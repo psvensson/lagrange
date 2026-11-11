@@ -25,7 +25,6 @@ import {publicationsOwnerOverRows} from
   '../control-plane/publication-owner-test-support.js';
 
 const TEST_DEFER_INLINE_OWNER_COMMAND_FIELD = 'deferInlineOwnerCommand';
-const TEST_DEFERRED_SKIP_PUBLICATION_WRITE_READBACK = true;
 const TEST_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD =
   'publicationActiveGateHandoff';
 const TEST_PUBLISHED_ACTIVE_NODE_IDS_FIELD = 'publishedActiveNodeIds';
@@ -294,10 +293,11 @@ test('AdminControlSnapshot defers snapshot-query handoff owner commands to the o
       false,
       'snapshot-query owner command should not preload empty membership rows',
     );
+    // Guarded write (2026-11-11): the read-back opt-out is deleted.
     t.equal(
-      enqueuedContext.skipPublicationWriteReadback,
-      TEST_DEFERRED_SKIP_PUBLICATION_WRITE_READBACK,
-      'snapshot-query owner command should avoid immediate durable readback',
+      'skipPublicationWriteReadback' in enqueuedContext,
+      false,
+      'snapshot-query owner command carries no read-back opt-out',
     );
     t.match(
       result.controlPlaneDiagnostics.publicationConvergence
@@ -490,10 +490,14 @@ test('AdminControlSnapshot queues handoff reconcile when awaited owner reconcile
         partitionRows: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_EMPTY_ROWS,
         replicaOperationRows: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_EMPTY_ROWS,
         readinessEntries: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_EMPTY_ROWS,
-        skipPublicationWriteReadback:
-          ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_SKIP_WRITE_READBACK,
       },
       'pressure-deferred awaited reconcile should still enqueue the canonical owner catch-up context',
+    );
+    // Guarded write (2026-11-11): the read-back opt-out is deleted.
+    t.equal(
+      'skipPublicationWriteReadback' in (enqueuedContext ?? {}),
+      false,
+      'the owner reconcile context carries no read-back opt-out',
     );
     t.equal(
       enqueuedContext.readProfile,
@@ -973,6 +977,10 @@ test('AdminControlSnapshot handoff reconcile defers when publication readback is
         },
         now: () => ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_NOW_MS,
       });
+    // The durable owner never answers here, so the held write keeps
+    // re-asking itself after its declared delay: stop the coordinator's
+    // queue when the test ends.
+    t.teardown(() => membershipPublicationService.stopOwnerMembershipDriver());
     const snapshot = new AdminControlSnapshot({
       nodeId: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_LOCAL_NODE_ID,
       controlPlaneReadinessService: {
@@ -1136,10 +1144,14 @@ test('AdminControlSnapshot queues handoff reconcile when awaited owner reconcile
         partitionRows: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_EMPTY_ROWS,
         replicaOperationRows: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_EMPTY_ROWS,
         readinessEntries: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_EMPTY_ROWS,
-        skipPublicationWriteReadback:
-          ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_SKIP_WRITE_READBACK,
       },
       'stale awaited reconcile rows should requeue the canonical owner catch-up context',
+    );
+    // Guarded write (2026-11-11): the read-back opt-out is deleted.
+    t.equal(
+      'skipPublicationWriteReadback' in (enqueuedContext ?? {}),
+      false,
+      'the owner reconcile context carries no read-back opt-out',
     );
   });
 

@@ -68,10 +68,17 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
         },
         'required node acknowledgement should be persisted with updated status',
       );
+      // Guarded write (2026-11-11): one authoritative read of the durable
+      // row and a compare-and-set on its revision; the read-back that
+      // verified an upsert is gone.
       t.equal(
-        getPublicationCalls.length,
-        3,
-        'owner reads should merge and verify the acknowledgement write',
+        persistedRows[0]?.publication_revision,
+        1,
+        'the acknowledgement should be a revision-guarded change of the durable row read by id',
+      );
+      t.ok(
+        getPublicationCalls.length > 0,
+        'the acknowledgement should read the durable publication by id',
       );
       t.equal(
         publicationRow?.acknowledged_node_ids?.[0],
@@ -164,10 +171,17 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
         1,
         'authoritative-refresh row should be acknowledged when the node becomes required',
       );
+      // Guarded write (2026-11-11): one authoritative read of the durable
+      // row and a compare-and-set on its revision; the read-back that
+      // verified an upsert is gone.
       t.equal(
-        getPublicationCalls.length,
-        3,
-        'authoritative acknowledgement should merge and verify the publication by id',
+        persistedRows[0]?.publication_revision,
+        1,
+        'the acknowledgement should be a revision-guarded change of the durable row read by id',
+      );
+      t.ok(
+        getPublicationCalls.length > 0,
+        'the acknowledgement should read the durable publication by id',
       );
       t.equal(
         publicationRow?.acknowledged_node_ids?.[0],
@@ -246,10 +260,17 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
         },
         'empty-cache acknowledgement refresh should prefer owner-rpc publication history',
       );
+      // Guarded write (2026-11-11): one authoritative read of the durable
+      // row and a compare-and-set on its revision; the read-back that
+      // verified an upsert is gone.
       t.equal(
-        getPublicationCalls.length,
-        3,
-        'empty-cache acknowledgement should still merge and verify the durable publication row',
+        persistedRows[0]?.publication_revision,
+        1,
+        'the acknowledgement should be a revision-guarded change of the durable row read by id',
+      );
+      t.ok(
+        getPublicationCalls.length > 0,
+        'the acknowledgement should read the durable publication by id',
       );
       t.match(
         persistedRows[0],
@@ -354,10 +375,17 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
         },
         'pending-target-ack refresh should prefer owner-rpc publication history',
       );
+      // Guarded write (2026-11-11): one authoritative read of the durable
+      // row and a compare-and-set on its revision; the read-back that
+      // verified an upsert is gone.
       t.equal(
-        getPublicationCalls.length,
-        3,
-        'refreshed acknowledgement should still merge and verify the durable row',
+        persistedRows[0]?.publication_revision,
+        1,
+        'the acknowledgement should be a revision-guarded change of the durable row read by id',
+      );
+      t.ok(
+        getPublicationCalls.length > 0,
+        'the acknowledgement should read the durable publication by id',
       );
       t.match(
         persistedRows[0],
@@ -467,10 +495,17 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
         1,
         'newer authoritative rows should be acknowledged when stale cache is terminal',
       );
+      // Guarded write (2026-11-11): one authoritative read of the durable
+      // row and a compare-and-set on its revision; the read-back that
+      // verified an upsert is gone.
       t.equal(
-        getPublicationCalls.length,
-        3,
-        'terminal-cache acknowledgement should merge and verify the publication by id',
+        persistedRows[0]?.publication_revision,
+        1,
+        'the acknowledgement should be a revision-guarded change of the durable row read by id',
+      );
+      t.ok(
+        getPublicationCalls.length > 0,
+        'the acknowledgement should read the durable publication by id',
       );
       t.match(
         persistedRows[0],
@@ -566,9 +601,14 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
       t.end();
     });
 
-  test('acknowledgeMembershipPublicationForNode retries when durable readback drops a merged acknowledgement',
+  // Supersedes the read-back retry of the upsert (guarded write, owner ruling
+  // 2026-11-11): another node's acknowledgement lands between this node's
+  // read and its write, so the compare-and-set on the revision misses; the
+  // change is re-applied to the newer durable row and keeps both.
+  test('acknowledgeMembershipPublicationForNode keeps a concurrent acknowledgement that lands between read and write',
     async (t) => {
-      let upsertCallCount = 0;
+      const storedRows = [];
+      let readCount = 0;
       let durablePublicationRow = {
         publication_id: 'publication-25',
         publication_kind: 'cluster_membership',
@@ -576,7 +616,8 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
         status: 'ACK_PENDING',
         published_active_node_ids: ['node-1', 'node-2', 'node-3'],
         required_ack_node_ids: ['node-1', 'node-2', 'node-3'],
-        acknowledged_node_ids: ['node-1', 'node-3'],
+        acknowledged_node_ids: ['node-1'],
+        publication_revision: 4,
         updated_at: 2500,
       };
       const coordinator = new MembershipPublicationCoordinator({
@@ -601,49 +642,42 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
         },
         controlPlanePublicationsOwner: publicationsOwnerOverRows({
           async getPublication() {
-            return durablePublicationRow;
-          },
-          async storeRow(row) {
-            upsertCallCount += 1;
-            if (upsertCallCount === 1) {
+            const answered = durablePublicationRow;
+            readCount += 1;
+            if (readCount === 1) {
+              // node-3 acknowledges itself right after this node's read.
               durablePublicationRow = {
-                ...row,
-                status: 'ACK_PENDING',
-                acknowledged_node_ids: ['node-1', 'node-2'],
+                ...durablePublicationRow,
+                acknowledged_node_ids: ['node-1', 'node-3'],
+                publication_revision: 5,
                 updated_at: 2501,
               };
-              return;
             }
+            return answered;
+          },
+          async storeRow(row) {
+            storedRows.push(row);
             durablePublicationRow = row;
           },
         }),
       });
 
-      const publicationRow =
-      (await coordinator.acknowledgeMembershipPublicationForNode('node-2')).row;
+      const outcome =
+        await coordinator.acknowledgeMembershipPublicationForNode('node-2');
 
-      t.equal(
-        upsertCallCount,
-        2,
-        'membership acknowledgement path should retry dropped durable acknowledgement unions',
-      );
+      t.equal(storedRows.length, 1,
+        'only the write computed from the newer durable row should land');
+      t.equal(outcome?.outcome, 'COMMITTED',
+        'the re-applied acknowledgement should be committed');
       t.match(
         durablePublicationRow,
         {
           publication_id: 'publication-25',
           status: 'PUBLISHED',
           acknowledged_node_ids: ['node-1', 'node-2', 'node-3'],
+          publication_revision: 6,
         },
-        'readback retry should preserve every merged acknowledgement',
-      );
-      t.match(
-        publicationRow,
-        {
-          publication_id: 'publication-25',
-          status: 'PUBLISHED',
-          acknowledged_node_ids: ['node-1', 'node-2', 'node-3'],
-        },
-        'caller should receive the verified durable publication row',
+        'the concurrent acknowledgement should be kept and the row closed',
       );
       t.end();
     });
@@ -829,6 +863,18 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
           },
         },
         controlPlanePublicationsOwner: publicationsOwnerOverRows({
+          // The change is computed from the durable row, never the cache.
+          async getPublication() {
+            return persistedRows.at(-1) ?? {
+              publication_id: PUBLICATION_ID,
+              publication_kind: PUBLICATION_KIND,
+              publication_epoch: PUBLICATION_EPOCH,
+              status: OPEN_STATUS,
+              published_active_node_ids: [...REQUIRED_NODE_IDS],
+              required_ack_node_ids: [...REQUIRED_NODE_IDS],
+              acknowledged_node_ids: [...REQUIRED_NODE_IDS],
+            };
+          },
           async storeRow(row) {
             persistedRows.push(row);
           },

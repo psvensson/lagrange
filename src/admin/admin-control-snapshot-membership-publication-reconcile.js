@@ -44,8 +44,6 @@ const MEMBERSHIP_PUBLICATION_RECONCILE_OPTIONS = Object.freeze({
 });
 const MEMBERSHIP_PUBLICATION_RECONCILE_REASON =
   'admin_control_snapshot_publication_handoff';
-const MEMBERSHIP_PUBLICATION_HANDOFF_SKIP_WRITE_READBACK = false;
-const MEMBERSHIP_PUBLICATION_HANDOFF_DEFERRED_SKIP_WRITE_READBACK = true;
 const MEMBERSHIP_PUBLICATION_HANDOFF_ALLOW_EMPTY_PRELOADED_ROWS = true;
 const MEMBERSHIP_PUBLICATION_HANDOFF_DEFER_NESTED_PRIORITY_RECOVERY = true;
 const MEMBERSHIP_PUBLICATION_HANDOFF_EMPTY_ROWS = Object.freeze([]);
@@ -77,7 +75,6 @@ const MEMBERSHIP_PUBLICATION_RECONCILE_FIELD = Object.freeze({
   REPLICA_OPERATION_ROWS: 'replicaOperationRows',
   REQUIRED_ACK_NODE_IDS: 'requiredAckNodeIds',
   SERVICE_ROWS: 'serviceRows',
-  SKIP_PUBLICATION_WRITE_READBACK: 'skipPublicationWriteReadback',
 });
 /**
  * Normalize one arbitrary value to a non-negative integer.
@@ -130,10 +127,6 @@ function buildMembershipPublicationReconcileOptions(options = {}) {
     resolveMembershipPublicationHandoffLatestPublicationRow(
       publicationActiveGateHandoff,
     );
-  const skipPublicationWriteReadback =
-    shouldDeferInlineMembershipPublicationOwnerCommand(options) ?
-      MEMBERSHIP_PUBLICATION_HANDOFF_DEFERRED_SKIP_WRITE_READBACK :
-      MEMBERSHIP_PUBLICATION_HANDOFF_SKIP_WRITE_READBACK;
   return {
     ...MEMBERSHIP_PUBLICATION_RECONCILE_OPTIONS,
     ...(latestPublicationRow ?
@@ -167,8 +160,6 @@ function buildMembershipPublicationReconcileOptions(options = {}) {
       MEMBERSHIP_PUBLICATION_HANDOFF_EMPTY_ROWS,
     [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.READINESS_ENTRIES]:
       MEMBERSHIP_PUBLICATION_HANDOFF_EMPTY_ROWS,
-    [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.SKIP_PUBLICATION_WRITE_READBACK]:
-      skipPublicationWriteReadback,
   };
 }
 function buildDeferredMembershipPublicationReconcileOptions(options = {}) {
@@ -205,8 +196,6 @@ function buildDeferredMembershipPublicationReconcileOptions(options = {}) {
     [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD
       .DEFER_NESTED_PRIORITY_RECOVERY_PLANNING]:
       MEMBERSHIP_PUBLICATION_HANDOFF_DEFER_NESTED_PRIORITY_RECOVERY,
-    [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.SKIP_PUBLICATION_WRITE_READBACK]:
-      MEMBERSHIP_PUBLICATION_HANDOFF_DEFERRED_SKIP_WRITE_READBACK,
   };
 }
 function enqueueMembershipPublicationReconcileFallback(

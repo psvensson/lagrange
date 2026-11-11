@@ -588,10 +588,14 @@ export function registerAdminControlSnapshotRepairHandoffReplayOutcomeTestCases(
           acknowledgedNodeIds: ['node-1', 'node-2'],
           readProfile:
             ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_READ_PROFILE,
-          skipPublicationWriteReadback:
-            ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_SKIP_WRITE_READBACK,
         },
         'repair-deferred degradation should perform a narrow publication-owner reconcile before rebuilding the snapshot view',
+      );
+      // Guarded write (2026-11-11): the read-back opt-out is deleted.
+      t.equal(
+        'skipPublicationWriteReadback' in (reconcileOptions ?? {}),
+        false,
+        'the owner reconcile context carries no read-back opt-out',
       );
       t.equal(
         buildOptions.length,

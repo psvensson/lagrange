@@ -665,6 +665,11 @@ test(MEMBERSHIP_PUBLICATION_RECONCILE_TEST_NAME, async (t) => {
       async listPublications() {
         return {rows: [latestPublicationRow]};
       },
+      // The durable read the owner's guarded write is computed from.
+      async getPublication(publicationId) {
+        return [latestPublicationRow, ...persistedRows].filter((row) =>
+          row?.publication_id === publicationId).at(-1) ?? null;
+      },
       async storeRow(row) {
         persistedRows.push(row);
       },

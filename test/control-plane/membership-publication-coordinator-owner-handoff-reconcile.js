@@ -93,7 +93,6 @@ const PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_BOUND = 1;
 const PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_RETRY_AFTER_MS = 1000;
 const PUBLICATION_CONVERGENCE_SHORT_RETRY_AFTER_MS = 37;
 const PUBLICATION_CONVERGENCE_LONG_RETRY_AFTER_MS = 1023525;
-const PUBLICATION_CONVERGENCE_DEFERRED_SKIP_WRITE_READBACK = true;
 const PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_OUTCOME_ENQUEUED =
   'enqueued';
 const PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_OUTCOME_MERGED =
@@ -423,10 +422,15 @@ test('reconcileClusterMembership publishes explicit handoff target without autho
         acknowledgedNodeIds: [
           ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS,
         ],
-        reasonCode:
-          PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DURABLE_REASON_CODE,
       },
-      'explicit handoff target should return the durable readback publication row',
+      'explicit handoff target should return the row the owner committed',
+    );
+    // Guarded write (2026-11-11): the admission is an insert that never
+    // replaces, confirmed by its affected row; no read-back follows it.
+    t.equal(
+      outcome.publicationWrite?.outcome,
+      'COMMITTED',
+      'explicit handoff target should be admitted as a committed write',
     );
     t.match(
       persistedRows[0],
@@ -446,14 +450,13 @@ test('reconcileClusterMembership publishes explicit handoff target without autho
       'explicit handoff target should be persisted as the durable publication target',
     );
     t.match(
-      publicationReadOptions[publicationReadOptions.length - 1],
+      persistOptions[0],
       {
+        ignoreExisting: true,
         readProfile:
           PUBLICATION_CONVERGENCE_HANDOFF_TARGET_READ_PROFILE,
-        authoritativeReadMode:
-          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
       },
-      'explicit handoff target should verify the write through the diagnostics owner readback path',
+      'explicit handoff target should be admitted insert-only on the diagnostics profile',
     );
   });
 
@@ -557,10 +560,11 @@ test('reconcileActiveGateMembershipPublication owns handoff write visibility',
       },
       'owner outcome should carry the durable readback row that covers the handoff target',
     );
+    // Guarded write (2026-11-11): the read-back opt-out is deleted.
     t.equal(
-      persistOptions[0]?.skipPublicationWriteReadback,
+      'skipPublicationWriteReadback' in (persistOptions[0] ?? {}),
       false,
-      'active-gate owner reconcile should keep write readback enabled',
+      'active-gate owner reconcile carries no read-back opt-out',
     );
     t.equal('skipCacheWait' in (persistOptions[0] ?? {}), false,
       'active-gate owner reconcile carries no cache-wait opt-out');
@@ -995,10 +999,13 @@ test('reconcileActiveGateMembershipPublication defers stale durable readback',
       [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS],
       'deferred owner context should preserve the complete handoff target',
     );
+    // Guarded write (2026-11-11): the read-back opt-out is deleted; the
+    // re-run reads the durable owner.
     t.equal(
-      pending.get(ownerKey)?.context?.skipPublicationWriteReadback,
-      PUBLICATION_CONVERGENCE_DEFERRED_SKIP_WRITE_READBACK,
-      'deferred owner retry should avoid immediate durable readback',
+      'skipPublicationWriteReadback' in
+        (pending.get(ownerKey)?.context ?? {}),
+      false,
+      'deferred owner retry carries no read-back opt-out',
     );
     t.match(
       outcome.controlPlaneConvergence,
@@ -1160,10 +1167,26 @@ test('reconcileActiveGateMembershipPublication bounds retryable write failure de
       PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_RETRY_AFTER_MS,
       'critical convergence diagnostics should carry the bounded retry delay',
     );
+    // Guarded write (2026-11-11): an unanswered admission is UNKNOWN; the
+    // reconcile holds it and re-asks itself, and the handoff defers with its
+    // target. Both land on the owner's one queue key as one pending wake.
+    t.same(
+      enqueued.map((entry) => entry.reason),
+      ['publication-write-unsettled', 'active_gate_handoff_owner_reconcile'],
+      'the held write and the deferred handoff should each re-ask the owner',
+    );
+    const ownerKey = coordinator.buildOwnerKey();
     t.equal(
-      enqueued.length,
+      [...pending.keys()].filter((key) => key === ownerKey).length +
+        [...coordinator.reconcileQueue.retryWorkItems.keys()]
+          .filter((key) => key === ownerKey).length,
       PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_ENQUEUE_COUNT,
-      'retryable write failure should enqueue one owner recovery wake',
+      'retryable write failure should leave one owner recovery wake',
+    );
+    t.same(
+      outcome.publicationRow,
+      null,
+      'an unsettled write reports no publication row',
     );
   });
 

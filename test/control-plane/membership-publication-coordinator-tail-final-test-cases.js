@@ -61,6 +61,11 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
           async listPublications() {
             return {rows: [latestPublicationRow]};
           },
+          // The durable read the owner's guarded write is computed from.
+          async getPublication(publicationId) {
+            return [latestPublicationRow, ...persistedRows].filter((row) =>
+              row?.publication_id === publicationId).at(-1) ?? null;
+          },
           async storeRow(row) {
             persistedRows.push(row);
           },
@@ -215,6 +220,11 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
           async listPublications() {
             return {rows: [latestPublicationRow]};
           },
+          // The durable read the owner's guarded write is computed from.
+          async getPublication(publicationId) {
+            return [latestPublicationRow, ...persistedRows].filter((row) =>
+              row?.publication_id === publicationId).at(-1) ?? null;
+          },
           async storeRow(row) {
             persistedRows.push(row);
           },
@@ -364,10 +374,17 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
               'publication-12',
               'metadata refresh retries should re-read the same publication row',
             );
+            // Guarded write (2026-11-11): the change is computed from the
+            // partition leader's own answer, never a preferred read. (A call
+            // carrying a write's idempotency key is the test seam evaluating
+            // that write's revision predicate, not a read of the owner.)
+            if (options?.idempotencyKey !== undefined) {
+              return durableRow;
+            }
             t.match(options, {
               authoritativeReadMode:
-              CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
-            }, 'metadata refresh retries should use owner-rpc preferred reads');
+              CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+            }, 'metadata refresh retries should use owner-rpc required reads');
             return durableRow;
           },
           async storeRow(row) {
@@ -545,6 +562,11 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
             authoritativeReadCount += 1;
             return {rows: [latestPublicationRow]};
           },
+          // The durable read the owner's guarded write is computed from.
+          async getPublication(publicationId) {
+            return latestPublicationRow.publication_id === publicationId ?
+              latestPublicationRow : null;
+          },
           async storeRow() {
             upsertCallCount += 1;
           },
@@ -651,12 +673,17 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
       const coordinator = new MembershipPublicationCoordinator({
         resolveIsControlPlanePublicationsWriteLeader: () => true,
         nodeId: 'node-1',
-        controlPlanePublicationsOwner: {
+        controlPlanePublicationsOwner: publicationsOwnerOverRows({
           async listPublications(options = {}) {
             authoritativeReadOptions = options;
             return {rows: [latestPublicationRow]};
           },
-        },
+          async getPublication(publicationId) {
+            return latestPublicationRow.publication_id === publicationId ?
+              latestPublicationRow : null;
+          },
+          async storeRow() {},
+        }),
         systemTableCache: {
           getAll(tableName) {
             if (tableName === 'nodes') {

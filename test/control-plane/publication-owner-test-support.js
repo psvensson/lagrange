@@ -125,7 +125,8 @@ function createPublicationStore(options = {}) {
 /**
  * A publications owner for a unit test that keeps its durable row in its
  * own closure: the test's read methods as it wrote them, and the REAL
- * owner's two write entries (admitPublication, applyPublicationChange) over
+ * owner's write entries (admitPublication, applyPublicationChange) and
+ * durable read (readDurablePublication) over
  * a gateway seam backed by the test's `getPublication` (the durable read)
  * and `storeRow` (the whole durable row after a landed write). A row the
  * test holds without a publication_revision reads the column default, 0.
@@ -140,9 +141,12 @@ function publicationsOwnerOverRows(rowAccess, options = {}) {
   const readRow = options.durableRead ??
     ((publicationId, readOptions) =>
       rowAccess.getPublication(publicationId, readOptions));
+  // A keyed read answers only that key's row: a test row carrying another
+  // publication_id is not the durable row of the key asked for.
   const durableRead = async (publicationId, readOptions) => {
     const row = await readRow(publicationId, readOptions);
-    return row ? {publication_revision: 0, ...row} : null;
+    return row && (row[KEY] === undefined || row[KEY] === publicationId) ?
+      {publication_revision: 0, ...row} : null;
   };
   const gateway = {
     async readAuthoritativeRows(_tableName, _sql, params = [], readOptions) {
@@ -178,6 +182,8 @@ function publicationsOwnerOverRows(rowAccess, options = {}) {
       owner.admitPublication(row, writeOptions),
     applyPublicationChange: (publicationId, change, writeOptions) =>
       owner.applyPublicationChange(publicationId, change, writeOptions),
+    readDurablePublication: (publicationId, readOptions) =>
+      owner.readDurablePublication(publicationId, readOptions),
   };
 }
 

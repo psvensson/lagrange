@@ -329,6 +329,11 @@ test('the summary refresh that clears the durable gap enqueues the trimming reco
         async listPublications() {
           return {rows: [durableRow]};
         },
+        // The durable read the owner's guarded write is computed from.
+        async getPublication(publicationId) {
+          return durableRow.publication_id === publicationId ?
+            durableRow : null;
+        },
         async storeRow(row) {
           upserts.push(row);
           durableRow = {...durableRow, ...row};
