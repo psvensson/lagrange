@@ -52,6 +52,15 @@ function createRemoteHandoffFollowUpOwner(scheduledCallbacks, members) {
   };
 }
 
+// The handoff decision reads the real workflow owner's step ordering
+// (isExecutorOutcomeStepBehindOperation); only the retryable-step answer is
+// the scenario's input.
+function handoffDecisionOwner(dispatchRetryable) {
+  const owner = Object.create(OperationWorkflowOwner.prototype);
+  owner.isDispatchRetryableWorkflowStep = () => dispatchRetryable;
+  return owner;
+}
+
 registerCoordinatorCreatedRemoteHandoffCreateOperationTests({test});
 registerCoordinatorCreatedRemoteHandoffPriorityRecoveryTests({test});
 
@@ -66,7 +75,7 @@ test('RUNTIME_SERVICE_CREATE_FAILED wakes remote operation owner via TARGET_EXEC
     createdAt: Date.now(),
   };
   const handoffMode = resolveExecutorOutcomeRemoteOwnerHandoffMode(
-    {isDispatchRetryableWorkflowStep: () => false},
+    handoffDecisionOwner(false),
     operation,
     {
       [EXECUTOR_OUTCOME_FIELD.OUTCOME_TYPE]:
@@ -250,7 +259,7 @@ test('dispatch-wake preemption answers create_in_progress while target is author
 
   const outcomeHandoffWhenPending =
     resolveExecutorOutcomeRemoteOwnerHandoffMode(
-      {isDispatchRetryableWorkflowStep: () => true},
+      handoffDecisionOwner(true),
       pendingOperation,
       {
         [EXECUTOR_OUTCOME_FIELD.OUTCOME_TYPE]:
@@ -266,7 +275,7 @@ test('dispatch-wake preemption answers create_in_progress while target is author
 
   const outcomeHandoffWhenAlreadyCreating =
     resolveExecutorOutcomeRemoteOwnerHandoffMode(
-      {isDispatchRetryableWorkflowStep: () => true},
+      handoffDecisionOwner(true),
       creatingOperation,
       {
         [EXECUTOR_OUTCOME_FIELD.OUTCOME_TYPE]:
