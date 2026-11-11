@@ -96,13 +96,26 @@ this epic owns coordination and its current summary.
   files; the full capture CLI retained the real native failure and refused positive
   admission. Actual setup and the append-only audit passed. The nested authoring
   session's Git spawn failure remains retained; it did not reproduce in the
-  coordinating host's canonical run. Exact review, custody and landing status
-  belong to the successor Quest, not to a rewritten closed component.
-- Publication remains open: the exact `15be1890a` and `c7c7acd89` publisher gates refused the
+  coordinating host's canonical run. It independently passed final review and
+  canonically landed as `2b52df39300b9575ff1691315fe3f911018c1261`; its selected
+  landing proof passed 219 files and 5,431 runner-reported assertions. Exact review
+  and custody belong to the successor Quest, not to a rewritten closed component.
+- Publication remains open: the exact `15be1890a`, `c7c7acd89` and `2b52df393`
+  publisher gates refused the
   existing duplication ratchets (source/scripts 45 groups and 1,342 lines versus
   35/1,109; tests 632/23,582 versus 623/23,339). No push occurred. Independent
   review confirmed the retained clone reports contain no pair involving this
-  epic's changed files. This attribution does not waive the composed gate.
+  epic's changed files; the repair's regenerated reports retain that result.
+  The latest actual publisher receipt lookup returns `ENOENT`. This attribution
+  does not waive the composed gate. The existing
+  [debt inventory](../changes/global-owner-debt-inventory/inventory.json)
+  identifies the remaining owner work; repairing unrelated clone groups is
+  outside this bounded tooling integration.
+- Q8 retains an independently checked descriptive report of 17 selected actual
+  observations. It preserves elapsed time, raw reported usage and MCP event
+  statuses. Different tasks, evolving source, resumed sessions and overlapping
+  runs prevent a matched productivity comparison or total-cost claim. Missing
+  model, monetary-cost and timing-decomposition data remains unmeasured.
 - Remaining for Q8: a publishable composed candidate, fresh affected capability
   proof with explicit reviewed supersession of historical evidence, and an actual
   authoring-to-landing-to-publication journey on that source. The later lesson
