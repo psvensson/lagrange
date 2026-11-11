@@ -1166,16 +1166,34 @@ function electAmongLive(world) {
 }
 
 /**
- * Let one named live member win the election (only it ticks): which survivor
- * leads is the test's premise, never the election timers' draw.
+ * Make one named live member the leader after a leader's loss: which
+ * survivor leads is the test's premise, never the election timers' draw.
+ * The live members elect whoever their timers pick; when that is not the
+ * named member, the elected leader transfers its leadership to it by the
+ * port's own named transfer. A transfer is the one election a survivor's
+ * leader lease does not refuse: a member that only campaigns is refused its
+ * pre-vote until every voter's own election clock has run out (measured
+ * 2026-11-11: with only the named member ticking it won 21 of 30 within the
+ * election budget, in 226 to 396 rounds, and otherwise was still a
+ * pre-candidate or had lost to a voter woken by its requests).
  * @param {Object} world
- * @param {string} replicaId - The survivor that campaigns.
+ * @param {string} replicaId - The survivor that must lead.
  * @return {string|null} The leader.
  */
 function electSurvivor(world, replicaId) {
-  world.group.cluster.tickers = [replicaId];
-  world.group.cluster.settle(() => world.group.leader() === replicaId,
-    {rounds: ELECTION_ROUNDS});
+  const elected = electAmongLive(world);
+  if (elected === null || elected === replicaId) {
+    return elected;
+  }
+  const answer = turnChainValue(world.group.cluster.node(elected)
+    .transferLeadership({successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
+      replicaIdentity: replicaId}));
+  if (answer?.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
+    throw new Error(`setup: ${elected} refused the transfer to ${replicaId}: ${
+      answer?.reason}`);
+  }
+  world.group.settle(() => world.group.leader() === replicaId,
+    ELECTION_ROUNDS);
   return world.group.leader();
 }
 
