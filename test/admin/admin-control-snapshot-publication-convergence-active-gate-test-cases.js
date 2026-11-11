@@ -752,10 +752,6 @@ test('AdminControlSnapshot normalizes active-gate owner cohort budget state',
       {
         state: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_COHORT_STATE_PENDING,
         reasonCode: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_COHORT_REASON_OWNER_RECONCILE_PENDING,
-        pendingRecoveryNodeIds: [
-          ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS[0],
-        ],
-        pendingReconcileNodeIds: [],
         activeGateBudget: {
           state: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_COHORT_BUDGET_STATE_AVAILABLE,
           activeGateState: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_COHORT_GATE_STATE_STALLED,
@@ -772,6 +768,16 @@ test('AdminControlSnapshot normalizes active-gate owner cohort budget state',
       },
       'active-gate owner cohort diagnostics should normalize bounded budget fields',
     );
+    // Handoff contract (2026-11-11): PRIORITY_CONTROL_PLANE_RECOVERY_PENDING
+    // is one cluster-level fact (the recovery gate), not a per-node wait. A
+    // missing node that is not itself waiting is a reconcile target.
+    t.match(activeGateOwnerCohort.recoveryGate, {state: 'active'},
+      'the cluster-wide recovery reason is read as the active recovery gate');
+    t.same(activeGateOwnerCohort.pendingRecoveryNodeIds, [],
+      'no node carries a per-node recovery wait');
+    t.same(activeGateOwnerCohort.pendingReconcileNodeIds, [
+      ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS[0],
+    ], 'the missing node is the owner reconcile target');
   });
 
 test('AdminControlSnapshot projects mixed selected-timeout handoff as owner reconcile',
