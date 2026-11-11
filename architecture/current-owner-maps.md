@@ -78,6 +78,34 @@ The current concrete ownership map is:
 - Dispatch -> `ReplicaDispatchService`
 - Failure detection -> `FailureDetector`
 - System cache -> `SystemTableCache`
+- Executable content census -> `src/diagnostics/runtime-content-fingerprint.js`.
+  Source checkouts retain their lock-based production-content measurement.
+  Published npm installations without a lock measure a conservative possible
+  production closure: all same-name candidates for declared dependencies in
+  Node lookup order, including hoisted, optional and peer package bodies and
+  dependency edges. CommonJS global fallback locations are included. Actual
+  file bytes determine identity; package versions cannot supply it. Broken
+  content is unavailable, not optional absence. The absent-lock census refuses
+  symlink-preserving runtime modes, declared loose-file dependencies and interior
+  source or package symlinks. Their importer-specific resolution is outside this
+  bounded census. Interior node_modules content is measured, including loose
+  files, and its package manifests enter the same dependency traversal. This
+  includes dormant fixture content, not only files exercised during startup.
+  Top-level dependency-directory links are canonicalized. Bundle/SEA measurement
+  is unchanged.
+- Immutable boot build facts -> `src/diagnostics/runtime-build-provenance.js`.
+  It combines the content census with native artifacts and the executable;
+  measurement failure remains unavailable. Seed admission consumes that result
+  through `src/bootstrap/seed-original-allocation-startup.js` without replacing
+  the measurement or relaxing its measured-build requirement. Installed package
+  proof belongs to `scripts/release-npm-package.js`; the corresponding
+  `runtime-build-content-provenance` impact contract selects its consumers.
+  The packaging proof delegates installed child process custody to
+  `scripts/npm-runtime-process.js`: finite process-group termination, bounded
+  captured output and settlement after pipe closure. Its log preserves ordered
+  stdout/stderr byte chunks as stream-tagged base64 NDJSON records. Runtime
+  failures map to the release owner's `RUNTIME_FAILED` outcome. The consumer uses
+  only the installed public facade and Node built-ins to start and stop.
 
 ## Topology Workflow Owner Map
 

@@ -1,0 +1,68 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "source": "5c30388e498cb1578dc7ba7199bf2de51266d77b plus staged candidate; source hashes bound in referenced manifests",
+  "receipts": [
+    {
+      "id": "content-closure-red-green-and-falsification",
+      "passed": true,
+      "evidence": "sha256:56ef07861a70e70babcdcb449be85927e240c222b2483fa26c87b095dea72b86",
+      "note": "21 intended green tests; nine retained source mutations red then restored; fixture-only rename21pass with independent review in fixture-reconciliation.",
+      "archiveMember": "solve/quests/published-runtime-dependency-closure/evidence/treatments-v2/manifest.json"
+    },
+    {
+      "id": "lock-present-predecessor-parity",
+      "passed": true,
+      "evidence": "sha256:56ef07861a70e70babcdcb449be85927e240c222b2483fa26c87b095dea72b86",
+      "note": "Literal predecessor facts unchanged;24 affected tests pass, including immutable boot/native provenance.",
+      "archiveMember": "solve/quests/published-runtime-dependency-closure/evidence/affected-final.tap"
+    },
+    {
+      "id": "installed-public-embedded-start-stop",
+      "passed": true,
+      "evidence": "sha256:56ef07861a70e70babcdcb449be85927e240c222b2483fa26c87b095dea72b86",
+      "note": "Actual tarball fresh install public start/stop/API/CLI/service-build integration2pass. Actual reverted-census artifact reproduces original ENOENT measured-build admission failure with typed RUNTIME_FAILED.",
+      "archiveMember": "solve/quests/published-runtime-dependency-closure/evidence/installed-public-final/manifest.json"
+    },
+    {
+      "id": "affected-gates-and-independent-review",
+      "passed": true,
+      "evidence": "sha256:56ef07861a70e70babcdcb449be85927e240c222b2483fa26c87b095dea72b86",
+      "note": "All33 static audits pass;21 packaging/process/release and24 census/boot tests pass; source-only plan and actual slice approvals logged. Canonical solve land still must run selected380-file regression proof before it can close/commit. No exact-head, registry or native viewer acceptance claim.",
+      "archiveMember": "solve/quests/published-runtime-dependency-closure/evidence/gates/static.txt"
+    }
+  ],
+  "evidenceArchive": {
+    "sha256": "56ef07861a70e70babcdcb449be85927e240c222b2483fa26c87b095dea72b86",
+    "bytes": 107081,
+    "asset": "published-runtime-dependency-closure--lagrange-published-runtime-proof-20261107T201410Z.tar.gz",
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/published-runtime-dependency-closure--lagrange-published-runtime-proof-20261107T201410Z.tar.gz",
+    "manifestSha256": "a6280b67153d414248a4a7670eac3e313c8add047d7db25838d80ac5d21fe41f",
+    "verifiedMembers": 103,
+    "originalPathsPreserved": 88,
+    "sourceState": "uncommitted working/index bytes; not committed source at base; no registry or exact-head acceptance"
+  },
+  "planMember": "solve/quests/published-runtime-dependency-closure/plan.md",
+  "proofLimits": "Archive holds pre-relocation plan, source snapshots, all logs and treatment manifests; live receipt/record/log snapshots there are historical. Interrupted380-file gate is incomplete; canonical land must rerun it. No exact-head CI, merge, published registry artifact or native viewer acceptance claim.",
+  "archivedSourceDigests": {
+    "scripts/npm-runtime-process.js": "2481475b5ee7d0ad1bba86a84064a085b85b3c1c08459e21022d76723d94e0d0",
+    "scripts/npm-runtime-smoke-consumer.js": "dcef8f7035469e69204c502366a085fa6296e599622e0a647f2ecc30be03a8c7",
+    "scripts/npm-runtime-smoke.js": "02524c852c11972016629dfd5e6ab56d1a05f8fd1642b511f2ce511ff381cf1b",
+    "scripts/release-npm-package.js": "983253b8bbe44497235517159961002d4aeff02aca5a87ae0f0ab4ce09dd01ae",
+    "src/diagnostics/runtime-content-fingerprint.js": "ee63f39d0a3184d6b7001e6c7f97ab19d261711a9f892823383b7e97d87105f5",
+    "test/diagnostics/runtime-content-fingerprint.test.js": "bf9a1a0d36e3cc1baff3ed8c5b93a7f629ff2e821e493e3100e649243fe08fd7",
+    "test/integration/lagrange-server-npm-package.integration.test.js": "cab4e1e22ea3de799513762dce544f66c4807da08777f85458c0a53e4efaafc3",
+    "test/scripts/npm-runtime-process.test.js": "638f85981635816f22acf851d2e2294fa557df2259fb81789c2db914d2aed776",
+    "test/scripts/npm-runtime-smoke.test.js": "d8bf958db604ac01aaf1cc85260a910fb75d4e3a00087e876cbf5dbdd59870d7"
+  },
+  "postArchiveReconciliation": [
+    {
+      "path": "test/scripts/npm-runtime-process.test.js",
+      "archivedSha256": "638f85981635816f22acf851d2e2294fa557df2259fb81789c2db914d2aed776",
+      "currentSha256": "699d7b3b67e5e83250dc0411363e7db38bbcb451564f8be09e36a19de1806437",
+      "change": "Remove one extra EOF blank line only; executable statements unchanged.",
+      "verificationCommand": "nice -n 15 node --test --test-concurrency=1 test/scripts/npm-runtime-process.test.js",
+      "verificationOutput": "TAP version 13\n# Subtest: installed process settlement cannot mistake exit for closed inherited pipes\nok 1 - installed process settlement cannot mistake exit for closed inherited pipes\n  ---\n  duration_ms: 0.88822\n  type: 'test'\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 1\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 32.078607\n"
+    }
+  ]
+}

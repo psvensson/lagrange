@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import {spawnSync} from 'node:child_process';
+import {verifyInstalledRuntime} from './npm-runtime-smoke.js';
+import {refuseUnderProbe} from '../src/test-helpers/probe-guard.js';
 
 import {ACTION, authorizeAction, isAuthorized} from './action-authority.js';
 import {spawnGit} from './checks/git-invocation.js';
@@ -134,6 +136,9 @@ const MANIFEST_ERROR = Object.freeze({
   GIT_HEAD: 'candidate tarball must contain a full gitHead',
 });
 const DRY_RUN_ERROR = 'installed lagrange --dry-run did not complete';
+const EMBEDDED_DATA_DIRECTORY = 'embedded-data';
+const EMBEDDED_LOG_SUFFIX = '.runtime-smoke.log';
+const PACKAGE_PROBE_ACTION = 'npm packaging or installed consumer verification';
 const CLI_USAGE =
   'usage: release-npm-package.js verify [--output DIR] [--git-head SHA] ' +
   'or publish --tarball FILE --authorize-version VERSION [--git-head SHA] ' +
@@ -154,6 +159,7 @@ const RELEASE_OUTCOME = Object.freeze({
   IMPORT_FAILED: 'IMPORT_FAILED',
   BIN_FAILED: 'BIN_FAILED',
   CLI_FAILED: 'CLI_FAILED',
+  RUNTIME_FAILED: 'RUNTIME_FAILED',
   AUTH_UNAVAILABLE: 'AUTH_UNAVAILABLE',
   OWNERSHIP_DENIED: 'OWNERSHIP_DENIED',
   REGISTRY_UNAVAILABLE: 'REGISTRY_UNAVAILABLE',
@@ -322,6 +328,7 @@ function headCommit() {
 }
 
 async function buildNpmPackage(options = {}) {
+  refuseUnderProbe(PACKAGE_PROBE_ACTION);
   const packageJson = await validateWorkspaceManifest();
   const gitHead = resolveGitHead(options.gitHead);
   const outputDirectory = resolve(
@@ -392,6 +399,7 @@ function assertInstalledPath(actualPath, installedPackageRoot, label) {
 }
 
 async function verifyInstalledPackage(packed) {
+  refuseUnderProbe(PACKAGE_PROBE_ACTION);
   const temporaryRoot = await mkdtemp(join(tmpdir(), 'lagrange-npm-install-'));
   const installDirectory = join(temporaryRoot, 'consumer');
   const cacheDirectory = join(temporaryRoot, 'npm-cache');
@@ -501,6 +509,12 @@ async function verifyInstalledPackage(packed) {
         RELEASE_OUTCOME.CLI_FAILED,
         DRY_RUN_ERROR,
       );
+    }
+    try {
+      await verifyInstalledRuntime(installDirectory,
+        join(temporaryRoot, EMBEDDED_DATA_DIRECTORY), packed.tarballPath + EMBEDDED_LOG_SUFFIX);
+    } catch (error) {
+      throw new NpmReleaseError(RELEASE_OUTCOME.RUNTIME_FAILED, error.message, error);
     }
     const serviceDirectory = join(
       temporaryRoot,

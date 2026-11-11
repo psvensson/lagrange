@@ -39,7 +39,7 @@ const FORBIDDEN_PACKAGE_PREFIXES = Object.freeze([
 ]);
 
 describe('lagrange-server npm distribution', () => {
-  it('packs one commit-bound artifact and proves its installed API and CLIs', {
+  it('packs one commit-bound artifact and proves installed public start/stop, API and CLIs', {
     timeout: PACKAGE_TEST_TIMEOUT_MS,
   }, async (t) => {
     const temporaryRoot = await mkdtemp(join(tmpdir(), 'lagrange-server-npm-'));

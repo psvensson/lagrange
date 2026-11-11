@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2530,
+    "ordinary": 2533,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2556,
-  "digest": "fnv1a32-665969f6",
+  "censusSize": 2559,
+  "digest": "fnv1a32-995d3cd6",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -798,6 +798,7 @@
     "test/diagnostics/lease-liveness-decision-neutrality.test.js": "ordinary",
     "test/diagnostics/raft-churn-sync-section-attribution.test.js": "ordinary",
     "test/diagnostics/resource-diagnostics-sampler.test.js": "ordinary",
+    "test/diagnostics/runtime-content-fingerprint.test.js": "ordinary",
     "test/diagnostics/source-fingerprint.test.js": "ordinary",
     "test/diagnostics/stop-condition-decision.test.js": "ordinary",
     "test/diagnostics/sync-section-clock-seam.test.js": "ordinary",
@@ -2255,6 +2256,8 @@
     "test/scripts/no-external-llm-guards.test.js": "ordinary",
     "test/scripts/no-legacy-consensus-reference-audit.test.js": "ordinary",
     "test/scripts/no-legacy-consensus-reference-ratchet.test.js": "ordinary",
+    "test/scripts/npm-runtime-process.test.js": "ordinary",
+    "test/scripts/npm-runtime-smoke.test.js": "ordinary",
     "test/scripts/observation-census.test.js": "ordinary",
     "test/scripts/participant-release-completion-owner.test.js": "ordinary",
     "test/scripts/pre-push-hook-control-flow.test.js": "ordinary",

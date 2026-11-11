@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "test-subsystem-classification",
   "counts": {
-    "admin-diagnostics": 118,
+    "admin-diagnostics": 119,
     "architecture-governance": 21,
     "bootstrap-membership": 330,
     "cdc-metadata": 67,
@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 208,
     "storage-raft": 148,
-    "test-infrastructure": 156,
+    "test-infrastructure": 158,
     "transactions": 17,
     "transport-messaging": 113,
     "wasm-toolchain": 74
   },
-  "censusSize": 2556,
-  "digest": "fnv1a32-713ef5b6",
+  "censusSize": 2559,
+  "digest": "fnv1a32-2790afc2",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-b9d19216",
+  "observationDigest": "fnv1a32-b8d36d69",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -818,6 +818,7 @@
     "test/diagnostics/lease-liveness-decision-neutrality.test.js": "admin-diagnostics",
     "test/diagnostics/raft-churn-sync-section-attribution.test.js": "admin-diagnostics",
     "test/diagnostics/resource-diagnostics-sampler.test.js": "admin-diagnostics",
+    "test/diagnostics/runtime-content-fingerprint.test.js": "admin-diagnostics",
     "test/diagnostics/source-fingerprint.test.js": "admin-diagnostics",
     "test/diagnostics/stop-condition-decision.test.js": "admin-diagnostics",
     "test/diagnostics/sync-section-clock-seam.test.js": "admin-diagnostics",
@@ -2275,6 +2276,8 @@
     "test/scripts/no-external-llm-guards.test.js": "test-infrastructure",
     "test/scripts/no-legacy-consensus-reference-audit.test.js": "test-infrastructure",
     "test/scripts/no-legacy-consensus-reference-ratchet.test.js": "test-infrastructure",
+    "test/scripts/npm-runtime-process.test.js": "test-infrastructure",
+    "test/scripts/npm-runtime-smoke.test.js": "test-infrastructure",
     "test/scripts/observation-census.test.js": "test-infrastructure",
     "test/scripts/participant-release-completion-owner.test.js": "test-infrastructure",
     "test/scripts/pre-push-hook-control-flow.test.js": "test-infrastructure",
@@ -5654,6 +5657,17 @@
         "src/diagnostics/resource-diagnostics-sampler.js"
       ]
     },
+    "test/diagnostics/runtime-content-fingerprint.test.js": {
+      "files": [
+        "package-lock.json",
+        "package.json",
+        "src/diagnostics/runtime-content-fingerprint.js",
+        "src/index.js"
+      ],
+      "directories": [
+        "src"
+      ]
+    },
     "test/diagnostics/stop-condition-decision.test.js": {
       "files": [
         "scripts/analyze-causal-model.js"
@@ -8890,6 +8904,8 @@
         "README.md",
         "package-lock.json",
         "package.json",
+        "scripts/npm-runtime-process.js",
+        "scripts/npm-runtime-smoke-consumer.js",
         "src/admin/static/playback-viewer.html",
         "src/admin/static/test-run-dashboard.html",
         "src/cli/bin/lagrange-admin.js",
@@ -16438,6 +16454,8 @@
         "package.json",
         "scripts/action-authority.js",
         "scripts/checks/push-gate-corpus-worktree.js",
+        "scripts/npm-runtime-process.js",
+        "scripts/npm-runtime-smoke-consumer.js",
         "scripts/proof-authority.js",
         "scripts/prune-test-output.js",
         "scripts/publish-head.js",
@@ -17986,6 +18004,23 @@
         "test/distributed"
       ]
     },
+    "test/scripts/npm-runtime-smoke.test.js": {
+      "files": [
+        "package-lock.json",
+        "package.json",
+        "scripts/npm-runtime-process.js",
+        "scripts/npm-runtime-smoke-consumer.js",
+        "src/public-api.js"
+      ],
+      "directories": [
+        "data",
+        "src",
+        "wit"
+      ],
+      "env": [
+        "LAGRANGE_PROBE"
+      ]
+    },
     "test/scripts/observation-census.test.js": {
       "files": [
         "package.json",
@@ -18300,6 +18335,8 @@
         "Dockerfile",
         "package-lock.json",
         "package.json",
+        "scripts/npm-runtime-process.js",
+        "scripts/npm-runtime-smoke-consumer.js",
         "src/public-api.js"
       ],
       "directories": [
