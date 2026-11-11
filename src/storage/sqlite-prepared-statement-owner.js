@@ -12,14 +12,13 @@
 // text is retained for the handle's lifetime. A statement is handed out for a
 // complete `get`, `all` or `run`; an open iterator would hold it busy.
 
-const DEFAULT_INTEGER_STATEMENTS = new WeakMap();
-const EXACT_INTEGER_STATEMENTS = new WeakMap();
+const STATEMENTS_BY_DATABASE = new WeakMap();
 
-function statementsOf(statementsByDatabase, database) {
-  let statements = statementsByDatabase.get(database);
+function statementsOf(database) {
+  let statements = STATEMENTS_BY_DATABASE.get(database);
   if (statements === undefined) {
-    statements = new Map();
-    statementsByDatabase.set(database, statements);
+    statements = {defaultInteger: new Map(), exactInteger: new Map()};
+    STATEMENTS_BY_DATABASE.set(database, statements);
   }
   return statements;
 }
@@ -31,7 +30,7 @@ function statementsOf(statementsByDatabase, database) {
  * @return {Object} The prepared statement.
  */
 function preparedStatementOf(database, sql) {
-  const statements = statementsOf(DEFAULT_INTEGER_STATEMENTS, database);
+  const statements = statementsOf(database).defaultInteger;
   let statement = statements.get(sql);
   if (statement === undefined) {
     statement = database.prepare(sql);
@@ -49,7 +48,7 @@ function preparedStatementOf(database, sql) {
  * @return {Object} The prepared statement, in safe-integer mode.
  */
 function preparedExactStatementOf(database, sql) {
-  const statements = statementsOf(EXACT_INTEGER_STATEMENTS, database);
+  const statements = statementsOf(database).exactInteger;
   let statement = statements.get(sql);
   if (statement === undefined) {
     statement = database.prepare(sql).safeIntegers(true);

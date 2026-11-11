@@ -14,6 +14,7 @@ import Database from 'better-sqlite3';
 import {PARTICIPANT_COMMIT_OUTCOME} from '../constants/transactions.js';
 import {stampParticipantConnection} from './partition-participant-transaction-connection.js';
 import {RaftRsDurableStore} from '../raft/raft-rs-durable-store.js';
+import {preparedStatementOf} from '../storage/sqlite-prepared-statement-owner.js';
 import {deepFreeze} from '../raft/raft-operation-port.js';
 import {RAFT_RS_RETAINED_ENTRY_KIND as ENTRY_KIND,
   RAFT_RS_RETAINED_ENTRY_PHASE as ENTRY_PHASE,
@@ -37,11 +38,6 @@ import {
 } from './partition-participant-transaction-constants.js';
 
 const ONE_ROW = 1;
-// Per connection: the store's own read statements, prepared once (the
-// reservation read runs on every committed statement and on the leader's
-// request path).
-const READ_STATEMENTS = new WeakMap();
-
 /**
  * Whether the participant store can be read on a partition's connection:
  * CLOSED when the lifecycle owner released it (the service's db is null) or
@@ -60,17 +56,9 @@ function readStatementOf(db, sql) {
     throw Object.assign(new Error(STORE_ERROR.CONNECTION_CLOSED),
       {code: STORE_ERROR_CODE.CONNECTION_CLOSED});
   }
-  let statements = READ_STATEMENTS.get(db);
-  if (statements === undefined) {
-    statements = new Map();
-    READ_STATEMENTS.set(db, statements);
-  }
-  let statement = statements.get(sql);
-  if (statement === undefined) {
-    statement = db.prepare(sql);
-    statements.set(sql, statement);
-  }
-  return statement;
+  // Prepared once per connection: the reservation read runs on every
+  // committed statement and on the leader's request path.
+  return preparedStatementOf(db, sql);
 }
 
 // What a durable state answers (design 5.2): a terminal row is the only
