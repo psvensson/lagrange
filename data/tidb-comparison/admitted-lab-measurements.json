@@ -4332,7 +4332,8 @@
           "bench-live-20261101-b-r7-r001",
           "bench-live-20261101-b-r8-r001"
         ],
-        "forensic": []
+        "forensic": [],
+        "semanticProofIds": []
       },
       "metrics": {
         "profileClass": "smoke",
@@ -7174,7 +7175,6 @@
       "status": "valid-observed",
       "reasons": [
         "semantic-gate-incomplete",
-        "semantic-gate-incomplete:durability:probe_inapplicable",
         "smoke-profile-no-capacity-claim"
       ],
       "defectIds": [
@@ -7199,7 +7199,40 @@
           "bench-live-20261101-b-r7-r003",
           "bench-live-20261101-b-r8-r003"
         ],
-        "forensic": []
+        "forensic": [],
+        "semanticProofIds": [
+          "failureAtomicity:terminal_logical_request_must_not_leave_partial_transaction_effects",
+          "forbidden:dirty_read",
+          "forbidden:duplicate_success_effect",
+          "forbidden:lost_successful_write",
+          "forbidden:partial_commit",
+          "forbidden:read_only_transaction_mutation",
+          "isolation:dirtyReadsForbidden",
+          "isolation:lostSuccessfulWriteForbidden",
+          "isolation:readYourOwnWritesRequired",
+          "isolation:successfulEffectsExactlyOnce",
+          "outcome:retryableConflictSqlState:40001",
+          "transaction:delivery:customer_balance_increases_by_selected_line_total",
+          "transaction:delivery:customer_delivery_count_advances_once_per_delivered_order",
+          "transaction:delivery:selected_new_order_is_removed_once_per_serviced_district",
+          "transaction:delivery:selected_order_carrier_is_set_once",
+          "transaction:delivery:selected_order_lines_are_marked_delivered",
+          "transaction:new_order:district_next_order_id_advances_once",
+          "transaction:new_order:one_new_order_row_created_for_allocated_order_id",
+          "transaction:new_order:one_order_line_created_per_input_line",
+          "transaction:new_order:one_order_row_created_for_allocated_order_id",
+          "transaction:new_order:stock_effects_applied_once_per_input_line",
+          "transaction:order_status:database_state_is_unchanged",
+          "transaction:order_status:latest_customer_order_is_returned_when_present",
+          "transaction:order_status:returned_lines_belong_to_returned_order",
+          "transaction:payment:customer_balance_decreases_by_payment_amount",
+          "transaction:payment:customer_payment_counters_advance_once",
+          "transaction:payment:district_ytd_increases_by_payment_amount",
+          "transaction:payment:one_history_row_created_for_logical_payment",
+          "transaction:payment:warehouse_ytd_increases_by_payment_amount",
+          "transaction:stock_level:database_state_is_unchanged",
+          "transaction:stock_level:reported_low_stock_count_uses_canonical_recent_order_window"
+        ]
       },
       "metrics": {
         "profileClass": "smoke",
@@ -9234,7 +9267,8 @@
           "bench-live-20261101-b-r7-r002",
           "bench-live-20261101-b-r8-r002"
         ],
-        "forensic": []
+        "forensic": [],
+        "semanticProofIds": []
       },
       "metrics": null
     },

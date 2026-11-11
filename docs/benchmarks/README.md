@@ -48,7 +48,7 @@ The named smoke profile scenario-a-smoke-v1: the canonical workload executed end
 | --- | --- |
 | Lagrange 0.4.0 (3 nodes) | product-failure (no-committed-operations, readiness-exhausted): smoke profile: offered 100, issued 0, committed 0, conflict-exhausted 0, product_error 0, correctness_failure 0, transport_failure 0, harness_fault 0, unresolved 0, unissued 100; setup failed in bench-live-20261101-b-r9-r001: product_error, sqlstate null, code readiness_exhausted, message lagrange-node@192.168.86.27 did not report ready after 120 attempts; last readiness answer of lagrange-node@192.168.86.27: DEGRADED (degraded), reasons PRIORITY_CONTROL_PLANE_RECOVERY_PENDING, after 120 attempts |
 | TiDB + TiKV v8.5.8 | unsupported (semantic-gate-client-missing:tidb-tikv) |
-| PostgreSQL 17 (single primary) | valid-observed (semantic-gate-incomplete, semantic-gate-incomplete:durability:probe_inapplicable, smoke-profile-no-capacity-claim): smoke profile: offered 100, issued 100, committed 100, conflict-exhausted 0, product_error 0, correctness_failure 0, transport_failure 0, harness_fault 0, unresolved 0, unissued 0 |
+| PostgreSQL 17 (single primary) | valid-observed (semantic-gate-incomplete, smoke-profile-no-capacity-claim): smoke profile: offered 100, issued 100, committed 100, conflict-exhausted 0, product_error 0, correctness_failure 0, transport_failure 0, harness_fault 0, unresolved 0, unissued 0 |
 
 ## Per-phase time breakdown
 
