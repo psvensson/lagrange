@@ -4,10 +4,10 @@
   "counts": {
     "admin-diagnostics": 128,
     "architecture-governance": 21,
-    "bootstrap-membership": 355,
+    "bootstrap-membership": 353,
     "cdc-metadata": 74,
     "cli-tooling": 100,
-    "control-plane": 250,
+    "control-plane": 248,
     "convergence-topology": 84,
     "distributed-harness": 220,
     "examples-e2e": 8,
@@ -25,10 +25,10 @@
     "transport-messaging": 127,
     "wasm-toolchain": 74
   },
-  "censusSize": 2766,
-  "digest": "fnv1a32-40a28340",
+  "censusSize": 2762,
+  "digest": "fnv1a32-dbcccd5f",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-642f466b",
+  "observationDigest": "fnv1a32-d8ea55e8",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -150,8 +150,6 @@
     "test/bootstrap/bootstrap-topology-snapshot.test.js": "bootstrap-membership",
     "test/bootstrap/bootstrap-websocket-server-reentry.test.js": "bootstrap-membership",
     "test/bootstrap/cache-hydration-correctness.property.test.js": "bootstrap-membership",
-    "test/bootstrap/cache-hydration-gate.property.test.js": "bootstrap-membership",
-    "test/bootstrap/cache-hydration-gate.test.js": "bootstrap-membership",
     "test/bootstrap/cache-hydration-performance.test.js": "bootstrap-membership",
     "test/bootstrap/cache-hydration-strictness.test.js": "bootstrap-membership",
     "test/bootstrap/call-cell-invocation-setup.test.js": "bootstrap-membership",
@@ -594,7 +592,6 @@
     "test/control-plane/current-membership-epoch-null-unreadable.test.js": "control-plane",
     "test/control-plane/deployment-binding-owner.test.js": "control-plane",
     "test/control-plane/dispatch-handler-verification.property.test.js": "control-plane",
-    "test/control-plane/dual-path-closure.test.js": "control-plane",
     "test/control-plane/eligibility-snapshot.test.js": "control-plane",
     "test/control-plane/endpoint-incarnation-authority.test.js": "control-plane",
     "test/control-plane/endpoint-reader-currentness.test.js": "control-plane",
@@ -666,7 +663,6 @@
     "test/control-plane/owner-membership-driver.test.js": "control-plane",
     "test/control-plane/owner-membership-reconcile-wait-bound-spent.test.js": "control-plane",
     "test/control-plane/owner-outcome-contract.test.js": "control-plane",
-    "test/control-plane/phase-exit-criteria.test.js": "control-plane",
     "test/control-plane/postgres-wire-scale.test.js": "control-plane",
     "test/control-plane/pressure-governor.test.js": "control-plane",
     "test/control-plane/priority-partition-census-self-diagnosis-adversarial.test.js": "control-plane",
@@ -1356,6 +1352,7 @@
     "test/node/replica-handler-idempotency.property.test.js": "bootstrap-membership",
     "test/node/replica-handler-leadership-transfer.test.js": "bootstrap-membership",
     "test/node/replica-handler-membership-relay.test.js": "bootstrap-membership",
+    "test/node/replica-handler-owner-path-bypass-removal.test.js": "bootstrap-membership",
     "test/node/replica-handler-owner-path-bypass.test.js": "bootstrap-membership",
     "test/node/replica-handler-release-recovery.test.js": "bootstrap-membership",
     "test/node/replica-handler-remove-closed-service.test.js": "bootstrap-membership",
@@ -1389,7 +1386,6 @@
     "test/node/runtime-service-handler.test.js": "bootstrap-membership",
     "test/node/runtime-service-remove-execution-custody.test.js": "bootstrap-membership",
     "test/node/runtime-service-restart-inventory-custody.test.js": "bootstrap-membership",
-    "test/node/services-p1-diagnostic-logger.test.js": "bootstrap-membership",
     "test/node/single-cdc-write-path.property.test.js": "bootstrap-membership",
     "test/node/state-change-event-emission.property.test.js": "bootstrap-membership",
     "test/node/state-count-accuracy.property.test.js": "bootstrap-membership",
@@ -12353,18 +12349,26 @@
         "src/transport/transport-semantic-outcome.js"
       ]
     },
-    "test/node/replica-handler-owner-path-bypass.test.js": {
+    "test/node/replica-handler-owner-path-bypass-removal.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
-        "src/config/configuration-manager.js",
         "src/partition/partition-participant-transaction-store.js",
-        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/executor-outcome-emitter.js",
         "src/rebalancer/replica-operation-constants.js",
         "test/node/replica-handler-bootstrap-stamps.js",
         "test/node/replica-handler-owner-path-admission-fixture.js",
-        "test/test-helpers/lifecycle-state-store.js",
-        "test/test-helpers/partition-removal-serving-surface.js",
-        "test/test-helpers/replica-handler-identity-fixture.js"
+        "test/test-helpers/lifecycle-state-store.js"
+      ]
+    },
+    "test/node/replica-handler-owner-path-bypass.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/partition/partition-participant-transaction-store.js",
+        "src/rebalancer/executor-outcome-emitter.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "test/node/replica-handler-bootstrap-stamps.js",
+        "test/node/replica-handler-owner-path-admission-fixture.js",
+        "test/test-helpers/lifecycle-state-store.js"
       ]
     },
     "test/node/replica-handler-release-recovery.test.js": {
@@ -24554,8 +24558,7 @@
     "test/transport/transport-delivery-failure-table.test.js": {
       "files": [
         "src/constants/transport.js",
-        "src/transport/transport-error-codes.js",
-        "src/transport/transport-router-invariant-error-codes.js"
+        "src/transport/transport-error-codes.js"
       ],
       "directories": [
         "src/transport"
