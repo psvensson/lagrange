@@ -8,13 +8,14 @@ documentClass: generated
 ## Files
 
 - [config-constants.js](config-constants.js) - Default configuration values. (importers: hub)
-- [config-definitions.js](config-definitions.js) - Default configuration values and typed configuration definitions. (importers: few)
+- [config-definitions.js](config-definitions.js) - Default configuration values and typed configuration definitions. (importers: many)
 - [config-key-constants.js](config-key-constants.js) - Canonical string keys for configuration settings. (importers: many)
 - [config-latency-constants.js](config-latency-constants.js) - No leading comment; first export: LATENCY_PROPAGATION_MODE. (importers: few)
 - [config-schema-constants.js](config-schema-constants.js) - JSON Schema for configuration validation. (importers: one)
 - [configuration-manager.js](configuration-manager.js) - Configuration Manager - Centralized configuration system. (importers: hub)
 - [dynamic-config-service.js](dynamic-config-service.js) - Dynamic Configuration Service - Manages configuration through system table. (importers: many)
 - [dynamic-config-startup-wiring.js](dynamic-config-startup-wiring.js) - Dynamic configuration startup wiring helpers. (importers: few)
+- [formation-target-node-count.js](formation-target-node-count.js) - The declared formation size (owner ruling 2026-11-11, decision D1(a) of... (importers: many)
 - [listener-port-model.js](listener-port-model.js) - No leading comment; first export: LISTENER_PORT_DEFAULT. (importers: hub)
 - [raft-adaptive-timing-controller-constants.js](raft-adaptive-timing-controller-constants.js) - Constants for Raft adaptive timing controller. (importers: one)
 - [raft-adaptive-timing-controller.js](raft-adaptive-timing-controller.js) - Raft adaptive timing controller. (importers: few)
