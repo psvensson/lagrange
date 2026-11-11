@@ -483,6 +483,9 @@ const READINESS_SKIP_DETAIL = Object.freeze({
   OUTBOUND_QUEUE_UNAVAILABLE: 'outbound_queue',
   PING_FAILED: 'ping',
   REPAIR_INELIGIBLE: 'repair_ineligible',
+  // The planning readiness owner answered neither ready nor not-ready (a
+  // rebuild is queued): not a final no; its publication wakes the entity.
+  READINESS_DEFERRED: 'readiness_deferred',
 });
 
 const REBALANCER_QUEUE_NAME = Object.freeze({

@@ -312,7 +312,12 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
     }
 
     /**
-   * Query a single operation by ID (cache-first, SQL fallback).
+   * ADVISORY projection read of one operation: the local cache row, else an
+   * owner-preferred read that may fall back to local SQL. It is never
+   * authority: null means "not visible in the projection" (a cache miss
+   * with an empty or FAILED fallback read), never confirmed absence. A
+   * consumer that discharges, completes or drops work on what it reads uses
+   * getOperationByIdVisibilityObservation with OWNER_RPC_REQUIRED instead.
    * @param {string} operationId
    * @return {Promise<object|null>}
    */

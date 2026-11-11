@@ -140,6 +140,11 @@ const RAFT_MEMBERSHIP_CHANGE_REFUSAL = Object.freeze({
   // refuses to apply it ("removed all voters"), so the leader's port refuses
   // it before the core is handed it. Terminal: no later state admits it.
   REMOVES_LAST_VOTER: 'membership-change-removes-last-voter',
+  // A change that removes the leader that proposes it: raft-rs
+  // would commit it and keep the removed leader leading while it drops every
+  // proposal. Refused at the leader's port, retryable: the change is another
+  // leader's once this one hands leadership on.
+  REMOVES_LEADER: 'membership-change-removes-leader',
   // A change to a group its durable workflow record retires as a unit (a
   // dissolved split/merge source, an aborted child/target): its member set
   // is frozen, so no member is added, replaced, promoted or removed.

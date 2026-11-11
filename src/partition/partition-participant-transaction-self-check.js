@@ -9,12 +9,17 @@
 // unaffected.
 //
 // A verdict lives only as long as what it measured: this connection, its
-// schema version and this leadership tenure. Each leadership acquisition
-// measures again; a schema change measures again; an UNAVAILABLE verdict (a
-// probe that could not be measured, nothing else unsatisfied) is never kept,
-// so the next BEGIN measures again. A FAILED verdict refuses every BEGIN for
-// the rest of its lifetime, and a binary that is genuinely not deterministic
-// fails every measurement, so it stays refused.
+// schema - the main schema and the connection's temp schema, whose objects (a
+// TEMP trigger on a participant table) enter every program yet never bump the
+// main schema_version - and this leadership tenure. Each leadership
+// acquisition measures again; a change to either schema measures again; an
+// UNAVAILABLE verdict (a probe that could not be measured, nothing else
+// unsatisfied, or a self-check that could not run) is never kept, so the next
+// BEGIN measures again, and it is reported once per leadership tenure (a
+// deterministic probe_unavailable would otherwise warn on every BEGIN). A
+// FAILED verdict refuses every BEGIN for the rest of its lifetime, and a
+// binary that is genuinely not deterministic fails every measurement, so it
+// stays refused.
 //
 // The coordinator ledger (sql_transactions) is never a participant: the
 // participant admission owner refuses its BEGIN before any self-check, and
@@ -40,10 +45,12 @@ import {coordinatorTableParticipantRefusal} from
 
 // Per partition service: its configured self-check.
 const CONFIGURED = new WeakMap();
-// Per connection: the verdict of the current leadership tenure, with the
-// schema version it was measured on.
+// Per connection, within the current leadership tenure: the kept verdict
+// with the schema key it was measured on, or the record that an UNAVAILABLE
+// verdict was already reported (nothing kept: `verdict` null).
 const VERDICTS = new WeakMap();
 const PRAGMA_SCHEMA_VERSION = 'schema_version';
+const PRAGMA_TEMP_SCHEMA_VERSION = 'temp.schema_version';
 const NOT_APPLICABLE_VERDICT = Object.freeze({passed: false,
   state: STATE.NOT_APPLICABLE, cases: Object.freeze([])});
 
@@ -59,16 +66,27 @@ function configureParticipantDeterminismSelfCheck(service, selfCheck) {
   }
 }
 
+// The one outcome of a self-check that could not run: nothing was measured,
+// so its state is UNAVAILABLE - BEGIN stays refused and the next BEGIN
+// measures again - with the cause it threw.
+function unmeasuredSelfCheck(selfCheckError) {
+  return Object.freeze({measured: false, passed: false,
+    cases: Object.freeze([]), error: String(selfCheckError?.message)});
+}
+
 function runConfiguredSelfCheck(service) {
   const selfCheck = CONFIGURED.get(service) ?? runDeterminismSelfCheck;
   try {
     return {measured: true, ...selfCheck(service.db, {tableName: service.tableName})};
   } catch (selfCheckError) {
-    // A self-check that cannot run measured nothing: BEGIN stays refused and
-    // the next BEGIN measures again.
-    return {measured: false, passed: false, cases: [],
-      error: String(selfCheckError?.message)};
+    return unmeasuredSelfCheck(selfCheckError);
   }
+}
+
+// What a verdict is kept against: the main and the temp schema versions.
+function schemaKeyOf(db) {
+  return `${db.pragma(PRAGMA_SCHEMA_VERSION, {simple: true})}:` +
+    `${db.pragma(PRAGMA_TEMP_SCHEMA_VERSION, {simple: true})}`;
 }
 
 // PASSED; UNAVAILABLE when nothing was measured, or when every unsatisfied
@@ -112,21 +130,25 @@ function participantDeterminismSelfCheckOf(service) {
     return NOT_APPLICABLE_VERDICT;
   }
   const db = service.db;
-  const schemaVersion = db.pragma(PRAGMA_SCHEMA_VERSION, {simple: true});
-  const kept = VERDICTS.get(db);
-  if (kept !== undefined && kept.schemaVersion === schemaVersion) {
-    return kept;
+  const schemaVersion = schemaKeyOf(db);
+  const tenure = VERDICTS.get(db);
+  if (tenure?.verdict && tenure.verdict.schemaVersion === schemaVersion) {
+    return tenure.verdict;
   }
   const measurement = runConfiguredSelfCheck(service);
   const state = verdictStateOf(measurement);
   const verdict = Object.freeze({...measurement, passed: state === STATE.PASSED,
     state, schemaVersion});
-  if (state === STATE.UNAVAILABLE) {
-    VERDICTS.delete(db);
+  if (state !== STATE.UNAVAILABLE) {
+    VERDICTS.set(db, {verdict, unavailableReported: false});
+    reportVerdict(service, verdict);
   } else {
-    VERDICTS.set(db, verdict);
+    // Never kept; reported once in this tenure.
+    VERDICTS.set(db, {verdict: null, unavailableReported: true});
+    if (tenure?.unavailableReported !== true) {
+      reportVerdict(service, verdict);
+    }
   }
-  reportVerdict(service, verdict);
   return verdict;
 }
 

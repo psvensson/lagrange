@@ -1,3 +1,5 @@
+import {stubAvailableNodes} from './available-node-plan-stub.js';
+
 export function registerUnifiedRebalancerPriorityFollowupCreationTests(context) {
   const {
     CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
@@ -137,10 +139,10 @@ export function registerUnifiedRebalancerPriorityFollowupCreationTests(context) 
 
     rebalancer.setLeader(true);
     rebalancer.getCurrentReplicas = () => [];
-    rebalancer.getAvailableNodes = () => ([
+    stubAvailableNodes(rebalancer, () => ([
       {node_id: 'node-1'},
       {node_id: 'node-2'},
-    ]);
+    ]));
     rebalancer.movePlanner.calculateTargetState = async () => ({
       targetReplicaCount: 2,
     });

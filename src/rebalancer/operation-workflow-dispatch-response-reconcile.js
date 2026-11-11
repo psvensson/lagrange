@@ -343,24 +343,44 @@ function noteReplaceSourceRemovalEffect(
 }
 
 // R14: a REMOVE whose effect the durable rows already show complete is
-// never failed by a later delivery's failure or refusal (a duplicate
-// re-drive answered after the removal finished, an answer lost to the
-// transport). The stop-phase satisfied path completes it; any other REMOVE
-// failure, and every other operation type, fails as before.
-async function failDispatchUnlessRemoveEffectComplete(
-  owner, operation, errorMsg) {
-  if (operation?.type === OperationType.REMOVE) {
-    const observation = await owner.observeStoppingReplicaProgress(
-      operation.replicaId,
-      operation.partitionId,
-      operation.targetNodeId,
+// never failed or deferred by a later delivery's failure or refusal (a
+// duplicate re-drive answered after the removal finished, an answer lost to
+// the transport): the stop-phase satisfied path completes it. This is that
+// check: the satisfied stop phase, or null (any other operation, or the
+// effect not observed).
+async function completeObservedRemoveEffect(owner, operation) {
+  if (operation?.type !== OperationType.REMOVE) {
+    return null;
+  }
+  const observation = await owner.observeStoppingReplicaProgress(
+    operation.replicaId,
+    operation.partitionId,
+    operation.targetNodeId,
+  );
+  return owner.isStoppingReplicaRemovalObserved(observation) ?
+    owner.handleStopPhaseSatisfiedResponse(
+      operation,
+      ReplicaOperationResponseStatus.COMPLETED,
+    ) : null;
+}
+
+// A dispatch that was not answered as accepted: a REMOVE whose effect the
+// durable rows already show complete completes at once (R14) - its effect
+// check runs before any deferral, so a retryable answer never holds a
+// removal that already happened until its retry budget is spent; otherwise
+// a retryable failure defers, and any other fails unless its effect is
+// complete.
+async function settleUnacceptedDispatch(owner, operation, errorLike, errorMsg) {
+  const completed = await completeObservedRemoveEffect(owner, operation);
+  if (completed !== null) {
+    return completed;
+  }
+  if (owner.deferDispatchRetry(operation, errorLike)) {
+    return owner.buildSkippedOperationResult(
+      REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
+      operation.operationId,
+      {error: errorMsg},
     );
-    if (owner.isStoppingReplicaRemovalObserved(observation)) {
-      return owner.handleStopPhaseSatisfiedResponse(
-        operation,
-        ReplicaOperationResponseStatus.COMPLETED,
-      );
-    }
   }
   await owner.failOperation(operation, errorMsg);
   return owner.buildFailedOperationResult(operation.operationId, errorMsg);
@@ -829,19 +849,8 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
         operation = ambiguousCreateResult.operation;
         response = ambiguousCreateResult.response;
       }
-      if (!retainedCreateDeliveryResolution &&
-          this.deferDispatchRetry(operation, error)) {
-        return this.buildSkippedOperationResult(
-          REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
-          operation.operationId,
-          {
-            error: errorMsg,
-          },
-        );
-      }
       if (!retainedCreateDeliveryResolution) {
-        return failDispatchUnlessRemoveEffectComplete(
-          this, operation, errorMsg);
+        return settleUnacceptedDispatch(this, operation, error, errorMsg);
       }
     }
     if (
@@ -876,19 +885,8 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
         operation = ambiguousCreateResult.operation;
         response = ambiguousCreateResult.response;
       }
-      if (!retainedCreateDeliveryResolution &&
-          this.deferDispatchRetry(operation, errorLike)) {
-        return this.buildSkippedOperationResult(
-          REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
-          operation.operationId,
-          {
-            error: errorMsg,
-          },
-        );
-      }
       if (!retainedCreateDeliveryResolution) {
-        return failDispatchUnlessRemoveEffectComplete(
-          this, operation, errorMsg);
+        return settleUnacceptedDispatch(this, operation, errorLike, errorMsg);
       }
     }
     while (true) {
@@ -1023,16 +1021,7 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
     if (ambiguousCreateResult) {
       return ambiguousCreateResult;
     }
-    if (this.deferDispatchRetry(operation, errorLike)) {
-      return this.buildSkippedOperationResult(
-        REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
-        operation.operationId,
-        {
-          error: errorMsg,
-        },
-      );
-    }
-    return failDispatchUnlessRemoveEffectComplete(this, operation, errorMsg);
+    return settleUnacceptedDispatch(this, operation, errorLike, errorMsg);
   },
   // The one owner accessor of an operation's armed retries.
   readOperationRetryArmedState(operationId) {

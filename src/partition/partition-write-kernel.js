@@ -203,6 +203,21 @@ function isWriteOutcomeUnknown(answer) {
 }
 
 /**
+ * Whether a statement failure carries an unknown write outcome, on itself or
+ * on a participant (the query layer's buildParticipantFailureEntry keeps each
+ * participant's failureCode). Only a re-delivery under that entryId resolves
+ * it; a client re-issue of the statement is a second write.
+ * @param {*} failure - A statement failure (result or thrown error).
+ * @return {boolean} Whether any part of it is the typed unknown outcome.
+ */
+function hasWriteOutcomeUnknown(failure) {
+  return isWriteOutcomeUnknown(failure) ||
+    isWriteOutcomeUnknown(failure?.firstFailedParticipant) ||
+    (Array.isArray(failure?.participantFailures) &&
+      failure.participantFailures.some(isWriteOutcomeUnknown));
+}
+
+/**
  * Whether a write answer is a settled replay whose affected-row count is not
  * known (PARTITION_SETTLED_REPLAY.OUTCOME_NOT_RETAINED): the write was
  * applied, and it carries no count. Every consumer that turns an answer's
@@ -581,6 +596,7 @@ export {
   isReroutableWriteFailureCode,
   isRetryableWriteFailureCode,
   isWriteOutcomeUnknown,
+  hasWriteOutcomeUnknown,
   pickTypedWriteAnswer,
   resolvePartitionWriteCommitMode,
 };

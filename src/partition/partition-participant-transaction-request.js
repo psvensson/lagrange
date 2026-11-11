@@ -282,8 +282,9 @@ function beginRefusalOf(service, payload) {
   }
   const selfCheck = participantDeterminismSelfCheckOf(service);
   if (selfCheck.passed !== true) {
-    return refusalOf(service, payload, CODE.DETERMINISM_SELF_CHECK_FAILED,
-      {selfCheckState: selfCheck.state});
+    // The verdict's state is the leader's log record (reportVerdict); the
+    // refusal's consumer decides on the code alone.
+    return refusalOf(service, payload, CODE.DETERMINISM_SELF_CHECK_FAILED);
   }
   return service.removalServingAdmissionFenced === true ?
     refusalOf(service, payload, CODE.REMOVAL_FENCED, {deferRetry: true}) :

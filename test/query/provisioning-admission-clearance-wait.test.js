@@ -112,6 +112,7 @@ function createWorld(options = {}) {
   world.coordinator.systemTableCache = world.cache;
   world.coordinator.controlPlaneReadinessService = world.readiness;
   world.coordinator.sqlQueryEngine = {queryExecutor: {
+    resolveAddressQuarantineRetryDueAtMs: () => null,
     resolvePartitionServiceCandidates: () => ({
       candidates: world.routeUp ? [{nodeId: 'node-a'}] : [],
       routingSnapshot: null,

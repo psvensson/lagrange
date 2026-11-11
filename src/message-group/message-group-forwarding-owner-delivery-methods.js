@@ -320,16 +320,10 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
       return true;
     },
 
-    // `deliveryResult` is the delivery reading (deliveryReadingOf) or a thrown
-    // error's transport outcome. A spent delivery suppresses the target only
-    // when the target's router never acknowledged it (ack_timeout): an
-    // answer_timeout says the leader accepted the forward and is alive, and
-    // an unestablished_timeout accuses no target.
+    // Spent: only ack_timeout accuses the target (answer_timeout: it is alive).
     shouldSuppressForwardTarget(deliveryResult, errorMessage) {
       if (deliveryReasonOfReading(deliveryResult) ===
-          TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.ACK_TIMEOUT) {
-        return true;
-      }
+          TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.ACK_TIMEOUT) return true;
       if (
         typeof errorMessage !== typeofToken.STRING ||
         errorMessage.length === num.ZERO
@@ -651,10 +645,7 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
           ) {
             const shouldRepairTopology =
               service.shouldRepairForwardTopology(deliveryErrorMessage);
-            if (service.shouldSuppressForwardTarget(
-              failure,
-              deliveryErrorMessage,
-            )) {
+            if (service.shouldSuppressForwardTarget(failure, deliveryErrorMessage)) {
               service.suppressForwardTarget({
                 serviceId: target.serviceId,
                 address: leaderAddress,

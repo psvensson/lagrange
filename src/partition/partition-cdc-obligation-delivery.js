@@ -33,8 +33,8 @@ import {PARTITION_CDC_OBLIGATION_BOUND as BOUND, PARTITION_CDC_OBLIGATION_DRIVE_
   PARTITION_CDC_OBLIGATION_ORIGIN as ORIGIN, PARTITION_CDC_OBLIGATION_REASON as REASON,
   PARTITION_CDC_RECIPIENT_PASS as PASS} from
   './partition-cdc-obligation-constants.js';
-import {acknowledgedEventBytesOf, buildCdcAcknowledgementCommand, isCdcPositionReclaimed,
-  readCdcObligationProgress, readOwedCdcObligations} from
+import {acknowledgedEventBytesOf, buildCdcAcknowledgementCommand, countCdcObligations,
+  isCdcPositionReclaimed, readCdcObligationProgress, readOwedCdcObligations, readOwedCdcTail} from
   './partition-cdc-obligation-ledger.js';
 import {eventOf, positionOf, readRetainedDeliveredGauge, retainedDeliveredBackpressured} from
   './partition-cdc-obligation-vector.js';
@@ -363,8 +363,25 @@ function drivePrecondition(delivery, lane, reason) {
   const {owner} = delivery;
   const state = owner.isShutdown || !owner.db ? DRIVE.SHUTDOWN :
     !laneIsCurrent(delivery, lane) ? DRIVE.NOT_LEADER :
-      owner.cdcSubscribers.size === 0 ? DRIVE.NO_SUBSCRIBERS : null;
+      owner.cdcSubscribers.size === 0 ? noSubscriberState(delivery, lane) : null;
   return state === null ? null : driveOutcome(lane, state, {reason, delivered: 0});
+}
+
+// A leader with owed rows and no subscriber: the named condition, logged once
+// per tenure, and the wake of the partition's deferred propagation attachment
+// (the registration that failed waits for this or for its message group).
+function noSubscriberState(delivery, lane) {
+  const {owner} = delivery;
+  if (readOwedCdcTail(owner.db) === null) return DRIVE.NO_SUBSCRIBERS;
+  const attachment = delivery.propagationAttachment;
+  if (!lane.noSubscriberReported) {
+    lane.noSubscriberReported = true;
+    owner.logger.warn(LOG_MSG.OWED_WITHOUT_PROPAGATION_SUBSCRIBER, {
+      partitionId: owner.partitionId, tableName: owner.tableName,
+      owed: countCdcObligations(owner.db).owed, attachmentPending: attachment !== null});
+  }
+  attachment?.();
+  return DRIVE.NO_PROPAGATION_SUBSCRIBER;
 }
 
 // A recipient has no committed receipt for the vector it was shipped: its own
@@ -419,15 +436,22 @@ const RECIPIENT_OPS = Object.freeze({
   // A held one keeps its backoff: another recipient's delivery never wakes it.
   recipientsObserved: (delivery, lane) => {
     reobserveLaneRecipients(lane);
-    startRecipientDrives(delivery, lane, joinAwaitedDrives(lane), RECIPIENT_OPS, false);
+    startRecipientDrives(delivery, lane, joinAwaitedDrives(lane), RECIPIENT_OPS);
   },
-  // The delivery's actual local cleanup released this recipient's custody:
-  // the wait it ended on is cleared, so it starts at once.
+  // A delivery's actual local cleanup released a custody slot: the recipient
+  // that ended on it starts at once (past its backoff: the raw work it was
+  // refused for is gone), and any recipient of the current lane that waited
+  // for that slot (a successor tenure's) is started.
   resumeAfterCleanup: (delivery, lane, target) => {
     const {drive} = target.recipient;
-    if (!drive?.resumeOnCleanup || drive.running) return;
-    drive.resumeOnCleanup = false;
-    wakeRecipient(delivery, lane, target, joinAwaitedDrives(lane), RECIPIENT_OPS);
+    if (drive?.resumeOnCleanup && !drive.running) {
+      drive.resumeOnCleanup = false;
+      wakeRecipient(delivery, lane, target, joinAwaitedDrives(lane), RECIPIENT_OPS);
+    }
+    const current = delivery.obligationLane;
+    if (laneIsCurrent(delivery, current)) {
+      startRecipientDrives(delivery, current, joinAwaitedDrives(current), RECIPIENT_OPS);
+    }
   },
   driveFailed: (delivery, error) => delivery.owner.logger.error(LOG_MSG.DRIVE_FAILED, {
     partitionId: delivery.owner.partitionId, error: error?.message ?? String(error)}),
@@ -515,7 +539,7 @@ function recipientDriveOutcome(delivery, lane, reason, delivered) {
   }
   const behind = recipientsBehindOwedTail(delivery, lane);
   if (behind.some(({wait}) => wait === null)) {
-    startRecipientDrives(delivery, lane, joinAwaitedDrives(lane), RECIPIENT_OPS, false);
+    startRecipientDrives(delivery, lane, joinAwaitedDrives(lane), RECIPIENT_OPS);
     return driveOutcome(lane, DRIVE.JOINED_IN_FLIGHT, fields);
   }
   const targets = laneRecipients(lane);
@@ -586,14 +610,13 @@ async function driveCdcObligations(delivery, reason) {
   try {
     acknowledgeFrontier(delivery, lane);
     startRecipientDrives(delivery, lane, group, RECIPIENT_OPS);
-    if (group.length === 0) return Object.freeze({state: DRIVE.JOINED_IN_FLIGHT, reason});
     for (let index = 0; index < group.length; index += 1) {
       await group[index];
       // A recipient observed meanwhile (a newly required group) is driven
       // before this drive answers.
       if (index === group.length - 1 && laneIsCurrent(delivery, lane)) {
         reobserveLaneRecipients(lane);
-        startRecipientDrives(delivery, lane, group, RECIPIENT_OPS, false);
+        startRecipientDrives(delivery, lane, group, RECIPIENT_OPS);
       }
     }
   } catch (error) {

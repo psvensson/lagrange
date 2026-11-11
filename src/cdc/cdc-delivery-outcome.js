@@ -39,6 +39,10 @@ const CDC_COMPLETION = objectFreeze({
   PROVISIONAL: 'cdc_provisional_ingress',
   INVALID: 'cdc_committed_acceptance_invalid',
   BACKPRESSURE: 'cdc_committed_acceptance_backpressure',
+  // The recipient holds raw work for this exact vector (an earlier identical
+  // delivery whose response already retired): retry after its hint. Never a
+  // capacity refusal and never a fault of the route that relayed it.
+  DUPLICATE_IN_FLIGHT: 'cdc_committed_acceptance_duplicate_in_flight',
 });
 const CDC_COVERAGE_STATE = objectFreeze({
   UNCOVERED: 'uncovered',
@@ -322,6 +326,28 @@ function unknownCdcAcceptance(error = CDC_COMPLETION.UNKNOWN) {
   return {success: false, error, deferRetry: true};
 }
 
+// The unknown outcomes that carry a typed reason and a retry hint.
+const TYPED_UNCONFIRMED_COMPLETIONS = objectFreeze([CDC_COMPLETION.BACKPRESSURE,
+  CDC_COMPLETION.DUPLICATE_IN_FLIGHT]);
+
+/**
+ * A recipient's answer that is neither committed nor provisional, as one hop
+ * carries it onward (a relay, the topology owner): the typed unknown that
+ * keeps the recipient's typed reason and retry hint, so the source honours
+ * them on that recipient only.
+ * @param {*} answer - The recipient's answer.
+ * @return {Object} The typed unknown outcome.
+ */
+function unconfirmedCdcAcceptance(answer) {
+  const typed = TYPED_UNCONFIRMED_COMPLETIONS.find((code) =>
+    answer?.error === code || answer?.reason === code) ?? CDC_COMPLETION.UNKNOWN;
+  return {
+    ...unknownCdcAcceptance(typed),
+    ...(numberIsFinite(answer?.retryAfterMs) && answer.retryAfterMs > 0 ?
+      {retryAfterMs: answer.retryAfterMs} : {}),
+  };
+}
+
 // Over a delivery envelope: the router delivered it AND its answer is the
 // canonical committed (or provisional) CDC outcome. The answer's own
 // deferral is CDC's provisional state, never a transport deferral.
@@ -406,5 +432,6 @@ export {
   isProvisionalCdcOutcome,
   observeCdcCoverage,
   observeCdcDeliveryCoverage,
+  unconfirmedCdcAcceptance,
   unknownCdcAcceptance,
 };

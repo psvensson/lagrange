@@ -12,9 +12,21 @@
 //    change (the delivery the planning owner classifies the pending source
 //    change on); cleared when the node's planning identity reads CURRENT.
 //  - REPLICA_OPERATION_ROUTE_SOURCE_CHANGED: woken by a deferred cache change
-//    of a table replica_operations routing is resolved from; cleared when
-//    one of those tables changed since the denial, or (for a denial taken by
-//    the sync route resolution) when the route resolves now.
+//    of a table replica_operations routing is resolved from, or a planning
+//    publication (a candidate's deferred readiness read); cleared when one of
+//    those tables changed since the denial, or (for a denial taken by the
+//    sync route resolution) when the route resolves now. A temporary address
+//    exclusion ends by time with no event: the routing owner states its
+//    retry point (routeObservation.retryDueAtMs) and the wait ends there so
+//    admission is re-run.
+//
+// Census of what else denies the replica_operations route (all through
+// resolvePartitionServiceCandidates): no routable service rows or no
+// canonical leader (cleared by services/partitions changes); node lease or
+// status (nodes changes; a lease that lapses only adds a denial); a deferred
+// readiness read of a candidate node (planning publication); a temporary
+// no-handler exclusion (time: the owner's retry point). A pre-submission
+// delivery loss has already spent its own retry budget inside delivery.
 //
 // Lost wake: the listeners are attached first and the condition re-checked
 // after, so a change landing between the denial and the subscription is
@@ -80,18 +92,34 @@ function attachClearanceWakes(coordinator, pending, nodeId, onWake) {
   const cache = coordinator.systemTableCache;
   const waitsForIdentity = pending.includes(
     OPERATION_CREATION_ADMISSION_CLEARANCE.PLANNING_IDENTITY_CURRENT);
-  if (waitsForIdentity) {
-    detach.push(coordinator.controlPlaneReadinessService
-      .subscribeReadinessPlanningSnapshots((event) => {
-        if (event.ownerKey === nodeId) onWake();
-      }));
-  }
+  const waitsForRoute = pending.includes(OPERATION_CREATION_ADMISSION_CLEARANCE
+    .REPLICA_OPERATION_ROUTE_SOURCE_CHANGED);
+  // A route candidate is also excluded while its node's readiness read is
+  // deferred, which a planning publication for ANY node key can end.
+  detach.push(coordinator.controlPlaneReadinessService
+    .subscribeReadinessPlanningSnapshots((event) => {
+      if (waitsForRoute || event.ownerKey === nodeId) onWake();
+    }));
   const listener = (tableName) => {
     if (waitsForIdentity || ROUTE_SOURCE_TABLE_SET.has(tableName)) onWake();
   };
   cache.onCacheChange(listener);
   detach.push(() => cache.offCacheChange(listener));
   return detach;
+}
+
+// The routing owner's stated retry point for a temporary address exclusion
+// (an exclusion ends by time, with no row change), as a delay on its clock;
+// null when the denial names none or it falls after the budget.
+function resolveRouteRetryDelayMs(denial, pending, remainingBudgetMs) {
+  const retryDueAtMs = denial.routeObservation?.retryDueAtMs;
+  if (!pending.includes(OPERATION_CREATION_ADMISSION_CLEARANCE
+    .REPLICA_OPERATION_ROUTE_SOURCE_CHANGED) ||
+      !Number.isFinite(retryDueAtMs)) {
+    return null;
+  }
+  const delayMs = Math.max(0, retryDueAtMs - Date.now());
+  return delayMs < remainingBudgetMs ? delayMs : null;
 }
 
 /**
@@ -145,6 +173,16 @@ function awaitOperationCreationAdmissionClearance(
       OPERATION_CREATION_ADMISSION_CLEARANCE_OUTCOME.BUDGET_SPENT),
     Math.max(0, remainingBudgetMs));
     detach.push(() => clearTimeout(timer));
+    // At the routing owner's retry point the denial may be over with no
+    // event at all: the wait ends there so admission is RE-RUN; the timer
+    // is the wake, the re-run admission is the answer.
+    const retryDelayMs = resolveRouteRetryDelayMs(denial, pending,
+      remainingBudgetMs);
+    if (retryDelayMs !== null) {
+      const retryTimer = setTimeout(() => finish(
+        OPERATION_CREATION_ADMISSION_CLEARANCE_OUTCOME.CLEARED), retryDelayMs);
+      detach.push(() => clearTimeout(retryTimer));
+    }
     if (options.cancellationToken) {
       detach.push(options.cancellationToken.onCancel(() =>
         finish(OPERATION_CREATION_ADMISSION_CLEARANCE_OUTCOME.CANCELLED)));

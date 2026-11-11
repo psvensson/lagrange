@@ -1,5 +1,4 @@
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
-import {copyCdcEvent} from '../cdc/cdc-event-envelope.js';
 import {replicaConsensusEventsOf} from '../node/replica-handler-membership-relay.js';
 import {NodeJoiningCdcSubscriptionAndBackfill} from './node-joining-cdc-subscription-and-backfill.js';
 import {
@@ -54,7 +53,8 @@ const {
   UNIFIED_SERVICE_TYPE,
   assertCritical,
   buildDurableRejoinPartitionRestorePlans,
-  registerPartitionCdcPropagation,
+  attachPartitionCdcPropagation,
+  propagatePartitionCdcVector,
   shouldAttachPartitionCdcPropagation,
   wireMigrationWorkflowOwners,
 } = NODE_JOINING_SERVICE_SHARED;
@@ -278,67 +278,42 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
     );
     const tableName = options.tableName;
     if (tableName && shouldAttachPartitionCdcPropagation(tableName)) {
-      const attachCdcPropagation = async () => {
-        const subscriptionSelection =
-          await this.resolveOperationalMessageGroupSelectionAsync({
-            requiredTables: [tableName],
-            preferredService: messageGroupService,
-            reuseCapturedIngress: true,
-          });
-        const subscriptionMessageGroupService = subscriptionSelection.service;
-        if (!subscriptionMessageGroupService) {
-          throw this.buildMessageGroupOwnerNotReadyError(
-            subscriptionSelection,
-            {
-              message:
-                NODE_JOINING_SERVICE_LITERAL
-                  .OPERATIONAL_MESSAGE_GROUP_CDC_INGRESS_NOT_READY +
-                `for ${tableName} CDC subscription`,
-            },
-          );
-        }
-        await subscriptionMessageGroupService.subscribeToCDC(tableName);
-        const handshake = await registerPartitionCdcPropagation(partition, {
+      await attachPartitionCdcPropagation(partition, {
+        tableName,
+        preferredService: messageGroupService,
+        defer: options.deferCdcPropagationHandshake === true,
+        messageGroupServices: () => this.messageGroupServices,
+        logger: this.logger,
+        logContext: {tableName, partitionId: options.partitionId, replicaId: options.replicaId},
+        notReadyMessage: NODE_JOINING_SERVICE_LITERAL.OPERATIONAL_MESSAGE_GROUP_CDC_INGRESS_NOT_READY +
+          `for ${tableName} CDC subscription`,
+        resolveOperationalMessageGroupSelectionAsync: (selectionOptions = {}) =>
+          this.resolveOperationalMessageGroupSelectionAsync(selectionOptions),
+        buildMessageGroupOwnerNotReadyError: (selection, errorOptions) =>
+          this.buildMessageGroupOwnerNotReadyError(selection, errorOptions),
+        registration: {
           role: JOINING_CDC_SUBSCRIBER_ROLE,
           nodeId: this.nodeId,
-          tableName,
           partitionId: options.partitionId,
           replicaId: options.replicaId,
           logger: this.logger,
           eventLogMessage: JOINING_LOG_MSG.CDC_EVENT_RECEIVED,
-          preferredService: subscriptionMessageGroupService,
           resolveOperationalMessageGroupSelection: (selectionOptions = {}) =>
             this.resolveOperationalMessageGroupSelection(selectionOptions),
-          resolveOperationalMessageGroupSelectionAsync:
-            (selectionOptions = {}) =>
-              this.resolveOperationalMessageGroupSelectionAsync(
-                selectionOptions,
-              ),
+          resolveOperationalMessageGroupSelectionAsync: (selectionOptions = {}) =>
+            this.resolveOperationalMessageGroupSelectionAsync(selectionOptions),
           buildMessageGroupOwnerNotReadyError: (selection, errorOptions) =>
             this.buildMessageGroupOwnerNotReadyError(selection, errorOptions),
           propagatePartitionCDCEvent: (messageGroupService, events, deliveryContext) =>
-            this.propagatePartitionCDCEvent(messageGroupService, events, deliveryContext),
-        });
-        this.logger.debug(JOINING_LOG_MSG.CDC_SUBSCRIPTION_REGISTERED, {
-          tableName,
-          partitionId: options.partitionId,
-          replicaId: options.replicaId,
-          subscriberId: handshake.subscriberId,
-          subscriptionEpoch: handshake.subscriptionEpoch,
-        });
-      };
-      if (options.deferCdcPropagationHandshake === true) {
-        attachCdcPropagation().catch((error) => {
-          this.logger.error(JOINING_LOG_MSG.CDC_SUBSCRIPTION_FAILED, {
-            tableName,
-            partitionId: options.partitionId,
-            replicaId: options.replicaId,
-            error: error?.message || String(error),
-          });
-        });
-      } else {
-        await attachCdcPropagation();
-      }
+            propagatePartitionCdcVector(this.latencyTopology,
+              JOINING_ERROR_MSG.LATENCY_TOPOLOGY_MISSING, messageGroupService, events,
+              deliveryContext),
+        },
+        onRegistered: (handshake) => this.logger.debug(
+          JOINING_LOG_MSG.CDC_SUBSCRIPTION_REGISTERED, {
+            tableName, partitionId: options.partitionId, replicaId: options.replicaId,
+            subscriberId: handshake.subscriberId, subscriptionEpoch: handshake.subscriptionEpoch}),
+      });
     }
     return partition;
   }
@@ -696,26 +671,6 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
    */
   startLatencyTopologyLifecycle() {
     return this.runtimeHandoffOwner.startLatencyTopologyLifecycle();
-  }
-  /**
-   * Propagate one vector of partition CDC events via the topology-owned
-   * propagation path.
-   * @param {Object} messageGroupService
-   * @param {Array<Object>} events - The durable vector.
-   * @param {Object} deliveryContext - The delivery invocation.
-   * @return {Promise<Object>}
-   * @private
-   */
-  async propagatePartitionCDCEvent(messageGroupService, events, deliveryContext) {
-    const topologyOwners = assertCritical(
-      this.latencyTopology,
-      JOINING_ERROR_MSG.LATENCY_TOPOLOGY_MISSING,
-    );
-    return topologyOwners.cdcGroupPropagationService.propagateCDCEvent({
-      events: events.map(copyCdcEvent),
-      sourceMessageGroupService: messageGroupService,
-      deliveryContext,
-    });
   }
 }
 

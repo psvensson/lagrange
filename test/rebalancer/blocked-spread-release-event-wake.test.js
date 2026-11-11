@@ -542,8 +542,16 @@ test('(l2) local mutation readiness wake also fires on readiness planning snapsh
     t.equal(decision?.gate, REBALANCE_PLANNING_GATE.LOCAL_MUTATION_READINESS);
     t.equal(planningListeners.size, 1, 'planning snapshot listener is armed');
     blocker = null;
+    // The owner's event shape: {ownerKey, snapshot, capturedToken}. Another
+    // node's publication cannot end a LOCAL deferral and wakes nothing.
     for (const listener of [...planningListeners]) {
-      listener({nodeId: rebalancer.nodeId});
+      listener({ownerKey: 'node-other', snapshot: {}, capturedToken: null});
+    }
+    await Promise.resolve();
+    t.same(wakeReasons, [], 'another node\'s publication does not wake');
+    for (const listener of [...planningListeners]) {
+      listener({ownerKey: rebalancer.nodeId, snapshot: {},
+        capturedToken: null});
     }
     await Promise.resolve();
     t.same(wakeReasons, [RECONCILE_REASON.LOCAL_MUTATION_READINESS_WAKE]);

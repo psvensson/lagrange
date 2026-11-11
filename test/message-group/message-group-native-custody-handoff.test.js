@@ -1,5 +1,7 @@
 // Production CDC producer -> subscriber -> seed bridge -> topology fanout ->
 // actual message-group RF1/RF3. No committed receipt is constructed by this test.
+import {propagatePartitionCdcVector} from
+  '../../src/bootstrap/shared/partition-cdc-propagation-subscriber.js';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import path from 'node:path';
@@ -28,7 +30,6 @@ import {buildPartitionCdcPropagationSubscriber} from
 import {resolveOperationalMessageGroupSelection,
   resolveOperationalMessageGroupSelectionAsync, buildMessageGroupOwnerNotReadyError} from
   '../../src/bootstrap/shared/message-group-selection.js';
-import {SeedRuntimeBridgeOwner} from '../../src/bootstrap/owners/seed-runtime-bridge-owner.js';
 import {CDCGroupPropagationService} from '../../src/topology/cdc-group-propagation-service.js';
 import {CDC_GROUP_PROPAGATION_STATE} from
   '../../src/topology/cdc-group-propagation-constants.js';
@@ -375,7 +376,6 @@ function subscribe(t, f, producer) {
   assert.equal(topology.cdcGroupPropagationService.getStats().state,
     CDC_GROUP_PROPAGATION_STATE.RUNNING);
   emit(f, 'setup-topology-running');
-  const bridge = new SeedRuntimeBridgeOwner({delegates: {getLatencyTopology: () => topology}});
   const actualSubscriber = buildPartitionCdcPropagationSubscriber({tableName: TABLES.CONFIG,
     partitionId: PARTITION_ID, replicaId: producer.leader.replicaId,
     resolveOperationalMessageGroupSelection: (options) =>
@@ -390,7 +390,7 @@ function subscribe(t, f, producer) {
         obligation: readCdcObligation(producer.leader.db, event.eventKey)});
     },
     propagatePartitionCDCEvent: (...args) => observeOwnerCall(f, 'seed-bridge', async () => {
-      const result = await Reflect.apply(bridge.propagatePartitionCDCEvent, bridge, args);
+      const result = await propagatePartitionCdcVector(topology, 'no topology', ...args);
       // Capture the frontier at the same real bridge-return continuation as
       // before tracing; the observer's later settlement must not move this cut.
       // The bridge is handed the lane's vector: here the one owed occurrence.

@@ -28,6 +28,7 @@ const queryExecutorTemporaryUnroutableAddressMethods = {
     const expiresAt =
       Date.now() + this.resolveNoHandlerAddressQuarantineMs(partitionId);
     const fingerprint = buildPartitionServiceWitnessFingerprint(service);
+    this.recordAddressQuarantineRetryDue(partitionId, expiresAt);
     const existing =
       this.temporarilyUnroutableAddressesByPartition.get(partitionId);
     if (existing instanceof Map) {
@@ -137,6 +138,41 @@ const queryExecutorTemporaryUnroutableAddressMethods = {
       this.temporarilyUnroutableAddressesByPartition.delete(partitionId);
     }
     return false;
+  },
+
+  /**
+   * Record the instant one address quarantine of a partition ends: the
+   * routing owner's retry point for that partition's exclusion.
+   * @param {string} partitionId
+   * @param {number} expiresAt this owner's clock (Date.now)
+   * @private
+   */
+  recordAddressQuarantineRetryDue(partitionId, expiresAt) {
+    const dues = this.addressQuarantineRetryDueAtMsByPartition;
+    dues.set(partitionId, [...(dues.get(partitionId) || []), expiresAt]);
+  },
+
+  /**
+   * The routing owner's stated retry point for one partition: the earliest
+   * instant (this owner's clock, Date.now) at which a live address
+   * quarantine of it ends, or null when none is live. A quarantine ends by
+   * time with no metadata change, so a waiter on metadata alone would miss
+   * it; this is the wake a waiter arms. It is never routing authority: at
+   * that instant the waiter re-runs its route read, which answers.
+   * @param {string} partitionId
+   * @return {number|null}
+   */
+  resolveAddressQuarantineRetryDueAtMs(partitionId) {
+    const nowMs = Date.now();
+    const dues = this.addressQuarantineRetryDueAtMsByPartition;
+    const live = (dues.get(partitionId) || [])
+      .filter((dueAtMs) => dueAtMs > nowMs);
+    if (live.length === 0) {
+      dues.delete(partitionId);
+      return null;
+    }
+    dues.set(partitionId, live);
+    return Math.min(...live);
   },
 
   /**

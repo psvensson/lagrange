@@ -1,6 +1,8 @@
 // S2: genuine depth-0 -> depth-1 CDC relay hydrates a strict follower, then
 // the same source debt reaches its real native leader through the depth-2 route.
 // One critical target only: this is not the full multi-window W7 witness.
+import {propagatePartitionCdcVector} from
+  '../../src/bootstrap/shared/partition-cdc-propagation-subscriber.js';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {CDC_OPERATION, TABLES, SERVICE_STATUS} from '../../src/constants/index.js';
@@ -28,7 +30,9 @@ import {CDC_GROUP_PROPAGATION_STATE} from '../../src/topology/cdc-group-propagat
 import {LatencyTreeService} from '../../src/topology/latency-tree-service.js';
 import {buildSafeTargets} from '../../src/topology/cdc-group-propagation-routing.js';
 import {SHIPS_ALONE_FIELDS, provisionalRouteFixture, registrationInsert, sourceView, targetView, recordOf,
-  json, note, pump, tick, releaseB, releaseFollower, disarmProducerRetryTimer, driveWithPump,
+  diagnostic, elapseProducerBackoff, json, note, pump,
+  tick, releaseB, releaseFollower, disarmProducerRetryTimer,
+  driveWithPump,
   addressOf, payloadOf, cdcEvents, NODE_ID, SOURCE_GROUP, TARGET_GROUP, SOURCE_REPLICA,
   TARGET_REPLICAS, LEADER, FIRST_HOP, FOLLOWER, PARTITION_ID} from
   './message-group-native-provisional-route-fixture.js';
@@ -98,7 +102,7 @@ async function writeOrdinarySource(t, f, service, entryId, extraFields = null) {
     assert.equal(row.status, SERVICE_STATUS.STOPPED);
     assert.equal(row.address, service.unifiedAddress);
   }
-  t.diagnostic(json({stage: 'setup-released-services-query-and-exact-debt', answer, debt}));
+  t.diagnostic(diagnostic({stage: 'setup-released-services-query-and-exact-debt', answer, debt}));
   return debt;
 }
 
@@ -110,7 +114,7 @@ function targets(f) {
 function assertPartialRouteSetup(t, f) {
   const first = f.first.raft.readStatus();
   const follower = f.follower.raft.readStatus();
-  t.diagnostic(json({stage: 'setup-partial-route-observations-before-assertions', first, follower,
+  t.diagnostic(diagnostic({stage: 'setup-partial-route-observations-before-assertions', first, follower,
     firstRows: f.first.systemTableCache.getAll(TABLES.SERVICES),
     followerRows: f.follower.systemTableCache.getAll(TABLES.SERVICES)}));
   assert.notEqual(first.role, RAFT_ROLE.LEADER);
@@ -146,7 +150,7 @@ function assertPartialRouteSetup(t, f) {
     createAttemptToken: selectedRoute.create_attempt_token ?? null,
     nodeBootIncarnation: selectedNode?.boot_incarnation ?? null}]);
   f.followerBefore = follower;
-  t.diagnostic(json({stage: 'setup-real-rf5-retained-reopens-and-partial-routes',
+  t.diagnostic(diagnostic({stage: 'setup-real-rf5-retained-reopens-and-partial-routes',
     formed: f.formed, first, follower, forward, targets: f.capturedTargets,
     reopens: f.events.filter((event) => event.kind === 'retained-reopen')}));
 }
@@ -186,7 +190,8 @@ function connectSubscriber(f) {
     propagatePartitionCDCEvent: async (service, events, deliveryContext) => {
       assert.equal(service, f.source);
       assert.equal(events.length, 1, 'A and B travel as vectors of their own');
-      const result = await bridge.propagatePartitionCDCEvent(service, events, deliveryContext);
+      const result = await propagatePartitionCdcVector(bridge.delegates.getLatencyTopology(),
+        'no topology', service, events, deliveryContext);
       note(f, 'actual-topology-return', {event: structuredClone(events[0]),
         result: structuredClone(result), source: sourceView(f), target: targetView(f)});
       return result;
@@ -341,7 +346,7 @@ test('SERVICES scan releases provisional relay to the real native leader', async
   assertOwedWithoutAck(held.source, f.debts);
   assert.equal(f.follower.systemTableCache.get(TABLES.SERVICES, LEADER), undefined);
   assert.deepEqual(targets(f), f.capturedTargets);
-  t.diagnostic(json({stage: 'semantic-provisional-a-retains-custody-and-scan-reaches-b', provisional, held}));
+  t.diagnostic(diagnostic({stage: 'semantic-provisional-a-retains-custody-and-scan-reaches-b', provisional, held}));
 
   const handshakeDrives = [...f.producerLeader.pendingCDCEventDeliveries];
   releaseB(f);
@@ -367,9 +372,9 @@ test('SERVICES scan releases provisional relay to the real native leader', async
   assert.equal(f.first.systemTableCache.get(TABLES.SERVICES, LEADER), undefined,
     'first relay did not hydrate itself');
   assert.deepEqual(targets(f), f.capturedTargets, 'STOPPED B does not replace the captured F1 target');
-  t.diagnostic(json({stage: 'semantic-follower-hears-leader-releases-route', hydrated, after}));
+  t.diagnostic(diagnostic({stage: 'semantic-follower-hears-leader-releases-route', hydrated, after}));
 
-  disarmProducerRetryTimer(f);
+  await elapseProducerBackoff(f);
   const driven = await driveWithPump(f, () =>
     f.producerLeader.cdcDelivery.driveCdcObligations('native-provisional-route-redrive')
       .then((answer) => ({answer}), (error) => ({error})));
@@ -435,7 +440,7 @@ test('SERVICES scan releases provisional relay to the real native leader', async
       assert.ok(BigInt(peer.record.appliedIndex) >= BigInt(entry.index));
     }
   }
-  t.diagnostic(json({stage: 'semantic-fresh-native-route-and-source-ack', native,
+  t.diagnostic(diagnostic({stage: 'semantic-fresh-native-route-and-source-ack', native,
     source: sourceView(f), targets: targets(f)}));
   await pump(f);
 });

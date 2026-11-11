@@ -5,15 +5,15 @@ import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outc
 import assert from 'node:assert/strict';
 import {COLUMN, SERVICE_STATUS, TABLES} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
-import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
 import {isIssuedBootIncarnation} from '../../src/bootstrap/boot-incarnation-contract.js';
 import {buildPartitionCdcPropagationSubscriber} from
   '../../src/bootstrap/shared/partition-cdc-propagation-subscriber.js';
-import {buildCommittedCdcOutcome, buildProvisionalCdcOutcome, cdcCommitWaitIdentity,
-  unknownCdcAcceptance} from '../../src/cdc/cdc-delivery-outcome.js';
+import {CDC_COMPLETION, buildCommittedCdcOutcome, buildProvisionalCdcOutcome,
+  cdcCommitWaitIdentity, unknownCdcAcceptance} from '../../src/cdc/cdc-delivery-outcome.js';
+import {PARTITION_SERVICE_CDC} from '../../src/partition/partition-service-constants.js';
 import {CDCGroupPropagationService} from '../../src/topology/cdc-group-propagation-service.js';
-import {PARTITION_CDC_COMMAND, PARTITION_CDC_OBLIGATION_REASON} from
+import {PARTITION_CDC_COMMAND} from
   '../../src/partition/partition-cdc-obligation-constants.js';
 import {countCdcObligations} from '../../src/partition/partition-cdc-obligation-ledger.js';
 import {createDurableSourceMessageGroupService, createMessageGroupServiceRow,
@@ -21,15 +21,24 @@ import {createDurableSourceMessageGroupService, createMessageGroupServiceRow,
 import {CDC_TABLE as TABLE, applyCommitted, committedQueryOf, settleTicks, shutdownAll,
   startLeader} from
   './participant-transaction-fixture.js';
+import {delayedClock, driveAfterBackoff} from './cdc-delivery-progress-fixture.js';
 
 const SOURCE_GROUP = 'progress-group-a';
 const TARGET_GROUP = 'progress-group-b';
 const SOURCE_NODE = 'node-a';
 const TARGET_NODE = 'node-b';
 const RETRY_AFTER_MS = 20;
-const RESPONSE = Object.freeze({NATIVE: 'native', WEAK: 'weak', UNKNOWN: 'unknown'});
+const RESPONSE = Object.freeze({NATIVE: 'native', WEAK: 'weak', UNKNOWN: 'unknown',
+  BACKPRESSURE: 'backpressure', DUPLICATE_IN_FLIGHT: 'duplicate_in_flight'});
+// The hint a recipient answering RESPONSE.BACKPRESSURE gives.
+const BACKPRESSURE_RETRY_AFTER_MS = 40;
 
 function controlledAnswer(events, groupId, mode) {
+  if (mode === RESPONSE.BACKPRESSURE || mode === RESPONSE.DUPLICATE_IN_FLIGHT) {
+    return {...unknownCdcAcceptance(mode === RESPONSE.BACKPRESSURE ?
+      CDC_COMPLETION.BACKPRESSURE : CDC_COMPLETION.DUPLICATE_IN_FLIGHT),
+    retryAfterMs: BACKPRESSURE_RETRY_AFTER_MS};
+  }
   const answer = mode === RESPONSE.NATIVE ?
     buildCommittedCdcOutcome(events, groupId, {index: 17, term: 2}) :
     mode === RESPONSE.WEAK ? buildProvisionalCdcOutcome(events, RETRY_AFTER_MS, groupId) :
@@ -113,8 +122,12 @@ function buildSubscriber(f, index) {
   });
 }
 
-async function topologyProgressFixture(t) {
-  const clock = new VirtualTimeSource({startMs: 100});
+// The production composition is one propagation subscriber per partition
+// (role SUBSCRIBER_ROLE_PROPAGATION); its recipients are the source group and
+// the target groups of its propagation. `otherSubscriber` adds the second,
+// role-less subscriber some older witnesses use.
+async function topologyProgressFixture(t, {otherSubscriber = true} = {}) {
+  const clock = delayedClock();
   const {leader, proposed} = await startLeader({tableName: TABLE, timeSource: clock});
   const f = {clock, leader, proposed, ready: false, projection: controlledProjection(),
     sourceCalls: [], sourceDigests: [], targetCalls: [], subscriberCalls: [], hooks: [],
@@ -126,9 +139,11 @@ async function topologyProgressFixture(t) {
   });
   Object.assign(f, buildTopology(f));
   leader.controllablePort.setRole(RAFT_ROLE.FOLLOWER);
-  for (let index = 0; index < 2; index += 1) {
-    await leader.subscribeToCDCWithHandshake(buildSubscriber(f, index),
-      {subscriberId: `topology-progress-${index}`});
+  await leader.subscribeToCDCWithHandshake(buildSubscriber(f, 0),
+    {subscriberId: 'topology-progress-0', role: PARTITION_SERVICE_CDC.SUBSCRIBER_ROLE_PROPAGATION});
+  if (otherSubscriber) {
+    await leader.subscribeToCDCWithHandshake(buildSubscriber(f, 1),
+      {subscriberId: 'topology-progress-1'});
   }
   addTopologySourceRow(f, 'A');
   leader.controllablePort.setRole(RAFT_ROLE.LEADER);
@@ -136,8 +151,7 @@ async function topologyProgressFixture(t) {
   assert.equal(f.subscriberCalls.length, 0);
   assert.deepEqual(countCdcObligations(leader.db), {owed: 1, delivered: 0});
   f.ready = true;
-  f.drive = () => leader.cdcDelivery.driveCdcObligations(
-    PARTITION_CDC_OBLIGATION_REASON.DELIVERY_RETRY);
+  f.drive = () => driveAfterBackoff(leader, clock);
   return f;
 }
 
@@ -167,6 +181,6 @@ function omitTarget(f) {
   f.projection.services[0][COLUMN.STATUS] = SERVICE_STATUS.STOPPED;
 }
 
-export {RESPONSE, SOURCE_GROUP, SOURCE_NODE, TARGET_GROUP, TARGET_NODE,
+export {BACKPRESSURE_RETRY_AFTER_MS, RESPONSE, SOURCE_GROUP, SOURCE_NODE, TARGET_GROUP, TARGET_NODE,
   addRequiredGroup, addTopologySourceRow, assertDebtWithoutAck, omitTarget,
   topologyProgressFixture};

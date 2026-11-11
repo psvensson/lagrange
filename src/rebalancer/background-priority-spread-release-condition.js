@@ -173,6 +173,26 @@ function resolveRequiredNodeServeState(nodeAnswers) {
 }
 
 /**
+ * The member nodes whose serve eligibility the dwell waits on: the planning
+ * owner's active cohort AND every member of the durable published
+ * membership. The planning cohort leaves out a member it currently excludes
+ * on readiness (a joiner whose serve lease is not yet granted), which made
+ * this leg vacuous for exactly the node it must wait for; a published
+ * member is required whatever its readiness says, and its serve owner
+ * answer decides.
+ * @param {Object} rebalancer
+ * @param {Array<string>} activeNodeIds
+ * @return {Array<string>}
+ */
+function resolveRequiredMemberNodeIds(rebalancer, activeNodeIds) {
+  const publishedMembers = rebalancer.getPublishedActiveNodeIdSet();
+  return Object.freeze([...new Set([
+    ...activeNodeIds,
+    ...(publishedMembers === null ? NO_NODE_IDS : publishedMembers),
+  ])].sort());
+}
+
+/**
  * Input 2. The member nodes priority placement requires (the readiness
  * owner's priority-recovery active cohort) and the committed serve answer
  * of each.
@@ -192,8 +212,8 @@ function observeRequiredNodeServeEligibility(rebalancer, observedAt) {
       RELEASE_CONDITION_UNAVAILABLE_REASON.PLANNING_ANSWER_ABSENT,
     );
   }
-  const requiredNodeIds =
-    resolvePriorityRecoveryActiveNodeCohort(planningAnswer).activeNodeIds;
+  const requiredNodeIds = resolveRequiredMemberNodeIds(rebalancer,
+    resolvePriorityRecoveryActiveNodeCohort(planningAnswer).activeNodeIds);
   if (requiredNodeIds.length === 0) {
     return unavailableRequiredNodeServe(
       RELEASE_CONDITION_UNAVAILABLE_REASON.REQUIRED_COHORT_UNSTATED,

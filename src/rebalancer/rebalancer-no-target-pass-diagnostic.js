@@ -86,17 +86,43 @@ function buildSignature(exit, candidates) {
  * @param {Object} [pass.detail] - exit-specific evidence
  * @return {{deferredNodeIds: Array<string>, waitArmed: boolean}}
  */
-function noteRebalancePassWithoutMove(rebalancer, pass) {
-  const candidates = pass.nodePlan?.candidates || [];
-  const deferredNodeIds = candidates
+/**
+ * The candidate nodes a placement answer read as DEFERRED.
+ * @param {Object|null} nodePlan resolveAvailableNodePlan's answer
+ * @return {Array<string>}
+ */
+function resolveDeferredCandidateNodeIds(nodePlan) {
+  return (nodePlan?.candidates || [])
     .filter((candidate) =>
       candidate.state === AVAILABLE_NODE_PLANNING_STATE.DEFERRED)
     .map((candidate) => candidate.nodeId);
+}
+
+/**
+ * Arm the planning-target readiness wait when an answer depended on a
+ * DEFERRED candidate; disarm it when it did not (the wait is for the
+ * deferral this answer saw, and no other).
+ * @param {Object} rebalancer
+ * @param {Object|null} nodePlan
+ * @return {boolean} whether the wait is armed
+ */
+function syncPlanningTargetReadinessWake(rebalancer, nodePlan) {
+  const deferredNodeIds = resolveDeferredCandidateNodeIds(nodePlan);
+  if (deferredNodeIds.length === 0) {
+    rebalancer.disarmPlanningTargetReadinessWake();
+    return false;
+  }
+  return rebalancer.armPlanningTargetReadinessWake(deferredNodeIds);
+}
+
+function noteRebalancePassWithoutMove(rebalancer, pass) {
+  const candidates = pass.nodePlan?.candidates || [];
+  const deferredNodeIds = resolveDeferredCandidateNodeIds(pass.nodePlan);
   const awaitsTarget =
     pass.exit === REBALANCE_PASS_NO_MOVE_EXIT.NO_AVAILABLE_NODES ||
     pass.exit === REBALANCE_PASS_NO_MOVE_EXIT.NO_MOVES_PLANNED;
-  const waitArmed = awaitsTarget && deferredNodeIds.length > 0 &&
-    rebalancer.armPlanningTargetReadinessWake(deferredNodeIds);
+  const waitArmed = awaitsTarget &&
+    syncPlanningTargetReadinessWake(rebalancer, pass.nodePlan);
   const signature = buildSignature(pass.exit, candidates);
   if (rebalancer.lastNoMovePassSignature !== signature) {
     rebalancer.lastNoMovePassSignature = signature;
@@ -118,11 +144,29 @@ function noteRebalancePassWithoutMove(rebalancer, pass) {
 
 /**
  * A pass that executed a move ends the no-move episode: the next no-move
- * pass is stated again even with the same reason.
+ * pass is stated again even with the same reason. The planning-target
+ * readiness wait loses exactly what the executed moves satisfied: a node a
+ * move was placed on is no longer awaited; a node the same pass skipped as
+ * deferred stays awaited, and the wait is disarmed only when none remains.
  * @param {Object} rebalancer
+ * @param {Object} result the pass result (its executed moves)
  */
-function noteRebalancePassMoved(rebalancer) {
+function noteRebalancePassMoved(rebalancer, result) {
   rebalancer.lastNoMovePassSignature = null;
+  const awaited = rebalancer.planningTargetReadinessWakeNodeIds;
+  if (!(awaited instanceof Set)) {
+    return;
+  }
+  const movedNodeIds = new Set(result.moves
+    .filter((move) => move && !move.skipped && move.success !== false)
+    .map((move) => move.nodeId));
+  const stillAwaited = [...awaited].filter((nodeId) =>
+    !movedNodeIds.has(nodeId));
+  if (stillAwaited.length === 0) {
+    rebalancer.disarmPlanningTargetReadinessWake();
+    return;
+  }
+  rebalancer.planningTargetReadinessWakeNodeIds = new Set(stillAwaited);
 }
 
 export {
@@ -132,4 +176,5 @@ export {
   REBALANCE_PASS_NO_MOVE_LOG_MSG,
   noteRebalancePassMoved,
   noteRebalancePassWithoutMove,
+  syncPlanningTargetReadinessWake,
 };

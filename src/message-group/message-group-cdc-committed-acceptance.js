@@ -4,7 +4,8 @@
 import {CDC_EVENT_METADATA_FIELD, captureCdcEvents} from
   '../cdc/cdc-event-envelope.js';
 import {CDC_COMPLETION, buildCommittedCdcOutcome, buildProvisionalCdcOutcome, cdcCommitWaitIdentity,
-  hasDurableCdcEvents, isCommittedCdcOutcome, isProvisionalCdcOutcome, unknownCdcAcceptance} from
+  hasDurableCdcEvents, isCommittedCdcOutcome, isProvisionalCdcOutcome, unconfirmedCdcAcceptance,
+  unknownCdcAcceptance} from
   '../cdc/cdc-delivery-outcome.js';
 import {assertCdcDeliveryInvocation} from '../cdc/cdc-delivery-invocation.js';
 import {appendOwnArrayValue, copyArrayByIndex, isDenseDataArray, isRecord} from
@@ -32,9 +33,34 @@ function capturedCommand(events) {
   return objectFreeze({type: MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH, events});
 }
 
+const CDC_ACCEPTANCE_LOG_MSG = objectFreeze({
+  DUPLICATE_IN_FLIGHT:
+    'CDC vector refused as a duplicate: raw work for the identical vector is still open',
+});
+
 function backpressuredCdcAcceptance() {
   return {...unknownCdcAcceptance(CDC_COMPLETION.BACKPRESSURE),
     retryAfterMs: PROPOSAL_QUEUE_DEFAULT.BACKPRESSURE_RETRY_AFTER_MS};
+}
+
+// The identical vector's response already retired but its raw work (a
+// proposal or forward) is still open: this caller retries after the hint. It
+// is not a capacity refusal, and no relay may treat it as a fault of its route.
+function duplicateInFlightAcceptance(service, key) {
+  service.logger?.info?.(CDC_ACCEPTANCE_LOG_MSG.DUPLICATE_IN_FLIGHT,
+    {groupId: service.groupId, vectorDigest: key});
+  return {...unknownCdcAcceptance(CDC_COMPLETION.DUPLICATE_IN_FLIGHT),
+    retryAfterMs: PROPOSAL_QUEUE_DEFAULT.BACKPRESSURE_RETRY_AFTER_MS};
+}
+
+// A second caller with the identical vector while the first one's response is
+// pending (a new source leader re-shipping what the old one has in flight, a
+// sender retry) joins it: one proposal, and the joiner receives the first
+// one's settled answer.
+function joinableWait(service, key) {
+  const first = service.cdcCommitWaiters.get(key);
+  return service.cdcCommitWaiters.isResponsePending(key) && liveWait(service, first) ?
+    first : null;
 }
 
 function currentWait(service, key, entry) {
@@ -117,9 +143,14 @@ function reserveCdcWait(service, command, timeoutMs, parent, options) {
     const {events, inputVectorDigest} = captureCdcCommandVector(service,
       command.events, options);
     const key = cdcCommitWaitIdentity(events);
-    if (queue.has(key)) return {answer: backpressuredCdcAcceptance()};
+    if (queue.has(key)) {
+      const first = joinableWait(service, key);
+      return first === null ? {answer: duplicateInFlightAcceptance(service, key)} :
+        {join: {first, events, inputVectorDigest, timeoutMs}};
+    }
     const completion = promiseWithResolvers();
     const entry = {events, inputVectorDigest, budget, originalBudget: budget,
+      settled: completion.promise,
       clock, now, parent, port: service.raft,
       lifetime: service.cdcCommitLifetime, groupId: service.groupId,
       resolve: completion.resolve,
@@ -240,7 +271,7 @@ async function deliverCapturedCdc(service, wait, options, context) {
   assertCurrent();
   return isCommittedCdcOutcome(answer, wait.entry.events, service.groupId) ||
     isProvisionalCdcOutcome(answer, wait.entry.events, service.groupId) ?
-    answer : {...unknownCdcAcceptance(), cause: answer};
+    answer : {...unconfirmedCdcAcceptance(answer), cause: answer};
 }
 
 function captureCdcParentGrant(service, options) {
@@ -278,6 +309,25 @@ async function retiredCdcOutcome(service, wait, context) {
     {...unknownCdcAcceptance(), cause: settled};
 }
 
+// The joiner awaits the first admission's settled answer under its own
+// deadline and binds a committed or provisional receipt to its own input
+// digest, as inputCdcOutcome binds the first one's. It holds no queue slot and
+// starts no raw work: what it costs is bounded by its caller's invocation.
+async function joinCdcWait(service, join, context) {
+  const {first, events, inputVectorDigest, timeoutMs} = join;
+  const deadline = promiseWithResolvers();
+  const timer = first.clock.setTimeout(() => deadline.resolve(unknownCdcAcceptance()), timeoutMs);
+  try {
+    const answer = await promiseRace([first.settled, deadline.promise]);
+    if (context !== null) assertCdcDeliveryInvocation(context);
+    if (!isCommittedCdcOutcome(answer, events, first.groupId) &&
+        !isProvisionalCdcOutcome(answer, events, first.groupId)) return unknownCdcAcceptance();
+    return {...answer, cdcVectorDigest: inputVectorDigest};
+  } finally {
+    first.clock.clearTimeout(timer);
+  }
+}
+
 async function applyDurableCdcBatch(service, events, options = {}) {
   const {context, timeoutMs, parent} = captureCdcParentGrant(service, options);
   if (!numberIsFinite(timeoutMs) || timeoutMs <= 0) return unknownCdcAcceptance();
@@ -290,15 +340,20 @@ async function applyDurableCdcBatch(service, events, options = {}) {
     throw error;
   }
   if (wait.answer) return wait.answer;
+  if (wait.join) return joinCdcWait(service, wait.join, context);
+  // The first admission's own answer, unbound to its input digest: what a
+  // joiner receives when this response settles it (a committed receipt
+  // settles it earlier, from the apply).
+  let settled = unknownCdcAcceptance();
   try {
-    const answer = await deliverCapturedCdc(service, wait, options, context);
-    return inputCdcOutcome(service, wait, answer, context);
+    settled = await deliverCapturedCdc(service, wait, options, context);
+    return inputCdcOutcome(service, wait, settled, context);
   } catch (error) {
     if (currentWait(service, wait.key, wait.entry) && liveWait(service, wait.entry)) throw error;
     return retiredCdcOutcome(service, wait, context);
   } finally {
     if (currentWait(service, wait.key, wait.entry)) {
-      service.cdcCommitWaiters.resolve(wait.key, unknownCdcAcceptance());
+      service.cdcCommitWaiters.resolve(wait.key, settled);
     }
   }
 }

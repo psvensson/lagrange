@@ -34,6 +34,21 @@
  * waits (WAIT_LEADER_NOT_CORROBORATED) until a survivor is corroborated.
  * Prohibited: no row, role column or leader_node_id is read as leadership;
  * no elapsed time permits a removal.
+ * Scope (R09 supersession, 2026-11-11, B2): the universal rule "a replica
+ * that is its group's current leader is never the subject of a removal
+ * effect" is held end to end by two owners, neither alone. This gate holds
+ * it at the removal's dispatch (and the STOPPING owner's RETIRE fence,
+ * isRemovalSubjectCorroboratedLeader). After dispatch the subject may still
+ * hold or gain leadership (an election it wins while its row is REMOVING):
+ * the node effect owner holds the rule there - the subject never proposes
+ * its own RemoveNode, hands any leadership it holds or gains to a survivor
+ * by the same removal transferee rule (raft-removal-transferee-rule.js), and
+ * the survivor that leads proposes the removal
+ * (partition-service-removal-subject-handoff.js); the leader's port refuses
+ * a change removing itself (REMOVES_LEADER) and a leader that applied its
+ * own removal anyway steps down (raft-rs-runtime-owner.js). The earlier
+ * reading "the subject proposes its own RemoveNode when it leads (round 2
+ * F-1)" is superseded.
  */
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {

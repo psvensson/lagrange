@@ -169,69 +169,33 @@ function exportedName(specifier) {
   return specifier.exported.name ?? specifier.exported.value;
 }
 
-/**
- * Everything one module says about module references: what it imports (by
- * local binding), what it re-exports, and every other specifier literal.
- */
-function describeModule(file, knownPaths) {
-  const ast = parseSourceFile(file.text);
-  const references = [];
-  const reexports = [];
-  const exportNames = [];
-  const bindingByLocal = new Map();
-  const declarationSources = new Set();
-  const resolve = (node) => {
-    const specifier = staticString(node);
-    return specifier === null ? null : resolveSpecifier(file.path, specifier, knownPaths);
-  };
-  for (const statement of ast.body) {
-    if (statement.source) declarationSources.add(statement.source);
-    const target = statement.source ? resolve(statement.source) : null;
-    if (statement.type === NODE.IMPORT_DECLARATION) {
-      const names = arrayMap(statement.specifiers, importedName);
-      if (target) references.push({target, names, line: statement.loc.start.line});
-      for (const specifier of statement.specifiers) {
-        if (target) {
-          bindingByLocal.set(specifier.local.name,
-            {target, name: importedName(specifier)});
-        }
-      }
-    } else if (statement.type === NODE.EXPORT_ALL) {
-      const exported = statement.exported ? exportedName(statement) : null;
-      if (exported) exportNames.push(exported);
-      if (target) {
-        references.push({target, names: [ALL_NAMES], line: statement.loc.start.line});
-        reexports.push({target, name: ALL_NAMES, as: exported, line: statement.loc.start.line});
-      }
-    } else if (statement.type === NODE.EXPORT_NAMED) {
-      collectNamedExport(statement, target, {references, reexports, exportNames});
-    } else if (statement.type === NODE.EXPORT_DEFAULT) {
-      exportNames.push(DEFAULT_EXPORT);
-      if (statement.declaration?.type === NODE.IDENTIFIER) {
-        reexports.push({local: statement.declaration.name, as: DEFAULT_EXPORT,
-          line: statement.loc.start.line});
-      }
-    }
+function collectImport(statement, target, collected) {
+  if (!target) return;
+  const line = statement.loc.start.line;
+  collected.references.push({target, names: arrayMap(statement.specifiers, importedName), line});
+  for (const specifier of statement.specifiers) {
+    collected.bindingByLocal.set(specifier.local.name, {target, name: importedName(specifier)});
   }
-  walkAst(ast, (node) => {
-    if (declarationSources.has(node)) return;
-    const target = resolve(node);
-    if (target) references.push({target, names: [ALL_NAMES], line: node.loc.start.line});
-  });
-  // An export of an imported binding re-exports what the binding names.
-  const relays = [];
-  for (const reexport of reexports) {
-    if (reexport.local === undefined) {
-      relays.push(reexport);
-      continue;
-    }
-    const binding = bindingByLocal.get(reexport.local);
-    if (binding) relays.push({...binding, as: reexport.as, line: reexport.line});
-  }
-  return {path: file.path, references, relays, exportNames};
 }
 
-function collectNamedExport(statement, target, collected) {
+function collectExportAll(statement, target, collected) {
+  const exported = statement.exported ? exportedName(statement) : null;
+  if (exported) collected.exportNames.push(exported);
+  if (!target) return;
+  const line = statement.loc.start.line;
+  collected.references.push({target, names: [ALL_NAMES], line});
+  collected.reexports.push({target, name: ALL_NAMES, as: exported, line});
+}
+
+function collectExportDefault(statement, target, collected) {
+  collected.exportNames.push(DEFAULT_EXPORT);
+  if (statement.declaration?.type === NODE.IDENTIFIER) {
+    collected.reexports.push({local: statement.declaration.name, as: DEFAULT_EXPORT,
+      line: statement.loc.start.line});
+  }
+}
+
+function collectNamedSpecifiers(statement, target, collected) {
   const line = statement.loc.start.line;
   for (const specifier of statement.specifiers) {
     const as = exportedName(specifier);
@@ -244,19 +208,97 @@ function collectNamedExport(statement, target, collected) {
       collected.reexports.push({local: specifier.local.name, as, line});
     }
   }
+}
+
+function collectNamedExport(statement, target, collected) {
+  collectNamedSpecifiers(statement, target, collected);
   const declaration = statement.declaration;
-  if (declaration?.type === NODE.VARIABLE_DECLARATION) {
-    for (const declarator of declaration.declarations) {
-      if (declarator.id.type !== NODE.IDENTIFIER) continue;
-      collected.exportNames.push(declarator.id.name);
-      // `export const relay = importedHintBinding`.
-      if (declarator.init?.type === NODE.IDENTIFIER) {
-        collected.reexports.push({local: declarator.init.name, as: declarator.id.name, line});
-      }
-    }
-  } else if (declaration?.id?.name) {
-    collected.exportNames.push(declaration.id.name);
+  if (declaration?.type !== NODE.VARIABLE_DECLARATION) {
+    if (declaration?.id?.name) collected.exportNames.push(declaration.id.name);
+    return;
   }
+  for (const declarator of declaration.declarations) {
+    if (declarator.id.type !== NODE.IDENTIFIER) continue;
+    collected.exportNames.push(declarator.id.name);
+    // `export const relay = importedHintBinding`.
+    if (declarator.init?.type === NODE.IDENTIFIER) {
+      collected.reexports.push({local: declarator.init.name, as: declarator.id.name,
+        line: statement.loc.start.line});
+    }
+  }
+}
+
+const COLLECT_BY_STATEMENT = Object.freeze({
+  [NODE.IMPORT_DECLARATION]: collectImport,
+  [NODE.EXPORT_ALL]: collectExportAll,
+  [NODE.EXPORT_NAMED]: collectNamedExport,
+  [NODE.EXPORT_DEFAULT]: collectExportDefault,
+});
+
+// An export of an imported binding re-exports what the binding names.
+function resolveRelays(reexports, bindingByLocal) {
+  const relays = [];
+  for (const reexport of reexports) {
+    const binding = reexport.local === undefined ? null : bindingByLocal.get(reexport.local);
+    if (reexport.local === undefined) {
+      relays.push(reexport);
+    } else if (binding) {
+      relays.push({...binding, as: reexport.as, line: reexport.line});
+    }
+  }
+  return relays;
+}
+
+/**
+ * Everything one module says about module references: what it imports (by
+ * local binding), what it re-exports, and every other specifier literal.
+ */
+function describeModule(file, knownPaths) {
+  const ast = parseSourceFile(file.text);
+  const collected = {references: [], reexports: [], exportNames: [],
+    bindingByLocal: new Map()};
+  const declarationSources = new Set();
+  const resolve = (node) => {
+    const specifier = staticString(node);
+    return specifier === null ? null : resolveSpecifier(file.path, specifier, knownPaths);
+  };
+  for (const statement of ast.body) {
+    if (statement.source) declarationSources.add(statement.source);
+    const collect = COLLECT_BY_STATEMENT[statement.type];
+    if (collect) collect(statement, statement.source ? resolve(statement.source) : null, collected);
+  }
+  walkAst(ast, (node) => {
+    if (declarationSources.has(node)) return;
+    const target = resolve(node);
+    if (target) collected.references.push({target, names: [ALL_NAMES], line: node.loc.start.line});
+  });
+  return {path: file.path, references: collected.references,
+    relays: resolveRelays(collected.reexports, collected.bindingByLocal),
+    exportNames: collected.exportNames};
+}
+
+// The hint names one relay passes on from the module it re-exports.
+function relayedNames(relay, source) {
+  if (relay.name === ALL_NAMES && relay.as === null) {
+    return arrayFilter([...source], (name) => name !== DEFAULT_EXPORT);
+  }
+  return relay.name === ALL_NAMES || source.has(relay.name) ? [relay.as] : [];
+}
+
+// Adds a module's relayed hint names; true when that added any.
+function addRelayedNames(described, hintExports) {
+  let added = false;
+  for (const relay of described.relays) {
+    const source = hintExports.get(relay.target);
+    if (!source) continue;
+    if (!hintExports.has(described.path)) hintExports.set(described.path, new Set());
+    const own = hintExports.get(described.path);
+    for (const name of relayedNames(relay, source)) {
+      added = added || !own.has(name);
+      own.add(name);
+    }
+  }
+  return added;
 }
 
 // The hint names each module exposes: every export of a hint module, and
@@ -272,21 +314,7 @@ function computeHintExports(modules) {
     changed = false;
     for (const described of modules.values()) {
       if (arrayIncludes(HEALTH_HINT_MODULES, described.path)) continue;
-      for (const relay of described.relays) {
-        const source = hintExports.get(relay.target);
-        if (!source) continue;
-        const relayed = relay.name === ALL_NAMES && relay.as === null ?
-          arrayFilter([...source], (name) => name !== DEFAULT_EXPORT) :
-          (relay.name === ALL_NAMES || source.has(relay.name) ? [relay.as] : []);
-        if (!hintExports.has(described.path)) hintExports.set(described.path, new Set());
-        const own = hintExports.get(described.path);
-        for (const name of relayed) {
-          if (!own.has(name)) {
-            own.add(name);
-            changed = true;
-          }
-        }
-      }
+      changed = addRelayedNames(described, hintExports) || changed;
     }
   }
   return hintExports;
@@ -317,6 +345,22 @@ function judgeReference(described, reference, touched, usedEntries) {
     {...violation, kind: VIOLATION_KIND.NAME_NOT_ALLOWED, names: outside};
 }
 
+function judgeModule(described, hintExports, audit) {
+  for (const reference of described.references) {
+    const touched = hintNamesTouched(reference, hintExports);
+    if (touched.length === 0) continue;
+    audit.reaching.add(described.path);
+    const violation = judgeReference(described, reference, touched, audit.usedEntries);
+    if (violation) audit.violations.push(violation);
+  }
+  const relayedHere = hintExports.get(described.path);
+  if ((relayedHere?.size ?? 0) > 0) {
+    const relay = arrayFind(described.relays, (candidate) => hintExports.has(candidate.target));
+    audit.violations.push({path: described.path, line: relay.line, module: relay.target,
+      kind: VIOLATION_KIND.RELAY, names: [...relayedHere]});
+  }
+}
+
 /**
  * @param {Array<{path: string, text: string}>} files - Every src module, by
  *   repository-relative posix path, with its source text.
@@ -331,32 +375,19 @@ function auditHealthHintImports(files, {wholeTree = false} = {}) {
   const modules = new Map(arrayMap(files,
     (file) => [file.path, describeModule(file, knownPaths)]));
   const hintExports = computeHintExports(modules);
-  const violations = [];
-  const usedEntries = new Set();
-  const reaching = new Set();
+  const audit = {violations: [], usedEntries: new Set(), reaching: new Set()};
   for (const described of modules.values()) {
-    if (arrayIncludes(HEALTH_HINT_MODULES, described.path)) continue;
-    for (const reference of described.references) {
-      const touched = hintNamesTouched(reference, hintExports);
-      if (touched.length === 0) continue;
-      reaching.add(described.path);
-      const violation = judgeReference(described, reference, touched, usedEntries);
-      if (violation) violations.push(violation);
-    }
-    if ((hintExports.get(described.path)?.size ?? 0) > 0) {
-      const relay = arrayFind(described.relays,
-        (candidate) => hintExports.has(candidate.target));
-      violations.push({path: described.path, line: relay.line, module: relay.target,
-        kind: VIOLATION_KIND.RELAY, names: [...hintExports.get(described.path)]});
+    if (!arrayIncludes(HEALTH_HINT_MODULES, described.path)) {
+      judgeModule(described, hintExports, audit);
     }
   }
   for (const entry of HEALTH_HINT_ALLOWED_IMPORTS) {
-    if (!usedEntries.has(entry) && (wholeTree || knownPaths.has(entry.importer))) {
-      violations.push({path: entry.importer, line: 0, module: entry.module,
+    if (!audit.usedEntries.has(entry) && (wholeTree || knownPaths.has(entry.importer))) {
+      audit.violations.push({path: entry.importer, line: 0, module: entry.module,
         kind: VIOLATION_KIND.STALE_ALLOW_ENTRY, names: [...entry.names]});
     }
   }
-  return {violations, hintReachingModules: reaching.size};
+  return {violations: audit.violations, hintReachingModules: audit.reaching.size};
 }
 
 function listSourceFiles(root) {
@@ -369,21 +400,26 @@ function listSourceFiles(root) {
     toPosix(path.relative(root, path.join(entry.parentPath, entry.name))));
 }
 
+const VIOLATION_TEXT = Object.freeze({
+  RELAY: 'a hint module is imported from its owner, never re-exported',
+  STALE: 'remove its allow-list entry',
+  NAME_NOT_ALLOWED: 'beyond its allow-list entry',
+  UNLISTED: 'node health is a hint and only the allow-listed reader, producers ' +
+    'and recorded debt may import it',
+});
+
 function formatViolation(violation) {
   const where = `${violation.path}:${violation.line}`;
   const names = arrayJoin(violation.names, ', ');
   switch (violation.kind) {
   case VIOLATION_KIND.RELAY:
-    return `${where} relays ${violation.module} (${names}): a hint module is ` +
-        'imported from its owner, never re-exported';
+    return `${where} relays ${violation.module} (${names}): ${VIOLATION_TEXT.RELAY}`;
   case VIOLATION_KIND.STALE_ALLOW_ENTRY:
-    return `${violation.path} no longer reaches ${violation.module}: remove its ` +
-        'allow-list entry';
+    return `${violation.path} no longer reaches ${violation.module}: ${VIOLATION_TEXT.STALE}`;
   case VIOLATION_KIND.NAME_NOT_ALLOWED:
-    return `${where} takes ${names} from ${violation.module}, beyond its allow-list entry`;
+    return `${where} takes ${names} from ${violation.module}, ${VIOLATION_TEXT.NAME_NOT_ALLOWED}`;
   default:
-    return `${where} reaches ${violation.module} (${names}): node health is a hint ` +
-        'and only the allow-listed reader, producers and recorded debt may import it';
+    return `${where} reaches ${violation.module} (${names}): ${VIOLATION_TEXT.UNLISTED}`;
   }
 }
 

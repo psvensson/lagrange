@@ -9,6 +9,8 @@ import {
   retireReplicaTransportHandler,
 } from '../node/replica-transport-handler-identity.js';
 import {endReplicaLeadershipTenure} from '../raft/replica-leadership-state.js';
+import {releaseRemovalSubjectHandoff} from
+  './partition-service-removal-subject-handoff.js';
 import {assertRaftOperationSucceeded} from '../raft/raft-operation-port.js';
 
 const {
@@ -183,6 +185,7 @@ class PartitionServiceLifecycleMethods {
       this.clearLocalCanonicalLeaderClaimOnTeardown?.();
       // No reader continues a closed replica's leadership.
       endReplicaLeadershipTenure(this);
+      releaseRemovalSubjectHandoff(this);
       await closePartitionConsensusResources(this);
       this.stopPeriodicSizeUpdates();
       this.stopPreparedStateHoldTimeoutSweep();

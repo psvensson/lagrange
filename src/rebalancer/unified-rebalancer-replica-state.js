@@ -244,6 +244,11 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
         decisionDimension: readinessDecisionDimension,
       },
     );
+    if (this.notePlanningTargetReadiness(nodeId, readiness)) {
+      // Not a final no: the target is skipped for this pass and the
+      // publication that answers its read wakes the entity.
+      return READINESS_SKIP_DETAIL.READINESS_DEFERRED;
+    }
     if (
       !this.isReadinessDimensionSatisfied(readiness, readinessDecisionDimension)
     ) {

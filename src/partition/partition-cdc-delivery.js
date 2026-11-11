@@ -137,6 +137,10 @@ function markReplayOnlyCdcEvent(cdcEvent) {
     // lane (at most one delivery in flight per recipient; a slot is released
     // only by its delivery's actual local cleanup, also across tenures).
     this.recipientCustody = new Map();
+    // propagationAttachment: the deferred attempt of this replica's one
+    // propagation registration while it awaits its operational message group
+    // (registerPartitionCdcPropagation's deferred form), or null.
+    this.propagationAttachment = null;
     this.obligationLane = createCdcObligationLane();
     if (typeof owner.on === PARTITION_SERVICE_TYPE.FUNCTION) {
       owner.on(PARTITION_SERVICE_EVENT.LEADER_ELECTED, () => {
@@ -572,6 +576,16 @@ function markReplayOnlyCdcEvent(cdcEvent) {
     this.driveCdcObligations(PARTITION_CDC_OBLIGATION_REASON.SUBSCRIPTION_HANDSHAKE)
       .catch(() => undefined);
     return handshake;
+  }
+  /**
+   * Hold (or, with null, release) the deferred attempt of this replica's
+   * propagation registration: the lane wakes it whenever it finds owed rows
+   * and no subscriber.
+   * @param {Function|null} attempt - Re-attempts the registration.
+   */
+  awaitPropagationAttachment(attempt) {
+    this.propagationAttachment = typeof attempt === PARTITION_SERVICE_TYPE.FUNCTION ?
+      attempt : null;
   }
   /**
    * The current propagation subscription other than the one keyed by

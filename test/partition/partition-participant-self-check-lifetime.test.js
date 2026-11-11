@@ -58,12 +58,17 @@ function scripted(results) {
   return {calls, selfCheck};
 }
 
-const beginAnswer = async (leader, id) =>
-  pick(await send(leader, beginMessage(identityOf(id))),
-    ['success', 'failureCode', 'selfCheckState']);
-const admitted = {success: true, failureCode: null, selfCheckState: null};
-const refused = (state) => ({success: false,
-  failureCode: CODE.DETERMINISM_SELF_CHECK_FAILED, selfCheckState: state});
+// The BEGIN answer as its consumer reads it: the code decides; the verdict's
+// state is the leader's log record, never a field of the refusal.
+const beginAnswer = async (leader, id) => {
+  const answer = await send(leader, beginMessage(identityOf(id)));
+  assert.equal(Object.hasOwn(answer, 'selfCheckState'), false,
+    'the refusal carries no selfCheckState (no consumer reads it)');
+  return pick(answer, ['success', 'failureCode']);
+};
+const admitted = {success: true, failureCode: null};
+const refused = {success: false,
+  failureCode: CODE.DETERMINISM_SELF_CHECK_FAILED};
 
 function captureWarnings(service) {
   const warnings = [];
@@ -121,8 +126,8 @@ test('a FAILED verdict refuses every BEGIN of its leadership tenure and is ' +
     await settleTicks();
     facts.nextTenure = calls.length;
     facts.afterReelection = await beginAnswer(leader, 'sc-life-c');
-    assert.deepEqual(facts, {atLeadership: 1, first: refused('failed'),
-      second: refused('failed'), withinTenure: 1, nextTenure: 2,
+    assert.deepEqual(facts, {atLeadership: 1, first: refused,
+      second: refused, withinTenure: 1, nextTenure: 2,
       afterReelection: admitted});
   }, {determinismSelfCheck: selfCheck});
 });
@@ -135,15 +140,94 @@ test('an UNAVAILABLE verdict (a probe that could not be measured, nothing ' +
     const facts = {atLeadership: calls.length,
       first: await beginAnswer(leader, 'sc-unavail-a'),
       second: await beginAnswer(leader, 'sc-unavail-b'), measured: calls.length};
-    assert.deepEqual(facts, {atLeadership: 1, first: refused('unavailable'),
+    assert.deepEqual(facts, {atLeadership: 1, first: refused,
       second: admitted, measured: 3});
   }, {determinismSelfCheck: selfCheck});
   let thrown = 0;
   await onLeader(async (leader) => {
     const first = await beginAnswer(leader, 'sc-throw-a');
-    assert.deepEqual({first, thrown}, {first: refused('unavailable'), thrown: 2});
+    assert.deepEqual({first, thrown}, {first: refused, thrown: 2});
   }, {determinismSelfCheck: () => {
     thrown += 1;
     throw new Error('probe connection busy');
   }});
+});
+
+const selfCheckWarnings = (warnings) => warnings
+  .filter(({message}) => message === LOG_MSG.SELF_CHECK_FAILED ||
+    message === LOG_MSG.SELF_CHECK_UNAVAILABLE)
+  .map(({message, fields}) => ({message, state: fields?.state ?? null}));
+
+test('a schema change on the leader\'s connection ends the kept verdict: the ' +
+  'next BEGIN measures again', async () => {
+  const {calls, selfCheck} = scripted([FAILED, PASSED]);
+  await onLeader(async (leader) => {
+    const facts = {first: await beginAnswer(leader, 'sc-schema-a'),
+      kept: await beginAnswer(leader, 'sc-schema-b'), beforeDdl: calls.length};
+    leader.db.exec('CREATE TABLE sc_schema_bump (x INTEGER)');
+    facts.afterDdl = await beginAnswer(leader, 'sc-schema-c');
+    facts.measured = calls.length;
+    assert.deepEqual(facts, {first: refused, kept: refused, beforeDdl: 1,
+      afterDdl: admitted, measured: 2});
+  }, {determinismSelfCheck: selfCheck});
+});
+
+test('the real self-check on a participant table that carries a trigger ' +
+  'FAILS at opcode and refuses BEGIN', async () => {
+  await onLeader(async (leader) => {
+    const before = await beginAnswer(leader, 'sc-trigger-a');
+    const warnings = captureWarnings(leader);
+    leader.db.exec('CREATE TRIGGER sc_participant_trigger AFTER INSERT ON ' +
+      `"${leader.tableName}" BEGIN SELECT 1; END`);
+    const after = await beginAnswer(leader, 'sc-trigger-b');
+    const [warned] = warnings.filter(({message}) =>
+      message === LOG_MSG.SELF_CHECK_FAILED);
+    const opcodeRefused = (warned?.fields?.cases ?? [])
+      .filter((entry) => entry.result === PROBE_RESULT.UNSATISFIED &&
+        entry.layer === LAYER.OPCODE).map((entry) => entry.name);
+    assert.deepEqual({before, after, state: warned?.fields?.state ?? null,
+      opcodeRefused: opcodeRefused.length > 0}, {before: admitted,
+      after: refused, state: 'failed', opcodeRefused: true},
+    JSON.stringify(warned?.fields?.cases));
+  });
+});
+
+test('a TEMP trigger (which leaves the main schema_version unchanged) ends ' +
+  'the kept verdict: the next BEGIN measures again and FAILS', async () => {
+  await onLeader(async (leader) => {
+    const before = await beginAnswer(leader, 'sc-temp-a');
+    const mainVersion = leader.db.pragma('schema_version', {simple: true});
+    leader.db.exec('CREATE TEMP TRIGGER sc_temp_trigger AFTER INSERT ON ' +
+      `main."${leader.tableName}" BEGIN SELECT 1; END`);
+    assert.equal(leader.db.pragma('schema_version', {simple: true}),
+      mainVersion, 'precondition: a TEMP trigger does not bump schema_version');
+    const after = await beginAnswer(leader, 'sc-temp-b');
+    assert.deepEqual({before, after}, {before: admitted, after: refused});
+  });
+});
+
+test('a deterministic UNAVAILABLE re-measures at every BEGIN but is reported ' +
+  'once per leadership tenure', async () => {
+  const {calls, selfCheck} = scripted([UNAVAILABLE]);
+  await onLeader(async (leader) => {
+    const warnings = captureWarnings(leader);
+    const atLeadership = calls.length;
+    const answers = [];
+    for (const id of ['sc-bound-a', 'sc-bound-b', 'sc-bound-c']) {
+      answers.push(await beginAnswer(leader, id));
+    }
+    const withinTenure = {measured: calls.length - atLeadership,
+      warnings: selfCheckWarnings(warnings).length};
+    leader.controllablePort.setRole(RAFT_ROLE.FOLLOWER);
+    await settleTicks();
+    leader.controllablePort.setRole(RAFT_ROLE.LEADER);
+    await settleTicks();
+    await beginAnswer(leader, 'sc-bound-d');
+    assert.deepEqual({answers, withinTenure,
+      nextTenure: selfCheckWarnings(warnings)}, {
+      answers: [refused, refused, refused],
+      withinTenure: {measured: 3, warnings: 0},
+      nextTenure: [{message: LOG_MSG.SELF_CHECK_UNAVAILABLE,
+        state: 'unavailable'}]});
+  }, {determinismSelfCheck: selfCheck});
 });

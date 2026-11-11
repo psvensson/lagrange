@@ -9,7 +9,8 @@ import {deliveryAnswerOf} from '../transport/transport-semantic-outcome.js';
 // lane; the service keeps no payload between attempts or after a delivery.
 import {captureCdcEvents} from '../cdc/cdc-event-envelope.js';
 import {CDC_COMPLETION, CDC_COVERAGE_STATE, isCommittedCdcOutcome, isProvisionalCdcOutcome,
-  observeCdcDeliveryCoverage, unknownCdcAcceptance} from '../cdc/cdc-delivery-outcome.js';
+  observeCdcDeliveryCoverage, unconfirmedCdcAcceptance, unknownCdcAcceptance} from
+  '../cdc/cdc-delivery-outcome.js';
 import {assertCdcDeliveryInvocation, openCdcDeliveryChildScope} from
   '../cdc/cdc-delivery-invocation.js';
 import {CDC_DELIVERY_REMAINING_MS, prepareCdcDeliveryMessage} from '../cdc/cdc-delivery-budget.js';
@@ -87,18 +88,6 @@ async function deliverTarget(owner, wave, events, leaf) {
   return {delivery, answer: deliveryAnswerOf(delivery)};
 }
 
-// The recipient's own answer over the vector, or the typed unknown that keeps
-// its backpressure hint: the source lane honours it on this recipient only.
-function unconfirmedAnswer(answer) {
-  const backpressured = answer?.error === CDC_COMPLETION.BACKPRESSURE ||
-    answer?.reason === CDC_COMPLETION.BACKPRESSURE;
-  return {
-    ...unknownCdcAcceptance(backpressured ? CDC_COMPLETION.BACKPRESSURE : CDC_COMPLETION.UNKNOWN),
-    ...(Number.isFinite(answer?.retryAfterMs) && answer.retryAfterMs > 0 ?
-      {retryAfterMs: answer.retryAfterMs} : {}),
-  };
-}
-
 // The recipient a delivery addresses: the source group (it applies locally)
 // or one target group, routed as the plan the topology owner observed now
 // routes it. A group the plan no longer names stays required: it is
@@ -149,7 +138,7 @@ async function deliverToRecipient(owner, wave, events, recipient) {
     // A target's answer counts only inside a delivered transport envelope.
     const covered = delivery !== null && observeCdcDeliveryCoverage(
       delivery, events, recipient.groupId).state !== CDC_COVERAGE_STATE.UNCOVERED;
-    return {answer: covered ? answer : unconfirmedAnswer(answer),
+    return {answer: covered ? answer : unconfirmedCdcAcceptance(answer),
       cause: {state: DURABLE_PROPAGATION_CAUSE.RESPONSE, cause: delivery ?? answer}};
   } catch (error) {
     traceWaveLeaf(wave.trace, {isSource: recipient.isSource, leaf,
@@ -167,7 +156,7 @@ function prepareRecipientDelivery(owner, wave, events, plan, recipient) {
     isProvisionalCdcOutcome(last.answer, events, recipient.groupId);
   const result = () => complete() ?
     propagationResult(owner, source, plan, last.answer) :
-    {...propagationResult(owner, source, plan, unconfirmedAnswer(last.answer)),
+    {...propagationResult(owner, source, plan, unconfirmedCdcAcceptance(last.answer)),
       failedTargetGroupIds: recipient.isSource ? [] : [recipient.groupId], cause: last.cause};
   return {
     deliveryLabel: owner.describeDeliveryEvents(events),

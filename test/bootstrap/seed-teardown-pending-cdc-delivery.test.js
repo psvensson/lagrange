@@ -20,6 +20,8 @@
 // stop() owns), entered because the target's answer is the CDC outcome
 // owner's typed unknown; settlement is observed by turns, never by a clock.
 
+import {propagatePartitionCdcVector} from
+  '../../src/bootstrap/shared/partition-cdc-propagation-subscriber.js';
 import assert from 'node:assert/strict';
 import {afterEach, beforeEach, test} from 'node:test';
 
@@ -137,8 +139,9 @@ test('the seed teardown completes when the latency topology stops inside a ' +
   await resumeFixtureParticipantAdmission(partition);
   const sourceMessageGroup = createDurableSourceMessageGroupService(SOURCE_GROUP_ID);
   await partition.subscribeToCDCWithHandshake(
-    (events, deliveryContext) => bridge.propagatePartitionCDCEvent(
-      sourceMessageGroup, events, deliveryContext),
+    (events, deliveryContext) => propagatePartitionCdcVector(
+      bridge.delegates.getLatencyTopology(), 'no topology', sourceMessageGroup, events,
+      deliveryContext),
     {subscriberId: 'seed-hydration'});
   const handler = new ReplicaHandler({
     nodeId: NODE_ID,

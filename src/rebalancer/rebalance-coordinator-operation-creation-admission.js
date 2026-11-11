@@ -96,6 +96,17 @@ const REPLICA_OPERATION_ROUTE_SOURCE_TABLES = Object.freeze([
   TABLES.SERVICES,
 ]);
 const EMPTY_REASON_CODES = Object.freeze([]);
+// The fields a re-entry error carries from its observation, with the value
+// an absent field states.
+const REENTRY_ERROR_FIELDS = Object.freeze([
+  ['contractState', OWNER_CONTRACT_STATE.DEFERRED],
+  ['nextAction', OWNER_CONTRACT_NEXT_ACTION.RETRY],
+  ['reasonCodes', EMPTY_REASON_CODES],
+  ['retryAfterMs', 0],
+  ['admissionResult', null],
+  ['moveIdentity', null],
+  ['routeObservation', null],
+]);
 
 /**
  * Classify one denied admission (an observation, or the re-entry error
@@ -280,18 +291,23 @@ function readAdmissionResult(error) {
     error.admissionResult : null;
 }
 
-function buildUnavailableRouteObservation(origin, sourceVersions) {
+// What can clear a route denial (operation-creation-admission-clearance.js):
+// a change of the rows routing reads (`sourceVersions`), or the routing
+// owner's own retry point for a temporary address exclusion that ends by
+// time with no row change (`retryDueAtMs`, the owner's clock; null when no
+// exclusion is live).
+function buildUnavailableRouteObservation(origin, routeClearance) {
   return Object.freeze({
     allowed: false,
     reasonCode: OPERATION_CREATION_ADMISSION_REASON.ROUTE_UNAVAILABLE,
     retryAfterMs: 0,
     routingSnapshot: null,
     origin,
-    sourceVersions,
+    ...routeClearance,
   });
 }
 
-function buildRouteObservation(candidateResolution, sourceVersions) {
+function buildRouteObservation(candidateResolution, routeClearance) {
   const routingSnapshot = candidateResolution?.routingSnapshot || null;
   const candidates = arrayOrEmpty(candidateResolution?.candidates);
   const routableServices = arrayOrEmpty(routingSnapshot?.routableServices);
@@ -305,7 +321,7 @@ function buildRouteObservation(candidateResolution, sourceVersions) {
       OPERATION_CREATION_ADMISSION_REASON.ROUTE_UNAVAILABLE,
     retryAfterMs: 0,
     origin: REPLICA_OPERATION_ROUTE_OBSERVATION_ORIGIN.ROUTE_RESOLUTION,
-    sourceVersions,
+    ...routeClearance,
     routingSnapshot: routingSnapshot ? Object.freeze({
       canonicalLeaderNodeId,
       canonicalLeaderRoutingGapState:
@@ -347,19 +363,38 @@ const operationCreationAdmissionMethods = {
     );
   },
 
+  /**
+   * What will clear a replica_operations route denial taken now: the
+   * route-source table versions, and the routing owner's retry point for a
+   * live temporary exclusion of a replica_operations address.
+   * @param {Object|null} queryExecutor the routing owner, when wired
+   * @return {{sourceVersions: Object, retryDueAtMs: number|null}}
+   */
+  captureReplicaOperationRouteClearance(queryExecutor) {
+    return {
+      sourceVersions:
+        captureReplicaOperationRouteSourceVersions(this.systemTableCache),
+      retryDueAtMs: queryExecutor ?
+        queryExecutor.resolveAddressQuarantineRetryDueAtMs(
+          INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.REPLICA_OPERATIONS]) :
+        null,
+    };
+  },
+
   observeReplicaOperationMutationRoute() {
     const queryExecutor = this.sqlQueryEngine?.queryExecutor || null;
     const partitionId =
       INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.REPLICA_OPERATIONS];
     const origin = REPLICA_OPERATION_ROUTE_OBSERVATION_ORIGIN.ROUTE_RESOLUTION;
-    const sourceVersions =
-      captureReplicaOperationRouteSourceVersions(this.systemTableCache);
     if (
       !partitionId ||
       typeof queryExecutor?.resolvePartitionServiceCandidates !== 'function'
     ) {
-      return buildUnavailableRouteObservation(origin, sourceVersions);
+      return buildUnavailableRouteObservation(origin,
+        this.captureReplicaOperationRouteClearance(null));
     }
+    const routeClearance =
+      this.captureReplicaOperationRouteClearance(queryExecutor);
     try {
       const candidateResolution =
         queryExecutor.resolvePartitionServiceCandidates(
@@ -370,9 +405,9 @@ const operationCreationAdmissionMethods = {
           CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
           {allowReadinessAuthoritativeRefresh: false},
         );
-      return buildRouteObservation(candidateResolution, sourceVersions);
+      return buildRouteObservation(candidateResolution, routeClearance);
     } catch {
-      return buildUnavailableRouteObservation(origin, sourceVersions);
+      return buildUnavailableRouteObservation(origin, routeClearance);
     }
   },
 
@@ -493,17 +528,11 @@ const operationCreationAdmissionMethods = {
       'Operation creation admission changed before persistence',
     );
     error.code = OPERATION_CREATION_ADMISSION_ERROR_CODE;
-    error.contractState = observation?.contractState ||
-      OWNER_CONTRACT_STATE.DEFERRED;
-    error.nextAction = observation?.nextAction ||
-      OWNER_CONTRACT_NEXT_ACTION.RETRY;
-    error.reasonCodes = observation?.reasonCodes || EMPTY_REASON_CODES;
-    error.retryAfterMs = observation?.retryAfterMs || 0;
-    error.admissionResult = observation?.admissionResult || null;
-    // What the consumer's clearance wait reads (operation-creation-
-    // admission-clearance.js): which node, and which route evidence.
-    error.moveIdentity = observation?.moveIdentity || null;
-    error.routeObservation = observation?.routeObservation || null;
+    // moveIdentity and routeObservation are what the consumer's clearance
+    // wait reads (operation-creation-admission-clearance.js).
+    for (const [field, absent] of REENTRY_ERROR_FIELDS) {
+      error[field] = observation?.[field] || absent;
+    }
     return error;
   },
 
@@ -594,7 +623,8 @@ const operationCreationAdmissionMethods = {
           ],
           routeObservation: buildUnavailableRouteObservation(
             REPLICA_OPERATION_ROUTE_OBSERVATION_ORIGIN.PRE_SUBMISSION_DELIVERY,
-            captureReplicaOperationRouteSourceVersions(this.systemTableCache),
+            this.captureReplicaOperationRouteClearance(
+              this.sqlQueryEngine?.queryExecutor || null),
           ),
         }),
       );

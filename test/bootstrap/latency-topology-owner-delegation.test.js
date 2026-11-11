@@ -5,6 +5,14 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {TABLES} from '../../src/constants/index.js';
+import {propagatePartitionCdcVector} from
+  '../../src/bootstrap/shared/partition-cdc-propagation-subscriber.js';
+import {JOINING_ERROR_MSG} from '../../src/bootstrap/node-joining-constants.js';
+
+// The joiner's propagation call, as its registration composes it.
+const joinerPropagation = (service) => (messageGroupService, events, deliveryContext) =>
+  propagatePartitionCdcVector(service.latencyTopology, JOINING_ERROR_MSG.LATENCY_TOPOLOGY_MISSING,
+    messageGroupService, events, deliveryContext);
 
 function setupEnvironment() {
   ConfigurationManager.resetInstance();
@@ -29,7 +37,7 @@ test('BootstrapService partition CDC propagation requires topology owner',
     const service = new BootstrapService({bootIncarnation: 1, nodeId: 'node-a'});
 
     await assert.rejects(
-      service.seedCacheHydrationPhase
+      service.seedCacheHydrationPhase.delegates
         .propagatePartitionCDCEvent(
           {},
           [{
@@ -66,7 +74,7 @@ test('BootstrapService delegates partition CDC propagation to topology owner',
       data: {node_id: 'node-z'},
     };
 
-    const result = await service.seedCacheHydrationPhase
+    const result = await service.seedCacheHydrationPhase.delegates
       .propagatePartitionCDCEvent(
         messageGroupService,
         [cdcEvent],
@@ -96,7 +104,7 @@ test('NodeJoiningService partition CDC propagation requires topology owner',
     });
 
     await assert.rejects(
-      service.propagatePartitionCDCEvent(
+      joinerPropagation(service)(
         {},
         [{
           tableName: TABLES.NODES,
@@ -136,7 +144,7 @@ test('NodeJoiningService delegates partition CDC propagation to topology owner',
       data: {node_id: 'node-z'},
     };
 
-    const result = await service.propagatePartitionCDCEvent(
+    const result = await joinerPropagation(service)(
       messageGroupService,
       [cdcEvent],
     );

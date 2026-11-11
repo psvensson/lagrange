@@ -43,6 +43,7 @@ import {
   shouldUsePublicationMerge,
   tryParseHLCTimestamp,
 } from './system-table-cache-row-merge.js';
+import {SystemTableCacheSourceOrder} from './system-table-cache-source-order.js';
 import {SystemTableCacheTombstoneStore} from
   './system-table-cache-tombstone-store.js';
 import {
@@ -221,6 +222,7 @@ class SystemTableCache {
       this.lastCdcObservationByTableName.set(tableName, new Map());
       this.mutationVersionByTableKey.set(tableName, new Map());
     }
+    this.sourceOrder = new SystemTableCacheSourceOrder();
     this.tombstoneStore = new SystemTableCacheTombstoneStore(SYSTEM_TABLES, {
       // The child reads the parent's clock: one physical-time domain for
       // every timestamp the authoritative-absence comparison touches.
@@ -299,6 +301,9 @@ class SystemTableCache {
         .AUTHORITATIVE_OBSERVATION_RECONCILIATION;
     let recordForNotification = null;
     let incomingVersionAccepted = false;
+    const sameEntryOrder = this.sourceOrder.compareInSameEntry(tableName, key, data, options);
+    if (sameEntryOrder < 0) return false;
+    if (sameEntryOrder > 0) this.tombstoneStore.clearKey(tableName, key);
 
     // A write (INSERT/UPDATE/UPSERT) for a key under an active DELETE tombstone is
     // a reordered, causally-older resurrection — reject it. A causally-newer write
@@ -328,7 +333,7 @@ class SystemTableCache {
     case CDC_OPERATIONS.INSERT:
       if (table.has(key)) {
         const existing = table.get(key);
-        if (this.isStaleForExistingRecord(tableName, existing, data)) {
+        if (this.isStaleForExistingRecord(tableName, existing, data, sameEntryOrder)) {
           const staleMergeResult = this.applyStaleRowBackfill(
             tableName,
             table,
@@ -368,7 +373,7 @@ class SystemTableCache {
         table.set(key, this.deepClone(data));
       } else {
         const existing = table.get(key);
-        if (this.isStaleForExistingRecord(tableName, existing, data)) {
+        if (this.isStaleForExistingRecord(tableName, existing, data, sameEntryOrder)) {
           const staleMergeResult = this.applyStaleRowBackfill(
             tableName,
             table,
@@ -416,6 +421,7 @@ class SystemTableCache {
           tableName,
           existing,
           data,
+          sameEntryOrder,
         )) {
           const staleMergeResult = this.applyStaleRowBackfill(
             tableName,
@@ -474,7 +480,7 @@ class SystemTableCache {
         });
       } else {
         const existing = table.get(key);
-        if (isDeleteSupersededByExistingRecord(tableName, existing, data)) {
+        if (isDeleteSupersededByExistingRecord(tableName, existing, data, sameEntryOrder)) {
           // The row is causally newer than this DELETE: the delete is superseded,
           // so it must NOT leave a tombstone that would fence the live row.
           this.logger.debug(CACHE_LOG_MSG.STALE_EVENT_IGNORED, {
@@ -502,6 +508,9 @@ class SystemTableCache {
       break;
     }
 
+    if (incomingVersionAccepted || (operation === CDC_OPERATIONS.DELETE && !table.has(key))) {
+      this.sourceOrder.record(tableName, key, data, options);
+    }
     this.logger.debug(CACHE_LOG_MSG.APPLIED_CDC_EVENT, {
       tableName,
       operation,
@@ -568,6 +577,7 @@ class SystemTableCache {
       this.tables.get(tableName).clear();
     }
     this.tombstoneStore.clear();
+    this.sourceOrder.clear();
     this.appliedSchemaVersions.clear();
     this.lastAppliedAtMsByTableName.clear();
     this.lastAppliedCauseIdByTableName.clear();
@@ -685,11 +695,12 @@ class SystemTableCache {
    * @param {string} tableName - Table name.
    * @param {Object} existing - Existing cached row.
    * @param {Object} incoming - Incoming CDC row.
+   * @param {number} [sameEntryOrder] - Source-ordinal order within one entry.
    * @return {boolean} True when incoming row is older.
    * @private
    */
-  isStaleForExistingRecord(tableName, existing, incoming) {
-    return isStaleForExistingRecord(tableName, existing, incoming);
+  isStaleForExistingRecord(tableName, existing, incoming, sameEntryOrder = 0) {
+    return isStaleForExistingRecord(tableName, existing, incoming, sameEntryOrder);
   }
 
   /**

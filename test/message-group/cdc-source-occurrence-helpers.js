@@ -1,4 +1,6 @@
 // Shared helpers for W1, W2, W7 and W9 end-to-end native CDC delivery witnesses.
+import {propagatePartitionCdcVector} from
+  '../../src/bootstrap/shared/partition-cdc-propagation-subscriber.js';
 import assert from 'node:assert/strict';
 import {RAFT_RS_ENTRY_TYPE} from '../../src/raft/raft-rs-ready-loop-constants.js';
 import {
@@ -21,8 +23,6 @@ import {
 } from '../../src/bootstrap/shared/message-group-selection.js';
 import {SeedRuntimeBridgeOwner} from
   '../../src/bootstrap/owners/seed-runtime-bridge-owner.js';
-import {NodeJoiningPublicationActivation} from
-  '../../src/bootstrap/node-joining-publication-activation.js';
 import {CDCGroupPropagationService} from
   '../../src/topology/cdc-group-propagation-service.js';
 import {LatencyTreeService} from '../../src/topology/latency-tree-service.js';
@@ -177,15 +177,12 @@ function buildBridgeSubscribers(f, tableName, partitionId) {
     });
 
   const seedBridge = makeSubscriber('seed-bridge', (service, events, ctx) =>
-    seedBridgeOwner.propagatePartitionCDCEvent(service, events, ctx),
+    propagatePartitionCdcVector(seedBridgeOwner.delegates.getLatencyTopology(), 'no topology',
+      service, events, ctx),
   );
   const joiningBridge = makeSubscriber('joining-bridge', (service, events, ctx) =>
-    NodeJoiningPublicationActivation.prototype.propagatePartitionCDCEvent.call(
-      joiningContext,
-      service,
-      events,
-      ctx,
-    ),
+    propagatePartitionCdcVector(joiningContext.latencyTopology, 'no topology', service, events,
+      ctx),
   );
   return {seedBridge, joiningBridge};
 }

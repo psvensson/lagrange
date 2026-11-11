@@ -1,3 +1,5 @@
+import {AVAILABLE_NODE_PLANNING_STATE} from
+  './rebalancer-no-target-pass-diagnostic.js';
 import {UnifiedRebalancerReplicaState} from './unified-rebalancer-replica-state.js';
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 import {orderLedgerQuorumCureMovesFirst} from './operation-ledger-hold-policy.js';
@@ -357,6 +359,34 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
     return this.isSystemPartitionEntity();
   }
 
+  /**
+   * The nodes whose replicas are not counted unhealthy: READY candidates and
+   * DEFERRED ones. A deferred readiness read means the node's health is
+   * unknown (a rebuild is queued), not that it is unhealthy: counting its
+   * replicas as missing made the planner mint ADDs for replicas that exist.
+   * No ADD may rest on an unknown, so its replicas still count, and the
+   * planning-target wake is armed so the publication that answers the read
+   * re-evaluates this entity. (Removal safety is not decided here: the
+   * remove-safety evaluator reads committed node and group evidence.)
+   * @return {Set<string>}
+   */
+  resolveNotUnhealthyNodeIds() {
+    const nodePlan = this.getAvailableNodePlan();
+    const deferredNodeIds = nodePlan.candidates
+      .filter((candidate) =>
+        candidate.state === AVAILABLE_NODE_PLANNING_STATE.DEFERRED)
+      .map((candidate) => candidate.nodeId);
+    if (deferredNodeIds.length > 0) {
+      this.armPlanningTargetReadinessWake([
+        ...(this.planningTargetReadinessWakeNodeIds || []),
+        ...deferredNodeIds]);
+    }
+    return new Set([
+      ...nodePlan.availableNodes.map((node) => node.node_id),
+      ...deferredNodeIds,
+    ]);
+  }
+
   getHealthyReplicas(replicas) {
     // services.status is NOT NULL: a row without one is not ACTIVE.
     const activeReplicas = replicas.filter(
@@ -369,9 +399,7 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
       return activeReplicas;
     }
 
-    const readyNodeIds = new Set(
-      this.getAvailableNodes().map((node) => node.node_id),
-    );
+    const readyNodeIds = this.resolveNotUnhealthyNodeIds();
 
     return activeReplicas.filter((replica) => {
       if (!replica?.node_id || !replica?.address) {
@@ -411,9 +439,7 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
     if (!this.isSystemPartitionEntity()) {
       return activeReplicas;
     }
-    const readyNodeIds = new Set(
-      this.getAvailableNodes().map((node) => node.node_id),
-    );
+    const readyNodeIds = this.resolveNotUnhealthyNodeIds();
     return activeReplicas.filter(
       (replica) =>
         replica?.node_id &&

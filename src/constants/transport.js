@@ -56,6 +56,7 @@ const TRANSPORT_CONFIG_KEY = Object.freeze({
   CONNECTION_POOL_CLEANUP_INTERVAL_MS: 'transport.connectionPoolCleanupIntervalMs',
 });
 
+// ends-on: n/a lookback
 const ACK_TIMEOUT_QUARANTINE_LIVENESS_WINDOW_MS = 30000;
 const KEEPALIVE_PINGS_PER_LIVENESS_WINDOW = 3;
 

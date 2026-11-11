@@ -533,7 +533,7 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
 
   notePassExecution(nodePlan, result) {
     if (this.countExecutedMoves(result) > UNIFIED_REBALANCER_LITERAL.ZERO) {
-      noteRebalancePassMoved(this);
+      noteRebalancePassMoved(this, result);
       return result;
     }
     return this.noMovePassResult(PASS_EXIT.MOVES_NOT_EXECUTED, nodePlan,

@@ -72,7 +72,49 @@ function resolveDrainedTopologyShapingOperationIds(operations, options) {
     .sort();
 }
 
+/**
+ * The latest retained drain by its remote completion stamp (clamped to the
+ * observing instant). Kept only for the demo preload gate
+ * (examples/service-data-affinity/affinity-demo-preload-gate.js); the
+ * release fence no longer reads it: a remote stamp can hide a fast
+ * transition stamped earlier than another, which is why the fence keys on
+ * resolveDrainedTopologyShapingOperationIds. Finding routed to that
+ * consumer's owner.
+ * @param {Array<Object>} operations
+ * @param {Object} [options]
+ * @param {number} [options.observedAt]
+ * @return {{drainedAtMs:number,operationId:string,operationType:string}|null}
+ */
+function resolveLatestTopologyShapingOperationDrain(operations, options = {}) {
+  if (!Array.isArray(operations)) {
+    return null;
+  }
+  const observedAt = Number.isFinite(options.observedAt) ?
+    Math.floor(options.observedAt) :
+    Date.now();
+  let latestDrain = null;
+  for (const operation of operations) {
+    if (!isDrainedTopologyShapingOperation(operation, observedAt)) continue;
+    const record = normalizeReplicaOperationRecord(operation, {
+      nowMs: observedAt,
+    });
+    const drainedAtMs = Number.isFinite(record.completedAt) ?
+      record.completedAt : record.updatedAt;
+    if (!Number.isFinite(drainedAtMs)) continue;
+    const candidate = Object.freeze({
+      drainedAtMs: Math.min(observedAt, Math.floor(drainedAtMs)),
+      operationId: record.operationId,
+      operationType: record.type,
+    });
+    if (!latestDrain || candidate.drainedAtMs > latestDrain.drainedAtMs) {
+      latestDrain = candidate;
+    }
+  }
+  return latestDrain;
+}
+
 export {
   isFoundingTopologyOperation,
   resolveDrainedTopologyShapingOperationIds,
+  resolveLatestTopologyShapingOperationDrain,
 };

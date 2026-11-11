@@ -50,6 +50,7 @@ import {
 } from './unified-rebalancer-test-support.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
+import {stubAvailableNodes} from './available-node-plan-stub.js';
 
 // Initialize test environment
 // Create a mock system table cache
@@ -166,10 +167,10 @@ test('UnifiedRebalancer serializes ordinary priority recovery moves while anothe
 
     rebalancer.setLeader(true);
     rebalancer.getCurrentReplicas = () => [];
-    rebalancer.getAvailableNodes = () => ([
+    stubAvailableNodes(rebalancer, () => ([
       {node_id: 'node-1'},
       {node_id: 'node-2'},
-    ]);
+    ]));
     rebalancer.movePlanner.calculateTargetState = async () => ({
       targetReplicaCount: 2,
     });
@@ -256,10 +257,10 @@ test('UnifiedRebalancer keeps emergency priority recovery eligible while ordinar
 
     rebalancer.setLeader(true);
     rebalancer.getCurrentReplicas = () => [];
-    rebalancer.getAvailableNodes = () => ([
+    stubAvailableNodes(rebalancer, () => ([
       {node_id: 'node-1'},
       {node_id: 'node-2'},
-    ]);
+    ]));
     rebalancer.movePlanner.calculateTargetState = async () => ({
       targetReplicaCount: 2,
     });

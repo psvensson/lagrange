@@ -2,7 +2,10 @@ import {CDC_COMPLETION, hasDurableCdcEvents,
   isCommittedCdcOutcome, isProvisionalCdcOutcome} from
   '../../cdc/cdc-delivery-outcome.js';
 import {assertCdcDeliveryInvocation} from '../../cdc/cdc-delivery-invocation.js';
+import {copyCdcEvent} from '../../cdc/cdc-event-envelope.js';
 import {PARTITION_SERVICE_CDC} from '../../partition/partition-service-constants.js';
+import {MESSAGE_GROUP_SERVICE_LITERAL} from
+  '../../message-group/message-group-service-runtime-support.js';
 const LOCAL_STR_OPERATIONAL_MESSAGE_GROUP_INGRESS_NOT_RE = 'Operational message-group ingress not ready ';
 const PARTITION_CDC_PROPAGATION_HELD_MSG =
   'Partition already holds a different CDC propagation subscriber';
@@ -371,7 +374,131 @@ async function registerPartitionCdcPropagation(partition, {role, nodeId, ...subs
   return handshake;
 }
 
+/**
+ * The one propagation call of every hosting path (seed, dynamic replica,
+ * joiner): one vector to the latency topology's CDC group propagation owner,
+ * from the selected source message group, under the delivery invocation.
+ * @param {Object|null} latencyTopology - The node's topology owners.
+ * @param {string} missingMessage - The hosting path's missing-topology error.
+ * @param {Object} messageGroupService - The selected source message group.
+ * @param {Array<Object>} events - The durable vector.
+ * @param {Object} deliveryContext - The delivery invocation.
+ * @return {Promise<Object>} The propagation outcome.
+ */
+async function propagatePartitionCdcVector(latencyTopology, missingMessage, messageGroupService,
+  events, deliveryContext) {
+  if (!latencyTopology) throw new Error(missingMessage);
+  return latencyTopology.cdcGroupPropagationService.propagateCDCEvent({
+    events: events.map(copyCdcEvent), sourceMessageGroupService: messageGroupService,
+    deliveryContext});
+}
+
+// What a deferred attachment awaits: the node's operational message group.
+// Any of its message-group services initializing or electing a leader is the
+// event that can clear it.
+const OPERATIONAL_MESSAGE_GROUP_READY_EVENTS = Object.freeze([
+  MESSAGE_GROUP_SERVICE_LITERAL.INITIALIZED, MESSAGE_GROUP_SERVICE_LITERAL.LEADERELECTED]);
+const CDC_PROPAGATION_ATTACHMENT_LOG_MSG = Object.freeze({
+  AWAITING: 'CDC propagation attachment awaits the operational message group',
+  ATTACHED: 'CDC propagation attachment registered after awaiting',
+});
+
+function messageGroupServicesOf(provider) {
+  const services = typeof provider === 'function' ? provider() : null;
+  return services instanceof Map ? [...services.values()] : [...(services ?? [])];
+}
+
+/**
+ * Attach a partition replica's propagation subscriber: select the node's
+ * operational message group (the replica's own preferred), subscribe it to
+ * the table, and register the one subscriber (registerPartitionCdcPropagation).
+ * With `defer`, a failed attempt is the named state AWAITING the operational
+ * message group, held on the partition (cdcDelivery.awaitPropagationAttachment)
+ * and attempted again on the events that can clear it: one of the node's
+ * message-group services initializing or electing a leader, and the
+ * partition's lane finding owed rows with no subscriber. Without `defer`, the
+ * failure is the caller's.
+ * @param {Object} partition - The partition replica's service.
+ * @param {Object} options - {tableName, preferredService, defer,
+ *   messageGroupServices (provider), logger, logContext,
+ *   resolveOperationalMessageGroupSelectionAsync, buildMessageGroupOwnerNotReadyError,
+ *   notReadyMessage, registration (registerPartitionCdcPropagation's options
+ *   without preferredService), onRegistered(handshake)}.
+ * @return {Promise<Object|null>} The handshake; null when deferred.
+ */
+async function attachPartitionCdcPropagation(partition, options) {
+  const {tableName, registration} = options;
+  const attempt = async () => {
+    const selection = await options.resolveOperationalMessageGroupSelectionAsync({
+      requiredTables: [tableName], preferredService: options.preferredService,
+      reuseCapturedIngress: true});
+    const service = selection.service;
+    if (!service) {
+      throw options.buildMessageGroupOwnerNotReadyError(selection,
+        {message: options.notReadyMessage});
+    }
+    await service.subscribeToCDC(tableName);
+    const handshake = await registerPartitionCdcPropagation(partition,
+      {...registration, tableName, preferredService: service});
+    options.onRegistered?.(handshake);
+    return handshake;
+  };
+  if (options.defer !== true) return attempt();
+  // Deferred: the caller does not wait for it (it never rejects).
+  deferredPropagationAttachment(partition, attempt, options)();
+  return null;
+}
+
+function deferredPropagationAttachment(partition, attempt, options) {
+  const listeners = [];
+  let inFlight = null;
+  const disarm = () => {
+    for (const [service, event, listener] of listeners.splice(0)) {
+      service.removeListener?.(event, listener);
+    }
+  };
+  const retry = () => {
+    if (inFlight !== null) return inFlight;
+    inFlight = attempt().then((handshake) => {
+      disarm();
+      partition.cdcDelivery?.awaitPropagationAttachment(null);
+      options.logger?.info?.(CDC_PROPAGATION_ATTACHMENT_LOG_MSG.ATTACHED, options.logContext);
+      return handshake;
+    }, (error) => {
+      options.logger?.warn?.(CDC_PROPAGATION_ATTACHMENT_LOG_MSG.AWAITING,
+        {...options.logContext, error: error?.message || String(error)});
+      arm();
+      return null;
+    }).finally(() => {
+      inFlight = null;
+    });
+    return inFlight;
+  };
+  // One listener per service and event, until the attachment registers.
+  function arm() {
+    for (const service of messageGroupServicesOf(options.messageGroupServices)) {
+      if (typeof service?.once !== 'function') continue;
+      for (const event of OPERATIONAL_MESSAGE_GROUP_READY_EVENTS) {
+        if (listeners.some(([armed, armedEvent]) => armed === service && armedEvent === event)) {
+          continue;
+        }
+        const listener = () => {
+          const index = listeners.findIndex((entry) => entry[2] === listener);
+          if (index >= 0) listeners.splice(index, 1);
+          retry();
+        };
+        service.once(event, listener);
+        listeners.push([service, event, listener]);
+      }
+    }
+  }
+  partition.cdcDelivery?.awaitPropagationAttachment(retry);
+  return retry;
+}
+
 export {
+  attachPartitionCdcPropagation,
+  propagatePartitionCdcVector,
   buildPartitionCdcPropagationSubscriber,
   registerPartitionCdcPropagation,
 };

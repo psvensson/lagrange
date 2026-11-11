@@ -656,6 +656,12 @@ class CDCHandler extends EventEmitter {
    * @private
    */
   generateEventId(event) {
+    // A durable event's identity is its source occurrence (eventKey): two
+    // events of one source entry share the entry's timestamp, and the second
+    // on a key is a distinct version, not a replay.
+    if (typeof event.eventKey === 'string' && event.eventKey.length > 0) {
+      return `${event.tableName}:${event.eventKey}`;
+    }
     return `${event.tableName}:${event.operation}:${event.getKey()}:${event.timestamp}`;
   }
 

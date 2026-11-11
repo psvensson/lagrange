@@ -262,7 +262,8 @@ const JOIN_SESSION_PHASE = Object.freeze({
   FINALIZED: 'join_session:finalized',
 });
 import {shouldAttachPartitionCdcPropagation} from './shared/cdc-propagation-filter.js';
-import {registerPartitionCdcPropagation} from './shared/partition-cdc-propagation-subscriber.js';
+import {attachPartitionCdcPropagation, propagatePartitionCdcVector} from
+  './shared/partition-cdc-propagation-subscriber.js';
 import {canonicalizeSystemTableRow} from '../control-plane/system-row-normalizers.js';
 /**
  * NodeJoiningService handles the process of a new node joining an existing cluster.
@@ -407,7 +408,8 @@ const NODE_JOINING_SERVICE_JOIN_HELPER_SHARED = Object.freeze({
   buildOwnerContractOutcome,
   canonicalizeSystemTableRow,
   compareJoinSchemaVersions,
-  registerPartitionCdcPropagation,
+  attachPartitionCdcPropagation,
+  propagatePartitionCdcVector,
 });
 const NODE_JOINING_SERVICE_ROUTING_HELPER_SHARED = Object.freeze({
   createJoinStartupPlan,

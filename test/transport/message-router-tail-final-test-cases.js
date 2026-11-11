@@ -110,7 +110,11 @@ export async function registerMessageRouterTailFinalTests({
         pingInterval: null,
         address: 'ws://node-b:9999',
         isSelfConnection: false,
-        ackTimeoutStreak: 0,
+        // An earlier timeout on this socket a keepalive round ago: the streak
+        // spans enough of the socket to be evidence against it.
+        ackTimeoutStreak: 1,
+        ackTimeoutStreakStartedAt:
+          Date.now() - (router.pingIntervalMs + router.pingTimeoutMs + 1000),
         lastAckAt: null,
         lastAckTimeoutAt: null,
       });

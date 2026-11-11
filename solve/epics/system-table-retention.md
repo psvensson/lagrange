@@ -78,8 +78,18 @@ be added without declaring its lifetime (R13). The checker only reads files
    CDC and leaves caches stale. Position-based reclamation inside apply is
    the model for partition-internal tables.
 5. **Retention never changes what a retry answers without an explicit
-   ruling.** Open owner ruling: what does a deterministic-intent retry answer
-   when its earlier terminal row has been retired?
+   ruling.** Ruled by the owner 2026-11-11 (recorded verbatim in
+   `solve/quests/replica-operation-retention-owner/log.ndjson`, entry
+   `2026-11-11T09:42:18.622Z`): **parent-owned lifetime is the rule** - a
+   terminal `replica_operations` row is retired only when its originator
+   (schema job, REPLACE chain, planner decision) is itself terminal and
+   retired, so no live retrier can reach a retired row; **a watermark is the
+   backstop** - retention records a retired-below position, and a straggler
+   retry of an intent below it receives a typed `intent retired` refusal;
+   **fresh execution of a retired intent is ruled out**. Owed by the
+   retention quest: every operation records its originator; intent ids gain
+   an orderable component; schema jobs get their own terminal-and-retired
+   rule first; callers handle the typed refusal (a schema job ends failed).
 6. **Observations do not belong in durable authority rows** (the
    `readinessSnapshot` finding below; R10).
 7. **Unwired retention code is wired or deleted, not kept** (no-legacy
@@ -225,7 +235,9 @@ decide the pressure class.
 
 **replica-operation-retention-owner** (L). One retention owner for terminal
 `replica_operations` and `storage_reservations` rows, with a
-referenced-predicate per dependency above. Needs the ruling in constraint 5.
+referenced-predicate per dependency above. Follows the 2026-11-11 ruling in
+constraint 5 (parent-owned lifetime, watermark backstop with a typed
+`intent retired` refusal).
 Deterministic tests: a retry after retirement, cleanup release after
 retirement, tombstone-cap pacing, a joiner hydrating mid-batch. Lab: three
 formations and a churn soak.
@@ -253,11 +265,11 @@ attempt.
 - **Active work.** None sealed. The step-history change is in progress
   inside the formation-stability work, outside this epic.
 - **Blockers.** Constraint 1 holds every deletion on the operation,
-  reservation and transaction tables. Two owner rulings are open: the retry
-  answer after retirement (constraint 5) and the retry-dedupe horizon for
-  statement outcomes.
-- **Next action.** The owner rules on the two questions and on the inert
-  tables. `log-retention-owner-wiring` is the first quest that can be sealed
+  reservation and transaction tables. The retry answer after retirement is
+  ruled (constraint 5, owner 2026-11-11). Still open: the retry-dedupe
+  horizon for statement outcomes, and the inert tables.
+- **Next action.** The owner rules on the statement-outcome dedupe horizon
+  and on the inert tables. `log-retention-owner-wiring` is the first quest that can be sealed
   without a ruling or the gate.
 
 ## Findings recorded at registration

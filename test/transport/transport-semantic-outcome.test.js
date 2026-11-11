@@ -433,10 +433,10 @@ const ABSENT_FIELD_DEFAULTS = Object.freeze([
     true, OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE, null, REASON.OUTBOUND_QUEUE_BACKPRESSURED],
   [{acknowledged: true, errorCode: WEBSOCKET_CONNECT_TIMEOUT_ERROR_CODE}, STATE.FAILED, false,
     WEBSOCKET_CONNECT_TIMEOUT_ERROR_CODE, null, REASON.WEBSOCKET_CONNECT_TIMEOUT],
-  // A spent lifetime whose producer states no ACK fact is an answer timeout:
-  // nothing establishes that the ACK was missing.
+  // A spent lifetime whose producer states no ACK fact is unestablished:
+  // nothing establishes that the ACK was missing, nor that it arrived.
   [{acknowledged: false, errorCode: 'ROUTER_MESSAGE_TIMEOUT'}, STATE.FAILED, false,
-    'ROUTER_MESSAGE_TIMEOUT', null, REASON.ANSWER_TIMEOUT],
+    'ROUTER_MESSAGE_TIMEOUT', null, REASON.UNESTABLISHED_TIMEOUT],
   [{acknowledged: false, errorCode: 'ROUTER_MESSAGE_TIMEOUT',
     acknowledgement: 'unacknowledged'}, STATE.FAILED, false,
   'ROUTER_MESSAGE_TIMEOUT', null, REASON.ACK_TIMEOUT],

@@ -292,8 +292,14 @@ test('R2-6 retry isolation: a recipient that answers backpressure carries its ow
   await settleTicks();
   assert.deepEqual(idsFor(f, Y), [...rowsOf(3), 'later'],
     'Y received the next row with no virtual time elapsed');
-  assert.ok(f.calls.filter((call) => call.index === X).length >= xCalls);
+  assert.equal(f.calls.filter((call) => call.index === X).length, xCalls,
+    'the commit\'s wake ships nothing to X inside its backoff');
   assert.equal(recipientOf(f, X).cursor, null);
+  f.behavior = (_index, events, _context, groupId) => recipientAnswer(events, groupId, true);
+  f.clock.advance(40);
+  await settleTicks();
+  assert.deepEqual(idsFor(f, X).slice(-4), [...rowsOf(3), 'later'],
+    'X\'s own due time ships it everything in one vector');
 });
 
 test('R2-7 a recovered recipient receives its backlog as bounded vectors in order and the ' +

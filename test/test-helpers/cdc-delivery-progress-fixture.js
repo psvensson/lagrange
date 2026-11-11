@@ -17,6 +17,7 @@ import {PARTITION_CDC_COMMAND, PARTITION_CDC_OBLIGATION_REASON,
   PARTITION_CDC_OBLIGATION_SQL} from
   '../../src/partition/partition-cdc-obligation-constants.js';
 import {countCdcObligations} from '../../src/partition/partition-cdc-obligation-ledger.js';
+import {PARTITION_SERVICE_CDC} from '../../src/partition/partition-service-constants.js';
 import {CDC_TABLE as TABLE, applyCommitted, committedQueryOf, settleTicks, shutdownAll,
   startLeader} from './participant-transaction-fixture.js';
 
@@ -41,6 +42,32 @@ function delayedClock() {
       scheduled.advance(milliseconds);
     },
   };
+}
+
+// An explicit drive stands for the lane's own retry timer: the observed clock
+// reaches every recipient's backoff due time (no timer callback runs), so a
+// held recipient is driven as its retry would drive it. A wake by a commit
+// (addSourceRow) moves no time: a recipient in backoff is not shipped to.
+function elapseRecipientBackoff(leader, clock) {
+  const due = leader.cdcDelivery.getCdcObligationDiagnostics().recipients
+    .map((recipient) => recipient.retryDueAtMs).filter(Number.isFinite);
+  const latest = Math.max(clock.now(), ...due);
+  if (latest > clock.now()) clock.elapseWithoutCallbacks(latest - clock.now());
+}
+
+// The same on a source whose clock runs by itself (a wall clock): wait, on
+// that clock, until every recipient's backoff is due. A witness that drives
+// the lane explicitly calls this first, as the lane's retry timer would.
+async function awaitRecipientBackoff(leader) {
+  const due = leader.cdcDelivery.getCdcObligationDiagnostics().recipients
+    .map((recipient) => recipient.retryDueAtMs).filter(Number.isFinite);
+  const waitMs = Math.max(0, ...due) - leader.timeSource.now();
+  if (waitMs > 0) await new Promise((resolve) => leader.timeSource.setTimeout(resolve, waitMs));
+}
+
+function driveAfterBackoff(leader, clock) {
+  elapseRecipientBackoff(leader, clock);
+  return leader.cdcDelivery.driveCdcObligations(REASON.DELIVERY_RETRY);
 }
 
 function recipientAnswer(events, groupId, committed) {
@@ -83,8 +110,11 @@ function addSubscriber(f, index) {
     },
   });
   f.subscribers.push(subscriber);
+  // The first is the partition's one propagation subscriber (the production
+  // composition); further ones are role-less.
   return f.leader.subscribeToCDCWithHandshake(subscriber,
-    {subscriberId: `progress-subscriber-${index}`});
+    {subscriberId: `progress-subscriber-${index}`,
+      ...(index === 0 ? {role: PARTITION_SERVICE_CDC.SUBSCRIBER_ROLE_PROPAGATION} : {})});
 }
 
 // rows: ids, or {id, value} to size a row's event body.
@@ -98,7 +128,7 @@ async function fixture(t, {rows = ['A', 'B'], subscribers = 3} = {}) {
   const f = {clock, leader, proposed, ready: false, calls: [], hooks: [], subscribers: [],
     behavior: (_index, events, _context, groupId) => recipientAnswer(events, groupId, false),
     acks: () => proposed.filter((command) => command.type === PARTITION_CDC_COMMAND.DELIVERED),
-    drive: () => leader.cdcDelivery.driveCdcObligations(REASON.DELIVERY_RETRY),
+    drive: () => driveAfterBackoff(leader, clock),
   };
   for (let index = 0; index < subscribers; index += 1) await addSubscriber(f, index);
   for (const row of rows) {
@@ -165,7 +195,10 @@ function hydrateThroughRow(f, rowNumber) {
 export {
   PAYLOAD_SENTINEL,
   addSourceRow,
+  awaitRecipientBackoff,
   commitAcknowledgements,
+  delayedClock,
+  driveAfterBackoff,
   fixture,
   hydrateThroughRow,
   observeOwedReads,

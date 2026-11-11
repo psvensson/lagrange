@@ -30,6 +30,7 @@ import {
 import {
   decideLeadershipTransfer,
   droppedByLeadershipTransfer,
+  removedLeaderStepDown,
   leadershipTransferInProgress,
 } from './raft-rs-leadership-transfer.js';
 import {
@@ -1434,6 +1435,7 @@ function announce(group, expectedGeneration) {
   const before = group.lastStatus;
   group.lastStatus = now;
   const observed = recordStatusObservation(group, expectedGeneration, now);
+  stepDownIfRemovedLeader(group, observed);
   announceAppliedProgress(group, expectedGeneration, observed);
   if (before && now.raftState !== before.raftState) {
     group.emit(ROLE[now.raftState] || ROLE[0]);
@@ -1457,6 +1459,28 @@ function announce(group, expectedGeneration) {
   if (settlement !== null) {
     group.emit(RUNTIME_EVENT.CONF_CHANGE_APPLIED, settlement);
   }
+}
+
+// A leader its applied configuration no longer names hands leadership on
+// (removedLeaderStepDown): the transfer is the group's next queued turn, one
+// at a time. The drains of that turn itself never ask again (that would
+// queue turn after turn with nothing else moving); the next drain anything
+// else causes - a tick, a delivery - asks again while it still leads
+// (raft-rs ignores a repeat to a transferee whose transfer runs, and aborts
+// one that ran out after an election timeout of ticks).
+function stepDownIfRemovedLeader(group, observed) {
+  const transfer = observed.ok ?
+    removedLeaderStepDown(group.peerId, observed.value) : null;
+  if (transfer === null || group.removedLeaderStepDownQueued === true) {
+    return;
+  }
+  group.removedLeaderStepDownQueued = true;
+  enqueue(group, () => continueTurn(
+    perform(group, {type: RUNTIME_COMMAND.TRANSFER_LEADERSHIP, transfer}),
+    (answer) => {
+      group.removedLeaderStepDownQueued = false;
+      return settledTurn(answer);
+    }));
 }
 
 function announceAppliedProgress(group, expectedGeneration, observed) {

@@ -61,6 +61,7 @@ import {
 import {
   claimReplaceAttemptStateRebuild,
 } from './operation-workflow-replace-owner-recovery.js';
+import {chooseRemovalTransferee} from '../raft/raft-removal-transferee-rule.js';
 
 // The sequence of an attempt record rebuilt after a restart (BR10): not one
 // this session issued, so no answer can match it.
@@ -427,51 +428,47 @@ function decideRemoveLeadership(owner, attempt, reads, corroborated) {
   if (leader !== reads.replicaIds.sourceReplicaId) {
     return Object.freeze({state: REPLACE_HANDOFF_DECISION.LEADER_RETAINED});
   }
-  const transferee = chooseRemovalTransferee(corroborated, reads, attempt);
+  const transferee = chooseGateRemovalTransferee(corroborated, reads, attempt);
   return transferee === null ?
     Object.freeze({state: REPLACE_HANDOFF_DECISION.WAIT_NO_TRANSFEREE}) :
     issueTo(transferee);
 }
 
-// The live committed voters a leading REMOVE subject may hand off to: the
-// voters of the leader's committed (non-joint) configuration, other than
-// the subject, whose own answer confirmed the leader's term past their
-// participation gate, and that can be routed to.
-function liveTransfereeCandidates(corroborated, reads) {
+// The voters of the leader's committed configuration as the removal
+// transferee rule reads them (raft-removal-transferee-rule.js), from the
+// gate's evidence: each voter's own corroborating answer (it confirmed the
+// leader's term; its gateOpen; its applied and commit index) and its route.
+function transfereeFactsOf(corroborated, reads) {
   const {authority, confirmingVoterAnswers} = corroborated;
-  const outgoing = Array.isArray(authority.votersOutgoingReplicaIds) ?
-    authority.votersOutgoingReplicaIds : [];
-  if (outgoing.length > 0 || !Array.isArray(authority.voterReplicaIds)) {
-    return [];
-  }
-  const candidates = [];
-  for (const replicaId of authority.voterReplicaIds) {
+  const voterIds = Array.isArray(authority.voterReplicaIds) ?
+    authority.voterReplicaIds : [];
+  return voterIds.map((replicaId) => {
     const answer = confirmingVoterAnswers?.get?.(replicaId) ?? null;
-    const route = typeof replicaId === 'string' &&
-      replicaId !== reads.replicaIds.sourceReplicaId &&
-      answer?.gateOpen === true ? reads.routeOf(replicaId) : null;
-    if (route !== null) {
-      candidates.push({...route, answer});
-    }
-  }
-  return candidates;
+    const route = reads.routeOf(replicaId);
+    return {id: replicaId, route, confirmsLeader: answer !== null,
+      pastParticipationGate: answer?.gateOpen === true, routed: route !== null,
+      index: answer?.appliedIndex, secondaryIndex: answer?.commitIndex};
+  });
 }
 
-// The most caught-up candidate by its own answer (applied, then commit
-// index; then replica id, so the choice is deterministic); the transferee of
-// the previous accepted attempt while it is still a candidate.
-function chooseRemovalTransferee(corroborated, reads, attempt) {
-  const candidates = liveTransfereeCandidates(corroborated, reads);
-  const previous = attempt?.answerClass ===
-    REPLACE_HANDOFF_ANSWER_CLASS.ACCEPTED ? attempt.transfereeReplicaId : null;
-  const kept = candidates.find((candidate) =>
-    candidate.replicaId === previous);
-  const ranked = kept ? [kept] : [...candidates].sort((left, right) =>
-    Number(right.answer.appliedIndex) - Number(left.answer.appliedIndex) ||
-    Number(right.answer.commitIndex) - Number(left.answer.commitIndex) ||
-    (left.replicaId < right.replicaId ? -1 : 1));
-  return ranked.length === 0 ? null :
-    {replicaId: ranked[0].replicaId, nodeId: ranked[0].nodeId};
+// The removal transferee rule over the gate's evidence. The transferee of the
+// previous ACCEPTED attempt is kept while it is still eligible (raft-rs
+// ignores a same-transferee repeat, so a running transfer is never
+// retargeted); the transferee of a previous attempt that did not take
+// leadership is excluded while another candidate exists.
+function chooseGateRemovalTransferee(corroborated, reads, attempt) {
+  const outgoing = corroborated.authority.votersOutgoingReplicaIds;
+  const voters = transfereeFactsOf(corroborated, reads);
+  const subjectId = reads.replicaIds.sourceReplicaId;
+  const joint = Array.isArray(outgoing) && outgoing.length > 0;
+  const previous = attempt?.transfereeReplicaId ?? null;
+  const accepted = attempt?.answerClass === REPLACE_HANDOFF_ANSWER_CLASS.ACCEPTED;
+  const kept = accepted ? chooseRemovalTransferee({subjectId, joint,
+    voters: voters.filter((voter) => voter.id === previous)}) : null;
+  const chosen = kept ?? chooseRemovalTransferee({subjectId, joint, voters,
+    excludedId: accepted ? null : previous});
+  return chosen === null ? null :
+    {replicaId: chosen.id, nodeId: chosen.route.nodeId};
 }
 
 /**

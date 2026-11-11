@@ -39,7 +39,7 @@ function createCdcObligationLane(tenure = null) {
     retryDelayMs: PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS,
     consecutiveBackpressure: 0,
     acknowledgementBlocked: false, driveDelivered: 0, driveUnacknowledged: 0,
-    held: null, lastDrive: null, lastFlush: null,
+    held: null, lastDrive: null, lastFlush: null, noSubscriberReported: false,
   };
 }
 

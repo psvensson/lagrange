@@ -43,7 +43,7 @@ import {eventOf, lowerCursor, positionAfter, positionOf, selectRecipientVector,
 // consecutiveBackpressure are this recipient's own backoff.
 function recipientDriveOf(recipient) {
   recipient.drive ??= {
-    running: false, rerun: false, resumeOnCleanup: false,
+    running: false, resumeOnCleanup: false,
     scanAfter: null, scanThrough: null, inFlight: null,
     retryDelayMs: PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS,
     consecutiveBackpressure: 0, lastRetryDisposition: null, dueAtMs: null,
@@ -95,17 +95,12 @@ function confirmRecipient(recipient, last) {
 }
 
 // The scan reached its captured tail. Rows owed beyond it belong to the next
-// scan: a drained recipient runs once more for them; a provisional scan
-// returns to the cursor on this recipient's own retry.
+// scan (the drive runs on while its recipient is behind the owed tail); a
+// provisional scan returns to the cursor on this recipient's own retry.
 function endRecipientScan(delivery, recipient, ops) {
   const drive = recipient.drive;
-  const through = drive.scanThrough;
   drive.scanThrough = null;
-  if (drive.scanAfter === null) {
-    const tail = readOwedCdcTail(delivery.owner.db);
-    if (tail !== null && (through === null || positionAfter(tail, through))) drive.rerun = true;
-    return PASS.DRAINED;
-  }
+  if (drive.scanAfter === null) return PASS.DRAINED;
   drive.scanAfter = null;
   ops.scheduleRetry(delivery, null, OBLIGATION_RETRY_DISPOSITION.TRANSIENT_FAILURE, drive);
   return PASS.PROVISIONAL;
@@ -223,23 +218,30 @@ async function driveRecipientPass(delivery, lane, target, ops) {
   }
 }
 
-// A drive runs another pass when rows arrived during a pass that drained,
-// and when the cleanup a pass ended on has already closed (the cleanup's own
-// wake found the drive still running and left the resumption to it).
-function passContinues(delivery, target) {
+// A drive ends only on a named wait: it runs another pass while its
+// recipient is behind the owed tail (rows that arrived during the pass, the
+// rest of a vector whose cleanup closed meanwhile) and nothing holds it. A
+// cleanup that closed while the drive was still running is the event its
+// hold waited for: the drive continues past its backoff.
+function passContinues(delivery, lane, target) {
   const {branch, recipient} = target;
   const {drive} = recipient;
-  if (drive.lastPass === PASS.DRAINED) return drive.rerun;
-  if (drive.lastPass !== PASS.CLEANUP_PENDING ||
-      custodyOf(delivery, recipientKeyOf(branch, recipient)).activeCdcInvocation) return false;
-  drive.resumeOnCleanup = false;
-  return true;
+  if (drive.lastPass === PASS.STOPPED || !laneIsCurrent(delivery, lane) ||
+      !recipientAttached(delivery, lane, branch, recipient)) return false;
+  if (custodyOccupied(delivery, target)) return false;
+  if (drive.resumeOnCleanup) {
+    drive.resumeOnCleanup = false;
+    return true;
+  }
+  const {owner} = delivery;
+  return idleRecipientWait(delivery, target, readOwedCdcTail(owner.db),
+    owner.timeSource.now()) === null;
 }
 
 /**
- * Run one recipient's single-flight drive: passes repeat while new rows
- * arrived during a pass that drained. It never rejects; a pass that throws
- * (a ledger read on a closing partition) ends the drive as STOPPED.
+ * Run one recipient's single-flight drive: passes repeat until the recipient
+ * reaches the owed tail or a named wait holds it. It never rejects; a pass
+ * that throws ends the drive as FAILED, on this recipient's own retry.
  * @param {Object} delivery - The CDC delivery owner.
  * @param {Object} lane - The delivery lane.
  * @param {Object} target - {branch, recipient}.
@@ -252,7 +254,6 @@ async function runRecipientDrive(delivery, lane, target, ops) {
   drive.dueAtMs = null;
   try {
     do {
-      drive.rerun = false;
       // The recipient set is observed before each pass: a released
       // propagation's primary, a new group or a group whose route changed is
       // started (this drive itself runs on with what remains attached).
@@ -263,7 +264,7 @@ async function runRecipientDrive(delivery, lane, target, ops) {
       if (drive.lastPass !== PASS.PAGE_YIELDED && drive.scanAfter === null) {
         drive.scanThrough = null;
       }
-    } while (laneIsCurrent(delivery, lane) && passContinues(delivery, target));
+    } while (passContinues(delivery, lane, target));
   } catch (error) {
     // A failed pass is a named wait on this recipient's own retry, never a
     // silent stop with rows owed.
@@ -295,12 +296,20 @@ function behindOwedTail(recipient, tail) {
  * @return {string|null} A PARTITION_CDC_RECIPIENT_WAIT, or null.
  */
 function recipientWait(delivery, target, tail, nowMs) {
-  const {branch, recipient} = target;
-  const drive = recipientDriveOf(recipient);
-  if (drive.running) return WAIT.RUNNING;
-  if (delivery.recipientCustody.get(recipientKeyOf(branch, recipient))?.activeCdcInvocation) {
-    return WAIT.CLEANUP;
-  }
+  return recipientDriveOf(target.recipient).running ? WAIT.RUNNING :
+    idleRecipientWait(delivery, target, tail, nowMs);
+}
+
+function custodyOccupied(delivery, {branch, recipient}) {
+  return Boolean(delivery.recipientCustody.get(recipientKeyOf(branch, recipient))
+    ?.activeCdcInvocation);
+}
+
+// The wait of a recipient whose drive is not (or no longer) running a pass.
+function idleRecipientWait(delivery, target, tail, nowMs) {
+  const {recipient} = target;
+  const {drive} = recipient;
+  if (custodyOccupied(delivery, target)) return WAIT.CLEANUP;
   if (BACKOFF_PASSES.has(drive.lastPass) && drive.dueAtMs !== null && drive.dueAtMs > nowMs) {
     return WAIT.BACKOFF;
   }
@@ -315,37 +324,23 @@ function startRecipientDrive(delivery, lane, target, group, ops) {
  * Start the drive of every idle recipient behind the owed tail that no named
  * wait holds; started drives join `group`. A recipient in backoff keeps its
  * own due time (the lane's retry timer is armed at it), so a wake costs a
- * refusing recipient nothing. On a wake (`rerunRunning`) a running drive is
- * asked to run once more for the rows that woke it.
+ * refusing recipient nothing. A running drive needs no wake: it ends only at
+ * the owed tail or on a named wait.
  * @param {Object} delivery - The CDC delivery owner.
  * @param {Object} lane - The delivery lane.
  * @param {Array<Promise>} group - The drives the caller awaits.
  * @param {Object} ops - The lane's operations.
- * @param {boolean} [rerunRunning] - Whether a running drive runs again.
- * @return {Array<string>} The recipients that stay in backoff.
+ * @return {void}
  */
-function startRecipientDrives(delivery, lane, group, ops, rerunRunning = true) {
+function startRecipientDrives(delivery, lane, group, ops) {
   const {owner} = delivery;
   const tail = owner.db ? readOwedCdcTail(owner.db) : null;
   const nowMs = owner.timeSource.now();
-  const backoff = [];
-  const targets = laneRecipients(lane);
-  // Only a drive that was running before this wake runs again for it (a
-  // drive started meanwhile, by another recipient's observation, is new).
-  const wasRunning = new Set(targets.filter(({recipient}) => recipient.drive?.running)
-    .map(({recipient}) => recipient));
-  for (const target of targets) {
+  for (const target of laneRecipients(lane)) {
     const wait = recipientWait(delivery, target, tail, nowMs);
-    const {drive} = target.recipient;
     if (wait === null) startRecipientDrive(delivery, lane, target, group, ops);
-    else if (wait === WAIT.RUNNING && rerunRunning && wasRunning.has(target.recipient)) {
-      drive.rerun = true;
-    } else if (wait === WAIT.BACKOFF) {
-      ops.armRetryAt(delivery, lane, drive.dueAtMs);
-      backoff.push(recipientKeyOf(target.branch, target.recipient));
-    }
+    else if (wait === WAIT.BACKOFF) ops.armRetryAt(delivery, lane, target.recipient.drive.dueAtMs);
   }
-  return backoff;
 }
 
 /**

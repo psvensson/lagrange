@@ -321,6 +321,7 @@ async function retirePartitionRaftPeer(service, replicaIdentity) {
 
 export {
   admitPartitionRaftPeer,
+  leadershipTransferWindowMaxMsOf,
   readPartitionCommittedMembership,
   readPartitionReplicaMembership,
   proposePeerRetirement,

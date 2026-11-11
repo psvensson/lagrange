@@ -141,10 +141,10 @@ function readFollowUpTargetReadiness(rebalancer, nodeId) {
   ) {
     return null;
   }
-  return readinessService.getNodeReadinessSync(
-    nodeId,
-    {allowStaleOnCacheChange: false},
-  );
+  const readiness = readinessService.getNodeReadinessSync(nodeId,
+    {allowStaleOnCacheChange: false});
+  rebalancer.notePlanningTargetReadiness(nodeId, readiness);
+  return readiness;
 }
 
 function copyFrozenArrayFields(record, fieldNames) {

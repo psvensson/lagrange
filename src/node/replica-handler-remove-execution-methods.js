@@ -26,15 +26,25 @@ import {
   REPLICA_REMOVAL_COMPLETION_DEFERRED,
   buildFailedRemovalOutcome,
   removalRowDeleteDeferred,
+  replicaAbsentNotByOperationError,
   retryableRemovalDebtError,
 } from './replica-removal-debt-errors.js';
 import {GROUP_RETIREMENT_REASON} from
   '../partition/group-retirement-evidence.js';
 import {REMOVAL_AUTHORITY_KIND} from './replica-state-machine-recovery.js';
+import {REMOVAL_SERVING_STATE} from
+  '../partition/partition-service-removal-serving-methods.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const REPLICA_REMOVE_EXECUTION_REASON = Object.freeze({
   DURABLE_REMOVE_CLEANUP_COMPLETE: 'durable_remove_cleanup_complete',
+});
+// Why a removal deferred before its durable retiring row (logged with the
+// deferral): its REMOVING write did not become durable, or its replica's
+// connection was released by something other than this removal.
+const REMOVAL_DEFERRAL_CAUSE = Object.freeze({
+  RETIRING_ROW_NOT_DURABLE: 'retiring_row_not_durable',
+  SERVING_CLOSED_OUTSIDE_REMOVAL: 'serving_closed_outside_removal',
 });
 const REMOVAL_CONSENSUS_EXIT_WAIT = Object.freeze({
   wait: 'REPLICA_HANDLER_DEFAULT.REMOVAL_CONSENSUS_EXIT_BACKSTOP_MS',
@@ -263,7 +273,21 @@ async function performReplicaRemoval(handler, request, service, lifecycle,
   const reason = request.groupRetirement?.retire === true ?
     GROUP_RETIREMENT_REASON : request.reason;
   handler.throwIfShuttingDown();
-  await handler.waitForReplicaServingDrain(service);
+  const serving = await handler.waitForReplicaServingDrain(service);
+  // A released connection is this removal's own earlier teardown only when
+  // its retiring row is already durable (a resumed removal). Released by
+  // anything else (node shutdown, a failed initialization), nothing proves
+  // no PREPARED participant is held there, so the removal does not cross its
+  // point of no return: shutdown ends it, otherwise it defers before any
+  // durable row, the replica keeping its status.
+  if (serving?.state === REMOVAL_SERVING_STATE.CLOSED &&
+      execution.retiringRowDurable !== true) {
+    handler.throwIfShuttingDown();
+    handler.deferReplicaRemovalWithoutDurableRow({operationId, replicaId,
+      partitionId, service, removalLifecycleSnapshot: lifecycle,
+      cause: REMOVAL_DEFERRAL_CAUSE.SERVING_CLOSED_OUTSIDE_REMOVAL});
+    return false;
+  }
   const retiringRow = await handler.publishReplicaRetiringRow({
     operationId,
     replicaId,
@@ -275,7 +299,8 @@ async function performReplicaRemoval(handler, request, service, lifecycle,
   });
   if (retiringRow.deferred) {
     handler.deferReplicaRemovalWithoutDurableRow({operationId, replicaId,
-      partitionId, service, removalLifecycleSnapshot: lifecycle});
+      partitionId, service, removalLifecycleSnapshot: lifecycle,
+      cause: REMOVAL_DEFERRAL_CAUSE.RETIRING_ROW_NOT_DURABLE});
     return false;
   }
   execution.retiringRowDurable = true;
@@ -487,11 +512,12 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
      * Let transactions admitted before the removal fence finish under their
      * existing owner before deleting the routable service row or runtime.
      * @param {Object|null} service
-     * @return {Promise<void>}
+     * @return {Promise<Object|undefined>} The partition's named serving
+     *   state (REMOVAL_SERVING_STATE), or undefined without a service.
      * @private
      */
     async waitForReplicaServingDrain(service) {
-      await service?.waitForRemovalServingDrain?.();
+      return service?.waitForRemovalServingDrain?.();
     }
 
     /**
@@ -588,13 +614,17 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
      * owner re-dispatches it; the in-progress record is cleared and the
      * local status is the durable one again. Nothing waits and nothing
      * retires: the port stays live and the replica a full participant (the
-     * serving fence raised at acceptance stays, being irreversible).
+     * serving fence raised at acceptance stays, being irreversible). A
+     * removal whose replica's connection was released by something other
+     * than this removal (it holds no durable retiring row yet) defers the
+     * same way: nothing proves no PREPARED participant is held there.
      * @param {Object} context - {operationId, replicaId, partitionId,
-     *   service, removalLifecycleSnapshot}.
+     *   service, removalLifecycleSnapshot, cause}: cause is a
+     *   REMOVAL_DEFERRAL_CAUSE.
      * @private
      */
     deferReplicaRemovalWithoutDurableRow({operationId, replicaId,
-      partitionId, service, removalLifecycleSnapshot}) {
+      partitionId, service, removalLifecycleSnapshot, cause}) {
       if (operationId) {
         this.inProgressOperations.delete(operationId);
       }
@@ -610,6 +640,7 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
         replicaId,
         partitionId,
         nodeId: this.nodeId,
+        cause,
       });
     }
     /**
@@ -684,9 +715,16 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
           nodeId: this.nodeId,
         });
       const local = this.getLocalReplica(replicaId);
-      if (authority?.kind === REMOVAL_AUTHORITY_KIND.ABSENT && operationId &&
-          local?.status === ReplicaStatus.REMOVED &&
-          local.removedByOperationId === operationId) return false;
+      if (authority?.kind === REMOVAL_AUTHORITY_KIND.ABSENT &&
+          local?.status === ReplicaStatus.REMOVED) {
+        if (operationId && local.removedByOperationId === operationId) {
+          return false;
+        }
+        // Removed here and absent durably, but not by this operation:
+        // nothing will change the answer, so it is final and typed (never a
+        // deferral); the coordinator's durable effect check decides it.
+        throw replicaAbsentNotByOperationError(replicaId, operationId);
+      }
       if (authority?.kind !== REMOVAL_AUTHORITY_KIND.REMOVING ||
           trackedStatus && ![
             ReplicaStatus.REMOVING,

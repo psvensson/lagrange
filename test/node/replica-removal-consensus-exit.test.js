@@ -21,8 +21,6 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {LoggingService} from '../../src/logging/logging-service.js';
 import {EXECUTOR_OUTCOME_TYPE} from
   '../../src/rebalancer/executor-outcome-constants.js';
 import {ReplicaOperationResponseStatus} from
@@ -34,41 +32,16 @@ import {REPLICA_CONSENSUS_EXIT_REASON} from
   '../../src/node/replica-removal-consensus-exit.js';
 import {retirePartitionRaftPeer} from
   '../../src/partition/partition-service-raft-membership-administration.js';
-import {PartitionNodeCluster} from
-  '../raft/raft-rs-backend/partition-node-cluster.js';
-import {
-  durableAppliedState,
-  durableHardState,
-  foldAt,
-  logFold,
-} from '../raft/raft-rs-backend/committed-membership-oracles.js';
-import {createMockCache} from '../rebalancer/test-helpers.js';
-import {
-  createRemovalSourceHandler,
-  durableLifecycleState,
-} from './replica-removal-consensus-exit-fixture.js';
+import {openTwoVoterRemovalWorld} from
+  './replica-removal-consensus-exit-fixture.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 const PARTITION_ID = 'users-p7';
 const SOURCE = `${PARTITION_ID}-r1`;
 const LEADER = `${PARTITION_ID}-r2`;
 const NODE_OF = Object.freeze({[SOURCE]: 'node-a', [LEADER]: 'node-b'});
-const ELECTION_ROUNDS = 400;
 const QUIET_ROUNDS = 60;
 const EXIT_ROUNDS = 40;
-
-function serviceRow(replicaId, status) {
-  return {
-    service_id: replicaId,
-    replica_id: replicaId,
-    partition_id: PARTITION_ID,
-    node_id: NODE_OF[replicaId],
-    service_type: 'partition',
-    status,
-    raft_role: 'follower',
-    address: `${NODE_OF[replicaId]}/partition/${replicaId}`,
-  };
-}
 
 function nextTurns(turns = 20) {
   let chain = Promise.resolve();
@@ -79,46 +52,8 @@ function nextTurns(turns = 20) {
 }
 
 function openWorld(t) {
-  ConfigurationManager.resetInstance();
-  LoggingService.resetInstance();
-  ConfigurationManager.getInstance().initialize({});
-  LoggingService.getInstance().initialize({level: 'error'});
-  const cluster = new PartitionNodeCluster({partitionId: PARTITION_ID,
-    replicaIds: [SOURCE, LEADER]});
-  cluster.tickers = [LEADER];
-  const elected = cluster.settle(() =>
-    cluster.leaderReplicaId() === LEADER,
-  {rounds: ELECTION_ROUNDS});
-  const peerIds = Object.freeze({
-    [SOURCE]: String(cluster.raftPeerIdOf(SOURCE)),
-    [LEADER]: String(cluster.raftPeerIdOf(LEADER)),
-  });
-  const cache = createMockCache({services: [
-    serviceRow(SOURCE, ReplicaStatus.ACTIVE),
-    serviceRow(LEADER, ReplicaStatus.ACTIVE)]});
-  const source = createRemovalSourceHandler({cluster, replicaId: SOURCE,
-    partitionId: PARTITION_ID, nodeId: NODE_OF[SOURCE], cache,
-    rowOf: (status) => serviceRow(SOURCE, status)});
-  const world = {cluster, cache, source, peerIds, elected,
-    sourceDb: cluster.replica(SOURCE).dbFile,
-    leaderDb: cluster.replica(LEADER).dbFile};
-  world.lifecycleAtSetup = durableLifecycleState(world.sourceDb, PARTITION_ID);
-  // The committed configuration: the fold of the leader's durable log over
-  // the founders, at the leader's durable commit index.
-  world.committedVoters = () => foldAt(logFold(world.leaderDb, PARTITION_ID,
-    [peerIds[SOURCE], peerIds[LEADER]]),
-  Number(durableHardState(world.leaderDb, PARTITION_ID).commit)).voters;
-  world.sourceAppliedVoters = () =>
-    durableAppliedState(world.sourceDb, PARTITION_ID).voters;
-  world.sourceLifecycle = () =>
-    durableLifecycleState(world.sourceDb, PARTITION_ID);
-  t.teardown(async () => {
-    await source.dispose();
-    cluster.dispose();
-    ConfigurationManager.resetInstance();
-    LoggingService.resetInstance();
-  });
-  return world;
+  return openTwoVoterRemovalWorld(t, {partitionId: PARTITION_ID,
+    source: SOURCE, leader: LEADER, nodeOf: NODE_OF});
 }
 
 test('generic REMOVE in a two-voter group: the removed follower acks its ' +

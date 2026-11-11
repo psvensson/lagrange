@@ -80,6 +80,7 @@ const FREEZE_METHOD = 'freeze';
 const CONST_KIND = 'const';
 const DEFAULT_EXPORT = 'default';
 const CONSTANT_BASE_NAME_PATTERN = /^[A-Z][A-Z0-9_]*$/;
+const ARRAY_INDEX_PATTERN = /^\d+$/u;
 const TYPEOF_OBJECT = 'object';
 const TYPEOF_STRING = 'string';
 const TYPEOF_NUMBER = 'number';
@@ -89,6 +90,7 @@ const UNDESCRIBED_BASE = '<expression>';
 const LINE_SEPARATOR = '\n';
 
 const NODE = Object.freeze({
+  ARRAY: 'ArrayExpression',
   ASSIGNMENT: 'AssignmentExpression',
   ASSIGNMENT_PATTERN: 'AssignmentPattern',
   CALL: 'CallExpression',
@@ -99,6 +101,7 @@ const NODE = Object.freeze({
   IMPORT_SPECIFIER: 'ImportSpecifier',
   LITERAL: 'Literal',
   MEMBER: 'MemberExpression',
+  NEW: 'NewExpression',
   OBJECT: 'ObjectExpression',
   OBJECT_PATTERN: 'ObjectPattern',
   TEMPLATE: 'TemplateLiteral',
@@ -143,6 +146,8 @@ const MESSAGE = Object.freeze({
   NO_SUCH_MEMBER: 'no such member',
   SUCCESS_PREFIX: 'constant-member existence: ok',
   RATCHET_FAILURE: 'constant-member existence: unexamined-read ratchet',
+  RATCHET_REMEDY: 'make the base resolvable (import the owner constant, ' +
+    'freeze the literal) instead of raising it',
 });
 // The unexamined count is one-way (R23): per reason, it may fall and never
 // rise above the committed baseline. A missing baseline is refused rather
@@ -157,6 +162,7 @@ const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 const stringEndsWith = Function.call.bind(String.prototype.endsWith);
 const stringSplit = Function.call.bind(String.prototype.split);
 const regexpTest = Function.call.bind(RegExp.prototype.test);
+const arrayEvery = Function.call.bind(Array.prototype.every);
 const objectHasOwn = Object.hasOwn;
 
 const OPAQUE = Object.freeze({closed: false, reason: UNCHECKED_REASON.NOT_AN_OBJECT});
@@ -211,8 +217,22 @@ function isClassValue(value) {
     stringStartsWith(functionToString(value), CLASS_SOURCE_PREFIX);
 }
 
+// Built-in collections whose member set is their prototype's: a read of
+// `.includes`, `.has` or `.size` on a frozen constant array, set or map.
+const BUILT_IN_COLLECTIONS = Object.freeze({Array, Map, Set});
+function isBuiltInCollection(value) {
+  return Array.isArray(value) || value instanceof Map || value instanceof Set;
+}
+
+function collectionModel(has) {
+  return {closed: true, has, get: () => OPAQUE};
+}
+
 // The model of a value loaded from a real module.
 function loadedValueModel(value) {
+  if (isBuiltInCollection(value)) {
+    return collectionModel((name) => name in value);
+  }
   if (isModuleNamespace(value)) {
     return {
       closed: true,
@@ -506,47 +526,65 @@ class FileAnalysis {
     if (node?.type !== NODE.CALL || node.arguments.length !== 1) return false;
     if (isObjectFreezeReference(node.callee)) return true;
     if (node.callee?.type !== NODE.IDENTIFIER) return false;
-    const variable = this.variableByIdentifier.get(node.callee);
-    const definition = variable?.defs.length === 1 ? variable.defs[0] : null;
-    if (definition?.type !== DEFINITION.VARIABLE ||
-        definition.parent?.kind !== CONST_KIND) {
-      return false;
-    }
+    const definition = this.constDefinitionOf(node.callee);
+    if (!definition) return false;
     const {id, init} = definition.node;
     if (id.type === NODE.IDENTIFIER) return isObjectFreezeReference(init);
-    // `const {freeze: objectFreeze} = Object`.
-    const found = findBindingPath(id, definition.name);
-    return init?.type === NODE.IDENTIFIER && init.name === FREEZE_OBJECT &&
-      !this.variableByIdentifier.has(init) && found?.defaulted === false &&
+    return this.isFreezeDestructure(init, findBindingPath(id, definition.name));
+  }
+
+  // The single `const` definition an identifier is bound by, or null.
+  constDefinitionOf(identifier) {
+    const variable = this.variableByIdentifier.get(identifier);
+    const definition = variable?.defs.length === 1 ? variable.defs[0] : null;
+    return definition?.type === DEFINITION.VARIABLE &&
+      definition.parent?.kind === CONST_KIND ? definition : null;
+  }
+
+  // `const {freeze: objectFreeze} = Object`, Object being the global.
+  isFreezeDestructure(init, found) {
+    const fromGlobalObject = init?.type === NODE.IDENTIFIER &&
+      init.name === FREEZE_OBJECT && !this.variableByIdentifier.has(init);
+    return fromGlobalObject && found?.defaulted === false &&
       found.path.length === 1 && found.path[0] === FREEZE_METHOD;
   }
 
   // A same-file object literal. Its key set is known only when every key is
   // static and every spread is itself a closed model.
   resolveLiteral(node, frozen) {
+    if (frozen && node?.type === NODE.ARRAY) return this.resolveArrayLiteral(node);
+    if (frozen && node?.type === NODE.NEW) return this.resolveCollection(node);
     if (node?.type !== NODE.OBJECT) {
       return frozen ? this.resolveExpression(node) : UNRESOLVED;
     }
+    // A member of a literal that is not frozen can be reassigned, so neither
+    // the literal nor anything read through it is closed.
+    if (!frozen) return MUTABLE;
+    return this.resolveFrozenObjectLiteral(node);
+  }
+
+  // Its keys, the closed models it spreads, and whether that is all of it.
+  collectLiteralKeys(node) {
     const valueByKey = new Map();
     const spreads = [];
     let complete = true;
     for (const property of node.properties) {
-      if (property.type === NODE.SPREAD) {
-        const spread = this.resolveExpression(property.argument);
-        if (spread.closed === true) {
-          spreads.push(spread);
-        } else {
-          complete = false;
-        }
-        continue;
-      }
-      const name = staticKeyName(property.key, property.computed);
-      if (name === null) {
+      const isSpread = property.type === NODE.SPREAD;
+      const spread = isSpread ? this.resolveExpression(property.argument) : null;
+      const name = isSpread ? null : staticKeyName(property.key, property.computed);
+      if (spread?.closed === true) {
+        spreads.push(spread);
+      } else if (name === null) {
         complete = false;
-        continue;
+      } else {
+        valueByKey.set(name, property.value);
       }
-      valueByKey.set(name, property.value);
     }
+    return {valueByKey, spreads, complete};
+  }
+
+  resolveFrozenObjectLiteral(node) {
+    const {valueByKey, spreads, complete} = this.collectLiteralKeys(node);
     const get = (name) => {
       if (valueByKey.has(name)) {
         return this.resolveExpression(valueByKey.get(name));
@@ -556,9 +594,6 @@ class FileAnalysis {
       }
       return UNRESOLVED;
     };
-    // A member of a literal that is not frozen can be reassigned, so neither
-    // the literal nor anything read through it is closed.
-    if (!frozen) return MUTABLE;
     if (!complete) {
       return {closed: false, reason: UNCHECKED_REASON.OPEN_LITERAL, get};
     }
@@ -570,6 +605,29 @@ class FileAnalysis {
       return false;
     };
     return {closed: true, has, get};
+  }
+
+  // A frozen array literal: its prototype's members and its indices, when
+  // no spread or hole hides its length.
+  resolveArrayLiteral(node) {
+    const exact = arrayEvery(node.elements,
+      (element) => element !== null && element.type !== NODE.SPREAD);
+    return collectionModel((name) => name in Array.prototype ||
+      (regexpTest(ARRAY_INDEX_PATTERN, name) &&
+        (!exact || Number(name) < node.elements.length)));
+  }
+
+  // `Object.freeze(new Set(...))` / `new Map(...)` of the built-in, not a
+  // same-file binding of that name.
+  resolveCollection(node) {
+    const callee = node.callee;
+    if (callee?.type !== NODE.IDENTIFIER ||
+        !objectHasOwn(BUILT_IN_COLLECTIONS, callee.name) ||
+        this.variableByIdentifier.has(callee)) {
+      return UNRESOLVED;
+    }
+    const prototype = BUILT_IN_COLLECTIONS[callee.name].prototype;
+    return collectionModel((name) => name in prototype);
   }
 
   resolveVariable(variable) {
@@ -587,19 +645,18 @@ class FileAnalysis {
   resolveDefinition(variable) {
     if (variable.defs.length !== 1) return UNRESOLVED;
     const definition = variable.defs[0];
-    if (definition.type === DEFINITION.IMPORT) {
-      return this.resolveImport(definition);
+    switch (definition.type) {
+    case DEFINITION.IMPORT: return this.resolveImport(definition);
+    case DEFINITION.PARAMETER: return this.resolveParameter(definition);
+    case DEFINITION.CLASS: return this.resolveOwnClass(definition.name.name);
+    case DEFINITION.VARIABLE:
+      return definition.parent?.kind === CONST_KIND ?
+        this.resolveConstDeclarator(definition) : UNRESOLVED;
+    default: return UNRESOLVED;
     }
-    if (definition.type === DEFINITION.PARAMETER) {
-      return this.resolveParameter(definition);
-    }
-    if (definition.type === DEFINITION.CLASS) {
-      return this.resolveOwnClass(definition.name.name);
-    }
-    if (definition.type !== DEFINITION.VARIABLE ||
-        definition.parent?.kind !== CONST_KIND) {
-      return UNRESOLVED;
-    }
+  }
+
+  resolveConstDeclarator(definition) {
     const declarator = definition.node;
     if (declarator.id.type === NODE.IDENTIFIER) {
       return this.resolveExpression(declarator.init);
@@ -727,6 +784,18 @@ function judgeInjectedRead(read, exportedConstants) {
     member}};
 }
 
+// Judges every deferred injected-bag read; returns how many were checked.
+function judgeInjectedReads(injectedReads, exportedConstants, collected) {
+  let checked = 0;
+  for (const read of injectedReads) {
+    const judged = judgeInjectedRead(read, exportedConstants);
+    if (judged.violation) collected.violations.push(judged.violation);
+    if (judged.checked) checked += 1;
+    if (judged.unchecked) collected.uncheckedReads.push(judged.unchecked);
+  }
+  return checked;
+}
+
 /**
  * Audit every `.js` file under the given roots.
  * @param {Object} [options]
@@ -766,13 +835,8 @@ async function auditConstantMemberExistence(options = {}) {
       injectedReads.push(...analysis.injectedReads);
     }
   }
-  const exportedConstants = indexExportedConstants(loadModule.loaded());
-  for (const read of injectedReads) {
-    const judged = judgeInjectedRead(read, exportedConstants);
-    if (judged.violation) violations.push(judged.violation);
-    if (judged.checked) checkedReads += 1;
-    if (judged.unchecked) uncheckedReads.push(judged.unchecked);
-  }
+  checkedReads += judgeInjectedReads(injectedReads,
+    indexExportedConstants(loadModule.loaded()), {violations, uncheckedReads});
   for (const read of uncheckedReads) {
     uncheckedByReason[read.reason] = (uncheckedByReason[read.reason] || 0) + 1;
   }
@@ -809,24 +873,23 @@ function judgeUnexaminedRatchet(repoRoot, uncheckedByReason) {
       `${firstLine(error)}; the ratchet refuses to run without a baseline`],
     tightenable: []};
   }
-  const failures = [];
-  const tightenable = [];
-  const reasons = new Set([...Object.keys(baseline ?? {}),
-    ...Object.keys(uncheckedByReason)]);
-  for (const reason of reasons) {
+  const judged = [...new Set([...Object.keys(baseline ?? {}),
+    ...Object.keys(uncheckedByReason)])].map((reason) => {
     const allowed = baseline?.[reason] ?? 0;
     const count = uncheckedByReason[reason] ?? 0;
     if (!Number.isSafeInteger(allowed) || allowed < 0) {
-      failures.push(`${reason}: baseline is not a non-negative integer`);
-    } else if (count > allowed) {
-      failures.push(`${reason}: ${count} unexamined reads exceed the ` +
-        `one-way baseline of ${allowed}; make the base resolvable (import ` +
-        'the owner constant, freeze the literal) instead of raising it');
-    } else if (count < allowed) {
-      tightenable.push(`${reason} from ${allowed} to ${count}`);
+      return {failure: `${reason}: baseline is not a non-negative integer`};
     }
-  }
-  return {failures, tightenable};
+    if (count > allowed) {
+      return {failure: `${reason}: ${count} unexamined reads exceed the ` +
+        `one-way baseline of ${allowed}; ${MESSAGE.RATCHET_REMEDY}`};
+    }
+    return count < allowed ? {tighten: `${reason} from ${allowed} to ${count}`} : {};
+  });
+  return {
+    failures: judged.flatMap((entry) => entry.failure ?? []),
+    tightenable: judged.flatMap((entry) => entry.tighten ?? []),
+  };
 }
 
 function parseArguments(argv) {
@@ -851,6 +914,29 @@ function writeLine(descriptor, text) {
   fs.writeSync(descriptor, `${text}${LINE_SEPARATOR}`);
 }
 
+function reportFailures(result, ratchet) {
+  for (const failure of ratchet?.failures ?? NO_KEYS) {
+    writeLine(STDERR, `${MESSAGE.RATCHET_FAILURE}: ${failure}`);
+  }
+  for (const violation of result.violations) {
+    writeLine(STDERR, formatViolation(violation));
+  }
+  const unloaded = [...result.loadFailures, ...result.parseFailures];
+  for (const failure of unloaded) {
+    writeLine(STDERR, `${failure.file}: ${failure.error}`);
+  }
+  if (result.violations.length > 0) {
+    writeLine(STDERR, `${MESSAGE.FAILURE} (${result.violations.length})`);
+  }
+  if (unloaded.length > 0) writeLine(STDERR, MESSAGE.LOAD_FAILURE);
+}
+
+function hasFailed(result, ratchet) {
+  return result.violations.length > 0 ||
+    result.loadFailures.length > 0 || result.parseFailures.length > 0 ||
+    (ratchet?.failures.length ?? 0) > 0;
+}
+
 async function main(argv) {
   const {roots, json} = parseArguments(argv);
   const result = await auditConstantMemberExistence({
@@ -860,33 +946,17 @@ async function main(argv) {
   const ratchet = roots === DEFAULT_ROOTS ?
     judgeUnexaminedRatchet(process.cwd(), result.stats.uncheckedByReason) :
     null;
-  const failed = result.violations.length > 0 ||
-    result.loadFailures.length > 0 || result.parseFailures.length > 0 ||
-    (ratchet !== null && ratchet.failures.length > 0);
+  const failed = hasFailed(result, ratchet);
   if (json) {
     writeLine(STDOUT, JSON.stringify({ok: !failed, ratchet, ...result}, null, 2));
     return failed ? 1 : 0;
-  }
-  for (const failure of ratchet?.failures ?? NO_KEYS) {
-    writeLine(STDERR, `${MESSAGE.RATCHET_FAILURE}: ${failure}`);
-  }
-  for (const violation of result.violations) {
-    writeLine(STDERR, formatViolation(violation));
-  }
-  for (const failure of [...result.loadFailures, ...result.parseFailures]) {
-    writeLine(STDERR, `${failure.file}: ${failure.error}`);
   }
   const summary = `${result.stats.fileCount} files, ` +
     `${result.stats.checkedReads} member reads checked, ` +
     `${result.uncheckedReads.length} constant-looking reads unexamined ` +
     `${JSON.stringify(result.stats.uncheckedByReason)}`;
-  if (result.violations.length > 0) {
-    writeLine(STDERR, `${MESSAGE.FAILURE} (${result.violations.length})`);
-  }
-  if (result.loadFailures.length + result.parseFailures.length > 0) {
-    writeLine(STDERR, MESSAGE.LOAD_FAILURE);
-  }
   if (failed) {
+    reportFailures(result, ratchet);
     writeLine(STDERR, summary);
     return 1;
   }

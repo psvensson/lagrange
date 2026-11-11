@@ -31,6 +31,10 @@ import {
 const {CORE_OK, CORE_REFUSED, HOST_FAILURE} = RAFT_OPERATION_OUTCOME;
 const ROLE_FOLLOWER = ROLE[FOLLOWER_RAFT_STATE];
 
+const REMOVED_LEADER_STEP_DOWN = deepFreeze({
+  successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.MOST_CAUGHT_UP,
+});
+
 function transferRefusal(reason, retryable = false) {
   return deepFreeze({
     outcome: CORE_REFUSED,
@@ -177,6 +181,26 @@ function droppedByLeadershipTransfer(refused, peerId, {status}) {
     hasProgress(status, peerId);
 }
 
+// The transfer a leader its own applied configuration no longer names asks
+// for, or null. Such a leader arises only from a removal another leader
+// proposed: the leader's own port refuses its own removal (REMOVES_LEADER),
+// but a replica may win an election holding the entry that removes it, then
+// commit and apply it. raft-rs keeps it leading (post_conf_change: "we
+// prevent demotions ... TODO step down") while it drops every proposal for
+// good, so it hands leadership to the most caught-up voter of the
+// configuration that removed it - the core's own transfer, which a leader
+// without progress for itself still steps.
+function removedLeaderStepDown(peerId, {status, confState}) {
+  // Removed outright: no voter, outgoing voter or learner entry - the leader
+  // without progress for itself. A leader demoted to a learner keeps its
+  // progress and its writes (CA9) and is not this case.
+  const configured = new Set([...(confState.voters || []),
+    ...(confState.votersOutgoing || []),
+    ...(confState.learners || [])].map(String));
+  return roleOf(status) === ROLE_LEADER && !configured.has(String(peerId)) ?
+    REMOVED_LEADER_STEP_DOWN : null;
+}
+
 function leadershipTransferInProgress(phase) {
   return deepFreeze({
     outcome: HOST_FAILURE,
@@ -192,4 +216,5 @@ export {
   droppedByLeadershipTransfer,
   leadershipTransferInProgress,
   normalizedTransferRequest,
+  removedLeaderStepDown,
 };

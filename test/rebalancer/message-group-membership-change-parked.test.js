@@ -32,6 +32,7 @@ import {
   REBALANCER_SKIP_REASON,
 } from '../../src/rebalancer/rebalancer-constants.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
+import {stubAvailableNodes} from './available-node-plan-stub.js';
 
 const SEED = 'node-1';
 const NODE_IDS = Object.freeze([SEED, 'node-2', 'node-3']);
@@ -92,7 +93,7 @@ function seedOnlyPlanner({entityId, entityType, serviceType}) {
   rebalancer.initialize();
   const nodes = NODE_IDS.map((nodeId) =>
     rebalancer.systemTableCache.get('nodes', nodeId));
-  rebalancer.getAvailableNodes = () => nodes;
+  stubAvailableNodes(rebalancer, () => nodes);
   rebalancer.movePlanner.storageAdmissionService =
     createAllowAllStorageAdmissionService();
   rebalancer.rebalanceCoordinator.storageAdmissionService =

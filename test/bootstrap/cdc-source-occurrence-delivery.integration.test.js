@@ -1,5 +1,6 @@
 // W1, W2 and W9 end-to-end native CDC delivery witnesses over connected
 // MessageRouters, released PartitionService sources and native MessageGroups.
+import {awaitRecipientBackoff} from '../test-helpers/cdc-delivery-progress-fixture.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -116,6 +117,14 @@ async function setupReleasedConfigProducer(t, f, {configPartId, tempPrefix}) {
   const release = await f.releaseOwners.release(configPartId);
   assert.equal(release.outcome, PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER);
   f.producerLeader = f.producer.services[0];
+}
+
+// An explicit drive stands for the lane's own retry timer: every recipient's
+// backoff is due first (a recipient inside its backoff is never shipped to by
+// a wake), then the lane is driven with the network pumped.
+async function driveLane(f, reason) {
+  await awaitRecipientBackoff(f.producerLeader);
+  return driveWithPump(f, () => f.producerLeader.cdcDelivery.driveCdcObligations(reason));
 }
 
 test(
@@ -320,9 +329,7 @@ test(
     // W2 paired negative control (unready bridge selection): while subscribersReady
     // is false, driveCdcObligations holds at the first obligation with zero deliveries.
     f.subscribersReady = false;
-    const unreadyDrive = await driveWithPump(f, () =>
-      f.producerLeader.cdcDelivery.driveCdcObligations('w2-negative-unready-selection'),
-    );
+    const unreadyDrive = await driveLane(f, 'w2-negative-unready-selection');
     assert.equal(unreadyDrive.state, DRIVE.HELD_BY_SUBSCRIBER);
     assert.equal(readCdcObligation(f.producerLeader.db, debtOcc1.eventKey).delivered, false);
     f.subscribersReady = true;
@@ -345,9 +352,7 @@ test(
       }
       return origApply(events, options);
     };
-    const w1NegativeDrive = await driveWithPump(f, () =>
-      f.producerLeader.cdcDelivery.driveCdcObligations('w1-negative-hold-occ2'),
-    );
+    const w1NegativeDrive = await driveLane(f, 'w1-negative-hold-occ2');
     assert.equal(w1NegativeDrive.state, DRIVE.HELD_BY_SUBSCRIBER);
     await driveWithPump(f, () =>
       f.producerLeader.cdcDelivery.flushCdcAcknowledgements('w1-occ1-ack'),
@@ -370,9 +375,7 @@ test(
     );
     holdAtOcc2 = false;
 
-    const zeroDrive = await driveWithPump(f, () =>
-      f.producerLeader.cdcDelivery.driveCdcObligations('w2-zero-target-pass'),
-    );
+    const zeroDrive = await driveLane(f, 'w2-zero-target-pass');
     assert.equal(zeroDrive.state, DRIVE.HELD_BY_SUBSCRIBER);
     const zeroReturns = f.events.filter(
       (e) => e.kind === 'subscriber-return' && e.eventKey === debtZeroTarget.eventKey,
@@ -461,9 +464,7 @@ test(
       return origPropagate(opts);
     };
 
-    const twoMiBNegativeDrive = await driveWithPump(f, () =>
-      f.producerLeader.cdcDelivery.driveCdcObligations('w9-2mib-negative-pass'),
-    );
+    const twoMiBNegativeDrive = await driveLane(f, 'w9-2mib-negative-pass');
     assert.equal(twoMiBNegativeDrive.state, DRIVE.HELD_BY_SUBSCRIBER);
     assert.equal(
       readCdcObligation(f.producerLeader.db, debt2MiB.eventKey).delivered,
@@ -472,9 +473,7 @@ test(
     );
     f.interceptSend = null;
 
-    const fullDrive = await driveWithPump(f, () =>
-      f.producerLeader.cdcDelivery.driveCdcObligations('w1-w2-w9-full-pass'),
-    );
+    const fullDrive = await driveLane(f, 'w1-w2-w9-full-pass');
     assert.equal(fullDrive.state, DRIVE.DRAINED);
     switchToSafeOn2MiB = false;
     assert.ok(f.events.some((e) => e.kind === 'subscriber-return' &&
@@ -698,9 +697,7 @@ test(
         recipient.cursor !== null).length;
     let negativeDrive;
     for (let round = 0; round < 65 && confirmedTargets() < 64; round += 1) {
-      negativeDrive = await driveWithPump(f, () =>
-        f.producerLeader.cdcDelivery.driveCdcObligations('w9-65th-withheld'),
-      );
+      negativeDrive = await driveLane(f, 'w9-65th-withheld');
       assert.equal(negativeDrive.state, DRIVE.HELD_BY_SUBSCRIBER);
     }
     assert.equal(readCdcObligation(f.producerLeader.db, debt.eventKey).delivered, false);
@@ -725,9 +722,7 @@ test(
     // Restore the 65th target group and complete the wave
     withhold65th = false;
     f.interceptSend = null;
-    const positiveDrive = await driveWithPump(f, () =>
-      f.producerLeader.cdcDelivery.driveCdcObligations('w9-65th-restored'),
-    );
+    const positiveDrive = await driveLane(f, 'w9-65th-restored');
     assert.equal(positiveDrive.state, DRIVE.DRAINED);
     assert.ok(
       f.maxObservedInFlight <= 2,

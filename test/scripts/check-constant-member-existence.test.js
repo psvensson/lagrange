@@ -101,10 +101,9 @@ function writeBaseline(directory, unexaminedByReason) {
     JSON.stringify({version: 1, unexaminedByReason}));
 }
 
-// The clean tree's unexamined reads: a frozen array and a parameter named
-// like no exported constant.
+// The clean tree's one unexamined read: a parameter named like no exported
+// constant.
 const CLEAN_UNEXAMINED = Object.freeze({
-  [UNCHECKED_REASON.NOT_AN_OBJECT]: 1,
   [UNCHECKED_REASON.INJECTED_UNKNOWN_NAME]: 1,
 });
 
@@ -142,8 +141,6 @@ test('reads of existing members on closed constants objects pass', async (t) => 
   t.same(result.stats.uncheckedByReason, CLEAN_UNEXAMINED,
     'a parameter named like no exported constant is counted as unexamined');
   t.same(result.uncheckedReads, [
-    {file: 'src/reader.js', line: 14, base: 'NAMES',
-      reason: UNCHECKED_REASON.NOT_AN_OBJECT},
     {file: 'src/reader.js', line: 15, base: 'FIELD_PARAMETER',
       reason: UNCHECKED_REASON.INJECTED_UNKNOWN_NAME},
   ], 'every unexamined read is listed by site');
@@ -308,11 +305,10 @@ test('the unexamined count is ratcheted one-way against its baseline',
 
     const atBaseline = run(writeFixture(t, files));
     t.equal(atBaseline.status, 0, atBaseline.stderr);
-    t.match(atBaseline.stdout, /2 constant-looking reads unexamined/);
+    t.match(atBaseline.stdout, /1 constant-looking reads unexamined/);
     t.notMatch(atBaseline.stdout, /can be tightened/);
 
-    const above = run(writeFixture(t, files,
-      {[UNCHECKED_REASON.NOT_AN_OBJECT]: 1}));
+    const above = run(writeFixture(t, files, {}));
     t.equal(above.status, 1, 'one more unexamined read than the baseline fails');
     t.match(above.stderr,
       /injected_bag_name_not_an_exported_constant: 1 unexamined reads exceed the one-way baseline of 0/);
@@ -326,4 +322,28 @@ test('the unexamined count is ratcheted one-way against its baseline',
     const missing = run(writeFixture(t, files, null));
     t.equal(missing.status, 1, 'a missing baseline is refused, not unlimited');
     t.match(missing.stderr, /refuses to run without a baseline/);
+  });
+
+test('frozen arrays, sets and maps are judged by their prototype members',
+  async (t) => {
+    const directory = writeFixture(t, {
+      'collections.js': 'export const CODES = Object.freeze([\'a\', \'b\']);\n',
+      'reader.js': [
+        'import {CODES} from \'./collections.js\';',
+        'const LOCAL_CODES = Object.freeze([\'x\']);',
+        'const KINDS = Object.freeze(new Set([\'k\']));',
+        'const BY_KIND = Object.freeze(new Map());',
+        'export const reads = [CODES.includes(\'a\'), CODES.length, CODES[1],',
+        '  LOCAL_CODES.includes(\'x\'), LOCAL_CODES[0], KINDS.has(\'k\'),',
+        '  BY_KIND.get(\'k\'), CODES.contains, LOCAL_CODES[1], KINDS.includes,',
+        '  BY_KIND.length];',
+        '',
+      ].join('\n'),
+    });
+
+    const result = await audit(directory);
+
+    t.same(result.violations.map((violation) => violation.member),
+      ['contains', '1', 'includes', 'length']);
+    t.same(result.stats.uncheckedByReason, {});
   });

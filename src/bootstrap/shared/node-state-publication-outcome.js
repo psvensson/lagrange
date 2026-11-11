@@ -118,9 +118,6 @@ function buildNodeStateUpdateDeliveryError(deliveryOutcome, targetAddress) {
   if (typeof deliveryOutcome?.errorCode === 'string') {
     deliveryError.code = deliveryOutcome.errorCode;
   }
-  if (deliveryOutcome?.acknowledgement !== undefined) {
-    deliveryError.acknowledgement = deliveryOutcome.acknowledgement;
-  }
   if (deliveryOutcome?.deferRetry === true) {
     deliveryError.deferRetry = true;
   }

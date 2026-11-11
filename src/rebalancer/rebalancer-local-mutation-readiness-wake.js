@@ -1,7 +1,24 @@
 import {TABLES} from '../constants/tables.js';
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
+import {CancellationToken} from '../query/cancellation-token.js';
+import {isDeferredReadinessPlanningSnapshot} from
+  '../control-plane/readiness-planning-version-contract.js';
+import {
+  OPERATION_CREATION_ADMISSION_DENIAL_CLASS,
+  OPERATION_CREATION_ADMISSION_ERROR_CODE,
+  classifyOperationCreationAdmissionDenial,
+} from './rebalance-coordinator-operation-creation-admission.js';
+import {
+  OPERATION_CREATION_ADMISSION_CLEARANCE_OUTCOME,
+  awaitOperationCreationAdmissionClearance,
+} from './operation-creation-admission-clearance.js';
+import {
+  AVAILABLE_NODE_PLANNING_STATE,
+} from './rebalancer-no-target-pass-diagnostic.js';
 
 const {RECONCILE_REASON} = UNIFIED_REBALANCER_SHARED;
+const OPERATION_CREATION_ADMISSION_WAKE_DISARMED =
+  'operation creation admission wake disarmed';
 
 // The rows whose change can end a local mutation-readiness deferral: the
 // publication row carries the durable spread summary and the ack state, and
@@ -50,8 +67,11 @@ function attachLocalMutationReadinessPlanningListener(
     return false;
   }
   rebalancer.localMutationReadinessPlanningUnsubscribe =
-    readinessService.subscribeReadinessPlanningSnapshots((snapshot) => {
-      if (!snapshot?.nodeId || snapshot.nodeId === rebalancer.nodeId) {
+    readinessService.subscribeReadinessPlanningSnapshots((event) => {
+      // A publication event is {ownerKey, snapshot, capturedToken}; only
+      // this node's own planning snapshot can end a LOCAL mutation-readiness
+      // deferral.
+      if (event.ownerKey === rebalancer.nodeId) {
         scheduleWakeEvaluation();
       }
     });
@@ -75,6 +95,10 @@ function attachLocalMutationReadinessPlanningListener(
  * PLANNING_TARGET_READINESS_DEFERRED - a pass needed a move and found no
  * target because a candidate's planning readiness read was deferred; see
  * armPlanningTargetReadinessWake.
+ *
+ * OPERATION_CREATION_ADMISSION_DEFERRED - a move's creation re-entered on
+ * the admission owner's transient deferral; see
+ * armOperationCreationAdmissionWake.
  */
 const REBALANCER_LOCAL_MUTATION_READINESS_WAKE_METHODS = {
   // Arms the wake while the gate defers and disarms it once it does not;
@@ -142,22 +166,44 @@ const REBALANCER_LOCAL_MUTATION_READINESS_WAKE_METHODS = {
    * @return {boolean} whether the wait is armed
    */
   armPlanningTargetReadinessWake(nodeIds) {
-    const readinessService = this.controlPlaneReadinessService;
-    const awaited = new Set(Array.isArray(nodeIds) ? nodeIds : []);
-    if (
-      awaited.size === 0 ||
-      typeof readinessService?.subscribeReadinessPlanningSnapshots !==
-        'function'
-    ) {
+    const awaited = new Set(nodeIds);
+    if (awaited.size === 0) {
       this.disarmPlanningTargetReadinessWake();
       return false;
     }
     this.planningTargetReadinessWakeNodeIds = awaited;
     if (!this.planningTargetReadinessWakeUnsubscribe) {
       this.planningTargetReadinessWakeUnsubscribe =
-        readinessService.subscribeReadinessPlanningSnapshots((event) =>
-          this.resolvePlanningTargetReadinessWake(event?.ownerKey));
+        this.controlPlaneReadinessService.subscribeReadinessPlanningSnapshots(
+          (event) => this.resolvePlanningTargetReadinessWake(event.ownerKey));
     }
+    // Subscribed first, re-read after: the deferral was read at the start of
+    // the pass, several awaits ago. When none of the awaited nodes reads
+    // DEFERRED any more, its publication landed before the subscription and
+    // is not waited for again: the check is enqueued now.
+    const stillDeferred = this.getAvailableNodePlan().candidates.some(
+      (candidate) => awaited.has(candidate.nodeId) &&
+        candidate.state === AVAILABLE_NODE_PLANNING_STATE.DEFERRED);
+    if (!stillDeferred) {
+      this.resolvePlanningTargetReadinessWake([...awaited][0]);
+    }
+    return true;
+  },
+
+  /**
+   * A sync planning reader's single-node read: a DEFERRED answer is unknown,
+   * never a final no, so the node joins the awaited set and its publication
+   * re-asks.
+   * @param {string} nodeId
+   * @param {Object|null} readiness the read's answer
+   * @return {boolean} whether the read was deferred
+   */
+  notePlanningTargetReadiness(nodeId, readiness) {
+    if (!isDeferredReadinessPlanningSnapshot(readiness)) {
+      return false;
+    }
+    this.armPlanningTargetReadinessWake([
+      ...(this.planningTargetReadinessWakeNodeIds || []), nodeId]);
     return true;
   },
 
@@ -193,6 +239,65 @@ const REBALANCER_LOCAL_MUTATION_READINESS_WAKE_METHODS = {
     const due = this.planningTargetReadinessWakeDue === true;
     this.planningTargetReadinessWakeDue = false;
     return due;
+  },
+
+  /**
+   * Named wait OPERATION_CREATION_ADMISSION_DEFERRED: a move's creation was
+   * answered with the admission owner's own transient deferral (planning
+   * identity changed or unavailable, replica_operations route unavailable).
+   * The move is skipped for this pass, and the wait the owner names for that
+   * deferral (operation-creation-admission-clearance.js) ends it: the
+   * clearing event enqueues one check instead of leaving the entity to its
+   * backed-off cadence. One wait per entity; bounded by the current cadence
+   * interval (the scheduled check takes over after it) and cancelled on
+   * shutdown or leadership loss.
+   * @param {Error} error the creation error
+   * @param {Object} move
+   * @return {boolean} whether a wait is armed for this error
+   */
+  armOperationCreationAdmissionWake(error, move) {
+    if (error?.code !== OPERATION_CREATION_ADMISSION_ERROR_CODE ||
+        classifyOperationCreationAdmissionDenial(error) !==
+          OPERATION_CREATION_ADMISSION_DENIAL_CLASS.TRANSIENT_REENTER) {
+      return false;
+    }
+    if (this.operationCreationAdmissionWakeToken) {
+      return true;
+    }
+    const token = new CancellationToken();
+    this.operationCreationAdmissionWakeToken = token;
+    awaitOperationCreationAdmissionClearance(this.rebalanceCoordinator, error, {
+      nodeId: move.nodeId,
+      remainingBudgetMs: this.currentInterval,
+      cancellationToken: token,
+    }).then(({outcome}) => {
+      this.resolveOperationCreationAdmissionWake(token, outcome);
+    }, (waitError) => {
+      // Recorded, never swallowed; the cadence timer remains the fallback.
+      this.lastOperationCreationAdmissionWakeError = waitError;
+      this.resolveOperationCreationAdmissionWake(token, null);
+    });
+    return true;
+  },
+
+  resolveOperationCreationAdmissionWake(token, outcome) {
+    if (this.operationCreationAdmissionWakeToken !== token) {
+      return false;
+    }
+    this.operationCreationAdmissionWakeToken = null;
+    if (outcome !== OPERATION_CREATION_ADMISSION_CLEARANCE_OUTCOME.CLEARED ||
+        !this.isLeader || this.isShuttingDown) {
+      return false;
+    }
+    return this.enqueueRebalanceCheck(
+      RECONCILE_REASON.OPERATION_CREATION_ADMISSION_CLEARED,
+    );
+  },
+
+  disarmOperationCreationAdmissionWake() {
+    const token = this.operationCreationAdmissionWakeToken;
+    this.operationCreationAdmissionWakeToken = null;
+    token?.cancel(OPERATION_CREATION_ADMISSION_WAKE_DISARMED);
   },
 
   resolveLocalMutationReadinessWake() {

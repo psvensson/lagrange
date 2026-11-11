@@ -25,6 +25,7 @@ import {
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL, pickTypedWriteAnswer} from
   './partition-write-kernel.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {isPartitionServiceClosed} from './partition-service-closed-refusal.js';
 
 const READ_AUTHORITY_WITNESS_STATE = Object.freeze({
   NOT_APPLICABLE: 'not_applicable',
@@ -352,6 +353,11 @@ const PARTITION_SERVICE_REMOTE_QUERY_METHODS = Object.freeze({
       const result = await executeRemoteQuery(this, payload);
       return remoteQueryAnswer(this, result, readAuthorityWitness);
     } catch (error) {
+      // A query that met the released connection is answered by the entry's
+      // one service-closed refusal (partition-service-closed-refusal.js).
+      if (isPartitionServiceClosed(this)) {
+        throw error;
+      }
       return remoteQueryFailure(this, sql, error);
     }
   },

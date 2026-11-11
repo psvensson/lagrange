@@ -16,6 +16,7 @@ import {test} from 'node:test';
 
 import {
   RAFT_LEADERSHIP_TRANSFER_SUCCESSOR,
+  RAFT_MEMBERSHIP_CHANGE_REFUSAL,
   RAFT_MEMBERSHIP_OPERATION,
   RAFT_OPERATION_OUTCOME,
 } from '../../../src/raft/raft-operation-port-constants.js';
@@ -68,16 +69,23 @@ test('CA9: a leader demoted to a learner that drops a proposal during its ' +
   }
 });
 
-test('a leader removed from its own configuration still refuses a proposal ' +
-  'terminally', async () => {
-  const cluster = clusterAfterSelfChange('ca9-removed-leader',
-    RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER);
+// A removed leader's terminal drop is pinned where such a leader can still
+// arise (removed-leader-step-down.test.js): its own port refuses its own
+// removal (REMOVES_LEADER), so it is not built from a self-change here.
+test('a leader asked to remove itself refuses at its own port and keeps ' +
+  'its configuration', async () => {
+  const cluster = new PartitionNodeCluster({partitionId: 'ca9-removed-leader',
+    replicaIds: REPLICAS});
   try {
-    const refused = await turnChainValue(cluster.node(A).propose({afterRemoval: true}));
-    assert.equal(refused.outcome, RAFT_OPERATION_OUTCOME.CORE_REFUSED,
-      `a leader without progress for itself drops it (${JSON.stringify(
-        refused)})`);
-    assert.equal(refused.retryable, false);
+    assert.equal(cluster.settle(() => cluster.leaderReplicaId() === A), true,
+      'setup: A leads');
+    const refused = await turnChainValue(cluster.node(A).proposeConfChange({
+      type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: A}));
+    assert.equal(refused.outcome, RAFT_OPERATION_OUTCOME.CORE_REFUSED);
+    assert.equal(refused.reason,
+      RAFT_MEMBERSHIP_CHANGE_REFUSAL.REMOVES_LEADER);
+    assert.ok(cluster.coreConfState(A).voters
+      .includes(cluster.raftPeerIdOf(A)), 'A is still a voter');
   } finally {
     cluster.dispose();
   }

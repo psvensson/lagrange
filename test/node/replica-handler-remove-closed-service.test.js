@@ -12,6 +12,15 @@
  * in-progress state from the removal owner; a resumed removal's fence on a
  * closed service answers CLOSED; after completion by the same operation the
  * answer is COMPLETED.
+ *
+ * And the two answers on either side of that (M1, M3): a removal that finds
+ * its replica's connection released by anything but its own earlier
+ * teardown (no durable retiring row yet) never publishes the retiring row -
+ * it defers before its point of no return, the replica keeping its status;
+ * a resumed removal (its retiring row already durable) treats CLOSED as
+ * satisfied and continues. A REMOVE asked after completion by ANOTHER
+ * operation, the row ABSENT, answers a typed, non-deferred
+ * REPLICA_ABSENT_NOT_BY_OPERATION (nothing will change that answer).
  */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -34,6 +43,10 @@ import {
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {REPLICA_HANDLER_LOG_MSG} from
+  '../../src/node/replica-handler-constants.js';
+import {REPLICA_ABSENT_NOT_BY_OPERATION} from
+  '../../src/node/replica-removal-debt-errors.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 
@@ -69,7 +82,7 @@ function partitionServingSurface(open) {
   return service;
 }
 
-function createHandler(service, status, extra = {}) {
+function createHandler(service, status, extra = {}, stateMachine = {}) {
   const handler = new ReplicaHandler({
     nodeId: 'remove-closed-node', dataDir,
     systemTableCache: {get: () => null, getAll: () => [], filter: () => [],
@@ -82,6 +95,7 @@ function createHandler(service, status, extra = {}) {
       getState: () => null,
       bindAuthoritativeRemovalAuthority: async () =>
         ({kind: REMOVAL_AUTHORITY_KIND.ABSENT}),
+      ...stateMachine,
     },
   });
   const started = [];
@@ -109,6 +123,13 @@ async function answerOf(handler, operationId) {
   } catch (error) {
     return `threw: ${error.message}`;
   }
+}
+
+// The typed fields of a REMOVE answer.
+async function typedAnswerOf(handler, operationId) {
+  const answer = await handler.handleRemoveReplica(removeRequest(operationId));
+  return {status: answer.status, errorCode: answer.errorCode ?? null,
+    deferRetry: answer.deferRetry ?? null};
 }
 
 test('a duplicate REMOVE while the first removal tears the replica down ' +
@@ -177,4 +198,87 @@ test('every REMOVE entry point answers a named status in every local ' +
     }
   }
   assert.deepEqual(observed, expected);
+});
+
+test('a REMOVE asked after completion answers COMPLETED to the operation ' +
+  'that removed the replica, and a typed non-deferred ' +
+  'REPLICA_ABSENT_NOT_BY_OPERATION to any other operation', async () => {
+  const facts = {};
+  for (const open of [true, false]) {
+    const service = partitionServingSurface(open);
+    const {handler, started} = createHandler(service, ReplicaStatus.REMOVED,
+      {removedByOperationId: FIRST_OP});
+    facts[open ? 'open' : 'released'] = {
+      same: await typedAnswerOf(handler, FIRST_OP),
+      other: await typedAnswerOf(handler, DUPLICATE_OP),
+      started,
+    };
+    service.db?.close();
+  }
+  const expected = {
+    same: {status: STATUS.COMPLETED, errorCode: null, deferRetry: null},
+    other: {status: STATUS.ERROR, errorCode: REPLICA_ABSENT_NOT_BY_OPERATION,
+      deferRetry: false},
+    started: [],
+  };
+  assert.deepEqual(facts, {open: expected, released: expected});
+});
+
+// What one async removal did up to its consensus exit: whether it published
+// its retiring row, entered the consensus-exit wait, and which deferral
+// (with its cause) it logged. The exit wait stops the run there.
+async function runRemovalUntilConsensusExit(status, trackedState) {
+  const service = partitionServingSurface(false);
+  const {handler} = createHandler(service, status, {},
+    {getState: () => trackedState});
+  const facts = {publishedRetiringRow: false, enteredConsensusExit: false,
+    deferral: null, statusWrites: []};
+  handler.persistReplicaStatusWithRetry = async (_id, written) => {
+    facts.statusWrites.push(written);
+  };
+  const publish = handler.publishReplicaRetiringRow.bind(handler);
+  handler.publishReplicaRetiringRow = async (context) => {
+    facts.publishedRetiringRow = true;
+    return publish(context);
+  };
+  handler.awaitReplicaRemovalConsensusExit = async () => {
+    facts.enteredConsensusExit = true;
+    throw new Error('stop at the consensus exit');
+  };
+  const warn = handler.logger.warn.bind(handler.logger);
+  handler.logger = Object.assign(Object.create(handler.logger), {
+    warn(message, fields) {
+      if (message === REPLICA_HANDLER_LOG_MSG.REMOVE_DEFERRED_WITHOUT_ROW) {
+        facts.deferral = fields.cause;
+      }
+      return warn(message, fields);
+    },
+  });
+  handler.trackReplicaRemovalOperation(FIRST_OP, PARTITION_ID, REPLICA_ID);
+  try {
+    await handler.removeReplicaAsync({operationId: FIRST_OP,
+      partitionId: PARTITION_ID, replicaId: REPLICA_ID, reason: 'rebalancing'});
+  } catch {
+    // The stop at the consensus exit.
+  }
+  facts.inProgress = handler.inProgressOperations.has(FIRST_OP);
+  facts.localStatus = handler.getLocalReplica(REPLICA_ID)?.status ?? null;
+  return facts;
+}
+
+test('a removal whose replica connection was released outside it defers ' +
+  'before its retiring row; a resumed removal treats CLOSED as its own ' +
+  'teardown and continues', async () => {
+  const outside = await runRemovalUntilConsensusExit(ReplicaStatus.ACTIVE,
+    null);
+  const resumed = await runRemovalUntilConsensusExit(ReplicaStatus.REMOVING,
+    ReplicaStatus.REMOVING);
+  assert.deepEqual({outside, resumed}, {
+    outside: {publishedRetiringRow: false, enteredConsensusExit: false,
+      deferral: 'serving_closed_outside_removal', statusWrites: [],
+      inProgress: false, localStatus: ReplicaStatus.ACTIVE},
+    resumed: {publishedRetiringRow: true, enteredConsensusExit: true,
+      deferral: null, statusWrites: [],
+      inProgress: false, localStatus: ReplicaStatus.REMOVING},
+  });
 });

@@ -430,15 +430,12 @@ class ManagedSplitWorkflowStateMethods {
       childProvisioningTargetNodeIdsByPartitionId,
     )) {
       const targetNodeIds = this.normalizeNodeIdList(targetNodeIdsRaw);
-      const precheck = typeof this.probeInitialTablePartitionProvisioning ===
-        'function' ?
-        await this.probeInitialTablePartitionProvisioning({
-          partitionId: childPartitionId,
-          targetNodeIds,
-          minimumRoutableReplicaCount,
-          timeoutBudget: options.timeoutBudget || null,
-        }) :
-        null;
+      const precheck = await this.probeInitialTablePartitionProvisioning({
+        partitionId: childPartitionId,
+        targetNodeIds,
+        minimumRoutableReplicaCount,
+        timeoutBudget: options.timeoutBudget || null,
+      });
       const existingRoutableNodeIds = this.normalizeNodeIdList(
         precheck?.existingRoutableNodeIds,
       );

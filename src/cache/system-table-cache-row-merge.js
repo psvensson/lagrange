@@ -178,7 +178,10 @@ function isServiceLifecycleRegressionOnEqualTimestamp(existing, incoming) {
   return isLifecycleTimestampRegressing(existingTs, incomingTs);
 }
 
-function isStaleForExistingRecord(tableName, existing, incoming) {
+// `sameEntryOrder` orders two versions of one source entry (equal origin HLC)
+// by source ordinal (system-table-cache-source-order.js): nonzero, it decides.
+function isStaleForExistingRecord(tableName, existing, incoming, sameEntryOrder = 0) {
+  if (sameEntryOrder !== 0) return sameEntryOrder < 0;
   // Prefer the origin HLC when both rows carry one: it is a total causal order, so
   // equal-`updated_at` ties resolve deterministically and identically on every replica.
   const existingHlc = getRecordHlc(existing);
@@ -238,7 +241,9 @@ function recordSatisfiesDeletePredicate(record, predicate) {
  * @param {Object} deletePredicate
  * @return {boolean}
  */
-function isDeleteSupersededByExistingRecord(tableName, existing, deletePredicate) {
+function isDeleteSupersededByExistingRecord(tableName, existing, deletePredicate,
+  sameEntryOrder = 0) {
+  if (sameEntryOrder !== 0) return sameEntryOrder < 0;
   const hlcOrdered = Boolean(getRecordHlc(existing) &&
     getRecordHlc(deletePredicate));
   if (!hlcOrdered &&

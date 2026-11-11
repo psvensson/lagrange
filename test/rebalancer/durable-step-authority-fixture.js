@@ -38,6 +38,38 @@ const LEDGER_WRITE = Object.freeze({
   FAILS_RETRYABLY: 'fails_retryably',
   FAILS_PERMANENTLY: 'fails_permanently',
 });
+// What the replica_operations owner answers at the read port.
+const OWNER_READ = Object.freeze({
+  AVAILABLE: 'available',
+  // The owner answered and holds no such row.
+  ABSENT: 'absent',
+  // The read failed retryably (no route to the owner).
+  UNAVAILABLE: 'unavailable',
+});
+// What the local system-table cache projects for replica_operations.
+const CACHE_PROJECTION = Object.freeze({
+  MIRRORS_DURABLE: 'mirrors_durable',
+  EMPTY: 'empty',
+});
+const ROUTER_NO_CONNECTION = 'ROUTER_NO_CONNECTION';
+
+function readReplicaOperationsAtPort(world) {
+  if (world.ownerRead === OWNER_READ.UNAVAILABLE) {
+    world.unavailableOwnerReads += 1;
+    return {
+      success: false,
+      error: ROUTER_NO_CONNECTION,
+      errorCode: ROUTER_NO_CONNECTION,
+      code: ROUTER_NO_CONNECTION,
+      rows: [],
+    };
+  }
+  return {
+    success: true,
+    source: READ_SOURCE,
+    rows: world.ownerRead === OWNER_READ.ABSENT ? [] : [{...world.durable}],
+  };
+}
 
 function buildRetryableLedgerFailure() {
   const participantFailure = {deferRetry: true, retryAfterMs: RETRY_AFTER_MS};
@@ -211,11 +243,14 @@ function createDurableStepWorld(options = {}) {
     timers: [],
     writeAttempts: [],
     refusedCasWrites: [],
+    ownerRead: OWNER_READ.AVAILABLE,
+    cacheProjection: CACHE_PROJECTION.MIRRORS_DURABLE,
+    unavailableOwnerReads: 0,
   };
 
   const readAuthoritative = async (tableName) => {
     if (tableName === REPLICA_OPERATIONS_TABLE) {
-      return {success: true, source: READ_SOURCE, rows: [{...world.durable}]};
+      return readReplicaOperationsAtPort(world);
     }
     if (tableName === SERVICES_TABLE) {
       return {
@@ -228,7 +263,11 @@ function createDurableStepWorld(options = {}) {
   };
   // The cache holds committed state only: it mirrors the durable row.
   const rowsOf = (tableName) => {
-    if (tableName === REPLICA_OPERATIONS_TABLE) return [world.durable];
+    if (tableName === REPLICA_OPERATIONS_TABLE) {
+      return world.cacheProjection === CACHE_PROJECTION.EMPTY ?
+        [] :
+        [world.durable];
+    }
     if (tableName === SERVICES_TABLE) {
       return world.service ? [world.service] : [];
     }
@@ -341,8 +380,10 @@ function createDurableStepWorld(options = {}) {
 }
 
 export {
+  CACHE_PROJECTION,
   LEDGER_WRITE,
   OPERATION_ID,
+  OWNER_READ,
   buildRowsOfCoordinatorStorage,
   createDurableStepWorld,
   createReplicaOperationsCasStore,

@@ -13,6 +13,10 @@ import {
 } from './provisioning-target-admission-settle.js';
 import {shouldRetainDurableSchemaPlanningOperations} from
   './durable-schema-planning-retention.js';
+import {REPLICA_OPERATION_VISIBILITY_READ_MODE} from
+  '../rebalancer/replica-operation-repository.js';
+import {buildReplicaOperationProgressSnapshot} from
+  '../rebalancer/replica-status.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
@@ -24,6 +28,8 @@ const PROVISIONING_FOUNDING_BELOW_REQUESTED_REASON = Object.freeze({
   TARGETS_REFUSED: 'founding_targets_refused',
   CANDIDATE_NODES_SHORT: 'founding_candidate_nodes_short',
 });
+const SCHEMA_JOB_HELD_FOUNDER_RELEASED_REASON =
+  'Schema job ended with this founding operation held unstamped';
 const PROVISIONING_ADMISSION_UNSETTLED_MESSAGE =
   'Provisioning unavailable: target admission did not settle within the ' +
   'statement budget for partition ';
@@ -586,6 +592,33 @@ class SQLQueryEngineProvisioningAdmissionMethods {
    * @return {Promise<void>}
    * @private
    */
+  /**
+   * Fail every founding operation a schema job still holds unstamped: its
+   * deterministic (job, target) ADDs whose bootstrap dispatch is still held
+   * (stamping releases the hold) and that are not terminal. Called by the
+   * schema provisioning job owner before the job ends, so a held founder
+   * never outlives its job. A read or fail that cannot complete throws.
+   * @param {{jobId: string, partitionId: string}} job
+   * @return {Promise<Array<string>>} the released operation ids
+   */
+  async releaseSchemaJobHeldFoundingOperations(job) {
+    const operations = await this.rebalanceCoordinator.getOperationsByEntity(
+      SERVICE_TYPE.PARTITION,
+      job.partitionId,
+      {visibilityReadMode:
+        REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED},
+    );
+    const held = operations.filter((operation) =>
+      buildReplicaOperationProgressSnapshot(operation).terminal !== true &&
+      shouldRetainDurableSchemaPlanningOperations({schemaJobId: job.jobId},
+        [operation]));
+    for (const operation of held) {
+      await this.rebalanceCoordinator.failOperation(operation,
+        SCHEMA_JOB_HELD_FOUNDER_RELEASED_REASON, {logLevel: LOCAL_STR_WARN});
+    }
+    return held.map((operation) => operation.operationId);
+  }
+
   async releaseUnsettledFoundingOperations(
     context,
     partitionId,

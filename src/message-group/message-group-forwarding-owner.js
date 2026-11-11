@@ -181,8 +181,8 @@ class MessageGroupForwardingOwner {
 
   isForwardNetworkFailure(normalizedErrorMessage) {
     return normalizedErrorMessage.includes(
-        MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.ENOTFOUND,
-      ) ||
+      MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.ENOTFOUND,
+    ) ||
       normalizedErrorMessage.includes(
         MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.EAI_AGAIN,
       ) ||

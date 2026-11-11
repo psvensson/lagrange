@@ -10,7 +10,8 @@ import {
   shouldAttachPartitionCdcPropagation,
 } from './shared/cdc-propagation-filter.js';
 import {
-  registerPartitionCdcPropagation,
+  attachPartitionCdcPropagation,
+  propagatePartitionCdcVector,
 } from './shared/partition-cdc-propagation-subscriber.js';
 import {assertCritical} from '../utils/assert.js';
 import {trackReplicaRegistrationSweep} from '../diagnostics/raft-churn-sync-sections.js';
@@ -51,8 +52,6 @@ const BOOTSTRAP_REPLICA_REGISTRATION_LOG_MSG = Object.freeze({
     'Bootstrap state-machine registration persistence settled',
   STATE_MACHINE_REGISTRATION_PERSISTENCE_REJECTED:
     'Replica state persistence rejected during bootstrap registration',
-  DEFERRED_CDC_DYNAMIC_SUBSCRIPTION_FAILED:
-    'Deferred CDC subscription failed for dynamically created partition',
 });
 const OPERATIONAL_CDC_SUBSCRIPTION_NOT_READY_PREFIX =
   'Operational message-group ingress not ready for ';
@@ -172,86 +171,48 @@ function createBootstrapServiceReplicaHandlerRuntimeMethods() {
         const tableName = options.tableName;
         if (tableName &&
             shouldAttachPartitionCdcPropagation(tableName)) {
-          const attachCdcPropagation = async () => {
-            const subscriptionSelection =
-              await this.resolveOperationalMessageGroupSelectionAsync({
-                requiredTables: [tableName],
-                preferredService: messageGroupService,
-                reuseCapturedIngress: true,
-              });
-            const subscriptionMessageGroupService =
-              subscriptionSelection.service;
-            if (!subscriptionMessageGroupService) {
-              throw this.buildMessageGroupOwnerNotReadyError(
-                subscriptionSelection,
-                {
-                  message:
-                    OPERATIONAL_CDC_SUBSCRIPTION_NOT_READY_PREFIX +
-                    `${tableName}${OPERATIONAL_CDC_SUBSCRIPTION_NOT_READY_SUFFIX}`,
-                },
-              );
-            }
-
-            await subscriptionMessageGroupService.subscribeToCDC(tableName);
-
-            const handshake = await registerPartitionCdcPropagation(partition, {
+          await attachPartitionCdcPropagation(partition, {
+            tableName,
+            preferredService: messageGroupService,
+            defer: options.deferCdcPropagationHandshake === true,
+            messageGroupServices: () => this.messageGroupServices,
+            logger: this.logger,
+            logContext: {tableName, partitionId: options.partitionId,
+              replicaId: options.replicaId},
+            notReadyMessage: OPERATIONAL_CDC_SUBSCRIPTION_NOT_READY_PREFIX +
+              `${tableName}${OPERATIONAL_CDC_SUBSCRIPTION_NOT_READY_SUFFIX}`,
+            resolveOperationalMessageGroupSelectionAsync: (selectionOptions = {}) =>
+              this.resolveOperationalMessageGroupSelectionAsync(selectionOptions),
+            buildMessageGroupOwnerNotReadyError: (selection, errorOptions) =>
+              this.buildMessageGroupOwnerNotReadyError(selection, errorOptions),
+            registration: {
               role: BOOTSTRAP_CDC_SUBSCRIBER_PART_PREFIX,
               nodeId: this.nodeId,
-              tableName,
               partitionId: options.partitionId,
               replicaId: options.replicaId,
               logger: this.logger,
               eventLogMessage: BootstrapLog.CDC_DYNAMIC_PARTITION_EVENT,
-              preferredService: subscriptionMessageGroupService,
               resolveOperationalMessageGroupSelection: (selectionOptions = {}) =>
                 this.resolveOperationalMessageGroupSelection(selectionOptions),
-              resolveOperationalMessageGroupSelectionAsync:
-                (selectionOptions = {}) =>
-                  this.resolveOperationalMessageGroupSelectionAsync(
-                    selectionOptions,
-                  ),
+              resolveOperationalMessageGroupSelectionAsync: (selectionOptions = {}) =>
+                this.resolveOperationalMessageGroupSelectionAsync(selectionOptions),
               buildMessageGroupOwnerNotReadyError: (selection, errorOptions) =>
-                this.buildMessageGroupOwnerNotReadyError(
-                  selection,
-                  errorOptions,
-                ),
+                this.buildMessageGroupOwnerNotReadyError(selection, errorOptions),
               propagatePartitionCDCEvent: (messageGroupService, events, deliveryContext) =>
-                this.seedRuntimeBridgeOwner.propagatePartitionCDCEvent(
-                  messageGroupService,
-                  events,
-                  deliveryContext,
-                ),
+                propagatePartitionCdcVector(this.latencyTopology,
+                  BOOTSTRAP_ERROR.LATENCY_TOPOLOGY_MISSING, messageGroupService, events,
+                  deliveryContext),
               afterPropagation: async () => {
                 if (tableName === TABLES.CONFIG) {
                   this.seedRuntimeBridgeOwner.applyCurrentEpochFromCache();
                 }
               },
-            });
-
-            this.logger.debug(BootstrapLog.CDC_DYNAMIC_SUBSCRIPTION, {
-              tableName,
-              partitionId: options.partitionId,
-              replicaId: options.replicaId,
+            },
+            onRegistered: (handshake) => this.logger.debug(BootstrapLog.CDC_DYNAMIC_SUBSCRIPTION, {
+              tableName, partitionId: options.partitionId, replicaId: options.replicaId,
               subscriberId: handshake.subscriberId,
-              subscriptionEpoch: handshake.subscriptionEpoch,
-            });
-          };
-          if (options.deferCdcPropagationHandshake === true) {
-            attachCdcPropagation().catch((error) => {
-              this.logger.warn(
-                BOOTSTRAP_REPLICA_REGISTRATION_LOG_MSG
-                  .DEFERRED_CDC_DYNAMIC_SUBSCRIPTION_FAILED,
-                {
-                  tableName,
-                  partitionId: options.partitionId,
-                  replicaId: options.replicaId,
-                  error: error?.message || String(error),
-                },
-              );
-            });
-          } else {
-            await attachCdcPropagation();
-          }
+              subscriptionEpoch: handshake.subscriptionEpoch}),
+          });
         }
 
         return partition;

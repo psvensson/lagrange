@@ -739,22 +739,6 @@ class SeedCacheHydrationPhase {
   }
 
   /**
-   * Propagate one vector of partition CDC events via the topology-owned
-   * propagation path.
-   * @param {Object} messageGroupService
-   * @param {Array<Object>} events - The durable vector, in log order.
-   * @param {Object} deliveryContext - The delivery invocation.
-   * @return {Promise<Object>}
-   */
-  async propagatePartitionCDCEvent(messageGroupService, events, deliveryContext) {
-    return this.runtimeBridgeOwner.propagatePartitionCDCEvent(
-      messageGroupService,
-      events,
-      deliveryContext,
-    );
-  }
-
-  /**
    * Resolve the message-group service for CDC propagation.
    * @param {Object|null} preferredMessageGroupService
    * @param {Object} [options]

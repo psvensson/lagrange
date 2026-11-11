@@ -71,7 +71,7 @@ function createProvisioningWorld(t, decideAdmission) {
   const nodes = NODE_IDS.map((nodeId) => ({node_id: nodeId, status: 'active'}));
   const services = [];
   const world = {checked: [], created: [], executed: [], warnings: []};
-  const cache = {
+  const cache = world.cache = {
     onCacheChange() {},
     offCacheChange() {},
     filter(type, predicate) {
@@ -169,13 +169,42 @@ test('an identity-changed deferral is re-entered and the full requested ' +
   );
 });
 
+function identityUnavailableDeferral(move) {
+  const reasonCodes = [OPERATION_CREATION_ADMISSION_REASON.IDENTITY_UNAVAILABLE];
+  return {
+    allowed: false,
+    decisionType: 'deferred',
+    reasonCodes,
+    moveIdentity: {nodeId: move.nodeId},
+    planningIdentity: null,
+    admissionResult: {allowed: false, decisionType: 'deferred',
+      blockingReasons: reasonCodes, reasonCodes},
+  };
+}
+
+// The admission owner ports the clearance wait reads: the target's planning
+// identity never becomes current and nothing is ever published.
+function stateUnclearedIdentityPorts(world) {
+  const coordinator = world.rebalanceCoordinator;
+  coordinator.captureOperationCreationPlanningIdentity = () => null;
+  coordinator.controlPlaneReadinessService = {
+    subscribeReadinessPlanningSnapshots: () => () => {},
+  };
+  coordinator.systemTableCache = world.cache;
+}
+
 test('a deferral still unsettled when the budget is spent fails the ' +
-  'statement retryably and founds nothing', async (t) => {
+  'statement retryably and founds nothing, without spinning', async (t) => {
   const world = createProvisioningWorld(t, (move) =>
     (move.nodeId === DEFERRED_NODE_ID ?
-      identityChangedDeferral(move) :
+      identityUnavailableDeferral(move) :
       {allowed: true, decisionType: 'admitted',
         operationCreationAdmission: {nodeId: move.nodeId}}));
+  stateUnclearedIdentityPorts(world);
+  let immediateRan = false;
+  setImmediate(() => {
+    immediateRan = true;
+  });
 
   await t.rejects(
     world.engine.provisionInitialTablePartition({
@@ -186,6 +215,9 @@ test('a deferral still unsettled when the budget is spent fails the ' +
     {code: QUERY_ERROR_CODE.TABLE_PARTITION_PROVISIONING_RETRYABLE},
     'the statement fails retryably',
   );
+  t.ok(immediateRan, 'the event loop ran while the target was unsettled');
+  t.ok(world.checked.filter((nodeId) => nodeId === DEFERRED_NODE_ID).length <= 2,
+    'the deferred target was asked a bounded number of times, not in a loop');
   t.same(world.created, [], 'no two-member cohort is founded');
   const unsettled = world.warnings.find((w) =>
     w.payload?.targetNodeId === DEFERRED_NODE_ID);
@@ -193,10 +225,82 @@ test('a deferral still unsettled when the budget is spent fails the ' +
     unsettled?.payload,
     {
       admissionState: 'unsettled',
-      blockingReasons: [OPERATION_CREATION_ADMISSION_REASON.IDENTITY_CHANGED],
+      blockingReasons: [OPERATION_CREATION_ADMISSION_REASON.IDENTITY_UNAVAILABLE],
     },
     'the unsettled target is logged with its typed reason',
   );
+});
+
+function routeLossError() {
+  const error = new Error('Operation creation admission changed');
+  error.code = OPERATION_CREATION_ADMISSION_ERROR_CODE;
+  error.reasonCodes = [OPERATION_CREATION_ADMISSION_REASON.ROUTE_UNAVAILABLE];
+  error.admissionResult = {allowed: false, decisionType: 'deferred'};
+  error.moveIdentity = {nodeId: DEFERRED_NODE_ID};
+  error.routeObservation = {origin: 'pre_submission_delivery',
+    sourceVersions: {nodes: 0, partitions: 0, services: 0}};
+  return error;
+}
+
+// The third founder's ledger write keeps finding no route after the first
+// two were persisted.
+function stateThirdCreateUnsettled(world, createdOperation) {
+  world.cache.getTableMutationVersion = () => 0;
+  world.rebalanceCoordinator.systemTableCache = world.cache;
+  world.rebalanceCoordinator.controlPlaneReadinessService = {
+    subscribeReadinessPlanningSnapshots: () => () => {},
+  };
+  world.failed = [];
+  world.rebalanceCoordinator.failOperation = async (operation) => {
+    world.failed.push(operation.operationId);
+  };
+  // No prior attempt: the established-cohort read finds nothing durable.
+  world.rebalanceCoordinator.getOperationsByEntity = async () => [];
+  world.rebalanceCoordinator.createOperation = async (move) => {
+    if (move.nodeId === DEFERRED_NODE_ID) throw routeLossError();
+    world.created.push(move.nodeId);
+    return createdOperation(move);
+  };
+}
+
+test('a founding left partial by an unsettled target is failed before the ' +
+  'error propagates when no schema job will retry it', async (t) => {
+  const world = createProvisioningWorld(t, (move) => ({allowed: true,
+    decisionType: 'admitted', operationCreationAdmission: {nodeId: move.nodeId}}));
+  stateThirdCreateUnsettled(world, (move) => ({
+    operationId: `op-${move.nodeId}`, createdAt: Date.now(), ...move}));
+  await t.rejects(world.engine.provisionInitialTablePartition({
+    partitionId: 'tbl-partial-p1',
+    replicaCount: REQUESTED_REPLICA_COUNT,
+    ...QUORUM_DEFAULTED_MINIMUM,
+  }), {code: QUERY_ERROR_CODE.TABLE_PARTITION_PROVISIONING_RETRYABLE,
+    retryable: true}, 'the statement fails retryably');
+  t.same([...world.created].sort(), ['node-a', 'node-b'],
+    'two founders were persisted before the third stayed unsettled');
+  t.same([...world.failed].sort(), ['op-node-a', 'op-node-b'],
+    'both are failed: no half-founded table outlives the statement');
+});
+
+test('a founding left partial under a schema job is retained for the ' +
+  'job\'s retry to complete through the deterministic intent', async (t) => {
+  const world = createProvisioningWorld(t, (move) => ({allowed: true,
+    decisionType: 'admitted', operationCreationAdmission: {nodeId: move.nodeId}}));
+  stateThirdCreateUnsettled(world, (move) => ({
+    operationId: move.operationIntentId,
+    replicaId: move.replicaIntentId,
+    targetNodeId: move.nodeId,
+    createdAt: Date.now(),
+    stepsHistory: [{bootstrapTopologyDispatchDeferred: true}],
+  }));
+  await t.rejects(world.engine.provisionInitialTablePartition({
+    partitionId: 'tbl-partial-job-p1',
+    schemaJobId: 'schema-job-7',
+    replicaCount: REQUESTED_REPLICA_COUNT,
+    ...QUORUM_DEFAULTED_MINIMUM,
+  }), {code: QUERY_ERROR_CODE.TABLE_PARTITION_PROVISIONING_RETRYABLE},
+  'the statement fails retryably');
+  t.same(world.failed, [],
+    'the job\'s own held founding operations are kept for its retry');
 });
 
 test('a non-transient refusal founds below the request only as an explicit, ' +
@@ -269,4 +373,61 @@ test('the creation boundary re-enters on a repeated transient re-entry and ' +
   });
   t.equal(operation.operationId, 'op-c', 'the operation is created');
   t.equal(settles.length, 2, 'admission was settled again after each re-entry');
+});
+
+test('composed: a partial founding whose statement budget ended is ' +
+  'completed by the same schema job\'s retry, with the same cohort, ' +
+  'nothing orphaned and no smaller child', async (t) => {
+  const world = createProvisioningWorld(t, (move) => ({allowed: true,
+    decisionType: 'admitted', operationCreationAdmission: {nodeId: move.nodeId}}));
+  const durable = new Map();
+  let routeToThirdFounder = false;
+  stateThirdCreateUnsettled(world, () => null);
+  world.rebalanceCoordinator.getOperationsByEntity = async () =>
+    [...durable.values()];
+  world.rebalanceCoordinator.createOperation = async (move) => {
+    if (move.nodeId === DEFERRED_NODE_ID && !routeToThirdFounder) {
+      throw routeLossError();
+    }
+    // The deterministic (job, target) intent: a retry lands on its own row.
+    const existing = durable.get(move.operationIntentId);
+    if (existing) return existing;
+    world.created.push(move.nodeId);
+    const operation = {
+      operationId: move.operationIntentId,
+      replicaId: move.replicaIntentId,
+      type: 'ADD',
+      partitionId: move.partitionId,
+      targetNodeId: move.nodeId,
+      nodeId: move.nodeId,
+      createdAt: Date.now(),
+      stepsHistory: [{bootstrapTopologyDispatchDeferred: true}],
+    };
+    durable.set(operation.operationId, operation);
+    return operation;
+  };
+  const statement = {
+    partitionId: 'tbl-partial-retry-p1',
+    schemaJobId: 'schema-job-9',
+    replicaCount: REQUESTED_REPLICA_COUNT,
+    ...QUORUM_DEFAULTED_MINIMUM,
+  };
+  await t.rejects(world.engine.provisionInitialTablePartition(statement),
+    {code: QUERY_ERROR_CODE.TABLE_PARTITION_PROVISIONING_RETRYABLE},
+    'the first attempt ends with its budget, retryably');
+  t.same([...durable.keys()].length, 2, 'two founders are held');
+  t.same(world.failed, [], 'and kept for the job\'s retry');
+
+  routeToThirdFounder = true;
+  // The replica rows' arrival is not under test.
+  world.engine.waitForPartitionServiceMetadata = async () => {};
+  await world.engine.provisionInitialTablePartition(statement);
+  t.same([...world.created].sort(), [...NODE_IDS],
+    'each founder was created exactly once across both attempts');
+  t.same([...world.executed].sort(), [...NODE_IDS],
+    'the full requested cohort is founded');
+  t.same(world.failed, [], 'nothing is orphaned or failed');
+  t.equal(world.warnings.filter((w) =>
+    w.message === FOUNDING_BELOW_REQUESTED_MSG).length, 0,
+  'no smaller child is founded');
 });

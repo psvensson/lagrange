@@ -287,6 +287,10 @@ const PARTITION_CDC_OBLIGATION_DRIVE_STATE = Object.freeze({
   SHUTDOWN: 'shutdown',
   JOINED_IN_FLIGHT: 'joined_in_flight',
   NO_SUBSCRIBERS: 'no_subscribers',
+  // The leader owes rows of a propagated table and has no propagation
+  // subscriber: a named, logged condition, never silent accumulation. A
+  // deferred attachment registered on the partition is woken by it.
+  NO_PROPAGATION_SUBSCRIBER: 'no_propagation_subscriber',
   NO_LEDGER: 'no_ledger',
   DRAINED: 'drained',
   PAGE_YIELDED: 'page_yielded',
@@ -360,6 +364,8 @@ const PARTITION_CDC_OBLIGATION_LOG_MSG = Object.freeze({
   RECORDED: 'CDC obligations recorded with the committed decision',
   DELIVERY_HELD: 'CDC obligation delivery held by a subscriber; retry scheduled',
   DRIVE_FAILED: 'CDC obligation drive failed',
+  OWED_WITHOUT_PROPAGATION_SUBSCRIBER:
+    'CDC obligations owed on a propagated table with no propagation subscriber',
   DELIVERY_BACKPRESSURED: 'CDC obligation delivery backpressured',
   ACKNOWLEDGEMENTS_PROPOSED: 'CDC acknowledgement batch proposed',
   ACKNOWLEDGEMENTS_REFUSED: 'CDC acknowledgement batch refused',

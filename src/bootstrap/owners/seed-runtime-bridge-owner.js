@@ -1,5 +1,4 @@
 import {assertCritical} from '../../utils/assert.js';
-import {copyCdcEvent} from '../../cdc/cdc-event-envelope.js';
 import {CDCIntegrationSetup} from '../shared/cdc-integration-setup.js';
 import {LatencyTopologySetup} from '../shared/latency-topology-setup.js';
 import {
@@ -194,24 +193,6 @@ class SeedRuntimeBridgeOwner {
     logger.info(BOOTSTRAP_LOG_MSG.LATENCY_TOPOLOGY_STARTED, {
       nodeId: d.getNodeId(),
       owner: LATENCY_TOPOLOGY_OWNER,
-    });
-  }
-
-  async propagatePartitionCDCEvent(messageGroupService, events, deliveryContext) {
-    const override = this.getCompatibilityOverride('propagatePartitionCDCEvent');
-    if (override) {
-      return override(messageGroupService, events, deliveryContext);
-    }
-
-    const d = this.delegates;
-    const topologyOwners = assertCritical(
-      d.getLatencyTopology(),
-      BOOTSTRAP_ERROR.LATENCY_TOPOLOGY_MISSING,
-    );
-    return topologyOwners.cdcGroupPropagationService.propagateCDCEvent({
-      events: events.map(copyCdcEvent),
-      sourceMessageGroupService: messageGroupService,
-      deliveryContext,
     });
   }
 

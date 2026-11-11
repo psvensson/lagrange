@@ -48,6 +48,19 @@ import {PARTITION_CDC_ADMISSION_STATE, admitCdcOwedWork, settleCdcOwedRefusal} f
   './partition-cdc-owed-admission.js';
 import {recordCommittedWriteTraffic} from './partition-write-traffic.js';
 import {turnChainValue} from '../raft/raft-rs-turn-answer.js';
+import {isPartitionServiceClosed, partitionServiceClosedRefusal} from
+  './partition-service-closed-refusal.js';
+// A transaction control the participant owner failed with, as its answer:
+// the failure's own code and retry semantics, never dropped.
+function transactionControlFailure(error) {
+  return {
+    success: false,
+    error: error.message,
+    errorCode: error.code ?? null,
+    deferRetry: error.deferRetry === true,
+  };
+}
+
 const COMMIT_APPLY_EFFECT_PHASE = Object.freeze({
   COMMIT: 'afterCommit',
   ROLLBACK: 'afterRollback',
@@ -347,11 +360,24 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         partitionId: this.partitionId,
       };
     }
+    // A serving request on a replica whose persistence was released is a
+    // routing fact: the one service-closed refusal, before and after the
+    // dispatch alike (partition-service-closed-refusal.js).
+    if (admission.servingRequest && isPartitionServiceClosed(this)) {
+      return partitionServiceClosedRefusal(this);
+    }
     if (admission.servingRequest) {
       this.activeServingRequestCount += 1;
     }
     try {
       return await this.handleAdmittedApplicationMessage(payload);
+    } catch (error) {
+      // A continuation that resumed after the release met the released
+      // connection; any other failure is the handler's own and propagates.
+      if (!admission.servingRequest || !isPartitionServiceClosed(this)) {
+        throw error;
+      }
+      return partitionServiceClosedRefusal(this, error);
     } finally {
       if (admission.servingRequest) {
         this.activeServingRequestCount -= 1;
@@ -465,12 +491,12 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         ...result,
       };
     } catch (error) {
-      return {
-
-        success: false,
-        error: error.message,
-        deferRetry: error?.deferRetry === true,
-      };
+      // A control that met the released connection is answered by the
+      // entry's one service-closed refusal (handleCanonicalApplicationPayload).
+      if (isPartitionServiceClosed(this)) {
+        throw error;
+      }
+      return transactionControlFailure(error);
     }
   }
 

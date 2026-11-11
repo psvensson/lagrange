@@ -472,8 +472,11 @@ test(
         deliveredEntryIds.push(message.entryId || null);
         const response = await leader.handleRemoteQuery(message);
         if (deliveries === 1) {
+          // The router's answer timeout: acknowledged, then the answer lost.
           return buildDeliveryEnvelope(
-            {acknowledged: false, error: 'Message timeout after committed response loss'});
+            {acknowledged: false, error: 'Message timeout after committed response loss',
+              errorCode: 'ROUTER_MESSAGE_TIMEOUT', deferRetry: true,
+              acknowledgement: 'acknowledged'});
         }
         return buildDeliveryEnvelope({acknowledged: true}, await response);
       },

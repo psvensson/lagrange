@@ -1049,12 +1049,13 @@ test('NodeJoiningService - CDC propagation reuses captured ingress when operatio
       });
       // The durable subscriber contract: the vector is handed to
       // propagation whole and answered over that exact vector.
-      service.propagatePartitionCDCEvent = async (messageGroupService, events) => {
-        propagatedMessageGroupService = messageGroupService;
-        propagatedEvent = events;
-        return buildCommittedCdcOutcome(events, messageGroupService.groupId,
-          {index: 1, term: 1});
-      };
+      service.latencyTopology = {cdcGroupPropagationService: {
+        propagateCDCEvent: async ({events, sourceMessageGroupService}) => {
+          propagatedMessageGroupService = sourceMessageGroupService;
+          propagatedEvent = events;
+          return buildCommittedCdcOutcome(events, sourceMessageGroupService.groupId,
+            {index: 1, term: 1});
+        }}};
 
       NodeService.getInstance = () => ({
         getSystemTableCache() {

@@ -11,6 +11,8 @@
  * (test/partition/cdc-hydration-live-handoff.test.js); here the partitions
  * are recording doubles of that owner's two surfaces.
  */
+import {propagatePartitionCdcVector} from
+  '../../src/bootstrap/shared/partition-cdc-propagation-subscriber.js';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {SeedCacheHydrationPhase} from
@@ -224,7 +226,8 @@ test('seed handoff: before the latency owners exist the lane retries a nodes eve
   };
   const bridge = new SeedRuntimeBridgeOwner({delegates});
   delegates.propagatePartitionCDCEvent = (service, event, context) =>
-    bridge.propagatePartitionCDCEvent(service, event, context);
+    propagatePartitionCdcVector(delegates.getLatencyTopology(),
+      BOOTSTRAP_ERROR.LATENCY_TOPOLOGY_MISSING, service, event, context);
   const phase = new SeedCacheHydrationPhase({delegates, runtimeBridgeOwner: bridge});
   await phase.subscribeToInitialSystemTableCDC(TABLES.NODES);
   // The durable subscriber contract: one vector under a delivery invocation.
