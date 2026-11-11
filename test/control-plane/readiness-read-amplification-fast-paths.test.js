@@ -28,6 +28,7 @@ import {
 import {
   buildGatewayFallbackSystemTableRoutingDiagnostics,
 } from '../../src/control-plane/control-plane-system-table-gateway-diagnostics.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 
 const NODE_ID = 'node-1';
 
@@ -152,9 +153,7 @@ test('CL-012 phase 1: readiness-read fast paths', async (t) => {
             },
           },
         },
-        systemTableCache: {
-          filter: () => [],
-        },
+        systemTableCache: new SystemTableCache(),
       };
 
       const diagnostics = buildSystemTableOperationDiagnostics(
