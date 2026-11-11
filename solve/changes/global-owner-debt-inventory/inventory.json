@@ -7,13 +7,13 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "9abe8c18b194ef3bf1af8a33e232a6e99ff564a39b8baf17456660014a83e5ab"
+        "sha256": "6f3b7f22ccf59122a07e5ac9b326d3edb7d036242b778f776ed578964848578f"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "ea04e03d20fb941084fa19b0ef9efd95e2544f0c9010ec13a44e492584b863be"
+        "sha256": "b9e53c5a9e3772bb134146f29d350b056b94e87bdab6fd2c6be992bb6866eaca"
       },
       {
         "path": "test-output/analysis/madge-circular-src-scripts-test.json",
@@ -23,8 +23,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3550429,
-        "sha256": "c519274175ecd5f654ab900c02e683792df16ce531510c084421fe4f51abeffe"
+        "bytes": 3550777,
+        "sha256": "36deeb84b53d5097d38203f257ad5501f04ac2995bd12f62eb6656d7da90ed64"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -33,7 +33,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "4e1d23acc3e8ed3225563db1360a0d74b067f5282d53d4117554000b733a00b2"
+        "sha256": "07c2e0e97a69abda0332339787efa912856228089e7090fe584ea496f8427fb0"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -42,7 +42,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "4b328093582ded9873110061aab72d827ddb7f37f814469862ea06991b81c040"
+        "sha256": "22850a27e3702ff73698b3db28133f039b2fd58103fca2a3a83dbd0c676d6915"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -65,7 +65,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "6893fb94ed10e36b610513113a14a38734ec7f1f5f138249a8ecd6dd7f75a94a"
+    "inputDigest": "c2199b10b95c96e61ab6f8f71dc211c3fb58f80bbcbdb4c9372a0e5c0d0f50ed"
   },
   "reconciliation": {
     "complexity": {
@@ -73,22 +73,22 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "9abe8c18b194ef3bf1af8a33e232a6e99ff564a39b8baf17456660014a83e5ab"
+        "sha256": "6f3b7f22ccf59122a07e5ac9b326d3edb7d036242b778f776ed578964848578f"
       },
-      "declaredCount": 1703,
-      "observedCount": 1703,
-      "assignedCount": 1703
+      "declaredCount": 1698,
+      "observedCount": 1698,
+      "assignedCount": 1698
     },
     "cognitive": {
       "identity": {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "ea04e03d20fb941084fa19b0ef9efd95e2544f0c9010ec13a44e492584b863be"
+        "sha256": "b9e53c5a9e3772bb134146f29d350b056b94e87bdab6fd2c6be992bb6866eaca"
       },
-      "declaredCount": 149,
-      "observedCount": 149,
-      "assignedCount": 149
+      "declaredCount": 145,
+      "observedCount": 145,
+      "assignedCount": 145
     },
     "fileSize": {
       "authority": {
@@ -117,7 +117,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "4e1d23acc3e8ed3225563db1360a0d74b067f5282d53d4117554000b733a00b2"
+          "sha256": "07c2e0e97a69abda0332339787efa912856228089e7090fe584ea496f8427fb0"
         },
         "cloneGroups": 35,
         "duplicatedLines": 1109,
@@ -135,7 +135,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "4b328093582ded9873110061aab72d827ddb7f37f814469862ea06991b81c040"
+          "sha256": "22850a27e3702ff73698b3db28133f039b2fd58103fca2a3a83dbd0c676d6915"
         },
         "cloneGroups": 620,
         "duplicatedLines": 22292,
@@ -173,38 +173,38 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3550429,
-        "sha256": "c519274175ecd5f654ab900c02e683792df16ce531510c084421fe4f51abeffe"
+        "bytes": 3550777,
+        "sha256": "36deeb84b53d5097d38203f257ad5501f04ac2995bd12f62eb6656d7da90ed64"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2841,
         "sha256": "3c7e7e10bd1ffa9a6744ed22c038928d52bdb7913e6b239aa5ef9a9448e3638f"
       },
-      "sourceDigest": "9e2d105a3bb3db0292f025a43c5f9468cb0649c31b48a1f43fd93892b2ea1a50",
-      "moduleCount": 6193,
-      "edgeCount": 35107,
+      "sourceDigest": "58a24cb9e86342f23b7528a37699cab8f57e90bc65ebcac24b5c73fbcf81e00c",
+      "moduleCount": 6194,
+      "edgeCount": 35109,
       "unresolvedCount": 47
     }
   },
   "assignment": {
-    "sourceSignalCount": 2386,
-    "assignedSignalCount": 2386,
-    "uniqueAssignmentCount": 2386,
-    "digest": "0b798c796a44ebd9119b385fdd406f7b7233558a4cfa9773c721dab4f67f09ac"
+    "sourceSignalCount": 2377,
+    "assignedSignalCount": 2377,
+    "uniqueAssignmentCount": 2377,
+    "digest": "c87ac6fade03cf56fd66568493ebe1db0005ffeda4b1a76c0354b0f2c27a4b7f"
   },
   "signalCounts": {
-    "cognitive": 149,
-    "complexity": 1703,
+    "cognitive": 145,
+    "complexity": 1698,
     "duplication": 453,
     "fileSize": 42,
     "lintExclusion": 39
   },
   "summary": {
-    "filesWithDebt": 1240,
-    "rankedBoundaryCount": 114,
+    "filesWithDebt": 1235,
+    "rankedBoundaryCount": 110,
     "semanticBoundaryCount": 20,
-    "fallbackBoundaryCount": 94,
+    "fallbackBoundaryCount": 90,
     "childQuestCount": 16
   },
   "rankedBoundaries": [
@@ -216,9 +216,9 @@
       "ownerAreas": [
         "test/distributed/harness"
       ],
-      "fileCount": 165,
-      "signalCount": 473,
-      "complexity": 395,
+      "fileCount": 164,
+      "signalCount": 468,
+      "complexity": 390,
       "cognitive": 0,
       "oversizedFiles": 11,
       "duplicatedLines": 10609,
@@ -226,8 +226,8 @@
       "cycleGroups": 0,
       "lintExclusions": 10,
       "importIn": 449,
-      "importOut": 704,
-      "score": 2651.1,
+      "importOut": 695,
+      "score": 2631.1,
       "topPaths": [
         "test/distributed/harness/report-writer.js",
         "test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics-tail-more-test-cases.js",
@@ -2162,30 +2162,6 @@
       ]
     },
     {
-      "key": "area:scripts/agent-tooling",
-      "owner": null,
-      "boundary": "scripts/agent-tooling",
-      "classification": "tool-owner-area",
-      "ownerAreas": [
-        "scripts/agent-tooling"
-      ],
-      "fileCount": 1,
-      "signalCount": 1,
-      "complexity": 0,
-      "cognitive": 1,
-      "oversizedFiles": 0,
-      "duplicatedLines": 0,
-      "cloneTouches": 0,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 4,
-      "importOut": 13,
-      "score": 8,
-      "topPaths": [
-        "scripts/agent-tooling/evidence.js"
-      ]
-    },
-    {
       "key": "area:scripts/analyze-replace-ghost-retirements.js",
       "owner": null,
       "boundary": "scripts/analyze-replace-ghost-retirements.js",
@@ -2207,30 +2183,6 @@
       "score": 8,
       "topPaths": [
         "scripts/analyze-replace-ghost-retirements.js"
-      ]
-    },
-    {
-      "key": "area:scripts/check-decision-tables.js",
-      "owner": null,
-      "boundary": "scripts/check-decision-tables.js",
-      "classification": "tool-owner-area",
-      "ownerAreas": [
-        "scripts/check-decision-tables.js"
-      ],
-      "fileCount": 1,
-      "signalCount": 1,
-      "complexity": 0,
-      "cognitive": 1,
-      "oversizedFiles": 0,
-      "duplicatedLines": 0,
-      "cloneTouches": 0,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 2,
-      "importOut": 4,
-      "score": 8,
-      "topPaths": [
-        "scripts/check-decision-tables.js"
       ]
     },
     {
@@ -2279,54 +2231,6 @@
       "score": 8,
       "topPaths": [
         "scripts/check-guideline-hot-path-diagnostics.js"
-      ]
-    },
-    {
-      "key": "area:scripts/check-invariants.js",
-      "owner": null,
-      "boundary": "scripts/check-invariants.js",
-      "classification": "tool-owner-area",
-      "ownerAreas": [
-        "scripts/check-invariants.js"
-      ],
-      "fileCount": 1,
-      "signalCount": 1,
-      "complexity": 0,
-      "cognitive": 1,
-      "oversizedFiles": 0,
-      "duplicatedLines": 0,
-      "cloneTouches": 0,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 3,
-      "importOut": 5,
-      "score": 8,
-      "topPaths": [
-        "scripts/check-invariants.js"
-      ]
-    },
-    {
-      "key": "area:scripts/check-owner-traces.js",
-      "owner": null,
-      "boundary": "scripts/check-owner-traces.js",
-      "classification": "tool-owner-area",
-      "ownerAreas": [
-        "scripts/check-owner-traces.js"
-      ],
-      "fileCount": 1,
-      "signalCount": 1,
-      "complexity": 0,
-      "cognitive": 1,
-      "oversizedFiles": 0,
-      "duplicatedLines": 0,
-      "cloneTouches": 0,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 2,
-      "importOut": 4,
-      "score": 8,
-      "topPaths": [
-        "scripts/check-owner-traces.js"
       ]
     },
     {
@@ -3739,8 +3643,8 @@
           }
         ],
         "baseline": {
-          "score": 2651.1,
-          "complexity": 395,
+          "score": 2631.1,
+          "complexity": 390,
           "cognitive": 0,
           "oversizedFiles": 11,
           "duplicatedLines": 10609,

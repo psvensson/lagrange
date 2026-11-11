@@ -127,6 +127,68 @@ function ruleMatchesCombination(rule, combination) {
   );
 }
 
+function validateRuleInvariantRefs(errors, filePath, rulePath, rule, invariantIds) {
+  if (Array.isArray(rule.invariantRefs)) {
+    for (const [refIndex, invariantRef] of rule.invariantRefs.entries()) {
+      if (
+        hasConcreteText(invariantRef) &&
+        !invariantIds.has(invariantRef)
+      ) {
+        errors.push(
+          `${filePath}: ${rulePath}.invariantRefs[${refIndex}] ` +
+          `does not match a declared invariant id: ${invariantRef}.`,
+        );
+      }
+    }
+  }
+}
+
+function validateRuleInputs(errors, filePath, rulePath, rule, inputNames, inputValues) {
+  if (!isObjectRecord(rule.when)) {
+    errors.push(`${filePath}: ${rulePath}.when must be an object.`);
+  } else {
+    for (const inputName of inputNames) {
+      const value = rule.when[inputName];
+      if (value === undefined) {
+        errors.push(`${filePath}: ${rulePath}.when.${inputName} is required.`);
+      } else if (value !== WILDCARD && !inputValues[inputName].has(value)) {
+        errors.push(
+          `${filePath}: ${rulePath}.when.${inputName} has invalid value ${value}.`,
+        );
+      }
+    }
+    for (const key of Object.keys(rule.when)) {
+      if (!inputNames.includes(key)) {
+        errors.push(`${filePath}: ${rulePath}.when.${key} is not a declared input.`);
+      }
+    }
+  }
+}
+
+function validateRuleOutcome(errors, filePath, rulePath, rule, outputSpecs, outputValues) {
+  if (!isObjectRecord(rule.outcome)) {
+    errors.push(`${filePath}: ${rulePath}.outcome must be an object.`);
+  } else {
+    for (const outputSpec of outputSpecs) {
+      const value = rule.outcome[outputSpec.name];
+      if (value === undefined) {
+        errors.push(
+          `${filePath}: ${rulePath}.outcome.${outputSpec.name} is required.`,
+        );
+      } else if (!outputValues[outputSpec.name].has(value)) {
+        errors.push(
+          `${filePath}: ${rulePath}.outcome.${outputSpec.name} has invalid value ${value}.`,
+        );
+      }
+    }
+    for (const key of Object.keys(rule.outcome)) {
+      if (!outputValues[key]) {
+        errors.push(`${filePath}: ${rulePath}.outcome.${key} is not declared.`);
+      }
+    }
+  }
+}
+
 function validateRuleShape(errors, filePath, table, inputNames, outputSpecs) {
   if (!Array.isArray(table.rules) || table.rules.length === 0) {
     errors.push(`${filePath}: rules must contain at least one rule.`);
@@ -159,62 +221,12 @@ function validateRuleShape(errors, filePath, table, inputNames, outputSpecs) {
       `${rulePath}.invariantRefs`,
       rule.invariantRefs,
     );
-    if (Array.isArray(rule.invariantRefs)) {
-      for (const [refIndex, invariantRef] of rule.invariantRefs.entries()) {
-        if (
-          hasConcreteText(invariantRef) &&
-          !invariantIds.has(invariantRef)
-        ) {
-          errors.push(
-            `${filePath}: ${rulePath}.invariantRefs[${refIndex}] ` +
-            `does not match a declared invariant id: ${invariantRef}.`,
-          );
-        }
-      }
-    }
+    validateRuleInvariantRefs(errors, filePath, rulePath, rule, invariantIds);
     if (hasConcreteText(rule.id)) {
       ruleIds.push(rule.id);
     }
-    if (!isObjectRecord(rule.when)) {
-      errors.push(`${filePath}: ${rulePath}.when must be an object.`);
-    } else {
-      for (const inputName of inputNames) {
-        const value = rule.when[inputName];
-        if (value === undefined) {
-          errors.push(`${filePath}: ${rulePath}.when.${inputName} is required.`);
-        } else if (value !== WILDCARD && !inputValues[inputName].has(value)) {
-          errors.push(
-            `${filePath}: ${rulePath}.when.${inputName} has invalid value ${value}.`,
-          );
-        }
-      }
-      for (const key of Object.keys(rule.when)) {
-        if (!inputNames.includes(key)) {
-          errors.push(`${filePath}: ${rulePath}.when.${key} is not a declared input.`);
-        }
-      }
-    }
-    if (!isObjectRecord(rule.outcome)) {
-      errors.push(`${filePath}: ${rulePath}.outcome must be an object.`);
-    } else {
-      for (const outputSpec of outputSpecs) {
-        const value = rule.outcome[outputSpec.name];
-        if (value === undefined) {
-          errors.push(
-            `${filePath}: ${rulePath}.outcome.${outputSpec.name} is required.`,
-          );
-        } else if (!outputValues[outputSpec.name].has(value)) {
-          errors.push(
-            `${filePath}: ${rulePath}.outcome.${outputSpec.name} has invalid value ${value}.`,
-          );
-        }
-      }
-      for (const key of Object.keys(rule.outcome)) {
-        if (!outputValues[key]) {
-          errors.push(`${filePath}: ${rulePath}.outcome.${key} is not declared.`);
-        }
-      }
-    }
+    validateRuleInputs(errors, filePath, rulePath, rule, inputNames, inputValues);
+    validateRuleOutcome(errors, filePath, rulePath, rule, outputSpecs, outputValues);
   }
   if (!uniqueValues(ruleIds)) {
     errors.push(`${filePath}: rules contains duplicate ids.`);

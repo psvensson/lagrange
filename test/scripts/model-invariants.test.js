@@ -135,3 +135,70 @@ tap.test('reports registry-not-found when absent', (t) => {
   t.equal(loaded.error, 'registry-not-found', 'signals missing registry');
   t.end();
 });
+
+// Isolated validator inputs, not runtime observations or benchmark evidence.
+tap.test('live evidence accepts supported evidence kinds and cadence triggers', (t) => {
+  for (const evidence of [
+    {kind: 'probe', probe: 'owner-ready'},
+    {kind: 'command', ref: 'node scripts/check-owner-traces.js'},
+    {kind: 'repro', ref: 'test/scripts/check-owner-traces.test.js'},
+  ]) {
+    const registry = validPair();
+    registry.invariants[0].liveEvidence = {
+      tier: 2, holdsWhen: 'The owner has published its readiness.', evidence,
+      trigger: {policy: 'on-cadence', cost: 'expensive'},
+      restoration: {autoSpawn: false},
+    };
+    t.same(validateInvariantRegistry(registry), [], evidence.kind);
+  }
+  t.end();
+});
+
+tap.test('live evidence accumulates malformed nested fields in contract order', (t) => {
+  const registry = validPair();
+  registry.invariants[0].liveEvidence = {
+    tier: 1, holdsWhen: '', evidence: [], trigger: null,
+    restoration: {autoSpawn: 'yes'},
+  };
+  const at = 'validation: invariants[0].liveEvidence';
+  t.same(validateInvariantRegistry(registry, {label: 'validation'}), [
+    `${at}.tier must be 2 when present.`,
+    `${at}.holdsWhen must be concrete text.`,
+    `${at}.evidence must be an object.`,
+    `${at}.trigger must be an object.`,
+    `${at}.restoration.autoSpawn must be a boolean.`,
+  ]);
+  registry.invariants[0].liveEvidence = [];
+  t.same(validateInvariantRegistry(registry, {label: 'validation'}), [
+    `${at} must be an object.`,
+  ], 'malformed top-level block returns before nested checks');
+  t.end();
+});
+
+tap.test('live evidence refuses expensive per-event work and missing owner paths', (t) => {
+  const registry = validPair();
+  registry.invariants[0].liveEvidence = {
+    holdsWhen: 'The owner has published its readiness.',
+    evidence: {kind: 'command', ref: ''},
+    trigger: {policy: 'on-touched-owner', cost: 'expensive'},
+  };
+  const at = 'validation: invariants[0].liveEvidence';
+  t.same(validateInvariantRegistry(registry, {label: 'validation'}), [
+    `${at}.evidence.ref must be concrete text for kind command.`,
+    `${at}.trigger — an expensive predicate cannot use per-event policy ` +
+      'on-touched-owner; use on-cadence.',
+    `${at}.trigger.paths is required for the on-touched-owner policy.`,
+  ]);
+  registry.invariants[0].liveEvidence = {
+    holdsWhen: 'The owner has published its readiness.',
+    evidence: {kind: 'probe', probe: ''},
+    trigger: {policy: 'on-touched-owner', cost: 'cheap', paths: []},
+    restoration: [],
+  };
+  t.same(validateInvariantRegistry(registry, {label: 'validation'}), [
+    `${at}.evidence.probe must name a probe for kind probe.`,
+    `${at}.trigger.paths must be a non-empty array of concrete path prefixes.`,
+    `${at}.restoration must be an object.`,
+  ]);
+  t.end();
+});

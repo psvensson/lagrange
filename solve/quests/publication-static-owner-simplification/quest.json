@@ -1,0 +1,44 @@
+{
+  "schema": "solve-quest/2",
+  "id": "publication-static-owner-simplification",
+  "class": "fix",
+  "statement": "Bring the existing cyclomatic and cognitive complexity ratchets back within their accepted limits by simplifying tooling validation and failure-report projection in their existing owners. Preserve output values, field and error ordering, refusal semantics, writer sequencing and per-event owner trace behavior.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/publication-static-owner-simplification/evidence/receipt.json",
+      "requiredReceipts": [
+        "cyclomatic-ratchet",
+        "cognitive-ratchet",
+        "invariant-controls",
+        "decision-table-controls",
+        "trace-controls",
+        "tooling-evidence-controls",
+        "failure-report-controls"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "existing-owners",
+      "statement": "Scope only scripts/agent-tooling/evidence.js, scripts/check-invariants.js, scripts/check-decision-tables.js, scripts/check-owner-traces.js; failure-bundle artifact-writers and triage-summary; their existing tests; this Quest harness and necessary generated metadata or measured downward ratchets. Use private helpers within current owners. No product src changes, new validation framework, fallback path, compatibility alias or relaxed checker."
+    },
+    {
+      "id": "preserve-semantics",
+      "statement": "Keep ordered errors and early returns; field order and absent/null/zero/falsy distinctions; diagnostics initialization and its existing broader object predicate for decision artifacts; one final verdict refresh; refused scenario handling before filesystem mutations, serial writes and existing bounded serialization-failure handling. Trace processing remains chronological within the original event loop. Add only discriminating missing public-validator/formatting/trace controls, not mirrored implementation tests."
+    },
+    {
+      "id": "honest-proof",
+      "statement": "Keep existing cyclomatic limit1698 at threshold12 and cognitive limit145 at threshold20 or tighten after measurement. Run actual canonical scanners and existing public tests. Isolated malformed-input test controls are not comparative measurements. Do not run campaigns or alter raw/forensic/history/invalidation data or benchmark publications."
+    },
+    {
+      "id": "composition",
+      "statement": "Independent sibling checkout starts at e18feb4fed30bcb57fbe17740fef41ca13994865 while the separately reviewed duplication repair waits for the shared landing lock. Selected function bodies are identical across that extraction. Preserve both units, compose reviewed landings, regenerate derived metadata and verify the combined source before publication; standalone green is not publication or Q8 acceptance."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ],
+  "sealedAt": "e18feb4fed30bcb57fbe17740fef41ca13994865"
+}

@@ -100,23 +100,33 @@ this epic owns coordination and its current summary.
   canonically landed as `2b52df39300b9575ff1691315fe3f911018c1261`; its selected
   landing proof passed 219 files and 5,431 runner-reported assertions. Exact review
   and custody belong to the successor Quest, not to a rewritten closed component.
-- Publication remains open: the exact `15be1890a`, `c7c7acd89` and `2b52df393`
-  publisher gates refused the
-  existing duplication ratchets (source/scripts 45 groups and 1,342 lines versus
-  35/1,109; tests 632/23,582 versus 623/23,339). No push occurred. Independent
-  review confirmed the retained clone reports contain no pair involving this
-  epic's changed files; the repair's regenerated reports retain that result.
-  The latest actual publisher receipt lookup returns `ENOENT`. This attribution
-  does not waive the composed gate. The existing
-  [debt inventory](../changes/global-owner-debt-inventory/inventory.json)
-  identifies the remaining owner work; repairing unrelated clone groups is
-  outside this bounded tooling integration.
+- The original publisher refusals on `15be1890a`, `c7c7acd89` and `2b52df393`
+  remain retained. Separate bounded repairs now address those blockers:
+  [duplication owner closure](../quests/publication-duplication-owner-closure/quest.json)
+  landed as `0de34aa775b12ee4bd98a7aef05a29450ac669e6`, and
+  [static owner simplification](../quests/publication-static-owner-simplification/quest.json)
+  as `9e7d41640cb0f6cccb507331cfb0c2f98695dab8`. Source/script duplication is
+  35 groups / 1,109 lines; test duplication is 620 / 22,292; cyclomatic and
+  cognitive violation counts are 1,698 and 145. All meet existing or tightened
+  limits. Both canonical landings passed their selected proofs; the first
+  retains a timeout followed by the canonical standalone retry, and the second
+  retains an earlier refusal for omitted real MovieLens input before a clean
+  rerun with digest-verified data. Their exact evidence belongs to the repair
+  Quests and Q8's evidence store, not rewritten component receipts.
+- Independent composition review verified the 57-path source union and all 31
+  overlapping implementation functions. Its actual preview proof passed 216
+  assertions across seven files, all 34 static audits and comparative
+  recomputation. The five-file benchmark refresh regenerates derived views
+  from retained real observations; raw measurements, admission status and
+  incomplete durability evidence remain unchanged. No comparative measurements
+  were run or generated. These source and preview results do not establish
+  publication: the publisher-owned receipt determines exact-HEAD status.
 - Q8 retains an independently checked descriptive report of 17 selected actual
   observations. It preserves elapsed time, raw reported usage and MCP event
   statuses. Different tasks, evolving source, resumed sessions and overlapping
   runs prevent a matched productivity comparison or total-cost claim. Missing
   model, monetary-cost and timing-decomposition data remains unmeasured.
-- Remaining for Q8: a publishable composed candidate, fresh affected capability
+- Q8 acceptance requires exact-HEAD publication, fresh affected capability
   proof with explicit reviewed supersession of historical evidence, and an actual
   authoring-to-landing-to-publication journey on that source. The later lesson
   session and failed publication attempts are retained in Q8's evidence store.

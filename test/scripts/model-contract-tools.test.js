@@ -191,3 +191,51 @@ tap.test('Alloy binary checksum rejects unexpected default binaries', (t) => {
   );
   t.end();
 });
+
+function decisionTableControl(rule) {
+  return {
+    schema: 'decision-table-v1', id: 'validator-control',
+    owner: 'control_policy_owner', boundary: 'unit_validation',
+    inputs: [{name: 'signal', values: ['ready']}],
+    outputs: [{name: 'result', values: ['allow']}],
+    invariants: [{id: 'only-ready', statement: 'Only ready input may allow work.'}],
+    rules: [rule],
+  };
+}
+
+// These malformed declarations exercise the real validator, not a measured system.
+tap.test('decision-rule validation retains refusal order and complete coverage', (t) => {
+  const root = tmpDir();
+  t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
+  const file = path.join(root, 'decision-table.json');
+  const prefix = `${path.relative(process.cwd(), file)}: `;
+  const validRule = {id: 'ready', reason: 'Ready input permits work.',
+    invariantRefs: ['only-ready'], when: {signal: 'ready'}, outcome: {result: 'allow'}};
+  const uncovered = 'combination {"signal":"ready"} matches 0 rules; expected exactly 1.';
+  const controls = [
+    {rule: validRule, errors: []},
+    {rule: null, errors: ['rules[0] must be an object.', uncovered]},
+    {rule: {...validRule, id: '', reason: '', invariantRefs: ['undeclared'],
+      when: {extra: 'ready'}, outcome: {extra: 'allow'}}, errors: [
+      'rules[0].id must be concrete text.',
+      'rules[0].reason must be concrete text.',
+      'rules[0].invariantRefs[0] does not match a declared invariant id: undeclared.',
+      'rules[0].when.signal is required.',
+      'rules[0].when.extra is not a declared input.',
+      'rules[0].outcome.result is required.',
+      'rules[0].outcome.extra is not declared.', uncovered,
+    ]},
+    {rule: {...validRule, when: {signal: 'invalid'}, outcome: {result: 'invalid'}},
+      errors: ['rules[0].when.signal has invalid value invalid.',
+        'rules[0].outcome.result has invalid value invalid.', uncovered]},
+    {rule: {...validRule, when: null, outcome: null}, errors: [
+      'rules[0].when must be an object.', 'rules[0].outcome must be an object.', uncovered,
+    ]},
+  ];
+  for (const control of controls) {
+    fs.writeFileSync(file, JSON.stringify(decisionTableControl(control.rule)));
+    t.same(validateDecisionTables([file]).errors,
+      control.errors.map((message) => prefix + message));
+  }
+  t.end();
+});

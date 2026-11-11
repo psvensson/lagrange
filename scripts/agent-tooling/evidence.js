@@ -192,6 +192,19 @@ function validateOutput(observation, failedBaseline) {
   INVALID_EVIDENCE.OUTPUT);
 }
 
+function validateCodexObservation(observation) {
+  requireEvidence(path.basename(observation.command[0]) === TOOLING_EXECUTABLE.CODEX &&
+    observation.command.includes(JSON_FLAG), INVALID_EVIDENCE.CODEX_STREAM);
+  if (observation.stdout === null) return [];
+  const events = observation.stdout.trim().split('\n').map((line) => JSON.parse(line));
+  requireEvidence(events.some((event) => event.type === CODEX_EVENT.THREAD_STARTED) &&
+    (observation.phase === OBSERVATION_PHASE.BASELINE ||
+      (events.some((event) => event.type === CODEX_EVENT.TURN_COMPLETED) &&
+        observation.exitCode === 0)),
+  INVALID_EVIDENCE.CODEX_TURN);
+  return events;
+}
+
 function validateObservation(root, observation, profile, files = sourceFiles(root)) {
   requireEvidence(typeof observation.id === 'string' && observation.id.length > 0,
     INVALID_EVIDENCE.OBSERVATION_ID);
@@ -265,16 +278,7 @@ function validateObservation(root, observation, profile, files = sourceFiles(roo
     }
   }
   if (observation.kind === OBSERVATION_KIND.CODEX) {
-    requireEvidence(path.basename(observation.command[0]) === TOOLING_EXECUTABLE.CODEX &&
-      observation.command.includes(JSON_FLAG), INVALID_EVIDENCE.CODEX_STREAM);
-    if (observation.stdout === null) return [];
-    const events = observation.stdout.trim().split('\n').map((line) => JSON.parse(line));
-    requireEvidence(events.some((event) => event.type === CODEX_EVENT.THREAD_STARTED) &&
-      (observation.phase === OBSERVATION_PHASE.BASELINE ||
-        (events.some((event) => event.type === CODEX_EVENT.TURN_COMPLETED) &&
-          observation.exitCode === 0)),
-    INVALID_EVIDENCE.CODEX_TURN);
-    return events;
+    return validateCodexObservation(observation);
   }
   return [];
 }

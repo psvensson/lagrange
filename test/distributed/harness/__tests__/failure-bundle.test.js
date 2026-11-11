@@ -26,6 +26,7 @@ import {
   mergeControlPlaneDiagnostics,
 } from '../failure-bundle-diagnostics-merge.js';
 import {isStartupReadinessBlocked} from '../failure-bundle-diagnostics-stability-gates.js';
+import {renderScenarioTriageSummaryMarkdown} from '../failure-bundle-triage-summary.js';
 import {describe, it, beforeEach, afterEach} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp, mkdir, readFile, rm, writeFile} from 'node:fs/promises';
@@ -139,6 +140,10 @@ import {
   buildPriorityRecoveryActuationDecisionInput,
   buildPriorityRecoveryPublicationConvergenceFixture,
 } from '../__fixtures__/priority-recovery-actuation-contract-fixture.js';
+
+const arrayFilter = Function.call.bind(Array.prototype.filter);
+const stringSplit = Function.call.bind(String.prototype.split);
+const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 
 const UTF8_ENCODING = 'utf8';
 const PRIORITY_RECOVERY_ACTUATION_SCENARIO_NAME = 'rolling-restart';
@@ -1178,4 +1183,35 @@ describe('failure-bundle', () => {
     buildPlaybackActiveGateStageEvent,
     buildStartupModeWitnessProgress,
   });
+});
+
+
+it('triage rendering preserves zero counts, absent evidence and field order', () => {
+  const summary = {
+    summary: {stabilityGates: {convergence: {
+      type: 'convergence', status: 'open', blockers: ['pending'],
+      evidence: {closureRecordId: ' c1 ', restartBoundaryCount: 0,
+        pendingAckCount: 0, blockedNodeCount: 0},
+    }}},
+    publicationConvergence: {priorityRecoveryProgressSummary: {
+      partitionCount: 0, dominantWitness: {partitionId: 'p1', currentOwner: 'owner',
+        retryAfterMs: 0, lastProgressAtMs: 0},
+    }},
+  };
+  const select = (text, prefix) => arrayFilter(stringSplit(text, '\n'),
+    (line) => stringStartsWith(line, prefix));
+  const present = renderScenarioTriageSummaryMarkdown(summary);
+  assert.deepEqual(select(present, '- Progress Summary:'), [
+    '- Progress Summary: partitionCount=0, partition=p1, owner=owner, ' +
+      'retryAfterMs=0, lastProgressAtMs=0',
+  ]);
+  assert.deepEqual(select(present, '- convergence:'), [
+    '- convergence: status=open, blockers=pending, closureRecordId=c1, ' +
+      'restartBoundaryCount=0, pendingAckCount=0, blockedNodeCount=0',
+  ]);
+  summary.publicationConvergence.priorityRecoveryProgressSummary.dominantWitness = {};
+  summary.summary.stabilityGates.convergence.evidence = {};
+  const absent = renderScenarioTriageSummaryMarkdown(summary);
+  assert.deepEqual(select(absent, '- Progress Summary:'), ['- Progress Summary: partitionCount=0']);
+  assert.deepEqual(select(absent, '- convergence:'), ['- convergence: status=open, blockers=pending']);
 });
