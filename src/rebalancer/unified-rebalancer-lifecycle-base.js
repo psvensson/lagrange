@@ -322,8 +322,17 @@ class UnifiedRebalancerLifecycleBase extends EventEmitter {
     this.isShuttingDown = false;
     this.initialized = false;
 
+    // The check queue runs on this planner's host ports: its drain turn
+    // (scheduleDrainFn; the queue owns the production default, a macrotask),
+    // its clock and the timers of a rate-limited self-requeue. A host that
+    // owns its own scheduling hands them over once here, exactly as it does
+    // the planner's periodic timers.
     this.rebalanceCheckQueue = new OwnerKeyReconcileQueue({
       name: `${REBALANCER_QUEUE_NAME.REBALANCE_CHECK}:${this.entityId}`,
+      scheduleDrainFn: options.scheduleDrainFn,
+      now: this.nowFn,
+      setTimeoutFn: this.setTimeoutFn,
+      clearTimeoutFn: this.clearTimeoutFn,
       reconcileFn: (_ownerKey, reasons) =>
         runRebalancerActivity(() => this.reconcileRebalanceCheck(reasons)),
     });

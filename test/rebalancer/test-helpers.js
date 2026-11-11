@@ -1399,6 +1399,9 @@ function createTestRebalancer(options = {}) {
     // clock. Omitted by default, which leaves the ambient late-bound pair.
     setTimeoutFn: options.setTimeoutFn,
     clearTimeoutFn: options.clearTimeoutFn,
+    // The check queue's drain scheduler: omitted, the queue's production
+    // default (a host turn).
+    scheduleDrainFn: options.scheduleDrainFn,
   });
 }
 

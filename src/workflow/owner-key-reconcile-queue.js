@@ -107,6 +107,17 @@ function defaultDrainScheduler(callback) {
   setImmediate(callback);
 }
 
+// The owner either declares its drain scheduler or leaves it out and gets the
+// production default above. A declared value that is not a function is a
+// wiring defect and refused, never silently replaced by the default.
+function resolveDrainScheduler(scheduleDrainFn) {
+  if (scheduleDrainFn === undefined) return defaultDrainScheduler;
+  if (typeof scheduleDrainFn !== LOCAL_STR_FUNCTION) {
+    throw new TypeError(RECONCILE_QUEUE_ERROR_MSG.SCHEDULE_DRAIN_FN_INVALID);
+  }
+  return scheduleDrainFn;
+}
+
 /**
  * @typedef {Object} ReconcileWorkItem
  * @property {string} ownerKey - The owner key for this work item.
@@ -138,10 +149,7 @@ class OwnerKeyReconcileQueue extends EventEmitter {
     this.maxItemsPerDrain = normalizeMaxItemsPerDrain(
       options.maxItemsPerDrain,
     );
-    this.scheduleDrainFn =
-      typeof options.scheduleDrainFn === LOCAL_STR_FUNCTION ?
-        options.scheduleDrainFn :
-        defaultDrainScheduler;
+    this.scheduleDrainFn = resolveDrainScheduler(options.scheduleDrainFn);
     this.now = typeof options.now === LOCAL_STR_FUNCTION ?
       options.now :
       Date.now;
