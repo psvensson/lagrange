@@ -28,16 +28,24 @@ dependent changes integrate in order and publication follows one release train.
 
 The published baseline is **0.4.0 (experimental alpha)**. Publication does not
 complete every obligation previously allocated to the 0.4 milestone.
-**0.4.1 is the next bounded correctness and claim-repair release**; **0.5 owns
+**Experimental 0.5.0 from current main is the next publication**, selected on
+8 November 2026. It carries the implemented bounded 0.4.1 corrections; a
+separate 0.4.1 maintenance publication is not being prepared. Unfinished 0.4.1
+acceptance remains required, and **0.5 owns
 the remaining Queryable Core, practical service, developer-journey and measured
 comparison obligations, together with standard HTTP authoring and pilot
 qualification**. Existing acceptance owners and applicable evidence carry
-forward. Version targets express scope and priority, not shipping dates or
+forward. The experimental artifact cut does not complete either milestone or
+defer required correctness to a later qualification. Version targets express
+scope and priority, not shipping dates or
 claims of current support.
 Use [Current Capabilities And Limitations](docs/current-capabilities-and-limitations.md)
 for availability and [CHANGELOG.md](CHANGELOG.md) for released changes.
 
-## Release sequence
+## Milestone sequence
+
+These allocations retain unfinished acceptance and stable ownership. They are
+not a list of separately promised package cuts; the next cut is 0.5.0 above.
 
 | Version | Milestone | Completion outcome |
 | --- | --- | --- |
@@ -59,12 +67,11 @@ ordinary public entrypoint and real production composition. Existing applicable
 evidence is reused; a bounded repair can complete while a wider feature remains
 open with a named owner. Publication alone does not complete a feature.
 
-Target the bounded 0.4.1 correction candidate in the next several working days,
-subject to its acceptance. Review the integrated candidate, passing journeys and
-first blockers by 6 November 2026; use observed repair, review and integration
-throughput by 13 November to set or revise the 0.5 window. These are review
-horizons, not shipping promises or waiting periods. Independent 0.4.1 and 0.5 work
-can advance without creating another release sequence.
+Prepare the experimental 0.5.0 candidate from current main and prove its
+integrated corrections before publication. Use observed repair, review and
+integration throughput by 13 November 2026 to reassess the remaining 0.5
+milestone window. This is a review horizon, not a shipping promise or waiting
+period. Independent bounded work can advance within the same release programme.
 
 ## Released - 0.1 Internal coherence
 
@@ -110,9 +117,10 @@ separate from completing the broader practical-service and comparison promises.
 Those unfinished obligations, including inherited 0.3.1/0.3.2 work, retain their
 existing acceptance owners under the 0.4.1 and 0.5 allocations below.
 
-## Next - 0.4.1 Bounded correctness and claim repairs
+## Carried milestone - 0.4.1 Bounded correctness and claim repairs
 
-Repair current admitted behavior before broadening the service API. Generic
+These correction obligations carry into the experimental 0.5.0 cut without
+changing their acceptance owners. Repair current admitted behavior. Generic
 reduction must include every admitted contribution or return an explicit bound
 error; an internal result limit must not silently discard contributions. Apply
 byte bounds before oversized partials consume the protected resource. Correct
@@ -131,8 +139,9 @@ major-feature user-journey requirement. Reuse valid evidence and shared setup;
 the retrospective inventory does not make every historical feature a new gate.
 
 Independently proved corrections to current SQL or feature guarantees may ship
-here. This release does not close all Queryable Core axes, the full distributed
-service journey, standard HTTP authoring or the remaining stable-core acceptance.
+in the experimental cut. Publication does not close all Queryable Core axes,
+the full distributed service journey, standard HTTP authoring or the remaining
+stable-core acceptance.
 Those obligations remain visible in 0.5 with their original owners and evidence.
 
 ## Planned - 0.5 Standard HTTP services and pilot-ready operation

@@ -1,0 +1,28 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pending",
+  "sourceBase": "e29e295a60caee9c36614954ee72c97e2998a691",
+  "receiptMeaning": "Pending preparation receipt. No implementation, source acceptance, publication or native proof is asserted by this initial record.",
+  "receipts": [
+    {
+      "id": "version-notes-consistency",
+      "passed": false
+    },
+    {
+      "id": "scope-reconciliation",
+      "passed": false
+    },
+    {
+      "id": "prerequisite-integration",
+      "passed": false
+    },
+    {
+      "id": "candidate-regressions",
+      "passed": false
+    },
+    {
+      "id": "independent-review",
+      "passed": false
+    }
+  ]
+}

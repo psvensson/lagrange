@@ -39,10 +39,16 @@ Edition ownership and implementation-home rules live in `edition-matrix.md`.
 
 ## Version Sequence
 
-Publication and milestone acceptance follow one ordered sequence after the
-published 0.4.0 experimental-alpha baseline:
+The next publication is **experimental 0.5.0 from current main**, as selected
+on 8 November 2026. It carries the implemented bounded 0.4.1 corrections;
+a separate 0.4.1 maintenance publication is not being prepared. The artifact
+cut does not close unfinished 0.4.1 or 0.5 acceptance or defer required
+correctness to a later qualification.
 
-`0.4.0 (published) -> 0.4.1 -> 0.5 -> 0.6 -> 0.7 -> 0.8 -> 0.9 -> 1.0 -> 1.1 -> 1.2 -> 2.0 -> 2.1`
+Milestone acceptance retains its ordered allocations after the published 0.4.0
+experimental-alpha baseline:
+
+`0.4.1 (carried corrections) -> 0.5 -> 0.6 -> 0.7 -> 0.8 -> 0.9 -> 1.0 -> 1.1 -> 1.2 -> 2.0 -> 2.1`
 
 Every planned feature has one primary version home below. Earlier capabilities
 are prerequisites reused by later milestones. Phase 0.1 and Phase 0.2 retain

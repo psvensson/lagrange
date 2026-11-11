@@ -10,6 +10,41 @@ releases without a compatibility guarantee.
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-11-08
+
+Experimental-alpha implementation cut of current main, including the bounded
+correctness and claim repairs previously assigned to a separate 0.4.1 cut.
+This version does not complete the remaining Queryable Core, practical-service,
+comparison or pilot milestones. During 0.x, the SQL dialect, wire protocols,
+admin CLI and cluster-membership behavior may change between minor releases
+without a compatibility guarantee.
+
+Formation-health trend observed during preparation:
+`formation health: 0/20 passed (0%), 0 with a starved seed`.
+The latest record, 2026-11-08T03:32:18.573Z at `5c30388e4`, failed with
+`node_ready_lease_incomplete`. This trend is not release qualification.
+
+### Added
+- **Standard HTTP authoring:** Hono applications use the Fetch request/response
+  boundary and a request-scoped Lagrange client. The canonical `service-cell-v2`
+  component target supports zero, one or multiple distributed operations.
+- **Bounded distributed service queries:** single-table selectors accept typed
+  positional parameters; shard execution supports a recoverable page accumulator
+  over a pinned read view, with bounded structured partials for reduction.
+
+### Known limitations
+- This cut does not establish pilot readiness or stable first-write behavior.
+  A hosted default-backend witness reached CREATE but its initial INSERT failed
+  with `PARTITION_EPOCH_EVIDENCE_DEFERRED` in
+  [CI run 42416327516](https://github.com/psvensson/lagrange/actions/runs/42416327516);
+  a later passing attempt does not resolve that observation (OE issue
+  `lagrange-object-environment-lis`).
+- Node-to-node transport remains plain WebSocket without cryptographic peer
+  authentication and requires a trusted private network. Backup/restore/PITR
+  and a supported rolling-upgrade contract remain unavailable on 0.x. See
+  [current capabilities and limitations](https://github.com/psvensson/lagrange/blob/v0.5.0/docs/current-capabilities-and-limitations.md)
+  for the supported surface and other constraints.
+
 ### Fixed
 - **PostgreSQL compatibility matrix certifies the SQL surface, not the host's client build (`postgres-compatibility-matrix.js`, `postgres-compatibility-catalog.js`, `docs/postgres-compatibility-matrix.json`):**
   the generating host's driver versions are now environment recorded beside the matrix, outside its digest and its cell receipt digests, so a host with psql 16.15 and one with psql 14.24 certify the same committed matrix (schema `lagrange-postgres-compatibility-matrix/2`). The matrix declares the client majors it certifies (psql 14 and 16, node-pg 8, pg-pool 3) and refuses any other build with `DRIVER_VERSION_UNSUPPORTED`; the generated content must still equal the committed matrix exactly.
@@ -30,7 +65,7 @@ releases without a compatibility guarantee.
   2026-11-02T12:47Z, reported as `cancelled`, with its serial exclusive lane at 73 of
   103 files, so pull-request gates could not reach a verdict on product changes. Quest
   `ci-gate-proof-time-and-lab-runner-routing`, attempt 1.
-- **0.4.1 bounded correctness & claim repairs (`call-cell-reduce-coordinator.js`, `runtime-service-call-cell-handler.js`, `management-v1-owner.js`, `bootstrap-api-server-methods.js`):**
+- **Bounded correctness & claim repairs (`call-cell-reduce-coordinator.js`, `runtime-service-call-cell-handler.js`, `management-v1-owner.js`, `bootstrap-api-server-methods.js`):**
   Fails closed with `REDUCE_INCOMPLETE` (`partial_unbounded`) instead of silently truncating merged partial sets at `limit` across slots or exceeding `maxPartialBytes`, enforces `resultMaxBytes` (`batchByteBound`) during local shard SQL reads before full batch materialization, reports unconfigured `management-v1` capabilities (`rollingUpgrade`, `backupRestore`, `decommissionNode`) as `UNSUPPORTED` by default while enforcing `verifyControlPlaneAuth` on `/management/v1/*` routes, and reconciles comparative benchmark documentation and CI guards against withdrawn modeled claims.
 - **Comparative benchmark results withdrawn (correction to 0.4.0 and earlier entries):**
   every comparative performance figure published under `docs/benchmarks/` and
@@ -782,7 +817,8 @@ extensively tested, but not production-hardened; see _Known limitations_ below.
 - Alpha surface: SQL coverage, wire protocols, and admin/CLI behaviour may
   change between `0.x` releases without migration guarantees.
 
-[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/psvensson/lagrange/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/psvensson/lagrange/compare/v0.3.3...v0.4.0
 [0.3.3]: https://github.com/psvensson/lagrange/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/psvensson/lagrange/compare/v0.3.0...v0.3.2
