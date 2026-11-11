@@ -154,7 +154,6 @@ function isOperationVisibilityUnavailableError(error) {
 
 export {
   OPERATION_VISIBILITY_STATE,
-  OPERATION_VISIBILITY_UNAVAILABLE_ERROR_CODE,
   buildAbsentOperationVisibility,
   buildOperationListUnavailableError,
   buildOperationVisibilityUnavailableError,

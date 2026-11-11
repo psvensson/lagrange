@@ -151,4 +151,4 @@ function requireSourcePositions(service) {
 }
 
 export {DURABLE_RANGE_DECISION, applyCommittedCdcRange, classifyDurableRangeAtLeader,
-  groupCommittedThroughOf, requireSourcePositions};
+  requireSourcePositions};

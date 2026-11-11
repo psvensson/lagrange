@@ -100,5 +100,5 @@ function assertShippedSourceRange(range) {
   throw Object.assign(new Error(CDC_COMPLETION.INVALID), {code: CDC_COMPLETION.INVALID});
 }
 
-export {TEST_SOURCE_INCARNATION, assertShippedSourceRange, positionRecipients,
+export {assertShippedSourceRange, positionRecipients,
   registerLeaderRelister, sourceRangeOfEvents, withSourceRange};

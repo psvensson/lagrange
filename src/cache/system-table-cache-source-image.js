@@ -69,4 +69,4 @@ function installSourceImage(cache, token, image) {
   return {admission, upserted, deleted, cell};
 }
 
-export {SOURCE_IMAGE_CAUSE_ID, installSourceImage};
+export {installSourceImage};

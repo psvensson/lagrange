@@ -176,8 +176,6 @@ function reportTargetDeadSourceRemoved(owner, operation, stepMetadata) {
 }
 
 export {
-  TARGET_DEAD_SOURCE_REMOVED,
-  TARGET_DEAD_SOURCE_REMOVED_REPAIR,
   reportTargetDeadSourceRemoved,
   cancelReplaceSourceRemoval,
   degradedCompletionStepMetadataOf,

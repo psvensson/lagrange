@@ -71,4 +71,4 @@ class MessageGroupServiceRegistry extends Map {
   }
 }
 
-export {MESSAGE_GROUP_READINESS_EVENTS, MessageGroupServiceRegistry};
+export {MessageGroupServiceRegistry};

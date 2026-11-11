@@ -213,7 +213,6 @@ function voterLivenessFactsOf(liveness, status, electionTick) {
 }
 
 export {
-  LIVE_WINDOW_ELECTION_TIMEOUTS,
   countVoterLivenessTick,
   createVoterLiveness,
   liveVotersOf,
