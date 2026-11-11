@@ -43,6 +43,10 @@ import {
 } from '../../src/rebalancer/replica-operation-constants.js';
 import {buildFailedCreateCleanupToken} from
   '../../src/rebalancer/failed-create-cleanup-token.js';
+import {
+  createFixtureLedgerGateway,
+  createFixtureOperationLedger,
+} from './fixture-operation-ledger.js';
 
 const SYSTEM_TABLE_PRIMARY_KEY_FIELD = {
   [SYSTEM_TABLE_NAME.NODES]: 'node_id',
@@ -816,7 +820,13 @@ function createMockCoordinator({controlPlaneReadinessService = null,
     estimateReplicaBytes: () => 1,
   };
   const storageAdmissionService = createMockStorageAdmissionService();
+  // The operations this coordinator created, as the durable rows production
+  // writes for them (replica-operation-repository-mutation-row-methods.js):
+  // the fixture node's replica_operations ledger answers from them.
+  const testReplicaOperationLedger = createFixtureOperationLedger();
+  let createdOperationSequence = 0;
   return {
+    testReplicaOperationLedger,
     // This controlled owner models an empty operation ledger unless the test
     // supplies its entity reader. It is not a cache fallback or a real read.
     getAuthoritativeOperationsByEntity(entityType, entityId) {
@@ -826,14 +836,34 @@ function createMockCoordinator({controlPlaneReadinessService = null,
     // The operation ledger owner's cluster-wide census answers an empty
     // ledger (the release fence's CLEAR rests on it).
     repository: {queryClusterWideIncompleteOperations: async () => []},
-    createOperation: async (move) => ({
-      operationId: 'op-' + Date.now(),
-      type: move.type,
-      partitionId: move.partitionId,
-      targetNodeId: move.nodeId,
-      status: ReplicaStatus.PENDING,
-      workflowStep: WORKFLOW_STEP.PENDING,
-    }),
+    createOperation: async (move) => {
+      createdOperationSequence += 1;
+      const createdAt = Date.now();
+      const operation = {
+        operationId: `op-${createdAt}-${createdOperationSequence}`,
+        type: move.type,
+        partitionId: move.partitionId,
+        targetNodeId: move.nodeId,
+        status: ReplicaStatus.PENDING,
+        workflowStep: WORKFLOW_STEP.PENDING,
+      };
+      testReplicaOperationLedger.commit({
+        operation_id: operation.operationId,
+        type: operation.type,
+        partition_id: operation.partitionId,
+        entity_type: move.entityType,
+        entity_id: move.entityId,
+        replica_id: move.replicaId ?? null,
+        source_node_id: move.sourceNodeId ?? '',
+        target_node_id: operation.targetNodeId,
+        status: operation.status,
+        workflow_step: operation.workflowStep,
+        created_at: createdAt,
+        updated_at: createdAt,
+        steps_history: '[]',
+      });
+      return operation;
+    },
     executeOperation: async () => ({success: true}),
     canStartAddOperation: async () => true,
     canStartRemoveOperation: async () => true,
@@ -1328,6 +1358,7 @@ function createTestCoordinator(options = {}) {
   // another writer committed (it is also replicated into the cache).
   coordinator.testReplicaOperationLedger = Object.freeze({
     commit: (row) => syncReplicaOperationRow(row),
+    rows: () => [...trackedOperations.values()],
   });
   return coordinator;
 }
@@ -1382,6 +1413,17 @@ function createTestRebalancer(options = {}) {
     mockCoordinator.storageAccountingService || {
     estimateReplicaBytes: () => 1,
   };
+  // The fixture node's authoritative replica_operations reads (the global
+  // in-flight count among them) answer from the coordinator fixture's
+  // modelled ledger through the production read path. A coordinator double
+  // that models no ledger is a world with no operations.
+  const controlPlaneSystemTableGateway = createFixtureLedgerGateway({
+    nodeId,
+    ledger: mockCoordinator.testReplicaOperationLedger ||
+      createFixtureOperationLedger(),
+    systemTableCache: mockCache,
+    messageRouter: mockMessageRouter,
+  });
   return new UnifiedRebalancer({
     entityId,
     entityType,
@@ -1392,6 +1434,7 @@ function createTestRebalancer(options = {}) {
     messageRouter: mockMessageRouter,
     rebalanceCoordinator: mockCoordinator,
     controlPlaneReadinessService,
+    controlPlaneSystemTableGateway,
     storageAdmissionService,
     storageAccountingService,
     nowFn: options.nowFn,
