@@ -236,20 +236,16 @@ function normalizeBlockedPriorityPartition(
   };
 }
 
-// A summary that states NOT_DERIVED normalizes to that state; any other
-// value is normalized as a census.
 function normalizePriorityPartitionSummary(summary, options = {}, _helperFns = {}) {
-  return readPriorityPartitionCensusState(summary) ===
-    PRIORITY_PARTITION_CENSUS_STATE.NOT_DERIVED ?
-    NOT_DERIVED_PRIORITY_PARTITION_SUMMARY :
-    normalizePriorityPartitionCensus(summary, options);
-}
-
-function normalizePriorityPartitionCensus(summary, options) {
   const summarySnapshot = copyStrictOwnDataRecord(summary);
   const optionsSnapshot = copyStrictOwnDataRecord(options);
   if (summarySnapshot === null || optionsSnapshot === null) {
     return null;
+  }
+  // A summary that states NOT_DERIVED normalizes to that state.
+  if (readPriorityPartitionCensusState(summarySnapshot) ===
+      PRIORITY_PARTITION_CENSUS_STATE.NOT_DERIVED) {
+    return NOT_DERIVED_PRIORITY_PARTITION_SUMMARY;
   }
   const fallbackRequiredDistinctNodeCountEntry = readCanonicalNonNegativeInteger(
     optionsSnapshot,
