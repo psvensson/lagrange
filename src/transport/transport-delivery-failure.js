@@ -24,13 +24,11 @@ import {
   ROUTER_NO_CONNECTION_ERROR_CODE,
   ROUTER_QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
   WEBSOCKET_CONNECT_TIMEOUT_ERROR_CODE,
-} from './transport-error-codes.js';
-import {
   ROUTER_DELIVERY_ENCODING_INVALID_ERROR_CODE,
   ROUTER_DELIVERY_LIFETIME_INVALID_ERROR_CODE,
   ROUTER_DUPLICATE_PENDING_ACK_ERROR_CODE,
   ROUTER_DUPLICATE_PENDING_RESPONSE_ERROR_CODE,
-} from './transport-router-invariant-error-codes.js';
+} from './transport-error-codes.js';
 import {
   TRANSPORT_ACKNOWLEDGEMENT,
   acknowledgementOfTransportFacts,

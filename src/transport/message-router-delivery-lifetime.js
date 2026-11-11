@@ -3,11 +3,12 @@
 import {assertCdcDeliveryInvocation} from '../cdc/cdc-delivery-invocation.js';
 import {createTimeoutBudget, getRemainingBudgetMs} from '../control-plane/timeout-budget.js';
 import {ROUTER_ERROR_MSG, TRANSPORT_ERROR_MSG, TRANSPORT_EVENT} from '../constants/transport.js';
-import {ROUTER_MESSAGE_TIMEOUT_ERROR_CODE} from './transport-error-codes.js';
+import {
+  ROUTER_DELIVERY_LIFETIME_INVALID_ERROR_CODE,
+  ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
+} from './transport-error-codes.js';
 import {TRANSPORT_ACKNOWLEDGEMENT, advancesAcknowledgement, isAckWaitOpen}
   from './transport-acknowledgement.js';
-import {ROUTER_DELIVERY_LIFETIME_INVALID_ERROR_CODE} from
-  './transport-router-invariant-error-codes.js';
 const lifetimes = new WeakMap();
 
 // The lifetime was spent. The error states the acknowledgement recorded on
