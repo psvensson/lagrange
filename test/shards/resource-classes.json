@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2741,
+    "ordinary": 2740,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2767,
-  "digest": "fnv1a32-121a0024",
+  "censusSize": 2766,
+  "digest": "fnv1a32-f3edb405",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1937,7 +1937,6 @@
     "test/rebalancer/cl-038-surplus-drain-retains-leader-node.test.js": "ordinary",
     "test/rebalancer/cleanup-moves-failed-replicas.property.test.js": "ordinary",
     "test/rebalancer/cluster-readiness-gate.test.js": "ordinary",
-    "test/rebalancer/cluster-readiness-signal.property.test.js": "ordinary",
     "test/rebalancer/committed-node-remove-safety-wake.test.js": "ordinary",
     "test/rebalancer/committed-node-remove-safety.test.js": "ordinary",
     "test/rebalancer/concurrent-epoch-proposals.property.test.js": "ordinary",

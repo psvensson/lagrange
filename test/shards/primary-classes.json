@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2406,
+    "unit": 2405,
     "integration": 124,
     "bootstrap": 230,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2767,
-  "digest": "fnv1a32-018f54c3",
+  "censusSize": 2766,
+  "digest": "fnv1a32-6fa36fc0",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1938,7 +1938,6 @@
     "test/rebalancer/cl-038-surplus-drain-retains-leader-node.test.js": "unit",
     "test/rebalancer/cleanup-moves-failed-replicas.property.test.js": "unit",
     "test/rebalancer/cluster-readiness-gate.test.js": "unit",
-    "test/rebalancer/cluster-readiness-signal.property.test.js": "unit",
     "test/rebalancer/committed-node-remove-safety-wake.test.js": "unit",
     "test/rebalancer/committed-node-remove-safety.test.js": "unit",
     "test/rebalancer/concurrent-epoch-proposals.property.test.js": "unit",

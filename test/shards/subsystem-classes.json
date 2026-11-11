@@ -12,7 +12,7 @@
     "distributed-harness": 220,
     "examples-e2e": 8,
     "pgwire-compat": 23,
-    "placement-rebalance": 309,
+    "placement-rebalance": 308,
     "query-sql": 202,
     "release-packaging": 15,
     "runtime-primitives": 24,
@@ -25,10 +25,10 @@
     "transport-messaging": 127,
     "wasm-toolchain": 74
   },
-  "censusSize": 2767,
-  "digest": "fnv1a32-e4f5f15a",
+  "censusSize": 2766,
+  "digest": "fnv1a32-40a28340",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-8e28b3c8",
+  "observationDigest": "fnv1a32-642f466b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1957,7 +1957,6 @@
     "test/rebalancer/cl-038-surplus-drain-retains-leader-node.test.js": "placement-rebalance",
     "test/rebalancer/cleanup-moves-failed-replicas.property.test.js": "placement-rebalance",
     "test/rebalancer/cluster-readiness-gate.test.js": "placement-rebalance",
-    "test/rebalancer/cluster-readiness-signal.property.test.js": "placement-rebalance",
     "test/rebalancer/committed-node-remove-safety-wake.test.js": "placement-rebalance",
     "test/rebalancer/committed-node-remove-safety.test.js": "placement-rebalance",
     "test/rebalancer/concurrent-epoch-proposals.property.test.js": "placement-rebalance",
@@ -3040,7 +3039,8 @@
     },
     "test/admin/cache-dump-completeness.property.test.js": {
       "files": [
-        "src/admin/admin-websocket-api.js"
+        "src/admin/admin-websocket-api.js",
+        "src/cache/system-cache-key-descriptor.js"
       ]
     },
     "test/admin/completed-placement-autonomous-progress.test.js": {
@@ -3706,6 +3706,7 @@
     "test/bootstrap/node-joining-service.test.js": {
       "files": [
         "src/node/replica-state-machine.js",
+        "src/transport/transport-error-codes.js",
         "test/test-helpers/endpoint-incarnation-fixture.js",
         "test/test-helpers/lifecycle-state-store.js"
       ]
@@ -6039,7 +6040,6 @@
         "src/config/configuration-manager.js",
         "src/control-plane/control-plane-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
-        "src/control-plane/replica-dispatch-service-constants.js",
         "src/control-plane/replica-dispatch-service.js",
         "src/rebalancer/rebalancer-constants.js"
       ]
@@ -11852,6 +11852,7 @@
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/operation-workflow-replace-terminal-admission.js",
         "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-operation-repository-operation-visibility.js",
         "src/rebalancer/replica-status.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/lifecycle-state-store.js",
@@ -11882,6 +11883,7 @@
         "src/rebalancer/operation-workflow-replace-terminal-admission.js",
         "src/rebalancer/rebalancer-constants.js",
         "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-operation-repository-operation-visibility.js",
         "src/rebalancer/replica-status.js",
         "test/test-helpers/lifecycle-state-store.js"
       ]
@@ -11900,6 +11902,7 @@
         "src/partition/managed-workflow-ownership-core.js",
         "src/partition/managed-workflow-record-coordinator.js",
         "src/partition/partition-constants.js",
+        "src/partition/partition-service-leadership-transfer.js",
         "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
         "src/partition/partition-service-removal-serving-methods.js",
@@ -11937,6 +11940,7 @@
         "src/partition/managed-workflow-ownership-core.js",
         "src/partition/managed-workflow-record-coordinator.js",
         "src/partition/partition-constants.js",
+        "src/partition/partition-service-leadership-transfer.js",
         "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
         "src/partition/partition-service-removal-serving-methods.js",
@@ -11973,6 +11977,7 @@
         "src/partition/managed-split-workflow.js",
         "src/partition/managed-workflow-ownership-core.js",
         "src/partition/managed-workflow-record-coordinator.js",
+        "src/partition/partition-service-leadership-transfer.js",
         "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
         "src/partition/partition-service-removal-serving-methods.js",
@@ -12009,6 +12014,7 @@
         "src/partition/managed-split-workflow.js",
         "src/partition/managed-workflow-ownership-core.js",
         "src/partition/managed-workflow-record-coordinator.js",
+        "src/partition/partition-service-leadership-transfer.js",
         "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
         "src/partition/partition-service-removal-serving-methods.js",
@@ -12046,6 +12052,7 @@
         "src/partition/managed-split-workflow.js",
         "src/partition/managed-workflow-ownership-core.js",
         "src/partition/managed-workflow-record-coordinator.js",
+        "src/partition/partition-service-leadership-transfer.js",
         "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
         "src/partition/partition-service-removal-serving-methods.js",
@@ -12083,6 +12090,7 @@
         "src/partition/managed-split-workflow.js",
         "src/partition/managed-workflow-ownership-core.js",
         "src/partition/managed-workflow-record-coordinator.js",
+        "src/partition/partition-service-leadership-transfer.js",
         "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
         "src/partition/partition-service-removal-serving-methods.js",
@@ -12119,6 +12127,7 @@
         "src/partition/managed-split-workflow.js",
         "src/partition/managed-workflow-ownership-core.js",
         "src/partition/managed-workflow-record-coordinator.js",
+        "src/partition/partition-service-leadership-transfer.js",
         "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
         "src/partition/partition-service-removal-serving-methods.js",
@@ -12156,6 +12165,7 @@
         "src/partition/managed-workflow-ownership-core.js",
         "src/partition/managed-workflow-record-coordinator.js",
         "src/partition/partition-constants.js",
+        "src/partition/partition-service-leadership-transfer.js",
         "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
         "src/partition/partition-service-removal-serving-methods.js",
@@ -15435,6 +15445,7 @@
         "src/query/sql-query-engine-select-execution.js",
         "src/query/sql-query-engine-statement-execution.js",
         "src/query/table-creation-service-create-table.js",
+        "src/query/table-creation-service-durable-job.js",
         "src/query/table-creation-service-existing-table-reconciliation.js",
         "src/query/table-creation-service-partition-provisioning.js"
       ]
@@ -15715,6 +15726,8 @@
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
+        "src/transport/transport-acknowledgement.js",
+        "src/transport/transport-error-codes.js",
         "src/transport/transport-semantic-outcome.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/participant-transaction-fixture.js",
@@ -18282,6 +18295,8 @@
         "src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js",
         "src/rebalancer/operation-workflow-transition-persistence.js",
         "src/rebalancer/rebalancer-constants.js",
+        "src/rebalancer/replica-operation-repository-constants.js",
+        "src/rebalancer/replica-operation-repository-operation-visibility.js",
         "src/rebalancer/replica-operation-update-disposition.js"
       ]
     },
@@ -18902,7 +18917,8 @@
     },
     "test/rebalancer/rebalance-coordinator-atomic-transitions.test.js": {
       "files": [
-        "src/control-plane/control-plane-system-table-gateway-constants.js"
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/rebalancer/replica-operation-repository-constants.js"
       ]
     },
     "test/rebalancer/rebalance-coordinator-facade-compatibility.test.js": {
@@ -18984,6 +19000,8 @@
     "test/rebalancer/rebalance-coordinator-timeout-cache-visibility.test.js": {
       "files": [
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/rebalancer/incomplete-operation-list-observation.js",
+        "src/rebalancer/replica-operation-repository-operation-visibility.js",
         "src/rebalancer/replica-operation-update-disposition.js"
       ]
     },
@@ -19612,6 +19630,7 @@
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/operation-workflow-gate-operation-row-repair.js",
         "src/rebalancer/rebalance-coordinator.js",
+        "src/rebalancer/replica-operation-repository-operation-visibility.js",
         "src/rebalancer/replica-status.js",
         "src/rebalancer/storage-capacity-constants.js",
         "src/transport/transport-semantic-outcome.js",
