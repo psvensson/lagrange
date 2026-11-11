@@ -63,7 +63,7 @@ export function registerUnifiedRebalancerPriorityFollowupCreationTests(context) 
           if (tableName === 'config') {
             return {success: true, rows: [{config_value: '6'}]};
           }
-          return {success: true, rows: [{total_count: 2}]};
+          return {success: true, rows: Array.from({length: 2}, (_unused, index) => ({operation_id: `op-${index}`}))};
         },
       };
       const rebalancer = createTestRebalancer({

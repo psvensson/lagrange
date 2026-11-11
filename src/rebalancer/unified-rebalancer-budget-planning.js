@@ -164,18 +164,15 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
   async getGlobalInFlightOperationCount() {
     const result = await this.executeBudgetRead(
       SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-      SQL_BUDGET.SELECT_IN_FLIGHT_COUNT,
+      SQL_BUDGET.SELECT_IN_FLIGHT_OPERATION_IDS,
       [],
     );
-    const answered = result?.success === true && Array.isArray(result.rows) &&
-      result.rows.length === 1;
-    const count = answered ? Number(result.rows[0].total_count) : Number.NaN;
-    if (!Number.isSafeInteger(count) || count < UNIFIED_REBALANCER_LITERAL.ZERO) {
+    if (result?.success !== true || !Array.isArray(result.rows)) {
       this.armOperationListReadWake();
       throw buildOperationListUnavailableError(result,
         GLOBAL_IN_FLIGHT_COUNT_SCOPE);
     }
-    return count;
+    return result.rows.length;
   }
 
   /**

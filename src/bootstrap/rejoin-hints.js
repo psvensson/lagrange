@@ -9,8 +9,10 @@ import {
   CLUSTER_ID_MATCH_STATE,
 } from './cluster-identity-constants.js';
 import {
+  LOCAL_IDENTITY_UNKNOWN_REASON,
   compareLocalClusterIdentity,
   describeLocalClusterIdentityMismatch,
+  isConfirmableAtJoin,
 } from './local-cluster-identity.js';
 import {
   AUTO_REJOIN_DECISION_STATE,
@@ -29,6 +31,7 @@ import {
 import {
   buildSeedServingStartupDecision,
   resolveSeedRecoveryProofSatisfied,
+  resolveSeedRejoinsToConfirmIdentity,
   resolveSeedServingDecisionState,
 } from './seed-recovery-proof.js';
 import {
@@ -119,8 +122,7 @@ function withBootIncarnation(snapshot, bootIncarnation) {
   };
 }
 
-// The cluster identity row as this node's cache holds it, or null while the
-// cache lacks it (the persistence service latches it; see persistSnapshot).
+// The cache's cluster identity row, or null (latched in persistSnapshot).
 function readCachedClusterId(systemTableCache) {
   const row = typeof systemTableCache?.get === 'function' ?
     systemTableCache.get(TABLES.CONFIG, CLUSTER_ID_CONFIG_KEY) :
@@ -370,8 +372,11 @@ async function collectAutoRejoinDecisionContext(options = {}) {
     peerAddresses,
     hintPeerAddresses,
   );
+  // A local CONFIG replica that cannot be read is damaged durable evidence.
   const durableEvidenceBlocked = durableEvidenceUnreadable ||
-    durableSnapshot.durableEvidenceUnreadable === true;
+    durableSnapshot.durableEvidenceUnreadable === true ||
+    clusterIdentity.reason ===
+      LOCAL_IDENTITY_UNKNOWN_REASON.DURABLE_REPLICA_UNREADABLE;
   const durableStateDetected = hintsIdentityMatched ||
     durableSnapshot.hasDurableNodesTable ||
     clusterNodeCount > 0 ||
@@ -393,6 +398,7 @@ async function collectAutoRejoinDecisionContext(options = {}) {
     durableSnapshot,
     hintsIdentityMatched,
     clusterIdentity,
+    identityConfirmableAtJoin: isConfirmableAtJoin(clusterIdentity),
     clusterIdMismatch:
       clusterIdentity.state === CLUSTER_ID_MATCH_STATE.MISMATCH,
     hintPeerAddresses,
@@ -432,7 +438,9 @@ function resolveAutoRejoinDecisionState(context = {}) {
     context.forceNewCluster !== true) {
     return AUTO_REJOIN_DECISION_STATE.UNREADABLE_DURABLE_EVIDENCE;
   }
-  if (context.localNodeRole === REJOIN_ROLE_SEED) {
+  // A seed whose identity only the cluster can confirm rejoins as a member.
+  if (context.localNodeRole === REJOIN_ROLE_SEED &&
+      !resolveSeedRejoinsToConfirmIdentity(context)) {
     return resolveSeedServingDecisionState(context, AUTO_REJOIN_DECISION_STATE);
   }
   if (context.selectedPeerAddress) {
@@ -477,9 +485,10 @@ function buildAutoRejoinMembershipOwnerOutcome(decision, state) {
   };
 }
 
-function attachMembershipOwnerOutcome(decision, state) {
+function attachMembershipOwnerOutcome(decision, state, context) {
   return {
     ...decision,
+    clusterIdentity: context.clusterIdentity,
     membershipOwnerOutcome: buildAutoRejoinMembershipOwnerOutcome(
       decision,
       state,
@@ -502,7 +511,7 @@ function buildAutoRejoinStartupDecision(context = {}, state) {
       identityMismatch: true,
       clusterIncarnationFence: context.clusterIncarnationFence,
       error: IDENTITY_MISMATCH_ERROR_MESSAGE,
-    }, state);
+    }, state, context);
   case AUTO_REJOIN_DECISION_STATE.CLUSTER_ID_MISMATCH:
     return attachMembershipOwnerOutcome({
       state,
@@ -515,9 +524,8 @@ function buildAutoRejoinStartupDecision(context = {}, state) {
       durableStateDetected: true,
       identityMismatch: true,
       clusterIncarnationFence: context.clusterIncarnationFence,
-      clusterIdentity: context.clusterIdentity,
       error: describeLocalClusterIdentityMismatch(context.clusterIdentity),
-    }, state);
+    }, state, context);
   case AUTO_REJOIN_DECISION_STATE.DURABLE_SEED:
   case AUTO_REJOIN_DECISION_STATE.SEED_RECOVERY_PROOF_MISSING:
     return attachMembershipOwnerOutcome(
@@ -529,8 +537,7 @@ function buildAutoRejoinStartupDecision(context = {}, state) {
         PEER_ADDRESS_STATE_UNAVAILABLE: PEER_ADDRESS_STATE.UNAVAILABLE,
         resolveDurableStartupSource,
       }),
-      state,
-    );
+      state, context);
   case AUTO_REJOIN_DECISION_STATE.JOIN_PROBED_PEER:
     return attachMembershipOwnerOutcome({
       state,
@@ -546,7 +553,7 @@ function buildAutoRejoinStartupDecision(context = {}, state) {
       durableStateDetected: true,
       identityMismatch: false,
       clusterIncarnationFence: context.clusterIncarnationFence,
-    }, state);
+    }, state, context);
   case AUTO_REJOIN_DECISION_STATE.JOIN_RECOVERED_PEER:
     return attachMembershipOwnerOutcome({
       state,
@@ -564,7 +571,7 @@ function buildAutoRejoinStartupDecision(context = {}, state) {
       durableStateDetected: true,
       identityMismatch: false,
       clusterIncarnationFence: context.clusterIncarnationFence,
-    }, state);
+    }, state, context);
   case AUTO_REJOIN_DECISION_STATE.PEER_REQUIRED_BUT_MISSING:
     return attachMembershipOwnerOutcome({
       state,
@@ -580,7 +587,7 @@ function buildAutoRejoinStartupDecision(context = {}, state) {
       identityMismatch: false,
       clusterIncarnationFence: context.clusterIncarnationFence,
       error: DURABLE_STATE_REJOIN_REQUIRED_ERROR_MESSAGE,
-    }, state);
+    }, state, context);
   case AUTO_REJOIN_DECISION_STATE.UNREADABLE_DURABLE_EVIDENCE:
     return attachMembershipOwnerOutcome({
       state,
@@ -594,7 +601,7 @@ function buildAutoRejoinStartupDecision(context = {}, state) {
       identityMismatch: false,
       clusterIncarnationFence: context.clusterIncarnationFence,
       error: UNREADABLE_DURABLE_EVIDENCE_ERROR_MESSAGE,
-    }, state);
+    }, state, context);
   case AUTO_REJOIN_DECISION_STATE.CONFLICTING_DURABLE_EVIDENCE:
     return attachMembershipOwnerOutcome({
       state,
@@ -608,7 +615,7 @@ function buildAutoRejoinStartupDecision(context = {}, state) {
       identityMismatch: false,
       clusterIncarnationFence: context.clusterIncarnationFence,
       error: CONFLICTING_DURABLE_EVIDENCE_ERROR_MESSAGE,
-    }, state);
+    }, state, context);
   case AUTO_REJOIN_DECISION_STATE.FRESH_SEED:
     return attachMembershipOwnerOutcome({
       state,
@@ -621,7 +628,7 @@ function buildAutoRejoinStartupDecision(context = {}, state) {
       durableStateDetected: false,
       identityMismatch: false,
       clusterIncarnationFence: context.clusterIncarnationFence,
-    }, state);
+    }, state, context);
   default:
     throw new Error(
       UNKNOWN_AUTO_REJOIN_DECISION_STATE_ERROR_PREFIX + String(state),
@@ -672,10 +679,8 @@ class RejoinHintsPersistenceService {
       REJOIN_HINTS_WRITE_INTERVAL_MS;
     this.timer = null;
     this.persistChain = Promise.resolve();
-    // The cluster identity this record carries: a latch, never erased. It
-    // starts from the record already on disk (what this node last knew) and
-    // is set once from the CONFIG row when the record had none, so a write
-    // before the cache holds the row cannot drop the identity.
+    // The record's cluster identity: a latch, never erased. It starts from
+    // the record on disk and is set once from the CONFIG row when absent.
     this.clusterId = null;
     this.clusterIdRecordLoaded = false;
   }

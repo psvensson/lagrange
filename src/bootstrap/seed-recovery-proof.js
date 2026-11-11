@@ -52,6 +52,22 @@ function resolveSeedRecoveryProofSatisfied({
 }
 
 /**
+ * Whether a persisted seed that may not serve as an authority instead
+ * rejoins as a member to have the cluster confirm its identity: it holds an
+ * id it cannot compare locally (no CONFIG replica after formation spread the
+ * replicas, the normal state of an original seed) and its durable records
+ * name peers. The join gate then confirms (MATCH) or refuses it; a typed
+ * retryable contact refusal applies while no peer answers.
+ * @param {Object} context - The collected startup decision context.
+ * @return {boolean}
+ */
+function resolveSeedRejoinsToConfirmIdentity(context) {
+  return context.seedRecoveryProofSatisfied !== true &&
+    context.identityConfirmableAtJoin === true &&
+    context.peerAddresses.length > 0;
+}
+
+/**
  * Build the fail-closed startup decision for a durable seed that lacks
  * recovery proof. Kept here so the decision-build switch in rejoin-hints.js
  * stays under the file-size ratchet; the vocabulary mirrors the other
@@ -133,5 +149,6 @@ function buildSeedServingStartupDecision(context, state, vocabulary) {
 export {
   buildSeedServingStartupDecision,
   resolveSeedRecoveryProofSatisfied,
+  resolveSeedRejoinsToConfirmIdentity,
   resolveSeedServingDecisionState,
 };

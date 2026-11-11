@@ -67,10 +67,10 @@ function initializeTestEnvironment() {
 function createBudgetSqlEngine(budget, inFlightCount) {
   return {
     executeQuery: async (sql, _params) => {
-      if (sql.includes('COUNT(*)')) {
+      if (sql.includes('SELECT operation_id FROM replica_operations')) {
         return {
           success: true,
-          rows: [{total_count: inFlightCount, count: inFlightCount}],
+          rows: Array.from({length: inFlightCount}, (_unused, index) => ({operation_id: `op-${index}`})),
         };
       }
       if (sql.includes('config_value')) {
@@ -306,8 +306,8 @@ test('Property 11: Rebalance budget enforcement', async (t) => {
        */
       const emptySqlEngine = {
         executeQuery: async (sql, _params) => {
-          if (sql.includes('COUNT(*)')) {
-            return {success: true, rows: [{total_count: 0}]};
+          if (sql.includes('SELECT operation_id FROM replica_operations')) {
+            return {success: true, rows: []};
           }
           // No config row found
           if (sql.includes('config_value')) {

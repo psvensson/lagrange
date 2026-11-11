@@ -14,7 +14,7 @@ documentClass: generated
 - [logs-view-constants.js](logs-view-constants.js) - Shared constants for LogsView and its helper modules. (importers: few)
 - [logs-view-data-helpers.js](logs-view-data-helpers.js) - Get column definitions for the logs view. (importers: one)
 - [logs-view-query-helpers.js](logs-view-query-helpers.js) - Build a LIVE SELECT SQL string for the logs table using current filters. (importers: one)
-- [logs-view.js](logs-view.js) - LogsView - Displays system logs with filtering and highlighting. (importers: many)
+- [logs-view.js](logs-view.js) - LogsView - Displays system logs with filtering and highlighting. (importers: few)
 - [message-groups-view.js](message-groups-view.js) - MessageGroupsView - Displays message group distribution and health Columns: group_id, replica_count, nodes_covered,... (importers: few)
 - [nodes-view.js](nodes-view.js) - NodesView - Displays cluster nodes with health metrics Columns: node_id, address, status, CPU%, memory%, disk%,... (importers: few)
 - [operations-view.js](operations-view.js) - OperationsView - Displays replica operations with workflow steps Columns: operation_id, type, partition_id,... (importers: one)

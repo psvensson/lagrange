@@ -15,7 +15,7 @@ documentClass: generated
 - [logging-service.js](logging-service.js) - Logging Service - Structured logging with pino. (importers: hub)
 - [logs-persistence-startup.js](logs-persistence-startup.js) - No leading comment; first export: LOGS_TABLE_PERSISTENCE_READY_DELAY_MS. (importers: few)
 - [logs-table-service-constants.js](logs-table-service-constants.js) - No leading comment; first export: LOCAL_NUM_ZERO. (importers: few)
-- [logs-table-service-flush-helpers.js](logs-table-service-flush-helpers.js) - Report the logs sink's own spent retry budget. (importers: few)
+- [logs-table-service-flush-helpers.js](logs-table-service-flush-helpers.js) - Report the logs sink's own spent retry budget. (importers: one)
 - [logs-table-service-pressure-helpers.js](logs-table-service-pressure-helpers.js) - Return the shared pressure governor for background log persistence. (importers: one)
 - [logs-table-service.js](logs-table-service.js) - Logs Table Service - Manages writing logs to the logs system table. (importers: many)
 - [wait-bound-spent.js](wait-bound-spent.js) - The one owner of "a spent wait is a failure, and is visible". (importers: hub)

@@ -81,7 +81,6 @@ documentClass: generated
 - [admin-websocket-diagnostics-route-methods.js](admin-websocket-diagnostics-route-methods.js) - No leading comment; first export: ADMIN_WEBSOCKET_DIAGNOSTICS_ROUTE_METHODS. (importers: one)
 - [admin-websocket-lifecycle-methods.js](admin-websocket-lifecycle-methods.js) - No leading comment; first export: ADMIN_WEBSOCKET_LIFECYCLE_METHODS. (importers: one)
 - [admin-websocket-lifecycle-state.js](admin-websocket-lifecycle-state.js) - No leading comment; first export: ADMIN_WEBSOCKET_LIFECYCLE_STATE. (importers: few)
-- [admin-websocket-live-query-methods.js](admin-websocket-live-query-methods.js) - The admin websocket's live-query surface: a subscribe is answered with the named acknowledgement... (importers: one)
 - [admin-websocket-load-lane-admission.js](admin-websocket-load-lane-admission.js) - Fail fast for load-lane queries when local routing/member health indicates requests should be shed. (importers: few)
 - [admin-websocket-local-observation-methods.js](admin-websocket-local-observation-methods.js) - Execute one simple single-table system observation query from the local cache instead of routing it back through... (importers: one)
 - [admin-websocket-message-dispatch-methods.js](admin-websocket-message-dispatch-methods.js) - Measure the serialized UTF-8 byte length of one payload member. (importers: few)

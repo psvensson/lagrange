@@ -28,7 +28,7 @@ documentClass: generated
 - [index.js](index.js) - No leading comment; first export: buildCausalAnalysis. (importers: few)
 - [invariant-review.js](invariant-review.js) - No leading comment; first export: reviewInvariants. (importers: few)
 - [node-health-buffer.js](node-health-buffer.js) - Node health buffer: about one hour of this node's own health samples, in memory only. (importers: many)
-- [node-health-collection.js](node-health-collection.js) - The explicit collection functions for node health. (importers: many)
+- [node-health-collection.js](node-health-collection.js) - The explicit collection functions for node health. (importers: few)
 - [periodic-diagnostics-reporters.js](periodic-diagnostics-reporters.js) - Reporters carried by the process's one periodic diagnostics tick. (importers: few)
 - [raft-churn-sync-sections.js](raft-churn-sync-sections.js) - Sync-section site names + thin wrappers for the raft-formation churn burst attribution (quest... (importers: many)
 - [raft-formation-attribution.js](raft-formation-attribution.js) - Raft/formation-diagnostics interaction contract. (importers: few)

@@ -2,7 +2,7 @@
   "schemaVersion": "priority-recovery-owner-inventory-v1",
   "generatedFrom": {
     "root": "src",
-    "sourceSha256": "d93e6f68fac6dd9ec795afec3a7b36a7f439ccb08a886b891c27b3a2485284ac"
+    "sourceSha256": "7bdc4ead85c3a384982bf1da7a40d0d317157e41099c09ad21935f6683661565"
   },
   "layerDirection": [
     "raw_observation",
@@ -17,9 +17,9 @@
     "disposition": "proposal requiring independent architecture and proof approval"
   },
   "metrics": {
-    "moduleCount": 68,
-    "publicExportCount": 775,
-    "importEdgeCount": 323,
+    "moduleCount": 67,
+    "publicExportCount": 773,
+    "importEdgeCount": 322,
     "crossLayerEdgeCount": 96,
     "layerDirectionViolationCount": 48,
     "largestStronglyConnectedComponent": 1,
@@ -28,7 +28,7 @@
     "migrationCandidateCount": 0
   },
   "closure": {
-    "uniquelyClassifiedModules": 68,
+    "uniquelyClassifiedModules": 67,
     "uniqueClassificationRate": 1,
     "unparsedImportEdgeCount": 0,
     "proposedDirectionAcyclic": true,
@@ -1289,20 +1289,6 @@
       "localExports": [
         "buildPriorityRecoveryTargetServiceRowIndex",
         "selectPriorityRecoveryTargetServiceRowsFromIndex"
-      ]
-    },
-    {
-      "path": "src/control-plane/priority-recovery-transport-retry-hint.js",
-      "owner": "control-plane",
-      "layer": "owner_decision",
-      "rationale": "owner policy or actuation surface",
-      "exports": [
-        "PRIORITY_RECOVERY_TRANSPORT_RETRY_AFTER_MS",
-        "priorityRecoveryTransportRetryAfterMs"
-      ],
-      "localExports": [
-        "PRIORITY_RECOVERY_TRANSPORT_RETRY_AFTER_MS",
-        "priorityRecoveryTransportRetryAfterMs"
       ]
     },
     {
@@ -4178,16 +4164,6 @@
       "conformsToLayerDirection": true
     },
     {
-      "from": "src/control-plane/priority-recovery-transport-retry-hint.js",
-      "specifier": "../transport/transport-delivery-failure.js",
-      "to": "src/transport/transport-delivery-failure.js",
-      "targetModule": false,
-      "sourceLayer": "owner_decision",
-      "targetLayer": null,
-      "crossLayer": false,
-      "conformsToLayerDirection": null
-    },
-    {
       "from": "src/control-plane/publication-recovery-ack-evidence-normalizers.js",
       "specifier": "./publication-recovery-evidence-values.js",
       "to": "src/control-plane/publication-recovery-evidence-values.js",
@@ -5426,9 +5402,6 @@
     ],
     [
       "src/control-plane/priority-recovery-target-service-row-index.js"
-    ],
-    [
-      "src/control-plane/priority-recovery-transport-retry-hint.js"
     ],
     [
       "src/control-plane/publication-recovery-ack-evidence-normalizers.js"

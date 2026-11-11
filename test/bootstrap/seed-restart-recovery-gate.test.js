@@ -83,6 +83,9 @@ test('an isolated stale seed with no quorum evidence and no reachable peer ' +
     ],
     clusterId: CLUSTER_ID_A,
   });
+  // Its identity is confirmed locally (hints and its own CONFIG row agree):
+  // identity is not what is missing, peer or quorum proof is.
+  await writeDurableConfigReplica(dataDir, {clusterId: CLUSTER_ID_A});
 
   const decision = await resolveAutoRejoinStartupDecision({
     dataDir,
@@ -232,7 +235,8 @@ test('a durable seed without a confirmed cluster-id match refuses even ' +
 });
 
 test('a seed whose hints carry a cluster-id but which hosts no CONFIG ' +
-  'replica cannot confirm it and refuses to serve', async (t) => {
+  'replica does not serve as authority: it rejoins to have the cluster ' +
+  'confirm its identity', async (t) => {
   const dataDir = await mkdtemp(join(tmpdir(), 'seed-recovery-gate-'));
   t.after(() => rm(dataDir, {recursive: true, force: true}));
   await persistSeedHints(dataDir, {
@@ -242,16 +246,19 @@ test('a seed whose hints carry a cluster-id but which hosts no CONFIG ' +
     ],
     clusterId: CLUSTER_ID_A,
   });
-  // The hints file alone is one record compared with nothing: UNKNOWN is
-  // not confirmation (before S4 the hints were compared with themselves).
-  const decision = await resolveAutoRejoinStartupDecision({
-    dataDir,
-    nodeId: LOCAL_NODE_ID,
-    nodeAddress: LOCAL_NODE_ADDRESS,
-    probePeerAddress: async () => true,
-  });
-  t.equal(decision.state, 'seed_recovery_proof_missing');
-  t.equal(decision.mode, 'fail');
+  for (const reachable of [true, false]) {
+    const decision = await resolveAutoRejoinStartupDecision({
+      dataDir,
+      nodeId: LOCAL_NODE_ID,
+      nodeAddress: LOCAL_NODE_ADDRESS,
+      probePeerAddress: async () => reachable,
+    });
+    t.equal(decision.mode, 'join', 'never serves bootstrap as an authority');
+    t.equal(decision.startupMode, STARTUP_JOIN_MODE.DURABLE_REJOIN);
+    t.equal(decision.peerAddress, PEER_NODE_ADDRESS_A);
+    t.equal(decision.state, reachable ? 'join_probed_peer' : 'join_recovered_peer');
+    t.equal(decision.clusterIdentity.reason, 'no_local_config_replica');
+  }
 });
 
 test('a pre-identity persisted seed role (no cluster-id) refuses to serve ' +

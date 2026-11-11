@@ -280,6 +280,6 @@ async function withRelistReentry(t, body, {holder = false} = {}) {
   }, {cdc: true});
 }
 
-export {HOLDER_GROUP, RECIPIENT_MODE, attachRecipient, cellOf, detachRecipient, laneOf,
+export {RECIPIENT_MODE, attachRecipient, cellOf, detachRecipient, laneOf,
   lanePrimaryOf, ledgerReclaimed, newestOf, owedOf, recipientRowsOf, sourceRowsOf, until,
   withRelistReentry, writeRows};

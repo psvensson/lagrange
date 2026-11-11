@@ -14,7 +14,7 @@ documentClass: generated
 - [columns.js](columns.js) - No leading comment; first export: COLUMN. (importers: many)
 - [deployment-binding.js](deployment-binding.js) - No leading comment; first export: DEPLOYMENT_BINDING_BUDGET_FIELDS. (importers: few)
 - [entrypoint.js](entrypoint.js) - No leading comment; first export: ENTRYPOINT_APP. (importers: hub)
-- [errors.js](errors.js) - Whether an error text is the answer of a partition write a caller may route again. (importers: hub)
+- [errors.js](errors.js) - Whether an error text is the answer of a partition write a caller may route again. (importers: many)
 - [fields.js](fields.js) - No leading comment; first export: FIELD. (importers: few)
 - [file-text.js](file-text.js) - Canonical owner for shared file/text scalar constants. (importers: few)
 - [http.js](http.js) - No leading comment; first export: HTTP_STATUS. (importers: one)

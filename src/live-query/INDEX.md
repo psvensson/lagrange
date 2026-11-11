@@ -8,9 +8,9 @@ documentClass: generated
 ## Files
 
 - [live-query-constants.js](live-query-constants.js) - No leading comment; first export: LIVE_QUERY_AST_TYPE. (importers: many)
-- [live-query-group-helpers.js](live-query-group-helpers.js) - Helper utilities and extracted functions for Live Query Group. (importers: few)
+- [live-query-group-helpers.js](live-query-group-helpers.js) - Helper utilities and extracted functions for Live Query Group. (importers: one)
 - [live-query-group.js](live-query-group.js) - QueryGroup manages clients with identical queries sharing CDC subscriptions. (importers: few)
 - [live-query-manager.js](live-query-manager.js) - Live Query Manager - Manages live query subscriptions and query grouping. (importers: few)
-- [live-query-service.js](live-query-service.js) - Live query SQL helpers: parse LIVE SELECT statements, extract partition keys and compile predicates. (importers: many)
+- [live-query-service.js](live-query-service.js) - Live Query Service - Core service for real-time streaming queries. (importers: many)
 - [live-query-sql-renderer.js](live-query-sql-renderer.js) - Live Query SQL Renderer and AST Inspector. (importers: few)
-- [live-query-startup-wiring.js](live-query-startup-wiring.js) - Live query startup wiring helpers. (importers: many)
+- [live-query-startup-wiring.js](live-query-startup-wiring.js) - Live query startup wiring helpers. (importers: few)

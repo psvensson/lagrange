@@ -178,7 +178,10 @@ const DEFAULT_MESSAGE_GROUP_POLICY = REBALANCER_DEFAULT_POLICY.MESSAGE_GROUP;
 const SQL_BUDGET = Object.freeze({
   SELECT_REBALANCE_BUDGET:
     'SELECT config_value FROM config WHERE config_key = ? LIMIT 1',
-  SELECT_IN_FLIGHT_COUNT: `SELECT COUNT(*) AS total_count FROM replica_operations
+  // Keyed rows, counted by the reader: the authoritative row reader merges
+  // partition row sets by primary key, so an aggregate row (no key) never
+  // survives it and a COUNT(*) read never answers.
+  SELECT_IN_FLIGHT_OPERATION_IDS: `SELECT operation_id FROM replica_operations
      WHERE type IN (${COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE})
      AND NOT (${REPLICA_OPERATION_TERMINAL_RECORD_SQL_CLAUSE})`,
 });

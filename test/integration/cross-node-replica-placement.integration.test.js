@@ -167,7 +167,7 @@ function createMockSqlQueryEngine() {
         return {success: true, rows: [{config_value: '10'}]};
       }
       if (normalizedSql.includes('from replica_operations')) {
-        return {success: true, rows: [{total_count: 0}]};
+        return {success: true, rows: []};
       }
       return {success: true, rows: []};
     },

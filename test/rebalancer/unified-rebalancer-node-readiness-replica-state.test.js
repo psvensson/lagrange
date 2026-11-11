@@ -322,7 +322,7 @@ async function runGlobalCountWitnessPass({entityId, countAnswers, priorityAdmits
       if (tableName !== 'replica_operations') return {success: true, rows: []};
       port.countReads += 1;
       return port.countAnswers ?
-        {success: true, rows: [{total_count: 0}]} :
+        {success: true, rows: []} :
         {success: false, errorCode: 'ROUTER_NO_CONNECTION', rows: []};
     },
   };

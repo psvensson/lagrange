@@ -22,7 +22,7 @@ documentClass: generated
 - [event-bus.js](event-bus.js) - EventBus - Central event bus for inter-component communication Supports namespaced events, priorities, wildcards,... (importers: hub)
 - [help-overlay.js](help-overlay.js) - HelpOverlay - Help overlay displaying keyboard shortcuts and context-sensitive help Requirements: 20.1, 20.2, 20.3,... (importers: few)
 - [keyboard-handler.js](keyboard-handler.js) - KeyboardHandler - Centralized keyboard navigation and input handling Handles arrow keys, Page Up/Down, Home/End,... (importers: few)
-- [live-query-manager.js](live-query-manager.js) - LiveQueryManager - Manages live query subscriptions Handles LIVE SELECT subscriptions that stream matching changes... (importers: many)
+- [live-query-manager.js](live-query-manager.js) - LiveQueryManager - Manages live query subscriptions Handles LIVE SELECT subscriptions that stream matching changes... (importers: few)
 - [navigation-controller.js](navigation-controller.js) - NavigationController - Manages hierarchical navigation state and breadcrumbs Supports navigation paths: - nodes ->... (importers: many)
 - [remote-cache-service-rows.js](remote-cache-service-rows.js) - Get replica rows with optional filtering. (importers: one)
 - [remote-cache.js](remote-cache.js) - Remote Cache - Maintains a local copy of system tables synchronized via CDC The Remote Cache stores system table... (importers: many)

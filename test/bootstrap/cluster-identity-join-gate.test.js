@@ -29,7 +29,13 @@ import {CLUSTER_ID_CONFIG_KEY} from
   '../../src/bootstrap/cluster-identity-constants.js';
 import {readLocalClusterIdentity} from
   '../../src/bootstrap/local-cluster-identity.js';
-import {JOINING_ERROR_MSG} from '../../src/bootstrap/node-joining-constants.js';
+import {
+  JOINING_ERROR_MSG,
+  JOINING_SEED_CONTACT_FAILURE_KIND,
+} from '../../src/bootstrap/node-joining-constants.js';
+import {RejoinHintsPersistenceService} from '../../src/bootstrap/rejoin-hints.js';
+import {resolveStartupJoinDecision} from '../../src/entrypoint-runtime-helpers.js';
+import {CONFIG_KEY} from '../../src/config/config-constants.js';
 import {isRetryableControlPlaneError} from
   '../../src/control-plane/control-plane-error-classification.js';
 import {STARTUP_JOIN_MODE} from '../../src/bootstrap/rejoin-hints-constants.js';
@@ -143,7 +149,7 @@ function injectHttpPost(api, exchanges, rewriteBody = (body) => body) {
 
 // The real contact phase of a joiner whose held identity is read from its
 // data directory, exactly as startJoinNode reads it.
-async function createJoiner(dataDir, httpPost) {
+async function createJoiner(dataDir, httpPost, config = CONTACT_CONFIG) {
   const heldClusterId = (await readLocalClusterIdentity(dataDir)).heldValue;
   const state = {bootstrapResponse: null};
   const phase = new ContactSeedPhase({
@@ -155,7 +161,7 @@ async function createJoiner(dataDir, httpPost) {
       getJoinStartupMode: () => STARTUP_JOIN_MODE.DURABLE_REJOIN,
       getExpectedClusterId: () => heldClusterId,
       getLogger: () => ({debug() {}, info() {}, warn() {}, error() {}}),
-      getConfig: () => CONTACT_CONFIG,
+      getConfig: () => config,
       getNow: () => () => Date.now(),
       getSleep: () => async () => {},
       getRandom: () => () => 0,
@@ -297,4 +303,111 @@ test('a fresh node with no persisted identity joins and persists the ' +
   t.equal(joinedClusterId, CLUSTER_ID_Y, 'the first join adopts the id');
   await persistHeldHints(dataDir, joinedClusterId);
   t.match(await readLocalClusterIdentity(dataDir), {heldValue: CLUSTER_ID_Y});
+});
+
+// A former seed after formation spread its replicas: its records hold the
+// cluster id and its peers, but it hosts no CONFIG replica (no second local
+// record to compare with), so it asks the cluster through the join gate.
+const PEER_ADDRESS = 'peer-node-2:8080';
+const QUICK_CONTACT_CONFIG = Object.freeze({...CONTACT_CONFIG,
+  httpTimeoutMs: 50, leadershipWaitTimeoutMs: 50});
+
+async function persistFormerSeedRecords(dataDir) {
+  const nodeRows = [
+    {[COLUMN.NODE_ID]: JOINER_NODE_ID, [COLUMN.NODE_ADDRESS]: JOINER_NODE_ADDRESS},
+    {[COLUMN.NODE_ID]: 'node-peer-2', [COLUMN.NODE_ADDRESS]: PEER_ADDRESS},
+  ];
+  const cache = {
+    getAll: (tableName) => tableName === TABLES.NODES ? nodeRows : [],
+    get: (tableName, key) => tableName === TABLES.CONFIG &&
+      key === CLUSTER_ID_CONFIG_KEY ? {[COLUMN.CONFIG_VALUE]: CLUSTER_ID_X} : null,
+  };
+  await new RejoinHintsPersistenceService({bootIncarnation: TEST_BOOT_INCARNATION,
+    dataDir, nodeId: JOINER_NODE_ID, nodeAddress: JOINER_NODE_ADDRESS,
+    nodeRole: 'seed', getSystemTableCache: () => cache, logger: {warn() {}},
+  }).persistNow();
+}
+
+// The production startup decision (entrypoint-runtime-helpers).
+function formerSeedStartupDecision(dataDir, peerReachable) {
+  const values = new Map([[CONFIG_KEY.NODE_ID, JOINER_NODE_ID],
+    [CONFIG_KEY.NODE_ADDRESS, 'localhost'],
+    [CONFIG_KEY.NODE_REST_API_PORT, 9090], [CONFIG_KEY.NODE_WS_PORT, 9092]]);
+  return resolveStartupJoinDecision({cliArgs: {}, env: {},
+    config: {get: (key) => values.get(key) ?? null},
+    dataDirectoryManager: {getDataDir: () => dataDir}, logger: {info() {}},
+    probePeerAddress: async (address) => address === PEER_ADDRESS && peerReachable});
+}
+
+test('a former seed without a local CONFIG replica rejoins through a ' +
+  'reachable peer presenting its held id, and is admitted by its cluster',
+async (t) => {
+  const dataDir = await withDataDir(t);
+  await persistFormerSeedRecords(dataDir);
+  const decision = await formerSeedStartupDecision(dataDir, true);
+  t.equal(decision.startupMode, STARTUP_JOIN_MODE.DURABLE_REJOIN,
+    'it rejoins as a member; it does not fail and does not serve as authority');
+  t.equal(decision.seedNodeAddress, PEER_ADDRESS);
+
+  const {api} = await startSeed(t, {answer: identityRows(CLUSTER_ID_X)});
+  const exchanges = [];
+  const joiner = await createJoiner(dataDir, injectHttpPost(api, exchanges));
+  t.equal(joiner.heldClusterId, CLUSTER_ID_X, 'it presents the id it holds');
+  await joiner.phase.phaseContactSeed();
+  t.equal(exchanges[0].statusCode, 200);
+  t.equal(joiner.state.bootstrapResponse.clusterId, CLUSTER_ID_X,
+    'the cluster confirmed the identity');
+});
+
+test('the same former seed is refused terminally by another cluster and ' +
+  'keeps its id', async (t) => {
+  const dataDir = await withDataDir(t);
+  await persistFormerSeedRecords(dataDir);
+  const decision = await formerSeedStartupDecision(dataDir, true);
+  t.equal(decision.startupMode, STARTUP_JOIN_MODE.DURABLE_REJOIN);
+
+  const {api} = await startSeed(t, {answer: identityRows(CLUSTER_ID_Y)});
+  const exchanges = [];
+  const joiner = await createJoiner(dataDir, injectHttpPost(api, exchanges));
+  await t.rejects(joiner.phase.phaseContactSeed(), /HTTP 409/u);
+  t.equal(exchanges.length, 1, 'the refusal is not retried');
+  t.equal(exchanges[0].body.code, JOIN_IDENTITY_REFUSAL_CODE.REQUEST_MISMATCH);
+  t.equal(joiner.state.bootstrapResponse, null);
+  t.match(await readLocalClusterIdentity(dataDir), {heldValue: CLUSTER_ID_X});
+});
+
+test('the same former seed with no reachable peer serves nothing, gets the ' +
+  'typed retryable contact refusal, and proceeds once a peer is reachable',
+async (t) => {
+  const dataDir = await withDataDir(t);
+  await persistFormerSeedRecords(dataDir);
+  const decision = await formerSeedStartupDecision(dataDir, false);
+  t.equal(decision.startupMode, STARTUP_JOIN_MODE.DURABLE_REJOIN,
+    'no peer answered: still a member rejoin, never a seed or a failure');
+  t.equal(decision.seedNodeAddress, PEER_ADDRESS);
+
+  const {api} = await startSeed(t, {answer: identityRows(CLUSTER_ID_X)});
+  const peer = {reachable: false};
+  const exchanges = [];
+  const reachablePost = injectHttpPost(api, exchanges);
+  const joiner = await createJoiner(dataDir, async (url, body) => {
+    if (!peer.reachable) {
+      throw Object.assign(new Error('connect ECONNREFUSED'),
+        {code: 'ECONNREFUSED'});
+    }
+    return reachablePost(url, body);
+  }, QUICK_CONTACT_CONFIG);
+
+  const unavailable = await joiner.phase.phaseContactSeed().then(
+    () => null, (error) => error);
+  t.equal(unavailable?.code,
+    JOINING_SEED_CONTACT_FAILURE_KIND.SEED_CONTACT_UNAVAILABLE);
+  t.equal(isRetryableControlPlaneError(unavailable), true,
+    'typed retryable: the join resumes on it');
+  t.equal(joiner.state.bootstrapResponse, null);
+
+  peer.reachable = true;
+  await joiner.phase.phaseContactSeed();
+  t.equal(joiner.state.bootstrapResponse.clusterId, CLUSTER_ID_X,
+    'it proceeds once a peer answers and confirms the identity');
 });

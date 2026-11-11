@@ -12,7 +12,6 @@ documentClass: generated
 - [constants.js](constants.js) - No leading comment; first export: MESSAGE_GROUP_APPLICATION_ERROR_MSG. (importers: hub)
 - [index.js](index.js) - Message Group module exports. (importers: few)
 - [message-group-cdc-committed-acceptance.js](message-group-cdc-committed-acceptance.js) - MessageGroupService's transient response custody. (importers: few)
-- [message-group-cdc-source-range.js](message-group-cdc-source-range.js) - The committed application of a durable CDC range in a message group (CDC Stage 3). (importers: few)
 - [message-group-committed-command-admission.js](message-group-committed-command-admission.js) - The one owner of "may this command enter a message group's consensus log" (design R3 section 1.1). (importers: few)
 - [message-group-consensus-port.js](message-group-consensus-port.js) - How a message-group replica runs on its raft-rs semantic operation port (design R3): the durable replica database... (importers: many)
 - [message-group-forwarding-owner-constants.js](message-group-forwarding-owner-constants.js) - No leading comment; first export: FORWARD_TOPOLOGY_REPAIR_OUTCOME. (importers: many)

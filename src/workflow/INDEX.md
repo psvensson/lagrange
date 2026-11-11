@@ -13,7 +13,6 @@ documentClass: generated
 - [operation-lane.js](operation-lane.js) - No leading comment; first export: OperationLane. (importers: many)
 - [owner-key-reconcile-completion.js](owner-key-reconcile-completion.js) - Completion boundary for owner-key reconciliation. (importers: few)
 - [owner-key-reconcile-queue-current-work.js](owner-key-reconcile-queue-current-work.js) - The reconcile queue's CURRENT-WORK completion contract. (importers: one)
-- [owner-key-reconcile-queue-run-scope.js](owner-key-reconcile-queue-run-scope.js) - The reconcile queue's run boundary: what an enqueue of an owner key whose reconcile is in flight does, and when a... (importers: one)
 - [owner-key-reconcile-queue-snapshots.js](owner-key-reconcile-queue-snapshots.js) - Immutable diagnostic projection owner for OwnerKeyReconcileQueue. (importers: few)
 - [owner-key-reconcile-queue-stale-fence.js](owner-key-reconcile-queue-stale-fence.js) - The stale-fence rejection record: one diagnostic, emitted, sampled, logged, and delivered to the waiting caller as a... (importers: one)
 - [owner-key-reconcile-queue.js](owner-key-reconcile-queue.js) - OwnerKeyReconcileQueue - enqueue-only reconcile queue with owner-key de-duplication and single-in-flight enforcement. (importers: many)

@@ -228,12 +228,13 @@ test('W-D4d: a recipient records its in-flight vector position and ' +
     let observedCellLast = null;
     let observedInvocationDuringHydration = null;
     let deliveries = 0;
-    const blockingSubscriber = async () => {
+    // After the hydration the recipient has still not confirmed the ledger's
+    // newest event by a receipt of its own, so it is contacted again with the
+    // position probe (design note S3.11), which it confirms.
+    const confirming = acknowledgingCdcSubscriber();
+    const blockingSubscriber = async (vector) => {
       deliveries += 1;
-      // After the hydration the recipient has still not confirmed the
-      // ledger's newest event by a receipt of its own, so it is contacted
-      // again with the position probe (design note S3.11): answered at once.
-      if (deliveries > 1) return {success: true, completion: 'DURABLE'};
+      if (deliveries > 1) return confirming(vector);
       const [recipient] = leader.cdcDelivery.getCdcObligationDiagnostics().recipients;
       const [custody] = [...leader.cdcDelivery.recipientCustody.values()];
       observedCellLogIndex = recipient.position?.logIndex ?? null;
@@ -259,7 +260,7 @@ test('W-D4d: a recipient records its in-flight vector position and ' +
     await settleTicks();
     const applied = new Set();
     await pump(timeSource, leader, proposed, applied);
-    assert.equal(deliveries, 2, 'the retired vector, then the position probe');
+    assert.equal(deliveries, 2, 'the retired vector, then the position probe, confirmed once');
   } finally {
     await shutdownAll(leader);
   }
@@ -333,8 +334,10 @@ test('W-D4e: scheduleDeliveryRetry preserves an earlier absolute dueAtMs against
     );
     // Recipient isolation: the bound holds back the acknowledgement, not the
     // delivery. The recipient received the row; it stays owed and unpending.
-    assert.equal(subscriber.events.length, 1);
-    assert.equal(lane.pending.has(subscriber.events[0].eventKey), false);
+    // (Its first contact was the position probe: the hydrated head, the
+    // ledger's newest event when it attached; design note S3.11.)
+    assert.equal(subscriber.events.length, 2);
+    assert.equal(lane.pending.has(subscriber.events.at(-1).eventKey), false);
     assert.equal(leader.cdcDelivery.getCdcObligationDiagnostics().lastDrive.unacknowledged, 1);
   } finally {
     await shutdownAll(leader);

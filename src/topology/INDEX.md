@@ -14,7 +14,7 @@ documentClass: generated
 - [cdc-group-propagation-foreground-retry.js](cdc-group-propagation-foreground-retry.js) - One foreground retry wait decision for the source-owned durable wave. (importers: one)
 - [cdc-group-propagation-lifecycle-methods.js](cdc-group-propagation-lifecycle-methods.js) - Stop-lifecycle methods for CDCGroupPropagationService: the one guard every arm site and post-attempt path checks,... (importers: one)
 - [cdc-group-propagation-retry-wait-report.js](cdc-group-propagation-retry-wait-report.js) - CDC group propagation retries are bounded by attempt counts and the live source invocation duration. (importers: few)
-- [cdc-group-propagation-routing.js](cdc-group-propagation-routing.js) - No leading comment; first export: ROUTING_DOMAIN_GROUP. (importers: few)
+- [cdc-group-propagation-routing.js](cdc-group-propagation-routing.js) - No leading comment; first export: buildGroupedContext. (importers: few)
 - [cdc-group-propagation-service.js](cdc-group-propagation-service.js) - CDCGroupPropagationService - single owner for topology-aware CDC fanout. (importers: many)
 - [cdc-group-propagation-wave-diagnostics.js](cdc-group-propagation-wave-diagnostics.js) - Diagnostics for the durable CDC propagation delivery (log lines only). (importers: few)
 - [group-selection-constants.js](group-selection-constants.js) - Constants for GroupSelectionService. (importers: one)

@@ -19,7 +19,7 @@ documentClass: generated
 - [distributed-transaction-commit-point.js](distributed-transaction-commit-point.js) - The commit point of a distributed transaction, as a typed fact on every failed COMMIT answer. (importers: many)
 - [distributed-transaction-coordinator-constants.js](distributed-transaction-coordinator-constants.js) - No leading comment; first export: IDEMPOTENT_COMMIT_MISS_ERROR_MESSAGES. (importers: many)
 - [distributed-transaction-coordinator.js](distributed-transaction-coordinator.js) - Distributed transaction coordinator with participant state persistence hooks. (importers: hub)
-- [distributed-transaction-decision-protocol.js](distributed-transaction-decision-protocol.js) - The decision protocol of the distributed transaction coordinator (TX1 design revision 10, sections 2.3, 2.4, 4 and... (importers: few)
+- [distributed-transaction-decision-protocol.js](distributed-transaction-decision-protocol.js) - The decision protocol of the distributed transaction coordinator (TX1 design revision 10, sections 2.3, 2.4, 4 and... (importers: one)
 - [distributed-transaction-decision-record.js](distributed-transaction-decision-record.js) - Actual stored decision bytes: no reconstruction and no coordinator execution dependency. (importers: few)
 - [distributed-transaction-decision.js](distributed-transaction-decision.js) - The coordinator's decision record of one distributed transaction (TX1 design revision 10, sections 2.3 and 2.4; seam... (importers: many)
 - [distributed-transaction-identity.js](distributed-transaction-identity.js) - The identity of a coordinator-managed transaction and of each of its participants (TX1 design revision 10, section... (importers: many)

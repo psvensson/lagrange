@@ -208,6 +208,28 @@ function compareLocalIdentityFact(fact, hints, durable) {
     durableValue, durableValue ?? recorded);
 }
 
+// UNKNOWN because one local record is missing while the node still holds an
+// id: the node can ask the cluster, whose join gate (join-cluster-identity.js)
+// confirms or refuses the held id. A damaged local replica
+// (durable_replica_unreadable) is not in this set: that is unreadable
+// durable evidence and fails closed like any other.
+const CONFIRMABLE_AT_JOIN_REASONS = Object.freeze(new Set([
+  LOCAL_IDENTITY_UNKNOWN_REASON.NO_LOCAL_CONFIG_REPLICA,
+  LOCAL_IDENTITY_UNKNOWN_REASON.DURABLE_ROW_ABSENT,
+  LOCAL_IDENTITY_UNKNOWN_REASON.HINTS_IDENTITY_ABSENT,
+]));
+
+/**
+ * Whether the cluster can confirm this UNKNOWN identity at join: the node
+ * holds an id and lacks only a local record to compare it with.
+ * @param {Object} identity A compareLocalClusterIdentity answer.
+ * @return {boolean}
+ */
+function isConfirmableAtJoin(identity) {
+  return identity.state === CLUSTER_ID_MATCH_STATE.UNKNOWN &&
+    identity.heldValue !== null && CONFIRMABLE_AT_JOIN_REASONS.has(identity.reason);
+}
+
 /**
  * The startup comparison of this node's cluster identity: the hints record
  * against its own durable CONFIG replica row.
@@ -248,5 +270,6 @@ export {
   LOCAL_IDENTITY_UNKNOWN_REASON,
   compareLocalClusterIdentity,
   describeLocalClusterIdentityMismatch,
+  isConfirmableAtJoin,
   readLocalClusterIdentity,
 };
