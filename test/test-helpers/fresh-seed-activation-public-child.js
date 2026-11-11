@@ -20,6 +20,7 @@ import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {BOOTSTRAP_API_ROUTE} from '../../src/bootstrap/bootstrap-api-constants.js';
 import {createRightsSampler, everyRightTransferred, readIssuedDeclaration,
   readOwnerRights} from './original-allocation-durable-reader.js';
+import {boundLoopbackConnect, unansweredConnectError} from './bounded-loopback-connect.js';
 
 // R27: a solver probe never starts a seed.
 refuseUnderProbe('a fresh seed runtime');
@@ -131,6 +132,7 @@ function probeTcp(port, surface) {
   return new Promise((resolve) => {
     const before = everyRightTransferred(observe(sampleRights));
     const socket = net.connect({port, host, localAddress: PROBE_CLIENT_ADDRESS});
+    boundLoopbackConnect(socket, () => socket.destroy(unansweredConnectError()));
     socket.once('connect', () => {
       const selfConnected = recordConnection(socket, surface, before);
       // Linux can self-connect an ephemeral socket without any listener.
@@ -153,8 +155,11 @@ function probeWebSocket() {
     const socket = new WebSocket(`ws://${host}:${port}`, {
       localAddress: PROBE_CLIENT_ADDRESS, handshakeTimeout: READY_BOUND_MS,
       finishRequest(request) {
-        request.once('socket', (connection) => connection.once('connect', () =>
-          recordConnection(connection, 'transport-websocket-handshake', before)));
+        request.once('socket', (connection) => {
+          boundLoopbackConnect(connection, () => request.destroy(unansweredConnectError()));
+          connection.once('connect', () =>
+            recordConnection(connection, 'transport-websocket-handshake', before));
+        });
         request.end();
       },
     });
@@ -181,8 +186,10 @@ function probeReady() {
       if (served) recordAccepted('rest-readyz', ports.restApiPort, before);
       resolve(served);
     });
-    request.once('socket', (socket) => socket.once('connect', () =>
-      recordConnection(socket, 'rest-readyz', before)));
+    request.once('socket', (socket) => {
+      boundLoopbackConnect(socket, () => request.destroy(unansweredConnectError()));
+      socket.once('connect', () => recordConnection(socket, 'rest-readyz', before));
+    });
     request.once('error', (error) => {
       recordProbe('rest-readyz', error.code || error.message);
       resolve(false);

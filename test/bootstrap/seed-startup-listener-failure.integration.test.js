@@ -11,15 +11,20 @@ import path from 'node:path';
 import {once} from 'node:events';
 import {createPortAllocator} from '../../src/test-helpers/port-allocator.js';
 import {contender} from '../entrypoint/data-directory-owner-contender.js';
+import {CONNECT_UNANSWERED, LOOPBACK_SILENT_DROP_MESSAGE, boundLoopbackConnect,
+  unansweredConnectError} from '../test-helpers/bounded-loopback-connect.js';
 
 const CHILD = new URL('../test-helpers/fresh-seed-activation-public-child.js', import.meta.url);
 const HOST = '127.0.0.1';
 const NODE_ID = '550e8400-e29b-41d4-a716-446655449973';
 const allocator = createPortAllocator(import.meta.url);
 
+// The connect's typed outcome: `connected`, its error code, or
+// CONNECT_UNANSWERED when the host answered nothing within the bound.
 function connectOutcome(port) {
   return new Promise((resolve) => {
     const socket = net.connect({host: HOST, port, localAddress: '127.0.0.2'});
+    boundLoopbackConnect(socket, () => socket.destroy(unansweredConnectError()));
     socket.once('connect', () => {
       socket.destroy();
       resolve('connected');
@@ -72,6 +77,11 @@ test('occupied transport listener refuses real seed startup and releases only it
         .filter(({surface}) => surface === 'rest-readyz'), custody, restAfterCleanup}));
     child.send('exit-after-observation');
     assert.deepEqual(await closed, {code: 0, signal: null});
+    // A host that drops connects to closed loopback ports cannot answer this
+    // test's question: name that property rather than fail on its symptom.
+    assert.ok(restAfterCleanup !== CONNECT_UNANSWERED &&
+      !Object.keys(report.observation.probeOutcomes).some((key) =>
+        key.endsWith(`:${CONNECT_UNANSWERED}`)), LOOPBACK_SILENT_DROP_MESSAGE);
     assert.equal(report.returnedRuntime, false, 'a failed listen cannot return a runtime');
     assert.equal(report.startupError?.code, 'EADDRINUSE', 'the actual bind error survives startup');
     assert.equal(report.cleanupError, null);
