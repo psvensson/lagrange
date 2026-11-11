@@ -27,8 +27,11 @@ import {
 import {
 } from '../../src/bootstrap/join-session-store.js';
 import {
-  JOINING_ERROR_MSG,
-} from '../../src/bootstrap/node-joining-constants.js';
+  buildNodeStateUpdateTargetMissingError,
+} from '../../src/bootstrap/shared/node-state-publication-outcome.js';
+import {ROUTER_ERROR_MSG} from '../../src/constants/transport.js';
+import {ROUTER_CONNECTION_CLOSED_ERROR_CODE} from
+  '../../src/transport/transport-error-codes.js';
 import {
   BOOTSTRAP_API_PROBE_REASON,
   BOOTSTRAP_API_REQUEST_FIELD,
@@ -773,16 +776,21 @@ test('NodeJoiningService - classifies transient control-plane publication failur
       seedNodeAddress: 'http://localhost:8080',
     });
 
+    // Each failure as its producer builds it: the router's connection-close
+    // failure (its code, read by the transport's one delivery-failure
+    // decision; never its text) and the publication owner's typed
+    // target-missing error.
     t.equal(
       service.shouldRetryControlPlaneNodeStateUpdate(
-        new Error('Connection to node seed-node-1 closed'),
+        Object.assign(new Error(ROUTER_ERROR_MSG.connectionClosed('seed-node-1')),
+          {code: ROUTER_CONNECTION_CLOSED_ERROR_CODE}),
       ),
       true,
       'closed target connections should defer connected publication',
     );
     t.equal(
       service.shouldRetryControlPlaneNodeStateUpdate(
-        new Error(JOINING_ERROR_MSG.CONTROL_PLANE_TARGET_MISSING),
+        buildNodeStateUpdateTargetMissingError(),
       ),
       true,
       'temporarily missing ingress targets should defer connected publication',
