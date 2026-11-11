@@ -385,7 +385,8 @@ async (t) => {
 // uncommitted and lost. The owner restarts in Φ5. Which survivor wins the
 // election is each cell's premise (measured 2026-11-11: left to the election
 // timers the source won 11 of 40, and the single former cell then failed its
-// routing assertion). A surviving peer that leads receives the re-drive; a
+// routing assertion); the three cells are every survivor. A surviving peer
+// or the target that leads receives the re-drive; a
 // SOURCE that leads first hands its leadership to the target (the universal
 // removal leadership rule), and the re-drive goes to that leader: no RETIRE
 // is ever routed to the replica being removed.
@@ -394,6 +395,12 @@ const AN7_ELECTIONS = Object.freeze([
     label: 'a surviving peer',
     winner: (world) => `${world.partitionId}-r3`,
     redriveLeader: (world) => `${world.partitionId}-r3`,
+    handoffs: 0,
+  }),
+  Object.freeze({
+    label: 'the target',
+    winner: (world) => world.targetReplicaId,
+    redriveLeader: (world) => world.targetReplicaId,
     handoffs: 0,
   }),
   Object.freeze({

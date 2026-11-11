@@ -22,16 +22,12 @@ import {REPLICA_CLEANUP_AUTHORITY_KIND} from
 import {
   REPLICA_HANDLER_LEADER_HANDOFF_STATE,
 } from './replica-handler-leader-handoff-methods.js';
+import {
+  matchesClaimedFailedCreateRemoval,
+  matchesFailedCreateCleanupPrecondition,
+} from './replica-failed-create-removal-claim.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
-
-function matchesFailedCreateCleanupPrecondition(precondition, expected) {
-  if (!precondition || typeof precondition !== 'object' ||
-      Array.isArray(precondition)) return false;
-  return Object.entries(expected).every(
-    ([field, value]) => precondition[field] === value,
-  );
-}
 
 function hasValidFailedCreateCleanupPrecondition(precondition) {
   if (!precondition) return false;
@@ -40,30 +36,6 @@ function hasValidFailedCreateCleanupPrecondition(precondition) {
   }
   return typeof precondition.create_attempt_token === 'string' &&
     precondition.create_attempt_token.length > 0;
-}
-
-function matchesClaimedFailedCreateRemoval(row, precondition, cleanupToken) {
-  const identityMatches = matchesFailedCreateCleanupPrecondition(row, {
-    service_id: precondition?.service_id,
-    replica_id: precondition?.replica_id,
-    group_id: precondition?.group_id ?? null,
-    partition_id: precondition?.partition_id,
-    node_id: precondition?.node_id,
-    service_type: precondition?.service_type,
-    created_at: precondition?.created_at,
-    status: ReplicaStatus.REMOVING,
-    previous_state: ReplicaStatus.FAILED,
-    cleanup_token: cleanupToken,
-    create_attempt_token: precondition?.create_attempt_token,
-  });
-  return identityMatches && isLaterLifecycleGeneration(row, precondition);
-}
-
-function isLaterLifecycleGeneration(row, precondition) {
-  const sourceVersion = precondition?.state_entered_at;
-  return Number.isFinite(sourceVersion) &&
-    Number.isFinite(row?.state_entered_at) &&
-    row.state_entered_at > sourceVersion;
 }
 
 function matchesCleanupCompletionReceipt(

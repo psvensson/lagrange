@@ -312,6 +312,10 @@ function assignReplicaHandlerGroupRetirementRequestMethods(ReplicaHandler) {
                 groupRetirement,
                 groupRetirementEvidence:
                   request?.[ReplicaOperationField.GROUP_RETIREMENT] ?? null,
+                // The FAILED row a failed-create cleanup was decided on
+                // (verified at admission), or null for any other REMOVE.
+                failedCreatePrecondition: request?.[ReplicaOperationField
+                  .FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION] ?? null,
               }).catch((error) => {
                 this.logger.error(REPLICA_HANDLER_LOG_MSG.ASYNC_REMOVE_FAILED, {
                   operationId,
