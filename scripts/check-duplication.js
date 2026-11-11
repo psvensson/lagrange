@@ -106,8 +106,9 @@ const RATCHET_TARGETS = [
     // State-read named defaults (42/1330 on its branch) merged at the lower 37/1187;
     // 37/1187 -> 35/1109 on the checker's hint after the admin control snapshot
     // imported the one latest-membership-publication-row resolver.
-    baselineCloneGroupCount: 35,
-    baselineDuplicatedLineCount: 1109,
+    // 2026-11-11 (round 2 hygiene): tightened 35/1109 -> 33/1064 on the checker's hint.
+    baselineCloneGroupCount: 33,
+    baselineDuplicatedLineCount: 1064,
     strictEligible: true,
   },
   {
@@ -294,8 +295,10 @@ const RATCHET_TARGETS = [
     // 2026-11-11 (canonical-authority formation hygiene): tightened 623/23339 -> 623/23152 on the checker hint
     // after shared stopping-reconcile, preflight, remote-handoff and admin load-benchmark test fixtures,
     // then 23152 -> 23148 on the next hint.
+    // 2026-11-11 (round 2 hygiene): 634/23409 back to 623 groups after one router-group
+    // setup and one remote-handoff row store replaced their copies; tightened 23148 -> 22839.
     baselineCloneGroupCount: 623,
-    baselineDuplicatedLineCount: 23148,
+    baselineDuplicatedLineCount: 22839,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

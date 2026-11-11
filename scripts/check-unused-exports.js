@@ -77,7 +77,9 @@ import {printRatchetTighteningHint} from './metric-check-helpers.js';
 // 2026-11-11 (canonical-authority formation hygiene): tightened 1381 -> 1379
 // on the checker hint after de-exporting in-file helpers, deleting orphaned
 // CDC helpers and the split accessor's unused status-contract re-exports.
-const BASELINE_UNUSED_EXPORT_COUNT = 1379;
+// 2026-11-11 (round 2 hygiene): tightened 1379 -> 1362 on the checker hint after
+// de-exporting today's in-file-only symbols and deleting production-dead modules.
+const BASELINE_UNUSED_EXPORT_COUNT = 1362;
 const EXIT_FAILURE = 1;
 const TOP_OFFENDER_COUNT = 10;
 const SELF_REFERENCE = 'scripts/check-unused-exports.js';
