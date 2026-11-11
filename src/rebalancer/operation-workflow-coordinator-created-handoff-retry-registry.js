@@ -1,13 +1,13 @@
-import * as DISPATCH_REARM_EVIDENCE
-  from './operation-workflow-dispatch-rearm-evidence.js';
+import * as COORDINATOR_CREATED_HANDOFF
+  from './operation-workflow-coordinator-created-handoff-scheduling.js';
 
 class OperationWorkflowCoordinatorCreatedHandoffRetryRegistry {
   cloneOperationSnapshot(operation) {
-    return DISPATCH_REARM_EVIDENCE.cloneOperationSnapshot(operation);
+    return COORDINATOR_CREATED_HANDOFF.cloneOperationSnapshot(operation);
   }
 
   resolveCoordinatorCreatedOperationOwnerNodeId(operation) {
-    return DISPATCH_REARM_EVIDENCE
+    return COORDINATOR_CREATED_HANDOFF
       .resolveCoordinatorCreatedOperationOwnerNodeId(this, operation);
   }
 
@@ -15,7 +15,7 @@ class OperationWorkflowCoordinatorCreatedHandoffRetryRegistry {
     operation,
     options = {},
   ) {
-    return DISPATCH_REARM_EVIDENCE
+    return COORDINATOR_CREATED_HANDOFF
       .resolveCoordinatorCreatedHandoffDiagnosticDestination(
         this,
         operation,
@@ -24,26 +24,26 @@ class OperationWorkflowCoordinatorCreatedHandoffRetryRegistry {
   }
 
   isCoordinatorCreatedOperationLocallyOwned(operation) {
-    return DISPATCH_REARM_EVIDENCE.isCoordinatorCreatedOperationLocallyOwned(
+    return COORDINATOR_CREATED_HANDOFF.isCoordinatorCreatedOperationLocallyOwned(
       this,
       operation,
     );
   }
 
   buildCoordinatorCreatedDispatchIngress(nodeId) {
-    return DISPATCH_REARM_EVIDENCE.buildCoordinatorCreatedDispatchIngress(
+    return COORDINATOR_CREATED_HANDOFF.buildCoordinatorCreatedDispatchIngress(
       nodeId,
     );
   }
 
   buildCoordinatorCreatedDispatchRow(operation) {
-    return DISPATCH_REARM_EVIDENCE.buildCoordinatorCreatedDispatchRow(
+    return COORDINATOR_CREATED_HANDOFF.buildCoordinatorCreatedDispatchRow(
       operation,
     );
   }
 
   shouldRetryCoordinatorCreatedRemoteHandoff(operation, options = {}) {
-    return DISPATCH_REARM_EVIDENCE
+    return COORDINATOR_CREATED_HANDOFF
       .shouldRetryCoordinatorCreatedRemoteHandoff(
         this,
         operation,
@@ -56,7 +56,7 @@ class OperationWorkflowCoordinatorCreatedHandoffRetryRegistry {
     now = Date.now(),
     options = {},
   ) {
-    return DISPATCH_REARM_EVIDENCE
+    return COORDINATOR_CREATED_HANDOFF
       .buildCoordinatorCreatedRemoteHandoffTimeoutDecision(
         this,
         operation,
@@ -66,7 +66,7 @@ class OperationWorkflowCoordinatorCreatedHandoffRetryRegistry {
   }
 
   canContinueCoordinatorCreatedRemoteHandoff(operation, delayMs) {
-    return DISPATCH_REARM_EVIDENCE
+    return COORDINATOR_CREATED_HANDOFF
       .canContinueCoordinatorCreatedRemoteHandoff(
         this,
         operation,
@@ -79,7 +79,7 @@ class OperationWorkflowCoordinatorCreatedHandoffRetryRegistry {
     delayMs,
     options = {},
   ) {
-    return DISPATCH_REARM_EVIDENCE
+    return COORDINATOR_CREATED_HANDOFF
       .scheduleCoordinatorCreatedRemoteHandoffFollowUp(
         this,
         operation,

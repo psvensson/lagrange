@@ -13,6 +13,7 @@ import {
 } from './operation-workflow-observed-progress-retention.js';
 import * as DISPATCH_REARM_EVIDENCE
   from './operation-workflow-dispatch-rearm-evidence.js';
+import * as TRANSITION_RETRY from './operation-workflow-transition-retry.js';
 import {
   joinInFlightOperationOwnerLanes,
 } from './operation-owner-shutdown-join.js';
@@ -771,14 +772,14 @@ class OperationWorkflowOwnerRetryRegistry extends
   }
 
   async resumeDeferredTransitionOperation(operationId) {
-    return DISPATCH_REARM_EVIDENCE.resumeDeferredTransitionOperation(
+    return TRANSITION_RETRY.resumeDeferredTransitionOperation(
       this,
       operationId,
     );
   }
 
   deferTransitionRetry(operationId, errorLike, context = {}) {
-    return DISPATCH_REARM_EVIDENCE.deferTransitionRetry(
+    return TRANSITION_RETRY.deferTransitionRetry(
       this,
       operationId,
       errorLike,
@@ -787,7 +788,7 @@ class OperationWorkflowOwnerRetryRegistry extends
   }
 
   handleDeferredTransitionRetryFailure(operationId, error, context = {}) {
-    return DISPATCH_REARM_EVIDENCE.handleDeferredTransitionRetryFailure(
+    return TRANSITION_RETRY.handleDeferredTransitionRetryFailure(
       this,
       operationId,
       error,

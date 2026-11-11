@@ -23,23 +23,6 @@ import {
   OPERATION_OWNER_RETRY_KIND,
   buildOperationOwnerRetryOutcome,
 } from './topology-owner-constants.js';
-import {
-  deferTransitionRetry,
-  handleDeferredTransitionRetryFailure,
-  resumeDeferredTransitionOperation,
-} from './operation-workflow-transition-retry.js';
-import {
-  buildCoordinatorCreatedDispatchIngress,
-  buildCoordinatorCreatedDispatchRow,
-  buildCoordinatorCreatedRemoteHandoffTimeoutDecision,
-  canContinueCoordinatorCreatedRemoteHandoff,
-  cloneOperationSnapshot,
-  isCoordinatorCreatedOperationLocallyOwned,
-  resolveCoordinatorCreatedHandoffDiagnosticDestination,
-  resolveCoordinatorCreatedOperationOwnerNodeId,
-  scheduleCoordinatorCreatedRemoteHandoffFollowUp,
-  shouldRetryCoordinatorCreatedRemoteHandoff,
-} from './operation-workflow-coordinator-created-handoff-scheduling.js';
 const {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   DISPATCH_RETRY_DELAY_MS,
@@ -779,19 +762,11 @@ function isOperationStepTimedOut(owner, operation, now = Date.now()) {
   );
 }
 export {
-  buildCoordinatorCreatedDispatchIngress,
-  buildCoordinatorCreatedDispatchRow,
-  buildCoordinatorCreatedRemoteHandoffTimeoutDecision,
   buildDispatchRearmFromProgressReconcileEvidence,
-  canContinueCoordinatorCreatedRemoteHandoff,
-  cloneOperationSnapshot,
   deferDispatchRetry,
-  deferTransitionRetry,
   getDeferredDispatchRetryOperation,
   handleDeferredDispatchRetryFailure,
-  handleDeferredTransitionRetryFailure,
   hasActiveTransitionRetryGrace,
-  isCoordinatorCreatedOperationLocallyOwned,
   isCreateRearmDispatchPhase,
   isDispatchRetryableWorkflowStep,
   isOperationDeferredRetryActive,
@@ -800,17 +775,12 @@ export {
   isRemoveInitialDispatchPhase,
   isSafetyDeferredRetryableOperation,
   readOperationRetryArmedState,
-  resolveCoordinatorCreatedHandoffDiagnosticDestination,
-  resolveCoordinatorCreatedOperationOwnerNodeId,
   resolveDeferredRetryVisibleOperation,
   resolveDispatchRearmFromProgressReconcileState,
   resolveTransitionRetryGraceTimeoutCeilingMs,
-  resumeDeferredTransitionOperation,
   runDeferredSafetyReentryTurn,
-  scheduleCoordinatorCreatedRemoteHandoffFollowUp,
   scheduleDeferredSafetyRetry,
   shouldDeferRetryableDispatchFailure,
   shouldRearmDispatchFromProgressReconcile,
-  shouldRetryCoordinatorCreatedRemoteHandoff,
   shouldUseOperationBudgetTransitionRetryGrace,
 };
