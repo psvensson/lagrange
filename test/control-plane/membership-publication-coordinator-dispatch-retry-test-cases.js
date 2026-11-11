@@ -86,7 +86,7 @@ export function registerMembershipPublicationCoordinatorDispatchRetryTests({
         },
       });
 
-      const dispatchRows =
+      const {rows: dispatchRows} =
         await coordinator.getDispatchRetryRowsForNode('node-2');
 
       t.same(
@@ -184,7 +184,7 @@ export function registerMembershipPublicationCoordinatorDispatchRetryTests({
       },
     });
 
-    const dispatchRows =
+    const {rows: dispatchRows} =
       await coordinator.getDispatchRetryRowsForNode(
         DISPATCH_RETRY_TARGET_NODE_ID,
       );
@@ -267,7 +267,7 @@ export function registerMembershipPublicationCoordinatorDispatchRetryTests({
         },
       });
 
-      const dispatchRows =
+      const {rows: dispatchRows} =
         await coordinator.getDispatchRetryRowsForNode('node-2');
 
       t.same(
@@ -321,7 +321,7 @@ export function registerMembershipPublicationCoordinatorDispatchRetryTests({
         },
       });
 
-      const dispatchRows =
+      const {rows: dispatchRows} =
         await coordinator.getDispatchRetryRowsForNode(
           DISPATCH_RETRY_SOURCE_NODE_ID,
         );
@@ -370,7 +370,7 @@ export function registerMembershipPublicationCoordinatorDispatchRetryTests({
         },
       });
 
-      const dispatchRows =
+      const {rows: dispatchRows} =
         await coordinator.getDispatchRetryRowsForNode(
           DISPATCH_RETRY_TARGET_NODE_ID,
         );
@@ -419,7 +419,7 @@ export function registerMembershipPublicationCoordinatorDispatchRetryTests({
         },
       });
 
-      const dispatchRows =
+      const {rows: dispatchRows} =
         await coordinator.getDispatchRetryRowsForNode(
           DISPATCH_RETRY_TARGET_NODE_ID,
         );

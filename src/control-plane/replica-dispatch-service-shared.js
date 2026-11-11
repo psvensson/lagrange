@@ -96,8 +96,6 @@ const {
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 const REPLICA_DISPATCH_SERVICE_LITERAL = Object.freeze({
   AUTHORITATIVE: 'authoritative',
-  AUTHORITATIVE_PRIORITY_RECOVERY_RETRY:
-    'authoritative_priority_recovery_retry',
   BACKGROUND: 'background',
   CACHE_UPDATE_NOT_OBSERVED_FOR_REPLICA_OPERATION:
     'Cache update not observed for replica operation',

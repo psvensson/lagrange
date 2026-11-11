@@ -35,6 +35,8 @@ const DISPATCH_LOG_MSG = Object.freeze({
     'Skipped duplicate ready-trigger retry',
   DISPATCH_LOOKUP_FAILED:
     'Replica operation lookup failed during ready-node retry',
+  READY_NODE_REPLAY_OWNER_LIST_DEFERRED:
+    'Ready-node dispatch replay still owed: the operation owner list was deferred',
   NODE_STATE_UPDATE_BOOTSTRAP_UPSERTED:
     'Bootstrapped missing node row from node-state update payload',
   MEMBERSHIP_PUBLICATION_REFRESH_FAILED:

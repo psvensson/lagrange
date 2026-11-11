@@ -23,6 +23,10 @@ import {
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
 } from '../rebalancer/replica-operation-repository.js';
 import {
+  INCOMPLETE_OPERATION_OBSERVATION_STATE,
+  readIncompleteOperationListState,
+} from '../rebalancer/incomplete-operation-list-observation.js';
+import {
   MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL,
   MEMBERSHIP_PUBLICATION_KIND,
   MEMBERSHIP_PUBLICATION_OWNER_KEY,
@@ -31,6 +35,8 @@ import {
   MEMBERSHIP_PUBLICATION_STATUS,
 } from './membership-publication-row-contract.js';
 import {
+  DISPATCH_RETRY_OWNER_LIST,
+  buildDispatchRetryRowsAnswer,
   buildMembershipPublicationAckRefreshDecision,
   isDispatchRetryOperation,
   listEquals,
@@ -473,10 +479,21 @@ class MembershipPublicationCoordinatorReads {
     return normalizedOperation.sourceNodeId === this.nodeId;
   }
 
+  /**
+   * The dispatch-retry rows of a ready node: the cache rows, and - while
+   * priority recovery evidence calls for it - the operation-ledger owner's
+   * incomplete-operation list merged over them. The answer names what the
+   * owner list said (DISPATCH_RETRY_OWNER_LIST): a DEFERRED list adds no row
+   * and is not "no rows"; the caller keeps the ready-node replay owed.
+   * @param {string} nodeId - The ready node.
+   * @return {Promise<{rows: Object[], ownerList: string,
+   *   deferredOutcome: Object|null}>}
+   */
   async getDispatchRetryRowsForNode(nodeId) {
     const normalizedNodeId = String(nodeId || '').trim();
     if (!normalizedNodeId) {
-      return [];
+      return buildDispatchRetryRowsAnswer(
+        [], DISPATCH_RETRY_OWNER_LIST.NOT_ASKED);
     }
     const cacheRows = readAllSharedRows(
       this.systemTableCache,
@@ -492,63 +509,66 @@ class MembershipPublicationCoordinatorReads {
         isDispatchRetryOperation(operation)
       );
     });
+    const repository = this.replicaOperationRepository;
+    if (!repository ||
+        !(await this.isPriorityRecoveryDispatchRetryRediscoveryOwed(
+          normalizedNodeId))) {
+      return buildDispatchRetryRowsAnswer(
+        dispatchRows, DISPATCH_RETRY_OWNER_LIST.NOT_ASKED);
+    }
+    const observation = await repository.queryIncompleteOperations({
+      visibilityReadMode: REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED,
+    });
+    if (readIncompleteOperationListState(observation) ===
+        INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED) {
+      return buildDispatchRetryRowsAnswer(
+        dispatchRows,
+        DISPATCH_RETRY_OWNER_LIST.DEFERRED,
+        observation.deferredOutcome,
+      );
+    }
+    const authoritativeRows = observation.operations
+      .filter((operation) => {
+        const normalizedOperation = consumeReplicaOperationView(this, operation);
+        return (
+          normalizedOperation &&
+          isCoordinatorOwnedOperationType(normalizedOperation.type) &&
+          this.isLocallyOwnedReplicaOperationRow(normalizedOperation) &&
+          matchesDispatchRetryReadyNode(
+            normalizedOperation,
+            normalizedNodeId,
+          ) &&
+          isDispatchRetryOperation(normalizedOperation)
+        );
+      })
+      .map((operation) => this.buildDispatchRetryRowFromOperation(operation));
+    return buildDispatchRetryRowsAnswer(
+      mergeDispatchRetryRowsByOperationId(authoritativeRows, dispatchRows),
+      DISPATCH_RETRY_OWNER_LIST.ANSWERED,
+    );
+  }
+
+  // Whether unresolved priority recovery calls for the owner's list (the
+  // cache may lag it).
+  async isPriorityRecoveryDispatchRetryRediscoveryOwed(nodeId) {
     const readinessService = this.controlPlaneReadinessService;
     if (!readinessService || typeof readinessService !== 'object') {
-      return dispatchRows;
+      return false;
     }
     let publicationConvergence = null;
     try {
       publicationConvergence = await readMembershipPublicationConvergence(
         readinessService,
-        normalizedNodeId,
+        nodeId,
         this.now(),
       );
     } catch (_error) {
       publicationConvergence = null;
     }
-    if (
-      !shouldUseAuthoritativePriorityRecoveryRediscovery(normalizedNodeId, {
-        cacheVisible: false,
-        publicationConvergence,
-      })
-    ) {
-      return dispatchRows;
-    }
-    const repository = this.replicaOperationRepository;
-    if (!repository || typeof repository.queryIncompleteOperations !== 'function') {
-      return dispatchRows;
-    }
-    try {
-      // The owner's list supplements the dispatch rows only when it answered
-      // (a DEFERRED observation carries no list and adds nothing).
-      const {operations} = await repository.queryIncompleteOperations({
-        visibilityReadMode: REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED,
-      });
-      if (operations.length === 0) {
-        return dispatchRows;
-      }
-      const authoritativeRows = operations
-        .filter((operation) => {
-          const normalizedOperation = consumeReplicaOperationView(this, operation);
-          return (
-            normalizedOperation &&
-            isCoordinatorOwnedOperationType(normalizedOperation.type) &&
-            this.isLocallyOwnedReplicaOperationRow(normalizedOperation) &&
-            matchesDispatchRetryReadyNode(
-              normalizedOperation,
-              normalizedNodeId,
-            ) &&
-            isDispatchRetryOperation(normalizedOperation)
-          );
-        })
-        .map((operation) => this.buildDispatchRetryRowFromOperation(operation));
-      return mergeDispatchRetryRowsByOperationId(
-        authoritativeRows,
-        dispatchRows,
-      );
-    } catch (_error) {
-      return dispatchRows;
-    }
+    return shouldUseAuthoritativePriorityRecoveryRediscovery(nodeId, {
+      cacheVisible: false,
+      publicationConvergence,
+    });
   }
 
   buildDispatchRetryRowFromOperation(operation) {

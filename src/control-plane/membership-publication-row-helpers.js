@@ -221,6 +221,22 @@ function matchesDispatchRetryReadyNode(operation, nodeId) {
   return resolveDispatchRetryNodeIds(operation).includes(nodeId);
 }
 
+// What the operation-ledger owner's incomplete-operation list said for one
+// dispatch-retry answer: it was not asked (no priority-recovery evidence
+// called for it), it ANSWERED (its rows are merged in), or it was DEFERRED
+// (no list: the ready-node replay stays owed; the answer carries the owner's
+// deferred outcome).
+const DISPATCH_RETRY_OWNER_LIST = Object.freeze({
+  NOT_ASKED: 'not_asked',
+  ANSWERED: 'answered',
+  DEFERRED: 'deferred',
+});
+
+function buildDispatchRetryRowsAnswer(rows, ownerList,
+  deferredOutcome = null) {
+  return Object.freeze({rows, ownerList, deferredOutcome});
+}
+
 function mergeDispatchRetryRowsByOperationId(
   preferredRows = [],
   fallbackRows = [],
@@ -451,6 +467,8 @@ function publicationRowIncludesNode(publicationRow, nodeId) {
 }
 
 export {
+  DISPATCH_RETRY_OWNER_LIST,
+  buildDispatchRetryRowsAnswer,
   abandonMembershipPublication,
   buildDispatchRetryReadyNodeEvidence,
   buildMembershipPublicationAckRefreshDecision,
