@@ -16,10 +16,14 @@ const TEST_CLUSTER_ID = '00000000-0000-4000-8000-000000000000';
  * process knows its cluster identity (the durable owner's KNOWN answer), so
  * the join identity gate (join-cluster-identity.js, witnessed in
  * cluster-identity-join-gate.test.js) admits and the response carries the id.
+ * A file that also runs real seeds passes one gateway-less BootstrapAPI as
+ * the target, so the real seeds keep reading their identity from CONFIG.
  * @param {string} [clusterId]
+ * @param {Object} [target] The BootstrapAPI (default: every one).
  */
-export function answerKnownClusterIdentity(clusterId = TEST_CLUSTER_ID) {
-  BootstrapAPI.prototype.readClusterIdentity = async () => Object.freeze({
+export function answerKnownClusterIdentity(clusterId = TEST_CLUSTER_ID,
+  target = BootstrapAPI.prototype) {
+  target.readClusterIdentity = async () => Object.freeze({
     state: SERVER_IDENTITY_STATE.KNOWN, reason: null, cause: null,
     facts: Object.freeze({clusterId}),
   });

@@ -32,6 +32,7 @@ import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
+import {answerKnownClusterIdentity} from '../bootstrap/bootstrap-api-test-fixtures.js';
 
 
 function createMockStorageAdmissionService() {
@@ -100,6 +101,9 @@ test('Multi-node cluster integration tests', {timeout: TEST_TIMEOUT_MS}, async (
       systemTableCache: cache,
       messageGroupServices: new Map(),
     });
+    // This gateway-less stand-in seed holds no CONFIG partition; it answers
+    // the join identity gate as a seed that knows its cluster id.
+    answerKnownClusterIdentity(undefined, seedApi);
 
     await seedApi.initialize(0, {listen: false});
     const httpPost = createInProcHttpPost(seedApi);
@@ -491,6 +495,7 @@ test('Multi-node cluster integration tests', {timeout: TEST_TIMEOUT_MS}, async (
       messageGroupServices: new Map(),
       systemTableCache: new SystemTableCache(),
     });
+    answerKnownClusterIdentity(undefined, seedApi);
 
     await seedApi.initialize(0, {listen: false});
     const response = await seedApi.getFastify().inject({
