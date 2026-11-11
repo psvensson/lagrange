@@ -126,6 +126,9 @@ function buildStallScenario({policyByFetch}) {
   // anchored on lastStateChangeTime; the scenario models a long-settled
   // topology, so no stabilization wait applies.
   rebalancer.lastStateChangeTime = 0;
+  // The mock coordinator's operation ledger is empty; the global in-flight
+  // count reads that ledger (an unanswered count holds the pass, never zero).
+  rebalancer.getGlobalInFlightOperationCount = async () => 0;
   const policyFetches = [];
   rebalancer.getPolicy = async () => {
     const policy = policyByFetch(policyFetches.length);
