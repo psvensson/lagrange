@@ -10,10 +10,14 @@ import {
 } from '../../scripts/checks/test-primary-classification.js';
 import {
   buildResourceManifest,
+  deriveHostRequirements,
   deriveResourceClasses,
   verifyResourceManifest,
 } from '../../scripts/checks/test-resource-classification.js';
 import {
+  HOST_REQUIREMENTS,
+  HOST_REQUIREMENT_LOOPBACK_REFUSAL,
+  HOST_REQUIREMENT_SHARD_PATHS,
   RESOURCE_CLASSES,
   RESOURCE_CLASS_EXCLUSIVE,
   RESOURCE_CLASS_EXTERNAL_TOOLCHAIN,
@@ -26,6 +30,7 @@ import {
   placedOrdinaryLaneJobsShell,
 } from '../../scripts/checks/test-resource-classification-constants.js';
 import {planLane} from '../../scripts/plan-test-lane.js';
+import {hostRequirementsOf} from '../../scripts/run-classified-test-files.js';
 
 const root = process.cwd();
 
@@ -260,4 +265,36 @@ test('the placement shell\'s generated arithmetic equals the planner\'s rule', (
     assert.equal(js, expected, `the function: ${why}`);
     assert.equal(said[index], expected === null ? 'unset' : String(expected), `the shell: ${why}`);
   });
+});
+
+// Host requirements: the third dimension, a property of the machine a test's
+// assertions are only true on. Each has its curated list, naming live tests.
+test('every host requirement has a curated list of live tests', () => {
+  const {requirements, problems} = deriveHostRequirements(root);
+  assert.deepEqual(problems, []);
+  for (const requirement of HOST_REQUIREMENTS) {
+    assert.ok(fs.existsSync(path.join(root, HOST_REQUIREMENT_SHARD_PATHS[requirement])),
+      `${requirement} has its list`);
+  }
+  assert.deepEqual(Object.keys(requirements).filter((file) =>
+    requirements[file].includes(HOST_REQUIREMENT_LOOPBACK_REFUSAL)).sort(), [
+    'test/bootstrap/fresh-seed-activation.integration.test.js',
+    'test/bootstrap/seed-startup-listener-failure.integration.test.js',
+  ]);
+  assert.deepEqual(hostRequirementsOf(root), requirements, 'placement reads the same record');
+});
+
+test('a host requirement list naming no live test is refused, never dropped', (t) => {
+  const scratch = fs.mkdtempSync(path.join(root, 'test-output', 'host-requirement-'));
+  t.after(() => fs.rmSync(scratch, {recursive: true, force: true}));
+  fs.mkdirSync(path.join(scratch, 'test', 'shards'), {recursive: true});
+  fs.writeFileSync(path.join(scratch, 'test', 'live.test.js'), '');
+  const list = HOST_REQUIREMENT_SHARD_PATHS[HOST_REQUIREMENT_LOOPBACK_REFUSAL];
+  fs.writeFileSync(path.join(scratch, list), '# comment\ntest/live.test.js\ntest/gone.test.js\n');
+  const derived = deriveHostRequirements(scratch);
+  assert.deepEqual(derived.requirements,
+    {'test/live.test.js': [HOST_REQUIREMENT_LOOPBACK_REFUSAL]});
+  assert.equal(derived.problems.length, 1);
+  assert.match(derived.problems[0], /test\/gone\.test\.js/u);
+  assert.throws(() => hostRequirementsOf(scratch), /test\/gone\.test\.js/u);
 });

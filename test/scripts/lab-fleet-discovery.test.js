@@ -19,10 +19,16 @@ import {runHarness} from '../../scripts/lab/harness.js';
 import {capture} from '../../scripts/lab/process.js';
 import * as labProbe from '../../scripts/lab/probe.js';
 import {
-  CAPABILITY_SCRIPT, MOVIELENS_FILE, MOVIELENS_SHA256, READINESS, corpusReadiness,
-  discoverFleet, fleetRequirement, formatFleet, parseCapability, probeTestCapability,
-  recordFleet, runLabTest, runPlacedTestFiles,
+  CAPABILITY_SCRIPT, LOOPBACK_REFUSAL, LOOPBACK_REFUSAL_SCRIPT, LOOPBACK_SAMPLE, MOVIELENS_FILE,
+  MOVIELENS_SHA256, READINESS, classifyLoopbackRefusal, corpusReadiness, discoverFleet,
+  fleetRequirement, formatFleet, hostProvides, parseCapability, placementMachines,
+  probeTestCapability, recordFleet, runLabTest, runPlacedTestFiles,
 } from '../../scripts/lab/probe.js';
+import net from 'node:net';
+import {once} from 'node:events';
+import {
+  HOST_REQUIREMENTS, HOST_REQUIREMENT_LOOPBACK_REFUSAL,
+} from '../../scripts/checks/test-resource-classification-constants.js';
 import * as selector from '../../scripts/select-change-tests.js';
 import {createEmptyState, loadState, saveState} from '../../scripts/lab/state.js';
 
@@ -47,6 +53,7 @@ const FULL = [
   'dependencies_current=yes',
   `movielens_sha256=${MOVIELENS_SHA256}`,
   'cpu_sample_ms=208',
+  'loopback_refusal_samples=refused,refused,refused',
 ].join('\n');
 const REQUIREMENT = Object.freeze({lockGraphSha256: LOCK, nodeMinimum: '22.12.0'});
 // A path with a single quote in it, and how the remote shell must receive it.
@@ -97,6 +104,72 @@ test('an unreported fact is unknown, never a capability the machine was not show
   assert.equal(noRepo.repo.dependenciesCurrent, null);
   assert.equal(parseCapability('repo_present=no\nrepo_free_bytes=5').repoFreeBytes, null,
     'free space of an absent checkout is not believed');
+});
+
+// The loopback-refusal host requirement: whether a connect to a loopback
+// port nobody listens on is refused at once. A WSL2 host with mirrored
+// networking drops it instead (ETIMEDOUT after ~130 s, measured 2026-11-11).
+test('a host\'s loopback refusal is classified from its samples, typed', () => {
+  const {REFUSED, SILENT_DROP, LISTENER, ERROR} = LOOPBACK_SAMPLE;
+  for (const [samples, verdict] of [
+    [`${REFUSED},${REFUSED},${REFUSED}`, LOOPBACK_REFUSAL.REFUSED],
+    [`${REFUSED},${SILENT_DROP},${REFUSED}`, LOOPBACK_REFUSAL.SILENT_DROP],
+    [`${SILENT_DROP},${LISTENER},${ERROR}`, LOOPBACK_REFUSAL.SILENT_DROP],
+    [`${REFUSED},${LISTENER},${REFUSED}`, LOOPBACK_REFUSAL.INCONCLUSIVE],
+    [`${REFUSED},${ERROR}`, LOOPBACK_REFUSAL.INCONCLUSIVE],
+    [`${REFUSED},garbled`, LOOPBACK_REFUSAL.INCONCLUSIVE],
+    ['', null], [undefined, null], [' , ', null],
+  ]) {
+    assert.equal(classifyLoopbackRefusal(samples), verdict, `${samples}`);
+  }
+  assert.equal(parseCapability(FULL).loopbackRefusal, LOOPBACK_REFUSAL.REFUSED);
+  assert.deepEqual(hostProvides(parseCapability(FULL)), [HOST_REQUIREMENT_LOOPBACK_REFUSAL]);
+  const dropping = FULL.replace('loopback_refusal_samples=refused,refused,refused',
+    'loopback_refusal_samples=silent-drop,silent-drop,silent-drop');
+  assert.equal(parseCapability(dropping).loopbackRefusal, LOOPBACK_REFUSAL.SILENT_DROP);
+  assert.deepEqual(hostProvides(parseCapability(dropping)), []);
+  assert.equal(parseCapability('cores=4').loopbackRefusal, null,
+    'not measured is unknown, never refusal');
+  assert.deepEqual(hostProvides(parseCapability('cores=4')), [], 'and provides nothing');
+  assert.deepEqual(hostProvides(null), []);
+  // Every declared requirement has a measured provider: a host that
+  // measured everything provides every one of them.
+  assert.deepEqual(hostProvides(parseCapability(FULL)), [...HOST_REQUIREMENTS]);
+  // A host requirement it lacks is a gap, not a disqualification.
+  assert.deepEqual(readiness(dropping),
+    {ready: true, missing: [], gaps: ['no-helm', 'no-wasm-tools', 'no-psql', 'no-rg',
+      `no-${HOST_REQUIREMENT_LOOPBACK_REFUSAL}`]});
+  // Placement carries what each machine provides.
+  const entry = (name, text) => ({name, capability: {...parseCapability(text),
+    repoPath: '/srv/repo', repo: {head: 'c'.repeat(40)}}, readiness: readiness(text)});
+  const fleet = [{name: '(controller)', controller: true, capability: {cpuSampleMs: 200},
+    readiness: readiness(FULL)}, entry('refusing', FULL), entry('dropping', dropping)];
+  const state = {nodes: {refusing: {ssh: 'p@r'}, dropping: {ssh: 'p@d'}}};
+  assert.deepEqual(placementMachines(fleet, state).map(({name, provides}) => [name, provides]),
+    [['refusing', [HOST_REQUIREMENT_LOOPBACK_REFUSAL]], ['dropping', []]]);
+});
+
+// The probe's own script, run here: a port with a listener is no evidence,
+// one that refuses is refusal. Its range is the test allocator's; here it is
+// narrowed to one port this test controls.
+test('the loopback probe script types each sample it takes', async () => {
+  const sample = (port) => new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, ['-e', LOOPBACK_REFUSAL_SCRIPT, '--',
+      String(port), String(port + 1), '2000', '2'], {stdio: ['ignore', 'pipe', 'inherit']});
+    let out = '';
+    child.stdout.on('data', (chunk) => out += chunk);
+    child.once('error', reject);
+    child.once('close', () => resolve(out.trim()));
+  });
+  const server = net.createServer((socket) => socket.destroy());
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const {port} = server.address();
+  assert.equal(await sample(port), `${LOOPBACK_SAMPLE.LISTENER},${LOOPBACK_SAMPLE.LISTENER}`);
+  await new Promise((resolve) => server.close(resolve));
+  // A port listened on and closed is refused even on the host that drops a
+  // never-bound one (measured 2026-11-11), so this proves the typing only.
+  assert.equal(await sample(port), `${LOOPBACK_SAMPLE.REFUSED},${LOOPBACK_SAMPLE.REFUSED}`);
 });
 
 test('readiness names every reason a machine cannot run the corpus', () => {
@@ -723,6 +796,8 @@ test('the controller is probed by the same script it sends to a lab node', async
   assert.ok(path.isAbsolute(String(capability.nodePath)), 'the absolute node it used');
   assert.equal(capability.repoPath, process.cwd());
   assert.ok(capability.cpuSampleMs > 0, 'a speed sample');
+  assert.ok(Object.values(LOOPBACK_REFUSAL).includes(capability.loopbackRefusal),
+    `loopback refusal measured, typed: ${capability.loopbackRefusal}`);
   assert.equal(capability.repo.present, true,
     'a linked worktree has a .git FILE, and still counts as a repository');
 

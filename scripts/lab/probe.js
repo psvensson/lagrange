@@ -12,6 +12,8 @@ import {gitProcessEnvironment} from '../checks/git-process-environment.js';
 import {IMPORT_GRAPH_PATH, IMPORT_GRAPH_SEAL_PATH} from '../checks/impact-proof-cone-constants.js';
 import {PROOF_CHECKOUT_GENERATORS} from '../checks/proof-checkout-preparation.js';
 import {
+  HOST_REQUIREMENTS,
+  HOST_REQUIREMENT_LOOPBACK_REFUSAL,
   LANE_JOBS_CAP_ENV,
   PLACED_ORDINARY_LANE_JOBS_ENV,
   RESOURCE_CLASS_ORDINARY,
@@ -23,6 +25,7 @@ import {defaultLoadThreshold} from '../checks/wait-for-load-headroom.js';
 import {HEADROOM, THERMAL_REFUSAL_LINE, waitForThermalHeadroom}
   from '../checks/wait-for-thermal-headroom.js';
 import {TEST_FILE_LINE, formatTestFilesSummary, relayedLine} from '../run-test-files.js';
+import {PORT_RANGE_END, PORT_RANGE_START} from '../../src/test-helpers/port-allocator-constants.js';
 import {capture, killGroup, run} from './process.js';
 import {loadState, saveState} from './state.js';
 
@@ -442,6 +445,35 @@ const CPU_SAMPLE_SCRIPT =
   'let h=Buffer.alloc(32);for(let i=0;i<200000;i+=1)' +
   'h=c.createHash("sha256").update(h).digest();' +
   'console.log(Number((process.hrtime.bigint()-t)/1000000n))';
+// Whether a loopback port nobody listens on is refused at once: the
+// loopback-refusal host requirement (test-resource-classification-constants).
+// Each sample connects to a port drawn from the range the test port
+// allocator hands out, one never bound here first: on the WSL2 host that
+// drops such connects (ETIMEDOUT after 131-135 s), a port that was listened
+// on and closed IS refused, still 40 s later (measured 2026-11-11), so a
+// just-closed port would report the very host that fails as refusing. A
+// sample is `refused`, `silent-drop` (no answer within the bound), `listener`
+// (something listens there: no evidence) or `error` (any other failure). The
+// samples run in parallel, so the whole measurement costs one bound at most.
+const LOOPBACK_SAMPLE = Object.freeze({REFUSED: 'refused', SILENT_DROP: 'silent-drop',
+  LISTENER: 'listener', ERROR: 'error'});
+const LOOPBACK_SAMPLE_COUNT = 3;
+const LOOPBACK_SAMPLE_BOUND_MS = 2000;
+const LOOPBACK_SAMPLE_SEPARATOR = ',';
+const LOOPBACK_REFUSAL_SCRIPT = 'const n=require("net");' +
+  'const [s,e,b,k]=process.argv.slice(1).map(Number);' +
+  'const one=()=>new Promise((r)=>{' +
+  'const c=n.connect({host:"127.0.0.1",port:s+Math.floor(Math.random()*(e-s))});' +
+  `const t=setTimeout(()=>{c.destroy();r("${LOOPBACK_SAMPLE.SILENT_DROP}");},b);` +
+  `c.once("connect",()=>{clearTimeout(t);c.destroy();r("${LOOPBACK_SAMPLE.LISTENER}");});` +
+  'c.once("error",(x)=>{clearTimeout(t);' +
+  `r(x.code==="ECONNREFUSED"?"${LOOPBACK_SAMPLE.REFUSED}":"${LOOPBACK_SAMPLE.ERROR}");});});` +
+  'Promise.all(Array.from({length:k},one))' +
+  `.then((o)=>console.log(o.join("${LOOPBACK_SAMPLE_SEPARATOR}")));`;
+// The host's verdict from its samples: one silent drop is decisive - a port
+// nobody listens on went unanswered - and only all-refused proves refusal.
+const LOOPBACK_REFUSAL = Object.freeze({REFUSED: 'refused', SILENT_DROP: 'silent-drop',
+  INCONCLUSIVE: 'inconclusive'});
 // Leading space on purpose: `$((` is arithmetic expansion to a POSIX shell,
 // so a subshell opened right after `$(` must be separated from it. The file
 // goes in on stdin: GNU sha256sum escapes a name holding a backslash and then
@@ -532,6 +564,9 @@ const CAPABILITY_SCRIPT = [
   '  say repo_present no',
   'fi',
   `say cpu_sample_ms "$(node -e '${CPU_SAMPLE_SCRIPT}' 2>/dev/null)"`,
+  `say loopback_refusal_samples "$(node -e ${shellQuote(LOOPBACK_REFUSAL_SCRIPT)} -- ` +
+    `${PORT_RANGE_START} ${PORT_RANGE_END} ${LOOPBACK_SAMPLE_BOUND_MS} ` +
+    `${LOOPBACK_SAMPLE_COUNT} 2>/dev/null)"`,
   ...LAB_LOCK_PROBE,
 ].join('\n');
 
@@ -550,6 +585,42 @@ function capabilityFlag(value) {
 function capabilityText(value) {
   const text = String(value || EMPTY).trim();
   return text.length > 0 ? text : null;
+}
+
+/**
+ * A host's loopback-refusal verdict from the probe's samples: `silent-drop`
+ * when any sample went unanswered within its bound, `refused` when every one
+ * was refused, `inconclusive` otherwise (a listener was hit, or another
+ * error), and null - unknown - when nothing was reported.
+ * @param {string|null|undefined} text the comma-separated samples
+ * @return {string|null}
+ */
+export function classifyLoopbackRefusal(text) {
+  const samples = String(text || EMPTY).split(LOOPBACK_SAMPLE_SEPARATOR)
+    .map((sample) => sample.trim()).filter((sample) => sample.length > 0);
+  if (samples.length === 0) return null;
+  if (samples.includes(LOOPBACK_SAMPLE.SILENT_DROP)) return LOOPBACK_REFUSAL.SILENT_DROP;
+  return samples.every((sample) => sample === LOOPBACK_SAMPLE.REFUSED) ?
+    LOOPBACK_REFUSAL.REFUSED : LOOPBACK_REFUSAL.INCONCLUSIVE;
+}
+
+// Which measured fact provides each host requirement. Every requirement the
+// classification declares has exactly one provider here (a witness binds it).
+const HOST_REQUIREMENT_PROVIDERS = Object.freeze({
+  [HOST_REQUIREMENT_LOOPBACK_REFUSAL]: (capability) =>
+    capability.loopbackRefusal === LOOPBACK_REFUSAL.REFUSED,
+});
+
+/**
+ * The host requirements a probed machine provides, as measured. A machine
+ * never probed provides none.
+ * @param {Object|null} capability
+ * @return {string[]}
+ */
+export function hostProvides(capability) {
+  if (!capability || typeof capability !== 'object') return [];
+  return HOST_REQUIREMENTS.filter((requirement) =>
+    HOST_REQUIREMENT_PROVIDERS[requirement](capability));
 }
 
 /**
@@ -592,6 +663,7 @@ export function parseCapability(text, probedAt = Date.now()) {
     },
     movielensSha256: repoPresent ? capabilityText(values.movielens_sha256) : null,
     cpuSampleMs: capabilityNumber(values.cpu_sample_ms),
+    loopbackRefusal: classifyLoopbackRefusal(values.loopback_refusal_samples),
     thermal: capabilityText(values.thermal),
     dockerRootFreeBytes: capabilityNumber(values.docker_root_free_bytes),
     repoFreeBytes: repoPresent ? capabilityNumber(values.repo_free_bytes) : null,
@@ -689,6 +761,12 @@ export function corpusReadiness(capability, {lockGraphSha256, nodeMinimum}) {
   for (const tool of PARTIAL_TOOLS) {
     if (capability.tools?.[tool] !== true) gaps.push(`${PARTIAL_TOOL_GAP_PREFIX}${tool}`);
   }
+  // A host requirement it does not provide is a gap too: only the files that
+  // declare it are kept off the machine.
+  const provided = hostProvides(capability);
+  for (const requirement of HOST_REQUIREMENTS) {
+    if (!provided.includes(requirement)) gaps.push(`${PARTIAL_TOOL_GAP_PREFIX}${requirement}`);
+  }
   return {ready: missing.length === 0, missing, gaps};
 }
 
@@ -728,7 +806,8 @@ function repositoryProblems(repo, lockGraphSha256) {
   return problems;
 }
 
-export {CAPABILITY_SCRIPT, MOVIELENS_FILE, MOVIELENS_SHA256, READINESS, REQUIREMENT_SOURCE};
+export {CAPABILITY_SCRIPT, LOOPBACK_REFUSAL, LOOPBACK_REFUSAL_SCRIPT, LOOPBACK_SAMPLE,
+  MOVIELENS_FILE, MOVIELENS_SHA256, READINESS, REQUIREMENT_SOURCE};
 
 // ---------------------------------------------------------------------------
 // Worker provisioning: the one script a newly registered lab worker runs, by
@@ -1350,6 +1429,9 @@ const PLACEMENT_TEXT = Object.freeze({
   REFUSED_BUSY: 'held by another agent',
   REFUSED_HOT: 'too hot to run',
   NO_NEXT_HOST: ', and no ready lab host is left',
+  UNPLACEABLE: 'unplaceable ',
+  REQUIRES: ': requires ',
+  NO_PROVIDER: ', which no machine of this run fits (',
   DEADLINE: 'deadline',
   INTERRUPTED: 'interrupted',
 });
@@ -1365,22 +1447,27 @@ const PLACEMENT_TEXT = Object.freeze({
  * no headroom - so a held tier takes only what no free machine can. A lab
  * machine left with less work than its setup is dropped and the split redone
  * while another free machine remains, so a machine is used only when it
- * shortens the run.
- * @param {Array<{file: string, ms: number, jobs: number}>} costs
+ * shortens the run - never when it is the only one some file fits. A file no
+ * machine fits (a host requirement none provides) is placed nowhere:
+ * unplaceableCosts names it, and its caller reports it red.
+ * @param {Array<{file: string, ms: number, jobs: number, requires?: string[]}>} costs
  * @param {Array<{name: string, controller: boolean, speed: number,
- *   cores?: number, tier?: number, avoid?: string[]}>} machines
+ *   cores?: number, tier?: number, avoid?: string[], provides?: string[]}>} machines
  * @param {{setupMs?: number}} [options]
  * @return {Array<{machine: Object, files: string[], loadMs: number}>}
  */
 export function placeTestFiles(costs, machines, {setupMs = PLACEMENT_REMOTE_SETUP_MS} = {}) {
+  const placeable = costs.filter((cost) => machines.some((machine) => fits(machine, cost)));
   let candidates = machines;
   for (;;) {
-    const shards = assignByCost(costs, candidates, setupMs);
+    const shards = assignByCost(placeable, candidates, setupMs);
     const free = candidates.filter((machine) => !machine.tier).length;
     const idle = shards
       .filter((shard) => !shard.machine.controller &&
         shard.loadMs - (shard.machine.waitMs ?? 0) < 2 * setupMs &&
-        (shard.machine.tier || free > 1))
+        (shard.machine.tier || free > 1) &&
+        placeable.every((cost) => candidates.some((machine) =>
+          machine !== shard.machine && fits(machine, cost))))
       .sort((left, right) => left.loadMs - right.loadMs)[0];
     if (!idle) return shards.filter((shard) => shard.files.length > 0);
     candidates = candidates.filter((machine) => machine !== idle.machine);
@@ -1426,13 +1513,46 @@ function jobsOn(machine, cost) {
   return Math.min(cost.jobs, machine.cores - 1);
 }
 
-// Whether a file may go to a machine: the controller takes anything; a lab
-// machine not a file it is known to fail, nor one it could not finish well
-// inside the per-file timeout.
+// Whether a file may go to a machine: never one without every host
+// requirement the file declares, measured there; past that the controller
+// takes anything, and a lab machine not a file it is known to fail, nor one
+// it could not finish well inside the per-file timeout.
 function fits(machine, cost) {
+  if (!providesFor(machine, cost)) return false;
   if (machine.controller) return true;
   return !machine.avoid?.includes(cost.file) &&
     cost.ms * machine.speed <= PLACEMENT_FILE_FIT_MS;
+}
+
+// A cost without `requires` requires nothing (a hand-built plan); a machine
+// without `provides` provides nothing (one never probed).
+function providesFor(machine, cost) {
+  return (cost.requires ?? []).every((requirement) =>
+    (machine.provides ?? []).includes(requirement));
+}
+
+/**
+ * The files no machine of a run fits: each with the host requirements it
+ * declares, for the run to report red. Placement never drops them silently.
+ * @param {Array<{file: string, requires?: string[]}>} costs
+ * @param {Array<Object>} machines
+ * @return {Array<{file: string, requires: string[]}>}
+ */
+export function unplaceableCosts(costs, machines) {
+  return costs.filter((cost) => !machines.some((machine) => fits(machine, cost)))
+    .map((cost) => ({file: cost.file, requires: [...(cost.requires ?? [])]}));
+}
+
+// One line per file no machine of the run fits, naming what it requires and
+// what each machine considered measured, so the red says which host property
+// was missing.
+function formatUnplaceable(prefix, unplaced, machines) {
+  const measured = machines.map((machine) =>
+    `${machine.name} provides [${(machine.provides ?? []).join(FLEET_TEXT.LIST)}]`)
+    .join(FLEET_TEXT.LIST);
+  return unplaced.map(({file, requires}) => `${prefix}${PLACEMENT_TEXT.UNPLACEABLE}${file}` +
+    `${PLACEMENT_TEXT.REQUIRES}${requires.join(FLEET_TEXT.LIST)}${PLACEMENT_TEXT.NO_PROVIDER}` +
+    `${measured})`);
 }
 
 // What a routing miss is remembered against: the machine's gaps and node.
@@ -1482,6 +1602,7 @@ export function placementMachines(fleet, state, {controllerFactor = 1, held = fa
       nodeMajor: String(cap.nodeVersion || EMPTY).replace(/^v/u, EMPTY)
         .split(PLACEMENT_VERSION_SEPARATOR)[0],
       gapsKey,
+      provides: hostProvides(cap),
       avoid: node.placement?.gapsKey === gapsKey ? [...node.placement.avoid] : [],
       ...(held ? {waitMs: holdWaitMs(cap.machineLock?.holder, now)} : {}),
     });
@@ -1720,10 +1841,12 @@ export async function runPlacedTestFiles(files, deps) {
   if (fleet.machines.length === 0) return local(PLACEMENT_TEXT.NO_MACHINE);
   // A controller without headroom takes only what no lab machine can.
   const headroom = deps.controllerHeadroom ? deps.controllerHeadroom() : CONTROLLER_FIT;
-  const shards = placeTestFiles(costs, [{...CONTROLLER_MACHINE, tier: headroom.fit ? 0 : TIER.HOT},
-    ...fleet.machines]);
+  const machines = [{...controllerMachine(fleet.fleet ?? []), tier: headroom.fit ? 0 : TIER.HOT},
+    ...fleet.machines];
+  const shards = placeTestFiles(costs, machines);
+  const unplaced = unplaceableCosts(costs, machines);
   const remote = shards.filter((shard) => !shard.machine.controller);
-  if (remote.length === 0) return local(PLACEMENT_TEXT.NO_GAIN);
+  if (remote.length === 0 && unplaced.length === 0) return local(PLACEMENT_TEXT.NO_GAIN);
   let checkBase;
   try {
     checkBase = deps.checkBase();
@@ -1731,6 +1854,7 @@ export async function runPlacedTestFiles(files, deps) {
     return local(`${PLACEMENT_TEXT.NO_CHECK_BASE}${error.message}`);
   }
   reportPlacement({files, shards, headroom, aloneMs, write});
+  for (const line of formatUnplaceable(PLACEMENT_TEXT.PREFIX, unplaced, machines)) write(line);
   // Every lab shard is on its way before the controller's own files start.
   const context = {deps, sha, forward: forwardedPolicy(env, checkBase), costs, write,
     machines: fleet.machines, tried: new Set(remote.map((shard) => shard.machine.name)),
@@ -1758,6 +1882,8 @@ export async function runPlacedTestFiles(files, deps) {
   try {
     const controllerShard = shards.find((shard) => shard.machine.controller);
     const statuses = controllerShard ? [await runHere(controllerShard.files)] : [];
+    // A file no machine fits is red, never skipped.
+    if (unplaced.length > 0) statuses.push(1);
     return await settleRemoteShards((await followed).flat(),
       {deps, fleet, statuses, write, runHere, leftover: context.leftover});
   } finally {
@@ -2692,10 +2818,12 @@ function bySpeed(left, right) {
 
 /**
  * Which machine runs which lanes of a hand run. Without --split every lane
- * goes to one lab machine: the one named, or the fastest measured this run.
- * With --split the files are spread by measured cost (placeTestFiles) as
- * planLabSplit decides. Each machine's own runner takes its lanes one after
- * another, so the exclusive lane still shares its machine with nothing.
+ * goes to one lab machine: the one named, or the fastest measured this run,
+ * less any file whose host requirement that machine does not provide (the
+ * run reports those unplaceable). With --split the files are spread by
+ * measured cost (placeTestFiles) as planLabSplit decides. Each machine's own
+ * runner takes its lanes one after another, so the exclusive lane still
+ * shares its machine with nothing.
  * @param {Array<{resourceClass: string, files: string[], jobs: number}>} plan
  * @param {Array<Object>} machines placementMachines' result
  * @param {{on?: string|null, split?: boolean, controller?: Object,
@@ -2717,7 +2845,13 @@ export function placeLabLanes(plan, machines, {on = null, split = false,
     throw new Error(`${on}${LAB_TEST_TEXT.NOT_READY}` +
       `${entry ? fleetVerdict(entry) : LAB_TEST_TEXT.NOT_LISTED}`);
   }
-  return [{machine: first, lanes: plan}];
+  // Only its host requirements: one machine takes every other file, however long.
+  const unplaced = new Set(costs.filter((cost) => !providesFor(first, cost))
+    .map(({file}) => file));
+  const lanes = plan.map((lane) =>
+    ({...lane, files: lane.files.filter((file) => !unplaced.has(file))}))
+    .filter((lane) => lane.files.length > 0);
+  return lanes.length > 0 ? [{machine: first, lanes}] : [];
 }
 
 // The controller is a reserve while the lab can carry the run (owner,
@@ -2910,7 +3044,7 @@ function splitHeadroom(deps, sha) {
 function controllerMachine(fleet) {
   const capability = fleet.find((entry) => entry.controller)?.capability;
   return {...CONTROLLER_MACHINE, cores: capability?.cores ?? null,
-    memKiB: capability?.memKiB ?? null};
+    memKiB: capability?.memKiB ?? null, provides: hostProvides(capability)};
 }
 
 // One machine's share, started: its lanes' files, the lines it streamed, and
@@ -2949,10 +3083,11 @@ function copyLabResults(share, root, write) {
 }
 
 // Every share's verdicts, from its own lines: what it proved, what was red,
-// and what never reported - which is a failure, never a pass.
-async function settleLabShares(shares, {root, write}) {
-  const totals = {total: 0, passed: 0, failed: 0, assertions: 0};
-  let status = 0;
+// and what never reported - which is a failure, never a pass. A file no
+// machine was given counts failed too.
+async function settleLabShares(shares, {root, write, unplaced}) {
+  const totals = {total: unplaced.length, passed: 0, failed: unplaced.length, assertions: 0};
+  let status = unplaced.length > 0 ? LAB_TEST_FAILED : 0;
   for (const share of shares) {
     const outcome = await share.run.done;
     const exit = typeof outcome === 'object' ? outcome.status : outcome;
@@ -2997,14 +3132,19 @@ export async function runLabTest({plan, costs = [], commit, checkBase, on = null
   split = false, root, results = LAB_TEST_RESULTS_FILE, env = process.env,
   write = (line) => process.stdout.write(`${line}${PLACEMENT_NEWLINE}`)}, deps) {
   let shares = [];
+  let unplaced = [];
   try {
     const {fleet = [], machines, held = []} = await deps.discover(commit.sha);
     const placed = split ? planLabSplit(plan, machines, {held, costs,
       controller: controllerMachine(fleet), controllerHeadroom: splitHeadroom(deps, commit.sha)}) :
-      {assignments: placeLabLanes(plan, machines, {on, fleet})};
+      {assignments: placeLabLanes(plan, machines, {on, fleet, costs})};
     const {assignments} = placed;
+    unplaced = unplacedFiles(plan, assignments, costs);
     for (const line of [...formatLabDecision(assignments), ...(split ? [formatLabController(placed),
-      ...formatLabSkipped(fleet, assignments, placed.controller)] : [])]) write(line);
+      ...formatLabSkipped(fleet, assignments, placed.controller)] : []),
+    ...formatUnplaceable(LAB_TEST_TEXT.PREFIX, unplaced,
+      split ? [controllerMachine(fleet), ...machines, ...held] :
+        assignments.map(({machine}) => machine))]) write(line);
     if (assignments.some(({machine}) => machine.controller) && deps.commitAt() !== commit.sha) {
       throw new Error(`${LAB_TEST_TEXT.CONTROLLER_TREE}${commit.sha}`);
     }
@@ -3021,7 +3161,15 @@ export async function runLabTest({plan, costs = [], commit, checkBase, on = null
   } finally {
     release();
   }
-  return settleLabShares(shares, {root, write});
+  return settleLabShares(shares, {root, write, unplaced});
+}
+
+// The planned files no assignment carries, with what each requires.
+function unplacedFiles(plan, assignments, costs) {
+  const placed = new Set(assignments.flatMap(({lanes}) => lanes.flatMap((lane) => lane.files)));
+  const costOf = new Map(costs.map((cost) => [cost.file, cost]));
+  return plan.flatMap((lane) => lane.files).filter((file) => !placed.has(file))
+    .map((file) => ({file, requires: [...(costOf.get(file)?.requires ?? [])]}));
 }
 
 /**

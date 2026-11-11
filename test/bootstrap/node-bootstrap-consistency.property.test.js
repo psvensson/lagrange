@@ -45,6 +45,7 @@ import {
   '../integration/helpers/cluster-test-helpers.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
+import {scaleByMachineFactor} from '../../scripts/test-machine-factor.js';
 const ports = createPortAllocator(import.meta.url);
 function getUniquePort() {
   return ports.getPort();
@@ -142,7 +143,14 @@ const FAST_BOOTSTRAP_CONFIG = {
   replicaStaggerDelayMs: 10,
 };
 
-test('Property 11: Node Bootstrap Consistency', {timeout: 90000}, async (t) => {
+// Three seed bootstraps: about 29 s on the reference machine. The bound is
+// work, so it scales by the one owner of host speed, as the seed-bootstrap
+// bounds of three-node-seed-rebalance do; at factor 1 it stays 90 s.
+const BOOTSTRAPS_TIMEOUT_MS = 90000;
+
+test('Property 11: Node Bootstrap Consistency', {
+  timeout: scaleByMachineFactor(BOOTSTRAPS_TIMEOUT_MS),
+}, async (t) => {
   t.beforeEach(() => {
     initializeTestEnvironment();
   });

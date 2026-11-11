@@ -10,8 +10,10 @@ import {test} from 'node:test';
 
 import {
   controllerHeadroom, formatLabController, formatLabDecision, formatLabSkipped, placeLabLanes,
-  placeTestFiles, placementMachines, planLabSplit, runLabTest,
+  placeTestFiles, placementMachines, planLabSplit, runLabTest, unplaceableCosts,
 } from '../../scripts/lab/probe.js';
+import {HOST_REQUIREMENT_LOOPBACK_REFUSAL} from
+  '../../scripts/checks/test-resource-classification-constants.js';
 import {CONTROLLER, LANE, fakeInventory, lab} from './test-placement-fixtures.js';
 
 const SECOND = 1000;
@@ -300,3 +302,81 @@ test('a split prints its plan and every skipped machine before any share starts'
   assert.ok(reserved.includes('lab test: skipped (controller): reserve - 4 free lab hosts'),
     reserved.join('\n'));
 });
+
+// A file declaring a host requirement (test/shards/host-*.txt) goes only to a
+// host whose probe measured it, and with no such host it is reported red -
+// never skipped, never run where its assertions mean something else.
+const REFUSAL = HOST_REQUIREMENT_LOOPBACK_REFUSAL;
+const REFUSING = Object.freeze([REFUSAL]);
+
+test('a file requiring a host property goes only to a host that measured it', () => {
+  const costs = [
+    {file: 'needs-refusal-a', ms: 3 * MINUTE, jobs: 1, requires: REFUSING},
+    {file: 'needs-refusal-b', ms: 2 * MINUTE, jobs: 1, requires: REFUSING},
+    ...Array.from({length: 12}, (_, index) =>
+      ({file: `plain-${index}`, ms: 2 * MINUTE, jobs: 1, requires: []})),
+  ];
+  const dropping = lab('dropping', 1, {provides: []});
+  const refusing = lab('refusing', 1.6, {provides: REFUSING});
+  const controller = {...CONTROLLER, provides: []};
+  const shards = placeTestFiles(costs, [controller, dropping, refusing]);
+  const where = (file) => shards.find((shard) => shard.files.includes(file))?.machine.name;
+  assert.equal(where('needs-refusal-a'), 'refusing');
+  assert.equal(where('needs-refusal-b'), 'refusing');
+  assert.ok(shards.some((shard) => shard.machine.name === 'dropping'),
+    'a host without the property still takes the files that do not require it');
+  assert.deepEqual(unplaceableCosts(costs, [controller, dropping, refusing]), []);
+
+  // The only provider is never dropped as idle, though its share is smaller
+  // than its setup would repay.
+  const small = placeTestFiles([{file: 'tiny', ms: 1000, jobs: 1, requires: REFUSING},
+    {file: 'plain', ms: 1000, jobs: 1, requires: []}], [controller, dropping, refusing]);
+  assert.deepEqual(small.find((shard) => shard.files.includes('tiny'))?.machine.name, 'refusing');
+
+  // No machine provides it: placed nowhere, and named with what it requires.
+  assert.deepEqual(placeTestFiles(costs, [controller, dropping]).flatMap((shard) => shard.files)
+    .filter((file) => file.startsWith('needs-')), []);
+  assert.deepEqual(unplaceableCosts(costs, [controller, dropping]), [
+    {file: 'needs-refusal-a', requires: [REFUSAL]},
+    {file: 'needs-refusal-b', requires: [REFUSAL]}]);
+});
+
+test('a hand lab run reports a file no host provides for as failed, and runs the rest',
+  async (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'lab-test-unplaceable-'));
+    t.after(() => fs.rmSync(root, {recursive: true, force: true}));
+    const plan = [{resourceClass: LANE.EXCLUSIVE, files: ['needs', 'plain'], jobs: 1}];
+    const costs = [{file: 'needs', ms: MINUTE, jobs: 1, requires: REFUSING},
+      {file: 'plain', ms: MINUTE, jobs: 1, requires: []}];
+    const ran = [];
+    const run = (split, machines) => {
+      const lines = [];
+      ran.length = 0;
+      return runLabTest({plan, costs, split, root,
+        commit: {sha: 'a'.repeat(40), gitRoot: root, release: () => {}},
+        write: (line) => lines.push(line)}, {
+        discover: async () => ({fleet: [], machines}),
+        commitAt: () => 'b'.repeat(40),
+        controllerHeadroom: () => ({fit: true, reason: null}),
+        // A share's verdicts arrive as its streamed lines.
+        runRemote: (shard, {onLine}) => {
+          ran.push(...shard.files);
+          for (const file of shard.files) onLine(`ok ${file} (1 assertions, 5ms)`, 'out');
+          return {done: Promise.resolve({status: 0, errors: '', log: ''})};
+        },
+      }).then((status) => ({status, lines}));
+    };
+    const dropping = [lab('dropping', 1, {provides: [], cores: 4})];
+    for (const split of [false, true]) {
+      const {status, lines} = await run(split, dropping);
+      assert.equal(status, 1, `split=${split}: a file no host provides for is red`);
+      assert.deepEqual(ran, ['plain'], `split=${split}: it is run nowhere, the rest still runs`);
+      assert.ok(lines.some((line) => line.startsWith('lab test: unplaceable needs: requires ' +
+        `${REFUSAL}, which no machine of this run fits (`)), lines.join('\n'));
+      assert.equal(lines.at(-1), '# test-files total=2 pass=1 fail=1 assertions=1',
+        `split=${split}: counted failed in the merged summary`);
+    }
+    const {status, lines} = await run(false, [lab('refusing', 1, {provides: REFUSING, cores: 4})]);
+    assert.equal(status, 0, lines.join('\n'));
+    assert.deepEqual(ran.sort(), ['needs', 'plain'], 'a host that measured it takes it');
+  });
