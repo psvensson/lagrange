@@ -105,7 +105,6 @@ function requeueHeldPublicationWrite(coordinator, answer) {
 export {
   MEMBERSHIP_PUBLICATION_WRITE_HOLD,
   PUBLICATION_WRITE_UNSETTLED_MAX_REQUEUE_MS,
-  PUBLICATION_WRITE_UNSETTLED_REASON,
   buildReconcilePublicationWriteAnswer,
   requeueHeldPublicationWrite,
 };
