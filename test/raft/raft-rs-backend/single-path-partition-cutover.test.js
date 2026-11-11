@@ -344,7 +344,7 @@ test('seed bootstraps and serves a write on rs-raft by default',
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
       config: {
-        leadershipWaitTimeoutMs: 3000,
+        // Consume the production budget for the complete seed release workflow.
         leadershipWaitInitialDelayMs: 10,
         leadershipWaitMaxDelayMs: 100,
         replicaStaggerDelayMs: 20,

@@ -1,0 +1,9 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pending",
+  "receipts": [
+    {"id": "default-construction-original-witness", "passed": false},
+    {"id": "deadline-and-control-regressions", "passed": false},
+    {"id": "independent-review", "passed": false}
+  ]
+}

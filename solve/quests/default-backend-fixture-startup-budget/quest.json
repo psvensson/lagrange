@@ -1,0 +1,32 @@
+{
+  "schema": "solve-quest/2",
+  "id": "default-backend-fixture-startup-budget",
+  "class": "fix",
+  "statement": "Correct the default-backend integration fixture by removing its obsolete leadershipWaitTimeoutMs3000 override and consuming BootstrapService's existing production default. The unchanged real backend and CREATE/INSERT/SELECT assertions are the witness. This is a fixture budget correction, not a product performance or release-policy change. Preserve the original hosted red and separately require corrected exact-head hosted CI before integration.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/default-backend-fixture-startup-budget/evidence/receipt.json",
+      "requiredReceipts": [
+        "default-construction-original-witness",
+        "deadline-and-control-regressions",
+        "independent-review"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "owner-default",
+      "statement": "Remove only this fixture's explicit3000 override; no replacement literal, scaling formula, per-cohort budgeting or production source edit. BootstrapService retains production configuration authority."
+    },
+    {
+      "id": "preserved-contract",
+      "statement": "Keep original90s watchdog, workload, assertions, trace, shared deadline/refusal semantics and initial/final control authority fences. No retries, skips or test claim weakening. If corrected witness fails, preserve first cause and reassess."
+    },
+    {
+      "id": "exact-evidence",
+      "statement": "Original source-pair run42414798673 is retained unchanged at3000. Proof archive sha256507443a948f6e7ebc2e2683a0d50dd9d26bc499619788c2ebc579c105a707129 is a GitHub solve-evidence release asset, not a repository directory. Exact corrected hosted witness and required CI are mandatory before merge; local proof and this Quest do not grant package/native acceptance."
+    }
+  ],
+  "sealedAt": "5c30388e498cb1578dc7ba7199bf2de51266d77b"
+}

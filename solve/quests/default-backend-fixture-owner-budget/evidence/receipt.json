@@ -1,0 +1,178 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "sourceHead": "44ff129dfdff752f400f4b444a77b4197bea917a",
+  "sourceBase": "5c30388e498cb1578dc7ba7199bf2de51266d77b",
+  "archive": {
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/default-backend-fixture-startup-budget--seed-fixture-proof-20261107T2144Z.tar.gz",
+    "sha256": "8325f699ebb79de0055f77d4317d60239ddd59937609f8be066ef091c0b83e70",
+    "payloadMembers": 70
+  },
+  "receiptMeaning": "Admits preserved earlier evidence against unchanged source. It does not claim new runtime execution at the successor seal, predecessor acceptance, canonical landing, final-head CI after a new commit, corpus, package or native acceptance.",
+  "receipts": [
+    {
+      "id": "owner-default-source",
+      "passed": true,
+      "test": "test/raft/raft-rs-backend/single-path-partition-cutover.test.js",
+      "testSha256": "8a8c417881750dae3888e098d241eaf5d8346f7d90a5c912a4e32537eae5c4bc",
+      "archiveDiffPath": "seed-fixture-source.diff",
+      "proof": "Only fixture override removal; production default and source unchanged; original assertions and 90-second watchdog preserved."
+    },
+    {
+      "id": "unretried-focused-proof",
+      "passed": true,
+      "host": "carinas-windows",
+      "nodeVersion": "v22.23.2",
+      "thermal": "unmeasurable under canonical remote policy",
+      "files": [
+        {
+          "file": "test/raft/raft-rs-backend/single-path-partition-cutover.test.js",
+          "sourceHead": "44ff129dfdff752f400f4b444a77b4197bea917a",
+          "result": {
+            "file": "test/raft/raft-rs-backend/single-path-partition-cutover.test.js",
+            "attempt": 1,
+            "ok": true,
+            "assertions": 5,
+            "durationMs": 62510,
+            "retriedOnce": false,
+            "firstFailureLine": null
+          },
+          "executionWindow": {
+            "before": "2026-11-07T21:39:59.479000+00:00",
+            "after": "2026-11-07T21:41:44.966000+00:00"
+          },
+          "archiveResultPath": "seed-fixture-focused-proof-carinas/1/results.ndjson",
+          "resultSha256": "3936971b9571bc672d036b45dd53f8df5bf208dea26490b240eaad752b03623a",
+          "beforeLock": "free",
+          "afterLock": "free"
+        },
+        {
+          "file": "test/bootstrap/seed-release-once-per-cohort.test.js",
+          "sourceHead": "44ff129dfdff752f400f4b444a77b4197bea917a",
+          "result": {
+            "file": "test/bootstrap/seed-release-once-per-cohort.test.js",
+            "attempt": 1,
+            "ok": true,
+            "assertions": 1,
+            "durationMs": 7698,
+            "retriedOnce": false,
+            "firstFailureLine": null
+          },
+          "executionWindow": {
+            "before": "2026-11-07T21:41:46.796000+00:00",
+            "after": "2026-11-07T21:42:05.698000+00:00"
+          },
+          "archiveResultPath": "seed-fixture-focused-proof-carinas/2/results.ndjson",
+          "resultSha256": "039bb20837b1fc3141a0e75a04b16e8844ce5593f926c48e54400d35446b798a",
+          "beforeLock": "free",
+          "afterLock": "free"
+        },
+        {
+          "file": "test/bootstrap/seed-participant-release-failure-projection.test.js",
+          "sourceHead": "44ff129dfdff752f400f4b444a77b4197bea917a",
+          "result": {
+            "file": "test/bootstrap/seed-participant-release-failure-projection.test.js",
+            "attempt": 1,
+            "ok": true,
+            "assertions": 7,
+            "durationMs": 7815,
+            "retriedOnce": false,
+            "firstFailureLine": null
+          },
+          "executionWindow": {
+            "before": "2026-11-07T21:42:07.612000+00:00",
+            "after": "2026-11-07T21:42:26.302000+00:00"
+          },
+          "archiveResultPath": "seed-fixture-focused-proof-carinas/3/results.ndjson",
+          "resultSha256": "d1f714df60a6c917a234ef6870a89bb50cdb5f4ce9b05eeebc4ac1010157d557",
+          "beforeLock": "free",
+          "afterLock": "free"
+        },
+        {
+          "file": "test/partition/participant-release-deadline-recovery.test.js",
+          "sourceHead": "44ff129dfdff752f400f4b444a77b4197bea917a",
+          "result": {
+            "file": "test/partition/participant-release-deadline-recovery.test.js",
+            "attempt": 1,
+            "ok": true,
+            "assertions": 2,
+            "durationMs": 9070,
+            "retriedOnce": false,
+            "firstFailureLine": null
+          },
+          "executionWindow": {
+            "before": "2026-11-07T21:42:28.175000+00:00",
+            "after": "2026-11-07T21:42:50.465000+00:00"
+          },
+          "archiveResultPath": "seed-fixture-focused-proof-carinas/4/results.ndjson",
+          "resultSha256": "0e7fc5531b5be72ad52db402c5baad0b117c94b1e7d8688325095bda2e99d69e",
+          "beforeLock": "free",
+          "afterLock": "free"
+        },
+        {
+          "file": "test/partition/participant-release-protocol.test.js",
+          "sourceHead": "44ff129dfdff752f400f4b444a77b4197bea917a",
+          "result": {
+            "file": "test/partition/participant-release-protocol.test.js",
+            "attempt": 1,
+            "ok": true,
+            "assertions": 16,
+            "durationMs": 10524,
+            "retriedOnce": false,
+            "firstFailureLine": null
+          },
+          "executionWindow": {
+            "before": "2026-11-07T21:42:52.461000+00:00",
+            "after": "2026-11-07T21:43:17.176000+00:00"
+          },
+          "archiveResultPath": "seed-fixture-focused-proof-carinas/5/results.ndjson",
+          "resultSha256": "ead5f38661ace49a1b5401fa6316cb88d981717856677d23424c94a584683a54",
+          "beforeLock": "free",
+          "afterLock": "free"
+        }
+      ],
+      "assertions": 31,
+      "finalFleetArchivePath": "seed-fixture-fleet-final.json",
+      "finalLock": "free"
+    },
+    {
+      "id": "canonical-hosted-ci",
+      "passed": true,
+      "run": 42416327516,
+      "job": 128535102722,
+      "url": "https://github.com/psvensson/lagrange/actions/runs/42416327516",
+      "head": "44ff129dfdff752f400f4b444a77b4197bea917a",
+      "selectedFiles": 208,
+      "fullCorpus": false,
+      "conclusion": "success",
+      "automaticStandaloneRetries": 1,
+      "cleanFirstAttemptWitness": false,
+      "scopeArchivePath": "pr199-proof-scope.zip",
+      "jobLogArchivePath": "pr199-ci-job.log",
+      "analysisArchivePath": "pr199-ci-analysis.json"
+    },
+    {
+      "id": "first-failure-preservation",
+      "passed": true,
+      "discoveredWork": "lagrange-object-environment-lis",
+      "failure": "Initial hosted INSERT failed with PARTITION_EPOCH_EVIDENCE_DEFERRED after successful seed release, bootstrap, backend checks, CREATE and routability predicate. Automatic standalone retry passed. First failure remains valid and unexplained.",
+      "attributionLimit": "The in-flight-transition error text does not establish that an actual split or merge was active.",
+      "rawTraceUploaded": false,
+      "rawTraceManifestSha256": "de4b47bc5a15de808771fe135784776eb7d6e973c4022a978faf851c3edd02a8",
+      "archiveJobLogPath": "pr199-ci-job.log",
+      "predecessor": "default-backend-fixture-startup-budget",
+      "predecessorDisposition": "superseded, not solved"
+    },
+    {
+      "id": "independent-review",
+      "passed": true,
+      "verifier": "subagent:fixture_acceptance_diff_review",
+      "verdict": "approve",
+      "sourceHead": "44ff129dfdff752f400f4b444a77b4197bea917a",
+      "reviewedQuestSha256": "48f672db697d3cec38fbc4c3956885478edd51a23512e9fbd23ad9fbd408fe27",
+      "reviewedReceiptBeforeApprovalSha256": "78a7c8148ecf6327fef06c4e6dcaf64c15d52877bc2743aea013fc15afb6ed66",
+      "scope": "Actual reconciliation records, unchanged source applicability and all70 archive payloads; permits recording this outcome, not canonical landing or broader acceptance."
+    }
+  ],
+  "workflowStatus": "Quest open; canonical landing and exact final-head CI before merge remain pending."
+}
