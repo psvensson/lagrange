@@ -22,6 +22,8 @@
 // application's own writes - keeps NORMAL and may be lost to a power loss;
 // it is recomputed from the synced log on restart.
 
+import {preparedExactStatementOf, preparedStatementOf} from
+  '../storage/sqlite-prepared-statement-owner.js';
 import {
   RAFT_RS_BOOLEAN_COLUMN,
   RAFT_RS_COMMIT_DURABILITY,
@@ -51,6 +53,7 @@ import {
   compactRaftRsCommittedPrefix,
   encodeSnapshotWitnessData,
   readCompactedMaxHlcIn,
+  readPresentSnapshotIndexIn,
   readSnapshotIndexIn,
 } from './raft-rs-snapshot-witness.js';
 
@@ -217,14 +220,13 @@ function commitDurably(db, work) {
 
 function readDurableRowsIn(db, groupId) {
   const hardStateRow = readRecordTable(RAFT_RS_TABLE.HARD_STATE, () =>
-    db.prepare(RAFT_RS_SQL.SELECT_HARD_STATE).safeIntegers(true).get(groupId));
+    preparedExactStatementOf(db, RAFT_RS_SQL.SELECT_HARD_STATE).get(groupId));
   const appliedRow = readRecordTable(RAFT_RS_TABLE.APPLIED_STATE, () =>
-    db.prepare(RAFT_RS_SQL.SELECT_APPLIED_STATE).safeIntegers(true).get(groupId));
+    preparedExactStatementOf(db, RAFT_RS_SQL.SELECT_APPLIED_STATE).get(groupId));
   const snapshotRow = readRecordTable(RAFT_RS_TABLE.SNAPSHOT, () =>
-    db.prepare(RAFT_RS_SQL.SELECT_SNAPSHOT).safeIntegers(true).get(groupId));
+    preparedExactStatementOf(db, RAFT_RS_SQL.SELECT_SNAPSHOT).get(groupId));
   const entryRows = readRecordTable(RAFT_RS_TABLE.LOG, () =>
-    db.prepare(RAFT_RS_SQL.SELECT_LOG_ENTRIES)
-      .safeIntegers(true).all(groupId));
+    preparedExactStatementOf(db, RAFT_RS_SQL.SELECT_LOG_ENTRIES).all(groupId));
   return {hardStateRow, appliedRow, snapshotRow, entryRows};
 }
 
@@ -264,6 +266,11 @@ function durableRecordOf({hardStateRow, appliedRow, snapshotRow, entryRows}) {
 
 function readDurableRecordIn(db, groupId) {
   return durableRecordOf(readDurableRowsIn(db, groupId));
+}
+
+function durableRecordExists(record) {
+  return record.hardState !== null || record.entries.length > 0 ||
+    record.confState.voters.length > 0;
 }
 
 function readRetainedHistoryIn(db, groupId) {
@@ -318,15 +325,19 @@ class RaftRsDurableStore {
     this.multiEntryReadyCount = 0;
     this.createRecordTables();
     this.addMembershipGenerationColumns();
+    // A fact since open: this store creates the table and nothing drops it here.
+    this.snapshotTablePresent = this.tablePresent(RAFT_RS_TABLE.SNAPSHOT);
+  }
+
+  tablePresent(table) {
+    return preparedStatementOf(this.db, RAFT_RS_SCHEMA_SQL.SELECT_TABLE_PRESENT)
+      .get(table) !== undefined;
   }
 
   // Create all record tables atomically when none exist yet; partial records
   // stay incomplete so readers fail closed naming the missing table.
   createRecordTables() {
-    const tablePresent = this.db.prepare(
-      RAFT_RS_SCHEMA_SQL.SELECT_TABLE_PRESENT);
-    if (RAFT_RS_RECORD_TABLES.some((table) =>
-      tablePresent.get(table) !== undefined)) {
+    if (RAFT_RS_RECORD_TABLES.some((table) => this.tablePresent(table))) {
       return;
     }
     this.transaction(() => {
@@ -343,8 +354,6 @@ class RaftRsDurableStore {
   // generation 0; an old snapshot stays null because native metadata cannot
   // identify the sender's configuration-only generation.
   addMembershipGenerationColumns() {
-    const tablePresent = this.db.prepare(
-      RAFT_RS_SCHEMA_SQL.SELECT_TABLE_PRESENT);
     const upgrades = [
       [RAFT_RS_TABLE.APPLIED_STATE, RAFT_RS_SQL.SELECT_APPLIED_STATE_COLUMNS,
         RAFT_RS_SQL.ADD_APPLIED_MEMBERSHIP_GENERATION],
@@ -352,7 +361,7 @@ class RaftRsDurableStore {
         RAFT_RS_SQL.ADD_SNAPSHOT_MEMBERSHIP_GENERATION],
     ];
     for (const [table, columnsSql, alterSql] of upgrades) {
-      if (tablePresent.get(table) === undefined) {
+      if (!this.tablePresent(table)) {
         continue;
       }
       const columns = new Set(this.db.prepare(columnsSql).all()
@@ -393,11 +402,6 @@ class RaftRsDurableStore {
    * @return {Array<Object>} The journal. */
   writesMade() {
     return this.journal.slice();
-  }
-
-  /** Forget the journal without touching the record. */
-  clearJournal() {
-    this.journal.length = 0;
   }
 
   /**
@@ -488,9 +492,9 @@ class RaftRsDurableStore {
     if (entries.length === 0) {
       return;
     }
-    this.db.prepare(RAFT_RS_SQL.DELETE_LOG_FROM)
+    preparedStatementOf(this.db, RAFT_RS_SQL.DELETE_LOG_FROM)
       .run(groupId, toExactInteger(entries[0].index));
-    const insert = this.db.prepare(RAFT_RS_SQL.INSERT_LOG_ENTRY);
+    const insert = preparedStatementOf(this.db, RAFT_RS_SQL.INSERT_LOG_ENTRY);
     for (const entry of entries) {
       insert.run(
         groupId,
@@ -514,7 +518,7 @@ class RaftRsDurableStore {
    */
   putHardState(groupId, hardState) {
     this.admitWrite();
-    this.db.prepare(RAFT_RS_SQL.UPSERT_HARD_STATE).run(
+    preparedStatementOf(this.db, RAFT_RS_SQL.UPSERT_HARD_STATE).run(
       groupId,
       toExactInteger(hardState.term),
       toExactInteger(hardState.vote),
@@ -530,7 +534,7 @@ class RaftRsDurableStore {
    */
   putCommitIndex(groupId, commitIndex) {
     this.admitWrite();
-    this.db.prepare(RAFT_RS_SQL.UPSERT_COMMIT_INDEX)
+    preparedStatementOf(this.db, RAFT_RS_SQL.UPSERT_COMMIT_INDEX)
       .run(groupId, toExactInteger(commitIndex));
     this.record(RAFT_RS_HOST_WRITE.COMMIT_INDEX, {groupId, commitIndex});
   }
@@ -550,7 +554,7 @@ class RaftRsDurableStore {
     this.admitWrite();
     const generation = membershipGenerationIndex === null ? null :
       toExactInteger(membershipGenerationIndex);
-    this.db.prepare(RAFT_RS_SQL.UPSERT_APPLIED_STATE).run(
+    preparedStatementOf(this.db, RAFT_RS_SQL.UPSERT_APPLIED_STATE).run(
       groupId,
       toExactInteger(appliedIndex),
       ...confStateColumns(confState),
@@ -575,7 +579,7 @@ class RaftRsDurableStore {
   putBootstrapAppliedState(groupId, confState, {bootstrapIndex,
     admissionIndex, membershipGenerationIndex = RAFT_RS_ZERO_INDEX}) {
     this.admitWrite();
-    this.db.prepare(RAFT_RS_SQL.UPSERT_BOOTSTRAP_APPLIED_STATE).run(
+    preparedStatementOf(this.db, RAFT_RS_SQL.UPSERT_BOOTSTRAP_APPLIED_STATE).run(
       groupId,
       toExactInteger(RAFT_RS_ZERO_INDEX),
       ...confStateColumns(confState),
@@ -596,7 +600,7 @@ class RaftRsDurableStore {
    */
   putAdmissionIndex(groupId, admissionIndex) {
     this.admitWrite();
-    this.db.prepare(RAFT_RS_SQL.UPDATE_ADMISSION_INDEX)
+    preparedStatementOf(this.db, RAFT_RS_SQL.UPDATE_ADMISSION_INDEX)
       .run(toExactInteger(admissionIndex), groupId);
   }
 
@@ -615,11 +619,11 @@ class RaftRsDurableStore {
       membershipGenerationIndex;
     const exactSnapshotIndex = toExactInteger(snapshotIndex);
     const confState = metadata.confState || emptyConfState();
-    const appliedRow = this.db.prepare(RAFT_RS_SQL.SELECT_APPLIED_STATE)
-      .safeIntegers(true).get(groupId);
+    const appliedRow = preparedExactStatementOf(this.db, RAFT_RS_SQL.SELECT_APPLIED_STATE)
+      .get(groupId);
     const exactGeneration = exactSnapshotMembershipGeneration({generation,
       snapshotIndex: exactSnapshotIndex, confState, appliedRow});
-    this.db.prepare(RAFT_RS_SQL.UPSERT_SNAPSHOT).run(
+    preparedStatementOf(this.db, RAFT_RS_SQL.UPSERT_SNAPSHOT).run(
       groupId,
       exactSnapshotIndex,
       toExactInteger(metadata.term || RAFT_RS_ZERO_INDEX),
@@ -667,11 +671,9 @@ class RaftRsDurableStore {
   readProgressRows(groupId) {
     return {
       hardStateRow: readRecordTable(RAFT_RS_TABLE.HARD_STATE, () =>
-        this.db.prepare(RAFT_RS_SQL.SELECT_HARD_STATE)
-          .safeIntegers(true).get(groupId)),
+        preparedExactStatementOf(this.db, RAFT_RS_SQL.SELECT_HARD_STATE).get(groupId)),
       appliedRow: readRecordTable(RAFT_RS_TABLE.APPLIED_STATE, () =>
-        this.db.prepare(RAFT_RS_SQL.SELECT_APPLIED_STATE)
-          .safeIntegers(true).get(groupId)),
+        preparedExactStatementOf(this.db, RAFT_RS_SQL.SELECT_APPLIED_STATE).get(groupId)),
     };
   }
 
@@ -700,13 +702,13 @@ class RaftRsDurableStore {
    * @return {Array<Object>} Frozen {index, term, command} records in log order.
    */
   static readCommittedEntriesIn(db, groupId) {
-    const {present} = db.prepare(
+    const {present} = preparedStatementOf(db,
       RAFT_RS_SQL.COUNT_LOG_AND_APPLIED_STATE_TABLES).get();
     if (present !== LOG_AND_APPLIED_STATE_TABLE_COUNT) {
       return [];
     }
-    return db.prepare(RAFT_RS_SQL.SELECT_APPLIED_PROPOSAL_ENTRIES)
-      .safeIntegers(true).all(groupId, RAFT_RS_ENTRY_TYPE.NORMAL)
+    return preparedExactStatementOf(db, RAFT_RS_SQL.SELECT_APPLIED_PROPOSAL_ENTRIES)
+      .all(groupId, RAFT_RS_ENTRY_TYPE.NORMAL)
       .map((row) => Object.freeze({
         index: fromExactInteger(row.log_index),
         term: fromExactInteger(row.term),
@@ -722,12 +724,11 @@ class RaftRsDurableStore {
    * @return {string|null} The applied index as a decimal string, or null.
    */
   static readAppliedIndexIn(db, groupId) {
-    const {present} = db.prepare(RAFT_RS_SQL.COUNT_APPLIED_STATE_TABLE).get();
+    const {present} = preparedStatementOf(db, RAFT_RS_SQL.COUNT_APPLIED_STATE_TABLE).get();
     if (present === 0) {
       return null;
     }
-    const row = db.prepare(RAFT_RS_SQL.SELECT_APPLIED_STATE)
-      .safeIntegers(true).get(groupId);
+    const row = preparedExactStatementOf(db, RAFT_RS_SQL.SELECT_APPLIED_STATE).get(groupId);
     return row ? fromExactInteger(row.applied_index) : null;
   }
 
@@ -741,7 +742,8 @@ class RaftRsDurableStore {
     return readSnapshotIndexIn(db, groupId);
   }
   readSnapshotIndex(groupId) {
-    return readSnapshotIndexIn(this.db, groupId);
+    return this.snapshotTablePresent && this.db.open ?
+      readPresentSnapshotIndexIn(this.db, groupId) : 0n;
   }
   compactCommittedPrefix(groupId, options) {
     return compactRaftRsCommittedPrefix(this, groupId, options);
@@ -769,9 +771,7 @@ class RaftRsDurableStore {
    * @return {boolean} Whether a record exists.
    */
   hasDurableRecord(groupId) {
-    const record = this.readDurableRecord(groupId);
-    return record.hardState !== null || record.entries.length > 0 ||
-      record.confState.voters.length > 0;
+    return durableRecordExists(this.readDurableRecord(groupId));
   }
 
   /**
@@ -781,15 +781,12 @@ class RaftRsDurableStore {
    * @return {boolean} Whether a record exists.
    */
   static hasDurableRecordIn(db, groupId) {
-    const tablePresent = db.prepare(RAFT_RS_SCHEMA_SQL.SELECT_TABLE_PRESENT);
+    const tablePresent = preparedStatementOf(db, RAFT_RS_SCHEMA_SQL.SELECT_TABLE_PRESENT);
     if (!RAFT_RS_RECORD_TABLES.every((table) =>
       tablePresent.get(table) !== undefined)) {
       return false;
     }
-    const readView = Object.create(RaftRsDurableStore.prototype, {
-      db: {value: db},
-    });
-    return readView.hasDurableRecord(groupId);
+    return durableRecordExists(readDurableRecordIn(db, groupId));
   }
 }
 
