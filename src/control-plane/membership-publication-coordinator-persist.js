@@ -33,6 +33,8 @@ import {
 } from './membership-publication-coordinator-reconcile-helpers.js';
 import {MEMBERSHIP_PUBLICATION_WRITE_REFUSAL} from
   './membership-publication-write-refusal.js';
+import {statePriorityPartitionSummary} from
+  './membership-publication-priority-partition-summary.js';
 
 
 // The projection shows no acknowledgement owed by this node (the row is
@@ -82,7 +84,10 @@ class MembershipPublicationCoordinatorPersist extends
   }
 
   /**
-   * Admit a new publication row (insert-only, revision 1).
+   * Admit a new publication row (insert-only, revision 1). An admitted row
+   * never carries no priority summary: a candidate row without a census (a
+   * reconcile that planned without the census inputs) is admitted stating
+   * NOT_DERIVED, on which every reader of the spread rule holds.
    * @param {Object} row - The candidate row.
    * @param {Object} [options={}] - The reconcile's convergence options.
    * @return {Promise<Object>} The typed write outcome.
@@ -95,7 +100,11 @@ class MembershipPublicationCoordinatorPersist extends
     const {logger: _logger, ...admissionOptions} =
       this.buildPublicationWriteOptions(options);
     return this.controlPlanePublicationsOwner.admitPublication(
-      serializeMembershipPublicationRow(row),
+      serializeMembershipPublicationRow({
+        ...row,
+        priority_partition_summary: statePriorityPartitionSummary(
+          row.priority_partition_summary),
+      }),
       admissionOptions,
     );
   }

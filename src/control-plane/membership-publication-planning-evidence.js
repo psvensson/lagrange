@@ -31,8 +31,6 @@ import {
   shouldPreferAuthoritativeMembershipState as shouldPreferAuthoritativeMembershipStateCore,
 } from './membership-publication-planning.js';
 import {buildMembershipEpochSnapshot} from './membership-epoch-contract.js';
-import {statePriorityPartitionSummary} from
-  './membership-publication-priority-partition-summary.js';
 import {
   MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL,
   MEMBERSHIP_PUBLICATION_KIND,
@@ -582,10 +580,11 @@ function buildMembershipPublicationRow(options = {}) {
     published_active_node_ids: normalizeNodeIdList(candidate.publishedActiveNodeIds),
     required_ack_node_ids: normalizeNodeIdList(candidate.requiredAckNodeIds),
     acknowledged_node_ids: normalizeNodeIdList(candidate.acknowledgedNodeIds),
-    // An admitted row never carries no summary: a candidate without a
-    // census states NOT_DERIVED.
-    priority_partition_summary: statePriorityPartitionSummary(
-      candidate.priorityPartitionSummary),
+    priority_partition_summary:
+      candidate.priorityPartitionSummary &&
+      typeof candidate.priorityPartitionSummary === 'object' ?
+        candidate.priorityPartitionSummary :
+        null,
     membership_lifecycle_summary:
       candidate.membershipLifecycleSummary &&
       typeof candidate.membershipLifecycleSummary === 'object' ?

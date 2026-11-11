@@ -36,6 +36,7 @@ import {
   SeedMap,
   createRecordingReconcileQueue,
 } from '../helpers/recording-reconcile-queue.js';
+import {createPublicationStore} from './publication-owner-test-support.js';
 
 const {DERIVED, NOT_DERIVED, ABSENT} = PRIORITY_PARTITION_CENSUS_STATE;
 const NODES = Object.freeze(['node-1', 'node-2', 'node-3']);
@@ -109,7 +110,7 @@ test('every reader of the spread rule holds on a NOT_DERIVED summary', () => {
     resolvePrioritySpreadPending({priorityPartitionSummary: CENSUS}), false);
 });
 
-test('a candidate planned without census inputs asks for no summary refresh, and the row admitted from it states NOT_DERIVED', () => {
+test('a candidate planned without census inputs asks for no summary refresh, and the row admitted from it states NOT_DERIVED', async () => {
   const latest = normalizeControlPlanePublicationRow(durableRow());
   const planning = {
     latestPublicationRow: latest,
@@ -144,16 +145,44 @@ test('a candidate planned without census inputs asks for no summary refresh, and
   });
   assert.equal(nextEpoch.changed, true);
   assert.equal(nextEpoch.publicationEpoch, 8);
-  const admitted = buildMembershipPublicationRow({
-    candidate: nextEpoch, nowMs: 2000});
+  const admitted = await admitThroughOwner(buildMembershipPublicationRow({
+    candidate: nextEpoch, nowMs: 2000}));
   assert.equal(
     readPriorityPartitionCensusState(admitted.priority_partition_summary),
     NOT_DERIVED,
     'the new epoch never inherits the previous epoch\'s census and never carries no summary');
 });
 
-test('the row builder never builds a row without a summary', () => {
-  const row = buildMembershipPublicationRow({
+// The owner's admission of a candidate row, over the real publications owner
+// and a row store: the durable row it admitted.
+async function admitThroughOwner(row) {
+  const store = createPublicationStore();
+  const coordinator = new MembershipPublicationCoordinator({
+    nodeId: 'node-1',
+    controlPlanePublicationsOwner: store.owner,
+    systemTableCache: {getAll: () => []},
+    logger: {debug() {}, info() {}, warn() {}, error() {},
+      logConsoleOnly() {}},
+  });
+  try {
+    const write = await coordinator.admitPublicationRow(row);
+    assert.equal(write.outcome, 'COMMITTED');
+    return normalizeDurableSummary(store.row(row.publication_id));
+  } finally {
+    coordinator.stopOwnerMembershipDriver();
+  }
+}
+
+function normalizeDurableSummary(storedRow) {
+  return {
+    ...storedRow,
+    priority_partition_summary:
+      normalizeControlPlanePublicationRow(storedRow).priorityPartitionSummary,
+  };
+}
+
+test('the owner\'s admission never admits a row without a summary, and admits a derived census as it is', async () => {
+  const withoutCensus = await admitThroughOwner(buildMembershipPublicationRow({
     candidate: {
       publicationEpoch: 8,
       publishedActiveNodeIds: [...NODES],
@@ -161,11 +190,11 @@ test('the row builder never builds a row without a summary', () => {
       acknowledgedNodeIds: [],
     },
     nowMs: 2000,
-  });
+  }));
   assert.equal(
-    readPriorityPartitionCensusState(row.priority_partition_summary),
+    readPriorityPartitionCensusState(withoutCensus.priority_partition_summary),
     NOT_DERIVED);
-  const withCensus = buildMembershipPublicationRow({
+  const withCensus = await admitThroughOwner(buildMembershipPublicationRow({
     candidate: {
       publicationEpoch: 8,
       publishedActiveNodeIds: [...NODES],
@@ -174,7 +203,7 @@ test('the row builder never builds a row without a summary', () => {
       priorityPartitionSummary: CENSUS,
     },
     nowMs: 2000,
-  });
+  }));
   assert.deepEqual(withCensus.priority_partition_summary, CENSUS);
 });
 
