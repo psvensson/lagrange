@@ -6,12 +6,10 @@ import {EventEmitter} from 'events';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {assertCritical} from '../utils/assert.js';
+import {isDenseDataArray, isRecord} from '../utils/canonical-json-data.js';
 import {hasDurableCdcEvents, unknownCdcAcceptance} from '../cdc/cdc-delivery-outcome.js';
 import {isCdcDeliveryInvocation} from '../cdc/cdc-delivery-invocation.js';
-import {
-  propagateDurableCdcEvent,
-  releaseWaitingDurableSliceContender,
-} from './cdc-group-propagation-durable-delivery.js';
+import {deliverCdcVectorToRecipient} from './cdc-group-propagation-durable-delivery.js';
 import {
   LATENCY_PROPAGATION_MODE,
   LATENCY_TOPOLOGY_CONFIG_KEY,
@@ -59,16 +57,10 @@ class CDCGroupPropagationService extends EventEmitter {
       loggingService.forSubsystem(CDC_GROUP_PROPAGATION_SUBSYSTEM) :
       console;
     this.state = CDC_GROUP_PROPAGATION_STATE.CREATED;
-    this.activeDurablePropagation = null;
-    this.durableSliceTable = null;
-    this.durableSliceWaves = 0;
-    this.durableSliceContended = false;
-    this.yieldedDurableSliceTable = null;
-    this.yieldedDurableSliceUntilMs = 0;
-    this.waitingDurableSliceTables = [];
-    this.waitingDurableSliceTableTimestamps = new Map();
-    this.waitingDurableSliceTableLifecycles = new Map();
-    this.creditedWaitingDurableSliceTables = new Set();
+    // Every durable delivery in flight (admission to actual local cleanup).
+    // There is no shared slot: the source lanes bound their number, one per
+    // (source partition, recipient).
+    this.activeDurableDeliveries = new Set();
     this.durablePropagationLifetime = Object.freeze({});
     this.stats = {
       groupedCount: 0,
@@ -78,6 +70,7 @@ class CDCGroupPropagationService extends EventEmitter {
       lastFallbackReason: null,
       lastPropagationAt: null,
       lastTargetGroupCount: 0,
+      peakActiveDurableDeliveries: 0,
     };
     this.deliveryRetryMaxAttempts = this.resolvePositiveInteger(
       options.deliveryRetryMaxAttempts,
@@ -113,16 +106,7 @@ class CDCGroupPropagationService extends EventEmitter {
    * Initialize dependencies.
    * @param {Object} options
    */ initialize(options = {}) {
-    this.activeDurablePropagation?.context.retire();
-    this.durableSliceTable = null;
-    this.durableSliceWaves = 0;
-    this.durableSliceContended = false;
-    this.yieldedDurableSliceTable = null;
-    this.yieldedDurableSliceUntilMs = 0;
-    this.waitingDurableSliceTables = [];
-    this.waitingDurableSliceTableTimestamps = new Map();
-    this.waitingDurableSliceTableLifecycles = new Map();
-    this.creditedWaitingDurableSliceTables = new Set();
+    this.retireActiveDurableDeliveries();
     this.durablePropagationLifetime = Object.freeze({});
     if (options.nodeId) {
       this.nodeId = options.nodeId;
@@ -173,27 +157,22 @@ class CDCGroupPropagationService extends EventEmitter {
    * Stop propagation lifecycle.
    */ stop() {
     this.state = CDC_GROUP_PROPAGATION_STATE.STOPPED;
-    this.activeDurablePropagation?.context.retire();
-    this.durableSliceTable = null;
-    this.durableSliceWaves = 0;
-    this.durableSliceContended = false;
-    this.yieldedDurableSliceTable = null;
-    this.yieldedDurableSliceUntilMs = 0;
-    this.waitingDurableSliceTables = [];
-    this.waitingDurableSliceTableTimestamps = new Map();
-    this.waitingDurableSliceTableLifecycles = new Map();
-    this.creditedWaitingDurableSliceTables = new Set();
+    this.retireActiveDurableDeliveries();
     for (const releaseSleep of [...this.retrySleepReleases]) {
       releaseSleep();
     }
     this.logger.info(CDC_GROUP_PROPAGATION_LOG_MSG.STOPPED, {nodeId: this.nodeId});
   }
   /**
-   * Propagate one durable partition CDC event through the durable wave
-   * (cdc-group-propagation-durable-delivery.js), grouped or safe by config.
-   * @param {Object} options - The durable event, its delivery invocation
-   *   (`deliveryContext`) and the source message group.
-   * @return {Promise<Object>}
+   * Deliver one vector of durable partition CDC events to the one recipient
+   * group its invocation addresses (the source group, or one target group;
+   * cdc-group-propagation-durable-delivery.js), routed grouped or safe by
+   * config. The recipient set observed for the source is reported to the
+   * invocation.
+   * @param {Object} options - The durable vector (`events`: one table, in
+   *   log order), its delivery invocation (`deliveryContext`, which names
+   *   the recipient) and the source message group.
+   * @return {Promise<Object>} That recipient's outcome over the vector.
    */ async propagateCDCEvent(options = {}) {
     this.ensureInitialized();
     this.assertPropagationRequest(options);
@@ -203,22 +182,20 @@ class CDCGroupPropagationService extends EventEmitter {
       return {...unknownCdcAcceptance(),
         reason: CDC_GROUP_PROPAGATION_DELIVERY_ERROR.PROPAGATION_STOPPED};
     }
-    return propagateDurableCdcEvent(this, options);
+    return deliverCdcVectorToRecipient(this, options);
   }
 
   /**
-   * Release a waiting table contender when its source retires, steps down,
-   * hydrates through its owed tail, or drains all owed obligations.
-   * @param {string} tableName
-   * @return {boolean}
+   * Retire every durable delivery in flight (stop, re-initialization).
+   * @private
    */
-  releaseDurableSliceContender(tableName) {
-    return releaseWaitingDurableSliceContender(this, tableName);
+  retireActiveDurableDeliveries() {
+    for (const delivery of [...this.activeDurableDeliveries]) delivery.context.retire();
   }
 
   /**
-   * The caller's contract: a durable partition event with its delivery
-   * invocation, and a source message group with the surface the durable wave
+   * The caller's contract: a vector of durable events of one table with its
+   * delivery invocation, and a source message group with the surface the durable wave
    * reads (its group, consensus port and commit lifetime, the strict forward
    * retry hint, and the batch apply answered with the committed receipt).
    * @param {Object} options
@@ -234,12 +211,16 @@ class CDCGroupPropagationService extends EventEmitter {
         typeof source.applyCDCBatch === 'function',
       CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_MESSAGE_GROUP_SERVICE,
     );
+    const {events} = options;
     assertCritical(
-      options.tableName && options.operation && options.data,
+      isDenseDataArray(events) && events.length > 0 && events.every((event) =>
+        isRecord(event) && event.tableName && event.operation && event.data &&
+        event.tableName === events[0].tableName),
       CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_CDC_PAYLOAD,
     );
     assertCritical(
-      hasDurableCdcEvents([options]) && isCdcDeliveryInvocation(options.deliveryContext),
+      events.every((event) => hasDurableCdcEvents([event])) &&
+        isCdcDeliveryInvocation(options.deliveryContext),
       CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_DURABLE_EVENT,
     );
   }
@@ -301,6 +282,7 @@ class CDCGroupPropagationService extends EventEmitter {
       ...this.stats,
       nodeId: this.nodeId,
       state: this.state,
+      activeDurableDeliveries: this.activeDurableDeliveries.size,
       propagationMode: this.propagationMode,
       deliveryRetryMaxAttempts: this.deliveryRetryMaxAttempts,
       deliveryRetryDelayMs: this.deliveryRetryDelayMs,

@@ -229,8 +229,16 @@ function report(t, f, producer, stage, extra = {}) {
   return result;
 }
 
+// The source lane's delivery to its one recipient (the subscriber, the
+// source message group) runs under that recipient's own invocation, held in
+// the recipient's custody slot until its actual local cleanup.
+function recipientInvocationOf(producer) {
+  return [...producer.leader.cdcDelivery.recipientCustody.values()]
+    .map((custody) => custody.activeCdcInvocation).find((invocation) => invocation) ?? null;
+}
+
 function observePendingNativeDelivery(f, producer) {
-  const invocation = producer.leader.cdcDelivery.activeCdcInvocation;
+  const invocation = recipientInvocationOf(producer);
   const key = cdcCommitWaitIdentity([f.event]);
   const queue = f.services[0].cdcCommitWaiters;
   const wait = queue.get(key);
@@ -249,7 +257,7 @@ async function closeExpiredNativeDelivery(t, f, producer, observed) {
   // inside the unchanged fixture budget; do not invoke retire/resolve by hand.
   assert.equal(await producer.group.waitFor(() => invocation.context.signal.aborted), true,
     'the existing source response deadline retires this invocation');
-  assert.equal(producer.leader.cdcDelivery.activeCdcInvocation, invocation,
+  assert.equal(recipientInvocationOf(producer), invocation,
     'source response expiry retains its original raw-child slot');
   assert.equal(observed.cleanupComplete, false,
     'a stationary recipient clock has not closed the actual native wait');
@@ -270,7 +278,7 @@ async function closeExpiredNativeDelivery(t, f, producer, observed) {
   assert.equal(await producer.group.waitFor(() => observed.cleanupComplete), true,
     'actual recipient completion releases the old source raw-child custody');
   assert.equal(queue.has(key), false, 'the exact retired native wait releases its queue slot');
-  assert.equal(producer.leader.cdcDelivery.activeCdcInvocation, null,
+  assert.equal(recipientInvocationOf(producer), null,
     'cleanup has closed before the explicitly requested new source attempt');
   const closed = report(t, f, producer, 'recipient-clock-closed-before-source-redrive', {
     advanceMs, recipientClockNow: wait.clock.now(), cleanupComplete: observed.cleanupComplete,
@@ -376,7 +384,7 @@ function subscribe(t, f, producer) {
       observeOwnerCall(f, 'async-selection', () =>
         resolveOperationalMessageGroupSelectionAsync(f.services, options)),
     buildMessageGroupOwnerNotReadyError,
-    beforePropagation: (event) => {
+    beforePropagation: ([event]) => {
       f.event = structuredClone(event);
       emit(f, 'producer-durable-event-entered-subscriber', {event: f.event,
         obligation: readCdcObligation(producer.leader.db, event.eventKey)});
@@ -385,14 +393,16 @@ function subscribe(t, f, producer) {
       const result = await Reflect.apply(bridge.propagatePartitionCDCEvent, bridge, args);
       // Capture the frontier at the same real bridge-return continuation as
       // before tracing; the observer's later settlement must not move this cut.
-      emit(f, 'actual-propagation-return', {result, event: structuredClone(args[1]),
+      // The bridge is handed the lane's vector: here the one owed occurrence.
+      assert.equal(args[1].length, 1);
+      emit(f, 'actual-propagation-return', {result, event: structuredClone(args[1][0]),
         recipient: view(f)});
       return result;
     }),
     afterPropagation: () => emit(f, 'subscriber-after-propagation'),
   });
-  const subscriber = (event, deliveryContext) => observeOwnerCall(f, 'subscriber', () =>
-    actualSubscriber(event, deliveryContext));
+  const subscriber = (events, deliveryContext) => observeOwnerCall(f, 'subscriber', () =>
+    actualSubscriber(events, deliveryContext));
   subscriber.getCDCPropagationService = () => actualSubscriber.getCDCPropagationService();
   subscriber.canAcceptCDCEvent = (event) => {
     try {

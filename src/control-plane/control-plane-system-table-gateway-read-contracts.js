@@ -429,11 +429,6 @@ function resolveReadProfileOptions(options = {}) {
   case CONTROL_PLANE_READ_PROFILE.DIAGNOSTICS:
     resolvedOptions = applyProfileDefault(
       resolvedOptions,
-      CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.REQUIREAUTHORITATIVE,
-      true,
-    );
-    resolvedOptions = applyProfileDefault(
-      resolvedOptions,
       CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.AUTHORITATIVEREADMODE,
       CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
     );
@@ -446,11 +441,6 @@ function resolveReadProfileOptions(options = {}) {
   case CONTROL_PLANE_READ_PROFILE.PLANNING:
     resolvedOptions = applyProfileDefault(
       resolvedOptions,
-      CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.PREFERAUTHORITATIVEREAD,
-      true,
-    );
-    resolvedOptions = applyProfileDefault(
-      resolvedOptions,
       CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.AUTHORITATIVEREADMODE,
       CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED_SQL_FALLBACK,
     );
@@ -461,11 +451,6 @@ function resolveReadProfileOptions(options = {}) {
     );
     break;
   case CONTROL_PLANE_READ_PROFILE.REPAIR_REQUIRED:
-    resolvedOptions = applyProfileDefault(
-      resolvedOptions,
-      CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.REQUIREAUTHORITATIVE,
-      true,
-    );
     resolvedOptions = applyProfileDefault(
       resolvedOptions,
       CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.AUTHORITATIVEREADMODE,
@@ -490,18 +475,8 @@ function resolveReadProfileOptions(options = {}) {
   case CONTROL_PLANE_READ_PROFILE.TABLE_LIFECYCLE:
     resolvedOptions = applyProfileDefault(
       resolvedOptions,
-      CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.PREFERAUTHORITATIVEREAD,
-      true,
-    );
-    resolvedOptions = applyProfileDefault(
-      resolvedOptions,
       CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.AUTHORITATIVEREADMODE,
       CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED_SQL_FALLBACK,
-    );
-    resolvedOptions = applyProfileDefault(
-      resolvedOptions,
-      CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.REQUIREAUTHORITATIVE,
-      true,
     );
     resolvedOptions = applyProfileDefault(
       resolvedOptions,

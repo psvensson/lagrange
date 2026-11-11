@@ -436,6 +436,7 @@ class ManagedSplitWorkflowStateMethods {
           partitionId: childPartitionId,
           targetNodeIds,
           minimumRoutableReplicaCount,
+          timeoutBudget: options.timeoutBudget || null,
         }) :
         null;
       const existingRoutableNodeIds = this.normalizeNodeIdList(
@@ -452,12 +453,20 @@ class ManagedSplitWorkflowStateMethods {
         this.compactChildProvisioningRejectedTargetNodePlans(
           precheck?.rejectedTargetNodePlans,
         );
+      // A target whose admission did not settle within the budget is
+      // neither admitted nor refused: it is carried as unsettled and defers
+      // the transition (retryably), so the child is never founded below
+      // the request on a transient answer.
+      const unsettledTargetNodePlans =
+        this.compactChildProvisioningRejectedTargetNodePlans(
+          precheck?.unsettledTargetNodePlans,
+        );
       const maximumProvisionableReplicaCount = Number.isInteger(
         precheck?.maximumProvisionableReplicaCount,
       ) ?
         precheck.maximumProvisionableReplicaCount :
         (existingRoutableNodeIds.length + admittedTargetNodeIds.length);
-      const allowed =
+      const allowed = unsettledTargetNodePlans.length === 0 &&
         maximumProvisionableReplicaCount >= minimumRoutableReplicaCount;
 
       childProvisioningAdmissionByPartitionId[childPartitionId] = {
@@ -466,12 +475,14 @@ class ManagedSplitWorkflowStateMethods {
         candidateTargetNodeIds,
         admittedTargetNodeIds,
         rejectedTargetNodePlans,
+        unsettledTargetNodePlans,
         maximumProvisionableReplicaCount,
         minimumRoutableReplicaCount,
         allowed,
         decisionType: allowed ?
           STORAGE_ADMISSION_DECISION_TYPE.ADMITTED :
-          this.resolveChildProvisioningDecisionType(rejectedTargetNodePlans),
+          this.resolveChildProvisioningDecisionType(rejectedTargetNodePlans,
+            unsettledTargetNodePlans),
       };
     }
 
@@ -514,13 +525,18 @@ class ManagedSplitWorkflowStateMethods {
 
   /**
    * Resolve one retryable denial type for child provisioning prechecks.
+   * An unsettled target is a deferral, never a block.
    * @param {Object[]} rejectedTargetNodePlans
+   * @param {Object[]} [unsettledTargetNodePlans]
    * @return {string}
    * @private
    */
-  resolveChildProvisioningDecisionType(rejectedTargetNodePlans) {
+  resolveChildProvisioningDecisionType(
+    rejectedTargetNodePlans,
+    unsettledTargetNodePlans = [],
+  ) {
     let sawBlocked = false;
-    let sawDeferred = false;
+    let sawDeferred = unsettledTargetNodePlans.length > 0;
     for (const rejection of rejectedTargetNodePlans || []) {
       const decisionType = String(rejection?.decisionType || '');
       if (decisionType === STORAGE_ADMISSION_DECISION_TYPE.BLOCKED) {

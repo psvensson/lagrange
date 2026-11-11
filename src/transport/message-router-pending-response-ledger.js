@@ -3,7 +3,9 @@ import {assertDeliveryOpen, deliveryAbortReason} from './message-router-delivery
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
 import {ROUTER_MESSAGE_TIMEOUT_ERROR_CODE} from './transport-error-codes.js';
-import {buildHandlerFailedError} from './transport-semantic-outcome.js';
+import {TRANSPORT_ACKNOWLEDGEMENT} from './transport-acknowledgement.js';
+import {TRANSPORT_DELIVERY_OUTCOME_REASON_CODE, buildHandlerFailedError}
+  from './transport-semantic-outcome.js';
 
 const {
   MESSAGE_ROUTER_LITERAL,
@@ -45,6 +47,8 @@ function reportPendingResponseSpent(router, messageId, pending, timeoutMs) {
       deliverySource: pending.deliverySource,
       responseContext: pending.responseContext,
       pendingResponses: router.pendingResponses.size,
+      reasonCode: TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.ANSWER_TIMEOUT,
+      acknowledgement: TRANSPORT_ACKNOWLEDGEMENT.ACKNOWLEDGED,
     }),
     scope: {
       nodeId: router.nodeId ?? null,
@@ -72,8 +76,11 @@ function remainingResponseMs(pending) {
   if (!pending.budget) return null;
   const remaining = getRemainingBudgetMs(pending.budget, {now: () => pending.clock.now()});
   if (remaining <= 0) {
+    // This budget is armed only by the ACK (armPendingResponseTimeout), so
+    // its expiry is an answer timeout on an acknowledged message.
     throw Object.assign(new Error(ROUTER_ERROR_MSG.PENDING_RESPONSE_TIMEOUT),
-      {code: ROUTER_MESSAGE_TIMEOUT_ERROR_CODE});
+      {code: ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
+        acknowledgement: TRANSPORT_ACKNOWLEDGEMENT.ACKNOWLEDGED});
   }
   return remaining;
 }
@@ -507,26 +514,24 @@ class MessageRouterPendingResponseLedger {
       }
       (pending.clock || this.timeSource).clearTimeout(pending.timeout);
       if (this.pendingMessages.get(messageId) === pending) this.pendingMessages.delete(messageId);
+      // The ACK settles this entry's acknowledgement state (and with it the
+      // delivery lifetime's: an acknowledged delivery has no ACK expiry left).
+      pending.recordAcknowledgement?.(acknowledged ?
+        TRANSPORT_ACKNOWLEDGEMENT.ACKNOWLEDGED : TRANSPORT_ACKNOWLEDGEMENT.REJECTED);
       if (acknowledged) {
-        const connection = this.nodeConnections.get(pending.targetNodeId);
-        if (
-          connection &&
-          connection.isIncoming !== true &&
-          connection.isSelfConnection !== true
-        ) {
-          connection.ackTimeoutStreak = TRANSPORT_NUM.ZERO;
-          connection.lastAckAt = this.timeSource.now();
-          connection.lastAckTimeoutAt = null;
-        }
+        // The socket that returned this ACK was credited at inbound dispatch
+        // (recordInboundSocketAcknowledgement): acknowledgement evidence is
+        // socket-specific, never the node's current record.
         const resolved = {messageId, acknowledged: true};
         if (error !== void 0) {
           resolved.error = error;
         }
         pending.resolve(resolved);
       } else {
-        pending.reject(
+        pending.reject(Object.assign(
           new Error(error || TRANSPORT_ERROR_MSG.MESSAGE_NOT_ACKNOWLEDGED),
-        );
+          {acknowledgement: TRANSPORT_ACKNOWLEDGEMENT.REJECTED},
+        ));
       }
     }
   }

@@ -692,7 +692,11 @@ for (const [shapeName, shape] of Object.entries(STALE_LEADER_SHAPES)) {
     test(`${label}: leader change x R-1a - the stale leader's answer never ` +
       'retires; the corroborated new leader decides; RETIRE only through ' +
       'it', async (t) => {
-      const world = await openReplaceWorld({sourceLeads: false});
+      // The premise is a target that leads and is then deposed: the source
+      // leads at creation, so the named handoff moves leadership to the
+      // target (BR11 as superseded 2026-11-11 retains a third leader; these
+      // cells formerly opened with one and relied on the handoff away).
+      const world = await openReplaceWorld({sourceLeads: true});
       try {
         const {deposed, newLeader} = await deposeTargetLeader(world, shape);
         t.equal(world.group.sourceCommittedVoter(world.sourceReplicaId), true,

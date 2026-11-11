@@ -318,6 +318,45 @@ const PARTICIPANT_TRANSACTION_STORE_ERROR = Object.freeze({
     'Participant transaction row did not move from PREPARED exactly once',
   ORIGIN_UPDATE_NOT_ONE_ROW:
     'Partition write generation origin was not recorded exactly once',
+  CONNECTION_CLOSED:
+    'Participant transaction store read on a closed partition connection',
+});
+
+// The store's typed codes beside its texts: a read on a connection the
+// lifecycle owner closed (or never opened) is this code, never a null
+// dereference.
+const PARTICIPANT_TRANSACTION_STORE_ERROR_CODE = Object.freeze({
+  CONNECTION_CLOSED: 'participant_transaction_store_connection_closed',
+});
+
+// Whether the participant store can be read on a partition's connection.
+const PARTICIPANT_STORE_CONNECTION_STATE = Object.freeze({
+  OPEN: 'open',
+  CLOSED: 'closed',
+});
+
+// The participant owner's custody of a partition: ACTIVE while a staging
+// session or a durable PREPARED reservation holds it, IDLE otherwise, CLOSED
+// once the lifecycle owner released the connection (nothing it holds can
+// progress or be read on this runtime again).
+const PARTICIPANT_TRANSACTION_CUSTODY = Object.freeze({
+  ACTIVE: 'active',
+  IDLE: 'idle',
+  CLOSED: 'closed',
+});
+
+// What the leader's determinism self-check answers for BEGIN (design 3.3,
+// AH). PASSED admits; FAILED (a probe refused at another layer, or an
+// unvetted engine) refuses until the verdict is measured again (the next
+// leadership tenure, or a schema change on the connection); UNAVAILABLE (a
+// probe could not be measured, nothing unsatisfied otherwise) refuses this
+// BEGIN and is measured again at the next; NOT_APPLICABLE is a table the
+// participant admission owner never admits (the coordinator ledger).
+const PARTICIPANT_DETERMINISM_SELF_CHECK_STATE = Object.freeze({
+  PASSED: 'passed',
+  FAILED: 'failed',
+  UNAVAILABLE: 'unavailable',
+  NOT_APPLICABLE: 'not_applicable',
 });
 
 // The texts beside the typed answers (the code is the decision; R07).
@@ -353,7 +392,10 @@ const PARTICIPANT_TRANSACTION_LOG_MSG = Object.freeze({
     'another execution envelope than this replica\'s build; applied as ' +
     'carried',
   SELF_CHECK_FAILED: 'Participant transaction determinism self-check ' +
-    'failed on this leader; every BEGIN is refused',
+    'failed on this leader; every BEGIN is refused until it is measured again',
+  SELF_CHECK_UNAVAILABLE: 'Participant transaction determinism self-check ' +
+    'could not measure a probe on this leader; BEGIN is refused and the ' +
+    'next BEGIN measures again',
   SESSION_DOOMED: 'Participant transaction session doomed: a staged ' +
     'operation no longer replays',
   SESSIONS_DISCARDED: 'Participant transaction staging sessions discarded: ' +
@@ -402,12 +444,16 @@ const PARTICIPANT_COORDINATOR_TABLE_COLUMNS = Object.freeze({
 
 export {
   PARTICIPANT_COORDINATOR_TABLE_COLUMNS,
+  PARTICIPANT_DETERMINISM_SELF_CHECK_STATE,
+  PARTICIPANT_STORE_CONNECTION_STATE,
+  PARTICIPANT_TRANSACTION_STORE_ERROR_CODE,
   PARTICIPANT_ORIGIN_HISTORY_REASON,
   PARTICIPANT_ORIGIN_HISTORY_STATE,
   PARTICIPANT_TRANSACTION_ADMISSION_CODE,
   PARTICIPANT_TRANSACTION_BYTES,
   PARTICIPANT_TRANSACTION_COMMAND,
   PARTICIPANT_TRANSACTION_COMMAND_TYPES,
+  PARTICIPANT_TRANSACTION_CUSTODY,
   PARTICIPANT_TRANSACTION_DECISION,
   PARTICIPANT_TRANSACTION_FAILURE_CODE,
   PARTICIPANT_TRANSACTION_GENERATION_ORIGIN_COLUMNS,

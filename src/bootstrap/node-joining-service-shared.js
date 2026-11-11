@@ -227,11 +227,8 @@ const NODE_JOINING_SERVICE_LITERAL = Object.freeze({
   NO_CONNECTION_TO_NODE: 'No connection to node',
   CONNECTION_TO_NODE: 'Connection to node',
   CLOSED: 'closed',
-  MESSAGE_TIMEOUT: 'Message timeout',
   NO_HANDLER_REGISTERED_FOR_ADDRESS: 'No handler registered for address',
   OBJECT: 'object',
-  CONTROL_PLANE_MESSAGE_WAS_NOT_ACKNOWLEDGED:
-    'control-plane message was not acknowledged',
   FAILED: 'failed',
   SHUTTING_DOWN: 'shutting_down',
   STOPPED: 'stopped',
@@ -265,7 +262,7 @@ const JOIN_SESSION_PHASE = Object.freeze({
   FINALIZED: 'join_session:finalized',
 });
 import {shouldAttachPartitionCdcPropagation} from './shared/cdc-propagation-filter.js';
-import {buildPartitionCdcPropagationSubscriber} from './shared/partition-cdc-propagation-subscriber.js';
+import {registerPartitionCdcPropagation} from './shared/partition-cdc-propagation-subscriber.js';
 import {canonicalizeSystemTableRow} from '../control-plane/system-row-normalizers.js';
 /**
  * NodeJoiningService handles the process of a new node joining an existing cluster.
@@ -408,9 +405,9 @@ const NODE_JOINING_SERVICE_JOIN_HELPER_SHARED = Object.freeze({
   buildNodeStateUpdatePublicationFailureError,
   buildNodeStateUpdatePublicationOutcome,
   buildOwnerContractOutcome,
-  buildPartitionCdcPropagationSubscriber,
   canonicalizeSystemTableRow,
   compareJoinSchemaVersions,
+  registerPartitionCdcPropagation,
 });
 const NODE_JOINING_SERVICE_ROUTING_HELPER_SHARED = Object.freeze({
   createJoinStartupPlan,

@@ -197,10 +197,10 @@ class SeedRuntimeBridgeOwner {
     });
   }
 
-  async propagatePartitionCDCEvent(messageGroupService, cdcEvent, deliveryContext = null) {
+  async propagatePartitionCDCEvent(messageGroupService, events, deliveryContext) {
     const override = this.getCompatibilityOverride('propagatePartitionCDCEvent');
     if (override) {
-      return override(messageGroupService, cdcEvent, deliveryContext);
+      return override(messageGroupService, events, deliveryContext);
     }
 
     const d = this.delegates;
@@ -209,7 +209,7 @@ class SeedRuntimeBridgeOwner {
       BOOTSTRAP_ERROR.LATENCY_TOPOLOGY_MISSING,
     );
     return topologyOwners.cdcGroupPropagationService.propagateCDCEvent({
-      ...copyCdcEvent(cdcEvent),
+      events: events.map(copyCdcEvent),
       sourceMessageGroupService: messageGroupService,
       deliveryContext,
     });

@@ -12,7 +12,6 @@ import {COLUMN, SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../../src/constants/
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {
   CDC_COMPLETION,
-  CDC_COVERAGE_STATE,
 } from '../../src/cdc/cdc-delivery-outcome.js';
 import {
   createCdcPropagationProgress,
@@ -31,7 +30,7 @@ import {CDCGroupPropagationService} from '../../src/topology/cdc-group-propagati
 import {
   committedTargetAnswer,
   createDurableCdcEvent,
-  createDurablePropagationRequest,
+  propagateToEveryRecipient,
   createDurableSourceMessageGroupService,
   setupConfig,
   teardownConfig,
@@ -232,8 +231,10 @@ function buildStandardDualDomainFixture(t, mode = LATENCY_PROPAGATION_MODE.SAFE,
   });
 
   const source = createDurableSourceMessageGroupService(SOURCE_MG);
+  // The harness addresses every recipient, as the source lane does: the
+  // service itself delivers one vector to one recipient group.
   const propagate = (event = createDurableCdcEvent()) =>
-    service.propagateCDCEvent(createDurablePropagationRequest(source, event));
+    propagateToEveryRecipient(service, source, [event]);
 
   return {service, treeService, cache, messageRouter, calls, source, propagate};
 }
@@ -364,9 +365,7 @@ test('missing-mapping-refusal-and-recovery: unmapped latency group returns typed
   const event = createDurableCdcEvent();
 
   // Attempt 1: UNMAPPED_LG has missing mapping -> typed unavailable deferRetry
-  const firstAttempt = await service.propagateCDCEvent(
-    createDurablePropagationRequest(source, event),
-  );
+  const firstAttempt = await propagateToEveryRecipient(service, source, [event]);
   assert.equal(firstAttempt.success, false);
   assert.equal(firstAttempt.deferRetry, true);
   assert.equal(firstAttempt.error, CDC_COMPLETION.UNKNOWN);
@@ -385,9 +384,7 @@ test('missing-mapping-refusal-and-recovery: unmapped latency group returns typed
   treeService.recompute();
 
   // Attempt 2: with mapping registered, retry succeeds and delivers to newly mapped group
-  const secondAttempt = await service.propagateCDCEvent(
-    createDurablePropagationRequest(source, event),
-  );
+  const secondAttempt = await propagateToEveryRecipient(service, source, [event]);
   assert.equal(secondAttempt.success, true);
   const delivered = calls.map((c) => c.payload.targetGroupId);
   assert.ok(delivered.includes(RESOLVED_MG), 'delivered to newly resolved message group');
@@ -403,7 +400,7 @@ test('captured-invalid-binding-recovery: invalid latency-domain binding transfer
 
   assert.equal(progress.targets.length, 1);
   assert.equal(progress.targets[0].groupId, NEAR_LG);
-  assert.equal(progress.targets[0].coverage.state, CDC_COVERAGE_STATE.UNCOVERED);
+  assert.equal(progress.targets[0].cursor, null);
 
   // Re-evaluating routing plan where NEAR_LG maps to NEAR_MG:
   const newTargets = [
@@ -420,8 +417,31 @@ test('captured-invalid-binding-recovery: invalid latency-domain binding transfer
   assert.ok(!progress.targets.some((entry) => entry.groupId === NEAR_LG), 'old latency ID leaf replaced');
   const transferredLeaf = progress.targets.find((entry) => entry.groupId === NEAR_MG);
   assert.ok(transferredLeaf, 'transferred to actual message group recipient');
-  assert.equal(transferredLeaf.coverage.state, CDC_COVERAGE_STATE.UNCOVERED, 'starts uncovered, not fabricated');
+  assert.equal(transferredLeaf.cursor, null,
+    'the recipient starts with an unknown cursor: no receipt is fabricated');
   assert.equal(transferredLeaf.route.address, 'node-b/mg-near');
+});
+
+test('captured-invalid-binding-recovery never transfers a binding to the source group: ' +
+  'a coordinator node that also hosts the source yields only its other groups', async (t) => {
+  const f = buildStandardDualDomainFixture(t, LATENCY_PROPAGATION_MODE.SAFE);
+  f.cache.addServiceRow({
+    [COLUMN.SERVICE_ID]: `${SOURCE_MG}-r2`,
+    [COLUMN.GROUP_ID]: SOURCE_MG,
+    [COLUMN.NODE_ID]: 'node-b',
+    [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
+    [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+    [COLUMN.ADDRESS]: 'node-b/mg-source',
+    [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER,
+  });
+  const progress = createCdcPropagationProgress(f.service, f.source, [
+    {groupId: NEAR_LG, coordinatorNodeId: 'node-b', address: null},
+  ]);
+
+  refreshCdcPropagationRoutes(progress, []);
+
+  assert.deepEqual(progress.targets.map((leaf) => leaf.groupId), [NEAR_MG],
+    'the source group is the primary recipient, never a target leaf');
 });
 
 test('exact-native-receipt-coverage: completion requires exact native committed receipts from all mapped recipients', async (t) => {
@@ -469,7 +489,9 @@ test('retained-source-obligation-progress: source delivery debt remains owned un
   assert.equal(attempt1.deferRetry, true);
   assert.equal(f.source.batches.length, 1, 'source applied batch once');
 
-  // Attempt 2: FAR_MG now succeeds -> propagation completes
+  // Attempt 2: FAR_MG now succeeds -> propagation completes. (The source
+  // lane keeps each recipient's cursor, so it would re-address only FAR_MG;
+  // this harness addresses every recipient again.)
   shouldFailFar = false;
   const attempt2 = await f.propagate(event);
   assert.equal(attempt2.success, true);

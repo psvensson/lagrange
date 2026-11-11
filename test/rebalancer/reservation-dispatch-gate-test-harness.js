@@ -20,6 +20,9 @@ import {
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
 } from './test-helpers.js';
+import {
+  createReplicaOperationsCasStore,
+} from './durable-step-authority-fixture.js';
 
 const TEST_NODE_ID = 'reservation-gate-node';
 const TEST_PARTITION_ID = 'p-gate';
@@ -105,18 +108,15 @@ function updateReservationRows(reservations, sql, params) {
   return {success: true, changes};
 }
 
-function updateOperationRow(operations, params) {
-  const [status, step, updated, completed, err,
-    history, repId, opId] = params;
-  const existing = operations.get(opId);
-  if (existing) {
-    operations.set(opId, {
-      ...existing, status, workflow_step: step,
-      updated_at: updated, completed_at: completed,
-      error_message: err, steps_history: history, replica_id: repId,
-    });
-  }
-  return {success: true};
+// A status/step UPDATE honours its CAS guards (shared store); any other
+// replica_operations UPDATE is accepted without effect.
+function updateOperationRow(operations, sql, params) {
+  const casStore = createReplicaOperationsCasStore({
+    readRow: (operationId) => operations.get(operationId) || null,
+  });
+  return casStore.isStepUpdate(sql) ?
+    casStore.apply(sql, params) :
+    {success: true};
 }
 
 function selectReservationRows(reservations, sql, params) {
@@ -167,7 +167,7 @@ function createTrackingSqlEngine(options = {}) {
         return updateReservationRows(reservations, sql, params);
       }
       if (sql.includes('UPDATE replica_operations')) {
-        return updateOperationRow(operations, params);
+        return updateOperationRow(operations, sql, params);
       }
       if (sql.includes('SELECT * FROM storage_reservations')) {
         return selectReservationRows(reservations, sql, params);

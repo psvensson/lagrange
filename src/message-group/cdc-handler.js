@@ -16,6 +16,7 @@ import {
 } from '../cache/system-cache-key-descriptor.js';
 import {canonicalizeSystemTableRow} from '../control-plane/system-row-normalizers.js';
 import {resolveTimeSource} from '../time/time-source.js';
+import {reportCdcEventAppliedToCache} from './cdc-handler-apply-diagnostics.js';
 
 const LOCAL_STR_CDCHANDLER_REQUIRES_A_SYSTEMTABLECACHE = 'CDCHandler requires a SystemTableCache';
 const LOCAL_NUM_ONE_HUNDRED = 100;
@@ -525,6 +526,11 @@ class CDCHandler extends EventEmitter {
         this.cache.recordAppliedSchemaVersion(tableName, timestamp);
       }
       this.markEventProcessed(event);
+      reportCdcEventAppliedToCache({
+        subsystem: LOCAL_STR_CDC_HANDLER, tableName, operation, timestamp, receivedAt,
+        sourcePartition: event.sourcePartition, sourceLogIndex: event.sourceLogIndex,
+        sourceOrdinal: event.sourceOrdinal, nowMs: this.timeSource.now(),
+      });
 
       this.logger.debug(LOCAL_STR_APPLIED_CDC_EVENT, {
         tableName,

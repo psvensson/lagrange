@@ -11,6 +11,7 @@ import {buildPartitionCdcPropagationSubscriber} from
 import {buildMessageGroupOwnerNotReadyError, resolveOperationalMessageGroupSelection,
   resolveOperationalMessageGroupSelectionAsync} from
   '../../src/bootstrap/shared/message-group-selection.js';
+import {beginDurableCdcInvocation} from '../topology/cdc-group-propagation-service-harness.js';
 
 function service(groupId, leader = false) {
   const owner = {groupId, initialized: true, leader, ready: true,
@@ -41,9 +42,11 @@ function fixture() {
     buildMessageGroupOwnerNotReadyError,
     propagatePartitionCDCEvent: (selected, delivered) => {
       calls.push(selected);
-      return buildProvisionalCdcOutcome([delivered], 20, f.answerGroup ?? selected.groupId);
+      return buildProvisionalCdcOutcome(delivered, 20, f.answerGroup ?? selected.groupId);
     },
   });
+  // The durable subscriber contract: one vector under a delivery invocation.
+  f.deliver = () => f.subscriber([f.event], beginDurableCdcInvocation());
   return f;
 }
 
@@ -60,13 +63,13 @@ test('shared CDC selection and currentness consume the same captured preferred o
     f.preferred);
   assert.equal(f.subscriber.getCDCPropagationService(), f.preferred,
     'the captured owner policy survives published readiness churn');
-  const answer = await f.subscriber(f.event);
+  const answer = await f.deliver();
   assert.equal(isProvisionalCdcOutcome(answer, [f.event], f.preferred.groupId), true);
   assert.deepEqual(f.calls, [f.preferred]);
 
   f.preferred.initialized = false;
   assert.equal(f.subscriber.getCDCPropagationService(), f.earlierRelay);
-  const replacement = await f.subscriber(f.event);
+  const replacement = await f.deliver();
   assert.equal(isProvisionalCdcOutcome(replacement, [f.event], f.earlierRelay.groupId), true);
   assert.deepEqual(f.calls, [f.preferred, f.earlierRelay]);
 });
@@ -77,18 +80,18 @@ test('shared CDC selection preserves current ready leader precedence over captur
     const leader = service('current-leader', true);
     f.services.push(leader);
     assert.equal(f.subscriber.getCDCPropagationService(), leader);
-    const answer = await f.subscriber(f.event);
+    const answer = await f.deliver();
     assert.equal(isProvisionalCdcOutcome(answer, [f.event], leader.groupId), true);
     assert.deepEqual(f.calls, [leader]);
     leader.initialized = false;
     assert.equal(f.subscriber.getCDCPropagationService(), f.preferred);
-    await f.subscriber(f.event);
+    await f.deliver();
     assert.deepEqual(f.calls, [leader, f.preferred]);
   });
 
 test('shared CDC subscriber refuses weak correspondence for a different source group', async () => {
   const f = fixture();
   f.answerGroup = 'contradictory-source-group';
-  await assert.rejects(f.subscriber(f.event), {deferRetry: true});
+  await assert.rejects(f.deliver(), {deferRetry: true});
   assert.deepEqual(f.calls, [f.preferred]);
 });

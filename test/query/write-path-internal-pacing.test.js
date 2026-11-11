@@ -1,4 +1,13 @@
-import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {TRANSPORT_ACKNOWLEDGEMENT, buildDeliveryEnvelope} from
+  '../../src/transport/transport-semantic-outcome.js';
+import {
+  OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE,
+  ROUTER_CONNECTION_CLOSED_ERROR_CODE,
+  ROUTER_HANDLER_FAILED_ERROR_CODE,
+  ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
+  ROUTER_NO_CONNECTION_ERROR_CODE,
+  WEBSOCKET_CONNECT_TIMEOUT_ERROR_CODE,
+} from '../../src/transport/transport-error-codes.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
@@ -685,3 +694,197 @@ test(
     );
   },
 );
+
+test(
+  'same-node read candidates share one node budget slice',
+  async (t) => {
+    const attemptBudget = createPartitionAttemptBudget({
+      executor: createBudgetExecutor(),
+      partitionId: 'nodes-p1',
+      forRead: true,
+      executionOptions: {timeoutMs: 1000},
+      routingReadinessDimension: 'serveReady',
+    });
+    const singleNodeOptions = attemptBudget.buildRouterDeliveryOptions([
+      {address: 'node-seed/partition/nodes-p1-r1', nodeId: 'node-seed'},
+      {address: 'node-seed/partition/nodes-p1-r2', nodeId: 'node-seed'},
+      {address: 'node-seed/partition/nodes-p1-r3', nodeId: 'node-seed'},
+    ], 0, new Set());
+    t.equal(singleNodeOptions?.timeoutMs, 1000,
+      'three read replicas on the same node must not divide the read timeout into three slices');
+
+    const twoNodeOptions = attemptBudget.buildRouterDeliveryOptions([
+      {address: 'node-seed/partition/nodes-p1-r1', nodeId: 'node-seed'},
+      {address: 'node-seed/partition/nodes-p1-r2', nodeId: 'node-seed'},
+      {address: 'node-peer/partition/nodes-p1-r3', nodeId: 'node-peer'},
+    ], 0, new Set());
+    t.ok(twoNodeOptions?.timeoutMs >= 450 && twoNodeOptions?.timeoutMs <= 500,
+      `three read replicas across two distinct nodes should budget across 2 nodes (got ${twoNodeOptions?.timeoutMs}ms)`);
+  },
+);
+
+// S2: a node is skipped only on the transport owner's node-level outcomes
+// (no connection, connection closed, connect timeout, and an ACK timeout: the
+// node's router did not acknowledge). A handler failure or an answer timeout
+// (the node's router acknowledged the request and the one replica did not
+// answer in time) is about the one replica that was asked: the node's other
+// replicas - its leader among them - stay eligible.
+const SEED_R1 = 'node-seed/partition/nodes-p1-r1';
+const SEED_R2 = 'node-seed/partition/nodes-p1-r2';
+const PEER_R3 = 'node-peer/partition/nodes-p1-r3';
+
+async function readThroughSeedFailure(failSeedDelivery) {
+  const deliveries = [];
+  const buildReplicaService = (id, nodeId, role) => ({
+    service_id: id, service_type: 'partition', partition_id: 'nodes-p1',
+    node_id: nodeId, raft_role: role, address: `${nodeId}/partition/${id}`,
+    status: 'active',
+  });
+  const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    nodeId: 'node-caller',
+    systemCache: buildMockSystemCache({
+      partitions: [{partition_id: 'nodes-p1', table_name: 'nodes',
+        leader_node_id: 'node-seed'}],
+      services: [
+        buildReplicaService('nodes-p1-r1', 'node-seed', 'follower'),
+        buildReplicaService('nodes-p1-r2', 'node-seed', 'leader'),
+        buildReplicaService('nodes-p1-r3', 'node-peer', 'follower'),
+      ],
+    }),
+    messageRouter: {
+      async deliver(address) {
+        deliveries.push(address);
+        if (address.startsWith('node-seed/') &&
+            deliveries.filter((a) => a.startsWith('node-seed/')).length === 1) {
+          return failSeedDelivery();
+        }
+        return buildDeliveryEnvelope({acknowledged: true}, {
+          success: true,
+          rows: [{node_id: address.split('/')[0]}],
+        });
+      },
+    },
+  });
+  const result = await executor.executeOnPartition(
+    'nodes-p1', 'SELECT node_id FROM nodes', [], true, false, false,
+    {timeoutMs: 1000},
+  );
+  return {deliveries, result};
+}
+
+const routerError = (message, code, facts = {}) => () => {
+  throw Object.assign(new Error(message), {code, ...facts});
+};
+
+test('a read skips a node\'s remaining replicas only when the transport ' +
+  'says the node was not reached', async (t) => {
+  const nodeLevel = {
+    'thrown no-connection': routerError(
+      'No connection to node node-seed', ROUTER_NO_CONNECTION_ERROR_CODE),
+    'thrown connection-closed': routerError(
+      'Connection to node node-seed closed',
+      ROUTER_CONNECTION_CLOSED_ERROR_CODE),
+    'thrown connect-timeout': routerError(
+      'WebSocket connect timeout', WEBSOCKET_CONNECT_TIMEOUT_ERROR_CODE),
+    'answered connection-closed': () => buildDeliveryEnvelope({
+      acknowledged: false,
+      errorCode: ROUTER_CONNECTION_CLOSED_ERROR_CODE,
+      error: 'Connection to node node-seed closed',
+    }),
+    'thrown ACK timeout (frame sent, no ACK)': routerError(
+      'Message timeout', ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
+      {acknowledgement: TRANSPORT_ACKNOWLEDGEMENT.UNACKNOWLEDGED}),
+    'answered ACK timeout (bound spent before a frame left)': () =>
+      buildDeliveryEnvelope({
+        acknowledged: false,
+        errorCode: ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
+        acknowledgement: TRANSPORT_ACKNOWLEDGEMENT.NOT_SENT,
+        error: 'Message timeout',
+      }),
+  };
+  for (const [name, failSeedDelivery] of Object.entries(nodeLevel)) {
+    const {deliveries, result} = await readThroughSeedFailure(failSeedDelivery);
+    t.equal(result.success, true, `${name}: the read is answered`);
+    t.equal(deliveries.filter((a) => a.startsWith('node-seed/')).length, 1,
+      `${name}: the unreached node is not asked again (${deliveries})`);
+    t.equal(deliveries.at(-1), PEER_R3, `${name}: the peer answers`);
+  }
+  const replicaLevel = {
+    'thrown answer timeout (acknowledged, no answer)': routerError(
+      'Message timeout', ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
+      {acknowledgement: TRANSPORT_ACKNOWLEDGEMENT.ACKNOWLEDGED}),
+    'answered answer timeout': () => buildDeliveryEnvelope({
+      acknowledged: false,
+      errorCode: ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
+      acknowledgement: TRANSPORT_ACKNOWLEDGEMENT.ACKNOWLEDGED,
+      error: 'Message timeout',
+    }),
+    'thrown spent lifetime that states no acknowledgement': routerError(
+      'Message timeout', ROUTER_MESSAGE_TIMEOUT_ERROR_CODE),
+    'thrown handler failure': routerError(
+      'handler threw', ROUTER_HANDLER_FAILED_ERROR_CODE),
+    'answered backpressure deferral': () => buildDeliveryEnvelope({
+      acknowledged: false,
+      errorCode: OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE,
+      error: 'Outbound queue for node node-seed is backpressured',
+      retryAfterMs: 5,
+    }),
+    'answered without an acknowledgement or a code': () =>
+      buildDeliveryEnvelope({acknowledged: false, error: 'not delivered'}),
+  };
+  for (const [name, failSeedDelivery] of Object.entries(replicaLevel)) {
+    const {deliveries, result} = await readThroughSeedFailure(failSeedDelivery);
+    t.equal(result.success, true, `${name}: the read is answered`);
+    t.same(deliveries.filter((a) => a.startsWith('node-seed/')).sort(),
+      [SEED_R1, SEED_R2],
+      `${name}: the node's other replica is still asked (${deliveries})`);
+  }
+});
+
+// S3: a connected candidate's ACK wait is bounded by one reconnect interval
+// whatever asks (a priority control-plane write and an authority read
+// included): a connected peer that never acknowledges is left after that
+// interval. The bound is the router's `ackTimeoutMs`, never `timeoutMs`: the
+// delivery's lifetime stays the candidate's whole share, so a leader that
+// acknowledges and answers slower than one reconnect interval is not cut.
+test('a connected recovery candidate gets ackTimeoutMs = min(share, reconnect ' +
+  'interval) and keeps its whole share as timeoutMs', async (t) => {
+  const candidates = [
+    {address: 'node-seed/partition/replica_operations-p1-r1',
+      nodeId: 'node-seed'},
+    {address: 'node-peer/partition/replica_operations-p1-r2',
+      nodeId: 'node-peer'},
+  ];
+  const optionsOf = (forRead, executionOptions, executor = createBudgetExecutor()) =>
+    createPartitionAttemptBudget({
+      executor,
+      partitionId: 'replica_operations-p1',
+      forRead,
+      executionOptions: {timeoutMs: 10000, ...executionOptions},
+      routingReadinessDimension: 'controlPlaneRecoveryEligible',
+    }).buildRouterDeliveryOptions(candidates, 0, new Set());
+  const write = optionsOf(false, {});
+  t.equal(write.ackTimeoutMs, 1000,
+    'a priority control-plane write waits one reconnect interval for the ACK');
+  t.ok(write.timeoutMs > 9000 && write.timeoutMs <= 10000,
+    `the write's answer wait keeps the whole remaining budget (${write.timeoutMs}ms)`);
+  for (const [name, read] of Object.entries({
+    'an authority read': optionsOf(true, {readAuthority: 'leader'}),
+    'an ordinary recovery read': optionsOf(true, {}),
+  })) {
+    t.equal(read.ackTimeoutMs, 1000,
+      `${name} waits one reconnect interval for the ACK`);
+    t.ok(read.timeoutMs > 4500 && read.timeoutMs <= 5000,
+      `${name} keeps its per-node share for the answer (${read.timeoutMs}ms)`);
+  }
+  const shortShare = optionsOf(true, {timeoutMs: 600});
+  t.ok(shortShare.timeoutMs >= 250 && shortShare.timeoutMs <= 300,
+    `a share below the reconnect interval is the lifetime (${shortShare.timeoutMs}ms)`);
+  t.equal(shortShare.ackTimeoutMs, shortShare.timeoutMs,
+    'the ACK bound never exceeds the share: min(share, reconnect interval)');
+  const notConnected = createBudgetExecutor();
+  notConnected.messageRouter.getConnectionState = () => 'unobserved';
+  t.equal(Object.hasOwn(optionsOf(false, {}, notConnected), 'ackTimeoutMs'), false,
+    'only a connected candidate gets an ACK bound; otherwise the lifetime bounds the ACK wait');
+});

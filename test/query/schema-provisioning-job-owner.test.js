@@ -23,6 +23,14 @@ import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {TABLES} from '../../src/constants/index.js';
 import {SCHEMA_PROVISIONING_DEFAULT} from
   '../../src/query/schema-provisioning-job-constants.js';
+import {isTransientProvisioningError} from
+  '../../src/query/schema-provisioning-job-owner.js';
+import {CREATE_ADMISSION_ERROR_CODE} from
+  '../../src/node/replica-create-admission-owner.js';
+import {
+  classifyTypedDistributedFailure,
+  isRetryableControlPlaneError,
+} from '../../src/control-plane/control-plane-error-classification.js';
 import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 
 function createAst(extraColumn = null) {
@@ -1107,3 +1115,368 @@ test('Logs case survives schema job identity, metadata creation and restart',
     t.equal(await resumed.findExistingTableRecord('logs'), null,
       'authoritative catalog does not resolve a case alias');
   });
+
+test('case 1: partition_write_outcome_unknown with deferRetry retries and succeeds', async (t) => {
+  const retryableErr = new Error(
+    'Distributed operation failed due to participant failures',
+  );
+  retryableErr.code = QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE;
+  retryableErr.participantFailures = [{
+    error: 'The proposal was accepted into consensus and its outcome is not known',
+    failureCode: 'partition_write_outcome_unknown',
+    deferRetry: true,
+  }];
+  t.equal(
+    isTransientProvisioningError(retryableErr),
+    true,
+    'outcome_unknown with deferRetry must be classified as transient',
+  );
+
+  const gateway = createGateway();
+  const service = createService(gateway, []);
+  t.teardown(() => service.shutdown());
+  const owner = service.schemaProvisioningJobOwner;
+  const ast = createAst();
+  let attempt = 0;
+  const executeStep = async () => {
+    attempt += 1;
+    if (attempt === 1) {
+      throw retryableErr;
+    }
+    return {
+      resolvedReplicaCount: 3,
+      routableReplicaCount: 3,
+      fullReplicaCountConverged: true,
+      contractState: OWNER_CONTRACT_STATE.READY,
+      nextAction: 'proceed',
+    };
+  };
+
+  const result1 = await owner.execute(ast, {}, executeStep);
+  t.equal(
+    result1.contractState,
+    OWNER_CONTRACT_STATE.PENDING,
+    'contractState must be pending',
+  );
+  t.equal(result1.nextAction, 'retry', 'nextAction must be retry');
+  const jobKey = `schema_operations:${result1.jobId}`;
+  t.equal(
+    gateway.rows.get(jobKey)?.status,
+    'PENDING',
+    'durable row must remain PENDING for retry',
+  );
+
+  const result2 = await owner.execute(ast, {}, executeStep);
+  t.equal(
+    result2.contractState,
+    OWNER_CONTRACT_STATE.READY,
+    'contractState must be ready after retry',
+  );
+  t.equal(result2.nextAction, 'proceed');
+  t.equal(gateway.rows.get(jobKey)?.status, 'SUCCEEDED');
+});
+
+test('case 2: SQLITE_CONSTRAINT_PRIMARYKEY with committed: true fails immediately as terminal on attempt 1', async (t) => {
+  const terminalErr = new Error(
+    'Distributed operation failed due to participant failures',
+  );
+  terminalErr.code = QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE;
+  terminalErr.participantFailures = [{
+    error: 'UNIQUE constraint failed: users.id',
+    failureCode: 'SQLITE_CONSTRAINT_PRIMARYKEY',
+    committed: true,
+    outcome: 'statement_failed',
+  }];
+  t.equal(
+    isTransientProvisioningError(terminalErr),
+    false,
+    'committed statement failure must not be transient',
+  );
+
+  const gateway = createGateway();
+  const service = createService(gateway, []);
+  t.teardown(() => service.shutdown());
+  const owner = service.schemaProvisioningJobOwner;
+  const ast = createAst();
+  let attempts = 0;
+  const executeStep = async () => {
+    attempts += 1;
+    throw terminalErr;
+  };
+
+  const result = await owner.execute(ast, {}, executeStep);
+  t.equal(result.contractState, OWNER_CONTRACT_STATE.FAILED);
+  t.equal(result.nextAction, 'stop');
+  t.equal(attempts, 1, 'must fail on attempt 1 without retry');
+  const jobKey = `schema_operations:${result.jobId}`;
+  t.equal(gateway.rows.get(jobKey)?.status, 'FAILED');
+});
+
+test('case 3: mixed participant failure set fails immediately as terminal on attempt 1', async (t) => {
+  const mixedErr = new Error(
+    'Distributed operation failed due to participant failures',
+  );
+  mixedErr.code = QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE;
+  mixedErr.participantFailures = [
+    {
+      error: 'The proposal was accepted into consensus and its outcome is not known',
+      failureCode: 'partition_write_outcome_unknown',
+      deferRetry: true,
+    },
+    {
+      error: 'UNIQUE constraint failed: users.id',
+      failureCode: 'SQLITE_CONSTRAINT_PRIMARYKEY',
+      committed: true,
+      outcome: 'statement_failed',
+    },
+  ];
+  t.equal(
+    isTransientProvisioningError(mixedErr),
+    false,
+    'mixed participant failures must not be transient',
+  );
+
+  const gateway = createGateway();
+  const service = createService(gateway, []);
+  t.teardown(() => service.shutdown());
+  const owner = service.schemaProvisioningJobOwner;
+  const ast = createAst();
+  let attempts = 0;
+  const executeStep = async () => {
+    attempts += 1;
+    throw mixedErr;
+  };
+
+  const result = await owner.execute(ast, {}, executeStep);
+  t.equal(result.contractState, OWNER_CONTRACT_STATE.FAILED);
+  t.equal(result.nextAction, 'stop');
+  t.equal(attempts, 1, 'must fail on attempt 1 without retry');
+  const jobKey = `schema_operations:${result.jobId}`;
+  t.equal(gateway.rows.get(jobKey)?.status, 'FAILED');
+});
+
+test('case 4: generic DISTRIBUTED_PARTICIPANT_FAILURE wrapper without retryable participant outcomes fails immediately as terminal on attempt 1', async (t) => {
+  const genericErr = new Error(
+    'Distributed operation failed due to participant failures',
+  );
+  genericErr.code = QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE;
+  t.equal(
+    isTransientProvisioningError(genericErr),
+    false,
+    'generic wrapper alone without deferRetry or retryAfterMs must not be transient',
+  );
+
+  const gateway = createGateway();
+  const service = createService(gateway, []);
+  t.teardown(() => service.shutdown());
+  const owner = service.schemaProvisioningJobOwner;
+  const ast = createAst();
+  let attempts = 0;
+  const executeStep = async () => {
+    attempts += 1;
+    throw genericErr;
+  };
+
+  const result = await owner.execute(ast, {}, executeStep);
+  t.equal(result.contractState, OWNER_CONTRACT_STATE.FAILED);
+  t.equal(result.nextAction, 'stop');
+  t.equal(attempts, 1, 'must fail on attempt 1 without retry');
+  const jobKey = `schema_operations:${result.jobId}`;
+  t.equal(gateway.rows.get(jobKey)?.status, 'FAILED');
+});
+
+test('case 5: permanent failures override deferRetry/retryAfterMs while uncertain/transient participant outcomes retain recovery obligations and operation identity across retry and restart', async (t) => {
+  // 5a. Explicit permanent failure overrides generic retry hints (deferRetry: true, retryAfterMs > 0)
+  const constraintWithDeferHint = Object.assign(
+    new Error('Distributed operation failed due to participant failures'),
+    {
+      code: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
+      deferRetry: true,
+      retryAfterMs: 1000,
+      participantFailures: [{
+        error: 'UNIQUE constraint failed: tables.table_id',
+        failureCode: 'SQLITE_CONSTRAINT_PRIMARYKEY',
+        deferRetry: true,
+        retryAfterMs: 1000,
+      }],
+    },
+  );
+  t.equal(
+    classifyTypedDistributedFailure(constraintWithDeferHint),
+    'terminal',
+    'permanent SQLite constraint must classify as terminal despite deferRetry and retryAfterMs',
+  );
+  t.equal(isRetryableControlPlaneError(constraintWithDeferHint), false);
+  t.equal(isTransientProvisioningError(constraintWithDeferHint), false);
+
+  const cohortConflictWithDeferHint = Object.assign(
+    new Error('Bootstrap cohort conflict for partition tbl-1-p1'),
+    {
+      code: QUERY_ERROR_CODE.BOOTSTRAP_COHORT_CONFLICT,
+      deferRetry: true,
+      retryAfterMs: 500,
+    },
+  );
+  t.equal(isRetryableControlPlaneError(cohortConflictWithDeferHint), false);
+  t.equal(isTransientProvisioningError(cohortConflictWithDeferHint), false);
+
+  // 5b. Unrecognized participant failure without permanent marker classifies as explicit uncertainty ('unclassified'), not terminal
+  const unrecognizedParticipantErr = Object.assign(
+    new Error('Distributed operation failed due to participant failures'),
+    {
+      code: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
+      participantFailures: [{
+        error: 'opaque transport state without known code',
+        failureCode: 'OPAQUE_PARTICIPANT_STATE',
+      }],
+    },
+  );
+  t.equal(
+    classifyTypedDistributedFailure(unrecognizedParticipantErr),
+    'unclassified',
+    'unrecognized participant entry without permanent failure marker must remain unclassified uncertainty',
+  );
+  t.equal(
+    isTransientProvisioningError(unrecognizedParticipantErr),
+    false,
+    'unrecognized participant failure without retry/uncertainty evidence does not blindly retry',
+  );
+
+  // 5c. Transient participant outcomes in their producers' own shapes (an
+  // unknown write outcome; the create admission owner's deferral, which
+  // carries deferRetry) classify as retryable and retain the original
+  // operation identities across retry and restart.
+  const mixedTransientUncertainErr = Object.assign(
+    new Error('Distributed operation failed due to participant failures'),
+    {
+      code: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
+      retryAfterMs: 1000,
+      participantFailures: [
+        {
+          errorCode: 'ROUTER_MESSAGE_TIMEOUT',
+          failureCode: 'partition_write_outcome_unknown',
+          deferRetry: true,
+        },
+        {
+          errorCode: CREATE_ADMISSION_ERROR_CODE.DEFERRED,
+          deferRetry: true,
+        },
+      ],
+    },
+  );
+  t.equal(
+    classifyTypedDistributedFailure(mixedTransientUncertainErr),
+    'retryable',
+    'transient participant outcomes with zero permanent failures must classify as retryable',
+  );
+  t.equal(isTransientProvisioningError(mixedTransientUncertainErr), true);
+
+  // 5d (R12). The fan-out coordinator's chunk timeout reaches the job as a
+  // participant failure with its typed code and no retry hint on the
+  // wrapper: load must leave the job PENDING, never terminal FAILED. With
+  // one permanent participant beside it the set is terminal.
+  const coordinatorTimeoutParticipant = {
+    error: 'Query timeout after 30000ms',
+    errorCode: QUERY_ERROR_CODE.COORDINATOR_QUERY_TIMEOUT,
+    retryAfterMs: null,
+    deferRetry: false,
+  };
+  const loadTimeoutErr = Object.assign(
+    new Error('Distributed operation failed due to participant failures'),
+    {
+      code: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
+      retryAfterMs: null,
+      participantFailures: [coordinatorTimeoutParticipant],
+    },
+  );
+  t.equal(isTransientProvisioningError(loadTimeoutErr), true);
+  t.equal(isTransientProvisioningError(Object.assign(
+    new Error('Distributed operation failed due to participant failures'),
+    {
+      code: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
+      participantFailures: [coordinatorTimeoutParticipant, {
+        error: 'UNIQUE constraint failed: tables.table_id',
+      }],
+    },
+  )), false, 'a text constraint failure beside a timeout is terminal');
+
+  const gateway = createGateway();
+  const now = {value: 1000};
+  const observedChildIntentsByAttempt = [];
+  let attempt = 0;
+
+  const makeOverrides = (ownerId) => ({
+    now: () => now.value,
+    schemaProvisioningOwnerId: ownerId,
+    schemaProvisioningLeaseMs: 100,
+    schemaProvisioningRetrySetTimeoutFn() {
+      return {unref() {}};
+    },
+    schemaProvisioningRetryClearTimeoutFn() {},
+    async partitionProvisioner(context) {
+      attempt += 1;
+      observedChildIntentsByAttempt.push({
+        attempt,
+        ownerId,
+        schemaJobId: context.schemaJobId,
+        partitionId: context.partitionId,
+      });
+      if (attempt === 1) {
+        throw mixedTransientUncertainErr;
+      }
+      if (attempt === 2) {
+        throw loadTimeoutErr;
+      }
+      return {
+        resolvedReplicaCount: 3,
+        routableReplicaCount: 3,
+        fullReplicaCountConverged: true,
+        contractState: OWNER_CONTRACT_STATE.READY,
+        nextAction: 'proceed',
+      };
+    },
+  });
+
+  const service1 = createService(
+    gateway,
+    [],
+    makeOverrides('schema-worker-node-1'),
+  );
+  t.teardown(() => service1.shutdown());
+
+  const firstAttempt = await service1.createTable(createAst());
+  t.equal(firstAttempt.contractState, OWNER_CONTRACT_STATE.PENDING);
+  t.equal(firstAttempt.nextAction, 'retry');
+  const jobId = firstAttempt.jobId;
+  const jobKey = `schema_operations:${jobId}`;
+  t.equal(gateway.rows.get(jobKey)?.status, 'PENDING');
+
+  // Simulate process restart / lease expiry recovery under a second worker for the same schema intent
+  await service1.shutdown();
+  now.value = 2000;
+  const service2 = createService(
+    gateway,
+    [],
+    makeOverrides('schema-worker-node-2'),
+  );
+  t.teardown(() => service2.shutdown());
+
+  const secondAttempt = await service2.createTable(createAst());
+  t.equal(secondAttempt.contractState, OWNER_CONTRACT_STATE.PENDING);
+  t.equal(secondAttempt.jobId, jobId, 'restart attaches to original jobId');
+  t.equal(gateway.rows.get(jobKey)?.status, 'PENDING');
+
+  const thirdAttempt = await service2.createTable(createAst());
+  t.equal(thirdAttempt.contractState, OWNER_CONTRACT_STATE.READY);
+  t.equal(thirdAttempt.jobId, jobId);
+  t.equal(gateway.rows.get(jobKey)?.status, 'SUCCEEDED');
+  t.equal(observedChildIntentsByAttempt.length, 3);
+  t.ok(
+    observedChildIntentsByAttempt.every(
+      (entry) =>
+        entry.schemaJobId === jobId &&
+        entry.partitionId === observedChildIntentsByAttempt[0].partitionId,
+    ),
+    'all recovery attempts preserve the exact schemaJobId and partitionId',
+  );
+});

@@ -318,6 +318,9 @@ function readinessConsumerMembers(clock) {
     getNodeReadinessSync: answerNull,
     // No committed node answer: the rebalancer plans over no candidate rows.
     answerCommittedNodes: answerNull,
+    // No committed serve cohort answer: the ordinary-work release fence
+    // reads that as its named unavailable hold.
+    answerServeCohort: answerNull,
     // The committed serve record: a refresh that settles with nothing, and a
     // subscription that never fires.
     readServeEligibility: answerNullAsync,

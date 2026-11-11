@@ -57,6 +57,7 @@ import {
 import {
   isPartitionReserved,
   participantOutcomeOf,
+  participantStoreConnectionStateOf,
   readParticipantTransactionRow,
   readPartitionWriteGeneration,
   readPartitionWriteOrigin,
@@ -98,6 +99,8 @@ import {
   PARTICIPANT_TRANSACTION_REFUSAL_CAUSE as CAUSE,
   PARTICIPANT_TRANSACTION_SESSION_PHASE as PHASE,
   PARTICIPANT_TRANSACTION_STATE as STATE,
+  PARTICIPANT_STORE_CONNECTION_STATE as STORE_CONNECTION,
+  PARTICIPANT_TRANSACTION_STORE_ERROR_CODE as STORE_ERROR_CODE,
 } from './partition-participant-transaction-constants.js';
 
 const {
@@ -148,6 +151,11 @@ function participantQueryClassification(service, payload) {
     return failureCode === null ?
       {kind: PARTICIPANT_QUERY_KIND.CURRENT, request} :
       {kind: PARTICIPANT_QUERY_KIND.REFUSED, request, failureCode};
+  } else if (isNonEmptyString(request.sessionId) && participantStoreConnectionStateOf(
+    service.db) === STORE_CONNECTION.CLOSED) {
+    // The collision is unreadable on a released connection: named, retryable.
+    return {kind: PARTICIPANT_QUERY_KIND.REFUSED, request,
+      failureCode: STORE_ERROR_CODE.CONNECTION_CLOSED};
   } else if (participantRoutingSessionCollision(service, request.sessionId)) {
     return {kind: PARTICIPANT_QUERY_KIND.REFUSED, request,
       failureCode: identityRefusalOf(request, service.partitionId)};
@@ -272,8 +280,10 @@ function beginRefusalOf(service, payload) {
     return refusalOf(service, payload, CODE.GENERATION_ORIGIN_PENDING,
       participantOutcomeOf(null));
   }
-  if (participantDeterminismSelfCheckOf(service)?.passed !== true) {
-    return refusalOf(service, payload, CODE.DETERMINISM_SELF_CHECK_FAILED);
+  const selfCheck = participantDeterminismSelfCheckOf(service);
+  if (selfCheck.passed !== true) {
+    return refusalOf(service, payload, CODE.DETERMINISM_SELF_CHECK_FAILED,
+      {selfCheckState: selfCheck.state});
   }
   return service.removalServingAdmissionFenced === true ?
     refusalOf(service, payload, CODE.REMOVAL_FENCED, {deferRetry: true}) :

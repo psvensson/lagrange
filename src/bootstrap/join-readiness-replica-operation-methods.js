@@ -320,7 +320,6 @@ function createJoinReadinessReplicaOperationMethods(options = {}) {
       const partitionRows = systemTableCache.getAll(TABLES.PARTITIONS) || [];
       for (const row of partitionRows) {
         const tableName = String(
-          row?.[COLUMN.TABLE_NAME] ||
           row?.table_name ||
           row?.tableName ||
           '',

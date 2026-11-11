@@ -23,6 +23,8 @@ import {initializeGuardedRuntimeServiceHandler} from
 // consensus port (owner decision O4): it is not restored, not activated and
 // not elected; it is left to the rebalancer as an ordinary ADD/REPLACE
 // target. Every other restore failure still aborts the rejoin.
+// The join path's name in its propagation subscribers' ids.
+const JOINING_CDC_SUBSCRIBER_ROLE = 'joining';
 const DURABLE_REJOIN_RECORD_MISSING_MSG =
   'Durable rejoin replica refused: no durable consensus record (O4)';
 function isDurableRecordMissingRefusal(error) {
@@ -52,7 +54,7 @@ const {
   UNIFIED_SERVICE_TYPE,
   assertCritical,
   buildDurableRejoinPartitionRestorePlans,
-  buildPartitionCdcPropagationSubscriber,
+  registerPartitionCdcPropagation,
   shouldAttachPartitionCdcPropagation,
   wireMigrationWorkflowOwners,
 } = NODE_JOINING_SERVICE_SHARED;
@@ -296,14 +298,9 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
           );
         }
         await subscriptionMessageGroupService.subscribeToCDC(tableName);
-        const subscriberId = [
-          'joining',
-          this.nodeId,
-          tableName,
-          options.replicaId,
-          subscriptionMessageGroupService?.groupId || 'message-group',
-        ].join(':');
-        const cdcSubscriber = buildPartitionCdcPropagationSubscriber({
+        const handshake = await registerPartitionCdcPropagation(partition, {
+          role: JOINING_CDC_SUBSCRIBER_ROLE,
+          nodeId: this.nodeId,
           tableName,
           partitionId: options.partitionId,
           replicaId: options.replicaId,
@@ -319,13 +316,9 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
               ),
           buildMessageGroupOwnerNotReadyError: (selection, errorOptions) =>
             this.buildMessageGroupOwnerNotReadyError(selection, errorOptions),
-          propagatePartitionCDCEvent: (messageGroupService, cdcEvent, deliveryContext) =>
-            this.propagatePartitionCDCEvent(messageGroupService, cdcEvent, deliveryContext),
+          propagatePartitionCDCEvent: (messageGroupService, events, deliveryContext) =>
+            this.propagatePartitionCDCEvent(messageGroupService, events, deliveryContext),
         });
-        const handshake = await partition.subscribeToCDCWithHandshake(
-          cdcSubscriber,
-          {subscriberId},
-        );
         this.logger.debug(JOINING_LOG_MSG.CDC_SUBSCRIPTION_REGISTERED, {
           tableName,
           partitionId: options.partitionId,
@@ -705,19 +698,21 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
     return this.runtimeHandoffOwner.startLatencyTopologyLifecycle();
   }
   /**
-   * Propagate partition CDC via topology-owned propagation path.
+   * Propagate one vector of partition CDC events via the topology-owned
+   * propagation path.
    * @param {Object} messageGroupService
-   * @param {Object} cdcEvent
+   * @param {Array<Object>} events - The durable vector.
+   * @param {Object} deliveryContext - The delivery invocation.
    * @return {Promise<Object>}
    * @private
    */
-  async propagatePartitionCDCEvent(messageGroupService, cdcEvent, deliveryContext = null) {
+  async propagatePartitionCDCEvent(messageGroupService, events, deliveryContext) {
     const topologyOwners = assertCritical(
       this.latencyTopology,
       JOINING_ERROR_MSG.LATENCY_TOPOLOGY_MISSING,
     );
     return topologyOwners.cdcGroupPropagationService.propagateCDCEvent({
-      ...copyCdcEvent(cdcEvent),
+      events: events.map(copyCdcEvent),
       sourceMessageGroupService: messageGroupService,
       deliveryContext,
     });

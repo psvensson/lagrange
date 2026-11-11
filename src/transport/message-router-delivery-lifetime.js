@@ -4,13 +4,19 @@ import {assertCdcDeliveryInvocation} from '../cdc/cdc-delivery-invocation.js';
 import {createTimeoutBudget, getRemainingBudgetMs} from '../control-plane/timeout-budget.js';
 import {ROUTER_ERROR_MSG, TRANSPORT_ERROR_MSG, TRANSPORT_EVENT} from '../constants/transport.js';
 import {ROUTER_MESSAGE_TIMEOUT_ERROR_CODE} from './transport-error-codes.js';
+import {TRANSPORT_ACKNOWLEDGEMENT, advancesAcknowledgement, isAckWaitOpen}
+  from './transport-acknowledgement.js';
 const DELIVERY_LIFETIME_INVALID = 'router_delivery_lifetime_invalid';
 const lifetimes = new WeakMap();
 
-function deliveryTimeoutError() {
+// The lifetime was spent. The error states the acknowledgement recorded on
+// this delivery at that moment, which is what names the timeout: no ACK yet
+// is an ACK timeout, an acknowledged delivery is an answer timeout.
+function deliveryTimeoutError(acknowledgement) {
   return Object.assign(new Error(TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT), {
     code: ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
     deferRetry: true,
+    acknowledgement,
   });
 }
 
@@ -23,12 +29,26 @@ function invalidLifetime() {
 }
 
 function validateDeliveryCallbacks(options) {
-  for (const callback of [options.remainingMs, options.prepareDeliveryMessage]) {
+  for (const callback of [options.remainingMs, options.prepareDeliveryMessage,
+    options.onAcknowledgement]) {
     if (callback !== undefined && typeof callback !== 'function') throw invalidLifetime();
   }
   if (options.deliveryDurationField !== undefined &&
       (typeof options.deliveryDurationField !== 'string' || options.deliveryDurationField.length === 0 ||
        typeof options.prepareDeliveryMessage !== 'function')) throw invalidLifetime();
+  // An ACK bound is optional; a supplied one is a positive duration. Zero or
+  // an unmeasured value never falls back to "no ACK bound".
+  const {ackTimeoutMs} = options;
+  if (ackTimeoutMs !== undefined && ackTimeoutMs !== null &&
+      !(Number.isFinite(ackTimeoutMs) && ackTimeoutMs >= 1)) throw invalidLifetime();
+}
+
+// The ACK wait's own bound (`ackTimeoutMs`), counted from the start of the
+// delivery like the lifetime it sits inside: queue residence, connection wait
+// and the wait for the ACK. Absent, the ACK wait is bounded by the lifetime.
+function createAckWaitBudget(options, now) {
+  return Number.isFinite(options.ackTimeoutMs) ?
+    createTimeoutBudget({configuredBudgetMs: Math.floor(options.ackTimeoutMs), now}) : null;
 }
 
 function parentDeliveryLimits(context, parentRemaining, localRemaining) {
@@ -54,6 +74,10 @@ function createDeliveryLifetime(router, options) {
   const requestedMs = Number.isFinite(options.timeoutMs) && options.timeoutMs > 0 ?
     Math.floor(options.timeoutMs) : router.messageTimeoutMs;
   let budget = createTimeoutBudget({configuredBudgetMs: requestedMs, now});
+  const ackWaitBudget = createAckWaitBudget(options, now);
+  // What this router knows of the target router's acceptance. sendWithAck and
+  // the ledger's ACK handler record it; the timeout error is stamped from it.
+  let acknowledgement = TRANSPORT_ACKNOWLEDGEMENT.NOT_SENT;
   const controller = new AbortController();
   const listeners = [];
   let timeoutId = null;
@@ -66,7 +90,7 @@ function createDeliveryLifetime(router, options) {
     timeoutId = null;
   };
   const spent = () => {
-    timeoutError ??= deliveryTimeoutError();
+    timeoutError ??= deliveryTimeoutError(acknowledgement);
     return timeoutError;
   };
   const refuse = (error) => {
@@ -79,11 +103,22 @@ function createDeliveryLifetime(router, options) {
     shutdownError ??= new Error(ROUTER_ERROR_MSG.SHUTDOWN);
     return shutdownError;
   };
+  // The ACK bound's remainder while the ACK wait is open, else null: an
+  // acknowledged (or rejected, or one-way) delivery has no ACK expiry left,
+  // and a delivery handed to another transport leaves the ACK wait to it.
+  const ackWaitRemainingMs = () => (ackWaitBudget !== null && isAckWaitOpen(acknowledgement) ?
+    Math.floor(getRemainingBudgetMs(ackWaitBudget, {now})) : null);
+  const ackWaitSpent = () => {
+    const ackRemainingMs = ackWaitRemainingMs();
+    return ackRemainingMs !== null && ackRemainingMs <= 0;
+  };
   // The deadline settles an owned obligation (F1: queue, connection wait,
   // ACK and response), so it stays ref'd: an empty event loop must still see
   // the typed refusal. refuse(), dispose() and router shutdown clear it.
+  // The earlier of the two expiries (ACK bound, lifetime) owns the timer.
   const armTimer = (remainingMs) => {
     clearTimer();
+    const ackRemainingMs = ackWaitRemainingMs();
     timeoutId = clock.setTimeout(() => {
       try {
         armTimer(remaining());
@@ -91,7 +126,34 @@ function createDeliveryLifetime(router, options) {
         // Idempotent when remaining() already refused; timer failures use the same owner.
         refuse(error);
       }
-    }, remainingMs);
+    }, ackRemainingMs === null ? remainingMs : Math.min(remainingMs, ackRemainingMs));
+  };
+  // The bound the open ACK wait ends on: the ACK bound when one is set and
+  // earlier, else the lifetime's remainder.
+  const ackWaitBoundMs = () => {
+    const lifetimeMs = remaining();
+    const ackRemainingMs = ackWaitRemainingMs();
+    return ackRemainingMs === null ? lifetimeMs : Math.min(lifetimeMs, ackRemainingMs);
+  };
+  // Acknowledgement only moves forward: a frame that left is never unsent,
+  // and a settled ACK wait (acknowledged, rejected, not requested) is final.
+  const recordAcknowledgement = (state) => {
+    if (!advancesAcknowledgement(acknowledgement, state)) return;
+    const ackWaitWasOpen = isAckWaitOpen(acknowledgement);
+    acknowledgement = state;
+    // A delivery that carries another one (the query transport's inner hop)
+    // reports its acknowledgement to the delivery it is carried for.
+    options.onAcknowledgement?.(state);
+    // The ACK settlement cancels the ACK expiry: only the lifetime remains.
+    // (A carried delivery's first frame opens it again.) The timer moves to
+    // whichever expiry is now the earlier; a frame leaving changes neither.
+    if (ackWaitBudget === null || ackWaitWasOpen === isAckWaitOpen(state) ||
+        refusal !== null || closed) return;
+    try {
+      armTimer(remaining());
+    } catch (error) {
+      refuse(error);
+    }
   };
   function remaining() {
     if (refusal !== null) throw refusal;
@@ -107,6 +169,7 @@ function createDeliveryLifetime(router, options) {
       }
       const grantedMs = Math.floor(Math.min(...limits));
       if (grantedMs <= 0) throw spent();
+      if (ackWaitSpent()) throw spent();
       if (grantedMs < localRemaining) {
         // A later parent observation may shorten this local grant, never renew it.
         budget = createTimeoutBudget({
@@ -137,6 +200,10 @@ function createDeliveryLifetime(router, options) {
     durationField: options.deliveryDurationField,
     signal: controller.signal,
     remainingMs: remaining,
+    ackWaitBoundMs,
+    ackWaitRemainingMs,
+    acknowledgement: () => acknowledgement,
+    recordAcknowledgement,
     ownsTimeout: (error) => error === timeoutError && timeoutError !== null,
     ownsShutdown: (error) => error === shutdownError && shutdownError !== null,
     dispose,

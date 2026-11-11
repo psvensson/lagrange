@@ -11,7 +11,7 @@ import {CDC_GROUP_FOREGROUND_RETRY_STATE as RETRY,
   CDC_GROUP_PROPAGATION_STATE as STATE} from
   '../../src/topology/cdc-group-propagation-constants.js';
 import {LATENCY_PROPAGATION_MODE} from '../../src/topology/latency-topology-constants.js';
-import {RESPONSE, assertDebtWithoutAck, topologyProgressFixture} from
+import {RESPONSE, TARGET_GROUP, assertDebtWithoutAck, topologyProgressFixture} from
   '../test-helpers/cdc-topology-progress-fixture.js';
 import {settleTicks} from '../test-helpers/participant-transaction-fixture.js';
 import {setupConfig, teardownConfig} from './cdc-group-propagation-service-harness.js';
@@ -76,7 +76,7 @@ async function durableFixture(t, maxAttempts) {
 
 function assertNoHeldWork(topology) {
   assert.equal(topology.retrySleepReleases.size, 0, 'no retry delay is held');
-  assert.equal(topology.activeDurablePropagation, null, 'no durable wave is in flight');
+  assert.equal(topology.activeDurableDeliveries.size, 0, 'no durable delivery is in flight');
 }
 
 function assertDurableDebt(f) {
@@ -178,7 +178,11 @@ test('durable foreground attempt exhaustion retains source debt and source conti
 function leaveRemainingDuration(f, remainingMs) {
   f.duringTarget = () => {
     f.duringTarget = null;
-    const context = f.leader.cdcDelivery.activeCdcInvocation.context;
+    // The target group is its own recipient: its delivery runs under its
+    // own invocation, held in that recipient's custody slot.
+    const [, custody] = [...f.leader.cdcDelivery.recipientCustody]
+      .find(([recipient]) => recipient.endsWith(`>${TARGET_GROUP}`));
+    const context = custody.activeCdcInvocation.context;
     const advanceMs = context.remainingMs() - remainingMs;
     assert.ok(advanceMs > 0, 'fixture reduces the actual source grant, never renews it');
     f.clock.advance(advanceMs);

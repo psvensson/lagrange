@@ -8,11 +8,11 @@ import {
   PRE_SYNC_WORKFLOW_STEPS,
   RECONCILE_REPLICA_STATUS_WORKFLOW_STEPS,
   isActiveReplaceSourceRemovalPhase,
+  isReplaceExemptFromTimeBudget,
 } from './replica-operation-step-policy.js';
 import {resolveOperationCurrentStepEntry} from './operation-step-age.js';
 import {
   isPartitionReplace,
-  isReplaceExemptFromTimeBudget,
   isReplaceRemovalIntentDurable,
   isTargetFailureDetectorDead,
 } from './operation-workflow-replace-owner.js';
@@ -281,19 +281,17 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
         operation, timeoutReconcileTasks)) {
         continue;
       }
-      const operationDrainSnapshot =
+      // Routing evidence only: no drain action, so it cannot decide in a lane.
+      const {ownerAction} =
         await this.buildPriorityRecoveryOperationDrainSnapshot(operation);
-      if (
-        await this.wakePriorityRecoveryRemoteOwnerFromDrainSnapshot(
-          operation,
-          operationDrainSnapshot,
-        )
-      ) {
+      const routingDrainSnapshot = Object.freeze({ownerAction});
+      if (await this.wakePriorityRecoveryRemoteOwnerFromDrainSnapshot(
+        operation, routingDrainSnapshot)) {
         continue;
       }
       if (
         !this.shouldEnterOperationLifecycleFromDrainSnapshot(
-          operationDrainSnapshot,
+          routingDrainSnapshot,
         )
       ) {
         continue;
@@ -317,12 +315,11 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
             visibilityObservation,
             operation,
           );
-          if (!timeoutOperation) {
+          if (!timeoutOperation ||
+              this.repository.isOperationTerminal(timeoutOperation)) {
             return;
           }
-          if (this.repository.isOperationTerminal(timeoutOperation)) {
-            return;
-          }
+          // Built after the lane wait; the one snapshot this turn decides on.
           const timeoutOperationDrainSnapshot =
             await this.buildPriorityRecoveryOperationDrainSnapshot(
               timeoutOperation,
@@ -346,6 +343,7 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
           await this.reconcileTimeoutOperation(
             timeoutOperation,
             this.resolveTimeoutCheckNowMs(),
+            timeoutOperationDrainSnapshot,
           );
         },
       ).catch((error) =>

@@ -55,8 +55,16 @@ const PARTITION_CDC_OBLIGATION_BYTES = Object.freeze({
 //   most one acknowledgement entry per second per partition, and the events a
 //   crash can make the consumer see twice are those acknowledged within the
 //   last second (at most ACK_BATCH_MAX_EVENTS of them).
-// - DRIVE_PAGE_ROWS: how many owed rows one drive visits before yielding; each
-//   ledger read hydrates only the current row, in log order.
+// - DRIVE_PAGE_ROWS: how many owed rows one recipient's drive ships before
+//   it yields (its continuation is the lane's retry timer).
+// - SHIP_MAX_EVENTS / SHIP_MAX_BYTES (range shipping): one delivery ships the
+//   owed rows after the scan cursor as one vector of at most this many rows
+//   and this many event_json bytes. A scheduling bound, never an admission
+//   cap: it refuses nothing, and a vector always holds at least one row, so a
+//   row above SHIP_MAX_BYTES ships alone. Both are this owner's existing
+//   acknowledgement batch bounds, so acknowledging one vector needs at most
+//   one flush; the byte bound is far below every carrier limit the vector
+//   crosses (the rs-raft append message, the router WebSocket payload).
 // - RETAINED_DELIVERED_MAX (decision D1): delivered rows are reclaimed only
 //   below the lowest owed row, so a row the lane leaves owed (a provisional
 //   coverage, a batch that commits after a later one) keeps every delivered
@@ -68,12 +76,16 @@ const PARTITION_CDC_OBLIGATION_BYTES = Object.freeze({
 //   reclaims at most this many rows, so its transaction stays bounded; it
 //   exceeds what one command can add (ACK_BATCH_MAX_EVENTS) plus the retained
 //   bound, so a backlog shrinks with every acknowledgement.
+const ACK_BATCH_MAX_EVENTS = NUM.TWO_HUNDRED_FIFTY_SIX;
+const ACK_BATCH_MAX_BYTES = NUM.SIXTY_FOUR * NUM.BYTES_PER_KIB;
 const PARTITION_CDC_OBLIGATION_BOUND = Object.freeze({
   // Durable owed-work capacity; no new per-event payload or fan-out cap.
   OWED_MAX_EVENTS: NUM.FOUR * NUM.FOUR * NUM.TWO_HUNDRED_FIFTY_SIX,
-  ACK_BATCH_MAX_EVENTS: NUM.TWO_HUNDRED_FIFTY_SIX,
+  ACK_BATCH_MAX_EVENTS,
   ACK_MAX_OUTSTANDING_BATCHES: NUM.TWO,
-  ACK_BATCH_MAX_BYTES: NUM.SIXTY_FOUR * NUM.BYTES_PER_KIB,
+  ACK_BATCH_MAX_BYTES,
+  SHIP_MAX_EVENTS: ACK_BATCH_MAX_EVENTS,
+  SHIP_MAX_BYTES: ACK_BATCH_MAX_BYTES,
   // ends-on: the pending acknowledgements are proposed as one CDC_DELIVERED
   // committed command
   ACK_FLUSH_DEADLINE_MS: TIME_MS.SECOND,
@@ -283,6 +295,41 @@ const PARTITION_CDC_OBLIGATION_DRIVE_STATE = Object.freeze({
   ACKNOWLEDGEMENT_BACKPRESSURE: 'acknowledgement_backpressure',
 });
 
+// The lane's named state of one recipient (a subscriber, or one target group
+// of a subscriber's propagation). CONFIRMED: it holds a committed receipt for
+// everything shipped to it. SUBSCRIBER_UNCONFIRMED: a vector shipped to it
+// (first row at `position`) has no committed receipt yet; the lane keeps
+// shipping to every other recipient and retries this one. The state is not
+// terminal: no deadline and no permanent refusal are defined here, so the
+// rows above the slowest recipient stay owed under OWED_MAX_EVENTS.
+const PARTITION_CDC_RECIPIENT_STATE = Object.freeze({
+  CONFIRMED: 'confirmed',
+  SUBSCRIBER_UNCONFIRMED: 'subscriber_unconfirmed',
+});
+
+// What one recipient's drive pass ended as.
+const PARTITION_CDC_RECIPIENT_PASS = Object.freeze({
+  DRAINED: 'drained',
+  HELD: 'held',
+  PROVISIONAL: 'provisional',
+  PAGE_YIELDED: 'page_yielded',
+  CLEANUP_PENDING: 'cleanup_pending',
+  FAILED: 'failed',
+  STOPPED: 'stopped',
+});
+
+// Why an idle recipient is not started by a wake. Each is a named wait woken
+// by the event that clears it: RUNNING (its own drive runs again), CLEANUP
+// (its delivery's actual local cleanup), BACKOFF (its own due time, on the
+// lane's retry timer) and CAUGHT_UP (the next committed row). A recipient
+// behind the owed tail with none of these is started; nothing else may hold it.
+const PARTITION_CDC_RECIPIENT_WAIT = Object.freeze({
+  RUNNING: 'running',
+  CLEANUP: 'cleanup',
+  BACKOFF: 'backoff',
+  CAUGHT_UP: 'caught_up',
+});
+
 // What one flush of the acknowledgement batch ended as.
 const PARTITION_CDC_OBLIGATION_FLUSH_STATE = Object.freeze({
   EMPTY: 'empty',
@@ -313,6 +360,7 @@ const PARTITION_CDC_OBLIGATION_LOG_MSG = Object.freeze({
   RECORDED: 'CDC obligations recorded with the committed decision',
   DELIVERY_HELD: 'CDC obligation delivery held by a subscriber; retry scheduled',
   DRIVE_FAILED: 'CDC obligation drive failed',
+  DELIVERY_BACKPRESSURED: 'CDC obligation delivery backpressured',
   ACKNOWLEDGEMENTS_PROPOSED: 'CDC acknowledgement batch proposed',
   ACKNOWLEDGEMENTS_REFUSED: 'CDC acknowledgement batch refused',
   ACKNOWLEDGEMENTS_OUTCOME_UNKNOWN:
@@ -347,4 +395,7 @@ export {
   PARTITION_CDC_OBLIGATION_SQL,
   PARTITION_CDC_OBLIGATION_STANDING,
   PARTITION_CDC_OBLIGATION_TABLE,
+  PARTITION_CDC_RECIPIENT_PASS,
+  PARTITION_CDC_RECIPIENT_STATE,
+  PARTITION_CDC_RECIPIENT_WAIT,
 };

@@ -10,12 +10,12 @@ import {
   LOCAL_STR_CONNECTION_TO_NODE,
   LOCAL_STR_CLOSED,
   LOCAL_STR_10U11,
-  LOCAL_STR_MESSAGE_TIMEOUT,
   LOCAL_STR_1Y4H5,
   LOCAL_STR_10811,
   MIN_YIELD_MS,
   MIN_SLEEP_MS,
 } from './logs-table-service-constants.js';
+import {ROUTER_MESSAGE_TIMEOUT_ERROR_CODE} from '../transport/transport-error-codes.js';
 import {
   WAIT_BOUND_SPENT_SINK,
   reportWaitBoundSpent,
@@ -60,8 +60,12 @@ function shouldDeferWriteError(error) {
   if (!error) {
     return false;
   }
+  // A spent delivery lifetime defers by its transport code, never its text;
+  // a re-write of the deferred entries is an UPSERT by log_id, so the ACK
+  // and the answer timeout defer alike.
   if (error?.deferRetry === true ||
-      error?.code === LOCAL_STR_12XVB) {
+      error?.code === LOCAL_STR_12XVB ||
+      error?.code === ROUTER_MESSAGE_TIMEOUT_ERROR_CODE) {
     return true;
   }
   if (Number.isFinite(error?.retryAfterMs) &&
@@ -73,7 +77,6 @@ function shouldDeferWriteError(error) {
     message.includes(LOCAL_STR_CONNECTION_TO_NODE) &&
     message.includes(LOCAL_STR_CLOSED) ||
     message.includes(LOCAL_STR_10U11) ||
-    message.includes(LOCAL_STR_MESSAGE_TIMEOUT) ||
     message.includes(LOCAL_STR_1Y4H5) ||
     message.includes(LOCAL_STR_10811);
 }

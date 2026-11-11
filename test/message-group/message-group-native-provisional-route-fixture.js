@@ -26,6 +26,8 @@ import {REPLICA_HANDLER_RETIREMENT_OUTCOME} from
 import {CDC_OPERATION, TABLES, SERVICE_STATUS} from '../../src/constants/index.js';
 import {SERVICES_SCHEMA} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {cdcSqlBuilder} from '../../src/cdc/cdc-sql-builder.js';
+import {PARTITION_CDC_OBLIGATION_BOUND} from
+  '../../src/partition/partition-cdc-obligation-constants.js';
 import {readCdcObligation, readCdcObligationProgress, readCdcObligationStanding} from
   '../../src/partition/partition-cdc-obligation-ledger.js';
 import {PARTICIPANT_CUTOVER_OUTCOME} from
@@ -440,18 +442,27 @@ async function provisionalRouteFixture(t) {
   return f;
 }
 
-function registrationInsert(service, entryId) {
+// Range shipping ships the owed rows of one drive as one vector. A witness
+// that stages two source rows as two waves (A released before the later row
+// B is visited) gives A these fields: its event body is then above the
+// shipping byte bound and A ships as a vector of its own.
+const SHIPS_ALONE_FIELDS = Object.freeze({
+  create_attempt_token: `ships-alone:${'a'.repeat(PARTITION_CDC_OBLIGATION_BOUND.SHIP_MAX_BYTES)}`,
+});
+
+function registrationInsert(service, entryId, extraFields = null) {
   // Canonical owner bytes plus released SQL prove a mutation/debt, not the
   // separate lifecycle gateway's registration or activation authorization.
   const row = MessageGroupServiceRowOwner.buildRegistrationRow({groupId: service.groupId,
     replicaId: service.replicaId, nodeId: NODE_ID, service,
-    timestamp: 2, status: SERVICE_STATUS.STOPPED});
+    timestamp: 2, status: SERVICE_STATUS.STOPPED, extraFields});
   const parts = cdcSqlBuilder.buildInsertParts(row);
   return {entryId, row, sql: `INSERT INTO services (${parts.columns}) VALUES (${parts.placeholders})`,
     params: parts.values};
 }
 
-export {provisionalRouteFixture, registrationInsert, sourceView, targetView, recordOf,
+export {SHIPS_ALONE_FIELDS, provisionalRouteFixture, registrationInsert, sourceView, targetView,
+  recordOf,
   json, note, pump, tick, releaseB, releaseFollower, disarmProducerRetryTimer, driveWithPump,
   addressOf, payloadOf, cdcEvents, NODE_ID, SOURCE_GROUP, TARGET_GROUP, SOURCE_REPLICA,
   TARGET_REPLICAS, LEADER, FIRST_HOP, FOLLOWER, PARTITION_ID};

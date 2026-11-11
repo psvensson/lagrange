@@ -23,7 +23,6 @@ const CDC_INTEGRATION_SERVICE_LITERAL = Object.freeze({
   CDC_WRITE_ROUTER_IS_NOT_CONFIGURED: 'CDC write router is not configured',
   NO_CONNECTION_TO_NODE: 'No connection to node',
   FAILED_TO_FORWARD_WRITE_TO_LEADER: 'Failed to forward write to leader',
-  MESSAGE_TIMEOUT: 'Message timeout',
   VALUE_60: 60,
   VALUE_1000: 1000,
   DIAGNOSED_CACHE_VISIBILITY_GAP_FROM_AUTHORITATIVE_SYSTEM_TABLE_READ:
@@ -47,7 +46,6 @@ const CDC_OWNER_HANDOFF_ROUTING_ERROR_FRAGMENTS = Object.freeze([
   QUERY_ERROR_MSG.QUERY_ROUTING_FAILED,
   'No connection to node',
   'Failed to forward write to leader',
-  'Message timeout',
 ]);
 const CDC_OWNER_HANDOFF_CONNECTION_TO_NODE_FRAGMENT = 'Connection to node';
 const CDC_OWNER_HANDOFF_CLOSED_FRAGMENT = 'closed';

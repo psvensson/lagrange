@@ -2,7 +2,10 @@ import {CDC_COMPLETION, hasDurableCdcEvents,
   isCommittedCdcOutcome, isProvisionalCdcOutcome} from
   '../../cdc/cdc-delivery-outcome.js';
 import {assertCdcDeliveryInvocation} from '../../cdc/cdc-delivery-invocation.js';
+import {PARTITION_SERVICE_CDC} from '../../partition/partition-service-constants.js';
 const LOCAL_STR_OPERATIONAL_MESSAGE_GROUP_INGRESS_NOT_RE = 'Operational message-group ingress not ready ';
+const PARTITION_CDC_PROPAGATION_HELD_MSG =
+  'Partition already holds a different CDC propagation subscriber';
 
 const CDC_PROPAGATION_SUBSCRIBER_REASON = Object.freeze({
   OWNER_NOT_READY: 'operational message-group ingress not ready',
@@ -156,18 +159,19 @@ function buildPropagationOwnerNotReadyMessage(tableName) {
     `for ${tableName} ${CDC_PROPAGATION_SUBSCRIBER_MESSAGE.PROPAGATION}`;
 }
 
-function acceptsPropagationTable(cdcEvent, tableName) {
-  if (cdcEvent?.tableName === tableName) return true;
-  if (hasDurableCdcEvents([cdcEvent])) {
+// The durable subscriber contract: one vector of durable events, every
+// member of this subscriber's table. Anything else is invalid, never ignored.
+function assertPropagationVector(events, tableName) {
+  if (!hasDurableCdcEvents(events) ||
+      events.some((cdcEvent) => cdcEvent?.tableName !== tableName)) {
     throw Object.assign(new Error(CDC_COMPLETION.INVALID), {code: CDC_COMPLETION.INVALID});
   }
-  return false;
 }
 
-function logPropagationEvent(logger, eventLogMessage, cdcEvent, partitionId, replicaId) {
-  if (logger && typeof logger.debug === 'function' && eventLogMessage) {
-    logger.debug(eventLogMessage, {tableName: cdcEvent.tableName,
-      operation: cdcEvent.operation, partitionId, replicaId});
+function logPropagationVector(logger, eventLogMessage, events, partitionId, replicaId) {
+  if (logger !== null && eventLogMessage !== null) {
+    logger.debug(eventLogMessage, {tableName: events[0].tableName,
+      operation: events[0].operation, eventCount: events.length, partitionId, replicaId});
   }
 }
 
@@ -193,10 +197,9 @@ function resolveUnknownAnswerDeferredFields(answer) {
   };
 }
 
-function propagationIsProvisional(answer, cdcEvent, groupId) {
-  if (!hasDurableCdcEvents([cdcEvent]) ||
-      isCommittedCdcOutcome(answer, [cdcEvent], groupId)) return false;
-  if (isProvisionalCdcOutcome(answer, [cdcEvent], groupId)) return true;
+function propagationIsProvisional(answer, events, groupId) {
+  if (isCommittedCdcOutcome(answer, events, groupId)) return false;
+  if (isProvisionalCdcOutcome(answer, events, groupId)) return true;
   throw Object.assign(new Error(CDC_COMPLETION.UNKNOWN), {
     code: CDC_COMPLETION.UNKNOWN, cause: answer, deferRetry: true,
     ...resolveUnknownAnswerDeferredFields(answer),
@@ -231,37 +234,47 @@ function buildPartitionCdcPropagationSubscriber(options = {}) {
     return resolvePropagationServiceReadiness(service, cdcEvent, requiredTables);
   };
 
-  const subscriber = async (cdcEvent = {}, deliveryContext = null) => {
-    if (deliveryContext !== null) assertCdcDeliveryInvocation(deliveryContext);
-    const wait = (operation) => deliveryContext === null ? operation() :
-      deliveryContext.run(operation);
-    if (!acceptsPropagationTable(cdcEvent, tableName)) return;
-    logPropagationEvent(logger, eventLogMessage, cdcEvent, partitionId, replicaId);
+  // A hook receives what the subscriber receives: the vector, in log order,
+  // once before it propagates and once after it committed. A hook that
+  // decides per event walks the vector itself (it alone knows what an event's
+  // predecessor is). The hooks belong to the propagation's source group: a
+  // delivery addressed to a target group runs neither.
+  const runPropagationHook = async (hook, events, wait) => {
+    if (typeof hook === 'function') await wait(() => hook(events));
+  };
 
-    if (typeof beforePropagation === 'function') {
-      await wait(() => beforePropagation(cdcEvent));
-    }
+  // The durable subscriber contract (partition-cdc-delivery.js): one vector
+  // of this table's durable events and its delivery invocation, answered
+  // with the outcome of the one recipient group the invocation addresses
+  // (the propagation's source group, or one target group) over that exact
+  // vector.
+  const subscriber = async (events, deliveryContext) => {
+    assertCdcDeliveryInvocation(deliveryContext);
+    const wait = (operation) => deliveryContext.run(operation);
+    assertPropagationVector(events, tableName);
+    const addressesSource = deliveryContext.recipientGroupId === null;
+    logPropagationVector(logger, eventLogMessage, events, partitionId, replicaId);
+    if (addressesSource) await runPropagationHook(beforePropagation, events, wait);
 
     const selection = await wait(() => resolveOperationalMessageGroupSelectionAsync(
       buildPropagationSelectionOptions(requiredTables, preferredService)));
     const propagationMessageGroupService = requirePropagationService(
-      selection, cdcEvent, requiredTables, resolveDeferredSelectionError);
+      selection, events[0], requiredTables, resolveDeferredSelectionError);
 
     const answer = await wait(() => propagatePartitionCDCEvent(
       propagationMessageGroupService,
-      cdcEvent,
+      events,
       deliveryContext,
     ));
 
     // The source delivery owner consumes this exact answer. In particular,
     // provisional ingress cannot run completion hooks or become an ACK merely
     // because this callback returned without throwing.
-    if (propagationIsProvisional(answer, cdcEvent, propagationMessageGroupService.groupId)) {
+    if (propagationIsProvisional(answer, events, deliveryContext.recipientGroupId === null ?
+      propagationMessageGroupService.groupId : deliveryContext.recipientGroupId)) {
       return answer;
     }
-    if (typeof afterPropagation === 'function') {
-      await wait(() => afterPropagation(cdcEvent));
-    }
+    if (addressesSource) await runPropagationHook(afterPropagation, events, wait);
     return answer;
   };
 
@@ -331,6 +344,34 @@ function buildPartitionCdcPropagationSubscriber(options = {}) {
   return subscriber;
 }
 
+/**
+ * Register a partition replica's one CDC propagation subscriber. Every
+ * bootstrap path (seed hydration, a dynamically created replica, a joiner's
+ * replica) registers through here: one subscriber per partition replica,
+ * named by the hosting path, node, table and replica, never by a message
+ * group (the subscriber selects its message group per delivery). The
+ * partition refuses a second, different propagation subscriber; that refusal
+ * is a broken registration and throws.
+ * @param {Object} partition - The partition replica's service.
+ * @param {Object} options - {role, nodeId} and the subscriber's options
+ *   (buildPartitionCdcPropagationSubscriber).
+ * @return {Promise<Object>} The partition's handshake.
+ */
+async function registerPartitionCdcPropagation(partition, {role, nodeId, ...subscriberOptions}) {
+  const subscriberId = [role, nodeId, subscriberOptions.tableName,
+    subscriberOptions.replicaId].join(':');
+  const handshake = await partition.subscribeToCDCWithHandshake(
+    buildPartitionCdcPropagationSubscriber(subscriberOptions),
+    {subscriberId, role: PARTITION_SERVICE_CDC.SUBSCRIBER_ROLE_PROPAGATION});
+  if (handshake.status === PARTITION_SERVICE_CDC.HANDSHAKE_STATUS_PROPAGATION_HELD) {
+    throw Object.assign(new Error(PARTITION_CDC_PROPAGATION_HELD_MSG), {
+      code: PARTITION_SERVICE_CDC.HANDSHAKE_STATUS_PROPAGATION_HELD,
+      subscriberId, holderSubscriberId: handshake.holderSubscriberId});
+  }
+  return handshake;
+}
+
 export {
   buildPartitionCdcPropagationSubscriber,
+  registerPartitionCdcPropagation,
 };

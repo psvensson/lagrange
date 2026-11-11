@@ -7,6 +7,31 @@ const {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
+// Unless some step entry already names the canonical source replica, the
+// first entry carries it.
+function stampCanonicalSourceReplica(stepsHistory, sourceReplicaId) {
+  const hasObservedSourceReplicaMetadata = stepsHistory.some(
+    (entry) => {
+      return (
+        entry &&
+        typeof entry === 'object' &&
+        entry[OPERATION_METADATA_KEY.SOURCE_REPLICA_ID] === sourceReplicaId
+      );
+    },
+  );
+  if (
+    !hasObservedSourceReplicaMetadata &&
+    stepsHistory.length > 0 &&
+    stepsHistory[0] &&
+    typeof stepsHistory[0] === 'object'
+  ) {
+    stepsHistory[0] = {
+      ...stepsHistory[0],
+      [OPERATION_METADATA_KEY.SOURCE_REPLICA_ID]: sourceReplicaId,
+    };
+  }
+}
+
 /**
  * Apply observed operation state updates to target operation.
  * @param {Object} context - Segment/Class context instance.
@@ -73,28 +98,7 @@ function applyObservedOperationState(context, targetOperation, sourceOperation) 
       canonicalSourceReplicaId.length > 0
     ) {
       targetOperation.sourceReplicaId = canonicalSourceReplicaId;
-      const hasObservedSourceReplicaMetadata = clonedStepsHistory.some(
-        (entry) => {
-          return (
-            entry &&
-            typeof entry === 'object' &&
-            entry[OPERATION_METADATA_KEY.SOURCE_REPLICA_ID] ===
-              canonicalSourceReplicaId
-          );
-        },
-      );
-      if (
-        !hasObservedSourceReplicaMetadata &&
-        clonedStepsHistory.length > 0 &&
-        clonedStepsHistory[0] &&
-        typeof clonedStepsHistory[0] === 'object'
-      ) {
-        clonedStepsHistory[0] = {
-          ...clonedStepsHistory[0],
-          [OPERATION_METADATA_KEY.SOURCE_REPLICA_ID]:
-            canonicalSourceReplicaId,
-        };
-      }
+      stampCanonicalSourceReplica(clonedStepsHistory, canonicalSourceReplicaId);
     }
   } else {
     targetOperation.replicaId = sourceOperation.replicaId;
@@ -139,11 +143,16 @@ async function adoptMostAdvancedObservedReplaceState(context, operation) {
     }
   };
 
+  // A cached row is a hint, with one exception: a terminal row is committed
+  // and final, so it is never rewound by a lagging authoritative read.
   const cachedRow = context.repository.getReplicaOperationRowFromCache(
     operation.operationId,
   );
-  if (cachedRow) {
-    maybeSelectOperation(context.repository.rowToOperation(cachedRow));
+  const cachedOperation = cachedRow ?
+    context.repository.rowToOperation(cachedRow) :
+    null;
+  if (context.repository.isOperationTerminal(cachedOperation)) {
+    maybeSelectOperation(cachedOperation);
   }
 
   const authoritativeOperation =

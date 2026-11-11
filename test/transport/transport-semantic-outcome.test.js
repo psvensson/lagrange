@@ -50,6 +50,7 @@ test('transport delivery outcome grammar classifies deferred and failed deliveri
         errorCode: 'ROUTER_CONNECTION_CLOSED',
         retryAfterMs: 250,
         deliveryState: TRANSPORT_DELIVERY_OUTCOME_STATE.DEFERRED,
+        acknowledgement: 'unestablished',
         deferRetry: true,
         noHandler: false,
         reasonCode:
@@ -166,6 +167,9 @@ test('message router normalizes local delivery results onto the shared delivery 
 // must be classified here before the property below can pass.
 const FIELD_RULE = Object.freeze({COMPUTED: 'computed', PRESERVED: 'preserved'});
 const METADATA_FIELD_RULES = Object.freeze({
+  // A named acknowledgement state is preserved (one outside the named states
+  // is no fact and is computed; transport-acknowledgement-contract.test.js).
+  acknowledgement: FIELD_RULE.PRESERVED,
   deliveryState: FIELD_RULE.COMPUTED,
   deferRetry: FIELD_RULE.PRESERVED,
   errorCode: FIELD_RULE.PRESERVED,
@@ -181,6 +185,7 @@ const CLOSED_CODE = 'ROUTER_CONNECTION_CLOSED';
 // Enumerated values per metadata field, plus a code application field and the
 // completed-with-error evidence: canonical, contradictory and wrong-type.
 const METADATA_FIELD_VALUES = Object.freeze({
+  acknowledgement: [ABSENT, 'acknowledged', 'not_sent'],
   deliveryState: [ABSENT, undefined, STATE.DELIVERED, STATE.DEFERRED, STATE.FAILED, '', null,
     1,
     'DELIVERED'],
@@ -304,7 +309,7 @@ test('buildTransportDeliveryOutcome is a fixed point that never rewrites a suppl
         buildTransportDeliveryOutcome(input));
       if (violation !== null && violations.length < 10) violations.push(violation);
     }
-    t.equal(size, 9 * 5 * 8 * 4 * 3 * 7 * 2 * 2 * 2 * 2, 'the whole matrix was enumerated');
+    t.equal(size, 3 * 9 * 5 * 8 * 4 * 3 * 7 * 2 * 2 * 2 * 2, 'the whole matrix was enumerated');
     t.same(violations, [], 'every matrix input normalizes once and keeps its values');
   });
 
@@ -428,8 +433,13 @@ const ABSENT_FIELD_DEFAULTS = Object.freeze([
     true, OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE, null, REASON.OUTBOUND_QUEUE_BACKPRESSURED],
   [{acknowledged: true, errorCode: WEBSOCKET_CONNECT_TIMEOUT_ERROR_CODE}, STATE.FAILED, false,
     WEBSOCKET_CONNECT_TIMEOUT_ERROR_CODE, null, REASON.WEBSOCKET_CONNECT_TIMEOUT],
+  // A spent lifetime whose producer states no ACK fact is an answer timeout:
+  // nothing establishes that the ACK was missing.
   [{acknowledged: false, errorCode: 'ROUTER_MESSAGE_TIMEOUT'}, STATE.FAILED, false,
-    'ROUTER_MESSAGE_TIMEOUT', null, REASON.MESSAGE_TIMEOUT],
+    'ROUTER_MESSAGE_TIMEOUT', null, REASON.ANSWER_TIMEOUT],
+  [{acknowledged: false, errorCode: 'ROUTER_MESSAGE_TIMEOUT',
+    acknowledgement: 'unacknowledged'}, STATE.FAILED, false,
+  'ROUTER_MESSAGE_TIMEOUT', null, REASON.ACK_TIMEOUT],
   [{acknowledged: true, deliveryState: STATE.DEFERRED}, STATE.DEFERRED, true, null, null,
     REASON.TRANSPORT_DEFERRED],
 ]);

@@ -11,6 +11,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {EntityType} from '../../src/rebalancer/unified-rebalancer.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {ReplicaOperationField} from '../../src/rebalancer/replica-operation-constants.js';
 import {REBALANCER_MOVE_TYPE} from '../../src/rebalancer/rebalancer-constants.js';
 import {
   REPLACE_COMPLETION_VERDICT,
@@ -347,30 +348,29 @@ test('AN2: a healthy owner whose lease would have expired (31 s) is not ' +
 });
 
 // A dead leader-source (the kill simulation, not the F2 handler: this cell
-// is about a source that died at the effect, before any RemoveNode).
-test('AN6: the leader-source dies at the effect; leaderless the owner ' +
-  'waits typed and proposes nothing; the new leader\'s answer wakes R-1f, ' +
-  'which completes the REPLACE', async (t) => {
+// is about a source that dies at the effect, before any RemoveNode).
+// Superseded 2026-11-11 (R09) by the universal removal leadership rule: the
+// pinned premise - the source still leads when its effect is sent, so its
+// death leaves the group leaderless - is the defect class the rule removes.
+// The leading source hands its leadership to the target first; its death at
+// the effect leaves a led group, and R-1f completes through that leader.
+// The leaderless typed wait stays witnessed by P6 b, b' and c above.
+test('AN6: a leading source hands off before its effect; dying at the ' +
+  'effect it leaves a led group, and R-1f completes through that leader',
+async (t) => {
   const world = await openReplaceWorld({partitionId: ORDINARY_PARTITION_ID,
     sourceLeads: true, sourceStopsAtEffect: true});
   try {
     t.equal(world.group.leader(), world.sourceReplicaId, 'setup: source leads');
     await driveToIntent(world);
-    t.equal(world.group.leader(), null, 'the group has no leader');
-    t.equal(world.retirements.length, 0,
-      'F1: no leader answers, so R-1f proposes nothing (no proposal to a ' +
-        'dead leader is counted as issued)');
-    await assertLeaderlessTypedWait(t, world, 'AN6', {targetGone: false});
-    const timersBefore = world.fallbackTimers.filter((h) => h.fired).length;
-    // The election: the relay announces the new leader and term to the
-    // owner, whose next decision reads the new leader (no fallback).
-    const outcome = await runToQuiescence(world, {rounds: 30,
-      useFallback: false});
+    t.equal(world.stepDowns.length, 1, 'one named handoff before the effect');
+    t.equal(world.group.leader(), world.targetReplicaId,
+      'the group keeps a leader - the target - when the source dies');
+    const outcome = await runToQuiescence(world, {rounds: 30});
     t.equal(outcome.workflowStep, WORKFLOW_STEP.REMOVED, 'completed');
-    t.equal(world.fallbackTimers.filter((h) => h.fired).length, timersBefore,
-      'no fallback timer fired: the leader/term wake drove it');
-    t.ok(world.retirements.length >= 1,
-      'R-1f proposed once a leader answered');
+    t.notOk(world.retirements.some((payload) =>
+      payload[ReplicaOperationField.REPLICA_ID] === world.sourceReplicaId),
+    'no RETIRE is ever routed to the source');
     t.equal(world.group.sourceCommittedVoter(world.sourceReplicaId), false,
       'the source left the committed configuration');
   } finally {

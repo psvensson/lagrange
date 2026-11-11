@@ -604,18 +604,31 @@ class RebalanceCoordinatorReservationLifecycleMethods {
    * silently reopen its admitted capacity. RELEASE_ACTIVE only when the
    * operation is visible-and-terminal or confirmed-absent.
    * @param {string|null} operationId
-   * @return {Promise<Object>} {action} — RELEASE_ACTIVE or KEEP_ACTIVE.
+   * @param {Map<string, Object>} [snapshotByOperationId] - One sweep's
+   *   snapshots: each operation is read once per sweep and both arms decide
+   *   on that one snapshot.
+   * @return {Promise<Object>} Frozen {action, state}; action is
+   *   RELEASE_ACTIVE or KEEP_ACTIVE.
    * @private
    */
-  async buildReservationExpirySnapshot(operationId) {
+  async buildReservationExpirySnapshot(
+    operationId,
+    snapshotByOperationId = new Map(),
+  ) {
+    const sweepSnapshot = snapshotByOperationId.get(operationId);
+    if (sweepSnapshot) {
+      return sweepSnapshot;
+    }
     const visibilityObservation =
       await this.getReservationOperationVisibilityObservation(operationId);
     const reconcileSnapshot =
       this.buildReservationOrphanReconcileSnapshot(visibilityObservation);
-    return Object.freeze({
+    const expirySnapshot = Object.freeze({
       action: reconcileSnapshot.action,
       state: reconcileSnapshot.state,
     });
+    snapshotByOperationId.set(operationId, expirySnapshot);
+    return expirySnapshot;
   }
 
   /**
@@ -646,6 +659,7 @@ class RebalanceCoordinatorReservationLifecycleMethods {
     const now = Date.now();
     let expired = 0;
     let orphansReleased = 0;
+    const snapshotByOperationId = new Map();
 
     const staleResult = await readAuthoritativeControlPlaneRows(
       this.controlPlaneSystemTableGateway,
@@ -664,19 +678,13 @@ class RebalanceCoordinatorReservationLifecycleMethods {
         // and terminal — so only a truly finished operation's reservation
         // expires.
         const expirySnapshot = await this.buildReservationExpirySnapshot(
-          row.operation_id,
-        );
-        if (
-          expirySnapshot.action !==
-          RESERVATION_ORPHAN_RECONCILE_ACTION.RELEASE_ACTIVE
-        ) {
+          row.operation_id, snapshotByOperationId);
+        if (expirySnapshot.action !==
+            RESERVATION_ORPHAN_RECONCILE_ACTION.RELEASE_ACTIVE) {
           continue;
         }
         const transition = await this.transitionActiveReservationById(
-          row.reservation_id,
-          RESERVATION_STATUS.EXPIRED,
-          now,
-        );
+          row.reservation_id, RESERVATION_STATUS.EXPIRED, now);
         if (!transition.success) {
           this.logger.warn(
             REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_RELEASE_FAILED,
@@ -695,11 +703,7 @@ class RebalanceCoordinatorReservationLifecycleMethods {
     } else if (!staleResult.success) {
       this.logger.warn(
         REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_RELEASE_FAILED,
-        {
-          operationId: null,
-          reservationId: null,
-          error: staleResult.error,
-        },
+        {operationId: null, reservationId: null, error: staleResult.error},
       );
     }
 
@@ -720,16 +724,10 @@ class RebalanceCoordinatorReservationLifecycleMethods {
 
     if (activeResult.success && activeResult.rows) {
       for (const row of activeResult.rows) {
-        const visibilityObservation =
-          await this.getReservationOperationVisibilityObservation(
-            row.operation_id,
-          );
-        const reconcileSnapshot =
-          this.buildReservationOrphanReconcileSnapshot(visibilityObservation);
-        if (
-          reconcileSnapshot.action !==
-          RESERVATION_ORPHAN_RECONCILE_ACTION.RELEASE_ACTIVE
-        ) {
+        const reconcileSnapshot = await this.buildReservationExpirySnapshot(
+          row.operation_id, snapshotByOperationId);
+        if (reconcileSnapshot.action !==
+            RESERVATION_ORPHAN_RECONCILE_ACTION.RELEASE_ACTIVE) {
           continue;
         }
         const transition = await this.transitionActiveReservationById(

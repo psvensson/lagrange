@@ -15,12 +15,15 @@
 // refusal) or whose outcome is unknown keeps the session PREPARING with its
 // sealed command, so the coordinator's retry re-proposes the same bytes.
 import {
+  PARTICIPANT_STORE_CONNECTION_STATE as CONNECTION_STATE,
+  PARTICIPANT_TRANSACTION_CUSTODY as CUSTODY,
   PARTICIPANT_TRANSACTION_LOG_MSG as LOG_MSG,
   PARTICIPANT_TRANSACTION_SESSION_PHASE as PHASE,
 } from './partition-participant-transaction-constants.js';
 import {
   isParticipantSessionPrepared,
   isPartitionReserved,
+  participantStoreConnectionStateOf,
   readPreparedParticipantIds,
 } from './partition-participant-transaction-store.js';
 import {hasLockingReadReservations} from './partition-locking-read-reservation.js';
@@ -299,7 +302,8 @@ function canAdvanceRowKeySessionGeneration(service, session, targetGeneration) {
 
 function reconcilePreparedParticipantRowKeys(service) {
   const preparedMap = PREPARED_PARTICIPANT_ROW_KEYS.get(service);
-  if (!preparedMap || preparedMap.size === 0 || service?.db?.open !== true) return;
+  if (!preparedMap || preparedMap.size === 0 ||
+      participantStoreConnectionStateOf(service?.db) === CONNECTION_STATE.CLOSED) return;
   const durablePrepared = new Set(readPreparedParticipantIds(service.db));
   for (const participantId of [...preparedMap.keys()]) {
     if (!durablePrepared.has(participantId)) {
@@ -393,13 +397,29 @@ function hasParticipantSession(service) {
 }
 
 /**
- * Whether the current participant owner holds the partition: volatile
- * staging on this leader, or a durable PREPARED reservation.
+ * The participant owner's custody of the partition: ACTIVE (volatile staging
+ * on this leader, or a durable PREPARED reservation), IDLE, or CLOSED once
+ * the lifecycle owner released the connection - a named answer, never a read
+ * through a released connection.
+ * @param {Object} service - The partition.
+ * @return {string} A PARTICIPANT_TRANSACTION_CUSTODY.
+ */
+function participantTransactionCustodyOf(service) {
+  if (participantStoreConnectionStateOf(service.db) === CONNECTION_STATE.CLOSED) {
+    return CUSTODY.CLOSED;
+  }
+  return hasParticipantSession(service) || isPartitionReserved(service.db) ?
+    CUSTODY.ACTIVE : CUSTODY.IDLE;
+}
+
+/**
+ * Whether the current participant owner holds the partition (custody
+ * ACTIVE).
  * @param {Object} service - The partition.
  * @return {boolean} Whether TX1 has nonterminal work here.
  */
 function participantTransactionActive(service) {
-  return hasParticipantSession(service) || isPartitionReserved(service.db);
+  return participantTransactionCustodyOf(service) === CUSTODY.ACTIVE;
 }
 
 /**
@@ -517,6 +537,7 @@ export {
   openParticipantSession,
   participantRoutingSessionCollision,
   participantTransactionActive,
+  participantTransactionCustodyOf,
   recordCommittedParticipantRowKeys,
   stagePreparedParticipantRowKeys,
   sweepParticipantTransactionHolds,

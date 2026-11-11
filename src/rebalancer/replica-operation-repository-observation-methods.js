@@ -1,5 +1,6 @@
 import {SERVICE_TYPE} from '../constants/service.js';
 import {UNIFIED_SERVICE_TYPE} from '../constants/unified-service-lifecycle.js';
+import {REPLICA_CLEANUP_AUTHORITY_KIND} from '../node/replica-cleanup-constants.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 import {isUnclaimedPreRuntimeFailedCreateRow} from
@@ -154,6 +155,15 @@ function assignReplicaOperationRepositoryObservationMethods(
       const decoded = decodeCanonicalObservedReplicaRow(row);
       if (!decoded || !decoded.status) {
         return null;
+      }
+      if (decoded.serviceType === SERVICE_TYPE.PARTITION_CLEANUP) {
+        if (decoded.status === REPLICA_CLEANUP_AUTHORITY_KIND.COMPLETE) {
+          return ReplicaStatus.REMOVED;
+        }
+        if (decoded.status === REPLICA_CLEANUP_AUTHORITY_KIND.OWNED) {
+          return ReplicaStatus.REMOVING;
+        }
+        return decoded.status;
       }
       if (decoded.serviceType !== SERVICE_TYPE.PARTITION) {
         return decoded.status;

@@ -145,8 +145,22 @@ async function occupyNativeSlot(f, service, event) {
   return pending;
 }
 
-for (const batch of [false, true]) {
-  test(`public ${batch ? 'batch' : 'single'} CDC receiver reserves the existing queue before capture`,
+// A durable vector has one wire form, the batch message, whatever its length.
+test('a durable event on the single CDC message is refused before any queue effect',
+  async (t) => {
+    const f = await recipientFixture(t, KEY);
+    const leader = f.services[0];
+    const event = sourceEvent(1);
+    const refused = await settle(f, receive(leader, event, false, 'durable-single'),
+      'the single message is the ordinary event\'s form');
+    assert.equal(refused.error?.code, CDC_COMPLETION.INVALID);
+    assert.equal(refused.answer, undefined);
+    assert.equal(leader.cdcCommitWaiters.size, 0);
+    assert.equal(nativeEntry(leader, event).entries.length, 0);
+  });
+
+for (const batch of [true]) {
+  test('public batch CDC receiver reserves the existing queue before capture',
     async (t) => {
       const f = await recipientFixture(t, KEY);
       const leader = f.services[0];
@@ -713,7 +727,7 @@ test('C1 proposeCDCCommand refuses unpaired or absent durable route custody', as
   const f = await recipientFixture(t, KEY);
   const leader = f.services[0];
   const event = sourceEvent(1);
-  const durable = {type: MESSAGE_GROUP_COMMAND_TYPE.CDC, ...event};
+  const durable = {type: MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH, events: [event]};
   let invoked = 0;
   const hook = () => {
     invoked += 1;

@@ -10,14 +10,14 @@ import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
 import {isIssuedBootIncarnation} from '../../src/bootstrap/boot-incarnation-contract.js';
 import {buildPartitionCdcPropagationSubscriber} from
   '../../src/bootstrap/shared/partition-cdc-propagation-subscriber.js';
-import {buildCommittedCdcOutcome, buildProvisionalCdcOutcome, unknownCdcAcceptance} from
-  '../../src/cdc/cdc-delivery-outcome.js';
+import {buildCommittedCdcOutcome, buildProvisionalCdcOutcome, cdcCommitWaitIdentity,
+  unknownCdcAcceptance} from '../../src/cdc/cdc-delivery-outcome.js';
 import {CDCGroupPropagationService} from '../../src/topology/cdc-group-propagation-service.js';
 import {PARTITION_CDC_COMMAND, PARTITION_CDC_OBLIGATION_REASON} from
   '../../src/partition/partition-cdc-obligation-constants.js';
 import {countCdcObligations} from '../../src/partition/partition-cdc-obligation-ledger.js';
-import {createDurableSourceMessageGroupService, createMessageGroupServiceRow} from
-  '../topology/cdc-group-propagation-service-harness.js';
+import {createDurableSourceMessageGroupService, createMessageGroupServiceRow,
+  deliveredEventsOf} from '../topology/cdc-group-propagation-service-harness.js';
 import {CDC_TABLE as TABLE, applyCommitted, committedQueryOf, settleTicks, shutdownAll,
   startLeader} from
   './participant-transaction-fixture.js';
@@ -65,15 +65,21 @@ function buildTopology(f) {
     canAcceptCDCEvent: () => f.ready,
     applyCDCBatch: (events) => {
       f.sourceCalls.push(events.map((event) => event.eventKey));
+      f.sourceDigests.push(cdcCommitWaitIdentity(events));
       return controlledAnswer(events, SOURCE_GROUP, f.sourceMode);
     }});
   const router = {deliver: async (address, payload, options) => {
     assert.equal(f.leader.db.inTransaction, false);
+    const events = deliveredEventsOf(payload);
     f.targetCalls.push({address, groupId: payload.targetGroupId,
-      nodeId: options.targetNodeId, eventKey: payload.eventKey});
+      nodeId: options.targetNodeId, eventKey: events[0].eventKey,
+      eventKeys: events.map((event) => event.eventKey), type: payload.type,
+      digest: cdcCommitWaitIdentity(events)});
     if (f.duringTarget) f.duringTarget();
+    // A held target does not answer until the witness releases it.
+    if (f.targetHold) await f.targetHold.promise;
     return buildDeliveryEnvelope({acknowledged: true},
-      controlledAnswer([payload], payload.targetGroupId, f.targetMode));
+      controlledAnswer(events, payload.targetGroupId, f.targetMode));
   }};
   const topology = new CDCGroupPropagationService({nodeId: SOURCE_NODE,
     systemTableCache: f.projection.cache, messageRouter: router,
@@ -93,15 +99,15 @@ function buildSubscriber(f, index) {
     resolveOperationalMessageGroupSelectionAsync: async () => selection(),
     buildMessageGroupOwnerNotReadyError: () => Object.assign(new Error('controlled readiness'),
       {retryAfterMs: RETRY_AFTER_MS}),
-    propagatePartitionCDCEvent: (_selected, event, context) => {
+    propagatePartitionCDCEvent: (_selected, events, context) => {
       f.subscriberCalls.push(index);
       if (index === 0) {
-        return f.topology.propagateCDCEvent({...event,
+        return f.topology.propagateCDCEvent({events,
           sourceMessageGroupService: f.source, deliveryContext: context});
       }
       if (f.expireOther) f.clock.advance(context.remainingMs());
       if (f.duringOther) f.duringOther();
-      return controlledAnswer([event], source.groupId, f.otherMode);
+      return controlledAnswer(events, source.groupId, f.otherMode);
     },
     afterPropagation: () => f.hooks.push(index),
   });
@@ -111,9 +117,9 @@ async function topologyProgressFixture(t) {
   const clock = new VirtualTimeSource({startMs: 100});
   const {leader, proposed} = await startLeader({tableName: TABLE, timeSource: clock});
   const f = {clock, leader, proposed, ready: false, projection: controlledProjection(),
-    sourceCalls: [], targetCalls: [], subscriberCalls: [], hooks: [],
+    sourceCalls: [], sourceDigests: [], targetCalls: [], subscriberCalls: [], hooks: [],
     sourceMode: RESPONSE.NATIVE, targetMode: RESPONSE.WEAK, otherMode: RESPONSE.NATIVE,
-    expireOther: false, duringTarget: null, duringOther: null};
+    expireOther: false, duringTarget: null, duringOther: null, targetHold: null};
   t.after(async () => {
     f.topology?.stop();
     await shutdownAll(leader);
@@ -124,11 +130,7 @@ async function topologyProgressFixture(t) {
     await leader.subscribeToCDCWithHandshake(buildSubscriber(f, index),
       {subscriberId: `topology-progress-${index}`});
   }
-  const command = committedQueryOf('topology-progress-source-row',
-    `INSERT INTO ${TABLE} (id, value) VALUES (?, ?)`);
-  command.params = ['A', 'retained-source-body'];
-  command.timestamp = new HLCTimestamp(1000, 0, 'topology-progress-component').toString();
-  assert.equal(applyCommitted(leader, command), null);
+  addTopologySourceRow(f, 'A');
   leader.controllablePort.setRole(RAFT_ROLE.LEADER);
   await settleTicks();
   assert.equal(f.subscriberCalls.length, 0);
@@ -139,8 +141,17 @@ async function topologyProgressFixture(t) {
   return f;
 }
 
-function assertDebtWithoutAck(f) {
-  assert.deepEqual(countCdcObligations(f.leader.db), {owed: 1, delivered: 0});
+// One committed source row (the fixture begins with the row A).
+function addTopologySourceRow(f, id) {
+  const command = committedQueryOf(`topology-progress-source-row${id === 'A' ? '' : `-${id}`}`,
+    `INSERT INTO ${TABLE} (id, value) VALUES (?, ?)`);
+  command.params = [id, 'retained-source-body'];
+  command.timestamp = new HLCTimestamp(1000, 0, 'topology-progress-component').toString();
+  assert.equal(applyCommitted(f.leader, command), null);
+}
+
+function assertDebtWithoutAck(f, owed = 1) {
+  assert.deepEqual(countCdcObligations(f.leader.db), {owed, delivered: 0});
   assert.equal(f.proposed.some((command) => command.type === PARTITION_CDC_COMMAND.DELIVERED),
     false);
   assert.equal(f.leader.cdcDelivery.getCdcObligationDiagnostics().pendingAcknowledgements, 0);
@@ -157,4 +168,5 @@ function omitTarget(f) {
 }
 
 export {RESPONSE, SOURCE_GROUP, SOURCE_NODE, TARGET_GROUP, TARGET_NODE,
-  addRequiredGroup, assertDebtWithoutAck, omitTarget, topologyProgressFixture};
+  addRequiredGroup, addTopologySourceRow, assertDebtWithoutAck, omitTarget,
+  topologyProgressFixture};

@@ -305,6 +305,7 @@ class MessageRouterConnectionLifecycleMethods {
       isSelfConnection: options.isSelfConnection || false,
       bootIncarnation: TRANSPORT_NUM.ZERO,
       ackTimeoutStreak: TRANSPORT_NUM.ZERO,
+      ackTimeoutStreakStartedAt: null,
       lastAckAt: null,
       lastAckTimeoutAt: null,
       retired: false,
@@ -437,6 +438,7 @@ class MessageRouterConnectionLifecycleMethods {
           connectionInfo.reconnectAttempts = TRANSPORT_NUM.ZERO;
           connectionInfo.reconnectDueAt = null;
           connectionInfo.ackTimeoutStreak = TRANSPORT_NUM.ZERO;
+          connectionInfo.ackTimeoutStreakStartedAt = null;
           connectionInfo.lastAckTimeoutAt = null;
           this.rememberReconnectAddress(
             connectionInfo,
@@ -551,6 +553,7 @@ class MessageRouterConnectionLifecycleMethods {
     connectionInfo.reconnectAttempts = TRANSPORT_NUM.ZERO;
     connectionInfo.reconnectDueAt = null;
     connectionInfo.ackTimeoutStreak = TRANSPORT_NUM.ZERO;
+    connectionInfo.ackTimeoutStreakStartedAt = null;
     connectionInfo.lastAckTimeoutAt = null;
     this.rememberReconnectAddress(
       connectionInfo,

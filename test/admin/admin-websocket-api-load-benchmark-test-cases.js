@@ -1,13 +1,16 @@
 import {FIXTURE_ENDPOINT_INCARNATION} from
   '../test-helpers/endpoint-incarnation-fixture.js';
+import {
+  createAuthoritativeCacheGateway,
+  createSystemTableRepairQueryEngine,
+  getAuthoritativeRepairReadTables,
+} from './admin-websocket-api-test-support.js';
 export function registerAdminWebSocketApiLoadBenchmarkTests({
   test,
   AdminWebSocketAPI,
   MessageType,
   ErrorCode,
   createReadOnlyCache,
-  getSystemCachePrimaryKeyField,
-  createMockQueryEngine,
   createPopulatedCache,
   connectAndReceive,
   waitForMessage,
@@ -48,173 +51,6 @@ export function registerAdminWebSocketApiLoadBenchmarkTests({
       await waitForBackgroundRepairToSettle(1);
     }
     return conditionFn();
-  }
-
-  function createSystemTableRepairQueryEngine(rowsByTable = {}) {
-    const fallback = createMockQueryEngine();
-    const executeRequestCalls = [];
-    return {
-      executeRequestCalls,
-      async executeRequest(request) {
-        const statement = String(request?.statement || '').trim();
-        executeRequestCalls.push(statement);
-        const match = statement.match(/^select \* from ([a-z_]+)$/i);
-        if (!match) {
-          return fallback.executeRequest(request);
-        }
-        const tableName = match[1].toLowerCase();
-        const value = rowsByTable[tableName];
-        const rows = typeof value === 'function' ? value(tableName) : value;
-        return {
-          success: true,
-          rows: Array.isArray(rows) ? rows.map((row) => ({...row})) : [],
-          count: Array.isArray(rows) ? rows.length : 0,
-          partitions: [`partition-${tableName}`],
-          tableName,
-        };
-      },
-    };
-  }
-
-  function getAuthoritativeRepairReadTables(statements = []) {
-    return [...new Set((Array.isArray(statements) ? statements : [])
-      .map((statement) => {
-        const match = String(statement || '').match(/^SELECT \* FROM ([a-z_]+)$/i);
-        return match ? match[1].toLowerCase() : null;
-      })
-      .filter(Boolean))]
-      .sort();
-  }
-
-  function createAuthoritativeCacheGateway(writableCache, options = {}) {
-    const queryEngine = options.queryEngine || null;
-    const readRowsByTable = options.readRowsByTable || {};
-    const executeReadCalls = [];
-    const cloneRows = (rows) => Array.isArray(rows) ?
-      rows.map((row) => ({...row})) :
-      [];
-    const resolveAuthoritativeRows = async (tableName, readIntent = {}) => {
-      const tableOverride = readRowsByTable[tableName];
-      if (typeof tableOverride === 'function') {
-        return cloneRows(await tableOverride(tableName, readIntent));
-      }
-      if (Array.isArray(tableOverride)) {
-        return cloneRows(tableOverride);
-      }
-
-      if (queryEngine && typeof queryEngine.executeRequest === 'function') {
-        const queryResult = await queryEngine.executeRequest({
-          statement: readIntent?.sql || `SELECT * FROM ${tableName}`,
-          params: Array.isArray(readIntent?.params) ? readIntent.params : [],
-        });
-        if (queryResult?.success !== true) {
-          return null;
-        }
-        return cloneRows(queryResult?.rows);
-      }
-
-      return cloneRows(writableCache?.getAll(tableName));
-    };
-
-    return {
-      executeReadCalls,
-      async executeRead(readIntent = {}, readOptions = {}) {
-        const statement = String(readIntent?.sql || '').trim();
-        const statementMatch = statement.match(/^select \* from ([a-z_]+)$/i);
-        const tableName = String(
-          readIntent?.tableName ||
-            statementMatch?.[1] ||
-            '',
-        )
-          .trim()
-          .toLowerCase();
-        executeReadCalls.push({
-          tableName,
-          sql: statement,
-          strategy: readIntent?.strategy || null,
-          owner: readIntent?.owner || null,
-          options: {...readOptions},
-        });
-        if (tableName.length === 0) {
-          return {
-            success: false,
-            tableName: null,
-            rows: [],
-            error: 'table_name_required',
-          };
-        }
-        const rows = await resolveAuthoritativeRows(tableName, readIntent);
-        if (!rows) {
-          return {
-            success: false,
-            tableName,
-            rows: [],
-            error: 'authoritative_query_failed',
-          };
-        }
-        return {
-          success: true,
-          tableName,
-          rows,
-          rowSetComplete: true,
-          authoritativeObservation: {
-            scope: 'complete_table',
-            tableName,
-            observedAtMs: Date.now(),
-            causeId: readOptions?.sessionId ||
-              `test-authoritative-read:${tableName}`,
-            rowSetComplete: true,
-          },
-        };
-      },
-      async reconcileAuthoritativeCacheRows(
-        tableName,
-        authoritativeRows,
-        options = {},
-      ) {
-        const cacheTarget = options.cacheMutationTarget || writableCache;
-        const keyField =
-          options.primaryKeyField || getSystemCachePrimaryKeyField(tableName);
-        const cachedRows = Array.isArray(options.cachedRows) ?
-          options.cachedRows :
-          cacheTarget.getAll(tableName);
-        const cachedByKey = new Map(
-          cachedRows
-            .map((row) => [String(row?.[keyField] || ''), row])
-            .filter(([key]) => key.length > 0),
-        );
-        const authoritativeByKey = new Map(
-          (Array.isArray(authoritativeRows) ? authoritativeRows : [])
-            .map((row) => [String(row?.[keyField] || ''), row])
-            .filter(([key]) => key.length > 0),
-        );
-        let mutationCount = 0;
-
-        for (const [key, row] of authoritativeByKey.entries()) {
-          cacheTarget.applySystemTableChange(
-            tableName,
-            cachedByKey.has(key) ? 'UPDATE' : 'INSERT',
-            {...row},
-          );
-          mutationCount += 1;
-        }
-
-        for (const [key, row] of cachedByKey.entries()) {
-          if (authoritativeByKey.has(key)) {
-            continue;
-          }
-          cacheTarget.applySystemTableChange(tableName, 'DELETE', {...row});
-          mutationCount += 1;
-        }
-
-        return {
-          success: true,
-          mutationCount,
-          authoritativeObservedAtMs:
-            options?.authoritativeObservation?.observedAtMs || null,
-        };
-      },
-    };
   }
 
   function seedRoutedTableDiscoveryRows(cache) {

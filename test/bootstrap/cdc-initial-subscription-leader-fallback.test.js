@@ -9,6 +9,22 @@ import assert from 'node:assert/strict';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
+import {buildCommittedCdcOutcome} from '../../src/cdc/cdc-delivery-outcome.js';
+import {beginDurableCdcInvocation, createDurableCdcEvent} from
+  '../topology/cdc-group-propagation-service-harness.js';
+
+// The durable subscriber contract: one vector of the table's durable events
+// under a delivery invocation, answered over that exact vector. `deliver`
+// hands the captured subscriber a one-member vector; `committedAnswer` is the
+// controlled answer of the propagation double (never recipient evidence).
+const deliver = (subscriber, {tableName, operation, data}) => subscriber(
+  [createDurableCdcEvent({tableName, operation, data})], beginDurableCdcInvocation());
+const committedAnswer = (messageGroup, events) =>
+  buildCommittedCdcOutcome(events, messageGroup.groupId, {index: 1, term: 1});
+
+// The seed hydration passes its message group as the propagation
+// subscribers' preferred service; these fixtures hydrate through the first.
+const hydrationMessageGroup = (service) => service.messageGroupServices.values().next().value;
 
 function setupEnvironment() {
   ConfigurationManager.resetInstance();
@@ -41,8 +57,9 @@ test(
 
     // Mock propagatePartitionCDCEvent to capture calls
     service.seedCacheHydrationPhase.propagatePartitionCDCEvent =
-      async (_messageGroup, cdcEvent) => {
-        propagatedEvents.push(cdcEvent);
+      async (messageGroup, events) => {
+        propagatedEvents.push(events);
+        return committedAnswer(messageGroup, events);
       };
 
     // Mock latencyTopology so propagatePartitionCDCEvent can resolve
@@ -69,6 +86,7 @@ test(
     // Message group that is NOT the leader
     const mockMessageGroup = {
       initialized: true,
+      groupId: 'mg-1',
       subscribeToCDC: async () => {},
       isLeaderReplica: () => false,
       getMetadataIngressReadiness: () => ({ready: false}),
@@ -77,6 +95,7 @@ test(
     // An operational message group that IS the leader.
     const leaderMg = {
       initialized: true,
+      groupId: 'mg-1',
       subscribeToCDC: async () => {},
       isLeaderReplica: () => true,
       getMetadataIngressReadiness: () => ({ready: true}),
@@ -94,6 +113,7 @@ test(
       'partitions',
       'partitions-p1',
       ['partitions-p1-r1'],
+      hydrationMessageGroup(service),
     );
 
     assert.ok(
@@ -111,7 +131,7 @@ test(
       sourceReplica: 'partitions-p1-r1',
     };
 
-    await capturedCdcSubscriber(cdcEvent);
+    await deliver(capturedCdcSubscriber, cdcEvent);
 
     // The event SHOULD be propagated even though the local MG
     // is not the leader. Currently it is silently dropped.
@@ -169,6 +189,7 @@ test(
       'partitions',
       'partitions-p1',
       ['partitions-p1-r1'],
+      hydrationMessageGroup(service),
     );
 
     assert.deepEqual(
@@ -186,7 +207,7 @@ test(
     );
 
     await assert.rejects(
-      () => capturedCdcSubscriber({
+      () => deliver(capturedCdcSubscriber, {
         tableName: 'partitions',
         operation: 'INSERT',
         data: {partition_id: 'tbl-abc-p1', table_name: 'benchmark'},
@@ -216,8 +237,9 @@ test(
     let repairSelectionCalls = 0;
 
     service.seedCacheHydrationPhase.propagatePartitionCDCEvent =
-      async (_messageGroup, cdcEvent) => {
-        propagatedEvents.push(cdcEvent);
+      async (messageGroup, events) => {
+        propagatedEvents.push(events);
+        return committedAnswer(messageGroup, events);
       };
     service.latencyTopology = {
       cdcGroupPropagationService: {
@@ -242,6 +264,7 @@ test(
     service.messageGroupServices = new Map([
       ['mg-1-r1', {
         initialized: true,
+        groupId: 'mg-1',
         systemTableCache: {
           get: () => null,
         },
@@ -271,9 +294,10 @@ test(
       'nodes',
       'nodes-p1',
       ['nodes-p1-r1'],
+      hydrationMessageGroup(service),
     );
 
-    await capturedCdcSubscriber({
+    await deliver(capturedCdcSubscriber, {
       tableName: 'nodes',
       operation: 'UPSERT',
       data: {node_id: 'node-b'},
@@ -307,8 +331,9 @@ test(
     let repairSelectionCalls = 0;
 
     service.seedCacheHydrationPhase.propagatePartitionCDCEvent =
-      async (messageGroup, cdcEvent) => {
-        propagatedEvents.push({messageGroup, cdcEvent});
+      async (messageGroup, events) => {
+        propagatedEvents.push({messageGroup, events});
+        return committedAnswer(messageGroup, events);
       };
     service.latencyTopology = {
       cdcGroupPropagationService: {
@@ -363,9 +388,10 @@ test(
       'nodes',
       'nodes-p1',
       ['nodes-p1-r1'],
+      hydrationMessageGroup(service),
     );
 
-    await capturedCdcSubscriber({
+    await deliver(capturedCdcSubscriber, {
       tableName: 'nodes',
       operation: 'UPSERT',
       data: {node_id: 'node-b'},
@@ -435,7 +461,7 @@ test(
         'tables-p1-r1',
         'tables-p1-r2',
         'tables-p1-r3',
-      ]);
+      ], hydrationMessageGroup(service));
 
     assert.equal(
       mgSubscribeCalls,
@@ -444,8 +470,8 @@ test(
     );
     assert.equal(
       partitionSubscriberRegistrations,
-      6,
-      'should still register callbacks for each partition replica x message group',
+      3,
+      'should register one propagation subscriber per partition replica',
     );
 
     teardownEnvironment();

@@ -61,6 +61,9 @@ import {insertViaUpsert} from
   '../test-helpers/endpoint-incarnation-fixture.js';
 import {publishRegisteredEndpoint} from
   '../test-helpers/endpoint-incarnation-fixture.js';
+import {buildCommittedCdcOutcome} from '../../src/cdc/cdc-delivery-outcome.js';
+import {beginDurableCdcInvocation, createDurableCdcEvent} from
+  '../topology/cdc-group-propagation-service-harness.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 import {createIdentityTransport} from
   '../test-helpers/replica-handler-identity-fixture.js';
@@ -1044,9 +1047,13 @@ test('NodeJoiningService - CDC propagation reuses captured ingress when operatio
         },
         upsertSystemTableRow: async () => true,
       });
-      service.propagatePartitionCDCEvent = async (messageGroupService, cdcEvent) => {
+      // The durable subscriber contract: the vector is handed to
+      // propagation whole and answered over that exact vector.
+      service.propagatePartitionCDCEvent = async (messageGroupService, events) => {
         propagatedMessageGroupService = messageGroupService;
-        propagatedEvent = cdcEvent;
+        propagatedEvent = events;
+        return buildCommittedCdcOutcome(events, messageGroupService.groupId,
+          {index: 1, term: 1});
       };
 
       NodeService.getInstance = () => ({
@@ -1093,12 +1100,11 @@ test('NodeJoiningService - CDC propagation reuses captured ingress when operatio
 
       service.messageGroupServices = new Map();
 
-      const cdcEvent = {
+      const cdcEvent = [createDurableCdcEvent({
         tableName: TABLES.SQL_TRANSACTIONS,
-        operation: 'UPSERT',
         data: {transaction_id: 'tx-1'},
-      };
-      await capturedSubscriber(cdcEvent);
+      })];
+      await capturedSubscriber(cdcEvent, beginDurableCdcInvocation());
 
       t.equal(
         propagatedMessageGroupService,
@@ -1108,7 +1114,7 @@ test('NodeJoiningService - CDC propagation reuses captured ingress when operatio
       t.same(
         propagatedEvent,
         cdcEvent,
-        'join CDC propagation should forward the original CDC event through the captured ingress',
+        'join CDC propagation should forward the delivered vector through the captured ingress',
       );
     } finally {
       ReplicaHandlerSetup.create = originalReplicaHandlerCreate;

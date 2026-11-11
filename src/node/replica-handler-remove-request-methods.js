@@ -148,6 +148,18 @@ function allowsLocalRemovalShortcut(precondition, removalAlreadyInProgress) {
   return precondition === undefined || removalAlreadyInProgress;
 }
 
+// An ERROR answer keeps the error's typing: a retryable removal debt is
+// answered retryable (the coordinator defers), never as untyped text.
+function typedRemoveErrorFields(error) {
+  return {
+    error: error.message,
+    errorCode: error.errorCode ?? error.code ?? null,
+    deferRetry: error.deferRetry === true,
+    retryAfterMs: Number.isFinite(error.retryAfterMs) ?
+      error.retryAfterMs : null,
+  };
+}
+
 function canReconcileRemovedReplica(replica, partitionId, shortcutAllowed) {
   return replica.status === ReplicaStatus.REMOVED &&
     (typeof replica.partitionId !== 'string' ||
@@ -435,8 +447,11 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
       // Check idempotency - already removing
       if (replica.status === ReplicaStatus.REMOVING &&
           mayUseLocalRemovalShortcut) {
-        this.fenceReplicaServingAdmissionForRemoval(replicaId, replica);
+        // The removal in progress raised the fence before it was tracked and
+        // owns the teardown: a duplicate answers its state and never touches
+        // the service. Only a removal resumed here raises the fence again.
         if (!this.hasInProgressReplicaRemoval(replicaId)) {
+          this.fenceReplicaServingAdmissionForRemoval(replicaId, replica);
           this.trackReplicaRemovalOperation(operationId, partitionId, replicaId);
           this.startRemoveReplicaAsync(request, groupRetirement);
         }
@@ -455,7 +470,8 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
         mayUseLocalRemovalShortcut,
       )) {
         try {
-          await this.reconcileRemovedReplicaCleanup(replicaId, partitionId);
+          await this.reconcileRemovedReplicaCleanup(
+            replicaId, partitionId, operationId);
         } catch (error) {
           if (request?.[ReplicaOperationField.GROUP_RETIREMENT]) {
             return this.answerRemovedGroupMember(request, error);
@@ -469,11 +485,7 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
           });
           return this.buildReplicaOperationResponse(
             ReplicaOperationResponseStatus.ERROR,
-            {
-              error: error.message,
-              replicaId,
-              nodeId: this.nodeId,
-            },
+            {...typedRemoveErrorFields(error), replicaId, nodeId: this.nodeId},
           );
         }
         this.logger.info(REPLICA_HANDLER_LOG_MSG.REMOVE_ALREADY_REMOVED, {

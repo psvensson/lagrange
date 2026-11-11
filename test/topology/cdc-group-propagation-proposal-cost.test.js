@@ -11,7 +11,7 @@ import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outc
 import {CDCGroupPropagationService} from '../../src/topology/cdc-group-propagation-service.js';
 import {LATENCY_PROPAGATION_MODE} from '../../src/topology/latency-topology-constants.js';
 import {pump, recipientFixture, NODE_ID} from '../message-group/message-group-native-custody-fixture.js';
-import {createDurableCdcEvent, createDurablePropagationRequest, createGroupRow,
+import {createDurableCdcEvent, propagateToEveryRecipient, createGroupRow,
   createMessageGroupServiceRow, createTopologyCache, setupConfig, teardownConfig} from
   './cdc-group-propagation-service-harness.js';
 
@@ -67,7 +67,7 @@ async function healthyWaves(t, duplicateProposals) {
       const target = services.find((s) => s.unifiedAddress === address);
       assert.ok(target, 'the transport reaches a real target owner');
       return buildDeliveryEnvelope({acknowledged: true},
-        await target.handleLatencyCdcPropagationMessage(`cost-${deliveries}`,
+        await target.handleLatencyCdcPropagationBatchMessage(`cost-${deliveries}`,
           options.prepareDeliveryMessage(payload, options.remainingMs())));
     }},
     latencyTreeService: {getRoutingOrder: () => services.map((s) => s.groupId)},
@@ -85,7 +85,7 @@ async function healthyWaves(t, duplicateProposals) {
       sourceLogIndex: wave + 1});
     let result;
     let failure;
-    const pending = topology.propagateCDCEvent(createDurablePropagationRequest(source, event))
+    const pending = propagateToEveryRecipient(topology, source, [event])
       .then((value) => {
         result = value;
       }, (error) => {

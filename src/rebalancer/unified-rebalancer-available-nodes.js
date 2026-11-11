@@ -24,6 +24,13 @@ import {
 import {
   readPriorityRecoveryPlanningAnswerSync,
 } from '../control-plane/priority-recovery-planning-answer-origin.js';
+import {
+  isDeferredReadinessPlanningSnapshot,
+} from '../control-plane/readiness-planning-version-contract.js';
+import {
+  AVAILABLE_NODE_EXCLUSION_REASON,
+  AVAILABLE_NODE_PLANNING_STATE,
+} from './rebalancer-no-target-pass-diagnostic.js';
 
 const {
   CONTROL_PLANE_PUBLICATION_STATUS,
@@ -88,6 +95,10 @@ const AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_STATE_TABLE = Object.freeze([
       evidence.recoveryActive === true,
   }),
 ]);
+
+function freezeCandidate(nodeId, state, reason) {
+  return Object.freeze({nodeId, state, reason});
+}
 
 class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
   getReservedPriorityRecoveryMoveSlots() {
@@ -193,75 +204,134 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
    * @private
    */
   getAvailableNodesConstrainedToNodeIds(constrainedNodeIds = null) {
-    let effectiveNodeIds =
-      constrainedNodeIds instanceof Set ? new Set(constrainedNodeIds) : null;
-    const startupAuthorityNodeIds = this.getStartupAuthorityNodeIdSet();
-    if (
-      startupAuthorityNodeIds instanceof Set &&
-      startupAuthorityNodeIds.size > 0
-    ) {
-      if (effectiveNodeIds instanceof Set) {
-        effectiveNodeIds = new Set(
-          [...effectiveNodeIds].filter((nodeId) =>
-            startupAuthorityNodeIds.has(nodeId),
-          ),
-        );
-      } else {
-        effectiveNodeIds = startupAuthorityNodeIds;
-      }
-    }
-    const readinessDecisionDimension =
-      this.resolveNodeReadinessDecisionDimension();
-    const candidateRows = this.resolveAvailableNodeCandidateRows();
-    const now = ownerNowMs(this);
-    return candidateRows.filter((node) => {
-      const nodeId = node?.node_id || null;
-      if (!nodeId || (effectiveNodeIds instanceof Set && !effectiveNodeIds.has(nodeId))) {
-        return false;
-      }
-      const readinessOptions = {
-        decisionDimension: readinessDecisionDimension,
-      };
-      if (this.isFormationLivenessDependencyPartition()) {
-        readinessOptions.allowStaleOnCacheChange = false;
-      }
-      const readiness = this.resolveNodeReadinessSyncSnapshot(
-        nodeId,
-        readinessOptions,
-      );
-      if (
-        this.isStartupAuthorityControlPlanePlacementEligibleNode(
-          node,
-          readinessDecisionDimension,
-        )
-      ) {
-        return this.isStartupAuthorityPlacementDispatchReady(
-          nodeId,
-          readiness,
-          readinessDecisionDimension,
-        );
-      }
-      return this.isCandidateActiveLeasedNode(
-        node,
-        readiness,
-        readinessDecisionDimension,
-        now,
-      );
-    });
+    return this.resolveAvailableNodePlan(constrainedNodeIds).availableNodes;
   }
 
   /**
-   * Decide whether one active node with a non-expired ready lease satisfies
-   * the requested readiness decision dimension.
+   * Classify every committed candidate node for this entity's placement:
+   * READY, NOT_READY (with the reason), DEFERRED (the planning readiness
+   * owner answered neither: its completed record was not current, a rebuild
+   * is queued) or OUT_OF_SCOPE. Deferred is never folded into not-ready:
+   * a pass that finds no target only because of a deferral waits for the
+   * publication that answers it (rebalancer-local-mutation-readiness-wake).
+   *
+   * @param {Set<string>|null} constrainedNodeIds
+   * @return {{availableNodes: Array<Object>, candidates: Array<Object>}}
+   * @private
+   */
+  resolveAvailableNodePlan(constrainedNodeIds = null) {
+    const effectiveNodeIds =
+      this.resolveEffectiveAvailableNodeScope(constrainedNodeIds);
+    const readinessDecisionDimension =
+      this.resolveNodeReadinessDecisionDimension();
+    const now = ownerNowMs(this);
+    const availableNodes = [];
+    const candidates = [];
+    for (const node of this.resolveAvailableNodeCandidateRows()) {
+      const candidate = this.classifyAvailableNodeCandidate(
+        node,
+        effectiveNodeIds,
+        readinessDecisionDimension,
+        now,
+      );
+      if (!candidate) continue;
+      candidates.push(candidate);
+      if (candidate.state === AVAILABLE_NODE_PLANNING_STATE.READY) {
+        availableNodes.push(node);
+      }
+    }
+    return Object.freeze({
+      availableNodes,
+      candidates: Object.freeze(candidates),
+      readinessDecisionDimension,
+    });
+  }
+
+  resolveEffectiveAvailableNodeScope(constrainedNodeIds) {
+    const effectiveNodeIds =
+      constrainedNodeIds instanceof Set ? new Set(constrainedNodeIds) : null;
+    const startupAuthorityNodeIds = this.getStartupAuthorityNodeIdSet();
+    if (
+      !(startupAuthorityNodeIds instanceof Set) ||
+      startupAuthorityNodeIds.size === 0
+    ) {
+      return effectiveNodeIds;
+    }
+    return effectiveNodeIds instanceof Set ?
+      new Set([...effectiveNodeIds].filter((nodeId) =>
+        startupAuthorityNodeIds.has(nodeId))) :
+      startupAuthorityNodeIds;
+  }
+
+  /**
+   * @param {Object} node
+   * @param {Set<string>|null} effectiveNodeIds
+   * @param {string} readinessDecisionDimension
+   * @param {number} now
+   * @return {{nodeId: string, state: string, reason: string|null}|null}
+   * @private
+   */
+  classifyAvailableNodeCandidate(
+    node,
+    effectiveNodeIds,
+    readinessDecisionDimension,
+    now,
+  ) {
+    const nodeId = node?.node_id || null;
+    if (!nodeId) return null;
+    if (effectiveNodeIds instanceof Set && !effectiveNodeIds.has(nodeId)) {
+      return freezeCandidate(nodeId,
+        AVAILABLE_NODE_PLANNING_STATE.OUT_OF_SCOPE,
+        AVAILABLE_NODE_EXCLUSION_REASON.OUTSIDE_PLACEMENT_SCOPE);
+    }
+    const readinessOptions = {
+      decisionDimension: readinessDecisionDimension,
+    };
+    if (this.isFormationLivenessDependencyPartition()) {
+      readinessOptions.allowStaleOnCacheChange = false;
+    }
+    const readiness = this.resolveNodeReadinessSyncSnapshot(
+      nodeId,
+      readinessOptions,
+    );
+    const exclusionReason =
+      this.isStartupAuthorityControlPlanePlacementEligibleNode(
+        node,
+        readinessDecisionDimension,
+      ) ?
+        (this.isStartupAuthorityPlacementDispatchReady(
+          nodeId,
+          readiness,
+          readinessDecisionDimension,
+        ) ? null : AVAILABLE_NODE_EXCLUSION_REASON.DISPATCH_NOT_READY) :
+        this.resolveActiveLeasedNodeExclusion(
+          node,
+          readiness,
+          readinessDecisionDimension,
+          now,
+        );
+    if (exclusionReason === null) {
+      return freezeCandidate(nodeId, AVAILABLE_NODE_PLANNING_STATE.READY, null);
+    }
+    return isDeferredReadinessPlanningSnapshot(readiness) ?
+      freezeCandidate(nodeId, AVAILABLE_NODE_PLANNING_STATE.DEFERRED,
+        AVAILABLE_NODE_EXCLUSION_REASON.READINESS_DEFERRED) :
+      freezeCandidate(nodeId, AVAILABLE_NODE_PLANNING_STATE.NOT_READY,
+        exclusionReason);
+  }
+
+  /**
+   * Why one active node with a non-expired ready lease does NOT satisfy the
+   * requested readiness decision dimension, or null when it does.
    *
    * @param {Object} node
    * @param {Object|null} readiness
    * @param {string} readinessDecisionDimension
    * @param {number} now
-   * @return {boolean}
+   * @return {string|null}
    * @private
    */
-  isCandidateActiveLeasedNode(
+  resolveActiveLeasedNodeExclusion(
     node,
     readiness,
     readinessDecisionDimension,
@@ -269,7 +339,7 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
   ) {
     const liveness = projectNodeLivenessSemantics({nodeRow: node, nowMs: now}).projection;
     if (liveness.readyNow !== true) {
-      return false;
+      return AVAILABLE_NODE_EXCLUSION_REASON.LIVENESS_NOT_READY;
     }
     if (
       !this.isReadinessDimensionSatisfied(
@@ -277,7 +347,7 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
         readinessDecisionDimension,
       )
     ) {
-      return false;
+      return AVAILABLE_NODE_EXCLUSION_REASON.READINESS_DIMENSION_UNSATISFIED;
     }
     return (
       readinessDecisionDimension !==
@@ -285,7 +355,7 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
       readiness?.dimensions?.[
         CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE
       ] === true
-    );
+    ) ? null : AVAILABLE_NODE_EXCLUSION_REASON.READINESS_DIMENSION_UNSATISFIED;
   }
 
   // The rebalancer's readiness service is the node's one service, a named
@@ -398,11 +468,20 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
    * @return {Array<Object>} Array of active nodes.
    */
   getAvailableNodes() {
+    return this.getAvailableNodePlan().availableNodes;
+  }
+
+  /**
+   * The classified placement answer getAvailableNodes reads: every candidate
+   * with its READY / NOT_READY / DEFERRED / OUT_OF_SCOPE state and reason.
+   * @return {{availableNodes: Array<Object>, candidates: Array<Object>}}
+   */
+  getAvailableNodePlan() {
     const publishedActiveNodeIds =
       this.shouldConstrainAvailableNodesToPublishedMembership() ?
         this.getPublishedActiveNodeIdSet() :
         null;
-    return this.getAvailableNodesConstrainedToNodeIds(publishedActiveNodeIds);
+    return this.resolveAvailableNodePlan(publishedActiveNodeIds);
   }
 
   /**

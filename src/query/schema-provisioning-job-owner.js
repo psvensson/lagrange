@@ -27,6 +27,10 @@ import {rowToWorkflow, serializeWorkflow} from
 import {
   runAdminActivity,
 } from '../diagnostics/formation-owner-attribution.js';
+import {
+  TYPED_DISTRIBUTED_FAILURE_DECISION,
+  classifyTypedDistributedFailure,
+} from '../control-plane/control-plane-error-classification.js';
 
 const TRANSIENT_ERROR_FRAGMENT = Object.freeze({
   CANCEL_CODE: 'CANCEL',
@@ -135,7 +139,22 @@ function buildInitialRow(intent, workflow) {
   };
 }
 
+// Whether a failed provisioning step leaves the job PENDING for another
+// attempt. The control plane's one classifier decides first: a terminal
+// failure (a permanent code, a permanent participant of a failed fan-out,
+// the writer's shut-down answer) ends the job and a retryable one keeps it.
+// A stopped one keeps it too: its outcome belongs to another owner (this
+// node's shutdown, transaction recovery), never a permanent job failure.
+// A failure the classifier leaves unclassified is the job's own to decide,
+// by the provisioning codes and texts listed above.
 export function isTransientProvisioningError(error) {
+  if (!error) {
+    return false;
+  }
+  const decision = classifyTypedDistributedFailure(error);
+  if (decision !== TYPED_DISTRIBUTED_FAILURE_DECISION.UNCLASSIFIED) {
+    return decision !== TYPED_DISTRIBUTED_FAILURE_DECISION.TERMINAL;
+  }
   const code = String(error?.code || error?.errorCode || '').toUpperCase();
   const message = String(error?.message || '').toLowerCase();
   return TRANSIENT_PROVISIONING_CODES.has(code) ||

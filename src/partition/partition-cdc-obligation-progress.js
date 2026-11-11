@@ -1,23 +1,32 @@
-// The obligation lane's one metadata-only continuation. The source ledger
-// remains the owner of debt; this cell retains neither event bodies nor calls.
-import {CDC_COMPLETION, CDC_COVERAGE_STATE, cdcCommitWaitIdentity, cdcCoverageState,
-  emptyCdcCoverage, observeCdcCoverage} from
-  '../cdc/cdc-delivery-outcome.js';
+// The obligation lane's recipients. The source ledger remains the owner of
+// debt; this module keeps, for the lane's leadership tenure only, who must
+// confirm it: one branch per current subscriber, and per branch its
+// recipients - the subscriber itself (the primary recipient: for a
+// propagation subscriber, the source message group) and each target group the
+// topology owner observed for it. Every recipient has a volatile cursor: the
+// ledger position through which it holds a committed receipt (null until its
+// first). Nothing here is durable and nothing here retains an event body or a
+// call: a new tenure rebuilds every recipient from the ledger, and the one
+// durable progress fact stays the delivered flag a committed CDC_DELIVERED
+// sets.
+import {CDC_COMPLETION} from '../cdc/cdc-delivery-outcome.js';
 import {scopeCdcDeliveryInvocation} from '../cdc/cdc-delivery-invocation.js';
-import {bindCdcPropagationProgress, cdcPropagationCoverage, cdcPropagationProgressCurrent,
-  createCdcPropagationProgress, refreshCdcPropagationRoutes} from
-  '../cdc/cdc-propagation-progress.js';
+import {cdcPropagationProgressCurrent, createCdcPropagationProgress,
+  refreshCdcPropagationRoutes} from '../cdc/cdc-propagation-progress.js';
 
-function progressError() {
-  return Object.assign(new Error(CDC_COMPLETION.UNKNOWN), {code: CDC_COMPLETION.UNKNOWN,
-    deferRetry: true});
+const RECIPIENT_KEY_SEPARATOR = '>';
+
+// The primary recipient of a branch: the subscriber's own answer. Its group
+// is the source group of the branch's propagation once one is bound.
+function primaryRecipient() {
+  return {groupId: null, route: null, cursor: null, drive: null};
 }
 
-function subscriberBinding(delivery, wrapper) {
+function subscriberBranch(delivery, wrapper) {
   const original = delivery.getCDCSubscriberSource(wrapper);
   const subscription = delivery.owner.cdcSubscriberStates?.get(original);
   return {wrapper, original, subscription, epoch: subscription?.subscriptionEpoch,
-    coverage: emptyCdcCoverage(), topology: null};
+    topology: null, primary: primaryRecipient()};
 }
 
 function subscriberBindingCurrent(delivery, branch) {
@@ -27,115 +36,136 @@ function subscriberBindingCurrent(delivery, branch) {
     branch.subscription?.subscriptionEpoch === branch.epoch;
 }
 
-function topologyBindingCurrent(branch, binding) {
-  const topology = branch.topology;
+/**
+ * Keep one branch per current subscriber: a subscriber that left, or whose
+ * subscription changed, takes its recipients (and their cursors) with it; a
+ * new one starts with an unknown cursor.
+ * @param {Object} delivery - The CDC delivery owner.
+ * @param {Object} lane - The delivery lane.
+ * @return {Array<Object>} The current branches, in subscription order.
+ */
+function syncSubscriberBranches(delivery, lane) {
+  for (const [wrapper, branch] of lane.branches) {
+    if (!subscriberBindingCurrent(delivery, branch)) lane.branches.delete(wrapper);
+  }
+  for (const wrapper of delivery.owner.cdcSubscribers) {
+    if (lane.branches.has(wrapper)) continue;
+    lane.branches.set(wrapper, subscriberBranch(delivery, wrapper));
+  }
+  return [...lane.branches.values()];
+}
+
+// A bound propagation is current while its topology owner, its source group
+// and their lifetimes are the ones observed; the check re-observes the plan,
+// so a newly required group appears here as a new target recipient.
+function topologyBindingCurrent(branch) {
+  const {topology} = branch;
   if (topology === null) return true;
-  if (!cdcPropagationProgressCurrent(topology)) return false;
-  if (cdcPropagationCoverage(topology, binding) === CDC_COVERAGE_STATE.UNCOVERED) {
-    branch.coverage = emptyCdcCoverage();
+  return cdcPropagationProgressCurrent(topology) &&
+    (typeof branch.original.getCDCPropagationService !== 'function' ||
+      branch.original.getCDCPropagationService() === topology.source);
+}
+
+// A propagation that is no longer the one observed takes its recipient set
+// with it: the next delivery observes it again, and every cursor starts
+// unknown (re-delivery is idempotent). The released primary recipient is
+// behind the owed tail; whoever re-observes starts it (startRecipientDrives).
+function releaseStaleTopology(branch) {
+  if (topologyBindingCurrent(branch)) return;
+  branch.topology = null;
+  branch.primary.cursor = null;
+}
+
+function recipientsOfBranch(branch) {
+  return branch.topology === null ? [branch.primary] :
+    [branch.primary, ...branch.topology.targets];
+}
+
+function recipientAttached(delivery, lane, branch, recipient) {
+  return lane.branches.get(branch.wrapper) === branch &&
+    subscriberBindingCurrent(delivery, branch) &&
+    (recipient === branch.primary ||
+      (branch.topology !== null && branch.topology.targets.includes(recipient)));
+}
+
+/**
+ * Re-observe every branch's propagation: a newly required group becomes a
+ * target recipient with an unknown cursor (so the frontier cannot pass a row
+ * it has not confirmed), and a propagation that is no longer the one
+ * observed is released. The caller starts the recipients this leaves behind
+ * the owed tail (partition-cdc-recipient-drive.js, startRecipientDrives).
+ * @param {Object} lane - The delivery lane.
+ * @return {void}
+ */
+function reobserveLaneRecipients(lane) {
+  for (const branch of lane.branches.values()) releaseStaleTopology(branch);
+}
+
+/**
+ * Every recipient of the lane with its branch, in subscription order.
+ * @param {Object} lane - The delivery lane.
+ * @return {Array<Object>} {branch, recipient} pairs.
+ */
+function laneRecipients(lane) {
+  const recipients = [];
+  for (const branch of lane.branches.values()) {
+    for (const recipient of recipientsOfBranch(branch)) recipients.push({branch, recipient});
   }
-  return typeof branch.original.getCDCPropagationService !== 'function' ||
-    branch.original.getCDCPropagationService() === topology.source;
+  return recipients;
 }
 
-function cdcProgressCurrent(delivery, lane, cell) {
-  return delivery.obligationLane === lane && lane.currentObligation === cell &&
-    delivery.owner.isLeader && !delivery.owner.isShutdown &&
-    delivery.owner.leadershipTenure === lane.tenure &&
-    delivery.owner.cdcSubscribers.size === cell.branches.length &&
-    cell.branches.every((branch) => subscriberBindingCurrent(delivery, branch) &&
-      topologyBindingCurrent(branch, cell.binding));
+// The stable name of a recipient: its subscriber, and for a target its group.
+function recipientKeyOf(branch, recipient) {
+  const subscriberId = branch.subscription?.subscriberId ?? null;
+  return recipient === branch.primary ? `${subscriberId}` :
+    `${subscriberId}${RECIPIENT_KEY_SEPARATOR}${recipient.groupId}`;
 }
 
-function resolveObligationNumber(primary, fallback, defaultValue) {
-  if (Number.isSafeInteger(primary)) return primary;
-  return Number.isSafeInteger(fallback) ? fallback : defaultValue;
-}
-
-function prepareCdcObligationProgress(delivery, lane, event, subscribers) {
-  const binding = cdcCommitWaitIdentity([event]);
-  const previous = lane.currentObligation;
-  if (previous?.binding === binding && cdcProgressCurrent(delivery, lane, previous)) {
-    return previous;
-  }
-  const logIndex = resolveObligationNumber(event?.logIndex, event?.sourceLogIndex, null);
-  const ordinal = resolveObligationNumber(event?.ordinal, event?.sourceOrdinal, 0);
-  const cell = {binding, logIndex, ordinal, branches: subscribers.map((subscriber) =>
-    subscriberBinding(delivery, subscriber)), nextSubscriber: 0};
-  lane.currentObligation = cell;
-  return cell;
-}
-
-function nextCdcSubscriber(cell) {
-  const branch = cell.branches[cell.nextSubscriber];
-  cell.nextSubscriber = (cell.nextSubscriber + 1) % cell.branches.length;
-  return branch;
-}
-
-function topologyProgressOf(lane, branch, owner, source, targets) {
+// The topology owner reports the recipient set it observed for a source
+// group. Another owner or source group is another propagation: its recipients
+// have confirmed nothing.
+function bindBranchTopology(branch, owner, source, targets) {
   if (branch.topology !== null && (branch.topology.owner !== owner ||
       branch.topology.source !== source)) {
-    lane.currentObligation = null;
-    throw progressError();
+    branch.topology = null;
+    branch.primary.cursor = null;
   }
-  branch.topology ??= createCdcPropagationProgress(owner, source, targets);
-  refreshCdcPropagationRoutes(branch.topology, targets);
-  return branch.topology;
+  if (branch.topology === null) {
+    branch.topology = createCdcPropagationProgress(owner, source, targets);
+  } else {
+    refreshCdcPropagationRoutes(branch.topology, targets);
+  }
 }
 
-function registerLaneContentionOwner(
-  delivery, lane, tableName, propagationOwner, onSliceTurnReady = null,
-) {
-  if (!propagationOwner || typeof tableName !== 'string' || tableName.length === 0) {
-    return null;
-  }
-  if (!(lane.contendedPropagationOwners instanceof Map)) {
-    lane.contendedPropagationOwners = new Map();
-  }
-  let owners = lane.contendedPropagationOwners.get(tableName);
-  if (!(owners instanceof Set)) {
-    owners = new Set();
-    lane.contendedPropagationOwners.set(tableName, owners);
-  }
-  owners.add(propagationOwner);
-  const isLive = () =>
-    delivery.obligationLane === lane &&
-    delivery.owner.isLeader &&
-    !delivery.owner.isShutdown &&
-    delivery.owner.leadershipTenure === lane.tenure &&
-    lane.contendedPropagationOwners instanceof Map &&
-    lane.contendedPropagationOwners.has(tableName);
-  if (typeof onSliceTurnReady === 'function') {
-    isLive.onSliceTurnReady = onSliceTurnReady;
-  }
-  return isLive;
-}
-
-function cdcSubscriberInvocation(
-  delivery, lane, cell, branch, context, event, onSliceTurnReady = null,
-) {
-  const operations = (scoped) => ({
+/**
+ * The invocation one recipient's delivery runs under: it names the recipient
+ * group the topology owner must address (null: the source group) and
+ * receives the recipient set that owner observed.
+ * @param {Object} context - The recipient's delivery invocation.
+ * @param {Function} isCurrent - Whether the recipient is still the lane's.
+ * @param {Object} branch - The recipient's branch.
+ * @param {Object} recipient - The recipient.
+ * @param {Function} onRecipientsObserved - Called after the set was bound.
+ * @return {Object} The scoped invocation.
+ */
+function cdcRecipientInvocation(context, isCurrent, branch, recipient, onRecipientsObserved) {
+  return scopeCdcDeliveryInvocation(context, isCurrent, (scoped) => ({
+    recipientGroupId: recipient.groupId,
+    recipientRoute: recipient.route,
     bindTopology: (owner, source, targets) => {
       scoped.assertCurrent();
-      const progress = topologyProgressOf(lane, branch, owner, source, targets);
-      scoped.assertCurrent();
-      return bindCdcPropagationProgress(scoped, progress, [event]);
+      bindBranchTopology(branch, owner, source, targets);
+      onRecipientsObserved();
     },
-    registerContentionOwner: (propagationOwner, tableName = event?.tableName) =>
-      registerLaneContentionOwner(
-        delivery, lane, tableName, propagationOwner, onSliceTurnReady,
-      ),
-  });
-  return scopeCdcDeliveryInvocation(context,
-    () => cdcProgressCurrent(delivery, lane, cell), operations);
+  }));
 }
 
-function observeCdcSubscriber(branch, answer, event) {
-  branch.coverage = observeCdcCoverage(answer, [event], branch.topology?.sourceGroupId ?? null);
-}
-
-function cdcObligationCoverage(cell) {
-  return cdcCoverageState(cell.branches.map((branch) => branch.coverage), cell.binding);
+// The group a recipient's committed receipt must name: the target group, or
+// for the primary recipient the source group of the bound propagation (any
+// group for a subscriber that binds none).
+function receiptGroupOf(branch, recipient) {
+  if (recipient.groupId !== null) return recipient.groupId;
+  return branch.topology === null ? null : branch.topology.sourceGroupId;
 }
 
 function recordUncoveredSubscriberHint(state, answer) {
@@ -147,36 +177,25 @@ function recordUncoveredSubscriberHint(state, answer) {
       answer?.reason === CDC_COMPLETION.BACKPRESSURE) state.backpressured = true;
 }
 
-function throwUncoveredObligationError(lane, current, state) {
-  if (!current) lane.currentObligation = null;
+// A recipient's answer that is neither committed nor provisional over the
+// vector: the typed unknown, with the recipient's own backpressure hint.
+function unconfirmedRecipientError(answer) {
+  const state = {retryAfterMs: null, backpressured: false};
+  recordUncoveredSubscriberHint(state, answer);
   const error = new Error(CDC_COMPLETION.UNKNOWN);
   error.deferRetry = true;
   if (state.retryAfterMs !== null) error.retryAfterMs = state.retryAfterMs;
   if (state.backpressured) error.reason = CDC_COMPLETION.BACKPRESSURE;
-  throw error;
+  return error;
 }
 
-function releaseOwnersForTable(contendedTable, owners) {
-  if (!(owners instanceof Set)) return;
-  for (const propagationOwner of owners) {
-    propagationOwner?.releaseDurableSliceContender?.(contendedTable);
-  }
-}
-
-function releaseContendedPropagationOwners(lane, tableName = null) {
-  const map = lane?.contendedPropagationOwners;
-  if (!(map instanceof Map) || map.size === 0) return;
-  if (typeof tableName === 'string' && tableName.length > 0) {
-    releaseOwnersForTable(tableName, map.get(tableName));
-    map.delete(tableName);
-    return;
-  }
-  for (const [contendedTable, owners] of map.entries()) {
-    releaseOwnersForTable(contendedTable, owners);
-  }
-  map.clear();
-}
-
-export {cdcObligationCoverage, cdcProgressCurrent, cdcSubscriberInvocation, nextCdcSubscriber,
-  observeCdcSubscriber, prepareCdcObligationProgress, recordUncoveredSubscriberHint,
-  releaseContendedPropagationOwners, throwUncoveredObligationError};
+export {
+  cdcRecipientInvocation,
+  laneRecipients,
+  receiptGroupOf,
+  recipientAttached,
+  recipientKeyOf,
+  reobserveLaneRecipients,
+  syncSubscriberBranches,
+  unconfirmedRecipientError,
+};

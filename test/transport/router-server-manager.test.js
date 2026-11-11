@@ -265,6 +265,34 @@ t.test('RouterServerManager unit tests', async (t) => {
     );
   });
 
+  t.test('should refuse an in-process port that is already in use', async (t) => {
+    const port = ports.getPort();
+    const buildManager = (nodeId) => new RouterServerManager({
+      nodeId,
+      logger: createMockLogger(),
+      routerId: `router-${nodeId}`,
+      wsPort: port,
+      inProcess: true,
+      nodeConnections: new Map(),
+      onMessage: () => {},
+      onConnectionClose: () => {},
+      emit: () => {},
+    });
+    const first = buildManager('node-1');
+    const second = buildManager('node-2');
+    await first.startServer();
+    t.teardown(() => first.shutdown());
+
+    const refusal = await second.startServer().then(() => null, (error) => error);
+
+    t.equal(refusal?.code, 'EADDRINUSE', 'the refusal is typed as address-in-use');
+    t.equal(refusal?.message,
+      `listen EADDRINUSE: address already in use 127.0.0.1:${port}`,
+      'the refusal names the port, like a real listen error');
+    t.equal(second.isRunning(), false, 'the refused manager is not running');
+    t.equal(first.isRunning(), true, 'the first registration is untouched');
+  });
+
   t.test('should return empty clients set when no server', async (t) => {
     const serverManager = new RouterServerManager({
       nodeId: 'node-1',

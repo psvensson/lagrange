@@ -1,13 +1,16 @@
 import {copyCdcEventMetadata} from '../cdc/cdc-event-envelope.js';
-import {CDC_DELIVERY_REMAINING_MS, createCdcDeliveryBudget} from '../cdc/cdc-delivery-budget.js';
+import {CDC_DELIVERY_REMAINING_MS, cdcDeliveryBudgetError, createCdcDeliveryBudget} from
+  '../cdc/cdc-delivery-budget.js';
+import {CDC_COMPLETION} from '../cdc/cdc-delivery-outcome.js';
 import {captureCdcForwardOptions, captureCdcForwardRequest} from
   './message-group-forwarding-owner-native-delivery-methods.js';
 import {appendOwnArrayValue, copyArrayByIndex} from '../utils/canonical-json-data.js';
 
 const arrayIsArray = Array.isArray;
 
+// A durable vector arrives only as the batch message, whatever its length.
 async function handleDurableLatencyCdcMessage(service, runtimeDeps, messageId, request,
-  batch, localDelivery, startedAtMs) {
+  localDelivery, startedAtMs) {
   // This receiver owns a distinct clock domain. Capture the wire duration at
   // handler entry, before any application await. Only the shallow wrapper
   // copy, its durable classification and forward context precede the owner's
@@ -24,10 +27,8 @@ async function handleDurableLatencyCdcMessage(service, runtimeDeps, messageId, r
   // contradictory field the canonical CDC validator must refuse); the router
   // carries its receipt beside it, never in it.
   return {messageId,
-    status: batch ? runtimeDeps.MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_BATCH_PROPAGATED :
-      runtimeDeps.MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_PROPAGATED,
-    ...(batch ? {eventCount: incoming.length} :
-      {tableName: payload.tableName, operation: payload.operation}),
+    status: runtimeDeps.MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_BATCH_PROPAGATED,
+    eventCount: incoming.length,
     ...answer,
   };
 }
@@ -41,15 +42,11 @@ async function handleLatencyCdcPropagationMessage(
   runtimeDeps,
   messageId,
   payload,
-  localDelivery,
 ) {
-  const startedAtMs = service.timeSource.now();
   const request = captureCdcForwardRequest(service, payload, false);
   payload = request.payload;
-  if (request.durable) {
-    return handleDurableLatencyCdcMessage(
-      service, runtimeDeps, messageId, request, false, localDelivery, startedAtMs);
-  }
+  // The single message is the ordinary (not durable) event's form.
+  if (request.durable) throw cdcDeliveryBudgetError(CDC_COMPLETION.INVALID);
   const {
     CDC_FORWARD_MAX_RELAY_DEPTH,
     MESSAGE_GROUP_APPLICATION_ERROR_MSG,
@@ -172,7 +169,7 @@ async function handleLatencyCdcPropagationBatchMessage(
   payload = request.payload;
   if (request.durable) {
     return handleDurableLatencyCdcMessage(service, runtimeDeps, messageId, request,
-      true, localDelivery, startedAtMs);
+      localDelivery, startedAtMs);
   }
   const {
     CDC_FORWARD_MAX_RELAY_DEPTH,

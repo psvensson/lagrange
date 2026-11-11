@@ -3,9 +3,9 @@ import {
   ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
 } from '../transport/transport-error-codes.js';
 import {deliveryTransportOf, deliveryAnswerOf,
-  TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
   classifyThrownDeliveryError,
   isDeliveredTransportDeliveryOutcome,
+  isDeliveryTimeoutTransportOutcome,
 } from '../transport/transport-semantic-outcome.js';
 
 const SOURCE_START_OUTCOME = Object.freeze({ANSWER_UNKNOWN: 'source_start_answer_unknown'});
@@ -14,8 +14,7 @@ const SOURCE_START_DELIVERY_FAILED = 'Source replication START delivery failed';
 function deliveryAnswerMayBeLost(error) {
   const outcome = error?.deliveryOutcome ||
     classifyThrownDeliveryError(error);
-  return outcome.reasonCode ===
-      TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT ||
+  return isDeliveryTimeoutTransportOutcome(outcome) ||
     (outcome.errorCode === ROUTER_CONNECTION_CLOSED_ERROR_CODE &&
       outcome.recoverableBeforeSend !== true) ||
     (outcome.errorCode === ROUTER_MESSAGE_TIMEOUT_ERROR_CODE);

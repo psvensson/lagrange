@@ -80,6 +80,8 @@ import {
 } from '../control-plane/owner-contract-outcome.js';
 import {HLCClockService} from '../hlc/hlc-clock-service.js';
 import {QUERY_ERROR_CODE, QUERY_ERROR_MSG} from '../query/query-constants.js';
+import {ROUTER_CONNECTION_CLOSED_ERROR_CODE, ROUTER_MESSAGE_TIMEOUT_ERROR_CODE} from
+  '../transport/transport-error-codes.js';
 import {
   SYSTEM_TABLE_NAME,
   INITIAL_PARTITION_IDS,
@@ -405,7 +407,10 @@ function isSystemTableOwnerHandoffFailure(errorLike, fallbackTableName = null) {
   const errorCode = getControlPlaneErrorCode(errorLike);
   // A partition write answer the caller holds is routed again by its code;
   // one that reached it only as text, by the fragments below.
-  if (errorCode === QUERY_ERROR_CODE.ROUTER_CONNECTION_CLOSED ||
+  // A spent delivery lifetime is read by its code in both waits: the owner's
+  // commit is unconfirmed either way and the handoff keeps the write key.
+  if (errorCode === ROUTER_CONNECTION_CLOSED_ERROR_CODE ||
+      errorCode === ROUTER_MESSAGE_TIMEOUT_ERROR_CODE ||
       isReroutableWriteFailureCode(errorLike?.failureCode)) {
     return true;
   }

@@ -192,6 +192,12 @@ test('T7: the stamp is carried, never re-derived: the set of files that ' +
     // R4: the WASM service replica's genesis founding set (see above).
     'src/wasm-service/wasm-service-consensus-port.js',
     'src/query/sql-query-engine-initial-partition-provisioning.js',
+    // Reader for the provisioning owner above: on a retry of a schema job it
+    // reads the GENESIS stamp the job's durable bootstrap operations carry
+    // (validated by the stamp's owner) and answers it as the established
+    // cohort, so the provisioner attaches to it instead of founding again.
+    // It never produces a stamp: genesisStamp stays with the provisioner.
+    'src/query/initial-partition-bootstrap-cohort.js',
     'src/rebalancer/committed-membership-bootstrap-read.js',
     'src/rebalancer/rebalance-coordinator-operation-creation.js',
     'src/bootstrap/shared/durable-rejoin-partition-restore-planner.js',

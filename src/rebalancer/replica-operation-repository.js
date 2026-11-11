@@ -101,7 +101,9 @@ import {RAFT_ROLE} from '../raft/constants.js';
 import {
   getControlPlaneErrorCode,
   getControlPlaneRetryAfterMs,
+  isControlPlaneWriterShutDown,
   isRetryableControlPlaneError,
+  isTerminalTypedDistributedFailure,
 } from '../control-plane/control-plane-error-classification.js';
 import {
   assignReplicaOperationRepositoryReadMethods,
@@ -719,8 +721,10 @@ assignReplicaOperationRepositoryMutationMethods(ReplicaOperationRepository, {
   getControlPlaneRetryAfterMs,
   getRemainingBudgetMs,
   hasControlPlaneMutationRoutingGapFailureSignature,
+  isControlPlaneWriterShutDown,
   isRetryableControlPlaneError,
   isRetryableWorkflowParticipantLookupErrorMessage,
+  isTerminalTypedDistributedFailure,
   ROUTER_ERROR_MSG,
   TRANSPORT_ERROR_MSG,
   uuidv4,

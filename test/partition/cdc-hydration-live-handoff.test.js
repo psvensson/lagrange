@@ -19,6 +19,7 @@
 import assert from 'node:assert/strict';
 import {afterEach, beforeEach, test} from 'node:test';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
+import {PARTITION_SERVICE_DEFAULT} from '../../src/partition/partition-service-constants.js';
 import {
   PARTITION_CDC_COMMAND,
   PARTITION_CDC_OBLIGATION_BOUND,
@@ -157,16 +158,25 @@ test('W-D4c: acknowledgeHydratedObligationsThrough drains > 256 pre-hydration ob
     );
     const committedAbove = commitLaterTraffic(leader, 'post-bulk-hydration');
     await settleTicks();
+    // The recipient's delivery that was in flight when the image arrived was
+    // retired with it; the recipient resumes on its own retry once that
+    // delivery's raw work has closed.
+    timeSource.advance(PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS);
+    await settleTicks();
+    // Recipient isolation: delivery no longer waits for acknowledgement
+    // capacity (acknowledgement is taken at the frontier, in bounded batches,
+    // as capacity returns). The > 256 pre-hydration acknowledgements saturate
+    // the outstanding batches while post-hydration rows are already shipped.
     const beforePumpDiagnostics = leader.cdcDelivery.getCdcObligationDiagnostics();
     assert.equal(
-      beforePumpDiagnostics.lastDrive?.state,
-      PARTITION_CDC_OBLIGATION_DRIVE_STATE.ACKNOWLEDGEMENT_BACKPRESSURE,
-      'actual-prefix pressure blocks post-hydration delivery while > 256 pre-hydration obligations saturate outstanding acknowledgement batches',
+      beforePumpDiagnostics.outstandingAcknowledgementBatches,
+      PARTITION_CDC_OBLIGATION_BOUND.ACK_MAX_OUTSTANDING_BATCHES,
+      'the pre-hydration acknowledgements saturate the outstanding acknowledgement batches',
     );
     assert.equal(
-      subscriber.events.length,
-      0,
-      'post-hydration events are held back until prefix acknowledgement batches drain',
+      subscriber.events.some((event) => event.logIndex > position),
+      true,
+      'post-hydration events are shipped while prefix acknowledgement batches are outstanding',
     );
     const applied = new Set();
     await pump(timeSource, leader, proposed, applied);
@@ -205,36 +215,40 @@ test('W-D4c: acknowledgeHydratedObligationsThrough drains > 256 pre-hydration ob
   }
 });
 
-test('W-D4d: prepareCdcObligationProgress attaches logIndex and ' +
+// Recipient isolation: each recipient records the vector it has in flight
+// (its unconfirmed position); a hydration image at or above that vector's
+// first row retires that recipient's in-flight invocation.
+test('W-D4d: a recipient records its in-flight vector position and ' +
   'acknowledgeHydratedObligationsThrough retires an in-flight pre-hydration invocation', async () => {
   const timeSource = new VirtualTimeSource();
   const {leader, proposed} = await startLeader({timeSource, tableName: CDC_TABLE});
   try {
     let unblockDelivery = null;
     let observedCellLogIndex = null;
+    let observedCellLast = null;
     let observedInvocationDuringHydration = null;
-    const blockingSubscriber = {
-      handleCDCEvent: async () => {
-        const currentCell = leader.cdcDelivery.obligationLane.currentObligation;
-        observedCellLogIndex = currentCell?.logIndex ?? null;
-        observedInvocationDuringHydration = leader.cdcDelivery.activeCdcInvocation;
-        await new Promise((resolve) => {
-          unblockDelivery = resolve;
-        });
-        return {success: true, completion: 'DURABLE'};
-      },
+    const blockingSubscriber = async () => {
+      const [recipient] = leader.cdcDelivery.getCdcObligationDiagnostics().recipients;
+      const [custody] = [...leader.cdcDelivery.recipientCustody.values()];
+      observedCellLogIndex = recipient.position?.logIndex ?? null;
+      observedCellLast = recipient.inFlight;
+      observedInvocationDuringHydration = custody.activeCdcInvocation;
+      await new Promise((resolve) => {
+        unblockDelivery = resolve;
+      });
+      return {success: true, completion: 'DURABLE'};
     };
     await leader.subscribeToCDCWithHandshake(blockingSubscriber, {subscriberId: 'blocking-sub'});
     applyCommitted(leader, upsertOf(leader, 'inflight-seed', 0));
     await settleTicks();
     assert.equal(Number.isSafeInteger(observedCellLogIndex) && observedCellLogIndex > 0, true);
+    assert.equal(observedCellLast, true, 'the recipient has that vector in flight');
     assert.notEqual(observedInvocationDuringHydration, null);
 
     const image = leader.readHydrationImage(IMAGE_SQL);
     await leader.cdcDelivery.acknowledgeHydratedObligationsThrough(image.appliedIndex);
 
     assert.equal(observedInvocationDuringHydration.context.signal.aborted, true);
-    assert.equal(leader.cdcDelivery.obligationLane.currentObligation, null);
     unblockDelivery?.();
     await settleTicks();
     const applied = new Set();
@@ -245,7 +259,8 @@ test('W-D4d: prepareCdcObligationProgress attaches logIndex and ' +
 });
 
 test('W-D4e: scheduleDeliveryRetry preserves an earlier absolute dueAtMs against a later ' +
-  'smaller relative delayMs, and retainedDeliveredBackpressured enforces actual-prefix pressure', async () => {
+  'smaller relative delayMs, and retainedDeliveredBackpressured enforces actual-prefix pressure ' +
+  'on acknowledgement', async () => {
   const timeSource = new VirtualTimeSource({startMs: 1000});
   const {leader} = await startLeader({timeSource, tableName: CDC_TABLE});
   try {
@@ -307,9 +322,13 @@ test('W-D4e: scheduleDeliveryRetry preserves an earlier absolute dueAtMs against
     assert.equal(
       leader.cdcDelivery.getCdcObligationDiagnostics().lastDrive?.state,
       PARTITION_CDC_OBLIGATION_DRIVE_STATE.ACKNOWLEDGEMENT_BACKPRESSURE,
-      'retainedDeliveredBackpressured stops post-hydration delivery when actual owed head + pending reaches RETAINED_DELIVERED_MAX',
+      'retainedDeliveredBackpressured stops post-hydration acknowledgement when actual owed head + pending reaches RETAINED_DELIVERED_MAX',
     );
-    assert.equal(subscriber.events.length, 0);
+    // Recipient isolation: the bound holds back the acknowledgement, not the
+    // delivery. The recipient received the row; it stays owed and unpending.
+    assert.equal(subscriber.events.length, 1);
+    assert.equal(lane.pending.has(subscriber.events[0].eventKey), false);
+    assert.equal(leader.cdcDelivery.getCdcObligationDiagnostics().lastDrive.unacknowledged, 1);
   } finally {
     await shutdownAll(leader);
   }

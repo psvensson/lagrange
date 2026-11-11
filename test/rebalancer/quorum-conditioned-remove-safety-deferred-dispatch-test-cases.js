@@ -25,7 +25,7 @@ export function registerQuorumConditionedRemoveSafetyDeferredDispatchTests({
           partitionId: 'nodes-p1',
           replicaId: 'nodes-p1-r1',
           nodeId: 'node-a',
-          raftRole: 'leader',
+          raftRole: 'follower',
         }),
         createCriticalPartitionServiceRow({
           partitionId: 'nodes-p1',
@@ -73,7 +73,7 @@ export function registerQuorumConditionedRemoveSafetyDeferredDispatchTests({
               partitionId: 'nodes-p1',
               replicaId: 'nodes-p1-r1',
               nodeId: 'node-a',
-              raftRole: 'leader',
+              raftRole: 'follower',
             }),
             createCriticalPartitionServiceRow({
               partitionId: 'nodes-p1',

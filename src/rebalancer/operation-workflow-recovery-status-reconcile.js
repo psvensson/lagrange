@@ -1,4 +1,7 @@
-import {PRE_SYNC_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
+import {
+  PRE_SYNC_WORKFLOW_STEPS,
+  isReplaceExemptFromTimeBudget,
+} from './replica-operation-step-policy.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {OperationWorkflowRecoveryObservation} from './operation-workflow-recovery-observation.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
@@ -12,7 +15,6 @@ import {
   REPLACE_TARGET_DEAD_BEFORE_INTENT,
   REPLACE_TARGET_REMOVED_BEFORE_ACTIVE,
   isPartitionReplace,
-  isReplaceExemptFromTimeBudget,
   isReplaceRemovalIntentDurable,
   recordReplaceBudgetDiagnostic,
 } from './operation-workflow-replace-owner.js';
@@ -20,6 +22,7 @@ import {
 import {
   observedReplaceTargetStatus,
 } from './operation-workflow-replace-surviving-membership.js';
+import {reconcileDeferredStepWriteOnTimeout} from './operation-workflow-transition-retry.js';
 const {
   ACTIVE_REPLACE_SOURCE_RETIREMENT_BLOCKING_STATUSES,
   OBSERVED_OPERATION_ROW_TARGET_PROGRESS_STATUSES,
@@ -420,6 +423,7 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
       return false;
     }
     const priorityRecoveryDrainSnapshot =
+      options.priorityRecoveryDrainSnapshot ||
       await this.buildPriorityRecoveryOperationDrainSnapshot(operation);
     if (
       await this.reconcilePriorityRecoveryOperationDrain(
@@ -482,6 +486,16 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
       if (await this.reconcileActiveReplaceSourceRemovalProgress(operation)) {
         return true;
       }
+      // A timeout tick stands down only for a retry that will itself
+      // re-enter this owner; every other ACTIVE REPLACE is re-driven here,
+      // because its time-exempt step has no later wake.
+      if (
+        cause === OPERATION_WORKFLOW_OWNER_LITERAL.TIMEOUT &&
+        this.readOperationRetryArmedState(operation.operationId)
+          .retryWakeArmed
+      ) {
+        return true;
+      }
       const activeReplaceResumeResult =
         await this.executeOperationFromReconcilePath(operation);
       if (activeReplaceResumeResult?.skipped === true) {
@@ -528,13 +542,14 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
     return this.reconcileOperationLifecycle(operation, options);
   }
 
-  async reconcileObservedTargetProgressDuringTransitionGrace(operation, now) {
-    if (!this.hasObservedOperationRowTargetProgress(operation)) {
-      return false;
-    }
+  async reconcileObservedTargetProgressDuringTransitionGrace(
+    operation, now, priorityRecoveryDrainSnapshot = null,
+  ) {
+    if (!this.hasObservedOperationRowTargetProgress(operation)) return false;
     return this.reconcileOperationProgress(operation, {
       cause: OPERATION_WORKFLOW_OWNER_LITERAL.OBSERVED_PROGRESS,
       now,
+      priorityRecoveryDrainSnapshot,
     });
   }
 
@@ -584,30 +599,6 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
       fallbackOperationId.length > 0 &&
       fallbackOperation &&
       typeof fallbackOperation === 'object';
-    const visibilityWorkflowRank =
-      hasVisibilityOperation ?
-        this.getOperationWorkflowStepRank(visibilityOperation) :
-        -1;
-    const fallbackWorkflowRank =
-      hasFallbackOperation ?
-        this.getOperationWorkflowStepRank(fallbackOperation) :
-        -1;
-    const visibilityUpdatedAt = Number(visibilityOperation?.updatedAt);
-    const fallbackUpdatedAt = Number(fallbackOperation?.updatedAt);
-    const fallbackWorkflowRankAhead =
-      hasVisibilityOperation &&
-      hasFallbackOperation &&
-      fallbackWorkflowRank > visibilityWorkflowRank;
-    const fallbackUpdatedAtAhead =
-      hasVisibilityOperation &&
-      hasFallbackOperation &&
-      fallbackWorkflowRank === visibilityWorkflowRank &&
-      Number.isFinite(fallbackUpdatedAt) &&
-      (
-        !Number.isFinite(visibilityUpdatedAt) ||
-        fallbackUpdatedAt > visibilityUpdatedAt
-      );
-
     return Object.freeze({
       hasVisibilityOperation,
       hasFallbackOperation,
@@ -621,8 +612,6 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
       fallbackTerminal:
         hasFallbackOperation &&
         this.repository.isOperationTerminal(fallbackOperation),
-      fallbackWorkflowRankAhead,
-      fallbackUpdatedAtAhead,
     });
   }
 
@@ -669,26 +658,29 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
     return null;
   }
 
-  async reconcileTimeoutOperation(operation, now) {
+  async reconcileTimeoutOperation(
+    operation, now, priorityRecoveryDrainSnapshot = null,
+  ) {
+    if (await reconcileDeferredStepWriteOnTimeout(this, operation, now)) {
+      return;
+    }
     if (
       this.hasActiveTransitionRetryGrace(operation?.operationId || null, now)
     ) {
-      if (
-        await this.reconcileObservedTargetProgressDuringTransitionGrace(
-          operation,
-          now,
-        )
-      ) {
+      if (await this.reconcileObservedTargetProgressDuringTransitionGrace(
+        operation, now, priorityRecoveryDrainSnapshot)) {
         return;
       }
-      if (await this.reconcilePriorityRecoveryOperationDrain(operation)) {
+      if (await this.reconcilePriorityRecoveryOperationDrain(
+        operation, priorityRecoveryDrainSnapshot)) {
         return;
       }
       return;
     }
     const progressed = await this.reconcileOperationProgress(operation, {
-      cause: 'timeout',
+      cause: OPERATION_WORKFLOW_OWNER_LITERAL.TIMEOUT,
       now,
+      priorityRecoveryDrainSnapshot,
     });
     if (progressed) {
       return;

@@ -10,6 +10,10 @@ import * as DISPATCH_WAKE_PREEMPTION
 import * as DISPATCH_RESPONSE_RECONCILE
   from './operation-workflow-dispatch-response-reconcile.js';
 import {ensureDispatchMembershipEpochOrSkip} from './operation-workflow-dispatch-epoch-gate.js';
+import {
+  resolveDeferredStepWriteEffectSkip,
+  typeDeferredStepWriteResult,
+} from './operation-workflow-transition-retry.js';
 import {ensureDispatchReservationOrSkip} from './operation-workflow-dispatch-reservation-gate.js';
 import {OPERATION_OWNER_TURN_POLICY} from './operation-owner-turn-policy.js';
 import * as LEDGER_SELF_MOVE_GATE from './operation-workflow-dispatch-ledger-self-move-gate.js';
@@ -164,8 +168,25 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
    */
   async claimPendingDispatchOperationInternal(operation, options) {
     if (this.shouldUsePriorityDispatchClaimNarrowPath(operation)) {
-      const claimedOperation =
-        await this.claimPriorityDispatchTransition(operation, options);
+      let claimedOperation;
+      try {
+        claimedOperation =
+          await this.claimPriorityDispatchTransition(operation, options);
+      } catch (error) {
+        if (
+          this.deferTransitionRetry(operation.operationId, error, {
+            boundary: OPERATION_WORKFLOW_OWNER_LITERAL.DISPATCH,
+            workflowStep: operation.workflowStep,
+            partitionId: operation.partitionId,
+            updatedAt: operation.updatedAt,
+            createdAt: operation.createdAt,
+            operationSnapshot: operation,
+          })
+        ) {
+          return null;
+        }
+        throw error;
+      }
       if (claimedOperation) {
         return claimedOperation;
       }
@@ -429,10 +450,13 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
         operation,
         createRearmDispatchPhase,
         options,
-      ) &&
-      await this.reconcileDispatchWakeOperationProgress(operation)
+      )
     ) {
-      return this.buildSuccessfulOperationResult(operation.operationId);
+      const wakeResult =
+        await this.resolveDispatchWakeProgressResult(operation);
+      if (wakeResult) {
+        return wakeResult;
+      }
     }
 
     // Fail-closed reservation gate (audit findings 3+11): after the
@@ -498,10 +522,9 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
     }
     if (!DISPATCH_PENDING_WORKFLOW_STEPS.has(dispatchableWorkflowStep) &&
       !createRearmDispatchPhase) {
-      if (await this.reconcileDispatchWakeOperationProgress(operation)) {
-        return this.buildSuccessfulOperationResult(operation.operationId);
-      }
-      return this.buildSkippedOperationResult(
+      const wakeResult =
+        await this.resolveDispatchWakeProgressResult(operation);
+      return wakeResult || this.buildSkippedOperationResult(
         OPERATION_WORKFLOW_OWNER_REASON.OPERATION_NOT_DISPATCHABLE,
         operation.operationId,
       );
@@ -537,36 +560,27 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
       );
     }
 
-    return this.advanceDispatchCandidateStep(operationInput, operation, options);
+    return typeDeferredStepWriteResult(
+      this,
+      operation,
+      await this.advanceDispatchCandidateStep(operationInput, operation, options),
+    );
   }
 
-  /**
-   * @param {string|Object} operationInput
-   * @return {boolean}
-   * @private
-   */
+  // Dispatch-wake preemption delegates; the contracts are documented on the
+  // functions of operation-workflow-dispatch-wake-preemption.js.
   isOperationRowDispatchWakeInput(operationInput) {
     return DISPATCH_WAKE_PREEMPTION.isOperationRowDispatchWakeInput(
       operationInput,
     );
   }
 
-  /**
-   * @param {Object} options
-   * @return {boolean}
-   * @private
-   */
   isExplicitDispatchWakeProgressInput(options) {
     return DISPATCH_WAKE_PREEMPTION.isExplicitDispatchWakeProgressInput(
       options,
     );
   }
 
-  /**
-   * @param {Object} operation
-   * @return {string}
-   * @private
-   */
   getDispatchWakeObservedTargetStatus(operation) {
     return DISPATCH_WAKE_PREEMPTION.getDispatchWakeObservedTargetStatus(
       this,
@@ -574,14 +588,6 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
     );
   }
 
-  /**
-   * @param {string|Object} operationInput
-   * @param {Object} operation
-   * @param {boolean} createRearmDispatchPhase
-   * @param {Object} [options={}]
-   * @return {Object}
-   * @private
-   */
   buildDispatchWakeProgressPreemptEvidence(
     operationInput,
     operation,
@@ -597,25 +603,12 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
     );
   }
 
-  /**
-   * @param {Object} evidence
-   * @return {string}
-   * @private
-   */
   resolveDispatchWakeProgressPreemptState(evidence) {
     return DISPATCH_WAKE_PREEMPTION.resolveDispatchWakeProgressPreemptState(
       evidence,
     );
   }
 
-  /**
-   * @param {string|Object} operationInput
-   * @param {Object} operation
-   * @param {boolean} createRearmDispatchPhase
-   * @param {Object} [options={}]
-   * @return {boolean}
-   * @private
-   */
   shouldPreemptCreateRearmWithObservedProgress(
     operationInput,
     operation,
@@ -632,16 +625,6 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
       );
   }
 
-  /**
-   * Dispatch wakeups can arrive after cache evidence has already moved the
-   * replica beyond the current durable step. Let the owner reconcile that
-   * progress before replaying create dispatch or classifying the wakeup as
-   * non-dispatchable.
-   *
-   * @param {Object} operation
-   * @return {Promise<boolean>}
-   * @private
-   */
   async reconcileDispatchWakeOperationProgress(operation) {
     return DISPATCH_WAKE_PREEMPTION.reconcileDispatchWakeOperationProgress(
       this,
@@ -649,17 +632,13 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
     );
   }
 
-  /**
-   * PENDING dispatch wakes with target evidence need only persist the target
-   * progress transition. A target `pending` row proves the create handler
-   * accepted the request, so it advances the durable owner row to CREATING.
-   * Running the full replace execution path here can turn a duplicate-create
-   * guard into a source-removal safety failure.
-   *
-   * @param {Object} operation
-   * @return {Promise<boolean>}
-   * @private
-   */
+  async resolveDispatchWakeProgressResult(operation) {
+    return DISPATCH_WAKE_PREEMPTION.resolveDispatchWakeProgressResult(
+      this,
+      operation,
+    );
+  }
+
   async reconcileDispatchWakePendingTargetProgress(operation) {
     return DISPATCH_WAKE_PREEMPTION
       .reconcileDispatchWakePendingTargetProgress(this, operation);
@@ -734,11 +713,22 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
     );
   }
 
+  // An execute never repeats the effect of a step whose write is still
+  // owed, and is not a success while the step it reached is not durable.
   async executeOperationInternal(operation, options = {}) {
-    return DISPATCH_RESPONSE_RECONCILE.executeOperationInternal.call(
+    const deferredStepWriteSkip =
+      await resolveDeferredStepWriteEffectSkip(this, operation);
+    if (deferredStepWriteSkip) {
+      return deferredStepWriteSkip;
+    }
+    return typeDeferredStepWriteResult(
       this,
       operation,
-      options,
+      await DISPATCH_RESPONSE_RECONCILE.executeOperationInternal.call(
+        this,
+        operation,
+        options,
+      ),
     );
   }
 
@@ -759,6 +749,11 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
   ensurePriorityActiveReplaceRetryArmed(operation) {
     return DISPATCH_RESPONSE_RECONCILE.ensurePriorityActiveReplaceRetryArmed
       .call(this, operation);
+  }
+
+  readOperationRetryArmedState(operationId) {
+    return DISPATCH_RESPONSE_RECONCILE.readOperationRetryArmedState
+      .call(this, operationId);
   }
 
   async reconcileCreateInProgressDispatchResponse(

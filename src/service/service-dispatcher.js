@@ -9,6 +9,7 @@ import {
 import {deliveryTransportOf, deliveryAnswerOf,
   TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
   isDeliveredTransportDeliveryOutcome,
+  isDeliveryTimeoutTransportOutcome,
 } from '../transport/transport-semantic-outcome.js';
 import {assertServiceMessageEnvelope} from './service-message-contract.js';
 import {ServicePolicyViolationError} from './service-lifecycle-errors.js';
@@ -122,10 +123,7 @@ function createDeliveryFailure(delivery) {
       {classification: REQUEST_CELL_ROUTE_CLASSIFICATION.RETRYABLE},
     );
   }
-  if (
-    delivery.reasonCode ===
-      TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT
-  ) {
+  if (isDeliveryTimeoutTransportOutcome(delivery)) {
     return createRoutingFailure(
       REQUEST_CELL_ROUTE_ERROR_CODE.TRANSPORT_FAILED,
       `${SERVICE_DISPATCHER_ERROR.DELIVERY_REJECTED}: message timeout`,

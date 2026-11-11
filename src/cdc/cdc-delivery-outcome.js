@@ -356,10 +356,6 @@ function observeCdcDeliveryCoverage(delivery, events, groupId = null) {
     observeCdcCoverage(deliveryAnswerOf(delivery), events, groupId) : UNCOVERED_CDC;
 }
 
-function emptyCdcCoverage() {
-  return UNCOVERED_CDC;
-}
-
 function coverageMatchesVector(coverage, expectedVectorDigest) {
   return hasCdcVectorDigest(coverage) && objectHasOwn(coverage, FIELD.STATE) &&
     (coverage.state === CDC_COVERAGE_STATE.COMMITTED ||
@@ -403,7 +399,6 @@ export {
   cdcCommitWaitIdentity,
   cdcCoverageState,
   completeCdcPropagation,
-  emptyCdcCoverage,
   hasDurableCdcEvents,
   isCommittedCdcOutcome,
   isCommittedCdcDelivery,

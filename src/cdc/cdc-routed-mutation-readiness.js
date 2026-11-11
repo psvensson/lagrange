@@ -25,6 +25,7 @@ import {
   buildControlPlaneWorkloadProfile,
 } from '../control-plane/control-plane-workload-profile.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+import {ROUTER_MESSAGE_TIMEOUT_ERROR_CODE} from '../transport/transport-error-codes.js';
 
 const {
   CDC_DEFAULTS,
@@ -42,7 +43,6 @@ const {
   PRESSURE_GOVERNOR_ACTION,
   PRESSURE_WORK_CLASS,
   PressureGovernor,
-  QUERY_ERROR_MSG,
   VALID_SYSTEM_TABLES,
   WRITE_ROUTER_MODE,
   annotateSystemTableMutationError,
@@ -701,7 +701,6 @@ class CDCRoutedMutationReadiness {
       isRetryableControlPlaneError(errorLike) ||
       message.includes(ERRORS.PARTITION_SERVICE_NOT_FOUND) ||
       message === ERRORS.QUERY_FAILED ||
-      message.includes(QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE) ||
       message.includes(ERRORS.SYSTEM_CACHE_NOT_AVAILABLE) ||
       message.includes(ERRORS.SYSTEM_CACHE_PARTITION_LOOKUP_UNAVAILABLE) ||
       message.includes(ERRORS.NO_HANDLER_FOR_ADDRESS) ||
@@ -709,7 +708,10 @@ class CDCRoutedMutationReadiness {
       message.includes(
         CDC_INTEGRATION_SERVICE_LITERAL.FAILED_TO_FORWARD_WRITE_TO_LEADER,
       ) ||
-      message.includes(CDC_INTEGRATION_SERVICE_LITERAL.MESSAGE_TIMEOUT)
+      // A spent delivery lifetime, by its transport code: the ACK and the
+      // answer timeout are one transient here, re-sent under the same
+      // write key (mintControlPlaneWriteKey), so never applied twice.
+      getControlPlaneErrorCode(errorLike) === ROUTER_MESSAGE_TIMEOUT_ERROR_CODE
     );
   }
 

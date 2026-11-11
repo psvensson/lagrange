@@ -261,6 +261,58 @@ async function recoverRetainedCreateAdmissionRow(
   });
 }
 
+function isSatisfiedCurrentBootActiveRow(handler, owner, row) {
+  if (
+    row?.create_admission_state !== CREATE_ADMISSION_STATE.ACTIVE ||
+    owner?.ownerIncarnation === null ||
+    Number(row.create_admission_owner_incarnation) !== owner.ownerIncarnation
+  ) {
+    return false;
+  }
+  const currentReplica = readRegisteredReplica(handler, row.replica_id);
+  if (!handler.isReplicaCreateAlreadySatisfied(currentReplica)) {
+    return false;
+  }
+  const matchOptions = {
+    operationId: row.operation_id,
+    admissionToken: row.create_admission_token,
+    attemptToken: row.create_admission_attempt_token,
+  };
+  return (
+    runtimeMatchesSupersededAdmission(currentReplica, matchOptions) ||
+    runtimeMatchesSupersededAdmission(
+      readRegisteredService(handler, row.replica_id),
+      matchOptions,
+    )
+  );
+}
+
+// Recovery order of retained rows: closed retirements first, ACTIVE rows
+// last, and within each class the open rows before the completed ones.
+const RETAINED_RECOVERY_ROW_PRIORITY = Object.freeze({
+  CLOSED: 0,
+  OPEN: 1,
+  OPEN_COMPLETED: 2,
+  ACTIVE: 3,
+  ACTIVE_COMPLETED: 4,
+});
+
+function retainedRecoveryRowPriority(row) {
+  if (row?.create_admission_state === CREATE_ADMISSION_STATE.CLOSED) {
+    return RETAINED_RECOVERY_ROW_PRIORITY.CLOSED;
+  }
+  const isCompleted =
+    row?.completed_at !== null && row?.completed_at !== undefined;
+  if (row?.create_admission_state !== CREATE_ADMISSION_STATE.ACTIVE) {
+    return isCompleted ?
+      RETAINED_RECOVERY_ROW_PRIORITY.OPEN_COMPLETED :
+      RETAINED_RECOVERY_ROW_PRIORITY.OPEN;
+  }
+  return isCompleted ?
+    RETAINED_RECOVERY_ROW_PRIORITY.ACTIVE_COMPLETED :
+    RETAINED_RECOVERY_ROW_PRIORITY.ACTIVE;
+}
+
 async function recoverRetainedCreateAdmissionRows(
   handler,
   owner,
@@ -268,7 +320,13 @@ async function recoverRetainedCreateAdmissionRows(
   {buildRequest, reconcileLifecycle, onFailure},
 ) {
   const deferredOperationIds = [];
-  for (const row of rows) {
+  const orderedRows = Array.isArray(rows) ?
+    [...rows].sort(
+      (left, right) =>
+        retainedRecoveryRowPriority(left) - retainedRecoveryRowPriority(right),
+    ) :
+    [];
+  for (const row of orderedRows) {
     handler.throwIfShuttingDown();
     if (row.create_admission_state === CREATE_ADMISSION_STATE.CLOSED) {
       await retireSupersededCreateAdmissionRuntime(handler, {
@@ -278,6 +336,9 @@ async function recoverRetainedCreateAdmissionRows(
         admissionToken: row.create_admission_token,
         attemptToken: row.create_admission_attempt_token,
       });
+      continue;
+    }
+    if (isSatisfiedCurrentBootActiveRow(handler, owner, row)) {
       continue;
     }
     try {

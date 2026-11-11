@@ -29,6 +29,8 @@ import {
   PARTICIPANT_TRANSACTION_SQL as SQL,
   PARTICIPANT_TRANSACTION_STATE as STATE,
   PARTICIPANT_TRANSACTION_STORE_ERROR as STORE_ERROR,
+  PARTICIPANT_TRANSACTION_STORE_ERROR_CODE as STORE_ERROR_CODE,
+  PARTICIPANT_STORE_CONNECTION_STATE as CONNECTION_STATE,
 } from './partition-participant-transaction-constants.js';
 
 const ONE_ROW = 1;
@@ -37,7 +39,24 @@ const ONE_ROW = 1;
 // request path).
 const READ_STATEMENTS = new WeakMap();
 
+/**
+ * Whether the participant store can be read on a partition's connection:
+ * CLOSED when the lifecycle owner released it (the service's db is null) or
+ * closed it; OPEN otherwise.
+ * @param {Object|null} db - The partition's connection.
+ * @return {string} A PARTICIPANT_STORE_CONNECTION_STATE.
+ */
+function participantStoreConnectionStateOf(db) {
+  return db === null || db === undefined || db.open === false ?
+    CONNECTION_STATE.CLOSED : CONNECTION_STATE.OPEN;
+}
+
 function readStatementOf(db, sql) {
+  if (participantStoreConnectionStateOf(db) === CONNECTION_STATE.CLOSED) {
+    // Typed, never a null dereference: the caller's owner names the answer.
+    throw Object.assign(new Error(STORE_ERROR.CONNECTION_CLOSED),
+      {code: STORE_ERROR_CODE.CONNECTION_CLOSED});
+  }
   let statements = READ_STATEMENTS.get(db);
   if (statements === undefined) {
     statements = new Map();
@@ -426,6 +445,7 @@ export {
   isPartitionReserved,
   openParticipantTransactionStore,
   participantOutcomeOf,
+  participantStoreConnectionStateOf,
   readParticipantTransactionRow,
   readPreparedParticipantIds,
   readPartitionWriteGeneration,

@@ -331,10 +331,12 @@ test('End-to-end SQL workflow integration tests', async (t) => {
       // Track CDC events
       const cdcEvents = [];
       let committedIndex = 0;
-      partition.subscribeToCDC((event) => {
-        cdcEvents.push(event);
+      // The durable subscriber contract: one vector of owed events per call,
+      // answered over that exact vector.
+      partition.subscribeToCDC((events) => {
+        cdcEvents.push(...events);
         committedIndex += 1;
-        return buildCommittedCdcOutcome([event], 'mg-1', {index: committedIndex, term: 1});
+        return buildCommittedCdcOutcome(events, 'mg-1', {index: committedIndex, term: 1});
       });
 
       // Insert

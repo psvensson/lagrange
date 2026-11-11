@@ -10,7 +10,6 @@ import {
   PRE_SYNC_WORKFLOW_STEPS,
   PRIORITY_CONTROL_PLANE_REMOVE_LANE_WORKFLOW_STEPS_BY_TYPE,
   PRIORITY_DISPATCH_TRANSITION_MUTATION_STEPS,
-  PRIORITY_OUTCOME_DEFERRED_LOCAL_PROGRESS_TYPES_BY_STEP,
   PRIORITY_RECOVERY_INCOMPLETE_OPERATION_STEP_ORDER,
   PRIORITY_RECOVERY_INCOMPLETE_OPERATION_VISIBILITY_STEPS,
   PRIORITY_RECOVERY_OPERATION_DRAIN_WORKFLOW_STEPS,
@@ -18,7 +17,6 @@ import {
   REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS,
   isActiveReplaceSourceRemovalPhase,
   isIncompleteOperationRowStep,
-  isPriorityOutcomeDeferredLocalProgressCovered,
   resolveOperationTransitionReason,
 } from '../../src/rebalancer/replica-operation-step-policy.js';
 
@@ -35,28 +33,17 @@ test('CL-029 lineage rows keep their sealed memberships', (t) => {
   t.strictSame(
     [...PRIORITY_DISPATCH_TRANSITION_MUTATION_STEPS].sort(),
     [WORKFLOW_STEP.CREATING, WORKFLOW_STEP.SENDING].sort());
-  t.ok(PRIORITY_OUTCOME_DEFERRED_LOCAL_PROGRESS_TYPES_BY_STEP
-    .get(WORKFLOW_STEP.ACTIVE).has(OperationType.REPLACE));
-  t.ok(PRIORITY_OUTCOME_DEFERRED_LOCAL_PROGRESS_TYPES_BY_STEP
-    .get(WORKFLOW_STEP.STOPPING).has(OperationType.REMOVE));
-  t.notOk(PRIORITY_OUTCOME_DEFERRED_LOCAL_PROGRESS_TYPES_BY_STEP
-    .get(WORKFLOW_STEP.STOPPING).has(OperationType.ADD));
-  t.notOk(PRIORITY_OUTCOME_DEFERRED_LOCAL_PROGRESS_TYPES_BY_STEP
-    .has(WORKFLOW_STEP.REMOVED),
-  'terminal steps deliberately absent: REMOVED converges via completeOperation');
   t.end();
 });
 
-test('deferred-local-progress predicate mirrors the table', (t) => {
-  t.ok(isPriorityOutcomeDeferredLocalProgressCovered(
-    OperationType.REPLACE, WORKFLOW_STEP.ACTIVE));
-  t.ok(isPriorityOutcomeDeferredLocalProgressCovered(
-    OperationType.REMOVE, WORKFLOW_STEP.STOPPING));
-  t.notOk(isPriorityOutcomeDeferredLocalProgressCovered(
-    OperationType.ADD, WORKFLOW_STEP.ACTIVE));
-  t.notOk(isPriorityOutcomeDeferredLocalProgressCovered(
-    OperationType.REPLACE, WORKFLOW_STEP.CREATING),
-  'CREATING takes the mutation-budget lane, not this table');
+// SUPERSEDED (R09): the deferred-local-progress table and its predicate
+// (quest formation-ledger-self-move-blocks-cluster-ops) are deleted. No step
+// may be shown before its row commits, so there is no coverage row to pin.
+test('no step-coverage row grants owner-local progress', async (t) => {
+  const policy = await import(
+    '../../src/rebalancer/replica-operation-step-policy.js');
+  t.notOk('PRIORITY_OUTCOME_DEFERRED_LOCAL_PROGRESS_TYPES_BY_STEP' in policy);
+  t.notOk('isPriorityOutcomeDeferredLocalProgressCovered' in policy);
   t.end();
 });
 

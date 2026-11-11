@@ -51,7 +51,10 @@ import {
   readReplaceCompletionAuthority,
   replaceRetirementRouteOf,
 } from './operation-workflow-replace-surviving-membership.js';
-import {isPartitionReplaceOwnerPhase} from './replica-operation-step-policy.js';
+import {
+  evaluateRemovalLeadershipSafety,
+  isRemovalSubjectCorroboratedLeader,
+} from './operation-workflow-removal-leadership-gate.js';
 import {
   deliverToReplaceWitness, deliveryUnavailableReason, replaceAnswerStatus,
   readReplaceWitnessMembership,
@@ -135,6 +138,9 @@ const REPLACE_WAIT_REASON = Object.freeze({
   TARGET_DEAD_WITNESS_UNAVAILABLE: 'target_dead_witness_unavailable',
   REMOVAL_INTENT_NOT_DURABLE: 'removal_intent_not_durable',
   EFFECT_REVALIDATION_MOVED: 'effect_revalidation_inputs_moved',
+  // The corroborated leader is the source: no RemoveNode is proposed through
+  // it; the removal leadership gate hands its leadership off first.
+  SOURCE_LEADS: 'source_leads_handoff_pending',
   // BR12: the owner's copy is a deferred-visibility snapshot.
   DEFERRED_VISIBILITY: 'deferred_visibility_snapshot',
   // A former step or operation budget elapsed while no other wait was
@@ -572,6 +578,12 @@ async function reconcileReplaceStoppingOwner(owner, operation, context = {}) {
     return waitForReplaceOwner(owner, operation,
       VERDICT_WAIT_REASON[decision.verdict], waitContext);
   }
+  if (isRemovalSubjectCorroboratedLeader(owner, operation,
+    decision.observation)) {
+    // Leadership moved onto the source: no RETIRE through it; the gate's
+    // named handoff leaves and the owner waits until a survivor leads.
+    return handOffLeadingSource(owner, operation, waitContext);
+  }
   const sourceRow = await observeReplaceSourceRow(owner, operation);
   if (sourceRow.state === STOPPING_OBSERVATION_UNAVAILABLE) {
     return waitForReplaceOwner(owner, operation,
@@ -602,6 +614,18 @@ async function reconcileReplaceStoppingOwner(owner, operation, context = {}) {
   await redriveReplaceSourceRetirement(owner, operation, decision.observation);
   return waitForReplaceOwner(owner, operation,
     REPLACE_WAIT_REASON.SOURCE_MEMBERSHIP_REMOVAL_PENDING, rowContext);
+}
+
+// The source leads at STOPPING: the gate decides (an attempt out waits for
+// its resolution); its handoff leaves; the owner waits on the one wake.
+async function handOffLeadingSource(owner, operation, waitContext) {
+  const evaluation = await evaluateRemovalLeadershipSafety(owner, operation);
+  if (evaluation?.handoffRequest) {
+    await owner.dispatchRemoveSafetyHandoffRequest(operation,
+      evaluation.handoffRequest);
+  }
+  return waitForReplaceOwner(owner, operation,
+    REPLACE_WAIT_REASON.SOURCE_LEADS, waitContext);
 }
 
 function waitAdmission(reason, witness = null) {
@@ -698,17 +722,6 @@ async function adoptObservedReplaceSourceRetirement(owner, operation) {
 }
 
 /**
- * S9 (ACTIVE: no time bound) and D2 (after durable intent: no timer-driven
- * FAILED): no elapsed-time budget may end a partition REPLACE at ACTIVE or
- * STOPPING; the budget becomes this diagnostic.
- * @param {Object} operation
- * @return {boolean}
- */
-function isReplaceExemptFromTimeBudget(operation) {
-  return isPartitionReplaceOwnerPhase(operation);
-}
-
-/**
  * Record an exhausted budget of a time-exempt REPLACE as its bounded
  * diagnostic (severity only, never a state change).
  * @param {Object} owner
@@ -774,7 +787,6 @@ export {
   clearReplaceOwnerState,
   decideReplaceCompletion,
   isPartitionReplace,
-  isReplaceExemptFromTimeBudget,
   isReplaceRemovalIntentDurable,
   isTargetFailureDetectorDead,
   readReplaceOwnerDiagnostic,

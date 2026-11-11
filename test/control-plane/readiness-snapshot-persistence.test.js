@@ -30,6 +30,31 @@ import {
 import {
   OPERATION_METADATA_KEY,
 } from '../../src/rebalancer/replica-status.js';
+import {LoggingService} from '../../src/logging/logging-service.js';
+import {READINESS_EVIDENCE_MESSAGE} from
+  '../../src/rebalancer/operation-readiness-evidence-log.js';
+
+// The field old rows may still carry in their history entries.
+const RETIRED_HISTORY_READINESS_FIELD = 'readinessSnapshot';
+
+// Collect the console-only readiness evidence lines written while `body`
+// runs.
+async function captureReadinessEvidence(body) {
+  const loggingService = LoggingService.getInstance();
+  const original = loggingService.logConsoleOnly;
+  const lines = [];
+  loggingService.logConsoleOnly = (_level, message, context) => {
+    if (message === READINESS_EVIDENCE_MESSAGE) {
+      lines.push(context);
+    }
+  };
+  try {
+    await body();
+  } finally {
+    loggingService.logConsoleOnly = original;
+  }
+  return lines;
+}
 import {
   RebalanceCoordinator as ProductionRebalanceCoordinator,
 } from '../../src/rebalancer/rebalance-coordinator.js';
@@ -354,9 +379,9 @@ test('admission result includes readinessSnapshots per candidate node',
     );
   });
 
-// --- RebalanceCoordinator persists readiness snapshot in stepsHistory ---
+// --- RebalanceCoordinator logs readiness evidence, stores none in history ---
 
-test('coordinator createOperation persists readiness snapshot in initial step',
+test('coordinator createOperation logs its readiness evidence and stores none in history',
   async (t) => {
     initializeConfig();
     const targetNodeId = 'node-target-1';
@@ -430,10 +455,13 @@ test('coordinator createOperation persists readiness snapshot in initial step',
     coordinator.initialize();
 
     try {
-      const operation = await coordinator.createOperation({
-        type: 'ADD',
-        partitionId: 'partition-1',
-        nodeId: targetNodeId,
+      let operation;
+      const creationEvidence = await captureReadinessEvidence(async () => {
+        operation = await coordinator.createOperation({
+          type: 'ADD',
+          partitionId: 'partition-1',
+          nodeId: targetNodeId,
+        });
       });
 
       t.ok(operation, 'operation created');
@@ -466,21 +494,24 @@ test('coordinator createOperation persists readiness snapshot in initial step',
         'stepsHistory has entries',
       );
 
-      const initialStep = persistedStepsHistory[0];
-      t.ok(
-        initialStep[OPERATION_METADATA_KEY.READINESS_SNAPSHOT],
-        'initial step has readinessSnapshot',
+      // The readiness decision evidence is an observation: it is logged
+      // console-only at creation and never stored in the operation row.
+      t.notOk(
+        persistedStepsHistory.some((entry) =>
+          RETIRED_HISTORY_READINESS_FIELD in entry),
+        'no persisted history entry carries a readiness snapshot',
       );
+      const createdEvidence = creationEvidence.find((line) =>
+        line.operationId === operation.operationId);
+      t.ok(createdEvidence, 'the creation logged its readiness evidence');
+      t.equal(createdEvidence.workflowStep, WORKFLOW_STEP.PENDING,
+        'keyed by operation and step');
       t.equal(
-        initialStep[OPERATION_METADATA_KEY.READINESS_SNAPSHOT][
-          READINESS_SNAPSHOT_KEY.NODE_ID
-        ],
+        createdEvidence.readinessSnapshot[READINESS_SNAPSHOT_KEY.NODE_ID],
         targetNodeId,
       );
       t.same(
-        initialStep[OPERATION_METADATA_KEY.READINESS_SNAPSHOT][
-          READINESS_SNAPSHOT_KEY.REASON_CODES
-        ],
+        createdEvidence.readinessSnapshot[READINESS_SNAPSHOT_KEY.REASON_CODES],
         ['test_reason'],
       );
     } finally {
@@ -767,9 +798,9 @@ test('dispatch service emits failure event when target is not ready',
     );
   });
 
-// --- Coordinator updateStep persists readiness snapshot ---
+// --- Coordinator updateStep logs readiness evidence at the committed step ---
 
-test('coordinator updateStep persists readiness snapshot in step entry',
+test('coordinator updateStep logs readiness evidence and stores none in the step entry',
   async (t) => {
     initializeConfig();
     const targetNodeId = 'node-step-target';
@@ -838,22 +869,33 @@ test('coordinator updateStep persists readiness snapshot in step entry',
         stepsHistory: [{step: WORKFLOW_STEP.PENDING, timestamp: Date.now()}],
       };
 
-      await coordinator.updateStep(operation, WORKFLOW_STEP.SENDING);
+      const stepEvidence = await captureReadinessEvidence(() =>
+        coordinator.updateStep(operation, WORKFLOW_STEP.SENDING));
 
       t.ok(lastPersistedHistory, 'stepsHistory was persisted');
       const sendingEntry = lastPersistedHistory.find(
         (e) => e.step === WORKFLOW_STEP.SENDING,
       );
       t.ok(sendingEntry, 'SENDING step entry exists');
-      t.ok(
-        sendingEntry[OPERATION_METADATA_KEY.READINESS_SNAPSHOT],
-        'SENDING step has readinessSnapshot',
+      t.notOk(
+        RETIRED_HISTORY_READINESS_FIELD in sendingEntry,
+        'the SENDING entry carries no readiness snapshot',
       );
-      t.equal(
-        sendingEntry[OPERATION_METADATA_KEY.READINESS_SNAPSHOT][
-          READINESS_SNAPSHOT_KEY.NODE_ID
-        ],
-        targetNodeId,
+      t.equal(stepEvidence.length, 1,
+        'the committed step logged one readiness evidence line');
+      t.same(
+        {
+          operationId: stepEvidence[0].operationId,
+          workflowStep: stepEvidence[0].workflowStep,
+          nodeId: stepEvidence[0].readinessSnapshot[
+            READINESS_SNAPSHOT_KEY.NODE_ID],
+        },
+        {
+          operationId: operation.operationId,
+          workflowStep: WORKFLOW_STEP.SENDING,
+          nodeId: targetNodeId,
+        },
+        'keyed by operation and step, with the target\'s readiness',
       );
     } finally {
       await coordinator.shutdown();

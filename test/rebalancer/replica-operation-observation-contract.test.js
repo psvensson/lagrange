@@ -481,3 +481,34 @@ test(
     );
   },
 );
+
+test(
+  'ReplicaOperationRepository normalizes partition_cleanup receipt rows into workflow removal lifecycle',
+  async (t) => {
+    const repository = createRepository();
+    t.equal(
+      repository.normalizeObservedReplicaLifecycle({
+        service_id: TEST_REPLICA_ID,
+        replica_id: TEST_REPLICA_ID,
+        partition_id: TEST_PARTITION_ID,
+        node_id: TEST_NODE_ID,
+        service_type: 'partition_cleanup',
+        status: 'cleanup_owned',
+      }),
+      ReplicaStatus.REMOVING,
+      'cleanup_owned partition_cleanup row normalizes to REMOVING',
+    );
+    t.equal(
+      repository.normalizeObservedReplicaLifecycle({
+        service_id: TEST_REPLICA_ID,
+        replica_id: TEST_REPLICA_ID,
+        partition_id: TEST_PARTITION_ID,
+        node_id: TEST_NODE_ID,
+        service_type: 'partition_cleanup',
+        status: 'cleanup_complete',
+      }),
+      ReplicaStatus.REMOVED,
+      'cleanup_complete partition_cleanup receipt normalizes to REMOVED',
+    );
+  },
+);

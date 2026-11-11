@@ -1,4 +1,7 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {
+  createReplicaOperationsCasStore,
+} from './durable-step-authority-fixture.js';
 export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
   registerCase,
   dependencies,
@@ -179,9 +182,17 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
         ],
       ]);
 
+      // The status/step UPDATE is the shared CAS store's, routed before the
+      // read match its WHERE would otherwise hit.
+      const operationCasStore = createReplicaOperationsCasStore({
+        readRow: (operationId) => operationRows.get(operationId) || null,
+      });
       const sqlQueryEngine = {
         async executeQuery(sql, params = []) {
           const normalizedSql = String(sql);
+          if (operationCasStore.isStepUpdate(normalizedSql)) {
+            return operationCasStore.apply(normalizedSql, params);
+          }
           if (
             normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT) &&
         normalizedSql.includes('WHERE operation_id = ?')
@@ -207,20 +218,6 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
               row.target_node_id === TEST_TARGET_NODE_ID,
                 )
                 .map((row) => ({...row})),
-              affectedRows: 1,
-            };
-          }
-          if (normalizedSql.startsWith('UPDATE replica_operations SET')) {
-            const operationRow = operationRows.get(params[7]);
-            operationRow.status = params[0];
-            operationRow.workflow_step = params[1];
-            operationRow.updated_at = params[2];
-            operationRow.completed_at = params[NUM.THREE];
-            operationRow.error_message = params[NUM.FOUR];
-            operationRow.steps_history = params[NUM.FIVE];
-            operationRow.replica_id = params[NUM.SIX];
-            return {
-              success: true,
               affectedRows: 1,
             };
           }
@@ -361,9 +358,18 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
         entity_id: TEST_PARTITION_ID,
       };
 
+      // The status/step UPDATE is the shared CAS store's, routed before the
+      // read match its WHERE would otherwise hit.
+      const operationCasStore = createReplicaOperationsCasStore({
+        readRow: (operationId) =>
+          operationId === TEST_OPERATION_ID ? operationRow : null,
+      });
       const sqlQueryEngine = {
         async executeQuery(sql, params = []) {
           const normalizedSql = String(sql);
+          if (operationCasStore.isStepUpdate(normalizedSql)) {
+            return operationCasStore.apply(normalizedSql, params);
+          }
           if (
             normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT) &&
         normalizedSql.includes('WHERE operation_id = ?')
@@ -537,9 +543,18 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
         entity_id: TEST_PARTITION_ID,
       };
 
+      // The status/step UPDATE is the shared CAS store's, routed before the
+      // read match its WHERE would otherwise hit.
+      const operationCasStore = createReplicaOperationsCasStore({
+        readRow: (operationId) =>
+          operationId === TEST_OPERATION_ID ? operationRow : null,
+      });
       const sqlQueryEngine = {
         async executeQuery(sql, params = []) {
           const normalizedSql = String(sql);
+          if (operationCasStore.isStepUpdate(normalizedSql)) {
+            return operationCasStore.apply(normalizedSql, params);
+          }
           if (
             normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT) &&
         normalizedSql.includes('WHERE operation_id = ?')
@@ -721,9 +736,18 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
         entity_id: TEST_PARTITION_ID,
       };
 
+      // The status/step UPDATE is the shared CAS store's, routed before the
+      // read match its WHERE would otherwise hit.
+      const operationCasStore = createReplicaOperationsCasStore({
+        readRow: (operationId) =>
+          operationId === TEST_OPERATION_ID ? operationRow : null,
+      });
       const sqlQueryEngine = {
         async executeQuery(sql, params = []) {
           const normalizedSql = String(sql);
+          if (operationCasStore.isStepUpdate(normalizedSql)) {
+            return operationCasStore.apply(normalizedSql, params);
+          }
           if (
             normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT) &&
         normalizedSql.includes('WHERE operation_id = ?')

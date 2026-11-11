@@ -15,6 +15,7 @@ import {
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {UnifiedRebalancer} from '../../src/rebalancer/unified-rebalancer.js';
 import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
+import {buildServeCohortAnswerFromNodeRows} from './priority-spread-release-condition-fixture.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
@@ -322,6 +323,15 @@ function createMockControlPlaneReadinessService(options = {}) {
         nodeRows: readNodeRows(),
       };
     },
+    // The committed serve record's cohort answer, from the same node rows
+    // and liveness projection as the rest of this mock.
+    answerServeCohort: (nodeIds) => buildServeCohortAnswerFromNodeRows({
+      nodeIds,
+      nodeRows: readNodeRows(),
+      isNodeRowEligible: (nodeRow) => project(nodeRow).readyNow === true,
+      absentNodeEligible: defaultRepairEligible,
+      readAtMs: now(),
+    }),
     getNodeReadinessSync(nodeId) {
       if (readinessByNodeId[nodeId]) return readinessByNodeId[nodeId];
       const nodeRow = readNodeRows().find((row) => row.node_id === nodeId);
@@ -707,6 +717,7 @@ function answerFixtureReplaceWitness(cache, payload) {
       String(sourceRow?.status || '').toLowerCase());
   const leader = fixtureWitnessLeader(cache, partitionId, rows,
     payload[ReplicaOperationField.REPLICA_ID]);
+
   return {
     status: ReplicaOperationResponseStatus.COMPLETED,
     [ReplicaOperationField.MEMBERSHIP]: {

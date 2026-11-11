@@ -1,4 +1,7 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {TRANSPORT_ERROR_MSG} from '../../src/constants/transport.js';
+import {ROUTER_MESSAGE_TIMEOUT_ERROR_CODE} from
+  '../../src/transport/transport-error-codes.js';
 const TEST_PENDING_RESPONSE_REPLACE_TEST_NAME =
   'critical REPLACE source-removal pending response timeout stays retryable';
 const TEST_PENDING_RESPONSE_PARTITION_ID =
@@ -28,7 +31,6 @@ export async function registerReplaceReplicaWorkflowSourceRemovalRetryTests({
   ReplicaStatus,
   ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
-  ROUTER_ERROR_MSG,
   createTestCoordinator,
   TEST_REPLACE_REMOVE_SAFETY_BLOCKED,
   TEST_PRIORITY_SPREAD_PENDING,
@@ -71,7 +73,9 @@ export async function registerReplaceReplicaWorkflowSourceRemovalRetryTests({
         }
         if (sourceRemovalTimeoutPending) {
           sourceRemovalTimeoutPending = false;
-          throw new Error(ROUTER_ERROR_MSG.PENDING_RESPONSE_TIMEOUT);
+          // The router's spent-lifetime refusal, by its typed code alone.
+          throw Object.assign(new Error(TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT),
+            {code: ROUTER_MESSAGE_TIMEOUT_ERROR_CODE});
         }
         return buildDeliveryEnvelope({acknowledged: true}, {
           status: ReplicaOperationResponseStatus.INITIATED,
@@ -301,7 +305,9 @@ export async function registerReplaceReplicaWorkflowSourceRemovalRetryTests({
               partition_id: 'control_plane_publications-p1',
               node_id: 'node-a',
               status: ReplicaStatus.ACTIVE,
-              raft_role: 'leader',
+              // Not the group's leader (2026-11-11 removal leadership gate: a
+              // leading source is handed off first; this cell stubs that gate).
+              raft_role: 'follower',
               address: 'node-a/partition/control_plane_publications-p1-r1',
             },
             {
@@ -530,7 +536,9 @@ export async function registerReplaceReplicaWorkflowSourceRemovalRetryTests({
               partition_id: 'control_plane_publications-p1',
               node_id: 'node-a',
               status: ReplicaStatus.ACTIVE,
-              raft_role: 'leader',
+              // Not the group's leader (2026-11-11 removal leadership gate: a
+              // leading source is handed off first; this cell stubs that gate).
+              raft_role: 'follower',
               address: 'node-a/partition/control_plane_publications-p1-r1',
             },
             {

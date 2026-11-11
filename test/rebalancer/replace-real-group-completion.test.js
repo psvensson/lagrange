@@ -106,6 +106,11 @@ const FAIL_OPERATION_CALLER_FILES = Object.freeze([
   'operation-workflow-recovery-status-reconcile.js',
   'operation-workflow-replace-owner.js',
   'operation-workflow-stopping-starvation.js',
+  // Durable-first step writes: a step write typed permanent, and an owed
+  // step write whose operation budget is spent, settle through the same
+  // failure owner; its post-intent admission stays authoritative for REPLACE.
+  'operation-workflow-transition-orchestration.js',
+  'operation-workflow-transition-retry.js',
 ]);
 const FAILURE_FACADE_FILE = 'rebalance-coordinator-owner-facade.js';
 const FAILURE_LANE_FILE = 'operation-workflow-owner-execution-lane.js';
@@ -524,10 +529,14 @@ test('P1 edge (target status REMOVED after the intent): with the target ' +
   }
 });
 
+// Re-premised 2026-11-11 (R09, universal removal leadership rule): an
+// ordinary partition's LEADING source now gets the one named handoff like
+// every partition's, so "leadership is not moved first" is the follower
+// source under a third leader (retained, no handoff). Assertions unchanged.
 test('P1 (ordinary partition, no handoff): the same implication holds ' +
   'where leadership is not moved first', async (t) => {
   const world = await openReplaceWorld({partitionId: ORDINARY_PARTITION_ID,
-    sourceHandler: true});
+    sourceLeads: false, sourceHandler: true});
   try {
     world.currentEdge = 'ordinary';
     await driveToIntent(world);

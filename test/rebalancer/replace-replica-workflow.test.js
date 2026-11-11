@@ -16,7 +16,6 @@ import {
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from '../../src/rebalancer/operation-workflow-owner-shared.js';
-import {ROUTER_ERROR_MSG} from '../../src/constants/transport.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
 import {MoveType} from '../../src/rebalancer/unified-rebalancer.js';
 import {createTestCoordinator, createTestRebalancer} from './test-helpers.js';
@@ -985,7 +984,6 @@ test('REPLACE replica workflow', async (t) => {
     ReplicaStatus,
     ReplicaOperationMessageType,
     ReplicaOperationResponseStatus,
-    ROUTER_ERROR_MSG,
     createTestCoordinator,
     TEST_REPLACE_REMOVE_SAFETY_BLOCKED,
     TEST_PRIORITY_SPREAD_PENDING,

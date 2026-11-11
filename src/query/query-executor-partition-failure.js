@@ -62,7 +62,7 @@ function isOutcomeLeaderUnavailable(executor, failure) {
     typeof outcome.errorCode === QUERY_EXECUTOR_LITERAL.STRING_STRING ?
       outcome.errorCode :
       null;
-  return Boolean(executor.isLeaderUnavailable(errorMessage, errorCode));
+  return Boolean(executor.isLeaderUnavailable(errorMessage, errorCode, outcome));
 }
 
 function resolveRetryableLeaderFailureRetryAfterMs({

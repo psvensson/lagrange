@@ -3,6 +3,7 @@ import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {
   OPERATION_LEDGER_PLACEMENT_OBSERVATION_STATE,
   getAuthoritativeOperationLedgerPlacementObservation,
+  logOperationLedgerQuorumSpreadHoldNotEngaged,
 } from './operation-ledger-quorum-concentration.js';
 import {
   OPERATION_LEDGER_DEPENDENT_ADMITTING_CLEAR_OUTCOMES,
@@ -464,8 +465,14 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
       this.systemTableCache,
     );
     if (engagedHold === null) {
+      this.ledgerQuorumSpreadNotEngagedKey =
+        logOperationLedgerQuorumSpreadHoldNotEngaged(this.logger,
+          REBALANCE_COORDINATOR_LOG_MSG
+            .OPERATION_LEDGER_QUORUM_SPREAD_HOLD_NOT_ENGAGED,
+          this.systemTableCache, this.ledgerQuorumSpreadNotEngagedKey);
       return;
     }
+    this.ledgerQuorumSpreadNotEngagedKey = null;
     if (
       await this.isOperationLedgerQuorumSpreadAuthoritativelyConfirmed(
         engagedHold,

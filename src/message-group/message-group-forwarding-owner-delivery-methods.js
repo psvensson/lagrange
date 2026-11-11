@@ -7,6 +7,7 @@ import {copyCdcEventMetadata} from '../cdc/cdc-event-envelope.js';
 import {cdcRelaySendDepth} from './message-group-service-runtime-support.js';
 import {OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE} from '../transport/transport-error-codes.js';
 import {deliveryTransportOf, TRANSPORT_DELIVERY_OUTCOME_REASON_CODE, deliveryReadingOf,
+  classifyThrownDeliveryError, deliveryReasonOfReading,
   isDeferredTransportDeliveryOutcome, isDeliveredTransportDeliveryOutcome} from
   '../transport/transport-semantic-outcome.js';
 
@@ -38,7 +39,6 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
   const num = options.num || {};
   const serviceType = options.serviceType || {};
   const tables = options.tables || {};
-  const transportErrorMsg = options.transportErrorMsg || {};
   const typeofToken = options.typeofToken || {};
   const forwardTopologyRepairWorkloadClass =
     options.forwardTopologyRepairWorkloadClass;
@@ -320,7 +320,16 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
       return true;
     },
 
+    // `deliveryResult` is the delivery reading (deliveryReadingOf) or a thrown
+    // error's transport outcome. A spent delivery suppresses the target only
+    // when the target's router never acknowledged it (ack_timeout): an
+    // answer_timeout says the leader accepted the forward and is alive, and
+    // an unestablished_timeout accuses no target.
     shouldSuppressForwardTarget(deliveryResult, errorMessage) {
+      if (deliveryReasonOfReading(deliveryResult) ===
+          TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.ACK_TIMEOUT) {
+        return true;
+      }
       if (
         typeof errorMessage !== typeofToken.STRING ||
         errorMessage.length === num.ZERO
@@ -332,7 +341,6 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
           deliveryResult,
           errorMessage,
         ) ||
-        errorMessage === transportErrorMsg.MESSAGE_TIMEOUT ||
         errorMessage.includes(messageGroupForwardingOwnerLiteral.ENOTFOUND) ||
         errorMessage.includes(messageGroupForwardingOwnerLiteral.EAI_AGAIN) ||
         errorMessage.includes(messageGroupForwardingOwnerLiteral.ECONNREFUSED) ||
@@ -370,8 +378,8 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
       const original = {tableName, operation, data, ...copyCdcEventMetadata(options)};
       if (requiresDurableCdcForwarding([original], options)) {
         return this.forwardDurableCdcPayload({
-          type: messageGroupApplicationMessageType.LATENCY_CDC_PROPAGATION,
-          ...original, sourceNodeId: service.nodeId,
+          type: messageGroupApplicationMessageType.LATENCY_CDC_PROPAGATION_BATCH,
+          events: [original], sourceNodeId: service.nodeId,
         }, options);
       }
       const eventTimestamp =
@@ -724,7 +732,8 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
         } catch (error) {
           const shouldRepairTopology =
             service.shouldRepairForwardTopology(error?.message || null);
-          if (service.shouldSuppressForwardTarget(null, error?.message || null)) {
+          if (service.shouldSuppressForwardTarget(
+            classifyThrownDeliveryError(error), error?.message || null)) {
             service.suppressForwardTarget({
               serviceId: target.serviceId,
               address: leaderAddress,

@@ -121,11 +121,6 @@ function captureCdcForwardRequest(service, payload, batch) {
   return {payload, incoming, durable, context};
 }
 
-function exactForwardPayload(payload, events) {
-  return payload.type === MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE.LATENCY_CDC_PROPAGATION_BATCH ?
-    {...payload, events} : {...payload, ...events[0]};
-}
-
 function forwardEventContext(service, events, options) {
   const event = arrayFind(events, (item) =>
     service.shouldUseStrictCDCForwarding(item)) ?? events[0];
@@ -264,7 +259,10 @@ function createMessageGroupForwardingOwnerNativeDeliveryMethods() {
       const context = readCdcForwardContext(service,
         combinedCdcForwardContext(payload, incomingOptions));
       const options = {...incomingOptions, ...context, ...budget};
-      const events = captureCdcEvents(arrayIsArray(payload.events) ? payload.events : [payload]);
+      // A durable vector travels only as the batch message.
+      if (payload.type !== MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE.LATENCY_CDC_PROPAGATION_BATCH ||
+          !arrayIsArray(payload.events)) throw cdcDeliveryBudgetError(CDC_COMPLETION.INVALID);
+      const events = captureCdcEvents(payload.events);
       assertCdcTerminalEvents(events, context);
       if (context.cdcForwardMode === MESSAGE_GROUP_CDC_FORWARD_MODE.NATIVE_COMMIT ||
           context.relayDepth >= CDC_FORWARD_MAX_RELAY_DEPTH) return unknownCdcAcceptance();
@@ -274,8 +272,7 @@ function createMessageGroupForwardingOwnerNativeDeliveryMethods() {
           errorMessage: MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN}, options);
         decision = this.resolveCdcIngressDecision(forwardEventContext(service, events, options));
       }
-      return this.deliverDurableCdcDecision(decision, exactForwardPayload(payload, events),
-        events, options);
+      return this.deliverDurableCdcDecision(decision, {...payload, events}, events, options);
     },
 
     async deliverDurableCdcDecision(decision, payload, events, options) {

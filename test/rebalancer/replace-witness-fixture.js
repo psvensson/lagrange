@@ -34,12 +34,47 @@ const PORT_OUTCOME_PROPOSED = 'PROPOSED';
  * @param {number} [options.appliedLag=0] - How far the answered applied
  *   index trails the commit index (F-3: a configuration applied below the
  *   commit index).
+ * @param {Object} [options.viewByReplicaId] - Per-replica overrides of the
+ *   answered {leaderReplicaId, term}: one replica's own (stale) view.
  * @param {string[]|null} [options.voters] - The committed voters the answer
  *   carries (fix-f7 corroboration). Without it the answer names the leader
  *   alone: the double has no group, so its leader corroborates itself; the
  *   real-group harness is the corroboration witness.
  * @return {Object} The witness double.
  */
+// The witness's answer to one READ_REPLICA_MEMBERSHIP: its view of the
+// addressed replica, or an error while it is unavailable.
+function answerMembershipRead(witness, payload) {
+  if (!witness.available) {
+    return {status: ReplicaOperationResponseStatus.ERROR,
+      error: 'witness unavailable'};
+  }
+  const addressed = payload[ReplicaOperationField.REPLICA_ID];
+  const view = witness.viewByReplicaId[addressed] ?? {};
+  const leaderReplicaId = witness.addressedLeads ? addressed :
+    (Object.hasOwn(view, 'leaderReplicaId') ?
+      view.leaderReplicaId : witness.leaderReplicaId);
+  return {
+    status: ReplicaOperationResponseStatus.COMPLETED,
+    [ReplicaOperationField.MEMBERSHIP]: {
+      state: witness.sourceVoter ?
+        PARTITION_REPLICA_MEMBERSHIP_STATE.VOTER :
+        PARTITION_REPLICA_MEMBERSHIP_STATE.ABSENT,
+      replicaId: payload[ReplicaOperationField.REPLICA_ID],
+      partitionId: payload[ReplicaOperationField.PARTITION_ID],
+      term: view.term ?? witness.term,
+      commitIndex: witness.commitIndex,
+      appliedIndex: witness.commitIndex - witness.appliedLag,
+      gateOpen: witness.gateOpen,
+      leaderReplicaId,
+      voterReplicaIds: witness.voters ??
+        (leaderReplicaId ? [leaderReplicaId] : []),
+      votersOutgoingReplicaIds: [],
+      transferWindowMaxMs: witness.transferWindowMaxMs,
+    },
+  };
+}
+
 export function createReplaceWitness(options = {}) {
   const witness = {
     leaderReplicaId: options.leaderReplicaId ?? null,
@@ -49,6 +84,9 @@ export function createReplaceWitness(options = {}) {
     commitIndex: options.commitIndex ?? DEFAULT_COMMIT_INDEX,
     appliedLag: options.appliedLag ?? 0,
     voters: options.voters ?? null,
+    // What one replica's own port answers where it differs from the group's
+    // ({leaderReplicaId, term} by replica id): a stale or deposed view.
+    viewByReplicaId: options.viewByReplicaId ?? {},
     // The witness's participation gate (O1): open unless a test holds it
     // below its gate.
     gateOpen: options.gateOpen !== false,
@@ -74,32 +112,7 @@ export function createReplaceWitness(options = {}) {
       const type = payload?.[ReplicaOperationField.TYPE];
       if (type === ReplicaOperationMessageType.READ_REPLICA_MEMBERSHIP) {
         witness.reads.push(payload);
-        if (!witness.available) {
-          return {status: ReplicaOperationResponseStatus.ERROR,
-            error: 'witness unavailable'};
-        }
-        const leaderReplicaId = witness.addressedLeads ?
-          payload[ReplicaOperationField.REPLICA_ID] :
-          witness.leaderReplicaId;
-        return {
-          status: ReplicaOperationResponseStatus.COMPLETED,
-          [ReplicaOperationField.MEMBERSHIP]: {
-            state: witness.sourceVoter ?
-              PARTITION_REPLICA_MEMBERSHIP_STATE.VOTER :
-              PARTITION_REPLICA_MEMBERSHIP_STATE.ABSENT,
-            replicaId: payload[ReplicaOperationField.REPLICA_ID],
-            partitionId: payload[ReplicaOperationField.PARTITION_ID],
-            term: witness.term,
-            commitIndex: witness.commitIndex,
-            appliedIndex: witness.commitIndex - witness.appliedLag,
-            gateOpen: witness.gateOpen,
-            leaderReplicaId,
-            voterReplicaIds: witness.voters ??
-              (leaderReplicaId ? [leaderReplicaId] : []),
-            votersOutgoingReplicaIds: [],
-            transferWindowMaxMs: witness.transferWindowMaxMs,
-          },
-        };
+        return answerMembershipRead(witness, payload);
       }
       if (type === ReplicaOperationMessageType.RETIRE_REPLICA_PEER) {
         witness.retirements.push(payload);

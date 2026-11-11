@@ -13,7 +13,6 @@ const LOCAL_STR_OV8OK = 'Distributed operation failed due to participant failure
 const LOCAL_STR_CONNECTION_TO_NODE = 'Connection to node';
 const LOCAL_STR_CLOSED = 'closed';
 const LOCAL_STR_10U11 = 'No connection to node';
-const LOCAL_STR_MESSAGE_TIMEOUT = 'Message timeout';
 const LOCAL_STR_1Y4H5 = 'Query routing failed';
 const LOCAL_STR_10811 = 'Failed to forward write to leader';
 const LOCAL_STR_10NUJ = 'control-plane:write';
@@ -122,7 +121,6 @@ export {
   LOCAL_STR_CONNECTION_TO_NODE,
   LOCAL_STR_CLOSED,
   LOCAL_STR_10U11,
-  LOCAL_STR_MESSAGE_TIMEOUT,
   LOCAL_STR_1Y4H5,
   LOCAL_STR_10811,
   LOCAL_STR_10NUJ,

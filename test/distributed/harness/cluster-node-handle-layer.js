@@ -1,4 +1,7 @@
 import {CLUSTER_CONTROL_SNAPSHOT_ADMIN_LAYER} from './cluster-control-snapshot-admin-layer.js';
+import {
+  decodeNodeHostFacts, decodeProcessLoad, processDiagnosticsUnavailableError,
+} from './run-health/resource-sample-contract.js';
 import {ADMIN_ROUTE} from '../../../src/admin/admin-constants.js';
 import {requestDiagnosticMarker, requestPostgresWireScale, requestTablePolicyUpdate} from
   './cluster-node-owner-operations.js';
@@ -81,13 +84,10 @@ const ADMIN_QUERY_CONNECTION_RESET_PREFIX =
   'Admin API query connection reset for node ';
 const ADMIN_QUERY_CONNECTION_RESET_LANE_TEXT = ' on lane ';
 const SUPPRESSED_BEST_EFFORT_ERROR_INCREMENT = 1;
-const PROCESS_RESOURCE_DIAGNOSTICS_UNAVAILABLE_PREFIX =
-  'Process resource diagnostics unavailable for node ';
 const PROCESS_RESOURCE_DIAGNOSTICS_INVALID_PREFIX =
   'Process resource diagnostics invalid for node ';
 const numberConstructor = Number;
 const numberIsFinite = Number.isFinite;
-const stringConstructor = String;
 
 function requiredProcessResourceCounter(value, nodeId, field) {
   const numeric = numberConstructor(value);
@@ -157,6 +157,8 @@ function normalizeProcessResourceDiagnostics(body, expectedNodeId) {
         'arrayBuffersBytes',
       ),
     },
+    host: decodeNodeHostFacts(latest),
+    load: decodeProcessLoad(processSnapshot),
   };
 }
 
@@ -383,7 +385,10 @@ class NodeHandle {
 
       const timeout = setTimeout(() => {
         pendingQueries.delete(queryId);
-        if (this._adminSocketByLane.get(lane) === ws) {
+        if (
+          pendingQueries.size === ZERO &&
+          this._adminSocketByLane.get(lane) === ws
+        ) {
           this._resetAdminSocket(lane);
         }
         rejectWithOutcome(
@@ -1058,10 +1063,7 @@ class NodeHandle {
       response?.status < HTTP_OK_LOWER ||
       response?.status > HTTP_OK_UPPER
     ) {
-      throw new Error(
-        PROCESS_RESOURCE_DIAGNOSTICS_UNAVAILABLE_PREFIX + this.id +
-          ' (status=' + stringConstructor(response?.status) + ')',
-      );
+      throw processDiagnosticsUnavailableError(this.id, response?.status);
     }
     return normalizeProcessResourceDiagnostics(response.body, this.id);
   }

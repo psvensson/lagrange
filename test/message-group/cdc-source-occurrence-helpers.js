@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import {RAFT_RS_ENTRY_TYPE} from '../../src/raft/raft-rs-ready-loop-constants.js';
 import {
+  PARTITION_SERVICE_CDC,
   PARTITION_SERVICE_OPERATION,
   PARTITION_COMMITTED_COMMAND_OUTCOME,
 } from '../../src/partition/partition-service-constants.js';
@@ -93,7 +94,11 @@ async function writeReleasedSql(producer, leader, sql, params, entryId, tableNam
   return debt;
 }
 
-function buildDualBridgeSubscribers(f, tableName, partitionId) {
+// The two production propagation bridges (the seed's SeedRuntimeBridgeOwner
+// and the joiner's NodeJoiningPublicationActivation) as subscribers of one
+// source partition. A partition holds one propagation subscriber: a witness
+// registers one of them, and may replace it with the other.
+function buildBridgeSubscribers(f, tableName, partitionId) {
   const cache = f.source.systemTableCache;
   f.tree = new LatencyTreeService({nodeId: NODE_A, systemTableCache: cache});
   f.tree.initialize();
@@ -111,7 +116,7 @@ function buildDualBridgeSubscribers(f, tableName, partitionId) {
   f.subscribersReady = false;
 
   const topologyBundle = {cdcGroupPropagationService: f.topology};
-  const seedBridge = new SeedRuntimeBridgeOwner({
+  const seedBridgeOwner = new SeedRuntimeBridgeOwner({
     delegates: {getLatencyTopology: () => topologyBundle},
   });
   const joiningContext = {latencyTopology: topologyBundle};
@@ -133,7 +138,8 @@ function buildDualBridgeSubscribers(f, tableName, partitionId) {
       resolveOperationalMessageGroupSelection: select,
       resolveOperationalMessageGroupSelectionAsync: selectAsync,
       buildMessageGroupOwnerNotReadyError,
-      beforePropagation: (event) => {
+      // The hooks receive the vector; these witnesses stage one-member vectors.
+      beforePropagation: ([event]) => {
         f.events.push({
           ordinal: f.events.length,
           phase: f.phase,
@@ -143,20 +149,23 @@ function buildDualBridgeSubscribers(f, tableName, partitionId) {
           entryId: event.entryId,
         });
       },
-      propagatePartitionCDCEvent: async (service, event, deliveryContext) => {
+      // The durable subscriber contract hands propagation one vector; its
+      // return is recorded under the vector's first event and all its keys.
+      propagatePartitionCDCEvent: async (service, events, deliveryContext) => {
         assert.equal(service, f.source);
-        const result = await propagateFn(service, event, deliveryContext);
+        const result = await propagateFn(service, events, deliveryContext);
         f.events.push({
           ordinal: f.events.length,
           phase: f.phase,
           kind: 'subscriber-return',
           subscriber: label,
-          eventKey: event.eventKey,
+          eventKey: events[0].eventKey,
+          eventKeys: events.map((event) => event.eventKey),
           result: structuredClone(result),
         });
         return result;
       },
-      afterPropagation: (event) => {
+      afterPropagation: ([event]) => {
         f.events.push({
           ordinal: f.events.length,
           phase: f.phase,
@@ -167,37 +176,35 @@ function buildDualBridgeSubscribers(f, tableName, partitionId) {
       },
     });
 
-  const subSeed = makeSubscriber('seed-bridge', (service, event, ctx) =>
-    seedBridge.propagatePartitionCDCEvent(service, event, ctx),
+  const seedBridge = makeSubscriber('seed-bridge', (service, events, ctx) =>
+    seedBridgeOwner.propagatePartitionCDCEvent(service, events, ctx),
   );
-  const subJoin = makeSubscriber('joining-bridge', (service, event, ctx) =>
+  const joiningBridge = makeSubscriber('joining-bridge', (service, events, ctx) =>
     NodeJoiningPublicationActivation.prototype.propagatePartitionCDCEvent.call(
       joiningContext,
       service,
-      event,
+      events,
       ctx,
     ),
   );
-  return {subSeed, subJoin};
+  return {seedBridge, joiningBridge};
 }
 
+// Register the partition's propagation subscriber (as production does) with
+// the selection held, then let the handshake's eager drive settle.
 async function subscribeWithoutEagerDrive(f, subscriber, subscriberId) {
   const prevReady = f.subscribersReady;
   f.subscribersReady = false;
-  await f.producerLeader.subscribeToCDCWithHandshake(subscriber, {subscriberId});
-  for (
-    let round = 0;
-    round < 30 && f.producerLeader.cdcDelivery.obligationLane.inFlight === true;
-    round += 1
-  ) {
+  const handshake = await f.producerLeader.subscribeToCDCWithHandshake(subscriber,
+    {subscriberId, role: PARTITION_SERVICE_CDC.SUBSCRIBER_ROLE_PROPAGATION});
+  assert.notEqual(handshake.status, PARTITION_SERVICE_CDC.HANDSHAKE_STATUS_PROPAGATION_HELD,
+    `the partition holds no other propagation subscriber: ${handshake.holderSubscriberId}`);
+  const laneInFlight = () =>
+    f.producerLeader.cdcDelivery.getCdcObligationDiagnostics().inFlight;
+  for (let round = 0; round < 30 && laneInFlight() === true; round += 1) {
     await pumpMulti(f, 1);
   }
-  assert.equal(
-    f.producerLeader.cdcDelivery.obligationLane.inFlight,
-    false,
-    'handshake eager drive settled within bounded rounds',
-  );
-  f.producerLeader.cdcDelivery.obligationLane.currentObligation = null;
+  assert.equal(laneInFlight(), false, 'handshake eager drive settled within bounded rounds');
   f.subscribersReady = prevReady;
 }
 
@@ -205,6 +212,6 @@ export {
   commandOf,
   assertEnvelope,
   writeReleasedSql,
-  buildDualBridgeSubscribers,
+  buildBridgeSubscribers,
   subscribeWithoutEagerDrive,
 };

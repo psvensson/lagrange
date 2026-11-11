@@ -35,6 +35,7 @@ import {
 import {
   READINESS_ADMISSION_TERM_BIT,
   READINESS_PUBLICATION_REFUSAL_TERM_BIT,
+  describeReadinessAdmissionVariant,
   noteReadinessAdmissionRead,
   noteReadinessAdmissionTerms,
   noteReadinessPublicationOutcome,
@@ -429,6 +430,18 @@ const readinessPlanningCompletionAdmissionMethods = {
         READINESS_ADMISSION_TERM_BIT.live_evidence_veto,
     );
     return reusable;
+  },
+
+  // The admission record of one node read as `options` would make it, for a
+  // consumer's diagnostic (state, failed terms, deferral age).
+  describeAdmission(ownerKey, options, nowMs) {
+    return describeReadinessAdmissionVariant(
+      this,
+      ownerKey,
+      this.captureBuildOptionsKey(ownerKey, options),
+      options?.participationKind,
+      nowMs,
+    );
   },
 
   // State what this read served and why, and hand the answer straight back.

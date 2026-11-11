@@ -10,7 +10,7 @@ import {
   shouldAttachPartitionCdcPropagation,
 } from './shared/cdc-propagation-filter.js';
 import {
-  buildPartitionCdcPropagationSubscriber,
+  registerPartitionCdcPropagation,
 } from './shared/partition-cdc-propagation-subscriber.js';
 import {assertCritical} from '../utils/assert.js';
 import {trackReplicaRegistrationSweep} from '../diagnostics/raft-churn-sync-sections.js';
@@ -58,7 +58,6 @@ const OPERATIONAL_CDC_SUBSCRIPTION_NOT_READY_PREFIX =
   'Operational message-group ingress not ready for ';
 const OPERATIONAL_CDC_SUBSCRIPTION_NOT_READY_SUFFIX = ' CDC subscription';
 const BOOTSTRAP_CDC_SUBSCRIBER_PART_PREFIX = 'bootstrap';
-const MESSAGE_GROUP_CDC_SUBSCRIBER_FALLBACK = 'message-group';
 
 function assertBootstrapReplicaActiveState(
   stateMachine,
@@ -195,15 +194,9 @@ function createBootstrapServiceReplicaHandlerRuntimeMethods() {
 
             await subscriptionMessageGroupService.subscribeToCDC(tableName);
 
-            const subscriberId = [
-              BOOTSTRAP_CDC_SUBSCRIBER_PART_PREFIX,
-              this.nodeId,
-              tableName,
-              options.replicaId,
-              subscriptionMessageGroupService?.groupId ||
-                MESSAGE_GROUP_CDC_SUBSCRIBER_FALLBACK,
-            ].join(':');
-            const cdcSubscriber = buildPartitionCdcPropagationSubscriber({
+            const handshake = await registerPartitionCdcPropagation(partition, {
+              role: BOOTSTRAP_CDC_SUBSCRIBER_PART_PREFIX,
+              nodeId: this.nodeId,
               tableName,
               partitionId: options.partitionId,
               replicaId: options.replicaId,
@@ -222,10 +215,10 @@ function createBootstrapServiceReplicaHandlerRuntimeMethods() {
                   selection,
                   errorOptions,
                 ),
-              propagatePartitionCDCEvent: (messageGroupService, cdcEvent, deliveryContext) =>
+              propagatePartitionCDCEvent: (messageGroupService, events, deliveryContext) =>
                 this.seedRuntimeBridgeOwner.propagatePartitionCDCEvent(
                   messageGroupService,
-                  cdcEvent,
+                  events,
                   deliveryContext,
                 ),
               afterPropagation: async () => {
@@ -234,10 +227,6 @@ function createBootstrapServiceReplicaHandlerRuntimeMethods() {
                 }
               },
             });
-            const handshake = await partition.subscribeToCDCWithHandshake(
-              cdcSubscriber,
-              {subscriberId},
-            );
 
             this.logger.debug(BootstrapLog.CDC_DYNAMIC_SUBSCRIPTION, {
               tableName,

@@ -178,6 +178,8 @@ class SQLQueryEngineProvisionTargetMethods {
         partitionId,
         targetNodeIds: resolvedNodeIds,
         schemaJobId: options.schemaJobId,
+        timeoutBudget: options.timeoutBudget || null,
+        cancellationToken,
       });
     }
 

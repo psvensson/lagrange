@@ -21,6 +21,7 @@ import {isBoundMembershipPublicationEpoch} from './replica-operation-membership-
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {buildReplicaCreateAdmissionToken, buildReplicaCreateAttemptToken} from './replica-create-admission-token.js';
 import {bindReplaceCreateTargetReplicaId} from './operation-workflow-replace-target-binding.js';
+import * as DISPATCH_REARM_EVIDENCE from './operation-workflow-dispatch-rearm-evidence.js';
 import {
   isRetainedCreateDeliveryResolution,
   resolveAmbiguousCreateDeliveryFailure,
@@ -339,6 +340,30 @@ function noteReplaceSourceRemovalEffect(
   if (replaceRemoveDispatchPhase && isPartitionReplace(operation)) {
     recordReplaceSourceRemovalEffect(owner, operation, response);
   }
+}
+
+// R14: a REMOVE whose effect the durable rows already show complete is
+// never failed by a later delivery's failure or refusal (a duplicate
+// re-drive answered after the removal finished, an answer lost to the
+// transport). The stop-phase satisfied path completes it; any other REMOVE
+// failure, and every other operation type, fails as before.
+async function failDispatchUnlessRemoveEffectComplete(
+  owner, operation, errorMsg) {
+  if (operation?.type === OperationType.REMOVE) {
+    const observation = await owner.observeStoppingReplicaProgress(
+      operation.replicaId,
+      operation.partitionId,
+      operation.targetNodeId,
+    );
+    if (owner.isStoppingReplicaRemovalObserved(observation)) {
+      return owner.handleStopPhaseSatisfiedResponse(
+        operation,
+        ReplicaOperationResponseStatus.COMPLETED,
+      );
+    }
+  }
+  await owner.failOperation(operation, errorMsg);
+  return owner.buildFailedOperationResult(operation.operationId, errorMsg);
 }
 
 const DISPATCH_RESPONSE_RECONCILE_METHODS = {
@@ -815,8 +840,8 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
         );
       }
       if (!retainedCreateDeliveryResolution) {
-        await this.failOperation(operation, errorMsg);
-        return this.buildFailedOperationResult(operation.operationId, errorMsg);
+        return failDispatchUnlessRemoveEffectComplete(
+          this, operation, errorMsg);
       }
     }
     if (
@@ -829,10 +854,13 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
     if (!retainedCreateDeliveryResolution &&
         !isDeliveredTransportDeliveryOutcome(transport)) {
       const errorLike = transport;
-      const errorMsg = this.normalizeErrorMessage(
-        errorLike,
-        REBALANCE_COORDINATOR_ERROR_MSG.MESSAGE_NOT_ACKED,
-      );
+      // The outcome's own text, else its own reason code (an acknowledged
+      // ROUTER_HANDLER_FAILED is handler_failed, never "not acked"). The
+      // transport owner computes a reason code for every outcome that is not
+      // delivered (resolveTransportDeliveryReasonCode), so it is the one
+      // authority here and no local text stands in for it.
+      const errorMsg = this.normalizeErrorMessage(errorLike,
+        transport.reasonCode);
       const ambiguousCreateResult =
         await resolveAmbiguousCreateDeliveryFailure(
           this,
@@ -859,8 +887,8 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
         );
       }
       if (!retainedCreateDeliveryResolution) {
-        await this.failOperation(operation, errorMsg);
-        return this.buildFailedOperationResult(operation.operationId, errorMsg);
+        return failDispatchUnlessRemoveEffectComplete(
+          this, operation, errorMsg);
       }
     }
     while (true) {
@@ -1004,8 +1032,12 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
         },
       );
     }
-    await this.failOperation(operation, errorMsg);
-    return this.buildFailedOperationResult(operation.operationId, errorMsg);
+    return failDispatchUnlessRemoveEffectComplete(this, operation, errorMsg);
+  },
+  // The one owner accessor of an operation's armed retries.
+  readOperationRetryArmedState(operationId) {
+    return DISPATCH_REARM_EVIDENCE.readOperationRetryArmedState(
+      this, operationId);
   },
   buildCreateSatisfiedReplaceResumeDecision(operation) {
     const operationId = operation?.operationId || null;
@@ -1019,19 +1051,12 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
         WORKFLOW_STEP.STOPPING,
       ) :
       false;
-    const safetyRetryArmed = operationId ?
-      this.safetyDeferredRetryTimerByOperationId.has(operationId) :
-      false;
-    const dispatchRetryArmed = operationId ?
-      this.dispatchRetryTimerByOperationId.has(operationId) :
-      false;
-    const activeReplaceRetryArmed = operationId ?
-      this.priorityActiveReplaceRetryTimerByOperationId.has(operationId) :
-      false;
-    const transitionRetryArmed =
-      Boolean(operationId) &&
-      (this.transitionRetryTimerByOperationId.has(operationId) ||
-        this.hasActiveTransitionRetryGrace(operationId));
+    const {
+      safetyRetryArmed,
+      dispatchRetryArmed,
+      activeReplaceRetryArmed,
+      transitionRetryArmed,
+    } = this.readOperationRetryArmedState(operationId);
     const shouldResume =
       replaceRemovePhase &&
       locallyOwned &&
@@ -1053,17 +1078,15 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
   },
   ensurePriorityActiveReplaceRetryArmed(operation) {
     const operationId = operation?.operationId || null;
+    const armed = this.readOperationRetryArmedState(operationId);
     if (
       operation?.workflowStep !== WORKFLOW_STEP.ACTIVE ||
       operation?.type !== OperationType.REPLACE ||
       !classifySystemPartition({partitionId: operation?.partitionId})
         .priorityControlPlane ||
       !this.repository.isOperationLocallyOwned(operation) ||
-      this.safetyDeferredRetryTimerByOperationId.has(operationId) ||
-      this.dispatchRetryTimerByOperationId.has(operationId) ||
-      this.transitionRetryTimerByOperationId.has(operationId) ||
-      this.hasActiveTransitionRetryGrace(operationId) ||
-      this.priorityActiveReplaceRetryTimerByOperationId.has(operationId)
+      armed.retryWakeArmed ||
+      armed.transitionRetryArmed
     ) {
       return;
     }
@@ -1276,6 +1299,7 @@ const {
   executeOperationFromReconcilePath,
   executeOperationInternal,
   handleCreatePhaseSatisfiedResponse,
+  readOperationRetryArmedState,
   reconcileCreateInProgressDispatchResponse,
   resolveCreateInProgressDispatchResponseStatus,
   shouldBoundReplicaOperationDispatch,
@@ -1292,6 +1316,7 @@ export {
   executeOperationFromReconcilePath,
   executeOperationInternal,
   handleCreatePhaseSatisfiedResponse,
+  readOperationRetryArmedState,
   reconcileCreateInProgressDispatchResponse,
   resolveCreateInProgressDispatchResponseStatus,
   shouldBoundReplicaOperationDispatch,

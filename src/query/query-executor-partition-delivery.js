@@ -517,6 +517,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               this.isLeaderUnavailable(
                 redirectFailureMessage,
                 redirectResponse?.errorCode,
+                redirectResponse,
               )
             ) {
               widenWriteCandidate(response.leaderAddress);
@@ -590,7 +591,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           }
           if (
             !forRead &&
-            this.isLeaderUnavailable(errorMessage, response?.errorCode)
+            this.isLeaderUnavailable(errorMessage, response?.errorCode, response)
           ) {
             recordCandidateFailure(
               errorMessage,
@@ -605,6 +606,8 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           // §1.12: For reads, treat transient failures as reasons
           // to try the next candidate rather than hard-failing.
           if (forRead) {
+            candidateState.observeCandidateTransportOutcome(
+              serviceInfo, deliveryTransportOf(delivery));
             this.logger.debug(QUERY_LOG_MSG.READ_CANDIDATE_TRANSIENT_FAILURE, {
               partitionId,
               address,
@@ -694,6 +697,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             this.isLeaderUnavailable(
               errorMessage,
               classifyThrownDeliveryError(error).errorCode,
+              classifyThrownDeliveryError(error),
             )
           ) {
             recordCandidateFailure(
@@ -709,6 +713,8 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           // §1.12: For reads, catch transient transport errors
           // and try the next candidate.
           if (forRead) {
+            candidateState.observeCandidateTransportOutcome(
+              serviceInfo, classifyThrownDeliveryError(error));
             this.logger.debug(QUERY_LOG_MSG.READ_CANDIDATE_TRANSIENT_FAILURE, {
               partitionId,
               address,

@@ -9,11 +9,21 @@ import {
 import {
   normalizeKnownNodeBootIncarnation,
 } from '../control-plane/control-plane-error-classification.js';
+import {isWriteOutcomeUnknown} from '../partition/partition-write-kernel.js';
 import {ADMIN_WEBSOCKET_API_SHARED} from './admin-websocket-api-shared.js';
 import {AdminWebSocketAPIBase} from './admin-websocket-api-base.js';
 import {
   ADMIN_WEBSOCKET_LOCAL_OBSERVATION_METHODS,
 } from './admin-websocket-local-observation-methods.js';
+
+// The query layer states an unknown write outcome on the failure itself, or
+// on its participants (buildParticipantFailureEntry keeps failureCode).
+function hasUnknownWriteOutcome(value) {
+  return isWriteOutcomeUnknown(value) ||
+    isWriteOutcomeUnknown(value.firstFailedParticipant) ||
+    (Array.isArray(value.participantFailures) &&
+      value.participantFailures.some(isWriteOutcomeUnknown));
+}
 
 const LOCAL_STR_SERVE_NOT_READY_LOAD_LANE_ADMISSION_DENI = 'serve not ready: load lane admission denied on node ';
 const LOCAL_STR_SERVEELIGIBLE = ' (serveEligible=';
@@ -744,6 +754,14 @@ class AdminWebSocketLoadLaneAdmission extends AdminWebSocketAPIBase {
    */
   isRetryableLoadLaneExecutionFailure(value = null) {
     if (!value || typeof value !== 'object') {
+      return false;
+    }
+    // A write whose outcome is unknown may have committed: only a
+    // re-delivery under its own entryId resolves it, never a client re-issue
+    // of the statement. It is surfaced as the typed unknown outcome, even when
+    // the delivery it replaced asked to be deferred (deferRetry says "retry
+    // later", not "nothing was applied").
+    if (hasUnknownWriteOutcome(value)) {
       return false;
     }
     if (value.deferRetry === true) {

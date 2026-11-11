@@ -687,7 +687,10 @@ const REBALANCER_PLANNING_GATE_METHODS = {
       UNIFIED_REBALANCER_LITERAL.THOUSAND :
       NUM.FIVE * UNIFIED_REBALANCER_LITERAL.THOUSAND;
 
+    // A planning-target readiness wake (one per failed pass) checks at the
+    // publication that answers the deferred read, ahead of the floor.
     if (
+      !this.consumePlanningTargetReadinessWakeDue() &&
       this.lastCheckAtMs &&
       now - this.lastCheckAtMs < minInterval
     ) {

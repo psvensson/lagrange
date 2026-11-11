@@ -94,8 +94,9 @@ test('split snapshot backfill reaches a foreground turn inside its original budg
       for (const partition of [source, left, right]) {
         await resumeFixtureParticipantAdmission(partition);
       }
-      left.subscribeToCDC((event) => childCdcEvents.push(event));
-      right.subscribeToCDC((event) => childCdcEvents.push(event));
+      // The durable subscriber contract hands each subscriber a vector.
+      left.subscribeToCDC((events) => childCdcEvents.push(...events));
+      right.subscribeToCDC((events) => childCdcEvents.push(...events));
       source.sqlQueryEngine = {
         queryExecutor: {
           async executeOnPartition(

@@ -39,7 +39,12 @@ function serviceRow(index) {
     node_id: `node-${index}`,
     service_type: 'partition',
     status: 'active',
-    raft_role: index === 1 ? 'leader' : 'follower',
+    // The removed replica (r1) is a follower: these cells are about the
+    // policy floor and its retained retry, not leadership; a leading r1
+    // would be held by the removal leadership gate (2026-11-11) for a
+    // named transfer this fixture group (no voters beyond its leader)
+    // cannot model.
+    raft_role: index === 2 ? 'leader' : 'follower',
     address: `node-${index}/partition/${PARTITION}-r${index}`,
   };
 }

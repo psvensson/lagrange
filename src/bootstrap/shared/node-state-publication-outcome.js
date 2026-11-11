@@ -43,7 +43,6 @@ const NODE_STATE_PUBLICATION_OWNER_LITERAL = Object.freeze({
   NO_CONNECTION_TO_NODE: 'No connection to node',
   CONNECTION_TO_NODE: 'Connection to node',
   CLOSED: 'closed',
-  MESSAGE_TIMEOUT: 'Message timeout',
   NO_HANDLER_REGISTERED_FOR_ADDRESS: 'No handler registered for address',
   FAILED_CLUSTER_MESH_RECONCILIATION:
     'Failed to reconcile cluster mesh during node-state publication',
@@ -118,6 +117,9 @@ function buildNodeStateUpdateDeliveryError(deliveryOutcome, targetAddress) {
   );
   if (typeof deliveryOutcome?.errorCode === 'string') {
     deliveryError.code = deliveryOutcome.errorCode;
+  }
+  if (deliveryOutcome?.acknowledgement !== undefined) {
+    deliveryError.acknowledgement = deliveryOutcome.acknowledgement;
   }
   if (deliveryOutcome?.deferRetry === true) {
     deliveryError.deferRetry = true;

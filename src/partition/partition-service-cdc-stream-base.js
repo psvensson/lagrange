@@ -552,7 +552,7 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
   /**
    * Resolve a stable subscriber identifier.
    * Delegates to partition-cdc-delivery.js.
-   * @param {Function|Object} subscriber - Subscriber.
+   * @param {Function} subscriber - Subscriber.
    * @param {Object} options - Subscription options.
    * @return {string} Stable subscriber identifier.
    * @private
@@ -561,9 +561,9 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
     return this.cdcDelivery.resolveCDCSubscriberId(subscriber, options);
   }
   /**
-   * Deliver one CDC event to a subscriber callback/object.
+   * Deliver one CDC event to a subscriber callback.
    * Delegates to partition-cdc-delivery.js.
-   * @param {Function|Object} subscriber - Subscriber callback/object.
+   * @param {Function} subscriber - Subscriber callback.
    * @param {Object} cdcEvent - Event payload.
    * @return {Promise<void>}
    * @private
@@ -574,7 +574,7 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
   /**
    * Create a wrapper that enriches stream metadata for one subscriber.
    * Delegates to partition-cdc-delivery.js.
-   * @param {Function|Object} subscriber - Target subscriber.
+   * @param {Function} subscriber - Target subscriber.
    * @param {Object} subscriptionState - Mutable state for this subscriber.
    * @return {Function} Wrapper callback.
    * @private
@@ -588,7 +588,7 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
   /**
    * Subscribe to CDC with explicit handshake acknowledgment and catch-up.
    * Delegates to partition-cdc-delivery.js.
-   * @param {Function|Object} subscriber - Subscriber function or object.
+   * @param {Function} subscriber - Subscriber callback.
    * @param {Object} [options] - Handshake options.
    * @param {string} [options.subscriberId] - Stable subscriber identifier.
    * @return {Promise<Object>} Handshake acknowledgment.
@@ -599,7 +599,7 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
   /**
    * Subscribe to CDC events from this partition.
    * Delegates to partition-cdc-delivery.js.
-   * @param {Function|Object} subscriber - Subscriber function or object.
+   * @param {Function} subscriber - Subscriber callback.
    */
   subscribeToCDC(subscriber) {
     this.cdcDelivery.subscribeToCDC(subscriber);
@@ -607,7 +607,7 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
   /**
    * Unsubscribe from CDC events.
    * Delegates to partition-cdc-delivery.js.
-   * @param {Function|Object} subscriber - Subscriber to remove.
+   * @param {Function} subscriber - Subscriber to remove.
    */
   unsubscribeFromCDC(subscriber) {
     this.cdcDelivery.unsubscribeFromCDC(subscriber);

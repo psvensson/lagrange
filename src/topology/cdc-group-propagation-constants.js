@@ -68,6 +68,9 @@ const CDC_GROUP_PROPAGATION_LOG_MSG = Object.freeze({
   STARTED: 'CDCGroupPropagationService started',
   STOPPED: 'CDCGroupPropagationService stopped',
   RETRYING_DELIVERY_FAILURES: 'Retrying CDC propagation delivery failures',
+  DURABLE_WAVE_FINISHED: 'CDC durable wave finished',
+  DURABLE_WAVE_REFUSED: 'CDC durable wave refused',
+  TARGET_SKIPPED: 'CDC target skipped',
 });
 
 const CDC_GROUP_PROPAGATION_ERROR_MSG = Object.freeze({

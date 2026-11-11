@@ -6,9 +6,9 @@ import {
 import {
   QueryExecutorCanonicalLeaderRoutingMethods,
 } from './query-executor-canonical-leader-routing-methods.js';
+import {isDeliveryTimeoutReading} from '../transport/transport-semantic-outcome.js';
 
 const {
-  COLUMN,
   CONTROL_PLANE_READ_PURPOSE,
   CONTROL_PLANE_READ_LEADER_MODE,
   CONTROL_PLANE_WRITE_RETRY_DECISION_STATE,
@@ -17,7 +17,6 @@ const {
   QUERY_EXECUTOR_ROUTING_OPTION_FIELD,
   QUERY_ROUTING_REPAIR_REASON,
   SYSTEM_TABLE_NAMES,
-  TRANSPORT_ERROR_MSG,
   isRetryableControlPlaneError,
   normalizeParticipantRetryAfterMs,
 } = QUERY_EXECUTOR_SHARED;
@@ -380,18 +379,25 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
 
   /**
    * Check if an error indicates missing partition leadership.
+   * A spent delivery is read from the transport owner's typed reading: the
+   * ACK and the answer timeout mean the same here (the leader is not
+   * confirmed; the write is re-routed under its unchanged entryId, so an
+   * acknowledged-and-executed attempt is never applied twice).
    * @param {string} errorMessage - Error message.
+   * @param {string|null} errorCode - Error code.
+   * @param {Object|null} reading - The delivery reading (deliveryReadingOf)
+   *   or the thrown error's transport outcome.
    * @return {boolean} True if leader is unavailable.
    * @private
    */
-  isLeaderUnavailable(errorMessage, errorCode = null) {
-    if (errorCode === QUERY_EXECUTOR_LITERAL.STRING_ROUTER_CONNECTION_CLOSED) {
+  isLeaderUnavailable(errorMessage, errorCode = null, reading = null) {
+    if (errorCode === QUERY_EXECUTOR_LITERAL.STRING_ROUTER_CONNECTION_CLOSED ||
+        isDeliveryTimeoutReading(reading)) {
       return true;
     }
     return (
       errorMessage &&
       (isReroutableWriteError(errorMessage) ||
-        errorMessage.includes(TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT) ||
         errorMessage.includes(ERRORS.NO_HANDLER_FOR_ADDRESS) ||
         (errorMessage.includes(
           QUERY_EXECUTOR_LITERAL.STRING_CONNECTION_TO_NODE,
@@ -415,7 +421,6 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
   resolvePartitionTableName(partitionId) {
     const partition = this.getPartitionRecord(partitionId);
     const tableName =
-      partition?.[COLUMN.TABLE_NAME] ??
       partition?.table_name ??
       partition?.tableName ??
       partition?.table_id ??

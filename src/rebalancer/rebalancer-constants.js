@@ -148,6 +148,8 @@ const REBALANCER_LOG_MSG = Object.freeze({
   STABILIZATION_RESET: 'State change recorded, resetting stabilization timer',
   SKIP_TRANSITIONAL: 'Replicas in transition, skipping move calculation',
   SKIP_PENDING: 'Pending moves exist, skipping move calculation',
+  PRIORITY_SPREAD_PLAN_DECISION:
+    'Priority spread plan decision: cure evidence and chosen REPLACE source',
   SKIP_REMOVE_REMOVING: 'Skipping REMOVE for replica already in removing state',
   SKIP_ADD_TRANSITIONAL: 'Skipping ADD for node with transitional replica',
   DEFER_ADD_DEGRADED:
@@ -166,6 +168,9 @@ const REBALANCER_LOG_MSG = Object.freeze({
   SKIP_BATCH_UNREADY: 'Skipping moves for unready node',
   NODE_DISCONNECTED_BATCH: 'Node disconnected during batch execution',
   NOT_LEADER_SKIP: 'Not leader, skipping rebalance',
+  LEADERSHIP_LOST_DURING_REBALANCE:
+    'Leadership lost during a rebalance pass; nothing further is planned ' +
+    'or executed',
   NO_AVAILABLE_NODES: 'Skipping rebalance - no available nodes in cache',
   NO_REBALANCE_NEEDED: 'No rebalancing needed',
   MESSAGE_GROUP_MEMBERSHIP_CHANGE_PARKED:
@@ -191,6 +196,8 @@ const REBALANCER_LOG_MSG = Object.freeze({
     'Deferring non-system rebalancing until priority control-plane partitions spread',
   WAIT_CONTROL_PLANE_PRIORITY_STABILITY:
     'Deferring non-system rebalancing until priority control-plane placement remains stable',
+  PRIORITY_SPREAD_FENCE_RELEASED:
+    'Released non-system rebalancing after priority control-plane placement remained stable',
   WAIT_TRANSPORT_BACKPRESSURE:
     'Waiting for local transport backpressure to clear before planning',
   PRIORITY_RECOVERY_PLANNING_GATE_DIAGNOSTIC:
@@ -308,6 +315,8 @@ const REBALANCE_COORDINATOR_LOG_MSG = Object.freeze({
   OPERATION_LEDGER_QUORUM_SPREAD_HOLD:
     'Operation-ledger quorum concentrated on one node; deferring dependent ' +
     'operation admission until the ledger spreads',
+  OPERATION_LEDGER_QUORUM_SPREAD_HOLD_NOT_ENGAGED:
+    'Operation-ledger quorum-spread hold evaluated and not engaged',
   PRIORITY_RECOVERY_DRAIN_SETTLED:
     'Priority recovery drain settled operation',
   STEPS_HISTORY_PARSE_ERROR: 'Failed to parse steps_history JSON',

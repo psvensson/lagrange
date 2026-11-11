@@ -1,6 +1,6 @@
 import {randomUUID} from 'node:crypto';
 import {ERRORS} from '../constants/errors.js';
-import {TRANSPORT_DELIVERY_OUTCOME_REASON_CODE} from
+import {TRANSPORT_DELIVERY_OUTCOME_REASON_CODE, isDeliveryTimeoutTransportOutcome} from
   '../transport/transport-semantic-outcome.js';
 import {
   PARTITION_WRITE_LEADERSHIP_REFUSAL,
@@ -171,8 +171,10 @@ function createUnknownOutcomeRedelivery({entryId, forRead, now}) {
     // never manufacture transport loss or erase an already retained debt.
     observeTransport(outcome) {
       if (forRead || outcome.recoverableBeforeSend === true) return;
+      // A spent lifetime in either wait: an unacknowledged frame may still
+      // have been received and executed, exactly like an unanswered one.
       if (outcome.reasonCode !== TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.CONNECTION_CLOSED &&
-          outcome.reasonCode !== TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT) return;
+          !isDeliveryTimeoutTransportOutcome(outcome)) return;
       state.lostAnswers += 1;
       markUnresolved({state: UNKNOWN_OUTCOME_LOST_ANSWER_STATE,
         reason: outcome.error, logIndex: null});

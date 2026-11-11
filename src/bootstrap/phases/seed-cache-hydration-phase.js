@@ -174,7 +174,7 @@ class SeedCacheHydrationPhase {
       systemTableCache,
       leaderMessageGroup,
       {registerSubscribers: (tableName) =>
-        this.subscribeToInitialSystemTableCDC(tableName)},
+        this.subscribeToInitialSystemTableCDC(tableName, leaderMessageGroup)},
     );
     logger.info(LOG_HYDRATION_STEP_COMPLETE, {
       nodeId: d.getNodeId(),
@@ -543,9 +543,10 @@ class SeedCacheHydrationPhase {
    * Register the CDC subscribers of one initial system table on every local
    * replica of its partition (before that table's hydration image is read).
    * @param {string} tableName
+   * @param {Object} preferredService - The hydration's message group.
    * @return {Promise<void>}
    */
-  async subscribeToInitialSystemTableCDC(tableName) {
+  async subscribeToInitialSystemTableCDC(tableName, preferredService) {
     const partitionId = INITIAL_PARTITION_IDS[tableName];
     const replicaIds = getInitialReplicaIds(tableName) || [];
     if (!partitionId ||
@@ -554,7 +555,7 @@ class SeedCacheHydrationPhase {
     }
 
     await this.subscribeToCDC(
-      tableName, partitionId, replicaIds,
+      tableName, partitionId, replicaIds, preferredService,
     );
   }
 
@@ -563,14 +564,16 @@ class SeedCacheHydrationPhase {
    * @param {string} tableName
    * @param {string} partitionId
    * @param {Array<string>} replicaIds
+   * @param {Object} preferredService - The hydration's message group.
    * @return {Promise<void>}
    */
-  async subscribeToCDC(tableName, partitionId, replicaIds) {
+  async subscribeToCDC(tableName, partitionId, replicaIds, preferredService) {
     return subscribeToHydrationCDC({
       delegates: this.delegates,
       tableName,
       partitionId,
       replicaIds,
+      preferredService,
     });
   }
 
@@ -736,17 +739,17 @@ class SeedCacheHydrationPhase {
   }
 
   /**
-   * Propagate partition CDC via topology-owned propagation path.
+   * Propagate one vector of partition CDC events via the topology-owned
+   * propagation path.
    * @param {Object} messageGroupService
-   * @param {Object} cdcEvent
+   * @param {Array<Object>} events - The durable vector, in log order.
+   * @param {Object} deliveryContext - The delivery invocation.
    * @return {Promise<Object>}
    */
-  async propagatePartitionCDCEvent(
-    messageGroupService, cdcEvent, deliveryContext = null,
-  ) {
+  async propagatePartitionCDCEvent(messageGroupService, events, deliveryContext) {
     return this.runtimeBridgeOwner.propagatePartitionCDCEvent(
       messageGroupService,
-      cdcEvent,
+      events,
       deliveryContext,
     );
   }

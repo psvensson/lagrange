@@ -28,7 +28,8 @@ import {MESSAGE_GROUP_NATIVE_CDC_INGRESS_STATE, defineMessageGroupForwardingOwne
   './message-group-forwarding-owner-routing-methods.js';
 import {normalizeCauseId} from '../utils/cause-id.js';
 import {hasDurableCdcEvents} from '../cdc/cdc-delivery-outcome.js';
-import {TRANSPORT_ERROR_MSG} from '../constants/transport.js';
+import {classifyThrownDeliveryError, isDeliveryTimeoutReading} from
+  '../transport/transport-semantic-outcome.js';
 import {
   FORWARD_TOPOLOGY_REPAIR_OUTCOME,
   MESSAGE_GROUP_CDC_FORWARD_FAILURE_STATE,
@@ -169,16 +170,17 @@ class MessageGroupForwardingOwner {
     if (failure?.deferRetry === true) {
       return true;
     }
-    return this.service.isForwardTargetBackpressured(
-      failure,
-      normalizedErrorMessage,
-    ) ||
+    // A spent delivery (any wait) is read from its typed transport reason.
+    return isDeliveryTimeoutReading(failure) ||
+      this.service.isForwardTargetBackpressured(
+        failure,
+        normalizedErrorMessage,
+      ) ||
       this.isForwardNetworkFailure(normalizedErrorMessage);
   }
 
   isForwardNetworkFailure(normalizedErrorMessage) {
-    return normalizedErrorMessage === TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT ||
-      normalizedErrorMessage.includes(
+    return normalizedErrorMessage.includes(
         MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.ENOTFOUND,
       ) ||
       normalizedErrorMessage.includes(
@@ -208,7 +210,8 @@ class MessageGroupForwardingOwner {
         null;
     if (errorLike?.deferRetry === true ||
         this.isRetryableForwardDeliveryFailure(
-          deliveryResult,
+          deliveryResult ?? (errorLike instanceof Error ?
+            classifyThrownDeliveryError(errorLike) : null),
           errorMessage,
         )) {
       return MESSAGE_GROUP_CDC_FORWARD_FAILURE_STATE.RETRYABLE_DEFER;
@@ -667,7 +670,6 @@ Object.assign(
     serviceType: SERVICE_TYPE,
     state: STATE,
     tables: TABLES,
-    transportErrorMsg: TRANSPORT_ERROR_MSG,
     typeofToken: TYPEOF,
     forwardTopologyRepairWorkloadClass:
       CONTROL_PLANE_WORKLOAD_CLASS.MESSAGE_GROUP_FORWARD_TOPOLOGY_REPAIR,

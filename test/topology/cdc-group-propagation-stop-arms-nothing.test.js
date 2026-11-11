@@ -20,7 +20,7 @@
 // - A propagate call after stop still proposed on the source message group
 //   (round 5, N1).
 // The service has one propagation path, the durable wave: its only held work
-// is the retry delay (sleep) and the in-flight wave (activeDurablePropagation).
+// is the retry delay (sleep) and the in-flight deliveries (activeDurableDeliveries).
 // Deleted with the volatile branch: the batch-window and background-retry
 // lanes (their maps and timers no longer exist).
 //
@@ -77,7 +77,8 @@ import {
   createOwnerWorkLedger,
 } from '../helpers/owner-work-ledger.js';
 import {
-  createDurablePropagationRequest,
+  createDurableCdcEvent,
+  propagateToEveryRecipientAtOnce,
   createDurableSourceMessageGroupService,
   createGroupRow,
   createMessageGroupServiceRow,
@@ -174,7 +175,7 @@ function compose(mode, options = {}) {
 
 function propagate(lane) {
   lane.box = {settled: false};
-  lane.service.propagateCDCEvent(createDurablePropagationRequest(lane.source)).then(
+  propagateToEveryRecipientAtOnce(lane.service, lane.source, [createDurableCdcEvent()]).then(
     (value) => Object.assign(lane.box, {settled: true, value}),
     (error) => Object.assign(lane.box, {settled: true, error}));
 }
@@ -196,11 +197,14 @@ function answerLastCall(lane, answer = REFUSED) {
 async function untilRetryDelay(lane) {
   await untilRouterCalls(lane, 1);
   answerLastCall(lane);
-  for (let turn = 0; turn < TURNS && lane.service.retrySleepReleases.size === 0;
+  // The refused source group and the refused target each hold their own
+  // retry delay: recipients are delivered to side by side.
+  for (let turn = 0; turn < TURNS && lane.service.retrySleepReleases.size < 2;
     turn += 1) {
     await turns(1);
   }
-  assert.equal(lane.service.retrySleepReleases.size, 1, 'the wave holds its retry delay');
+  assert.equal(lane.service.retrySleepReleases.size, 2,
+    'each refused recipient delivery holds its retry delay');
 }
 
 const LANES = [
@@ -220,6 +224,9 @@ const LANES = [
       await turns(3);
       lane.stop();
       lane.heldApply();
+      // Recipients are delivered to side by side: the target's delivery was
+      // in flight too, and its raw work ends when the router answers.
+      for (const call of lane.routerCalls) call.answer(REFUSED);
     }},
   {name: 'propagate (grouped mode), stop while the source group applies',
     mode: LATENCY_PROPAGATION_MODE.GROUPED, async drive(lane) {
@@ -228,6 +235,9 @@ const LANES = [
       await turns(3);
       lane.stop();
       lane.heldApply();
+      // Recipients are delivered to side by side: the target's delivery was
+      // in flight too, and its raw work ends when the router answers.
+      for (const call of lane.routerCalls) call.answer(REFUSED);
     }},
   {name: 'propagate (grouped mode), stop during the target delivery',
     mode: LATENCY_PROPAGATION_MODE.GROUPED, async drive(lane) {
@@ -257,12 +267,13 @@ const LANES = [
     lane.ledger.markTerminal();
     await LatencyTopologySetup.stop({cdcGroupPropagationService: lane.service});
   }},
-  {name: 'two targets, stop while the first is in flight',
+  {name: 'two targets, stop while both are in flight',
     options: {targets: TARGETS}, async drive(lane) {
       propagate(lane);
-      await untilRouterCalls(lane, 1);
+      // Both targets' deliveries are in flight at once (recipient isolation).
+      await untilRouterCalls(lane, 2);
       lane.stop();
-      answerLastCall(lane);
+      for (const call of lane.routerCalls) call.answer(REFUSED);
     }},
 ];
 
@@ -284,7 +295,7 @@ function assertStoppedAnswer(lane) {
 function assertOwnerBookkeepingEmpty(service) {
   assert.deepEqual({
     heldSleeps: service.retrySleepReleases.size,
-    waveInFlight: service.activeDurablePropagation !== null,
+    waveInFlight: service.activeDurableDeliveries.size > 0,
   }, {heldSleeps: 0, waveInFlight: false},
   'the owner holds no wave and no sleep after stop');
 }

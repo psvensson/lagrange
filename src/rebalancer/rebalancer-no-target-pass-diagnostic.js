@@ -1,0 +1,135 @@
+// A rebalance pass that needed a move and executed none, stated once per
+// change of reason (permanent diagnostic), and the named wait it arms when
+// the reason is a deferred planning readiness read.
+//
+// Lab evidence it answers (local three-node formation): 13.7-16 % of the
+// passes that needed a move found no target node, at debug level only. The
+// candidate nodes' planning readiness reads had been DEFERRED (the planning
+// owner's completed record was not current; it queued a rebuild and answered
+// neither ready nor not-ready), and nothing woke the planner when the rebuild
+// published; the next pass was the cadence tick.
+//
+// Explicit-context module: every function takes the rebalancer first.
+import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
+
+const {REBALANCER_RUNTIME_REASON} = UNIFIED_REBALANCER_SHARED;
+
+/**
+ * One candidate node's place in this entity's placement answer.
+ */
+const AVAILABLE_NODE_PLANNING_STATE = Object.freeze({
+  READY: 'ready',
+  NOT_READY: 'not_ready',
+  // The planning readiness owner answered neither ready nor not-ready.
+  DEFERRED: 'deferred',
+  OUT_OF_SCOPE: 'out_of_scope',
+});
+
+const AVAILABLE_NODE_EXCLUSION_REASON = Object.freeze({
+  OUTSIDE_PLACEMENT_SCOPE: 'outside_placement_scope',
+  READINESS_DEFERRED: 'readiness_deferred',
+  DISPATCH_NOT_READY: 'startup_authority_dispatch_not_ready',
+  LIVENESS_NOT_READY: 'liveness_not_ready_now',
+  READINESS_DIMENSION_UNSATISFIED: 'readiness_dimension_unsatisfied',
+});
+
+/**
+ * How a pass that needed a move ended without executing one.
+ */
+const REBALANCE_PASS_NO_MOVE_EXIT = Object.freeze({
+  NO_AVAILABLE_NODES: REBALANCER_RUNTIME_REASON.NO_AVAILABLE_NODES,
+  NO_MOVES_PLANNED: 'no_moves_planned',
+  SERIAL_GATE: 'serial_gate',
+  BUDGET_EXCEEDED: 'budget_exceeded',
+  BUDGET_QUERY_FAILED: 'budget_query_failed',
+  MOVES_NOT_EXECUTED: 'moves_not_executed',
+});
+
+const REBALANCE_PASS_NO_MOVE_LOG_MSG =
+  'Rebalance pass needed a move and executed none';
+const LOGGED_CANDIDATE_LIMIT = 16;
+
+function describeCandidate(rebalancer, candidate, readinessDecisionDimension) {
+  const description = {
+    nodeId: candidate.nodeId,
+    state: candidate.state,
+    reason: candidate.reason,
+  };
+  if (candidate.state !== AVAILABLE_NODE_PLANNING_STATE.DEFERRED) {
+    return description;
+  }
+  const admission = rebalancer.controlPlaneReadinessService
+    ?.describeReadinessPlanningAdmission?.(candidate.nodeId, {
+      decisionDimension: readinessDecisionDimension,
+    }) || null;
+  return {
+    ...description,
+    admissionState: admission?.admissionState ?? null,
+    failedTerms: admission?.failedTerms ?? [],
+    deferredForMs: admission?.deferredForMs ?? null,
+  };
+}
+
+function buildSignature(exit, candidates) {
+  return [exit, ...candidates.map((candidate) =>
+    `${candidate.nodeId}:${candidate.state}:${candidate.reason}`)].join('|');
+}
+
+/**
+ * State one pass that needed a move and executed none, and arm the
+ * planning-target readiness wait when a deferred read is why no target
+ * was found.
+ * @param {Object} rebalancer
+ * @param {Object} pass
+ * @param {string} pass.exit - a REBALANCE_PASS_NO_MOVE_EXIT member
+ * @param {Object|null} pass.nodePlan - resolveAvailableNodePlan's answer
+ * @param {Object} [pass.detail] - exit-specific evidence
+ * @return {{deferredNodeIds: Array<string>, waitArmed: boolean}}
+ */
+function noteRebalancePassWithoutMove(rebalancer, pass) {
+  const candidates = pass.nodePlan?.candidates || [];
+  const deferredNodeIds = candidates
+    .filter((candidate) =>
+      candidate.state === AVAILABLE_NODE_PLANNING_STATE.DEFERRED)
+    .map((candidate) => candidate.nodeId);
+  const awaitsTarget =
+    pass.exit === REBALANCE_PASS_NO_MOVE_EXIT.NO_AVAILABLE_NODES ||
+    pass.exit === REBALANCE_PASS_NO_MOVE_EXIT.NO_MOVES_PLANNED;
+  const waitArmed = awaitsTarget && deferredNodeIds.length > 0 &&
+    rebalancer.armPlanningTargetReadinessWake(deferredNodeIds);
+  const signature = buildSignature(pass.exit, candidates);
+  if (rebalancer.lastNoMovePassSignature !== signature) {
+    rebalancer.lastNoMovePassSignature = signature;
+    const listed = candidates.slice(0, LOGGED_CANDIDATE_LIMIT);
+    rebalancer.logger.info(REBALANCE_PASS_NO_MOVE_LOG_MSG, {
+      entityId: rebalancer.entityId,
+      entityType: rebalancer.entityType,
+      exit: pass.exit,
+      candidates: listed.map((candidate) => describeCandidate(
+        rebalancer, candidate, pass.nodePlan?.readinessDecisionDimension)),
+      candidatesWithheld: candidates.length - listed.length,
+      deferredNodeIds,
+      waitArmed,
+      ...(pass.detail || {}),
+    });
+  }
+  return {deferredNodeIds, waitArmed};
+}
+
+/**
+ * A pass that executed a move ends the no-move episode: the next no-move
+ * pass is stated again even with the same reason.
+ * @param {Object} rebalancer
+ */
+function noteRebalancePassMoved(rebalancer) {
+  rebalancer.lastNoMovePassSignature = null;
+}
+
+export {
+  AVAILABLE_NODE_EXCLUSION_REASON,
+  AVAILABLE_NODE_PLANNING_STATE,
+  REBALANCE_PASS_NO_MOVE_EXIT,
+  REBALANCE_PASS_NO_MOVE_LOG_MSG,
+  noteRebalancePassMoved,
+  noteRebalancePassWithoutMove,
+};

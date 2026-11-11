@@ -1,6 +1,7 @@
 import {
   CONTROL_PLANE_READINESS_REASON,
 } from './control-plane-readiness-constants.js';
+import {collectReasonCodes} from './eligibility-snapshot.js';
 import {
   PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST,
   PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD,
@@ -420,30 +421,21 @@ function resolvePublicationActiveGateHandoffMissingPublishedNodeIds({
   ]);
 }
 
+// A readiness entry states its reason codes in the two shapes its producers
+// write: the readiness owner's `reasons` records, read through that owner's
+// own reading, and the `reasonCodes` list the control snapshot's observation
+// overlay adds (admin-control-snapshot-local-build-base.js).
 function normalizePublicationActiveGateHandoffReasonCodes(readinessEntry) {
   if (!isPublicationActiveGateHandoffRecord(readinessEntry)) {
     return PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST;
   }
+  const overlayReasonCodes =
+    readinessEntry[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.REASON_CODES];
   return normalizePublicationActiveGateHandoffNodeIdList([
-    ...(Array.isArray(
-      readinessEntry[
-        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.REASON_CODES
-      ],
-    ) ?
-      readinessEntry[
-        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.REASON_CODES
-      ] :
+    ...(Array.isArray(overlayReasonCodes) ?
+      overlayReasonCodes :
       PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST),
-    ...(Array.isArray(readinessEntry[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.REASONS]) ?
-      readinessEntry[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.REASONS].map(
-        (reason) =>
-          reason?.[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.CODE] ??
-          reason?.[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.REASON_CODE],
-      ) :
-      PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST),
-    readinessEntry[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.CODE],
-    readinessEntry[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.REASON_CODE],
-    readinessEntry[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.REASON],
+    ...collectReasonCodes(readinessEntry),
   ]);
 }
 

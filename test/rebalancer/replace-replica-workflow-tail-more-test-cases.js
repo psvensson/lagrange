@@ -931,7 +931,9 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
               partition_id: PARTITION_ID,
               node_id: SOURCE_NODE_ID,
               status: ReplicaStatus.ACTIVE,
-              raft_role: 'leader',
+              // Not the group's leader (2026-11-11 removal leadership gate: a
+              // leading source is handed off first; this cell stubs that gate).
+              raft_role: 'follower',
               address: `${SOURCE_NODE_ID}/partition/${SOURCE_REPLICA_ID}`,
             },
             {

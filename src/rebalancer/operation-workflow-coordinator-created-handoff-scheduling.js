@@ -4,6 +4,7 @@ import {
   EXECUTOR_OUTCOME_TYPE,
 } from './executor-outcome-constants.js';
 import {
+  DISPATCH_PENDING_WORKFLOW_STEPS,
   RUNTIME_TARGET_PROGRESS_WAKE_WORKFLOW_STEPS,
   TARGET_CREATE_ACTIVE_REMOTE_OWNER_WAKE_WORKFLOW_STEPS,
 } from './replica-operation-step-policy.js';
@@ -273,6 +274,20 @@ function shouldRetryCoordinatorCreatedRemoteHandoff(
   return isInitialCoordinatorCreatedRemoteHandoffEligible(operation);
 }
 
+// The executor outcome names a step the operation already holds or has
+// moved past, so it carries no progress to hand off.
+function isExecutorOutcomeStepAlreadyReached(owner, operation, outcomeWorkflowStep) {
+  return typeof outcomeWorkflowStep === 'string' &&
+    outcomeWorkflowStep.length > 0 &&
+    (
+      outcomeWorkflowStep === operation?.workflowStep ||
+      owner.isExecutorOutcomeStepBehindOperation?.(
+        operation,
+        outcomeWorkflowStep,
+      ) === true
+    );
+}
+
 function resolveExecutorOutcomeRemoteOwnerHandoffMode(
   owner,
   operation,
@@ -290,12 +305,40 @@ function resolveExecutorOutcomeRemoteOwnerHandoffMode(
   }
   if (
     EXECUTOR_OUTCOME_REMOTE_OWNER_WAKE_TYPES.has(outcomeType) &&
+    !isExecutorOutcomeStepAlreadyReached(owner, operation, outcomeWorkflowStep) &&
     isInitialCoordinatorCreatedRemoteHandoffEligible(operation) &&
     owner.isDispatchRetryableWorkflowStep(operation) === true
   ) {
     return COORDINATOR_CREATED_REMOTE_HANDOFF_MODE.INITIAL_DISPATCH;
   }
   return COORDINATOR_CREATED_REMOTE_HANDOFF_MODE.NONE;
+}
+
+function hasInitialCoordinatorCreatedRemoteHandoffProgressed(
+  operationSnapshot,
+  currentOperation,
+  options = {},
+) {
+  if (
+    options.handoffMode ===
+    COORDINATOR_CREATED_REMOTE_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME
+  ) {
+    return false;
+  }
+  const snapshotStep = readStateField(operationSnapshot?.workflowStep);
+  const currentStep = readStateField(currentOperation?.workflowStep);
+  if (
+    typeof snapshotStep !== 'string' ||
+    snapshotStep.length === 0 ||
+    typeof currentStep !== 'string' ||
+    currentStep.length === 0
+  ) {
+    return false;
+  }
+  if (DISPATCH_PENDING_WORKFLOW_STEPS.has(snapshotStep)) {
+    return !DISPATCH_PENDING_WORKFLOW_STEPS.has(currentStep);
+  }
+  return currentStep !== snapshotStep;
 }
 
 function buildCoordinatorCreatedRemoteHandoffTimeoutDecision(
@@ -565,6 +608,11 @@ function scheduleCoordinatorCreatedRemoteHandoffFollowUp(
         }
         if (
           owner.repository.isOperationTerminal(currentOperation) ||
+          hasInitialCoordinatorCreatedRemoteHandoffProgressed(
+            operationSnapshot,
+            currentOperation,
+            options,
+          ) ||
           !owner.shouldRetryCoordinatorCreatedRemoteHandoff(
             currentOperation,
             options,

@@ -175,7 +175,7 @@ test('applied-position client preserves overall and RPC deadlines without strand
     for (const control of [
       {label: 'rpc', budgetMs: 30000, expectedTimeoutMs: BOUND.REQUEST_TIMEOUT_MS,
         missingFact: 'replica_release_reply',
-        reason: TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT},
+        reason: TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.ANSWER_TIMEOUT},
       {label: 'overall', budgetMs: 1500, expectedTimeoutMs: 1500,
         missingFact: 'release_deadline', reason: undefined},
     ]) {
@@ -373,7 +373,7 @@ test('transport queue delay consumes the carried applied-position RPC window', (
       const answer = await pending;
       assert.equal(answer.outcome, OUTCOME.UNAVAILABLE);
       assert.equal(answer.missingFact, 'replica_release_reply');
-      assert.equal(answer.reason, TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT);
+      assert.equal(answer.reason, TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.ANSWER_TIMEOUT);
       assert.equal(answer.partitionId, request.partitionId);
       assert.equal(answer.phase, request.action);
       assert.equal(answer.releaseId, request.release.releaseId);
@@ -514,7 +514,7 @@ test('one applied-position observation owns duplicate, conflict and successor li
         'a matching joiner settles with the starter without renewing its deadline');
       assert.equal(starterAnswer.missingFact, 'replica_release_reply');
       assert.equal(starterAnswer.reason,
-        TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT);
+        TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.ANSWER_TIMEOUT);
       assert.equal(starterAnswer.partitionId, request.partitionId);
       assert.equal(starterAnswer.phase, request.action);
       assert.equal(starterAnswer.releaseId, request.release.releaseId);
@@ -696,7 +696,7 @@ test('applied-position receiver refuses malformed observation clocks without eff
       assert.equal(answer.outcome, OUTCOME.UNAVAILABLE, JSON.stringify(answer));
       assert.equal(answer.missingFact, 'replica_release_reply');
       assert.equal(answer.reason,
-        TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT);
+        TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.ANSWER_TIMEOUT);
       assert.equal(releaseListenerCount(leader), 0);
       assert.equal(observationTimerOwnedCount(clock), timerBaseline);
     } catch (error) {

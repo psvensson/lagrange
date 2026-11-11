@@ -136,6 +136,50 @@ describe('live query startup wiring', () => {
     assert.equal(cache.listeners.size, 0);
   });
 
+  // A partition of an obligation-recording (system) table delivers durable
+  // vectors that every subscriber must acknowledge with a committed receipt;
+  // a live query registered there could never answer and would hold the
+  // partition's whole delivery lane. The wiring therefore never registers a
+  // live query on such a partition: it observes through the cache.
+  it('never registers a live query on an obligation-recording partition', async () => {
+    const registered = [];
+    const partitionOf = (tableName) => ({
+      tableName,
+      async subscribeToCDCWithHandshake(handler, options) {
+        registered.push({tableName, subscriberId: options.subscriberId});
+        return {status: 'ok', subscriberId: options.subscriberId};
+      },
+    });
+    const hosted = new Map([
+      ['nodes-p1', partitionOf(TABLES.NODES)],
+      ['services-p1', partitionOf(TABLES.SERVICES)],
+      ['partition-orders', partitionOf('orders')],
+    ]);
+    const cache = createMockSystemCache([
+      {partition_id: 'nodes-p1', table_name: TABLES.NODES},
+      {partition_id: 'partition-orders', table_name: 'orders'},
+    ]);
+    const wiring = createLiveQueryStartupWiring({
+      nodeId: 'node-4',
+      systemTableCache: cache,
+      sqlQueryEngine: null,
+      partitionServicesProvider: () => hosted,
+    });
+    const observed = [];
+    const subscribe = wiring.liveQueryManager.subscribeToPartition;
+
+    await subscribe('nodes-p1', 'query-system', (change) => observed.push(change));
+    await subscribe('services-p1', 'query-system', () => {});
+    assert.deepEqual(registered, [], 'no registration on a system-table partition');
+    await subscribe('partition-orders', 'query-user', () => {});
+    assert.deepEqual(registered, [{tableName: 'orders', subscriberId: 'query-user'}],
+      'a user-table partition (ordinary events) is still subscribed directly');
+
+    cache.emitCacheChange(TABLES.NODES, 'UPDATE', {partition_id: 'nodes-p1', node_id: 'n-1'});
+    assert.equal(observed.length, 1, 'the system-table live query observes through the cache');
+    wiring.shutdown();
+  });
+
   it('entrypoint wires live query manager in both startup branches', () => {
     const indexSource = readFileSync('src/lagrange-runtime-startup.js', 'utf8');
     const compositionSource = readFileSync(

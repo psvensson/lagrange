@@ -30,6 +30,7 @@ import {
   LOCKING_READ_TX_OWNERSHIP,
   LOCKING_READ_UNKNOWN_PARTITION,
 } from './sql-locking-read-constants.js';
+import {EXPR_TYPE} from './parser-constants.js';
 import {
   QUERY_AST_NODE,
   QUERY_ERROR_CODE,
@@ -757,7 +758,7 @@ function buildMatchingPkSelectAst(target, statement) {
   return {
     type: LOCKING_READ_AST_TYPE.SELECT,
     columns: pkColumns.map((col) => ({type: QUERY_AST_NODE.COLUMN_REF, column: col})),
-    from: {type: QUERY_AST_NODE.TABLE, name: tableName},
+    from: {type: EXPR_TYPE.TABLE, name: tableName},
     where: extractWriteWhereClause(statement),
     ...(ast?.orderBy ? {orderBy: ast.orderBy} : {}),
     ...(ast?.limit !== undefined ? {limit: ast.limit} : {}),

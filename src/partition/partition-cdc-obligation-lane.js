@@ -4,7 +4,6 @@
 
 import {PARTITION_SERVICE_DEFAULT} from './partition-service-constants.js';
 import {CDC_COMPLETION} from '../cdc/cdc-delivery-outcome.js';
-import {releaseContendedPropagationOwners} from './partition-cdc-obligation-progress.js';
 import {PARTITION_CDC_OBLIGATION_BOUND as BOUND} from './partition-cdc-obligation-constants.js';
 import {acknowledgedEventBytesOf, cdcObligationEventKeyDigest,
   emptyAcknowledgedBytes} from './partition-cdc-obligation-ledger.js';
@@ -24,17 +23,33 @@ function emptyBatch() {
     firstAcknowledgedAt: null};
 }
 
+// branches: one per current subscriber (partition-cdc-obligation-progress.js),
+// each with its recipients and their volatile cursors; all of it is
+// tenure-local and rebuilt from the ledger by the next tenure. The lane's own
+// retry state (retryDelayMs, consecutiveBackpressure) belongs to the
+// acknowledgement batch; each recipient carries its own.
 function createCdcObligationLane(tenure = null) {
   return {
-    tenure, inFlight: false, rerun: false, scan: null, currentObligation: null,
+    tenure, branches: new Map(),
+    awaitedDrives: new Set(),
+    acknowledgedThrough: null,
     hydratedThroughLogIndex: 0,
     pending: new Map(), commands: new Map(), batch: emptyBatch(),
-    contendedPropagationOwners: new Map(),
     flushTimer: null, retryTimer: IDLE_OBLIGATION_RETRY,
     retryDelayMs: PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS,
-    consecutiveBackpressure: 0, sliceTurnReady: false,
+    consecutiveBackpressure: 0,
+    acknowledgementBlocked: false, driveDelivered: 0, driveUnacknowledged: 0,
     held: null, lastDrive: null, lastFlush: null,
   };
+}
+
+// Every recipient invocation of the delivery owner (its custody outlives a
+// lane: a retired delivery keeps its slot until its actual local cleanup).
+function retireRecipientInvocations(delivery) {
+  for (const [key, custody] of delivery.recipientCustody) {
+    if (custody.activeCdcInvocation) custody.activeCdcInvocation.retire();
+    else delivery.recipientCustody.delete(key);
+  }
 }
 
 function currentTenureOf(owner) {
@@ -62,8 +77,7 @@ function resetCdcObligationLane(delivery) {
   if (lane.tenure === tenure && !delivery.owner.isShutdown) return;
   clearTimer(delivery.owner, lane.flushTimer);
   clearTimer(delivery.owner, lane.retryTimer.handle);
-  releaseContendedPropagationOwners(lane);
-  delivery.activeCdcInvocation?.retire();
+  retireRecipientInvocations(delivery);
   delivery.obligationLane = createCdcObligationLane(tenure);
 }
 
@@ -145,7 +159,6 @@ function disarmDeliveryRetry(owner, lane, resetDelay = true) {
   clearTimer(owner, lane.retryTimer.handle);
   lane.retryTimer = IDLE_OBLIGATION_RETRY;
   lane.consecutiveBackpressure = 0;
-  lane.sliceTurnReady = false;
   if (resetDelay) lane.retryDelayMs = PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
 }
 
@@ -156,23 +169,13 @@ function resetYieldedRetryDelay(lane, disposition) {
   }
 }
 
-function consumeRetryHintMs(lane, error) {
-  if (lane.sliceTurnReady === true) {
-    lane.sliceTurnReady = false;
-    lane.consecutiveBackpressure = 0;
-    lane.retryDelayMs = PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
-    return 1;
-  }
-  return error?.retryAfterMs;
-}
-
+// `lane` is the retry state the delay belongs to: the lane's own (its
+// acknowledgement batch) or one recipient's drive.
 function computeRetryDelayMs(lane, error, disposition) {
   resetYieldedRetryDelay(lane, disposition);
-  const sliceTurnWoken = lane.sliceTurnReady === true;
-  const rawHint = consumeRetryHintMs(lane, error);
+  const rawHint = error?.retryAfterMs;
   const hasHint = Number.isFinite(rawHint) && rawHint > 0;
-  const isBackpressure =
-    disposition === OBLIGATION_RETRY_DISPOSITION.BACKPRESSURE && !sliceTurnWoken;
+  const isBackpressure = disposition === OBLIGATION_RETRY_DISPOSITION.BACKPRESSURE;
   const isTransient = disposition === OBLIGATION_RETRY_DISPOSITION.TRANSIENT_FAILURE;
   const initDelay = PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
   const maxDelay = PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_MAX_DELAY_MS;
@@ -218,6 +221,7 @@ export {
   driveOutcome,
   flushOutcome,
   createCdcObligationLane,
+  retireRecipientInvocations,
   laneOf,
   laneIsCurrent,
   clearTimer,

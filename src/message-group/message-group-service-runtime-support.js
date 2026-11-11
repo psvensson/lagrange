@@ -210,6 +210,7 @@ function buildDirectDeliveryError(delivery, fallbackMessage) {
   const outcome = deliveryTransportOf(delivery);
   return Object.assign(new Error(outcome.error || fallbackMessage), {
     code: outcome.errorCode,
+    acknowledgement: outcome.acknowledgement,
     deliveryState: outcome.deliveryState,
     reasonCode: outcome.reasonCode,
     noHandler: outcome.noHandler,
@@ -288,6 +289,21 @@ function boundCdcForwardErrorDetail(detail) {
   );
 }
 
+// The caller's ACK bound and acknowledgement observer belong to the transport
+// hop that waits for the ACK; they pass through to it unchanged. The
+// transport delivery lifetime is their one validator: a bound it refuses is
+// refused there, never dropped here into "no ACK bound".
+function resolveAckWaitOverrides(overrides) {
+  const ackWait = {};
+  if (overrides?.ackTimeoutMs !== undefined && overrides.ackTimeoutMs !== null) {
+    ackWait.ackTimeoutMs = overrides.ackTimeoutMs;
+  }
+  if (overrides?.onAcknowledgement !== undefined) {
+    ackWait.onAcknowledgement = overrides.onAcknowledgement;
+  }
+  return ackWait;
+}
+
 function resolveTransportDeliveryOptions(
   targetService,
   overrides = null,
@@ -302,6 +318,7 @@ function resolveTransportDeliveryOptions(
   if (Number.isFinite(overrides?.timeoutMs) && overrides.timeoutMs > 0) {
     baseOptions.timeoutMs = Math.floor(overrides.timeoutMs);
   }
+  Object.assign(baseOptions, resolveAckWaitOverrides(overrides));
   if (
     typeof overrides?.deliveryPriority === 'string' &&
     overrides.deliveryPriority.length > 0

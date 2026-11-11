@@ -1,5 +1,6 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
+import {createLeadershipGroup} from './removal-leadership-group-fixture.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {REBALANCER_SKIP_REASON} from '../../src/rebalancer/rebalancer-constants.js';
@@ -15,6 +16,9 @@ import {
   createMockPolicyService,
   createMockTransactionCoordinator,
 } from './test-helpers.js';
+import {
+  withReplicaOperationsCas,
+} from './durable-step-authority-fixture.js';
 
 const TEST_CRITICAL_CREATED_OPERATION_ID = 'critical-created-op';
 const TEST_CRITICAL_CREATED_PARTITION_ID = 'sql_write_operations-p1';
@@ -199,7 +203,11 @@ async (t) => {
       readAuthorityWitness: buildMockPolicyAuthorityWitness(`${tableName}-p1`),
     };
   };
-  const executeQuery = async (sql, params = []) => {
+  // The status/step UPDATE (and its compare-and-set) is the shared CAS
+  // store's, routed before the read match its WHERE would otherwise hit.
+  const executeQuery = withReplicaOperationsCas({
+    readRow: (operationId) => operationRows.get(operationId) || null,
+  }, async (sql, params = []) => {
     const normalizedSql = String(sql);
     if (normalizedSql.includes('WHERE operation_id = ?')) {
       const row = operationRows.get(params[0]) || null;
@@ -240,23 +248,8 @@ async (t) => {
       operationRows.set(row.operation_id, row);
       return {success: true, affectedRows: 1};
     }
-    if (normalizedSql.includes('replica_operations') &&
-        Array.isArray(params) &&
-        params.length === 8) {
-      const row = operationRows.get(params[7]);
-      if (row) {
-        row.status = params[0];
-        row.workflow_step = params[1];
-        row.updated_at = params[2];
-        row.completed_at = params[3];
-        row.error_message = params[4];
-        row.steps_history = params[5];
-        row.replica_id = params[6];
-      }
-      return {success: true, affectedRows: row ? 1 : 0};
-    }
     return {success: true, rows: [], affectedRows: 0};
-  };
+  });
 
   const coordinator = new RebalanceCoordinator({
     nodeId: 'node-local',
@@ -412,6 +405,16 @@ test('createOperation defers retryable participant-pressure failures and ' +
     raft_role: 'follower',
     address: 'node-peer/partition/partition-pressure-retry-test-r2',
   };
+  // The group as its replica handlers answer it: the peer leads, so the
+  // removed replica is not its group's leader (the leadership gate admits).
+  const pressureGroup = createLeadershipGroup({
+    partitionId: 'partition-pressure-retry-test',
+    members: [
+      {replicaId: 'partition-pressure-retry-test-r1', nodeId: 'node-target'},
+      {replicaId: 'partition-pressure-retry-test-r2', nodeId: 'node-peer'},
+    ],
+    leaderReplicaId: 'partition-pressure-retry-test-r2',
+  });
   const authoritativeRead = async (tableName, sql, params = []) => {
     const readAuthorityWitness = buildMockPolicyAuthorityWitness(
       `${tableName}-p1`,
@@ -444,7 +447,11 @@ test('createOperation defers retryable participant-pressure failures and ' +
       readAuthorityWitness,
     };
   };
-  const executeQuery = async (sql, params = []) => {
+  // The status/step UPDATE (and its compare-and-set) is the shared CAS
+  // store's, routed before the read match its WHERE would otherwise hit.
+  const executeQuery = withReplicaOperationsCas({
+    readRow: (operationId) => operationRows.get(operationId) || null,
+  }, async (sql, params = []) => {
     const normalizedSql = String(sql);
     if (normalizedSql.includes('WHERE operation_id = ?')) {
       const row = operationRows.get(params[0]) || null;
@@ -485,23 +492,8 @@ test('createOperation defers retryable participant-pressure failures and ' +
       operationRows.set(row.operation_id, row);
       return {success: true, affectedRows: 1};
     }
-    if (normalizedSql.includes('replica_operations') &&
-        Array.isArray(params) &&
-        params.length === 8) {
-      const row = operationRows.get(params[7]);
-      if (row) {
-        row.status = params[0];
-        row.workflow_step = params[1];
-        row.updated_at = params[2];
-        row.completed_at = params[3];
-        row.error_message = params[4];
-        row.steps_history = params[5];
-        row.replica_id = params[6];
-      }
-      return {success: true, affectedRows: row ? 1 : 0};
-    }
     return {success: true, rows: [], affectedRows: 0};
-  };
+  });
 
   // The universal remove-safety floor (audit finding 1) fails closed on an
   // empty replica-row read ("safety check unavailable"). This fixture tests
@@ -556,6 +548,11 @@ test('createOperation defers retryable participant-pressure failures and ' +
     }),
     messageRouter: {
       async deliver(target, payload, options) {
+        // The removal leadership gate reads the group: its peer leads.
+        const groupAnswer = pressureGroup.answer(payload);
+        if (groupAnswer !== undefined) {
+          return buildDeliveryEnvelope({acknowledged: true}, groupAnswer);
+        }
         deliveries.push({target, payload, options});
         return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
       },
@@ -717,7 +714,11 @@ test('dispatchOperation defers priority claim misses when durable ' +
       readAuthorityWitness: buildMockPolicyAuthorityWitness(`${tableName}-p1`),
     };
   };
-  const executeQuery = async (sql, params = []) => {
+  // The status/step UPDATE (and its compare-and-set) is the shared CAS
+  // store's, routed before the read match its WHERE would otherwise hit.
+  const executeQuery = withReplicaOperationsCas({
+    readRow: (operationId) => operationRows.get(operationId) || null,
+  }, async (sql, params = []) => {
     const normalizedSql = String(sql);
     if (normalizedSql.includes('WHERE operation_id = ?')) {
       const row = operationRows.get(params[0]) || null;
@@ -727,28 +728,13 @@ test('dispatchOperation defers priority claim misses when durable ' +
         affectedRows: row ? 1 : 0,
       };
     }
-    if (normalizedSql.includes('replica_operations') &&
-        Array.isArray(params) &&
-        params.length === 8) {
-      const row = operationRows.get(params[7]);
-      if (row) {
-        row.status = params[0];
-        row.workflow_step = params[1];
-        row.updated_at = params[2];
-        row.completed_at = params[3];
-        row.error_message = params[4];
-        row.steps_history = params[5];
-        row.replica_id = params[6];
-      }
-      return {success: true, affectedRows: row ? 1 : 0};
-    }
     if (normalizedSql.includes('WHERE (') &&
         normalizedSql.includes('entity_type = ?') &&
         normalizedSql.includes('entity_id = ?')) {
       return {success: true, rows: [], affectedRows: 0};
     }
     return {success: true, rows: [], affectedRows: 0};
-  };
+  });
 
   const coordinator = new RebalanceCoordinator({
     nodeId: 'node-local',
@@ -1233,7 +1219,11 @@ async (t) => {
       readAuthorityWitness: buildMockPolicyAuthorityWitness(`${tableName}-p1`),
     };
   };
-  const executeQuery = async (sql, params = []) => {
+  // The status/step UPDATE (and its compare-and-set) is the shared CAS
+  // store's, routed before the read match its WHERE would otherwise hit.
+  const executeQuery = withReplicaOperationsCas({
+    readRow: (operationId) => operationRows.get(operationId) || null,
+  }, async (sql, params = []) => {
     const normalizedSql = String(sql);
     if (normalizedSql.includes('WHERE operation_id = ?')) {
       const row = operationRows.get(params[0]) || null;
@@ -1243,28 +1233,13 @@ async (t) => {
         affectedRows: row ? 1 : 0,
       };
     }
-    if (normalizedSql.includes('replica_operations') &&
-        Array.isArray(params) &&
-        params.length === 8) {
-      const row = operationRows.get(params[7]);
-      if (row) {
-        row.status = params[0];
-        row.workflow_step = params[1];
-        row.updated_at = params[2];
-        row.completed_at = params[3];
-        row.error_message = params[4];
-        row.steps_history = params[5];
-        row.replica_id = params[6];
-      }
-      return {success: true, affectedRows: row ? 1 : 0};
-    }
     if (normalizedSql.includes('WHERE (') &&
         normalizedSql.includes('entity_type = ?') &&
         normalizedSql.includes('entity_id = ?')) {
       return {success: true, rows: [], affectedRows: 0};
     }
     return {success: true, rows: [], affectedRows: 0};
-  };
+  });
 
   const coordinator = new RebalanceCoordinator({
     nodeId: 'node-local',

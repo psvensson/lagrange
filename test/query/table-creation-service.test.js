@@ -206,6 +206,42 @@ test('TableCreationService - does not log shutdown cancellation as failure',
     await service.shutdown();
   });
 
+test('TableCreationService - the provisioning failure log carries the ' +
+  'refusal\'s code, reasons, retryAfterMs and epoch', async (t) => {
+  const logged = [];
+  const refusal = Object.assign(
+    new Error('Provisioning unavailable: quorum not reachable'), {
+      code: 'PROVISIONING_UNAVAILABLE',
+      errorCode: 'PROVISIONING_UNAVAILABLE',
+      reasons: ['node_not_ready'],
+      retryAfterMs: 250,
+      epoch: 7,
+    });
+  const service = new TableCreationService({
+    partitionProvisioner: async () => {
+      throw refusal;
+    },
+  });
+  service.logger = {
+    debug() {},
+    error(message, fields) {
+      logged.push({message, fields});
+    },
+  };
+  await t.rejects(service.provisionInitialPartition({
+    partitionId: 'partition-refused',
+    replicaCount: 3,
+    tableId: 'table-refused',
+    tableName: 'refused_table',
+  }), /Provisioning unavailable/u);
+  t.equal(logged.length, 1, 'one failure line');
+  t.equal(logged[0].fields.errorCode, 'PROVISIONING_UNAVAILABLE');
+  t.same(logged[0].fields.reasons, ['node_not_ready']);
+  t.equal(logged[0].fields.retryAfterMs, 250);
+  t.equal(logged[0].fields.epoch, 7);
+  await service.shutdown();
+});
+
 test('TableCreationService - triggers split/merge evaluation on table policy cache updates',
   async (t) => {
     let evaluationCalls = 0;

@@ -181,7 +181,7 @@ function createMessageGroupServiceInboundIngressRuntimeMethods(deps = {}) {
           payload.type ===
             MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE.LATENCY_CDC_PROPAGATION
         ) {
-          return this.handleLatencyCdcPropagationMessage(messageId, payload, localDelivery);
+          return this.handleLatencyCdcPropagationMessage(messageId, payload);
         }
         if (
           payload &&
@@ -224,13 +224,12 @@ function createMessageGroupServiceInboundIngressRuntimeMethods(deps = {}) {
      * @return {Promise<Object>}
      * @private
      */
-    async handleLatencyCdcPropagationMessage(messageId, payload, localDelivery) {
+    async handleLatencyCdcPropagationMessage(messageId, payload) {
       return runHandleLatencyMessage(
         this,
         cdcPropagationRuntimeDeps,
         messageId,
         payload,
-        localDelivery,
       );
     }
     /**

@@ -1,7 +1,7 @@
 // MessageGroupService's transient response custody. Only its native
 // application afterCommit can produce an accepted receipt; this queue stores
 // no durable outcome and cannot discharge the source ledger's obligation.
-import {CDC_EVENT_METADATA_FIELD, captureCdcEvents, copyCdcEvent} from
+import {CDC_EVENT_METADATA_FIELD, captureCdcEvents} from
   '../cdc/cdc-event-envelope.js';
 import {CDC_COMPLETION, buildCommittedCdcOutcome, buildProvisionalCdcOutcome, cdcCommitWaitIdentity,
   hasDurableCdcEvents, isCommittedCdcOutcome, isProvisionalCdcOutcome, unknownCdcAcceptance} from
@@ -27,15 +27,9 @@ const reservationToken = Symbol;
 const arraySome = Function.call.bind(Array.prototype.some);
 const arrayFind = Function.call.bind(Array.prototype.find);
 
-function commandEvents(command) {
-  return command.type === MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH ? command.events :
-    [copyCdcEvent(command)];
-}
-
+// A durable vector has one committed form, whatever its length: CDC_BATCH.
 function capturedCommand(events) {
-  return objectFreeze(events.length === 1 ?
-    {type: MESSAGE_GROUP_COMMAND_TYPE.CDC, ...events[0]} :
-    {type: MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH, events});
+  return objectFreeze({type: MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH, events});
 }
 
 function backpressuredCdcAcceptance() {
@@ -121,7 +115,7 @@ function reserveCdcWait(service, command, timeoutMs, parent, options) {
     const now = () => clock.now();
     const budget = createTimeoutBudget({configuredBudgetMs: timeoutMs, now});
     const {events, inputVectorDigest} = captureCdcCommandVector(service,
-      commandEvents(command), options);
+      command.events, options);
     const key = cdcCommitWaitIdentity(events);
     if (queue.has(key)) return {answer: backpressuredCdcAcceptance()};
     const completion = promiseWithResolvers();
@@ -310,7 +304,8 @@ async function applyDurableCdcBatch(service, events, options = {}) {
 }
 
 function registerCdcCommittedAcceptance(service, committed, lifetime) {
-  const events = commandEvents(committed.command);
+  if (committed.command.type !== MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH) return;
+  const {events} = committed.command;
   if (!hasDurableCdcEvents(events) || lifetime === null) return;
   const key = cdcCommitWaitIdentity(events);
   const entry = service.cdcCommitWaiters.get(key);

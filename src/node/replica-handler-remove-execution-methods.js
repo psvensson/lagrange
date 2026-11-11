@@ -30,6 +30,7 @@ import {
 } from './replica-removal-debt-errors.js';
 import {GROUP_RETIREMENT_REASON} from
   '../partition/group-retirement-evidence.js';
+import {REMOVAL_AUTHORITY_KIND} from './replica-state-machine-recovery.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const REPLICA_REMOVE_EXECUTION_REASON = Object.freeze({
@@ -336,7 +337,7 @@ async function performReplicaRemoval(handler, request, service, lifecycle,
         );
         throw error;
       }
-      return execution.serviceRowRemoved && guard.requireAbsent();
+      return execution.serviceRowRemoved && await guard.requireComplete();
     },
     () => {
       if (!execution.cleanupError) handler.localServices.delete(replicaId);
@@ -345,6 +346,7 @@ async function performReplicaRemoval(handler, request, service, lifecycle,
         partitionId,
         status: ReplicaStatus.REMOVED,
         service: execution.cleanupError ? service : null,
+        removedByOperationId: execution.cleanupError ? null : operationId,
       });
     },
     {
@@ -663,12 +665,15 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
      * only that exact cleanup token may remove artifacts and release the row.
      * Genuinely rowless startup candidates are owned separately by the
      * cleanup-tombstone sweep and never enter through a synthetic generation.
+     * R14: the REMOVE of the operation that completed this removal, its row
+     * ABSENT, is satisfied; generic absence alone still fails closed.
      * @param {string} replicaId
      * @param {string} partitionId
+     * @param {string|null} operationId - The duplicate REMOVE's operation.
      * @return {Promise<boolean>} True when stale cleanup work ran.
      * @private
      */
-    async reconcileRemovedReplicaCleanup(replicaId, partitionId) {
+    async reconcileRemovedReplicaCleanup(replicaId, partitionId, operationId) {
       const trackedService = this.getTrackedService(replicaId);
       const lifecycleSnapshot =
         this.buildReplicaRemovalLifecycleSnapshot(replicaId);
@@ -678,7 +683,11 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
           partitionId,
           nodeId: this.nodeId,
         });
-      if (authority?.kind !== ReplicaStatus.REMOVING ||
+      const local = this.getLocalReplica(replicaId);
+      if (authority?.kind === REMOVAL_AUTHORITY_KIND.ABSENT && operationId &&
+          local?.status === ReplicaStatus.REMOVED &&
+          local.removedByOperationId === operationId) return false;
+      if (authority?.kind !== REMOVAL_AUTHORITY_KIND.REMOVING ||
           trackedStatus && ![
             ReplicaStatus.REMOVING,
             ReplicaStatus.REMOVED,
@@ -717,12 +726,9 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
         },
         () => {
           this.localServices.delete(replicaId);
-          this.setLocalReplica(replicaId, {
-            replicaId,
-            partitionId,
-            status: ReplicaStatus.REMOVED,
-            service: null,
-          });
+          this.setLocalReplica(replicaId, {replicaId, partitionId,
+            status: ReplicaStatus.REMOVED, service: null,
+            removedByOperationId: null});
         },
         {
           partitionId,

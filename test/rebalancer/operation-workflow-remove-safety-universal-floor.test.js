@@ -25,6 +25,7 @@ import {
   createMockControlPlaneReadinessService,
 } from './test-helpers.js';
 import {PriorityPublicationSafetyTopology} from '../../src/rebalancer/priority-publication-safety-topology.js';
+import {createLeadershipGroup} from './removal-leadership-group-fixture.js';
 
 const REMOVE_SAFETY_EVALUATION_CLASSIFICATION =
   OPERATION_WORKFLOW_OWNER_SHARED.REMOVE_SAFETY_EVALUATION_CLASSIFICATION;
@@ -51,11 +52,24 @@ function replicaRow(replicaId, nodeId) {
 /**
  * Build a minimal context stub driving evaluateRemoveSafety. Rows is the
  * authoritative replica-row set for the partition; minReplicaCount is the
- * policy floor. Every context method the evaluator touches is stubbed.
+ * policy floor. Every context method the evaluator touches is stubbed. The
+ * removal leadership gate reads a group whose third replica leads (these
+ * tests are about the floors, so the removed replica never leads).
  */
 function buildContext({rows, minReplicaCount}) {
+  const partitionId = rows?.[0]?.partition_id ?? USER_PARTITION_ID;
+  const group = createLeadershipGroup({
+    partitionId,
+    members: ['r1', 'r2', 'r3'].map((suffix, index) => ({
+      replicaId: `${partitionId}-${suffix}`,
+      nodeId: ['node-a', 'node-b', 'node-c'][index],
+    })),
+    leaderReplicaId: `${partitionId}-r3`,
+  });
   return {
     nodeId: 'owner-node',
+    messageRouter: group.router(),
+    getCachedCriticalReplicaRows: () => group.rows(),
     controlPlaneReadinessService: createMockControlPlaneReadinessService({
       readNodeRows: () => ['node-a', 'node-b', 'node-c'].map((nodeId) => ({
         node_id: nodeId, status: 'active', ready_lease_expires_at: Date.now() + 60000,
@@ -81,7 +95,6 @@ function buildContext({rows, minReplicaCount}) {
       PriorityPublicationSafetyTopology.prototype.isVoterReadyFloorCountableReplica,
     isOperationReplicaRow: (row, op) =>
       row.replica_id === op.replicaId || row.service_id === op.replicaId,
-    isReplaceSourceLeaderHandoffRequiredPartition: () => false,
     getCriticalMinReplicaCount: async () => minReplicaCount,
     evaluatePriorityRecoveryCompletionRemoveSafety: async () => null,
     // Priority-tier methods throw if reached: the universal tier must not

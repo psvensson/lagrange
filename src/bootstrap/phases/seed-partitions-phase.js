@@ -42,7 +42,6 @@ import {
   SERVICE_DESCRIPTOR_FIELD,
   SERVICE_LIFECYCLE_STATE,
   SERVICE_TYPE,
-  STRING,
   UNIFIED_SERVICE_TYPE,
   isPartitionCleanupServiceRow,
 } from '../../constants/index.js';
@@ -52,6 +51,7 @@ import {resolveHostedNodeClock, resolveHostedReplicaAuthorities} from
 import {reportWaitBoundSpent} from '../../logging/wait-bound-spent.js';
 
 const LOCAL_STR_STRING = 'string';
+const LOCAL_STR_COMMA = ',';
 const SEED_PARTITION_LEADERSHIP_WAIT = Object.freeze({
   wait: 'leadershipWaitTimeoutMs',
   awaited: 'a live leader for every seed system-table partition',
@@ -612,7 +612,7 @@ class SeedPartitionsPhase {
   }
 
   buildPartitionLeadershipSetKey(partitionIds) {
-    return [...partitionIds].sort().join(STRING.COMMA);
+    return [...partitionIds].sort().join(LOCAL_STR_COMMA);
   }
 
   canBypassLocalPriorityPartitionLeadership(partitionId) {

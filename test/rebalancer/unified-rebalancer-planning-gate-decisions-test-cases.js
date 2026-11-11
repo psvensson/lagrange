@@ -1,3 +1,7 @@
+import {
+  statePrioritySpreadReleaseReadiness,
+} from './priority-spread-release-condition-fixture.js';
+
 export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
   const {
     CONTROL_PLANE_READINESS_DIMENSION,
@@ -553,6 +557,13 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
       const sharedReadinessOwner = {};
       const replacementReadinessOwner = {};
       const independentReadinessOwner = {};
+      for (const readinessOwner of [
+        sharedReadinessOwner,
+        replacementReadinessOwner,
+        independentReadinessOwner,
+      ]) {
+        statePrioritySpreadReleaseReadiness(readinessOwner);
+      }
       const observer = createTestRebalancer({
         entityId: 'observer-p1',
         entityType: EntityType.PARTITION,
@@ -943,6 +954,7 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
 
       let nowMs = 1000;
       const sharedReadinessOwner = {};
+      statePrioritySpreadReleaseReadiness(sharedReadinessOwner);
       const visibleReplicaOperations = [];
       const systemTableCache = createMockCache();
       const filterCachedRows = systemTableCache.filter;
@@ -1043,18 +1055,21 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
         schemaOperation.updated_at = nowMs;
         schemaOperation.completed_at = nowMs;
 
-        nowMs += 11_000;
-        const missedIntervalDecision =
+        // Supersedes the quiescence-anchor pin (quest
+        // formation-background-release-quiescence-anchor-live): ordinary
+        // topology work, in flight or drained, no longer resets the maturity
+        // clock. The fence stands for priority control-plane placement only;
+        // the background work it released would otherwise restart it for
+        // every other entity (lab f4: a 70 s window behind moves ~66 s apart
+        // never matured).
+        const firstClearAtMs = 1000;
+        nowMs += 5_000;
+        const afterOrdinaryDrainDecision =
           backgroundEntity.resolvePrioritySpreadPlanningGateDecision();
         t.equal(
-          missedIntervalDecision.blocker.stableElapsedMs,
-          11_000,
-          'a retained terminal row should recover work missed between evaluations',
-        );
-        t.equal(
-          missedIntervalDecision.blocker.stableRemainingMs,
-          59_000,
-          'the scheduled recheck should preserve the post-drain maturity deadline',
+          afterOrdinaryDrainDecision.blocker.stableElapsedMs,
+          nowMs - firstClearAtMs,
+          'ordinary work drained between evaluations does not reset the clock',
         );
 
         const admissionStableWindowMs =
@@ -1062,20 +1077,17 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
         const observationHandoffMs =
           backgroundEntity
             .getBackgroundPrioritySpreadObservationHandoffMs();
-        nowMs = schemaOperation.completed_at + admissionStableWindowMs;
-        const admissionBoundaryDecision =
-          backgroundEntity.resolvePrioritySpreadPlanningGateDecision();
         t.equal(
-          admissionBoundaryDecision.blocker.stableRemainingMs,
-          observationHandoffMs,
-          'ordinary work should remain fenced through the observation handoff',
+          afterOrdinaryDrainDecision.blocker.requiredStableMs,
+          admissionStableWindowMs + observationHandoffMs,
+          'the window is the admission interval plus the observation handoff',
         );
-
-        nowMs += observationHandoffMs;
+        nowMs = firstClearAtMs + admissionStableWindowMs +
+          observationHandoffMs;
         t.equal(
           backgroundEntity.resolvePrioritySpreadPlanningGateDecision(),
           null,
-          'ordinary work should release after full post-drain stability',
+          'ordinary work releases one full window after the first clear',
         );
 
         visibleReplicaOperations.push({

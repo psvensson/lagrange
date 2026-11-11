@@ -30,6 +30,9 @@ import {
 } from '../../src/workflow/reconcile-queue-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {
+  statePrioritySpreadReleaseReadiness,
+} from './priority-spread-release-condition-fixture.js';
 
 const TEST_NODE_ID = 'node-1';
 const TEST_LOG_LEVEL = 'error';
@@ -128,6 +131,7 @@ async (t) => {
   let nowMs = 100_000;
   const nowFn = () => nowMs;
   const readinessOwner = {};
+  statePrioritySpreadReleaseReadiness(readinessOwner);
   const parked = createFenceTestRebalancer({
     entityId: PARKED_BACKGROUND_ENTITY_ID,
     readinessOwner,
@@ -288,6 +292,7 @@ async (t) => {
   let nowMs = 200_000;
   const nowFn = () => nowMs;
   const readinessOwner = {};
+  statePrioritySpreadReleaseReadiness(readinessOwner);
   const parked = createFenceTestRebalancer({
     entityId: PARKED_BACKGROUND_ENTITY_ID,
     readinessOwner,

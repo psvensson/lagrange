@@ -11,8 +11,8 @@ import {
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const DURABLE_ROW_EPOCH_BINDING_SOURCE = 'replica_operations row';
 
-// Sanctioned local-only-truth seed literal for the priority control-plane
-// operation-row analog of CL-016/CL-035. See applyLocalPriorityOperationProgressRow.
+// Cache-write literals of the committed priority operation row mirror. See
+// applyLocalPriorityOperationProgressRow.
 const PRIORITY_LOCAL_PROGRESS_LITERAL = Object.freeze({
   UPSERT: 'UPSERT',
   CAUSE_PREFIX: 'priority-local-progress:',
@@ -292,24 +292,13 @@ function assignReplicaOperationRepositoryRowMethods(
       return this.resolveOperationOwnerNodeId(operation) === this.nodeId;
     }
     /**
-   * Seed the owner's locally-decided operation-row truth into the LOCAL cache
-   * when the durable replica_operations write defers under formation/recovery
-   * pressure (the write routes through the very control-plane partition being
-   * spread, so it cannot land within budget). Without this, the durable
-   * workflow_step the system cache projects — and that every other reader and
-   * downstream gate observes — stalls at the pre-deferral step forever even
-   * though the owner has locally advanced the operation, deadlocking control-
-   * plane spread during 2-node+ formation.
+   * Write one priority control-plane operation row into the LOCAL cache
+   * ahead of its CDC round-trip. The row must be COMMITTED state: a row
+   * read from authority, or a terminal this owner's write settled. An
+   * operation's step advances only by its committed row, so a step whose
+   * durable write failed or deferred is never seeded here.
    *
-   * This is the replica_operations-row analog of the sanctioned SERVICES-row
-   * seeds CL-016 (priority local-commit fallback) and CL-035 (raft_role seed):
-   * scoped to owner-local priority control-plane partitions and superseded
-   * later by the durable write's CDC round-trip (newer updated_at wins in the
-   * cache merge). The durable distributed write is NOT short-circuited — it
-   * still retries and, once the partition reaches quorum, becomes the
-   * authoritative cluster-wide truth.
-   *
-   * @param {object} operation - Projected operation snapshot to seed.
+   * @param {object} operation - Committed operation row to mirror.
    * @return {boolean} Whether the local row was applied.
    */
     applyLocalPriorityOperationProgressRow(operation) {

@@ -17,6 +17,11 @@
  *  - attemptSeq echo: a late answer of an earlier attempt is dropped;
  *  - fresh leadership decides: removal proceeds once the witness reports the
  *    target itself leading (BR11);
+ *  - leadership retained (BR11 as superseded 2026-11-11): a third replica
+ *    that the group's current-leader authority confirms, and the target
+ *    follows, lets removal proceed with NO handoff; an unconfirmed third
+ *    leader is a typed wait; an unresolved or rebuilt attempt blocks the
+ *    retained removal until it resolves;
  *  - F-b: no handoff leaves for an operation that became terminal;
  *  - target NOT_FOUND fails the REPLACE before its intent (no retarget).
  *
@@ -37,6 +42,12 @@
  *    non-source candidates;
  *  - exact completed replacement election terminates before retry expiry can
  *    retarget it.
+ *
+ * Superseded (R09, 2026-11-11, leadership retained): "BR11: only a fresh
+ * read of the target leading authorizes removal; a third replica leading
+ * gets the named-target handoff". Its first half stands for a third leader
+ * that is not confirmed; its second half (the handoff away from a third
+ * leader) is replaced by the retained-leader receipts below.
  */
 
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
@@ -53,6 +64,7 @@ import {
 } from '../../src/rebalancer/replica-operation-constants.js';
 import {
   REPLACE_HANDOFF_ANSWER_CLASS,
+  clearAllReplaceHandoffAttempts,
   readReplaceHandoffAttempt,
   readReplaceHandoffLateAnswerCount,
   recordReplaceHandoffAnswer,
@@ -70,11 +82,23 @@ import {
 } from '../../src/rebalancer/operation-workflow-replace-owner.js';
 import {
   REPLACE_OWNER_PHASE,
+  REPLACE_OWNER_RESTART_CLASS,
+  startReplaceOwnerSession,
 } from '../../src/rebalancer/operation-workflow-replace-owner-recovery.js';
 import {
   REBALANCE_COORDINATOR_DEFER_REASON,
 } from '../../src/rebalancer/rebalancer-constants.js';
 import {createReplaceWitness} from './replace-witness-fixture.js';
+import {
+  evaluateRemovalLeadershipSafety,
+} from '../../src/rebalancer/operation-workflow-removal-leadership-gate.js';
+import {
+  classifySystemPartition,
+} from '../../src/bootstrap/system-partition-classification.js';
+import {
+  INITIAL_PARTITION_IDS,
+  SYSTEM_TABLE_NAME,
+} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
   createPublishedPlanningReadinessService,
 } from './quorum-conditioned-remove-safety-tail-fixture-builders.js';
@@ -86,10 +110,16 @@ const PEER_NODE_C = 'node-c';
 const TARGET_NODE_ID = 'node-d';
 const SOURCE_REPLICA_ID = `${PARTITION_ID}-r1`;
 const PEER_REPLICA_B = `${PARTITION_ID}-r2`;
+const PEER_REPLICA_C = `${PARTITION_ID}-r3`;
 const TARGET_REPLICA_ID = `${PARTITION_ID}-r4`;
 const NODE_IDS = Object.freeze([
   SOURCE_NODE_ID, PEER_NODE_B, PEER_NODE_C, TARGET_NODE_ID]);
 const READY_LEASE_EXTENSION_MS = 60_000;
+// The group's committed voters as its leader answers them.
+const GROUP_VOTERS = Object.freeze([
+  SOURCE_REPLICA_ID, PEER_REPLICA_B, PEER_REPLICA_C, TARGET_REPLICA_ID]);
+// Past the fixture witness's 1 s transfer window.
+const PAST_TRANSFER_WINDOW_MS = 2_000;
 
 function readyNode(nodeId) {
   return {
@@ -100,11 +130,11 @@ function readyNode(nodeId) {
   };
 }
 
-function serviceRow(replicaId, nodeId, raftRole) {
+function serviceRow(replicaId, nodeId, raftRole, partitionId = PARTITION_ID) {
   return {
     service_id: replicaId,
     replica_id: replicaId,
-    partition_id: PARTITION_ID,
+    partition_id: partitionId,
     node_id: nodeId,
     service_type: 'partition',
     status: 'active',
@@ -120,13 +150,24 @@ function confirmedDelivery(response) {
     buildDeliveryEnvelope({acknowledged: true}, response);
 }
 
-async function createHarness({stepDownResponse} = {}) {
+function replicaIdsFor(partitionId) {
+  return Object.freeze({
+    source: `${partitionId}-r1`,
+    peerB: `${partitionId}-r2`,
+    peerC: `${partitionId}-r3`,
+    target: `${partitionId}-r4`,
+  });
+}
+
+async function createHarness({stepDownResponse, partitionId = PARTITION_ID} =
+{}) {
+  const ids = replicaIdsFor(partitionId);
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
   ConfigurationManager.getInstance().initialize({});
   LoggingService.getInstance().initialize({level: 'error'});
   // The witness sees the SOURCE leading; the rows (lagging) are irrelevant.
-  const witness = createReplaceWitness({leaderReplicaId: SOURCE_REPLICA_ID});
+  const witness = createReplaceWitness({leaderReplicaId: ids.source});
   const deliveries = [];
   const coordinator = createTestCoordinator({
     nodeId: TARGET_NODE_ID,
@@ -170,22 +211,22 @@ async function createHarness({stepDownResponse} = {}) {
     cacheData: {
       nodes: NODE_IDS.map(readyNode),
       services: [
-        serviceRow(SOURCE_REPLICA_ID, SOURCE_NODE_ID, 'leader'),
-        serviceRow(PEER_REPLICA_B, PEER_NODE_B, 'follower'),
-        serviceRow(`${PARTITION_ID}-r3`, PEER_NODE_C, 'follower'),
-        serviceRow(TARGET_REPLICA_ID, TARGET_NODE_ID, 'follower'),
+        serviceRow(ids.source, SOURCE_NODE_ID, 'leader', partitionId),
+        serviceRow(ids.peerB, PEER_NODE_B, 'follower', partitionId),
+        serviceRow(ids.peerC, PEER_NODE_C, 'follower', partitionId),
+        serviceRow(ids.target, TARGET_NODE_ID, 'follower', partitionId),
       ],
     },
   });
   coordinator.initialize();
   const operation = await coordinator.createOperation({
     type: OperationType.REPLACE,
-    partitionId: PARTITION_ID,
+    partitionId,
     nodeId: TARGET_NODE_ID,
     sourceNodeId: SOURCE_NODE_ID,
-    replicaId: SOURCE_REPLICA_ID,
+    replicaId: ids.source,
   });
-  operation.replicaId = TARGET_REPLICA_ID;
+  operation.replicaId = ids.target;
   operation.workflowStep = WORKFLOW_STEP.ACTIVE;
   operation.status = 'active';
   const owner = coordinator.workflowOwner;
@@ -199,7 +240,7 @@ async function createHarness({stepDownResponse} = {}) {
     LoggingService.resetInstance();
   };
   return {coordinator, owner, operation, witness, deliveries, stepDowns,
-    removals, shutdown};
+    removals, shutdown, ids};
 }
 
 test('named-target only: while the source leads, the only handoff names the ' +
@@ -232,6 +273,35 @@ async (t) => {
       'the removal intent is persisted');
   } finally {
     await harness.shutdown();
+  }
+});
+
+// The handoff-required partitions are the classification owner's priority
+// control-plane partitions, never a hand-copied subset: schema_operations-p1
+// (omitted by the deleted list) had its leading source removed with no
+// handoff in the multi-process formation run.
+const PRIORITY_CONTROL_PLANE_PARTITION_IDS = Object.freeze(
+  Object.values(INITIAL_PARTITION_IDS).filter((partitionId) =>
+    classifySystemPartition({partitionId}).priorityControlPlane));
+
+test('every priority control-plane partition: a leading source gets the ' +
+  'named-target handoff before its removal', async (t) => {
+  t.ok(PRIORITY_CONTROL_PLANE_PARTITION_IDS.includes(
+    INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SCHEMA_OPERATIONS]),
+  'schema_operations-p1 is a priority control-plane partition');
+  for (const partitionId of PRIORITY_CONTROL_PLANE_PARTITION_IDS) {
+    const harness = await createHarness({partitionId});
+    try {
+      await harness.coordinator.executeOperation(harness.operation);
+      t.equal(harness.stepDowns().length, 1,
+        `${partitionId}: one named-target handoff was issued`);
+      t.equal(harness.stepDowns()[0]?.payload[ReplicaOperationField.REPLICA_ID],
+        harness.ids.target, `${partitionId}: it names the target replica`);
+      t.equal(harness.removals().length, 0,
+        `${partitionId}: no source removal while the source leads`);
+    } finally {
+      await harness.shutdown();
+    }
   }
 });
 
@@ -327,8 +397,7 @@ test('F-b: no handoff leaves for an operation that became terminal',
     const harness = await createHarness();
     try {
       const evaluation =
-        await harness.owner.evaluateReplaceNamedHandoffSafety(
-          harness.operation);
+        await evaluateRemovalLeadershipSafety(harness.owner, harness.operation);
       t.ok(evaluation.handoffRequest, 'the decision was to issue a handoff');
       harness.operation.completedAt = Date.now();
       harness.operation.workflowStep = WORKFLOW_STEP.FAILED;
@@ -381,21 +450,259 @@ test('BR12: no handoff leaves on a deferred-visibility snapshot', async (t) => {
   }
 });
 
-test('BR11: only a fresh read of the target leading authorizes removal; a ' +
-  'third replica leading gets the named-target handoff', async (t) => {
+// The witness double as a group whose current leader is a third replica
+// (neither the source nor the target): every member's own port names it at
+// one term, and its committed voters include the target.
+function thirdReplicaLeads(harness) {
+  harness.witness.leaderReplicaId = PEER_REPLICA_B;
+  harness.witness.voters = GROUP_VOTERS;
+}
+
+function advanceOwnerClock(harness, deltaMs) {
+  const baseNow = harness.owner.resolveTimeoutCheckNowMs.bind(harness.owner);
+  harness.owner.resolveTimeoutCheckNowMs = () => baseNow() + deltaMs;
+}
+
+test('leadership retained: a corroborated third leader the target follows ' +
+  'lets removal proceed with no handoff', async (t) => {
   const harness = await createHarness();
   try {
-    harness.witness.leaderReplicaId = PEER_REPLICA_B;
+    thirdReplicaLeads(harness);
+    await harness.coordinator.executeOperation(harness.operation);
+    t.equal(harness.stepDowns().length, 0,
+      'no leadership transfer is requested: the source does not lead');
+    t.equal(harness.removals().length, 1,
+      'the corroborated third leader lets removal proceed');
+    t.equal(harness.operation.workflowStep, WORKFLOW_STEP.STOPPING,
+      'the removal intent is persisted');
+    t.equal(readReplaceHandoffAttempt(harness.owner,
+      harness.operation.operationId), null, 'no attempt was ever opened');
+    const leaderReads = harness.witness.reads.filter((payload) =>
+      payload[ReplicaOperationField.REPLICA_ID] === PEER_REPLICA_B);
+    t.ok(leaderReads.length >= 1,
+      'the decision read the named leader\'s own port');
+  } finally {
+    await harness.shutdown();
+  }
+});
+
+// What the BR11 cell pinned and still holds: a third leader named by the
+// target's own view alone authorizes nothing. Each row leaves one clause of
+// the current-leader evidence unmet.
+const UNCONFIRMED_THIRD_LEADER_CASES = Object.freeze([
+  ['the named leader does not lead in its own port (a stale target view)',
+    (witness) => {
+      witness.viewByReplicaId = {
+        [PEER_REPLICA_B]: {leaderReplicaId: SOURCE_REPLICA_ID}};
+    }],
+  ['no majority of the leader\'s voters is at its term (a deposed leader)',
+    (witness) => {
+      witness.viewByReplicaId = {
+        [SOURCE_REPLICA_ID]: {term: 2, leaderReplicaId: SOURCE_REPLICA_ID},
+        [PEER_REPLICA_C]: {term: 2, leaderReplicaId: SOURCE_REPLICA_ID}};
+    }],
+  ['the leader\'s configuration is applied behind its commit index',
+    (witness) => {
+      witness.appliedLag = 1;
+    }],
+  ['the target is not a voter of the leader\'s committed configuration',
+    (witness) => {
+      witness.voters = [SOURCE_REPLICA_ID, PEER_REPLICA_B, PEER_REPLICA_C];
+    }],
+  ['the target is below its participation gate',
+    (witness) => {
+      witness.gateOpen = false;
+    }],
+]);
+
+for (const [label, unconfirm] of UNCONFIRMED_THIRD_LEADER_CASES) {
+  test(`third leader not corroborated - ${label}: a typed wait, no ` +
+    'handoff and no removal', async (t) => {
+    const harness = await createHarness();
+    try {
+      thirdReplicaLeads(harness);
+      unconfirm(harness.witness);
+      const evaluation =
+        await evaluateRemovalLeadershipSafety(harness.owner, harness.operation);
+      t.equal(evaluation.classification, 'defer', 'the decision waits');
+      t.notOk(evaluation.handoffRequest, 'and asks for no handoff');
+      const deferral = JSON.stringify(evaluation);
+      t.match(deferral, /current leader is not corroborated/u,
+        'the deferral says exactly what it waits on');
+      t.notMatch(deferral, /replacement leader ownership pending/u,
+        'not the handoff\'s ownership-pending text');
+      await harness.coordinator.executeOperation(harness.operation);
+      t.equal(harness.stepDowns().length, 0, 'no STEP_DOWN leaves');
+      t.equal(harness.removals().length, 0,
+        'an unconfirmed third leader does not authorize the removal');
+      t.equal(harness.operation.workflowStep, WORKFLOW_STEP.ACTIVE,
+        'no removal intent');
+      // Control: the same world, confirmed, proceeds - the wait was this
+      // clause's.
+      harness.witness.viewByReplicaId = {};
+      harness.witness.appliedLag = 0;
+      harness.witness.gateOpen = true;
+      harness.witness.voters = GROUP_VOTERS;
+      await harness.coordinator.executeOperation(harness.operation);
+      t.equal(harness.removals().length, 1, 'control: confirmed, it proceeds');
+      t.equal(harness.stepDowns().length, 0, 'control: still no handoff');
+    } finally {
+      await harness.shutdown();
+    }
+  });
+}
+
+// A leader change between the decision's two reads: the target's own port
+// names a third replica, and by the time the current-leader authority is read
+// the group has a new leader. The stronger read wins.
+function changeLeaderAfterFirstTargetRead(harness, newLeaderReplicaId) {
+  const answer = harness.witness.answer.bind(harness.witness);
+  let targetReads = 0;
+  harness.witness.answer = (payload) => {
+    const answered = answer(payload);
+    if (payload?.type === ReplicaOperationMessageType.READ_REPLICA_MEMBERSHIP &&
+        payload[ReplicaOperationField.REPLICA_ID] === TARGET_REPLICA_ID) {
+      targetReads += 1;
+      if (targetReads === 1) {
+        harness.witness.leaderReplicaId = newLeaderReplicaId;
+      }
+    }
+    return answered;
+  };
+}
+
+test('leader change between the two reads: the authority names the source ' +
+  '- the one named handoff is issued, no removal', async (t) => {
+  const harness = await createHarness();
+  try {
+    thirdReplicaLeads(harness);
+    changeLeaderAfterFirstTargetRead(harness, SOURCE_REPLICA_ID);
+    await harness.coordinator.executeOperation(harness.operation);
+    t.equal(harness.stepDowns().length, 1,
+      'the corroborated leader is the source: one handoff');
+    t.equal(harness.stepDowns()[0].payload[ReplicaOperationField.REPLICA_ID],
+      TARGET_REPLICA_ID, 'naming the target');
+    t.equal(harness.removals().length, 0,
+      'the third leader the target first named authorizes nothing');
+  } finally {
+    await harness.shutdown();
+  }
+});
+
+test('leader change between the two reads: the authority names the target ' +
+  '- the removal proceeds as under a leading target, no handoff',
+async (t) => {
+  const harness = await createHarness();
+  try {
+    thirdReplicaLeads(harness);
+    // The retained-leader clauses cannot hold (the target's first read is
+    // below its gate), so only the authority naming the target can admit.
+    harness.witness.gateOpen = false;
+    changeLeaderAfterFirstTargetRead(harness, TARGET_REPLICA_ID);
+    const evaluation =
+      await evaluateRemovalLeadershipSafety(harness.owner, harness.operation);
+    t.equal(evaluation.classification, 'safe',
+      'the corroborated leader is the target: leadership is safe');
+    t.notOk(evaluation.handoffRequest, 'no handoff is asked for');
+    t.equal(harness.stepDowns().length, 0, 'none left');
+  } finally {
+    await harness.shutdown();
+  }
+});
+
+test('T-9: an unresolved attempt blocks the retained-leader removal until ' +
+  'it resolves; no second transferee is ever named', async (t) => {
+  const harness = await createHarness();
+  try {
+    await harness.coordinator.executeOperation(harness.operation);
+    t.equal(harness.stepDowns().length, 1,
+      'setup: the source led, one handoff to the target was accepted');
+    // Leadership moves to a third replica while the attempt is unresolved.
+    thirdReplicaLeads(harness);
     await harness.coordinator.executeOperation(harness.operation);
     t.equal(harness.removals().length, 0,
-      'a non-source, non-target leader does not authorize the removal');
-    t.equal(harness.stepDowns().length, 1, 'one handoff was issued');
-    t.equal(harness.stepDowns()[0]?.payload[ReplicaOperationField.REPLICA_ID],
-      TARGET_REPLICA_ID, 'it names the REPLACE\'s own target');
+      'inside the transfer window the removal is not admitted');
+    t.equal(harness.stepDowns().length, 1, 'and nothing is re-issued');
+    advanceOwnerClock(harness, PAST_TRANSFER_WINDOW_MS);
+    await harness.coordinator.executeOperation(harness.operation);
+    t.equal(harness.removals().length, 1,
+      'the window passed: the corroborated third leader is retained');
+    t.same([...new Set(harness.stepDowns().map((delivery) =>
+      delivery.payload[ReplicaOperationField.REPLICA_ID]))],
+    [TARGET_REPLICA_ID], 'the only transferee ever named is the target');
+    t.equal(harness.stepDowns().length, 1, 'one handoff in the operation');
+  } finally {
+    await harness.shutdown();
+  }
+});
+
+test('BR10: after an owner restart the rebuilt attempt blocks the ' +
+  'retained-leader removal for the transfer window, then it proceeds ' +
+  'with no handoff', async (t) => {
+  const harness = await createHarness();
+  try {
+    thirdReplicaLeads(harness);
+    // A new owner session that began after the operation's step: whatever
+    // handoff the previous session issued is lost with its memory.
+    advanceOwnerClock(harness, PAST_TRANSFER_WINDOW_MS);
+    clearAllReplaceHandoffAttempts(harness.owner);
+    startReplaceOwnerSession(harness.owner,
+      REPLACE_OWNER_RESTART_CLASS.COORDINATOR_REINIT);
+    await harness.coordinator.executeOperation(harness.operation);
+    const rebuilt = readReplaceHandoffAttempt(harness.owner,
+      harness.operation.operationId);
+    t.equal(rebuilt?.attemptSeq, 0, 'the lost attempt is rebuilt, not issued');
+    t.equal(harness.removals().length, 0,
+      'the rebuilt attempt blocks the retained-leader removal');
+    t.equal(harness.stepDowns().length, 0, 'and issues nothing');
+    advanceOwnerClock(harness, PAST_TRANSFER_WINDOW_MS);
+    await harness.coordinator.executeOperation(harness.operation);
+    t.equal(harness.removals().length, 1,
+      'past the window the corroborated third leader is retained');
+    t.equal(harness.stepDowns().length, 0, 'no handoff after the restart');
+  } finally {
+    await harness.shutdown();
+  }
+});
+
+test('BR10: a rebuilt attempt resolves at once when the target leads, and ' +
+  'a leading source gets the one named handoff after the window',
+async (t) => {
+  const harness = await createHarness();
+  try {
+    advanceOwnerClock(harness, PAST_TRANSFER_WINDOW_MS);
+    clearAllReplaceHandoffAttempts(harness.owner);
+    startReplaceOwnerSession(harness.owner,
+      REPLACE_OWNER_RESTART_CLASS.COORDINATOR_REINIT);
+    await harness.coordinator.executeOperation(harness.operation);
+    t.equal(harness.stepDowns().length, 0,
+      'the source leads: the rebuilt attempt blocks a new issuance');
+    advanceOwnerClock(harness, PAST_TRANSFER_WINDOW_MS);
+    await harness.coordinator.executeOperation(harness.operation);
+    t.equal(harness.stepDowns().length, 1,
+      'past the window the leading source gets the named handoff');
     harness.witness.leaderReplicaId = TARGET_REPLICA_ID;
     await harness.coordinator.executeOperation(harness.operation);
     t.equal(harness.removals().length, 1,
-      'the target leading (fresh read) lets removal proceed');
+      'the target leading resolves the attempt and admits the removal');
+  } finally {
+    await harness.shutdown();
+  }
+});
+
+test('the existing waits are unchanged: an unreadable witness and an ' +
+  'unknown leader issue nothing and remove nothing', async (t) => {
+  const harness = await createHarness();
+  try {
+    harness.witness.available = false;
+    await harness.coordinator.executeOperation(harness.operation);
+    harness.witness.available = true;
+    harness.witness.leaderReplicaId = null;
+    await harness.coordinator.executeOperation(harness.operation);
+    t.equal(harness.stepDowns().length, 0, 'no handoff');
+    t.equal(harness.removals().length, 0, 'no removal');
+    t.equal(harness.operation.workflowStep, WORKFLOW_STEP.ACTIVE,
+      'the REPLACE waits at ACTIVE');
   } finally {
     await harness.shutdown();
   }
@@ -418,7 +725,7 @@ test('S9: an ACTIVE wait after the named handoff decided safe reads the ' +
       'setup: attempt accepted');
     harness.witness.leaderReplicaId = TARGET_REPLICA_ID;
     const evaluation =
-      await harness.owner.evaluateReplaceNamedHandoffSafety(harness.operation);
+      await evaluateRemovalLeadershipSafety(harness.owner, harness.operation);
     t.equal(evaluation.classification, 'safe',
       'setup: the named handoff decided safe (the target leads)');
     recordReplaceOwnerWait(harness.owner, harness.operation,

@@ -33,7 +33,9 @@ import {
 import {
   STATE,
 } from '../../constants/index.js';
-import {deliveryTransportOf, deliveryAnswerOf, isDeliveredTransportDeliveryOutcome} from '../../transport/transport-semantic-outcome.js';
+import {classifyThrownDeliveryError, deliveryTransportOf, deliveryAnswerOf,
+  isDeliveredTransportDeliveryOutcome, isDeliveryTimeoutTransportOutcome} from
+  '../../transport/transport-semantic-outcome.js';
 import {
   NODE_STATE_PUBLICATION_OWNER_LITERAL,
   NODE_STATE_UPDATE_PUBLICATION_DEFER_REASON,
@@ -161,6 +163,12 @@ class NodeStatePublicationOwner {
     )) {
       return isRetryableControlPlaneError(error);
     }
+    // A spent delivery lifetime, read from the transport owner: a node-state
+    // publication is a state assignment, so the ACK and the answer timeout
+    // are retried alike.
+    if (isDeliveryTimeoutTransportOutcome(classifyThrownDeliveryError(error))) {
+      return true;
+    }
     const message = typeof error?.message === 'string' ? error.message : '';
     return message.includes(
       NODE_STATE_PUBLICATION_OWNER_LITERAL.NO_CONNECTION_TO_NODE,
@@ -170,9 +178,6 @@ class NodeStatePublicationOwner {
       ) &&
       message.includes(
         NODE_STATE_PUBLICATION_OWNER_LITERAL.CLOSED,
-      ) ||
-      message.includes(
-        NODE_STATE_PUBLICATION_OWNER_LITERAL.MESSAGE_TIMEOUT,
       ) ||
       message.includes(
         NODE_STATE_PUBLICATION_OWNER_LITERAL.NO_HANDLER_REGISTERED_FOR_ADDRESS,

@@ -17,6 +17,9 @@ const ADMIN_ROUTE = Object.freeze({
   TEST_RUN_STOP: '/api/admin/test-runs/:runId/stop',
   TEST_RUN_STREAM: '/api/admin/test-runs/:runId/stream',
   SERVICE_DIAGNOSTICS: '/api/admin/diagnostics/services',
+  // Node health: an explicit collection call, never a table (the owner is
+  // src/diagnostics/node-health-collection.js). `?sinceMs=` bounds the slice.
+  NODE_HEALTH: '/api/admin/diagnostics/health',
   CDC_DIAGNOSTICS: '/api/admin/diagnostics/cdc',
   PARTITION_DIAGNOSTICS: '/api/admin/diagnostics/partitions',
   SQL_DIAGNOSTICS: '/api/admin/diagnostics/sql',

@@ -36,7 +36,7 @@ const REPLICA_OPERATION_IDENTITY_FIELDS = Object.freeze([
   'target_node_id',
 ]);
 
-function areCompatibleReplicaOperationRows(left, right) {
+function haveSameReplicaOperationIdentity(left, right) {
   if (
     !left?.operation_id ||
     !right?.operation_id ||
@@ -89,7 +89,7 @@ function shouldPreferRuntimeTargetProgressRow(
     contextRow &&
     !isTerminalReplicaOperationRecord(refreshedRow) &&
     service.isRuntimeTargetProgressWakeOperation(contextRow, context) &&
-    areCompatibleReplicaOperationRows(refreshedRow, contextRow) &&
+    haveSameReplicaOperationIdentity(refreshedRow, contextRow) &&
     isReplicaOperationRowAhead(contextRow, refreshedRow),
   );
 }
@@ -172,7 +172,12 @@ const REPLICA_DISPATCH_RECONCILE_CALLBACK_METHODS = {
       typeof this.getReplicaOperationRow === 'function'
     ) {
       const refreshedRow = await this.getReplicaOperationRow(operationId);
-      if (isTerminalReplicaOperationRecord(refreshedRow)) {
+      // R10: the wake-up row is a hint. A durable row that is terminal or
+      // already past it (an echo of SENDING read after the owner wrote
+      // STOPPING) is the authority, so a stale step is never re-dispatched.
+      if (isTerminalReplicaOperationRecord(refreshedRow) ||
+          (haveSameReplicaOperationIdentity(refreshedRow, contextRow) &&
+            isReplicaOperationRowAhead(refreshedRow, contextRow))) {
         return refreshedRow;
       }
     }

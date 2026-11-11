@@ -65,6 +65,8 @@ function createAdmissionOwner() {
   owner.isShuttingDown = false;
   owner.operationsInCreation = new Map();
   owner.recentOperationIntents = new Map();
+  // The cache the admission owner captures route-source versions from.
+  owner.systemTableCache = {getTableMutationVersion: () => 0};
   owner.controlPlaneReadinessService = {
     readCurrentPlanningProjectionIdentity() {
       return state.identity;

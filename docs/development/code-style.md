@@ -86,6 +86,12 @@ When writing or modifying code:
   [`docs/steering/rules.md`](../steering/rules.md).
 - Shared domain literals belong in their canonical owner module and must be
   imported from there.
+- A member read from a constants object must exist on it: `CONST.MISSING`
+  evaluates to `undefined` silently and then acts as a key, argument or
+  message. `npm run audit:guideline:constant-members`
+  (`scripts/checks/check-constant-member-existence.js`) fails on any such
+  read with no baseline; use the owner's existing member or define the
+  member in its owner module.
 - File-local named constants are allowed when the value is private to one file.
 - Suite-local named test constants are allowed when the value is private to one
   suite.

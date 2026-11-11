@@ -1,8 +1,19 @@
+import {existsSync} from 'node:fs';
 import {mkdir, rm, writeFile} from 'node:fs/promises';
 import {join, resolve} from 'node:path';
 import {FAILURE_BUNDLE_FORMATTING} from './failure-bundle-formatting.js';
 import {classifyScenarioVerdict} from './validation-matrix.js';
 import {SCENARIO_OUTCOME, scenarioOutcomeOf} from './scenario-outcome.js';
+import {
+  linkBaselinePathFromEnvironment,
+  writeScenarioRunHealth,
+} from './run-health/run-health-artifacts.js';
+import {insertRunHealthSummary} from './run-health/run-health-markdown.js';
+import {summarizeRunHealth} from './run-health/run-health-classifier.js';
+import {
+  INFRASTRUCTURE_SUSPECT,
+  RUN_HEALTH_ARTIFACT,
+} from './run-health/run-health-constants.js';
 import {
   resolveLogWindowMaxRetainedBytes,
 } from './failure-bundle-artifact-foundation.js';
@@ -380,6 +391,7 @@ async function writeScenarioFailureBundleArtifacts({
   benchmarkRegressionGate,
   workspaceRoot,
   scenarioConfig,
+  runHealth,
 }) {
   const logs = await collectScenarioLogArtifacts(
     scenarioDir,
@@ -399,6 +411,10 @@ async function writeScenarioFailureBundleArtifacts({
   // Serialize BEFORE mutating the scenario entry: if the bundle cannot
   // stringify, the entry must not carry the bundle diagnostics into the
   // report writer (which would hit the same serialization limit there).
+  // Run health: additive evidence about the machines and links, attached
+  // after the bundle is built so that nothing in the failure classification
+  // can read it.
+  bundleJson.runHealth = runHealth;
   const serializedBundleJson = JSON.stringify(bundleJson, null, 2);
   applyBundleDiagnosticsToScenarioEntry(entry, bundleJson);
   const jsonAbsolutePath = join(scenarioDir, FAILURE_BUNDLE_JSON_FILENAME);
@@ -421,7 +437,10 @@ async function writeScenarioFailureBundleArtifacts({
   );
   await writeFile(
     markdownAbsolutePath,
-    renderScenarioFailureBundleMarkdown(bundleJson),
+    Object.hasOwn(bundleJson.runHealth, 'unavailable') ?
+      renderScenarioFailureBundleMarkdown(bundleJson) :
+      insertRunHealthSummary(
+        renderScenarioFailureBundleMarkdown(bundleJson), bundleJson.runHealth),
     UTF8_ENCODING,
   );
   const triageLinks = {
@@ -456,6 +475,51 @@ async function writeScenarioFailureBundleArtifacts({
     summary: bundleJson.summary,
     links,
   };
+}
+
+const RUN_HEALTH_UNAVAILABLE = Object.freeze({
+  NO_SCENARIO_DIRECTORY: 'scenario_directory_absent',
+  CLASSIFICATION_FAILED: 'run_health_classification_failed',
+});
+
+/**
+ * Classify one scenario's run health, write `run-health.json`/`.md` into its
+ * directory and put the compact summary on its report entry as `runHealth`.
+ * Additive evidence only: the entry's outcome, predicates and failure
+ * diagnostics are not read or changed, and a classification that fails is a
+ * named absence, never a scenario failure. A PASSED scenario with a flagged
+ * infrastructure verdict is also named on the console.
+ * @param {Object} entry - The scenario's report entry.
+ * @param {string} scenarioDir
+ * @param {string} workspaceRoot
+ * @return {Promise<Object>} The full run health, or its named absence.
+ */
+async function recordScenarioRunHealth(entry, scenarioDir, workspaceRoot) {
+  if (!existsSync(scenarioDir)) {
+    entry.runHealth = {unavailable: RUN_HEALTH_UNAVAILABLE.NO_SCENARIO_DIRECTORY};
+    return entry.runHealth;
+  }
+  let runHealth = null;
+  try {
+    runHealth = await writeScenarioRunHealth({
+      scenarioDir,
+      linkBaselinePath: linkBaselinePathFromEnvironment(),
+    });
+  } catch (error) {
+    entry.runHealth = {unavailable: RUN_HEALTH_UNAVAILABLE.CLASSIFICATION_FAILED,
+      detail: String(error?.message ?? error)};
+    return entry.runHealth;
+  }
+  entry.runHealth = {
+    ...summarizeRunHealth(runHealth),
+    jsonPath: toWorkspaceRelative(join(scenarioDir, RUN_HEALTH_ARTIFACT.JSON), workspaceRoot),
+  };
+  if (entry.passed === true &&
+      runHealth.infrastructureSuspect === INFRASTRUCTURE_SUSPECT.TRUE) {
+    console.warn(`[harness] run health: ${entry.scenario} PASSED with infrastructure ` +
+      `verdicts flagged: ${runHealth.reasons.join('; ')}`);
+  }
+  return runHealth;
 }
 
 const FALLBACK_BUNDLE_ARTIFACT_TYPE = 'scenario-failure-bundle-fallback';
@@ -595,6 +659,9 @@ async function writeFailureBundlesForReport({
       delete entry.failureBundle;
       continue;
     }
+    // Every scenario that ran, passed or failed, gets its run health: the
+    // artefacts in its directory and a compact summary on its report entry.
+    const runHealth = await recordScenarioRunHealth(entry, scenarioDir, workspaceRoot);
     if (entry.passed === true) {
       await removeScenarioFailureArtifacts(scenarioDir);
       delete entry.failureBundle;
@@ -627,6 +694,7 @@ async function writeFailureBundlesForReport({
           scenarioConfig: isRecord(scenarioConfigs) ?
             scenarioConfigs[entry.scenario] :
             null,
+          runHealth,
         }),
       );
     } catch (bundleError) {

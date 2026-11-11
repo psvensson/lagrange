@@ -173,7 +173,6 @@ function isEligibleLatencyGroupRow(groupRow) {
   return (
     !groupValue ||
     groupValue === LATENCY_GROUP_STATE.ACTIVE ||
-    groupValue === LATENCY_GROUP_STATE.DEGRADED ||
     groupValue === ROUTING_DOMAIN_GROUP.DEGRADED
   );
 }
@@ -341,11 +340,6 @@ function resolveLatencyGroupTargetCandidates(rowOrId, options, domain) {
     return [...latencyHostedGroups].sort((left, right) => left.localeCompare(right));
   }
   return [];
-}
-
-function resolveLatencyGroupRecipients(latencyGroupId, options = {}) {
-  const domain = collectKnownMessageGroupDomain(options);
-  return resolveLatencyGroupTargetCandidates(latencyGroupId, options, domain);
 }
 
 function collectCacheTargetGroupIds(options = {}, sourceGroupId = null, domain = null) {
@@ -780,6 +774,5 @@ export {
   buildSafeTargets,
   collectKnownMessageGroupDomain,
   isPreActivationLatencyGroup,
-  resolveLatencyGroupRecipients,
   resolveLatencyGroupTargetCandidates,
 };

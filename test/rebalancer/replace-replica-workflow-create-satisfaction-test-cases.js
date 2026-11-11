@@ -142,10 +142,12 @@ export async function registerReplaceReplicaWorkflowCreateSatisfactionTests({
           WORKFLOW_STEP.SENDING,
           'the operation should stay dispatchable until observed progress resumes it',
         );
+        // Durable-first: the deferred ACTIVE write arms its own transition
+        // retry (the write's wake) beside the observed-progress retry.
         t.equal(
           deferredTimers.length,
-          1,
-          'a bounded observed-progress retry should be armed',
+          2,
+          'the deferred ACTIVE write and the observed-progress retry are armed',
         );
 
         await deferredTimers[0].fn();
@@ -350,7 +352,9 @@ export async function registerReplaceReplicaWorkflowCreateSatisfactionTests({
               partition_id: 'control_plane_publications-p1',
               node_id: 'node-a',
               status: ReplicaStatus.ACTIVE,
-              raft_role: 'leader',
+              // Not the group's leader (2026-11-11 removal leadership gate: a
+              // leading source is handed off first; this cell is about the replay).
+              raft_role: 'follower',
               address: 'node-a/partition/control_plane_publications-p1-r1',
             },
             {
@@ -550,7 +554,9 @@ export async function registerReplaceReplicaWorkflowCreateSatisfactionTests({
               partition_id: 'sql_transaction_participants-p1',
               node_id: 'node-a',
               status: ReplicaStatus.ACTIVE,
-              raft_role: 'leader',
+              // Not the group's leader (2026-11-11 removal leadership gate: a
+              // leading source is handed off first; this cell is about the replay).
+              raft_role: 'follower',
               address: 'node-a/partition/sql_transaction_participants-p1-r1',
             },
             {

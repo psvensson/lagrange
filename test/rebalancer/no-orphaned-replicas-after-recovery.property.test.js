@@ -26,6 +26,9 @@ import {
   createMockTransactionCoordinator,
 } from './test-helpers.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
+import {
+  createReplicaOperationsCasStore,
+} from './durable-step-authority-fixture.js';
 
 /**
  * Create a mock operation row for the system table cache.
@@ -86,6 +89,9 @@ function createRecoveryTestCoordinator(options = {}) {
     return updated;
   }
 
+  const operationCasStore = createReplicaOperationsCasStore({
+    readRow: (operationId) => trackedOperations.get(operationId) || null,
+  });
   // SQL engine that tracks operations via INSERT/UPDATE queries
   const sqlQueryEngine = {
     executeQuery: async (sql, params) => {
@@ -117,25 +123,12 @@ function createRecoveryTestCoordinator(options = {}) {
       }
 
       // Handle UPDATE operations
+      // A status/step UPDATE honours its CAS guards (shared store); any
+      // other replica_operations UPDATE is accepted without effect.
+      if (operationCasStore.isStepUpdate(sql)) {
+        return operationCasStore.apply(sql, params);
+      }
       if (sql.includes('UPDATE replica_operations')) {
-        const [
-          status, workflowStep, updatedAt, completedAt, errorMessage,
-          stepsHistory, replicaId, operationId,
-        ] = params;
-
-        const existing = trackedOperations.get(operationId);
-        if (existing) {
-          trackedOperations.set(operationId, {
-            ...existing,
-            status,
-            workflow_step: workflowStep,
-            updated_at: updatedAt,
-            completed_at: completedAt,
-            error_message: errorMessage,
-            steps_history: stepsHistory,
-            replica_id: replicaId,
-          });
-        }
         return {success: true};
       }
 

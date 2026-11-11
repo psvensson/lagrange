@@ -1,5 +1,6 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+import {logOperationReadinessEvidence} from './operation-readiness-evidence-log.js';
 import {
   OPERATION_RESERVATION_ATTEMPT_OUTCOME,
   buildReservationAuthorityUnavailableError,
@@ -749,25 +750,6 @@ class RebalanceCoordinatorOperationCreation {
       }
     }
 
-    // Capture readiness snapshot for the target node at creation time
-    // (Req 4.2 — persist readiness snapshot with decisions)
-    const readinessDecisionDimension =
-      this.resolveOperationReadinessDecisionDimension(partitionId);
-    const targetReadiness =
-      this.controlPlaneReadinessService.getNodeReadinessSync(move.nodeId, {
-        decisionDimension: readinessDecisionDimension,
-      });
-    const readinessSnapshot =
-      ControlPlaneReadinessService.compactSnapshotSummary(
-        targetReadiness,
-        readinessDecisionDimension,
-      );
-    if (readinessSnapshot && operation.stepsHistory.length > 0) {
-      operation.stepsHistory[0][
-        OPERATION_METADATA_KEY.READINESS_SNAPSHOT
-      ] = readinessSnapshot;
-    }
-
     // The cure policy owner's authorization, completed with the two
     // identities only this path knows: the canonical replica id allocated
     // above, and the operation id. The stamp owner adds nothing else and
@@ -898,6 +880,23 @@ class RebalanceCoordinatorOperationCreation {
     }
 
     if (shouldEmitOperationCreated) {
+      // The target's readiness at creation explains the decision; it is
+      // logged, never stored in the operation row.
+      const readinessDecisionDimension =
+        this.resolveOperationReadinessDecisionDimension(operation.partitionId);
+      logOperationReadinessEvidence({
+        operationId: operation.operationId,
+        workflowStep: operation.workflowStep,
+        partitionId: operation.partitionId,
+        targetNodeId: operation.targetNodeId,
+        readinessSnapshot: ControlPlaneReadinessService.compactSnapshotSummary(
+          this.controlPlaneReadinessService.getNodeReadinessSync(
+            operation.targetNodeId,
+            {decisionDimension: readinessDecisionDimension},
+          ),
+          readinessDecisionDimension,
+        ),
+      });
       this.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_CREATED, {operation});
       await this.armCoordinatorCreatedOperationProgress(
         operation,

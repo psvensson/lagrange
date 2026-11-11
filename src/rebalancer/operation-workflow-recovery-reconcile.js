@@ -569,7 +569,7 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
     try {
       if (operation.workflowStep !== WORKFLOW_STEP.STOPPING &&
           await this.updateStep(operation, WORKFLOW_STEP.STOPPING,
-            undefined, {stepMetadata, requireDurable: true}) &&
+            undefined, {stepMetadata}) &&
           replaceIntentEntryOf(operation)) {
         // This owner's own durable transition committed the intent entry.
         return true;
@@ -602,7 +602,7 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
         return false;
       }
       if (await this.updateStep(durable, WORKFLOW_STEP.STOPPING,
-        undefined, {stepMetadata, requireDurable: true}) &&
+        undefined, {stepMetadata}) &&
           replaceIntentEntryOf(durable)) {
         adoptDurableReplaceIntent(operation, durable);
         return true;
@@ -752,6 +752,8 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
     const candidateValues = [
       errorLike.message,
       errorLike.errorMessage,
+      // A handler answer or a transport outcome carries its text as `error`.
+      errorLike.error,
       errorLike.error?.message,
       errorLike.error?.errorMessage,
       errorLike.details?.message,

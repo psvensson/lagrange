@@ -24,6 +24,9 @@ import {
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
 } from './test-helpers.js';
+import {
+  createReplicaOperationsCasStore,
+} from './durable-step-authority-fixture.js';
 
 const PERSISTENCE_PROPERTY_DEFAULT_PARTITION_ID = 'partition';
 const PERSISTENCE_PROPERTY_DEFAULT_REPLICA_SUFFIX = 'r1';
@@ -31,6 +34,9 @@ const PERSISTENCE_PROPERTY_DEFAULT_REPLICA_SUFFIX = 'r1';
 function createTestCoordinatorWithPersistence() {
   const persistedOperations = new Map();
   const persistedReservations = new Map();
+  const operationCasStore = createReplicaOperationsCasStore({
+    readRow: (operationId) => persistedOperations.get(operationId) || null,
+  });
 
   const sqlQueryEngine = {
     executeQuery: async (sql, params) => {
@@ -63,25 +69,12 @@ function createTestCoordinatorWithPersistence() {
         return {success: true, affectedRows: 1};
       }
 
+      // A status/step UPDATE honours its CAS guards (shared store); any
+      // other replica_operations UPDATE is accepted without effect.
+      if (operationCasStore.isStepUpdate(sql)) {
+        return operationCasStore.apply(sql, params);
+      }
       if (sql.includes('UPDATE replica_operations')) {
-        const [
-          status, workflowStep, updatedAt, completedAt, errorMessage,
-          stepsHistory, replicaId, operationId,
-        ] = params;
-
-        const existing = persistedOperations.get(operationId);
-        if (existing) {
-          persistedOperations.set(operationId, {
-            ...existing,
-            status,
-            workflow_step: workflowStep,
-            updated_at: updatedAt,
-            completed_at: completedAt,
-            error_message: errorMessage,
-            steps_history: stepsHistory,
-            replica_id: replicaId,
-          });
-        }
         return {success: true, affectedRows: 1};
       }
 

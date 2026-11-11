@@ -7,6 +7,7 @@
 
 import {LoggingService} from '../logging/logging-service.js';
 import {CDC_OPERATION, TABLES} from '../constants/index.js';
+import {isTableCdcObligationRecorded} from '../cache/cdc-table-policy.js';
 import {LiveQueryManager} from './live-query-manager.js';
 import {LIVE_QUERY_SUBSYSTEM} from './live-query-constants.js';
 
@@ -364,8 +365,13 @@ function resolvePartition(options, partitionId) {
     null;
 }
 
+// A partition whose table records CDC obligations delivers durable vectors
+// to propagation subscribers only: a subscriber there must answer each vector
+// with a committed receipt, and one that cannot holds the partition's whole
+// delivery lane. A live query is an observer, so it never registers on such a
+// partition; its changes reach it through the system-table cache subscription.
 async function trySubscribeViaPartition(partition, queryId, handler, subOptions) {
-  if (!partition) {
+  if (!partition || isTableCdcObligationRecorded(partition.tableName)) {
     return {handled: false};
   }
   if (typeof partition.subscribeToCDCWithHandshake === 'function') {

@@ -502,4 +502,93 @@ describe('ReplicaHandler retained CREATE admission recovery', () => {
     );
     await fixture.handler.shutdown();
   });
+
+  it('prioritizes CLOSED and unsettled admission rows ahead of satisfied current-boot ACTIVE rows', async () => {
+    const activeRow = operationRow({
+      operation_id: 'op-satisfied-active',
+      replica_id: 'rep-satisfied-active',
+      create_admission_state: CREATE_ADMISSION_STATE.ACTIVE,
+      create_admission_token: 'admission-satisfied-active',
+      create_admission_attempt_token: 'attempt-satisfied-active',
+      create_admission_owner_incarnation: 102,
+    });
+    const closedRow = operationRow({
+      operation_id: 'op-closed-cleanup',
+      replica_id: 'rep-closed-cleanup',
+      create_admission_state: CREATE_ADMISSION_STATE.CLOSED,
+      create_admission_token: 'admission-closed-cleanup',
+      create_admission_attempt_token: 'attempt-closed-cleanup',
+      create_admission_owner_incarnation: 102,
+    });
+    const fixture = await createHandlerFixture({
+      row: activeRow,
+      targetRow: targetLifecycle(activeRow, {status: ReplicaStatus.ACTIVE}),
+      gatewayOptions: {additionalRows: [closedRow]},
+      additionalTargetRows: [targetLifecycle(closedRow)],
+    });
+
+    const activeService = {
+      isInitialized: true,
+      createAdmissionOperationId: activeRow.operation_id,
+      createAdmissionToken: activeRow.create_admission_token,
+      createAttemptToken: activeRow.create_admission_attempt_token,
+      async shutdown() {},
+    };
+    fixture.handler.localServices.set(activeRow.replica_id, activeService);
+    fixture.handler.setLocalReplica(activeRow.replica_id, {
+      replicaId: activeRow.replica_id,
+      partitionId: activeRow.partition_id,
+      status: ReplicaStatus.ACTIVE,
+      service: activeService,
+      createAdmissionOperationId: activeRow.operation_id,
+      createAdmissionToken: activeRow.create_admission_token,
+      createAttemptToken: activeRow.create_admission_attempt_token,
+    });
+
+    const staleClosedService = {
+      createAdmissionOperationId: closedRow.operation_id,
+      createAdmissionToken: closedRow.create_admission_token,
+      createAttemptToken: closedRow.create_admission_attempt_token,
+      shutdownCalls: 0,
+      async shutdown() {
+        this.shutdownCalls += 1;
+      },
+    };
+    fixture.handler.localServices.set(closedRow.replica_id, staleClosedService);
+    fixture.handler.setLocalReplica(closedRow.replica_id, {
+      replicaId: closedRow.replica_id,
+      partitionId: closedRow.partition_id,
+      status: ReplicaStatus.CREATING,
+      service: staleClosedService,
+      createAdmissionOperationId: closedRow.operation_id,
+      createAdmissionToken: closedRow.create_admission_token,
+      createAttemptToken: closedRow.create_admission_attempt_token,
+    });
+
+    let persistActiveCalls = 0;
+    const originalPersist =
+      fixture.handler.persistReplicaStatusWithRetry.bind(fixture.handler);
+    fixture.handler.persistReplicaStatusWithRetry = async (
+      replicaId,
+      newStatus,
+      additionalData,
+    ) => {
+      if (replicaId === activeRow.replica_id) {
+        persistActiveCalls += 1;
+      }
+      return originalPersist(replicaId, newStatus, additionalData);
+    };
+
+    // Even if boot authority reads fail after the retained rows are fetched,
+    // CLOSED cleanup runs without boot-authority reads and satisfied ACTIVE
+    // rows on the current boot incarnation short-circuit without re-reading.
+    fixture.authority.failNextBootReads(1);
+    await fixture.handler.recoverRetainedReplicaCreateAdmissions();
+
+    assert.equal(staleClosedService.shutdownCalls, 1,
+      'CLOSED retained row is retired immediately without blocking on ACTIVE rows');
+    assert.equal(persistActiveCalls, 0,
+      'satisfied current-boot ACTIVE row must not re-run status persistence during retained recovery');
+    await fixture.handler.shutdown();
+  });
 });

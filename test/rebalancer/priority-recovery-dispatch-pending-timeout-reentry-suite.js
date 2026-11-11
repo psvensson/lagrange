@@ -207,11 +207,11 @@ const TEST_SQL_PRIORITY_STALE_VISIBILITY_REDISPATCH_TEST_NAME =
   'local-owner priority SQL dispatch publishes deferred transition visibility ' +
   'while authoritative reads lag';
 const TEST_SQL_PRIORITY_DEFERRED_CLAIM_DISPATCH_TEST_NAME =
-  'local-owner priority SQL dispatch proceeds when the SENDING claim is ' +
-  'retryably deferred';
+  'local-owner priority SQL dispatch defers target delivery when the SENDING ' +
+  'claim is retryably deferred and dispatches after the durable claim commits';
 const TEST_SQL_PRIORITY_DEFERRED_PROGRESS_DISPATCH_TEST_NAME =
-  'local-owner priority SQL dispatch publishes deferred CREATING progress ' +
-  'after target delivery';
+  'local-owner priority SQL dispatch defers the CREATING transition after ' +
+  'target delivery and commits it on retry without a second delivery';
 const TEST_SQL_PRIORITY_PENDING_WAKE_ACTIVE_RECONCILE_TEST_NAME =
   'local-owner priority SQL dispatch wake reconciles PENDING rows from active ' +
   'target evidence';
@@ -222,16 +222,16 @@ const TEST_ASSERT_SQL_PRIORITY_STALE_ROW =
   'the test must keep the authoritative SQL row stale to model lagging ' +
   'visibility';
 const TEST_ASSERT_SQL_PRIORITY_SNAPSHOT_STEP =
-  'priority snapshot should consume the owner-persisted transition instead of ' +
-  'reclassifying stale PENDING as dispatch-pending';
+  'priority snapshot should show the committed row step, never an ' +
+  'unpersisted one';
 const TEST_ASSERT_SQL_PRIORITY_DEFERRED_CLAIM_DISPATCH =
-  'retryable priority claim pressure should not block local target dispatch';
+  'retryable priority claim pressure must defer target dispatch until SENDING commits durably';
 const TEST_ASSERT_SQL_PRIORITY_DEFERRED_CLAIM_STEP =
-  'the next durable priority transition should advance directly to CREATING';
+  'after the deferred SENDING claim commits on retry, the transition advances to CREATING';
 const TEST_ASSERT_SQL_PRIORITY_DEFERRED_CLAIM_CAS =
-  'deferred local priority claims should preserve the original PENDING CAS';
+  'the retried priority SENDING claim must preserve the original PENDING CAS';
 const TEST_ASSERT_SQL_PRIORITY_DEFERRED_PROGRESS_STALE_ROW =
-  'retryable priority progress pressure should leave the durable row stale';
+  'a retryable CREATING write failure leaves the row and the owner at SENDING';
 const TEST_ASSERT_SQL_PRIORITY_DEFERRED_PROGRESS_TIMER =
   'retryable priority progress pressure should arm one durable retry';
 const TEST_ASSERT_SQL_PRIORITY_DEFERRED_PROGRESS_RETRY =

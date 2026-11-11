@@ -2,14 +2,31 @@ import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {
   buildSchemaProvisioningChildIntent,
 } from './schema-provisioning-child-intent.js';
+import {
+  OPERATION_CREATION_ADMISSION_DENIAL_CLASS,
+  OPERATION_CREATION_ADMISSION_ERROR_CODE,
+  classifyOperationCreationAdmissionDenial,
+} from '../rebalancer/rebalance-coordinator-operation-creation-admission.js';
+import {
+  PROVISIONING_TARGET_ADMISSION_STATE,
+  settleProvisioningTargetAdmission,
+} from './provisioning-target-admission-settle.js';
+import {shouldRetainDurableSchemaPlanningOperations} from
+  './durable-schema-planning-retention.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_SEMI_SPACE = '; ';
 const LOCAL_STR_WARN = 'warn';
-const LOCAL_STR_ADMISSION_REENTER_CODE = 'OPERATION_CREATION_ADMISSION_REENTER';
-const LOCAL_STR_PLANNING_IDENTITY_CHANGED =
-  'readiness_planning_identity_changed';
+const PROVISIONING_FOUNDING_BELOW_REQUESTED_LOG_MSG =
+  'Founding table partition below its requested replica count';
+const PROVISIONING_FOUNDING_BELOW_REQUESTED_REASON = Object.freeze({
+  TARGETS_REFUSED: 'founding_targets_refused',
+  CANDIDATE_NODES_SHORT: 'founding_candidate_nodes_short',
+});
+const PROVISIONING_ADMISSION_UNSETTLED_MESSAGE =
+  'Provisioning unavailable: target admission did not settle within the ' +
+  'statement budget for partition ';
 
 const {
   CONTROL_PLANE_MUTATION_WORK_CLASS,
@@ -122,6 +139,8 @@ class SQLQueryEngineProvisioningAdmissionMethods {
       nodeSummary: rejection?.nodeSummary || null,
       readinessSnapshot: rejection?.readinessSnapshot || null,
       message: rejection?.message || null,
+      admissionState: rejection?.admissionState || null,
+      reentries: rejection?.reentries ?? null,
     });
   }
 
@@ -318,73 +337,145 @@ class SQLQueryEngineProvisioningAdmissionMethods {
       };
     }
 
-    const admittedTargetNodeIds = [];
-    const acceptedTargetPlans = [];
-    const rejectedTargetNodePlans = [];
-    for (const targetNodeId of candidateTargetNodeIds) {
-      let admissionDecision = null;
-      const childIntent = buildSchemaProvisioningChildIntent(
-        options.schemaJobId,
-        targetNodeId,
-      );
-      try {
-        admissionDecision =
-          await this.rebalanceCoordinator.checkProvisioningAdmission({
-            type: OperationType.ADD,
-            partitionId,
-            entityType: SERVICE_TYPE.PARTITION,
-            entityId: partitionId,
-            nodeId: targetNodeId,
-            controlPlaneMutationWorkClass:
-              CONTROL_PLANE_MUTATION_WORK_CLASS.INTERACTIVE,
-            ...childIntent,
-          });
-      } catch (error) {
-        if (!this.isProvisioningAdmissionDeniedError(error)) {
-          throw error;
-        }
-        admissionDecision = {
-          allowed: false,
-          admissionResult: error.admissionResult || null,
-          error,
-        };
-      }
-
-      if (admissionDecision?.allowed === true) {
-        admittedTargetNodeIds.push(targetNodeId);
-        acceptedTargetPlans.push(Object.freeze({
-          targetNodeId,
-          operationCreationAdmission:
-            admissionDecision.operationCreationAdmission,
-        }));
-        continue;
-      }
-
-      const rejectionError =
-        admissionDecision?.error && typeof admissionDecision.error === 'object' ?
-          admissionDecision.error :
-          (() => {
-            const fallbackError = new Error(
-              `Provisioning admission denied on ${targetNodeId}`,
-            );
-            fallbackError.admissionResult =
-                admissionDecision?.admissionResult || null;
-            return fallbackError;
-          })();
-      rejectedTargetNodePlans.push(
-        this.createProvisioningTargetRejection(targetNodeId, rejectionError),
-      );
-    }
-
+    const settled = await this.admitProvisioningTargets({
+      partitionId,
+      targetNodeIds: candidateTargetNodeIds,
+      schemaJobId: options.schemaJobId,
+      timeoutBudget: options.timeoutBudget || null,
+      cancellationToken: options.cancellationToken || null,
+    });
     return {
       existingRoutableNodeIds,
       candidateTargetNodeIds,
-      admittedTargetNodeIds,
-      admittedTargetPlans: Object.freeze(acceptedTargetPlans),
-      rejectedTargetNodePlans,
+      ...settled,
       maximumProvisionableReplicaCount:
-        existingRoutableNodeIds.length + admittedTargetNodeIds.length,
+        existingRoutableNodeIds.length + settled.admittedTargetNodeIds.length,
     };
+  }
+
+  /**
+   * Settle admission for each founding target through the one settle path
+   * (provisioning-target-admission-settle.js) and log every refusal and
+   * every unsettled target with its typed reasons. An UNSETTLED target is
+   * neither admitted nor rejected.
+   * @param {Object} options
+   * @return {Promise<Object>}
+   * @private
+   */
+  async admitProvisioningTargets(options) {
+    const admittedTargetNodeIds = [];
+    const admittedTargetPlans = [];
+    const rejectedTargetNodePlans = [];
+    const unsettledTargetNodePlans = [];
+    for (const targetNodeId of options.targetNodeIds) {
+      const settled = await settleProvisioningTargetAdmission(this, {
+        partitionId: options.partitionId,
+        targetNodeId,
+        childIntent: buildSchemaProvisioningChildIntent(
+          options.schemaJobId,
+          targetNodeId,
+        ),
+      }, options);
+      if (settled.state === PROVISIONING_TARGET_ADMISSION_STATE.ADMITTED) {
+        admittedTargetNodeIds.push(targetNodeId);
+        admittedTargetPlans.push(Object.freeze({
+          targetNodeId,
+          operationCreationAdmission:
+            settled.decision.operationCreationAdmission,
+        }));
+        continue;
+      }
+      const plan = {
+        ...this.createProvisioningTargetRejection(
+          targetNodeId,
+          this.buildProvisioningAdmissionDenialError(targetNodeId, settled),
+        ),
+        admissionState: settled.state,
+        reentries: settled.reentries,
+      };
+      (settled.state === PROVISIONING_TARGET_ADMISSION_STATE.REFUSED ?
+        rejectedTargetNodePlans : unsettledTargetNodePlans).push(plan);
+      this.logProvisioningTargetRejection(options.partitionId, targetNodeId,
+        plan);
+    }
+    return {
+      admittedTargetNodeIds,
+      admittedTargetPlans: Object.freeze(admittedTargetPlans),
+      rejectedTargetNodePlans,
+      unsettledTargetNodePlans,
+    };
+  }
+
+  /**
+   * The error a denied settle is described by: the thrown one, or one built
+   * from the returned observation.
+   * @param {string} targetNodeId
+   * @param {Object} settled
+   * @return {Error}
+   * @private
+   */
+  buildProvisioningAdmissionDenialError(targetNodeId, settled) {
+    const decision = settled.decision;
+    if (decision?.error && typeof decision.error === LOCAL_STR_OBJECT) {
+      return decision.error;
+    }
+    const error = new Error(`Provisioning admission denied on ${targetNodeId}`);
+    error.admissionResult = decision?.admissionResult || null;
+    return error;
+  }
+
+  /**
+   * Founding a partition with fewer members than requested is an explicit
+   * decision, taken only on non-transient grounds (a transient admission
+   * deferral fails the statement retryably before this point): every
+   * per-target refusal it rests on, or the shortfall of candidate nodes.
+   * @param {Object} details
+   * @return {boolean} whether the cohort is founded below the request
+   * @private
+   */
+  logProvisioningFoundingBelowRequested(details) {
+    if (details.foundingReplicaCount >= details.requestedReplicaCount) {
+      return false;
+    }
+    const refusals = Array.isArray(details.rejectedTargetNodePlans) ?
+      details.rejectedTargetNodePlans : [];
+    this.logger?.warn?.(PROVISIONING_FOUNDING_BELOW_REQUESTED_LOG_MSG, {
+      partitionId: details.partitionId,
+      requestedReplicaCount: details.requestedReplicaCount,
+      foundingReplicaCount: details.foundingReplicaCount,
+      minimumRoutableReplicaCount: details.minimumRoutableReplicaCount,
+      reason: refusals.length > 0 ?
+        PROVISIONING_FOUNDING_BELOW_REQUESTED_REASON.TARGETS_REFUSED :
+        PROVISIONING_FOUNDING_BELOW_REQUESTED_REASON.CANDIDATE_NODES_SHORT,
+      candidateTargetNodeIds: details.candidateTargetNodeIds,
+      refusals: this.summarizeProvisioningTargetRejections(refusals),
+    });
+    return true;
+  }
+
+  /**
+   * Fail the statement, retryably, when a founding target's admission did
+   * not settle within its budget: the cohort is never founded smaller on a
+   * transient deferral.
+   * @param {string} partitionId
+   * @param {Object[]} unsettledTargetNodePlans
+   * @return {void}
+   * @private
+   */
+  throwIfProvisioningAdmissionUnsettled(partitionId, unsettledTargetNodePlans) {
+    if (!Array.isArray(unsettledTargetNodePlans) ||
+        unsettledTargetNodePlans.length === 0) {
+      return;
+    }
+    const error = new Error(PROVISIONING_ADMISSION_UNSETTLED_MESSAGE +
+      `${partitionId}: ` +
+      this.summarizeProvisioningTargetRejections(unsettledTargetNodePlans));
+    error.code = QUERY_ERROR_CODE.TABLE_PARTITION_PROVISIONING_RETRYABLE;
+    // Retryable for every consumer, the managed split and merge retry
+    // policies included (they read `retryable`, not the code).
+    error.retryable = true;
+    error.unsettledTargetNodePlans = unsettledTargetNodePlans;
+    throw error;
   }
 
   /**
@@ -396,23 +487,6 @@ class SQLQueryEngineProvisioningAdmissionMethods {
    */
   async probeInitialTablePartitionProvisioning(options = {}) {
     return this.probeProvisioningTargetAdmission(options);
-  }
-
-  /**
-   * Return true when createOperation failed only because the control-plane
-   * planning generation advanced after admission precheck.
-   * @param {Error} error
-   * @return {boolean}
-   * @private
-   */
-  isPlanningIdentityChangedReentryError(error) {
-    if (error?.code !== LOCAL_STR_ADMISSION_REENTER_CODE) {
-      return false;
-    }
-    const reasons = this.normalizeProvisioningReasonCodes(
-      error?.reasonCodes || error?.admissionResult?.blockingReasons,
-    );
-    return reasons.includes(LOCAL_STR_PLANNING_IDENTITY_CHANGED);
   }
 
   /**
@@ -444,58 +518,91 @@ class SQLQueryEngineProvisioningAdmissionMethods {
   }
 
   /**
-   * Refresh provisioning admission for one target after a planning-generation
-   * advance while preserving the deterministic child intent identity.
-   * @param {Object} options
-   * @return {Promise<Object|null>}
-   * @private
-   */
-  async refreshProvisioningOperationAdmission(options) {
-    const decision =
-      await this.rebalanceCoordinator.checkProvisioningAdmission({
-        type: OperationType.ADD,
-        partitionId: options.partitionId,
-        entityType: SERVICE_TYPE.PARTITION,
-        entityId: options.partitionId,
-        nodeId: options.targetNodeId,
-        controlPlaneMutationWorkClass:
-          CONTROL_PLANE_MUTATION_WORK_CLASS.INTERACTIVE,
-        operationIntentId: options.childIntent.operationIntentId,
-        replicaIntentId: options.childIntent.replicaIntentId,
-      });
-    return decision?.allowed === true ?
-      decision.operationCreationAdmission || null :
-      null;
-  }
-
-  /**
-   * Create one initial-provisioning ADD operation, re-entering admission once
-   * if a concurrent control-plane CDC event advanced the planning generation.
+   * Create one initial-provisioning ADD operation. The creation boundary
+   * re-observes admission; when it re-enters on the admission owner's own
+   * transient deferral, the settle path first waits for what the owner
+   * names as clearing that deferral (the error is its prior denial) and
+   * then settles admission again, all within the statement budget. A
+   * target still unsettled at the bound fails the statement retryably
+   * (never a per-target rejection); a refusal is rethrown as the rejection
+   * it is.
    * @param {Object} options
    * @return {Promise<Object>}
    * @private
    */
   async createProvisioningOperationWithAdmissionReentry(options) {
-    const createWithAdmission = (admission) =>
-      this.rebalanceCoordinator.createOperation(
-        this.buildProvisioningCreateOperationMove(options, admission),
-      );
     let admission = options.operationCreationAdmission || null;
-    try {
-      return await createWithAdmission(admission);
-    } catch (error) {
-      if (
-        !options.supportsAdmissionPrecheck ||
-        !this.isPlanningIdentityChangedReentryError(error)
-      ) {
-        throw error;
+    for (;;) {
+      try {
+        return await this.rebalanceCoordinator.createOperation(
+          this.buildProvisioningCreateOperationMove(options, admission),
+        );
+      } catch (error) {
+        if (
+          !options.supportsAdmissionPrecheck ||
+          error?.code !== OPERATION_CREATION_ADMISSION_ERROR_CODE ||
+          classifyOperationCreationAdmissionDenial(error) !==
+            OPERATION_CREATION_ADMISSION_DENIAL_CLASS.TRANSIENT_REENTER
+        ) {
+          throw error;
+        }
+        const settled = await settleProvisioningTargetAdmission(this, options,
+          {...options, priorDenial: error});
+        if (settled.state === PROVISIONING_TARGET_ADMISSION_STATE.REFUSED) {
+          throw this.buildProvisioningAdmissionDenialError(
+            options.targetNodeId, settled);
+        }
+        if (settled.state === PROVISIONING_TARGET_ADMISSION_STATE.UNSETTLED) {
+          this.throwIfProvisioningAdmissionUnsettled(options.partitionId, [{
+            ...this.createProvisioningTargetRejection(options.targetNodeId,
+              error),
+            admissionState: settled.state,
+            reentries: settled.reentries,
+          }]);
+        }
+        admission = settled.decision.operationCreationAdmission || null;
       }
-      admission = await this.refreshProvisioningOperationAdmission(options);
-      if (!admission) {
-        throw error;
-      }
-      return createWithAdmission(admission);
     }
+  }
+
+  /**
+   * The contract for a founding left partly created by an unsettled
+   * target (the creation boundary of target B can re-enter after target
+   * A's operation was persisted): the statement fails retryably and what
+   * this attempt created is kept only where the retry is guaranteed to
+   * complete it. Under a schema job, the job's own deterministic,
+   * dispatch-deferred, unstamped founding operations are retained: the
+   * schema provisioning job owner keeps the job PENDING on the retryable
+   * code and runs it again; the retry reads the cohort UNFOUNDED (nothing is
+   * stamped before every founder is created), re-creating (job, target)
+   * collides with the held operation and reuses it, and the cohort is
+   * stamped once. Anything else (no schema job: NO_DURABLE_INTENT, or
+   * operations not of that shape) is failed before the error propagates, so
+   * no held half-founding outlives the statement.
+   * @param {Object} context the provisioning context
+   * @param {string} partitionId
+   * @param {Object[]} createdPlanningOperations
+   * @param {Error} error the statement's failure
+   * @return {Promise<void>}
+   * @private
+   */
+  async releaseUnsettledFoundingOperations(
+    context,
+    partitionId,
+    createdPlanningOperations,
+    error,
+  ) {
+    if (!Array.isArray(error?.unsettledTargetNodePlans) ||
+        createdPlanningOperations.length === 0 ||
+        shouldRetainDurableSchemaPlanningOperations(context,
+          createdPlanningOperations)) {
+      return;
+    }
+    await this.abortProvisioningPlanningOperations(
+      partitionId,
+      createdPlanningOperations,
+      QUERY_ERROR_MSG.TABLE_PARTITION_PROVISION_ABORTED_PRE_DISPATCH,
+    );
   }
 }
 

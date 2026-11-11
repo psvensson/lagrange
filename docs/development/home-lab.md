@@ -695,6 +695,120 @@ All selected Linux machines must be able to reach each other's advertised LAN
 addresses and the harness port range. Keep this traffic on the trusted home LAN;
 do not expose these ports to the Internet.
 
+## Run health: is a red run infrastructure-limited?
+
+A multi-host run executes on household Wi-Fi and on machines of very
+different size, so a red scenario can be a product defect or a slow machine or
+link. Run health is the evidence that tells them apart. It is additive: it
+never changes a scenario outcome, a bound or a failure class.
+
+Three things are recorded for every lab formation:
+
+1. **Resource samples** (`<outputDir>/<scenario>/samples.ndjson`). Per node:
+   container CPU and memory from the node's Docker daemon, and the node's own
+   process and host facts from its admin diagnostics route - network
+   interface byte counters, TCP retransmitted and sent segments, Wi-Fi signal,
+   CPU steal and I/O wait, load, memory and I/O pressure, thermal throttle
+   events and zone temperature - plus `rates` between successive samples.
+   Every field is a measurement or a typed `unavailable` reason; a zero is a
+   measured zero. In a multi-host run the node container shares its host's
+   network namespace, so Docker reports no per-container network counters
+   (`container_has_no_network_namespace_of_its_own`) and the host facts
+   describe the host's interfaces and whole TCP stack.
+2. **Link baseline** (`<config>.link-baseline.json` beside the generated
+   config under `.tmp/home-lab/`, copied into each failed scenario directory
+   as `link-baseline.json`). Before and after the formation the adapter
+   measures every host pair: five TCP round trips and at most 2 MiB each way
+   in at most 1.5 s, using a small Node probe sent over the existing ssh
+   channel (`scripts/lab/link-baseline.js`). Pairs run strictly one at a
+   time, so only two hosts transfer at once and a pair moves at most 4 MiB.
+   A pair that cannot be measured is recorded as unavailable; the run goes on.
+3. **Node health** (`<outputDir>/<scenario>/node-health.json`). Each node
+   keeps about one hour of its own health samples in memory only - not a
+   table, not replicated, not on disk - and the harness reads it once at the
+   end of the run with the explicit collection call
+   (`GET /api/admin/diagnostics/health?sinceMs=`). A node that does not
+   answer is an explicit `unreachable` entry.
+
+Every scenario that ran, passed or failed, gets `run-health.json` and
+`run-health.md` in its directory (rewritten once the post-run baseline
+exists), and its report entry carries a compact `runHealth` summary: the
+overall classification and the id and attribution of every flagged verdict.
+A PASSED scenario with a flagged infrastructure verdict is also named on the
+runner's console; the pass itself is unchanged. A failed scenario's
+`failure-bundle.md` additionally starts with the **Run Health** summary and
+its `failure-bundle.json` carries the full `runHealth` section. For any
+scenario directory, including an old one:
+
+```bash
+npm run analyze:run-health -- --scenario-dir <outputDir>/<scenario>
+```
+
+How to read it:
+
+- `infrastructure_suspect` is `true` when a flagged verdict is attributed to
+  infrastructure, `false` when every infrastructure check was evaluated and
+  none is flagged, and `unknown` when at least one such check had no input.
+  `unknown` is not `false`: the reasons list names each missing input.
+- Every verdict is `flagged`, `clear` or `unknown`, with its evidence and the
+  threshold it used. Node verdicts: `cpu_saturated`, `host_cpu_contended`,
+  `event_loop_delayed`, `memory_pressure`, `thermally_throttled`, `lossy`.
+  Link verdicts (one per direction): `bandwidth_limited`,
+  `latency_degraded`, `lossy`, `stalled`.
+- A flagged verdict carries an attribution. `infrastructure` is the machine
+  or the network: steal or I/O wait, thermal throttling, memory stall,
+  retransmits, a backlog on a link that carried less than its measured idle
+  throughput, a link silent while both processes kept logging. `workload` is
+  load the product itself placed: the node's own CPU, a backlog on a link
+  that carried at least its measured throughput. `undetermined` means the
+  input that would tell them apart was missing.
+- Read each link's verdicts next to its **offered load** (bytes per second,
+  frames by class, largest frame, socket backlog) and each node's served
+  query bytes per table. "The link is slow" and "the product sent too much"
+  look the same from the far end; the offered load is what separates them.
+- One-way latency includes the clock skew between two hosts. It is compared
+  with the link's own floor in the same run, never read as an absolute.
+- TCP retransmit counters are per host, not per link: `lossy` on a link
+  means one of its two hosts retransmitted above the threshold.
+
+Every threshold, with its source and justification, is in
+`test/distributed/harness/run-health/run-health-constants.js` and is echoed
+in each `runHealth` section.
+
+Node health is a hint. No placement, readiness, admission or routing owner
+may read it; `npm run audit:health-hint-imports` (part of
+`audit:guidelines`) fails if one imports it.
+
+### CPU profile of one node
+
+When a node is flagged `cpu_saturated` and the question is what burns the
+CPU, profile that node on the next run. It is off by default and profiles
+exactly one node:
+
+```bash
+node scripts/lab.js harness run fresh-formation-user-table-routability \
+  --base test/distributed/config/local-three-node.json \
+  --nodes main-linux,small-linux,third-linux \
+  -- --profile-node seed
+```
+
+`--profile-node` takes `seed` or a node index. The harness starts that node
+with Node's sampling profiler (`NODE_OPTIONS=--cpu-prof`, 10 ms interval) and,
+after the node stopped and before its container is removed, copies the
+profile to `<outputDir>/.cpu-profiles/<scenario>/<nodeId>.<file>.cpuprofile`.
+Node writes the profile when the process exits, so a node that was killed
+rather than stopped, or a reused container that is never stopped
+(`--fast-local`), leaves none; the runner prints the named reason. Like every
+harness run it refuses under the solve probe mark. Read a profile without a
+browser:
+
+```bash
+npm run analyze:cpu-profile -- <file.cpuprofile> [--top N] [--depth N]
+```
+
+It prints the busy/idle split, the top self-time functions, the top files by
+self and inclusive time, and the top call paths as chains of files.
+
 ## K3s setup and administration
 
 K3s is useful for deployment-style tests and experiments that should look like

@@ -12,11 +12,10 @@ import {
   CDC_LIFECYCLE_LOG_MSG,
 } from '../constants/cdc-lifecycle-constants.js';
 import {isTableCdcObligationRecorded} from '../cache/cdc-table-policy.js';
-import {hasDurableCdcEvents, isCommittedCdcOutcome,
+import {CDC_COMPLETION, hasDurableCdcEvents, isCommittedCdcOutcome,
   isProvisionalCdcOutcome} from '../cdc/cdc-delivery-outcome.js';
-import {assertCdcDeliveryInvocation, beginCdcDeliveryInvocation} from
-  '../cdc/cdc-delivery-invocation.js';
-import {captureCdcEvents} from '../cdc/cdc-event-envelope.js';
+import {assertCdcDeliveryInvocation} from '../cdc/cdc-delivery-invocation.js';
+import {readStateField} from '../utils/state-field-read.js';
 import {
   PARTITION_SERVICE_CDC,
   PARTITION_SERVICE_DEFAULT,
@@ -27,6 +26,7 @@ import {
 } from './partition-service-constants.js';
 import {PARTITION_CDC_OBLIGATION_REASON} from
   './partition-cdc-obligation-constants.js';
+import {retireRecipientInvocations} from './partition-cdc-obligation-lane.js';
 import {
   acknowledgeHydratedObligationsThrough,
   cdcObligationDiagnosticsOf,
@@ -47,19 +47,15 @@ const CDC_SUBSCRIBER_NOT_READY_MSG = 'CDC subscriber not ready for delivery';
 const CDC_SUBSCRIBER_REFUSED_MSG = 'CDC subscriber refused the event';
 const CDC_SUBSCRIBER_REFUSED_CODE = 'cdc_subscriber_refused';
 
-async function deliverCapturedCdcEvent(delivery, subscriber, cdcEvent) {
-  const {owner} = delivery;
-  const tenure = owner.leadershipTenure;
-  const subscriptionEpoch = owner.cdcSubscriptionEpoch;
-  const context = beginCdcDeliveryInvocation(delivery, () =>
-    owner.isLeader && owner.leadershipTenure === tenure &&
-    owner.cdcSubscriptionEpoch === subscriptionEpoch);
-  try {
-    const captured = Object.freeze({...cdcEvent, ...captureCdcEvents([cdcEvent])[0]});
-    return await delivery.deliverCDCEventToSubscriber(subscriber, captured, context);
-  } finally {
-    context.finish();
-  }
+function invalidCdcDeliveryShape() {
+  return Object.assign(new Error(CDC_COMPLETION.INVALID), {code: CDC_COMPLETION.INVALID});
+}
+
+// Invoke a CDC subscriber: a subscriber is a callback (the one subscriber
+// shape) and receives what was delivered: an ordinary event, or a durable
+// vector with its invocation.
+function invoke(subscriber, ...delivered) {
+  return subscriber(...delivered);
 }
 
 /**
@@ -83,10 +79,10 @@ function assertSubscriberReadiness(readiness) {
   throw error;
 }
 
-function assertSubscriberAcceptance(answer, cdcEvent) {
-  if (isProvisionalCdcOutcome(answer, [cdcEvent])) return;
-  const refused = hasDurableCdcEvents([cdcEvent]) ?
-    !isCommittedCdcOutcome(answer, [cdcEvent]) : answer?.success === false;
+// A durable vector is accepted only by the committed (or provisional)
+// outcome over that exact vector; an ordinary event by any answer that is
+// not an explicit refusal.
+function assertSubscriberAcceptance(answer, refused) {
   if (!refused) return;
   const error = new Error(CDC_SUBSCRIBER_REFUSED_MSG);
   error.code = CDC_SUBSCRIBER_REFUSED_CODE;
@@ -115,16 +111,11 @@ function markReplayOnlyCdcEvent(cdcEvent) {
   return {...cdcEvent, replayOnly: true};
 }
 /**
- * Check whether a value is a valid CDC subscriber.
+ * Check whether a value is a valid CDC subscriber: a callback.
  * @param {*} subscriber - Candidate subscriber.
  * @return {boolean} True when subscriber is valid.
  */ function isCDCSubscriber(subscriber) {
-  if (typeof subscriber === PARTITION_SERVICE_TYPE.FUNCTION) {
-    return true;
-  }
-  return Boolean(
-    subscriber && typeof subscriber.handleCDCEvent === PARTITION_SERVICE_TYPE.FUNCTION,
-  );
+  return typeof subscriber === PARTITION_SERVICE_TYPE.FUNCTION;
 }
 /**
  * Helper class encapsulating CDC delivery, subscription, and buffering logic.
@@ -142,7 +133,10 @@ function markReplayOnlyCdcEvent(cdcEvent) {
    * @param {Object} owner - The PartitionService instance that owns CDC state.
    */ constructor(owner) {
     this.owner = owner;
-    this.activeCdcInvocation = null;
+    // recipientCustody: one custody slot per recipient of the obligation
+    // lane (at most one delivery in flight per recipient; a slot is released
+    // only by its delivery's actual local cleanup, also across tenures).
+    this.recipientCustody = new Map();
     this.obligationLane = createCdcObligationLane();
     if (typeof owner.on === PARTITION_SERVICE_TYPE.FUNCTION) {
       owner.on(PARTITION_SERVICE_EVENT.LEADER_ELECTED, () => {
@@ -151,7 +145,7 @@ function markReplayOnlyCdcEvent(cdcEvent) {
       });
       owner.on(PARTITION_SERVICE_EVENT.SHUTDOWN, () => resetCdcObligationLane(this));
       owner.on(PARTITION_SERVICE_EVENT.SHUTDOWN_STARTED, () => {
-        this.activeCdcInvocation?.retire();
+        retireRecipientInvocations(this);
         resetCdcObligationLane(this);
       });
     }
@@ -197,8 +191,8 @@ function markReplayOnlyCdcEvent(cdcEvent) {
   }
   /**
    * Resolve the underlying subscriber object from a wrapper.
-   * @param {Function|Object} subscriber
-   * @return {Function|Object}
+   * @param {Function} subscriber
+   * @return {Function}
    * @private
    */ getCDCSubscriberSource(subscriber) {
     return subscriber?.cdcSourceSubscriber || subscriber;
@@ -236,7 +230,7 @@ function markReplayOnlyCdcEvent(cdcEvent) {
   }
   /**
    * Resolve whether a subscriber-owner is ready to accept this CDC event.
-   * @param {Function|Object} subscriber
+   * @param {Function} subscriber
    * @param {Object} cdcEvent
    * @return {{ready:boolean,retryAfterMs:number,reason:string|null}}
    * @private
@@ -373,13 +367,10 @@ function markReplayOnlyCdcEvent(cdcEvent) {
       while (this.owner.cdcSubscribers.size > 0 && this.owner.cdcEventBuffer.hasEvents()) {
         const replayedCount = await this.owner.cdcEventBuffer.replay(async (cdcEvent) => {
           const subscribers = [...this.owner.cdcSubscribers];
-          let provisional = false;
           for (const subscriber of subscribers) {
-            const answer = await this.deliverCDCEventToSubscriber(
+            await this.deliverCDCEventToSubscriber(
               subscriber, markReplayOnlyCdcEvent(cdcEvent));
-            provisional ||= isProvisionalCdcOutcome(answer, [cdcEvent]);
           }
-          if (provisional) return false;
           this.owner.cdcPipelineMetrics.increment(CDC_PIPELINE_METRIC.EVENTS_DELIVERED);
           this.owner.emit(PARTITION_SERVICE_EVENT.CDC_EVENT, cdcEvent);
         });
@@ -419,7 +410,7 @@ function markReplayOnlyCdcEvent(cdcEvent) {
   }
   /**
    * Resolve a stable subscriber identifier.
-   * @param {Function|Object} subscriber - Subscriber.
+   * @param {Function} subscriber - Subscriber.
    * @param {Object} options - Subscription options.
    * @return {string} Stable subscriber identifier.
    */ resolveCDCSubscriberId(subscriber, options = {}) {
@@ -435,45 +426,71 @@ function markReplayOnlyCdcEvent(cdcEvent) {
     return `${PARTITION_SERVICE_CDC.SUBSCRIBER_ID_PREFIX}-${fallbackOrdinal}`;
   }
   /**
-   * Deliver one CDC event to a subscriber callback/object.
-   * @param {Function|Object} subscriber - Subscriber callback/object.
+   * Deliver one ordinary (not durable) CDC event to a subscriber
+   * callback. A durable event travels only as a vector
+   * (deliverCdcVectorToSubscriber); here it is refused as invalid.
+   * @param {Function} subscriber - Subscriber callback.
    * @param {Object} cdcEvent - Event payload.
-   * @return {Promise<void>}
-   */ async deliverCDCEventToSubscriber(subscriber, cdcEvent, deliveryContext = null) {
-    if (hasDurableCdcEvents([cdcEvent]) && deliveryContext === null) {
-      return deliverCapturedCdcEvent(this, subscriber, cdcEvent);
-    }
-    if (deliveryContext !== null) assertCdcDeliveryInvocation(deliveryContext);
-    const readiness = this.resolveCDCSubscriberReadiness(subscriber, cdcEvent);
-    assertSubscriberReadiness(readiness);
-    const invoke = () => typeof subscriber === PARTITION_SERVICE_TYPE.FUNCTION ?
-      subscriber(cdcEvent, deliveryContext) :
-      subscriber.handleCDCEvent(cdcEvent, deliveryContext);
-    const answer = deliveryContext === null ? await invoke() : await deliveryContext.run(invoke);
-    assertSubscriberAcceptance(answer, cdcEvent);
+   * @return {Promise<*>} The subscriber's answer.
+   */ async deliverCDCEventToSubscriber(subscriber, cdcEvent) {
+    if (hasDurableCdcEvents([cdcEvent])) throw invalidCdcDeliveryShape();
+    assertSubscriberReadiness(this.resolveCDCSubscriberReadiness(subscriber, cdcEvent));
+    const answer = await invoke(subscriber, cdcEvent);
+    assertSubscriberAcceptance(answer, answer?.success === false);
     return answer;
   }
   /**
-   * Create a wrapper that enriches stream metadata for one subscriber.
-   * @param {Function|Object} subscriber - Target subscriber.
+   * Deliver one vector of durable CDC events (one table, one partition, in
+   * log order) to a subscriber: the durable subscriber contract is
+   * (events, deliveryContext), answered with the outcome over that exact
+   * vector. Readiness is asked with the vector's first event.
+   * @param {Function} subscriber - Subscriber callback.
+   * @param {Array<Object>} events - The durable vector.
+   * @param {Object} deliveryContext - The obligation lane's delivery
+   *   invocation for the vector's recipient (the one caller).
+   * @return {Promise<Object>} The subscriber's committed or provisional
+   *   outcome.
+   */ async deliverCdcVectorToSubscriber(subscriber, events, deliveryContext) {
+    if (!hasDurableCdcEvents(events)) throw invalidCdcDeliveryShape();
+    assertCdcDeliveryInvocation(deliveryContext);
+    assertSubscriberReadiness(this.resolveCDCSubscriberReadiness(subscriber, events[0]));
+    const answer = await deliveryContext.run(() =>
+      invoke(subscriber, events, deliveryContext));
+    assertSubscriberAcceptance(answer, !isProvisionalCdcOutcome(answer, events) &&
+      !isCommittedCdcOutcome(answer, events));
+    return answer;
+  }
+  /**
+   * Create a wrapper that enriches stream metadata for one subscriber. It
+   * carries both delivery contracts of the partition: an ordinary event
+   * (cdcEvent), and the durable vector (events, deliveryContext).
+   * @param {Function} subscriber - Target subscriber.
    * @param {Object} subscriptionState - Mutable state for this subscriber.
    * @return {Function} Wrapper callback.
    */ buildCDCSubscriberWrapper(subscriber, subscriptionState) {
-    return async (cdcEvent, deliveryContext = null) => {
-      const sequencedEvent = Number.isFinite(cdcEvent.sequenceNumber) ?
-        cdcEvent :
-        {...cdcEvent, sequenceNumber: this.nextCDCEventSequenceNumber()};
-      const decoratedEvent = Object.freeze({
-        ...sequencedEvent,
-        subscriberId: subscriptionState.subscriberId,
-        subscriptionEpoch: subscriptionState.subscriptionEpoch,
-      });
-      const answer = await this.deliverCDCEventToSubscriber(
-        subscriber, decoratedEvent, deliveryContext);
-      if (deliveryContext !== null) assertCdcDeliveryInvocation(deliveryContext);
-      if (isProvisionalCdcOutcome(answer, [cdcEvent])) return answer;
+    const decorate = (cdcEvent) => Object.freeze({
+      ...(Number.isFinite(cdcEvent.sequenceNumber) ? cdcEvent :
+        {...cdcEvent, sequenceNumber: this.nextCDCEventSequenceNumber()}),
+      subscriberId: subscriptionState.subscriberId,
+      subscriptionEpoch: subscriptionState.subscriptionEpoch,
+    });
+    const recordDelivered = (decoratedEvent) => {
       subscriptionState.lastDeliveredSequenceNumber = decoratedEvent.sequenceNumber;
       subscriptionState.lastDeliveredAt = this.owner.timeSource.now();
+    };
+    return async (delivered, deliveryContext = null) => {
+      if (!Array.isArray(delivered)) {
+        const decoratedEvent = decorate(delivered);
+        const answer = await this.deliverCDCEventToSubscriber(subscriber, decoratedEvent);
+        recordDelivered(decoratedEvent);
+        return answer;
+      }
+      const decorated = Object.freeze(delivered.map(decorate));
+      const answer = await this.deliverCdcVectorToSubscriber(
+        subscriber, decorated, deliveryContext);
+      assertCdcDeliveryInvocation(deliveryContext);
+      if (isProvisionalCdcOutcome(answer, delivered)) return answer;
+      recordDelivered(decorated.at(-1));
       return answer;
     };
   }
@@ -487,10 +504,16 @@ function markReplayOnlyCdcEvent(cdcEvent) {
    * or below P that still reach the subscriber (owed history, an event
    * acknowledged but not yet committed delivered) are absorbed by the
    * consumer's row-version merge.
-   * @param {Function|Object} subscriber - Subscriber function or object.
+   * A partition has one propagation subscriber (options.role
+   * SUBSCRIBER_ROLE_PROPAGATION): re-registering it is ALREADY_SUBSCRIBED;
+   * a second, different one is refused (HANDSHAKE_STATUS_PROPAGATION_HELD,
+   * naming the holder) and registers nothing. Other subscribers declare no
+   * role.
+   * @param {Function} subscriber - Subscriber callback.
    * @param {Object} [options] - Handshake options.
    * @param {string} [options.subscriberId] - Stable subscriber identifier.
-   * @return {Promise<Object>} Handshake acknowledgment.
+   * @param {string} [options.role] - SUBSCRIBER_ROLE_PROPAGATION, or none.
+   * @return {Promise<Object>} Handshake acknowledgment, or the refusal.
    */ async subscribeToCDCWithHandshake(subscriber, options = {}) {
     if (!isCDCSubscriber(subscriber)) {
       throw new Error(PARTITION_SERVICE_ERROR_MSG.CDC_INVALID_SUBSCRIBER);
@@ -504,6 +527,10 @@ function markReplayOnlyCdcEvent(cdcEvent) {
     const subscriberKey = this.owner.cdcSubscriberWrappers.has(subscriber) ?
       subscriber : (existingById || subscriber);
     const existingWrapper = this.owner.cdcSubscriberWrappers.get(subscriberKey);
+    const role = readStateField(options.role);
+    const holder = !existingWrapper && role === PARTITION_SERVICE_CDC.SUBSCRIBER_ROLE_PROPAGATION ?
+      this.propagationSubscriptionOtherThan(subscriberKey) : null;
+    if (holder !== null) return this.refusePropagationSubscriber(subscriberId, holder);
     const status = existingWrapper ?
       PARTITION_SERVICE_CDC.HANDSHAKE_STATUS_ALREADY_SUBSCRIBED :
       PARTITION_SERVICE_CDC.HANDSHAKE_STATUS_OK;
@@ -515,6 +542,7 @@ function markReplayOnlyCdcEvent(cdcEvent) {
       this.owner.cdcSubscriptionEpoch = subscriptionEpoch;
       subscriptionState = {
         subscriberId,
+        role,
         subscriptionEpoch,
         lastDeliveredSequenceNumber: null,
         lastDeliveredAt: null,
@@ -546,8 +574,36 @@ function markReplayOnlyCdcEvent(cdcEvent) {
     return handshake;
   }
   /**
+   * The current propagation subscription other than the one keyed by
+   * `subscriberKey`, or null.
+   * @param {Function} subscriberKey - The registering subscriber's key.
+   * @return {Object|null} Its subscription state.
+   * @private
+   */ propagationSubscriptionOtherThan(subscriberKey) {
+    for (const [key, state] of this.owner.cdcSubscriberStates) {
+      if (key !== subscriberKey &&
+          state.role === PARTITION_SERVICE_CDC.SUBSCRIBER_ROLE_PROPAGATION) return state;
+    }
+    return null;
+  }
+  /**
+   * Refuse a second propagation subscriber: the lane keeps its one holder.
+   * @param {string} subscriberId - The refused registration's id.
+   * @param {Object} holder - The holder's subscription state.
+   * @return {Object} The frozen refusal.
+   * @private
+   */ refusePropagationSubscriber(subscriberId, holder) {
+    const refusal = Object.freeze({
+      status: PARTITION_SERVICE_CDC.HANDSHAKE_STATUS_PROPAGATION_HELD,
+      subscriberId, holderSubscriberId: holder.subscriberId,
+    });
+    this.owner.logger.warn(PARTITION_SERVICE_LOG_MSG.CDC_PROPAGATION_SUBSCRIBER_REFUSED, {
+      partitionId: this.owner.partitionId, ...refusal});
+    return refusal;
+  }
+  /**
    * Subscribe to CDC events from this partition.
-   * @param {Function|Object} subscriber - Subscriber function or object.
+   * @param {Function} subscriber - Subscriber callback.
    */ subscribeToCDC(subscriber) {
     this.subscribeToCDCWithHandshake(subscriber).catch((error) => {
       this.owner.logger.error(PARTITION_SERVICE_ERROR_MSG.CDC_SUBSCRIPTION_FAILED, {
@@ -558,7 +614,7 @@ function markReplayOnlyCdcEvent(cdcEvent) {
   }
   /**
    * Unsubscribe from CDC events.
-   * @param {Function|Object} subscriber - Subscriber to remove.
+   * @param {Function} subscriber - Subscriber to remove.
    */ unsubscribeFromCDC(subscriber) {
     const wrapper = this.owner.cdcSubscriberWrappers.get(subscriber);
     const subscriberToDelete = wrapper || subscriber;
