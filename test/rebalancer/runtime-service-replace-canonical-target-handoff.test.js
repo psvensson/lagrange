@@ -312,9 +312,6 @@ test('runtime-service REPLACE keeps one canonical target through the next ' +
   });
   rebalancer.logger = QUIET_LOGGER;
   rebalancer.initialize();
-  // The global budget's owner answers an empty ledger (this test is not
-  // about the budget read, whose failure now holds the pass).
-  rebalancer.getGlobalInFlightOperationCount = async () => 0;
   rebalancer.setLeader(true);
 
   try {

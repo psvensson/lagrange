@@ -145,7 +145,6 @@ async function driveOneRebalance(options) {
   rebalancer.clusterReadinessConfirmed = true;
   rebalancer.isStabilized = () => true;
   rebalancer.getConfiguredRebalanceBudget = async () => REBALANCE_BUDGET;
-  rebalancer.getGlobalInFlightOperationCount = async () => 0;
 
   // One cycle calls the planner more than once (the priority-recovery
   // follow-up augmentation re-plans over the same state), so the plans are

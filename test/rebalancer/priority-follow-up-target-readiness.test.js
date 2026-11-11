@@ -39,7 +39,6 @@ const TEST_PARTITION_SERVICE_TYPE = 'partition';
 const TEST_ADDRESS_PREFIX = 'local/partition/';
 const TEST_RAFT_ROLE_VOTER = 'voter';
 const TEST_TARGET_REPLICA_COUNT = 3;
-const TEST_NO_IN_FLIGHT_OPERATIONS = 0;
 const TEST_READY_LEASE_EXTENSION_MS = 60000;
 const TEST_EXPIRED_READY_LEASE_OFFSET_MS = -1000;
 const TEST_DEFER_TO_WORKFLOW_OWNER = 'defer_to_workflow_owner';
@@ -315,8 +314,6 @@ test(
     rebalancer.evaluateState = async () => true;
     rebalancer.getConfiguredRebalanceBudget = async () =>
       TEST_TARGET_REPLICA_COUNT;
-    rebalancer.getGlobalInFlightOperationCount = async () =>
-      TEST_NO_IN_FLIGHT_OPERATIONS;
     rebalancer.getCurrentPriorityRecoveryFollowUpDecisionSnapshot =
       async () =>
         Object.freeze({
@@ -464,8 +461,6 @@ test(
     rebalancer.evaluateState = async () => true;
     rebalancer.getConfiguredRebalanceBudget = async () =>
       TEST_TARGET_REPLICA_COUNT;
-    rebalancer.getGlobalInFlightOperationCount = async () =>
-      TEST_NO_IN_FLIGHT_OPERATIONS;
     rebalancer.getCurrentPriorityRecoveryFollowUpDecisionSnapshot =
       async () =>
         Object.freeze({
@@ -611,8 +606,6 @@ test(
     rebalancer.evaluateState = async () => true;
     rebalancer.getConfiguredRebalanceBudget = async () =>
       TEST_TARGET_REPLICA_COUNT;
-    rebalancer.getGlobalInFlightOperationCount = async () =>
-      TEST_NO_IN_FLIGHT_OPERATIONS;
     rebalancer.getCurrentPriorityRecoveryFollowUpDecisionSnapshot =
       async () =>
         Object.freeze({
@@ -760,8 +753,6 @@ test(
     rebalancer.isStabilized = () => true;
     rebalancer.getConfiguredRebalanceBudget = async () =>
       TEST_TARGET_REPLICA_COUNT;
-    rebalancer.getGlobalInFlightOperationCount = async () =>
-      TEST_NO_IN_FLIGHT_OPERATIONS;
     rebalancer.getCurrentPriorityRecoveryFollowUpDecisionSnapshot = async () =>
       buildCurrentPriorityDecisionSnapshot();
     rebalancer.movePlanner.calculateTargetState = async () => ({
@@ -886,8 +877,6 @@ test(
     rebalancer.evaluateState = async () => true;
     rebalancer.getConfiguredRebalanceBudget = async () =>
       TEST_TARGET_REPLICA_COUNT;
-    rebalancer.getGlobalInFlightOperationCount = async () =>
-      TEST_NO_IN_FLIGHT_OPERATIONS;
     rebalancer.getCurrentPriorityRecoveryFollowUpDecisionSnapshot =
       async () =>
         Object.freeze({
@@ -1026,8 +1015,6 @@ test(
     rebalancer.evaluateState = async () => true;
     rebalancer.getConfiguredRebalanceBudget = async () =>
       TEST_TARGET_REPLICA_COUNT;
-    rebalancer.getGlobalInFlightOperationCount = async () =>
-      TEST_NO_IN_FLIGHT_OPERATIONS;
     rebalancer.getCurrentPriorityRecoveryFollowUpDecisionSnapshot =
       async () =>
         Object.freeze({

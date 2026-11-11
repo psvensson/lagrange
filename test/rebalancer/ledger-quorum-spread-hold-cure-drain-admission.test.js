@@ -111,7 +111,6 @@ const TEST_ADDRESS_PREFIX = 'local/partition/';
 const TEST_RAFT_ROLE_LEADER = 'leader';
 const TEST_RAFT_ROLE_FOLLOWER = 'follower';
 const TEST_REBALANCE_BUDGET = 5;
-const TEST_NO_GLOBAL_IN_FLIGHT_OPERATIONS = 0;
 const TEST_BOUNDED_PLANNING_PASS_COUNT = 3;
 const TEST_AUTHORITATIVE_SOURCE = 'owner_rpc_lane';
 const TEST_PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
@@ -323,8 +322,6 @@ function createDrainFixture({
   rebalancer.isStabilized = () => true;
   rebalancer.getConfiguredRebalanceBudget = async () =>
     TEST_REBALANCE_BUDGET;
-  rebalancer.getGlobalInFlightOperationCount = async () =>
-    TEST_NO_GLOBAL_IN_FLIGHT_OPERATIONS;
   return {cache, coordinator, rebalancer};
 }
 

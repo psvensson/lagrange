@@ -73,7 +73,7 @@ const TEST_RAFT_ROLE_LEADER = 'leader';
 const TEST_RAFT_ROLE_FOLLOWER = 'follower';
 const TEST_TARGET_REPLICA_COUNT = 3;
 const TEST_REBALANCE_BUDGET = 5;
-const TEST_NO_GLOBAL_IN_FLIGHT_OPERATIONS = 0;
+const TEST_OPERATION_ROW_CREATED_AT = 1;
 const TEST_AUTHORITATIVE_SERVICES_READ_UNAVAILABLE = Object.freeze({
   success: false,
   error: 'authoritative services owner unavailable',
@@ -120,10 +120,15 @@ function createOperationRow({
     entity_type: EntityType.PARTITION,
     entity_id: partitionId,
     replica_id: replicaId,
+    // A durable ledger row: an ADD or REMOVE records no source node as the
+    // empty string (rebalance-coordinator-operation-creation-admission.js).
+    source_node_id: '',
     target_node_id: targetNodeId,
     status: rowState?.status || ReplicaStatus.PENDING,
     workflow_step: rowState?.workflow_step || 'PENDING',
-    completed_at: rowState ? 1 : null,
+    created_at: TEST_OPERATION_ROW_CREATED_AT,
+    updated_at: TEST_OPERATION_ROW_CREATED_AT,
+    completed_at: rowState ? TEST_OPERATION_ROW_CREATED_AT : null,
   };
 }
 
@@ -231,8 +236,6 @@ async function runAtTargetGapCycle(t, {
   rebalancer.isStabilized = () => true;
   rebalancer.getConfiguredRebalanceBudget = async () =>
     TEST_REBALANCE_BUDGET;
-  rebalancer.getGlobalInFlightOperationCount = async () =>
-    TEST_NO_GLOBAL_IN_FLIGHT_OPERATIONS;
 
   try {
     t.equal(
@@ -465,8 +468,6 @@ function createOverTargetTestStack({services, replicaOperations}) {
   rebalancer.isStabilized = () => true;
   rebalancer.getConfiguredRebalanceBudget = async () =>
     TEST_REBALANCE_BUDGET;
-  rebalancer.getGlobalInFlightOperationCount = async () =>
-    TEST_NO_GLOBAL_IN_FLIGHT_OPERATIONS;
   return {cache, coordinator, rebalancer};
 }
 
