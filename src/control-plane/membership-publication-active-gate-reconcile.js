@@ -42,6 +42,8 @@ import {
   resolveActiveGateMembershipPublicationDeferredReasonCode,
   resolveActiveGateMembershipPublicationHandoffRetryAfterMs,
 } from './membership-publication-active-gate-deferred-outcome.js';
+import {requestOwedPriorityCensus} from
+  './membership-publication-coordinator-reconcile-helpers.js';
 import {SnapshotService} from './snapshot-service.js';
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_SCHEMA_VERSION = 1;
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_REASON = 'active_gate_handoff_owner_reconcile';
@@ -629,6 +631,12 @@ async function reconcileActiveGateMembershipPublication(
         }
         if (visibility.state ===
             ACTIVE_GATE_MEMBERSHIP_PUBLICATION_VISIBILITY.VISIBLE) {
+          // This reconcile planned without the census inputs: a row it
+          // admitted states its census NOT_DERIVED, and the owner's full
+          // reconcile is asked to derive it.
+          requestOwedPriorityCensus(coordinator, visibility.row,
+            {[ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
+              .LATEST_PUBLICATION_ROW]: visibility.row});
           return buildActiveGateMembershipPublicationReconcileOutcome(
             ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME
               .PUBLISHED_VISIBLE,

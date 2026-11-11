@@ -77,6 +77,7 @@ import {
   buildPublicationReadinessTraceFields,
   hasPrioritySummaryRefreshClearedGap,
   reportOwnerMembershipReconcileSpent,
+  requestOwedPriorityCensusFromDriver,
   resolveDeferredPropagatedCatchupCooldownMs,
   resolveOwnerAckCompletionPendingNodeIds,
   shouldDeferMembershipReconcileToWriteLeader,
@@ -336,18 +337,22 @@ class MembershipPublicationCoordinatorReconcile extends
             candidate,
             nowMs: this.now(),
           });
-          const answer = buildReconcilePublicationWriteAnswer({
-            publicationWrite: await this.admitPublicationRow(
-              row,
-              convergenceOptions,
-            ),
-            candidate,
-            workflow,
-          });
+          // A write still owed is re-asked after the declared delay; any
+          // other answer ends the hold.
+          const answer = requeueHeldPublicationWrite(
+            this,
+            buildReconcilePublicationWriteAnswer({
+              publicationWrite: await this.admitPublicationRow(
+                row,
+                convergenceOptions,
+              ),
+              candidate,
+              workflow,
+            }),
+          );
           if (!isPublicationWriteLanded(answer.publicationWrite)) {
-            // No landed admission, no OPEN: the workflow stays DERIVING and
-            // a write still owed is re-asked after the declared delay.
-            return requeueHeldPublicationWrite(this, answer);
+            // No landed admission, no OPEN: the workflow stays DERIVING.
+            return answer;
           }
           await this.workflowCoordinator.transitionStep(
             workflow.workflowId,
@@ -461,6 +466,11 @@ class MembershipPublicationCoordinatorReconcile extends
         ownerAckCompletionPendingNodeIds,
       });
       const missingCount = handoffContract?.missingPublishedCount ?? 0;
+      requestOwedPriorityCensusFromDriver(
+        this,
+        planningSnapshot.latestPublicationRow,
+        {leadershipTier: leadership.tier, publicationEpoch},
+      );
       if (
         missingCount <= 0 &&
         ownerAckCompletionPendingNodeIds.length === 0

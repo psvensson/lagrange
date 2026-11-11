@@ -843,6 +843,31 @@ const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DEFERRED_ROW_MESSAGE =
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DEFERRED_CONTEXT_MESSAGE =
   'queued owner retry should use the written publication row as the latest row';
 
+// A handoff-routed reconcile plans without the census inputs: the row it
+// admits states its priority census NOT_DERIVED, and once that row is
+// durably visible the owner asks its queue, once, for the full reconcile
+// that derives it. That request is not a retry of the handoff.
+const PRIORITY_CENSUS_NOT_DERIVED_REASON = 'priority_census_not_derived';
+
+function isHandoffRetryEnqueue(entry) {
+  return entry.reason !== PRIORITY_CENSUS_NOT_DERIVED_REASON;
+}
+
+function assertCensusRequestedForVisibleRow(t, enqueued, outcome) {
+  const requests = enqueued.filter((entry) => !isHandoffRetryEnqueue(entry));
+  t.equal(requests.length, 1,
+    'the visible publication asks once for the census it did not derive');
+  t.equal(
+    requests[0].context.latestPublicationRow.publicationId,
+    outcome.publicationRow.publicationId,
+    'the census request runs from the durable row the handoff published',
+  );
+  t.equal(requests[0].context.publicationActiveGateHandoff, undefined,
+    'the census request carries no handoff: it is a full reconcile');
+  t.equal(requests[0].context.allowEmptyPreloadedRows, undefined,
+    'the census request reads the census inputs');
+}
+
 test(PUBLICATION_CONVERGENCE_HANDOFF_RETRY_VISIBLE_TEST_NAME,
   async (t) => {
     const latestPublicationRow = {
@@ -943,10 +968,11 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_RETRY_VISIBLE_TEST_NAME,
       PUBLICATION_CONVERGENCE_HANDOFF_RETRY_VISIBLE_STATE_MESSAGE,
     );
     t.equal(
-      enqueued.length,
+      enqueued.filter(isHandoffRetryEnqueue).length,
       PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NO_ENQUEUE_COUNT,
       PUBLICATION_CONVERGENCE_HANDOFF_RETRY_VISIBLE_ENQUEUE_MESSAGE,
     );
+    assertCensusRequestedForVisibleRow(t, enqueued, outcome);
     t.equal(
       persistedRows.length,
       PUBLICATION_CONVERGENCE_HANDOFF_RETRY_VISIBLE_PERSISTED_COUNT,
@@ -1067,10 +1093,11 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_STALE_VISIBLE_TEST_NAME,
       PUBLICATION_CONVERGENCE_HANDOFF_TARGET_STALE_VISIBLE_STATE_MESSAGE,
     );
     t.equal(
-      enqueued.length,
+      enqueued.filter(isHandoffRetryEnqueue).length,
       PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NO_ENQUEUE_COUNT,
       PUBLICATION_CONVERGENCE_HANDOFF_TARGET_STALE_VISIBLE_ENQUEUE_MESSAGE,
     );
+    assertCensusRequestedForVisibleRow(t, enqueued, outcome);
     t.same(
       outcome.publicationRow.publishedActiveNodeIds,
       [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS],

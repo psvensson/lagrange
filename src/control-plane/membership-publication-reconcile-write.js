@@ -31,13 +31,23 @@ const MEMBERSHIP_PUBLICATION_WRITE_HOLD = Object.freeze({
 
 const PUBLICATION_WRITE_UNSETTLED_REASON = 'publication-write-unsettled';
 
-// The held reconcile re-asks itself after the critical convergence bound,
-// never at once (the queue's declared self-requeue).
-const PUBLICATION_WRITE_UNSETTLED_REQUEUE = Object.freeze({
-  selfRequeue: Object.freeze({
-    delayMs: CONTROL_PLANE_CRITICAL_CONVERGENCE_RETRY_AFTER_MS,
-  }),
-});
+// The held reconcile re-asks itself, never at once (the queue's declared
+// delayed self-requeue). On unchanged input the re-ask backs off: each
+// consecutive held answer doubles the delay, from the critical convergence
+// bound up to PUBLICATION_WRITE_UNSETTLED_MAX_REQUEUE_MS. The delay bounds
+// only the re-ask nothing else triggers: an enqueue from outside the held
+// run (any owner wake - a READY node, recovery progress, the owner driver)
+// releases the hold at once (the queue's contract), and an answer that is
+// no longer held resets the backoff.
+const PUBLICATION_WRITE_UNSETTLED_MAX_REQUEUE_MS = 30000;
+
+function resolveHeldPublicationWriteRequeueDelayMs(consecutiveHolds) {
+  return Math.min(
+    CONTROL_PLANE_CRITICAL_CONVERGENCE_RETRY_AFTER_MS *
+      (2 ** (consecutiveHolds - 1)),
+    PUBLICATION_WRITE_UNSETTLED_MAX_REQUEUE_MS,
+  );
+}
 
 /**
  * The reconcile's answer for one publication write.
@@ -68,24 +78,33 @@ function buildReconcilePublicationWriteAnswer({publicationWrite, candidate,
 }
 
 /**
- * Re-ask the reconcile for a write it still owes (a hold on the durable
- * owner): through the coordinator's own queue, after the declared delay.
+ * Account one reconcile write answer on the coordinator's held-write
+ * backoff, and re-ask the reconcile for a write it still owes (a hold on
+ * the durable owner): through the coordinator's own queue, after the
+ * backoff's delay. Any other answer ends the hold and resets the backoff.
  * @param {Object} coordinator
  * @param {Object} answer - A buildReconcilePublicationWriteAnswer result.
  * @return {Object} The answer.
  */
 function requeueHeldPublicationWrite(coordinator, answer) {
-  if (answer.publicationWriteHold ===
+  if (answer.publicationWriteHold !==
       MEMBERSHIP_PUBLICATION_WRITE_HOLD.AWAITING_DURABLE_OWNER) {
-    coordinator.enqueueClusterMembershipReconcile(
-      PUBLICATION_WRITE_UNSETTLED_REASON, {},
-      PUBLICATION_WRITE_UNSETTLED_REQUEUE);
+    coordinator.heldPublicationWriteRequeueStreak = 0;
+    return answer;
   }
+  coordinator.heldPublicationWriteRequeueStreak += 1;
+  coordinator.enqueueClusterMembershipReconcile(
+    PUBLICATION_WRITE_UNSETTLED_REASON,
+    {},
+    {selfRequeue: {delayMs: resolveHeldPublicationWriteRequeueDelayMs(
+      coordinator.heldPublicationWriteRequeueStreak)}},
+  );
   return answer;
 }
 
 export {
   MEMBERSHIP_PUBLICATION_WRITE_HOLD,
+  PUBLICATION_WRITE_UNSETTLED_MAX_REQUEUE_MS,
   buildReconcilePublicationWriteAnswer,
   requeueHeldPublicationWrite,
 };

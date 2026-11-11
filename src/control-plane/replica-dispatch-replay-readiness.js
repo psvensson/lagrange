@@ -10,6 +10,12 @@ import {
 } from './control-plane-constants.js';
 import {UNIFIED_SERVICE_TYPE} from '../constants/index.js';
 import {
+  INCOMPLETE_OPERATION_OBSERVATION_STATE,
+  readIncompleteOperationListState,
+} from '../rebalancer/incomplete-operation-list-observation.js';
+import {DISPATCH_RETRY_OWNER_LIST} from
+  './membership-publication-row-helpers.js';
+import {
   getDispatchRetryRowOperationIds,
   getDispatchRetryRowPartitionIds,
   getPriorityRecoveryDispatchRetryBlockedOperationIds,
@@ -342,13 +348,16 @@ class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
         'function'
     ) {
       try {
-        const dispatchRows =
+        const answer =
           await membershipPublicationService.getDispatchRetryRowsForNode(
             nodeId,
           );
+        if (answer.ownerList === DISPATCH_RETRY_OWNER_LIST.DEFERRED) {
+          this.holdReadyNodeDispatchReplay(nodeId, answer.deferredOutcome);
+        }
         return this.mergeAuthoritativePriorityRecoveryDispatchRowsForNode(
           nodeId,
-          Array.isArray(dispatchRows) ? dispatchRows : [],
+          answer.rows,
         );
       } catch (error) {
         this.logger.warn(DISPATCH_LOG_MSG.DISPATCH_LOOKUP_FAILED, {
@@ -547,49 +556,55 @@ class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
   }
 
   /**
-   * Read dispatch-retry operations through the canonical repository owner path
-   * when cache coverage is missing under priority recovery.
+   * The operation-ledger owner's dispatch-retry rows for a ready node, read
+   * when cache coverage is missing under priority recovery. The owner's list
+   * is decided on by its named state: a DEFERRED list is not "no rows" - it
+   * adds none and the ready-node replay stays owed.
    * @param {string} nodeId
    * @return {Promise<Array<Object>>}
    * @private
    */
   async getAuthoritativeDispatchRetryRowsForNode(nodeId) {
     const repository = this.rebalanceCoordinator?.repository || null;
-    if (
-      !repository ||
-      typeof repository.queryIncompleteOperations !== 'function'
-    ) {
+    if (!repository) {
       return [];
     }
-
-    try {
-      // A DEFERRED observation carries no list: nothing is replayed on it.
-      const {operations} = await repository.queryIncompleteOperations({
-        visibilityReadMode:
-          REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED,
-      });
-      if (operations.length === 0) {
-        return [];
-      }
-
-      return operations
-        .filter((operation) => {
-          const operationRow = this.buildOperationRowFromCoordinator(operation);
-          return (
-            isCoordinatorOwnedOperationType(operation?.type) &&
-            this.matchesDispatchReplayReadyNode(operationRow, nodeId) &&
-            this.isDispatchReplayableOperationRow(operationRow)
-          );
-        })
-        .map((operation) => this.buildOperationRowFromCoordinator(operation));
-    } catch (error) {
-      this.logger.warn(DISPATCH_LOG_MSG.DISPATCH_LOOKUP_FAILED, {
-        nodeId,
-        error: error?.message || String(error),
-        path: REPLICA_DISPATCH_SERVICE_LITERAL.AUTHORITATIVE_PRIORITY_RECOVERY_RETRY,
-      });
+    const observation = await repository.queryIncompleteOperations({
+      visibilityReadMode:
+        REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED,
+    });
+    if (readIncompleteOperationListState(observation) ===
+        INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED) {
+      this.holdReadyNodeDispatchReplay(nodeId, observation.deferredOutcome);
       return [];
     }
+    return observation.operations
+      .filter((operation) => {
+        const operationRow = this.buildOperationRowFromCoordinator(operation);
+        return (
+          isCoordinatorOwnedOperationType(operation?.type) &&
+          this.matchesDispatchReplayReadyNode(operationRow, nodeId) &&
+          this.isDispatchReplayableOperationRow(operationRow)
+        );
+      })
+      .map((operation) => this.buildOperationRowFromCoordinator(operation));
+  }
+
+  /**
+   * The owner's list for this ready node was DEFERRED: its replay is still
+   * owed. The node's next READY trigger runs it again, also for an unchanged
+   * READY row (the trigger is not a duplicate while the replay is owed).
+   * @param {string} nodeId
+   * @param {Object} deferredOutcome - The owner's typed deferred outcome.
+   * @private
+   */
+  holdReadyNodeDispatchReplay(nodeId, deferredOutcome) {
+    this.clearNodeReadyRetryWatermark(nodeId);
+    this.logger.info(DISPATCH_LOG_MSG.READY_NODE_REPLAY_OWNER_LIST_DEFERRED, {
+      nodeId,
+      completionState: deferredOutcome.completionState ?? null,
+      retryAfterMs: deferredOutcome.retryAfterMs ?? null,
+    });
   }
 
   /**

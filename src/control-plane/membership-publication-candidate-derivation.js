@@ -44,10 +44,11 @@ import {
 } from './membership-publication-readiness-repair.js';
 import {
   PRIORITY_SPREAD_REQUIRED_DISTINCT_NODE_COUNT,
-  arePriorityPartitionSummariesEqual,
   buildDerivedPriorityPartitionSummary,
+  isDerivedPriorityCensusChange,
   isReadinessPromotable,
   normalizePriorityPartitionSummary,
+  refreshPriorityPartitionSummary,
 } from './membership-publication-priority-partition-summary.js';
 import {
   buildMembershipPublicationAckCompletionSnapshot,
@@ -78,9 +79,9 @@ function buildPublicationMetadataRefreshRow(options = {}, helperFns = {}) {
   const acknowledgedNodeIds = Array.isArray(options.acknowledgedNodeIds) ?
     helperFns.normalizeNodeIdList(options.acknowledgedNodeIds) :
     normalizedPublication.acknowledgedNodeIds;
-  const priorityPartitionSummary = normalizePriorityPartitionSummary(
-    options.priorityPartitionSummary ?? normalizedPublication.priorityPartitionSummary,
-    {},
+  const priorityPartitionSummary = refreshPriorityPartitionSummary(
+    options.priorityPartitionSummary,
+    normalizedPublication.priorityPartitionSummary,
     helperFns,
   );
   const membershipLifecycleSummary =
@@ -696,7 +697,7 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
   // The census is the summary: the closure witness never produces or
   // selects one (owner decision 2026-10-04, "delete the second authority").
   const priorityPartitionSummary = priorityPartitionSummaryBase;
-  const priorityPartitionSummaryChanged = !arePriorityPartitionSummariesEqual(
+  const priorityPartitionSummaryChanged = isDerivedPriorityCensusChange(
     latestPublicationRow?.priorityPartitionSummary,
     priorityPartitionSummary,
     helperFns,

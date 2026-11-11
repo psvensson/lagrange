@@ -108,4 +108,5 @@ export {
   buildAnsweredIncompleteOperationListObservation,
   buildDeferredIncompleteOperationListObservation,
   isAnsweredIncompleteOperationList,
+  readIncompleteOperationListState,
 };

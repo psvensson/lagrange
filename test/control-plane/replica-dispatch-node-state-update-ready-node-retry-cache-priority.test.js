@@ -33,6 +33,10 @@ import {
 import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {buildAnsweredIncompleteOperationListObservation} from
   '../../src/rebalancer/incomplete-operation-list-observation.js';
+import {
+  DISPATCH_RETRY_OWNER_LIST,
+  buildDispatchRetryRowsAnswer,
+} from '../../src/control-plane/membership-publication-row-helpers.js';
 
 const READY_RETRY_TARGET_NODE_ID = 'node-2';
 const READY_RETRY_SOURCE_NODE_ID = 'node-1';
@@ -136,7 +140,7 @@ test('ReplicaDispatchService ready-node retry prefers membership publication own
         membershipPublicationService: {
           async getDispatchRetryRowsForNode(nodeId) {
             ownerCalls.push(nodeId);
-            return [{
+            return buildDispatchRetryRowsAnswer([{
               operation_id: 'op-owner-retry-1',
               type: OperationType.REPLACE,
               partition_id: 'replica_operations-p1',
@@ -145,7 +149,7 @@ test('ReplicaDispatchService ready-node retry prefers membership publication own
               status: 'pending',
               workflow_step: WORKFLOW_STEP.PENDING,
               steps_history: '[]',
-            }];
+            }], DISPATCH_RETRY_OWNER_LIST.NOT_ASKED);
           },
         },
       },
