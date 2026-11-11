@@ -242,10 +242,15 @@ export function registerControlPlaneSystemTableGatewayTailTests({
         'gateway answers a committed mutation applied');
     });
 
-  test('ControlPlaneSystemTableGateway submitMutation canonicalizes ' +
-    'control_plane_publications upserts before delegating to CDC',
+  // Publication guarded write (owner ruling 2026-11-11): a publication row
+  // is admitted by an insert that never replaces and changed only by a
+  // revision-guarded update; the gateway refuses an upsert of the table.
+  test('ControlPlaneSystemTableGateway submitMutation refuses ' +
+    'control_plane_publications upserts and canonicalizes the admission ' +
+    'insert before delegating to CDC',
   async (t) => {
     const upsertCalls = [];
+    const insertCalls = [];
     const gateway = new ControlPlaneSystemTableGateway({
       nodeId: 'node-gateway',
       cdcIntegrationService: {
@@ -253,42 +258,58 @@ export function registerControlPlaneSystemTableGatewayTailTests({
           upsertCalls.push({tableName, row});
           return {success: true};
         },
+        async insertSystemTableRow(tableName, row) {
+          insertCalls.push({tableName, row});
+          return {success: true, affectedRows: 1};
+        },
       },
     });
+    const row = {
+      publicationId: 'pub-1',
+      publicationKind: 'cluster_membership',
+      publicationEpoch: 7,
+      publisherNodeId: 'node-a',
+      publishedActiveNodeIds: ['node-a'],
+      requiredAckNodeIds: ['node-a'],
+      acknowledgedNodeIds: [],
+      status: 'OPEN',
+    };
+
+    await t.rejects(
+      gateway.submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
+        tableName: TABLES.CONTROL_PLANE_PUBLICATIONS,
+        row,
+      }),
+      {code: CONTROL_PLANE_GATEWAY_ERROR_CODE.PUBLICATIONS_UPSERT_FORBIDDEN},
+      'gateway should refuse an upsert of a publication row',
+    );
+    t.equal(upsertCalls.length, 0, 'a refused upsert reaches no CDC write');
 
     await gateway.submitMutation({
-      operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
+      operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
       tableName: TABLES.CONTROL_PLANE_PUBLICATIONS,
-      row: {
-        publicationId: 'pub-1',
-        publicationKind: 'cluster_membership',
-        publicationEpoch: 7,
-        publisherNodeId: 'node-a',
-        publishedActiveNodeIds: ['node-a'],
-        requiredAckNodeIds: ['node-a'],
-        acknowledgedNodeIds: [],
-        status: 'OPEN',
-      },
+      row,
     });
 
-    t.equal(upsertCalls.length, 1, 'gateway should delegate one upsert');
+    t.equal(insertCalls.length, 1, 'gateway should delegate one insert');
     t.equal(
-      upsertCalls[0].tableName,
+      insertCalls[0].tableName,
       TABLES.CONTROL_PLANE_PUBLICATIONS,
       'gateway should preserve the publication table name',
     );
     t.equal(
-      upsertCalls[0].row.publication_id,
+      insertCalls[0].row.publication_id,
       'pub-1',
       'gateway should canonicalize the publication primary key',
     );
     t.same(
-      upsertCalls[0].row.published_active_node_ids,
+      insertCalls[0].row.published_active_node_ids,
       ['node-a'],
       'gateway should canonicalize publication array fields',
     );
     t.equal(
-      upsertCalls[0].row.status,
+      insertCalls[0].row.status,
       'OPEN',
       'gateway should preserve publication status',
     );
@@ -369,7 +390,9 @@ export function registerControlPlaneSystemTableGatewayTailTests({
 
     await t.rejects(
       gateway.submitMutation({
-        operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
+        // The admission insert (an upsert of this table is refused before
+        // routing).
+        operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
         tableName: TABLES.CONTROL_PLANE_PUBLICATIONS,
         row: {
           publication_id: 'cluster_membership',
