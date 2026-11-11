@@ -10,7 +10,7 @@ import {
   buildGuidelineViolationReport,
   collectJavaScriptFiles,
   loadCountBaseline,
-  writeCountBaseline,
+  writeTightenedCountBaseline,
   classifyFilePath,
   formatGuidelineHumanSummary,
   parseSourceFile,
@@ -18,6 +18,7 @@ import {
   runGuidelineCheckWhenDirect,
   walkAst,
 } from './guideline-check-shared.js';
+import {EXIT_CODE} from './guideline-check-constants.js';
 
 const LOCAL_STR_IFSTATEMENT = 'IfStatement';
 const LOCAL_STR_IDENTIFIER = 'Identifier';
@@ -1077,7 +1078,6 @@ const DECISION_BASELINE_FILE_URL = new URL(
   './check-guideline-decision-boundaries-baseline.json',
   import.meta.url,
 );
-const NUMERIC_LITERAL_ZERO = 0;
 
 function buildDecisionBoundaryViolationIdentity(violation) {
   // Line/column-independent so routine edits do not resurface inherited
@@ -1158,12 +1158,13 @@ async function main(argv = process.argv.slice(2)) {
       argv.filter((arg) => arg !== UPDATE_BASELINE_FLAG),
       {},
     );
-    await writeCountBaseline(
+    const {newSiteCount} = await writeTightenedCountBaseline(
       DECISION_BASELINE_FILE_URL,
       report,
       'decision-boundary',
+      buildDecisionBoundaryViolationIdentity,
     );
-    return NUMERIC_LITERAL_ZERO;
+    return newSiteCount > 0 ? EXIT_CODE.FAILURE : EXIT_CODE.SUCCESS;
   }
   return runGuidelineCheck(
     argv,
