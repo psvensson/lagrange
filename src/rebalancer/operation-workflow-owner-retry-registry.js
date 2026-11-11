@@ -11,8 +11,7 @@ import {
 import {
   withObservedProgressRetention,
 } from './operation-workflow-observed-progress-retention.js';
-import * as DISPATCH_REARM_EVIDENCE
-  from './operation-workflow-dispatch-rearm-evidence.js';
+import * as DISPATCH_REARM_EVIDENCE from './operation-workflow-dispatch-rearm-evidence.js';
 import * as TRANSITION_RETRY from './operation-workflow-transition-retry.js';
 import {
   joinInFlightOperationOwnerLanes,
