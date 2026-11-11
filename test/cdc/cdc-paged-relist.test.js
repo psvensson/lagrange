@@ -581,8 +581,8 @@ test('(g) property: table size x page bound x interleaved commits x fault point 
     let faulted = false;
     let next = 0;
     const live = () => [...source.rows.keys()];
-    recipient.hook = async (cursor) => {
-      const kind = random(5);
+    // One random source change while a page is read (kind 4: none).
+    const changeSource = (kind) => {
       const ids = live();
       if (kind === 0) source.insert([`n-${next++}`]);
       if (kind === 1 && ids.length) source.update(ids[random(ids.length)], `s${next++}`);
@@ -592,14 +592,9 @@ test('(g) property: table size x page bound x interleaved commits x fault point 
         source.delete(id);
         source.insert([id]);
       }
-      if (random(2) === 0) sender.ship();
-      if (kind < 4) coverage.commitsDuring += 1;
-      // The table as the image this request opens will read it (page 0 is
-      // never a fault page).
-      if (cursor.page === 0) opens.set(source.appliedIndex(), source.table());
-      if (faulted || cursor.page !== faultPage) return undefined;
-      faulted = true;
-      coverage.fired[fault] = (coverage.fired[fault] ?? 0) + 1;
+    };
+    // The trial's one fault, at its page: the page's answer, or undefined.
+    const injectFault = () => {
       if (fault === FAULT.LEADER_CHANGE) {
         const [current, other] = source.leader() === source.replicas[0] ?
           source.replicas : [...source.replicas].reverse();
@@ -614,6 +609,19 @@ test('(g) property: table size x page bound x interleaved commits x fault point 
       }
       if (fault === FAULT.STOP) recipient.integration.markShuttingDown();
       return undefined;
+    };
+    recipient.hook = async (cursor) => {
+      const kind = random(5);
+      changeSource(kind);
+      if (random(2) === 0) sender.ship();
+      if (kind < 4) coverage.commitsDuring += 1;
+      // The table as the image this request opens will read it (page 0 is
+      // never a fault page).
+      if (cursor.page === 0) opens.set(source.appliedIndex(), source.table());
+      if (faulted || cursor.page !== faultPage) return undefined;
+      faulted = true;
+      coverage.fired[fault] = (coverage.fired[fault] ?? 0) + 1;
+      return injectFault();
     };
     // Every install (logged in its own span) is the table at its image's P.
     recipient.onImage = (image) => {

@@ -176,7 +176,7 @@ function canonicalContainerEnv(inspect) {
     const entry = descriptor.value;
     const separator = stringIndexOf(entry, '=');
     if (separator <= ZERO) return null;
-    const key = separator > ZERO ? stringSlice(entry, ZERO, separator) : '';
+    const key = stringSlice(entry, ZERO, separator);
     const value = stringSlice(entry, separator + 1);
     if (objectHasOwn(values, key)) return null;
     values[key] = value;

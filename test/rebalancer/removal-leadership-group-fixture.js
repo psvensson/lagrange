@@ -73,9 +73,10 @@ export function createLeadershipGroup(options) {
       const type = payload?.[ReplicaOperationField.TYPE];
       const addressed = payload?.[ReplicaOperationField.REPLICA_ID];
       const member = group.member(addressed);
+      const reachable = member !== null && !group.downReplicaIds.has(addressed);
       if (type === ReplicaOperationMessageType.READ_REPLICA_MEMBERSHIP) {
         group.reads.push(addressed);
-        if (!member || group.downReplicaIds.has(addressed)) {
+        if (!reachable) {
           return {status: ReplicaOperationResponseStatus.ERROR,
             error: 'member unavailable'};
         }
@@ -83,7 +84,7 @@ export function createLeadershipGroup(options) {
       }
       if (type === ReplicaOperationMessageType.STEP_DOWN_REPLICA) {
         group.stepDowns.push(addressed);
-        if (!member || group.downReplicaIds.has(addressed)) {
+        if (!reachable) {
           return {status: ReplicaOperationResponseStatus.NOT_FOUND};
         }
         // The named transfer is forwarded to the leader: a dead or absent
