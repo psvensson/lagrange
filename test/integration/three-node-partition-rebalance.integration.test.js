@@ -32,6 +32,13 @@ function createMockCDCService(cache) {
       cache.applySystemTableChange(tableName, 'UPDATE', {..._where, ...data});
       return {success: true};
     },
+    // The durable owner's authoritative read (the rebalancer's budget reads
+    // go through it). This fixture's world writes no replica_operations or
+    // config rows (the coordinator stand-in only records its operations), so
+    // the owner answers an explicit empty success.
+    async executeAuthoritativeSystemTableRead() {
+      return {success: true, rows: []};
+    },
   };
 }
 
