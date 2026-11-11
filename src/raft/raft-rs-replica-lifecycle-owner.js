@@ -909,14 +909,25 @@ async function withReplicaLifecycleClaim(request, work) {
 }
 
 // What a read of a replica database's lifecycle row found when it holds no
-// such row, or could not be read: neither is a lifecycle state.
+// such row, or cannot say: none is a lifecycle state. ABSENT is positive: no
+// database file, or a lifecycle table that holds no row for the identity.
+// A database that cannot be read, and a database file WITHOUT the lifecycle
+// table (nothing tells a database the lifecycle owner never opened from one
+// that lost the write-ahead log holding its tables), are UNREADABLE and
+// TABLE_ABSENT: neither is ever read as "no lifecycle".
+const NO_ROW_FIELDS = Object.freeze({incarnation: null, peerId: null,
+  retirementEvidence: null});
 const DURABLE_LIFECYCLE_READ = Object.freeze({
   ABSENT: Object.freeze({state: 'absent', reason: 'lifecycle-row-absent',
-    incarnation: null, retirementEvidence: null}),
+    ...NO_ROW_FIELDS}),
   UNREADABLE: Object.freeze({state: 'unreadable',
-    reason: 'lifecycle-database-unreadable', incarnation: null,
-    retirementEvidence: null}),
+    reason: 'lifecycle-database-unreadable', ...NO_ROW_FIELDS}),
+  TABLE_ABSENT: Object.freeze({state: 'unreadable',
+    reason: 'lifecycle-table-absent', ...NO_ROW_FIELDS}),
 });
+const NOTHING_BESIDE = Object.freeze({beside: null});
+const UNREADABLE_SNAPSHOT = Object.freeze({
+  lifecycle: DURABLE_LIFECYCLE_READ.UNREADABLE, ...NOTHING_BESIDE});
 
 // The recorded evidence, or null (none, or one that cannot be parsed).
 function retirementEvidenceOf(raw) {
@@ -936,8 +947,11 @@ function lifecycleRowOf(db, groupId, replicaIdentity) {
   const table = db.prepare(`
     SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?
   `).get(REPLICA_LIFECYCLE_TABLE);
+  if (table === undefined) {
+    return DURABLE_LIFECYCLE_READ.TABLE_ABSENT;
+  }
   // Every column: an older table has no incarnation or evidence column.
-  const row = table === undefined ? undefined : db.prepare(`
+  const row = db.prepare(`
     SELECT * FROM ${REPLICA_LIFECYCLE_TABLE}
     WHERE group_id = ? AND replica_identity = ?
   `).get(String(groupId), String(replicaIdentity));
@@ -945,40 +959,74 @@ function lifecycleRowOf(db, groupId, replicaIdentity) {
     Object.freeze({state: row.state, reason: String(row.reason ?? ''),
       incarnation: typeof row.incarnation === 'string' &&
         row.incarnation.length > 0 ? row.incarnation : null,
+      peerId: String(row.peer_id),
       retirementEvidence: retirementEvidenceOf(row.retirement_evidence)});
+}
+
+function holdsLifecycleRow(lifecycle) {
+  return lifecycle.state === LIFECYCLE_STATE.ACTIVE ||
+    lifecycle.state === LIFECYCLE_STATE.RETIRED;
+}
+
+/**
+ * The durable lifecycle row of exactly one (group, replica identity) and,
+ * when the file holds that row, whatever else its reader takes from the SAME
+ * read snapshot of the file - read read-only, without opening a runtime or
+ * creating a database. `readBeside(db)` runs only beside a held row; a read
+ * of it that throws makes the whole answer UNREADABLE.
+ * @param {string} dbPath - The replica's database file.
+ * @param {string} groupId
+ * @param {string} replicaIdentity
+ * @param {Function|null} readBeside - (db) => value, or null.
+ * @return {Object} Frozen {lifecycle, beside}; beside is null without a row.
+ */
+function readDurableReplicaLifecycleBeside(dbPath, groupId, replicaIdentity,
+  readBeside) {
+  try {
+    if (!fs.existsSync(dbPath)) {
+      return Object.freeze({lifecycle: DURABLE_LIFECYCLE_READ.ABSENT,
+        ...NOTHING_BESIDE});
+    }
+    const db = new Database(dbPath, {readonly: true, fileMustExist: true});
+    try {
+      return db.transaction(() => {
+        const lifecycle = lifecycleRowOf(db, groupId, replicaIdentity);
+        return Object.freeze({lifecycle, beside: readBeside !== null &&
+          holdsLifecycleRow(lifecycle) ? readBeside(db) : null});
+      })();
+    } finally {
+      db.close();
+    }
+  } catch (_error) {
+    return UNREADABLE_SNAPSHOT;
+  }
 }
 
 /**
  * The durable lifecycle row of exactly one (group, replica identity), read
  * read-only from a replica database file without opening a runtime or
- * creating anything: {state, reason, incarnation, retirementEvidence} (a row
- * born before the stamp, never opened since, reads incarnation null). A missing file or row is ABSENT, a
- * database that cannot be read is UNREADABLE - never a lifecycle state.
+ * creating a database (the read-only connection may leave the file's
+ * shared-memory sidecars; it never changes a page of the database):
+ * {state, reason, incarnation, peerId, retirementEvidence} (a row born
+ * before the stamp, never opened since, reads incarnation null). A missing
+ * file or row is ABSENT; a database that cannot be read, or a file without
+ * the lifecycle table, is UNREADABLE - never a lifecycle state, never ABSENT.
  * @param {string} dbPath - The replica's database file.
  * @param {string} groupId
  * @param {string} replicaIdentity
- * @return {Object} Frozen {state, reason, incarnation,retirementEvidence}.
+ * @return {Object} Frozen {state, reason, incarnation, peerId,
+ *   retirementEvidence}.
  */
 function readDurableReplicaLifecycle(dbPath, groupId, replicaIdentity) {
-  try {
-    if (!fs.existsSync(dbPath)) {
-      return DURABLE_LIFECYCLE_READ.ABSENT;
-    }
-    const db = new Database(dbPath, {readonly: true, fileMustExist: true});
-    try {
-      return lifecycleRowOf(db, groupId, replicaIdentity);
-    } finally {
-      db.close();
-    }
-  } catch (_error) {
-    return DURABLE_LIFECYCLE_READ.UNREADABLE;
-  }
+  return readDurableReplicaLifecycleBeside(dbPath, groupId, replicaIdentity,
+    null).lifecycle;
 }
 
 export {
   DURABLE_LIFECYCLE_READ,
   RaftRsReplicaLifecycleOwner,
   readDurableReplicaLifecycle,
+  readDurableReplicaLifecycleBeside,
   prepareReplicaLifecycleForSnapshot,
   prepareReplicaLifecycleForOriginalAllocation,
   prepareOriginalAllocationRow,

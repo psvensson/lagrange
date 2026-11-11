@@ -30,6 +30,9 @@ import path from 'node:path';
 import {afterEach, beforeEach, test} from 'node:test';
 import Database from 'better-sqlite3';
 
+import {PartitionNodeCluster} from
+  '../raft/raft-rs-backend/partition-node-cluster.js';
+
 import {ReplicaHandler} from '../../src/node/replica-handler.js';
 import {REMOVAL_AUTHORITY_KIND} from '../../src/node/replica-state-machine-recovery.js';
 import {
@@ -319,8 +322,25 @@ const TX = Object.freeze({transactionId: 'tx-closed-1',
   participantId: 'participant-closed-1'});
 const NODE_ID = 'remove-closed-node';
 
+// The replica's database as its earlier teardown left it: written by a real
+// rs-raft port of this (group, replica) whose lifecycle that teardown
+// retired - the removal's teardown authority on its resume (a database file
+// with no lifecycle table is never read as "no lifecycle").
+function placeRetiredReplicaDatabase(dbPath) {
+  const cluster = new PartitionNodeCluster({partitionId: PARTITION_ID,
+    replicaIds: [REPLICA_ID]});
+  try {
+    cluster.retireReplica(REPLICA_ID, 'earlier-teardown');
+    cluster.replica(REPLICA_ID).db.pragma('wal_checkpoint(TRUNCATE)');
+    fs.mkdirSync(path.dirname(dbPath), {recursive: true});
+    fs.copyFileSync(cluster.dbFileOf(REPLICA_ID), dbPath);
+  } finally {
+    cluster.dispose();
+  }
+}
+
 function seedPreparedParticipant(dbPath) {
-  fs.mkdirSync(path.dirname(dbPath), {recursive: true});
+  placeRetiredReplicaDatabase(dbPath);
   const db = new Database(dbPath);
   try {
     openParticipantTransactionStore(db);
