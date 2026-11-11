@@ -157,6 +157,11 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
           async listPublications() {
             return {rows: [latestPublicationRow]};
           },
+          // The durable read the owner's guarded write is computed from.
+          async getPublication(publicationId) {
+            return latestPublicationRow.publication_id === publicationId ?
+              latestPublicationRow : null;
+          },
           async storeRow() {
             upsertCallCount += 1;
           },
@@ -971,6 +976,11 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
           async listPublications() {
             return {rows: [latestPublicationRow]};
           },
+          // The durable read the owner's guarded write is computed from.
+          async getPublication(publicationId) {
+            return [latestPublicationRow, ...persistedRows].filter((row) =>
+              row?.publication_id === publicationId).at(-1) ?? null;
+          },
           async storeRow(row) {
             persistedRows.push(row);
           },
@@ -1133,6 +1143,11 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
         controlPlanePublicationsOwner: publicationsOwnerOverRows({
           async listPublications() {
             return {rows: [latestPublicationRow]};
+          },
+          // The durable read the owner's guarded write is computed from.
+          async getPublication(publicationId) {
+            return [latestPublicationRow, ...persistedRows].filter((row) =>
+              row?.publication_id === publicationId).at(-1) ?? null;
           },
           async storeRow(row) {
             persistedRows.push(row);

@@ -75,7 +75,6 @@ const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS =
   ]);
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EMPTY_ROWS = Object.freeze([]);
 const PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_RETRY_AFTER_MS = 1000;
-const PUBLICATION_CONVERGENCE_DEFERRED_SKIP_WRITE_READBACK = true;
 
 test('deriveMembershipPublicationCandidate promotes recovery-eligible joiners when publication health is still pending',
   async (t) => {
@@ -839,7 +838,6 @@ const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_READBACK_FAILURE_TEST_NAME =
   'reconcileActiveGateMembershipPublication carries written owner row after visibility read error';
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_READBACK_FAILURE_MESSAGE =
   'owner visibility readback failed';
-const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_VISIBLE_READ_CALL_INDEX = 3;
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DEFERRED_ROW_MESSAGE =
   'deferred owner outcome should retain the written publication row';
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DEFERRED_CONTEXT_MESSAGE =
@@ -1102,8 +1100,6 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_READBACK_FAILURE_TEST_NAME,
     const pending = new SeedMap();
     const enqueued = [];
     const persistedRows = [];
-    let publicationReadCount =
-      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NO_ENQUEUE_COUNT;
     const coordinator = new MembershipPublicationCoordinator({
       nodeId:
         PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[
@@ -1116,11 +1112,9 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_READBACK_FAILURE_TEST_NAME,
           return {rows: [latestPublicationRow]};
         },
         async getPublication(publicationId) {
-          publicationReadCount += 1;
-          if (
-            publicationReadCount >=
-            PUBLICATION_CONVERGENCE_HANDOFF_TARGET_VISIBLE_READ_CALL_INDEX
-          ) {
+          // The durable owner stops answering once the write has landed:
+          // the visibility read after the write fails.
+          if (persistedRows.length > 0) {
             throw new Error(
               PUBLICATION_CONVERGENCE_HANDOFF_TARGET_READBACK_FAILURE_MESSAGE,
             );
@@ -1201,9 +1195,12 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_READBACK_FAILURE_TEST_NAME,
       PUBLICATION_CONVERGENCE_HANDOFF_TARGET_STALE_READBACK_COUNT,
       PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DEFERRED_CONTEXT_MESSAGE,
     );
+    // Guarded write (2026-11-11): the read-back opt-out is deleted; the
+    // re-run reads the durable owner.
     t.equal(
-      pending.get(ownerKey)?.context?.skipPublicationWriteReadback,
-      PUBLICATION_CONVERGENCE_DEFERRED_SKIP_WRITE_READBACK,
-      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DEFERRED_CONTEXT_MESSAGE,
+      'skipPublicationWriteReadback' in
+        (pending.get(ownerKey)?.context ?? {}),
+      false,
+      'the queued owner retry carries no read-back opt-out',
     );
   });

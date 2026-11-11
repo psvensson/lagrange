@@ -132,6 +132,10 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
           async listPublications() {
             return {rows: [durableRow]};
           },
+          // The durable read the owner's guarded write is computed from.
+          async getPublication(publicationId) {
+            return durableRow?.publication_id === publicationId ? durableRow : null;
+          },
           async storeRow(row) {
             persistedRows.push(row);
             durableRow = row;
@@ -303,6 +307,10 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
           async listPublications() {
             return {rows: [durableRow]};
           },
+          // The durable read the owner's guarded write is computed from.
+          async getPublication(publicationId) {
+            return durableRow?.publication_id === publicationId ? durableRow : null;
+          },
           async storeRow(row) {
             persistedRows.push(row);
             durableRow = row;
@@ -458,6 +466,10 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
           async listPublications() {
             return {rows: [durableRow]};
           },
+          // The durable read the owner's guarded write is computed from.
+          async getPublication(publicationId) {
+            return durableRow?.publication_id === publicationId ? durableRow : null;
+          },
           async storeRow(row) {
             durableRow = row;
           },
@@ -558,6 +570,11 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
         nodeId: PRIORITY_REFRESH_NODE_IDS[PRIORITY_REFRESH_LOCAL_NODE_INDEX],
         resolveIsControlPlanePublicationsWriteLeader: () => true,
         controlPlanePublicationsOwner: publicationsOwnerOverRows({
+          // The durable read the owner's guarded write is computed from.
+          async getPublication(publicationId) {
+            return [latestPublicationRow, ...persistedRows].filter((row) =>
+              row?.publication_id === publicationId).at(-1) ?? null;
+          },
           async storeRow(row) {
             persistedRows.push(row);
           },
@@ -652,6 +669,11 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
         nodeId: PRIORITY_REFRESH_NODE_IDS[PRIORITY_REFRESH_LOCAL_NODE_INDEX],
         resolveIsControlPlanePublicationsWriteLeader: () => true,
         controlPlanePublicationsOwner: publicationsOwnerOverRows({
+          // The durable read the owner's guarded write is computed from.
+          async getPublication(publicationId) {
+            return [latestPublicationRow, ...persistedRows].filter((row) =>
+              row?.publication_id === publicationId).at(-1) ?? null;
+          },
           async storeRow(row) {
             persistedRows.push(row);
           },
