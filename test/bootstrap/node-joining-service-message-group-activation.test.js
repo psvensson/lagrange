@@ -470,7 +470,6 @@ test('NodeJoiningService - full join hosts its own message group; mg-1 ' +
   // Add 3 replicas on the same node (seed-node-1) with leader role and addresses
   // This satisfies the leader readiness check
   systemTableCache.applySystemTableChange('services', 'INSERT', {
-    id: 'mg-1-r1',
     service_id: 'mg-1-r1',
     replica_id: 'mg-1-r1',
     group_id: 'mg-1',
@@ -481,7 +480,6 @@ test('NodeJoiningService - full join hosts its own message group; mg-1 ' +
     status: 'active',
   });
   systemTableCache.applySystemTableChange('services', 'INSERT', {
-    id: 'mg-1-r2',
     service_id: 'mg-1-r2',
     replica_id: 'mg-1-r2',
     group_id: 'mg-1',
@@ -492,7 +490,6 @@ test('NodeJoiningService - full join hosts its own message group; mg-1 ' +
     status: 'active',
   });
   systemTableCache.applySystemTableChange('services', 'INSERT', {
-    id: 'mg-1-r3',
     service_id: 'mg-1-r3',
     replica_id: 'mg-1-r3',
     group_id: 'mg-1',

@@ -77,6 +77,9 @@ const RECONCILE_QUEUE_LOG_MSG = Object.freeze({
   IN_FLIGHT_RELEASED: 'Owner key released from in-flight reconcile',
   IN_FLIGHT_DEFERRED: 'Owner key deferred — already in-flight',
   STALE_FENCE_REJECTED: 'Claim rejected — stale fence token',
+  RATE_LIMITED_REQUEUE:
+    'Owner key re-enqueued during consecutive runs with no declared ' +
+    'change — next run rate-limited',
   SHUTDOWN: 'Reconcile queue shutdown',
 });
 
@@ -87,6 +90,9 @@ const RECONCILE_QUEUE_ERROR_MSG = Object.freeze({
     'OwnerKeyReconcileQueue enqueue requires an owner key',
   STALE_FENCE_TOKEN:
     'OwnerKeyReconcileQueue claim rejected: stale fence token',
+  SELF_REQUEUE_DECLARATION_INVALID:
+    'OwnerKeyReconcileQueue selfRequeue must name exactly one of ' +
+    'changed (a non-empty string) or delayMs (a positive safe integer)',
 });
 
 /**
@@ -97,6 +103,51 @@ const RECONCILE_QUEUE_DIAGNOSTIC = Object.freeze({
   STALE_CLAIM_IN_FLIGHT: 'stale_claim_in_flight',
   /** Claim rejected because the fence token is stale. */
   STALE_FENCE_TOKEN: 'stale_fence_token',
+  /**
+   * An owner key re-enqueued during each of its last runs with no declared
+   * change: its next run is held back by the rate limit.
+   */
+  RATE_LIMITED_REQUEUE: 'rate_limited_requeue',
+});
+
+/**
+ * How the queue classified an enqueue of an owner key whose reconcile is in
+ * flight (made from inside that run, or by an event during it: the queue
+ * cannot tell them apart without async-context tracking, which it does not
+ * pay for).
+ */
+const RECONCILE_QUEUE_IN_FLIGHT_REQUEUE = Object.freeze({
+  /** The owner key is not in flight: ordinary admission. */
+  NOT_IN_FLIGHT: 'not_in_flight',
+  /** `selfRequeue.changed` names what changed: admitted, and the key's rate
+   * limit restarts. */
+  CHANGED: 'changed',
+  /** `selfRequeue.delayMs`: held until the delay has passed. */
+  DELAYED: 'delayed',
+  /** No declaration: admitted behind the turn boundary and counted toward
+   * the key's rate limit. */
+  UNDECLARED: 'undeclared',
+});
+
+/**
+ * Rate limit of an owner key re-enqueued during each of its consecutive
+ * runs with no declared change: the first FREE_RUNS successors only wait for
+ * the next host turn; each further one is held, doubling from BASE_MS up to
+ * MAX_MS. A run that ends with no successor, or whose successor names a
+ * change, restarts the count.
+ */
+const RECONCILE_QUEUE_REQUEUE_RATE_LIMIT = Object.freeze({
+  FREE_RUNS: 8,
+  BASE_MS: 25,
+  MAX_MS: 1000,
+});
+
+/** What readQueuedContext found for one owner key. */
+const OWNER_KEY_QUEUED_CONTEXT_STATE = Object.freeze({
+  /** Pending or waiting for its retry instant: `context` is its input. */
+  QUEUED: 'queued',
+  /** Nothing queued for the key (it may be in flight or held). */
+  NOT_QUEUED: 'not_queued',
 });
 
 /**
@@ -110,6 +161,8 @@ const RECONCILE_QUEUE_EVENT = Object.freeze({
   STALE_FENCE_REJECTED_DRAIN: 'stale_fence_rejected_drain',
   /** Emitted when a work item is deferred because the key is in-flight. */
   STALE_CLAIM_DEFERRED: 'stale_claim_deferred',
+  /** Emitted when an owner key's next run is held by the rate limit. */
+  RATE_LIMITED_REQUEUE: 'rate_limited_requeue',
 });
 
 /**
@@ -119,11 +172,14 @@ const RECONCILE_QUEUE_EVENT = Object.freeze({
 const STALE_FENCE_SAMPLE_CAPACITY = 32;
 
 export {
+  OWNER_KEY_QUEUED_CONTEXT_STATE,
   RECONCILE_QUEUE_SUBSYSTEM,
   RECONCILE_REASON,
   RECONCILE_QUEUE_LOG_MSG,
   RECONCILE_QUEUE_ERROR_MSG,
   RECONCILE_QUEUE_DIAGNOSTIC,
   RECONCILE_QUEUE_EVENT,
+  RECONCILE_QUEUE_IN_FLIGHT_REQUEUE,
+  RECONCILE_QUEUE_REQUEUE_RATE_LIMIT,
   STALE_FENCE_SAMPLE_CAPACITY,
 };

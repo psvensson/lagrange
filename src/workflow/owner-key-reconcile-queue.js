@@ -16,8 +16,15 @@
 
 import {EventEmitter} from 'events';
 import {
+  deferInFlightWorkItem,
   recordStaleFenceRejection,
 } from './owner-key-reconcile-queue-stale-fence.js';
+import {
+  closeReconcileRun,
+  dropHeldRequeues,
+  holdRequeueIfOwed,
+  initializeReconcileRunScope,
+} from './owner-key-reconcile-queue-run-scope.js';
 import {
   awaitReconcileQueueCurrentWorkIdle,
   isReconcileQueueCurrentWorkIdle,
@@ -25,6 +32,7 @@ import {
 } from './owner-key-reconcile-queue-current-work.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {
+  OWNER_KEY_QUEUED_CONTEXT_STATE,
   RECONCILE_QUEUE_SUBSYSTEM,
   RECONCILE_QUEUE_LOG_MSG,
   RECONCILE_QUEUE_ERROR_MSG,
@@ -42,7 +50,6 @@ import {
 import {
   appendCompletionWaiter,
   enqueueAndWaitForOwner,
-  mergeWorkItemCompletionWaiters,
   rejectAllQueueCompletionWaiters,
   rejectStaleFenceCompletionWaiter,
   rejectStoppedCompletionWaiter,
@@ -72,7 +79,6 @@ const SetConstructor = Set;
 const setAdd = Function.call.bind(Set.prototype.add);
 const setClear = Function.call.bind(Set.prototype.clear);
 const setDelete = Function.call.bind(Set.prototype.delete);
-const setForEach = Function.call.bind(Set.prototype.forEach);
 const setHas = Function.call.bind(Set.prototype.has);
 const setSize = Function.call.bind(
   Object.getOwnPropertyDescriptor(Set.prototype, 'size').get,
@@ -92,8 +98,13 @@ function normalizeMaxItemsPerDrain(value) {
     DEFAULT_MAX_ITEMS_PER_DRAIN;
 }
 
+// Every drain starts on its own host turn (a macrotask), so no chain of
+// reconciles - one key re-enqueued by its own run, or a wake that re-enqueues
+// after the run ended - can starve timers or I/O. scheduleDrainFn is a port
+// for a deterministic scheduler (tests, the formation simulator), never a
+// second production policy.
 function defaultDrainScheduler(callback) {
-  Promise.resolve().then(callback);
+  setImmediate(callback);
 }
 
 /**
@@ -187,6 +198,7 @@ class OwnerKeyReconcileQueue extends EventEmitter {
     this._retryableDrainFailureSamples = [];
     this._retryableDrainFailureSampleIndex = 0;
     this.retrySampleCapacity = STALE_FENCE_SAMPLE_CAPACITY;
+    initializeReconcileRunScope(this);
 
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
@@ -209,10 +221,16 @@ class OwnerKeyReconcileQueue extends EventEmitter {
    * @param {*} [context] - Optional context payload.
    * @param {Object} [options] - Enqueue options.
    * @param {number} [options.fenceToken] - Owner epoch / lease token.
-   * @return {boolean} True if a new entry was created, false if merged
-   *   or rejected.
+   * @param {Object} [options.selfRequeue] - On a re-enqueue made from inside
+   *   the running reconcile of the same owner key: {changed} or {delayMs}
+   *   (owner-key-reconcile-queue-run-scope.js).
+   * @return {boolean} True if a new entry was created, false if merged,
+   *   held or rejected.
    */
   enqueue(ownerKey, reason, context, options) {
+    if (holdRequeueIfOwed(this, ownerKey, reason, context, options)) {
+      return false;
+    }
     const admission = this._resolveEnqueueAdmission(
       ownerKey,
       reason,
@@ -444,7 +462,7 @@ class OwnerKeyReconcileQueue extends EventEmitter {
 
   /**
    * Schedule a drain if not already draining.
-   * Uses a microtask to batch rapid enqueues.
+   * Uses the next host turn, which also batches rapid enqueues.
    * @private
    */
   scheduleDrain() {
@@ -550,6 +568,7 @@ class OwnerKeyReconcileQueue extends EventEmitter {
     } finally {
       setDelete(this.inFlight, ownerKey);
       mapDelete(this.inFlightItems, ownerKey);
+      closeReconcileRun(this, ownerKey);
       this.logger.debug(
         RECONCILE_QUEUE_LOG_MSG.IN_FLIGHT_RELEASED, {
           queue: this.name,
@@ -575,51 +594,9 @@ class OwnerKeyReconcileQueue extends EventEmitter {
     if (available) this.scheduleDrain();
   }
 
-  /**
-   * Defer a work item whose owner key is already in-flight.
-   *
-   * The item is merged back into the pending map (preserving any
-   * reasons already accumulated there) and a typed stale-claim
-   * diagnostic is recorded.
-   *
-   * @param {string} ownerKey
-   * @param {ReconcileWorkItem} item
-   * @private
-   */
+  // Merge a work item whose owner key is already in flight back into pending.
   _deferInFlightItem(ownerKey, item) {
-    const existing = mapGet(this.pending, ownerKey);
-    if (existing) {
-      setForEach(item.reasons, (reason) => setAdd(existing.reasons, reason));
-      if (item.context !== null && item.context !== undefined) {
-        existing.context = item.context;
-      }
-      mergeWorkItemCompletionWaiters(existing, item);
-    } else {
-      mapSet(this.pending, ownerKey, item);
-    }
-
-    const diagnostic = {
-      type: RECONCILE_QUEUE_DIAGNOSTIC.STALE_CLAIM_IN_FLIGHT,
-      queue: this.name,
-      ownerKey,
-      reasons: snapshotSetValues(item.reasons),
-      timestamp: this.now(),
-    };
-    this._staleInFlightDeferralCount++;
-    recordStaleFenceDiagnosticSamples(
-      this,
-      diagnostic,
-      STALE_FENCE_SAMPLE_CAPACITY,
-    );
-    this.emit(
-      RECONCILE_QUEUE_EVENT.STALE_CLAIM_DEFERRED,
-      diagnostic,
-    );
-
-    this.logger.debug(
-      RECONCILE_QUEUE_LOG_MSG.IN_FLIGHT_DEFERRED, {
-        ...diagnostic,
-      });
+    deferInFlightWorkItem(this, ownerKey, item);
   }
 
   _deferRetryableDrainFailure(ownerKey, item, reasons, error) {
@@ -708,11 +685,12 @@ class OwnerKeyReconcileQueue extends EventEmitter {
       mapGet(this.retryWorkItems, ownerKey),
       mapGet(this.exhaustedWorkItems, ownerKey),
     ];
+    const discardError = new Error(`${this.name} discarded ${ownerKey}`);
+    const held = dropHeldRequeues(this, ownerKey, discardError);
     const removed = mapDelete(this.pending, ownerKey) ||
       mapHas(this.retryWorkItems, ownerKey) ||
-      mapHas(this.exhaustedWorkItems, ownerKey);
+      mapHas(this.exhaustedWorkItems, ownerKey) || held;
     this._clearRetryState(ownerKey);
-    const discardError = new Error(`${this.name} discarded ${ownerKey}`);
     for (let index = 0; index < discardedItems.length; index++) {
       rejectWorkItemCompletionWaiters(
         discardedItems[index],
@@ -720,6 +698,20 @@ class OwnerKeyReconcileQueue extends EventEmitter {
       );
     }
     return removed;
+  }
+
+  /**
+   * The queued input of one owner key: pending, or waiting for its retry
+   * instant. A held self re-enqueue is not queued input.
+   * @param {string} ownerKey
+   * @return {{state: string, context: *}}
+   */
+  readQueuedContext(ownerKey) {
+    const item = mapGet(this.pending, ownerKey) ||
+      mapGet(this.retryWorkItems, ownerKey);
+    return item ?
+      {state: OWNER_KEY_QUEUED_CONTEXT_STATE.QUEUED, context: item.context} :
+      {state: OWNER_KEY_QUEUED_CONTEXT_STATE.NOT_QUEUED, context: null};
   }
 
   /**
@@ -760,6 +752,7 @@ class OwnerKeyReconcileQueue extends EventEmitter {
   shutdown() {
     this.stopped = true;
     rejectAllQueueCompletionWaiters(this);
+    dropHeldRequeues(this, null, new Error(`${this.name} is stopped`));
     mapClear(this.pending);
     mapClear(this.retryWorkItems);
     mapClear(this.retryStates);

@@ -175,7 +175,7 @@ function createBootstrapServiceReplicaHandlerRuntimeMethods() {
             tableName,
             preferredService: messageGroupService,
             defer: options.deferCdcPropagationHandshake === true,
-            messageGroupServices: () => this.messageGroupServices,
+            messageGroupServices: this.messageGroupServices,
             logger: this.logger,
             logContext: {tableName, partitionId: options.partitionId,
               replicaId: options.replicaId},

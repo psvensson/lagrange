@@ -182,6 +182,9 @@ test('MessageGroupService - Raft CDC propose failures preserve deferred retry ' 
       'failure log should identify the leader routing path');
     t.equal(errorLogs[0]?.fields?.configuredRetryBudget, service.retryMaxAttempts || 1,
       'failure log should preserve the configured retry budget');
+    t.equal(errorLogs[0]?.fields?.attemptsMade, 1,
+      'a non-retryable failure is logged as the one attempt made, not as ' +
+        'the spent budget');
     t.equal(errorLogs[0]?.fields?.proposeTimeoutMs > 0, true,
       'failure log should preserve the propose timeout budget');
   }
@@ -800,7 +803,7 @@ test('MessageGroupService - applyCDCEvent updates cache', async (t) => {
     });
 
     await service.applyCDCEvent('nodes', 'INSERT', {
-      id: 'node-1',
+      node_id: 'node-1',
       address: '127.0.0.1:8080',
       status: 'active',
     });
@@ -843,7 +846,7 @@ test('MessageGroupService - applyCDCEvent fails closed on Raft propose error', a
 
     await t.rejects(
       service.applyCDCEvent('nodes', 'INSERT', {
-        id: 'node-raft-fail',
+        node_id: 'node-raft-fail',
         status: 'active',
       }),
       /raft propose failed/,
@@ -1052,7 +1055,7 @@ test(
         service.applyCDCEvent(
           'nodes',
           'INSERT',
-          {id: 'node-retry-same-ts', status: 'active'},
+          {node_id: 'node-retry-same-ts', status: 'active'},
           {timestamp: retryTimestamp},
         ),
         /synthetic propose failure/,
@@ -1062,7 +1065,7 @@ test(
       await service.applyCDCEvent(
         'nodes',
         'INSERT',
-        {id: 'node-retry-same-ts', status: 'active'},
+        {node_id: 'node-retry-same-ts', status: 'active'},
         {timestamp: retryTimestamp},
       );
 
@@ -1114,12 +1117,12 @@ test('MessageGroupService - CDC batch propagation proposes one raft command',
             {
               tableName: 'nodes',
               operation: 'INSERT',
-              data: {id: 'node-batch-1', status: 'active'},
+              data: {node_id: 'node-batch-1', status: 'active'},
             },
             {
               tableName: 'nodes',
               operation: 'INSERT',
-              data: {id: 'node-batch-2', status: 'ready'},
+              data: {node_id: 'node-batch-2', status: 'ready'},
             },
           ],
         },
@@ -1193,7 +1196,7 @@ test(
         proposedCommands.push(command);
       });
       await service.applyCDCEvent('nodes', 'INSERT', {
-        id: 'node-grown-cdc',
+        node_id: 'node-grown-cdc',
         status: 'active',
       });
       t.equal(proposedCommands.length, 1,
@@ -1225,13 +1228,13 @@ test('MessageGroupService - CDC paths delegate to CDCHandler owner', async (t) =
     t.ok(service.cdcHandler.isSubscribed('nodes'));
 
     await service.applyCDCEvent('nodes', 'INSERT', {
-      id: 'node-owner-1',
+      node_id: 'node-owner-1',
       status: 'active',
     });
     t.ok(service.getWritableCache().get('nodes', 'node-owner-1'));
 
     await service.applyCDCEvent('partitions', 'INSERT', {
-      id: 'partition-owner-1',
+      partition_id: 'partition-owner-1',
       status: 'active',
     });
     t.equal(

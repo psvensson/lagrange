@@ -2,7 +2,7 @@
  * Unit tests for LiveQueryManager
  *
  * Tests live query subscription management including subscribe, pause,
- * resume, cancel, and renew operations.
+ * resume and cancel operations.
  *
  * Requirements: 32.1, 32.7, 32.9, 32.10, 32.11
  */
@@ -107,8 +107,7 @@ test('LiveQueryManager', async (t) => {
     // Simulate activation
     manager.handleLiveQueryEvent({
       subscriptionId,
-      type: 'live_query_initial',
-      data: [],
+      type: 'live_query_subscribed',
       partitions: ['p1'],
     });
 
@@ -138,8 +137,7 @@ test('LiveQueryManager', async (t) => {
     // Simulate activation and pause
     manager.handleLiveQueryEvent({
       subscriptionId,
-      type: 'live_query_initial',
-      data: [],
+      type: 'live_query_subscribed',
       partitions: ['p1'],
     });
     manager.pause(subscriptionId);
@@ -161,8 +159,7 @@ test('LiveQueryManager', async (t) => {
     // Simulate activation but don't pause
     manager.handleLiveQueryEvent({
       subscriptionId,
-      type: 'live_query_initial',
-      data: [],
+      type: 'live_query_subscribed',
       partitions: ['p1'],
     });
 
@@ -193,63 +190,22 @@ test('LiveQueryManager', async (t) => {
     t.equal(result, false);
   });
 
-  await t.test('renew renews an expired subscription', async (t) => {
+  await t.test('handleLiveQueryEvent applies the subscribe acknowledgement', async (t) => {
     const eventBus = new EventBus();
     const connMgr = createMockConnectionManager();
     const manager = new LiveQueryManager(connMgr, eventBus);
 
     const subscriptionId = manager.subscribe('LIVE SELECT * FROM users');
-
-    // Simulate expiration
     manager.handleLiveQueryEvent({
       subscriptionId,
-      type: 'live_query_expired',
-    });
-
-    const subscription = manager.getSubscription(subscriptionId);
-    t.equal(subscription.status, 'expired');
-
-    const result = manager.renew(subscriptionId);
-    t.equal(result, true);
-    t.equal(subscription.status, 'renewing');
-  });
-
-  await t.test('renew returns false for non-expired subscription', async (t) => {
-    const eventBus = new EventBus();
-    const connMgr = createMockConnectionManager();
-    const manager = new LiveQueryManager(connMgr, eventBus);
-
-    const subscriptionId = manager.subscribe('LIVE SELECT * FROM users');
-
-    const result = manager.renew(subscriptionId);
-    t.equal(result, false);
-  });
-
-  await t.test('handleLiveQueryEvent processes initial results', async (t) => {
-    const eventBus = new EventBus();
-    const connMgr = createMockConnectionManager();
-    const manager = new LiveQueryManager(connMgr, eventBus);
-
-    const subscriptionId = manager.subscribe('LIVE SELECT * FROM users');
-
-    let emittedEvent = null;
-    eventBus.on('livequery:initialized', (data) => {
-      emittedEvent = data;
-    });
-
-    const initialData = [{id: 1, name: 'Alice'}];
-    manager.handleLiveQueryEvent({
-      subscriptionId,
-      type: 'live_query_initial',
-      data: initialData,
+      type: 'live_query_subscribed',
+      queryId: 'q-1',
       partitions: ['p1', 'p2'],
     });
 
     const subscription = manager.getSubscription(subscriptionId);
     t.equal(subscription.status, 'active');
     t.same(subscription.partitions, ['p1', 'p2']);
-    t.same(subscription.initialResults, initialData);
-    t.ok(emittedEvent);
   });
 
   await t.test('handleLiveQueryEvent adds events when not paused', async (t) => {
@@ -262,8 +218,7 @@ test('LiveQueryManager', async (t) => {
     // Activate
     manager.handleLiveQueryEvent({
       subscriptionId,
-      type: 'live_query_initial',
-      data: [],
+      type: 'live_query_subscribed',
       partitions: ['p1'],
     });
 
@@ -281,6 +236,27 @@ test('LiveQueryManager', async (t) => {
     t.ok(subscription.lastEventAt);
   });
 
+  await t.test('handleLiveQueryEvent forwards data, oldData and rows by name', async (t) => {
+    const eventBus = new EventBus();
+    const manager = new LiveQueryManager(createMockConnectionManager(), eventBus);
+    const subscriptionId = manager.subscribe('LIVE SELECT * FROM users');
+    const results = [];
+    const changes = [];
+    eventBus.on('livequery:result', (event) => results.push(event));
+    eventBus.on('livequery:event', (event) => changes.push(event));
+
+    manager.handleLiveQueryEvent({subscriptionId, type: 'live_query_event',
+      eventType: 'snapshot', rows: [{id: 1}]});
+    manager.handleLiveQueryEvent({subscriptionId, type: 'live_query_event',
+      eventType: 'update', data: {id: 1, v: 2}, oldData: {id: 1, v: 1}});
+
+    t.same(results[0].rows, [{id: 1}], 'snapshot rows forwarded as rows');
+    t.equal(results[0].data, undefined, 'snapshot carries no data');
+    t.equal(changes.length, 1, 'a snapshot is a result, not a change');
+    t.same(changes[0].data, {id: 1, v: 2}, 'update row forwarded as data');
+    t.same(changes[0].oldData, {id: 1, v: 1}, 'update previous row forwarded as oldData');
+  });
+
   await t.test('handleLiveQueryEvent ignores events when paused', async (t) => {
     const eventBus = new EventBus();
     const connMgr = createMockConnectionManager();
@@ -291,8 +267,7 @@ test('LiveQueryManager', async (t) => {
     // Activate and pause
     manager.handleLiveQueryEvent({
       subscriptionId,
-      type: 'live_query_initial',
-      data: [],
+      type: 'live_query_subscribed',
       partitions: ['p1'],
     });
     manager.pause(subscriptionId);
@@ -334,14 +309,12 @@ test('LiveQueryManager', async (t) => {
     // Activate first two
     manager.handleLiveQueryEvent({
       subscriptionId: id1,
-      type: 'live_query_initial',
-      data: [],
+      type: 'live_query_subscribed',
       partitions: [],
     });
     manager.handleLiveQueryEvent({
       subscriptionId: id2,
-      type: 'live_query_initial',
-      data: [],
+      type: 'live_query_subscribed',
       partitions: [],
     });
 
@@ -373,8 +346,7 @@ test('LiveQueryManager', async (t) => {
     // Activate
     manager.handleLiveQueryEvent({
       subscriptionId,
-      type: 'live_query_initial',
-      data: [],
+      type: 'live_query_subscribed',
       partitions: ['p1'],
     });
 

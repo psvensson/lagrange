@@ -24,6 +24,8 @@
  * Epic: solve/epics/rebalancer-operation-safety-audit-remediation.md
  */
 
+import {withRemovalServingSurface} from
+  '../test-helpers/partition-removal-serving-surface.js';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -186,10 +188,11 @@ test('removed-replica cleanup debt owner', async (t) => {
       handler.initialize();
       await handler.removedReplicaCleanupDebtSweepTask;
 
-      const liveService = {shutdownCalls: ZERO_COUNT,
+      const liveService = withRemovalServingSurface({
+        shutdownCalls: ZERO_COUNT,
         async shutdown() {
           this.shutdownCalls += 1;
-        }};
+        }});
       handler.localServices.set(TEST_REPLICA_ID, liveService);
 
       // Force the removal-cleanup failure AFTER the durable row delete so
@@ -278,7 +281,8 @@ test('removed-replica cleanup debt owner', async (t) => {
       const handler = createHandler({cache, dataDir});
       handler.initialize();
       await handler.removedReplicaCleanupDebtSweepTask;
-      handler.localServices.set(TEST_REPLICA_ID, {async shutdown() {}});
+      handler.localServices.set(TEST_REPLICA_ID,
+        withRemovalServingSurface({async shutdown() {}}));
       const removeMessage = {
         correlationId: TEST_CORRELATION_ID,
         payload: {

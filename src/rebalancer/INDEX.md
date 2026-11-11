@@ -12,7 +12,6 @@ documentClass: generated
 - [background-priority-spread-release-condition.js](background-priority-spread-release-condition.js) - The durable condition the ordinary-work release fence's stability dwell stands for. (importers: one)
 - [background-priority-spread-release-tracker.js](background-priority-spread-release-tracker.js) - What one evaluation observed about the durable condition the stability dwell stands for (no non-terminal... (importers: many)
 - [background-spread-fence-exemption.js](background-spread-fence-exemption.js) - Which entities the ordinary-work release fence's stability dwell does NOT hold. (importers: few)
-- [cluster-readiness-signal.js](cluster-readiness-signal.js) - Cluster Readiness Signal - composite readiness evaluator for the rebalancer's first planning cycle. (importers: few)
 - [cluster-readiness-wait-report.js](cluster-readiness-wait-report.js) - The rebalancer's cluster-readiness gate is a bounded wait: when its bound is spent, planning proceeds degraded and... (importers: one)
 - [committed-membership-bootstrap-read.js](committed-membership-bootstrap-read.js) - Owner contract: Owner: the creation owner's committed-membership read (owner decision O1, committed-read amendment... (importers: few)
 - [effective-placement-serial-priority-planner.js](effective-placement-serial-priority-planner.js) - Project the one priority-planning view from the canonical joined inventory. (importers: few)

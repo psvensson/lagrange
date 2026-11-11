@@ -55,22 +55,22 @@ test('L1: a failed incomplete-operation read is DEFERRED, typed, never EMPTY',
     }
   });
 
-test('L2: an admission gate holds on a failed in-flight read', async (t) => {
-  const world = unavailableWorld(CACHE_PROJECTION.EMPTY);
+test('L2: a failed in-flight read is a DEFERRED observation with no list, ' +
+  'and the admission gate holds on it', async (t) => {
+  const world = unavailableWorld(CACHE_PROJECTION.MIRRORS_DURABLE);
   try {
     const coordinator = world.coordinator;
-    await coordinator.queryIncompleteOperations({
+    const observation = await coordinator.queryIncompleteOperations({
       visibilityReadMode:
         REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED,
     });
-    const observation = coordinator.getIncompleteOperationObservation();
-    t.equal(
-      coordinator.shouldBlockOperationAdmissionOnIncompleteOperationObservation(
-        observation,
-      ),
-      true,
-      'the gate does not open on "no operations" from a failed read',
-    );
+    t.equal(observation.state, INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED,
+      'the read that did not answer is DEFERRED');
+    t.same(observation.operations, [],
+      'no list, though the cache projects an in-flight row');
+    t.equal(await coordinator.canStartRemoveOperation({
+      partitionId: world.partitionId,
+    }), false, 'the gate does not open on an unanswered read');
   } finally {
     await world.coordinator.shutdown();
   }
@@ -87,7 +87,6 @@ test('L3: a strict create-dedupe read that fails throws, never "none"',
         world.partitionId,
         {},
         () => true,
-        {allowCacheFallbackOnReadFailure: false},
       ).then((value) => ({value}), (error) => ({error}));
       t.equal(isOperationVisibilityUnavailableError(outcome.error), true,
         'the typed retryable unavailability, not null');

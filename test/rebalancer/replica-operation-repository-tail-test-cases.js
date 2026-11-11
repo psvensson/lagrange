@@ -574,8 +574,8 @@ export function registerReplicaOperationRepositoryTailTests({
   );
 
   test(
-    'persistNewOperation keeps owner-persisted incomplete operations ' +
-    'visible while priority recovery defers later owner reads',
+    'persistNewOperation persists; a later owner list read that priority ' +
+    'recovery defers is DEFERRED with no list (no owner-persisted copy stands in)',
     async (t) => {
       let incompleteReadCalls = 0;
       const repo = createTestRepository({
@@ -654,15 +654,12 @@ export function registerReplicaOperationRepositoryTailTests({
         'the repository should still attempt authoritative incomplete-operation reads before deferring',
       );
       t.same(
-        operations.map((operation) => operation.operationId),
-        [op.operationId],
-        'deferred owner reads should fall back to the owner-persisted incomplete operation set',
+        operations.operations,
+        [],
+        'a deferred owner read carries no list: the owner-persisted copy ' +
+          'is not the owner\'s answer',
       );
-      t.equal(
-        outcome?.fallbackOperationCount,
-        1,
-        'the deferred outcome should report the persisted fallback operation count',
-      );
+      t.not(outcome, null, 'the deferral is typed');
     },
   );
 

@@ -29,7 +29,6 @@ const {
   HTTP_OK_UPPER,
   INACTIVE_STATE,
   LIVE_QUERY_EVENT_MESSAGE_TYPE,
-  LIVE_QUERY_INITIAL_MESSAGE_TYPE,
   LOGS_TABLE_NAME,
   LOG_SUBSCRIPTION_CAPABILITY,
   MIN_TIMEOUT_MS,
@@ -902,34 +901,20 @@ class NodeHandle {
       return;
     }
 
-    if (parsed.type === LIVE_QUERY_INITIAL_MESSAGE_TYPE) {
-      const rows = Array.isArray(parsed.data) ? parsed.data : [];
-      for (const row of rows) {
-        this._emitLogStreamEntry(row);
-      }
-      return;
-    }
-
     if (parsed.type !== LIVE_QUERY_EVENT_MESSAGE_TYPE) {
       return;
     }
 
-    const payload =
-      parsed.record ||
-      parsed.row ||
-      parsed.data ||
-      parsed.new ||
-      parsed.old ||
-      null;
-
-    if (Array.isArray(payload)) {
-      for (const row of payload) {
+    // A snapshot or reset carries its result list as `rows`; every other
+    // live-query change names its row `data`.
+    if (parsed.eventType === 'snapshot' || parsed.eventType === 'reset') {
+      for (const row of parsed.rows) {
         this._emitLogStreamEntry(row);
       }
       return;
     }
 
-    this._emitLogStreamEntry(payload);
+    this._emitLogStreamEntry(parsed.data);
   }
 
   _emitLogStreamEntry(entry) {

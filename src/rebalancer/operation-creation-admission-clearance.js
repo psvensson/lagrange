@@ -5,7 +5,12 @@
 // for exactly those events:
 //
 //  - IMMEDIATE: nothing to wait for; re-entry starts from the identity the
-//    denial captured.
+//    denial captured. The identity moving while the gates ran IS the changed
+//    input (a classified planning source change), so the denial permits
+//    exactly one re-entry; a further IDENTITY_CHANGED denial needs a further
+//    move of the identity. The consumer runs that re-entry at its cadence
+//    floor, never ahead of it (rebalancer-wake.js), so an immediate clearance
+//    is never a self-sustaining loop.
 //  - PLANNING_IDENTITY_CURRENT: woken by a planning-snapshot publication for
 //    the target node key (the readiness owner's subscription seam, the same
 //    one the rebalancer's planning-target wake uses) and by a deferred cache

@@ -12,6 +12,10 @@ import {test} from '../../src/test-helpers/tap.js';
 import {
   canStartAddOperation,
 } from '../../src/rebalancer/rebalance-coordinator-priority-budget-helper.js';
+import {
+  buildAnsweredIncompleteOperationListObservation,
+  buildDeferredIncompleteOperationListObservation,
+} from '../../src/rebalancer/incomplete-operation-list-observation.js';
 
 function buildFakeCoordinator(overrides = {}) {
   const calls = {cachedReads: 0, authoritativeReads: 0};
@@ -37,7 +41,13 @@ function buildFakeCoordinator(overrides = {}) {
     },
     async queryIncompleteOperations() {
       calls.authoritativeReads += 1;
-      return coordinator.authoritativeOperations;
+      return coordinator.blockOnObservation ?
+        buildDeferredIncompleteOperationListObservation({
+          reasonCode: 'authoritative_read_unavailable',
+          retryable: true,
+        }) :
+        buildAnsweredIncompleteOperationListObservation(
+          coordinator.authoritativeOperations);
     },
     isPriorityControlPlanePartition() {
       return false;
@@ -51,13 +61,7 @@ function buildFakeCoordinator(overrides = {}) {
     async shouldIgnoreCriticalAddBudgetOperation() {
       return false;
     },
-    getIncompleteOperationObservation() {
-      return {};
-    },
     reconcileIncompleteOperationEmptyQueryDelay() {},
-    shouldBlockOperationAdmissionOnIncompleteOperationObservation() {
-      return coordinator.blockOnObservation;
-    },
     clearEmptyIncompleteOperationQueryDelay() {},
     ...overrides,
   };

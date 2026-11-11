@@ -20,6 +20,10 @@ import {
 } from './raft-operation-port-constants.js';
 import {RAFT_RS_CORE_REFUSAL_TEXT} from './raft-rs-core-constants.js';
 import {
+  TRANSFEREE_DECISION,
+  decideCoreTransferee,
+} from './raft-removal-transferee-rule.js';
+import {
   FOLLOWER_RAFT_STATE,
   NO_LEADER,
   ROLE,
@@ -30,10 +34,6 @@ import {
 
 const {CORE_OK, CORE_REFUSED, HOST_FAILURE} = RAFT_OPERATION_OUTCOME;
 const ROLE_FOLLOWER = ROLE[FOLLOWER_RAFT_STATE];
-
-const REMOVED_LEADER_STEP_DOWN = deepFreeze({
-  successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.MOST_CAUGHT_UP,
-});
 
 function transferRefusal(reason, retryable = false) {
   return deepFreeze({
@@ -107,38 +107,39 @@ function decideNamedTransfer({status, confState}, target) {
   return {answer: transferRefusal(RUNTIME_REASON.NO_KNOWN_LEADER, true)};
 }
 
-function progressOrder(left, right) {
-  const leftMatched = BigInt(left.matched);
-  const rightMatched = BigInt(right.matched);
-  if (leftMatched !== rightMatched) {
-    return leftMatched > rightMatched ? -1 : 1;
-  }
-  return BigInt(left.id) < BigInt(right.id) ? -1 : 1;
+// The rule's outcome a refusal names. Every outcome but CHOSEN leaves nothing
+// stepped; the port's answer keeps its one name for "no voter can take it"
+// (NO_ELIGIBLE_SUCCESSOR), the rule's own outcome beside it.
+function noTransfereeRefusal(decision) {
+  return deepFreeze({...transferRefusal(RUNTIME_REASON.NO_ELIGIBLE_SUCCESSOR),
+    transfereeDecision: decision});
 }
 
-// The most caught-up successor, by the leader's own progress: the
-// transferable voter other than this replica with the highest matched index,
-// the lowest raft id on a tie. Only the leader holds that progress.
-function decideMostCaughtUpTransfer({status, confState}, peerId) {
-  if (roleOf(status) !== ROLE_LEADER) {
+// The successor by the leadership transferee rule (raft-removal-transferee-
+// rule.js) over the leader's own facts: a voter of a non-joint configuration
+// other than this replica, live by the leader's voter-liveness record (and
+// not a transferee whose attempt aborted unheard since), whose progress the
+// core can bring to the last index inside the transfer's election timeout;
+// the most caught up by matched index, a voter not yet passed over in this
+// tenure first, the lowest raft id on a tie. Only the leader holds that
+// progress.
+function decideMostCaughtUpTransfer(observation, peerId) {
+  if (roleOf(observation.status) !== ROLE_LEADER) {
     return {answer: transferRefusal(RUNTIME_REASON.NOT_LEADER)};
   }
-  const voters = transferableVoters(confState);
-  voters.delete(String(peerId));
-  const [successor] = (status.progress || [])
-    .filter((progress) => voters.has(String(progress?.id)))
-    .sort(progressOrder);
-  if (successor === undefined) {
-    return {answer: transferRefusal(RUNTIME_REASON.NO_ELIGIBLE_SUCCESSOR)};
+  const decided = decideCoreTransferee(peerId, observation);
+  if (decided.decision !== TRANSFEREE_DECISION.CHOSEN) {
+    return {answer: noTransfereeRefusal(decided.decision)};
   }
-  return {transferee: String(successor.id),
+  return {transferee: decided.transferee.id,
     accepted: transferAccepted(RUNTIME_REASON.TRANSFER_REQUESTED)};
 }
 
 /**
  * What a normalized transfer command means against the core's facts.
  * @param {string} peerId - This replica's raft id.
- * @param {Object} observation - {status, confState} read in the same turn.
+ * @param {Object} observation - {status, confState, voterLiveness} read in
+ *   the same turn.
  * @param {Object} command - The normalized request.
  * @return {Object} {answer} when nothing is stepped, or {transferee,
  *   accepted}: the raft id to step as the transferee and the answer once the
@@ -181,24 +182,104 @@ function droppedByLeadershipTransfer(refused, peerId, {status}) {
     hasProgress(status, peerId);
 }
 
-// The transfer a leader its own applied configuration no longer names asks
-// for, or null. Such a leader arises only from a removal another leader
-// proposed: the leader's own port refuses its own removal (REMOVES_LEADER),
-// but a replica may win an election holding the entry that removes it, then
-// commit and apply it. raft-rs keeps it leading (post_conf_change: "we
-// prevent demotions ... TODO step down") while it drops every proposal for
-// good, so it hands leadership to the most caught-up voter of the
-// configuration that removed it - the core's own transfer, which a leader
-// without progress for itself still steps.
-function removedLeaderStepDown(peerId, {status, confState}) {
-  // Removed outright: no voter, outgoing voter or learner entry - the leader
-  // without progress for itself. A leader demoted to a learner keeps its
-  // progress and its writes (CA9) and is not this case.
+// What a leader its own applied configuration no longer names does about its
+// leadership: one table. Such a leader arises only from a removal another
+// leader proposed: the leader's own port refuses its own removal
+// (REMOVES_LEADER), but a replica may win an election holding the entry that
+// removes it, then commit and apply it. raft-rs keeps it leading
+// (raft.rs post_conf_change: "This node is leader and was removed ...
+// TODO(tbg): step down (for sanity) and ask follower with largest Match to
+// TimeoutNow") with no progress for itself: it drops every proposal for good,
+// its heartbeats keep the voters that remain from electing, and the two
+// places that advance its commit index unwrap the progress it no longer has
+// (maybe_commit on an append response, on_persist_entries on a persisted
+// Ready) - an abort of the whole module.
+//
+//   its log                        the transferee rule       action
+//   -----------------------------  ------------------------  -------------
+//   holds an uncommitted entry     (not asked)               STEP_DOWN
+//   all committed, transfer runs   (not asked)               AWAIT_TRANSFER
+//   all committed                  CHOSEN                    TRANSFER
+//   all committed                  NO_LIVE_TRANSFEREE        STEP_DOWN
+//   all committed                  JOINT_CONFIGURATION       STEP_DOWN
+//
+// STEP_DOWN is the binding's step_down_removed_leader (raft-rs's own
+// become_follower at the current term, what its check-quorum does), entered
+// by the runtime owner in the same turn: the voters that remain elect by
+// their own timeout, within two election timeouts of its last heartbeat (the
+// randomized timeout's upper bound) and the vote's round trips.
+// TRANSFER is the core's own transfer to the voter the transferee rule names
+// (decideCoreTransferee), which a leader without progress for itself still
+// steps: the transferee campaigns on MsgTimeoutNow at once, no timeout
+// waited. It is taken only while every entry of the log is committed: then
+// no acknowledgement can advance the commit index (maybe_commit moves it
+// only past committed) and a removed leader appends nothing (it drops every
+// proposal), so neither unwrap is reachable while the transfer runs. With an
+// uncommitted entry the transferee's own acknowledgement could commit it, so
+// that leader steps down instead; what it proposed stays in its log and
+// replicates or not as the next leader decides.
+// While a transfer it stepped still runs (raft-rs completes or aborts it
+// within one election timeout) it asks nothing: a repeat to the same
+// transferee is ignored and one to another aborts it. Once it aborted, the
+// rule passes its transferee over, and excludes it until the leader hears it
+// again; with no voter left to name the leader steps down.
+const REMOVED_LEADER_ACTION = deepFreeze({
+  NONE: 'not-a-removed-leader',
+  AWAIT_TRANSFER: 'await-running-transfer',
+  TRANSFER: 'transfer-to-chosen-voter',
+  STEP_DOWN: 'step-down',
+});
+const REMOVED_LEADER_STEP_DOWN_CAUSE = deepFreeze({
+  UNCOMMITTED_ENTRIES: 'uncommitted-entries',
+  [TRANSFEREE_DECISION.NO_LIVE_TRANSFEREE]:
+    TRANSFEREE_DECISION.NO_LIVE_TRANSFEREE,
+  [TRANSFEREE_DECISION.JOINT_CONFIGURATION]:
+    TRANSFEREE_DECISION.JOINT_CONFIGURATION,
+});
+const NOT_A_REMOVED_LEADER = deepFreeze({action: REMOVED_LEADER_ACTION.NONE});
+const AWAIT_RUNNING_TRANSFER = deepFreeze({
+  action: REMOVED_LEADER_ACTION.AWAIT_TRANSFER});
+const TRANSFER_TO_CHOSEN_VOTER = deepFreeze({
+  action: REMOVED_LEADER_ACTION.TRANSFER,
+  transfer: {successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.MOST_CAUGHT_UP},
+});
+
+function stepDown(cause) {
+  return deepFreeze({action: REMOVED_LEADER_ACTION.STEP_DOWN, cause});
+}
+
+// Removed outright: no voter, outgoing voter or learner entry - the leader
+// without progress for itself. A leader demoted to a learner keeps its
+// progress and its writes (CA9) and is not this case.
+function isRemovedLeader(peerId, {status, confState}) {
   const configured = new Set([...(confState.voters || []),
     ...(confState.votersOutgoing || []),
     ...(confState.learners || [])].map(String));
-  return roleOf(status) === ROLE_LEADER && !configured.has(String(peerId)) ?
-    REMOVED_LEADER_STEP_DOWN : null;
+  return roleOf(status) === ROLE_LEADER && !configured.has(String(peerId));
+}
+
+/**
+ * The removed leader's action, from the facts of one observation.
+ * @param {string} peerId - This replica's raft id.
+ * @param {Object} observation - {status, confState, voterLiveness,
+ *   lastIndex} read in the same turn; lastIndex is the last index of the
+ *   replica's log.
+ * @return {Object} Frozen {action} (REMOVED_LEADER_ACTION), with {cause} for
+ *   STEP_DOWN and {transfer} (the transfer command) for TRANSFER.
+ */
+function removedLeaderAction(peerId, observation) {
+  if (!isRemovedLeader(peerId, observation)) {
+    return NOT_A_REMOVED_LEADER;
+  }
+  if (BigInt(observation.status.commit) < BigInt(observation.lastIndex)) {
+    return stepDown(REMOVED_LEADER_STEP_DOWN_CAUSE.UNCOMMITTED_ENTRIES);
+  }
+  if (observation.voterLiveness.transferRunning === true) {
+    return AWAIT_RUNNING_TRANSFER;
+  }
+  const {decision} = decideCoreTransferee(peerId, observation);
+  return decision === TRANSFEREE_DECISION.CHOSEN ? TRANSFER_TO_CHOSEN_VOTER :
+    stepDown(REMOVED_LEADER_STEP_DOWN_CAUSE[decision]);
 }
 
 function leadershipTransferInProgress(phase) {
@@ -216,5 +297,7 @@ export {
   droppedByLeadershipTransfer,
   leadershipTransferInProgress,
   normalizedTransferRequest,
-  removedLeaderStepDown,
+  REMOVED_LEADER_ACTION,
+  REMOVED_LEADER_STEP_DOWN_CAUSE,
+  removedLeaderAction,
 };

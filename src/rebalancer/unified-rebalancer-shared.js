@@ -13,7 +13,6 @@ import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js'
 import {
   classifySystemPartition,
   getPartitionRowFromCache,
-  isCriticalTransportControlPlanePartition as isCriticalTransportControlPlanePartitionTable,
 } from '../bootstrap/system-partition-classification.js';
 import {isBackgroundWorkReadySnapshot as isBackgroundWorkLifecycleReadySnapshot} from '../bootstrap/traffic-readiness-utils.js';
 import {StartupRecoveryCoordinator} from '../bootstrap/startup-recovery-coordinator.js';
@@ -343,7 +342,6 @@ export const UNIFIED_REBALANCER_SHARED = {
   hasPriorityRecoverySpreadGap,
   isBackgroundWorkLifecycleReadySnapshot,
   isCoordinatorOwnedOperationType,
-  isCriticalTransportControlPlanePartitionTable,
   isPriorityRecoveryEmergencyPartition,
   isNodeReadyLeaseExplicitlyCleared,
   isNodeReadyWithConnection,

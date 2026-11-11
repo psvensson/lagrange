@@ -29,6 +29,8 @@ import {
 } from '../../src/bootstrap/cluster-identity-constants.js';
 import {COLUMN, TABLES} from '../../src/constants/index.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {writeDurableConfigReplica} from
+  '../test-helpers/durable-config-replica-fixture.js';
 
 const LOCAL_NODE_ID = 'node-local';
 const LOCAL_NODE_ADDRESS = 'seed-node:8080';
@@ -86,7 +88,6 @@ test('an isolated stale seed with no quorum evidence and no reachable peer ' +
     dataDir,
     nodeId: LOCAL_NODE_ID,
     nodeAddress: LOCAL_NODE_ADDRESS,
-    expectedClusterId: CLUSTER_ID_A,
     probePeerAddress: async () => false,
   });
 
@@ -132,12 +133,13 @@ test('a durable seed serves when cluster-id matches AND a current member ' +
     ],
     clusterId: CLUSTER_ID_A,
   });
+  // The seed's own CONFIG replica: the second, independent identity record.
+  await writeDurableConfigReplica(dataDir, {clusterId: CLUSTER_ID_A});
 
   const decision = await resolveAutoRejoinStartupDecision({
     dataDir,
     nodeId: LOCAL_NODE_ID,
     nodeAddress: LOCAL_NODE_ADDRESS,
-    expectedClusterId: CLUSTER_ID_A,
     probePeerAddress: async () => true,
   });
 
@@ -169,12 +171,12 @@ test('a durable seed serves when cluster-id matches AND durable quorum ' +
     ],
     clusterId: CLUSTER_ID_A,
   });
+  await writeDurableConfigReplica(dataDir, {clusterId: CLUSTER_ID_A});
 
   const decision = await resolveAutoRejoinStartupDecision({
     dataDir,
     nodeId: LOCAL_NODE_ID,
     nodeAddress: LOCAL_NODE_ADDRESS,
-    expectedClusterId: CLUSTER_ID_A,
     probePeerAddress: async () => false,
   });
 
@@ -206,14 +208,14 @@ test('a durable seed without a confirmed cluster-id match refuses even ' +
     clusterId: CLUSTER_ID_A,
   });
 
-  // The node expects a DIFFERENT cluster identity than its hints carry:
-  // cluster-id match is not confirmed, so the recovery gate must not let
-  // it serve (this also trips the dedicated CLUSTER_ID_MISMATCH fence).
+  // The seed's own CONFIG replica carries a DIFFERENT cluster identity
+  // than its hints: cluster-id match is not confirmed, so the recovery gate
+  // must not let it serve (this also trips the CLUSTER_ID_MISMATCH fence).
+  await writeDurableConfigReplica(dataDir, {clusterId: CLUSTER_ID_B});
   const decision = await resolveAutoRejoinStartupDecision({
     dataDir,
     nodeId: LOCAL_NODE_ID,
     nodeAddress: LOCAL_NODE_ADDRESS,
-    expectedClusterId: CLUSTER_ID_B,
     probePeerAddress: async () => true,
   });
 
@@ -227,6 +229,29 @@ test('a durable seed without a confirmed cluster-id match refuses even ' +
     'durable_seed',
     'no cluster-id match means no durable_seed serve',
   );
+});
+
+test('a seed whose hints carry a cluster-id but which hosts no CONFIG ' +
+  'replica cannot confirm it and refuses to serve', async (t) => {
+  const dataDir = await mkdtemp(join(tmpdir(), 'seed-recovery-gate-'));
+  t.after(() => rm(dataDir, {recursive: true, force: true}));
+  await persistSeedHints(dataDir, {
+    nodeRows: [
+      {[COLUMN.NODE_ID]: LOCAL_NODE_ID, [COLUMN.NODE_ADDRESS]: LOCAL_NODE_ADDRESS},
+      {[COLUMN.NODE_ID]: 'node-peer-a', [COLUMN.NODE_ADDRESS]: PEER_NODE_ADDRESS_A},
+    ],
+    clusterId: CLUSTER_ID_A,
+  });
+  // The hints file alone is one record compared with nothing: UNKNOWN is
+  // not confirmation (before S4 the hints were compared with themselves).
+  const decision = await resolveAutoRejoinStartupDecision({
+    dataDir,
+    nodeId: LOCAL_NODE_ID,
+    nodeAddress: LOCAL_NODE_ADDRESS,
+    probePeerAddress: async () => true,
+  });
+  t.equal(decision.state, 'seed_recovery_proof_missing');
+  t.equal(decision.mode, 'fail');
 });
 
 test('a pre-identity persisted seed role (no cluster-id) refuses to serve ' +

@@ -20,8 +20,9 @@
 // stop() owns), entered because the target's answer is the CDC outcome
 // owner's typed unknown; settlement is observed by turns, never by a clock.
 
-import {propagatePartitionCdcVector} from
+import {buildPartitionCdcPropagationSubscriber, propagatePartitionCdcVector} from
   '../../src/bootstrap/shared/partition-cdc-propagation-subscriber.js';
+import {PARTITION_SERVICE_CDC} from '../../src/partition/partition-service-constants.js';
 import assert from 'node:assert/strict';
 import {afterEach, beforeEach, test} from 'node:test';
 
@@ -138,11 +139,18 @@ test('the seed teardown completes when the latency topology stops inside a ' +
   await partition.initialize();
   await resumeFixtureParticipantAdmission(partition);
   const sourceMessageGroup = createDurableSourceMessageGroupService(SOURCE_GROUP_ID);
-  await partition.subscribeToCDCWithHandshake(
-    (events, deliveryContext) => propagatePartitionCdcVector(
-      bridge.delegates.getLatencyTopology(), 'no topology', sourceMessageGroup, events,
-      deliveryContext),
-    {subscriberId: 'seed-hydration'});
+  // The seed's subscriber, built by its one producer: it selects the source
+  // group and propagates through the seed's latency topology.
+  const selection = () => ({ready: true, service: sourceMessageGroup});
+  await partition.subscribeToCDCWithHandshake(buildPartitionCdcPropagationSubscriber({
+    tableName: 'replica_operations',
+    resolveOperationalMessageGroupSelection: selection,
+    resolveOperationalMessageGroupSelectionAsync: async () => selection(),
+    buildMessageGroupOwnerNotReadyError: () => new Error('the source group is ready'),
+    propagatePartitionCDCEvent: (selected, events, deliveryContext) =>
+      propagatePartitionCdcVector(bridge.delegates.getLatencyTopology(), 'no topology',
+        selected, events, deliveryContext),
+  }), {subscriberId: 'seed-hydration', role: PARTITION_SERVICE_CDC.SUBSCRIBER_ROLE_PROPAGATION});
   const handler = new ReplicaHandler({
     nodeId: NODE_ID,
     systemTableCache: new SystemTableCache(),

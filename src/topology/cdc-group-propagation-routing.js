@@ -9,15 +9,8 @@ import {
 const ROUTING_DOMAIN_GROUP = Object.freeze({
   DEGRADED: 'degraded',
   SYSTEM: 'system',
-  RETIRED: 'retired',
-  INACTIVE: 'inactive',
 });
 
-const INACTIVE_MESSAGE_GROUP_VALUES = new Set([
-  ROUTING_DOMAIN_GROUP.RETIRED,
-  ROUTING_DOMAIN_GROUP.INACTIVE,
-  SERVICE_STATUS.STOPPED,
-]);
 
 function buildGroupedContextResult(sourceGroupId, targets, fallbackReason) {
   return {
@@ -177,19 +170,12 @@ function isEligibleLatencyGroupRow(groupRow) {
   );
 }
 
+// message_groups rows carry no lifecycle column (MESSAGE_GROUPS_SCHEMA): a
+// group's retirement is its replica rows' (services), never this row's.
 function isEligibleMessageGroupRow(groupRow) {
   const groupId = groupRow?.[COLUMN.GROUP_ID];
-  if (
-    typeof groupId !== 'string' ||
-    groupId.length === 0 ||
-    groupId === ROUTING_DOMAIN_GROUP.SYSTEM
-  ) {
-    return false;
-  }
-  return (
-    !INACTIVE_MESSAGE_GROUP_VALUES.has(groupRow?.[COLUMN.STATUS]) &&
-    !INACTIVE_MESSAGE_GROUP_VALUES.has(groupRow?.[COLUMN.STATE])
-  );
+  return typeof groupId === 'string' && groupId.length > 0 &&
+    groupId !== ROUTING_DOMAIN_GROUP.SYSTEM;
 }
 
 function collectActiveLatencyGroups(systemTableCache) {

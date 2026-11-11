@@ -15,6 +15,7 @@
  */
 import {v4 as uuidv4} from 'uuid';
 import {resolveTimeSource} from '../time/time-source.js';
+import {INCOMPLETE_OPERATION_OBSERVATION_STATE} from './incomplete-operation-list-observation.js';
 import {
   INITIAL_PARTITION_IDS,
   SYSTEM_TABLE_NAME,
@@ -61,7 +62,6 @@ import {
   CONTROL_PLANE_MUTATION_OPERATION,
   CONTROL_PLANE_MUTATION_MERGE_POLICY,
   CONTROL_PLANE_READ_STRATEGY,
-  resolveAuthoritativeReadModeContract,
   readAuthoritativeControlPlaneRows,
 } from '../control-plane/control-plane-system-table-gateway.js';
 import {
@@ -246,11 +246,6 @@ const INCOMPLETE_OPERATION_OBSERVATION_SOURCE = Object.freeze({
   CACHE_OR_AUTHORITATIVE_READ: 'cache_or_authoritative_read',
   OWNER_PERSISTED_TRANSITION: 'owner_persisted_transition',
 });
-const INCOMPLETE_OPERATION_OBSERVATION_STATE = Object.freeze({
-  PRESENT: 'present',
-  EMPTY: 'empty',
-  DEFERRED: 'deferred',
-});
 const COORDINATOR_OWNER_COMPONENT = 'RebalanceCoordinator';
 const REPLICA_OPERATION_AUTHORITATIVE_VISIBILITY_TIMEOUT_MS = TIME_MS.SECOND * NUM.FIVE; // ends-on: the persisted row reads back authoritatively and matches
 const REPLICA_OPERATION_AUTHORITATIVE_VISIBILITY_RETRY_DELAY_MS = TIME_MS.SECOND / NUM.FIVE;
@@ -265,6 +260,7 @@ const INCOMPLETE_OPERATION_READ_OUTCOME_SOURCE = Object.freeze({
     'priority_recovery_authoritative_operation_empty_read',
   AUTHORITATIVE_READ_FAILURE: 'incomplete_operation_authoritative_read_failure',
   AUTHORITATIVE_READ_BACKOFF: 'incomplete_operation_authoritative_read_backoff',
+  LOCAL_ROUTER_PRESSURE: 'incomplete_operation_read_local_router_pressure',
   UNANSWERED_PROJECTION: 'incomplete_operation_unanswered_projection',
 });
 const REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE = Object.freeze({
@@ -374,7 +370,6 @@ function isRetryableWorkflowParticipantLookupErrorMessage(errorMessage) {
 /**
  */
 const REPLICA_OPERATION_VISIBILITY_READ_MODE = Object.freeze({
-  CACHE_ONLY: 'cache_only',
   CACHE_PREFERRED_SQL_FALLBACK: 'cache_preferred_sql_fallback',
   OWNER_RPC_REQUIRED: 'owner_rpc_required',
   OWNER_RPC_SINGLE_ATTEMPT: 'owner_rpc_single_attempt',
@@ -424,9 +419,6 @@ const REPLICA_OPERATION_REQUIRED_STATUS_READ_QUERY_OPTIONS = Object.freeze({
 });
 
 function normalizeReplicaOperationVisibilityReadMode(value) {
-  if (value === REPLICA_OPERATION_VISIBILITY_READ_MODE.CACHE_ONLY) {
-    return REPLICA_OPERATION_VISIBILITY_READ_MODE.CACHE_ONLY;
-  }
   if (value === REPLICA_OPERATION_VISIBILITY_READ_MODE.CACHE_PREFERRED_SQL_FALLBACK) {
     return REPLICA_OPERATION_VISIBILITY_READ_MODE.CACHE_PREFERRED_SQL_FALLBACK;
   }
@@ -468,8 +460,6 @@ function resolveIncompleteOperationVisibilitySupplementMode(options = {}) {
 
 function buildReplicaOperationVisibilityReadOptions(readMode) {
   switch (readMode) {
-  case REPLICA_OPERATION_VISIBILITY_READ_MODE.CACHE_ONLY:
-    return null;
   case REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED:
     return {
       ...REPLICA_OPERATION_STRICT_VISIBILITY_QUERY_OPTIONS,
@@ -618,6 +608,7 @@ assignReplicaOperationRepositoryVisibilityMethods(ReplicaOperationRepository, {
   TYPEOF,
   buildPriorityRecoveryCompletion,
   buildReplicaOperationVisibilityReadOptions,
+  getControlPlaneErrorCode,
   getControlPlaneRetryAfterMs,
   hasPriorityRecoverySpreadGap,
   isRetryableControlPlaneError,
@@ -684,7 +675,6 @@ assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository, {
   isCoordinatorOwnedOperationType,
   isRetryableControlPlaneError,
   readAuthoritativeControlPlaneRows,
-  resolveAuthoritativeReadModeContract,
   resolveReplicaOperationVisibilityReadMode,
   shouldDeferReplicaOperationOwnerRead,
   WORKFLOW_STEP,

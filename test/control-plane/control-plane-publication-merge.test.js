@@ -2,7 +2,6 @@ import {test} from '../../src/test-helpers/tap.js';
 import {
   CONTROL_PLANE_PUBLICATION_STATUS,
   mergeControlPlanePublicationRows,
-  publicationRowSatisfiesDesiredState,
 } from '../../src/control-plane/control-plane-publication-merge.js';
 import {
   PUBLICATION_OWNER_ACK_STATE,
@@ -181,33 +180,5 @@ test('mergeControlPlanePublicationRows keeps acknowledgement union for the same 
       stream.streamOutcome,
       PUBLICATION_OWNER_STREAM_OUTCOME.PUBLISHED,
       'the merge result should be consumable as a published owner stream',
-    );
-  });
-
-test('publicationRowSatisfiesDesiredState requires exact published membership',
-  async (t) => {
-    const satisfied = publicationRowSatisfiesDesiredState(
-      {
-        publication_id: PUBLICATION_ID_TRIM,
-        publication_epoch: PUBLICATION_EPOCH_TWO,
-        status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
-        published_active_node_ids: [...ACTIVE_NODE_IDS_FIVE],
-        required_ack_node_ids: [...ACTIVE_NODE_IDS_FIVE],
-        acknowledged_node_ids: [...ACTIVE_NODE_IDS_FIVE],
-      },
-      {
-        publication_id: PUBLICATION_ID_TRIM,
-        publication_epoch: PUBLICATION_EPOCH_TWO,
-        status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
-        published_active_node_ids: [...ACTIVE_NODE_IDS_THREE],
-        required_ack_node_ids: [...ACTIVE_NODE_IDS_THREE],
-        acknowledged_node_ids: [...ACTIVE_NODE_IDS_THREE],
-      },
-    );
-
-    t.equal(
-      satisfied,
-      false,
-      'a stale superset is still an open membership-trim boundary',
     );
   });

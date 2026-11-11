@@ -362,38 +362,6 @@ const REPLICA_DISPATCH_RECONCILE_CALLBACK_METHODS = {
   },
 
   /**
-   * Enqueue a local READY-node dispatch rediscovery trigger that bypasses the
-   * heartbeat watermark. Publication updates can reveal or advance recovery
-   * work without changing the node row itself.
-   * @param {string} reason - Reconcile reason for the trigger.
-   * @param {Object} [context] - Additional retry context.
-   * @return {boolean} True when a retry was enqueued.
-   * @private
-   */
-  enqueueLocalReadyNodeDispatchRetry(reason, context = {}) {
-    const nodeId = this.nodeId;
-    const readyForDispatchRetry =
-      typeof this.isNodeReadyForDispatchRetry === 'function' ?
-        this.isNodeReadyForDispatchRetry(nodeId) :
-        this.isNodeReady(nodeId);
-    if (!nodeId || !readyForDispatchRetry) {
-      return false;
-    }
-    const retryContext =
-      context && typeof context === 'object' ? context : {};
-    this.nodeReadyRetryQueue.enqueue(
-      nodeId,
-      reason,
-      {
-        ...retryContext,
-        source: reason,
-        [READY_NODE_DISPATCH_RETRY_CONTEXT_FIELD.FORCE_READY_WATERMARK]: true,
-      },
-    );
-    return true;
-  },
-
-  /**
    * Handle cache updates and retry dispatch when key rows become available.
    * @param {string} tableName - Updated table name.
    * @param {string|Object} operationOrRecord - Operation or updated row.

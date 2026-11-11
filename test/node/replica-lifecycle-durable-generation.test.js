@@ -8,6 +8,8 @@
  * used by transitions, restart recovery, leader settlement and REMOVE cleanup.
  */
 
+import {REMOVAL_DRAINED_ANSWER} from
+  '../test-helpers/partition-removal-serving-surface.js';
 import {REPLICA_CONSENSUS_EXIT_REASON} from
   '../../src/node/replica-removal-consensus-exit.js';
 import {test} from '../../src/test-helpers/tap.js';
@@ -179,7 +181,7 @@ function prepareRemovingHandler(t, store, row, outcomes = []) {
   const handler = createHandler(store, stateMachine, outcomes);
   handler.awaitReplicaRemovalConsensusExit = async () =>
     APPLIED_EXIT;
-  handler.waitForReplicaServingDrain = async () => {};
+  handler.waitForReplicaServingDrain = async () => REMOVAL_DRAINED_ANSWER;
   handler.localReplicas.set(row.service_id, {
     replicaId: row.service_id,
     partitionId: row.partition_id,
@@ -358,7 +360,7 @@ test('handler binds leader settlement before retire and durable deletion',
     });
     handler.awaitReplicaRemovalConsensusExit = async () =>
       APPLIED_EXIT;
-    handler.waitForReplicaServingDrain = async () => {};
+    handler.waitForReplicaServingDrain = async () => REMOVAL_DRAINED_ANSWER;
     handler.cleanupRemovedReplicaLocalRuntime = async () => {
       order.push('runtime-cleanup');
     };
@@ -932,7 +934,7 @@ test('terminal completion refusal emits typed retry debt', async (t) => {
   const handler = createHandler(store, stateMachine, outcomes);
   handler.awaitReplicaRemovalConsensusExit = async () =>
     APPLIED_EXIT;
-  handler.waitForReplicaServingDrain = async () => {};
+  handler.waitForReplicaServingDrain = async () => REMOVAL_DRAINED_ANSWER;
   handler.cleanupRemovedReplicaLocalRuntime = async () => {};
   handler.localReplicas.set(row.service_id, {
     replicaId: row.service_id,

@@ -191,21 +191,10 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
         provisionTargetDiagnostics,
       );
       provisioningEpoch = convergenceResult?.epoch || provisioningEpoch;
+      // A deferred convergence carries its typed PROVISIONING_UNAVAILABLE
+      // refusal (reasons, epoch, retryAfterMs and cause).
       if (convergenceResult.contractState === OWNER_CONTRACT_STATE.DEFERRED) {
-        const error = new Error(
-          `Provisioning unavailable: quorum not reachable for partition ${partitionId}`,
-        );
-        error.code = QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE;
-        error.errorCode = QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE;
-        error.epoch = convergenceResult.epoch || null;
-        error.reasons = convergenceResult.reasons || [];
-        error.retryAfterMs = convergenceResult.retryAfterMs || 0;
-        error.detail = {
-          epoch: error.epoch,
-          reasons: error.reasons,
-          retryAfterMs: error.retryAfterMs,
-        };
-        throw error;
+        throw convergenceResult.refusal;
       }
       targetReplicaCount = provisionTargetNodeIds.length;
       if (!hasExplicitMinimumRoutableReplicaCount) {

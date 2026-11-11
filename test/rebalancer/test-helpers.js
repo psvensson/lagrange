@@ -183,6 +183,7 @@ function createMockRpcClient() {
  * @return {Object} Mock cache.
  */
 function createMockCache(options = {}) {
+  const changeListeners = new Set();
   const {
     nodes = [],
     services = [],
@@ -290,6 +291,10 @@ function createMockCache(options = {}) {
       }
       return table.delete(key);
     },
+    // The production cache's change seam: listeners are held, and this
+    // mock never emits a change.
+    onCacheChange: (listener) => changeListeners.add(listener),
+    offCacheChange: (listener) => changeListeners.delete(listener),
   };
 }
 

@@ -13,6 +13,8 @@ const CONFIG_KEY = Object.freeze({
   NODE_ADVERTISED_WS_ADDRESS: 'node.advertisedWsAddress',
   NODE_SEED_NODE_ADDRESS: 'node.seedNodeAddress',
   NODE_SEED_NODE_WS_ADDRESS: 'node.seedNodeWsAddress',
+  // The declared formation size; no default (formation-target-node-count.js).
+  FORMATION_TARGET_NODE_COUNT: 'formation.targetNodeCount',
 
   RAFT_ELECTION_TIMEOUT_MIN_MS: 'raft.electionTimeoutMinMs',
   RAFT_ELECTION_TIMEOUT_MAX_MS: 'raft.electionTimeoutMaxMs',

@@ -20,53 +20,102 @@
  *    removal) and the planner restores the replica count from the ACTIVE
  *    rows. Never a voter-less replica serving.
  * Inputs: the lifecycle owner's TIMEOUT events; the node's consensus relay
- *   (each tracked partition's applied configuration announcements).
+ *   (each tracked partition's consensus announcements).
+ * Canonical output of one settlement read (REPLICA_REMOVAL_SETTLEMENT_OUTCOME):
+ *   NOT_OUTSIDE_REMOVAL     no serving replica with a port and no removal
+ *                           running: nothing to settle here;
+ *   STILL_NAMED             its own applied configuration names it a voter;
+ *   UNREADABLE              its configuration could not be read (the port's
+ *                           typed refusal), names a voter it cannot resolve,
+ *                           or reads absent below its gate: nothing is
+ *                           concluded - it neither settles nor fails, and
+ *                           is read again on the replica's next consensus
+ *                           observation of any kind;
+ *   STATUS_WRITE_DEFERRED   fenced, but the FAILED row write exhausted its
+ *                           retry on a retryable control-plane failure: read
+ *                           again (and written again) on the next
+ *                           observation, as UNREADABLE;
+ *   SETTLED                 fenced and marked FAILED.
+ * Owned state (on the handler): removingRedrives (replicas a re-drive
+ * carries), removalSettlementRereads (replicas whose last settlement read
+ * concluded nothing).
  * Prohibited: a teardown here (only the removal owner tears down), a
- * decision from a row or from elapsed time alone (the TIMEOUT only re-asks).
+ * decision from a row or from elapsed time alone (the TIMEOUT only re-asks),
+ * a caught error read as "nothing to settle".
  */
 import {readPartitionReplicaMembership} from
   '../partition/partition-service-raft-membership-administration.js';
 import {PARTITION_REPLICA_MEMBERSHIP_STATE as MEMBERSHIP} from
   '../partition/partition-replica-membership-constants.js';
+import {
+  isRetryableControlPlaneError,
+} from '../control-plane/control-plane-error-classification.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {REPLICA_HANDLER_LOG_MSG} from './replica-handler-constants.js';
 import {REPLICA_STATE_MACHINE_EVENT} from './replica-state-machine-constants.js';
 
-const FUNCTION_TYPE = 'function';
 const REPLICA_REMOVAL_SETTLEMENT_CAUSE = Object.freeze({
   REMOVING_REDRIVE: 'removing_redrive',
   REMOVED_OUTSIDE_REMOVAL: 'own_removal_applied_outside_removal',
 });
+const REPLICA_REMOVAL_SETTLEMENT_OUTCOME = Object.freeze({
+  NOT_OUTSIDE_REMOVAL: 'not_outside_removal',
+  STILL_NAMED: 'own_configuration_names_it',
+  UNREADABLE: 'own_configuration_unreadable',
+  STATUS_WRITE_DEFERRED: 'failed_status_write_deferred',
+  SETTLED: 'settled_failed',
+});
+// The outcomes that conclude nothing: read again on the next observation.
+const PENDING_SETTLEMENT_OUTCOMES = Object.freeze(new Set([
+  REPLICA_REMOVAL_SETTLEMENT_OUTCOME.UNREADABLE,
+  REPLICA_REMOVAL_SETTLEMENT_OUTCOME.STATUS_WRITE_DEFERRED,
+]));
 
 function removalRunning(handler, replicaId) {
-  return handler.hasInProgressReplicaRemoval?.(replicaId) === true ||
-    handler.removingRedrives?.has(replicaId) === true ||
-    [...(handler.removalExecutions?.values() ?? [])]
+  return handler.hasInProgressReplicaRemoval(replicaId) ||
+    handler.removingRedrives.has(replicaId) ||
+    [...handler.removalExecutions.values()]
       .some((removal) => removal.replicaId === replicaId);
 }
 
 /**
  * The lifecycle owner's REMOVING re-drive signal: re-run the removal of a
- * REMOVING replica no removal carries.
+ * REMOVING replica no removal carries. A re-driven removal that defers
+ * (typed) is reported as every detached removal is, and re-asked on the
+ * next signal.
  * @param {Object} handler
  * @param {Object} event - {replicaId, partitionId, state}.
  */
 function redriveRemovingReplica(handler, event) {
-  const {replicaId, partitionId} = event || {};
-  const local = handler.getLocalReplica?.(replicaId);
-  if (event?.state !== ReplicaStatus.REMOVING || handler.shuttingDown ||
-      local?.status !== ReplicaStatus.REMOVING ||
+  const {replicaId, partitionId, state} = event;
+  if (state !== ReplicaStatus.REMOVING || handler.shuttingDown ||
+      handler.getLocalReplica(replicaId)?.status !== ReplicaStatus.REMOVING ||
       removalRunning(handler, replicaId)) {
     return;
   }
-  handler.removingRedrives ??= new Set();
   handler.removingRedrives.add(replicaId);
   handler.logger.info(REPLICA_HANDLER_LOG_MSG.REMOVING_REDRIVE, {replicaId,
     partitionId, nodeId: handler.nodeId});
-  handler.removeReplicaAsync({operationId: null, replicaId, partitionId,
+  handler.registerOperationTask(handler.removeReplicaAsync({operationId: null,
+    replicaId, partitionId,
     reason: REPLICA_REMOVAL_SETTLEMENT_CAUSE.REMOVING_REDRIVE})
-    .catch(() => undefined)
-    .finally(() => handler.removingRedrives.delete(replicaId));
+    .catch((error) => {
+      handler.logger.error(REPLICA_HANDLER_LOG_MSG.ASYNC_REMOVE_FAILED, {
+        operationId: null, replicaId, partitionId,
+        cause: REPLICA_REMOVAL_SETTLEMENT_CAUSE.REMOVING_REDRIVE,
+        errorCode: error.code ?? null, error: error.message});
+    })
+    .finally(() => handler.removingRedrives.delete(replicaId)));
+}
+
+// What the replica's own applied configuration says about it.
+function ownConfigurationOutcomeOf(observation) {
+  if (observation.state === MEMBERSHIP.VOTER) {
+    return REPLICA_REMOVAL_SETTLEMENT_OUTCOME.STILL_NAMED;
+  }
+  return observation.state === MEMBERSHIP.ABSENT &&
+    observation.gateOpen === true ? null :
+    REPLICA_REMOVAL_SETTLEMENT_OUTCOME.UNREADABLE;
 }
 
 /**
@@ -74,57 +123,82 @@ function redriveRemovingReplica(handler, event) {
  * serves: it stops serving and is marked FAILED (the repair path removes it).
  * @param {Object} handler
  * @param {string} replicaId
- * @return {Promise<boolean>} Whether it was settled.
+ * @return {Promise<string>} A REPLICA_REMOVAL_SETTLEMENT_OUTCOME.
  */
 async function settleRemovedOutsideRemoval(handler, replicaId) {
-  const local = handler.getLocalReplica?.(replicaId);
-  const service = handler.getTrackedService?.(replicaId);
+  const local = handler.getLocalReplica(replicaId);
+  const service = handler.getTrackedService(replicaId);
   if (!service?.raft || local?.status !== ReplicaStatus.ACTIVE ||
       removalRunning(handler, replicaId)) {
-    return false;
+    return REPLICA_REMOVAL_SETTLEMENT_OUTCOME.NOT_OUTSIDE_REMOVAL;
   }
-  let own = null;
-  try {
-    own = await readPartitionReplicaMembership(service, replicaId);
-  } catch (_error) {
-    return false;
+  const own = ownConfigurationOutcomeOf(
+    await readPartitionReplicaMembership(service, replicaId));
+  if (own !== null) {
+    return own;
   }
-  if (own?.state !== MEMBERSHIP.ABSENT || own.gateOpen !== true ||
-      removalRunning(handler, replicaId)) {
-    return false;
+  if (removalRunning(handler, replicaId)) {
+    return REPLICA_REMOVAL_SETTLEMENT_OUTCOME.NOT_OUTSIDE_REMOVAL;
   }
-  service.fenceServingAdmissionForRemoval?.();
+  service.fenceServingAdmissionForRemoval();
   handler.logger.warn(REPLICA_HANDLER_LOG_MSG.REMOVED_OUTSIDE_REMOVAL, {
     replicaId, partitionId: service.partitionId, nodeId: handler.nodeId,
     cause: REPLICA_REMOVAL_SETTLEMENT_CAUSE.REMOVED_OUTSIDE_REMOVAL});
-  await handler.persistReplicaStatusWithRetry(replicaId, ReplicaStatus.FAILED,
-    {partitionId: service.partitionId,
-      errorMessage: REPLICA_REMOVAL_SETTLEMENT_CAUSE.REMOVED_OUTSIDE_REMOVAL});
-  return true;
+  try {
+    await handler.persistReplicaStatusWithRetry(replicaId,
+      ReplicaStatus.FAILED, {partitionId: service.partitionId,
+        errorMessage: REPLICA_REMOVAL_SETTLEMENT_CAUSE.REMOVED_OUTSIDE_REMOVAL});
+  } catch (error) {
+    if (!isRetryableControlPlaneError(error)) {
+      throw error;
+    }
+    return REPLICA_REMOVAL_SETTLEMENT_OUTCOME.STATUS_WRITE_DEFERRED;
+  }
+  return REPLICA_REMOVAL_SETTLEMENT_OUTCOME.SETTLED;
+}
+
+// One settlement read, outside the port event that woke it (a detached
+// task: its outcome and its failure each have one sink). An outcome that
+// concludes nothing is re-asked on the next observation; a failure is
+// reported at ERROR, never read as settled or as nothing to settle.
+function runRemovalSettlement(handler, replicaId) {
+  handler.removalSettlementRereads.delete(replicaId);
+  return settleRemovedOutsideRemoval(handler, replicaId).then(
+    (outcome) => recordSettlementOutcome(handler, replicaId, outcome),
+    (error) => handler.logger.error(
+      REPLICA_HANDLER_LOG_MSG.REMOVAL_SETTLEMENT_FAILED, {replicaId,
+        nodeId: handler.nodeId, error: error.message, stack: error.stack}));
+}
+
+function recordSettlementOutcome(handler, replicaId, outcome) {
+  if (PENDING_SETTLEMENT_OUTCOMES.has(outcome)) {
+    handler.removalSettlementRereads.add(replicaId);
+    handler.logger.info(REPLICA_HANDLER_LOG_MSG.REMOVAL_SETTLEMENT_PENDING, {
+      replicaId, nodeId: handler.nodeId, outcome});
+  }
 }
 
 /**
  * Subscribe a handler's settlement to its lifecycle owner and consensus
- * relay (the handler's lifetime).
+ * relay (the handler's lifetime). An applied configuration announcement
+ * asks; any announcement re-asks a replica whose last read concluded
+ * nothing.
  * @param {Object} handler - The ReplicaHandler.
  */
 function subscribeRemovalSettlement(handler) {
-  const stateMachine = handler.replicaStateMachine;
-  if (typeof stateMachine?.on === FUNCTION_TYPE) {
-    stateMachine.on(REPLICA_STATE_MACHINE_EVENT.TIMEOUT,
-      (event) => redriveRemovingReplica(handler, event));
-  }
-  handler.consensusEvents?.subscribe?.((event) => {
-    if (event?.confState && typeof event.replicaId === 'string') {
+  handler.replicaStateMachine.on(REPLICA_STATE_MACHINE_EVENT.TIMEOUT,
+    (event) => redriveRemovingReplica(handler, event));
+  handler.consensusEvents.subscribe((event) => {
+    if (event.confState ||
+        handler.removalSettlementRereads.has(event.replicaId)) {
       // Never re-entered from inside the port event that woke it.
-      queueMicrotask(() => settleRemovedOutsideRemoval(handler,
-        event.replicaId).catch(() => undefined));
+      queueMicrotask(() => runRemovalSettlement(handler, event.replicaId));
     }
   });
 }
 
 export {
   REPLICA_REMOVAL_SETTLEMENT_CAUSE,
-  settleRemovedOutsideRemoval,
+  REPLICA_REMOVAL_SETTLEMENT_OUTCOME,
   subscribeRemovalSettlement,
 };

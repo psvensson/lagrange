@@ -333,7 +333,7 @@ test('End-to-end SQL workflow integration tests', async (t) => {
       let committedIndex = 0;
       // The durable subscriber contract: one vector of owed events per call,
       // answered over that exact vector.
-      partition.subscribeToCDC((events) => {
+      void partition.subscribeToCDCWithHandshake((events) => {
         cdcEvents.push(...events);
         committedIndex += 1;
         return buildCommittedCdcOutcome(events, 'mg-1', {index: committedIndex, term: 1});

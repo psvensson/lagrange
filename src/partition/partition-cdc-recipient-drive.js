@@ -14,12 +14,12 @@
 // flight per recipient, each bounded by SHIP_MAX_EVENTS / SHIP_MAX_BYTES. A
 // lane has one propagation subscriber (the partition refuses a second), and
 // its recipients name distinct groups (partition-cdc-obligation-progress.js),
-// so a lane has at most one delivery in flight per group.
+// so a lane has at most one delivery in flight per group. What a recipient's
+// state pins and how a released one returns: partition-cdc-recipient-progress.js.
 
 import {CDC_COMPLETION, CDC_COVERAGE_STATE, cdcCommitWaitIdentity, observeCdcCoverage} from
   '../cdc/cdc-delivery-outcome.js';
 import {beginCdcDeliveryInvocation} from '../cdc/cdc-delivery-invocation.js';
-import {PARTITION_SERVICE_DEFAULT} from './partition-service-constants.js';
 import {PARTITION_CDC_OBLIGATION_BOUND as BOUND,
   PARTITION_CDC_RECIPIENT_PASS as PASS,
   PARTITION_CDC_RECIPIENT_STATE as RECIPIENT_STATE,
@@ -30,28 +30,12 @@ import {OBLIGATION_RETRY_DISPOSITION, laneIsCurrent} from './partition-cdc-oblig
 import {cdcRecipientInvocation, laneRecipients, receiptGroupOf, recipientAttached,
   recipientKeyOf, unconfirmedRecipientError} from
   './partition-cdc-obligation-progress.js';
-import {eventOf, isPositionProbe, lowerCursor, positionAfter, positionOf, selectRecipientVector,
+import {eventOf, isPositionProbe, positionAfter, positionOf, selectRecipientVector,
   settledWithoutDelivery, sourceRangeOf} from
   './partition-cdc-obligation-vector.js';
-
-// One recipient's tenure-local drive state. scanThrough is the owed tail
-// captured when its scan began: a scan stays finite while rows keep arriving
-// (the rows beyond it belong to the next scan). scanAfter is its provisional
-// scan position: rows shipped past a vector that was only provisionally
-// accepted, so that later metadata still reaches the recipient; at the
-// captured tail the scan returns to the cursor. retryDelayMs /
-// consecutiveBackpressure are this recipient's own backoff.
-function recipientDriveOf(recipient) {
-  recipient.drive ??= {
-    running: false, resumeOnCleanup: false,
-    scanAfter: null, scanThrough: null, inFlight: null,
-    retryDelayMs: PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS,
-    consecutiveBackpressure: 0, lastRetryDisposition: null, dueAtMs: null,
-    state: RECIPIENT_STATE.CONFIRMED, position: null, since: null, lastPass: null,
-    detachReason: null, lifecycleRead: null,
-  };
-  return recipient.drive;
-}
+import {confirmRecipient, heldPositionOf, offerRelist, recipientDriveOf, recordGapAnswer,
+  recordShipped, recordUnconfirmedEnd, relistDiagnosticsOf, settleRelistOffer} from
+  './partition-cdc-recipient-progress.js';
 
 // The custody slot of one recipient's delivery invocation. It belongs to the
 // delivery owner, not the lane: a retired delivery keeps it until its actual
@@ -63,51 +47,6 @@ function custodyOf(delivery, key) {
     delivery.recipientCustody.set(key, custody);
   }
   return custody;
-}
-
-// The recipients that hold the frontier: every one except a DETACHED one
-// (its group is retired by lifecycle evidence) and a MUST_RELIST one (it
-// fell more than RELIST_LAG_ROWS behind; its next range answers a gap).
-const OUTSIDE_FRONTIER = Object.freeze(new Set([RECIPIENT_STATE.DETACHED,
-  RECIPIENT_STATE.MUST_RELIST]));
-
-function holdsFrontier(recipient) {
-  return !OUTSIDE_FRONTIER.has(recipientDriveOf(recipient).state);
-}
-
-/**
- * The frontier: the lowest cursor of the recipients that hold it, or null
- * while any of them has an unknown cursor (or none holds it).
- * @param {Object} lane - The delivery lane.
- * @return {Object|null} {logIndex, ordinal}, or null.
- */
-function recipientFrontier(lane) {
-  const recipients = laneRecipients(lane).filter(({recipient}) => holdsFrontier(recipient));
-  if (recipients.length === 0) return null;
-  return recipients.reduce((frontier, {recipient}) =>
-    frontier === undefined ? recipient.cursor : lowerCursor(frontier, recipient.cursor),
-  undefined);
-}
-
-// A committed (or already-applied) receipt confirms the recipient through
-// `last`; an already-applied answer may confirm beyond the vector (its
-// group's log committed through `last`). A recipient that confirms is back
-// in the frontier (a MUST_RELIST one re-listed and streams again).
-function confirmRecipient(recipient, last) {
-  const drive = recipient.drive;
-  if (drive.scanAfter !== null) {
-    // Inside a provisional scan a committed vector lies above an unconfirmed
-    // one: the cursor waits; the scan returns to it and ships this again.
-    drive.scanAfter = last;
-    return;
-  }
-  recipient.cursor = recipient.cursor === null || positionAfter(last, recipient.cursor) ?
-    last : recipient.cursor;
-  drive.state = RECIPIENT_STATE.CONFIRMED;
-  drive.position = null;
-  drive.since = null;
-  drive.retryDelayMs = PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
-  drive.consecutiveBackpressure = 0;
 }
 
 // The scan reached its captured tail. Rows owed beyond it belong to the next
@@ -139,6 +78,12 @@ function confirmedThrough(attempt, vector, sourceRange) {
     attempt.coverage.appliedThrough : last;
 }
 
+// Who a recipient is, as its progress transitions are logged.
+function recipientNameOf({branch, recipient}) {
+  return {recipient: recipientKeyOf(branch, recipient),
+    groupId: receiptGroupOf(branch, recipient)};
+}
+
 // Deliver one vector to one recipient under that recipient's own invocation.
 async function deliverVectorToRecipient(delivery, lane, target, vector, sourceRange, ops) {
   const {branch, recipient} = target;
@@ -157,7 +102,7 @@ async function deliverVectorToRecipient(delivery, lane, target, vector, sourceRa
   }
   drive.inFlight = Object.freeze({digest: cdcCommitWaitIdentity(events),
     first: positionOf(vector[0]), last: positionOf(vector.at(-1))});
-  markUnconfirmed(delivery, recipient, vector);
+  recordShipped(delivery, recipient, vector);
   try {
     const scoped = cdcRecipientInvocation(context, isCurrent, branch, recipient, {
       recipientsObserved: () => ops.recipientsObserved(delivery, lane, target),
@@ -177,29 +122,15 @@ async function deliverVectorToRecipient(delivery, lane, target, vector, sourceRa
   }
 }
 
-// A vector shipped to a recipient has no committed receipt yet: the recipient
-// is SUBSCRIBER_UNCONFIRMED at the vector's first row from the moment it is
-// shipped (`since` is kept from the first such moment) until a committed
-// receipt moves its cursor. The state is not terminal.
-function markUnconfirmed(delivery, recipient, vector,
-  state = RECIPIENT_STATE.SUBSCRIBER_UNCONFIRMED) {
-  const drive = recipient.drive;
-  // A MUST_RELIST recipient stays outside the frontier until it confirms; a
-  // DETACHED one stays detached.
-  if (!OUTSIDE_FRONTIER.has(drive.state)) drive.state = state;
-  // Inside a provisional scan the unconfirmed position stays the row after
-  // the cursor, not the row the scan has reached.
-  if (drive.scanAfter === null) drive.position = positionOf(vector[0]);
-  drive.since ??= delivery.owner.timeSource.now();
-}
-
 // The recipient answered without a committed receipt (or not at all within
 // its invocation): it stays unconfirmed and its own retry is armed. Nothing
 // else waits for it.
 function holdRecipient(delivery, lane, target, attempt, vector, ops) {
-  markUnconfirmed(delivery, target.recipient, vector,
-    attempt.error?.reason === CDC_COMPLETION.POSITION_GAP ?
-      RECIPIENT_STATE.POSITION_GAP : RECIPIENT_STATE.SUBSCRIBER_UNCONFIRMED);
+  // An offer of a re-list that neither a gap nor a receipt answered is
+  // withdrawn before the hold is reported: the rows it retained are released.
+  if (settleRelistOffer(delivery, target.recipient, recipientNameOf(target))) {
+    ops.frontierMoved(delivery, lane);
+  }
   ops.recipientHeld(delivery, lane, target, vector[0], attempt.error);
   // Raw work still open: its actual local cleanup wakes this recipient at
   // once (the backoff is its other wake).
@@ -210,11 +141,29 @@ function holdRecipient(delivery, lane, target, attempt, vector, ops) {
 // Ship the next vector after the recipient's position. Returns the pass's
 // end, or null while the pass continues.
 async function shipNextVector(delivery, lane, target, ops, pass) {
+  try {
+    return await shipVectorAfterPosition(delivery, lane, target, ops, pass);
+  } finally {
+    // Whatever ended this delivery, an offer it carried that is still
+    // unanswered does not keep its hold.
+    if (settleRelistOffer(delivery, target.recipient, recipientNameOf(target)) &&
+        laneIsCurrent(delivery, lane)) ops.frontierMoved(delivery, lane);
+  }
+}
+
+async function shipVectorAfterPosition(delivery, lane, target, ops, pass) {
   const {branch, recipient} = target;
   if (!laneIsCurrent(delivery, lane) ||
       !recipientAttached(delivery, lane, branch, recipient) ||
       recipient.drive.state === RECIPIENT_STATE.DETACHED) return PASS.STOPPED;
-  const vector = selectRecipientVector(delivery.owner, lane, recipient);
+  // A released recipient's contact is a re-list offer: the hold is pinned
+  // before anything is shipped (a provisional scan ships what it began).
+  if (recipient.drive.state === RECIPIENT_STATE.MUST_RELIST &&
+      recipient.drive.scanAfter === null) {
+    offerRelist(delivery, recipient, recipientNameOf(target));
+  }
+  const vector = selectRecipientVector(delivery.owner, lane, recipient,
+    heldPositionOf(recipient));
   if (vector.length === 0) return endRecipientScan(delivery, recipient, ops);
   if (pass.visited > 0 && pass.visited + vector.length > BOUND.DRIVE_PAGE_ROWS) {
     ops.scheduleRetry(delivery, null, OBLIGATION_RETRY_DISPOSITION.PAGE_YIELDED,
@@ -230,6 +179,11 @@ async function shipNextVector(delivery, lane, target, ops, pass) {
     ops);
   pass.visited += vector.length;
   const last = positionOf(vector.at(-1));
+  // A typed gap is the recipient saying it is there and re-lists: it is
+  // recorded whatever else ends this delivery, and what its image covers is
+  // no longer pinned.
+  if (attempt.error?.reason === CDC_COMPLETION.POSITION_GAP &&
+      recordGapAnswer(delivery, recipient)) ops.frontierMoved(delivery, lane);
   if (recipient.drive.state === RECIPIENT_STATE.DETACHED) {
     // Detached on lifecycle evidence while its delivery ran: a late receipt
     // does not bring a retired group back into the frontier.
@@ -242,11 +196,13 @@ async function shipNextVector(delivery, lane, target, ops, pass) {
     confirmRecipient(recipient, confirmedThrough(attempt, vector, sourceRange));
     ops.frontierMoved(delivery, lane);
   } else if (attempt.state === CDC_COVERAGE_STATE.PROVISIONAL) {
+    recordUnconfirmedEnd(recipient);
     recipient.drive.scanAfter = last;
   } else if (!laneIsCurrent(delivery, lane)) {
     return PASS.STOPPED;
-  } else if (isPositionProbe(vector) ||
+  } else if (isPositionProbe(recipient, vector) ||
       !vector.some((obligation) => settledWithoutDelivery(lane, obligation))) {
+    recordUnconfirmedEnd(recipient);
     return holdRecipient(delivery, lane, target, attempt, vector, ops);
   }
   // (A delivery that ended while part of its vector was settled elsewhere -
@@ -441,6 +397,23 @@ function recipientsBehindOwedTail(delivery, lane) {
 }
 
 /**
+ * A delivery whose vector holds a hydrated row is no longer the vector to
+ * ship: its invocation is retired and its recipient reads again.
+ * @param {Object} delivery - The CDC delivery owner.
+ * @param {Object} lane - The delivery lane.
+ * @param {number} throughLogIndex - The hydration image's applied index.
+ * @return {void}
+ */
+function retireHydratedDeliveries(delivery, lane, throughLogIndex) {
+  for (const {branch, recipient} of laneRecipients(lane)) {
+    const inFlight = recipient.drive?.inFlight ?? null;
+    if (inFlight !== null && inFlight.first.logIndex <= throughLogIndex) {
+      custodyOf(delivery, recipientKeyOf(branch, recipient)).activeCdcInvocation?.retire();
+    }
+  }
+}
+
+/**
  * What each recipient is (diagnostics).
  * @param {Object} lane - The delivery lane.
  * @return {Array<Object>} One frozen record per recipient.
@@ -452,17 +425,15 @@ function recipientDiagnosticsOf(lane) {
       groupId: receiptGroupOf(branch, recipient), state: drive.state, position: drive.position,
       since: drive.since, cursor: recipient.cursor, inFlight: drive.inFlight !== null,
       running: drive.running, retryDueAtMs: drive.dueAtMs, lastPass: drive.lastPass,
-      detachReason: drive.detachReason});
+      detachReason: drive.detachReason, relist: relistDiagnosticsOf(drive)});
   });
 }
 
 export {
   custodyOf,
-  holdsFrontier,
   recipientDiagnosticsOf,
-  recipientDriveOf,
-  recipientFrontier,
   recipientsBehindOwedTail,
+  retireHydratedDeliveries,
   startRecipientDrives,
   wakeRecipient,
 };

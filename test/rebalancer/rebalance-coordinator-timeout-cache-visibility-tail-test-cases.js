@@ -24,8 +24,8 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
   buildTransactionCoordinator,
   createCoordinator,
 }) {
-  test('queryIncompleteOperations uses the cache-preferred visibility read ' +
-  'contract for replica_operations when the cache is empty',
+  test('queryIncompleteOperations uses the owner-preferred visibility read ' +
+  'contract for replica_operations',
   async (t) => {
     const authoritativeReadCalls = [];
     const sqlQueryCalls = [];
@@ -98,7 +98,8 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
 
     coordinator.initialize();
     try {
-      const operations = await coordinator.queryIncompleteOperations();
+      const observation = await coordinator.queryIncompleteOperations();
+      const operations = observation.operations;
       t.equal(operations.length, 1, 'owner-local authoritative read should surface the local in-flight operation');
       t.equal(
         operations[0]?.operationId,
@@ -294,10 +295,11 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
     try {
       const operations = await coordinator.queryIncompleteOperations();
       t.equal(
-        operations.length,
-        0,
-        'cache-empty owner scans should fail closed instead of reconstructing routed replica_operations rows',
+        operations.state,
+        'deferred',
+        'an unavailable owner scan is DEFERRED, never an empty answer',
       );
+      t.same(operations.operations, [], 'and carries no list');
       t.equal(
         authoritativeReadCalls.length,
         1,
@@ -314,7 +316,8 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
     }
   });
 
-  test('queryIncompleteOperations prefers cache observation boundary before routed SQL',
+  test('the cache projection is read by name and never answers the owner ' +
+    'list read',
     async (t) => {
       let sqlQueryCalls = 0;
       const cacheRows = [
@@ -391,13 +394,19 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
 
       coordinator.initialize();
       try {
-        const operations = await coordinator.queryIncompleteOperations();
+        const projected = await coordinator.queryCachedIncompleteOperations();
         t.same(
-          operations.map((operation) => operation.operationId),
+          projected.map((operation) => operation.operationId),
           ['op-cache-local-1'],
-          'cache observation boundary should answer incomplete owner scans',
+          'the named cache projection shows the local cache-visible operation',
         );
-        t.equal(sqlQueryCalls, 0, 'cache-visible incomplete operations should bypass routed SQL');
+        const observation = await coordinator.queryIncompleteOperations();
+        t.notOk(
+          observation.operations.some((operation) =>
+            operation.operationId === 'op-cache-local-1'),
+          'the owner list read never answers with the cache projection',
+        );
+        t.equal(sqlQueryCalls, 0, 'owner reads stay inside the authoritative owner path');
       } finally {
         await coordinator.shutdown();
       }
@@ -532,7 +541,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
   );
 
   test(
-    'queryIncompleteOperations attempts one authoritative owner read before degrading to cached visibility',
+    'queryIncompleteOperations attempts one authoritative owner read and answers DEFERRED when it is deferred',
     async (t) => {
       let sqlQueryCalls = 0;
       const coordinator = createCoordinator({
@@ -599,11 +608,9 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         const operations = await coordinator.queryIncompleteOperations();
         const outcome =
         coordinator.repository.getLastIncompleteOperationReadOutcome();
-        t.same(
-          operations,
-          [],
-          'empty cache should remain the bounded fallback after one deferred owner read',
-        );
+        t.equal(operations.state, 'deferred',
+          'a deferred owner read is DEFERRED with no list');
+        t.same(operations.operations, [], 'no list');
         t.equal(
           sqlQueryCalls,
           1,
@@ -621,7 +628,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
   );
 
   test(
-    'queryIncompleteOperations falls back to routed SQL when cache is empty and router pressure is clear',
+    'queryIncompleteOperations reads the owner when router pressure is clear',
     async (t) => {
       let sqlQueryCalls = 0;
       const coordinator = createCoordinator({
@@ -663,11 +670,8 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
       coordinator.initialize();
       try {
         const operations = await coordinator.queryIncompleteOperations();
-        t.same(
-          operations,
-          [],
-          'empty cache with clear pressure should still return no in-flight operations',
-        );
+        t.equal(operations.state, 'empty',
+          'the owner answered with no rows: a confirmed EMPTY');
         t.equal(
           sqlQueryCalls,
           1,

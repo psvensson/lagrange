@@ -586,7 +586,6 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
   CDC_PARAM_DELETE_MISMATCH:
     'Column/param count mismatch in parameterized DELETE',
   CDC_DELIVERY_FAILED: 'Failed to deliver CDC event',
-  CDC_SUBSCRIPTION_FAILED: 'Failed to subscribe CDC listener',
   CDC_INVALID_SUBSCRIBER: 'CDC subscriber must be a function',
   PARTITION_SIZE_FAILED: 'Failed to calculate partition size',
   PARTITION_SIZE_UPDATE_FAILED: 'Failed to update partition size',

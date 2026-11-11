@@ -1,22 +1,18 @@
+import {buildAnsweredIncompleteOperationListObservation} from
+  '../../src/rebalancer/incomplete-operation-list-observation.js';
+
 /**
  * Replace a coordinator's incomplete-operation list read with an ANSWERED
- * read of the given list: the repository records it as the owner's complete
- * answer, so the list observation is PRESENT (or a confirmed EMPTY), exactly
- * as after a successful authoritative read. A stub that skips this leaves
- * the observation unanswered (DEFERRED), which holds admission gates.
+ * read of the given list: the repository's own answered-read recorder
+ * returns the PRESENT (or confirmed EMPTY) observation, exactly as after a
+ * successful authoritative read.
  * @param {Object} coordinator
  * @param {Function} listOf - () => the answered list (re-evaluated per read).
  * @return {void}
  */
 function stubAnsweredIncompleteOperationsRead(coordinator, listOf) {
-  const answeredRead = async () => {
-    const operations = listOf();
-    const repository = coordinator.repository;
-    repository.recordIncompleteOperationObservation(operations);
-    repository.clearIncompleteOperationReadOutcome();
-    repository.lastIncompleteOperationReadComplete = true;
-    return operations;
-  };
+  const answeredRead = async () =>
+    coordinator.repository.recordAnsweredIncompleteOperationRead(listOf());
   Object.assign(coordinator, {queryIncompleteOperations: answeredRead});
 }
 
@@ -35,13 +31,9 @@ function answeredPriorityClassCounts(counts) {
     (counts.nonPriorityCount || 0);
   return Object.freeze({
     ...counts,
-    observation: Object.freeze({
-      state: operationCount > 0 ? 'present' : 'empty',
-      complete: true,
-      operationCount,
-      deferredOutcome: null,
-      retryAfterMs: null,
-    }),
+    observation: buildAnsweredIncompleteOperationListObservation(
+      Array.from({length: operationCount}, (_unused, index) =>
+        ({operationId: `counted-${index}`}))),
   });
 }
 

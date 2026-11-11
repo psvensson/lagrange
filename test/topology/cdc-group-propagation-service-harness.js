@@ -1,6 +1,7 @@
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {sourceRangeOfEvents} from '../test-helpers/cdc-source-range-fixture.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {
   CDC_OPERATION,
   COLUMN,
@@ -11,6 +12,7 @@ import {
 import {buildCommittedCdcOutcome} from '../../src/cdc/cdc-delivery-outcome.js';
 import {beginCdcDeliveryInvocation, scopeCdcDeliveryInvocation} from
   '../../src/cdc/cdc-delivery-invocation.js';
+import {refreshCdcPropagationRoutes} from '../../src/cdc/cdc-propagation-progress.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
 import {LATENCY_TOPOLOGY_MESSAGE_TYPE} from '../../src/topology/latency-topology-constants.js';
@@ -46,37 +48,33 @@ export function teardownConfig() {
   LoggingService.resetInstance();
 }
 
+// The topology owners read the node's real system-table cache: the rows are
+// applied through the cache's own change gateway, so the cache-change port the
+// propagation's recipient-domain watch consumes is the production one.
 export function createTopologyCache({
   nodes = [],
   groups = [],
   services = [],
+  messageGroups = [],
+  latencies = [],
 } = {}) {
-  const nodeRows = new Map(
-    nodes.map((row) => [row[COLUMN.NODE_ID], {...row}]),
-  );
-  const groupRows = groups.map((row) => ({...row}));
-  const serviceRows = services.map((row) => ({...row}));
+  const cache = new SystemTableCache();
+  for (const row of nodes) putTopologyRow(cache, TABLES.NODES, row);
+  for (const row of groups) putTopologyRow(cache, TABLES.LATENCY_GROUPS, row);
+  for (const row of services) putTopologyRow(cache, TABLES.SERVICES, row);
+  for (const row of messageGroups) putTopologyRow(cache, TABLES.MESSAGE_GROUPS, row);
+  for (const row of latencies) putTopologyRow(cache, TABLES.INTER_GROUP_LATENCIES, row);
+  return cache;
+}
 
-  return {
-    get(tableName, key) {
-      if (tableName === TABLES.NODES) {
-        return nodeRows.get(key) || null;
-      }
-      return null;
-    },
-    getAll(tableName) {
-      if (tableName === TABLES.LATENCY_GROUPS) {
-        return groupRows.map((row) => ({...row}));
-      }
-      return [];
-    },
-    filter(tableName, predicate) {
-      if (tableName !== TABLES.SERVICES) {
-        return [];
-      }
-      return serviceRows.filter((row) => predicate(row));
-    },
-  };
+// One projection change: the row as a whole replaces the key's row.
+export function putTopologyRow(cache, tableName, row) {
+  cache.applySystemTableChange(tableName, CDC_OPERATION.INSERT, {...row});
+}
+
+// One projection removal of the key's row.
+export function removeTopologyRow(cache, tableName, row) {
+  cache.applySystemTableChange(tableName, CDC_OPERATION.DELETE, {...row});
 }
 
 // The one source message group double: the durable surface the durable wave
@@ -145,11 +143,18 @@ export function createDurablePropagationRequest(source, events = [createDurableC
 
 // The invocation of a delivery addressed to one recipient group (null: the
 // source group); `onRecipients` receives the recipient set the service
-// observed and reported (bindTopology), as the source lane does.
+// observed and reported (bindTopology), as the source lane does, and the
+// service is answered the recipient's route as the lane's route owner
+// observes it for a fresh recipient set (refreshCdcPropagationRoutes).
 export function addressedTo(parent, recipientGroupId, onRecipients = () => {},
   sourceRange = undefined) {
   return scopeCdcDeliveryInvocation(parent, () => true, () => ({recipientGroupId, sourceRange,
-    bindTopology: (_owner, _source, targets) => onRecipients(targets)}));
+    bindTopology: (_owner, _source, targets) => {
+      onRecipients(targets);
+      const observed = {targets: [], plannedGroupIds: new Set()};
+      refreshCdcPropagationRoutes(observed, targets);
+      return observed.targets.find((leaf) => leaf.groupId === recipientGroupId)?.route ?? null;
+    }}));
 }
 
 // The harness in the source lane's place: it delivers the vector to the

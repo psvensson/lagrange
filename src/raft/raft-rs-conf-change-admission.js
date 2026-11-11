@@ -37,7 +37,9 @@
 // removal committed by the dying quorum's last acknowledgements (a REPLACE
 // source removed after its target died) leaves a configuration that cannot
 // elect. The leader refuses a removal whose resulting voters hold no live
-// quorum by its own check-quorum activity (REMOVES_LIVE_QUORUM, retryable).
+// quorum by its own voter-liveness record (REMOVES_LIVE_QUORUM, retryable):
+// a voter counts only on its own answer in this tenure, so a voter just
+// added that has answered nothing is not counted (raft-rs-voter-liveness.js).
 // Excluded: an empty change (the leave) outside a joint configuration. No
 // producer reaches the port with one: the port's normaliser builds exactly
 // one step for every membership operation it accepts.

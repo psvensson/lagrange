@@ -14,6 +14,7 @@ import {
   PARTITION_SERVICE_REMOTE_QUERY_METHODS,
 } from '../../src/partition/partition-service-remote-query-methods.js';
 import {
+  CDC_CATCHUP_TRIGGER,
   hydrateCdcPropagatedTablesFromAuthority,
 } from '../../src/cdc/cdc-integration-service-authoritative-catchup.js';
 import {
@@ -281,6 +282,7 @@ test('hydrateCdcPropagatedTablesFromAuthority binds leader witness revisions on 
   };
 
   const summary = await hydrateCdcPropagatedTablesFromAuthority(fakeService, {
+    trigger: CDC_CATCHUP_TRIGGER.JOIN_CATCHUP,
     tables: [TABLE_NAME],
   });
 

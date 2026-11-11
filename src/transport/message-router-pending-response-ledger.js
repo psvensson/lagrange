@@ -6,6 +6,8 @@ import {ROUTER_MESSAGE_TIMEOUT_ERROR_CODE} from './transport-error-codes.js';
 import {TRANSPORT_ACKNOWLEDGEMENT} from './transport-acknowledgement.js';
 import {TRANSPORT_DELIVERY_OUTCOME_REASON_CODE, buildHandlerFailedError}
   from './transport-semantic-outcome.js';
+import {ROUTER_DUPLICATE_PENDING_RESPONSE_ERROR_CODE} from
+  './transport-router-invariant-error-codes.js';
 
 const {
   MESSAGE_ROUTER_LITERAL,
@@ -58,7 +60,6 @@ function reportPendingResponseSpent(router, messageId, pending, timeoutMs) {
   });
 }
 
-const DUPLICATE_PENDING_RESPONSE = 'router_duplicate_pending_response';
 
 // A SERVICE_RESPONSE that carries no answer settles its waiter as the router
 // fact it states: the target router had no handler (frame-level noHandler),
@@ -356,8 +357,8 @@ class MessageRouterPendingResponseLedger {
   registerPendingResponse(messageId, targetNodeId = null, options = {}) {
     assertDeliveryOpen(options);
     if (this.pendingResponses.has(messageId)) {
-      throw Object.assign(new Error(DUPLICATE_PENDING_RESPONSE), {
-        code: DUPLICATE_PENDING_RESPONSE,
+      throw Object.assign(new Error(ROUTER_DUPLICATE_PENDING_RESPONSE_ERROR_CODE), {
+        code: ROUTER_DUPLICATE_PENDING_RESPONSE_ERROR_CODE,
       });
     }
     const response = new Promise((resolve, reject) => {

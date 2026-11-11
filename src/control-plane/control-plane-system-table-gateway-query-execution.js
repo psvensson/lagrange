@@ -99,6 +99,13 @@ function buildImplicitReadRequestKey(tableName, sql, params, options) {
   });
 }
 
+// The typed refusal of an UPSERT, per table that forbids it.
+const UPSERT_FORBIDDEN_BY_TABLE = Object.freeze({
+  [SYSTEM_TABLE_NAME.SERVICES]: 'SERVICES_UPSERT_FORBIDDEN',
+  [SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS]:
+    'PUBLICATIONS_UPSERT_FORBIDDEN',
+});
+
 const controlPlaneSystemTableGatewayQueryExecutionMethods = {
   admitReadPressure(tableName, options = {}) {
     return this.getPressureGovernor().admit(buildPressureAdmissionRequest(
@@ -217,12 +224,18 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
     ));
   },
 
+  // Tables whose rows are never written whole and unconditionally: each is
+  // admitted by an insert that does not replace and changed by a guarded
+  // update (services: identity-fenced; publications: revision-guarded, see
+  // owners/control-plane-publication-change.js).
   assertSystemTableMutationAllowed(operation, tableName) {
-    if (tableName === SYSTEM_TABLE_NAME.SERVICES &&
-        operation === CONTROL_PLANE_MUTATION_OPERATION.UPSERT) {
-      const error = new Error(GATEWAY_ERROR_MSG.SERVICES_UPSERT_FORBIDDEN);
-      error.code =
-        CONTROL_PLANE_GATEWAY_ERROR_CODE.SERVICES_UPSERT_FORBIDDEN;
+    if (operation !== CONTROL_PLANE_MUTATION_OPERATION.UPSERT) {
+      return;
+    }
+    const forbidden = UPSERT_FORBIDDEN_BY_TABLE[tableName];
+    if (forbidden) {
+      const error = new Error(GATEWAY_ERROR_MSG[forbidden]);
+      error.code = CONTROL_PLANE_GATEWAY_ERROR_CODE[forbidden];
       error.errorCode = error.code;
       throw error;
     }

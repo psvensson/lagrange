@@ -32,6 +32,8 @@ import {
   createDurableCdcEvent,
   propagateToEveryRecipient,
   createDurableSourceMessageGroupService,
+  createTopologyCache,
+  putTopologyRow,
   setupConfig,
   teardownConfig,
 } from './cdc-group-propagation-service-harness.js';
@@ -46,6 +48,8 @@ const SOURCE_MG = 'mg-source';
 const NEAR_MG = 'mg-near';
 const FAR_MG = 'mg-far';
 
+// The node's real system-table cache over both domains (latency groups and
+// message groups); each inter-group latency row carries its declared key.
 function createDualDomainTopologyCache({
   nodes = [],
   latencyGroups = [],
@@ -53,76 +57,9 @@ function createDualDomainTopologyCache({
   services = [],
   latencies = [],
 } = {}) {
-  const nodeRows = new Map(nodes.map((row) => [row[COLUMN.NODE_ID], {...row}]));
-  const latencyGroupRows = new Map(latencyGroups.map((row) => [row[COLUMN.GROUP_ID], {...row}]));
-  const messageGroupRows = new Map(messageGroups.map((row) => [row[COLUMN.GROUP_ID], {...row}]));
-  const serviceRows = services.map((row) => ({...row}));
-  const latencyRows = latencies.map((row) => ({...row}));
-  const listeners = new Set();
-
-  return {
-    get(tableName, key) {
-      if (tableName === TABLES.NODES) {
-        return nodeRows.get(key) || null;
-      }
-      if (tableName === TABLES.LATENCY_GROUPS) {
-        return latencyGroupRows.get(key) || null;
-      }
-      if (tableName === TABLES.MESSAGE_GROUPS) {
-        return messageGroupRows.get(key) || null;
-      }
-      return null;
-    },
-    getAll(tableName) {
-      if (tableName === TABLES.NODES) {
-        return [...nodeRows.values()].map((row) => ({...row}));
-      }
-      if (tableName === TABLES.LATENCY_GROUPS) {
-        return [...latencyGroupRows.values()].map((row) => ({...row}));
-      }
-      if (tableName === TABLES.MESSAGE_GROUPS) {
-        return [...messageGroupRows.values()].map((row) => ({...row}));
-      }
-      if (tableName === TABLES.INTER_GROUP_LATENCIES) {
-        return latencyRows.map((row) => ({...row}));
-      }
-      return [];
-    },
-    filter(tableName, predicate) {
-      if (tableName === TABLES.SERVICES) {
-        return serviceRows.filter((row) => predicate(row));
-      }
-      if (tableName === TABLES.NODES) {
-        return [...nodeRows.values()].filter((row) => predicate(row));
-      }
-      if (tableName === TABLES.LATENCY_GROUPS) {
-        return [...latencyGroupRows.values()].filter((row) => predicate(row));
-      }
-      if (tableName === TABLES.MESSAGE_GROUPS) {
-        return [...messageGroupRows.values()].filter((row) => predicate(row));
-      }
-      return [];
-    },
-    onCacheChange(listener) {
-      listeners.add(listener);
-    },
-    offCacheChange(listener) {
-      listeners.delete(listener);
-    },
-    emitCacheChange(tableName) {
-      for (const listener of listeners.values()) {
-        listener(tableName);
-      }
-    },
-    addServiceRow(row) {
-      serviceRows.push({...row});
-      this.emitCacheChange(TABLES.SERVICES);
-    },
-    addMessageGroupRow(row) {
-      messageGroupRows.set(row[COLUMN.GROUP_ID], {...row});
-      this.emitCacheChange(TABLES.MESSAGE_GROUPS);
-    },
-  };
+  return createTopologyCache({nodes, groups: latencyGroups, messageGroups, services,
+    latencies: latencies.map((row) => ({...row, [COLUMN.LATENCY_EDGE_ID]:
+      `${row[COLUMN.SOURCE_GROUP_ID]}->${row[COLUMN.TARGET_GROUP_ID]}`}))});
 }
 
 function buildStandardDualDomainFixture(t, mode = LATENCY_PROPAGATION_MODE.SAFE, options = {}) {
@@ -371,8 +308,8 @@ test('missing-mapping-refusal-and-recovery: unmapped latency group returns typed
   assert.equal(firstAttempt.error, CDC_COMPLETION.UNKNOWN);
 
   // Now register mapping for UNMAPPED_LG:
-  cache.addMessageGroupRow({[COLUMN.GROUP_ID]: RESOLVED_MG, leader_node_id: 'node-u'});
-  cache.addServiceRow({
+  putTopologyRow(cache, TABLES.MESSAGE_GROUPS, {[COLUMN.GROUP_ID]: RESOLVED_MG, leader_node_id: 'node-u'});
+  putTopologyRow(cache, TABLES.SERVICES, {
     [COLUMN.SERVICE_ID]: `${RESOLVED_MG}-r1`,
     [COLUMN.GROUP_ID]: RESOLVED_MG,
     [COLUMN.NODE_ID]: 'node-u',
@@ -425,7 +362,7 @@ test('captured-invalid-binding-recovery: invalid latency-domain binding transfer
 test('captured-invalid-binding-recovery never transfers a binding to the source group: ' +
   'a coordinator node that also hosts the source yields only its other groups', async (t) => {
   const f = buildStandardDualDomainFixture(t, LATENCY_PROPAGATION_MODE.SAFE);
-  f.cache.addServiceRow({
+  putTopologyRow(f.cache, TABLES.SERVICES, {
     [COLUMN.SERVICE_ID]: `${SOURCE_MG}-r2`,
     [COLUMN.GROUP_ID]: SOURCE_MG,
     [COLUMN.NODE_ID]: 'node-b',

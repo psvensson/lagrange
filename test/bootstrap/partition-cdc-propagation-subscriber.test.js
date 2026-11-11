@@ -20,6 +20,8 @@ import {PARTITION_CDC_OBLIGATION_DRIVE_STATE, PARTITION_CDC_OBLIGATION_LOG_MSG,
   PARTITION_CDC_OBLIGATION_REASON} from
   '../../src/partition/partition-cdc-obligation-constants.js';
 import {EventEmitter} from 'node:events';
+import {MessageGroupServiceRegistry} from
+  '../../src/bootstrap/shared/message-group-service-registry.js';
 import {MESSAGE_GROUP_SERVICE_LITERAL} from
   '../../src/message-group/message-group-service-runtime-support.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
@@ -273,8 +275,9 @@ async function seedHostingGroups(t, groupIds) {
     timeSource: new VirtualTimeSource({startMs: 100})});
   t.after(() => shutdownAll(leader));
   leader.controllablePort.setRole(RAFT_ROLE.FOLLOWER);
-  const services = new Map(groupIds.map((groupId, index) =>
-    [`${groupId}-r${index + 1}`, laneMessageGroup(groupId)]));
+  const services = new MessageGroupServiceRegistry();
+  groupIds.forEach((groupId, index) =>
+    services.set(`${groupId}-r${index + 1}`, laneMessageGroup(groupId)));
   const operational = [...services.values()][0];
   const deliveries = [];
   const selection = () => ({ready: true, service: operational});
@@ -389,7 +392,7 @@ test('a deferred propagation attachment awaiting its message group attaches on t
   const selection = () => ({ready, service: ready ? group : null});
   const attached = await attachPartitionCdcPropagation(f.leader, {
     tableName: CDC_TABLE, preferredService: null, defer: true,
-    messageGroupServices: () => f.services, logger: null, logContext: {},
+    messageGroupServices: f.services, logger: null, logContext: {},
     notReadyMessage: 'controlled: no operational message group',
     resolveOperationalMessageGroupSelectionAsync: async () => selection(),
     buildMessageGroupOwnerNotReadyError: (_selection, {message}) => new Error(message),
@@ -421,6 +424,55 @@ test('a deferred propagation attachment awaiting its message group attaches on t
   assert.deepEqual(f.deliveries.flatMap(({eventKeys}) => eventKeys).length, 1,
     'the owed row was delivered once the subscriber attached');
   assert.equal(f.leader.cdcDelivery.propagationAttachment, null, 'the awaited state is released');
-  assert.equal(group.listenerCount(MESSAGE_GROUP_SERVICE_LITERAL.INITIALIZED), 0,
-    'no listener outlives the attachment');
+  assert.equal(f.services.readinessListeners.size, 0,
+    'no subscription outlives the attachment');
+});
+
+// F2 (2026-11-11): the attachment armed while the node hosted no operational
+// message group. A message-group service created afterwards - registered
+// already initialized and elected, as the joiner's creation path registers
+// it, so it emits nothing after registration - must attach it without any
+// committed write; then the row owed meanwhile is delivered.
+test('F2 a deferred propagation attachment attaches when a message-group service created ' +
+  'after it armed is registered, with no committed write and no service event', async (t) => {
+  const f = await seedHostingGroups(t, [LANE_GROUPS[0]]);
+  f.services.clear();
+  const late = Object.assign(new EventEmitter(), laneMessageGroup('mg-late'));
+  const selection = () => ({ready: f.services.size > 0, service: f.services.get('mg-late-r1') ??
+    null});
+  await commitAndDrive(f.leader, 'owed-before');
+  const committedBefore = f.leader.db.prepare(`SELECT COUNT(*) AS n FROM ${CDC_TABLE}`).get().n;
+  await attachPartitionCdcPropagation(f.leader, {
+    tableName: CDC_TABLE, preferredService: null, defer: true,
+    messageGroupServices: f.services, logger: null, logContext: {},
+    notReadyMessage: 'controlled: no operational message group',
+    resolveOperationalMessageGroupSelectionAsync: async () => selection(),
+    buildMessageGroupOwnerNotReadyError: (_selection, {message}) => new Error(message),
+    registration: {role: 'joining', nodeId: 'joiner-node', partitionId: f.leader.partitionId,
+      replicaId: f.leader.replicaId,
+      resolveOperationalMessageGroupSelection: selection,
+      resolveOperationalMessageGroupSelectionAsync: async () => selection(),
+      buildMessageGroupOwnerNotReadyError: f.delegates.buildMessageGroupOwnerNotReadyError,
+      propagatePartitionCDCEvent: f.delegates.propagatePartitionCDCEvent},
+  });
+  await settleTicks();
+  assert.equal(typeof f.leader.cdcDelivery.propagationAttachment, 'function',
+    'the attachment awaits the operational message group');
+  assert.deepEqual(f.deliveries, []);
+
+  // The service is created and registered after the attachment armed; it
+  // emits nothing more. No write commits.
+  f.services.set('mg-late-r1', late);
+  await settleTicks();
+  assert.equal(f.leader.db.prepare(`SELECT COUNT(*) AS n FROM ${CDC_TABLE}`).get().n,
+    committedBefore, 'no write committed meanwhile');
+  assert.deepEqual(f.leader.cdcDelivery.getCDCSubscriptionDiagnostics().subscriptions
+    .map(({subscriberId}) => subscriberId), [`joining:joiner-node:${CDC_TABLE}:${f.leader.replicaId}`],
+  'the late service attached the propagation subscriber');
+  assert.equal(f.leader.cdcDelivery.propagationAttachment, null, 'the awaited state is released');
+  await f.leader.cdcDelivery.driveCdcObligations(PARTITION_CDC_OBLIGATION_REASON.DELIVERY_RETRY);
+  await settleTicks();
+  assert.deepEqual(f.deliveries.flatMap(({eventKeys}) => eventKeys).length, 1,
+    'the row owed before the service existed is delivered');
+  assert.equal(f.services.readinessListeners.size, 0, 'no subscription outlives the attachment');
 });

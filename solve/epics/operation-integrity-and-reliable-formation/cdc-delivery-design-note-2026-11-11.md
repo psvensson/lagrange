@@ -1535,13 +1535,15 @@ not independently verified.
 | FLUSH PROPOSER_UNAVAILABLE | a proposer registered | yes: the lane retry timer | yes | warn PROPOSER_UNAVAILABLE per flush |
 | FLUSH OUTCOME_UNKNOWN | the ledger decides the pending command (reconciliation), or tenure end | yes: the lane retry timer | yes | warn ACKNOWLEDGEMENTS_REFUSED (proposed: true) |
 | FLUSH REFUSED, non-terminal code | the retry | yes: the lane retry timer | yes | warn ACKNOWLEDGEMENTS_REFUSED |
-| FLUSH REFUSED, terminal code (UNKNOWN_EVENT, ENTRY_MISMATCH, POSITION_MISMATCH, BYTES_INVALID, IDENTITY_MISMATCH) or refused before proposal | **nothing in the tenure**: `lane.held` is set and only a new lane (leader change) clears it | **no** | yes, then RESERVE_EXHAUSTED until a leader change | warn ACKNOWLEDGEMENTS_REFUSED once; diagnostics `acknowledgementHeld` |
+| FLUSH REFUSED, terminal code (UNKNOWN_EVENT, ENTRY_MISMATCH, POSITION_MISMATCH, BYTES_INVALID, IDENTITY_MISMATCH) or refused before proposal | **nothing in the tenure**: `lane.held` is set and only a new lane (leader change) clears it *(superseded by S3.10 F1 and S3.11.6: only LANE_HELD - IDENTITY_MISMATCH, ORIGIN_REFUSED, a broken batch builder - still sets `lane.held`; the other codes are RE_DERIVED or QUARANTINED, and a QUARANTINED head still ends in a write stop)* | **no** | yes, then RESERVE_EXHAUSTED until a leader change | warn ACKNOWLEDGEMENTS_REFUSED once; diagnostics `acknowledgementHeld` *(superseded: `obligationAlarm` in the CDC subscription diagnostics, S3.11.6)* |
 | FLUSH NOT_LEADER | the new leader's lane | leader election | n/a on this replica | debug ACKNOWLEDGEMENTS_DROPPED_NOT_LEADER |
 | DRIVE ACKNOWLEDGEMENT_BACKPRESSURE | the next flush or retry (outstanding batches commit) | yes: flush deadline / retry | yes | the obligation backpressure report |
 
 Findings for the CDC delivery owner (outside this writer's files): the
 terminal `lane.held` has no event that clears it within a tenure; the deferred
 attachment listens only to the message-group services present when it armed.
+*(Both superseded by S3.10 F1/F2; the blast radius of what remains is stated
+in S3.11.6.)*
 
 #### S3.8.2 Supersessions (R09)
 
@@ -1672,3 +1674,345 @@ no position).
 - **Open.** The lab must measure image sizes, pages, restarts and WAL growth
   during images on a long-running cluster; INDEX.md regeneration and the
   duplication ratchet are owed to the integration owner.
+
+### S3.10 Every peer has a progress state that releases what it pins (2026-11-11, F1-F3)
+
+Repairs of three findings of the S3.8 writer. Unit and real-group level only;
+not lab-measured, not independently verified. The rule this section adds, after
+the comparable systems (Raft/etcd/TiKV progress Probe/Replicate/Snapshot,
+Kafka ISR shrink and re-sync, rangefeed disconnect-and-catch-up-scan, Postgres
+`max_slot_wal_keep_size` invalidating a slot): every party the lane waits on has
+an explicit named state; a party that cannot make progress moves to a named state
+that releases the retention it pins; it returns through one catch-up path (the
+Stage 3 re-list). No wait without a clearing event inside its lifetime.
+
+- **F1, acknowledgement refusals** (`partition-cdc-acknowledgement-refusal.js`).
+  A terminal refusal no longer sets `lane.held` for the tenure. The refused batch
+  is a decision: the lane forgets its command, its pending identities and its
+  acknowledgement scan, and rebuilds from the committed ledger at once.
+  | Refusal | Meaning | Outcome | Clearing event | Scope blocked |
+  | --- | --- | --- | --- | --- |
+  | UNKNOWN_EVENT, POSITION_MISMATCH, IDENTITY_COMPACTED not explained by the lane's progress read (each names its position) | the lane's identity of a member disagrees with the ledger | RE_DERIVED | the refusal itself | none |
+  | the same, again at a position already re-derived in this tenure | the ledger contradicts its own owed read (storage fault) | QUARANTINED{position} | none in the tenure (named terminal; a new tenure re-derives once) | that position; D1 prefix reclamation stops below it, so the rows above are delivered and retained up to RETAINED_DELIVERED_MAX, then acknowledgement backpressures *(understated; corrected by S3.11.6: the partition's writes stop, and a new tenure re-enters the same state while the fault persists)* |
+  | BYTES_INVALID (before or after proposal) | the batch is not in its pinned form | RE_DERIVED; on a repeat, members whose one-member acknowledgement is refused are QUARANTINED; if none is, LANE_HELD | the refusal / the split | the refused members, or the lane (its builder is broken) |
+  | IDENTITY_MISMATCH, ORIGIN_REFUSED | the lane's own identity is refused | LANE_HELD | a new tenure | the lane: nothing it builds can be valid |
+  | ENTRY_MISMATCH | had no producer | deleted | - | - |
+  Every outcome is raised at error level with position, code and owed depth; the
+  lane diagnostics name `held` and `quarantined`. The only narrower blast radius
+  for QUARANTINED would be a committed "retire a corrupt obligation" decision: a
+  new CDC_DELIVERED form, i.e. a wire change, not built (owner decision).
+- **F2, the deferred propagation attachment** waited on `once` listeners over the
+  message-group services that existed when it armed. The node's message-group
+  services now live in one registry (`MessageGroupServiceRegistry`, constructed by
+  BootstrapService and NodeJoiningService) that owns the event "a message-group
+  service appeared or became able to serve" (registered, initialized, elected);
+  the attachment holds one subscription on it until it registers or the replica
+  shuts down, and a wake during an attempt is never lost.
+- **F3, the primary recipient.** S3.2 item 6 ("a branch's primary recipient
+  never leaves the frontier") is superseded (R09): MUST_RELIST and
+  DETACHED{lifecycle} apply to every recipient of the propagation subscriber (the
+  only subscriber role a partition that records obligations admits; a live query
+  refuses such a partition), the primary included. The primary is the source
+  message group: it is shipped the same source ranges, classifies them, answers a
+  missing predecessor with a gap and re-lists from the source leader's image like
+  a target. Its lifecycle evidence is read for its bound source group; when its
+  propagation is released (the selection owner rebinds, or the source group's
+  service shut down) a DETACHED primary starts again as a new recipient. When no
+  recipient holds the frontier (all MUST_RELIST or DETACHED) the frontier is the
+  whole ledger (UNHELD_FRONTIER): each of them returns through its re-list.
+  MUST_RELIST now also requires that the recipient's last delivery ended without
+  a receipt (pass HELD or FAILED, not running): lag alone is a backlog, not a dead
+  recipient. Without this, a freshly attached primary (cursor unknown) on a ledger
+  owing more than RELIST_LAG_ROWS was marked at once and, being the only
+  recipient, made the frontier unheld - acknowledging rows no one had received.
+  The same tightening applies to target groups (S3.1 measure 3 is narrowed, R09).
+- **message_groups RETIRED evidence** deleted (lifecycle reader and the routing
+  eligibility filter): MESSAGE_GROUPS_SCHEMA has no status or state column, so the
+  branch had no producer; a group's retirement is its replica rows'.
+
+### S3.11 Recipient progress: one re-entry path, cursors that only receipts move (2026-11-11, corrective round)
+
+Corrective round after the independent verification rejected F3 (quest log
+fresh-formation-user-table-routability, the `verification` entry with verdict
+reject). Unit and component level on real consensus at both ends of the range
+contract; not lab-measured, not independently verified yet. Where this section
+differs from S3.1 (sender side, measure 3), S3.2 item 5, S3.3, S3.8 ("what the
+reserve relieves"), S3.10 F3 and the QUARANTINED row of S3.10, it supersedes
+them (R09); each supersession is named in S3.11.8.
+
+#### S3.11.1 What was wrong (reproduced before the repair)
+
+1. The position probe was malformed whenever the ledger's newest row had been
+   reclaimed, the normal quiet state: `after` came from the compact progress,
+   which is the newest row itself. Reproduced: `VERIFY probe sourceRange
+   {"after":{"logIndex":6,"ordinal":0},"through":{"logIndex":6,"ordinal":0}}
+   isSourceRange= false`. The real receiver refuses it as invalid input, so a
+   recipient that attaches to a quiet table was never told it had a gap. The
+   witnesses passed because their recipient model never validated the range.
+2. `selectRecipientVector` advanced a recipient's cursor over rows that were
+   acknowledged without it. Reproduced: a released recipient ended with
+   `cursor {2576,0}`, `state must_relist`, `lastPass drained` and a cell
+   `current` at `{2575, MAX}`: a committed row it never applied, a cell that
+   says it is current, and nothing scheduled to contact it.
+3. A released recipient could only re-enter in a write-free window: every row
+   acknowledged after its image's position was another gap and another image.
+4. The narrowing "MUST_RELIST also requires a refused last delivery" sampled
+   the drive's state; a recipient that only answers provisionally, or whose
+   delivery is in flight at most sample points, could pin the ledger to the cap.
+
+#### S3.11.2 The model
+
+A recipient is a Raft follower's Progress. Two positions, never mixed
+(`partition-cdc-recipient-progress.js`):
+
+- **cursor**: the ledger position through which this recipient holds a
+  committed (or already-applied) receipt of its own. It moves in exactly one
+  function (`confirmRecipient`). Rows acknowledged without the recipient are
+  stepped over by its scan and never move it.
+- **hold**: a re-list hold `{position, sinceMs}`: the ledger's newest position
+  as of the moment the range the recipient answered with a gap was shipped.
+  For a released recipient it is pinned when the offer is shipped, so that
+  nothing passes it before the answer; for a recipient that holds the frontier
+  it is pinned by the gap answer (until then its cursor pins everything after
+  it). What lies at or below the hold is the image's and is no longer pinned;
+  nothing after it is acknowledged while the hold stands.
+
+| State | Holds the frontier at | Entered by | Left by |
+| --- | --- | --- | --- |
+| NEVER_SHIPPED | cursor (none: the ledger's floor) | attach; a released propagation binding; re-attach after DETACHED | its first shipped vector |
+| SUBSCRIBER_UNCONFIRMED | cursor | a vector shipped | a receipt; a gap answer; a release |
+| CONFIRMED | cursor | a committed or already-applied receipt | the next shipped vector |
+| POSITION_GAP | its hold | a typed gap answer | a receipt; a release |
+| RELIST_OFFERED | its hold | the lane contacts a MUST_RELIST recipient | a gap (POSITION_GAP); a receipt (CONFIRMED); any other end of that delivery (release) |
+| MUST_RELIST | nothing | a release | its next contact, which is always an offer |
+| DETACHED | nothing | authoritative lifecycle evidence (unchanged, S3.1 measure 2) | lifecycle evidence ACTIVE |
+
+Releases (`PARTITION_CDC_RECIPIENT_RELEASE`), each to MUST_RELIST, each logged
+with its reason and counted per reason in the lane diagnostics
+(`recipients[].relist.releases`):
+
+| Reason | Condition | Read where |
+| --- | --- | --- |
+| LAG_WITHOUT_RECEIPT | a recipient more than RELIST_LAG_ROWS (2048) owed rows behind its cursor, at least one of whose deliveries ended without a committed receipt since its last one (refused, unknown, a gap, timed out at its 5 s invocation budget, or only provisionally accepted) | every frontier computation; a count of ended deliveries, no clock, independent of what the drive is doing when it is read |
+| OFFER_UNANSWERED | the delivery that carried a re-list offer ended with neither a gap nor a receipt | the end of that delivery |
+| HOLD_LAG_EXCEEDED | a re-list hold pins more than RELIST_LAG_ROWS owed rows | every frontier computation |
+| HOLD_EXPIRED | a re-list hold stood longer than RELIST_HOLD_DEADLINE_MS (120 s) | every frontier computation (no timer) |
+
+Lag alone is a backlog. A recipient nothing was shipped to (NEVER_SHIPPED), or
+whose deliveries are all confirmed or still in flight, is never released,
+whatever its lag: nobody received the rows it pins (the defect the morning's
+narrowing repaired). The evidence is counted when a delivery ends, so it does
+not depend on the drive's state at the moment the frontier is computed, and it
+does not need new rows: at the owed capacity, where no row can be recorded,
+a dead recipient is still released by its next ended delivery (a first version
+of this rule required further rows and deadlocked exactly there; the
+retirement-reserve witness caught it). A recipient without the propagation
+role has no position and is never released; the owed capacity is its
+backpressure (R2-5, restated for such a recipient).
+
+#### S3.11.3 The one re-entry path
+
+1. The lane's next contact of a MUST_RELIST recipient (on that recipient's own
+   retry) pins a hold at the ledger's newest position H and then ships: the
+   owed rows after H, or the position probe when there are none.
+2. The recipient's real acceptance classifies the range. If its node cache has
+   not applied the predecessor it answers the typed gap, records the gap and
+   starts its image; the lane keeps the hold (POSITION_GAP).
+3. The image is opened by the source leader after the recipient received the
+   range, so its applied index P is at or beyond H. While the hold stands
+   nothing after H is acknowledged: every row committed during the image stays
+   owed.
+4. The lane's retry ships the owed rows after H. Their predecessor is at or
+   below H, so at or below `{P, MAX}`: the recipient applies the range, its
+   members at or below P are refused by position, and its committed receipt
+   moves the cursor. The hold dissolves into the cursor; the frontier moves.
+
+A recipient that holds the frontier and answers a gap (a restarted node, a new
+recipient, a first range of an incarnation its cache has no position of) takes
+the same path from step 2: its gap answer pins the hold at the newest position
+as of the range it was shipped (its cursor pinned everything until then), the
+backlog below the hold is acknowledged on the strength of the image, and what
+is committed during the image is retained. Its cursor does not move until its
+own receipt.
+
+#### S3.11.4 Invariants and their witnesses
+
+All in `test/partition/partition-cdc-relist-reentry.test.js`, on
+`test/test-helpers/cdc-relist-reentry-fixture.js`: a real rs-raft `config`
+partition leader behind the production write path, and a real message group
+(rs-raft) with the real committed acceptance, cache and position cell, listing
+through the production fetch and install.
+
+- **I-A1** A cursor moves only on that recipient's own receipt. W2 (the row
+  committed during the image is shipped to and applied by the recipient; a
+  sampled invariant fails if its cell is current at the newest event while its
+  cache lacks a committed row), W5.
+- **I-A2** A recipient that has not confirmed the ledger's newest event is
+  contacted until it confirms or is detached; the probe is a well-formed range
+  on a reclaimed ledger. W1 (attach on a fully reclaimed ledger, no write:
+  probe, gap, one list, CURRENT with the source table; every shipped range is
+  checked with the contract owner's predicate and accepted by the real
+  receiver). The probe's predecessor is produced by the ledger
+  (`readCdcPredecessorPosition`): the retained row below, else the end of the
+  reclaimed prefix, else, when the probe row itself is reclaimed, the position
+  immediately before it (`{logIndex, ordinal - 1}`), below which no event can
+  be missing. The range contract, the committed command and every pinned byte
+  form are unchanged; `_cdc_ledger_newest` is unchanged.
+- **I-A3** One image suffices under writes, bounded. W2 (holder): a recipient
+  that holds the frontier answers a gap on a backlog; its hold is the newest
+  position as of the gapped range, the backlog is acknowledged while its image
+  is in flight, a row committed meanwhile stays owed and is applied after the
+  install, with one image and no release. W3: 512 rows written while
+  the image is in flight are all retained, the recipient re-enters with one
+  image, owed stays under the cap; then more than RELIST_LAG_ROWS rows during
+  an image release the hold by name (HOLD_LAG_EXCEEDED), and the next offer
+  succeeds with one more image. Arithmetic: let T be the time from the offer
+  to the recipient's confirming retry (gap round trip + image fetch + install
+  + at most 250 ms of hinted retry + one round trip) and w the write rate of
+  the table. One image suffices when w x T <= 2048 rows and T <= 120 s. For a
+  system table listed in one second that is about 2,000 writes per second, two
+  to three orders of magnitude above what formation was measured to produce
+  (3.6 events/s across tables, section 1.4). Above the threshold the system
+  degrades, visibly and without loss: each exceeded hold is released (a warn
+  line "CDC recipient released to MUST_RELIST" with the reason, and the
+  per-reason counter), the writes are acknowledged past the recipient, its
+  cell stays GAP (currency-requiring reads keep waiting) and the next contact
+  offers again at a newer position. It converges when the rate drops below the
+  threshold; it never refuses a write and never reports a stale cache current.
+- **I-A4** A dead recipient cannot pin the ledger; a fresh one is not skipped.
+  W4 (never-settling), W4 (provisional for ever): released by
+  LAG_WITHOUT_RECEIPT, owed stays under the cap, no write refused. W4 (fresh):
+  a recipient attached to a ledger owing more than the bound holds the
+  frontier while its first delivery is in flight - the frontier is computed
+  meanwhile, by a write - is never released, and nothing is acknowledged
+  before its own receipt (a recipient whose first answer is a gap is the
+  re-lister of I-A3 instead: its image carries the backlog). A dead MUST_RELIST recipient pins rows only while
+  one offer is in flight (at most one delivery invocation budget, 5 s) and at
+  most RELIST_LAG_ROWS of them. A never-settling delivery is evidence only
+  when its invocation budget ends it: a writer faster than 2048 rows in those
+  5 s reaches the owed capacity first and is refused until the release
+  (backpressure, R12).
+- **I-A5** UNHELD_FRONTIER survives, with one meaning: the lane has recipients
+  and every one is MUST_RELIST or DETACHED. Then the ledger may be reclaimed
+  with no receipt from anyone. No change is lost because a MUST_RELIST
+  recipient's next contact is an offer whose range it answers with a gap
+  unless its cache already holds everything up to the newest event, and its
+  image is opened after that offer; a DETACHED one returns NEVER_SHIPPED with
+  no cursor and its first range names a predecessor it must have applied. W5
+  (the ledger is reclaimed with no receipt; the released recipient returns
+  through an image at or beyond everything reclaimed; a recipient that attaches
+  afterwards holds the source table). The lane diagnostics name the frontier's
+  state (`frontierState`: no_recipients, unconfirmed, held, unheld).
+
+The older model witnesses (`partition-cdc-source-relist.test.js`,
+`partition-cdc-primary-relist.test.js`) keep their recipient model for the
+source-side rules they cover, but the model now refuses a range the contract
+owner does not accept, as the receiver does (`assertShippedSourceRange`).
+
+#### S3.11.5 Bounds
+
+- Ledger: unchanged capacities. A recipient whose delivery ended unconfirmed
+  pins at most RELIST_LAG_ROWS owed rows by its cursor (plus what is recorded
+  before its next ended delivery or the next frontier computation), a re-list
+  hold at most RELIST_LAG_ROWS, for at most RELIST_HOLD_DEADLINE_MS. A
+  recipient that keeps confirming is never released: if it is slower than the
+  writers, the owed capacity slows the writers to its pace.
+- Source images: unchanged (at most 4 open images per leader, 2 fetched per
+  node cache, the idle and applied-advance expiries of S3.9).
+- No new timer, no new durable row, no wire change.
+
+#### S3.11.6 QUARANTINED: the real blast radius, and the signal (finding 4)
+
+A quarantined position stays owed. Decision D1 reclaims only below the lowest
+owed row, so with the ledger head quarantined nothing is reclaimed: after
+RETAINED_DELIVERED_MAX (1,024) delivered rows are retained every further
+acknowledgement is refused by the retained-delivered bound, owed rows grow to
+OWED_MAX_EVENTS, ordinary writes are refused, the retirement reserve drains,
+and a new leadership tenure re-derives the position once and quarantines it
+again while the fault persists. A persistent quarantine is therefore a
+partition-wide write stop, not a one-position hold. Nothing here changes that:
+the committed "retire a corrupt obligation" form and a leader step-down are
+owner decisions and are not built.
+
+What is built is the signal. The lane's acknowledgement alarm
+(`acknowledgementAlarmOf`: none, quarantined with the positions and codes, or
+lane_held) is part of every partition's CDC subscription diagnostics
+(`getCDCSubscriptionDiagnostics().obligationAlarm`), which the existing admin
+CDC diagnostics collection reports per partition on every node
+(`buildLocalCdcDiagnostics`, `partitionDiagnosticsById[...].diagnostics`). No
+virtual table and no new collector. The error line at the moment of quarantine
+is unchanged. A producer for the node health buffer was not added: it needs a
+new entry in the health-hint import allow-list, which this round may not edit.
+
+#### S3.11.7 Smaller repairs
+
+- The acknowledgement-refusal owner keeps one re-derivation record per refusal
+  path (`lane.reDerived.byPosition`, `.byBytes`); an entry ends when the ledger
+  commits its position delivered, at the latest with the tenure.
+- The deferred propagation attachment releases its shutdown listener when it
+  registers.
+- Not done in this round: deleting the registry's and the projection wait's
+  branches for stand-ins that are not event emitters or have no source-order
+  owner (42 stand-in registrations in 14 bootstrap test files, and cache
+  stand-ins another writer is replacing with a shared fixture). Recorded for
+  the owner of those tests.
+
+#### S3.11.8 Supersessions (R09)
+
+- **S3.1, sender side** ("A recipient is behind whenever a ledger row lies above
+  its cursor ... shipped the ledger's newest recorded event") stands, with the
+  probe's predecessor as in S3.11.4 I-A2 and the cursor rule of S3.11.2.
+- **S3.1 measure 3 and S3.10 F3's narrowing** ("MUST_RELIST also requires that
+  the recipient's last delivery ended without a receipt (pass HELD or FAILED,
+  not running)") are superseded by the release rule LAG_WITHOUT_RECEIPT of
+  S3.11.2. "It stays required and keeps being shipped to" is superseded: a
+  MUST_RELIST recipient is shipped only re-list offers.
+- **S3.2 item 5** ("The new-recipient window is closed by the position probe")
+  stands; the probe is now well-formed on a reclaimed ledger.
+- **Section 6.4 item 7** ("A gapped range stays owed for that recipient at the
+  source") and **S3.1** ("GAP holds the recipient in the named state
+  POSITION_GAP on its own hinted retry") are superseded in one respect: a
+  gapped recipient holds the ledger from its re-list hold, not from its
+  cursor; the rows at or below the hold are acknowledged without its receipt
+  because its image, opened after it received the range, carries them.
+- **S3.3 and S3.5** ("neither state is entered on elapsed time"; "No clock is
+  read") are superseded for one case only: a re-list hold, which is retention
+  granted to a recipient that said it is re-listing, ends after
+  RELIST_HOLD_DEADLINE_MS. No recipient is declared dead or detached on
+  elapsed time.
+- **S3.4 Ledger** ("no single recipient holds more than RELIST_LAG_ROWS") is
+  restated in S3.11.5.
+- **S3.10 F3** ("When no recipient holds the frontier ... the frontier is the
+  whole ledger (UNHELD_FRONTIER): each of them returns through its re-list")
+  stands with the meaning and the proof obligation of I-A5.
+- **S3.10 table, QUARANTINED row, and S3.8.1's `lane.held` row** are corrected
+  by S3.11.6.
+- **Section 5.9 R2-5** (a recipient that never answers pins the ledger to
+  OWED_MAX_EVENTS) holds only for a recipient with no position; the witness is
+  restated for one (`partition-cdc-recipient-isolation.test.js`).
+
+#### S3.11.9 Open, and what only a lab formation can show
+
+- A member of the recipient group that is not its leader decides each
+  committed range against its own cache. A member that gaps at apply merges
+  nothing and lists; ranges that commit in its group while its image is in
+  flight are gaps too, so under a range rate above one per image time such a
+  member needs a quiet window to converge. The lane's hold does not help it
+  (the lane's recipient is the group, satisfied by its leader). Not repaired
+  here: it needs the member to keep the ranges that arrive during its image.
+- The production relister lists again 500 ms after an install that left its
+  cell stale. The lane's retry after a gap is at most 250 ms, so the retried
+  range normally closes the gap first and one image suffices; when the lane is
+  slower a second, harmless image is fetched. The witnesses use the production
+  fetch and install without that retry policy, so the count of images per
+  re-entry on a loaded cluster is lab evidence.
+- An image whose source leader cannot be reached is retried inside its image
+  slot; two such tables occupy both slots of a node cache and every other list
+  on that node waits behind them.
+- Formation: a propagation subscriber whose message group refuses (not ready)
+  while more than RELIST_LAG_ROWS rows of one system table are owed is
+  released and re-lists when it answers; expected never to happen at formation
+  sizes, to be confirmed by the absence of the release line. After a seed
+  hydration every recipient is contacted with the probe even on a quiet table
+  (its cursor no longer moves over hydrated rows), so the seed lists each
+  quiet propagated table once: count the image lines at formation.

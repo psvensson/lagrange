@@ -1,4 +1,6 @@
 import {deliveryTransportOf} from '../transport/transport-semantic-outcome.js';
+import {buildTransportFailureError} from
+  '../transport/transport-delivery-failure.js';
 import {NUM} from '../constants/index.js';
 import {CDC_COMPLETION} from '../cdc/cdc-delivery-outcome.js';
 import {cdcDeliveryBudgetError} from '../cdc/cdc-delivery-budget.js';
@@ -207,17 +209,8 @@ function shouldSynthesizeMessageGroupDeliverySource(
 // canonical envelope once, preserving every transport discriminator; never
 // reconstruct it from a second MG-specific flat delivery record.
 function buildDirectDeliveryError(delivery, fallbackMessage) {
-  const outcome = deliveryTransportOf(delivery);
-  return Object.assign(new Error(outcome.error || fallbackMessage), {
-    code: outcome.errorCode,
-    acknowledgement: outcome.acknowledgement,
-    deliveryState: outcome.deliveryState,
-    reasonCode: outcome.reasonCode,
-    noHandler: outcome.noHandler,
-    deferRetry: outcome.deferRetry,
-    retryAfterMs: outcome.retryAfterMs,
-    recoverableBeforeSend: outcome.recoverableBeforeSend,
-  });
+  return buildTransportFailureError(deliveryTransportOf(delivery),
+    fallbackMessage);
 }
 
 function buildDeferredCdcForwardError(message, retryAfterMs = 0) {

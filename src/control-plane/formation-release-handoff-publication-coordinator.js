@@ -5,25 +5,43 @@ import {
   readFormationReleaseHandoffPublicationRow,
 } from './formation-release-handoff-publication.js';
 import {formationReleaseContractsEqual} from './formation-release-handoff-identity.js';
+import {
+  PUBLICATION_WRITE_OUTCOME,
+  isPublicationWriteSettled,
+} from './owners/control-plane-publication-change.js';
 
 const promiseResolve = Promise.resolve.bind(Promise);
 const stringConstructor = String;
 
 const ERROR_STORAGE_OWNER_UNAVAILABLE =
   'formation release publication storage owner unavailable';
+const ERROR_WRITE_NOT_SETTLED =
+  'formation release publication write not settled';
 const ERROR_READBACK_MISMATCH =
   'formation release publication readback did not match intent';
 const LOG_PUBLICATION_DEFERRED =
   'Formation release handoff publication deferred';
 
 function requireStorageOwner(storageOwner) {
-  if (typeof storageOwner?.upsertPublication !== 'function') {
-    throw new Error(ERROR_STORAGE_OWNER_UNAVAILABLE);
-  }
-  if (typeof storageOwner.getPublication !== 'function') {
+  if (!storageOwner) {
     throw new Error(ERROR_STORAGE_OWNER_UNAVAILABLE);
   }
   return storageOwner;
+}
+
+// The handoff row is this authority's whole statement: admitted when the
+// authority has no row yet, else replaced as a change of the durable row
+// (a function of its stored revision). Landed means the publications owner
+// confirmed it.
+async function writeDesiredRow(storageOwner, desired) {
+  const admission = await storageOwner.admitPublication(desired.row);
+  if (admission.outcome !== PUBLICATION_WRITE_OUTCOME.ALREADY_APPLIED) {
+    return admission;
+  }
+  return storageOwner.applyPublicationChange(
+    desired.row.publication_id,
+    () => desired.row,
+  );
 }
 
 async function readBackDurableContract(storageOwner, desired) {
@@ -119,9 +137,11 @@ class FormationReleaseHandoffPublicationCoordinator {
   async persistAndAcknowledge(desired) {
     try {
       const storageOwner = requireStorageOwner(this.getStorageOwner());
-      await storageOwner.upsertPublication(desired.row, {
-        requireDurableRead: true,
-      });
+      const written = await writeDesiredRow(storageOwner, desired);
+      if (!isPublicationWriteSettled(written)) {
+        throw new Error(`${ERROR_WRITE_NOT_SETTLED}: ${written.outcome}` +
+          `/${written.reason}`);
+      }
       this.writeCount += 1;
       const durableContract = await readBackDurableContract(
         storageOwner,

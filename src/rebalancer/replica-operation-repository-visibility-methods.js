@@ -2,6 +2,10 @@ import {readPublicationRecordStatus} from '../control-plane/system-row-normalize
 import {
   readPriorityRecoveryPlanningAnswerSync,
 } from '../control-plane/priority-recovery-planning-answer-origin.js';
+import {
+  buildAnsweredIncompleteOperationListObservation,
+  isAnsweredIncompleteOperationList,
+} from './incomplete-operation-list-observation.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
@@ -31,6 +35,7 @@ function assignReplicaOperationRepositoryVisibilityMethods(
     REPLICA_OPERATION_VISIBILITY_READ_MODE,
     REPLICA_OPERATION_VISIBILITY_REASON,
     buildPriorityRecoveryCompletion,
+    getControlPlaneErrorCode,
     getControlPlaneRetryAfterMs,
     hasPriorityRecoverySpreadGap,
     isRetryableControlPlaneError,
@@ -400,20 +405,15 @@ function assignReplicaOperationRepositoryVisibilityMethods(
      * @return {Object}
      */
     buildIncompleteOperationReadUnavailableOutcome(result, options = {}) {
-      const fallbackOperationCount = Array.isArray(options.fallbackOperations) ?
-        options.fallbackOperations.length :
-        0;
       return {
         completionState: null,
         reasonCode:
           REPLICA_OPERATION_VISIBILITY_REASON.AUTHORITATIVE_READ_UNAVAILABLE,
         retryable: result ? isRetryableControlPlaneError(result) : true,
-        errorCode: result?.errorCode || result?.code || null,
+        errorCode: (result && getControlPlaneErrorCode(result)) || null,
         retryAfterMs: Number.isFinite(options.retryAfterMs) ?
           Math.max(0, Math.floor(options.retryAfterMs)) :
           null,
-        cachedOperationCount: fallbackOperationCount,
-        fallbackOperationCount,
         queryDurationMs: Number.isFinite(options.queryDurationMs) ?
           Math.floor(options.queryDurationMs) :
           null,
@@ -471,17 +471,10 @@ function assignReplicaOperationRepositoryVisibilityMethods(
         priorityRecoveryActive: true,
         retryAfterMs: options.retryAfterMs,
       });
-      const fallbackOperationCount = Array.isArray(options.fallbackOperations) ?
-        options.fallbackOperations.length :
-        Array.isArray(options.cachedOperations) ?
-          options.cachedOperations.length :
-          0;
       return {
         completionState: completion.state,
         reasonCode: completion.reasonCode,
         retryAfterMs: completion.retryAfterMs,
-        cachedOperationCount: fallbackOperationCount,
-        fallbackOperationCount,
         queryDurationMs: Number.isFinite(options.queryDurationMs) ?
           Math.floor(options.queryDurationMs) :
           null,
@@ -536,7 +529,7 @@ function assignReplicaOperationRepositoryVisibilityMethods(
         reasonCode:
         REPLICA_OPERATION_VISIBILITY_REASON.AUTHORITATIVE_READ_UNAVAILABLE,
         retryable: isRetryableControlPlaneError(result),
-        errorCode: result?.errorCode || result?.code || null,
+        errorCode: getControlPlaneErrorCode(result) || null,
         retryAfterMs: Number.isFinite(options.retryAfterMs) ?
           Math.floor(options.retryAfterMs) :
           null,
@@ -587,17 +580,13 @@ function assignReplicaOperationRepositoryVisibilityMethods(
         priorityRecoveryActive: true,
         retryAfterMs: options.retryAfterMs,
       });
-      const fallbackOperationCount = Array.isArray(options.fallbackOperations) ?
-        options.fallbackOperations.length :
-        Array.isArray(options.cachedOperations) ?
-          options.cachedOperations.length :
-          0;
       return {
         completionState: completion.state,
         reasonCode: completion.reasonCode,
         retryAfterMs: completion.retryAfterMs,
-        cachedOperationCount: fallbackOperationCount,
-        fallbackOperationCount,
+        fallbackOperationCount: Array.isArray(options.fallbackOperations) ?
+          options.fallbackOperations.length :
+          0,
         queryDurationMs: Number.isFinite(options.queryDurationMs) ?
           Math.floor(options.queryDurationMs) :
           null,
@@ -665,57 +654,48 @@ function assignReplicaOperationRepositoryVisibilityMethods(
         );
       });
     }
+    /**
+     * The timeout and orphan sweeps' candidate observation. With cache
+     * candidates and no supplement it is the cache projection (complete
+     * false: the sweep turns re-read each row by id and decide nothing on
+     * it); otherwise it is the owner's typed list observation
+     * (queryIncompleteOperations), merged over the cache candidates only
+     * when the owner answered.
+     * @param {Object} [options={}]
+     * @return {Promise<Object>}
+     */
     async getIncompleteOperationVisibilityObservation(options = {}) {
-      const visibilityReadMode =
-      resolveReplicaOperationVisibilityReadMode(options) ||
-      REPLICA_OPERATION_VISIBILITY_READ_MODE.CACHE_PREFERRED_SQL_FALLBACK;
-      const visibilitySupplementMode = resolveIncompleteOperationVisibilitySupplementMode(options);
+      const visibilityReadMode = resolveReplicaOperationVisibilityReadMode(options);
       const cachedOperations = Array.isArray(options?.cachedOperations) ?
         this.cloneIncompleteOperationObservationSet(options.cachedOperations) :
         [];
-      let visibleOperations = [];
-
+      const supplement = cachedOperations.length > 0 &&
+        resolveIncompleteOperationVisibilitySupplementMode(options) ===
+          INCOMPLETE_OPERATION_VISIBILITY_SUPPLEMENT_MODE.AUTHORITATIVE_SUPPLEMENT;
       if (
-        cachedOperations.length > 0 &&
-      visibilitySupplementMode ===
-        INCOMPLETE_OPERATION_VISIBILITY_SUPPLEMENT_MODE.AUTHORITATIVE_SUPPLEMENT &&
-      visibilityReadMode !== REPLICA_OPERATION_VISIBILITY_READ_MODE.CACHE_ONLY
+        cachedOperations.length > 0 && !supplement &&
+        visibilityReadMode !== REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED
       ) {
-        visibleOperations = this.mergeIncompleteOperationVisibilityOperations(
-          cachedOperations,
-          await this.queryIncompleteOperations({
-            visibilityReadMode: REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED,
-          }),
-        );
-      } else if (
-        cachedOperations.length > 0 &&
-      visibilityReadMode !== REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED
-      ) {
-        this.recordIncompleteOperationObservation(cachedOperations);
-        this.clearIncompleteOperationReadOutcome();
-        this.lastIncompleteOperationReadComplete = false;
-        visibleOperations = cachedOperations;
-      } else {
-        visibleOperations = await this.queryIncompleteOperations({
-          visibilityReadMode,
+        return Object.freeze({
+          state: INCOMPLETE_OPERATION_OBSERVATION_STATE.PRESENT,
+          complete: false,
+          operationCount: cachedOperations.length,
+          operations: cachedOperations,
+          deferredOutcome: null,
+          retryAfterMs: null,
         });
       }
-
-      const visibilityObservation = this.resolveIncompleteOperationObservation(visibleOperations);
-
-      return Object.freeze({
-        ...visibilityObservation,
-        operations: this.cloneIncompleteOperationObservationSet(visibleOperations),
+      const ownerObservation = await this.queryIncompleteOperations({
+        visibilityReadMode: supplement ?
+          REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED :
+          visibilityReadMode,
       });
-    }
-    resolveDeferredIncompleteOperationReadFallback(cachedOperations = []) {
-      if (Array.isArray(cachedOperations) && cachedOperations.length > 0) {
-        return this.cloneIncompleteOperationObservationSet(cachedOperations);
+      if (!supplement || !isAnsweredIncompleteOperationList(ownerObservation)) {
+        return ownerObservation;
       }
-      if (this.canReuseLastIncompleteOperationObservation()) {
-        return this.cloneIncompleteOperationObservationSet(this.lastIncompleteOperationObservation);
-      }
-      return [];
+      return buildAnsweredIncompleteOperationListObservation(
+        this.mergeIncompleteOperationVisibilityOperations(
+          cachedOperations, ownerObservation.operations));
     }
     shouldDeferIncompleteOperationEmptyRead(
       result,
@@ -749,12 +729,9 @@ function assignReplicaOperationRepositoryVisibilityMethods(
       const cachedOperations = Array.isArray(options.cachedOperations) ?
         options.cachedOperations :
         [];
-      const fallbackOperations = Array.isArray(options.fallbackOperations) ?
-        options.fallbackOperations :
-        [];
+      // Evidence for the deferral label only: the read answers nothing.
       const hasReusableOperationEvidence =
       cachedOperations.length > 0 ||
-      fallbackOperations.length > 0 ||
       this.canReuseLastIncompleteOperationObservation();
       return (
         result?.success === false &&

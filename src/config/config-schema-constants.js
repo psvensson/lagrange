@@ -25,6 +25,14 @@ const CONFIG_SCHEMA = {
       required: ['id'],
       additionalProperties: false,
     },
+    // The declared formation size has no default (formation-target-node-count.js).
+    formation: {
+      type: 'object',
+      properties: {
+        targetNodeCount: {type: 'integer', minimum: 1},
+      },
+      additionalProperties: false,
+    },
     raft: {
       type: 'object',
       properties: {

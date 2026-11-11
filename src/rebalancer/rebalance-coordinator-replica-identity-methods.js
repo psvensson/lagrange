@@ -5,8 +5,6 @@ import {
   isEngagedLedgerQuorumSpreadCureMove,
   shouldLeaseRecentCompletedLedgerSelfMove,
 } from './operation-ledger-hold-policy.js';
-import {isOperationVisibilityUnavailableError} from
-  './replica-operation-repository-operation-visibility.js';
 
 const {
   OperationType,
@@ -137,21 +135,11 @@ class RebalanceCoordinatorReplicaIdentityMethods {
     return replicaIds;
   }
 
-  // An ADDITIVE supplement to the authoritative rows (more ids are only more
-  // conservative): an unavailable projection adds nothing and decides
-  // nothing; the authoritative observation above already gated the read.
+  // An ADDITIVE supplement to the authoritative rows: more ids are only more
+  // conservative, so a projection that cannot be read is not "no ids" - its
+  // typed unavailability propagates and the identity decision waits.
   async readAdditiveEntityOperationProjection(entityType, entityId) {
-    if (typeof this.repository?.getOperationsByEntityProjection !== LOCAL_STR_FUNCTION) {
-      return [];
-    }
-    try {
-      return await this.repository.getOperationsByEntityProjection(entityType, entityId);
-    } catch (error) {
-      if (isOperationVisibilityUnavailableError(error)) {
-        return [];
-      }
-      throw error;
-    }
+    return this.repository.getOperationsByEntityProjection(entityType, entityId);
   }
 
   addAllocatedOperationReplicaIds(replicaIds, operation) {

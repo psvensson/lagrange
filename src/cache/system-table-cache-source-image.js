@@ -43,24 +43,27 @@ function installSourceImage(cache, token, image) {
   const table = cache.tables.get(tableName);
   const options = {causeId: SOURCE_IMAGE_CAUSE_ID,
     mutationMode: SYSTEM_TABLE_CACHE_MUTATION_MODE.SOURCE_IMAGE_REPLACEMENT};
+  // The swap as one change list: every changed image row, then every cached
+  // row the image lacks. An unchanged row is not re-applied (no mutation
+  // generation, no wake).
   const imageKeys = new Set();
-  let upserted = 0;
+  const changes = [];
   for (const row of rows) {
     const key = resolveSystemCacheRowKey(tableName, row);
     imageKeys.add(key);
     const current = table.get(key);
-    // An unchanged row is not re-applied: no mutation generation, no wake.
     if (current !== undefined && areAuthoritativeSystemTableCacheRowsEqual(tableName, current,
       row)) continue;
-    cache.applySystemTableChange(tableName, CACHE_CDC_OPERATIONS.UPSERT, row, options);
-    upserted += 1;
+    changes.push([CACHE_CDC_OPERATIONS.UPSERT, row]);
   }
-  let deleted = 0;
+  const upserted = changes.length;
   for (const [key, current] of [...table]) {
-    if (imageKeys.has(key)) continue;
-    cache.applySystemTableChange(tableName, CACHE_CDC_OPERATIONS.DELETE, current, options);
-    deleted += 1;
+    if (!imageKeys.has(key)) changes.push([CACHE_CDC_OPERATIONS.DELETE, current]);
   }
+  for (const [operation, row] of changes) {
+    cache.applySystemTableChange(tableName, operation, row, options);
+  }
+  const deleted = changes.length - upserted;
   const cell = cache.sourceOrder.recordListedPosition({sourcePartition, tableName, incarnation,
     appliedIndex});
   return {admission, upserted, deleted, cell};

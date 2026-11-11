@@ -7,8 +7,6 @@ import {
 import {
   assertCanonicalRebalancerEntityIdentity,
 } from './rebalancer-entity-identity.js';
-import {isOperationVisibilityUnavailableError} from
-  './replica-operation-repository-operation-visibility.js';
 
 const {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
@@ -203,23 +201,15 @@ class RebalanceCoordinatorOperationIntentMethods {
         cacheVisibleOperation :
         cachedOperation;
 
-    // null is the owner's confirmed absence; an unanswered read throws its
-    // typed unavailability, and the remembered intent keeps deduplicating
-    // (no second operation is created on an unanswered read).
-    let authoritativeOperation;
-    try {
-      authoritativeOperation =
-        await this.repository.queryAuthoritativeOperationById(cachedOperationId, {
-          authoritativeReadMode:
-            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
-        });
-    } catch (error) {
-      if (!isOperationVisibilityUnavailableError(error)) {
-        throw error;
-      }
-      this.rememberOperationIntent(dedupeKey, operationForMissReuse);
-      return operationForMissReuse;
-    }
+    // null is the owner's confirmed absence. An unanswered read throws its
+    // typed unavailability to the creating caller: the remembered intent is
+    // kept (no second operation is created) and no cached copy is reused or
+    // re-armed in its place; creation waits for the owner's answer.
+    const authoritativeOperation =
+      await this.repository.queryAuthoritativeOperationById(cachedOperationId, {
+        authoritativeReadMode:
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+      });
     if (!authoritativeOperation) {
       const authoritativeEntityVisibility =
         await this.inspectRecentOperationIntentEntityVisibility(

@@ -6,7 +6,8 @@ import {ROUTER_ERROR_MSG, TRANSPORT_ERROR_MSG, TRANSPORT_EVENT} from '../constan
 import {ROUTER_MESSAGE_TIMEOUT_ERROR_CODE} from './transport-error-codes.js';
 import {TRANSPORT_ACKNOWLEDGEMENT, advancesAcknowledgement, isAckWaitOpen}
   from './transport-acknowledgement.js';
-const DELIVERY_LIFETIME_INVALID = 'router_delivery_lifetime_invalid';
+import {ROUTER_DELIVERY_LIFETIME_INVALID_ERROR_CODE} from
+  './transport-router-invariant-error-codes.js';
 const lifetimes = new WeakMap();
 
 // The lifetime was spent. The error states the acknowledgement recorded on
@@ -25,7 +26,8 @@ function deliveryAbortReason(signal) {
 }
 
 function invalidLifetime() {
-  return Object.assign(new Error(DELIVERY_LIFETIME_INVALID), {code: DELIVERY_LIFETIME_INVALID});
+  return Object.assign(new Error(ROUTER_DELIVERY_LIFETIME_INVALID_ERROR_CODE),
+    {code: ROUTER_DELIVERY_LIFETIME_INVALID_ERROR_CODE});
 }
 
 function validateDeliveryCallbacks(options) {

@@ -83,8 +83,6 @@ import {assignReplicaHandlerRuntimeMethods} from './replica-handler-runtime-meth
 import {
   assignReplicaHandlerRemoveExecutionMethods,
 } from './replica-handler-remove-execution-methods.js';
-import {assignReplicaHandlerRemovalCancellationMethods} from
-  './replica-removal-cancellation.js';
 import {subscribeRemovalSettlement} from './replica-removal-settlement.js';
 import {
   METADATA_RESOLUTION_POLL_INTERVAL_MS,
@@ -193,8 +191,7 @@ class ReplicaHandler extends EventEmitter {
     this.localServices = new TrackedServiceRegistry();
     this.consensusEvents = Object.freeze({
       subscribe: (listener) =>
-        this.localServices.subscribeConsensusObservations?.(listener) ||
-        (() => {}),
+        this.localServices.subscribeConsensusObservations(listener),
     });
     // Backward-compatible replica metadata map used by lifecycle tests.
     this.localReplicas = new Map();
@@ -236,6 +233,14 @@ class ReplicaHandler extends EventEmitter {
     this.participantReleaseAuthorizationOwner =
       createParticipantReleaseAuthorizationOwner(this);
     this.participantReleaseRecovery = createParticipantReleaseRecovery(this);
+    // The removal owners' state: running removals by operation (their
+    // release and pending cancellation), replicas a REMOVING re-drive
+    // carries, replicas whose last settlement read concluded nothing, and
+    // the shutdown release of every consensus-exit wait.
+    this.removalExecutions = new Map();
+    this.removingRedrives = new Set();
+    this.removalSettlementRereads = new Set();
+    this.removalConsensusExitRelease = new AbortController();
     // A removal state no running removal carries is re-driven or settled.
     subscribeRemovalSettlement(this);
   }
@@ -253,7 +258,6 @@ assignReplicaHandlerMembershipMethods(ReplicaHandler);
 assignReplicaHandlerCommittedMembershipMethods(ReplicaHandler);
 assignReplicaHandlerVoterReadinessMethods(ReplicaHandler);
 assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler);
-assignReplicaHandlerRemovalCancellationMethods(ReplicaHandler);
 assignReplicaHandlerGroupRetiredTombstoneMethods(ReplicaHandler);
 assignReplicaHandlerRuntimeMethods(ReplicaHandler, {
   AddressManager,

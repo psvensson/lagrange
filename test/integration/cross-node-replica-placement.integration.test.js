@@ -225,7 +225,6 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
 
         // Register seed node in the cache
         systemTableCache.applySystemTableChange('nodes', 'INSERT', {
-          id: seedNodeId,
           node_id: seedNodeId,
           status: 'active',
           cpu_usage_percent: 20,
@@ -344,7 +343,6 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
 
         // Register partition services in cache
         systemTableCache.applySystemTableChange('services', 'INSERT', {
-          id: `${partitionId}-r1`,
           service_id: `${partitionId}-r1`,
           service_type: 'partition',
           node_id: seedNodeId,
@@ -352,7 +350,6 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
           status: 'active',
         });
         systemTableCache.applySystemTableChange('services', 'INSERT', {
-          id: `${partitionId}-r2`,
           service_id: `${partitionId}-r2`,
           service_type: 'partition',
           node_id: seedNodeId,
@@ -360,7 +357,6 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
           status: 'active',
         });
         systemTableCache.applySystemTableChange('services', 'INSERT', {
-          id: `${partitionId}-r3`,
           service_id: `${partitionId}-r3`,
           service_type: 'partition',
           node_id: seedNodeId,
@@ -373,7 +369,6 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
         // ========================================
 
         systemTableCache.applySystemTableChange('nodes', 'INSERT', {
-          id: secondNodeId,
           node_id: secondNodeId,
           status: 'active',
           cpu_usage_percent: 15,
@@ -556,7 +551,6 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
       const cache = new SystemTableCache();
       const readyLeaseExpiresAt = Date.now() + 10000;
       cache.applySystemTableChange('nodes', 'INSERT', {
-        id: nodeId,
         node_id: nodeId,
         status: 'active',
         cpu_usage_percent: 20,
@@ -566,7 +560,6 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
       });
 
       cache.applySystemTableChange('services', 'INSERT', {
-        id: 'partition-1-r1',
         service_id: 'partition-1-r1',
         service_type: 'partition',
         node_id: nodeId,
@@ -574,7 +567,6 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
         status: 'active',
       });
       cache.applySystemTableChange('services', 'INSERT', {
-        id: 'partition-1-r2',
         service_id: 'partition-1-r2',
         service_type: 'partition',
         node_id: nodeId,
@@ -582,7 +574,6 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
         status: 'active',
       });
       cache.applySystemTableChange('services', 'INSERT', {
-        id: 'partition-1-r3',
         service_id: 'partition-1-r3',
         service_type: 'partition',
         node_id: nodeId,
@@ -621,7 +612,6 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
       t.equal(events.length, 0, 'should have no events with single node');
 
       cache.applySystemTableChange('nodes', 'INSERT', {
-        id: 'second-node',
         node_id: 'second-node',
         status: 'active',
         cpu_usage_percent: 15,

@@ -809,19 +809,24 @@ test('a durably terminal intent collision is a typed permanent failure',
 
 // The CDC consumers of a router failure read the router's codes from the
 // transport owner. (They read two members of QUERY_ERROR_CODE that do not
-// exist, so a real router code never matched.) A failure with no code is
-// never a router timeout or a closed connection by code.
+// exist, so a real router code never matched.) Every transport code is
+// decided by the one table (CONTROL_PLANE_ERROR_CODE_DECISION): it is never
+// an owner handoff (the routed write loop re-sends it under its one key), and
+// no transport code by itself widens the owner read's SQL fallback (D2,
+// 2026-11-11). A failure with no code is neither.
 test('CDC classifies a router failure by the transport owner\'s code, and ' +
   'a failure with no code by none', async (t) => {
   const failure = (extra) => ({success: false, error: 'owner read failed',
     failedTable: 'nodes', ...extra});
   const SQL_FALLBACK_READ = {readAuthority: {authoritativeReadMode:
     CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED_SQL_FALLBACK}};
-  for (const code of [ROUTER_CONNECTION_CLOSED_ERROR_CODE,
-    ROUTER_MESSAGE_TIMEOUT_ERROR_CODE]) {
+  for (const code of Object.values(TRANSPORT_ERROR_CODES)) {
     t.equal(shouldRetryOwnerRpcReadViaSqlFallback(
-      failure({errorCode: code}), SQL_FALLBACK_READ), true,
-    `${code}: the owner read is retried through the SQL read`);
+      failure({errorCode: code}), SQL_FALLBACK_READ), false,
+    `${code}: the code alone does not answer the owner read from SQL`);
+    t.equal(CDC_SHARED.isSystemTableOwnerHandoffFailure(
+      failure({errorCode: code})), false,
+    `${code}: a transport failure is never an owner handoff`);
   }
   for (const noCode of [{}, {errorCode: null}, {errorCode: ''},
     {errorCode: 'UNDEFINED'}]) {
@@ -831,7 +836,8 @@ test('CDC classifies a router failure by the transport owner\'s code, and ' +
     t.equal(CDC_SHARED.isSystemTableOwnerHandoffFailure(failure(noCode)),
       false, `${JSON.stringify(noCode)}: no owner handoff by code`);
   }
-  t.equal(CDC_SHARED.isSystemTableOwnerHandoffFailure(
-    failure({errorCode: ROUTER_CONNECTION_CLOSED_ERROR_CODE})), true,
-  'a closed router connection to a system table owner is an owner handoff');
+  t.equal(CDC_SHARED.isSystemTableOwnerHandoffFailure(failure({
+    failureCode: partitionWriteKernel.PARTITION_WRITE_LEADERSHIP_REFUSAL
+      .NOT_LEADER})), true,
+  'the partition\'s own reroutable answer is the owner handoff');
 });

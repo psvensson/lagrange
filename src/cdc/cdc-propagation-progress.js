@@ -131,7 +131,6 @@ const RECIPIENT_DOMAIN_TABLES = Object.freeze(new Set([TABLES.SERVICES, TABLES.M
   TABLES.LATENCY_GROUPS, TABLES.NODES]));
 
 function watchRecipientDomain(cache, onChanged) {
-  if (typeof cache?.onCacheChange !== 'function') return () => {};
   const listener = (tableName) => {
     if (RECIPIENT_DOMAIN_TABLES.has(tableName)) onChanged();
   };

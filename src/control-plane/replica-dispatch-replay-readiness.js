@@ -563,11 +563,12 @@ class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
     }
 
     try {
-      const operations = await repository.queryIncompleteOperations({
+      // A DEFERRED observation carries no list: nothing is replayed on it.
+      const {operations} = await repository.queryIncompleteOperations({
         visibilityReadMode:
           REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED,
       });
-      if (!Array.isArray(operations) || operations.length === 0) {
+      if (operations.length === 0) {
         return [];
       }
 

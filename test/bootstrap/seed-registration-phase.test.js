@@ -272,6 +272,9 @@ test('SeedRegistrationPhase waits only for cache-hydration leader partitions bef
     phase.persistCurrentEpochIfMissing = async () => {
       events.push('persistCurrentEpochIfMissing');
     };
+    phase.persistFormationTargetIfMissing = async () => {
+      events.push('persistFormationTargetIfMissing');
+    };
     phase.persistClusterIdIfMissing = async () => {
       events.push('persistClusterIdIfMissing');
     };
@@ -296,6 +299,7 @@ test('SeedRegistrationPhase waits only for cache-hydration leader partitions bef
       'updatePartitionSizes',
       'seedDynamicConfiguration',
       'persistCurrentEpochIfMissing',
+      'persistFormationTargetIfMissing',
       'persistClusterIdIfMissing',
     ], 'bootstrap-direct writer should be enabled before registration steps run');
   });

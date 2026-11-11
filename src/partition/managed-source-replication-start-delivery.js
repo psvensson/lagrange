@@ -1,27 +1,22 @@
-import {
-  ROUTER_CONNECTION_CLOSED_ERROR_CODE,
-  ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
-} from '../transport/transport-error-codes.js';
 import {deliveryTransportOf, deliveryAnswerOf,
-  classifyThrownDeliveryError,
   isDeliveredTransportDeliveryOutcome,
-  isDeliveryTimeoutTransportOutcome,
 } from '../transport/transport-semantic-outcome.js';
+import {
+  TRANSPORT_DELIVERY_FAILURE,
+  classifyTransportDeliveryFailure,
+  mayResendAfterTransportFailure,
+} from '../transport/transport-delivery-failure.js';
 
 const SOURCE_START_OUTCOME = Object.freeze({ANSWER_UNKNOWN: 'source_start_answer_unknown'});
 const SOURCE_START_DELIVERY_FAILED = 'Source replication START delivery failed';
 
-function deliveryAnswerMayBeLost(error) {
-  const outcome = error?.deliveryOutcome ||
-    classifyThrownDeliveryError(error);
-  return isDeliveryTimeoutTransportOutcome(outcome) ||
-    (outcome.errorCode === ROUTER_CONNECTION_CLOSED_ERROR_CODE &&
-      outcome.recoverableBeforeSend !== true) ||
-    (outcome.errorCode === ROUTER_MESSAGE_TIMEOUT_ERROR_CODE);
-}
-
+// START's one re-send fact: a re-send is not the same authorization (its
+// answer is resolved by the workflow's confirmation read), so an ambiguous
+// failure is START_ANSWER_UNKNOWN, never a blind re-send.
 function markDeliveryAnswerLossCandidate(error) {
-  if (error && (sourceReplicationStartAnswerMayBeLost(error) || deliveryAnswerMayBeLost(error))) {
+  if (error && (sourceReplicationStartAnswerMayBeLost(error) ||
+      classifyTransportDeliveryFailure(error.deliveryOutcome ?? error) ===
+        TRANSPORT_DELIVERY_FAILURE.AMBIGUOUS)) {
     error.sourceStartOutcome = SOURCE_START_OUTCOME.ANSWER_UNKNOWN;
     error.retryable = true;
   }
@@ -48,8 +43,12 @@ function requireProcessedSourceReplicationStart(delivery, fallbackMessage) {
   // A refusal is the handler's answer when delivered, else the transport's.
   const refusal = delivered ? answer : transport;
   const error = new Error(refusal.error || fallbackMessage);
-  error.retryable = transport.noHandler === true ||
-    refusal.deferRetry === true || refusal.retryable === true;
+  // Undelivered: the transport's decision (nothing executed is re-sent);
+  // delivered: the source handler's own answer.
+  error.retryable = delivered ?
+    refusal.deferRetry === true || refusal.retryable === true :
+    mayResendAfterTransportFailure(classifyTransportDeliveryFailure(transport),
+      {identityKeyed: false});
   error.deliveryOutcome = transport;
   error.deferRetry = refusal.deferRetry === true;
   error.retryAfterMs = refusal.retryAfterMs;

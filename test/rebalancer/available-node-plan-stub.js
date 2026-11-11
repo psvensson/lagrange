@@ -24,6 +24,8 @@ function stubAvailableNodes(rebalancer, readNodes) {
         reason: null,
       }))),
       readinessDecisionDimension: null,
+      planningPublicationGeneration:
+        rebalancer.readPlanningPublicationGeneration(),
     });
   };
 }

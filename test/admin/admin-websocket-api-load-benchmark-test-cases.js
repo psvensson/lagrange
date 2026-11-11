@@ -164,7 +164,7 @@ export function registerAdminWebSocketApiLoadBenchmarkTests({
     });
 
     cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
-      id: 'service-benchmark-events-node-1',
+      service_id: 'service-benchmark-events-node-1',
       service_type: 'partition',
       partition_id: 'partition-benchmark-events-1',
       node_id: 'node-1',
@@ -178,7 +178,7 @@ export function registerAdminWebSocketApiLoadBenchmarkTests({
     seedRoutedTableDiscoveryRows(cache);
 
     cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
-      id: 'service-benchmark-events-node-2',
+      service_id: 'service-benchmark-events-node-2',
       service_type: 'partition',
       partition_id: 'partition-benchmark-events-1',
       node_id: 'node-2',
@@ -192,7 +192,7 @@ export function registerAdminWebSocketApiLoadBenchmarkTests({
     seedRoutedTableDiscoveryRows(cache);
 
     cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
-      id: 'service-benchmark-events-node-2',
+      service_id: 'service-benchmark-events-node-2',
       service_type: 'partition',
       partition_id: 'partition-benchmark-events-1',
       node_id: 'node-2',
@@ -555,7 +555,7 @@ export function registerAdminWebSocketApiLoadBenchmarkTests({
         updated_at: 1000,
       });
       cache.applySystemTableChange(TABLES.TABLES, 'INSERT', {
-        id: 'tbl-ratings',
+        table_id: 'tbl-ratings',
         table_name: 'ratings',
         schema_json: JSON.stringify({
           tableName: 'ratings',

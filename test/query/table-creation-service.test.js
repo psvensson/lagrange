@@ -8,6 +8,7 @@ import {
   OWNER_CONTRACT_NEXT_ACTION,
   OWNER_CONTRACT_STATE,
 } from '../../src/control-plane/owner-contract-outcome.js';
+import {createTableThroughDurableJob} from './table-creation-durable-job-fixture.js';
 
 const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
@@ -36,6 +37,25 @@ function createCreateTableAst() {
     ],
     primaryKey: ['id'],
     ifNotExists: false,
+  };
+}
+
+// The durable job meets the committed table its own intent wrote: same id,
+// same schema (an existing row with another identity is an intent conflict).
+const USERS_JOB = Object.freeze({
+  jobId: 'schema-job-users',
+  tableId: 'tbl-users',
+  partitionId: 'tbl-users-p1',
+});
+
+function committedUsersTableRow(extra = {}) {
+  const ast = createCreateTableAst();
+  return {
+    table_id: USERS_JOB.tableId,
+    table_name: 'users',
+    schema_definition: JSON.stringify(
+      new TableCreationService({}).buildSchemaDefinition(ast.columns, ast)),
+    ...extra,
   };
 }
 
@@ -78,6 +98,9 @@ test('TableCreationService - triggers split/merge evaluation after CREATE TABLE'
         },
       },
       cdcIntegrationService: {
+        async executeAuthoritativeSystemTableRead() {
+          return {success: true, rows: []};
+        },
         async insertSystemTableRow() {
           return {success: true};
         },
@@ -89,7 +112,7 @@ test('TableCreationService - triggers split/merge evaluation after CREATE TABLE'
       },
     });
 
-    const result = await service.executeCreateTableProvisioning(createCreateTableAst());
+    const result = await createTableThroughDurableJob(service, createCreateTableAst());
 
     t.equal(result.success, true);
     t.equal(evaluationCalls, 1);
@@ -104,6 +127,9 @@ test('TableCreationService - continues when split/merge evaluation fails',
         },
       },
       cdcIntegrationService: {
+        async executeAuthoritativeSystemTableRead() {
+          return {success: true, rows: []};
+        },
         async insertSystemTableRow() {
           return {success: true};
         },
@@ -115,7 +141,7 @@ test('TableCreationService - continues when split/merge evaluation fails',
       },
     });
 
-    const result = await service.executeCreateTableProvisioning(createCreateTableAst());
+    const result = await createTableThroughDurableJob(service, createCreateTableAst());
     t.equal(result.success, true);
     t.equal(result.operation, 'CREATE_TABLE');
   });
@@ -366,6 +392,9 @@ test('TableCreationService - writes partition metadata with logical table_name',
         },
       },
       cdcIntegrationService: {
+        async executeAuthoritativeSystemTableRead() {
+          return {success: true, rows: []};
+        },
         async insertSystemTableRow(tableName, row) {
           writes.push({tableName, row});
           return {success: true};
@@ -373,7 +402,7 @@ test('TableCreationService - writes partition metadata with logical table_name',
       },
     });
 
-    const result = await service.executeCreateTableProvisioning(createCreateTableAst());
+    const result = await createTableThroughDurableJob(service, createCreateTableAst());
     t.equal(result.success, true);
 
     const partitionWrite = writes.find((entry) => entry.tableName === 'partitions');
@@ -400,24 +429,24 @@ test('TableCreationService - writes partition metadata with logical table_name',
 test('TableCreationService - re-provisions initial partition on ' +
   'CREATE TABLE IF NOT EXISTS retries', async (t) => {
   const provisionCalls = [];
+  // The metadata authority holds the committed table and partition rows.
+  const committedRows = {
+    tables: [committedUsersTableRow()],
+    partitions: [{
+      partition_id: 'tbl-users-p1',
+      table_id: 'tbl-users',
+      table_name: 'users',
+      replica_count: 3,
+    }],
+  };
   const service = new TableCreationService({
-    systemCache: {
-      find(tableName, predicate) {
-        if (tableName === 'tables') {
-          return [{
-            table_id: 'tbl-users',
-            table_name: 'users',
-          }].find(predicate) || null;
-        }
-        if (tableName === 'partitions') {
-          return [{
-            partition_id: 'tbl-users-p1',
-            table_id: 'tbl-users',
-            table_name: 'users',
-            replica_count: 3,
-          }].find(predicate) || null;
-        }
-        return null;
+    systemCache: {find: () => null},
+    controlPlaneSystemTableGateway: {
+      async readRows(tableName) {
+        return {success: true, rows: committedRows[tableName] ?? []};
+      },
+      async submitMutation() {
+        throw new Error('the existing table is not written again');
       },
     },
     partitionProvisioner: async (context) => {
@@ -425,10 +454,10 @@ test('TableCreationService - re-provisions initial partition on ' +
     },
   });
 
-  const result = await service.executeCreateTableProvisioning({
+  const result = await createTableThroughDurableJob(service, {
     ...createCreateTableAst(),
     ifNotExists: true,
-  });
+  }, USERS_JOB);
 
   t.equal(result.success, true);
   t.equal(result.skipped, true);
@@ -437,43 +466,6 @@ test('TableCreationService - re-provisions initial partition on ' +
   t.equal(provisionCalls[0]?.tableId, 'tbl-users');
   t.equal(provisionCalls[0]?.partitionId, 'tbl-users-p1');
   t.equal(provisionCalls[0]?.replicaCount, 3);
-});
-
-test('TableCreationService - forwards timeout budget to fresh initial ' +
-  'partition provisioning', async (t) => {
-  const provisionCalls = [];
-  const timeoutBudget = {deadlineMs: 4321};
-  const service = new TableCreationService({
-    systemCache: {
-      find() {
-        return null;
-      },
-    },
-    cdcIntegrationService: {},
-    controlPlaneSystemTableGateway: {
-      async submitMutation() {
-        return {success: true};
-      },
-    },
-    partitionProvisioner: async (context) => {
-      provisionCalls.push(context);
-      return {
-        requestedReplicaCount: 3,
-        resolvedReplicaCount: 3,
-        minimumRoutableReplicaCount: 2,
-        routableReplicaCount: 2,
-      };
-    },
-  });
-
-  const result = await service.executeCreateTableProvisioning(
-    createCreateTableAst(),
-    {timeoutBudget},
-  );
-
-  t.equal(result.success, true);
-  t.equal(provisionCalls.length, 1);
-  t.equal(provisionCalls[0]?.timeoutBudget, timeoutBudget);
 });
 
 test('TableCreationService - uses authoritative metadata reads to avoid ' +
@@ -492,10 +484,7 @@ test('TableCreationService - uses authoritative metadata reads to avoid ' +
         if (tableName === 'tables') {
           return {
             success: true,
-            rows: [{
-              table_id: 'tbl-users',
-              table_name: 'users',
-            }],
+            rows: [committedUsersTableRow()],
           };
         }
         if (tableName === 'partitions') {
@@ -520,10 +509,10 @@ test('TableCreationService - uses authoritative metadata reads to avoid ' +
     },
   });
 
-  const result = await service.executeCreateTableProvisioning({
+  const result = await createTableThroughDurableJob(service, {
     ...createCreateTableAst(),
     ifNotExists: true,
-  });
+  }, USERS_JOB);
 
   t.equal(result.success, true);
   t.equal(result.skipped, true);
@@ -533,82 +522,6 @@ test('TableCreationService - uses authoritative metadata reads to avoid ' +
     'authoritative retries should still reconcile initial partition provisioning');
   t.equal(provisionCalls[0]?.tableId, 'tbl-users');
   t.equal(provisionCalls[0]?.partitionId, 'tbl-users-p1');
-});
-
-test('TableCreationService - forwards timeout budget through CREATE TABLE IF ' +
-  'NOT EXISTS reconciliation provisioning', async (t) => {
-  const provisionCalls = [];
-  const timeoutBudget = {deadlineMs: 9876};
-  const service = new TableCreationService({
-    systemCache: {
-      find(tableName, predicate) {
-        if (tableName === 'tables') {
-          return [{
-            table_id: 'tbl-users',
-            table_name: 'users',
-          }].find(predicate) || null;
-        }
-        if (tableName === 'partitions') {
-          return [{
-            partition_id: 'tbl-users-p1',
-            table_id: 'tbl-users',
-            table_name: 'users',
-            replica_count: 3,
-          }].find(predicate) || null;
-        }
-        return null;
-      },
-    },
-    partitionProvisioner: async (context) => {
-      provisionCalls.push(context);
-    },
-  });
-
-  const result = await service.executeCreateTableProvisioning({
-    ...createCreateTableAst(),
-    ifNotExists: true,
-  }, {
-    timeoutBudget,
-  });
-
-  t.equal(result.success, true);
-  t.equal(result.skipped, true);
-  t.equal(provisionCalls.length, 1);
-  t.equal(provisionCalls[0]?.timeoutBudget, timeoutBudget);
-});
-
-test('TableCreationService - rejects duplicate CREATE TABLE when ' +
-  'authoritative metadata already exists', async (t) => {
-  const service = new TableCreationService({
-    systemCache: {
-      find() {
-        return null;
-      },
-    },
-    controlPlaneSystemTableGateway: {
-      async readRows(tableName) {
-        if (tableName === 'tables') {
-          return {
-            success: true,
-            rows: [{
-              table_id: 'tbl-users',
-              table_name: 'users',
-            }],
-          };
-        }
-        return {success: true, rows: []};
-      },
-      async submitMutation() {
-        throw new Error('submitMutation should not be called when table exists');
-      },
-    },
-  });
-
-  await t.rejects(
-    service.executeCreateTableProvisioning(createCreateTableAst()),
-    /already exists/i,
-    'authoritative duplicate detection should preserve CREATE TABLE semantics',
-  );
 });
 
 test('TableCreationService - provisions initial partition when callback is configured',
@@ -621,6 +534,9 @@ test('TableCreationService - provisions initial partition when callback is confi
         },
       },
       cdcIntegrationService: {
+        async executeAuthoritativeSystemTableRead() {
+          return {success: true, rows: []};
+        },
         async insertSystemTableRow() {
           return {success: true};
         },
@@ -630,7 +546,7 @@ test('TableCreationService - provisions initial partition when callback is confi
       },
     });
 
-    const result = await service.executeCreateTableProvisioning(createCreateTableAst());
+    const result = await createTableThroughDurableJob(service, createCreateTableAst());
     t.equal(result.success, true);
     t.ok(provisionContext, 'partition provisioner should receive context');
     t.equal(provisionContext?.tableName, 'users', 'provisioner gets table name');
@@ -661,6 +577,9 @@ test('TableCreationService - provisions CREATE TABLE partitions with a ' +
       },
     },
     cdcIntegrationService: {
+      async executeAuthoritativeSystemTableRead() {
+        return {success: true, rows: []};
+      },
       async insertSystemTableRow() {
         return {success: true};
       },
@@ -673,7 +592,7 @@ test('TableCreationService - provisions CREATE TABLE partitions with a ' +
     },
   });
 
-  const result = await service.executeCreateTableProvisioning(createCreateTableAst());
+  const result = await createTableThroughDurableJob(service, createCreateTableAst());
 
   t.equal(result.success, true);
   t.equal(
@@ -692,6 +611,9 @@ test('TableCreationService - surfaces initial partition provisioning failures',
         },
       },
       cdcIntegrationService: {
+        async executeAuthoritativeSystemTableRead() {
+          return {success: true, rows: []};
+        },
         async insertSystemTableRow() {
           return {success: true};
         },
@@ -702,7 +624,7 @@ test('TableCreationService - surfaces initial partition provisioning failures',
     });
 
     await t.rejects(
-      service.executeCreateTableProvisioning(createCreateTableAst()),
+      createTableThroughDurableJob(service, createCreateTableAst()),
       /provision failed/,
       'create table should fail when partition provisioning fails',
     );
@@ -712,27 +634,18 @@ test('TableCreationService - CREATE TABLE IF NOT EXISTS restores missing ' +
   'initial partition metadata before continuing provisioning', async (t) => {
   const submittedMutations = [];
   const provisionCalls = [];
-  const existingTable = {
-    table_id: 'tbl-users',
-    table_name: 'users',
-    active_partition_version: 1,
-  };
+  const existingTable = committedUsersTableRow({active_partition_version: 1});
   const service = new TableCreationService({
-    systemCache: {
-      find(tableName, predicate) {
-        if (tableName === 'tables') {
-          return predicate(existingTable) ? existingTable : null;
-        }
-        return null;
-      },
-    },
+    systemCache: {find: () => null},
     controlPlaneSystemTableGateway: {
       async submitMutation(mutation) {
         submittedMutations.push(mutation);
         return {success: true};
       },
-      async readRows() {
-        return {rows: []};
+      // The authority holds the table row and explicitly no partition row.
+      async readRows(tableName) {
+        return {success: true,
+          rows: tableName === 'tables' ? [existingTable] : []};
       },
     },
     partitionProvisioner: async (context) => {
@@ -740,10 +653,10 @@ test('TableCreationService - CREATE TABLE IF NOT EXISTS restores missing ' +
     },
   });
 
-  const result = await service.executeCreateTableProvisioning({
+  const result = await createTableThroughDurableJob(service, {
     ...createCreateTableAst(),
     ifNotExists: true,
-  });
+  }, USERS_JOB);
 
   t.equal(result.success, true);
   t.equal(result.skipped, true);
@@ -785,6 +698,9 @@ function commitAnsweringTableCreation(provisioning, answerExtra = {}) {
     },
     cdcIntegrationService: {},
     controlPlaneSystemTableGateway: {
+      async readRows() {
+        return {success: true, rows: []};
+      },
       async submitMutation(mutation, options) {
         submittedMutations.push({mutation, options});
         return {
@@ -810,8 +726,7 @@ async (t) => {
   const {service, submittedMutations, counts} =
     commitAnsweringTableCreation(undefined);
 
-  const result = await service.executeCreateTableProvisioning(
-    createCreateTableAst());
+  const result = await createTableThroughDurableJob(service, createCreateTableAst());
 
   t.equal(submittedMutations.length, 2);
   for (const {options} of submittedMutations) {
@@ -840,8 +755,7 @@ test('TableCreationService - CREATE TABLE with a converged cohort answers ' +
     routableReplicaCount: 3,
   });
 
-  const result = await service.executeCreateTableProvisioning(
-    createCreateTableAst());
+  const result = await createTableThroughDurableJob(service, createCreateTableAst());
 
   t.equal(result.success, true);
   t.equal(result.completionState, TABLE_CREATION_TEST_COMPLETION_STATE.ACTIVE);
@@ -873,8 +787,7 @@ test('TableCreationService - CREATE TABLE ignores a legacy visibility field ' +
       routableReplicaCount: 3,
     }, {visibilityState: legacy});
 
-    const result = await service.executeCreateTableProvisioning(
-      createCreateTableAst());
+    const result = await createTableThroughDurableJob(service, createCreateTableAst());
 
     t.equal(result.completionState,
       TABLE_CREATION_TEST_COMPLETION_STATE.ACTIVE,
@@ -892,6 +805,9 @@ test('TableCreationService - CREATE TABLE stays pending when only the minimum ro
         },
       },
       cdcIntegrationService: {
+        async executeAuthoritativeSystemTableRead() {
+          return {success: true, rows: []};
+        },
         async insertSystemTableRow() {
           return {success: true};
         },
@@ -906,7 +822,7 @@ test('TableCreationService - CREATE TABLE stays pending when only the minimum ro
       },
     });
 
-    const result = await service.executeCreateTableProvisioning(createCreateTableAst());
+    const result = await createTableThroughDurableJob(service, createCreateTableAst());
 
     t.equal(
       result.completionState,
@@ -949,6 +865,9 @@ test('TableCreationService - CREATE TABLE without provisioning detail stays pend
         },
       },
       cdcIntegrationService: {
+        async executeAuthoritativeSystemTableRead() {
+          return {success: true, rows: []};
+        },
         async insertSystemTableRow() {
           return {success: true};
         },
@@ -956,7 +875,7 @@ test('TableCreationService - CREATE TABLE without provisioning detail stays pend
       partitionProvisioner: async () => {},
     });
 
-    const result = await service.executeCreateTableProvisioning(createCreateTableAst());
+    const result = await createTableThroughDurableJob(service, createCreateTableAst());
 
     t.equal(
       result.completionState,

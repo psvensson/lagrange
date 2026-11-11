@@ -54,6 +54,7 @@ import {ServiceLocalOciLayoutBuilder} from
 const SEAM_ENV_KEY = Object.freeze({
   ADMIN_WS_PORT: 'ADMIN_WS_PORT',
   DATA_DIR: 'DATA_DIR',
+  FORMATION_TARGET_NODE_COUNT: 'LAGRANGE_FORMATION_TARGET_NODE_COUNT',
   NODE_ID: 'NODE_ID',
   PGWIRE_AUTH_DATABASE: 'PGWIRE_AUTH_DATABASE',
   PGWIRE_AUTH_PASSWORD: 'PGWIRE_AUTH_PASSWORD',
@@ -138,6 +139,8 @@ async function startSeamRuntime(options) {
   const assignments = {
     [SEAM_ENV_KEY.ADMIN_WS_PORT]: String(options.restPort + ADMIN_PORT_OFFSET),
     [SEAM_ENV_KEY.DATA_DIR]: options.dataDir,
+    // One embedded runtime is a single-node formation, declared explicitly.
+    [SEAM_ENV_KEY.FORMATION_TARGET_NODE_COUNT]: '1',
     [SEAM_ENV_KEY.NODE_ID]: options.nodeId,
     [SEAM_ENV_KEY.PGWIRE_AUTH_DATABASE]: options.credentials.database,
     [SEAM_ENV_KEY.PGWIRE_AUTH_PASSWORD]: options.credentials.password,

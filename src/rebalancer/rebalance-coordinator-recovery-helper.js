@@ -1,10 +1,3 @@
-import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
-import {filterConcurrentAddBudgetOperations} from './rebalance-coordinator-priority-budget-helper.js';
-
-const {
-  OperationType,
-} = REBALANCE_COORDINATOR_SHARED;
-
 function checkTimeouts(coordinator) {
   if (!coordinator.workflowOwner) {
     return;
@@ -109,20 +102,14 @@ async function getAuthoritativeOperationsByEntity(coordinator, entityType, entit
   return coordinator.requireEntityOperationRows(observation, entityType, entityId);
 }
 
+/**
+ * This node's in-flight operations as the owner answers them: the typed
+ * list observation (no list when DEFERRED).
+ * @param {Object} coordinator
+ * @return {Promise<Object>}
+ */
 async function getInFlightOperations(coordinator) {
   return coordinator.queryIncompleteOperations();
-}
-
-function getConcurrentAddCount(coordinator, options = {}) {
-  return coordinator.queryIncompleteOperations(options).then((inFlight) =>
-    filterConcurrentAddBudgetOperations(coordinator, inFlight, options),
-  ).then((operations) => operations.length);
-}
-
-function getConcurrentRemoveCount(coordinator, options = {}) {
-  return coordinator.queryIncompleteOperations(options).then((inFlight) =>
-    inFlight.filter((operation) => operation?.type === OperationType.REMOVE).length,
-  );
 }
 
 export {
@@ -142,6 +129,4 @@ export {
   getAllOperations,
   getAuthoritativeOperationsByEntity,
   getInFlightOperations,
-  getConcurrentAddCount,
-  getConcurrentRemoveCount,
 };

@@ -24,6 +24,7 @@ import {
   BOOTSTRAP_REQUEST_CLIENT_ATTEMPT_DEADLINE_DECISION,
   normalizeBootstrapRequestClientAttemptDeadlineSnapshot,
 } from './bootstrap-request-owner-deadline.js';
+import {gateJoinClusterIdentity} from '../join-cluster-identity.js';
 
 const LOCAL_STR_MOVE_REPLICA_HANDOFF_STABILIZING = 'move_replica_handoff_stabilizing';
 const BOOTSTRAP_REQUEST_DEFER_STAGE = Object.freeze({
@@ -215,15 +216,14 @@ const bootstrapRequestOwnerHandlerMethods = {
       startupMode: requestStartupMode,
     });
 
+    const joinIdentity = await gateJoinClusterIdentity(this, reply, requestBody);
+    if (joinIdentity.refusal !== null) return joinIdentity.refusal;
     const conflictError = await this.checkForConflicts(
       nodeId,
       nodeAddress,
       {
         startupMode: requestStartupMode,
         membershipOwnerOutcome,
-        expectedClusterId: typeof requestBody.expectedClusterId === 'string' ?
-          requestBody.expectedClusterId :
-          null,
       },
     );
     if (conflictError) {
@@ -551,7 +551,7 @@ const bootstrapRequestOwnerHandlerMethods = {
       const response = {
         success: true,
         seedNodeId: this.getSeedNodeId(),
-        clusterId: this.getClusterId?.() || null,
+        clusterId: joinIdentity.clusterId,
         seedNodeAddress: this.getSeedNodeAddress(),
         seedNodeWsAddress,
         messageGroupAssignment: assignment,

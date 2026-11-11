@@ -47,6 +47,8 @@ import {
 } from './membership-publication-coordinator-candidate-fixtures.js';
 
 import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
+import {publicationsOwnerOverRows} from
+  './publication-owner-test-support.js';
 test('deriveMembershipPublicationCandidate keeps the latest in-flight publication membership as a convergence floor',
   async (t) => {
     const candidate = deriveMembershipPublicationCandidate({
@@ -659,14 +661,14 @@ test(MEMBERSHIP_PUBLICATION_RECONCILE_TEST_NAME, async (t) => {
   const coordinator = new MembershipPublicationCoordinator({
     nodeId: MEMBERSHIP_PUBLICATION_TRIM_NODE_ONE_ID,
     resolveIsControlPlanePublicationsWriteLeader: () => true,
-    controlPlanePublicationsOwner: {
+    controlPlanePublicationsOwner: publicationsOwnerOverRows({
       async listPublications() {
         return {rows: [latestPublicationRow]};
       },
-      async upsertPublication(row) {
+      async storeRow(row) {
         persistedRows.push(row);
       },
-    },
+    }),
     controlPlaneReadinessService: {
       async getAllNodeReadiness() {
         const readinessEntries =

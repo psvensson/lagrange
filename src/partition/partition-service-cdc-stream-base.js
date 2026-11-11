@@ -597,14 +597,6 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
     return this.cdcDelivery.subscribeToCDCWithHandshake(subscriber, options);
   }
   /**
-   * Subscribe to CDC events from this partition.
-   * Delegates to partition-cdc-delivery.js.
-   * @param {Function} subscriber - Subscriber callback.
-   */
-  subscribeToCDC(subscriber) {
-    this.cdcDelivery.subscribeToCDC(subscriber);
-  }
-  /**
    * Unsubscribe from CDC events.
    * Delegates to partition-cdc-delivery.js.
    * @param {Function} subscriber - Subscriber to remove.

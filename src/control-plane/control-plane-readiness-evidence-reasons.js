@@ -5,6 +5,8 @@ import {
   CONTROL_PLANE_READINESS_COLLABORATOR_UNWIRED as UNWIRED,
 } from './control-plane-readiness-constants.js';
 import {trackSyncSection} from '../diagnostics/event-loop-gap-watchdog.js';
+import {priorityRecoveryTransportRetryAfterMs} from
+  './priority-recovery-transport-retry-hint.js';
 import {NODE_LIVENESS_SEMANTIC_STATE} from
   './node-liveness-semantic-projection-owner.js';
 
@@ -78,18 +80,13 @@ function hasActivePriorityRecoveryTransportGrace(state, liveness) {
 
 /**
  * An unavailable priority-recovery health answer carries the diagnostics
- * reason code and, when the failure was a closed transport, a retry hint.
+ * reason code and, when the failure was a transport failure, a retry hint.
  * @param {Object} result - The startup-authority unavailable health.
  * @param {*} error - The failure that made diagnostics unavailable.
  * @return {Object}
  */
 function withPriorityRecoveryTransportRetryHint(result, error) {
-  const isWebSocketClosed = error && (
-    String(error).includes('WebSocket') ||
-    String(error).includes('closed') ||
-    String(error).includes('transport')
-  );
-  const retryAfterMs = isWebSocketClosed ? 15000 : undefined;
+  const retryAfterMs = priorityRecoveryTransportRetryAfterMs(error);
   return Object.freeze({
     ...result,
     reasonCode: PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE,

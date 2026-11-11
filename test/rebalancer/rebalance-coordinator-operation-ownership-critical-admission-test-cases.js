@@ -1,5 +1,7 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
+import {buildDeferredIncompleteOperationListObservation} from
+  '../../src/rebalancer/incomplete-operation-list-observation.js';
 export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionTests({
   test,
   assert,
@@ -429,13 +431,12 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
       priorityCount: 0,
       ordinaryPriorityCount: 0,
       nonPriorityCount: 0,
-    });
-    coordinator.getIncompleteOperationObservation = () =>
-      (coordinator.repository.buildEntityOperationVisibilityObservation([], {
+      observation: buildDeferredIncompleteOperationListObservation({
         completionState: 'operation_visibility_deferred',
         reasonCode: 'operation_visibility_deferred',
         retryAfterMs: 125,
-      }));
+      }),
+    });
 
     const identityReads = [];
     for (const method of ['getEntityAllocatedOperationReplicaIds',

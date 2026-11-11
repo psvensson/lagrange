@@ -41,7 +41,7 @@ import {
 import {GROUP_RETIREMENT_REASON} from
   '../partition/group-retirement-evidence.js';
 import {REMOVAL_AUTHORITY_KIND} from './replica-state-machine-recovery.js';
-import {REMOVAL_SERVING_STATE} from
+import {REMOVAL_SERVING_NOT_HOSTED, REMOVAL_SERVING_STATE} from
   '../partition/partition-service-removal-serving-methods.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
@@ -213,7 +213,7 @@ async function performReplicaRemoval(handler, request, service, lifecycle,
   // (node shutdown, a failed initialization), the removal does not cross
   // its point of no return: shutdown ends it, otherwise it defers before any
   // durable row, the replica keeping its status.
-  if (serving?.state === REMOVAL_SERVING_STATE.CLOSED &&
+  if (serving.state === REMOVAL_SERVING_STATE.CLOSED &&
       execution.retiringRowDurable !== true) {
     handler.throwIfShuttingDown();
     handler.deferReplicaRemovalWithoutDurableRow({operationId, replicaId,
@@ -453,7 +453,7 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
      */
     fenceReplicaServingAdmissionForRemoval(replicaId, replica = null) {
       const service = replica?.service || this.getTrackedService(replicaId);
-      service?.fenceServingAdmissionForRemoval?.();
+      if (service) service.fenceServingAdmissionForRemoval();
       return service || null;
     }
 
@@ -461,12 +461,12 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
      * Let transactions admitted before the removal fence finish under their
      * existing owner before deleting the routable service row or runtime.
      * @param {Object|null} service
-     * @return {Promise<Object|undefined>} The partition's named serving
-     *   state (REMOVAL_SERVING_STATE), or undefined without a service.
+     * @return {Promise<Object>} A named REMOVAL_SERVING_STATE answer.
      * @private
      */
     async waitForReplicaServingDrain(service) {
-      return service?.waitForRemovalServingDrain?.();
+      return service ? service.waitForRemovalServingDrain() :
+        REMOVAL_SERVING_NOT_HOSTED;
     }
 
     /**
@@ -763,7 +763,7 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
         );
         throw error;
       } finally {
-        await endRemovalExecution(this, execution.removal);
+        endRemovalExecution(this, execution.removal);
       }
     }
   }

@@ -18,8 +18,6 @@ import {SeedRegistrationRuntimeOwner} from
   '../../src/bootstrap/owners/seed-registration-runtime-owner.js';
 import {buildNodeStateUpdateDeliveryError} from
   '../../src/bootstrap/shared/node-state-publication-outcome.js';
-import {CDCEmitter} from '../../src/cdc/cdc-emitter.js';
-import {CDC_EMITTER_OPERATION} from '../../src/cdc/cdc-emitter-constants.js';
 import {DEBUG_BREAKPOINT_FIELD} from
   '../../src/debug-runtime/debug-metadata-constants.js';
 import {normalizeBreakpointRow} from
@@ -111,19 +109,6 @@ test('a missing partition leader and a missing state machine are named errors',
       {message: BOOTSTRAP_ERROR.STATE_MACHINE_MISSING},
     );
   });
-
-test('INSERT OR REPLACE is a write the CDC emitter recognises', async (t) => {
-  const extract = CDCEmitter.prototype.extractOperationFromSQL;
-
-  t.equal(
-    extract('  insert or replace into nodes (node_id) values (?)'),
-    CDC_EMITTER_OPERATION.INSERT,
-  );
-  t.equal(extract('INSERT INTO nodes (node_id) VALUES (?)'),
-    CDC_EMITTER_OPERATION.INSERT);
-  t.equal(extract('SELECT * FROM nodes'), null);
-  t.equal(extract('undefined'), null, 'no prefix is the text "undefined"');
-});
 
 test('a stored breakpoint row carries its tenant column', async (t) => {
   const row = {

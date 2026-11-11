@@ -14,11 +14,9 @@ import {LIVE_QUERY_SUBSYSTEM} from './live-query-constants.js';
 const PARTITION_ID_FIELD = 'partition_id';
 const TABLE_NAME_FIELD = 'table_name';
 const CHANGE_DATA_FIELD = 'data';
-const CHANGE_OLD_DATA_FIELD = 'old_data';
-const CHANGE_NEW_FIELD = 'new';
-const CHANGE_OLD_FIELD = 'old';
 const CHANGE_OPERATION_FIELD = 'operation';
 const CHANGE_HLC_FIELD = 'hlc_timestamp';
+const PARTITION_PROVIDER_UNAVAILABLE = 'LIVE_QUERY_PARTITION_PROVIDER_UNAVAILABLE';
 const LOG_MSG_PARTITION_HANDLER_FAILED =
   'Live query partition topology update failed';
 const LOG_MSG_SUBSCRIPTION_HANDLER_FAILED =
@@ -65,51 +63,43 @@ function resolvePartitionTableName(systemTableCache, partitionId) {
   return partition[TABLE_NAME_FIELD] || null;
 }
 
+// The one change shape a query group reads, whoever produced it: the
+// operation, `data` (the row the change is about: the row an INSERT or
+// UPDATE leaves, the row a DELETE removed) and hlc_timestamp. An UPDATE (a
+// cache UPSERT is one: it merges into a held row or inserts a missing key)
+// names no previous row, because no producer has one: the cache notifies the
+// row it holds after the change, a partition's CDC envelope the row written.
+// The query group answers "was it in the result, and as which row" from its
+// own result set (LiveQueryGroup._evaluateUpdate).
+const CHANGE_OPERATION_OF = Object.freeze({
+  [CDC_OPERATION.INSERT]: CDC_OPERATION.INSERT,
+  [CDC_OPERATION.UPDATE]: CDC_OPERATION.UPDATE,
+  [CDC_OPERATION.UPSERT]: CDC_OPERATION.UPDATE,
+  [CDC_OPERATION.DELETE]: CDC_OPERATION.DELETE,
+});
+
 /**
- * Convert cache change payload into live query change shape.
+ * Convert one cache change notification into the live query change shape.
  * @param {string} operation
- * @param {Object|null} record
- * @return {Object|null}
+ * @param {Object|null} record - The row the cache names for the change.
+ * @return {Object|null} Null for no row or an operation that is no change.
  */
 function buildLiveQueryChange(operation, record) {
-  const normalizedOperation = String(operation || '').toUpperCase();
-  if (!record) {
+  const changeOperation = CHANGE_OPERATION_OF[String(operation || '').toUpperCase()];
+  if (!record || changeOperation === undefined) {
     return null;
   }
-
-  if (normalizedOperation === CDC_OPERATION.DELETE) {
-    return {
-      [CHANGE_OPERATION_FIELD]: normalizedOperation,
-      [CHANGE_DATA_FIELD]: null,
-      [CHANGE_OLD_DATA_FIELD]: record,
-      [CHANGE_HLC_FIELD]: record[CHANGE_HLC_FIELD] || null,
-    };
-  }
-
-  if (normalizedOperation === CDC_OPERATION.INSERT) {
-    return {
-      [CHANGE_OPERATION_FIELD]: normalizedOperation,
-      [CHANGE_DATA_FIELD]: record,
-      [CHANGE_OLD_DATA_FIELD]: null,
-      [CHANGE_HLC_FIELD]: record[CHANGE_HLC_FIELD] || null,
-    };
-  }
-
-  if (normalizedOperation === CDC_OPERATION.UPDATE ||
-      normalizedOperation === CDC_OPERATION.UPSERT) {
-    return {
-      [CHANGE_OPERATION_FIELD]: normalizedOperation,
-      [CHANGE_DATA_FIELD]: record,
-      [CHANGE_OLD_DATA_FIELD]: record,
-      [CHANGE_HLC_FIELD]: record[CHANGE_HLC_FIELD] || null,
-    };
-  }
-
-  return null;
+  return {
+    [CHANGE_OPERATION_FIELD]: changeOperation,
+    [CHANGE_DATA_FIELD]: record,
+    [CHANGE_HLC_FIELD]: record[CHANGE_HLC_FIELD] || null,
+  };
 }
 
 /**
- * Convert cache partition-row change into topology-change shape.
+ * Convert cache partition-row change into topology-change shape. The cache
+ * names one partition row per change, whatever the operation; it travels as
+ * `data`.
  * @param {string} operation
  * @param {Object|null} record
  * @return {Object|null}
@@ -120,19 +110,13 @@ function buildPartitionTopologyChange(operation, record) {
     return null;
   }
 
-  if (normalizedOperation === CDC_OPERATION.DELETE) {
-    return {
-      [CHANGE_OPERATION_FIELD]: normalizedOperation,
-      [CHANGE_OLD_FIELD]: record,
-    };
-  }
-
-  if (normalizedOperation === CDC_OPERATION.INSERT ||
+  if (normalizedOperation === CDC_OPERATION.DELETE ||
+      normalizedOperation === CDC_OPERATION.INSERT ||
       normalizedOperation === CDC_OPERATION.UPDATE ||
       normalizedOperation === CDC_OPERATION.UPSERT) {
     return {
       [CHANGE_OPERATION_FIELD]: normalizedOperation,
-      [CHANGE_NEW_FIELD]: record,
+      [CHANGE_DATA_FIELD]: record,
     };
   }
 
@@ -306,66 +290,56 @@ function createLiveQueryCacheSubscriptionAdapter(options = {}) {
   };
 }
 
-function resolveEventHlc(rawEvent) {
-  return rawEvent.hlc_timestamp ?? rawEvent.hlcTimestamp ?? rawEvent.timestamp ?? null;
-}
-
-function resolveEventRowData(rawEvent, isDelete) {
-  const oldData = rawEvent.old_data ?? rawEvent.oldData ?? (isDelete ? rawEvent.data : null);
-  const data = isDelete ? null : (rawEvent.data ?? null);
-  return {data, oldData};
-}
-
 /**
- * Normalize a raw partition CDC event into canonical LiveQuery change shape.
+ * Normalize one hosted partition's CDC envelope (tableName, operation,
+ * timestamp, sourcePartition, data, optional sequenceNumber) into the one
+ * change shape a query group reads (its `data` is the change's row). An
+ * operation that is no row change keeps its name: it still advances the
+ * partition frontier and evaluates to no event.
  * @param {Object} rawEvent
- * @param {string} partitionId
+ * @param {string} partitionId - The partition this subscription is on.
  * @return {Object|null}
  */
 function normalizePartitionCDCEvent(rawEvent, partitionId) {
   if (!rawEvent) {
     return null;
   }
-  const operation = String(rawEvent.operation || '').toUpperCase();
-  const eventPartitionId = rawEvent.partitionId || rawEvent.sourcePartition || partitionId;
-  const isDelete = operation === CDC_OPERATION.DELETE;
-  const {data, oldData} = resolveEventRowData(rawEvent, isDelete);
-
+  const rawOperation = String(rawEvent.operation || '').toUpperCase();
+  const operation = CHANGE_OPERATION_OF[rawOperation] ?? rawOperation;
   return {
     ...rawEvent,
     operation,
-    partitionId: eventPartitionId,
-    data,
-    old_data: oldData,
-    oldData,
-    hlc_timestamp: resolveEventHlc(rawEvent),
+    partitionId,
+    [CHANGE_HLC_FIELD]: rawEvent.timestamp,
     sequenceNumber: rawEvent.sequenceNumber ?? null,
   };
 }
 
-// The provider is the node's hosted partition replicas, keyed by replica id:
-// the partition is the hosted replica whose partitionId it is.
-function getFromProvider(provider, partitionId) {
-  if (typeof provider !== 'function') return null;
-  const container = provider();
-  if (!container || typeof container.values !== 'function') return null;
-  return [...container.values()].find((service) => service?.partitionId === partitionId) || null;
+function partitionProviderUnavailable(partitionId) {
+  const error = new Error(
+    `Live query partition provider unavailable for partition ${partitionId}`);
+  error.code = PARTITION_PROVIDER_UNAVAILABLE;
+  return error;
 }
 
 /**
- * Resolve partition from supplied options.
- * @param {Object} options
+ * The one provider of a partition at startup: the node's hosted partition
+ * replicas (keyed by replica id, so matched by partitionId). A provider
+ * that answers nothing is a typed refusal, never read as "not hosted here".
+ * @param {Function|undefined} provider
  * @param {string} partitionId
- * @return {Object|null}
+ * @return {Object|null} The hosted replica, or null when this node hosts none.
  */
-function resolvePartition(options, partitionId) {
-  if (!options || !partitionId) return null;
-  const service = options.partitionService;
-  const direct = service?.getPartition?.(partitionId) || options.partitions?.get?.(partitionId);
-  if (direct) return direct;
-  return getFromProvider(options.partitionServicesProvider, partitionId) ||
-    getFromProvider(options.sqlQueryEngine?.partitionServicesProvider, partitionId) ||
-    null;
+function resolveHostedPartition(provider, partitionId) {
+  // An absent provider and one answering no replica map are one outcome.
+  const hosted = provider?.();
+  if (!(hosted instanceof Map)) {
+    throw partitionProviderUnavailable(partitionId);
+  }
+  for (const service of hosted.values()) {
+    if (service.partitionId === partitionId) return service;
+  }
+  return null;
 }
 
 // A partition whose table records CDC obligations delivers durable vectors
@@ -373,22 +347,8 @@ function resolvePartition(options, partitionId) {
 // with a committed receipt, and one that cannot holds the partition's whole
 // delivery lane. A live query is an observer, so it never registers on such a
 // partition; its changes reach it through the system-table cache subscription.
-async function trySubscribeViaPartition(partition, queryId, handler, subOptions) {
-  if (!partition || isTableCdcObligationRecorded(partition.tableName)) {
-    return {handled: false};
-  }
-  if (typeof partition.subscribeToCDCWithHandshake === 'function') {
-    const result = await partition.subscribeToCDCWithHandshake(handler, {
-      subscriberId: queryId,
-      ...subOptions,
-    });
-    return {handled: true, result};
-  }
-  if (typeof partition.subscribeToCDC === 'function') {
-    const result = partition.subscribeToCDC(handler);
-    return {handled: true, result};
-  }
-  return {handled: false};
+function observesThroughPartition(partition) {
+  return partition !== null && !isTableCdcObligationRecorded(partition.tableName);
 }
 
 /**
@@ -413,49 +373,37 @@ function createLiveQueryStartupWiring(options = {}) {
     },
   });
 
-  /** @type {Map<string, Function>} */
+  /** @type {Map<string, {partition: Object, handler: Function}>} */
   const partitionSubscribers = new Map();
 
   const subscribeToPartition = async (partitionId, queryId, handler, subOptions = {}) => {
     if (typeof options.subscribeToPartition === 'function') {
       return await options.subscribeToPartition(partitionId, queryId, handler, subOptions);
     }
-    if (typeof options.partitionService?.subscribeToPartition === 'function') {
-      return await options.partitionService.subscribeToPartition(
-        partitionId, queryId, handler, subOptions,
-      );
+    const partition = resolveHostedPartition(options.partitionServicesProvider, partitionId);
+    if (!observesThroughPartition(partition)) {
+      return cacheSubscriptionAdapter.subscribeToPartition(partitionId, queryId, handler);
     }
-    const subKey = `${queryId}:${partitionId}`;
-    const wrappedHandler = (rawEvent) => {
-      const normalized = normalizePartitionCDCEvent(rawEvent, partitionId);
-      return handler(normalized);
-    };
-    partitionSubscribers.set(subKey, wrappedHandler);
-
-    const partition = resolvePartition(options, partitionId);
-    const subResult = await trySubscribeViaPartition(
-      partition, queryId, wrappedHandler, subOptions,
-    );
-    if (subResult.handled) {
-      return subResult.result;
-    }
-    return cacheSubscriptionAdapter.subscribeToPartition(partitionId, queryId, handler);
+    const wrappedHandler = (rawEvent) =>
+      handler(normalizePartitionCDCEvent(rawEvent, partitionId));
+    partitionSubscribers.set(`${queryId}:${partitionId}`,
+      {partition, handler: wrappedHandler});
+    return await partition.subscribeToCDCWithHandshake(wrappedHandler, {
+      subscriberId: queryId,
+      ...subOptions,
+    });
   };
 
   const unsubscribeFromPartition = async (partitionId, queryId) => {
     if (typeof options.unsubscribeFromPartition === 'function') {
       return await options.unsubscribeFromPartition(partitionId, queryId);
     }
-    if (typeof options.partitionService?.unsubscribeFromPartition === 'function') {
-      return await options.partitionService.unsubscribeFromPartition(partitionId, queryId);
-    }
     const subKey = `${queryId}:${partitionId}`;
-    const wrappedHandler = partitionSubscribers.get(subKey);
+    const registration = partitionSubscribers.get(subKey);
     partitionSubscribers.delete(subKey);
-
-    const partition = resolvePartition(options, partitionId);
-    if (partition && typeof partition.unsubscribeFromCDC === 'function') {
-      partition.unsubscribeFromCDC(wrappedHandler || queryId);
+    // No registration: this subscription observed through the cache.
+    if (registration !== undefined) {
+      registration.partition.unsubscribeFromCDC(registration.handler);
     }
     return cacheSubscriptionAdapter.unsubscribeFromPartition(partitionId, queryId);
   };
@@ -463,8 +411,6 @@ function createLiveQueryStartupWiring(options = {}) {
   liveQueryManager.initialize({
     systemCache: options.systemTableCache || null,
     sqlQueryEngine: options.sqlQueryEngine || null,
-    partitionService: options.partitionService || null,
-    partitionServicesProvider: options.partitionServicesProvider || null,
     subscribeToPartition,
     unsubscribeFromPartition,
   });

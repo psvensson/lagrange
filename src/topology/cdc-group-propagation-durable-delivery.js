@@ -67,7 +67,7 @@ async function deliverTarget(owner, wave, events, leaf) {
   if (
     !owner.messageRouter ||
     typeof owner.messageRouter.deliver !== 'function' ||
-    typeof leaf.route?.address !== 'string' ||
+    leaf.route === null || typeof leaf.route.address !== 'string' ||
     leaf.route.address.length === 0
   ) {
     reportCdcTargetSkipped(owner, events[0], leaf.route,
@@ -92,17 +92,17 @@ async function deliverTarget(owner, wave, events, leaf) {
 }
 
 // The recipient a delivery addresses: the source group (it applies locally)
-// or one target group, routed as the plan the topology owner observed now
-// routes it. A group the plan no longer names stays required: it is
-// delivered through the route the source lane last observed for it, and
-// without one it stays unconfirmed.
-function resolveRecipient(source, plan, {recipientGroupId, recipientRoute}) {
+// or one target group, through the one route the invocation answered when the
+// plan was bound: the source lane's observation of that group (the plan's
+// route for a group it names, the last observed one for a required group it
+// no longer names; cdc-propagation-progress.js). No observed route, or one
+// without an address, is not routable: the typed unknown, and the lane holds
+// the recipient until its recipient domain changes or its backoff ends.
+function resolveRecipient(source, recipientGroupId, observedRoute) {
   if (recipientGroupId === null || recipientGroupId === source.groupId) {
     return {isSource: true, groupId: source.groupId, route: null};
   }
-  const route = plan.targets.find((target) => target.groupId === recipientGroupId) ??
-    recipientRoute ?? {groupId: recipientGroupId, address: null, coordinatorNodeId: null};
-  return {isSource: false, groupId: recipientGroupId, route};
+  return {isSource: false, groupId: recipientGroupId, route: observedRoute};
 }
 
 // A recipient's delivery that threw inside its current invocation: the typed
@@ -249,8 +249,8 @@ async function deliverCdcVectorToRecipient(owner, options) {
       reportDurableWaveRefused(owner, head, refusal);
       return refusal;
     }
-    parent.bindTopology(owner, source, plan.targets);
-    const recipient = resolveRecipient(source, plan, parent);
+    const observedRoute = parent.bindTopology(owner, source, plan.targets);
+    const recipient = resolveRecipient(source, parent.recipientGroupId, observedRoute);
     trace.recipientGroupId = recipient.groupId;
     owner.setPublicationMode(publicationModeOf(plan), plan.fallbackReason);
     const prepared = prepareRecipientDelivery(owner, wave, events, plan, recipient);

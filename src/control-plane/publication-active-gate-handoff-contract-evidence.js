@@ -1,18 +1,8 @@
 import {
-  CONTROL_PLANE_READINESS_REASON,
-} from './control-plane-readiness-constants.js';
-import {collectReasonCodes} from './eligibility-snapshot.js';
-import {
   PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST,
   PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD,
   PUBLICATION_ACTIVE_GATE_HANDOFF_LIFECYCLE_NODE_FIELDS,
   PUBLICATION_ACTIVE_GATE_HANDOFF_NODE_DEBT_STATE,
-  PUBLICATION_ACTIVE_GATE_HANDOFF_PENDING_OWNER_REASON_CODES,
-  PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_BLOCKER_COUNT_FIELDS,
-  PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_BLOCKER_LIST_FIELDS,
-  PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_CLEAN_COUNT_GROUPS,
-  PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_STATE,
-  PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_SUMMARY_BLOCKER_FIELDS,
   PUBLICATION_ACTIVE_GATE_HANDOFF_PUBLICATION_NODE_FIELDS,
   PUBLICATION_ACTIVE_GATE_HANDOFF_PUBLICATION_OBSERVATION_STATE,
   PUBLICATION_ACTIVE_GATE_HANDOFF_RECONCILE_REQUIREMENT,
@@ -23,7 +13,6 @@ import {
 import {
   isPublicationActiveGateHandoffRecord,
   normalizePublicationActiveGateHandoffDebtCount,
-  normalizePublicationActiveGateHandoffInteger,
   normalizePublicationActiveGateHandoffNodeIdList,
   normalizePublicationActiveGateHandoffText,
 } from './publication-active-gate-handoff-contract-helpers.js';
@@ -421,153 +410,6 @@ function resolvePublicationActiveGateHandoffMissingPublishedNodeIds({
   ]);
 }
 
-// A readiness entry states its reason codes in the two shapes its producers
-// write: the readiness owner's `reasons` records, read through that owner's
-// own reading, and the `reasonCodes` list the control snapshot's observation
-// overlay adds (admin-control-snapshot-local-build-base.js).
-function normalizePublicationActiveGateHandoffReasonCodes(readinessEntry) {
-  if (!isPublicationActiveGateHandoffRecord(readinessEntry)) {
-    return PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST;
-  }
-  const overlayReasonCodes =
-    readinessEntry[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.REASON_CODES];
-  return normalizePublicationActiveGateHandoffNodeIdList([
-    ...(Array.isArray(overlayReasonCodes) ?
-      overlayReasonCodes :
-      PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST),
-    ...collectReasonCodes(readinessEntry),
-  ]);
-}
-
-function normalizePublicationActiveGateHandoffPriorityRecoveryEvidenceRecord(
-  evidenceRecord,
-) {
-  const blockerCounts =
-    [
-      ...PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_BLOCKER_COUNT_FIELDS,
-      ...PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_SUMMARY_BLOCKER_FIELDS,
-    ]
-      .map((fieldName) =>
-        normalizePublicationActiveGateHandoffInteger(
-          evidenceRecord?.[fieldName],
-        ))
-      .filter((value) => value !== null);
-  const cleanCountGroups =
-    PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_CLEAN_COUNT_GROUPS.map(
-      (fieldNames) =>
-        fieldNames
-          .map((fieldName) =>
-            normalizePublicationActiveGateHandoffInteger(
-              evidenceRecord?.[fieldName],
-            ))
-          .filter((value) => value !== null),
-    );
-  const blockerListLengths =
-    PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_BLOCKER_LIST_FIELDS
-      .map((fieldName) =>
-        normalizePublicationActiveGateHandoffNodeIdList(
-          evidenceRecord?.[fieldName],
-        ).length);
-  const hasUnresolvedEvidence = [
-    ...blockerCounts,
-    ...blockerListLengths,
-  ].some((value) => value > 0);
-  if (hasUnresolvedEvidence) {
-    return PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_STATE.UNRESOLVED;
-  }
-  const hasExplicitCleanEvidence =
-    cleanCountGroups.some((cleanCounts, index) =>
-      cleanCounts.length ===
-        PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_CLEAN_COUNT_GROUPS[
-          index
-        ].length &&
-      cleanCounts.every((value) => value === 0),
-    );
-  return hasExplicitCleanEvidence ?
-    PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_STATE.CLEAN :
-    PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_STATE.UNKNOWN;
-}
-
-function resolvePublicationActiveGateHandoffPriorityRecoveryState(
-  publicationConvergence = null,
-) {
-  const evidenceStates =
-    collectPublicationActiveGateHandoffPriorityRecoveryEvidenceRecords(
-      publicationConvergence,
-    ).map((evidenceRecord) =>
-      normalizePublicationActiveGateHandoffPriorityRecoveryEvidenceRecord(
-        evidenceRecord,
-      ));
-  if (
-    evidenceStates.includes(
-      PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_STATE.UNRESOLVED,
-    )
-  ) {
-    return PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_STATE.UNRESOLVED;
-  }
-  return evidenceStates.includes(
-    PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_STATE.CLEAN,
-  ) ?
-    PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_STATE.CLEAN :
-    PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_STATE.UNKNOWN;
-}
-
-function hasPublicationActiveGateHandoffPendingOwnerReasonCode(
-  reasonCode,
-  priorityRecoveryState,
-) {
-  if (
-    reasonCode ===
-      CONTROL_PLANE_READINESS_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING &&
-    priorityRecoveryState ===
-      PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_STATE.CLEAN
-  ) {
-    return false;
-  }
-  return PUBLICATION_ACTIVE_GATE_HANDOFF_PENDING_OWNER_REASON_CODES.includes(
-    reasonCode,
-  );
-}
-
-function resolvePublicationActiveGateHandoffPendingRecoveryNodeIds(
-  expectedNodeIds,
-  readinessByNodeId,
-  publicationConvergence = null,
-) {
-  if (!isPublicationActiveGateHandoffRecord(readinessByNodeId)) {
-    return PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST;
-  }
-  const priorityRecoveryState =
-    resolvePublicationActiveGateHandoffPriorityRecoveryState(
-      publicationConvergence,
-    );
-  return normalizePublicationActiveGateHandoffNodeIdList(
-    expectedNodeIds.filter((nodeId) => {
-      const reasonCodes = normalizePublicationActiveGateHandoffReasonCodes(
-        readinessByNodeId[nodeId],
-      );
-      return reasonCodes.some((reasonCode) =>
-        hasPublicationActiveGateHandoffPendingOwnerReasonCode(
-          reasonCode,
-          priorityRecoveryState,
-        ),
-      );
-    }),
-  );
-}
-
-function resolvePublicationActiveGateHandoffPendingReconcileNodeIds({
-  missingPublishedNodeIds,
-  pendingRecoveryNodeIds,
-}) {
-  const pendingRecoveryNodeIdSet = new Set(pendingRecoveryNodeIds);
-  return normalizePublicationActiveGateHandoffNodeIdList(
-    missingPublishedNodeIds.filter(
-      (nodeId) => !pendingRecoveryNodeIdSet.has(nodeId),
-    ),
-  );
-}
-
 export {
   normalizePublicationActiveGateHandoffPublicationSnapshot,
   resolvePublicationActiveGateHandoffReconcileRequirement,
@@ -583,10 +425,4 @@ export {
   resolvePublicationActiveGateHandoffExplicitMissingNodeIds,
   resolvePublicationActiveGateHandoffMissingPublishedNodeIds,
   resolvePublicationActiveGateHandoffPendingCandidateNodeIds,
-  normalizePublicationActiveGateHandoffReasonCodes,
-  normalizePublicationActiveGateHandoffPriorityRecoveryEvidenceRecord,
-  resolvePublicationActiveGateHandoffPriorityRecoveryState,
-  hasPublicationActiveGateHandoffPendingOwnerReasonCode,
-  resolvePublicationActiveGateHandoffPendingRecoveryNodeIds,
-  resolvePublicationActiveGateHandoffPendingReconcileNodeIds,
 };

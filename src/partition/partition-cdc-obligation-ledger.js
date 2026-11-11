@@ -28,7 +28,8 @@ import {RETAINED_STORE_ERROR, retainedStoreError, retainedStoreTableExistsIn, re
   isStoredInteger, isStoredNullableInteger} from './partition-retained-store-observation.js';
 
 const ONE_ROW = 1;
-const FIRST_POSITION = Object.freeze({logIndex: 0, ordinal: -1});
+const ONE_ORDINAL = 1;
+const FIRST_POSITION = Object.freeze({logIndex: 0, ordinal: -ONE_ORDINAL});
 const INCARNATION_SEPARATOR = ':';
 const DELIVERED_FLAG = Object.freeze({OWED: 0, DELIVERED: 1});
 const JSON_ARRAY_BRACKETS = 2;
@@ -308,11 +309,10 @@ function readCdcLedgerNewest(db) {
 }
 
 /**
- * The position of the source event immediately before `position` in the
- * ledger's order: the retained row below it, else the end of the reclaimed
- * prefix, else the position before the first event. A range names it as its
- * predecessor (CDC Stage 3): a recipient that has applied it has missed
- * nothing before the range.
+ * The predecessor a range starting at `position` names (CDC Stage 3; no source
+ * event lies between the two): the retained row below it, else the end of the
+ * reclaimed prefix, else the ledger's start; for a reclaimed `position` (the
+ * probe) the position immediately before it, never `position` itself.
  * @param {Object} db - The partition's connection.
  * @param {{logIndex: number, ordinal: number}} position - A range's first row.
  * @return {{logIndex: number, ordinal: number}} The predecessor position.
@@ -322,7 +322,9 @@ function readCdcPredecessorPosition(db, position) {
     db.prepare(SQL.SELECT_PREDECESSOR).get(position) : undefined;
   if (row !== undefined) return positionOf(row);
   const progress = readCdcObligationProgress(db);
-  return progress === null ? {...FIRST_POSITION} :
+  if (progress === null) return {...FIRST_POSITION};
+  return isCdcPositionReclaimed(position, progress) ?
+    {logIndex: position.logIndex, ordinal: position.ordinal - ONE_ORDINAL} :
     {logIndex: progress.throughLogIndex, ordinal: progress.throughOrdinal};
 }
 

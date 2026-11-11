@@ -90,6 +90,10 @@ const REPLICA_HANDLER_LOG_MSG = Object.freeze({
   REMOVED_OUTSIDE_REMOVAL:
     'Replica applied its own removal with no removal running; it stops ' +
     'serving and is marked FAILED for the repair path',
+  REMOVAL_SETTLEMENT_PENDING:
+    'Removal settlement concluded nothing; re-asked on the replica\'s next ' +
+    'consensus observation',
+  REMOVAL_SETTLEMENT_FAILED: 'Removal settlement failed',
   REMOVE_CANCELLED:
     'Replica removal cancelled: its row serves again and it stays a voter',
   OPENED_INTO_RETIRED_GROUP:

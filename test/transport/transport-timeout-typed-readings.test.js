@@ -11,7 +11,6 @@ import {
   TRANSPORT_ACKNOWLEDGEMENT as ACK,
   TRANSPORT_DELIVERY_OUTCOME_REASON_CODE as REASON,
   buildDeliveryEnvelope,
-  classifyThrownDeliveryError,
   deliveryReadingOf,
   forwardedDeliveryAnswer,
   isDeliveryTimeoutReading,
@@ -60,18 +59,22 @@ test('the owner reads a spent delivery from the outcome or a forwarded answer on
 
 test('query write routing: leader unavailability is typed, never the timeout text',
   async (t) => {
-    const isLeaderUnavailable = (message, code, reading) =>
+    // The transport's delivery-failure decision plus the write's one fact:
+    // an ambiguous (timed-out) delivery is re-routed only under its entryId.
+    const isLeaderUnavailable = (message, failure, identityKeyed) =>
       QueryExecutorWriteRetryRouting.prototype.isLeaderUnavailable.call(
-        null, message, code, reading);
-    t.equal(Boolean(isLeaderUnavailable(TIMEOUT_TEXT, null, {success: false,
-      error: TIMEOUT_TEXT})), false, 'an answer that only says "Message timeout"');
+        null, message, failure, identityKeyed);
+    t.equal(Boolean(isLeaderUnavailable(TIMEOUT_TEXT, {success: false,
+      error: TIMEOUT_TEXT}, true)), false, 'an answer that only says "Message timeout"');
     const spent = deliveryReadingOf(spentDelivery(ACK.ACKNOWLEDGED));
-    t.equal(isLeaderUnavailable('', spent.errorCode, spent), true,
+    t.equal(isLeaderUnavailable('', spent, true), true,
       'an answer timeout re-routes under the same entryId');
-    t.equal(isLeaderUnavailable('', null,
-      forwardedDeliveryAnswer(spentDelivery(ACK.UNACKNOWLEDGED))), true,
+    t.equal(isLeaderUnavailable('', spent, false), false,
+      'an answer timeout without an entry identity is never re-routed');
+    t.equal(isLeaderUnavailable('',
+      forwardedDeliveryAnswer(spentDelivery(ACK.UNACKNOWLEDGED)), true), true,
     'a follower\'s forwarded ACK timeout re-routes');
-    t.equal(isLeaderUnavailable('', null, classifyThrownDeliveryError(timeoutError())), true,
+    t.equal(isLeaderUnavailable('', timeoutError(), true), true,
       'a thrown router timeout re-routes');
   });
 

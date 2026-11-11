@@ -220,6 +220,11 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
    * @private
    */
   resolveAvailableNodePlan(constrainedNodeIds = null) {
+    // Observed before the reads: a publication that lands after them is
+    // newer than this generation, which a wait armed on this answer
+    // compares against (rebalancer-local-mutation-readiness-wake.js).
+    const planningPublicationGeneration =
+      this.readPlanningPublicationGeneration();
     const effectiveNodeIds =
       this.resolveEffectiveAvailableNodeScope(constrainedNodeIds);
     const readinessDecisionDimension =
@@ -244,7 +249,28 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
       availableNodes,
       candidates: Object.freeze(candidates),
       readinessDecisionDimension,
+      planningPublicationGeneration,
     });
+  }
+
+  /**
+   * The one readiness read variant this entity's placement decisions use:
+   * the planning owner keys a completed answer by these options, so two
+   * readers of one decision with different options read two answers that
+   * can disagree in one synchronous step.
+   * @param {string} [readinessDecisionDimension]
+   * @return {Object}
+   */
+  buildPlanningReadinessReadOptions(
+    readinessDecisionDimension = this.resolveNodeReadinessDecisionDimension(),
+  ) {
+    const readinessOptions = {
+      decisionDimension: readinessDecisionDimension,
+    };
+    if (this.isFormationLivenessDependencyPartition()) {
+      readinessOptions.allowStaleOnCacheChange = false;
+    }
+    return readinessOptions;
   }
 
   resolveEffectiveAvailableNodeScope(constrainedNodeIds) {
@@ -284,15 +310,9 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
         AVAILABLE_NODE_PLANNING_STATE.OUT_OF_SCOPE,
         AVAILABLE_NODE_EXCLUSION_REASON.OUTSIDE_PLACEMENT_SCOPE);
     }
-    const readinessOptions = {
-      decisionDimension: readinessDecisionDimension,
-    };
-    if (this.isFormationLivenessDependencyPartition()) {
-      readinessOptions.allowStaleOnCacheChange = false;
-    }
     const readiness = this.resolveNodeReadinessSyncSnapshot(
       nodeId,
-      readinessOptions,
+      this.buildPlanningReadinessReadOptions(readinessDecisionDimension),
     );
     const exclusionReason =
       this.isStartupAuthorityControlPlanePlacementEligibleNode(

@@ -76,6 +76,9 @@ const CDC_GROUP_PROPAGATION_LOG_MSG = Object.freeze({
 const CDC_GROUP_PROPAGATION_ERROR_MSG = Object.freeze({
   MISSING_NODE_ID: 'CDCGroupPropagationService requires nodeId',
   MISSING_CACHE: 'CDCGroupPropagationService requires systemTableCache',
+  MISSING_CACHE_CHANGE_PORT:
+    'CDCGroupPropagationService requires the node\'s SystemTableCache (or its read-only view): ' +
+    'every bound propagation watches its recipient-domain tables through its change port',
   MISSING_TREE_SERVICE: 'CDCGroupPropagationService requires latencyTreeService',
   NOT_INITIALIZED: 'CDCGroupPropagationService must be initialized first',
   MISSING_MESSAGE_GROUP_SERVICE:

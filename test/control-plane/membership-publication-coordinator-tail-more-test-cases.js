@@ -8,6 +8,8 @@ import {
   createReadinessServiceForTest,
   readinessCollaboratorFake,
 } from '../helpers/readiness-service-fixture.js';
+import {publicationsOwnerOverRows} from
+  './publication-owner-test-support.js';
 export function registerMembershipPublicationCoordinatorTailMoreTests({
   test,
   acknowledgeMembershipPublication,
@@ -151,14 +153,14 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
       const coordinator = new MembershipPublicationCoordinator({
         resolveIsControlPlanePublicationsWriteLeader: () => true,
         nodeId: 'node-1',
-        controlPlanePublicationsOwner: {
+        controlPlanePublicationsOwner: publicationsOwnerOverRows({
           async listPublications() {
             return {rows: [latestPublicationRow]};
           },
-          async upsertPublication() {
+          async storeRow() {
             upsertCallCount += 1;
           },
-        },
+        }),
         systemTableCache: {
           getAll(tableName) {
             if (tableName === 'nodes') {
@@ -965,14 +967,14 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
       const coordinator = new MembershipPublicationCoordinator({
         resolveIsControlPlanePublicationsWriteLeader: () => true,
         nodeId: 'node-1',
-        controlPlanePublicationsOwner: {
+        controlPlanePublicationsOwner: publicationsOwnerOverRows({
           async listPublications() {
             return {rows: [latestPublicationRow]};
           },
-          async upsertPublication(row) {
+          async storeRow(row) {
             persistedRows.push(row);
           },
-        },
+        }),
         systemTableCache: {
           getAll(tableName) {
             if (tableName === 'nodes') {
@@ -1128,14 +1130,14 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
       const coordinator = new MembershipPublicationCoordinator({
         resolveIsControlPlanePublicationsWriteLeader: () => true,
         nodeId: 'node-1',
-        controlPlanePublicationsOwner: {
+        controlPlanePublicationsOwner: publicationsOwnerOverRows({
           async listPublications() {
             return {rows: [latestPublicationRow]};
           },
-          async upsertPublication(row) {
+          async storeRow(row) {
             persistedRows.push(row);
           },
-        },
+        }),
         controlPlaneReadinessService: {
           async getAllNodeReadiness(options = {}) {
             readinessRefreshModes.push(options.allowAuthoritativeRefresh === true);

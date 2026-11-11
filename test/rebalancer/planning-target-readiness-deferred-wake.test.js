@@ -170,21 +170,55 @@ test('a pass with no target and no deferred read arms no wait', async (t) => {
 });
 
 
-test('a publication that lands before the wait subscribes is not lost',
-  async (t) => {
-    const world = createDeferredTargetWorld(t);
-    const {rebalancer} = world;
-    // The pass read node-3 as deferred; its rebuild published (now answered,
-    // not ready) before the pass reached the arm.
-    for (const nodeId of DEFERRED_NODE_IDS) {
-      world.readinessByNodeId[nodeId] = {...NOT_READY_SNAPSHOT, nodeId};
-    }
-    rebalancer.armPlanningTargetReadinessWake([...DEFERRED_NODE_IDS]);
-    t.same(world.enqueued,
-      [RECONCILE_REASON.READINESS_PLANNING_SNAPSHOT_PUBLISHED],
-      'the re-read after subscribing enqueues the check at once');
-    t.equal(world.listeners.size, 0, 'and releases the subscription');
-  });
+test('a publication that lands between the read and the arm is decided by ' +
+  'generation, and the arm never re-reads the verdict', async (t) => {
+  const world = createDeferredTargetWorld(t);
+  const {rebalancer} = world;
+  rebalancer.getPlanningPublicationCursor().attach();
+  const plan = rebalancer.getAvailableNodePlan();
+  t.equal(plan.planningPublicationGeneration, 0,
+    'the answer carries the publication generation it was read at');
+  // node-3's rebuild published after the pass read it, before the arm.
+  world.publish('node-3');
+  rebalancer.armPlanningTargetReadinessWake([...DEFERRED_NODE_IDS],
+    plan.planningPublicationGeneration);
+  t.same(world.enqueued,
+    [RECONCILE_REASON.READINESS_PLANNING_SNAPSHOT_PUBLISHED],
+    'the newer publication enqueues the check at once');
+  t.same(rebalancer.readPlanningTargetReadinessAwaitedNodeIds(), [],
+    'and ends the wait');
+  t.equal(rebalancer.consumePlanningTargetReadinessWakeDue(), true,
+    'that publication grants one floor skip');
+
+  // The same publication cannot end a second wait.
+  rebalancer.armPlanningTargetReadinessWake([...DEFERRED_NODE_IDS],
+    plan.planningPublicationGeneration);
+  t.equal(world.enqueued.length, 2, 'a re-arm on the older read re-asks once');
+  t.equal(rebalancer.consumePlanningTargetReadinessWakeDue(), false,
+    'but the consumed publication grants no second floor skip');
+});
+
+test('an arm whose arm-time state disagrees with the read waits for the ' +
+  'next publication (no self-resolve)', async (t) => {
+  const world = createDeferredTargetWorld(t);
+  const {rebalancer} = world;
+  rebalancer.getPlanningPublicationCursor().attach();
+  const plan = rebalancer.getAvailableNodePlan();
+  // Another read variant answers now: the old arm re-read this and woke
+  // itself inside the pass that armed it.
+  for (const nodeId of DEFERRED_NODE_IDS) {
+    world.readinessByNodeId[nodeId] = {...NOT_READY_SNAPSHOT, nodeId};
+  }
+  rebalancer.armPlanningTargetReadinessWake([...DEFERRED_NODE_IDS],
+    plan.planningPublicationGeneration);
+  t.same(world.enqueued, [], 'no publication since the read: no wake');
+  t.equal(rebalancer.consumePlanningTargetReadinessWakeDue(), false,
+    'and no floor skip');
+  world.publish('node-2');
+  t.same(world.enqueued,
+    [RECONCILE_REASON.READINESS_PLANNING_SNAPSHOT_PUBLISHED],
+    'the owner\'s publication is the one clearing event');
+});
 
 test('evaluateState reads the classified plan: a "no need" that rests on a ' +
   'deferred candidate arms the wake; a moved pass disarms it', async (t) => {
@@ -192,7 +226,8 @@ test('evaluateState reads the classified plan: a "no need" that rests on a ' +
   const {rebalancer} = world;
   t.equal(await rebalancer.evaluateState(), false,
     'no ready target: no rebalance this pass');
-  t.equal(world.listeners.size, 1,
+  t.same(rebalancer.readPlanningTargetReadinessAwaitedNodeIds(),
+    [...DEFERRED_NODE_IDS],
     'the answer depended on deferred candidates: the wake is armed');
   world.publish('node-2');
   t.same(world.enqueued,
@@ -200,12 +235,13 @@ test('evaluateState reads the classified plan: a "no need" that rests on a ' +
     'their publication enqueues the check, not the backed-off cadence');
 
   await rebalancer.evaluateState();
-  t.equal(world.listeners.size, 1, 're-armed on the next deferred answer');
+  t.same(rebalancer.readPlanningTargetReadinessAwaitedNodeIds(),
+    [...DEFERRED_NODE_IDS], 're-armed on the next deferred answer');
   noteRebalancePassMoved(rebalancer, {moves: [
     {nodeId: 'node-2', success: true},
     {nodeId: 'node-3', success: true},
   ]});
-  t.equal(world.listeners.size, 0,
+  t.same(rebalancer.readPlanningTargetReadinessAwaitedNodeIds(), [],
     'a pass that moved onto every awaited node disarms it');
 });
 
@@ -214,12 +250,16 @@ test('evaluateState disarms the wake when no candidate is deferred',
     const world = createDeferredTargetWorld(t);
     const {rebalancer} = world;
     await rebalancer.evaluateState();
-    t.equal(world.listeners.size, 1, 'armed on the deferred answer');
+    t.equal(rebalancer.readPlanningTargetReadinessAwaitedNodeIds().length, 2,
+      'armed on the deferred answer');
     for (const nodeId of DEFERRED_NODE_IDS) {
       world.readinessByNodeId[nodeId] = {...NOT_READY_SNAPSHOT, nodeId};
     }
     await rebalancer.evaluateState();
-    t.equal(world.listeners.size, 0, 'an answer with no deferral disarms it');
+    t.same(rebalancer.readPlanningTargetReadinessAwaitedNodeIds(), [],
+      'an answer with no deferral disarms it');
+    world.publish('node-2');
+    t.same(world.enqueued, [], 'and nothing wakes it');
   });
 
 test('a move whose creation re-enters on a transient admission deferral is ' +
@@ -268,7 +308,8 @@ async (t) => {
   t.equal(await rebalancer.getNodeReadinessSkipReason('node-2'),
     READINESS_SKIP_DETAIL.READINESS_DEFERRED,
     'the skip names the deferral');
-  t.equal(world.listeners.size, 1, 'the planning-target wait is armed');
+  t.same(rebalancer.readPlanningTargetReadinessAwaitedNodeIds(), ['node-2'],
+    'the planning-target wait is armed');
   world.publish('node-2');
   t.same(world.enqueued,
     [RECONCILE_REASON.READINESS_PLANNING_SNAPSHOT_PUBLISHED],
@@ -282,12 +323,14 @@ test('a pass that both moved and skipped a deferred target keeps the ' +
   // node-3 was skipped as deferred during the pass; node-2 got a move.
   t.equal(await rebalancer.getNodeReadinessSkipReason('node-3'),
     READINESS_SKIP_DETAIL.READINESS_DEFERRED, 'node-3 skipped as deferred');
-  rebalancer.armPlanningTargetReadinessWake(['node-2', 'node-3']);
+  rebalancer.armPlanningTargetReadinessWake(['node-2', 'node-3'],
+    rebalancer.readPlanningPublicationGeneration());
   noteRebalancePassMoved(rebalancer, {moves: [
     {nodeId: 'node-2', success: true},
     {nodeId: 'node-3', skipped: true, reason: 'readiness_deferred'},
   ]});
-  t.equal(world.listeners.size, 1, 'the wait stays armed');
+  t.same(rebalancer.readPlanningTargetReadinessAwaitedNodeIds(), ['node-3'],
+    'the wait stays armed');
   world.publish('node-2');
   t.same(world.enqueued, [], 'the satisfied node no longer wakes');
   world.publish('node-3');
@@ -309,7 +352,8 @@ test('a system partition\'s replica on a node whose readiness read is ' +
     'unknown health is not unhealthy: no ADD can rest on it');
   t.equal(rebalancer.getReadyNodeOccupiedReplicas(replicas).length,
     DEFERRED_NODE_IDS.length, 'nor is the node\'s slot counted free');
-  t.equal(world.listeners.size, 1, 'the planning-target wake is armed');
+  t.same(rebalancer.readPlanningTargetReadinessAwaitedNodeIds(),
+    [...DEFERRED_NODE_IDS], 'the planning-target wake is armed');
   world.publish('node-3');
   t.same(world.enqueued,
     [RECONCILE_REASON.READINESS_PLANNING_SNAPSHOT_PUBLISHED],
@@ -320,7 +364,8 @@ test('a follow-up target read that is deferred arms the wake', async (t) => {
   const world = createDeferredTargetWorld(t);
   const {rebalancer} = world;
   rebalancer.isPriorityRecoveryFollowUpTargetRecoveryEligible('node-2');
-  t.equal(world.listeners.size, 1, 'the deferred read is awaited');
+  t.same(rebalancer.readPlanningTargetReadinessAwaitedNodeIds(), ['node-2'],
+    'the deferred read is awaited');
   world.publish('node-2');
   t.same(world.enqueued,
     [RECONCILE_REASON.READINESS_PLANNING_SNAPSHOT_PUBLISHED],

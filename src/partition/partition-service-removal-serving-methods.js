@@ -24,7 +24,14 @@ const REMOVAL_SERVING_STATE = Object.freeze({
   FENCED: 'fenced',
   DRAINED: 'drained',
   CLOSED: 'closed',
+  // The removal's node tracks no service for the replica (a removal resumed
+  // without its runtime): nothing serves there, so nothing is fenced or
+  // drained; participant custody is read from the file at the irreversible
+  // boundary like any released connection's.
+  NOT_HOSTED: 'not_hosted',
 });
+const REMOVAL_SERVING_NOT_HOSTED = Object.freeze({
+  state: REMOVAL_SERVING_STATE.NOT_HOSTED});
 
 function closedAnswer(service) {
   return {state: REMOVAL_SERVING_STATE.CLOSED,
@@ -82,4 +89,8 @@ const PARTITION_SERVICE_REMOVAL_SERVING_METHODS = Object.freeze({
   },
 });
 
-export {PARTITION_SERVICE_REMOVAL_SERVING_METHODS, REMOVAL_SERVING_STATE};
+export {
+  PARTITION_SERVICE_REMOVAL_SERVING_METHODS,
+  REMOVAL_SERVING_NOT_HOSTED,
+  REMOVAL_SERVING_STATE,
+};

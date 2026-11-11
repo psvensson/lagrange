@@ -1,5 +1,5 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
-import {isOperationVisibilityUnavailableError} from
+import {presentOperationOf} from
   './replica-operation-repository-operation-visibility.js';
 
 const {
@@ -157,23 +157,19 @@ async function adoptMostAdvancedObservedReplaceState(context, operation) {
     maybeSelectOperation(cachedOperation);
   }
 
-  // Advisory: only a PRESENT owner row can name a more advanced state; an
-  // absent or unanswered read adopts nothing and the caller's next write is
-  // a compare-and-set on its own step.
-  maybeSelectOperation(
-    await context.repository.queryAuthoritativeOperationById(
+  // Advisory, on the typed by-id read: only PRESENT names a more advanced
+  // state. ABSENT and UNAVAILABLE adopt nothing and decide nothing - the
+  // caller's next write is a compare-and-set on its own step, which an
+  // unanswered owner refuses.
+  maybeSelectOperation(presentOperationOf(
+    await context.repository.queryAuthoritativeOperationVisibilityObservation(
       operation.operationId,
       {
         authoritativeReadMode:
           CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
       },
-    ).catch((error) => {
-      if (isOperationVisibilityUnavailableError(error)) {
-        return null;
-      }
-      throw error;
-    }),
-  );
+    ),
+  ));
 
   if (!selectedOperation) {
     return null;

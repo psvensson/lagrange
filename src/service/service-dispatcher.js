@@ -7,10 +7,12 @@ import {
   SUBSYSTEM,
 } from '../constants/index.js';
 import {deliveryTransportOf, deliveryAnswerOf,
-  TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
   isDeliveredTransportDeliveryOutcome,
-  isDeliveryTimeoutTransportOutcome,
 } from '../transport/transport-semantic-outcome.js';
+import {
+  TRANSPORT_DELIVERY_FAILURE,
+  classifyTransportDeliveryFailure,
+} from '../transport/transport-delivery-failure.js';
 import {assertServiceMessageEnvelope} from './service-message-contract.js';
 import {ServicePolicyViolationError} from './service-lifecycle-errors.js';
 import {
@@ -36,7 +38,6 @@ const SERVICE_DISPATCHER_ERROR = Object.freeze({
     'message delivery was not acknowledged',
   DEADLINE_EXPIRED:
     'Request deadline expired before service dispatch',
-  NO_HANDLER: 'no handler',
   PROCESSED_RESPONSE_REQUIRED:
     'message delivery did not include handler completion evidence',
 });
@@ -111,31 +112,33 @@ function buildDeliveryOptions(target, traceId, context) {
   };
 }
 
+// The request-cell classification of each delivery failure the transport
+// names: nothing executed (no frame left, or no handler there) is retried,
+// a delivery that may have reached the handler is ambiguous, and a refusal
+// is terminal.
+const DELIVERY_FAILURE_ROUTE = Object.freeze({
+  [TRANSPORT_DELIVERY_FAILURE.NOT_SENT]: Object.freeze({
+    code: REQUEST_CELL_ROUTE_ERROR_CODE.TRANSPORT_FAILED,
+    classification: REQUEST_CELL_ROUTE_CLASSIFICATION.RETRYABLE}),
+  [TRANSPORT_DELIVERY_FAILURE.WRONG_OWNER]: Object.freeze({
+    code: REQUEST_CELL_ROUTE_ERROR_CODE.ROUTE_UNAVAILABLE,
+    classification: REQUEST_CELL_ROUTE_CLASSIFICATION.RETRYABLE}),
+  [TRANSPORT_DELIVERY_FAILURE.REJECTED]: Object.freeze({
+    code: REQUEST_CELL_ROUTE_ERROR_CODE.TRANSPORT_FAILED,
+    classification: REQUEST_CELL_ROUTE_CLASSIFICATION.TERMINAL}),
+});
+const AMBIGUOUS_DELIVERY_ROUTE = Object.freeze({
+  code: REQUEST_CELL_ROUTE_ERROR_CODE.TRANSPORT_FAILED,
+  classification: REQUEST_CELL_ROUTE_CLASSIFICATION.AMBIGUOUS});
+
 function createDeliveryFailure(delivery) {
-  if (
-    delivery.reasonCode ===
-      TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_HANDLER
-  ) {
-    return createRoutingFailure(
-      REQUEST_CELL_ROUTE_ERROR_CODE.ROUTE_UNAVAILABLE,
-      `${SERVICE_DISPATCHER_ERROR.DELIVERY_REJECTED}:` +
-        ` ${delivery?.error || SERVICE_DISPATCHER_ERROR.NO_HANDLER}`,
-      {classification: REQUEST_CELL_ROUTE_CLASSIFICATION.RETRYABLE},
-    );
-  }
-  if (isDeliveryTimeoutTransportOutcome(delivery)) {
-    return createRoutingFailure(
-      REQUEST_CELL_ROUTE_ERROR_CODE.TRANSPORT_FAILED,
-      `${SERVICE_DISPATCHER_ERROR.DELIVERY_REJECTED}: message timeout`,
-      {classification: REQUEST_CELL_ROUTE_CLASSIFICATION.AMBIGUOUS},
-    );
-  }
-  return createRoutingFailure(
-    REQUEST_CELL_ROUTE_ERROR_CODE.TRANSPORT_FAILED,
+  const failure = classifyTransportDeliveryFailure(delivery);
+  const route = Object.hasOwn(DELIVERY_FAILURE_ROUTE, failure) ?
+    DELIVERY_FAILURE_ROUTE[failure] : AMBIGUOUS_DELIVERY_ROUTE;
+  return createRoutingFailure(route.code,
     `${SERVICE_DISPATCHER_ERROR.DELIVERY_REJECTED}:` +
-      ` ${delivery?.error || LOCAL_STR_UNKNOWN_ERROR}`,
-    {classification: REQUEST_CELL_ROUTE_CLASSIFICATION.AMBIGUOUS},
-  );
+      ` ${delivery?.error || delivery?.reasonCode || LOCAL_STR_UNKNOWN_ERROR}`,
+    {classification: route.classification});
 }
 
 class ServiceDispatcher {

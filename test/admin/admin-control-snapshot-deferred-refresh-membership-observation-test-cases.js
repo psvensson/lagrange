@@ -13,16 +13,6 @@ import './admin-control-snapshot-deferred-refresh-membership-authoritative-publi
 
 const TEST_ACTIVE_GATE_HANDOFF_NEXT_ACTION_WAIT_OWNER_RECOVERY =
   'wait_owner_recovery';
-const TEST_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_STATE_WRITE_DEFERRED =
-  'write_deferred';
-const TEST_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_REASON_OWNER_RECOVERY_WAIT_ENQUEUED =
-  'owner_recovery_wait_enqueued';
-const TEST_MEMBERSHIP_PUBLICATION_HANDOFF_REASON =
-  'admin_control_snapshot_publication_handoff';
-const TEST_MEMBERSHIP_PUBLICATION_HANDOFF_FIELD =
-  'publicationActiveGateHandoff';
-const TEST_MEMBERSHIP_PUBLICATION_PUBLISHED_ACTIVE_NODE_IDS_FIELD =
-  'publishedActiveNodeIds';
 const TEST_MEMBERSHIP_PUBLICATION_STATUS_ACK_PENDING = 'ACK_PENDING';
 
 test('AdminControlSnapshot repair-deferred trigger refreshes after visible owner publication',
@@ -1476,11 +1466,11 @@ test('AdminControlSnapshot repair-unavailable path still triggers publication ow
     );
   });
 
-test('AdminControlSnapshot repair-deferred shared owner wakes recovery waits without publication catch-up',
+test('AdminControlSnapshot repair-deferred shared owner surfaces the owner recovery wait without queueing the handoff',
   async (t) => {
     const buildOptions = [];
-    let reconcileReason = null;
-    let reconcileContext = null;
+    let enqueued = 0;
+    let ownerHandoff = null;
     const localSnapshot = {
       nodes: ['node-1'],
       controlPlaneDiagnostics: {
@@ -1504,10 +1494,19 @@ test('AdminControlSnapshot repair-deferred shared owner wakes recovery waits wit
       nodeId: 'node-1',
       controlPlaneReadinessService: {
         membershipPublicationService: {
-          enqueueClusterMembershipReconcile(reason, context = {}) {
-            reconcileReason = reason;
-            reconcileContext = context;
+          enqueueClusterMembershipReconcile() {
+            enqueued += 1;
             return true;
+          },
+          async reconcileActiveGateMembershipPublication(handoff) {
+            ownerHandoff = handoff;
+            return {
+              state: 'target_blocked',
+              enqueued: false,
+              ownerRecoveryWait: 'awaiting_recovery_progress',
+              reasonCode: 'owner_reconcile_pending',
+              retryAfterMs: 1000,
+            };
           },
         },
       },
@@ -1553,27 +1552,15 @@ test('AdminControlSnapshot repair-deferred shared owner wakes recovery waits wit
       1,
       'wait_owner_recovery should not schedule a visibility rebuild from repair-deferred admin reads',
     );
-    t.equal(
-      reconcileReason,
-      TEST_MEMBERSHIP_PUBLICATION_HANDOFF_REASON,
-      'wait_owner_recovery should wake the selected owner command queue',
-    );
-    t.equal(
-      Object.hasOwn(
-        reconcileContext,
-        TEST_MEMBERSHIP_PUBLICATION_PUBLISHED_ACTIVE_NODE_IDS_FIELD,
-      ),
-      false,
-      'wait_owner_recovery should not carry explicit publication targets',
-    );
+    t.equal(enqueued, 0,
+      'wait_owner_recovery never queues the captured handoff for the owner');
     t.match(
-      reconcileContext?.[TEST_MEMBERSHIP_PUBLICATION_HANDOFF_FIELD],
+      ownerHandoff,
       {
         nextAction: TEST_ACTIVE_GATE_HANDOFF_NEXT_ACTION_WAIT_OWNER_RECOVERY,
         pendingRecoveryNodeIds: ['node-2'],
-        pendingReconcileNodeIds: [],
       },
-      'wait_owner_recovery should preserve recovery debt on the handoff-only wake',
+      'the owner answers the wait on the handoff it was shown',
     );
     t.same(
       result.nodes,
@@ -1583,15 +1570,11 @@ test('AdminControlSnapshot repair-deferred shared owner wakes recovery waits wit
     t.match(
       result.controlPlaneDiagnostics.membershipPublicationHandoffOutcome,
       {
-        state:
-          TEST_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_STATE_WRITE_DEFERRED,
-        enqueued: true,
-        reasonCode:
-          TEST_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_REASON_OWNER_RECOVERY_WAIT_ENQUEUED,
-        retryAfterMs:
-          ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OWNER_RETRY_AFTER_MS,
+        state: 'target_blocked',
+        ownerRecoveryWait: 'awaiting_recovery_progress',
+        reasonCode: 'owner_reconcile_pending',
       },
-      'the deferred snapshot should surface an actionable owner recovery wake',
+      'the deferred snapshot surfaces the owner\'s named recovery wait',
     );
   });
 

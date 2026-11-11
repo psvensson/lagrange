@@ -18,7 +18,9 @@
  *     consensus-exit path cannot retire the port meanwhile; with no running
  *     removal nothing local can retire it;
  *  2. the replica's own applied configuration names it a voter (absent past
- *     its gate: ALREADY_REMOVED, the removal goes on), and nothing that
+ *     its gate: ALREADY_REMOVED once its row reads retiring - a serving row
+ *     is published retiring again first, UNAVAILABLE when that write does
+ *     not apply - and the removal goes on), and nothing that
  *     could still commit its removal is pending in its log: leading, it has
  *     applied an entry of its own term with no configuration change pending
  *     (no earlier-term entry can commit any more); following a known
@@ -45,9 +47,13 @@
  * (REMOVED_OUTSIDE_REMOVAL). New proposals are refused by the serving row
  * and, while the target is silent past the leader's liveness window, by the
  * leader's live-quorum admission.
+ * Errors: the lifecycle owner's typed answers (its authority kind, a CAS
+ * that did not apply, a status write that exhausted its retry on a
+ * retryable control-plane failure) are UNAVAILABLE with their reason; any
+ * other error propagates to the asker (an untyped answer it waits on).
  * Prohibited: an answer from elapsed time; CANCELLED without the durable
  * serving row and the voter read after it; touching another operation's
- * removal or another generation.
+ * removal or another generation; a caught error read as an answer.
  */
 import {
   readPartitionReplicaMembership,
@@ -55,6 +61,9 @@ import {
 import {PARTITION_REPLICA_MEMBERSHIP_STATE as MEMBERSHIP} from
   '../partition/partition-replica-membership-constants.js';
 import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
+import {
+  isRetryableControlPlaneError,
+} from '../control-plane/control-plane-error-classification.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {
   ReplicaOperationField,
@@ -72,7 +81,6 @@ import {
   REPLICA_REMOVAL_CANCEL_REASON as REASON,
 } from './replica-removal-cancel-contract.js';
 
-const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const VOTER_VERDICT = Object.freeze({
   VOTER: 'voter',
   REMOVED: 'removed',
@@ -84,18 +92,15 @@ function resultOf(answer, reason) {
 }
 
 // The replica's own applied configuration about itself: a voter, removed
-// (absent past its gate), or unknown (unreadable, unresolved, below gate).
+// (absent past its gate), or unknown (the port's typed refusal, a voter it
+// cannot resolve, an absence below its gate). A throw is not a refusal and
+// propagates.
 async function ownVoterVerdict(service, replicaId) {
-  let observation = null;
-  try {
-    observation = await readPartitionReplicaMembership(service, replicaId);
-  } catch (_error) {
-    return VOTER_VERDICT.UNKNOWN;
-  }
-  if (observation?.state === MEMBERSHIP.VOTER) {
+  const observation = await readPartitionReplicaMembership(service, replicaId);
+  if (observation.state === MEMBERSHIP.VOTER) {
     return VOTER_VERDICT.VOTER;
   }
-  return observation?.state === MEMBERSHIP.ABSENT &&
+  return observation.state === MEMBERSHIP.ABSENT &&
     observation.gateOpen === true ?
     VOTER_VERDICT.REMOVED : VOTER_VERDICT.UNKNOWN;
 }
@@ -103,14 +108,11 @@ async function ownVoterVerdict(service, replicaId) {
 // Nothing that could still commit this replica's removal is pending in its
 // own log (step 2): leading, an entry of its term applied and no change
 // pending; following a known leader, every entry it holds applied.
+// A status the port could not answer (its typed non-OK outcome) settles
+// nothing.
 function ownLogSettled(service) {
-  let status = null;
-  try {
-    status = service.raft.readStatus?.();
-  } catch (_error) {
-    return false;
-  }
-  if (status?.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
+  const status = service.raft.readStatus();
+  if (status.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
     return false;
   }
   if (status.role === RAFT_ROLE.LEADER) {
@@ -136,33 +138,74 @@ function hasCancelFields(fields) {
     fields.replicaId) && fields.generation !== null;
 }
 
-// Step 3: the exact REMOVING generation back to ACTIVE.
+// Why a bound removal authority is not the exact REMOVING generation.
+const AUTHORITY_REFUSAL_REASON = Object.freeze({
+  [REMOVAL_AUTHORITY_KIND.UNAVAILABLE]: REASON.ROW_UNAVAILABLE,
+  [REMOVAL_AUTHORITY_KIND.ABSENT]: REASON.ROW_ABSENT,
+  [REMOVAL_AUTHORITY_KIND.CONFLICT]: REASON.GENERATION_MISMATCH,
+});
+
+// Step 3: the exact REMOVING generation back to ACTIVE. Answers null when
+// the row serves again, otherwise the typed reason it does not: the
+// lifecycle owner's authority kind, a compare-and-set that did not apply,
+// or a write that exhausted its retry on a retryable control-plane failure
+// (the owner's "thrown persistence error is the caller's UNAVAILABLE").
+// Any other error propagates.
 async function revertRetiringRow(handler, fields, service) {
   const stateMachine = handler.replicaStateMachine;
-  try {
-    const authority = await stateMachine.bindAuthoritativeRemovalAuthority(
-      fields.replicaId, {partitionId: fields.partitionId,
-        nodeId: handler.nodeId});
-    return authority?.kind === REMOVAL_AUTHORITY_KIND.REMOVING &&
-      await stateMachine.cancelDurableRemovalWithAuthority(fields.replicaId,
-        authority, {partitionId: fields.partitionId, nodeId: handler.nodeId,
-          isEffectHandlerCurrent: () =>
-            isReplicaServiceHandlerBound(service, stateMachine)}) === true;
-  } catch (_error) {
-    return false;
+  const authority = await stateMachine.bindAuthoritativeRemovalAuthority(
+    fields.replicaId, {partitionId: fields.partitionId,
+      nodeId: handler.nodeId});
+  if (authority.kind !== REMOVAL_AUTHORITY_KIND.REMOVING) {
+    return AUTHORITY_REFUSAL_REASON[authority.kind];
   }
+  let reverted;
+  try {
+    reverted = await stateMachine.cancelDurableRemovalWithAuthority(
+      fields.replicaId, authority, {partitionId: fields.partitionId,
+        nodeId: handler.nodeId, isEffectHandlerCurrent: () =>
+          isReplicaServiceHandlerBound(service, stateMachine)});
+  } catch (error) {
+    if (!isRetryableControlPlaneError(error)) {
+      throw error;
+    }
+    return REASON.ROW_UNAVAILABLE;
+  }
+  return reverted === true ? null : REASON.REVERT_NOT_APPLIED;
 }
 
-// Step 4's other branch: the removal committed in the window; its retiring
-// row is published again so the removal completes from it.
-async function republishRetiringRow(handler, fields) {
+// The removal applied (the replica's own configuration no longer names it):
+// its durable row must read retiring before the answer is ALREADY_REMOVED,
+// so the teardown completes from it (a running removal goes on; otherwise
+// the lifecycle owner's REMOVING re-drive, replica-removal-settlement.js,
+// whose local status is set to match). A serving row this owner wrote in an
+// earlier window (its revert, then the removal committed) is published
+// again; a write that exhausted its retry is UNAVAILABLE, so the asker asks
+// again and this republishes again (never an ALREADY_REMOVED over a serving
+// row nobody re-drives).
+async function alreadyRemovedAnswer(handler, fields) {
+  const named = await readNamedRow(handler, fields);
+  if (named.refusal === REASON.ROW_ABSENT) {
+    return resultOf(ANSWER.ALREADY_REMOVED, REASON.REMOVAL_APPLIED);
+  }
+  if (named.refusal) {
+    return resultOf(ANSWER.UNAVAILABLE, named.refusal);
+  }
+  if (named.row.status !== ReplicaStatus.ACTIVE) {
+    return resultOf(ANSWER.ALREADY_REMOVED, REASON.REMOVAL_APPLIED);
+  }
   try {
     await handler.persistReplicaStatusWithRetry(fields.replicaId,
       ReplicaStatus.REMOVING, {partitionId: fields.partitionId});
-    return resultOf(ANSWER.ALREADY_REMOVED, REASON.REMOVAL_APPLIED);
-  } catch (_error) {
-    return resultOf(ANSWER.ALREADY_REMOVED, REASON.REPUBLISH_NOT_APPLIED);
+  } catch (error) {
+    if (!isRetryableControlPlaneError(error)) {
+      throw error;
+    }
+    return resultOf(ANSWER.UNAVAILABLE, REASON.REPUBLISH_NOT_APPLIED);
   }
+  handler.setLocalReplica(fields.replicaId, {replicaId: fields.replicaId,
+    partitionId: fields.partitionId, status: ReplicaStatus.REMOVING});
+  return resultOf(ANSWER.ALREADY_REMOVED, REASON.REMOVAL_APPLIED);
 }
 
 // The services row as the lifecycle owner reads it, checked against the
@@ -182,66 +225,77 @@ async function readNamedRow(handler, fields) {
   return {row: observation.row};
 }
 
+// One settled cancellation: the asker's {answer, reason}, and - when the
+// replica serves again (CANCELLED, NOT_IN_PROGRESS) - its tracked service
+// and the serving status its durable row holds (ACTIVE after this owner's
+// revert; the row's own status when no removal was in progress).
+function settledOf(result, serving = null) {
+  return Object.freeze({result, serving});
+}
+
 /**
  * Steps 2-4 on durable state: the one cancellation, run at a running
  * removal's checkpoint and for a node with no running removal alike.
  * @param {Object} handler - The ReplicaHandler.
  * @param {Object} fields - {operationId, partitionId, replicaId,
  *   generation}.
- * @return {Promise<Object>} Frozen {answer, reason}.
+ * @return {Promise<Object>} Frozen {result, serving}.
  */
 async function settleRemovalCancellation(handler, fields) {
   const local = handler.getLocalReplica(fields.replicaId);
   if (local?.status === ReplicaStatus.REMOVED &&
       local.removedByOperationId === fields.operationId) {
-    return resultOf(ANSWER.ALREADY_REMOVED, REASON.REMOVAL_APPLIED);
+    return settledOf(resultOf(ANSWER.ALREADY_REMOVED, REASON.REMOVAL_APPLIED));
   }
   const service = handler.getTrackedService(fields.replicaId);
   if (!service?.raft) {
-    return resultOf(ANSWER.UNAVAILABLE, REASON.NO_CONSENSUS_PORT);
+    return settledOf(resultOf(ANSWER.UNAVAILABLE, REASON.NO_CONSENSUS_PORT));
   }
   const before = await ownVoterVerdict(service, fields.replicaId);
   if (before === VOTER_VERDICT.REMOVED) {
-    return resultOf(ANSWER.ALREADY_REMOVED, REASON.REMOVAL_APPLIED);
+    return settledOf(await alreadyRemovedAnswer(handler, fields));
   }
   const named = await readNamedRow(handler, fields);
   if (named.refusal) {
-    return resultOf(ANSWER.UNAVAILABLE, named.refusal);
+    return settledOf(resultOf(ANSWER.UNAVAILABLE, named.refusal));
   }
   if (before !== VOTER_VERDICT.VOTER) {
-    return resultOf(ANSWER.UNAVAILABLE, REASON.MEMBERSHIP_UNAVAILABLE);
+    return settledOf(resultOf(ANSWER.UNAVAILABLE,
+      REASON.MEMBERSHIP_UNAVAILABLE));
   }
   if (!ownLogSettled(service)) {
-    return resultOf(ANSWER.UNAVAILABLE, REASON.LOG_UNSETTLED);
+    return settledOf(resultOf(ANSWER.UNAVAILABLE, REASON.LOG_UNSETTLED));
   }
   if (named.row.status !== ReplicaStatus.REMOVING) {
-    return resultOf(ANSWER.NOT_IN_PROGRESS, REASON.ROW_SERVING);
+    return settledOf(resultOf(ANSWER.NOT_IN_PROGRESS, REASON.ROW_SERVING),
+      {service, status: named.row.status});
   }
-  if (!await revertRetiringRow(handler, fields, service)) {
-    return resultOf(ANSWER.UNAVAILABLE, REASON.REVERT_NOT_APPLIED);
+  const notReverted = await revertRetiringRow(handler, fields, service);
+  if (notReverted !== null) {
+    return settledOf(resultOf(ANSWER.UNAVAILABLE, notReverted));
   }
   const after = await ownVoterVerdict(service, fields.replicaId);
   if (after === VOTER_VERDICT.REMOVED) {
-    return republishRetiringRow(handler, fields);
+    return settledOf(await alreadyRemovedAnswer(handler, fields));
   }
   return after === VOTER_VERDICT.VOTER && ownLogSettled(service) ?
-    resultOf(ANSWER.CANCELLED, REASON.ROW_REVERTED) :
-    resultOf(ANSWER.UNAVAILABLE, REASON.MEMBERSHIP_UNAVAILABLE);
+    settledOf(resultOf(ANSWER.CANCELLED, REASON.ROW_REVERTED),
+      {service, status: ReplicaStatus.ACTIVE}) :
+    settledOf(resultOf(ANSWER.UNAVAILABLE, REASON.MEMBERSHIP_UNAVAILABLE));
 }
 
 /**
  * The replica serves again: its removal's fence lifts and its local status
- * is its lifecycle owner's (ACTIVE after the cancelling write).
+ * is its durable row's serving status.
  * @param {Object} handler
  * @param {Object} fields - {operationId, partitionId, replicaId}.
+ * @param {Object} serving - {service, status}.
  */
-function restoreServingAfterCancellation(handler, fields) {
-  const service = handler.getTrackedService(fields.replicaId);
-  service?.liftServingAdmissionFenceForCancelledRemoval?.();
+function restoreServingAfterCancellation(handler, fields, serving) {
+  serving.service.liftServingAdmissionFenceForCancelledRemoval();
   handler.setLocalReplica(fields.replicaId, {replicaId: fields.replicaId,
-    partitionId: fields.partitionId, service,
-    status: handler.getTrackedReplicaLifecycleState(fields.replicaId) ||
-      ReplicaStatus.ACTIVE});
+    partitionId: fields.partitionId, service: serving.service,
+    status: serving.status});
   if (fields.operationId) {
     handler.inProgressOperations.delete(fields.operationId);
   }
@@ -253,17 +307,15 @@ function restoreServingAfterCancellation(handler, fields) {
 /**
  * A running removal's checkpoint: settle the cancellation it was asked, if
  * any, and answer the asker. Before its retiring row (retiringRowDurable
- * false) a serving row means the removal is cancelled where it stands.
+ * false) a serving row means the removal is cancelled where it stands. A
+ * settlement that throws rejects the asker's answer and the removal alike.
  * @param {Object} handler
- * @param {Object|null} removal - The running removal's record.
+ * @param {Object} removal - The running removal's record.
  * @param {Object} phase - {retiringRowDurable}.
  * @return {Promise<Object|null>} The settled {answer, reason}, or null when
  *   no cancellation was asked.
  */
 async function runRemovalCancellationCheckpoint(handler, removal, phase) {
-  if (!removal) {
-    return null;
-  }
   if (removal.controller.signal.aborted) {
     removal.controller = new AbortController();
   }
@@ -272,16 +324,22 @@ async function runRemovalCancellationCheckpoint(handler, removal, phase) {
     return null;
   }
   removal.cancellation = null;
-  let result = await settleRemovalCancellation(handler, {
-    operationId: removal.operationId, partitionId: removal.partitionId,
-    replicaId: removal.replicaId, generation: asked.generation});
+  let settled;
+  try {
+    settled = await settleRemovalCancellation(handler, {
+      operationId: removal.operationId, partitionId: removal.partitionId,
+      replicaId: removal.replicaId, generation: asked.generation});
+  } catch (error) {
+    asked.reject(error);
+    throw error;
+  }
+  let result = settled.result;
   if (phase.retiringRowDurable !== true &&
       result.answer === ANSWER.NOT_IN_PROGRESS) {
     result = resultOf(ANSWER.CANCELLED, REASON.ROW_SERVING);
   }
-  if (result.answer === ANSWER.CANCELLED ||
-      result.answer === ANSWER.NOT_IN_PROGRESS) {
-    restoreServingAfterCancellation(handler, removal);
+  if (settled.serving !== null) {
+    restoreServingAfterCancellation(handler, removal, settled.serving);
   }
   asked.resolve(result);
   return result;
@@ -289,28 +347,25 @@ async function runRemovalCancellationCheckpoint(handler, removal, phase) {
 
 /**
  * A running removal ended: a cancellation asked of it and not yet settled
- * is settled on the state it left.
+ * is settled on the state it left (the asker gets its answer, or its
+ * error).
  * @param {Object} handler
  * @param {Object} removal - The running removal's record.
- * @return {Promise<void>}
  */
-async function settleCancellationAfterRemoval(handler, removal) {
+function settleCancellationAfterRemoval(handler, removal) {
   const asked = removal.cancellation;
   if (!asked) {
     return;
   }
   removal.cancellation = null;
-  try {
-    asked.resolve(await settleRemovalCancellation(handler, {
-      operationId: removal.operationId, partitionId: removal.partitionId,
-      replicaId: removal.replicaId, generation: asked.generation}));
-  } catch (_error) {
-    asked.resolve(resultOf(ANSWER.UNAVAILABLE, REASON.ROW_UNAVAILABLE));
-  }
+  asked.resolve(settleRemovalCancellation(handler, {
+    operationId: removal.operationId, partitionId: removal.partitionId,
+    replicaId: removal.replicaId, generation: asked.generation})
+    .then((settled) => settled.result));
 }
 
 function runningRemovalOf(handler, replicaId) {
-  for (const removal of handler.removalExecutions?.values() ?? []) {
+  for (const removal of handler.removalExecutions.values()) {
     if (removal.replicaId === replicaId) {
       return removal;
     }
@@ -327,11 +382,8 @@ function runningRemovalOf(handler, replicaId) {
  */
 function askRunningRemoval(removal, generation) {
   if (!removal.cancellation) {
-    let resolve;
-    const settled = new Promise((settle) => {
-      resolve = settle;
-    });
-    removal.cancellation = {generation, resolve, settled};
+    const {promise, resolve, reject} = Promise.withResolvers();
+    removal.cancellation = {generation, resolve, reject, settled: promise};
   }
   removal.controller.abort(REPLICA_CONSENSUS_EXIT_REASON.CANCELLED);
   return removal.cancellation.settled;
@@ -345,7 +397,6 @@ function askRunningRemoval(removal, generation) {
  * @return {Object} The record.
  */
 function beginRemovalExecution(handler, request) {
-  handler.removalExecutions ??= new Map();
   const removal = {operationId: request.operationId,
     partitionId: request.partitionId, replicaId: request.replicaId,
     controller: new AbortController(), cancellation: null};
@@ -355,11 +406,11 @@ function beginRemovalExecution(handler, request) {
   return removal;
 }
 
-async function endRemovalExecution(handler, removal) {
-  if (handler.removalExecutions?.get(removal.operationId) === removal) {
+function endRemovalExecution(handler, removal) {
+  if (handler.removalExecutions.get(removal.operationId) === removal) {
     handler.removalExecutions.delete(removal.operationId);
   }
-  await settleCancellationAfterRemoval(handler, removal);
+  settleCancellationAfterRemoval(handler, removal);
 }
 
 function answerCancellation(handler, fields, result) {
@@ -371,54 +422,41 @@ function answerCancellation(handler, fields, result) {
     });
 }
 
-function assignReplicaHandlerRemovalCancellationMethods(ReplicaHandler) {
-  class ReplicaHandlerRemovalCancellationMethods {
-    /**
-     * CANCEL_REPLICA_REMOVAL: cancel this operation's removal of exactly
-     * the named replica generation, or answer why not (typed, idempotent).
-     * @param {Object} request
-     * @return {Promise<Object>} COMPLETED with {removalCancellation}.
-     */
-    async handleCancelReplicaRemoval(request) {
-      const fields = cancelFieldsOf(request);
-      this.logger.info(REPLICA_HANDLER_LOG_MSG.REMOVE_CANCEL_REQUEST,
-        {...fields, nodeId: this.nodeId});
-      if (!hasCancelFields(fields)) {
-        return answerCancellation(this, fields,
-          resultOf(ANSWER.UNAVAILABLE, REASON.REQUIRED_FIELDS));
-      }
-      const running = runningRemovalOf(this, fields.replicaId);
-      if (running && running.operationId !== fields.operationId) {
-        return answerCancellation(this, fields,
-          resultOf(ANSWER.UNAVAILABLE, REASON.OTHER_OPERATION));
-      }
-      if (running) {
-        return answerCancellation(this, fields,
-          await askRunningRemoval(running, fields.generation));
-      }
-      const result = await settleRemovalCancellation(this, fields);
-      if (result.answer === ANSWER.CANCELLED ||
-          result.answer === ANSWER.NOT_IN_PROGRESS) {
-        restoreServingAfterCancellation(this, fields);
-      }
-      return answerCancellation(this, fields, result);
-    }
+/**
+ * CANCEL_REPLICA_REMOVAL: cancel this operation's removal of exactly the
+ * named replica generation, or answer why not (typed, idempotent). An
+ * explicit-context entry point (the handler is its first argument).
+ * @param {Object} handler - The ReplicaHandler.
+ * @param {Object} request
+ * @return {Promise<Object>} COMPLETED with {removalCancellation}.
+ */
+async function handleCancelReplicaRemoval(handler, request) {
+  const fields = cancelFieldsOf(request);
+  handler.logger.info(REPLICA_HANDLER_LOG_MSG.REMOVE_CANCEL_REQUEST,
+    {...fields, nodeId: handler.nodeId});
+  if (!hasCancelFields(fields)) {
+    return answerCancellation(handler, fields,
+      resultOf(ANSWER.UNAVAILABLE, REASON.REQUIRED_FIELDS));
   }
-  for (const methodName of Object.getOwnPropertyNames(
-    ReplicaHandlerRemovalCancellationMethods.prototype)) {
-    if (methodName === LOCAL_STR_CONSTRUCTOR) {
-      continue;
-    }
-    Object.defineProperty(ReplicaHandler.prototype, methodName,
-      Object.getOwnPropertyDescriptor(
-        ReplicaHandlerRemovalCancellationMethods.prototype, methodName));
+  const running = runningRemovalOf(handler, fields.replicaId);
+  if (running && running.operationId !== fields.operationId) {
+    return answerCancellation(handler, fields,
+      resultOf(ANSWER.UNAVAILABLE, REASON.OTHER_OPERATION));
   }
+  if (running) {
+    return answerCancellation(handler, fields,
+      await askRunningRemoval(running, fields.generation));
+  }
+  const settled = await settleRemovalCancellation(handler, fields);
+  if (settled.serving !== null) {
+    restoreServingAfterCancellation(handler, fields, settled.serving);
+  }
+  return answerCancellation(handler, fields, settled.result);
 }
 
 export {
-  assignReplicaHandlerRemovalCancellationMethods,
   beginRemovalExecution,
   endRemovalExecution,
+  handleCancelReplicaRemoval,
   runRemovalCancellationCheckpoint,
-  settleRemovalCancellation,
 };

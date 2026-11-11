@@ -227,7 +227,8 @@ function makeReconciliationInstance(partitionRow, capture) {
   class ReconciliationHost {}
   defineTableCreationExistingTableReconciliation(ReconciliationHost);
   const instance = new ReconciliationHost();
-  instance.findExistingPartitionRecord = async () => partitionRow;
+  instance.lookupPartitionRecord = async () =>
+    ({outcome: 'FOUND', row: partitionRow, reason: null});
   instance.provisionInitialPartition = async (options) => {
     capture.replicaCount = options.replicaCount;
     throw new Error(SENTINEL);

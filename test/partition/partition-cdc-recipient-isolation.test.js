@@ -195,38 +195,47 @@ test('R2-2 frontier: acknowledgement stops at the slowest recipient; nothing at 
     'the owed head is the first row X has not confirmed');
 });
 
-test('R2-5 retention with an unanswering recipient is the existing owed-work backpressure: ' +
-  'writes are refused at OWED_MAX_EVENTS and admitted again once it catches up', async (t) => {
+// The unanswering recipient here has no source position (a subscriber without
+// the propagation role): it can never re-list, so it is never released and
+// the owed-work capacity is its backpressure. A recipient that speaks source
+// ranges is released at the lag bound instead and returns through a re-list
+// (design note S3.11; test/partition/partition-cdc-relist-reentry.test.js W4).
+test('R2-5 retention with an unanswering recipient that has no position is the existing ' +
+  'owed-work backpressure: writes are refused at OWED_MAX_EVENTS and admitted again once it ' +
+  'catches up', async (t) => {
   const f = await fixture(t, {rows: ['seed-row'], subscribers: 2});
-  let xAnswers = false;
-  f.behavior = (index, events, _context, groupId) => index === X && !xAnswers ?
+  let yAnswers = false;
+  f.behavior = (index, events, _context, groupId) => index === Y && !yAnswers ?
     unknownCdcAcceptance() : recipientAnswer(events, groupId, true);
-  f.ready = false;
+  // The rows are committed while both recipients are attached and reachable:
+  // X confirms them as they arrive, Y never answers.
   for (let index = 1; index < BOUND.OWED_MAX_EVENTS; index += 1) {
     addSourceRow(f.leader, `owed-${index}`);
+    if (index % BOUND.SHIP_MAX_EVENTS === 0) await settleTicks();
   }
   await settleTicks();
-  f.ready = true;
   let held;
   for (let drive = 0; drive < 20; drive += 1) held = await f.drive();
   assert.equal(held.state, DRIVE.HELD_BY_SUBSCRIBER);
-  assert.equal(idsFor(f, Y).filter((id, index, ids) => ids.indexOf(id) === index).length,
-    BOUND.OWED_MAX_EVENTS, 'Y holds every owed row');
+  assert.equal(idsFor(f, X).filter((id, index, ids) => ids.indexOf(id) === index).length,
+    BOUND.OWED_MAX_EVENTS, 'X holds every owed row');
   assert.equal(countCdcObligations(f.leader.db).owed, BOUND.OWED_MAX_EVENTS,
     'backpressure, never a dropped obligation');
+  assert.equal(f.leader.cdcDelivery.getCdcObligationDiagnostics().pendingAcknowledgements, 0,
+    'nothing is acknowledged past the recipient that has not confirmed');
   const refused = track(f.leader.executeQuery(
     `INSERT INTO ${CDC_TABLE} (id, value) VALUES (?, ?)`, ['over-capacity', 'v'],
     {entryId: 'over-capacity'}));
   await settleTicks();
   assert.equal(refused.value?.failureCode, PARTITION_WRITE_LEADERSHIP_REFUSAL.CDC_CAPACITY);
 
-  xAnswers = true;
+  yAnswers = true;
   for (let round = 0; round < 40 && countCdcObligations(f.leader.db).owed > 0; round += 1) {
     await f.drive();
     await commitAcknowledgements(f);
   }
-  assert.equal(countCdcObligations(f.leader.db).owed, 0, 'X caught up: the frontier reached the tail');
-  assert.ok(idsFor(f, X).length >= BOUND.OWED_MAX_EVENTS);
+  assert.equal(countCdcObligations(f.leader.db).owed, 0, 'Y caught up: the frontier reached the tail');
+  assert.ok(idsFor(f, Y).length >= BOUND.OWED_MAX_EVENTS);
   const admitted = track(f.leader.executeQuery(
     `INSERT INTO ${CDC_TABLE} (id, value) VALUES (?, ?)`, ['after-recovery', 'v'],
     {entryId: 'after-recovery'}));

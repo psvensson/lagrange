@@ -68,7 +68,6 @@ const EXIT_WAKE_EVENTS = Object.freeze([
   RAFT_EVENT.MEMBERSHIP_CHANGED,
   RAFT_EVENT.GATE_OPENED,
 ]);
-const FUNCTION_TYPE = 'function';
 const ABORT_EVENT = 'abort';
 
 /**
@@ -107,8 +106,9 @@ function releaseReasonOf(signal) {
 function awaitReplicaConsensusExit(service, {replicaId, backstopMs, signal}) {
   // The read itself goes through the partition's one witness read (which
   // answers UNAVAILABLE for a port without the committed read).
+  // A port's subscribe always answers its unsubscribe (raft-operation-port).
   const port = service?.raft;
-  if (typeof port?.subscribe !== FUNCTION_TYPE) {
+  if (!port) {
     return Promise.resolve(Object.freeze({
       reason: REPLICA_CONSENSUS_EXIT_REASON.NO_CONSENSUS_PORT}));
   }
@@ -128,7 +128,7 @@ function awaitReplicaConsensusExit(service, {replicaId, backstopMs, signal}) {
         unsubscribe();
       }
       clearTimeout(timer);
-      signal?.removeEventListener?.(ABORT_EVENT, onAbort);
+      signal?.removeEventListener(ABORT_EVENT, onAbort);
       resolve(Object.freeze(reason === REPLICA_CONSENSUS_EXIT_REASON.BACKSTOP ?
         {reason, lastObservation} : {reason}));
     }
@@ -156,12 +156,9 @@ function awaitReplicaConsensusExit(service, {replicaId, backstopMs, signal}) {
       finish(releaseReasonOf(signal));
       return;
     }
-    signal?.addEventListener?.(ABORT_EVENT, onAbort, {once: true});
+    signal?.addEventListener(ABORT_EVENT, onAbort, {once: true});
     for (const eventName of EXIT_WAKE_EVENTS) {
-      const unsubscribe = port.subscribe(eventName, check);
-      if (typeof unsubscribe === FUNCTION_TYPE) {
-        unsubscribers.push(unsubscribe);
-      }
+      unsubscribers.push(port.subscribe(eventName, check));
     }
     timer = setTimeout(
       () => finish(REPLICA_CONSENSUS_EXIT_REASON.BACKSTOP), backstopMs);

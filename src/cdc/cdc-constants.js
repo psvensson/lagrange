@@ -196,8 +196,13 @@ const CDC_ERROR_MSG = Object.freeze({
 // answers SHUT_DOWN (its last failure, if any, as the cause) instead of any
 // retryable answer, since no engine will arrive. An engine missing before the
 // service is wired stays the retryable startup answer.
+// CACHE_OWNER_UNBOUND: an authoritative cache repair, sweep, snapshot or
+// observation was asked of a service whose writable cache (the one cache
+// owner, cacheMutationTarget) is not bound yet: the bootstrap-direct phase has
+// none, every sql-routed phase binds it (CDCIntegrationSetup).
 const CDC_ERROR_CODE = Object.freeze({
   SHUT_DOWN: 'CDC_INTEGRATION_SERVICE_SHUT_DOWN',
+  CACHE_OWNER_UNBOUND: 'CDC_INTEGRATION_SERVICE_CACHE_OWNER_UNBOUND',
 });
 
 // What the SHUT_DOWN answer knows of its write: never routed (a write that

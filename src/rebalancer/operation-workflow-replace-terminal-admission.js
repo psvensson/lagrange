@@ -28,6 +28,7 @@ import {
 } from './operation-workflow-replace-owner.js';
 
 import {isLiveCreateTargetStatus} from './replica-status.js';
+import {ACTUAL_REPLICA_OBSERVATION_STATE} from './replica-operation-repository-constants.js';
 import {buildFailedCreateCleanupToken} from
   './failed-create-cleanup-token.js';
 import {assertCanonicalRebalancerEntityIdentity} from
@@ -138,14 +139,12 @@ async function readReplaceDurableStep(owner, operation) {
 }
 
 async function observeCreateTarget(owner, operation) {
-  return typeof owner.repository?.getActualReplicaObservation ===
-    OPERATION_WORKFLOW_OWNER_LITERAL.FUNCTION ?
-    owner.repository.getActualReplicaObservation(
-      operation.replicaId,
-      operation.partitionId,
-      operation.targetNodeId,
-      ADD_TARGET_LIVENESS_READ,
-    ) : null;
+  return owner.repository.getActualReplicaObservation(
+    operation.replicaId,
+    operation.partitionId,
+    operation.targetNodeId,
+    ADD_TARGET_LIVENESS_READ,
+  );
 }
 
 /**
@@ -186,13 +185,13 @@ async function admitReplaceTerminalFailure(owner, operation, options = {}) {
  */
 async function admitAddTerminalFailure(owner, operation) {
   const [observation, durableStep] = await Promise.all([
-    observeCreateTarget(owner, operation),
-    readReplaceDurableStep(owner, operation),
-  ]);
-  const live = observation?.state === OPERATION_WORKFLOW_OWNER_LITERAL
-    .OBSERVED && isLiveCreateTargetStatus(observation.lifecycleStatus);
+    observeCreateTarget(owner, operation), readReplaceDurableStep(owner, operation)]);
+  // UNAVAILABLE never shows a non-live target: refused (held); the step re-asks.
+  const answered = observation.state !== ACTUAL_REPLICA_OBSERVATION_STATE.UNAVAILABLE;
+  const live = observation.state === ACTUAL_REPLICA_OBSERVATION_STATE.OBSERVED &&
+    isLiveCreateTargetStatus(observation.lifecycleStatus);
   return Object.freeze({
-    admitted: !live,
+    admitted: answered && !live,
     expectedWorkflowStep: durableStep,
     completeInstead: live,
     stepMetadata: null,

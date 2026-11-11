@@ -295,7 +295,7 @@ test('runtime-service REPLACE keeps one canonical target through the next ' +
       executorOutcomeEmitter: coordinator.executorOutcomeEmitter,
     }));
   }
-  handlerByNodeId.get(SOURCE_NODE_ID).registerExistingReplica({
+  handlerByNodeId.get(SOURCE_NODE_ID).localReplicas.set(SOURCE_REPLICA_ID, {
     replicaId: SOURCE_REPLICA_ID,
     entityId: ENTITY_ID,
     status: ReplicaStatus.ACTIVE,

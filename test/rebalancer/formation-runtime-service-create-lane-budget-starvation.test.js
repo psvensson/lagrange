@@ -383,9 +383,9 @@ async function runPlacementScenario(t, finiteAuthorityFailure = false) {
       'four non-priority ADD slots remain after the recovery reservation',
     );
     t.equal(
-      await coordinator.getConcurrentAddCount({
+      (await coordinator.getConcurrentAddCount({
         partitionId: SERVICE_ENTITY_ID,
-      }),
+      })).count,
       3,
       'the authoritative budget owner observes all three churn operations',
     );

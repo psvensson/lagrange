@@ -93,7 +93,7 @@ function createTestSystemCache({
   }
 
   cache.applySystemTableChange(TABLES.TABLES, 'INSERT', {
-    id: 'tbl-ratings',
+    table_id: 'tbl-ratings',
     table_name: TEST_TABLE_RATINGS,
     schema_json: JSON.stringify({
       tableName: TEST_TABLE_RATINGS,

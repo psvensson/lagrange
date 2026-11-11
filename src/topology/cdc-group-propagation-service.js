@@ -6,6 +6,8 @@ import {EventEmitter} from 'events';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {assertCritical} from '../utils/assert.js';
+import {SystemTableCache} from '../cache/system-table-cache.js';
+import {ReadOnlySystemTableCache} from '../cache/read-only-system-table-cache.js';
 import {isDenseDataArray, isRecord} from '../utils/canonical-json-data.js';
 import {hasDurableCdcEvents, unknownCdcAcceptance} from '../cdc/cdc-delivery-outcome.js';
 import {isCdcDeliveryInvocation} from '../cdc/cdc-delivery-invocation.js';
@@ -128,6 +130,12 @@ class CDCGroupPropagationService extends EventEmitter {
       this.systemTableCache,
       CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_CACHE,
     );
+    // Every bound propagation watches the recipient-domain tables of this
+    // cache (cdc-propagation-progress.js): the collaborator is the node's
+    // system-table cache, whose change port that watch consumes.
+    assertCritical(this.systemTableCache instanceof SystemTableCache ||
+      this.systemTableCache instanceof ReadOnlySystemTableCache,
+    CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_CACHE_CHANGE_PORT);
     this.latencyTreeService = assertCritical(
       this.latencyTreeService,
       CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_TREE_SERVICE,

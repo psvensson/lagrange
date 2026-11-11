@@ -11,7 +11,6 @@ import {buildOperationListUnavailableError} from
 const LIST_SCOPE = Object.freeze({
   ALL: 'all operations',
   ENTITY: 'entity operations ',
-  IN_FLIGHT_REMOVES: 'in-flight REMOVE operations',
 });
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
@@ -45,14 +44,11 @@ function assignReplicaOperationRepositoryEntityReadMethods(
     REPLICA_OPERATION_OWNER_PREFERRED_READ_QUERY_OPTIONS,
     REPLICA_OPERATION_REPOSITORY_LITERAL,
     REPLICA_OPERATION_STRICT_VISIBILITY_QUERY_OPTIONS,
-    REPLICA_OPERATION_VISIBILITY_READ_MODE,
     SERVICE_TYPE,
     SQL,
     SYSTEM_TABLE_NAME,
     UNIFIED_SERVICE_TYPE,
     WORKFLOW_STEP,
-    buildReplicaOperationVisibilityReadOptions,
-    resolveReplicaOperationVisibilityReadMode,
   } = options;
   const LOCAL_PREFERRED_AUTHORITATIVE_READ_OPTIONS = Object.freeze({
     ...REPLICA_OPERATION_STRICT_VISIBILITY_QUERY_OPTIONS,
@@ -271,40 +267,6 @@ function assignReplicaOperationRepositoryEntityReadMethods(
       }
 
       return this.buildEntityOperationVisibilityObservation(operations, null);
-    }
-
-    /**
-   * Get count of non-terminal REMOVE operations.
-   * @param {object} [options={}]
-   * @return {Promise<number>}
-   */
-    async getConcurrentRemoveCount(options = {}) {
-      const visibilityReadMode = resolveReplicaOperationVisibilityReadMode(options);
-      if (visibilityReadMode !== REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED) {
-        const cachedCount = this.queryCachedIncompleteOperations().filter(
-          (operation) => operation?.type === OperationType.REMOVE,
-        ).length;
-        if (
-          cachedCount > 0 ||
-        visibilityReadMode === REPLICA_OPERATION_VISIBILITY_READ_MODE.CACHE_ONLY
-        ) {
-          return cachedCount;
-        }
-      }
-
-      const result = await this.executeReplicaOperationsRead(
-        SQL.SELECT_IN_FLIGHT_BY_TYPE,
-        [OperationType.REMOVE],
-        buildReplicaOperationVisibilityReadOptions(visibilityReadMode),
-      );
-      if (!result.success || !result.rows) {
-        throw buildOperationListUnavailableError(
-          result, LIST_SCOPE.IN_FLIGHT_REMOVES);
-      }
-
-      return result.rows
-        .map((row) => this.rowToOperation(row))
-        .filter((op) => !this.isOperationTerminal(op)).length;
     }
 
     /**

@@ -8,7 +8,10 @@
  * participant session owner (a session ended or was discarded), the
  * persistence release (the connection closed), and the port's applied
  * progress (a PREPARED row decided by a committed entry).
- * Inputs: the partition service; its port's APPLIED_PROGRESS event.
+ * Inputs: the partition service and its owned wake set
+ * (service.removalDrainWakes, created with the service); its port's
+ * APPLIED_PROGRESS event, read only while the service has a port (a
+ * released port applies nothing, and its release is itself a wake).
  * Canonical output: nextRemovalDrainWake(service), a promise settled by the
  * next such change; notifyRemovalServingDrain(service) settles every waiter.
  * Prohibited: a timer, a poll, or a decision - the drain re-reads its owners
@@ -16,20 +19,13 @@
  */
 import {RAFT_EVENT} from '../raft/raft-operation-port-constants.js';
 
-const FUNCTION_TYPE = 'function';
-// Per service: the wakes of the drains waiting on it.
-const DRAIN_WAKES = new WeakMap();
-
 /**
  * Wake every removal drain waiting on this partition.
  * @param {Object} service - The partition.
  */
 function notifyRemovalServingDrain(service) {
-  const wakes = service ? DRAIN_WAKES.get(service) : undefined;
-  if (wakes === undefined) {
-    return;
-  }
-  DRAIN_WAKES.delete(service);
+  const wakes = [...service.removalDrainWakes];
+  service.removalDrainWakes.clear();
   for (const wake of wakes) {
     wake();
   }
@@ -43,11 +39,6 @@ function notifyRemovalServingDrain(service) {
  */
 function nextRemovalDrainWake(service) {
   return new Promise((resolve) => {
-    let wakes = DRAIN_WAKES.get(service);
-    if (wakes === undefined) {
-      wakes = new Set();
-      DRAIN_WAKES.set(service, wakes);
-    }
     let unsubscribe = null;
     let woken = false;
     const wake = () => {
@@ -55,14 +46,18 @@ function nextRemovalDrainWake(service) {
         return;
       }
       woken = true;
-      wakes.delete(wake);
-      unsubscribe?.();
+      service.removalDrainWakes.delete(wake);
+      if (unsubscribe !== null) {
+        unsubscribe();
+      }
       resolve();
     };
-    wakes.add(wake);
-    const subscription = typeof service.raft?.subscribe === FUNCTION_TYPE ?
-      service.raft.subscribe(RAFT_EVENT.APPLIED_PROGRESS, wake) : null;
-    unsubscribe = typeof subscription === FUNCTION_TYPE ? subscription : null;
+    service.removalDrainWakes.add(wake);
+    // The port's subscribe always answers its unsubscribe
+    // (raft-rs-operation-port.js).
+    if (service.raft) {
+      unsubscribe = service.raft.subscribe(RAFT_EVENT.APPLIED_PROGRESS, wake);
+    }
   });
 }
 

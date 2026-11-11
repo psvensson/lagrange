@@ -29,11 +29,13 @@ import {
   createDurableSourceMessageGroupService,
   createGroupRow,
   createMessageGroupServiceRow,
+  createTopologyCache,
   setupConfig,
   teardownConfig,
 } from '../topology/cdc-group-propagation-service-harness.js';
 import {RESPONSE, SOURCE_GROUP, SOURCE_NODE, TARGET_GROUP, TARGET_NODE,
-  addRequiredGroup, assertDebtWithoutAck, omitTarget, topologyProgressFixture} from
+  addRequiredGroup, assertDebtWithoutAck, omitTarget, putGroup, targetService,
+  topologyProgressFixture, updateNode, updateTargetService} from
   '../test-helpers/cdc-topology-progress-fixture.js';
 import {
   applyCommitted,
@@ -60,24 +62,24 @@ async function commitAllButTheTarget(f) {
 
 const replacements = [
   ['address', (f) => {
-    f.projection.services[0][COLUMN.ADDRESS] = 'repaired/message-group/target';
+    updateTargetService(f, {[COLUMN.ADDRESS]: 'repaired/message-group/target'});
   }],
   ['coordinator', (f) => {
-    f.projection.services[0][COLUMN.NODE_ID] = 'replacement-node';
+    updateTargetService(f, {[COLUMN.NODE_ID]: 'replacement-node'});
   }],
   ['service identity', (f) => {
-    f.projection.services[0][COLUMN.SERVICE_ID] = 'replacement-service';
+    updateTargetService(f, {[COLUMN.SERVICE_ID]: 'replacement-service'});
   }],
   ['same-text service birth', (f) => {
-    f.projection.services[0][COLUMN.CREATED_AT] += 1;
+    updateTargetService(f, {[COLUMN.CREATED_AT]: targetService(f)[COLUMN.CREATED_AT] + 1});
   }],
   ['same-text creation attempt', (f) => {
-    f.projection.services[0].create_attempt_token = 'replacement-birth-attempt';
+    updateTargetService(f, {create_attempt_token: 'replacement-birth-attempt'});
   }],
   ['node boot incarnation', (f) => {
-    f.projection.nodes.get(TARGET_NODE)[COLUMN.BOOT_INCARNATION] = 2;
+    updateNode(f, TARGET_NODE, {[COLUMN.BOOT_INCARNATION]: 2});
     assert.equal(isIssuedBootIncarnation(
-      f.projection.nodes.get(TARGET_NODE)[COLUMN.BOOT_INCARNATION]), true);
+      f.projection.cache.get(TABLES.NODES, TARGET_NODE)[COLUMN.BOOT_INCARNATION]), true);
   }],
 ];
 
@@ -156,7 +158,7 @@ test('a weak answer moves no cursor whatever route carried it; the next delivery
   'route that replaced it', async (t) => {
   const f = await topologyProgressFixture(t);
   f.duringTarget = () => {
-    f.projection.services[0][COLUMN.ADDRESS] = 'new-route/message-group/target';
+    updateTargetService(f, {[COLUMN.ADDRESS]: 'new-route/message-group/target'});
     f.duringTarget = null;
   };
   assert.equal((await f.drive()).state, DRIVE.PROVISIONAL);
@@ -188,21 +190,22 @@ test('grouped source contradiction refuses before effects even with another fall
     setupConfig(LATENCY_PROPAGATION_MODE.GROUPED);
     const f = await topologyProgressFixture(t);
     f.targetMode = RESPONSE.NATIVE;
-    f.projection.nodes.get(SOURCE_NODE)[COLUMN.LATENCY_GROUP_ID] = 'contradictory-source';
-    f.projection.groups.push(createGroupRow('contradictory-source', SOURCE_NODE),
-      createGroupRow(TARGET_GROUP, null));
+    updateNode(f, SOURCE_NODE, {[COLUMN.LATENCY_GROUP_ID]: 'contradictory-source'});
+    putGroup(f, createGroupRow('contradictory-source', SOURCE_NODE));
+    putGroup(f, createGroupRow(TARGET_GROUP, null));
     assert.equal((await f.drive()).state, DRIVE.HELD_BY_SUBSCRIBER);
     assert.equal(f.sourceCalls.length, 0);
     assert.equal(f.targetCalls.length, 0);
     assertDebtWithoutAck(f);
-    f.projection.nodes.get(SOURCE_NODE)[COLUMN.LATENCY_GROUP_ID] = SOURCE_GROUP;
-    f.projection.groups[0][COLUMN.GROUP_ID] = SOURCE_GROUP;
+    updateNode(f, SOURCE_NODE, {[COLUMN.LATENCY_GROUP_ID]: SOURCE_GROUP});
+    putGroup(f, {...createGroupRow('contradictory-source', SOURCE_NODE),
+      [COLUMN.GROUP_ID]: SOURCE_GROUP}, 'contradictory-source');
     assert.equal((await f.drive()).state, DRIVE.HELD_BY_SUBSCRIBER,
       'missing coordinator node retains target group debt instead of bypassing grouped routing');
     assert.equal(f.sourceCalls.length, 1);
     assert.equal(f.targetCalls.length, 0);
     assertDebtWithoutAck(f);
-    f.projection.groups[1][COLUMN.COORDINATOR_NODE_ID] = TARGET_NODE;
+    putGroup(f, createGroupRow(TARGET_GROUP, TARGET_NODE));
     assert.equal((await f.drive()).state, DRIVE.DRAINED,
       'restoring coordinator node drains retained grouped obligation');
     assert.equal(f.sourceCalls.length, 1);
@@ -259,12 +262,8 @@ test(HELD_RECIPIENT_ACROSS_TABLES,
       [COLUMN.CREATED_AT]: 100,
       create_attempt_token: `${TARGET_GROUP}-birth-1`,
     };
-    const cache = {
-      get: (table, key) => table === TABLES.NODES ? nodesMap.get(key) ?? null : null,
-      getAll: () => [],
-      filter: (table, predicate) =>
-        table === TABLES.SERVICES ? [targetServiceRow].filter(predicate) : [],
-    };
+    const cache = createTopologyCache({nodes: [...nodesMap.values()],
+      services: [targetServiceRow]});
     const sourceGroup = createDurableSourceMessageGroupService(SOURCE_GROUP);
     const router = {
       deliver: async (address, payload, options) => {

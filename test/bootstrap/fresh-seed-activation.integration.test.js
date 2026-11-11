@@ -368,8 +368,8 @@ test('R3 negative: with original rights untransferred every public admission ent
     t.after(() => api.shutdown());
     // Substitute only a ready observation; the actual readiness owner and
     // API composition must still consume original admission and refuse it.
-    t.mock.method(api.bootstrapReadinessOwner, 'evaluateReadinessSnapshotForProbe',
-      async () => ({ready: true, reasons: [], timestamp: Date.now()}));
+    t.mock.method(api.bootstrapReadinessOwner, 'evaluateReadinessSnapshot',
+      () => ({ready: true, reasons: [], timestamp: Date.now()}));
     let status;
     const response = await api.bootstrapReadinessOwner.handleReadinessProbeRequest({
       code(value) {

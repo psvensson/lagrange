@@ -220,7 +220,7 @@ for (const tableName of FOUNDATION_TABLES) {
       // committed receipt and never permission to clear the source debt.
       return buildProvisionalCdcOutcome(events, PROVISIONAL_RETRY_MS);
     }, {canAcceptCDCEvent: () => true});
-    reopened.subscribeToCDC(subscriber);
+    void reopened.subscribeToCDCWithHandshake(subscriber);
     if (reopened.raft.readStatus().role !== RAFT_ROLE.LEADER) {
       await turnChainValue(reopened.raft.campaign());
     }

@@ -1,6 +1,7 @@
 /* tslint:disable */
 /* eslint-disable */
 export function wasm_start(): void;
+export function step_down_removed_leader(handle: number): any;
 export function propose_conf_change_v2(handle: number, cc: any): void;
 export function apply_conf_change(handle: number, cc: any): any;
 export function decode_conf_change_entry(entry_type: number, data?: string | null): any;

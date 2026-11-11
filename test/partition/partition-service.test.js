@@ -1417,7 +1417,7 @@ test('PartitionService - follower applyCommittedEntry must not emit CDC', async 
   partition.isLeader = false;
 
   const cdcEvents = [];
-  partition.subscribeToCDC((events) => {
+  void partition.subscribeToCDCWithHandshake((events) => {
     cdcEvents.push(...events);
   });
 

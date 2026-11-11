@@ -476,7 +476,7 @@ test('Property 10: Operation Log Persistence', async (t) => {
       });
       await coordinator.failOperation(op3, 'Test error');
 
-      const inFlight = await coordinator.getInFlightOperations();
+      const {operations: inFlight} = await coordinator.getInFlightOperations();
 
       t.equal(inFlight.length, 1, 'Should return 1 in-flight operation');
       t.equal(inFlight[0].operationId, op1.operationId,
@@ -496,7 +496,7 @@ test('Property 10: Operation Log Persistence', async (t) => {
         nodeId: 'node-1',
       });
 
-      const inFlight = await coordinator.getInFlightOperations();
+      const {operations: inFlight} = await coordinator.getInFlightOperations();
       const op = inFlight[0];
 
       t.ok(op.operationId, 'Has operationId');

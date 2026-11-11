@@ -1,5 +1,9 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  SeedMap,
+  createRecordingReconcileQueue,
+} from '../helpers/recording-reconcile-queue.js';
+import {
   deriveMembershipPublicationCandidate,
   MembershipPublicationCoordinator,
 } from '../../src/control-plane/membership-publication-coordinator.js';
@@ -19,6 +23,8 @@ import {
   PUBLICATION_ACTIVE_GATE_HANDOFF_REASON,
 } from '../../src/control-plane/publication-active-gate-handoff-contract.js';
 import {MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_CONNECTION_STATE_CONNECTED, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_NOW_MS, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PROCESS_DEAD_NODE_ID, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLICATION_EPOCH, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLISHED_NODE_ID, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLISHER_NODE_ID, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_STATUS_ACK_PENDING, MEMBERSHIP_PUBLICATION_TRIM_CONNECTION_STATE_READY, MEMBERSHIP_PUBLICATION_TRIM_STATUS_PUBLISHED, buildMembershipPublicationAckDeferralNodeRow, buildMembershipPublicationTrimEndpointRow, buildMembershipPublicationTrimServiceRow} from './membership-publication-coordinator-candidate-fixtures.js';
+import {publicationsOwnerOverRows} from
+  './publication-owner-test-support.js';
 
 const PUBLICATION_CONVERGENCE_STALE_PUBLISHED_EPOCH = 29;
 const PUBLICATION_CONVERGENCE_REPAIR_NOW_MS = 1000;
@@ -858,7 +864,7 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_RETRY_VISIBLE_TEST_NAME,
       priority_partition_summary:
         PUBLICATION_CONVERGENCE_AUTH_REFRESH_PRIORITY_SUMMARY,
     };
-    const pending = new Map();
+    const pending = new SeedMap();
     const enqueued = [];
     const persistedRows = [];
     const coordinator = new MembershipPublicationCoordinator({
@@ -866,15 +872,8 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_RETRY_VISIBLE_TEST_NAME,
         PUBLICATION_CONVERGENCE_HANDOFF_RETRY_NODE_IDS[
           PUBLICATION_CONVERGENCE_HANDOFF_TARGET_FIRST_NODE_INDEX
         ],
-      reconcileQueue: {
-        pending,
-        enqueue(ownerKey, reason, context, options) {
-          enqueued.push({ownerKey, reason, context, options});
-          pending.set(ownerKey, {context});
-          return true;
-        },
-      },
-      controlPlanePublicationsOwner: {
+      reconcileQueue: createRecordingReconcileQueue({pending, enqueued}),
+      controlPlanePublicationsOwner: publicationsOwnerOverRows({
         async listPublications() {
           return {rows: [latestPublicationRow]};
         },
@@ -900,11 +899,11 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_RETRY_VISIBLE_TEST_NAME,
               PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DURABLE_UPDATED_AT,
           };
         },
-        async upsertPublication(row) {
+        async storeRow(row) {
           persistedRows.push(row);
           return row;
         },
-      },
+      }),
       systemTableCache: {
         getAll(tableName) {
           if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
@@ -981,7 +980,7 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_STALE_VISIBLE_TEST_NAME,
       priority_partition_summary:
         PUBLICATION_CONVERGENCE_AUTH_REFRESH_PRIORITY_SUMMARY,
     };
-    const pending = new Map();
+    const pending = new SeedMap();
     const enqueued = [];
     const persistedRows = [];
     let staleWriteReadbackCount =
@@ -991,15 +990,8 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_STALE_VISIBLE_TEST_NAME,
         PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[
           PUBLICATION_CONVERGENCE_HANDOFF_TARGET_FIRST_NODE_INDEX
         ],
-      reconcileQueue: {
-        pending,
-        enqueue(ownerKey, reason, context, options) {
-          enqueued.push({ownerKey, reason, context, options});
-          pending.set(ownerKey, {context});
-          return true;
-        },
-      },
-      controlPlanePublicationsOwner: {
+      reconcileQueue: createRecordingReconcileQueue({pending, enqueued}),
+      controlPlanePublicationsOwner: publicationsOwnerOverRows({
         async listPublications() {
           return {rows: [latestPublicationRow]};
         },
@@ -1030,11 +1022,11 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_STALE_VISIBLE_TEST_NAME,
               PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DURABLE_UPDATED_AT,
           };
         },
-        async upsertPublication(row) {
+        async storeRow(row) {
           persistedRows.push(row);
           return row;
         },
-      },
+      }),
       systemTableCache: {
         getAll(tableName) {
           if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
@@ -1107,7 +1099,7 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_READBACK_FAILURE_TEST_NAME,
       priority_partition_summary:
         PUBLICATION_CONVERGENCE_AUTH_REFRESH_PRIORITY_SUMMARY,
     };
-    const pending = new Map();
+    const pending = new SeedMap();
     const enqueued = [];
     const persistedRows = [];
     let publicationReadCount =
@@ -1118,15 +1110,8 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_READBACK_FAILURE_TEST_NAME,
           PUBLICATION_CONVERGENCE_HANDOFF_TARGET_FIRST_NODE_INDEX
         ],
       resolveIsControlPlanePublicationsWriteLeader: () => true,
-      reconcileQueue: {
-        pending,
-        enqueue(ownerKey, reason, context, options) {
-          enqueued.push({ownerKey, reason, context, options});
-          pending.set(ownerKey, {context});
-          return true;
-        },
-      },
-      controlPlanePublicationsOwner: {
+      reconcileQueue: createRecordingReconcileQueue({pending, enqueued}),
+      controlPlanePublicationsOwner: publicationsOwnerOverRows({
         async listPublications() {
           return {rows: [latestPublicationRow]};
         },
@@ -1148,11 +1133,11 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_READBACK_FAILURE_TEST_NAME,
           }
           return persistedRow;
         },
-        async upsertPublication(row) {
+        async storeRow(row) {
           persistedRows.push(row);
           return row;
         },
-      },
+      }),
       systemTableCache: {
         getAll(tableName) {
           if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {

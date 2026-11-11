@@ -26,6 +26,10 @@ For the complete guide on Kubernetes deployment and cloud benchmark automation, 
   distinct seed/joiner startup branches (seed = no `SEED_NODE_ADDRESS`, no
   self-seed guard), and the runtime image is distroless (no shell), so
   ordinal-based "pod-0 is the seed" logic cannot run in-container.
+- **Declared formation size.** The seed alone receives
+  `LAGRANGE_FORMATION_TARGET_NODE_COUNT = 1 + joiners.replicas`, the intended
+  total node count it records once at founding; the runtime has no default
+  and refuses to found a cluster without it.
 - **Name-first addressing.** Every pod registers (`NODE_ADDRESS`) and
   advertises (`NODE_ADVERTISED_WS_ADDRESS`) its stable headless-service DNS
   name, and binds wide (`TRANSPORT_WS_HOST=0.0.0.0`). Peers re-resolve the

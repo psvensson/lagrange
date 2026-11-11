@@ -255,11 +255,13 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
             cachedIncompleteOps,
           ),
       });
-    const incompleteOps = Array.isArray(
-      incompleteOperationObservation?.operations,
-    ) ?
-      incompleteOperationObservation.operations :
-      [];
+    // DEFERRED carries no list. The sweep then wakes the cache-visible
+    // candidates only: each turn re-reads its row by id from the owner and
+    // decides nothing on an unanswered read or on what the projection lacks.
+    const incompleteOps = incompleteOperationObservation.state ===
+      INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED ?
+      cachedIncompleteOps :
+      incompleteOperationObservation.operations;
     if (
       incompleteOperationObservation.state ===
       INCOMPLETE_OPERATION_OBSERVATION_STATE.EMPTY
@@ -272,15 +274,7 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
       return;
     }
     this.clearEmptyIncompleteOperationQueryDelay();
-    // DEFERRED: the owner did not answer. Its operations (if any) are a
-    // projection, so the sweep visits them - each turn re-reads its row by
-    // id from the owner and decides nothing on an unanswered read - and
-    // concludes nothing from what the projection lacks.
-    if (
-      incompleteOperationObservation.state ===
-        INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED &&
-      incompleteOps.length === 0
-    ) {
+    if (incompleteOps.length === 0) {
       return;
     }
 
@@ -461,11 +455,8 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
           REPLICA_OPERATION_VISIBILITY_READ_MODE.CACHE_PREFERRED_SQL_FALLBACK,
       });
     // Orphan adoption fails or adopts work: only on an answered list (a
-    // DEFERRED observation's operations are a projection fallback).
-    const incompleteOps = Array.isArray(observation?.operations) &&
-      observation.state !== INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED ?
-      observation.operations :
-      [];
+    // DEFERRED observation carries none).
+    const incompleteOps = observation.operations;
     const ownedOps = incompleteOps.filter((op) =>
       op &&
       !this.repository.isOperationTerminal(op) &&

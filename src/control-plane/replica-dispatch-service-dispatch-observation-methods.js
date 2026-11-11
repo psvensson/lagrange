@@ -3,15 +3,17 @@ import {MESSAGE_GROUP_SERVICE_HANDLER_ADDRESS} from '../node/message-group-servi
 import {REPLICA_HANDLER_ADDRESS} from '../node/replica-handler-constants.js';
 import {RUNTIME_SERVICE_HANDLER_ADDRESS} from '../node/runtime-service-handler-constants.js';
 import {UNIFIED_SERVICE_TYPE} from '../constants/index.js';
-import {isOperationVisibilityUnavailableError} from
-  '../rebalancer/replica-operation-repository-operation-visibility.js';
+import {
+  OPERATION_VISIBILITY_STATE,
+  buildOperationVisibilityUnavailableError,
+  readOperationVisibilityState,
+} from '../rebalancer/replica-operation-repository-operation-visibility.js';
 
 const {
   COLUMN,
   DISPATCH_ERROR_MSG,
   DISPATCH_EVENT,
   DISPATCH_LOG_MSG,
-  DISPATCH_SUBSYSTEM,
   REPLICA_DISPATCH_SERVICE_LITERAL,
   SERVICE_STATUS,
   SERVICE_TYPE,
@@ -174,136 +176,54 @@ class ReplicaDispatchServiceDispatchObservationMethods {
   }
 
   /**
-   * ADVISORY refresh of one replica_operations row for a dispatch wake (its
-   * callers keep their wake-up row when this answers nothing). The row is
-   * the repository's PRESENT authoritative row; null means "no refreshed
-   * row" - the owner confirmed it absent OR the read was unavailable - and
-   * is never used here to drop or complete work.
+   * The one owner read of one replica_operations row for dispatch: the
+   * repository's by-id visibility contract (PRESENT / ABSENT / UNAVAILABLE),
+   * with the row in the dispatch row shape. UNAVAILABLE never carries a row.
    * @param {string} operationId
-   * @return {Promise<Object|null>}
+   * @param {Object} [options]
+   * @param {boolean} [options.allowPriorityRecoveryDeferredVisibility]
+   * @return {Promise<Object>} {state, row, deferredOutcome}
    * @private
    */
-  async getAuthoritativeReplicaOperationRow(operationId) {
-    const authoritativeOperationQuery =
-      this.rebalanceCoordinator?.repository &&
-      typeof this.rebalanceCoordinator.repository
-        .queryAuthoritativeOperationById === 'function' ?
-        this.rebalanceCoordinator.repository.queryAuthoritativeOperationById.bind(
-          this.rebalanceCoordinator.repository,
-        ) :
-        null;
-    if (authoritativeOperationQuery) {
-      const authoritativeOperation = await authoritativeOperationQuery(
+  async observeAuthoritativeReplicaOperationRow(operationId, options = {}) {
+    const observation =
+      await this.rebalanceCoordinator.repository.getOperationByIdVisibilityObservation(
         operationId,
         {
-        },
-      ).catch((error) => {
-        if (isOperationVisibilityUnavailableError(error)) {
-          return null;
-        }
-        throw error;
-      });
-      if (authoritativeOperation) {
-        return this.buildOperationRowFromCoordinator(authoritativeOperation);
-      }
-      return null;
-    }
-
-    const gateway = this.controlPlaneSystemTableGateway;
-    if (!operationId || !gateway || typeof gateway !== 'object') {
-      return null;
-    }
-
-    let result = null;
-    if (typeof gateway.readAuthoritativeRows === 'function') {
-      result = await gateway.readAuthoritativeRows(
-        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-        REPLICA_DISPATCH_SERVICE_LITERAL.SELECT_STAR_FROM_REPLICA_OPERATIONS_WHERE_OPERATION_ID_EQUALS_QUESTION_MARK,
-        [operationId],
-        {
-          owner: DISPATCH_SUBSYSTEM,
+          allowPriorityRecoveryDeferredVisibility:
+            options.allowPriorityRecoveryDeferredVisibility === true,
+          allowOwnerPersistedTransitionDeferredVisibility: false,
         },
       );
-    } else if (typeof gateway.executeRead === 'function') {
-      result = await gateway.executeRead(
-        {
-          tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-          sql: REPLICA_DISPATCH_SERVICE_LITERAL.SELECT_STAR_FROM_REPLICA_OPERATIONS_WHERE_OPERATION_ID_EQUALS_QUESTION_MARK,
-          params: [operationId],
-          strategy: REPLICA_DISPATCH_SERVICE_LITERAL.AUTHORITATIVE,
-        },
-        {
-          owner: DISPATCH_SUBSYSTEM,
-        },
-      );
-    } else if (typeof gateway.readRows === 'function') {
-      result = await gateway.readRows(
-        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-        REPLICA_DISPATCH_SERVICE_LITERAL.SELECT_STAR_FROM_REPLICA_OPERATIONS_WHERE_OPERATION_ID_EQUALS_QUESTION_MARK,
-        [operationId],
-        {owner: DISPATCH_SUBSYSTEM},
-      );
-    }
-
-    if (result?.success === false) {
-      return null;
-    }
-
-    const rows = Array.isArray(result?.rows) ?
-      result.rows :
-      Array.isArray(result) ?
-        result :
-        [];
-    return rows[REPLICA_DISPATCH_SERVICE_LITERAL.ZERO] || null;
-  }
-
-  /**
-   * Resolve the best available owner-path operation visibility for direct
-   * dispatch retries. Prefer the canonical repository visibility observation
-   * when available so deferred retries inherit the same fallback row and
-   * retry metadata the rebalancer owner already uses.
-   *
-   * @param {string} operationId
-   * @return {Promise<Object>}
-   * @private
-   */
-  async getDispatchRetryOperationVisibilityObservation(operationId) {
-    const visibilityObservationQuery =
-      this.rebalanceCoordinator?.repository &&
-      typeof this.rebalanceCoordinator.repository
-        .getOperationByIdVisibilityObservation === 'function' ?
-        this.rebalanceCoordinator.repository.getOperationByIdVisibilityObservation.bind(
-          this.rebalanceCoordinator.repository,
-        ) :
-        null;
-    if (visibilityObservationQuery) {
-      const observation = await visibilityObservationQuery(operationId, {
-        allowPriorityRecoveryDeferredVisibility: true,
-      });
-      const operation =
-        observation?.operation && typeof observation.operation === 'object' ?
-          observation.operation :
-          null;
-      return Object.freeze({
-        row: operation ?
-          this.buildOperationRowFromCoordinator(operation) :
-          null,
-        deferredOutcome:
-          observation?.deferredOutcome &&
-          typeof observation.deferredOutcome === 'object' ?
-            {...observation.deferredOutcome} :
-            null,
-      });
-    }
+    const state = readOperationVisibilityState(observation);
     return Object.freeze({
-      row: await this.getAuthoritativeReplicaOperationRow(operationId),
-      deferredOutcome: null,
+      state,
+      row: state === OPERATION_VISIBILITY_STATE.PRESENT ?
+        this.buildOperationRowFromCoordinator(observation.operation) :
+        null,
+      deferredOutcome: observation.deferredOutcome ?
+        {...observation.deferredOutcome} :
+        null,
     });
   }
 
   /**
-   * Get a replica operation row from cache, with authoritative fallback when
-   * the persisted row is still invisible to the local cache.
+   * The owner-path visibility of one operation for a direct dispatch retry:
+   * the typed observation, so an unanswered read defers the retry on its
+   * own retry semantics instead of reading as "no row".
+   * @param {string} operationId
+   * @return {Promise<Object>} {state, row, deferredOutcome}
+   * @private
+   */
+  async getDispatchRetryOperationVisibilityObservation(operationId) {
+    return this.observeAuthoritativeReplicaOperationRow(operationId, {
+      allowPriorityRecoveryDeferredVisibility: true,
+    });
+  }
+
+  /**
+   * Get a replica operation row from cache; on a cache miss, the owner's
+   * answer (readOwnerReplicaOperationRowOnCacheMiss).
    * @readModel DISPATCH_OPERATION_LOOKUP — READ_MODEL_SOURCE.SYSTEM_TABLE_CACHE
    * @param {string} operationId - Operation ID.
    * @return {Promise<Object|null>} Operation row or null.
@@ -323,7 +243,7 @@ class ReplicaDispatchServiceDispatchObservationMethods {
       if (cachedRow) {
         return cachedRow;
       }
-      return this.getAuthoritativeReplicaOperationRow(operationId);
+      return this.readOwnerReplicaOperationRowOnCacheMiss(operationId);
     }
     const cachedRow =
       this.getSystemTableRowFromCache(
@@ -333,7 +253,33 @@ class ReplicaDispatchServiceDispatchObservationMethods {
     if (cachedRow) {
       return cachedRow;
     }
-    return this.getAuthoritativeReplicaOperationRow(operationId);
+    return this.readOwnerReplicaOperationRowOnCacheMiss(operationId);
+  }
+
+  /**
+   * The owner's row on a cache miss: the row when PRESENT, null when the
+   * owner confirmed it ABSENT. An unanswered read is never null (absence is
+   * not inferred from it): the dispatch holds on the named visibility-lag
+   * retry, which re-reads the row when it fires, and the pass ends with the
+   * typed unavailability.
+   * @param {string} operationId
+   * @return {Promise<Object|null>}
+   * @private
+   */
+  async readOwnerReplicaOperationRowOnCacheMiss(operationId) {
+    const observation =
+      await this.observeAuthoritativeReplicaOperationRow(operationId);
+    if (observation.state === OPERATION_VISIBILITY_STATE.UNAVAILABLE) {
+      this.deferOperationDispatchRetry(
+        operationId,
+        this.buildReplicaOperationVisibilityLagError(
+          operationId, observation.deferredOutcome),
+        null,
+        {[REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH]: true},
+      );
+      throw buildOperationVisibilityUnavailableError(observation, operationId);
+    }
+    return observation.row;
   }
 
   /**

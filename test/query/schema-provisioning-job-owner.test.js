@@ -146,10 +146,11 @@ function createGateway() {
         )};
       }
       if (tableName === 'tables') {
-        return {rows: candidates.filter((row) => row.table_name === params[0])};
+        return {success: true,
+          rows: candidates.filter((row) => row.table_name === params[0])};
       }
       if (tableName === 'partitions') {
-        return {rows: candidates.filter(
+        return {success: true, rows: candidates.filter(
           (row) => row.partition_id === params[0],
         )};
       }
@@ -1110,9 +1111,9 @@ test('Logs case survives schema job identity, metadata creation and restart',
     t.equal(calls.length, 1);
     t.equal(calls[0].tableName, 'Logs');
     t.equal(gateway.rows.get(`tables:${intent.tableId}`).table_name, 'Logs');
-    t.equal((await resumed.findExistingTableRecord('Logs')).table_id,
+    t.equal((await resumed.lookupTableRecord('Logs')).row.table_id,
       intent.tableId, 'authoritative catalog resolves exact name');
-    t.equal(await resumed.findExistingTableRecord('logs'), null,
+    t.equal((await resumed.lookupTableRecord('logs')).outcome, 'ABSENT',
       'authoritative catalog does not resolve a case alias');
   });
 

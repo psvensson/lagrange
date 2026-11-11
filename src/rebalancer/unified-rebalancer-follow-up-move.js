@@ -142,7 +142,7 @@ function readFollowUpTargetReadiness(rebalancer, nodeId) {
     return null;
   }
   const readiness = readinessService.getNodeReadinessSync(nodeId,
-    {allowStaleOnCacheChange: false});
+    rebalancer.buildPlanningReadinessReadOptions());
   rebalancer.notePlanningTargetReadiness(nodeId, readiness);
   return readiness;
 }

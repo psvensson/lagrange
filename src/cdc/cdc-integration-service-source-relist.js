@@ -224,7 +224,7 @@ function logImage(service, record, outcome, extra = {}) {
 function installFetchedImage(service, token, image) {
   const installed = installSourceImage(service.cacheMutationTarget, token, image);
   if (installed.admission === SOURCE_IMAGE_ADMISSION.INSTALL) {
-    service.cacheMutationTarget.recordAuthoritativeObservation?.(image.tableName, {
+    service.cacheMutationTarget.recordAuthoritativeObservation(image.tableName, {
       term: image.witness.term ?? null, appliedIndex: image.appliedIndex,
       commitIndex: image.witness.commitIndex ?? null,
       servingNodeId: image.witness.servingNodeId ?? null, partitionId: image.sourcePartition,
@@ -283,8 +283,8 @@ async function relistSourceTable(service, request) {
   } finally {
     release();
   }
-  const cell = listed.installed?.cell ?? service.cacheMutationTarget.sourceOrder
-    .positionOf(request.sourcePartition);
+  // The cell as it stands after the (synchronous) install, or after none.
+  const cell = service.cacheMutationTarget.sourceOrder.positionOf(request.sourcePartition);
   logImage(service, record, listed.installed?.admission ?? listed.outcome,
     {state: cell.state, appliedIndex: cell.position?.logIndex ?? null,
       upserted: listed.installed?.upserted ?? 0, deleted: listed.installed?.deleted ?? 0});

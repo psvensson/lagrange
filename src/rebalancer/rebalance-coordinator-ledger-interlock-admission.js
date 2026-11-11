@@ -190,13 +190,10 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
     const isDisruptiveSelfMove =
       selfMoveEngagement === OPERATION_LEDGER_HOLD_ENGAGEMENT_OUTCOME.IDLE_ONLY;
 
-    const incompleteOperations = await this.queryIncompleteOperations();
-    const observation = this.getIncompleteOperationObservation(
-      incompleteOperations,
-    );
-    const observedOperations = Array.isArray(incompleteOperations) ?
-      incompleteOperations :
-      [];
+    // The owner's list: DEFERRED carries none, so nothing below admits on
+    // it (each branch holds on `observation.deferredOutcome`).
+    const observation = await this.queryIncompleteOperations();
+    const observedOperations = observation.operations;
     const nowMs = this.timeSource?.now?.() ?? Date.now();
     const currentOperationId = String(
       context?.move?.operationId || '',
@@ -282,9 +279,20 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
     }
 
     // Every other operation defers while an ENGAGED ledger self-move exists
-    // (a registered, not yet dispatch-admissible waiter does not defer). This
-    // direction gates only on OBSERVED rows (absence of actuals never blocks
-    // routine admission).
+    // (a registered, not yet dispatch-admissible waiter does not defer). An
+    // unanswered list cannot show that none is engaged: it holds, and the
+    // planner re-asks on its next pass.
+    if (observation.deferredOutcome) {
+      throw this.createDeferredOperationVisibilityError(
+        normalizedMoveType,
+        observation,
+        {
+          partitionId: partitionId || null,
+          entityType: context?.entityType || SERVICE_TYPE.PARTITION,
+          entityId: context?.entityId || partitionId || null,
+        },
+      );
+    }
     const liveLedgerSelfMove = await this.resolveEngagedLedgerSelfMove(
       liveOperations,
     );

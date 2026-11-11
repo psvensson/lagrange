@@ -1,24 +1,7 @@
 import {retireNodeTransportHandler} from '../node/replica-transport-handler-identity.js';
 import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared.js';
 import {ReplicaDispatchReadinessCapture} from './replica-dispatch-readiness-capture.js';
-import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
-  './control-plane-system-table-gateway-constants.js';
-import {SERVICE_INSTANCE_OUTCOME as LEGACY_AUTHORITY} from
-  '../constants/service-instance.js';
-import {UNIFIED_SERVICE_TYPE, WORKFLOW_STEP} from '../constants/index.js';
-import {
-  OPERATION_VISIBILITY_STATE,
-  buildUnavailableOperationVisibility,
-  readOperationVisibilityState,
-} from '../rebalancer/replica-operation-repository-operation-visibility.js';
-import {OperationType} from '../rebalancer/replica-status.js';
-import {isIncompleteOperationRowStep} from
-  '../rebalancer/replica-operation-step-policy.js';
 
-// No repository or a read that threw: the owner answered nothing.
-const LEGACY_REMOVAL_AUTHORITY_UNAVAILABLE = buildUnavailableOperationVisibility({
-  reasonCode: LEGACY_AUTHORITY.UNAVAILABLE,
-});
 const {
   CONTROL_PLANE_EVENT,
   DISPATCH_LOG_MSG,
@@ -48,49 +31,6 @@ function unregisterMessageGroupHandlers(mgService, handlers) {
 }
 
 class ReplicaDispatchService extends ReplicaDispatchReadinessCapture {
-  /**
-   * A pre-canonical target's services row has no provable entity binding.
-   * Ask the existing operation repository's strict authoritative owner,
-   * never local cache or the caller's claimed entity, for REMOVE permission.
-   * No response from this read grants new CREATE authority.
-   */
-  async authorizeLegacyRuntimeRemoval({operationId, entityId, replicaId, nodeId} = {}) {
-    const observation = await this.readLegacyRemovalObservation(operationId);
-    const state = readOperationVisibilityState(observation);
-    if (state === OPERATION_VISIBILITY_STATE.UNAVAILABLE) {
-      return {outcome: LEGACY_AUTHORITY.UNAVAILABLE};
-    }
-    if (state === OPERATION_VISIBILITY_STATE.ABSENT) {
-      return {outcome: LEGACY_AUTHORITY.CONTENT_CONFLICT};
-    }
-    const operation = observation.operation;
-    const matches = operation.operationId === operationId &&
-      operation.type === OperationType.REMOVE &&
-      operation.entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE &&
-      operation.entityId === entityId &&
-      operation.replicaId === replicaId &&
-      operation.targetNodeId === nodeId &&
-      operation.workflowStep !== WORKFLOW_STEP.PENDING &&
-      isIncompleteOperationRowStep(operation.type, operation.workflowStep);
-    return {outcome: matches ? LEGACY_AUTHORITY.ADMITTED :
-      LEGACY_AUTHORITY.CONTENT_CONFLICT};
-  }
-
-  async readLegacyRemovalObservation(operationId) {
-    const repository = this.rebalanceCoordinator?.repository;
-    if (typeof repository?.queryAuthoritativeOperationVisibilityObservation !== 'function') {
-      return LEGACY_REMOVAL_AUTHORITY_UNAVAILABLE;
-    }
-    try {
-      return await repository.queryAuthoritativeOperationVisibilityObservation(
-        operationId, {
-          authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
-        });
-    } catch {
-      return LEGACY_REMOVAL_AUTHORITY_UNAVAILABLE;
-    }
-  }
-
   isControlMessage(payload) {
     return getControlPlaneMessageCompletionKind(payload?.type) !== null;
   }

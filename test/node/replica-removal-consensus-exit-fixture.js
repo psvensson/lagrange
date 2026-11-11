@@ -25,6 +25,8 @@ import {retirePartitionRaftPeer} from
   '../../src/partition/partition-service-raft-membership-administration.js';
 import {subscribeRemovalSubjectHandoff} from
   '../../src/partition/partition-service-removal-subject-handoff.js';
+import {REMOVAL_SERVING_STATE} from
+  '../../src/partition/partition-service-removal-serving-methods.js';
 import {RAFT_OPERATION_PORT_REQUEST} from
   '../../src/raft/raft-operation-port-request.js';
 import {EventEmitter} from 'node:events';
@@ -215,7 +217,11 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
       service.admissionFenced = false;
       return fenced;
     },
-    async waitForRemovalServingDrain() {},
+    // Nothing serves in this world: the drain answers the serving
+    // contract's named DRAINED state.
+    async waitForRemovalServingDrain() {
+      return {state: REMOVAL_SERVING_STATE.DRAINED};
+    },
     async shutdown() {
       portClosed = true;
       service.raft?.close();

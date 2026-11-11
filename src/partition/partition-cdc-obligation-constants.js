@@ -86,15 +86,12 @@ const PARTITION_CDC_OBLIGATION_BYTES = Object.freeze({
 //   reserve, and it covers the lifecycle rows of a node's retirement (its
 //   nodes row and the services rows of the replicas it hosts) several times
 //   over; the ledger's worst case grows by one batch (6 %).
-// - RELIST_LAG_ROWS (dead-recipient measure 3): a recipient more than this
-//   many owed rows behind its cursor leaves the frontier as MUST_RELIST: the
-//   ledger reclaims past it and its next contact answers a gap, so it
-//   re-lists once. Half the capacity: every recipient still in the frontier
-//   is at most this far behind, so owed rows stay below it plus the
-//   acknowledgement pipeline (ACK_MAX_OUTSTANDING_BATCHES batches) and one
-//   burst admitted between two drives, under OWED_MAX_EVENTS: a slow
-//   recipient costs one re-list, never a refused write. A row count, never a
-//   clock.
+// - RELIST_LAG_ROWS (dead-recipient measure 3, S3.11): a recipient more than
+//   this many owed rows behind what it holds the frontier at, one of whose
+//   deliveries ended without a committed receipt, is released as MUST_RELIST;
+//   a re-list hold is released at the same lag, or after
+//   RELIST_HOLD_DEADLINE_MS. Half the capacity, so owed rows stay under
+//   OWED_MAX_EVENTS: a slow recipient costs a re-list, never a refused write.
 const ACK_BATCH_MAX_EVENTS = NUM.TWO_HUNDRED_FIFTY_SIX;
 const ACK_BATCH_MAX_BYTES = NUM.SIXTY_FOUR * NUM.BYTES_PER_KIB;
 const OWED_MAX_EVENTS = NUM.FOUR * NUM.FOUR * NUM.TWO_HUNDRED_FIFTY_SIX;
@@ -102,6 +99,8 @@ const PARTITION_CDC_OBLIGATION_BOUND = Object.freeze({
   OWED_MAX_EVENTS,
   OWED_RETIREMENT_RESERVE_EVENTS: ACK_BATCH_MAX_EVENTS,
   RELIST_LAG_ROWS: OWED_MAX_EVENTS / NUM.TWO,
+  // ends-on: the hold's recipient confirms a range, or the hold is released
+  RELIST_HOLD_DEADLINE_MS: TIME_MS.MINUTE * NUM.TWO,
   ACK_BATCH_MAX_EVENTS,
   ACK_MAX_OUTSTANDING_BATCHES: NUM.TWO,
   ACK_BATCH_MAX_BYTES,
@@ -338,11 +337,12 @@ const PARTITION_CDC_OBLIGATION_EVENT_FIELD = Object.freeze({
 });
 
 // The typed answers of this owner. The first two are the admission owner's
-// refusals before a CDC_DELIVERED command is proposed; the next three are
+// refusals before a CDC_DELIVERED command is proposed; the next four are
 // what its application answers when it is consumed without a write (a
-// command naming another partition, an event the ledger never recorded, or an
-// event filed under another entry than the one that owes it: each a bug path,
-// refused alike on every replica and raised as an alarm); the last two are
+// command naming another partition, compacted identity evidence, an event the
+// ledger does not retain at that position, or another event at that position:
+// refused alike on every replica and raised as an alarm; the delivery owner
+// resolves each, partition-cdc-acknowledgement-refusal.js); the last two are
 // the delivery owner's flush outcomes when no proposer is composed or the
 // batch was proposed by a replica that no longer leads.
 const PARTITION_CDC_OBLIGATION_FAILURE_CODE = Object.freeze({
@@ -351,7 +351,6 @@ const PARTITION_CDC_OBLIGATION_FAILURE_CODE = Object.freeze({
   IDENTITY_MISMATCH: 'cdc_acknowledgement_identity_mismatch',
   IDENTITY_COMPACTED: 'cdc_acknowledgement_identity_compacted',
   UNKNOWN_EVENT: 'cdc_acknowledgement_unknown_event',
-  ENTRY_MISMATCH: 'cdc_acknowledgement_entry_mismatch',
   POSITION_MISMATCH: 'cdc_acknowledgement_position_mismatch',
   PROPOSER_UNAVAILABLE: 'cdc_acknowledgement_proposer_unavailable',
   NOT_LEADER: 'cdc_acknowledgement_not_leader',
@@ -391,31 +390,30 @@ const PARTITION_CDC_OBLIGATION_DRIVE_STATE = Object.freeze({
   ACKNOWLEDGEMENT_BACKPRESSURE: 'acknowledgement_backpressure',
 });
 
-// The lane's named state of one recipient (a subscriber, or one target group
-// of a subscriber's propagation). CONFIRMED: it holds a committed receipt for
-// everything shipped to it. SUBSCRIBER_UNCONFIRMED: a vector shipped to it
-// (first row at `position`) has no committed receipt yet; the lane keeps
-// shipping to every other recipient and retries this one. The state is not
-// terminal and has no deadline. POSITION_GAP: it answered that it has not
-// applied the range's predecessor (CDC Stage 3): it re-lists, and its own
-// retry ships the range again. MUST_RELIST: it fell more than
-// RELIST_LAG_ROWS behind; it stays a required recipient and keeps being
-// shipped to, but it no longer holds the frontier, so the ledger reclaims
-// past it and its next range answers a gap (one re-list). DETACHED: the
-// recipient-domain lifecycle owner's authoritative state says its group is
-// retired or removed (reason in PARTITION_CDC_RECIPIENT_DETACH_REASON); it
-// leaves the frontier and is shipped nothing; a group that returns is a new
-// recipient. No state is entered on a cache omission or on elapsed time.
+// The lane's named progress state of one recipient (a subscriber, or one
+// target group of its propagation). Transitions, what each state pins and
+// what releases it: partition-cdc-recipient-progress.js (design note S3.11).
+// MUST_RELIST and DETACHED hold nothing; every other state holds the frontier.
 const PARTITION_CDC_RECIPIENT_STATE = Object.freeze({
+  NEVER_SHIPPED: 'never_shipped',
   CONFIRMED: 'confirmed',
   SUBSCRIBER_UNCONFIRMED: 'subscriber_unconfirmed',
   POSITION_GAP: 'position_gap',
   MUST_RELIST: 'must_relist',
+  RELIST_OFFERED: 'relist_offered',
   DETACHED: 'detached',
 });
 
 const PARTITION_CDC_RECIPIENT_DETACH_REASON = Object.freeze({
   LIFECYCLE: 'lifecycle',
+});
+
+// Why a recipient was released to MUST_RELIST.
+const PARTITION_CDC_RECIPIENT_RELEASE = Object.freeze({
+  LAG_WITHOUT_RECEIPT: 'lag_without_receipt',
+  OFFER_UNANSWERED: 'relist_offer_unanswered',
+  HOLD_LAG_EXCEEDED: 'relist_hold_lag_exceeded',
+  HOLD_EXPIRED: 'relist_hold_expired',
 });
 
 // What one recipient's drive pass ended as.
@@ -514,6 +512,7 @@ export {
   PARTITION_CDC_LEDGER_NEWEST_TABLE,
   PARTITION_CDC_RECIPIENT_DETACH_REASON,
   PARTITION_CDC_RECIPIENT_PASS,
+  PARTITION_CDC_RECIPIENT_RELEASE,
   PARTITION_CDC_RECIPIENT_STATE,
   PARTITION_CDC_RECIPIENT_WAIT,
 };

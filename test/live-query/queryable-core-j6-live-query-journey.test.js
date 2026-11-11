@@ -353,8 +353,7 @@ describe('Unit J6: Live query results committed CDC delivery and lifecycle', () 
 
     await customWiring.liveQueryManager.handlePartitionTopologyChange({
       operation: 'UPDATE',
-      old: {table_name: 'live_orders'},
-      new: {table_name: 'live_orders'},
+      data: {table_name: 'live_orders'},
     });
 
     assert.ok(unsubscribed.has(leader.partitionId), 'unsubscribed from the retired partition');

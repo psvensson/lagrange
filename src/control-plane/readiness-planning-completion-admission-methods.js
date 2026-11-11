@@ -71,13 +71,14 @@ function stableFeedbackTokenFieldsEqual(previous, current) {
 
 // The terms of the reuse decision that a cheap comparison can settle. Every
 // one of them was already computed on this path before this quest; naming
-// them costs five comparisons of values the decision is about to use anyway,
-// and reads no source.
+// them costs four comparisons of values the decision is about to use anyway,
+// and reads no source. (No build-options term: `readCompleted` is keyed by
+// the build options key, and `handleStaleCompletion` passes the record it
+// has just built under that key, so a completed record always carries the
+// key it is read under.)
 function collectCheapReuseTermFailures(
   token,
   planningIdentity,
-  completed,
-  buildOptionsKey,
   freshnessCurrent,
 ) {
   let failedTerms = NO_ADMISSION_TERMS;
@@ -89,9 +90,6 @@ function collectCheapReuseTermFailures(
   }
   if (planningIdentity.saturated) {
     failedTerms |= READINESS_ADMISSION_TERM_BIT.planning_identity_saturated;
-  }
-  if (completed.buildOptionsKey !== buildOptionsKey) {
-    failedTerms |= READINESS_ADMISSION_TERM_BIT.build_options_key_changed;
   }
   if (!freshnessCurrent) {
     failedTerms |= READINESS_ADMISSION_TERM_BIT.freshness_not_current;
@@ -401,21 +399,12 @@ const readinessPlanningCompletionAdmissionMethods = {
   // every cheaper term passed, so no source is read more often per decision.
   // What is new is that the terms that failed are deposited for the read in
   // flight on this variant, instead of collapsing into one boolean.
-  //
-  // `build_options_key_changed` is stated but unreachable from a read:
-  // `readCompleted` is keyed by `buildOptionsKey`, so a record it returns
-  // always carries that same key, and the one other caller
-  // (`handleStaleCompletion`, unversioned legacy compositions) passes the
-  // record it has just built. It is kept because the decision still states
-  // it; no input reaches it, so no test drives it.
   canReuseCompletedSnapshot(ownerKey, completed, token, buildOptionsKey) {
     const currentPlanningIdentity =
       this.readPlanningProjectionIdentity(ownerKey);
     const failedTerms = collectCheapReuseTermFailures(
       token,
       currentPlanningIdentity,
-      completed,
-      buildOptionsKey,
       this.isCompletedFreshnessCurrent(completed, token,
         currentPlanningIdentity),
     );

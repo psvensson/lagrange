@@ -414,8 +414,8 @@ const TYPED_UNCONFIRMED_COMPLETIONS = objectFreeze([CDC_COMPLETION.BACKPRESSURE,
  * @return {Object} The typed unknown outcome.
  */
 function unconfirmedCdcAcceptance(answer) {
-  const typed = TYPED_UNCONFIRMED_COMPLETIONS.find((code) =>
-    answer?.error === code || answer?.reason === code) ?? CDC_COMPLETION.UNKNOWN;
+  const typed = TYPED_UNCONFIRMED_COMPLETIONS.find((code) => answer?.error === code) ??
+    CDC_COMPLETION.UNKNOWN;
   return {
     ...unknownCdcAcceptance(typed),
     ...(numberIsFinite(answer?.retryAfterMs) && answer.retryAfterMs > 0 ?

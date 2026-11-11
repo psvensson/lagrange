@@ -16,6 +16,7 @@ import {applyRebalanceCoordinatorConcurrentBudgetGateMethods} from './rebalance-
 import {applyRebalanceCoordinatorOwnerFacadeMethods} from './rebalance-coordinator-owner-facade.js';
 import {applyRebalanceCoordinatorReservationLifecycleMethods} from './rebalance-coordinator-reservation-lifecycle-methods.js';
 import {applyRebalanceCoordinatorRecoveryBudgetBindingMethods} from './rebalance-coordinator-recovery-budget-bindings.js';
+import {isAnsweredIncompleteOperationList} from './incomplete-operation-list-observation.js';
 import {isOperationVisibilityUnavailableError} from
   './replica-operation-repository-operation-visibility.js';
 
@@ -135,8 +136,8 @@ class RebalanceCoordinator extends EventEmitter {
    * @return {Promise<Object>} Statistics object.
    */
   async getStats() {
-    const inFlightOps = await this.getInFlightOperations();
-    // Diagnostics: an unavailable all-operations read is reported, not 0.
+    // Diagnostics: an unanswered read is reported as unknown (null), not 0.
+    const inFlightObservation = await this.getInFlightOperations();
     const allOps = await this.getAllOperations().catch((error) => {
       if (isOperationVisibilityUnavailableError(error)) {
         return null;
@@ -144,12 +145,11 @@ class RebalanceCoordinator extends EventEmitter {
       throw error;
     });
 
-    const inFlightObservation =
-      this.getIncompleteOperationObservation(inFlightOps);
-
     return {
       ...this.stats,
-      inFlightOperations: inFlightOps.length,
+      inFlightOperations: isAnsweredIncompleteOperationList(inFlightObservation) ?
+        inFlightObservation.operationCount :
+        null,
       inFlightOperationObservationState: inFlightObservation.state,
       inFlightOperationRetryAfterMs: inFlightObservation.retryAfterMs,
       totalOperations: allOps === null ? null : allOps.length,

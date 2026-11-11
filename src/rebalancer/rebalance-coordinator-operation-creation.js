@@ -87,7 +87,6 @@ const {
   REBALANCE_COORDINATOR_LOG_MSG,
   ReplicaOperationField,
   SERVICE_TYPE,
-  STRICT_CREATE_DEDUPE_REPOSITORY_QUERY_OPTIONS,
   buildReplicatedServiceBootstrapTopology,
   createOperationRecord,
   uuidv4,
@@ -466,7 +465,6 @@ class RebalanceCoordinatorOperationCreation {
       entityType,
       entityId,
       normalizedMove,
-      STRICT_CREATE_DEDUPE_REPOSITORY_QUERY_OPTIONS,
     );
 
     if (existing) {

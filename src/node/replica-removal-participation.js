@@ -86,8 +86,8 @@ function reportConsensusExitSpent(handler, exit, context) {
     lastObserved: () => ({
       exitReason: exit.reason,
       // The wait's last witness read: why no exit event came.
-      lastObservation: exit.lastObservation ?? null,
-      trackedRaftRole: handler.getTrackedReplicaRole?.(replicaId) ?? null,
+      lastObservation: exit.lastObservation,
+      trackedRaftRole: handler.getTrackedReplicaRole(replicaId),
       lifecycleState: handler.getTrackedReplicaLifecycleState(replicaId),
     }),
     scope: {nodeId: handler.nodeId, operationId, partitionId, replicaId},
@@ -105,11 +105,8 @@ function logConsensusExit(handler, exit, {operationId, replicaId,
 // The signal one round of the wait is released by: node shutdown, or this
 // removal's own release (its cancellation).
 function roundSignalOf(handler, removal) {
-  handler.removalConsensusExitRelease ??= new AbortController();
-  const shutdown = handler.removalConsensusExitRelease.signal;
-  return removal ?
-    globalThis.AbortSignal.any([shutdown, removal.controller.signal]) :
-    shutdown;
+  return globalThis.AbortSignal.any([
+    handler.removalConsensusExitRelease.signal, removal.controller.signal]);
 }
 
 /**
@@ -122,11 +119,11 @@ function roundSignalOf(handler, removal) {
  * @param {Object|null} service - The tracked partition service.
  * @param {Object} context - {operationId, replicaId, partitionId, removal}:
  *   removal is the running removal's record (its release and pending
- *   cancellation), absent for a caller with none.
+ *   cancellation; beginRemovalExecution).
  * @return {Promise<Object>} Frozen {reason}.
  */
 async function awaitRemovalConsensusExit(handler, service, context) {
-  const {replicaId, removal = null} = context;
+  const {replicaId, removal} = context;
   const startedAtMs = Date.now();
   let reported = false;
   for (;;) {

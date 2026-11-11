@@ -343,6 +343,9 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
       const proposeTimeoutMs = this.computeCdcProposeTimeoutMs(
         configuredRetryBudget,
       );
+      // The attempts actually made: onRetry runs before each further attempt
+      // and may refuse it (spent budget, lost currency).
+      let attemptsMade = 1;
       try {
         const routed = await routeMessageGroupCommand(this, cdcCommand, {
           maxAttempts: configuredRetryBudget,
@@ -361,6 +364,7 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
           onRetry: ({attempt, mode, retryDelayMs, error}) => {
             options.assertCurrent?.();
             if (options.remainingMs && retryDelayMs >= options.remainingMs()) throw error;
+            attemptsMade = attempt + 1;
             this.logger.warn(
               MESSAGE_GROUP_SERVICE_LITERAL.RETRYING_RAFT_CDC_COMMAND,
               {
@@ -385,8 +389,7 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
             replicaId: this.replicaId,
             tableName: cdcCommand.tableName,
             causeId: normalizeCauseId(cdcCommand.causeId),
-            attempts: configuredRetryBudget,
-            configuredRetryBudget,
+            attemptsMade, configuredRetryBudget,
             proposeTimeoutMs,
             isCurrentRaftLeader: this.isCurrentRaftLeader(),
             raftState: this.getRole(),

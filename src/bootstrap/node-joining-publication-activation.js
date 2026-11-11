@@ -282,7 +282,7 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
         tableName,
         preferredService: messageGroupService,
         defer: options.deferCdcPropagationHandshake === true,
-        messageGroupServices: () => this.messageGroupServices,
+        messageGroupServices: this.messageGroupServices,
         logger: this.logger,
         logContext: {tableName, partitionId: options.partitionId, replicaId: options.replicaId},
         notReadyMessage: NODE_JOINING_SERVICE_LITERAL.OPERATIONAL_MESSAGE_GROUP_CDC_INGRESS_NOT_READY +

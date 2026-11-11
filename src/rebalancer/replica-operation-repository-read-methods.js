@@ -80,9 +80,12 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
     isCoordinatorOwnedOperationType,
     isRetryableControlPlaneError,
     readAuthoritativeControlPlaneRows,
-    resolveAuthoritativeReadModeContract,
     shouldDeferReplicaOperationOwnerRead,
   } = options;
+  // The create dedupe read is the owner's: absence decides a create.
+  const IN_FLIGHT_DEDUPE_READ_OPTIONS = Object.freeze({
+    authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+  });
 
   class ReplicaOperationRepositoryReadMethods {
   /**
@@ -637,15 +640,20 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
     }
 
     /**
-   * Query for an existing in-flight operation matching a move intent.
-   * @param {string} partitionId
-   * @param {string} targetNodeId
-   * @param {string} entityType
-   * @param {string} entityId
-   * @param {object} move
-   * @param {Function} operationMatchesMoveIntent
-   * @return {Promise<object|null>}
-   */
+     * The create dedupe read: the existing in-flight operation matching a
+     * move intent, as the owner answers it. A read that did not answer
+     * throws the typed list unavailability: "no existing operation" is never
+     * inferred from a failed read and no cache row stands in for the owner,
+     * so creation waits rather than risk a duplicate.
+     * @param {string} partitionId
+     * @param {string} targetNodeId
+     * @param {string} entityType
+     * @param {string} entityId
+     * @param {object} move
+     * @param {Function} operationMatchesMoveIntent
+     * @return {Promise<object|null>} The matching operation, or null when
+     *   the owner answered with none.
+     */
     async queryExistingInFlightOperation(
       partitionId,
       targetNodeId,
@@ -653,59 +661,21 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
       entityId,
       move,
       operationMatchesMoveIntent,
-      options = {},
     ) {
-      const readOptions =
-      options?.readOptions && typeof options.readOptions === 'object' ? options.readOptions : null;
-      const authoritativeReadContract = resolveAuthoritativeReadModeContract(readOptions || {});
-      const allowCacheFallbackOnReadFailure =
-      options?.allowCacheFallbackOnReadFailure === false ?
-        false :
-        authoritativeReadContract.authoritativeReadMode !==
-          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED;
       const result = await this.executeReplicaOperationsRead(
         SQL.SELECT_IN_FLIGHT_FOR_ENTITY_NODE,
         [partitionId, targetNodeId, entityType, entityId],
-        readOptions,
+        IN_FLIGHT_DEDUPE_READ_OPTIONS,
       );
-      if (result.success && Array.isArray(result.rows)) {
-        if (result.rows.length === 0) {
-          return null;
-        }
-        const operations = result.rows.map((row) => this.rowToOperation(row));
-        return (
-          operations.find((operation) => {
-            return (
-              !this.isOperationTerminal(operation) &&
-            operationMatchesMoveIntent(operation, move, entityType, entityId)
-            );
-          }) || null
-        );
+      if (!result.success || !Array.isArray(result.rows)) {
+        throw buildOperationListUnavailableError(result, IN_FLIGHT_DEDUPE_SCOPE);
       }
-      if (!allowCacheFallbackOnReadFailure) {
-        // A strict dedupe read that did not answer cannot say "no existing
-        // operation": creating on it would duplicate.
-        throw buildOperationListUnavailableError(
-          result, IN_FLIGHT_DEDUPE_SCOPE);
-      } // Advisory fallback path for degraded SQL-read conditions.
-      const cachedRows = this.filterReplicaOperationRowsFromCache((row) => {
-        if (!row || row.partition_id !== partitionId || row.target_node_id !== targetNodeId) {
-          return false;
-        }
-        return row.entity_type === entityType && row.entity_id === entityId;
-      });
-      if (cachedRows === null) {
-        return null;
-      }
-      const cachedOperations = cachedRows.map((row) => this.rowToOperation(row));
-      return (
-        cachedOperations.find((operation) => {
-          return (
-            !this.isOperationTerminal(operation) &&
-          operationMatchesMoveIntent(operation, move, entityType, entityId)
-          );
-        }) || null
-      );
+      return result.rows
+        .map((row) => this.rowToOperation(row))
+        .find((operation) =>
+          !this.isOperationTerminal(operation) &&
+          operationMatchesMoveIntent(operation, move, entityType, entityId)) ||
+        null;
     }
   }
 

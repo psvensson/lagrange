@@ -11,6 +11,10 @@
 //
 // Explicit-context module: every function takes the rebalancer first.
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
+import {
+  REBALANCER_WAKE_CONTRACT,
+  REBALANCER_WAKE_STATE,
+} from './rebalancer-wake.js';
 
 const {REBALANCER_RUNTIME_REASON} = UNIFIED_REBALANCER_SHARED;
 
@@ -108,11 +112,12 @@ function resolveDeferredCandidateNodeIds(nodePlan) {
  */
 function syncPlanningTargetReadinessWake(rebalancer, nodePlan) {
   const deferredNodeIds = resolveDeferredCandidateNodeIds(nodePlan);
+  rebalancer.disarmPlanningTargetReadinessWake();
   if (deferredNodeIds.length === 0) {
-    rebalancer.disarmPlanningTargetReadinessWake();
     return false;
   }
-  return rebalancer.armPlanningTargetReadinessWake(deferredNodeIds);
+  return rebalancer.armPlanningTargetReadinessWake(deferredNodeIds,
+    nodePlan.planningPublicationGeneration);
 }
 
 function noteRebalancePassWithoutMove(rebalancer, pass) {
@@ -136,6 +141,9 @@ function noteRebalancePassWithoutMove(rebalancer, pass) {
       candidatesWithheld: candidates.length - listed.length,
       deferredNodeIds,
       waitArmed,
+      // The wait's declared bound: the cadence check this pass schedules.
+      waitBound: waitArmed ? REBALANCER_WAKE_CONTRACT[
+        REBALANCER_WAKE_STATE.PLANNING_TARGET_READINESS_DEFERRED].bound : null,
       ...(pass.detail || {}),
     });
   }
@@ -153,20 +161,9 @@ function noteRebalancePassWithoutMove(rebalancer, pass) {
  */
 function noteRebalancePassMoved(rebalancer, result) {
   rebalancer.lastNoMovePassSignature = null;
-  const awaited = rebalancer.planningTargetReadinessWakeNodeIds;
-  if (!(awaited instanceof Set)) {
-    return;
-  }
-  const movedNodeIds = new Set(result.moves
+  rebalancer.releasePlanningTargetReadinessWakeNodes(new Set(result.moves
     .filter((move) => move && !move.skipped && move.success !== false)
-    .map((move) => move.nodeId));
-  const stillAwaited = [...awaited].filter((nodeId) =>
-    !movedNodeIds.has(nodeId));
-  if (stillAwaited.length === 0) {
-    rebalancer.disarmPlanningTargetReadinessWake();
-    return;
-  }
-  rebalancer.planningTargetReadinessWakeNodeIds = new Set(stillAwaited);
+    .map((move) => move.nodeId)));
 }
 
 export {

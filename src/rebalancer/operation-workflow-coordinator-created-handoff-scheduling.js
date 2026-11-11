@@ -281,7 +281,7 @@ function isExecutorOutcomeStepAlreadyReached(owner, operation, outcomeWorkflowSt
     outcomeWorkflowStep.length > 0 &&
     (
       outcomeWorkflowStep === operation?.workflowStep ||
-      owner.isExecutorOutcomeStepBehindOperation?.(
+      owner.isExecutorOutcomeStepBehindOperation(
         operation,
         outcomeWorkflowStep,
       ) === true

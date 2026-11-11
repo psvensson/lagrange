@@ -146,10 +146,15 @@ function peerIdOfIdentity(cluster, holder, replicaId) {
 function commitChange(cluster, type, replicaId, tickers) {
   const adds = type === RAFT_MEMBERSHIP_OPERATION.ADD_PEER;
   if (!adds && leaderOf(cluster) === replicaId) {
-    cluster.node(replicaId).transferLeadership({
-      successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.MOST_CAUGHT_UP});
-    assert.ok(settle(cluster, () => leaderOf(cluster) !== null &&
-      leaderOf(cluster) !== replicaId, tickers),
+    // The leader names only a voter that has answered it in this tenure (a
+    // voter just added has not yet): it is asked until leadership moved.
+    assert.ok(settle(cluster, () => {
+      if (leaderOf(cluster) === replicaId) {
+        cluster.node(replicaId).transferLeadership({
+          successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.MOST_CAUGHT_UP});
+      }
+      return leaderOf(cluster) !== null && leaderOf(cluster) !== replicaId;
+    }, tickers),
     `setup: ${replicaId} handed leadership over before its removal`);
   }
   const shows = () => {

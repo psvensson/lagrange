@@ -11,8 +11,11 @@ import {seedMessageGroupRow, seedTableRow, seedPartitionRow} from
   '../seed-foundation-rows.js';
 import {ORIGINAL_ALLOCATION_REASON, originalAllocationError} from
   '../../raft/raft-rs-original-allocation-constants.js';
-import {originalSeedServiceRegistration, publishOriginalSeedClusterIdentity} from
-  '../seed-original-registration.js';
+import {originalSeedServiceRegistration, publishOriginalSeedClusterIdentity,
+  publishOriginalSeedFormationTarget} from '../seed-original-registration.js';
+import {buildFormationTargetRow} from '../formation-target-record.js';
+import {requireDeclaredFormationTarget} from
+  '../../config/formation-target-node-count.js';
 import {DynamicConfigService} from '../../config/dynamic-config-service.js';
 import {
   CONFIG_SEED_SOURCE,
@@ -129,6 +132,7 @@ class SeedRegistrationPhase {
     await this.updatePartitionSizes();
     await this.seedDynamicConfiguration();
     await this.persistCurrentEpochIfMissing();
+    await this.persistFormationTargetIfMissing();
     await this.persistClusterIdIfMissing();
 
     logger.debug(BOOTSTRAP_LOG_MSG.SERVICE_REGISTRATION_COMPLETE, {
@@ -604,6 +608,19 @@ class SeedRegistrationPhase {
         [COLUMN.UPDATED_AT]: now,
         [COLUMN.CREATED_AT]: now,
       });
+  }
+
+  /**
+   * Publish the declared formation size once, before cluster_id: a reader
+   * that sees cluster_id can then prove the formation row's absence.
+   * @return {Promise<void>}
+   */
+  async persistFormationTargetIfMissing() {
+    const d = this.delegates;
+    const count = requireDeclaredFormationTarget(d.getFormationTargetDeclaration());
+    const {timestamp} = d.getOriginalSeedPreparation().clusterIdentity();
+    await publishOriginalSeedFormationTarget(this.ensureSystemTableWriter(),
+      buildFormationTargetRow({count, nodeId: d.getNodeId(), timestamp}));
   }
 
   /**

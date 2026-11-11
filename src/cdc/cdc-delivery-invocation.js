@@ -283,13 +283,12 @@ function beginCdcDeliveryInvocation(delivery, isCurrent, onClosed = () => {}) {
     run,
     retire,
     // The recipient this invocation addresses: null is the source group of
-    // the propagation; the source lane names a target group (and the route
-    // it last observed for it) on its scoped invocation. bindTopology is
-    // where the topology owner reports the recipient set it observed; only a
-    // source lane keeps it.
+    // the propagation; the source lane names a target group on its scoped
+    // invocation. bindTopology is where the topology owner reports the
+    // recipient set it observed and is answered the addressed recipient's
+    // route (null: the source group has none); only a source lane keeps it.
     recipientGroupId: null,
-    recipientRoute: null,
-    bindTopology: () => {},
+    bindTopology: () => null,
     signal: controller.signal,
     cleanup: cleanup.promise,
     remainingMs: () => {

@@ -365,7 +365,7 @@ function buildStaleServiceLifecycleAdvance(tableName, existing, incoming) {
   };
 }
 
-function handlePublicationStaleBackfill(table, key, existing, incoming) {
+function handlePublicationStaleBackfill(existing, incoming) {
   const mergedRecord = mergeControlPlanePublicationRows(existing, incoming);
   if (JSON.stringify(mergedRecord) === JSON.stringify(existing)) {
     return {
@@ -374,7 +374,6 @@ function handlePublicationStaleBackfill(table, key, existing, incoming) {
       backfilledFields: NO_ADVANCED_SERVICE_LIFECYCLE_FIELDS,
     };
   }
-  table.set(key, mergedRecord);
   return {
     applied: true,
     record: mergedRecord,
@@ -406,15 +405,10 @@ function isConflictingStaleIncarnation(existingId, incomingId) {
   );
 }
 
-function applyStaleRowBackfill(
-  tableName,
-  table,
-  key,
-  existing,
-  incoming,
-) {
+// The stale-row rule, pure: what a stale incoming version leaves of a row.
+function foldStaleRowBackfill(tableName, existing, incoming) {
   if (shouldUsePublicationMerge(existing, incoming)) {
-    return handlePublicationStaleBackfill(table, key, existing, incoming);
+    return handlePublicationStaleBackfill(existing, incoming);
   }
 
   const existingId = extractRowReplicaIncarnation(existing);
@@ -459,12 +453,17 @@ function applyStaleRowBackfill(
     };
   }
 
-  table.set(key, merged);
   return {
     applied: true,
     record: merged,
     backfilledFields,
   };
+}
+
+function applyStaleRowBackfill(tableName, table, key, existing, incoming) {
+  const folded = foldStaleRowBackfill(tableName, existing, incoming);
+  if (folded.applied) table.set(key, folded.record);
+  return folded;
 }
 
 function hasMatchingTokens(existing, incoming) {
@@ -563,6 +562,7 @@ export {
   buildDeletedRowTombstoneSource,
   cloneFieldValue,
   compareSchemaVersions,
+  foldStaleRowBackfill,
   getRecordHlc,
   getRecordTimestamp,
   isDeleteSupersededByExistingRecord,

@@ -31,18 +31,18 @@ import {
   resolveSystemCacheRowKey,
 } from './system-cache-key-descriptor.js';
 import {
-  applyStaleRowBackfill,
   buildDeletedRowTombstoneSource,
   cloneFieldValue,
   compareSchemaVersions,
   getRecordTimestamp,
-  isDeleteSupersededByExistingRecord,
   isStaleForExistingRecord,
   mergeRecords,
   shouldBackfillMissingField,
   shouldUsePublicationMerge,
   tryParseHLCTimestamp,
 } from './system-table-cache-row-merge.js';
+import {CDC_ROW_FOLD_STATE, cdcRowFoldOutcome, foldCdcEventOntoRow} from
+  './system-table-cache-cdc-fold.js';
 import {SystemTableCacheTombstoneStore} from
   './system-table-cache-tombstone-store.js';
 import {
@@ -120,6 +120,35 @@ function mutationObservationCompatible(
       !Number.isFinite(currentObservedAtMs) ||
       Math.floor(observedAtMs) > currentObservedAtMs
     );
+}
+
+const AUTHORITATIVE_REPLACEMENT_UPSERT_MODES = new Set([
+  SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_RECONCILIATION,
+  SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_OBSERVATION_RECONCILIATION]);
+
+// The row one change leaves: the CDC-merge fold, except where an image or an
+// authoritative mode replaces a held row (an UPSERT) or an image deletes one.
+function resolveAppliedRow({tableName, existing, operation, data, mutationMode,
+  imageReplacement, sameEntryOrder}) {
+  const upsertOverHeldRow = operation === CDC_OPERATIONS.UPSERT && existing !== null;
+  if (upsertOverHeldRow && imageReplacement) {
+    return cdcRowFoldOutcome(CDC_ROW_FOLD_STATE.REPLACED,
+      buildAuthoritativeSystemTableCacheReplacement(existing, data));
+  }
+  if (upsertOverHeldRow && mutationMode ===
+      SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_SERVICE_LIFECYCLE_RECONCILIATION) {
+    return cdcRowFoldOutcome(CDC_ROW_FOLD_STATE.REPLACED,
+      buildAuthoritativeServiceLifecycleCacheReplacement(existing, data));
+  }
+  if (operation === CDC_OPERATIONS.DELETE && existing !== null && imageReplacement) {
+    return cdcRowFoldOutcome(CDC_ROW_FOLD_STATE.DELETED, null);
+  }
+  const folded = foldCdcEventOntoRow(tableName, existing, operation, data, sameEntryOrder);
+  return upsertOverHeldRow && folded.state === CDC_ROW_FOLD_STATE.MERGED &&
+    AUTHORITATIVE_REPLACEMENT_UPSERT_MODES.has(mutationMode) ?
+    cdcRowFoldOutcome(CDC_ROW_FOLD_STATE.REPLACED,
+      buildAuthoritativeSystemTableCacheReplacement(existing, data)) :
+    folded;
 }
 
 function cacheWriteIsFenced(options) {
@@ -328,187 +357,49 @@ class SystemTableCache {
       return false;
     }
 
-    switch (operation) {
-    case CDC_OPERATIONS.INSERT:
-      if (table.has(key)) {
-        const existing = table.get(key);
-        if (this.isStaleForExistingRecord(tableName, existing, data, sameEntryOrder)) {
-          const staleMergeResult = this.applyStaleRowBackfill(
-            tableName,
-            table,
-            key,
-            existing,
-            data,
-          );
-          if (staleMergeResult.applied) {
-            recordForNotification = staleMergeResult.record;
-          }
-          this.logger.debug(CACHE_LOG_MSG.STALE_EVENT_IGNORED, {
-            tableName,
-            key,
-            operation,
-            existingUpdatedAt: this.getRecordTimestamp(existing),
-            incomingUpdatedAt: this.getRecordTimestamp(data),
-            backfilledFields: staleMergeResult.backfilledFields,
-          });
-          break;
-        }
-        this.logger.debug(CACHE_LOG_MSG.INSERT_ON_EXISTING_KEY_TREAT_UPDATE, {
-          tableName,
-          key,
-        });
+    // Every CDC-merge row is the one fold's (system-table-cache-cdc-fold.js);
+    // an image or an authoritative mode overrides only its own branch.
+    const existing = table.has(key) ? table.get(key) : null;
+    const folded = resolveAppliedRow({tableName, existing, operation, data,
+      mutationMode, imageReplacement, sameEntryOrder});
+    incomingVersionAccepted = folded.accepted;
+    switch (folded.state) {
+    case CDC_ROW_FOLD_STATE.STALE_BACKFILLED:
+    case CDC_ROW_FOLD_STATE.STALE_IGNORED:
+    case CDC_ROW_FOLD_STATE.DELETE_SUPERSEDED:
+      if (folded.state === CDC_ROW_FOLD_STATE.STALE_BACKFILLED) {
+        table.set(key, folded.row);
+        recordForNotification = folded.row;
       }
-      table.set(key, this.deepClone(data));
-      recordForNotification = data;
-      incomingVersionAccepted = true;
+      this.logger.debug(CACHE_LOG_MSG.STALE_EVENT_IGNORED, {tableName, key,
+        operation, existingUpdatedAt: this.getRecordTimestamp(existing),
+        incomingUpdatedAt: this.getRecordTimestamp(data),
+        backfilledFields: folded.backfilledFields});
       break;
-
-    case CDC_OPERATIONS.UPDATE:
-      if (!table.has(key)) {
-        this.logger.debug(CACHE_LOG_MSG.UPDATE_ON_MISSING_KEY_TREAT_INSERT, {
-          tableName,
-          key,
-        });
-        table.set(key, this.deepClone(data));
-      } else {
-        const existing = table.get(key);
-        if (this.isStaleForExistingRecord(tableName, existing, data, sameEntryOrder)) {
-          const staleMergeResult = this.applyStaleRowBackfill(
-            tableName,
-            table,
-            key,
-            existing,
-            data,
-          );
-          if (staleMergeResult.applied) {
-            recordForNotification = staleMergeResult.record;
-          }
-          this.logger.debug(CACHE_LOG_MSG.STALE_EVENT_IGNORED, {
-            tableName,
-            key,
-            operation,
-            existingUpdatedAt: this.getRecordTimestamp(existing),
-            incomingUpdatedAt: this.getRecordTimestamp(data),
-            backfilledFields: staleMergeResult.backfilledFields,
-          });
-          break;
-        }
-        table.set(key, this.mergeRecords(tableName, existing, data));
-      }
-      recordForNotification = table.get(key);
-      incomingVersionAccepted = true;
+    case CDC_ROW_FOLD_STATE.DELETE_ABSENT:
+      // Reorder case: the DELETE arrived before its INSERT. Leave a tombstone so
+      // the late INSERT cannot resurrect the row.
+      this.tombstoneStore.record(tableName, key, data, {authoritativeAbsence,
+        authoritativeObservedAtMs: options?.authoritativeObservedAtMs});
+      this.logger.debug(CACHE_LOG_MSG.DELETE_ON_MISSING_KEY_IGNORED, {tableName, key});
       break;
-
-    case CDC_OPERATIONS.UPSERT:
-      if (!table.has(key)) {
-        table.set(key, this.deepClone(data));
-      } else {
-        const existing = table.get(key);
-        if (imageReplacement) {
-          table.set(key, buildAuthoritativeSystemTableCacheReplacement(existing, data));
-        } else if (
-          mutationMode ===
-          SYSTEM_TABLE_CACHE_MUTATION_MODE
-            .AUTHORITATIVE_SERVICE_LIFECYCLE_RECONCILIATION
-        ) {
-          table.set(
-            key,
-            buildAuthoritativeServiceLifecycleCacheReplacement(
-              existing,
-              data,
-            ),
-          );
-        } else if (this.isStaleForExistingRecord(
-          tableName,
-          existing,
-          data,
-          sameEntryOrder,
-        )) {
-          const staleMergeResult = this.applyStaleRowBackfill(
-            tableName,
-            table,
-            key,
-            existing,
-            data,
-          );
-          if (staleMergeResult.applied) {
-            recordForNotification = staleMergeResult.record;
-          }
-          this.logger.debug(CACHE_LOG_MSG.STALE_EVENT_IGNORED, {
-            tableName,
-            key,
-            operation,
-            existingUpdatedAt: this.getRecordTimestamp(existing),
-            incomingUpdatedAt: this.getRecordTimestamp(data),
-            backfilledFields: staleMergeResult.backfilledFields,
-          });
-          break;
-        } else if (
-          mutationMode ===
-            SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_RECONCILIATION ||
-          mutationMode ===
-            SYSTEM_TABLE_CACHE_MUTATION_MODE
-              .AUTHORITATIVE_OBSERVATION_RECONCILIATION
-        ) {
-          table.set(
-            key,
-            buildAuthoritativeSystemTableCacheReplacement(existing, data),
-          );
-        } else {
-          table.set(key, this.mergeRecords(tableName, existing, data));
-        }
-      }
-      recordForNotification = table.get(key);
-      incomingVersionAccepted = true;
-      break;
-
-    case CDC_OPERATIONS.DELETE:
-      if (!table.has(key)) {
-        // Reorder case: the DELETE arrived before its INSERT. Leave a tombstone so
-        // the late INSERT cannot resurrect the row.
-        this.tombstoneStore.record(
-          tableName,
-          key,
-          data,
-          {
-            authoritativeAbsence,
-            authoritativeObservedAtMs: options?.authoritativeObservedAtMs,
-          },
-        );
-        this.logger.debug(CACHE_LOG_MSG.DELETE_ON_MISSING_KEY_IGNORED, {
-          tableName,
-          key,
-        });
-      } else {
-        const existing = table.get(key);
-        if (!imageReplacement &&
-            isDeleteSupersededByExistingRecord(tableName, existing, data, sameEntryOrder)) {
-          // The row is causally newer than this DELETE: the delete is superseded,
-          // so it must NOT leave a tombstone that would fence the live row.
-          this.logger.debug(CACHE_LOG_MSG.STALE_EVENT_IGNORED, {
-            tableName,
-            key,
-            operation,
-            existingUpdatedAt: this.getRecordTimestamp(existing),
-            incomingUpdatedAt: this.getRecordTimestamp(data),
-          });
-          break;
-        }
-        recordForNotification = existing;
-        table.delete(key);
-        // An image's absence leaves no tombstone: what follows the image is
-        // ordered by the source-order cell, not fenced by the deleted row.
-        if (!imageReplacement) {
-          this.tombstoneStore.record(tableName, key,
-            buildDeletedRowTombstoneSource(existing, data), {authoritativeAbsence,
-              authoritativeObservedAtMs: options?.authoritativeObservedAtMs});
-        }
-        incomingVersionAccepted = true;
+    case CDC_ROW_FOLD_STATE.DELETED:
+      recordForNotification = existing;
+      table.delete(key);
+      // An image's absence leaves no tombstone: what follows the image is
+      // ordered by the source-order cell, not fenced by the deleted row.
+      if (!imageReplacement) {
+        this.tombstoneStore.record(tableName, key,
+          buildDeletedRowTombstoneSource(existing, data), {authoritativeAbsence,
+            authoritativeObservedAtMs: options?.authoritativeObservedAtMs});
       }
       break;
+    default:
+      table.set(key, folded.row);
+      recordForNotification = folded.row;
     }
 
-    if (incomingVersionAccepted || (operation === CDC_OPERATIONS.DELETE && !table.has(key))) {
+    if (incomingVersionAccepted || folded.state === CDC_ROW_FOLD_STATE.DELETE_ABSENT) {
       this.sourceOrder.record(tableName, key, data, options);
     }
     this.logger.debug(CACHE_LOG_MSG.APPLIED_CDC_EVENT, {tableName, operation, key, causeId});
@@ -696,25 +587,6 @@ class SystemTableCache {
    */
   isStaleForExistingRecord(tableName, existing, incoming, sameEntryOrder = 0) {
     return isStaleForExistingRecord(tableName, existing, incoming, sameEntryOrder);
-  }
-
-  /**
-   * Backfill missing fields from a stale CDC row without overriding newer data.
-   * @param {Map<string, Object>} table - Table storage map.
-   * @param {string} key - Primary key value.
-   * @param {Object} existing - Existing cached row.
-   * @param {Object} incoming - Incoming stale row.
-   * @return {{applied: boolean, record: Object, backfilledFields: string[]}}
-   * @private
-   */
-  applyStaleRowBackfill(tableName, table, key, existing, incoming) {
-    return applyStaleRowBackfill(
-      tableName,
-      table,
-      key,
-      existing,
-      incoming,
-    );
   }
 
   /**

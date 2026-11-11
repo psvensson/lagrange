@@ -479,7 +479,9 @@ test('(m\') a local-mutation-readiness deferral is ended by the readiness ' +
   const cache = createListenableSystemTableCache();
   const rebalancer = createFenceTestRebalancer({
     entityId: PARKED_BACKGROUND_ENTITY_ID,
-    readinessOwner: {},
+    // The planning publication stream the wake also listens on (no
+    // publication in this witness).
+    readinessOwner: {subscribeReadinessPlanningSnapshots: () => () => {}},
     nowFn: () => 1_000,
   });
   rebalancer.systemTableCache = cache;
@@ -539,6 +541,8 @@ test('(l2) local mutation readiness wake also fires on readiness planning snapsh
     readinessOwner,
     nowFn: () => 1_000,
   });
+  // The cache-change seam the wake listens on beside the planning stream.
+  rebalancer.systemTableCache = createListenableSystemTableCache();
   rebalancer.isLeader = true;
   let blocker = {
     failedDimensions: ['controlPlaneWritable', 'metadataPublicationHealthy'],

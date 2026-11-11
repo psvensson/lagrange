@@ -25,10 +25,11 @@ import {
   buildControlPlaneWorkloadProfile,
 } from '../control-plane/control-plane-workload-profile.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+import {TYPED_DISTRIBUTED_FAILURE_DECISION, classifyTypedDistributedFailure} from
+  '../control-plane/control-plane-error-classification.js';
 import {CDC_ADMISSION_INTENT_FIELD, PARTITION_CDC_ADMISSION_CLASS,
   cdcAdmissionClassFieldsOf, cdcAdmissionClassOfIntent} from
   '../partition/partition-cdc-admission-class.js';
-import {ROUTER_MESSAGE_TIMEOUT_ERROR_CODE} from '../transport/transport-error-codes.js';
 
 const {
   CDC_DEFAULTS,
@@ -56,7 +57,6 @@ const {
   hasControlPlaneMutationRoutingGapFailureSignature,
   hasSystemTableOwnerHandoffFailureSignature,
   isRetryableControlPlaneError,
-  isTerminalTypedDistributedFailure,
   normalizeDeliveryPriority,
   resolveSystemTableMutationDeliveryPriority,
   shouldEmitTableWriteMetric,
@@ -712,24 +712,23 @@ class CDCRoutedMutationReadiness {
       typeof errorLike === 'string' ?
         errorLike :
         errorLike?.message || errorLike?.error || '';
-    // A partition write answer: by the control plane's one classifier (its
-    // code when the caller holds it, else its text).
-    return !isTerminalTypedDistributedFailure(errorLike) && (
-      isRetryableControlPlaneError(errorLike) ||
+    // The control plane's one classifier decides (every transport code by its
+    // table: a re-send is the same entry under the one key, R14); a terminal
+    // or stopped decision is never re-sent, whatever its text.
+    const decision = classifyTypedDistributedFailure(errorLike);
+    if (decision === TYPED_DISTRIBUTED_FAILURE_DECISION.TERMINAL ||
+        decision === TYPED_DISTRIBUTED_FAILURE_DECISION.STOPPED) {
+      return false;
+    }
+    // These texts have no producer code yet (recorded for their owners).
+    return isRetryableControlPlaneError(errorLike) ||
       message.includes(ERRORS.PARTITION_SERVICE_NOT_FOUND) ||
       message === ERRORS.QUERY_FAILED ||
       message.includes(ERRORS.SYSTEM_CACHE_NOT_AVAILABLE) ||
       message.includes(ERRORS.SYSTEM_CACHE_PARTITION_LOOKUP_UNAVAILABLE) ||
-      message.includes(ERRORS.NO_HANDLER_FOR_ADDRESS) ||
-      message.includes(CDC_INTEGRATION_SERVICE_LITERAL.NO_CONNECTION_TO_NODE) ||
       message.includes(
         CDC_INTEGRATION_SERVICE_LITERAL.FAILED_TO_FORWARD_WRITE_TO_LEADER,
-      ) ||
-      // A spent delivery lifetime, by its transport code: the ACK and the
-      // answer timeout are one transient here, re-sent under the same
-      // write key (mintControlPlaneWriteKey), so never applied twice.
-      getControlPlaneErrorCode(errorLike) === ROUTER_MESSAGE_TIMEOUT_ERROR_CODE
-    );
+      );
   }
 
   shouldRetryRoutedSystemTableMutationFailure(result, tableName = null) {

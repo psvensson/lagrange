@@ -1,6 +1,7 @@
-import {COLUMN} from '../constants/index.js';
 import {CACHE_CDC_OPERATIONS} from './cache-constants.js';
 import {compareSchemaVersions} from './system-table-cache-row-merge.js';
+import {compareSameEntryPositions, entryPositionOf} from
+  './system-table-cache-cdc-fold.js';
 
 function resolveCdcOriginHlc(row) {
   if (typeof row?.updated_at_hlc === 'string') {
@@ -450,16 +451,6 @@ function isSourceRange(range) {
 }
 
 // The within-entry rule's position of one event.
-function entryPositionOf(data, options) {
-  const hlc = data?.[COLUMN.UPDATED_AT_HLC];
-  if (typeof hlc !== 'string' || hlc.length === 0 ||
-      typeof options?.sourcePartition !== 'string' ||
-      !Number.isSafeInteger(options?.sourceLogIndex) ||
-      !Number.isSafeInteger(options?.sourceOrdinal)) return null;
-  return Object.freeze({hlc, partition: options.sourcePartition,
-    logIndex: options.sourceLogIndex, ordinal: options.sourceOrdinal});
-}
-
 function cellSnapshot(cell) {
   return Object.freeze({sourcePartition: cell.sourcePartition, tableName: cell.tableName,
     incarnation: cell.incarnation, state: cell.state, position: cell.position,
@@ -708,13 +699,8 @@ class SystemTableCacheSourceOrder {
    *   no event of this entry was applied (the merge alone decides).
    */
   compareInSameEntry(tableName, key, data, options) {
-    const incoming = entryPositionOf(data, options);
-    const applied = incoming === null ? undefined : this.tables.get(tableName)?.get(key);
-    if (applied === undefined || applied.hlc !== incoming.hlc ||
-        applied.partition !== incoming.partition || applied.logIndex !== incoming.logIndex) {
-      return 0;
-    }
-    return Math.sign(incoming.ordinal - applied.ordinal);
+    return compareSameEntryPositions(this.tables.get(tableName)?.get(key),
+      entryPositionOf(data, options));
   }
 
   /**

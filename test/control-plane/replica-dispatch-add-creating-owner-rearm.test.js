@@ -150,7 +150,7 @@ function createStrandedAddScenario(operationId) {
       return null;
     },
   };
-  scenario.sourceDispatch.getAuthoritativeReplicaOperationRow = async () =>
+  scenario.sourceDispatch.readOwnerReplicaOperationRowOnCacheMiss = async () =>
     null;
   return scenario;
 }
@@ -394,7 +394,7 @@ test(
         return null;
       },
     };
-    sourceDispatch.getAuthoritativeReplicaOperationRow = async () => null;
+    sourceDispatch.readOwnerReplicaOperationRowOnCacheMiss = async () => null;
 
     try {
       await sourceDispatch.handleReplicaOperationDispatch({

@@ -2,14 +2,16 @@
 // recipient on (dead-recipient measure 2, owner ruling 2026-11-11): the
 // membership owner's authoritative state of the recipient's group, read from
 // the leaders of the `services` and `nodes` partitions (leader-witnessed, as
-// the owner holds it - never the sender's cache, never elapsed time).
+// the owner holds it - never the sender's cache, never elapsed time). A
+// group's lifecycle is its replica rows': the message_groups row carries no
+// lifecycle column (MESSAGE_GROUPS_SCHEMA), so it is not read.
 //
-// A message group is RETIRED when the services partition's leader holds at
-// least one replica row of the group and every one of them is retired: its
+// A message group is STOPPED when the services partition's leader holds at
+// least one replica row of the group and every one of them is stopped: its
 // status is stopped, or the nodes partition's leader holds its node in a
 // terminal state (stopped, failed). Any active replica on a live node makes it
 // ACTIVE. No row at all is NOT_ESTABLISHED (absence is not evidence, R07);
-// an unreadable or non-leader answer is UNAVAILABLE. Only RETIRED detaches.
+// an unreadable or non-leader answer is UNAVAILABLE. Only STOPPED detaches.
 // Detaching is safe by construction (CDC Stage 3): a group that returns is a
 // new recipient whose first range answers a gap, and it lists again.
 import {COLUMN, SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../constants/index.js';
@@ -21,19 +23,16 @@ import {buildControlPlaneReadAuthority} from
   '../control-plane/control-plane-system-table-gateway-read-contracts.js';
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE, CONTROL_PLANE_READ_LEADER_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
-import {ROUTING_DOMAIN_GROUP, resolveMessageGroupId} from
-  '../topology/cdc-group-propagation-routing.js';
+import {resolveMessageGroupId} from '../topology/cdc-group-propagation-routing.js';
 
 const CDC_RECIPIENT_LIFECYCLE = Object.freeze({
   ACTIVE: 'active',
-  RETIRED: 'retired',
+  STOPPED: 'stopped',
   NOT_ESTABLISHED: 'not_established',
   UNAVAILABLE: 'unavailable',
 });
 
 const TERMINAL_NODE_STATES = Object.freeze(new Set([NODE_STATE.STOPPED, NODE_STATE.FAILED]));
-const RETIRED_GROUP_VALUES = Object.freeze(new Set([ROUTING_DOMAIN_GROUP.RETIRED,
-  ROUTING_DOMAIN_GROUP.INACTIVE]));
 
 const LIFECYCLE_READ_OPTIONS = Object.freeze({
   readAuthority: buildControlPlaneReadAuthority({
@@ -69,19 +68,13 @@ async function readRecipientGroupLifecycle(service, groupId) {
   const replicas = services.filter((row) =>
     row?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP &&
     resolveMessageGroupId(row) === groupId);
-  const groups = await leaderRows(service, TABLES.MESSAGE_GROUPS);
-  const groupRow = groups?.find((row) => row?.[COLUMN.GROUP_ID] === groupId) ?? null;
-  if (groupRow !== null && (RETIRED_GROUP_VALUES.has(groupRow[COLUMN.STATUS]) ||
-      RETIRED_GROUP_VALUES.has(groupRow[COLUMN.STATE]))) {
-    return evidence(CDC_RECIPIENT_LIFECYCLE.RETIRED, {groupId, by: TABLES.MESSAGE_GROUPS});
-  }
   if (replicas.length === 0) return evidence(CDC_RECIPIENT_LIFECYCLE.NOT_ESTABLISHED, {groupId});
   const nodes = await leaderRows(service, TABLES.NODES);
   if (nodes === null) return evidence(CDC_RECIPIENT_LIFECYCLE.UNAVAILABLE, {groupId});
   const nodeState = new Map(nodes.map((row) => [row?.[COLUMN.NODE_ID], row?.[COLUMN.STATUS]]));
-  const retired = replicas.every((row) => row[COLUMN.STATUS] === SERVICE_STATUS.STOPPED ||
+  const stopped = replicas.every((row) => row[COLUMN.STATUS] === SERVICE_STATUS.STOPPED ||
     TERMINAL_NODE_STATES.has(nodeState.get(row[COLUMN.NODE_ID])));
-  return evidence(retired ? CDC_RECIPIENT_LIFECYCLE.RETIRED : CDC_RECIPIENT_LIFECYCLE.ACTIVE,
+  return evidence(stopped ? CDC_RECIPIENT_LIFECYCLE.STOPPED : CDC_RECIPIENT_LIFECYCLE.ACTIVE,
     {groupId, by: TABLES.SERVICES, replicas: replicas.length});
 }
 

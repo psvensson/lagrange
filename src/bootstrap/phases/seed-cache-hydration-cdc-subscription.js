@@ -4,19 +4,19 @@ import {
 import {
   BOOTSTRAP_LOG_MSG,
 } from '../bootstrap-constants.js';
-import {
-  CDC_OPERATION,
-  COLUMN,
-  TABLES,
-} from '../../constants/index.js';
-import {SystemTableCache} from '../../cache/system-table-cache.js';
+import {COLUMN, TABLES} from '../../constants/index.js';
+import {foldCdcEventsOntoRows} from '../../cache/system-table-cache-cdc-fold.js';
+import {isUsableSystemCacheKey} from
+  '../../cache/system-cache-key-descriptor.js';
 
 // The seed hydration path's name in its propagation subscribers' ids.
 const SEED_CDC_SUBSCRIBER_ROLE = 'bootstrap';
 
+// The node a nodes event names: its row's node_id, the one key field the
+// nodes partition emits (null: none).
 function nodeIdOfEvent(cdcEvent) {
-  const cdcData = cdcEvent?.data && typeof cdcEvent.data === 'object' ? cdcEvent.data : {};
-  return cdcData[COLUMN.NODE_ID] || cdcData.id || null;
+  const nodeId = cdcEvent?.data?.[COLUMN.NODE_ID];
+  return isUsableSystemCacheKey(nodeId) ? nodeId : null;
 }
 
 /**
@@ -26,37 +26,19 @@ function nodeIdOfEvent(cdcEvent) {
  * vector, the cached row. This is what one-by-one delivery compared (the
  * cache then held every earlier event), so a node that flaps inside one
  * vector raises exactly the transitions it raised one event at a time. The
- * predecessor is computed by the cache owner's own apply (a scratch
- * SystemTableCache seeded with the cached rows these events touch), never by
- * a copy of its merge rule, so this hook cannot drift from one-by-one
- * semantics (stale versions, tombstones, same-entry source order).
+ * predecessor is the cache owner's own fold (foldCdcEventsOntoRows, the
+ * function its apply decides every CDC-merge row with), never a copy of it.
  * @param {Array<Object>} events - The nodes vector, in log order.
  * @param {Object} owner - {readCachedNodeRow(nodeId), trigger(cdcEvent,
  *   previousNodeRow)}.
  * @return {void}
  */
 function raiseNodeReadyRebalanceTriggers(events, {readCachedNodeRow, trigger}) {
-  const rows = new SystemTableCache();
-  const seeded = new Set();
-  for (const cdcEvent of events) {
-    const nodeId = nodeIdOfEvent(cdcEvent);
-    if (!nodeId) {
-      trigger(cdcEvent, null);
-      continue;
-    }
-    if (!seeded.has(nodeId)) {
-      seeded.add(nodeId);
-      const cachedNodeRow = readCachedNodeRow(nodeId);
-      if (cachedNodeRow) {
-        rows.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, cachedNodeRow);
-      }
-    }
-    const previousNodeRow = rows.get(TABLES.NODES, nodeId) ?? null;
-    trigger(cdcEvent, previousNodeRow === null ? null : {...previousNodeRow});
-    rows.applySystemTableChange(TABLES.NODES, cdcEvent.operation, cdcEvent.data, {
-      timestamp: cdcEvent.timestamp, sourcePartition: cdcEvent.sourcePartition,
-      sourceLogIndex: cdcEvent.sourceLogIndex, sourceOrdinal: cdcEvent.sourceOrdinal});
-  }
+  const keyed = events.map((cdcEvent) => ({key: nodeIdOfEvent(cdcEvent),
+    operation: cdcEvent.operation, data: cdcEvent.data, source: cdcEvent,
+    cdcEvent}));
+  foldCdcEventsOntoRows(TABLES.NODES, keyed, readCachedNodeRow,
+    (event, previousNodeRow) => trigger(event.cdcEvent, previousNodeRow));
 }
 
 /**

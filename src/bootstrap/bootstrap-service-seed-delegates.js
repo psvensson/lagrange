@@ -78,6 +78,7 @@ function buildPhaseExecutionDelegates(service) {
     admitOriginalSeedReplica: (options) => self.admitOriginalSeedReplica(options),
     assertOriginalSeedContinuation: (replicaId) => self.assertOriginalSeedContinuation(replicaId),
     getOriginalSeedPreparation: () => self.originalAllocationPreparation,
+    getFormationTargetDeclaration: () => self.formationTargetDeclaration,
     getOriginalSeedFoundationTimestamp: () =>
       self.originalAllocationPreparation.foundationTimestamp(),
     getNodeId: () => self.nodeId,

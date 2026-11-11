@@ -31,14 +31,18 @@ import {
   countVoterLivenessTick,
   createVoterLiveness,
   liveVotersOf,
+  recordTransferAttempt,
+  recordVoterAnswer,
   sampleVoterLiveness,
+  voterLivenessFactsOf,
 } from './raft-rs-voter-liveness.js';
 import {
   decideLeadershipTransfer,
   droppedByLeadershipTransfer,
-  removedLeaderStepDown,
   leadershipTransferInProgress,
 } from './raft-rs-leadership-transfer.js';
+import {removedLeaderAtApply, removedLeaderAtDrainEnd} from
+  './raft-rs-removed-leader-step-down.js';
 import {
   RAFT_RS_CONF_CHANGE_ENTRY_TYPES,
 } from './raft-rs-ready-loop-constants.js';
@@ -1175,6 +1179,9 @@ function resolveCommittedEntryConfState(group, expectedGeneration, entry) {
     if (!set.ok) {
       return set;
     }
+    removedLeaderAtApply({peerId: group.peerId, confState: applied.value,
+      observe: () => readGroupObservation(group, expectedGeneration),
+      stepDown: (primitive) => invokeCoreAt(group, expectedGeneration, primitive)});
     return {...applied, decoded: decoded.value, membershipContext};
   }
   return invokeCoreAt(
@@ -1384,7 +1391,8 @@ function drainReady(group, expectedGeneration, startCycles = 0) {
       return settledTurn(hasReady.result);
     }
     if (!hasReady.value) {
-      announce(group, expectedGeneration);
+      // A removed leader that stepped down here left a Ready: drained now.
+      if (announce(group, expectedGeneration)) continue;
       return settledTurn(outcome(CORE_OK, {reason: RUNTIME_REASON.DRAINED}));
     }
 
@@ -1435,18 +1443,22 @@ function semanticLeaderIdentity(group, lead) {
 function announce(group, expectedGeneration) {
   const status = invokeCoreAt(group, expectedGeneration, 'status');
   if (!status.ok) {
-    return;
+    return false;
   }
   const now = status.value;
   const before = group.lastStatus;
   group.lastStatus = now;
-  const observed = recordStatusObservation(group, expectedGeneration, now);
-  if (sampleVoterLiveness(group.voterLiveness, now,
+  // Sampled first: the observation recorded below carries this liveness.
+  const livenessChanged = sampleVoterLiveness(group.voterLiveness, now,
     tuningOf(group.timing).electionTick,
-    (status) => ROLE[status.raftState] === ROLE_LEADER)) {
+    (status) => ROLE[status.raftState] === ROLE_LEADER);
+  const observed = recordStatusObservation(group, expectedGeneration, now);
+  if (livenessChanged) {
     group.emit(RUNTIME_EVENT.VOTER_LIVENESS_CHANGED);
   }
-  stepDownIfRemovedLeader(group, observed);
+  const steppedDown = removedLeaderAtDrainEnd({peerId: group.peerId, observed,
+    stepDown: (primitive) => invokeCoreAt(group, expectedGeneration, primitive),
+    queueTransfer: (transfer) => queueRemovedLeaderTransfer(group, transfer)});
   announceAppliedProgress(group, expectedGeneration, observed);
   if (before && now.raftState !== before.raftState) {
     group.emit(ROLE[now.raftState] || ROLE[0]);
@@ -1470,27 +1482,19 @@ function announce(group, expectedGeneration) {
   if (settlement !== null) {
     group.emit(RUNTIME_EVENT.CONF_CHANGE_APPLIED, settlement);
   }
+  return steppedDown;
 }
 
-// A leader its applied configuration no longer names hands leadership on
-// (removedLeaderStepDown): the transfer is the group's next queued turn, one
-// at a time. The drains of that turn itself never ask again (that would
-// queue turn after turn with nothing else moving); the next drain anything
-// else causes - a tick, a delivery - asks again while it still leads
-// (raft-rs ignores a repeat to a transferee whose transfer runs, and aborts
-// one that ran out after an election timeout of ticks).
 // The voters this group's leader counts live (raft-rs-voter-liveness.js).
 function groupLiveVoters(group, status) {
   return liveVotersOf(group.voterLiveness, status,
     tuningOf(group.timing).electionTick);
 }
 
-function stepDownIfRemovedLeader(group, observed) {
-  const transfer = observed.ok ?
-    removedLeaderStepDown(group.peerId, observed.value) : null;
-  if (transfer === null || group.removedLeaderStepDownQueued === true) {
-    return;
-  }
+// A removed leader's transfer (raft-rs-removed-leader-step-down.js): the
+// group's next queued turn, one at a time.
+function queueRemovedLeaderTransfer(group, transfer) {
+  if (group.removedLeaderStepDownQueued === true) return;
   group.removedLeaderStepDownQueued = true;
   enqueue(group, () => continueTurn(
     perform(group, {type: RUNTIME_COMMAND.TRANSFER_LEADERSHIP, transfer}),
@@ -1571,6 +1575,8 @@ function readGroupObservation(group, expectedGeneration, rawStatus = null) {
     configurationKey: raftRsConfStateKey(conf.value),
     membershipGenerationIndex: group.membershipGenerationKnown ?
       Number(group.membershipGenerationIndex) : null,
+    voterLiveness: voterLivenessFactsOf(group.voterLiveness, status.value,
+      tuningOf(group.timing).electionTick),
     lifecycleIncarnation: group.lifecycleIncarnation,
     runtimeHealth, runtimeGeneration}};
 }
@@ -1796,6 +1802,9 @@ function transferLeadership(group, expectedGeneration, command) {
   if (!stepped.ok) {
     return settledTurn(stepped.result);
   }
+  if (decision.accepted.reason === RUNTIME_REASON.TRANSFER_REQUESTED) {
+    recordTransferAttempt(group.voterLiveness, observed.value.status, decision.transferee);
+  }
   return continueTurn(drainReady(group, expectedGeneration), (drained) =>
     settledTurn(drained.outcome === CORE_OK ? decision.accepted : drained));
 }
@@ -1980,7 +1989,7 @@ function stepOneInbound(group, expectedGeneration, envelope) {
       return {done: true, result: stepped.result};
     }
     recordInboundStepRefusal(group, envelope, stepped.result);
-  }
+  } else recordVoterAnswer(group.voterLiveness, envelope.message);
   return {done: false, ready: drainReady(group, expectedGeneration)};
 }
 

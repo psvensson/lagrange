@@ -394,7 +394,7 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
     // A list the owner did not answer completely holds the gate: its count
     // is unknown, and reading it as zero admitted a second ordinary-priority
     // ADD beside one already in flight. The named wait re-asks on the event
-    // that can let the owner answer (no timer; the cadence re-asks too).
+    // that can let the owner answer; its bound is the cadence check.
     // The emergency lane (replica_operations, control-plane publications),
     // whose recovery restores that answer, is never gated here.
     if (!isCompleteIncompleteOperationObservation(counts.observation)) {
@@ -442,11 +442,10 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
       .filter((candidate) =>
         candidate.state === AVAILABLE_NODE_PLANNING_STATE.DEFERRED)
       .map((candidate) => candidate.nodeId);
-    if (deferredNodeIds.length > 0) {
-      this.armPlanningTargetReadinessWake([
-        ...(this.planningTargetReadinessWakeNodeIds || []),
-        ...deferredNodeIds]);
-    }
+    // Armed against the generation this answer was read at, never by
+    // re-reading it.
+    this.armPlanningTargetReadinessWake(deferredNodeIds,
+      nodePlan.planningPublicationGeneration);
     return new Set([
       ...nodePlan.availableNodes.map((node) => node.node_id),
       ...deferredNodeIds,

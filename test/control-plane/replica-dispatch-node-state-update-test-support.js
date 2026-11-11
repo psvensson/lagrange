@@ -20,6 +20,11 @@ import {
   NODE_CAPABILITY,
 } from '../../src/constants/index.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
+import {
+  buildAbsentOperationVisibility,
+  buildPresentOperationVisibility,
+  buildUnavailableOperationVisibility,
+} from '../../src/rebalancer/replica-operation-repository-operation-visibility.js';
 
 export const READY_NODE_CAPABILITIES = Object.freeze([
   NODE_CAPABILITY.PARTITION_REPLICA,
@@ -201,6 +206,45 @@ export function createService(options = {}) {
       },
       rebalanceCoordinator,
     }));
+  attachOwnerReadPort(rebalanceCoordinator, controlPlaneSystemTableGateway, service);
   service.initialize();
   return service;
+}
+
+/**
+ * The dispatch service reads one operation through its coordinator's
+ * repository (the typed by-id read). A coordinator double without one gets
+ * a port over the fixture's durable replica_operations rows (the gateway's
+ * authoritative read): a failed read is UNAVAILABLE, no row ABSENT, a row
+ * PRESENT - classified by the production visibility builders.
+ * @param {Object} rebalanceCoordinator
+ * @param {Object|null} gateway
+ * @param {Object} service
+ * @return {void}
+ */
+function attachOwnerReadPort(rebalanceCoordinator, gateway, service) {
+  if (rebalanceCoordinator.repository) return;
+  rebalanceCoordinator.repository = {
+    async getOperationByIdVisibilityObservation(operationId) {
+      const result = gateway ?
+        await gateway.readAuthoritativeRows(
+          'replica_operations',
+          'SELECT * FROM replica_operations WHERE operation_id = ?',
+          [operationId],
+          {},
+        ) :
+        {success: true, rows: []};
+      if (result?.success === false) {
+        return buildUnavailableOperationVisibility({
+          reasonCode: 'authoritative_read_unavailable',
+          retryable: true,
+          retryAfterMs: null,
+        });
+      }
+      const row = Array.isArray(result?.rows) ? result.rows[0] : null;
+      return row ?
+        buildPresentOperationVisibility(service.buildOperationFromRow(row)) :
+        buildAbsentOperationVisibility();
+    },
+  };
 }

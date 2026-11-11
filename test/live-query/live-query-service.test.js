@@ -1,11 +1,11 @@
 /**
- * Tests for LiveQueryService - Core live query functionality.
+ * Tests for the live query SQL helpers: LIVE SELECT parsing, predicates and
+ * partition keys.
  * Requirements: 33.1, 33.4, 33.16
  */
 
 import {test} from '../../src/test-helpers/tap.js';
 import {
-  LiveQueryService,
   compilePredicate,
   extractPartitionKeyValue,
   canonicalizePredicate,
@@ -264,86 +264,4 @@ test('canonicalizePredicate - produces consistent output', async (t) => {
   const sig2 = canonicalizePredicate(where2);
 
   t.equal(sig1, sig2, 'should produce same signature');
-});
-
-test('LiveQueryService - creates with parsed query', async (t) => {
-  const parsedQuery = {
-    type: 'SELECT',
-    from: {name: 'orders'},
-    where: {
-      type: 'binary',
-      operator: '=',
-      left: {type: 'column_ref', column: 'id'},
-      right: {type: 'literal', value: 1},
-    },
-  };
-
-  const service = new LiveQueryService({parsedQuery});
-
-  t.ok(service.queryId, 'should have queryId');
-  t.equal(service.table, 'orders', 'should extract table');
-  t.ok(service.predicate, 'should have predicate');
-});
-
-test('LiveQueryService - evaluates predicate', async (t) => {
-  const parsedQuery = {
-    type: 'SELECT',
-    from: {name: 'orders'},
-    where: {
-      type: 'binary',
-      operator: '>',
-      left: {type: 'column_ref', column: 'amount'},
-      right: {type: 'literal', value: 100},
-    },
-  };
-
-  const service = new LiveQueryService({parsedQuery});
-
-  t.equal(service.evaluatePredicate({amount: 150}), true, 'matches');
-  t.equal(service.evaluatePredicate({amount: 50}), false, 'does not match');
-});
-
-test('LiveQueryService - renews subscription', async (t) => {
-  const service = new LiveQueryService({
-    parsedQuery: {from: {name: 'test'}},
-  });
-
-  const before = service.lastRenewal;
-  await new Promise((r) => setTimeout(r, 10));
-
-  const result = service.renew('cursor-123');
-
-  t.ok(service.lastRenewal > before, 'should update lastRenewal');
-  t.equal(service.lastSeenHLC, 'cursor-123', 'should update cursor');
-  t.ok(result.expiresAt > Date.now(), 'should have future expiry');
-});
-
-test('LiveQueryService - detects expiration', async (t) => {
-  const service = new LiveQueryService({
-    parsedQuery: {from: {name: 'test'}},
-  });
-
-  // Set TTL to very short
-  service.ttlMs = 10;
-  service.lastRenewal = Date.now() - 100;
-
-  t.equal(service.isExpired(), true, 'should be expired');
-});
-
-test('LiveQueryService - gets query signature', async (t) => {
-  const parsedQuery = {
-    from: {name: 'orders'},
-    where: {
-      type: 'binary',
-      operator: '=',
-      left: {type: 'column_ref', column: 'id'},
-      right: {type: 'literal', value: 1},
-    },
-  };
-
-  const service = new LiveQueryService({parsedQuery});
-  const sig = service.getQuerySignature();
-
-  t.ok(sig.startsWith('orders:'), 'should include table');
-  t.ok(sig.length > 10, 'should have predicate hash');
 });

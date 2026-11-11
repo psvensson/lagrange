@@ -9,6 +9,8 @@ import {FRAME_CLASS, ROUTER_SYNC_SECTION, logRouterDiagnostics}
   from './message-router-peer-traffic-diagnostics.js';
 import {TRANSPORT_ACKNOWLEDGEMENT} from './transport-acknowledgement.js';
 import {TRANSPORT_DELIVERY_OUTCOME_REASON_CODE} from './transport-semantic-outcome.js';
+import {ROUTER_DUPLICATE_PENDING_ACK_ERROR_CODE} from
+  './transport-router-invariant-error-codes.js';
 
 const DELIVERY_SETTLEMENT_REJECTED = 'rejected';
 
@@ -20,7 +22,6 @@ const ACK_WAIT = Object.freeze({
   wait: 'MESSAGE_TIMEOUT_MS (delivery ACK)',
   awaited: 'ACK from the target node for a sent SERVICE_MESSAGE',
 });
-const DUPLICATE_PENDING_ACK = 'router_duplicate_pending_ack';
 
 function rejectBeforeSend(router, connection, targetNodeId, reject) {
   const active = router.nodeConnections.get(targetNodeId) || connection;
@@ -132,7 +133,8 @@ function sendWithAck(router, connection, targetAddress, messageId, payload, targ
   const acknowledged = new Promise((resolve, reject) => {
     assertDeliveryOpen(options);
     if (router.pendingMessages.has(messageId)) {
-      throw Object.assign(new Error(DUPLICATE_PENDING_ACK), {code: DUPLICATE_PENDING_ACK});
+      throw Object.assign(new Error(ROUTER_DUPLICATE_PENDING_ACK_ERROR_CODE),
+        {code: ROUTER_DUPLICATE_PENDING_ACK_ERROR_CODE});
     }
     const ws = connection?.ws;
     if (!ws || ws.readyState !== WebSocket.OPEN) {

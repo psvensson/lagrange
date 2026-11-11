@@ -105,7 +105,6 @@ function buildOperationVisibilityUnavailableError(observation, operationId) {
   const deferredOutcome = observation?.deferredOutcome || null;
   const error = new Error(
     `${OPERATION_VISIBILITY_UNAVAILABLE_MESSAGE}${operationId}`);
-  error.code = OPERATION_VISIBILITY_UNAVAILABLE_ERROR_CODE;
   error.errorCode = OPERATION_VISIBILITY_UNAVAILABLE_ERROR_CODE;
   error.deferRetry = true;
   error.retryAfterMs = observation?.retryAfterMs ?? null;
@@ -126,7 +125,6 @@ function buildOperationVisibilityUnavailableError(observation, operationId) {
  */
 function buildOperationListUnavailableError(result, scope, retryAfterMs = null) {
   const error = new Error(`${OPERATION_VISIBILITY_UNAVAILABLE_MESSAGE}${scope}`);
-  error.code = OPERATION_VISIBILITY_UNAVAILABLE_ERROR_CODE;
   error.errorCode = OPERATION_VISIBILITY_UNAVAILABLE_ERROR_CODE;
   error.deferRetry = true;
   error.retryAfterMs = Number.isFinite(retryAfterMs) ? retryAfterMs : null;
@@ -151,7 +149,7 @@ function presentOperationOf(observation) {
 }
 
 function isOperationVisibilityUnavailableError(error) {
-  return error?.code === OPERATION_VISIBILITY_UNAVAILABLE_ERROR_CODE;
+  return error?.errorCode === OPERATION_VISIBILITY_UNAVAILABLE_ERROR_CODE;
 }
 
 export {

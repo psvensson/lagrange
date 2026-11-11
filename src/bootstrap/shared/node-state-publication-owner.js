@@ -33,16 +33,20 @@ import {
 import {
   STATE,
 } from '../../constants/index.js';
-import {classifyThrownDeliveryError, deliveryTransportOf, deliveryAnswerOf,
-  isDeliveredTransportDeliveryOutcome, isDeliveryTimeoutTransportOutcome} from
+import {deliveryTransportOf, deliveryAnswerOf,
+  isDeliveredTransportDeliveryOutcome} from
   '../../transport/transport-semantic-outcome.js';
+import {classifyTransportDeliveryFailure, mayResendAfterTransportFailure} from
+  '../../transport/transport-delivery-failure.js';
 import {
   NODE_STATE_PUBLICATION_OWNER_LITERAL,
   NODE_STATE_UPDATE_PUBLICATION_DEFER_REASON,
   NODE_STATE_UPDATE_PUBLICATION_DEFER_STATE,
   NODE_STATE_UPDATE_PUBLICATION_PATH,
   NODE_STATE_UPDATE_PUBLICATION_RETRY_TARGET,
+  NODE_STATE_UPDATE_TARGET_MISSING_CODE,
   buildNodeStateUpdateDeliveryError,
+  buildNodeStateUpdateTargetMissingError,
   buildNodeStateUpdatePublicationDiagnostics,
   buildNodeStateUpdatePublicationFailureAction,
   buildNodeStateUpdatePublicationFailureError,
@@ -51,7 +55,6 @@ import {
 } from './node-state-publication-outcome.js';
 import {
   JOINING_DEFAULT,
-  JOINING_ERROR_MSG,
   JOINING_LOG_MSG,
 } from '../node-joining-constants.js';
 import {requireIssuedBootIncarnation} from '../boot-incarnation-contract.js';
@@ -163,26 +166,14 @@ class NodeStatePublicationOwner {
     )) {
       return isRetryableControlPlaneError(error);
     }
-    // A spent delivery lifetime, read from the transport owner: a node-state
-    // publication is a state assignment, so the ACK and the answer timeout
-    // are retried alike.
-    if (isDeliveryTimeoutTransportOutcome(classifyThrownDeliveryError(error))) {
-      return true;
-    }
-    const message = typeof error?.message === 'string' ? error.message : '';
-    return message.includes(
-      NODE_STATE_PUBLICATION_OWNER_LITERAL.NO_CONNECTION_TO_NODE,
-    ) ||
-      message.includes(
-        NODE_STATE_PUBLICATION_OWNER_LITERAL.CONNECTION_TO_NODE,
-      ) &&
-      message.includes(
-        NODE_STATE_PUBLICATION_OWNER_LITERAL.CLOSED,
-      ) ||
-      message.includes(
-        NODE_STATE_PUBLICATION_OWNER_LITERAL.NO_HANDLER_REGISTERED_FOR_ADDRESS,
-      ) ||
-      message.includes(JOINING_ERROR_MSG.CONTROL_PLANE_TARGET_MISSING);
+    // The transport's one delivery-failure decision, plus this owner's one
+    // fact: a re-send is the same publication (the publisher's own row,
+    // under its boot incarnation, assigned the same state; the receiver's
+    // CAS publication applies it as that assignment), so an ambiguous
+    // failure is re-sent too. No known target is a failure nothing sent.
+    return mayResendAfterTransportFailure(
+      classifyTransportDeliveryFailure(error), {identityKeyed: true}) ||
+      error?.code === NODE_STATE_UPDATE_TARGET_MISSING_CODE;
   }
 
   resolveNodeStateUpdatePublicationRetryClass(error) {
@@ -430,7 +421,7 @@ class NodeStatePublicationOwner {
         publicationMode,
       });
       throw buildNodeStateUpdatePublicationFailureError(
-        new Error(JOINING_ERROR_MSG.CONTROL_PLANE_TARGET_MISSING),
+        buildNodeStateUpdateTargetMissingError(),
         publicationDiagnostics,
         failureAction,
       );

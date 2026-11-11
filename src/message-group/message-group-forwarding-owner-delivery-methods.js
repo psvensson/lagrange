@@ -6,10 +6,20 @@ import {captureCdcForwardOptions,
 import {copyCdcEventMetadata} from '../cdc/cdc-event-envelope.js';
 import {cdcRelaySendDepth} from './message-group-service-runtime-support.js';
 import {OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE} from '../transport/transport-error-codes.js';
+import {
+  TRANSPORT_DELIVERY_FAILURE,
+  classifyTransportDeliveryFailure,
+  transportErrorCodeOf,
+} from '../transport/transport-delivery-failure.js';
 import {deliveryTransportOf, TRANSPORT_DELIVERY_OUTCOME_REASON_CODE, deliveryReadingOf,
   classifyThrownDeliveryError, deliveryReasonOfReading,
   isDeferredTransportDeliveryOutcome, isDeliveredTransportDeliveryOutcome} from
   '../transport/transport-semantic-outcome.js';
+
+const SUPPRESSING_FORWARD_REASONS = Object.freeze([
+  TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.ACK_TIMEOUT,
+  TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.CONNECTION_CLOSED,
+]);
 
 function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
   const buildForwardTopologyRepairReadOptions =
@@ -320,50 +330,26 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
       return true;
     },
 
-    // Spent: only ack_timeout accuses the target (answer_timeout: it is alive).
+    // The target is set aside when the transport says nothing reached a
+    // handler there (no frame left, no handler, a closed connection) or it
+    // never acknowledged (ack_timeout; an answer_timeout target is alive),
+    // or when its answer asks for a topology repair.
     shouldSuppressForwardTarget(deliveryResult, errorMessage) {
-      if (deliveryReasonOfReading(deliveryResult) ===
-          TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.ACK_TIMEOUT) return true;
-      if (
-        typeof errorMessage !== typeofToken.STRING ||
-        errorMessage.length === num.ZERO
-      ) {
-        return false;
-      }
-      return this.service.shouldRepairForwardTopology(errorMessage) ||
-        this.service.isForwardTargetBackpressured(
-          deliveryResult,
-          errorMessage,
-        ) ||
-        errorMessage.includes(messageGroupForwardingOwnerLiteral.ENOTFOUND) ||
-        errorMessage.includes(messageGroupForwardingOwnerLiteral.EAI_AGAIN) ||
-        errorMessage.includes(messageGroupForwardingOwnerLiteral.ECONNREFUSED) ||
-        errorMessage.includes(
-          messageGroupForwardingOwnerLiteral.NO_CONNECTION_TO_NODE,
-        ) ||
-        (errorMessage.includes(
-          messageGroupForwardingOwnerLiteral.CONNECTION_TO_NODE,
-        ) &&
-          errorMessage.includes(messageGroupForwardingOwnerLiteral.CLOSED)) ||
-        errorMessage.includes(
-          messageGroupForwardingOwnerLiteral.NO_HANDLER_REGISTERED_FOR_ADDRESS,
-        );
-    },
-
-    isForwardTargetBackpressured(deliveryResult, errorMessage) {
-      const normalizedErrorMessage =
-        typeof errorMessage === typeofToken.STRING ?
-          errorMessage :
-          '';
-      if (deliveryResult?.errorCode === OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE) {
+      const failure = classifyTransportDeliveryFailure(deliveryResult);
+      if (failure === TRANSPORT_DELIVERY_FAILURE.NOT_SENT ||
+          failure === TRANSPORT_DELIVERY_FAILURE.WRONG_OWNER ||
+          SUPPRESSING_FORWARD_REASONS.includes(
+            deliveryReasonOfReading(deliveryResult))) {
         return true;
       }
-      return normalizedErrorMessage.includes(
-        messageGroupForwardingOwnerLiteral.OUTBOUND_QUEUE_FOR_NODE,
-      ) &&
-        normalizedErrorMessage.includes(
-          messageGroupForwardingOwnerLiteral.IS_SATURATED,
-        );
+      return typeof errorMessage === typeofToken.STRING &&
+        errorMessage.length > num.ZERO &&
+        this.service.shouldRepairForwardTopology(errorMessage);
+    },
+
+    isForwardTargetBackpressured(deliveryResult) {
+      return transportErrorCodeOf(deliveryResult) ===
+        OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE;
     },
 
     async forwardCDCEventToLeader(tableName, operation, data, options = {}) {

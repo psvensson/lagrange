@@ -33,7 +33,8 @@ import {PARTITION_WRITE_LEADERSHIP_REFUSAL as REFUSAL} from
   '../../src/partition/partition-write-kernel.js';
 import {MessageGroupServiceRowOwner} from
   '../../src/message-group/message-group-service-row-owner.js';
-import {createDurableSourceMessageGroupService, createMessageGroupServiceRow} from
+import {createDurableSourceMessageGroupService, createMessageGroupServiceRow,
+  createTopologyCache} from
   '../topology/cdc-group-propagation-service-harness.js';
 import {selectRows, waitFor, withSurface} from '../query/unknown-outcome-surface-fixture.js';
 
@@ -68,17 +69,8 @@ function leaderLifecyclePort(surface) {
 // The sender's cache still names the dead group's replica as active (a stale
 // projection): only the lifecycle owner's evidence may detach it.
 function senderCache(targetRow) {
-  const nodes = new Map([[SOURCE_NODE, {[COLUMN.NODE_ID]: SOURCE_NODE}],
-    [TARGET_NODE, {[COLUMN.NODE_ID]: TARGET_NODE, [COLUMN.BOOT_INCARNATION]: 1}]]);
-  const services = [targetRow];
-  const listeners = new Set();
-  return {
-    get: (table, key) => table === TABLES.NODES ? nodes.get(key) ?? null : null,
-    getAll: () => [],
-    filter: (table, predicate) => table === TABLES.SERVICES ? services.filter(predicate) : [],
-    onCacheChange: (listener) => listeners.add(listener),
-    offCacheChange: (listener) => listeners.delete(listener),
-  };
+  return createTopologyCache({nodes: [{[COLUMN.NODE_ID]: SOURCE_NODE},
+    {[COLUMN.NODE_ID]: TARGET_NODE, [COLUMN.BOOT_INCARNATION]: 1}], services: [targetRow]});
 }
 
 function attachLane(partition, targetRow) {

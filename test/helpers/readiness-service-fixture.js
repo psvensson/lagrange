@@ -325,6 +325,9 @@ function readinessConsumerMembers(clock) {
     // subscription that never fires.
     readServeEligibility: answerNullAsync,
     subscribeServeEligibility: () => noop,
+    // The readiness planning owner's publication stream: a subscription
+    // that never fires (no planning owner, no publication).
+    subscribeReadinessPlanningSnapshots: () => noop,
     now: ownerClockOrAmbient(clock),
   };
 }

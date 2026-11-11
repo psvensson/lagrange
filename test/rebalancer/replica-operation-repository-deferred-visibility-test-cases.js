@@ -59,7 +59,9 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
 
     const operations = await repo.queryIncompleteOperations();
 
-    t.same(operations, [], 'retryable read failures should fail closed to empty results');
+    t.equal(operations.state, INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED,
+      'a retryable read failure is DEFERRED, never an empty answer');
+    t.same(operations.operations, [], 'and carries no list');
     t.equal(warnings.length, 1, 'retryable read failures should log one warning');
     t.equal(errors.length, 0, 'retryable read failures should not log hard errors');
     t.equal(
@@ -95,8 +97,10 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
     const first = await repo.queryIncompleteOperations();
     const second = await repo.queryIncompleteOperations();
 
-    t.same(first, [], 'first retryable failure should fail closed to empty results');
-    t.same(second, [], 'subsequent reads during cooldown should reuse the empty observation');
+    t.equal(first.state, INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED,
+      'the first retryable failure is DEFERRED');
+    t.equal(second.state, INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED,
+      'a read during the cooldown is DEFERRED (backing off), not empty');
     t.equal(
       readCalls,
       1,
@@ -142,8 +146,10 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
       const first = await repo.queryIncompleteOperations();
       const second = await repo.queryIncompleteOperations();
 
-      t.same(first, [], 'authoritative-source gaps should fail closed to empty results');
-      t.same(second, [], 'subsequent reads during cooldown should reuse the empty observation');
+      t.equal(first.state, INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED,
+        'an authoritative-source gap is DEFERRED');
+      t.equal(second.state, INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED,
+        'a read during the cooldown is DEFERRED, not empty');
       t.equal(
         readCalls,
         1,
@@ -159,8 +165,8 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
   );
 
   test(
-    'queryIncompleteOperations reuses the last observed operation set when ' +
-      'priority recovery defers the authoritative owner read',
+    'queryIncompleteOperations answers DEFERRED with no list (never the ' +
+      'cache projection) when priority recovery defers the owner read',
     async (t) => {
       let readCalls = 0;
       const cachedRows = [
@@ -219,11 +225,10 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
         readCalls >= 1,
         'the repository should still attempt the authoritative owner read before deferring',
       );
-      t.same(
-        operations.map((operation) => operation.operationId),
-        ['op-priority-recovery'],
-        'priority recovery defer should fall back to the last observed incomplete operation set instead of collapsing to empty',
-      );
+      t.equal(operations.state, INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED,
+        'the deferred owner read is DEFERRED');
+      t.same(operations.operations, [],
+        'and carries no list: the cache projection never stands in for it');
       t.equal(
         outcome?.completionState,
         'operation_visibility_deferred',
@@ -238,11 +243,6 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
         outcome?.retryAfterMs,
         250,
         'the repository should preserve the bounded retry delay from the failed owner read',
-      );
-      t.equal(
-        outcome?.cachedOperationCount,
-        1,
-        'the deferred outcome should report how many cached operations were reused',
       );
       t.equal(
         outcome?.source,
@@ -341,8 +341,8 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
   );
 
   test(
-    'queryIncompleteOperations preserves deferred visibility from cached ' +
-      'operations when retryable owner reads are backpressured',
+    'queryIncompleteOperations answers DEFERRED with no list when retryable ' +
+      'owner reads are backpressured, even with cached operations',
     async (t) => {
       const cachedRows = [
         makeRow({
@@ -378,20 +378,12 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
       });
       const outcome = repo.getLastIncompleteOperationReadOutcome();
 
-      t.same(
-        operations.map((operation) => operation.operationId),
-        ['op-cached-pressure'],
-        'cached in-flight operations should remain visible under retryable read pressure',
-      );
+      t.same(operations.operations, [],
+        'cached in-flight operations are not the owner\'s answer');
       t.equal(
         outcome?.completionState,
         PRIORITY_RECOVERY_COMPLETION_STATE.AUTHORITATIVE_OPERATION_READ_DEFERRED,
         'retryable pressure with cached operations should preserve canonical deferred visibility',
-      );
-      t.equal(
-        outcome?.cachedOperationCount,
-        1,
-        'deferred visibility should report the reused cached operation count',
       );
       t.equal(
         outcome?.retryAfterMs,
@@ -738,11 +730,8 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
       });
       const operations = await repo.queryIncompleteOperations();
 
-      t.same(
-        operations,
-        [],
-        'local-safe execution should still fail closed to empty owner observations when no rows exist',
-      );
+      t.equal(operations.state, INCOMPLETE_OPERATION_OBSERVATION_STATE.EMPTY,
+        'the local-safe owner read answers a confirmed EMPTY when no rows exist');
       t.equal(readCalls, 1, 'owner read should proceed through the local-safe gateway path');
     },
   );
@@ -1278,11 +1267,8 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
         'priority_recovery_authoritative_operation_failure',
         'deferred visibility should record the priority recovery authoritative failure source',
       );
-      t.same(
-        deferredOperations.map((operation) => operation.operationId),
-        ['op-stale-cache'],
-        'deferred owner read during priority recovery should preserve cached operations under the deferred contract',
-      );
+      t.same(deferredOperations.operations, [],
+        'the deferred owner read carries no list (the stale cache row is not its answer)');
 
       // Phase 2: Publication advances to epoch 5, priority recovery settles,
       // and authoritative owner read succeeds. Useful reading must be restored.
@@ -1337,7 +1323,7 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
         'publication advancement and authoritative read recovery should clear the deferred read outcome',
       );
       t.same(
-        restoredOperations.map((operation) => operation.operationId),
+        restoredOperations.operations.map((operation) => operation.operationId),
         ['op-live-epoch-5'],
         'restored read should return the live authoritative operation row instead of stale cache',
       );

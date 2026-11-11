@@ -88,68 +88,76 @@ function boundRecipientVector(lane, rows) {
   return vector;
 }
 
-// A recipient below the ledger's newest row with nothing owed after it (no
-// cursor yet, or rows acknowledged without it: a MUST_RELIST recipient the
-// ledger reclaimed past, a hydration image) is shipped the newest row (never
-// reclaimed, decision D1). The range names its predecessor, so a recipient
+// A recipient below the ledger's newest row (it has no receipt of its own
+// through it) with nothing left to ship after its position - no cursor yet on
+// a reclaimed ledger, rows acknowledged without it (a released recipient the
+// ledger reclaimed past, a hydration image), a re-list hold with no row
+// committed since - is shipped the newest row, kept beside the ledger
+// (decision D1 is unchanged). The range names its predecessor, so a recipient
 // that lacks what was acknowledged without it answers a gap and re-lists (CDC
-// Stage 3). Without it such a recipient would never be contacted again.
-const POSITION_PROBES = new WeakSet();
-
-function positionProbe(owner, recipient) {
-  if (recipient.drive.scanAfter !== null) return [];
+// Stage 3); one that has it confirms, and only that moves its cursor. Without
+// the probe such a recipient would never be contacted again. The probe vector
+// is held on the recipient's drive (lane-owned, tenure-local).
+function positionProbe(owner, recipient, shipAfter) {
+  const {drive} = recipient;
+  if (drive.scanAfter !== null) return [];
   const newest = readCdcLedgerNewest(owner.db);
   if (newest === null || (recipient.cursor !== null &&
       !positionAfter(positionOf(newest), recipient.cursor))) return [];
-  // Owed rows after the cursor (beyond the pass's captured tail) are the next
-  // scan's: the probe never steps over an owed row.
-  if (readOwedCdcObligations(owner.db, {after: recipient.cursor ?? undefined, limit: 1})
-    .length > 0) return [];
+  // Rows owed beyond the pass's captured tail are the next scan's: the probe
+  // is shipped only when a whole scan found nothing to ship.
+  const scanned = drive.scanThrough === null ? shipAfter :
+    shipAfter === null || positionAfter(drive.scanThrough, shipAfter) ?
+      drive.scanThrough : shipAfter;
+  if (readOwedCdcObligations(owner.db, {after: scanned ?? undefined, limit: 1}).length > 0) {
+    return [];
+  }
   const probe = [newest];
-  POSITION_PROBES.add(probe);
+  drive.positionProbe = probe;
   return probe;
 }
 
 /**
- * Whether a vector is a position probe (the delivered newest row shipped to
- * a recipient with no cursor), whose failed delivery is always this
- * recipient's own hold.
+ * Whether a vector is a position probe (the ledger's newest row shipped to a
+ * recipient with nothing owed after its position), whose failed delivery is
+ * always this recipient's own hold.
+ * @param {Object} recipient - The recipient it was selected for.
  * @param {Array<Object>} vector - A selected vector.
  * @return {boolean} Whether it is.
  */
-function isPositionProbe(vector) {
-  return POSITION_PROBES.has(vector);
+function isPositionProbe(recipient, vector) {
+  return recipient.drive.positionProbe === vector;
 }
 
 /**
  * The vector one delivery ships to one recipient: the owed rows after its
- * position (its provisional scan position, else its cursor, else the ledger
- * head), within the shipping bounds. Rows that need no delivery are stepped
- * over; outside a provisional scan the cursor moves over them (they are
- * below what this recipient still has to confirm: a recipient that has not
- * applied them answers the next range's predecessor with a gap). A recipient
- * below the newest row with nothing owed after it is shipped the position
- * probe.
+ * position (its provisional scan position, else `shipAfter`: its re-list
+ * hold or its cursor, else the ledger head), within the shipping bounds.
+ * Rows that need no delivery (their acknowledgement is pending, a hydration
+ * image covers them) are stepped over by the scan only: the recipient's
+ * cursor never moves here, because it received nothing. The range of what is
+ * shipped next names such a row as its predecessor, so a recipient that has
+ * not applied it answers a gap. A recipient with nothing left to ship that
+ * has not confirmed the ledger's newest row is shipped the position probe.
  * @param {Object} owner - The partition service.
  * @param {Object} lane - The delivery lane.
  * @param {Object} recipient - The recipient ({cursor, drive}).
+ * @param {Object|null} shipAfter - The position it is shipped after.
  * @return {Array<Object>} The vector, in log order; empty when nothing after
  *   the position is owed and no probe is due.
  */
-function selectRecipientVector(owner, lane, recipient) {
+function selectRecipientVector(owner, lane, recipient, shipAfter) {
   const {drive} = recipient;
+  let after = drive.scanAfter === null ? shipAfter : drive.scanAfter;
   for (;;) {
-    const after = drive.scanAfter === null ? recipient.cursor : drive.scanAfter;
     const page = readOwedCdcObligations(owner.db, {after: after ?? undefined,
       through: drive.scanThrough ?? undefined, limit: BOUND.SHIP_MAX_EVENTS});
-    if (page.length === 0) return positionProbe(owner, recipient);
+    if (page.length === 0) return positionProbe(owner, recipient, shipAfter);
     let settled = 0;
     while (settled < page.length && settledWithoutDelivery(lane, page[settled])) settled += 1;
-    if (settled === 0) return boundRecipientVector(lane, page);
-    const steppedOver = positionOf(page[settled - 1]);
-    if (drive.scanAfter === null) recipient.cursor = steppedOver;
-    else drive.scanAfter = steppedOver;
     if (settled < page.length) return boundRecipientVector(lane, page.slice(settled));
+    after = positionOf(page[settled - 1]);
+    if (drive.scanAfter !== null) drive.scanAfter = after;
   }
 }
 

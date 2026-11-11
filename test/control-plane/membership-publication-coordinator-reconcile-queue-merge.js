@@ -1,5 +1,9 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  SeedMap,
+  createRecordingReconcileQueue,
+} from '../helpers/recording-reconcile-queue.js';
+import {
   deriveMembershipPublicationCandidate,
   MembershipPublicationCoordinator,
 } from '../../src/control-plane/membership-publication-coordinator.js';
@@ -18,6 +22,8 @@ import {
 import {
   PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION,
 } from '../../src/control-plane/publication-active-gate-handoff-contract.js';
+import {publicationsOwnerOverRows} from
+  './publication-owner-test-support.js';
 
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLICATION_ID =
   'publication-handoff-target';
@@ -113,7 +119,7 @@ test('reconcileActiveGateMembershipPublication reports bounded critical queue pr
         ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
       ],
     };
-    const pending = new Map([
+    const pending = new SeedMap([
       [PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_OTHER_OWNER_KEY, {
         context: {},
       }],
@@ -122,31 +128,18 @@ test('reconcileActiveGateMembershipPublication reports bounded critical queue pr
     const coordinator = new MembershipPublicationCoordinator({
       resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
-      reconcileQueue: {
-        pending,
-        get size() {
-          return pending.size;
-        },
-        has(ownerKey) {
-          return pending.has(ownerKey);
-        },
-        enqueue(ownerKey, reason, context, options) {
-          enqueued.push({ownerKey, reason, context, options});
-          pending.set(ownerKey, {context});
-          return true;
-        },
-      },
-      controlPlanePublicationsOwner: {
+      reconcileQueue: createRecordingReconcileQueue({pending, enqueued}),
+      controlPlanePublicationsOwner: publicationsOwnerOverRows({
         async listPublications() {
           return {rows: [latestPublicationRow]};
         },
         async getPublication() {
           return latestPublicationRow;
         },
-        async upsertPublication(row) {
+        async storeRow(row) {
           return row;
         },
-      },
+      }),
       systemTableCache: {
         getAll(tableName) {
           if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
@@ -206,21 +199,9 @@ test('reconcileActiveGateMembershipPublication reports bounded critical queue pr
 
 test('enqueueClusterMembershipReconcile merges pending explicit handoff targets',
   async (t) => {
-    const pending = new Map();
+    const pending = new SeedMap();
     const enqueued = [];
-    const reconcileQueue = {
-      pending,
-      enqueue(ownerKey, reason, context, options) {
-        enqueued.push({ownerKey, reason, context, options});
-        const pendingEntry = pending.get(ownerKey);
-        if (pendingEntry) {
-          pendingEntry.context = context;
-          return false;
-        }
-        pending.set(ownerKey, {context});
-        return true;
-      },
-    };
+    const reconcileQueue = createRecordingReconcileQueue({pending, enqueued});
     const coordinator = new MembershipPublicationCoordinator({
       resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
@@ -306,27 +287,9 @@ test('enqueueClusterMembershipReconcile merges pending explicit handoff targets'
 
 test('enqueueClusterMembershipReconcile lets handoff-only owner wake clear stale explicit targets',
   async (t) => {
-    const pending = new Map();
+    const pending = new SeedMap();
     const enqueued = [];
-    const reconcileQueue = {
-      pending,
-      has(ownerKey) {
-        return pending.has(ownerKey);
-      },
-      get size() {
-        return pending.size;
-      },
-      enqueue(ownerKey, reason, context, options) {
-        enqueued.push({ownerKey, reason, context, options});
-        const pendingEntry = pending.get(ownerKey);
-        if (pendingEntry) {
-          pendingEntry.context = context;
-          return false;
-        }
-        pending.set(ownerKey, {context});
-        return true;
-      },
-    };
+    const reconcileQueue = createRecordingReconcileQueue({pending, enqueued});
     const coordinator = new MembershipPublicationCoordinator({
       resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
@@ -432,25 +395,8 @@ test('enqueueClusterMembershipReconcile lets handoff-only owner wake clear stale
 
 test('enqueueClusterMembershipReconcile applies explicit node exclusions to merged targets',
   async (t) => {
-    const pending = new Map();
-    const reconcileQueue = {
-      pending,
-      has(ownerKey) {
-        return pending.has(ownerKey);
-      },
-      get size() {
-        return pending.size;
-      },
-      enqueue(ownerKey, _reason, context) {
-        const pendingEntry = pending.get(ownerKey);
-        if (pendingEntry) {
-          pendingEntry.context = context;
-          return false;
-        }
-        pending.set(ownerKey, {context});
-        return true;
-      },
-    };
+    const pending = new SeedMap();
+    const reconcileQueue = createRecordingReconcileQueue({pending});
     const coordinator = new MembershipPublicationCoordinator({
       resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId: PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS[0],
@@ -530,59 +476,18 @@ test('enqueueClusterMembershipReconcile applies explicit node exclusions to merg
       [...PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS],
       'excluded node should be removed from merged acknowledged targets',
     );
-    t.same(
-      mergedContext?.publicationActiveGateHandoff?.pendingReconcileNodeIds,
-      [...PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS],
-      'excluded node should be removed from nested handoff reconcile debt',
-    );
     t.equal(
-      mergedContext?.publicationActiveGateHandoff?.pendingReconcileCount,
-      PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS.length,
-      'nested handoff reconcile debt count should match filtered nodes',
-    );
-    t.same(
-      mergedContext?.publicationActiveGateHandoff?.pendingRecoveryNodeIds,
-      [...PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS],
-      'excluded node should be removed from nested handoff recovery debt',
-    );
-    t.equal(
-      mergedContext?.publicationActiveGateHandoff?.pendingRecoveryCount,
-      PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS.length,
-      'nested handoff recovery debt count should match filtered nodes',
-    );
-    t.same(
-      mergedContext?.publicationActiveGateHandoff?.missingPublishedNodeIds,
-      [],
-      'excluded node should be removed from nested missing publication debt',
-    );
-    t.equal(
-      mergedContext?.publicationActiveGateHandoff?.missingPublishedCount,
-      0,
-      'nested missing publication debt count should match filtered nodes',
+      Object.hasOwn(mergedContext, 'publicationActiveGateHandoff'),
+      false,
+      'a later enqueue without a handoff never inherits the queued one: ' +
+        'the run derives from current rows',
     );
   });
 
 test('enqueueClusterMembershipReconcile lets fresh explicit targets clear stale exclusions',
   async (t) => {
-    const pending = new Map();
-    const reconcileQueue = {
-      pending,
-      has(ownerKey) {
-        return pending.has(ownerKey);
-      },
-      get size() {
-        return pending.size;
-      },
-      enqueue(ownerKey, _reason, context) {
-        const pendingEntry = pending.get(ownerKey);
-        if (pendingEntry) {
-          pendingEntry.context = context;
-          return false;
-        }
-        pending.set(ownerKey, {context});
-        return true;
-      },
-    };
+    const pending = new SeedMap();
+    const reconcileQueue = createRecordingReconcileQueue({pending});
     const coordinator = new MembershipPublicationCoordinator({
       resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId: PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS[0],
@@ -638,33 +543,10 @@ test('enqueueClusterMembershipReconcile lets fresh explicit targets clear stale 
 
 test('enqueueClusterMembershipReconcile merges retrying explicit handoff targets',
   async (t) => {
-    const pending = new Map();
-    const retryWorkItems = new Map();
+    const pending = new SeedMap();
+    const retryWorkItems = new SeedMap();
     const enqueued = [];
-    const reconcileQueue = {
-      pending,
-      retryWorkItems,
-      get size() {
-        return new Set([
-          ...pending.keys(),
-          ...retryWorkItems.keys(),
-        ]).size;
-      },
-      has(ownerKey) {
-        return pending.has(ownerKey) || retryWorkItems.has(ownerKey);
-      },
-      enqueue(ownerKey, reason, context, options) {
-        enqueued.push({ownerKey, reason, context, options});
-        const retryingEntry = retryWorkItems.get(ownerKey);
-        if (retryingEntry) {
-          retryingEntry.reasons.add(reason);
-          retryingEntry.context = context;
-          return false;
-        }
-        pending.set(ownerKey, {context});
-        return true;
-      },
-    };
+    const reconcileQueue = createRecordingReconcileQueue({pending, retryWorkItems, enqueued});
     const coordinator = new MembershipPublicationCoordinator({
       resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
@@ -724,7 +606,9 @@ test('enqueueClusterMembershipReconcile merges retrying explicit handoff targets
       },
     );
 
-    const mergedContext = retryWorkItems.get(ownerKey)?.context;
+    // Merging into a retrying item wakes it: read the queued input through
+    // the queue, wherever the item now waits.
+    const mergedContext = reconcileQueue.readQueuedContext(ownerKey).context;
     t.match(
       coordinator.lastControlPlaneConvergenceQueueOutcome,
       {
@@ -755,10 +639,10 @@ test('enqueueClusterMembershipReconcile merges retrying explicit handoff targets
       [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS],
       'retrying context should union explicit acknowledged nodes',
     );
-    t.same(
-      mergedContext?.publicationActiveGateHandoff?.pendingReconcileNodeIds,
-      [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PENDING_NODE_IDS],
-      'retrying context should retain the active-gate handoff target',
+    t.equal(
+      Object.hasOwn(mergedContext, 'publicationActiveGateHandoff'),
+      false,
+      'a later enqueue without a handoff never inherits the retrying one',
     );
     t.equal(
       mergedContext?.latestPublicationRow?.publication_epoch,

@@ -107,7 +107,8 @@ test('A2c-2. mounting the seed on node-0 changes nothing on node-1 to node-4',
   async () => {
     const {scenario, environments} = fiveEnvironments();
     const seed = await createProductionSeedSimHost(environments.get(SEED_ID),
-      {bootIncarnation: await reserveSimulatedBootIncarnation()});
+      {bootIncarnation: await reserveSimulatedBootIncarnation(),
+        formationTargetNodeCount: NODE_IDS.length});
 
     await runOnSimulationGenerationRoot(GENERATION, () =>
       runOnExecutionNode(SEED_ID, () => seed.phaseInfrastructure()));

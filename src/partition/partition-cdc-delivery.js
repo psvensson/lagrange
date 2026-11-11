@@ -26,6 +26,7 @@ import {
 } from './partition-service-constants.js';
 import {PARTITION_CDC_OBLIGATION_REASON} from
   './partition-cdc-obligation-constants.js';
+import {acknowledgementAlarmOf} from './partition-cdc-acknowledgement-refusal.js';
 import {retireRecipientInvocations} from './partition-cdc-obligation-lane.js';
 import {
   acknowledgeHydratedObligationsThrough,
@@ -586,8 +587,7 @@ function markReplayOnlyCdcEvent(cdcEvent) {
    * @param {Function|null} attempt - Re-attempts the registration.
    */
   awaitPropagationAttachment(attempt) {
-    this.propagationAttachment = typeof attempt === PARTITION_SERVICE_TYPE.FUNCTION ?
-      attempt : null;
+    this.propagationAttachment = attempt;
   }
   /**
    * The current propagation subscription other than the one keyed by
@@ -618,17 +618,6 @@ function markReplayOnlyCdcEvent(cdcEvent) {
     return refusal;
   }
   /**
-   * Subscribe to CDC events from this partition.
-   * @param {Function} subscriber - Subscriber callback.
-   */ subscribeToCDC(subscriber) {
-    this.subscribeToCDCWithHandshake(subscriber).catch((error) => {
-      this.owner.logger.error(PARTITION_SERVICE_ERROR_MSG.CDC_SUBSCRIPTION_FAILED, {
-        partitionId: this.owner.partitionId,
-        error: error.message,
-      });
-    });
-  }
-  /**
    * Unsubscribe from CDC events.
    * @param {Function} subscriber - Subscriber to remove.
    */ unsubscribeFromCDC(subscriber) {
@@ -650,15 +639,10 @@ function markReplayOnlyCdcEvent(cdcEvent) {
    * Get CDC subscription diagnostics for this partition.
    * @return {Object} CDC subscription diagnostics.
    */ getCDCSubscriptionDiagnostics() {
-    const subscriptions = [];
-    for (const state of this.owner.cdcSubscriberStates.values()) {
-      subscriptions.push({
-        subscriberId: state.subscriberId,
-        subscriptionEpoch: state.subscriptionEpoch,
-        lastDeliveredSequenceNumber: state.lastDeliveredSequenceNumber,
-        lastDeliveredAt: state.lastDeliveredAt,
-      });
-    }
+    const subscriptions = [...this.owner.cdcSubscriberStates.values()].map((state) => ({
+      subscriberId: state.subscriberId, subscriptionEpoch: state.subscriptionEpoch,
+      lastDeliveredSequenceNumber: state.lastDeliveredSequenceNumber,
+      lastDeliveredAt: state.lastDeliveredAt}));
     return {
       partitionId: this.owner.partitionId,
       subscriptionEpoch: this.owner.cdcSubscriptionEpoch,
@@ -668,6 +652,8 @@ function markReplayOnlyCdcEvent(cdcEvent) {
       bufferReplayInFlight: this.owner.cdcBufferReplayInFlight,
       bufferReplayDelayMs: this.owner.cdcBufferReplayDelayMs,
       subscriptions,
+      // A quarantined or held acknowledgement lane (it ends in a write stop).
+      obligationAlarm: acknowledgementAlarmOf(this.obligationLane),
     };
   }
 }

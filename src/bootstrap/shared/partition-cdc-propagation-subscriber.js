@@ -5,8 +5,6 @@ import {assertCdcDeliveryInvocation} from '../../cdc/cdc-delivery-invocation.js'
 import {copyCdcEvent} from '../../cdc/cdc-event-envelope.js';
 import {PARTITION_SERVICE_CDC, PARTITION_SERVICE_EVENT} from
   '../../partition/partition-service-constants.js';
-import {MESSAGE_GROUP_SERVICE_LITERAL} from
-  '../../message-group/message-group-service-runtime-support.js';
 const LOCAL_STR_OPERATIONAL_MESSAGE_GROUP_INGRESS_NOT_RE = 'Operational message-group ingress not ready ';
 const PARTITION_CDC_PROPAGATION_HELD_MSG =
   'Partition already holds a different CDC propagation subscriber';
@@ -195,10 +193,8 @@ function resolveUnknownAnswerDeferredFields(answer) {
     Math.floor(answer.retryAfterMs) : undefined;
   // The recipient's typed reasons survive this hop: its backpressure, and
   // its position gap (CDC Stage 3: it re-lists; the lane retries on the hint).
-  const reason = answer?.reason ?
-    answer.reason :
-    (answer?.error === CDC_COMPLETION.BACKPRESSURE ||
-      answer?.error === CDC_COMPLETION.POSITION_GAP ? answer.error : undefined);
+  const reason = answer?.error === CDC_COMPLETION.BACKPRESSURE ||
+    answer?.error === CDC_COMPLETION.POSITION_GAP ? answer.error : undefined;
   return {
     ...(retryAfterMs !== undefined ? {retryAfterMs} : {}),
     ...(reason !== undefined ? {reason} : {}),
@@ -405,20 +401,10 @@ async function propagatePartitionCdcVector(latencyTopology, missingMessage, mess
     deliveryContext});
 }
 
-// What a deferred attachment awaits: the node's operational message group.
-// Any of its message-group services initializing or electing a leader is the
-// event that can clear it.
-const OPERATIONAL_MESSAGE_GROUP_READY_EVENTS = Object.freeze([
-  MESSAGE_GROUP_SERVICE_LITERAL.INITIALIZED, MESSAGE_GROUP_SERVICE_LITERAL.LEADERELECTED]);
 const CDC_PROPAGATION_ATTACHMENT_LOG_MSG = Object.freeze({
   AWAITING: 'CDC propagation attachment awaits the operational message group',
   ATTACHED: 'CDC propagation attachment registered after awaiting',
 });
-
-function messageGroupServicesOf(provider) {
-  const services = typeof provider === 'function' ? provider() : null;
-  return services instanceof Map ? [...services.values()] : [...(services ?? [])];
-}
 
 /**
  * Attach a partition replica's propagation subscriber: select the node's
@@ -426,16 +412,18 @@ function messageGroupServicesOf(provider) {
  * the table, and register the one subscriber (registerPartitionCdcPropagation).
  * With `defer`, a failed attempt is the named state AWAITING the operational
  * message group, held on the partition (cdcDelivery.awaitPropagationAttachment)
- * and attempted again on the events that can clear it: one of the node's
- * message-group services initializing or electing a leader, and the
+ * and attempted again on the events that can clear it: the node's
+ * message-group registry announcing a service that appeared or became able to
+ * serve (registered, initialized or elected, whenever it was created), and the
  * partition's lane finding owed rows with no subscriber. Without `defer`, the
  * failure is the caller's.
  * @param {Object} partition - The partition replica's service.
  * @param {Object} options - {tableName, preferredService, defer,
- *   messageGroupServices (provider), logger, logContext,
- *   resolveOperationalMessageGroupSelectionAsync, buildMessageGroupOwnerNotReadyError,
- *   notReadyMessage, registration (registerPartitionCdcPropagation's options
- *   without preferredService), onRegistered(handshake)}.
+ *   messageGroupServices (the node's MessageGroupServiceRegistry), logger,
+ *   logContext, resolveOperationalMessageGroupSelectionAsync,
+ *   buildMessageGroupOwnerNotReadyError, notReadyMessage, registration
+ *   (registerPartitionCdcPropagation's options without preferredService),
+ *   onRegistered(handshake)}.
  * @return {Promise<Object|null>} The handshake; null when deferred.
  */
 async function attachPartitionCdcPropagation(partition, options) {
@@ -461,56 +449,45 @@ async function attachPartitionCdcPropagation(partition, options) {
   return null;
 }
 
+// The awaited attachment holds one subscription on the node's message-group
+// registry from the first attempt until it registers or the replica shuts
+// down. A wake that arrives while an attempt runs is not lost: the attempt
+// that fails runs once more.
 function deferredPropagationAttachment(partition, attempt, options) {
-  const listeners = [];
   let inFlight = null;
-  const disarm = () => {
-    for (const [service, event, listener] of listeners.splice(0)) {
-      service.removeListener?.(event, listener);
-    }
+  let wokenDuringAttempt = false;
+  let unsubscribe = null;
+  const release = () => {
+    unsubscribe?.();
+    unsubscribe = null;
+    partition.cdcDelivery?.awaitPropagationAttachment(null);
+    partition.removeListener?.(PARTITION_SERVICE_EVENT.SHUTDOWN, release);
   };
   const retry = () => {
-    if (inFlight !== null) return inFlight;
+    if (inFlight !== null) {
+      wokenDuringAttempt = true;
+      return inFlight;
+    }
+    wokenDuringAttempt = false;
     inFlight = attempt().then((handshake) => {
-      disarm();
-      partition.cdcDelivery?.awaitPropagationAttachment(null);
+      release();
       options.logger?.info?.(CDC_PROPAGATION_ATTACHMENT_LOG_MSG.ATTACHED, options.logContext);
       return handshake;
     }, (error) => {
       options.logger?.warn?.(CDC_PROPAGATION_ATTACHMENT_LOG_MSG.AWAITING,
         {...options.logContext, error: error?.message || String(error)});
-      arm();
       return null;
     }).finally(() => {
       inFlight = null;
+      if (wokenDuringAttempt && unsubscribe !== null) retry();
     });
     return inFlight;
   };
-  // One listener per service and event, until the attachment registers.
-  function arm() {
-    for (const service of messageGroupServicesOf(options.messageGroupServices)) {
-      if (typeof service?.once !== 'function') continue;
-      for (const event of OPERATIONAL_MESSAGE_GROUP_READY_EVENTS) {
-        if (listeners.some(([armed, armedEvent]) => armed === service && armedEvent === event)) {
-          continue;
-        }
-        const listener = () => {
-          const index = listeners.findIndex((entry) => entry[2] === listener);
-          if (index >= 0) listeners.splice(index, 1);
-          retry();
-        };
-        service.once(event, listener);
-        listeners.push([service, event, listener]);
-      }
-    }
-  }
+  unsubscribe = options.messageGroupServices.subscribeReadiness(() => retry());
   partition.cdcDelivery?.awaitPropagationAttachment(retry);
   // The awaited attachment belongs to this replica's lifetime: its shutdown
-  // retires it (no listener outlives the replica).
-  partition.once?.(PARTITION_SERVICE_EVENT.SHUTDOWN, () => {
-    disarm();
-    partition.cdcDelivery?.awaitPropagationAttachment(null);
-  });
+  // retires it, and registering releases this listener with the rest.
+  partition.once?.(PARTITION_SERVICE_EVENT.SHUTDOWN, release);
   return retry;
 }
 

@@ -589,9 +589,10 @@ export function registerClusterLoadReadinessStabilityQuiescenceTests(context) {
           pendingReconcileCount: LOAD_READINESS_CANONICAL_ZERO_COUNT,
         },
         selectedMembershipPublicationHandoffOutcome: {
-          state: 'write_deferred',
+          state: 'target_blocked',
           reasonCode: 'owner_reconcile_pending',
-          enqueued: true,
+          enqueued: false,
+          ownerRecoveryWait: 'awaiting_recovery_progress',
           retryAfterMs: LOAD_READINESS_CANONICAL_TIMEOUT_MS,
         },
         selectedControlPlaneOwnerQueueDepth: {
@@ -852,9 +853,10 @@ export function registerClusterLoadReadinessStabilityQuiescenceTests(context) {
               pendingReconcileCount: LOAD_READINESS_CANONICAL_ZERO_COUNT,
             },
             selectedMembershipPublicationHandoffOutcome: {
-              state: 'write_deferred',
+              state: 'target_blocked',
               reasonCode: 'owner_reconcile_pending',
-              enqueued: true,
+              enqueued: false,
+              ownerRecoveryWait: 'awaiting_recovery_progress',
               retryAfterMs: LOAD_READINESS_CANONICAL_TIMEOUT_MS,
             },
             selectedControlPlaneOwnerQueueDepth: {
@@ -1009,9 +1011,10 @@ export function registerClusterLoadReadinessStabilityQuiescenceTests(context) {
             publishedActiveNodeIds: LOAD_READINESS_REPAIR_NODE_IDS,
           },
           selectedMembershipPublicationHandoffOutcome: {
-            state: 'write_deferred',
+            state: 'target_blocked',
             reasonCode: 'owner_reconcile_pending',
-            enqueued: true,
+            enqueued: false,
+            ownerRecoveryWait: 'awaiting_recovery_progress',
             retryAfterMs: LOAD_READINESS_REPAIR_RETRY_AFTER_MS,
           },
           selectedPublishedActiveNodeIds: LOAD_READINESS_REPAIR_NODE_IDS,

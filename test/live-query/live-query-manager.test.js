@@ -83,21 +83,6 @@ test('QueryGroup - adds and removes clients', async (t) => {
 });
 
 
-test('QueryGroup - renews client subscription', async (t) => {
-  const group = new QueryGroup({
-    parsedQuery: {from: {name: 'test'}},
-  });
-
-  const client = createMockClient('c1');
-  group.addClient(client);
-
-  const result = group.renewClient('c1', 'cursor-123');
-
-  t.ok(result, 'should return result');
-  t.equal(result.queryId, group.queryId, 'should have queryId');
-  t.ok(result.expiresAt > Date.now(), 'should have future expiry');
-});
-
 test('QueryGroup - detects expired subscriptions', async (t) => {
   const group = new QueryGroup({
     parsedQuery: {from: {name: 'test'}},
@@ -172,6 +157,7 @@ test('QueryGroup - finds all partitions when no key filter', async (t) => {
 
 test('QueryGroup - evaluates CDC INSERT event', async (t) => {
   const group = new QueryGroup({
+    systemCache: createMockSystemCache(),
     parsedQuery: {
       from: {name: 'orders'},
       where: {
@@ -191,11 +177,12 @@ test('QueryGroup - evaluates CDC INSERT event', async (t) => {
 
   t.ok(result, 'should produce result');
   t.equal(result.type, 'insert', 'should be insert');
-  t.same(result.row, {id: 1, amount: 150}, 'should have row');
+  t.same(result.data, {id: 1, amount: 150}, 'should have data');
 });
 
 test('QueryGroup - ignores non-matching INSERT', async (t) => {
   const group = new QueryGroup({
+    systemCache: createMockSystemCache(),
     parsedQuery: {
       from: {name: 'orders'},
       where: {
@@ -218,6 +205,7 @@ test('QueryGroup - ignores non-matching INSERT', async (t) => {
 
 test('QueryGroup - evaluates UPDATE entering predicate', async (t) => {
   const group = new QueryGroup({
+    systemCache: createMockSystemCache(),
     parsedQuery: {
       from: {name: 'orders'},
       where: {
@@ -229,10 +217,10 @@ test('QueryGroup - evaluates UPDATE entering predicate', async (t) => {
     },
   });
 
+  // The row was not in the result: an UPDATE names only the row it leaves.
   const result = group.evaluateChange({
     operation: 'UPDATE',
     data: {id: 1, status: 'active'},
-    old_data: {id: 1, status: 'pending'},
     hlc_timestamp: '123:0:node1',
   });
 
@@ -242,6 +230,7 @@ test('QueryGroup - evaluates UPDATE entering predicate', async (t) => {
 
 test('QueryGroup - evaluates UPDATE exiting predicate', async (t) => {
   const group = new QueryGroup({
+    systemCache: createMockSystemCache(),
     parsedQuery: {
       from: {name: 'orders'},
       where: {
@@ -253,19 +242,22 @@ test('QueryGroup - evaluates UPDATE exiting predicate', async (t) => {
     },
   });
 
+  group.evaluateChange({operation: 'INSERT', data: {id: 1, status: 'active'},
+    hlc_timestamp: '122:0:node1'});
   const result = group.evaluateChange({
     operation: 'UPDATE',
     data: {id: 1, status: 'completed'},
-    old_data: {id: 1, status: 'active'},
     hlc_timestamp: '123:0:node1',
   });
 
   t.ok(result, 'should produce result');
   t.equal(result.type, 'delete', 'should be delete (exiting predicate)');
+  t.same(result.data, {id: 1, status: 'active'}, 'the removal names the row held');
 });
 
 test('QueryGroup - evaluates UPDATE staying in predicate', async (t) => {
   const group = new QueryGroup({
+    systemCache: createMockSystemCache(),
     parsedQuery: {
       from: {name: 'orders'},
       where: {
@@ -277,21 +269,23 @@ test('QueryGroup - evaluates UPDATE staying in predicate', async (t) => {
     },
   });
 
+  group.evaluateChange({operation: 'INSERT',
+    data: {id: 1, status: 'active', amount: 100}, hlc_timestamp: '122:0:node1'});
   const result = group.evaluateChange({
     operation: 'UPDATE',
     data: {id: 1, status: 'active', amount: 200},
-    old_data: {id: 1, status: 'active', amount: 100},
     hlc_timestamp: '123:0:node1',
   });
 
   t.ok(result, 'should produce result');
   t.equal(result.type, 'update', 'should be update');
-  t.ok(result.old, 'should have old row');
-  t.ok(result.new, 'should have new row');
+  t.same(result.oldData, {id: 1, status: 'active', amount: 100}, 'should have oldData');
+  t.same(result.data, {id: 1, status: 'active', amount: 200}, 'should have data');
 });
 
 test('QueryGroup - evaluates DELETE event', async (t) => {
   const group = new QueryGroup({
+    systemCache: createMockSystemCache(),
     parsedQuery: {
       from: {name: 'orders'},
       where: {
@@ -305,7 +299,7 @@ test('QueryGroup - evaluates DELETE event', async (t) => {
 
   const result = group.evaluateChange({
     operation: 'DELETE',
-    old_data: {id: 1, status: 'active'},
+    data: {id: 1, status: 'active'},
     hlc_timestamp: '123:0:node1',
   });
 
@@ -315,6 +309,7 @@ test('QueryGroup - evaluates DELETE event', async (t) => {
 
 test('QueryGroup - fans out CDC events to clients', async (t) => {
   const group = new QueryGroup({
+    systemCache: createMockSystemCache(),
     parsedQuery: {
       from: {name: 'orders'},
       where: null, // Match all
@@ -455,32 +450,6 @@ test('LiveQueryManager - enforces query limit per client', async (t) => {
   } catch (error) {
     t.match(error.message, /Maximum concurrent live queries exceeded/, 'should throw limit error');
   }
-
-  manager.shutdown();
-});
-
-test('LiveQueryManager - renews subscription', async (t) => {
-  const manager = new LiveQueryManager({
-    systemCache: createMockSystemCache([
-      {partition_id: 'p1', table_name: 'orders', partition_key_start: null,
-        partition_key_end: null,
-      },
-    ]),
-    nodeId: 'test-node',
-  });
-
-  manager.initialize({
-    subscribeToPartition: async () => {},
-    unsubscribeFromPartition: async () => {},
-  });
-
-  const client = createMockClient('c1');
-  const result = await manager.registerLiveQuery({from: {name: 'orders'}}, client);
-
-  const renewed = manager.renewLiveQuery(result.queryId, 'c1', 'cursor-123');
-
-  t.ok(renewed, 'should return renewal result');
-  t.ok(renewed.expiresAt > Date.now(), 'should have future expiry');
 
   manager.shutdown();
 });
@@ -651,7 +620,7 @@ test('LiveQueryManager - handles partition topology change', async (t) => {
 
   await manager.handlePartitionTopologyChange({
     operation: 'INSERT',
-    new: {partition_id: 'p1a', table_name: 'orders'},
+    data: {partition_id: 'p1a', table_name: 'orders'},
   });
 
   t.equal(subscriptions.size, 2, 'should have 2 subscriptions after split');
@@ -711,79 +680,4 @@ test('QueryGroup - updates subscriptions on partition change', async (t) => {
   t.equal(group.subscribedPartitions.size, 1, 'should have 1 partition after merge');
   t.ok(group.subscribedPartitions.has('p3'), 'should have p3');
   t.notOk(group.subscribedPartitions.has('p1'), 'should not have p1');
-});
-
-
-test('LiveQueryManager - resumes from cursor', async (t) => {
-  const manager = new LiveQueryManager({
-    systemCache: createMockSystemCache([
-      {partition_id: 'p1', table_name: 'orders', partition_key_start: null,
-        partition_key_end: null,
-      },
-    ]),
-    nodeId: 'test-node',
-  });
-
-  manager.initialize({
-    subscribeToPartition: async () => {},
-    unsubscribeFromPartition: async () => {},
-  });
-
-  const client = createMockClient('c1');
-  await manager.registerLiveQuery({from: {name: 'orders'}}, client);
-
-  // Simulate disconnect
-  manager.handleClientDisconnection('c1');
-
-  // Re-register the query group
-  const client2 = createMockClient('c2');
-  await manager.registerLiveQuery({from: {name: 'orders'}}, client2);
-
-  // Resume with cursor
-  const cursor = `${Date.now()}:0:node1`;
-  const resumed = await manager.resumeLiveQuery(
-    manager.queryGroups.values().next().value.queryId,
-    'c3',
-    cursor,
-  );
-
-  t.ok(resumed, 'should return resume result');
-  t.equal(resumed.resumed, true, 'should indicate resumed');
-  t.equal(resumed.fromCursor, cursor, 'should include cursor');
-
-  manager.shutdown();
-});
-
-test('LiveQueryManager - rejects old cursor', async (t) => {
-  const manager = new LiveQueryManager({
-    systemCache: createMockSystemCache([
-      {partition_id: 'p1', table_name: 'orders', partition_key_start: null,
-        partition_key_end: null,
-      },
-    ]),
-    nodeId: 'test-node',
-  });
-
-  manager.cursorRetentionMs = 1000; // 1 second retention
-  manager.initialize({
-    subscribeToPartition: async () => {},
-    unsubscribeFromPartition: async () => {},
-  });
-
-  const client = createMockClient('c1');
-  await manager.registerLiveQuery({from: {name: 'orders'}}, client);
-
-  const queryId = manager.queryGroups.values().next().value.queryId;
-
-  // Try to resume with old cursor
-  const oldCursor = `${Date.now() - 10000}:0:node1`; // 10 seconds ago
-
-  try {
-    await manager.resumeLiveQuery(queryId, 'c2', oldCursor);
-    t.fail('should throw');
-  } catch (error) {
-    t.match(error.message, /Cursor too old/, 'should reject old cursor');
-  }
-
-  manager.shutdown();
 });

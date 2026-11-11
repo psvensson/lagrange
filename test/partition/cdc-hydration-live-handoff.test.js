@@ -227,7 +227,13 @@ test('W-D4d: a recipient records its in-flight vector position and ' +
     let observedCellLogIndex = null;
     let observedCellLast = null;
     let observedInvocationDuringHydration = null;
+    let deliveries = 0;
     const blockingSubscriber = async () => {
+      deliveries += 1;
+      // After the hydration the recipient has still not confirmed the
+      // ledger's newest event by a receipt of its own, so it is contacted
+      // again with the position probe (design note S3.11): answered at once.
+      if (deliveries > 1) return {success: true, completion: 'DURABLE'};
       const [recipient] = leader.cdcDelivery.getCdcObligationDiagnostics().recipients;
       const [custody] = [...leader.cdcDelivery.recipientCustody.values()];
       observedCellLogIndex = recipient.position?.logIndex ?? null;
@@ -253,6 +259,7 @@ test('W-D4d: a recipient records its in-flight vector position and ' +
     await settleTicks();
     const applied = new Set();
     await pump(timeSource, leader, proposed, applied);
+    assert.equal(deliveries, 2, 'the retired vector, then the position probe');
   } finally {
     await shutdownAll(leader);
   }

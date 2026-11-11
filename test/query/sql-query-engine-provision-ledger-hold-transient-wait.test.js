@@ -36,6 +36,8 @@ import {
   createMockMessageRouter,
   createProvisioningReadyService,
 } from './sql-query-engine-test-support.js';
+import {buildAnsweredIncompleteOperationListObservation} from
+  '../../src/rebalancer/incomplete-operation-list-observation.js';
 
 const LEDGER_HOLD_REJECTION = Object.freeze({
   allowed: false,
@@ -375,17 +377,14 @@ test('run-25: the provisioning PRECHECK consults the ledger interlock — a ' +
     async queryIncompleteOperations() {
       // A live ledger self-move is in flight (REPLACE of the ledger
       // partition) — the exact run-24/25 formation window.
-      return [
+      return buildAnsweredIncompleteOperationListObservation([
         {
           operationId: 'op-ledger-self-move',
           type: 'REPLACE',
           partitionId: 'replica_operations-p1',
           status: 'executing',
         },
-      ];
-    }
-    getIncompleteOperationObservation() {
-      return {deferredOutcome: null};
+      ]);
     }
     createConcurrentOperationBudgetError(normalizedMoveType, budget, options) {
       return new Error(options.message);

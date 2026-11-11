@@ -68,10 +68,6 @@ function unavailable(reason, generation = null) {
 // The source row's generation (created_at), from the authoritative read.
 async function readSourceGeneration(owner, operation, sourceReplicaId,
   sourceNodeId) {
-  if (typeof owner.repository?.getActualReplicaObservation !==
-      OPERATION_WORKFLOW_OWNER_LITERAL.FUNCTION) {
-    return null;
-  }
   const observation = await owner.repository.getActualReplicaObservation(
     sourceReplicaId, operation.partitionId, sourceNodeId);
   const createdAt =

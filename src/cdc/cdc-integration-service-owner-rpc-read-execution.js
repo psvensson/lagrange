@@ -7,10 +7,6 @@ import {isValidLeaderReadAuthorityWitness} from
 import {CONTROL_PLANE_READ_LEADER_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
 import {CDC_TERMINAL_STAGE} from './cdc-constants.js';
-import {
-  ROUTER_CONNECTION_CLOSED_ERROR_CODE,
-  ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
-} from '../transport/transport-error-codes.js';
 import {issueAuthoritativeReadStage} from './cdc-terminal-gate.js';
 
 const {
@@ -32,10 +28,6 @@ const {
 const AUTHORITATIVE_SQL_FALLBACK_SOURCE = 'sql_query_engine';
 const AUTHORITATIVE_SQL_FALLBACK_SESSION_SUFFIX = ':owner-rpc-recovery';
 const AUTHORITATIVE_SQL_FALLBACK_PREFER_LEADER = false;
-const AUTHORITATIVE_SQL_FALLBACK_RETRYABLE_ERROR_CODES = Object.freeze([
-  ROUTER_CONNECTION_CLOSED_ERROR_CODE,
-  ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
-]);
 const AUTHORITATIVE_SQL_FALLBACK_QUERY_TIMEOUT_ERROR_MESSAGES = Object.freeze([
   QUERY_ERROR_MSG.QUERY_TIMEOUT,
 ]);
@@ -187,17 +179,16 @@ function shouldRetryOwnerRpcReadViaSqlFallback(
     return false;
   }
 
-  const errorCode = String(
-    ownerRpcResult?.errorCode || ownerRpcResult?.code || '',
-  ).toUpperCase();
-
   const errorMessage =
     typeof ownerRpcResult?.error === 'string' ?
       ownerRpcResult.error :
       ownerRpcResult?.error?.message || ownerRpcResult?.message;
 
+  // No transport code widens this fallback: the code list it once held named
+  // two members QUERY_ERROR_CODE never had (dead since 2026-04), and a router
+  // failure on an owner read reaches here only through the hints below, as
+  // it always did (census: the fallback mode is owed its own unit).
   return (
-    AUTHORITATIVE_SQL_FALLBACK_RETRYABLE_ERROR_CODES.includes(errorCode) ||
     isAuthoritativeSqlFallbackQueryTimeoutMessage(errorMessage) ||
     ownerRpcResult?.deferRetry === true ||
     (

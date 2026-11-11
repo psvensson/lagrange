@@ -7,7 +7,6 @@ import {
   READINESS_PLANNING_TABLES,
   appendArrayValue,
   buildQueueOwnerKey,
-  defaultMacrotaskScheduler,
   freezeToken,
   getReadinessBuildFailureReason,
   getReadinessBuildRetryAfterMs,
@@ -131,8 +130,9 @@ function createPlanningQueue(owner, options) {
     name: READINESS_PLANNING_QUEUE_NAME,
     maxConcurrency: 1,
     maxItemsPerDrain: 1,
-    scheduleDrainFn: typeof options.scheduleDrainFn === 'function' ?
-      options.scheduleDrainFn : defaultMacrotaskScheduler,
+    // The queue's one drain scheduler (a host turn) unless a deterministic
+    // scheduler is supplied through the port.
+    scheduleDrainFn: options.scheduleDrainFn,
     now: owner.now,
     setTimeoutFn: owner.service?.setTimeoutFn,
     clearTimeoutFn: owner.service?.clearTimeoutFn,

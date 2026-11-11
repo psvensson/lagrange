@@ -5,17 +5,18 @@ import {
 import {
   LOCAL_NUM_ZERO,
   LOCAL_NUM_ONE,
-  LOCAL_STR_12XVB,
-  LOCAL_STR_OV8OK,
-  LOCAL_STR_CONNECTION_TO_NODE,
-  LOCAL_STR_CLOSED,
-  LOCAL_STR_10U11,
-  LOCAL_STR_1Y4H5,
-  LOCAL_STR_10811,
+  LOG_PRESSURE_MESSAGE_FRAGMENT,
   MIN_YIELD_MS,
   MIN_SLEEP_MS,
 } from './logs-table-service-constants.js';
-import {ROUTER_MESSAGE_TIMEOUT_ERROR_CODE} from '../transport/transport-error-codes.js';
+import {
+  TRANSPORT_DELIVERY_FAILURE,
+  classifyTransportDeliveryFailure,
+  mayResendAfterTransportFailure,
+} from '../transport/transport-delivery-failure.js';
+import {PRESSURE_GOVERNOR_ERROR_CODE} from
+  '../control-plane/pressure-governor.js';
+import {QUERY_ERROR_CODE, QUERY_ERROR_MSG} from '../query/query-constants.js';
 import {
   WAIT_BOUND_SPENT_SINK,
   reportWaitBoundSpent,
@@ -60,25 +61,29 @@ function shouldDeferWriteError(error) {
   if (!error) {
     return false;
   }
-  // A spent delivery lifetime defers by its transport code, never its text;
-  // a re-write of the deferred entries is an UPSERT by log_id, so the ACK
-  // and the answer timeout defer alike.
+  // A transport failure defers by the transport's one decision; this sink's
+  // one fact is that a re-write is an UPSERT by log_id (identity-keyed), so
+  // an ambiguous write defers like one that never left.
+  const transportFailure = classifyTransportDeliveryFailure(error);
+  if (transportFailure !== TRANSPORT_DELIVERY_FAILURE.NOT_TRANSPORT) {
+    return mayResendAfterTransportFailure(transportFailure,
+      {identityKeyed: true});
+  }
   if (error?.deferRetry === true ||
-      error?.code === LOCAL_STR_12XVB ||
-      error?.code === ROUTER_MESSAGE_TIMEOUT_ERROR_CODE) {
+      error?.code === PRESSURE_GOVERNOR_ERROR_CODE
+        .CONTROL_PLANE_PRESSURE_DEGRADED ||
+      error?.code === QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE) {
     return true;
   }
   if (Number.isFinite(error?.retryAfterMs) &&
       error.retryAfterMs > LOCAL_NUM_ZERO) {
     return true;
   }
+  // These answers reach the sink with no code at their producers yet (the
+  // query router's routing failure, the follower's forwarded-write failure).
   const message = error?.message || String(error);
-  return message.includes(LOCAL_STR_OV8OK) ||
-    message.includes(LOCAL_STR_CONNECTION_TO_NODE) &&
-    message.includes(LOCAL_STR_CLOSED) ||
-    message.includes(LOCAL_STR_10U11) ||
-    message.includes(LOCAL_STR_1Y4H5) ||
-    message.includes(LOCAL_STR_10811);
+  return message.includes(QUERY_ERROR_MSG.QUERY_ROUTING_FAILED) ||
+    message.includes(LOG_PRESSURE_MESSAGE_FRAGMENT.FORWARD_WRITE_FAILED);
 }
 
 const logsTableServiceFlushHelperMethods = {

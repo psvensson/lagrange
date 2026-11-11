@@ -72,6 +72,11 @@ function statusOf(world) {
     confState: {voters, votersOutgoing: world.joint ? [PEERS.y] : [],
       learners: []},
     peers,
+    // The leader's voter-liveness record: a silent survivor was never heard
+    // in this tenure.
+    liveVoters: [PEERS[SUBJECT], ...peers.filter((peer) =>
+      world.availability[peer.replicaIdentity] !== AVAILABILITY.SILENT)
+      .map((peer) => peer.peerId)],
     followerProgress: Object.fromEntries(peers.map((peer) =>
       [peer.replicaIdentity,
         world.availability[peer.replicaIdentity].matched])),

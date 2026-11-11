@@ -31,8 +31,27 @@ import {
 } from '../../src/node/replica-removal-debt-errors.js';
 import {REPLICA_CONSENSUS_EXIT_REASON} from
   '../../src/node/replica-removal-consensus-exit.js';
-import {REPLICA_REMOVAL_SETTLEMENT_CAUSE} from
-  '../../src/node/replica-removal-settlement.js';
+import {
+  REPLICA_REMOVAL_SETTLEMENT_CAUSE,
+  REPLICA_REMOVAL_SETTLEMENT_OUTCOME,
+} from '../../src/node/replica-removal-settlement.js';
+import {
+  REPLICA_REMOVAL_CANCEL_ANSWER,
+  REPLICA_REMOVAL_CANCEL_REASON,
+} from '../../src/node/replica-removal-cancel-contract.js';
+import {REPLICA_HANDLER_LOG_MSG} from
+  '../../src/node/replica-handler-constants.js';
+import {
+  ReplicaOperationField,
+  ReplicaOperationMessageType,
+} from '../../src/rebalancer/replica-operation-constants.js';
+import {PARTITION_SERVICE_EVENT} from
+  '../../src/partition/partition-service-constants.js';
+import {RAFT_OPERATION} from '../../src/raft/raft-operation-port-constants.js';
+import {
+  COMMITTED_MEMBERSHIP_ANSWER_KIND,
+  COMMITTED_MEMBERSHIP_REFUSAL,
+} from '../../src/raft/raft-committed-membership-constants.js';
 import {retirePartitionRaftPeer} from
   '../../src/partition/partition-service-raft-membership-administration.js';
 import {relayPartitionConsensusObservations} from
@@ -240,4 +259,187 @@ test('removed outside a removal: the replica applies its own removal with ' +
   t.equal(world.cache.get('services', s) ?? null, null, 'its row is deleted');
   t.equal(fs.existsSync(cluster.replica(s).dbFile), false,
     'its storage is gone');
+});
+
+// The leader {a} removes s; s applies its own removal (its row still
+// serves: no removal ran).
+async function removeThroughLeader(world) {
+  const {cluster, a, s} = world;
+  await retirePartitionRaftPeer({raft: cluster.node(a),
+    partitionId: world.partitionId, replicaId: a}, s);
+  cluster.settle(() => !durableAppliedState(cluster.replica(s).dbFile,
+    world.partitionId).voters.includes(world.sPeer), {rounds: ELECTION_ROUNDS});
+}
+
+// The source's port with its committed-membership read refused (the
+// port's typed HELD refusal) while `faults.refuseRead` holds.
+function faultMembershipRead(service, faults) {
+  const port = service.raft;
+  service.raft = new Proxy({}, {get: (_target, key) => {
+    if (key === RAFT_OPERATION.READ_COMMITTED_MEMBERSHIP) {
+      return (request) => faults.refuseRead ?
+        {kind: COMMITTED_MEMBERSHIP_ANSWER_KIND.REFUSED,
+          reason: COMMITTED_MEMBERSHIP_REFUSAL.HELD} : port[key](request);
+    }
+    const value = port[key];
+    return typeof value === 'function' ? value.bind(port) : value;
+  }});
+}
+
+function captureLog(handler, level, message) {
+  const seen = [];
+  const original = handler.logger[level].bind(handler.logger);
+  handler.logger[level] = (logged, fields) => {
+    if (logged === message) seen.push(fields);
+    return original(logged, fields);
+  };
+  return seen;
+}
+
+test('an unreadable settlement read concludes nothing: the replica keeps ' +
+  'its serving row and is not fenced; its next consensus observation reads ' +
+  'again and settles it', async (t) => {
+  const world = openWorld(t, 'settle-unreadable');
+  const {source, s} = world;
+  t.equal(world.elected, true, 'setup: a leads {s, a, b}');
+  const faults = {refuseRead: true};
+  faultMembershipRead(source.service, faults);
+  relayPartitionConsensusObservations(source.service);
+  const pending = captureLog(source.handler, 'info',
+    REPLICA_HANDLER_LOG_MSG.REMOVAL_SETTLEMENT_PENDING);
+  await removeThroughLeader(world);
+  await nextTurns();
+  t.same({status: world.cache.get('services', s)?.status,
+    fenced: source.service.admissionFenced,
+    pending: pending.map((fields) => fields.outcome),
+    rereads: source.handler.removalSettlementRereads.has(s)},
+  {status: ReplicaStatus.ACTIVE, fenced: false,
+    pending: [REPLICA_REMOVAL_SETTLEMENT_OUTCOME.UNREADABLE], rereads: true},
+  'its read refused: neither settled nor failed, re-asked on its next ' +
+  'observation (named)');
+  // The read answers again; the replica's next consensus observation (any
+  // kind, here a leader announcement) re-asks.
+  faults.refuseRead = false;
+  source.service.emit(PARTITION_SERVICE_EVENT.CONSENSUS_OBSERVED,
+    {partitionId: world.partitionId, replicaId: s, leaderReplicaId: null});
+  for (let turn = 0; turn < 20 &&
+    world.cache.get('services', s)?.status !== ReplicaStatus.FAILED;
+    turn += 1) {
+    await nextTurns(5);
+  }
+  t.same({status: world.cache.get('services', s)?.status,
+    fenced: source.service.admissionFenced,
+    rereads: source.handler.removalSettlementRereads.has(s)},
+  {status: ReplicaStatus.FAILED, fenced: true, rereads: false},
+  'the next observation settles it: fenced and FAILED');
+});
+
+test('a tracked service without the removal fence cannot be marked FAILED ' +
+  'while it still serves: the settlement fails loudly, its row keeps ' +
+  'serving', async (t) => {
+  const world = openWorld(t, 'settle-no-fence');
+  const {source, s} = world;
+  t.equal(world.elected, true, 'setup: a leads {s, a, b}');
+  delete source.service.fenceServingAdmissionForRemoval;
+  relayPartitionConsensusObservations(source.service);
+  const failed = captureLog(source.handler, 'error',
+    REPLICA_HANDLER_LOG_MSG.REMOVAL_SETTLEMENT_FAILED);
+  await removeThroughLeader(world);
+  for (let turn = 0; turn < 20 && failed.length === 0; turn += 1) {
+    await nextTurns(5);
+  }
+  t.same({status: world.cache.get('services', s)?.status,
+    failures: failed.length > 0},
+  {status: ReplicaStatus.ACTIVE, failures: true},
+  'no FAILED row over a replica nothing fenced; the failure is reported');
+});
+
+function cancelRequest(world, operationId) {
+  return {payload: {
+    [ReplicaOperationField.TYPE]:
+      ReplicaOperationMessageType.CANCEL_REPLICA_REMOVAL,
+    [ReplicaOperationField.OPERATION_ID]: operationId,
+    [ReplicaOperationField.PARTITION_ID]: world.partitionId,
+    [ReplicaOperationField.REPLICA_ID]: world.s,
+    // The fixture's services row generation (created_at).
+    [ReplicaOperationField.REPLICA_GENERATION]: 1,
+  }, correlationId: `cancel-${operationId}`};
+}
+
+test('a cancel that finds the removal applied over a serving row republishes ' +
+  'the retiring row first: a write that did not apply is UNAVAILABLE (asked ' +
+  'again), never ALREADY_REMOVED over a serving row; the re-ask republishes ' +
+  'and the REMOVING re-drive tears the replica down', async (t) => {
+  const world = openWorld(t, 'settle-cancel-republish');
+  const {source, s} = world;
+  t.equal(world.elected, true, 'setup: a leads {s, a, b}');
+  await removeThroughLeader(world);
+  t.equal(world.cache.get('services', s)?.status, ReplicaStatus.ACTIVE,
+    'setup: s applied its own removal with a serving row');
+  // The status-write port exhausts its retry (a retryable control-plane
+  // failure) once.
+  const persist = source.handler.persistReplicaStatusWithRetry
+    .bind(source.handler);
+  let refusals = 1;
+  source.handler.persistReplicaStatusWithRetry = (...args) => {
+    if (refusals > 0) {
+      refusals -= 1;
+      return Promise.reject(Object.assign(
+        new Error('status write retry spent'), {deferRetry: true}));
+    }
+    return persist(...args);
+  };
+  const first = await source.handler.handleMessage(
+    cancelRequest(world, 'op-cancel'));
+  t.same(first[ReplicaOperationField.REMOVAL_CANCELLATION], {
+    answer: REPLICA_REMOVAL_CANCEL_ANSWER.UNAVAILABLE,
+    reason: REPLICA_REMOVAL_CANCEL_REASON.REPUBLISH_NOT_APPLIED},
+  'the republish did not apply: UNAVAILABLE, the asker asks again');
+  t.equal(world.cache.get('services', s)?.status, ReplicaStatus.ACTIVE,
+    'its row still serves');
+  const again = await source.handler.handleMessage(
+    cancelRequest(world, 'op-cancel'));
+  t.same(again[ReplicaOperationField.REMOVAL_CANCELLATION], {
+    answer: REPLICA_REMOVAL_CANCEL_ANSWER.ALREADY_REMOVED,
+    reason: REPLICA_REMOVAL_CANCEL_REASON.REMOVAL_APPLIED},
+  'the re-ask republishes: ALREADY_REMOVED');
+  t.same({row: world.cache.get('services', s)?.status,
+    local: source.handler.getLocalReplica(s)?.status},
+  {row: ReplicaStatus.REMOVING, local: ReplicaStatus.REMOVING},
+  'its row reads retiring again, its local status matches');
+  // The lifecycle owner's REMOVING re-drive tears it down.
+  const stateMachine = source.handler.replicaStateMachine;
+  const baseNow = stateMachine.now;
+  stateMachine.now = () => baseNow() + REMOVING_BOUND_MS;
+  stateMachine.checkTimeoutsNow();
+  await nextTurns();
+  await settleRemoval(world, null);
+  t.same({row: world.cache.get('services', s) ?? null,
+    local: source.handler.getLocalReplica(s)?.status,
+    storage: fs.existsSync(world.cluster.replica(s).dbFile)},
+  {row: null, local: ReplicaStatus.REMOVED, storage: false},
+  'the re-drive completed the removal from the republished row');
+});
+
+test('a removal with no port asks its group only through the handler\'s ' +
+  'message router: without one it fails loudly, never a deferral that ' +
+  'reads the wiring gap as a group that did not answer', async (t) => {
+  const world = openWorld(t, 'settle-no-router');
+  const {cluster, source, s} = world;
+  t.equal(world.elected, true, 'setup: a leads {s, a, b}');
+  await source.removeRequest('op-norouter');
+  await nextTurns();
+  source.handler.removalConsensusExitRelease.abort();
+  await settleRemoval(world, 'op-norouter');
+  source.handler.removalConsensusExitRelease = new AbortController();
+  cluster.isolate(s);
+  source.service.raft = null;
+  source.handler.messageRouter = null;
+  await source.removeRequest('op-norouter');
+  await settleRemoval(world, 'op-norouter');
+  t.same({...world.lastOutcome(), lifecycle: world.lifecycle()},
+    {type: EXECUTOR_OUTCOME_TYPE.REPLICA_REMOVE_FAILED, errorCode: null,
+      lifecycle: 'active'},
+    'an untyped failure (not REPLICA_REMOVAL_CONSENSUS_EXIT_DEFERRED); ' +
+    'nothing retired');
 });

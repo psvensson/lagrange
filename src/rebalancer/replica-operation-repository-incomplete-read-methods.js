@@ -7,6 +7,10 @@ import {
   REPLICA_OPERATION_OWNER_LEASE_ADOPTION,
   resolveOperationOwnerLeaseAdoption,
 } from './replica-operation-owner-lease.js';
+import {
+  buildAnsweredIncompleteOperationListObservation,
+  buildDeferredIncompleteOperationListObservation,
+} from './incomplete-operation-list-observation.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const LOCAL_STR_STRING = 'string';
@@ -49,34 +53,16 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
     SKIP: 'skip',
   });
 
+  const VISIBILITY_STATE = INCOMPLETE_OPERATION_OWNER_VISIBILITY_STATE;
+  const VISIBILITY_ACTION = INCOMPLETE_OPERATION_OWNER_VISIBILITY_ACTION;
   const INCOMPLETE_OPERATION_OWNER_VISIBILITY_ACTION_BY_STATE = Object.freeze(
     new Map([
-      [
-        INCOMPLETE_OPERATION_OWNER_VISIBILITY_STATE.LOCAL_OWNER,
-        INCOMPLETE_OPERATION_OWNER_VISIBILITY_ACTION.INCLUDE,
-      ],
-      [
-        INCOMPLETE_OPERATION_OWNER_VISIBILITY_STATE
-          .PRIORITY_RECOVERY_DRAIN_CANDIDATE,
-        INCOMPLETE_OPERATION_OWNER_VISIBILITY_ACTION.INCLUDE,
-      ],
-      [
-        INCOMPLETE_OPERATION_OWNER_VISIBILITY_STATE
-          .REMOTE_SYSTEM_REPLACE_HANDOFF_CANDIDATE,
-        INCOMPLETE_OPERATION_OWNER_VISIBILITY_ACTION.INCLUDE,
-      ],
-      [
-        INCOMPLETE_OPERATION_OWNER_VISIBILITY_STATE.REMOTE_OWNER,
-        INCOMPLETE_OPERATION_OWNER_VISIBILITY_ACTION.SKIP,
-      ],
-      [
-        INCOMPLETE_OPERATION_OWNER_VISIBILITY_STATE.NON_COORDINATOR_OPERATION,
-        INCOMPLETE_OPERATION_OWNER_VISIBILITY_ACTION.SKIP,
-      ],
-      [
-        INCOMPLETE_OPERATION_OWNER_VISIBILITY_STATE.TERMINAL_OPERATION,
-        INCOMPLETE_OPERATION_OWNER_VISIBILITY_ACTION.SKIP,
-      ],
+      [VISIBILITY_STATE.LOCAL_OWNER, VISIBILITY_ACTION.INCLUDE],
+      [VISIBILITY_STATE.PRIORITY_RECOVERY_DRAIN_CANDIDATE, VISIBILITY_ACTION.INCLUDE],
+      [VISIBILITY_STATE.REMOTE_SYSTEM_REPLACE_HANDOFF_CANDIDATE, VISIBILITY_ACTION.INCLUDE],
+      [VISIBILITY_STATE.REMOTE_OWNER, VISIBILITY_ACTION.SKIP],
+      [VISIBILITY_STATE.NON_COORDINATOR_OPERATION, VISIBILITY_ACTION.SKIP],
+      [VISIBILITY_STATE.TERMINAL_OPERATION, VISIBILITY_ACTION.SKIP],
     ]),
   );
 
@@ -236,9 +222,7 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
    * @private
    */
     isRemoteSystemReplaceIncompleteOperationVisibilityCandidate(operation) {
-      const sourceNodeId = String(
-        operation?.sourceNodeId || operation?.source_node_id || '',
-      );
+      const sourceNodeId = String(operation?.sourceNodeId || '');
       return Boolean(
         operation &&
         operation.type === OperationType.REPLACE &&
@@ -267,31 +251,19 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
       );
     }
     /**
-   * Return only the cache-visible incomplete operations.
-   * Callers that specifically need the cache observation boundary should use
-   * this surface instead of tuning fallback behavior on the general read API.
-   *
+   * The cache projection of this node's incomplete operations: a hint, read
+   * by name, never the owner's answer (that is queryIncompleteOperations).
    * @return {Object[]}
    */
     queryCachedIncompleteOperations() {
-      const cachedRows = this.filterReplicaOperationRowsFromCache((row) => {
-        if (!row) {
-          return false;
-        }
-        return isIncompleteOperationRowStep(row.type, row.workflow_step);
-      });
+      const cachedRows = this.filterReplicaOperationRowsFromCache((row) =>
+        Boolean(row) && isIncompleteOperationRowStep(row.type, row.workflow_step));
       if (cachedRows === null) {
         return [];
       }
       return this.mapAndSortIncompleteOperations(cachedRows);
     }
 
-    /**
-   * Query all incomplete (in-flight) operations owned by this node.
-   * @param {object} [options={}]
-   * @param {string} [options.visibilityReadMode]
-   * @return {Promise<Array>}
-   */
     /**
    * Cluster-wide authoritative census of live ledger writers (every
    * coordinator-owned non-terminal row, any source or target node), read
@@ -332,60 +304,35 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
     }
 
     /**
-     * This node's incomplete operations. The answer's meaning is in the
-     * observation this read records (resolveIncompleteOperationObservation):
-     *   PRESENT  - a list; complete (authoritative) or a cache projection
-     *              (complete=false, possibly partial).
-     *   EMPTY    - the owner answered with no rows (confirmed, complete).
-     *   DEFERRED - the read did not answer (failed, deferred or backing
-     *              off): typed deferredOutcome with retry semantics; the
-     *              returned list is only a projection fallback (possibly
-     *              empty, possibly partial) and is never "no operations".
-     * A caller that drops, completes, plans or opens a gate on the list
-     * consults that observation first.
+     * This node's incomplete operations, read from the operation-ledger
+     * owner. The answer is one named observation
+     * (incomplete-operation-list-observation.js): PRESENT or a confirmed
+     * EMPTY with the owner's complete list, or DEFERRED with no list and the
+     * typed `deferredOutcome` (failed, backing off, priority-recovery
+     * deferral). No cache row stands in for the owner; the cache projection
+     * is queryCachedIncompleteOperations, read by name.
      * @param {Object} [options={}]
-     * @return {Promise<Array>}
+     * @param {string} [options.visibilityReadMode] - OWNER_RPC_REQUIRED or
+     *   OWNER_RPC_SINGLE_ATTEMPT; otherwise the owner-preferred read, which
+     *   honours the retryable-failure backoff.
+     * @return {Promise<Object>}
      */
     async queryIncompleteOperations(options = {}) {
-      const visibilityReadMode = resolveReplicaOperationVisibilityReadMode(options);
-      const requireAuthoritativeOutcome =
-        options.requireAuthoritativeOutcome === true;
-      const authoritativeReadOptions =
-        buildReplicaOperationVisibilityReadOptions(visibilityReadMode);
-      const cachedOperations = this.queryCachedIncompleteOperations();
-
-      if (
-        visibilityReadMode !==
-          REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED &&
-        visibilityReadMode !==
-          REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_SINGLE_ATTEMPT
-      ) {
-        if (
-          cachedOperations.length === 0 &&
-        this.nextIncompleteOperationSqlRetryAtMs > this.timeSource.now()
-        ) {
-          // Backing off after a failed owner read: nothing was read, so the
-          // answer is the typed unavailability, never an empty list.
-          this.recordIncompleteOperationReadUnavailable(null, {
-            retryAfterMs:
-              this.nextIncompleteOperationSqlRetryAtMs - this.timeSource.now(),
-            source:
-              INCOMPLETE_OPERATION_READ_OUTCOME_SOURCE.AUTHORITATIVE_READ_BACKOFF,
-          });
-          return this.resolveDeferredIncompleteOperationReadFallback(cachedOperations);
-        }
-        if (
-          cachedOperations.length > 0 ||
-        visibilityReadMode === REPLICA_OPERATION_VISIBILITY_READ_MODE.CACHE_ONLY
-        ) {
-          this.recordIncompleteOperationObservation(cachedOperations);
-          this.clearIncompleteOperationReadOutcome();
-          // A cache projection: possibly partial, never "confirmed empty".
-          this.lastIncompleteOperationReadComplete = false;
-          return cachedOperations;
-        }
+      const requestedMode = resolveReplicaOperationVisibilityReadMode(options);
+      const strictOwnerRead =
+        requestedMode === REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED ||
+        requestedMode === REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_SINGLE_ATTEMPT;
+      const nowMs = this.timeSource.now();
+      if (!strictOwnerRead && this.nextIncompleteOperationSqlRetryAtMs > nowMs) {
+        // Backing off after a failed owner read: nothing was read.
+        return this.recordDeferredIncompleteOperationRead(
+          this.buildIncompleteOperationReadUnavailableOutcome(null, {
+            retryAfterMs: this.nextIncompleteOperationSqlRetryAtMs - nowMs,
+            source: INCOMPLETE_OPERATION_READ_OUTCOME_SOURCE.AUTHORITATIVE_READ_BACKOFF,
+          }));
       }
-
+      // Evidence for the priority-recovery deferral label only; never answers.
+      const cachedOperations = this.queryCachedIncompleteOperations();
       const queryStartedAtMs = this.timeSource.now();
       const result = await this.executeReplicaOperationsRead(
         SQL.SELECT_INCOMPLETE_OPERATIONS,
@@ -396,143 +343,135 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
           OperationType.REPLACE,
           OperationType.REMOVE,
         ],
-        authoritativeReadOptions,
+        buildReplicaOperationVisibilityReadOptions(strictOwnerRead ?
+          requestedMode :
+          REPLICA_OPERATION_VISIBILITY_READ_MODE.CACHE_PREFERRED_SQL_FALLBACK),
       );
       const queryDurationMs = this.timeSource.now() - queryStartedAtMs;
       const rowCount = Array.isArray(result?.rows) ? result.rows.length : 0;
       const planningSnapshot = this.resolvePriorityRecoveryPlanningSnapshotForOwnerRead();
 
       if (!result.success || !result.rows) {
-        const fallbackOperations =
-        this.resolveDeferredIncompleteOperationReadFallback(cachedOperations);
+        const retryAfterMs = this.getRetryableIncompleteOperationReadBackoffMs(result);
         const deferredOutcome = this.buildDeferredIncompleteOperationReadOutcome({
-          priorityRecoveryActive:
-            requireAuthoritativeOutcome ||
-            this.shouldDeferIncompleteOperationReadFailure(
-              result,
-              planningSnapshot,
-              {
-                cachedOperations,
-                fallbackOperations,
-              },
-            ),
-          retryAfterMs: this.getRetryableIncompleteOperationReadBackoffMs(result),
-          cachedOperations,
-          fallbackOperations,
+          priorityRecoveryActive: this.shouldDeferIncompleteOperationReadFailure(
+            result, planningSnapshot, {cachedOperations}),
+          retryAfterMs,
           queryDurationMs,
-          source:
-          INCOMPLETE_OPERATION_READ_OUTCOME_SOURCE
+          source: INCOMPLETE_OPERATION_READ_OUTCOME_SOURCE
             .PRIORITY_RECOVERY_AUTHORITATIVE_OPERATION_FAILURE,
+        }) || this.buildIncompleteOperationReadUnavailableOutcome(result, {
+          retryAfterMs,
+          queryDurationMs,
+          source: INCOMPLETE_OPERATION_READ_OUTCOME_SOURCE.AUTHORITATIVE_READ_FAILURE,
         });
         const logPayload = {
           ...buildControlPlaneFailurePayload(this.nodeId, result),
-          completionState: deferredOutcome?.completionState || null,
+          completionState: deferredOutcome.completionState || null,
         };
-
         if (isRetryableControlPlaneError(result)) {
-          this.nextIncompleteOperationSqlRetryAtMs =
-          this.timeSource.now() + this.getRetryableIncompleteOperationReadBackoffMs(result);
+          this.nextIncompleteOperationSqlRetryAtMs = this.timeSource.now() + retryAfterMs;
           this.logger.warn(REBALANCE_COORDINATOR_LOG_MSG.QUERY_OPERATIONS_FAILED, logPayload);
         } else {
           this.logger.error(REBALANCE_COORDINATOR_LOG_MSG.QUERY_OPERATIONS_FAILED, logPayload);
         }
-
-        // A failed read is unavailability for every caller: the priority
-        // recovery outcome when it applies, else the typed read failure.
-        // The returned list is only the projection fallback (possibly empty,
-        // possibly partial); the outcome says so.
-        if (deferredOutcome) {
-          this.lastIncompleteOperationReadOutcome = deferredOutcome;
-          this.lastIncompleteOperationReadComplete = false;
-        } else {
-          this.recordIncompleteOperationReadUnavailable(result, {
-            retryAfterMs: this.getRetryableIncompleteOperationReadBackoffMs(result),
-            queryDurationMs,
-            fallbackOperations,
-            source:
-              INCOMPLETE_OPERATION_READ_OUTCOME_SOURCE.AUTHORITATIVE_READ_FAILURE,
-          });
-        }
-        return fallbackOperations;
+        return this.recordDeferredIncompleteOperationRead(deferredOutcome);
       }
 
       this.nextIncompleteOperationSqlRetryAtMs = 0;
-
-      const shouldWarnOnQueryPressure =
-      queryDurationMs >= INCOMPLETE_OPERATION_QUERY_SLOW_THRESHOLD_MS ||
-      rowCount >= INCOMPLETE_OPERATION_QUERY_ROW_WARN_THRESHOLD;
-      if (
-        this.shouldDeferIncompleteOperationEmptyRead(
-          result,
-          queryDurationMs,
-          cachedOperations,
-          planningSnapshot,
-        )
-      ) {
-        const fallbackOperations =
-        this.resolveDeferredIncompleteOperationReadFallback(cachedOperations);
-        const deferredOutcome = this.buildDeferredIncompleteOperationReadOutcome({
+      const deferEmptyRead = this.shouldDeferIncompleteOperationEmptyRead(
+        result,
+        queryDurationMs,
+        cachedOperations,
+        planningSnapshot,
+      );
+      const deferredOutcome = deferEmptyRead ?
+        this.buildDeferredIncompleteOperationReadOutcome({
           priorityRecoveryActive: true,
           retryAfterMs: this.getRetryableIncompleteOperationReadBackoffMs(result),
-          cachedOperations,
-          fallbackOperations,
           queryDurationMs,
-          source:
-          INCOMPLETE_OPERATION_READ_OUTCOME_SOURCE
+          source: INCOMPLETE_OPERATION_READ_OUTCOME_SOURCE
             .PRIORITY_RECOVERY_AUTHORITATIVE_OPERATION_EMPTY_READ,
-        });
-        this.lastIncompleteOperationReadOutcome = deferredOutcome;
-        this.lastIncompleteOperationReadComplete = false;
-
-        if (shouldWarnOnQueryPressure) {
-          const nowMs = this.timeSource.now();
-          if (
-            nowMs - this.lastIncompleteOperationQueryWarningAtMs >=
-          INCOMPLETE_OPERATION_QUERY_WARN_THROTTLE_MS
-          ) {
-            this.lastIncompleteOperationQueryWarningAtMs = nowMs;
-            this.logger.warn(
-              REPLICA_OPERATION_REPOSITORY_LITERAL.IN_FLIGHT_OPERATION_OWNER_QUERY_INDICATES +
-              REPLICA_OPERATION_REPOSITORY_LITERAL.CONTROL_PLANE_PRESSURE,
-              {
-                nodeId: this.nodeId,
-                queryDurationMs,
-                rowCount,
-                completionState: deferredOutcome?.completionState || null,
-              },
-            );
-          }
-        }
-
-        return fallbackOperations;
+        }) :
+        null;
+      this.warnIncompleteOperationQueryPressure(queryDurationMs, rowCount, deferredOutcome);
+      if (deferredOutcome) {
+        return this.recordDeferredIncompleteOperationRead(deferredOutcome);
       }
+      return this.recordAnsweredIncompleteOperationRead(
+        this.mapAndSortIncompleteOperations(result.rows));
+    }
 
-      this.clearIncompleteOperationReadOutcome();
-      if (shouldWarnOnQueryPressure) {
-        const nowMs = this.timeSource.now();
-        if (
-          nowMs - this.lastIncompleteOperationQueryWarningAtMs >=
-        INCOMPLETE_OPERATION_QUERY_WARN_THROTTLE_MS
-        ) {
-          this.lastIncompleteOperationQueryWarningAtMs = nowMs;
-          this.logger.warn(
-            REPLICA_OPERATION_REPOSITORY_LITERAL.IN_FLIGHT_OPERATION_OWNER_QUERY_INDICATES +
-            REPLICA_OPERATION_REPOSITORY_LITERAL.CONTROL_PLANE_PRESSURE,
-            {
-              nodeId: this.nodeId,
-              queryDurationMs,
-              rowCount,
-            },
-          );
-        }
-      }
+    /**
+     * The DEFERRED observation of a read the local router pressure governor
+     * paused before it reached the owner.
+     * @return {Object}
+     */
+    buildLocalRouterPressureIncompleteOperationObservation() {
+      return buildDeferredIncompleteOperationListObservation(
+        this.buildIncompleteOperationReadUnavailableOutcome(null, {
+          source: INCOMPLETE_OPERATION_READ_OUTCOME_SOURCE.LOCAL_ROUTER_PRESSURE,
+        }));
+    }
 
-      const operations = this.mapAndSortIncompleteOperations(result.rows);
+    /**
+     * @param {Object} deferredOutcome
+     * @return {Object} The DEFERRED observation; no list.
+     * @private
+     */
+    recordDeferredIncompleteOperationRead(deferredOutcome) {
+      this.lastIncompleteOperationReadOutcome = deferredOutcome;
+      this.lastIncompleteOperationReadComplete = false;
+      return buildDeferredIncompleteOperationListObservation(deferredOutcome);
+    }
+
+    /**
+     * @param {Array<Object>} operations - The owner's complete list.
+     * @return {Object} PRESENT or a confirmed EMPTY.
+     * @private
+     */
+    recordAnsweredIncompleteOperationRead(operations) {
       this.recordIncompleteOperationObservation(operations);
-      // The owner answered: the list is complete as of the read (an empty
-      // list is a confirmed empty).
+      this.clearIncompleteOperationReadOutcome();
       this.lastIncompleteOperationReadComplete = true;
-      return operations;
+      return buildAnsweredIncompleteOperationListObservation(operations);
+    }
+
+    /**
+     * Throttled warning for a slow or large owner read.
+     * @param {number} queryDurationMs
+     * @param {number} rowCount
+     * @param {Object|null} deferredOutcome
+     * @return {void}
+     * @private
+     */
+    warnIncompleteOperationQueryPressure(queryDurationMs, rowCount, deferredOutcome) {
+      if (
+        queryDurationMs < INCOMPLETE_OPERATION_QUERY_SLOW_THRESHOLD_MS &&
+        rowCount < INCOMPLETE_OPERATION_QUERY_ROW_WARN_THRESHOLD
+      ) {
+        return;
+      }
+      const nowMs = this.timeSource.now();
+      if (
+        nowMs - this.lastIncompleteOperationQueryWarningAtMs <
+        INCOMPLETE_OPERATION_QUERY_WARN_THROTTLE_MS
+      ) {
+        return;
+      }
+      this.lastIncompleteOperationQueryWarningAtMs = nowMs;
+      this.logger.warn(
+        REPLICA_OPERATION_REPOSITORY_LITERAL.IN_FLIGHT_OPERATION_OWNER_QUERY_INDICATES +
+        REPLICA_OPERATION_REPOSITORY_LITERAL.CONTROL_PLANE_PRESSURE,
+        {
+          nodeId: this.nodeId,
+          queryDurationMs,
+          rowCount,
+          ...(deferredOutcome ?
+            {completionState: deferredOutcome.completionState || null} :
+            {}),
+        },
+      );
     }
   }
 

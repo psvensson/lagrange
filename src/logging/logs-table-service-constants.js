@@ -8,13 +8,7 @@ const LOCAL_STR_BACKGROUND = 'background';
 const LOCAL_STR_LOGSOWNER = 'logsOwner';
 const LOCAL_STR_LOGS = 'logs';
 const LOCAL_STR_WRITE = 'write';
-const LOCAL_STR_12XVB = 'CONTROL_PLANE_PRESSURE_DEGRADED';
-const LOCAL_STR_OV8OK = 'Distributed operation failed due to participant failures';
-const LOCAL_STR_CONNECTION_TO_NODE = 'Connection to node';
 const LOCAL_STR_CLOSED = 'closed';
-const LOCAL_STR_10U11 = 'No connection to node';
-const LOCAL_STR_1Y4H5 = 'Query routing failed';
-const LOCAL_STR_10811 = 'Failed to forward write to leader';
 const LOCAL_STR_10NUJ = 'control-plane:write';
 const LOCAL_STR_CONTROL_PLANE_READ = 'control-plane:read';
 const LOCAL_STR_121M5 = 'control-plane:table:logs';
@@ -116,13 +110,7 @@ export {
   LOCAL_STR_LOGSOWNER,
   LOCAL_STR_LOGS,
   LOCAL_STR_WRITE,
-  LOCAL_STR_12XVB,
-  LOCAL_STR_OV8OK,
-  LOCAL_STR_CONNECTION_TO_NODE,
   LOCAL_STR_CLOSED,
-  LOCAL_STR_10U11,
-  LOCAL_STR_1Y4H5,
-  LOCAL_STR_10811,
   LOCAL_STR_10NUJ,
   LOCAL_STR_121M5,
   LOCAL_STR_STRING,

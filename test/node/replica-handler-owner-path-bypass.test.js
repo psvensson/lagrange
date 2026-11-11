@@ -56,6 +56,8 @@ import {
   createCanonicalLifecycleServiceRow,
   createLifecycleCdcServiceForCache,
 } from '../test-helpers/lifecycle-state-store.js';
+import {REMOVAL_DRAINED_ANSWER, withRemovalServingSurface} from
+  '../test-helpers/partition-removal-serving-surface.js';
 import {bindRegisteredReplicaHandler} from
   '../test-helpers/replica-handler-identity-fixture.js';
 import {OwnerPathReplicaHandler as ReplicaHandler} from
@@ -128,12 +130,9 @@ function createMockCDCService(cache) {
   return createLifecycleCdcServiceForCache(cache);
 }
 
-/**
- * Create a mock partition service factory.
- * @return {Function} Factory that returns a minimal partition service.
- */
+// A partition-service double factory (the production removal-serving surface).
 function createMockPartitionServiceFactory() {
-  return async (options) => bindRegisteredReplicaHandler({
+  return async (options) => bindRegisteredReplicaHandler(withRemovalServingSurface({
     partitionId: options.partitionId,
     replicaId: options.replicaId,
     initialized: true,
@@ -142,7 +141,7 @@ function createMockPartitionServiceFactory() {
     async requestReplicaAdmission(operationId) {
       return {operationId, state: 'admitted', lastOutcome: 'proposed'};
     },
-  }, options);
+  }), options);
 }
 
 /**
@@ -738,6 +737,7 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
         async waitForRemovalServingDrain() {
           drainWaitCount += 1;
           await drainGate;
+          return REMOVAL_DRAINED_ANSWER;
         },
         async shutdown() {},
         async syncFromLeader() {},

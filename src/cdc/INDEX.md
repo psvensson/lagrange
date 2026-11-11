@@ -19,8 +19,6 @@ documentClass: generated
 - [cdc-delivery-budget.js](cdc-delivery-budget.js) - One CDC receiver/forwarder's local grant. (importers: many)
 - [cdc-delivery-invocation.js](cdc-delivery-invocation.js) - Private lifetime of one CDC delivery-owner invocation. (importers: many)
 - [cdc-delivery-outcome.js](cdc-delivery-outcome.js) - A recipient's answer that is neither committed nor provisional, as one hop carries it onward (a relay, the topology... (importers: hub)
-- [cdc-emitter-constants.js](cdc-emitter-constants.js) - Constants for CDCEmitter - composable CDC event generation and subscriber management. (importers: few)
-- [cdc-emitter.js](cdc-emitter.js) - CDCEmitter - Composable CDC event generation and subscriber management. (importers: few)
 - [cdc-event-envelope.js](cdc-event-envelope.js) - No leading comment; first export: CDC_EVENT_METADATA_FIELD. (importers: many)
 - [cdc-event-handler.js](cdc-event-handler.js) - CDC Event Handler - Handles CDC events for system state changes. (importers: few)
 - [cdc-integration-service-authoritative-catchup.js](cdc-integration-service-authoritative-catchup.js) - Authoritative catch-up hydration for CDC-propagated system tables (closure record CL-014). (importers: few)

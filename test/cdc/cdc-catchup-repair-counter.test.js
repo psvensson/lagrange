@@ -4,12 +4,16 @@
 // formation can show zero repairs before those compensations are deleted.
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {CDC_CATCHUP_TRIGGER, hydrateCdcPropagatedTablesFromAuthority} from
+import {CDC_CATCHUP_REFUSAL, CDC_CATCHUP_TRIGGER, hydrateCdcPropagatedTablesFromAuthority} from
   '../../src/cdc/cdc-integration-service-authoritative-catchup.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {CDC_ERROR_CODE} from '../../src/cdc/cdc-constants.js';
 
 function stub(changes) {
   const warnings = [];
   return {warnings, nodeId: 'node-a',
+    // The one cache owner of snapshots and observations: the real writable cache.
+    cacheMutationTarget: new SystemTableCache(),
     delayUntilShutdown: async () => {},
     logger: {info() {}, debug() {}, error() {},
       warn: (message, fields) => warnings.push({message, fields})},
@@ -36,4 +40,28 @@ test('a catch-up that changes nothing counts a run and no repair; one that chang
     {runs: 1, repairingRuns: 1, rowsApplied: 1, rowsSwept: 0});
   assert.equal(repairing.warnings.length, 1);
   assert.equal(repairing.warnings[0].fields.trigger, CDC_CATCHUP_TRIGGER.JOIN_CATCHUP);
+});
+
+test('a catch-up without a named trigger is refused typed before any read is issued', async () => {
+  for (const options of [undefined, {tables: ['nodes']}, {tables: ['nodes'], trigger: 'unnamed'}]) {
+    const service = stub(true);
+    let reads = 0;
+    service.executeAuthoritativeSystemTableRead = async () => {
+      reads += 1;
+      return {success: true, rows: []};
+    };
+    await assert.rejects(hydrateCdcPropagatedTablesFromAuthority(service, options),
+      {code: CDC_CATCHUP_REFUSAL.TRIGGER_REQUIRED});
+    assert.equal(reads, 0, 'no authoritative read before the refusal');
+    assert.equal(service.catchupRepairCounts, undefined, 'no run is counted');
+  }
+});
+
+test('a catch-up on a service with no writable cache bound is refused typed ' +
+  '(CACHE_OWNER_UNBOUND), never answered from a second cache', async () => {
+  const service = stub(true);
+  service.cacheMutationTarget = null;
+  await assert.rejects(hydrateCdcPropagatedTablesFromAuthority(service,
+    {tables: ['nodes'], trigger: CDC_CATCHUP_TRIGGER.JOIN_CATCHUP}),
+  {code: CDC_ERROR_CODE.CACHE_OWNER_UNBOUND});
 });

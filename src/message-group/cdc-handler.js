@@ -117,12 +117,12 @@ class CDCEvent {
 
   /**
    * Get the record key from the event data.
-   * @return {string} Record key (id field).
+   * @return {string} Record key (the table's declared key field).
    */
   getKey() {
     const keyField = getSystemCachePrimaryKeyFieldOrFallback(this.tableName);
     const canonicalData = canonicalizeSystemTableRow(this.tableName, this.data);
-    return canonicalData?.[keyField] || canonicalData?.id;
+    return canonicalData?.[keyField];
   }
 
   /**

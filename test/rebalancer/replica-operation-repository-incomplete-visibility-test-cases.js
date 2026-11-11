@@ -186,7 +186,7 @@ export function registerReplicaOperationRepositoryIncompleteVisibilityTests({
     });
 
     t.equal(
-      operations.length,
+      operations.operations.length,
       1,
       'authoritative incomplete-operation reads should recover after bounded retry',
     );
@@ -237,9 +237,9 @@ export function registerReplicaOperationRepositoryIncompleteVisibilityTests({
       const operations = await repo.queryIncompleteOperations();
 
       t.equal(
-        operations.length,
+        operations.operations.length,
         1,
-        'empty cache visibility should still recover the routed authoritative operation',
+        'the owner-preferred read recovers the routed authoritative operation',
       );
       t.equal(
         capturedReads.length,
@@ -380,10 +380,10 @@ export function registerReplicaOperationRepositoryIncompleteVisibilityTests({
 
       const operations = await repo.queryIncompleteOperations();
 
-      t.same(
-        operations,
-        [],
-        'owner read should still fail closed to empty results when SQL sees no rows',
+      t.equal(
+        operations.state,
+        INCOMPLETE_OPERATION_OBSERVATION_STATE.EMPTY,
+        'the owner answered with no rows: a confirmed EMPTY',
       );
       t.equal(
         readCalls,

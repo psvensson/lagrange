@@ -12,8 +12,11 @@
 //   - a removed leader can still arise from a race no proposal check closes:
 //     a removal another leader proposed reaches the subject's log, the
 //     subject wins the next election holding it, commits and applies it. It
-//     then hands leadership to the most caught-up voter of the configuration
-//     that removed it.
+//     then hands leadership to the voter the leadership transferee rule
+//     names among the configuration that removed it: live by its own
+//     liveness record, most caught up; a transferee whose transfer aborted
+//     (it died before its MsgTimeoutNow) is passed over until it is heard
+//     again, so a dead successor never pins the group.
 //
 // Real rs-raft ports through the provider seam; time moves only by explicit
 // ticks (TransferLeadershipDriver).
@@ -152,6 +155,76 @@ test('a leader that applied its own removal (the race no proposal check ' +
       'the successor takes writes');
     assert.equal(driver.status(C).role === RAFT_ROLE.LEADER, false,
       'the removed replica never leads again');
+  } finally {
+    driver.dispose();
+  }
+});
+
+// The pinned group (2026-11-11 residual): the removed leader's most caught-up
+// successor dies before its MsgTimeoutNow arrives. raft-rs aborts that
+// transfer one election timeout later and leaves matched as it was, so a
+// rule by matched index alone names the dead voter again at the next drain,
+// for as long as the removed leader leads; its heartbeats keep the live
+// voters from timing out and its check-quorum passes on them, while it drops
+// every proposal. The group then takes no write until the dead voter
+// returns. Roles by raft id: the dead voter has the lowest id of the
+// survivors, so it wins every tie on matched.
+const PIN = Object.freeze({
+  LEADER: 'pin-leader', SUBJECT: 'pin-subject', DEAD: 'pin-dead',
+  LIVE: 'pin-live'});
+// Election timeouts a live voter is allowed to take leadership in, from the
+// dead successor's crash: its aborted transfer (one), the next transfer and
+// the transferee's election.
+const DEAD_SUCCESSOR_BOUND_TIMEOUTS = 3;
+
+test('a removed leader whose most caught-up successor is dead does not pin ' +
+  'its group: within a bounded number of election timeouts a live voter ' +
+  'leads and a write commits', async () => {
+  const driver = new TransferLeadershipDriver({partitionId:
+    'step-down-dead-successor', replicaIds: Object.values(PIN)});
+  try {
+    driver.form();
+    assert.ok([PIN.LEADER, PIN.LIVE].every((replicaId) =>
+      BigInt(driver.raftIdAt(PIN.LEADER, PIN.DEAD)) <
+        BigInt(driver.raftIdAt(PIN.LEADER, replicaId))),
+    'setup: the dead successor wins every tie on matched');
+    // The race: only the subject holds RemoveNode(subject); its leader is
+    // cut off with the acknowledgement; the subject wins the election with
+    // the other two and commits its own removal.
+    driver.isolate(PIN.DEAD);
+    driver.isolate(PIN.LIVE);
+    assert.equal(driver.port(PIN.LEADER).proposeConfChange({
+      type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER,
+      replicaIdentity: PIN.SUBJECT}).result.outcome, CORE_OK,
+    'setup: the leader proposes RemoveNode(subject)');
+    driver.deliverOnly([PIN.SUBJECT]);
+    driver.isolate(PIN.LEADER);
+    driver.heal(PIN.DEAD);
+    driver.heal(PIN.LIVE);
+    assert.notEqual(driver.roundsUntil(() => driver.leads(PIN.SUBJECT) &&
+      !isVoter(driver, PIN.SUBJECT),
+    ELECTION_TIMEOUTS * driver.electionTick()), null,
+    'setup: the subject leads and applied its own removal');
+    // The successor it names dies before the transfer reaches it; the old
+    // leader answers again, so the live voters are a quorum of the
+    // configuration that removed the subject.
+    driver.crash(PIN.DEAD);
+    driver.heal(PIN.LEADER);
+    const live = [PIN.LEADER, PIN.LIVE];
+    const rounds = await roundsUntil(driver, () => !driver.leads(PIN.SUBJECT) &&
+      live.some((replicaId) => driver.leads(replicaId)),
+    DEAD_SUCCESSOR_BOUND_TIMEOUTS * driver.electionTick());
+    assert.notEqual(rounds, null, 'a live voter leads within ' +
+      `${DEAD_SUCCESSOR_BOUND_TIMEOUTS} election timeouts of the crash ` +
+      `(subject leads: ${driver.leads(PIN.SUBJECT)})`);
+    const successor = live.find((replicaId) => driver.leads(replicaId));
+    const command = {after: 'dead-successor'};
+    const accepted = await turnChainValue(driver.port(successor)
+      .propose(command));
+    driver.deliver();
+    assert.equal(accepted.outcome, CORE_OK, JSON.stringify(accepted));
+    assert.equal(driver.applied(successor, command), true,
+      'the write commits without the dead voter');
   } finally {
     driver.dispose();
   }

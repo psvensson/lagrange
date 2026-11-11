@@ -23,6 +23,7 @@
  * REPLICA_ABSENT_NOT_BY_OPERATION (nothing will change that answer).
  */
 import assert from 'node:assert/strict';
+import {EventEmitter} from 'node:events';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -95,6 +96,7 @@ function partitionServingSurface(open) {
   const service = Object.assign({
     partitionId: PARTITION_ID, replicaId: REPLICA_ID, db,
     activeServingRequestCount: 0, removalServingAdmissionFenced: false,
+    removalDrainWakes: new Set(),
     async shutdown() {
       service.db?.close();
       service.db = null;
@@ -112,12 +114,14 @@ function createHandler(service, status, extra = {}, stateMachine = {}) {
     createPartitionService: () => {
       throw new Error('this world creates no partition service');
     },
-    replicaStateMachine: {
+    // The lifecycle owner's surface this world reads, on its event port
+    // (the handler subscribes to its TIMEOUT re-drive signal).
+    replicaStateMachine: Object.assign(new EventEmitter(), {
       getState: () => null,
       bindAuthoritativeRemovalAuthority: async () =>
         ({kind: REMOVAL_AUTHORITY_KIND.ABSENT}),
       ...stateMachine,
-    },
+    }),
   });
   const started = [];
   handler.startRemoveReplicaAsync = (request) => started.push(

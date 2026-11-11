@@ -17,7 +17,8 @@ import {PARTITION_CDC_COMMAND} from
   '../../src/partition/partition-cdc-obligation-constants.js';
 import {countCdcObligations} from '../../src/partition/partition-cdc-obligation-ledger.js';
 import {createDurableSourceMessageGroupService, createMessageGroupServiceRow,
-  deliveredEventsOf} from '../topology/cdc-group-propagation-service-harness.js';
+  createTopologyCache, deliveredEventsOf, putTopologyRow, removeTopologyRow} from
+  '../topology/cdc-group-propagation-service-harness.js';
 import {CDC_TABLE as TABLE, applyCommitted, committedQueryOf, settleTicks, shutdownAll,
   startLeader} from
   './participant-transaction-fixture.js';
@@ -53,20 +54,52 @@ function serviceRow(groupId, nodeId) {
   create_attempt_token: `${groupId}-birth-1`};
 }
 
+// The route projection is the node's real system-table cache; a witness
+// changes it only through the cache's change gateway (the helpers below), so
+// every change reaches the propagation's recipient-domain watch as in
+// production.
 function controlledProjection() {
-  const nodes = new Map([
-    [SOURCE_NODE, {[COLUMN.NODE_ID]: SOURCE_NODE, [COLUMN.LATENCY_GROUP_ID]: SOURCE_GROUP}],
-    [TARGET_NODE, {[COLUMN.NODE_ID]: TARGET_NODE, [COLUMN.BOOT_INCARNATION]: 1}],
-  ]);
-  assert.equal(isIssuedBootIncarnation(nodes.get(TARGET_NODE)[COLUMN.BOOT_INCARNATION]), true);
-  const projection = {nodes, groups: [], services: [serviceRow(TARGET_GROUP, TARGET_NODE)]};
-  projection.cache = {
-    get: (table, key) => table === TABLES.NODES ? nodes.get(key) ?? null : null,
-    getAll: (table) => table === TABLES.LATENCY_GROUPS ? projection.groups : [],
-    filter: (table, predicate) => table === TABLES.SERVICES ?
-      projection.services.filter(predicate) : [],
-  };
-  return projection;
+  const nodes = [{[COLUMN.NODE_ID]: SOURCE_NODE, [COLUMN.LATENCY_GROUP_ID]: SOURCE_GROUP},
+    {[COLUMN.NODE_ID]: TARGET_NODE, [COLUMN.BOOT_INCARNATION]: 1}];
+  assert.equal(isIssuedBootIncarnation(nodes[1][COLUMN.BOOT_INCARNATION]), true);
+  const target = serviceRow(TARGET_GROUP, TARGET_NODE);
+  return {cache: createTopologyCache({nodes, services: [target]}),
+    targetServiceId: target[COLUMN.SERVICE_ID]};
+}
+
+// The target group's service row (the one the fixture starts with).
+function targetService(f) {
+  return f.projection.cache.get(TABLES.SERVICES, f.projection.targetServiceId);
+}
+
+// Replace fields of the target service row; a new service identity is a new
+// row (the old one is removed).
+function updateTargetService(f, fields) {
+  const current = targetService(f);
+  const next = {...current, ...fields};
+  if (next[COLUMN.SERVICE_ID] !== current[COLUMN.SERVICE_ID]) {
+    removeTopologyRow(f.projection.cache, TABLES.SERVICES, current);
+    f.projection.targetServiceId = next[COLUMN.SERVICE_ID];
+  }
+  putTopologyRow(f.projection.cache, TABLES.SERVICES, next);
+}
+
+function updateNode(f, nodeId, fields) {
+  putTopologyRow(f.projection.cache, TABLES.NODES,
+    {...f.projection.cache.get(TABLES.NODES, nodeId), ...fields});
+}
+
+// Put a latency group row; `replaces` names a group id this row supersedes.
+function putGroup(f, row, replaces = null) {
+  if (replaces !== null && replaces !== row[COLUMN.GROUP_ID]) {
+    removeTopologyRow(f.projection.cache, TABLES.LATENCY_GROUPS,
+      f.projection.cache.get(TABLES.LATENCY_GROUPS, replaces));
+  }
+  putTopologyRow(f.projection.cache, TABLES.LATENCY_GROUPS, row);
+}
+
+function groupRows(f) {
+  return f.projection.cache.getAll(TABLES.LATENCY_GROUPS);
 }
 
 function buildTopology(f) {
@@ -92,7 +125,7 @@ function buildTopology(f) {
   }};
   const topology = new CDCGroupPropagationService({nodeId: SOURCE_NODE,
     systemTableCache: f.projection.cache, messageRouter: router,
-    latencyTreeService: {getRoutingOrder: () => f.projection.groups.map((row) => row.group_id)},
+    latencyTreeService: {getRoutingOrder: () => groupRows(f).map((row) => row.group_id)},
     nowFn: () => f.clock.now(), deliveryRetryMaxAttempts: 1});
   topology.initialize();
   topology.start();
@@ -173,14 +206,14 @@ function assertDebtWithoutAck(f, owed = 1) {
 
 function addRequiredGroup(f, groupId = 'progress-group-c') {
   const row = serviceRow(groupId, 'node-c');
-  f.projection.services.push(row);
+  putTopologyRow(f.projection.cache, TABLES.SERVICES, row);
   return row;
 }
 
 function omitTarget(f) {
-  f.projection.services[0][COLUMN.STATUS] = SERVICE_STATUS.STOPPED;
+  updateTargetService(f, {[COLUMN.STATUS]: SERVICE_STATUS.STOPPED});
 }
 
 export {BACKPRESSURE_RETRY_AFTER_MS, RESPONSE, SOURCE_GROUP, SOURCE_NODE, TARGET_GROUP, TARGET_NODE,
-  addRequiredGroup, addTopologySourceRow, assertDebtWithoutAck, omitTarget,
-  topologyProgressFixture};
+  addRequiredGroup, addTopologySourceRow, assertDebtWithoutAck, groupRows, omitTarget, putGroup,
+  targetService, topologyProgressFixture, updateNode, updateTargetService};

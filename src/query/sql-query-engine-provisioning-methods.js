@@ -238,9 +238,7 @@ class SQLQueryEngineProvisioningMethods {
         activeNodeRowCount: 0,
         activeServiceRowCount: 0,
         strictNodeIds: [],
-        degradedFallbackNodeIds: [],
         selectedNodeIds: [],
-        usedDegradedFallback: false,
         epoch: null,
       };
     }
@@ -257,9 +255,7 @@ class SQLQueryEngineProvisioningMethods {
         selectedNodeIds.length,
       activeServiceRowCount: 0,
       strictNodeIds,
-      degradedFallbackNodeIds: [],
       selectedNodeIds,
-      usedDegradedFallback: false,
       epoch: cohort?.epoch || null,
       cohort,
     };

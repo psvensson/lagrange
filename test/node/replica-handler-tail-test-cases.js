@@ -1,3 +1,5 @@
+import {withRemovalServingSurface} from
+  '../test-helpers/partition-removal-serving-surface.js';
 import {registerReplicaHandlerTailMoreTests} from './replica-handler-tail-more-test-cases.js';
 
 export async function registerReplicaHandlerTailTests({
@@ -511,9 +513,9 @@ export async function registerReplicaHandlerTailTests({
         replicaId: 'replica-1',
         partitionId: 'partition-1',
         status: ReplicaStatus.ACTIVE,
-        service: {
+        service: withRemovalServingSurface({
           async shutdown() {},
-        },
+        }),
       });
 
       const response = await handler.handleRemoveReplica({
@@ -614,9 +616,9 @@ export async function registerReplicaHandlerTailTests({
         replicaId: 'replica-1',
         partitionId: 'partition-1',
         status: ReplicaStatus.ACTIVE,
-        service: {
+        service: withRemovalServingSurface({
           async shutdown() {},
-        },
+        }),
       });
 
       const request = {
@@ -709,9 +711,9 @@ export async function registerReplicaHandlerTailTests({
         replicaId: 'replica-1',
         partitionId: 'partition-1',
         status: ReplicaStatus.ACTIVE,
-        service: {
+        service: withRemovalServingSurface({
           async shutdown() {},
-        },
+        }),
       });
 
       await handler.handleRemoveReplica({
@@ -792,11 +794,11 @@ export async function registerReplicaHandlerTailTests({
       );
 
       let shutdownCalls = 0;
-      const trackedService = {
+      const trackedService = withRemovalServingSurface({
         async shutdown() {
           shutdownCalls += 1;
         },
-      };
+      });
       handler.localServices.set(
         TEST_REMOVE_DELETE_FAILURE_REPLICA_ID,
         trackedService,
@@ -975,9 +977,9 @@ export async function registerReplicaHandlerTailTests({
         replicaId: TEST_STALLED_REMOVE_REPLICA_ID,
         partitionId: TEST_STALLED_REMOVE_PARTITION_ID,
         status: ReplicaStatus.REMOVING,
-        service: {
+        service: withRemovalServingSurface({
           async shutdown() {},
-        },
+        }),
       });
 
       const removed = waitForReplicaEvent(
@@ -1148,11 +1150,11 @@ export async function registerReplicaHandlerTailTests({
 
       handler.initialize();
       let shutdownCalls = 0;
-      const trackedService = {
+      const trackedService = withRemovalServingSurface({
         async shutdown() {
           shutdownCalls += 1;
         },
-      };
+      });
       handler.localReplicas.set(TEST_REMOVED_CLEANUP_REPLICA_ID, {
         replicaId: TEST_REMOVED_CLEANUP_REPLICA_ID,
         partitionId: TEST_REMOVED_CLEANUP_PARTITION_ID,
@@ -1246,11 +1248,11 @@ export async function registerReplicaHandlerTailTests({
         },
       );
       let shutdownCalls = 0;
-      const trackedService = {
+      const trackedService = withRemovalServingSurface({
         async shutdown() {
           shutdownCalls += 1;
         },
-      };
+      });
       handler.cleanupReplicaResources = async () => {
         throw new Error(TEST_REMOVED_CLEANUP_DEFERRED_ERROR);
       };

@@ -72,6 +72,24 @@ function buildControlPlaneMutationIntent(
   };
 }
 
+// An UPDATE's data and a predicate are partial: they name only their own
+// columns. Each named column takes its canonical value; a whole-row
+// canonicalization's defaults for the columns the caller did not name
+// (control_plane_publications fills a kind, an epoch, a status and empty
+// lists) are never added - they would be written over the row, or turn the
+// predicate into one no row matches.
+function canonicalizeNamedColumns(tableName, columns, allowedColumns) {
+  const canonicalized = canonicalizeSystemTableRow(tableName, columns);
+  const named = {};
+  for (const key of Object.keys(columns)) {
+    if ((!allowedColumns || allowedColumns.has(key)) &&
+        typeof canonicalized[key] !== 'undefined') {
+      named[key] = canonicalized[key];
+    }
+  }
+  return named;
+}
+
 function canonicalizeControlPlaneMutation(
   mutation = {},
   operation,
@@ -108,17 +126,7 @@ function canonicalizeControlPlaneMutation(
     typeof data === 'object' &&
     operation === CONTROL_PLANE_MUTATION_OPERATION.UPDATE
   ) {
-    const canonicalized = canonicalizeSystemTableRow(tableName, data);
-    if (allowedColumns) {
-      data = {};
-      for (const [key, value] of Object.entries(canonicalized)) {
-        if (allowedColumns.has(key) && typeof value !== 'undefined') {
-          data[key] = value;
-        }
-      }
-    } else {
-      data = canonicalized;
-    }
+    data = canonicalizeNamedColumns(tableName, data, allowedColumns);
   }
 
   let whereClause = mutation?.whereClause;
@@ -128,17 +136,8 @@ function canonicalizeControlPlaneMutation(
     (operation === CONTROL_PLANE_MUTATION_OPERATION.UPDATE ||
       operation === CONTROL_PLANE_MUTATION_OPERATION.DELETE)
   ) {
-    const canonicalized = canonicalizeSystemTableRow(tableName, whereClause);
-    if (allowedColumns) {
-      whereClause = {};
-      for (const [key, value] of Object.entries(canonicalized)) {
-        if (allowedColumns.has(key) && typeof value !== 'undefined') {
-          whereClause[key] = value;
-        }
-      }
-    } else {
-      whereClause = canonicalized;
-    }
+    whereClause = canonicalizeNamedColumns(tableName, whereClause,
+      allowedColumns);
   }
 
   return {

@@ -6,7 +6,15 @@ import {
 import {
   QueryExecutorCanonicalLeaderRoutingMethods,
 } from './query-executor-canonical-leader-routing-methods.js';
-import {isDeliveryTimeoutReading} from '../transport/transport-semantic-outcome.js';
+import {
+  TRANSPORT_DELIVERY_FAILURE,
+  classifyTransportDeliveryFailure,
+  mayResendAfterTransportFailure,
+} from '../transport/transport-delivery-failure.js';
+import {
+  isPartitionWriteFailureCode,
+  isReroutableWriteFailureCode,
+} from '../partition/partition-write-kernel.js';
 
 const {
   CONTROL_PLANE_READ_PURPOSE,
@@ -365,51 +373,43 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
   }
 
   /**
-   * Check if an error represents a stale no-handler transport witness.
-   * @param {string} errorMessage - Error message.
+   * Whether a failure is the transport's wrong-owner answer: the target
+   * serves nothing at the address (a stale no-handler witness).
+   * @param {*} failure - The thrown Error or the delivery reading.
    * @return {boolean}
    * @private
    */
-  isNoHandlerFailure(errorMessage) {
-    return (
-      typeof errorMessage === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-      errorMessage.includes(ERRORS.NO_HANDLER_FOR_ADDRESS)
-    );
+  isNoHandlerFailure(failure) {
+    return classifyTransportDeliveryFailure(failure) ===
+      TRANSPORT_DELIVERY_FAILURE.WRONG_OWNER;
   }
 
   /**
-   * Check if an error indicates missing partition leadership.
-   * A spent delivery is read from the transport owner's typed reading: the
-   * ACK and the answer timeout mean the same here (the leader is not
-   * confirmed; the write is re-routed under its unchanged entryId, so an
-   * acknowledged-and-executed attempt is never applied twice).
-   * @param {string} errorMessage - Error message.
-   * @param {string|null} errorCode - Error code.
-   * @param {Object|null} reading - The delivery reading (deliveryReadingOf)
-   *   or the thrown error's transport outcome.
-   * @return {boolean} True if leader is unavailable.
+   * Whether a failed write is sent again (to the next candidate). A
+   * transport failure is decided by the transport's one delivery-failure
+   * decision and this write's one fact: whether every delivery carries the
+   * same entryId (an ambiguous failure is re-sent only then). A partition
+   * answer is decided by the write kernel's code, or by the errors owner's
+   * text when only its text reached here (the forwarding follower's
+   * 'Failed to forward write to leader' answer has no code yet).
+   * @param {string} errorMessage - The failure's text.
+   * @param {*} failure - The thrown Error or the delivery reading.
+   * @param {boolean} identityKeyed - Every delivery carries one entryId.
+   * @return {boolean} True if the write is routed again.
    * @private
    */
-  isLeaderUnavailable(errorMessage, errorCode = null, reading = null) {
-    if (errorCode === QUERY_EXECUTOR_LITERAL.STRING_ROUTER_CONNECTION_CLOSED ||
-        isDeliveryTimeoutReading(reading)) {
-      return true;
+  isLeaderUnavailable(errorMessage, failure = null, identityKeyed = false) {
+    const transportFailure = classifyTransportDeliveryFailure(failure);
+    if (transportFailure !== TRANSPORT_DELIVERY_FAILURE.NOT_TRANSPORT) {
+      return mayResendAfterTransportFailure(transportFailure, {identityKeyed});
     }
-    return (
-      errorMessage &&
-      (isReroutableWriteError(errorMessage) ||
-        errorMessage.includes(ERRORS.NO_HANDLER_FOR_ADDRESS) ||
-        (errorMessage.includes(
-          QUERY_EXECUTOR_LITERAL.STRING_CONNECTION_TO_NODE,
-        ) &&
-          errorMessage.includes(QUERY_EXECUTOR_LITERAL.STRING_CLOSED)) ||
-        errorMessage.includes(
-          QUERY_EXECUTOR_LITERAL.STRING_NO_CONNECTION_TO_NODE,
-        ) ||
-        errorMessage.includes(
-          QUERY_EXECUTOR_LITERAL.STRING_FAILED_TO_FORWARD_WRITE_TO_LEADER,
-        ))
-    );
+    if (isPartitionWriteFailureCode(failure?.failureCode)) {
+      return isReroutableWriteFailureCode(failure.failureCode,
+        {carriesEntryId: identityKeyed});
+    }
+    return typeof errorMessage === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
+      (isReroutableWriteError(errorMessage) || errorMessage.includes(
+        QUERY_EXECUTOR_LITERAL.STRING_FAILED_TO_FORWARD_WRITE_TO_LEADER));
   }
 
   /**

@@ -13,6 +13,7 @@ import {CDC_COMPLETION} from '../cdc/cdc-delivery-outcome.js';
 import {scopeCdcDeliveryInvocation} from '../cdc/cdc-delivery-invocation.js';
 import {cdcPropagationProgressCurrent, createCdcPropagationProgress,
   refreshCdcPropagationRoutes} from '../cdc/cdc-propagation-progress.js';
+import {restartRecipient} from './partition-cdc-recipient-progress.js';
 
 const RECIPIENT_KEY_SEPARATOR = '>';
 
@@ -58,14 +59,14 @@ function syncSubscriberBranches(delivery, lane) {
 }
 
 // A bound propagation is current while its topology owner, its source group
-// and their lifetimes are the ones observed; the check re-observes the plan,
-// so a newly required group appears here as a new target recipient.
+// and their lifetimes are the ones observed, and while the subscriber still
+// propagates through that source group; the check re-observes the plan, so a
+// newly required group appears here as a new target recipient.
 function topologyBindingCurrent(branch) {
   const {topology} = branch;
   if (topology === null) return true;
   return cdcPropagationProgressCurrent(topology) &&
-    (typeof branch.original.getCDCPropagationService !== 'function' ||
-      branch.original.getCDCPropagationService() === topology.source);
+    branch.original.getCDCPropagationService() === topology.source;
 }
 
 // A propagation that is no longer the one observed takes its recipient set
@@ -77,11 +78,13 @@ function releaseStaleTopology(branch) {
   releaseBranchTopology(branch);
 }
 
-// The released propagation stops watching its recipient domain.
+// The released propagation stops watching its recipient domain. Its primary
+// recipient is the next propagation's and starts again: nothing was shipped
+// to it under that one yet (a detached primary returns as a new recipient).
 function releaseBranchTopology(branch) {
   branch.topology.unwatch();
   branch.topology = null;
-  branch.primary.cursor = null;
+  restartRecipient(branch.primary);
   branch.releases += 1;
 }
 
@@ -139,10 +142,26 @@ function recipientKeyOf(branch, recipient) {
     `${subscriberId}${RECIPIENT_KEY_SEPARATOR}${recipient.groupId}`;
 }
 
+// A subscriber that binds a propagation answers which source group it
+// propagates through now (getCDCPropagationService): that answer is what keeps
+// the binding current, so binding without it is refused.
+const CDC_TOPOLOGY_BINDING_ERROR = Object.freeze({
+  CODE: 'cdc_topology_binding_without_propagation_port',
+  MESSAGE: 'A CDC subscriber that binds a propagation must answer ' +
+    'getCDCPropagationService (its current source message group)',
+});
+
+function requirePropagationPort(subscriber) {
+  if (subscriber.getCDCPropagationService instanceof Function) return;
+  throw Object.assign(new Error(CDC_TOPOLOGY_BINDING_ERROR.MESSAGE),
+    {code: CDC_TOPOLOGY_BINDING_ERROR.CODE});
+}
+
 // The topology owner reports the recipient set it observed for a source
 // group. Another owner or source group is another propagation: its recipients
 // have confirmed nothing.
 function bindBranchTopology(branch, owner, source, targets, onRecipientDomainChanged) {
+  requirePropagationPort(branch.original);
   if (branch.topology !== null && (branch.topology.owner !== owner ||
       branch.topology.source !== source)) {
     releaseBranchTopology(branch);
@@ -158,8 +177,8 @@ function bindBranchTopology(branch, owner, source, targets, onRecipientDomainCha
 /**
  * The invocation one recipient's delivery runs under: it names the recipient
  * group the topology owner must address (null: the source group) and the
- * source range the vector is shipped as (CDC Stage 3), and receives the
- * recipient set that owner observed.
+ * source range the vector is shipped as (CDC Stage 3), receives the
+ * recipient set that owner observed and answers the recipient's route.
  * @param {Object} context - The recipient's delivery invocation.
  * @param {Function} isCurrent - Whether the recipient is still the lane's.
  * @param {Object} branch - The recipient's branch.
@@ -173,12 +192,14 @@ function bindBranchTopology(branch, owner, source, targets, onRecipientDomainCha
 function cdcRecipientInvocation(context, isCurrent, branch, recipient, hooks, sourceRange) {
   return scopeCdcDeliveryInvocation(context, isCurrent, (scoped) => ({
     recipientGroupId: recipient.groupId,
-    recipientRoute: recipient.route,
     sourceRange,
+    // Answers the one route this recipient is delivered through: the lane's
+    // observation after the reported set is bound (the primary has none).
     bindTopology: (owner, source, targets) => {
       scoped.assertCurrent();
       bindBranchTopology(branch, owner, source, targets, hooks.recipientDomainChanged);
       hooks.recipientsObserved();
+      return recipient.route;
     },
   }));
 }
@@ -196,8 +217,7 @@ function recordUncoveredSubscriberHint(state, answer) {
   if (Number.isFinite(hint) && hint > 0) {
     state.retryAfterMs = state.retryAfterMs === null ? hint : Math.min(state.retryAfterMs, hint);
   }
-  if (answer?.error === CDC_COMPLETION.BACKPRESSURE ||
-      answer?.reason === CDC_COMPLETION.BACKPRESSURE) state.backpressured = true;
+  if (answer?.error === CDC_COMPLETION.BACKPRESSURE) state.backpressured = true;
   if (answer?.error === CDC_COMPLETION.POSITION_GAP) state.positionGap = true;
 }
 
@@ -217,6 +237,7 @@ function unconfirmedRecipientError(answer) {
 }
 
 export {
+  CDC_TOPOLOGY_BINDING_ERROR,
   cdcRecipientInvocation,
   laneRecipients,
   receiptGroupOf,

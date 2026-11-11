@@ -4,9 +4,10 @@
 
 import {PARTITION_SERVICE_DEFAULT} from './partition-service-constants.js';
 import {CDC_COMPLETION} from '../cdc/cdc-delivery-outcome.js';
-import {PARTITION_CDC_OBLIGATION_BOUND as BOUND} from './partition-cdc-obligation-constants.js';
-import {acknowledgedEventBytesOf, cdcObligationEventKeyDigest,
-  emptyAcknowledgedBytes} from './partition-cdc-obligation-ledger.js';
+import {PARTITION_CDC_OBLIGATION_BOUND as BOUND, PARTITION_CDC_OBLIGATION_DRIVE_STATE as DRIVE,
+  PARTITION_CDC_OBLIGATION_LOG_MSG as LOG_MSG} from './partition-cdc-obligation-constants.js';
+import {acknowledgedEventBytesOf, cdcObligationEventKeyDigest, countCdcObligations,
+  emptyAcknowledgedBytes, readOwedCdcTail} from './partition-cdc-obligation-ledger.js';
 import {releaseLaneTopologies} from './partition-cdc-obligation-progress.js';
 
 const OBLIGATION_RETRY_STATE = Object.freeze({IDLE: 'idle', ARMED: 'armed'});
@@ -40,7 +41,11 @@ function createCdcObligationLane(tenure = null) {
     retryDelayMs: PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS,
     consecutiveBackpressure: 0,
     acknowledgementBlocked: false, driveDelivered: 0, driveUnacknowledged: 0,
-    held: null, lastDrive: null, lastFlush: null, noSubscriberReported: false,
+    // held: the lane's own identity is refused (LANE_HELD); quarantined /
+    // reDerived (one record per refusal path, each entry ending when its
+    // position is committed delivered): partition-cdc-acknowledgement-refusal.js.
+    held: null, quarantined: new Map(), reDerived: {byPosition: new Set(), byBytes: new Set()},
+    lastDrive: null, lastFlush: null, noSubscriberReported: false,
     recipientDomainWake: false,
   };
 }
@@ -208,20 +213,45 @@ function computeRetryDelayMs(lane, error, disposition) {
   return {delayMs, advanceBackoff};
 }
 
+function driveOutcome(lane, state, fields) {
+  lane.lastDrive = Object.freeze({state, ...fields});
+  return lane.lastDrive;
+}
+
+function drivePrecondition(delivery, lane, reason) {
+  const {owner} = delivery;
+  const state = owner.isShutdown || !owner.db ? DRIVE.SHUTDOWN :
+    !laneIsCurrent(delivery, lane) ? DRIVE.NOT_LEADER :
+      owner.cdcSubscribers.size === 0 ? noSubscriberState(delivery, lane) : null;
+  return state === null ? null : driveOutcome(lane, state, {reason, delivered: 0});
+}
+
+// A leader with owed rows and no subscriber: the named condition, logged once
+// per tenure, and the wake of the partition's deferred propagation attachment
+// (the registration that failed waits for this or for its message group).
+function noSubscriberState(delivery, lane) {
+  const {owner} = delivery;
+  if (readOwedCdcTail(owner.db) === null) return DRIVE.NO_SUBSCRIBERS;
+  const attachment = delivery.propagationAttachment;
+  if (!lane.noSubscriberReported) {
+    lane.noSubscriberReported = true;
+    owner.logger.warn(LOG_MSG.OWED_WITHOUT_PROPAGATION_SUBSCRIBER, {
+      partitionId: owner.partitionId, tableName: owner.tableName,
+      owed: countCdcObligations(owner.db).owed, attachmentPending: attachment !== null});
+  }
+  attachment?.();
+  return DRIVE.NO_PROPAGATION_SUBSCRIBER;
+}
+
 function flushOutcome(lane, state, fields) {
   lane.lastFlush = Object.freeze({state, ...fields});
   return lane.lastFlush;
 }
 
 
-function driveOutcome(lane, state, fields) {
-  lane.lastDrive = Object.freeze({state, ...fields});
-  return lane.lastDrive;
-}
-
-
 export {
   driveOutcome,
+  drivePrecondition,
   flushOutcome,
   createCdcObligationLane,
   retireRecipientInvocations,

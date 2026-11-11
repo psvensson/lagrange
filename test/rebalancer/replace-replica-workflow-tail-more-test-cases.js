@@ -1842,8 +1842,8 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
       });
 
       try {
-        const inFlight = await coordinator.getInFlightOperations();
-        const removeCount = await coordinator.getConcurrentRemoveCount();
+        const {operations: inFlight} = await coordinator.getInFlightOperations();
+        const {count: removeCount} = await coordinator.getConcurrentRemoveCount();
 
         t.same(
           inFlight.map((operation) => operation.operationId).sort(),
@@ -1866,9 +1866,7 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
             'owner-scoped in-flight SQL should remain parser-safe when used',
           );
         } else {
-          t.pass(
-            'cache fast-path satisfied in-flight query without issuing SQL',
-          );
+          t.pass('the owner read reached the gateway without routed SQL');
         }
       } finally {
         await coordinator.shutdown();

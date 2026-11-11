@@ -693,7 +693,7 @@ test('queryIncompleteOperations requests bounded local replica fallback for auth
   const operations = await repo.queryIncompleteOperations();
 
   t.equal(
-    operations.length,
+    operations.operations.length,
     1,
     'authoritative incomplete-operation reads should remain visible through the bounded local replica fallback lane',
   );

@@ -36,8 +36,9 @@ import {LATENCY_PROPAGATION_MODE} from '../../src/topology/latency-topology-cons
 import {CDC_TABLE, clearFixtureSingletons, resetFixtureSingletons, settleTicks} from
   '../test-helpers/participant-transaction-fixture.js';
 import {commitAcknowledgements} from '../test-helpers/cdc-delivery-progress-fixture.js';
+import {assertShippedSourceRange} from '../test-helpers/cdc-source-range-fixture.js';
 import {RESPONSE, TARGET_GROUP, TARGET_NODE, addRequiredGroup, addTopologySourceRow,
-  topologyProgressFixture} from '../test-helpers/cdc-topology-progress-fixture.js';
+  omitTarget, targetService, topologyProgressFixture, updateTargetService} from '../test-helpers/cdc-topology-progress-fixture.js';
 
 beforeEach(() => {
   resetFixtureSingletons();
@@ -54,14 +55,6 @@ async function stage3Fixture(t) {
   const f = await topologyProgressFixture(t, {otherSubscriber: false});
   f.acks = () => f.proposed.filter((command) => command.type === PARTITION_CDC_COMMAND.DELIVERED);
   f.targetPayloads = [];
-  // The sender's cache: a change listener the lane's recipient-domain watch
-  // registers on.
-  f.cacheListeners = new Set();
-  f.projection.cache.onCacheChange = (listener) => f.cacheListeners.add(listener);
-  f.projection.cache.offCacheChange = (listener) => f.cacheListeners.delete(listener);
-  f.cacheChanged = (tableName) => {
-    for (const listener of f.cacheListeners) listener(tableName);
-  };
   const deliver = f.topology.messageRouter.deliver;
   f.topology.messageRouter.deliver = async (address, payload, options) => {
     f.targetPayloads.push(payload);
@@ -109,6 +102,7 @@ function stage3Recipient(f, groupId = TARGET_GROUP) {
     return SOURCE_RELIST_OUTCOME.STOPPED;
   });
   model.answer = (payload) => {
+    assertShippedSourceRange(payload.sourceRange);
     const events = deliveredEventsOf(payload);
     if (model.refusing) {
       return {...unknownCdcAcceptance(CDC_COMPLETION.BACKPRESSURE), retryAfterMs: 40};
@@ -185,7 +179,8 @@ test('S3-L2 every shipped vector names its source range: partition, ledger incar
 });
 
 test('S3-L3 a recipient with no position answers a gap, re-lists once from the leader image, ' +
-  'and the retried range then confirms it; nothing is acknowledged before it confirmed',
+  'and the retried range then confirms it; while it re-lists it holds the ledger from the ' +
+  'newest position as of the gapped range (design note S3.11)',
 async (t) => {
   const f = await stage3Fixture(t);
   const recipient = stage3Recipient(f);
@@ -207,8 +202,8 @@ async (t) => {
   await f.drive();
   await settleTicks();
   assert.equal(targetOf(f).state, RECIPIENT_STATE.POSITION_GAP);
-  assert.equal(f.leader.cdcDelivery.getCdcObligationDiagnostics().frontier.logIndex <
-    readCdcLedgerNewest(f.leader.db).logIndex, true, 'the gapped recipient holds the frontier');
+  assert.deepEqual(targetOf(f).relist.hold.position, positionOf(readCdcLedgerNewest(f.leader.db)),
+    'the gapped recipient holds the ledger from the newest position its image will cover');
   await settleTicks();
   assert.equal(recipient.lists.length, 2, 'one re-list for the gap');
   await retryHeld(f);
@@ -259,8 +254,9 @@ test('S3-L5 a group that becomes a recipient after the last write is contacted w
     buildCommittedCdcOutcome(deliveredEventsOf(payload), payload.targetGroupId,
       {index: 9, term: 2});
   const shippedBefore = f.targetPayloads.length;
+  // The sender's real cache announces the new row to the lane's
+  // recipient-domain watch.
   addRequiredGroup(f, joiner);
-  f.cacheChanged(TABLES.SERVICES);
   await settleTicks();
   const probes = f.targetPayloads.slice(shippedBefore)
     .filter((payload) => payload.targetGroupId === joiner);
@@ -334,7 +330,7 @@ test('S3-C measure 2: a dead group pins the frontier; cache omission alone detac
   'reclaimed, without a restart', async (t) => {
   const f = await stage3Fixture(t);
   f.target = () => unknownCdcAcceptance();
-  const services = f.projection.services.map((row) => ({...row}));
+  const services = [{...targetService(f)}];
   const authority = lifecycleAuthority({[TABLES.SERVICES]: services, [TABLES.NODES]: [
     {[COLUMN.NODE_ID]: TARGET_NODE, [COLUMN.STATUS]: 'active'}]});
   f.leader.cdcIntegrationService = authority;
@@ -343,8 +339,7 @@ test('S3-C measure 2: a dead group pins the frontier; cache omission alone detac
   assert.equal(countCdcObligations(f.leader.db).owed, 4, 'the dead group pins the frontier');
 
   // The sender's cache stops naming the group: a hint, not evidence.
-  f.projection.services[0][COLUMN.STATUS] = SERVICE_STATUS.STOPPED;
-  f.cacheChanged(TABLES.SERVICES);
+  omitTarget(f);
   await retryHeld(f);
   assert.equal(authority.reads.includes(TABLES.SERVICES), true, 'the lifecycle owner was asked');
   assert.notEqual(targetOf(f).state, RECIPIENT_STATE.DETACHED,
@@ -353,7 +348,8 @@ test('S3-C measure 2: a dead group pins the frontier; cache omission alone detac
 
   // The membership owner records the retirement (the replica row stopped).
   services[0][COLUMN.STATUS] = SERVICE_STATUS.STOPPED;
-  f.cacheChanged(TABLES.SERVICES);
+  // A services change in the sender's cache wakes the lane (the row again).
+  updateTargetService(f, {});
   await retryHeld(f);
   assert.deepEqual({state: targetOf(f).state, reason: targetOf(f).detachReason},
     {state: RECIPIENT_STATE.DETACHED, reason: DETACH_REASON.LIFECYCLE});
