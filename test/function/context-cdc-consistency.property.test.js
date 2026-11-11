@@ -48,18 +48,17 @@ function createMockCDCService(caches) {
     },
     updateSystemTableRow: async (tableName, where, data) => {
       // Merge where clause with data for cache update
+      // The where clause carries the table's declared key (context_id).
       const updateData = {...where, ...data};
-      // Ensure id is set for cache compatibility
-      if (where.context_id && !updateData.id) {
-        updateData.id = where.context_id;
-      }
       for (const cache of caches) {
         cache.applySystemTableChange(tableName, CDC_OPERATIONS.UPDATE, updateData);
       }
       return {success: true, changes: 1};
     },
     deleteSystemTableRow: async (tableName, where) => {
-      const deleteData = {id: where.context_id || where.id};
+      // A delete change carries the table's declared key (context_id): the
+      // cache keys system rows by the declared key only.
+      const deleteData = {...where};
       for (const cache of caches) {
         cache.applySystemTableChange(tableName, CDC_OPERATIONS.DELETE, deleteData);
       }
