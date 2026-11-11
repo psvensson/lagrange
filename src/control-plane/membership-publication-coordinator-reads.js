@@ -160,6 +160,9 @@ class MembershipPublicationCoordinatorReads {
         name: MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL.MEMBERSHIP_PUBLICATION_ACKNOWLEDGEMENT,
         workflowCoordinator: this.workflowCoordinator,
       });
+    // Consecutive reconcile answers held on the durable owner
+    // (membership-publication-reconcile-write.js: the re-ask's backoff).
+    this.heldPublicationWriteRequeueStreak = 0;
     this.reconcileQueue =
       options.reconcileQueue ||
       new OwnerKeyReconcileQueue({
