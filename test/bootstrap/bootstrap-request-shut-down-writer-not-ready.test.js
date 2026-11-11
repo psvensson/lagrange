@@ -25,6 +25,11 @@ import * as CDC_CONSTANTS from '../../src/cdc/cdc-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {HTTP_STATUS} from '../../src/constants/index.js';
+import {answerKnownClusterIdentity} from './bootstrap-api-test-fixtures.js';
+
+// The seed knows its cluster identity, so the join identity gate admits and
+// the request reaches the admitted work this file is about.
+answerKnownClusterIdentity();
 
 const SEED_NODE_ID = 'seed-node-1';
 const SEED_NODE_ADDRESS = 'ws://localhost:8080';

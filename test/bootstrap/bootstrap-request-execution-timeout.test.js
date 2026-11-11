@@ -21,6 +21,9 @@ import {
   getRemainingBudgetMs,
 } from
   '../../src/control-plane/timeout-budget.js';
+import {answerKnownClusterIdentity} from './bootstrap-api-test-fixtures.js';
+
+answerKnownClusterIdentity();
 
 const TEST_NAME =
   'BootstrapAPI returns bootstrap-not-ready when admitted bootstrap work' +

@@ -10,7 +10,12 @@ import {createTimeoutBudget} from
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
   '../../src/control-plane/control-plane-system-table-gateway.js';
-import {initializeTestEnvironment} from './bootstrap-api-test-fixtures.js';
+import {
+  answerKnownClusterIdentity,
+  initializeTestEnvironment,
+} from './bootstrap-api-test-fixtures.js';
+
+answerKnownClusterIdentity();
 
 const TEST_PARTITION_ID = 'nodes-p1';
 const TEST_SECOND_PARTITION_ID = 'tables-p1';
