@@ -33,7 +33,9 @@
  * NO_TRANSFEREE with no other voter at all waits on MEMBERSHIP_CHANGED only:
  * the last voter of a group is never removed by a removal (the port refuses
  * it, REMOVES_LAST_VOTER); a group retirement retires it by its durable
- * workflow record.
+ * workflow record, and a sole founder whose create failed retires its own
+ * never-created group at the node's removal owner
+ * (node/replica-removal-sole-founder.js).
  * Second line, at the raft owner: the leader's port refuses a change that
  * removes the leader itself (REMOVES_LEADER), and a leader that
  * applied its own removal anyway steps down (raft-rs-runtime-owner.js).

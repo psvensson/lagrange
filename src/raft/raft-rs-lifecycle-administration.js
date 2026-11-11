@@ -5,6 +5,8 @@ import {
   withReplicaLifecycleClaim,
 } from './raft-rs-replica-lifecycle-owner.js';
 import {LIFECYCLE_STATE} from './raft-rs-replica-lifecycle-constants.js';
+import {readDurableOwnGroupRecord} from
+  './raft-rs-durable-own-group-record.js';
 
 // Retire the exact runtime generation the caller holds (its own operation
 // port); never the current runtime of a reused logical name. A retirement
@@ -49,6 +51,10 @@ const raftRsLifecycleAdministration = Object.freeze({
   // The durable lifecycle row of one (group, replica identity) in a replica
   // database file, read-only (survives a restart that dropped the replica).
   readReplicaLifecycle: Object.freeze(readDurableReplicaLifecycle),
+  // What that file's own record says about its group: the replica's applied
+  // configuration against its own peer id, and whether any history is held
+  // (raft-rs-durable-own-group-record.js). Throws when it cannot be read.
+  readReplicaOwnGroupRecord: Object.freeze(readDurableOwnGroupRecord),
   isRetiredFor: Object.freeze(isRetiredFor),
   isRetired: Object.freeze(isRetired),
   isAbsent: Object.freeze(isAbsent),

@@ -68,7 +68,7 @@ function environment(t) {
   });
 }
 
-function seedCache(operationId, replicaId) {
+function seedCache(operationId, replicaId, genesis) {
   const cache = new SystemTableCache();
   cache.applySystemTableChange(SYSTEM_TABLE_NAME.TABLES, 'INSERT', {
     table_id: TABLES.SQL_TRANSACTIONS, table_name: TABLES.SQL_TRANSACTIONS,
@@ -88,7 +88,7 @@ function seedCache(operationId, replicaId) {
     // The founding create carries its GENESIS stamp in its first step, as the
     // provisioning owner writes it (the leader's release authority reads it).
     steps_history: JSON.stringify([{[OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP]:
-      genesisStampFor([replicaId], {[replicaId]: NODE_ID})}]),
+      genesis}]),
     create_admission_state: null, create_admission_token: null,
     create_admission_replica_created_at: null, create_admission_attempt_token: null,
     create_admission_previous_attempt_token: null, create_admission_attempt_seq: null,
@@ -144,11 +144,16 @@ function faultingGateway(cache, operationRow, refusals) {
   }};
 }
 
-async function runCreate(t, {label, refusals}) {
+// `coFounders`: founders the genesis stamp names beside the replica (none
+// exists: a founder of three whose peers never came up).
+async function runCreate(t, {label, refusals, coFounders = []}) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), `fresh-authority-${label}-`));
   const operationId = `op-fresh-authority-${label}`;
   const replicaId = `${PARTITION_ID}-r-${label}`;
-  const cache = seedCache(operationId, replicaId);
+  const founders = [replicaId, ...coFounders];
+  const genesis = genesisStampFor(founders, Object.fromEntries(
+    founders.map((founder) => [founder, NODE_ID])));
+  const cache = seedCache(operationId, replicaId, genesis);
   const operationRow = structuredClone(cache.get(
     SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, operationId));
   const {gateway, fault, lifecycle} = faultingGateway(cache, operationRow, refusals);
@@ -197,14 +202,60 @@ async function runCreate(t, {label, refusals}) {
     [ReplicaOperationField.CREATE_ADMISSION_ATTEMPT_TOKEN]:
       buildReplicaCreateAttemptToken(admissionToken, 1),
     [ReplicaOperationField.CREATE_ADMISSION_ATTEMPT_SEQ]: 1,
-  }, genesisStampFor([replicaId], {[replicaId]: NODE_ID})));
+  }, genesis));
   assert.equal(response.status, ReplicaOperationResponseStatus.INITIATED,
     `setup: the create was admitted (${JSON.stringify(response)})`);
   // The release client's waits are unref'd timers; hold the loop open.
   const keepAlive = setInterval(() => {}, 250);
   const outcome = await settled.finally(() => clearInterval(keepAlive));
   return {outcome, elapsedMs: Date.now() - startedAt, fault, handler, operationId,
-    replicaId, operationRow, store: lifecycle.store};
+    replicaId, operationRow, store: lifecycle.store,
+    dbPath: handler.getPartitionDbPath(PARTITION_ID, replicaId)};
+}
+
+const REMOVE_POLL_MS = 100;
+
+// Send the REMOVE and replay it: the COMPLETED answer, or null when the
+// removal is still not complete after `polls` replays. Every failure the
+// removal reported meanwhile is collected (its typed deferral).
+async function driveRemove(run, request, polls) {
+  const failures = [];
+  const onFailure = (event) => failures.push(event.error);
+  run.handler.on('replicaRemovalFailed', onFailure);
+  try {
+    const accepted = await run.handler.handleRemoveReplica(request);
+    assert.equal(accepted.status, ReplicaOperationResponseStatus.INITIATED,
+      `the REMOVE is accepted (${JSON.stringify(accepted)})`);
+    for (let attempt = 0; attempt < polls; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, REMOVE_POLL_MS));
+      const replay = await run.handler.handleRemoveReplica(request);
+      if (replay.status === ReplicaOperationResponseStatus.COMPLETED) {
+        return {completed: replay, failures};
+      }
+    }
+    return {completed: null, failures};
+  } finally {
+    run.handler.off('replicaRemovalFailed', onFailure);
+  }
+}
+
+function claimedRemoveRequest(run, row) {
+  return {operationId: `cleanup-${run.operationId}`,
+    partitionId: PARTITION_ID, replicaId: run.replicaId,
+    [ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION]: row};
+}
+
+// A failed fresh create of the permanent-refusal fixture and its FAILED row.
+async function failedCreate(t, options) {
+  const run = await runCreate(t, {refusals: Infinity, ...options});
+  assert.equal(run.outcome.created, false, 'setup: the create failed');
+  const row = run.store.durableRow(TABLES.SERVICES, run.replicaId);
+  assert.equal(row?.status, ReplicaStatus.FAILED, 'setup: the replica is FAILED');
+  assert.equal(row?.cleanup_token, buildFailedCreateCleanupToken(run.operationId),
+    'setup: the FAILED row carries the cleanup claim');
+  assert.equal(fs.existsSync(run.dbPath), true,
+    'setup: the replica database exists');
+  return {run, row};
 }
 
 test('an authority read unavailable N times delays the fresh create, which ' +
@@ -258,17 +309,65 @@ test('an authority read unavailable forever fails the fresh create at the ' +
     stepsHistory: [{...admission.stepMetadata}]});
   assert.equal(decision.cleanupEligible, true,
     'the cleanup decision is ELIGIBLE with the recorded lifecycle precondition');
-  const request = {operationId: `cleanup-${run.operationId}`,
-    partitionId: PARTITION_ID, replicaId: run.replicaId,
-    [ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION]: row};
-  const accepted = await run.handler.handleRemoveReplica(request);
-  assert.equal(accepted.status, ReplicaOperationResponseStatus.INITIATED,
-    `the claimed REMOVE is accepted (${JSON.stringify(accepted)})`);
-  let completed = null;
-  for (let attempt = 0; attempt < 50 && completed === null; attempt += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    const replay = await run.handler.handleRemoveReplica(request);
-    if (replay.status === ReplicaOperationResponseStatus.COMPLETED) completed = replay;
+  assert.equal(fs.existsSync(run.dbPath), true,
+    'the failed sole founder left its replica database');
+  const {completed, failures} = await driveRemove(run,
+    claimedRemoveRequest(run, row), 50);
+  assert.ok(completed, `the claimed REMOVE completes (${failures.join('; ')})`);
+  assert.equal(fs.existsSync(run.dbPath), false,
+    'the sole founder\'s group is retired: its database is gone');
+});
+
+// Negative controls of the sole-founder group retirement (2026-11-11): each
+// of its two durable facts is required, and an unreadable record holds.
+const HOLD_POLLS = 12;
+const DEFERRED_WITHOUT_EVIDENCE = /has no evidence it left consensus/u;
+
+function assertHeld(run, driven, reason, label) {
+  assert.equal(driven.completed, null, `${label}: the REMOVE does not complete`);
+  assert.ok(driven.failures.length >= 1, `${label}: the removal deferred`);
+  assert.match(driven.failures.at(-1), reason,
+    `${label}: the typed reason (${driven.failures.at(-1)})`);
+  assert.equal(fs.existsSync(run.dbPath), true,
+    `${label}: nothing retired - the replica database is kept`);
+}
+
+test('a failed founder whose own durable configuration names three members ' +
+  'never retires its group on its own: the claimed REMOVE stays deferred',
+{timeout: TEST_TIMEOUT_MS}, async (t) => {
+  environment(t);
+  const {run, row} = await failedCreate(t, {label: 'of-three', coFounders: [
+    `${PARTITION_ID}-r-absent-b`, `${PARTITION_ID}-r-absent-c`]});
+  const driven = await driveRemove(run, claimedRemoveRequest(run, row),
+    HOLD_POLLS);
+  assertHeld(run, driven, DEFERRED_WITHOUT_EVIDENCE, 'of three');
+  assert.match(driven.failures.at(-1),
+    /group_unanswered, sole_founder_record_not_sole_founder/u,
+    'nobody answered for the group and the record is not a sole founder\'s');
+});
+
+test('a failed sole founder whose database cannot be read holds: unreadable ' +
+  'is never teardown', {timeout: TEST_TIMEOUT_MS}, async (t) => {
+  environment(t);
+  const {run, row} = await failedCreate(t, {label: 'unreadable'});
+  for (const suffix of ['-wal', '-shm']) {
+    fs.rmSync(`${run.dbPath}${suffix}`, {force: true});
   }
-  assert.ok(completed, 'the claimed REMOVE completes');
+  fs.writeFileSync(run.dbPath, Buffer.alloc(8192, 0x5a));
+  const driven = await driveRemove(run, claimedRemoveRequest(run, row),
+    HOLD_POLLS);
+  assertHeld(run, driven, /sole_founder_record_unreadable/u, 'unreadable');
+});
+
+test('an ordinary REMOVE (no failed-create claim) of a sole member without ' +
+  'a port never retires the last voter', {timeout: TEST_TIMEOUT_MS},
+async (t) => {
+  environment(t);
+  const {run} = await failedCreate(t, {label: 'unclaimed'});
+  const driven = await driveRemove(run, {operationId: 'remove-unclaimed',
+    partitionId: PARTITION_ID, replicaId: run.replicaId}, HOLD_POLLS);
+  assertHeld(run, driven, DEFERRED_WITHOUT_EVIDENCE, 'unclaimed');
+  assert.match(driven.failures.at(-1),
+    /group_unanswered, sole_founder_not_failed_create_claim/u,
+    'the sole-founder retirement refuses a removal that is not the claim');
 });

@@ -18,8 +18,11 @@
  *    evidence - REMOVAL_APPLIED (the replica's own applied configuration no
  *    longer names it), GROUP_RETIRED (the verified group-retirement
  *    authority), or, without a port, a durable lifecycle that holds no record
- *    or is already retired; anything else is the typed retryable
- *    REPLICA_REMOVAL_CONSENSUS_EXIT_DEFERRED, nothing retired.
+ *    or is already retired, the group's answer that the removal applied, or
+ *    - when no leader answers - the sole founder's failed create retiring
+ *    its own group (replica-removal-sole-founder.js); anything else is the
+ *    typed retryable REPLICA_REMOVAL_CONSENSUS_EXIT_DEFERRED, nothing
+ *    retired.
  *  - requireRemovalParticipantCustodySettled: nothing irreversible while the
  *    participant owner holds the replica (a PREPARED row, volatile work) or
  *    its custody cannot be read; the typed retryable
@@ -46,6 +49,10 @@ import {
   GROUP_REMOVAL_VERDICT,
   readGroupVerdictOnOwnRemoval,
 } from './replica-removal-group-verdict.js';
+import {
+  SOLE_FOUNDER_RETIREMENT,
+  decideSoleFounderRetirement,
+} from './replica-removal-sole-founder.js';
 import {runRemovalCancellationCheckpoint} from
   './replica-removal-cancellation.js';
 import {REPLICA_REMOVAL_CANCEL_ANSWER as CANCEL} from
@@ -62,6 +69,7 @@ const REMOVAL_CONSENSUS_EXIT_WAIT = Object.freeze({
   awaited: 'retiring replica\'s applied configuration no longer names it ' +
     '(removal committed)',
 });
+const ANSWER_SEPARATOR = ', ';
 // The exits on which the replica's port may retire and its state go.
 const TEARDOWN_EXITS = Object.freeze(new Set([
   REPLICA_CONSENSUS_EXIT_REASON.REMOVAL_APPLIED,
@@ -206,11 +214,13 @@ function leaveConsensus(handler, request, service, removal) {
  * consensus state) or a retired one (its retirement already happened)
  * permits the cleanup. An active record asks the group (its leader's
  * committed configuration): its removal applied permits the cleanup; still
- * a member is STILL_MEMBER_WITHOUT_PORT; no leader answering is the
- * ordinary deferral. Each deferral is re-asked when the removal is
+ * a member is STILL_MEMBER_WITHOUT_PORT; no leader answering asks the one
+ * remaining owner - the sole founder's failed create, which retires its own
+ * group from its durable claim and its own durable record - and is otherwise
+ * the ordinary deferral. Each deferral is re-asked when the removal is
  * re-driven (the coordinator's re-dispatch, the REMOVING re-drive).
  * @param {Object} handler
- * @param {Object} request - {partitionId, replicaId}.
+ * @param {Object} request - {operationId, partitionId, replicaId}.
  * @param {Object} exit - Frozen {reason}.
  * @return {Promise<void>}
  */
@@ -218,6 +228,7 @@ async function requireRemovalTeardownAuthority(handler, request, exit) {
   if (TEARDOWN_EXITS.has(exit.reason)) {
     return;
   }
+  const answers = [exit.reason];
   let groupVerdict = null;
   if (exit.reason === REPLICA_CONSENSUS_EXIT_REASON.NO_CONSENSUS_PORT) {
     const lifecycle = handler.lifecycleVerdictsOf(
@@ -227,24 +238,27 @@ async function requireRemovalTeardownAuthority(handler, request, exit) {
       return;
     }
     groupVerdict = await readGroupVerdictOnOwnRemoval(handler, request);
-    logGroupVerdict(handler, request, groupVerdict);
-    if (groupVerdict === GROUP_REMOVAL_VERDICT.REMOVED) {
+    const soleFounder = groupVerdict === GROUP_REMOVAL_VERDICT.UNANSWERED ?
+      await decideSoleFounderRetirement(handler, request) : null;
+    logGroupVerdict(handler, request, {groupVerdict, soleFounder});
+    if (groupVerdict === GROUP_REMOVAL_VERDICT.REMOVED ||
+        soleFounder?.state === SOLE_FOUNDER_RETIREMENT.RETIRES_GROUP) {
       return;
     }
+    answers.push(groupVerdict, ...(soleFounder ? [soleFounder.state] : []));
   }
   throw retryableRemovalDebtError(
     groupVerdict === GROUP_REMOVAL_VERDICT.STILL_MEMBER ?
       REPLICA_REMOVAL_STILL_MEMBER_WITHOUT_PORT :
       REPLICA_REMOVAL_CONSENSUS_EXIT_DEFERRED,
     `Replica ${request.replicaId} has no evidence it left consensus ` +
-      `(${exit.reason}${groupVerdict ? `, ${groupVerdict}` : ''}); ` +
-      'nothing retired');
+      `(${answers.join(ANSWER_SEPARATOR)}); nothing retired`);
 }
 
-function logGroupVerdict(handler, request, groupVerdict) {
+function logGroupVerdict(handler, request, answers) {
   handler.logger.info(REPLICA_HANDLER_LOG_MSG.REMOVE_GROUP_VERDICT, {
     partitionId: request.partitionId, replicaId: request.replicaId,
-    nodeId: handler.nodeId, groupVerdict});
+    nodeId: handler.nodeId, ...answers});
 }
 
 /**
