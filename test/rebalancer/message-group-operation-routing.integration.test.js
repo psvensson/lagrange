@@ -135,8 +135,11 @@ test('Message-group operation routing integration', async (t) => {
             entityId: opRow.entity_id,
             stepsHistory: [],
           }),
+          // The coordinator answers its execution result; an answer-less
+          // dispatch is an unsuccessful one the dispatch service recovers.
           executeOperation: async (operation) => {
             receivedOperation = operation;
+            return {success: true};
           },
         },
       });
@@ -233,8 +236,11 @@ test('Message-group operation routing integration', async (t) => {
             entityId: opRow.entity_id,
             stepsHistory: JSON.parse(opRow.steps_history),
           }),
+          // The coordinator answers its execution result; an answer-less
+          // dispatch is an unsuccessful one the dispatch service recovers.
           executeOperation: async (operation) => {
             receivedOperation = operation;
+            return {success: true};
           },
         },
       });
