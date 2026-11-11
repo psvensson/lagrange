@@ -218,7 +218,16 @@ test('the probe reports a typed failure when nothing listens', async () => {
   const result = await runLinkProbeClient({host: LOOPBACK, port: free, pings: 1,
     capBytes: 10, capMs: 10});
   assert.equal(result.outcome, PROBE_OUTCOME.UNAVAILABLE);
-  assert.equal(result.reason, PROBE_UNAVAILABLE_REASON.CONNECT_FAILED);
+  // Where nothing listens the kernel refuses the connect. A WSL2 host in
+  // mirrored networking (carinas-windows) accepts a loopback connect to a
+  // closed port and resets it at once: the connection was made, so the probe
+  // names the failure after connect. The reason follows the error observed.
+  const reasonOfError = {
+    ECONNREFUSED: PROBE_UNAVAILABLE_REASON.CONNECT_FAILED,
+    ECONNRESET: PROBE_UNAVAILABLE_REASON.CONNECTION_FAILED,
+  };
+  assert.ok(Object.hasOwn(reasonOfError, result.detail), result.detail);
+  assert.equal(result.reason, reasonOfError[result.detail]);
 });
 
 test('TCP segment counters are null where the kernel exposes none', () => {

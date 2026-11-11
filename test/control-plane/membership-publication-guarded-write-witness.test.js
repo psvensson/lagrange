@@ -39,7 +39,7 @@ import {
 } from '../../src/control-plane/membership-publication-row-changes.js';
 import {
   MEMBERSHIP_PUBLICATION_WRITE_REFUSAL,
-} from '../../src/control-plane/membership-publication-write-refusal.js';
+} from '../../src/control-plane/membership-publication-coordinator-persist.js';
 import {
   MEMBERSHIP_PUBLICATION_WRITE_HOLD,
 } from '../../src/control-plane/membership-publication-reconcile-write.js';

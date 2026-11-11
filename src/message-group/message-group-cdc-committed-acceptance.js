@@ -424,5 +424,5 @@ function retireCdcCommitWaiters(service) {
   service.cdcCommitWaiters.release(() => unknownCdcAcceptance());
 }
 
-export {applyDurableCdcBatch, positionGapAcceptance, registerCdcCommittedAcceptance,
+export {applyDurableCdcBatch, registerCdcCommittedAcceptance,
   retireCdcCommitWaiters};

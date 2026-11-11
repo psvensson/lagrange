@@ -3,7 +3,7 @@ import {
   applyCountBaseline,
   buildGuidelineViolationReport,
   loadCountBaseline,
-  writeCountBaseline,
+  writeTightenedCountBaseline,
   classifyFilePath,
   formatGuidelineHumanSummary,
   parseSourceFile,
@@ -11,7 +11,7 @@ import {
   runGuidelineCheckWhenDirect,
   walkAst,
 } from './guideline-check-shared.js';
-import {SCRIPT_TEXT} from './guideline-check-constants.js';
+import {EXIT_CODE, SCRIPT_TEXT} from './guideline-check-constants.js';
 
 const LOCAL_STR_LITERAL = 'Literal';
 const LOCAL_STR_STRING = 'string';
@@ -103,7 +103,6 @@ const LITERAL_BASELINE_FILE_URL = new URL(
   './check-guideline-literals-baseline.json',
   import.meta.url,
 );
-const NUMERIC_LITERAL_ZERO = 0;
 
 function isLiteralNode(node) {
   return node?.type === LOCAL_STR_LITERAL &&
@@ -303,12 +302,13 @@ async function main(argv = process.argv.slice(LOCAL_NUM_TWO)) {
       argv.filter((arg) => arg !== UPDATE_BASELINE_FLAG),
       {},
     );
-    await writeCountBaseline(
+    const {newSiteCount} = await writeTightenedCountBaseline(
       LITERAL_BASELINE_FILE_URL,
       report,
       'literal-guideline',
+      buildLiteralViolationIdentity,
     );
-    return NUMERIC_LITERAL_ZERO;
+    return newSiteCount > 0 ? EXIT_CODE.FAILURE : EXIT_CODE.SUCCESS;
   }
   return runGuidelineCheck(
     argv,

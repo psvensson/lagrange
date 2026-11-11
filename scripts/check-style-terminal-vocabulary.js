@@ -15,8 +15,9 @@ import {
   loadCountBaseline,
   runGuidelineCheck,
   runGuidelineCheckWhenDirect,
-  writeCountBaseline,
+  writeTightenedCountBaseline,
 } from './guideline-check-shared.js';
+import {EXIT_CODE} from './guideline-check-constants.js';
 
 const RULE_REFERENCE =
   'STYLE-0012: terminalize is not a word — an operation/handoff terminates; ' +
@@ -135,12 +136,13 @@ async function main(argv = process.argv.slice(NUMERIC_LITERAL_TWO)) {
       argv.filter((arg) => arg !== UPDATE_BASELINE_FLAG),
       {},
     );
-    await writeCountBaseline(
+    const {newSiteCount} = await writeTightenedCountBaseline(
       TERMINAL_VOCABULARY_BASELINE_FILE_URL,
       report,
       'terminal-vocabulary',
+      buildTerminalVocabularyViolationIdentity,
     );
-    return NUMERIC_LITERAL_ZERO;
+    return newSiteCount > 0 ? EXIT_CODE.FAILURE : EXIT_CODE.SUCCESS;
   }
   return runGuidelineCheck(
     argv,

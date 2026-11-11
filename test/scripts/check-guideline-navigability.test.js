@@ -267,6 +267,25 @@ test('--update-baseline never raises a recorded count', (t) => {
     fs.readFileSync(baselineFile(root, 'catch_returns_default'), ENCODING), before);
 });
 
+test('--update-baseline never writes a new site in place of a removed one', (t) => {
+  const root = fixture(t);
+  assert.equal(audit(root, ['--update-baseline']).status, 0);
+  // One owner-port site goes and another appears: the count is unchanged.
+  write(root, 'src/alpha.js', ALPHA_SOURCE.replace(
+    '  mark_owner_port_feature_detection();\n}', '}'));
+  write(root, 'src/gamma.js', 'function grow() { mark_owner_port_feature_detection(); }\n');
+  const result = audit(root, ['--update-baseline']);
+  assert.equal(result.status, 1, result.stdout);
+  assert.match(result.stderr,
+    /1 navigability owner_port_feature_detection site\(s\) the baseline does not allow/);
+  const baseline = readBaseline(root, 'owner_port_feature_detection');
+  assert.equal(baseline.rawViolationCount, 1);
+  assert.ok(baseline.violations.every((v) => v.filePath !== 'src/gamma.js'));
+  const check = audit(root, []);
+  assert.equal(check.status, 1, check.stdout);
+  assert.match(check.stdout, /src\/gamma\.js:\d+ grow owner_port_feature_detection/);
+});
+
 test('--pattern limits scanning and baseline writes to one row', (t) => {
   const root = fixture(t);
   const report = auditJson(root, ['--pattern', 'catch_returns_default']);

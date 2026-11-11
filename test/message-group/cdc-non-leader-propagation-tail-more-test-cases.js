@@ -32,6 +32,35 @@ let testPortCounter = 27200;
 const NON_SYSTEM_CDC_TABLE = 'runtime_forward_events';
 
 
+// One message group on its own live router; both are shut down after the body.
+async function withRouterGroup({groupId, replica = 'r1', now}, body) {
+  const port = testPortCounter++;
+  const nodeId = `test-node-${port}`;
+  const router = new MessageRouter({
+    bootIncarnation: TEST_BOOT_INCARNATION,
+    nodeId, wsPort: port});
+  await router.initialize({startServer: true});
+  const consensus = new ControllableConsensusPort();
+  const mg = createControllableMessageGroupService({
+    groupId,
+    replicaId: `${groupId}-${replica}`,
+    nodeId,
+    transport: router,
+    ...(now ? {now} : {}),
+  }, consensus);
+  try {
+    await mg.initialize();
+    return await body({mg, router, consensus, nodeId});
+  } finally {
+    try {
+      if (mg.raft) await mg.shutdown();
+    } finally {
+      await router.shutdown();
+    }
+  }
+}
+
+
 
 export function registerCdcNonLeaderPropagationTailMoreTests({
   test,
@@ -39,40 +68,9 @@ export function registerCdcNonLeaderPropagationTailMoreTests({
   test(
     'applyCDCEvent temporarily suppresses queue-saturated forward targets across commands',
     async (t) => {
-      const port = testPortCounter++;
-      const nodeId = `test-node-${port}`;
       let nowMs = 0;
-      const router = new MessageRouter({
-        bootIncarnation: TEST_BOOT_INCARNATION,
-        nodeId, wsPort: port});
-      await router.initialize({startServer: true});
-
-      let shutdownCalled = false;
-      const cleanup = async () => {
-        if (shutdownCalled) return;
-        shutdownCalled = true;
-        try {
-          if (mg && mg.raft) {
-            await mg.shutdown();
-          }
-        } catch (_e) {
-          // best-effort
-        }
-        await router.shutdown();
-      };
-
-      let mg;
-
-      const consensus = new ControllableConsensusPort();
-      try {
-        mg = createControllableMessageGroupService({
-          groupId: 'mg-backpressure-suppress',
-          replicaId: 'mg-backpressure-suppress-r1',
-          nodeId,
-          transport: router,
-          now: () => nowMs,
-        }, consensus);
-        await mg.initialize();
+      await withRouterGroup({groupId: 'mg-backpressure-suppress', now: () => nowMs},
+        async ({mg, router, consensus}) => {
         mg.replicaIds = [
           'mg-backpressure-suppress-r1',
           'mg-backpressure-suppress-r2',
@@ -150,47 +148,14 @@ export function registerCdcNonLeaderPropagationTailMoreTests({
           ],
           'queue-saturation suppression should expire so the preferred target can be retried',
         );
-      } finally {
-        await cleanup();
-      }
+      });
     },
   );
 
   test(
     'applyCDCEvent fails fast when every known peer is already suppressed',
     async (t) => {
-      const port = testPortCounter++;
-      const nodeId = `test-node-${port}`;
-      const router = new MessageRouter({
-        bootIncarnation: TEST_BOOT_INCARNATION,
-        nodeId, wsPort: port});
-      await router.initialize({startServer: true});
-
-      let shutdownCalled = false;
-      const cleanup = async () => {
-        if (shutdownCalled) return;
-        shutdownCalled = true;
-        try {
-          if (mg && mg.raft) {
-            await mg.shutdown();
-          }
-        } catch (_e) {
-          // best-effort
-        }
-        await router.shutdown();
-      };
-
-      let mg;
-
-      const consensus = new ControllableConsensusPort();
-      try {
-        mg = createControllableMessageGroupService({
-          groupId: 'mg-all-suppressed',
-          replicaId: 'mg-all-suppressed-r1',
-          nodeId,
-          transport: router,
-        }, consensus);
-        await mg.initialize();
+      await withRouterGroup({groupId: 'mg-all-suppressed'}, async ({mg, router, consensus}) => {
         mg.replicaIds = [
           'mg-all-suppressed-r1',
           'mg-all-suppressed-r2',
@@ -248,47 +213,14 @@ export function registerCdcNonLeaderPropagationTailMoreTests({
           [],
           'fully suppressed leader sets should fail without consuming the outer retry budget',
         );
-      } finally {
-        await cleanup();
-      }
+      });
     },
   );
 
   test(
     'applyCDCEvent does not redeliver fully suppressed timeout peers across retry budget',
     async (t) => {
-      const port = testPortCounter++;
-      const nodeId = `test-node-${port}`;
-      const router = new MessageRouter({
-        bootIncarnation: TEST_BOOT_INCARNATION,
-        nodeId, wsPort: port});
-      await router.initialize({startServer: true});
-
-      let shutdownCalled = false;
-      const cleanup = async () => {
-        if (shutdownCalled) return;
-        shutdownCalled = true;
-        try {
-          if (mg && mg.raft) {
-            await mg.shutdown();
-          }
-        } catch (_e) {
-          // best-effort
-        }
-        await router.shutdown();
-      };
-
-      let mg;
-
-      const consensus = new ControllableConsensusPort();
-      try {
-        mg = createControllableMessageGroupService({
-          groupId: 'mg-retry-suppressed',
-          replicaId: 'mg-retry-suppressed-r1',
-          nodeId,
-          transport: router,
-        }, consensus);
-        await mg.initialize();
+      await withRouterGroup({groupId: 'mg-retry-suppressed'}, async ({mg, router, consensus}) => {
         mg.replicaIds = [
           'mg-retry-suppressed-r1',
           'mg-retry-suppressed-r2',
@@ -336,9 +268,7 @@ export function registerCdcNonLeaderPropagationTailMoreTests({
           ],
           'suppressed peers should not be retried again during the same command budget',
         );
-      } finally {
-        await cleanup();
-      }
+      });
     },
   );
 
@@ -350,38 +280,7 @@ export function registerCdcNonLeaderPropagationTailMoreTests({
   test(
     'latency CDC received by non-leader relay-forwards once without local apply',
     async (t) => {
-      const port = testPortCounter++;
-      const nodeId = `test-node-${port}`;
-      const router = new MessageRouter({
-        bootIncarnation: TEST_BOOT_INCARNATION,
-        nodeId, wsPort: port});
-      await router.initialize({startServer: true});
-
-      let shutdownCalled = false;
-      const cleanup = async () => {
-        if (shutdownCalled) return;
-        shutdownCalled = true;
-        try {
-          if (mg && mg.raft) {
-            await mg.shutdown();
-          }
-        } catch (_e) {
-          // best-effort
-        }
-        await router.shutdown();
-      };
-
-      let mg;
-
-      const consensus = new ControllableConsensusPort();
-      try {
-        mg = createControllableMessageGroupService({
-          groupId: 'mg-relay',
-          replicaId: 'mg-relay-r1',
-          nodeId,
-          transport: router,
-        }, consensus);
-        await mg.initialize();
+      await withRouterGroup({groupId: 'mg-relay'}, async ({mg, router, consensus}) => {
         mg.replicaIds = ['mg-relay-r1', 'mg-relay-r2'];
         await mg.subscribeToCDC(NON_SYSTEM_CDC_TABLE);
 
@@ -430,47 +329,14 @@ export function registerCdcNonLeaderPropagationTailMoreTests({
         const cache = NodeService.getInstance().getSystemTableCache();
         const cached = cache.get(TABLES.PARTITIONS, 'relay-partition');
         t.equal(cached, undefined, 'non-leader should not apply relayed CDC locally');
-      } finally {
-        await cleanup();
-      }
+      });
     },
   );
 
   test(
     'latency CDC batch received by leader applies all events locally',
     async (t) => {
-      const port = testPortCounter++;
-      const nodeId = `test-node-${port}`;
-      const router = new MessageRouter({
-        bootIncarnation: TEST_BOOT_INCARNATION,
-        nodeId, wsPort: port});
-      await router.initialize({startServer: true});
-
-      let shutdownCalled = false;
-      const cleanup = async () => {
-        if (shutdownCalled) return;
-        shutdownCalled = true;
-        try {
-          if (mg && mg.raft) {
-            await mg.shutdown();
-          }
-        } catch (_e) {
-          // best-effort
-        }
-        await router.shutdown();
-      };
-
-      let mg;
-
-      const consensus = new ControllableConsensusPort();
-      try {
-        mg = createControllableMessageGroupService({
-          groupId: 'mg-batch-leader',
-          replicaId: 'mg-batch-leader-r1',
-          nodeId,
-          transport: router,
-        }, consensus);
-        await mg.initialize();
+      await withRouterGroup({groupId: 'mg-batch-leader'}, async ({mg, consensus}) => {
         mg.replicaIds = ['mg-batch-leader-r1'];
         mg.isLeader = true;
         mg.role = 'leader';
@@ -503,47 +369,14 @@ export function registerCdcNonLeaderPropagationTailMoreTests({
         const cache = NodeService.getInstance().getSystemTableCache();
         t.ok(cache.get(TABLES.PARTITIONS, 'batch-partition-1'));
         t.ok(cache.get(TABLES.PARTITIONS, 'batch-partition-2'));
-      } finally {
-        await cleanup();
-      }
+      });
     },
   );
 
   test(
     'latency CDC batch received by non-leader relay-forwards once without local apply',
     async (t) => {
-      const port = testPortCounter++;
-      const nodeId = `test-node-${port}`;
-      const router = new MessageRouter({
-        bootIncarnation: TEST_BOOT_INCARNATION,
-        nodeId, wsPort: port});
-      await router.initialize({startServer: true});
-
-      let shutdownCalled = false;
-      const cleanup = async () => {
-        if (shutdownCalled) return;
-        shutdownCalled = true;
-        try {
-          if (mg && mg.raft) {
-            await mg.shutdown();
-          }
-        } catch (_e) {
-          // best-effort
-        }
-        await router.shutdown();
-      };
-
-      let mg;
-
-      const consensus = new ControllableConsensusPort();
-      try {
-        mg = createControllableMessageGroupService({
-          groupId: 'mg-batch-relay',
-          replicaId: 'mg-batch-relay-r1',
-          nodeId,
-          transport: router,
-        }, consensus);
-        await mg.initialize();
+      await withRouterGroup({groupId: 'mg-batch-relay'}, async ({mg, router, consensus}) => {
         mg.replicaIds = ['mg-batch-relay-r1', 'mg-batch-relay-r2'];
         await mg.subscribeToCDC(NON_SYSTEM_CDC_TABLE);
 
@@ -593,47 +426,15 @@ export function registerCdcNonLeaderPropagationTailMoreTests({
           undefined,
           'follower should not apply relayed batch locally',
         );
-      } finally {
-        await cleanup();
-      }
+      });
     },
   );
 
   test(
     'latency CDC received by stale follower relay-forwards one extra hop to current leader',
     async (t) => {
-      const port = testPortCounter++;
-      const nodeId = `test-node-${port}`;
-      const router = new MessageRouter({
-        bootIncarnation: TEST_BOOT_INCARNATION,
-        nodeId, wsPort: port});
-      await router.initialize({startServer: true});
-
-      let shutdownCalled = false;
-      const cleanup = async () => {
-        if (shutdownCalled) return;
-        shutdownCalled = true;
-        try {
-          if (mg && mg.raft) {
-            await mg.shutdown();
-          }
-        } catch (_e) {
-          // best-effort
-        }
-        await router.shutdown();
-      };
-
-      let mg;
-
-      const consensus = new ControllableConsensusPort();
-      try {
-        mg = createControllableMessageGroupService({
-          groupId: 'mg-relay-stale',
-          replicaId: 'mg-relay-stale-r2',
-          nodeId,
-          transport: router,
-        }, consensus);
-        await mg.initialize();
+      await withRouterGroup({groupId: 'mg-relay-stale', replica: 'r2'},
+        async ({mg, router, consensus}) => {
         mg.replicaIds = [
           'mg-relay-stale-r1',
           'mg-relay-stale-r2',
@@ -691,47 +492,15 @@ export function registerCdcNonLeaderPropagationTailMoreTests({
           2,
           'extra relay should increment depth and remain bounded',
         );
-      } finally {
-        await cleanup();
-      }
+      });
     },
   );
 
   test(
     'latency CDC relay still fails closed once extra-hop budget is exhausted',
     async (t) => {
-      const port = testPortCounter++;
-      const nodeId = `test-node-${port}`;
-      const router = new MessageRouter({
-        bootIncarnation: TEST_BOOT_INCARNATION,
-        nodeId, wsPort: port});
-      await router.initialize({startServer: true});
-
-      let shutdownCalled = false;
-      const cleanup = async () => {
-        if (shutdownCalled) return;
-        shutdownCalled = true;
-        try {
-          if (mg && mg.raft) {
-            await mg.shutdown();
-          }
-        } catch (_e) {
-          // best-effort
-        }
-        await router.shutdown();
-      };
-
-      let mg;
-
-      const consensus = new ControllableConsensusPort();
-      try {
-        mg = createControllableMessageGroupService({
-          groupId: 'mg-relay-budget',
-          replicaId: 'mg-relay-budget-r2',
-          nodeId,
-          transport: router,
-        }, consensus);
-        await mg.initialize();
+      await withRouterGroup({groupId: 'mg-relay-budget', replica: 'r2'},
+        async ({mg, consensus}) => {
         mg.replicaIds = [
           'mg-relay-budget-r1',
           'mg-relay-budget-r2',
@@ -767,47 +536,14 @@ export function registerCdcNonLeaderPropagationTailMoreTests({
           /leader is unknown/i,
           'relay path should still fail closed after the bounded extra hop',
         );
-      } finally {
-        await cleanup();
-      }
+      });
     },
   );
 
   test(
     'applyCDCEvent on leader MG proposes to Raft without forwarding',
     async (_t) => {
-      const port = testPortCounter++;
-      const nodeId = `test-node-${port}`;
-      const router = new MessageRouter({
-        bootIncarnation: TEST_BOOT_INCARNATION,
-        nodeId, wsPort: port});
-      await router.initialize({startServer: true});
-
-      let shutdownCalled = false;
-      const cleanup = async () => {
-        if (shutdownCalled) return;
-        shutdownCalled = true;
-        try {
-          if (mg && mg.raft) {
-            await mg.shutdown();
-          }
-        } catch (_e) {
-          // best-effort
-        }
-        await router.shutdown();
-      };
-
-      let mg;
-
-      const consensus = new ControllableConsensusPort();
-      try {
-        mg = createControllableMessageGroupService({
-          groupId: 'mg-2',
-          replicaId: 'mg-2-r1',
-          nodeId,
-          transport: router,
-        }, consensus);
-        await mg.initialize();
+      await withRouterGroup({groupId: 'mg-2'}, async ({mg, router, consensus}) => {
         mg.replicaIds = ['mg-2-r1', 'mg-2-r2'];
 
         await mg.subscribeToCDC(TABLES.PARTITIONS);
@@ -856,9 +592,7 @@ export function registerCdcNonLeaderPropagationTailMoreTests({
         assert.equal(proposeCount, 1, 'Leader MG should propose CDC event via Raft');
 
         router.deliver = originalDeliver;
-      } finally {
-        await cleanup();
-      }
+      });
     },
   );
 
@@ -871,38 +605,7 @@ export function registerCdcNonLeaderPropagationTailMoreTests({
       // remote side also fails its own forward, error messages grow without
       // bound across retry cycles — eventually causing stack overflow or
       // memory exhaustion on the seed node.
-      const port = testPortCounter++;
-      const nodeId = `test-node-${port}`;
-      const router = new MessageRouter({
-        bootIncarnation: TEST_BOOT_INCARNATION,
-        nodeId, wsPort: port});
-      await router.initialize({startServer: true});
-
-      let shutdownCalled = false;
-      const cleanup = async () => {
-        if (shutdownCalled) return;
-        shutdownCalled = true;
-        try {
-          if (mg && mg.raft) {
-            await mg.shutdown();
-          }
-        } catch (_e) {
-          // best-effort
-        }
-        await router.shutdown();
-      };
-
-      let mg;
-
-      const consensus = new ControllableConsensusPort();
-      try {
-        mg = createControllableMessageGroupService({
-          groupId: 'mg-err-bound',
-          replicaId: 'mg-err-bound-r1',
-          nodeId,
-          transport: router,
-        }, consensus);
-        await mg.initialize();
+      await withRouterGroup({groupId: 'mg-err-bound'}, async ({mg, router, consensus, nodeId}) => {
         mg.replicaIds = ['mg-err-bound-r1', 'mg-err-bound-r2'];
         await mg.subscribeToCDC(NON_SYSTEM_CDC_TABLE);
 
@@ -965,9 +668,7 @@ export function registerCdcNonLeaderPropagationTailMoreTests({
             'error should still contain the forward failure reason',
           );
         }
-      } finally {
-        await cleanup();
-      }
+      });
     },
   );
 }

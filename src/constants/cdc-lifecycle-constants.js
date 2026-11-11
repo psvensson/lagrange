@@ -90,14 +90,6 @@ const CDC_PIPELINE_READINESS_SLEEP = (delayMs) =>
     new Promise((resolve) => setTimeout(resolve, delayMs)) :
     new Promise((resolve) => setTimeout(resolve, 0));
 
-// --- Cluster readiness condition names ---
-
-const CLUSTER_READINESS_CONDITION = Object.freeze({
-  CDC_PIPELINE_READY: 'cdcPipelineReady',
-  NODES_REGISTERED: 'nodesRegistered',
-  CACHE_HYDRATED: 'cacheHydrated',
-});
-
 export {
   CDC_CONFIRMATION_DEFAULT_TIMEOUT_MS,
   CDC_CONFIRMATION_ERROR_TYPE,
@@ -111,6 +103,5 @@ export {
   CDC_PIPELINE_READINESS_POLL_INTERVAL_MS,
   CDC_PIPELINE_READINESS_SLEEP,
   CDC_PIPELINE_READINESS_TIMEOUT_MS,
-  CLUSTER_READINESS_CONDITION,
   CLUSTER_READINESS_TIMEOUT_MS,
 };

@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-23T07:57:42.459Z",
-  "rawViolationCount": 87,
+  "generatedAt": "2026-11-11T22:34:01.161Z",
+  "rawViolationCount": 77,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-readiness-diagnostics-methods.js",
-      "line": 215,
+      "line": 216,
       "column": 8,
       "functionName": "resolveControlPlaneReadinessEntries",
       "kind": "silent_catch",
@@ -14,7 +14,7 @@
     },
     {
       "filePath": "src/admin/admin-test-run-lifecycle-methods.js",
-      "line": 541,
+      "line": 545,
       "column": 8,
       "functionName": "publishEvent",
       "kind": "silent_catch",
@@ -23,7 +23,7 @@
     },
     {
       "filePath": "src/admin/admin-websocket-api-base.js",
-      "line": 289,
+      "line": 338,
       "column": 6,
       "functionName": "initLogger",
       "kind": "silent_catch",
@@ -32,7 +32,7 @@
     },
     {
       "filePath": "src/admin/admin-websocket-api-base.js",
-      "line": 508,
+      "line": 589,
       "column": 8,
       "functionName": "<anonymous>",
       "kind": "silent_catch",
@@ -41,7 +41,7 @@
     },
     {
       "filePath": "src/admin/admin-websocket-api-base.js",
-      "line": 519,
+      "line": 600,
       "column": 8,
       "functionName": "handleDisconnection",
       "kind": "silent_catch",
@@ -49,17 +49,8 @@
       "ruleReference": "loud-by-construction guideline: a catch block with no statements (empty or comment-only) makes a failure path invisible to log-driven debugging. Runs 23-26 of the affinity demo each traced to a silent branch; every swallowed error must at least emit a typed log, bump a suppressed counter, or record a typed outcome."
     },
     {
-      "filePath": "src/admin/admin-websocket-lifecycle-methods.js",
-      "line": 80,
-      "column": 8,
-      "functionName": "shutdown",
-      "kind": "silent_catch",
-      "reason": "catch block swallows the error with no statements; emit a typed log, increment a suppressed counter, or record a typed outcome instead",
-      "ruleReference": "loud-by-construction guideline: a catch block with no statements (empty or comment-only) makes a failure path invisible to log-driven debugging. Runs 23-26 of the affinity demo each traced to a silent branch; every swallowed error must at least emit a typed log, bump a suppressed counter, or record a typed outcome."
-    },
-    {
       "filePath": "src/admin/admin-websocket-message-dispatch-methods.js",
-      "line": 86,
+      "line": 88,
       "column": 12,
       "functionName": "handleConnection",
       "kind": "silent_catch",
@@ -68,7 +59,7 @@
     },
     {
       "filePath": "src/admin/admin-websocket-message-dispatch-methods.js",
-      "line": 444,
+      "line": 332,
       "column": 10,
       "functionName": "sendToClient",
       "kind": "silent_catch",
@@ -95,7 +86,7 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-service-runtime-methods.js",
-      "line": 248,
+      "line": 290,
       "column": 8,
       "functionName": "_getSystemTableCacheSafe",
       "kind": "silent_catch",
@@ -113,7 +104,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js",
-      "line": 640,
+      "line": 618,
       "column": 8,
       "functionName": "buildMembershipPublicationPlanningSnapshot",
       "kind": "silent_catch",
@@ -122,7 +113,7 @@
     },
     {
       "filePath": "src/bootstrap/shared/meta-service-definition-registration.js",
-      "line": 190,
+      "line": 174,
       "column": 6,
       "functionName": "resolveEndpointAddress",
       "kind": "silent_catch",
@@ -131,7 +122,7 @@
     },
     {
       "filePath": "src/bootstrap/shared/meta-service-definition-registration.js",
-      "line": 234,
+      "line": 218,
       "column": 6,
       "functionName": "resolveEndpointPort",
       "kind": "silent_catch",
@@ -140,7 +131,7 @@
     },
     {
       "filePath": "src/cdc/cdc-integration-service-mutation-operations.js",
-      "line": 291,
+      "line": 283,
       "column": 12,
       "functionName": "<anonymous>",
       "kind": "silent_catch",
@@ -149,7 +140,7 @@
     },
     {
       "filePath": "src/cdc/cdc-integration-service-mutation-operations.js",
-      "line": 487,
+      "line": 451,
       "column": 12,
       "functionName": "<anonymous>",
       "kind": "silent_catch",
@@ -158,7 +149,7 @@
     },
     {
       "filePath": "src/cdc/cdc-routed-mutation-readiness.js",
-      "line": 617,
+      "line": 660,
       "column": 12,
       "functionName": "executeSQLViaQueryEngine",
       "kind": "silent_catch",
@@ -167,7 +158,7 @@
     },
     {
       "filePath": "src/cli/admin-cli-action-methods.js",
-      "line": 598,
+      "line": 549,
       "column": 8,
       "functionName": "<anonymous>",
       "kind": "silent_catch",
@@ -203,7 +194,7 @@
     },
     {
       "filePath": "src/config/raft-adaptive-timing-controller.js",
-      "line": 395,
+      "line": 438,
       "column": 8,
       "functionName": "loadConfig",
       "kind": "silent_catch",
@@ -212,7 +203,7 @@
     },
     {
       "filePath": "src/config/raft-adaptive-timing-controller.js",
-      "line": 404,
+      "line": 450,
       "column": 8,
       "functionName": "loadConfig",
       "kind": "silent_catch",
@@ -221,7 +212,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-publications-leadership.js",
-      "line": 84,
+      "line": 85,
       "column": 4,
       "functionName": "resolvePartitionRowLeadership",
       "kind": "silent_catch",
@@ -230,7 +221,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-publications-leadership.js",
-      "line": 103,
+      "line": 109,
       "column": 4,
       "functionName": "resolveServicesWitnessLeadership",
       "kind": "silent_catch",
@@ -257,7 +248,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reads.js",
-      "line": 656,
+      "line": 664,
       "column": 6,
       "functionName": "_emitMembershipSwimDivergence",
       "kind": "silent_catch",
@@ -266,7 +257,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reconcile.js",
-      "line": 754,
+      "line": 579,
       "column": 6,
       "functionName": "assertSingleMembershipPartition",
       "kind": "silent_catch",
@@ -293,7 +284,7 @@
     },
     {
       "filePath": "src/diagnostics/event-loop-gap-watchdog.js",
-      "line": 450,
+      "line": 478,
       "column": 8,
       "functionName": "stop",
       "kind": "silent_catch",
@@ -302,7 +293,7 @@
     },
     {
       "filePath": "src/entrypoint-runtime-admin-composition.js",
-      "line": 537,
+      "line": 557,
       "column": 6,
       "functionName": "shutdownEarlyAdminSqlRuntime",
       "kind": "silent_catch",
@@ -311,7 +302,7 @@
     },
     {
       "filePath": "src/entrypoint-runtime-admin-composition.js",
-      "line": 545,
+      "line": 565,
       "column": 6,
       "functionName": "shutdownEarlyAdminSqlRuntime",
       "kind": "silent_catch",
@@ -329,7 +320,7 @@
     },
     {
       "filePath": "src/function/function-query-executor.js",
-      "line": 57,
+      "line": 117,
       "column": 6,
       "functionName": "initLogger",
       "kind": "silent_catch",
@@ -347,7 +338,7 @@
     },
     {
       "filePath": "src/live-query/live-query-group.js",
-      "line": 93,
+      "line": 133,
       "column": 6,
       "functionName": "initLogger",
       "kind": "silent_catch",
@@ -356,7 +347,7 @@
     },
     {
       "filePath": "src/live-query/live-query-group.js",
-      "line": 213,
+      "line": 218,
       "column": 6,
       "functionName": "getPartitionKeyColumn",
       "kind": "silent_catch",
@@ -365,34 +356,16 @@
     },
     {
       "filePath": "src/live-query/live-query-manager.js",
-      "line": 95,
+      "line": 172,
       "column": 6,
       "functionName": "initLogger",
-      "kind": "silent_catch",
-      "reason": "catch block swallows the error with no statements; emit a typed log, increment a suppressed counter, or record a typed outcome instead",
-      "ruleReference": "loud-by-construction guideline: a catch block with no statements (empty or comment-only) makes a failure path invisible to log-driven debugging. Runs 23-26 of the affinity demo each traced to a silent branch; every swallowed error must at least emit a typed log, bump a suppressed counter, or record a typed outcome."
-    },
-    {
-      "filePath": "src/live-query/live-query-service.js",
-      "line": 416,
-      "column": 6,
-      "functionName": "initLogger",
-      "kind": "silent_catch",
-      "reason": "catch block swallows the error with no statements; emit a typed log, increment a suppressed counter, or record a typed outcome instead",
-      "ruleReference": "loud-by-construction guideline: a catch block with no statements (empty or comment-only) makes a failure path invisible to log-driven debugging. Runs 23-26 of the affinity demo each traced to a silent branch; every swallowed error must at least emit a typed log, bump a suppressed counter, or record a typed outcome."
-    },
-    {
-      "filePath": "src/live-query/live-query-service.js",
-      "line": 446,
-      "column": 6,
-      "functionName": "getPartitionKeyColumn",
       "kind": "silent_catch",
       "reason": "catch block swallows the error with no statements; emit a typed log, increment a suppressed counter, or record a typed outcome instead",
       "ruleReference": "loud-by-construction guideline: a catch block with no statements (empty or comment-only) makes a failure path invisible to log-driven debugging. Runs 23-26 of the affinity demo each traced to a silent branch; every swallowed error must at least emit a typed log, bump a suppressed counter, or record a typed outcome."
     },
     {
       "filePath": "src/live-query/live-query-startup-wiring.js",
-      "line": 151,
+      "line": 136,
       "column": 4,
       "functionName": "initLogger",
       "kind": "silent_catch",
@@ -401,7 +374,7 @@
     },
     {
       "filePath": "src/message-group/message-group-forwarding-owner-routing-methods.js",
-      "line": 73,
+      "line": 180,
       "column": 6,
       "functionName": "normalizeLeaderReplicaId",
       "kind": "silent_catch",
@@ -409,17 +382,8 @@
       "ruleReference": "loud-by-construction guideline: a catch block with no statements (empty or comment-only) makes a failure path invisible to log-driven debugging. Runs 23-26 of the affinity demo each traced to a silent branch; every swallowed error must at least emit a typed log, bump a suppressed counter, or record a typed outcome."
     },
     {
-      "filePath": "src/message-group/message-group-forwarding-owner-routing-methods.js",
-      "line": 99,
-      "column": 8,
-      "functionName": "resolveLivePeerAddressFromRaftNodes",
-      "kind": "silent_catch",
-      "reason": "catch block swallows the error with no statements; emit a typed log, increment a suppressed counter, or record a typed outcome instead",
-      "ruleReference": "loud-by-construction guideline: a catch block with no statements (empty or comment-only) makes a failure path invisible to log-driven debugging. Runs 23-26 of the affinity demo each traced to a silent branch; every swallowed error must at least emit a typed log, bump a suppressed counter, or record a typed outcome."
-    },
-    {
       "filePath": "src/message-group/message-group-forwarding-owner-target-methods.js",
-      "line": 98,
+      "line": 79,
       "column": 10,
       "functionName": "isLocalForwardTarget",
       "kind": "silent_catch",
@@ -427,17 +391,8 @@
       "ruleReference": "loud-by-construction guideline: a catch block with no statements (empty or comment-only) makes a failure path invisible to log-driven debugging. Runs 23-26 of the affinity demo each traced to a silent branch; every swallowed error must at least emit a typed log, bump a suppressed counter, or record a typed outcome."
     },
     {
-      "filePath": "src/message-group/message-group-forwarding-owner-target-methods.js",
-      "line": 128,
-      "column": 10,
-      "functionName": "resolveForwardTargetNodeId",
-      "kind": "silent_catch",
-      "reason": "catch block swallows the error with no statements; emit a typed log, increment a suppressed counter, or record a typed outcome instead",
-      "ruleReference": "loud-by-construction guideline: a catch block with no statements (empty or comment-only) makes a failure path invisible to log-driven debugging. Runs 23-26 of the affinity demo each traced to a silent branch; every swallowed error must at least emit a typed log, bump a suppressed counter, or record a typed outcome."
-    },
-    {
       "filePath": "src/migration/migration-coordinator-stage-methods.js",
-      "line": 497,
+      "line": 543,
       "column": 10,
       "functionName": "executeCutoverTransaction",
       "kind": "silent_catch",
@@ -446,7 +401,7 @@
     },
     {
       "filePath": "src/partition/partition-service-core-base.js",
-      "line": 723,
+      "line": 605,
       "column": 6,
       "functionName": "normalizeLeaderReplicaId",
       "kind": "silent_catch",
@@ -454,26 +409,8 @@
       "ruleReference": "loud-by-construction guideline: a catch block with no statements (empty or comment-only) makes a failure path invisible to log-driven debugging. Runs 23-26 of the affinity demo each traced to a silent branch; every swallowed error must at least emit a typed log, bump a suppressed counter, or record a typed outcome."
     },
     {
-      "filePath": "src/partition/partition-service-durability-fitness.js",
-      "line": 203,
-      "column": 8,
-      "functionName": "latchReadonlyWatermarkUnavailable",
-      "kind": "silent_catch",
-      "reason": "catch block swallows the error with no statements; emit a typed log, increment a suppressed counter, or record a typed outcome instead",
-      "ruleReference": "loud-by-construction guideline: a catch block with no statements (empty or comment-only) makes a failure path invisible to log-driven debugging. Runs 23-26 of the affinity demo each traced to a silent branch; every swallowed error must at least emit a typed log, bump a suppressed counter, or record a typed outcome."
-    },
-    {
-      "filePath": "src/partition/partition-service-durability-fitness.js",
-      "line": 215,
-      "column": 8,
-      "functionName": "closeLeaderDurabilityFitnessWitness",
-      "kind": "silent_catch",
-      "reason": "catch block swallows the error with no statements; emit a typed log, increment a suppressed counter, or record a typed outcome instead",
-      "ruleReference": "loud-by-construction guideline: a catch block with no statements (empty or comment-only) makes a failure path invisible to log-driven debugging. Runs 23-26 of the affinity demo each traced to a silent branch; every swallowed error must at least emit a typed log, bump a suppressed counter, or record a typed outcome."
-    },
-    {
       "filePath": "src/partition/partition-service-entry-apply-base.js",
-      "line": 939,
+      "line": 598,
       "column": 6,
       "functionName": "witnessCommandHlc",
       "kind": "silent_catch",
@@ -482,16 +419,7 @@
     },
     {
       "filePath": "src/partition/partition-service-write-metrics-base.js",
-      "line": 79,
-      "column": 10,
-      "functionName": "executeQuery",
-      "kind": "silent_catch",
-      "reason": "catch block swallows the error with no statements; emit a typed log, increment a suppressed counter, or record a typed outcome instead",
-      "ruleReference": "loud-by-construction guideline: a catch block with no statements (empty or comment-only) makes a failure path invisible to log-driven debugging. Runs 23-26 of the affinity demo each traced to a silent branch; every swallowed error must at least emit a typed log, bump a suppressed counter, or record a typed outcome."
-    },
-    {
-      "filePath": "src/partition/partition-service-write-metrics-base.js",
-      "line": 462,
+      "line": 521,
       "column": 8,
       "functionName": "proposeWrite",
       "kind": "silent_catch",
@@ -500,7 +428,7 @@
     },
     {
       "filePath": "src/partition/partition-service-write-metrics-base.js",
-      "line": 506,
+      "line": 577,
       "column": 10,
       "functionName": "proposeWrite",
       "kind": "silent_catch",
@@ -509,7 +437,7 @@
     },
     {
       "filePath": "src/partition/partition-service-write-metrics-base.js",
-      "line": 535,
+      "line": 606,
       "column": 10,
       "functionName": "proposeWrite",
       "kind": "silent_catch",
@@ -527,25 +455,7 @@
     },
     {
       "filePath": "src/query/partition-resolver.js",
-      "line": 57,
-      "column": 6,
-      "functionName": "initLogger",
-      "kind": "silent_catch",
-      "reason": "catch block swallows the error with no statements; emit a typed log, increment a suppressed counter, or record a typed outcome instead",
-      "ruleReference": "loud-by-construction guideline: a catch block with no statements (empty or comment-only) makes a failure path invisible to log-driven debugging. Runs 23-26 of the affinity demo each traced to a silent branch; every swallowed error must at least emit a typed log, bump a suppressed counter, or record a typed outcome."
-    },
-    {
-      "filePath": "src/query/partition-resolver.js",
-      "line": 286,
-      "column": 6,
-      "functionName": "getTableInfo",
-      "kind": "silent_catch",
-      "reason": "catch block swallows the error with no statements; emit a typed log, increment a suppressed counter, or record a typed outcome instead",
-      "ruleReference": "loud-by-construction guideline: a catch block with no statements (empty or comment-only) makes a failure path invisible to log-driven debugging. Runs 23-26 of the affinity demo each traced to a silent branch; every swallowed error must at least emit a typed log, bump a suppressed counter, or record a typed outcome."
-    },
-    {
-      "filePath": "src/query/query-executor-base.js",
-      "line": 111,
+      "line": 72,
       "column": 6,
       "functionName": "initLogger",
       "kind": "silent_catch",
@@ -554,7 +464,16 @@
     },
     {
       "filePath": "src/query/query-executor-base.js",
-      "line": 473,
+      "line": 139,
+      "column": 6,
+      "functionName": "initLogger",
+      "kind": "silent_catch",
+      "reason": "catch block swallows the error with no statements; emit a typed log, increment a suppressed counter, or record a typed outcome instead",
+      "ruleReference": "loud-by-construction guideline: a catch block with no statements (empty or comment-only) makes a failure path invisible to log-driven debugging. Runs 23-26 of the affinity demo each traced to a silent branch; every swallowed error must at least emit a typed log, bump a suppressed counter, or record a typed outcome."
+    },
+    {
+      "filePath": "src/query/query-executor-base.js",
+      "line": 507,
       "column": 6,
       "functionName": "executeSelect",
       "kind": "silent_catch",
@@ -563,7 +482,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-statement-execution.js",
-      "line": 500,
+      "line": 428,
       "column": 8,
       "functionName": "executeQuery",
       "kind": "silent_catch",
@@ -572,7 +491,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-statement-execution.js",
-      "line": 519,
+      "line": 450,
       "column": 8,
       "functionName": "executeQuery",
       "kind": "silent_catch",
@@ -581,7 +500,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-table-routing-methods.js",
-      "line": 192,
+      "line": 197,
       "column": 6,
       "functionName": "getTableInfo",
       "kind": "silent_catch",
@@ -590,7 +509,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-table-routing-methods.js",
-      "line": 356,
+      "line": 359,
       "column": 6,
       "functionName": "getPartitionInfo",
       "kind": "silent_catch",
@@ -608,7 +527,7 @@
     },
     {
       "filePath": "src/query/table-creation-service-class.js",
-      "line": 110,
+      "line": 112,
       "column": 6,
       "functionName": "initLogger",
       "kind": "silent_catch",
@@ -617,7 +536,7 @@
     },
     {
       "filePath": "src/query/table-creation-service-metadata-lookup.js",
-      "line": 206,
+      "line": 123,
       "column": 6,
       "functionName": "getPartitionKey",
       "kind": "silent_catch",
@@ -626,7 +545,7 @@
     },
     {
       "filePath": "src/query/table-creation-service-metadata-lookup.js",
-      "line": 237,
+      "line": 154,
       "column": 6,
       "functionName": "getTableSchema",
       "kind": "silent_catch",
@@ -634,17 +553,8 @@
       "ruleReference": "loud-by-construction guideline: a catch block with no statements (empty or comment-only) makes a failure path invisible to log-driven debugging. Runs 23-26 of the affinity demo each traced to a silent branch; every swallowed error must at least emit a typed log, bump a suppressed counter, or record a typed outcome."
     },
     {
-      "filePath": "src/query/wasm-call-adapter.js",
-      "line": 52,
-      "column": 6,
-      "functionName": "initLogger",
-      "kind": "silent_catch",
-      "reason": "catch block swallows the error with no statements; emit a typed log, increment a suppressed counter, or record a typed outcome instead",
-      "ruleReference": "loud-by-construction guideline: a catch block with no statements (empty or comment-only) makes a failure path invisible to log-driven debugging. Runs 23-26 of the affinity demo each traced to a silent branch; every swallowed error must at least emit a typed log, bump a suppressed counter, or record a typed outcome."
-    },
-    {
       "filePath": "src/raft/authoritative-row-mutation-helper.js",
-      "line": 574,
+      "line": 627,
       "column": 6,
       "functionName": "recoverFromObservedStateChanged",
       "kind": "silent_catch",
@@ -653,7 +563,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-transition-persistence.js",
-      "line": 429,
+      "line": 502,
       "column": 6,
       "functionName": "completeOperation",
       "kind": "silent_catch",
@@ -662,7 +572,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-transition-persistence.js",
-      "line": 590,
+      "line": 753,
       "column": 6,
       "functionName": "failOperation",
       "kind": "silent_catch",
@@ -671,7 +581,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-priority-recovery-coordination.js",
-      "line": 305,
+      "line": 307,
       "column": 6,
       "functionName": "enqueueMembershipPublicationReconcile",
       "kind": "silent_catch",
@@ -689,7 +599,7 @@
     },
     {
       "filePath": "src/runtime/endpoint-sync-source-client.js",
-      "line": 255,
+      "line": 298,
       "column": 10,
       "functionName": "<anonymous>",
       "kind": "silent_catch",
@@ -698,7 +608,7 @@
     },
     {
       "filePath": "src/runtime/endpoint-sync-source-client.js",
-      "line": 272,
+      "line": 315,
       "column": 10,
       "functionName": "finalize",
       "kind": "silent_catch",
@@ -725,7 +635,7 @@
     },
     {
       "filePath": "src/service/service-lifecycle-manager.js",
-      "line": 82,
+      "line": 111,
       "column": 6,
       "functionName": "_initLogger",
       "kind": "silent_catch",
@@ -734,7 +644,7 @@
     },
     {
       "filePath": "src/service/service-reconciler.js",
-      "line": 178,
+      "line": 205,
       "column": 6,
       "functionName": "_initLogger",
       "kind": "silent_catch",
@@ -743,7 +653,7 @@
     },
     {
       "filePath": "src/test-helpers/port-allocator.js",
-      "line": 207,
+      "line": 214,
       "column": 6,
       "functionName": "withAllocatorLock",
       "kind": "silent_catch",
@@ -752,7 +662,7 @@
     },
     {
       "filePath": "src/test-helpers/port-allocator.js",
-      "line": 250,
+      "line": 257,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "silent_catch",
@@ -761,7 +671,7 @@
     },
     {
       "filePath": "src/workflow/reconcile-queue-retry-ownership.js",
-      "line": 173,
+      "line": 178,
       "column": 4,
       "functionName": "clearRetryTimer",
       "kind": "silent_catch",
@@ -770,7 +680,7 @@
     },
     {
       "filePath": "src/workflow/reconcile-queue-retry-ownership.js",
-      "line": 214,
+      "line": 219,
       "column": 4,
       "functionName": "maybeUnrefTimer",
       "kind": "silent_catch",
@@ -779,7 +689,7 @@
     },
     {
       "filePath": "src/workflow/reconcile-queue-retry-ownership.js",
-      "line": 245,
+      "line": 250,
       "column": 8,
       "functionName": "scheduleRetryDrain",
       "kind": "silent_catch",

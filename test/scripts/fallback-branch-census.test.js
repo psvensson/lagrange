@@ -1402,9 +1402,11 @@ test('preload launch wrappers preserve promisify(exec/execFile) and sync error s
     '  (err) => err.status === 7 && String(err.stderr) === \'E7\' && err.message.endsWith(\'\\nE7\'));',
     'assert.throws(() => execSync(`${process.execPath} -e \'${fail}\'`, {stdio: \'pipe\'}),',
     '  (err) => err.status === 7 && String(err.stderr) === \'E7\' && err.message.endsWith(\'\\nE7\'));',
-    'const hang = \'process.stdout.write("PRE");setTimeout(()=>{},1000)\';',
+    // The child must have started and written PRE before the timeout kills
+    // it; a loaded host can take far longer than 80 ms just to start node.
+    'const hang = \'process.stdout.write("PRE");setInterval(()=>{},1000)\';',
     'assert.throws(() => execFileSync(process.execPath, [\'-e\', hang],',
-    '  {timeout: 80, stdio: \'pipe\'}),',
+    '  {timeout: 2000, stdio: \'pipe\'}),',
     '  (err) => err.code === \'ETIMEDOUT\' && err.signal === \'SIGTERM\' &&',
     '    String(err.stdout) === \'PRE\' && Array.isArray(err.output) && Number.isInteger(err.pid));',
   ].join('\n'));

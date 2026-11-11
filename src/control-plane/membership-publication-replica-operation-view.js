@@ -122,7 +122,5 @@ function consumeReplicaOperationView(owner, operation) {
 }
 
 export {
-  REPLICA_OPERATION_VIEW_STATE,
   consumeReplicaOperationView,
-  readReplicaOperationView,
 };

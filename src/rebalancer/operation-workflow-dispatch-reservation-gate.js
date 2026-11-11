@@ -152,5 +152,4 @@ async function ensureDispatchReservationOrSkip(owner, operation) {
 
 export {
   ensureDispatchReservationOrSkip,
-  isDispatchReservationGateEngaged,
 };

@@ -307,5 +307,5 @@ function registerSourceRelister(service) {
   return true;
 }
 
-export {SOURCE_RELIST_BOUND, SOURCE_RELIST_FAILURE, fetchSourceImage, registerSourceRelister,
+export {SOURCE_RELIST_FAILURE, fetchSourceImage, registerSourceRelister,
   relistSourceTable};

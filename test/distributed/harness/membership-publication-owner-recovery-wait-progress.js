@@ -42,7 +42,6 @@ function isOwnerRecoveryWaitProgress(progressSnapshot) {
 }
 
 export {
-  OWNER_RECOVERY_WAIT_OUTCOME_FIELD,
   isOwnerRecoveryWaitProgress,
   readOwnerRecoveryWaitOutcomeState,
 };

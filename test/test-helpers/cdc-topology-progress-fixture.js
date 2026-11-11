@@ -215,5 +215,5 @@ function omitTarget(f) {
 }
 
 export {BACKPRESSURE_RETRY_AFTER_MS, RESPONSE, SOURCE_GROUP, SOURCE_NODE, TARGET_GROUP, TARGET_NODE,
-  addRequiredGroup, addTopologySourceRow, assertDebtWithoutAck, groupRows, omitTarget, putGroup,
+  addRequiredGroup, addTopologySourceRow, assertDebtWithoutAck, omitTarget, putGroup,
   targetService, topologyProgressFixture, updateNode, updateTargetService};

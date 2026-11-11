@@ -215,8 +215,6 @@ const CONTROL_PLANE_ERROR_CODE_DECISION = Object.freeze({
     'the statement lacks a primary key'),
   [QUERY_ERROR_CODE.SYNTAX_ERROR]: codeDecision(PERMANENT,
     'the text does not parse'),
-  [QUERY_ERROR_CODE.TABLE_EXISTS]: codeDecision(UNCLASSIFIED,
-    'an idempotent re-create reads it; the caller decides'),
   [QUERY_ERROR_CODE.TABLE_NOT_FOUND]: codeDecision(UNCLASSIFIED,
     'a concurrent CREATE may make it appear; the caller decides'),
   [QUERY_ERROR_CODE.PARTITION_NOT_FOUND]: codeDecision(UNCLASSIFIED,

@@ -8,8 +8,6 @@ import {readFileSync, readdirSync} from 'node:fs';
 import {test} from '../../src/test-helpers/tap.js';
 import * as TRANSPORT_ERROR_CODES from
   '../../src/transport/transport-error-codes.js';
-import * as ROUTER_INVARIANT_ERROR_CODES from
-  '../../src/transport/transport-router-invariant-error-codes.js';
 import {
   TRANSPORT_ACKNOWLEDGEMENT as ACK,
   TRANSPORT_DELIVERY_OUTCOME_REASON_CODE as REASON,
@@ -31,8 +29,7 @@ import {ROUTER_ERROR_MSG, TRANSPORT_ERROR_MSG} from
 
 const OUTCOMES = new Set(Object.values(FAILURE));
 const ACKS = Object.values(ACK);
-const EMITTED_CODES = [...Object.values(TRANSPORT_ERROR_CODES),
-  ...Object.values(ROUTER_INVARIANT_ERROR_CODES)];
+const EMITTED_CODES = Object.values(TRANSPORT_ERROR_CODES);
 
 function assertRowDecided(t, table, key) {
   const row = Object.hasOwn(table, key) ? table[key] : null;

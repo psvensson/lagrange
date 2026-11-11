@@ -40,4 +40,4 @@ function createTableThroughDurableJob(service, ast, overrides = {}) {
   );
 }
 
-export {createTableThroughDurableJob, durableSchemaJob};
+export {createTableThroughDurableJob};

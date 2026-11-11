@@ -46,81 +46,90 @@ import {
   REMOTE_HANDOFF_TIMEOUT_OVERRUN_MS,
 } from './coordinator-created-operation-progress-remote-handoff-fixture-builders.js';
 
+// The replica_operations rows one remote-handoff test writes and reads back:
+// the authoritative read and the reservation-aware query both see them.
+function remoteHandoffRowStore() {
+  const operationRows = new Map();
+  const authoritativeRead = async (tableName, sql, params = []) => {
+    if (tableName === 'replica_operations' &&
+        String(sql).includes('WHERE operation_id = ?')) {
+      const row = operationRows.get(params[0]) || null;
+      return {
+        success: true,
+        rows: row ? [{...row}] : [],
+        affectedRows: row ? 1 : 0,
+      };
+    }
+    return {
+      success: true,
+      rows: [],
+      affectedRows: 0,
+    };
+  };
+  // The status/step UPDATE (and its compare-and-set) is the shared CAS
+  // store's, routed before the read match its WHERE would otherwise hit.
+  const executeQuery = withReplicaOperationsCas({
+    readRow: (operationId) => operationRows.get(operationId) || null,
+  }, async (sql, params = []) => {
+    const normalizedSql = String(sql);
+    if (normalizedSql.includes('WHERE operation_id = ?')) {
+      const row = operationRows.get(params[0]) || null;
+      return {
+        success: true,
+        rows: row ? [{...row}] : [],
+        affectedRows: row ? 1 : 0,
+      };
+    }
+    if (normalizedSql.includes('WHERE partition_id = ? AND target_node_id = ?')) {
+      return {success: true, rows: [], affectedRows: 0};
+    }
+    if (normalizedSql.includes('WHERE (') &&
+        normalizedSql.includes('entity_type = ?') &&
+        normalizedSql.includes('entity_id = ?')) {
+      return {success: true, rows: [], affectedRows: 0};
+    }
+    if (normalizedSql.includes('replica_operations') &&
+        normalizedSql.includes('VALUES')) {
+      const row = {
+        operation_id: params[0],
+        type: params[1],
+        partition_id: params[2],
+        replica_id: params[3],
+        target_claim_key: params[4],
+        source_node_id: params[5],
+        target_node_id: params[6],
+        status: params[7],
+        workflow_step: params[8],
+        created_at: params[9],
+        updated_at: params[10],
+        completed_at: params[11],
+        error_message: params[12],
+        steps_history: params[13],
+        entity_type: params[14],
+        entity_id: params[15],
+      };
+      operationRows.set(row.operation_id, row);
+      return {success: true, affectedRows: 1};
+    }
+    return {success: true, rows: [], affectedRows: 0};
+  });
+
+  return {
+    operationRows,
+    authoritativeRead,
+    executeQuery: withSuccessfulStorageReservationInsert(executeQuery),
+  };
+}
+
 export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
   test,
 }) {
   test('createOperation retries coordinator-created handoff for remote-owned ' +
     'priority REPLACE operations until the canonical owner wake-up succeeds',
   async (t) => {
-    const operationRows = new Map();
     const deferredTimers = [];
     const deliveries = [];
-    const authoritativeRead = async (tableName, sql, params = []) => {
-      if (tableName === 'replica_operations' &&
-          String(sql).includes('WHERE operation_id = ?')) {
-        const row = operationRows.get(params[0]) || null;
-        return {
-          success: true,
-          rows: row ? [{...row}] : [],
-          affectedRows: row ? 1 : 0,
-        };
-      }
-      return {
-        success: true,
-        rows: [],
-        affectedRows: 0,
-      };
-    };
-    // The status/step UPDATE (and its compare-and-set) is the shared CAS
-    // store's, routed before the read match its WHERE would otherwise hit.
-    const executeQuery = withReplicaOperationsCas({
-      readRow: (operationId) => operationRows.get(operationId) || null,
-    }, async (sql, params = []) => {
-      const normalizedSql = String(sql);
-      if (normalizedSql.includes('WHERE operation_id = ?')) {
-        const row = operationRows.get(params[0]) || null;
-        return {
-          success: true,
-          rows: row ? [{...row}] : [],
-          affectedRows: row ? 1 : 0,
-        };
-      }
-      if (normalizedSql.includes('WHERE partition_id = ? AND target_node_id = ?')) {
-        return {success: true, rows: [], affectedRows: 0};
-      }
-      if (normalizedSql.includes('WHERE (') &&
-          normalizedSql.includes('entity_type = ?') &&
-          normalizedSql.includes('entity_id = ?')) {
-        return {success: true, rows: [], affectedRows: 0};
-      }
-      if (normalizedSql.includes('replica_operations') &&
-          normalizedSql.includes('VALUES')) {
-        const row = {
-          operation_id: params[0],
-          type: params[1],
-          partition_id: params[2],
-          replica_id: params[3],
-          target_claim_key: params[4],
-          source_node_id: params[5],
-          target_node_id: params[6],
-          status: params[7],
-          workflow_step: params[8],
-          created_at: params[9],
-          updated_at: params[10],
-          completed_at: params[11],
-          error_message: params[12],
-          steps_history: params[13],
-          entity_type: params[14],
-          entity_id: params[15],
-        };
-        operationRows.set(row.operation_id, row);
-        return {success: true, affectedRows: 1};
-      }
-      return {success: true, rows: [], affectedRows: 0};
-    });
-
-    const reservationAwareExecuteQuery =
-      withSuccessfulStorageReservationInsert(executeQuery);
+    const {operationRows, authoritativeRead, executeQuery} = remoteHandoffRowStore();
     let deliveryAttempt = 0;
     const deliver = async (target, payload) => {
       deliveries.push({target, payload});
@@ -137,7 +146,7 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
       authoritativeRead,
       deferredTimers,
       deliver,
-      executeQuery: reservationAwareExecuteQuery,
+      executeQuery,
     });
 
     try {
@@ -333,144 +342,19 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
   test('createOperation re-arms acknowledged remote handoff while the ' +
     'authoritative priority REPLACE row remains dispatchable',
   async (t) => {
-    const operationRows = new Map();
     const deferredTimers = [];
     const deliveries = [];
 
-    const authoritativeRead = async (tableName, sql, params = []) => {
-      if (tableName === 'replica_operations' &&
-          String(sql).includes('WHERE operation_id = ?')) {
-        const row = operationRows.get(params[0]) || null;
-        return {
-          success: true,
-          rows: row ? [{...row}] : [],
-          affectedRows: row ? 1 : 0,
-        };
-      }
-      return {
-        success: true,
-        rows: [],
-        affectedRows: 0,
-      };
-    };
-    // The status/step UPDATE (and its compare-and-set) is the shared CAS
-    // store's, routed before the read match its WHERE would otherwise hit.
-    const executeQuery = withReplicaOperationsCas({
-      readRow: (operationId) => operationRows.get(operationId) || null,
-    }, async (sql, params = []) => {
-      const normalizedSql = String(sql);
-      if (normalizedSql.includes('WHERE operation_id = ?')) {
-        const row = operationRows.get(params[0]) || null;
-        return {
-          success: true,
-          rows: row ? [{...row}] : [],
-          affectedRows: row ? 1 : 0,
-        };
-      }
-      if (normalizedSql.includes('WHERE partition_id = ? AND target_node_id = ?')) {
-        return {success: true, rows: [], affectedRows: 0};
-      }
-      if (normalizedSql.includes('WHERE (') &&
-          normalizedSql.includes('entity_type = ?') &&
-          normalizedSql.includes('entity_id = ?')) {
-        return {success: true, rows: [], affectedRows: 0};
-      }
-      if (normalizedSql.includes('replica_operations') &&
-          normalizedSql.includes('VALUES')) {
-        const row = {
-          operation_id: params[0],
-          type: params[1],
-          partition_id: params[2],
-          replica_id: params[3],
-          target_claim_key: params[4],
-          source_node_id: params[5],
-          target_node_id: params[6],
-          status: params[7],
-          workflow_step: params[8],
-          created_at: params[9],
-          updated_at: params[10],
-          completed_at: params[11],
-          error_message: params[12],
-          steps_history: params[13],
-          entity_type: params[14],
-          entity_id: params[15],
-        };
-        operationRows.set(row.operation_id, row);
-        return {success: true, affectedRows: 1};
-      }
-      return {success: true, rows: [], affectedRows: 0};
+    const {operationRows, authoritativeRead, executeQuery} = remoteHandoffRowStore();
+    const coordinator = createRemoteHandoffCoordinator({
+      authoritativeRead,
+      deferredTimers,
+      deliver: async (target, payload) => {
+        deliveries.push({target, payload});
+        return buildDeliveryEnvelope({acknowledged: true});
+      },
+      executeQuery,
     });
-
-    const reservationAwareExecuteQuery =
-      withSuccessfulStorageReservationInsert(executeQuery);
-    const coordinator = new RebalanceCoordinator({
-      nodeId: 'node-source',
-      systemTableCache: {
-        get() {
-          return null;
-        },
-        getAll() {
-          return [];
-        },
-        filter() {
-          return [];
-        },
-      },
-      cdcIntegrationService: {
-        async executeAuthoritativeSystemTableRead(
-          tableName,
-          sql,
-          params,
-        ) {
-          return authoritativeRead(tableName, sql, params);
-        },
-      },
-      controlPlaneSystemTableGateway: {
-        async readRows(tableName, sql, params = []) {
-          return authoritativeRead(tableName, sql, params);
-        },
-        async readAuthoritativeRows(tableName, sql, params = []) {
-          return authoritativeRead(tableName, sql, params);
-        },
-        async executeQuery(sql, params = []) {
-          return reservationAwareExecuteQuery(sql, params);
-        },
-      },
-      sqlQueryEngine: {
-        async executeQuery(sql, params = []) {
-          return reservationAwareExecuteQuery(sql, params);
-        },
-      },
-      tablePolicyService: {
-        async getPolicyForPartition() {
-          return {targetReplicaCount: 3, minReplicaCount: 1};
-        },
-      },
-      storageAccountingService: {
-        estimateReplicaBytes() {
-          return 1024;
-        },
-      },
-      storageAdmissionService: createAllowAllStorageAdmissionService(),
-      messageRouter: {
-        async deliver(target, payload) {
-          deliveries.push({target, payload});
-          return buildDeliveryEnvelope({acknowledged: true});
-        },
-      },
-      controlPlaneReadinessService: createMockControlPlaneReadinessService({
-        defaultRepairEligible: true,
-      }),
-      transactionCoordinator: createMockTransactionCoordinator(),
-      setTimeoutFn(fn, delayMs) {
-        const handle = {fn, delayMs};
-        deferredTimers.push(handle);
-        return handle;
-      },
-      clearTimeoutFn() {},
-      enableTimeouts: false,
-    });
-    coordinator.initialize();
 
     try {
       const operation = await coordinator.createOperation({
@@ -522,147 +406,22 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
   test('createOperation continues re-arming acknowledged remote handoff after ' +
     'durable PENDING timeout until operation budget exhaustion',
   async (t) => {
-    const operationRows = new Map();
     const deferredTimers = [];
     const deliveries = [];
     let nowMs = REMOTE_HANDOFF_TEST_INITIAL_NOW_MS;
     const originalDateNow = Date.now;
     Date.now = () => nowMs;
 
-    const authoritativeRead = async (tableName, sql, params = []) => {
-      if (tableName === 'replica_operations' &&
-          String(sql).includes('WHERE operation_id = ?')) {
-        const row = operationRows.get(params[0]) || null;
-        return {
-          success: true,
-          rows: row ? [{...row}] : [],
-          affectedRows: row ? 1 : 0,
-        };
-      }
-      return {
-        success: true,
-        rows: [],
-        affectedRows: 0,
-      };
-    };
-    // The status/step UPDATE (and its compare-and-set) is the shared CAS
-    // store's, routed before the read match its WHERE would otherwise hit.
-    const executeQuery = withReplicaOperationsCas({
-      readRow: (operationId) => operationRows.get(operationId) || null,
-    }, async (sql, params = []) => {
-      const normalizedSql = String(sql);
-      if (normalizedSql.includes('WHERE operation_id = ?')) {
-        const row = operationRows.get(params[0]) || null;
-        return {
-          success: true,
-          rows: row ? [{...row}] : [],
-          affectedRows: row ? 1 : 0,
-        };
-      }
-      if (normalizedSql.includes('WHERE partition_id = ? AND target_node_id = ?')) {
-        return {success: true, rows: [], affectedRows: 0};
-      }
-      if (normalizedSql.includes('WHERE (') &&
-          normalizedSql.includes('entity_type = ?') &&
-          normalizedSql.includes('entity_id = ?')) {
-        return {success: true, rows: [], affectedRows: 0};
-      }
-      if (normalizedSql.includes('replica_operations') &&
-          normalizedSql.includes('VALUES')) {
-        const row = {
-          operation_id: params[0],
-          type: params[1],
-          partition_id: params[2],
-          replica_id: params[3],
-          target_claim_key: params[4],
-          source_node_id: params[5],
-          target_node_id: params[6],
-          status: params[7],
-          workflow_step: params[8],
-          created_at: params[9],
-          updated_at: params[10],
-          completed_at: params[11],
-          error_message: params[12],
-          steps_history: params[13],
-          entity_type: params[14],
-          entity_id: params[15],
-        };
-        operationRows.set(row.operation_id, row);
-        return {success: true, affectedRows: 1};
-      }
-      return {success: true, rows: [], affectedRows: 0};
+    const {authoritativeRead, executeQuery} = remoteHandoffRowStore();
+    const coordinator = createRemoteHandoffCoordinator({
+      authoritativeRead,
+      deferredTimers,
+      deliver: async (target, payload) => {
+        deliveries.push({target, payload});
+        return buildDeliveryEnvelope({acknowledged: true});
+      },
+      executeQuery,
     });
-
-    const reservationAwareExecuteQuery =
-      withSuccessfulStorageReservationInsert(executeQuery);
-    const coordinator = new RebalanceCoordinator({
-      nodeId: 'node-source',
-      systemTableCache: {
-        get() {
-          return null;
-        },
-        getAll() {
-          return [];
-        },
-        filter() {
-          return [];
-        },
-      },
-      cdcIntegrationService: {
-        async executeAuthoritativeSystemTableRead(
-          tableName,
-          sql,
-          params,
-        ) {
-          return authoritativeRead(tableName, sql, params);
-        },
-      },
-      controlPlaneSystemTableGateway: {
-        async readRows(tableName, sql, params = []) {
-          return authoritativeRead(tableName, sql, params);
-        },
-        async readAuthoritativeRows(tableName, sql, params = []) {
-          return authoritativeRead(tableName, sql, params);
-        },
-        async executeQuery(sql, params = []) {
-          return reservationAwareExecuteQuery(sql, params);
-        },
-      },
-      sqlQueryEngine: {
-        async executeQuery(sql, params = []) {
-          return reservationAwareExecuteQuery(sql, params);
-        },
-      },
-      tablePolicyService: {
-        async getPolicyForPartition() {
-          return {targetReplicaCount: 3, minReplicaCount: 1};
-        },
-      },
-      storageAccountingService: {
-        estimateReplicaBytes() {
-          return 1024;
-        },
-      },
-      storageAdmissionService: createAllowAllStorageAdmissionService(),
-      messageRouter: {
-        async deliver(target, payload) {
-          deliveries.push({target, payload});
-          return buildDeliveryEnvelope({acknowledged: true});
-        },
-      },
-      controlPlaneReadinessService: createMockControlPlaneReadinessService({
-        defaultRepairEligible: true,
-      }),
-      transactionCoordinator: createMockTransactionCoordinator(),
-      setTimeoutFn(fn, delayMs) {
-        const handle = {fn, delayMs};
-        deferredTimers.push(handle);
-        return handle;
-      },
-      clearTimeoutFn() {},
-      enableTimeouts: false,
-    });
-    coordinator.initialize();
 
     try {
       const operation = await coordinator.createOperation({

@@ -66,7 +66,7 @@ const PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_OTHER_OWNER_KEY =
 const PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_BOUND = 1;
 const PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_RETRY_AFTER_MS = 1000;
 const PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_EMPTY_ENQUEUE_COUNT = 0;
-const PUBLICATION_CONVERGENCE_DEFERRED_SKIP_WRITE_READBACK = true;
+const PUBLICATION_CONVERGENCE_RETAINED_CONTEXT_MARKER = true;
 const PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_OUTCOME_ENQUEUED =
   'enqueued';
 const PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_OUTCOME_MERGED =
@@ -339,8 +339,8 @@ test('enqueueClusterMembershipReconcile lets handoff-only owner wake clear stale
             PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
               .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
         },
-        skipPublicationWriteReadback:
-          PUBLICATION_CONVERGENCE_DEFERRED_SKIP_WRITE_READBACK,
+        retainedContextMarker:
+          PUBLICATION_CONVERGENCE_RETAINED_CONTEXT_MARKER,
       },
     );
 
@@ -387,9 +387,9 @@ test('enqueueClusterMembershipReconcile lets handoff-only owner wake clear stale
       'handoff-only owner wake should not inherit stale preloaded rows',
     );
     t.equal(
-      mergedContext?.skipPublicationWriteReadback,
-      PUBLICATION_CONVERGENCE_DEFERRED_SKIP_WRITE_READBACK,
-      'handoff-only owner wake should retain deferred write readback policy',
+      mergedContext?.retainedContextMarker,
+      PUBLICATION_CONVERGENCE_RETAINED_CONTEXT_MARKER,
+      'handoff-only owner wake should retain the fields of its enqueued context',
     );
   });
 

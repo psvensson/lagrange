@@ -216,6 +216,4 @@ export {
   chooseLeaderRemovalTransferee,
   chooseRemovalTransferee,
   decideCoreTransferee,
-  decideLeaderTransferee,
-  decideTransferee,
 };

@@ -735,7 +735,6 @@ export {
   SOURCE_POSITION_STATE,
   SOURCE_RANGE_DECISION,
   SOURCE_RELIST_OUTCOME,
-  SOURCE_RELIST_STATE,
   SystemTableCacheSourceOrder,
   getAllTableRevisionWatermarkSnapshots,
   getTableRevisionWatermarkSnapshot,

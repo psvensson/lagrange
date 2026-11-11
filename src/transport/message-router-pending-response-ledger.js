@@ -2,12 +2,13 @@ import {createTimeoutBudget, getRemainingBudgetMs} from '../control-plane/timeou
 import {assertDeliveryOpen, deliveryAbortReason} from './message-router-delivery-lifetime.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
-import {ROUTER_MESSAGE_TIMEOUT_ERROR_CODE} from './transport-error-codes.js';
+import {
+  ROUTER_DUPLICATE_PENDING_RESPONSE_ERROR_CODE,
+  ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
+} from './transport-error-codes.js';
 import {TRANSPORT_ACKNOWLEDGEMENT} from './transport-acknowledgement.js';
 import {TRANSPORT_DELIVERY_OUTCOME_REASON_CODE, buildHandlerFailedError}
   from './transport-semantic-outcome.js';
-import {ROUTER_DUPLICATE_PENDING_RESPONSE_ERROR_CODE} from
-  './transport-router-invariant-error-codes.js';
 
 const {
   MESSAGE_ROUTER_LITERAL,

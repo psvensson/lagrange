@@ -198,8 +198,6 @@ function membershipPublicationTimeoutAbandonChange({timeoutMs, reasonCode,
 
 export {
   MEMBERSHIP_PUBLICATION_CHANGE_REFUSAL,
-  MEMBERSHIP_PUBLICATION_STATUS_TRANSITIONS,
-  isMembershipPublicationStatusTransitionAllowed,
   membershipPublicationAcknowledgementChange,
   membershipPublicationRefreshChange,
   membershipPublicationTimeoutAbandonChange,

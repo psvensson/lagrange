@@ -12,7 +12,7 @@ documentClass: generated
 - [query-input.js](query-input.js) - QueryInput - Multi-line text input component for SQL queries Provides text editing, cursor movement, history... (importers: few)
 - [results-panel.js](results-panel.js) - ResultsPanel - Display panel for SQL query results Displays query results in tabular format with support for... (importers: few)
 - [sql-query-view-compatibility-methods.js](sql-query-view-compatibility-methods.js) - Set data for the view (no-op for SQL view, required for ViewManager compatibility) (importers: one)
-- [sql-query-view-live-methods.js](sql-query-view-live-methods.js) - Handle live query event from connection manager (importers: one)
+- [sql-query-view-live-methods.js](sql-query-view-live-methods.js) - Live query subscription status (importers: one)
 - [sql-query-view.js](sql-query-view.js) - SQLQueryView - Main view for SQL query interface Combines QueryInput, ResultsPanel, QueryHistory, and other... (importers: few)
 - [sql-syntax-highlighter.js](sql-syntax-highlighter.js) - SQLSyntaxHighlighter - Syntax highlighting for SQL queries Provides keyword highlighting for SQL statements using... (importers: few)
 - [table-autocomplete.js](table-autocomplete.js) - TableAutocomplete - Autocomplete provider for table names Provides table name suggestions based on the current input... (importers: few)

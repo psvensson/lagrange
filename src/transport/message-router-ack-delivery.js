@@ -9,8 +9,7 @@ import {FRAME_CLASS, ROUTER_SYNC_SECTION, logRouterDiagnostics}
   from './message-router-peer-traffic-diagnostics.js';
 import {TRANSPORT_ACKNOWLEDGEMENT} from './transport-acknowledgement.js';
 import {TRANSPORT_DELIVERY_OUTCOME_REASON_CODE} from './transport-semantic-outcome.js';
-import {ROUTER_DUPLICATE_PENDING_ACK_ERROR_CODE} from
-  './transport-router-invariant-error-codes.js';
+import {ROUTER_DUPLICATE_PENDING_ACK_ERROR_CODE} from './transport-error-codes.js';
 
 const DELIVERY_SETTLEMENT_REJECTED = 'rejected';
 

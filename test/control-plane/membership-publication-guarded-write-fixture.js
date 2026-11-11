@@ -16,7 +16,6 @@ import '../../src/query/sql-query-engine-metadata-authority-refresh.js';
 import {
   authoritativeLeaderReads,
   selectRows,
-  waitFor,
   withSurface,
 } from '../query/unknown-outcome-surface-fixture.js';
 import {ControlPlanePublicationsOwner} from
@@ -227,7 +226,6 @@ export {
   MEMBER_NODE_IDS,
   PUBLICATIONS,
   PUBLICATION_ID,
-  SEEDED_AT_MS,
   captureDeliveredStatements,
   changeDataOf,
   coordinatorOver,
@@ -236,6 +234,5 @@ export {
   ownerCoordinatorOver,
   publicationRow,
   refreshCandidate,
-  waitFor,
   withPublicationSurface,
 };

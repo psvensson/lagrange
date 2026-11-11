@@ -34,7 +34,7 @@ import {
   loadCountBaseline,
   runGuidelineCheck,
   runGuidelineCheckWhenDirect,
-  writeCountBaseline,
+  writeTightenedCountBaseline,
 } from './guideline-check-shared.js';
 import {printRatchetTighteningHint} from './metric-check-helpers.js';
 
@@ -290,8 +290,9 @@ function printTighteningHints(report, options) {
   }
 }
 
-// Baseline writes seal the current count and may only lower it afterwards:
-// a pattern whose count grew keeps its recorded file and fails the update.
+// Baseline writes seal the current sites once and may only drop sites
+// afterwards: a pattern whose count grew keeps its recorded file and fails
+// the update, and a new site is never written in place of a removed one.
 async function updateNavigabilityBaselines(pathsToScan, options) {
   if (pathsToScan.length > 0) {
     process.stderr.write(`${UPDATE_BASELINE_FLAG} scans the whole governed domain; ` +
@@ -312,11 +313,13 @@ async function updateNavigabilityBaselines(pathsToScan, options) {
       exitCode = EXIT_CODE.FAILURE;
       continue;
     }
-    await writeCountBaseline(
+    const {newSiteCount} = await writeTightenedCountBaseline(
       fileUrl,
       {totalViolationCount: violations.length, violations},
       `${BASELINE_LABEL_PREFIX}${pattern}`,
+      buildNavigabilityViolationIdentity,
     );
+    if (newSiteCount > 0) exitCode = EXIT_CODE.FAILURE;
   }
   return exitCode;
 }

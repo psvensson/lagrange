@@ -279,6 +279,8 @@ const BASELINE_FILE_NOT_FOUND_CODE = 'ENOENT';
 const BASELINE_ENCODING_UTF8 = 'utf8';
 const BASELINE_VERSION = 1;
 const BASELINE_JSON_INDENT = 2;
+const UNALLOWED_SITES_SUFFIX =
+  ' site(s) the baseline does not allow were not written into it; fix them instead\n';
 
 async function loadCountBaseline(baselineFileUrl, buildIdentity) {
   try {
@@ -361,6 +363,36 @@ async function writeCountBaseline(baselineFileUrl, report, label) {
   );
 }
 
+// A baseline update only ever drops what is gone. The sites it records are
+// the current sites the recorded baseline already allows; a site the baseline
+// does not allow is never written into it (it stays a violation to fix, and
+// the update fails naming how many). The file is rewritten only when that
+// lowers its count. With no baseline recorded yet the current sites seal it.
+async function writeTightenedCountBaseline(baselineFileUrl, report, label,
+  buildIdentity) {
+  let recorded = null;
+  try {
+    await fs.access(baselineFileUrl);
+    recorded = await loadCountBaseline(baselineFileUrl, buildIdentity);
+  } catch (error) {
+    if (error?.code !== BASELINE_FILE_NOT_FOUND_CODE) throw error;
+  }
+  if (recorded === null) {
+    await writeCountBaseline(baselineFileUrl, report, label);
+    return {newSiteCount: 0};
+  }
+  const applied = applyCountBaseline(report, recorded, buildIdentity);
+  const newSites = new Set(applied.violations);
+  const allowed = report.violations.filter((violation) => !newSites.has(violation));
+  if (allowed.length < applied.baselineViolationCount) {
+    await writeCountBaseline(baselineFileUrl,
+      {totalViolationCount: allowed.length, violations: allowed}, label);
+  }
+  if (newSites.size > 0) {
+    process.stderr.write(`${newSites.size} ${label}${UNALLOWED_SITES_SUFFIX}`);
+  }
+  return {newSiteCount: newSites.size};
+}
 
 // Resolve the nearest enclosing function name for a violation site (used by
 // AST-based guideline checks for line-independent violation identities).
@@ -415,5 +447,5 @@ export {
   runGuidelineCheck,
   runGuidelineCheckWhenDirect,
   walkAst,
-  writeCountBaseline,
+  writeTightenedCountBaseline,
 };
