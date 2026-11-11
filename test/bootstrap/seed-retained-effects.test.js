@@ -705,7 +705,8 @@ function registrationRecorder(originalTimestamp) {
   phase.ensureSystemTableWriter = () => ({enable: () => events.push(['writer'])});
   for (const name of ['registerMessageGroup', 'registerServices', 'registerMetaServiceDefinitions',
     'registerSystemTables', 'updatePartitionSizes', 'seedDynamicConfiguration',
-    'persistCurrentEpochIfMissing', 'persistClusterIdIfMissing']) {
+    'persistCurrentEpochIfMissing', 'persistFormationTargetIfMissing',
+    'persistClusterIdIfMissing']) {
     phase[name] = async (...args) => events.push([name, ...args]);
   }
   return {phase, events, clockReads: () => clockReads};
@@ -732,7 +733,8 @@ test('SeedRegistrationPhase keeps the ordinary delegate clock and exact original
           ['registerMessageGroup', stamp], ['registerServices', stamp],
           ['registerMetaServiceDefinitions'], ['registerSystemTables', stamp],
           ['updatePartitionSizes'], ['seedDynamicConfiguration'],
-          ['persistCurrentEpochIfMissing'], ['persistClusterIdIfMissing']]);
+          ['persistCurrentEpochIfMissing'], ['persistFormationTargetIfMissing'],
+          ['persistClusterIdIfMissing']]);
       });
     }
   });
