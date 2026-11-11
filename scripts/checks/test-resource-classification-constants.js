@@ -127,6 +127,27 @@ export const RESOURCE_CLASS_SHARD_PATHS = Object.freeze({
   [RESOURCE_CLASS_EXCLUSIVE]: 'test/shards/resource-exclusive.txt',
 });
 
+// Host requirement: a THIRD dimension, orthogonal to both. Primary says what
+// a test is, resource what it costs; a host requirement is a property of the
+// machine the test's assertions are only true on, which the lab probe
+// measures per host (scripts/lab/probe.js) and placement honours: a file is
+// never given to a host that does not provide what it requires, and a file
+// no host of the run provides for is reported unplaceable, never skipped.
+// One curated list per requirement; a file on none requires nothing.
+//
+// loopback-refusal: a TCP connect to a loopback port nobody listens on is
+// refused at once. A WSL2 host with mirrored networking answers nothing for
+// a port that was never bound there, and the connect ends ETIMEDOUT after
+// about 130 s (measured 2026-11-11), so a test asserting ECONNREFUSED, or
+// probing a not-yet-open listener in a tight loop, means something else there.
+export const HOST_REQUIREMENT_LOOPBACK_REFUSAL = 'loopback-refusal';
+export const HOST_REQUIREMENTS = Object.freeze([HOST_REQUIREMENT_LOOPBACK_REFUSAL]);
+export const HOST_REQUIREMENT_SHARD_PATHS = Object.freeze({
+  [HOST_REQUIREMENT_LOOPBACK_REFUSAL]: 'test/shards/host-loopback-refusal.txt',
+});
+export const HOST_REQUIREMENT_UNKNOWN_PATH_PROBLEM =
+  'host requirement list names a path that is not in the live test census';
+
 export const RESOURCE_CLASS_SEPARATOR = ':';
 export const RESOURCE_DIGEST_ALGORITHM_LABEL = 'fnv1a32';
 export const RESOURCE_DIGEST_HEX_WIDTH = 8;

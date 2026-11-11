@@ -21,6 +21,9 @@ import path from 'node:path';
 
 import {collectTestFiles} from './test-primary-classification.js';
 import {
+  HOST_REQUIREMENTS,
+  HOST_REQUIREMENT_SHARD_PATHS,
+  HOST_REQUIREMENT_UNKNOWN_PATH_PROBLEM,
   RESOURCE_CLASSES,
   RESOURCE_CLASSES_NOT_OBJECT_PROBLEM,
   RESOURCE_CLASS_MANIFEST_ID,
@@ -111,6 +114,31 @@ export function deriveResourceClasses(root) {
     }
   }
   return {census, classes, problems};
+}
+
+/**
+ * What each test file requires of the host it runs on, from the curated
+ * host-requirement lists (HOST_REQUIREMENT_SHARD_PATHS). A file on no list
+ * requires nothing and is absent. A listed path outside the live census is a
+ * problem, never a requirement. Never throws: callers decide fatality.
+ * @param {string} root
+ * @return {{requirements: Object<string, string[]>, problems: string[]}}
+ */
+export function deriveHostRequirements(root) {
+  const censusSet = new Set(collectTestFiles(root));
+  const requirements = {};
+  const problems = [];
+  for (const requirement of HOST_REQUIREMENTS) {
+    const shardPath = HOST_REQUIREMENT_SHARD_PATHS[requirement];
+    for (const testPath of readCuratedShard(root, shardPath)) {
+      if (!censusSet.has(testPath)) {
+        problems.push(`${HOST_REQUIREMENT_UNKNOWN_PATH_PROBLEM}: ${shardPath} -> ${testPath}`);
+        continue;
+      }
+      (requirements[testPath] ??= []).push(requirement);
+    }
+  }
+  return {requirements, problems};
 }
 
 export function resourceManifestDigest(classes) {

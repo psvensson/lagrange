@@ -21,6 +21,7 @@ import {
   derivePrimaryClasses,
 } from './checks/test-primary-classification.js';
 import {
+  deriveHostRequirements,
   deriveResourceClasses,
 } from './checks/test-resource-classification.js';
 import {
@@ -316,8 +317,10 @@ function medianOf(values) {
 // What each planned file is expected to cost, for placement: its last green
 // duration here, else the median of its lane's timed files, else a default.
 // A red or unknown file is priced like its lane, never as free. Each names
-// its lane, which a placed shard tells other agents on the lab it runs.
-export function estimateFileCosts(plan, resultsRoots) {
+// its lane, which a placed shard tells other agents on the lab it runs, and
+// what it requires of the host (deriveHostRequirements' record), which
+// placement honours: none is an empty list.
+export function estimateFileCosts(plan, resultsRoots, requirements) {
   const costs = [];
   for (let laneIndex = 0; laneIndex < plan.length; laneIndex += 1) {
     const lane = plan[laneIndex];
@@ -335,6 +338,8 @@ export function estimateFileCosts(plan, resultsRoots) {
         jobs: lane.jobs,
         ms: measured[index] === null ? fallback : measured[index],
         lane: lane.resourceClass,
+        requires: objectHasOwn(requirements, lane.files[index]) ?
+          copyOwnStringArray(requirements[lane.files[index]]) : [],
       });
     }
   }
@@ -619,6 +624,19 @@ function readInputFiles(argv) {
   return files;
 }
 
+/**
+ * What each test file of the checkout at `root` requires of its host, for
+ * placement. A curated list naming a file outside the census is refused: a
+ * requirement placement cannot attach is never dropped silently.
+ * @param {string} root
+ * @return {Object<string, string[]>}
+ */
+export function hostRequirementsOf(root) {
+  const {requirements, problems} = deriveHostRequirements(root);
+  if (problems.length > 0) throw new Error(problems.join(NEWLINE));
+  return requirements;
+}
+
 export function runPlacedClassifiedTestFiles(files, options = {}) {
   const root = options.root || ROOT;
   const failFast = Boolean(options.failFast);
@@ -626,7 +644,7 @@ export function runPlacedClassifiedTestFiles(files, options = {}) {
     root,
     failFast,
     planCosts: (planned) => estimateFileCosts(
-      planClassifiedTestFiles(root, planned), lastResultsRoots(root)),
+      planClassifiedTestFiles(root, planned), lastResultsRoots(root), hostRequirementsOf(root)),
     runLocal: (planned, localOptions) =>
       runClassifiedTestFiles(planned, {...options, ...localOptions}),
     lastGreen: (file) => readLastResult(lastResultsRoots(root), file) !== null,

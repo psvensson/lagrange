@@ -1,0 +1,26 @@
+# host requirement: loopback-refusal
+#
+# Tests whose assertions hold only on a host where a TCP connect to a loopback
+# port nobody listens on is refused at once (ECONNREFUSED). The lab probe
+# measures this per host (scripts/lab/probe.js, `loopback_refusal_samples`)
+# and placement never gives these files to a host without it; a file no host
+# of a run provides for is reported unplaceable and the run is red.
+#
+# Measured 2026-11-11 on a WSL2 host with mirrored networking: a never-bound
+# loopback port in the test allocator's range is silently dropped (ETIMEDOUT
+# after 131-135 s), while a port that was listened on and closed is refused.
+#
+# Census of the 38 test files that mention ECONNREFUSED (2026-11-11): only
+# these two connect to a real closed loopback port and depend on its refusal.
+# The other 36 inject or match a synthetic refusal (a thrown Error, a recorded
+# `lastError` string, a fake client), name it in a comment, or observe a
+# container or pod network, not the host's loopback.
+#
+# seed-startup-listener-failure asserts ECONNREFUSED on the REST port after
+# startup cleanup, and its child probes that never-opened port in a loop.
+# fresh-seed-activation's child probes the not-yet-open public ports in a
+# 5 ms loop to bracket the first admission; dropped connects thin that
+# sampling to one per connect bound, so its R3 witness means less there.
+
+test/bootstrap/fresh-seed-activation.integration.test.js
+test/bootstrap/seed-startup-listener-failure.integration.test.js

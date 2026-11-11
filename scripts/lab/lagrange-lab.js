@@ -22,7 +22,8 @@ import {
   workerCloneUrl, workerSetupScript,
 } from './probe.js';
 import {
-  CLASSIFIED_LANES, estimateFileCosts, lastResultsRoots, planClassifiedTestFiles,
+  CLASSIFIED_LANES, estimateFileCosts, hostRequirementsOf, lastResultsRoots,
+  planClassifiedTestFiles,
 } from '../run-classified-test-files.js';
 import {parseLaneArgs, planLane} from '../plan-test-lane.js';
 import {capture} from './process.js';
@@ -506,7 +507,9 @@ async function commandTest(profile, args) {
     const plan = await labTestPlan(profile, request, commit);
     process.exitCode = await runLabTest({
       plan,
-      costs: estimateFileCosts(plan, lastResultsRoots(FLEET_REPO_ROOT)),
+      // What each file requires of its host, as the planned commit declares it.
+      costs: estimateFileCosts(plan, lastResultsRoots(FLEET_REPO_ROOT),
+        hostRequirementsOf(commit.gitRoot)),
       commit,
       // The base the cone was selected from is the one its history walks use.
       checkBase: resolvedCheckBaseCommit(request.baseSha, process.env, commit.gitRoot),
