@@ -10,7 +10,6 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {ClusterReadinessSignal} from '../../src/rebalancer/cluster-readiness-signal.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {ReplicaOperationResponseStatus} from
   '../../src/rebalancer/replica-operation-constants.js';
@@ -88,20 +87,16 @@ test('Control plane dispatch integration', async (t) => {
         systemTableCache,
         cdcPropagatedTables: CDC_PROPAGATED_TABLES,
       });
-      const clusterReadinessSignal = new ClusterReadinessSignal({
-        cdcPipelineReadinessGate: cdcReadinessGate,
-        systemTableCache,
-        expectedNodeCount: 1,
-      });
-
-      const clusterReady = await waitFor(() => {
-        const result = clusterReadinessSignal.evaluate({
+      // The production CDC pipeline readiness gate (the deleted test-only
+      // ClusterReadinessSignal composite had no production consumer).
+      const cdcPipelineReady = await waitFor(() => {
+        const result = cdcReadinessGate.evaluate({
           partitionServices: bootstrapResult.partitionServices,
           messageGroupServices: bootstrapResult.messageGroupServices,
         });
         return result.ready;
       }, 3000, 25);
-      t.ok(clusterReady, 'cluster readiness should be satisfied');
+      t.ok(cdcPipelineReady, 'the CDC pipeline should be ready');
 
       // Get real CDCIntegrationService from bootstrap
       const cdcIntegrationService = bootstrapService.cdcIntegrationService;
