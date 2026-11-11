@@ -74,7 +74,9 @@ import {printRatchetTighteningHint} from './metric-check-helpers.js';
 // on the checker hint after consuming noteReplaceOwnerObservedReplicaRows.
 // 2026-11-09 (candidate-integration): tightened 1386 -> 1381 on the checker
 // hint after de-exporting internal runtime-admin composition and policy helpers.
-const BASELINE_UNUSED_EXPORT_COUNT = 1381;
+// Retiring unconsumed failure-bundle forwarding exports, with namespace
+// consumers preserved and audited: measured 1381 -> 1321.
+const BASELINE_UNUSED_EXPORT_COUNT = 1321;
 const EXIT_FAILURE = 1;
 const TOP_OFFENDER_COUNT = 10;
 const SELF_REFERENCE = 'scripts/check-unused-exports.js';

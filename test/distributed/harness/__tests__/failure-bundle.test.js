@@ -1,3 +1,31 @@
+import {
+  FAILURE_CLASS_LOAD_PRESSURE,
+  FAILURE_CLASS_PUBLICATION_CONVERGENCE_BLOCKED,
+  FAILURE_CLASS_STARTUP_RECOVERY_BLOCKED,
+  FAILURE_CLASS_DISCOVERY_UNAVAILABLE,
+  FAILURE_CLASS_CACHE_STALE,
+  FAILURE_CLASS_TOPOLOGY_UNSTABLE,
+  FAILURE_CLASS_CDC_DEGRADED,
+  FAILURE_CLASS_UNKNOWN,
+  ROOT_CAUSE_CLASS_STARTUP,
+  ROOT_CAUSE_CLASS_TOPOLOGY,
+  PRIORITY_RECOVERY_PROGRESS_REASON_FALLBACK,
+  STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED,
+  STABILITY_GATE_BLOCKER_PUBLICATION_PENDING,
+  STABILITY_GATE_BLOCKER_PUBLICATION_MISSING_ACTIVE_NODE,
+  STABILITY_GATE_BLOCKER_PRIORITY_SPREAD_PENDING,
+} from '../failure-bundle-artifact-foundation.js';
+import {
+  mergePriorityRecoveryDecisionSnapshots,
+} from '../failure-bundle-priority-recovery-decision-snapshots.js';
+import {
+  buildPublicationConvergenceSummary,
+} from '../failure-bundle-diagnostics-artifact-builder.js';
+import {
+  hasPublicationMissingActiveNodeBlocker,
+  mergeControlPlaneDiagnostics,
+} from '../failure-bundle-diagnostics-merge.js';
+import {isStartupReadinessBlocked} from '../failure-bundle-diagnostics-stability-gates.js';
 import {describe, it, beforeEach, afterEach} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp, mkdir, readFile, rm, writeFile} from 'node:fs/promises';
@@ -14,10 +42,7 @@ import {
   CONTROL_PLANE_QUIESCENCE_REASON,
   CONTROL_PLANE_QUIESCENCE_STATE,
 } from '../../../../src/diagnostics/control-plane-quiescence-snapshot.js';
-import {FAILURE_BUNDLE_FOUNDATION} from
-  '../failure-bundle-foundation.js';
-import {FAILURE_BUNDLE_DIAGNOSTICS_CONTRACT} from
-  '../failure-bundle-diagnostics-contract-reexport.js';
+
 import {registerFailureBundlePlaybackTests} from './failure-bundle-playback-test-cases.js';
 import {
   registerFailureBundleActiveGateTailTests,
@@ -198,30 +223,6 @@ const STARTUP_SEED_CONTACT_PHASE_SIGNAL =
   'startupPhase=' + JOINING_PHASE.CONTACTING_SEED;
 const STARTUP_SEED_CONTACT_RETRY_SIGNAL =
   'startupRetryAfterMs=' + STARTUP_SEED_CONTACT_RETRY_AFTER_MS;
-const {
-  FAILURE_CLASS_LOAD_PRESSURE,
-  FAILURE_CLASS_PUBLICATION_CONVERGENCE_BLOCKED,
-  FAILURE_CLASS_STARTUP_RECOVERY_BLOCKED,
-  FAILURE_CLASS_DISCOVERY_UNAVAILABLE,
-  FAILURE_CLASS_CACHE_STALE,
-  FAILURE_CLASS_TOPOLOGY_UNSTABLE,
-  FAILURE_CLASS_CDC_DEGRADED,
-  FAILURE_CLASS_UNKNOWN,
-  ROOT_CAUSE_CLASS_STARTUP,
-  ROOT_CAUSE_CLASS_TOPOLOGY,
-  PRIORITY_RECOVERY_PROGRESS_REASON_FALLBACK,
-  STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED,
-  STABILITY_GATE_BLOCKER_PUBLICATION_PENDING,
-  STABILITY_GATE_BLOCKER_PUBLICATION_MISSING_ACTIVE_NODE,
-  STABILITY_GATE_BLOCKER_PRIORITY_SPREAD_PENDING,
-  mergePriorityRecoveryDecisionSnapshots,
-} = FAILURE_BUNDLE_FOUNDATION;
-const {
-  buildPublicationConvergenceSummary,
-  hasPublicationMissingActiveNodeBlocker,
-  isStartupReadinessBlocked,
-  mergeControlPlaneDiagnostics,
-} = FAILURE_BUNDLE_DIAGNOSTICS_CONTRACT;
 
 function buildRuntimeFailureScenario() {
   const workflowId = 'split-tbl-users-users-p1-v2';
@@ -962,8 +963,6 @@ describe('failure-bundle', () => {
     CONTROL_PLANE_QUIESCENCE_STATE,
     CONTROL_PLANE_READINESS_REASON,
     ENTRYPOINT_LOG_MSG,
-    FAILURE_BUNDLE_FOUNDATION,
-    FAILURE_BUNDLE_DIAGNOSTICS_CONTRACT,
     FAILURE_CLASS_CACHE_STALE,
     FAILURE_CLASS_CDC_DEGRADED,
     FAILURE_CLASS_DISCOVERY_UNAVAILABLE,

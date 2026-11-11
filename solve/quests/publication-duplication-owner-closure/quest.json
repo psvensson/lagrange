@@ -1,0 +1,40 @@
+{
+  "schema": "solve-quest/2",
+  "id": "publication-duplication-owner-closure",
+  "class": "fix",
+  "statement": "Remove copied Quest evidence verification readers and failure-bundle pass-through export chains so the canonical source/scripts and test duplication ratchets pass at or below their existing limits. Preserve verification approval/refusal, the public failure-bundle writer, diagnostic behavior, and each consumed binding's original defining owner.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/publication-duplication-owner-closure/evidence/receipt.json",
+      "requiredReceipts": [
+        "canonical-duplication-ratchets",
+        "verification-evidence-controls",
+        "failure-bundle-public-controls"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "bounded-owner-scope",
+      "statement": "Scope: scripts/quest-evidence verification readers and one shared reader; failure-bundle harness aggregate exports and their actual consumers, including current failure-bundle tests; existing verification/harness tests; only necessary generated owner/test metadata and measured downward ratchet updates. Do not change product src, runtime diagnostics algorithms or unify same-named functions with distinct owners."
+    },
+    {
+      "id": "preserved-proof-and-behavior",
+      "statement": "Keep CLI flags, output meaning, refusal/exit behavior, existing stronger content-bound verification, raw logs and evidence provenance. Preserve failure-bundle function bodies and imported binding identities through the extraction. Do not remove assertions or selected tests to obtain a pass."
+    },
+    {
+      "id": "honest-measurement",
+      "statement": "Use the actual canonical duplication scanner and test runner. No raised baselines, ignored clone files, detector/config changes, fabricated receipts, mock benchmark results or comparative campaigns. Test controls remain isolated unit-test fixtures, not systems measurements."
+    },
+    {
+      "id": "separate-acceptance",
+      "statement": "This bounded repair closes duplication debt only. Retry the exact-HEAD publisher after reviewed landing, retain any further refusal, and keep broader Q8/physical/release acceptance under their existing owners. Historical records remain append-only."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ],
+  "sealedAt": "e18feb4fed30bcb57fbe17740fef41ca13994865"
+}

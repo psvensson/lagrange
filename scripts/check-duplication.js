@@ -291,8 +291,10 @@ const RATCHET_TARGETS = [
     // Alignment with PR #201 (code-navigability stream): the lower of the two
     // one-way baselines, then tightened 23689 -> 23629 -> 23624 on the hint.
     // 2026-11-09 (candidate-integration): tightened 629/23624 -> 624/23388 -> 623/23344 -> 623/23339 on the checker hint.
-    baselineCloneGroupCount: 623,
-    baselineDuplicatedLineCount: 23339,
+    // 2026-11-11: retiring failure-bundle forwarding aggregates tightened
+    // 623/23339 -> 620/22292 on the canonical checker's measured hint.
+    baselineCloneGroupCount: 620,
+    baselineDuplicatedLineCount: 22292,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

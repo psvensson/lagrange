@@ -1,12 +1,6 @@
+import {buildScenarioFailureBundle} from '../failure-bundle-scenario-assembly.js';
 import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  FAILURE_BUNDLE_SCENARIO_ASSEMBLY,
-} from '../failure-bundle-scenario-assembly.js';
-
-const {
-  buildScenarioFailureBundle,
-} = FAILURE_BUNDLE_SCENARIO_ASSEMBLY;
 
 const SCENARIO = 'rolling-restart';
 const NODE_A = 'node-a';

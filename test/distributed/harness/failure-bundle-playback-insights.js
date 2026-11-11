@@ -1,3 +1,30 @@
+import {
+  PLAYBACK_EVENTS_FILENAME,
+  PLAYBACK_SNAPSHOTS_FILENAME,
+  PLAYBACK_EVENT_TYPE_CLUSTER_STAGE,
+  PLAYBACK_EVENT_TYPE_NODE_RESTART_BOUNDARY,
+  PLAYBACK_STAGE_SETUP_CLUSTER_WAITING_ACTIVE,
+  PLAYBACK_STAGE_LOAD_READINESS_WAITING,
+  PLAYBACK_STAGE_LOAD_READINESS_STABLE,
+  UTF8_ENCODING,
+  ZERO,
+  UNKNOWN_VALUE,
+  toWorkspaceRelative,
+  isRecord,
+  normalizeNonNegativeCount,
+} from './failure-bundle-artifact-foundation.js';
+import {
+  buildPriorityRecoveryCorrelationKey,
+} from './failure-bundle-priority-recovery-decision-snapshots.js';
+import {cloneJsonValue} from './failure-bundle-priority-recovery-diagnostics-summary.js';
+import {
+  resolvePlaybackPublicationConvergence,
+  resolvePlaybackPublishedMembershipObservation,
+  scorePlaybackActiveGateDetails,
+  buildPlaybackEventSummary,
+  buildFirstFaultTimelineFromPlaybackEvents,
+  buildReadinessFromPlaybackEvents,
+} from './failure-bundle-playback-classification.js';
 import {readFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {
@@ -21,30 +48,6 @@ import {
   resolveControlPlaneDiagnostics,
   toIsoTimestamp,
 } from './failure-bundle-control-plane-diagnostics.js';
-import {FAILURE_BUNDLE_PLAYBACK_CLASSIFICATION} from './failure-bundle-playback-classification.js';
-const {
-  PLAYBACK_EVENTS_FILENAME,
-  PLAYBACK_SNAPSHOTS_FILENAME,
-  PLAYBACK_EVENT_TYPE_CLUSTER_STAGE,
-  PLAYBACK_EVENT_TYPE_NODE_RESTART_BOUNDARY,
-  PLAYBACK_STAGE_SETUP_CLUSTER_WAITING_ACTIVE,
-  PLAYBACK_STAGE_LOAD_READINESS_WAITING,
-  PLAYBACK_STAGE_LOAD_READINESS_STABLE,
-  UTF8_ENCODING,
-  ZERO,
-  UNKNOWN_VALUE,
-  toWorkspaceRelative,
-  isRecord,
-  normalizeNonNegativeCount,
-  buildPriorityRecoveryCorrelationKey,
-  cloneJsonValue,
-  resolvePlaybackPublicationConvergence,
-  resolvePlaybackPublishedMembershipObservation,
-  scorePlaybackActiveGateDetails,
-  buildPlaybackEventSummary,
-  buildFirstFaultTimelineFromPlaybackEvents,
-  buildReadinessFromPlaybackEvents,
-} = FAILURE_BUNDLE_PLAYBACK_CLASSIFICATION;
 
 const PLAYBACK_PRIORITY_RECOVERY_SNAPSHOT_FIELD = Object.freeze({
   REPLICA_OPERATIONS: 'replicaOperations',
@@ -717,7 +720,6 @@ async function collectPlaybackSnapshotInsights(
     return null;
   }
 }
-
 
 export {
   buildPlaybackControlPlaneFallback,

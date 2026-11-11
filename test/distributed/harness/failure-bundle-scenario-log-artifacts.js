@@ -1,22 +1,4 @@
-import {readdir, readFile} from 'node:fs/promises';
-import {basename, dirname, join} from 'node:path';
 import {
-  buildPriorityRecoveryObservationFromDecisionArtifactsByNodeId,
-  collectPlaybackEventInsights,
-  collectPlaybackSnapshotInsights,
-  mergePlaybackPriorityRecoveryObservation,
-} from './failure-bundle-playback-insights.js';
-import {FAILURE_BUNDLE_PLAYBACK_CLASSIFICATION} from './failure-bundle-playback-classification.js';
-import {
-  LOG_WINDOW_COVERAGE,
-  summarizeLogWindowCoverage,
-} from './failure-bundle-artifact-foundation.js';
-import {retainNodeLogWindowFromGzip} from './failure-bundle-log-window.js';
-import {
-  CAPTURE_COMPLETENESS_NOT_RECORDED,
-  fullLogDestPath,
-} from './full-node-log-capture.js';
-const {
   TIMELINE_FILENAME,
   ANALYSIS_FILENAME,
   UTF8_ENCODING,
@@ -26,8 +8,28 @@ const {
   sanitizePathSegment,
   extractDecisionArtifactsFromLogContent,
   isRecord,
+} from './failure-bundle-artifact-foundation.js';
+import {
   mergePriorityRecoveryDecisionSnapshots,
-} = FAILURE_BUNDLE_PLAYBACK_CLASSIFICATION;
+} from './failure-bundle-priority-recovery-decision-snapshots.js';
+import {readdir, readFile} from 'node:fs/promises';
+import {basename, dirname, join} from 'node:path';
+import {
+  buildPriorityRecoveryObservationFromDecisionArtifactsByNodeId,
+  collectPlaybackEventInsights,
+  collectPlaybackSnapshotInsights,
+  mergePlaybackPriorityRecoveryObservation,
+} from './failure-bundle-playback-insights.js';
+
+import {
+  LOG_WINDOW_COVERAGE,
+  summarizeLogWindowCoverage,
+} from './failure-bundle-artifact-foundation.js';
+import {retainNodeLogWindowFromGzip} from './failure-bundle-log-window.js';
+import {
+  CAPTURE_COMPLETENESS_NOT_RECORDED,
+  fullLogDestPath,
+} from './full-node-log-capture.js';
 
 const arrayMap = Function.call.bind(Array.prototype.map);
 

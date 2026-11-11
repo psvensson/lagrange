@@ -12,38 +12,14 @@
  */
 
 import {runQuestEvidenceHarness} from './harness-runtime.js';
-import {questState, readLog, verdictOf} from '../solve/store.js';
-import {VERDICT} from '../solve/schema.js';
+import {CHECK_VERIFICATION_FLAG, exitWithQuestVerification} from './verification-check.js';
 
 const QUEST_ID = 'contract-first-authoring-and-producer-fidelity';
 const OUTPUT_FILE = `solve/quests/${QUEST_ID}/evidence/receipt.json`;
-const CHECK_VERIFICATION_FLAG = '--check-verification';
-const VERIFIER_PREFIX = 'subagent:';
 const WITNESS_TEST = 'test/bootstrap/contract-first-authoring-fidelity.test.js';
 
-const EXIT_SUCCESS = 0;
-const EXIT_FAILURE = 1;
-const MINIMUM_ATTEMPTS = 1;
-
-function checkVerification() {
-  const state = questState(readLog(process.cwd(), QUEST_ID));
-  const last = state.lastVerification;
-  const approved = state.attempts.length >= MINIMUM_ATTEMPTS &&
-    last !== null &&
-    state.verificationIsCurrent &&
-    verdictOf(last) === VERDICT.APPROVE &&
-    String(last?.verifier || '').startsWith(VERIFIER_PREFIX);
-  process.stdout.write(`${JSON.stringify({
-    approved,
-    verifier: last?.verifier ?? null,
-    current: state.verificationIsCurrent,
-    attempts: state.attempts.length,
-  })}\n`);
-  process.exit(approved ? EXIT_SUCCESS : EXIT_FAILURE);
-}
-
 if (process.argv.includes(CHECK_VERIFICATION_FLAG)) {
-  checkVerification();
+  exitWithQuestVerification(QUEST_ID);
 }
 
 const receipts = Object.freeze([

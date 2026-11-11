@@ -1,50 +1,47 @@
 import {
-  classifyActiveGateClosureWitness,
-  ACTIVE_GATE_CLOSURE_WITNESS_CLASS_PRIORITY_SPREAD,
-  LEGACY_PRIORITY_RECOVERY_CLOSURE_STATE_SATISFIED_STALE_PUBLICATION,
-  ACTIVE_GATE_CLOSURE_WITNESS_CLASS_STARTUP_PUBLICATION_LAG,
-  ACTIVE_GATE_CLOSURE_WITNESS_CLASS_STARTUP_SNAPSHOT_TIMEOUT,
-} from './active-gate-closure-classification.js';
-import {
-  normalizePriorityRecoveryActiveGateSnapshot,
-} from './active-gate-contract.js';
-import {
-  CONTROL_PLANE_QUIESCENCE_REASON,
-  CONTROL_PLANE_QUIESCENCE_STATE,
-} from '../../../src/diagnostics/control-plane-quiescence-snapshot.js';
-import {
-  buildCanonicalControlPlaneDiagnosticsFromControlPlane,
-  buildCanonicalPublicationEvidenceFromControlPlane,
-} from
-  './publication-evidence-contract.js';
-import {
-  buildPriorityRecoveryProgressSummary,
-  normalizePriorityRecoveryPartitionWitnessesForDiagnostics,
-} from './priority-recovery-summary-normalization.js';
-import {
-  CONTROL_PLANE_PUBLICATION_STATUS,
-} from '../../../src/control-plane/control-plane-publication-merge.js';
-import {
   RECOVERY_PROTOCOL_STATE,
 } from '../../../src/control-plane/membership-lifecycle-constants.js';
 import {
-  PUBLICATION_RECOVERY_GATE_STATE,
-  PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE,
-  buildPublicationRecoveryGateSnapshot,
-} from '../../../src/control-plane/publication-recovery-gate.js';
+  buildCanonicalControlPlaneDiagnosticsFromControlPlane,
+  buildCanonicalPublicationEvidenceFromControlPlane,
+} from './publication-evidence-contract.js';
 import {
-  PUBLICATION_OWNER_ACK_STATE,
-  PUBLICATION_OWNER_FRESHNESS_FENCE,
-  PUBLICATION_OWNER_RECOVERY_OUTCOME,
-  PUBLICATION_OWNER_STREAM_OUTCOME,
-  PUBLICATION_OWNER_TEXT,
-} from '../../../src/control-plane/publication-owner-constants.js';
+  FIRST_FAULT_MARKER_ATTEMPT_ERRORS,
+  FIRST_FAULT_MARKER_HARD_FAILURE,
+  FIRST_FAULT_MARKER_QUEUE_PRESSURE,
+  NODE_DIAGNOSTICS_TRACE_LIMIT,
+  ROOT_CAUSE_CLASS_CACHE,
+  ROOT_CAUSE_CLASS_CDC,
+  ROOT_CAUSE_CLASS_DISCOVERY,
+  ROOT_CAUSE_CLASS_TOPOLOGY,
+  STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED,
+  resolveRoutingDiagnostics,
+} from './failure-bundle-artifact-foundation.js';
+import {
+  cloneJsonValue,
+  mergePriorityRecoveryInvariants,
+  normalizePriorityRecoveryInvariants,
+} from './failure-bundle-priority-recovery-diagnostics-summary.js';
+import {
+  extractNodeIdsFromText,
+  resolveAdminQueryTraceByNodeId,
+  resolveControlSnapshot,
+} from './failure-bundle-control-plane-diagnostics.js';
+import {
+  mergeByNodeIdMaps,
+} from './failure-bundle-scenario-log-artifacts.js';
+import {
+  mergePriorityRecoveryDecisionSnapshots,
+  normalizePriorityRecoveryDecisionSnapshots,
+} from './failure-bundle-priority-recovery-decision-snapshots.js';
 import {
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
-  CONTROL_PLANE_READINESS_REASON,
 } from '../../../src/control-plane/control-plane-readiness-constants.js';
 import {
-  PRIORITY_RECOVERY_ACTUATION_STATE,
+  EDGE_ID,
+  REASON,
+} from '../../../src/diagnostics/topology-convergence-constants.js';
+import {
   PRIORITY_RECOVERY_BLOCKER_REASON,
   PRIORITY_RECOVERY_BLOCKING_BOUNDARY,
   PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION,
@@ -52,80 +49,47 @@ import {
   PRIORITY_RECOVERY_SEMANTIC_STATE,
 } from '../../../src/control-plane/priority-recovery-diagnostics-constants.js';
 import {
-  PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE,
-} from '../../../src/control-plane/priority-recovery-snapshot.js';
-import {
-  EDGE_ID,
-  EDGE_STATE,
-  REASON,
   buildTopologyConvergenceGraphFromArtifacts,
-  buildTopologyConvergenceOwnerPresentation,
 } from '../../../src/diagnostics/topology-convergence-graph.js';
-import {FAILURE_BUNDLE_DIAGNOSTICS_ASSEMBLY} from './failure-bundle-diagnostics-assembly.js';
-export const {
-  FAILURE_BUNDLE_SCHEMA_VERSION,
-  FAILURE_BUNDLE_RUN_DIRNAME,
-  FAILURE_BUNDLE_JSON_FILENAME,
-  FAILURE_BUNDLE_MARKDOWN_FILENAME,
-  TRIAGE_SUMMARY_JSON_FILENAME,
-  TRIAGE_SUMMARY_MARKDOWN_FILENAME,
-  RUN_FAILURE_BUNDLE_JSON_FILENAME,
-  RUN_FAILURE_BUNDLE_MARKDOWN_FILENAME,
-  LOG_FILE_EXTENSION,
-  TIMELINE_FILENAME,
-  ANALYSIS_FILENAME,
-  UTF8_ENCODING,
+import {
+  buildTopologyConvergenceOwnerPresentation,
+} from '../../../src/diagnostics/topology-convergence-owner-witness.js';
+import {
+  buildPriorityRecoveryProgressSummary,
+  normalizePriorityRecoveryPartitionWitnessesForDiagnostics,
+} from './priority-recovery-summary-normalization.js';
+import {
+  ACTIVE_GATE_CLOSURE_WITNESS_CLASS_PRIORITY_SPREAD,
+  ACTIVE_GATE_CLOSURE_WITNESS_CLASS_STARTUP_PUBLICATION_LAG,
+  ACTIVE_GATE_CLOSURE_WITNESS_CLASS_STARTUP_SNAPSHOT_TIMEOUT,
+  LEGACY_PRIORITY_RECOVERY_CLOSURE_STATE_SATISFIED_STALE_PUBLICATION,
+  classifyActiveGateClosureWitness,
+} from './active-gate-closure-classification.js';
+import {
+  CONTROL_PLANE_PUBLICATION_STATUS,
+  PUBLICATION_OWNER_ACK_STATE,
+  PUBLICATION_OWNER_FRESHNESS_FENCE,
+  PUBLICATION_OWNER_RECOVERY_OUTCOME,
+  PUBLICATION_OWNER_STREAM_OUTCOME,
+  PUBLICATION_OWNER_TEXT,
+} from '../../../src/control-plane/publication-owner-constants.js';
+import {
+  PUBLICATION_RECOVERY_GATE_STATE,
+  buildPublicationRecoveryGateSnapshot,
+} from '../../../src/control-plane/publication-recovery-gate.js';
+import {
+  PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE,
+} from '../../../src/control-plane/publication-recovery-gate-constants.js';
+import {
+  normalizePriorityRecoveryActiveGateSnapshot,
+} from './active-gate-contract.js';
+import {
   ZERO,
-  MARKDOWN_SECTION_BREAK,
   UNKNOWN_VALUE,
-  NO_PROGRESS_REASON_CODE,
-  READINESS_FAILURE_CLASS_NO_PROGRESS,
-  NODE_DIAGNOSTICS_TRACE_LIMIT,
-  NODE_ID_ERROR_PATTERN,
-  PLAYBACK_EVENTS_FILENAME,
-  PLAYBACK_EVENT_TYPE_CLUSTER_STAGE,
-  PLAYBACK_EVENT_TYPE_LOAD_STARTED,
-  PLAYBACK_EVENT_TYPE_LOAD_PROGRESS,
-  PLAYBACK_EVENT_TYPE_LOAD_COMPLETED,
-  PLAYBACK_EVENT_TYPE_NODE_RESTART_BOUNDARY,
-  PLAYBACK_EVENT_TYPE_PARTITION_CREATED,
-  PLAYBACK_EVENT_TYPE_REPLICA_CREATED,
-  PLAYBACK_EVENT_TYPE_REPLICA_REMOVED,
-  PLAYBACK_STAGE_SETUP_CLUSTER_WAITING_ACTIVE,
   ROOT_CAUSE_CLASS_UNKNOWN,
   ROOT_CAUSE_CLASS_STARTUP,
-  ROOT_CAUSE_CLASS_DISCOVERY,
-  ROOT_CAUSE_CLASS_TOPOLOGY,
-  ROOT_CAUSE_CLASS_LOAD,
-  ROOT_CAUSE_CLASS_CDC,
-  ROOT_CAUSE_CLASS_CACHE,
-  FIRST_FAULT_MARKER_QUEUE_PRESSURE,
-  FIRST_FAULT_MARKER_ATTEMPT_ERRORS,
-  FIRST_FAULT_MARKER_HARD_FAILURE,
   LOAD_WAIT_REASON_NODE_SLOT_UNAVAILABLE,
-  LOAD_WAIT_REASON_NODE_ADMISSION_BLOCKED,
-  LOAD_WAIT_REASON_RETRYABLE_CONTROL_PLANE_PRESSURE,
-  LOAD_WAIT_REASON_TIMEOUT_WAITS,
-  LOAD_WAIT_REASON_QUEUE_CAPACITY_REJECTED,
-  PRIORITY_RECOVERY_PROGRESS_REASON_FALLBACK,
-  READINESS_REASON_MAX_NODES,
-  READINESS_REASON_MAX_PER_NODE,
-  AFFECTED_NODE_ID_LIMIT,
-  FAILURE_CLASS_PUBLICATION_CONVERGENCE_BLOCKED,
-  FAILURE_CLASS_STARTUP_RECOVERY_BLOCKED,
-  FAILURE_CLASS_DISCOVERY_UNAVAILABLE,
-  FAILURE_CLASS_TOPOLOGY_UNSTABLE,
-  FAILURE_CLASS_LOAD_PRESSURE,
-  FAILURE_CLASS_CDC_DEGRADED,
-  FAILURE_CLASS_CACHE_STALE,
-  FAILURE_CLASS_VERIFICATION_MISMATCH,
   FAILURE_CLASS_UNKNOWN,
-  FAILURE_CLASS_CONFIDENCE_HIGH,
-  FAILURE_CLASS_CONFIDENCE_MEDIUM,
-  FAILURE_CLASS_CONFIDENCE_LOW,
-  TRIAGE_CLUSTER_STAGE_LIMIT,
-  TRIAGE_RECENT_TOPOLOGY_EVENT_LIMIT,
-  TRIAGE_TOP_LOAD_NODE_LIMIT,
   STABILITY_GATE_STATUS_OPEN,
   STABILITY_GATE_STATUS_CLOSED,
   STABILITY_GATE_STATUS_NOT_APPLICABLE,
@@ -140,82 +104,88 @@ export const {
   STABILITY_GATE_BLOCKER_BLOCKED_NODES,
   STABILITY_GATE_BLOCKER_CLOSURE_RECORD,
   STABILITY_GATE_BLOCKER_STARTUP_READINESS,
-  STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED,
-  SCENARIO_NAME_FRAGMENT_RESTART,
-  LOAD_WAIT_REASON_KEYS,
-  LOAD_REASON_ROOT_CAUSE_CLASS_BY_REASON,
-  toWorkspaceRelative,
-  sanitizePathSegment,
-  parseStructuredLogLine,
-  resolveStructuredLogMessage,
-  resolveStructuredLogTimestamp,
-  sanitizeStructuredDecisionArtifact,
-  extractDecisionArtifactsFromLogContent,
-  resolveRoutingDiagnostics,
+  resolveFailureDiagnostics,
+  addNormalizedReasonCount,
+  isRecord,
+  normalizeNonNegativeCount,
+  buildTopReasonCounts,
+  buildDominantReason,
+  mergeReasonCounts,
+  normalizeDistinctStringArray,
+} from './failure-bundle-artifact-foundation.js';
+import {
+  buildPriorityRecoveryProgressDominantReason,
+  deriveReasonCountsFromPublicationConvergence,
+  normalizeActiveGateReadinessDelay,
+  hasBlockingReadinessFailure,
+} from './failure-bundle-publication-reason-counts.js';
+
+import {
+  deriveReasonCountsFromLoadMetrics,
+  deriveReasonCountsFromReadiness,
+  resolveRootCauseClass,
+  normalizeAffectedNodeIds,
+} from './failure-bundle-playback-classification.js';
+
+import {
+  resolveLoadMetrics,
+  resolveRelevantNodeIds,
+} from './failure-bundle-control-plane-diagnostics.js';
+
+import {
+  CONTROL_PLANE_QUIESCENCE_REASON,
+  CONTROL_PLANE_QUIESCENCE_STATE,
+} from '../../../src/diagnostics/control-plane-quiescence-snapshot.js';
+
+import {
+  CONTROL_PLANE_READINESS_REASON,
+} from '../../../src/control-plane/control-plane-readiness-constants.js';
+import {
+  PRIORITY_RECOVERY_ACTUATION_STATE,
+} from '../../../src/control-plane/priority-recovery-diagnostics-constants.js';
+
+import {
+  EDGE_STATE,
+} from '../../../src/diagnostics/topology-convergence-graph.js';
+
+export {
+  ZERO,
+  UNKNOWN_VALUE,
+  ROOT_CAUSE_CLASS_UNKNOWN,
+  LOAD_WAIT_REASON_NODE_SLOT_UNAVAILABLE,
+  FAILURE_CLASS_UNKNOWN,
+  STABILITY_GATE_STATUS_OPEN,
+  STABILITY_GATE_STATUS_CLOSED,
+  STABILITY_GATE_STATUS_NOT_APPLICABLE,
+  STABILITY_GATE_STATUS_UNKNOWN,
+  STABILITY_GATE_TYPE_FAILOVER,
+  STABILITY_GATE_TYPE_CONVERGENCE,
+  STABILITY_GATE_BLOCKER_PUBLICATION_PENDING,
+  STABILITY_GATE_BLOCKER_PUBLICATION_MISSING_ACTIVE_NODE,
+  STABILITY_GATE_BLOCKER_PRIORITY_SPREAD_PENDING,
+  STABILITY_GATE_BLOCKER_PENDING_ACKS_PRESENT,
+  STABILITY_GATE_BLOCKER_BLOCKED_NODES,
+  STABILITY_GATE_BLOCKER_CLOSURE_RECORD,
+  STABILITY_GATE_BLOCKER_STARTUP_READINESS,
   resolveFailureDiagnostics,
   addNormalizedReasonCount,
   buildPriorityRecoveryProgressDominantReason,
   deriveReasonCountsFromPublicationConvergence,
   isRecord,
   normalizeActiveGateReadinessDelay,
-  appendActiveGateReadinessDelaySignals,
-  appendReadinessFailureSignals,
-  normalizeReadinessFailure,
   hasBlockingReadinessFailure,
-  resolveReadinessFailure,
-  resolveReadinessFailureGuidance,
   normalizeNonNegativeCount,
-  resolveCanonicalFailedOperationCount,
-  resolveFailureReasonCounts,
   buildTopReasonCounts,
   buildDominantReason,
   mergeReasonCounts,
   normalizeDistinctStringArray,
-  buildPriorityRecoveryCorrelationKey,
-  normalizePriorityRecoverySemanticStateId,
-  normalizePriorityRecoveryDecisionSnapshots,
-  mergePriorityRecoveryDecisionSnapshots,
-  normalizePriorityRecoveryInvariants,
-  mergePriorityRecoveryInvariants,
-  summarizePriorityRecoveryDecisionSnapshots,
   deriveReasonCountsFromLoadMetrics,
   deriveReasonCountsFromReadiness,
-  resolveRootCauseClassFromReason,
   resolveRootCauseClass,
-  resolveSummaryRootCauseClass,
   normalizeAffectedNodeIds,
-  buildMarker,
-  resolveLoadMetricsFromPlaybackEvent,
-  resolveLoadQueuePressureSignalCount,
-  buildFirstFaultTimelineFromPlaybackEvents,
-  buildPlaybackEventSummary,
-  buildReadinessFromPlaybackEvents,
-  cloneJsonValue,
-  resolvePlaybackPublicationConvergence,
-  resolvePlaybackPublishedMembershipObservation,
-  scorePlaybackActiveGateDetails,
-  buildPlaybackControlPlaneFallback,
-  buildRestartBoundariesFromPlaybackEvents,
-  collectPlaybackEventInsights,
-  resolveReadinessSnapshot,
-  resolveControlPlaneDiagnostics,
-  mergeTransitionHistory,
-  resolveControlSnapshot,
-  resolveAdminQueryTraceByNodeId,
   resolveLoadMetrics,
-  extractNodeIdsFromText,
   resolveRelevantNodeIds,
-  resolveTraceFailureTimestampMs,
-  toIsoTimestamp,
-  resolveWorkflowRelevantNodeIds,
-  resolveWorkflowStartTimestampMs,
-  resolveWorkflowDeniedTimestampMs,
-  resolveWorkflowFailureTimestampMs,
-  buildNodeTimelineCorrelation,
-  buildTimelineCorrelationByNodeId,
-  collectScenarioLogArtifacts,
-  mergeByNodeIdMaps,
-} = FAILURE_BUNDLE_DIAGNOSTICS_ASSEMBLY;
+};
 
 export const PRIORITY_RECOVERY_WORKFLOW_PROGRESS_ACTUATION_STATES = Object.freeze([
   PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
@@ -649,16 +619,19 @@ export function selectActiveGateForPublicationConvergence({
 
 export {
   ACTIVE_GATE_CLOSURE_WITNESS_CLASS_PRIORITY_SPREAD,
-  LEGACY_PRIORITY_RECOVERY_CLOSURE_STATE_SATISFIED_STALE_PUBLICATION,
   ACTIVE_GATE_CLOSURE_WITNESS_CLASS_STARTUP_PUBLICATION_LAG,
   ACTIVE_GATE_CLOSURE_WITNESS_CLASS_STARTUP_SNAPSHOT_TIMEOUT,
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
   CONTROL_PLANE_PUBLICATION_STATUS,
   EDGE_ID,
+  FIRST_FAULT_MARKER_ATTEMPT_ERRORS,
+  FIRST_FAULT_MARKER_HARD_FAILURE,
+  FIRST_FAULT_MARKER_QUEUE_PRESSURE,
+  LEGACY_PRIORITY_RECOVERY_CLOSURE_STATE_SATISFIED_STALE_PUBLICATION,
+  NODE_DIAGNOSTICS_TRACE_LIMIT,
   PRIORITY_RECOVERY_ACTUATION_STATE,
   PRIORITY_RECOVERY_BLOCKER_REASON,
   PRIORITY_RECOVERY_BLOCKING_BOUNDARY,
-  PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE,
   PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION,
   PRIORITY_RECOVERY_PROGRESS_OWNER,
   PRIORITY_RECOVERY_SEMANTIC_STATE,
@@ -671,6 +644,12 @@ export {
   PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE,
   REASON,
   RECOVERY_PROTOCOL_STATE,
+  ROOT_CAUSE_CLASS_CACHE,
+  ROOT_CAUSE_CLASS_CDC,
+  ROOT_CAUSE_CLASS_DISCOVERY,
+  ROOT_CAUSE_CLASS_STARTUP,
+  ROOT_CAUSE_CLASS_TOPOLOGY,
+  STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED,
   buildCanonicalControlPlaneDiagnosticsFromControlPlane,
   buildCanonicalPublicationEvidenceFromControlPlane,
   buildPriorityRecoveryProgressSummary,
@@ -678,6 +657,16 @@ export {
   buildTopologyConvergenceGraphFromArtifacts,
   buildTopologyConvergenceOwnerPresentation,
   classifyActiveGateClosureWitness,
+  cloneJsonValue,
+  extractNodeIdsFromText,
+  mergeByNodeIdMaps,
+  mergePriorityRecoveryDecisionSnapshots,
+  mergePriorityRecoveryInvariants,
   normalizePriorityRecoveryActiveGateSnapshot,
+  normalizePriorityRecoveryDecisionSnapshots,
+  normalizePriorityRecoveryInvariants,
   normalizePriorityRecoveryPartitionWitnessesForDiagnostics,
+  resolveAdminQueryTraceByNodeId,
+  resolveControlSnapshot,
+  resolveRoutingDiagnostics,
 };

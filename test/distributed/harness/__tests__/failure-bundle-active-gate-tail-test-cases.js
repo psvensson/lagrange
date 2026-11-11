@@ -1,10 +1,15 @@
+import {
+  FAILURE_CLASS_PUBLICATION_CONVERGENCE_BLOCKED,
+  ROOT_CAUSE_CLASS_TOPOLOGY,
+  STABILITY_GATE_BLOCKER_PENDING_ACKS_PRESENT,
+} from '../failure-bundle-artifact-foundation.js';
 import {readFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {writeFailureBundlesForCompleteRun} from './failure-bundle-full-log-fixture.js';
 import {
   registerFailureBundlePublicationClosureTailTests,
 } from './failure-bundle-publication-closure-tail-test-cases.js';
-import {FAILURE_BUNDLE_FOUNDATION} from '../failure-bundle-foundation.js';
+
 import {
   buildCanonicalPublicationEvidenceFromControlPlane,
 } from '../publication-evidence-contract.js';
@@ -25,11 +30,6 @@ const ACTIVE_GATE_PENDING_ACK_PRIORITY_ACTUATION_TEST_NAME =
   'keeps explicit active-gate pending ACK while priority actuation remains open';
 const ACTIVE_GATE_PENDING_ACK_WORKFLOW_PROGRESS_TEST_NAME =
   'keeps active-gate pending ACK dominant over subordinate workflow progress';
-const {
-  FAILURE_CLASS_PUBLICATION_CONVERGENCE_BLOCKED,
-  ROOT_CAUSE_CLASS_TOPOLOGY,
-  STABILITY_GATE_BLOCKER_PENDING_ACKS_PRESENT,
-} = FAILURE_BUNDLE_FOUNDATION;
 
 export function registerFailureBundleActiveGateTailTests({
   it,

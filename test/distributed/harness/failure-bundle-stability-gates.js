@@ -1,8 +1,4 @@
-import {FAILURE_BUNDLE_DIAGNOSTICS_CONTRACT} from './failure-bundle-diagnostics-contract-reexport.js';
-
-const arrayIncludes = Function.call.bind(Array.prototype.includes);
-
-const {
+import {
   ZERO,
   STABILITY_GATE_STATUS_OPEN,
   STABILITY_GATE_STATUS_CLOSED,
@@ -22,14 +18,18 @@ const {
   isRecord,
   normalizeNonNegativeCount,
   normalizeDistinctStringArray,
+} from './failure-bundle-artifact-foundation.js';
+import {
   buildStabilityGate,
-  hasPublicationMissingActiveNodeBlocker,
   hasBlockingPublicationClosureRecord,
   isStartupReadinessBlocked,
   countRestartBoundaries,
   buildConvergenceStabilityGate,
   buildFailoverStabilityGate,
-} = FAILURE_BUNDLE_DIAGNOSTICS_CONTRACT;
+} from './failure-bundle-diagnostics-stability-gates.js';
+import {hasPublicationMissingActiveNodeBlocker} from './failure-bundle-diagnostics-merge.js';
+
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
 
 const STABILITY_GATE_BLOCKER_RESTART_BOOTSTRAP_AUTHORITY =
   'restart_bootstrap_authority';

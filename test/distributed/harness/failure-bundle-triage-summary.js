@@ -1,19 +1,19 @@
-import {PRIORITY_RECOVERY_INVARIANT_FALLBACK} from '../../../src/control-plane/priority-recovery-diagnostics-constants.js';
-import {FAILURE_BUNDLE_DIAGNOSTICS_CONTRACT} from './failure-bundle-diagnostics-contract-reexport.js';
 import {
-  formatLogWindowCoverageVerdict,
-} from './failure-bundle-artifact-foundation.js';
-const {
   FAILURE_BUNDLE_SCHEMA_VERSION,
   ZERO,
   UNKNOWN_VALUE,
   TRIAGE_TOP_LOAD_NODE_LIMIT,
   isRecord,
-  normalizeReadinessFailure,
   normalizeNonNegativeCount,
   normalizeDistinctStringArray,
-  cloneJsonValue,
-} = FAILURE_BUNDLE_DIAGNOSTICS_CONTRACT;
+} from './failure-bundle-artifact-foundation.js';
+import {normalizeReadinessFailure} from './failure-bundle-publication-reason-counts.js';
+import {cloneJsonValue} from './failure-bundle-priority-recovery-diagnostics-summary.js';
+import {PRIORITY_RECOVERY_INVARIANT_FALLBACK} from '../../../src/control-plane/priority-recovery-diagnostics-constants.js';
+
+import {
+  formatLogWindowCoverageVerdict,
+} from './failure-bundle-artifact-foundation.js';
 
 function buildTriageLoadSummary(loadMetrics) {
   if (!isRecord(loadMetrics)) {

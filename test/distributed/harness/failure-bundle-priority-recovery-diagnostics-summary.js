@@ -1,19 +1,19 @@
 import {
+  ZERO,
+  isRecord,
+  normalizeDistinctStringArray,
+  normalizeNonNegativeCount,
+} from './failure-bundle-artifact-foundation.js';
+import {
+  normalizePriorityRecoverySemanticStateId,
+  normalizePriorityRecoveryDecisionSnapshots,
+} from './failure-bundle-priority-recovery-decision-snapshots.js';
+import {
   PRIORITY_RECOVERY_INVARIANT_FALLBACK,
   PRIORITY_RECOVERY_PROGRESS_CLASS_IDS,
   PRIORITY_RECOVERY_SEMANTIC_STATE_IDS,
   PRIORITY_RECOVERY_UNRESOLVED_SEMANTIC_STATE_IDS,
 } from '../../../src/control-plane/priority-recovery-diagnostics-constants.js';
-import {FAILURE_BUNDLE_FOUNDATION} from './failure-bundle-foundation.js';
-
-const {
-  ZERO,
-  isRecord,
-  normalizeDistinctStringArray,
-  normalizeNonNegativeCount,
-  normalizePriorityRecoverySemanticStateId,
-  normalizePriorityRecoveryDecisionSnapshots,
-} = FAILURE_BUNDLE_FOUNDATION;
 
 const PRIORITY_RECOVERY_OPERATION_ID_FIELD = Object.freeze({
   CAMEL: 'operationId',

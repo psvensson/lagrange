@@ -1,8 +1,4 @@
 import {
-  CONTROL_PLANE_READINESS_REASON,
-} from '../../../src/control-plane/control-plane-readiness-constants.js';
-import {FAILURE_BUNDLE_DIAGNOSTICS_CONTRACT} from './failure-bundle-diagnostics-contract-reexport.js';
-const {
   ZERO,
   ROOT_CAUSE_CLASS_UNKNOWN,
   ROOT_CAUSE_CLASS_TOPOLOGY,
@@ -13,8 +9,11 @@ const {
   isRecord,
   normalizeNonNegativeCount,
   normalizeDistinctStringArray,
-  hasPublicationMissingActiveNodeBlocker,
-} = FAILURE_BUNDLE_DIAGNOSTICS_CONTRACT;
+} from './failure-bundle-artifact-foundation.js';
+import {hasPublicationMissingActiveNodeBlocker} from './failure-bundle-diagnostics-merge.js';
+import {
+  CONTROL_PLANE_READINESS_REASON,
+} from '../../../src/control-plane/control-plane-readiness-constants.js';
 
 import {
   ACTIVE_GATE_PUBLICATION_GATE_PREFIX,

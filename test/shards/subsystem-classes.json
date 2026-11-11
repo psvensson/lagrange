@@ -28,7 +28,7 @@
   "censusSize": 2647,
   "digest": "fnv1a32-a7e1ea76",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-b3f9a295",
+  "observationDigest": "fnv1a32-8fecd807",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -6305,7 +6305,6 @@
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
-        "test/distributed/harness/failure-bundle-priority-recovery-decision-snapshots.js",
         "test/distributed/harness/priority-recovery-summary-normalization.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/report-writer-optimization-summary.js",
@@ -6427,7 +6426,6 @@
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
-        "test/distributed/harness/failure-bundle-priority-recovery-decision-snapshots.js",
         "test/distributed/harness/priority-recovery-summary-normalization.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/report-writer-optimization-summary.js",
@@ -7532,7 +7530,6 @@
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
-        "test/distributed/harness/failure-bundle-priority-recovery-decision-snapshots.js",
         "test/distributed/harness/publication-evidence-contract.js"
       ]
     },
@@ -7551,7 +7548,6 @@
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
-        "test/distributed/harness/failure-bundle-priority-recovery-decision-snapshots.js",
         "test/distributed/harness/publication-evidence-contract.js"
       ],
       "directories": [
@@ -7570,7 +7566,6 @@
         "src/control-plane/publication-recovery-evidence.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
-        "test/distributed/harness/failure-bundle-priority-recovery-decision-snapshots.js",
         "test/distributed/harness/publication-evidence-contract.js"
       ]
     },
@@ -7582,7 +7577,6 @@
         "src/control-plane/publication-recovery-evidence.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
-        "test/distributed/harness/failure-bundle-priority-recovery-decision-snapshots.js",
         "test/distributed/harness/publication-evidence-contract.js"
       ]
     },
@@ -7601,9 +7595,6 @@
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
-        "test/distributed/harness/failure-bundle-diagnostics-contract-reexport.js",
-        "test/distributed/harness/failure-bundle-foundation.js",
-        "test/distributed/harness/failure-bundle-priority-recovery-decision-snapshots.js",
         "test/distributed/harness/priority-recovery-summary-normalization.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/report-writer-optimization-summary.js"
@@ -7749,7 +7740,6 @@
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
-        "test/distributed/harness/failure-bundle-priority-recovery-decision-snapshots.js",
         "test/distributed/harness/priority-recovery-summary-normalization.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/report-writer-optimization-summary.js",
@@ -8305,7 +8295,6 @@
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
-        "test/distributed/harness/failure-bundle-priority-recovery-decision-snapshots.js",
         "test/distributed/harness/priority-recovery-summary-normalization.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/report-writer-optimization-summary.js"
@@ -8328,7 +8317,6 @@
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
-        "test/distributed/harness/failure-bundle-priority-recovery-decision-snapshots.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
       ],
@@ -8382,7 +8370,6 @@
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
-        "test/distributed/harness/failure-bundle-priority-recovery-decision-snapshots.js",
         "test/distributed/harness/priority-recovery-summary-normalization.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/report-writer-optimization-summary.js",
@@ -8418,7 +8405,6 @@
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
-        "test/distributed/harness/failure-bundle-priority-recovery-decision-snapshots.js",
         "test/distributed/harness/priority-recovery-summary-normalization.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/report-writer-optimization-summary.js",
@@ -8480,7 +8466,6 @@
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
-        "test/distributed/harness/failure-bundle-priority-recovery-decision-snapshots.js",
         "test/distributed/harness/priority-recovery-summary-normalization.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/report-writer-optimization-summary.js",
@@ -8588,7 +8573,6 @@
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
-        "test/distributed/harness/failure-bundle-priority-recovery-decision-snapshots.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
       ],
@@ -20851,7 +20835,14 @@
     },
     "test/scripts/quest-evidence-harness-expected-tests.test.js": {
       "files": [
+        "README.md",
         "scripts/quest-evidence/harness-runtime.js"
+      ],
+      "directories": [
+        "scripts/checks",
+        "scripts/quest-evidence",
+        "solve/epics",
+        "solve/quests"
       ]
     },
     "test/scripts/release-content-digest.test.js": {
@@ -21227,7 +21218,6 @@
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
-        "test/distributed/harness/failure-bundle-priority-recovery-decision-snapshots.js",
         "test/distributed/harness/priority-recovery-summary-normalization.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/report-writer-optimization-summary.js",

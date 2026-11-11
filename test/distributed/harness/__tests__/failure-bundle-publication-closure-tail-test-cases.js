@@ -1,14 +1,12 @@
-import {readFile} from 'node:fs/promises';
-import {resolve} from 'node:path';
-import {writeFailureBundlesForCompleteRun} from './failure-bundle-full-log-fixture.js';
-import {FAILURE_BUNDLE_FOUNDATION} from '../failure-bundle-foundation.js';
-
-const {
+import {
   FAILURE_CLASS_PUBLICATION_CONVERGENCE_BLOCKED,
   FAILURE_CLASS_STARTUP_RECOVERY_BLOCKED,
   ROOT_CAUSE_CLASS_STARTUP,
   ROOT_CAUSE_CLASS_TOPOLOGY,
-} = FAILURE_BUNDLE_FOUNDATION;
+} from '../failure-bundle-artifact-foundation.js';
+import {readFile} from 'node:fs/promises';
+import {resolve} from 'node:path';
+import {writeFailureBundlesForCompleteRun} from './failure-bundle-full-log-fixture.js';
 
 export function registerFailureBundlePublicationClosureTailTests({
   it,

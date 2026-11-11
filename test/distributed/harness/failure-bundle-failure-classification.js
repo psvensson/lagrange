@@ -1,17 +1,4 @@
 import {
-  JOINING_PHASE,
-} from '../../../src/bootstrap/bootstrap-constants.js';
-import {
-  POST_REBALANCE_CLOSURE_STATE,
-} from './post-rebalance-closure-contract.js';
-import {
-  CONTROL_PLANE_QUIESCENCE_CANDIDATE_WINDOW_RESET_REASON,
-} from '../../../src/diagnostics/control-plane-quiescence-snapshot.js';
-import {
-  hasMeaningfulPriorityRecoveryProgressWitness,
-} from './priority-recovery-summary-normalization.js';
-import {FAILURE_BUNDLE_DIAGNOSTICS_CONTRACT} from './failure-bundle-diagnostics-contract-reexport.js';
-const {
   ZERO,
   UNKNOWN_VALUE,
   ROOT_CAUSE_CLASS_UNKNOWN,
@@ -37,15 +24,33 @@ const {
   STABILITY_GATE_TYPE_RESTART_RECOVERY,
   STABILITY_GATE_BLOCKER_PRIORITY_SPREAD_PENDING,
   isRecord,
+  normalizeNonNegativeCount,
+  normalizeDistinctStringArray,
+} from './failure-bundle-artifact-foundation.js';
+import {
   appendActiveGateReadinessDelaySignals,
   appendReadinessFailureSignals,
   resolveReadinessFailure,
-  normalizeNonNegativeCount,
-  normalizeDistinctStringArray,
+} from './failure-bundle-publication-reason-counts.js';
+import {
   buildPublicationConvergenceSummary,
+} from './failure-bundle-diagnostics-artifact-builder.js';
+import {
   hasBlockingPublicationClosureRecord,
   isStartupReadinessBlocked,
-} = FAILURE_BUNDLE_DIAGNOSTICS_CONTRACT;
+} from './failure-bundle-diagnostics-stability-gates.js';
+import {
+  JOINING_PHASE,
+} from '../../../src/bootstrap/bootstrap-constants.js';
+import {
+  POST_REBALANCE_CLOSURE_STATE,
+} from './post-rebalance-closure-contract.js';
+import {
+  CONTROL_PLANE_QUIESCENCE_CANDIDATE_WINDOW_RESET_REASON,
+} from '../../../src/diagnostics/control-plane-quiescence-snapshot.js';
+import {
+  hasMeaningfulPriorityRecoveryProgressWitness,
+} from './priority-recovery-summary-normalization.js';
 
 import {
   ARRAY_LAST_INDEX,
