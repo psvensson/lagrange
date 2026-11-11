@@ -53,53 +53,44 @@ this epic owns coordination and its current summary.
 
 ## Current integration summary
 
-- Governing rules: revision 5, inspected at source
-  `103f132c13268321445369d3b4c1183ca2c39c66`, branch
-  `work/canonical-authority-epic-20261110`, 2026-11-10T20:22:07Z.
-  The working tree contains unrelated runtime and evidence work; it is preserved.
-- Current unit: implementation in the isolated worktree
+- Governing rules: revision 5, initially inspected at source
+  `103f132c13268321445369d3b4c1183ca2c39c66`. Implementation remains isolated in
   `/mnt/data/peter/projects/.worktrees/quest-agent-tooling-20261110`, branch
-  `work/quest-agent-tooling-20261110`. Q1 landed as `f9da7b04a`; the current
-  integration commit is `15be1890a`, including the independently reviewed remote
-  formation trend row. All eight Quests
-  were sealed against directly observed absent capabilities. The bounded design
-  has independent approval. The first canonical landing refused inline values,
-  implicit decisions and mutable checker calls before committing. Their owners
-  are repaired without baseline changes; independent source review approves the
-  updated candidate. Q1 receipt review and canonical landing are complete;
-  remaining component closure and composed acceptance remain open.
-- Implemented candidate: pinned profile, five project skills, local configuration
-  and service lifecycle, real observation capture and shared read-only admission.
-  Actual Codex sessions invoked both Serena and Context7. The first host invocation
-  omitted project MCP tools; a later run exposed incomplete generated Serena settings.
-  Those failures are retained and the configuration producer has been corrected.
-  The daemon restart updated Codex to 0.167.1; the old pin refused that host and
-  an explicit reviewed profile update now governs current execution. Original
-  0.167.0 authoring sessions remain historical, without relabeling.
-- Current executed proof: 174 assertions across seven canonical files; real
-  setup/configuration-reader evidence; real setup, repeat, upgrade, interruption,
-  recovery, worktree/source refresh, service cancellation, removal and ordinary
-  Solver execution in a separate Lagrange worktree. Unrelated configuration is
-  unchanged and no observed owned process remains alive. The independent reviewer
-  also independently passed 48 focused assertions. Changed-path landing audits
-  and fast static checks pass. The final actual authoring continuation changed
-  only the process owner; its complete source and outputs are retained.
-  Raw evidence uses the existing verified release store; compact receipts and
-  canonical closure are being completed, not inferred from these counts.
-- Integration responsibility: the agent assigned this epic owns its composition;
-  existing product Quest owners retain their source and evidence responsibilities.
-  No unattended coordinator or scheduler is installed.
-- Publication blocker: the exact `15be1890a` publisher gate refused the existing
-  duplication ratchets (source/scripts 45 groups and 1,342 lines versus 35/1,109;
-  tests 632/23,582 versus 623/23,339). No push occurred. The retained clone reports
-  contain no pair involving this epic's changed files. That attribution does not
-  waive the full gate or establish publishability of the inherited candidate.
-- Next action: finish exact component receipts, canonical landings and separate
-  lesson reuse. Q8 retains its real publication requirement; no publication or
-  epic completion is inferred from the implemented source or focused proof.
-- Scope and lifecycle follow current `scripts/solve/schema.js`, AGENTS and routed
-  owners. The older epic README describes retired commands and a contradictory
-  no-status format; Q1 reconciles that guidance with the current owners.
+  `work/quest-agent-tooling-20261110`. Unrelated primary-worktree changes are preserved.
+- Q1-Q6 are canonically landed and independently admitted at current HEAD
+  `645f8aa6305902a48cf4f64f653b0e29b6f7560e`. Q7's exact lifecycle receipt is in final review. Q8 remains open.
+  Initial source integration landed in `f9da7b04a`; `15be1890a` reconciled the
+  existing remote formation trend row without altering tooling source.
+- Implemented: five project skills, a pinned profile, worktree-local Serena and
+  Context7 configuration/services, explicit setup/upgrade/recovery/removal,
+  actual observation capture, verified evidence-store custody and shared read-only
+  receipt admission. Existing Quest owners retain workflow and publication authority.
+- Executed proof: 174 assertions across seven canonical files, independently
+  rechecked 48 focused assertions, actual Codex MCP navigation/documentation,
+  and the real SDK/CLI lifecycle in a separate Lagrange worktree. Canonical
+  component landings also passed their selected proof. A distinct later session
+  retrieved the closed Q1 lesson, inspected current prevention owners and rejected
+  stale guidance without rewriting history or creating another memory store.
+- Observed limits remain explicit: JavaScript reference results are partial;
+  Context7 did not establish exact-version coverage for installed ws8.21.0;
+  lifecycle upgrade proof covers configuration/profile transition, not a new
+  upstream dependency version. Other clients and Rust backends remain unmeasured.
+- Actual first failures remain retained: missing client tool exposure, incomplete
+  generated Serena configuration, process lifetime/invocation defects, and the
+  host update to Codex0.167.1. The Q2 landing also caught the added router row
+  exceeding the 360-line steering budget by one. Shorter introductory prose
+  restored 360; the existing 20-assertion check and full selected proof passed.
+  No baseline or acceptance requirement was weakened.
+- Publication remains open: the exact `15be1890a` publisher gate refused the
+  existing duplication ratchets (source/scripts 45 groups and 1,342 lines versus
+  35/1,109; tests 632/23,582 versus 623/23,339). No push occurred. Independent
+  review confirmed the retained clone reports contain no pair involving this
+  epic's changed files. This attribution does not waive the composed gate.
+- Next: capture Q7's actual canonical landing, finish the separate Q8 lesson-reuse
+  review and retain the required publication outcome. Q8 cannot close without an
+  actual publisher-owned receipt for its pilot commit. Product formation,
+  durability, release and comparative measurements retain their existing owners;
+  this integration has run no comparative system campaign.
 
 ## Work packages and dependency order
 
