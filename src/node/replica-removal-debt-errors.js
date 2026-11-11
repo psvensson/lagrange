@@ -42,6 +42,11 @@ function retryableRemovalDebtError(code, message, metadata = {}) {
   if (typeof metadata.mutationOutcome === REPLICA_HANDLER_TYPEOF.STRING) {
     error.mutationOutcome = metadata.mutationOutcome;
   }
+  // The named states the deferral was decided from, in decision order (the
+  // typed reason of the hold; its message only renders them).
+  if (Array.isArray(metadata.deferralReasons)) {
+    error.deferralReasons = Object.freeze([...metadata.deferralReasons]);
+  }
   return error;
 }
 
@@ -81,6 +86,9 @@ function buildFailedRemovalOutcome(replicaId, error) {
   }
   if (typeof error?.mutationOutcome === REPLICA_HANDLER_TYPEOF.STRING) {
     outcome.mutationOutcome = error.mutationOutcome;
+  }
+  if (Array.isArray(error?.deferralReasons)) {
+    outcome.deferralReasons = error.deferralReasons;
   }
   return outcome;
 }

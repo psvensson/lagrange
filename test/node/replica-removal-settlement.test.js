@@ -29,6 +29,8 @@ import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {
   REPLICA_REMOVAL_STILL_MEMBER_WITHOUT_PORT,
 } from '../../src/node/replica-removal-debt-errors.js';
+import {GROUP_REMOVAL_VERDICT} from
+  '../../src/node/replica-removal-group-verdict.js';
 import {REPLICA_CONSENSUS_EXIT_REASON} from
   '../../src/node/replica-removal-consensus-exit.js';
 import {
@@ -171,12 +173,23 @@ async (t) => {
     'setup: no removal runs any more');
 
   // Re-dispatched while the group still names it.
+  const groupVerdicts = captureLog(source.handler, 'info',
+    REPLICA_HANDLER_LOG_MSG.REMOVE_GROUP_VERDICT);
+  const answersOf = (logged) => ({groupVerdict: logged?.groupVerdict,
+    soleFounder: logged?.soleFounder});
   await source.removeRequest('op-restart');
   await settleRemoval(world, 'op-restart');
   t.same(world.lastOutcome(), {
     type: EXECUTOR_OUTCOME_TYPE.REPLICA_REMOVE_FAILED,
     errorCode: REPLICA_REMOVAL_STILL_MEMBER_WITHOUT_PORT},
   'the group still names it: a named deferral, typed');
+  t.same(source.outcomes.at(-1)[3].deferralReasons, [
+    REPLICA_CONSENSUS_EXIT_REASON.NO_CONSENSUS_PORT,
+    GROUP_REMOVAL_VERDICT.STILL_MEMBER],
+  'the deferral carries its named states: no port, the group\'s answer');
+  t.same(answersOf(groupVerdicts.at(-1)), {
+    groupVerdict: GROUP_REMOVAL_VERDICT.STILL_MEMBER, soleFounder: null},
+  'the group answered: the replica\'s own file is never consulted');
   t.equal(world.lifecycle(), 'active', 'nothing retired');
   t.equal(world.cache.get('services', s)?.status, ReplicaStatus.REMOVING,
     'its row still reads REMOVING');
@@ -199,6 +212,9 @@ async (t) => {
   await settleRemoval(world, null);
   t.equal(world.lastOutcome().type,
     EXECUTOR_OUTCOME_TYPE.REPLICA_REMOVE_COMPLETED, 'the removal completed');
+  t.same(answersOf(groupVerdicts.at(-1)), {
+    groupVerdict: GROUP_REMOVAL_VERDICT.REMOVED, soleFounder: null},
+  'admitted by the group\'s answer alone: its own file was not consulted');
   t.equal(world.cache.get('services', s) ?? null, null,
     'the re-drive asked the group and tore it down: its row is deleted');
   t.equal(source.handler.getLocalReplica(s)?.status, ReplicaStatus.REMOVED,

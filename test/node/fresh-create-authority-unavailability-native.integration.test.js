@@ -47,11 +47,28 @@ import {createLifecycleControlPlaneGatewayForCache} from
 import {createLoopbackTransport} from '../partition/partition-service-test-support.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 import {genesisStampFor, withBootstrapStamp} from './replica-handler-bootstrap-stamps.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
+import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {REPLICA_CONSENSUS_EXIT_REASON} from
+  '../../src/node/replica-removal-consensus-exit.js';
+import {REPLICA_REMOVAL_CONSENSUS_EXIT_DEFERRED} from
+  '../../src/node/replica-removal-debt-errors.js';
+import {GROUP_REMOVAL_VERDICT} from
+  '../../src/node/replica-removal-group-verdict.js';
+import {SOLE_FOUNDER_RETIREMENT} from
+  '../../src/node/replica-removal-sole-founder.js';
+import {
+  DURABLE_OWN_HISTORY,
+  DURABLE_OWN_MEMBERSHIP,
+} from '../../src/raft/raft-rs-durable-own-group-record.js';
 
 const NODE_ID = 'fresh-authority-native-node';
 const PARTITION_ID = 'sql_transactions-p1';
 const SYNC_TIMEOUT_MS = 4000;
 const TEST_TIMEOUT_MS = 60000;
+const LEADING_POLLS = 150;
+const LEADING_POLL_MS = 20;
+const DATABASE_FILE_SUFFIXES = Object.freeze(['', '-wal', '-shm']);
 const ROUTING_REFUSAL = Object.freeze({success: false, outcome: 'owner_not_ready',
   error: 'all_services_filtered_by_readiness'});
 
@@ -146,7 +163,26 @@ function faultingGateway(cache, operationRow, refusals) {
 
 // `coFounders`: founders the genesis stamp names beside the replica (none
 // exists: a founder of three whose peers never came up).
-async function runCreate(t, {label, refusals, coFounders = []}) {
+// The port refuses every command until the create path has recorded the
+// replica's identity, and the lone founder leads only after that: the
+// proposal is made once the port's own status reads leader past its gate
+// (null when it never did within the bound).
+async function proposeOnceLeading(service, command) {
+  for (let attempt = 0; attempt < LEADING_POLLS; attempt += 1) {
+    const status = service.raft.readStatus();
+    if (status.role === RAFT_ROLE.LEADER && status.gateOpen === true) {
+      return turnChainValue(service.raft.propose(command));
+    }
+    await new Promise((resolve) => setTimeout(resolve, LEADING_POLL_MS));
+  }
+  return null;
+}
+
+// `foundingProposal`: a command the lone leader proposes on its own port
+// before the release fails (the port's entry point; the partition's write
+// path refuses a write before the fresh-create release).
+async function runCreate(t, {label, refusals, coFounders = [],
+  foundingProposal = null}) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), `fresh-authority-${label}-`));
   const operationId = `op-fresh-authority-${label}`;
   const replicaId = `${PARTITION_ID}-r-${label}`;
@@ -158,6 +194,7 @@ async function runCreate(t, {label, refusals, coFounders = []}) {
     SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, operationId));
   const {gateway, fault, lifecycle} = faultingGateway(cache, operationRow, refusals);
   const transport = createLoopbackTransport();
+  const proposal = {settled: Promise.resolve(null)};
   const handler = new ReplicaHandler({
     nodeId: NODE_ID, ownerIncarnation: 101,
     cdcIntegrationService: {}, controlPlaneSystemTableGateway: gateway,
@@ -170,6 +207,9 @@ async function runCreate(t, {label, refusals, coFounders = []}) {
       // The lone founder of this fixture group leads (as a founded group's
       // first election would); the subject is the release, not the election.
       await service.raft.campaign();
+      if (foundingProposal !== null) {
+        proposal.settled = proposeOnceLeading(service, foundingProposal);
+      }
       fault.armed = true;
       return service;
     },
@@ -209,7 +249,7 @@ async function runCreate(t, {label, refusals, coFounders = []}) {
   const keepAlive = setInterval(() => {}, 250);
   const outcome = await settled.finally(() => clearInterval(keepAlive));
   return {outcome, elapsedMs: Date.now() - startedAt, fault, handler, operationId,
-    replicaId, operationRow, store: lifecycle.store,
+    replicaId, operationRow, store: lifecycle.store, proposal,
     dbPath: handler.getPartitionDbPath(PARTITION_ID, replicaId)};
 }
 
@@ -220,7 +260,8 @@ const REMOVE_POLL_MS = 100;
 // removal reported meanwhile is collected (its typed deferral).
 async function driveRemove(run, request, polls) {
   const failures = [];
-  const onFailure = (event) => failures.push(event.error);
+  const onFailure = (event) => failures.push({errorCode: event.errorCode,
+    deferralReasons: event.deferralReasons});
   run.handler.on('replicaRemovalFailed', onFailure);
   try {
     const accepted = await run.handler.handleRemoveReplica(request);
@@ -313,23 +354,37 @@ test('an authority read unavailable forever fails the fresh create at the ' +
     'the failed sole founder left its replica database');
   const {completed, failures} = await driveRemove(run,
     claimedRemoveRequest(run, row), 50);
-  assert.ok(completed, `the claimed REMOVE completes (${failures.join('; ')})`);
-  assert.equal(fs.existsSync(run.dbPath), false,
-    'the sole founder\'s group is retired: its database is gone');
+  assert.ok(completed,
+    `the claimed REMOVE completes (${JSON.stringify(failures)})`);
+  assert.deepEqual(DATABASE_FILE_SUFFIXES.filter((suffix) =>
+    fs.existsSync(`${run.dbPath}${suffix}`)), [],
+  'the sole founder\'s group is retired: its database and the sidecars a ' +
+    'read-only read of it may leave are gone');
 });
 
 // Negative controls of the sole-founder group retirement (2026-11-11): each
-// of its two durable facts is required, and an unreadable record holds.
+// of its two durable facts is required, and a store that cannot say holds.
+// Every hold is asserted on the deferral's typed code and named states.
 const HOLD_POLLS = 12;
-const DEFERRED_WITHOUT_EVIDENCE = /has no evidence it left consensus/u;
+const UNANSWERED = Object.freeze([
+  REPLICA_CONSENSUS_EXIT_REASON.NO_CONSENSUS_PORT,
+  GROUP_REMOVAL_VERDICT.UNANSWERED]);
 
-function assertHeld(run, driven, reason, label) {
+function assertHeld(run, driven, soleFounderStates, label) {
   assert.equal(driven.completed, null, `${label}: the REMOVE does not complete`);
   assert.ok(driven.failures.length >= 1, `${label}: the removal deferred`);
-  assert.match(driven.failures.at(-1), reason,
-    `${label}: the typed reason (${driven.failures.at(-1)})`);
+  assert.deepEqual(driven.failures.at(-1), {
+    errorCode: REPLICA_REMOVAL_CONSENSUS_EXIT_DEFERRED,
+    deferralReasons: [...UNANSWERED, ...soleFounderStates]},
+  `${label}: the typed deferral and its named states`);
   assert.equal(fs.existsSync(run.dbPath), true,
     `${label}: nothing retired - the replica database is kept`);
+}
+
+function dropSidecars(run) {
+  for (const suffix of ['-wal', '-shm']) {
+    fs.rmSync(`${run.dbPath}${suffix}`, {force: true});
+  }
 }
 
 test('a failed founder whose own durable configuration names three members ' +
@@ -340,23 +395,60 @@ test('a failed founder whose own durable configuration names three members ' +
     `${PARTITION_ID}-r-absent-b`, `${PARTITION_ID}-r-absent-c`]});
   const driven = await driveRemove(run, claimedRemoveRequest(run, row),
     HOLD_POLLS);
-  assertHeld(run, driven, DEFERRED_WITHOUT_EVIDENCE, 'of three');
-  assert.match(driven.failures.at(-1),
-    /group_unanswered, sole_founder_record_not_sole_founder/u,
-    'nobody answered for the group and the record is not a sole founder\'s');
+  assertHeld(run, driven, [SOLE_FOUNDER_RETIREMENT.NOT_SOLE_FOUNDER,
+    DURABLE_OWN_MEMBERSHIP.SHARED, DURABLE_OWN_HISTORY.EMPTY], 'of three');
+});
+
+// The partition's write path refuses every write before the fresh-create
+// release, so no production entry point applies a proposal in a founder
+// whose create then fails at the release. The nearest state the port itself
+// admits: a proposal the lone leader COMMITTED (durable in its log at index
+// 2) whose application failed closed (a command the partition does not
+// recognise). Its log holds a payload: the group holds history.
+test('a failed sole founder whose log holds a committed proposal holds: a ' +
+  'group that holds history is never retired by its founder',
+{timeout: TEST_TIMEOUT_MS}, async (t) => {
+  environment(t);
+  const {run, row} = await failedCreate(t, {label: 'history',
+    foundingProposal: {witness: 'sole-founder-history'}});
+  const proposed = await run.proposal.settled;
+  assert.deepEqual({phase: proposed?.phase, index: proposed?.detail?.index},
+    {phase: 'application', index: 2},
+    `setup: the lone leader committed the proposal at index 2 (${
+      JSON.stringify(proposed)})`);
+  const driven = await driveRemove(run, claimedRemoveRequest(run, row),
+    HOLD_POLLS);
+  assertHeld(run, driven, [SOLE_FOUNDER_RETIREMENT.NOT_SOLE_FOUNDER,
+    DURABLE_OWN_MEMBERSHIP.SOLE_MEMBER, DURABLE_OWN_HISTORY.HELD], 'history');
 });
 
 test('a failed sole founder whose database cannot be read holds: unreadable ' +
   'is never teardown', {timeout: TEST_TIMEOUT_MS}, async (t) => {
   environment(t);
   const {run, row} = await failedCreate(t, {label: 'unreadable'});
-  for (const suffix of ['-wal', '-shm']) {
-    fs.rmSync(`${run.dbPath}${suffix}`, {force: true});
-  }
+  dropSidecars(run);
   fs.writeFileSync(run.dbPath, Buffer.alloc(8192, 0x5a));
   const driven = await driveRemove(run, claimedRemoveRequest(run, row),
     HOLD_POLLS);
-  assertHeld(run, driven, /sole_founder_record_unreadable/u, 'unreadable');
+  assertHeld(run, driven, [SOLE_FOUNDER_RETIREMENT.RECORD_UNREADABLE,
+    DURABLE_OWN_MEMBERSHIP.UNREADABLE, DURABLE_OWN_HISTORY.UNKNOWN],
+  'unreadable');
+});
+
+test('a failed sole founder whose database lost its lifecycle table (the ' +
+  'file is there, the table is not) holds: a store that cannot say is ' +
+  'never read as "no lifecycle"', {timeout: TEST_TIMEOUT_MS}, async (t) => {
+  environment(t);
+  const {run, row} = await failedCreate(t, {label: 'tableless'});
+  dropSidecars(run);
+  // A valid, readable, empty database: what a main file reads as when the
+  // write-ahead log that held its tables is gone.
+  fs.truncateSync(run.dbPath, 0);
+  const driven = await driveRemove(run, claimedRemoveRequest(run, row),
+    HOLD_POLLS);
+  assertHeld(run, driven, [SOLE_FOUNDER_RETIREMENT.RECORD_UNREADABLE,
+    DURABLE_OWN_MEMBERSHIP.UNREADABLE, DURABLE_OWN_HISTORY.UNKNOWN],
+  'tableless');
 });
 
 test('an ordinary REMOVE (no failed-create claim) of a sole member without ' +
@@ -366,8 +458,5 @@ async (t) => {
   const {run} = await failedCreate(t, {label: 'unclaimed'});
   const driven = await driveRemove(run, {operationId: 'remove-unclaimed',
     partitionId: PARTITION_ID, replicaId: run.replicaId}, HOLD_POLLS);
-  assertHeld(run, driven, DEFERRED_WITHOUT_EVIDENCE, 'unclaimed');
-  assert.match(driven.failures.at(-1),
-    /group_unanswered, sole_founder_not_failed_create_claim/u,
-    'the sole-founder retirement refuses a removal that is not the claim');
+  assertHeld(run, driven, [SOLE_FOUNDER_RETIREMENT.NOT_CLAIMED], 'unclaimed');
 });

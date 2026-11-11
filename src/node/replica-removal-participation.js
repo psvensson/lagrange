@@ -228,7 +228,7 @@ async function requireRemovalTeardownAuthority(handler, request, exit) {
   if (TEARDOWN_EXITS.has(exit.reason)) {
     return;
   }
-  const answers = [exit.reason];
+  const reasons = [exit.reason];
   let groupVerdict = null;
   if (exit.reason === REPLICA_CONSENSUS_EXIT_REASON.NO_CONSENSUS_PORT) {
     const lifecycle = handler.lifecycleVerdictsOf(
@@ -238,6 +238,8 @@ async function requireRemovalTeardownAuthority(handler, request, exit) {
       return;
     }
     groupVerdict = await readGroupVerdictOnOwnRemoval(handler, request);
+    // The group's leader outranks the replica's own file: the sole-founder
+    // owner is asked only when no leader answered.
     const soleFounder = groupVerdict === GROUP_REMOVAL_VERDICT.UNANSWERED ?
       await decideSoleFounderRetirement(handler, request) : null;
     logGroupVerdict(handler, request, {groupVerdict, soleFounder});
@@ -245,14 +247,23 @@ async function requireRemovalTeardownAuthority(handler, request, exit) {
         soleFounder?.state === SOLE_FOUNDER_RETIREMENT.RETIRES_GROUP) {
       return;
     }
-    answers.push(groupVerdict, ...(soleFounder ? [soleFounder.state] : []));
+    reasons.push(groupVerdict, ...namedStatesOf(soleFounder));
   }
   throw retryableRemovalDebtError(
     groupVerdict === GROUP_REMOVAL_VERDICT.STILL_MEMBER ?
       REPLICA_REMOVAL_STILL_MEMBER_WITHOUT_PORT :
       REPLICA_REMOVAL_CONSENSUS_EXIT_DEFERRED,
     `Replica ${request.replicaId} has no evidence it left consensus ` +
-      `(${answers.join(ANSWER_SEPARATOR)}); nothing retired`);
+      `(${reasons.join(ANSWER_SEPARATOR)}); nothing retired`,
+    {deferralReasons: reasons});
+}
+
+// The named states of a sole-founder decision that was asked: its state,
+// then the record's membership and history when the record was read.
+function namedStatesOf(soleFounder) {
+  return soleFounder === null ? [] : [soleFounder.state,
+    soleFounder.membership, soleFounder.history].filter((state) =>
+    state !== null);
 }
 
 function logGroupVerdict(handler, request, answers) {

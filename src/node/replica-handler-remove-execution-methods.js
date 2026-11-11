@@ -359,18 +359,25 @@ function reportReplicaRemovalSuccess(handler, request, cleanupError) {
   });
 }
 
+const TYPED_FAILURE_FIELDS = Object.freeze(['errorCode', 'deferralReasons']);
+
 async function handleReplicaRemovalFailure(handler, request, service,
   execution, error) {
   const {operationId, partitionId, replicaId} = request;
+  const outcome = buildFailedRemovalOutcome(replicaId, error);
+  // The typed part of the failure: its code and, for a deferral, the named
+  // states it was decided from (no key for an untyped failure).
+  const typed = Object.fromEntries(TYPED_FAILURE_FIELDS.filter((field) =>
+    Object.hasOwn(outcome, field)).map((field) => [field, outcome[field]]));
   handler.logger.error(REPLICA_HANDLER_LOG_MSG.REMOVE_FAILED, {
-    operationId, replicaId, partitionId, error: error.message,
+    operationId, replicaId, partitionId, error: error.message, ...typed,
     stack: error.stack,
   });
   handler.emitExecutorOutcome(
     EXECUTOR_OUTCOME_TYPE.REPLICA_REMOVE_FAILED,
     operationId,
     WORKFLOW_STEP.FAILED,
-    buildFailedRemovalOutcome(replicaId, error),
+    outcome,
   );
   if (!execution.serviceRowRemoved) {
     if (!execution.retiringRowDurable) {
@@ -399,7 +406,7 @@ async function handleReplicaRemovalFailure(handler, request, service,
   }
   if (operationId) handler.inProgressOperations.delete(operationId);
   handler.emit(REPLICA_HANDLER_EVENT.REMOVAL_FAILED, {
-    operationId, replicaId, partitionId, error: error.message,
+    operationId, replicaId, partitionId, error: error.message, ...typed,
     nodeId: handler.nodeId,
   });
 }
