@@ -811,10 +811,14 @@ test('AdminControlSnapshot repair-deferred trigger queues owner reconcile withou
         ],
         readProfile:
           ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_READ_PROFILE,
-        skipPublicationWriteReadback:
-          ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_SKIP_WRITE_READBACK,
       },
       'the pressure-deferred direct attempt should still enqueue the owner catch-up target',
+    );
+    // Guarded write (2026-11-11): the read-back opt-out is deleted.
+    t.equal(
+      'skipPublicationWriteReadback' in (enqueuedContexts[0] ?? {}),
+      false,
+      'the owner reconcile context carries no read-back opt-out',
     );
     t.equal(
       buildOptions.length,
@@ -1216,10 +1220,14 @@ test(ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_OPEN_PROGRESS_TEST_NAME
       ],
       readProfile:
         ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_READ_PROFILE,
-      skipPublicationWriteReadback:
-        ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_SKIP_WRITE_READBACK,
     },
     'OPEN publication flattened progress should enqueue only the selected owner reconcile cohort',
+  );
+  // Guarded write (2026-11-11): the read-back opt-out is deleted.
+  t.equal(
+    'skipPublicationWriteReadback' in (reconcileOptions ?? {}),
+    false,
+    'the owner reconcile context carries no read-back opt-out',
   );
   t.equal(
     buildOptions.length,
