@@ -147,7 +147,7 @@ test('SQLQueryEngine - provisionInitialTablePartition preserves genesis bootstra
           return created;
         },
         // The partition's durable operation rows, decoded by their owner.
-        async getOperationsByEntity() {
+        async getAuthoritativeOperationsByEntity() {
           return [...durableRowsByTargetNodeId.values()]
             .map((row) => repository.rowToOperation(row));
         },
@@ -432,7 +432,7 @@ function createCohortProvisioningSeam(coordinatorOverrides = {}) {
       controlPlaneReadinessService: createProvisioningReadyService(nodeRows),
       messageRouter: createMockMessageRouter(),
       rebalanceCoordinator: {
-        async getOperationsByEntity() {
+        async getAuthoritativeOperationsByEntity() {
           return [...seam.operationsByNodeId.values()];
         },
         async createOperation(move) {
@@ -559,7 +559,7 @@ test('conflicting bootstrap metadata for an established cohort is a ' +
 test('a deferred read of the durable bootstrap operations is a typed ' +
   'retryable refusal, never an unfounded partition', async (t) => {
   const seam = createCohortProvisioningSeam({
-    async getOperationsByEntity() {
+    async getAuthoritativeOperationsByEntity() {
       throw Object.assign(
         new Error('Authoritative operation visibility deferred'),
         {rebalanceSkipReason: REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
@@ -573,7 +573,7 @@ test('a deferred read of the durable bootstrap operations is a typed ' +
     'the schema job stays PENDING');
   t.same(seam.createCalls, [], 'nothing was planned');
   const broken = createCohortProvisioningSeam({
-    async getOperationsByEntity() {
+    async getAuthoritativeOperationsByEntity() {
       throw new Error('operation rows are malformed');
     },
   });

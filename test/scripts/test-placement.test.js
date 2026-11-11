@@ -19,6 +19,7 @@ import {
   runPlacedTestFiles, startRemoteShard,
 } from '../../scripts/lab/probe.js';
 import {runClassifiedTestFiles} from '../../scripts/run-classified-test-files.js';
+import {placedOrdinaryLaneJobs} from '../../scripts/checks/test-resource-classification-constants.js';
 import {
   CONTROLLER, IMPORT_GRAPH_PRODUCER, LANE, PRODUCER_STUB, fakeInventory, gateTestSource, lab,
   sealPlacedCommit, waitForNonEmptyFile, worktreeTap,
@@ -965,10 +966,18 @@ test('a lab machine proves the exact commit in a throwaway worktree and leaves n
     assert.match(green.log, new RegExp(`^ok ${FAST_TEST} `, 'mu'));
     const cores = Number(spawnSync('getconf', ['_NPROCESSORS_ONLN'], {encoding: 'utf8'})
       .stdout.trim());
+    // Its ordinary lane's count from its own memory and thermal facts, read
+    // there by the lines it was sent, by the planner's rule.
+    const memKiB = Number(/^MemTotal:\s+(\d+)/mu.exec(fs.readFileSync('/proc/meminfo', 'utf8'))[1]);
+    const thermalLine = sent.split('\n').find((line) => line.startsWith('if { command -v sensors'));
+    const thermal = spawnSync('sh', ['-c', `${thermalLine}\nprintf %s "$thermal"`],
+      {encoding: 'utf8'}).stdout;
+    const ordinary = placedOrdinaryLaneJobs({cores, memKiB, thermal});
     assert.match(green.log, new RegExp('^placement-env=factor:1\\.5 mode:local retry:1 ' +
-      `timeout:900 lanecap:${Math.max(1, cores - 1)} base:${basis}$`, 'mu'),
+      `timeout:900 lanecap:${Math.max(1, cores - 1)} ordinary:${ordinary} base:${basis}$`, 'mu'),
     'its own budgets scaled, the controller\'s retry and timeout policy and check base, ' +
-      'never placed again, and its lanes capped at its cores less one');
+      'never placed again, its lanes capped at its cores less one, and its ordinary lane ' +
+      'at the count the planner priced it with');
     assert.match(sent, /else unset LAGRANGE_CHECK_BASE; fi$/mu, 'none forwarded, none kept');
     assert.match(green.log, /^placement-link=node_modules$/mu);
     assert.match(green.log, /^placement-link=data\/examples$/mu, 'an ignored entry is linked');

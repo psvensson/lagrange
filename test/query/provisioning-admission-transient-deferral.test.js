@@ -255,7 +255,7 @@ function stateThirdCreateUnsettled(world, createdOperation) {
     world.failed.push(operation.operationId);
   };
   // No prior attempt: the established-cohort read finds nothing durable.
-  world.rebalanceCoordinator.getOperationsByEntity = async () => [];
+  world.rebalanceCoordinator.getAuthoritativeOperationsByEntity = async () => [];
   world.rebalanceCoordinator.createOperation = async (move) => {
     if (move.nodeId === DEFERRED_NODE_ID) throw routeLossError();
     world.created.push(move.nodeId);
@@ -383,7 +383,7 @@ test('composed: a partial founding whose statement budget ended is ' +
   const durable = new Map();
   let routeToThirdFounder = false;
   stateThirdCreateUnsettled(world, () => null);
-  world.rebalanceCoordinator.getOperationsByEntity = async () =>
+  world.rebalanceCoordinator.getAuthoritativeOperationsByEntity = async () =>
     [...durable.values()];
   world.rebalanceCoordinator.createOperation = async (move) => {
     if (move.nodeId === DEFERRED_NODE_ID && !routeToThirdFounder) {

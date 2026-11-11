@@ -485,7 +485,7 @@ async (t) => {
     const baseEvaluate = owner.evaluateRemoveSafety.bind(owner);
     owner.evaluateRemoveSafety = async (operation) => {
       const evaluation = await baseEvaluate(operation);
-      first.cache.upsert('replica_operations', concurrentRemoveRow(first));
+      first.coordinator.testReplicaOperationLedger.commit(concurrentRemoveRow(first));
       owner.evaluateRemoveSafety = baseEvaluate;
       return evaluation;
     };
@@ -494,12 +494,12 @@ async (t) => {
     t.equal(first.removeEffects.length, 0,
       'decide-first: the effect is withheld (WAIT)');
     // Process-first: the REMOVE is there before SAFE.
-    second.cache.upsert('replica_operations', concurrentRemoveRow(second));
+    second.coordinator.testReplicaOperationLedger.commit(concurrentRemoveRow(second));
     await second.coordinator.executeOperation(await readPersisted(second));
     await settleTurns();
     t.equal(second.removeEffects.length, 0, 'process-first: deferred');
     for (const world of [first, second]) {
-      world.cache.upsert('replica_operations', {...concurrentRemoveRow(world),
+      world.coordinator.testReplicaOperationLedger.commit({...concurrentRemoveRow(world),
         status: ReplicaStatus.FAILED, workflow_step: WORKFLOW_STEP.FAILED,
         completed_at: Date.now()});
       await world.coordinator.executeOperation(await readPersisted(world));
@@ -525,7 +525,7 @@ test('S11 (T5\' re-send): a concurrent operation active at STOPPING defers ' +
     world.eventsSuppressed = true;
     t.equal(world.removeEffects.length, 1, 'setup: the first effect left');
     world.clockOffsetMs += 61_000;
-    world.cache.upsert('replica_operations', concurrentRemoveRow(world));
+    world.coordinator.testReplicaOperationLedger.commit(concurrentRemoveRow(world));
     await world.coordinator.reconcileOperationProgress(
       await readPersisted(world));
     await settleTurns();

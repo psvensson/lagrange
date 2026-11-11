@@ -470,17 +470,6 @@ const RECONCILE_REPLICA_STATUS_WORKFLOW_STEPS = Object.freeze(
   ]),
 );
 
-// Node-recovery classification: rows at these steps are marked failed on
-// recovery (pre-sync steps plus STOPPING); SYNCING rows reconcile instead.
-const NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS = Object.freeze(
-  new Set([
-    WORKFLOW_STEP.PENDING,
-    WORKFLOW_STEP.SENDING,
-    WORKFLOW_STEP.CREATING,
-    WORKFLOW_STEP.STOPPING,
-  ]),
-);
-
 // ---------------------------------------------------------------------------
 // Transition-reason projection
 // ---------------------------------------------------------------------------
@@ -520,7 +509,6 @@ export {
   CREATE_REARM_DISPATCH_OPERATION_TYPES,
   DISPATCH_PENDING_WORKFLOW_STEPS,
   DISPATCH_WAKE_PROGRESS_PREEMPT_WORKFLOW_STEPS,
-  NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS,
   PROTECTED_PRIORITY_BUDGET_WORKFLOW_STEPS,
   RECONCILE_REPLICA_STATUS_WORKFLOW_STEPS,
   REMOVE_INITIAL_DISPATCH_WORKFLOW_STEPS,

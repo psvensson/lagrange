@@ -1,4 +1,5 @@
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {sourceRangeOfEvents} from '../test-helpers/cdc-source-range-fixture.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   CDC_OPERATION,
@@ -145,8 +146,9 @@ export function createDurablePropagationRequest(source, events = [createDurableC
 // The invocation of a delivery addressed to one recipient group (null: the
 // source group); `onRecipients` receives the recipient set the service
 // observed and reported (bindTopology), as the source lane does.
-export function addressedTo(parent, recipientGroupId, onRecipients = () => {}) {
-  return scopeCdcDeliveryInvocation(parent, () => true, () => ({recipientGroupId,
+export function addressedTo(parent, recipientGroupId, onRecipients = () => {},
+  sourceRange = undefined) {
+  return scopeCdcDeliveryInvocation(parent, () => true, () => ({recipientGroupId, sourceRange,
     bindTopology: (_owner, _source, targets) => onRecipients(targets)}));
 }
 
@@ -164,7 +166,7 @@ export async function propagateToEveryRecipient(service, source, events,
     sourceMessageGroupService: source,
     deliveryContext: addressedTo(deliveryContext, recipientGroupId, (observed) => {
       targets = observed;
-    })});
+    }, sourceRangeOfEvents(events))});
   const sourceResult = await deliver(null);
   const results = new Map([[source.groupId, sourceResult]]);
   for (const target of targets) results.set(target.groupId, await deliver(target.groupId));
@@ -193,7 +195,7 @@ export async function propagateToEveryRecipientAtOnce(service, source, events,
     sourceMessageGroupService: source,
     deliveryContext: addressedTo(deliveryContext, recipientGroupId, (observed) => {
       targets = observed;
-    })});
+    }, sourceRangeOfEvents(events))});
   // The service reports the recipient set before its first await.
   const sourceDelivery = deliver(null);
   const settled = await Promise.allSettled(

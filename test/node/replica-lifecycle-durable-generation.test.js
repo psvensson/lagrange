@@ -8,6 +8,8 @@
  * used by transitions, restart recovery, leader settlement and REMOVE cleanup.
  */
 
+import {REPLICA_CONSENSUS_EXIT_REASON} from
+  '../../src/node/replica-removal-consensus-exit.js';
 import {test} from '../../src/test-helpers/tap.js';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -73,6 +75,9 @@ import {
   createLifecycleStateStore as createLifecycleRowStore,
   createPartitionRow,
 } from '../test-helpers/lifecycle-state-store.js';
+// The removal's own applied removal: the exit that permits its teardown.
+const APPLIED_EXIT = Object.freeze(
+  {reason: REPLICA_CONSENSUS_EXIT_REASON.REMOVAL_APPLIED});
 
 const SERVICES = 'services';
 const PARTITIONS = 'partitions';
@@ -172,7 +177,8 @@ function createHandler(store, stateMachine, outcomes = []) {
 function prepareRemovingHandler(t, store, row, outcomes = []) {
   const stateMachine = createStateMachine(store);
   const handler = createHandler(store, stateMachine, outcomes);
-  handler.awaitReplicaRemovalConsensusExit = async () => ({reason: 'test'});
+  handler.awaitReplicaRemovalConsensusExit = async () =>
+    APPLIED_EXIT;
   handler.waitForReplicaServingDrain = async () => {};
   handler.localReplicas.set(row.service_id, {
     replicaId: row.service_id,
@@ -350,7 +356,8 @@ test('handler binds leader settlement before retire and durable deletion',
         order.push('services-delete');
       }
     });
-    handler.awaitReplicaRemovalConsensusExit = async () => ({reason: 'test'});
+    handler.awaitReplicaRemovalConsensusExit = async () =>
+      APPLIED_EXIT;
     handler.waitForReplicaServingDrain = async () => {};
     handler.cleanupRemovedReplicaLocalRuntime = async () => {
       order.push('runtime-cleanup');
@@ -923,7 +930,8 @@ test('terminal completion refusal emits typed retry debt', async (t) => {
   const stateMachine = createStateMachine(store);
   const outcomes = [];
   const handler = createHandler(store, stateMachine, outcomes);
-  handler.awaitReplicaRemovalConsensusExit = async () => ({reason: 'test'});
+  handler.awaitReplicaRemovalConsensusExit = async () =>
+    APPLIED_EXIT;
   handler.waitForReplicaServingDrain = async () => {};
   handler.cleanupRemovedReplicaLocalRuntime = async () => {};
   handler.localReplicas.set(row.service_id, {

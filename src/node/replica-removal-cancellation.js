@@ -37,13 +37,14 @@
  * request runs 2-4. A crash after 3 leaves a serving row: a repeat answers
  * NOT_IN_PROGRESS (still a voter) or ALREADY_REMOVED.
  * Canonical output: {answer, reason} (REPLICA_REMOVAL_CANCEL_ANSWER).
- * Residual (recorded 2026-11-11): a RemoveNode of this replica proposed by
- * an earlier leader and held only by another survivor's log, not yet
- * replicated here when step 2 reads, can still commit after CANCELLED; the
- * leader-side settlement fact (currentTermApplied) is not part of the
- * witness observation the asker reads. New proposals are refused by the
- * serving row and, while the target is silent past the leader's liveness
- * window, by the leader's live-quorum admission.
+ * CANCELLED is "cancelled as far as this replica's log shows": a RemoveNode
+ * proposed by an earlier leader and held only by another survivor's log,
+ * not yet replicated here when step 2 reads, can still commit after it. Its
+ * end state - this replica applying its own removal with a serving row and
+ * no removal running - is settled by replica-removal-settlement.js
+ * (REMOVED_OUTSIDE_REMOVAL). New proposals are refused by the serving row
+ * and, while the target is silent past the leader's liveness window, by the
+ * leader's live-quorum admission.
  * Prohibited: an answer from elapsed time; CANCELLED without the durable
  * serving row and the voter read after it; touching another operation's
  * removal or another generation.

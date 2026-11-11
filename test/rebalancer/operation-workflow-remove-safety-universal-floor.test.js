@@ -78,7 +78,11 @@ function buildContext({rows, minReplicaCount}) {
     repository: {
       isReplaceRemovePhase: () => false,
       isReplaceRemoveDispatchPhase: () => false,
-      getOperationsByEntity: async () => [],
+      // The ledger owner answers: no operation of the entity is in flight.
+      getOperationsByEntityAuthoritativeObservation: async () => ({
+        state: 'empty', complete: true, operationCount: 0, operations: [],
+        deferredOutcome: null, retryAfterMs: null,
+      }),
       isOperationTerminal: () => false,
       getReplaceSourceReplicaId: () => null,
       getReplaceTargetReplicaId: () => null,

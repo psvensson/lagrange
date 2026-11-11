@@ -39,7 +39,7 @@ function createEngine(operations, failed) {
   const engine = Object.create(SQLQueryEngine.prototype);
   engine.logger = {debug() {}, warn() {}, error() {}};
   engine.rebalanceCoordinator = {
-    getOperationsByEntity: async () => operations,
+    getAuthoritativeOperationsByEntity: async () => operations,
     failOperation: async (operation) => {
       failed.push(operation.operationId);
     },

@@ -88,17 +88,23 @@ function boundRecipientVector(lane, rows) {
   return vector;
 }
 
-// A recipient with no cursor and nothing owed after it is shipped the
-// ledger's newest row (never reclaimed, decision D1): the range names its
-// predecessor, so a recipient that lacks what was acknowledged before it was
-// a recipient answers a gap and re-lists (CDC Stage 3). Without it, a group
-// that became a recipient after the last write would never be contacted.
+// A recipient below the ledger's newest row with nothing owed after it (no
+// cursor yet, or rows acknowledged without it: a MUST_RELIST recipient the
+// ledger reclaimed past, a hydration image) is shipped the newest row (never
+// reclaimed, decision D1). The range names its predecessor, so a recipient
+// that lacks what was acknowledged without it answers a gap and re-lists (CDC
+// Stage 3). Without it such a recipient would never be contacted again.
 const POSITION_PROBES = new WeakSet();
 
 function positionProbe(owner, recipient) {
-  if (recipient.cursor !== null || recipient.drive.scanAfter !== null) return [];
+  if (recipient.drive.scanAfter !== null) return [];
   const newest = readCdcLedgerNewest(owner.db);
-  if (newest === null) return [];
+  if (newest === null || (recipient.cursor !== null &&
+      !positionAfter(positionOf(newest), recipient.cursor))) return [];
+  // Owed rows after the cursor (beyond the pass's captured tail) are the next
+  // scan's: the probe never steps over an owed row.
+  if (readOwedCdcObligations(owner.db, {after: recipient.cursor ?? undefined, limit: 1})
+    .length > 0) return [];
   const probe = [newest];
   POSITION_PROBES.add(probe);
   return probe;
@@ -122,7 +128,8 @@ function isPositionProbe(vector) {
  * over; outside a provisional scan the cursor moves over them (they are
  * below what this recipient still has to confirm: a recipient that has not
  * applied them answers the next range's predecessor with a gap). A recipient
- * with no cursor and nothing owed is shipped the position probe.
+ * below the newest row with nothing owed after it is shipped the position
+ * probe.
  * @param {Object} owner - The partition service.
  * @param {Object} lane - The delivery lane.
  * @param {Object} recipient - The recipient ({cursor, drive}).
@@ -164,6 +171,6 @@ function sourceRangeOf(owner, vector) {
     through: Object.freeze(positionOf(vector.at(-1)))});
 }
 
-export {eventOf, isPositionProbe, lowerCursor, positionAfter, positionOf, readRetainedDeliveredGauge,
-  retainedDeliveredBackpressured, selectRecipientVector, settledWithoutDelivery,
-  sourceRangeOf};
+export {eventOf, isPositionProbe, lowerCursor, positionAfter, positionOf,
+  readRetainedDeliveredGauge, retainedDeliveredBackpressured, selectRecipientVector,
+  settledWithoutDelivery, sourceRangeOf};

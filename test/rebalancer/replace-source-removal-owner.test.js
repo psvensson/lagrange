@@ -188,11 +188,12 @@ function removalEffects(deliveries) {
     payload?.type === ReplicaOperationMessageType.REMOVE_REPLICA);
 }
 
-// SYNCING -> remove safety SAFE -> the removal-intent boundary.
+// SYNCING -> remove safety SAFE -> the removal-intent boundary, through the
+// owner's PROGRESS lifecycle (the cause the orphan sweep re-drives with).
 async function driveToRemovalIntent(harness) {
   harness.operation.workflowStep = WORKFLOW_STEP.SYNCING;
   harness.operation.status = ReplicaStatus.SYNCING;
-  await harness.coordinator.reconcileSyncingOperation(harness.operation);
+  await harness.coordinator.reconcileOperationProgress(harness.operation);
 }
 
 async function persistedOperation(harness) {

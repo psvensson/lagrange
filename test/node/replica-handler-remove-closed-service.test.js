@@ -35,8 +35,27 @@ import {
   PARTITION_SERVICE_REMOVAL_SERVING_METHODS,
   REMOVAL_SERVING_STATE,
 } from '../../src/partition/partition-service-removal-serving-methods.js';
-import {openParticipantTransactionStore} from
-  '../../src/partition/partition-participant-transaction-store.js';
+import {notifyRemovalServingDrain} from
+  '../../src/partition/partition-service-removal-drain-wake.js';
+import {
+  insertParticipantTransactionRow,
+  openParticipantTransactionStore,
+  readParticipantTransactionRow,
+  updateParticipantTransactionDecided,
+} from '../../src/partition/partition-participant-transaction-store.js';
+import {
+  PARTICIPANT_TRANSACTION_CUSTODY,
+  PARTICIPANT_TRANSACTION_DECISION,
+  PARTICIPANT_TRANSACTION_STATE,
+} from '../../src/partition/partition-participant-transaction-constants.js';
+import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
+import {EXECUTOR_OUTCOME_TYPE} from
+  '../../src/rebalancer/executor-outcome-constants.js';
+import {
+  createLifecycleServiceRow,
+  createLifecycleStateStore,
+  createPartitionRow,
+} from '../test-helpers/lifecycle-state-store.js';
 import {
   ReplicaOperationField,
   ReplicaOperationMessageType,
@@ -45,8 +64,10 @@ import {
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {REPLICA_HANDLER_LOG_MSG} from
   '../../src/node/replica-handler-constants.js';
-import {REPLICA_ABSENT_NOT_BY_OPERATION} from
-  '../../src/node/replica-removal-debt-errors.js';
+import {
+  REPLICA_ABSENT_NOT_BY_OPERATION,
+  REPLICA_REMOVAL_PARTICIPANT_CUSTODY_DEFERRED,
+} from '../../src/node/replica-removal-debt-errors.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 
@@ -162,11 +183,13 @@ test('the removal fence and drain answer CLOSED on a released connection, ' +
   };
   const fenced = {state: REMOVAL_SERVING_STATE.FENCED,
     activeServingRequestCount: 0, participantTransactionActive: false};
+  // A released connection never answers custody settled: what it holds
+  // durably cannot be read through it (2026-11-11).
+  const closedUnknown = {state: REMOVAL_SERVING_STATE.CLOSED,
+    participantCustody: PARTICIPANT_TRANSACTION_CUSTODY.UNAVAILABLE};
   assert.deepEqual(facts, {
     open: [fenced, fenced, {state: REMOVAL_SERVING_STATE.DRAINED}],
-    closed: [{state: REMOVAL_SERVING_STATE.CLOSED},
-      {state: REMOVAL_SERVING_STATE.CLOSED},
-      {state: REMOVAL_SERVING_STATE.CLOSED}],
+    closed: [closedUnknown, closedUnknown, closedUnknown],
   });
   open.db.close();
 });
@@ -282,3 +305,221 @@ test('a removal whose replica connection was released outside it defers ' +
       inProgress: false, localStatus: ReplicaStatus.REMOVING},
   });
 });
+
+// M1 on real participant debt (2026-11-11): a RESUMED removal (its REMOVING
+// row durable) of a replica whose connection was released, whose database
+// file holds a durable PREPARED participant transaction - driven through the
+// production entry point (handleRemoveReplica and its real asynchronous
+// removal start), on the real lifecycle owner and a real database file.
+const TX = Object.freeze({transactionId: 'tx-closed-1',
+  participantId: 'participant-closed-1'});
+const NODE_ID = 'remove-closed-node';
+
+function seedPreparedParticipant(dbPath) {
+  fs.mkdirSync(path.dirname(dbPath), {recursive: true});
+  const db = new Database(dbPath);
+  try {
+    openParticipantTransactionStore(db);
+    insertParticipantTransactionRow(db, {...TX, sessionId: 'session-closed-1',
+      commitMode: 'two-phase', transactionEpoch: 1,
+      state: PARTICIPANT_TRANSACTION_STATE.PREPARED,
+      operationsText: '[]', preparedDigest: 'digest-1',
+      prepareEntryId: 'prepare-1', prepareIndex: 7, prepareTerm: 1});
+  } finally {
+    db.close();
+  }
+}
+
+function settlePreparedParticipant(dbPath) {
+  const db = new Database(dbPath);
+  try {
+    updateParticipantTransactionDecided(db, {...TX,
+      state: PARTICIPANT_TRANSACTION_STATE.COMMITTED,
+      decision: PARTICIPANT_TRANSACTION_DECISION.COMMIT,
+      decisionDigest: 'decision-1', decisionEntryId: 'decide-1',
+      decisionIndex: 8, decisionTerm: 1});
+  } finally {
+    db.close();
+  }
+}
+
+function participantStateAt(dbPath) {
+  if (!fs.existsSync(dbPath)) return null;
+  const db = new Database(dbPath, {readonly: true});
+  try {
+    return readParticipantTransactionRow(db, TX)?.state ?? null;
+  } finally {
+    db.close();
+  }
+}
+
+function openResumedRemovalWorld() {
+  const removingRow = createLifecycleServiceRow({replicaId: REPLICA_ID,
+    partitionId: PARTITION_ID, nodeId: NODE_ID, status: ReplicaStatus.REMOVING,
+    createdAt: 1, stateEnteredAt: 2});
+  const store = createLifecycleStateStore({services: [removingRow],
+    partitions: [createPartitionRow({partitionId: PARTITION_ID,
+      leaderNodeId: null})]});
+  const replicaStateMachine = new ReplicaStateMachine({nodeId: NODE_ID,
+    systemTableCache: store.cache,
+    controlPlaneSystemTableGateway: store.gateway});
+  replicaStateMachine.registerReplicaSnapshot(REPLICA_ID, {
+    partitionId: PARTITION_ID, nodeId: NODE_ID, state: ReplicaStatus.REMOVING,
+    serviceId: REPLICA_ID, serviceType: removingRow.service_type,
+    serviceAddress: removingRow.address, replicaIdentity: removingRow.replica_id,
+    groupId: removingRow.group_id, cleanupToken: removingRow.cleanup_token,
+    createAttemptToken: removingRow.create_attempt_token,
+    createdAt: removingRow.created_at, durableVersionColumn: 'state_entered_at',
+    durableVersion: removingRow.state_entered_at,
+    durableUpdatedAt: removingRow.updated_at, authoritativeSnapshot: true});
+  const outcomes = [];
+  let reopened = 0;
+  const handler = new ReplicaHandler({nodeId: NODE_ID, dataDir,
+    systemTableCache: store.cache, cdcIntegrationService: {},
+    controlPlaneSystemTableGateway: store.gateway,
+    createPartitionService: () => {
+      reopened += 1;
+      throw new Error('a removal never reopens the service');
+    },
+    replicaStateMachine,
+    executorOutcomeEmitter: {emitOutcome: (...args) => outcomes.push(args)}});
+  // The replica's connection was released by its earlier teardown.
+  const service = partitionServingSurface(false);
+  handler.localServices.set(REPLICA_ID, service);
+  handler.localReplicas.set(REPLICA_ID, {replicaId: REPLICA_ID,
+    partitionId: PARTITION_ID, status: ReplicaStatus.REMOVING, service});
+  const dbPath = handler.getPartitionDbPath(PARTITION_ID, REPLICA_ID);
+  return {handler, store, service, outcomes, dbPath,
+    reopened: () => reopened,
+    durableStatus: () => store.durable.services.get(REPLICA_ID)?.status ?? null,
+    async removeAndSettle(operationId) {
+      const answer = await handler.handleRemoveReplica(
+        removeRequest(operationId));
+      for (let turn = 0; turn < 200 &&
+        handler.inProgressOperations.has(operationId); turn += 1) {
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+      return answer.status;
+    },
+  };
+}
+
+// The last executor outcome: emitOutcome(type, operationId, step, options).
+function lastOutcomeOf(world) {
+  const [type, , , options] = world.outcomes.at(-1) ?? [];
+  return type === undefined ? null : {type,
+    errorCode: options?.errorCode ?? null,
+    deferRetry: options?.deferRetry ?? null};
+}
+
+test('M1 witness: a resumed removal of a released connection with a durable ' +
+  'PREPARED participant defers typed and keeps everything; once the ' +
+  'participant is settled the same removal completes; a duplicate after ' +
+  'completion answers idempotently without reopening the service',
+async () => {
+  const world = openResumedRemovalWorld();
+  seedPreparedParticipant(world.dbPath);
+  // (a) the refusal: nothing retired, deleted or completed.
+  const first = await world.removeAndSettle(FIRST_OP);
+  const refused = {answer: first, outcome: lastOutcomeOf(world),
+    durableStatus: world.durableStatus(),
+    localStatus: world.handler.getLocalReplica(REPLICA_ID)?.status ?? null,
+    databaseKept: fs.existsSync(world.dbPath),
+    participant: participantStateAt(world.dbPath)};
+  // The participant is settled through its decision.
+  settlePreparedParticipant(world.dbPath);
+  // (b) the resumed useful work: the same removal completes.
+  const second = await world.removeAndSettle(FIRST_OP);
+  const completed = {answer: second, outcome: lastOutcomeOf(world),
+    durableStatus: world.durableStatus(),
+    localStatus: world.handler.getLocalReplica(REPLICA_ID)?.status ?? null,
+    databaseKept: fs.existsSync(world.dbPath)};
+  // (c) a duplicate after completion.
+  const duplicate = await world.handler.handleRemoveReplica(
+    removeRequest(FIRST_OP));
+  assert.deepEqual({refused, completed, duplicate: duplicate.status,
+    reopened: world.reopened(), db: world.service.db}, {
+    refused: {answer: STATUS.IN_PROGRESS,
+      outcome: {type: EXECUTOR_OUTCOME_TYPE.REPLICA_REMOVE_FAILED,
+        errorCode: REPLICA_REMOVAL_PARTICIPANT_CUSTODY_DEFERRED,
+        deferRetry: true},
+      durableStatus: ReplicaStatus.REMOVING,
+      localStatus: ReplicaStatus.REMOVING, databaseKept: true,
+      participant: PARTICIPANT_TRANSACTION_STATE.PREPARED},
+    completed: {answer: STATUS.IN_PROGRESS,
+      outcome: {type: EXECUTOR_OUTCOME_TYPE.REPLICA_REMOVE_COMPLETED,
+        errorCode: null, deferRetry: null},
+      durableStatus: null, localStatus: ReplicaStatus.REMOVED,
+      databaseKept: false},
+    duplicate: STATUS.COMPLETED, reopened: 0, db: null});
+});
+
+// The drain waits on the named change that ends it, never a poll: a
+// serving request finishing, a PREPARED row decided (the port's applied
+// progress), the connection released.
+test('the removal drain is woken by the change that ends it, never polls',
+  async () => {
+    const turns = async (count = 20) => {
+      for (let turn = 0; turn < count; turn += 1) {
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+    };
+    const settledOf = (promise) => {
+      const box = {value: null};
+      promise.then((value) => {
+        box.value = value;
+      });
+      return box;
+    };
+    const service = partitionServingSurface(true);
+    const listeners = new Set();
+    service.raft = {subscribe: (_event, listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    }};
+    // A serving request in flight.
+    service.activeServingRequestCount = 1;
+    const byRequest = settledOf(service.waitForRemovalServingDrain());
+    await turns();
+    const requestPending = byRequest.value;
+    service.activeServingRequestCount = 0;
+    await turns();
+    const unannounced = byRequest.value;
+    notifyRemovalServingDrain(service);
+    await turns();
+    const afterRequest = byRequest.value;
+    // A PREPARED participant, decided by a committed entry.
+    insertParticipantTransactionRow(service.db, {...TX,
+      sessionId: 'drain-session', commitMode: 'two-phase',
+      transactionEpoch: 1, state: PARTICIPANT_TRANSACTION_STATE.PREPARED,
+      operationsText: '[]', preparedDigest: 'd', prepareEntryId: 'p',
+      prepareIndex: 3, prepareTerm: 1});
+    const byDecision = settledOf(service.waitForRemovalServingDrain());
+    await turns();
+    const preparedPending = byDecision.value;
+    updateParticipantTransactionDecided(service.db, {...TX,
+      state: PARTICIPANT_TRANSACTION_STATE.COMMITTED,
+      decision: PARTICIPANT_TRANSACTION_DECISION.COMMIT, decisionDigest: 'x',
+      decisionEntryId: 'e', decisionIndex: 4, decisionTerm: 1});
+    for (const listener of [...listeners]) listener();
+    await turns();
+    const afterDecision = byDecision.value;
+    // Busy again, then the connection is released.
+    service.activeServingRequestCount = 1;
+    const byRelease = settledOf(service.waitForRemovalServingDrain());
+    await turns();
+    service.db.close();
+    service.db = null;
+    notifyRemovalServingDrain(service);
+    await turns();
+    assert.deepEqual({requestPending, unannounced, afterRequest,
+      preparedPending, afterDecision, afterRelease: byRelease.value,
+      listenersLeft: listeners.size}, {
+      requestPending: null, unannounced: null,
+      afterRequest: {state: REMOVAL_SERVING_STATE.DRAINED},
+      preparedPending: null,
+      afterDecision: {state: REMOVAL_SERVING_STATE.DRAINED},
+      afterRelease: {state: REMOVAL_SERVING_STATE.CLOSED,
+        participantCustody: PARTICIPANT_TRANSACTION_CUSTODY.UNAVAILABLE},
+      listenersLeft: 0});
+  });

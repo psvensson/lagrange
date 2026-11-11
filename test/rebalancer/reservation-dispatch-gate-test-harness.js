@@ -321,6 +321,23 @@ function createDeterministicTimerQueue() {
   };
 }
 
+// The production restart path is the coordinator timer
+// (rebalance-coordinator-lifecycle.js startTimeoutChecking): the step-budget
+// timeout sweep, then the level-triggered orphan sweep. A test that restarts
+// an owner drives exactly that sequence; there is no separate restart routine.
+async function runRestartTimerTick(coordinator) {
+  await coordinator.checkTimeouts();
+  await coordinator.reconcileOrphanedOperations();
+}
+
+function countProgressOwners(owner, operationId) {
+  return Number(owner.transitionRetryTimerByOperationId.has(operationId)) +
+    Number(owner.dispatchRetryTimerByOperationId.has(operationId)) +
+    Number(owner.createdOperationHandoffRetryTimerByOperationId.has(
+      operationId,
+    ));
+}
+
 function seedActiveReservation(sqlEngine, operationId) {
   const now = Date.now();
   sqlEngine.reservations.set(`res-${operationId}`, {
@@ -386,11 +403,13 @@ export {
   TEST_RESERVATION_ID,
   TEST_TARGET_NODE_ID,
   buildStorageIncreasingOperation,
+  countProgressOwners,
   createCoordinatorWithStorage,
   createRuntimeServiceDeferralFixture,
   createDeterministicTimerQueue,
   createTrackingSqlEngine,
   initializeConfig,
+  runRestartTimerTick,
   seedActiveReservation,
   seedAuthoritativeOperation,
 };

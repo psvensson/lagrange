@@ -30,7 +30,6 @@ const {
   OPERATION_WORKFLOW_OWNER_LITERAL,
   OperationType,
   PRIORITY_CONTROL_PLANE_SYNCING_TIMEOUT_CAP_MS,
-  REBALANCE_COORDINATOR_LOG_MSG,
   RECONCILED_REPLICA_STATUS_ABSENT_VALUES,
   RECONCILED_REPLICA_STATUS_AUTHORITATIVE_TERMINAL_STATUSES,
   RECONCILED_REPLICA_STATUS_PROGRESS_RANK_BY_STATUS,
@@ -39,7 +38,6 @@ const {
   RECONCILED_REPLICA_STATUS_RESOLUTION_TABLE,
   RECONCILED_REPLICA_STATUS_TERMINAL_CACHE_BLOCKING_STATUSES,
   ReplicaStatus,
-  SQL_RECONCILIATION_REASON,
   STOPPING_REPLICA_OBSERVATION_STATE,
   SYSTEM_TABLE_NAME,
   TARGET_CREATE_ADMISSION_WORKFLOW_STEPS_BY_STATUS,
@@ -256,7 +254,6 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
   }
 
   async applyReconciledReplicaStatus(operation, actualStatus, options = {}) {
-    const cause = options.cause || 'progress';
     const reconciledStatus = this.resolveReconciledReplicaStatus(
       operation,
       actualStatus,
@@ -331,22 +328,7 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
     if (reconciledStatus === ReplicaStatus.FAILED) {
       await this.failOperation(
         operation,
-        cause === OPERATION_WORKFLOW_OWNER_LITERAL.RECOVERY &&
-          operation.workflowStep === WORKFLOW_STEP.SYNCING ?
-          OPERATION_WORKFLOW_OWNER_LITERAL.REPLICA_FAILED_DURING_SYNC :
-          OPERATION_WORKFLOW_OWNER_LITERAL.REPLICA_FAILED_DURING_OPERATION_RECONCILIATION,
-      );
-      return true;
-    }
-
-    if (
-      reconciledStatus === null &&
-      cause === OPERATION_WORKFLOW_OWNER_LITERAL.RECOVERY &&
-      operation.workflowStep === WORKFLOW_STEP.SYNCING
-    ) {
-      await this.failOperation(
-        operation,
-        OPERATION_WORKFLOW_OWNER_LITERAL.REPLICA_NOT_FOUND_DURING_RECOVERY_RECONCILIATION,
+        OPERATION_WORKFLOW_OWNER_LITERAL.REPLICA_FAILED_DURING_OPERATION_RECONCILIATION,
       );
       return true;
     }
@@ -442,42 +424,8 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
     }
 
     const cause = options.cause || 'progress';
-    const lifecycleAction = this.resolveOperationLifecycleAction(
-      operation,
-      cause,
-    );
+    const lifecycleAction = this.resolveOperationLifecycleAction(operation);
     switch (lifecycleAction) {
-    case OPERATION_LIFECYCLE_ACTION.FAIL_PRE_SYNC_RECOVERY:
-      await this.failOperation(
-        operation,
-        OPERATION_WORKFLOW_OWNER_LITERAL.NODE_RECOVERY_DASH_INCOMPLETE_OPERATION,
-      );
-      this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_MARK_FAILED, {
-        operationId: operation.operationId,
-        workflowStep: operation.workflowStep,
-        partitionId: operation.partitionId,
-      });
-      return true;
-    case OPERATION_LIFECYCLE_ACTION.FAIL_STOPPING_RECOVERY:
-      if (isReplaceRemovalIntentDurable(operation)) {
-        // D2: recovery of a post-intent REPLACE resumes its owner; it never
-        // re-enables a timer- or restart-driven FAILED.
-        await this.runReplaceStoppingOwner(operation);
-        return true;
-      }
-      await this.failOperation(
-        operation,
-        OPERATION_WORKFLOW_OWNER_LITERAL.NODE_RECOVERY_DASH_INCOMPLETE_REMOVAL_OPERATION,
-      );
-      this.logger.info(
-        REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_MARK_REMOVE_FAILED,
-        {
-          operationId: operation.operationId,
-          workflowStep: operation.workflowStep,
-          partitionId: operation.partitionId,
-        },
-      );
-      return true;
     case OPERATION_LIFECYCLE_ACTION.EXECUTE_ACTIVE_REPLACE: {
       if (await reconcilePartitionReplaceTargetStatus(this, operation,
         observedReplaceTargetStatus(this, operation))) {
@@ -526,13 +474,6 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
           this.isPreSyncCreateOperation(operation),
       },
     );
-    if (cause === OPERATION_WORKFLOW_OWNER_LITERAL.RECOVERY) {
-      this.repository.emitReplicaStatusDivergence(
-        operation.replicaId,
-        actualStatus,
-        SQL_RECONCILIATION_REASON.RECOVERY_REPLICA_STATUS,
-      );
-    }
     return this.applyReconciledReplicaStatus(operation, actualStatus, {
       cause,
     });

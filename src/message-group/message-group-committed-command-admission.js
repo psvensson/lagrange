@@ -78,7 +78,11 @@ function isMessageGroupCommandType(type) {
  *   type} with a MESSAGE_GROUP_COMMAND_REFUSAL reason.
  */
 function admitMessageGroupCommand(command) {
-  if (command?.type === MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH && !isClosedCdcBatchShape(command)) {
+  // A durable event commits only inside a ranged CDC_BATCH (CDC Stage 3).
+  const refusedShape = command?.type === MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH ?
+    !isClosedCdcBatchShape(command) :
+    command?.type === MESSAGE_GROUP_COMMAND_TYPE.CDC && hasDurableCdcEvents([command]);
+  if (refusedShape) {
     return Object.freeze({admitted: false, reason: MESSAGE_GROUP_COMMAND_REFUSAL.CDC_BATCH_SHAPE,
       type: command.type});
   }

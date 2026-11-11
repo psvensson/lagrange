@@ -98,6 +98,9 @@ function createFenceTestRebalancer({entityId, readinessOwner, nowFn}) {
     },
     rebalanceCoordinator: {
       getMoveSafetyError: () => null,
+      // The operation ledger owner's census answers an empty ledger: the
+      // fence's CLEAR rests on it, not on the empty cache projection.
+      repository: {queryClusterWideIncompleteOperations: async () => []},
     },
     sqlQueryEngine: {
       async executeQuery() {
@@ -107,6 +110,14 @@ function createFenceTestRebalancer({entityId, readinessOwner, nowFn}) {
     controlPlaneReadinessService: readinessOwner,
     nowFn,
   });
+}
+
+// Ask the fence once at the clear (the census is requested; the
+// observation is UNAVAILABLE, which neither starts nor rearms the dwell) and
+// let the owner answer, so the next evaluation is the first HELD one.
+async function answerOwnerCensus(rebalancer) {
+  rebalancer.resolvePrioritySpreadPlanningGateDecision();
+  await new Promise((resolve) => setImmediate(resolve));
 }
 
 function buildPrioritySpreadBlocker() {
@@ -231,6 +242,7 @@ async (t) => {
 
     sharedBlocker = null;
     nowMs += BLOCKED_TO_CLEAR_DELAY_MS;
+    await answerOwnerCensus(priorityResolver);
     t.equal(
       priorityResolver.resolvePrioritySpreadPlanningGateDecision(),
       null,
@@ -343,6 +355,7 @@ async (t) => {
 
     sharedBlocker = null;
     nowMs += BLOCKED_TO_CLEAR_DELAY_MS;
+    await answerOwnerCensus(stabilizer);
     const stabilizingDecision =
       stabilizer.resolvePrioritySpreadPlanningGateDecision();
     t.equal(

@@ -50,6 +50,15 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
     TEST_REBALANCE_PLANNING_GATE_SCHEDULE_MODE,
   } = context;
 
+  // The fence's CLEAR needs the operation ledger owner's census, kept per
+  // coordinator: one evaluation requests it (an UNAVAILABLE observation,
+  // which neither starts nor rearms the dwell) and one macrotask lets the
+  // mock owner answer at the current instant.
+  async function answerFenceCensus(rebalancer) {
+    rebalancer.resolvePrioritySpreadPlanningGateDecision();
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+
   test('UnifiedRebalancer defers background planning when local control-plane mutation readiness is unhealthy',
     async (t) => {
       initializeTestEnvironment();
@@ -647,6 +656,7 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
           'the shared ordinary-work fence must never defer a priority partition',
         );
 
+        await answerFenceCensus(lateBackgroundEntity);
         const firstClearDecision =
           lateBackgroundEntity.resolvePrioritySpreadPlanningGateDecision();
         t.equal(
@@ -670,6 +680,9 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
         convergenceCoordinator.controlPlaneReadinessService =
           replacementReadinessOwner;
         independentObserver.setRebalanceCoordinator(convergenceCoordinator);
+        // The original-owner entity keeps its own coordinator; its census is
+        // answered so its sample is the first HELD one after the merge.
+        await answerFenceCensus(originalOwnerBackgroundEntity);
         const convergedOwnerDecision =
           originalOwnerBackgroundEntity
             .resolvePrioritySpreadPlanningGateDecision();
@@ -688,6 +701,8 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
           replacementReadinessOwner,
           'an invalid owner rebind must retain the valid fenced owner',
         );
+        // The rebind changes the census owner: the new coordinator answers.
+        await answerFenceCensus(lateBackgroundEntity);
         const invalidRebindDecision =
           lateBackgroundEntity.resolvePrioritySpreadPlanningGateDecision();
         t.equal(
@@ -727,6 +742,9 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
           observationHandoffMs,
           'a boundary recheck must preserve the existing maturity deadline',
         );
+        // Past half the window that evaluation requested a census refresh;
+        // let it answer so the window-end census is not borderline.
+        await new Promise((resolve) => setImmediate(resolve));
 
         nowMs += observationHandoffMs - 1;
         const lastHeldDecision =
@@ -929,6 +947,7 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
           null,
           'the later cache snapshot must prove every priority partition clear',
         );
+        await answerFenceCensus(lateBackgroundEntity);
         const lateClearDecision =
           lateBackgroundEntity.resolvePrioritySpreadPlanningGateDecision();
         t.equal(
@@ -1031,6 +1050,7 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
 
       try {
         observer.resolvePrioritySpreadPlanningGateDecision();
+        await answerFenceCensus(backgroundEntity);
         const firstClearDecision =
           backgroundEntity.resolvePrioritySpreadPlanningGateDecision();
         t.equal(
@@ -1071,6 +1091,8 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
           nowMs - firstClearAtMs,
           'ordinary work drained between evaluations does not reset the clock',
         );
+        // That evaluation, past half the window, requested a census refresh.
+        await new Promise((resolve) => setImmediate(resolve));
 
         const admissionStableWindowMs =
           backgroundEntity.periodicCheckIntervalMs;

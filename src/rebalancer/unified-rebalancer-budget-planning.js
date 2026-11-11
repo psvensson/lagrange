@@ -11,6 +11,12 @@ import {
   applyUnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods,
 } from './unified-rebalancer-priority-recovery-follow-up-decisions.js';
 import {UNIFIED_REBALANCER_FOLLOW_UP_SHARED as SHARED} from './unified-rebalancer-follow-up-shared.js';
+import {INCOMPLETE_OPERATION_OBSERVATION_STATE} from
+  './replica-operation-repository.js';
+import {
+  buildOperationListUnavailableError,
+  isOperationVisibilityUnavailableError,
+} from './replica-operation-repository-operation-visibility.js';
 
 const {
   CONTROL_PLANE_WORKLOAD_CLASS,
@@ -31,6 +37,21 @@ const {
   UNIFIED_REBALANCER_LITERAL,
   buildControlPlaneWorkloadProfile,
 } = SHARED;
+
+const GLOBAL_IN_FLIGHT_COUNT_SCOPE = 'global in-flight operation count';
+
+// The serial gate's own answer about its in-flight count: COUNTED - the
+// owner answered the list completely; UNANSWERED - the list read was
+// DEFERRED or only a projection, so the count is unknown, never zero.
+const ORDINARY_PRIORITY_SERIAL_GATE_COUNT_STATE = Object.freeze({
+  COUNTED: 'counted',
+  UNANSWERED: 'unanswered',
+});
+
+function isCompleteIncompleteOperationObservation(observation) {
+  return observation?.complete === true &&
+    observation.state !== INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED;
+}
 
 const PRIORITY_RECOVERY_ORDINARY_SERIAL_GATE_STATE = Object.freeze({
   FOLLOW_UP_WITHOUT_SERIAL_WAIT: 'follow_up_without_serial_wait',
@@ -131,25 +152,53 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
       this.rebalanceBudget;
   }
 
+  /**
+   * The cluster-wide in-flight operation count the global move budget is
+   * charged with. The read prefers this node's replica of replica_operations
+   * and asks the owner when it is not hosted here; a read that still does not
+   * answer is the typed list unavailability (never a count of zero, which
+   * opened the whole budget), and the OPERATION_LIST_READ_DEFERRED wait is
+   * armed so the event that can let the owner answer re-asks.
+   * @return {Promise<number>}
+   */
   async getGlobalInFlightOperationCount() {
     const result = await this.executeBudgetRead(
       SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       SQL_BUDGET.SELECT_IN_FLIGHT_COUNT,
       [],
     );
-
-    if (
-      !result.success ||
-      !result.rows ||
-      result.rows.length === UNIFIED_REBALANCER_LITERAL.ZERO
-    ) {
-      return UNIFIED_REBALANCER_LITERAL.ZERO;
+    const answered = result?.success === true && Array.isArray(result.rows) &&
+      result.rows.length === 1;
+    const count = answered ? Number(result.rows[0].total_count) : Number.NaN;
+    if (!Number.isSafeInteger(count) || count < UNIFIED_REBALANCER_LITERAL.ZERO) {
+      this.armOperationListReadWake();
+      throw buildOperationListUnavailableError(result,
+        GLOBAL_IN_FLIGHT_COUNT_SCOPE);
     }
+    return count;
+  }
 
-    const parsed = Number(result.rows[0].total_count);
-    return Number.isFinite(parsed) && parsed >= UNIFIED_REBALANCER_LITERAL.ZERO ?
-      parsed :
-      UNIFIED_REBALANCER_LITERAL.ZERO;
+  /**
+   * The global budget's in-flight count for this entity's pass. An
+   * unanswered count holds every entity (the pass reports the budget query
+   * failure) except the emergency lane: replica_operations and
+   * control-plane publication partitions, whose recovery is what lets the
+   * owner answer. For them an unknown count is no free budget, and the
+   * coordinator's emergency admission decides through the priority budget
+   * bypass (canBypassGlobalBudgetForPriorityRecovery) - so the cycle
+   * "count needs the owner, the owner needs this ADD" cannot close.
+   * @return {Promise<number>}
+   */
+  async resolveGlobalInFlightOperationCountForBudget() {
+    try {
+      return await this.getGlobalInFlightOperationCount();
+    } catch (error) {
+      if (!isOperationVisibilityUnavailableError(error) ||
+          !this.isEmergencyPriorityControlPlanePartition(this.entityId)) {
+        throw error;
+      }
+      return Number.POSITIVE_INFINITY;
+    }
   }
 
   hasPriorityBudgetBypassCandidateMove(moves = []) {
@@ -342,16 +391,33 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
         visibilityReadMode:
           REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED,
       });
-    const ordinaryPriorityInFlightCount = Number.isFinite(
-      counts?.ordinaryPriorityCount,
-    ) ?
-      counts.ordinaryPriorityCount :
-      0;
+    // A list the owner did not answer completely holds the gate: its count
+    // is unknown, and reading it as zero admitted a second ordinary-priority
+    // ADD beside one already in flight. The named wait re-asks on the event
+    // that can let the owner answer (no timer; the cadence re-asks too).
+    // The emergency lane (replica_operations, control-plane publications),
+    // whose recovery restores that answer, is never gated here.
+    if (!isCompleteIncompleteOperationObservation(counts.observation)) {
+      this.armOperationListReadWake();
+      return Object.freeze({
+        applicable: true,
+        serialLimit: 1,
+        countState: ORDINARY_PRIORITY_SERIAL_GATE_COUNT_STATE.UNANSWERED,
+        ordinaryPriorityInFlightCount: null,
+        observationState: counts.observation.state,
+        deferredOutcome: counts.observation.deferredOutcome,
+        blocked: true,
+      });
+    }
+    this.disarmOperationListReadWake();
     return Object.freeze({
       applicable: true,
       serialLimit: 1,
-      ordinaryPriorityInFlightCount,
-      blocked: ordinaryPriorityInFlightCount >= 1,
+      countState: ORDINARY_PRIORITY_SERIAL_GATE_COUNT_STATE.COUNTED,
+      ordinaryPriorityInFlightCount: counts.ordinaryPriorityCount,
+      observationState: counts.observation.state,
+      deferredOutcome: null,
+      blocked: counts.ordinaryPriorityCount >= 1,
     });
   }
 

@@ -11,11 +11,16 @@
  * records from it:
  *   CANCELLED, NOT_IN_PROGRESS  TARGET_DEAD_SOURCE_RETAINED (the source
  *                               serves and stays a voter);
- *   ALREADY_REMOVED             TARGET_DEAD_SOURCE_REMOVED, a named degraded
- *                               outcome: the source left, the dead target is
- *                               still configured, the group runs below its
- *                               replica count until the durability repair
- *                               ADD restores it - never a silent success;
+ *   ALREADY_REMOVED             the removal happened: never "retained". The
+ *                               degraded group is reported by name
+ *                               (TARGET_DEAD_SOURCE_REMOVED: the source left,
+ *                               the dead target is still configured, the
+ *                               group runs below its replica count until the
+ *                               durability repair ADD restores it) and the
+ *                               operation completes by R-1a from the
+ *                               committed absence - the same terminal the
+ *                               source's completed removal, or an absence
+ *                               read first (P6 (c)), reaches;
  *   UNAVAILABLE (and any undelivered or untyped answer)
  *                               nothing is recorded: the owner waits
  *                               (SOURCE_REMOVAL_CANCEL_PENDING), woken by its
@@ -48,6 +53,11 @@ const SOURCE_CANCEL_UNASKED = Object.freeze({
 });
 // What repairs a REPLACE that removed its source while its target died.
 const TARGET_DEAD_SOURCE_REMOVED_REPAIR = 'durability_repair_add';
+// The named degraded outcome of that REPLACE (its WARN report).
+const TARGET_DEAD_SOURCE_REMOVED = 'replace_target_dead_source_removed';
+const TARGET_DEAD_SOURCE_REMOVED_LOG_MSG =
+  'REPLACE target died after its source was removed: the group is ' +
+  'degraded until the durability repair ADD restores its replica count';
 const ANSWERS = new Set(Object.values(REPLICA_REMOVAL_CANCEL_ANSWER));
 
 function unavailable(reason, generation = null) {
@@ -104,17 +114,6 @@ async function cancelReplaceSourceRemoval(owner, operation) {
 }
 
 /**
- * The answer that stands for a source the completion authority already
- * reads out of the committed configuration: its removal applied, nothing to
- * cancel.
- * @return {Object} Frozen {answer, reason, generation}.
- */
-function removalAppliedAnswer() {
-  return Object.freeze({answer: REPLICA_REMOVAL_CANCEL_ANSWER.ALREADY_REMOVED,
-    reason: REPLICA_REMOVAL_CANCEL_REASON.REMOVAL_APPLIED, generation: null});
-}
-
-/**
  * Whether the source's node answered that the operation retains its
  * source (its removal cancelled, or none in progress).
  * @param {Object} cancel - cancelReplaceSourceRemoval's answer.
@@ -147,10 +146,45 @@ function targetDeathStepMetadataOf(cancel, observation, ids) {
   }}};
 }
 
+/**
+ * The completion record of a REPLACE whose source left while its target is
+ * gone: the degraded group and the repair it owes (evidence for operators;
+ * the repair planner decides from the ACTIVE rows below replica_count).
+ * @param {Object} observation - The completion authority's observation.
+ * @param {Object} ids - {sourceReplicaId, targetReplicaId}.
+ * @return {Object} Step metadata.
+ */
+function degradedCompletionStepMetadataOf(observation, ids) {
+  return {replaceTargetDeath: {outcome: TARGET_DEAD_SOURCE_REMOVED, degraded: {
+    removedSourceReplicaId: ids.sourceReplicaId,
+    deadTargetReplicaId: ids.targetReplicaId,
+    lastObservedVoterReplicaIds: observation?.voterReplicaIds ?? null,
+    repair: TARGET_DEAD_SOURCE_REMOVED_REPAIR,
+  }}};
+}
+
+/**
+ * Report the degraded group a REPLACE leaves when its source was removed
+ * while its target died (its named outcome and repair).
+ * @param {Object} owner
+ * @param {Object} operation
+ * @param {Object} stepMetadata - targetDeathStepMetadataOf's answer.
+ */
+function reportTargetDeadSourceRemoved(owner, operation, stepMetadata) {
+  owner.logger?.warn?.(TARGET_DEAD_SOURCE_REMOVED_LOG_MSG, {
+    outcome: TARGET_DEAD_SOURCE_REMOVED,
+    operationId: operation.operationId,
+    partitionId: operation.partitionId,
+    ...stepMetadata.replaceTargetDeath,
+  });
+}
+
 export {
+  TARGET_DEAD_SOURCE_REMOVED,
   TARGET_DEAD_SOURCE_REMOVED_REPAIR,
+  reportTargetDeadSourceRemoved,
   cancelReplaceSourceRemoval,
+  degradedCompletionStepMetadataOf,
   isSourceRetainedAnswer,
-  removalAppliedAnswer,
   targetDeathStepMetadataOf,
 };

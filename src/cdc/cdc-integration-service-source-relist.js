@@ -1,24 +1,29 @@
 // The re-list of one CDC-propagated source table into this node's cache (CDC
-// Stage 3): the one path that sets a source position from a list. The
-// partition leader answers its hydration image - the rows of the table and
-// the applied index P (with the ledger incarnation) they are current as of,
-// read in one synchronous span (partition-service-hydration-image-methods.js)
-// - and this owner installs the rows (the canonical merge-safe repair and the
-// leader-witnessed sweep) and the position in one synchronous span, so no
-// event can interleave between them. Only a read whose witness names the
-// serving replica as the partition's leader installs anything; anything else
-// is a typed failure that leaves the cell as it was and owes another list
-// after this owner's backoff.
+// Stage 3): the one path that sets a source position from a list. The source
+// partition's leader serves a paged hydration image - every page read from
+// one snapshot, naming the same applied index P and ledger incarnation
+// (partition-hydration-image-pages.js) - and this owner fetches it page by
+// page, staging the rows off the cache, and installs it only when its last
+// page arrived: rows swapped and position recorded in one synchronous span
+// (system-table-cache-source-image.js). Until then the cache keeps its old
+// rows and the cell stays gapped. A page that is refused, not from the
+// leader, or from another image (imageId, P or incarnation changed) discards
+// the stage, and the image restarts from page 0 after this owner's backoff
+// (or the leader's hint); so does an install the cell refuses because it was
+// reset or moved to another incarnation meanwhile. One table, any size, one
+// path: a small table is a one-page image.
 //
-// Bound: one image per (cache, source partition) in flight
-// (system-table-cache-cdc-observation.js), each at most RELIST_IMAGE_MAX_ROWS
-// rows and RELIST_IMAGE_MAX_BYTES bytes; a table above the bound is refused
-// typed by its leader (partition_hydration_image_exceeds_bound) and stays
-// gapped (an open item: a chunked image). Pacing: a failed or still-stale
-// list waits RELIST_RETRY_DELAY_MS (or the leader's hint) before the next.
-import {SOURCE_POSITION_STATE, SOURCE_RELIST_OUTCOME, SystemTableCacheSourceOrder} from
-  '../cache/system-table-cache-cdc-observation.js';
-import {SYSTEM_TABLE_CACHE_MUTATION_MODE} from '../cache/cache-constants.js';
+// Bounds. The page asked for is at most RELIST_PAGE_MAX_ROWS rows and
+// RELIST_PAGE_MAX_BYTES bytes (the leader serves at most its own bound, and a
+// single larger row alone). One page in flight per image: the next page is
+// asked only after the previous one is staged. At most RELIST_IMAGES_MAX
+// images are fetched at once per service (= per node cache); a further list
+// waits for a slot, it is never refused. The stage holds one copy of the
+// table being listed (the cache holds the same rows after the swap), so the
+// peak is the cache plus RELIST_IMAGES_MAX staged tables.
+import {SOURCE_IMAGE_ADMISSION, SOURCE_POSITION_STATE, SOURCE_RELIST_OUTCOME,
+  SystemTableCacheSourceOrder} from '../cache/system-table-cache-cdc-observation.js';
+import {installSourceImage} from '../cache/system-table-cache-source-image.js';
 import {isUsableSystemCacheKey, resolveSystemCacheRowKey} from
   '../cache/system-cache-key-descriptor.js';
 import {isValidLeaderReadAuthorityWitness} from
@@ -29,7 +34,8 @@ import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE, CONTROL_PLANE_READ_LEADER_MODE} f
   '../control-plane/control-plane-system-table-gateway-constants.js';
 import {getControlPlaneRetryAfterMs} from
   '../control-plane/control-plane-error-classification.js';
-import {PARTITION_HYDRATION_IMAGE_QUERY_FIELD} from
+import {canonicalizeSystemTableRow} from '../control-plane/system-row-normalizers.js';
+import {PARTITION_HYDRATION_IMAGE_PAGE_FIELD, PARTITION_HYDRATION_IMAGE_QUERY_FIELD} from
   '../partition/partition-service-hydration-image-methods.js';
 import {QUERY_MESSAGE_TYPE} from '../query/query-constants.js';
 import {QUERY_RESULT_REQUEST_FIELD} from '../query/query-result-budget.js';
@@ -39,24 +45,30 @@ import {CDC_TERMINAL_STAGE} from './cdc-constants.js';
 import {issueAuthoritativeReadStage} from './cdc-terminal-gate.js';
 
 const SOURCE_RELIST_BOUND = Object.freeze({
-  // A system table's image: far above any control-plane table of a formed
-  // cluster, below the router's message size.
-  RELIST_IMAGE_MAX_ROWS: NUM.SIXTY_FOUR * NUM.BYTES_PER_KIB,
-  RELIST_IMAGE_MAX_BYTES: NUM.SIXTEEN * NUM.BYTES_PER_KIB * NUM.BYTES_PER_KIB,
+  // The page this recipient asks for (its staging step).
+  RELIST_PAGE_MAX_ROWS: NUM.FOUR * NUM.BYTES_PER_KIB,
+  RELIST_PAGE_MAX_BYTES: NUM.BYTES_PER_MIB,
+  // Images fetched at once per node cache.
+  RELIST_IMAGES_MAX: NUM.TWO,
   RELIST_RETRY_DELAY_MS: TIME_MS.HALF_SECOND,
 });
 
+// Why a page could not be staged (or why an image was discarded).
 const SOURCE_RELIST_FAILURE = Object.freeze({
   NO_QUERY_EXECUTOR: 'source_relist_no_query_executor',
   NOT_LEADER_WITNESSED: 'source_relist_not_leader_witnessed',
   NO_SOURCE_IMAGE: 'source_relist_no_source_image',
+  // A page of another image than page 0's (imageId, P or incarnation).
+  IMAGE_CHANGED: 'source_relist_image_changed',
   INVALID_ROWS: 'source_relist_invalid_rows',
   READ_FAILED: 'source_relist_read_failed',
+  // The install found the cell reset or in another incarnation.
+  CELL_CHANGED: 'source_relist_cell_changed',
 });
 
 const SOURCE_RELIST_LOG_MSG = Object.freeze({
-  LISTED: 'CDC source table listed from its leader at a position',
-  FAILED: 'CDC source table list failed; another is owed while the gap stands',
+  IMAGE: 'CDC source table image listed from its leader',
+  PAGE_FAILED: 'CDC source image page failed; the image restarts from page 0',
 });
 
 const RELIST_READ_AUTHORITY = buildControlPlaneReadAuthority({
@@ -64,117 +76,221 @@ const RELIST_READ_AUTHORITY = buildControlPlaneReadAuthority({
   leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
 });
 
-function hydrationImageRequest(sql) {
+function pageRequest(sql, cursor) {
   return () => ({type: QUERY_MESSAGE_TYPE.QUERY, sql, params: [],
     [PARTITION_HYDRATION_IMAGE_QUERY_FIELD]: true,
-    [QUERY_RESULT_REQUEST_FIELD.MAX_ROWS]: SOURCE_RELIST_BOUND.RELIST_IMAGE_MAX_ROWS,
-    [QUERY_RESULT_REQUEST_FIELD.MAX_BYTES]: SOURCE_RELIST_BOUND.RELIST_IMAGE_MAX_BYTES});
+    [PARTITION_HYDRATION_IMAGE_PAGE_FIELD]: {imageId: cursor.imageId, page: cursor.page},
+    [QUERY_RESULT_REQUEST_FIELD.MAX_ROWS]: SOURCE_RELIST_BOUND.RELIST_PAGE_MAX_ROWS,
+    [QUERY_RESULT_REQUEST_FIELD.MAX_BYTES]: SOURCE_RELIST_BOUND.RELIST_PAGE_MAX_BYTES});
 }
 
-function hydrationImageResult(partitionId) {
+function pageResult(partitionId) {
   return (response) => ({partitionId, success: true, rows: response.rows,
-    rowSetComplete: response.rowSetComplete === true,
-    readAuthorityWitness: response.readAuthorityWitness, sourceImage: response.sourceImage});
+    readAuthorityWitness: response.readAuthorityWitness, sourceImage: response.sourceImage,
+    imagePage: response.imagePage});
 }
 
-function validImageRows(tableName, rows) {
-  if (!Array.isArray(rows)) return false;
-  const keys = new Set();
-  return rows.every((row) => {
-    if (!row || typeof row !== 'object' || Array.isArray(row)) return false;
-    const key = resolveSystemCacheRowKey(tableName, row);
-    if (!isUsableSystemCacheKey(key) || keys.has(String(key))) return false;
-    keys.add(String(key));
-    return true;
-  });
-}
-
-// Why a read cannot be installed, or null.
-function imageFailure(result, sourcePartition, tableName) {
-  if (result?.success !== true) return result?.errorCode ?? SOURCE_RELIST_FAILURE.READ_FAILED;
-  if (!isValidLeaderReadAuthorityWitness(result.readAuthorityWitness, sourcePartition)) {
-    return SOURCE_RELIST_FAILURE.NOT_LEADER_WITNESSED;
-  }
-  const image = result.sourceImage;
-  if (image?.sourcePartition !== sourcePartition || !Number.isSafeInteger(image.appliedIndex) ||
-      image.appliedIndex < 0 || result.rowSetComplete !== true) {
-    return SOURCE_RELIST_FAILURE.NO_SOURCE_IMAGE;
-  }
-  return validImageRows(tableName, result.rows) ? null : SOURCE_RELIST_FAILURE.INVALID_ROWS;
-}
-
-// Rows and position, installed in one synchronous span.
-function installImage(service, sourceOrder, request, result, read) {
-  const {sourcePartition, tableName} = request;
-  const witness = result.readAuthorityWitness;
-  const repairOptions = {
-    mutationMode: SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_OBSERVATION_RECONCILIATION,
-    authoritativeObservedAtMs: witness.observedAtMs,
-    authoritativeReadStartedAtMs: read.startedAtMs,
-  };
-  for (const row of result.rows) {
-    service.applyAuthoritativeCacheRepair(tableName, 'UPSERT', row,
-      resolveSystemCacheRowKey(tableName, row), repairOptions);
-  }
-  service.applyAuthoritativeCacheSweep(tableName, result.rows, {
-    readStartedAtMs: read.startedAtMs, mutationSnapshot: read.mutationSnapshot,
-    authoritativeObservedAtMs: witness.observedAtMs});
-  service.cacheMutationTarget.recordAuthoritativeObservation(tableName, {
-    observedAtMs: witness.observedAtMs, term: witness.term ?? null,
-    appliedIndex: result.sourceImage.appliedIndex, commitIndex: witness.commitIndex ?? null,
-    servingNodeId: witness.servingNodeId ?? null, partitionId: sourcePartition,
-    causeId: 'cdc-source-relist'});
-  return sourceOrder.recordListedPosition({sourcePartition, tableName,
-    incarnation: result.sourceImage.incarnation, appliedIndex: result.sourceImage.appliedIndex});
-}
-
-async function readSourceImage(service, request) {
+// Read one page through the owner-RPC query path, at the source's leader.
+async function readImagePage(service, request, cursor) {
   const queryExecutor = service.sqlQueryEngine?.queryExecutor ?? null;
   if (queryExecutor === null) {
     return {success: false, errorCode: SOURCE_RELIST_FAILURE.NO_QUERY_EXECUTOR};
   }
   const sql = `SELECT * FROM ${request.tableName}`;
-  return issueAuthoritativeReadStage(service, CDC_TERMINAL_STAGE.OWNER_RPC_READ,
-    () => queryExecutor.executeOnPartition(request.sourcePartition, sql, [], true, true, false, {
-      readAuthority: RELIST_READ_AUTHORITY,
-      buildRequest: hydrationImageRequest(sql),
-      buildSuccessResult: hydrationImageResult(request.sourcePartition),
-    }));
+  try {
+    return await issueAuthoritativeReadStage(service, CDC_TERMINAL_STAGE.OWNER_RPC_READ,
+      () => queryExecutor.executeOnPartition(request.sourcePartition, sql, [], true, true, false, {
+        readAuthority: RELIST_READ_AUTHORITY,
+        buildRequest: pageRequest(sql, cursor),
+        buildSuccessResult: pageResult(request.sourcePartition),
+      }));
+  } catch (error) {
+    return {success: false, errorCode: SOURCE_RELIST_FAILURE.READ_FAILED,
+      error: error?.message ?? String(error)};
+  }
+}
+
+function isImagePage(page, cursor) {
+  return page !== null && typeof page === 'object' && typeof page.imageId === 'string' &&
+    page.imageId.length > 0 && page.page === cursor.page && typeof page.last === 'boolean' &&
+    Number.isSafeInteger(page.byteCount) && page.byteCount >= 0;
+}
+
+// Why a page cannot be staged, or null. Every page must name page 0's image:
+// the same imageId, applied index and incarnation.
+function pageFailure(result, request, cursor, first) {
+  if (result?.success !== true) return result?.errorCode ?? SOURCE_RELIST_FAILURE.READ_FAILED;
+  if (!isValidLeaderReadAuthorityWitness(result.readAuthorityWitness, request.sourcePartition)) {
+    return SOURCE_RELIST_FAILURE.NOT_LEADER_WITNESSED;
+  }
+  const image = result.sourceImage;
+  if (image?.sourcePartition !== request.sourcePartition ||
+      !Number.isSafeInteger(image.appliedIndex) || image.appliedIndex < 0 ||
+      !isImagePage(result.imagePage, cursor)) {
+    return SOURCE_RELIST_FAILURE.NO_SOURCE_IMAGE;
+  }
+  if (first !== null && (result.imagePage.imageId !== first.imageId ||
+      image.appliedIndex !== first.appliedIndex || image.incarnation !== first.incarnation)) {
+    return SOURCE_RELIST_FAILURE.IMAGE_CHANGED;
+  }
+  return Array.isArray(result.rows) ? null : SOURCE_RELIST_FAILURE.INVALID_ROWS;
+}
+
+// Stage one page's rows: canonical, one per key across the whole image.
+function stagePage(stage, tableName, rows) {
+  for (const row of rows) {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) return false;
+    const canonical = canonicalizeSystemTableRow(tableName, row);
+    const key = resolveSystemCacheRowKey(tableName, canonical);
+    if (!isUsableSystemCacheKey(key) || stage.has(key)) return false;
+    stage.set(key, canonical);
+  }
+  return true;
 }
 
 /**
- * List one source table again and install rows and position together.
+ * Fetch one complete image, page by page: the next page is asked only once
+ * the previous one is staged. A failed page discards the whole stage.
+ * @param {Function} readPage - async (cursor {imageId, page}) => the page's
+ *   answer (the hydration-image query answer, or a typed failure).
+ * @param {Object} request - {sourcePartition, tableName}.
+ * @param {Function} stopped - () => whether the owner became terminal.
+ * @return {Promise<Object>} {image: {sourcePartition, tableName,
+ *   incarnation, appliedIndex, rows, pages, bytes}} | {failure,
+ *   retryAfterMs} | {stopped: true}.
+ */
+async function fetchSourceImage(readPage, request, stopped = () => false) {
+  const stage = new Map();
+  let first = null;
+  let bytes = 0;
+  for (let page = 0; ; page += 1) {
+    const cursor = {imageId: first?.imageId ?? null, page};
+    const result = await readPage(cursor);
+    if (stopped()) return {stopped: true};
+    let failure = pageFailure(result, request, cursor, first);
+    if (failure === null && !stagePage(stage, request.tableName, result.rows)) {
+      failure = SOURCE_RELIST_FAILURE.INVALID_ROWS;
+    }
+    if (failure !== null) {
+      return {failure, error: result?.error ?? null,
+        retryAfterMs: getControlPlaneRetryAfterMs(result)};
+    }
+    first ??= {imageId: result.imagePage.imageId, appliedIndex: result.sourceImage.appliedIndex,
+      incarnation: result.sourceImage.incarnation ?? null};
+    bytes += result.imagePage.byteCount;
+    if (result.imagePage.last) {
+      return {image: {sourcePartition: request.sourcePartition, tableName: request.tableName,
+        incarnation: first.incarnation, appliedIndex: first.appliedIndex,
+        rows: [...stage.values()], pages: page + 1, bytes,
+        witness: result.readAuthorityWitness}};
+    }
+  }
+}
+
+// The per-service image slots: a list beyond RELIST_IMAGES_MAX waits, in
+// order, for a slot to be released (an event, no timer).
+function acquireImageSlot(service) {
+  service.relistImageSlots ??= {held: 0, waiting: []};
+  const slots = service.relistImageSlots;
+  const release = () => {
+    const next = slots.waiting.shift();
+    if (next) next(release);
+    else slots.held -= 1;
+  };
+  if (slots.held < SOURCE_RELIST_BOUND.RELIST_IMAGES_MAX) {
+    slots.held += 1;
+    return Promise.resolve(release);
+  }
+  return new Promise((resolve) => slots.waiting.push(resolve));
+}
+
+function countRestart(record, reason) {
+  record.restarts += 1;
+  record.restartReasons[reason] = (record.restartReasons[reason] ?? 0) + 1;
+}
+
+// The one line per image: table, pages, rows, bytes, duration, restarts.
+function logImage(service, record, outcome, extra = {}) {
+  service.logger?.info?.(SOURCE_RELIST_LOG_MSG.IMAGE, {
+    tableName: record.tableName, sourcePartition: record.sourcePartition, outcome,
+    pages: record.pages, rows: record.rows, bytes: record.bytes,
+    durationMs: service.timeSource.now() - record.startedAtMs, restarts: record.restarts,
+    restartReasons: record.restartReasons, ...extra});
+}
+
+// Rows and position, in one synchronous span, plus the table's authoritative
+// watermark (term and applied index; no observation time: the position
+// orders what follows the image, never a wall-clock fence).
+function installFetchedImage(service, token, image) {
+  const installed = installSourceImage(service.cacheMutationTarget, token, image);
+  if (installed.admission === SOURCE_IMAGE_ADMISSION.INSTALL) {
+    service.cacheMutationTarget.recordAuthoritativeObservation?.(image.tableName, {
+      term: image.witness.term ?? null, appliedIndex: image.appliedIndex,
+      commitIndex: image.witness.commitIndex ?? null,
+      servingNodeId: image.witness.servingNodeId ?? null, partitionId: image.sourcePartition,
+      causeId: 'cdc-source-relist'});
+  }
+  return installed;
+}
+
+async function listOneImage(service, request, record, terminal) {
+  const sourceOrder = service.cacheMutationTarget.sourceOrder;
+  for (;;) {
+    if (terminal()) return {outcome: SOURCE_RELIST_OUTCOME.STOPPED};
+    // The cell may have closed its gap meanwhile (ranges applied): no list.
+    const token = sourceOrder.beginImage(request.sourcePartition);
+    if (token === null) return {outcome: SOURCE_RELIST_OUTCOME.RETRY};
+    const fetched = await fetchSourceImage((cursor) => readImagePage(service, request, cursor),
+      request, terminal);
+    if (fetched.stopped || terminal()) return {outcome: SOURCE_RELIST_OUTCOME.STOPPED};
+    if (fetched.image) {
+      const installed = installFetchedImage(service, token, fetched.image);
+      if (installed.admission !== SOURCE_IMAGE_ADMISSION.CELL_CHANGED) {
+        Object.assign(record, {pages: fetched.image.pages, rows: fetched.image.rows.length,
+          bytes: fetched.image.bytes});
+        return {outcome: SOURCE_RELIST_OUTCOME.RETRY, installed};
+      }
+      countRestart(record, SOURCE_RELIST_FAILURE.CELL_CHANGED);
+    } else {
+      countRestart(record, fetched.failure);
+      service.logger?.debug?.(SOURCE_RELIST_LOG_MSG.PAGE_FAILED, {...request,
+        failure: fetched.failure, error: fetched.error});
+    }
+    const hintMs = fetched.retryAfterMs ?? 0;
+    await service.delayUntilShutdown(hintMs > 0 ? hintMs :
+      SOURCE_RELIST_BOUND.RELIST_RETRY_DELAY_MS);
+  }
+}
+
+/**
+ * List one source table again: fetch a complete paged image and install
+ * rows and position together.
  * @param {Object} service - The CDC integration service.
  * @param {Object} request - {sourcePartition, tableName}.
  * @return {Promise<string>} A SOURCE_RELIST_OUTCOME: RETRY (after this
- *   owner's backoff; another list is owed if the cell is still stale) or
- *   STOPPED (the owner is terminal).
+ *   owner's backoff when the cell is still stale; another list is owed while
+ *   it is) or STOPPED (the owner is terminal).
  */
 async function relistSourceTable(service, request) {
   const terminal = () => Boolean(service.refuseIfTerminal(CDC_TERMINAL_STAGE.CACHE_REPAIR));
   if (terminal()) return SOURCE_RELIST_OUTCOME.STOPPED;
-  const sourceOrder = service.cacheMutationTarget.sourceOrder;
-  const read = {startedAtMs: service.timeSource.now(),
-    mutationSnapshot: service.captureAuthoritativeCacheSweepSnapshot(request.tableName)};
-  let result;
+  const release = await acquireImageSlot(service);
+  const record = {...request, startedAtMs: service.timeSource.now(), pages: 0, rows: 0,
+    bytes: 0, restarts: 0, restartReasons: {}};
+  let listed;
   try {
-    result = await readSourceImage(service, request);
-  } catch (error) {
-    result = {success: false, errorCode: SOURCE_RELIST_FAILURE.READ_FAILED,
-      error: error?.message ?? String(error)};
+    listed = await listOneImage(service, request, record, terminal);
+  } finally {
+    release();
   }
-  if (terminal()) return SOURCE_RELIST_OUTCOME.STOPPED;
-  const failure = imageFailure(result, request.sourcePartition, request.tableName);
-  if (failure === null) {
-    const cell = installImage(service, sourceOrder, request, result, read);
-    service.logger?.info?.(SOURCE_RELIST_LOG_MSG.LISTED, {...cell, rows: result.rows.length});
-    if (cell.state !== SOURCE_POSITION_STATE.GAP) return SOURCE_RELIST_OUTCOME.RETRY;
-  } else {
-    service.logger?.warn?.(SOURCE_RELIST_LOG_MSG.FAILED, {...request, failure,
-      error: result?.error ?? null});
-  }
-  const hintMs = getControlPlaneRetryAfterMs(result);
-  await service.delayUntilShutdown(hintMs > 0 ? hintMs : SOURCE_RELIST_BOUND.RELIST_RETRY_DELAY_MS);
+  const cell = listed.installed?.cell ?? service.cacheMutationTarget.sourceOrder
+    .positionOf(request.sourcePartition);
+  logImage(service, record, listed.installed?.admission ?? listed.outcome,
+    {state: cell.state, appliedIndex: cell.position?.logIndex ?? null,
+      upserted: listed.installed?.upserted ?? 0, deleted: listed.installed?.deleted ?? 0});
+  if (listed.outcome === SOURCE_RELIST_OUTCOME.STOPPED) return listed.outcome;
+  if (cell.state !== SOURCE_POSITION_STATE.GAP) return SOURCE_RELIST_OUTCOME.RETRY;
+  await service.delayUntilShutdown(SOURCE_RELIST_BOUND.RELIST_RETRY_DELAY_MS);
   return terminal() ? SOURCE_RELIST_OUTCOME.STOPPED : SOURCE_RELIST_OUTCOME.RETRY;
 }
 
@@ -191,4 +307,5 @@ function registerSourceRelister(service) {
   return true;
 }
 
-export {SOURCE_RELIST_BOUND, SOURCE_RELIST_FAILURE, registerSourceRelister, relistSourceTable};
+export {SOURCE_RELIST_BOUND, SOURCE_RELIST_FAILURE, fetchSourceImage, registerSourceRelister,
+  relistSourceTable};

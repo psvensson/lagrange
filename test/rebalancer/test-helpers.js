@@ -814,10 +814,13 @@ function createMockCoordinator({controlPlaneReadinessService = null,
   return {
     // This controlled owner models an empty operation ledger unless the test
     // supplies its entity reader. It is not a cache fallback or a real read.
-    getOperationsByEntity(entityType, entityId, options) {
-      return readOperationsByEntity(entityType, entityId, options);
+    getAuthoritativeOperationsByEntity(entityType, entityId) {
+      return readOperationsByEntity(entityType, entityId);
     },
     getMoveSafetyError: () => null,
+    // The operation ledger owner's cluster-wide census answers an empty
+    // ledger (the release fence's CLEAR rests on it).
+    repository: {queryClusterWideIncompleteOperations: async () => []},
     createOperation: async (move) => ({
       operationId: 'op-' + Date.now(),
       type: move.type,
@@ -1316,6 +1319,11 @@ function createTestCoordinator(options = {}) {
       return baseCreateOperation(normalizedMove);
     };
   }
+  // The durable replica_operations store the owner reads answer from: a row
+  // another writer committed (it is also replicated into the cache).
+  coordinator.testReplicaOperationLedger = Object.freeze({
+    commit: (row) => syncReplicaOperationRow(row),
+  });
   return coordinator;
 }
 

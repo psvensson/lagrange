@@ -1204,3 +1204,471 @@ DRAINED outcome (which disarms the retry) derives from the ledger: it is
 reported only when no recipient is behind the owed tail. A release of the
 propagation binding restarts its primary recipient; a receipt shipped under a
 binding that was released meanwhile confirms nothing.
+
+---
+
+## Stage 3 as built, and the dead-recipient measures (2026-11-11)
+
+Appended by the CDC writer under the owner ruling of 2026-11-11 ("please do
+all 1, 2 and 3 now"; quest log fresh-formation-user-table-routability, entry
+143). The sections above are kept as written; where this section differs it
+supersedes them (R09), and each supersession is named below. Unit level only:
+nothing here is lab-measured, and nothing is independently verified yet.
+
+### S3.1 What was built
+
+- **Source incarnation.** No per-log incarnation exists in the source: the
+  raft-rs applied state, the snapshot identity `{clusterId, raftGroupId}`
+  (clusterId is the same for every log of a cluster, and a backup restore keeps
+  it), the opening history, the services-row birth (`created_at`, per replica)
+  and the node boot incarnation were read; none changes when one partition's
+  log is rebuilt. The ledger therefore mints one, owned with the positions it
+  qualifies: `_cdc_ledger_incarnation` (`partition-cdc-obligation-ledger.js`,
+  `ensureCdcObligationLedger`), written inside the application transaction of
+  the first committed entry that records an obligation under this build, from
+  that entry's identity (`term:index:entryId`), INSERT OR IGNORE, so every
+  replica and every snapshot install holds the same value. Every range and
+  every image names it; a position of another incarnation is never compared
+  (cell: a range of another incarnation is a GAP; an image of another
+  incarnation replaces the cell).
+- **Ranges.** Each shipped vector carries `sourceRange {sourcePartition,
+  incarnation, after, through}` beside the events (`sourceRangeOf`,
+  `partition-cdc-obligation-vector.js`); `after` is
+  `readCdcPredecessorPosition` (highest retained row below the first, else the
+  compact progress, else `{0,-1}`). It rides the recipient invocation
+  (`cdcRecipientInvocation`), the topology payload (`targetDeliveryPayload`),
+  the source group's `applyCDCBatch` options, the follower-to-leader forward
+  payload, and the committed command: a durable `CDC_BATCH` is exactly `{type,
+  events, sourceRange}`; an ordinary one exactly `{type, events}`; a single
+  `CDC` command never carries a durable event
+  (`message-group-committed-command-admission.js`, refusal
+  `message_group_cdc_batch_shape_invalid`). One wire change; no positionless
+  durable form remains.
+- **Position cell** (`system-table-cache-cdc-observation.js`,
+  `SystemTableCacheSourceOrder`, which replaces
+  `system-table-cache-source-order.js`): per source partition `{incarnation,
+  position, state UNKNOWN|CURRENT|GAP, need}`. It advances only by a committed
+  range whose predecessor is at or below it, or by a complete leader image.
+  The per-key same-entry order is kept, in the same owner, as the within-entry
+  rule for paths no range gates (local-replica apply, provisional ingress, list
+  rows): the cell cannot subsume them, and the tie exists only inside one entry
+  (same origin HLC, partition and log index).
+- **Recipient decisions.** The replica that will propose decides after the
+  vector is captured (`classifyDurableRangeAtLeader`,
+  `message-group-cdc-source-range.js`): ALREADY_APPLIED when its group's log
+  already committed the range in that incarnation (positive typed outcome
+  `cdcAlreadyApplied` with `cdcAppliedThrough` and `cdcSourceIncarnation`; a
+  closed field set in `cdc-delivery-outcome.js`), GAP when this node's cell has
+  not applied `after` (typed `cdc_recipient_position_gap` with a retry hint,
+  nothing proposed, the table is listed again), else APPLY. Every member node
+  decides again when the committed entry applies (`applyCommittedCdcRange`):
+  GAP merges nothing and owes a list; APPLY refuses members at or below the
+  cell before the merge and advances the cell to `through`.
+- **Re-list.** `relistSourceTable` (`cdc-integration-service-source-relist.js`)
+  asks the source leader for its hydration image through the owner-RPC query
+  path with `hydrationImage: true`; the partition answers
+  `answerHydrationImageQuery` (`partition-service-hydration-image-methods.js`):
+  rows, applied index P and the ledger incarnation from one synchronous span on
+  the leader, with the leader witness, or a typed refusal
+  (`partition_hydration_image_not_leader | _refused | _exceeds_bound`). The
+  recipient installs rows (authoritative repair + leader-witnessed sweep) and
+  the position in one synchronous span. One list in flight per (cache, source
+  partition); a list that leaves the cell stale (image older than what was
+  missed) owes another after the relister's backoff. *(Single-shot image and
+  its install superseded by S3.9: a paged image from one leader snapshot,
+  installed as a swap.)*
+- **Sender side.** The cursor moves on COMMITTED or ALREADY_APPLIED (for the
+  same incarnation, to `cdcAppliedThrough` when higher); GAP holds the
+  recipient in the named state `POSITION_GAP` on its own hinted retry. A
+  recipient is behind whenever a ledger row lies above its cursor; when nothing
+  is owed after its cursor it is shipped the ledger's newest recorded event
+  (the position probe), kept as one row beside the ledger
+  (`_cdc_ledger_newest`, replaced by every recording inside its application
+  transaction) so decision D1's reclamation is unchanged. A change of the sender cache's
+  recipient-domain tables (services, message_groups, latency_groups, nodes)
+  wakes the lane through a watch held by the bound propagation
+  (`watchRecipientDomain`), so a group that becomes a recipient after the last
+  write is contacted without a write.
+- **Dead-recipient measure 2 (DETACHED{lifecycle}).**
+  `partition-cdc-recipient-lifecycle.js` asks
+  `readRecipientGroupLifecycle` (`cdc-recipient-lifecycle.js`): leader-witnessed
+  reads of services, message_groups and nodes. RETIRED when the group's
+  message_groups row is retired/inactive, or it has replica rows and every one
+  is stopped or on a node in a terminal state (stopped, failed); ACTIVE if any
+  is live; no row is NOT_ESTABLISHED; an unreadable or non-leader answer is
+  UNAVAILABLE. Only RETIRED detaches. It is asked only for a held target group
+  the sender's cache no longer names, or a MUST_RELIST one (omission is a
+  trigger, never evidence), at most one read in flight per recipient. A
+  detached group is shipped nothing and is outside the frontier; if the
+  lifecycle owner later says ACTIVE and the cache names it, it is attached
+  again with no cursor (a new recipient).
+- **Dead-recipient measure 3 (MUST_RELIST).** `markRelistRecipients` runs at
+  every frontier computation while the ledger owes more than
+  `RELIST_LAG_ROWS` (= OWED_MAX_EVENTS / 2 = 2048): a target recipient more
+  than that many owed rows behind its cursor leaves the frontier (it stays
+  required and keeps being shipped to); the ledger reclaims past it; its next
+  range answers a gap; it lists once and streams again (confirming puts it
+  back in the frontier). No clock is read.
+- **Selection churn.** `message-group-selection.js`: both resolvers honour
+  `options.boundService` by one rule (registered among the node's
+  message-group services and live: the sync resolver names it by identity, the
+  async one uses it while ready); the propagation subscriber binds the service
+  its delivery used. The lane's currentness check and each delivery now agree,
+  and only a real ineligibility rebinds.
+
+### S3.2 Deviations from the plan (sections 6.2-6.4 and the writer's plan)
+
+1. Classification happens after the vector is captured inside the reservation,
+   not before it: the leadership read before capture violated the receiver's
+   "nothing serialized before capture" guard (input-guard witness). A gap or an
+   already-applied range still proposes nothing.
+2. ALREADY_APPLIED is a group-log fact (the highest range this group's log
+   committed), not the leader node's cell: a list is node-local, so a leader
+   that listed must still propose, or its followers would never see the range.
+3. A gapped member never merges (6.2 "every node decides again ... still merges
+   the members" and amendment B's open claim are withdrawn): it lists instead.
+4. The re-list is a new positioned path, not the CL-014 catch-up: that read is
+   not one span (the witness's applied index is read before an async query);
+   CL-014 is left unchanged.
+5. The new-recipient window is closed by the position probe and the
+   recipient-domain wake, not by the recipient listing on its own.
+6. MUST_RELIST and DETACHED apply only to target groups of a bound
+   propagation (they speak ranges); a branch's primary recipient never leaves
+   the frontier.
+
+### S3.3 Supersessions (R09)
+
+- **D1 reclamation is NOT superseded.** A first version retained the ledger's
+  newest row; it changed the seed census and the D1 witnesses, so the probe now
+  reads a separate one-row record and D1 stands as written. Only
+  `cdc-hydration-old-order.test.js` (W-D4a negative) is restated: the late
+  positionless subscriber now also receives the probe row (1 event; 599 of
+  600 still missing).
+- **O-A (no second durable progress ledger).** Not superseded: the incarnation
+  and newest-event rows are identity and probe records, not progress; no
+  per-recipient durable mark exists.
+- **O-C (section 0).** Chosen in the form built here, with the supersession
+  the row asked for: events at or below the recipient's position are dropped
+  by position; the merge is retained as the convergence guarantee of the
+  unranged paths.
+- **Section 5.2 / 5.6 (DETACHED "proposed, needs owner approval"; no deadline,
+  no permanent refusal).** Approved by the owner ruling of 2026-11-11 and built
+  as DETACHED{lifecycle} plus MUST_RELIST; still no deadline and no permanent
+  refusal: neither state is entered on elapsed time.
+- **OWED_MAX_EVENTS.** Unchanged as the capacity of ordinary writes; its
+  meaning gains: with MUST_RELIST no single recipient can hold more than
+  RELIST_LAG_ROWS of it. **RETAINED_DELIVERED_MAX** unchanged.
+- **Amendment B (source-order module).** "Stage 3 ... subsumes this
+  tie-break, which is then deleted" is superseded: the module is deleted, and
+  its rule is kept in the cell's owner as the within-entry rule.
+- **Pinned race cell (message-group-cdc-receiver-admission.test.js, C1 race,
+  "the same vector is admitted again after real raw closure").** Superseded: a
+  replay of a range the group's log committed is answered already-applied and
+  proposes nothing.
+
+### S3.4 Bounds per node now
+
+- Lane: per (source partition led here, recipient) one vector in flight
+  (SHIP_MAX_EVENTS / SHIP_MAX_BYTES, a singleton above the byte bound ships
+  alone), plus one lifecycle read per held target recipient.
+- Ledger: owed rows below OWED_MAX_EVENTS (ordinary writes); no single
+  recipient holds more than RELIST_LAG_ROWS of them; RETAINED_DELIVERED_MAX;
+  plus two one-row records (incarnation, newest event).
+- Recipient: one image in flight per (cache, source partition), each at most
+  RELIST_IMAGE_MAX_ROWS (65 536) rows and RELIST_IMAGE_MAX_BYTES (16 MiB);
+  a re-list per 2048 rows of lag at most for a slow recipient. *(Image bound
+  superseded by S3.9: no table-size bound; pages, slots and the per-row
+  bound instead.)*
+- Unbounded / not established: the total of in-flight vectors is (source
+  partitions led here) x (recipients), each bounded by bytes except a
+  singleton; images of different partitions may be in flight together;
+  the per-group committed map is volatile and bounded by source partitions.
+
+### S3.5 Timers and sweeps
+
+- No new timer. The relister's retry is the existing CDCIntegrationService
+  `delayUntilShutdown` (RELIST_RETRY_DELAY_MS 500) of an owed list.
+- Redundant by construction for the joiner window (follow-up deletions, not
+  done here: they are control-plane and bootstrap files outside this writer's
+  scope, and the lab must confirm): C5 (5 s fast propagated-table cooldown),
+  C8's role as the window's closure (the post-subscription catch-up), and the
+  joiner-window purpose of C6/C7. C4 (CDCHandler out-of-order warning) is
+  unreachable for ranged events but still fires on unranged ingress; kept.
+
+### S3.6 Open
+
+- Dead-recipient measure 1 (admission reserve) is not built: system-table
+  lifecycle writes reach the partition as TX1 PREPARE commands whose bytes
+  (`partition-participant-transaction-bytes.js`, operations `{entryId, sql,
+  params}`) are pinned by another active writer's owner; a typed intent can only
+  reach `admitCdcOwedWork` through those bytes and the SQL engine's write plan.
+  The constant `OWED_RETIREMENT_RESERVE_EVENTS` (= ACK_BATCH_MAX_EVENTS) and its
+  justification are in place; the class, the threading and the witness are
+  owed. With measures 2 and 3 a dead recipient can no longer drive the ledger
+  to the cap; the cap is still reachable by a leader with no subscriber or by
+  acknowledgements that cannot commit.
+- A backup restore keeps the ledger incarnation while rewinding positions: the
+  restore owner must re-mint it (or caches must be new).
+- A new member of an existing message group whose node cell is UNKNOWN learns
+  it is stale only at its group's next committed range.
+- Images above RELIST_IMAGE_MAX_* are refused typed and leave the recipient
+  gapped; a chunked image is not designed. *(Closed by S3.9.)*
+- The positioned path is unit-witnessed only; the formation service milestone
+  needs the lab run named in the writer's report.
+
+### S3.7 Follow-up round (2026-11-11, later the same day)
+
+- **Read currency (built).** A projection wait for a deletion is satisfied by
+  absence only while the table's source cell is CURRENT; on a gapped or
+  position-unknown cache it stays open and is woken by the cell becoming
+  current (`SystemTableCacheSourceOrder.onCurrent`). Upsert waits are
+  unchanged. Census: `awaitProjectionAt` is the one currency-requiring cache
+  reader (callers table-creation-service-durable-job.js and
+  runtime-access-policy-owner.js); the cache-visibility repairs read the
+  authority. Observation only: it grants no write or admission.
+- **New member (built).** A message-group replica's initialization marks every
+  CDC-propagated source its node cache holds no position of as owing a list
+  (`requireSourcePositions`), so a quiet group's new member lists without
+  waiting for a range.
+- **Compensation repair counters (built).** The join catch-up, the 5 s
+  publications sweep and the 5 s / 30 s propagated sweep name their trigger;
+  a run that changed cache rows is counted and logged
+  (`CDC_CATCHUP_TRIGGER`, "CDC catch-up repaired cache rows"). Zero over a
+  formation soak is the evidence for deleting them.
+- **Restore (finding).** The restore port (`hydratePartitionSnapshots`) is
+  bound to NULL_PORT in production; restore is refused as unsupported. Contract
+  for whoever binds it: mint a new ledger incarnation in the same restore
+  transaction.
+- **Not built in this round:** the admission reserve (Part B) and the chunked
+  re-list. The owner ruled the PREPARE byte change; the traced hops are in the
+  writer's report.
+
+### S3.8 Dead-recipient measure 1: the retirement reserve (built 2026-11-11)
+
+Built under the owner ruling of 2026-11-11 (admission reserve for
+recipient-retirement writes). Unit and component level only; not lab-measured,
+not independently verified.
+
+- **Carrier: the committed write entry, not the PREPARE.** Tracing the write
+  path refuted the premise of S3.6 and the ruling's wording: a lifecycle write
+  (one row of `nodes` or `services`) is a single-partition statement, so the
+  engine runs it DIRECT_AUTOCOMMIT
+  (`sql-query-engine-write-execution.js` `resolveWriteTransactionOwnership`):
+  it reaches the partition as one ordinary committed write entry (`QUERY`),
+  never as a participant PREPARE. The class therefore rides that entry; the
+  pinned participant bytes (`partition-participant-transaction-bytes.js`) are
+  unchanged, and a classified write whose plan would need a participant
+  transaction (two partitions, an explicit transaction) is refused typed
+  (`cdc_admission_class_refused`, reason `not_direct_write`) instead of
+  losing its class.
+- **The class** (`partition-cdc-admission-class.js`, a leaf): closed
+  `PARTITION_CDC_ADMISSION_CLASS {ORDINARY, RECIPIENT_RETIREMENT}`. In process
+  it is an intent: the frozen token `RECIPIENT_RETIREMENT_WRITE` under
+  `cdcAdmissionIntent`, spread from `RECIPIENT_RETIREMENT_WRITE_OPTIONS` by a
+  lifecycle owner only. At the partition boundary (the QUERY request, the
+  local-leader leg, the committed entry) it is `cdcAdmissionClass:
+  'recipient_retirement'`; ORDINARY is the field's absence. One conversion
+  (`cdcAdmissionClassOfIntent`), one decode (`committedCdcAdmissionClassOf`,
+  `partition-cdc-owed-admission.js`).
+- **Who sets it** (typed intent at the transition owner, never from a table
+  name, SQL text or a caller option): `MessageGroupServiceRowOwner` (the
+  ACTIVE->STOPPED transition of a replica and the removal of its staged
+  STOPPED row); `applyNodeTerminalTransition` (a node's own graceful shutdown
+  and failed-join withdrawal; both callers spread what it passes); the
+  stranded-join reaper (`LeaseService.reapStrandedJoiningRows`);
+  `NodesOwner.removeTerminalNode` (the owner's intent is spread last, a
+  caller's options cannot remove it). No message_groups retirement writer
+  exists in src (the lifecycle read's message_groups branch has no producer).
+- **Enforcement.** The engine entry (`resolveClientStatementRefusal`, every
+  `executeQuery`) refuses a class on a client statement (`client_ingress`), a
+  raw class value or a forged intent (`not_owner_intent`); the client
+  SqlRequest entry carries a request's claim there so it is refused, not
+  silently dropped (the canonical `createSqlRequest` never carries one). The
+  CDC routed write refuses a forged intent before its local leg. The partition
+  refuses a carried class on a client-ingress statement and any value but
+  `recipient_retirement` (`invalid_value`). A census test pins the src
+  modules that name the token.
+- **The reserve** (`admitCdcOwedWork`): ORDINARY is admitted while owed +
+  required <= OWED_MAX_EVENTS (4096) and otherwise refused
+  `partition_write_cdc_capacity` as before; RECIPIENT_RETIREMENT also within
+  OWED_RETIREMENT_RESERVE_EVENTS (256) above it (state ADMITTED_FROM_RESERVE,
+  logged by the leader's preflight with owed depth, required, table and
+  class); past it the write is refused
+  `partition_write_cdc_retirement_reserve_exhausted` (retryable, deferRetry;
+  named state RESERVE_EXHAUSTED, logged). Only acknowledgements draining
+  clear it.
+- **Determinism.** Admission runs where it did: the leader's preflight
+  (`partition-service-raft-write-commit.js` `startPartitionRaftWriteCommit`)
+  and again at apply on every replica (`partition-service-entry-apply-base.js`
+  committed statement path; `partition-participant-transaction-apply.js` for a
+  PREPARE). The apply decision reads only the replicated ledger count and the
+  committed entry's own class field, so every replica decides alike.
+- **Old entries.** A committed write entry written before this field existed
+  decodes ORDINARY, which is what it was: absence is the format's definition
+  of ORDINARY, not a fallback, and there is one decoder. In-place upgrade is
+  unsupported on 0.x (docs/current-capabilities-and-limitations.md, "Rolling
+  -upgrade contract: Unsupported on 0.x"), but the TX1 envelope ruling already
+  has committed entries from an earlier build applied as carried, so an old
+  entry can exist in a live log; it needs no second path.
+- **Bound of 256.** Each committed lifecycle statement owes exactly one ledger
+  row (`recordCommittedStatementCdc`). Retiring one replica writes two rows on
+  the services partition (STOPPED, then the removal); a node's own terminal
+  transition one row on the nodes partition (removal one more). 256 covers 128
+  replica retirements, or about 42 three-replica groups, per partition before
+  one acknowledgement batch drains it. Retiring several nodes that host more
+  than 128 replicas between two drains exhausts it: the further retirement
+  writes are refused typed and retried by their owners; nothing is lost, and
+  the first ones admitted already carry the evidence the lane detaches on.
+- **What the reserve relieves, stated plainly.** With measure 3 a dead target
+  group never pins the frontier to the cap: above RELIST_LAG_ROWS it is
+  MUST_RELIST and the ledger reclaims past it. The cap is reached by the two
+  other causes (no propagation subscriber; acknowledgements that cannot
+  commit) or a dead primary recipient (never detached, S3.2 item 6). The
+  reserve's guarantee is that the lifecycle writes still commit at the cap;
+  under a stalled acknowledgement path they do not by themselves drain it.
+
+#### S3.8.1 The other two ways to the cap
+
+| Cause | Cleared by | Armed? | Reserve consumable? | Operator sees |
+| --- | --- | --- | --- | --- |
+| NO_PROPAGATION_SUBSCRIBER | the deferred attachment's retry: a message-group service's init / leader-election event, or a lane drive that finds owed rows and no subscriber | yes: `once` listeners on the node's message-group services at arm time; every committed write (a reserve write included) drives the lane | yes, up to 256; each admitted write also wakes the attachment | warn "CDC obligations owed on a propagated table with no propagation subscriber" (once per tenure, with owed), attachment AWAITING warns per failed attempt, drive state in the lane diagnostics |
+| FLUSH PROPOSER_UNAVAILABLE | a proposer registered | yes: the lane retry timer | yes | warn PROPOSER_UNAVAILABLE per flush |
+| FLUSH OUTCOME_UNKNOWN | the ledger decides the pending command (reconciliation), or tenure end | yes: the lane retry timer | yes | warn ACKNOWLEDGEMENTS_REFUSED (proposed: true) |
+| FLUSH REFUSED, non-terminal code | the retry | yes: the lane retry timer | yes | warn ACKNOWLEDGEMENTS_REFUSED |
+| FLUSH REFUSED, terminal code (UNKNOWN_EVENT, ENTRY_MISMATCH, POSITION_MISMATCH, BYTES_INVALID, IDENTITY_MISMATCH) or refused before proposal | **nothing in the tenure**: `lane.held` is set and only a new lane (leader change) clears it | **no** | yes, then RESERVE_EXHAUSTED until a leader change | warn ACKNOWLEDGEMENTS_REFUSED once; diagnostics `acknowledgementHeld` |
+| FLUSH NOT_LEADER | the new leader's lane | leader election | n/a on this replica | debug ACKNOWLEDGEMENTS_DROPPED_NOT_LEADER |
+| DRIVE ACKNOWLEDGEMENT_BACKPRESSURE | the next flush or retry (outstanding batches commit) | yes: flush deadline / retry | yes | the obligation backpressure report |
+
+Findings for the CDC delivery owner (outside this writer's files): the
+terminal `lane.held` has no event that clears it within a tenure; the deferred
+attachment listens only to the message-group services present when it armed.
+
+#### S3.8.2 Supersessions (R09)
+
+- **S3.6 "system-table lifecycle writes reach the partition as TX1 PREPARE
+  commands"** is withdrawn: they are DIRECT_AUTOCOMMIT committed write
+  entries. The participant PREPARE byte format is **not** changed (the ruling
+  authorised one change; none was needed there).
+- **The committed write entry** (`QUERY`/SQL command built by
+  `buildQueryOperation` + `buildPartitionWriteEntry`) gains one optional
+  field, `cdcAdmissionClass`, present only as `recipient_retirement`.
+- **OWED_MAX_EVENTS** is the capacity of ORDINARY writes; the ledger's bound
+  is OWED_MAX_EVENTS + OWED_RETIREMENT_RESERVE_EVENTS, the extra rows only for
+  RECIPIENT_RETIREMENT writes (S3.3's restatement stands otherwise).
+- **S3.4 Ledger bound** becomes: owed rows below OWED_MAX_EVENTS for ordinary
+  writes, below OWED_MAX_EVENTS + OWED_RETIREMENT_RESERVE_EVENTS in all.
+
+### S3.9 Paged re-list (built 2026-11-11)
+
+Unit and component level; not lab-measured, not independently verified.
+Replaces the single-shot hydration image of S3.1 (re-list), whose
+65 536-row / 16 MiB bound left a larger table permanently gapped (its
+recipient retried every 500 ms forever; before-run of witness (a) on the old
+code: 13 consecutive `partition_hydration_image_exceeds_bound`, cell GAP with
+no position).
+
+- **What holds the image (source).** One read snapshot per image, owned by
+  `PartitionHydrationImages` (`partition-hydration-image-pages.js`, created
+  on the partition on first use): a second, read-only connection to the
+  replica database in a read transaction (`BEGIN`; WAL), or for an in-memory
+  database a private `serialize()` copy. The applied index P, the ledger
+  incarnation and every page are read from that snapshot, so all pages of an
+  image are the table after every entry at or below P and none above,
+  whatever the leader applies meanwhile. Rows come from one open cursor in
+  the snapshot's scan order. Chosen over a position-pinned re-read because
+  nothing in the source can reconstruct the table at an old P once later
+  entries apply (the ledger reclaims), while a read transaction gives it for
+  free.
+- **Page.** At most PAGE_MAX_ROWS (4096) rows and PAGE_MAX_BYTES (1 MiB,
+  JSON bytes); the recipient may ask less (`resultMaxRows`/`resultMaxBytes`),
+  never more. A row above the byte bound ships alone. Absolute per-row bound
+  ROW_MAX_BYTES (16 MiB, below the router's message size): beyond it the
+  image is closed and answered `partition_hydration_image_row_exceeds_bound`
+  (this is the one remaining permanent refusal: a single system row above
+  16 MiB cannot be listed).
+- **Lifetime and cost (R13).** At most OPEN_IMAGES_MAX (4) open images per
+  partition leader; a fifth is `partition_hydration_image_unavailable` with
+  `retryAfterMs` 500. An image closes on: its last page; a page asked out of
+  order (`_expired`); leadership ending or a new tenure (`_not_leader` /
+  `_expired`); the leader applying more than APPLIED_ADVANCE_MAX (65 536)
+  entries past P; no page asked between two idle sweeps (IDLE_SWEEP_MS 10 s,
+  one timer per partition, armed only while an image is open: an abandoned
+  image lives at most 20 s); the partition closing. A held read transaction
+  pins the WAL: the WAL the images keep is bounded by the writes of at most
+  APPLIED_ADVANCE_MAX entries and at most two idle sweeps after the last
+  page asked, times at most four images (in practice one snapshot point each).
+  Expiry is a resource decision only: the recipient restarts from page 0 and
+  its correctness never depends on when it happens.
+- **Wire (one change, no dual path).** The query carries `hydrationImage:
+  true` plus `hydrationImagePage: {imageId (null opens), page}`; a request
+  without a cursor is `_refused`. A page answer is {rows, rowSetComplete
+  (= last), readAuthorityWitness, sourceImage {sourcePartition, incarnation,
+  appliedIndex}, imagePage {imageId, page, last, rowCount, byteCount}}.
+  Refusals: `partition_hydration_image_not_leader | _refused | _expired |
+  _unavailable | _row_exceeds_bound`. `_exceeds_bound` is deleted. The seed's
+  local `readHydrationImage` (one span on the leader's own connection) is
+  unchanged except that it takes no limits.
+- **Recipient.** `relistSourceTable` fetches page by page
+  (`fetchSourceImage`): the next page is asked only after the previous one is
+  staged (one page in flight; request/response is the pacing, no timer). Every
+  page must name page 0's imageId, P and incarnation, else
+  `source_relist_image_changed`; any failed page discards the whole stage and
+  the image restarts from page 0 after the leader's hint or 500 ms. The stage
+  is an in-memory map off the cache (canonical rows, one per key): the cache
+  holds the whole table after the swap anyway, so staging costs one extra
+  copy of the table being listed; at most RELIST_IMAGES_MAX (2) images are
+  fetched at once per node cache (further lists wait for a slot, never
+  refused), so the peak is cache + two staged tables. Old rows stay visible
+  and the cell stays GAP (currency-required reads keep waiting) until the
+  install.
+- **Install (swap, one span).** `installSourceImage`
+  (`system-table-cache-source-image.js`) asks the cell
+  (`SystemTableCacheSourceOrder.admitImage` against the token of
+  `beginImage`): CELL_CHANGED if the cell was reset or moved to an incarnation
+  that is neither the one begun against nor the image's (stage discarded,
+  restart); OBSOLETE if the cell already holds a position at or past P in the
+  same incarnation (ranges applied meanwhile; image discarded, rows
+  untouched); else INSTALL: every image row replaces its key's row, every
+  cached row the image lacks is removed (new cache mutation mode
+  SOURCE_IMAGE_REPLACEMENT: no HLC merge, no tombstone fence, no tombstone
+  left), and the position is recorded, all in one synchronous span. A row
+  deleted at or before P cannot resurrect. The table's authoritative
+  watermark records term and applied index but no longer an observation
+  time: the position orders what follows the image, and a wall-clock
+  absence fence on later inserts (a source/recipient clock skew hazard of
+  the old install) is not created.
+- **Stream during the image.** Ranges arriving while the image is fetched
+  gap (nothing merged, `need` raised); after the install the cell is at P;
+  the sender's held range (after its cursor, at or below P) applies, members
+  at or below P refused; a later gap lists again.
+- **Group members.** Each member node fetches and installs its own image into
+  its own cache (the cache is node-local; the group's log carries only
+  ranges, and ALREADY_APPLIED stays a group-log fact). Members may install at
+  different P; the ranges that follow converge them, as before. A recipient
+  group leader change does not touch a node's image; a node crash loses the
+  stage (nothing was installed).
+- **Observability.** One info line per image, "CDC source table image listed
+  from its leader": table, partition, outcome (install | obsolete | stopped |
+  retry), pages, rows, bytes, durationMs, restarts and restartReasons, cell
+  state, applied index, rows upserted/deleted. Source: a debug line per image
+  closed before its last page, with the reason.
+- **Witnesses.** test/cdc/cdc-paged-relist.test.js (9 tests: (a) ~20 MiB /
+  5000 rows over ~20 pages with a currency wait released only at install,
+  (b) source leader change, (b2) a page of another image, (c) idle expiry,
+  (d) commits during the image, (e) recipient stopped / cache reset,
+  (f) oversized rows, the source bounds, (g) 48-trial property over size x
+  page bound x interleaved commits x six fault kinds: 48 installs each equal
+  to the table at its own P); the S3-5 property of
+  cdc-vector-application-equivalence now runs on 2-row pages. Mutations
+  killed: swap without deletes ((a), (e), (g)); install without position (8
+  of 9); per-page image identity removed ((b2)); stage kept across restarts
+  ((b), (b2), (e), (g)); obsolete image installed ((g)); reset cell ignored
+  ((e), (g)).
+- **R09.** S3.1's single-shot re-list and its install (authoritative repair +
+  leader-witnessed sweep, `_exceeds_bound`), S3.4's recipient image bound
+  (65 536 rows / 16 MiB) and S3.6's open item are superseded by this section
+  as recorded here: a table of any size lists; the only size refusal left is
+  a single row above 16 MiB.
+- **Open.** The lab must measure image sizes, pages, restarts and WAL growth
+  during images on a long-running cluster; INDEX.md regeneration and the
+  duplication ratchet are owed to the integration owner.

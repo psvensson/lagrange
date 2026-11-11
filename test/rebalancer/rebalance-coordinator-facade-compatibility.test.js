@@ -62,10 +62,6 @@ function createFacadeCoordinator(overrides = {}) {
       calls.repository.push(['getAllOperations']);
       return [{operationId: 'op-a'}];
     },
-    async getOperationsByEntity(entityType, entityId) {
-      calls.repository.push(['getOperationsByEntity', entityType, entityId]);
-      return [{entityType, entityId}];
-    },
     async getOperationsByEntityAuthoritativeObservation(entityType, entityId) {
       calls.repository.push([
         'getOperationsByEntityAuthoritativeObservation',
@@ -221,8 +217,10 @@ test('RebalanceCoordinator facade delegates repository contract methods',
     );
     const allOperations = await coordinator.getAllOperations();
     t.equal(allOperations.length, 1);
-    const byEntity = await coordinator.getOperationsByEntity('partition', 'partition-1');
-    t.equal(byEntity.length, 1);
+    t.equal(coordinator.getOperationsByEntity, undefined,
+      'the coordinator exposes no cache-projection entity read');
+    t.equal(coordinator.getOperationsByPartition, undefined,
+      'the coordinator exposes no cache-projection partition read');
 
     t.same(calls.repository.map(([name]) => name), [
       'queryOperationProjectionById',
@@ -231,7 +229,6 @@ test('RebalanceCoordinator facade delegates repository contract methods',
       'runReplicaOperationTransitionExclusive',
       'persistOperationUpdate',
       'getAllOperations',
-      'getOperationsByEntity',
     ]);
     t.same(
       calls.repository[3][1],
@@ -277,10 +274,9 @@ test(
   async (t) => {
     const {coordinator, calls} = createFacadeCoordinator();
 
-    const byEntity = await coordinator.getOperationsByEntity(
+    const byEntity = await coordinator.getAuthoritativeOperationsByEntity(
       'partition',
       'partition-1',
-      {visibilityReadMode: 'owner_rpc_required'},
     );
 
     t.equal(byEntity.length, 1);

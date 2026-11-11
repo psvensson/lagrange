@@ -1,3 +1,5 @@
+import {notifyRemovalServingDrain} from
+  './partition-service-removal-drain-wake.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
 import {assertReplicaHandlerServing} from '../node/replica-transport-handler-identity.js';
@@ -381,6 +383,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
     } finally {
       if (admission.servingRequest) {
         this.activeServingRequestCount -= 1;
+        notifyRemovalServingDrain(this);
       }
     }
   }

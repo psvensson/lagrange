@@ -2,6 +2,8 @@
 // 3 RF5 target groups and 2 connected routers (window 2), through the source
 // partition's one propagation subscriber (its source group and its three
 // target groups are its recipients).
+import {positionRecipients} from '../test-helpers/cdc-source-range-fixture.js';
+import {readCdcLedgerIncarnation} from '../../src/partition/partition-cdc-obligation-ledger.js';
 import {elapseRecipientBackoff} from '../test-helpers/cdc-delivery-progress-fixture.js';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
@@ -128,6 +130,9 @@ async function seedW7DebtsAndSubscribers(f) {
   assert.ok(debtsB[0].logIndex < debtsB[1].logIndex);
   assert.ok(debtsB[1].logIndex < debtsB[2].logIndex);
 
+  // CDC Stage 3: every message-group node listed the source at its start.
+  positionRecipients([...f.services.values()], PARTITION_ID, TABLES.SERVICES,
+    readCdcLedgerIncarnation(f.producerLeader.db));
   const {seedBridge: subscriber} = buildBridgeSubscribers(
     f,
     TABLES.SERVICES,

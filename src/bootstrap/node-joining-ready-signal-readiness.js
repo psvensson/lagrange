@@ -1,4 +1,5 @@
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
+import {CDC_CATCHUP_TRIGGER} from '../cdc/cdc-integration-service-authoritative-catchup.js';
 import {
   NodeJoiningOperationLedgerFormationReadiness,
 } from './node-joining-operation-ledger-formation-readiness.js';
@@ -597,7 +598,7 @@ class NodeJoiningReadySignalReadiness
     }
     try {
       return await cdcIntegrationService
-        .hydrateCdcPropagatedTablesFromAuthority();
+        .hydrateCdcPropagatedTablesFromAuthority({trigger: CDC_CATCHUP_TRIGGER.JOIN_CATCHUP});
     } catch (error) {
       this.logger.warn(JOINING_LOG_MSG.CDC_CATCHUP_HYDRATION_FAILED, {
         nodeId: this.nodeId,

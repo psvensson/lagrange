@@ -11,11 +11,19 @@
  * created_at) under exactly that operation; idempotent: a repeat answers the
  * state the first one left.
  * Canonical output: {answer, reason} with answer one of
- *   CANCELLED        the durable row serves again (written from the exact
+ *   CANCELLED        cancelled as far as this replica's own log shows: the
+ *                    durable row serves again (written from the exact
  *                    REMOVING generation), the replica's own applied
- *                    configuration still names it a voter after that write,
- *                    and the removal's consensus-exit wait was released so
- *                    nothing local retires its port;
+ *                    configuration still names it a voter after that write
+ *                    with nothing unapplied in its log, and the removal's
+ *                    consensus-exit wait was released so nothing local
+ *                    retires its port. It does not see a RemoveNode an
+ *                    earlier leader proposed that only another survivor
+ *                    holds; if that entry later commits, the replica applies
+ *                    its own removal with a serving row and no removal
+ *                    running, and replica-removal-settlement.js converges it
+ *                    (REMOVED_OUTSIDE_REMOVAL: it stops serving, is marked
+ *                    FAILED, and the repair path removes and replaces it);
  *   ALREADY_REMOVED  the RemoveNode committed: the replica's own applied
  *                    configuration no longer names it - the removal
  *                    happened and completes;

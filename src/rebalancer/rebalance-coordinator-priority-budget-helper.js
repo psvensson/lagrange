@@ -377,12 +377,26 @@ function isAddBudgetOperationPastWorkflowTimeout(coordinator, operation = null) 
   return coordinator.nowFn() - observedAtMs >= timeoutMs;
 }
 
+/**
+ * The ADD budget counts by priority class, with the named observation of
+ * the list read they were counted from (taken at the read, before any other
+ * await can record another read): a count from a DEFERRED or projected list
+ * is not "nothing in flight", and a gate that consumes the counts decides
+ * on `observation` first.
+ * @param {Object} coordinator
+ * @param {Object} [options]
+ * @return {Promise<Object>}
+ */
 async function getConcurrentAddCountByPriorityClass(coordinator, options = {}) {
   const inFlight = await coordinator.queryIncompleteOperations(options);
-  return buildConcurrentAddCountByPriorityClass(
-    coordinator,
-    await filterConcurrentAddBudgetOperations(coordinator, inFlight, options),
-  );
+  const observation = coordinator.getIncompleteOperationObservation(inFlight);
+  return Object.freeze({
+    ...buildConcurrentAddCountByPriorityClass(
+      coordinator,
+      await filterConcurrentAddBudgetOperations(coordinator, inFlight, options),
+    ),
+    observation,
+  });
 }
 
 function isConcurrentAddBudgetOperation(coordinator, operation) {

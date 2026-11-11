@@ -19,6 +19,11 @@ const REPLICA_ABSENT_NOT_BY_OPERATION = 'REPLICA_ABSENT_NOT_BY_OPERATION';
 // an active record): nothing local retires; its owner re-drives it.
 const REPLICA_REMOVAL_CONSENSUS_EXIT_DEFERRED =
   'REPLICA_REMOVAL_CONSENSUS_EXIT_DEFERRED';
+// A removal resumed without a consensus port whose group (its leader's
+// committed configuration) still names the replica: it must take part again
+// before it can be removed; nothing retires.
+const REPLICA_REMOVAL_STILL_MEMBER_WITHOUT_PORT =
+  'REPLICA_REMOVAL_STILL_MEMBER_WITHOUT_PORT';
 // A removal whose replica's participant custody is not proven settled (a
 // durable PREPARED participant, volatile participant work, or custody that
 // cannot be read): nothing is retired, deleted or completed; the PREPARED
@@ -86,6 +91,7 @@ export {
   REPLICA_REMOVAL_COMPLETION_DEFERRED,
   REPLICA_REMOVAL_CONSENSUS_EXIT_DEFERRED,
   REPLICA_REMOVAL_PARTICIPANT_CUSTODY_DEFERRED,
+  REPLICA_REMOVAL_STILL_MEMBER_WITHOUT_PORT,
   buildFailedRemovalOutcome,
   removalRowDeleteDeferred,
   replicaAbsentNotByOperationError,

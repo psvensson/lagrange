@@ -93,6 +93,9 @@ test('the fence opens and stays open across the background moves it ' +
     );
     armFenceThenClearSpread(world, parked);
     const firstHeldAtMs = world.nowMs;
+    // The empty projection's CLEAR is the owner census's: it answers at
+    // this instant, before the first held observation.
+    await world.answerOwnerCensus(parked);
     t.equal(
       blockerOf(parked.resolvePrioritySpreadPlanningGateDecision()).state,
       BACKGROUND_PRIORITY_SPREAD_RELEASE_STATE.STABILIZING,
@@ -112,6 +115,8 @@ test('the fence opens and stays open across the background moves it ' +
         world.nowMs - firstHeldAtMs,
         `background move ${index} in flight does not rearm the dwell`,
       );
+      // Any census refresh that evaluation requested answers.
+      await world.settleOwnerCensus();
       world.nowMs += BACKGROUND_MOVE_RUN_MS;
       completeReplace(move, world.nowMs);
       t.equal(
@@ -174,6 +179,7 @@ async (t) => {
 
     armFenceThenClearSpread(world, concentrated);
     runBackgroundMove(world, 0);
+    await world.answerOwnerCensus(concentrated);
     t.equal(
       repairing.resolvePrioritySpreadPlanningGateDecision(),
       null,
@@ -249,8 +255,16 @@ async (t) => {
     priorityAdd.workflow_step = 'ACTIVE';
     priorityAdd.completed_at = world.nowMs;
     world.nowMs += PRIORITY_DRAIN_GAP_MS;
+    // The drained projection is not CLEAR by itself: the owner census
+    // answers at this instant, before the first held observation.
+    await world.answerOwnerCensus(background);
     const afterPriorityDrain =
       background.resolvePrioritySpreadPlanningGateDecision();
+    t.equal(
+      blockerOf(afterPriorityDrain).state,
+      BACKGROUND_PRIORITY_SPREAD_RELEASE_STATE.STABILIZING,
+      'the condition is observed held after the completion',
+    );
     t.equal(
       blockerOf(afterPriorityDrain).stableElapsedMs,
       0,
@@ -258,8 +272,15 @@ async (t) => {
     );
 
     // A second priority transition that starts and drains between two
-    // evaluations is still seen, by its retained terminal row.
+    // evaluations is still seen, by its retained terminal row. A
+    // mid-dwell evaluation first refreshes the census (older than half the
+    // window), as the rebalancer's cadence would; it does not release.
     world.nowMs += stableWindowMs - PRIORITY_DRAIN_GAP_MS;
+    t.equal(
+      blockerOf(await world.answerOwnerCensus(background)).state,
+      BACKGROUND_PRIORITY_SPREAD_RELEASE_STATE.STABILIZING,
+      'the dwell still runs before the quick transition',
+    );
     const quickPriorityAdd = buildOperationRow({
       operationId: 'add-schema_operations-p1-r6',
       type: 'ADD',

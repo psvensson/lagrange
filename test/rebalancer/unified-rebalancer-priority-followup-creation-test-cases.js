@@ -107,8 +107,8 @@ export function registerUnifiedRebalancerPriorityFollowupCreationTests(context) 
       );
       t.equal(
         cdcCalls[0]?.options?.authoritativeReadMode,
-        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
-        'budget probes should report the canonical local-only authoritative read mode',
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_PREFERRED_OWNER_RPC_FALLBACK,
+        'budget probes read the local replica and ask the owner when it is not hosted here',
       );
       t.equal(
         cdcCalls[1]?.options?.queryOptions?.deliveryPriority,

@@ -77,7 +77,20 @@ function reportCatchupTableRetriesSpent(service, spent) {
   });
 }
 
+// Which timed or one-shot compensation ran this catch-up (CDC Stage 3
+// deletion evidence, design note S3.5): each run that actually changed cache
+// rows is counted and logged, so a formation can show these compensations
+// repair nothing before they are deleted.
+const CDC_CATCHUP_TRIGGER = Object.freeze({
+  JOIN_CATCHUP: 'join_catchup',
+  PUBLICATIONS_SWEEP: 'publications_sweep',
+  PROPAGATED_SWEEP_FAST: 'propagated_sweep_fast',
+  PROPAGATED_SWEEP: 'propagated_sweep',
+  UNNAMED: 'unnamed',
+});
+
 const CATCHUP_LOG_MSG = Object.freeze({
+  REPAIRED: 'CDC catch-up repaired cache rows (a compensation found a difference)',
   SUMMARY: 'CDC catch-up hydration completed',
   TABLE_FAILED: 'CDC catch-up hydration table read failed',
 });
@@ -148,6 +161,27 @@ function authoritativeReadFailure(readResult) {
   return readResult?.success === true ?
     CATCHUP_FAILURE_MSG.MALFORMED_ROW_SET :
     readResult?.error || CATCHUP_FAILURE_MSG.UNAVAILABLE;
+}
+
+/**
+ * Count one catch-up run per trigger, and the runs that changed cache rows.
+ * @param {Object} service - The CDC integration service.
+ * @param {string} trigger - A CDC_CATCHUP_TRIGGER.
+ * @param {Object} summary - The run's summary.
+ */
+function recordCatchupRepairs(service, trigger, summary) {
+  service.catchupRepairCounts ??= new Map();
+  const counts = service.catchupRepairCounts.get(trigger) ??
+    {runs: 0, repairingRuns: 0, rowsApplied: 0, rowsSwept: 0};
+  counts.runs += 1;
+  if (summary.rowsApplied + summary.rowsSwept > 0) {
+    counts.repairingRuns += 1;
+    counts.rowsApplied += summary.rowsApplied;
+    counts.rowsSwept += summary.rowsSwept;
+    service.logger?.warn?.(CATCHUP_LOG_MSG.REPAIRED, {nodeId: service.nodeId, trigger,
+      rowsApplied: summary.rowsApplied, rowsSwept: summary.rowsSwept, ...counts});
+  }
+  service.catchupRepairCounts.set(trigger, counts);
 }
 
 /**
@@ -403,6 +437,7 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options = {}) {
   if (isTerminal()) {
     summary.code = CDC_ERROR_CODE.SHUT_DOWN;
   }
+  recordCatchupRepairs(service, options.trigger ?? CDC_CATCHUP_TRIGGER.UNNAMED, summary);
   service.logger?.info?.(CATCHUP_LOG_MSG.SUMMARY, {
     tablesAttempted: summary.tablesAttempted,
     tablesHydrated: summary.tablesHydrated,
@@ -415,5 +450,6 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options = {}) {
 }
 
 export {
+  CDC_CATCHUP_TRIGGER,
   hydrateCdcPropagatedTablesFromAuthority,
 };

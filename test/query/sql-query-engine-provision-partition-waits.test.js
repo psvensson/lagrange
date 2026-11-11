@@ -170,7 +170,7 @@ test('SQLQueryEngine - provisionInitialTablePartition provisions requested ' +
       };
     },
     // No prior attempt of this schema job left durable bootstrap operations.
-    async getOperationsByEntity() {
+    async getAuthoritativeOperationsByEntity() {
       return [];
     },
     async executeOperation(operation, options = {}) {

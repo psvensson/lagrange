@@ -22,6 +22,13 @@ const deliver = (subscriber, {tableName, operation, data}) => subscriber(
 const committedAnswer = (messageGroup, events) =>
   buildCommittedCdcOutcome(events, messageGroup.groupId, {index: 1, term: 1});
 
+// The latency topology's CDC group propagation service, the one seam the
+// seed's propagation subscribers reach (bootstrap-service-seed-delegates.js
+// propagatePartitionCDCEvent -> propagatePartitionCdcVector).
+const propagationTopology = (propagateCDCEvent) => ({
+  cdcGroupPropagationService: {propagateCDCEvent: async (request) => propagateCDCEvent(request)},
+});
+
 // The seed hydration passes its message group as the propagation
 // subscribers' preferred service; these fixtures hydrate through the first.
 const hydrationMessageGroup = (service) => service.messageGroupServices.values().next().value;
@@ -55,19 +62,13 @@ test(
     // Track propagated events
     const propagatedEvents = [];
 
-    // Mock propagatePartitionCDCEvent to capture calls
-    service.seedCacheHydrationPhase.propagatePartitionCDCEvent =
-      async (messageGroup, events) => {
-        propagatedEvents.push(events);
-        return committedAnswer(messageGroup, events);
-      };
-
-    // Mock latencyTopology so propagatePartitionCDCEvent can resolve
-    service.latencyTopology = {
-      cdcGroupPropagationService: {
-        propagateCDCEvent: async () => {},
-      },
-    };
+    // The propagation seam every seed subscriber reaches (the delegate's
+    // propagatePartitionCdcVector -> latency topology): capture the vector
+    // and answer it committed by the selected source group.
+    service.latencyTopology = propagationTopology(({sourceMessageGroupService, events}) => {
+      propagatedEvents.push(events);
+      return committedAnswer(sourceMessageGroupService, events);
+    });
 
     // Capture the CDC subscriber callback registered on the partition
     let capturedCdcSubscriber = null;
@@ -236,16 +237,10 @@ test(
     let capturedCdcSubscriber = null;
     let repairSelectionCalls = 0;
 
-    service.seedCacheHydrationPhase.propagatePartitionCDCEvent =
-      async (messageGroup, events) => {
-        propagatedEvents.push(events);
-        return committedAnswer(messageGroup, events);
-      };
-    service.latencyTopology = {
-      cdcGroupPropagationService: {
-        propagateCDCEvent: async () => {},
-      },
-    };
+    service.latencyTopology = propagationTopology(({sourceMessageGroupService, events}) => {
+      propagatedEvents.push(events);
+      return committedAnswer(sourceMessageGroupService, events);
+    });
 
     const mockPartition = {
       subscribeToCDCWithHandshake: async (subscriber, options = {}) => {
@@ -330,16 +325,10 @@ test(
     let capturedCdcSubscriber = null;
     let repairSelectionCalls = 0;
 
-    service.seedCacheHydrationPhase.propagatePartitionCDCEvent =
-      async (messageGroup, events) => {
-        propagatedEvents.push({messageGroup, events});
-        return committedAnswer(messageGroup, events);
-      };
-    service.latencyTopology = {
-      cdcGroupPropagationService: {
-        propagateCDCEvent: async () => {},
-      },
-    };
+    service.latencyTopology = propagationTopology(({sourceMessageGroupService, events}) => {
+      propagatedEvents.push({messageGroup: sourceMessageGroupService, events});
+      return committedAnswer(sourceMessageGroupService, events);
+    });
 
     const localRelay = {
       initialized: true,

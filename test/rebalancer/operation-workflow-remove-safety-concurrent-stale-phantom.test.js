@@ -2,9 +2,10 @@
 // drains forever.
 //
 // The concurrent-partition-operation safety gate in evaluateRemoveSafety
-// (operation-workflow-remove-safety-evaluator.js ~283-298) defers a critical
-// REMOVE/REPLACE whenever getOperationsByEntity returns ANY non-terminal op on
-// the same partition. CL-043: a REPLACE whose replica_operations coordination
+// (operation-workflow-remove-safety-concurrent-operation.js) defers a critical
+// REMOVE/REPLACE whenever the ledger owner's entity observation
+// (getOperationsByEntityAuthoritativeObservation) answers ANY non-terminal op
+// on the same partition. CL-043: a REPLACE whose replica_operations coordination
 // row NEVER PERSISTED (control-plane write timeout) is stuck non-terminal with
 // no terminal-timeout anchor — so it stays "active" forever, blocking every
 // peer surplus-drain → surplus 5/3 → readiness oscillation → scheduler-leader
@@ -70,7 +71,20 @@ function buildPhantomConcurrentOp(ageMs) {
   };
 }
 
-function buildCoordinatorWithConcurrentOp(concurrentOp) {
+// The ledger owner's entity answer remove safety consumes: PRESENT for a
+// non-empty list, EMPTY for none.
+function answeredEntityObservation(operations) {
+  return Object.freeze({
+    state: operations.length > 0 ? 'present' : 'empty',
+    complete: true,
+    operationCount: operations.length,
+    operations: Object.freeze([...operations]),
+    deferredOutcome: null,
+    retryAfterMs: null,
+  });
+}
+
+function buildPeerRemoveCoordinator() {
   const coordinator = createTestCoordinator({
     nodeId: 'seed-node',
     enableTimeouts: false,
@@ -113,12 +127,10 @@ function buildCoordinatorWithConcurrentOp(concurrentOp) {
   });
 
   coordinator.initialize();
-  // The exact seam the gate reads. workflowOwner.repository === coordinator.repository.
-  coordinator.repository.getOperationsByEntity = async () => [concurrentOp];
   return coordinator;
 }
 
-async function evaluatePeerRemove(coordinator) {
+async function evaluatePeerRemove(coordinator, concurrentOp) {
   const operation = await coordinator.createOperation({
     type: OperationType.REMOVE,
     partitionId: CRITICAL_PARTITION_ID,
@@ -130,6 +142,11 @@ async function evaluatePeerRemove(coordinator) {
     // concurrent-op gate this falsifier pins.
     moveReason: MOVE_REASON.REPLICA_FAILED,
   });
+  // The exact seam the gate reads (workflowOwner.repository ===
+  // coordinator.repository), answered once the peer REMOVE exists so its
+  // creation admission reads the real ledger, as it always has.
+  coordinator.repository.getOperationsByEntityAuthoritativeObservation =
+    async () => answeredEntityObservation([concurrentOp]);
   return coordinator.workflowOwner.evaluateRemoveSafety(operation);
 }
 
@@ -140,11 +157,10 @@ test('CL-043 — a stale persist-failed concurrent REPLACE must not block a peer
     ConfigurationManager.getInstance().initialize({});
     LoggingService.getInstance().initialize({level: 'error'});
 
-    const coordinator = buildCoordinatorWithConcurrentOp(
-      buildPhantomConcurrentOp(STALE_AGE_MS),
-    );
+    const concurrentOp = buildPhantomConcurrentOp(STALE_AGE_MS);
+    const coordinator = buildPeerRemoveCoordinator();
     try {
-      const evaluation = await evaluatePeerRemove(coordinator);
+      const evaluation = await evaluatePeerRemove(coordinator, concurrentOp);
       t.notMatch(
         String(evaluation?.error ?? ''),
         CONCURRENT_OP_ERROR,
@@ -164,11 +180,10 @@ test('CL-043 — a FRESH concurrent REPLACE must still block the peer remove (sa
     ConfigurationManager.getInstance().initialize({});
     LoggingService.getInstance().initialize({level: 'error'});
 
-    const coordinator = buildCoordinatorWithConcurrentOp(
-      buildPhantomConcurrentOp(0),
-    );
+    const concurrentOp = buildPhantomConcurrentOp(0);
+    const coordinator = buildPeerRemoveCoordinator();
     try {
-      const evaluation = await evaluatePeerRemove(coordinator);
+      const evaluation = await evaluatePeerRemove(coordinator, concurrentOp);
       t.match(
         String(evaluation?.error ?? ''),
         CONCURRENT_OP_ERROR,

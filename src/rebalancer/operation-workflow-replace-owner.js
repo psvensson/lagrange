@@ -21,9 +21,9 @@
  *  - D2: after durable intent, the only admitted FAILED is target death:
  *    with the source still a voter its node cancels the source's removal
  *    first (CANCEL_REPLICA_REMOVAL); CANCELLED or NOT_IN_PROGRESS records
- *    the source retained, ALREADY_REMOVED (or the authority reading the
- *    source absent, checked after target death) the degraded source-removed
- *    outcome, anything else waits (2026-11-11). No elapsed-time budget fails
+ *    the source retained, ALREADY_REMOVED is reported as the named degraded
+ *    group and completes by R-1a, anything else waits (2026-11-11). No
+ *    elapsed-time budget fails
  *    a REPLACE after its intent; budgets become bounded diagnostics.
  * Prohibited: completing from a row, the AVAILABLE readiness verdict, a
  * release, a predicted configuration or any third replica; failing a
@@ -88,8 +88,9 @@ import {
 } from './operation-workflow-replace-owner-recovery.js';
 import {redriveReplaceSourceRetirement} from
   './operation-workflow-replace-source-retirement.js';
-import {cancelReplaceSourceRemoval, isSourceRetainedAnswer,
-  removalAppliedAnswer, targetDeathStepMetadataOf} from
+import {cancelReplaceSourceRemoval, degradedCompletionStepMetadataOf,
+  isSourceRetainedAnswer, reportTargetDeadSourceRemoved,
+  targetDeathStepMetadataOf} from
   './operation-workflow-replace-source-cancellation.js';
 import {REPLICA_REMOVAL_CANCEL_ANSWER} from
   '../node/replica-removal-cancel-contract.js';
@@ -109,11 +110,9 @@ const REPLACE_COMPLETION_VERDICT = Object.freeze({
   WITNESS_BELOW_GATE: 'witness_below_gate',
 });
 
-// The FAILED a REPLACE may reach after its durable removal intent (D2):
-// target death, its source retained or (degraded) already removed.
+// The one FAILED a REPLACE may reach after its durable removal intent (D2).
 const REPLACE_POST_INTENT_FAILURE = Object.freeze({
   TARGET_DEAD_SOURCE_RETAINED: 'replace_target_dead_source_retained',
-  TARGET_DEAD_SOURCE_REMOVED: 'replace_target_dead_source_removed',
 });
 
 // R-1c: the drain's non-owner FAIL of a pre-intent REPLACE whose owner is
@@ -416,43 +415,57 @@ function recordReplaceOwnerWait(owner, operation, reason, context = {}) {
   return true;
 }
 
-// D2's terminal for the source node's typed cancel answer, or null.
-function targetDeathFailureOf(cancel) {
-  if (isSourceRetainedAnswer(cancel)) {
-    return REPLACE_POST_INTENT_FAILURE.TARGET_DEAD_SOURCE_RETAINED;
-  }
-  return cancel.answer === REPLICA_REMOVAL_CANCEL_ANSWER.ALREADY_REMOVED ?
-    REPLACE_POST_INTENT_FAILURE.TARGET_DEAD_SOURCE_REMOVED : null;
-}
-
 async function handleReplaceTargetDeath(owner, operation, decision, context) {
-  const removed =
-    decision.verdict === REPLACE_COMPLETION_VERDICT.SOURCE_RETIRED;
-  if (removed ||
-      decision.verdict === REPLACE_COMPLETION_VERDICT.STILL_VOTER) {
+  if (decision.verdict === REPLACE_COMPLETION_VERDICT.STILL_VOTER) {
     // D2: a real premise change. The source is retained only once its node
-    // cancelled its removal; an unanswered cancel records nothing. A source
-    // already out of the committed configuration is the degraded outcome,
-    // however the owner learned it (2026-11-11).
-    const cancel = removed ? removalAppliedAnswer() :
-      await cancelReplaceSourceRemoval(owner, operation);
-    const failure = targetDeathFailureOf(cancel);
-    if (failure === null) {
-      return waitForReplaceOwner(owner, operation,
-        REPLACE_WAIT_REASON.SOURCE_REMOVAL_CANCEL_PENDING,
-        {...context, observation: decision.observation});
+    // cancelled its removal; an unanswered cancel records nothing
+    // (2026-11-11). Its node answering ALREADY_REMOVED means the removal
+    // happened: never "retained" - the degraded group is reported by name
+    // with its repair, and R-1a completes from the committed absence at the
+    // next entry (as when the absence is read first, P6 (c)).
+    const cancel = await cancelReplaceSourceRemoval(owner, operation);
+    const stepMetadata = targetDeathStepMetadataOf(cancel,
+      decision.observation, replaceReplicaIdsOf(owner, operation));
+    if (isSourceRetainedAnswer(cancel)) {
+      await owner.failOperation(operation,
+        REPLACE_POST_INTENT_FAILURE.TARGET_DEAD_SOURCE_RETAINED,
+        {replacePostIntentFailure:
+          REPLACE_POST_INTENT_FAILURE.TARGET_DEAD_SOURCE_RETAINED,
+        stepMetadata});
+      return true;
     }
-    await owner.failOperation(operation, failure, {
-      replacePostIntentFailure: failure,
-      stepMetadata: targetDeathStepMetadataOf(cancel, decision.observation,
-        replaceReplicaIdsOf(owner, operation))});
-    return true;
+    const removed =
+      cancel.answer === REPLICA_REMOVAL_CANCEL_ANSWER.ALREADY_REMOVED;
+    if (removed) {
+      reportTargetDeadSourceRemoved(owner, operation, stepMetadata);
+    }
+    // Removed: the one completion edge above (R-1a) decides at the next
+    // entry, woken by the committed membership change.
+    return waitForReplaceOwner(owner, operation, removed ?
+      REPLACE_WAIT_REASON.SOURCE_MEMBERSHIP_REMOVAL_PENDING :
+      REPLACE_WAIT_REASON.SOURCE_REMOVAL_CANCEL_PENDING,
+    {...context, observation: decision.observation});
   }
   // The witness is the dead target: its configuration cannot be read, so
   // nothing is concluded - the REPLACE waits visibly (never a rollback).
   return waitForReplaceOwner(owner, operation,
     REPLACE_WAIT_REASON.TARGET_DEAD_WITNESS_UNAVAILABLE,
     {...context, observation: decision.observation});
+}
+
+/**
+ * The durable record a REPLACE completion carries when its target is gone:
+ * the source left (R-1a), the group runs degraded, the repair it owes is
+ * named. Recorded by the one completion sink for every success edge.
+ * @param {Object} owner
+ * @param {Object} operation
+ * @param {Object} decision - decideReplaceCompletion's SOURCE_RETIRED answer.
+ * @return {Object|null} Step metadata, or null with a live target.
+ */
+function replaceCompletionStepMetadataOf(owner, operation, decision) {
+  return isReplaceTargetGone(owner, operation) ?
+    degradedCompletionStepMetadataOf(decision.observation,
+      replaceReplicaIdsOf(owner, operation)) : null;
 }
 
 /**
@@ -494,12 +507,12 @@ async function reconcileReplaceStoppingOwner(owner, operation, context = {}) {
   }
   const decision = await decideReplaceCompletion(owner, operation);
   const waitContext = {...context, observation: decision.observation};
-  if (isReplaceTargetGone(owner, operation)) {
-    return handleReplaceTargetDeath(owner, operation, decision, context);
-  }
   if (decision.verdict === REPLACE_COMPLETION_VERDICT.SOURCE_RETIRED) {
     await owner.completeOperation(operation);
     return true;
+  }
+  if (isReplaceTargetGone(owner, operation)) {
+    return handleReplaceTargetDeath(owner, operation, decision, context);
   }
   if (Object.hasOwn(VERDICT_WAIT_REASON, decision.verdict)) {
     return waitForReplaceOwner(owner, operation,
@@ -718,6 +731,7 @@ export {
   isTargetFailureDetectorDead,
   readReplaceOwnerDiagnostic,
   readReplaceOwnerPhase,
+  replaceCompletionStepMetadataOf,
   recordReplaceBudgetDiagnostic,
   recordReplaceOwnerWait,
   recordReplaceSourceRemovalEffect,

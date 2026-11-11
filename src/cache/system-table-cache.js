@@ -301,14 +301,17 @@ class SystemTableCache {
         .AUTHORITATIVE_OBSERVATION_RECONCILIATION;
     let recordForNotification = null;
     let incomingVersionAccepted = false;
+    const imageReplacement = mutationMode ===
+      SYSTEM_TABLE_CACHE_MUTATION_MODE.SOURCE_IMAGE_REPLACEMENT;
     const sameEntryOrder = this.sourceOrder.compareInSameEntry(tableName, key, data, options);
     if (sameEntryOrder < 0) return false;
-    if (sameEntryOrder > 0) this.tombstoneStore.clearKey(tableName, key);
+    if (sameEntryOrder > 0 || imageReplacement) this.tombstoneStore.clearKey(tableName, key);
 
     // A write (INSERT/UPDATE/UPSERT) for a key under an active DELETE tombstone is
     // a reordered, causally-older resurrection — reject it. A causally-newer write
     // clears the tombstone inside the check and proceeds (legitimate re-create).
-    if (cacheWriteIsFenced({
+    // A leader image is the table at its position: it is never fenced.
+    if (!imageReplacement && cacheWriteIsFenced({
       cache: this,
       table,
       tableName,
@@ -321,11 +324,7 @@ class SystemTableCache {
         options?.authoritativeReadStartedAtMs,
       readAuthorityWitness: options?.readAuthorityWitness,
     })) {
-      this.logger.debug(CACHE_LOG_MSG.WRITE_FENCED_BY_TOMBSTONE, {
-        tableName,
-        key,
-        operation,
-      });
+      this.logger.debug(CACHE_LOG_MSG.WRITE_FENCED_BY_TOMBSTONE, {tableName, key, operation});
       return false;
     }
 
@@ -405,7 +404,9 @@ class SystemTableCache {
         table.set(key, this.deepClone(data));
       } else {
         const existing = table.get(key);
-        if (
+        if (imageReplacement) {
+          table.set(key, buildAuthoritativeSystemTableCacheReplacement(existing, data));
+        } else if (
           mutationMode ===
           SYSTEM_TABLE_CACHE_MUTATION_MODE
             .AUTHORITATIVE_SERVICE_LIFECYCLE_RECONCILIATION
@@ -480,7 +481,8 @@ class SystemTableCache {
         });
       } else {
         const existing = table.get(key);
-        if (isDeleteSupersededByExistingRecord(tableName, existing, data, sameEntryOrder)) {
+        if (!imageReplacement &&
+            isDeleteSupersededByExistingRecord(tableName, existing, data, sameEntryOrder)) {
           // The row is causally newer than this DELETE: the delete is superseded,
           // so it must NOT leave a tombstone that would fence the live row.
           this.logger.debug(CACHE_LOG_MSG.STALE_EVENT_IGNORED, {
@@ -494,15 +496,13 @@ class SystemTableCache {
         }
         recordForNotification = existing;
         table.delete(key);
-        this.tombstoneStore.record(
-          tableName,
-          key,
-          buildDeletedRowTombstoneSource(existing, data),
-          {
-            authoritativeAbsence,
-            authoritativeObservedAtMs: options?.authoritativeObservedAtMs,
-          },
-        );
+        // An image's absence leaves no tombstone: what follows the image is
+        // ordered by the source-order cell, not fenced by the deleted row.
+        if (!imageReplacement) {
+          this.tombstoneStore.record(tableName, key,
+            buildDeletedRowTombstoneSource(existing, data), {authoritativeAbsence,
+              authoritativeObservedAtMs: options?.authoritativeObservedAtMs});
+        }
         incomingVersionAccepted = true;
       }
       break;
@@ -511,12 +511,7 @@ class SystemTableCache {
     if (incomingVersionAccepted || (operation === CDC_OPERATIONS.DELETE && !table.has(key))) {
       this.sourceOrder.record(tableName, key, data, options);
     }
-    this.logger.debug(CACHE_LOG_MSG.APPLIED_CDC_EVENT, {
-      tableName,
-      operation,
-      key,
-      causeId,
-    });
+    this.logger.debug(CACHE_LOG_MSG.APPLIED_CDC_EVENT, {tableName, operation, key, causeId});
 
     // Notify listeners after applying the change
     const tableMutationRevision = recordForNotification ?

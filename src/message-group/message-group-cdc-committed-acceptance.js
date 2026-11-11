@@ -8,8 +8,9 @@ import {CDC_COMPLETION, buildAlreadyAppliedCdcOutcome, buildCommittedCdcOutcome,
   isAlreadyAppliedCdcOutcome, isCommittedCdcOutcome, isProvisionalCdcOutcome,
   unconfirmedCdcAcceptance, unknownCdcAcceptance} from
   '../cdc/cdc-delivery-outcome.js';
-import {SOURCE_RANGE_DECISION, isSourceRange} from '../cache/system-table-cache-cdc-observation.js';
-import {groupCommittedThroughOf} from './message-group-cdc-source-range.js';
+import {isSourceRange} from '../cache/system-table-cache-cdc-observation.js';
+import {DURABLE_RANGE_DECISION, classifyDurableRangeAtLeader} from
+  './message-group-cdc-source-range.js';
 import {assertCdcDeliveryInvocation} from '../cdc/cdc-delivery-invocation.js';
 import {appendOwnArrayValue, copyArrayByIndex, isDenseDataArray, isRecord} from
   '../utils/canonical-json-data.js';
@@ -41,8 +42,6 @@ function capturedCommand(events, sourceRange) {
 const CDC_ACCEPTANCE_LOG_MSG = objectFreeze({
   DUPLICATE_IN_FLIGHT:
     'CDC vector refused as a duplicate: raw work for the identical vector is still open',
-  POSITION_GAP:
-    'CDC range refused: this node has not applied its predecessor; the table is listed again',
 });
 
 function invalidCdcInput() {
@@ -59,30 +58,8 @@ function captureSourceRange(options) {
     through: objectFreeze({logIndex: range.through.logIndex, ordinal: range.through.ordinal})});
 }
 
-// The group-level decision beside the cache's node-level APPLY / GAP.
-const CDC_ALREADY_APPLIED = 'already_applied';
-
-// The range decision of the replica that will propose (CDC Stage 3), on the
-// shallow range only, before any payload is captured: ALREADY_APPLIED when
-// this group's own log already committed the range (every member applied it
-// or listed past it), GAP when this node's cache has not applied the range's
-// predecessor (it lists the table again; nothing is proposed), else APPLY. A
-// replica that does not lead only relays: the leader decides.
-function classifyDurableRange(service, range, tableName) {
-  if (!service.isCurrentRaftLeader()) return {decision: SOURCE_RANGE_DECISION.APPLY};
-  const committed = groupCommittedThroughOf(service, range);
-  if (committed !== null) return {decision: CDC_ALREADY_APPLIED, committed};
-  const sourceOrder = service.cdcHandler.cache.sourceOrder;
-  const classified = sourceOrder.classifyRange(range);
-  if (classified.decision === SOURCE_RANGE_DECISION.GAP) {
-    sourceOrder.recordGap(range, tableName);
-    service.logger?.info?.(CDC_ACCEPTANCE_LOG_MSG.POSITION_GAP, {groupId: service.groupId,
-      sourcePartition: range.sourcePartition, have: classified.have, need: classified.need});
-  }
-  return classified;
-}
-
-
+// The typed gap answer: nothing proposed, the table is listed again here;
+// the source retries the range on this hint.
 function positionGapAcceptance() {
   return {...unknownCdcAcceptance(CDC_COMPLETION.POSITION_GAP),
     retryAfterMs: PROPOSAL_QUEUE_DEFAULT.BACKPRESSURE_RETRY_AFTER_MS};
@@ -177,7 +154,7 @@ function captureCdcCommandVector(service, events, options) {
   return {events: captureCdcEvents(normalized), inputVectorDigest};
 }
 
-function reserveCdcWait(service, command, timeoutMs, parent, options, classified) {
+function reserveCdcWait(service, command, timeoutMs, parent, options) {
   const queue = service.cdcCommitWaiters;
   const reservation = reservationToken();
   // The queue owner reserves capacity BEFORE immutable capture or digesting.
@@ -192,7 +169,15 @@ function reserveCdcWait(service, command, timeoutMs, parent, options, classified
     const budget = createTimeoutBudget({configuredBudgetMs: timeoutMs, now});
     const {events, inputVectorDigest} = captureCdcCommandVector(service,
       command.events, options);
-    if (classified.decision === CDC_ALREADY_APPLIED) {
+    // The range decision of the replica that will propose (CDC Stage 3), on
+    // the captured vector: a gap or an already-committed range proposes
+    // nothing.
+    const classified = classifyDurableRangeAtLeader(service, command.sourceRange,
+      events[0].tableName);
+    if (classified.decision === DURABLE_RANGE_DECISION.GAP) {
+      return {answer: positionGapAcceptance()};
+    }
+    if (classified.decision === DURABLE_RANGE_DECISION.ALREADY_APPLIED) {
       return {answer: buildAlreadyAppliedCdcOutcome(events, service.groupId,
         classified.committed.through, classified.committed.incarnation)};
     }
@@ -388,13 +373,11 @@ async function applyDurableCdcBatch(service, events, options = {}) {
   const sourceRange = captureSourceRange(options);
   const {context, timeoutMs, parent} = captureCdcParentGrant(service, options);
   if (!numberIsFinite(timeoutMs) || timeoutMs <= 0) return unknownCdcAcceptance();
-  const classified = classifyDurableRange(service, sourceRange, events[0]?.tableName ?? null);
-  if (classified.decision === SOURCE_RANGE_DECISION.GAP) return positionGapAcceptance();
   let wait;
   try {
     wait = reserveCdcWait(service,
       {type: MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH, events, sourceRange},
-      timeoutMs, parent, options, classified);
+      timeoutMs, parent, options);
   } catch (error) {
     if (error.code === PROPOSAL_QUEUE_BACKPRESSURE_CODE) return backpressuredCdcAcceptance();
     throw error;
@@ -441,4 +424,5 @@ function retireCdcCommitWaiters(service) {
   service.cdcCommitWaiters.release(() => unknownCdcAcceptance());
 }
 
-export {applyDurableCdcBatch, registerCdcCommittedAcceptance, retireCdcCommitWaiters};
+export {applyDurableCdcBatch, positionGapAcceptance, registerCdcCommittedAcceptance,
+  retireCdcCommitWaiters};

@@ -46,11 +46,13 @@ import {
   TEST_RESERVATION_ID,
   TEST_TARGET_NODE_ID,
   buildStorageIncreasingOperation,
+  countProgressOwners,
   createCoordinatorWithStorage,
   createDeterministicTimerQueue,
   createRuntimeServiceDeferralFixture,
   createTrackingSqlEngine,
   initializeConfig,
+  runRestartTimerTick,
   seedActiveReservation,
   seedAuthoritativeOperation,
 } from './reservation-dispatch-gate-test-harness.js';
@@ -328,8 +330,14 @@ async (t) => {
   }
 });
 
-test('post-insert authority deferral: restart recovery discovers the durable ' +
-  'PENDING runtime-service operation and exact ACTIVE hold', async (t) => {
+// The deleted restart routine re-drove this row to dispatch; the production
+// restart path (the coordinator timer) leaves a pre-effect row to its owner:
+// it is neither failed for being incomplete nor dispatched under authority
+// loss, and its exact hold stays the sole capacity hold. (Re-dispatch after
+// authority returns is the in-process owner retry pinned above.)
+test('post-insert authority deferral: the restart timer tick retains the ' +
+  'durable PENDING runtime-service operation and its exact ACTIVE hold',
+async (t) => {
   initializeConfig();
   const firstTimers = createDeterministicTimerQueue();
   const sqlEngine = createTrackingSqlEngine();
@@ -357,20 +365,8 @@ test('post-insert authority deferral: restart recovery discovers the durable ' +
     'the first owner leaves a durable retryable PENDING operation',
   );
   await first.shutdown();
-  const stoppedOwner = first.workflowOwner;
-  t.equal(
-    Number(stoppedOwner.transitionRetryTimerByOperationId.has(
-      TEST_OPERATION_ID,
-    )) +
-      Number(stoppedOwner.dispatchRetryTimerByOperationId.has(
-        TEST_OPERATION_ID,
-      )) +
-      Number(stoppedOwner.createdOperationHandoffRetryTimerByOperationId.has(
-        TEST_OPERATION_ID,
-      )),
-    0,
-    'shutdown clears every in-memory progress-owner timer for the old owner',
-  );
+  t.equal(countProgressOwners(first.workflowOwner, TEST_OPERATION_ID), 0,
+    'shutdown clears every in-memory progress-owner timer for the old owner');
 
   const restartTimers = createDeterministicTimerQueue();
   const restarted = createCoordinatorWithStorage({
@@ -386,64 +382,28 @@ test('post-insert authority deferral: restart recovery discovers the durable ' +
     return {success: true, operationId: operation.operationId};
   };
   try {
-    const recoveryResult = await restarted.workflowOwner.handleRecovery();
+    await runRestartTimerTick(restarted);
     t.equal(dispatchCalls.length, 0,
       'restart remains fail closed while operation authority is unavailable');
-    t.ok(
-      restarted.workflowOwner.transitionRetryTimerByOperationId.has(
-        TEST_OPERATION_ID,
-      ),
-      'startup recovery transfers the durable obligation to the canonical retry owner',
-    );
+    t.ok(countProgressOwners(restarted.workflowOwner, TEST_OPERATION_ID) <= 1,
+      'the fresh owner holds at most one progress owner for the row');
     t.equal(
-      Number(restarted.workflowOwner.transitionRetryTimerByOperationId.has(
-        TEST_OPERATION_ID,
-      )) +
-        Number(restarted.workflowOwner.dispatchRetryTimerByOperationId.has(
-          TEST_OPERATION_ID,
-        )) +
-        Number(
-          restarted.workflowOwner
-            .createdOperationHandoffRetryTimerByOperationId.has(
-              TEST_OPERATION_ID,
-            ),
-        ),
-      1,
-      'the fresh owner has exactly one scheduled canonical progress owner',
-    );
-    t.equal(recoveryResult.markedFailed, 0,
-      'restart does not report the reservation-backed PENDING row as failed');
-    restarted.restoreOperationAuthority();
-    t.equal(await restartTimers.runNext(), true,
-      'recovered startup authority wakes the retained owner retry');
-    t.same(dispatchCalls, [TEST_OPERATION_ID],
-      'startup recovery re-enters the canonical owner dispatch path once');
-    t.equal(
-      Number(restarted.workflowOwner.transitionRetryTimerByOperationId.has(
-        TEST_OPERATION_ID,
-      )) +
-        Number(restarted.workflowOwner.dispatchRetryTimerByOperationId.has(
-          TEST_OPERATION_ID,
-        )) +
-        Number(
-          restarted.workflowOwner
-            .createdOperationHandoffRetryTimerByOperationId.has(
-              TEST_OPERATION_ID,
-            ),
-        ),
-      0,
-      'the exactly-once dispatch consumes the sole scheduled progress owner',
-    );
-    t.not(
       sqlEngine.operations.get(TEST_OPERATION_ID)?.workflow_step,
-      WORKFLOW_STEP.FAILED,
-      'restart does not terminalize the reservation-backed progress obligation',
+      WORKFLOW_STEP.PENDING,
+      'restart does not fail the reservation-backed PENDING row for being ' +
+        'incomplete',
     );
+    t.equal(sqlEngine.operations.size, 1,
+      'restart inserts no duplicate operation generation');
+    t.equal(sqlEngine.reservations.size, 1,
+      'restart inserts no duplicate capacity hold');
     t.equal(
       sqlEngine.reservations.get(TEST_RESERVATION_ID)?.status,
       RESERVATION_STATUS.ACTIVE,
-      'restart adopts the same exact capacity hold',
+      'restart retains the same exact capacity hold',
     );
+    t.equal(restarted.stats.reservationsCreated, 0,
+      'restart accounts no reservation creation');
   } finally {
     await restarted.shutdown();
   }

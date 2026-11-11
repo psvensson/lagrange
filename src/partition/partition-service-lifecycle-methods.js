@@ -1,3 +1,5 @@
+import {notifyRemovalServingDrain} from
+  './partition-service-removal-drain-wake.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {
   PARTITION_WRITE_RELEASE_CAUSE,
@@ -78,9 +80,12 @@ async function retirePartitionTransportHandler(service) {
 }
 
 function closePartitionPersistenceResources(service) {
+  // Held hydration-image snapshots close with the partition (R13).
+  service.hydrationImages?.closeAll();
   if (service.db) {
     service.db.close();
     service.db = null;
+    notifyRemovalServingDrain(service);
   }
 }
 

@@ -51,6 +51,13 @@ import {
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
 import {stubAvailableNodes} from './available-node-plan-stub.js';
+import {answeredPriorityClassCounts} from './incomplete-operations-read-stub.js';
+import {
+  CACHE_PROJECTION,
+  OWNER_READ,
+  createDurableStepWorld,
+} from './durable-step-authority-fixture.js';
+import {RECONCILE_REASON} from '../../src/workflow/reconcile-queue-constants.js';
 
 // Initialize test environment
 // Create a mock system table cache
@@ -158,7 +165,7 @@ test('UnifiedRebalancer serializes ordinary priority recovery moves while anothe
         },
       );
     rebalancer.rebalanceCoordinator.getConcurrentAddCountByPriorityClass =
-      async () => ({
+      async () => answeredPriorityClassCounts({
         priorityCount: 1,
         ordinaryPriorityCount: 1,
         emergencyPriorityCount: 0,
@@ -220,6 +227,166 @@ test('UnifiedRebalancer serializes ordinary priority recovery moves while anothe
     rebalancer.shutdown();
   });
 
+// Paired witness, gate 1: the planner's ordinary-priority serial gate counts
+// in-flight ADDs from the owner's replica_operations list read. A read the
+// owner did not answer is an unknown count: the gate HOLDS (and arms the
+// named wait that re-asks), and it admits once the owner answers. The
+// failure is injected at the read port of a real coordinator.
+test('Ordinary priority serial gate holds on an unanswered list read and admits once the owner answers',
+  async (t) => {
+    initializeTestEnvironment();
+    const world = createDurableStepWorld({partitionId: 'sql_transactions-p1'});
+    world.cacheProjection = CACHE_PROJECTION.EMPTY;
+    world.ownerRead = OWNER_READ.UNAVAILABLE;
+    const rebalancer = createTestRebalancer({
+      entityId: 'sql_transactions-p1',
+      entityType: EntityType.PARTITION,
+      nodeId: 'node-1',
+      nodes: [
+        {node_id: 'node-1', status: NodeStatus.ACTIVE},
+        {node_id: 'node-2', status: NodeStatus.ACTIVE},
+      ],
+    });
+    rebalancer.controlPlaneReadinessService.membershipPublicationService =
+      createMockMembershipPublicationService(['node-1', 'node-2'], 1, {
+        priorityPartitionSummary: {
+          satisfied: false,
+          blockedPartitions: [{partitionId: 'sql_transactions-p1', spreadGap: 1}],
+        },
+      });
+    rebalancer.rebalanceCoordinator.getConcurrentAddCountByPriorityClass =
+      (options) => world.coordinator.getConcurrentAddCountByPriorityClass(options);
+    const cacheListeners = new Set();
+    rebalancer.systemTableCache.onCacheChange = (listener) =>
+      cacheListeners.add(listener);
+    rebalancer.systemTableCache.offCacheChange = (listener) =>
+      cacheListeners.delete(listener);
+    const enqueuedReasons = [];
+    rebalancer.enqueueRebalanceCheck = (reason) => {
+      enqueuedReasons.push(reason);
+      return true;
+    };
+    rebalancer.setLeader(true);
+    rebalancer.getCurrentReplicas = () => [];
+    stubAvailableNodes(rebalancer, () => ([{node_id: 'node-1'}, {node_id: 'node-2'}]));
+    rebalancer.movePlanner.calculateTargetState = async () => ({targetReplicaCount: 2});
+    rebalancer.movePlanner.calculateMoves = () => ([
+      {type: MoveType.ADD, nodeId: 'node-2', replicaId: 'sql-transactions-r2'},
+    ]);
+    rebalancer.movePlanner.applyPressureGating = async (moves) => moves;
+    rebalancer.movePlanner.isCriticalState = () => true;
+    rebalancer.getConfiguredRebalanceBudget = async () => 5;
+    rebalancer.getGlobalInFlightOperationCount = async () => 0;
+    const executedMoves = [];
+    rebalancer.executeRebalancingMoves = async (moves) => {
+      executedMoves.push(...moves);
+      return moves.map((move) => ({success: true, skipped: false, nodeId: move.nodeId}));
+    };
+    const policy = {targetReplicaCount: 2, placementConstraints: {}};
+
+    const held = await rebalancer.rebalance(TriggerType.PERIODIC, policy);
+    t.ok(world.unavailableOwnerReads > 0, 'the owner list read failed at the port');
+    t.equal(executedMoves.length, 0,
+      'no ordinary-priority ADD is admitted on an unknown in-flight count');
+    t.equal(held.skipped, true, 'the pass is a clean skip');
+    t.equal(held.ordinaryPriorityRecoverySerialGate?.countState, 'unanswered',
+      'the gate names the unanswered count');
+    t.equal(held.ordinaryPriorityRecoverySerialGate?.ordinaryPriorityInFlightCount,
+      null, 'an unanswered count is not zero');
+    t.equal(cacheListeners.size, 1, 'the named wait is armed while the gate holds');
+
+    enqueuedReasons.length = 0;
+    for (const listener of [...cacheListeners]) listener('services');
+    t.same(enqueuedReasons,
+      [RECONCILE_REASON.OPERATION_LIST_READ_SOURCE_CHANGED],
+      'a change of an owner-route source table re-asks once');
+    t.equal(cacheListeners.size, 0, 'the wait disarms when it fires');
+
+    world.ownerRead = OWNER_READ.ABSENT;
+    const admitted = await rebalancer.rebalance(TriggerType.PERIODIC, policy);
+    t.equal(executedMoves.length, 1, 'the ADD is admitted once the owner answers');
+    t.equal(admitted.success, true);
+    t.equal(cacheListeners.size, 0, 'an answered count leaves no wait armed');
+    rebalancer.shutdown();
+  });
+
+// Paired witness, item C: the global move budget is charged with the
+// cluster-wide in-flight count. A count read that does not answer holds an
+// ordinary entity's pass (budget query failure, named wait armed) instead of
+// opening the whole budget; the emergency lane is not held - the
+// coordinator's emergency admission decides through the priority bypass.
+async function runGlobalCountWitnessPass({entityId, countAnswers, priorityAdmits}) {
+  const port = {countAnswers, countReads: 0};
+  const gateway = {
+    async readAuthoritativeRows(tableName) {
+      if (tableName !== 'replica_operations') return {success: true, rows: []};
+      port.countReads += 1;
+      return port.countAnswers ?
+        {success: true, rows: [{total_count: 0}]} :
+        {success: false, errorCode: 'ROUTER_NO_CONNECTION', rows: []};
+    },
+  };
+  const rebalancer = createTestRebalancer({
+    entityId,
+    entityType: EntityType.PARTITION,
+    nodeId: 'node-1',
+    nodes: [
+      {node_id: 'node-1', status: NodeStatus.ACTIVE},
+      {node_id: 'node-2', status: NodeStatus.ACTIVE},
+    ],
+    controlPlaneSystemTableGateway: gateway,
+  });
+  const cacheListeners = new Set();
+  rebalancer.systemTableCache.onCacheChange = (listener) => cacheListeners.add(listener);
+  rebalancer.systemTableCache.offCacheChange = (listener) => cacheListeners.delete(listener);
+  rebalancer.rebalanceCoordinator.canStartPriorityAddOperation = async () => priorityAdmits;
+  rebalancer.getOrdinaryPriorityRecoverySerialGateSnapshot = async () => null;
+  rebalancer.setLeader(true);
+  rebalancer.getCurrentReplicas = () => [];
+  stubAvailableNodes(rebalancer, () => ([{node_id: 'node-1'}, {node_id: 'node-2'}]));
+  rebalancer.movePlanner.calculateTargetState = async () => ({targetReplicaCount: 2});
+  rebalancer.movePlanner.calculateMoves = () => ([
+    {type: MoveType.ADD, nodeId: 'node-2', replicaId: `${entityId}-r2`},
+  ]);
+  rebalancer.movePlanner.applyPressureGating = async (moves) => moves;
+  rebalancer.movePlanner.isCriticalState = () => false;
+  const executedMoves = [];
+  rebalancer.executeRebalancingMoves = async (moves) => {
+    executedMoves.push(...moves);
+    return moves.map((move) => ({success: true, skipped: false, nodeId: move.nodeId}));
+  };
+  const result = await rebalancer.rebalance(TriggerType.PERIODIC,
+    {targetReplicaCount: 2, placementConstraints: {}});
+  const armedWaits = cacheListeners.size;
+  rebalancer.shutdown();
+  return {result, executedMoves, port, armedWaits};
+}
+
+test('An unanswered global in-flight count holds ordinary planning and leaves the emergency lane to its admission',
+  async (t) => {
+    initializeTestEnvironment();
+    const held = await runGlobalCountWitnessPass({
+      entityId: 'user_orders-p1', countAnswers: false, priorityAdmits: true});
+    t.ok(held.port.countReads > 0, 'the count read failed at the port');
+    t.equal(held.executedMoves.length, 0, 'no move on an unknown in-flight count');
+    t.equal(held.result.reason, REBALANCER_SKIP_REASON.BUDGET_QUERY_FAILED,
+      'the pass names the failed budget read');
+    t.equal(held.armedWaits, 1, 'the list-read wait is armed to re-ask');
+
+    const answered = await runGlobalCountWitnessPass({
+      entityId: 'user_orders-p1', countAnswers: true, priorityAdmits: true});
+    t.equal(answered.executedMoves.length, 1, 'the move runs once the count answers');
+
+    const emergency = await runGlobalCountWitnessPass({
+      entityId: 'replica_operations-p1', countAnswers: false, priorityAdmits: true});
+    t.equal(emergency.executedMoves.length, 1,
+      'the emergency lane is not held by the unanswered count');
+    const emergencyRefused = await runGlobalCountWitnessPass({
+      entityId: 'replica_operations-p1', countAnswers: false, priorityAdmits: false});
+    t.equal(emergencyRefused.executedMoves.length, 0,
+      'an unknown count is no free budget: emergency admission decides');
+  });
+
 test('UnifiedRebalancer keeps emergency priority recovery eligible while ordinary priority work is already in flight',
   async (t) => {
     initializeTestEnvironment();
@@ -248,7 +415,7 @@ test('UnifiedRebalancer keeps emergency priority recovery eligible while ordinar
         },
       );
     rebalancer.rebalanceCoordinator.getConcurrentAddCountByPriorityClass =
-      async () => ({
+      async () => answeredPriorityClassCounts({
         priorityCount: 1,
         ordinaryPriorityCount: 1,
         emergencyPriorityCount: 0,

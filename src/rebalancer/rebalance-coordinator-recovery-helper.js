@@ -1,25 +1,9 @@
-import {NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {filterConcurrentAddBudgetOperations} from './rebalance-coordinator-priority-budget-helper.js';
 
 const {
-  INCOMPLETE_OPERATION_OBSERVATION_STATE,
-  REPLICA_OPERATION_VISIBILITY_READ_MODE,
-  REBALANCE_COORDINATOR_EVENT,
-  REBALANCE_COORDINATOR_LOG_MSG,
   OperationType,
-  SERVICE_TYPE,
-  WORKFLOW_STEP,
 } = REBALANCE_COORDINATOR_SHARED;
-
-// A recovery or orphan decision fails, adopts or completes work: it runs
-// only on a list the owner answered. A DEFERRED observation's operations are
-// a projection fallback; acting on them would decide from it, so the turn
-// decides nothing and a later sweep reads again.
-function isAnsweredIncompleteObservation(observation) {
-  return Array.isArray(observation?.operations) &&
-    observation.state !== INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED;
-}
 
 function checkTimeouts(coordinator) {
   if (!coordinator.workflowOwner) {
@@ -55,111 +39,12 @@ async function reconcileExecutorOutcome(coordinator, outcome) {
   return coordinator.workflowOwner.reconcileExecutorOutcome(outcome);
 }
 
-async function handleRecovery(coordinator) {
-  coordinator.logger.info(REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_START, {
-    nodeId: coordinator.nodeId,
-  });
-
-  const result = {
-    totalIncomplete: 0,
-    markedFailed: 0,
-    reconciled: 0,
-    errors: [],
-  };
-
-  const canUseCacheObservationBoundary =
-    coordinator.repository.hasReplicaOperationCacheObservationBoundary();
-  const cachedIncompleteOps = canUseCacheObservationBoundary ?
-    await coordinator.queryCachedIncompleteOperations() :
-    [];
-  const incompleteOperationObservation =
-    await coordinator.repository.getIncompleteOperationVisibilityObservation({
-      cachedOperations: cachedIncompleteOps,
-      visibilityReadMode:
-        REPLICA_OPERATION_VISIBILITY_READ_MODE.CACHE_PREFERRED_SQL_FALLBACK,
-    });
-  const incompleteOps = isAnsweredIncompleteObservation(
-    incompleteOperationObservation,
-  ) ?
-    incompleteOperationObservation.operations :
-    [];
-  result.totalIncomplete = incompleteOps.length;
-
-  coordinator.logger.info(REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_FOUND, {
-    count: incompleteOps.length,
-    nodeId: coordinator.nodeId,
-  });
-
-  for (const op of incompleteOps) {
-    if (!coordinator.isOperationLocallyOwned(op)) {
-      continue;
-    }
-
-    const originalStep = op.workflowStep;
-    const singleFlightKey = coordinator.getOperationOwnerSingleFlightKey(
-      op.operationId,
-    );
-
-    try {
-      await coordinator.operationWorkflowRunExclusive(singleFlightKey, () =>
-        coordinator.reconcileRecoveryOperation(op),
-      );
-    } catch (error) {
-      result.errors.push({
-        operationId: op.operationId,
-        error: error.message,
-      });
-      coordinator.logger.error(REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_MARK_FAILED, {
-        operationId: op.operationId,
-        workflowStep: originalStep,
-        partitionId: op.partitionId,
-        error: error.message,
-      });
-      continue;
-    }
-
-    if (
-      coordinator.workflowOwner.isRemoveInitialDispatchPhase({
-        type: op.type,
-        workflowStep: originalStep,
-      })
-    ) {
-      result.reconciled++;
-    } else if (NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS.has(originalStep)) {
-      result.markedFailed++;
-    } else if (originalStep === WORKFLOW_STEP.SYNCING) {
-      result.reconciled++;
-    }
-  }
-
-  coordinator.logger.info(REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_COMPLETED, {
-    nodeId: coordinator.nodeId,
-    ...result,
-  });
-
-  const reservationResult = await coordinator.reconcileReservations();
-  result.reservationsExpired = reservationResult.expired;
-  result.reservationsOrphansReleased = reservationResult.orphansReleased;
-
-  coordinator.emit(REBALANCE_COORDINATOR_EVENT.RECOVERY_COMPLETED, result);
-
-  return result;
-}
-
 function isPreSyncStep(coordinator, step) {
   return coordinator.workflowOwner.isPreSyncStep(step);
 }
 
-async function reconcileRecoveryOperation(coordinator, op) {
-  return coordinator.workflowOwner.reconcileRecoveryOperation(op);
-}
-
-async function reconcileMessageGroupMembershipDebt(coordinator) {
-  return coordinator.workflowOwner.reconcileMessageGroupMembershipDebt();
-}
-
-async function reconcileSyncingOperation(coordinator, operation) {
-  return coordinator.workflowOwner.reconcileSyncingOperation(operation);
+async function reconcileMessageGroupMembershipDebt(coordinator, census) {
+  return coordinator.workflowOwner.reconcileMessageGroupMembershipDebt(census);
 }
 
 function getObservedReplicaStatusFromCache(
@@ -206,18 +91,22 @@ async function getAllOperations(coordinator) {
   return coordinator.repository.getAllOperations();
 }
 
-async function getOperationsByPartition(coordinator, partitionId) {
-  return coordinator.getOperationsByEntity(SERVICE_TYPE.PARTITION, partitionId);
-}
-
-async function getOperationsByEntity(coordinator, entityType, entityId, options = {}) {
-  if (options?.visibilityReadMode === REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED) {
-    const observation = await coordinator.getEntityAuthoritativeOperationObservation(
-      entityType, entityId,
-    );
-    return coordinator.requireEntityOperationRows(observation, entityType, entityId);
-  }
-  return coordinator.repository.getOperationsByEntity(entityType, entityId);
+/**
+ * The entity's operation rows as the operation ledger owner answers them
+ * (strict owner read). A read the owner did not answer throws the typed
+ * deferred-visibility error; no cache projection stands in. The one
+ * entity-scoped list read a decision may consume; the projection is the
+ * repository's getOperationsByEntityProjection, an advisory supplement.
+ * @param {Object} coordinator
+ * @param {string} entityType
+ * @param {string} entityId
+ * @return {Promise<Array<Object>>}
+ */
+async function getAuthoritativeOperationsByEntity(coordinator, entityType, entityId) {
+  const observation = await coordinator.getEntityAuthoritativeOperationObservation(
+    entityType, entityId,
+  );
+  return coordinator.requireEntityOperationRows(observation, entityType, entityId);
 }
 
 async function getInFlightOperations(coordinator) {
@@ -244,18 +133,14 @@ export {
   reconcileOperationProgress,
   handleExecutorOutcome,
   reconcileExecutorOutcome,
-  handleRecovery,
   isPreSyncStep,
-  reconcileRecoveryOperation,
   reconcileMessageGroupMembershipDebt,
-  reconcileSyncingOperation,
   getObservedReplicaStatusFromCache,
   getActualReplicaStatus,
   emitReplicaStatusDivergence,
   getOperation,
   getAllOperations,
-  getOperationsByPartition,
-  getOperationsByEntity,
+  getAuthoritativeOperationsByEntity,
   getInFlightOperations,
   getConcurrentAddCount,
   getConcurrentRemoveCount,

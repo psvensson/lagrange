@@ -12,6 +12,8 @@ import {
   OPERATION_CREATION_ADMISSION_CLEARANCE_OUTCOME,
   awaitOperationCreationAdmissionClearance,
 } from './operation-creation-admission-clearance.js';
+import {REPLICA_OPERATION_ROUTE_SOURCE_TABLES} from
+  './rebalance-coordinator-operation-creation-admission.js';
 import {
   AVAILABLE_NODE_PLANNING_STATE,
 } from './rebalancer-no-target-pass-diagnostic.js';
@@ -28,6 +30,13 @@ const OPERATION_CREATION_ADMISSION_WAKE_DISARMED =
 const LOCAL_MUTATION_READINESS_WAKE_TABLES = Object.freeze(new Set([
   TABLES.CONTROL_PLANE_PUBLICATIONS,
   TABLES.REPLICA_OPERATIONS,
+]));
+// The rows whose change can end an unanswered replica_operations list read:
+// the ledger rows themselves, and the tables the owner route is resolved
+// from (a route that comes back is what lets the owner answer).
+const OPERATION_LIST_READ_WAKE_TABLES = Object.freeze(new Set([
+  TABLES.REPLICA_OPERATIONS,
+  ...REPLICA_OPERATION_ROUTE_SOURCE_TABLES,
 ]));
 
 function isLocalMutationReadinessWakeArmed(rebalancer) {
@@ -99,6 +108,10 @@ function attachLocalMutationReadinessPlanningListener(
  * OPERATION_CREATION_ADMISSION_DEFERRED - a move's creation re-entered on
  * the admission owner's transient deferral; see
  * armOperationCreationAdmissionWake.
+ *
+ * OPERATION_LIST_READ_DEFERRED - a planning gate held because the
+ * replica_operations list read it counts did not answer completely; see
+ * armOperationListReadWake.
  */
 const REBALANCER_LOCAL_MUTATION_READINESS_WAKE_METHODS = {
   // Arms the wake while the gate defers and disarms it once it does not;
@@ -298,6 +311,52 @@ const REBALANCER_LOCAL_MUTATION_READINESS_WAKE_METHODS = {
     const token = this.operationCreationAdmissionWakeToken;
     this.operationCreationAdmissionWakeToken = null;
     token?.cancel(OPERATION_CREATION_ADMISSION_WAKE_DISARMED);
+  },
+
+  /**
+   * Named wait OPERATION_LIST_READ_DEFERRED: a planning gate counted the
+   * in-flight operations from a list read the owner did not answer
+   * completely (DEFERRED, or a projection) and held instead of reading the
+   * count as zero. The wait is ended by the event that can let the owner
+   * answer: a change of the ledger rows or of a table the owner route is
+   * resolved from, delivered through the same cache-change seam the local
+   * mutation wake uses; it enqueues one check and disarms. No timer: the
+   * cadence check stays armed as the fallback re-ask.
+   * @return {boolean} whether the wait is armed
+   */
+  armOperationListReadWake() {
+    if (this.operationListReadWakeListener) {
+      return true;
+    }
+    const listener = (tableName) => {
+      if (OPERATION_LIST_READ_WAKE_TABLES.has(tableName)) {
+        this.resolveOperationListReadWake();
+      }
+    };
+    this.operationListReadWakeListener = listener;
+    this.systemTableCache.onCacheChange(listener);
+    return true;
+  },
+
+  disarmOperationListReadWake() {
+    const listener = this.operationListReadWakeListener;
+    this.operationListReadWakeListener = null;
+    if (listener) {
+      this.systemTableCache.offCacheChange(listener);
+    }
+  },
+
+  resolveOperationListReadWake() {
+    if (!this.operationListReadWakeListener) {
+      return false;
+    }
+    this.disarmOperationListReadWake();
+    if (!this.isLeader || this.isShuttingDown) {
+      return false;
+    }
+    return this.enqueueRebalanceCheck(
+      RECONCILE_REASON.OPERATION_LIST_READ_SOURCE_CHANGED,
+    );
   },
 
   resolveLocalMutationReadinessWake() {

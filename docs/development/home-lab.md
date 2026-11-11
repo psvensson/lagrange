@@ -465,6 +465,18 @@ The plan says which rule applied and what the controller kept, for example
 `lab test: controller: reserve - 5 free lab hosts; takes 0 file(s), only what
 no lab host fits`, before any share starts.
 
+On a placed run each lab host also sizes its own ordinary lane, counted
+there at run time: two thirds of its processors, never fewer than the lane's
+own 4 nor more than 8, at most one worker per whole GiB of total memory, and
+within its cap of processors less one - and no raise at all where total
+memory cannot be read or the thermal gate has no sensor to hold the host by.
+The placement shell exports it as `LAGRANGE_PLACED_ORDINARY_LANE_JOBS` beside
+`LAGRANGE_LANE_JOBS_CAP` (`placement-env=... ordinary:N`), and the split
+prices every host with the same rule (`placedOrdinaryLaneJobs` in
+`scripts/checks/test-resource-classification-constants.js`), so the plan
+matches what runs; every other lane, and every local or unplaced run, keeps
+its own count.
+
 A placement checkout on a lab host links this checkout's ignored workspace
 (`node_modules`, `data/` and the model checkers under `tools/`) and declares
 every link it makes in `LAGRANGE_WORKSPACE_INJECTIONS`, as the publisher's

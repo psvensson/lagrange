@@ -13,13 +13,6 @@ const OPERATION_RESERVATION_ATTEMPT_OUTCOME = Object.freeze({
   FAILED: 'failed',
 });
 
-const OPERATION_RESERVATION_RECOVERY_OUTCOME = Object.freeze({
-  NOT_APPLICABLE: 'not_applicable',
-  LIFECYCLE_RECONCILED: 'lifecycle_reconciled',
-  RESERVATION_BACKED_PENDING_REDRIVEN:
-    'reservation_backed_pending_redriven',
-});
-
 function buildReservationAuthorityUnavailableError(message) {
   const error = new Error(message);
   error.deferRetry = true;
@@ -29,6 +22,5 @@ function buildReservationAuthorityUnavailableError(message) {
 
 export {
   OPERATION_RESERVATION_ATTEMPT_OUTCOME,
-  OPERATION_RESERVATION_RECOVERY_OUTCOME,
   buildReservationAuthorityUnavailableError,
 };

@@ -37,6 +37,11 @@ import {
   arrayFind,
   includesOf,
 } from '../run-health/captured-intrinsics.js';
+import {NodeHealthBuffer} from '../../../../src/diagnostics/node-health-buffer.js';
+import {
+  NODE_HEALTH_RESPONSE_STATE,
+  collectNodeHealth,
+} from '../../../../src/diagnostics/node-health-collection.js';
 
 const MEASURED = 'measured';
 const UNAVAILABLE = 'unavailable';
@@ -257,15 +262,20 @@ describe('run health artefacts', () => {
   it('reads the node health the harness collected at the end of the run', async () => {
     const {outputDir, scenarioDir} = await scenarioFixture();
     try {
+      // The node's own answer, from the node's producer (collectNodeHealth
+      // over its health buffer), as the admin route serves it.
+      const buffer = new NodeHealthBuffer();
+      buffer.recordEventLoopDelay(START, {delayP50Ms: 1, delayP99Ms: 2,
+        delayMaxMs: 3, eventLoopUtilization: 0.2});
+      const health = collectNodeHealth({sinceMs: START, buffer, nowMs: START + 1});
+      assert.equal(health.response.state, NODE_HEALTH_RESPONSE_STATE.COMPLETE);
       await writeClusterNodeHealth({scenarioDir, sinceMs: START, timeoutMs: 50,
         nodes: [{id: NODE_ID, ip: '10.0.0.1', _adminApiPort: 8081}],
-        fetchImpl: async () => ({ok: true, status: 200, json: async () => ({health: {
-          collectors: {eventLoop: {state: 'measured', downsampled: [], raw: [
-            {atMs: START, delayP50Ms: 1, delayP99Ms: 2, delayMaxMs: 3,
-              eventLoopUtilization: 0.2}]}}}})})});
+        fetchImpl: async () => ({ok: true, status: 200, json: async () => ({health})})});
       const runHealth = await buildScenarioRunHealth({scenarioDir});
       const evidence = arrayFind(runHealth.inputs.nodeEvidence, (node) => node.nodeId === NODE_ID);
-      assert.deepEqual(evidence.healthCollection, {state: 'collected'});
+      assert.deepEqual(evidence.healthCollection,
+        {state: 'collected', response: health.response});
       assert.equal(evidence.seriesSources.eventLoopDelay, 'node_health_collection');
       assert.equal(evidence.eventLoopDelaySamples, 1);
     } finally {

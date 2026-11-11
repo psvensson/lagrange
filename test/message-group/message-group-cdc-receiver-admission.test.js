@@ -12,7 +12,8 @@ import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {isRaftRsTransportEnvelope} from '../../src/raft/raft-packet-utils.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
-import {CDC_COMPLETION, cdcCommitWaitIdentity, isCommittedCdcOutcome, unknownCdcAcceptance} from
+import {CDC_COMPLETION, cdcCommitWaitIdentity, isAlreadyAppliedCdcOutcome, isCommittedCdcOutcome,
+  unknownCdcAcceptance} from
   '../../src/cdc/cdc-delivery-outcome.js';
 import {CDC_DELIVERY_REMAINING_MS, cdcDeliveryBudgetError, createCdcDeliveryBudget} from
   '../../src/cdc/cdc-delivery-budget.js';
@@ -22,11 +23,24 @@ import {MESSAGE_GROUP_CDC_FORWARD_MODE, MESSAGE_GROUP_CDC_INGRESS_ACTION} from
   '../../src/message-group/message-group-forwarding-owner-constants.js';
 import {CDC_FORWARD_MAX_RELAY_DEPTH} from
   '../../src/message-group/message-group-service-runtime-support.js';
-import {GROUP_ID, NODE_ID, pump, recipientFixture} from './message-group-native-custody-fixture.js';
+import {GROUP_ID, NODE_ID, pump, recipientFixture as nativeRecipientFixture} from
+  './message-group-native-custody-fixture.js';
+import {positionRecipients, sourceRangeOfEvents, withSourceRange} from
+  '../test-helpers/cdc-source-range-fixture.js';
 
 const KEY = 'receiver-admission-row';
 const RECEIVED_BUDGET_MS = 100;
 const ORDINARY_TABLE = 'c4_ordinary_rows';
+
+
+// CDC Stage 3: every recipient node starts from a known position of the
+// synthetic source (a list of it at its start), and every durable vector
+// travels with its source range.
+async function recipientFixture(...args) {
+  const f = await nativeRecipientFixture(...args);
+  positionRecipients(f.services, 'receiver-source');
+  return f;
+}
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -66,7 +80,7 @@ function receive(service, event, batch, messageId, remainingMs = service.deliver
   const payload = {type: batch ?
     MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE.LATENCY_CDC_PROPAGATION_BATCH :
     MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE.LATENCY_CDC_PROPAGATION,
-  ...(batch ? {events: [event]} : event), targetGroupId: GROUP_ID,
+  ...(batch ? {events: [event], ...withSourceRange([event])} : event), targetGroupId: GROUP_ID,
   [CDC_DELIVERY_REMAINING_MS]: remainingMs, ...wrapper};
   return observe(service.receiveMessage({messageId, payload}));
 }
@@ -132,7 +146,7 @@ function releaseNativePackets(f) {
 
 async function occupyNativeSlot(f, service, event) {
   f.holdEntries = true;
-  const pending = observe(service.applyCDCBatch([event]));
+  const pending = observe(service.applyCDCBatch([event], withSourceRange([event])));
   await pump(f);
   assert.equal(pending.settled, false, 'actual native quorum remains held');
   const retained = nativeEntry(service, event);
@@ -271,7 +285,7 @@ test('public follower CDC receiver cannot bypass occupied ProposalQueue admissio
   const firstEvent = sourceEvent(1);
   const hold = holdNativeForwardAnswer(f, firstEvent, follower);
   try {
-    const occupied = observe(follower.applyCDCBatch([firstEvent]));
+    const occupied = observe(follower.applyCDCBatch([firstEvent], withSourceRange([firstEvent])));
     await pump(f);
     assertHeldNativeAnswer(f, hold, firstEvent);
     assert.equal(occupied.settled, false);
@@ -375,7 +389,7 @@ function directWithReceivedGrant(follower, event, remainingMs) {
   // The existing receiver grant owner bounds a direct owner call the same way
   // it bounds the public receiver, so the owner's exact answer is observable.
   const budget = createCdcDeliveryBudget(follower, {receivedRemainingMs: remainingMs});
-  return observe(follower.applyCDCBatch([event], {...budget}));
+  return observe(follower.applyCDCBatch([event], withSourceRange([event], {...budget})));
 }
 
 async function heldForwardFixture(t, event, {holdFollowerReplication = true} = {}) {
@@ -433,16 +447,15 @@ test('C1 race: waiter deadline first names typed UNKNOWN while the forward keeps
       assert.equal(pending.answer, answer, 'late raw closure cannot replace the settled answer');
       hold.releaseNativePackets();
       await pump(f);
-      // The same vector's successor is admitted only after the old entry
-      // physically closed; it is a distinct entry with its own native receipt.
-      const successor = await settle(f, receive(follower, event, true, 'deadline-successor'),
-        'the same vector is admitted again after real raw closure');
+      // Superseded (CDC Stage 3, R09): the same vector after the old entry
+      // physically closed is a replay of a range the group's log committed:
+      // the leader answers it already-applied (positive) and proposes nothing.
+      const successor = await settle(f, receive(f.services[0], event, true,
+        'deadline-successor'), 'the same vector is answered after real raw closure');
       assert.equal(successor.error, undefined, successor.error?.stack);
-      assert.equal(isCommittedCdcOutcome(successor.answer, [event], GROUP_ID), true);
+      assert.equal(isAlreadyAppliedCdcOutcome(successor.answer, [event], GROUP_ID), true);
       const occurrences = nativeEntry(f.services[0], event).entries;
-      assert.equal(occurrences.length, 2, 'the successor is its own exact native occurrence');
-      assert.equal(BigInt(successor.answer.cdcCommitted[0].logIndex),
-        BigInt(occurrences[1].entry.index));
+      assert.equal(occurrences.length, 1, 'the replay is not a second native occurrence');
       assert.equal(queue.size, 0);
     } finally {
       await releaseHeldForward(f, hold);
@@ -574,7 +587,7 @@ test('C1 DEFER is decided by the committed-acceptance owner after admission', as
       targetGroupId: GROUP_ID, events: [deferred]});
     assert.equal(decision.action, MESSAGE_GROUP_CDC_INGRESS_ACTION.DEFER,
       'setup: an exhausted relay is an owner DEFER');
-    const occupied = observe(follower.applyCDCBatch([firstEvent]));
+    const occupied = observe(follower.applyCDCBatch([firstEvent], withSourceRange([firstEvent])));
     await pump(f);
     assertHeldNativeAnswer(f, hold, firstEvent);
     assert.equal(queue.isResponsePending(key), true);
@@ -731,7 +744,8 @@ test('C1 proposeCDCCommand refuses unpaired or absent durable route custody', as
   const f = await recipientFixture(t, KEY);
   const leader = f.services[0];
   const event = sourceEvent(1);
-  const durable = {type: MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH, events: [event]};
+  const durable = {type: MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH, events: [event],
+    sourceRange: sourceRangeOfEvents([event])};
   let invoked = 0;
   const hook = () => {
     invoked += 1;
@@ -780,7 +794,7 @@ test('C1 a committed receipt settled before its parent retired never answers suc
       },
     };
     try {
-      const pending = observe(follower.applyCDCBatch([event], parent));
+      const pending = observe(follower.applyCDCBatch([event], withSourceRange([event], parent)));
       await pump(f);
       assert.equal(committedSettlements, 1, 'setup: local afterCommit settled the waiter committed');
       assert.ok(hold.response, 'setup: the remote terminal answer is held');
@@ -873,9 +887,9 @@ test('C5 an identical vector arriving while the first one\'s response is pending
   const leader = f.services[0];
   const event = sourceEvent(1);
   f.holdEntries = true;
-  const first = observe(leader.applyCDCBatch([event]));
+  const first = observe(leader.applyCDCBatch([event], withSourceRange([event])));
   await pump(f);
-  const second = observe(leader.applyCDCBatch([event]));
+  const second = observe(leader.applyCDCBatch([event], withSourceRange([event])));
   await pump(f);
   assert.equal(first.settled, false, 'setup: the first proposal is held at the quorum');
   assert.equal(second.settled, false, 'the identical vector waits for the first, not refused');

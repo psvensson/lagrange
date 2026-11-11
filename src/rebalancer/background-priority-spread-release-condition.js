@@ -11,13 +11,13 @@
 //
 // Where each input is read from:
 //
-//  1. replica_operations rows through the rebalancer's SystemTableCache.
-//     This is a CACHE PROJECTION (READ_MODEL_SOURCE.SYSTEM_TABLE_CACHE), not
-//     the durable ledger: it can lag a committed row. The cache states no
-//     freshness or hydration, so the only unknown state observable here is
-//     a projection that cannot be read, which is the named UNAVAILABLE hold.
-//     The freshness contract of this read is separate, later work; no
-//     authority polling is added here.
+//  1. replica_operations rows through the rebalancer's SystemTableCache, a
+//     CACHE PROJECTION that can lag or miss a committed row: an operation it
+//     shows is IN_FLIGHT, but its emptiness is never CLEAR. CLEAR needs the
+//     ledger owner's census (priority-spread-fence-operation-census.js)
+//     answered within the stability window with no fence-blocking
+//     operation; an unanswered or older census is the named UNAVAILABLE
+//     hold (no dwell restart) and requests one.
 //  2. the required member cohort from the readiness owner's priority
 //     recovery planning answer (a readiness-owner PROJECTION, the same
 //     answer and cohort resolver the spread blocker uses), and each
@@ -37,6 +37,11 @@ import {
 } from '../control-plane/serve-eligibility-owner.js';
 import {readPriorityRecoveryPlanningAnswerSync} from
   '../control-plane/priority-recovery-planning-answer-origin.js';
+import {
+  FENCE_OPERATION_CENSUS_STATE,
+  readFenceOperationCensus,
+  requestFenceOperationCensus,
+} from './priority-spread-fence-operation-census.js';
 
 const {
   SYSTEM_TABLE_NAME,
@@ -58,6 +63,7 @@ const REQUIRED_NODE_SERVE_STATE = Object.freeze({
 
 const RELEASE_CONDITION_UNAVAILABLE_REASON = Object.freeze({
   OPERATION_PROJECTION_UNREADABLE: 'operation_projection_unreadable',
+  OPERATION_CENSUS_UNANSWERED: 'operation_census_unanswered',
   PLANNING_ANSWER_ABSENT: 'priority_planning_answer_absent',
   REQUIRED_COHORT_UNSTATED: 'required_node_cohort_unstated',
   SERVE_ANSWER_ABSENT: 'serve_eligibility_answer_absent',
@@ -65,6 +71,10 @@ const RELEASE_CONDITION_UNAVAILABLE_REASON = Object.freeze({
 });
 
 const OPERATION_PROJECTION_SOURCE = 'system_table_cache';
+const OPERATION_CENSUS_SOURCE = 'operation_ledger_owner_census';
+// A census older than this share of the stability window is refreshed ahead
+// of need, so a held condition is not interrupted by its own expiry.
+const CENSUS_REFRESH_WINDOW_DIVISOR = 2;
 // A lab log line stays readable: at most this many operations are listed
 // per group, and the number left out is stated beside them.
 const LOGGED_OPERATION_LIMIT = 16;
@@ -116,16 +126,59 @@ function observePriorityTransitions(rebalancer, observedAt) {
   }
   const fenceBlockingOperations = trackedOperations.filter((operation) =>
     rebalancer.isPrioritySpreadReleaseFenceBlockingOperation(operation));
-  const plannerExcludedOperations = trackedOperations.filter((operation) =>
-    !rebalancer.isTopologyBlockingInFlightOperation(operation));
+  const plannerExcluded = describeOperations(
+    trackedOperations.filter((operation) =>
+      !rebalancer.isTopologyBlockingInFlightOperation(operation)),
+    observedAt);
+  if (fenceBlockingOperations.length > 0) {
+    return Object.freeze({
+      state: PRIORITY_TRANSITION_STATE.IN_FLIGHT,
+      reason: null,
+      source: OPERATION_PROJECTION_SOURCE,
+      fenceBlocking: describeOperations(fenceBlockingOperations, observedAt),
+      plannerExcluded,
+    });
+  }
+  return observeCensusPriorityTransitions(rebalancer, observedAt,
+    plannerExcluded);
+}
+
+// An empty projection is not CLEAR: the ledger owner's census decides.
+function observeCensusPriorityTransitions(
+  rebalancer, observedAt, plannerExcluded) {
+  const windowMs = rebalancer.getBackgroundPrioritySpreadStableWindowMs();
+  const census = readFenceOperationCensus(rebalancer, observedAt, windowMs);
+  if (census.state !== FENCE_OPERATION_CENSUS_STATE.ANSWERED ||
+      observedAt - census.answeredAtMs >
+        windowMs / CENSUS_REFRESH_WINDOW_DIVISOR) {
+    requestFenceOperationCensus(rebalancer, {
+      held: census.state !== FENCE_OPERATION_CENSUS_STATE.ANSWERED,
+    });
+  }
+  if (census.state !== FENCE_OPERATION_CENSUS_STATE.ANSWERED) {
+    return Object.freeze({
+      state: PRIORITY_TRANSITION_STATE.UNAVAILABLE,
+      reason: RELEASE_CONDITION_UNAVAILABLE_REASON.OPERATION_CENSUS_UNANSWERED,
+      source: OPERATION_CENSUS_SOURCE,
+      fenceBlocking: describeOperations(NO_OPERATIONS, observedAt),
+      plannerExcluded,
+    });
+  }
+  const censusBlockingOperations = census.operations.filter((operation) =>
+    rebalancer.isPrioritySpreadReleaseFenceBlockingOperation(operation));
+  // Only the census shows these (the projection drained or never had
+  // them): the census may be the stale side, so it is re-asked.
+  if (censusBlockingOperations.length > 0) {
+    requestFenceOperationCensus(rebalancer);
+  }
   return Object.freeze({
-    state: fenceBlockingOperations.length === 0 ?
+    state: censusBlockingOperations.length === 0 ?
       PRIORITY_TRANSITION_STATE.CLEAR :
       PRIORITY_TRANSITION_STATE.IN_FLIGHT,
     reason: null,
-    source: OPERATION_PROJECTION_SOURCE,
-    fenceBlocking: describeOperations(fenceBlockingOperations, observedAt),
-    plannerExcluded: describeOperations(plannerExcludedOperations, observedAt),
+    source: OPERATION_CENSUS_SOURCE,
+    fenceBlocking: describeOperations(censusBlockingOperations, observedAt),
+    plannerExcluded,
   });
 }
 

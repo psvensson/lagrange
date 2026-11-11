@@ -265,6 +265,10 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
       INCOMPLETE_OPERATION_OBSERVATION_STATE.EMPTY
     ) {
       this.lastEmptyIncompleteOperationQueryAtMs = now;
+      // A confirmed-empty ledger still owes the reservation sweep: a hold
+      // whose operation is terminal is released only here (the restart
+      // routine that also released it had no production caller).
+      await this.reconcileReservationsOnSweep();
       return;
     }
     this.clearEmptyIncompleteOperationQueryDelay();
@@ -377,7 +381,16 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
       await Promise.all(timeoutReconcileTasks);
     }
 
-    // Periodic reservation reconciliation (Req 4.4)
+    await this.reconcileReservationsOnSweep();
+  }
+
+  /**
+   * Periodic reservation reconciliation (Req 4.4); a failure is logged and
+   * the next sweep retries.
+   * @return {Promise<void>}
+   * @private
+   */
+  async reconcileReservationsOnSweep() {
     await this.reconcileReservations().catch((error) => {
       this.logger.warn(
         REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_RELEASE_FAILED,
@@ -402,8 +415,8 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
    * reconcile-to-truth core (reconcileOperationLifecycle) for EVERY locally-owned
    * non-terminal op that ground truth says is actionable, on the coordinator's
    * periodic timer — independent of which edge was supposed to fire. It uses the
-   * NON-DESTRUCTIVE PROGRESS cause (never RECOVERY), so the pre-sync FAIL semantics
-   * that make startup handleRecovery destructive can never fire here. It is bounded
+   * NON-DESTRUCTIVE PROGRESS cause: nothing here fails a row for being
+   * incomplete (restart included; there is no restart FAIL path). It is bounded
    * to be a SAFETY NET, not a competitor to the edge path:
    *   - locally-owned + single-flight (re-reads under the op lock → idempotent, no
    *     double-dispatch, preserves the single-writer guarantee);
@@ -584,21 +597,9 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
     return PRE_SYNC_WORKFLOW_STEPS.has(step);
   }
 
-  resolveOperationLifecycleAction(
-    operation,
-    cause = OPERATION_WORKFLOW_OWNER_LITERAL.PROGRESS,
-  ) {
+  resolveOperationLifecycleAction(operation) {
     if (this.isRemoveInitialDispatchPhase(operation)) {
       return OPERATION_LIFECYCLE_ACTION.EXECUTE_REMOVE_DISPATCH;
-    }
-
-    if (cause === OPERATION_WORKFLOW_OWNER_LITERAL.RECOVERY) {
-      if (this.isPreSyncStep(operation.workflowStep)) {
-        return OPERATION_LIFECYCLE_ACTION.FAIL_PRE_SYNC_RECOVERY;
-      }
-      if (operation.workflowStep === WORKFLOW_STEP.STOPPING) {
-        return OPERATION_LIFECYCLE_ACTION.FAIL_STOPPING_RECOVERY;
-      }
     }
 
     if (

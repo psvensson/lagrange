@@ -2,6 +2,7 @@
 // source group and all target groups. Native RF1 groups commit/apply; only the
 // inter-group transport and route projection are controlled. This does not
 // measure source partition writes/ACKs, membership setup, or physical network cost.
+import {positionRecipients} from '../test-helpers/cdc-source-range-fixture.js';
 import assert from 'node:assert/strict';
 import {afterEach, test} from 'node:test';
 import {CDC_OPERATION, COLUMN, TABLES} from '../../src/constants/index.js';
@@ -53,6 +54,8 @@ async function healthyWaves(t, duplicateProposals) {
     });
   }
   const services = fixtures.map((f) => f.services[0]);
+  // CDC Stage 3: every recipient node starts from the synthetic source's start.
+  positionRecipients(services, createDurableCdcEvent().sourcePartition, TABLES.CONFIG);
   const [source] = services;
   let deliveries = 0;
   const topology = new CDCGroupPropagationService({nodeId: NODE_ID,

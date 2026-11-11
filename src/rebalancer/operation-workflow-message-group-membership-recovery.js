@@ -1,9 +1,9 @@
 /** Owned discovery and reentry for message-group membership debt.
  *
- * One algorithm, three legitimate triggers: the restart scan (handleRecovery,
- * authoritative census), the periodic timeout/orphan sweep (replicated-cache
- * hint census: no round trip while nothing owes), and the replicated-row
- * observer. Each turn re-reads the authoritative row, holds the operation lane
+ * One algorithm, three legitimate triggers: the restart census (the
+ * coordinator sweep's authoritative census until one answers after a
+ * restart), the periodic timeout/orphan sweep (replicated-cache hint census:
+ * no round trip while nothing owes), and the replicated-row observer. Each turn re-reads the authoritative row, holds the operation lane
  * for one turn, keeps or adopts the membership claim through the repository's
  * existing claim CAS only while a learner attempt is still unrecorded,
  * selects an explicitly HOSTED witness from the service census (never the

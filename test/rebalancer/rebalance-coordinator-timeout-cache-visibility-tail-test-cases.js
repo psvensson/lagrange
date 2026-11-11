@@ -404,10 +404,13 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
     });
 
   test(
-    'handleRecovery preserves cache-visible local-owner operations when ' +
-    'authoritative replica_operations owner rows are unavailable',
+    'the restart timer tick fails no fresh cache-visible local-owner ' +
+    'operation when authoritative replica_operations owner rows are unavailable',
     async (t) => {
       let authoritativeReadCalls = 0;
+      // Fresh: within its PENDING step budget, so only a restart that failed
+      // incomplete rows could terminalize it (the deleted routine did).
+      const freshAtMs = Date.now();
       const recoveryRow = {
         operation_id: 'op-recovery-cache-visible',
         type: 'ADD',
@@ -417,11 +420,13 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         target_node_id: 'node-2',
         status: ReplicaStatus.PENDING,
         workflow_step: 'PENDING',
-        created_at: 100,
-        updated_at: 100,
+        created_at: freshAtMs,
+        updated_at: freshAtMs,
         completed_at: null,
         error_message: null,
-        steps_history: '[]',
+        steps_history: JSON.stringify([
+          {step: 'PENDING', timestamp: freshAtMs},
+        ]),
         entity_type: 'partition',
         entity_id: 'partition-recovery-1',
       };
@@ -498,33 +503,27 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
       try {
         t.notOk(coordinator.hasStorageReservationSupport(),
           'the reduced owner has no storage-reservation subsystem');
-        const result = await coordinator.handleRecovery();
+        // The production restart path: step-budget sweep, then orphan sweep.
+        await coordinator.checkTimeouts();
+        await coordinator.reconcileOrphanedOperations();
         t.equal(reservationRecoveryCalls, 0,
-          'reservation recovery stays disengaged when its canonical ' +
+          'reservation adoption stays disengaged when its canonical ' +
           'support owner is absent');
-        t.equal(
-          result.totalIncomplete,
-          1,
-          'recovery should preserve the cache-visible local-owner operation set instead of collapsing to empty',
-        );
-        t.equal(
-          result.markedFailed,
-          1,
-          'recovery should still reconcile the cache-visible pending operation',
-        );
         t.ok(
           authoritativeReadCalls >= 1,
-          'recovery should still attempt one authoritative owner read before falling back to cached visibility',
+          'the restart tick attempts an authoritative owner read before ' +
+          'falling back to cached visibility',
         );
         t.equal(
           recoveryRow.status,
-          ReplicaStatus.FAILED,
-          'recovery should fail the cached pending operation through the normal owner workflow',
+          ReplicaStatus.PENDING,
+          'the restart tick does not fail the cached pending operation for ' +
+          'being incomplete',
         );
         t.equal(
           recoveryRow.workflow_step,
-          'FAILED',
-          'recovery should advance the cached pending operation to the failed terminal step',
+          'PENDING',
+          'the cached pending operation keeps its pre-effect step',
         );
       } finally {
         await coordinator.shutdown();

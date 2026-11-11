@@ -307,7 +307,7 @@ test('Property 11: Rebalance budget enforcement', async (t) => {
       const emptySqlEngine = {
         executeQuery: async (sql, _params) => {
           if (sql.includes('COUNT(*)')) {
-            return {success: true, rows: [{count: 0}]};
+            return {success: true, rows: [{total_count: 0}]};
           }
           // No config row found
           if (sql.includes('config_value')) {

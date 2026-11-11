@@ -437,7 +437,9 @@ const RECIPIENT_OPS = Object.freeze({
     // A held target group the sender's cache no longer names (or one too far
     // behind) is asked about at its lifecycle owner: only its evidence may
     // detach it.
-    if (lifecycleQuestionDue(target)) requestRecipientLifecycle(delivery, lane, target, RECIPIENT_OPS);
+    if (lifecycleQuestionDue(target)) {
+      requestRecipientLifecycle(delivery, lane, target, RECIPIENT_OPS);
+    }
     return outcome;
   },
   // The sender's cache changed a recipient-domain table: the recipient set is

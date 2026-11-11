@@ -409,7 +409,8 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
       this.hasPriorityTopologyCleanupBudgetBypassCandidateMove(moves);
     try {
       const configuredBudget = await this.getConfiguredRebalanceBudget();
-      const inFlightCount = await this.getGlobalInFlightOperationCount();
+      const inFlightCount =
+        await this.resolveGlobalInFlightOperationCountForBudget();
       const isCritical = this.movePlanner.isCriticalState(
         currentReplicas,
         effectivePolicy,

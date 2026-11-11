@@ -55,6 +55,7 @@ function ensureCdcObligationLedger(db, {index, term, entryId}) {
   db.exec(SQL.CREATE_OWED_INDEX);
   db.exec(SQL.CREATE_PROGRESS_TABLE);
   db.exec(SQL.CREATE_INCARNATION_TABLE);
+  db.exec(SQL.CREATE_NEWEST_TABLE);
   db.prepare(SQL.INSERT_INCARNATION).run({scope: PROGRESS_SCOPE,
     incarnation: [term, index, entryId ?? ''].join(INCARNATION_SEPARATOR), index, term});
 }
@@ -146,14 +147,17 @@ function readCdcObligationCensusIn(db) {
  *   eventJson}.
  */
 function insertCdcObligation(db, row) {
-  db.prepare(SQL.INSERT).run({
+  const values = {
     eventKey: row.eventKey,
     logIndex: row.logIndex,
     term: row.term,
     ordinal: row.ordinal,
     entryId: row.entryId,
     eventJson: row.eventJson,
-  });
+  };
+  db.prepare(SQL.INSERT).run(values);
+  // Recorded in log order: the last recording is the newest event.
+  db.prepare(SQL.UPSERT_NEWEST).run({scope: PROGRESS_SCOPE, ...values});
 }
 
 function obligationOf(row) {
@@ -291,15 +295,15 @@ function readOwedCdcHead(db) {
 }
 
 /**
- * The ledger's newest row, owed or delivered, or null without one. Decision
- * D1 never reclaims it: it is the position probe a recipient with no cursor
- * is shipped when nothing is owed (CDC Stage 3).
+ * The ledger's newest recorded event, owed, delivered or reclaimed, or null
+ * without one: the position probe a recipient below it is shipped when
+ * nothing is owed after its cursor (CDC Stage 3).
  * @param {Object} db - The partition's connection.
- * @return {Object|null} The frozen row (as readOwedCdcObligations).
+ * @return {Object|null} The frozen event (as readOwedCdcObligations).
  */
 function readCdcLedgerNewest(db) {
-  if (!cdcObligationLedgerExists(db)) return null;
-  const row = db.prepare(SQL.SELECT_NEWEST).get();
+  if (db.prepare(SQL.NEWEST_TABLE_EXISTS).get() === undefined) return null;
+  const row = db.prepare(SQL.SELECT_NEWEST).get(PROGRESS_SCOPE);
   return row ? obligationOf(row) : null;
 }
 
@@ -350,10 +354,9 @@ function countRetainedDeliveredCdcObligations(db, limit) {
 /**
  * Reclaim the delivered prefix (decision D1), inside the application
  * transaction of the committed CDC_DELIVERED at `marker`: delete the delivered
- * rows below the lowest owed one (and, when nothing is owed, below the newest
- * row, which is always retained: CDC Stage 3's position probe), in log order
- * and at most RECLAIM_ROWS_PER_APPLY of them, and fold them into the compact
- * progress row. A function of the committed ledger alone, so every replica
+ * rows below the lowest owed one, in log order and at most
+ * RECLAIM_ROWS_PER_APPLY of them, and fold them into the compact progress
+ * row. A function of the committed ledger alone, so every replica
  * reclaims the same rows at the same entry; a count that does not match
  * throws (the application fails closed).
  * @param {Object} db - The partition's connection.
@@ -362,10 +365,8 @@ function countRetainedDeliveredCdcObligations(db, limit) {
  */
 function reclaimDeliveredCdcObligations(db, {index, term}) {
   if (!cdcObligationLedgerExists(db)) return 0;
-  const newest = readCdcLedgerNewest(db);
-  if (newest === null) return 0;
-  const head = readOwedCdcHead(db) ?? positionOf({log_index: newest.logIndex,
-    ordinal: newest.ordinal});
+  const head = readOwedCdcHead(db) ??
+    {logIndex: Number.MAX_SAFE_INTEGER, ordinal: Number.MAX_SAFE_INTEGER};
   const reclaimable = db.prepare(SQL.SELECT_RECLAIMABLE).all({...head,
     limit: BOUND.RECLAIM_ROWS_PER_APPLY});
   if (reclaimable.length === 0) return 0;

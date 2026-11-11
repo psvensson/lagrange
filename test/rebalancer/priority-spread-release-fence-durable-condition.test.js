@@ -170,6 +170,9 @@ test('(a,d) a priority REPLACE in its source-removal phase holds the fence ' +
 
     completeReplace(priorityReplace, world.nowMs);
     world.nowMs += RECHECK_AFTER_COMPLETION_MS;
+    // The emptied projection is not CLEAR by itself: the ledger owner's
+    // census answers first, at this instant.
+    await world.answerOwnerCensus(background);
     const restarted = background.resolvePrioritySpreadPlanningGateDecision();
     t.equal(
       blockerOf(restarted).state,
@@ -194,6 +197,9 @@ test('(a,d) a priority REPLACE in its source-removal phase holds the fence ' +
       1,
       'the fence holds through the last tick of the restarted dwell',
     );
+    // That evaluation found the census older than half the window and
+    // refreshed it; the refresh answers before the next one.
+    await world.settleOwnerCensus();
     world.nowMs += 1;
     t.equal(
       background.resolvePrioritySpreadPlanningGateDecision(),
@@ -253,6 +259,8 @@ test('(b) a required member node that is not serve-eligible holds the fence',
       t.same(background.releaseLogs, [], 'no release was logged');
 
       delete world.readiness.notEligibleReasonsByNodeId[NOT_ELIGIBLE_NODE_ID];
+      // The empty projection needs the owner's census, answered now.
+      await world.answerOwnerCensus(background);
       const restarted = background.resolvePrioritySpreadPlanningGateDecision();
       t.equal(
         blockerOf(restarted).state,
@@ -270,6 +278,8 @@ test('(b) a required member node that is not serve-eligible holds the fence',
         BACKGROUND_PRIORITY_SPREAD_RELEASE_STATE.CONDITION_NOT_HELD,
         'a node that stops being serve-eligible mid-dwell rearms the fence',
       );
+      // The census refresh that evaluation requested answers.
+      await world.settleOwnerCensus();
       delete world.readiness.notEligibleReasonsByNodeId[NOT_ELIGIBLE_NODE_ID];
       world.nowMs += 1;
       t.equal(
@@ -362,7 +372,9 @@ test('(c) an unavailable input holds the fence as a named state, never a ' +
     ];
 
     for (const unavailableCase of unavailableCases) {
-      // Start from a running dwell so the hold is shown NOT to rearm it.
+      // Start from a running dwell so the hold is shown NOT to rearm it. The
+      // empty projection's CLEAR is the owner census's, answered first.
+      await world.answerOwnerCensus(background);
       const running = background.resolvePrioritySpreadPlanningGateDecision();
       t.equal(
         blockerOf(running).state,
@@ -398,6 +410,10 @@ test('(c) an unavailable input holds the fence as a named state, never a ' +
       t.same(background.releaseLogs, [],
         `${unavailableCase.name}: an unknown never releases`);
       unavailableCase.restore();
+      // The census answered a full window and more ago: the restored input
+      // alone is still the census-unanswered hold until the owner answers
+      // again (that evaluation neither releases nor rearms).
+      await world.answerOwnerCensus(background);
       t.equal(
         background.resolvePrioritySpreadPlanningGateDecision(),
         null,
@@ -438,6 +454,9 @@ test('(e) release after a continuous clear still works, wakes each parked ' +
     );
     world.prioritySpreadBlocker = null;
     world.nowMs += BLOCKED_TO_CLEAR_MS;
+    // The resolver's coordinator holds its own owner census; it answers
+    // before the first observation that the condition holds.
+    await world.answerOwnerCensus(resolver);
 
     const firstClear = resolver.resolvePrioritySpreadPlanningGateDecision();
     t.equal(
@@ -458,6 +477,8 @@ test('(e) release after a continuous clear still works, wakes each parked ' +
       'the fence holds through the last tick',
     );
     t.same(parked.wakeReasons, [], 'no wake before maturity');
+    // The census refresh that evaluation requested answers.
+    await world.settleOwnerCensus();
 
     world.nowMs += 1;
     t.equal(
@@ -497,7 +518,8 @@ test('(e) release after a continuous clear still works, wakes each parked ' +
         fenceBlockingOperationCount: 0,
         fenceBlockingOperations: [],
         priorityTransitionState: 'clear',
-        priorityTransitionSource: 'system_table_cache',
+        // An empty projection is never CLEAR: the owner census stated it.
+        priorityTransitionSource: 'operation_ledger_owner_census',
         requiredNodeServeState: 'eligible',
         requiredNodeIds: [...REQUIRED_NODE_IDS],
         requiredNodeServeEligibility: {
@@ -555,6 +577,7 @@ test('(f) non-priority work in flight or drained neither holds nor ' +
       'an ordinary partition transition is not a fence blocker',
     );
     armFenceThenClearSpread(world, background);
+    await world.answerOwnerCensus(background);
 
     const firstClear = background.resolvePrioritySpreadPlanningGateDecision();
     t.equal(
@@ -598,6 +621,8 @@ test('(f) non-priority work in flight or drained neither holds nor ' +
       2 * ORDINARY_ADD_IN_FLIGHT_MS,
       'its drain does not rearm the dwell either',
     );
+    // The census refresh that evaluation requested answers.
+    await world.settleOwnerCensus();
 
     world.nowMs += stableWindowMs - 2 * ORDINARY_ADD_IN_FLIGHT_MS;
     t.equal(

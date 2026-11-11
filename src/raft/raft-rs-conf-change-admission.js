@@ -108,10 +108,15 @@ function resultingVoters(confState, steps) {
  */
 function removesLiveQuorum(confState, change, liveVoters) {
   const steps = change?.changes || [];
-  if (!steps.some(({changeType}) => TAKES_A_VOTER.has(changeType))) {
+  const voters = resultingVoters(confState, steps);
+  // Only a change that takes a CURRENT voter out is a removal: an
+  // AddLearnerNode of a peer that is not a voter (a fresh learner) leaves
+  // every voter in place and is never refused here.
+  const takesAVoter = (confState?.voters || []).map(String)
+    .some((peerId) => !voters.has(peerId));
+  if (!takesAVoter) {
     return false;
   }
-  const voters = resultingVoters(confState, steps);
   const live = [...voters].filter((peerId) => liveVoters.has(peerId)).length;
   return live < Math.floor(voters.size / 2) + 1;
 }

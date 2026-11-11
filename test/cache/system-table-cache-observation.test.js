@@ -142,7 +142,7 @@ test('CDCHandler preserves and forwards owner revision metadata to SystemTableCa
       sourceReplica: 'node-1',
       sourceLogIndex: 15,
       sourceOrdinal: 2,
-      eventKey: 'tables:users',
+      eventKey: 'tables:users-update-15-2',
       entryId: 'entry-15-2',
       causeId: 'cause-pub-2',
     },

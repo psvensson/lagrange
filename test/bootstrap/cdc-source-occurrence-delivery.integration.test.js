@@ -1,5 +1,8 @@
 // W1, W2 and W9 end-to-end native CDC delivery witnesses over connected
 // MessageRouters, released PartitionService sources and native MessageGroups.
+import {positionRecipients, registerLeaderRelister, sourceRangeOfEvents} from
+  '../test-helpers/cdc-source-range-fixture.js';
+import {readCdcLedgerIncarnation} from '../../src/partition/partition-cdc-obligation-ledger.js';
 import {awaitRecipientBackoff} from '../test-helpers/cdc-delivery-progress-fixture.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -59,6 +62,7 @@ import {
   wrapRouterDelivery,
   recordOf,
   cdcEvents,
+  pumpMulti,
 } from '../message-group/message-group-native-w7-composition.js';
 import {
   commandOf,
@@ -75,6 +79,8 @@ const DRIVE = PARTITION_CDC_OBLIGATION_DRIVE_STATE;
 const shipsAlone = (label) =>
   `${label}:${'v'.repeat(PARTITION_CDC_OBLIGATION_BOUND.SHIP_MAX_BYTES)}`;
 const W1_IDENTICAL_VALUE = shipsAlone('identical-value');
+
+const W9_VECTOR_SOURCE = 'w9-vector-source';
 
 async function setupReleasedConfigProducer(t, f, {configPartId, tempPrefix}) {
   const members = [1, 2, 3].map((n) => [`${configPartId}-r${n}`, NODE_A]);
@@ -264,18 +270,25 @@ test(
       copyCdcEvent({
         ...baseEvent,
         data: {...baseEvent.data, config_key: `w9-vec-key-${idx}`},
+        // A synthetic source of its own (CDC Stage 3 positions are per
+        // source): this vector must not move the real source's position.
+        sourcePartition: W9_VECTOR_SOURCE,
         eventKey: `w9-vec-event-${idx}`,
         entryId: `w9-vec-entry-${idx}`,
         sourceLogIndex: 100 + idx,
         sourceOrdinal: 0,
       }),
     );
+    // CDC Stage 3: the remote group listed the synthetic source at its start,
+    // and the vector names its source range.
+    positionRecipients([remoteTarget], W9_VECTOR_SOURCE, TABLES.CONFIG);
     const batchDelivery = await driveWithPump(f, () =>
       routerA.deliver(
         remoteTarget.unifiedAddress,
         {
           type: LATENCY_TOPOLOGY_MESSAGE_TYPE.CDC_PROPAGATION_BATCH,
           events: vector65,
+          sourceRange: sourceRangeOfEvents(vector65),
           sourceNodeId: NODE_A,
           sourceGroupId: 'mg-w2-source',
           targetGroupId: 'mg-w2-target',
@@ -318,6 +331,9 @@ test(
     // partition holds one propagation subscriber. The seed's
     // SeedRuntimeBridgeOwner runs the first waves; the joiner's
     // NodeJoiningPublicationActivation then replaces it for the rest.
+    // CDC Stage 3: every message-group node listed the source at its start.
+    positionRecipients([...f.services.values()], f.producerLeader.partitionId,
+      TABLES.CONFIG, readCdcLedgerIncarnation(f.producerLeader.db));
     const {seedBridge, joiningBridge} = buildBridgeSubscribers(
       f,
       TABLES.CONFIG,
@@ -473,6 +489,10 @@ test(
     );
     f.interceptSend = null;
 
+    // The target's node owes a list for the rows it missed (CDC Stage 3):
+    // its relister lists the source leader's image.
+    registerLeaderRelister([...f.services.values()], () => f.producerLeader);
+    await pumpMulti(f);
     const fullDrive = await driveLane(f, 'w1-w2-w9-full-pass');
     assert.equal(fullDrive.state, DRIVE.DRAINED);
     switchToSafeOn2MiB = false;
@@ -666,6 +686,8 @@ test(
       table: TABLES.CONFIG,
     });
 
+    positionRecipients([...f.services.values()], f.producerLeader.partitionId,
+      TABLES.CONFIG, readCdcLedgerIncarnation(f.producerLeader.db));
     const {seedBridge} = buildBridgeSubscribers(f, TABLES.CONFIG, configPartId);
     f.subscribers.push(seedBridge);
     await subscribeWithoutEagerDrive(f, seedBridge, 'w9-65-seed-sub');

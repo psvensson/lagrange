@@ -1,5 +1,3 @@
-import {REPLICA_OPERATION_VISIBILITY_READ_MODE} from
-  '../../src/rebalancer/replica-operation-repository.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionTests({
@@ -191,7 +189,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
     // The create-dedupe read answered: no in-flight operation for this
     // move (this fixture has no replica_operations read port).
     coordinator.repository.queryExistingInFlightOperation = async () => null;
-    coordinator.repository.getOperationsByEntity = async () => [];
+    coordinator.repository.getOperationsByEntityProjection = async () => [];
     coordinator.repository.getOperationsByEntityAuthoritativeObservation =
         async (entityType, entityId) => (
           coordinator.repository.buildEntityOperationVisibilityObservation([
@@ -489,9 +487,8 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
         observation.state === 'bounded_usable' && observation.deferredOutcome &&
         observation.operationCount === 0),
       'the existing pressure owner explicitly authorized every recovery identity observation');
-      await t.rejects(coordinator.getOperationsByEntity(
+      await t.rejects(coordinator.getAuthoritativeOperationsByEntity(
         'partition', BLOCKED_PRIORITY_PARTITION_ID,
-        {visibilityReadMode: REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED},
       ), {rebalanceSkipReason: REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING},
       'the strict consumer still refuses under the same contained pressure');
       coordinator.repository.getOperationsByEntityAuthoritativeObservation = async () =>

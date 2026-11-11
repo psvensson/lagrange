@@ -13,8 +13,6 @@ import {
 } from './provisioning-target-admission-settle.js';
 import {shouldRetainDurableSchemaPlanningOperations} from
   './durable-schema-planning-retention.js';
-import {REPLICA_OPERATION_VISIBILITY_READ_MODE} from
-  '../rebalancer/replica-operation-repository.js';
 import {buildReplicaOperationProgressSnapshot} from
   '../rebalancer/replica-status.js';
 
@@ -299,7 +297,7 @@ class SQLQueryEngineProvisioningAdmissionMethods {
 
   /**
    * Return true when the coordinator can probe provisioning admission
-   * without creating replica_operations rows.
+   * without creating replica-operation ledger rows.
    * @return {boolean}
    * @private
    */
@@ -602,12 +600,11 @@ class SQLQueryEngineProvisioningAdmissionMethods {
    * @return {Promise<Array<string>>} the released operation ids
    */
   async releaseSchemaJobHeldFoundingOperations(job) {
-    const operations = await this.rebalanceCoordinator.getOperationsByEntity(
-      SERVICE_TYPE.PARTITION,
-      job.partitionId,
-      {visibilityReadMode:
-        REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED},
-    );
+    const operations =
+      await this.rebalanceCoordinator.getAuthoritativeOperationsByEntity(
+        SERVICE_TYPE.PARTITION,
+        job.partitionId,
+      );
     const held = operations.filter((operation) =>
       buildReplicaOperationProgressSnapshot(operation).terminal !== true &&
       shouldRetainDurableSchemaPlanningOperations({schemaJobId: job.jobId},

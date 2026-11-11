@@ -1,7 +1,7 @@
 /**
  * Owner-path convergence tests for RebalanceCoordinator.
  *
- * Proves that recovery, polling/timeout, and event-triggered
+ * Proves that the restart orphan sweep, polling/timeout, and event-triggered
  * progression all route through the same owner-key reconcile
  * queue (operationWorkflowRunExclusive / DurableWorkflowCoordinator
  * .runExclusive). No alternate mutation path exists outside the
@@ -304,31 +304,38 @@ function createConvergenceCoordinator(options = {}) {
 test('Owner-path convergence: all progression entry points ' +
   'route through runExclusive', async (t) => {
   await t.test(
-    'recovery routes per-operation work through ' +
+    'the restart orphan sweep routes per-operation work through ' +
     'operationWorkflowRunExclusive',
     async (t) => {
+      // Stale past its PENDING step budget: the orphan sweep acts on it.
+      const staleAtMs = Date.now() - 600000;
       const opRow = buildOperationRow({
         workflowStep: WORKFLOW_STEP.PENDING,
         status: ReplicaStatus.PENDING,
+        createdAt: staleAtMs,
+        updatedAt: staleAtMs,
+        stepsHistory: JSON.stringify([
+          {step: WORKFLOW_STEP.PENDING, timestamp: staleAtMs},
+        ]),
       });
       const {coordinator, recordedOwnerKeys} =
         createConvergenceCoordinator({operationRows: [opRow]});
 
       try {
-        await coordinator.handleRecovery();
+        await coordinator.reconcileOrphanedOperations();
 
         const recoveryKeys = recordedOwnerKeys.filter((k) => {
           return k === buildOperationOwnerKey(TEST_OPERATION_ID);
         });
         t.ok(
           recoveryKeys.length > 0,
-          'recovery must route through runExclusive ' +
+          'the orphan sweep must route through runExclusive ' +
           'with the shared per-operation owner key',
         );
         t.equal(
           recoveryKeys[0],
           buildOperationOwnerKey(TEST_OPERATION_ID),
-          'recovery owner key must match the shared operation owner key',
+          'orphan-sweep owner key must match the shared operation owner key',
         );
       } finally {
         await coordinator.shutdown();
@@ -722,10 +729,16 @@ test('Owner-path convergence: all progression entry points ' +
     async (t) => {
       // Use three separate operations so they don't collide
       // in the single-flight map.
+      const staleAtMs = Date.now() - 600000;
       const recoveryOp = buildOperationRow({
         operationId: 'op-recovery-path',
         workflowStep: WORKFLOW_STEP.PENDING,
         status: ReplicaStatus.PENDING,
+        createdAt: staleAtMs,
+        updatedAt: staleAtMs,
+        stepsHistory: JSON.stringify([
+          {step: WORKFLOW_STEP.PENDING, timestamp: staleAtMs},
+        ]),
       });
       const timeoutOp = buildOperationRow({
         operationId: 'op-timeout-path',
@@ -746,8 +759,10 @@ test('Owner-path convergence: all progression entry points ' +
         });
 
       try {
-        // Trigger all three entry points
-        await coordinator.handleRecovery();
+        // Trigger all three entry points; the orphan sweep (the restart
+        // re-drive) first, its keys captured before the timeout sweep runs.
+        await coordinator.reconcileOrphanedOperations();
+        const orphanSweepKeys = [...recordedOwnerKeys];
 
         await coordinator.checkTimeouts();
 
@@ -758,7 +773,7 @@ test('Owner-path convergence: all progression entry points ' +
         );
         await new Promise((r) => setImmediate(r));
 
-        const hasRecovery = recordedOwnerKeys.includes(
+        const hasRecovery = orphanSweepKeys.includes(
           buildOperationOwnerKey('op-recovery-path'),
         );
         const hasTimeout = recordedOwnerKeys.includes(
@@ -768,7 +783,7 @@ test('Owner-path convergence: all progression entry points ' +
           buildOperationOwnerKey('op-outcome-path'),
         );
 
-        t.ok(hasRecovery, 'recovery path recorded');
+        t.ok(hasRecovery, 'orphan-sweep (restart) path recorded');
         t.ok(hasTimeout, 'timeout path recorded');
         t.ok(hasOutcome, 'outcome path recorded');
 
@@ -1034,7 +1049,7 @@ test('Owner-path convergence: all progression entry points ' +
   );
 
   await t.test(
-    'recovery reconciles SYNCING operations through the ' +
+    'the restart orphan sweep reconciles SYNCING operations through the ' +
     'same owner path as event-triggered progression',
     async (t) => {
       const opRow = buildOperationRow({
@@ -1048,22 +1063,28 @@ test('Owner-path convergence: all progression entry points ' +
         node_id: TEST_NODE_ID,
         status: ReplicaStatus.ACTIVE,
       };
-      const {coordinator, recordedOwnerKeys} =
+      const {coordinator, recordedOwnerKeys, operationMap} =
         createConvergenceCoordinator({
           operationRows: [opRow],
           serviceRows: [serviceRow],
         });
 
       try {
-        await coordinator.handleRecovery();
+        // The replica reached ACTIVE the row has not applied: actionable.
+        await coordinator.reconcileOrphanedOperations();
 
         const recoveryKeys = recordedOwnerKeys.filter((k) => {
           return k === buildOperationOwnerKey(TEST_OPERATION_ID);
         });
         t.ok(
           recoveryKeys.length > 0,
-          'SYNCING reconciliation during recovery must ' +
+          'SYNCING reconciliation by the orphan sweep must ' +
           'route through runExclusive',
+        );
+        t.not(
+          operationMap.get(TEST_OPERATION_ID).workflow_step,
+          WORKFLOW_STEP.FAILED,
+          'the sweep never fails a SYNCING row whose replica is ACTIVE',
         );
       } finally {
         await coordinator.shutdown();

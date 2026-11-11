@@ -141,11 +141,11 @@ class RebalanceCoordinatorReplicaIdentityMethods {
   // conservative): an unavailable projection adds nothing and decides
   // nothing; the authoritative observation above already gated the read.
   async readAdditiveEntityOperationProjection(entityType, entityId) {
-    if (typeof this.repository?.getOperationsByEntity !== LOCAL_STR_FUNCTION) {
+    if (typeof this.repository?.getOperationsByEntityProjection !== LOCAL_STR_FUNCTION) {
       return [];
     }
     try {
-      return await this.repository.getOperationsByEntity(entityType, entityId);
+      return await this.repository.getOperationsByEntityProjection(entityType, entityId);
     } catch (error) {
       if (isOperationVisibilityUnavailableError(error)) {
         return [];

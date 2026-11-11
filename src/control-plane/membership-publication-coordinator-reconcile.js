@@ -1,4 +1,5 @@
 import {readUpperStateField} from '../utils/state-field-read.js';
+import {CDC_CATCHUP_TRIGGER} from '../cdc/cdc-integration-service-authoritative-catchup.js';
 import {
   TABLES,
 } from '../constants/index.js';
@@ -53,6 +54,7 @@ import {
   DEFERRED_PROPAGATED_CATCHUP_MAX_ATTEMPTS_PER_TABLE,
   DEFERRED_PROPAGATED_CATCHUP_OUTCOME,
   DEFERRED_PROPAGATED_CATCHUP_TABLES,
+  DEFERRED_PROPAGATED_CATCHUP_COOLDOWN_MS,
   DEFERRED_PUBLICATIONS_CATCHUP_COOLDOWN_MS,
   EMPTY_PUBLICATION_CANDIDATE_REASON,
   MEMBERSHIP_DEFERRED_PROPAGATED_CATCHUP_FAILED_MSG,
@@ -110,6 +112,7 @@ class MembershipPublicationCoordinatorReconcile extends
       try {
         return await service.hydrateCdcPropagatedTablesFromAuthority({
           tables: [TABLES.CONTROL_PLANE_PUBLICATIONS],
+          trigger: CDC_CATCHUP_TRIGGER.PUBLICATIONS_SWEEP,
           readAuthority: buildControlPlaneReadAuthority({
             authoritativeReadMode:
               CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
@@ -171,6 +174,8 @@ class MembershipPublicationCoordinatorReconcile extends
       try {
         return await service.hydrateCdcPropagatedTablesFromAuthority({
           tables: DEFERRED_PROPAGATED_CATCHUP_TABLES,
+          trigger: cooldownMs === DEFERRED_PROPAGATED_CATCHUP_COOLDOWN_MS ?
+            CDC_CATCHUP_TRIGGER.PROPAGATED_SWEEP : CDC_CATCHUP_TRIGGER.PROPAGATED_SWEEP_FAST,
           maxAttemptsPerTable:
             DEFERRED_PROPAGATED_CATCHUP_MAX_ATTEMPTS_PER_TABLE,
           readAuthority: buildControlPlaneReadAuthority({

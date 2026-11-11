@@ -1228,7 +1228,7 @@ test('SQLQueryEngine - retryable durable schema shortfall retains and reuses ' +
   };
 
   const rebalanceCoordinator = {
-    async getOperationsByEntity() {
+    async getAuthoritativeOperationsByEntity() {
       return [...operationsById.values()];
     },
     async checkProvisioningAdmission(move) {

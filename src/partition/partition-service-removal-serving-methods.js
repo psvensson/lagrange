@@ -8,11 +8,13 @@
 // without the connection (ACTIVE for volatile work, otherwise UNAVAILABLE):
 // it is never an answer that participant custody is settled (2026-11-11);
 // the removal owner reads the durable custody before anything irreversible.
+// The drain waits on the named wake of the change that can end it.
 // A cancelled removal lifts the fence it raised (the replica serves again).
 import {participantTransactionCustodyOf} from
   './partition-participant-transaction-session.js';
 import {participantStoreConnectionStateOf} from
   './partition-participant-transaction-store.js';
+import {nextRemovalDrainWake} from './partition-service-removal-drain-wake.js';
 import {
   PARTICIPANT_STORE_CONNECTION_STATE as CONNECTION_STATE,
   PARTICIPANT_TRANSACTION_CUSTODY as CUSTODY,
@@ -59,9 +61,14 @@ const PARTITION_SERVICE_REMOVAL_SERVING_METHODS = Object.freeze({
     return fenced;
   },
 
-  async waitForRemovalServingDrain(options = {}) {
-    const pollIntervalMs = Number.isFinite(options.pollIntervalMs) &&
-      options.pollIntervalMs > 0 ? Math.floor(options.pollIntervalMs) : 10;
+  /**
+   * Wait until the requests and participant work admitted before the fence
+   * are done, woken by the change that can end it
+   * (partition-service-removal-drain-wake.js), never by a poll. Its bound
+   * is the removal's own.
+   * @return {Promise<Object>} DRAINED, or CLOSED with the custody.
+   */
+  async waitForRemovalServingDrain() {
     for (;;) {
       if (connectionClosed(this)) {
         return closedAnswer(this);
@@ -70,7 +77,7 @@ const PARTITION_SERVICE_REMOVAL_SERVING_METHODS = Object.freeze({
       if (this.activeServingRequestCount === 0 && custody === CUSTODY.IDLE) {
         return {state: REMOVAL_SERVING_STATE.DRAINED};
       }
-      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+      await nextRemovalDrainWake(this);
     }
   },
 });

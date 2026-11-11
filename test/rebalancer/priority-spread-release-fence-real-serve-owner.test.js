@@ -100,6 +100,9 @@ test('(b) a lease that passes before its refresh lands holds the fence ' +
     await owner.readServeEligibility();
     armFenceThenClearSpread(world, parked);
     const firstHeldAtMs = world.nowMs;
+    // The empty projection's CLEAR is the owner census's: it answers at
+    // this instant, before the first held observation.
+    await world.answerOwnerCensus(parked);
     t.equal(blockerOf(parked.resolvePrioritySpreadPlanningGateDecision())
       .state, BACKGROUND_PRIORITY_SPREAD_RELEASE_STATE.STABILIZING,
     'the dwell runs on the real owner\'s eligible answers');
@@ -120,6 +123,12 @@ test('(b) a lease that passes before its refresh lands holds the fence ' +
     committed.nodes = MEMBERS.map((nodeId) =>
       nodeRow(nodeId, leaseEndMs + 10 * stableWindowMs));
     await owner.readServeEligibility();
+    // A mid-window evaluation refreshes the census (older than half the
+    // window), as the rebalancer's cadence would; it does not release.
+    world.nowMs = firstHeldAtMs + Math.floor(stableWindowMs / 2) + 1;
+    t.equal(blockerOf(await world.answerOwnerCensus(parked)).state,
+      BACKGROUND_PRIORITY_SPREAD_RELEASE_STATE.STABILIZING,
+      'the renewed leases are eligible again mid-window');
     world.nowMs = firstHeldAtMs + stableWindowMs;
     t.equal(parked.resolvePrioritySpreadPlanningGateDecision(), null,
       'the fence releases one window after it first held');

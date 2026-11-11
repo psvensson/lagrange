@@ -206,6 +206,7 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
     transport: {getRegisteredHandler: (address) =>
       !portClosed && address === initialRow.address ? transportHandler : null},
     resolveHandlerRetirementLane: () => replicaStateMachine,
+    timeSource: {now: () => Date.now()},
     fenceServingAdmissionForRemoval() {
       service.admissionFenced = true;
     },
@@ -217,7 +218,7 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
     async waitForRemovalServingDrain() {},
     async shutdown() {
       portClosed = true;
-      service.raft.close();
+      service.raft?.close();
     },
   });
   const handler = new ReplicaHandler({

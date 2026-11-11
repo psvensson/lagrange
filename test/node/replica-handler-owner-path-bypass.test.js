@@ -22,6 +22,9 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import {test} from '../../src/test-helpers/tap.js';
+import Database from 'better-sqlite3';
+import {openParticipantTransactionStore} from '../../src/partition/partition-participant-transaction-store.js';
+import {REPLICA_CONSENSUS_EXIT_REASON} from '../../src/node/replica-removal-consensus-exit.js';
 import {
   OperationType,
   ReplicaStatus,
@@ -721,10 +724,14 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
       const drainGate = new Promise((resolve) => {
         releaseDrain = resolve;
       });
+      const db = new Database(':memory:'); // participant custody: idle
+      openParticipantTransactionStore(db);
+      t.teardown(() => db.close());
       const partitionService = {
         partitionId: TEST_PARTITION_ID,
         replicaId: TEST_REPLICA_ID,
         initialized: true,
+        db,
         fenceServingAdmissionForRemoval() {
           fenceCount += 1;
         },
@@ -826,6 +833,8 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
       handler.controlPlaneSystemTableGateway = gateway;
       handler.replicaStateMachine.controlPlaneSystemTableGateway = gateway;
       handler.replicaCleanupTombstoneOwner = null;
+      handler.awaitReplicaRemovalConsensusExit = async () => // portless stub
+        ({reason: REPLICA_CONSENSUS_EXIT_REASON.REMOVAL_APPLIED});
 
       const removed = waitForReplicaEvent(
         handler,

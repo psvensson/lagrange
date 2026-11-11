@@ -149,10 +149,12 @@ function resolveSelectionBackedServiceReadiness(
 function buildPropagationSelectionOptions(
   requiredTables,
   preferredService = null,
+  boundService = null,
 ) {
   return {
     requiredTables,
     preferredService,
+    boundService,
     reuseCapturedIngress:
       CDC_PROPAGATION_SUBSCRIBER_SELECTION.REUSE_CAPTURED_INGRESS,
   };
@@ -230,6 +232,10 @@ function buildPartitionCdcPropagationSubscriber(options = {}) {
   const beforePropagation = options.beforePropagation || null;
   const afterPropagation = options.afterPropagation || null;
   const requiredTables = tableName ? [tableName] : [];
+  // The service this subscriber's deliveries propagate through: one binding
+  // the delivery and the source lane's currentness check both read through
+  // the selection owner's one rule (message-group-selection.js).
+  let boundService = null;
 
   const resolveDeferredSelectionError = (selection = {}) => {
     return buildMessageGroupOwnerNotReadyError(selection, {
@@ -264,9 +270,10 @@ function buildPartitionCdcPropagationSubscriber(options = {}) {
     if (addressesSource) await runPropagationHook(beforePropagation, events, wait);
 
     const selection = await wait(() => resolveOperationalMessageGroupSelectionAsync(
-      buildPropagationSelectionOptions(requiredTables, preferredService)));
+      buildPropagationSelectionOptions(requiredTables, preferredService, boundService)));
     const propagationMessageGroupService = requirePropagationService(
       selection, events[0], requiredTables, resolveDeferredSelectionError);
+    boundService = propagationMessageGroupService;
 
     const answer = await wait(() => propagatePartitionCDCEvent(
       propagationMessageGroupService,
@@ -289,7 +296,8 @@ function buildPartitionCdcPropagationSubscriber(options = {}) {
     // The source continuation consumes this selector's current object binding;
     // equal group text never makes a replacement service the old owner.
     subscriber.getCDCPropagationService = () => resolveOperationalMessageGroupSelection(
-      buildPropagationSelectionOptions(requiredTables, preferredService))?.service ?? null;
+      buildPropagationSelectionOptions(requiredTables, preferredService, boundService))
+      ?.service ?? null;
   }
 
   subscriber.canAcceptCDCEvent = (cdcEvent = {}) => {

@@ -107,6 +107,10 @@ test('T7: no reader outside src/raft takes membership from a status ' +
   'confState; the remaining mentions carry the MEMBERSHIP_CHANGED wake-up ' +
   'as data', () => {
   assert.deepEqual(filesMatching(/\bconfState\b/u, {outsideRaft: true}), [
+    // The removal settlement's wake: a relayed MEMBERSHIP_CHANGED (its
+    // confState present) wakes it, and it decides only from the witness
+    // read of its own replica (readPartitionReplicaMembership).
+    'src/node/replica-removal-settlement.js',
     // The port's MEMBERSHIP_CHANGED relayed as the partition's event.
     'src/partition/partition-service-raft-lifecycle-wiring.js',
     // The REPLACE owner's wake de-duplication key: a wake-up, never an
@@ -210,6 +214,10 @@ test('T7: the stamp is carried, never re-derived: the set of files that ' +
     'src/rebalancer/operation-workflow-dispatch-response-reconcile.js',
     'src/rebalancer/operation-workflow-owner-ports.js',
     'src/rebalancer/replica-operation-repository-row-methods.js',
+    // Reader: the topology drain recognises founding work by the GENESIS
+    // kind of the stamp a create operation's steps carry; it never produces
+    // or re-derives one.
+    'src/rebalancer/replica-operation-topology-drain.js',
     // Reader (quest fresh-create-release-authority-from-committed-operation):
     // the answering leader reads the GENESIS founding stamp the provisioning
     // owner wrote into the committed create operation's first step, as the
@@ -312,9 +320,17 @@ test('T7 (integration): the REPLACE target and surviving-member reads are ' +
       'src/partition/partition-service-raft-membership-administration.js'),
   [
     'src/node/replica-handler-membership-methods.js',
+    // D2 cancel contract: the source answers CANCEL_REPLICA_REMOVAL from
+    // its own applied configuration about itself (the same witness read,
+    // addressed to itself; no REPLACE module).
+    'src/node/replica-removal-cancellation.js',
     // F2: a retiring replica reads its own configuration to leave consensus
     // (the same witness read, addressed to itself; no REPLACE module).
     'src/node/replica-removal-consensus-exit.js',
+    // Cancel contract: an ACTIVE replica whose own configuration no longer
+    // names it is settled FAILED by the settlement owner (the same witness
+    // read, addressed to itself; no REPLACE module).
+    'src/node/replica-removal-settlement.js',
   ],
   'the witness message has one handler reader');
 });

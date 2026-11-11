@@ -1,5 +1,7 @@
 // Production CDC producer -> subscriber -> seed bridge -> topology fanout ->
 // actual message-group RF1/RF3. No committed receipt is constructed by this test.
+import {positionRecipients} from '../test-helpers/cdc-source-range-fixture.js';
+import {readCdcLedgerIncarnation} from '../../src/partition/partition-cdc-obligation-ledger.js';
 import {propagatePartitionCdcVector} from
   '../../src/bootstrap/shared/partition-cdc-propagation-subscriber.js';
 import assert from 'node:assert/strict';
@@ -422,6 +424,9 @@ test('released executeQuery debt requires actual RF1 native receipt through the 
     const producer = await producerFixture(t);
     const debt = await writeSource(t, producer, 'native-cdc-rf1-write');
     const f = await recipientFixture(t, KEY, {replicaCount: 1});
+    // The recipient listed the source at its start (CDC Stage 3 position).
+    positionRecipients(f.services, producer.leader.partitionId, null,
+      readCdcLedgerIncarnation(producer.leader.db));
     const {subscriber} = subscribe(t, f, producer);
     await producer.leader.subscribeToCDCWithHandshake(subscriber,
       {subscriberId: 'native-rf1-message-group-custody'});
@@ -441,6 +446,8 @@ test('native CDC producer retains custody until message-group committed applicat
     const producer = await producerFixture(t);
     const debt = await writeSource(t, producer, 'native-cdc-custody-write');
     const f = await recipientFixture(t, KEY);
+    positionRecipients(f.services, producer.leader.partitionId, null,
+      readCdcLedgerIncarnation(producer.leader.db));
     const {subscriber} = subscribe(t, f, producer);
     f.holdEntries = true;
     await producer.leader.subscribeToCDCWithHandshake(subscriber,

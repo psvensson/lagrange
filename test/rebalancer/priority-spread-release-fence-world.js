@@ -102,6 +102,13 @@ function createFenceWorld() {
       ],
     },
     rebalancers: [],
+    // The operation ledger owner's census port: it answers the durable rows
+    // (every non-terminal one) unless a test makes it fail.
+    // ownerCensusOnlyOperations are committed rows the cache projection has
+    // not caught up with: only the owner's census answers them.
+    ownerCensusAnswers: true,
+    ownerCensusReads: 0,
+    ownerCensusOnlyOperations: [],
   };
   world.readiness = statePrioritySpreadReleaseReadiness(
     world.readinessOwner,
@@ -118,6 +125,16 @@ function createFenceWorld() {
     });
     rebalancer.getControlPlanePrioritySpreadBlocker =
       () => world.prioritySpreadBlocker;
+    rebalancer.rebalanceCoordinator.repository = {
+      async queryClusterWideIncompleteOperations() {
+        world.ownerCensusReads += 1;
+        if (!world.ownerCensusAnswers) {
+          throw new Error('ROUTER_NO_CONNECTION');
+        }
+        return [...world.replicaOperations, ...world.ownerCensusOnlyOperations]
+          .filter((row) => row.completed_at === null);
+      },
+    };
     rebalancer.randomSource = {random: () => NO_JITTER_DRAW};
     rebalancer.wakeReasons = [];
     rebalancer.enqueueRebalanceCheck = (reason) => {
@@ -137,6 +154,21 @@ function createFenceWorld() {
     };
     world.rebalancers.push(rebalancer);
     return rebalancer;
+  };
+  // The census read is one promise turn: a requested census answers, on the
+  // world's clock as it stands then, once the test yields.
+  world.settleOwnerCensus = () =>
+    new Promise((resolve) => setImmediate(resolve));
+  // The production path to a fresh census: one evaluation (an empty
+  // projection, or a census older than half the window, requests it), then
+  // the answer. The evaluation itself is an ordinary one; call this where
+  // the condition is meant to be observed HELD (before the dwell would
+  // release), so the next evaluation observes it from the owner's answer.
+  // Resolves to that evaluation's gate decision.
+  world.answerOwnerCensus = async (rebalancer) => {
+    const decision = rebalancer.resolvePrioritySpreadPlanningGateDecision();
+    await world.settleOwnerCensus();
+    return decision;
   };
   world.shutdown = () => {
     for (const rebalancer of world.rebalancers) {

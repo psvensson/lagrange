@@ -1,4 +1,5 @@
 import {test} from '../../src/test-helpers/tap.js';
+import {CDC_CATCHUP_TRIGGER} from '../../src/cdc/cdc-integration-service-authoritative-catchup.js';
 import {
   MembershipPublicationCoordinatorReconcile,
 } from '../../src/control-plane/membership-publication-coordinator-reconcile.js';
@@ -167,6 +168,9 @@ test('CL-001 variant D: the deferred catch-up is rate-limited to one authoritati
   t.equal(publicationsSweeps().length, 1, 'the first defer triggers a catch-up');
   t.same(publicationsSweeps()[0], {
     tables: [PUBLICATIONS],
+    // The compensation names itself so its repairs are counted (CDC Stage 3
+    // deletion evidence).
+    trigger: CDC_CATCHUP_TRIGGER.PUBLICATIONS_SWEEP,
     readAuthority: buildControlPlaneReadAuthority({
       authoritativeReadMode:
         CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,

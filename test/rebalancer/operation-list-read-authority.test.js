@@ -103,7 +103,7 @@ test('L4: the advisory entity projection without a cache throws on a failed ' +
   const cache = repository.systemTableCache;
   try {
     repository.systemTableCache = null;
-    const outcome = await repository.getOperationsByEntity(
+    const outcome = await repository.getOperationsByEntityProjection(
       ENTITY_TYPE, world.partitionId,
     ).then((value) => ({value}), (error) => ({error}));
     t.equal(isOperationVisibilityUnavailableError(outcome.error), true,

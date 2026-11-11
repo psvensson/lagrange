@@ -27,6 +27,7 @@ import {
   readPreparedParticipantIds,
 } from './partition-participant-transaction-store.js';
 import {hasLockingReadReservations} from './partition-locking-read-reservation.js';
+import {notifyRemovalServingDrain} from './partition-service-removal-drain-wake.js';
 
 // Per partition service: participantId -> session.
 const SESSIONS = new WeakMap();
@@ -435,6 +436,7 @@ function endParticipantSession(service, session) {
   const sessions = SESSIONS.get(service);
   if (sessions?.get(session.identity.participantId) === session) {
     sessions.delete(session.identity.participantId);
+    notifyRemovalServingDrain(service);
   }
 }
 
@@ -452,6 +454,7 @@ function discardParticipantSessions(service) {
   service.logger.info(LOG_MSG.SESSIONS_DISCARDED, {
     partitionId: service.partitionId, sessionCount: sessions.size});
   sessions.clear();
+  notifyRemovalServingDrain(service);
   reconcilePreparedParticipantRowKeys(service);
 }
 
@@ -475,6 +478,7 @@ function sweepExpiredParticipantSessions(service, nowMs, holdTimeoutMs) {
     }
   }
   if (discarded > 0) {
+    notifyRemovalServingDrain(service);
     reconcilePreparedParticipantRowKeys(service);
   }
   return discarded;

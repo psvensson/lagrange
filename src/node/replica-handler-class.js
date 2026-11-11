@@ -85,6 +85,7 @@ import {
 } from './replica-handler-remove-execution-methods.js';
 import {assignReplicaHandlerRemovalCancellationMethods} from
   './replica-removal-cancellation.js';
+import {subscribeRemovalSettlement} from './replica-removal-settlement.js';
 import {
   METADATA_RESOLUTION_POLL_INTERVAL_MS,
   PARTITION_METADATA_MISSING_PREFIX,
@@ -235,6 +236,8 @@ class ReplicaHandler extends EventEmitter {
     this.participantReleaseAuthorizationOwner =
       createParticipantReleaseAuthorizationOwner(this);
     this.participantReleaseRecovery = createParticipantReleaseRecovery(this);
+    // A removal state no running removal carries is re-driven or settled.
+    subscribeRemovalSettlement(this);
   }
 }
 

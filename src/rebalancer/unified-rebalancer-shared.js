@@ -190,8 +190,11 @@ const PRIORITY_BUDGET_BYPASS_COORDINATOR_OPTIONS = Object.freeze({
   bypassEmptyQueryDelay: true,
 });
 
+// The budget reads prefer this node's replica and ask the owner when the
+// table is not hosted here: "not hosted" is not a failed read.
 const REBALANCER_BUDGET_READ_OPTIONS = Object.freeze({
-  authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+  authoritativeReadMode:
+    CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_PREFERRED_OWNER_RPC_FALLBACK,
   localReadConsistency: LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
   replicaFallbackConsistency: LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
 });

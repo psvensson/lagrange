@@ -16,13 +16,11 @@
  *    never retired, it stays a committed voter, nothing proposes its removal
  *    from a serving row; the group keeps quorum and takes a write; the dead
  *    target is removed and a repair ADD restores three voters.
- *  - ALREADY_REMOVED: the RemoveNode commits as the owner asks its cancel
- *    (the source's node answers ALREADY_REMOVED, or answers UNAVAILABLE
- *    while the entry is unapplied and the authority then reads the source
- *    absent - one classification either way); the outcome says the source
- *    was removed (degraded, the repair named), never "retained"; the
- *    source's teardown completes; the repair ADD restores the replica
- *    count.
+ *  - ALREADY_REMOVED: the RemoveNode commits, and the source applies it,
+ *    between the owner's read (still a voter, after it acted on the death)
+ *    and its cancel; the outcome says the source was removed (degraded, the
+ *    repair named), never "retained"; the source's teardown completes; the
+ *    repair ADD restores the replica count.
  * Oracles: the committed configuration folded from a member's durable log,
  * the source's durable lifecycle row, the world's services rows.
  */
@@ -46,10 +44,13 @@ import {RAFT_OPERATION_PORT_REQUEST} from
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 import {REPLICA_REMOVAL_CANCEL_ANSWER as CANCEL} from
   '../../src/node/replica-removal-cancel-contract.js';
-import {durableHardState} from
+import {durableAppliedState, durableHardState} from
   '../raft/raft-rs-backend/committed-membership-oracles.js';
 import {durableLifecycleState} from
   '../node/replica-removal-consensus-exit-fixture.js';
+import {EntityType} from '../../src/rebalancer/unified-rebalancer.js';
+import {REBALANCER_MOVE_TYPE} from '../../src/rebalancer/rebalancer-constants.js';
+import {createMockCache, createTestRebalancer} from './test-helpers.js';
 import {
   ORDINARY_PARTITION_ID,
   disposeWorld,
@@ -121,6 +122,25 @@ function repairAdd(world, replicaId) {
     {[RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]: stamp});
   world.group.commitChange(RAFT_MEMBERSHIP_OPERATION.ADD_PEER, replicaId);
   return committedVoterCount(world);
+}
+
+// The production planner over the world's rows (never the operation's
+// record): the moves it plans for a three-replica partition.
+function plannedMoves(world) {
+  const rebalancer = createTestRebalancer({entityId: world.partitionId,
+    entityType: EntityType.PARTITION, nodeId: 'planner-node',
+    systemTableCache: createMockCache({
+      services: world.cache.getAll('services'),
+      replicaOperations: world.cache.getAll('replica_operations'),
+    })});
+  rebalancer.initialize();
+  try {
+    return rebalancer.movePlanner.calculateMoves(
+      rebalancer.getCurrentReplicas(), {targetReplicaCount: 3,
+        targetNodes: world.nodeIds, degraded: false});
+  } finally {
+    rebalancer.shutdown();
+  }
 }
 
 function lastStep(persisted) {
@@ -196,8 +216,9 @@ test('CANCELLED: the target dies after the source\'s row is REMOVING; the ' +
   }
 });
 
-test('ALREADY_REMOVED: the removal commits once the target is dead; the ' +
-  'outcome says the source was removed (degraded, repair named), the ' +
+test('ALREADY_REMOVED: the removal commits between the owner\'s read and ' +
+  'its cancel; never "retained": the degraded group is reported by name ' +
+  'with its repair, R-1a completes from the committed absence, the ' +
   'source\'s teardown completes, and the repair ADD restores the replica ' +
   'count', async (t) => {
   const {world, intent} = await openWorld();
@@ -208,8 +229,16 @@ test('ALREADY_REMOVED: the removal commits once the target is dead; the ' +
     // The failure detector marks the target dead; its process still runs,
     // so the leader admits RemoveNode(s) (its survivors are a live quorum).
     setTargetRow(world, ReplicaStatus.FAILED);
+    const owner = world.coordinator.workflowOwner;
+    const reports = [];
+    const warn = owner.logger.warn.bind(owner.logger);
+    owner.logger.warn = (message, fields) => {
+      if (fields?.outcome === REMOVED) reports.push(fields);
+      return warn(message, fields);
+    };
     const deliver = world.coordinator.messageRouter.deliver;
     let injected = false;
+    const answers = [];
     world.coordinator.messageRouter.deliver = async (target, payload,
       options) => {
       const type = payload?.[ReplicaOperationField.TYPE];
@@ -223,29 +252,46 @@ test('ALREADY_REMOVED: the removal commits once the target is dead; the ' +
           type === ReplicaOperationMessageType.CANCEL_REPLICA_REMOVAL) {
         injected = true;
         leaderReconcilesSourceRow(world);
-        world.group.settle(() =>
-          !world.group.sourceCommittedVoter(world.sourceReplicaId),
-        ELECTION_ROUNDS);
+        const sourcePeer = world.group.peerIdOf(world.sourceReplicaId);
+        world.group.settle(() => !durableAppliedState(sourceDb,
+          world.partitionId).voters.includes(sourcePeer), ELECTION_ROUNDS);
         await settleTurns();
       }
-      return deliver(target, payload, options);
+      const delivered = await deliver(target, payload, options);
+      if (type === ReplicaOperationMessageType.CANCEL_REPLICA_REMOVAL) {
+        answers.push(delivered.answer?.[
+          ReplicaOperationField.REMOVAL_CANCELLATION]?.answer ?? null);
+      }
+      return delivered;
     };
     const persisted = await enterOwnerUntilTerminal(world);
     world.group.advance(QUIET_ROUNDS);
     await settleTurns();
 
     t.equal(injected, true, 'the cancel was asked');
-    t.equal(persisted.workflowStep, WORKFLOW_STEP.FAILED, 'terminal FAILED');
-    t.match(String(persisted.errorMessage), REMOVED,
-      'the outcome says the source was removed, not retained');
-    const death = lastStep(persisted).replaceTargetDeath;
-    t.equal(death?.sourceRemoval?.answer, CANCEL.ALREADY_REMOVED,
+    t.same(answers, [CANCEL.ALREADY_REMOVED],
       'the source\'s node answered ALREADY_REMOVED');
-    t.same({source: death?.degraded?.removedSourceReplicaId,
-      target: death?.degraded?.deadTargetReplicaId,
-      repair: death?.degraded?.repair}, {source: world.sourceReplicaId,
+    t.equal(persisted.workflowStep, WORKFLOW_STEP.REMOVED,
+      'R-1a completes from the committed absence (the source was removed)');
+    t.notMatch(String(persisted.errorMessage ?? ''), RETAINED,
+      'never "retained"');
+    const record = lastStep(persisted).replaceTargetDeath ?? null;
+    t.same({outcome: record?.outcome,
+      source: record?.degraded?.removedSourceReplicaId,
+      target: record?.degraded?.deadTargetReplicaId,
+      repair: record?.degraded?.repair}, {outcome: REMOVED,
+      source: world.sourceReplicaId, target: world.targetReplicaId,
+      repair: 'durability_repair_add'},
+    'the completion records the degraded group and the owed repair durably');
+    t.ok(plannedMoves(world).some((move) =>
+      move.type === REBALANCER_MOVE_TYPE.ADD),
+    'the repair planner, from the ACTIVE rows alone, plans the ADD');
+    const degraded = reports[0]?.degraded ?? null;
+    t.same({reports: reports.length, source: degraded?.removedSourceReplicaId,
+      target: degraded?.deadTargetReplicaId, repair: degraded?.repair},
+    {reports: 1, source: world.sourceReplicaId,
       target: world.targetReplicaId, repair: 'durability_repair_add'},
-    'the degraded group and its repair are named');
+    'the degraded group and its repair are reported by name');
     t.equal(world.group.sourceCommittedVoter(world.sourceReplicaId), false,
       'the source left the committed configuration');
     t.equal(durableLifecycleState(sourceDb, world.partitionId), 'retired',

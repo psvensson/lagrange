@@ -385,11 +385,12 @@ function committedQueryOf(entryId, sql) {
 }
 
 // A fixture replica: the fixture table unless `extra.tableName` names
-// another (a production system table, with `extra.schema`).
+// another (a production system table, with `extra.schema`, and optionally
+// its production `extra.partitionId`).
 function createReplica(replicaId, extra = {}) {
   const replicaIds = extra.replicaIds ?? [...REPLICAS];
   return createControllablePartitionService({
-    partitionId: PARTITION_ID,
+    partitionId: extra.partitionId ?? PARTITION_ID,
     tableId: extra.tableName ?? TABLE,
     tableName: extra.tableName ?? TABLE,
     replicaId,
@@ -430,6 +431,7 @@ async function startReplica(replicaId, extra) {
   const replica = createReplica(replicaId, extra);
   try {
     await replica.initialize();
+    recordResidentAppliedProgressListeners(replica);
     if (extra?.generationOrigin !== false && originOf(replica) === null) {
       replica.controllablePort.committedIndex = GENERATION_ORIGIN_INDEX - 1;
       applyCommitted(replica, originCommandOf());
@@ -549,9 +551,26 @@ function participantFixtureHandlerOf(service) {
     localServices: new Map([[service.replicaId, service]])};
 }
 
+// The APPLIED_PROGRESS listeners the replica's own resident owners hold from
+// its start (the removal subject handoff, src/partition/
+// partition-service-removal-subject-handoff.js), so the count below is the
+// applied-position observation's own and nothing the service keeps for its
+// lifetime.
+const RESIDENT_APPLIED_PROGRESS_LISTENERS = new WeakMap();
+
+function recordResidentAppliedProgressListeners(replica) {
+  RESIDENT_APPLIED_PROGRESS_LISTENERS.set(replica, new Set(
+    replica.controllablePort.listeners.get(RAFT_EVENT.APPLIED_PROGRESS) ?? []));
+}
+
 function fixtureParticipantObservationListenerCount(service) {
-  return service.controllablePort.listeners
-    .get(RAFT_EVENT.APPLIED_PROGRESS)?.size ?? 0;
+  const resident = RESIDENT_APPLIED_PROGRESS_LISTENERS.get(service);
+  if (resident === undefined) {
+    throw new Error('fixture replica has no recorded resident listeners');
+  }
+  return [...(service.controllablePort.listeners
+    .get(RAFT_EVENT.APPLIED_PROGRESS) ?? [])]
+    .filter((listener) => !resident.has(listener)).length;
 }
 
 function retainFixtureParticipantFailure(current, next, message) {

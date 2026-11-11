@@ -155,7 +155,7 @@ function assignReplicaOperationRepositoryEntityReadMethods(
    * @param {string} entityId
    * @return {Promise<Array>}
    */
-    async getOperationsByEntity(entityType, entityId) {
+    async getOperationsByEntityProjection(entityType, entityId) {
       const cachedRows = this.filterReplicaOperationRowsFromCache((row) => {
         if (!row) {
           return false;

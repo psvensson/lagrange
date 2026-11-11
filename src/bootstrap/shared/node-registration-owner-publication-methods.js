@@ -520,6 +520,9 @@ class NodeRegistrationOwnerPublicationMethods {
         data,
         {
           ...joinTimeOptions,
+          // The terminal-transition owner's write intent (its CDC admission
+          // class), when it passed one.
+          ...(options.writeOptions ?? {}),
           ...attemptIdentity,
           queryTimeoutMs,
         },
@@ -541,12 +544,14 @@ class NodeRegistrationOwnerPublicationMethods {
 
   // The final failed-join withdrawal mutation; the predicate is the exact
   // node id + boot incarnation.
-  writeNodeWithdrawalAtIncarnation(whereClause, withdrawn) {
+  writeNodeWithdrawalAtIncarnation(whereClause, withdrawn,
+    retirementOptions = {}) {
     return this.updateJoinAdmissionSystemTableRowWithRetry(
       TABLES.NODES,
       whereClause,
       withdrawn,
-      {admissionTarget: JOIN_ADMISSION_WITHDRAWAL_TARGET.NODE_MEMBERSHIP},
+      {admissionTarget: JOIN_ADMISSION_WITHDRAWAL_TARGET.NODE_MEMBERSHIP,
+        writeOptions: retirementOptions},
     );
   }
 
@@ -600,8 +605,9 @@ class NodeRegistrationOwnerPublicationMethods {
         [COLUMN.STATUS]: SERVICE_STATUS.STOPPED,
         [COLUMN.CONNECTION_STATE]: STATE.DISCONNECTED,
       },
-      write: (whereClause) =>
-        this.writeNodeWithdrawalAtIncarnation(whereClause, withdrawn),
+      write: (whereClause, retirementOptions) =>
+        this.writeNodeWithdrawalAtIncarnation(whereClause, withdrawn,
+          retirementOptions),
     });
     if (isNodeTerminalTransitionRefused(transition.outcome)) {
       return {refused: true, transition};

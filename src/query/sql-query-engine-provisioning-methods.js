@@ -7,8 +7,6 @@ import {
 import {buildSchemaProvisioningChildIntent} from
   './schema-provisioning-child-intent.js';
 import {REBALANCER_SKIP_REASON} from '../rebalancer/rebalancer-constants.js';
-import {REPLICA_OPERATION_VISIBILITY_READ_MODE} from
-  '../rebalancer/replica-operation-repository.js';
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_FUNCTION = 'function';
@@ -56,12 +54,11 @@ class SQLQueryEngineProvisioningMethods {
     }
     let partitionOperations;
     try {
-      partitionOperations = await this.rebalanceCoordinator.getOperationsByEntity(
-        SERVICE_TYPE.PARTITION,
-        partitionId,
-        {visibilityReadMode:
-          REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED},
-      );
+      partitionOperations =
+        await this.rebalanceCoordinator.getAuthoritativeOperationsByEntity(
+          SERVICE_TYPE.PARTITION,
+          partitionId,
+        );
     } catch (cause) {
       if (cause?.rebalanceSkipReason !==
           REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING) {

@@ -253,7 +253,7 @@ async function performReplicaRemoval(handler, request, service, lifecycle,
   // Nothing local retires without exact evidence (2026-11-11): its applied
   // removal, its group's retirement, or no consensus record to retire; and
   // nothing irreversible while participant custody is held or unknown.
-  requireRemovalTeardownAuthority(handler, request, exit);
+  await requireRemovalTeardownAuthority(handler, request, exit);
   requireRemovalParticipantCustodySettled(handler, request, service);
   const authority = await settleCanonicalLeaderClearOrThrow(
     handler,

@@ -20,4 +20,29 @@ function stubAnsweredIncompleteOperationsRead(coordinator, listOf) {
   Object.assign(coordinator, {queryIncompleteOperations: answeredRead});
 }
 
-export {stubAnsweredIncompleteOperationsRead};
+/**
+ * ADD budget counts by priority class as the coordinator returns them after
+ * an ANSWERED list read: the counts plus the list observation they were
+ * counted from (complete, PRESENT or a confirmed EMPTY). A count stub without
+ * an answered observation is an unknown count, which holds the planner's
+ * ordinary-priority serial gate.
+ * @param {Object} counts - {priorityCount, ordinaryPriorityCount,
+ *   emergencyPriorityCount, nonPriorityCount}
+ * @return {Object}
+ */
+function answeredPriorityClassCounts(counts) {
+  const operationCount = (counts.priorityCount || 0) +
+    (counts.nonPriorityCount || 0);
+  return Object.freeze({
+    ...counts,
+    observation: Object.freeze({
+      state: operationCount > 0 ? 'present' : 'empty',
+      complete: true,
+      operationCount,
+      deferredOutcome: null,
+      retryAfterMs: null,
+    }),
+  });
+}
+
+export {answeredPriorityClassCounts, stubAnsweredIncompleteOperationsRead};

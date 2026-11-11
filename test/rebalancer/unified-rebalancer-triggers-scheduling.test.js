@@ -11,9 +11,6 @@ import {
 import {
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {
-  REPLICA_OPERATION_VISIBILITY_READ_MODE,
-} from '../../src/rebalancer/replica-operation-repository.js';
-import {
   UnifiedRebalancer,
   EntityType,
   ReplicaStatus,
@@ -644,7 +641,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         ],
         rebalanceCoordinator: {
           ...createMockCoordinator(),
-          async getOperationsByEntity() {
+          async getAuthoritativeOperationsByEntity() {
             authoritativeEntityReadCalls += 1;
             return [];
           },
@@ -726,7 +723,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         ],
         rebalanceCoordinator: {
           ...createMockCoordinator(),
-          async getOperationsByEntity() {
+          async getAuthoritativeOperationsByEntity() {
             authoritativeEntityReadCalls += 1;
             return [{
               operation_id: 'op-authoritative-stale',
@@ -781,7 +778,6 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
   await t.test(
     'checkRebalance requests authoritative entity operations during topology blocker revalidation when available',
     async (t) => {
-      let cacheEntityReadCalls = 0;
       let authoritativeEntityReadCalls = 0;
       const rebalancer = createTestRebalancer({
         entityId: 'control_plane_publications-p1',
@@ -820,25 +816,9 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         ],
         rebalanceCoordinator: {
           ...createMockCoordinator(),
-          async getOperationsByEntity(_entityType, _entityId, options = {}) {
-            if (options?.visibilityReadMode ===
-                REPLICA_OPERATION_VISIBILITY_READ_MODE
-                  .OWNER_RPC_REQUIRED) {
-              authoritativeEntityReadCalls += 1;
-              return [];
-            }
-            cacheEntityReadCalls += 1;
-            return [{
-              operation_id: 'op-cache-stale-topology',
-              type: 'ADD',
-              partition_id: 'control_plane_publications-p1',
-              entity_type: EntityType.PARTITION,
-              entity_id: 'control_plane_publications-p1',
-              source_node_id: 'node-1',
-              target_node_id: 'node-2',
-              status: ReplicaStatus.CREATING,
-              workflow_step: WORKFLOW_STEP.CREATING,
-            }];
+          async getAuthoritativeOperationsByEntity() {
+            authoritativeEntityReadCalls += 1;
+            return [];
           },
         },
       });
@@ -869,9 +849,9 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         'topology blocker revalidation should prefer authoritative entity operations when the coordinator supports them',
       );
       t.equal(
-        cacheEntityReadCalls,
-        0,
-        'topology blocker revalidation should not fall back to cache-backed entity reads when authoritative reads are available',
+        rebalancer.rebalanceCoordinator.getOperationsByEntity,
+        undefined,
+        'the coordinator exposes no cache-backed entity read for topology blocker revalidation to fall back to',
       );
       t.equal(
         evaluateStateCalls,
@@ -918,7 +898,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         }],
         rebalanceCoordinator: {
           ...createMockCoordinator(),
-          async getOperationsByEntity() {
+          async getAuthoritativeOperationsByEntity() {
             authoritativeEntityReadCalls += 1;
             return [{
               operation_id: 'op-authoritative-replace-active',
@@ -1049,7 +1029,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         controlPlaneReadinessService: readinessService,
         rebalanceCoordinator: {
           ...createMockCoordinator(),
-          async getOperationsByEntity() {
+          async getAuthoritativeOperationsByEntity() {
             authoritativeEntityReadCalls += 1;
             return [{
               operation_id: 'op-authoritative-priority-syncing',

@@ -337,13 +337,7 @@ class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
     if (operation.type === OperationType.REPLACE && replaceRemovePhase) {
       return REBALANCE_COORDINATOR_DEFER_REASON.REPLACE_REMOVE_SAFETY_BLOCKED;
     }
-    if (
-      operation.type !== OperationType.REMOVE ||
-      !(await this.isCriticalRemoveOverReplicated(operation))
-    ) {
-      return null;
-    }
-    return REBALANCE_COORDINATOR_DEFER_REASON.REMOVE_SAFETY_BLOCKED;
+    return this.resolveCriticalRemoveDeferReason(operation);
   }
 
   /**

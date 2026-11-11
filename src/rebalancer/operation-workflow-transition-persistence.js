@@ -6,6 +6,7 @@ import {
   clearReplaceOwnerState,
   decideReplaceCompletion,
   isPartitionReplace,
+  replaceCompletionStepMetadataOf,
 } from './operation-workflow-replace-owner.js';
 import {
   admitCreateTerminalFailure,
@@ -352,10 +353,13 @@ class OperationWorkflowTransitionPersistence
   /**
    * Complete an operation successfully.
    * @param {Object} operation
+   * @param {Object} [options] - {stepMetadata}: recorded on the completion
+   *   step entry (a partition REPLACE completing with its target dead adds
+   *   its degraded group and owed repair itself).
    * @return {Promise<Object>} Typed transition outcome
    *   ({committed, disposition}) of the terminal persist.
    */
-  async completeOperation(operation) {
+  async completeOperation(operation, options = {}) {
     const now = Date.now();
     const finalStep =
       operation.type === OperationType.ADD ?
@@ -372,11 +376,14 @@ class OperationWorkflowTransitionPersistence
     // R-1a (quest replace-source-removal-owner): every success edge of a
     // partition REPLACE ends here, and none completes while its source is
     // still a committed voter on the witness replica.
+    let replaceStepMetadata = null;
     if (isPartitionReplace(operation)) {
       const decision = await decideReplaceCompletion(this, operation);
       if (decision.verdict !== REPLACE_COMPLETION_VERDICT.SOURCE_RETIRED) {
         return buildReplaceCompletionRefusal(decision);
       }
+      replaceStepMetadata =
+        replaceCompletionStepMetadataOf(this, operation, decision);
     }
     const previousStep = operation.workflowStep;
     const stepEntry = this.buildOperationTransitionStepEntry(
@@ -386,6 +393,8 @@ class OperationWorkflowTransitionPersistence
       previousStep,
       now,
     );
+    applyFailureStepMetadata(stepEntry, {stepMetadata: {
+      ...(options.stepMetadata || {}), ...(replaceStepMetadata || {})}});
     const projectedOperation = {
       ...operation,
       workflowStep: finalStep,

@@ -544,9 +544,9 @@ class HeartbeatServiceLifecycleMethods {
         status: shutdownRow.status,
         connection_state: shutdownRow.connection_state,
       },
-      write: (whereClause) => this.writeShutdownRowAtIncarnation(
+      write: (whereClause, retirementOptions) => this.writeShutdownRowAtIncarnation(
         gateway, whereClause, shutdownRow,
-        {queryTimeoutMs}),
+        {queryTimeoutMs, ...retirementOptions}),
     });
     if (!isNodeTerminalTransitionCompleted(transition.outcome)) {
       if (transition.error &&

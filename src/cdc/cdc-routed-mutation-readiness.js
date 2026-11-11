@@ -25,6 +25,9 @@ import {
   buildControlPlaneWorkloadProfile,
 } from '../control-plane/control-plane-workload-profile.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+import {CDC_ADMISSION_INTENT_FIELD, PARTITION_CDC_ADMISSION_CLASS,
+  cdcAdmissionClassFieldsOf, cdcAdmissionClassOfIntent} from
+  '../partition/partition-cdc-admission-class.js';
 import {ROUTER_MESSAGE_TIMEOUT_ERROR_CODE} from '../transport/transport-error-codes.js';
 
 const {
@@ -128,15 +131,19 @@ function createRoutedMutationSpentLatch(service, write) {
 // The local-leader leg of a routed write is the same entry as its engine
 // attempts: its entryId is derived from the write's key and the partition
 // exactly as the engine's write plan derives it.
-function localLegWriteIdentity(idempotencyKey, partitionService) {
+// The leg also carries the write's CDC admission class, as the engine's
+// partition request does (partition-cdc-admission-class.js).
+function localLegWriteIdentity(idempotencyKey, partitionService, admissionClass) {
+  const classFields = cdcAdmissionClassFieldsOf(admissionClass);
   if (typeof idempotencyKey !== 'string' || idempotencyKey.length === 0 ||
     typeof partitionService?.partitionId !== 'string') {
-    return {};
+    return classFields;
   }
   return {
     idempotencyKey,
     entryId: deriveParticipantEntryId(idempotencyKey,
       partitionService.partitionId),
+    ...classFields,
   };
 }
 
@@ -157,7 +164,7 @@ class CDCRoutedMutationReadiness {
   }
 
   async tryExecuteLocalSystemTableWrite(sql, params = [],
-    idempotencyKey = null) {
+    idempotencyKey = null, admissionClass = PARTITION_CDC_ADMISSION_CLASS.ORDINARY) {
     if (!sql || typeof sql !== 'string') {
       return {
         handled: false,
@@ -202,7 +209,7 @@ class CDCRoutedMutationReadiness {
       }
       try {
         const legIdentity =
-          localLegWriteIdentity(idempotencyKey, partitionService);
+          localLegWriteIdentity(idempotencyKey, partitionService, admissionClass);
         const localResult = await submitRoutedMutationHop(this,
           CDC_TERMINAL_STAGE.LOCAL_LEADER_WRITE,
           () => partitionService.executeQuery(sql, params, legIdentity),
@@ -369,6 +376,10 @@ class CDCRoutedMutationReadiness {
       CDC_RETRY.MIN_DELAY_MS,
       Number(this.retryDelayMs) || CDC_DEFAULTS.RETRY_DELAY_MS,
     );
+    // A forged intent is refused before either leg (the engine entry refuses
+    // it too; the local leg would otherwise not ask).
+    const admission = cdcAdmissionClassOfIntent(options);
+    if (admission.refusal !== undefined) return admission.refusal;
     const tableNameResult = this.extractTableNameFromSQL(sql);
     const tableName =
       tableNameResult.state ===
@@ -532,6 +543,11 @@ class CDCRoutedMutationReadiness {
     if (options?.cancellationToken) {
       baseQueryOptions.cancellationToken = options.cancellationToken;
     }
+    // The lifecycle owner's intent rides every engine attempt (this option
+    // set is built field by field: the intent is added here, deliberately).
+    if (options?.[CDC_ADMISSION_INTENT_FIELD] !== undefined) {
+      baseQueryOptions[CDC_ADMISSION_INTENT_FIELD] = options[CDC_ADMISSION_INTENT_FIELD];
+    }
     // The answer of the last hop issued (a local leg or an engine attempt).
     const issuedHop = {};
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
@@ -582,6 +598,7 @@ class CDCRoutedMutationReadiness {
             sql,
             params,
             baseQueryOptions.idempotencyKey,
+            admission.admissionClass,
           );
           if (localWriteResult.handled) {
             return localWriteResult.result;

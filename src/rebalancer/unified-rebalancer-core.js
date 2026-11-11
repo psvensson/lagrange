@@ -110,6 +110,7 @@ class UnifiedRebalancerCore extends UnifiedRebalancerRebalanceLoop {
     this.disarmLocalMutationReadinessWake();
     this.disarmPlanningTargetReadinessWake();
     this.disarmOperationCreationAdmissionWake();
+    this.disarmOperationListReadWake();
     this.lastStateChangeTime = null;
     this.initialized = false;
 

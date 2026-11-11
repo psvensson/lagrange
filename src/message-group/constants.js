@@ -64,7 +64,8 @@ const MESSAGE_GROUP_COMMAND_REFUSAL = Object.freeze({
   UNKNOWN_TYPE: 'message_group_command_type_unknown',
   // A CDC_BATCH outside its closed shape: a durable vector carries exactly
   // {type, events, sourceRange} with a well-formed range (CDC Stage 3); an
-  // ordinary one exactly {type, events}.
+  // ordinary one exactly {type, events}. A single CDC command never carries
+  // a durable event.
   CDC_BATCH_SHAPE: 'message_group_cdc_batch_shape_invalid',
 });
 

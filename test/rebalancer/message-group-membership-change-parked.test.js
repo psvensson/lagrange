@@ -98,6 +98,9 @@ function seedOnlyPlanner({entityId, entityType, serviceType}) {
     createAllowAllStorageAdmissionService();
   rebalancer.rebalanceCoordinator.storageAdmissionService =
     rebalancer.movePlanner.storageAdmissionService;
+  // The global budget's owner answers an empty ledger (this test is not
+  // about the budget read, whose failure now holds the pass).
+  rebalancer.getGlobalInFlightOperationCount = async () => 0;
   rebalancer.setLeader(true);
   return {rebalancer, minted, warnings, timers, clock};
 }

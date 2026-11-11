@@ -4,6 +4,8 @@
  * Requirements: 8.3, 8.6
  */
 
+import {RECIPIENT_RETIREMENT_WRITE_OPTIONS} from
+  '../partition/partition-cdc-admission-class.js';
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
@@ -524,6 +526,9 @@ class LeaseService extends EventEmitter {
             TABLES.NODES,
             buildStrandedJoiningReapPredicate(node),
             {status: LEASE_REAPER.TARGET_STATUS, updated_at: now},
+            // This reaper owns the stranded row's terminal transition: a
+            // retirement write (partition-cdc-admission-class.js).
+            RECIPIENT_RETIREMENT_WRITE_OPTIONS,
           );
       } catch (error) {
         this.logger.warn(LEASE_LOG_MSG.REAPER_ROW_STOP_FAILED, {

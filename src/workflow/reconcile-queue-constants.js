@@ -47,6 +47,9 @@ const RECONCILE_REASON = Object.freeze({
   LOCAL_MUTATION_READINESS_WAKE: 'local_mutation_readiness_wake',
   OPERATION_CREATION_ADMISSION_CLEARED:
     'operation_creation_admission_cleared',
+  OPERATION_LIST_READ_SOURCE_CHANGED: 'operation_list_read_source_changed',
+  PRIORITY_SPREAD_FENCE_CENSUS_ANSWERED:
+    'priority_spread_fence_census_answered',
   RUNTIME_SERVICE_DESIRED_STATE: 'runtime_service_desired_state',
 
   // Rebalance: operation execution reasons

@@ -343,8 +343,10 @@ function updateSystemTableCacheCdcObservation(apply) {
 //    incarnation they belong to, or no position (UNKNOWN). X advances only
 //    by (i) a committed range whose predecessor is at or below X, or (ii) a
 //    complete leader-witnessed image (rows and the applied index they are
-//    current as of, read in one span on the leader and installed here in one
-//    synchronous span). A committed range whose predecessor lies above X - or
+//    current as of, read from one leader snapshot across its pages, staged
+//    off the cache and installed here - rows swapped and position recorded -
+//    in one synchronous span, system-table-cache-source-image.js). A
+//    committed range whose predecessor lies above X - or
 //    of another incarnation, or with no position - is a GAP: none of its
 //    members is merged, the cell records how far it is known to be stale
 //    (`need`) and the registered relister lists the table again. A member at
@@ -394,6 +396,25 @@ const SOURCE_RELIST_STATE = Object.freeze({
 const SOURCE_RELIST_OUTCOME = Object.freeze({
   RETRY: 'retry',
   STOPPED: 'stopped',
+});
+
+// Whether a complete image may be installed into the cell it was begun
+// against (admitImage).
+const SOURCE_IMAGE_ADMISSION = Object.freeze({
+  INSTALL: 'install',
+  // The cell already holds a position at or after the image's applied
+  // index (ranges applied while the image was fetched): the image is older
+  // than the cache and is discarded; rows are untouched.
+  OBSOLETE: 'obsolete',
+  // The cell was reset (the cache was cleared) or moved to an incarnation
+  // that is neither the one the image was begun against nor the image's own:
+  // the stage is discarded and the list restarts.
+  CELL_CHANGED: 'cell_changed',
+});
+
+const SOURCE_ORDER_LOG_MSG = Object.freeze({
+  NO_RELISTER: 'CDC source gap owes a list but no relister is registered on this cache',
+  RELIST_FAILED: 'CDC source re-list failed; another is owed while the gap stands',
 });
 
 // A list at applied index P holds every event of every entry at or below P.
@@ -451,6 +472,19 @@ class SystemTableCacheSourceOrder {
     this.cells = new Map();
     this.relister = null;
     this.logger = null;
+    this.currentListeners = new Set();
+  }
+
+  /**
+   * Observe a cell becoming CURRENT (the read-currency waits' wake: an image
+   * install or a range that closes a gap). Observation only: it grants
+   * nothing.
+   * @param {Function} listener - (sourcePartition) => void.
+   * @return {Function} Its removal.
+   */
+  onCurrent(listener) {
+    this.currentListeners.add(listener);
+    return () => this.currentListeners.delete(listener);
   }
 
   cellOf(sourcePartition, tableName = null) {
@@ -518,6 +552,20 @@ class SystemTableCacheSourceOrder {
   }
 
   /**
+   * A source this cache must hold a position of (its node joined a message
+   * group that applies the source's ranges): a cell with no position owes a
+   * list now, without waiting for the source's next range.
+   * @param {string} sourcePartition - The source partition.
+   * @param {string} tableName - Its table.
+   */
+  requireListed(sourcePartition, tableName) {
+    const cell = this.cellOf(sourcePartition, tableName);
+    if (cell.position !== null) return;
+    cell.state = SOURCE_POSITION_STATE.GAP;
+    this.requestRelist(cell);
+  }
+
+  /**
    * Whether a member of an applying range is already applied (at or below
    * the cell's position, same incarnation).
    * @param {Object} range - The source range.
@@ -543,9 +591,13 @@ class SystemTableCacheSourceOrder {
   }
 
   settleNeed(cell) {
+    const before = cell.state;
     if (cell.need !== null && comparePositions(cell.need, cell.position) <= 0) cell.need = null;
     cell.state = cell.need === null ? SOURCE_POSITION_STATE.CURRENT : SOURCE_POSITION_STATE.GAP;
     if (cell.state === SOURCE_POSITION_STATE.GAP) this.requestRelist(cell);
+    else if (before !== SOURCE_POSITION_STATE.CURRENT) {
+      for (const listener of [...this.currentListeners]) listener(cell.sourcePartition);
+    }
   }
 
   /**
@@ -569,6 +621,37 @@ class SystemTableCacheSourceOrder {
     }
     this.settleNeed(cell);
     return cellSnapshot(cell);
+  }
+
+  /**
+   * Begin a list of one source: the token its install is admitted against.
+   * @param {string} sourcePartition - The source partition.
+   * @return {Object|null} A frozen token, or null when the cell owes no
+   *   list (it is not GAP).
+   */
+  beginImage(sourcePartition) {
+    const cell = this.cells.get(sourcePartition);
+    if (cell === undefined || cell.state !== SOURCE_POSITION_STATE.GAP) return null;
+    return Object.freeze({cell, incarnation: cell.incarnation});
+  }
+
+  /**
+   * Decide whether a complete image may be installed (rows swapped and the
+   * position recorded in the same synchronous span as this answer).
+   * @param {Object} token - From beginImage.
+   * @param {Object} image - {sourcePartition, incarnation, appliedIndex}.
+   * @return {string} A SOURCE_IMAGE_ADMISSION.
+   */
+  admitImage(token, {sourcePartition, incarnation, appliedIndex}) {
+    const cell = this.cells.get(sourcePartition);
+    if (cell !== token.cell ||
+        (cell.incarnation !== token.incarnation && cell.incarnation !== incarnation)) {
+      return SOURCE_IMAGE_ADMISSION.CELL_CHANGED;
+    }
+    const listed = {logIndex: appliedIndex, ordinal: LISTED_ORDINAL};
+    return cell.incarnation === incarnation && cell.position !== null &&
+      comparePositions(listed, cell.position) <= 0 ?
+      SOURCE_IMAGE_ADMISSION.OBSOLETE : SOURCE_IMAGE_ADMISSION.INSTALL;
   }
 
   // One list in flight per source partition on this cache. A list that ends
@@ -661,12 +744,8 @@ class SystemTableCacheSourceOrder {
   }
 }
 
-const SOURCE_ORDER_LOG_MSG = Object.freeze({
-  NO_RELISTER: 'CDC source gap owes a list but no relister is registered on this cache',
-  RELIST_FAILED: 'CDC source re-list failed; another is owed while the gap stands',
-});
-
 export {
+  SOURCE_IMAGE_ADMISSION,
   SOURCE_POSITION_STATE,
   SOURCE_RANGE_DECISION,
   SOURCE_RELIST_OUTCOME,

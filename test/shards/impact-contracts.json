@@ -975,7 +975,6 @@
         "src/rebalancer/operation-workflow-dispatch-reservation-gate.js",
         "src/rebalancer/operation-workflow-recovery-drain.js",
         "src/rebalancer/operation-workflow-recovery-reconcile.js",
-        "src/rebalancer/operation-workflow-reservation-recovery.js",
         "src/rebalancer/rebalance-coordinator-operation-creation.js",
         "src/control-plane/replica-dispatch-readiness-capture.js"
       ],
@@ -3041,7 +3040,6 @@
             "src/rebalancer/storage-reservation-authority.js",
             "src/rebalancer/operation-reservation-attempt-outcome.js",
             "src/rebalancer/operation-workflow-dispatch-reservation-gate.js",
-            "src/rebalancer/operation-workflow-reservation-recovery.js",
             "src/rebalancer/rebalance-coordinator-operation-creation.js"
           ]
         },

@@ -16,7 +16,6 @@ const {
   ENDPOINT_STATUS,
   NodeStatus,
   REBALANCER_LOG_MSG,
-  REPLICA_OPERATION_VISIBILITY_READ_MODE,
   TABLES,
   TOPOLOGY_IN_FLIGHT_REPLICA_OPERATION_SOURCE,
   TRANSPORT_TYPE,
@@ -377,13 +376,9 @@ async function revalidateInFlightTopologyBlocker(rebalancer, blocker) {
   let entityOperations;
   try {
     entityOperations =
-      await rebalancer.rebalanceCoordinator.getOperationsByEntity(
+      await rebalancer.rebalanceCoordinator.getAuthoritativeOperationsByEntity(
         rebalancer.entityType,
         rebalancer.entityId,
-        {
-          visibilityReadMode:
-            REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED,
-        },
       );
     if (!Array.isArray(entityOperations)) {
       throw new TypeError(CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON.UNAVAILABLE);

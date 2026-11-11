@@ -91,6 +91,9 @@ test('July: schema founding ADDs hold the dwell; the background wave waits ' +
     for (const add of adds) completeAdd(add, world.nowMs);
     const drainedAtMs = world.nowMs;
     world.nowMs += 1;
+    // The drained projection is not CLEAR by itself: the owner census
+    // answers at this instant, before the first held observation.
+    await world.answerOwnerCensus(parked);
     const afterDrain = parked.resolvePrioritySpreadPlanningGateDecision();
     t.equal(blockerOf(afterDrain).state,
       BACKGROUND_PRIORITY_SPREAD_RELEASE_STATE.STABILIZING,
@@ -104,6 +107,12 @@ test('July: schema founding ADDs hold the dwell; the background wave waits ' +
       REBALANCE_PLANNING_GATE.CONTROL_PLANE_PRIORITY_SPREAD,
       'the background wave does not start 11.5 s after the drain',
     );
+    // A mid-window evaluation refreshes the census (older than half the
+    // window), as the rebalancer's cadence would; it does not release.
+    world.nowMs = drainedAtMs + 1 + Math.floor(stableWindowMs / 2) + 1;
+    t.equal(blockerOf(await world.answerOwnerCensus(parked)).state,
+      BACKGROUND_PRIORITY_SPREAD_RELEASE_STATE.STABILIZING,
+      'the dwell still runs at mid-window');
     world.nowMs = drainedAtMs + 1 + stableWindowMs;
     t.equal(parked.resolvePrioritySpreadPlanningGateDecision(), null,
       'it starts one full window after the drain');
@@ -119,7 +128,10 @@ test('a founding ADD that starts and drains between two evaluations ' +
   try {
     const stableWindowMs = parked.getBackgroundPrioritySpreadStableWindowMs();
     armFenceThenClearSpread(world, parked);
-    parked.resolvePrioritySpreadPlanningGateDecision();
+    await world.answerOwnerCensus(parked);
+    t.equal(blockerOf(parked.resolvePrioritySpreadPlanningGateDecision()).state,
+      BACKGROUND_PRIORITY_SPREAD_RELEASE_STATE.STABILIZING,
+      'the dwell runs before the drain');
     world.nowMs += stableWindowMs - 10;
     // Stamped far in the past by a remote clock: no timestamp is read.
     const add = foundingAdd('tbl-fast-p1', 1, world.nowMs - 3_600_000,
@@ -127,13 +139,20 @@ test('a founding ADD that starts and drains between two evaluations ' +
     completeAdd(add, world.nowMs - 3_600_000);
     world.replicaOperations.push(add);
     const seen = parked.resolvePrioritySpreadPlanningGateDecision();
+    t.equal(blockerOf(seen).state,
+      BACKGROUND_PRIORITY_SPREAD_RELEASE_STATE.STABILIZING,
+      'the condition is observed held at the drain');
     t.equal(blockerOf(seen).stableElapsedMs, 0,
       'the unseen drain rearms the dwell at the observing instant');
     t.same(logContextOf(seen).newlyDrainedFenceHoldingOperationIds,
       [add.operation_id], 'and names the drained operation');
+    // The census refresh that evaluation requested answers.
+    await world.settleOwnerCensus();
     world.nowMs += 20;
-    t.ok(parked.resolvePrioritySpreadPlanningGateDecision(),
-      'the old window no longer releases');
+    const later = parked.resolvePrioritySpreadPlanningGateDecision();
+    t.ok(later, 'the old window no longer releases');
+    t.equal(blockerOf(later).stableElapsedMs, 20,
+      'the dwell runs from the drain\'s observation');
   } finally {
     world.shutdown();
   }
@@ -147,7 +166,10 @@ test('livelock: released background moves, in flight or drained, never ' +
     const stableWindowMs = parked.getBackgroundPrioritySpreadStableWindowMs();
     armFenceThenClearSpread(world, parked);
     const firstHeldAtMs = world.nowMs;
-    parked.resolvePrioritySpreadPlanningGateDecision();
+    await world.answerOwnerCensus(parked);
+    t.equal(blockerOf(parked.resolvePrioritySpreadPlanningGateDecision()).state,
+      BACKGROUND_PRIORITY_SPREAD_RELEASE_STATE.STABILIZING,
+      'the dwell starts at the first held observation');
     // Moves another node's fence released, created while this one dwells.
     for (let index = 0; index < 3; index++) {
       world.nowMs += stableWindowMs / 4;
@@ -159,6 +181,8 @@ test('livelock: released background moves, in flight or drained, never ' +
       t.equal(blockerOf(parked.resolvePrioritySpreadPlanningGateDecision())
         .stableElapsedMs, world.nowMs - firstHeldAtMs,
       `released move ${index} in flight does not rearm`);
+      // Any census refresh that evaluation requested answers.
+      await world.settleOwnerCensus();
       completeReplace(move, world.nowMs);
     }
     world.nowMs = firstHeldAtMs + stableWindowMs;
@@ -215,6 +239,7 @@ test('a priority drain stamped earlier than one already seen still rearms ' +
       'schema_operations-p1', world.nowMs);
     completeReplace(first, world.nowMs);
     world.replicaOperations.push(first);
+    await world.answerOwnerCensus(parked);
     parked.resolvePrioritySpreadPlanningGateDecision();
     world.nowMs += 20_000;
     t.ok(blockerOf(parked.resolvePrioritySpreadPlanningGateDecision())

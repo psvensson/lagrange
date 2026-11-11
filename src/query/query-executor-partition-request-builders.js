@@ -1,4 +1,6 @@
 import {STATEMENT_INGRESS_FIELD} from './sql-statement-ingress.js';
+import {CDC_ADMISSION_CLASS_FIELD, cdcAdmissionClassFieldsOf} from
+  '../partition/partition-cdc-admission-class.js';
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 import {QUERY_RESULT_REQUEST_FIELD} from './query-result-budget.js';
 import {deliveryTransportOf, deliveryAnswerOf, isDeliveredTransportDeliveryOutcome} from
@@ -107,6 +109,10 @@ function createDefaultPartitionRequestBuilder({
     stampOptionalStringField(
       request, STATEMENT_INGRESS_FIELD,
       executionOptions[STATEMENT_INGRESS_FIELD]);
+    // The write's CDC admission class (RECIPIENT_RETIREMENT only; absence
+    // is ORDINARY) rides the partition QUERY request.
+    Object.assign(request, cdcAdmissionClassFieldsOf(
+      executionOptions[CDC_ADMISSION_CLASS_FIELD]));
     stampMigrationIdentityFields(request, executionOptions);
     // Write-path epoch fencing: carry the partition epoch the write was
     // planned against so the partition boundary can reject stale-epoch

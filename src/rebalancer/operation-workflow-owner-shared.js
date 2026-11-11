@@ -149,10 +149,6 @@ const OPERATION_WORKFLOW_OWNER_LITERAL = Object.freeze({
     ' is no longer in the current eligible cohort for ',
   IS_NOT_VOTER_DASH_READY: ' is not voter-ready',
   IS_UNAVAILABLE: ' is unavailable',
-  NODE_RECOVERY_DASH_INCOMPLETE_OPERATION:
-    'Node recovery - incomplete operation',
-  NODE_RECOVERY_DASH_INCOMPLETE_REMOVAL_OPERATION:
-    'Node recovery - incomplete removal operation',
   OBJECT: 'object',
   OBSERVED: 'observed',
   OBSERVED_PROGRESS: 'observed_progress',
@@ -183,7 +179,6 @@ const OPERATION_WORKFLOW_OWNER_LITERAL = Object.freeze({
     ' published membership safety is unavailable',
   RECOVERY_PROJECTION_MEMBERSHIP: 'recovery projection membership',
   QUESTION_MARK: '?',
-  RECOVERY: 'recovery',
   REPLACE_SOURCE_LEADER_HANDOFF: 'replace_source_leader_handoff',
   REPLACE_SOURCE_REMOVAL: 'replace_source_removal',
   REPLACEMENT_REPLICA: ' replacement replica',
@@ -194,11 +189,8 @@ const OPERATION_WORKFLOW_OWNER_LITERAL = Object.freeze({
     'Replica failed during operation reconciliation',
   REPLICA_FAILED_DURING_REMOVE_RECONCILIATION:
     'Replica failed during remove reconciliation',
-  REPLICA_FAILED_DURING_SYNC: 'Replica failed during sync',
   REPLICA_MISSING_DURING_STOPPING_RECONCILIATION:
     'Replica missing during STOPPING reconciliation',
-  REPLICA_NOT_FOUND_DURING_RECOVERY_RECONCILIATION:
-    'Replica not found during recovery reconciliation',
   REQUIREMENT: 'requirement',
   RETRYABLE_CONTROL_DASH_PLANE_TRANSITION_FAILURE:
     'Retryable control-plane transition failure',
@@ -282,8 +274,6 @@ const OPERATION_LIFECYCLE_ACTION = Object.freeze({
   FAIL_PRIORITY_RECOVERY_DRAIN_STALE: 'fail_priority_recovery_drain_stale',
   FAIL_PRIORITY_RECOVERY_SUPERSEDED_TARGET:
     'fail_priority_recovery_superseded_target',
-  FAIL_PRE_SYNC_RECOVERY: 'fail_pre_sync_recovery',
-  FAIL_STOPPING_RECOVERY: 'fail_stopping_recovery',
   EXECUTE_ACTIVE_REPLACE: 'execute_active_replace',
   EXECUTE_REMOVE_DISPATCH: 'execute_remove_dispatch',
   RECONCILE_STOPPING: 'reconcile_stopping',

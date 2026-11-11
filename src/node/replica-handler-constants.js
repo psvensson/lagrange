@@ -84,6 +84,12 @@ const REPLICA_HANDLER_LOG_MSG = Object.freeze({
   REMOVE_CONSENSUS_EXIT:
     'Retiring replica left consensus; retiring its port',
   REMOVE_CANCEL_REQUEST: 'Handling CANCEL_REPLICA_REMOVAL request',
+  REMOVE_GROUP_VERDICT:
+    'Retiring replica without a consensus port asked its group',
+  REMOVING_REDRIVE: 'Re-driving a REMOVING replica with no removal running',
+  REMOVED_OUTSIDE_REMOVAL:
+    'Replica applied its own removal with no removal running; it stops ' +
+    'serving and is marked FAILED for the repair path',
   REMOVE_CANCELLED:
     'Replica removal cancelled: its row serves again and it stays a voter',
   OPENED_INTO_RETIRED_GROUP:

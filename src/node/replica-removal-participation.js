@@ -39,8 +39,13 @@ import {
 import {
   REPLICA_REMOVAL_CONSENSUS_EXIT_DEFERRED,
   REPLICA_REMOVAL_PARTICIPANT_CUSTODY_DEFERRED,
+  REPLICA_REMOVAL_STILL_MEMBER_WITHOUT_PORT,
   retryableRemovalDebtError,
 } from './replica-removal-debt-errors.js';
+import {
+  GROUP_REMOVAL_VERDICT,
+  readGroupVerdictOnOwnRemoval,
+} from './replica-removal-group-verdict.js';
 import {runRemovalCancellationCheckpoint} from
   './replica-removal-cancellation.js';
 import {REPLICA_REMOVAL_CANCEL_ANSWER as CANCEL} from
@@ -199,18 +204,24 @@ function leaveConsensus(handler, request, service, removal) {
 
 /**
  * Teardown authority from one consensus exit (throws the typed deferral
- * when there is none). Without a port the replica's durable lifecycle
- * decides: no record (it never held consensus state) or a retired one (its
- * retirement already happened) permits the cleanup; an active or unreadable
- * record does not.
+ * when there is none). Without a port (a removal resumed after a restart)
+ * the replica's durable lifecycle decides first: no record (it never held
+ * consensus state) or a retired one (its retirement already happened)
+ * permits the cleanup. An active record asks the group (its leader's
+ * committed configuration): its removal applied permits the cleanup; still
+ * a member is STILL_MEMBER_WITHOUT_PORT; no leader answering is the
+ * ordinary deferral. Each deferral is re-asked when the removal is
+ * re-driven (the coordinator's re-dispatch, the REMOVING re-drive).
  * @param {Object} handler
  * @param {Object} request - {partitionId, replicaId}.
  * @param {Object} exit - Frozen {reason}.
+ * @return {Promise<void>}
  */
-function requireRemovalTeardownAuthority(handler, request, exit) {
+async function requireRemovalTeardownAuthority(handler, request, exit) {
   if (TEARDOWN_EXITS.has(exit.reason)) {
     return;
   }
+  let groupVerdict = null;
   if (exit.reason === REPLICA_CONSENSUS_EXIT_REASON.NO_CONSENSUS_PORT) {
     const lifecycle = handler.lifecycleVerdictsOf(
       handler.readReplicaDurableLifecycle(request.partitionId,
@@ -218,10 +229,25 @@ function requireRemovalTeardownAuthority(handler, request, exit) {
     if (lifecycle.absent || lifecycle.retired) {
       return;
     }
+    groupVerdict = await readGroupVerdictOnOwnRemoval(handler, request);
+    logGroupVerdict(handler, request, groupVerdict);
+    if (groupVerdict === GROUP_REMOVAL_VERDICT.REMOVED) {
+      return;
+    }
   }
-  throw retryableRemovalDebtError(REPLICA_REMOVAL_CONSENSUS_EXIT_DEFERRED,
+  throw retryableRemovalDebtError(
+    groupVerdict === GROUP_REMOVAL_VERDICT.STILL_MEMBER ?
+      REPLICA_REMOVAL_STILL_MEMBER_WITHOUT_PORT :
+      REPLICA_REMOVAL_CONSENSUS_EXIT_DEFERRED,
     `Replica ${request.replicaId} has no evidence it left consensus ` +
-      `(${exit.reason}); nothing retired`);
+      `(${exit.reason}${groupVerdict ? `, ${groupVerdict}` : ''}); ` +
+      'nothing retired');
+}
+
+function logGroupVerdict(handler, request, groupVerdict) {
+  handler.logger.info(REPLICA_HANDLER_LOG_MSG.REMOVE_GROUP_VERDICT, {
+    partitionId: request.partitionId, replicaId: request.replicaId,
+    nodeId: handler.nodeId, groupVerdict});
 }
 
 /**

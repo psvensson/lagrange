@@ -181,7 +181,8 @@ async function deliverVectorToRecipient(delivery, lane, target, vector, sourceRa
 // is SUBSCRIBER_UNCONFIRMED at the vector's first row from the moment it is
 // shipped (`since` is kept from the first such moment) until a committed
 // receipt moves its cursor. The state is not terminal.
-function markUnconfirmed(delivery, recipient, vector, state = RECIPIENT_STATE.SUBSCRIBER_UNCONFIRMED) {
+function markUnconfirmed(delivery, recipient, vector,
+  state = RECIPIENT_STATE.SUBSCRIBER_UNCONFIRMED) {
   const drive = recipient.drive;
   // A MUST_RELIST recipient stays outside the frontier until it confirms; a
   // DETACHED one stays detached.
@@ -330,20 +331,21 @@ async function runRecipientDrive(delivery, lane, target, ops) {
 const BACKOFF_PASSES = Object.freeze(new Set([PASS.HELD, PASS.PROVISIONAL, PASS.PAGE_YIELDED,
   PASS.FAILED]));
 
-// Whether a recipient still has something to confirm: its cursor is below
-// the ledger's owed tail, or it has no cursor while the ledger holds a row
-// (it is owed the owed rows, or the position probe). A DETACHED recipient
-// is owed nothing.
+// Whether a recipient still has something to confirm: the ledger holds a row
+// above its cursor (or it has none): an owed row, or the position probe (the
+// newest row, when what lies above the cursor was acknowledged without it).
+// A DETACHED recipient is owed nothing.
 function behindOwedTail(recipient, ledger) {
   if (recipientDriveOf(recipient).state === RECIPIENT_STATE.DETACHED) return false;
-  if (recipient.cursor === null) return ledger.newest !== null;
-  return ledger.tail !== null && positionAfter(ledger.tail, recipient.cursor);
+  if (ledger.newest === null) return false;
+  return recipient.cursor === null || positionAfter(ledger.newest, recipient.cursor);
 }
 
-// What the waits read of the ledger: its owed tail and its newest row.
+// What the waits read of the ledger: its newest row (owed or delivered).
 function readLedgerView(db) {
-  if (!db) return {tail: null, newest: null};
-  return {tail: readOwedCdcTail(db), newest: readCdcLedgerNewest(db)};
+  if (!db) return {newest: null};
+  const newest = readCdcLedgerNewest(db);
+  return {newest: newest === null ? null : positionOf(newest)};
 }
 
 /**

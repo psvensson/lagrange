@@ -148,6 +148,10 @@ const PARTITION_CDC_OBLIGATION_PROGRESS_SCOPE = 'ledger';
 // from that entry's own identity, so every replica holds the same value and a
 // snapshot install carries it.
 const PARTITION_CDC_LEDGER_INCARNATION_TABLE = '_cdc_ledger_incarnation';
+// The ledger's newest recorded event, kept as one row beside the ledger (CDC
+// Stage 3): the position probe shipped to a recipient below it when nothing is
+// owed after its cursor. Decision D1's reclamation is unchanged.
+const PARTITION_CDC_LEDGER_NEWEST_TABLE = '_cdc_ledger_newest';
 const PARTITION_CDC_OBLIGATION_SQL = Object.freeze({
   SELECT_ALL:
     'SELECT event_key, log_index, term, ordinal, entry_id, event_json, delivered, ' +
@@ -205,11 +209,33 @@ const PARTITION_CDC_OBLIGATION_SQL = Object.freeze({
   COUNT_BY_FLAG:
     'SELECT delivered, COUNT(*) AS count ' +
     `FROM ${PARTITION_CDC_OBLIGATION_TABLE} GROUP BY delivered`,
-  // The ledger's newest row, owed or delivered: decision D1 never reclaims
-  // it (the position probe a new recipient is shipped, CDC Stage 3).
+  // The newest recorded event (CDC Stage 3 position probe): one row, replaced
+  // by every recording in the same application transaction, so it survives
+  // decision D1's reclamation of the ledger row it copies.
+  CREATE_NEWEST_TABLE: `
+      CREATE TABLE IF NOT EXISTS ${PARTITION_CDC_LEDGER_NEWEST_TABLE} (
+        scope TEXT PRIMARY KEY,
+        event_key TEXT NOT NULL,
+        log_index INTEGER NOT NULL,
+        term INTEGER NOT NULL,
+        ordinal INTEGER NOT NULL,
+        entry_id TEXT NOT NULL,
+        event_json TEXT NOT NULL
+      )
+    `,
+  UPSERT_NEWEST:
+    `INSERT INTO ${PARTITION_CDC_LEDGER_NEWEST_TABLE} ` +
+    '(scope, event_key, log_index, term, ordinal, entry_id, event_json) ' +
+    'VALUES (@scope, @eventKey, @logIndex, @term, @ordinal, @entryId, @eventJson) ' +
+    'ON CONFLICT (scope) DO UPDATE SET event_key = excluded.event_key, ' +
+    'log_index = excluded.log_index, term = excluded.term, ordinal = excluded.ordinal, ' +
+    'entry_id = excluded.entry_id, event_json = excluded.event_json',
+  NEWEST_TABLE_EXISTS:
+    'SELECT 1 AS present FROM sqlite_master WHERE type = \'table\' ' +
+    `AND name = '${PARTITION_CDC_LEDGER_NEWEST_TABLE}'`,
   SELECT_NEWEST:
     'SELECT event_key, log_index, term, ordinal, entry_id, event_json ' +
-    `FROM ${PARTITION_CDC_OBLIGATION_TABLE} ORDER BY log_index DESC, ordinal DESC LIMIT 1`,
+    `FROM ${PARTITION_CDC_LEDGER_NEWEST_TABLE} WHERE scope = ?`,
   // The retained row immediately before a position, owed or delivered: the
   // predecessor a shipped range names (CDC Stage 3).
   SELECT_PREDECESSOR:
@@ -485,6 +511,7 @@ export {
   PARTITION_CDC_OBLIGATION_STANDING,
   PARTITION_CDC_OBLIGATION_TABLE,
   PARTITION_CDC_LEDGER_INCARNATION_TABLE,
+  PARTITION_CDC_LEDGER_NEWEST_TABLE,
   PARTITION_CDC_RECIPIENT_DETACH_REASON,
   PARTITION_CDC_RECIPIENT_PASS,
   PARTITION_CDC_RECIPIENT_STATE,

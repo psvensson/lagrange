@@ -50,6 +50,9 @@ const ERRORS = Object.freeze({
     'Partition CDC debt is at capacity; this attempt changed no data and may be retried',
   WRITE_CDC_DEMAND_EXCEEDS_CAPACITY:
     'The carried operation batch exceeds the partition CDC capacity; no data changed',
+  WRITE_CDC_RETIREMENT_RESERVE_EXHAUSTED:
+    'Partition CDC debt is past its retirement reserve; this retirement write changed ' +
+    'no data and may be retried once acknowledgements drain',
   SERVING_ADMISSION_FENCED_FOR_REMOVAL:
     'Serving admission fenced for replica removal',
   PARTITION_SERVICE_NOT_FOUND: 'Partition service not found',
@@ -76,6 +79,7 @@ const REROUTABLE_WRITE_ERROR_FRAGMENTS = Object.freeze([
   ERRORS.WRITE_RESERVED,
   ERRORS.WRITE_CUTOVER_PAUSED,
   ERRORS.WRITE_CDC_CAPACITY,
+  ERRORS.WRITE_CDC_RETIREMENT_RESERVE_EXHAUSTED,
   ERRORS.SERVING_ADMISSION_FENCED_FOR_REMOVAL,
 ]);
 

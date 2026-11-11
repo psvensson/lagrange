@@ -263,7 +263,9 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
           null,
         );
         await coordinator.getAllOperations();
-        await coordinator.getOperationsByEntity('partition', 'p1');
+        // The advisory entity projection is a repository read; the
+        // coordinator itself exposes only the authoritative entity read.
+        await coordinator.repository.getOperationsByEntityProjection('partition', 'p1');
         await coordinator.getConcurrentRemoveCount();
         await coordinator.getActualReplicaStatus('p1-r1', 'p1', 'node-2');
       } finally {

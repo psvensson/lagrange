@@ -1,6 +1,8 @@
 // S2: genuine depth-0 -> depth-1 CDC relay hydrates a strict follower, then
 // the same source debt reaches its real native leader through the depth-2 route.
 // One critical target only: this is not the full multi-window W7 witness.
+import {positionRecipients} from '../test-helpers/cdc-source-range-fixture.js';
+import {readCdcLedgerIncarnation} from '../../src/partition/partition-cdc-obligation-ledger.js';
 import {propagatePartitionCdcVector} from
   '../../src/bootstrap/shared/partition-cdc-propagation-subscriber.js';
 import assert from 'node:assert/strict';
@@ -171,6 +173,9 @@ function connectSubscriber(f) {
     getLatencyTopology: () => ({cdcGroupPropagationService: f.topology}),
   }});
   const inventory = [...f.services.values()];
+  // CDC Stage 3: every message-group node listed the source at its start.
+  positionRecipients(inventory, PARTITION_ID, TABLES.SERVICES,
+    readCdcLedgerIncarnation(f.producerLeader.db));
   assert.equal(inventory.length, TARGET_REPLICAS.length + 1, 'selection sees every hosted actual MG');
   const select = (options) => resolveOperationalMessageGroupSelection(inventory, options);
   assert.equal(select({requiredTables: [TABLES.SERVICES]}).service, f.source);

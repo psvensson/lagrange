@@ -764,7 +764,7 @@ export async function registerReplaceReplicaWorkflowTailTests({
   );
 
   await t.test(
-    'RebalanceCoordinator reconcileSyncingOperation advances REPLACE into source removal',
+    'RebalanceCoordinator PROGRESS reconcile advances a SYNCING REPLACE into source removal',
     async (t) => {
       const deliveries = [];
       const messageRouter = {
@@ -822,7 +822,7 @@ export async function registerReplaceReplicaWorkflowTailTests({
           address: `node-2/partition/${operation.replicaId}`,
         });
 
-        await coordinator.reconcileSyncingOperation(operation);
+        await coordinator.reconcileOperationProgress(operation);
 
         t.equal(deliveries.length, 1,
           'syncing reconciliation should dispatch the source removal phase');
