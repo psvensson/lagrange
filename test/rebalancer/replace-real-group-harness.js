@@ -1166,6 +1166,20 @@ function electAmongLive(world) {
 }
 
 /**
+ * Let one named live member win the election (only it ticks): which survivor
+ * leads is the test's premise, never the election timers' draw.
+ * @param {Object} world
+ * @param {string} replicaId - The survivor that campaigns.
+ * @return {string|null} The leader.
+ */
+function electSurvivor(world, replicaId) {
+  world.group.cluster.tickers = [replicaId];
+  world.group.cluster.settle(() => world.group.leader() === replicaId,
+    {rounds: ELECTION_ROUNDS});
+  return world.group.leader();
+}
+
+/**
  * A world with its coordinator started and one REPLACE at ACTIVE.
  * @param {Object} [options] - createReplaceWorld options.
  * @return {Promise<Object>}
@@ -1191,6 +1205,7 @@ export {
   disposeWorld,
   driveToIntent,
   electAmongLive,
+  electSurvivor,
   enterOwnerAfter,
   fireFallbackTimers,
   firedTimerCount,
