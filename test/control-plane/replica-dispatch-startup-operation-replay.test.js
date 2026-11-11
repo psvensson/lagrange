@@ -3,6 +3,7 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
+import {settleReplicaDispatchQueues} from '../helpers/reconcile-queue-turns.js';
 import {ReplicaDispatchService} from
   '../../src/control-plane/replica-dispatch-service.js';
 import {ConfigurationManager} from
@@ -27,9 +28,6 @@ const TEST_REPLICA_ID = 'control_plane_publications-p1-r4';
 const TEST_OPERATION_STATUS = 'pending';
 const TEST_EMPTY_STEPS_HISTORY = '[]';
 const TEST_LOG_LEVEL_ERROR = 'error';
-const TEST_QUEUE_DRAIN_TICKS = 8;
-const TEST_DRAIN_INITIAL_INDEX = 0;
-const TEST_DRAIN_INCREMENT = 1;
 const TEST_EXPECTED_SINGLE_DISPATCH_COUNT = 1;
 const TEST_FIRST_DISPATCH_INDEX = 0;
 const TEST_OBSERVED_EVENT_CACHE_GET = 'cache-get';
@@ -58,16 +56,6 @@ function initEnv() {
   const logging = LoggingService.getInstance();
   if (!logging.isInitialized()) {
     logging.initialize({level: TEST_LOG_LEVEL_ERROR});
-  }
-}
-
-async function waitForQueueDrain() {
-  for (
-    let tick = TEST_DRAIN_INITIAL_INDEX;
-    tick < TEST_QUEUE_DRAIN_TICKS;
-    tick += TEST_DRAIN_INCREMENT
-  ) {
-    await Promise.resolve();
   }
 }
 
@@ -157,7 +145,7 @@ test(TEST_NAME_STARTUP_REPLAYS_CACHED_PENDING,
     }));
 
     service.initialize();
-    await waitForQueueDrain();
+    await settleReplicaDispatchQueues(service);
 
     t.equal(
       dispatchedOperations.length,
