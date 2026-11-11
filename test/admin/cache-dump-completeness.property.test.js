@@ -14,6 +14,8 @@ import fc from 'fast-check';
 import {AdminWebSocketAPI, MessageType} from
   '../../src/admin/admin-websocket-api.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {getSystemCachePrimaryKeyField} from
+  '../../src/cache/system-cache-key-descriptor.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {createInProcWebSocketPair} from '../../src/test-helpers/inproc-ws.js';
@@ -36,25 +38,33 @@ afterEach(() => {
 });
 
 /**
- * Generate random records for a system table.
+ * Generate random records for a system table, keyed by the table's declared
+ * cache key (the cache rejects a row without it).
+ * @param {string} tableName
+ * @return {fc.Arbitrary<Object>}
  */
-const recordArbitrary = fc.record({
-  id: fc.uuid(),
+const recordArbitrary = (tableName) => fc.record({
+  [getSystemCachePrimaryKeyField(tableName)]: fc.uuid(),
   name: fc.string({minLength: 1, maxLength: 30}),
   status: fc.constantFrom('active', 'inactive', 'pending'),
 });
 
+const rowsArbitrary = (tableName) =>
+  fc.array(recordArbitrary(tableName), {minLength: 0, maxLength: 5});
+
 /**
- * Generate random cache state with records for each system table.
+ * Generate random non-empty cache state with records for each system table
+ * (an empty cache is refused: see 'Empty cache rejects cache dump').
  */
 const cacheStateArbitrary = fc.record({
-  nodes: fc.array(recordArbitrary, {minLength: 0, maxLength: 5}),
-  services: fc.array(recordArbitrary, {minLength: 0, maxLength: 5}),
-  partitions: fc.array(recordArbitrary, {minLength: 0, maxLength: 5}),
-  tables: fc.array(recordArbitrary, {minLength: 0, maxLength: 5}),
-  message_groups: fc.array(recordArbitrary, {minLength: 0, maxLength: 5}),
-  indices: fc.array(recordArbitrary, {minLength: 0, maxLength: 5}),
-});
+  nodes: rowsArbitrary('nodes'),
+  services: rowsArbitrary('services'),
+  partitions: rowsArbitrary('partitions'),
+  tables: rowsArbitrary('tables'),
+  message_groups: rowsArbitrary('message_groups'),
+  indices: rowsArbitrary('indices'),
+}).filter((state) =>
+  SYSTEM_TABLES.some((tableName) => state[tableName].length > 0));
 
 /**
  * Connect to AdminWebSocketAPI in-process and wait for first message.
@@ -187,8 +197,10 @@ test('Property 5: Cache dump data matches cache contents', async (t) => {
             }
 
             // Verify each record exists in the dump
+            const keyField = getSystemCachePrimaryKeyField(tableName);
             for (const expected of expectedRecords) {
-              const found = actualRecords.some((r) => r.id === expected.id);
+              const found = actualRecords.some((r) =>
+                r[keyField] === expected[keyField]);
               if (!found) {
                 return false;
               }
