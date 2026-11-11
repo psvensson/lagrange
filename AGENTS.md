@@ -18,9 +18,8 @@ This is the single steering entry point and load order for the **Quest** workflo
    the work touches. Nothing else is read by default, and no rule holds the
    detail its owner holds.
 
-Only this file, the rules and router load by default. On starting or resuming,
-identify the rule-set revision and source commit; reconcile older handoffs with
-the current owners before continuing.
+On starting or resuming, identify the rule-set revision and source commit;
+reconcile older handoffs with the current owners before continuing.
 
 ## Choose The Work Unit
 
@@ -29,14 +28,7 @@ an owner-boundary contract. A single-sitting fix, documentation edit or mechanic
 change with an obvious proof may be committed directly; see the binding threshold
 in [`solver-quests.md`](docs/steering/workflow-guidelines/solver-quests.md).
 
-## Quest Happy Path
-
-```sh
-node scripts/solve.js start --id <id>      # seals against a red probe
-node scripts/solve.js note --id <id> --attempt "<what changed>"
-node scripts/solve.js probe --id <id>
-node scripts/solve.js land --id <id>       # guards, npm test, commit; never pushes
-```
+## Quest Records
 
 A Quest has `solve/quests/<id>/quest.json` (statement, epic or `class: fix`, `doneWhen`)
 and an append-only `log.ndjson` of findings, attempts, verifications and a terminal
@@ -70,8 +62,9 @@ requirements are owned by the [runbook](docs/development/solver-runbook.md).
 | Available project commands | `npm run commands` |
 | Open epics and quests | `node scripts/solve.js board` |
 
-Before an ad-hoc repository command, check `npm run commands` and the complete
-generated tools index for an existing script.
+Use `npm run commands` for the quickstart. Before an ad-hoc repository command,
+search the [generated tools index](docs/steering/generated/tools-index.md) for task
+keywords and read matching entries; prefer an existing script.
 
 Ratchet baselines are one-way: fix, de-export, extract, or simplify instead of
 raising them; tighten a baseline when its checker prints the hint.
