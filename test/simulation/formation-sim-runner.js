@@ -288,7 +288,7 @@ function publishCohortLeadership({hosts, cohorts, leadership, rebalancers, seedI
 // reproduce their logic and does not read their internals.
 // A raft-rs port's work is its own turns on the node's clock (its ticks and
 // inbound drains are timers the scheduler sees), so it has no contract here.
-function ownerIdleContracts(hosts, rebalancers) {
+function ownerIdleContracts(hosts, rebalancers, seedId) {
   const contracts = [];
   for (const node of hosts.values()) {
     contracts.push(() => node.controlPlaneSystemTableGateway.awaitCurrentWorkIdle());
@@ -299,8 +299,13 @@ function ownerIdleContracts(hosts, rebalancers) {
   // without its contract a scenario could return while a check it had
   // admitted was still running, and the continuation then executed inside
   // the NEXT scenario.
+  // Its check queue drains on the seed's virtual queue, so a drain the
+  // scheduler holds yields to the closure loop instead of being awaited
+  // (createHeldDrainLedger in formation-sim-quiescence.js).
+  const {heldDrains} = hosts.get(seedId);
   for (const rebalancer of rebalancers.values()) {
-    contracts.push(() => rebalancer.awaitCurrentWorkIdle());
+    contracts.push(() =>
+      heldDrains.untilIdleOrDrainHeld(() => rebalancer.awaitCurrentWorkIdle()));
   }
   return contracts;
 }
@@ -312,8 +317,9 @@ function ownerIdleContracts(hosts, rebalancers) {
 // host turn after the owners lets such a pure continuation run to its next
 // virtual event or to its end before the round is judged. It decides nothing:
 // a round whose turn enqueues nothing still ends the fixpoint.
-function closureContracts(hosts, rebalancers, observer) {
-  return [...ownerIdleContracts(hosts, rebalancers), () => observer.checkpoint()];
+function closureContracts(hosts, rebalancers, observer, seedId) {
+  return [...ownerIdleContracts(hosts, rebalancers, seedId),
+    () => observer.checkpoint()];
 }
 
 // Close the instant the scheduler is standing on. The horizon is a stopping
@@ -497,7 +503,7 @@ async function runSimulationGeneration(seed, options = {}) {
   const observer = options.observer || new ScenarioHostObserver().enable();
   const ownsObserver = !options.observer;
   observer.begin(options.generation || DEFAULT_GENERATION);
-  const owners = closureContracts(hosts, rebalancers, observer);
+  const owners = closureContracts(hosts, rebalancers, observer, seedId);
   try {
     // The seed's watchdog runs from the start of the window; a joiner's from
     // the moment it is part of the cluster, as its process would.

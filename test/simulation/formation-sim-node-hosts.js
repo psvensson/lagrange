@@ -51,6 +51,7 @@ import {LEGACY_SIMULATED_NODE_HOST_COMPOSER} from
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
+import {createHeldDrainLedger} from './formation-sim-quiescence.js';
 const QUIET_LOGGER = Object.freeze({warn() {}, info() {}, debug() {}, error() {}});
 const DRAIN_DELAY_MS = 0;
 const NEXT_TURN_DELAY_MS = 0;
@@ -343,16 +344,26 @@ function createSimulatedNodeHosts({network, nodeId, randomSource,
     getControlPlaneReadinessService: () => controlPlaneReadinessService,
     logger: QUIET_LOGGER, now,
   });
+  // Every reconcile queue drains on a macrotask, and the queue's default is
+  // the real setImmediate. Left alone, every drain in a deterministic run
+  // happens outside virtual time, on no node's clock and charged to nobody.
+  // It belongs on this node's timer queue, where the node's own occupancy
+  // defers it like any other event. One port for every queue owner hosted
+  // here.
+  // The ledger is the quiescence rule's view of those drains
+  // (formation-sim-quiescence.js).
+  const heldDrains = createHeldDrainLedger();
+  const hostScheduleDrain = (callback) => {
+    heldDrains.hold();
+    network.setTimer(nodeId, () => {
+      heldDrains.release();
+      return chargeDispatch(nodeId, callback);
+    }, DRAIN_DELAY_MS);
+  };
   controlPlaneReadinessService = createReadinessServiceForTest({
     nodeId, systemTableCache: cache, cacheMutationTarget: cache, cdcIntegrationService,
     messageRouter, controlPlaneSystemTableGateway, timeSource,
-    // The readiness planning queue drains on a macrotask, and its default is
-    // the real setImmediate. Left alone, every build in a deterministic run
-    // happens outside virtual time, on no node's clock and charged to
-    // nobody. It belongs on this node's timer queue, where the node's own
-    // occupancy defers it like any other event.
-    readinessPlanningScheduleDrainFn: (callback) =>
-      network.setTimer(nodeId, () => chargeDispatch(nodeId, callback), DRAIN_DELAY_MS),
+    readinessPlanningScheduleDrainFn: hostScheduleDrain,
   });
   const tablePolicyService = new TablePolicyService({
     systemTableCache: cache, sqlQueryEngine, cdcIntegrationService,
@@ -450,6 +461,7 @@ function createSimulatedNodeHosts({network, nodeId, randomSource,
     storageAccountingService, storageAdmissionService, membershipPublicationService,
     rebalanceCoordinator, randomSource, heartbeatService,
     setTimeoutFn: hostSetTimeout, clearTimeoutFn: hostClearTimeout,
+    scheduleDrainFn: hostScheduleDrain, heldDrains,
     stopIntervals: () => intervals.clear(),
   });
 }
@@ -494,6 +506,8 @@ function createPriorityPartitionRebalancer(hosts, tableId) {
     // run on this node's virtual queue, so the planning rate is the owner's.
     setTimeoutFn: hosts.setTimeoutFn,
     clearTimeoutFn: hosts.clearTimeoutFn,
+    // Its check queue drains on this node's virtual queue too.
+    scheduleDrainFn: hosts.scheduleDrainFn,
   });
   rebalancer.logger = QUIET_LOGGER;
   return rebalancer;
