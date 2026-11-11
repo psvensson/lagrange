@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "id": "test-subsystem-classification",
   "counts": {
-    "admin-diagnostics": 125,
+    "admin-diagnostics": 126,
     "architecture-governance": 21,
-    "bootstrap-membership": 347,
+    "bootstrap-membership": 348,
     "cdc-metadata": 70,
     "cli-tooling": 99,
     "control-plane": 241,
@@ -12,23 +12,23 @@
     "distributed-harness": 219,
     "examples-e2e": 8,
     "pgwire-compat": 23,
-    "placement-rebalance": 297,
-    "query-sql": 196,
+    "placement-rebalance": 305,
+    "query-sql": 198,
     "release-packaging": 15,
     "runtime-primitives": 24,
     "services-runtime": 160,
     "solver-tooling": 7,
-    "storage-partition": 221,
-    "storage-raft": 151,
-    "test-infrastructure": 174,
+    "storage-partition": 227,
+    "storage-raft": 152,
+    "test-infrastructure": 175,
     "transactions": 17,
-    "transport-messaging": 122,
+    "transport-messaging": 123,
     "wasm-toolchain": 74
   },
-  "censusSize": 2693,
-  "digest": "fnv1a32-b680a0bf",
+  "censusSize": 2714,
+  "digest": "fnv1a32-2649a4e5",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-a0d5dd8d",
+  "observationDigest": "fnv1a32-fd4f9bd2",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -52,6 +52,7 @@
     "test/admin/admin-control-snapshot-local-published-membership-recovery.test.js": "admin-diagnostics",
     "test/admin/admin-control-snapshot-owner-recovery-retry-options.test.js": "admin-diagnostics",
     "test/admin/admin-control-snapshot-priority-recovery-authority.test.js": "admin-diagnostics",
+    "test/admin/admin-control-snapshot-priority-recovery-discount.test.js": "admin-diagnostics",
     "test/admin/admin-control-snapshot-priority-recovery-dormant-context-retirement.test.js": "admin-diagnostics",
     "test/admin/admin-control-snapshot-readiness-sync-first.test.js": "admin-diagnostics",
     "test/admin/admin-control-snapshot-response-contract.test.js": "admin-diagnostics",
@@ -1342,6 +1343,7 @@
     "test/node/replica-removal-consensus-exit.test.js": "bootstrap-membership",
     "test/node/replica-removal-deferred-row-write.test.js": "bootstrap-membership",
     "test/node/replica-removal-leader-source.test.js": "bootstrap-membership",
+    "test/node/replica-removal-reasked-after-completion.test.js": "bootstrap-membership",
     "test/node/replica-runtime-cleanup-custody.integration.test.js": "bootstrap-membership",
     "test/node/replica-state-delegation.test.js": "bootstrap-membership",
     "test/node/replica-state-machine-authoritative-transition.test.js": "bootstrap-membership",
@@ -1406,6 +1408,7 @@
     "test/partition/managed-merge-epoch-persistence-effects.test.js": "storage-partition",
     "test/partition/managed-merge-workflow.test.js": "storage-partition",
     "test/partition/managed-split-epoch-persistence-effects.test.js": "storage-partition",
+    "test/partition/managed-split-merge-unsettled-target.test.js": "storage-partition",
     "test/partition/managed-split-metrics-provider.test.js": "storage-partition",
     "test/partition/managed-split-resume-under-write-load.test.js": "storage-partition",
     "test/partition/managed-split-workflow-terminal-lifecycle.test.js": "storage-partition",
@@ -1447,6 +1450,7 @@
     "test/partition/partition-cdc-prepared-capacity.test.js": "storage-partition",
     "test/partition/partition-cdc-range-shipping.test.js": "storage-partition",
     "test/partition/partition-cdc-recipient-isolation.test.js": "storage-partition",
+    "test/partition/partition-cdc-recipient-liveness.test.js": "storage-partition",
     "test/partition/partition-cdc-topology-progress-currentness.test.js": "storage-partition",
     "test/partition/partition-commit-deadline-wait-bound-spent.test.js": "storage-partition",
     "test/partition/partition-consensus-hold-log.test.js": "storage-partition",
@@ -1468,11 +1472,15 @@
     "test/partition/partition-rebalancer-readiness-edge-gate.test.js": "storage-partition",
     "test/partition/partition-registration-exact-birth.test.js": "storage-partition",
     "test/partition/partition-registration-readback-controls.test.js": "storage-partition",
+    "test/partition/partition-removal-live-quorum.test.js": "storage-partition",
+    "test/partition/partition-removal-subject-handoff.property.test.js": "storage-partition",
+    "test/partition/partition-removal-subject-leadership.test.js": "storage-partition",
     "test/partition/partition-replication-restart-attempt-handoff.test.js": "storage-partition",
     "test/partition/partition-retiring-row-peer-retirement.test.js": "storage-partition",
     "test/partition/partition-runtime-reconstruction-leadership.test.js": "storage-partition",
     "test/partition/partition-service-cdc-log-suppression.test.js": "storage-partition",
     "test/partition/partition-service-cleanup-token-schema.test.js": "storage-partition",
+    "test/partition/partition-service-closed-refusal.test.js": "storage-partition",
     "test/partition/partition-service-hlc-monotonicity.test.js": "storage-partition",
     "test/partition/partition-service-learner-promotion-wake.test.js": "storage-partition",
     "test/partition/partition-service-learner-promotion.test.js": "storage-partition",
@@ -1640,6 +1648,7 @@
     "test/query/primary-key-requirement.property.test.js": "query-sql",
     "test/query/primitive-telemetry.test.js": "query-sql",
     "test/query/provision-target-live-transport-rescue.test.js": "query-sql",
+    "test/query/provisioning-admission-clearance-wait.test.js": "query-sql",
     "test/query/provisioning-admission-transient-deferral.test.js": "query-sql",
     "test/query/provisioning-parent-deadline-dependency-guard.test.js": "query-sql",
     "test/query/q10-postgres-compatibility-certification-matrix.test.js": "query-sql",
@@ -1672,6 +1681,7 @@
     "test/query/runtime-runner.test.js": "query-sql",
     "test/query/scenario-a-deep-stack-throughput-and-latency.test.js": "query-sql",
     "test/query/scenario-a-transaction-coordination-fast-path.test.js": "query-sql",
+    "test/query/schema-job-held-founder-release.test.js": "query-sql",
     "test/query/schema-provisioning-job-owner.test.js": "query-sql",
     "test/query/schema-provisioning-transient-collision.test.js": "query-sql",
     "test/query/select-no-from.test.js": "query-sql",
@@ -1814,6 +1824,7 @@
     "test/raft/raft-rs-backend/persistence-admission.test.js": "storage-raft",
     "test/raft/raft-rs-backend/raft-rs-ingress-fuzz.test.js": "storage-raft",
     "test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/removed-leader-step-down.test.js": "storage-raft",
     "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js": "storage-raft",
     "test/raft/raft-rs-backend/replica-membership-witness.test.js": "storage-raft",
     "test/raft/raft-rs-backend/reseed-hold-durability.test.js": "storage-raft",
@@ -1920,6 +1931,7 @@
     "test/rebalancer/coordinator-timeout-check-serialization.test.js": "placement-rebalance",
     "test/rebalancer/critical-spread-terminal-stall-repro.test.js": "placement-rebalance",
     "test/rebalancer/critical-topology-committed-lease.test.js": "placement-rebalance",
+    "test/rebalancer/deferred-step-write-owner-read-authority.test.js": "placement-rebalance",
     "test/rebalancer/dispatch-handler-failed-outcome-label.test.js": "placement-rebalance",
     "test/rebalancer/dispatch-pending-drain-single-partition-authority.test.js": "placement-rebalance",
     "test/rebalancer/dispatch-retry-create-admission-deferred.test.js": "placement-rebalance",
@@ -1975,6 +1987,7 @@
     "test/rebalancer/operation-ledger-quorum-concentration-replace-impotence.test.js": "placement-rebalance",
     "test/rebalancer/operation-lifecycle-fold.property.test.js": "placement-rebalance",
     "test/rebalancer/operation-lifecycle.test.js": "placement-rebalance",
+    "test/rebalancer/operation-list-read-authority.test.js": "placement-rebalance",
     "test/rebalancer/operation-log-persistence.property.test.js": "placement-rebalance",
     "test/rebalancer/operation-ownership-lease-fencing.test.js": "placement-rebalance",
     "test/rebalancer/operation-progress-store-persistence.test.js": "placement-rebalance",
@@ -2019,7 +2032,9 @@
     "test/rebalancer/priority-remove-safety-spread-nonregression.test.js": "placement-rebalance",
     "test/rebalancer/priority-replace-exact-target-observation.test.js": "placement-rebalance",
     "test/rebalancer/priority-spread-release-fence-durable-condition.test.js": "placement-rebalance",
+    "test/rebalancer/priority-spread-release-fence-founding-work.test.js": "placement-rebalance",
     "test/rebalancer/priority-spread-release-fence-own-moves.test.js": "placement-rebalance",
+    "test/rebalancer/priority-spread-release-fence-real-serve-owner.test.js": "placement-rebalance",
     "test/rebalancer/projection-boundary.guard.test.js": "placement-rebalance",
     "test/rebalancer/promoted-voter-voter-ready-routable-60s-axis.test.js": "placement-rebalance",
     "test/rebalancer/provisioning-admission-policy.test.js": "placement-rebalance",
@@ -2059,7 +2074,9 @@
     "test/rebalancer/recovery-handles-incomplete-operations.property.test.js": "placement-rebalance",
     "test/rebalancer/removal-leadership-effect-race.test.js": "placement-rebalance",
     "test/rebalancer/removal-leadership-gate.property.test.js": "placement-rebalance",
+    "test/rebalancer/removal-transferee-refusal-exclusion.test.js": "placement-rebalance",
     "test/rebalancer/remove-active-dispatch-redrive.test.js": "placement-rebalance",
+    "test/rebalancer/remove-effect-check-before-deferral.test.js": "placement-rebalance",
     "test/rebalancer/remove-workflow-step-progression.property.test.js": "placement-rebalance",
     "test/rebalancer/removed-replica-cleanup-debt-owner.test.js": "placement-rebalance",
     "test/rebalancer/replace-dispatch-epoch-gate-scope.test.js": "placement-rebalance",
@@ -2078,6 +2095,7 @@
     "test/rebalancer/replace-real-group-latency.test.js": "placement-rebalance",
     "test/rebalancer/replace-real-group-retire-route.test.js": "placement-rebalance",
     "test/rebalancer/replace-real-group-scheduling.test.js": "placement-rebalance",
+    "test/rebalancer/replace-real-group-target-death-cancel.test.js": "placement-rebalance",
     "test/rebalancer/replace-remove-safety-post-intent.test.js": "placement-rebalance",
     "test/rebalancer/replace-remove-safety-wake-property.test.js": "placement-rebalance",
     "test/rebalancer/replace-replica-workflow.test.js": "placement-rebalance",
@@ -2173,6 +2191,7 @@
     "test/rebalancer/unified-rebalancer-triggers-system-partition-defer.test.js": "placement-rebalance",
     "test/rebalancer/unified-rebalancer.test.js": "placement-rebalance",
     "test/rebalancer/user-table-leader-placement-cure.test.js": "placement-rebalance",
+    "test/rebalancer/zz-dbg-cancel.test.js": "placement-rebalance",
     "test/release/embedded-node-worker-contract.test.js": "release-packaging",
     "test/release/project-hardening-contracts.test.js": "release-packaging",
     "test/release/public-api-boot-incarnation-contract.test.js": "release-packaging",
@@ -2331,6 +2350,7 @@
     "test/scripts/check-guideline-deferred-outcomes.test.js": "test-infrastructure",
     "test/scripts/check-guideline-literals.test.js": "test-infrastructure",
     "test/scripts/check-guideline-navigability.test.js": "test-infrastructure",
+    "test/scripts/check-health-hint-imports.test.js": "test-infrastructure",
     "test/scripts/check-no-ordinal-files.test.js": "test-infrastructure",
     "test/scripts/check-operation-dispatch-completion-owner.test.js": "test-infrastructure",
     "test/scripts/check-operation-progress-authority.test.js": "test-infrastructure",
@@ -2625,6 +2645,7 @@
     "test/transport/service-response-correlation.property.test.js": "transport-messaging",
     "test/transport/transport-outcome-forwarding-hop.test.js": "transport-messaging",
     "test/transport/transport-semantic-outcome.test.js": "transport-messaging",
+    "test/transport/transport-timeout-typed-readings.test.js": "transport-messaging",
     "test/transport/uniform-message-routing.property.test.js": "transport-messaging",
     "test/transport/uniform-websocket-delivery.property.test.js": "transport-messaging",
     "test/utils/assert.property.test.js": "runtime-primitives",
@@ -2787,6 +2808,11 @@
         "src/control-plane/priority-recovery-snapshot-burndown.js",
         "src/control-plane/priority-recovery-snapshot-closure.js",
         "src/control-plane/priority-recovery-snapshot.js"
+      ]
+    },
+    "test/admin/admin-control-snapshot-priority-recovery-discount.test.js": {
+      "files": [
+        "src/bootstrap/system-partition-classification.js"
       ]
     },
     "test/admin/admin-control-snapshot-priority-recovery-dormant-context-retirement.test.js": {
@@ -3194,18 +3220,24 @@
     },
     "test/bootstrap/cdc-source-occurrence-delivery.integration.test.js": {
       "files": [
-        "src/bootstrap/node-joining-publication-activation.js",
         "src/bootstrap/owners/seed-runtime-bridge-owner.js",
         "src/bootstrap/shared/message-group-transport-handler.js",
         "src/bootstrap/shared/partition-cdc-propagation-subscriber.js",
         "src/bootstrap/system-table-schemas-constants.js",
         "src/bootstrap/system-table-workflow-schema-definitions.js",
+        "src/cdc/cdc-delivery-outcome.js",
         "src/node/replica-transport-handler-identity.js",
         "src/partition/partition-cdc-obligation-constants.js",
         "src/partition/partition-cdc-obligation-ledger.js",
         "src/partition/partition-committed-statement-outcome-constants.js",
         "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-constants.js",
@@ -3218,6 +3250,7 @@
         "test/message-group/message-group-native-provisional-route-fixture.js",
         "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/participant-transaction-fixture.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
@@ -3372,6 +3405,11 @@
       "files": [
         "src/node/replica-state-machine.js",
         "test/test-helpers/lifecycle-state-store.js"
+      ]
+    },
+    "test/bootstrap/latency-topology-owner-delegation.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-cdc-propagation-subscriber.js"
       ]
     },
     "test/bootstrap/lifecycle-owner-replica-routing.test.js": {
@@ -3600,6 +3638,7 @@
         "src/bootstrap/phases/seed-cache-hydration-cdc-subscription.js",
         "src/cdc/cdc-delivery-invocation.js",
         "src/cdc/cdc-delivery-outcome.js",
+        "src/message-group/message-group-service-runtime-support.js",
         "src/partition/partition-cdc-obligation-constants.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
@@ -3784,6 +3823,7 @@
       "files": [
         "src/bootstrap/owners/bootstrap-node-ready-rebalance-owner.js",
         "src/bootstrap/phases/seed-cache-hydration-phase.js",
+        "src/bootstrap/shared/partition-cdc-propagation-subscriber.js",
         "src/cdc/cdc-delivery-invocation.js",
         "src/partition/partition-service-hydration-image-methods.js",
         "test/topology/cdc-group-propagation-service-harness.js"
@@ -3969,6 +4009,7 @@
       "files": [
         "src/bootstrap/owners/seed-runtime-bridge-owner.js",
         "src/bootstrap/shared/latency-topology-setup.js",
+        "src/bootstrap/shared/partition-cdc-propagation-subscriber.js",
         "src/cdc/cdc-delivery-invocation.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
@@ -4560,6 +4601,8 @@
         "src/bootstrap/bootstrap-constants.js",
         "src/bootstrap/owners/seed-registration-runtime-owner.js",
         "src/bootstrap/shared/node-state-publication-outcome.js",
+        "src/control-plane/priority-recovery-snapshot-burndown.js",
+        "src/control-plane/priority-recovery-snapshot-contract.js",
         "src/debug-runtime/debug-metadata-constants.js",
         "src/debug-runtime/debug-metadata-service-row-normalizers.js",
         "src/policy/policy-constants.js",
@@ -4648,17 +4691,23 @@
         "src/bootstrap/shared/retryable-control-plane-write.js",
         "src/cdc/cdc-integration-service-owner-rpc-read-execution.js",
         "src/cdc/cdc-integration-service-shared.js",
+        "src/constants/errors.js",
+        "src/constants/transport.js",
+        "src/control-plane/control-plane-error-classification.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/control-plane/control-plane-write-identity.js",
         "src/partition/partition-write-kernel.js",
         "src/partition/proposal-queue-constants.js",
+        "src/query/distributed/distributed-transaction-decision-protocol.js",
         "src/query/distributed/distributed-write-coordinator.js",
         "src/query/distributed/parallel-query-coordinator.js",
         "src/query/query-constants.js",
         "src/query/schema-provisioning-job-constants.js",
+        "src/query/schema-provisioning-job-owner.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port.js",
-        "src/rebalancer/rebalance-coordinator-operation-persistence-collision.js"
+        "src/rebalancer/rebalance-coordinator-operation-persistence-collision.js",
+        "src/transport/transport-error-codes.js"
       ]
     },
     "test/control-plane/control-plane-gateway-registry.test.js": {
@@ -5282,7 +5331,10 @@
     },
     "test/control-plane/publication-active-gate-handoff-readiness-reason-codes.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-constants.js"
+        "src/control-plane/control-plane-readiness-evidence-reasons.js",
+        "src/control-plane/eligibility-snapshot.js",
+        "src/control-plane/publication-active-gate-handoff-contract-constants.js",
+        "src/control-plane/publication-active-gate-handoff-contract.js"
       ]
     },
     "test/control-plane/publication-planning-committed-rows.test.js": {
@@ -5749,7 +5801,9 @@
     "test/control-plane/runtime-access-settled-replay-projection.test.js": {
       "files": [
         "src/partition/partition-committed-statement-outcome.js",
-        "src/partition/partition-service-constants.js"
+        "src/partition/partition-service-constants.js",
+        "src/transport/transport-acknowledgement.js",
+        "src/transport/transport-error-codes.js"
       ]
     },
     "test/control-plane/serve-eligibility-committed-epoch-read.test.js": {
@@ -5820,6 +5874,7 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/node/replica-removal-cancel-contract.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
@@ -5828,6 +5883,7 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/node/replica-removal-cancel-contract.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
@@ -5836,6 +5892,7 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/node/replica-removal-cancel-contract.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
@@ -5938,7 +5995,8 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
-        "test/rebalancer/committed-membership-fixture.js"
+        "test/rebalancer/committed-membership-fixture.js",
+        "test/rebalancer/incomplete-operations-read-stub.js"
       ]
     },
     "test/convergence/dt6-learner-promotion-progress-proof.test.js": {
@@ -5999,13 +6057,15 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
-        "src/rebalancer/failed-create-cleanup-token.js"
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "test/rebalancer/incomplete-operations-read-stub.js"
       ]
     },
     "test/convergence/dt6-operation-ledger-self-move-hold-engagement.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/node/replica-removal-cancel-contract.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
@@ -6014,6 +6074,7 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/node/replica-removal-cancel-contract.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
@@ -6022,6 +6083,7 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/node/replica-removal-cancel-contract.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/storage-reservation-authority.js",
         "test/rebalancer/committed-membership-fixture.js"
@@ -6032,13 +6094,15 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
-        "test/rebalancer/committed-membership-fixture.js"
+        "test/rebalancer/committed-membership-fixture.js",
+        "test/rebalancer/incomplete-operations-read-stub.js"
       ]
     },
     "test/convergence/dt6-priority-recovery-add-dispatch-cadence.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/node/replica-removal-cancel-contract.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
@@ -6047,6 +6111,7 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/node/replica-removal-cancel-contract.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
@@ -6266,27 +6331,13 @@
         "test/diagnostics/lease-liveness-decision-grid.golden.json"
       ]
     },
-    "test/diagnostics/node-health-buffer.test.js": {
-      "files": [
-        "scripts/checks/check-health-hint-imports.js",
-        "src/admin/admin-websocket-diagnostics-route-methods.js",
-        "src/control-plane/heartbeat-service.js",
-        "src/diagnostics/event-loop-delay-sampler.js",
-        "src/node/node-service.js"
-      ],
-      "directories": [
-        "src/control-plane",
-        "src/node",
-        "src/query",
-        "src/rebalancer"
-      ]
-    },
     "test/diagnostics/raft-churn-sync-section-attribution.test.js": {
       "files": [
         "src/bootstrap/bootstrap-service-replica-registration-methods.js",
         "src/bootstrap/shared/startup-runtime-surface-owner.js",
         "src/diagnostics/raft-churn-sync-sections.js",
-        "src/rebalancer/rebalance-coordinator-reservation-lifecycle-methods.js"
+        "src/rebalancer/rebalance-coordinator-reservation-lifecycle-methods.js",
+        "src/rebalancer/replica-operation-repository-operation-visibility.js"
       ]
     },
     "test/diagnostics/resource-diagnostics-sampler.test.js": {
@@ -6326,6 +6377,7 @@
       "files": [
         "Dockerfile",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/container-memory-working-set.js"
@@ -6373,6 +6425,7 @@
         "scripts/checks/comparative-benchmark-recompute.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/benchmark-oltp-attempt-capture.js",
@@ -6426,6 +6479,7 @@
         "docs/benchmarks/tidb-scenario-b-comparison.svg",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/container-memory-working-set.js",
@@ -6457,6 +6511,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -6499,6 +6554,7 @@
         "docs/benchmarks/tidb-scenario-b-comparison.svg",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/container-memory-working-set.js",
@@ -6578,6 +6634,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -6617,6 +6674,7 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
@@ -6656,6 +6714,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -6681,6 +6740,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -6706,6 +6766,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -6731,6 +6792,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -6756,6 +6818,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -6777,6 +6840,7 @@
       "files": [
         "Dockerfile",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/cluster-active-wait-diagnostics.js",
@@ -6789,6 +6853,7 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
@@ -6802,6 +6867,7 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
@@ -6817,6 +6883,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -6844,6 +6911,7 @@
         "src/control-plane/control-plane-publication-merge.js",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -6869,6 +6937,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -6894,6 +6963,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -6919,6 +6989,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -6942,6 +7013,7 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
@@ -6957,6 +7029,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -6982,6 +7055,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -7007,6 +7081,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -7032,6 +7107,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -7057,6 +7133,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -7082,6 +7159,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -7107,6 +7185,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -7132,6 +7211,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -7157,6 +7237,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -7182,6 +7263,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -7207,6 +7289,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -7232,6 +7315,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/index.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
@@ -7258,6 +7342,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -7283,6 +7368,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -7319,6 +7405,7 @@
         "scripts/checks/comparative-benchmark-recompute.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/benchmark-oltp-attempt-capture.js",
@@ -7379,6 +7466,7 @@
         "data/tidb-comparison/raw-observations.ndjson",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/container-memory-working-set.js"
@@ -7396,6 +7484,7 @@
         "Dockerfile",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/benchmark-oltp-attempt-capture.js",
@@ -7429,6 +7518,7 @@
         "Dockerfile",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/benchmark-oltp-attempt-capture.js",
@@ -7478,6 +7568,7 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
@@ -7525,6 +7616,7 @@
         "docs/benchmarks/tidb-scenario-b-comparison.svg",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/container-memory-working-set.js",
@@ -7553,6 +7645,7 @@
         "Dockerfile",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/container-memory-working-set.js",
@@ -7688,6 +7781,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -7703,6 +7797,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -7753,6 +7848,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -7777,6 +7873,7 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
@@ -7866,6 +7963,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/logging/logs-table-service.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
@@ -7901,6 +7999,7 @@
         "src/control-plane/owners/log-diagnostic-marker-contract.js",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -7958,6 +8057,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -8037,6 +8137,7 @@
       "files": [
         "Dockerfile",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "test/distributed/config/local.json"
       ]
     },
@@ -8184,6 +8285,7 @@
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/owners/postgres-wire-scale-contract.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
@@ -8205,6 +8307,7 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
@@ -8267,6 +8370,7 @@
         "docs/benchmarks/cloud-reproduction-guide.md",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/container-memory-working-set.js"
@@ -8321,6 +8425,7 @@
         "Dockerfile",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/benchmark-oltp-attempt-capture.js",
@@ -8354,6 +8459,7 @@
         "Dockerfile",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/benchmark-oltp-attempt-capture.js",
@@ -8387,6 +8493,7 @@
         "Dockerfile",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/benchmark-oltp-attempt-capture.js",
@@ -8424,6 +8531,7 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -8443,6 +8551,7 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -8464,6 +8573,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -8488,6 +8598,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -8523,12 +8634,18 @@
         "test/distributed/config/local.json"
       ]
     },
+    "test/distributed/harness/__tests__/run-health-classifier.test.js": {
+      "files": [
+        "src/diagnostics/node-health-collection.js"
+      ]
+    },
     "test/distributed/harness/__tests__/run-health-collection.test.js": {
       "files": [
         "Dockerfile",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -8553,6 +8670,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -8590,6 +8708,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -8625,6 +8744,7 @@
         "Dockerfile",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/container-memory-working-set.js"
@@ -8652,6 +8772,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -8704,6 +8825,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -8728,6 +8850,7 @@
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/owners/postgres-wire-scale-contract.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
@@ -8761,6 +8884,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -8881,6 +9005,7 @@
       "files": [
         "Dockerfile",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
@@ -8962,6 +9087,7 @@
         "docs/benchmarks/tidb-scenario-b-comparison.svg",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/container-memory-working-set.js",
@@ -9018,6 +9144,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -9041,6 +9168,7 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
@@ -9125,6 +9253,7 @@
       "files": [
         "Dockerfile",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "src/query/query-constants.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local-poison-row-ab.json",
@@ -9149,6 +9278,7 @@
         "Dockerfile",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "src/partition/partition-participant-transaction-bytes.js",
         "src/partition/partition-participant-transaction-constants.js",
         "src/query/distributed/distributed-transaction-coordinator.js",
@@ -9177,6 +9307,7 @@
         "Dockerfile",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/container-memory-working-set.js"
@@ -9575,6 +9706,7 @@
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/control-plane-system-table-gateway.js",
+        "src/diagnostics/node-health-collection.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/cluster-node-owner-operations.js",
@@ -9599,6 +9731,7 @@
         "src/control-plane/owners/postgres-wire-scale-contract.js",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/embedded-lagrange.js",
         "src/service/call-cell-batch-executor.js",
         "src/service/service-local-oci-layout-builder.js",
@@ -10576,14 +10709,23 @@
     "test/message-group/message-group-cdc-public-defer-repair.test.js": {
       "files": [
         "src/bootstrap/shared/message-group-transport-handler.js",
+        "src/bootstrap/shared/partition-cdc-propagation-subscriber.js",
         "src/bootstrap/system-table-schemas-constants.js",
         "src/bootstrap/system-table-workflow-schema-definitions.js",
+        "src/cdc/cdc-delivery-outcome.js",
         "src/message-group/message-group-forwarding-owner-constants.js",
         "src/message-group/message-group-service-row-owner.js",
         "src/node/replica-transport-handler-identity.js",
         "src/partition/partition-cdc-obligation-constants.js",
         "src/partition/partition-cdc-obligation-ledger.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-constants.js",
@@ -10595,6 +10737,7 @@
         "test/message-group/message-group-native-provisional-route-fixture.js",
         "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/participant-transaction-fixture.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
@@ -10703,6 +10846,7 @@
       "files": [
         "src/bootstrap/shared/message-group-selection.js",
         "src/bootstrap/shared/message-group-transport-handler.js",
+        "src/bootstrap/shared/partition-cdc-propagation-subscriber.js",
         "src/bootstrap/system-table-schemas-constants.js",
         "src/bootstrap/system-table-workflow-schema-definitions.js",
         "src/cdc/cdc-delivery-outcome.js",
@@ -10710,8 +10854,15 @@
         "src/partition/partition-cdc-obligation-constants.js",
         "src/partition/partition-cdc-obligation-ledger.js",
         "src/partition/partition-committed-statement-outcome-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-service-constants.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-constants.js",
@@ -10723,24 +10874,31 @@
         "test/message-group/message-group-native-provisional-route-fixture.js",
         "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/participant-transaction-fixture.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/message-group/message-group-native-w7-multi-target-route.integration.test.js": {
       "files": [
-        "src/bootstrap/node-joining-publication-activation.js",
         "src/bootstrap/owners/seed-runtime-bridge-owner.js",
         "src/bootstrap/shared/message-group-transport-handler.js",
         "src/bootstrap/shared/partition-cdc-propagation-subscriber.js",
         "src/bootstrap/system-table-schemas-constants.js",
         "src/bootstrap/system-table-workflow-schema-definitions.js",
+        "src/cdc/cdc-delivery-outcome.js",
         "src/node/replica-transport-handler-identity.js",
         "src/partition/partition-cdc-obligation-constants.js",
         "src/partition/partition-cdc-obligation-delivery.js",
         "src/partition/partition-cdc-obligation-ledger.js",
         "src/partition/partition-committed-statement-outcome-constants.js",
         "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-constants.js",
@@ -10754,6 +10912,7 @@
         "test/message-group/message-group-native-provisional-route-fixture.js",
         "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/participant-transaction-fixture.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
@@ -11105,10 +11264,13 @@
         "src/partition/managed-workflow-ownership-core.js",
         "src/partition/managed-workflow-record-coordinator.js",
         "src/partition/partition-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
+        "src/partition/partition-service-removal-subject-handoff.js",
         "src/partition/split-ack-constants.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-conf-state-key.js",
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
@@ -11138,10 +11300,13 @@
         "src/partition/managed-workflow-ownership-core.js",
         "src/partition/managed-workflow-record-coordinator.js",
         "src/partition/partition-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
+        "src/partition/partition-service-removal-subject-handoff.js",
         "src/partition/split-ack-constants.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-conf-state-key.js",
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
@@ -11170,11 +11335,14 @@
         "src/partition/managed-split-workflow.js",
         "src/partition/managed-workflow-ownership-core.js",
         "src/partition/managed-workflow-record-coordinator.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
+        "src/partition/partition-service-removal-subject-handoff.js",
         "src/partition/split-ack-constants.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-conf-state-key.js",
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
@@ -11202,11 +11370,14 @@
         "src/partition/managed-split-workflow.js",
         "src/partition/managed-workflow-ownership-core.js",
         "src/partition/managed-workflow-record-coordinator.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
+        "src/partition/partition-service-removal-subject-handoff.js",
         "src/partition/split-ack-constants.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-conf-state-key.js",
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
@@ -11235,10 +11406,13 @@
         "src/partition/managed-split-workflow.js",
         "src/partition/managed-workflow-ownership-core.js",
         "src/partition/managed-workflow-record-coordinator.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
+        "src/partition/partition-service-removal-subject-handoff.js",
         "src/partition/split-ack-constants.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-conf-state-key.js",
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
@@ -11268,11 +11442,14 @@
         "src/partition/managed-split-workflow.js",
         "src/partition/managed-workflow-ownership-core.js",
         "src/partition/managed-workflow-record-coordinator.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
+        "src/partition/partition-service-removal-subject-handoff.js",
         "src/partition/split-ack-constants.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-conf-state-key.js",
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
@@ -11300,11 +11477,14 @@
         "src/partition/managed-split-workflow.js",
         "src/partition/managed-workflow-ownership-core.js",
         "src/partition/managed-workflow-record-coordinator.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
+        "src/partition/partition-service-removal-subject-handoff.js",
         "src/partition/split-ack-constants.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-conf-state-key.js",
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
@@ -11333,11 +11513,14 @@
         "src/partition/managed-workflow-ownership-core.js",
         "src/partition/managed-workflow-record-coordinator.js",
         "src/partition/partition-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
+        "src/partition/partition-service-removal-subject-handoff.js",
         "src/partition/split-ack-constants.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-conf-state-key.js",
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
@@ -11553,6 +11736,8 @@
     },
     "test/node/replica-handler-remove-closed-service.test.js": {
       "files": [
+        "src/node/replica-handler-constants.js",
+        "src/node/replica-removal-debt-errors.js",
         "src/partition/partition-participant-transaction-store.js"
       ]
     },
@@ -11639,9 +11824,12 @@
         "src/node/replica-handler-constants.js",
         "src/node/replica-removal-consensus-exit.js",
         "src/partition/partition-service-raft-membership-administration.js",
+        "src/partition/partition-service-raft-peer-cache-reconciliation.js",
+        "src/partition/partition-service-removal-subject-handoff.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-conf-state-key.js",
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
@@ -11651,6 +11839,7 @@
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/transport/transport-semantic-outcome.js",
+        "test/node/replica-removal-consensus-exit-fixture.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
       ]
     },
@@ -11660,10 +11849,13 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/node/replica-handler-constants.js",
         "src/node/replica-removal-consensus-exit.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
+        "src/partition/partition-service-removal-subject-handoff.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-conf-state-key.js",
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
@@ -11682,9 +11874,12 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/node/replica-handler-constants.js",
         "src/node/replica-removal-consensus-exit.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
+        "src/partition/partition-service-removal-subject-handoff.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-conf-state-key.js",
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
@@ -11694,6 +11889,32 @@
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/transport/transport-semantic-outcome.js",
         "test/raft/raft-rs-backend/committed-membership-oracles.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js"
+      ]
+    },
+    "test/node/replica-removal-reasked-after-completion.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/node/replica-handler-constants.js",
+        "src/node/replica-removal-debt-errors.js",
+        "src/partition/partition-service-raft-membership-administration.js",
+        "src/partition/partition-service-raft-peer-cache-reconciliation.js",
+        "src/partition/partition-service-removal-serving-methods.js",
+        "src/partition/partition-service-removal-subject-handoff.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-conf-state-key.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/executor-outcome-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/node/replica-removal-consensus-exit-fixture.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
       ]
     },
@@ -12092,6 +12313,14 @@
     },
     "test/partition/managed-split-epoch-persistence-effects.test.js": {
       "files": [
+        "src/partition/partition-constants.js"
+      ]
+    },
+    "test/partition/managed-split-merge-unsettled-target.test.js": {
+      "files": [
+        "src/partition/managed-merge-workflow.js",
+        "src/partition/managed-split-retry-policy.js",
+        "src/partition/managed-split-workflow.js",
         "src/partition/partition-constants.js"
       ]
     },
@@ -12691,6 +12920,33 @@
         "test/topology/cdc-group-propagation-service-harness.js"
       ]
     },
+    "test/partition/partition-cdc-recipient-liveness.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-cdc-propagation-subscriber.js",
+        "src/cdc/cdc-delivery-invocation.js",
+        "src/cdc/cdc-delivery-outcome.js",
+        "src/partition/partition-cdc-obligation-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/test-helpers/cdc-topology-progress-fixture.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/participant-transaction-fixture.js",
+        "test/test-helpers/replica-handler-identity-fixture.js",
+        "test/topology/cdc-group-propagation-service-harness.js"
+      ]
+    },
     "test/partition/partition-cdc-topology-progress-currentness.test.js": {
       "files": [
         "src/bootstrap/shared/partition-cdc-propagation-subscriber.js",
@@ -12960,6 +13216,51 @@
         "src/partition/partition-service-row-owner.js"
       ]
     },
+    "test/partition/partition-removal-live-quorum.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/bootstrap/system-table-workflow-schema-definitions.js",
+        "src/config/configuration-manager.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-service-constants.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/partition/committed-operation-gateway-fixture.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/partition/partition-removal-subject-handoff.property.test.js": {
+      "files": [
+        "src/raft/raft-removal-transferee-rule.js",
+        "src/raft/raft-rs-runtime-owner-constants.js"
+      ]
+    },
+    "test/partition/partition-removal-subject-leadership.test.js": {
+      "files": [
+        "src/bootstrap/system-table-core-schema-definitions.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/bootstrap/system-table-workflow-schema-definitions.js",
+        "src/config/configuration-manager.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-service-constants.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/partition/committed-operation-gateway-fixture.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
     "test/partition/partition-replication-restart-attempt-handoff.test.js": {
       "files": [
         "src/partition/managed-merge-topology-adapter.js",
@@ -13032,6 +13333,21 @@
       "files": [
         "src/bootstrap/system-table-core-schema-definitions.js",
         "src/partition/partition-service-schema-migration-base.js"
+      ]
+    },
+    "test/partition/partition-service-closed-refusal.test.js": {
+      "files": [
+        "src/config/configuration-manager.js",
+        "src/partition/partition-service-closed-refusal.js",
+        "src/partition/partition-service-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/partition/partition-service-test-support.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/partition/partition-service-hlc-monotonicity.test.js": {
@@ -14034,6 +14350,7 @@
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/projection-readiness-constants.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/partition/partition-service-remote-query-methods.js",
         "src/query/query-executor-partition-request-builders.js",
         "src/transport/transport-semantic-outcome.js",
@@ -14355,6 +14672,12 @@
         "src/raft/raft-rs-ready-loop-constants.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/query/schema-job-held-founder-release.test.js": {
+      "files": [
+        "src/query/schema-provisioning-child-intent.js",
+        "src/query/schema-provisioning-job-owner.js"
       ]
     },
     "test/query/schema-provisioning-job-owner.test.js": {
@@ -15080,6 +15403,7 @@
       "files": [
         "src/node/replica-handler-leader-handoff-methods.js",
         "src/partition/partition-service-leadership-transfer.js",
+        "src/partition/partition-service-removal-subject-handoff.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port.js",
         "src/raft/raft-rs-durable-store-constants.js",
@@ -15981,6 +16305,18 @@
         "src/transport/transport-semantic-outcome.js"
       ]
     },
+    "test/raft/raft-rs-backend/removed-leader-step-down.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/raft/raft-rs-backend/transfer-leadership-driver.js"
+      ]
+    },
     "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js": {
       "files": [
         "src/node/replica-create-admission-owner.js",
@@ -16622,6 +16958,7 @@
         "src/control-plane/control-plane-system-table-gateway.js",
         "src/control-plane/projection-readiness-constants.js",
         "src/control-plane/readiness-planning-version-contract.js",
+        "src/query/provisioning-target-admission-settle.js",
         "src/query/sql-query-engine-initial-partition-provisioning.js",
         "src/rebalancer/provisioning-admission-policy.js",
         "src/rebalancer/rebalance-coordinator.js",
@@ -16681,6 +17018,7 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/node/replica-removal-cancel-contract.js",
         "src/rebalancer/executor-outcome-constants.js",
         "src/rebalancer/executor-outcome-emitter.js",
         "src/rebalancer/failed-create-cleanup-token.js",
@@ -16746,7 +17084,8 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
-        "src/rebalancer/replica-operation-constants.js"
+        "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-operation-repository-operation-visibility.js"
       ]
     },
     "test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js": {
@@ -16814,7 +17153,8 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
-        "src/rebalancer/rebalance-coordinator.js"
+        "src/rebalancer/rebalance-coordinator.js",
+        "src/rebalancer/replica-operation-repository-operation-visibility.js"
       ]
     },
     "test/rebalancer/coordinator-reused-operation-rearm-guard.test.js": {
@@ -16847,6 +17187,15 @@
       "files": [
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
+      ]
+    },
+    "test/rebalancer/deferred-step-write-owner-read-authority.test.js": {
+      "files": [
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/rebalancer/rebalance-coordinator.js",
+        "src/rebalancer/replica-status.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/helpers/readiness-service-fixture.js"
       ]
     },
     "test/rebalancer/dispatch-handler-failed-outcome-label.test.js": {
@@ -16884,7 +17233,8 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
-        "src/rebalancer/failed-create-cleanup-token.js"
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-operation-visibility.js"
       ]
     },
     "test/rebalancer/duplicate-move-prevention.property.test.js": {
@@ -17054,6 +17404,7 @@
       "files": [
         "scripts/check-cognitive-complexity.js",
         "scripts/check-complexity.js",
+        "src/rebalancer/rebalancer-local-mutation-readiness-wake.js",
         "src/rebalancer/unified-rebalancer-critical-topology-methods.js",
         "src/rebalancer/unified-rebalancer-follow-up-decision.js",
         "src/rebalancer/unified-rebalancer-follow-up-move.js",
@@ -17175,6 +17526,15 @@
         "src/rebalancer/rebalance-coordinator.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/rebalancer/replica-operation-progress.js",
+        "src/rebalancer/replica-status.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/helpers/readiness-service-fixture.js"
+      ]
+    },
+    "test/rebalancer/operation-list-read-authority.test.js": {
+      "files": [
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/rebalancer/rebalance-coordinator.js",
         "src/rebalancer/replica-status.js",
         "src/transport/transport-semantic-outcome.js",
         "test/helpers/readiness-service-fixture.js"
@@ -17345,7 +17705,8 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
-        "src/rebalancer/failed-create-cleanup-token.js"
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/rebalancer-constants.js"
       ]
     },
     "test/rebalancer/priority-dispatch-deferred-local-progress-outcome-coverage.test.js": {
@@ -17383,6 +17744,7 @@
         "src/control-plane/priority-recovery-snapshot.js",
         "src/rebalancer/operation-workflow-recovery-reconcile-shared.js",
         "src/rebalancer/rebalance-coordinator.js",
+        "src/rebalancer/replica-operation-repository-operation-visibility.js",
         "src/rebalancer/replica-status.js",
         "src/transport/transport-semantic-outcome.js",
         "test/helpers/readiness-service-fixture.js",
@@ -17436,7 +17798,21 @@
         "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
+    "test/rebalancer/priority-spread-release-fence-founding-work.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
+      ]
+    },
     "test/rebalancer/priority-spread-release-fence-own-moves.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
+      ]
+    },
+    "test/rebalancer/priority-spread-release-fence-real-serve-owner.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
@@ -17499,7 +17875,8 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/replica-operation-repository.js",
         "src/workflow/durable-workflow-coordinator.js",
-        "test/rebalancer/committed-membership-fixture.js"
+        "test/rebalancer/committed-membership-fixture.js",
+        "test/rebalancer/incomplete-operations-read-stub.js"
       ]
     },
     "test/rebalancer/rebalance-coordinator-outcome-routing.test.js": {
@@ -17637,6 +18014,7 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/node/replica-removal-cancel-contract.js",
         "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
@@ -17648,6 +18026,13 @@
       ]
     },
     "test/rebalancer/remove-active-dispatch-redrive.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
+      ]
+    },
+    "test/rebalancer/remove-effect-check-before-deferral.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
@@ -17689,6 +18074,7 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/node/replica-removal-cancel-contract.js",
         "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
@@ -17696,7 +18082,9 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
-        "src/rebalancer/failed-create-cleanup-token.js"
+        "src/node/replica-removal-cancel-contract.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-operation-visibility.js"
       ]
     },
     "test/rebalancer/replace-owner-lease-causal.test.js": {
@@ -17724,6 +18112,7 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/node/replica-removal-cancel-contract.js",
         "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
@@ -17731,6 +18120,7 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/node/replica-removal-cancel-contract.js",
         "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
@@ -17742,6 +18132,8 @@
         "src/node/replica-handler-constants.js",
         "src/node/replica-handler-membership-relay.js",
         "src/partition/partition-service-raft-membership-administration.js",
+        "src/partition/partition-service-raft-peer-cache-reconciliation.js",
+        "src/partition/partition-service-removal-subject-handoff.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-request.js",
@@ -17751,6 +18143,7 @@
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-operation-visibility.js",
         "src/transport/transport-semantic-outcome.js",
         "test/node/replica-removal-consensus-exit-fixture.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
@@ -17766,6 +18159,9 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/node/replica-handler-constants.js",
         "src/node/replica-handler-membership-relay.js",
+        "src/partition/partition-service-raft-membership-administration.js",
+        "src/partition/partition-service-raft-peer-cache-reconciliation.js",
+        "src/partition/partition-service-removal-subject-handoff.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-request.js",
@@ -17775,6 +18171,7 @@
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-operation-visibility.js",
         "src/transport/transport-semantic-outcome.js",
         "test/node/replica-removal-consensus-exit-fixture.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
@@ -17787,6 +18184,9 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/node/replica-handler-constants.js",
         "src/node/replica-handler-membership-relay.js",
+        "src/partition/partition-service-raft-membership-administration.js",
+        "src/partition/partition-service-raft-peer-cache-reconciliation.js",
+        "src/partition/partition-service-removal-subject-handoff.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-request.js",
@@ -17796,6 +18196,7 @@
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-operation-visibility.js",
         "src/transport/transport-semantic-outcome.js",
         "test/node/replica-removal-consensus-exit-fixture.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
@@ -17809,6 +18210,9 @@
         "src/node/replica-handler-constants.js",
         "src/node/replica-handler-membership-relay.js",
         "src/node/replica-removal-consensus-exit.js",
+        "src/partition/partition-service-raft-membership-administration.js",
+        "src/partition/partition-service-raft-peer-cache-reconciliation.js",
+        "src/partition/partition-service-removal-subject-handoff.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-request.js",
@@ -17819,6 +18223,7 @@
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/executor-outcome-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-operation-visibility.js",
         "src/transport/transport-semantic-outcome.js",
         "test/node/replica-removal-consensus-exit-fixture.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
@@ -17831,6 +18236,9 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/node/replica-handler-constants.js",
         "src/node/replica-handler-membership-relay.js",
+        "src/partition/partition-service-raft-membership-administration.js",
+        "src/partition/partition-service-raft-peer-cache-reconciliation.js",
+        "src/partition/partition-service-removal-subject-handoff.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-request.js",
@@ -17841,6 +18249,7 @@
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-operation-visibility.js",
         "src/transport/transport-semantic-outcome.js",
         "test/node/replica-removal-consensus-exit-fixture.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
@@ -17854,6 +18263,8 @@
         "src/node/replica-handler-constants.js",
         "src/node/replica-handler-membership-relay.js",
         "src/partition/partition-service-raft-membership-administration.js",
+        "src/partition/partition-service-raft-peer-cache-reconciliation.js",
+        "src/partition/partition-service-removal-subject-handoff.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-constants.js",
@@ -17865,6 +18276,7 @@
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-operation-repository-operation-visibility.js",
         "src/transport/transport-semantic-outcome.js",
         "test/node/replica-removal-consensus-exit-fixture.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
@@ -17877,6 +18289,9 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/node/replica-handler-constants.js",
         "src/node/replica-handler-membership-relay.js",
+        "src/partition/partition-service-raft-membership-administration.js",
+        "src/partition/partition-service-raft-peer-cache-reconciliation.js",
+        "src/partition/partition-service-removal-subject-handoff.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-request.js",
@@ -17887,8 +18302,36 @@
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-operation-visibility.js",
         "src/transport/transport-semantic-outcome.js",
         "test/node/replica-removal-consensus-exit-fixture.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js"
+      ]
+    },
+    "test/rebalancer/replace-real-group-target-death-cancel.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/index.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/node/replica-handler-constants.js",
+        "src/node/replica-handler-membership-relay.js",
+        "src/node/replica-removal-cancel-contract.js",
+        "src/partition/partition-service-raft-membership-administration.js",
+        "src/partition/partition-service-raft-peer-cache-reconciliation.js",
+        "src/partition/partition-service-removal-subject-handoff.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-conf-state-key.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-operation-visibility.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/node/replica-removal-consensus-exit-fixture.js",
+        "test/raft/raft-rs-backend/committed-membership-oracles.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
       ]
     },
@@ -17899,6 +18342,9 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/node/replica-handler-constants.js",
         "src/node/replica-handler-membership-relay.js",
+        "src/partition/partition-service-raft-membership-administration.js",
+        "src/partition/partition-service-raft-peer-cache-reconciliation.js",
+        "src/partition/partition-service-removal-subject-handoff.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-request.js",
@@ -17908,6 +18354,7 @@
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-operation-visibility.js",
         "src/transport/transport-semantic-outcome.js",
         "test/node/replica-removal-consensus-exit-fixture.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
@@ -17924,7 +18371,9 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
-        "src/rebalancer/failed-create-cleanup-token.js"
+        "src/node/replica-removal-cancel-contract.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/transport/transport-error-codes.js"
       ]
     },
     "test/rebalancer/replace-source-planner-set-exclusion.test.js": {
@@ -17938,7 +18387,9 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
-        "src/rebalancer/failed-create-cleanup-token.js"
+        "src/node/replica-removal-cancel-contract.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-operation-visibility.js"
       ]
     },
     "test/rebalancer/replace-temporary-extra-voter-planner.test.js": {
@@ -18011,7 +18462,8 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/control-plane/control-plane-system-table-gateway.js",
         "src/partition/partition-write-kernel.js",
-        "src/rebalancer/failed-create-cleanup-token.js"
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-operation-visibility.js"
       ]
     },
     "test/rebalancer/replica-operation-retained-owner-turn.test.js": {
@@ -18032,7 +18484,8 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
-        "src/rebalancer/failed-create-cleanup-token.js"
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-operation-visibility.js"
       ]
     },
     "test/rebalancer/replica-operations-single-writer.test.js": {
@@ -18367,11 +18820,13 @@
         "src/rebalancer/operation-workflow-replace-owner.js",
         "src/rebalancer/rebalancer-constants.js",
         "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-operation-repository-operation-visibility.js",
         "src/rebalancer/replica-status.js"
       ]
     },
     "test/rebalancer/timeout-sweep-lane-local-drain-snapshot.test.js": {
       "files": [
+        "src/rebalancer/replica-operation-repository-operation-visibility.js",
         "src/rebalancer/replica-status.js"
       ]
     },
@@ -18539,6 +18994,32 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
+      ]
+    },
+    "test/rebalancer/zz-dbg-cancel.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/index.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/node/replica-handler-constants.js",
+        "src/node/replica-handler-membership-relay.js",
+        "src/partition/partition-service-raft-membership-administration.js",
+        "src/partition/partition-service-raft-peer-cache-reconciliation.js",
+        "src/partition/partition-service-removal-subject-handoff.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-conf-state-key.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-operation-visibility.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/node/replica-removal-consensus-exit-fixture.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js",
+        "test/rebalancer/replace-real-group-harness.js"
       ]
     },
     "test/release/embedded-node-worker-contract.test.js": {
@@ -18710,6 +19191,7 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -19427,6 +19909,7 @@
         "data/tidb-comparison/progress-summary.json",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/container-memory-working-set.js"
@@ -19448,7 +19931,8 @@
     "test/scripts/check-constant-member-existence.test.js": {
       "files": [
         "package.json",
-        "scripts/checks/check-constant-member-existence.js"
+        "scripts/checks/check-constant-member-existence.js",
+        "scripts/checks/constant-member-existence-unexamined-baseline.json"
       ]
     },
     "test/scripts/check-current-capabilities.test.js": {
@@ -19649,6 +20133,30 @@
         "test/scripts"
       ]
     },
+    "test/scripts/check-health-hint-imports.test.js": {
+      "files": [
+        "scripts/checks/check-health-hint-imports.js",
+        "src/admin/admin-websocket-diagnostics-route-methods.js",
+        "src/config/raft-adaptive-timing-controller.js",
+        "src/control-plane/heartbeat-service.js",
+        "src/diagnostics/event-loop-delay-sampler.js",
+        "src/diagnostics/index.js",
+        "src/diagnostics/node-health-buffer.js",
+        "src/diagnostics/node-health-collection.js",
+        "src/diagnostics/resource-diagnostics-sampler.js",
+        "src/entrypoint-runtime-admin-composition.js",
+        "src/message-group/cdc-handler-apply-diagnostics.js",
+        "src/node/node-service.js",
+        "src/topology/cdc-group-propagation-wave-diagnostics.js",
+        "src/transport/message-router-peer-traffic-diagnostics.js"
+      ],
+      "directories": [
+        "scripts",
+        "scripts/checks",
+        "src",
+        "test"
+      ]
+    },
     "test/scripts/check-no-ordinal-files.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-service-node-methods.js",
@@ -19808,6 +20316,7 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -19892,6 +20401,7 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "src/partition/partition-service-remote-query-methods.js",
         "src/public-api.js",
         "src/query/sql-query-engine-participant-wire.js",
@@ -20031,6 +20541,7 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -20091,6 +20602,7 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "src/index.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
@@ -20229,6 +20741,7 @@
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/bootstrap/owners/rolling-upgrade-owner.js",
+        "src/diagnostics/node-health-collection.js",
         "src/raft/raft-rs-turn-answer.js",
         "src/utils/canonical-json-data.js",
         "test/bootstrap/bootstrap-topology-snapshot.test.js",
@@ -20355,6 +20868,7 @@
         "src/admin/static/playback-viewer.html",
         "src/bootstrap/bootstrap-service-seed-workflow.js",
         "src/constants/index.js",
+        "src/diagnostics/node-health-collection.js",
         "src/diagnostics/runtime-build-provenance.js",
         "src/node/participant-release-client.js",
         "src/node/participant-release-diagnostic-observation.js",
@@ -20586,6 +21100,7 @@
         "scripts/test-machine-factor.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "src/index.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
@@ -20624,6 +21139,7 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local-three-node.json",
         "test/distributed/config/local.json",
@@ -20652,6 +21168,7 @@
     },
     "test/scripts/lab-link-baseline.test.js": {
       "files": [
+        "src/diagnostics/node-health-collection.js",
         "test/distributed/harness/run-health/link-baseline-probe.js"
       ],
       "directories": [
@@ -21474,6 +21991,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/formation-release-handoff-contract.js",
         "src/control-plane/formation-release-handoff-identity.js",
+        "src/diagnostics/node-health-collection.js",
         "src/diagnostics/source-fingerprint.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
@@ -21559,6 +22077,7 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -21611,6 +22130,7 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local-three-node.json",
@@ -21653,6 +22173,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local-three-node.json",
@@ -21776,6 +22297,7 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -22481,6 +23003,7 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "src/index.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
@@ -22576,6 +23099,7 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -22916,6 +23440,16 @@
     "test/transport/transport-semantic-outcome.test.js": {
       "files": [
         "src/rebalancer/replica-operation-constants.js"
+      ]
+    },
+    "test/transport/transport-timeout-typed-readings.test.js": {
+      "files": [
+        "src/admin/admin-websocket-load-lane-admission.js",
+        "src/bootstrap/shared/node-state-publication-owner.js",
+        "src/message-group/message-group-forwarding-owner.js",
+        "src/query/query-executor-write-retry-routing.js",
+        "src/rebalancer/replica-operation-repository.js",
+        "src/transport/transport-error-codes.js"
       ]
     },
     "test/utils/canonical-json-data.test.js": {
