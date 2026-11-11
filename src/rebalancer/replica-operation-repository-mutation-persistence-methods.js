@@ -6,6 +6,8 @@ import {TYPEOF, WORKFLOW_STEP} from '../constants/index.js';
 import {CONTROL_PLANE_READ_LEADER_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+import {buildUnavailableOperationVisibility} from
+  './replica-operation-repository-operation-visibility.js';
 import {
   REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_FIELDS,
 } from './replica-operation-message-group-membership-fields.js';
@@ -13,6 +15,8 @@ import {
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const ABSENT_VISIBILITY_VALUE = null;
 const SETTLED_MEMBERSHIP_OBLIGATION_STATE = 'settled';
+const PERSISTENCE_AUTHORITY_OPERATION_IDENTITY_MISSING =
+  'persistence_authority_operation_identity_missing';
 const SQLITE_CONSTRAINT_PRIMARY_KEY = 'SQLITE_CONSTRAINT_PRIMARYKEY';
 const REPLICA_OPERATION_VISIBILITY_WAIT = Object.freeze({
   wait: 'REPLICA_OPERATION_AUTHORITATIVE_VISIBILITY_TIMEOUT_MS',
@@ -403,7 +407,10 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
 
     async queryReplicaOperationPersistenceAuthorityObservation(operation, options = {}) {
       if (!operation?.operationId) {
-        return Object.freeze({operation: null, deferredOutcome: null});
+        // Nothing was read: unavailability, never absence.
+        return buildUnavailableOperationVisibility({
+          reasonCode: PERSISTENCE_AUTHORITY_OPERATION_IDENTITY_MISSING,
+        });
       }
       const observationOptions = {
         allowPriorityRecoveryDeferredVisibility:

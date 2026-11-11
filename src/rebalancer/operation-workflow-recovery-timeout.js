@@ -22,6 +22,10 @@ import {
 import {
   resolveOperationDrainOwnerAvailability,
 } from './operation-owner-availability-policy.js';
+import {
+  OPERATION_VISIBILITY_STATE,
+  readOperationVisibilityState,
+} from './replica-operation-repository-operation-visibility.js';
 
 // Fenced orphan adoption (audit findings 5+14): incomplete operations on
 // ORDINARY partitions whose recorded owner is remote join the sweep when
@@ -311,6 +315,14 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
                 allowPriorityRecoveryDeferredVisibility: true,
               },
             );
+          // No owner answer: this tick decides nothing (no timeout is
+          // judged from the scan's copy); the next sweep tick reads again.
+          if (
+            readOperationVisibilityState(visibilityObservation) ===
+            OPERATION_VISIBILITY_STATE.UNAVAILABLE
+          ) {
+            return;
+          }
           const timeoutOperation = this.selectTimeoutReconcileOperation(
             visibilityObservation,
             operation,

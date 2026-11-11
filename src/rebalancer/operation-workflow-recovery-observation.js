@@ -14,6 +14,12 @@ import {
   isPartitionReplace,
   isReplaceRemovalIntentDurable,
 } from './operation-workflow-replace-owner.js';
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
+  '../control-plane/control-plane-system-table-gateway-constants.js';
+import {
+  OPERATION_VISIBILITY_STATE,
+  readOperationVisibilityState,
+} from './replica-operation-repository-operation-visibility.js';
 const {
   EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
   OBSERVED_OPERATION_ROW_TARGET_PROGRESS_STATUSES,
@@ -368,10 +374,20 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
       await this.repository.getOperationByIdVisibilityObservation(
         operationId,
         {
+          authoritativeReadMode:
+            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
           allowPriorityRecoveryDeferredVisibility: true,
         },
       );
-    const operation = visibilityObservation?.operation || null;
+    // No owner answer: the observed-progress retry stays armed (it is not
+    // cleared on a read that answered nothing).
+    if (
+      readOperationVisibilityState(visibilityObservation) ===
+      OPERATION_VISIBILITY_STATE.UNAVAILABLE
+    ) {
+      return false;
+    }
+    const operation = visibilityObservation.operation;
     const routeEvidence =
       this.buildObservedProgressOperationRouteEvidence(operation);
     const routeAction =

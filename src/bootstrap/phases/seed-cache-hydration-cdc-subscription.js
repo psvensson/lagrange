@@ -9,7 +9,7 @@ import {
   COLUMN,
   TABLES,
 } from '../../constants/index.js';
-import {isStaleForExistingRecord} from '../../cache/system-table-cache-row-merge.js';
+import {SystemTableCache} from '../../cache/system-table-cache.js';
 
 // The seed hydration path's name in its propagation subscribers' ids.
 const SEED_CDC_SUBSCRIBER_ROLE = 'bootstrap';
@@ -19,45 +19,43 @@ function nodeIdOfEvent(cdcEvent) {
   return cdcData[COLUMN.NODE_ID] || cdcData.id || null;
 }
 
-// The row a node holds once an event is applied over its predecessor, by the
-// cache's own merge rule: a DELETE leaves no row, a version the cache would
-// reject as stale leaves the predecessor, any other version merges over it.
-function nodeRowAfterEvent(previousNodeRow, cdcEvent) {
-  if (cdcEvent.operation === CDC_OPERATION.DELETE) return null;
-  if (previousNodeRow !== null &&
-      isStaleForExistingRecord(TABLES.NODES, previousNodeRow, cdcEvent.data)) {
-    return previousNodeRow;
-  }
-  return {...previousNodeRow, ...cdcEvent.data};
-}
-
 /**
  * Raise the node-ready rebalance trigger for each event of a nodes vector,
  * comparing each event with its predecessor: the row its node holds after the
  * vector's earlier events for that node, or, for a node's first event in the
  * vector, the cached row. This is what one-by-one delivery compared (the
  * cache then held every earlier event), so a node that flaps inside one
- * vector raises exactly the transitions it raised one event at a time.
+ * vector raises exactly the transitions it raised one event at a time. The
+ * predecessor is computed by the cache owner's own apply (a scratch
+ * SystemTableCache seeded with the cached rows these events touch), never by
+ * a copy of its merge rule, so this hook cannot drift from one-by-one
+ * semantics (stale versions, tombstones, same-entry source order).
  * @param {Array<Object>} events - The nodes vector, in log order.
  * @param {Object} owner - {readCachedNodeRow(nodeId), trigger(cdcEvent,
  *   previousNodeRow)}.
  * @return {void}
  */
 function raiseNodeReadyRebalanceTriggers(events, {readCachedNodeRow, trigger}) {
-  const rowsInVector = new Map();
+  const rows = new SystemTableCache();
+  const seeded = new Set();
   for (const cdcEvent of events) {
     const nodeId = nodeIdOfEvent(cdcEvent);
     if (!nodeId) {
       trigger(cdcEvent, null);
       continue;
     }
-    if (!rowsInVector.has(nodeId)) {
+    if (!seeded.has(nodeId)) {
+      seeded.add(nodeId);
       const cachedNodeRow = readCachedNodeRow(nodeId);
-      rowsInVector.set(nodeId, cachedNodeRow ? {...cachedNodeRow} : null);
+      if (cachedNodeRow) {
+        rows.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, cachedNodeRow);
+      }
     }
-    const previousNodeRow = rowsInVector.get(nodeId);
-    trigger(cdcEvent, previousNodeRow);
-    rowsInVector.set(nodeId, nodeRowAfterEvent(previousNodeRow, cdcEvent));
+    const previousNodeRow = rows.get(TABLES.NODES, nodeId) ?? null;
+    trigger(cdcEvent, previousNodeRow === null ? null : {...previousNodeRow});
+    rows.applySystemTableChange(TABLES.NODES, cdcEvent.operation, cdcEvent.data, {
+      timestamp: cdcEvent.timestamp, sourcePartition: cdcEvent.sourcePartition,
+      sourceLogIndex: cdcEvent.sourceLogIndex, sourceOrdinal: cdcEvent.sourceOrdinal});
   }
 }
 

@@ -6,10 +6,19 @@ import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
 import {SERVICE_INSTANCE_OUTCOME as LEGACY_AUTHORITY} from
   '../constants/service-instance.js';
 import {UNIFIED_SERVICE_TYPE, WORKFLOW_STEP} from '../constants/index.js';
+import {
+  OPERATION_VISIBILITY_STATE,
+  buildUnavailableOperationVisibility,
+  readOperationVisibilityState,
+} from '../rebalancer/replica-operation-repository-operation-visibility.js';
 import {OperationType} from '../rebalancer/replica-status.js';
 import {isIncompleteOperationRowStep} from
   '../rebalancer/replica-operation-step-policy.js';
 
+// No repository or a read that threw: the owner answered nothing.
+const LEGACY_REMOVAL_AUTHORITY_UNAVAILABLE = buildUnavailableOperationVisibility({
+  reasonCode: LEGACY_AUTHORITY.UNAVAILABLE,
+});
 const {
   CONTROL_PLANE_EVENT,
   DISPATCH_LOG_MSG,
@@ -47,11 +56,14 @@ class ReplicaDispatchService extends ReplicaDispatchReadinessCapture {
    */
   async authorizeLegacyRuntimeRemoval({operationId, entityId, replicaId, nodeId} = {}) {
     const observation = await this.readLegacyRemovalObservation(operationId);
-    const operation = observation?.operation;
-    if (!operation) {
-      return {outcome: observation?.deferredOutcome ?
-        LEGACY_AUTHORITY.UNAVAILABLE : LEGACY_AUTHORITY.CONTENT_CONFLICT};
+    const state = readOperationVisibilityState(observation);
+    if (state === OPERATION_VISIBILITY_STATE.UNAVAILABLE) {
+      return {outcome: LEGACY_AUTHORITY.UNAVAILABLE};
     }
+    if (state === OPERATION_VISIBILITY_STATE.ABSENT) {
+      return {outcome: LEGACY_AUTHORITY.CONTENT_CONFLICT};
+    }
+    const operation = observation.operation;
     const matches = operation.operationId === operationId &&
       operation.type === OperationType.REMOVE &&
       operation.entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE &&
@@ -67,16 +79,15 @@ class ReplicaDispatchService extends ReplicaDispatchReadinessCapture {
   async readLegacyRemovalObservation(operationId) {
     const repository = this.rebalanceCoordinator?.repository;
     if (typeof repository?.queryAuthoritativeOperationVisibilityObservation !== 'function') {
-      return {deferredOutcome: LEGACY_AUTHORITY.UNAVAILABLE};
+      return LEGACY_REMOVAL_AUTHORITY_UNAVAILABLE;
     }
     try {
       return await repository.queryAuthoritativeOperationVisibilityObservation(
         operationId, {
           authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
-          requireAbsenceConfirmation: true,
         });
     } catch {
-      return {deferredOutcome: LEGACY_AUTHORITY.UNAVAILABLE};
+      return LEGACY_REMOVAL_AUTHORITY_UNAVAILABLE;
     }
   }
 

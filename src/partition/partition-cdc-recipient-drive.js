@@ -185,10 +185,16 @@ async function shipNextVector(delivery, lane, target, ops, pass) {
       recipient.drive);
     return PASS.PAGE_YIELDED;
   }
+  // A primary recipient's receipt confirms it only under the propagation it
+  // was shipped under: a release meanwhile dropped recipients that never
+  // confirmed, so the vector is shipped again under the binding observed now.
+  const releases = branch.releases;
   const attempt = await deliverVectorToRecipient(delivery, lane, target, vector, ops);
   pass.visited += vector.length;
   const last = positionOf(vector.at(-1));
-  if (attempt.state === CDC_COVERAGE_STATE.COMMITTED) {
+  if (branch.releases !== releases) {
+    if (!laneIsCurrent(delivery, lane)) return PASS.STOPPED;
+  } else if (attempt.state === CDC_COVERAGE_STATE.COMMITTED) {
     confirmRecipient(recipient, last);
     ops.frontierMoved(delivery, lane);
   } else if (attempt.state === CDC_COVERAGE_STATE.PROVISIONAL) {

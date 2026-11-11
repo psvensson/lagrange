@@ -16,12 +16,16 @@ import {
   isReplaceExemptFromTimeBudget,
 } from './replica-operation-step-policy.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+import {
+  OPERATION_VISIBILITY_STATE,
+  buildOperationVisibilityUnavailableError,
+  readOperationVisibilityState,
+} from './replica-operation-repository-operation-visibility.js';
 
 const {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   OPERATION_OWNER_ACTION,
   OPERATION_WORKFLOW_OWNER_LITERAL,
-  OperationType,
   REBALANCER_SKIP_REASON,
   REBALANCE_COORDINATOR_LOG_MSG,
   ReplicaStatus,
@@ -61,10 +65,24 @@ function hasDurableRowReachedStep(owner, durableOperation, step) {
     owner.getOperationWorkflowStepRank({...durableOperation, workflowStep: step});
 }
 
+// A step write that records an intent BEFORE its effect: the SENDING claim,
+// and a REPLACE's ACTIVE -> STOPPING source-removal intent (admitted by
+// admitActiveReplaceSourceRemovalIntent against a fresh witness, source row
+// and owner level; the removal is sent only after it commits). Its failed
+// write is never owed: a later retry would commit a stale intent without
+// that revalidation. The transition is only retried, and the retry re-enters
+// the owner, which re-admits the intent.
+function isIntentStepWrite(operation, step) {
+  return step === WORKFLOW_STEP.SENDING ||
+    (step === WORKFLOW_STEP.STOPPING &&
+      isActiveReplaceSourceRemovalPhase(operation.type, operation.workflowStep));
+}
+
 /**
- * Defer one step transition whose write failed retryably. A step past
- * SENDING follows a performed effect, so its write is recorded as owed; the
- * SENDING claim precedes its effect and is only retried.
+ * Defer one step transition whose write failed retryably. A step write that
+ * follows a performed effect is recorded as owed; an intent write (the
+ * SENDING claim, a REPLACE's STOPPING intent) precedes its effect and is
+ * only retried.
  * @param {Object} owner
  * @param {Object} operation - The owner's copy, still at its durable step.
  * @param {Object} write - {step, reason, stepMetadata}.
@@ -73,7 +91,7 @@ function hasDurableRowReachedStep(owner, durableOperation, step) {
  */
 function deferStepWrite(owner, operation, write, errorLike) {
   const operationId = operation.operationId;
-  const effectPerformed = write.step !== WORKFLOW_STEP.SENDING;
+  const effectPerformed = !isIntentStepWrite(operation, write.step);
   if (effectPerformed && !owner.deferredStepWriteByOperationId.has(operationId)) {
     owner.deferredStepWriteByOperationId.set(operationId, Object.freeze({
       ...write,
@@ -114,13 +132,47 @@ function readDeferredStepWriteBudget(owner, operationId, now) {
   });
 }
 
-// A row that is gone, terminal, owned elsewhere or already at the step owes
-// no write.
-function owesNoStepWrite(owner, durable, step) {
-  return !durable ||
-    owner.repository.isOperationTerminal(durable) ||
+// The owed write is discharged only by authoritative evidence: the owner
+// confirmed the row absent, or its row is terminal, owned elsewhere or
+// already at (or past) the step. UNAVAILABLE discharges nothing.
+const STEP_WRITE_EVIDENCE = Object.freeze({
+  DISCHARGED: 'discharged',
+  OWED: 'owed',
+  UNAVAILABLE: 'unavailable',
+});
+
+function classifyStepWriteEvidence(owner, observation, step) {
+  const state = readOperationVisibilityState(observation);
+  if (state === OPERATION_VISIBILITY_STATE.UNAVAILABLE) {
+    return STEP_WRITE_EVIDENCE.UNAVAILABLE;
+  }
+  if (state === OPERATION_VISIBILITY_STATE.ABSENT) {
+    return STEP_WRITE_EVIDENCE.DISCHARGED;
+  }
+  const durable = observation.operation;
+  return owner.repository.isOperationTerminal(durable) ||
     !owner.repository.isOperationLocallyOwned(durable) ||
-    hasDurableRowReachedStep(owner, durable, step);
+    hasDurableRowReachedStep(owner, durable, step) ?
+    STEP_WRITE_EVIDENCE.DISCHARGED :
+    STEP_WRITE_EVIDENCE.OWED;
+}
+
+// The owner read did not answer: the owed write and its retry stay, with
+// the failure's retry delay.
+function retainOwedStepWrite(owner, operationId, owed, observation) {
+  const snapshot = owner.getTransitionRetryOperationSnapshot(operationId);
+  return owner.deferTransitionRetry(
+    operationId,
+    buildOperationVisibilityUnavailableError(observation, operationId),
+    {
+      boundary: OPERATION_WORKFLOW_OWNER_LITERAL.DEFERRED_STEP_WRITE,
+      workflowStep: owed.durableStep,
+      partitionId: owed.partitionId,
+      createdAt: owed.createdAt,
+      operationSnapshot: snapshot,
+      deferredStepWrite: true,
+    },
+  );
 }
 
 // The operation moves on the moment its row commits, when there is
@@ -133,8 +185,9 @@ function hasProgressToMoveOnTo(owner, durable) {
 }
 
 /**
- * Retry the owed write against the durable row. A row that already reached
- * the step, is terminal or is no longer owned here owes nothing.
+ * Retry the owed write against the owner's row. Authoritative evidence that
+ * the write is no longer owed discharges it; an unavailable owner read
+ * retains it with its retry armed (whatever the cache projects).
  * @param {Object} owner
  * @param {string} operationId
  * @return {Promise<boolean>} Whether this call committed the step.
@@ -142,15 +195,17 @@ function hasProgressToMoveOnTo(owner, durable) {
 async function resumeDeferredStepWrite(owner, operationId) {
   const owed = owner.deferredStepWriteByOperationId.get(operationId);
   const observation = await readDurableOperationForStepWrite(owner, operationId);
-  const durable = observation?.operation || null;
-  if (!durable && observation?.deferredOutcome) {
-    throw buildUninitializedTransitionRetryError(owed);
+  const evidence = classifyStepWriteEvidence(owner, observation, owed.step);
+  if (evidence === STEP_WRITE_EVIDENCE.UNAVAILABLE) {
+    retainOwedStepWrite(owner, operationId, owed, observation);
+    return false;
   }
-  if (owesNoStepWrite(owner, durable, owed.step)) {
+  if (evidence === STEP_WRITE_EVIDENCE.DISCHARGED) {
     owner.deferredStepWriteByOperationId.delete(operationId);
     owner.clearTransitionRetry(operationId);
     return false;
   }
+  const durable = observation.operation;
   const committed = await owner.updateStep(durable, owed.step, owed.reason, {
     stepMetadata: owed.stepMetadata,
   }) === true;
@@ -238,25 +293,25 @@ async function persistOwedStepBefore(owner, operation, step) {
 }
 
 // The replica whose authoritative row tells whether the owed step's effect
-// took: the created target, or the replica being removed.
-function resolveDeferredStepEffectReplica(owner, operation, owed) {
-  const removesSource = owed.step === WORKFLOW_STEP.STOPPING &&
-    operation.type === OperationType.REPLACE;
-  return {
-    replicaId: removesSource ?
-      owner.repository.getReplaceSourceReplicaId(operation) :
-      operation.replicaId,
-    nodeId: removesSource ? operation.sourceNodeId : operation.targetNodeId,
-  };
+// took: the created target, or the replica a REMOVE stops. (A REPLACE's
+// STOPPING is an intent, never owed - isIntentStepWrite.)
+function resolveDeferredStepEffectReplica(operation) {
+  return {replicaId: operation.replicaId, nodeId: operation.targetNodeId};
 }
 
+// The effect is re-sent only on the services owner's own answer (an
+// OWNER_RPC_REQUIRED read, whose ABSENT is also corroborated against the
+// cache): the CREATE target absent, or the removed replica still ACTIVE. An
+// unavailable read waits (the execute is skipped, typed). The re-send is the
+// same idempotent request: a CREATE carries the committed row's admission
+// key, a removal targets the same replica.
 async function isDeferredStepEffectNeeded(owner, operation, owed) {
-  const {replicaId, nodeId} =
-    resolveDeferredStepEffectReplica(owner, operation, owed);
+  const {replicaId, nodeId} = resolveDeferredStepEffectReplica(operation);
   const observation = await owner.repository.getActualReplicaObservation(
     replicaId,
     operation.partitionId,
     nodeId,
+    {authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED},
   );
   if (owed.step === WORKFLOW_STEP.CREATING) {
     return observation?.state === STOPPING_REPLICA_OBSERVATION_STATE.ABSENT;
@@ -401,13 +456,25 @@ async function resumeDeferredTransitionOperation(owner, operationId) {
     await resumeDeferredStepWrite(owner, operationId);
     return;
   }
+  // Clearing the retry on absence drops the wake, so absence must be the
+  // owner's; an unavailable read re-arms the retry (the timer's failure
+  // handler) and no retained snapshot stands in for the row.
   const visibilityObservation =
     await owner.repository.getOperationByIdVisibilityObservation(operationId, {
+      authoritativeReadMode:
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
       allowPriorityRecoveryDeferredVisibility: true,
     });
-  const operation =
-    visibilityObservation?.operation ||
-    owner.getTransitionRetryOperationSnapshot(operationId);
+  if (
+    readOperationVisibilityState(visibilityObservation) ===
+    OPERATION_VISIBILITY_STATE.UNAVAILABLE
+  ) {
+    throw buildOperationVisibilityUnavailableError(
+      visibilityObservation,
+      operationId,
+    );
+  }
+  const operation = visibilityObservation.operation;
   const now = Date.now();
   const resumeOutcome = buildOperationOwnerResumeOutcome({
     operationAvailable: Boolean(operation),

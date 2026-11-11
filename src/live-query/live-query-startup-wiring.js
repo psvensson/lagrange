@@ -343,10 +343,13 @@ function normalizePartitionCDCEvent(rawEvent, partitionId) {
   };
 }
 
+// The provider is the node's hosted partition replicas, keyed by replica id:
+// the partition is the hosted replica whose partitionId it is.
 function getFromProvider(provider, partitionId) {
   if (typeof provider !== 'function') return null;
   const container = provider();
-  return container?.get?.(partitionId) || null;
+  if (!container || typeof container.values !== 'function') return null;
+  return [...container.values()].find((service) => service?.partitionId === partitionId) || null;
 }
 
 /**

@@ -7,6 +7,10 @@ import {
 import {
   assertCanonicalRebalancerEntityIdentity,
 } from './rebalancer-entity-identity.js';
+import {
+  OPERATION_VISIBILITY_STATE,
+  readOperationVisibilityState,
+} from './replica-operation-repository-operation-visibility.js';
 
 const {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
@@ -201,12 +205,23 @@ class RebalanceCoordinatorOperationIntentMethods {
         cacheVisibleOperation :
         cachedOperation;
 
-    const authoritativeOperation =
-      await this.repository.queryAuthoritativeOperationById(cachedOperationId, {
-        authoritativeReadMode:
-          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
-      });
-    if (!authoritativeOperation) {
+    const observation =
+      await this.repository.queryAuthoritativeOperationVisibilityObservation(
+        cachedOperationId,
+        {
+          authoritativeReadMode:
+            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+        },
+      );
+    const observationState = readOperationVisibilityState(observation);
+    if (observationState === OPERATION_VISIBILITY_STATE.UNAVAILABLE) {
+      // No owner answer: the remembered intent keeps deduplicating (no
+      // second operation is created on an unanswered read).
+      this.rememberOperationIntent(dedupeKey, operationForMissReuse);
+      return operationForMissReuse;
+    }
+    const authoritativeOperation = observation.operation;
+    if (observationState === OPERATION_VISIBILITY_STATE.ABSENT) {
       const authoritativeEntityVisibility =
         await this.inspectRecentOperationIntentEntityVisibility(
           operationForMissReuse,

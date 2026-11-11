@@ -69,7 +69,9 @@ function composeSeed() {
   };
   const propagate = (events) => {
     for (const event of events) {
-      cache.applySystemTableChange(TABLES.NODES, event.operation, event.data);
+      cache.applySystemTableChange(TABLES.NODES, event.operation, event.data, {
+        timestamp: event.timestamp, sourcePartition: event.sourcePartition,
+        sourceLogIndex: event.sourceLogIndex, sourceOrdinal: event.sourceOrdinal});
     }
   };
   return {cache, triggers, owner, propagate};
@@ -103,4 +105,39 @@ test('a node that flaps inside one vector raises exactly the transitions one-by-
   assert.deepEqual(vector.triggers.filter((trigger) => trigger.nodeId === 'node-d')
     .map((trigger) => [trigger.previousStatus, trigger.status]),
   [['active', null], [null, 'joining']], 'a deleted node has no previous row');
+});
+
+// Where a copy of the merge rule drifts from the cache owner's apply: an
+// older version behind a tombstone stays deleted (no previous row for the
+// next event), an INSERT on an existing key replaces rather than merges, and
+// two versions of one source entry (one HLC) order by source ordinal.
+test('the in-vector predecessor is the cache owner\'s own apply: tombstones, INSERT replacement ' +
+  'and same-entry source order', () => {
+  const sameEntry = (ordinal, status) => ({...version(CDC_OPERATION.UPDATE, 'node-f', 3000, status),
+    sourcePartition: 'nodes-p1', sourceLogIndex: 30, sourceOrdinal: ordinal,
+    timestamp: hlc(3000)});
+  const insertNoStatus = {...version(CDC_OPERATION.INSERT, 'node-g', 3100), data: {
+    [COLUMN.NODE_ID]: 'node-g', [COLUMN.UPDATED_AT]: 3100, [COLUMN.UPDATED_AT_HLC]: hlc(3100)}};
+  const events = [
+    version(CDC_OPERATION.DELETE, 'node-e', 2400),
+    version(CDC_OPERATION.INSERT, 'node-e', 2300, 'behind-the-tombstone'),
+    version(CDC_OPERATION.UPDATE, 'node-e', 2350, 'still-behind'),
+    sameEntry(0, 'joining'), sameEntry(1, 'active'), sameEntry(2, 'active'),
+    version(CDC_OPERATION.INSERT, 'node-g', 3000, 'joining'), insertNoStatus,
+    version(CDC_OPERATION.UPDATE, 'node-g', 3200, 'active'),
+  ];
+  const oneByOne = composeSeed();
+  for (const event of events) {
+    raiseNodeReadyRebalanceTriggers([event], oneByOne.owner);
+    oneByOne.propagate([event]);
+  }
+  const vector = composeSeed();
+  raiseNodeReadyRebalanceTriggers(events, vector.owner);
+  assert.deepEqual(vector.triggers, oneByOne.triggers);
+  assert.deepEqual(vector.triggers.filter((trigger) => trigger.nodeId === 'node-e')
+    .map((trigger) => trigger.previousStatus), [null, null, null],
+  'versions behind a tombstone never become a predecessor');
+  assert.deepEqual(vector.triggers.filter((trigger) => trigger.nodeId === 'node-g')
+    .map((trigger) => trigger.previousStatus), [null, 'joining', null],
+  'an INSERT replaces the row: its missing status is not carried over');
 });

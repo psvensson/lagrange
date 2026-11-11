@@ -4,6 +4,10 @@ import {readStateField} from '../utils/state-field-read.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {
+  OPERATION_VISIBILITY_STATE,
+  readOperationVisibilityState,
+} from './replica-operation-repository-operation-visibility.js';
+import {
   ReplicaOperationField,
   ReplicaOperationVisibilityClass,
 } from './replica-operation-constants.js';
@@ -37,6 +41,7 @@ import {
   shouldRetryCoordinatorCreatedRemoteHandoff,
 } from './operation-workflow-coordinator-created-handoff-scheduling.js';
 const {
+  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   DISPATCH_RETRY_DELAY_MS,
   OPERATION_OWNER_ACTION,
   OPERATION_WORKFLOW_OWNER_LITERAL,
@@ -521,6 +526,8 @@ async function getDeferredDispatchRetryOperation(
 ) {
   const visibilityObservation =
     await owner.repository.getOperationByIdVisibilityObservation(operationId, {
+      authoritativeReadMode:
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
       allowPriorityRecoveryDeferredVisibility: true,
       allowOwnerPersistedTransitionDeferredVisibility: false,
     });
@@ -529,15 +536,25 @@ async function getDeferredDispatchRetryOperation(
     fallbackOperation,
   );
 }
+/**
+ * The operation a deferred retry re-enters with. A retry whose caller drops
+ * it on null reads OWNER_RPC_REQUIRED, so null is the owner's confirmed
+ * absence (or an unavailable read with no previous copy to keep).
+ * @param {Object} owner
+ * @param {Object} visibilityObservation - Named-state by-id observation.
+ * @param {Object|null} fallbackOperation - The retry's previous copy.
+ * @return {Object|null}
+ */
 function resolveDeferredRetryVisibleOperation(
   owner,
   visibilityObservation,
   fallbackOperation,
 ) {
-  if (visibilityObservation?.operation) {
+  const state = readOperationVisibilityState(visibilityObservation);
+  if (state === OPERATION_VISIBILITY_STATE.PRESENT) {
     return visibilityObservation.operation;
   }
-  if (visibilityObservation?.deferredOutcome && fallbackOperation) {
+  if (state === OPERATION_VISIBILITY_STATE.UNAVAILABLE && fallbackOperation) {
     // BR12: the copy is the previous snapshot, marked as such so an effect
     // boundary waits on it rather than acting.
     return {
@@ -588,6 +605,8 @@ async function runDeferredSafetyRetryInLane(
     await owner.repository.getOperationByIdVisibilityObservation(
       operationId,
       {
+        authoritativeReadMode:
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
         allowPriorityRecoveryDeferredVisibility: true,
       },
     );

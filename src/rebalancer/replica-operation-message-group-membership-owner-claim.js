@@ -5,6 +5,8 @@ import {readAuthoritativeControlPlaneRows} from
   '../control-plane/control-plane-system-table-gateway.js';
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE, CONTROL_PLANE_READ_LEADER_MODE}
   from '../control-plane/control-plane-system-table-gateway-constants.js';
+import {OPERATION_VISIBILITY_STATE, readOperationVisibilityState}
+  from './replica-operation-repository-operation-visibility.js';
 import {SERVICE_TYPE} from '../constants/service.js';
 import {OperationType} from './replica-status.js';
 import {REBALANCE_COORDINATOR_LOG_MSG} from './rebalancer-constants.js';
@@ -63,9 +65,9 @@ function membershipRowIdentityMatches(row, identity, encodedIdentity,
 async function observeMembershipOperation(repository, operationId) {
   try {
     const observation = await repository.queryAuthoritativeOperationVisibilityObservation(
-      operationId, {...READ, requireAbsenceConfirmation: true});
-    return {available: observation.deferredOutcome === null,
-      row: observation.operation};
+      operationId, READ);
+    return {available: readOperationVisibilityState(observation) !==
+      OPERATION_VISIBILITY_STATE.UNAVAILABLE, row: observation.operation};
   } catch {
     return {available: false, row: null};
   }

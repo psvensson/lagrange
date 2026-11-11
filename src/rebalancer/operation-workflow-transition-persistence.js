@@ -34,6 +34,7 @@ import {operationCarriesReplicaCreateAdmission} from
   './replica-operation-create-admission-fields.js';
 
 const {
+  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   FAILURE_LOG_LEVEL,
   METRICS_LOG_TAG,
   OPERATION_TRANSITION_REASON,
@@ -203,12 +204,24 @@ class OperationWorkflowTransitionPersistence
         }
 
         if (!transitionCommitted) {
-          const authoritativeOperation =
-            await this.repository.queryAuthoritativeOperationById(
-              operation.operationId,
-              {
-              },
-            );
+          // The claim CAS missed: only the owner's row says whether another
+          // claim won. An unavailable read restores the projection and
+          // throws its typed retryable error (the claim is retried); an
+          // absent or unclaimed row is "not claimed".
+          let authoritativeOperation;
+          try {
+            authoritativeOperation =
+              await this.repository.queryAuthoritativeOperationById(
+                operation.operationId,
+                {
+                  authoritativeReadMode:
+                    CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+                },
+              );
+          } catch (error) {
+            restoreCommittedWorkflowRecord();
+            throw error;
+          }
           if (
             !authoritativeOperation ||
             !this.repository.isOperationLocallyOwned(authoritativeOperation) ||

@@ -1,5 +1,6 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {
+  forgetDeferredRetirement,
   proposePeerRetirement,
   takeAdmissionsInFlight,
   takeDeferredRetirements,
@@ -180,6 +181,12 @@ function retireRaftPeerFromAuthoritativeServiceChange(
     return observeOwnServiceRow(partitionService, operation, serviceRow);
   }
   if (!isExplicitPeerRetirement(operation, serviceRow)) {
+    // A peer whose row serves again is no longer being removed: a
+    // retirement deferred from its earlier retiring row is dropped, never
+    // re-proposed by a later settlement.
+    if (serviceRow?.trigger_reason !== GROUP_RETIREMENT_REASON) {
+      forgetDeferredRetirement(partitionService, replicaId);
+    }
     return false;
   }
 
@@ -215,8 +222,9 @@ function retireRaftPeerFromAuthoritativeServiceChange(
 }
 
 /**
- * Re-drive, whenever a configuration change settles (CONF_CHANGE_APPLIED)
- * or this replica gains leadership (LEADER): the deferred retirements, and
+ * Re-drive, whenever a configuration change settles (CONF_CHANGE_APPLIED),
+ * this replica gains leadership (LEADER) or its live voter set changes
+ * (VOTER_LIVENESS_CHANGED): the deferred retirements, and
  * the admission requests this leader accepted from targets and has not seen
  * settle (the admission owner's in-flight set is handed over first, so a
  * settled proposal is evaluated again from its committed operation). Rows
@@ -236,6 +244,9 @@ function redriveAdmissionsOnMembershipChange(partitionService) {
   };
   partitionService.raft.subscribe(RAFT_EVENT.CONF_CHANGE_APPLIED, redrive);
   partitionService.raft.subscribe(RAFT_EVENT.LEADER, redrive);
+  // A removal deferred on a live quorum (REMOVES_LIVE_QUORUM) waits for the
+  // leader's live voter set to change.
+  partitionService.raft.subscribe(RAFT_EVENT.VOTER_LIVENESS_CHANGED, redrive);
 }
 
 export {

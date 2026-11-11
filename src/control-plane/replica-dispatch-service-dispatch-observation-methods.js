@@ -3,6 +3,8 @@ import {MESSAGE_GROUP_SERVICE_HANDLER_ADDRESS} from '../node/message-group-servi
 import {REPLICA_HANDLER_ADDRESS} from '../node/replica-handler-constants.js';
 import {RUNTIME_SERVICE_HANDLER_ADDRESS} from '../node/runtime-service-handler-constants.js';
 import {UNIFIED_SERVICE_TYPE} from '../constants/index.js';
+import {isOperationVisibilityUnavailableError} from
+  '../rebalancer/replica-operation-repository-operation-visibility.js';
 
 const {
   COLUMN,
@@ -172,9 +174,11 @@ class ReplicaDispatchServiceDispatchObservationMethods {
   }
 
   /**
-   * Read one authoritative replica_operations row directly from the control-
-   * plane gateway. Dispatch retries use this to recover when owner-local cache
-   * visibility lags behind the persisted operation row.
+   * ADVISORY refresh of one replica_operations row for a dispatch wake (its
+   * callers keep their wake-up row when this answers nothing). The row is
+   * the repository's PRESENT authoritative row; null means "no refreshed
+   * row" - the owner confirmed it absent OR the read was unavailable - and
+   * is never used here to drop or complete work.
    * @param {string} operationId
    * @return {Promise<Object|null>}
    * @private
@@ -193,7 +197,12 @@ class ReplicaDispatchServiceDispatchObservationMethods {
         operationId,
         {
         },
-      );
+      ).catch((error) => {
+        if (isOperationVisibilityUnavailableError(error)) {
+          return null;
+        }
+        throw error;
+      });
       if (authoritativeOperation) {
         return this.buildOperationRowFromCoordinator(authoritativeOperation);
       }

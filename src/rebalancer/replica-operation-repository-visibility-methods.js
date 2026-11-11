@@ -467,38 +467,32 @@ function assignReplicaOperationRepositoryVisibilityMethods(
       };
     }
     /**
-     * A caller that must prove absence before acting on it (e.g. the
-     * reservation orphan reconcile) receives this outcome when the
-     * authoritative read did not complete: an unconfirmed absence defers the
-     * decision instead of masquerading as an empty read.
+     * The typed unavailability of one failed authoritative read: every
+     * caller receives it (the read did not answer, so absence is
+     * unconfirmed), with the failure's retry semantics.
+     * @param {Object} result - The failed read result.
      * @param {Object} options
-     * @return {Object|null}
+     * @return {Object}
      * @private
      */
-    buildUnconfirmedAbsenceVisibilityOutcome(options = {}) {
-      const operationId =
-      typeof options.operationId === 'string' ?
-        options.operationId :
-        null;
-      if (!operationId) {
-        return null;
-      }
+    buildAuthoritativeReadUnavailableOutcome(result, options = {}) {
       return {
         confirmationState: REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.DEFERRED,
         completionState: null,
         reasonCode:
-        REPLICA_OPERATION_VISIBILITY_REASON
-          .ABSENCE_CONFIRMATION_AUTHORITATIVE_READ_UNAVAILABLE,
+        REPLICA_OPERATION_VISIBILITY_REASON.AUTHORITATIVE_READ_UNAVAILABLE,
+        retryable: isRetryableControlPlaneError(result),
+        errorCode: result?.errorCode || result?.code || null,
         retryAfterMs: Number.isFinite(options.retryAfterMs) ?
           Math.floor(options.retryAfterMs) :
           null,
         queryDurationMs: Number.isFinite(options.queryDurationMs) ?
           Math.floor(options.queryDurationMs) :
           null,
-        operationId,
+        operationId:
+        typeof options.operationId === 'string' ? options.operationId : null,
         source:
-        REPLICA_OPERATION_VISIBILITY_OUTCOME_SOURCE
-          .ABSENCE_CONFIRMATION_READ_FAILURE,
+        REPLICA_OPERATION_VISIBILITY_OUTCOME_SOURCE.AUTHORITATIVE_READ_FAILURE,
       };
     }
     buildOwnerPersistedTransitionDeferredVisibilityOutcome(options = {}) {
@@ -560,27 +554,6 @@ function assignReplicaOperationRepositoryVisibilityMethods(
           options.source :
           ENTITY_OPERATION_VISIBILITY_OUTCOME_SOURCE.PRIORITY_RECOVERY_AUTHORITATIVE_OPERATION_READ,
       };
-    }
-    buildOperationVisibilityObservation(operation = null, deferredOutcome = null) {
-      const hasDeferredOwnerRead =
-      deferredOutcome?.completionState ===
-        PRIORITY_RECOVERY_COMPLETION_STATE.AUTHORITATIVE_OPERATION_READ_DEFERRED ||
-      deferredOutcome?.confirmationState ===
-        REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.DEFERRED;
-      const normalizedOperation =
-      operation && typeof operation === 'object' ? {...operation} : null;
-      return Object.freeze({
-        state: normalizedOperation ?
-          INCOMPLETE_OPERATION_OBSERVATION_STATE.PRESENT :
-          hasDeferredOwnerRead ?
-            INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED :
-            INCOMPLETE_OPERATION_OBSERVATION_STATE.EMPTY,
-        operation: normalizedOperation,
-        deferredOutcome: deferredOutcome ? {...deferredOutcome} : null,
-        retryAfterMs: Number.isFinite(deferredOutcome?.retryAfterMs) ?
-          deferredOutcome.retryAfterMs :
-          null,
-      });
     }
     buildEntityOperationVisibilityObservation(operations = [], deferredOutcome = null) {
       const normalizedOperations = this.cloneIncompleteOperationObservationSet(

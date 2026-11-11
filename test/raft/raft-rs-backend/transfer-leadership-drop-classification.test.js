@@ -32,6 +32,9 @@ function clusterAfterSelfChange(partitionId, type) {
   const cluster = new PartitionNodeCluster({partitionId, replicaIds: REPLICAS});
   assert.equal(cluster.settle(() => cluster.leaderReplicaId() === A), true,
     'setup: A leads');
+  // A hears its voters answer first: its admission counts only voters it
+  // heard from (REMOVES_LIVE_QUORUM).
+  cluster.settle(() => false, {rounds: 3});
   const proposed = turnChainValue(cluster.node(A).proposeConfChange({type,
     replicaIdentity: A, nodeId: 'node-test'}));
   assert.equal(proposed.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,

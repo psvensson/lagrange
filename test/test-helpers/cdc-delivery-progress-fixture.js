@@ -199,6 +199,7 @@ export {
   commitAcknowledgements,
   delayedClock,
   driveAfterBackoff,
+  elapseRecipientBackoff,
   fixture,
   hydrateThroughRow,
   observeOwedReads,

@@ -280,14 +280,13 @@ const REPLICA_OPERATION_VISIBILITY_OUTCOME_SOURCE = Object.freeze({
     'owner_persisted_transition_authoritative_operation_visibility_empty_read',
   OWNER_PERSISTED_TRANSITION_STALE_READ:
     'owner_persisted_transition_authoritative_operation_visibility_stale_read',
-  ABSENCE_CONFIRMATION_READ_FAILURE:
-    'absence_confirmation_authoritative_operation_visibility_read_failure',
+  AUTHORITATIVE_READ_FAILURE:
+    'authoritative_operation_visibility_read_failure',
 });
 const REPLICA_OPERATION_VISIBILITY_REASON = Object.freeze({
   OWNER_PERSISTED_TRANSITION_PENDING_AUTHORITATIVE_CONFIRMATION:
     'owner_persisted_transition_pending_authoritative_confirmation',
-  ABSENCE_CONFIRMATION_AUTHORITATIVE_READ_UNAVAILABLE:
-    'absence_confirmation_authoritative_read_unavailable',
+  AUTHORITATIVE_READ_UNAVAILABLE: 'authoritative_read_unavailable',
 });
 const ENTITY_OPERATION_VISIBILITY_OUTCOME_SOURCE = Object.freeze({
   PRIORITY_RECOVERY_AUTHORITATIVE_OPERATION_READ:
@@ -415,6 +414,10 @@ const REPLICA_OPERATION_CANONICAL_STATUS_READ_QUERY_OPTIONS = Object.freeze({
 const REPLICA_OPERATION_LOCAL_STATUS_READ_QUERY_OPTIONS = Object.freeze({
   ...REPLICA_STATUS_READ_QUERY_OPTIONS,
   authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+});
+const REPLICA_OPERATION_REQUIRED_STATUS_READ_QUERY_OPTIONS = Object.freeze({
+  ...REPLICA_STATUS_READ_QUERY_OPTIONS,
+  authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
 });
 
 function normalizeReplicaOperationVisibilityReadMode(value) {
@@ -753,6 +756,7 @@ assignReplicaOperationRepositoryObservationMethods(ReplicaOperationRepository, {
   REBALANCE_COORDINATOR_LOG_MSG,
   REPLICA_OPERATION_CANONICAL_STATUS_READ_QUERY_OPTIONS,
   REPLICA_OPERATION_LOCAL_STATUS_READ_QUERY_OPTIONS,
+  REPLICA_OPERATION_REQUIRED_STATUS_READ_QUERY_OPTIONS,
   REPLICA_OPERATION_REPOSITORY_LITERAL,
   ReplicaStatus,
   SERVICE_TYPE,

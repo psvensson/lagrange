@@ -1141,3 +1141,66 @@ the informer's synced version; rangefeed checkpoints considered and left out.
 - **Suggested work units**: one Quest per stage part (1, 2a, 2b, 3, 4), each
   with its R-tests as the sealed probe, in that order; O-A and O-B before 2a,
   O-C before 3, O-D before 4.
+
+---
+
+## Amendments 2026-11-11 (external review)
+
+Appended after the Stage 1/2 repair review; the sections above are kept as
+written and are superseded only where stated here (R09).
+
+**A. The opening invariant (1.1) is restated.** "Delay bounded by the cost of
+one delivery to that node, independent of backlog depth" is not achievable:
+Stage 1 itself ships a backlog as several bounded waves. The claims are now:
+(i) isolation - a slow, refusing or dead recipient does not delay another
+recipient of the same table or any recipient of another table (S2-a; witnessed
+by R2-1, L2, L6); (ii) conditional progress - under declared assumptions
+(finitely many failures per recipient, offered load below the drain rate of
+`SHIP_MAX_EVENTS`-row vectors at the measured per-wave cost) every owed row is
+delivered and acknowledged, and catch-up of a backlog of B rows costs
+ceil(B / SHIP_MAX_EVENTS) waves per recipient. The bounds are to be measured on
+lab hosts: drain throughput, owed depth over time, bytes per wave, receiver
+proposal-queue depth and event-loop delay on the seed.
+
+**B. Occurrence identity and order are inside the owned interaction.** The HLC
+merge does not safely absorb same-entry siblings: every event of one committed
+entry carries the entry's HLC, the recipient's CDC handler deduplicated by
+(table, operation, key, timestamp) and dropped the second update of a row in
+one entry, and an older range committing late overwrote a newer member.
+Repaired now (finding 6): a durable event's identity is its source occurrence
+(`eventKey`) in the handler; the cache's merge orders two versions of one
+source entry (same origin HLC, source partition and log index) by source
+ordinal (`system-table-cache-source-order.js`), including a newer member
+superseding its own entry's tombstone. Witnesses:
+`test/message-group/cdc-vector-application-equivalence.test.js` (same-entry
+replay/reorder, late older range, seeded convergence property). Stage 3's
+"a gapped follower may still merge safely" is an open claim that needs its own
+proof before Stage 3 relies on it.
+
+**C. Source incarnation and snapshot-position atomicity come first.** No
+position-based skip or acknowledgement may land until (1) a position names its
+source incarnation (a rebuilt log reusing indexes must never be compared
+blindly; the same-entry tie-break above compares only within one origin HLC,
+partition and log index), and (2) a list's rows and position describe one
+authoritative image read in one span on the witnessed leader.
+
+**D. Late and dead recipients stay explicit.** No pretend-acknowledgement, no
+release on cache omission, no retirement inferred from elapsed time. Any
+DETACHED / re-list contract needs authoritative lifecycle evidence for the
+group's retirement and a witness that the write which retires the group is not
+itself refused by the `OWED_MAX_EVENTS` capacity it must free. Removing the
+node-wide slot (2b) makes concurrency proportional to (source partitions
+leading here) x (recipients); a row-count bound plus a byte target that admits
+an oversized singleton is not a fixed node-wide memory bound. Receiver
+pressure (proposal-queue backpressure, the typed duplicate-in-flight answer)
+stays; what must be measured is in A.
+
+**E. Recipient waits are named (repair of the Stage 2 review).** A recipient
+behind the owed tail is either running, waiting on its delivery's actual local
+cleanup (woken by that cleanup, also across a tenure change), in its own
+backoff (woken by the lane timer armed at its due time; a commit's wake never
+ships to it), or started. A drive ends only on one of these, and the lane's
+DRAINED outcome (which disarms the retry) derives from the ledger: it is
+reported only when no recipient is behind the owed tail. A release of the
+propagation binding restarts its primary recipient; a receipt shipped under a
+binding that was released meanwhile confirms nothing.

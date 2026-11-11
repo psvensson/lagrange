@@ -1,5 +1,9 @@
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from
   './operation-workflow-recovery-reconcile-shared.js';
+import {
+  OPERATION_VISIBILITY_STATE,
+  readOperationVisibilityState,
+} from './replica-operation-repository-operation-visibility.js';
 
 const {
   EXECUTOR_OUTCOME_FIELD,
@@ -111,8 +115,8 @@ class OperationWorkflowExecutorOutcomeVisibility {
     const replicaId = outcome?.[EXECUTOR_OUTCOME_FIELD.REPLICA_ID];
     return Object.freeze({
       emptyVisibility:
-        visibilityObservation?.state ===
-        INCOMPLETE_OPERATION_OBSERVATION_STATE.EMPTY,
+        readOperationVisibilityState(visibilityObservation) ===
+        OPERATION_VISIBILITY_STATE.ABSENT,
       emptyVisibilityReplicaOutcome:
         typeof replicaId === 'string' && replicaId.length > 0,
       emptyVisibilityRetryableOutcome:
@@ -121,11 +125,12 @@ class OperationWorkflowExecutorOutcomeVisibility {
         ),
       freshEmptyVisibilityOutcome:
         this.isFreshExecutorOutcomeForEmptyVisibility(outcome),
-      operationAvailable: Boolean(visibilityObservation?.operation),
+      operationAvailable:
+        readOperationVisibilityState(visibilityObservation) ===
+        OPERATION_VISIBILITY_STATE.PRESENT,
       visibilityDeferred:
-        visibilityObservation?.state ===
-          INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED ||
-        Boolean(visibilityObservation?.deferredOutcome),
+        readOperationVisibilityState(visibilityObservation) ===
+        OPERATION_VISIBILITY_STATE.UNAVAILABLE,
     });
   }
 

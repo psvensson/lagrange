@@ -1,3 +1,5 @@
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
+  '../control-plane/control-plane-system-table-gateway-constants.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {WORKFLOW_STEP_PROGRESS_RANK} from './replica-operation-step-policy.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
@@ -589,10 +591,13 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
       workflowStep,
     });
 
+    // Skipping the outcome on absence drops it, so absence is the owner's.
     const visibilityObservation =
       await this.repository.getOperationByIdVisibilityObservation(
         operationId,
         {
+          authoritativeReadMode:
+            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
           allowPriorityRecoveryDeferredVisibility: true,
         },
       );

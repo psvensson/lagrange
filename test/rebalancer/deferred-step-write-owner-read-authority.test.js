@@ -14,7 +14,8 @@
  */
 import {test} from '../../src/test-helpers/tap.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
-import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {OperationType, ReplicaStatus} from
+  '../../src/rebalancer/replica-status.js';
 import {
   CACHE_PROJECTION,
   LEDGER_WRITE,
@@ -202,3 +203,29 @@ for (const cacheProjection of Object.values(CACHE_PROJECTION)) {
     }
   });
 }
+
+test('W6: a REPLACE STOPPING intent whose write fails is never owed, so ' +
+  'no retry commits it without the owner re-admitting it',
+async (t) => {
+  const world = createDurableStepWorld({
+    type: OperationType.REPLACE,
+    durableSteps: [
+      WORKFLOW_STEP.PENDING, WORKFLOW_STEP.SENDING, WORKFLOW_STEP.CREATING,
+      WORKFLOW_STEP.SYNCING, WORKFLOW_STEP.ACTIVE,
+    ],
+    ledgerWrite: (step) => step === WORKFLOW_STEP.STOPPING ?
+      LEDGER_WRITE.FAILS_RETRYABLY :
+      LEDGER_WRITE.COMMITS,
+  });
+  try {
+    await t.rejects(
+      world.owner.updateStep(world.durableOperation(), WORKFLOW_STEP.STOPPING),
+      'the intent write fails retryably',
+    );
+    t.notOk(world.owner.deferredStepWriteByOperationId.has(OPERATION_ID),
+      'the intent precedes its effect: no step write is owed');
+    t.ok(isRetryArmed(world), 'the transition is retried');
+  } finally {
+    await world.coordinator.shutdown();
+  }
+});

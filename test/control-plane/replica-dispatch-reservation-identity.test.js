@@ -19,6 +19,11 @@ import {
   seedAuthoritativeOperation,
 } from '../rebalancer/reservation-dispatch-gate-test-harness.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
+import {
+  buildAbsentOperationVisibility,
+  buildPresentOperationVisibility,
+  buildUnavailableOperationVisibility,
+} from '../../src/rebalancer/replica-operation-repository-operation-visibility.js';
 
 const OWNER_NODE_ID = 'dispatch-projection-owner';
 const TARGET_NODE_ID = 'dispatch-projection-target';
@@ -204,8 +209,11 @@ test('legacy REMOVE dispatch consumer requests strict original-operation observa
     dispatch.rebalanceCoordinator = {repository: {
       async queryAuthoritativeOperationVisibilityObservation(id, options) {
         reads.push({id, options});
-        return unavailable ? {operation: null, deferredOutcome: {retryAfterMs: 100}} :
-          {operation: row, deferredOutcome: null};
+        if (unavailable) {
+          return buildUnavailableOperationVisibility({retryAfterMs: 100});
+        }
+        return row ? buildPresentOperationVisibility(row) :
+          buildAbsentOperationVisibility();
       },
     }};
     const request = {operationId, entityId: SERVICE_ID, replicaId, nodeId: TARGET_NODE_ID};
@@ -215,8 +223,6 @@ test('legacy REMOVE dispatch consumer requests strict original-operation observa
     t.equal(reads[0].options.authoritativeReadMode,
       CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
       'projection or local cache cannot authorize physical deletion');
-    t.equal(reads[0].options.requireAbsenceConfirmation, true,
-      'a failed owner read must remain distinct from confirmed absence');
     row = {...original, entityId: 'wrong-service'};
     t.equal((await dispatch.authorizeLegacyRuntimeRemoval(request)).outcome,
       'CONTENT_CONFLICT', 'owner refuses caller entity mismatch');

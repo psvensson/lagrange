@@ -7,6 +7,14 @@ import {
   assignReplicaOperationRepositoryIncompleteReadMethods,
 } from './replica-operation-repository-incomplete-read-methods.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+import {
+  OPERATION_VISIBILITY_STATE,
+  buildAbsentOperationVisibility,
+  buildOperationVisibilityUnavailableError,
+  buildPresentOperationVisibility,
+  buildUnavailableOperationVisibility,
+  readOperationVisibilityState,
+} from './replica-operation-repository-operation-visibility.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const REPLICA_OPERATION_READ_COALESCING_KEY_SEPARATOR = ':';
@@ -343,11 +351,16 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
     }
 
     /**
-   * Query a single operation by ID from the authoritative owner path only.
+   * Read one operation from the authoritative owner path only and classify
+   * the answer into the by-id visibility contract
+   * (replica-operation-repository-operation-visibility.js): PRESENT, ABSENT
+   * (the read succeeded and holds no coordinator-owned row) or UNAVAILABLE
+   * (the read failed, or the owner deferred it). A failed read is never
+   * ABSENT and no projected row is ever returned.
    * @param {string} operationId
    * @param {object} [options]
    * @param {string} [options.authoritativeReadMode]
-   * @return {Promise<object|null>}
+   * @return {Promise<object>} Frozen named-state observation.
    */
     async queryAuthoritativeOperationVisibilityObservation(operationId, options = {}) {
       const allowPriorityRecoveryDeferredVisibility =
@@ -434,26 +447,23 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
             source,
           });
         }
-        if (
-          !deferredOutcome &&
-          options?.requireAbsenceConfirmation === true &&
-          !isEmptyRead
-        ) {
-          // The read FAILED rather than returning an empty row set: absence
-          // is unconfirmed, and a caller that demanded confirmation must see
-          // an explicit deferral, never a silent null it cannot distinguish
-          // from a confirmed-empty authoritative read.
-          deferredOutcome = this.buildUnconfirmedAbsenceVisibilityOutcome({
-            retryAfterMs: this.getRetryableReplicaOperationReadRetryDelayMs(result),
-            queryDurationMs,
-            operationId,
-          });
+        if (!deferredOutcome && !isEmptyRead) {
+          // The read FAILED rather than returning an empty row set: that is
+          // unavailability for every caller, never absence.
+          deferredOutcome = this.buildAuthoritativeReadUnavailableOutcome(
+            result,
+            {
+              retryAfterMs:
+                this.getRetryableReplicaOperationReadRetryDelayMs(result),
+              queryDurationMs,
+              operationId,
+            },
+          );
         }
 
-        return Object.freeze({
-          operation: null,
-          deferredOutcome,
-        });
+        return deferredOutcome ?
+          buildUnavailableOperationVisibility(deferredOutcome) :
+          buildAbsentOperationVisibility();
       }
 
       const matchingRow =
@@ -470,9 +480,8 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
         ownerPersistedTransitionWitness,
       )
       ) {
-        return Object.freeze({
-          operation: null,
-          deferredOutcome: this.buildOwnerPersistedTransitionDeferredVisibilityOutcome({
+        return buildUnavailableOperationVisibility(
+          this.buildOwnerPersistedTransitionDeferredVisibilityOutcome({
             retryAfterMs: this.replicaOperationAuthoritativeVisibilityRetryDelayMs,
             queryDurationMs,
             operationId,
@@ -480,7 +489,7 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
             REPLICA_OPERATION_VISIBILITY_OUTCOME_SOURCE
               .OWNER_PERSISTED_TRANSITION_STALE_READ,
           }),
-        });
+        );
       }
       if (
         ownerPersistedTransitionWitness &&
@@ -491,18 +500,31 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
       ) {
         this.clearOwnerPersistedTransitionVisibilityWitness(operationId);
       }
-      return Object.freeze({
-        operation: isCoordinatorOwnedOperationType(operation?.type) ? operation : null,
-        deferredOutcome: null,
-      });
+      return isCoordinatorOwnedOperationType(operation?.type) ?
+        buildPresentOperationVisibility(operation) :
+        buildAbsentOperationVisibility();
     }
 
+    /**
+     * The authoritative operation, or null for a CONFIRMED absence at the
+     * requested read mode. An unavailable read throws the typed retryable
+     * error (buildOperationVisibilityUnavailableError); it is never null.
+     * @param {string} operationId
+     * @param {Object} [options]
+     * @return {Promise<Object|null>}
+     */
     async queryAuthoritativeOperationById(operationId, options = {}) {
       const observation = await this.queryAuthoritativeOperationVisibilityObservation(operationId, {
         authoritativeReadMode: options?.authoritativeReadMode,
         leaderMode: options?.leaderMode,
         allowPriorityRecoveryDeferredVisibility: false,
       });
+      if (
+        readOperationVisibilityState(observation) ===
+        OPERATION_VISIBILITY_STATE.UNAVAILABLE
+      ) {
+        throw buildOperationVisibilityUnavailableError(observation, operationId);
+      }
       return observation.operation;
     }
 
@@ -575,8 +597,24 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
         null;
     }
 
+    /**
+     * The workflow owner's by-id visibility read: the authoritative
+     * observation, with this owner's own persisted-transition witness
+     * honoured as a deferral (an empty or lagging read behind a transition
+     * this owner just committed is UNAVAILABLE, not ABSENT) unless the
+     * caller turns it off. It reads nothing else: no cache row and no
+     * owner-preferred SQL fallback stand in for the owner.
+     * @param {string} operationId
+     * @param {Object} [options]
+     * @param {string} [options.authoritativeReadMode]
+     * @param {string} [options.leaderMode]
+     * @param {boolean} [options.allowPriorityRecoveryDeferredVisibility]
+     * @param {boolean} [options.allowOwnerPersistedTransitionDeferredVisibility]
+     *   Default true.
+     * @return {Promise<Object>} Frozen named-state observation.
+     */
     async getOperationByIdVisibilityObservation(operationId, options = {}) {
-      const authoritativeObservation = await this.queryAuthoritativeOperationVisibilityObservation(
+      return this.queryAuthoritativeOperationVisibilityObservation(
         operationId,
         {
           authoritativeReadMode: options?.authoritativeReadMode,
@@ -585,23 +623,7 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
           options?.allowPriorityRecoveryDeferredVisibility === true,
           allowOwnerPersistedTransitionDeferredVisibility:
           options?.allowOwnerPersistedTransitionDeferredVisibility !== false,
-          requireAbsenceConfirmation:
-          options?.requireAbsenceConfirmation === true,
         },
-      );
-      if (authoritativeObservation?.operation) {
-        return this.buildOperationVisibilityObservation(authoritativeObservation.operation, null);
-      }
-      const ownerPersistedFallbackOperation =
-      options?.allowOwnerPersistedTransitionDeferredVisibility === false ?
-        null :
-        this.getOwnerPersistedTransitionVisibilityFallbackOperation(operationId);
-      const cacheFallbackOperation = await this.queryOperationById(operationId);
-      const fallbackOperation =
-      ownerPersistedFallbackOperation || cacheFallbackOperation;
-      return this.buildOperationVisibilityObservation(
-        fallbackOperation,
-        authoritativeObservation?.deferredOutcome || null,
       );
     }
 

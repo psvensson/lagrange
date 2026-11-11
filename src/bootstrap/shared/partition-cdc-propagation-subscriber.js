@@ -3,7 +3,8 @@ import {CDC_COMPLETION, hasDurableCdcEvents,
   '../../cdc/cdc-delivery-outcome.js';
 import {assertCdcDeliveryInvocation} from '../../cdc/cdc-delivery-invocation.js';
 import {copyCdcEvent} from '../../cdc/cdc-event-envelope.js';
-import {PARTITION_SERVICE_CDC} from '../../partition/partition-service-constants.js';
+import {PARTITION_SERVICE_CDC, PARTITION_SERVICE_EVENT} from
+  '../../partition/partition-service-constants.js';
 import {MESSAGE_GROUP_SERVICE_LITERAL} from
   '../../message-group/message-group-service-runtime-support.js';
 const LOCAL_STR_OPERATIONAL_MESSAGE_GROUP_INGRESS_NOT_RE = 'Operational message-group ingress not ready ';
@@ -493,6 +494,12 @@ function deferredPropagationAttachment(partition, attempt, options) {
     }
   }
   partition.cdcDelivery?.awaitPropagationAttachment(retry);
+  // The awaited attachment belongs to this replica's lifetime: its shutdown
+  // retires it (no listener outlives the replica).
+  partition.once?.(PARTITION_SERVICE_EVENT.SHUTDOWN, () => {
+    disarm();
+    partition.cdcDelivery?.awaitPropagationAttachment(null);
+  });
   return retry;
 }
 

@@ -10,6 +10,8 @@
  * that one down to reconcileTimeoutOperation.
  */
 import {test} from '../../src/test-helpers/tap.js';
+import {buildPresentOperationVisibility} from
+  '../../src/rebalancer/replica-operation-repository-operation-visibility.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {
   OperationWorkflowRecoveryTimeout,
@@ -66,9 +68,8 @@ function buildSweepProbe() {
       }),
       isOperationTerminal: () => false,
       isOperationLocallyOwned: () => true,
-      getOperationByIdVisibilityObservation: async () => ({
-        operation: buildCreatingOperation(),
-      }),
+      getOperationByIdVisibilityObservation: async () =>
+        buildPresentOperationVisibility(buildCreatingOperation()),
     },
     clearEmptyIncompleteOperationQueryDelay() {},
     resolveTimeoutIncompleteVisibilitySupplementMode: () => 'none',

@@ -26,7 +26,7 @@ function subscriberBranch(delivery, wrapper) {
   const original = delivery.getCDCSubscriberSource(wrapper);
   const subscription = delivery.owner.cdcSubscriberStates?.get(original);
   return {wrapper, original, subscription, epoch: subscription?.subscriptionEpoch,
-    topology: null, primary: primaryRecipient()};
+    topology: null, releases: 0, primary: primaryRecipient()};
 }
 
 function subscriberBindingCurrent(delivery, branch) {
@@ -74,6 +74,7 @@ function releaseStaleTopology(branch) {
   if (topologyBindingCurrent(branch)) return;
   branch.topology = null;
   branch.primary.cursor = null;
+  branch.releases += 1;
 }
 
 function recipientsOfBranch(branch) {
@@ -129,6 +130,7 @@ function bindBranchTopology(branch, owner, source, targets) {
       branch.topology.source !== source)) {
     branch.topology = null;
     branch.primary.cursor = null;
+    branch.releases += 1;
   }
   if (branch.topology === null) {
     branch.topology = createCdcPropagationProgress(owner, source, targets);

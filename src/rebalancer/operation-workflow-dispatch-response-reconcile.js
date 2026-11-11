@@ -19,6 +19,10 @@ import {
 import {assertCanonicalRebalancerEntityIdentity} from './rebalancer-entity-identity.js';
 import {isBoundMembershipPublicationEpoch} from './replica-operation-membership-epoch-binding.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+import {
+  OPERATION_VISIBILITY_STATE,
+  readOperationVisibilityState,
+} from './replica-operation-repository-operation-visibility.js';
 import {buildReplicaCreateAdmissionToken, buildReplicaCreateAttemptToken} from './replica-create-admission-token.js';
 import {bindReplaceCreateTargetReplicaId} from './operation-workflow-replace-target-binding.js';
 import * as DISPATCH_REARM_EVIDENCE from './operation-workflow-dispatch-rearm-evidence.js';
@@ -207,14 +211,18 @@ function resolveObservedCreateDispatchAuthority(
   operation,
   observation,
 ) {
-  const current = observation?.operation || null;
-  if (!current) {
-    if (!observation?.deferredOutcome &&
-        hasDurableCreateDispatchTuple(operation)) {
-      return allowCreateDispatchAuthority(operation);
-    }
+  const state = readOperationVisibilityState(observation);
+  if (state === OPERATION_VISIBILITY_STATE.UNAVAILABLE) {
+    // No owner answer: no CREATE is sent and nothing is completed from the
+    // local copy or a projection; the dispatch defers retryably.
     throw buildCreateDispatchRefreshDeferred(operation, observation);
   }
+  if (state === OPERATION_VISIBILITY_STATE.ABSENT) {
+    // The owner holds no such operation: a CREATE past SENDING has no
+    // authority left to send under.
+    return REFUSED_CREATE_DISPATCH_AUTHORITY;
+  }
+  const current = observation.operation;
   if (!sameCreateDispatchIdentity(operation, current)) {
     return REFUSED_CREATE_DISPATCH_AUTHORITY;
   }
@@ -1104,6 +1112,8 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
             await this.repository.getOperationByIdVisibilityObservation(
               operationId,
               {
+                authoritativeReadMode:
+                  CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
                 allowPriorityRecoveryDeferredVisibility: true,
               },
             );

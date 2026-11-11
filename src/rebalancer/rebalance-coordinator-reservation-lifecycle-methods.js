@@ -538,10 +538,10 @@ class RebalanceCoordinatorReservationLifecycleMethods {
       ) {
         return preferredObservation;
       }
-      // A silent absent from the preferred read may be a transient lagging
-      // local view. Releasing an active reservation requires the absence to
-      // be disproven or confirmed by the owner-RPC-required authority read;
-      // an escalated read that cannot confirm defers the decision.
+      // An ABSENT answer from the preferred read may be a lagging local
+      // view. Releasing an active reservation requires the absence to be
+      // confirmed by the owner-RPC-required read; an UNAVAILABLE answer
+      // (from either read) carries its deferred outcome and keeps it.
       return this.repository.getOperationByIdVisibilityObservation(
         operationId,
         {
@@ -549,7 +549,6 @@ class RebalanceCoordinatorReservationLifecycleMethods {
             CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
           leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
           allowPriorityRecoveryDeferredVisibility: true,
-          requireAbsenceConfirmation: true,
         },
       );
     }

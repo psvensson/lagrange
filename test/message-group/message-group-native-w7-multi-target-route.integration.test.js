@@ -2,6 +2,7 @@
 // 3 RF5 target groups and 2 connected routers (window 2), through the source
 // partition's one propagation subscriber (its source group and its three
 // target groups are its recipients).
+import {elapseRecipientBackoff} from '../test-helpers/cdc-delivery-progress-fixture.js';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {CDC_OPERATION, TABLES} from '../../src/constants/index.js';
@@ -288,6 +289,7 @@ async function runTenureResetWhileHeld(f, subscriber, target3FirstHopAddr) {
       ),
     };
   };
+  elapseRecipientBackoff(f.producerLeader, f.producerClock);
   const heldDrivePromise = f.producerLeader.cdcDelivery.driveCdcObligations(
     'w7-tenure-reset-while-held',
   );
@@ -400,10 +402,15 @@ test(
       return {overrideResult: realResult};
     };
 
+    elapseRecipientBackoff(f.producerLeader, f.producerClock);
     const drive1 = await driveWithPump(f, () =>
       f.producerLeader.cdcDelivery.driveCdcObligations('w7-attempt-1-expiry'),
     );
-    assert.equal(drive1.state, DRIVE.HELD_BY_SUBSCRIBER);
+    // The expired delivery's raw work closed: that cleanup is the event its
+    // hold waited for, so Target 2 was shipped again at once and answered
+    // provisionally (superseded 2026-11-11: it used to stay held until its
+    // backoff). Its late answer still confirmed nothing.
+    assert.equal(drive1.state, DRIVE.PROVISIONAL);
     assert.equal(
       f.producerClock.heldTimers().some((timer) => timer.cleared),
       true,
@@ -415,7 +422,7 @@ test(
     assert.equal(
       target2Recipients().some((recipient) =>
         recipient.state === PARTITION_CDC_RECIPIENT_STATE.SUBSCRIBER_UNCONFIRMED &&
-        recipient.cursor === null && recipient.lastPass === 'held'),
+        recipient.cursor === null),
       true,
       'a late valid provisional answer after expiry did not cover its Target 2 recipient',
     );
@@ -431,6 +438,7 @@ test(
     };
     for (const mode of ['wrong-group', 'changed-vector']) {
       target2Mode = mode;
+      elapseRecipientBackoff(f.producerLeader, f.producerClock);
       const drive = await driveWithPump(f, () =>
         f.producerLeader.cdcDelivery.driveCdcObligations(`w7-attempt-${mode}`),
       );
@@ -468,6 +476,7 @@ test(
       return null;
     };
     const visitedBefore = bVisitedCount;
+    elapseRecipientBackoff(f.producerLeader, f.producerClock);
     const cleanAttempt2Promise = f.producerLeader.cdcDelivery.driveCdcObligations(
       'w7-clean-attempt-release-to-b',
     );
@@ -539,6 +548,7 @@ test(
       return origPressure(events);
     };
 
+    elapseRecipientBackoff(f.producerLeader, f.producerClock);
     const nativeDrive = await driveWithPump(
       f,
       () =>

@@ -33,6 +33,11 @@
 // is another leader's to make once this one hands leadership on (the removal
 // subject's hand-off, partition-service-removal-subject-handoff.js; the
 // rebalancer's named STEP_DOWN), and its proposer re-drives it there.
+// Nor does the crate know whether the voters a removal leaves are alive: a
+// removal committed by the dying quorum's last acknowledgements (a REPLACE
+// source removed after its target died) leaves a configuration that cannot
+// elect. The leader refuses a removal whose resulting voters hold no live
+// quorum by its own check-quorum activity (REMOVES_LIVE_QUORUM, retryable).
 // Excluded: an empty change (the leave) outside a joint configuration. No
 // producer reaches the port with one: the port's normaliser builds exactly
 // one step for every membership operation it accepts.
@@ -56,6 +61,12 @@ import {
 } from './raft-rs-runtime-owner-constants.js';
 import {RAFT_RS_CONF_CHANGE_TYPE} from './raft-rs-ready-loop-constants.js';
 
+// The steps that take a voter out of the incoming configuration.
+const TAKES_A_VOTER = Object.freeze(new Set([
+  RAFT_RS_CONF_CHANGE_TYPE.REMOVE_NODE,
+  RAFT_RS_CONF_CHANGE_TYPE.ADD_LEARNER_NODE,
+]));
+
 /**
  * Whether the change would leave the incoming configuration without a voter:
  * its steps folded over the core's voters (AddNode adds one, RemoveNode and
@@ -68,19 +79,41 @@ import {RAFT_RS_CONF_CHANGE_TYPE} from './raft-rs-ready-loop-constants.js';
  */
 function leavesNoVoter(confState, change) {
   const steps = change?.changes || [];
-  if (steps.length === 0) {
-    return false;
-  }
+  return steps.length > 0 && resultingVoters(confState, steps).size === 0;
+}
+
+// The incoming voters after the change's steps, folded over the core's
+// voters as raft-rs's changer folds them.
+function resultingVoters(confState, steps) {
   const voters = new Set((confState?.voters || []).map(String));
   for (const {changeType, nodeId} of steps) {
     if (changeType === RAFT_RS_CONF_CHANGE_TYPE.ADD_NODE) {
       voters.add(String(nodeId));
-    } else if (changeType === RAFT_RS_CONF_CHANGE_TYPE.REMOVE_NODE ||
-        changeType === RAFT_RS_CONF_CHANGE_TYPE.ADD_LEARNER_NODE) {
+    } else if (TAKES_A_VOTER.has(changeType)) {
       voters.delete(String(nodeId));
     }
   }
-  return voters.size === 0;
+  return voters;
+}
+
+/**
+ * Whether a change that takes voters out leaves a resulting configuration
+ * whose live voters (the leader's own activity record) are no quorum of it.
+ * Removing a dead voter from a group whose survivors are a live quorum
+ * passes: only the RESULTING voters are counted.
+ * @param {Object} confState - The core's configuration.
+ * @param {Object} change - The normalized ConfChangeV2 ({changes}).
+ * @param {Set<string>} liveVoters - Live raft peer ids.
+ * @return {boolean}
+ */
+function removesLiveQuorum(confState, change, liveVoters) {
+  const steps = change?.changes || [];
+  if (!steps.some(({changeType}) => TAKES_A_VOTER.has(changeType))) {
+    return false;
+  }
+  const voters = resultingVoters(confState, steps);
+  const live = [...voters].filter((peerId) => liveVoters.has(peerId)).length;
+  return live < Math.floor(voters.size / 2) + 1;
 }
 
 /**
@@ -119,13 +152,15 @@ function hasPendingConfChange(status) {
  * @param {Object} observed.change - The normalized ConfChangeV2 ({changes}).
  * @param {Function} observed.leaderReplicaIdOf - (lead) => the leader's
  *   replica identity, or null.
+ * @param {Set<string>} observed.liveVoters - The voters the leader counts
+ *   live (raft-rs-voter-liveness.js).
  * @return {Object|null} Frozen CORE_REFUSED NOT_LEADER (retryable),
  *   CORE_REFUSED REMOVES_LAST_VOTER (terminal), CORE_REFUSED REMOVES_LEADER
  *   (retryable, at another leader) or HOST_FAILURE deferral
  *   (retryable), the group usable in each; or null.
  */
 function confChangeProposalRefusal({status, confState, change,
-  leaderReplicaIdOf}) {
+  leaderReplicaIdOf, liveVoters}) {
   if (ROLE[status.raftState] !== ROLE_LEADER) {
     return deepFreeze({
       outcome: RAFT_OPERATION_OUTCOME.CORE_REFUSED,
@@ -153,6 +188,15 @@ function confChangeProposalRefusal({status, confState, change,
       retryable: true,
       recoveryRequired: false,
       leaderReplicaId: leaderReplicaIdOf(status.lead),
+    });
+  }
+  if (removesLiveQuorum(confState, change, liveVoters)) {
+    return deepFreeze({
+      outcome: RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+      reason: RAFT_MEMBERSHIP_CHANGE_REFUSAL.REMOVES_LIVE_QUORUM,
+      phase: RUNTIME_PHASE.ADMISSION,
+      retryable: true,
+      recoveryRequired: false,
     });
   }
   const joint = (confState?.votersOutgoing || []).length > 0;

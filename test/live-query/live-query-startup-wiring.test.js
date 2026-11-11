@@ -140,20 +140,22 @@ describe('live query startup wiring', () => {
   // vectors that every subscriber must acknowledge with a committed receipt;
   // a live query registered there could never answer and would hold the
   // partition's whole delivery lane. The wiring therefore never registers a
-  // live query on such a partition: it observes through the cache.
+  // live query on such a partition: it observes through the cache. A user
+  // table's partition is found among the node's hosted replicas (the
+  // production provider is keyed by replica id) by its partition id.
   it('never registers a live query on an obligation-recording partition', async () => {
     const registered = [];
-    const partitionOf = (tableName) => ({
-      tableName,
+    const partitionOf = (tableName, partitionId) => ({
+      tableName, partitionId,
       async subscribeToCDCWithHandshake(handler, options) {
         registered.push({tableName, subscriberId: options.subscriberId});
         return {status: 'ok', subscriberId: options.subscriberId};
       },
     });
     const hosted = new Map([
-      ['nodes-p1', partitionOf(TABLES.NODES)],
-      ['services-p1', partitionOf(TABLES.SERVICES)],
-      ['partition-orders', partitionOf('orders')],
+      ['nodes-p1-r1', partitionOf(TABLES.NODES, 'nodes-p1')],
+      ['services-p1-r1', partitionOf(TABLES.SERVICES, 'services-p1')],
+      ['partition-orders-r2', partitionOf('orders', 'partition-orders')],
     ]);
     const cache = createMockSystemCache([
       {partition_id: 'nodes-p1', table_name: TABLES.NODES},
@@ -173,7 +175,7 @@ describe('live query startup wiring', () => {
     assert.deepEqual(registered, [], 'no registration on a system-table partition');
     await subscribe('partition-orders', 'query-user', () => {});
     assert.deepEqual(registered, [{tableName: 'orders', subscriberId: 'query-user'}],
-      'a user-table partition (ordinary events) is still subscribed directly');
+      'a user-table partition (ordinary events), found by partition id, is subscribed');
 
     cache.emitCacheChange(TABLES.NODES, 'UPDATE', {partition_id: 'nodes-p1', node_id: 'n-1'});
     assert.equal(observed.length, 1, 'the system-table live query observes through the cache');

@@ -59,6 +59,12 @@ function shouldReturnDeferredDispatchOwnerProgressResult(result) {
 import {recordMessageGroupLearnerFromRecipient, recoverMessageGroupLearnerFromRecipient,
   recoverMessageGroupVoterFromRecipient, issueMessageGroupSuccessorFromRecipient} from
   './operation-workflow-message-group-native-read.js';
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
+  '../control-plane/control-plane-system-table-gateway-constants.js';
+import {
+  OPERATION_VISIBILITY_STATE,
+  readOperationVisibilityState,
+} from './replica-operation-repository-operation-visibility.js';
 
 class OperationWorkflowOwner extends OperationWorkflowRecoveryReconcile {
   constructor(options) {
@@ -311,10 +317,20 @@ class OperationWorkflowOwner extends OperationWorkflowRecoveryReconcile {
       await this.repository.getOperationByIdVisibilityObservation(
         operationId,
         {
+          authoritativeReadMode:
+            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
           allowPriorityRecoveryDeferredVisibility: true,
         },
       );
-    const operation = visibilityObservation?.operation || null;
+    // No owner answer: the observed-progress retry stays armed (it is not
+    // cleared on a read that answered nothing).
+    if (
+      readOperationVisibilityState(visibilityObservation) ===
+      OPERATION_VISIBILITY_STATE.UNAVAILABLE
+    ) {
+      return false;
+    }
+    const operation = visibilityObservation.operation;
     const routeEvidence =
       this.buildObservedProgressOperationRouteEvidence(operation);
     const routeAction =

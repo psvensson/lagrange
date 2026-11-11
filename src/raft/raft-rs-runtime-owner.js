@@ -28,6 +28,12 @@ import {
   reportWaitBoundExceeded,
 } from './raft-rs-runtime-faults.js';
 import {
+  countVoterLivenessTick,
+  createVoterLiveness,
+  liveVotersOf,
+  sampleVoterLiveness,
+} from './raft-rs-voter-liveness.js';
+import {
   decideLeadershipTransfer,
   droppedByLeadershipTransfer,
   removedLeaderStepDown,
@@ -1435,6 +1441,11 @@ function announce(group, expectedGeneration) {
   const before = group.lastStatus;
   group.lastStatus = now;
   const observed = recordStatusObservation(group, expectedGeneration, now);
+  if (sampleVoterLiveness(group.voterLiveness, now,
+    tuningOf(group.timing).electionTick,
+    (status) => ROLE[status.raftState] === ROLE_LEADER)) {
+    group.emit(RUNTIME_EVENT.VOTER_LIVENESS_CHANGED);
+  }
   stepDownIfRemovedLeader(group, observed);
   announceAppliedProgress(group, expectedGeneration, observed);
   if (before && now.raftState !== before.raftState) {
@@ -1468,6 +1479,12 @@ function announce(group, expectedGeneration) {
 // else causes - a tick, a delivery - asks again while it still leads
 // (raft-rs ignores a repeat to a transferee whose transfer runs, and aborts
 // one that ran out after an election timeout of ticks).
+// The voters this group's leader counts live (raft-rs-voter-liveness.js).
+function groupLiveVoters(group, status) {
+  return liveVotersOf(group.voterLiveness, status,
+    tuningOf(group.timing).electionTick);
+}
+
 function stepDownIfRemovedLeader(group, observed) {
   const transfer = observed.ok ?
     removedLeaderStepDown(group.peerId, observed.value) : null;
@@ -1507,7 +1524,8 @@ function refusedConfChange(group, expectedGeneration, change) {
   }
   return confChangeProposalRefusal({status: status.value,
     confState: conf.value, change,
-    leaderReplicaIdOf: (lead) => semanticLeaderIdentity(group, lead)});
+    leaderReplicaIdOf: (lead) => semanticLeaderIdentity(group, lead),
+    liveVoters: groupLiveVoters(group, status.value)});
 }
 
 // The configuration's voter-bearing and learner parts as one comparable key.
@@ -1893,6 +1911,9 @@ function performCommand(group, command, expectedGeneration) {
   if (refused !== null) {
     return settledTurn(refused);
   }
+  if (command.type === TICK_COMMAND) {
+    countVoterLivenessTick(group.voterLiveness);
+  }
   const invoked = invokeCoreAt(
     group, expectedGeneration, primitive[0], ...primitive[1]);
   return settlePrimitiveInvocation(group, command, expectedGeneration, invoked);
@@ -2250,6 +2271,7 @@ function createRuntimeDispatcher(request) {
     membershipGenerationIndex: 0n,
     membershipGenerationKnown: true,
     gateOpen: false,
+    voterLiveness: createVoterLiveness(),
     timing: request.timing,
     timers: request.timers,
     store,

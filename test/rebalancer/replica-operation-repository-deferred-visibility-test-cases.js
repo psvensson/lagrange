@@ -1,6 +1,8 @@
 import {CONTROL_PLANE_READ_LEADER_MODE} from
   '../../src/control-plane/control-plane-system-table-gateway.js';
 import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
+import {OPERATION_VISIBILITY_STATE} from
+  '../../src/rebalancer/replica-operation-repository-operation-visibility.js';
 
 export function registerReplicaOperationRepositoryDeferredVisibilityTests({
   test,
@@ -945,8 +947,8 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
   );
 
   test(
-    'getOperationByIdVisibilityObservation preserves deferred cache-backed ' +
-      'visibility when priority recovery blocks authoritative reads',
+    'getOperationByIdVisibilityObservation answers UNAVAILABLE, not the ' +
+      'cached row, when priority recovery blocks authoritative reads',
     async (t) => {
       let readCalls = 0;
       const cachedRow = makeRow({
@@ -1008,13 +1010,13 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
       );
       t.equal(
         observation?.state,
-        INCOMPLETE_OPERATION_OBSERVATION_STATE.PRESENT,
-        'deferred authoritative visibility should keep cache-backed operations visible',
+        OPERATION_VISIBILITY_STATE.UNAVAILABLE,
+        'a deferred authoritative read is unavailability, never a cache-backed PRESENT',
       );
       t.equal(
-        observation?.operation?.operationId,
-        cachedRow.operation_id,
-        'single-operation visibility should fall back to the repository-owned query result',
+        observation?.operation,
+        null,
+        'no cached row stands in for the owner',
       );
       t.equal(
         observation?.deferredOutcome?.completionState,
@@ -1030,8 +1032,9 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
   );
 
   test(
-    'persistNewOperation keeps a deferred owner-persisted transition visible ' +
-      'to later single-operation reads when authoritative confirmation stays empty',
+    'persistNewOperation: a later single-operation read behind the ' +
+      'owner-persisted transition is UNAVAILABLE, never ABSENT, while ' +
+      'authoritative confirmation stays empty',
     async (t) => {
       const repo = createTestRepository({
         authoritativeVisibilityTimeoutMs: 0,
@@ -1065,13 +1068,13 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
       );
       t.equal(
         visibilityObservation?.state,
-        INCOMPLETE_OPERATION_OBSERVATION_STATE.PRESENT,
-        'later single-operation reads should keep the owner-persisted transition visible',
+        OPERATION_VISIBILITY_STATE.UNAVAILABLE,
+        'an empty read behind this owner\'s own persisted transition is not absence',
       );
       t.equal(
-        visibilityObservation?.operation?.workflowStep,
-        WORKFLOW_STEP.CREATING,
-        'the fallback visibility should preserve the owner-persisted workflow step',
+        visibilityObservation?.operation,
+        null,
+        'the owner-persisted witness is not returned as the authoritative row',
       );
       t.equal(
         visibilityObservation?.deferredOutcome?.reasonCode,
