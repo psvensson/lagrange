@@ -37,6 +37,7 @@
 
 import {createHash} from 'node:crypto';
 
+import {preparedStatementOf} from '../storage/sqlite-prepared-statement-owner.js';
 import {
   RAFT_RS_LEARNER_ADMISSION_COLUMN,
   RAFT_RS_NODE_ID_COLUMN,
@@ -108,7 +109,7 @@ function validatedReservation(reservation, identities, peerIds) {
 
 function readRaftRsPeerIdentityReservations(db) {
   return validatedRaftRsPeerIdentityReservations(
-    db.prepare(RAFT_RS_PEER_IDENTITY_SQL.SELECT_ALL).all().map((row) => ({
+    preparedStatementOf(db, RAFT_RS_PEER_IDENTITY_SQL.SELECT_ALL).all().map((row) => ({
       replicaIdentity: row.replica_identity,
       peerId: row.raft_peer_id,
       nodeId: row.node_id,
@@ -162,7 +163,7 @@ class RaftRsPeerIdentityRegistry {
    * @private
    */
   reservationFor(replicaIdentity) {
-    return this.db.prepare(RAFT_RS_PEER_IDENTITY_SQL.SELECT_BY_IDENTITY)
+    return preparedStatementOf(this.db, RAFT_RS_PEER_IDENTITY_SQL.SELECT_BY_IDENTITY)
       .get(replicaIdentity);
   }
 
@@ -172,7 +173,7 @@ class RaftRsPeerIdentityRegistry {
    * @private
    */
   reservationOfPeerId(raftPeerId) {
-    return this.db.prepare(RAFT_RS_PEER_IDENTITY_SQL.SELECT_BY_PEER_ID)
+    return preparedStatementOf(this.db, RAFT_RS_PEER_IDENTITY_SQL.SELECT_BY_PEER_ID)
       .get(raftPeerId);
   }
 
@@ -217,7 +218,7 @@ class RaftRsPeerIdentityRegistry {
       throw new Error(RAFT_RS_PEER_IDENTITY_ERROR_MSG.collision(
         replicaIdentity, holder.replica_identity, raftPeerId));
     }
-    this.db.prepare(RAFT_RS_PEER_IDENTITY_SQL.INSERT_RESERVATION)
+    preparedStatementOf(this.db, RAFT_RS_PEER_IDENTITY_SQL.INSERT_RESERVATION)
       .run(replicaIdentity, raftPeerId);
     return raftPeerId;
   }
@@ -255,7 +256,7 @@ class RaftRsPeerIdentityRegistry {
       throw new Error(RAFT_RS_PEER_IDENTITY_ERROR_MSG.LEARNER_ADMISSION_CONFLICT);
     }
     if (row.learner_admission === null) {
-      this.db.prepare(RAFT_RS_PEER_IDENTITY_SQL.RECORD_LEARNER_ADMISSION)
+      preparedStatementOf(this.db, RAFT_RS_PEER_IDENTITY_SQL.RECORD_LEARNER_ADMISSION)
         .run(encoded, replicaIdentity);
     }
   }
@@ -275,7 +276,7 @@ class RaftRsPeerIdentityRegistry {
       throw new Error(RAFT_RS_PEER_IDENTITY_ERROR_MSG.NODE_ID_CONFLICT);
     }
     if (row.node_id === null) {
-      this.db.prepare(RAFT_RS_PEER_IDENTITY_SQL.RECORD_NODE_ID)
+      preparedStatementOf(this.db, RAFT_RS_PEER_IDENTITY_SQL.RECORD_NODE_ID)
         .run(nodeId, replicaIdentity);
     }
   }

@@ -24,6 +24,7 @@ import {
   PARTITION_CDC_OBLIGATION_STANDING as STANDING,
   PARTITION_CDC_OBLIGATION_TABLE as TABLE,
 } from './partition-cdc-obligation-constants.js';
+import {preparedStatementOf} from '../storage/sqlite-prepared-statement-owner.js';
 import {RETAINED_STORE_ERROR, retainedStoreError, retainedStoreTableExistsIn, readRetainedStoreRowsIn,
   isStoredInteger, isStoredNullableInteger} from './partition-retained-store-observation.js';
 
@@ -57,7 +58,7 @@ function ensureCdcObligationLedger(db, {index, term, entryId}) {
   db.exec(SQL.CREATE_PROGRESS_TABLE);
   db.exec(SQL.CREATE_INCARNATION_TABLE);
   db.exec(SQL.CREATE_NEWEST_TABLE);
-  db.prepare(SQL.INSERT_INCARNATION).run({scope: PROGRESS_SCOPE,
+  preparedStatementOf(db, SQL.INSERT_INCARNATION).run({scope: PROGRESS_SCOPE,
     incarnation: [term, index, entryId ?? ''].join(INCARNATION_SEPARATOR), index, term});
 }
 
@@ -68,12 +69,12 @@ function ensureCdcObligationLedger(db, {index, term, entryId}) {
  * @return {string|null} The incarnation.
  */
 function readCdcLedgerIncarnation(db) {
-  if (db.prepare(SQL.INCARNATION_TABLE_EXISTS).get() === undefined) return null;
-  return db.prepare(SQL.SELECT_INCARNATION).get(PROGRESS_SCOPE)?.incarnation ?? null;
+  if (preparedStatementOf(db, SQL.INCARNATION_TABLE_EXISTS).get() === undefined) return null;
+  return preparedStatementOf(db, SQL.SELECT_INCARNATION).get(PROGRESS_SCOPE)?.incarnation ?? null;
 }
 
 function progressTableExists(db) {
-  return db.prepare(SQL.PROGRESS_TABLE_EXISTS).get() !== undefined;
+  return preparedStatementOf(db, SQL.PROGRESS_TABLE_EXISTS).get() !== undefined;
 }
 
 /**
@@ -83,7 +84,7 @@ function progressTableExists(db) {
  * @return {boolean} Whether the table exists.
  */
 function cdcObligationLedgerExists(db) {
-  return db.prepare(SQL.TABLE_EXISTS).get() !== undefined;
+  return preparedStatementOf(db, SQL.TABLE_EXISTS).get() !== undefined;
 }
 
 function validCdcCensusRow(row) {
@@ -156,9 +157,9 @@ function insertCdcObligation(db, row) {
     entryId: row.entryId,
     eventJson: row.eventJson,
   };
-  db.prepare(SQL.INSERT).run(values);
+  preparedStatementOf(db, SQL.INSERT).run(values);
   // Recorded in log order: the last recording is the newest event.
-  db.prepare(SQL.UPSERT_NEWEST).run({scope: PROGRESS_SCOPE, ...values});
+  preparedStatementOf(db, SQL.UPSERT_NEWEST).run({scope: PROGRESS_SCOPE, ...values});
 }
 
 function obligationOf(row) {
@@ -187,7 +188,7 @@ function readOwedCdcObligations(db, options = {}) {
   const after = options.after ?? FIRST_POSITION;
   const through = options.through ??
     {logIndex: Number.MAX_SAFE_INTEGER, ordinal: Number.MAX_SAFE_INTEGER};
-  return db.prepare(SQL.SELECT_OWED_AFTER).all({
+  return preparedStatementOf(db, SQL.SELECT_OWED_AFTER).all({
     logIndex: after.logIndex,
     ordinal: after.ordinal,
     throughIndex: through.logIndex,
@@ -200,7 +201,7 @@ function readOwedCdcObligations(db, options = {}) {
 // It is a scheduling bound, never evidence that any prefix was delivered.
 function readOwedCdcTail(db) {
   if (!cdcObligationLedgerExists(db)) return null;
-  const row = db.prepare(SQL.SELECT_OWED_TAIL).get();
+  const row = preparedStatementOf(db, SQL.SELECT_OWED_TAIL).get();
   return row ? {logIndex: Number(row.log_index), ordinal: Number(row.ordinal)} : null;
 }
 
@@ -214,7 +215,7 @@ function readCdcObligation(db, eventKey) {
   if (!cdcObligationLedgerExists(db)) {
     return null;
   }
-  const row = db.prepare(SQL.SELECT_BY_KEY).get(eventKey);
+  const row = preparedStatementOf(db, SQL.SELECT_BY_KEY).get(eventKey);
   if (row === undefined) {
     return null;
   }
@@ -236,7 +237,8 @@ function readCdcObligation(db, eventKey) {
  *   entry (delivery-marker position) that last advanced it.
  */
 function readCdcObligationProgress(db) {
-  const row = progressTableExists(db) ? db.prepare(SQL.SELECT_PROGRESS).get() : undefined;
+  if (!progressTableExists(db)) return null;
+  const row = preparedStatementOf(db, SQL.SELECT_PROGRESS).get();
   if (row === undefined) return null;
   return Object.freeze({throughLogIndex: Number(row.through_log_index),
     throughOrdinal: Number(row.through_ordinal), reclaimed: Number(row.reclaimed),
@@ -270,8 +272,8 @@ function readCdcObligationStanding(db, position) {
   if (isCdcPositionReclaimed(position, readCdcObligationProgress(db))) {
     return {standing: STANDING.RECLAIMED, row: null};
   }
-  const row = cdcObligationLedgerExists(db) ?
-    db.prepare(SQL.SELECT_BY_POSITION).get(position.logIndex, position.ordinal) : undefined;
+  const row = cdcObligationLedgerExists(db) ? preparedStatementOf(db, SQL.SELECT_BY_POSITION)
+    .get(position.logIndex, position.ordinal) : undefined;
   if (row === undefined) return {standing: STANDING.UNKNOWN, row: null};
   const delivered = Number(row.delivered) === DELIVERED_FLAG.DELIVERED;
   return {standing: delivered ? STANDING.DELIVERED : STANDING.OWED,
@@ -291,7 +293,7 @@ function positionOf(row) {
  */
 function readOwedCdcHead(db) {
   if (!cdcObligationLedgerExists(db)) return null;
-  const row = db.prepare(SQL.SELECT_OWED_HEAD).get();
+  const row = preparedStatementOf(db, SQL.SELECT_OWED_HEAD).get();
   return row ? positionOf(row) : null;
 }
 
@@ -303,8 +305,8 @@ function readOwedCdcHead(db) {
  * @return {Object|null} The frozen event (as readOwedCdcObligations).
  */
 function readCdcLedgerNewest(db) {
-  if (db.prepare(SQL.NEWEST_TABLE_EXISTS).get() === undefined) return null;
-  const row = db.prepare(SQL.SELECT_NEWEST).get(PROGRESS_SCOPE);
+  if (preparedStatementOf(db, SQL.NEWEST_TABLE_EXISTS).get() === undefined) return null;
+  const row = preparedStatementOf(db, SQL.SELECT_NEWEST).get(PROGRESS_SCOPE);
   return row ? obligationOf(row) : null;
 }
 
@@ -319,7 +321,7 @@ function readCdcLedgerNewest(db) {
  */
 function readCdcPredecessorPosition(db, position) {
   const row = cdcObligationLedgerExists(db) ?
-    db.prepare(SQL.SELECT_PREDECESSOR).get(position) : undefined;
+    preparedStatementOf(db, SQL.SELECT_PREDECESSOR).get(position) : undefined;
   if (row !== undefined) return positionOf(row);
   const progress = readCdcObligationProgress(db);
   if (progress === null) return {...FIRST_POSITION};
@@ -337,7 +339,7 @@ function readCdcPredecessorPosition(db, position) {
  */
 function countOwedCdcObligationsAfter(db, position, limit) {
   if (!cdcObligationLedgerExists(db)) return 0;
-  return Number(db.prepare(SQL.COUNT_OWED_AFTER).get({...(position ?? FIRST_POSITION),
+  return Number(preparedStatementOf(db, SQL.COUNT_OWED_AFTER).get({...(position ?? FIRST_POSITION),
     limit}).count);
 }
 
@@ -350,7 +352,7 @@ function countOwedCdcObligationsAfter(db, position, limit) {
  */
 function countRetainedDeliveredCdcObligations(db, limit) {
   if (!cdcObligationLedgerExists(db)) return 0;
-  return Number(db.prepare(SQL.COUNT_RETAINED_DELIVERED).get({limit}).count);
+  return Number(preparedStatementOf(db, SQL.COUNT_RETAINED_DELIVERED).get({limit}).count);
 }
 
 /**
@@ -369,17 +371,17 @@ function reclaimDeliveredCdcObligations(db, {index, term}) {
   if (!cdcObligationLedgerExists(db)) return 0;
   const head = readOwedCdcHead(db) ??
     {logIndex: Number.MAX_SAFE_INTEGER, ordinal: Number.MAX_SAFE_INTEGER};
-  const reclaimable = db.prepare(SQL.SELECT_RECLAIMABLE).all({...head,
+  const reclaimable = preparedStatementOf(db, SQL.SELECT_RECLAIMABLE).all({...head,
     limit: BOUND.RECLAIM_ROWS_PER_APPLY});
   if (reclaimable.length === 0) return 0;
   const through = positionOf(reclaimable.at(-1));
-  const deleted = db.prepare(SQL.DELETE_RECLAIMED).run(through).changes;
+  const deleted = preparedStatementOf(db, SQL.DELETE_RECLAIMED).run(through).changes;
   if (deleted !== reclaimable.length) {
     throw new Error(`${MESSAGE.RECLAIM_COUNT_MISMATCH}${MESSAGE.CODE_SEPARATOR}` +
       `${deleted}/${reclaimable.length}`);
   }
   db.exec(SQL.CREATE_PROGRESS_TABLE);
-  db.prepare(SQL.UPSERT_PROGRESS).run({scope: PROGRESS_SCOPE, ...through,
+  preparedStatementOf(db, SQL.UPSERT_PROGRESS).run({scope: PROGRESS_SCOPE, ...through,
     reclaimed: deleted, index, term});
   return deleted;
 }
@@ -393,7 +395,7 @@ function reclaimDeliveredCdcObligations(db, {index, term}) {
  * @param {{index: number, term: number}} position - The CDC_DELIVERED entry.
  */
 function markCdcObligationDelivered(db, eventKey, {index, term}) {
-  const moved = db.prepare(SQL.MARK_DELIVERED).run({eventKey, index, term});
+  const moved = preparedStatementOf(db, SQL.MARK_DELIVERED).run({eventKey, index, term});
   if (moved.changes !== ONE_ROW) {
     throw new Error(
       `${MESSAGE.MARK_NOT_ONE_ROW}${MESSAGE.CODE_SEPARATOR}${eventKey}`);
@@ -413,7 +415,7 @@ function countCdcObligations(db) {
   if (!cdcObligationLedgerExists(db)) {
     return counts;
   }
-  for (const row of db.prepare(SQL.COUNT_BY_FLAG).all()) {
+  for (const row of preparedStatementOf(db, SQL.COUNT_BY_FLAG).all()) {
     if (Number(row.delivered) === DELIVERED_FLAG.DELIVERED) {
       counts.delivered += Number(row.count);
     } else {

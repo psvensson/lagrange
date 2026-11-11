@@ -18,6 +18,7 @@ import {PARTITION_CDC_COMMAND, PARTITION_CDC_OBLIGATION_REASON,
   '../../src/partition/partition-cdc-obligation-constants.js';
 import {countCdcObligations} from '../../src/partition/partition-cdc-obligation-ledger.js';
 import {PARTITION_SERVICE_CDC} from '../../src/partition/partition-service-constants.js';
+import {preparedStatementOf} from '../../src/storage/sqlite-prepared-statement-owner.js';
 import {CDC_TABLE as TABLE, applyCommitted, committedQueryOf, settleTicks, shutdownAll,
   startLeader} from './participant-transaction-fixture.js';
 
@@ -143,24 +144,20 @@ async function fixture(t, {rows = ['A', 'B'], subscribers = 3} = {}) {
   return f;
 }
 
-// Every ledger page read the lane makes, with its limit and row count.
+// Every ledger page read the lane makes, with its limit and row count: read
+// at the handle's own owed-page statement, the one the ledger reads through.
 function observeOwedReads(leader) {
-  const {db} = leader;
-  const prepare = db.prepare;
+  const statement = preparedStatementOf(leader.db,
+    PARTITION_CDC_OBLIGATION_SQL.SELECT_OWED_AFTER);
+  const all = statement.all;
   const reads = [];
-  db.prepare = function(sql) {
-    const statement = prepare.call(this, sql);
-    if (sql !== PARTITION_CDC_OBLIGATION_SQL.SELECT_OWED_AFTER) return statement;
-    const all = statement.all;
-    statement.all = function(options) {
-      const result = all.call(this, options);
-      reads.push({limit: options.limit, count: result.length});
-      return result;
-    };
-    return statement;
+  statement.all = function(options) {
+    const result = all.call(this, options);
+    reads.push({limit: options.limit, count: result.length});
+    return result;
   };
   return {reads, restore: () => {
-    db.prepare = prepare;
+    statement.all = all;
   }};
 }
 

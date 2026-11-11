@@ -21,6 +21,7 @@ import {PARTITION_CDC_OBLIGATION_BOUND as BOUND, PARTITION_CDC_OBLIGATION_FAILUR
   '../../src/partition/partition-cdc-obligation-constants.js';
 import {countCdcObligations, readOwedCdcObligations} from
   '../../src/partition/partition-cdc-obligation-ledger.js';
+import {preparedStatementOf} from '../../src/storage/sqlite-prepared-statement-owner.js';
 import {ACKNOWLEDGEMENT_REFUSAL_LOG_MSG as REFUSAL_LOG_MSG,
   ACKNOWLEDGEMENT_REFUSAL_OUTCOME as REFUSAL_OUTCOME} from
   '../../src/partition/partition-cdc-acknowledgement-refusal.js';
@@ -81,21 +82,18 @@ async function fillToCapacity(partition) {
 }
 
 // The storage-port fault: the owed read reports `eventKey` wrong for the row
-// at `position` while the fault is on.
+// at `position` while the fault is on. It is injected at the handle's own
+// owed-page statement, the one the ledger reads through.
 function injectOwedReadFault(partition, position) {
   const fault = {on: true, served: 0};
-  const {db} = partition;
-  const prepare = db.prepare.bind(db);
-  db.prepare = (sql) => {
-    const statement = prepare(sql);
-    if (sql !== SQL.SELECT_OWED_AFTER) return statement;
-    return {all: (...args) => statement.all(...args).map((row) => {
-      if (!fault.on || Number(row.log_index) !== position.logIndex ||
-          Number(row.ordinal) !== position.ordinal) return row;
-      fault.served += 1;
-      return {...row, event_key: CORRUPT_KEY};
-    })};
-  };
+  const statement = preparedStatementOf(partition.db, SQL.SELECT_OWED_AFTER);
+  const all = statement.all.bind(statement);
+  statement.all = (...args) => all(...args).map((row) => {
+    if (!fault.on || Number(row.log_index) !== position.logIndex ||
+        Number(row.ordinal) !== position.ordinal) return row;
+    fault.served += 1;
+    return {...row, event_key: CORRUPT_KEY};
+  });
   return fault;
 }
 
