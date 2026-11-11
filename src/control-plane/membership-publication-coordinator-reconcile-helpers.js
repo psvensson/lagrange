@@ -20,6 +20,7 @@ import {isTerminalReplicaOperationRecord} from '../rebalancer/replica-operation-
 import {
   MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL,
   MEMBERSHIP_PUBLICATION_KIND,
+  MEMBERSHIP_PUBLICATION_READ_SOURCE,
   MEMBERSHIP_PUBLICATION_STATUS,
 } from './membership-publication-row-contract.js';
 import {
@@ -157,6 +158,30 @@ const CONVERGENCE_OUTCOME = Object.freeze({
   RECONCILE_TIMED_OUT: 'reconcile-timed-out',
   NONE: 'none',
 });
+
+/**
+ * The owner driver's tick: while the latest durable row still states its
+ * census NOT_DERIVED, ask for the full reconcile that derives it, read from
+ * the durable owner, and trace the decision.
+ * @param {Object} coordinator
+ * @param {Object|null} latestPublicationRow - The driver's durable read.
+ * @param {Object} traceFields - The driver's decision-trace fields.
+ * @return {void}
+ */
+function requestOwedPriorityCensusFromDriver(coordinator,
+  latestPublicationRow, traceFields) {
+  if (requestOwedPriorityCensus(
+    coordinator,
+    latestPublicationRow,
+    {readSource: MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED},
+  )) {
+    coordinator._emitConvergenceDecisionTrace({
+      decision: CONVERGENCE_DECISION.DRIVE,
+      reason: CONVERGENCE_REASON.CENSUS_NOT_DERIVED,
+      ...traceFields,
+    });
+  }
+}
 
 const OWNER_ACK_COMPLETION_REDRIVE_STATUSES = Object.freeze([
   MEMBERSHIP_PUBLICATION_STATUS.OPEN,
@@ -517,6 +542,7 @@ export {
   hasPrioritySummaryRefreshClearedGap,
   reportOwnerMembershipReconcileSpent,
   requestOwedPriorityCensus,
+  requestOwedPriorityCensusFromDriver,
   resolveDeferredPropagatedCatchupCooldownMs,
   resolveOwnerAckCompletionPendingNodeIds,
   shouldDeferMembershipReconcileToWriteLeader,

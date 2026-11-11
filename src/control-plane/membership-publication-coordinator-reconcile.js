@@ -77,7 +77,7 @@ import {
   buildPublicationReadinessTraceFields,
   hasPrioritySummaryRefreshClearedGap,
   reportOwnerMembershipReconcileSpent,
-  requestOwedPriorityCensus,
+  requestOwedPriorityCensusFromDriver,
   resolveDeferredPropagatedCatchupCooldownMs,
   resolveOwnerAckCompletionPendingNodeIds,
   shouldDeferMembershipReconcileToWriteLeader,
@@ -337,18 +337,22 @@ class MembershipPublicationCoordinatorReconcile extends
             candidate,
             nowMs: this.now(),
           });
-          const answer = buildReconcilePublicationWriteAnswer({
-            publicationWrite: await this.admitPublicationRow(
-              row,
-              convergenceOptions,
-            ),
-            candidate,
-            workflow,
-          });
+          // A write still owed is re-asked after the declared delay; any
+          // other answer ends the hold.
+          const answer = requeueHeldPublicationWrite(
+            this,
+            buildReconcilePublicationWriteAnswer({
+              publicationWrite: await this.admitPublicationRow(
+                row,
+                convergenceOptions,
+              ),
+              candidate,
+              workflow,
+            }),
+          );
           if (!isPublicationWriteLanded(answer.publicationWrite)) {
-            // No landed admission, no OPEN: the workflow stays DERIVING and
-            // a write still owed is re-asked after the declared delay.
-            return requeueHeldPublicationWrite(this, answer);
+            // No landed admission, no OPEN: the workflow stays DERIVING.
+            return answer;
           }
           await this.workflowCoordinator.transitionStep(
             workflow.workflowId,
@@ -378,22 +382,6 @@ class MembershipPublicationCoordinatorReconcile extends
       CONVERGENCE_DECISION_TRACE_MSG,
       {nodeId: this.nodeId, ...fields},
     );
-  }
-
-  // The latest durable row still states its census NOT_DERIVED: ask for
-  // the full reconcile that derives it, from the durable owner.
-  _requestOwedPriorityCensus(latestPublicationRow, traceFields) {
-    if (requestOwedPriorityCensus(
-      this,
-      latestPublicationRow,
-      {readSource: MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED},
-    )) {
-      this._emitConvergenceDecisionTrace({
-        decision: CONVERGENCE_DECISION.DRIVE,
-        reason: CONVERGENCE_REASON.CENSUS_NOT_DERIVED,
-        ...traceFields,
-      });
-    }
   }
 
   _buildPublicationReadinessTraceFields(handoffContract, planningSnapshot) {
@@ -478,10 +466,11 @@ class MembershipPublicationCoordinatorReconcile extends
         ownerAckCompletionPendingNodeIds,
       });
       const missingCount = handoffContract?.missingPublishedCount ?? 0;
-      this._requestOwedPriorityCensus(planningSnapshot.latestPublicationRow, {
-        leadershipTier: leadership.tier,
-        publicationEpoch,
-      });
+      requestOwedPriorityCensusFromDriver(
+        this,
+        planningSnapshot.latestPublicationRow,
+        {leadershipTier: leadership.tier, publicationEpoch},
+      );
       if (
         missingCount <= 0 &&
         ownerAckCompletionPendingNodeIds.length === 0
