@@ -74,6 +74,12 @@ function createMockCDCService() {
     async awaitProjectionAt(position) {
       return {outcome: 'reached', position};
     },
+    // The durable owner's authoritative read (the metadata authority of
+    // CREATE TABLE): this fresh in-memory cluster holds no table metadata,
+    // so every lookup answers an explicit empty success (ABSENT).
+    async executeAuthoritativeSystemTableRead() {
+      return {success: true, rows: []};
+    },
     async insertSystemTableRow(tableName, data) {
       insertedRows.push({tableName, data});
       return buildMutationEnvelope('INSERT', tableName, {
