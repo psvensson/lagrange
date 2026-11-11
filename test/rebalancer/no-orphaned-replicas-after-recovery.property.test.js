@@ -306,10 +306,14 @@ test('Property 9: No Orphaned Replicas After Recovery', async (t) => {
     await fc.assert(
       fc.asyncProperty(
         fc.array(
+          // An ADD carries its minted replica id from creation
+          // (allocateCanonicalReplicaId); its FAILED is admitted on the
+          // owner's read of that replica (M2).
           fc.record({
             operationId: fc.uuid(),
             partitionId: fc.uuid(),
             targetNodeId: fc.uuid(),
+            replicaId: fc.uuid(),
             workflowStep: fc.constantFrom('PENDING', 'SENDING', 'CREATING'),
           }),
           {minLength: 1, maxLength: 5},

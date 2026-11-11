@@ -3,6 +3,7 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
+import {settleReplicaDispatchQueues} from '../helpers/reconcile-queue-turns.js';
 import {ReplicaDispatchService} from
   '../../src/control-plane/replica-dispatch-service.js';
 import {
@@ -733,8 +734,7 @@ test('ReplicaDispatchService consumes readiness-owner completion wakes through '
       ownerKey: 'node-2',
       capturedToken: {tokenKey: 'semantic-token-1'},
     });
-    await Promise.resolve();
-    await Promise.resolve();
+    await settleReplicaDispatchQueues(service);
     t.equal(downstreamProgress.length, 1,
       'one semantic completion reaches downstream dispatch progress once');
     t.match(downstreamProgress[0], {
@@ -746,17 +746,14 @@ test('ReplicaDispatchService consumes readiness-owner completion wakes through '
       ownerKey: 'node-2',
       capturedToken: {tokenKey: 'semantic-token-2'},
     });
-    for (let turn = 0; turn < 8 && downstreamProgress.length < 3; turn++) {
-      await Promise.resolve();
-    }
+    await settleReplicaDispatchQueues(service);
     t.equal(downstreamProgress.length, 3,
       'a transient downstream failure retries the same semantic wake once');
     completionListener({
       ownerKey: 'node-2',
       capturedToken: {tokenKey: 'semantic-token-2'},
     });
-    await Promise.resolve();
-    await Promise.resolve();
+    await settleReplicaDispatchQueues(service);
     t.equal(downstreamProgress.length, 3,
       'a successfully consumed semantic token suppresses later duplicates');
   } finally {

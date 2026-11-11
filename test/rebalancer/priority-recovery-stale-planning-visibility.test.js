@@ -722,6 +722,10 @@ test(
     rebalancer.getCriticalSystemLocalServeReadinessBlocker = () => null;
     rebalancer.getLocalControlPlaneMutationReadinessBlocker = () => null;
     rebalancer.scheduleNextCheck = () => {};
+    // The operation ledger this world models holds no in-flight operation;
+    // the global in-flight count reads that ledger (an unanswered count
+    // holds the pass, it is never zero).
+    rebalancer.getGlobalInFlightOperationCount = async () => 0;
 
     await rebalancer.checkRebalance();
 

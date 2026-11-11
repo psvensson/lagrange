@@ -50,6 +50,10 @@ async function runFinitePolicyFault(disableRetryTrigger) {
     rebalanceCoordinator: coordinator, controlPlaneReadinessService: readiness,
     nowFn: () => clock.now(),
     setTimeoutFn: clock.setTimeout.bind(clock), clearTimeoutFn: clock.clearTimeout.bind(clock)});
+  // The operation ledger this world models is the mock coordinator's empty
+  // one; the planner's global in-flight count reads that ledger (an
+  // unanswered count holds the pass, it is never zero), so it answers zero.
+  rebalancer.getGlobalInFlightOperationCount = async () => 0;
   rebalancer.initialize();
   // The external cluster-readiness boundary is ready throughout. Start-delay
   // and stabilization still use the real owners and the injected clock.

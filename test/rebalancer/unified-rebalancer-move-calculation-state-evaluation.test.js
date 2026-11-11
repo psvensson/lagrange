@@ -889,6 +889,9 @@ test('UnifiedRebalancer - Rebalancing', async (t) => {
 
     rebalancer.initialize();
     rebalancer.setLeader(true);
+    // The mock coordinator's ledger is empty; the global in-flight count
+    // reads that ledger (an unanswered count holds the pass).
+    rebalancer.getGlobalInFlightOperationCount = async () => 0;
 
     const result = await rebalancer.rebalance(TriggerType.PERIODIC);
 

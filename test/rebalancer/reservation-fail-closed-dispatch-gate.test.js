@@ -40,6 +40,8 @@ import {
 } from '../../src/rebalancer/operation-workflow-owner-shared.js';
 import {repairOperationRowForGateRepairedReservation} from
   '../../src/rebalancer/operation-workflow-gate-operation-row-repair.js';
+import {isOperationVisibilityUnavailableError} from
+  '../../src/rebalancer/replica-operation-repository-operation-visibility.js';
 import {
   TEST_OPERATION_ID,
   TEST_PARTITION_ID,
@@ -297,9 +299,13 @@ async (t) => {
       ),
       'the operation owner retains one retry obligation for the durable PENDING row',
     );
-    const reusedOperation = await coordinator.createOperation(move);
-    t.equal(reusedOperation.operationId, TEST_OPERATION_ID,
-      'a caller retry reuses the durable operation generation');
+    // While the owner still cannot answer, a caller retry waits on the typed
+    // unavailability: the remembered intent creates no second operation and
+    // no cached copy is reused in the owner's place.
+    const callerRetry = await coordinator.createOperation(move)
+      .then((operation) => ({operation}), (error) => ({error}));
+    t.equal(isOperationVisibilityUnavailableError(callerRetry.error), true,
+      'a caller retry under authority loss waits on the typed unavailability');
     t.equal(dispatchCalls.length, 0,
       'a caller retry cannot bypass the live canonical retry owner');
     t.equal(coordinator.stats.operationsCreated, 1,

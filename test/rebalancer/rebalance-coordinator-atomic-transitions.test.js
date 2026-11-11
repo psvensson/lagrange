@@ -3,6 +3,9 @@ import {test} from '../../src/test-helpers/tap.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
+import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {ACTUAL_REPLICA_OBSERVATION_STATE} from
+  '../../src/rebalancer/replica-operation-repository-constants.js';
 
 const MOCK_NODE_ID = 'node-local';
 
@@ -204,6 +207,14 @@ test('guarded transitions retry the same operation after rejected persistence',
         targetStep: WORKFLOW_STEP.FAILED,
         invoke: (coordinator, operation) =>
           coordinator.failOperation(operation, 'test failure'),
+        // An ADD's FAILED is admitted on the owner's read of its target
+        // replica (M2): here the target is authoritatively observed, not live.
+        prepare: (coordinator) => {
+          coordinator.repository.getActualReplicaObservation = async () => ({
+            state: ACTUAL_REPLICA_OBSERVATION_STATE.OBSERVED,
+            lifecycleStatus: ReplicaStatus.CREATING,
+          });
+        },
       },
     ];
 
@@ -222,6 +233,7 @@ test('guarded transitions retry the same operation after rejected persistence',
           },
         },
       });
+      testCase.prepare?.(coordinator);
       coordinator.initialize();
       try {
         const operation = createTestOperation({

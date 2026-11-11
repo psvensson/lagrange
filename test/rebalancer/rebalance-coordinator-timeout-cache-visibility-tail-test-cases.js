@@ -1,5 +1,7 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests} from './rebalance-coordinator-timeout-cache-visibility-tail-more-test-cases.js';
+import {INCOMPLETE_OPERATION_OBSERVATION_STATE} from
+  '../../src/rebalancer/incomplete-operation-list-observation.js';
 
 const REPLICA_OPERATION_CRITICAL_RECOVERY_QUERY_TIMEOUT_MS = 15_000;
 const NON_PRIORITY_DEFERRED_PARTITION_ID = 'customer_orders-p1';
@@ -383,10 +385,11 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
             return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
+        // The owner answers its complete list: no incomplete operation.
         sqlQueryEngine: {
           async executeQuery() {
             sqlQueryCalls += 1;
-            throw new Error('routed SQL should not run');
+            return {success: true, rows: []};
           },
         },
         enableTimeouts: false,
@@ -401,12 +404,14 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
           'the named cache projection shows the local cache-visible operation',
         );
         const observation = await coordinator.queryIncompleteOperations();
+        t.equal(sqlQueryCalls, 1, 'the owner list read asks the owner');
+        t.equal(observation.state, INCOMPLETE_OPERATION_OBSERVATION_STATE.EMPTY,
+          'the owner\'s confirmed empty answer is the observation');
         t.notOk(
           observation.operations.some((operation) =>
             operation.operationId === 'op-cache-local-1'),
           'the owner list read never answers with the cache projection',
         );
-        t.equal(sqlQueryCalls, 0, 'owner reads stay inside the authoritative owner path');
       } finally {
         await coordinator.shutdown();
       }

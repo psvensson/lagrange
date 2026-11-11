@@ -15,11 +15,16 @@ import {ControlPlaneField} from
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
-import {DISPATCH_SUBSYSTEM} from
-  '../../src/control-plane/replica-dispatch-service-constants.js';
 import {
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
+  ReplicaOperationRepository,
 } from '../../src/rebalancer/replica-operation-repository.js';
+import {
+  buildAnsweredIncompleteOperationListObservation,
+} from '../../src/rebalancer/incomplete-operation-list-observation.js';
+import {
+  buildPresentOperationVisibility,
+} from '../../src/rebalancer/replica-operation-repository-operation-visibility.js';
 import {
   COLUMN,
   SERVICE_TYPE,
@@ -243,7 +248,7 @@ test(
         repository: {
           async queryIncompleteOperations(options) {
             authoritativeQueryOptions.push(options);
-            return [{
+            return buildAnsweredIncompleteOperationListObservation([{
               operationId: authoritativeOperationId,
               type: 'REPLACE',
               partitionId: 'sql_write_operations-p1',
@@ -259,7 +264,7 @@ test(
               stepsHistory: [],
               entityType: SERVICE_TYPE.PARTITION,
               entityId: 'sql_write_operations-p1',
-            }];
+            }]);
           },
         },
       },
@@ -344,6 +349,14 @@ test(
         enteredAt: new Date().toISOString(),
         recentTransitions: [],
       }),
+    };
+    // The dispatch reconcile re-reads a cache-missed row from the owner's
+    // typed by-id read (a required port): the coordinator just persisted the
+    // operation, so the owner answers PRESENT with its current durable state.
+    coordinator.repository = {
+      async getOperationByIdVisibilityObservation() {
+        return buildPresentOperationVisibility(operation);
+      },
     };
     coordinator.claimDispatchTransition = async (opId) => {
       return claimPendingOperation(operation, opId);
@@ -446,7 +459,12 @@ test(
       steps_history: '[]',
     });
 
-    let authoritativeReadCount = 0;
+    // The dispatch service's one owner read of a cache-missed row is the
+    // repository's typed by-id visibility read (PRESENT / ABSENT /
+    // UNAVAILABLE); the row is the repository's own decode of the durable row.
+    const ownerOperation =
+      new ReplicaOperationRepository({}).rowToOperation(operationRow);
+    const ownerReads = [];
     let dispatchedOperation = null;
     const service = new ReplicaDispatchService({
       nodeId: 'node-1',
@@ -454,35 +472,6 @@ test(
         getConnectionState: () => STATE.CONNECTED,
       },
       cdcIntegrationService: {},
-      controlPlaneSystemTableGateway: {
-        async readAuthoritativeRows(tableName, sql, params, options) {
-          authoritativeReadCount += 1;
-          t.equal(
-            tableName,
-            SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-            'should read authoritative replica operations',
-          );
-          t.match(
-            sql,
-            /SELECT \* FROM replica_operations WHERE operation_id = \?/,
-            'should query by operation id',
-          );
-          t.same(
-            params,
-            [operationRow.operation_id],
-            'should request the missing operation row',
-          );
-          t.equal(
-            options?.owner,
-            DISPATCH_SUBSYSTEM,
-            'should use dispatch subsystem ownership for the fallback read',
-          );
-          return {
-            success: true,
-            rows: [{...operationRow}],
-          };
-        },
-      },
       controlPlaneReadinessService: {
         getNodeReadinessSync(nodeId) {
           return {
@@ -509,6 +498,12 @@ test(
             recentTransitions: [],
           }),
         },
+        repository: {
+          async getOperationByIdVisibilityObservation(operationId) {
+            ownerReads.push(operationId);
+            return buildPresentOperationVisibility(ownerOperation);
+          },
+        },
         isOperationLocallyOwned(operation) {
           return (
             operation?.sourceNodeId === 'node-1' ||
@@ -526,10 +521,10 @@ test(
     try {
       await service.reconcileOperationDispatch(operationRow.operation_id);
 
-      t.equal(
-        authoritativeReadCount,
-        1,
-        'should fall back to an authoritative operation lookup once',
+      t.same(
+        ownerReads,
+        [operationRow.operation_id],
+        'the cache miss is answered by one owner by-id read of the operation',
       );
       t.equal(
         dispatchedOperation?.operationId,

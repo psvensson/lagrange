@@ -540,13 +540,17 @@ export async function registerReplaceReplicaWorkflowTailTests({
           address: `node-2/partition/${operation.replicaId}`,
         });
 
-        const authoritativeActiveOperation = {
-          ...operation,
-          workflowStep: WORKFLOW_STEP.ACTIVE,
+        // The durable row is already ACTIVE (committed by another writer)
+        // while this local copy is still SYNCING: every owner read (the
+        // typed by-id observation and the scalar read) answers it.
+        const durableRow = coordinator.systemTableCache.get(
+          'replica_operations', operation.operationId);
+        coordinator.testReplicaOperationLedger.commit({
+          ...durableRow,
+          replica_id: operation.replicaId,
+          workflow_step: WORKFLOW_STEP.ACTIVE,
           status: ReplicaStatus.ACTIVE,
-        };
-        coordinator.repository.queryAuthoritativeOperationById =
-          async () => authoritativeActiveOperation;
+        });
 
         const progressed =
           await coordinator.reconcileOperationProgress(operation);
@@ -564,6 +568,12 @@ export async function registerReplaceReplicaWorkflowTailTests({
           operation.workflowStep,
           WORKFLOW_STEP.STOPPING,
           'authoritative ACTIVE replay should advance the durable row into STOPPING',
+        );
+        t.equal(
+          coordinator.systemTableCache.get(
+            'replica_operations', operation.operationId)?.workflow_step,
+          WORKFLOW_STEP.STOPPING,
+          'the durable row itself holds STOPPING',
         );
       } finally {
         await coordinator.shutdown();
