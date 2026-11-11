@@ -344,11 +344,12 @@ test('message group proposal commits and applies through raft-rs', async () => {
   try {
     const services = await openFounders(host);
     const leader = await electedLeader(services);
-    const row = {id: 'mg-rs-node', address: '10.0.0.7:7000', status: 'active'};
+    // A nodes row is keyed by its declared key (node_id) in the system cache.
+    const row = {node_id: 'mg-rs-node', address: '10.0.0.7:7000', status: 'active'};
     await leader.applyCDCEvent(TABLES.NODES, 'INSERT', row);
     for (const service of services) {
       assert.equal(await waitFor(() =>
-        service.getWritableCache().get(TABLES.NODES, row.id)?.address ===
+        service.getWritableCache().get(TABLES.NODES, row.node_id)?.address ===
           row.address), true,
       `${service.replicaId}'s cache applied the committed CDC command`);
     }
@@ -356,7 +357,7 @@ test('message group proposal commits and applies through raft-rs', async () => {
       const committed = durableRecordOf(host.dbFileOf(replicaId)).committed;
       assert.ok(committed.some((entry) => entry.command?.type === 'CDC' &&
         entry.command.tableName === TABLES.NODES &&
-        entry.command.data?.id === row.id),
+        entry.command.data?.node_id === row.node_id),
       `${replicaId}'s durable log holds the decoded CDC command`);
     }
   } finally {

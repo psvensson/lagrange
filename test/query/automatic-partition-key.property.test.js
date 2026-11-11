@@ -16,12 +16,16 @@ import {createTableThroughDurableJob} from './table-creation-durable-job-fixture
 
 /**
  * The CDC backend under the service's real control-plane gateway: the
+ * authority answers an explicit empty read (the table is ABSENT) and the
  * durable job's metadata rows commit.
  * @return {TableCreationService}
  */
 function createDurableTableCreationService() {
   return new TableCreationService({
     cdcIntegrationService: {
+      async executeAuthoritativeSystemTableRead() {
+        return {success: true, rows: []};
+      },
       async insertSystemTableRow() {
         return {success: true};
       },

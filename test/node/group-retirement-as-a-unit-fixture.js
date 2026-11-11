@@ -27,6 +27,8 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {WAIT_BOUND_SPENT_EVENT} from
   '../../src/logging/wait-bound-spent.js';
+import {createPartitionServiceLeadershipTransferMethods} from
+  '../../src/partition/partition-service-leadership-transfer.js';
 import {retireRaftPeerFromAuthoritativeServiceChange} from
   '../../src/partition/partition-service-raft-peer-cache-reconciliation.js';
 import {ManagedMergeWorkflowStateMethods} from
@@ -146,10 +148,13 @@ function openGroupWorld(t, {partitionId, voters, reconcile = true}) {
   };
   world.emitNodeRow = (row) => world.emitSystemRow('nodes', 'UPDATE', row);
   // The row-driven reconcile on every member, as PartitionService runs it.
+  // A member whose own row retires it hands its leadership on through the
+  // partition's one transfer issuer (the production method over its port).
   const memberServices = new Map(members.map((replicaId) => [replicaId, {
     raft: countingPort(cluster.node(replicaId), replicaId, world.proposals),
     replicaId, partitionId, replicaIds: [...members], peerAddresses: [],
     logger: QUIET_LOGGER,
+    ...createPartitionServiceLeadershipTransferMethods(),
   }]));
   const react = (operation, row) => {
     if (!reconcile || !row || row.partition_id !== partitionId ||

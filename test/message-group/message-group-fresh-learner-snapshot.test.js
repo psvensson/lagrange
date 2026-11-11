@@ -203,11 +203,12 @@ test('fresh message-group learner installs a transferred raft-rs image and ' +
       service.raft.readStatus().role === 'leader')), true);
     const liveLeader = reopened.find((service) =>
       service.raft.readStatus().role === 'leader');
-    const row = {id: 'after-snapshot', address: '10.8.0.4:7000',
+    // A nodes row is keyed by its declared key (node_id) in the system cache.
+    const row = {node_id: 'after-snapshot', address: '10.8.0.4:7000',
       status: 'active'};
     await liveLeader.applyCDCEvent(TABLES.NODES, 'INSERT', row);
     assert.equal(await waitFor(() => learner.getWritableCache()
-      .get(TABLES.NODES, row.id)?.address === row.address), true,
+      .get(TABLES.NODES, row.node_id)?.address === row.address), true,
     'the fresh learner catches a real command after the snapshot boundary');
     await host.close(TARGET);
     const restarted = await host.open(TARGET, {isJoiningExistingGroup: true,
@@ -217,16 +218,16 @@ test('fresh message-group learner installs a transferred raft-rs image and ' +
     const durable = new Database(host.dbPath(TARGET), {readonly: true});
     try {
       assert.equal(RaftRsDurableStore.readCommittedEntriesIn(durable, GROUP)
-        .some((entry) => entry.command?.data?.id === row.id), true,
+        .some((entry) => entry.command?.data?.node_id === row.node_id), true,
       'restart retains the post-boundary command in the learner record');
     } finally {
       durable.close();
     }
-    const afterRestart = {id: 'after-restart', address: '10.8.0.5:7000',
+    const afterRestart = {node_id: 'after-restart', address: '10.8.0.5:7000',
       status: 'active'};
     await liveLeader.applyCDCEvent(TABLES.NODES, 'INSERT', afterRestart);
     assert.equal(await waitFor(() => restarted.getWritableCache()
-      .get(TABLES.NODES, afterRestart.id)?.address === afterRestart.address),
+      .get(TABLES.NODES, afterRestart.node_id)?.address === afterRestart.address),
     true, 'the restarted learner continues catching real commands');
   } finally {
     await host.dispose();

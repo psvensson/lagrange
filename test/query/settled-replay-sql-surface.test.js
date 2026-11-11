@@ -42,6 +42,10 @@ import * as outcomeConstants from
   '../../src/partition/partition-committed-statement-outcome-constants.js';
 import {buildDeliveryEnvelope} from
   '../../src/transport/transport-semantic-outcome.js';
+import {ROUTER_CONNECTION_CLOSED_ERROR_CODE} from
+  '../../src/transport/transport-error-codes.js';
+import {TRANSPORT_ACKNOWLEDGEMENT} from
+  '../../src/transport/transport-acknowledgement.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 import {resumeFixtureParticipantAdmission} from
   '../test-helpers/participant-transaction-fixture.js';
@@ -165,7 +169,13 @@ async function withSurface(body) {
           }
           if (deliveries.loseNextAnswer) {
             deliveries.loseNextAnswer = false;
-            throw new Error(LOST_ANSWER);
+            // The router's own outcome for a connection that closed after
+            // the frame was acknowledged: an ambiguous transport failure
+            // (the transport owner decides it by code and acknowledgement).
+            return buildDeliveryEnvelope({acknowledged: false, error: LOST_ANSWER,
+              errorCode: ROUTER_CONNECTION_CLOSED_ERROR_CODE,
+              acknowledgement: TRANSPORT_ACKNOWLEDGEMENT.ACKNOWLEDGED,
+              deferRetry: true, retryAfterMs: EXECUTOR_RETRY_DELAY_MS});
           }
           return buildDeliveryEnvelope({acknowledged: true}, answer);
         },

@@ -21,6 +21,8 @@ const SELECT_EXECUTION_SOURCE =
   'src/query/sql-query-engine-select-execution.js';
 const STATEMENT_EXECUTION_SOURCE =
   'src/query/sql-query-engine-statement-execution.js';
+const TABLE_CREATION_DURABLE_JOB_SOURCE =
+  'src/query/table-creation-service-durable-job.js';
 const TABLE_CREATION_SOURCES = [
   'src/query/table-creation-service-create-table.js',
   'src/query/table-creation-service-existing-table-reconciliation.js',
@@ -137,40 +139,38 @@ test('provisioning parent deadline dependency guard - nested progress waits ' +
     /timeoutBudget:\s*options\?\.timeoutBudget/,
     'SQL CREATE forwards the request budget to TableCreationService',
   );
-  // e1f687ea consolidated the inline budget forwards into shared option
-  // builders, so assert the builders forward the budget AND every
-  // provisioning/reconciliation call site routes through a builder — the
-  // contract, not a raw occurrence count.
-  t.ok(
-    (tableCreationSource.match(
-      /timeoutBudget:\s*options\?\.timeoutBudget/g,
-    )?.length || 0) >= 2,
-    'the shared option builders forward the request budget',
-  );
+  // Superseded (R09) by the formation-stability snapshot 620bb9460: the
+  // unpersisted CREATE TABLE route was deleted, so the durable schema job is
+  // the one entry into table creation. SQL CREATE's request budget is owned
+  // by SchemaProvisioningJobOwner (its retry pacing and deadline); the job's
+  // executor never carried a caller budget (it passed `timeoutBudget: null`
+  // before the snapshot), so the e1f687ea option-builder forwarding below the
+  // job owner was dead and is gone. Below the job owner, provisioning mints
+  // its single root budget (asserted above) - never a second caller budget.
+  const durableJobSource = fs.readFileSync(TABLE_CREATION_DURABLE_JOB_SOURCE, 'utf8');
   t.match(
-    tableCreationSource,
-    /buildDurableProvisioningInput[\s\S]{0,80}\.\.\.buildBaseProvisioningInput\(context, options\)/,
-    'the durable provisioning input inherits the base budget forwarding',
+    durableJobSource,
+    /schemaProvisioningJobOwner\.execute\([\s\S]{0,160}timeoutBudget:\s*options\.timeoutBudget/,
+    'the SQL CREATE request budget is handed to the schema job owner',
   );
-  t.match(
-    tableCreationSource,
-    /reconcileExistingInitialPartition\([\s\S]{0,120}buildExistingReconciliationOptions\(options\)/,
-    'existing-table reconciliation routes through the budget-forwarding builder',
+  const jobExecutor = durableJobSource.slice(
+    durableJobSource.indexOf('executeDurableSchemaProvisioningJob('),
+    durableJobSource.indexOf('async createTable('),
+  );
+  t.ok(jobExecutor.length > 0, 'the durable job executor is included in the guard');
+  t.notMatch(
+    jobExecutor + tableCreationSource,
+    /timeoutBudget/,
+    'table creation below the job owner forwards no caller budget',
   );
   t.equal(
     (tableCreationSource.match(
-      /service\.provisionInitialPartition\(\s*build(?:Durable|Base)ProvisioningInput\(/g,
+      /service\.provisionInitialPartition\(\s*buildDurableProvisioningInput\(/g,
     ) || []).length,
     (tableCreationSource.match(/service\.provisionInitialPartition\(/g) || [])
       .length,
-    'every create-table provisioning call site routes through a ' +
-      'budget-forwarding builder',
-  );
-  t.match(
-    tableCreationSource,
-    /this\.provisionInitialPartition\(\{[\s\S]{0,320}timeoutBudget:\s*options\?\.timeoutBudget/,
-    'the existing-table reconciliation provisioning call forwards the ' +
-      'request budget inline',
+    'every create-table provisioning call site routes through the durable ' +
+      'provisioning input',
   );
   t.end();
 });

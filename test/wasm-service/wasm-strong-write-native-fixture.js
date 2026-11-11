@@ -20,6 +20,7 @@ import {WRITE_CONSISTENCY_MODE} from
   '../../src/wasm-service/wasm-service-constants.js';
 import {createLoopbackTransport} from
   '../partition/partition-service-test-support.js';
+import {drainTurn} from '../helpers/reconcile-queue-turns.js';
 
 const NODE_ID = 'wasm-write-witness-node';
 const REPLICAS = ['wasm-write-a', 'wasm-write-b', 'wasm-write-c'];
@@ -49,6 +50,20 @@ function views(f) {
 // No elapsed time advances: only already-owned zero-delay inbound wakes fire.
 // Each round captures the transport queue once. Later native messages wait
 // for the next declared round. No status/read/settle/tick call occurs here.
+// A replica's creation reconciliation queue drains on its own host turn
+// (OwnerKeyReconcileQueue's production scheduler), so a round whose queue
+// still holds work yields one host turn; microtask ticks never reach it.
+// A host's lifecycle may hold a replica (a reopen in flight) that is not yet
+// in f.replicas, so both sets are read.
+function reconciliationBusy(f) {
+  const replicas = [...f.replicas];
+  for (const host of f.hosts ?? []) replicas.push(...host.lifecycle.activeReplicas.values());
+  return replicas.some((replica) => {
+    const queue = replica.creationReconciliation?.queue;
+    return queue !== undefined && queue !== null && !queue.isCurrentWorkIdle();
+  });
+}
+
 async function deliverScheduled(f) {
   for (let round = 0; round < DELIVERY_ROUNDS; round += 1) {
     for (const item of f.queue.splice(0)) {
@@ -66,6 +81,7 @@ async function deliverScheduled(f) {
     for (let microtask = 0; microtask < MICROTASKS_PER_ROUND; microtask += 1) {
       await Promise.resolve();
     }
+    if (reconciliationBusy(f)) await drainTurn();
   }
 }
 

@@ -6,6 +6,7 @@
  */
 
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {buildTransportFailureError} from '../../src/transport/transport-delivery-failure.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {
@@ -313,7 +314,11 @@ test('QueryExecutor - executeOnPartition quarantines thrown stale no-handler ' +
     async deliver(address) {
       deliveries.push(address);
       if (address === staleAddress) {
-        throw new Error(`${ERRORS.NO_HANDLER_FOR_ADDRESS} ${address}`);
+        // The router's thrown no-handler fact (the transport owner's error
+        // builder), classified by the transport owner, never by its text.
+        throw buildTransportFailureError(
+          {error: `${ERRORS.NO_HANDLER_FOR_ADDRESS} ${address}`, noHandler: true},
+          ERRORS.NO_HANDLER_FOR_ADDRESS);
       }
       if (address === fallbackAddress) {
         return buildDeliveryEnvelope({acknowledged: true}, {
