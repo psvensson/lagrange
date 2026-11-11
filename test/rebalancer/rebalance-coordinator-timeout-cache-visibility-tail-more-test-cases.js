@@ -1,4 +1,6 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {isOperationVisibilityUnavailableError} from
+  '../../src/rebalancer/replica-operation-repository-operation-visibility.js';
 import {registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests} from './rebalance-coordinator-timeout-cache-visibility-tail-final-test-cases.js';
 
 const REPLICA_OPERATION_CRITICAL_RECOVERY_QUERY_TIMEOUT_MS = 15_000;
@@ -224,7 +226,10 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
     },
   );
 
-  test('queryExistingInFlightOperation falls back to cache when routed SQL read fails',
+  // The create dedupe read is always the owner's: a failed read is the typed
+  // list unavailability (creation waits), never a cache answer.
+  test('queryExistingInFlightOperation throws the typed unavailability when ' +
+    'the owner read fails, and the cache row does not answer',
     async (t) => {
       let sqlQueryCalls = 0;
       const cacheRows = [
@@ -288,7 +293,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
 
       coordinator.initialize();
       try {
-        const operation = await coordinator.queryExistingInFlightOperation(
+        const outcome = await coordinator.queryExistingInFlightOperation(
           'partition-1',
           'node-2',
           'partition',
@@ -300,13 +305,12 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
             entityId: 'partition-1',
             nodeId: 'node-2',
           },
-        );
-        t.equal(
-          operation?.operationId,
-          'op-cache-dedupe-1',
-          'cache fallback should answer in-flight dedupe reads after SQL failure',
-        );
-        t.equal(sqlQueryCalls, 1, 'SQL-first dedupe path should attempt one routed read');
+        ).then((operation) => ({operation}), (error) => ({error}));
+        t.equal(outcome.operation, undefined,
+          'no operation (cached or none) answers a failed owner read');
+        t.equal(isOperationVisibilityUnavailableError(outcome.error), true,
+          'the failed dedupe read is the typed list unavailability');
+        t.equal(sqlQueryCalls, 1, 'the dedupe read asks the owner once');
       } finally {
         await coordinator.shutdown();
       }
