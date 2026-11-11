@@ -17,6 +17,8 @@ import {
   uniqueValues,
 } from './system-contract-utils.js';
 
+const TRACE_ACTOR = Object.freeze({OWNER: 'owner', OBSERVER: 'observer', WAKE: 'wake'});
+
 const DEFAULT_TRACE_DIRS = Object.freeze([
   'architecture/models/traces',
 ]);
@@ -56,70 +58,76 @@ function normalizeInteger(value) {
   return Number.isInteger(value) ? value : null;
 }
 
+function recordOwnerTraceEvent(state, event, action) {
+  if (action === 'serviceable' && event.service === 'sql') {
+    state.sqlServiceable = true;
+  } else if (action === 'serviceable' && event.service === 'query_transport') {
+    state.queryServiceable = true;
+  } else if (action === 'owner_outcome') {
+    state.ownerOutcomeSeen = true;
+    state.latestOutcome = event.outcome || null;
+    state.ownerEpoch = normalizeInteger(event.ownerEpoch);
+  } else if (action === 'fresh_projection') {
+    state.observedEpoch = normalizeInteger(event.observedEpoch);
+  } else if (action === 'durable_transition' && event.followUpRequired === true) {
+    const epoch = normalizeInteger(event.ownerEpoch);
+    if (epoch !== null) state.pendingWakeEpochs.add(epoch);
+  }
+}
+
+function recordReadinessViolations(state, violations) {
+  if (state.latestOutcome !== 'ready') {
+    violations.add('owner-outcome-before-observer');
+  }
+  if (state.ownerEpoch === null || state.observedEpoch !== state.ownerEpoch) {
+    violations.add('stale-projection-never-promotes-readiness');
+  }
+  if (!state.sqlServiceable || !state.queryServiceable) {
+    violations.add('ready-requires-serviceable-canonical-leader');
+  }
+}
+
+function recordObserverTraceEvent(state, action, violations) {
+  if (action === 'projection') {
+    if (!state.ownerOutcomeSeen) {
+      violations.add('owner-outcome-before-observer');
+    }
+    for (const epoch of state.pendingWakeEpochs) {
+      if (!state.wakeEpochs.has(epoch)) {
+        violations.add('durable-transition-has-recoverable-wake');
+      }
+    }
+  } else if (action === 'readiness_promoted') {
+    recordReadinessViolations(state, violations);
+  } else if (action === 'repair_authority') {
+    violations.add('readers-do-not-repair-authority');
+  }
+}
+
 function collectTraceViolations(trace) {
   const violations = new Set();
-  let ownerOutcomeSeen = false;
-  let latestOutcome = null;
-  let ownerEpoch = null;
-  let observedEpoch = null;
-  let sqlServiceable = false;
-  let queryServiceable = false;
-  const pendingWakeEpochs = new Set();
-  const wakeEpochs = new Set();
-
+  const state = {
+    ownerOutcomeSeen: false,
+    latestOutcome: null,
+    ownerEpoch: null,
+    observedEpoch: null,
+    sqlServiceable: false,
+    queryServiceable: false,
+    pendingWakeEpochs: new Set(),
+    wakeEpochs: new Set(),
+  };
   for (const event of trace.events || []) {
     const action = event?.action;
     const actor = event?.actor;
-    const ownerAuthored = actor === 'owner';
-    const observerAuthored = actor === 'observer';
-    if (action === 'serviceable' && event.service === 'sql' && ownerAuthored) {
-      sqlServiceable = true;
-    } else if (
-      action === 'serviceable' &&
-      event.service === 'query_transport' &&
-      ownerAuthored
-    ) {
-      queryServiceable = true;
-    } else if (action === 'owner_outcome' && ownerAuthored) {
-      ownerOutcomeSeen = true;
-      latestOutcome = event.outcome || null;
-      ownerEpoch = normalizeInteger(event.ownerEpoch);
-    } else if (action === 'fresh_projection' && ownerAuthored) {
-      observedEpoch = normalizeInteger(event.observedEpoch);
-    } else if (
-      action === 'durable_transition' &&
-      event.followUpRequired === true &&
-      ownerAuthored
-    ) {
+    if (actor === TRACE_ACTOR.OWNER) {
+      recordOwnerTraceEvent(state, event, action);
+    } else if (actor === TRACE_ACTOR.WAKE && action === 'wake_enqueued') {
       const epoch = normalizeInteger(event.ownerEpoch);
-      if (epoch !== null) pendingWakeEpochs.add(epoch);
-    } else if (action === 'wake_enqueued' && actor === 'wake') {
-      const epoch = normalizeInteger(event.ownerEpoch);
-      if (epoch !== null) wakeEpochs.add(epoch);
-    } else if (action === 'projection' && observerAuthored) {
-      if (!ownerOutcomeSeen) {
-        violations.add('owner-outcome-before-observer');
-      }
-      for (const epoch of pendingWakeEpochs) {
-        if (!wakeEpochs.has(epoch)) {
-          violations.add('durable-transition-has-recoverable-wake');
-        }
-      }
-    } else if (action === 'readiness_promoted' && observerAuthored) {
-      if (latestOutcome !== 'ready') {
-        violations.add('owner-outcome-before-observer');
-      }
-      if (ownerEpoch === null || observedEpoch !== ownerEpoch) {
-        violations.add('stale-projection-never-promotes-readiness');
-      }
-      if (!sqlServiceable || !queryServiceable) {
-        violations.add('ready-requires-serviceable-canonical-leader');
-      }
-    } else if (action === 'repair_authority' && observerAuthored) {
-      violations.add('readers-do-not-repair-authority');
+      if (epoch !== null) state.wakeEpochs.add(epoch);
+    } else if (actor === TRACE_ACTOR.OBSERVER) {
+      recordObserverTraceEvent(state, action, violations);
     }
   }
-
   return [...violations].sort();
 }
 

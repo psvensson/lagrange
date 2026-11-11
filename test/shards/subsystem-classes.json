@@ -28,7 +28,7 @@
   "censusSize": 2647,
   "digest": "fnv1a32-a7e1ea76",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-b3f9a295",
+  "observationDigest": "fnv1a32-6d796fd8",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -20476,7 +20476,8 @@
     },
     "test/scripts/model-invariants.test.js": {
       "files": [
-        "architecture/contracts/invariants.json"
+        "architecture/contracts/invariants.json",
+        "test/scripts/check-owner-traces.test.js"
       ],
       "directories": [
         "architecture/contracts"

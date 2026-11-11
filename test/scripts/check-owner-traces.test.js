@@ -106,3 +106,31 @@ tap.test('owner trace checker rejects valid traces with hidden violations', (t) 
   fs.rmSync(root, {recursive: true, force: true});
   t.end();
 });
+
+tap.test('owner traces preserve debt observed before a later wake and epoch update', (t) => {
+  const ownerReady = [
+    {actor: 'owner', action: 'owner_outcome', outcome: 'ready', ownerEpoch: 2},
+    {actor: 'owner', action: 'serviceable', service: 'sql'},
+    {actor: 'owner', action: 'serviceable', service: 'query_transport'},
+    {actor: 'owner', action: 'fresh_projection', observedEpoch: 2},
+    {actor: 'owner', action: 'durable_transition', followUpRequired: true, ownerEpoch: 2},
+  ];
+  const wake = {actor: 'wake', action: 'wake_enqueued', ownerEpoch: 2};
+  const projection = {actor: 'observer', action: 'projection'};
+  t.same(collectTraceViolations({events: [...ownerReady, wake, projection]}), []);
+  t.same(collectTraceViolations({events: [...ownerReady, projection, wake,
+    projection,
+    {actor: 'owner', action: 'owner_outcome', outcome: 'waiting', ownerEpoch: 3},
+    {actor: 'observer', action: 'readiness_promoted'},
+    {actor: 'owner', action: 'owner_outcome', outcome: 'ready', ownerEpoch: 3},
+    {actor: 'owner', action: 'fresh_projection', observedEpoch: 3},
+    {actor: 'observer', action: 'readiness_promoted'},
+    {actor: 'observer', action: 'repair_authority'},
+  ]}), [
+    'durable-transition-has-recoverable-wake',
+    'owner-outcome-before-observer',
+    'readers-do-not-repair-authority',
+    'stale-projection-never-promotes-readiness',
+  ]);
+  t.end();
+});

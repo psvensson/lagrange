@@ -1,0 +1,72 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "publication-static-owner-simplification",
+  "status": "pass",
+  "testFileDigests": {
+    "test/scripts/model-invariants.test.js": "6ae85a07f9ab92d8a109bc1deee05c57031e0abe05be1035b0030b2d149b72a0",
+    "test/scripts/model-contract-tools.test.js": "0a41182fa413ba138813c91d459557ef6b7a2540e9f26779c5237e13cdbaa93c",
+    "test/scripts/check-owner-traces.test.js": "1cf7aabac311fdfdf47e52076e4541b43408cfa3da503cd67593d8b54b5ca0cd",
+    "test/scripts/agent-tooling-evidence.test.js": "7868e86bd4b61e9e841eb38e57ad376fe6b21dc81690761a8883a5f18ce4c6fe",
+    "test/distributed/harness/__tests__/failure-bundle.test.js": "d16e6bdd456df7d49d1e84a0df225ce014d6e5e5efa8e0b787e65508e5ec246e",
+    "test/distributed/harness/__tests__/failure-bundle-fallback.test.js": "e29d76a97e4a00fb24317c49fa43864a47b455d20ba40275fdad721e627fda85"
+  },
+  "generatedAt": "2026-11-11T07:47:23.548Z",
+  "receipts": [
+    {
+      "id": "cyclomatic-ratchet",
+      "passed": true,
+      "command": "npm run test:complexity",
+      "detail": "Actual src/test function complexity count respects the accepted limit.",
+      "testFile": null
+    },
+    {
+      "id": "cognitive-ratchet",
+      "passed": true,
+      "command": "npm run test:complexity:cognitive",
+      "detail": "Actual src/scripts cognitive complexity count respects the accepted limit.",
+      "testFile": null
+    },
+    {
+      "id": "invariant-controls",
+      "passed": true,
+      "command": "npm run test:file -- test/scripts/model-invariants.test.js",
+      "detail": "Existing public owner and discriminating refusal/output controls.",
+      "testFile": "test/scripts/model-invariants.test.js"
+    },
+    {
+      "id": "decision-table-controls",
+      "passed": true,
+      "command": "npm run test:file -- test/scripts/model-contract-tools.test.js",
+      "detail": "Existing public owner and discriminating refusal/output controls.",
+      "testFile": "test/scripts/model-contract-tools.test.js"
+    },
+    {
+      "id": "trace-controls",
+      "passed": true,
+      "command": "npm run test:file -- test/scripts/check-owner-traces.test.js",
+      "detail": "Existing public owner and discriminating refusal/output controls.",
+      "testFile": "test/scripts/check-owner-traces.test.js"
+    },
+    {
+      "id": "tooling-evidence-controls",
+      "passed": true,
+      "command": "npm run test:file -- test/scripts/agent-tooling-evidence.test.js",
+      "detail": "Existing public owner and discriminating refusal/output controls.",
+      "testFile": "test/scripts/agent-tooling-evidence.test.js"
+    },
+    {
+      "id": "failure-report-controls",
+      "passed": true,
+      "command": "npm run test:file -- test/distributed/harness/__tests__/failure-bundle.test.js",
+      "detail": "Existing public owner and discriminating refusal/output controls.",
+      "testFile": "test/distributed/harness/__tests__/failure-bundle.test.js"
+    },
+    {
+      "id": "serialization-failure-controls",
+      "passed": true,
+      "command": "npm run test:file -- test/distributed/harness/__tests__/failure-bundle-fallback.test.js",
+      "detail": "Existing public owner and discriminating refusal/output controls.",
+      "testFile": "test/distributed/harness/__tests__/failure-bundle-fallback.test.js"
+    }
+  ]
+}

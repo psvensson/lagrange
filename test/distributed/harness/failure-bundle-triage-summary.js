@@ -168,6 +168,18 @@ function resolvePartitioningDiagnosticsForTriage(bundleJson) {
   };
 }
 
+function buildRoutingTimelineSummary(timelineCorrelation) {
+  if (!timelineCorrelation) return null;
+  return {
+    firstLoadFailureAt: timelineCorrelation.firstLoadFailureAt || null,
+    firstSplitStartedAt:
+        timelineCorrelation.firstSplitStartedAt || null,
+    firstSplitRejectedAt:
+        timelineCorrelation.firstSplitRejectedAt || null,
+    firstSplitFailedAt: timelineCorrelation.firstSplitFailedAt || null,
+  };
+}
+
 function buildRoutingDiagnosticsSummary(nodeDiagnostics) {
   const summaryByNodeId = {};
   for (const [nodeId, diagnostic] of Object.entries(
@@ -184,16 +196,7 @@ function buildRoutingDiagnosticsSummary(nodeDiagnostics) {
     }
     summaryByNodeId[nodeId] = {
       routingDiagnostics,
-      timelineCorrelation: timelineCorrelation ?
-        {
-          firstLoadFailureAt: timelineCorrelation.firstLoadFailureAt || null,
-          firstSplitStartedAt:
-              timelineCorrelation.firstSplitStartedAt || null,
-          firstSplitRejectedAt:
-              timelineCorrelation.firstSplitRejectedAt || null,
-          firstSplitFailedAt: timelineCorrelation.firstSplitFailedAt || null,
-        } :
-        null,
+      timelineCorrelation: buildRoutingTimelineSummary(timelineCorrelation),
     };
   }
   return Object.keys(summaryByNodeId).length > ZERO ? summaryByNodeId : null;
@@ -653,35 +656,24 @@ function formatPriorityRecoveryProgressSummary(progressSummary) {
   const parts = [
     'partitionCount=' + String(progressSummary.partitionCount ?? UNKNOWN_VALUE),
   ];
-  if (dominantWitness?.partitionId) {
-    parts.push('partition=' + dominantWitness.partitionId);
+  for (const [field, label] of [
+    ['partitionId', 'partition'],
+    ['currentOwner', 'owner'],
+    ['actuationState', 'actuation'],
+    ['blockingBoundary', 'boundary'],
+    ['waitMode', 'waitMode'],
+    ['nextRequiredAction', 'nextAction'],
+    ['progressContractState', 'contractState'],
+    ['pressureState', 'pressure'],
+  ]) {
+    if (dominantWitness?.[field]) {
+      parts.push(label + '=' + dominantWitness[field]);
+    }
   }
-  if (dominantWitness?.currentOwner) {
-    parts.push('owner=' + dominantWitness.currentOwner);
-  }
-  if (dominantWitness?.actuationState) {
-    parts.push('actuation=' + dominantWitness.actuationState);
-  }
-  if (dominantWitness?.blockingBoundary) {
-    parts.push('boundary=' + dominantWitness.blockingBoundary);
-  }
-  if (dominantWitness?.waitMode) {
-    parts.push('waitMode=' + dominantWitness.waitMode);
-  }
-  if (dominantWitness?.nextRequiredAction) {
-    parts.push('nextAction=' + dominantWitness.nextRequiredAction);
-  }
-  if (dominantWitness?.progressContractState) {
-    parts.push('contractState=' + dominantWitness.progressContractState);
-  }
-  if (dominantWitness?.pressureState) {
-    parts.push('pressure=' + dominantWitness.pressureState);
-  }
-  if (dominantWitness?.retryAfterMs !== undefined) {
-    parts.push('retryAfterMs=' + String(dominantWitness.retryAfterMs));
-  }
-  if (dominantWitness?.lastProgressAtMs !== undefined) {
-    parts.push('lastProgressAtMs=' + String(dominantWitness.lastProgressAtMs));
+  for (const field of ['retryAfterMs', 'lastProgressAtMs']) {
+    if (dominantWitness?.[field] !== undefined) {
+      parts.push(field + '=' + String(dominantWitness[field]));
+    }
   }
   return parts.join(', ');
 }
@@ -738,23 +730,11 @@ function formatStabilityGate(gate) {
   if (closureRecordId.length > ZERO) {
     parts.push('closureRecordId=' + closureRecordId);
   }
-  const restartBoundaryCount = normalizeNonNegativeCount(
-    gate?.evidence?.restartBoundaryCount,
-  );
-  if (restartBoundaryCount !== null) {
-    parts.push('restartBoundaryCount=' + String(restartBoundaryCount));
-  }
-  const pendingAckCount = normalizeNonNegativeCount(
-    gate?.evidence?.pendingAckCount,
-  );
-  if (pendingAckCount !== null) {
-    parts.push('pendingAckCount=' + String(pendingAckCount));
-  }
-  const blockedNodeCount = normalizeNonNegativeCount(
-    gate?.evidence?.blockedNodeCount,
-  );
-  if (blockedNodeCount !== null) {
-    parts.push('blockedNodeCount=' + String(blockedNodeCount));
+  for (const field of ['restartBoundaryCount', 'pendingAckCount', 'blockedNodeCount']) {
+    const count = normalizeNonNegativeCount(gate?.evidence?.[field]);
+    if (count !== null) {
+      parts.push(field + '=' + String(count));
+    }
   }
   return parts.join(', ');
 }

@@ -100,25 +100,7 @@ function validateEntryRefs(errors, label, entry, index, rootDir) {
   }
 }
 
-// The `liveEvidence` block is optional and additive (Requirement 8). When
-// present, validate its shape so a malformed Tier-2 declaration is caught.
-function validateLiveEvidence(errors, label, entry, index) {
-  const live = entry.liveEvidence;
-  if (live === undefined || live === null) {
-    return;
-  }
-  const at = `invariants[${index}].liveEvidence`;
-  if (!isObjectRecord(live)) {
-    errors.push(`${label}: ${at} must be an object.`);
-    return;
-  }
-  if (live.tier !== undefined && live.tier !== 2) {
-    errors.push(`${label}: ${at}.tier must be 2 when present.`);
-  }
-  if (!hasConcreteText(live.holdsWhen)) {
-    errors.push(`${label}: ${at}.holdsWhen must be concrete text.`);
-  }
-  const evidence = live.evidence;
+function validateLiveEvidenceDescriptor(errors, label, at, evidence) {
   if (!isObjectRecord(evidence)) {
     errors.push(`${label}: ${at}.evidence must be an object.`);
   } else {
@@ -133,7 +115,9 @@ function validateLiveEvidence(errors, label, entry, index) {
       errors.push(`${label}: ${at}.evidence.probe must name a probe for kind probe.`);
     }
   }
-  const trigger = live.trigger;
+}
+
+function validateLiveEvidenceTrigger(errors, label, at, trigger) {
   if (!isObjectRecord(trigger)) {
     errors.push(`${label}: ${at}.trigger must be an object.`);
   } else {
@@ -157,6 +141,28 @@ function validateLiveEvidence(errors, label, entry, index) {
         'on-touched-owner policy.');
     }
   }
+}
+
+// The `liveEvidence` block is optional and additive (Requirement 8). When
+// present, validate its shape so a malformed Tier-2 declaration is caught.
+function validateLiveEvidence(errors, label, entry, index) {
+  const live = entry.liveEvidence;
+  if (live === undefined || live === null) {
+    return;
+  }
+  const at = `invariants[${index}].liveEvidence`;
+  if (!isObjectRecord(live)) {
+    errors.push(`${label}: ${at} must be an object.`);
+    return;
+  }
+  if (live.tier !== undefined && live.tier !== 2) {
+    errors.push(`${label}: ${at}.tier must be 2 when present.`);
+  }
+  if (!hasConcreteText(live.holdsWhen)) {
+    errors.push(`${label}: ${at}.holdsWhen must be concrete text.`);
+  }
+  validateLiveEvidenceDescriptor(errors, label, at, live.evidence);
+  validateLiveEvidenceTrigger(errors, label, at, live.trigger);
   if (live.restoration !== undefined) {
     if (!isObjectRecord(live.restoration)) {
       errors.push(`${label}: ${at}.restoration must be an object.`);

@@ -232,22 +232,7 @@ function refreshScenarioVerdict(entry) {
   entry.verdictReason = verdict.reason;
 }
 
-function applyBundleDiagnosticsToScenarioEntry(entry, bundleJson) {
-  const diagnostics = ensureScenarioDiagnostics(entry);
-  if (!diagnostics || !isRecord(bundleJson)) {
-    return;
-  }
-
-  if (isRecord(bundleJson.diagnostics?.failure)) {
-    diagnostics.failure = bundleJson.diagnostics.failure;
-  }
-
-  // The bundle's root-cause bundle is the entry's own, or its withheld form
-  // when the bundle is non-measuring (scenario-assembly withholds it).
-  if (isRecord(bundleJson.diagnostics?.rootCauseBundle)) {
-    diagnostics.rootCauseBundle = bundleJson.diagnostics.rootCauseBundle;
-  }
-
+function applyBundleScenarioSummary(entry, bundleJson) {
   if (isRecord(bundleJson.summary?.logWindowCoverage)) {
     entry.logWindowCoverage = bundleJson.summary.logWindowCoverage;
   }
@@ -272,7 +257,9 @@ function applyBundleDiagnosticsToScenarioEntry(entry, bundleJson) {
   ) {
     entry.dominantReason = bundleJson.summary.dominantReason;
   }
+}
 
+function applyBundleSummaryGuidance(entry, diagnostics, bundleJson) {
   if (isRecord(bundleJson.summary?.readinessFailure)) {
     diagnostics.readinessFailure = bundleJson.summary.readinessFailure;
     entry.readinessFailure = bundleJson.summary.readinessFailure;
@@ -294,7 +281,9 @@ function applyBundleDiagnosticsToScenarioEntry(entry, bundleJson) {
       bundleJson.summary.operatorRecommendation;
     entry.operatorRecommendation = bundleJson.summary.operatorRecommendation;
   }
+}
 
+function applyBundleRecoveryEvidence(entry, diagnostics, bundleJson) {
   if (isRecord(bundleJson.publicationConvergence)) {
     diagnostics.publicationConvergence = bundleJson.publicationConvergence;
     entry.publicationConvergence = bundleJson.publicationConvergence;
@@ -325,6 +314,42 @@ function applyBundleDiagnosticsToScenarioEntry(entry, bundleJson) {
     entry.priorityRecoveryInvariants =
       bundleJson.controlPlane.priorityRecoveryInvariants;
   }
+}
+
+function applyBundleReadinessArtifacts(diagnostics, bundleJson) {
+  if (isRecord(bundleJson.readiness?.nodeReasonsByNodeId)) {
+    if (!isRecord(diagnostics.failedPhase)) {
+      diagnostics.failedPhase = {};
+    }
+    if (!isRecord(diagnostics.failedPhase.artifacts)) {
+      diagnostics.failedPhase.artifacts = {};
+    }
+    diagnostics.failedPhase.artifacts.nodeReasonsByNodeId =
+      bundleJson.readiness.nodeReasonsByNodeId;
+  }
+}
+
+function applyBundleDiagnosticsToScenarioEntry(entry, bundleJson) {
+  const diagnostics = ensureScenarioDiagnostics(entry);
+  if (!diagnostics || !isRecord(bundleJson)) {
+    return;
+  }
+
+  if (isRecord(bundleJson.diagnostics?.failure)) {
+    diagnostics.failure = bundleJson.diagnostics.failure;
+  }
+
+  // The bundle's root-cause bundle is the entry's own, or its withheld form
+  // when the bundle is non-measuring (scenario-assembly withholds it).
+  if (isRecord(bundleJson.diagnostics?.rootCauseBundle)) {
+    diagnostics.rootCauseBundle = bundleJson.diagnostics.rootCauseBundle;
+  }
+
+  applyBundleScenarioSummary(entry, bundleJson);
+
+  applyBundleSummaryGuidance(entry, diagnostics, bundleJson);
+
+  applyBundleRecoveryEvidence(entry, diagnostics, bundleJson);
 
   if (
     bundleJson.decisionArtifactsByNodeId &&
@@ -344,16 +369,7 @@ function applyBundleDiagnosticsToScenarioEntry(entry, bundleJson) {
     entry.recoveryReadiness = bundleJson.recoveryReadiness;
   }
 
-  if (isRecord(bundleJson.readiness?.nodeReasonsByNodeId)) {
-    if (!isRecord(diagnostics.failedPhase)) {
-      diagnostics.failedPhase = {};
-    }
-    if (!isRecord(diagnostics.failedPhase.artifacts)) {
-      diagnostics.failedPhase.artifacts = {};
-    }
-    diagnostics.failedPhase.artifacts.nodeReasonsByNodeId =
-      bundleJson.readiness.nodeReasonsByNodeId;
-  }
+  applyBundleReadinessArtifacts(diagnostics, bundleJson);
 
   refreshScenarioVerdict(entry);
 }
@@ -567,88 +583,51 @@ async function attachPassingScenarioConvergenceEvidence({
   }
 }
 
-async function writeFailureBundlesForReport({
-  scenarios,
-  reportOutputPath,
-  outputDir,
+async function writeFailedScenarioBundle({
+  entry,
+  scenarioDir,
+  absoluteReportPath,
   reportSummary,
   standardSummary,
   benchmarkRegressionGate,
-  workspaceRoot = process.cwd(),
-  scenarioConfigs = null,
+  workspaceRoot,
+  scenarioConfigs,
 }) {
-  const scenarioEntries = Array.isArray(scenarios) ? scenarios : [];
-  const absoluteOutputDir = resolve(String(outputDir || '.'));
-  const absoluteReportPath = resolve(String(reportOutputPath || ''));
-  const scenarioBundles = [];
-
-  for (const entry of scenarioEntries) {
-    if (!entry) {
-      continue;
-    }
-    const scenarioName = sanitizePathSegment(entry.scenario, 'scenario');
-    const scenarioDir = join(absoluteOutputDir, scenarioName);
-    // A refused scenario never ran: no cluster, no logs, nothing to triage
-    // as a failure - no bundle, and its directory (an earlier run's
-    // evidence) is left untouched. The report entry names the refusal.
-    if (scenarioOutcomeOf(entry) === SCENARIO_OUTCOME.REFUSED) {
-      delete entry.failureBundle;
-      continue;
-    }
-    if (entry.passed === true) {
-      await removeScenarioFailureArtifacts(scenarioDir);
-      delete entry.failureBundle;
-      await attachPassingScenarioConvergenceEvidence({
-        entry,
-        scenarioDir,
-        absoluteReportPath,
-        reportSummary,
-        standardSummary,
-        benchmarkRegressionGate,
-        workspaceRoot,
-      });
-      continue;
-    }
-    await mkdir(scenarioDir, {recursive: true});
-    // A bundle that cannot serialize (e.g. RangeError: Invalid string
-    // length on long runs) must degrade to a minimal artifact, never take
-    // down the report: the report records WHAT failed; the bundle is only
-    // the pre-digested HOW.
-    try {
-      scenarioBundles.push(
-        await writeScenarioFailureBundleArtifacts({
-          entry,
-          scenarioDir,
-          absoluteReportPath,
-          reportSummary,
-          standardSummary,
-          benchmarkRegressionGate,
-          workspaceRoot,
-          scenarioConfig: isRecord(scenarioConfigs) ?
-            scenarioConfigs[entry.scenario] :
-            null,
-        }),
-      );
-    } catch (bundleError) {
-      scenarioBundles.push(
-        await writeScenarioFailureBundleFallback({
-          entry,
-          scenarioDir,
-          workspaceRoot,
-          error: bundleError,
-        }),
-      );
-    }
-  }
-
-  if (scenarioBundles.length === ZERO) {
-    await rm(join(absoluteOutputDir, FAILURE_BUNDLE_RUN_DIRNAME), {
-      recursive: true,
-      force: true,
+  await mkdir(scenarioDir, {recursive: true});
+  // Serialization failure is isolated to this scenario's diagnostic artifact.
+  // Keep the explicit failure artifact and the original report outcome.
+  try {
+    return await writeScenarioFailureBundleArtifacts({
+      entry,
+      scenarioDir,
+      absoluteReportPath,
+      reportSummary,
+      standardSummary,
+      benchmarkRegressionGate,
+      workspaceRoot,
+      scenarioConfig: isRecord(scenarioConfigs) ?
+        scenarioConfigs[entry.scenario] :
+        null,
     });
-    return {runBundle: null, scenarioBundles: []};
+  } catch (bundleError) {
+    return await writeScenarioFailureBundleFallback({
+      entry,
+      scenarioDir,
+      workspaceRoot,
+      error: bundleError,
+    });
   }
+}
 
+async function writeRunFailureBundle({
+  absoluteOutputDir,
+  absoluteReportPath,
+  reportSummary,
+  standardSummary,
+  benchmarkRegressionGate,
+  workspaceRoot,
+  scenarioBundles,
+}) {
   const runBundleDir = join(absoluteOutputDir, FAILURE_BUNDLE_RUN_DIRNAME);
   await mkdir(runBundleDir, {recursive: true});
   try {
@@ -695,6 +674,79 @@ async function writeFailureBundlesForReport({
     );
     return {runBundle: null, scenarioBundles};
   }
+}
+
+async function writeFailureBundlesForReport({
+  scenarios,
+  reportOutputPath,
+  outputDir,
+  reportSummary,
+  standardSummary,
+  benchmarkRegressionGate,
+  workspaceRoot = process.cwd(),
+  scenarioConfigs = null,
+}) {
+  const scenarioEntries = Array.isArray(scenarios) ? scenarios : [];
+  const absoluteOutputDir = resolve(String(outputDir || '.'));
+  const absoluteReportPath = resolve(String(reportOutputPath || ''));
+  const scenarioBundles = [];
+
+  for (const entry of scenarioEntries) {
+    if (!entry) {
+      continue;
+    }
+    const scenarioName = sanitizePathSegment(entry.scenario, 'scenario');
+    const scenarioDir = join(absoluteOutputDir, scenarioName);
+    // A refused scenario never ran: no cluster, no logs, nothing to triage
+    // as a failure - no bundle, and its directory (an earlier run's
+    // evidence) is left untouched. The report entry names the refusal.
+    if (scenarioOutcomeOf(entry) === SCENARIO_OUTCOME.REFUSED) {
+      delete entry.failureBundle;
+      continue;
+    }
+    if (entry.passed === true) {
+      await removeScenarioFailureArtifacts(scenarioDir);
+      delete entry.failureBundle;
+      await attachPassingScenarioConvergenceEvidence({
+        entry,
+        scenarioDir,
+        absoluteReportPath,
+        reportSummary,
+        standardSummary,
+        benchmarkRegressionGate,
+        workspaceRoot,
+      });
+      continue;
+    }
+    scenarioBundles.push(await writeFailedScenarioBundle({
+      entry,
+      scenarioDir,
+      absoluteReportPath,
+      reportSummary,
+      standardSummary,
+      benchmarkRegressionGate,
+      workspaceRoot,
+      scenarioConfigs,
+    }));
+  }
+
+  if (scenarioBundles.length === ZERO) {
+    await rm(join(absoluteOutputDir, FAILURE_BUNDLE_RUN_DIRNAME), {
+      recursive: true,
+      force: true,
+    });
+    return {runBundle: null, scenarioBundles: []};
+  }
+
+  return writeRunFailureBundle({
+    absoluteOutputDir,
+    absoluteReportPath,
+    reportSummary,
+    standardSummary,
+    benchmarkRegressionGate,
+    workspaceRoot,
+    scenarioBundles,
+  });
 }
 
 export const FAILURE_BUNDLE_ARTIFACT_WRITERS = {
