@@ -26,7 +26,11 @@ import {REPLICA_OPERATION_UPDATE_DISPOSITION} from
   '../../src/rebalancer/replica-operation-update-disposition.js';
 import {REBALANCE_COORDINATOR_LOG_MSG} from
   '../../src/rebalancer/rebalancer-constants.js';
-import {OperationType} from '../../src/rebalancer/replica-status.js';
+import {OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {ACTUAL_REPLICA_OBSERVATION_STATE} from
+  '../../src/rebalancer/replica-operation-repository-constants.js';
+import {buildPresentOperationVisibility} from
+  '../../src/rebalancer/replica-operation-repository-operation-visibility.js';
 
 const TEST_OPERATION_ID = 'op-redrive-untouched';
 
@@ -174,6 +178,17 @@ function buildTerminalPersistenceHost({transitionOutcome}) {
   host.normalizeErrorMessage = (message, fallback) => message || fallback;
   host.isSafetyPolicyFailure = () => false;
   host.executeAtomicTransition = async () => transitionOutcome;
+  // A partition ADD's FAILED is admitted on the owner's reads (M2): the
+  // target replica is authoritatively observed not yet live and the durable
+  // row holds the operation's step, so the failure is admitted.
+  host.repository = {
+    getActualReplicaObservation: async () => ({
+      state: ACTUAL_REPLICA_OBSERVATION_STATE.OBSERVED,
+      lifecycleStatus: ReplicaStatus.SYNCING,
+    }),
+    queryReplicaOperationPersistenceAuthorityObservation: async (operation) =>
+      buildPresentOperationVisibility(operation),
+  };
   host.emitter = {emit() {}};
   host.stats = {operationsCompleted: 0, operationsFailed: 0};
   host.logger = {
