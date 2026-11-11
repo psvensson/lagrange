@@ -10,8 +10,11 @@ import {
   TABLES,
 } from '../../src/constants/index.js';
 import {
+  ROUTER_ERROR_MSG,
   TRANSPORT_ERROR_MSG,
 } from '../../src/constants/transport.js';
+import {ROUTER_NO_CONNECTION_ERROR_CODE} from
+  '../../src/transport/transport-error-codes.js';
 import {RaftRole} from '../../src/message-group/message-group-service.js';
 import {
   MESSAGE_GROUP_CDC_ERROR_MSG,
@@ -611,11 +614,19 @@ export function registerCdcNonLeaderPropagationTailTests({
     },
   );
 
+  // Superseded (R09) by 620bb9460, the routed forward classifying transport
+  // answers through the one transport owner: a no-handler answer is
+  // WRONG_OWNER, which sets the target aside for the suppression window (the
+  // router's own no-handler text was set aside before as well; only this
+  // double's non-production text escaped it). A leader whose handler is still
+  // starting is reached again once the window ends, never re-sent within it.
   test(
-    'applyCDCEvent retries no-handler forward targets while handlers finish starting',
+    'applyCDCEvent sets a no-handler forward target aside and reaches it again ' +
+      'after the suppression window (a handler that finished starting)',
     async (t) => {
       const port = testPortCounter++;
       const nodeId = `test-node-${port}`;
+      let nowMs = 0;
       const router = new MessageRouter({
         bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId, wsPort: port});
@@ -631,6 +642,7 @@ export function registerCdcNonLeaderPropagationTailTests({
           replicaId: 'mg-forward-suppress-r1',
           nodeId,
           transport: router,
+          now: () => nowMs,
         }, consensus);
         await mg.initialize();
         mg.replicaIds = [
@@ -649,29 +661,44 @@ export function registerCdcNonLeaderPropagationTailTests({
         mg.retryMaxAttempts = 2;
         mg.retryInitialDelayMs = 10;
         mg.retryBackoffMultiplier = 1;
+        mg.forwardTargetSuppressionMs = 1000;
 
         let deliverAttempts = 0;
         router.deliver = async (address) => {
           deliverAttempts += 1;
           if (deliverAttempts === 1) {
-            return buildDeliveryEnvelope({acknowledged: true, noHandler: true}, {
-              error: `No handler for address: ${address}`,
-            });
+            // The router's no-handler answer (frame-level noHandler).
+            return buildDeliveryEnvelope({acknowledged: true, noHandler: true,
+              error: ROUTER_ERROR_MSG.noHandlerForAddress(address)});
           }
           return buildDeliveryEnvelope({acknowledged: true}, {success: true});
         };
 
+        let refused = false;
+        try {
+          await mg.applyCDCEvent(
+            NON_SYSTEM_CDC_TABLE,
+            'INSERT',
+            {partition_id: 'p-forward-suppress-1'},
+            {timestamp: '1234567890:21'},
+          );
+        } catch {
+          refused = true;
+        }
+        t.equal(refused, true,
+          'a command whose only target answered no-handler is refused, not lost');
+        t.equal(deliverAttempts, 1,
+          'the no-handler target is not re-sent within its suppression window');
+
+        nowMs += 1001;
         await mg.applyCDCEvent(
           NON_SYSTEM_CDC_TABLE,
           'INSERT',
-          {partition_id: 'p-forward-suppress-1'},
-          {timestamp: '1234567890:21'},
+          {partition_id: 'p-forward-suppress-2'},
+          {timestamp: '1234567890:22'},
         );
-        t.equal(
-          deliverAttempts,
-          2,
-          'retry budget should retry the same target after a transient no-handler response',
-        );
+        t.equal(deliverAttempts, 2,
+          'after the window the same target is reached again and serves');
       } finally {
         await cleanup();
       }
@@ -725,8 +752,10 @@ export function registerCdcNonLeaderPropagationTailTests({
           attempts.push(address);
           if (address ===
             'remote-node-2/message-group/mg-no-connection-suppress-r2') {
+            // The router's no-connection outcome (its code, no frame left).
             return buildDeliveryEnvelope(
-              {acknowledged: false, error: 'No connection to node remote-node-2'});
+              {acknowledged: false, error: 'No connection to node remote-node-2',
+                errorCode: ROUTER_NO_CONNECTION_ERROR_CODE});
           }
           return buildDeliveryEnvelope({acknowledged: true}, {success: true});
         };
