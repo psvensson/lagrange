@@ -24,28 +24,59 @@ are preserved; no source writer works in the primary checkout.
   is tightened from 145 to the measured 144. The fixed-input inventory refresh
   completed; it records a complexity failure of 1,702 versus baseline 1,697,
   which is retained, not waived. Cycle and both duplication ratchets pass.
-  Next: commit/push this WIP candidate and run the full lab suite before
-  integrating F. The first inventory measurement rejected changing inputs;
+  These changes are committed and pushed as
+  `eaccbd37a2794e6afbc46f4eb9d5434cc6a9802e`. Its full lab run is active
+  across five hosts plus controller placement; the integration tree stays
+  frozen. First failures remain in
+  `/tmp/lagrange-takeover-20261112-full-lab-eaccbd37a.log` and placement logs.
+  The first inventory measurement rejected changing inputs;
   a subsequent run was interrupted. Neither supersedes the completed result.
 - F: compose `1046d897d` and `3ce07ba54` in an isolated worktree, preserving
   M's classify-only record module and administration-owned read snapshot.
-  Add the handler-owned own-group read boundary. The implementation owner is
-  subagent `01a1ce13-dbe2-7e20-90bd-9b69ad140b9a`; separate verification is
-  still required. Birth/restart and ended-operation cleanup proof remain open.
+  The isolated r3 candidate is staged tree
+  `0e0e7f1c0b95d42d49af5a2a5e1e6dd638be13b5`. Independent review rejected
+  two remaining freshness paths: runtime opening can backfill a never-opened
+  fact, and snapshot observation can interpret missing history as fresh.
+  Stronger-model reimplementation owns this work in
+  `lagrange-codex-f-compose-20261112`; fresh independent review remains required.
+  Preserve its r2/r3 manifests and the first native setup failure. That failure
+  preceded redrive; its historical input bytes are unavailable.
 - Exactly-once c2/d: retain the lab failure as a correctness red. Source review
   identifies admission/redelivery and durable outcome as the first useful
-  observation boundary; it does not establish the cause. Evidence recovery
-  owner: subagent `01a1ce15-211d-7812-b935-1b652c12ff1d`.
+  observation boundary; it does not establish the cause. The original physical
+  log was recovered and hashed. This file passes on the current lab candidate,
+  which does not discharge the earlier unexplained correctness red.
 - Checkpoint: original worktree bytes/modes match snapshot `402253be1`, and
   its index remains tree `7689e8691353b8516bfae21c8b0baaeef35f6ea3`.
-  Isolated investigation owner: subagent
-  `01a1ce13-dc09-7b20-b552-f16a4b50fd45`. First investigate failed replacement
-  shutdown followed by cleanup, and real partition CREATE-deferral continuation.
-  These are source-supported risks, not executed reproductions. The snapshot
+  Isolated investigation in `lagrange-codex-checkpoint-20261112` reproduced
+  database unlink while a replacement handle remained live after failed
+  shutdown; successful-shutdown control passes. Real coordinator continuation
+  also exposes a bounded redispatch gap, not yet permanent-stranding proof.
+  Its `R09-SPLIT-PROPOSAL-2026-11-12.md` is a proposal only. A product decision
+  is pending between full ownership repair before delivery and separately
+  proved cadence/install/recovery containment for a format-only delivery.
+  Cadence HOLD alone cannot contain the unsafe install paths. The snapshot
   retains legacy marker handling and unfinished witnesses. Its historical
   80-file/37-mutation report does not cover the final snapshot. Checkpoint
   evidence and continuation log belong in its isolated candidate; the primary
   checkout does not contain that Quest.
+- Lab fixture repair: the required cache subscription contract exposed a
+  family of incomplete test doubles. Stronger-model repair in
+  `lagrange-codex-lab-fixtures-20261112` has 26 focused files passing with
+  1,242 assertions and awaits independent review. Its original lower-model
+  failure is retained. Production fallbacks and test bounds are unchanged.
+- Other isolated work: direct example-owner import and SEA host requirement
+  are independently approved only as a bounded delta, preserved in WIP
+  `fddbae1be`. A clock-fixture repair is under stronger-model implementation
+  after a lower-model syntax failure. Closed native-role decoding has a
+  red-first malformed-role witness. CDC timing/occurrence failures remain
+  under diagnosis; package/solve budgets and census closure remain open.
+
+Repository implementation now defaults to `gpt-6.1-sol`; difficult ownership
+repair uses `gpt-6-astra`. A failed implementation verification transfers to a
+stronger model for reimplementation and fresh independent verification.
+Low-risk read-only inventory may use a smaller model. Parallel writers own
+separate worktrees; local test execution observes the shared machine lock.
 
 ## Remaining acceptance
 
