@@ -20,11 +20,14 @@ import {
 
 
 // The coalescing-key part of a write's CDC admission class: none for an
-// ordinary write (its keys are unchanged), the class for any other.
+// ordinary write (its keys are unchanged), the declared class for a classified
+// one, and the refusal's code for a refused one (refused writes coalesce only
+// with each other).
 function admissionClassKeyOf(options) {
   if (options?.[CDC_ADMISSION_INTENT_FIELD] === undefined) return {};
-  return {admissionClass: cdcAdmissionClassOfIntent(options).admissionClass ??
-    CDC_ADMISSION_CLASS_ERROR.REFUSED};
+  const declared = cdcAdmissionClassOfIntent(options);
+  return {admissionClass: declared.refusal === undefined ?
+    declared.admissionClass : CDC_ADMISSION_CLASS_ERROR.REFUSED};
 }
 
 const GATEWAY_IDLE_NOT_REACHED = 'control_plane_gateway_current_work_not_idle';
