@@ -105,8 +105,10 @@ async function readAuthoritativeLifecycleAdmission(stateMachine, evidence, admis
   const replicaId = evidence.service_id;
   if (!isReplicaAdmissionCurrent(stateMachine, replicaId, admission)) return null;
   if (context.runtimeObservation && context.isEffectHandlerCurrent() !== true) return null;
+  const debt = stateMachine.canonicalLeaderClearDebtByReplicaId.get(replicaId);
   const observation = await observeAuthoritativeReplicaLifecycle(stateMachine, replicaId);
-  if (!isReplicaAdmissionCurrent(stateMachine, replicaId, admission)) return null;
+  if (!isReplicaAdmissionCurrent(stateMachine, replicaId, admission) ||
+      stateMachine.canonicalLeaderClearDebtByReplicaId.get(replicaId) !== debt) return null;
   if (context.runtimeObservation && context.isEffectHandlerCurrent() !== true) return null;
   if (observation.available !== true) {
     throw authoritativeLifecycleTransitionError(
@@ -129,8 +131,10 @@ async function resolveAuthoritativeLifecycleOutcome(
 ) {
   const replicaId = evidence.service_id;
   if (!isReplicaAdmissionCurrent(stateMachine, replicaId, admission)) return false;
+  const debt = stateMachine.canonicalLeaderClearDebtByReplicaId.get(replicaId);
   const observation = await observeAuthoritativeReplicaLifecycle(stateMachine, replicaId);
-  if (!isReplicaAdmissionCurrent(stateMachine, replicaId, admission)) return false;
+  if (!isReplicaAdmissionCurrent(stateMachine, replicaId, admission) ||
+      stateMachine.canonicalLeaderClearDebtByReplicaId.get(replicaId) !== debt) return false;
   if (observation.available !== true) {
     throw authoritativeLifecycleTransitionError(
       AUTHORITATIVE_LIFECYCLE_TRANSITION_ERROR_CODE.AUTHORITY_UNAVAILABLE,
@@ -224,5 +228,6 @@ async function transitionAuthoritativeReplicaGeneration(
 }
 
 export {
+  applyAuthoritativeLifecycleInLane,
   transitionAuthoritativeReplicaGeneration,
 };

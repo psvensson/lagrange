@@ -7,9 +7,11 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ReplicaHandler} from '../../src/node/replica-handler.js';
 import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
-import {captureReplicaAdmission} from '../../src/node/replica-state-machine-serialization.js';
-import {durableRowVersion, installAuthoritativeReplicaLifecycleSnapshot} from
-  '../../src/node/replica-state-machine-lifecycle-observation.js';
+import {captureReplicaAdmission, runSerializedReplicaMutation} from
+  '../../src/node/replica-state-machine-serialization.js';
+import {installAuthoritativeReplicaLifecycleInLane} from
+  '../../src/node/replica-state-machine-recovery.js';
+import {settledTurn, turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 import {createReplicaRuntimePublication, publishReplicaRuntime} from
   '../../src/node/replica-runtime-publication.js';
 import {captureReplicaRuntimeObservation} from '../../src/node/replica-runtime-observation.js';
@@ -30,6 +32,15 @@ function initializeEnvironment() {
   LoggingService.getInstance().initialize({level: 'error'});
 }
 
+function installDeclaredSource(owner, row) {
+  const replicaId = row.service_id;
+  const admission = captureReplicaAdmission(owner, replicaId);
+  return turnChainValue(runSerializedReplicaMutation(owner, replicaId,
+    () => settledTurn(installAuthoritativeReplicaLifecycleInLane(
+      owner, replicaId, row, admission,
+    ))));
+}
+
 async function publicationFixture(t) {
   initializeEnvironment();
   const row = createLifecycleServiceRow({replicaId: 'publication-r1',
@@ -39,8 +50,7 @@ async function publicationFixture(t) {
     partitions: [createPartitionRow({partitionId: row.partition_id})]});
   const owner = new ReplicaStateMachine({nodeId: row.node_id,
     systemTableCache: store.cache, controlPlaneSystemTableGateway: store.gateway});
-  await installAuthoritativeReplicaLifecycleSnapshot(owner, row, row.node_id,
-    durableRowVersion(row));
+  await installDeclaredSource(owner, row);
   const handler = new ReplicaHandler({nodeId: row.node_id, ownerIncarnation: 1,
     dataDir: '/tmp/replica-publication-unit', systemTableCache: store.cache,
     controlPlaneSystemTableGateway: store.gateway, cdcIntegrationService: {},
@@ -73,15 +83,13 @@ test('runtime publication retains the admitted source when the caller mutates it
     const callerRow = {...f.row};
     const service = f.construct(callerRow);
     const other = {...f.row, service_id: 'other-r1', replica_id: 'other-r1'};
-    await installAuthoritativeReplicaLifecycleSnapshot(f.owner, other, other.node_id,
-      durableRowVersion(other));
+    await installDeclaredSource(f.owner, other);
     callerRow.service_id = other.service_id;
     callerRow.created_at = 900;
     t.equal(service.runtimePublication.assertCurrent(service), true,
       'caller edits do not revoke or redirect the retained original source');
     const advanced = {...f.row, state_entered_at: 200};
-    await installAuthoritativeReplicaLifecycleSnapshot(f.owner, advanced, advanced.node_id,
-      durableRowVersion(advanced));
+    await installDeclaredSource(f.owner, advanced);
     t.throws(() => service.runtimePublication.assertCurrent(service), REFUSED,
       'a second unchanged ID cannot lend its admission to the stale original runtime');
     t.equal(f.handler.getTrackedService(f.row.service_id), null);

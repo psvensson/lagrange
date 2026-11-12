@@ -7,13 +7,16 @@ import {
   DURABLE_VERSION_COLUMN,
   buildReplicaLifecycleMutationPredicateFromRow,
   durableRowVersion,
-  installAuthoritativeReplicaLifecycleSnapshot,
   isReplicaLifecycleMutationPredicate,
   observeAuthoritativeReplicaLifecycle,
   rowMatchesReplicaLifecycle,
 } from
   './replica-state-machine-lifecycle-observation.js';
 import {completeRemovalInLane} from './replica-state-machine-transition.js';
+import {applyAuthoritativeLifecycleInLane} from
+  './replica-state-machine-authoritative-transition.js';
+import {settleCanonicalLeaderClearDebtInLane} from
+  './replica-state-machine-leader-clear.js';
 import {createRemovalCompletionReceiptVerifier} from './replica-state-machine-removal-completion-receipt.js';
 import {removeFromTracking} from './replica-state-machine-metrics.js';
 import {
@@ -315,12 +318,16 @@ function refuseRecoverySnapshot(stateMachine, replicaId, currentState, state,
   return false;
 }
 
-async function recoverService(stateMachine, cachedService, nodeId) {
-  const replicaId = cachedService.service_id;
+async function recoverServiceInLane(stateMachine, replicaId, nodeId,
+  originalAdmission, originalDebt) {
+  const isCurrent = () => isReplicaAdmissionCurrent(stateMachine, replicaId, originalAdmission) &&
+    stateMachine.canonicalLeaderClearDebtByReplicaId.get(replicaId) === originalDebt;
+  if (!isCurrent()) return null;
   const observation = await observeAuthoritativeReplicaLifecycle(
     stateMachine,
     replicaId,
   );
+  if (!isCurrent()) return null;
   const service = observation.available === true ? observation.row : null;
   if (!service || service.service_id !== replicaId ||
       service.node_id !== nodeId ||
@@ -334,19 +341,17 @@ async function recoverService(stateMachine, cachedService, nodeId) {
     ReplicaState.REMOVED,
     ReplicaState.FAILED,
   ].includes(status)) return null;
-  const observedVersion = durableRowVersion(service);
-  if (!observedVersion) return null;
-  const existingState = await installAuthoritativeReplicaLifecycleSnapshot(
-    stateMachine,
-    service,
-    nodeId,
-    observedVersion,
-  );
-  if (!existingState) return null;
+  if (!installAuthoritativeReplicaLifecycleInLane(
+    stateMachine, replicaId, service, originalAdmission,
+  )) return null;
+  // Only our synchronous accepted install may issue the next admission.
+  const installedAdmission = captureReplicaAdmission(stateMachine, replicaId);
 
   if ([ReplicaState.REMOVING, ReplicaState.REMOVED, ReplicaState.FAILED]
     .includes(status) &&
-      await stateMachine.settleCanonicalLeaderClearDebt(replicaId) !== true) {
+      await settleCanonicalLeaderClearDebtInLane(
+        stateMachine, replicaId, installedAdmission,
+      ) !== true) {
     // Keep this durable generation reconstructible until its cross-owner
     // leader side effect is confirmed.
     return null;
@@ -358,7 +363,8 @@ async function recoverService(stateMachine, cachedService, nodeId) {
 
   const newState = ReplicaState.FAILED;
   const reason = REPLICA_STATE_MACHINE_REASON.RECOVERY_INCOMPLETE;
-  const result = await stateMachine.transitionAuthoritativeReplicaGeneration(
+  const result = await applyAuthoritativeLifecycleInLane(
+    stateMachine,
     service,
     newState,
     {
@@ -369,6 +375,7 @@ async function recoverService(stateMachine, cachedService, nodeId) {
         REPLICA_STATE_MACHINE_ERROR_MSG.recoveryIncompleteOperation(status),
       serviceId: replicaId,
     },
+    installedAdmission,
   );
   if (result !== true) return null;
   stateMachine.logger.info(
@@ -376,6 +383,16 @@ async function recoverService(stateMachine, cachedService, nodeId) {
     {replicaId, previousStatus: status, nodeId},
   );
   return status;
+}
+
+function recoverService(stateMachine, cachedService, nodeId) {
+  const replicaId = cachedService.service_id;
+  const admission = captureReplicaAdmission(stateMachine, replicaId);
+  const debt = stateMachine.canonicalLeaderClearDebtByReplicaId.get(replicaId);
+  return turnChainValue(runSerializedReplicaMutation(stateMachine, replicaId,
+    () => pendingTurn(recoverServiceInLane(
+      stateMachine, replicaId, nodeId, admission, debt,
+    ))));
 }
 
 function resolveSnapshotDurableVersion(context) {
@@ -688,10 +705,9 @@ function registerReplicaSnapshot(stateMachine, replicaId, context = {}) {
     return false;
   }
 
-  // Snapshot hydration is a synchronous compatibility boundary. Refuse a
-  // snapshot while another mutation owns the replica lane instead of changing
-  // the API into an occasionally-awaitable operation that legacy callers can
-  // accidentally treat as success. Recovery can retry from fresh evidence.
+  // Public snapshot hydration answers synchronously on an idle lane. A busy
+  // lane refuses this request; recovery already holding that lane uses the
+  // in-lane install kernel with its retained original admission.
   if (stateMachine.serviceRowPersistInFlightByServiceId.has(replicaId)) {
     return refuseRecoverySnapshot(
       stateMachine,

@@ -217,43 +217,6 @@ function rowHoldsReplicaIncarnation(row, replicaState) {
     field === replicaState.durableVersionColumn || row?.[field] === value);
 }
 
-async function installAuthoritativeReplicaLifecycleSnapshot(
-  stateMachine,
-  service,
-  nodeId,
-  observedVersion,
-) {
-  if (!observedVersion) return false;
-  const replicaId = service.service_id;
-  const registered = await Promise.resolve(
-    stateMachine.registerReplicaSnapshot(replicaId, {
-      partitionId: service.partition_id,
-      nodeId,
-      state: service.status,
-      serviceId: replicaId,
-      serviceType: service.service_type,
-      serviceAddress: service.address,
-      replicaIdentity: service.replica_id,
-      groupId: service.group_id,
-      cleanupToken: service.cleanup_token,
-      createAttemptToken: service.create_attempt_token,
-      createdAt: service.created_at,
-      durableVersionColumn: observedVersion.column,
-      durableVersion: observedVersion.value,
-      durableUpdatedAt: service.updated_at,
-      authoritativeSnapshot: true,
-    }),
-  );
-  if (registered !== true) return false;
-  const installedState = stateMachine.replicas.get(replicaId) || false;
-  if (installedState?.state !== service.status ||
-      installedState.durableVersionColumn !== observedVersion.column ||
-      installedState.durableVersion !== observedVersion.value) {
-    return false;
-  }
-  return installedState;
-}
-
 function resolveReplicaCreateGroupId(stateMachine, replicaState, serviceId) {
   if (replicaState.lifecycleIdentityAuthoritative === true ||
       typeof replicaState.groupId === 'string') {
@@ -439,7 +402,6 @@ export {
   isConflictingCachedReplicaIdentity,
   isReplicaLifecycleMutationPredicate,
   nextLifecycleStateEntry,
-  installAuthoritativeReplicaLifecycleSnapshot,
   observeAuthoritativeReplicaLifecycle,
   readAuthoritativePartitionLeader,
   readAuthoritativeReplicaLifecycle,
