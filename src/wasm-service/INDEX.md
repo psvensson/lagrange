@@ -40,7 +40,7 @@ documentClass: generated
 - [timer-manager.js](timer-manager.js) - TimerManager - manages persistent timers for a WASM service replica. (importers: few)
 - [wasm-creation-custody.js](wasm-creation-custody.js) - The physical lifecycle owns current registration and every admitted exact retirement, including work by path with no... (importers: one)
 - [wasm-creation-genesis.js](wasm-creation-genesis.js) - The held lifecycle's INIT continuation. (importers: few)
-- [wasm-creation-opening.js](wasm-creation-opening.js) - The existing WASM opening owns the common root and the receiver-local creation record. (importers: many)
+- [wasm-creation-opening.js](wasm-creation-opening.js) - The receiver-local record's phases. (importers: many)
 - [wasm-creation-publication.js](wasm-creation-publication.js) - The grant half of the keyed bound-creation continuation (design SERVING-PUBLICATION-RETIREMENT-DESIGN-20261017 D1',... (importers: few)
 - [wasm-creation-reconciliation.js](wasm-creation-reconciliation.js) - Volatile trigger/custody adapter of WasmServiceLifecycle, not another genesis or permission owner. (importers: few)
 - [wasm-creation-retirement.js](wasm-creation-retirement.js) - WasmServiceLifecycle's retirement of one exact bound resource (design SERVING-PUBLICATION-RETIREMENT-DESIGN-20261017... (importers: one)

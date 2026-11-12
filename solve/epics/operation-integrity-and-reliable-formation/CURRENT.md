@@ -9,8 +9,9 @@ Governing rule-set: revision 5; rules source
 The takeover baseline is `d0f86d73cfd3272cc35788dab113b9741f70ec3b`, verified
 against origin. Its source matches `21a82d45b`; the later commit adds the
 [handover and reports](HANDOVER-2026-11-12.md). Neither has a lab result or
-independent approval of the composed source. The last reported full lab run
-is `22f9791e9`, with 12 failing files. Nothing is landed.
+independent approval of the composed source. The prior handover lab run
+was `22f9791e9`, with 12 failing files; the takeover run below supersedes it
+for its own exact candidate. Nothing is landed.
 
 The [formation Quest](../../quests/fresh-formation-user-table-routability/quest.json)
 retains its sealed acceptance. Its authoritative continuation log remains in
@@ -38,16 +39,18 @@ are preserved; no source writer works in the primary checkout.
   were subsequently pushed at `1b51362e0`; that tip has no full-lab result.
   The first inventory measurement rejected changing inputs;
   a subsequent run was interrupted. Neither supersedes the completed result.
-- F: compose `1046d897d` and `3ce07ba54` in an isolated worktree, preserving
-  M's classify-only record module and administration-owned read snapshot.
-  The isolated r3 candidate is staged tree
-  `0e0e7f1c0b95d42d49af5a2a5e1e6dd638be13b5`. Independent review rejected
-  two remaining freshness paths: runtime opening can backfill a never-opened
-  fact, and snapshot observation can interpret missing history as fresh.
-  Stronger-model reimplementation owns this work in
-  `lagrange-codex-f-compose-20261112`; fresh independent review remains required.
-  Preserve its r2/r3 manifests and the first native setup failure. That failure
-  preceded redrive; its historical input bytes are unavailable.
+- F: r4 staged tree `b8f0f6474fa013c8393460fa54e40a5be4793ea5` has
+  fresh independent bounded approval. All 56 manifest paths were rehashed;
+  32 focused files passed with 1,270 reported assertions. Preserved as
+  `aed5cba28`, integrated as `3a1fcd4ee`. The final manifest in the isolated
+  worktree is `test-output/f-compose-20261112/r4/final-candidate-manifest.json`
+  (SHA-256 `de06a5959caa2b431d71103e011080df5dda03410badb31b829e2238e4527cd7`).
+  Freshness and construction custody rejections are closed within that review's
+  scope. Earlier failures/rejections remain retained. Static debt includes an
+  added initializer complexity point; no baseline or integration gate is waived.
+  Constructor migration is now released against this frozen source.
+  The [verified F evidence bundle](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--lagrange-f-r4-reviewed-evidence-20261112.tar.gz)
+  retains the rejected attempts, negatives and final approval.
 - Exactly-once c2/d: retain the lab failure as a correctness red. Source review
   identifies admission/redelivery and durable outcome as the first useful
   observation boundary; it does not establish the cause. The original physical
@@ -66,7 +69,9 @@ are preserved; no source writer works in the primary checkout.
   retains legacy marker handling and unfinished witnesses. Its historical
   80-file/37-mutation report does not cover the final snapshot. Checkpoint
   evidence and continuation log belong in its isolated candidate; the primary
-  checkout does not contain that Quest.
+  checkout does not contain that Quest. Stronger-model implementation of the
+  exact-object custody core is now underway; destructive cleanup wiring,
+  durable continuation and canonical marker closure remain dependent work.
 - Lab fixture repair: the required cache subscription contract exposed a
   family of incomplete test doubles. Stronger-model repair in
   `lagrange-codex-lab-fixtures-20261112` has 26 focused files passing with
@@ -81,13 +86,23 @@ are preserved; no source writer works in the primary checkout.
   Native-role decoding passed focused tests but independent review rejected
   caller closure: transfer can bypass it, message-group reads can substitute
   a ledger term, and partition writes can lose its refusal classification.
-  Stronger-model repair owns those paths. CDC timing/occurrence failures
+  Stronger-model caller repair passed 19 focused files / 1,051 assertions
+  but fresh review rejected four more production transitions: invalid announce
+  does not withdraw leadership, inbound reads stale authority, removed-leader
+  decisions ignore refusal, and row publication restores retained leadership.
+  It remains excluded; a fresh Astra max-effort worker owns reimplementation. CDC timing/occurrence failures
   remain under diagnosis; package/solve budgets and census closure remain open.
-- Statement cache: an independently reviewed connection-lifetime design is
-  being implemented in a separate `sqlite-connection-statement-ownership`
-  Quest. Its first phase touches only the storage owner and dedicated tests.
-  Constructor and caller migration waits for F to freeze and must preserve
-  its freshness policy, exact resource custody and existing cache performance.
+  The independently approved retention plan selects only superseded v3/v5/v7
+  designs. Its prerequisite historical-reference checker repair is underway
+  in a separate Quest; no relocation has occurred.
+- Statement cache: Phase 1 of `sqlite-connection-statement-ownership` now
+  has independent approval of the owner and three dedicated test files, with
+  13 passing cases and engaged negative controls. Its receipt remains incomplete.
+  Production constructor/caller migration against frozen F is now with Astra
+  after the first positive witness used a nonexistent lifecycle table. Nine
+  refusal cases passed; this failure is a witness defect, not a demonstrated
+  product regression. The stopped candidate and exact failure are preserved. It must preserve freshness, resource custody, integer modes
+  and cache performance; full composition needs fresh independent review.
 
 Repository implementation now defaults to `gpt-6.1-sol`; difficult ownership
 repair uses `gpt-6-astra`. A failed implementation verification transfers to a
@@ -98,7 +113,7 @@ separate worktrees; local test execution observes the shared machine lock.
 ## Remaining acceptance
 
 Preserve first failures and prove their causes without fallback logic, enlarged
-bounds, or raised baselines. Full lab results, F's independent review, checkpoint
+bounds, or raised baselines. Full lab results on the composed candidate, checkpoint
 evidence and its fifth verification remain outstanding. Formation additionally
 owes composed independent review, the declared consecutive physical runs and
 system-partition spread proof before Quest landing and exact-head publication.

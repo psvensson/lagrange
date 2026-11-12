@@ -9,6 +9,7 @@ documentClass: generated
 
 - [data-directory-manager.js](data-directory-manager.js) - Data Directory Manager - Manages persistent storage directories. (importers: hub)
 - [data-directory-process-owner.js](data-directory-process-owner.js) - No leading comment; first export: DATA_DIRECTORY_OWNER_ERROR_CODE. (importers: hub)
+- [durable-file-presence.js](durable-file-presence.js) - Owner contract: Owner: whether a durable file is positively absent (2026-11-12). (importers: few)
 - [index.js](index.js) - Storage module exports. (importers: one)
 - [sqlite-prepared-statement-owner.js](sqlite-prepared-statement-owner.js) - The prepared statements of one SQLite database handle, prepared once. (importers: many)
 - [sqlite-store-constants.js](sqlite-store-constants.js) - Constants for SQLiteStore - composable SQLite database lifecycle management. (importers: few)

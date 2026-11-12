@@ -298,7 +298,7 @@ const RATCHET_TARGETS = [
     // 2026-11-11 (round 2 hygiene): 634/23409 back to 623 groups after one router-group
     // setup and one remote-handoff row store replaced their copies; tightened 23148 -> 22839.
     baselineCloneGroupCount: 623,
-    baselineDuplicatedLineCount: 22839,
+    baselineDuplicatedLineCount: 22817,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

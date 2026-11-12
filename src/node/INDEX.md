@@ -60,7 +60,7 @@ documentClass: generated
 - [replica-handler-participant-release.js](replica-handler-participant-release.js) - The lifecycle recipient survives a PartitionService replacement. (importers: one)
 - [replica-handler-progress-methods.js](replica-handler-progress-methods.js) - Start staged one-line progress reporting for replica creation. (importers: one)
 - [replica-handler-release-recovery.js](replica-handler-release-recovery.js) - No leading comment; first export: createParticipantReleaseRecovery. (importers: few)
-- [replica-handler-remove-execution-methods.js](replica-handler-remove-execution-methods.js) - One replica's durable raft-rs lifecycle row, read from the partition database its port opened (it survives a restart... (importers: one)
+- [replica-handler-remove-execution-methods.js](replica-handler-remove-execution-methods.js) - One replica's durable raft-rs lifecycle row, read from the partition database its port opened (it survives a restart... (importers: few)
 - [replica-handler-remove-request-methods.js](replica-handler-remove-request-methods.js) - No leading comment; first export: assignReplicaHandlerRemoveRequestMethods. (importers: one)
 - [replica-handler-removed-cleanup-sweep.js](replica-handler-removed-cleanup-sweep.js) - Startup sweep owning removed-replica cleanup debt (rebalancer safety-audit finding 12). (importers: one)
 - [replica-handler-runtime-metadata-methods.js](replica-handler-runtime-metadata-methods.js) - The replica-context metadata wait spent its bound: one wait_bound_spent ERROR with the last transient resolution... (importers: one)
