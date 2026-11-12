@@ -85,7 +85,8 @@ import {
   recoveryRetryWindowMsOf,
   tuningOf,
 } from './raft-rs-runtime-tuning.js';
-import {shapeGroupObservation} from './raft-rs-status-observation.js';
+import {observedRole, observedTerm, shapeGroupObservation} from
+  './raft-rs-status-observation.js';
 import {
   confChangeProposalRefusal,
   confChangeSettlement,
@@ -1595,10 +1596,37 @@ function shapeGroupStatus(group, observation) {
     groupHostFailure(group, RUNTIME_PHASE.ADDRESS_RESOLUTION, error));
 }
 
-function readGroupStatus(group, expectedGeneration) {
+function readGroupStatus(group, expectedGeneration, answer) {
   const observed = recordStatusObservation(group, expectedGeneration);
-  return observed.ok ? shapeGroupStatus(group, observed.value) :
+  return observed.ok ? answer.fresh(group, observed.value) :
     observed.result;
+}
+
+// What a status-kind read answers from an observation of the core: the whole
+// shaped status, or this replica's role and term alone (its readRoleAndTerm:
+// no peer, leader or progress is resolved, so no identity is read). `fresh`
+// answers an observation the read itself recorded, `recorded` the one the
+// last completed core entry recorded (shaped once, SHAPED_STATUS), and
+// `ofStatus` a status a queued read answered.
+const STATUS_ANSWER = Object.freeze({
+  fresh: shapeGroupStatus,
+  recorded: (group, observation) => {
+    if (!SHAPED_STATUS.has(observation)) {
+      SHAPED_STATUS.set(observation, shapeGroupStatus(group, observation));
+    }
+    return SHAPED_STATUS.get(observation);
+  },
+  ofStatus: (status) => status,
+});
+const ROLE_AND_TERM_ANSWER = Object.freeze({
+  fresh: (_group, observation) => roleAndTermOf(observation.status),
+  recorded: (_group, observation) => roleAndTermOf(observation.status),
+  ofStatus: (status) => status.outcome === CORE_OK ?
+    outcome(CORE_OK, {role: status.role, term: status.term}) : status,
+});
+
+function roleAndTermOf(status) {
+  return outcome(CORE_OK, {role: observedRole(status), term: observedTerm(status)});
 }
 
 // Every drain that completes a core entry ends in announce, which records the
@@ -1614,23 +1642,23 @@ function recordStatusObservation(group, expectedGeneration, rawStatus = null) {
 // readStatus answers synchronously: idle with nothing delivered, the fresh
 // core read; otherwise (a read still drives delivered inbound, as before) the
 // status of the last completed core entry.
-function readStatusUndrained(group) {
+function readStatusUndrained(group, answer) {
   return continueTurn(ensureExecution(group), (ready) => settledTurn(
     ready.outcome === CORE_OK ?
-      readGroupStatus(group, runtimeGeneration) : ready));
+      readGroupStatus(group, runtimeGeneration, answer) : ready));
 }
 
 // A group held by its host failure answers from its own state while it is
 // busy (an announcement of its own operation may ask); idle, the read is the
 // group's next operation and may reconstruct it, through the group's queue so
 // a reconstruction is single-flight. Synchronous either way.
-function readStatusInRecovery(group) {
+function readStatusInRecovery(group, answer) {
   if (group.tail !== null || group.entered > 0) {
     return settledTurn(
       recoveryOutcome(group, RUNTIME_REASON.RECOVERY_DEFERRED));
   }
   return answeredRead(group,
-    enqueue(group, () => readStatusUndrained(group)));
+    enqueue(group, () => readStatusUndrained(group, answer)));
 }
 
 // A status read's answer settles in the call: a read whose recovery work is
@@ -1644,7 +1672,7 @@ function answeredRead(group, read) {
   return settledTurn(recoveryOutcome(group, RUNTIME_REASON.RECOVERY_DEFERRED));
 }
 
-function readStatusNow(group) {
+function readStatusNow(group, answer) {
   if (runtimeHealth === REPLACING) {
     return settledTurn(runtimeRecoveryOutcome(group));
   }
@@ -1654,32 +1682,28 @@ function readStatusNow(group) {
     // waits on it: a resumption still pending is the group's recovery hold,
     // and the resumption runs on as its own operation.
     return answeredRead(group,
-      withinGroup(group, () => readStatusUndrained(group)));
+      withinGroup(group, () => readStatusUndrained(group, answer)));
   }
   if (runtimeHealth === HEALTHY && group.health === RECOVERY_REQUIRED) {
-    return readStatusInRecovery(group);
+    return readStatusInRecovery(group, answer);
   }
-  return withinGroup(group, () => readStatusObserved(group));
+  return withinGroup(group, () => readStatusObserved(group, answer));
 }
 
-function readStatusObserved(group) {
+function readStatusObserved(group, answer) {
   if ((group.tail === null && group.inbound.length === 0) ||
       group.statusObservation === NO_STATUS_OBSERVATION) {
-    return readStatusUndrained(group);
+    return readStatusUndrained(group, answer);
   }
   if (group.inbound.length > 0) {
     const read = enqueue(group, () =>
       perform(group, {type: RUNTIME_COMMAND.READ_STATUS}));
     if (read.settled) {
-      return read;
+      return settledTurn(answer.ofStatus(read.result));
     }
     read.pending.catch(() => undefined);
   }
-  const observation = group.statusObservation;
-  if (!SHAPED_STATUS.has(observation)) {
-    SHAPED_STATUS.set(observation, shapeGroupStatus(group, observation));
-  }
-  return settledTurn(SHAPED_STATUS.get(observation));
+  return settledTurn(answer.recorded(group, group.statusObservation));
 }
 
 function campaignGroup(group, expectedGeneration) {
@@ -1825,9 +1849,9 @@ function answerRefusedProposal(group, expectedGeneration, refused) {
 const COMMAND_OPERATION = Object.freeze({
   [RUNTIME_COMMAND.READ_COMMITTED_MEMBERSHIP]: (group, command, generation) =>
     settledTurn(answerCommittedLearnerAction(group,
-      readGroupStatus(group, generation), command.query)),
+      readGroupStatus(group, generation, STATUS_ANSWER), command.query)),
   [RUNTIME_COMMAND.READ_STATUS]: (group, command, generation) =>
-    settledTurn(readGroupStatus(group, generation)),
+    settledTurn(readGroupStatus(group, generation, STATUS_ANSWER)),
   [RUNTIME_COMMAND.CAMPAIGN]: (group, command, generation) =>
     campaignGroup(group, generation),
   [RUNTIME_COMMAND.DRAIN_INBOUND]: () =>
@@ -2082,7 +2106,7 @@ function perform(group, command) {
   // retryable deferral that leaves the group usable.
   if (!persistenceAdmitted(group)) {
     return command.type === RUNTIME_COMMAND.READ_STATUS ?
-      readStatusUndrained(group) : settledTurn(hostFailure(
+      readStatusUndrained(group, STATUS_ANSWER) : settledTurn(hostFailure(
         RUNTIME_PHASE.READY_PERSISTENCE, RUNTIME_REASON.USER_TRANSACTION_OPEN));
   }
   return continueTurn(ensureExecution(group), (ready) => {
@@ -2217,11 +2241,14 @@ function executeCommand(group, command) {
     return settledTurn(runtimeRecoveryOutcome(group));
   }
   if (command?.type === RUNTIME_COMMAND.READ_STATUS) {
-    return readStatusNow(group);
+    return readStatusNow(group, STATUS_ANSWER);
+  }
+  if (command?.type === RUNTIME_COMMAND.READ_ROLE_AND_TERM) {
+    return readStatusNow(group, ROLE_AND_TERM_ANSWER);
   }
   if (command?.type === RUNTIME_COMMAND.READ_COMMITTED_MEMBERSHIP &&
       command.purpose !== COMMITTED_MEMBERSHIP_READ_PURPOSE.LEARNER_ACTION) {
-    return continueTurn(readStatusNow(group), (status) => settledTurn(
+    return continueTurn(readStatusNow(group, STATUS_ANSWER), (status) => settledTurn(
       answerCommittedMembership(group, status, command.purpose)));
   }
   if (command?.type === PROPOSE_COMMAND && group.tail !== null) {

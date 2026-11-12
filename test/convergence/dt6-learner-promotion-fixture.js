@@ -503,13 +503,15 @@ async function admitLiveVoter(topology, replicaId, nodeId, options = {}) {
 // The learner observing a newer term than the proof carries is the "leader
 // changed after proof collection" fact. The port is the learner's term
 // observable, so the witness decorates the observation, never the core:
-// readStatus reports `term`, every other operation is the real port's.
+// readStatus and readRoleAndTerm report `term`, every other operation is
+// the real port's.
 // Returns the restore that reinstalls the real port.
 export function observeLearnerTerm(learner, term) {
   const realPort = learner.raft;
   learner.raft = createRaftOperationPort({
     ...realPort,
     readStatus: () => deepFreeze({...realPort.readStatus(), term}),
+    readRoleAndTerm: () => deepFreeze({...realPort.readRoleAndTerm(), term}),
   });
   return () => {
     learner.raft = realPort;

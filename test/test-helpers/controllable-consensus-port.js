@@ -348,6 +348,10 @@ export class ControllableConsensusPort {
           confChangePending: this.confChangePending,
         });
       },
+      // The port's role-and-term read: the role and term of this double's
+      // own status.
+      readRoleAndTerm: () => deepFreeze({
+        outcome: RAFT_OPERATION_OUTCOME.CORE_OK, role: this.role, term: this.term}),
       // The fake holds no committed configuration; a test that needs one
       // answers through committedMembershipHandler.
       readCommittedMembership: (request) => this.committedMembershipHandler ?

@@ -24,7 +24,7 @@ const BASELINE = JSON.parse(fs.readFileSync(path.join(ROOT, 'test', 'raft',
 const PORT_OPERATIONS = Object.freeze([
   'campaign', 'close', 'configureTick', 'probePeerProgress', 'propose',
   'proposeConfChange', 'proposeMembershipTransition',
-  'readCommittedMembership', 'readStatus',
+  'readCommittedMembership', 'readRoleAndTerm', 'readStatus',
   'startScheduling', 'step',
   'stopScheduling', 'subscribe', 'tick', 'transferLeadership',
 ]);

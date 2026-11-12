@@ -515,6 +515,11 @@ function createRaftRsOperationPort(request) {
     // A status read never waits (the runtime's readStatusNow): its turn
     // settles in this run, and the status is answered as is.
     readStatus: () => execute({type: 'read-status'}).result,
+    // This replica's role and term from the same observation a status read
+    // answers from, without resolving any peer: {outcome: CORE_OK, role,
+    // term}, or the status read's own failure. Settles in this run.
+    readRoleAndTerm: () =>
+      execute({type: RUNTIME_COMMAND.READ_ROLE_AND_TERM}).result,
     // The committed configuration as frozen data ({purpose} is a
     // COMMITTED_MEMBERSHIP_READ_PURPOSE; a bootstrap read by default).
     [RAFT_OPERATION.READ_COMMITTED_MEMBERSHIP]: (readRequest) => {

@@ -127,6 +127,16 @@ function currentTermApplied(status) {
   return BigInt(status.applied) > BigInt(status.pendingConfIndex);
 }
 
+// The role and the term a core status names: the shaped status's and the
+// role-and-term read's, from one rule.
+function observedRole(status) {
+  return ROLE[status.raftState] || RUNTIME_REASON.UNKNOWN;
+}
+
+function observedTerm(status) {
+  return Number(status.term);
+}
+
 /**
  * The status one observation of the core describes.
  * @param {Object} group - The runtime group.
@@ -154,7 +164,7 @@ function shapeGroupObservation(group, observation, leaderIdentityUnresolved) {
     groupId: group.groupId,
     replicaIdentity: group.replicaIdentity,
     peerId: group.peerId,
-    term: Number(status.term),
+    term: observedTerm(status),
     commitIndex: Number(status.commit),
     // The core holds a proposed configuration change it has not applied
     // (the conf-change admission's own pending check).
@@ -169,7 +179,7 @@ function shapeGroupObservation(group, observation, leaderIdentityUnresolved) {
     configurationKey: observation.configurationKey,
     membershipGenerationIndex: observation.membershipGenerationIndex,
     lifecycleIncarnation: observation.lifecycleIncarnation,
-    role: ROLE[status.raftState] || RUNTIME_REASON.UNKNOWN,
+    role: observedRole(status),
     ...leader,
     voters: confState.voters,
     voterCount: confState.voters.length,
@@ -195,4 +205,5 @@ function shapeGroupObservation(group, observation, leaderIdentityUnresolved) {
   return result;
 }
 
-export {shapeGroupObservation, setNativeStatusObserver};
+export {observedRole, observedTerm, shapeGroupObservation,
+  setNativeStatusObserver};

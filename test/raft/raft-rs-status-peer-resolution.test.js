@@ -1,17 +1,26 @@
 // One status read resolves each peer id it names with one read of the
 // peer's reservation (its identity and committed node), and shapes the same
 // status byte for byte as the shape before that change (the expected JSON
-// was captured from the base tree 7d4fb6f5f through its own port wiring).
+// was captured from the base tree 7d4fb6f5f through its own port wiring). A
+// role-and-term read answers the status read's role and term and resolves
+// no peer at all.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 import Database from 'better-sqlite3';
 
 import {peerResolutionOf} from '../../src/raft/raft-rs-operation-port.js';
 import {RaftRsPeerIdentityRegistry} from '../../src/raft/raft-rs-peer-identity.js';
 import {shapeGroupObservation} from '../../src/raft/raft-rs-status-observation.js';
+import {RAFT_OPERATION_OUTCOME as OUTCOME} from
+  '../../src/raft/raft-operation-port-constants.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 import {groupOf, hostAddress, observations, reserve} from
   './raft-rs-status-shape-fixture.js';
+import {historyDb, openHistory} from
+  './raft-rs-backend/opening-history-native-fixture.js';
 import {PartitionNodeCluster} from './raft-rs-backend/partition-node-cluster.js';
 
 const EXPECTED = JSON.parse(fs.readFileSync(new URL(
@@ -110,6 +119,33 @@ function countingDatabase(db) {
   return {proxy, executions};
 }
 
+test('the role-and-term read answers the status read\'s role and term and reads no identity',
+  async (t) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'role-and-term-'));
+    const db = historyDb(path.join(dir, 'replica.db'));
+    const {proxy, executions} = countingDatabase(db);
+    const port = openHistory(proxy);
+    t.after(() => {
+      port.close();
+      db.close();
+      fs.rmSync(dir, {recursive: true, force: true});
+    });
+    for (const phase of ['follower', 'leader']) {
+      if (phase === 'leader') {
+        assert.equal((await turnChainValue(port.campaign())).outcome, OUTCOME.CORE_OK);
+      }
+      const status = port.readStatus();
+      assert.equal(status.outcome, OUTCOME.CORE_OK);
+      executions.count = 0;
+      const read = port.readRoleAndTerm();
+      assert.deepEqual(read, {outcome: OUTCOME.CORE_OK, role: status.role,
+        term: status.term}, `${phase}: the status read's role and term`);
+      assert.equal(read.role, phase);
+      assert.ok(Object.isFrozen(read));
+      assert.equal(executions.count, 0, `${phase}: no peer identity is read`);
+    }
+  });
+
 test('a leader\'s status read of a three-replica group reads each peer\'s reservation once',
   (t) => {
     const counters = new Map();
@@ -131,4 +167,8 @@ test('a leader\'s status read of a three-replica group reads each peer\'s reserv
       ['resolved', 'resolved']);
     assert.deepEqual(Object.keys(status.followerProgress).sort(), ['spr-b', 'spr-c']);
     assert.equal(executions.count, 3, 'the leader and its two peers, one read each');
+    executions.count = 0;
+    assert.deepEqual(cluster.node('spr-a').readRoleAndTerm(),
+      {outcome: OUTCOME.CORE_OK, role: 'leader', term: status.term});
+    assert.equal(executions.count, 0);
   });

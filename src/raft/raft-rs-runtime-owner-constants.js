@@ -57,6 +57,9 @@ const CORE_OPERATION = Object.freeze({
 });
 const RUNTIME_COMMAND = Object.freeze({
   READ_STATUS: 'read-status',
+  // This replica's role and term alone: the status read's observation,
+  // without its peers, leader or progress (no identity is resolved).
+  READ_ROLE_AND_TERM: 'read-role-and-term',
   CAMPAIGN: 'campaign',
   // The runtime's own entry for envelopes step() delivered: it drives them
   // through the core and nothing else - it is not a tick, so a replica whose
