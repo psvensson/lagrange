@@ -185,3 +185,197 @@ test('explicit bootstrap catchup keeps provisional local rows without remote abs
     assert.equal(f.calls.sweeps, 0);
     assert.equal(f.clock.pendingTimerCount(), 0);
   });
+
+const ROW_VECTOR_CARRIERS = [
+  {name: 'own every callback', create(calls) {
+    const rows = [{...ROW}];
+    Object.defineProperty(rows, 'every', {enumerable: true, value() {
+      calls.count += 1;
+      return true;
+    }});
+    return rows;
+  }},
+  {name: 'own iterator getter', create(calls) {
+    const rows = [{...ROW}];
+    Object.defineProperty(rows, Symbol.iterator, {get() {
+      calls.count += 1;
+      return function* () {yield ROW;};
+    }});
+    return rows;
+  }},
+  {name: 'sparse membership', create() {
+    const rows = [{...ROW}];
+    rows.length = 2;
+    return rows;
+  }},
+  {name: 'key accessor', create(calls) {
+    const row = {...ROW};
+    Object.defineProperty(row, 'node_id', {enumerable: true, get() {
+      calls.count += 1;
+      return ROW.node_id;
+    }});
+    return [row];
+  }},
+  {name: 'row serialization hook', create(calls) {
+    return [{...ROW, toJSON() {calls.count += 1; return ROW;}}];
+  }},
+  {name: 'nested serialization hook', create(calls) {
+    return [{...ROW, detail: {toJSON() {calls.count += 1; return 'rewritten';}}}];
+  }},
+  {name: 'nested array accessor', create(calls) {
+    const detail = [];
+    Object.defineProperty(detail, 0, {enumerable: true, get() {
+      calls.count += 1;
+      return 'rewritten';
+    }});
+    return [{...ROW, detail}];
+  }},
+  {name: 'row proxy', create(calls) {
+    return [new Proxy({...ROW}, {get(target, key, receiver) {
+      calls.count += 1;
+      return Reflect.get(target, key, receiver);
+    }})];
+  }},
+  {name: 'inherited canonical key', create() {
+    return [Object.assign(Object.create({node_id: ROW.node_id}),
+      {status: ROW.status, updated_at: ROW.updated_at})];
+  }},
+  {name: 'duplicate canonical keys', create() {return [{...ROW}, {...ROW}];}},
+];
+
+for (const carrier of ROW_VECTOR_CARRIERS) {
+  test(`catchup refuses ${carrier.name} before data callbacks or effects; same owner heals`,
+    async (t) => {
+      const f = fixture(t);
+      const calls = {count: 0};
+      const authority = selectedAuthority();
+      f.setAnswer(ownerAnswer({rows: carrier.create(calls)}));
+      const refused = await f.run({readAuthority: authority});
+      assert.equal(f.calls.rpc.length, 1, 'the declared owner actually returns the carrier');
+      assert.equal(calls.count, 0, 'carrier callbacks are never part of data admission');
+      assertNoCompleteEffect(f);
+      assert.equal(refused.tablesHydrated, 0);
+      assert.deepEqual(refused.tablesFailed, [TABLE]);
+      await assertCompleteOwnerHealing(f, authority);
+    });
+}
+
+for (const property of ['every', Symbol.iterator]) {
+  test(`catchup retains canonical rows without the live Array ${String(property)} intrinsic`,
+    async (t) => {
+      const f = fixture(t);
+      const authority = selectedAuthority();
+      const original = Object.getOwnPropertyDescriptor(Array.prototype, property);
+      let invoked = 0;
+      let failure;
+      Object.defineProperty(Array.prototype, property, {...original, value: function(...args) {
+        if (this.length === 1 && this[0]?.node_id === ROW.node_id) {
+          invoked += 1;
+          throw new Error('borrowed row-vector intrinsic engaged');
+        }
+        return Reflect.apply(original.value, this, args);
+      }});
+      try {
+        await assertCompleteOwnerHealing(f, authority);
+      } catch (error) {
+        failure = error;
+      } finally {
+        Object.defineProperty(Array.prototype, property, original);
+      }
+      assert.equal(f.calls.rpc.length, 1, 'the canonical owner read was actually issued');
+      assert.equal(invoked, 0, 'validation, repair and sweep retain indexed row membership');
+      assert.equal(failure, undefined);
+    });
+}
+
+test('catchup retains original row membership, keys and nested data across the first repair',
+  async (t) => {
+    const f = fixture(t);
+    const authority = selectedAuthority();
+    const first = {...ROW, address: 'first-observed'};
+    const second = {node_id: 'catchup-second-owned-row', status: 'active', updated_at: 10,
+      detail: {version: 'original'}};
+    const rows = [first, second];
+    const foreign = {node_id: 'catchup-injected-row', status: 'active', updated_at: 10};
+    f.setAnswer(ownerAnswer({rows}));
+    const apply = f.service.applyAuthoritativeCacheRepair;
+    let mutated = false;
+    f.service.applyAuthoritativeCacheRepair = function(...args) {
+      if (!mutated) {
+        mutated = true;
+        second.node_id = 'catchup-retargeted-row';
+        second.detail.version = 'changed-after-admission';
+        rows.splice(1, 1, foreign);
+      }
+      return Reflect.apply(apply, this, args);
+    };
+    const summary = await f.run({readAuthority: authority});
+    assert.equal(mutated, true, 'the real first repair crosses the mutation seam');
+    assert.equal(summary.tablesHydrated, 1);
+    assert.equal(summary.rowsApplied, 2);
+    assert.equal(summary.rowsSwept, 1);
+    assert.deepEqual(f.cache.get(TABLE, ROW.node_id), first);
+    assert.deepEqual(f.cache.get(TABLE, 'catchup-second-owned-row'), {
+      node_id: 'catchup-second-owned-row', status: 'active', updated_at: 10,
+      detail: {version: 'original'},
+    });
+    assert.equal(f.cache.get(TABLE, 'catchup-retargeted-row'), undefined);
+    assert.equal(f.cache.get(TABLE, foreign.node_id), undefined);
+    assert.equal(f.cache.get(TABLE, UNSEEN_ROW.node_id), undefined);
+    assert.equal(f.cache.getLastAuthoritativeObservedAtMs(TABLE), NOW);
+    assert.equal(f.calls.repairs, 2);
+    assert.equal(f.calls.sweeps, 1);
+    assert.equal(f.calls.rpc.length, 1);
+    assert.equal(f.calls.rpc[0][6].readAuthority, authority);
+  });
+
+for (const provider of ['different field', 'throws']) {
+  test(`catchup uses its canonical captured keys when a second provider ${provider}`, async (t) => {
+    const f = fixture(t);
+    let consulted = 0;
+    let failure;
+    f.service.getPrimaryKeyField = () => {
+      consulted += 1;
+      if (provider === 'throws') throw new Error('second key provider consulted');
+      return 'other_key';
+    };
+    try {
+      await assertCompleteOwnerHealing(f, selectedAuthority());
+    } catch (error) {
+      failure = error;
+    }
+    assert.equal(f.calls.rpc.length, 1, 'the original owner actually supplies the canonical row');
+    assert.equal(consulted, 0, 'repair and sweep cannot reinterpret the admitted key');
+    assert.equal(failure, undefined);
+  });
+}
+
+for (const dependency of ['tables', 'maxAttemptsPerTable', 'now', 'timeSource']) {
+  test(`invalid selected catchup authority refuses before the ${dependency} dependency`,
+    async (t) => {
+      const f = fixture(t);
+      const options = {...CATCHUP_OPTIONS, readAuthority: null};
+      const target = dependency === 'timeSource' ? f.service : options;
+      const original = Object.getOwnPropertyDescriptor(target, dependency);
+      let consulted = 0;
+      let failure;
+      Object.defineProperty(target, dependency, {configurable: true, get() {
+        consulted += 1;
+        throw new Error('dependency accessed before selected-token admission');
+      }});
+      try {
+        await f.service.hydrateCdcPropagatedTablesFromAuthority(options);
+      } catch (error) {
+        failure = error;
+      } finally {
+        if (original) Object.defineProperty(target, dependency, original);
+        else delete target[dependency];
+      }
+      assert.equal(failure?.message, GATEWAY_ERROR_MSG.AUTHORITATIVE_READ_AUTHORITY_TOKEN_REQUIRED);
+      assert.equal(consulted, 0);
+      assert.equal(f.calls.reads.length, 0);
+      assert.equal(f.calls.rpc.length, 0);
+      assertNoCompleteEffect(f);
+      await assertCompleteOwnerHealing(f, selectedAuthority());
+    });
+}

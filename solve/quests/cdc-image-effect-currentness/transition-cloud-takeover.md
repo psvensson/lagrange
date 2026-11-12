@@ -939,3 +939,34 @@ positive may repair keys without claiming collection completeness. The productio
 correction will consume the composed canonical classifier rather than introduce a
 second decoder. These tests are frozen before that correction for a first lab
 original. No local execution or acceptance claim.
+
+
+## Catchup owned-row-vector controls (tests-only on8a)
+
+Pre-freeze independent source review found that catchup validates with live
+rows.every, later applies with for-of, and consults a separate service key provider.
+RPC normalization retains the original row vector; LOCAL merging separately
+iterates it, so neither leaf currently proves owned membership. This repeats the
+retained-input/intrinsic/key-custody pattern, not an isolated completeness failure.
+Root approved new discriminators on unchanged8a/sourceb2 before capture correction.
+
+Nineteen added actual-CDC/cache controls exercise own every/iterator carriers,
+sparse membership, key accessor, row/nested serialization hooks, nested array
+accessor, proxy row, inherited key and duplicate keys; all refuse before effects
+and heal through the same selected owner. Two valid-vector controls alter the live
+Array every/iterator only for the target row shape, restore before final assertions,
+and require the real complete repair/sweep to remain useful without that callback.
+A first-repair mutation changes the borrowed vector's second key, nested data and
+membership; admitted rows must retain their original data. Two divergent/throwing
+service key providers must never reinterpret captured canonical keys. Four malformed
+selected-token controls install throwing tables/attempts/now/clock dependencies;
+canonical token refusal must precede them, then the same service heals.
+
+These controls extend the13 original authority/completeness controls, whose original
+3076 remains separate evidence. No source is changed, no callbacks are assumed
+unreachable, and no new result is claimed. Root owns the proposed one shared
+captureSystemTableRows(tableName, rows) data API and canonical JSON capture utility;
+this lane will consume its reviewed frozen {rows, keys} through indexed repair and
+sweep paths. Capturing data supplies no authority or completeness on its own.
+
+Root independently read and bounded-APPROVED blob`f0ff069fc0a3abb90a96b1d088782760203d3f7c` for its first lab original. This approves the19 new control obligations and unchanged8a source seal, not any result or candidate correction. Later assertions remain unmeasured until the full original stream establishes their engagement.
