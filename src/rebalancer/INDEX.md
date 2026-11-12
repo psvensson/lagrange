@@ -22,7 +22,7 @@ documentClass: generated
 - [failed-create-cleanup-token.js](failed-create-cleanup-token.js) - No leading comment; first export: buildFailedCreateCleanupToken. (importers: hub)
 - [global-topology-blocking-operation-view.js](global-topology-blocking-operation-view.js) - No leading comment; first export: readGlobalTopologyBlockingInFlightOperations. (importers: one)
 - [in-flight-aware-replica-count.js](in-flight-aware-replica-count.js) - Compatibility projection for callers that still consume the historical accounting shape. (importers: few)
-- [incomplete-operation-list-observation.js](incomplete-operation-list-observation.js) - The one incomplete-operation list read contract (the list sibling of the by-id PRESENT / ABSENT / UNAVAILABLE... (importers: many)
+- [incomplete-operation-list-observation.js](incomplete-operation-list-observation.js) - The one incomplete-operation list read contract (the list sibling of the by-id PRESENT / ABSENT / UNAVAILABLE... (importers: hub)
 - [index.js](index.js) - Rebalancer module exports. (importers: few)
 - [move-planner-move-calculation-methods.js](move-planner-move-calculation-methods.js) - MovePlanner calculates replica placement and moves for partitions, message groups, and runtime services. (importers: one)
 - [move-planner-placement-tail-methods.js](move-planner-placement-tail-methods.js) - Move Planner - Calculates replica placement and moves for rebalancing. (importers: one)

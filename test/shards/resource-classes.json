@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2745,
+    "ordinary": 2746,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2771,
-  "digest": "fnv1a32-aad6668d",
+  "censusSize": 2772,
+  "digest": "fnv1a32-468b52d5",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1892,6 +1892,7 @@
     "test/raft/raft-rs-original-opening.test.js": "ordinary",
     "test/raft/raft-rs-peer-delivery-transport-outcome.test.js": "ordinary",
     "test/raft/raft-rs-removal-step-down-and-liveness.test.js": "ordinary",
+    "test/raft/raft-rs-status-peer-resolution.test.js": "ordinary",
     "test/raft/raft-rs-turn-answer.test.js": "ordinary",
     "test/raft/replica-voter-readiness.test.js": "ordinary",
     "test/raft/snapshot-boundary-observability.test.js": "ordinary",

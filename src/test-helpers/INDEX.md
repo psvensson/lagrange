@@ -13,7 +13,7 @@ documentClass: generated
 
 - [inproc-ws.js](inproc-ws.js) - No leading comment; first export: createInProcWebSocketPair. (importers: few)
 - [managed-timers.js](managed-timers.js) - Teardown-registered timers for tests. (importers: many)
-- [port-allocator-constants.js](port-allocator-constants.js) - Constants for the test port allocator. (importers: one)
+- [port-allocator-constants.js](port-allocator-constants.js) - Constants for the test port allocator. (importers: few)
 - [port-allocator.js](port-allocator.js) - Centralized port allocator for tests. (importers: hub)
 - [probe-guard.js](probe-guard.js) - R27: a probe measures, it never acts. (importers: many)
 - [run-entrypoint.js](run-entrypoint.js) - Run a JS entrypoint in a worker thread and capture stdout/stderr. (importers: few)

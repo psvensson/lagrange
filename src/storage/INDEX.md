@@ -10,6 +10,7 @@ documentClass: generated
 - [data-directory-manager.js](data-directory-manager.js) - Data Directory Manager - Manages persistent storage directories. (importers: hub)
 - [data-directory-process-owner.js](data-directory-process-owner.js) - No leading comment; first export: DATA_DIRECTORY_OWNER_ERROR_CODE. (importers: hub)
 - [index.js](index.js) - Storage module exports. (importers: one)
+- [sqlite-prepared-statement-owner.js](sqlite-prepared-statement-owner.js) - The prepared statements of one SQLite database handle, prepared once. (importers: many)
 - [sqlite-store-constants.js](sqlite-store-constants.js) - Constants for SQLiteStore - composable SQLite database lifecycle management. (importers: few)
 - [sqlite-store.js](sqlite-store.js) - SQLiteStore - Composable SQLite database lifecycle management. (importers: few)
 - [storage-constants.js](storage-constants.js) - No leading comment; first export: REPLICA_DB_PRAGMA. (importers: many)

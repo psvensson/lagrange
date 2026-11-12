@@ -19,16 +19,16 @@
     "services-runtime": 161,
     "solver-tooling": 7,
     "storage-partition": 237,
-    "storage-raft": 157,
+    "storage-raft": 158,
     "test-infrastructure": 175,
     "transactions": 18,
     "transport-messaging": 127,
     "wasm-toolchain": 74
   },
-  "censusSize": 2771,
-  "digest": "fnv1a32-690e1762",
+  "censusSize": 2772,
+  "digest": "fnv1a32-538dc1bb",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-727987b7",
+  "observationDigest": "fnv1a32-7a3b45e3",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1912,6 +1912,7 @@
     "test/raft/raft-rs-original-opening.test.js": "storage-raft",
     "test/raft/raft-rs-peer-delivery-transport-outcome.test.js": "storage-raft",
     "test/raft/raft-rs-removal-step-down-and-liveness.test.js": "storage-raft",
+    "test/raft/raft-rs-status-peer-resolution.test.js": "storage-raft",
     "test/raft/raft-rs-turn-answer.test.js": "storage-raft",
     "test/raft/replica-voter-readiness.test.js": "storage-raft",
     "test/raft/snapshot-boundary-observability.test.js": "storage-raft",
@@ -18117,6 +18118,21 @@
         "src/raft/raft-rs-ingress-constants.js"
       ]
     },
+    "test/raft/raft-rs-status-peer-resolution.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/raft/raft-rs-backend/opening-history-native-fixture.js",
+        "test/raft/raft-rs-status-shape-expected.json",
+        "test/raft/raft-rs-status-shape-fixture.js"
+      ]
+    },
     "test/raft/snapshot-compaction-catchup-integration.test.js": {
       "files": [
         "src/partition/partition-raft-storage.js"
@@ -23231,6 +23247,7 @@
         "data",
         "scripts",
         "solve/quests",
+        "src/test-helpers",
         "test",
         "test/manifests",
         "test/shards"
