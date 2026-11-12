@@ -46,18 +46,19 @@ retain their own exact proof. Existing large WIP branches remain preserved.
 | --- | --- |
 | Canonical JSON nested-data validation | [PR203](https://github.com/psvensson/lagrange/pull/203). Six code/test paths plus four scope/review records. First isolated local `dc52cfcb0a9f7d08405f4096e284cc285ca7cf70` was published as `b280e0a88f9f7319d6f7655b16bb28f64349e2fb`, identical tree `ca01bd7a54cc686b174b877b5f2f2c7cd907c131`. Independent source review APPROVE. Original 3194 verifies twelve failures and two positives among fourteen retained controls on the identical base serializer/helper. Exact candidate 3241 verifies PASS: two roots/574 assertions, utility 73 and actual calculator 501. Disjoint caller 3246 is fully verified: three roots/67 assertions, giving five roots/641 assertions on that initial candidate. Metadata/static 3242 passed generation and all checks except 34 brace-style errors; canonical selection requires 810 unique roots. The reviewed whitespace-only correction and current evidence are local `d9a901a24d025e63b3501ea3ab2803dd482bc0f6`, published `fb03e86177e003ab21779cd0f932d2d0bafe6826`, identical tree `70c017a795a0604f708154d13748e06f2232ae01`, unchanged product source. Fresh canonical generation, static checks, selected execution and exact merge proof remain pending. No row-capture API or broader CDC implementation is included. |
 | Durable store constructor connection | [PR204](https://github.com/psvensson/lagrange/pull/204). Two authored paths: six added constructor lines and five focused native SQLite controls. Local candidate `223ad16ae23c73ae96c0a778776e5a56b7ccfb25`, published `3e1d1fa4dc61107f25927e480485323bc7417bcc`, tree `59693a7f15ed4bfa8fb00950b334b84d90ca8a6e`; tests-only original local `317a38f0c3f14a263d3035785ee68afe666ac06b`, published `292670255f07dd17213c60e2e93a316fda94e3cb`. Root independently APPROVES the complete controls and source. Both sides retain test blob `39d8b3ccdf429852090ca441233667b19206831e`. Original 3247 fully verifies four negative controls exposing foreign effects before failing, with the unchanged-owner positive passing. Exact candidate 3255 fully verifies all five cases PASS. Canonical metadata, selected callers and static gates remain pending. The broader strict SQLiteConnection migration is not imported. |
-| Immutable lifecycle observation | Next candidate: five-line3356302 correction has bounded original/candidate evidence but needs a coherent main-base control extraction. No broad runtime constructor migration is implied. |
+| CDC retry-delay timer custody | [PR205](https://github.com/psvensson/lagrange/pull/205), created and read-verified open/draft against review `10f3e795`, with exactly five intended paths, +458/-9. Local `953d73bd31251727d379e271711255a1409cbd0b` is published as `346d214ab8a39a4f86960a8b761df92412264724`, identical tree `34fa02848fc85457aaad1f80ebd49b0a6621754e`. Only `delayUntilShutdown` and its adjacent comment change in production; root approves the source and eleven real-owner controls. Original 3284 verifies three positive passes/eight intended first failures. Candidate 3291 verifies four roots/47 assertions PASS. Metadata/static 3292 verifies all ten stages in the canonically generated workspace; its four-file metadata patch remains unapplied. Execution of the full 354-root selected scope, combined metadata, and main acceptance remain pending. |
+| Immutable lifecycle observation | [PR206](https://github.com/psvensson/lagrange/pull/206), created and read-verified open/draft against review `10f3e795`, with exactly three intended files, +359/-3. Local `65b2866abcaefad96a32999ca943756efc5a8836`, published `751a1076ab9ff9fa8a3a98766ad150b2a5338cfa`, tree `8f9f8f4f6577cc0f81efe40e4fbe284f451e6749`, source `9f67ca19dddb9b2d0cf6960551b9bf315057f5aa`, has independent exact-source approval from root and the CDC reviewer. Production is +12/-3 in the shared helper, with two focused real-gateway roots. Original `ca0376d1cae2b43162a88d2b187bacb11186f229`, published `5d01570ee57d52c878b5805aed952efb8d093a9c`, retains unchanged main49 source and identical tests. Original 3315 fully verifies 29 positive leaf passes and 24 intended product failures. Predecessor `48ef54a0` / published `2f555bbf` passes five roots/309 classified assertions in 3323; its strict complexity failure in 3324 remains preserved. The current successor simplifies the existing validation guards with no test or limit changes. Exact candidate 3334 fully verifies five roots/309 classified assertions PASS; metadata/static 3335 fully verifies all ten stages in the generated workspace. Its four-file metadata patch remains unapplied. Execution of the full 687-root selected scope, combined metadata and main acceptance remain pending. No broad runtime constructor migration is included. |
 | CDC and authority follow-ups | Keep canonical read contract, row ownership, local-image agreement and catchup/receipt consumers as explicit dependent cuts. Do not open the whole runtime/factory stack as a small independent PR. |
 
 The coordinator verified all94 live-main workflows. Main-targeted PRs
 automatically start hosted tests with retry-on-failure, conflicting with the
-standing lab-only/no-retry instruction. Both PRs were created against
+standing lab-only/no-retry instruction. The first two PRs were created against
 `review/lagrange-split-base-20261112`, initially verified at exact main49fba.
-The only other PR workflow has TiDB-specific paths that neither cut touches.
+The only other PR workflow has TiDB-specific paths that none of these cuts touches.
 Main delivery and its required merge gates remain pending; no skip marker or
 workflow edit is included.
 
-The coordinator subsequently observed both PRs merged into that review branch:
+The coordinator subsequently observed PR203 and PR204 merged into that review branch:
 PR203 at 19:03:06 UTC, merge `908e551732b4ce956759a0a93166caea736e7871`,
 and PR204 at 19:03:23 UTC, merge `10f3e795981b45b68bdfbee93fa6d1674d2a1a7f`.
 GitHub attributes both to `psvensson`; the event mechanism is unverified. The
@@ -106,9 +107,192 @@ generated seal. The old generated patch is retained as evidence for its exact
 input and is not reused. These bounded results do not discharge canonical
 selected callers, the final corrected static gates or main merge acceptance.
 
-After these cuts, the next small extraction candidates are CDC retry-delay timer
-custody and immutable lifecycle observation. Each needs its own main-base source
-review and physical proof. The larger CDC image/effect chain must retain its
+The user subsequently authorized those next two extractions. The coordinator
+reverified main49 and review branch `10f3e795` at 19:25:31 UTC. Both source cuts
+start independently from main49 and reuse the existing review target; the
+coordinator must verify the actual target, common ancestor and intended-only
+three-dot diff before each PR. Main-targeted hosted CI remains incompatible
+with the standing physical-lab/no-retry instruction, so no workflow or skip
+marker is changed to publish these drafts.
+
+The timer correction captures the acquiring clock, releases its exact shutdown
+registration on acquisition failure, defers shutdown settlement while acquiring
+the handle, and contains cancellation failure within that delay. Its first
+original is local `16396e3d1e21a6c4b7ce0569ce71b863866f385b`, published
+`2277a043401fd6f06e67583482e033025688841c`. The fully verified 3284 log is
+10,942 bytes, SHA256
+`1a08c33fb748edbaaa7fb73d214781544544fcd22adcfc36dd8095b4d1592c47`.
+Later assertions after the first native-assert failure are not claimed reached.
+Clock reentry and replacement are admitted-seam controls, not spontaneous
+native-clock incident claims. Failed cancellation leaves any uncleared timer
+with its original clock; a rejected Promise is not disposal evidence.
+Candidate 3291 is fully verified on tv-dator: resource 11, time-seam 10,
+catchup-terminal 2 and shutdown-owner-write 24 all pass, four roots/47 classified
+assertions, exit 0. Its full 1,639-byte log has SHA256
+`3d3ec70602730c170333f73d04f86e704e725c461e972d68404382877f9d3df3`.
+The source/tree, unchanged control blob, fresh dependencies, native SQLite
+identity and closed scopes are preserved independently from metadata 3292.
+That metadata/static stream is fully verified: 31,883 bytes, SHA256
+`bed1717c52fadb7662f24c3ff6c0ecb1519cac38b553a0bdc9c7dcf195fb53da`.
+All ten stages pass, including fourteen fast-static checks, uncapped changed-JS
+lint, owner-index audit and strict complexity at unchanged 12/20 limits. These
+checks apply to exact `346d214` plus the generated workspace patch, not a clean
+raw-head or combined-review metadata seal. The retained 4,568-byte patch has
+SHA256 `24c61dc95a5df5c447ec2183d6e99cda24cdadf0b06cf7922a7290c2122149c1`
+and is not applied to PR205. The canonical 354-root list is 18,668 bytes,
+SHA256 `abda8c5487d2f67595972df9128f367d593d39e86c0f84e451677bcca9ab5c9a`:
+327 ordinary, one toolchain, seven bootstrap and nineteen exclusive roots.
+Its full execution remains owed. The coordinator created PR205 with draft=true
+and issued no ready, merge or retarget operation.
+
+The lifecycle producer/transport audit found that the supported result pipeline
+admits malformed singleton carriers. Main can treat `[null]` as available
+absence, and removal recovery's `requireAbsent`/`confirmDeleted` consume that
+distinction. The correction reuses the existing unavailable outcome for a
+singleton that is not a non-null, non-array object. Within this helper's existing
+result contract, a successful empty row array remains available absence.
+Accepted legitimate scalar rows become independent frozen shallow
+snapshots. Transport-wide row validation, general hostile-object/deep-value
+policy, BLOB values, cross-table consistency and future mutation authority
+remain separate obligations.
+
+First lifecycle originals 3285 and 3290 remain preserved. Fully verified 3290
+stopped after its first real gateway read with `t.deepEqual is not a function`,
+before any malformed-row assertion; it supplies fixture-failure evidence, not
+product proof. Its 2,730-byte log has SHA256
+`b13df81656916ba0ff2231226c684d23084fba8542044edb6f725cd9037afd24`.
+Snapshot 3285 is fully attributed as mixed evidence: four reached leaf passes,
+nine product failures and five unsupported-assertion API errors; five failed
+subtest outcomes make 23 classified assertions. Its 17,652-byte stream has
+SHA256 `92938f307a7a316f3fc40edfc2a2daae95a286fb979ad4fe82826b397cd77c56`.
+Shared-row identity, consumer writes/deletion, the later accessor and partition
+aliasing failed before the fixture errors. Later structural, owner, fresh-read
+and absence checks are unclaimed. This partial evidence is not a clean paired
+original and does not replace corrected original run 3300.
+The systematic TAP-import census identified this unsupported method in only
+the two new roots. Corrected original `370e235` changes all 17 calls to supported
+strict structural comparison and includes six independently reviewed callback
+layout joins; expected values, effects, order, fifteen equality and three
+reference-inequality sites remain. That first corrected original/candidate pair
+retained test blobs `4f44033ab85f8a62d2ab0433752ffd664fc03879` and
+`ec35967546972fa588ea5583b4bd3fb0e1cd15de`. Earlier 1b/6ae/42/d69 revisions
+and their incomplete measurements are not replaced or promoted to acceptance.
+
+Original 3300 on published `b44198a736e22535dc057bf562fb91a4634b5298` is now
+fully attributed: 59 classified assertions, with 53 leaves comprising 23 passes
+and 30 failures. Its 36,602-byte log has SHA256
+`109b04afb823860a9c64de6beefc20c7303909fc7b025390ccbd826998605530`.
+All seven invalid-carrier assertions and 17 snapshot assertions reach the
+intended product failures. The other six failures counted two diagnostic cache
+filters per public read as alternate answer selection. Source tracing proves
+these PARTITIONS/SERVICES filters occur in operation-ledger diagnostics after
+the authoritative result, which `executeRead` then returns unchanged. Coalesced
+callers each record diagnostics, explaining the measured counts. This is not
+evidence that cache rows supplied the observations.
+
+The ca037/48ef pair corrects only that fixture accounting: it retains
+the same diagnostic cache methods and empty results, captures the real bound
+`executeCacheRead`, and counts/delegates calls with unchanged arguments and
+return value. It preserves zero cache-strategy/SQL assertions, every expected
+value, exact owner calls, coalescing, pressure, and closure checks. Current test
+blobs are `5af0fa7af03a90ad4110455d7d1d3b4f352cca1c` and
+`940be3092f1df9059cea6dfb64933b1eed6a3491`. Production blob
+`ac364fe2b8af18a62538565341a11c6a1844a231` is unchanged across those candidates.
+The preceding `bf08ce2e86fad08592d5102a330fd9ebce0179a7` / published
+`113f3dec9d34e8aed614b56fbcb3e1fac111bdda` candidate remains preserved and
+unexecuted. No failed assertion is waived and no production diagnostics are
+disabled to make the fixture pass.
+
+Original 3315 on adams-gamla fully verifies the corrected controls against
+published `5d01570ee57d52c878b5805aed952efb8d093a9c`, tree
+`893a7e69728f7fbf724f643394724f6fcef553bf`, with unchanged main source.
+Its 53 leaf assertions comprise 29 passes and 24 intended product failures
+(17 snapshot and seven malformed-carrier failures); six subtest outcomes bring
+the classified count to 59. There are no fixture failures. Exact owner calls,
+zero alternative cache-strategy/SQL reads, later useful reads, available absence,
+unavailable/ambiguous reads and completed work all pass. The complete
+30,629-byte log has SHA256
+`0f785e7b019a494793ab639e681fcc16810dfaa54131092e37fa5d600fda7636`.
+Root and the lifecycle author independently read the complete stream.
+
+Candidate 3323 on tv-dator fully verifies published
+`2f555bbfb52c01296f1c31b43370199cedf715d8`, tree
+`598fe7a6be1747976712a6a1329337b40841bf49`: five roots/309 classified
+assertions pass, comprising carrier 13, snapshot 46, authoritative transition
+38, removal leader 18 and durable generation 194. Its complete 1,832-byte log
+has SHA256
+`c22fe3ef808f3e755c77567e957797816e3ff8abb382a156d3527e232cc190cb`.
+Both runs retain fresh dependencies, the native SQLite identity and closed
+execution/container/thermal scopes. The same-source metadata run 3324 in its
+generated workspace retains a strict cyclomatic failure:
+`readOneAuthoritativeRow` measures 13 against limit 12. Its verified stream
+reports all fourteen fast-static checks, uncapped changed
+JavaScript lint, source-owner audit and cognitive limit 20 passing. The complete
+52,305-byte stream is fully verified, SHA256
+`80abe871ad58a58f184b2078b0496b41d468c8bc266e99e31355a686fb4ffbf0`.
+Its four-file generated patch remains historical and unapplied: 5,651 bytes,
+SHA256 `b91c5fe72f88602c5cac6a1edd90b4442cf5baba2d563a63bf677de508fa4822`.
+Separately reviewed production-only successor
+`65b2866abcaefad96a32999ca943756efc5a8836`, tree
+`8f9f8f4f6577cc0f81efe40e4fbe284f451e6749`, source
+`9f67ca19dddb9b2d0cf6960551b9bf315057f5aa`, makes empty, invalid and valid
+row dispositions explicit without changing the controls or complexity limits.
+Root and the CDC reviewer approve the exact 10-addition/7-deletion helper delta
+from the predecessor and unchanged test blobs. It captures the successful row
+collection once, validates array/cardinality before element access, and copies
+only an admitted singleton. This establishes no new hostile-object guarantee.
+Original 3315 remains the exact unchanged-test baseline. This successor is
+published as `751a1076ab9ff9fa8a3a98766ad150b2a5338cfa` on
+`work/pr-lifecycle-observation-final-20261112`, with the same whole tree.
+Candidate 3334 fully verifies all five roots/309 classified assertions PASS on
+tv-dator, including the same 13/46/38/18/194 per-root counts, exit 0 and closed
+scopes. Root independently read and hash-checked its complete 1,831-byte log:
+SHA256 `3135df3825a592bd23c1f0b898bbcd6ef73686db3b3812e9773698601aaa4d55`.
+Metadata/static 3335 is fully verified on local-workstation: all ten stages
+pass, including fourteen fast-static checks, uncapped three-file JavaScript
+lint, source-owner audit, unchanged strict cyclomatic/cognitive limits 12/20
+and production-source identity. Its complete 14,877-byte log has SHA256
+`baa3705e2cbdb94edb102e1e10fa1a25cbca4784ae89501a8cda6deb6e657621`.
+Root independently read and hash-checked that stream and its fresh four-file
+metadata patch. The patch is 5,651 bytes, SHA256
+`4a17edf30bfee7f8468a206e82b3af1c6fa16d7fc40254fa2bf47ef805b4988b`.
+It adds only the two new root classifications/observation records and refreshes
+the graph seal; resolver state and source-owner indexes remain unchanged. It
+stays unapplied and outside the draft source head. Static evidence applies to
+the exact final source plus its canonically generated workspace, not a fresh
+raw-head or combined-review seal.
+
+The fresh final selector reports 687 unique roots: 429 ordinary, one toolchain,
+223 bootstrap and 34 exclusive. Its 37,407-byte full list is exactly identical
+to the retained predecessor list, SHA256
+`6598317042b3dcaf3a311dd1226d6f7db946b2fa366ddae1baa4d1916e881a6e`.
+The coordinator verified the full retained bytes, uniqueness, validity, lane
+conservation and matching fresh final manifest hashes. Only duplicate output
+was omitted; canonical generation, explanation and selection ran afresh on the
+final source. Execution of the full selected scope remains owed. Neither
+bounded result establishes combined integration acceptance or main delivery.
+
+The coordinator created PR206 at 20:54:54 UTC and verified its readback at
+20:55:15 UTC: open, draft, unmerged, exact final head `751a1076`, review base
+`10f3e795`, common ancestor main49, and exactly the three intended paths.
+The published body matches the approved 12,961-byte source, SHA256
+`00d0d582e32d7b628592faa937a0aa14cb8a939eb8dffad50249e3fcffe26d56`.
+PR205 also remains open, draft and unmerged. Main remains
+`49fba99e1ad27acf83a75fdcee1f89a061377de4`; the review branch remains
+`10f3e795981b45b68bdfbee93fa6d1674d2a1a7f`. No ready, merge or retarget
+operation was issued. Both requested extractions are published for review;
+their full selected scopes and combined metadata/integration gates remain open.
+
+All new execution, including metadata and static checks, stays on qualified
+physical machines through the sole coordinator. No generated seals from
+different heads are composed or silently adopted.
+
+These independent source refinements are not yet applied to the broader WIP
+composition. Future integration must reconcile the original-clock/acquisition
+timer repair and malformed-singleton observation disposition explicitly; a
+whole-file donor import must not restore the earlier incomplete methods.
+
+The larger CDC image/effect chain must retain its
 ledger/range producer, application adapters, cache owner and relister together;
 main lacks those prerequisites. The metadata mutation cache-dedup finding is
 preserved in the CDC Quest at `fbf3a52d5` and remains separate follow-up work.
