@@ -80,7 +80,9 @@ const ADMIN_WEBSOCKET_LIVE_QUERY_METHODS = {
       return;
     }
 
-    let ast;
+    // A statement that does not parse is answered SYNTAX_ERROR and never
+    // registers.
+    let ast = null;
     try {
       const parsed = parseLiveSelect(sql);
       ast = new SQLParser(parsed.isLive ? parsed.sql : sql).parse();
@@ -90,8 +92,8 @@ const ADMIN_WEBSOCKET_LIVE_QUERY_METHODS = {
       this.answerLiveQuerySubscribeFailure(clientInfo, subscriptionId,
         `${ADMIN_ERROR_MESSAGE.LIVE_QUERY_PARSE_FAILED}: ${error.message}`,
         ErrorCode.SYNTAX_ERROR);
-      return;
     }
+    if (ast === null) return;
 
     // The snapshot is sent during registration, before the partitions are
     // known: until then an event names none. A failure the manager already

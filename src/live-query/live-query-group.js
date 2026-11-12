@@ -416,14 +416,13 @@ class QueryGroup extends EventEmitter {
 
     // Tier 1: Incremental delta evaluation. A change that cannot be
     // evaluated ends the subscription with its named error.
-    let result;
+    let result = null;
     try {
       result = this.evaluateChange(change);
     } catch (error) {
       this.failure = error;
       this._fanOutResult({type: LIVE_QUERY_EVENT.ERROR, queryId: this.queryId,
         error: error.message});
-      return null;
     }
     if (result) {
       this._fanOutResult(result);
@@ -508,7 +507,8 @@ class QueryGroup extends EventEmitter {
       storeSnapshotRows(this.resultSet, (r) => this.getRowPrimaryKey(r), rawRows);
     }
     recordInitialFrontiers(this, options, result.appliedIndex);
-    return {rows: projectedRows, count: result.count ?? projectedRows.length};
+    // The count is of the rows the snapshot carries.
+    return {rows: projectedRows, count: projectedRows.length};
   }
 
   /**
@@ -540,7 +540,7 @@ class QueryGroup extends EventEmitter {
       const resetNotification = buildResetNotification({
         queryId: this.queryId,
         newRows,
-        count: result.count ?? newRows.length,
+        count: newRows.length,
         generation: currentGeneration,
       });
       this._broadcastReset(resetNotification);
