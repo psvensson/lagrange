@@ -59,6 +59,7 @@ import {
   PARTITION_SQLITE_RESULT_CODE,
 } from './partition-committed-statement-outcome-constants.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {preparedStatementOf} from '../storage/sqlite-prepared-statement-owner.js';
 import {RETAINED_STORE_ERROR, retainedStoreError, readRetainedStoreRowsIn,
   isStoredInteger, isStoredNullableText, isStoredNullableInteger} from
   './partition-retained-store-observation.js';
@@ -151,9 +152,8 @@ const UNSETTLED_RECORD = Object.freeze({
  *   no result.
  */
 function readCommittedStatementOutcome(service, entryKey) {
-  const row = service.db
-    .prepare(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.SELECT_BY_ENTRY_KEY)
-    .get(entryKey);
+  const row = preparedStatementOf(service.db,
+    PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.SELECT_BY_ENTRY_KEY).get(entryKey);
   if (row === undefined) {
     return UNSETTLED_RECORD;
   }
@@ -180,7 +180,7 @@ function readCommittedStatementOutcome(service, entryKey) {
  */
 function recordCommittedStatementOutcome(service, {entryKey, outcome, index,
   term, error = null, result = null, ownerResultText = null}) {
-  service.db.prepare(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.INSERT).run(
+  preparedStatementOf(service.db, PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.INSERT).run(
     entryKey, outcome, index, term,
     error === null ? null : failureCodeOf(error),
     error === null ? null : String(error.message),
