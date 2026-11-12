@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-11T22:22:36.133Z",
-  "rawViolationCount": 370,
+  "generatedAt": "2026-11-12T01:32:39.334Z",
+  "rawViolationCount": 369,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-diagnostic-loss-accounting.js",
@@ -797,7 +797,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reconcile-helpers.js",
-      "line": 272,
+      "line": 340,
       "column": 4,
       "functionName": "shouldDeferMembershipReconcileToWriteLeader",
       "kind": "catch_returns_default",
@@ -806,7 +806,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reconcile.js",
-      "line": 126,
+      "line": 127,
       "column": 8,
       "functionName": "<anonymous>",
       "kind": "catch_returns_default",
@@ -815,7 +815,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reconcile.js",
-      "line": 533,
+      "line": 543,
       "column": 6,
       "functionName": "driveOwnerMembershipReconcile",
       "kind": "catch_returns_default",
@@ -833,7 +833,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-row-helpers.js",
-      "line": 416,
+      "line": 432,
       "column": 4,
       "functionName": "safelyGetLatestMembershipPublicationRow",
       "kind": "catch_returns_default",
@@ -1085,18 +1085,9 @@
     },
     {
       "filePath": "src/control-plane/replica-dispatch-replay-readiness.js",
-      "line": 503,
+      "line": 512,
       "column": 6,
       "functionName": "shouldUseAuthoritativePriorityRecoveryRediscovery",
-      "kind": "catch_returns_default",
-      "reason": "catch that returns a default; surface a typed refusal instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/replica-dispatch-replay-readiness.js",
-      "line": 585,
-      "column": 6,
-      "functionName": "getAuthoritativeDispatchRetryRowsForNode",
       "kind": "catch_returns_default",
       "reason": "catch that returns a default; surface a typed refusal instead",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -1409,7 +1400,7 @@
     },
     {
       "filePath": "src/node/replica-handler-remove-execution-methods.js",
-      "line": 542,
+      "line": 549,
       "column": 8,
       "functionName": "publishReplicaRetiringRow",
       "kind": "catch_returns_default",
@@ -1418,7 +1409,7 @@
     },
     {
       "filePath": "src/node/replica-handler-remove-request-methods.js",
-      "line": 120,
+      "line": 92,
       "column": 4,
       "functionName": "applyFailedCreateCleanupTransition",
       "kind": "catch_returns_default",
@@ -1553,7 +1544,7 @@
     },
     {
       "filePath": "src/partition/partition-locking-read-reservation.js",
-      "line": 122,
+      "line": 99,
       "column": 4,
       "functionName": "ensureTableInitialized",
       "kind": "catch_returns_default",
@@ -1562,7 +1553,7 @@
     },
     {
       "filePath": "src/partition/partition-locking-read-reservation.js",
-      "line": 204,
+      "line": 181,
       "column": 4,
       "functionName": "checkDbReservation",
       "kind": "catch_returns_default",
@@ -1571,7 +1562,7 @@
     },
     {
       "filePath": "src/partition/partition-locking-read-reservation.js",
-      "line": 219,
+      "line": 196,
       "column": 6,
       "functionName": "checkDbReservation",
       "kind": "catch_returns_default",
@@ -1580,7 +1571,7 @@
     },
     {
       "filePath": "src/partition/partition-locking-read-reservation.js",
-      "line": 251,
+      "line": 228,
       "column": 4,
       "functionName": "insertDbReservation",
       "kind": "catch_returns_default",
@@ -1589,7 +1580,7 @@
     },
     {
       "filePath": "src/partition/partition-locking-read-reservation.js",
-      "line": 512,
+      "line": 489,
       "column": 4,
       "functionName": "releaseDbTransactionReservations",
       "kind": "catch_returns_default",
@@ -1598,7 +1589,7 @@
     },
     {
       "filePath": "src/partition/partition-locking-read-reservation.js",
-      "line": 586,
+      "line": 563,
       "column": 4,
       "functionName": "releaseDbSessionReservations",
       "kind": "catch_returns_default",
@@ -1607,7 +1598,7 @@
     },
     {
       "filePath": "src/partition/partition-locking-read-reservation.js",
-      "line": 660,
+      "line": 637,
       "column": 4,
       "functionName": "sweepExpiredReservations",
       "kind": "catch_returns_default",
@@ -2066,7 +2057,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-replica-lifecycle-owner.js",
-      "line": 930,
+      "line": 941,
       "column": 4,
       "functionName": "retirementEvidenceOf",
       "kind": "catch_returns_default",
@@ -2129,7 +2120,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-snapshot-witness.js",
-      "line": 71,
+      "line": 75,
       "column": 4,
       "functionName": "decodeSnapshotWitnessMaxHlc",
       "kind": "catch_returns_default",
@@ -2138,7 +2129,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-snapshot-witness.js",
-      "line": 171,
+      "line": 185,
       "column": 4,
       "functionName": "extractLogRowHlc",
       "kind": "catch_returns_default",
@@ -2444,7 +2435,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js",
-      "line": 536,
+      "line": 528,
       "column": 8,
       "functionName": "isOperationLedgerQuorumSpreadAuthoritativelyConfirmed",
       "kind": "catch_returns_default",

@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-11T22:22:36.112Z",
-  "rawViolationCount": 1952,
+  "generatedAt": "2026-11-12T01:32:39.316Z",
+  "rawViolationCount": 1944,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
@@ -275,25 +275,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-membership-publication-reconcile.js",
-      "line": 207,
-      "column": 4,
-      "functionName": "enqueueMembershipPublicationReconcileFallback",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/admin/admin-control-snapshot-membership-publication-reconcile.js",
-      "line": 369,
-      "column": 4,
-      "functionName": "maybeReconcileAuthoritativeMembershipPublication",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/admin/admin-control-snapshot-membership-publication-reconcile.js",
-      "line": 574,
+      "line": 472,
       "column": 6,
       "functionName": "ensureMembershipPublicationObservation",
       "kind": "owner_port_feature_detection",
@@ -302,7 +284,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-membership-publication-reconcile.js",
-      "line": 587,
+      "line": 485,
       "column": 6,
       "functionName": "ensureMembershipPublicationObservation",
       "kind": "owner_port_feature_detection",
@@ -311,7 +293,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-membership-publication-reconcile.js",
-      "line": 601,
+      "line": 499,
       "column": 6,
       "functionName": "ensureMembershipPublicationObservation",
       "kind": "owner_port_feature_detection",
@@ -320,7 +302,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-membership-publication-reconcile.js",
-      "line": 613,
+      "line": 511,
       "column": 6,
       "functionName": "ensureMembershipPublicationObservation",
       "kind": "owner_port_feature_detection",
@@ -329,7 +311,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-membership-publication-reconcile.js",
-      "line": 674,
+      "line": 572,
       "column": 6,
       "functionName": "ensurePublishedMembershipObservation",
       "kind": "owner_port_feature_detection",
@@ -338,7 +320,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-membership-publication-reconcile.js",
-      "line": 687,
+      "line": 585,
       "column": 6,
       "functionName": "ensurePublishedMembershipObservation",
       "kind": "owner_port_feature_detection",
@@ -347,7 +329,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-membership-publication-reconcile.js",
-      "line": 702,
+      "line": 600,
       "column": 6,
       "functionName": "ensurePublishedMembershipObservation",
       "kind": "owner_port_feature_detection",
@@ -356,7 +338,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-membership-publication-reconcile.js",
-      "line": 714,
+      "line": 612,
       "column": 6,
       "functionName": "ensurePublishedMembershipObservation",
       "kind": "owner_port_feature_detection",
@@ -1112,7 +1094,7 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-api.js",
-      "line": 117,
+      "line": 115,
       "column": 6,
       "functionName": "constructor",
       "kind": "owner_port_feature_detection",
@@ -1121,7 +1103,7 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-api.js",
-      "line": 218,
+      "line": 216,
       "column": 6,
       "functionName": "constructor",
       "kind": "owner_port_feature_detection",
@@ -1130,7 +1112,7 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-api.js",
-      "line": 398,
+      "line": 396,
       "column": 8,
       "functionName": "constructor",
       "kind": "owner_port_feature_detection",
@@ -4162,33 +4144,6 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/bootstrap/traffic-readiness-utils.js",
-      "line": 361,
-      "column": 6,
-      "functionName": "attachTrafficReadinessListener",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/traffic-readiness-utils.js",
-      "line": 365,
-      "column": 4,
-      "functionName": "attachTrafficReadinessListener",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/traffic-readiness-utils.js",
-      "line": 367,
-      "column": 7,
-      "functionName": "attachTrafficReadinessListener",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/cache/cache-hydration-service.js",
       "line": 43,
       "column": 15,
@@ -6017,7 +5972,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-persist.js",
-      "line": 290,
+      "line": 300,
       "column": 6,
       "functionName": "getControlPlaneOwnerQueueDepth",
       "kind": "owner_port_feature_detection",
@@ -6125,7 +6080,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reads.js",
-      "line": 84,
+      "line": 90,
       "column": 4,
       "functionName": "fetchDirectOwnerRows",
       "kind": "owner_port_feature_detection",
@@ -6134,7 +6089,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reads.js",
-      "line": 91,
+      "line": 97,
       "column": 6,
       "functionName": "fetchDirectOwnerRows",
       "kind": "owner_port_feature_detection",
@@ -6143,7 +6098,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reads.js",
-      "line": 96,
+      "line": 102,
       "column": 6,
       "functionName": "fetchDirectOwnerRows",
       "kind": "owner_port_feature_detection",
@@ -6152,7 +6107,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reads.js",
-      "line": 125,
+      "line": 131,
       "column": 6,
       "functionName": "constructor",
       "kind": "owner_port_feature_detection",
@@ -6161,7 +6116,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reads.js",
-      "line": 139,
+      "line": 145,
       "column": 15,
       "functionName": "constructor",
       "kind": "owner_port_feature_detection",
@@ -6170,7 +6125,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reads.js",
-      "line": 210,
+      "line": 219,
       "column": 16,
       "functionName": "readTableRows",
       "kind": "owner_port_feature_detection",
@@ -6179,7 +6134,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reads.js",
-      "line": 225,
+      "line": 234,
       "column": 10,
       "functionName": "readTableRows",
       "kind": "owner_port_feature_detection",
@@ -6188,7 +6143,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reads.js",
-      "line": 248,
+      "line": 257,
       "column": 8,
       "functionName": "readTableRows",
       "kind": "owner_port_feature_detection",
@@ -6197,7 +6152,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reads.js",
-      "line": 270,
+      "line": 279,
       "column": 7,
       "functionName": "getLatestPublicationRowSync",
       "kind": "owner_port_feature_detection",
@@ -6206,7 +6161,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reads.js",
-      "line": 308,
+      "line": 317,
       "column": 7,
       "functionName": "getLatestPublishedPublicationRowSync",
       "kind": "owner_port_feature_detection",
@@ -6215,7 +6170,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reads.js",
-      "line": 357,
+      "line": 366,
       "column": 7,
       "functionName": "getLatestMembershipPublicationEpochStatusForNodeSync",
       "kind": "owner_port_feature_detection",
@@ -6224,7 +6179,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reads.js",
-      "line": 469,
+      "line": 478,
       "column": 6,
       "functionName": "isLocallyOwnedReplicaOperationRow",
       "kind": "owner_port_feature_detection",
@@ -6233,16 +6188,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reads.js",
-      "line": 518,
-      "column": 23,
-      "functionName": "getDispatchRetryRowsForNode",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/membership-publication-coordinator-reads.js",
-      "line": 600,
+      "line": 618,
       "column": 6,
       "functionName": "deriveClusterMembershipCandidate",
       "kind": "owner_port_feature_detection",
@@ -6251,7 +6197,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reconcile-helpers.js",
-      "line": 148,
+      "line": 216,
       "column": 6,
       "functionName": "hasLocalNonTerminalReplicaOperations",
       "kind": "owner_port_feature_detection",
@@ -6260,7 +6206,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reconcile-helpers.js",
-      "line": 185,
+      "line": 253,
       "column": 6,
       "functionName": "hasLocalServicesConvergenceGap",
       "kind": "owner_port_feature_detection",
@@ -6269,7 +6215,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reconcile-helpers.js",
-      "line": 220,
+      "line": 288,
       "column": 4,
       "functionName": "canWriteTableLocally",
       "kind": "owner_port_feature_detection",
@@ -6278,7 +6224,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reconcile-helpers.js",
-      "line": 265,
+      "line": 333,
       "column": 4,
       "functionName": "shouldDeferMembershipReconcileToWriteLeader",
       "kind": "owner_port_feature_detection",
@@ -6287,7 +6233,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reconcile.js",
-      "line": 102,
+      "line": 103,
       "column": 6,
       "functionName": "refreshDeferredPublicationsCacheFromAuthority",
       "kind": "owner_port_feature_detection",
@@ -6296,7 +6242,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reconcile.js",
-      "line": 106,
+      "line": 107,
       "column": 18,
       "functionName": "refreshDeferredPublicationsCacheFromAuthority",
       "kind": "owner_port_feature_detection",
@@ -6305,7 +6251,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reconcile.js",
-      "line": 159,
+      "line": 160,
       "column": 6,
       "functionName": "refreshDeferredPropagatedCachesFromAuthority",
       "kind": "owner_port_feature_detection",
@@ -6314,27 +6260,9 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reconcile.js",
-      "line": 164,
+      "line": 165,
       "column": 18,
       "functionName": "refreshDeferredPropagatedCachesFromAuthority",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/membership-publication-coordinator-reconcile.js",
-      "line": 603,
-      "column": 6,
-      "functionName": "startOwnerMembershipDriver",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/membership-publication-coordinator-reconcile.js",
-      "line": 607,
-      "column": 6,
-      "functionName": "startOwnerMembershipDriver",
       "kind": "owner_port_feature_detection",
       "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -6342,6 +6270,24 @@
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reconcile.js",
       "line": 613,
+      "column": 6,
+      "functionName": "startOwnerMembershipDriver",
+      "kind": "owner_port_feature_detection",
+      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/membership-publication-coordinator-reconcile.js",
+      "line": 617,
+      "column": 6,
+      "functionName": "startOwnerMembershipDriver",
+      "kind": "owner_port_feature_detection",
+      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/membership-publication-coordinator-reconcile.js",
+      "line": 623,
       "column": 8,
       "functionName": "startOwnerMembershipDriver",
       "kind": "owner_port_feature_detection",
@@ -6350,7 +6296,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reconcile.js",
-      "line": 621,
+      "line": 631,
       "column": 8,
       "functionName": "stopOwnerMembershipDriver",
       "kind": "owner_port_feature_detection",
@@ -6359,7 +6305,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reconcile.js",
-      "line": 627,
+      "line": 637,
       "column": 8,
       "functionName": "stopOwnerMembershipDriver",
       "kind": "owner_port_feature_detection",
@@ -6368,7 +6314,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reconcile.js",
-      "line": 630,
+      "line": 640,
       "column": 8,
       "functionName": "stopOwnerMembershipDriver",
       "kind": "owner_port_feature_detection",
@@ -6386,7 +6332,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-row-helpers.js",
-      "line": 411,
+      "line": 427,
       "column": 22,
       "functionName": "safelyGetLatestMembershipPublicationRow",
       "kind": "owner_port_feature_detection",
@@ -6395,7 +6341,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-row-helpers.js",
-      "line": 425,
+      "line": 441,
       "column": 6,
       "functionName": "readMembershipPublicationConvergence",
       "kind": "owner_port_feature_detection",
@@ -6404,7 +6350,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-row-helpers.js",
-      "line": 428,
+      "line": 444,
       "column": 6,
       "functionName": "readMembershipPublicationConvergence",
       "kind": "owner_port_feature_detection",
@@ -7277,7 +7223,7 @@
     },
     {
       "filePath": "src/control-plane/replica-dispatch-replay-readiness.js",
-      "line": 341,
+      "line": 347,
       "column": 6,
       "functionName": "getDispatchRetryRowsForNode",
       "kind": "owner_port_feature_detection",
@@ -7286,7 +7232,7 @@
     },
     {
       "filePath": "src/control-plane/replica-dispatch-replay-readiness.js",
-      "line": 364,
+      "line": 373,
       "column": 6,
       "functionName": "getDispatchRetryRowsForNode",
       "kind": "owner_port_feature_detection",
@@ -7295,7 +7241,7 @@
     },
     {
       "filePath": "src/control-plane/replica-dispatch-replay-readiness.js",
-      "line": 525,
+      "line": 534,
       "column": 6,
       "functionName": "resolvePriorityRecoveryPublicationConvergence",
       "kind": "owner_port_feature_detection",
@@ -7304,7 +7250,7 @@
     },
     {
       "filePath": "src/control-plane/replica-dispatch-replay-readiness.js",
-      "line": 538,
+      "line": 547,
       "column": 6,
       "functionName": "resolvePriorityRecoveryPublicationConvergence",
       "kind": "owner_port_feature_detection",
@@ -7313,16 +7259,7 @@
     },
     {
       "filePath": "src/control-plane/replica-dispatch-replay-readiness.js",
-      "line": 560,
-      "column": 6,
-      "functionName": "getAuthoritativeDispatchRetryRowsForNode",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/replica-dispatch-replay-readiness.js",
-      "line": 609,
+      "line": 624,
       "column": 6,
       "functionName": "isReplicaOperationLocallyOwned",
       "kind": "owner_port_feature_detection",
@@ -7331,7 +7268,7 @@
     },
     {
       "filePath": "src/control-plane/replica-dispatch-replay-readiness.js",
-      "line": 616,
+      "line": 631,
       "column": 6,
       "functionName": "isReplicaOperationLocallyOwned",
       "kind": "owner_port_feature_detection",
@@ -9482,7 +9419,7 @@
     },
     {
       "filePath": "src/node/replica-handler-remove-execution-methods.js",
-      "line": 482,
+      "line": 489,
       "column": 8,
       "functionName": "buildReplicaRemovalLifecycleSnapshot",
       "kind": "owner_port_feature_detection",
@@ -9491,7 +9428,7 @@
     },
     {
       "filePath": "src/node/replica-handler-remove-execution-methods.js",
-      "line": 617,
+      "line": 624,
       "column": 8,
       "functionName": "getTrackedReplicaLifecycleState",
       "kind": "owner_port_feature_detection",
@@ -9500,7 +9437,7 @@
     },
     {
       "filePath": "src/node/replica-handler-remove-request-methods.js",
-      "line": 95,
+      "line": 67,
       "column": 4,
       "functionName": "validFailedCreateCleanupRequest",
       "kind": "owner_port_feature_detection",
@@ -10166,7 +10103,7 @@
     },
     {
       "filePath": "src/partition/partition-locking-read-reservation.js",
-      "line": 263,
+      "line": 240,
       "column": 27,
       "functionName": "registerPartitionDatabase",
       "kind": "owner_port_feature_detection",
@@ -15440,7 +15377,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-lifecycle-base.js",
-      "line": 423,
+      "line": 432,
       "column": 8,
       "functionName": "syncOwnerDependencies",
       "kind": "owner_port_feature_detection",
@@ -15449,7 +15386,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-lifecycle-base.js",
-      "line": 496,
+      "line": 505,
       "column": 6,
       "functionName": "syncOwnerDependenciesFromCoordinator",
       "kind": "owner_port_feature_detection",
@@ -17420,7 +17357,7 @@
     },
     {
       "filePath": "src/workflow/owner-key-reconcile-queue.js",
-      "line": 131,
+      "line": 142,
       "column": 8,
       "functionName": "constructor",
       "kind": "owner_port_feature_detection",
@@ -17429,16 +17366,7 @@
     },
     {
       "filePath": "src/workflow/owner-key-reconcile-queue.js",
-      "line": 142,
-      "column": 6,
-      "functionName": "constructor",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/workflow/owner-key-reconcile-queue.js",
-      "line": 145,
+      "line": 153,
       "column": 15,
       "functionName": "constructor",
       "kind": "owner_port_feature_detection",
@@ -17447,7 +17375,7 @@
     },
     {
       "filePath": "src/workflow/owner-key-reconcile-queue.js",
-      "line": 148,
+      "line": 156,
       "column": 24,
       "functionName": "constructor",
       "kind": "owner_port_feature_detection",
@@ -17456,7 +17384,7 @@
     },
     {
       "filePath": "src/workflow/owner-key-reconcile-queue.js",
-      "line": 152,
+      "line": 160,
       "column": 6,
       "functionName": "constructor",
       "kind": "owner_port_feature_detection",

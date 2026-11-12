@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-11T22:22:36.126Z",
-  "rawViolationCount": 1675,
+  "generatedAt": "2026-11-12T01:32:39.328Z",
+  "rawViolationCount": 1671,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
@@ -752,7 +752,7 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-api.js",
-      "line": 124,
+      "line": 122,
       "column": 6,
       "functionName": "constructor",
       "kind": "two_source_fallback_reads",
@@ -761,7 +761,7 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-api.js",
-      "line": 136,
+      "line": 134,
       "column": 33,
       "functionName": "constructor",
       "kind": "two_source_fallback_reads",
@@ -770,7 +770,7 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-api.js",
-      "line": 140,
+      "line": 138,
       "column": 6,
       "functionName": "constructor",
       "kind": "two_source_fallback_reads",
@@ -779,7 +779,7 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-api.js",
-      "line": 149,
+      "line": 147,
       "column": 6,
       "functionName": "constructor",
       "kind": "two_source_fallback_reads",
@@ -788,7 +788,7 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-api.js",
-      "line": 237,
+      "line": 235,
       "column": 6,
       "functionName": "constructor",
       "kind": "two_source_fallback_reads",
@@ -797,7 +797,7 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-api.js",
-      "line": 262,
+      "line": 260,
       "column": 12,
       "functionName": "getMessageRouter",
       "kind": "two_source_fallback_reads",
@@ -806,7 +806,7 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-api.js",
-      "line": 357,
+      "line": 355,
       "column": 12,
       "functionName": "getMessageRouter",
       "kind": "two_source_fallback_reads",
@@ -815,7 +815,7 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-api.js",
-      "line": 413,
+      "line": 411,
       "column": 12,
       "functionName": "getMessageRouter",
       "kind": "two_source_fallback_reads",
@@ -824,7 +824,7 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-api.js",
-      "line": 440,
+      "line": 438,
       "column": 12,
       "functionName": "getMessageRouter",
       "kind": "two_source_fallback_reads",
@@ -3092,7 +3092,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-request-coalescing.js",
-      "line": 182,
+      "line": 185,
       "column": 8,
       "functionName": "buildMutationCoalescingDescriptor",
       "kind": "two_source_fallback_reads",
@@ -3101,7 +3101,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-request-coalescing.js",
-      "line": 188,
+      "line": 191,
       "column": 6,
       "functionName": "buildMutationCoalescingDescriptor",
       "kind": "two_source_fallback_reads",
@@ -3110,7 +3110,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-request-coalescing.js",
-      "line": 215,
+      "line": 218,
       "column": 12,
       "functionName": "buildMutationCoalescingDescriptor",
       "kind": "two_source_fallback_reads",
@@ -3119,7 +3119,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-request-coalescing.js",
-      "line": 236,
+      "line": 239,
       "column": 12,
       "functionName": "buildMutationCoalescingDescriptor",
       "kind": "two_source_fallback_reads",
@@ -3128,7 +3128,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-request-coalescing.js",
-      "line": 249,
+      "line": 252,
       "column": 10,
       "functionName": "buildMutationCoalescingDescriptor",
       "kind": "two_source_fallback_reads",
@@ -3137,7 +3137,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-request-coalescing.js",
-      "line": 332,
+      "line": 335,
       "column": 8,
       "functionName": "buildMutationQueueMetadata",
       "kind": "two_source_fallback_reads",
@@ -3335,16 +3335,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-candidate-derivation.js",
-      "line": 82,
-      "column": 4,
-      "functionName": "buildPublicationMetadataRefreshRow",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/membership-publication-candidate-derivation.js",
-      "line": 130,
+      "line": 131,
       "column": 4,
       "functionName": "shouldAllowRecoveryEligibleProjection",
       "kind": "two_source_fallback_reads",
@@ -3353,7 +3344,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-candidate-derivation.js",
-      "line": 319,
+      "line": 320,
       "column": 8,
       "functionName": "deriveMembershipPublicationCandidate",
       "kind": "two_source_fallback_reads",
@@ -3362,7 +3353,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-candidate-derivation.js",
-      "line": 322,
+      "line": 323,
       "column": 8,
       "functionName": "deriveMembershipPublicationCandidate",
       "kind": "two_source_fallback_reads",
@@ -3371,7 +3362,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-candidate-derivation.js",
-      "line": 326,
+      "line": 327,
       "column": 8,
       "functionName": "deriveMembershipPublicationCandidate",
       "kind": "two_source_fallback_reads",
@@ -3380,7 +3371,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-candidate-derivation.js",
-      "line": 340,
+      "line": 341,
       "column": 16,
       "functionName": "deriveMembershipPublicationCandidate",
       "kind": "two_source_fallback_reads",
@@ -3389,7 +3380,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-candidate-derivation.js",
-      "line": 352,
+      "line": 353,
       "column": 14,
       "functionName": "deriveMembershipPublicationCandidate",
       "kind": "two_source_fallback_reads",
@@ -3398,7 +3389,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-candidate-derivation.js",
-      "line": 601,
+      "line": 602,
       "column": 4,
       "functionName": "deriveMembershipPublicationCandidate",
       "kind": "two_source_fallback_reads",
@@ -3443,7 +3434,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reads.js",
-      "line": 131,
+      "line": 137,
       "column": 18,
       "functionName": "constructor",
       "kind": "two_source_fallback_reads",
@@ -5171,7 +5162,7 @@
     },
     {
       "filePath": "src/control-plane/replica-dispatch-replay-readiness.js",
-      "line": 626,
+      "line": 641,
       "column": 8,
       "functionName": "isReplicaOperationLocallyOwned",
       "kind": "two_source_fallback_reads",
@@ -6494,15 +6485,6 @@
     },
     {
       "filePath": "src/live-query/live-query-group.js",
-      "line": 543,
-      "column": 15,
-      "functionName": "refreshQueryResult",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/live-query/live-query-group.js",
       "line": 650,
       "column": 27,
       "functionName": "evaluateChange",
@@ -7196,7 +7178,7 @@
     },
     {
       "filePath": "src/node/replica-handler-remove-execution-methods.js",
-      "line": 583,
+      "line": 590,
       "column": 16,
       "functionName": "deferReplicaRemovalWithoutDurableRow",
       "kind": "two_source_fallback_reads",
@@ -7970,7 +7952,7 @@
     },
     {
       "filePath": "src/partition/partition-cdc-obligation-ledger.js",
-      "line": 195,
+      "line": 196,
       "column": 11,
       "functionName": "readOwedCdcObligations",
       "kind": "two_source_fallback_reads",
@@ -8051,7 +8033,7 @@
     },
     {
       "filePath": "src/partition/partition-participant-transaction-store.js",
-      "line": 464,
+      "line": 452,
       "column": 13,
       "functionName": "participantOutcomeOf",
       "kind": "two_source_fallback_reads",
@@ -10256,7 +10238,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-snapshot-witness.js",
-      "line": 253,
+      "line": 266,
       "column": 22,
       "functionName": "<anonymous>",
       "kind": "two_source_fallback_reads",
@@ -11402,24 +11384,6 @@
       "line": 105,
       "column": 4,
       "functionName": "resolvePriorityDeferredObservationPressureState",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js",
-      "line": 243,
-      "column": 26,
-      "functionName": "ensureOperationLedgerSelfMoveSerialized",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js",
-      "line": 273,
-      "column": 24,
-      "functionName": "ensureOperationLedgerSelfMoveSerialized",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
