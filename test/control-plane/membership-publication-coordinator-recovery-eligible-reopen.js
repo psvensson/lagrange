@@ -841,7 +841,7 @@ const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_READBACK_FAILURE_MESSAGE =
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DEFERRED_ROW_MESSAGE =
   'deferred owner outcome should retain the written publication row';
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DEFERRED_CONTEXT_MESSAGE =
-  'queued owner retry should use the written publication row as the latest row';
+  'queued owner retry retains the desired target and rereads the publication owner';
 
 // A handoff-routed reconcile plans without the census inputs: the row it
 // admits states its priority census NOT_DERIVED, and once that row is
@@ -853,15 +853,17 @@ function isHandoffRetryEnqueue(entry) {
   return entry.reason !== PRIORITY_CENSUS_NOT_DERIVED_REASON;
 }
 
-function assertCensusRequestedForVisibleRow(t, enqueued, outcome) {
+function assertCensusRequestedForVisibleRow(t, enqueued) {
   const requests = enqueued.filter((entry) => !isHandoffRetryEnqueue(entry));
   t.equal(requests.length, 1,
     'the visible publication asks once for the census it did not derive');
   t.equal(
-    requests[0].context.latestPublicationRow.publicationId,
-    outcome.publicationRow.publicationId,
-    'the census request runs from the durable row the handoff published',
+    requests[0].context.latestPublicationRow,
+    undefined,
+    'the census request cannot donate a row as read authority',
   );
+  t.equal(requests[0].context.deferNestedPriorityRecoveryPlanning, false,
+    'the retained queue must run the full census after the handoff');
   t.equal(requests[0].context.publicationActiveGateHandoff, undefined,
     'the census request carries no handoff: it is a full reconcile');
   t.equal(requests[0].context.allowEmptyPreloadedRows, undefined,
@@ -972,7 +974,7 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_RETRY_VISIBLE_TEST_NAME,
       PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NO_ENQUEUE_COUNT,
       PUBLICATION_CONVERGENCE_HANDOFF_RETRY_VISIBLE_ENQUEUE_MESSAGE,
     );
-    assertCensusRequestedForVisibleRow(t, enqueued, outcome);
+    assertCensusRequestedForVisibleRow(t, enqueued);
     t.equal(
       persistedRows.length,
       PUBLICATION_CONVERGENCE_HANDOFF_RETRY_VISIBLE_PERSISTED_COUNT,
@@ -1097,7 +1099,7 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_STALE_VISIBLE_TEST_NAME,
       PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NO_ENQUEUE_COUNT,
       PUBLICATION_CONVERGENCE_HANDOFF_TARGET_STALE_VISIBLE_ENQUEUE_MESSAGE,
     );
-    assertCensusRequestedForVisibleRow(t, enqueued, outcome);
+    assertCensusRequestedForVisibleRow(t, enqueued);
     t.same(
       outcome.publicationRow.publishedActiveNodeIds,
       [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS],
@@ -1202,11 +1204,12 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_READBACK_FAILURE_TEST_NAME,
       PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DEFERRED_ROW_MESSAGE,
     );
     t.same(
-      pending.get(ownerKey)?.context?.latestPublicationRow
-        ?.publishedActiveNodeIds,
+      pending.get(ownerKey)?.context?.publishedActiveNodeIds,
       [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS],
       PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DEFERRED_CONTEXT_MESSAGE,
     );
+    t.equal(pending.get(ownerKey)?.context?.latestPublicationRow, undefined,
+      'the retry cannot treat the written row as a new owner read');
     t.equal(
       outcome.reasonCode,
       PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING,

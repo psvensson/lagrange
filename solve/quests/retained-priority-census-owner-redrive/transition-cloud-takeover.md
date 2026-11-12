@@ -216,3 +216,41 @@ SQL owners return current rows. It also exercises the real no-downgrade path.
 The original no-input pure candidate expectation is explicitly changed from
 ABSENT to NOT_DERIVED to state this strengthened candidate contract. All new
 runtime controls remain pending physical-lab execution at this writing.
+
+### Physical owner-closure results and fixture reachability
+
+The exact `fcbcb7a6d1f0ac56cc02ca01901ace9db30b860e` source was transported as
+`3366553d7d1b097164c38556f2b7a67673463c68`, preserving tree
+`73ac91871cfe9627096478b49e50f433d6d30082`. Lab `2801` passed seven caller roots
+and 672 assertions. Its complete 2,236-byte log has SHA256
+`ac24668120b3847b9b4adbdd13620158c6d01d202f316035f98d2e9e3e546286`.
+Lab `2800` passed four of six core roots: authority-read (17), priority census
+(28), held-write cadence (3), and dispatch node-state (110). The coordinator
+and guarded-write roots failed; all 643 assertions and the complete 84,634-byte
+stream remain preserved, SHA256
+`588089d3f3d8987fd9f6c809fe20374b82e2d244c5275712f871f3167072aed9`.
+Both jobs closed their scopes. Passing controls do not discharge these failures.
+
+Independent review approved the following precise fixture changes, with no
+production delta or changed timeout:
+
+- The ABANDONED-row ACK now reaches a real stale-write race: it reads the live
+  owner, is held before the guarded update, then another coordinator abandons
+  the row through the actual timeout change. The original FINAL_ROW refusals
+  remain, with a later terminal observation required to return UNCHANGED and
+  issue no write. The former raw stale input no longer grants read authority.
+- Visible-handoff cases assert the owed full-census request and absence of raw
+  latest rows. The deferred retry retains its desired target; pending-target
+  merging and the eventual full owner read remain covered by the real retained
+  queue witness that passed `2800`.
+- The two ACK-refresh units receive the actual publication-list port and all
+  five planning table inputs. The existing explicit acknowledged-node intent
+  is retained where the owner is completing ACK debt. Guarded writes and all
+  closure assertions remain unchanged.
+- The in-flight read unit obtains its two publication observations from the
+  list owner and separately verifies the five planning RPC inputs. The trim
+  candidate receives current priority partitions and replicas, so its unchanged
+  steady-state assertion no longer relies on a retained satisfied summary.
+
+These are reachability corrections on unchanged source, pending exact lab
+renewal. Static gates, generated metadata and whole-epic acceptance remain open.

@@ -4,8 +4,9 @@ import {ControlPlaneSystemTableGateway} from
   '../../src/control-plane/control-plane-system-table-gateway.js';
 import {buildControlPlaneReadAuthority} from
   '../../src/control-plane/control-plane-system-table-gateway-read-contracts.js';
+import {CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE as SCOPE} from
+  '../../src/control-plane/control-plane-cache-reconcile-constants.js';
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE as MODE,
-  CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE as SCOPE,
   CONTROL_PLANE_READ_LEADER_MODE as LEADER,
   CONTROL_PLANE_READ_PROFILE as PROFILE} from
   '../../src/control-plane/control-plane-system-table-gateway-constants.js';
