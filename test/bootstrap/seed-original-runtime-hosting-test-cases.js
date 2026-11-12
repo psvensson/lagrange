@@ -30,12 +30,24 @@ import {captureReplicaAdmission, runSerializedReplicaMutation} from
   '../../src/node/replica-state-machine-serialization.js';
 import {installAuthoritativeReplicaLifecycleInLane} from
   '../../src/node/replica-state-machine-recovery.js';
+import {buildReplicaLifecycleMutationPredicateFromRow,
+  buildReplicaLifecycleMutationPredicateFromState} from
+  '../../src/node/replica-state-machine-lifecycle-observation.js';
 import {settledTurn, turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 import {ORIGINAL_ALLOCATION, ORIGINAL_ALLOCATION_REASON} from
   '../../src/raft/raft-rs-original-allocation-constants.js';
 
 const HOSTING_FACT = 'current_lifecycle_registry';
 const REFUSED = {code: PARTITION_RUNTIME_PUBLICATION_REFUSED};
+
+function assertOriginalLifecycleInstalled(owner, replicaId, evidence, admission, installed) {
+  const observed = buildReplicaLifecycleMutationPredicateFromState(owner.getState(replicaId));
+  const expected = buildReplicaLifecycleMutationPredicateFromRow(evidence);
+  assert.equal(installed, true, `original registration lifecycle install must be accepted: ${
+    JSON.stringify({replicaId, ownerNodeId: owner.nodeId, admission, evidence, observed})}`);
+  assert.deepEqual(observed, expected,
+    'accepted original installation must retain every canonical predicate field before publication');
+}
 
 async function openedOriginal(t, owners) {
   const f = await owners.fixture(t);
@@ -108,9 +120,10 @@ async function originalRegistrationInfo(f, handler) {
     replicaId: f.options.replicaId, nodeId: f.service.nodeId, service: f.runtime,
     status: SERVICE_STATUS.CREATING, originalRegistration: registration});
   const admission = captureReplicaAdmission(owner, f.options.replicaId);
-  await turnChainValue(runSerializedReplicaMutation(owner, f.options.replicaId,
+  const installed = await turnChainValue(runSerializedReplicaMutation(owner, f.options.replicaId,
     () => settledTurn(installAuthoritativeReplicaLifecycleInLane(
       owner, f.options.replicaId, evidence, admission))));
+  assertOriginalLifecycleInstalled(owner, f.options.replicaId, evidence, admission, installed);
   return {replicaId: f.options.replicaId, partitionId: f.options.partitionId,
     tableName: f.options.tableName, service: f.runtime, sourceEvidence: evidence,
     lifecycleOwner: owner, hostServices: f.service.partitionServices};
@@ -481,9 +494,10 @@ function registerOriginalSeedRuntimeHostingTests(owners) {
       replicaId: f.options.replicaId, nodeId: f.service.nodeId, service: f.runtime,
       status: SERVICE_STATUS.CREATING, originalRegistration: registration});
     const admission = captureReplicaAdmission(owner, f.options.replicaId);
-    await turnChainValue(runSerializedReplicaMutation(owner, f.options.replicaId,
+    const installed = await turnChainValue(runSerializedReplicaMutation(owner, f.options.replicaId,
       () => settledTurn(installAuthoritativeReplicaLifecycleInLane(
         owner, f.options.replicaId, evidence, admission))));
+    assertOriginalLifecycleInstalled(owner, f.options.replicaId, evidence, admission, installed);
     const info = {replicaId: f.options.replicaId, partitionId: f.options.partitionId,
       tableName: f.options.tableName, service: f.runtime, sourceEvidence: evidence,
       lifecycleOwner: owner, hostServices: f.service.partitionServices};
