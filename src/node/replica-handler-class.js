@@ -239,7 +239,7 @@ class ReplicaHandler extends EventEmitter {
     // the shutdown release of every consensus-exit wait.
     this.removalExecutions = new Map();
     this.removingRedrives = new Set();
-    this.removalSettlementRereads = new Set();
+    this.removalSettlementRereads = new Map();
     this.removalConsensusExitRelease = new AbortController();
     // A removal state no running removal carries is re-driven or settled.
     subscribeRemovalSettlement(this);

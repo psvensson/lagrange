@@ -1,3 +1,5 @@
+import {publishReplicaRuntime} from './replica-runtime-publication.js';
+import {runtimePublicationRefused} from '../partition/partition-runtime-publication.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {retireNodeTransportHandler} from './replica-transport-handler-identity.js';
 import {settlePendingReplicaRuntimeCleanup, fenceFailedReplicaCreateRuntime,
@@ -282,15 +284,6 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
         localReplica &&
         typeof localReplica === REPLICA_HANDLER_TYPEOF.OBJECT
       ) {
-        const trackedService = this.getTrackedService(replicaId);
-        if (!localReplica.replicaId) {
-          localReplica.replicaId = replicaId;
-        }
-        if (localReplica.service === undefined) {
-          localReplica.service = trackedService;
-        } else if (!localReplica.service && trackedService) {
-          localReplica.service = trackedService;
-        }
         return localReplica;
       }
       // Read durable placement from cache and merge tracked local runtime service.
@@ -302,27 +295,6 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
       // Check if this replica belongs to this node
       if (!cacheEntry || cacheEntry.node_id !== this.nodeId ||
           isCleanupTombstoneRow(cacheEntry)) {
-        // Compatibility fallback for legacy tests that seed in-memory local replicas
-        // directly on the lifecycle manager.
-        if (
-          service &&
-          typeof service === REPLICA_HANDLER_TYPEOF.OBJECT &&
-          service.status
-        ) {
-          const compatibilityService =
-            service.service ||
-            (typeof service.shutdown === REPLICA_HANDLER_TYPEOF.FUNCTION ||
-            typeof service.syncFromLeader === REPLICA_HANDLER_TYPEOF.FUNCTION ?
-              service :
-              null);
-          return {
-            replicaId: service.replicaId || replicaId,
-            partitionId: service.partitionId || null,
-            tableName: service.tableName || null,
-            status: service.status,
-            service: compatibilityService,
-          };
-        }
         return null;
       }
       // Merge cache state with local service reference
@@ -385,28 +357,8 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
      * @param {Object} [replicaInfo.service] - Partition service instance.
      */
     registerExistingReplica(replicaInfo) {
-      const {replicaId, service} = replicaInfo;
-      // Idempotent: no error on duplicate registration
-      if (this.localReplicas.has(replicaId)) {
-        this.logger.debug(REPLICA_HANDLER_LOG_MSG.ALREADY_REGISTERED, {
-          replicaId,
-          nodeId: this.nodeId,
-        });
-        return;
-      }
-      this.setLocalReplica(replicaId, {
-        replicaId,
-        partitionId: replicaInfo.partitionId || null,
-        tableName: replicaInfo.tableName || null,
-        // The one caller (bootstrap-service-replica-registration-methods.js)
-        // passes SERVICE_STATUS.ACTIVE.
-        status: replicaInfo.status,
-        service: service || null,
-      });
-      // Store service reference when provided
-      if (service) {
-        this.localServices.set(replicaId, service);
-      }
+      const {replicaId} = replicaInfo;
+      const published = publishReplicaRuntime(this, replicaInfo);
       this.logger.info(REPLICA_HANDLER_LOG_MSG.REGISTERED_REPLICA, {
         replicaId,
         partitionId: replicaInfo.partitionId,
@@ -418,6 +370,7 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
         .catch((error) => this.logger.warn(
           REPLICA_HANDLER_LOG_MSG.OPENED_INTO_RETIRED_GROUP,
           {replicaId, error: error?.message || String(error)})));
+      return published;
     }
     /**
      * Swap a tracked replica's LIVE service instance (snapshot-install
@@ -430,28 +383,24 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
      * @param {Object} service - Replacement partition service instance.
      * @return {Object} Updated local replica metadata.
      */
-    replaceLocalReplicaService(replicaId, service) {
-      this.localServices.set(replicaId, service);
-      const merged = this.setLocalReplica(replicaId, {
-        replicaId,
-        partitionId:
-          service?.partitionId ||
-          this.localReplicas.get(replicaId)?.partitionId ||
-          null,
-        tableName:
-          service?.tableName ||
-          this.localReplicas.get(replicaId)?.tableName ||
-          null,
-        service,
-      });
-      this.logger.info(REPLICA_HANDLER_LOG_MSG.REGISTERED_REPLICA, {
-        replicaId,
-        partitionId: merged.partitionId,
-        tableName: merged.tableName,
-        nodeId: this.nodeId,
-      });
-      return merged;
+    replaceLocalReplicaService(replicaId, service, expected, hostServices) {
+      if (expected && this.getTrackedService(replicaId) === service &&
+          this.localReplicas.get(replicaId)?.runtimeBinding === service.runtimeBinding &&
+          service.runtimeBinding?.owner === expected.owner) {
+        service.runtimePublication.assertCurrent(service);
+        return this.localReplicas.get(replicaId);
+      }
+      if (!expected || this.getTrackedService(replicaId) !== expected.service ||
+          this.localReplicas.get(replicaId)?.runtimeBinding !== expected.binding ||
+          this.replicaStateMachine !== expected.owner) {
+        throw runtimePublicationRefused(replicaId);
+      }
+      return publishReplicaRuntime(this, {replicaId, service, hostServices,
+        tableName: expected.local.tableName,
+        sourceEvidence: expected.sourceEvidence, lifecycleOwner: expected.owner},
+      expected.service);
     }
+
     /**
      * Aggregate pending-request tracker telemetry from local replica services.
      * @return {Object}
@@ -630,27 +579,7 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
      * @private
      */
     getTrackedService(replicaId) {
-      const service = this.localServices.get(replicaId);
-      if (service) {
-        return service;
-      }
-      const trackedReplica = this.localReplicas.get(replicaId);
-      if (
-        !trackedReplica ||
-        typeof trackedReplica !== REPLICA_HANDLER_TYPEOF.OBJECT
-      ) {
-        return null;
-      }
-      if (trackedReplica.service) {
-        return trackedReplica.service;
-      }
-      if (
-        typeof trackedReplica.shutdown === REPLICA_HANDLER_TYPEOF.FUNCTION ||
-        typeof trackedReplica.syncFromLeader === REPLICA_HANDLER_TYPEOF.FUNCTION
-      ) {
-        return trackedReplica;
-      }
-      return null;
+      return this.localServices.get(replicaId) || null;
     }
     /**
      * Determine whether CREATE_REPLICA idempotency is already satisfied.
@@ -707,11 +636,16 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
      */
     setLocalReplica(replicaId, updates) {
       const existing = this.localReplicas.get(replicaId) || {};
+      if (updates.service && updates.service !== existing.service &&
+          (!updates.runtimeBinding || updates.runtimeBinding !== updates.service.runtimeBinding)) {
+        throw runtimePublicationRefused(replicaId);
+      }
       const merged = {
         ...existing,
         ...updates,
         replicaId: updates.replicaId || existing.replicaId || replicaId,
       };
+      if (updates.service === null) delete merged.runtimeBinding;
       this.localReplicas.set(replicaId, merged);
       return merged;
     }

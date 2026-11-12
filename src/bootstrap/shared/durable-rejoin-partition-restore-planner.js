@@ -32,9 +32,6 @@ const RESTORABLE_DURABLE_REJOIN_PARTITION_STATUSES = new Set([
   ReplicaStatus.ACTIVE,
   SERVICE_STATUS.ACTIVE,
 ]);
-const DURABLE_VERSION_COLUMN = Object.freeze({
-  STATE_ENTERED_AT: 'state_entered_at',
-});
 const DURABLE_REJOIN_RESTORE_ERROR_CODE = Object.freeze({
   LIFECYCLE_GENERATION_UNAVAILABLE:
     'DURABLE_REJOIN_LIFECYCLE_GENERATION_UNAVAILABLE',
@@ -284,15 +281,7 @@ function buildDurableRejoinPartitionRestoreOptions({
     deferElection: true,
     suppressLifecycleLogs: true,
     restoringExistingReplica: true,
-    lifecycleAuthority: {
-      nodeId: serviceRow.node_id,
-      partitionId: serviceRow.partition_id,
-      replicaId: serviceRow.service_id,
-      serviceType: serviceRow.service_type,
-      status: serviceRow.status,
-      durableVersionColumn: DURABLE_VERSION_COLUMN.STATE_ENTERED_AT,
-      durableVersion: serviceRow.state_entered_at,
-    },
+    lifecycleAuthority: Object.freeze({...serviceRow}),
   };
 }
 

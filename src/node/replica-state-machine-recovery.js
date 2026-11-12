@@ -570,6 +570,7 @@ function replaceExistingRecoverySnapshot(stateMachine, replicaId,
     existingState.replicaIdentity === context.replicaIdentity &&
     existingState.groupId === (context.groupId ?? null) &&
     existingState.cleanupToken === (context.cleanupToken ?? null) &&
+    existingState.createAttemptToken === (context.createAttemptToken ?? null) &&
     existingState.createdAt === context.createdAt;
   if (sameGeneration &&
       (context.authoritativeSnapshot !== true || sameAuthoritativeIdentity)) {
@@ -618,6 +619,7 @@ function installAuthoritativeReplicaLifecycleInLane(
   stateMachine,
   replicaId,
   row,
+  admission,
 ) {
   const version = durableRowVersion(row);
   if (!version || row?.service_id !== replicaId ||
@@ -650,7 +652,7 @@ function installAuthoritativeReplicaLifecycleInLane(
       reason: REPLICA_STATE_MACHINE_REASON.RECOVERY_REGISTRATION,
     },
     row.status,
-    captureReplicaAdmission(stateMachine, replicaId),
+    admission,
   );
 }
 

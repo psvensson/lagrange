@@ -9,7 +9,8 @@ import {
 } from './replica-state-machine-lifecycle-observation.js';
 import {installAuthoritativeReplicaLifecycleInLane} from
   './replica-state-machine-recovery.js';
-import {runSerializedReplicaMutation} from
+import {captureReplicaAdmission, isReplicaAdmissionCurrent,
+  runSerializedReplicaMutation} from
   './replica-state-machine-serialization.js';
 import {pendingTurn, turnChainValue} from '../raft/raft-rs-turn-answer.js';
 import {
@@ -32,11 +33,12 @@ function rowHoldsFailedCreateClaim(row, evidence, cleanupToken) {
     );
 }
 
-async function installClaimedRow(stateMachine, row) {
+async function installClaimedRow(stateMachine, row, admission) {
   const installed = installAuthoritativeReplicaLifecycleInLane(
     stateMachine,
     row.service_id,
     row,
+    admission,
   );
   return installed !== false;
 }
@@ -52,15 +54,18 @@ async function claimFailedCreateCleanup(
       typeof cleanupToken !== 'string' || cleanupToken.length === 0) {
     return false;
   }
+  const admission = captureReplicaAdmission(stateMachine, replicaId);
   const claim = async () => {
+    if (!isReplicaAdmissionCurrent(stateMachine, replicaId, admission)) return false;
     const observation = await observeAuthoritativeReplicaLifecycle(
       stateMachine,
       replicaId,
     );
-    if (observation.available !== true || !observation.row) return false;
+    if (!isReplicaAdmissionCurrent(stateMachine, replicaId, admission) ||
+        observation.available !== true || !observation.row) return false;
     const row = observation.row;
     if (rowHoldsFailedCreateClaim(row, evidence, cleanupToken)) {
-      return installClaimedRow(stateMachine, row);
+      return installClaimedRow(stateMachine, row, admission);
     }
     if (row.cleanup_token !== null && row.cleanup_token !== undefined) {
       return false;
@@ -114,7 +119,7 @@ async function claimFailedCreateCleanup(
         )) {
       return false;
     }
-    return installClaimedRow(stateMachine, claimed.row);
+    return installClaimedRow(stateMachine, claimed.row, admission);
   };
   return Promise.resolve(turnChainValue(runSerializedReplicaMutation(
     stateMachine,

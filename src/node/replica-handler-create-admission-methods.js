@@ -1,3 +1,5 @@
+import {captureReplicaAdmission, isReplicaAdmissionCurrent} from
+  './replica-state-machine-serialization.js';
 import {WORKFLOW_STEP} from '../constants/index.js';
 import {
   SERVICE_TYPE,
@@ -30,7 +32,8 @@ import {isReplicaCreateAdmissionEvidence} from
   './replica-create-admission-evidence.js';
 import {REPLICA_CLEANUP_ERROR_CODE} from
   './replica-cleanup-tombstone-owner.js';
-import {observeAuthoritativeReplicaLifecycle} from
+import {buildReplicaLifecycleMutationPredicateFromRow, rowMatchesReplicaLifecyclePredicate,
+  observeAuthoritativeReplicaLifecycle} from
   './replica-state-machine-lifecycle-observation.js';
 import {durableRowVersion} from './replica-state-machine-recovery.js';
 import {
@@ -306,18 +309,12 @@ async function reconcileCreateAdmissionLifecycle(handler, evidence) {
 }
 
 function rowMatchesActiveStorageAdmission(row, handler, replicaId,
-  partitionId, version) {
-  if (!version) return false;
-  const expected = {
-    service_id: replicaId,
-    service_type: SERVICE_TYPE.PARTITION,
-    partition_id: partitionId,
-    node_id: handler.nodeId,
-    status: ReplicaStatus.ACTIVE,
-    [version.column]: version.value,
-  };
-  return Object.entries(expected).every(([field, value]) =>
-    row?.[field] === value);
+  partitionId, source) {
+  return row?.service_id === replicaId && row.service_type === SERVICE_TYPE.PARTITION &&
+    row.partition_id === partitionId && row.node_id === handler.nodeId &&
+    row.status === ReplicaStatus.ACTIVE && rowMatchesReplicaLifecyclePredicate(
+      row, buildReplicaLifecycleMutationPredicateFromRow(source),
+    );
 }
 
 async function requireActiveReplicaStorageAdmission(
@@ -329,7 +326,8 @@ async function requireActiveReplicaStorageAdmission(
     SYSTEM_TABLE_NAME.SERVICES,
     replicaId,
   );
-  const version = durableRowVersion(cached);
+  const owner = handler.replicaStateMachine;
+  const admission = captureReplicaAdmission(owner, replicaId);
   const observation = await observeAuthoritativeReplicaLifecycle(
     handler.replicaStateMachine,
     replicaId,
@@ -337,7 +335,9 @@ async function requireActiveReplicaStorageAdmission(
   const row = observation.row;
   if (observation.available !== true ||
       !rowMatchesActiveStorageAdmission(
-        row, handler, replicaId, partitionId, version)) {
+        row, handler, replicaId, partitionId, cached) ||
+      handler.replicaStateMachine !== owner ||
+      !isReplicaAdmissionCurrent(owner, replicaId, admission)) {
     const error = new Error(
       `Replica storage admission deferred for ${replicaId}`,
     );
@@ -347,7 +347,7 @@ async function requireActiveReplicaStorageAdmission(
     error.deferRetry = true;
     throw error;
   }
-  return row;
+  return Object.freeze({row: Object.freeze({...row}), owner, admission});
 }
 
 function explicitCreateOperationType(request) {
@@ -625,7 +625,7 @@ async function existingCreateResponse(handler, existingReplica, createRequest,
 async function persistCreateLifecycle(handler, createRequest,
   needsReplicaRuntimeRepair, needsFailedCreateReplay) {
   if (needsReplicaRuntimeRepair) {
-    await handler.requireActiveReplicaStorageAdmission(
+    createRequest.runtimeStorageAdmission = await handler.requireActiveReplicaStorageAdmission(
       createRequest.replicaId,
       createRequest.partitionId,
     );

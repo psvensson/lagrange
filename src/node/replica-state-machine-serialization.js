@@ -20,7 +20,8 @@ function captureReplicaAdmission(stateMachine, replicaId) {
 }
 
 function isReplicaAdmissionCurrent(stateMachine, replicaId, admission) {
-  return getReplicaRevision(stateMachine, replicaId) === admission.revision &&
+  return Boolean(admission) &&
+    getReplicaRevision(stateMachine, replicaId) === admission.revision &&
     (stateMachine.replicas.get(replicaId)?.state || null) ===
       admission.sourceState;
 }
@@ -70,6 +71,7 @@ function observeReplicaMutationTail(stateMachine, replicaId, tail) {
 
 // A mutation refused because the lane no longer admits mutations.
 const MUTATION_ADMISSION_CLOSED = settledTurn(false);
+const REPLICA_RUNTIME_OBSERVATION_CHANGED = 'REPLICA_RUNTIME_OBSERVATION_CHANGED';
 
 function invokeReplicaMutation(stateMachine, action) {
   if (stateMachine.replicaMutationAdmissionClosed === true) {
@@ -222,11 +224,18 @@ function runPersistedTransitionEffect(
   context,
   persist,
 ) {
-  if (newState !== REPLICA_STATE_MACHINE_STATE.ACTIVE) return persist();
+  const runtimeBound = context.runtimeObservation !== undefined;
+  if (newState !== REPLICA_STATE_MACHINE_STATE.ACTIVE && !runtimeBound) return persist();
   return runActivationEffectSection(stateMachine, replicaId, () => {
     if (typeof context.isEffectHandlerCurrent !== 'function' ||
         context.isEffectHandlerCurrent() !== true) {
-      throw activationHandlerNotRegisteredError(replicaId);
+      if (!runtimeBound) throw activationHandlerNotRegisteredError(replicaId);
+      throw Object.assign(new Error(
+        `Replica runtime observation changed for ${replicaId}`), {
+        code: REPLICA_RUNTIME_OBSERVATION_CHANGED,
+        errorCode: REPLICA_RUNTIME_OBSERVATION_CHANGED,
+        deferRetry: false,
+      });
     }
   }, persist);
 }
@@ -271,6 +280,7 @@ async function runReplicaHandlerRetirement(stateMachine, replicaId, retire) {
 }
 
 export {
+  REPLICA_RUNTIME_OBSERVATION_CHANGED,
   advanceReplicaRevision,
   captureReplicaAdmission,
   getReplicaRevision,

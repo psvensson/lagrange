@@ -388,7 +388,7 @@ async function orchestrateSnapshotCatchupInstall(options) {
     });
   }
   try {
-    options.registerReplacementService(replacement);
+    await options.registerReplacementService(replacement);
   } catch (error) {
     return orchestrationResult(INSTALL_ORCHESTRATION.REGISTER_FAILED, {
       transfer,

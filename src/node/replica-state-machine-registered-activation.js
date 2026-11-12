@@ -22,6 +22,8 @@ import {
 } from
   './replica-state-machine-lifecycle-observation.js';
 import {
+  captureReplicaAdmission,
+  isReplicaAdmissionCurrent,
   runActivationEffectSection,
   runSerializedReplicaMutation,
 } from
@@ -35,8 +37,6 @@ import {REPLICA_ACTIVATION_HANDLER_NOT_REGISTERED} from
 const REGISTERED_REPLICA_POINT_READ_SQL =
   'SELECT * FROM services WHERE service_id = ?';
 const REGISTERED_REPLICA_ACTIVATION_REASON = 'registered_runtime_ready';
-const REGISTERED_REPLICA_ACTIVATION_EVIDENCE_OPTION =
-  'registrationEvidence';
 const REPLICA_REGISTERED_ACTIVATION_ERROR_CODE = Object.freeze({
   AUTHORITY_UNAVAILABLE: 'REPLICA_ACTIVATION_AUTHORITY_UNAVAILABLE',
   DURABILITY_DEFERRED: 'REPLICA_ACTIVATION_DURABILITY_DEFERRED',
@@ -68,12 +68,6 @@ function durableReplicaIncarnation(row) {
     null;
 }
 
-function matchesRegisteredReplicaIncarnation(row, sourceRow, options) {
-  const sourceIncarnation = durableReplicaIncarnation(sourceRow);
-  return sourceIncarnation !== null &&
-    matchesRegisteredReplicaIdentity(row, options) &&
-    durableReplicaIncarnation(row) === sourceIncarnation;
-}
 
 async function observeRegisteredReplica(writer, replicaId) {
   try {
@@ -186,13 +180,8 @@ async function persistRegisteredReplicaActivation(
   if (matchesActivatedGeneration(observation.row, activatedRow)) {
     return activatedRow;
   }
-  if (matchesRegisteredReplicaIncarnation(
-    observation.row,
-    sourceRow,
-    options,
-  ) &&
-      observation.row.status === SERVICE_STATUS.STOPPED &&
-      observation.row[sourceVersion.column] === sourceVersion.value) {
+  if (rowMatchesReplicaLifecyclePredicate(observation.row,
+    buildReplicaLifecycleMutationPredicateFromRow(sourceRow))) {
     throw activationError(
       REPLICA_REGISTERED_ACTIVATION_ERROR_CODE.DURABILITY_DEFERRED,
       options.replicaId,
@@ -206,19 +195,10 @@ async function persistRegisteredReplicaActivation(
   );
 }
 
-function hasRegistrationEvidence(options) {
-  return (
-    Object.prototype.hasOwnProperty.call(
-      options,
-      REGISTERED_REPLICA_ACTIVATION_EVIDENCE_OPTION,
-    ) &&
-    options.registrationEvidence !== undefined
-  );
-}
 
-function resolveRegistrationEvidence(options) {
+function resolveRegistrationEvidence(stateMachine, options) {
   const evidence = options.registrationEvidence;
-  if (!isPartitionRegistrationEvidence(evidence) ||
+  if (!isPartitionRegistrationEvidence(evidence, options.service, stateMachine) ||
       !matchesRegisteredReplicaIdentity(evidence, options) ||
       evidence.status !== SERVICE_STATUS.STOPPED ||
       durableReplicaIncarnation(evidence) === null ||
@@ -231,38 +211,6 @@ function resolveRegistrationEvidence(options) {
   return evidence;
 }
 
-function resolveObservedSourceRow(observation, options) {
-  if (!observation.available) {
-    throw activationError(
-      REPLICA_REGISTERED_ACTIVATION_ERROR_CODE.AUTHORITY_UNAVAILABLE,
-      options.replicaId,
-    );
-  }
-  const sourceRow = observation.row;
-  const validStatus = sourceRow?.status === SERVICE_STATUS.ACTIVE ||
-    (sourceRow?.status === SERVICE_STATUS.STOPPED &&
-      durableRowVersion(sourceRow));
-  if (!matchesRegisteredReplicaIdentity(sourceRow, options) ||
-      durableReplicaIncarnation(sourceRow) === null ||
-      !validStatus) {
-    throw activationError(
-      REPLICA_REGISTERED_ACTIVATION_ERROR_CODE.SOURCE_CHANGED,
-      options.replicaId,
-    );
-  }
-  return sourceRow;
-}
-
-async function resolveRegisteredReplicaSourceRow(options) {
-  if (hasRegistrationEvidence(options)) {
-    return resolveRegistrationEvidence(options);
-  }
-  const observation = await observeRegisteredReplica(
-    options.systemTableWriter,
-    options.replicaId,
-  );
-  return resolveObservedSourceRow(observation, options);
-}
 
 // The activation effect boundary (owner decision N2): the exact handler of
 // this replica generation must be registered at the moment the ACTIVE CAS is
@@ -279,40 +227,47 @@ function requireEffectHandler(options) {
   }
 }
 
-async function activateRegisteredReplicaInLane(stateMachine, options) {
-  const sourceRow = await resolveRegisteredReplicaSourceRow(options);
+async function activateRegisteredReplicaInLane(stateMachine, options, admission) {
+  if (!isReplicaAdmissionCurrent(stateMachine, options.replicaId, admission)) {
+    throw activationError(REPLICA_REGISTERED_ACTIVATION_ERROR_CODE.SOURCE_CHANGED, options.replicaId);
+  }
+  const sourceRow = resolveRegistrationEvidence(stateMachine, options);
   // The check and the section opening are one synchronous step: retirement
   // cannot interleave before the ACTIVE CAS settles.
-  const activatedRow = await runActivationEffectSection(
+  return runActivationEffectSection(
     stateMachine,
     options.replicaId,
     () => requireEffectHandler(options),
-    () => sourceRow.status === SERVICE_STATUS.ACTIVE ? sourceRow :
-      persistRegisteredReplicaActivation(
+    async () => {
+      const activatedRow = await persistRegisteredReplicaActivation(
         stateMachine,
         options,
         sourceRow,
         durableRowVersion(sourceRow),
-      ),
+      );
+      requireEffectHandler(options);
+      if (!installAuthoritativeReplicaLifecycleInLane(
+        stateMachine,
+        options.replicaId,
+        activatedRow,
+        admission,
+      )) {
+        throw activationError(
+          REPLICA_REGISTERED_ACTIVATION_ERROR_CODE.SOURCE_CHANGED,
+          options.replicaId,
+        );
+      }
+      return activatedRow;
+    },
   );
-  if (!installAuthoritativeReplicaLifecycleInLane(
-    stateMachine,
-    options.replicaId,
-    activatedRow,
-  )) {
-    throw activationError(
-      REPLICA_REGISTERED_ACTIVATION_ERROR_CODE.SOURCE_CHANGED,
-      options.replicaId,
-    );
-  }
-  return activatedRow;
 }
 
 function activateRegisteredReplica(stateMachine, options = {}) {
+  const admission = captureReplicaAdmission(stateMachine, options.replicaId);
   return turnChainValue(runSerializedReplicaMutation(
     stateMachine,
     options.replicaId,
-    () => pendingTurn(activateRegisteredReplicaInLane(stateMachine, options)),
+    () => pendingTurn(activateRegisteredReplicaInLane(stateMachine, options, admission)),
   ));
 }
 

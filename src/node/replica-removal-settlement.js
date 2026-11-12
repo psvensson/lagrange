@@ -53,6 +53,10 @@ import {
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {REPLICA_HANDLER_LOG_MSG} from './replica-handler-constants.js';
 import {REPLICA_STATE_MACHINE_EVENT} from './replica-state-machine-constants.js';
+import {captureReplicaRuntimeObservation, isReplicaRuntimeObservationCurrent} from
+  './replica-runtime-observation.js';
+import {REPLICA_RUNTIME_OBSERVATION_CHANGED} from
+  './replica-state-machine-serialization.js';
 
 const REPLICA_REMOVAL_SETTLEMENT_CAUSE = Object.freeze({
   REMOVING_REDRIVE: 'removing_redrive',
@@ -64,6 +68,7 @@ const REPLICA_REMOVAL_SETTLEMENT_OUTCOME = Object.freeze({
   UNREADABLE: 'own_configuration_unreadable',
   STATUS_WRITE_DEFERRED: 'failed_status_write_deferred',
   SETTLED: 'settled_failed',
+  OBSOLETE: 'observed_generation_changed',
 });
 // The outcomes that conclude nothing: read again on the next observation.
 const PENDING_SETTLEMENT_OUTCOMES = Object.freeze(new Set([
@@ -125,18 +130,26 @@ function ownConfigurationOutcomeOf(observation) {
  * @param {string} replicaId
  * @return {Promise<string>} A REPLICA_REMOVAL_SETTLEMENT_OUTCOME.
  */
-async function settleRemovedOutsideRemoval(handler, replicaId) {
-  const local = handler.getLocalReplica(replicaId);
-  const service = handler.getTrackedService(replicaId);
+async function settleRemovedOutsideRemoval(handler, replicaId, observation) {
+  const local = observation?.local;
+  const service = observation?.service;
   if (!service?.raft || local?.status !== ReplicaStatus.ACTIVE ||
       removalRunning(handler, replicaId)) {
     return REPLICA_REMOVAL_SETTLEMENT_OUTCOME.NOT_OUTSIDE_REMOVAL;
   }
+  if (!observation.sourceEvidence) return REPLICA_REMOVAL_SETTLEMENT_OUTCOME.UNREADABLE;
+  if (!isReplicaRuntimeObservationCurrent(observation)) {
+    return REPLICA_REMOVAL_SETTLEMENT_OUTCOME.OBSOLETE;
+  }
+  if (observation.sourceEvidence.status !== ReplicaStatus.ACTIVE) {
+    return REPLICA_REMOVAL_SETTLEMENT_OUTCOME.NOT_OUTSIDE_REMOVAL;
+  }
   const own = ownConfigurationOutcomeOf(
     await readPartitionReplicaMembership(service, replicaId));
-  if (own !== null) {
-    return own;
+  if (!isReplicaRuntimeObservationCurrent(observation)) {
+    return REPLICA_REMOVAL_SETTLEMENT_OUTCOME.OBSOLETE;
   }
+  if (own !== null) return own;
   if (removalRunning(handler, replicaId)) {
     return REPLICA_REMOVAL_SETTLEMENT_OUTCOME.NOT_OUTSIDE_REMOVAL;
   }
@@ -145,10 +158,15 @@ async function settleRemovedOutsideRemoval(handler, replicaId) {
     replicaId, partitionId: service.partitionId, nodeId: handler.nodeId,
     cause: REPLICA_REMOVAL_SETTLEMENT_CAUSE.REMOVED_OUTSIDE_REMOVAL});
   try {
-    await handler.persistReplicaStatusWithRetry(replicaId,
+    const settled = await handler.persistReplicaStatusWithRetry(replicaId,
       ReplicaStatus.FAILED, {partitionId: service.partitionId,
+        runtimeObservation: observation,
         errorMessage: REPLICA_REMOVAL_SETTLEMENT_CAUSE.REMOVED_OUTSIDE_REMOVAL});
+    if (settled !== true) return REPLICA_REMOVAL_SETTLEMENT_OUTCOME.OBSOLETE;
   } catch (error) {
+    if (error.code === REPLICA_RUNTIME_OBSERVATION_CHANGED) {
+      return REPLICA_REMOVAL_SETTLEMENT_OUTCOME.OBSOLETE;
+    }
     if (!isRetryableControlPlaneError(error)) {
       throw error;
     }
@@ -161,21 +179,41 @@ async function settleRemovedOutsideRemoval(handler, replicaId) {
 // task: its outcome and its failure each have one sink). An outcome that
 // concludes nothing is re-asked on the next observation; a failure is
 // reported at ERROR, never read as settled or as nothing to settle.
-function runRemovalSettlement(handler, replicaId) {
-  handler.removalSettlementRereads.delete(replicaId);
-  return settleRemovedOutsideRemoval(handler, replicaId).then(
-    (outcome) => recordSettlementOutcome(handler, replicaId, outcome),
-    (error) => handler.logger.error(
-      REPLICA_HANDLER_LOG_MSG.REMOVAL_SETTLEMENT_FAILED, {replicaId,
-        nodeId: handler.nodeId, error: error.message, stack: error.stack}));
+function runRemovalSettlement(handler, replicaId, debt) {
+  if (handler.removalSettlementRereads.get(replicaId) !== debt) return;
+  return settleRemovedOutsideRemoval(handler, replicaId, debt.observation).then(
+    (outcome) => recordSettlementOutcome(handler, replicaId, debt, outcome),
+    (error) => {
+      if (handler.removalSettlementRereads.get(replicaId) === debt) debt.running = false;
+      handler.logger.error(REPLICA_HANDLER_LOG_MSG.REMOVAL_SETTLEMENT_FAILED, {
+        replicaId, nodeId: handler.nodeId, error: error.message, stack: error.stack});
+    });
 }
 
-function recordSettlementOutcome(handler, replicaId, outcome) {
+function recordSettlementOutcome(handler, replicaId, debt, outcome) {
+  if (handler.removalSettlementRereads.get(replicaId) !== debt) return;
   if (PENDING_SETTLEMENT_OUTCOMES.has(outcome)) {
-    handler.removalSettlementRereads.add(replicaId);
+    debt.running = false;
     handler.logger.info(REPLICA_HANDLER_LOG_MSG.REMOVAL_SETTLEMENT_PENDING, {
       replicaId, nodeId: handler.nodeId, outcome});
+  } else {
+    handler.removalSettlementRereads.delete(replicaId);
   }
+}
+
+function queueRemovalSettlement(handler, replicaId) {
+  if (handler.shuttingDown) return;
+  const previous = handler.removalSettlementRereads.get(replicaId);
+  const current = previous && isReplicaRuntimeObservationCurrent(previous.observation);
+  if (current && previous.running) return;
+  // An unavailable source has not supplied membership proof. Its wake may
+  // admit a new read, while a retry of existing proof retains the exact value.
+  const observation = current && previous.observation.sourceEvidence ?
+    previous.observation : captureReplicaRuntimeObservation(handler, replicaId);
+  if (!observation) return;
+  const debt = {observation, running: true};
+  handler.removalSettlementRereads.set(replicaId, debt);
+  queueMicrotask(() => runRemovalSettlement(handler, replicaId, debt));
 }
 
 /**
@@ -192,7 +230,7 @@ function subscribeRemovalSettlement(handler) {
     if (event.confState ||
         handler.removalSettlementRereads.has(event.replicaId)) {
       // Never re-entered from inside the port event that woke it.
-      queueMicrotask(() => runRemovalSettlement(handler, event.replicaId));
+      queueRemovalSettlement(handler, event.replicaId);
     }
   });
 }

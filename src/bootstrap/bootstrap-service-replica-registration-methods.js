@@ -1,3 +1,5 @@
+import {buildReplicaLifecycleMutationPredicateFromState} from
+  '../node/replica-state-machine-lifecycle-observation.js';
 import {PartitionService} from '../partition/partition-service.js';
 import {ReplicaState} from '../node/replica-state-machine.js';
 import {
@@ -163,58 +165,66 @@ function createBootstrapServiceReplicaHandlerRuntimeMethods() {
           bootstrapReadinessState: this.bootstrapReadinessState,
         });
 
-        await partition.initialize();
+        options.onRuntimeCreated?.(partition);
+        try {
+          await partition.initialize();
 
-        this.partitionServices.set(options.replicaId, partition);
-        this.servicesCreated++;
-
-        const tableName = options.tableName;
-        if (tableName &&
-            shouldAttachPartitionCdcPropagation(tableName)) {
-          await attachPartitionCdcPropagation(partition, {
-            tableName,
-            preferredService: messageGroupService,
-            defer: options.deferCdcPropagationHandshake === true,
-            messageGroupServices: this.messageGroupServices,
-            logger: this.logger,
-            logContext: {tableName, partitionId: options.partitionId,
-              replicaId: options.replicaId},
-            notReadyMessage: OPERATIONAL_CDC_SUBSCRIPTION_NOT_READY_PREFIX +
-              `${tableName}${OPERATIONAL_CDC_SUBSCRIPTION_NOT_READY_SUFFIX}`,
-            resolveOperationalMessageGroupSelectionAsync: (selectionOptions = {}) =>
-              this.resolveOperationalMessageGroupSelectionAsync(selectionOptions),
-            buildMessageGroupOwnerNotReadyError: (selection, errorOptions) =>
-              this.buildMessageGroupOwnerNotReadyError(selection, errorOptions),
-            registration: {
-              role: BOOTSTRAP_CDC_SUBSCRIBER_PART_PREFIX,
-              nodeId: this.nodeId,
-              partitionId: options.partitionId,
-              replicaId: options.replicaId,
+          const tableName = options.tableName;
+          if (tableName &&
+              shouldAttachPartitionCdcPropagation(tableName)) {
+            await attachPartitionCdcPropagation(partition, {
+              tableName,
+              preferredService: messageGroupService,
+              defer: options.deferCdcPropagationHandshake === true,
+              messageGroupServices: this.messageGroupServices,
               logger: this.logger,
-              eventLogMessage: BootstrapLog.CDC_DYNAMIC_PARTITION_EVENT,
-              resolveOperationalMessageGroupSelection: (selectionOptions = {}) =>
-                this.resolveOperationalMessageGroupSelection(selectionOptions),
+              logContext: {tableName, partitionId: options.partitionId,
+                replicaId: options.replicaId},
+              notReadyMessage: OPERATIONAL_CDC_SUBSCRIPTION_NOT_READY_PREFIX +
+                `${tableName}${OPERATIONAL_CDC_SUBSCRIPTION_NOT_READY_SUFFIX}`,
               resolveOperationalMessageGroupSelectionAsync: (selectionOptions = {}) =>
                 this.resolveOperationalMessageGroupSelectionAsync(selectionOptions),
               buildMessageGroupOwnerNotReadyError: (selection, errorOptions) =>
                 this.buildMessageGroupOwnerNotReadyError(selection, errorOptions),
-              propagatePartitionCDCEvent: (messageGroupService, events, deliveryContext) =>
-                propagatePartitionCdcVector(this.latencyTopology,
-                  BOOTSTRAP_ERROR.LATENCY_TOPOLOGY_MISSING, messageGroupService, events,
-                  deliveryContext),
-              afterPropagation: async () => {
-                if (tableName === TABLES.CONFIG) {
-                  this.seedRuntimeBridgeOwner.applyCurrentEpochFromCache();
-                }
+              registration: {
+                role: BOOTSTRAP_CDC_SUBSCRIBER_PART_PREFIX,
+                nodeId: this.nodeId,
+                partitionId: options.partitionId,
+                replicaId: options.replicaId,
+                logger: this.logger,
+                eventLogMessage: BootstrapLog.CDC_DYNAMIC_PARTITION_EVENT,
+                resolveOperationalMessageGroupSelection: (selectionOptions = {}) =>
+                  this.resolveOperationalMessageGroupSelection(selectionOptions),
+                resolveOperationalMessageGroupSelectionAsync: (selectionOptions = {}) =>
+                  this.resolveOperationalMessageGroupSelectionAsync(selectionOptions),
+                buildMessageGroupOwnerNotReadyError: (selection, errorOptions) =>
+                  this.buildMessageGroupOwnerNotReadyError(selection, errorOptions),
+                propagatePartitionCDCEvent: (messageGroupService, events, deliveryContext) =>
+                  propagatePartitionCdcVector(this.latencyTopology,
+                    BOOTSTRAP_ERROR.LATENCY_TOPOLOGY_MISSING, messageGroupService, events,
+                    deliveryContext),
+                afterPropagation: async () => {
+                  if (tableName === TABLES.CONFIG) {
+                    this.seedRuntimeBridgeOwner.applyCurrentEpochFromCache();
+                  }
+                },
               },
-            },
-            onRegistered: (handshake) => this.logger.debug(BootstrapLog.CDC_DYNAMIC_SUBSCRIPTION, {
-              tableName, partitionId: options.partitionId, replicaId: options.replicaId,
-              subscriberId: handshake.subscriberId,
-              subscriptionEpoch: handshake.subscriptionEpoch}),
-          });
-        }
+              onRegistered: (handshake) => this.logger.debug(BootstrapLog.CDC_DYNAMIC_SUBSCRIPTION, {
+                tableName, partitionId: options.partitionId, replicaId: options.replicaId,
+                subscriberId: handshake.subscriberId,
+                subscriptionEpoch: handshake.subscriptionEpoch}),
+            });
+          }
 
+          partition.runtimePublication.assertCurrent(partition);
+          options.publishRuntime(partition, this.partitionServices);
+          this.servicesCreated++;
+        } catch (error) {
+          await this.replicaHandler.fenceFailedReplicaCreateRuntime(
+            options.replicaId, options.partitionId, partition, error,
+          );
+          throw error;
+        }
         return partition;
       };
 
@@ -416,11 +426,16 @@ function createBootstrapServiceReplicaHandlerRuntimeMethods() {
               partitionId: partition.partitionId || null,
             },
           );
+          const lifecycleOwner = partition.runtimeBinding?.owner;
+          const sourceState = assertBootstrapReplicaActiveState(
+            lifecycleOwner, replicaId, partition, this.nodeId,
+          );
           replicaHandler.registerExistingReplica({
             replicaId: replicaId,
             partitionId: partition.partitionId,
             tableName: partition.tableName,
-            status: SERVICE_STATUS.ACTIVE,
+            sourceEvidence: buildReplicaLifecycleMutationPredicateFromState(sourceState),
+            lifecycleOwner,
             service: partition,
           });
           registeredCount++;

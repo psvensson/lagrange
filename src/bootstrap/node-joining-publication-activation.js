@@ -1,3 +1,5 @@
+import {createReplicaRuntimePublication, publishReplicaRuntime} from
+  '../node/replica-runtime-publication.js';
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
 import {replicaConsensusEventsOf} from '../node/replica-handler-membership-relay.js';
 import {NodeJoiningCdcSubscriptionAndBackfill} from './node-joining-cdc-subscription-and-backfill.js';
@@ -235,9 +237,12 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
    * @private
    */
   async createJoinLocalPartitionService(options) {
-    await assertDurableRejoinStorageAdmission(
+    const restoreAdmission = await assertDurableRejoinStorageAdmission(
       this.replicaStateMachine, options,
     );
+    const runtimePublication = restoreAdmission ? createReplicaRuntimePublication(
+      this.replicaHandler, restoreAdmission.row, restoreAdmission.admission,
+    ) : options.runtimePublication;
     const cdcIntegrationService = this.createCdcIntegrationService();
     const systemTableCache = NodeService.getInstance().getSystemTableCache();
     if (!this.tablePolicyService) {
@@ -254,6 +259,7 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
       options.messageGroupService || this.getLeaderMessageGroupService();
     const partition = new PartitionService({
       ...options,
+      runtimePublication,
       transport: this.transport,
       messageGroupService,
       messageRouter: this.messageRouter,
@@ -265,55 +271,64 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
       tablePolicyService: this.tablePolicyService,
       bootstrapReadinessState: this.bootstrapReadinessState,
     });
-    await partition.initialize();
-    // S6: durable-rejoin restores bypass the ReplicaHandler factory wrapper,
-    // so the dispatcher seam attaches here for every join-built service.
-    attachSnapshotCatchupDispatcher({service: partition,
-      systemTableCache, messageRouter: this.messageRouter});
-    this.partitionServices.set(options.replicaId, partition);
-    this.trackJoinPartitionReplica(
-      options.replicaId,
-      options.partitionId,
-      partition,
-    );
-    const tableName = options.tableName;
-    if (tableName && shouldAttachPartitionCdcPropagation(tableName)) {
-      await attachPartitionCdcPropagation(partition, {
-        tableName,
-        preferredService: messageGroupService,
-        defer: options.deferCdcPropagationHandshake === true,
-        messageGroupServices: this.messageGroupServices,
-        logger: this.logger,
-        logContext: {tableName, partitionId: options.partitionId, replicaId: options.replicaId},
-        notReadyMessage: NODE_JOINING_SERVICE_LITERAL.OPERATIONAL_MESSAGE_GROUP_CDC_INGRESS_NOT_READY +
-          `for ${tableName} CDC subscription`,
-        resolveOperationalMessageGroupSelectionAsync: (selectionOptions = {}) =>
-          this.resolveOperationalMessageGroupSelectionAsync(selectionOptions),
-        buildMessageGroupOwnerNotReadyError: (selection, errorOptions) =>
-          this.buildMessageGroupOwnerNotReadyError(selection, errorOptions),
-        registration: {
-          role: JOINING_CDC_SUBSCRIBER_ROLE,
-          nodeId: this.nodeId,
-          partitionId: options.partitionId,
-          replicaId: options.replicaId,
+    options.onRuntimeCreated?.(partition);
+    try {
+      await partition.initialize();
+      // S6: durable-rejoin restores bypass the ReplicaHandler factory wrapper,
+      // so the dispatcher seam attaches here for every join-built service.
+      attachSnapshotCatchupDispatcher({service: partition,
+        systemTableCache, messageRouter: this.messageRouter});
+      const tableName = options.tableName;
+      if (tableName && shouldAttachPartitionCdcPropagation(tableName)) {
+        await attachPartitionCdcPropagation(partition, {
+          tableName,
+          preferredService: messageGroupService,
+          defer: options.deferCdcPropagationHandshake === true,
+          messageGroupServices: this.messageGroupServices,
           logger: this.logger,
-          eventLogMessage: JOINING_LOG_MSG.CDC_EVENT_RECEIVED,
-          resolveOperationalMessageGroupSelection: (selectionOptions = {}) =>
-            this.resolveOperationalMessageGroupSelection(selectionOptions),
+          logContext: {tableName, partitionId: options.partitionId, replicaId: options.replicaId},
+          notReadyMessage: NODE_JOINING_SERVICE_LITERAL.OPERATIONAL_MESSAGE_GROUP_CDC_INGRESS_NOT_READY +
+            `for ${tableName} CDC subscription`,
           resolveOperationalMessageGroupSelectionAsync: (selectionOptions = {}) =>
             this.resolveOperationalMessageGroupSelectionAsync(selectionOptions),
           buildMessageGroupOwnerNotReadyError: (selection, errorOptions) =>
             this.buildMessageGroupOwnerNotReadyError(selection, errorOptions),
-          propagatePartitionCDCEvent: (messageGroupService, events, deliveryContext) =>
-            propagatePartitionCdcVector(this.latencyTopology,
-              JOINING_ERROR_MSG.LATENCY_TOPOLOGY_MISSING, messageGroupService, events,
-              deliveryContext),
-        },
-        onRegistered: (handshake) => this.logger.debug(
-          JOINING_LOG_MSG.CDC_SUBSCRIPTION_REGISTERED, {
-            tableName, partitionId: options.partitionId, replicaId: options.replicaId,
-            subscriberId: handshake.subscriberId, subscriptionEpoch: handshake.subscriptionEpoch}),
-      });
+          registration: {
+            role: JOINING_CDC_SUBSCRIBER_ROLE,
+            nodeId: this.nodeId,
+            partitionId: options.partitionId,
+            replicaId: options.replicaId,
+            logger: this.logger,
+            eventLogMessage: JOINING_LOG_MSG.CDC_EVENT_RECEIVED,
+            resolveOperationalMessageGroupSelection: (selectionOptions = {}) =>
+              this.resolveOperationalMessageGroupSelection(selectionOptions),
+            resolveOperationalMessageGroupSelectionAsync: (selectionOptions = {}) =>
+              this.resolveOperationalMessageGroupSelectionAsync(selectionOptions),
+            buildMessageGroupOwnerNotReadyError: (selection, errorOptions) =>
+              this.buildMessageGroupOwnerNotReadyError(selection, errorOptions),
+            propagatePartitionCDCEvent: (messageGroupService, events, deliveryContext) =>
+              propagatePartitionCdcVector(this.latencyTopology,
+                JOINING_ERROR_MSG.LATENCY_TOPOLOGY_MISSING, messageGroupService, events,
+                deliveryContext),
+          },
+          onRegistered: (handshake) => this.logger.debug(
+            JOINING_LOG_MSG.CDC_SUBSCRIPTION_REGISTERED, {
+              tableName, partitionId: options.partitionId, replicaId: options.replicaId,
+              subscriberId: handshake.subscriberId, subscriptionEpoch: handshake.subscriptionEpoch}),
+        });
+      }
+      partition.runtimePublication.assertCurrent(partition);
+      if (restoreAdmission) {
+        this.trackJoinPartitionReplica(options.replicaId, options.partitionId,
+          partition, restoreAdmission);
+      } else {
+        options.publishRuntime(partition, this.partitionServices);
+      }
+    } catch (error) {
+      await this.replicaHandler.fenceFailedReplicaCreateRuntime(
+        options.replicaId, options.partitionId, partition, error,
+      );
+      throw error;
     }
     return partition;
   }
@@ -325,17 +340,13 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
    * @return {void}
    * @private
    */
-  trackJoinPartitionReplica(replicaId, partitionId, partition) {
-    if (!this.replicaHandler) {
-      return;
-    }
-    this.replicaHandler.localServices?.set?.(replicaId, partition);
-    this.replicaHandler.setLocalReplica?.(replicaId, {
-      replicaId,
-      partitionId,
-      service: partition,
-    });
+  trackJoinPartitionReplica(replicaId, partitionId, partition, admission) {
+    return publishReplicaRuntime(this.replicaHandler, {replicaId,
+      tableName: partition.tableName, service: partition,
+      hostServices: this.partitionServices,
+      sourceEvidence: admission.row, lifecycleOwner: admission.owner});
   }
+
   /**
    * Initialize the control plane service for ordered registration and dispatch.
    * @private

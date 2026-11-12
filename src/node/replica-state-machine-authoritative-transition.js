@@ -10,19 +10,24 @@ import {
   rowMatchesReplicaLifecyclePredicate,
 } from './replica-state-machine-lifecycle-observation.js';
 import {
-  REPLICA_STATE_MACHINE_REASON,
   REPLICA_STATE_MACHINE_STATE,
 } from './replica-state-machine-constants.js';
+
+import {installAuthoritativeReplicaLifecycleInLane} from
+  './replica-state-machine-recovery.js';
+import {runTransitionAttempt} from './replica-state-machine-transition.js';
+import {settleCanonicalLeaderClearDebtInLane} from
+  './replica-state-machine-leader-clear.js';
+import {captureReplicaAdmission, isReplicaAdmissionCurrent,
+  runPersistedTransitionEffect, runSerializedReplicaMutation} from
+  './replica-state-machine-serialization.js';
+import {pendingTurn, turnChainValue} from '../raft/raft-rs-turn-answer.js';
 
 const ReplicaState = REPLICA_STATE_MACHINE_STATE;
 const AUTHORITATIVE_LIFECYCLE_TRANSITION_ERROR_CODE = Object.freeze({
   AUTHORITY_UNAVAILABLE:
     'REPLICA_LIFECYCLE_TRANSITION_AUTHORITY_UNAVAILABLE',
   SOURCE_CHANGED: 'REPLICA_LIFECYCLE_TRANSITION_SOURCE_CHANGED',
-});
-const AUTHORITATIVE_LIFECYCLE_ADMISSION_STATE = Object.freeze({
-  ACCEPTED: 'accepted',
-  REFUSED: 'refused',
 });
 
 function authoritativeLifecycleTransitionError(code, replicaId, cause = null) {
@@ -78,31 +83,12 @@ function rowMatchesLifecycleDestination(row, expected) {
     row?.[field] === value);
 }
 
-async function installObservedLifecycle(stateMachine, observation) {
+function installObservedLifecycle(stateMachine, observation, admission) {
   const row = observation?.row;
-  const version = durableRowVersion(row);
-  if (observation?.available !== true || !version ||
-      row.service_id === undefined) return false;
-  return Promise.resolve(stateMachine.registerReplicaSnapshot(
-    row.service_id,
-    {
-      partitionId: row.partition_id,
-      nodeId: row.node_id,
-      state: row.status,
-      serviceId: row.service_id,
-      serviceType: row.service_type,
-      serviceAddress: row.address,
-      replicaIdentity: row.replica_id,
-      groupId: row.group_id,
-      cleanupToken: row.cleanup_token,
-      createAttemptToken: row.create_attempt_token,
-      createdAt: row.created_at,
-      durableVersionColumn: version.column,
-      durableVersion: version.value,
-      authoritativeSnapshot: true,
-      reason: REPLICA_STATE_MACHINE_REASON.RECOVERY_REGISTRATION,
-    },
-  ));
+  return observation?.available === true && row &&
+    installAuthoritativeReplicaLifecycleInLane(
+      stateMachine, row.service_id, row, admission,
+    );
 }
 
 function isAuthoritativeLifecycleTransitionRequest(evidence, newState) {
@@ -114,100 +100,99 @@ function isAuthoritativeLifecycleTransitionRequest(evidence, newState) {
     Object.values(ReplicaState).includes(newState);
 }
 
-async function readAuthoritativeLifecycleAdmission(stateMachine, evidence) {
+async function readAuthoritativeLifecycleAdmission(stateMachine, evidence, admission,
+  expected, context) {
   const replicaId = evidence.service_id;
-  const observation = await observeAuthoritativeReplicaLifecycle(
-    stateMachine,
-    replicaId,
-  );
+  if (!isReplicaAdmissionCurrent(stateMachine, replicaId, admission)) return null;
+  if (context.runtimeObservation && context.isEffectHandlerCurrent() !== true) return null;
+  const observation = await observeAuthoritativeReplicaLifecycle(stateMachine, replicaId);
+  if (!isReplicaAdmissionCurrent(stateMachine, replicaId, admission)) return null;
+  if (context.runtimeObservation && context.isEffectHandlerCurrent() !== true) return null;
   if (observation.available !== true) {
     throw authoritativeLifecycleTransitionError(
       AUTHORITATIVE_LIFECYCLE_TRANSITION_ERROR_CODE.AUTHORITY_UNAVAILABLE,
       replicaId,
     );
   }
-  if (!rowMatchesLifecycleEvidence(observation.row, evidence) ||
-      !await installObservedLifecycle(stateMachine, observation)) {
-    return Object.freeze({
-      state: AUTHORITATIVE_LIFECYCLE_ADMISSION_STATE.REFUSED,
-      observation,
-    });
-  }
-  return Object.freeze({
-    state: AUTHORITATIVE_LIFECYCLE_ADMISSION_STATE.ACCEPTED,
-    observation,
-  });
-}
-
-async function attemptAuthoritativeLifecycleTransition(
-  stateMachine,
-  admissionRow,
-  newState,
-  context,
-  timestamp,
-) {
-  try {
-    const applied = await Promise.resolve(stateMachine._applyTransition(
-      admissionRow.service_id,
-      newState,
-      {
-        ...context,
-        partitionId: admissionRow.partition_id,
-        nodeId: admissionRow.node_id,
-        serviceId: admissionRow.service_id,
-        serviceType: admissionRow.service_type,
-        serviceAddress: admissionRow.address,
-        timestamp,
-      },
-      {
-        persist: true,
-        validate: true,
-        expectedSourceEvidence: admissionRow,
-      },
-    ));
-    return Object.freeze({applied: applied === true, error: null});
-  } catch (error) {
-    return Object.freeze({applied: false, error});
-  }
+  const completed = Boolean(context.runtimeObservation) &&
+    rowMatchesLifecycleDestination(observation.row, expected);
+  if (!completed && !rowMatchesLifecycleEvidence(observation.row, evidence) ||
+      !installObservedLifecycle(stateMachine, observation, admission)) return null;
+  // This capture immediately follows our own synchronous accepted install.
+  // It never borrows an unrelated revision after an asynchronous boundary.
+  return Object.freeze({row: observation.row, completed,
+    admission: captureReplicaAdmission(stateMachine, replicaId)});
 }
 
 async function resolveAuthoritativeLifecycleOutcome(
-  stateMachine,
-  evidence,
-  newState,
-  expected,
-  transitionError,
+  stateMachine, evidence, newState, expected, transitionError, admission,
 ) {
   const replicaId = evidence.service_id;
-  const observation = await observeAuthoritativeReplicaLifecycle(
-    stateMachine,
-    replicaId,
-  );
+  if (!isReplicaAdmissionCurrent(stateMachine, replicaId, admission)) return false;
+  const observation = await observeAuthoritativeReplicaLifecycle(stateMachine, replicaId);
+  if (!isReplicaAdmissionCurrent(stateMachine, replicaId, admission)) return false;
   if (observation.available !== true) {
     throw authoritativeLifecycleTransitionError(
       AUTHORITATIVE_LIFECYCLE_TRANSITION_ERROR_CODE.AUTHORITY_UNAVAILABLE,
-      replicaId,
-      transitionError,
+      replicaId, transitionError,
     );
   }
   if (rowMatchesLifecycleDestination(observation.row, expected)) {
-    if (!await installObservedLifecycle(stateMachine, observation)) {
-      return false;
+    if (!installObservedLifecycle(stateMachine, observation, admission)) return false;
+    const installedAdmission = captureReplicaAdmission(stateMachine, replicaId);
+    if (newState === ReplicaState.FAILED || newState === ReplicaState.REMOVING) {
+      await settleCanonicalLeaderClearDebtInLane(
+        stateMachine, replicaId, installedAdmission,
+      );
     }
-    if (newState === ReplicaState.FAILED) {
-      await stateMachine.settleCanonicalLeaderClearDebt(replicaId);
-    }
-    return true;
+    return isReplicaAdmissionCurrent(stateMachine, replicaId, installedAdmission);
   }
   if (rowMatchesLifecycleEvidence(observation.row, evidence)) {
     throw transitionError || durableTransitionNotAppliedError(
-      replicaId,
-      newState,
-      {success: true, deferRetry: true},
+      replicaId, newState, {success: true, deferRetry: true},
     );
   }
-  await installObservedLifecycle(stateMachine, observation);
+  // A foreign observation belongs to its own recovery intent. This old
+  // operation must not install it or clear that successor's debt.
   return false;
+}
+
+async function applyAuthoritativeLifecycleInLane(
+  stateMachine, evidence, newState, context, originalAdmission,
+) {
+  const timestamp = Number.isFinite(context.timestamp) ? context.timestamp : stateMachine.now();
+  const expected = expectedLifecycleDestination(evidence, newState, timestamp, context);
+  const accepted = await readAuthoritativeLifecycleAdmission(
+    stateMachine, evidence, originalAdmission, expected, context,
+  );
+  if (!accepted) return false;
+  const replicaId = evidence.service_id;
+  const transitionContext = {...context,
+    partitionId: accepted.row.partition_id, nodeId: accepted.row.node_id,
+    serviceId: replicaId, serviceType: accepted.row.service_type,
+    serviceAddress: accepted.row.address, timestamp};
+  let effectAdmission = accepted.admission;
+  return runPersistedTransitionEffect(stateMachine, replicaId, newState, context, async () => {
+    if (accepted.completed) {
+      await settleCanonicalLeaderClearDebtInLane(stateMachine, replicaId, effectAdmission);
+      return isReplicaAdmissionCurrent(stateMachine, replicaId, effectAdmission);
+    }
+    let transitionError = null;
+    try {
+      const applied = await turnChainValue(runTransitionAttempt(
+        stateMachine, replicaId, newState, transitionContext,
+        {persist: true, validate: true, expectedSourceEvidence: accepted.row,
+          onAdmissionAdvanced: (admission) => { effectAdmission = admission; }},
+        accepted.admission,
+      ));
+      if (applied === true) return true;
+    } catch (error) {
+      transitionError = error;
+    }
+    return resolveAuthoritativeLifecycleOutcome(
+      stateMachine, evidence, newState, expected, transitionError, effectAdmission,
+    );
+  });
 }
 
 /**
@@ -230,37 +215,12 @@ async function transitionAuthoritativeReplicaGeneration(
   if (!isAuthoritativeLifecycleTransitionRequest(evidence, newState)) {
     return false;
   }
-  const admission = await readAuthoritativeLifecycleAdmission(
-    stateMachine,
-    evidence,
-  );
-  if (admission.state !== AUTHORITATIVE_LIFECYCLE_ADMISSION_STATE.ACCEPTED) {
-    return false;
-  }
-  const admissionObservation = admission.observation;
-  const timestamp = Number.isFinite(context.timestamp) ?
-    context.timestamp : stateMachine.now();
-  const expected = expectedLifecycleDestination(
-    admissionObservation.row,
-    newState,
-    timestamp,
-    context,
-  );
-  const attempt = await attemptAuthoritativeLifecycleTransition(
-    stateMachine,
-    admissionObservation.row,
-    newState,
-    context,
-    timestamp,
-  );
-  if (attempt.applied) return true;
-  return resolveAuthoritativeLifecycleOutcome(
-    stateMachine,
-    evidence,
-    newState,
-    expected,
-    attempt.error,
-  );
+  const admission = context.runtimeObservation ?
+    context.runtimeObservation.admission : captureReplicaAdmission(stateMachine, evidence.service_id);
+  return turnChainValue(runSerializedReplicaMutation(stateMachine, evidence.service_id,
+    () => pendingTurn(applyAuthoritativeLifecycleInLane(
+      stateMachine, evidence, newState, context, admission,
+    ))));
 }
 
 export {

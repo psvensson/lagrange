@@ -204,6 +204,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     // so bootstrap-batch stalls attribute in the watchdog's siteDeltas
     // instead of reporting as unexplained gaps (round-10).
     try {
+      this.runtimePublication.assertCurrent(this);
       trackSyncSection(PARTITION_REPLICA_INIT_SYNC_SECTION_SITE, () => {
         if (this.dbPath !== PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH) {
           const dbDir = path.dirname(this.dbPath);
@@ -264,6 +265,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     }
     if (this.transport) {
       // Kept as this replica's exact handler identity (owner decision N2).
+      this.runtimePublication.assertCurrent(this);
       this.transportHandler = this.handleTransportMessage.bind(this);
       this.transport.register(this.unifiedAddress, this.transportHandler);
     }

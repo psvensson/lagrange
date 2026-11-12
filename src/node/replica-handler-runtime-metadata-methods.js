@@ -426,6 +426,7 @@ function assignReplicaHandlerRuntimeMetadataMethods(
       }
       this.partitionServiceRowOwner = new PartitionServiceRowOwner({
         systemTableWriter: this.getControlPlaneSystemTableGateway(),
+        replicaStateMachine: this.replicaStateMachine,
       });
       return this.partitionServiceRowOwner;
     }

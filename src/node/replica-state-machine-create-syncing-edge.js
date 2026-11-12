@@ -33,6 +33,7 @@ import {clearLeaderOrRecordDebt} from
   './replica-state-machine-leader-clear.js';
 import {REPLICA_STATE_MACHINE_STATE as ReplicaState} from
   './replica-state-machine-constants.js';
+import {isReplicaAdmissionCurrent} from './replica-state-machine-serialization.js';
 
 /**
  * Whether this write is the idempotent CREATING -> SYNCING edge.
@@ -83,10 +84,11 @@ function isCreateSyncingDeferral(error) {
  * @throws {Error} A retryable deferral while the row is unreadable.
  */
 async function resolveCreateSyncingEdge(stateMachine, replicaState,
-  previousState, cause) {
+  previousState, cause, admission) {
   const serviceId = replicaState.serviceId || replicaState.replicaId;
   const observation = await observeAuthoritativeReplicaLifecycle(
     stateMachine, serviceId);
+  if (!isReplicaAdmissionCurrent(stateMachine, serviceId, admission)) return null;
   if (observation.available !== true) {
     throw deferredSyncingResolution(replicaState, cause);
   }
@@ -99,7 +101,7 @@ async function resolveCreateSyncingEdge(stateMachine, replicaState,
   replicaState.durableVersion = version.value;
   replicaState.stateEnteredAt = version.value;
   stateMachine.clearServiceRowLocalOnly?.(serviceId);
-  await clearLeaderOrRecordDebt(stateMachine, replicaState, previousState);
+  await clearLeaderOrRecordDebt(stateMachine, replicaState, previousState, admission);
   reportServiceRowPersisted(stateMachine, replicaState);
   return {
     success: true,
@@ -119,10 +121,10 @@ async function resolveCreateSyncingEdge(stateMachine, replicaState,
  *   the outcome as written.
  */
 async function settleUnappliedLifecycleWrite(stateMachine, replicaState,
-  previousState, result) {
+  previousState, result, admission) {
   const resolved = isCreateSyncingEdge(replicaState, previousState) ?
     await resolveCreateSyncingEdge(stateMachine, replicaState, previousState,
-      null) : null;
+      null, admission) : null;
   if (resolved !== null) {
     return resolved;
   }

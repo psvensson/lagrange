@@ -27,6 +27,8 @@ import {
   REPLICA_STATE_MACHINE_STATE,
 } from './replica-state-machine-constants.js';
 import {
+  captureReplicaAdmission,
+  isReplicaAdmissionCurrent,
   runPersistedTransitionEffect,
   runSerializedReplicaMutation,
 } from './replica-state-machine-serialization.js';
@@ -84,6 +86,7 @@ async function resolveInitialInsertOutcome(
 }
 
 async function createReplicaRowInCdc(stateMachine, replicaState) {
+  const admission = captureReplicaAdmission(stateMachine, replicaState.replicaId);
   try {
     const serviceId = replicaState.serviceId || replicaState.replicaId;
     const serviceType = replicaState.serviceType || SERVICE_TYPE.PARTITION;
@@ -127,7 +130,10 @@ async function createReplicaRowInCdc(stateMachine, replicaState) {
         replicaState,
       );
     }
-    await clearLeaderOrRecordDebt(stateMachine, replicaState, null);
+    if (!isReplicaAdmissionCurrent(stateMachine, replicaState.replicaId, admission)) {
+      return mutationResult;
+    }
+    await clearLeaderOrRecordDebt(stateMachine, replicaState, null, admission);
     reportServiceRowPersisted(stateMachine, replicaState);
     return mutationResult;
   } catch (error) {

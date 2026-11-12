@@ -5,6 +5,8 @@ import path from 'node:path';
 import {isDeepStrictEqual} from 'node:util';
 import {deepFreeze} from './raft-operation-port.js';
 import {SERVICE_TYPE} from '../constants/service.js';
+import {createPartitionRuntimePublication} from
+  '../partition/partition-runtime-publication.js';
 import {validateOriginalSeedDeclaration, validateOriginalSeedDraft,
   completeSeedOriginalAllocation, originalSeedPeerAddresses} from
   '../bootstrap/seed-original-allocation-declaration.js';
@@ -597,6 +599,20 @@ class RaftRsOriginalAllocationPreparation {
       throw originalAllocationError(REASON.CONTINUATION_UNAVAILABLE, member.replicaId);
     }
     const admitted = Object.freeze({...owned,
+      ...(member.serviceType === SERVICE_TYPE.PARTITION ? {
+        runtimePublication: createPartitionRuntimePublication({incarnation: {
+          service_id: member.replicaId, replica_id: member.replicaId,
+          partition_id: member.groupId, node_id: this.#declaration.nodeId,
+          group_id: null, created_at: member.createdAt,
+          create_attempt_token: member.createAttemptToken,
+        }, assertSourceCurrent: () => {
+          this.#assertCurrent();
+          if (this.#openings.get(member.replicaId) !== opening ||
+              originalOpenings.get(opening)?.admitted !== true) {
+            throw originalAllocationError(REASON.IDENTITY, member.replicaId);
+          }
+        }}),
+      } : {}),
       dbPath: member.dbPath,
       replicaIds: member.replicaIds,
       schema,

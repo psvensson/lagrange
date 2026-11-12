@@ -1,3 +1,8 @@
+import {createReplicaRuntimePublication, publishReplicaRuntime} from './replica-runtime-publication.js';
+import {captureReplicaAdmission, isReplicaAdmissionCurrent} from './replica-state-machine-serialization.js';
+import {buildReplicaLifecycleMutationPredicateFromState} from './replica-state-machine-lifecycle-observation.js';
+import {isReplicaCreateAdmissionEvidence} from './replica-create-admission-evidence.js';
+import {runtimePublicationRefused} from '../partition/partition-runtime-publication.js';
 import {WORKFLOW_STEP} from '../constants/index.js';
 import {REPLICA_CREATE_PHASE, failedReplicaCreateClaimsCleanup,
   replicaCreatePhaseAfterResume} from './replica-create-admission-input.js';
@@ -325,6 +330,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         peerTotal: 0,
       });
       let partitionService = null;
+      const lifecycleOwner = this.replicaStateMachine;
       // A restart of this identity's own admissible durable row (B1) already
       // carries published admission input before any step of this attempt.
       let createPhase = replicaCreatePhaseAfterResume(
@@ -367,6 +373,23 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             status: ReplicaStatus.CREATING,
           });
         }
+        if (this.replicaStateMachine !== lifecycleOwner) throw runtimePublicationRefused(replicaId);
+        const trackedSource = lifecycleOwner.getState(replicaId);
+        const runtimeSource = skipLifecycleStatusPersistence ? request.runtimeStorageAdmission?.row :
+          {...buildReplicaLifecycleMutationPredicateFromState(trackedSource),
+            address: trackedSource?.serviceAddress};
+        if (!skipLifecycleStatusPersistence &&
+            (!isReplicaCreateAdmissionEvidence(createAdmissionEvidence) ||
+              runtimeSource.created_at !== createAdmissionEvidence.replicaCreatedAt ||
+              runtimeSource.create_attempt_token !== createAdmissionEvidence.attemptToken) ||
+            skipLifecycleStatusPersistence && request.runtimeStorageAdmission?.owner !== lifecycleOwner) {
+          throw runtimePublicationRefused(replicaId);
+        }
+        const runtimeAdmission = skipLifecycleStatusPersistence ? request.runtimeStorageAdmission.admission :
+          captureReplicaAdmission(lifecycleOwner, replicaId);
+        const runtimePublication = createReplicaRuntimePublication(
+          this, runtimeSource, runtimeAdmission,
+        );
         this.applyBootstrapMetadataPayload({
           partitionId,
           bootstrapTableMetadata,
@@ -417,6 +440,19 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           partitionId, tableId, tableName, schema, keyRange,
           replicaId,
           replicaIds,
+          runtimePublication,
+          publishRuntime: (service, hostServices) => publishReplicaRuntime(this, {
+            replicaId, tableName, service, hostServices,
+            sourceEvidence: runtimeSource, lifecycleOwner,
+            createAdmissionOperationId: createAdmissionEvidence?.operationId || operationId,
+            createAdmissionToken: createAdmissionEvidence?.admissionToken,
+          }),
+          onRuntimeCreated: (service) => {
+            partitionService = service;
+            service.createAdmissionOperationId = createAdmissionEvidence?.operationId || operationId;
+            service.createAdmissionToken = createAdmissionEvidence?.admissionToken;
+            service.createAttemptToken = runtimeSource.create_attempt_token;
+          },
           nodeId: this.nodeId,
           dbPath,
           isJoiningExistingGroup,
@@ -428,7 +464,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           suppressLifecycleLogs: true,
           onInitializationStage: (stageEvent) =>
             this.updateReplicaCreationProgress(progress, stageEvent),
-          resolveHandlerRetirementLane: () => this.replicaStateMachine,
+          resolveHandlerRetirementLane: () => lifecycleOwner,
         });
         createPhase = REPLICA_CREATE_PHASE.RUNTIME_OPENED;
         if (
@@ -438,29 +474,14 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           await partitionService.shutdown();
         }
         this.throwIfShuttingDown();
-        // Store service reference in localServices
-        const admissionOperationId =
-          createAdmissionEvidence?.operationId || operationId || null;
-        const admissionToken =
-          createAdmissionEvidence?.admissionToken || null;
-        const admissionAttemptToken =
-          createAdmissionEvidence?.attemptToken ||
-          request.createAttemptToken ||
-          null;
-        if (partitionService && typeof partitionService === REPLICA_HANDLER_TYPEOF.OBJECT) {
-          partitionService.createAdmissionOperationId = admissionOperationId;
-          partitionService.createAdmissionToken = admissionToken;
-          partitionService.createAttemptToken = admissionAttemptToken;
+        if (!isReplicaAdmissionCurrent(lifecycleOwner, replicaId, runtimeAdmission)) {
+          throw runtimePublicationRefused(replicaId);
         }
-        this.localServices.set(replicaId, partitionService);
-        this.setLocalReplica(replicaId, {
-          replicaId,
-          partitionId,
-          tableName,
-          service: partitionService,
-          createAdmissionOperationId: admissionOperationId,
-          createAdmissionToken: admissionToken,
-          createAttemptToken: admissionAttemptToken,
+        publishReplicaRuntime(this, {
+          replicaId, tableName, service: partitionService,
+          sourceEvidence: runtimeSource, lifecycleOwner,
+          createAdmissionOperationId: createAdmissionEvidence?.operationId || operationId,
+          createAdmissionToken: createAdmissionEvidence?.admissionToken,
         });
         // Emit syncing outcome - coordinator will transition workflow.
         this.emitExecutorOutcome(

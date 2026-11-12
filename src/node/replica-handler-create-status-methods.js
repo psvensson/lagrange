@@ -722,36 +722,16 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
       const trackedState =
         this.replicaStateMachine?.getState?.(replicaId) || null;
       if (trackedState?.state !== ReplicaStatus.CREATING) {
-        if (
-          typeof this.replicaStateMachine?._applyTransition ===
-            REPLICA_HANDLER_TYPEOF.FUNCTION
-        ) {
-          const result = await Promise.resolve(
-            this.replicaStateMachine._applyTransition(
-              replicaId,
-              ReplicaStatus.CREATING,
-              transitionContext,
-              {
-                persist: false,
-                validate: trackedState !== null,
-              },
-            ),
+        const result = await Promise.resolve(
+          this.replicaStateMachine._applyTransition(
+            replicaId, ReplicaStatus.CREATING, transitionContext,
+            {persist: false, validate: trackedState !== null},
+          ),
+        );
+        if (result === false) {
+          throw new Error(
+            `Replica local state transition rejected for ${replicaId}: ` + ReplicaStatus.CREATING,
           );
-          if (result === false) {
-            throw new Error(
-              `Replica local state transition rejected for ${replicaId}: ` +
-                ReplicaStatus.CREATING,
-            );
-          }
-        } else if (
-          !trackedState &&
-          typeof this.replicaStateMachine?.registerReplicaSnapshot ===
-            REPLICA_HANDLER_TYPEOF.FUNCTION
-        ) {
-          this.replicaStateMachine.registerReplicaSnapshot(replicaId, {
-            ...transitionContext,
-            state: ReplicaStatus.CREATING,
-          });
         }
       }
       this.seedLocalPriorityServiceRow(

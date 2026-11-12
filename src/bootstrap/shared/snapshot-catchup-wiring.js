@@ -1,3 +1,6 @@
+import {captureReplicaRuntimeObservation, isReplicaRuntimeObservationCurrent,
+  runtimeObservationChangedError} from '../../node/replica-runtime-observation.js';
+import {createReplicaRuntimePublication} from '../../node/replica-runtime-publication.js';
 // Production wiring for the S1-S5 snapshot catch-up chain (quest
 // raft-snapshot-live-rebuild, spec solve/specs/raft-snapshot-transfer-
 // install/live-rebuild-design.md, S6 Phase A links 2/4/6). This module owns
@@ -195,8 +198,15 @@ function armSnapshotOfferRouting(context) {
       connection,
       resolveLocalReplica: (raftGroupId) =>
         resolveLocalReplicaService(replicaHandler, raftGroupId),
-      orchestrate: ({service, socket}) =>
-        orchestrateSnapshotCatchupInstall({
+      orchestrate: ({service, socket}) => {
+        const observed = captureReplicaRuntimeObservation(replicaHandler, service.replicaId);
+        if (observed?.service !== service || !observed.sourceEvidence ||
+            !isReplicaRuntimeObservationCurrent(observed)) {
+          throw runtimeObservationChangedError(service.replicaId);
+        }
+        const runtimePublication = createReplicaRuntimePublication(replicaHandler,
+          observed.sourceEvidence, observed.admission, service);
+        return orchestrateSnapshotCatchupInstall({
           service,
           receiveOptions: {
             socket,
@@ -209,16 +219,23 @@ function armSnapshotOfferRouting(context) {
               systemTableCache,
             }),
           },
-          createPartitionService: async (serviceOptions) => {
-            await replicaHandler.requireActiveReplicaStorageAdmission(
-              serviceOptions.replicaId,
-              serviceOptions.partitionId,
-            );
-            return replicaHandler.createPartitionService(serviceOptions);
+          createPartitionService: (serviceOptions) =>
+            replicaHandler.createPartitionService({...serviceOptions, runtimePublication,
+              publishRuntime: (replacement, hostServices) =>
+                replicaHandler.replaceLocalReplicaService(
+                  service.replicaId, replacement, observed, hostServices),
+              resolveHandlerRetirementLane: () => observed.owner}),
+          registerReplacementService: async (replacement) => {
+            try {
+              return replicaHandler.replaceLocalReplicaService(
+                service.replicaId, replacement, observed);
+            } catch (error) {
+              await replicaHandler.fenceFailedReplicaCreateRuntime(
+                service.replicaId, service.partitionId, replacement, error,
+              );
+              throw error;
+            }
           },
-          registerReplacementService: (replacement) =>
-            replicaHandler.replaceLocalReplicaService(
-              service.replicaId, replacement),
         }).catch((error) => {
           resolveWiringLogger().warn(
             SNAPSHOT_WIRING_LOG_MSG.OFFER_ORCHESTRATION_FAILED, {
@@ -226,7 +243,8 @@ function armSnapshotOfferRouting(context) {
               error: error?.message,
             });
           return null;
-        }),
+        });
+      },
       onOutcome: context.onRouteOutcome,
     });
   });

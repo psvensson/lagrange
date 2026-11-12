@@ -1,3 +1,4 @@
+import {bindPartitionRuntimeLifecycle} from './partition-runtime-publication.js';
 import {AddressManager} from '../address/address-manager.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
@@ -56,17 +57,18 @@ const CRITICAL_SERVICE_ROW_UPDATE_OPTION = Object.freeze({
   pressureRetryAfterMs: 250,
   workClass: 'critical',
 });
-const partitionRegistrationEvidence = new WeakSet();
+const partitionRegistrationEvidence = new WeakMap();
 
-function sealPartitionRegistrationEvidence(row) {
+function sealPartitionRegistrationEvidence(row, association) {
   const evidence = Object.freeze({...row});
-  partitionRegistrationEvidence.add(evidence);
+  partitionRegistrationEvidence.set(evidence, association);
   return evidence;
 }
 
-function isPartitionRegistrationEvidence(value) {
-  return value !== null && typeof value === 'object' &&
-    partitionRegistrationEvidence.has(value);
+function isPartitionRegistrationEvidence(value, service, lifecycleOwner) {
+  const association = value && partitionRegistrationEvidence.get(value);
+  return Boolean(association && service && lifecycleOwner) &&
+    association.service === service && association.lifecycleOwner === lifecycleOwner;
 }
 
 function assertRequiredString(value, errorMessage) {
@@ -137,7 +139,7 @@ function rowsMatchPartitionRegistration(observed, expected) {
 }
 
 async function resolvePartitionRegistration(systemTableWriter, row,
-  insertError) {
+  insertError, association) {
   const observed = await observePartitionRegistration(
     systemTableWriter,
     row.service_id,
@@ -150,7 +152,7 @@ async function resolvePartitionRegistration(systemTableWriter, row,
     );
   }
   if (rowsMatchPartitionRegistration(observed, row)) {
-    return sealPartitionRegistrationEvidence(observed);
+    return sealPartitionRegistrationEvidence(observed, association);
   }
   throw partitionCreateOwnershipError(
     observed ? PARTITION_SERVICE_ROW_OWNER_ERROR.IDENTITY_CONFLICT :
@@ -294,12 +296,15 @@ class PartitionServiceRowOwner {
       extraFields: {...options.extraFields, ...options.originalRegistration?.birth},
     }));
 
+    const association = Object.freeze({service: options.service,
+      lifecycleOwner: this.replicaStateMachine});
+    bindPartitionRuntimeLifecycle(association.service, association.lifecycleOwner, row);
     if (options.originalRegistration) {
       const registered = await options.originalRegistration.publish(row, (value) =>
         this.systemTableWriter.insertSystemTableRow(SYSTEM_TABLE_NAME.SERVICES, value,
           {...this.buildDeferredUpdateOptions(row.service_id, row.partition_id),
             allowCoalescing: false}));
-      return sealPartitionRegistrationEvidence(registered);
+      return sealPartitionRegistrationEvidence(registered, association);
     }
 
     let insertResult;
@@ -322,9 +327,10 @@ class PartitionServiceRowOwner {
         this.systemTableWriter,
         row,
         insertError,
+        association,
       );
     }
-    const registrationEvidence = sealPartitionRegistrationEvidence(row);
+    const registrationEvidence = sealPartitionRegistrationEvidence(row, association);
     await this.publishCanonicalLeaderNodeId(row, options.service);
 
     return registrationEvidence;
@@ -366,6 +372,7 @@ class PartitionServiceRowOwner {
       systemTableWriter: this.systemTableWriter,
       timestamp: options.timestamp ?? this.now(),
       registrationEvidence: options.registrationEvidence,
+      service: options.service,
       isEffectHandlerCurrent: options.isEffectHandlerCurrent,
       writeOptions: this.buildDeferredUpdateOptions(
         options.replicaId,

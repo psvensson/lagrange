@@ -32,7 +32,7 @@ import {
   runPersistedTransitionEffect,
   runSerializedReplicaMutation,
 } from './replica-state-machine-serialization.js';
-import {pendingTurn, settledTurn} from '../raft/raft-rs-turn-answer.js';
+import {pendingTurn, settledTurn, turnChainValue} from '../raft/raft-rs-turn-answer.js';
 import {clearLeaderOrRecordDebt} from
   './replica-state-machine-leader-clear.js';
 import {createReplicaRowInCdc} from
@@ -73,22 +73,23 @@ const RETAINS_CANONICAL_PARTITION_LEADER_SERVICE_STATES = new Set([
 ]);
 
 async function resolveUncertainLifecycleUpdate(stateMachine, replicaState,
-  previousState, cause) {
+  previousState, cause, admission) {
   if (isCreateSyncingEdge(replicaState, previousState)) {
     const resolved = await resolveCreateSyncingEdge(stateMachine,
-      replicaState, previousState, cause);
+      replicaState, previousState, cause, admission);
     if (resolved === null) throw cause;
     return resolved;
   }
   const serviceId = replicaState.serviceId || replicaState.replicaId;
   const observation = await observeAuthoritativeReplicaLifecycle(
     stateMachine, serviceId);
-  if (observation.available !== true ||
+  if (!isReplicaAdmissionCurrent(stateMachine, serviceId, admission) ||
+      observation.available !== true ||
       !rowMatchesReplicaLifecycle(observation.row, replicaState)) {
     throw cause;
   }
   stateMachine.clearServiceRowLocalOnly?.(serviceId);
-  await clearLeaderOrRecordDebt(stateMachine, replicaState, previousState);
+  await clearLeaderOrRecordDebt(stateMachine, replicaState, previousState, admission);
   reportServiceRowPersisted(stateMachine, replicaState);
   return {
     success: true,
@@ -219,6 +220,7 @@ function commitTransition(
   newState,
   context,
   transitionState,
+  onAdmissionAdvanced,
 ) {
   const {
     now,
@@ -257,7 +259,10 @@ function commitTransition(
 
   stateMachine._updatePeakConcurrentOperations();
   stateMachine.replicas.set(replicaId, replicaState);
-  advanceReplicaRevision(stateMachine, replicaId);
+  const revision = advanceReplicaRevision(stateMachine, replicaId);
+  if (onAdmissionAdvanced) {
+    onAdmissionAdvanced(Object.freeze({revision, sourceState: newState}));
+  }
 
   stateMachine.logger.info(REPLICA_STATE_MACHINE_LOG_MSG.STATE_TRANSITION, {
     replicaId,
@@ -323,6 +328,10 @@ function runTransitionAttempt(
   // transition commits (for example, a CREATING -> FAILED observation after
   // durable REMOVING has won). The monotonic revision also fences ABA changes.
   if (!isReplicaAdmissionCurrent(stateMachine, replicaId, admission) ||
+      !isCreateAdmissionTransitionAllowed(stateMachine, replicaId,
+        currentState, context, options.expectedSourceEvidence) ||
+      stateMachine.uncertainRemovingIntentByReplicaId.has(replicaId) &&
+        newState !== ReplicaState.REMOVING ||
       currentState === ReplicaState.REMOVING &&
         newState === ReplicaState.REMOVED &&
         !isCanonicalLeaderClearSettled(stateMachine, replicaId) ||
@@ -345,6 +354,7 @@ function runTransitionAttempt(
       newState,
       context,
       transitionState,
+      options.onAdmissionAdvanced,
     );
     stateMachine._armTimeoutClock(replicaId);
   };
@@ -363,6 +373,7 @@ function runTransitionAttempt(
       existingState,
       admission,
       uncertainty: uncertainRemoval,
+      onAdmissionAdvanced: options.onAdmissionAdvanced,
     }).then((resolved) => resolved === true ? true :
       resolved === false ? false : persistTransitionAttempt({
         stateMachine,
@@ -373,19 +384,20 @@ function runTransitionAttempt(
         transitionState,
         context,
         commit,
+        onAdmissionAdvanced: options.onAdmissionAdvanced,
       })));
   }
-  return pendingTurn(runPersistedTransitionEffect(stateMachine, replicaId,
-    newState, context, () => persistTransitionAttempt({
-      stateMachine,
-      replicaId,
-      newState,
-      existingState,
-      admission,
-      transitionState,
-      context,
-      commit,
-    })));
+  return pendingTurn(persistTransitionAttempt({
+    stateMachine,
+    replicaId,
+    newState,
+    existingState,
+    admission,
+    transitionState,
+    context,
+    commit,
+    onAdmissionAdvanced: options.onAdmissionAdvanced,
+  }));
 }
 
 async function resolveUncertainRemovingTransition({
@@ -394,8 +406,10 @@ async function resolveUncertainRemovingTransition({
   existingState,
   admission,
   uncertainty,
+  onAdmissionAdvanced,
 }) {
   const row = await readAuthoritativeReplicaLifecycle(stateMachine, replicaId);
+  if (!isReplicaAdmissionCurrent(stateMachine, replicaId, admission)) return false;
   if (rowMatchesReplicaLifecycle(row, uncertainty.transitionState.replicaState)) {
     if (!isReplicaAdmissionCurrent(stateMachine, replicaId, admission)) {
       return false;
@@ -404,6 +418,7 @@ async function resolveUncertainRemovingTransition({
       stateMachine,
       uncertainty.transitionState.replicaState,
       existingState,
+      admission,
     );
     if (!isReplicaAdmissionCurrent(stateMachine, replicaId, admission)) {
       return false;
@@ -415,6 +430,7 @@ async function resolveUncertainRemovingTransition({
       ReplicaState.REMOVING,
       uncertainty.context,
       uncertainty.transitionState,
+      onAdmissionAdvanced,
     );
     stateMachine._armTimeoutClock(replicaId);
     return true;
@@ -443,6 +459,7 @@ function persistTransitionAttempt({
   transitionState,
   context,
   commit,
+  onAdmissionAdvanced,
 }) {
   const persistenceResult = transitionState.previousState === null ?
     stateMachine._createReplicaRowInCdc(transitionState.replicaState) :
@@ -468,7 +485,8 @@ function persistTransitionAttempt({
     commit();
     return durableApplyConfirmed;
   }, (error) => {
-    if (newState === ReplicaState.REMOVING) {
+    if (newState === ReplicaState.REMOVING &&
+        isReplicaAdmissionCurrent(stateMachine, replicaId, admission)) {
       // A thrown persistence outcome can mean the durable REMOVING write
       // applied but its acknowledgement was lost. Fence the old source
       // revision so no failure or forward transition can reinterpret that
@@ -479,7 +497,11 @@ function persistTransitionAttempt({
         context: Object.freeze({reason: context.reason}),
         transitionState,
       });
-      advanceReplicaRevision(stateMachine, replicaId);
+      const revision = advanceReplicaRevision(stateMachine, replicaId);
+      if (onAdmissionAdvanced) {
+        onAdmissionAdvanced(Object.freeze({revision,
+          sourceState: admission.sourceState}));
+      }
     }
     throw error;
   });
@@ -529,7 +551,12 @@ function applyTransition(stateMachine, replicaId, newState, context = {}, option
     options,
     admission,
   );
-  return runSerializedReplicaMutation(stateMachine, replicaId, runAttempt);
+  const runEffect = options.persist === false ? runAttempt : () =>
+    pendingTurn(Promise.resolve(runPersistedTransitionEffect(
+      stateMachine, replicaId, newState, context,
+      () => turnChainValue(runAttempt()),
+    )));
+  return runSerializedReplicaMutation(stateMachine, replicaId, runEffect);
 }
 
 /**
@@ -544,8 +571,9 @@ async function updateReplicaStateInCdc(
   replicaState,
   previousState,
 ) {
+  const serviceId = replicaState.serviceId || replicaState.replicaId;
+  const admission = captureReplicaAdmission(stateMachine, serviceId);
   try {
-    const serviceId = replicaState.serviceId || replicaState.replicaId;
     const persistenceOptions = stateMachine._buildCdcPersistenceOptions(
       replicaState,
       serviceId,
@@ -577,10 +605,11 @@ async function updateReplicaStateInCdc(
       didDurableServiceRowWriteApply(mutationResult);
     if (!durableApplyConfirmed) {
       return await settleUnappliedLifecycleWrite(stateMachine, replicaState,
-        previousState, mutationResult);
+        previousState, mutationResult, admission);
     }
+    if (!isReplicaAdmissionCurrent(stateMachine, serviceId, admission)) return mutationResult;
     stateMachine.clearServiceRowLocalOnly?.(serviceId);
-    await clearLeaderOrRecordDebt(stateMachine, replicaState, previousState);
+    await clearLeaderOrRecordDebt(stateMachine, replicaState, previousState, admission);
     reportServiceRowPersisted(stateMachine, replicaState);
     return mutationResult;
   } catch (error) {
@@ -589,7 +618,7 @@ async function updateReplicaStateInCdc(
       throw error;
     }
     return resolveUncertainLifecycleUpdate(stateMachine, replicaState,
-      previousState, error);
+      previousState, error, admission);
   }
 }
 
@@ -770,5 +799,6 @@ export {
   createReplicaRowInCdc,
   getControlPlaneSystemTableGateway,
   hasOtherActivePartitionReplicaOnLeaderNode,
+  runTransitionAttempt,
   updateReplicaStateInCdc,
 };

@@ -49,6 +49,12 @@ import {
 } from '../raft/raft-rs-backend/committed-membership-oracles.js';
 import {createMockCache} from '../rebalancer/test-helpers.js';
 import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
+import {captureReplicaAdmission} from
+  '../../src/node/replica-state-machine-serialization.js';
+import {createReplicaRuntimePublication, publishReplicaRuntime} from
+  '../../src/node/replica-runtime-publication.js';
+import {attachPartitionRuntimePublication} from
+  '../../src/partition/partition-runtime-publication.js';
 import {REPLICA_HANDLER_LOG_MSG} from
   '../../src/node/replica-handler-constants.js';
 import {
@@ -202,6 +208,8 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
   Object.assign(service, {
     partitionId,
     replicaId,
+    nodeId,
+    isShutdown: false,
     raft: cluster.node(replicaId),
     admissionFenced: false,
     unifiedAddress: initialRow.address,
@@ -224,6 +232,7 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
       return {state: REMOVAL_SERVING_STATE.DRAINED};
     },
     async shutdown() {
+      service.isShutdown = true;
       portClosed = true;
       service.raft?.close();
     },
@@ -253,9 +262,11 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
       return logger.info(message, fields);
     },
   });
-  handler.localServices.set(replicaId, service);
-  handler.localReplicas.set(replicaId, {replicaId, partitionId,
-    status: ReplicaStatus.ACTIVE, service});
+  const publication = createReplicaRuntimePublication(handler, initialRow,
+    captureReplicaAdmission(replicaStateMachine, replicaId));
+  attachPartitionRuntimePublication(service, publication);
+  publishReplicaRuntime(handler, {replicaId, service, sourceEvidence: initialRow,
+    lifecycleOwner: replicaStateMachine});
   return {
     handler,
     service,

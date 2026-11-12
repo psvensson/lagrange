@@ -14,12 +14,13 @@ import {
   REPLICA_HANDLER_DEFAULT,
   REPLICA_HANDLER_LOG_MSG,
   REPLICA_HANDLER_SERVICE,
-  REPLICA_HANDLER_TYPEOF,
 } from './replica-handler-constants.js';
 import {settlePartitionServiceActiveAdmission} from
   '../bootstrap/shared/partition-service-activation.js';
 import {isReplicaServiceHandlerBound} from
   './replica-transport-handler-identity.js';
+import {isReplicaRuntimeObservationCurrent, runtimeObservationChangedError} from
+  './replica-runtime-observation.js';
 import {isCreateSyncingDeferral} from
   './replica-state-machine-create-syncing-edge.js';
 import {
@@ -119,27 +120,22 @@ function assignReplicaHandlerStatusMethods(ReplicaHandler) {
         newStatus,
         nodeId: this.nodeId,
       });
-      const previousLocalReplica = this.localReplicas.has(replicaId) ?
-        {...this.localReplicas.get(replicaId)} :
-        null;
+      const previousLocalReplica = this.localReplicas.get(replicaId) || null;
+      const lifecycleOwner = this.replicaStateMachine;
+      const runtimeObservation = additionalData.runtimeObservation;
+      const localService = this.getTrackedService(replicaId);
       try {
-        const existing = this.systemTableCache.get(
-          SYSTEM_TABLE_NAME.SERVICES,
-          replicaId,
-        );
+        if (runtimeObservation &&
+            !isReplicaRuntimeObservationCurrent(runtimeObservation)) {
+          throw runtimeObservationChangedError(replicaId);
+        }
+        const existing = runtimeObservation ? runtimeObservation.sourceEvidence :
+          this.systemTableCache.get(SYSTEM_TABLE_NAME.SERVICES, replicaId);
         const partitionId =
           additionalData.partitionId !== undefined ?
             additionalData.partitionId :
             existing?.partition_id || null;
-        const localService = this.getTrackedService(replicaId);
-        this.setLocalReplica(replicaId, {
-          replicaId,
-          partitionId,
-          status: newStatus,
-          service: localService,
-        });
-        const trackedState =
-          this.replicaStateMachine?.getState?.(replicaId) || null;
+        const trackedState = lifecycleOwner.getState(replicaId);
         const transitionContext = {
           partitionId,
           nodeId: existing?.node_id || this.nodeId,
@@ -160,22 +156,23 @@ function assignReplicaHandlerStatusMethods(ReplicaHandler) {
           // stays registered through the activation effect boundary, and the
           // runtime retires it through this lifecycle owner (the create path
           // passes resolveHandlerRetirementLane) (owner decision N2, S-F2).
-          isEffectHandlerCurrent: () => isReplicaServiceHandlerBound(
-            additionalData.activationService, this.replicaStateMachine),
+          ...(runtimeObservation ? {runtimeObservation,
+            timestamp: runtimeObservation.timestamp} : {}),
+          isEffectHandlerCurrent: () => runtimeObservation ?
+            isReplicaRuntimeObservationCurrent(runtimeObservation, false) :
+            this.replicaStateMachine === lifecycleOwner &&
+              isReplicaServiceHandlerBound(additionalData.activationService, lifecycleOwner),
         };
-        const requiresAuthoritativeAdmission = !trackedState &&
-          newStatus !== ReplicaStatus.PENDING && existing &&
-          typeof this.replicaStateMachine
-            ?.transitionAuthoritativeReplicaGeneration ===
-              REPLICA_HANDLER_TYPEOF.FUNCTION;
+        const requiresAuthoritativeAdmission = Boolean(runtimeObservation) ||
+          !trackedState && newStatus !== ReplicaStatus.PENDING && existing;
         let transitionResult = await Promise.resolve(
           requiresAuthoritativeAdmission ?
-            this.replicaStateMachine.transitionAuthoritativeReplicaGeneration(
+            lifecycleOwner.transitionAuthoritativeReplicaGeneration(
               existing,
               newStatus,
               transitionContext,
             ) :
-            this.replicaStateMachine.transition(
+            lifecycleOwner.transition(
               replicaId,
               newStatus,
               transitionContext,
@@ -188,14 +185,13 @@ function assignReplicaHandlerStatusMethods(ReplicaHandler) {
         // boundary instead of abandoning the durable removal protocol.
         if (transitionResult === false &&
             newStatus === ReplicaStatus.REMOVING) {
-          const latest = this.replicaStateMachine?.getState?.(replicaId);
-          const latestState = typeof latest === REPLICA_HANDLER_TYPEOF.STRING ?
-            latest : latest?.state;
+          if (this.replicaStateMachine !== lifecycleOwner) return false;
+          const latestState = lifecycleOwner.getState(replicaId)?.state;
           if (latestState === ReplicaStatus.REMOVING) {
             transitionResult = true;
           } else if (latestState === ReplicaStatus.FAILED) {
             transitionResult = await Promise.resolve(
-              this.replicaStateMachine.transition(replicaId, newStatus, {
+              lifecycleOwner.transition(replicaId, newStatus, {
                 partitionId,
                 nodeId: existing?.node_id || this.nodeId,
                 reason: additionalData.triggerReason,
@@ -215,10 +211,20 @@ function assignReplicaHandlerStatusMethods(ReplicaHandler) {
           }
         }
         if (transitionResult === false) {
+          if (runtimeObservation) throw runtimeObservationChangedError(replicaId);
           throw new Error(
             `Replica state transition rejected for ${replicaId}: ${newStatus}`,
           );
         }
+        if (this.shuttingDown || this.replicaStateMachine !== lifecycleOwner ||
+            (this.localReplicas.get(replicaId) || null) !== previousLocalReplica ||
+            this.getTrackedService(replicaId) !== localService ||
+            lifecycleOwner.getState(replicaId)?.state !== newStatus ||
+            runtimeObservation &&
+              !isReplicaRuntimeObservationCurrent(runtimeObservation, false)) return false;
+        this.setLocalReplica(replicaId, {
+          replicaId, partitionId, status: newStatus, service: localService,
+        });
         if (newStatus === ReplicaStatus.ACTIVE) {
           this.seedLocalPriorityServiceRow?.(
             replicaId,
@@ -232,12 +238,8 @@ function assignReplicaHandlerStatusMethods(ReplicaHandler) {
             service: localService,
           });
         }
+        return true;
       } catch (error) {
-        if (previousLocalReplica) {
-          this.localReplicas.set(replicaId, previousLocalReplica);
-        } else {
-          this.localReplicas.delete(replicaId);
-        }
         this.logger.error(REPLICA_HANDLER_LOG_MSG.UPDATE_STATUS_FAILED, {
           replicaId,
           newStatus,

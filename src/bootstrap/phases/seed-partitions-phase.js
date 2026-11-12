@@ -262,6 +262,7 @@ class SeedPartitionsPhase {
         bootstrapMembership: options.bootstrapMembership,
         identityExisted: options.identityExisted,
         originalAllocationOpening: options.originalAllocationOpening,
+        runtimePublication: options.runtimePublication,
         nodeId: d.getNodeId(),
         transport: d.getTransport(),
         dbPath: options.dbPath,
@@ -291,8 +292,10 @@ class SeedPartitionsPhase {
       });
 
       // Retain this exact resource before initialize can yield or fail.
+      partition.runtimePublication.assertCurrent(partition);
       partitionServices.set(options.replicaId, partition);
       await partition.initialize();
+      partition.runtimePublication.assertCurrent(partition);
       d.assertOriginalSeedAttempt();
       d.pushPartitionReplica(partition);
       d.incrementServicesCreated();

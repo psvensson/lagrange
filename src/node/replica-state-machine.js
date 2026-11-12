@@ -38,8 +38,7 @@ import {
 } from './replica-state-machine-create-persistence.js';
 import {
   clearCanonicalPartitionLeaderIfNeeded,
-  hasCanonicalLeaderClearIdentity,
-  settleCanonicalLeaderMutation,
+  settleCanonicalLeaderClearDebtInLane,
 } from
   './replica-state-machine-leader-clear.js';
 import {
@@ -64,7 +63,6 @@ import {
   bindAuthoritativeRemovalAuthority,
   completeDurableRemovalWithAuthority,
   handleNodeRecovery,
-  installAuthoritativeReplicaLifecycleInLane,
   registerReplicaSnapshot,
 } from './replica-state-machine-recovery.js';
 import {transitionAuthoritativeReplicaGeneration} from
@@ -73,7 +71,6 @@ import {claimFailedCreateCleanup} from
   './replica-state-machine-failed-create-claim.js';
 import {
   observeAuthoritativeReplicaLifecycle,
-  rowMatchesReplicaLifecycle,
 } from './replica-state-machine-lifecycle-observation.js';
 import {activateRegisteredReplica} from
   './replica-state-machine-registered-activation.js';
@@ -81,10 +78,8 @@ import {cancelDurableRemovalWithAuthority} from
   './replica-state-machine-removal-cancellation.js';
 import {
   captureReplicaAdmission,
-  getReplicaRevision,
   isCanonicalLeaderClearSettled,
   isReplicaAdmissionCurrent,
-  recordCanonicalLeaderClearSettlement,
   runHandlerBoundActivation,
   runReplicaHandlerRetirement,
   runSerializedReplicaMutation,
@@ -694,68 +689,11 @@ class ReplicaStateMachine extends EventEmitter {
    * @return {Promise<boolean>} True only when no leader-clear debt remains.
    */
   async settleCanonicalLeaderClearDebt(replicaId) {
-    let debt = this.canonicalLeaderClearDebtByReplicaId.get(replicaId);
-    if (!debt) {
-      const currentState = this.replicas.get(replicaId) || null;
-      if (!hasCanonicalLeaderClearIdentity(currentState)) {
-        return false;
-      }
-      if (isCanonicalLeaderClearSettled(this, replicaId)) {
-        return true;
-      }
-      // A restart legitimately loses the in-memory side-effect record while
-      // the durable REMOVING row remains its reconstructible authority.
-      debt = Object.freeze({
-        replicaState: currentState,
-        revision: getReplicaRevision(this, replicaId),
-      });
-      this.canonicalLeaderClearDebtByReplicaId.set(replicaId, debt);
-    }
+    const admission = captureReplicaAdmission(this, replicaId);
     return turnChainValue(runSerializedReplicaMutation(this, replicaId,
-      () => pendingTurn((async () => {
-        if (this.canonicalLeaderClearDebtByReplicaId.get(replicaId) !== debt) {
-          return false;
-        }
-        const currentState = this.replicas.get(replicaId) || null;
-        if (getReplicaRevision(this, replicaId) !== debt.revision ||
-            currentState !== debt.replicaState) {
-          return false;
-        }
-        const lifecycleObservation =
-          await observeAuthoritativeReplicaLifecycle(this, replicaId);
-        if (lifecycleObservation.available !== true) return false;
-        if (!rowMatchesReplicaLifecycle(
-          lifecycleObservation.row,
-          debt.replicaState,
-        )) {
-          if (lifecycleObservation.row) {
-            installAuthoritativeReplicaLifecycleInLane(
-              this,
-              replicaId,
-              lifecycleObservation.row,
-            );
-          }
-          return false;
-        }
-        try {
-          if (await settleCanonicalLeaderMutation(
-            this,
-            debt.replicaState,
-          ) !== true) return false;
-        } catch (_error) {
-          return false;
-        }
-        if (this.canonicalLeaderClearDebtByReplicaId.get(replicaId) === debt) {
-          this.canonicalLeaderClearDebtByReplicaId.delete(replicaId);
-        }
-        recordCanonicalLeaderClearSettlement(
-          this,
-          replicaId,
-          debt.replicaState,
-          debt.revision,
-        );
-        return true;
-      })())));
+      () => pendingTurn(settleCanonicalLeaderClearDebtInLane(
+        this, replicaId, admission,
+      ))));
   }
 
   async handleNodeRecovery(options = {}) {

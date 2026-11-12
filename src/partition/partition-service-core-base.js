@@ -1,3 +1,4 @@
+import {attachPartitionRuntimePublication} from './partition-runtime-publication.js';
 import {PARTITION_DRAIN_CAPACITIES} from './partition-cdc-owed-admission.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {createLearnerPromotionWakeState} from './partition-service-learner-promotion-wake-methods.js';
@@ -301,6 +302,7 @@ class PartitionServiceCoreBase extends EventEmitter {
     this.mergeReplicationRun = null;
     this.splitSnapshotBackfillYieldEveryRows =
       SPLIT_SNAPSHOT_BACKFILL_YIELD_EVERY_ROWS;
+    attachPartitionRuntimePublication(this, options.runtimePublication);
   }
   get systemTableCache() {
     return this._systemTableCache || null;
