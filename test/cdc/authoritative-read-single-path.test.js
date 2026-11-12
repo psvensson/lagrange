@@ -5,9 +5,12 @@ import {ControlPlaneSystemTableGateway} from
 import {buildControlPlaneReadAuthority} from
   '../../src/control-plane/control-plane-system-table-gateway-read-contracts.js';
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE as MODE,
+  CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE as SCOPE,
+  CONTROL_PLANE_READ_LEADER_MODE as LEADER,
   CONTROL_PLANE_READ_PROFILE as PROFILE} from
   '../../src/control-plane/control-plane-system-table-gateway-constants.js';
-import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {INITIAL_PARTITION_IDS, SYSTEM_TABLE_NAME} from
+  '../../src/bootstrap/system-table-schemas-constants.js';
 import {QUERY_ERROR_CODE} from '../../src/query/query-constants.js';
 import {createLocalSystemTablePartitionServices, setupCDCTestLifecycle} from
   './cdc-integration-service-test-support.js';
@@ -166,3 +169,67 @@ for (const mode of [...RETIRED_MODES, 'unknown-owner-mode']) {
       'an invalid explicit mode cannot normalize into a different read');
   });
 }
+
+const COMPLETE_AUTHORITY_CONTRADICTION =
+  'contradictory_control_plane_authoritative_read_authority';
+const CONTRADICTORY_COMPLETE_INTENTS = Object.freeze([
+  {authoritativeReadMode: MODE.OWNER_LOCAL_ONLY},
+  {leaderMode: LEADER.ANY},
+  {leaderMode: LEADER.PREFERRED},
+  {preferLeader: false},
+]);
+
+for (const intent of CONTRADICTORY_COMPLETE_INTENTS) {
+  test(`complete-table authority refuses explicit ${JSON.stringify(intent)} before admission`,
+    async (t) => {
+      const options = {...intent, authoritativeObservationScope: SCOPE.COMPLETE_TABLE};
+      t.throws(() => buildControlPlaneReadAuthority(options),
+        {code: COMPLETE_AUTHORITY_CONTRADICTION},
+        'the canonical constructor refuses contradictory caller intent');
+      const f = fixture({local: true});
+      let coalescingKeys = 0;
+      const buildKey = f.gateway.buildReadRequestKey;
+      f.gateway.buildReadRequestKey = function(...args) {
+        coalescingKeys += 1;
+        return Reflect.apply(buildKey, this, args);
+      };
+      await t.rejects(f.gateway.readRows(TABLE, SQL, [], options),
+        {code: COMPLETE_AUTHORITY_CONTRADICTION},
+        'the gateway must not overwrite an explicit mode or leader intent');
+      t.equal(coalescingKeys, 0, 'contradiction is rejected before coalescing');
+      t.equal(f.calls.local.length, 0);
+      t.equal(f.calls.owner.length, 0);
+      t.equal(f.calls.sql.length, 0);
+      t.equal(f.gateway.inFlightReadRequestsByKey.size, 0);
+    });
+}
+
+test('complete-table defaults require the RPC owner and its serving-leader witness', async (t) => {
+  const authority = buildControlPlaneReadAuthority({
+    authoritativeObservationScope: SCOPE.COMPLETE_TABLE,
+  });
+  t.equal(authority.authoritativeReadMode, MODE.OWNER_RPC_REQUIRED);
+  t.equal(authority.leaderMode, LEADER.REQUIRED);
+  const f = fixture({local: true});
+  f.setOwnerResult({success: true, rows: [ROW], rowSetComplete: true});
+  const unwitnessed = await f.service.executeAuthoritativeSystemTableRead(TABLE, SQL, [], {
+    readAuthority: authority,
+  });
+  t.equal(unwitnessed.success, false,
+    'rows without a serving-leader witness cannot satisfy complete authority');
+  t.same(unwitnessed.rows, []);
+  const witness = Object.freeze({state: 'observed', partitionId: INITIAL_PARTITION_IDS[TABLE],
+    role: 'leader', servingNodeId: NODE_ID, servingReplicaId: 'nodes-owner',
+    observedAtMs: 1000, term: 3, appliedIndex: 8, commitIndex: 8});
+  f.setOwnerResult({success: true, rows: [ROW], rowSetComplete: true,
+    readAuthorityWitness: witness});
+  const witnessed = await f.service.executeAuthoritativeSystemTableRead(TABLE, SQL, [], {
+    readAuthority: authority,
+  });
+  t.equal(witnessed.success, true, 'the same RPC owner answers with a valid witness');
+  t.same(witnessed.rows, [ROW]);
+  t.equal(f.calls.owner.length, 2);
+  t.equal(f.calls.owner[1][6].readAuthority, authority, 'the selected token is unchanged');
+  t.equal(f.calls.local.length, 0);
+  t.equal(f.calls.sql.length, 0);
+});
