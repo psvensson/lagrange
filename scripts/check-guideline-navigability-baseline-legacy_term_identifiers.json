@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-11T06:28:37.073Z",
-  "rawViolationCount": 2848,
+  "generatedAt": "2026-11-11T23:37:03.342Z",
+  "rawViolationCount": 2846,
   "violations": [
     {
       "filePath": "src/admin/admin-cli-compat.js",
@@ -11624,7 +11624,7 @@
     },
     {
       "filePath": "src/node/replica-handler-class.js",
-      "line": 251,
+      "line": 255,
       "column": 0,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -11660,7 +11660,7 @@
     },
     {
       "filePath": "src/node/replica-handler-create-methods.js",
-      "line": 722,
+      "line": 726,
       "column": 19,
       "functionName": "createReplicaAsync",
       "kind": "legacy_term_identifiers",
@@ -12020,15 +12020,6 @@
     },
     {
       "filePath": "src/node/replica-handler-group-retirement-request-methods.js",
-      "line": 106,
-      "column": 10,
-      "functionName": "assignReplicaHandlerGroupRetirementRequestMethods",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/node/replica-handler-group-retirement-request-methods.js",
       "line": 229,
       "column": 10,
       "functionName": "assignReplicaHandlerGroupRetirementRequestMethods",
@@ -12074,7 +12065,7 @@
     },
     {
       "filePath": "src/node/replica-handler-remove-execution-methods.js",
-      "line": 464,
+      "line": 469,
       "column": 42,
       "functionName": "lifecycleVerdictsOf",
       "kind": "legacy_term_identifiers",
@@ -12083,7 +12074,7 @@
     },
     {
       "filePath": "src/node/replica-handler-remove-execution-methods.js",
-      "line": 465,
+      "line": 470,
       "column": 8,
       "functionName": "lifecycleVerdictsOf",
       "kind": "legacy_term_identifiers",
@@ -12092,7 +12083,7 @@
     },
     {
       "filePath": "src/node/replica-handler-runtime-methods.js",
-      "line": 183,
+      "line": 190,
       "column": 13,
       "functionName": "cleanupReplicaResources",
       "kind": "legacy_term_identifiers",
@@ -12101,7 +12092,7 @@
     },
     {
       "filePath": "src/node/replica-handler-runtime-methods.js",
-      "line": 312,
+      "line": 319,
       "column": 16,
       "functionName": "getLocalReplica",
       "kind": "legacy_term_identifiers",
@@ -12110,18 +12101,9 @@
     },
     {
       "filePath": "src/node/replica-handler-runtime-methods.js",
-      "line": 323,
+      "line": 330,
       "column": 21,
       "functionName": "getLocalReplica",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/node/replica-handler-runtime-methods.js",
-      "line": 417,
-      "column": 38,
-      "functionName": "registerExistingReplica",
       "kind": "legacy_term_identifiers",
       "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -13910,7 +13892,7 @@
     },
     {
       "filePath": "src/partition/partition-service-raft-init-base.js",
-      "line": 242,
+      "line": 243,
       "column": 12,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -13919,17 +13901,8 @@
     },
     {
       "filePath": "src/partition/partition-service-raft-init-base.js",
-      "line": 242,
+      "line": 243,
       "column": 35,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-service-raft-init-base.js",
-      "line": 244,
-      "column": 10,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
       "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
@@ -13946,8 +13919,8 @@
     },
     {
       "filePath": "src/partition/partition-service-raft-init-base.js",
-      "line": 248,
-      "column": 14,
+      "line": 246,
+      "column": 10,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
       "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
@@ -13956,6 +13929,15 @@
     {
       "filePath": "src/partition/partition-service-raft-init-base.js",
       "line": 249,
+      "column": 14,
+      "functionName": "<anonymous>",
+      "kind": "legacy_term_identifiers",
+      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-service-raft-init-base.js",
+      "line": 250,
       "column": 10,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -18554,7 +18536,7 @@
     },
     {
       "filePath": "src/raft/snapshot-checkpoint-store.js",
-      "line": 99,
+      "line": 101,
       "column": 8,
       "functionName": "readCopyWatermarks",
       "kind": "legacy_term_identifiers",
@@ -18563,7 +18545,7 @@
     },
     {
       "filePath": "src/raft/snapshot-checkpoint-store.js",
-      "line": 108,
+      "line": 110,
       "column": 58,
       "functionName": "readCopyWatermarks",
       "kind": "legacy_term_identifiers",
@@ -18581,7 +18563,7 @@
     },
     {
       "filePath": "src/raft/snapshot-install-constants.js",
-      "line": 74,
+      "line": 77,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -18590,7 +18572,7 @@
     },
     {
       "filePath": "src/raft/snapshot-install-constants.js",
-      "line": 84,
+      "line": 87,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -18599,7 +18581,7 @@
     },
     {
       "filePath": "src/raft/snapshot-install-constants.js",
-      "line": 96,
+      "line": 101,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -18617,7 +18599,7 @@
     },
     {
       "filePath": "src/raft/snapshot-install.js",
-      "line": 84,
+      "line": 86,
       "column": 25,
       "functionName": "readMarker",
       "kind": "legacy_term_identifiers",

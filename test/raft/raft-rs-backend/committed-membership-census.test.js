@@ -333,10 +333,11 @@ const PARTITION_CONSTRUCTION_SITES = Object.freeze({
   'src/node/replica-handler-create-methods.js': [
     /this\.createPartitionService\(\{[\s\S]{0,900}?bootstrapMembership: context\.bootstrapMembership,/u,
   ],
-  // A snapshot install's replacement: the durable-record bootstrap of the
-  // shared replacement options builder (asserted below).
-  'src/raft/snapshot-catchup.js': [
-    /options\.createPartitionService\(\s*buildReplacementServiceOptions\(service\)\)/u,
+  // A snapshot install's replacement, opened by the replica handler's
+  // install owner: the durable-record bootstrap of the shared replacement
+  // options builder (asserted below), which the owner's record holds.
+  'src/node/replica-snapshot-install-owner.js': [
+    /handler\.createPartitionService\(\{\s*\.\.\.record\.serviceOptions,/u,
   ],
   // Factories: they forward their caller's options unchanged (the handler's
   // stamp, a durable rejoin's restore plan, a replacement's bootstrap).
@@ -352,8 +353,6 @@ const PARTITION_CONSTRUCTION_SITES = Object.freeze({
   'src/bootstrap/shared/snapshot-catchup-wiring.js': [
     // The catch-up wrapper: the wrapped factory's own options.
     /const service = await createPartitionService\(serviceOptions\)/u,
-    // The replacement's factory: the handler's create with its options.
-    /replicaHandler\.createPartitionService\(serviceOptions\)/u,
   ],
   // The durable-rejoin lifecycle: a restore plan (durableRecordBootstrap)
   // or the join options it queued, which are restore plans.

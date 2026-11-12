@@ -506,6 +506,9 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           });
           await this.waitForVoterReadyActivation(replicaId, partitionId);
         }
+        // A snapshot install during the wait replaced the service object:
+        // the create continues with the one that runs in its place.
+        partitionService = this.snapshotInstallOwner.continuationOf(partitionService);
         // CREATE cannot publish an ACTIVE service whose participant runtime
         // is still default closed. The lifecycle owner performs the same
         // cohort proof used at startup, including control group first,
@@ -539,16 +542,13 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           {replicaId, partitionId},
         );
         if (!skipLifecycleStatusPersistence) {
-          await this.persistReplicaStatusWithRetry(
-            replicaId,
-            ReplicaStatus.ACTIVE,
-            {
-              partitionId,
-              activationService: partitionService,
-              createAdmissionEvidence,
-              createAttemptToken,
-            },
-          );
+          // Activated on the service that runs: an install may stop the
+          // replica around this write (replica-snapshot-install-owner.js).
+          partitionService = await this.snapshotInstallOwner.activateContinuation(
+            partitionService, this.timeSource.now() + this.syncTimeoutMs,
+            (activationService) => this.persistReplicaStatusWithRetry(
+              replicaId, ReplicaStatus.ACTIVE, {partitionId, activationService,
+                createAdmissionEvidence, createAttemptToken}));
           const settled = await settleCreateAdmissionProgress(
             this,
             createAdmissionEvidence,
@@ -593,6 +593,10 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           nodeId: this.nodeId,
         });
       } catch (error) {
+        // What a failed create fences is the service that runs: an install
+        // may have replaced the one this create opened (the fence claims a
+        // replica still under its install episode).
+        partitionService = this.snapshotInstallOwner.continuationOf(partitionService);
         if (this.shuttingDown) {
           this.clearReplicaCreationProgress(progress);
           await this.fenceFailedReplicaCreateRuntime(

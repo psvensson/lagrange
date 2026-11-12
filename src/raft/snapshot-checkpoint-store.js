@@ -36,6 +36,8 @@ import {
   RAFT_CHECKPOINT_PAYLOAD_VERSION,
   RAFT_CHECKPOINT_VALIDATION_OUTCOME,
   RAFT_RS_CHECKPOINT_REASON,
+  NOT_A_RAFT_RS_IMAGE_ENTITY_KIND,
+  raftRsImageEntityKindRules,
 } from './snapshot-checkpoint-constants.js';
 import {
   buildCheckpointDescriptor,
@@ -262,6 +264,10 @@ function readRaftRsCheckpoint(copyDb, groupId) {
 }
 
 function prepareRaftRsCheckpointCopy(copyDb, groupId, entityKind) {
+  if (raftRsImageEntityKindRules(entityKind) === NOT_A_RAFT_RS_IMAGE_ENTITY_KIND) {
+    return {gate: creationResult(CREATION.UNSUPPORTED_ADAPTER,
+      [RAFT_RS_CHECKPOINT_REASON.ENTITY_KIND])};
+  }
   if (hasPendingPreparedParticipantTransactions(copyDb)) {
     return {gate: creationResult(CREATION.PREPARED_TRANSACTIONS_PENDING,
       [RAFT_RS_CHECKPOINT_REASON.PREPARED_TRANSACTIONS])};
@@ -363,7 +369,9 @@ function buildCreatedCheckpointDescriptor(
  * @param {number[]} [options.inProcessPins] in-process retention pins (the
  *   S4 dispatcher's in-flight generation indexes) honored by the
  *   opportunistic post-creation sweep
- * @return {Promise<Object>} typed creation result
+ * @return {Promise<Object>} typed creation result; `created` only for a
+ *   generation the checkpoint reader holds valid (`image_rejected` carries
+ *   the reader's outcome as `validation`)
  */
 async function createSqliteStateMachineCheckpoint(options) {
   const {db, identity, checkpointsRoot} = options;
@@ -404,6 +412,20 @@ async function createSqliteStateMachineCheckpoint(options) {
     const payloadBytes = fs.readFileSync(stagingPayload);
     const descriptor = buildCreatedCheckpointDescriptor(
       identity, prepared, payloadBytes, options.raftRsGroupId);
+    // The sealed image is read back through the reader BEFORE it is
+    // published: staged beside its payload, the descriptor makes the staging
+    // directory one generation the reader can judge. A refused image is a
+    // typed refusal that never reaches a generation directory (the staging
+    // is removed below), so no caller is told `created` for an image its own
+    // reader rejects, and an earlier valid generation at this index stays.
+    writeAtomicDurable(
+      path.join(stagingDir, RAFT_CHECKPOINT_DESCRIPTOR_FILE), descriptor);
+    const validation = readCheckpoint({checkpointDir: stagingDir});
+    if (validation.outcome !== VALIDATION.VALID) {
+      return creationResult(CREATION.IMAGE_REJECTED, validation.reasons, {
+        validation: checkpointResult(validation.outcome, validation.reasons),
+      });
+    }
     const generationDir = path.join(
       checkpointsRoot, String(watermarks.committedIndex));
     ensureDirectory(generationDir);

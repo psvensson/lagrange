@@ -16,6 +16,7 @@ import {
   RAFT_SNAPSHOT_CATCHUP_DISPATCH_OUTCOME,
 } from '../../src/raft/snapshot-catchup-constants.js';
 import {
+  createCheckpointSealer,
   dispatchSnapshotCatchup,
   listInFlightGenerationIndexes,
 } from '../../src/raft/snapshot-catchup.js';
@@ -159,7 +160,7 @@ test('a compacted leader serves and installs its sealed boundary snapshot',
           decision,
           checkpointsRoot: leader.checkpointsRoot,
           identity: IDENTITY,
-          db: leader.db,
+          sealGeneration: createCheckpointSealer(leader.db),
           socketProvider: () => a,
         }),
         receiveSnapshotTransfer({
@@ -290,7 +291,7 @@ test('the single-flight registry exposes the served generation as a pin',
           }),
           checkpointsRoot: leader.checkpointsRoot,
           identity: IDENTITY,
-          db: leader.db,
+          sealGeneration: createCheckpointSealer(leader.db),
           inflightByFollower,
           socketProvider: () => {
             // Selection already happened (recorded synchronously, no await

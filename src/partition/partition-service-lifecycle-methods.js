@@ -186,6 +186,9 @@ class PartitionServiceLifecycleMethods {
       await closePartitionConsensusResources(this);
       this.stopPeriodicSizeUpdates();
       this.stopPreparedStateHoldTimeoutSweep();
+      // The sweep bounded the catch-up driver's flights; with it stopped the
+      // driver's flights and records end here.
+      this.stopSnapshotCatchupDriver();
       this.roleMutationHelper.shutdown();
       this.leaderNodeMutationHelper.shutdown();
       clearPartitionLifecycleListeners(this);

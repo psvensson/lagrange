@@ -4,6 +4,9 @@
 // applied-watermark state keys, and every typed creation/validation outcome.
 // Transfer (S3), install (S2), and retention (S5) own their own vocabulary.
 
+import {ENTITY_TYPE} from '../constants/addresses.js';
+import {SERVICE_TYPE} from '../constants/service.js';
+
 const RAFT_CHECKPOINT_ENVELOPE_VERSION = 1;
 
 // Directory + file layout of one sealed checkpoint generation:
@@ -54,6 +57,7 @@ const RAFT_RS_CHECKPOINT_REASON = Object.freeze({
   DESCRIPTOR: 'raftRs',
   BOUNDARY: 'raft_rs_boundary',
   PAYLOAD_KIND_REQUIRED: 'raft_rs_payload_kind_required',
+  ENTITY_KIND: 'raft_rs_entity_kind',
   PEER_RESERVATIONS: 'peer_reservations',
   PAYLOAD_TABLES: 'raft_rs_payload_tables',
   PREPARED_TRANSACTIONS: 'prepared_participant_transactions',
@@ -88,6 +92,16 @@ const RAFT_CHECKPOINT_CREATION_OUTCOME = Object.freeze({
   UNSUPPORTED_ADAPTER: 'unsupported_adapter',
   APPLY_WATERMARK_DIVERGENCE: 'apply_watermark_divergence',
   PREPARED_TRANSACTIONS_PENDING: 'prepared_transactions_pending',
+  // The sealed generation was read back through the checkpoint reader and
+  // refused: it was removed, and the result carries the reader's outcome.
+  IMAGE_REJECTED: 'image_rejected',
+  // Answered by a generation sealer that owns a standing refusal (a
+  // partition's checkpoint cadence) instead of building an image: it is
+  // holding the image after a refusal nothing has lifted, it is already
+  // building one, or its attempt failed before the creation owner answered.
+  SEALER_HELD: 'sealer_held_after_refusal',
+  SEALER_BUSY: 'sealer_busy',
+  SEALER_FAILED: 'sealer_failed',
 });
 
 // Typed validation outcomes (R1: partial, corrupt, unsupported, stale, and
@@ -129,6 +143,52 @@ const RAFT_RS_CHECKPOINT_ENVELOPE_FIELDS = Object.freeze([
 
 const RAFT_CHECKPOINT_ENTITY_FIELDS = Object.freeze(['kind', 'id']);
 
+// The CLOSED table of entity kinds a raft-rs replica image may describe,
+// and the two rules that differ by kind. It is the one statement of both:
+// the envelope (snapshot-checkpoint-format.js) reads `epoch`, the payload
+// owner (snapshot-application-content.js) reads `content`, and a kind the
+// table does not name is no raft-rs image for either.
+//  - epoch: `membershipEpoch` is supplied by the identity owner of the kind.
+//    A partition's is the cluster's membership-publication epoch, unrelated
+//    to the group's Raft log and OPAQUE to the envelope. A message group's
+//    identity owner DEFINES it as the image's own raft-rs configuration
+//    generation (message-group-learner-join.js seals a learner image at the
+//    committed stamp's membershipGenerationIndex), and is held to that.
+//  - content: a partition image carries the partition's state tables; a
+//    message-group image carries the peer identity table and nothing else.
+const RAFT_RS_IMAGE_EPOCH_RULE = Object.freeze({
+  OPAQUE: 'opaque',
+  CONFIGURATION_GENERATION: 'configuration_generation',
+});
+const RAFT_RS_IMAGE_CONTENT_RULE = Object.freeze({
+  PARTITION_STATE: 'partition_state',
+  PEER_IDENTITY_ONLY: 'peer_identity_only',
+});
+const RAFT_RS_IMAGE_ENTITY_KINDS = Object.freeze({
+  [ENTITY_TYPE.PARTITION]: Object.freeze({
+    epoch: RAFT_RS_IMAGE_EPOCH_RULE.OPAQUE,
+    content: RAFT_RS_IMAGE_CONTENT_RULE.PARTITION_STATE,
+  }),
+  [SERVICE_TYPE.MESSAGE_GROUP]: Object.freeze({
+    epoch: RAFT_RS_IMAGE_EPOCH_RULE.CONFIGURATION_GENERATION,
+    content: RAFT_RS_IMAGE_CONTENT_RULE.PEER_IDENTITY_ONLY,
+  }),
+});
+// What the table answers for a kind it does not name.
+const NOT_A_RAFT_RS_IMAGE_ENTITY_KIND = null;
+
+/**
+ * The rules of one raft-rs image entity kind.
+ * @param {*} kind descriptor entity kind
+ * @return {Object|null} frozen {epoch, content}, or
+ *   NOT_A_RAFT_RS_IMAGE_ENTITY_KIND
+ */
+function raftRsImageEntityKindRules(kind) {
+  return typeof kind === 'string' &&
+    Object.hasOwn(RAFT_RS_IMAGE_ENTITY_KINDS, kind) ?
+    RAFT_RS_IMAGE_ENTITY_KINDS[kind] : NOT_A_RAFT_RS_IMAGE_ENTITY_KIND;
+}
+
 export {
   RAFT_CHECKPOINT_APPLIED_GAP_MARKER_VALUE,
   RAFT_CHECKPOINT_APPLIED_STATE_KEY,
@@ -150,4 +210,8 @@ export {
   RAFT_RS_CHECKPOINT_PEER_RESERVATION_FIELDS,
   RAFT_RS_CHECKPOINT_PEER_RESERVATION_OPTIONAL_FIELDS,
   RAFT_RS_CHECKPOINT_REASON,
+  RAFT_RS_IMAGE_CONTENT_RULE,
+  RAFT_RS_IMAGE_EPOCH_RULE,
+  NOT_A_RAFT_RS_IMAGE_ENTITY_KIND,
+  raftRsImageEntityKindRules,
 };

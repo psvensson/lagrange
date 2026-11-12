@@ -1,0 +1,66 @@
+{
+  "schema": "solve-quest/2",
+  "id": "partition-checkpoint-epoch-generation",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "A partition's raft-rs replica-image checkpoint is valid by its own reader. The checkpoint format no longer equates a cluster membership-publication epoch with a per-group Raft membership generation index: that equality is a message-group identity rule and is enforced where message groups define it. Checkpoint creation refuses to report success for an image its own reader rejects. The partition snapshot cadence compacts a user partition's log past the threshold with a production identity (publication epoch >= 1, after a committed membership change), a lagging follower installs the checkpoint through the production dispatch and orchestration, and every cadence or dispatch outcome other than success is logged as a typed outcome. A lagging follower whose snapshot cannot be served is re-asked on a named event or bounded cadence and its stall is visible.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/partition-checkpoint-epoch-generation/evidence/receipt.json",
+      "requiredReceipts": [
+        "format-epoch-is-opaque-for-partitions",
+        "message-group-epoch-rule-kept-where-defined",
+        "creation-refuses-reader-rejected-image",
+        "cadence-compacts-genesis-group-publication-epoch-one",
+        "cadence-compacts-after-membership-change-epoch-zero",
+        "cadence-compacts-after-membership-change-epoch-one",
+        "epoch-moved-follower-installs-current-identity-generation",
+        "refused-follower-is-re-asked-and-stall-visible",
+        "cadence-refusal-is-typed-logged-and-not-a-rebuild-loop",
+        "message-group-descriptor-moved-regression",
+        "sn1-fixture-exercises-nonzero-publication-epoch",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "message-group-refusal-unchanged",
+      "statement": "No change to the message-group DESCRIPTOR_MOVED refusal: a configuration that moves between the leader's committed read and its image seal still answers DESCRIPTOR_MOVED with the reader's outcome as detail, and the target still refuses it."
+    },
+    {
+      "id": "pinned-bytes",
+      "statement": "No change to pinned checkpoint bytes (descriptor field sets, envelope and payload versions) unless shown necessary and then recorded as a finding before the change."
+    },
+    {
+      "id": "no-bound-changes",
+      "statement": "No existing timeout or threshold changes (the cadence entry and byte thresholds, the sweep interval, raft timing). A new bound is declared as a named constant at its owner."
+    },
+    {
+      "id": "one-path",
+      "statement": "No fallback path, no text matching on errors, named states only, no outcome inferred from an empty value (R07, R11). One reader decides checkpoint validity for creation, compaction, selection, transfer and install."
+    },
+    {
+      "id": "epoch-author-not-half-changed",
+      "statement": "The partition identity's epoch author (the one author shared by snapshots and learner-promotion proofs) is not half-changed here: if replacing the cache-read publication epoch is the correct repair it is recorded as a finding with its options and left to its own unit."
+    },
+    {
+      "id": "binding-not-rebuilt",
+      "statement": "The vendored raft-rs WASM artifact is the committed one; a missing binding operation is reported, never rebuilt here."
+    },
+    {
+      "id": "proof",
+      "statement": "Red first: every witness receipt is red on the sealing head before any src change. The paired witness runs real partition services with the real cadence owner and the service's own system-table cache through the production dispatch and orchestration functions. Independent verification precedes landing."
+    }
+  ],
+  "verificationTemplates": [
+    "recovery-replay",
+    "retry-loops",
+    "sweep-timer",
+    "owner-interaction",
+    "harness-fidelity",
+    "adversarial-js-intrinsics"
+  ],
+  "sealedAt": "da5eb99bdc2893d1dd245d25a68d789490571c91"
+}

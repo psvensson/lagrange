@@ -253,8 +253,7 @@ function leaveConsensus(handler, request, service) {
   });
 }
 
-async function performReplicaRemoval(handler, request, service, lifecycle,
-  execution) {
+async function performReplicaRemoval(handler, request, lifecycle, execution) {
   const {operationId, partitionId, replicaId} = request;
   // A group retired as a unit records its retirement as such - on the
   // REMOVING row (the row-driven reconcile proposes no conf change for it)
@@ -262,22 +261,28 @@ async function performReplicaRemoval(handler, request, service, lifecycle,
   const reason = request.groupRetirement?.retire === true ?
     GROUP_RETIREMENT_REASON : request.reason;
   handler.throwIfShuttingDown();
-  await handler.waitForReplicaServingDrain(service);
+  await handler.waitForReplicaServingDrain(execution.service);
   const retiringRow = await handler.publishReplicaRetiringRow({
     operationId,
     replicaId,
     partitionId,
-    service,
     removalLifecycleSnapshot: lifecycle,
     triggerReason: request.groupRetirement?.retire === true ?
       GROUP_RETIREMENT_REASON : null,
   });
   if (retiringRow.deferred) {
     handler.deferReplicaRemovalWithoutDurableRow({operationId, replicaId,
-      partitionId, service, removalLifecycleSnapshot: lifecycle});
+      partitionId, service: execution.service,
+      removalLifecycleSnapshot: lifecycle});
     return false;
   }
   execution.retiringRowDurable = true;
+  // The durable REMOVING row is this removal's claim on a replica under a
+  // snapshot-install episode: from here it acts on the service the claim
+  // answers (the tracked one, after the episode's step in flight settled).
+  execution.service = await handler.snapshotInstallOwner.claimForRemoval(
+    replicaId);
+  const {service} = execution;
   await leaveConsensus(handler, request, service);
   handler.throwIfShuttingDown();
   const authority = await settleCanonicalLeaderClearOrThrow(
@@ -383,8 +388,8 @@ function reportReplicaRemovalSuccess(handler, request, cleanupError) {
   });
 }
 
-async function handleReplicaRemovalFailure(handler, request, service,
-  execution, error) {
+async function handleReplicaRemovalFailure(handler, request, execution,
+  error) {
   const {operationId, partitionId, replicaId} = request;
   handler.logger.error(REPLICA_HANDLER_LOG_MSG.REMOVE_FAILED, {
     operationId, replicaId, partitionId, error: error.message,
@@ -418,7 +423,7 @@ async function handleReplicaRemovalFailure(handler, request, service,
       partitionId,
       status: execution.retiringRowDurable ?
         ReplicaStatus.REMOVING : ReplicaStatus.FAILED,
-      service,
+      service: execution.service,
     });
   }
   if (operationId) handler.inProgressOperations.delete(operationId);
@@ -547,7 +552,7 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
      * @private
      */
     async publishReplicaRetiringRow({operationId, replicaId, partitionId,
-      service: _service, removalLifecycleSnapshot, triggerReason = null}) {
+      removalLifecycleSnapshot, triggerReason = null}) {
       if (removalLifecycleSnapshot.skipRemovingStatusWrite === true) {
         return {
           skipRemovingStatusWrite: true,
@@ -669,7 +674,6 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
      * @private
      */
     async reconcileRemovedReplicaCleanup(replicaId, partitionId) {
-      const trackedService = this.getTrackedService(replicaId);
       const lifecycleSnapshot =
         this.buildReplicaRemovalLifecycleSnapshot(replicaId);
       const trackedStatus = lifecycleSnapshot.trackedStatus;
@@ -688,6 +692,9 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
           `Replica removal lacks exact durable authority for ${replicaId}`,
         );
       }
+      // Durable REMOVING: the removal's claim on an install episode.
+      const trackedService =
+        await this.snapshotInstallOwner.claimForRemoval(replicaId);
       const removingAuthority = await settleCanonicalLeaderClearOrThrow(
         this,
         replicaId,
@@ -744,10 +751,12 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
       const {operationId, replicaId} = request;
       // request.groupRetirement: the verified group-retirement decision
       // (verifyRemoveGroupRetirement), or absent for an ordinary REMOVE.
-      const service = this.getTrackedService(replicaId);
       const removalLifecycleSnapshot =
         this.buildReplicaRemovalLifecycleSnapshot(replicaId);
       const execution = {
+        // The tracked service; replaced by the removal claim's answer once
+        // REMOVING is durable (performReplicaRemoval).
+        service: this.getTrackedService(replicaId),
         cleanupError: null,
         retiringRowDurable:
           removalLifecycleSnapshot.retiringRowDurable === true,
@@ -755,12 +764,7 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
       };
       try {
         const completed = await performReplicaRemoval(
-          this,
-          request,
-          service,
-          removalLifecycleSnapshot,
-          execution,
-        );
+          this, request, removalLifecycleSnapshot, execution);
         if (!completed) return;
         reportReplicaRemovalSuccess(this, request, execution.cleanupError);
       } catch (error) {
@@ -768,13 +772,7 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
           if (operationId) this.inProgressOperations.delete(operationId);
           return;
         }
-        await handleReplicaRemovalFailure(
-          this,
-          request,
-          service,
-          execution,
-          error,
-        );
+        await handleReplicaRemovalFailure(this, request, execution, error);
         throw error;
       }
     }

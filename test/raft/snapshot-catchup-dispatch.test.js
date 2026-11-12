@@ -21,6 +21,7 @@ import {
 } from '../../src/raft/snapshot-catchup-constants.js';
 import {
   buildSnapshotCatchupIdentity,
+  createCheckpointSealer,
   dispatchSnapshotCatchup,
 } from '../../src/raft/snapshot-catchup.js';
 import {
@@ -97,7 +98,6 @@ test('dispatch refuses catchup_range_empty and never mints a checkpoint',
         }),
         checkpointsRoot,
         identity: IDENTITY,
-        db: null,
         socketProvider: () => {
           throw new Error('must not open a channel for corruption decisions');
         },
@@ -128,7 +128,6 @@ test('dispatch is per-follower single-flight with a typed refusal',
         }),
         checkpointsRoot: fixture.checkpointsRoot,
         identity: IDENTITY,
-        db: null,
         inflightByFollower,
         socketProvider: () => {
           throw new Error('must not dial while a dispatch is in flight');
@@ -145,6 +144,38 @@ test('dispatch is per-follower single-flight with a typed refusal',
       fixture.close();
     }
   });
+
+test('the generation is selected off the caller\'s turn (selection reads ' +
+  'and hashes a whole image; the caller is the consensus delivery turn)',
+async (t) => {
+  const fixture = await createSealedGenerationFixture();
+  try {
+    const inflightByFollower = new Map();
+    const dispatching = dispatchSnapshotCatchup({
+      decision: buildSnapshotCatchupDecision({
+        outcome: RAFT_SNAPSHOT_CATCHUP_DECISION_OUTCOME.INSTALL_SNAPSHOT,
+        followerAddress: FOLLOWER_ADDRESS,
+        startIndex: 1,
+        failedIndex: fixture.boundaryIndex,
+        leaderBoundary: fixture.boundaryIndex,
+      }),
+      checkpointsRoot: fixture.checkpointsRoot,
+      identity: IDENTITY,
+      socketProvider: () => null,
+      inflightByFollower,
+    });
+    t.equal(inflightByFollower.get('node-f'), true,
+      'the caller\'s turn ends with the follower slot claimed and no ' +
+      'generation selected yet');
+    const dispatched = await dispatching;
+    t.equal(dispatched.outcome,
+      RAFT_SNAPSHOT_CATCHUP_DISPATCH_OUTCOME.SOCKET_UNAVAILABLE);
+    t.equal(dispatched.generationIndex, fixture.boundaryIndex,
+      'the generation was selected after the yield');
+  } finally {
+    fixture.close();
+  }
+});
 
 test('dispatch serves the newest eligible generation over the injected socket',
   async (t) => {
@@ -164,7 +195,6 @@ test('dispatch serves the newest eligible generation over the injected socket',
           }),
           checkpointsRoot: fixture.checkpointsRoot,
           identity: IDENTITY,
-          db: null,
           socketProvider: () => a,
         }),
         receiveSnapshotTransfer({
@@ -284,7 +314,7 @@ test('a below-boundary generation is skipped and an eligible one is created',
             }),
             checkpointsRoot: servingRoot,
             identity: IDENTITY,
-            db: leaderDb,
+            sealGeneration: createCheckpointSealer(leaderDb),
             socketProvider: () => a,
           }),
           receiveSnapshotTransfer({

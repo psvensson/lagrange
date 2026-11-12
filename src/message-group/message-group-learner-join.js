@@ -81,13 +81,18 @@ async function sealLeaderImage(leader, options, stamp) {
     stamp.membershipGenerationIndex);
   const created = await createSqliteStateMachineCheckpoint({db: leader.db, identity,
     checkpointsRoot: options.checkpointsRoot, raftRsGroupId: leader.groupId});
+  // The stamp and the image are two reads of the leader. The image's epoch
+  // is the stamp's configuration generation, and the checkpoint owner holds a
+  // message-group image's own generation to its epoch
+  // (RAFT_RS_IMAGE_ENTITY_KINDS in snapshot-checkpoint-constants.js): a
+  // configuration that moved between the two reads is an image the reader
+  // refuses, which creation answers before publishing it; the descriptor moved.
+  if (created.outcome === RAFT_CHECKPOINT_CREATION_OUTCOME.IMAGE_REJECTED) {
+    return {refusal: REFUSAL.DESCRIPTOR_MOVED, detail: created.validation.outcome};
+  }
   if (created.outcome !== RAFT_CHECKPOINT_CREATION_OUTCOME.CREATED) {
     return {refusal: REFUSAL.DESCRIPTOR_UNAVAILABLE, detail: created.outcome};
   }
-  // The stamp and the image are two reads of the leader. The image's epoch
-  // is the stamp's configuration generation, and the checkpoint owner holds
-  // an image's own generation to its epoch: a configuration that moved
-  // between the two reads leaves an invalid image, so the descriptor moved.
   const sealed = readCheckpoint({checkpointDir: created.checkpointDir, expectedIdentity: identity});
   if (sealed.outcome !== RAFT_CHECKPOINT_VALIDATION_OUTCOME.VALID) {
     return {refusal: REFUSAL.DESCRIPTOR_MOVED, detail: sealed.outcome};

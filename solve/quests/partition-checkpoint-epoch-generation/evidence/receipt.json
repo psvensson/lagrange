@@ -1,0 +1,233 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "partition-checkpoint-epoch-generation",
+  "status": "fail",
+  "testFileDigests": {
+    "test/raft/raft-rs-backend/partition-checkpoint-epoch-generation.test.js": "56c303703fa6e9f89ada9804fdaf56e91f1aca9a53fcef07623644c9458117bb",
+    "test/raft/raft-rs-backend/partition-snapshot-install-recreate.test.js": "e94ae7ad153fe3acf28d472e9466f6633f0d01e08757ef52a4d400454f2c4220",
+    "test/raft/snapshot-catchup-install.test.js": "80b6cb6b30a12ba79741035b66d50a47af56aa4528b27a9fe3eb1b59d9342f7a",
+    "test/node/replica-snapshot-install-owner.test.js": "225964f4beaf2f59cdd40fd71dff81af35ac997b0ad7bc8304e9b12ba173d217",
+    "test/node/replica-recreate-after-install-admission.test.js": "3c85af371054053b6d14aea7a4f3cd21e98e767e0fdafabf1ecf4c3d78cb88e8",
+    "test/raft/snapshot-offer-router.test.js": "46bc43d2ca6bbdc706c270b5aee8da6c2fbe5d0ed0a130bbc4e6003688e974b3",
+    "test/raft/snapshot-catchup-wiring-reask.test.js": "b50cdaee1b6a66b9d9f663c599dd4d486a855d2351559776993ffb4b9a894954",
+    "test/partition/partition-snapshot-catchup-driver.test.js": "5f226d4f151a51a4366a57a627425402fddca660c366d302e09162f8224a3746",
+    "test/partition/partition-snapshot-cadence-refusal.test.js": "412637bac170d89adc81ed1392332be78a7bd3aa3867ae973a526dbeee797e66",
+    "test/raft/snapshot-catchup-dispatch.test.js": "111f5f4498fa001d19bcc53525214738802bde3ba439d0c2be5e683b45e19ab7",
+    "test/integration/message-group-learner-join.integration.test.js": "d4ae4eea306c8137897bbe15caaf24d7f4957569e3ced15fc820ac167dce3c34",
+    "test/raft/raft-rs-backend/partition-snapshot-compaction-catchup.test.js": "f4bfccd7c82dfee1e685525bb6bbe35aa6ca37fa9ef80d8ef891db67c31076e2"
+  },
+  "generatedAt": "2026-11-11T22:10:30.354Z",
+  "receipts": [
+    {
+      "id": "format-epoch-is-opaque-for-partitions",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^W1 .*$\" test/raft/raft-rs-backend/partition-checkpoint-epoch-generation.test.js",
+      "detail": "A partition replica image sealed under a publication epoch that differs from the group's membership generation index is created and is VALID by the checkpoint reader.",
+      "testFile": "test/raft/raft-rs-backend/partition-checkpoint-epoch-generation.test.js"
+    },
+    {
+      "id": "message-group-epoch-rule-kept-where-defined",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^W2 .*$\" test/raft/raft-rs-backend/partition-checkpoint-epoch-generation.test.js",
+      "detail": "A message-group image whose epoch is not its own configuration generation is still CORRUPT_DESCRIPTOR raftRs; equal, it is VALID.",
+      "testFile": "test/raft/raft-rs-backend/partition-checkpoint-epoch-generation.test.js"
+    },
+    {
+      "id": "creation-refuses-reader-rejected-image",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^W3 .*$\" test/raft/raft-rs-backend/partition-checkpoint-epoch-generation.test.js",
+      "detail": "Checkpoint creation reads back what it sealed through the reader: a rejected image is the typed IMAGE_REJECTED refusal with the reader's outcome, and neither the generation nor its staging is left on disk.",
+      "testFile": "test/raft/raft-rs-backend/partition-checkpoint-epoch-generation.test.js"
+    },
+    {
+      "id": "cadence-compacts-genesis-group-publication-epoch-one",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^W4 .*$\" test/raft/raft-rs-backend/partition-checkpoint-epoch-generation.test.js",
+      "detail": "Genesis group (generation 0), publication epoch 1: the leader's own sweep compacts past the threshold and a cut-off follower installs through the production dispatch and orchestration and converges.",
+      "testFile": "test/raft/raft-rs-backend/partition-checkpoint-epoch-generation.test.js"
+    },
+    {
+      "id": "cadence-compacts-after-membership-change-epoch-zero",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^W5 .*$\" test/raft/raft-rs-backend/partition-checkpoint-epoch-generation.test.js",
+      "detail": "Committed membership change (generation 2), publication epoch 0: compacts, installs, converges.",
+      "testFile": "test/raft/raft-rs-backend/partition-checkpoint-epoch-generation.test.js"
+    },
+    {
+      "id": "cadence-compacts-after-membership-change-epoch-one",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^W6 .*$\" test/raft/raft-rs-backend/partition-checkpoint-epoch-generation.test.js",
+      "detail": "Committed membership change (generation 2), publication epoch 1: compacts, installs, converges.",
+      "testFile": "test/raft/raft-rs-backend/partition-checkpoint-epoch-generation.test.js"
+    },
+    {
+      "id": "epoch-moved-follower-installs-current-identity-generation",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^W7 .*$\" test/raft/raft-rs-backend/partition-checkpoint-epoch-generation.test.js",
+      "detail": "Case F: after a valid compaction the publication epoch moves and writes continue below the threshold; the dispatch does not serve the stale generation, seals one under the current identity, and the follower installs it and converges.",
+      "testFile": "test/raft/raft-rs-backend/partition-checkpoint-epoch-generation.test.js"
+    },
+    {
+      "id": "refused-follower-is-re-asked-and-stall-visible",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^W8 .*$\" test/raft/raft-rs-backend/partition-checkpoint-epoch-generation.test.js",
+      "detail": "Case F with a lagging leader cache, through the production wiring: the receiver refuses stale_epoch; the refusal is logged typed once and visible in the leader's diagnostics; an unchanged refusal is not re-driven before the declared bound; the bound and the identity-changed event re-ask over freshly dialled connections; the follower installs and its record closes.",
+      "testFile": "test/raft/raft-rs-backend/partition-checkpoint-epoch-generation.test.js"
+    },
+    {
+      "id": "cadence-refusal-is-typed-logged-and-not-a-rebuild-loop",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^W9 .*$\" test/raft/raft-rs-backend/partition-checkpoint-epoch-generation.test.js",
+      "detail": "A cadence creation refusal is logged typed, stands as a visible refusal state, builds no image while its reason is unchanged, and is retried on the declared bound and on the applied-index event.",
+      "testFile": "test/raft/raft-rs-backend/partition-checkpoint-epoch-generation.test.js"
+    },
+    {
+      "id": "second-episode-served-over-a-fresh-connection",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^W10 .*$\" test/raft/raft-rs-backend/partition-checkpoint-epoch-generation.test.js",
+      "detail": "A follower served once falls behind a later boundary and is served again: every dispatch dials its own connection through the production wiring and the offer is routed again.",
+      "testFile": "test/raft/raft-rs-backend/partition-checkpoint-epoch-generation.test.js"
+    },
+    {
+      "id": "cadence-refusal-stamped-at-completion",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^W11 .*$\" test/raft/raft-rs-backend/partition-checkpoint-epoch-generation.test.js",
+      "detail": "The standing refusal is stamped when the image attempt completes, so a slow build is spaced from its end.",
+      "testFile": "test/raft/raft-rs-backend/partition-checkpoint-epoch-generation.test.js"
+    },
+    {
+      "id": "any-compaction-ends-the-refusal",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^W12 .*$\" test/raft/raft-rs-backend/partition-checkpoint-epoch-generation.test.js",
+      "detail": "A compaction through an already sealed generation clears a standing refusal.",
+      "testFile": "test/raft/raft-rs-backend/partition-checkpoint-epoch-generation.test.js"
+    },
+    {
+      "id": "dispatch-sealing-respects-the-cadence-hold",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^W13 .*$\" test/raft/raft-rs-backend/partition-checkpoint-epoch-generation.test.js",
+      "detail": "One creation owner: a generation the dispatch needs is sealed by the cadence owner and is refused typed while the cadence holds the image.",
+      "testFile": "test/raft/raft-rs-backend/partition-checkpoint-epoch-generation.test.js"
+    },
+    {
+      "id": "service-shutdown-aborts-catchup-flights",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^W14 .*$\" test/raft/raft-rs-backend/partition-checkpoint-epoch-generation.test.js",
+      "detail": "A leader service shut down while its dispatch waits on a silent follower aborts the dispatch and frees the follower node's transfer slot.",
+      "testFile": "test/raft/raft-rs-backend/partition-checkpoint-epoch-generation.test.js"
+    },
+    {
+      "id": "served-generation-names-the-follower",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^W15 .*$\" test/raft/raft-rs-backend/partition-checkpoint-epoch-generation.test.js",
+      "detail": "A generation sealed before the leader applied a follower's admission is not served to it: the dispatch seals one that names it; a follower the leader never admitted is the typed generation_omits_follower and nothing is dialled.",
+      "testFile": "test/raft/raft-rs-backend/partition-checkpoint-epoch-generation.test.js"
+    },
+    {
+      "id": "new-replica-behind-compaction-installs-and-reaches-active",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^W-new: .*$\" test/raft/raft-rs-backend/partition-snapshot-install-recreate.test.js",
+      "detail": "Finding 1 through the real replica handler and its CREATE path: a new replica (row PENDING, CREATING, SYNCING) on a partition whose leader compacted past its start is offered a generation that names it, installs, is recreated by the handler, catches up, becomes a voter, and its row reaches ACTIVE.",
+      "testFile": "test/raft/raft-rs-backend/partition-snapshot-install-recreate.test.js"
+    },
+    {
+      "id": "create-outliving-the-install-continues-with-the-replacement",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^W-new-late: .*$\" test/raft/raft-rs-backend/partition-snapshot-install-recreate.test.js",
+      "detail": "The same create with the leader's admission answer delivered only after the install replaced the service the create opened: the create continues with the replacement (its own participant release, then ACTIVE).",
+      "testFile": "test/raft/raft-rs-backend/partition-snapshot-install-recreate.test.js"
+    },
+    {
+      "id": "established-follower-recreated-by-the-real-handler",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^W-established: .*$\" test/raft/raft-rs-backend/partition-snapshot-install-recreate.test.js",
+      "detail": "The control: an ACTIVE follower behind the leader's compaction installs and is recreated through ReplicaHandlerSetup.create wiring.",
+      "testFile": "test/raft/raft-rs-backend/partition-snapshot-install-recreate.test.js"
+    },
+    {
+      "id": "stopped-replica-return-is-owned",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^W-(offer|recreate|installing).*$\" test/raft/raft-rs-backend/partition-snapshot-install-recreate.test.js",
+      "detail": "Through the real handler: an offer the lifecycle does not admit (unobservable, REMOVING) is refused before anything is received with the replica untouched and the leader told why; after the shutdown a recreate that throws or is held stays the handler's visible obligation and the replica returns on the retry bound; a row turning REMOVING releases it to the removal owner; an offer during an install is answered installing; a REMOVE and a handler stop end the record and release a replacement that was opening.",
+      "testFile": "test/raft/raft-rs-backend/partition-snapshot-install-recreate.test.js"
+    },
+    {
+      "id": "install-orchestration-owns-every-path-after-the-shutdown",
+      "passed": true,
+      "command": "npm run test:file -- test/raft/snapshot-catchup-install.test.js",
+      "detail": "The orchestration over a real transfer and install: nothing is stopped before the recreation owner admits it; after the shutdown (thrown or not), a rejected install and an install that threw each hand the stopped replica to the recreation owner exactly once.",
+      "testFile": "test/raft/snapshot-catchup-install.test.js"
+    },
+    {
+      "id": "install-owner-branches",
+      "passed": true,
+      "command": "npm run test:file -- test/node/replica-snapshot-install-owner.test.js",
+      "detail": "The handler's install owner branch by branch over the real handler and lifecycle rows: the previous service released again, a replacement that cannot be registered released, a replica taken while it opens, removal takeover, handler stop, the image-names-replica admission, and a create activating the service that runs over an install around its ACTIVE write.",
+      "testFile": "test/node/replica-snapshot-install-owner.test.js"
+    },
+    {
+      "id": "recreate-after-install-admission-is-total",
+      "passed": true,
+      "command": "npm run test:file -- test/node/replica-recreate-after-install-admission.test.js",
+      "detail": "The named admission as a decision table over every lifecycle status, an unobservable row, no row, a cleanup-ownership row and a row of another replica.",
+      "testFile": "test/node/replica-recreate-after-install-admission.test.js"
+    },
+    {
+      "id": "offer-router-typed-refusals",
+      "passed": true,
+      "command": "npm run test:file -- test/raft/snapshot-offer-router.test.js",
+      "detail": "The offer router answers replica_installing for a replica stopped for an install, receiver_not_admitted (with the admission) before anything is received, and routes an admitted offer with buffered-frame replay.",
+      "testFile": "test/raft/snapshot-offer-router.test.js"
+    },
+    {
+      "id": "reask-over-production-wiring",
+      "passed": true,
+      "command": "npm run test:file -- test/raft/snapshot-catchup-wiring-reask.test.js",
+      "detail": "Over attachSnapshotCatchupDispatcher and armSnapshotOfferRouting with real bulk registries and each node's real replica handler: a second dispatch after a refusal and after a served transfer is dialled afresh and routed; unroutable offers answer typed aborts; an unanswered dispatch is aborted at the idle bound and frees the node slot; three partitions lagging on one node are each served; a busy lane is socket_unavailable; a driver shut down mid-dispatch frees the slot for another partition; a half-open adopted connection is closed at the lane idle bound and the reverse dispatch is then served; a follower install that did not complete is recorded typed on the replica.",
+      "testFile": "test/raft/snapshot-catchup-wiring-reask.test.js"
+    },
+    {
+      "id": "catchup-driver-contract",
+      "passed": true,
+      "command": "npm run test:file -- test/partition/partition-snapshot-catchup-driver.test.js",
+      "detail": "The catch-up driver against an owner-shaped consensus status: typed seam outcomes, coalescing, the re-ask triggers and bounds, the idle abort, closing by progress, by committed configuration and on lost leadership.",
+      "testFile": "test/partition/partition-snapshot-catchup-driver.test.js"
+    },
+    {
+      "id": "cadence-refusal-decision-table",
+      "passed": true,
+      "command": "npm run test:file -- test/partition/partition-snapshot-cadence-refusal.test.js",
+      "detail": "The standing refusal as a decision table: unheld, held, lifted by the named events after the doubling spacing, lifted at the bound.",
+      "testFile": "test/partition/partition-snapshot-cadence-refusal.test.js"
+    },
+    {
+      "id": "dispatch-selects-off-the-delivery-turn",
+      "passed": true,
+      "command": "npm run test:file -- test/raft/snapshot-catchup-dispatch.test.js",
+      "detail": "The dispatch claims the follower slot in the caller turn and selects (reads and hashes) the generation only after yielding it; the sealer capability replaces the db option.",
+      "testFile": "test/raft/snapshot-catchup-dispatch.test.js"
+    },
+    {
+      "id": "message-group-descriptor-moved-regression",
+      "passed": true,
+      "command": "npm run test:file -- test/integration/message-group-learner-join.integration.test.js",
+      "detail": "The message-group fresh-learner join file passes unchanged: a configuration that moves between the leader's committed read and its image seal still answers DESCRIPTOR_MOVED with detail corrupt_descriptor and the target refuses it.",
+      "testFile": "test/integration/message-group-learner-join.integration.test.js"
+    },
+    {
+      "id": "sn1-fixture-exercises-nonzero-publication-epoch",
+      "passed": true,
+      "command": "npm run test:file -- test/raft/raft-rs-backend/partition-snapshot-compaction-catchup.test.js",
+      "detail": "The SN1 catch-up file passes with its identity fixture reading the field the epoch reader reads (publication_epoch), so its sealed epoch is 3 and no longer silently 0.",
+      "testFile": "test/raft/raft-rs-backend/partition-snapshot-compaction-catchup.test.js"
+    },
+    {
+      "id": "independent-verification",
+      "passed": false,
+      "command": "node scripts/quest-evidence/partition-checkpoint-epoch-generation.js --check-verification",
+      "detail": "An approving subagent verification newer than the last attempt, read through the solve store owner.",
+      "failure": "Command failed: /bin/sh -c node scripts/quest-evidence/partition-checkpoint-epoch-generation.js --check-verification",
+      "testFile": null
+    }
+  ]
+}
