@@ -289,3 +289,93 @@ All new controls and the later candidate remain unverified until exact-source
 lab receipts arrive. The coordinator reported that no immutable 194f42 requests
 existed; a305 transports were prepared for the pending lanes. No pending or
 transported request is described as an executed test.
+
+## Outer relister continuation and canonical source admission (reviewed design)
+
+The fb369 candidate remains frozen with its own receipts. Root source review
+found that requestRelist initialized its outcome to STOPPED and only logged an
+escaping exception; finally then released the running slot without re-driving
+live GAP debt. listOneImage catches ordinary read/install failures, but initial
+clock access, slot acquisition/release, final observation and pacing can escape.
+A bounded history search finds this exact default in the source-order extraction
+at dd3dd8b04; earlier source-relist work and the shutdown-aware delay owner are
+preserved in 2a373dd85 and the lifecycle cutover history. The existing inner
+catch is not a proof that every outer failure is terminal.
+
+Root approved a required relister owner record with list(request), isStopped()
+and paceAfterFailure(request, cause). Production registration supplies the same
+CDC integration service and its existing 500 ms shutdown-aware delay. There is
+no old function compatibility path. A failed live attempt retains one latest
+original cause and a failure count on the existing cell, then uses that owner's
+pace. STOPPED is valid only when the owner reports actual terminal state. A
+failed pace retains GAP plus FAULTED and both original/pacing causes; it neither
+spins nor invents another clock. Re-registration or a genuine new gap can wake
+the healed owner. Owner replacement during RUNNING preserves the registration
+wake after the old exact slot releases. Diagnostic property access, callbacks
+and error conversion cannot terminate recovery or prevent later observers.
+
+The same clock-failure control exposes a neighboring acquisition obligation:
+delayUntilShutdown registers a shutdown release before acquiring its timer. A
+throw from setTimeout currently rejects the promise but retains that release.
+Root approved removing the exact registration on that exception, preserving its
+original cause. Paired normal timer completion and shutdown cancellation remain
+required. This adds only cdc-integration-service-lifecycle.js to behavior scope.
+
+Complete source images already replace a whole system table. The canonical
+INITIAL_PARTITION_IDS mapping must therefore admit the table/source pair before
+cell creation, effect-context capture, range application or image staging. A
+second partition cannot share that whole-table basis. Unknown position reads
+remain observations and may not bind a cell. The mapping remains the existing
+bootstrap owner, with no new registry, guessed names or multi-source algorithm.
+A direct/forward native guard and a real local committed producer preserve
+valid-but-noncanonical source input and require zero cache effect/cell mutation,
+then prove canonical source progress. Generic user-table fixtures are unchanged;
+the participant fixture threads its existing custom partitionId into its actual
+generation origin command so CDC-specific producers can name canonical sources.
+
+A separate topology-owner gap remains: automatic split/merge criteria prohibit
+system tables (947fbe658, partition-split-merge-manager-core-methods.js), but
+managed-split-workflow.executeInternal uses criticalSystemPartition only for
+work flags, and evaluation admits outstanding split redrives before criteria.
+The execution admission checks overlap/transition state rather than the system
+table prohibition. Cache refusal does not fix that producer. Root owns its
+separate disposition; this repair does not silently add a split implementation.
+
+### Exact first fb369 failures and disposition
+
+Lab 2749 (request d291a14dd9574313b0a2857a2118d585) ran three canonical roots:
+29 assertions, sealed seven-case aggregate and reconciliation ingress passed;
+R2 had 22 pass and two failures. The clear/foreign pre-cell observations already
+refused and retained a null authoritative watermark. Their last assertion
+expected CONTRACT_INVALID, while validateObservationRequest deliberately returns
+CACHE_NOT_RECONCILED for original-generation mismatch after a valid minted
+receipt passes structural/provenance validation. The test now names that exact
+category; refusal, watermark and no-invented-cell assertions are retained.
+Original 36,495-byte log SHA256:
+313bc3a4fef92a13fde302524bca9e14cd27abb8f669b6ffac51f65af97647c0.
+
+Lab 2750 (request 41cf287f115241989c1f8816c4cd94a7) ran four native roots:
+33 assertions; three roots passed. The native membership iterator-fault control
+observed two iterator calls instead of the deliberate probe's one. Both rows
+had applied. Source trace finds the new singleton destructuring in
+system-table-cache-source-effect-application.js invokes the public iterator on
+captureCdcEvents([input]); indexed vector application itself preserves members.
+A repository search finds no other destructured captureCdcEvents result. The
+original counter remains unchanged, and a direct singleton throwing-iterator
+control is added. The existing range comparison also reads live Math.sign;
+a separate captured-intrinsic control is added before its correction.
+Original 3,201-byte log SHA256:
+7ac167681a028258a9f7fe29f6debbf0f3aaae65fdf0fbfe04f94e1865071d6e.
+
+These tests and fixture corrections are a separate tests-only freeze, not a
+claim that the new design is implemented or physically verified. New controls
+use real production registration, cache/source-order and CDC lifecycle paths;
+query transport and finite clock faults are controlled. Old native receipts
+and fb369 source remain immutable. All execution remains on the lab machines.
+
+Correction to a static handoff: system-table-cache-cdc-observation.js was not
+deleted. fb369 modifies that tracked file (blob
+58c479f5c6e73c88c0fe9bbad133c0b69fa9d621), retaining observation/watermark ownership
+while extracting source order. The coordinator confirmed the same blob in the
+remote exact tree. No 21-path static request ran. All 22 changed extant paths
+belong in the original freeze's scoped metrics selection.

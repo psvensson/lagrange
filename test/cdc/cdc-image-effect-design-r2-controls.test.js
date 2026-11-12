@@ -5,6 +5,7 @@
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {test} from 'node:test';
+import {setImmediate as nextTurn} from 'node:timers/promises';
 import {INITIAL_PARTITION_IDS} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {CACHE_LOG_MSG} from '../../src/cache/cache-constants.js';
@@ -12,7 +13,9 @@ import {installSourceImage} from '../../src/cache/system-table-cache-source-imag
 import {SOURCE_EFFECT_STATE} from '../../src/cache/system-table-cache-source-order.js';
 import {captureCdcEvents} from '../../src/cdc/cdc-event-envelope.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
+import {registerSourceRelister} from '../../src/cdc/cdc-integration-service-source-relist.js';
 import {CDC_OPERATION, TABLES} from '../../src/constants/index.js';
+import {CDC_EVENT_IDENTITY} from '../../src/constants/cdc-lifecycle-constants.js';
 import {CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR,
   CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE, CONTROL_PLANE_READ_STRATEGY,
   ControlPlaneSystemTableGateway} from
@@ -24,6 +27,7 @@ import {applyCommittedCdcRange, classifyDurableRangeAtLeader} from
   '../../src/message-group/message-group-cdc-source-range.js';
 import {assignRaftTiming} from '../../src/message-group/message-group-service-raft-timing.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
+import {replacePrototypeProperty, withHostileIntrinsics} from '../helpers/hostile-intrinsics.js';
 
 const TABLE = TABLES.NODES;
 const SOURCE = INITIAL_PARTITION_IDS[TABLE];
@@ -280,7 +284,7 @@ for (const transition of ['unchanged', 'clear', 'foreign-cache']) {
       assert.equal(target.getLastAuthoritativeObservedAtMs(TABLE),
         transition === 'unchanged' ? 2000 : null);
       if (transition !== 'unchanged') assert.equal(reconciled.error,
-        CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.CONTRACT_INVALID);
+        CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.CACHE_NOT_RECONCILED);
       assert.equal(target.sourceOrder.cells.size, 0, 'observation does not invent source currency');
     });
 }
@@ -526,4 +530,251 @@ test('throwing handler listener cannot turn a refused vector into current source
   recovery.service.initialize();
   await recovery.installed;
   assertImagePrefix(f, 11);
+});
+
+// The following discriminators were frozen before the outer-relister repair.
+// They enter the real production registration and CDCIntegrationService clock,
+// shutdown and image owners. Only the query transport and clock fault are held.
+test('an escaping image-attempt failure retains its cause and uses the owner pace', async (t) => {
+  const f = fixture(t);
+  const recovery = integrationWithImage(t, f, eventOf(CDC_OPERATION.INSERT, 11).data, 11);
+  const cause = new Error('source image start clock failed');
+  const now = f.clock.now.bind(f.clock);
+  const setTimeout = f.clock.setTimeout.bind(f.clock);
+  const delays = [];
+  let failed = false;
+  f.clock.now = () => {
+    if (!failed) { failed = true; throw cause; }
+    return now();
+  };
+  f.clock.setTimeout = (callback, delay) => {
+    delays.push(delay);
+    return setTimeout(callback, delay);
+  };
+  registerSourceRelister(recovery.service);
+  await nextTurn();
+  const waiting = f.cache.sourceOrder.positionOf(SOURCE);
+  assert.equal(waiting.state, 'gap');
+  assert.equal(waiting.relist, 'running', 'the failed attempt still owns its paced continuation');
+  assert.equal(waiting.relistFailures, 1);
+  assert.equal(waiting.lastRelistFailure.cause, cause, 'retain the actual original exception');
+  assert.deepEqual(delays, [500], 'the existing shutdown-aware clock owns the only delay');
+  assert.equal(recovery.reads(), 0);
+  f.clock.advance(499);
+  await nextTurn();
+  assert.equal(recovery.reads(), 0, 'no retry before the existing pace expires');
+  f.clock.advance(1);
+  await nextTurn();
+  assert.equal(recovery.reads(), 1);
+  assertImagePrefix(f, 11);
+  assert.equal(recovery.service.shutdownReleases.size, 0);
+});
+
+for (const wake of ['registration', 'new-gap']) {
+  test(`a failed relist clock retains FAULTED debt until ${wake} wakes its healed owner`, async (t) => {
+    const f = fixture(t);
+    const recovery = integrationWithImage(t, f, eventOf(CDC_OPERATION.INSERT, 12).data, 12);
+    const cause = new Error('source image start clock failed');
+    const pacingCause = new Error('source image retry clock failed');
+    const now = f.clock.now.bind(f.clock);
+    const setTimeout = f.clock.setTimeout.bind(f.clock);
+    let failed = false;
+    let pacingCalls = 0;
+    f.clock.now = () => {
+      if (!failed) { failed = true; throw cause; }
+      return now();
+    };
+    f.clock.setTimeout = () => { pacingCalls += 1; throw pacingCause; };
+    registerSourceRelister(recovery.service);
+    await nextTurn();
+    const faulted = f.cache.sourceOrder.positionOf(SOURCE);
+    assert.equal(faulted.state, 'gap');
+    assert.equal(faulted.relist, 'faulted', 'a broken sole clock is not terminal owner state');
+    assert.equal(faulted.relistFailures, 1);
+    assert.equal(faulted.lastRelistFailure.cause, cause);
+    assert.equal(faulted.lastRelistFailure.pacingCause, pacingCause);
+    assert.equal(pacingCalls, 1, 'pacing failure does not spin or introduce a second clock');
+    assert.equal(recovery.service.shutdownReleases.size, 0, 'failed timer acquisition releases custody');
+    assert.equal(recovery.reads(), 0);
+    f.clock.setTimeout = setTimeout;
+    if (wake === 'registration') registerSourceRelister(recovery.service);
+    else f.cache.sourceOrder.recordGap(rangeOf([eventOf(CDC_OPERATION.INSERT, 12)]), TABLE);
+    await nextTurn();
+    assert.equal(recovery.reads(), 1);
+    assertImagePrefix(f, 12);
+    assert.equal(f.cache.sourceOrder.positionOf(SOURCE).relist, 'idle');
+  });
+}
+
+for (const terminal of [false, true]) {
+  test(`STOPPED is accepted only from an actually terminal relister: ${terminal}`, async (t) => {
+    const f = fixture(t);
+    const recovery = integrationWithImage(t, f, eventOf(CDC_OPERATION.INSERT, 11).data, 11);
+    const refuse = recovery.service.refuseIfTerminal.bind(recovery.service);
+    let first = true;
+    if (terminal) recovery.service.markShuttingDown();
+    else recovery.service.refuseIfTerminal = (...args) => {
+      if (first) { first = false; return new Error('false terminal answer'); }
+      return refuse(...args);
+    };
+    registerSourceRelister(recovery.service);
+    await nextTurn();
+    const cell = f.cache.sourceOrder.positionOf(SOURCE);
+    assert.equal(cell.state, 'gap', 'neither terminal answer fabricates current currency');
+    assert.equal(cell.relist, terminal ? 'idle' : 'running');
+    assert.equal(recovery.reads(), 0);
+    assert.equal(recovery.service.shutdownReleases.size, terminal ? 0 : 1);
+    f.clock.advance(500);
+    await nextTurn();
+    assert.equal(recovery.reads(), terminal ? 0 : 1);
+    if (terminal) assert.equal(f.cache.sourceOrder.positionOf(SOURCE).state, 'gap');
+    else assertImagePrefix(f, 11);
+  });
+}
+
+for (const completion of ['clock', 'shutdown']) {
+  test(`the existing retry delay releases its exact registration on ${completion}`, async (t) => {
+    const f = fixture(t);
+    const recovery = integrationWithImage(t, f, eventOf(CDC_OPERATION.INSERT, 11).data, 11);
+    let completed = false;
+    const pending = recovery.service.delayUntilShutdown(500).then(() => { completed = true; });
+    assert.equal(recovery.service.shutdownReleases.size, 1);
+    assert.equal(f.clock.pendingTimerCount(), 1);
+    if (completion === 'clock') f.clock.advance(500);
+    else recovery.service.markShuttingDown();
+    await pending;
+    assert.equal(completed, true);
+    assert.equal(recovery.service.shutdownReleases.size, 0);
+    assert.equal(f.clock.pendingTimerCount(), 0);
+  });
+}
+
+test('registration while the old relister runs is delivered after its exact slot releases',
+  async (t) => {
+    const f = fixture(t);
+    const row = eventOf(CDC_OPERATION.INSERT, 11).data;
+    const oldOwner = integrationWithImage(t, f, row, 11);
+    const newOwner = integrationWithImage(t, f, row, 11);
+    const started = Promise.withResolvers();
+    const release = Promise.withResolvers();
+    const executor = oldOwner.service.sqlQueryEngine.queryExecutor;
+    const execute = executor.executeOnPartition.bind(executor);
+    executor.executeOnPartition = async (...args) => {
+      started.resolve();
+      await release.promise;
+      return execute(...args);
+    };
+    registerSourceRelister(oldOwner.service);
+    await started.promise;
+    const cell = f.cache.sourceOrder.cells.get(SOURCE);
+    registerSourceRelister(newOwner.service);
+    assert.equal(f.cache.sourceOrder.cells.get(SOURCE), cell, 'the same cell owes the continuation');
+    assert.equal(newOwner.reads(), 0, 'registration does not run two attempts for one cell');
+    oldOwner.service.markShuttingDown();
+    release.resolve();
+    await nextTurn();
+    assert.equal(newOwner.reads(), 1, 'the new registration wake survives old terminal completion');
+    assert.equal(oldOwner.service.relistImageSlots.held, 0);
+    assert.equal(newOwner.service.relistImageSlots.held, 0);
+    assertImagePrefix(f, 11);
+  });
+
+for (const fault of ['warn-call', 'warn-property', 'message-property', 'conversion']) {
+  test(`current listeners cannot strand publication when diagnostic observation fails: ${fault}`,
+    (t) => {
+      const f = fixture(t);
+      const diagnosticFailure = new Error('observer diagnostic failed');
+      let cause = new Error('source current listener failed');
+      const logger = {...silent};
+      if (fault === 'warn-call') logger.warn = () => { throw diagnosticFailure; };
+      if (fault === 'warn-property') Object.defineProperty(logger, 'warn', {
+        get() { throw diagnosticFailure; },
+      });
+      if (fault === 'message-property') Object.defineProperty(cause, 'message', {
+        get() { throw diagnosticFailure; },
+      });
+      if (fault === 'conversion') {
+        cause = {[Symbol.toPrimitive]() { throw diagnosticFailure; }};
+        logger.warn = (_message, fields) => String(fields.error);
+      }
+      f.cache.sourceOrder.logger = logger;
+      let observed = 0;
+      f.cache.sourceOrder.onCurrent(() => { throw cause; });
+      f.cache.sourceOrder.onCurrent(() => { observed += 1; });
+      assert.doesNotThrow(() => f.install());
+      assert.equal(observed, 1, 'a diagnostic cannot prevent the next actual currentness observer');
+      assertImagePrefix(f);
+    });
+}
+
+test('source singleton capture never consults the public array iterator', (t) => {
+  const f = fixture(t);
+  f.install();
+  const event = eventOf(CDC_OPERATION.INSERT, 11);
+  const range = rangeOf([event], imagePosition(10));
+  const iterator = Array.prototype[Symbol.iterator];
+  let consulted = 0;
+  const result = withHostileIntrinsics([
+    replacePrototypeProperty(Array.prototype, Symbol.iterator, function() {
+      if (this[0]?.eventKey === event.eventKey) {
+        consulted += 1;
+        throw new Error('source singleton consulted public iterator');
+      }
+      return Reflect.apply(iterator, this, []);
+    }),
+  ], () => f.cache.applySourceCdcEvent(event, range, f.clock.now()));
+  assert.equal(consulted, 0);
+  assert.equal(result.state, SOURCE_EFFECT_STATE.APPLIED);
+  assert.equal(f.cache.has(TABLE, KEY), true);
+  assertImagePrefix(f, 10);
+});
+
+test('range comparison never consults a replaced Math.sign intrinsic', (t) => {
+  const f = fixture(t);
+  f.install();
+  const event = eventOf(CDC_OPERATION.INSERT, 11);
+  const range = rangeOf([event], imagePosition(10));
+  let consulted = 0;
+  const result = withHostileIntrinsics([
+    replacePrototypeProperty(Math, 'sign', () => {
+      consulted += 1;
+      throw new Error('source range consulted mutable comparison intrinsic');
+    }),
+  ], () => f.cache.applySourceCdcEvent(event, range, f.clock.now()));
+  assert.equal(consulted, 0);
+  assert.equal(result.state, SOURCE_EFFECT_STATE.APPLIED);
+  assertImagePrefix(f, 10);
+});
+
+test('unknown position reads never bind a source cell or change the table observation basis', (t) => {
+  const f = fixture(t);
+  const unknown = 'nodes-p2';
+  const before = f.cache.sourceOrder.tableGeneration(TABLE);
+  const count = f.cache.sourceOrder.cells.size;
+  assert.equal(f.cache.sourceOrder.positionOf(unknown).state, 'unknown');
+  assert.equal(f.cache.sourceOrder.cells.size, count);
+  assert.equal(f.cache.sourceOrder.cells.has(unknown), false);
+  assert.equal(f.cache.sourceOrder.tableGeneration(TABLE), before);
+  assert.equal(f.install().admission, 'install');
+  assertImagePrefix(f);
+});
+
+test('a noncanonical image source refuses before staging or changing any cell or table', (t) => {
+  const f = fixture(t);
+  const wrongSource = 'nodes-p2';
+  const image = {sourcePartition: wrongSource, tableName: TABLE, incarnation: INCARNATION,
+    appliedIndex: 10, rows: [eventOf(CDC_OPERATION.INSERT, 10).data]};
+  const token = f.cache.sourceOrder.beginImage(SOURCE);
+  const count = f.cache.sourceOrder.cells.size;
+  const clone = f.cache.deepClone.bind(f.cache);
+  let staged = 0;
+  f.cache.deepClone = (...args) => { staged += 1; return clone(...args); };
+  assert.throws(() => installSourceImage(f.cache, token, image),
+    {code: CDC_EVENT_IDENTITY.INVALID_CODE});
+  assert.equal(staged, 0);
+  assert.equal(f.cache.sourceOrder.cells.size, count);
+  assert.equal(f.cache.sourceOrder.cells.has(wrongSource), false);
+  assert.equal(f.cache.has(TABLE, KEY), false);
+  assert.equal(f.install(image.rows).admission, 'install');
+  assertImagePrefix(f);
 });

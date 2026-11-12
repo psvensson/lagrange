@@ -21,6 +21,7 @@ import {createReadOnlyCache} from '../../src/cache/read-only-system-table-cache.
 import {installSourceImage} from '../../src/cache/system-table-cache-source-image.js';
 import {eventOf, sourceRangeOf} from '../../src/partition/partition-cdc-obligation-vector.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
+import {INITIAL_PARTITION_IDS} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
   PARTITION_CDC_COMMAND,
   PARTITION_CDC_OBLIGATION_BOUND,
@@ -419,7 +420,7 @@ test('W-D1f: pending work under budget - an owed row the lane cannot complete (p
 
 test('W-D1g: local committed application preserves the exact ledger occurrence and range ' +
   'through the real writable cache when the partition holds a read-only view', async () => {
-  const {leader} = await startLeader({...CDC});
+  const {leader} = await startLeader({...CDC, partitionId: INITIAL_PARTITION_IDS[CDC_TABLE]});
   const cache = new SystemTableCache({timeSource: leader.timeSource});
   try {
     leader.systemTableCache = createReadOnlyCache(cache);
@@ -456,7 +457,7 @@ test('W-D1g: local committed application preserves the exact ledger occurrence a
 
 test('W-D1h: a real cache notification scheduling failure retains source and local recovery debt',
   async () => {
-    const {leader} = await startLeader({...CDC});
+    const {leader} = await startLeader({...CDC, partitionId: INITIAL_PARTITION_IDS[CDC_TABLE]});
     let notifications = 0;
     const failures = [];
     const cache = new SystemTableCache({timeSource: leader.timeSource,
@@ -488,5 +489,37 @@ test('W-D1h: a real cache notification scheduling failure retains source and loc
       assert.equal(leader.db.prepare(IMAGE_SQL).all().length, 2);
     } finally {
       await shutdownAll(leader);
+    }
+  });
+
+test('W-D1i: a noncanonical local source cannot bind table effects; canonical source still progresses',
+  async () => {
+    const cache = new SystemTableCache();
+    let source;
+    try {
+      ({leader: source} = await startLeader({...CDC}));
+      source.cdcIntegrationService = {cacheMutationTarget: cache};
+      const wrong = upsertOf(source, 'wrong-source', 1);
+      assert.equal(source.partitionId, PARTITION_ID,
+        'the real committed source is internally consistent but not the system table source');
+      assert.equal(applyCommitted(source, wrong), null);
+      assert.equal(source.db.prepare(IMAGE_SQL).all().length, 1,
+        'cache admission cannot rewrite the already committed SQL owner');
+      assert.equal(ledgerFactsOf(source).owed, 1, 'the actual source still retains delivery debt');
+      assert.equal(cache.has(CDC_TABLE, 'r-1'), false);
+      assert.equal(cache.sourceOrder.cells.size, 0, 'invalid source does not acquire a cache cell');
+      assert.equal(cache.sourceOrder.tables.has(CDC_TABLE), false);
+      await shutdownAll(source);
+      source = null;
+      ({leader: source} = await startLeader({...CDC, partitionId: INITIAL_PARTITION_IDS[CDC_TABLE]}));
+      source.cdcIntegrationService = {cacheMutationTarget: cache};
+      const canonical = upsertOf(source, 'canonical-source', 1);
+      assert.equal(applyCommitted(source, canonical), null);
+      assert.equal(cache.get(CDC_TABLE, 'r-1').value, 'canonical-source-1');
+      assert.equal(cache.sourceOrder.cells.size, 1);
+      assert.equal(cache.sourceOrder.cells.has(source.partitionId), true);
+      assert.equal(ledgerFactsOf(source).owed, 1);
+    } finally {
+      if (source !== null && source !== undefined) await shutdownAll(source);
     }
   });

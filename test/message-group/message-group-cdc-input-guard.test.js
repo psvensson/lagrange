@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import {afterEach, beforeEach, test} from 'node:test';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {INITIAL_PARTITION_IDS} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {CDC_OPERATION, TABLES} from '../../src/constants/index.js';
 import {CDC_EVENT_IDENTITY} from '../../src/constants/cdc-lifecycle-constants.js';
@@ -20,7 +21,7 @@ import {GROUP_ID, NODE_ID, pump, recipientFixture as nativeRecipientFixture} fro
   './message-group-native-custody-fixture.js';
 import {positionRecipients, withSourceRange} from '../test-helpers/cdc-source-range-fixture.js';
 
-const SOURCE_PARTITION = 'guard-source';
+const SOURCE_PARTITION = INITIAL_PARTITION_IDS[TABLES.CONFIG];
 const KEY = 'guard-native-row';
 const ENTRIES = ['direct', 'forward-handler'];
 
@@ -30,7 +31,7 @@ const ENTRIES = ['direct', 'forward-handler'];
 // travels with its source range.
 async function recipientFixture(...args) {
   const f = await nativeRecipientFixture(...args);
-  positionRecipients(f.services, SOURCE_PARTITION);
+  positionRecipients(f.services, SOURCE_PARTITION, TABLES.CONFIG);
   return f;
 }
 
@@ -166,6 +167,27 @@ async function accept(f, calls, entry, events, install = () => []) {
   const record = RaftRsDurableStore.readDurableRecordIn(f.services[0].db, GROUP_ID);
   assert.ok(BigInt(record.appliedIndex) >= BigInt(result.answer.cdcCommitted[0].logIndex));
   assert.equal(f.services[0].systemTableCache.get(TABLES.CONFIG, KEY).config_value, 'guard-body');
+}
+
+for (const entry of ENTRIES) {
+  test(`a valid range from a noncanonical table source refuses before ${entry} effects`, async (t) => {
+    const f = await recipientFixture(t, KEY, {replicaCount: 1});
+    const service = f.services[0];
+    const calls = observeEffects(t, service);
+    const order = service.cdcHandler.cache.sourceOrder;
+    const wrongSource = 'config-p2';
+    const events = [{...sourceEvent(), sourcePartition: wrongSource,
+      sourceReplica: 'config-p2-r1'}];
+    const range = withSourceRange(events).sourceRange;
+    const count = order.cells.size;
+    const generation = order.tableGeneration(TABLES.CONFIG);
+    assert.equal(order.cells.has(wrongSource), false);
+    await refuse(f, calls, entry, events, () => [], () => events, range);
+    assert.equal(order.cells.size, count, 'rejected source identity cannot create recovery state');
+    assert.equal(order.cells.has(wrongSource), false);
+    assert.equal(order.tableGeneration(TABLES.CONFIG), generation);
+    await accept(f, calls, entry, [sourceEvent()]);
+  });
 }
 
 for (const entry of ENTRIES) {
