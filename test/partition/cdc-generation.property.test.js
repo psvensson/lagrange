@@ -119,7 +119,7 @@ test('Property 6: CDC event generated for INSERT operations', async (t) => {
           await startPropertyPartition(partition);
 
           // Subscribe to CDC events
-          partition.subscribeToCDC(subscriber);
+          void partition.subscribeToCDCWithHandshake(subscriber);
           await settlePendingCdcDeliveries(partition);
 
           // Perform INSERT
@@ -183,7 +183,7 @@ test('Property 6: CDC event generated for UPDATE operations', async (t) => {
           await partition.insertData(tableName, data);
 
           // Subscribe to CDC events after insert
-          partition.subscribeToCDC(subscriber);
+          void partition.subscribeToCDCWithHandshake(subscriber);
           // The owed INSERT reaches the new subscriber first; settle it.
           await settlePendingCdcDeliveries(partition);
           cdcEvents.length = 0;
@@ -245,7 +245,7 @@ test('Property 6: CDC event generated for DELETE operations', async (t) => {
           await partition.insertData(tableName, data);
 
           // Subscribe to CDC events after insert
-          partition.subscribeToCDC(subscriber);
+          void partition.subscribeToCDCWithHandshake(subscriber);
           // The owed INSERT reaches the new subscriber first; settle it.
           await settlePendingCdcDeliveries(partition);
           cdcEvents.length = 0;
@@ -309,7 +309,7 @@ test('Property 6: CDC events delivered to multiple subscribers', async (t) => {
 
           // Subscribe multiple subscribers
           for (const subscriber of subscribers) {
-            partition.subscribeToCDC(subscriber);
+            void partition.subscribeToCDCWithHandshake(subscriber);
           }
           await settlePendingCdcDeliveries(partition);
 

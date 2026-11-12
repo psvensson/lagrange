@@ -22,6 +22,8 @@
 
 import {performance} from 'node:perf_hooks';
 import {observeHeartbeat} from './event-loop-gap-heartbeat-rule.js';
+import {runPeriodicDiagnosticsReporters} from './periodic-diagnostics-reporters.js';
+import {startEventLoopDelaySampling} from './event-loop-delay-sampler.js';
 import {Session} from 'node:inspector';
 import {LoggingService} from '../logging/logging-service.js';
 import {SUBSYSTEM} from '../constants/index.js';
@@ -548,6 +550,8 @@ class EventLoopGapWatchdog {
     if (typeof this.intervalHandle.unref === 'function') {
       this.intervalHandle.unref();
     }
+    this.stopDelaySampling = startEventLoopDelaySampling((message, context) =>
+      this.logConsoleOnly(WATCHDOG_LOG_LEVEL.INFO, message, context));
     if (this.profiler) {
       this.profiler.start().catch((error) => {
         this.logConsoleOnly(
@@ -570,6 +574,7 @@ class EventLoopGapWatchdog {
     if (this.intervalHandle) {
       clearInterval(this.intervalHandle);
       this.intervalHandle = null;
+      this.stopDelaySampling();
     }
     if (this.profiler) {
       this.profiler.stop();
@@ -589,6 +594,7 @@ class EventLoopGapWatchdog {
     });
     const gapMs = beat.gapMs;
     this.expectedAtMs = beat.nextExpectedAtMs;
+    runPeriodicDiagnosticsReporters(nowMs);
     if (beat.exceeded) {
       this.gapsInProfileWindow += 1;
     }

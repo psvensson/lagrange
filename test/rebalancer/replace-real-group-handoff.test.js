@@ -10,6 +10,10 @@
  *     the attempt resolves, no dropped removal is counted as issued, and the
  *     REPLACE completes once the target is admitted, through add-voter,
  *     transfer, remove-voter.
+ *   - leadership retained (BR11 as superseded 2026-11-11): a follower source
+ *     under a third leader is removed with no handoff at all; the leader and
+ *     its term are the same before the intent, at every RETIRE and at the
+ *     terminal write;
  * AN4 (a late attemptSeq has no effect) and AN8 (no handoff after terminal)
  * are witnessed at the answer seam by replace-named-handoff-attempt.test.js
  * (routed attemptSeq echo; F-b) and are not repeated here.
@@ -77,6 +81,56 @@ test('named-target only: the one handoff names the target and is served ' +
     t.equal((await readPersisted(world)).workflowStep, WORKFLOW_STEP.STOPPING,
       'a fresh read of the target leading admitted the removal');
     t.equal(world.removeEffects.length, 1, 'one removal effect');
+  } finally {
+    await disposeWorld(world);
+  }
+});
+
+// Leadership retained: the source r1 is a follower, r2 leads, the target t
+// follows r2. The real group's own ports answer every read: t's witness read
+// names r2, r2's own answer is corroborated by a majority at its term, so
+// the source is removed where leadership is. Red before the supersession:
+// one STEP_DOWN to t left and t led at the removal.
+test('leadership retained: a follower source under a third leader is ' +
+  'removed with no handoff; leader and term are unchanged at its removal',
+async (t) => {
+  const world = await openReplaceWorld({sourceLeads: false,
+    sourceHandler: true});
+  try {
+    const leader = world.group.leader();
+    const termOf = (replicaId) => Number(
+      world.group.cluster.node(replicaId).readStatus().term);
+    const term = termOf(leader);
+    t.not(leader, world.sourceReplicaId, 'setup: the source is a follower');
+    t.not(leader, world.targetReplicaId, 'setup: the target is a follower');
+    await driveToIntent(world);
+    await settleTurns();
+    t.equal((await readPersisted(world)).workflowStep, WORKFLOW_STEP.STOPPING,
+      'the removal intent is durable');
+    t.equal(world.stepDowns.length, 0, 'no leadership transfer was requested');
+    t.equal(readReplaceHandoffAttempt(world.coordinator.workflowOwner,
+      world.operation.operationId), null, 'no handoff attempt was opened');
+    t.equal(world.group.leader(), leader, 'the leader is the same at the intent');
+    const outcome = await runToQuiescenceWithSweeps(world, {rounds: 30});
+    t.equal(outcome.workflowStep, WORKFLOW_STEP.REMOVED, 'the REPLACE completed');
+    t.equal(world.stepDowns.length, 0,
+      'no leadership transfer was requested in the whole operation');
+    t.equal(world.terminalWrites.at(-1)?.sourceCommittedVoter, false,
+      'at the terminal write the source is absent from the committed voters');
+    t.same([...new Set(world.retirementRoutes.map((route) => route.leader))]
+      .filter((routeLeader) => routeLeader !== leader), [],
+    'the group\'s leader was the same replica at every RETIRE');
+    t.equal(world.group.leader(), leader,
+      'the same replica leads after the source left');
+    t.equal(termOf(leader), term, 'at the same term: no election happened');
+    t.equal(termOf(world.targetReplicaId), term,
+      'the target follows at that term');
+    t.equal(world.group.committedConfiguration().voters.includes(
+      world.group.peerIdOf(world.targetReplicaId)), true,
+    'the target is a committed voter');
+    t.equal(world.group.committedConfiguration().voters.includes(
+      world.group.peerIdOf(world.sourceReplicaId)), false,
+    'the source is not');
   } finally {
     await disposeWorld(world);
   }
@@ -181,15 +235,17 @@ test('B13 (RF=1, control order): with the source stepping until its ' +
   await runRf1Replace(t, {sourceHandler: false, label: 'control order'});
 });
 
-// V10 (verification round 1): RF=1 on an ordinary partition with the SOURCE
-// leading and no handoff. The removed leader is the group's leader: R-1f
-// routes the RETIRE to it (conf changes are leader-only; the target is a
-// follower), it proposes its own RemoveNode, commits it with the target's
-// ack, leaves on its applied removal and retires; the target then leads the
-// sole-voter group and the leader's answer completes the REPLACE.
-test('RF=1 x ordinary partition x source leads: the removed leader takes ' +
-  'its own RemoveNode through R-1f, retires on its applied removal, and ' +
-  'the target completes the REPLACE', async (t) => {
+// V10 (verification round 1), superseded 2026-11-11 by the universal
+// removal leadership rule (R09; the pinned "no handoff on an ordinary
+// partition" and "every RETIRE went to the source itself" are the defect
+// class: a leader removed with no transfer leaves its group leaderless).
+// RF=1 on an ordinary partition with the SOURCE leading: the gate reads the
+// group's leadership as on every partition, the one named handoff goes to
+// the target, the target leads before the intent, takes the RemoveNode,
+// and completes the REPLACE; no RETIRE is ever routed to the source.
+test('RF=1 x ordinary partition x source leads: the leading source gets ' +
+  'the one named handoff to its target, which leads before the intent, ' +
+  'takes the RemoveNode and completes the REPLACE', async (t) => {
   const world = await openReplaceWorld({replicaCount: 1,
     partitionId: ORDINARY_PARTITION_ID, sourceLeads: true,
     sourceHandler: true});
@@ -199,14 +255,19 @@ test('RF=1 x ordinary partition x source leads: the removed leader takes ' +
     t.equal(world.group.leader(), world.sourceReplicaId, 'setup: source leads');
     await driveToIntent(world);
     await settleTurns();
-    t.equal(world.stepDowns.length, 0, 'no handoff on an ordinary partition');
+    t.equal(world.stepDowns.length, 1,
+      'one named handoff on an ordinary partition too');
+    t.equal(world.stepDowns[0]?.[ReplicaOperationField.REPLICA_ID],
+      world.targetReplicaId, 'it names the target');
     t.equal((await readPersisted(world)).workflowStep, WORKFLOW_STEP.STOPPING,
       'the removal intent is durable');
+    t.equal(world.group.leader(), world.targetReplicaId,
+      'the target leads at the intent');
     const outcome = await runToQuiescence(world, {rounds: 30});
     t.equal(outcome.workflowStep, WORKFLOW_STEP.REMOVED, 'completed');
-    t.same([...new Set(world.retirements.map((payload) =>
-      payload[ReplicaOperationField.REPLICA_ID]))], [world.sourceReplicaId],
-    'every RETIRE went to the leader - the source itself - never the follower target');
+    t.notOk(world.retirements.some((payload) =>
+      payload[ReplicaOperationField.REPLICA_ID] === world.sourceReplicaId),
+    'no RETIRE is ever routed to the source');
     t.same(world.group.committedConfiguration().voters,
       [world.group.peerIdOf(world.targetReplicaId)],
       'the committed configuration is the target alone');

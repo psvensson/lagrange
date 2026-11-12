@@ -198,16 +198,18 @@ test('explicit live callbacks preserve readiness and planning arguments', async 
 });
 
 test('constructed coordinator forwards the declared operation reader without adaptation', async (t) => {
-  const options = {visibilityReadMode: 'owner_rpc_required'};
   const rows = [{operationId: 'op-reader'}];
   const calls = [];
   const coordinator = createMockCoordinator({readOperationsByEntity(...args) {
     calls.push(args);
     return rows;
   }});
-  t.equal(await coordinator.getOperationsByEntity('partition', 'p1', options), rows);
-  t.same(calls[0].slice(0, 2), ['partition', 'p1']);
-  t.equal(calls[0][2], options, 'required-read options retain their identity');
-  t.same(await createMockCoordinator().getOperationsByEntity('partition', 'p1', options), [],
+  t.equal(await coordinator.getAuthoritativeOperationsByEntity('partition', 'p1'), rows);
+  t.same(calls, [['partition', 'p1']], 'the owner read takes no read-mode options');
+  t.equal(coordinator.getOperationsByEntity, undefined,
+    'the mock exposes no dual-mode entity read');
+  t.equal(coordinator.getOperationsByPartition, undefined,
+    'the mock exposes no partition projection read');
+  t.same(await createMockCoordinator().getAuthoritativeOperationsByEntity('partition', 'p1'), [],
     'the default explicitly models an empty ledger');
 });

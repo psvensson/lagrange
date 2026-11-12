@@ -658,7 +658,8 @@ describe('stage 1c round 3: the HELD creation keeps custody (RV5.1, RV5.2, RV5.3
     'untouched, nothing emitted', async (t) => {
     const w = await world(t);
     await w.metadata.prepare();
-    w.handler.registerExistingReplica({replicaId: w.replicaId, entityId: w.metadata.serviceId,
+    w.handler.localReplicas.set(w.replicaId, {
+      replicaId: w.replicaId, entityId: w.metadata.serviceId,
       status: ReplicaStatus.HELD});
     const corrupt = w.handler.getLocalReplica(w.replicaId);
     const resumed = trackResumes(w);
@@ -879,7 +880,8 @@ describe('stage 1c: bound REMOVE route (RV2.1, RV3.3 REMOVE table)', () => {
       assert.equal((await w.metadata.prepare()).outcome, 'UNKNOWN');
       w.metadata.primary.reserveInstanceResource = reserve;
       assert.equal(w.metadata.row().state, 'pending');
-      w.handler.registerExistingReplica({replicaId: w.replicaId, entityId: w.metadata.serviceId,
+      w.handler.localReplicas.set(w.replicaId, {
+        replicaId: w.replicaId, entityId: w.metadata.serviceId,
         status: ReplicaStatus.HELD, operationId: w.operationId});
       const reserves = w.metadata.events.filter((event) => event.kind === 'reserve').length;
       await w.handler.handleRemoveReplica(removeRequest(w.metadata.serviceId, w.replicaId, 'rm-c'));
@@ -1047,7 +1049,8 @@ describe('recovery unit 1 (design RECOVERY-DESIGN-20261017): the handler side', 
       await w.metadata.prepare();
       w.metadata.db.prepare('UPDATE wasm_operations SET state = ? WHERE operation_id = ?')
         .run(state, w.operationId);
-      w.handler.registerExistingReplica({replicaId: w.replicaId, entityId: w.metadata.serviceId,
+      w.handler.localReplicas.set(w.replicaId, {
+        replicaId: w.replicaId, entityId: w.metadata.serviceId,
         status: ReplicaStatus.FAILED, operationId: w.operationId});
       await w.handler.handleRemoveReplica(removeRequest(w.metadata.serviceId, w.replicaId,
         `rm-${state}`));
@@ -1065,7 +1068,8 @@ describe('recovery unit 1 (design RECOVERY-DESIGN-20261017): the handler side', 
       throw new Error('RESERVATION_NOT_REACHED');
     };
     assert.equal((await w.metadata.prepare()).outcome, 'UNKNOWN');
-    w.handler.registerExistingReplica({replicaId: w.replicaId, entityId: w.metadata.serviceId,
+    w.handler.localReplicas.set(w.replicaId, {
+      replicaId: w.replicaId, entityId: w.metadata.serviceId,
       status: ReplicaStatus.HELD, operationId: w.operationId});
     w.metadata.primary.reserveInstanceResource = async () => ({outcome: 'UNAVAILABLE'});
     await w.handler.handleRemoveReplica(removeRequest(w.metadata.serviceId, w.replicaId, 'rm-u'));
@@ -1132,7 +1136,8 @@ for (const condition of ['TARGET_ALREADY_OWNED', 'INVALID_EXPECTED_STATE', 'STAL
       const original = f.prepare();
       await arrived.promise;
       const before = f.row();
-      w.handler.registerExistingReplica({replicaId: w.replicaId, entityId: f.serviceId,
+      w.handler.localReplicas.set(w.replicaId, {
+        replicaId: w.replicaId, entityId: f.serviceId,
         status: ReplicaStatus.HELD, operationId: w.operationId});
       const remove = removeRequest(f.serviceId, w.replicaId, 'f1-remove');
       await w.handler.handleRemoveReplica(remove);

@@ -1,18 +1,27 @@
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
-import {assertDeliveryOpen, deliveryAbortReason, remainingDeliveryMs, withDeliveryLifetime}
+import {assertDeliveryOpen, deliveryAbortReason, withDeliveryLifetime}
   from './message-router-delivery-lifetime.js';
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
 import {encodeDeliveryMessage} from './message-router-delivery-encoding.js';
+import {enterSyncSection, exitSyncSection} from '../diagnostics/event-loop-gap-watchdog.js';
+import {resolveDeliverySource} from './message-router-outbound-queue-admission.js';
+import {FRAME_CLASS, ROUTER_SYNC_SECTION, logRouterDiagnostics}
+  from './message-router-peer-traffic-diagnostics.js';
+import {TRANSPORT_ACKNOWLEDGEMENT} from './transport-acknowledgement.js';
+import {TRANSPORT_DELIVERY_OUTCOME_REASON_CODE} from './transport-semantic-outcome.js';
+import {ROUTER_DUPLICATE_PENDING_ACK_ERROR_CODE} from
+  './transport-router-invariant-error-codes.js';
 
 const DELIVERY_SETTLEMENT_REJECTED = 'rejected';
 
 const {ROUTER_ADDRESS, ROUTER_LOG_MSG, RouterMessageType, WebSocket} =
   MESSAGE_ROUTER_SHARED;
+// boundMs is the delivery's ACK bound (`ackTimeoutMs`) when the caller set one
+// and it is the earlier, else the delivery lifetime's remainder.
 const ACK_WAIT = Object.freeze({
   wait: 'MESSAGE_TIMEOUT_MS (delivery ACK)',
   awaited: 'ACK from the target node for a sent SERVICE_MESSAGE',
 });
-const DUPLICATE_PENDING_ACK = 'router_duplicate_pending_ack';
 
 function rejectBeforeSend(router, connection, targetNodeId, reject) {
   const active = router.nodeConnections.get(targetNodeId) || connection;
@@ -33,26 +42,80 @@ function rejectBeforeSend(router, connection, targetNodeId, reject) {
   reject(router.buildConnectionClosedError(targetNodeId, {beforeSend: true, retryAfterMs}));
 }
 
-function reportAckTimeout(router, pending, connection, targetAddress) {
+// What one timed-out delivery looked like: which message, how large, how much
+// the socket had buffered when it was handed over and has buffered now, and
+// how loaded the peer's outbound queue is.
+function observeAckTimeout(router, pending, sent) {
+  const queue = router.outboundQueues.get(pending.targetNodeId);
+  return {
+    deliverySource: resolveDeliverySource(sent.targetAddress, sent.payload, sent.options),
+    reasonCode: TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.ACK_TIMEOUT,
+    acknowledgement: pending.acknowledgement,
+    messageType: sent.payload?.type ?? null,
+    payloadBytes: pending.payloadBytes,
+    bufferedAmountAtSend: pending.bufferedAmountAtSend,
+    bufferedAmountNow: sent.ws.bufferedAmount ?? null,
+    queueInFlight: queue ? queue.inFlight : 0,
+    queuePending: queue ? queue.pending.length : 0,
+  };
+}
+
+// Every timeout, console sink only: the folded wait_bound_spent ERROR keeps
+// one line per (target, observed state), which hides the per-message sizes
+// and socket backlog needed to tell a wedged socket from a slow peer.
+function logAckTimeoutDetail(router, pending, connection, sent, timeout) {
+  logRouterDiagnostics(ROUTER_LOG_MSG.ACK_TIMEOUT_DETAIL, {
+    localNodeId: router.nodeId ?? null,
+    targetNodeId: pending.targetNodeId,
+    messageId: pending.messageId,
+    targetAddress: sent.targetAddress,
+    connectionId: connection?.connectionId ?? null,
+    boundMs: pending.deliveryTimeoutMs,
+    elapsedMs: timeout.elapsedMs,
+    ...timeout.observed,
+    ackTimeoutStreak: timeout.active?.ackTimeoutStreak ?? null,
+    quarantineOwnerChanged: timeout.quarantineOwnerChanged,
+  });
+}
+
+function reportAckTimeout(router, pending, connection, sent) {
   const {messageId, targetNodeId, clock, sentAt, deliveryTimeoutMs} = pending;
+  const observed = observeAckTimeout(router, pending, sent);
+  const elapsedMs = clock.now() - sentAt;
   const recoveryOwner = router.quarantineConnectionAfterAckTimeout(
-    targetNodeId, connection, messageId, targetAddress,
+    targetNodeId, connection, messageId, sent.targetAddress,
   );
   const active = router.nodeConnections.get(targetNodeId) || null;
+  const quarantineOwnerChanged =
+    Boolean(recoveryOwner) && recoveryOwner !== connection;
+  logAckTimeoutDetail(router, pending, connection, sent,
+    {observed, elapsedMs, active, quarantineOwnerChanged});
   reportWaitBoundSpent(router.logger, {
     ...ACK_WAIT,
     boundMs: deliveryTimeoutMs,
-    elapsedMs: clock.now() - sentAt,
+    elapsedMs,
     lastObserved: {
       connectionId: connection?.connectionId ?? null,
       activeConnectionId: active?.connectionId ?? null,
       activeConnectionState: active?.state ?? null,
       sameConnection: active === connection,
-      quarantineOwnerChanged: Boolean(recoveryOwner) && recoveryOwner !== connection,
+      quarantineOwnerChanged,
+      deliverySource: observed.deliverySource,
+      reasonCode: observed.reasonCode,
+      acknowledgement: observed.acknowledgement,
     },
     scope: {nodeId: router.nodeId ?? null, targetNodeId, messageId},
     subject: targetNodeId,
   });
+}
+
+function encodeDeliveryFrame(envelope, lifetime) {
+  const encodeToken = enterSyncSection(ROUTER_SYNC_SECTION.FRAME_ENCODE);
+  try {
+    return encodeDeliveryMessage(envelope, lifetime);
+  } finally {
+    exitSyncSection(ROUTER_SYNC_SECTION.FRAME_ENCODE, encodeToken);
+  }
 }
 
 function sendWithAck(router, connection, targetAddress, messageId, payload, targetNodeId, options) {
@@ -70,7 +133,8 @@ function sendWithAck(router, connection, targetAddress, messageId, payload, targ
   const acknowledged = new Promise((resolve, reject) => {
     assertDeliveryOpen(options);
     if (router.pendingMessages.has(messageId)) {
-      throw Object.assign(new Error(DUPLICATE_PENDING_ACK), {code: DUPLICATE_PENDING_ACK});
+      throw Object.assign(new Error(ROUTER_DUPLICATE_PENDING_ACK_ERROR_CODE),
+        {code: ROUTER_DUPLICATE_PENDING_ACK_ERROR_CODE});
     }
     const ws = connection?.ws;
     if (!ws || ws.readyState !== WebSocket.OPEN) {
@@ -78,7 +142,7 @@ function sendWithAck(router, connection, targetAddress, messageId, payload, targ
       return;
     }
     const {clock} = options.deliveryLifetime;
-    const encoded = encodeDeliveryMessage({
+    const encoded = encodeDeliveryFrame({
       type: RouterMessageType.SERVICE_MESSAGE,
       messageId,
       targetAddress,
@@ -93,10 +157,21 @@ function sendWithAck(router, connection, targetAddress, messageId, payload, targ
     const pending = {
       messageId, targetNodeId, clock,
       sentAt: clock.now(),
-      deliveryTimeoutMs: remainingDeliveryMs(options),
+      // The bound this ACK wait ends on, not the whole lifetime.
+      deliveryTimeoutMs: options.deliveryLifetime.ackWaitBoundMs(),
       timeout: null,
       assertOpen: () => assertDeliveryOpen(options),
+      // The named acknowledgement state of this send; the delivery lifetime
+      // holds the same fact and stamps its timeout error from it.
+      acknowledgement: TRANSPORT_ACKNOWLEDGEMENT.NOT_SENT,
+      recordAcknowledgement(state) {
+        options.deliveryLifetime.recordAcknowledgement(state);
+        pending.acknowledgement = options.deliveryLifetime.acknowledgement();
+      },
+      payloadBytes: null,
+      bufferedAmountAtSend: null,
     };
+    const sent = {ws, targetAddress, payload, options};
     let settled = false;
     const finish = (settle, value) => {
       if (settled) return;
@@ -112,9 +187,13 @@ function sendWithAck(router, connection, targetAddress, messageId, payload, targ
       if (settled) return;
       const reason = deliveryAbortReason(options.signal);
       // Cancellation of an upstream grant is not evidence of a bad socket.
-      // Preserve ACK-timeout quarantine for this router's own spent grant.
-      if (options.deliveryLifetime.ownsTimeout(reason)) {
-        reportAckTimeout(router, pending, connection, targetAddress);
+      // Preserve ACK-timeout quarantine for this router's own spent grant,
+      // and only for a frame this socket took and never acknowledged: a bound
+      // spent before the frame left (not_sent) or after the ACK (an answer
+      // timeout) says nothing about this socket.
+      if (options.deliveryLifetime.ownsTimeout(reason) &&
+          pending.acknowledgement === TRANSPORT_ACKNOWLEDGEMENT.UNACKNOWLEDGED) {
+        reportAckTimeout(router, pending, connection, sent);
       }
       finish(reject, reason);
     }
@@ -136,7 +215,7 @@ function sendWithAck(router, connection, targetAddress, messageId, payload, targ
         } catch (error) {
           finish(reject, error);
         }
-      }, remainingDeliveryMs(options));
+      }, options.deliveryLifetime.ackWaitBoundMs());
     };
     router.pendingMessages.set(messageId, pending);
     options.signal.addEventListener('abort', onAbort, {once: true});
@@ -149,16 +228,27 @@ function sendWithAck(router, connection, targetAddress, messageId, payload, targ
       finish(reject, error);
       return;
     }
+    pending.payloadBytes = Buffer.byteLength(bytes);
+    pending.bufferedAmountAtSend = ws.bufferedAmount ?? null;
+    router.peerTrafficDiagnostics.recordSent(
+      targetNodeId, pending.payloadBytes, FRAME_CLASS.REQUEST);
+    let handedToSocket = false;
     try {
       writeStarted = true;
       ws.send(bytes, {binary: false}, (error) => {
         if (finishWrite(error) && error) pending.reject(error);
       });
+      handedToSocket = true;
     } catch (_sendError) {
       // Once ws.send has been entered, a thrown error is not proof that its
       // compression/write child released the encoded copy. The existing close
       // owner may induce the actual callback; until then cleanup stays owed.
       rejectBeforeSend(router, connection, targetNodeId, pending.reject);
+    }
+    // ws.send returned: the socket took the frame and the target may receive
+    // it. A synchronous throw left nothing on the wire, so it stays not_sent.
+    if (handedToSocket) {
+      pending.recordAcknowledgement(TRANSPORT_ACKNOWLEDGEMENT.UNACKNOWLEDGED);
     }
   });
   if (!writeStarted) finishWrite();

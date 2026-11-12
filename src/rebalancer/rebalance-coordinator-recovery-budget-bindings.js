@@ -6,18 +6,14 @@ import {
   reconcileOperationProgress,
   handleExecutorOutcome,
   reconcileExecutorOutcome,
-  handleRecovery,
   isPreSyncStep,
-  reconcileRecoveryOperation,
   reconcileMessageGroupMembershipDebt,
-  reconcileSyncingOperation,
   getObservedReplicaStatusFromCache,
   getActualReplicaStatus,
   emitReplicaStatusDivergence,
   getOperation,
   getAllOperations,
-  getOperationsByPartition,
-  getOperationsByEntity,
+  getAuthoritativeOperationsByEntity,
   getInFlightOperations,
 } from './rebalance-coordinator-recovery-helper.js';
 import {
@@ -86,24 +82,12 @@ class RebalanceCoordinatorRecoveryBudgetBindings {
     return reconcileExecutorOutcome(this, outcome);
   }
 
-  async handleRecovery() {
-    return handleRecovery(this);
-  }
-
   isPreSyncStep(step) {
     return isPreSyncStep(this, step);
   }
 
-  async reconcileRecoveryOperation(op) {
-    return reconcileRecoveryOperation(this, op);
-  }
-
-  async reconcileMessageGroupMembershipDebt() {
-    return reconcileMessageGroupMembershipDebt(this);
-  }
-
-  async reconcileSyncingOperation(operation) {
-    return reconcileSyncingOperation(this, operation);
+  async reconcileMessageGroupMembershipDebt(census) {
+    return reconcileMessageGroupMembershipDebt(this, census);
   }
 
   getObservedReplicaStatusFromCache(
@@ -142,12 +126,8 @@ class RebalanceCoordinatorRecoveryBudgetBindings {
     return getAllOperations(this);
   }
 
-  async getOperationsByPartition(partitionId) {
-    return getOperationsByPartition(this, partitionId);
-  }
-
-  async getOperationsByEntity(entityType, entityId, options = {}) {
-    return getOperationsByEntity(this, entityType, entityId, options);
+  async getAuthoritativeOperationsByEntity(entityType, entityId) {
+    return getAuthoritativeOperationsByEntity(this, entityType, entityId);
   }
 
   async getInFlightOperations() {

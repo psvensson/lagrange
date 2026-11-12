@@ -15,9 +15,10 @@ import {
   REPLACE_INTENT_FIELD,
   replaceIntentEntryOf,
 } from './operation-workflow-replace-owner-state.js';
+import {presentOperationOf} from
+  './replica-operation-repository-operation-visibility.js';
 
 const {
-  OPERATION_WORKFLOW_OWNER_LITERAL,
   OperationType,
   SERVICE_TYPE,
   WORKFLOW_STEP,
@@ -75,14 +76,11 @@ function isSourceUnreachableAtIntent(operation) {
 // reads it from the durable row.
 async function resolveIntentCommitIndex(owner, operation) {
   const fromCopy = witnessCommitIndexAtIntent(operation);
-  if (!Number.isNaN(fromCopy) ||
-      typeof owner.repository
-        ?.queryReplicaOperationPersistenceAuthorityOperation !==
-        OPERATION_WORKFLOW_OWNER_LITERAL.FUNCTION) {
+  if (!Number.isNaN(fromCopy)) {
     return fromCopy;
   }
-  const durable = await owner.repository
-    .queryReplicaOperationPersistenceAuthorityOperation(operation);
+  const durable = presentOperationOf(await owner.repository
+    .queryReplicaOperationPersistenceAuthorityObservation(operation));
   return durable ? witnessCommitIndexAtIntent(durable) : fromCopy;
 }
 

@@ -37,7 +37,7 @@ for (const disableCommittedTrigger of [false, true]) {
         'only the required committed trigger can drive this frozen-timer schedule');
       t.equal(h.operation.operationId, operationId, 'same retained operation identity');
       if (disableCommittedTrigger) {
-        const row = await h.coordinator.queryOperationById(operationId);
+        const row = await h.coordinator.queryOperationProjectionById(operationId);
         t.not(row.workflowStep, WORKFLOW_STEP.FAILED, 'the disabled-trigger negative stays retained');
       }
       h.releasePlanningNotifications();
@@ -99,7 +99,7 @@ test('committed node availability is revalidated after the last awaited intent b
     await settleOwnerTurns();
     t.equal(changedAfterSafe, true, 'SAFE reached the actual durable-intent await');
     t.equal(h.state.effects.length, 0, 'changed committed level withholds the effect');
-    const row = await h.coordinator.queryOperationById(h.operation.operationId);
+    const row = await h.coordinator.queryOperationProjectionById(h.operation.operationId);
     t.equal(row.workflowStep, WORKFLOW_STEP.STOPPING, 'durable intent retains its owner');
     h.owner.persistReplaceRemovalIntent = persist;
     h.state.nodes[1] = floorNodeRow(FLOOR_NODE_IDS[1]);
@@ -130,7 +130,7 @@ test('remaining peer liveness degradation during evaluateRemoveSafety awaits aft
     await settleOwnerTurns();
     t.equal(degradedMidEvaluation, true, 'peer liveness degraded during evaluateRemoveSafety after floor read');
     t.equal(h.state.effects.length, 0, 'pre-evaluation readinessEntryLevel catches mid-evaluation degradation and withholds REMOVE_REPLICA');
-    const row = await h.coordinator.queryOperationById(h.operation.operationId);
+    const row = await h.coordinator.queryOperationProjectionById(h.operation.operationId);
     t.equal(row.workflowStep, WORKFLOW_STEP.ACTIVE, 'STOPPING intent is not persisted when inputs degraded during evaluation');
     h.owner.messageRouter.pingNode = pingNode;
     h.state.nodes[1] = floorNodeRow(FLOOR_NODE_IDS[1]);

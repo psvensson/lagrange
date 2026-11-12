@@ -74,7 +74,10 @@ import {printRatchetTighteningHint} from './metric-check-helpers.js';
 // on the checker hint after consuming noteReplaceOwnerObservedReplicaRows.
 // 2026-11-09 (candidate-integration): tightened 1386 -> 1381 on the checker
 // hint after de-exporting internal runtime-admin composition and policy helpers.
-const BASELINE_UNUSED_EXPORT_COUNT = 1381;
+// 2026-11-11 (canonical-authority formation hygiene): tightened 1381 -> 1379
+// on the checker hint after de-exporting in-file helpers, deleting orphaned
+// CDC helpers and the split accessor's unused status-contract re-exports.
+const BASELINE_UNUSED_EXPORT_COUNT = 1379;
 const EXIT_FAILURE = 1;
 const TOP_OFFENDER_COUNT = 10;
 const SELF_REFERENCE = 'scripts/check-unused-exports.js';

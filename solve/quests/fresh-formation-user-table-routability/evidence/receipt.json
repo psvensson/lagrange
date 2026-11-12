@@ -1,24 +1,40 @@
 {
   "schema": "test-receipt/1",
+  "quest": "fresh-formation-user-table-routability",
   "status": "fail",
+  "testFileDigests": {
+    "test/scripts/fresh-formation-user-table-routability.test.js": "e77e7d5728e979693c3e169cd515c0bbb68491b32fb4423cb72adfa75e15e8c7"
+  },
+  "generatedAt": "2026-11-10T22:27:54.597Z",
   "receipts": [
     {
       "id": "reproducer-red-on-current-product",
-      "passed": false
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^reproducer is registered with unchanged preregistered bounds and retained red H1 baseline$\" test/scripts/fresh-formation-user-table-routability.test.js",
+      "detail": "The reproducer scenario fresh-formation-user-table-routability preserves its preregistered bounds and topology requirements, and the quest retains its sealed red measurement and historical H1 evidence.",
+      "testFile": "test/scripts/fresh-formation-user-table-routability.test.js"
     },
     {
       "id": "first-divergence-repaired-at-cause",
-      "passed": false
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^first causal divergence and all bounded formation authority blockers are repaired at cause$\" test/scripts/fresh-formation-user-table-routability.test.js",
+      "detail": "All 8 bounded runtime formation/authority quests plus management, load-admission, and legacy-fallback closure are solved with passing receipts, and zero legacy fallback violations survive.",
+      "testFile": "test/scripts/fresh-formation-user-table-routability.test.js"
     },
     {
       "id": "scenario-green-three-consecutive",
-      "passed": false
+      "passed": false,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^registered three-node formation scenario passes three consecutive runs on physical lab hosts$\" test/scripts/fresh-formation-user-table-routability.test.js",
+      "detail": "Three consecutive fresh formation runs pass on physical lab hosts matching the current source fingerprint, satisfying all 8 predicates with observed physical boot identities and retained logs.",
+      "failure": "1 test(s) failed",
+      "testFile": "test/scripts/fresh-formation-user-table-routability.test.js"
     },
     {
       "id": "independent-verification",
-      "passed": false
+      "passed": true,
+      "command": "node scripts/quest-evidence/fresh-formation-user-table-routability.js --check-verification",
+      "detail": "An approving subagent verification newer than the last attempt, read through the solve store owner.",
+      "testFile": null
     }
-  ],
-  "evidence": [],
-  "applicability": "active quest fresh-formation-user-table-routability under epic operation-integrity-and-reliable-formation (milestone 0.4.1); red until all four receipts (reproducer-red-on-current-product, first-divergence-repaired-at-cause, scenario-green-three-consecutive, independent-verification) are satisfied on the frozen candidate SHA. The baseline red formation-repro run (multi-host-lab-run1-20261101T2118Z, incl. run-summary.json) and product-blocker-first-divergence-2026-11-01.md are retained in relocated bundles comparative-benchmark-evidence-repair--comparative-benchmark-evidence-repair-evidence-435c426b9-2026-11-01.tar.gz (sha256 3718164dc7b632abbecd39049600efe02c4e9d7ab0566a0ea19b62b7e4b4e6c9) and comparative-benchmark-evidence-repair--comparative-benchmark-evidence-repair-evidence-c959e0241-2026-11-01.tar.gz (sha256 eaf4c6658612a812504507dffa26a594ff820217898f8df0ba28cf5f7f83b95f); summaries in tree under solve/quests/comparative-benchmark-evidence-repair/evidence/."
+  ]
 }

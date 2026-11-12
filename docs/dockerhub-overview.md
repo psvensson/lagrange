@@ -61,6 +61,7 @@ This command is local-host only:
 
 ```bash
 docker run --rm \
+  -e LAGRANGE_FORMATION_TARGET_NODE_COUNT=1 \
   -e ADMIN_WS_HOST=0.0.0.0 \
   -e ADMIN_ALLOW_INSECURE_EXTERNAL_BIND=true \
   -p 127.0.0.1:8080:8080 \
@@ -70,7 +71,9 @@ docker run --rm \
 ```
 
 A node started without `SEED_NODE_ADDRESS` becomes the seed of a new
-cluster. It opens three ports:
+cluster. The seed must declare the cluster's intended total node count in
+`LAGRANGE_FORMATION_TARGET_NODE_COUNT` (`1` for a single node); there is no
+default, and a seed without it refuses to start. It opens three ports:
 
 | Port | Purpose |
 | --- | --- |
@@ -97,6 +100,7 @@ from each node's REST base unless individually overridden. Joiners point
 docker network create lagrange-net
 
 docker run -d --name seed --network lagrange-net \
+  -e LAGRANGE_FORMATION_TARGET_NODE_COUNT=2 \
   -e TRANSPORT_WS_HOST=0.0.0.0 \
   -e ADMIN_WS_HOST=0.0.0.0 \
   -e ADMIN_ALLOW_INSECURE_EXTERNAL_BIND=true \
@@ -128,6 +132,7 @@ Set via environment variables (`-e`):
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `SEED_NODE_ADDRESS` | unset | Unset → start as seed; set (`http://host:8080`) → join that cluster |
+| `LAGRANGE_FORMATION_TARGET_NODE_COUNT` | none (required on a founding seed) | Intended total node count of the cluster the seed founds; a positive integer, recorded once. Joiners do not set it |
 | `NODE_ADDRESS` | localhost | Registration address other nodes reach you at (`host:8080`); the localhost default is rejected at join admission |
 | `NODE_ADVERTISED_WS_ADDRESS` | localhost | Advertised transport address (`host:8082`) |
 | `TRANSPORT_WS_HOST` | localhost | Transport bind host; use `0.0.0.0` in containers |
@@ -152,6 +157,7 @@ replacement:
 
 ```bash
 docker run -d -v lagrange-data:/app/data \
+  -e LAGRANGE_FORMATION_TARGET_NODE_COUNT=1 \
   -e ADMIN_WS_HOST=0.0.0.0 \
   -e ADMIN_ALLOW_INSECURE_EXTERNAL_BIND=true \
   -p 8080:8080 -p 8081:8081 -p 8082:8082 \

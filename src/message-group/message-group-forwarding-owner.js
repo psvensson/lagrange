@@ -28,7 +28,8 @@ import {MESSAGE_GROUP_NATIVE_CDC_INGRESS_STATE, defineMessageGroupForwardingOwne
   './message-group-forwarding-owner-routing-methods.js';
 import {normalizeCauseId} from '../utils/cause-id.js';
 import {hasDurableCdcEvents} from '../cdc/cdc-delivery-outcome.js';
-import {TRANSPORT_ERROR_MSG} from '../constants/transport.js';
+import {classifyTransportDeliveryFailure, mayResendAfterTransportFailure} from
+  '../transport/transport-delivery-failure.js';
 import {
   FORWARD_TOPOLOGY_REPAIR_OUTCOME,
   MESSAGE_GROUP_CDC_FORWARD_FAILURE_STATE,
@@ -162,55 +163,18 @@ class MessageGroupForwardingOwner {
 
   // `failure` is the onward hop's transport outcome when it was not
   // delivered, else the leader's answer; either asks to defer by deferRetry.
-  isRetryableForwardDeliveryFailure(failure = null, errorMessage = null) {
-    const normalizedErrorMessage = typeof errorMessage === 'string' ?
-      errorMessage :
-      '';
-    if (failure?.deferRetry === true) {
-      return true;
-    }
-    return this.service.isForwardTargetBackpressured(
-      failure,
-      normalizedErrorMessage,
-    ) ||
-      this.isForwardNetworkFailure(normalizedErrorMessage);
-  }
-
-  isForwardNetworkFailure(normalizedErrorMessage) {
-    return normalizedErrorMessage === TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT ||
-      normalizedErrorMessage.includes(
-        MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.ENOTFOUND,
-      ) ||
-      normalizedErrorMessage.includes(
-        MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.EAI_AGAIN,
-      ) ||
-      normalizedErrorMessage.includes(
-        MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.ECONNREFUSED,
-      ) ||
-      normalizedErrorMessage.includes(
-        MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.NO_CONNECTION_TO_NODE,
-      ) ||
-      (
-        normalizedErrorMessage.includes(
-          MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.CONNECTION_TO_NODE,
-        ) &&
-        normalizedErrorMessage.includes(
-          MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.CLOSED,
-        )
-      );
+  // A transport failure is decided by the transport's one decision and this
+  // owner's one fact: a forwarded CDC event is applied under its event
+  // identity (its eventKey; the CDC handler dedupes on it), so an ambiguous
+  // forward is re-sent as that same event.
+  isRetryableForwardDeliveryFailure(failure = null) {
+    return failure?.deferRetry === true || mayResendAfterTransportFailure(
+      classifyTransportDeliveryFailure(failure), {identityKeyed: true});
   }
 
   resolveForwardFailureState(deliveryResult = null, errorLike = null) {
-    const errorMessage = typeof errorLike?.message === 'string' ?
-      errorLike.message :
-      typeof errorLike === 'string' ?
-        errorLike :
-        null;
     if (errorLike?.deferRetry === true ||
-        this.isRetryableForwardDeliveryFailure(
-          deliveryResult,
-          errorMessage,
-        )) {
+        this.isRetryableForwardDeliveryFailure(deliveryResult ?? errorLike)) {
       return MESSAGE_GROUP_CDC_FORWARD_FAILURE_STATE.RETRYABLE_DEFER;
     }
     return MESSAGE_GROUP_CDC_FORWARD_FAILURE_STATE.NON_RETRYABLE_DEFER;
@@ -667,7 +631,6 @@ Object.assign(
     serviceType: SERVICE_TYPE,
     state: STATE,
     tables: TABLES,
-    transportErrorMsg: TRANSPORT_ERROR_MSG,
     typeofToken: TYPEOF,
     forwardTopologyRepairWorkloadClass:
       CONTROL_PLANE_WORKLOAD_CLASS.MESSAGE_GROUP_FORWARD_TOPOLOGY_REPAIR,

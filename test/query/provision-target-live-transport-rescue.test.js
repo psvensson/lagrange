@@ -69,9 +69,7 @@ test('repair eligibility cannot replace committed serving eligibility', (t) => {
   });
   const diagnostics = fixture.engine.resolveProvisionTargetNodeDiagnostics(1);
   t.same(diagnostics.strictNodeIds, []);
-  t.same(diagnostics.degradedFallbackNodeIds, []);
   t.same(diagnostics.selectedNodeIds, []);
-  t.equal(diagnostics.usedDegradedFallback, false);
   t.equal(fixture.getRetiredTrustCalls(), 0);
   t.end();
 });

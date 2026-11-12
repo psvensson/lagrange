@@ -1,3 +1,5 @@
+import {RECIPIENT_RETIREMENT_WRITE_OPTIONS} from
+  '../partition/partition-cdc-admission-class.js';
 import {AddressManager} from '../address/address-manager.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
@@ -256,7 +258,12 @@ async function persistMessageGroupActivation(owner, source, options) {
       SYSTEM_TABLE_NAME.SERVICES,
       buildMessageGroupActivationPredicate(source),
       updates,
-      owner.buildDeferredUpdateOptions(source.service_id),
+      {...owner.buildDeferredUpdateOptions(source.service_id),
+        // This owner's STOPPED transition retires the replica: the write that
+        // lets a CDC source lane detach the group may use the retirement
+        // reserve (partition-cdc-admission-class.js).
+        ...(options.status === SERVICE_STATUS.STOPPED ?
+          RECIPIENT_RETIREMENT_WRITE_OPTIONS : {})},
     );
   } catch (error) {
     cause = error;
@@ -574,6 +581,9 @@ class MessageGroupServiceRowOwner {
           allowCoalescing: false,
           coalescingKey: `services:${replicaId}:message-group-remove:` +
             durableRowVersion(stoppedRow).value,
+          // Removing the staged STOPPED row completes the replica's
+          // retirement (retirement reserve, partition-cdc-admission-class.js).
+          ...RECIPIENT_RETIREMENT_WRITE_OPTIONS,
         },
       );
     } catch (error) {

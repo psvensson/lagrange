@@ -14,6 +14,10 @@ import {
   isPartitionReplace,
   isReplaceRemovalIntentDurable,
 } from './operation-workflow-replace-owner.js';
+import {
+  OPERATION_VISIBILITY_STATE,
+  readOperationVisibilityState,
+} from './replica-operation-repository-operation-visibility.js';
 const {
   EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
   OBSERVED_OPERATION_ROW_TARGET_PROGRESS_STATUSES,
@@ -231,9 +235,13 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
       return [];
     }
     if (cacheOperation !== OPERATION_WORKFLOW_OWNER_LITERAL.DELETE) {
-      // services.status is NOT NULL; no relevant status is ever absent.
-      const status = String(serviceRow.status).toLowerCase();
-      if (!OBSERVED_PROGRESS_RELEVANT_SERVICE_STATUSES.has(status)) return [];
+      // The wake reads the same lifecycle vocabulary the reconcile decides
+      // on: a cleanup receipt row is REMOVING/REMOVED, never its raw status.
+      const lifecycleStatus =
+        this.repository.normalizeObservedReplicaLifecycle(serviceRow);
+      if (!OBSERVED_PROGRESS_RELEVANT_SERVICE_STATUSES.has(lifecycleStatus)) {
+        return [];
+      }
     }
     const targetNodeId = String(serviceRow.node_id || serviceRow.nodeId || '');
     const replicaId = String(
@@ -367,7 +375,18 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
           allowPriorityRecoveryDeferredVisibility: true,
         },
       );
-    const operation = visibilityObservation?.operation || null;
+    // The owner's local durable rows (owner-preferred, local SQL fallback):
+    // observed progress must move during control-plane recovery, when the
+    // strict owner-RPC lane is what is unavailable; its step writes are
+    // compare-and-set. No answer at all keeps the observed-progress retry
+    // armed (it is not cleared on a read that answered nothing).
+    if (
+      readOperationVisibilityState(visibilityObservation) ===
+      OPERATION_VISIBILITY_STATE.UNAVAILABLE
+    ) {
+      return false;
+    }
+    const operation = visibilityObservation.operation;
     const routeEvidence =
       this.buildObservedProgressOperationRouteEvidence(operation);
     const routeAction =
@@ -561,6 +580,14 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
     });
   }
 
+  isStoppingReplicaRemovalObserved(stoppingReplicaObservation) {
+    return (
+      stoppingReplicaObservation?.state ===
+        STOPPING_REPLICA_OBSERVATION_STATE.ABSENT ||
+      stoppingReplicaObservation?.lifecycleStatus === ReplicaStatus.REMOVED
+    );
+  }
+
   buildStoppingObservationRetryableError(operation) {
     const error = new Error(
       OPERATION_WORKFLOW_OWNER_LITERAL
@@ -634,8 +661,7 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
     }
 
     if (
-      stoppingReplicaObservation.state ===
-        STOPPING_REPLICA_OBSERVATION_STATE.ABSENT ||
+      this.isStoppingReplicaRemovalObserved(stoppingReplicaObservation) ||
       (operation.type === OperationType.REPLACE &&
         operation.entityType !== UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE &&
         actualStatus === ReplicaStatus.FAILED)

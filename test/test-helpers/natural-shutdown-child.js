@@ -32,6 +32,7 @@ if (mode === 'successful-start') {
       NODE_ID: nodeId,
       DATA_DIR: directory,
       LAGRANGE_FORCE_NEW_CLUSTER: '1',
+      LAGRANGE_FORMATION_TARGET_NODE_COUNT: '1',
     },
   });
 
@@ -86,6 +87,7 @@ if (mode === 'successful-start') {
     environment: {
       NODE_ID: nodeId,
       DATA_DIR: directory,
+      LAGRANGE_FORMATION_TARGET_NODE_COUNT: '1',
     },
   });
   const inc1 = await readIssuedBootIncarnation(directory);
@@ -104,6 +106,7 @@ if (mode === 'successful-start') {
     environment: {
       NODE_ID: nodeId,
       DATA_DIR: directory,
+      LAGRANGE_FORMATION_TARGET_NODE_COUNT: '1',
     },
   });
   assert.ok(runtime2, 'runtime2 dryRun completed');

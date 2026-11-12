@@ -53,8 +53,7 @@ test('Property 51: Live Query Event Rate Calculation', async (t) => {
           // Activate the subscription
           manager.handleLiveQueryEvent({
             subscriptionId,
-            type: 'live_query_initial',
-            data: [],
+            type: 'live_query_subscribed',
             partitions: ['p1'],
           });
 
@@ -100,8 +99,7 @@ test('Property 51: Live Query Event Rate Calculation', async (t) => {
           // Activate the subscription
           manager.handleLiveQueryEvent({
             subscriptionId,
-            type: 'live_query_initial',
-            data: [],
+            type: 'live_query_subscribed',
             partitions: ['p1'],
           });
 
@@ -132,8 +130,7 @@ test('Property 51: Live Query Event Rate Calculation', async (t) => {
           // Activate the subscription
           manager.handleLiveQueryEvent({
             subscriptionId,
-            type: 'live_query_initial',
-            data: [],
+            type: 'live_query_subscribed',
             partitions: ['p1'],
           });
 
@@ -183,8 +180,7 @@ test('Property 51: Live Query Event Rate Calculation', async (t) => {
           // Activate the subscription
           manager.handleLiveQueryEvent({
             subscriptionId,
-            type: 'live_query_initial',
-            data: [],
+            type: 'live_query_subscribed',
             partitions: ['p1'],
           });
 

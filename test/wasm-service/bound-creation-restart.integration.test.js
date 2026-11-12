@@ -1252,9 +1252,9 @@ for (const replacement of ['memo', 'physical']) {
         queueOrdinaryMemoWake(witness);
         let physical = e.replicaOf(host);
         if (replacement === 'memo') {
-          // LABELLED volatile replacement seam through the handler's existing
-          // registration API. The replacement never inherits the old bit.
-          host.handler.registerExistingReplica({...memo, wakePending: false});
+          // LABELLED volatile replacement seam: the handler's memo is
+          // replaced in place. The replacement never inherits the old bit.
+          host.handler.localReplicas.set(memo.replicaId, {...memo, wakePending: false});
         } else {
           // A real successor is admitted and materialized by the lower
           // owners while the old handler continuation is suspended.

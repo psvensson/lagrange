@@ -2,6 +2,11 @@ import {assertDeliveryOpen, remainingDeliveryMs, withDeliveryLifetime}
   from './message-router-delivery-lifetime.js';
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
 import {
+  recordOutboundSocketAckTimeout,
+  resolveOutboundSocketWedged,
+  resolveQuarantineMinimumStreakSpanMs,
+} from './message-router-peer-liveness.js';
+import {
   TIMEOUT_BUDGET_DEFAULT,
   createTimeoutBudget,
   getRemainingBudgetMs,
@@ -606,10 +611,8 @@ export function quarantineConnectionAfterAckTimeout(
   ) {
     return activeConnection || null;
   }
-  activeConnection.ackTimeoutStreak =
-    (activeConnection.ackTimeoutStreak || TRANSPORT_NUM.ZERO) +
-    TRANSPORT_NUM.ONE;
-  activeConnection.lastAckTimeoutAt = router.timeSource.now();
+  const nowMs = router.timeSource.now();
+  const socketEvidence = recordOutboundSocketAckTimeout(activeConnection, nowMs);
   if (
     activeConnection.ackTimeoutStreak < router.ackTimeoutQuarantineThreshold
   ) {
@@ -627,32 +630,47 @@ export function quarantineConnectionAfterAckTimeout(
     );
     return activeConnection;
   }
-  // Liveness guard (CL-007): quarantine exists to stop wasting deliveries on
-  // DEAD/hung peers. A peer we are actively receiving from (any inbound
-  // message, or a recent ACK) is alive but slow — severing its connection
-  // converts slow into broken ("never break, only slow") and, during
-  // formation, cuts every joiner off from the saturated seed at once. The
-  // timed-out message itself still fails and retries; only the connection
-  // teardown is skipped. Truly dead sockets still close via ws close/error
-  // events, and silent-hung peers exceed the liveness window and quarantine.
+  // Liveness guard (CL-007), both directions, on evidence of the right scope.
+  // Slow is not dead: a peer we are receiving from (any inbound frame from
+  // the node, or an ACK on this socket) keeps its connection, the timed-out
+  // message alone fails and retries. Dead is not slow: node-level inbound
+  // traffic cannot vouch for THIS outbound socket, so a socket that has
+  // returned no ACK at all, late ones included, for a full liveness window of
+  // continuous ACK timeouts is wedged and is quarantined even while the peer
+  // is heard on another path. Truly closed sockets still close via ws
+  // close/error events.
   const livenessWindowMs = router.ackTimeoutQuarantineLivenessWindowMs;
-  const nowMs = router.timeSource.now();
-  const lastSocketAckAt = activeConnection.lastAckAt || TRANSPORT_NUM.ZERO;
-  const outboundSocketWedged =
-    activeConnection.ackTimeoutStreak >=
-      Math.max(router.ackTimeoutQuarantineThreshold * 3, 6) &&
-    Number.isFinite(livenessWindowMs) &&
-    livenessWindowMs > TRANSPORT_NUM.ZERO &&
-    (lastSocketAckAt <= TRANSPORT_NUM.ZERO ||
-      nowMs - lastSocketAckAt >= livenessWindowMs);
-  const lastInboundAt = outboundSocketWedged ?
-    lastSocketAckAt :
-    Math.max(
-      lastSocketAckAt,
-      (typeof router.getNodeInboundActivityAt === TRANSPORT_TYPEOF.FUNCTION &&
-        router.getNodeInboundActivityAt(targetNodeId)) || TRANSPORT_NUM.ZERO,
+  const wedged = resolveOutboundSocketWedged(socketEvidence, {
+    nowMs,
+    livenessWindowMs,
+    quarantineThreshold: router.ackTimeoutQuarantineThreshold,
+  });
+  // A streak is evidence against this socket only once it spans a keepalive
+  // round on it; the wedged judgement (a whole silent liveness window) is
+  // already longer and overrides.
+  const streakSpanMs = nowMs - socketEvidence.streakStartedAt;
+  const minimumStreakSpanMs = resolveQuarantineMinimumStreakSpanMs(router);
+  if (!wedged.wedged && streakSpanMs < minimumStreakSpanMs) {
+    router.logger.debug(
+      MESSAGE_ROUTER_LITERAL.STRING_QUARANTINE_SKIPPED_STREAK_SPAN_SHORT,
+      {
+        messageId,
+        targetNodeId,
+        localNodeId: router.nodeId,
+        connectionId: activeConnection.connectionId,
+        ackTimeoutStreak: activeConnection.ackTimeoutStreak,
+        streakSpanMs,
+        minimumStreakSpanMs,
+      },
     );
+    return activeConnection;
+  }
+  const lastInboundAt = Math.max(
+    socketEvidence.lastAckAt,
+    router.getNodeInboundActivityAt(targetNodeId) || TRANSPORT_NUM.ZERO,
+  );
   if (
+    !wedged.wedged &&
     Number.isFinite(livenessWindowMs) &&
     livenessWindowMs > TRANSPORT_NUM.ZERO &&
     lastInboundAt > TRANSPORT_NUM.ZERO &&
@@ -668,8 +686,9 @@ export function quarantineConnectionAfterAckTimeout(
         connectionId: activeConnection.connectionId,
         ackTimeoutStreak: activeConnection.ackTimeoutStreak,
         ackTimeoutQuarantineThreshold: router.ackTimeoutQuarantineThreshold,
-        lastInboundAgoMs: router.timeSource.now() - lastInboundAt,
+        lastInboundAgoMs: nowMs - lastInboundAt,
         livenessWindowMs,
+        socketSilentForMs: wedged.socketSilentForMs,
       },
     );
     return activeConnection;
@@ -684,6 +703,9 @@ export function quarantineConnectionAfterAckTimeout(
       connectionId: activeConnection.connectionId,
       ackTimeoutStreak: activeConnection.ackTimeoutStreak,
       ackTimeoutQuarantineThreshold: router.ackTimeoutQuarantineThreshold,
+      outboundSocketWedged: wedged.wedged,
+      socketSilentForMs: wedged.socketSilentForMs,
+      livenessWindowMs,
     },
   );
   const staleWs = activeConnection.ws || null;
@@ -704,6 +726,7 @@ export function quarantineConnectionAfterAckTimeout(
     isSelfConnection: false,
     bootIncarnation: TRANSPORT_NUM.ZERO,
     ackTimeoutStreak: TRANSPORT_NUM.ZERO,
+    ackTimeoutStreakStartedAt: null,
     lastAckAt: activeConnection.lastAckAt || null,
     lastAckTimeoutAt: activeConnection.lastAckTimeoutAt || null,
     retired: false,
@@ -743,6 +766,11 @@ export function buildDeferredDeliveryFailure(
   }
   if (options.recoverableBeforeSend === true) {
     result.recoverableBeforeSend = true;
+  }
+  // The acknowledgement the failing owner recorded (a spent lifetime's
+  // stamp); absent, the outcome owner states it from the error code.
+  if (options.acknowledgement !== undefined) {
+    result.acknowledgement = options.acknowledgement;
   }
   return result;
 }

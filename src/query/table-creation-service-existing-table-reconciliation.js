@@ -17,6 +17,10 @@ import {
   TABLE_CREATION_SERVICE_LITERAL,
   resolveTableCreationCompletion,
 } from './table-creation-service-completion.js';
+import {METADATA_AUTHORITY_REFRESH_OUTCOME} from
+  './metadata-authority-outcome-constants.js';
+import {metadataLookupUnavailableError} from
+  './table-creation-service-metadata-lookup.js';
 
 
 const EXISTING_TABLE_RECONCILIATION_METHODS = Object.freeze({
@@ -24,21 +28,16 @@ const EXISTING_TABLE_RECONCILIATION_METHODS = Object.freeze({
    * Re-run initial partition provisioning for existing CREATE TABLE IF NOT
    * EXISTS retries when metadata was created before provisioning finished.
    * @param {string} tableName
-   * @return {Promise<void>}
+   * @param {Object} existingTableRecord The table row the caller found.
+   * @param {Object} [options]
+   * @return {Promise<Object>}
    * @private
    */
   async reconcileExistingInitialPartition(
     tableName,
-    existingTable = null,
+    existingTableRecord,
     options = {},
   ) {
-    const existingTableRecord =
-      existingTable || (await this.findExistingTableRecord(tableName));
-    if (!existingTableRecord) {
-      return {
-        partitionMetadataCreated: false,
-      };
-    }
     const tableId =
       existingTableRecord.table_id || existingTableRecord.tableId || null;
     if (!tableId) {
@@ -47,10 +46,15 @@ const EXISTING_TABLE_RECONCILIATION_METHODS = Object.freeze({
       };
     }
     const partitionId = `${tableId}-p1`;
-    let existingPartition =
-      await this.findExistingPartitionRecord(partitionId);
+    const partitionLookup = await this.lookupPartitionRecord(partitionId);
+    if (partitionLookup.outcome ===
+        METADATA_AUTHORITY_REFRESH_OUTCOME.UNAVAILABLE) {
+      throw metadataLookupUnavailableError(`partition ${partitionId}`,
+        partitionLookup);
+    }
+    let existingPartition = partitionLookup.row;
     let partitionMetadataCreated = false;
-    if (!existingPartition) {
+    if (partitionLookup.outcome === METADATA_AUTHORITY_REFRESH_OUTCOME.ABSENT) {
       const controlPlaneGateway = this.getControlPlaneSystemTableGateway();
       if (
         !controlPlaneGateway ||
@@ -100,7 +104,6 @@ const EXISTING_TABLE_RECONCILIATION_METHODS = Object.freeze({
       partitionId,
       partitionMetadata: existingPartition,
       replicaCount: desiredTarget.replicationFactor,
-      timeoutBudget: options?.timeoutBudget,
       cancellationToken: options?.cancellationToken || null,
       schemaJobId: options.schemaJobId || null,
       schemaOwnerFenceToken: options.schemaOwnerFenceToken ?? null,

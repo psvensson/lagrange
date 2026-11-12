@@ -2,7 +2,7 @@
 // ask; only the answering consensus owner can name the current leader.
 import {AddressManager} from '../address/address-manager.js';
 import {deliveryTransportOf, deliveryAnswerOf, classifyThrownDeliveryError, isDeliveredTransportDeliveryOutcome,
-  TRANSPORT_DELIVERY_OUTCOME_REASON_CODE} from
+  isDeliveryTimeoutTransportOutcome, TRANSPORT_DELIVERY_OUTCOME_REASON_CODE} from
   '../transport/transport-semantic-outcome.js';
 import {participantReleaseClockMeasured, participantReleaseSafeClockInteger,
   readParticipantReleaseClock} from
@@ -90,7 +90,7 @@ function prepareParticipantReleaseRequest(owner, nodeId, request) {
   }
   const answer = budget.nowMs < request.deadlineAtMs ?
     observationUnavailable(dispatched, nodeId,
-      TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT) :
+      TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.ANSWER_TIMEOUT) :
     releaseAnswer(OUTCOME.UNAVAILABLE, dispatched,
       {missingFact: MISSING_FACT.RELEASE_DEADLINE, owner: nodeId});
   return {answer};
@@ -102,8 +102,7 @@ function participantReleaseDeliveryAnswer(delivery, prepared, nodeId) {
   const result = answer?.[PARTICIPANT_RELEASE_RESULT_FIELD];
   if (isDeliveredTransportDeliveryOutcome(transport) &&
       result && typeof result === 'object') return result;
-  return prepared.observation &&
-    transport.reasonCode === TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT ?
+  return prepared.observation && isDeliveryTimeoutTransportOutcome(transport) ?
     observationUnavailable(prepared.request, nodeId, transport.reasonCode) :
     observationUnavailable(prepared.request, nodeId);
 }
@@ -126,8 +125,7 @@ async function askParticipantRelease(owner, nodeId, request) {
     return participantReleaseDeliveryAnswer(delivery, prepared, nodeId);
   } catch (error) {
     const delivery = classifyThrownDeliveryError(error);
-    return prepared.observation &&
-      delivery.reasonCode === TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT ?
+    return prepared.observation && isDeliveryTimeoutTransportOutcome(delivery) ?
       observationUnavailable(prepared.request, nodeId, delivery.reasonCode) :
       releaseAnswer(OUTCOME.UNAVAILABLE, prepared.request,
         {missingFact: MISSING_FACT.REPLICA_RELEASE_REPLY, owner: nodeId,

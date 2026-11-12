@@ -15,6 +15,8 @@ import {
 } from '../../src/query/query-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {CDC_OPERATIONS, SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {createReadOnlyCache} from '../../src/cache/read-only-system-table-cache.js';
 import {
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
@@ -764,31 +766,18 @@ test('CDCIntegrationService - authoritative fallback diagnostics track phase win
         },
       },
     };
-    const cacheState = {
-      row: undefined,
-    };
-    const cache = {
-      has(_tableName, key) {
-        return key === 'node-1' && Boolean(cacheState.row);
-      },
-      get(_tableName, key) {
-        return key === 'node-1' ? cacheState.row : undefined;
-      },
-    };
-    const cacheMutationTarget = {
-      get(_tableName, key) {
-        return key === 'node-1' ? cacheState.row : undefined;
-      },
-      applySystemTableChange(_tableName, _operation, record) {
-        cacheState.row = {...record};
-      },
+    // The real cache (writable owner + its read view); each phase starts from
+    // an empty cache so each repair is a cache-lag recovery.
+    const bindEmptyCache = (service) => {
+      const cache = new SystemTableCache();
+      service.systemTableCache = createReadOnlyCache(cache);
+      service.cacheMutationTarget = cache;
     };
     const service = new CDCIntegrationService({
       nodeId: 'test-node',
       sqlQueryEngine: mockSqlEngine,
-      systemTableCache: cache,
-      cacheMutationTarget,
     });
+    bindEmptyCache(service);
     service.initialize();
 
     await service.repairCacheVisibilityHole(
@@ -799,7 +788,7 @@ test('CDCIntegrationService - authoritative fallback diagnostics track phase win
       null,
       {fallbackPhase: 'steady_state'},
     );
-    cacheState.row = undefined;
+    bindEmptyCache(service);
     await service.repairCacheVisibilityHole(
       SYSTEM_TABLE_NAME.NODES,
       'node-1',
@@ -927,36 +916,16 @@ test('CDCIntegrationService - local system table routing ignores un-cut-over chi
       },
     };
     const services = new Map([['logs_p_7cd6bb21_left', childService]]);
-    const systemTableCache = {
-      get: (tableName, key) =>
-        tableName === SYSTEM_TABLE_NAME.TABLES && key === SYSTEM_TABLE_NAME.LOGS ?
-          {table_id: 'logs', table_name: 'logs', active_partition_version: 1} :
-          null,
-      getAll: (tableName) => {
-        if (tableName === SYSTEM_TABLE_NAME.TABLES) {
-          return [{table_id: 'logs', table_name: 'logs', active_partition_version: 1}];
-        }
-        if (tableName === SYSTEM_TABLE_NAME.PARTITIONS) {
-          return [
-            {
-              partition_id: 'logs-p1',
-              table_id: 'logs',
-              table_name: 'logs',
-              partition_version: 1,
-              state: 'NORMAL',
-            },
-            {
-              partition_id: 'logs_p_7cd6bb21_left',
-              table_id: 'logs',
-              table_name: 'logs',
-              partition_version: 2,
-              state: 'NORMAL',
-            },
-          ];
-        }
-        return [];
-      },
-    };
+    // The real cache holding the logs table at version 1 and an un-cut-over
+    // version-2 child partition.
+    const systemTableCache = new SystemTableCache();
+    systemTableCache.applySystemTableChange(SYSTEM_TABLE_NAME.TABLES, CDC_OPERATIONS.UPSERT,
+      {table_id: 'logs', table_name: 'logs', active_partition_version: 1});
+    for (const [partitionId, version] of [['logs-p1', 1], ['logs_p_7cd6bb21_left', 2]]) {
+      systemTableCache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS,
+        CDC_OPERATIONS.UPSERT, {partition_id: partitionId, table_id: 'logs',
+          table_name: 'logs', partition_version: version, state: 'NORMAL'});
+    }
     const service = new CDCIntegrationService({
       nodeId: 'test-node',
       sqlQueryEngine: mockSqlEngine,

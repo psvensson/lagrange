@@ -98,8 +98,7 @@ function evaluatePartitionReplicaTopology(options = {}) {
       partitionRow?.leaderNodeId,
   );
   const desiredReplicaCount = Number(
-    partitionRow?.[COLUMN.REPLICA_COUNT] ??
-      partitionRow?.replica_count ??
+    partitionRow?.replica_count ??
       partitionRow?.replicaCount ??
       0,
   );

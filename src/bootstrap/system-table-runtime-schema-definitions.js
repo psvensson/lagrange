@@ -39,6 +39,15 @@ const CONTROL_PLANE_PUBLICATIONS_SCHEMA = {
     {name: 'published_at', type: COLUMN_TYPE.INTEGER},
     {name: 'closed_at', type: COLUMN_TYPE.INTEGER},
     {name: 'transition_history', type: COLUMN_TYPE.TEXT, notNull: true},
+    // The row's revision (control-plane-publication-change.js): admitted at
+    // 1, advanced by one in the same write as every accepted change; every
+    // change is a compare-and-set on it.
+    {
+      name: 'publication_revision',
+      type: COLUMN_TYPE.INTEGER,
+      notNull: true,
+      defaultValue: 0,
+    },
   ],
   indices: [
     {

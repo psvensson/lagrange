@@ -50,6 +50,9 @@ const ERRORS = Object.freeze({
     'Partition CDC debt is at capacity; this attempt changed no data and may be retried',
   WRITE_CDC_DEMAND_EXCEEDS_CAPACITY:
     'The carried operation batch exceeds the partition CDC capacity; no data changed',
+  WRITE_CDC_RETIREMENT_RESERVE_EXHAUSTED:
+    'Partition CDC debt is past its retirement reserve; this retirement write changed ' +
+    'no data and may be retried once acknowledgements drain',
   SERVING_ADMISSION_FENCED_FOR_REMOVAL:
     'Serving admission fenced for replica removal',
   PARTITION_SERVICE_NOT_FOUND: 'Partition service not found',
@@ -76,6 +79,7 @@ const REROUTABLE_WRITE_ERROR_FRAGMENTS = Object.freeze([
   ERRORS.WRITE_RESERVED,
   ERRORS.WRITE_CUTOVER_PAUSED,
   ERRORS.WRITE_CDC_CAPACITY,
+  ERRORS.WRITE_CDC_RETIREMENT_RESERVE_EXHAUSTED,
   ERRORS.SERVING_ADMISSION_FENCED_FOR_REMOVAL,
 ]);
 
@@ -108,6 +112,14 @@ function isRetryableWriteError(message) {
     message.includes(ERRORS.WRITE_OUTCOME_UNKNOWN));
 }
 
+// The typed answer of an operation persistence collision whose winner is
+// durably terminal for the deterministic intent: the intent's operation ended
+// without creating its replica, and no retry under the same intent id can
+// change that. The rebalancer raises it and the control-plane failure
+// classifier decides on it, so the code lives below both.
+const OPERATION_INTENT_TERMINAL_COLLISION_CODE =
+  'OPERATION_INTENT_TERMINAL_COLLISION';
+
 const ERRNO = Object.freeze({
   EPERM: 'EPERM',
   EACCES: 'EACCES',
@@ -119,6 +131,7 @@ const ERRNO = Object.freeze({
 export {
   ERRORS,
   ERRNO,
+  OPERATION_INTENT_TERMINAL_COLLISION_CODE,
   REROUTABLE_WRITE_ERROR_FRAGMENTS,
   isReroutableWriteError,
   isRetryableWriteError,

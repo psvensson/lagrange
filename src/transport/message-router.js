@@ -20,6 +20,7 @@ import {defineMessageRouterDeliveryDelegation} from './message-router-delivery-d
 import {defineMessageRouterStatsShutdown} from './message-router-stats-shutdown.js';
 import {resolveInProcessConnectionEnvironment} from './in-process-connection-environment.js';
 import {resolveTimeSource} from '../time/time-source.js';
+import {PeerTrafficDiagnostics} from './message-router-peer-traffic-diagnostics.js';
 import {requireIssuedBootIncarnation} from
   '../bootstrap/boot-incarnation-contract.js';
 
@@ -312,6 +313,10 @@ class MessageRouter extends EventEmitter {
     // `channel: bulk` sockets and feeds the additive bulkChannel stats
     // section. Attached via attachBulkChannelRegistry or constructor option.
     this.bulkChannelRegistry = options.bulkChannelRegistry || null;
+    // Observation only: per-peer traffic counters for the periodic
+    // console-only diagnostics lines. No router decision reads them.
+    this.peerTrafficDiagnostics = new PeerTrafficDiagnostics();
+    this.detachPeerTrafficReporter = null;
     this.connectionAuthorityOwner = new RouterConnectionAuthorityOwner(this);
     this.outboundDeliveryRegistryOwner = new OutboundDeliveryRegistryOwner(
       this,

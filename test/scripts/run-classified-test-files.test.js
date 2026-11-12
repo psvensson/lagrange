@@ -756,29 +756,59 @@ test('a host with a CPU sensor and no NVMe sensor gates on the CPU alone', (t) =
   assert.deepEqual(hot.spawned, [ORDINARY]);
 });
 
+// The workers each lane's batch was started with under one env, and every
+// batch's env, as the runner handed them to its children.
+function laneJobsUnder(files, env) {
+  const calls = [];
+  const batchEnvs = [];
+  const lines = [];
+  runClassifiedTestFiles(files, {...COOL, root, env, write: (text) => lines.push(text),
+    spawn(command, args, options) {
+      calls.push([args.at(-1), args[1]]);
+      batchEnvs.push(options.env);
+      return {status: 0};
+    }});
+  return {jobs: Object.fromEntries(calls), batchEnvs, text: lines.join('')};
+}
+
 // A lab host's ordinary lane is capped by its own processor count, which the
 // remote wrapper discovers at run time and hands over in one runner-owned env.
 test('a lane jobs cap lowers a lane, never raises one, and refuses garbage', () => {
-  const batchEnvs = [];
-  const jobsOf = (files, cap) => {
-    const calls = [];
-    runClassifiedTestFiles(files, {...COOL, root, write: () => {},
-      env: {LAGRANGE_LANE_JOBS_CAP: cap},
-      spawn(command, args, options) {
-        calls.push([args.at(-1), args[1]]);
-        batchEnvs.push(options.env);
-        return {status: 0};
-      }});
-    return Object.fromEntries(calls);
-  };
-  assert.deepEqual(jobsOf([ORDINARY, BOOTSTRAP], '3'),
+  const jobsOf = (files, cap) => laneJobsUnder(files, {LAGRANGE_LANE_JOBS_CAP: cap});
+  assert.deepEqual(jobsOf([ORDINARY, BOOTSTRAP], '3').jobs,
     {[ORDINARY]: '--jobs=3', [BOOTSTRAP]: '--jobs=2'}, 'ordinary 4 -> 3; bootstrap stays 2');
-  assert.deepEqual(jobsOf([ORDINARY, BOOTSTRAP], '1'),
+  assert.deepEqual(jobsOf([ORDINARY, BOOTSTRAP], '1').jobs,
     {[ORDINARY]: '--jobs=1', [BOOTSTRAP]: '--jobs=1'}, 'a two-thread host runs one-up');
-  assert.deepEqual(jobsOf([ORDINARY], '19'), {[ORDINARY]: '--jobs=4'}, 'never raised');
-  assert.ok(batchEnvs.every((env) => !Object.hasOwn(env, 'LAGRANGE_LANE_JOBS_CAP')),
+  const uncapped = jobsOf([ORDINARY], '19');
+  assert.deepEqual(uncapped.jobs, {[ORDINARY]: '--jobs=4'}, 'never raised');
+  assert.ok(uncapped.batchEnvs.every((env) => !Object.hasOwn(env, 'LAGRANGE_LANE_JOBS_CAP')),
     'the runner consumes its cap: a batch\'s tests never inherit the host\'s ceiling');
   for (const garbage of ['0', 'x', '2.5', '-1']) {
     assert.throws(() => jobsOf([ORDINARY], garbage), /LAGRANGE_LANE_JOBS_CAP/u, garbage);
   }
 });
+
+// A placed host's ordinary lane runs at the count its placement shell
+// computed there (placedOrdinaryLaneJobs); nothing else sets it, so a local
+// or unplaced run keeps the lane's own count exactly.
+test('a placed ordinary count raises the ordinary lane only, within the cap, and refuses garbage',
+  () => {
+    const placed = (value, extra = {}) => ({LAGRANGE_PLACED_ORDINARY_LANE_JOBS: value, ...extra});
+    const raised = laneJobsUnder([ORDINARY, BOOTSTRAP, TOOLCHAIN],
+      placed('8', {LAGRANGE_LANE_JOBS_CAP: '11'}));
+    assert.deepEqual(raised.jobs, {[ORDINARY]: '--jobs=8', [BOOTSTRAP]: '--jobs=2',
+      [TOOLCHAIN]: '--jobs=1'}, 'only the ordinary lane is raised');
+    assert.match(raised.text, /^classified lane ordinary: 1 file\(s\), jobs=8$/mu,
+      'and the lane says the count it runs at');
+    assert.ok(raised.batchEnvs.every((env) =>
+      !Object.hasOwn(env, 'LAGRANGE_PLACED_ORDINARY_LANE_JOBS')),
+    'the runner consumes it: a nested runner inside a test never inherits the raise');
+    assert.deepEqual(laneJobsUnder([ORDINARY], placed('5', {LAGRANGE_LANE_JOBS_CAP: '3'})).jobs,
+      {[ORDINARY]: '--jobs=3'}, 'the host\'s cap still bounds it');
+    assert.deepEqual(laneJobsUnder([ORDINARY], {}).jobs, {[ORDINARY]: '--jobs=4'},
+      'no placed count: the lane\'s own, exactly as before');
+    for (const garbage of ['0', 'x', '2.5', '-1', '9', '']) {
+      assert.throws(() => laneJobsUnder([ORDINARY], placed(garbage)),
+        /LAGRANGE_PLACED_ORDINARY_LANE_JOBS must be an integer from 1 to 8, not: /u, garbage);
+    }
+  });

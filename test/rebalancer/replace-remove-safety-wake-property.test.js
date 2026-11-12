@@ -2,9 +2,15 @@
  * R-2 remove-safety readiness wake: properties from the owner directive
  * (2026-09-25, points 2-5 and 7), not from the implementation (quest
  * replace-source-removal-owner; record quest-records/
- * replace-source-removal-owner/evidence-remove-safety-wake.md).
+ * replace-source-removal-owner/evidence-remove-safety-wake.md), restated
+ * 2026-11-11 for the committed-voter floor.
  *
- * W1 normal path: fallback frozen; readiness turns authoritative and the
+ * W0 no circular wait: a remaining voter (or the replacement) whose node
+ *    holds no ready lease but whose replica is a live committed voter - the
+ *    lab's system-floor placeholder, a formation joiner behind its barrier -
+ *    does not defer the removal at all. Superseded (R09): the 2026-09-25
+ *    cells pinned a "below minimum 2/3" deferral on that placeholder.
+ * W1 normal path: fallback frozen; the deferring voter recovers and the
  *    readiness owner publishes normally -> the REPLACE owner wakes and
  *    progresses (SAFE -> REMOVE_REPLICA -> STOPPING) with zero fallback
  *    advance.
@@ -16,18 +22,19 @@
  *    the fallback.
  * W4 no lost edges: a wake into a lane held by another owner turn; a change
  *    during the wake's own run; a fallback fire into a held lane.
- * W5 a wake is not authority: a wake whose readiness is still unsafe
+ * W5 a wake is not authority: a wake whose floor is still unsafe
  *    re-evaluates and defers with no removal; duplicate and stale wakes
  *    never remove twice.
- * W6 causal refinement: deciding while a relevant readiness change is
- *    pending may WAIT, but never permits an unsafe removal - over every
- *    combination of the remaining voters' readiness profiles.
+ * W6 causal refinement: deciding while a relevant change is pending may
+ *    WAIT, but never permits an unsafe removal - over every combination of
+ *    the remaining voters' profiles: the source is removed iff every
+ *    remaining voter is ready or a live committed voter.
  *
  * Every cell runs on both a priority control-plane partition and the
- * operation-ledger partition (replica_operations-p1), with the lab's
- * system-floor profile ("below minimum 2/3" on
- * PRIORITY_CONTROL_PLANE_RECOVERY_PENDING + planning_snapshot_refresh_pending)
- * as the deferring readiness.
+ * operation-ledger partition (replica_operations-p1). The deferring level in
+ * W1-W5 is a remaining voter whose process is gone (no ready lease, a silent
+ * replica): on a peer the floor defers "below minimum (2/3)"; on the
+ * replacement's own node the replacement is "not voter-ready".
  */
 
 import {test} from '../../src/test-helpers/tap.js';
@@ -44,9 +51,14 @@ import {
 // The fallback period the owner arms (the 1 s backstop), advanced only by
 // the backstop cells.
 const FALLBACK_ADVANCE_MS = 1_000;
-// Nodes whose placeholder alone drops the floor to 2/3: the remaining
-// voters after the source leaves (a peer, and the owner itself).
+// Nodes whose loss alone defers the removal: the remaining voters after the
+// source leaves (a peer, and the owner itself - the replacement's node).
 const DEFERRING_NODES = Object.freeze([WAKE_NODE.PEER, WAKE_NODE.OWNER]);
+// What the deferral names, by the node whose voter is not live.
+const DEFERRAL_BY_NODE = Object.freeze({
+  [WAKE_NODE.PEER]: /below minimum \(2\/3\)$/,
+  [WAKE_NODE.OWNER]: /replacement replica \S+ is not voter-ready/,
+});
 
 async function withScenario(options, body) {
   const scenario = createWakeScenario(options);
@@ -57,8 +69,10 @@ async function withScenario(options, body) {
   }
 }
 
+// The deferring level: the node's process is gone (no ready lease, and its
+// replica does not answer for itself).
 function deferredOn(nodeId) {
-  return {[nodeId]: READINESS_PROFILE.SYSTEM_FLOOR};
+  return {[nodeId]: READINESS_PROFILE.UNSAFE};
 }
 
 async function readProgress(scenario) {
@@ -101,19 +115,21 @@ const HELD = Object.freeze({
 });
 
 /**
- * Run the owner's EXECUTE and require the lab profile's deferral.
+ * Run the owner's EXECUTE and require the floor's deferral on the voter that
+ * is not live.
  * @param {Object} t
  * @param {Object} scenario
+ * @param {string} deferringNode
  */
-async function executeAndRequireDeferral(t, scenario) {
+async function executeAndRequireDeferral(t, scenario, deferringNode) {
   const result = await scenario.execute();
   t.same(
     {skipped: result?.skipped === true, removals: scenario.removals.length},
     {skipped: true, removals: 0},
-    'the owner defers on the system-floor placeholder and removes nothing',
+    'the owner defers on the voter that is not live and removes nothing',
   );
-  t.match(String(result?.error), /below minimum \(\d\/3\)/,
-    'the deferral is the lab-classified floor deferral');
+  t.match(String(result?.error), DEFERRAL_BY_NODE[deferringNode],
+    'the deferral names the missing voter fact');
 }
 
 function forEachCell(body) {
@@ -125,6 +141,35 @@ function forEachCell(body) {
 }
 
 // ---------------------------------------------------------------------------
+// W0 no circular wait: a live committed voter on a node without a ready
+// lease is credited, so the placeholder never defers the removal.
+// ---------------------------------------------------------------------------
+
+forEachCell((partitionId, placeholderNode) => {
+  test(`W0 no circular wait (${partitionId}, placeholder on ` +
+    `${placeholderNode}): the removal proceeds on committed-voter evidence ` +
+    'with no wake and zero fallback advance', async (t) => {
+    await withScenario({
+      partitionId,
+      profiles: {[placeholderNode]: READINESS_PROFILE.SYSTEM_FLOOR},
+    }, async (scenario) => {
+      const result = await scenario.execute();
+      t.same(
+        {skipped: result?.skipped === true, error: result?.error ?? null},
+        {skipped: false, error: null},
+        'no deferral on a node whose ready lease is withheld',
+      );
+      t.same(await readProgress(scenario), PROGRESSED,
+        'SAFE -> REMOVE_REPLICA -> STOPPING at once');
+      t.same(scenario.removals[0]?.replicaId, `${partitionId}-r1`,
+        'the removal is the REPLACE source');
+      t.ok(scenario.group.reads.includes(`${partitionId}-r4`),
+        'the group answered for itself (the credit is not a row)');
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // W1 normal path and W2 backstop.
 // ---------------------------------------------------------------------------
 
@@ -134,7 +179,7 @@ forEachCell((partitionId, deferringNode) => {
   async (t) => {
     await withScenario({partitionId, profiles: deferredOn(deferringNode)},
       async (scenario) => {
-        await executeAndRequireDeferral(t, scenario);
+        await executeAndRequireDeferral(t, scenario, deferringNode);
         await settleWithoutFallback();
         t.same(await readProgress(scenario), HELD,
           'no progress before readiness changes (no other wake source)');
@@ -153,7 +198,7 @@ forEachCell((partitionId, deferringNode) => {
   async (t) => {
     await withScenario({partitionId, profiles: deferredOn(deferringNode)},
       async (scenario) => {
-        await executeAndRequireDeferral(t, scenario);
+        await executeAndRequireDeferral(t, scenario, deferringNode);
         scenario.readiness.setProfile(deferringNode, READINESS_PROFILE.READY);
         await settleWithoutFallback();
         t.same(await readProgress(scenario), HELD,
@@ -165,6 +210,30 @@ forEachCell((partitionId, deferringNode) => {
       });
   });
 });
+
+for (const partitionId of WAKE_PARTITIONS) {
+  test(`W2 backstop, group evidence only (${partitionId}): a silent voter ` +
+    'on a node without a ready lease defers; when the voter answers again ' +
+    '(no readiness level changes, nothing is published) the fallback ' +
+    'recovers progress', async (t) => {
+    await withScenario({
+      partitionId,
+      profiles: {[WAKE_NODE.PEER]: READINESS_PROFILE.SYSTEM_FLOOR},
+    }, async (scenario) => {
+      const peerReplicaId = `${partitionId}-r2`;
+      scenario.silencedReplicaIds.add(peerReplicaId);
+      await executeAndRequireDeferral(t, scenario, WAKE_NODE.PEER);
+      scenario.silencedReplicaIds.delete(peerReplicaId);
+      await settleWithoutFallback();
+      t.same(await readProgress(scenario), HELD,
+        'no level changed and nothing was published: the owner still waits');
+      await scenario.clock.advance(FALLBACK_ADVANCE_MS);
+      await settleWithoutFallback();
+      t.same(await readRemovalProgress(scenario), REMOVAL_PROGRESSED,
+        'the fallback re-evaluates the group and re-drives the owner');
+    });
+  });
+}
 
 // ---------------------------------------------------------------------------
 // W3 lost-wakeup race around waiter registration.
@@ -219,7 +288,7 @@ forEachCell((partitionId, deferringNode) => {
   async (t) => {
     await withScenario({partitionId, profiles: deferredOn(deferringNode)},
       async (scenario) => {
-        await executeAndRequireDeferral(t, scenario);
+        await executeAndRequireDeferral(t, scenario, deferringNode);
         // Same identity, level still the placeholder: a no-op wake.
         await scenario.readiness.publish(deferringNode);
         await settleWithoutFallback();
@@ -262,7 +331,7 @@ forEachCell((partitionId, deferringNode) => {
     'the owner lane held runs when the holder releases', async (t) => {
     await withScenario({partitionId, profiles: deferredOn(deferringNode)},
       async (scenario) => {
-        await executeAndRequireDeferral(t, scenario);
+        await executeAndRequireDeferral(t, scenario, deferringNode);
         const holder = holdOwnerLane(scenario);
         scenario.readiness.setProfile(deferringNode, READINESS_PROFILE.READY);
         await scenario.readiness.publish(deferringNode);
@@ -281,7 +350,7 @@ forEachCell((partitionId, deferringNode) => {
     'the backstop fire is not dropped by a lane holder', async (t) => {
     await withScenario({partitionId, profiles: deferredOn(deferringNode)},
       async (scenario) => {
-        await executeAndRequireDeferral(t, scenario);
+        await executeAndRequireDeferral(t, scenario, deferringNode);
         scenario.readiness.setProfile(deferringNode, READINESS_PROFILE.READY);
         const holder = holdOwnerLane(scenario);
         await scenario.clock.advance(FALLBACK_ADVANCE_MS);
@@ -301,11 +370,11 @@ for (const partitionId of WAKE_PARTITIONS) {
     await withScenario({
       partitionId,
       profiles: {
-        [WAKE_NODE.PEER]: READINESS_PROFILE.SYSTEM_FLOOR,
-        [WAKE_NODE.OWNER]: READINESS_PROFILE.SYSTEM_FLOOR,
+        [WAKE_NODE.PEER]: READINESS_PROFILE.UNSAFE,
+        [WAKE_NODE.OWNER]: READINESS_PROFILE.UNSAFE,
       },
     }, async (scenario) => {
-      await executeAndRequireDeferral(t, scenario);
+      await executeAndRequireDeferral(t, scenario, WAKE_NODE.OWNER);
       const owner = scenario.owner;
       const evaluate = owner.evaluateRemoveSafety.bind(owner);
       let wokenRuns = 0;
@@ -341,7 +410,7 @@ forEachCell((partitionId, deferringNode) => {
   async (t) => {
     await withScenario({partitionId, profiles: deferredOn(deferringNode)},
       async (scenario) => {
-        await executeAndRequireDeferral(t, scenario);
+        await executeAndRequireDeferral(t, scenario, deferringNode);
         const owner = scenario.owner;
         const evaluate = owner.evaluateRemoveSafety.bind(owner);
         let evaluations = 0;
@@ -373,7 +442,7 @@ forEachCell((partitionId, deferringNode) => {
     'one removal only', async (t) => {
     await withScenario({partitionId, profiles: deferredOn(deferringNode)},
       async (scenario) => {
-        await executeAndRequireDeferral(t, scenario);
+        await executeAndRequireDeferral(t, scenario, deferringNode);
         scenario.readiness.setProfile(deferringNode, READINESS_PROFILE.READY);
         await Promise.all([
           scenario.readiness.publish(deferringNode),
@@ -418,14 +487,15 @@ function enumerateProfileCombinations() {
 }
 
 for (const partitionId of WAKE_PARTITIONS) {
-  test(`W6 (${partitionId}): the owner removes the source only when every ` +
-    'remaining voter is ready; a pending (placeholder) level waits like an ' +
-    'unsafe one, with or without a wake', async (t) => {
+  test(`W6 (${partitionId}): the owner removes the source if and only if ` +
+    'every remaining voter is ready or a live committed voter (the ' +
+    'placeholder); one whose process is gone withholds it, with or without ' +
+    'a wake', async (t) => {
     const violations = [];
     const combinations = enumerateProfileCombinations();
     for (const profiles of combinations) {
-      const allReady = Object.values(profiles)
-        .every((profile) => profile === READINESS_PROFILE.READY);
+      const allLive = Object.values(profiles)
+        .every((profile) => profile !== READINESS_PROFILE.UNSAFE);
       await withScenario({partitionId, profiles}, async (scenario) => {
         await scenario.execute();
         for (const nodeId of REMAINING_VOTERS) {
@@ -434,12 +504,12 @@ for (const partitionId of WAKE_PARTITIONS) {
         await settleWithoutFallback();
         const progress = await readProgress(scenario);
         const removed = progress.removals > 0;
-        if (removed !== allReady) {
+        if (removed !== allLive) {
           violations.push({profiles, progress});
         }
       });
     }
-    t.same(violations, [], 'removal iff every remaining voter is ready');
+    t.same(violations, [], 'removal iff every remaining voter is live');
     t.equal(
       combinations.length,
       Object.values(READINESS_PROFILE).length ** REMAINING_VOTERS.length,

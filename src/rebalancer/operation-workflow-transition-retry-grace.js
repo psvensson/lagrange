@@ -149,6 +149,11 @@ class OperationWorkflowTransitionRetryGrace {
    * @return {boolean}
    */
   usesOperationBudget(context, workflowStep) {
+    // A step whose effect was performed and whose write is deferred is
+    // bounded by the operation budget at every step.
+    if (context?.deferredStepWrite === true) {
+      return true;
+    }
     const partitionId =
       typeof context?.partitionId === 'string' &&
       context.partitionId.length > 0 ?

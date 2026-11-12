@@ -12,6 +12,22 @@ import fc from 'fast-check';
 import {TableCreationService} from '../../src/query/table-creation-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {createTableThroughDurableJob} from './table-creation-durable-job-fixture.js';
+
+/**
+ * The CDC backend under the service's real control-plane gateway: the
+ * durable job's metadata rows commit.
+ * @return {TableCreationService}
+ */
+function createDurableTableCreationService() {
+  return new TableCreationService({
+    cdcIntegrationService: {
+      async insertSystemTableRow() {
+        return {success: true};
+      },
+    },
+  });
+}
 
 /**
  * SQL reserved keywords to avoid in column/table names.
@@ -101,8 +117,8 @@ test('Property 42: Single-column PRIMARY KEY becomes partition key', async (t) =
           ifNotExists: false,
         };
 
-        const service = new TableCreationService();
-        const result = await service.executeCreateTableProvisioning(ast);
+        const service = createDurableTableCreationService();
+        const result = await createTableThroughDurableJob(service, ast);
 
         // Verify partition key equals PRIMARY KEY
         if (!result.success) {
@@ -157,8 +173,8 @@ test('Property 42: Composite PRIMARY KEY becomes partition key', async (t) => {
           ifNotExists: false,
         };
 
-        const service = new TableCreationService();
-        const result = await service.executeCreateTableProvisioning(ast);
+        const service = createDurableTableCreationService();
+        const result = await createTableThroughDurableJob(service, ast);
 
         // Verify partition key equals comma-separated PRIMARY KEY columns
         if (!result.success) {

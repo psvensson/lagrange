@@ -80,7 +80,7 @@ function createDiscoveryCache() {
     keyEnd: null,
   });
   cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
-    id: 'service-benchmark-events-node-1',
+    service_id: 'service-benchmark-events-node-1',
     service_type: 'partition',
     partition_id: 'partition-benchmark-events-1',
     node_id: 'node-1',
@@ -89,7 +89,7 @@ function createDiscoveryCache() {
     address: '10.0.0.1:7001',
   });
   cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
-    id: 'service-benchmark-events-node-2',
+    service_id: 'service-benchmark-events-node-2',
     service_type: 'partition',
     partition_id: 'partition-benchmark-events-1',
     node_id: 'node-2',

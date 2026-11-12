@@ -1,18 +1,26 @@
 import {deliveryAnswerOf} from '../transport/transport-semantic-outcome.js';
-// CDCGroupPropagationService's durable wave, its one propagation path. Source
-// debt and between-attempt progress remain with the source lane; the service
-// keeps no payload of its own between attempts or after the wave.
+// CDCGroupPropagationService's durable delivery, its one propagation path:
+// one vector to ONE recipient group (the source group, or one target group
+// the source lane addresses). There is no node-wide wave slot and no
+// cross-table turn-taking: each delivery has its own child scope, the source
+// lane keeps at most one in flight per (source partition, recipient), and a
+// recipient that cannot keep up answers backpressure from its own proposal
+// queue. Source debt and every recipient's progress remain with the source
+// lane; the service keeps no payload between attempts or after a delivery.
 import {captureCdcEvents} from '../cdc/cdc-event-envelope.js';
-import {CDC_COMPLETION, isCommittedCdcOutcome, isProvisionalCdcOutcome,
-  unknownCdcAcceptance} from '../cdc/cdc-delivery-outcome.js';
+import {CDC_COMPLETION, CDC_COVERAGE_STATE, isAlreadyAppliedCdcOutcome, isCommittedCdcOutcome,
+  isProvisionalCdcOutcome, observeCdcDeliveryCoverage, unconfirmedCdcAcceptance,
+  unknownCdcAcceptance} from
+  '../cdc/cdc-delivery-outcome.js';
 import {assertCdcDeliveryInvocation, openCdcDeliveryChildScope} from
   '../cdc/cdc-delivery-invocation.js';
-import {bindCdcPropagationProgress, createCdcPropagationProgress} from
-  '../cdc/cdc-propagation-progress.js';
 import {CDC_DELIVERY_REMAINING_MS, prepareCdcDeliveryMessage} from '../cdc/cdc-delivery-budget.js';
 import {resolveCdcPropagationDeliveryProfile} from '../cache/cdc-propagation-delivery-profile.js';
 import {PRESSURE_GOVERNOR_ACTION} from '../control-plane/pressure-governor.js';
 import {captureDurablePropagationPlan} from './cdc-group-propagation-durable-plan.js';
+import {TARGET_SKIP_REASON, openDurableWaveTrace, reportCdcTargetSkipped,
+  reportDurableWaveFinished, reportDurableWaveRefused, traceWaveLeaf} from
+  './cdc-group-propagation-wave-diagnostics.js';
 import {LATENCY_TOPOLOGY_MESSAGE_TYPE} from
   './latency-topology-constants.js';
 import {CDC_GROUP_FOREGROUND_RETRY_STATE, CDC_GROUP_PROPAGATION_EVENT,
@@ -21,324 +29,20 @@ import {CDC_GROUP_FOREGROUND_RETRY_STATE, CDC_GROUP_PROPAGATION_EVENT,
   CDC_GROUP_PUBLICATION_MODE} from
   './cdc-group-propagation-constants.js';
 
-const DURABLE_PROPAGATION_ADMISSION = Object.freeze({
-  ADMIT: 'admit',
-  BUSY: 'busy',
-  SOURCE_MISMATCH: 'source_mismatch',
-});
 const DURABLE_PROPAGATION_CAUSE = Object.freeze({
   NONE: 'none',
   RESPONSE: 'response',
   ERROR: 'error',
 });
-const CONTENDED_TABLE_SLICE_WAVES = 4;
-const CONTENDED_SLICE_YIELD_HOLD_MS = 300;
-const BUSY_CONTENDED_RETRY_AFTER_MS = 10;
-const MIN_YIELD_HOLD_RETRY_AFTER_MS = 5;
 
-function isWaitingSliceTableExpired(owner, table) {
-  const isLive = owner.waitingDurableSliceTableLifecycles?.get?.(table);
-  return typeof isLive === 'function' && isLive() === false;
-}
-
-function clearWaitingSliceTableMetadata(owner, table) {
-  owner.waitingDurableSliceTableTimestamps?.delete?.(table);
-  owner.waitingDurableSliceTableLifecycles?.delete?.(table);
-  owner.creditedWaitingDurableSliceTables?.delete?.(table);
-}
-
-function pruneStaleWaitingDurableSliceTables(owner) {
-  if (!Array.isArray(owner.waitingDurableSliceTables) ||
-      owner.waitingDurableSliceTables.length === 0) {
-    return;
-  }
-  owner.waitingDurableSliceTables = owner.waitingDurableSliceTables.filter(
-    (table) => {
-      if (isWaitingSliceTableExpired(owner, table)) {
-        clearWaitingSliceTableMetadata(owner, table);
-        return false;
-      }
-      return true;
-    },
-  );
-  if (owner.waitingDurableSliceTables.length === 0) {
-    owner.durableSliceContended = false;
-  }
-}
-
-function enqueueWaitingDurableSliceTable(owner, tableName, deliveryContext = null) {
-  if (
-    typeof tableName !== 'string' ||
-    tableName.length === 0 ||
-    tableName === owner.durableSliceTable
-  ) {
-    return;
-  }
-  pruneStaleWaitingDurableSliceTables(owner);
-  if (!Array.isArray(owner.waitingDurableSliceTables)) {
-    owner.waitingDurableSliceTables = [];
-  }
-  if (!(owner.waitingDurableSliceTableTimestamps instanceof Map)) {
-    owner.waitingDurableSliceTableTimestamps = new Map();
-  }
-  if (!(owner.waitingDurableSliceTableLifecycles instanceof Map)) {
-    owner.waitingDurableSliceTableLifecycles = new Map();
-  }
-  owner.waitingDurableSliceTableTimestamps.set(tableName, owner.now());
-  const lifecycle =
-    typeof deliveryContext?.registerContentionOwner === 'function' ?
-      deliveryContext.registerContentionOwner(owner, tableName) :
-      null;
-  if (typeof lifecycle === 'function') {
-    owner.waitingDurableSliceTableLifecycles.set(tableName, lifecycle);
-  }
-  if (!owner.waitingDurableSliceTables.includes(tableName)) {
-    owner.waitingDurableSliceTables.push(tableName);
-  }
-}
-
-function dequeueWaitingDurableSliceTable(owner, tableName) {
-  if (!Array.isArray(owner.waitingDurableSliceTables) || !tableName) {
-    return;
-  }
-  const index = owner.waitingDurableSliceTables.indexOf(tableName);
-  if (index !== -1) {
-    owner.waitingDurableSliceTables.splice(index, 1);
-  }
-  if (owner.waitingDurableSliceTableTimestamps instanceof Map) {
-    owner.waitingDurableSliceTableTimestamps.delete(tableName);
-  }
-  if (owner.waitingDurableSliceTableLifecycles instanceof Map) {
-    owner.waitingDurableSliceTableLifecycles.delete(tableName);
-  }
-  if (owner.creditedWaitingDurableSliceTables instanceof Set) {
-    owner.creditedWaitingDurableSliceTables.delete(tableName);
-  }
-}
-
-function notifyNextWaitingDurableSliceTable(owner) {
-  if (
-    owner?.activeDurablePropagation !== null ||
-    !Array.isArray(owner?.waitingDurableSliceTables) ||
-    owner.waitingDurableSliceTables.length === 0
-  ) {
-    return;
-  }
-  pruneStaleWaitingDurableSliceTables(owner);
-  const headTable = owner.waitingDurableSliceTables[0];
-  if (!headTable) return;
-  const lifecycle = owner.waitingDurableSliceTableLifecycles?.get?.(headTable);
-  if (typeof lifecycle?.onSliceTurnReady === 'function') {
-    lifecycle.onSliceTurnReady();
-  }
-}
-
-function clearActiveDurableSliceIfMatching(owner, tableName) {
-  if (owner.durableSliceTable !== tableName) return false;
-  owner.durableSliceTable = null;
-  owner.durableSliceWaves = 0;
-  if (
-    Array.isArray(owner.waitingDurableSliceTables) &&
-    owner.waitingDurableSliceTables.length > 0
-  ) {
-    owner.yieldedDurableSliceTable = tableName;
-    owner.yieldedDurableSliceUntilMs =
-      owner.now() + CONTENDED_SLICE_YIELD_HOLD_MS;
-  } else if (owner.yieldedDurableSliceTable === null) {
-    owner.yieldedDurableSliceUntilMs = 0;
-  }
-  return true;
-}
-
-function releaseWaitingDurableSliceContender(owner, tableName) {
-  if (!owner || typeof tableName !== 'string' || tableName.length === 0) {
-    return false;
-  }
-  const wasActiveSlice = clearActiveDurableSliceIfMatching(owner, tableName);
-  const waiting = owner.waitingDurableSliceTables;
-  const wasHead = Array.isArray(waiting) && waiting[0] === tableName;
-  const wasQueued = Array.isArray(waiting) && waiting.includes(tableName);
-  dequeueWaitingDurableSliceTable(owner, tableName);
-  if (!Array.isArray(waiting) || waiting.length === 0) {
-    owner.durableSliceContended = false;
-    owner.yieldedDurableSliceUntilMs = 0;
-    owner.yieldedDurableSliceTable = null;
-  } else if (wasHead || wasActiveSlice) {
-    notifyNextWaitingDurableSliceTable(owner);
-  }
-  return wasQueued || wasActiveSlice;
-}
-
-function expireYieldedSliceHoldIfElapsed(owner) {
-  pruneStaleWaitingDurableSliceTables(owner);
-  if (
-    Number.isFinite(owner.yieldedDurableSliceUntilMs) &&
-    owner.yieldedDurableSliceUntilMs > 0 &&
-    owner.now() >= owner.yieldedDurableSliceUntilMs
-  ) {
-    owner.yieldedDurableSliceUntilMs = 0;
-    owner.yieldedDurableSliceTable = null;
-    if (Array.isArray(owner.waitingDurableSliceTables) &&
-        owner.waitingDurableSliceTables.length > 0) {
-      const headTable = owner.waitingDurableSliceTables[0];
-      if (!(owner.creditedWaitingDurableSliceTables instanceof Set)) {
-        owner.creditedWaitingDurableSliceTables = new Set();
-      }
-      owner.creditedWaitingDurableSliceTables.add(headTable);
-      if (owner.waitingDurableSliceTableTimestamps instanceof Map) {
-        owner.waitingDurableSliceTableTimestamps.set(headTable, owner.now());
-      }
-    }
-  }
-}
-
-function isYieldHoldWindowActive(owner) {
-  return (
-    Number.isFinite(owner.yieldedDurableSliceUntilMs) &&
-    owner.yieldedDurableSliceUntilMs > 0 &&
-    owner.now() < owner.yieldedDurableSliceUntilMs
-  );
-}
-
-function isYieldedSliceTableDeferred(owner, tableName) {
-  expireYieldedSliceHoldIfElapsed(owner);
-  if (!isYieldHoldWindowActive(owner)) return false;
-  const candidateTable = tableName ?? null;
-  if (owner.durableSliceTable !== null && candidateTable === owner.durableSliceTable) {
-    return false;
-  }
-  const nextWaitingTable = owner.waitingDurableSliceTables?.[0] ?? null;
-  if (nextWaitingTable !== null) {
-    return candidateTable !== nextWaitingTable;
-  }
-  return owner.yieldedDurableSliceTable !== null &&
-    candidateTable === owner.yieldedDurableSliceTable;
-}
-
-function decideDurablePropagationAdmission(occupied, sourceMismatch = false) {
-  if (occupied) return DURABLE_PROPAGATION_ADMISSION.BUSY;
-  return sourceMismatch ? DURABLE_PROPAGATION_ADMISSION.SOURCE_MISMATCH :
-    DURABLE_PROPAGATION_ADMISSION.ADMIT;
-}
-
-function shouldPreemptActiveDurableSlice(owner, incomingTable) {
-  if ((owner.durableSliceWaves ?? 0) >= CONTENDED_TABLE_SLICE_WAVES) {
-    return true;
-  }
-  return Boolean(owner.creditedWaitingDurableSliceTables?.has?.(incomingTable));
-}
-
-function computeBusyRetryAfterMs(owner, incomingTable, deliveryContext = null) {
-  if (owner.activeDurablePropagation !== null) {
-    if (incomingTable !== owner.durableSliceTable) {
-      enqueueWaitingDurableSliceTable(owner, incomingTable, deliveryContext);
-      owner.durableSliceContended = true;
-      if (shouldPreemptActiveDurableSlice(owner, incomingTable)) {
-        owner.activeDurablePropagation?.context?.markContended?.();
-      }
-    }
-    return Math.min(owner.deliveryRetryDelayMs, BUSY_CONTENDED_RETRY_AFTER_MS);
-  }
-  if (
-    incomingTable !== owner.yieldedDurableSliceTable ||
-    (Array.isArray(owner.waitingDurableSliceTables) &&
-      owner.waitingDurableSliceTables.length > 0)
-  ) {
-    enqueueWaitingDurableSliceTable(owner, incomingTable, deliveryContext);
-  }
-  notifyNextWaitingDurableSliceTable(owner);
-  return Math.max(
-    MIN_YIELD_HOLD_RETRY_AFTER_MS,
-    Math.min(
-      owner.deliveryRetryDelayMs,
-      (owner.yieldedDurableSliceUntilMs ?? 0) - owner.now(),
-    ),
-  );
-}
-
-function durablePropagationRefusal(owner, admission, options = null) {
-  if (admission === DURABLE_PROPAGATION_ADMISSION.BUSY) {
-    const incomingTable = options?.tableName ?? null;
-    return {
-      ...unknownCdcAcceptance(CDC_COMPLETION.BACKPRESSURE),
-      retryAfterMs: computeBusyRetryAfterMs(
-        owner,
-        incomingTable,
-        options?.deliveryContext ?? null,
-      ),
-    };
-  }
-  return {...unknownCdcAcceptance(),
-    fallbackReason: CDC_GROUP_PROPAGATION_REASON.SOURCE_GROUP_MISMATCH};
-}
-
-function shouldMarkSliceContended(owner, wasCredited) {
-  const hasOtherCreditedContender =
-    !wasCredited &&
-    owner.creditedWaitingDurableSliceTables instanceof Set &&
-    owner.creditedWaitingDurableSliceTables.size > 0;
-  return (
-    hasOtherCreditedContender ||
-    (owner.durableSliceContended &&
-      owner.durableSliceWaves >= CONTENDED_TABLE_SLICE_WAVES)
-  );
-}
-
-function advanceDurablePropagationSlice(
-  owner, tableName, context, deliveryContext = null,
-) {
-  expireYieldedSliceHoldIfElapsed(owner);
-  const wasCredited = Boolean(
-    owner.creditedWaitingDurableSliceTables?.has?.(tableName),
-  );
-  dequeueWaitingDurableSliceTable(owner, tableName);
-  deliveryContext?.registerContentionOwner?.(owner, tableName);
-  owner.yieldedDurableSliceTable = null;
-  owner.yieldedDurableSliceUntilMs = 0;
-  if (owner.durableSliceTable === tableName) {
-    owner.durableSliceWaves = (owner.durableSliceWaves ?? 0) + 1;
-  } else {
-    owner.durableSliceTable = tableName ?? null;
-    owner.durableSliceWaves = 1;
-    owner.durableSliceContended =
-      Array.isArray(owner.waitingDurableSliceTables) &&
-      owner.waitingDurableSliceTables.length > 0;
-  }
-  if (shouldMarkSliceContended(owner, wasCredited)) {
-    context.markContended?.();
-  }
-}
-
-function finishDurablePropagationSliceWave(owner, context) {
-  if (context.isContended?.() === true) {
-    owner.yieldedDurableSliceTable = owner.durableSliceTable;
-    owner.durableSliceTable = null;
-    owner.yieldedDurableSliceUntilMs =
-      owner.now() + CONTENDED_SLICE_YIELD_HOLD_MS;
-    owner.durableSliceWaves = 0;
-    owner.durableSliceContended = false;
-    return;
-  }
-  if (
-    Array.isArray(owner.waitingDurableSliceTables) &&
-    owner.waitingDurableSliceTables.length > 0
-  ) {
-    owner.yieldedDurableSliceUntilMs =
-      owner.now() + CONTENDED_SLICE_YIELD_HOLD_MS;
-  }
-}
-
-function bindWaveProgress(owner, source, events, context, plan) {
-  return typeof context.bindTopology === 'function' ?
-    context.bindTopology(owner, source, plan.targets) :
-    bindCdcPropagationProgress(context,
-      createCdcPropagationProgress(owner, source, plan.targets), events);
-}
-
-function targetDeliveryPayload(owner, source, events, target) {
+// The durable vector has one wire form, whatever its length: the batch
+// message naming its events and the source range the lane shipped them as
+// (CDC Stage 3: source partition and incarnation, predecessor, last row).
+function targetDeliveryPayload(owner, source, events, target, sourceRange) {
   return {
-    ...(events.length === 1 ? {type: LATENCY_TOPOLOGY_MESSAGE_TYPE.CDC_PROPAGATION,
-      ...events[0]} : {type: LATENCY_TOPOLOGY_MESSAGE_TYPE.CDC_PROPAGATION_BATCH, events}),
+    type: LATENCY_TOPOLOGY_MESSAGE_TYPE.CDC_PROPAGATION_BATCH,
+    events,
+    sourceRange,
     sourceNodeId: owner.nodeId,
     sourceGroupId: source.groupId,
     targetGroupId: target.groupId,
@@ -352,21 +56,26 @@ function notSentTarget(error = undefined) {
   return {delivery: null, answer: unknownCdcAcceptance(error)};
 }
 
-async function deliverTarget(owner, source, events, leaf, context) {
+async function deliverTarget(owner, wave, events, leaf) {
+  const {context, source} = wave;
   context.assertCurrent();
   if (owner.resolvePropagationPressure(events).action === PRESSURE_GOVERNOR_ACTION.DEFER) {
+    reportCdcTargetSkipped(owner, events[0], leaf.route,
+      TARGET_SKIP_REASON.PRESSURE_DEFERRED, wave.trace.planRoutingReason);
     return notSentTarget(CDC_COMPLETION.BACKPRESSURE);
   }
   if (
     !owner.messageRouter ||
     typeof owner.messageRouter.deliver !== 'function' ||
-    typeof leaf.route?.address !== 'string' ||
+    leaf.route === null || typeof leaf.route.address !== 'string' ||
     leaf.route.address.length === 0
   ) {
+    reportCdcTargetSkipped(owner, events[0], leaf.route,
+      TARGET_SKIP_REASON.NOT_ROUTABLE, wave.trace.planRoutingReason);
     return notSentTarget();
   }
   const profile = resolveCdcPropagationDeliveryProfile(events);
-  const payload = targetDeliveryPayload(owner, source, events, leaf.route);
+  const payload = targetDeliveryPayload(owner, source, events, leaf.route, wave.sourceRange);
   const delivery = await context.run(() => owner.messageRouter.deliver(
     leaf.route.address, payload, {
       targetNodeId: leaf.route.coordinatorNodeId,
@@ -382,57 +91,87 @@ async function deliverTarget(owner, source, events, leaf, context) {
   return {delivery, answer: deliveryAnswerOf(delivery)};
 }
 
-async function deliverUncoveredLeaves(owner, wave, progress, events) {
-  const {context, source} = wave;
-  const count = progress.leafCount();
-  let lastFailure = {state: DURABLE_PROPAGATION_CAUSE.NONE};
-  // A serial dispatch window is bounded by every positive router concurrency.
-  // The total captured population is not capped by that window.
-  for (let visited = 0; visited < count; visited += 1) {
-    context.assertCurrent();
-    const leaf = progress.next();
-    if (leaf === null) break;
-    try {
-      // The source applies locally (its answer); a target is a delivery.
-      const {delivery, answer} = progress.isSource(leaf) ?
-        {delivery: null, answer: await context.run(() => source.applyCDCBatch(events, {
-          deliveryContext: context, remainingMs: context.remainingMs,
-        }))} : await deliverTarget(owner, source, events, leaf, context);
-      context.assertCurrent();
-      progress.observe(leaf, progress.isSource(leaf) ? answer : delivery);
-      if (answer?.success !== true) {
-        lastFailure = {state: DURABLE_PROPAGATION_CAUSE.RESPONSE, cause: delivery ?? answer};
-      }
-    } catch (error) {
-      context.assertCurrent();
-      lastFailure = {state: DURABLE_PROPAGATION_CAUSE.ERROR, cause: error};
-    }
+// The recipient a delivery addresses: the source group (it applies locally)
+// or one target group, through the one route the invocation answered when the
+// plan was bound: the source lane's observation of that group (the plan's
+// route for a group it names, the last observed one for a required group it
+// no longer names; cdc-propagation-progress.js). No observed route, or one
+// without an address, is not routable: the typed unknown, and the lane holds
+// the recipient until its recipient domain changes or its backoff ends.
+function resolveRecipient(source, recipientGroupId, observedRoute) {
+  if (recipientGroupId === null || recipientGroupId === source.groupId) {
+    return {isSource: true, groupId: source.groupId, route: null};
   }
-  return lastFailure;
+  return {isSource: false, groupId: recipientGroupId, route: observedRoute};
 }
 
-function prepareDurableForegroundWave(owner, wave, events, plan) {
+// A recipient's delivery that threw inside its current invocation: the typed
+// unknown, with the error as its cause.
+function erroredRecipientAnswer(error) {
+  return {answer: unknownCdcAcceptance(),
+    cause: {state: DURABLE_PROPAGATION_CAUSE.ERROR, cause: error}};
+}
+
+// The one refusal of a durable delivery: the grouped plan names another
+// source group than the one that delivers.
+function durablePropagationRefusal() {
+  return {...unknownCdcAcceptance(),
+    fallbackReason: CDC_GROUP_PROPAGATION_REASON.SOURCE_GROUP_MISMATCH};
+}
+
+async function deliverToRecipient(owner, wave, events, recipient) {
   const {context, source} = wave;
-  const progress = bindWaveProgress(owner, source, events, context, plan);
-  let lastFailure = {state: DURABLE_PROPAGATION_CAUSE.NONE};
-  const complete = (answer) => isCommittedCdcOutcome(answer, events, source.groupId) ||
-    isProvisionalCdcOutcome(answer, events, source.groupId);
-  const result = () => {
-    const answer = progress.result();
-    return complete(answer) ? propagationResult(owner, source, plan, progress, answer) :
-      {...propagationResult(owner, source, plan, progress, unknownCdcAcceptance()),
-        failedTargetGroupIds: progress.failedTargetGroupIds(),
-        cause: lastFailure};
-  };
+  context.assertCurrent();
+  const startedAtMs = owner.now();
+  const leaf = {groupId: recipient.groupId, route: recipient.route};
+  try {
+    if (recipient.isSource) {
+      const answer = await context.run(() => source.applyCDCBatch(events, {
+        deliveryContext: context, remainingMs: context.remainingMs,
+        sourceRange: wave.sourceRange,
+      }));
+      traceWaveLeaf(wave.trace,
+        {isSource: true, leaf, elapsedMs: owner.now() - startedAtMs, answer, error: null});
+      context.assertCurrent();
+      return {answer, cause: {state: DURABLE_PROPAGATION_CAUSE.RESPONSE, cause: answer}};
+    }
+    const {delivery, answer} = await deliverTarget(owner, wave, events, leaf);
+    traceWaveLeaf(wave.trace,
+      {isSource: false, leaf, elapsedMs: owner.now() - startedAtMs, answer, error: null});
+    context.assertCurrent();
+    // A target's answer counts only inside a delivered transport envelope.
+    const covered = delivery !== null && observeCdcDeliveryCoverage(
+      delivery, events, recipient.groupId).state !== CDC_COVERAGE_STATE.UNCOVERED;
+    return {answer: covered ? answer : unconfirmedCdcAcceptance(answer),
+      cause: {state: DURABLE_PROPAGATION_CAUSE.RESPONSE, cause: delivery ?? answer}};
+  } catch (error) {
+    traceWaveLeaf(wave.trace, {isSource: recipient.isSource, leaf,
+      elapsedMs: owner.now() - startedAtMs, answer: null, error});
+    context.assertCurrent();
+    return erroredRecipientAnswer(error);
+  }
+}
+
+// The prepared unit of the foreground retry loop: one recipient's delivery.
+function prepareRecipientDelivery(owner, wave, events, plan, recipient) {
+  const {context, source} = wave;
+  let last = {answer: unknownCdcAcceptance(), cause: {state: DURABLE_PROPAGATION_CAUSE.NONE}};
+  const complete = () => isCommittedCdcOutcome(last.answer, events, recipient.groupId) ||
+    isAlreadyAppliedCdcOutcome(last.answer, events, recipient.groupId) ||
+    isProvisionalCdcOutcome(last.answer, events, recipient.groupId);
+  const result = () => complete() ?
+    propagationResult(owner, source, plan, last.answer) :
+    {...propagationResult(owner, source, plan, unconfirmedCdcAcceptance(last.answer)),
+      failedTargetGroupIds: recipient.isSource ? [] : [recipient.groupId], cause: last.cause};
   return {
     deliveryLabel: owner.describeDeliveryEvents(events),
-    complete: () => complete(progress.result()),
+    complete,
+    positionGap: () => last.answer?.error === CDC_COMPLETION.POSITION_GAP,
     result,
-    // The prepared unit is one aggregate durable wave. Leaf coverage, never
-    // this diagnostic count, decides completion and source progress.
+    // One recipient: its answer, never this diagnostic count, decides.
     failureCount: () => 1,
     deliver: async () => {
-      lastFailure = await deliverUncoveredLeaves(owner, wave, progress, events);
+      last = await deliverToRecipient(owner, wave, events, recipient);
       context.assertCurrent();
     },
     stopped: result,
@@ -442,17 +181,17 @@ function prepareDurableForegroundWave(owner, wave, events, plan) {
         CDC_GROUP_FOREGROUND_RETRY_STATE.INSUFFICIENT_DURATION, retryDelayMs, remainingMs};
     },
     wait: (delayMs) => context.run(() => owner.sleep(delayMs)),
-    // Unresolved debt returns to the source owner: the original source lane
-    // retains the next invocation and this child scope retains actual cleanup.
+    // An unconfirmed recipient returns to the source lane: the lane retains
+    // that recipient's next invocation and this child scope its cleanup.
   };
 }
 
-function propagationResult(owner, source, plan, progress, answer) {
+function propagationResult(owner, source, plan, answer) {
   const strategy = plan.useGrouped ? CDC_GROUP_PROPAGATION_STRATEGY.GROUP_COORDINATOR :
     CDC_GROUP_PROPAGATION_STRATEGY.DIRECT_FANOUT;
   const mode = plan.useGrouped ? CDC_GROUP_PROPAGATION_STATUS.GROUPED :
     CDC_GROUP_PROPAGATION_STATUS.SAFE;
-  const result = {sourceGroupId: source.groupId, targetGroupCount: progress.leafCount() - 1,
+  const result = {sourceGroupId: source.groupId, targetGroupCount: plan.targets.length,
     strategy, mode, fallbackReason: plan.fallbackReason, timestamp: owner.now(), ...answer};
   owner.stats.lastStrategy = strategy;
   owner.stats.lastMode = mode;
@@ -474,51 +213,60 @@ function publicationModeOf(plan) {
     CDC_GROUP_PUBLICATION_MODE.REPAIR_ONLY : CDC_GROUP_PUBLICATION_MODE.CONSERVATIVE_FANOUT;
 }
 
-async function propagateDurableCdcEvent(owner, options) {
+// A delivery is in flight from its admission until its child scope's actual
+// local cleanup; the service counts them (and their peak) for diagnostics.
+// Their number is bounded by the source lanes: one per (source partition,
+// recipient) on this node.
+function openRecipientDelivery(owner, parent, source) {
+  const context = openCdcDeliveryChildScope(parent);
+  const wave = {context, source, sourceRange: parent.sourceRange,
+    trace: openDurableWaveTrace(owner)};
+  owner.activeDurableDeliveries.add(wave);
+  owner.stats.peakActiveDurableDeliveries = Math.max(
+    owner.stats.peakActiveDurableDeliveries, owner.activeDurableDeliveries.size);
+  context.cleanup.then(() => owner.activeDurableDeliveries.delete(wave));
+  return wave;
+}
+
+// One delivery carries one vector (the events of one table, in log order, as
+// the source lane shipped them) to the one recipient group its invocation
+// addresses. The topology owner reports the recipient set it observed to the
+// invocation (bindTopology): that is how the source lane learns its leaves.
+async function deliverCdcVectorToRecipient(owner, options) {
   const parent = options.deliveryContext;
   assertCdcDeliveryInvocation(parent);
-  const admission = decideDurablePropagationAdmission(
-    owner.activeDurablePropagation !== null ||
-      isYieldedSliceTableDeferred(owner, options.tableName),
-  );
-  if (admission !== DURABLE_PROPAGATION_ADMISSION.ADMIT) {
-    return durablePropagationRefusal(owner, admission, options);
-  }
-  // Admission precedes immutable capture, target capture, source effects and
-  // every await. The slot is released by actual local cleanup, not response.
-  const context = openCdcDeliveryChildScope(parent);
-  const wave = {context, source: options.sourceMessageGroupService};
-  owner.activeDurablePropagation = wave;
-  advanceDurablePropagationSlice(owner, options.tableName, context, parent);
-  context.cleanup.then(() => {
-    if (owner.activeDurablePropagation === wave) {
-      owner.activeDurablePropagation = null;
-      notifyNextWaitingDurableSliceTable(owner);
-    }
-  });
+  const head = options.events[0];
+  const wave = openRecipientDelivery(owner, parent, options.sourceMessageGroupService);
+  const {context, source, trace} = wave;
+  trace.eventCount = options.events.length;
   try {
     context.assertCurrent();
-    const events = captureCdcEvents([options]);
-    const plan = captureDurablePropagationPlan(owner, wave.source);
-    const sourceAdmission = decideDurablePropagationAdmission(false, plan.sourceMismatch);
-    if (sourceAdmission !== DURABLE_PROPAGATION_ADMISSION.ADMIT) {
-      return durablePropagationRefusal(owner, sourceAdmission);
+    const events = captureCdcEvents(options.events);
+    const plan = captureDurablePropagationPlan(owner, source);
+    trace.planRoutingReason = plan.fallbackReason ?? null;
+    if (plan.sourceMismatch) {
+      const refusal = durablePropagationRefusal();
+      reportDurableWaveRefused(owner, head, refusal);
+      return refusal;
     }
+    const observedRoute = parent.bindTopology(owner, source, plan.targets);
+    const recipient = resolveRecipient(source, parent.recipientGroupId, observedRoute);
+    trace.recipientGroupId = recipient.groupId;
     owner.setPublicationMode(publicationModeOf(plan), plan.fallbackReason);
-    const prepared = prepareDurableForegroundWave(owner, wave, events, plan);
+    const prepared = prepareRecipientDelivery(owner, wave, events, plan, recipient);
     const result = await owner.deliverToTargetsWithRetry(prepared);
     context.assertCurrent();
     if (!plan.useGrouped && result?.success === true) {
-      const postPlan = captureDurablePropagationPlan(owner, wave.source);
+      const postPlan = captureDurablePropagationPlan(owner, source);
       if (postPlan.useGrouped) {
         owner.setPublicationMode(publicationModeOf(postPlan), postPlan.fallbackReason);
       }
     }
     return result;
   } finally {
-    finishDurablePropagationSliceWave(owner, context);
     context.finish();
+    reportDurableWaveFinished(owner, head, trace);
   }
 }
 
-export {propagateDurableCdcEvent, releaseWaitingDurableSliceContender};
+export {deliverCdcVectorToRecipient};

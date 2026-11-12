@@ -19,6 +19,8 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {ENTRYPOINT_DEFAULT} from '../../src/constants/entrypoint.js';
 import {PROTOCOL, ADDRESS} from '../../src/constants/index.js';
 import {MAX_PORT} from '../../src/constants/runtime.js';
+import {createCdcEventHandlerContext} from
+  './cdc-event-handler-context-fixture.js';
 
 /**
  * Initialize test environment with required singletons.
@@ -53,21 +55,6 @@ beforeEach(() => {
 afterEach(() => {
   cleanupTestEnvironment();
 });
-
-/**
- * Create a mock event context for testing.
- * @return {Object} Mock event context.
- */
-function createMockEventContext() {
-  return {
-    epochManager: null,
-    rebalancer: null,
-    messageRouter: null,
-    emit: () => {},
-    incrementEpochChanges: () => {},
-    incrementNodeStateChanges: () => {},
-  };
-}
 
 /**
  * Arbitrary for generating valid hostnames.
@@ -126,7 +113,7 @@ test('Property: WebSocket address derivation produces correct URL', async (t) =>
     fc.property(
       nodeAddressArb,
       ({address, hostname, port}) => {
-        const context = createMockEventContext();
+        const context = createCdcEventHandlerContext();
         const handler = new CDCEventHandler({
           nodeId: 'test-handler-node',
           eventContext: context,
@@ -163,7 +150,7 @@ test('Property: WebSocket address starts with ws:// protocol', async (t) => {
     fc.property(
       nodeAddressArb,
       ({address}) => {
-        const context = createMockEventContext();
+        const context = createCdcEventHandlerContext();
         const handler = new CDCEventHandler({
           nodeId: 'test-handler-node',
           eventContext: context,
@@ -194,7 +181,7 @@ test('Property: WebSocket port offset is applied correctly', async (t) => {
     fc.property(
       nodeAddressArb,
       ({address, port}) => {
-        const context = createMockEventContext();
+        const context = createCdcEventHandlerContext();
         const handler = new CDCEventHandler({
           nodeId: 'test-handler-node',
           eventContext: context,
@@ -231,7 +218,7 @@ test('Property: Hostname is preserved in WebSocket address', async (t) => {
     fc.property(
       nodeAddressArb,
       ({address, hostname}) => {
-        const context = createMockEventContext();
+        const context = createCdcEventHandlerContext();
         const handler = new CDCEventHandler({
           nodeId: 'test-handler-node',
           eventContext: context,
@@ -285,7 +272,7 @@ test('Property: Invalid addresses return null', async (t) => {
     fc.property(
       invalidAddressArb,
       (invalidAddress) => {
-        const context = createMockEventContext();
+        const context = createCdcEventHandlerContext();
         const handler = new CDCEventHandler({
           nodeId: 'test-handler-node',
           eventContext: context,

@@ -7,6 +7,7 @@ documentClass: generated
 
 ## Files
 
+- [cdc-handler-apply-diagnostics.js](cdc-handler-apply-diagnostics.js) - Diagnostics for CDC events applied to the system-table cache (log line only): per table, at most one line per... (importers: few)
 - [cdc-handler.js](cdc-handler.js) - CDC Handler - Manages CDC subscriptions and cache updates for message groups. (importers: many)
 - [constants.js](constants.js) - No leading comment; first export: MESSAGE_GROUP_APPLICATION_ERROR_MSG. (importers: hub)
 - [index.js](index.js) - Message Group module exports. (importers: few)
@@ -33,7 +34,7 @@ documentClass: generated
 - [message-group-service-outbound-dispatch-runtime-methods.js](message-group-service-outbound-dispatch-runtime-methods.js) - Direct delivery spent its attempt budget without an acknowledgement: one wait_bound_spent ERROR with the last failure. (importers: one)
 - [message-group-service-peer-resolution.js](message-group-service-peer-resolution.js) - Message Group Service - peer-address resolution and cache reconciliation triggering. (importers: one)
 - [message-group-service-raft-lifecycle.js](message-group-service-raft-lifecycle.js) - Message Group Service - consensus lifecycle on the raft-rs operation port: initialization, role/leader/term... (importers: one)
-- [message-group-service-raft-timing.js](message-group-service-raft-timing.js) - Message Group Service - runtime raft timing reconfiguration through the operation port, and committed-entry... (importers: one)
+- [message-group-service-raft-timing.js](message-group-service-raft-timing.js) - Message Group Service - runtime raft timing reconfiguration through the operation port, and committed-entry... (importers: few)
 - [message-group-service-rebalancer-runtime-methods.js](message-group-service-rebalancer-runtime-methods.js) - Set the CDC integration service for raft role updates. (importers: one)
 - [message-group-service-row-owner.js](message-group-service-row-owner.js) - The row of one registration (a birth). (importers: many)
 - [message-group-service-runtime-methods-class.js](message-group-service-runtime-methods-class.js) - No leading comment; first export: createMessageGroupServiceRuntimeMethodsClass. (importers: one)

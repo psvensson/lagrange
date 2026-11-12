@@ -11,6 +11,7 @@ import {applyBootstrapReadinessProbeDetailMethods} from './bootstrap-readiness-o
 import {assignBootstrapStartupAuthorityEvidenceMethods} from './bootstrap-startup-authority-evidence.js';
 import {assignBootstrapJoinProjectionMethods} from './bootstrap-join-projection-policy.js';
 import {assignBootstrapReadinessSnapshotEvaluatorMethods} from './bootstrap-readiness-snapshot-evaluator.js';
+import {assignBootstrapReadinessLifecycleSourceMethods} from './bootstrap-readiness-lifecycle-source.js';
 import {assignBootstrapControlPlaneRecoveryHealthMethods} from './bootstrap-control-plane-recovery-health.js';
 import {assignBootstrapReadinessDependencyProbeMethods} from './bootstrap-readiness-dependency-probes.js';
 
@@ -19,6 +20,8 @@ class BootstrapReadinessOwner {
     this.delegates = options.delegates || {};
     this.lastBootstrapJoinBlockedSignature = null;
     this.lastBootstrapJoinProjectionEvaluation = null;
+    this.lifecycleFollow = null;
+    this.followLifecycleSources();
   }
   getSeedNodeId() {
     return this.delegates.getSeedNodeId?.() || null;
@@ -107,7 +110,7 @@ class BootstrapReadinessOwner {
   }
   async handleReadinessProbeRequest(reply) {
     const snapshot = this.applyOriginalSeedAdmission(
-      await this.evaluateReadinessSnapshotForProbe());
+      this.evaluateReadinessSnapshot());
     const statusCode = snapshot.ready ?
       HTTP_STATUS.OK :
       HTTP_STATUS.SERVICE_UNAVAILABLE;
@@ -118,7 +121,7 @@ class BootstrapReadinessOwner {
   }
   async handleBootstrapReadinessProbeRequest(reply) {
     const snapshot = this.applyOriginalSeedAdmission(this.resolveReadinessSnapshotForScope(
-      await this.evaluateReadinessSnapshotForProbe(),
+      this.evaluateReadinessSnapshot(),
       BOOTSTRAP_API_PROBE_SCOPE.BOOTSTRAP_JOIN,
     ));
     const statusCode = snapshot.ready ?
@@ -154,6 +157,7 @@ applyBootstrapReadinessProbeDetailMethods(BootstrapReadinessOwner);
 assignBootstrapStartupAuthorityEvidenceMethods(BootstrapReadinessOwner);
 assignBootstrapJoinProjectionMethods(BootstrapReadinessOwner);
 assignBootstrapReadinessSnapshotEvaluatorMethods(BootstrapReadinessOwner);
+assignBootstrapReadinessLifecycleSourceMethods(BootstrapReadinessOwner);
 assignBootstrapControlPlaneRecoveryHealthMethods(BootstrapReadinessOwner);
 assignBootstrapReadinessDependencyProbeMethods(BootstrapReadinessOwner);
 

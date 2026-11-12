@@ -18,17 +18,29 @@
  *    fires only when the test advances it, so "frozen" means zero fallback
  *    advance.
  *
+ * A third authority is the group itself (committed-voter-group-fixture.js):
+ * the four replicas are the committed voters, the target leads, and every
+ * replica answers the witness read for itself - unless its node's process is
+ * gone, when its read fails as a delivery failure.
+ *
  * Readiness profiles come from the readiness reason enum:
- *  - READY: eligible, no reasons;
+ *  - READY: eligible, no reasons; the node holds its ready lease;
  *  - SYSTEM_FLOOR: the lab-classified placeholder
- *    (PRIORITY_CONTROL_PLANE_RECOVERY_PENDING + planning_snapshot_refresh_pending),
- *    not routable and not an evidence-absent denial, so the replica is not
- *    floor-countable and remove safety defers "below minimum";
- *  - UNSAFE: a substantive denial (process_not_alive).
+ *    (PRIORITY_CONTROL_PLANE_RECOVERY_PENDING + planning_snapshot_refresh_pending):
+ *    the node is not routable and holds no ready lease, but its process
+ *    runs and its replica answers. The remove-safety floor credits such a
+ *    voter from the group's committed evidence, so it does not defer
+ *    (superseding the 2026-09-25 "below minimum 2/3" placeholder deferral);
+ *  - UNSAFE: a substantive denial (process_not_alive): no ready lease and a
+ *    silent replica. Nothing credits it; the floor defers.
  */
 
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {createMockControlPlaneReadinessService} from './test-helpers.js';
+import {
+  createCommittedVoterGroup,
+  withCommittedVoterGroup,
+} from './committed-voter-group-fixture.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {
   CONTROL_PLANE_PARTICIPATION_DECISION,
@@ -204,6 +216,9 @@ function createReadinessAuthority(partitionId, profiles, clock) {
       setProfile(nodeId, profile) {
         profileByNode.set(nodeId, profile);
       },
+      /** Whether the node's process is gone (its replicas are silent). */
+      isProcessGone: (nodeId) =>
+        profileByNode.get(nodeId) === READINESS_PROFILE.UNSAFE,
       /**
      * Emit the readiness owner's publication for a node, synchronously.
      * @param {string} nodeId
@@ -290,12 +305,34 @@ function createWakeScenario(options) {
   const clock = createFallbackClock();
   const readiness = createReadinessAuthority(partitionId, options.profiles, clock);
   const removals = [];
+  const serviceRows = [
+    buildServiceRow(partitionId, 1, WAKE_NODE.SOURCE),
+    buildServiceRow(partitionId, 2, WAKE_NODE.PEER),
+    buildServiceRow(partitionId, 3, WAKE_NODE.SECOND_PEER),
+    buildServiceRow(partitionId, 4, WAKE_NODE.OWNER),
+  ];
+  const nodeIdByReplicaId = new Map(
+    serviceRows.map((row) => [row.replica_id, row.node_id]));
+  // The group: four committed voters, the target (r4) leading; a replica
+  // whose node's process is gone does not answer.
+  // Replicas a test silences on their own (the replica's process is gone
+  // while its node's readiness level says nothing new).
+  const silencedReplicaIds = new Set();
+  const group = createCommittedVoterGroup({
+    voterReplicaIds: serviceRows.map((row) => row.replica_id),
+    leaderReplicaId: `${partitionId}-r4`,
+    isSilent: (replicaId) => silencedReplicaIds.has(replicaId) ||
+      readiness.isProcessGone(nodeIdByReplicaId.get(replicaId)),
+  });
   const coordinator = createTestCoordinator({
     nodeId: WAKE_NODE.OWNER,
     enableTimeouts: false,
     setTimeoutFn: clock.setTimeoutFn,
     clearTimeoutFn: clock.clearTimeoutFn,
-    messageRouter: {
+    // The group's replicas answer the witness read for themselves; the
+    // fixture-world witness (a leader naming itself alone) is not used.
+    replaceWitness: false,
+    messageRouter: withCommittedVoterGroup({
       async deliver(target, payload) {
         if (payload?.type === ReplicaOperationMessageType.REMOVE_REPLICA) {
           removals.push({target, replicaId: payload.replicaId});
@@ -307,15 +344,10 @@ function createWakeScenario(options) {
       async pingNode() {
         return true;
       },
-    },
+    }, group),
     controlPlaneReadinessService: readiness,
     cacheData: {
-      services: [
-        buildServiceRow(partitionId, 1, WAKE_NODE.SOURCE),
-        buildServiceRow(partitionId, 2, WAKE_NODE.PEER),
-        buildServiceRow(partitionId, 3, WAKE_NODE.SECOND_PEER),
-        buildServiceRow(partitionId, 4, WAKE_NODE.OWNER),
-      ],
+      services: serviceRows,
       replicaOperations: [buildReplaceRow(partitionId, clock.now())],
     },
   });
@@ -326,12 +358,14 @@ function createWakeScenario(options) {
     async () => ReplicaStatus.ACTIVE,
   );
   // No handoff deferral: the REPLACE's leadership is decided from its
-  // witness's fresh leader (BR11), which the fixture witness answers as the
-  // target (the partition row names no other leader). Nothing is planted in
-  // the per-leg evidence maps, which no operation reaches any more.
+  // witness's fresh leader (BR11), which the group answers as the target.
+  // Nothing is planted in the per-leg evidence maps, which no operation
+  // reaches any more.
   return {
     coordinator,
     owner,
+    group,
+    silencedReplicaIds,
     clock,
     readiness,
     removals,

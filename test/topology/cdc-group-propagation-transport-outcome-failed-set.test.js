@@ -26,7 +26,7 @@ import {CDCGroupPropagationService} from
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {buildCommittedCdcOutcome} from '../../src/cdc/cdc-delivery-outcome.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
-import {createDurableCdcEvent, createDurablePropagationRequest,
+import {createDurableCdcEvent, propagateToEveryRecipient,
   createDurableSourceMessageGroupService, createMessageGroupServiceRow,
   createTopologyCache} from './cdc-group-propagation-service-harness.js';
 
@@ -61,11 +61,11 @@ async function harness(t, failingReply, {bareReceipt = false} = {}) {
   const calls = new Map();
   const failing = target('cdc-failed-set-failing');
   router.register(target(DELIVERED_GROUP).address,
-    (message) => buildCommittedCdcOutcome([message.payload], DELIVERED_GROUP,
+    (message) => buildCommittedCdcOutcome(message.payload.events, DELIVERED_GROUP,
       {index: 1, term: 1}));
   // The failing reply also carries the target's committed receipt.
   router.register(failing.address, (message) => ({...buildCommittedCdcOutcome(
-    [message.payload], failing.groupId, {index: 1, term: 1}), ...failingReply}));
+    message.payload.events, failing.groupId, {index: 1, term: 1}), ...failingReply}));
   const service = new CDCGroupPropagationService({
     nodeId: NODE_ID,
     systemTableCache: createTopologyCache({services: [target(DELIVERED_GROUP), failing].map(
@@ -76,7 +76,7 @@ async function harness(t, failingReply, {bareReceipt = false} = {}) {
       async deliver(address, payload, options) {
         calls.set(address, (calls.get(address) ?? 0) + 1);
         if (bareReceipt && address === failing.address) {
-          return buildCommittedCdcOutcome([payload], failing.groupId, {index: 1, term: 1});
+          return buildCommittedCdcOutcome(payload.events, failing.groupId, {index: 1, term: 1});
         }
         return router.deliver(address, payload, options);
       },
@@ -109,13 +109,12 @@ const LANES = [
 ];
 
 for (const {name, reply, options} of LANES) {
-  test(`CDC topology wave keeps a ${name} target uncovered`, async (t) => {
+  test(`CDC topology delivery keeps a ${name} target unconfirmed`, async (t) => {
     const {service, calls, failing, delivered} = await harness(t, reply, options);
     const source = createDurableSourceMessageGroupService(SOURCE_GROUP);
-    const result = await service.propagateCDCEvent(
-      createDurablePropagationRequest(source, EVENT));
+    const result = await propagateToEveryRecipient(service, source, [EVENT]);
     t.equal(result.success, false,
-      `${name}: the wave is incomplete while the target the owner did not classify delivered is uncovered`);
+      `${name}: the vector is incomplete while the target the owner did not classify delivered is unconfirmed`);
     t.same(result.failedTargetGroupIds, [failing.groupId],
       `${name}: only the uncovered target group remains in failedTargetGroupIds`);
     t.equal(calls.get(delivered.address), 1,

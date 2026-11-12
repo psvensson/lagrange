@@ -52,17 +52,11 @@ function isDisconnectedOrReconnectingNode(executor, participantNodeId) {
   );
 }
 
+// A pacing hint only (the reconnect interval), never a re-send decision:
+// whether the failure is one a write routed under its entry may re-send.
 function isOutcomeLeaderUnavailable(executor, failure) {
-  const outcome = failureFactsOf(failure);
-  const errorMessage =
-    typeof outcome.error === QUERY_EXECUTOR_LITERAL.STRING_STRING ?
-      outcome.error :
-      QUERY_EXECUTOR_LITERAL.STRING_VALUE;
-  const errorCode =
-    typeof outcome.errorCode === QUERY_EXECUTOR_LITERAL.STRING_STRING ?
-      outcome.errorCode :
-      null;
-  return Boolean(executor.isLeaderUnavailable(errorMessage, errorCode));
+  const errorMessage = failureFactsOf(failure).error;
+  return Boolean(executor.isLeaderUnavailable(errorMessage, failure, true));
 }
 
 function resolveRetryableLeaderFailureRetryAfterMs({

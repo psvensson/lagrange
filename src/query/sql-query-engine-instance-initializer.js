@@ -347,6 +347,9 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
     calculateQuorumReplicaCount: (replicaCount) =>
       engine.calculateQuorumReplicaCount(replicaCount),
     partitionProvisioner: tablePartitionProvisioner,
+    releaseHeldFoundingOperations: engine.rebalanceCoordinator ?
+      (job) => engine.releaseSchemaJobHeldFoundingOperations(job) :
+      null,
   });
 
   engine.parseCache = new SqlParseCache(SQL_PARSE_CACHE.DEFAULT_MAX_SIZE);

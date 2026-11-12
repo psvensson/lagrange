@@ -931,7 +931,9 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
               partition_id: PARTITION_ID,
               node_id: SOURCE_NODE_ID,
               status: ReplicaStatus.ACTIVE,
-              raft_role: 'leader',
+              // Not the group's leader (2026-11-11 removal leadership gate: a
+              // leading source is handed off first; this cell stubs that gate).
+              raft_role: 'follower',
               address: `${SOURCE_NODE_ID}/partition/${SOURCE_REPLICA_ID}`,
             },
             {
@@ -1840,8 +1842,8 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
       });
 
       try {
-        const inFlight = await coordinator.getInFlightOperations();
-        const removeCount = await coordinator.getConcurrentRemoveCount();
+        const {operations: inFlight} = await coordinator.getInFlightOperations();
+        const {count: removeCount} = await coordinator.getConcurrentRemoveCount();
 
         t.same(
           inFlight.map((operation) => operation.operationId).sort(),
@@ -1864,9 +1866,7 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
             'owner-scoped in-flight SQL should remain parser-safe when used',
           );
         } else {
-          t.pass(
-            'cache fast-path satisfied in-flight query without issuing SQL',
-          );
+          t.pass('the owner read reached the gateway without routed SQL');
         }
       } finally {
         await coordinator.shutdown();

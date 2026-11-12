@@ -32,6 +32,10 @@ const RAFT_EVENT = Object.freeze({
   // confChangeEntries}. The admission re-drive's wake-up (verification V2);
   // MEMBERSHIP_CHANGED keeps its configuration-key meaning.
   CONF_CHANGE_APPLIED: 'conf change applied',
+  // The set of voters this leader has heard from within its liveness window
+  // changed (raft-rs-voter-liveness.js): the wake of a proposer whose
+  // removal waited on a live quorum (REMOVES_LIVE_QUORUM). No payload.
+  VOTER_LIVENESS_CHANGED: 'voter liveness changed',
 });
 
 // The one typed startup refusal of a replica its consensus port refused at
@@ -140,6 +144,17 @@ const RAFT_MEMBERSHIP_CHANGE_REFUSAL = Object.freeze({
   // refuses to apply it ("removed all voters"), so the leader's port refuses
   // it before the core is handed it. Terminal: no later state admits it.
   REMOVES_LAST_VOTER: 'membership-change-removes-last-voter',
+  // A change that removes the leader that proposes it: raft-rs
+  // would commit it and keep the removed leader leading while it drops every
+  // proposal. Refused at the leader's port, retryable: the change is another
+  // leader's once this one hands leadership on.
+  REMOVES_LEADER: 'membership-change-removes-leader',
+  // A removal whose resulting voters hold no live quorum by the leader's
+  // own check-quorum activity (raft-rs-voter-liveness.js): committed, it
+  // would leave a configuration that cannot elect or commit while a voter
+  // stays dead. Refused at the leader's port, retryable: re-driven when the
+  // live set changes (VOTER_LIVENESS_CHANGED) or the configuration settles.
+  REMOVES_LIVE_QUORUM: 'membership-change-removes-live-quorum',
   // A change to a group its durable workflow record retires as a unit (a
   // dissolved split/merge source, an aborted child/target): its member set
   // is frozen, so no member is added, replaced, promoted or removed.

@@ -306,6 +306,13 @@ function applyPrioritySpreadExpandCure(options = {}) {
     // standalone ADD (no REPLACE handoff, no same-batch surplus REMOVE) —
     // the same expand-before-drain design the at-target row encodes.
     classifyPriorityOverTargetSpreadCureCondition(sharedEvidence);
+  // Diagnostic only: the evidence this decision was classified from, the
+  // condition it matched, and the REPLACE count it leaves.
+  options.recordDecision?.({
+    evidence: {...sharedEvidence, replaceCountBeforeCure: replaceCount},
+    cureCondition: spreadExpandCureCondition,
+    replaceCount: spreadExpandCureCondition === null ? replaceCount : 0,
+  });
   if (spreadExpandCureCondition === null) {
     return replaceCount;
   }

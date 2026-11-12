@@ -8,6 +8,11 @@ import {
 } from './replica-operation-membership-epoch-binding.js';
 import {isGroupRetiringInView} from
   '../partition/group-retirement-evidence.js';
+import {
+  REBALANCE_PASS_NO_MOVE_EXIT as PASS_EXIT,
+  noteRebalancePassMoved,
+  noteRebalancePassWithoutMove,
+} from './rebalancer-no-target-pass-diagnostic.js';
 
 const {
   EntityType,
@@ -53,6 +58,15 @@ function resolveLedgerSurplusDrainTargetState(
   });
 }
 
+// Where a rebalance pass re-reads its own leadership: at entry, and again
+// after every stretch of awaits that precedes a decision or an effect taken
+// as the leader (leadership can be lost while the pass is suspended).
+const REBALANCE_LEADERSHIP_CHECKPOINT = Object.freeze({
+  BEFORE_PLANNING: 'before_planning',
+  BEFORE_EXECUTION: 'before_execution',
+  BEFORE_MOVE_BATCH: 'before_move_batch',
+});
+
 class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
   /**
    * The one planning refusal for message groups (owner decision 2026-10-04):
@@ -93,6 +107,48 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
    */
   isPlanningParked() {
     return this.messageGroupMembershipChangeRefusal() !== null;
+  }
+
+  /**
+   * The typed NOT_LEADER outcome of a pass whose rebalancer no longer holds
+   * its entity's leadership at a checkpoint, or null while it holds it. The
+   * fact consumed is this rebalancer's own leadership, as its service sets
+   * it; a deposed planner plans nothing and creates nothing.
+   * @param {string} checkpoint - A REBALANCE_LEADERSHIP_CHECKPOINT member.
+   * @return {Object|null}
+   */
+  leadershipLostRebalanceResult(checkpoint) {
+    if (this.isLeader) {
+      return null;
+    }
+    this.logger.info(REBALANCER_LOG_MSG.LEADERSHIP_LOST_DURING_REBALANCE, {
+      entityId: this.entityId,
+      entityType: this.entityType,
+      checkpoint,
+    });
+    return this.buildRebalanceResult(false, {
+      reason: REBALANCER_RUNTIME_REASON.NOT_LEADER,
+      leadershipCheckpoint: checkpoint,
+      moves: [],
+    });
+  }
+
+  // The moves a pass did not execute because leadership was lost first.
+  skipMovesForLostLeadership(moves) {
+    this.logger.info(REBALANCER_LOG_MSG.LEADERSHIP_LOST_DURING_REBALANCE, {
+      entityId: this.entityId,
+      entityType: this.entityType,
+      checkpoint: REBALANCE_LEADERSHIP_CHECKPOINT.BEFORE_MOVE_BATCH,
+      skippedMoveCount: moves.length,
+    });
+    return moves.map((move) => ({
+      success: false,
+      skipped: true,
+      reason: REBALANCER_RUNTIME_REASON.NOT_LEADER,
+      operation: move.type,
+      nodeId: move.nodeId,
+      replicaId: move.replicaId,
+    }));
   }
 
   async executeRebalancingMoves(moves, context = {}) {
@@ -157,6 +213,12 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
         if (this.isShuttingDown) {
           break;
         }
+        if (!this.isLeader) {
+          // Every await above (the handoff plan, an earlier batch, the
+          // readiness read, the inter-batch delay) may have cost leadership.
+          results.push(...this.skipMovesForLostLeadership(nodeMoves.slice(i)));
+          break;
+        }
         const batch = nodeMoves.slice(i, i + batchSize);
         const batchResults = await Promise.all(
           batch.map((move) => {
@@ -205,11 +267,13 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
     return results;
   }
 
-  async rebalance(
-    trigger = TriggerType.PERIODIC,
-    policy = null,
-    evaluationContext = null,
-  ) {
+  /**
+   * The result a pass returns before planning anything, or null when it may
+   * plan: shutting down, not the leader, a message-group membership change
+   * it may not plan, or a group retired as a unit.
+   * @return {Object|null}
+   */
+  rebalanceEntryRefusal() {
     if (this.isShuttingDown) {
       return this.buildRebalanceResult(false, {
         skipped: true,
@@ -237,12 +301,25 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
       return this.buildRebalanceResult(true, {skipped: true, moves: [],
         reason: REBALANCER_SKIP_REASON.GROUP_RETIRING});
     }
+    return null;
+  }
+
+  async rebalance(
+    trigger = TriggerType.PERIODIC,
+    policy = null,
+    evaluationContext = null,
+  ) {
+    const entryRefusal = this.rebalanceEntryRefusal();
+    if (entryRefusal !== null) {
+      return entryRefusal;
+    }
 
     const effectivePolicy = policy || (await this.getPolicy());
     const inventorySourceStateBefore =
       this.movePlanner.captureReplicaInventorySourceState();
     const currentReplicas = this.getCurrentReplicas();
-    const availableNodes = this.getAvailableNodes();
+    const nodePlan = this.getAvailableNodePlan();
+    const availableNodes = nodePlan.availableNodes;
     const operationCreationGate =
       this.resolvePriorityRecoveryOperationCreationPlanningGateForEvaluation(
         evaluationContext,
@@ -257,9 +334,10 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
         entityId: this.entityId,
         entityType: this.entityType,
       });
-      return this.buildRebalanceResult(false, {
-        reason: REBALANCER_RUNTIME_REASON.NO_AVAILABLE_NODES,
-      });
+      return this.noMovePassResult(PASS_EXIT.NO_AVAILABLE_NODES, nodePlan,
+        this.buildRebalanceResult(false, {
+          reason: REBALANCER_RUNTIME_REASON.NO_AVAILABLE_NODES,
+        }));
     }
 
     const calculatedTargetState = await this.movePlanner.calculateTargetState(
@@ -274,6 +352,13 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
     const planningMembershipPublicationEpoch =
       this.resolvePublishedMembershipPlanningEpoch();
     await this.refreshFailedCreateTargetCleanupDecisions();
+    // The entry check is three awaits old here; the plan is taken only by
+    // the rebalancer that still leads.
+    const leadershipLostBeforePlanning = this.leadershipLostRebalanceResult(
+      REBALANCE_LEADERSHIP_CHECKPOINT.BEFORE_PLANNING);
+    if (leadershipLostBeforePlanning !== null) {
+      return leadershipLostBeforePlanning;
+    }
     const calculatedMoves = this.movePlanner.calculateMoves(
       currentReplicas,
       targetState,
@@ -297,21 +382,26 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
         currentCount: currentReplicas.length,
         targetCount: targetState.targetReplicaCount,
       });
-      return this.buildRebalanceResult(true, {
-        moves: [],
-        reason: REBALANCER_RUNTIME_REASON.NO_CHANGES_NEEDED,
-      });
+      return this.noMovePassResult(PASS_EXIT.NO_MOVES_PLANNED, nodePlan,
+        this.buildRebalanceResult(true, {
+          moves: [],
+          reason: REBALANCER_RUNTIME_REASON.NO_CHANGES_NEEDED,
+        }), {
+          currentCount: currentReplicas.length,
+          targetCount: targetState.targetReplicaCount,
+        });
     }
 
     const ordinaryPriorityRecoverySerialGate =
       await this.getOrdinaryPriorityRecoverySerialGateSnapshot(moves);
     if (ordinaryPriorityRecoverySerialGate?.blocked === true) {
-      return this.buildRebalanceResult(true, {
-        skipped: true,
-        reason: REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
-        moves: [],
-        ordinaryPriorityRecoverySerialGate,
-      });
+      return this.noMovePassResult(PASS_EXIT.SERIAL_GATE, nodePlan,
+        this.buildRebalanceResult(true, {
+          skipped: true,
+          reason: REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
+          moves: [],
+          ordinaryPriorityRecoverySerialGate,
+        }));
     }
 
     let availableBudget = this.maxConcurrentMoves;
@@ -319,7 +409,8 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
       this.hasPriorityTopologyCleanupBudgetBypassCandidateMove(moves);
     try {
       const configuredBudget = await this.getConfiguredRebalanceBudget();
-      const inFlightCount = await this.getGlobalInFlightOperationCount();
+      const inFlightCount =
+        await this.resolveGlobalInFlightOperationCountForBudget();
       const isCritical = this.movePlanner.isCriticalState(
         currentReplicas,
         effectivePolicy,
@@ -346,11 +437,12 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
           if (priorityBudgetBypass === true) {
             availableBudget = 1;
           } else {
-            return this.buildRebalanceResult(true, {
-              skipped: true,
-              reason: REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
-              moves: [],
-            });
+            return this.noMovePassResult(PASS_EXIT.BUDGET_EXCEEDED, nodePlan,
+              this.buildRebalanceResult(true, {
+                skipped: true,
+                reason: REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
+                moves: [],
+              }));
           }
         }
       }
@@ -359,13 +451,20 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
         entityId: this.entityId,
         error: error.message,
       });
-      return this.buildRebalanceResult(false, {
-        skipped: true,
-        reason: REBALANCER_SKIP_REASON.BUDGET_QUERY_FAILED,
-        moves: [],
-      });
+      return this.noMovePassResult(PASS_EXIT.BUDGET_QUERY_FAILED, nodePlan,
+        this.buildRebalanceResult(false, {
+          skipped: true,
+          reason: REBALANCER_SKIP_REASON.BUDGET_QUERY_FAILED,
+          moves: [],
+        }));
     }
 
+    // The follow-up, pressure, serial-gate and budget reads above all await.
+    const leadershipLostBeforeExecution = this.leadershipLostRebalanceResult(
+      REBALANCE_LEADERSHIP_CHECKPOINT.BEFORE_EXECUTION);
+    if (leadershipLostBeforeExecution !== null) {
+      return leadershipLostBeforeExecution;
+    }
     this.logger.info(REBALANCER_LOG_MSG.START_REBALANCE, {
       entityId: this.entityId,
       entityType: this.entityType,
@@ -411,11 +510,36 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
       results,
     });
 
-    return this.buildRebalanceResult(true, {
+    return this.notePassExecution(nodePlan, this.buildRebalanceResult(true, {
       moves: results,
       trigger,
       timestamp: this.lastRebalanceTime,
-    });
+    }));
+  }
+
+  /**
+   * State a pass that needed a move and executed none (once per change of
+   * reason) and hand its result back; a deferred target read arms the
+   * planning-target readiness wait.
+   * @param {string} exit - a REBALANCE_PASS_NO_MOVE_EXIT member
+   * @param {Object} nodePlan
+   * @param {Object} result
+   * @param {Object} [detail]
+   * @return {Object} result
+   */
+  noMovePassResult(exit, nodePlan, result, detail = undefined) {
+    noteRebalancePassWithoutMove(this, {exit, nodePlan, detail});
+    return result;
+  }
+
+  notePassExecution(nodePlan, result) {
+    if (this.countExecutedMoves(result) > UNIFIED_REBALANCER_LITERAL.ZERO) {
+      noteRebalancePassMoved(this, result);
+      return result;
+    }
+    return this.noMovePassResult(PASS_EXIT.MOVES_NOT_EXECUTED, nodePlan,
+      result, {skipReasons: [...new Set(result.moves.map(
+        (move) => move?.reason || null))]});
   }
 
   resolvePublishedMembershipPlanningEpoch() {
@@ -434,4 +558,7 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
   }
 }
 
-export {UnifiedRebalancerRebalanceLoop};
+export {
+  REBALANCE_LEADERSHIP_CHECKPOINT,
+  UnifiedRebalancerRebalanceLoop,
+};

@@ -2,6 +2,8 @@
  * Canonical SqlRequest execution-mode dispatch.
  */
 
+import {CDC_ADMISSION_CLASS_FIELD, CDC_ADMISSION_INTENT_FIELD} from
+  '../partition/partition-cdc-admission-class.js';
 import {META_SERVICE_ID} from '../constants/wasm-meta.js';
 import {isSystemTableName} from
   '../bootstrap/system-table-schema-shared-constants.js';
@@ -130,7 +132,19 @@ function buildClientRequestQueryOptions(sqlRequest, executionOptions = {}) {
     ...expectedTransactionOption(sqlRequest),
     ...(issuingServiceId ? {issuingServiceId} : {}),
     ...(securityContext ? {securityContext} : {}),
+    // A client cannot declare a CDC admission class: a request that names
+    // one carries the claim to the engine entry, which refuses it typed
+    // rather than run the statement as if it had not asked.
+    ...admissionClassClaimOf(sqlRequest),
   };
+}
+
+function admissionClassClaimOf(sqlRequest) {
+  const claim = {};
+  for (const field of [CDC_ADMISSION_CLASS_FIELD, CDC_ADMISSION_INTENT_FIELD]) {
+    if (sqlRequest?.[field] !== undefined) claim[field] = sqlRequest[field];
+  }
+  return claim;
 }
 
 class SQLQueryEngineRequestDispatch extends

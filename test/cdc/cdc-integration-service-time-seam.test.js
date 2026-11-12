@@ -15,6 +15,7 @@
 // virtual clock sees no timer, so advancing it settles nothing and the
 // assertions on what the virtual clock drives fail.
 
+import {CDC_CATCHUP_TRIGGER} from '../../src/cdc/cdc-integration-service-authoritative-catchup.js';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
@@ -139,6 +140,7 @@ test('the catch-up default sleep is armed on the injected clock', async () => {
     return original(...args);
   };
   const hydration = service.hydrateCdcPropagatedTablesFromAuthority({
+    trigger: CDC_CATCHUP_TRIGGER.JOIN_CATCHUP,
     tables: [SYSTEM_TABLE_NAME.NODES], maxAttemptsPerTable: 3,
   }).then((result) => ({result}), (error) => ({error}));
   const {outcome} = await pumpOnVirtualClock(timeSource, hydration, RETRY_AFTER_MS);
@@ -176,6 +178,7 @@ test('the catch-up sweep sweeps a stale row under a virtual clock', async () => 
     },
   });
   const summary = await service.hydrateCdcPropagatedTablesFromAuthority({
+    trigger: CDC_CATCHUP_TRIGGER.JOIN_CATCHUP,
     tables: [TABLES.SERVICES], maxAttemptsPerTable: 1,
   });
   assert.equal(timeSource.now(), 0, 'the virtual clock never moved');
@@ -202,6 +205,7 @@ test('MUTATION: one producer back on ambient time breaks the sweep again',
       },
     });
     const summary = await service.hydrateCdcPropagatedTablesFromAuthority({
+      trigger: CDC_CATCHUP_TRIGGER.JOIN_CATCHUP,
       tables: [TABLES.SERVICES], maxAttemptsPerTable: 1,
     });
     assert.equal(summary.rowsSwept, 0,

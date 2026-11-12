@@ -34,8 +34,6 @@ const {
   WORKFLOW_STEP,
   buildPriorityRecoveryDecisionSnapshot,
   buildPriorityRecoveryOperationContextFromRecord,
-  isPriorityControlPlanePartition,
-  isSystemTablePartition,
   readAuthoritativeControlPlaneRows,
   resolveOperationHandlerType,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
@@ -146,8 +144,6 @@ const OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED = Object.freeze({
   buildPriorityRecoveryDecisionSnapshot,
   buildPriorityRecoveryOperationContextFromRecord,
   decidePriorityPublicationFollowerSourceRemovalSafety,
-  isPriorityControlPlanePartition,
-  isSystemTablePartition,
   normalizePriorityRecoveryOperationPartitionId,
   readAuthoritativeControlPlaneRows,
   resolveOperationHandlerType,

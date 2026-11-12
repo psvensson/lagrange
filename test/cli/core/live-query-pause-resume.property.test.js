@@ -53,8 +53,7 @@ test('Property 50: Live Query Pause/Resume Consistency', async (t) => {
           // Activate the subscription
           manager.handleLiveQueryEvent({
             subscriptionId,
-            type: 'live_query_initial',
-            data: [],
+            type: 'live_query_subscribed',
             partitions: ['p1'],
           });
 
@@ -100,8 +99,7 @@ test('Property 50: Live Query Pause/Resume Consistency', async (t) => {
           // Activate the subscription
           manager.handleLiveQueryEvent({
             subscriptionId,
-            type: 'live_query_initial',
-            data: [],
+            type: 'live_query_subscribed',
             partitions: ['p1'],
           });
 
@@ -148,8 +146,7 @@ test('Property 50: Live Query Pause/Resume Consistency', async (t) => {
           // Activate the subscription
           manager.handleLiveQueryEvent({
             subscriptionId,
-            type: 'live_query_initial',
-            data: [],
+            type: 'live_query_subscribed',
             partitions: ['p1'],
           });
 
@@ -207,8 +204,7 @@ test('Property 50: Live Query Pause/Resume Consistency', async (t) => {
           // Activate the subscription
           manager.handleLiveQueryEvent({
             subscriptionId,
-            type: 'live_query_initial',
-            data: [],
+            type: 'live_query_subscribed',
             partitions: ['p1'],
           });
 

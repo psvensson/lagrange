@@ -1,3 +1,5 @@
+import {stubAvailableNodes} from './available-node-plan-stub.js';
+
 export function registerUnifiedRebalancerBudgetArbitrationCleanupTests(context) {
   const {
     CONTROL_PLANE_READINESS_DIMENSION,
@@ -82,9 +84,9 @@ export function registerUnifiedRebalancerBudgetArbitrationCleanupTests(context) 
             status: ReplicaStatus.ACTIVE,
           }),
         );
-        rebalancer.getAvailableNodes = () => nodeIds.map(
+        stubAvailableNodes(rebalancer, () => nodeIds.map(
           (nodeId) => ({node_id: nodeId}),
-        );
+        ));
         rebalancer.movePlanner.calculateTargetState = async () => ({
           targetReplicaCount: PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
         });
@@ -184,12 +186,12 @@ export function registerUnifiedRebalancerBudgetArbitrationCleanupTests(context) 
           status: ReplicaStatus.ACTIVE,
         },
       ]);
-      rebalancer.getAvailableNodes = () => ([
+      stubAvailableNodes(rebalancer, () => ([
         {node_id: REBALANCER_TEST_NODE_ID_A},
         {node_id: REBALANCER_TEST_NODE_ID_B},
         {node_id: REBALANCER_TEST_NODE_ID_C},
         {node_id: PRIORITY_FOLLOW_UP_NODE_ID_D},
-      ]);
+      ]));
       rebalancer.movePlanner.calculateTargetState = async () => ({
         targetReplicaCount: PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
       });
@@ -311,12 +313,12 @@ export function registerUnifiedRebalancerBudgetArbitrationCleanupTests(context) 
           status: ReplicaStatus.ACTIVE,
         },
       ]);
-      rebalancer.getAvailableNodes = () => ([
+      stubAvailableNodes(rebalancer, () => ([
         {node_id: REBALANCER_TEST_NODE_ID_A},
         {node_id: REBALANCER_TEST_NODE_ID_B},
         {node_id: REBALANCER_TEST_NODE_ID_C},
         {node_id: PRIORITY_FOLLOW_UP_NODE_ID_D},
-      ]);
+      ]));
       rebalancer.movePlanner.calculateTargetState = async () => ({
         targetReplicaCount: PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
       });
@@ -404,10 +406,10 @@ export function registerUnifiedRebalancerBudgetArbitrationCleanupTests(context) 
 
     rebalancer.setLeader(true);
     rebalancer.getCurrentReplicas = () => [];
-    rebalancer.getAvailableNodes = () => ([
+    stubAvailableNodes(rebalancer, () => ([
       {node_id: 'node-1'},
       {node_id: 'node-2'},
-    ]);
+    ]));
     rebalancer.movePlanner.calculateTargetState = async () => ({
       targetReplicaCount: 2,
     });

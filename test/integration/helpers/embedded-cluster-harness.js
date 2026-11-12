@@ -34,6 +34,8 @@ import {
 import {refuseUnderProbe} from '../../../src/test-helpers/probe-guard.js';
 import {flushCoverageBeforeKill} from '../../../scripts/checks/census-pre-kill-flush.js';
 import {getUniqueListenerPorts} from './cluster-test-helpers.js';
+import {FORMATION_TARGET_NODE_COUNT_ENV} from
+  '../../../src/config/formation-target-node-count.js';
 import {
   EMBEDDED_STEP_OUTCOME,
   EMBEDDED_WORKER_OP,
@@ -198,7 +200,7 @@ function requireOk(reply, what) {
   throw new Error(`${what} failed: ${describeExposedError(reply.error)}`);
 }
 
-function buildNodeEnvironment(node, role, seedRestPort, credentials, env) {
+function buildNodeEnvironment(node, role, nodeOptions, credentials) {
   const environment = {
     ...process.env,
     ADMIN_WS_PORT: String(node.adminPort),
@@ -211,12 +213,18 @@ function buildNodeEnvironment(node, role, seedRestPort, credentials, env) {
     PGWIRE_AUTH_USER: credentials.user,
     REST_API_PORT: String(node.restPort),
     TRANSPORT_WS_PORT: String(node.transportPort),
-    ...env,
+    ...(nodeOptions.env ?? {}),
   };
   delete environment.SEED_NODE_ADDRESS;
+  // Only the seed declares the formation size; it has no default, so a seed
+  // started without nodeOptions.formationTargetNodeCount is refused typed.
+  delete environment[FORMATION_TARGET_NODE_COUNT_ENV];
   if (role === EMBEDDED_NODE_ROLE.JOINER) {
     environment.SEED_NODE_ADDRESS =
-      `${EMBEDDED_CLUSTER_VALUE.LOCALHOST}:${seedRestPort}`;
+      `${EMBEDDED_CLUSTER_VALUE.LOCALHOST}:${nodeOptions.seedRestPort}`;
+  } else if (nodeOptions.formationTargetNodeCount !== undefined) {
+    environment[FORMATION_TARGET_NODE_COUNT_ENV] =
+      String(nodeOptions.formationTargetNodeCount);
   }
   return environment;
 }
@@ -402,13 +410,7 @@ function createEmbeddedCluster(t, options = {}) {
     const startedAt = Date.now();
     node.child = fork(WORKER_PATH, [], {
       cwd: REPOSITORY_ROOT,
-      env: buildNodeEnvironment(
-        node,
-        role,
-        nodeOptions.seedRestPort,
-        credentials,
-        nodeOptions.env ?? {},
-      ),
+      env: buildNodeEnvironment(node, role, nodeOptions, credentials),
       stdio: ['ignore', logFd, logFd, 'ipc'],
     });
     closeSync(logFd);
@@ -531,7 +533,8 @@ function createEmbeddedCluster(t, options = {}) {
     const remaining = () => referenceBudgetUntil(deadline);
     try {
       const seed = await startEmbeddedNode({...nodeOptions,
-        role: EMBEDDED_NODE_ROLE.SEED, startBudgetMs: remaining()});
+        role: EMBEDDED_NODE_ROLE.SEED, formationTargetNodeCount: size,
+        startBudgetMs: remaining()});
       for (let index = 1; index < size; index++) {
         await startEmbeddedNode({...nodeOptions, role: EMBEDDED_NODE_ROLE.JOINER,
           seedRestPort: seed.restPort, startBudgetMs: remaining()});

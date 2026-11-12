@@ -273,6 +273,9 @@ export function registerUnifiedRebalancerLifecycleAndRecoveryProgressEventsTests
         },
       });
 
+      // The budget's owner answers an empty ledger (this test is about the
+      // pressure owner, not the budget read).
+      rebalancer.getGlobalInFlightOperationCount = async () => 0;
       rebalancer.setLeader(true);
       try {
         const result = await rebalancer.rebalance(

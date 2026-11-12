@@ -46,6 +46,7 @@ import {
   initializeTestEnvironment,
 } from './unified-rebalancer-test-support.js';
 import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
+import {answeredPriorityClassCounts} from './incomplete-operations-read-stub.js';
 
 // Initialize test environment
 // Create a mock system table cache
@@ -996,11 +997,11 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 4', async (t) => {
         rebalanceCoordinator: {
           ...createMockCoordinator(),
           async getConcurrentAddCountByPriorityClass() {
-            return {
+            return answeredPriorityClassCounts({
               ordinaryPriorityCount: 0,
               emergencyPriorityCount: 1,
               priorityCount: 1,
-            };
+            });
           },
           async createOperation(operationRequest) {
             createdOperations.push(operationRequest);

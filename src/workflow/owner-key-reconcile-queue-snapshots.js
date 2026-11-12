@@ -114,6 +114,10 @@ function buildReconcileQueueDiagnostics(queue) {
     retryableDrainExhaustedCount: queue._retryableDrainExhaustedCount,
     recentRetryableDrainFailureSamples:
       copySnapshotValues(queue._retryableDrainFailureSamples),
+    rateLimitedRequeueCount: queue._rateLimitedRequeueCount,
+    recentRateLimitedRequeueSamples:
+      copySnapshotValues(queue._rateLimitedRequeueSamples),
+    heldRequeueKeys: snapshotMapKeys(queue.heldRequeues),
     draining: queue.draining,
     stopped: queue.stopped,
   };

@@ -12,6 +12,7 @@ import {
 } from './management-v1-constants.js';
 import {RollingUpgradeOwner} from './rolling-upgrade-owner.js';
 import {BackupRestoreOwner} from './backup-restore-owner.js';
+import {readCachedDeclaredFormationSize} from '../formation-target-record.js';
 import {
   computeCanonicalOperationDigest,
   failValidation,
@@ -201,7 +202,10 @@ function buildClusterSection(owner, incLin) {
     CLUSTER_FACTS_CONSTANTS.IDENTITY_UNKNOWN :
     CLUSTER_FACTS_CONSTANTS.IDENTITY_ESTABLISHED;
   const lin = owner.getRestoreLineage();
-  return lin && incLin ? {identity, identityState, restoredFrom: lin} : {identity, identityState};
+  const declaredFormationSize = owner.getDeclaredFormationSize();
+  return lin && incLin ?
+    {identity, identityState, declaredFormationSize, restoredFrom: lin} :
+    {identity, identityState, declaredFormationSize};
 }
 
 function buildFacts(owner, snap, incLin) {
@@ -374,7 +378,8 @@ async function executeGuardedOperation(owner, input, args, nowMs) {
 class ManagementV1Owner {
   /**
    * @param {Object} [options] - Declared ports: getClusterId/onSetClusterId
-   *   (the established cluster record), getClusterSnapshot, healthSnapshot,
+   *   and getDeclaredFormationSize (the established cluster record),
+   *   getClusterSnapshot, healthSnapshot,
    *   capacitySnapshot, storageAdapter, exportPartitionSnapshots,
    *   hydratePartitionSnapshots, onDrainNodeLeadership, onTriggerNodeRestart,
    *   onSetNodeReadyz, onPersistState, onDecommissionNode, supportEnvelope.
@@ -383,6 +388,10 @@ class ManagementV1Owner {
   constructor(options = {}) {
     this.options = options;
     this.clusterId = options.clusterId ?? NULL_CLUSTER_ID;
+    // The cluster-record port for the declared formation size; without one
+    // the answer is the named UNAVAILABLE (no source), never a number.
+    this.declaredFormationSizePort = options.getDeclaredFormationSize ??
+      (() => readCachedDeclaredFormationSize(null));
     this.includeRestoredFromInFacts = options.includeRestoredFromInFacts ?? false;
     this.supportEnvelope =
       options.supportEnvelopeOwner?.getEnvelope?.() ??
@@ -406,6 +415,16 @@ class ManagementV1Owner {
     const id = typeof this.options.getClusterId === FUNCTION_TYPE ?
       this.options.getClusterId() : this.clusterId;
     return isEstablishedClusterId(id) ? id : NULL_CLUSTER_ID;
+  }
+
+  /**
+   * The declared formation size as the cluster-record port reads it (a
+   * cache-served answer that names its read strategy), or UNAVAILABLE when
+   * no port is installed. Never a number invented here.
+   * @return {Object} {state, count, reason, readStrategy}.
+   */
+  getDeclaredFormationSize() {
+    return this.declaredFormationSizePort();
   }
 
   getCapacityFacts() {

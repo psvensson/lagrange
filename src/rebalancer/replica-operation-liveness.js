@@ -1,7 +1,8 @@
 import {STATE_ABSENT, readLowerStateField, readStateField, readUpperStateField} from '../utils/state-field-read.js';
 import {NUM, TIME_MS, WORKFLOW_STEP} from '../constants/index.js';
 import {resolveOperationCurrentStepEntry} from './operation-step-age.js';
-import {readOperationRecordWorkflowStep} from './replica-operation-progress.js';
+import {REPLICA_OPERATION_TARGET_NODE_SOURCE, readOperationRecordWorkflowStep} from
+  './replica-operation-progress.js';
 import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
 import {
   OperationType,
@@ -179,16 +180,22 @@ function inferTargetNodeIdFromStepsHistory(stepsHistory, replicaId) {
         }
       }
     }
-    const readinessNodeId = firstStringField(
-      entry?.readinessSnapshot,
-      'nodeId',
-      'node_id',
-    );
-    if (readinessNodeId) {
-      return readinessNodeId;
-    }
   }
   return null;
+}
+
+// The row's own column is the authority; else the peer address its history
+// records for its replica; else the target node is UNAVAILABLE.
+function resolveTargetNodeIdentity(row, stepsHistory, replicaId) {
+  const SOURCE = REPLICA_OPERATION_TARGET_NODE_SOURCE;
+  const rowNodeId = firstStringField(row, LOCAL_STR_TARGET_NODE_ID, LOCAL_STR_TARGETNODEID);
+  if (rowNodeId) {
+    return {targetNodeId: String(rowNodeId), targetNodeIdSource: SOURCE.OPERATION_ROW};
+  }
+  const peerNodeId = inferTargetNodeIdFromStepsHistory(stepsHistory, replicaId);
+  return peerNodeId ?
+    {targetNodeId: peerNodeId, targetNodeIdSource: SOURCE.PEER_ADDRESS} :
+    {targetNodeId: '', targetNodeIdSource: SOURCE.UNAVAILABLE};
 }
 
 function inferOperationTypeFromStepsHistory(
@@ -337,10 +344,6 @@ function normalizeReplicaOperationRecord(row, options = {}) {
     workflowStep,
     status,
   );
-  const inferredTargetNodeId = inferTargetNodeIdFromStepsHistory(
-    stepsHistory,
-    replicaId,
-  );
   const inferredSourceReplicaId =
     inferSourceReplicaIdFromStepsHistory(stepsHistory);
   const semanticPhase = resolveReplicaOperationSemanticPhase(
@@ -386,11 +389,7 @@ function normalizeReplicaOperationRecord(row, options = {}) {
       LOCAL_STR_SOURCEREPLICAID,
     ) || inferredSourceReplicaId || ''),
     replicaId,
-    targetNodeId: String(firstStringField(
-      row,
-      LOCAL_STR_TARGET_NODE_ID,
-      LOCAL_STR_TARGETNODEID,
-    ) || inferredTargetNodeId || ''),
+    ...resolveTargetNodeIdentity(row, stepsHistory, replicaId),
     createAdmissionAttemptToken: firstStringField(
       row,
       LOCAL_STR_CREATE_ADMISSION_ATTEMPT_TOKEN,

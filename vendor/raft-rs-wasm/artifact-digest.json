@@ -1,8 +1,8 @@
 {
   "note": "The artifact the raft-rs-wasm backend loads, how it was built, and the raft-rs 0.7 sources the host contract is cited against. Integrity is required; reproducibility is measured and reported as found.",
-  "wasmSha256": "b285c5eca45ddb6c44301abc0e35c561cd74b24f3e1670b8c49882820aa9e5ad",
-  "glueSha256": "4506be46562d06379c4a1adfb0791bb220096ba780f8cc07eccee6e779e1ab81",
-  "wasmBytes": 680702,
+  "wasmSha256": "03b80b4e4b5049d5ea32dfa48ca2e2cb0efe261b47f73bf91499e2d510cadbc8",
+  "glueSha256": "766ec8b1e9dab187ec22bdbf059c4e717a312792f8b6f03536d3c444e76d0f6e",
+  "wasmBytes": 681812,
   "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
   "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
   "wasmPack": "wasm-pack 0.13.1",
@@ -17,8 +17,8 @@
   "forkedFrom": "raft-logic 0.3.14 native/raft-wasm (repository head 918d481)",
   "upstreamed": false,
   "reproducibility": {
-    "attempts": 4,
-    "method": "the recorded build command run twice on one machine with `cargo clean` between them (attempts 1 and 2, one source); attempt 3 is the intermediate artifact after the first three fork fixes; attempt 4 is the checked-in production artifact after the fourth fork fix (tagged recoverable binding refusals)",
+    "attempts": 6,
+    "method": "the recorded build command run twice on one machine with `cargo clean` between them (attempts 1 and 2, one source); attempt 3 is the intermediate artifact after the first three fork fixes; attempt 4 is the artifact after the fourth fork fix (tagged recoverable binding refusals); attempts 5 and 6 are the recorded build command run twice on one machine with `cargo clean` between them on the source after the fifth fork fix (step_down_removed_leader), attempt 5 the checked-in production artifact",
     "builds": [
       {
         "attempt": 1,
@@ -40,18 +40,30 @@
         "attempt": 4,
         "wasmSha256": "b285c5eca45ddb6c44301abc0e35c561cd74b24f3e1670b8c49882820aa9e5ad",
         "glueSha256": "4506be46562d06379c4a1adfb0791bb220096ba780f8cc07eccee6e779e1ab81",
-        "note": "checked-in production artifact after the fourth fork fix (tagged recoverable binding refusals)"
+        "note": "after the fourth fork fix (tagged recoverable binding refusals); superseded by attempt 5"
+      },
+      {
+        "attempt": 5,
+        "wasmSha256": "03b80b4e4b5049d5ea32dfa48ca2e2cb0efe261b47f73bf91499e2d510cadbc8",
+        "glueSha256": "766ec8b1e9dab187ec22bdbf059c4e717a312792f8b6f03536d3c444e76d0f6e",
+        "note": "checked-in production artifact after the fifth fork fix (step_down_removed_leader)"
+      },
+      {
+        "attempt": 6,
+        "wasmSha256": "89bfc252437d84777a67de926ef4fecc7c40ae4a438b65e2add9303ef5e3e4a5",
+        "glueSha256": "766ec8b1e9dab187ec22bdbf059c4e717a312792f8b6f03536d3c444e76d0f6e",
+        "note": "second build of the attempt 5 source after `cargo clean`: same glue, same size (681812 bytes), 85 bytes differ; the WebAssembly text differs only in the order of three wasm-bindgen cast imports (__wbindgen_cast_*) and the function indices that follow from it"
       }
     ],
-    "checkedInArtifactIsAttempt": 4,
+    "checkedInArtifactIsAttempt": 5,
     "glueIdentical": true,
     "wasmIdentical": false,
     "result": "differs",
-    "observation": "the generated JavaScript glue is byte-identical across builds; the .wasm is not. Reported as measured; byte-for-byte reproducibility is not assumed.",
-    "note": "attempts 1 and 2 measured reproducibility of the original source; attempt 3 recorded the three-fix intermediate build; attempt 4 is the current checked-in artifact after all four fork fixes."
+    "observation": "the generated JavaScript glue is byte-identical across builds of one source (attempts 1 to 4 share one glue; attempts 5 and 6 share the glue that adds the step_down_removed_leader export); the .wasm is not. For attempts 5 and 6 the difference was read: wasm-bindgen 0.2.104 emits three of its cast imports in a different order per run. Reported as measured; byte-for-byte reproducibility is not assumed.",
+    "note": "attempts 1 and 2 measured reproducibility of the original source; attempt 3 recorded the three-fix intermediate build; attempt 4 recorded the four-fix build; attempts 5 and 6 measured reproducibility of the five-fix source, and attempt 5 is the current checked-in artifact after all five fork fixes."
   },
   "sourceInputs": {
-    "src/lib.rs": "c64131af8e32126f06a056e2560dc56aa37dc2d4aa4bfe6f02e9a50f3c431cc7",
+    "src/lib.rs": "0fa91ffb1ae68d1c3724fcd455185248c95880796ea542ae4b1c402aa73d0086",
     "Cargo.toml": "bac23df9887bc8e3c93f1bcfc20bdcc3acc80afdbd47ef0eef4199e3b97644af",
     "Cargo.lock": "6d16d0cff5143d0b30f51fc1d06110cf22b41c89e3311d756c88ae8d4974761f",
     "rust-toolchain.toml": "d9d51bbd4f251213d5420895ae01cc6d574275c64e2d8e2ef613b50bbfbe9c32"
@@ -72,6 +84,10 @@
     {
       "fix": "every recoverable binding refusal crosses as a tagged object",
       "why": "the private invocation owner must distinguish CORE_REFUSED from a WASM trap by construction, without inspecting a generic JavaScript exception class or message"
+    },
+    {
+      "fix": "step_down_removed_leader: a leader its own applied configuration removed becomes a follower at its current term",
+      "why": "raft-rs leaves a leader that applied its own removal leading (raft.rs post_conf_change: \"TODO(tbg): step down (for sanity)\") with no Progress for itself: it drops every proposal, its heartbeats keep the remaining voters from electing, and maybe_commit and on_persist_entries unwrap the Progress it no longer has, which aborts the module. RawNode gives the host no way to end that leadership (MsgCheckQuorum is refused as a local message; a node that is not promotable cannot campaign). The function calls the crate's public become_follower(term, INVALID_ID) - the transition its own check-quorum makes - only for a leader that is not promotable and holds no Progress for itself, and answers a tagged refusal naming the state, changing nothing, in every other state."
     }
   ],
   "vendoredAt": "vendor/raft-rs-wasm — generated and vendored infrastructure for the production raft-rs-wasm consensus backend loaded by src/raft/raft-rs-binding-owner.js. It lives outside src/ because wasm-pack output is nobody's handwritten JavaScript source: keeping it out of the source tree lets every repository checker stay on its own default walk with no exclusion for it, while package.json files ships it.",

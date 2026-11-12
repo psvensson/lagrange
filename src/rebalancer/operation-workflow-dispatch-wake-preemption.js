@@ -11,6 +11,7 @@ import {
 
 const {
   OPERATION_WORKFLOW_OWNER_LITERAL,
+  OPERATION_WORKFLOW_OWNER_REASON,
   OperationType,
   ReplicaStatus,
   WORKFLOW_STEP,
@@ -150,6 +151,45 @@ function shouldPreemptCreateRearmWithObservedProgress(
   return isDispatchWakeProgressPreemptStateAllowed(state);
 }
 
+// What one dispatch wake's progress reconcile established. A wake is a
+// request to reconcile, so only PROGRESS_RECONCILED is a success.
+const DISPATCH_WAKE_PROGRESS_OUTCOME = Object.freeze({
+  // The owner applied observed progress to the operation.
+  PROGRESS_RECONCILED: 'progress_reconciled',
+  // Nothing to apply, and the target's authoritative services row says the
+  // create is in progress: the wake neither progresses nor re-sends. The
+  // operation is released by the target's next lifecycle publication (the
+  // observed-progress wake), by the owner's own dispatch and transition
+  // retries (which re-send CREATE_REPLICA through the node-side admission
+  // owner), or by the timeout sweep's CREATING step budget.
+  CREATE_IN_PROGRESS: 'create_in_progress',
+  // Nothing to apply and no authoritative in-progress evidence: the caller
+  // continues on its dispatch path.
+  NO_PROGRESS: 'no_progress',
+});
+
+/**
+ * Whether the target's authoritative services row reports the create in
+ * progress. An absent, unavailable or cache-only observation is not evidence:
+ * the create may be lost, and the dispatch path must be free to re-send.
+ * @param {Object} context
+ * @param {Object} operation
+ * @return {Promise<boolean>}
+ */
+async function isTargetCreateAuthoritativelyInProgress(context, operation) {
+  if (operation?.workflowStep !== WORKFLOW_STEP.CREATING) {
+    return false;
+  }
+  const observation = await context.repository.getActualReplicaObservation(
+    operation.replicaId,
+    operation.partitionId,
+    operation.targetNodeId,
+    context.buildObservedTargetReplicaObservationOptions(operation),
+  );
+  return observation?.state === OPERATION_WORKFLOW_OWNER_LITERAL.OBSERVED &&
+    observation.lifecycleStatus === ReplicaStatus.CREATING;
+}
+
 /**
  * Dispatch wakeups can arrive after cache evidence has already moved the
  * replica beyond the current durable step. Let the owner reconcile that
@@ -158,25 +198,50 @@ function shouldPreemptCreateRearmWithObservedProgress(
  *
  * @param {Object} context
  * @param {Object} operation
- * @return {Promise<boolean>}
+ * @return {Promise<string>} DISPATCH_WAKE_PROGRESS_OUTCOME.
  */
 async function reconcileDispatchWakeOperationProgress(context, operation) {
+  // An initial REMOVE dispatch has no target progress to reconcile: the
+  // dispatch path executes it and answers the execute's own typed result
+  // (a safety-blocked remove is a skip, never this wake's success).
+  if (context.isRemoveInitialDispatchPhase(operation)) {
+    return DISPATCH_WAKE_PROGRESS_OUTCOME.NO_PROGRESS;
+  }
   if (
-    await context.reconcileDispatchWakePendingTargetProgress(operation)
-  ) {
-    return true;
-  }
-  if (typeof context.reconcileOperationLifecycle === 'function') {
-    return context.reconcileOperationLifecycle(operation, {
+    await context.reconcileDispatchWakePendingTargetProgress(operation) ||
+    await context.reconcileOperationLifecycle(operation, {
       cause: OPERATION_WORKFLOW_OWNER_LITERAL.OBSERVED_PROGRESS,
-    });
+    }) === true
+  ) {
+    return DISPATCH_WAKE_PROGRESS_OUTCOME.PROGRESS_RECONCILED;
   }
-  if (typeof context.reconcileOperationProgress !== 'function') {
-    return false;
+  return await isTargetCreateAuthoritativelyInProgress(context, operation) ?
+    DISPATCH_WAKE_PROGRESS_OUTCOME.CREATE_IN_PROGRESS :
+    DISPATCH_WAKE_PROGRESS_OUTCOME.NO_PROGRESS;
+}
+
+/**
+ * The caller's result for one settled dispatch wake: success when progress
+ * was reconciled, a typed skip while the create is authoritatively in
+ * progress, null when the dispatch path continues.
+ * @param {Object} context
+ * @param {Object} operation
+ * @return {Promise<Object|null>}
+ */
+async function resolveDispatchWakeProgressResult(context, operation) {
+  const outcome = await context.reconcileDispatchWakeOperationProgress(
+    operation,
+  );
+  if (outcome === DISPATCH_WAKE_PROGRESS_OUTCOME.PROGRESS_RECONCILED) {
+    return context.buildSuccessfulOperationResult(operation.operationId);
   }
-  return context.reconcileOperationProgress(operation, {
-    cause: OPERATION_WORKFLOW_OWNER_LITERAL.OBSERVED_PROGRESS,
-  });
+  if (outcome === DISPATCH_WAKE_PROGRESS_OUTCOME.CREATE_IN_PROGRESS) {
+    return context.buildSkippedOperationResult(
+      OPERATION_WORKFLOW_OWNER_REASON.CREATE_IN_PROGRESS,
+      operation.operationId,
+    );
+  }
+  return null;
 }
 
 /**
@@ -241,11 +306,13 @@ async function reconcileDispatchWakePendingTargetProgress(
 
 export {
   buildDispatchWakeProgressPreemptEvidence,
+  DISPATCH_WAKE_PROGRESS_OUTCOME,
   getDispatchWakeObservedTargetStatus,
   isExplicitDispatchWakeProgressInput,
   isOperationRowDispatchWakeInput,
   reconcileDispatchWakeOperationProgress,
   reconcileDispatchWakePendingTargetProgress,
   resolveDispatchWakeProgressPreemptState,
+  resolveDispatchWakeProgressResult,
   shouldPreemptCreateRearmWithObservedProgress,
 };

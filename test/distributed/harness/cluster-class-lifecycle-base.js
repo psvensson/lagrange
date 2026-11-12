@@ -1,12 +1,15 @@
 import {CLUSTER_CLASS_SHARED_CONTEXT} from './cluster-class-shared-context.js';
 import {acquireReusableClusterLease, isReusableClusterLeaseTimeoutError, registerClusterCleanup} from './cluster-runtime-helpers.js';
 import {waitForState} from './wait-for-state.js';
+import {collectCpuProfiles, cpuProfileEnvFor} from './run-health/node-cpu-profile.js';
 import {observeConvergenceWait} from './scenario-certification.js';
 import {
   NODE_LIFECYCLE_ACTION,
   PARTITION_CONFIG_ENV_FIELDS,
 } from './constants.js';
 import {SOURCE_FINGERPRINT_ENV_VAR} from '../../../src/diagnostics/source-fingerprint.js';
+import {FORMATION_TARGET_NODE_COUNT_ENV} from
+  '../../../src/config/formation-target-node-count.js';
 import {
   createNodeLogStreamer,
   assessCaptureCompleteness,
@@ -179,7 +182,8 @@ function canonicalContainerEnv(inspect) {
     values[key] = value;
     if (stringStartsWith(key, LAGRANGE_ENV_PREFIX) &&
       !arrayIncludes(FORWARDED_HOST_ENV_KEYS, key) &&
-      !arrayIncludes(FORWARDED_SEED_HOST_ENV_KEYS, key)) {
+      !arrayIncludes(FORWARDED_SEED_HOST_ENV_KEYS, key) &&
+      key !== FORMATION_TARGET_NODE_COUNT_ENV) {
       return null;
     }
   }
@@ -615,6 +619,9 @@ class ClusterLifecycleBase {
       }
     }
     if (nodeIndex === SEED_NODE_INDEX) {
+      // The seed declares the formation size: the node count of the topology
+      // this cluster starts (no default; joiners do not declare it).
+      env[FORMATION_TARGET_NODE_COUNT_ENV] = String(this._config.size);
       for (const key of FORWARDED_SEED_HOST_ENV_KEYS) {
         const value = process.env[key];
         if (typeof value === 'string' && value.length > ZERO) {
@@ -622,7 +629,7 @@ class ClusterLifecycleBase {
         }
       }
     }
-    return env;
+    return Object.assign(env, cpuProfileEnvFor(this, nodeId, nodeIndex, env));
   }
 
   _hasLiveSourceBind() {
@@ -1132,6 +1139,8 @@ class ClusterLifecycleBase {
       // containers so the streamers capture shutdown-log lines as they flow, then
       // flush/close and assess completeness — before the conditional removal.
       await this._finalizeFullNodeLogStreams(teardownNodes, errors);
+      await collectCpuProfiles(this, teardownNodes).catch((error) => errors.push(
+        'Failed to collect CPU profile: ' + String(error?.message || error)));
       if (!reuseContainers) {
         await this._removeNodeContainersForTeardown(teardownNodes, errors);
       }

@@ -66,6 +66,8 @@ class TableCreationService {
         clearTimeoutFn: options.clearTimeoutFn,
         retrySetTimeoutFn: options.schemaProvisioningRetrySetTimeoutFn,
         retryClearTimeoutFn: options.schemaProvisioningRetryClearTimeoutFn,
+        releaseHeldFoundingOperations:
+          options.releaseHeldFoundingOperations,
       });
     this.schemaProvisioningCancellationToken = new CancellationToken();
     this.partitionSplitMergeManager = null;

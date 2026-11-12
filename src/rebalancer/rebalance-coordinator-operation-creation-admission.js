@@ -1,3 +1,4 @@
+import {TABLES} from '../constants/tables.js';
 import {
   INITIAL_PARTITION_IDS,
   SYSTEM_TABLE_NAME,
@@ -43,7 +44,110 @@ const OPERATION_CREATION_ADMISSION_DECISION_TYPE = Object.freeze({
   ADMITTED: 'admitted',
   DEFERRED: 'deferred',
 });
+// What a denied admission means to its consumer. A denial whose every reason
+// is this owner's own deferral (the planning identity moved or was
+// unreadable while the gates ran, or the replica_operations route was
+// briefly unavailable) says nothing about the target: the consumer re-enters
+// admission. Any other reason is a gate's answer about the move: REFUSED.
+const OPERATION_CREATION_ADMISSION_DENIAL_CLASS = Object.freeze({
+  TRANSIENT_REENTER: 'transient_reenter',
+  REFUSED: 'refused',
+});
+// What ends each transient deferral, so a consumer re-enters admission on
+// the event that can change the answer and never in a loop that cannot:
+//  - IDENTITY_CHANGED: the denial was decided on the identity current at its
+//    end, so re-entry at once starts from that identity (IMMEDIATE).
+//  - IDENTITY_UNAVAILABLE: the planning identity of the target node is
+//    unclassified or saturated; it becomes current only when the planning
+//    owner classifies a source change (a deferred cache-change delivery) or
+//    publishes a snapshot for that node (PLANNING_IDENTITY_CURRENT).
+//  - ROUTE_UNAVAILABLE: replica_operations had no routable candidate (or the
+//    ledger write found none before submission); only a change of the rows
+//    routing is resolved from can end it (REPLICA_OPERATION_ROUTE_SOURCE_CHANGED).
+// operation-creation-admission-clearance.js owns the wait on these events.
+const OPERATION_CREATION_ADMISSION_CLEARANCE = Object.freeze({
+  IMMEDIATE: 'immediate',
+  PLANNING_IDENTITY_CURRENT: 'planning_identity_current',
+  REPLICA_OPERATION_ROUTE_SOURCE_CHANGED:
+    'replica_operation_route_source_changed',
+});
+const CLEARANCE_BY_TRANSIENT_REASON = Object.freeze(new Map([
+  [OPERATION_CREATION_ADMISSION_REASON.IDENTITY_CHANGED,
+    OPERATION_CREATION_ADMISSION_CLEARANCE.IMMEDIATE],
+  [OPERATION_CREATION_ADMISSION_REASON.IDENTITY_UNAVAILABLE,
+    OPERATION_CREATION_ADMISSION_CLEARANCE.PLANNING_IDENTITY_CURRENT],
+  [OPERATION_CREATION_ADMISSION_REASON.ROUTE_UNAVAILABLE,
+    OPERATION_CREATION_ADMISSION_CLEARANCE
+      .REPLICA_OPERATION_ROUTE_SOURCE_CHANGED],
+]));
+const TRANSIENT_ADMISSION_REASON_CODES = Object.freeze(
+  new Set(CLEARANCE_BY_TRANSIENT_REASON.keys()));
+// Where a route denial was observed: the sync candidate resolution, or the
+// ledger write's delivery finding no route before submission. Only the
+// former can be re-checked synchronously.
+const REPLICA_OPERATION_ROUTE_OBSERVATION_ORIGIN = Object.freeze({
+  ROUTE_RESOLUTION: 'route_resolution',
+  PRE_SUBMISSION_DELIVERY: 'pre_submission_delivery',
+});
+// The cached tables replica_operations routing is resolved from.
+const REPLICA_OPERATION_ROUTE_SOURCE_TABLES = Object.freeze([
+  TABLES.NODES,
+  TABLES.PARTITIONS,
+  TABLES.SERVICES,
+]);
 const EMPTY_REASON_CODES = Object.freeze([]);
+// The fields a re-entry error carries from its observation, with the value
+// an absent field states.
+const REENTRY_ERROR_FIELDS = Object.freeze([
+  ['contractState', OWNER_CONTRACT_STATE.DEFERRED],
+  ['nextAction', OWNER_CONTRACT_NEXT_ACTION.RETRY],
+  ['reasonCodes', EMPTY_REASON_CODES],
+  ['retryAfterMs', 0],
+  ['admissionResult', null],
+  ['moveIdentity', null],
+  ['routeObservation', null],
+]);
+
+/**
+ * Classify one denied admission (an observation, or the re-entry error
+ * consumeOperationCreationAdmission throws) by its reason codes.
+ * @param {Object|null} denial
+ * @return {string} an OPERATION_CREATION_ADMISSION_DENIAL_CLASS member
+ */
+function classifyOperationCreationAdmissionDenial(denial) {
+  const reasonCodes = Array.isArray(denial?.reasonCodes) ?
+    denial.reasonCodes : EMPTY_REASON_CODES;
+  return reasonCodes.length > 0 &&
+    reasonCodes.every((code) => TRANSIENT_ADMISSION_REASON_CODES.has(code)) ?
+    OPERATION_CREATION_ADMISSION_DENIAL_CLASS.TRANSIENT_REENTER :
+    OPERATION_CREATION_ADMISSION_DENIAL_CLASS.REFUSED;
+}
+
+/**
+ * The clearances a transient denial waits on, one per distinct reason.
+ * @param {Object|null} denial
+ * @return {Array<string>} OPERATION_CREATION_ADMISSION_CLEARANCE members
+ */
+function resolveOperationCreationAdmissionClearances(denial) {
+  const reasonCodes = Array.isArray(denial?.reasonCodes) ?
+    denial.reasonCodes : EMPTY_REASON_CODES;
+  return [...new Set(reasonCodes
+    .map((code) => CLEARANCE_BY_TRANSIENT_REASON.get(code))
+    .filter(Boolean))];
+}
+
+/**
+ * The mutation versions of the tables replica_operations routing reads,
+ * captured synchronously with a route denial: a later version proves a row
+ * routing depends on has changed since.
+ * @param {Object|null} cache
+ * @return {Object<string, number>}
+ */
+function captureReplicaOperationRouteSourceVersions(cache) {
+  return Object.freeze(Object.fromEntries(
+    REPLICA_OPERATION_ROUTE_SOURCE_TABLES.map((tableName) =>
+      [tableName, cache.getTableMutationVersion(tableName)])));
+}
 
 function freezeReasonCodes(values = []) {
   return Object.freeze([...new Set(values.filter(Boolean).map(String))]);
@@ -187,16 +291,23 @@ function readAdmissionResult(error) {
     error.admissionResult : null;
 }
 
-function buildUnavailableRouteObservation() {
+// What can clear a route denial (operation-creation-admission-clearance.js):
+// a change of the rows routing reads (`sourceVersions`), or the routing
+// owner's own retry point for a temporary address exclusion that ends by
+// time with no row change (`retryDueAtMs`, the owner's clock; null when no
+// exclusion is live).
+function buildUnavailableRouteObservation(origin, routeClearance) {
   return Object.freeze({
     allowed: false,
     reasonCode: OPERATION_CREATION_ADMISSION_REASON.ROUTE_UNAVAILABLE,
     retryAfterMs: 0,
     routingSnapshot: null,
+    origin,
+    ...routeClearance,
   });
 }
 
-function buildRouteObservation(candidateResolution) {
+function buildRouteObservation(candidateResolution, routeClearance) {
   const routingSnapshot = candidateResolution?.routingSnapshot || null;
   const candidates = arrayOrEmpty(candidateResolution?.candidates);
   const routableServices = arrayOrEmpty(routingSnapshot?.routableServices);
@@ -209,6 +320,8 @@ function buildRouteObservation(candidateResolution) {
     reasonCode: allowed ? null :
       OPERATION_CREATION_ADMISSION_REASON.ROUTE_UNAVAILABLE,
     retryAfterMs: 0,
+    origin: REPLICA_OPERATION_ROUTE_OBSERVATION_ORIGIN.ROUTE_RESOLUTION,
+    ...routeClearance,
     routingSnapshot: routingSnapshot ? Object.freeze({
       canonicalLeaderNodeId,
       canonicalLeaderRoutingGapState:
@@ -250,16 +363,38 @@ const operationCreationAdmissionMethods = {
     );
   },
 
+  /**
+   * What will clear a replica_operations route denial taken now: the
+   * route-source table versions, and the routing owner's retry point for a
+   * live temporary exclusion of a replica_operations address.
+   * @param {Object|null} queryExecutor the routing owner, when wired
+   * @return {{sourceVersions: Object, retryDueAtMs: number|null}}
+   */
+  captureReplicaOperationRouteClearance(queryExecutor) {
+    return {
+      sourceVersions:
+        captureReplicaOperationRouteSourceVersions(this.systemTableCache),
+      retryDueAtMs: queryExecutor ?
+        queryExecutor.resolveAddressQuarantineRetryDueAtMs(
+          INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.REPLICA_OPERATIONS]) :
+        null,
+    };
+  },
+
   observeReplicaOperationMutationRoute() {
     const queryExecutor = this.sqlQueryEngine?.queryExecutor || null;
     const partitionId =
       INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.REPLICA_OPERATIONS];
+    const origin = REPLICA_OPERATION_ROUTE_OBSERVATION_ORIGIN.ROUTE_RESOLUTION;
     if (
       !partitionId ||
       typeof queryExecutor?.resolvePartitionServiceCandidates !== 'function'
     ) {
-      return buildUnavailableRouteObservation();
+      return buildUnavailableRouteObservation(origin,
+        this.captureReplicaOperationRouteClearance(null));
     }
+    const routeClearance =
+      this.captureReplicaOperationRouteClearance(queryExecutor);
     try {
       const candidateResolution =
         queryExecutor.resolvePartitionServiceCandidates(
@@ -270,9 +405,9 @@ const operationCreationAdmissionMethods = {
           CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
           {allowReadinessAuthoritativeRefresh: false},
         );
-      return buildRouteObservation(candidateResolution);
+      return buildRouteObservation(candidateResolution, routeClearance);
     } catch {
-      return buildUnavailableRouteObservation();
+      return buildUnavailableRouteObservation(origin, routeClearance);
     }
   },
 
@@ -393,13 +528,11 @@ const operationCreationAdmissionMethods = {
       'Operation creation admission changed before persistence',
     );
     error.code = OPERATION_CREATION_ADMISSION_ERROR_CODE;
-    error.contractState = observation?.contractState ||
-      OWNER_CONTRACT_STATE.DEFERRED;
-    error.nextAction = observation?.nextAction ||
-      OWNER_CONTRACT_NEXT_ACTION.RETRY;
-    error.reasonCodes = observation?.reasonCodes || EMPTY_REASON_CODES;
-    error.retryAfterMs = observation?.retryAfterMs || 0;
-    error.admissionResult = observation?.admissionResult || null;
+    // moveIdentity and routeObservation are what the consumer's clearance
+    // wait reads (operation-creation-admission-clearance.js).
+    for (const [field, absent] of REENTRY_ERROR_FIELDS) {
+      error[field] = observation?.[field] || absent;
+    }
     return error;
   },
 
@@ -488,7 +621,11 @@ const operationCreationAdmissionMethods = {
           reasonCodes: [
             OPERATION_CREATION_ADMISSION_REASON.ROUTE_UNAVAILABLE,
           ],
-          routeObservation: buildUnavailableRouteObservation(),
+          routeObservation: buildUnavailableRouteObservation(
+            REPLICA_OPERATION_ROUTE_OBSERVATION_ORIGIN.PRE_SUBMISSION_DELIVERY,
+            this.captureReplicaOperationRouteClearance(
+              this.sqlQueryEngine?.queryExecutor || null),
+          ),
         }),
       );
     }
@@ -504,5 +641,14 @@ function applyRebalanceCoordinatorOperationCreationAdmissionMethods(target) {
 }
 
 export {
+  OPERATION_CREATION_ADMISSION_CLEARANCE,
+  OPERATION_CREATION_ADMISSION_DENIAL_CLASS,
+  OPERATION_CREATION_ADMISSION_ERROR_CODE,
+  OPERATION_CREATION_ADMISSION_REASON,
+  REPLICA_OPERATION_ROUTE_OBSERVATION_ORIGIN,
+  REPLICA_OPERATION_ROUTE_SOURCE_TABLES,
   applyRebalanceCoordinatorOperationCreationAdmissionMethods,
+  captureReplicaOperationRouteSourceVersions,
+  classifyOperationCreationAdmissionDenial,
+  resolveOperationCreationAdmissionClearances,
 };

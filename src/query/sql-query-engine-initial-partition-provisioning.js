@@ -10,6 +10,10 @@ import {
 import {OPERATION_OWNER_TURN_POLICY} from '../rebalancer/operation-owner-turn-policy.js';
 import {genesisStamp} from '../raft/raft-committed-membership-stamp.js';
 import {
+  BOOTSTRAP_COHORT_STATE,
+  resolveInitialPartitionBootstrapCohort,
+} from './initial-partition-bootstrap-cohort.js';
+import {
   isTerminalSuccessfulCreateOperation,
 } from '../rebalancer/replica-operation-progress.js';
 import {
@@ -19,6 +23,7 @@ import {shouldRetainDurableSchemaPlanningOperations} from
   './durable-schema-planning-retention.js';
 import {buildSchemaProvisioningChildIntent} from
   './schema-provisioning-child-intent.js';
+import {WORKFLOW_STEP} from '../constants/index.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
@@ -29,17 +34,14 @@ const LOCAL_STR_WAIT_REPLICA_METADATA = 'wait_replica_metadata';
 const LOCAL_STR_WAIT_MINIMUM_REPLICA_METADATA = 'wait_minimum_replica_metadata';
 
 const {
-  CONTROL_PLANE_MUTATION_WORK_CLASS,
   OPERATION_METADATA_KEY,
   OWNER_CONTRACT_NEXT_ACTION,
   OWNER_CONTRACT_STATE,
-  OperationType,
   QUERY_DEFAULTS,
   QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
   QUERY_LOG_MSG,
   ReplicaOperationField,
-  SERVICE_TYPE,
   getRemainingBudgetMs,
 } = SQL_QUERY_ENGINE_SHARED;
 
@@ -72,11 +74,35 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       );
     }
 
+    const bootstrapTableMetadata =
+      context?.tableMetadata && typeof context.tableMetadata === 'object' ?
+        context.tableMetadata :
+        null;
+    const bootstrapPartitionMetadata =
+      context?.partitionMetadata &&
+      typeof context.partitionMetadata === 'object' ?
+        context.partitionMetadata :
+        null;
+    // A retry of the same schema job plans exactly the founders its durable
+    // bootstrap operations already name; only an unfounded partition is
+    // planned from the caller's targets or the current serving cohort.
+    const establishedCohort =
+      await this.readSchemaJobEstablishedBootstrapCohort(
+        context,
+        partitionId,
+        bootstrapTableMetadata,
+        bootstrapPartitionMetadata,
+      );
+    const planTargetNodeIds =
+      establishedCohort.state === BOOTSTRAP_COHORT_STATE.ESTABLISHED ?
+        establishedCohort.founderTargetNodeIds :
+        explicitTargetNodeIds;
+
     let targetReplicaCount =
-      explicitTargetNodeIds.length > 0 ?
+      planTargetNodeIds.length > 0 ?
         Math.max(
           1,
-          Math.min(requestedReplicaCount, explicitTargetNodeIds.length),
+          Math.min(requestedReplicaCount, planTargetNodeIds.length),
         ) :
         Math.max(1, requestedReplicaCount);
     const hasExplicitMinimumRoutableReplicaCount =
@@ -90,15 +116,6 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       );
     let enforceEveryProvisioningOperation =
       minimumRoutableReplicaCount >= targetReplicaCount;
-    const bootstrapTableMetadata =
-      context?.tableMetadata && typeof context.tableMetadata === 'object' ?
-        context.tableMetadata :
-        null;
-    const bootstrapPartitionMetadata =
-      context?.partitionMetadata &&
-      typeof context.partitionMetadata === 'object' ?
-        context.partitionMetadata :
-        null;
     const routingReadinessDimension =
       typeof context?.routingReadinessDimension === 'string' &&
       context.routingReadinessDimension.length > 0 ?
@@ -110,12 +127,12 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
         this.tablePartitionProvisioningTimeoutMs,
       );
     let provisionTargetDiagnostics =
-      explicitTargetNodeIds.length === 0 ?
+      planTargetNodeIds.length === 0 ?
         this.resolveProvisionTargetNodeIdsWithDiagnostics(targetReplicaCount)
           .diagnostics :
         null;
     let provisionTargetNodeIds = this.resolveProvisionTargetNodeIdsForContext(
-      explicitTargetNodeIds,
+      planTargetNodeIds,
       targetReplicaCount,
       provisionTargetDiagnostics,
     );
@@ -144,7 +161,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
     }
 
     if (
-      explicitTargetNodeIds.length === 0 &&
+      planTargetNodeIds.length === 0 &&
       (provisionTargetNodeIds.length < targetReplicaCount ||
         this.supportsProvisioningAdmissionPrecheck())
     ) {
@@ -159,7 +176,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
         timeoutBudget,
         failOnTimeout: false,
         maxWaitMs: this.tablePartitionTargetNodeConvergenceTimeoutMs,
-        explicitTargetNodeIds,
+        explicitTargetNodeIds: planTargetNodeIds,
         allowAdaptiveAdmissionConvergenceWait:
           this.tablePartitionTargetNodeConvergenceTimeoutMs ===
           QUERY_DEFAULTS.TABLE_CREATE_TARGET_NODE_CONVERGENCE_TIMEOUT_MS,
@@ -169,26 +186,15 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       provisionTargetDiagnostics =
         convergenceResult.diagnostics || provisionTargetDiagnostics;
       provisionTargetNodeIds = this.resolveProvisionTargetNodeIdsForContext(
-        explicitTargetNodeIds,
+        planTargetNodeIds,
         targetReplicaCount,
         provisionTargetDiagnostics,
       );
       provisioningEpoch = convergenceResult?.epoch || provisioningEpoch;
+      // A deferred convergence carries its typed PROVISIONING_UNAVAILABLE
+      // refusal (reasons, epoch, retryAfterMs and cause).
       if (convergenceResult.contractState === OWNER_CONTRACT_STATE.DEFERRED) {
-        const error = new Error(
-          `Provisioning unavailable: quorum not reachable for partition ${partitionId}`,
-        );
-        error.code = QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE;
-        error.errorCode = QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE;
-        error.epoch = convergenceResult.epoch || null;
-        error.reasons = convergenceResult.reasons || [];
-        error.retryAfterMs = convergenceResult.retryAfterMs || 0;
-        error.detail = {
-          epoch: error.epoch,
-          reasons: error.reasons,
-          retryAfterMs: error.retryAfterMs,
-        };
-        throw error;
+        throw convergenceResult.refusal;
       }
       targetReplicaCount = provisionTargetNodeIds.length;
       if (!hasExplicitMinimumRoutableReplicaCount) {
@@ -251,6 +257,23 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
     const admittedTargetNodeIds = [];
     const operationCreationAdmissionByTargetNodeId = new Map();
     const precheckedTargetNodeIds = new Set();
+    const unsettledTargetNodePlans = [];
+    const acceptSettledTargets = (settled) => {
+      admittedTargetNodeIds.push(...settled.admittedTargetNodeIds.filter(
+        (targetNodeId) =>
+          typeof targetNodeId === LOCAL_STR_STRING && targetNodeId.length > 0,
+      ));
+      for (const plan of settled.admittedTargetPlans || []) {
+        if (plan?.operationCreationAdmission) {
+          operationCreationAdmissionByTargetNodeId.set(
+            plan.targetNodeId,
+            plan.operationCreationAdmission,
+          );
+        }
+      }
+      rejectedTargetNodePlans.push(...settled.rejectedTargetNodePlans);
+      unsettledTargetNodePlans.push(...(settled.unsettledTargetNodePlans || []));
+    };
     if (
       supportsAdmissionPrecheck &&
       admissionConvergence &&
@@ -258,101 +281,35 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       Array.isArray(admissionConvergence.admittedTargetNodeIds) &&
       Array.isArray(admissionConvergence.rejectedTargetNodePlans)
     ) {
+      // A target the earlier probe left unsettled is not prechecked: it is
+      // settled again here, under this statement's budget.
+      const probeUnsettled = new Set((admissionConvergence
+        .unsettledTargetNodePlans || []).map((plan) => plan?.targetNodeId));
       for (const targetNodeId of admissionConvergence.candidateTargetNodeIds) {
-        precheckedTargetNodeIds.add(String(targetNodeId || ''));
-      }
-      admittedTargetNodeIds.push(
-        ...admissionConvergence.admittedTargetNodeIds.filter(
-          (targetNodeId) =>
-            typeof targetNodeId === LOCAL_STR_STRING && targetNodeId.length > 0,
-        ),
-      );
-      for (const plan of Array.isArray(
-        admissionConvergence.admittedTargetPlans,
-      ) ? admissionConvergence.admittedTargetPlans : []) {
-        if (
-          typeof plan?.targetNodeId === LOCAL_STR_STRING &&
-          plan.targetNodeId.length > 0 &&
-          plan.operationCreationAdmission
-        ) {
-          operationCreationAdmissionByTargetNodeId.set(
-            plan.targetNodeId,
-            plan.operationCreationAdmission,
-          );
+        if (!probeUnsettled.has(targetNodeId)) {
+          precheckedTargetNodeIds.add(String(targetNodeId || ''));
         }
       }
-      rejectedTargetNodePlans.push(
-        ...admissionConvergence.rejectedTargetNodePlans,
-      );
+      acceptSettledTargets({...admissionConvergence,
+        unsettledTargetNodePlans: []});
     }
-    for (const targetNodeId of candidateTargetNodeIds) {
-      throwIfCancellationRequested(cancellationToken);
-      if (precheckedTargetNodeIds.has(targetNodeId)) {
-        continue;
-      }
-      if (!supportsAdmissionPrecheck) {
-        admittedTargetNodeIds.push(targetNodeId);
-        continue;
-      }
-
-      let admissionDecision = null;
-      const childIntent = buildSchemaProvisioningChildIntent(
-        context?.schemaJobId,
-        targetNodeId,
-      );
-      try {
-        admissionDecision =
-          await this.rebalanceCoordinator.checkProvisioningAdmission({
-            type: OperationType.ADD,
-            partitionId,
-            entityType: SERVICE_TYPE.PARTITION,
-            entityId: partitionId,
-            nodeId: targetNodeId,
-            controlPlaneMutationWorkClass:
-              CONTROL_PLANE_MUTATION_WORK_CLASS.INTERACTIVE,
-            operationIntentId: childIntent.operationIntentId,
-            replicaIntentId: childIntent.replicaIntentId,
-          });
-      } catch (error) {
-        if (!this.isProvisioningAdmissionDeniedError(error)) {
-          throw error;
-        }
-        admissionDecision = {
-          allowed: false,
-          admissionResult: error.admissionResult || null,
-          error,
-        };
-      }
-
-      if (admissionDecision?.allowed === true) {
-        admittedTargetNodeIds.push(targetNodeId);
-        if (admissionDecision.operationCreationAdmission) {
-          operationCreationAdmissionByTargetNodeId.set(
-            targetNodeId,
-            admissionDecision.operationCreationAdmission,
-          );
-        }
-        continue;
-      }
-
-      const rejectionError =
-        admissionDecision?.error && typeof admissionDecision.error === 'object' ?
-          admissionDecision.error :
-          (() => {
-            const fallbackError = new Error(
-              `Provisioning admission denied on ${targetNodeId}`,
-            );
-            fallbackError.admissionResult =
-                admissionDecision?.admissionResult || null;
-            return fallbackError;
-          })();
-      const rejection = this.createProvisioningTargetRejection(
-        targetNodeId,
-        rejectionError,
-      );
-      rejectedTargetNodePlans.push(rejection);
-      this.logProvisioningTargetRejection(partitionId, targetNodeId, rejection);
+    const uncheckedTargetNodeIds = candidateTargetNodeIds.filter(
+      (targetNodeId) => !precheckedTargetNodeIds.has(targetNodeId));
+    if (!supportsAdmissionPrecheck) {
+      admittedTargetNodeIds.push(...uncheckedTargetNodeIds);
+    } else if (uncheckedTargetNodeIds.length > 0) {
+      acceptSettledTargets(await this.admitProvisioningTargets({
+        partitionId,
+        targetNodeIds: uncheckedTargetNodeIds,
+        schemaJobId: context?.schemaJobId,
+        timeoutBudget,
+        cancellationToken,
+      }));
     }
+    this.throwIfProvisioningAdmissionUnsettled(
+      partitionId,
+      unsettledTargetNodePlans,
+    );
 
     const maximumPrecheckedProvisionableReplicaCount =
       routableNodeIdSet.size + admittedTargetNodeIds.length;
@@ -396,6 +353,8 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
               operationCreationAdmissionByTargetNodeId.get(targetNodeId) ||
               null,
             parentWorkflowFenceToken: context?.schemaOwnerFenceToken ?? null,
+            timeoutBudget,
+            cancellationToken,
           });
         plannedOperations.push(operation);
 
@@ -408,6 +367,8 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
         }
       } catch (error) {
         if (!this.isProvisioningAdmissionDeniedError(error)) {
+          await this.releaseUnsettledFoundingOperations(context, partitionId,
+            createdPlanningOperations, error);
           throw error;
         }
         const rejection = this.createProvisioningTargetRejection(
@@ -460,14 +421,39 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       });
     }
 
-    const bootstrapTopology = this.buildInitialPartitionBootstrapTopology(
+    this.logProvisioningFoundingBelowRequested({
+      partitionId,
+      requestedReplicaCount,
+      foundingReplicaCount: maximumProvisionableReplicaCount,
+      minimumRoutableReplicaCount,
+      candidateTargetNodeIds: provisionTargetNodeIds,
+      rejectedTargetNodePlans,
+    });
+    const candidateTopology = this.buildInitialPartitionBootstrapTopology(
       partitionId,
       plannedOperations,
     );
     // The founding cohort's GENESIS stamp (owner decision O1): the second
     // and last stamp origin beside the creation owner's committed read.
-    const bootstrapMembership = genesisStamp(bootstrapTopology.replicaIds,
-      bootstrapTopology.founderNodeIds);
+    // Validated against any already-established operation cohort so retries
+    // and restarts preserve the founding cohort without rewriting operations.
+    const plannedCohort = resolveInitialPartitionBootstrapCohort({
+      partitionId,
+      plannedOperations,
+      candidateTopology,
+      bootstrapTableMetadata,
+      bootstrapPartitionMetadata,
+      explicitTargetNodeIds,
+    });
+    const {bootstrappedOperations} = plannedCohort;
+    const cohortEstablished =
+      plannedCohort.state === BOOTSTRAP_COHORT_STATE.ESTABLISHED;
+    const bootstrapTopology = cohortEstablished ?
+      plannedCohort.bootstrapTopology : candidateTopology;
+    const bootstrapMembership = cohortEstablished ?
+      plannedCohort.bootstrapMembership :
+      genesisStamp(candidateTopology.replicaIds,
+        candidateTopology.founderNodeIds);
     const bootstrapLeaderNodeId =
       this.resolveInitialPartitionBootstrapLeaderNodeId(
         partitionId,
@@ -489,9 +475,13 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
 
     for (const operation of plannedOperations) {
       throwIfCancellationRequested(cancellationToken);
-      if (isTerminalSuccessfulCreateOperation(operation)) {
+      if (
+        isTerminalSuccessfulCreateOperation(operation) ||
+        bootstrappedOperations.has(operation)
+      ) {
         continue;
       }
+
       operation[ReplicaOperationField.REPLICA_IDS] =
         bootstrapTopology.replicaIds;
       operation[ReplicaOperationField.PEER_ADDRESSES] =
@@ -561,6 +551,23 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
         }
         continue;
       }
+      // An operation a prior attempt already dispatched is in flight under
+      // its workflow owner (its durable step says so): wait on its replica,
+      // never dispatch it again.
+      if (
+        operation.workflowStep === WORKFLOW_STEP.CREATING ||
+        operation.workflowStep === WORKFLOW_STEP.SYNCING ||
+        operation.workflowStep === WORKFLOW_STEP.ACTIVE
+      ) {
+        const replicaId = operation?.replicaId ?? null;
+        if (
+          typeof replicaId === LOCAL_STR_STRING &&
+          replicaId.length > 0
+        ) {
+          metadataWaitReplicaIds.push(replicaId);
+        }
+        continue;
+      }
       const executionResult =
         typeof this.rebalanceCoordinator.executeOperation === 'function' ?
           await this.rebalanceCoordinator.executeOperation(operation, {
@@ -575,10 +582,32 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
         executionResult.skipped !== true
       ) {
         if (enforceEveryProvisioningOperation) {
-          throw new Error(
+          const dispatchError = new Error(
             executionResult.error ||
               QUERY_ERROR_MSG.TABLE_PARTITION_PROVISION_DISPATCH_FAILED,
           );
+          if (executionResult.code) {
+            dispatchError.code = executionResult.code;
+          }
+          if (executionResult.errorCode) {
+            dispatchError.errorCode = executionResult.errorCode;
+          }
+          if (executionResult.deferRetry !== undefined) {
+            dispatchError.deferRetry = executionResult.deferRetry;
+          }
+          if (executionResult.retryAfterMs !== undefined) {
+            dispatchError.retryAfterMs = executionResult.retryAfterMs;
+          }
+          if (executionResult.participantFailures) {
+            dispatchError.participantFailures = executionResult.participantFailures;
+          }
+          if (executionResult.firstFailedParticipant) {
+            dispatchError.firstFailedParticipant = executionResult.firstFailedParticipant;
+          }
+          if (executionResult.cause) {
+            dispatchError.cause = executionResult.cause;
+          }
+          throw dispatchError;
         }
         continue;
       }

@@ -22,6 +22,16 @@ const controlPlaneReadinessPlanningOwnerDelegateMethods = {
     });
   },
 
+  // The planning owner's admission record for one node read as `options`
+  // would make it: state, failed terms and deferral age. Diagnostic only.
+  describeReadinessPlanningAdmission(nodeId, options = {}) {
+    return this.readinessPlanningSnapshotOwner?.describeAdmission(
+      nodeId,
+      options,
+      this.now(),
+    ) || null;
+  },
+
   getReadinessPlanningDiagnostics() {
     return this.readinessPlanningSnapshotOwner?.getDiagnostics() || null;
   },

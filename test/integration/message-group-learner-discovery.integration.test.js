@@ -270,9 +270,9 @@ test('owned discovery recovers the exact learner outcome from membership debt by
         assert.deepEqual(await sweep(fx.owner),
           summaryOf({retained: 1}));
         let laneReads = 0; const repository = fx.owner.repository;
-        const readLane = repository.queryAuthoritativeOperationByMessageGroupMembershipLane
+        const readLane = repository.observeAuthoritativeOperationByMessageGroupMembershipLane
           .bind(repository);
-        repository.queryAuthoritativeOperationByMessageGroupMembershipLane = (...args) => {
+        repository.observeAuthoritativeOperationByMessageGroupMembershipLane = (...args) => {
           laneReads += 1; return readLane(...args);
         };
         // The owing row is listed first, so only the ACTIVE check keeps the
@@ -332,17 +332,22 @@ test('owned discovery recovers the exact learner outcome from membership debt by
         assert.deepEqual(second.witness, witness(fx));
         assertExactReceipt(fx, before, proposals);
       });
-    await t.test('the restart scan recovers debt from the authoritative census alone', async (t) => {
+    await t.test('a restart leaves an in-flight learner proposal to its owner, whose ' +
+      'authoritative restart census recovers it', async (t) => {
       const fx = await discoveryFixture(t); fx.f.hostWitness(SUCCESSOR, fx.replicaId);
       const before = {...fx.f.row()}; const proposals = fx.f.proposalCount();
-      // The reservation owner is not part of this fixture; the restart scan's
-      // last step is stubbed so the scan can run to its summary.
-      fx.owner.reconcileReservations = async () => ({expired: 0, orphansReleased: 0});
-      const emitted = []; fx.owner.emitter = {emit: (...args) => emitted.push(args[0])};
-      const result = await fx.owner.handleRecovery();
-      assert.deepEqual(result.membershipDebt, summaryOf({recorded: 1}),
-        'handleRecovery must census and recover membership debt with the authoritative read');
-      assert.ok(emitted.length > 0, 'the scan still reaches its completion event');
+      // The production restart path is the coordinator timer: the orphan
+      // sweep (progress cause), then the membership-debt sweep. Neither may
+      // fail or re-drive a PENDING row whose learner proposal may be in raft.
+      await fx.owner.reconcileOrphanedOperations();
+      assert.equal(fx.f.row().status, before.status, 'the orphan sweep does not fail the row');
+      assert.equal(fx.f.row().completed_at, null, 'the row stays non-terminal');
+      assert.equal(fx.f.proposalCount(), proposals, 'nothing re-proposes the learner');
+      // The cache lists no debt, so only the owner's census can find it: the
+      // first sweep after a restart reads that census.
+      assert.deepEqual(await fx.owner.reconcileMessageGroupMembershipDebt(),
+        summaryOf({recorded: 1}),
+        'the first sweep after a restart censuses the owner, not the cache');
       assertExactReceipt(fx, before, proposals);
     });
     await t.test('the periodic sweep reads the replicated cache as its hint and re-reads only ' +
@@ -352,18 +357,18 @@ test('owned discovery recovers the exact learner outcome from membership debt by
       const operationReads = () => fx.f.reads.filter((read) =>
         read.table === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS).length;
       const readsBefore = operationReads();
-      assert.deepEqual(await fx.owner.reconcileMessageGroupMembershipDebt(),
+      assert.deepEqual(await fx.owner.reconcileMessageGroupMembershipDebt(DEBT_CENSUS.CACHE_HINT),
         {available: true, found: 0, recorded: 0, settled: 0, retained: 0, refused: 0},
-        'the default census is the cache hint');
+        'the periodic census is the cache hint');
       assert.equal(operationReads(), readsBefore,
         'a cache listing no debt costs no authoritative operation read');
       fx.f.cacheOperationRow();
-      assert.deepEqual(await fx.owner.reconcileMessageGroupMembershipDebt(),
+      assert.deepEqual(await fx.owner.reconcileMessageGroupMembershipDebt(DEBT_CENSUS.CACHE_HINT),
         summaryOf({recorded: 1}), 'a listed debt row is re-read and recovered');
       assert.ok(operationReads() > readsBefore, 'the listed candidate is read authoritatively');
       assertExactReceipt(fx, before, proposals);
       fx.f.cacheOperationRow(); const readsAfter = operationReads();
-      assert.deepEqual(await fx.owner.reconcileMessageGroupMembershipDebt(),
+      assert.deepEqual(await fx.owner.reconcileMessageGroupMembershipDebt(DEBT_CENSUS.CACHE_HINT),
         {available: true, found: 0, recorded: 0, settled: 0, retained: 0, refused: 0},
         'a listed row whose initial action is recorded is not a candidate');
       assert.equal(operationReads(), readsAfter, 'a settled row costs no read per sweep');
@@ -382,19 +387,20 @@ test('owned discovery recovers the exact learner outcome from membership debt by
         assert.equal(logged.warn[0].field, 'messageGroupLearnerStamp');
         assert.deepEqual(fx.f.row(), forged); assert.equal(fx.physical(), 0);
       });
-    await t.test('a census that throws is reported by the restart scan, which still completes',
-      async (t) => {
-        const fx = await discoveryFixture(t);
-        fx.owner.reconcileReservations = async () => ({expired: 0, orphansReleased: 0});
-        const emitted = []; fx.owner.emitter = {emit: (...args) => emitted.push(args[0])};
-        fx.owner.repository.queryAuthoritativeMessageGroupMembershipDebtOperations = async () => {
-          throw new Error('fixture: census unavailable');
-        };
-        const result = await fx.owner.handleRecovery();
-        assert.deepEqual(result.membershipDebt,
-          {available: false, error: 'fixture: census unavailable'});
-        assert.ok(emitted.length > 0, 'the scan reaches its completion event');
-      });
+    await t.test('an unanswered restart census keeps the restart census owed', async (t) => {
+      const fx = await discoveryFixture(t); fx.f.hostWitness(SUCCESSOR, fx.replicaId);
+      const before = {...fx.f.row()}; const proposals = fx.f.proposalCount();
+      const census = fx.owner.repository.queryAuthoritativeMessageGroupMembershipDebtOperations;
+      fx.owner.repository.queryAuthoritativeMessageGroupMembershipDebtOperations = async () => {
+        throw new Error('fixture: census unavailable');
+      };
+      await assert.rejects(fx.owner.reconcileMessageGroupMembershipDebt(),
+        /fixture: census unavailable/u, 'the failure surfaces; it is never an empty census');
+      fx.owner.repository.queryAuthoritativeMessageGroupMembershipDebtOperations = census;
+      assert.deepEqual(await fx.owner.reconcileMessageGroupMembershipDebt(),
+        summaryOf({recorded: 1}), 'the next tick reads the owner census again and recovers');
+      assertExactReceipt(fx, before, proposals);
+    });
     await t.test('the inline recorder refuses a caller that does not hold the lane', async (t) => {
       const fx = await discoveryFixture(t); fx.f.hostWitness(SUCCESSOR, fx.replicaId);
       const before = {...fx.f.row()}; const proposals = fx.f.proposalCount();
@@ -496,7 +502,7 @@ test('owned discovery recovers the exact learner outcome from membership debt by
       const fx = await discoveryFixture(t); const before = {...fx.f.row()};
       const proposals = fx.f.proposalCount();
       const laneReads = countCalls(fx.owner.repository,
-        'queryAuthoritativeOperationByMessageGroupMembershipLane');
+        'observeAuthoritativeOperationByMessageGroupMembershipLane');
       const operationReads = () => fx.f.reads.filter((read) =>
         read.table === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS).length;
       fx.f.cacheOperationRow();
@@ -521,7 +527,7 @@ test('owned discovery recovers the exact learner outcome from membership debt by
       const proposals = fx.f.proposalCount(); const repository = fx.owner.repository;
       repository.hasReplicaOperationCacheObservationBoundary = () => false;
       const laneReads = countCalls(repository,
-        'queryAuthoritativeOperationByMessageGroupMembershipLane');
+        'observeAuthoritativeOperationByMessageGroupMembershipLane');
       fx.owner.handleObservedReplicaStateChange('services', 'insert',
         fx.f.hostWitness(SUCCESSOR, fx.replicaId));
       assert.equal(await settled(() =>

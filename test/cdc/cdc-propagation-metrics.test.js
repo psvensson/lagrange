@@ -19,25 +19,10 @@ import {
 import {AssignmentEpoch} from '../../src/rebalancer/assignment-epoch.js';
 import {NodeState} from
   '../../src/node/node-lifecycle-state-machine.js';
+import {createCdcEventHandlerContext} from
+  './cdc-event-handler-context-fixture.js';
 
 setupCDCTestLifecycle(beforeEach, afterEach);
-
-function createMockEventContext(overrides = {}) {
-  const events = [];
-  return {
-    epochManager: overrides.epochManager || null,
-    rebalancer: overrides.rebalancer || null,
-    messageRouter: overrides.messageRouter || null,
-    events,
-    emit(eventName, data) {
-      events.push({eventName, data});
-    },
-    incrementEpochChanges: overrides.incrementEpochChanges ||
-      (() => {}),
-    incrementNodeStateChanges:
-      overrides.incrementNodeStateChanges || (() => {}),
-  };
-}
 
 function collectInfoCalls(handler) {
   const calls = [];
@@ -59,7 +44,7 @@ test('handleEpochChangeCDC emits metrics.cdc.propagation',
       new AssignmentEpochManager({nodeId: 'test-node'});
     epochManager.initialize();
 
-    const context = createMockEventContext({epochManager});
+    const context = createCdcEventHandlerContext({epochManager});
     const handler = new CDCEventHandler({
       nodeId: 'test-node',
       eventContext: context,
@@ -106,7 +91,7 @@ test('handleEpochChangeCDC includes eventAgeMs when timestamp present',
       new AssignmentEpochManager({nodeId: 'test-node'});
     epochManager.initialize();
 
-    const context = createMockEventContext({epochManager});
+    const context = createCdcEventHandlerContext({epochManager});
     const handler = new CDCEventHandler({
       nodeId: 'test-node',
       eventContext: context,
@@ -145,7 +130,7 @@ test('handleEpochChangeCDC includes eventAgeMs when timestamp present',
 
 test('handleNodeStateCDC emits metrics.cdc.propagation on state change',
   async (t) => {
-    const context = createMockEventContext();
+    const context = createCdcEventHandlerContext();
     const handler = new CDCEventHandler({
       nodeId: 'test-node',
       eventContext: context,
@@ -181,7 +166,7 @@ test('handleNodeStateCDC emits metrics.cdc.propagation on state change',
 
 test('handleNodeStateCDC includes eventAgeMs when timestamp present',
   async (t) => {
-    const context = createMockEventContext();
+    const context = createCdcEventHandlerContext();
     const handler = new CDCEventHandler({
       nodeId: 'test-node',
       eventContext: context,
@@ -209,7 +194,7 @@ test('handleNodeStateCDC includes eventAgeMs when timestamp present',
 
 test('handleNodeStateCDC uses info level not debug for metrics',
   async (t) => {
-    const context = createMockEventContext();
+    const context = createCdcEventHandlerContext();
     const handler = new CDCEventHandler({
       nodeId: 'test-node',
       eventContext: context,

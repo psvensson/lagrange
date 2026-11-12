@@ -6,6 +6,7 @@ import {
 } from '../../src/rebalancer/unified-rebalancer.js';
 import {createTestRebalancer} from './test-helpers.js';
 import {buildReplicaInventorySnapshot} from '../../src/rebalancer/replica-inventory.js';
+import {stubAvailableNodes} from './available-node-plan-stub.js';
 
 // Count-aware deficit ADD gate (reframe lever #2 — see memory
 // metastable-reconfig-reframe / over-removal-readd-oscillation-root).
@@ -390,10 +391,10 @@ function buildCriticalDecision() {
 test('over-target follow-up suppression counts a terminal-projected voter ' +
   'before it becomes ready-healthy', async (t) => {
   const rebalancer = buildCriticalRebalancer();
-  rebalancer.getAvailableNodes = () =>
+  stubAvailableNodes(rebalancer, () =>
     [NODE_A, NODE_B, NODE_C, NODE_D].map((nodeId) => ({
       node_id: nodeId,
-    }));
+    })));
   const projectedReplica = {
     ...critReplica(NODE_C, 'r-c-projected', 'follower'),
     address: undefined,

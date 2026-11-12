@@ -86,6 +86,13 @@ const RAFT_RS_CORE_PRIMITIVE = Object.freeze({
   DECODE_CONF_CHANGE_ENTRY: 'decode_conf_change_entry',
   PROPOSE_CONF_CHANGE_V2: 'propose_conf_change_v2',
   SEED_STORAGE: 'seed_storage',
+  // The step-down raft-rs leaves undone for a leader its own applied
+  // configuration removed (raft.rs post_conf_change's TODO): the crate's own
+  // become_follower at the current term, refused by name in every other
+  // state. It ends a leadership; it proposes nothing and changes no
+  // configuration, so it is no membership convenience. Its one caller is
+  // raft-rs-removed-leader-step-down.js.
+  STEP_DOWN_REMOVED_LEADER: 'step_down_removed_leader',
 });
 
 const RAFT_RS_CORE_PRIMITIVES = Object.freeze(
@@ -132,6 +139,7 @@ export {
   RAFT_RS_BINDING_LAYOUT,
   RAFT_RS_BINDING_STATE,
   RAFT_RS_CORE_ERROR_MSG,
+  RAFT_RS_CORE_PRIMITIVE,
   RAFT_RS_CORE_PRIMITIVES,
   RAFT_RS_CORE_REFUSAL_TEXT,
   RAFT_RS_DIGEST_ALGORITHM,

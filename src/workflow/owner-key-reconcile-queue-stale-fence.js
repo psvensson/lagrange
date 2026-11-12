@@ -15,7 +15,15 @@ import {
   recordStaleFenceDiagnosticSamples,
   snapshotSetValues,
 } from './owner-key-reconcile-queue-snapshots.js';
-import {rejectWorkItemCompletionWaiters} from './owner-key-reconcile-completion.js';
+import {
+  mergeWorkItemCompletionWaiters,
+  rejectWorkItemCompletionWaiters,
+} from './owner-key-reconcile-completion.js';
+
+const mapGet = Function.call.bind(Map.prototype.get);
+const mapSet = Function.call.bind(Map.prototype.set);
+const setAdd = Function.call.bind(Set.prototype.add);
+const setForEach = Function.call.bind(Set.prototype.forEach);
 
 /**
  * @param {Object} queue
@@ -53,4 +61,43 @@ function recordStaleFenceRejection(
   });
 }
 
-export {recordStaleFenceRejection};
+/**
+ * Defer a work item whose owner key is already in flight: merge it back into
+ * the pending map (preserving reasons already accumulated there) and record
+ * the typed stale-claim diagnostic.
+ * @param {Object} queue
+ * @param {string} ownerKey
+ * @param {Object} item
+ * @return {void}
+ */
+function deferInFlightWorkItem(queue, ownerKey, item) {
+  const existing = mapGet(queue.pending, ownerKey);
+  if (existing) {
+    setForEach(item.reasons, (reason) => setAdd(existing.reasons, reason));
+    if (item.context !== null && item.context !== undefined) {
+      existing.context = item.context;
+    }
+    mergeWorkItemCompletionWaiters(existing, item);
+  } else {
+    mapSet(queue.pending, ownerKey, item);
+  }
+  const diagnostic = {
+    type: RECONCILE_QUEUE_DIAGNOSTIC.STALE_CLAIM_IN_FLIGHT,
+    queue: queue.name,
+    ownerKey,
+    reasons: snapshotSetValues(item.reasons),
+    timestamp: queue.now(),
+  };
+  queue._staleInFlightDeferralCount++;
+  recordStaleFenceDiagnosticSamples(
+    queue,
+    diagnostic,
+    STALE_FENCE_SAMPLE_CAPACITY,
+  );
+  queue.emit(RECONCILE_QUEUE_EVENT.STALE_CLAIM_DEFERRED, diagnostic);
+  queue.logger.debug(RECONCILE_QUEUE_LOG_MSG.IN_FLIGHT_DEFERRED, {
+    ...diagnostic,
+  });
+}
+
+export {deferInFlightWorkItem, recordStaleFenceRejection};

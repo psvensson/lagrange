@@ -1,7 +1,12 @@
 import {readOperationRecordWorkflowStep} from './replica-operation-progress.js';
+import {CREATE_ADMISSION_ERROR_CODE} from '../node/replica-create-admission-owner.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+import {
+  OPERATION_VISIBILITY_STATE,
+  readOperationVisibilityState,
+} from './replica-operation-repository-operation-visibility.js';
 import {
   ReplicaOperationField,
   ReplicaOperationVisibilityClass,
@@ -11,6 +16,7 @@ import {
   DISPATCH_PENDING_WORKFLOW_STEPS,
   REMOVE_INITIAL_DISPATCH_WORKFLOW_STEPS,
   REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS,
+  WORKFLOW_STEP_PROGRESS_RANK,
 } from './replica-operation-step-policy.js';
 import {
   OPERATION_OWNER_RETRY_ACTION,
@@ -35,6 +41,7 @@ import {
   shouldRetryCoordinatorCreatedRemoteHandoff,
 } from './operation-workflow-coordinator-created-handoff-scheduling.js';
 const {
+  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   DISPATCH_RETRY_DELAY_MS,
   OPERATION_OWNER_ACTION,
   OPERATION_WORKFLOW_OWNER_LITERAL,
@@ -148,15 +155,32 @@ function shouldUseOperationBudgetTransitionRetryGrace(
 function hasActiveTransitionRetryGrace(owner, operationId, now = Date.now()) {
   return owner.transitionRetryGrace.isActive(operationId, now);
 }
+// The one reader of an operation's armed owner retries. `retryWakeArmed` is
+// true only while a timer that will re-enter the owner exists; the
+// transition-retry grace is a deadline, not a wake, so it counts toward
+// `transitionRetryArmed` and never toward `retryWakeArmed`.
+function readOperationRetryArmedState(owner, operationId) {
+  const safetyRetryArmed =
+    owner.safetyDeferredRetryTimerByOperationId.has(operationId);
+  const dispatchRetryArmed =
+    owner.dispatchRetryTimerByOperationId.has(operationId);
+  const activeReplaceRetryArmed =
+    owner.priorityActiveReplaceRetryTimerByOperationId.has(operationId);
+  const transitionRetryTimerArmed =
+    owner.transitionRetryTimerByOperationId.has(operationId);
+  return Object.freeze({
+    safetyRetryArmed,
+    dispatchRetryArmed,
+    activeReplaceRetryArmed,
+    transitionRetryArmed: transitionRetryTimerArmed ||
+      owner.hasActiveTransitionRetryGrace(operationId),
+    retryWakeArmed: safetyRetryArmed || dispatchRetryArmed ||
+      activeReplaceRetryArmed || transitionRetryTimerArmed,
+  });
+}
 function isOperationDeferredRetryActive(owner, operationId) {
-  return (
-    Boolean(operationId) &&
-    (
-      owner.dispatchRetryTimerByOperationId.has(operationId) ||
-      owner.transitionRetryTimerByOperationId.has(operationId) ||
-      owner.hasActiveTransitionRetryGrace(operationId)
-    )
-  );
+  const armed = readOperationRetryArmedState(owner, operationId);
+  return armed.dispatchRetryArmed || armed.transitionRetryArmed;
 }
 function isRetryableControlPlaneOperationTarget(operation) {
   if (!operation) {
@@ -171,11 +195,19 @@ function isRetryableControlPlaneOperationTarget(operation) {
     partitionId: operation.partitionId,
   }).systemTable;
 }
+// The node-side CREATE admission owner's recoverable refusal: the target
+// could not decide admission yet. It defers for every target class; the
+// operation's own step budget bounds the retries.
+function isCreateAdmissionDeferredError(errorLike) {
+  return errorLike?.code === CREATE_ADMISSION_ERROR_CODE.DEFERRED ||
+    errorLike?.errorCode === CREATE_ADMISSION_ERROR_CODE.DEFERRED;
+}
 function shouldDeferRetryableDispatchFailure(owner, operation, errorLike) {
   if (!operation || !isRetryableControlPlaneError(errorLike)) {
     return false;
   }
-  return isRetryableControlPlaneOperationTarget(operation);
+  return isCreateAdmissionDeferredError(errorLike) ||
+    isRetryableControlPlaneOperationTarget(operation);
 }
 function isDispatchRetryableWorkflowStep(owner, operation) {
   if (!operation) {
@@ -494,6 +526,8 @@ async function getDeferredDispatchRetryOperation(
 ) {
   const visibilityObservation =
     await owner.repository.getOperationByIdVisibilityObservation(operationId, {
+      authoritativeReadMode:
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
       allowPriorityRecoveryDeferredVisibility: true,
       allowOwnerPersistedTransitionDeferredVisibility: false,
     });
@@ -502,15 +536,25 @@ async function getDeferredDispatchRetryOperation(
     fallbackOperation,
   );
 }
+/**
+ * The operation a deferred retry re-enters with. A retry whose caller drops
+ * it on null reads OWNER_RPC_REQUIRED, so null is the owner's confirmed
+ * absence (or an unavailable read with no previous copy to keep).
+ * @param {Object} owner
+ * @param {Object} visibilityObservation - Named-state by-id observation.
+ * @param {Object|null} fallbackOperation - The retry's previous copy.
+ * @return {Object|null}
+ */
 function resolveDeferredRetryVisibleOperation(
   owner,
   visibilityObservation,
   fallbackOperation,
 ) {
-  if (visibilityObservation?.operation) {
+  const state = readOperationVisibilityState(visibilityObservation);
+  if (state === OPERATION_VISIBILITY_STATE.PRESENT) {
     return visibilityObservation.operation;
   }
-  if (visibilityObservation?.deferredOutcome && fallbackOperation) {
+  if (state === OPERATION_VISIBILITY_STATE.UNAVAILABLE && fallbackOperation) {
     // BR12: the copy is the previous snapshot, marked as such so an effect
     // boundary waits on it rather than acting.
     return {
@@ -561,6 +605,8 @@ async function runDeferredSafetyRetryInLane(
     await owner.repository.getOperationByIdVisibilityObservation(
       operationId,
       {
+        authoritativeReadMode:
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
         allowPriorityRecoveryDeferredVisibility: true,
       },
     );
@@ -577,7 +623,11 @@ async function runDeferredSafetyRetryInLane(
   }
   let retryOperation = currentOperation;
   if (!owner.isSafetyDeferredRetryableOperation(currentOperation)) {
-    if (operation && owner.isSafetyDeferredRetryableOperation(operation)) {
+    // The caller's copy re-enters only while the visible copy lags behind
+    // it; a visible copy at or past it (a REMOVE already at STOPPING) ended
+    // the wait - its older snapshot is never re-dispatched.
+    if (operation && owner.isSafetyDeferredRetryableOperation(operation) &&
+        isWorkflowStepBehind(currentOperation, operation)) {
       retryOperation = operation;
     } else {
       return;
@@ -595,6 +645,11 @@ async function runDeferredSafetyRetryInLane(
       runInlineWhenOwnerLaneHeld: true,
     },
   );
+}
+function isWorkflowStepBehind(copy, reference) {
+  const rankOf = (operation) => WORKFLOW_STEP_PROGRESS_RANK.get(
+    readStateField(operation?.workflowStep)) ?? 0;
+  return rankOf(copy) < rankOf(reference);
 }
 // Run the deferred remove-safety body in its OWN operation-lane turn. A plain
 // lane submission JOINS an in-flight holder and discards the new factory
@@ -744,6 +799,7 @@ export {
   isProtectedCreateDispatchRetryBudgetActive,
   isRemoveInitialDispatchPhase,
   isSafetyDeferredRetryableOperation,
+  readOperationRetryArmedState,
   resolveCoordinatorCreatedHandoffDiagnosticDestination,
   resolveCoordinatorCreatedOperationOwnerNodeId,
   resolveDeferredRetryVisibleOperation,

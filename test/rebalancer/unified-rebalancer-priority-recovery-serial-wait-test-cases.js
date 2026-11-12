@@ -1,3 +1,5 @@
+import {answeredPriorityClassCounts} from './incomplete-operations-read-stub.js';
+
 export async function registerPriorityRecoverySerialWaitTestCases(t, context) {
   const {
     CONTROL_PLANE_PUBLICATIONS_PRIORITY_PARTITION_ID,
@@ -224,12 +226,13 @@ export async function registerPriorityRecoverySerialWaitTestCases(t, context) {
       };
       const missingSerialWaitCoordinator = {
         ...createMockCoordinator({controlPlaneReadinessService: missingSerialWaitReadinessService}),
-        getConcurrentAddCountByPriorityClass: async () => ({
-          priorityCount: TEST_NUMBER.ONE,
-          ordinaryPriorityCount: TEST_NUMBER.ONE,
-          emergencyPriorityCount: TEST_NUMBER.ZERO,
-          nonPriorityCount: TEST_NUMBER.ZERO,
-        }),
+        getConcurrentAddCountByPriorityClass: async () =>
+          answeredPriorityClassCounts({
+            priorityCount: TEST_NUMBER.ONE,
+            ordinaryPriorityCount: TEST_NUMBER.ONE,
+            emergencyPriorityCount: TEST_NUMBER.ZERO,
+            nonPriorityCount: TEST_NUMBER.ZERO,
+          }),
         createOperation: async (move) => {
           createdOperationsWithMissingSerialWait.push(move);
           return {
@@ -308,12 +311,13 @@ export async function registerPriorityRecoverySerialWaitTestCases(t, context) {
       const createdOperations = [];
       const coordinator = {
         ...createMockCoordinator({controlPlaneReadinessService: readinessService}),
-        getConcurrentAddCountByPriorityClass: async () => ({
-          priorityCount: TEST_NUMBER.ONE,
-          ordinaryPriorityCount: TEST_NUMBER.ONE,
-          emergencyPriorityCount: TEST_NUMBER.ZERO,
-          nonPriorityCount: TEST_NUMBER.ZERO,
-        }),
+        getConcurrentAddCountByPriorityClass: async () =>
+          answeredPriorityClassCounts({
+            priorityCount: TEST_NUMBER.ONE,
+            ordinaryPriorityCount: TEST_NUMBER.ONE,
+            emergencyPriorityCount: TEST_NUMBER.ZERO,
+            nonPriorityCount: TEST_NUMBER.ZERO,
+          }),
         createOperation: async (move) => {
           createdOperations.push(move);
           return {
@@ -472,12 +476,13 @@ export async function registerPriorityRecoverySerialWaitTestCases(t, context) {
       const createdOperations = [];
       const coordinator = {
         ...createMockCoordinator({controlPlaneReadinessService: readinessService}),
-        getConcurrentAddCountByPriorityClass: async () => ({
-          priorityCount: TEST_NUMBER.ONE,
-          ordinaryPriorityCount: TEST_NUMBER.ONE,
-          emergencyPriorityCount: TEST_NUMBER.ZERO,
-          nonPriorityCount: TEST_NUMBER.ZERO,
-        }),
+        getConcurrentAddCountByPriorityClass: async () =>
+          answeredPriorityClassCounts({
+            priorityCount: TEST_NUMBER.ONE,
+            ordinaryPriorityCount: TEST_NUMBER.ONE,
+            emergencyPriorityCount: TEST_NUMBER.ZERO,
+            nonPriorityCount: TEST_NUMBER.ZERO,
+          }),
         createOperation: async (move) => {
           createdOperations.push(move);
           return {

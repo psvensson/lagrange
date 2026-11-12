@@ -1,5 +1,9 @@
 // W1, W2 and W9 end-to-end native CDC delivery witnesses over connected
 // MessageRouters, released PartitionService sources and native MessageGroups.
+import {positionRecipients, registerLeaderRelister, sourceRangeOfEvents} from
+  '../test-helpers/cdc-source-range-fixture.js';
+import {readCdcLedgerIncarnation} from '../../src/partition/partition-cdc-obligation-ledger.js';
+import {awaitRecipientBackoff} from '../test-helpers/cdc-delivery-progress-fixture.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -17,11 +21,12 @@ import {
   readCdcObligationStanding,
 } from '../../src/partition/partition-cdc-obligation-ledger.js';
 import {
+  PARTITION_CDC_OBLIGATION_BOUND,
   PARTITION_CDC_OBLIGATION_DRIVE_STATE,
   PARTITION_CDC_OBLIGATION_STANDING,
+  PARTITION_CDC_RECIPIENT_STATE,
 } from '../../src/partition/partition-cdc-obligation-constants.js';
 import {
-  CDC_COVERAGE_STATE,
   isCommittedCdcDelivery,
   unknownCdcAcceptance,
 } from '../../src/cdc/cdc-delivery-outcome.js';
@@ -57,15 +62,25 @@ import {
   wrapRouterDelivery,
   recordOf,
   cdcEvents,
+  pumpMulti,
 } from '../message-group/message-group-native-w7-composition.js';
 import {
   commandOf,
   writeReleasedSql,
-  buildDualBridgeSubscribers,
+  buildBridgeSubscribers,
   subscribeWithoutEagerDrive,
 } from '../message-group/cdc-source-occurrence-helpers.js';
 
 const DRIVE = PARTITION_CDC_OBLIGATION_DRIVE_STATE;
+// Range shipping ships the owed rows of one drive as one vector. These
+// witnesses stage their debts one occurrence per wave (deliver the first,
+// withhold the second), so each staged row carries a value above the shipping
+// byte bound: such a row ships as a vector of its own and the staging holds.
+const shipsAlone = (label) =>
+  `${label}:${'v'.repeat(PARTITION_CDC_OBLIGATION_BOUND.SHIP_MAX_BYTES)}`;
+const W1_IDENTICAL_VALUE = shipsAlone('identical-value');
+
+const W9_VECTOR_SOURCE = 'w9-vector-source';
 
 async function setupReleasedConfigProducer(t, f, {configPartId, tempPrefix}) {
   const members = [1, 2, 3].map((n) => [`${configPartId}-r${n}`, NODE_A]);
@@ -108,6 +123,14 @@ async function setupReleasedConfigProducer(t, f, {configPartId, tempPrefix}) {
   const release = await f.releaseOwners.release(configPartId);
   assert.equal(release.outcome, PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER);
   f.producerLeader = f.producer.services[0];
+}
+
+// An explicit drive stands for the lane's own retry timer: every recipient's
+// backoff is due first (a recipient inside its backoff is never shipped to by
+// a wake), then the lane is driven with the network pumped.
+async function driveLane(f, reason) {
+  await awaitRecipientBackoff(f.producerLeader);
+  return driveWithPump(f, () => f.producerLeader.cdcDelivery.driveCdcObligations(reason));
 }
 
 test(
@@ -171,7 +194,7 @@ test(
       f.producer,
       f.producerLeader,
       insertSql,
-      ['w1-same-key', 'identical-value', 'string', '', 1],
+      ['w1-same-key', W1_IDENTICAL_VALUE, 'string', '', 1],
       'w1-occurrence-1',
       TABLES.CONFIG,
     );
@@ -179,7 +202,7 @@ test(
       f.producer,
       f.producerLeader,
       updateSql,
-      ['identical-value', 2, 'w1-same-key'],
+      [W1_IDENTICAL_VALUE, 2, 'w1-same-key'],
       'w1-occurrence-2',
       TABLES.CONFIG,
     );
@@ -191,7 +214,7 @@ test(
       f.producer,
       f.producerLeader,
       insertSql,
-      ['w2-zero-target-key', 'zero-target-val', 'string', '', 1],
+      ['w2-zero-target-key', shipsAlone('zero-target-val'), 'string', '', 1],
       'w2-zero-target',
       TABLES.CONFIG,
     );
@@ -247,18 +270,25 @@ test(
       copyCdcEvent({
         ...baseEvent,
         data: {...baseEvent.data, config_key: `w9-vec-key-${idx}`},
+        // A synthetic source of its own (CDC Stage 3 positions are per
+        // source): this vector must not move the real source's position.
+        sourcePartition: W9_VECTOR_SOURCE,
         eventKey: `w9-vec-event-${idx}`,
         entryId: `w9-vec-entry-${idx}`,
         sourceLogIndex: 100 + idx,
         sourceOrdinal: 0,
       }),
     );
+    // CDC Stage 3: the remote group listed the synthetic source at its start,
+    // and the vector names its source range.
+    positionRecipients([remoteTarget], W9_VECTOR_SOURCE, TABLES.CONFIG);
     const batchDelivery = await driveWithPump(f, () =>
       routerA.deliver(
         remoteTarget.unifiedAddress,
         {
           type: LATENCY_TOPOLOGY_MESSAGE_TYPE.CDC_PROPAGATION_BATCH,
           events: vector65,
+          sourceRange: sourceRangeOfEvents(vector65),
           sourceNodeId: NODE_A,
           sourceGroupId: 'mg-w2-source',
           targetGroupId: 'mg-w2-target',
@@ -297,22 +327,25 @@ test(
       'W9 negative control: mutated 65th vector element is rejected',
     );
 
-    // Connect both SeedRuntimeBridgeOwner and NodeJoiningPublicationActivation
-    const {subSeed, subJoin} = buildDualBridgeSubscribers(
+    // Both production bridges propagate this partition, one at a time: the
+    // partition holds one propagation subscriber. The seed's
+    // SeedRuntimeBridgeOwner runs the first waves; the joiner's
+    // NodeJoiningPublicationActivation then replaces it for the rest.
+    // CDC Stage 3: every message-group node listed the source at its start.
+    positionRecipients([...f.services.values()], f.producerLeader.partitionId,
+      TABLES.CONFIG, readCdcLedgerIncarnation(f.producerLeader.db));
+    const {seedBridge, joiningBridge} = buildBridgeSubscribers(
       f,
       TABLES.CONFIG,
       configPartId,
     );
-    f.subscribers.push(subSeed, subJoin);
-    await subscribeWithoutEagerDrive(f, subSeed, 'w2-seed-subscriber');
-    await subscribeWithoutEagerDrive(f, subJoin, 'w2-joining-subscriber');
+    f.subscribers.push(seedBridge, joiningBridge);
+    await subscribeWithoutEagerDrive(f, seedBridge, 'w2-seed-subscriber');
 
     // W2 paired negative control (unready bridge selection): while subscribersReady
     // is false, driveCdcObligations holds at the first obligation with zero deliveries.
     f.subscribersReady = false;
-    const unreadyDrive = await driveWithPump(f, () =>
-      f.producerLeader.cdcDelivery.driveCdcObligations('w2-negative-unready-selection'),
-    );
+    const unreadyDrive = await driveLane(f, 'w2-negative-unready-selection');
     assert.equal(unreadyDrive.state, DRIVE.HELD_BY_SUBSCRIBER);
     assert.equal(readCdcObligation(f.producerLeader.db, debtOcc1.eventKey).delivered, false);
     f.subscribersReady = true;
@@ -335,9 +368,7 @@ test(
       }
       return origApply(events, options);
     };
-    const w1NegativeDrive = await driveWithPump(f, () =>
-      f.producerLeader.cdcDelivery.driveCdcObligations('w1-negative-hold-occ2'),
-    );
+    const w1NegativeDrive = await driveLane(f, 'w1-negative-hold-occ2');
     assert.equal(w1NegativeDrive.state, DRIVE.HELD_BY_SUBSCRIBER);
     await driveWithPump(f, () =>
       f.producerLeader.cdcDelivery.flushCdcAcknowledgements('w1-occ1-ack'),
@@ -360,18 +391,23 @@ test(
     );
     holdAtOcc2 = false;
 
-    const zeroDrive = await driveWithPump(f, () =>
-      f.producerLeader.cdcDelivery.driveCdcObligations('w2-zero-target-pass'),
-    );
+    const zeroDrive = await driveLane(f, 'w2-zero-target-pass');
     assert.equal(zeroDrive.state, DRIVE.HELD_BY_SUBSCRIBER);
     const zeroReturns = f.events.filter(
       (e) => e.kind === 'subscriber-return' && e.eventKey === debtZeroTarget.eventKey,
     );
-    assert.equal(zeroReturns.length, 2, 'both seed and joining bridges ran zero-target wave');
+    assert.ok(zeroReturns.length > 0, 'the seed bridge ran the zero-target wave');
     for (const ret of zeroReturns) {
+      assert.equal(ret.subscriber, 'seed-bridge');
       assert.equal(ret.result.targetGroupCount, 0);
       assert.equal(ret.result.mode, CDC_GROUP_PROPAGATION_STATUS.SAFE);
     }
+
+    // The joining bridge replaces the seed bridge as the partition's one
+    // propagation subscriber; it starts from the owed rows (re-delivery of a
+    // row the seed bridge carried is idempotent).
+    f.producerLeader.unsubscribeFromCDC(seedBridge);
+    await subscribeWithoutEagerDrive(f, joiningBridge, 'w2-joining-subscriber');
 
     // Now add remoteTarget to source cache + LATENCY_GROUPS to exercise GROUPED mode
     // on debtSmall and SAFE mode on debt2MiB
@@ -434,7 +470,8 @@ test(
     let switchToSafeOn2MiB = true;
     const origPropagate = f.topology.propagateCDCEvent.bind(f.topology);
     f.topology.propagateCDCEvent = async (opts) => {
-      if (switchToSafeOn2MiB && opts.entryId === 'w9-2mib-row') {
+      if (switchToSafeOn2MiB &&
+          opts.events.some((event) => event.entryId === 'w9-2mib-row')) {
         ConfigurationManager.getInstance().setByPath(
           LATENCY_TOPOLOGY_CONFIG_KEY.PROPAGATION_MODE,
           LATENCY_PROPAGATION_MODE.SAFE,
@@ -443,9 +480,7 @@ test(
       return origPropagate(opts);
     };
 
-    const twoMiBNegativeDrive = await driveWithPump(f, () =>
-      f.producerLeader.cdcDelivery.driveCdcObligations('w9-2mib-negative-pass'),
-    );
+    const twoMiBNegativeDrive = await driveLane(f, 'w9-2mib-negative-pass');
     assert.equal(twoMiBNegativeDrive.state, DRIVE.HELD_BY_SUBSCRIBER);
     assert.equal(
       readCdcObligation(f.producerLeader.db, debt2MiB.eventKey).delivered,
@@ -454,18 +489,35 @@ test(
     );
     f.interceptSend = null;
 
-    const fullDrive = await driveWithPump(f, () =>
-      f.producerLeader.cdcDelivery.driveCdcObligations('w1-w2-w9-full-pass'),
-    );
+    // The target's node owes a list for the rows it missed (CDC Stage 3):
+    // its relister lists the source leader's image.
+    registerLeaderRelister([...f.services.values()], () => f.producerLeader);
+    await pumpMulti(f);
+    const fullDrive = await driveLane(f, 'w1-w2-w9-full-pass');
     assert.equal(fullDrive.state, DRIVE.DRAINED);
     switchToSafeOn2MiB = false;
+    assert.ok(f.events.some((e) => e.kind === 'subscriber-return' &&
+      e.subscriber === 'joining-bridge' && e.eventKey === debt2MiB.eventKey),
+    'the joining bridge carried the later waves');
+    assert.equal(
+      f.events.filter((e) => e.kind === 'subscriber-return')
+        .every((e) => e.eventKeys.length === 1),
+      true,
+      'every staged occurrence travelled as a vector of its own (above the byte bound, or ' +
+        'next to a row above it)',
+    );
 
-    const smallReturn = f.events.findLast(
+    // Each recipient group is delivered to on its own (recipient isolation):
+    // the source group's delivery of the small row ran in grouped mode before
+    // the 2-MiB row's delivery switched the mode to safe.
+    const smallReturn = f.events.find(
       (e) =>
         e.kind === 'subscriber-return' &&
         e.eventKey === debtSmall.eventKey &&
-        e.result.success === true,
+        e.result.success === true &&
+        e.result.mode === CDC_GROUP_PROPAGATION_STATUS.GROUPED,
     );
+    assert.ok(smallReturn, 'the small row was delivered in grouped mode');
     assert.equal(smallReturn.result.mode, CDC_GROUP_PROPAGATION_STATUS.GROUPED);
     assert.equal(
       smallReturn.result.strategy,
@@ -634,9 +686,11 @@ test(
       table: TABLES.CONFIG,
     });
 
-    const {subSeed} = buildDualBridgeSubscribers(f, TABLES.CONFIG, configPartId);
-    f.subscribers.push(subSeed);
-    await subscribeWithoutEagerDrive(f, subSeed, 'w9-65-seed-sub');
+    positionRecipients([...f.services.values()], f.producerLeader.partitionId,
+      TABLES.CONFIG, readCdcLedgerIncarnation(f.producerLeader.db));
+    const {seedBridge} = buildBridgeSubscribers(f, TABLES.CONFIG, configPartId);
+    f.subscribers.push(seedBridge);
+    await subscribeWithoutEagerDrive(f, seedBridge, 'w9-65-seed-sub');
     f.subscribersReady = true;
 
     // Paired negative control: fail the 65th target group (simulating a 64-target
@@ -655,31 +709,42 @@ test(
       return null;
     };
 
-    const negativeDrive = await driveWithPump(f, () =>
-      f.producerLeader.cdcDelivery.driveCdcObligations('w9-65th-withheld'),
-    );
-    assert.equal(negativeDrive.state, DRIVE.HELD_BY_SUBSCRIBER);
+    // Each target group is a recipient with its own cursor and its own drive:
+    // all 65 deliveries are requested at once and the router's window of 2
+    // (and the pressure governor in front of it) paces them, so the targets
+    // confirm over several drives; the withheld 65th never does.
+    const confirmedTargets = () => f.producerLeader.cdcDelivery.getCdcObligationDiagnostics()
+      .recipients.filter((recipient) => recipient.groupId !== 'mg-w9-source' &&
+        recipient.state === PARTITION_CDC_RECIPIENT_STATE.CONFIRMED &&
+        recipient.cursor !== null).length;
+    let negativeDrive;
+    for (let round = 0; round < 65 && confirmedTargets() < 64; round += 1) {
+      negativeDrive = await driveLane(f, 'w9-65th-withheld');
+      assert.equal(negativeDrive.state, DRIVE.HELD_BY_SUBSCRIBER);
+    }
     assert.equal(readCdcObligation(f.producerLeader.db, debt.eventKey).delivered, false);
-    const cell = f.producerLeader.cdcDelivery.obligationLane.currentObligation;
-    assert.ok(cell, 'source progress cell retains the 64 completed target receipts');
-    const branchTargets = cell.branches[0].topology.targets;
-    assert.equal(branchTargets.length, 65);
+    // 64 hold their committed receipt, the 65th is the named unconfirmed
+    // recipient, and the row is not acknowledged while it is.
+    const targetRecipients = f.producerLeader.cdcDelivery.getCdcObligationDiagnostics()
+      .recipients.filter((recipient) => recipient.groupId !== 'mg-w9-source');
+    assert.equal(targetRecipients.length, 65);
     assert.equal(
-      branchTargets.filter((t) => t.coverage.state === CDC_COVERAGE_STATE.COMMITTED)
-        .length,
+      targetRecipients.filter((recipient) =>
+        recipient.state === PARTITION_CDC_RECIPIENT_STATE.CONFIRMED &&
+        recipient.cursor !== null).length,
       64,
     );
     assert.equal(
-      branchTargets.find((t) => t.groupId === 'mg-w9-target-65').coverage.state,
-      CDC_COVERAGE_STATE.UNCOVERED,
+      targetRecipients.find((recipient) => recipient.groupId === 'mg-w9-target-65').state,
+      PARTITION_CDC_RECIPIENT_STATE.SUBSCRIBER_UNCONFIRMED,
     );
+    assert.equal(
+      f.producerLeader.cdcDelivery.getCdcObligationDiagnostics().pendingAcknowledgements, 0);
 
     // Restore the 65th target group and complete the wave
     withhold65th = false;
     f.interceptSend = null;
-    const positiveDrive = await driveWithPump(f, () =>
-      f.producerLeader.cdcDelivery.driveCdcObligations('w9-65th-restored'),
-    );
+    const positiveDrive = await driveLane(f, 'w9-65th-restored');
     assert.equal(positiveDrive.state, DRIVE.DRAINED);
     assert.ok(
       f.maxObservedInFlight <= 2,

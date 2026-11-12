@@ -16,11 +16,23 @@ import {buildEventIdentity} from '../../src/partition/cdc-event-buffer.js';
 import {digest} from '../../src/utils/canonical-json-data.js';
 import {pollutePrototypeProperty, replacePrototypeProperty, withHostileIntrinsics} from
   '../helpers/hostile-intrinsics.js';
-import {GROUP_ID, NODE_ID, pump, recipientFixture} from './message-group-native-custody-fixture.js';
+import {GROUP_ID, NODE_ID, pump, recipientFixture as nativeRecipientFixture} from
+  './message-group-native-custody-fixture.js';
+import {positionRecipients, withSourceRange} from '../test-helpers/cdc-source-range-fixture.js';
 
 const SOURCE_PARTITION = 'guard-source';
 const KEY = 'guard-native-row';
 const ENTRIES = ['direct', 'forward-handler'];
+
+
+// CDC Stage 3: every recipient node starts from a known position of the
+// synthetic source (a list of it at its start), and every durable vector
+// travels with its source range.
+async function recipientFixture(...args) {
+  const f = await nativeRecipientFixture(...args);
+  positionRecipients(f.services, SOURCE_PARTITION);
+  return f;
+}
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -94,10 +106,14 @@ function observeEffects(t, service) {
 function startEntry(service, entry, events, install = () => []) {
   // Restore all global mutations before yielding to native/runtime work. The
   // actual async method's synchronous admission prefix runs inside this cut.
-  const payload = {events, targetGroupId: GROUP_ID,
+  // The source range is named from a plain source event, never from the
+  // (possibly hostile) input under test: it travels beside the events.
+  const rangeOf = () => withSourceRange([sourceEvent()]).sourceRange;
+  const payload = {events, targetGroupId: GROUP_ID, sourceRange: rangeOf(),
     [CDC_DELIVERY_REMAINING_MS]: service.deliveryTimeoutMs};
+  const direct = {sourceRange: rangeOf()};
   return withHostileIntrinsics(install(), () => entry === 'direct' ?
-    service.applyCDCBatch(events) :
+    service.applyCDCBatch(events, direct) :
     service.handleLatencyCdcPropagationBatchMessage('guard-entry', payload));
 }
 

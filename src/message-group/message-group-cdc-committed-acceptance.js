@@ -1,11 +1,16 @@
 // MessageGroupService's transient response custody. Only its native
 // application afterCommit can produce an accepted receipt; this queue stores
 // no durable outcome and cannot discharge the source ledger's obligation.
-import {CDC_EVENT_METADATA_FIELD, captureCdcEvents, copyCdcEvent} from
+import {CDC_EVENT_METADATA_FIELD, captureCdcEvents} from
   '../cdc/cdc-event-envelope.js';
-import {CDC_COMPLETION, buildCommittedCdcOutcome, buildProvisionalCdcOutcome, cdcCommitWaitIdentity,
-  hasDurableCdcEvents, isCommittedCdcOutcome, isProvisionalCdcOutcome, unknownCdcAcceptance} from
+import {CDC_COMPLETION, buildAlreadyAppliedCdcOutcome, buildCommittedCdcOutcome,
+  buildProvisionalCdcOutcome, cdcCommitWaitIdentity, hasDurableCdcEvents,
+  isAlreadyAppliedCdcOutcome, isCommittedCdcOutcome, isProvisionalCdcOutcome,
+  unconfirmedCdcAcceptance, unknownCdcAcceptance} from
   '../cdc/cdc-delivery-outcome.js';
+import {isSourceRange} from '../cache/system-table-cache-cdc-observation.js';
+import {DURABLE_RANGE_DECISION, classifyDurableRangeAtLeader} from
+  './message-group-cdc-source-range.js';
 import {assertCdcDeliveryInvocation} from '../cdc/cdc-delivery-invocation.js';
 import {appendOwnArrayValue, copyArrayByIndex, isDenseDataArray, isRecord} from
   '../utils/canonical-json-data.js';
@@ -27,20 +32,62 @@ const reservationToken = Symbol;
 const arraySome = Function.call.bind(Array.prototype.some);
 const arrayFind = Function.call.bind(Array.prototype.find);
 
-function commandEvents(command) {
-  return command.type === MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH ? command.events :
-    [copyCdcEvent(command)];
+// A durable vector has one committed form, whatever its length: CDC_BATCH
+// with the source range it was shipped as (CDC Stage 3), so every member
+// decides the range against its own cache when the entry applies.
+function capturedCommand(events, sourceRange) {
+  return objectFreeze({type: MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH, events, sourceRange});
 }
 
-function capturedCommand(events) {
-  return objectFreeze(events.length === 1 ?
-    {type: MESSAGE_GROUP_COMMAND_TYPE.CDC, ...events[0]} :
-    {type: MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH, events});
+const CDC_ACCEPTANCE_LOG_MSG = objectFreeze({
+  DUPLICATE_IN_FLIGHT:
+    'CDC vector refused as a duplicate: raw work for the identical vector is still open',
+});
+
+function invalidCdcInput() {
+  return objectAssign(new Error(CDC_COMPLETION.INVALID), {code: CDC_COMPLETION.INVALID});
+}
+
+// The source range of a durable vector (CDC Stage 3), captured once. Every
+// durable vector carries one: there is no positionless durable form.
+function captureSourceRange(options) {
+  const range = options.sourceRange;
+  if (!isSourceRange(range)) throw invalidCdcInput();
+  return objectFreeze({sourcePartition: range.sourcePartition, incarnation: range.incarnation,
+    after: objectFreeze({logIndex: range.after.logIndex, ordinal: range.after.ordinal}),
+    through: objectFreeze({logIndex: range.through.logIndex, ordinal: range.through.ordinal})});
+}
+
+// The typed gap answer: nothing proposed, the table is listed again here;
+// the source retries the range on this hint.
+function positionGapAcceptance() {
+  return {...unknownCdcAcceptance(CDC_COMPLETION.POSITION_GAP),
+    retryAfterMs: PROPOSAL_QUEUE_DEFAULT.BACKPRESSURE_RETRY_AFTER_MS};
 }
 
 function backpressuredCdcAcceptance() {
   return {...unknownCdcAcceptance(CDC_COMPLETION.BACKPRESSURE),
     retryAfterMs: PROPOSAL_QUEUE_DEFAULT.BACKPRESSURE_RETRY_AFTER_MS};
+}
+
+// The identical vector's response already retired but its raw work (a
+// proposal or forward) is still open: this caller retries after the hint. It
+// is not a capacity refusal, and no relay may treat it as a fault of its route.
+function duplicateInFlightAcceptance(service, key) {
+  service.logger?.info?.(CDC_ACCEPTANCE_LOG_MSG.DUPLICATE_IN_FLIGHT,
+    {groupId: service.groupId, vectorDigest: key});
+  return {...unknownCdcAcceptance(CDC_COMPLETION.DUPLICATE_IN_FLIGHT),
+    retryAfterMs: PROPOSAL_QUEUE_DEFAULT.BACKPRESSURE_RETRY_AFTER_MS};
+}
+
+// A second caller with the identical vector while the first one's response is
+// pending (a new source leader re-shipping what the old one has in flight, a
+// sender retry) joins it: one proposal, and the joiner receives the first
+// one's settled answer.
+function joinableWait(service, key) {
+  const first = service.cdcCommitWaiters.get(key);
+  return service.cdcCommitWaiters.isResponsePending(key) && liveWait(service, first) ?
+    first : null;
 }
 
 function currentWait(service, key, entry) {
@@ -121,11 +168,28 @@ function reserveCdcWait(service, command, timeoutMs, parent, options) {
     const now = () => clock.now();
     const budget = createTimeoutBudget({configuredBudgetMs: timeoutMs, now});
     const {events, inputVectorDigest} = captureCdcCommandVector(service,
-      commandEvents(command), options);
+      command.events, options);
+    // The range decision of the replica that will propose (CDC Stage 3), on
+    // the captured vector: a gap or an already-committed range proposes
+    // nothing.
+    const classified = classifyDurableRangeAtLeader(service, command.sourceRange,
+      events[0].tableName);
+    if (classified.decision === DURABLE_RANGE_DECISION.GAP) {
+      return {answer: positionGapAcceptance()};
+    }
+    if (classified.decision === DURABLE_RANGE_DECISION.ALREADY_APPLIED) {
+      return {answer: buildAlreadyAppliedCdcOutcome(events, service.groupId,
+        classified.committed.through, classified.committed.incarnation)};
+    }
     const key = cdcCommitWaitIdentity(events);
-    if (queue.has(key)) return {answer: backpressuredCdcAcceptance()};
+    if (queue.has(key)) {
+      const first = joinableWait(service, key);
+      return first === null ? {answer: duplicateInFlightAcceptance(service, key)} :
+        {join: {first, events, inputVectorDigest, timeoutMs}};
+    }
     const completion = promiseWithResolvers();
     const entry = {events, inputVectorDigest, budget, originalBudget: budget,
+      settled: completion.promise,
       clock, now, parent, port: service.raft,
       lifetime: service.cdcCommitLifetime, groupId: service.groupId,
       resolve: completion.resolve,
@@ -138,7 +202,7 @@ function reserveCdcWait(service, command, timeoutMs, parent, options) {
     queue.enqueue(key, entry);
     armCdcWait(service, key, entry, budget);
     return {key, entry, completion: completion.promise,
-      command: capturedCommand(events)};
+      command: capturedCommand(events, command.sourceRange)};
   } finally {
     queue.resolve(reservation);
   }
@@ -245,8 +309,9 @@ async function deliverCapturedCdc(service, wait, options, context) {
   });
   assertCurrent();
   return isCommittedCdcOutcome(answer, wait.entry.events, service.groupId) ||
+    isAlreadyAppliedCdcOutcome(answer, wait.entry.events, service.groupId) ||
     isProvisionalCdcOutcome(answer, wait.entry.events, service.groupId) ?
-    answer : {...unknownCdcAcceptance(), cause: answer};
+    answer : {...unconfirmedCdcAcceptance(answer), cause: answer};
 }
 
 function captureCdcParentGrant(service, options) {
@@ -264,6 +329,7 @@ function captureCdcParentGrant(service, options) {
 function inputCdcOutcome(service, wait, answer, context) {
   assertCdcRequestCurrent(service, wait, context);
   if (!isCommittedCdcOutcome(answer, wait.entry.events, wait.entry.groupId) &&
+      !isAlreadyAppliedCdcOutcome(answer, wait.entry.events, wait.entry.groupId) &&
       !isProvisionalCdcOutcome(answer, wait.entry.events, wait.entry.groupId)) return answer;
   // Only this live admission owns I -> N. Native/remote/provisional acceptance
   // must first bind the actual normalized command; no receipt field is changed.
@@ -284,33 +350,60 @@ async function retiredCdcOutcome(service, wait, context) {
     {...unknownCdcAcceptance(), cause: settled};
 }
 
+// The joiner awaits the first admission's settled answer under its own
+// deadline and binds a committed or provisional receipt to its own input
+// digest, as inputCdcOutcome binds the first one's. It holds no queue slot and
+// starts no raw work: what it costs is bounded by its caller's invocation.
+async function joinCdcWait(service, join, context) {
+  const {first, events, inputVectorDigest, timeoutMs} = join;
+  const deadline = promiseWithResolvers();
+  const timer = first.clock.setTimeout(() => deadline.resolve(unknownCdcAcceptance()), timeoutMs);
+  try {
+    const answer = await promiseRace([first.settled, deadline.promise]);
+    if (context !== null) assertCdcDeliveryInvocation(context);
+    if (!isCommittedCdcOutcome(answer, events, first.groupId) &&
+        !isProvisionalCdcOutcome(answer, events, first.groupId)) return unknownCdcAcceptance();
+    return {...answer, cdcVectorDigest: inputVectorDigest};
+  } finally {
+    first.clock.clearTimeout(timer);
+  }
+}
+
 async function applyDurableCdcBatch(service, events, options = {}) {
+  const sourceRange = captureSourceRange(options);
   const {context, timeoutMs, parent} = captureCdcParentGrant(service, options);
   if (!numberIsFinite(timeoutMs) || timeoutMs <= 0) return unknownCdcAcceptance();
   let wait;
   try {
-    wait = reserveCdcWait(service, {type: MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH, events},
+    wait = reserveCdcWait(service,
+      {type: MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH, events, sourceRange},
       timeoutMs, parent, options);
   } catch (error) {
     if (error.code === PROPOSAL_QUEUE_BACKPRESSURE_CODE) return backpressuredCdcAcceptance();
     throw error;
   }
   if (wait.answer) return wait.answer;
+  if (wait.join) return joinCdcWait(service, wait.join, context);
+  // The first admission's own answer, unbound to its input digest: what a
+  // joiner receives when this response settles it (a committed receipt
+  // settles it earlier, from the apply).
+  let settled = unknownCdcAcceptance();
   try {
-    const answer = await deliverCapturedCdc(service, wait, options, context);
-    return inputCdcOutcome(service, wait, answer, context);
+    settled = await deliverCapturedCdc(service, wait, options, context);
+    return inputCdcOutcome(service, wait, settled, context);
   } catch (error) {
     if (currentWait(service, wait.key, wait.entry) && liveWait(service, wait.entry)) throw error;
     return retiredCdcOutcome(service, wait, context);
   } finally {
     if (currentWait(service, wait.key, wait.entry)) {
-      service.cdcCommitWaiters.resolve(wait.key, unknownCdcAcceptance());
+      service.cdcCommitWaiters.resolve(wait.key, settled);
     }
   }
 }
 
 function registerCdcCommittedAcceptance(service, committed, lifetime) {
-  const events = commandEvents(committed.command);
+  if (committed.command.type !== MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH) return;
+  const {events} = committed.command;
   if (!hasDurableCdcEvents(events) || lifetime === null) return;
   const key = cdcCommitWaitIdentity(events);
   const entry = service.cdcCommitWaiters.get(key);
@@ -331,4 +424,5 @@ function retireCdcCommitWaiters(service) {
   service.cdcCommitWaiters.release(() => unknownCdcAcceptance());
 }
 
-export {applyDurableCdcBatch, registerCdcCommittedAcceptance, retireCdcCommitWaiters};
+export {applyDurableCdcBatch, positionGapAcceptance, registerCdcCommittedAcceptance,
+  retireCdcCommitWaiters};

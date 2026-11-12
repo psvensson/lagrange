@@ -324,6 +324,9 @@ function generateClusterSpec(options = {}) {
       TRANSPORT_WS_HOST: '127.0.0.1',
       DATA_DIR: 'member-data',
       MESSAGE_GROUP_REPLICA_COUNT: '3',
+      // Only the seed (member 0) declares the formation size.
+      ...(index === 0 ?
+        {LAGRANGE_FORMATION_TARGET_NODE_COUNT: String(normalized.members.length)} : {}),
       PARTITION_DEFAULT_REPLICA_COUNT: '3',
       LOG_LEVEL: 'info',
     };

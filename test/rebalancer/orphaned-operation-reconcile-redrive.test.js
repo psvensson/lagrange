@@ -6,8 +6,9 @@
  * SYNCING->ACTIVE advance is driven by an in-memory executor-outcome event on
  * the operation's owner. When owner/leadership churn drops that event the row
  * is orphaned at SYNCING forever — the harness quiescence oracle counts it as
- * effectiveInFlight forever and the recovery barrier never closes. handleRecovery
- * (the SYNCING reconcile) is never wired post-startup, so nothing re-drives it.
+ * effectiveInFlight forever and the recovery barrier never closes. The deleted
+ * startup restart routine was never wired post-startup either; this periodic sweep
+ * is the one restart-and-churn re-drive path.
  *
  * This test seeds exactly that orphaned state — an owned SYNCING row whose target
  * replica has genuinely reached ACTIVE — and asserts the periodic reconcile advances it.
@@ -196,7 +197,7 @@ test('orphan-reconcile leaves a still-syncing op untouched (no premature advance
 test('orphan-reconcile retires a SYNCING op whose replica diverged to FAILED under the lock', async (t) => {
   // The advance-only gate reads ACTIVE, but the authoritative re-read inside the
   // single-flight reconcile finds the replica has since FAILED. The standard
-  // recovery lifecycle must retire the row (fail it) — the correct outcome for a
+  // PROGRESS lifecycle must retire the row (fail it) — the correct outcome for a
   // failed replica, not a wedge. (Subagent-flagged divergence path.)
   const now = Date.now();
   const operationRow = {
@@ -234,6 +235,42 @@ test('orphan-reconcile retires a SYNCING op whose replica diverged to FAILED und
     t.equal(after.status, ReplicaStatus.FAILED,
       'a replica that diverged to FAILED is retired (FAILED), not advanced to ' +
       'ACTIVE — the standard recovery lifecycle outcome');
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('orphan-reconcile never fails a fresh incomplete pre-effect row merely ' +
+  'for being incomplete (restart law)', async (t) => {
+  const now = Date.now();
+  const operationRow = {
+    operation_id: 'op-fresh-pending-1',
+    type: OperationType.ADD,
+    partition_id: 'latency_groups-p1',
+    entity_type: 'partition',
+    entity_id: 'latency_groups-p1',
+    replica_id: 'replica-fresh-pending-1',
+    source_node_id: 'test-node-1',
+    target_node_id: 'test-node-1',
+    status: ReplicaStatus.PENDING,
+    workflow_step: 'PENDING',
+    created_at: now,
+    updated_at: now,
+    completed_at: null,
+    error_message: null,
+    steps_history: JSON.stringify([{step: 'PENDING', timestamp: now}]),
+  };
+  // No replica yet: the effect has not started. The deleted restart routine
+  // FAILED exactly this row; the production sweep must leave it to its owner.
+  const {coordinator, getOp} = buildCoordinator({operationRow, serviceRow: null});
+  coordinator.initialize();
+  try {
+    await coordinator.reconcileOrphanedOperations();
+    const after = getOp('op-fresh-pending-1');
+    t.not(after.status, ReplicaStatus.FAILED,
+      'a fresh PENDING row is not failed by the restart sweep');
+    t.not(after.workflow_step, 'FAILED',
+      'its workflow step is not moved to FAILED');
   } finally {
     await coordinator.shutdown();
   }

@@ -21,7 +21,6 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {CancellationToken} from '../../src/query/cancellation-token.js';
-import {createSqlRequest} from '../../src/query/sql-request.js';
 import {COLUMN, SERVICE_STATUS, TABLES} from '../../src/constants/index.js';
 import {
   ServeEligibilityOwner,
@@ -266,19 +265,6 @@ function createDeadlineFixture(options = {}) {
     tablePartitionTargetNodeConvergenceTimeoutMs: OWNER_READ_TIMEOUT_MS,
     tablePartitionProvisioningPollIntervalMs: 1,
   });
-  engine.tableCreationService.setControlPlaneSystemTableGateway({
-    async readRows() {
-      return {success: true, rows: []};
-    },
-  });
-  // This fixture attacks the inner provisioning deadline. Durable schema-job
-  // ownership has separate coverage and would otherwise end the request before
-  // the provisioning wait under test starts.
-  engine.tableCreationService.createTable = (ast, createOptions) =>
-    engine.tableCreationService.executeCreateTableProvisioning(
-      ast,
-      createOptions,
-    );
   engine.waitForRoutablePartitionServiceCount = async () => {};
   engine.waitForPartitionLeaderService = async () => {};
   if (options.cancelAfterMetadataWait === true) {
@@ -305,15 +291,23 @@ function createParentBudget(configuredBudgetMs, now) {
   return createTimeoutBudget({configuredBudgetMs, now});
 }
 
+// The caller-owned deadline enters at the provisioning owner: the durable
+// CREATE TABLE job provisions with no caller budget, while managed split and
+// merge workflows call `provisionInitialTablePartition` with theirs.
 async function executeCreate(engine, timeoutBudget, cancellationToken = null) {
-  return engine.executeRequest({
-    ...createSqlRequest({
-      statement: 'CREATE TABLE deadline_probe (id TEXT PRIMARY KEY)',
-      sessionId: 'provisioning-parent-deadline',
-    }),
-    timeoutBudget,
-    cancellationToken,
-  });
+  try {
+    const summary = await engine.provisionInitialTablePartition({
+      partitionId: 'tbl-deadline-probe-p1',
+      replicaCount: NODE_IDS.length,
+      minimumRoutableReplicaCount: 2,
+      minimumRoutableReplicaCountWasDefaulted: true,
+      timeoutBudget,
+      cancellationToken,
+    });
+    return {success: true, summary};
+  } catch (error) {
+    return {success: false, error: error.message};
+  }
 }
 
 test('provisioning parent deadline - outer 30ms budget clamps an inner ' +
@@ -324,7 +318,7 @@ test('provisioning parent deadline - outer 30ms budget clamps an inner ' +
   const result = await executeCreate(fixture.engine, budget);
 
   t.equal(result.success, false,
-    'progress after the caller deadline cannot make CREATE succeed');
+    'progress after the caller deadline cannot make provisioning succeed');
   t.equal(
     fixture.getLastReadOptions()?.timeoutMs,
     OWNER_READ_TIMEOUT_MS,

@@ -22,6 +22,8 @@ import {test} from '../../src/test-helpers/tap.js';
 import {
   canStartAddOperation,
 } from '../../src/rebalancer/rebalance-coordinator-priority-budget-helper.js';
+import {buildAnsweredIncompleteOperationListObservation} from
+  '../../src/rebalancer/incomplete-operation-list-observation.js';
 
 const RUNTIME_SERVICE = 'runtime_service';
 const PARTITION = 'partition';
@@ -49,7 +51,8 @@ function buildFakeCoordinator(overrides = {}) {
       return coordinator.cachedOperations;
     },
     async queryIncompleteOperations() {
-      return coordinator.authoritativeOperations;
+      return buildAnsweredIncompleteOperationListObservation(
+        coordinator.authoritativeOperations);
     },
     // In the fake, every op is a non-priority add-budget operation. Entity type
     // is the authoritative placement classification.
@@ -68,13 +71,7 @@ function buildFakeCoordinator(overrides = {}) {
     async shouldIgnoreCriticalAddBudgetOperation() {
       return false;
     },
-    getIncompleteOperationObservation() {
-      return {};
-    },
     reconcileIncompleteOperationEmptyQueryDelay() {},
-    shouldBlockOperationAdmissionOnIncompleteOperationObservation() {
-      return false;
-    },
     clearEmptyIncompleteOperationQueryDelay() {},
     shouldDelayEmptyIncompleteOperationQuery() {
       return false;
@@ -220,7 +217,8 @@ test('A6 stale cache: the runtime placement reservation forces owner admission '
     },
     async queryIncompleteOperations() {
       authoritativeReadCount += 1;
-      return coordinator.authoritativeOperations;
+      return buildAnsweredIncompleteOperationListObservation(
+        coordinator.authoritativeOperations);
     },
   });
 

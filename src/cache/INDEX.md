@@ -22,5 +22,6 @@ documentClass: generated
 - [system-table-cache-cdc-observation.js](system-table-cache-cdc-observation.js) - Record CDC-side revision watermark observations for one system table. (importers: few)
 - [system-table-cache-observation-methods.js](system-table-cache-observation-methods.js) - Engagement counter for the directed micro-repro: proves the no-clone shared read path fires rather than silently... (importers: one)
 - [system-table-cache-row-merge.js](system-table-cache-row-merge.js) - Whether the cached row is causally newer than an applied DELETE. (importers: many)
+- [system-table-cache-source-order.js](system-table-cache-source-order.js) - Same-entry source order of the system-table cache's row merge. (importers: none)
 - [system-table-cache-tombstone-store.js](system-table-cache-tombstone-store.js) - Whether an incoming write proves that it follows a retained deletion. (importers: few)
 - [system-table-cache.js](system-table-cache.js) - System Table Cache - In-memory cache for system tables. (importers: hub)

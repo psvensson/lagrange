@@ -1,5 +1,5 @@
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
-import {deliveryTransportOf, deliveryAnswerOf,
+import {TRANSPORT_ACKNOWLEDGEMENT, deliveryTransportOf, deliveryAnswerOf,
   classifyThrownDeliveryError,
   isDeferredTransportDeliveryOutcome,
 } from './transport-semantic-outcome.js';
@@ -15,6 +15,22 @@ const {
   TRANSPORT_TYPEOF,
   buildQueryTransportSemanticOutcome,
 } = MESSAGE_ROUTER_SHARED;
+
+// The query transport's inner hop is the one that waits for the ACK: it gets
+// what is left of the carrying delivery's ACK bound, and it reports the
+// acknowledgement it records back to the carrying delivery's lifetime.
+function carryAckWait(transportDeliveryOptions, options) {
+  const lifetime = options?.deliveryLifetime;
+  if (!lifetime) return;
+  const ackWaitRemainingMs = lifetime.ackWaitRemainingMs();
+  if (ackWaitRemainingMs !== null) {
+    // A spent ACK bound is this delivery's own ack_timeout, decided here by
+    // the lifetime; it is never handed on as a bound the carried hop refuses.
+    if (ackWaitRemainingMs < 1) lifetime.remainingMs();
+    transportDeliveryOptions.ackTimeoutMs = ackWaitRemainingMs;
+  }
+  transportDeliveryOptions.onAcknowledgement = lifetime.recordAcknowledgement;
+}
 
 const MESSAGE_ROUTER_DELIVERY_PRESSURE_ROUTING_METHODS = Object.freeze({
   setServiceNodeResolver(resolver) {
@@ -144,6 +160,7 @@ const MESSAGE_ROUTER_DELIVERY_PRESSURE_ROUTING_METHODS = Object.freeze({
       outcome.error ?? ROUTER_ERROR_MSG.QUERY_MESSAGE_GROUP_TRANSPORT_REQUIRED,
       {
         errorCode: outcome.errorCode,
+        acknowledgement: outcome.acknowledgement,
         recoverableBeforeSend: outcome.recoverableBeforeSend,
         retryAfterMs: Number.isFinite(outcome.retryAfterMs) ?
           outcome.retryAfterMs :
@@ -184,6 +201,7 @@ const MESSAGE_ROUTER_DELIVERY_PRESSURE_ROUTING_METHODS = Object.freeze({
     messageId,
     message,
     correlationId,
+    options,
   }) {
     if (!(failure instanceof Error)) {
       throw failure;
@@ -202,6 +220,7 @@ const MESSAGE_ROUTER_DELIVERY_PRESSURE_ROUTING_METHODS = Object.freeze({
       messageId,
       payload: message,
       correlationId,
+      options,
     });
     if (recoverableFailure) {
       return recoverableFailure;
@@ -229,6 +248,7 @@ const MESSAGE_ROUTER_DELIVERY_PRESSURE_ROUTING_METHODS = Object.freeze({
     ) {
       transportDeliveryOptions.deliverySource = options.deliverySource;
     }
+    carryAckWait(transportDeliveryOptions, options);
     if (Object.keys(transportDeliveryOptions).length === TRANSPORT_NUM.ZERO) {
       return {};
     }
@@ -251,12 +271,18 @@ const MESSAGE_ROUTER_DELIVERY_PRESSURE_ROUTING_METHODS = Object.freeze({
       return this.buildDeliveryOutcomeResult(
         this.buildDeferredQueryTransportOutcome(queryTransportSelection));
     }
+    // The query transport carries this delivery on its own hop: this hop
+    // establishes no acknowledgement itself and leaves the ACK wait (and what
+    // is left of its bound) to the carried delivery, which reports what it
+    // records.
+    const sendOptions = this.buildQueryTransportSendOptions(options);
+    options.deliveryLifetime?.recordAcknowledgement(TRANSPORT_ACKNOWLEDGEMENT.UNESTABLISHED);
     let record;
     try {
       record = await queryTransport.sendMessage(
         targetAddress,
         message,
-        this.buildQueryTransportSendOptions(options),
+        sendOptions,
       );
     } catch (error) {
       return this.buildDeliveryOutcomeResult(await this.normalizeQueryTransportFailure({
@@ -266,6 +292,7 @@ const MESSAGE_ROUTER_DELIVERY_PRESSURE_ROUTING_METHODS = Object.freeze({
         messageId,
         message,
         correlationId,
+        options,
       }));
     }
     // The query transport resolves with its own record of the inner

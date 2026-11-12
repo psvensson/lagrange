@@ -1,5 +1,9 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  SeedMap,
+  createRecordingReconcileQueue,
+} from '../helpers/recording-reconcile-queue.js';
+import {
   MembershipPublicationCoordinator,
 } from '../../src/control-plane/membership-publication-coordinator.js';
 import {
@@ -27,6 +31,8 @@ import {
   PUBLICATION_ACTIVE_GATE_HANDOFF_REASON,
   PUBLICATION_ACTIVE_GATE_HANDOFF_STATE,
 } from '../../src/control-plane/publication-active-gate-handoff-contract.js';
+import {publicationsOwnerOverRows} from
+  './publication-owner-test-support.js';
 
 const PUBLICATION_CONVERGENCE_REPAIR_ACTIVE_STATUS = 'active';
 const PUBLICATION_CONVERGENCE_REPAIR_READY_CONNECTION = 'ready';
@@ -307,7 +313,7 @@ test('reconcileClusterMembership publishes explicit handoff target without autho
         PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[
           PUBLICATION_CONVERGENCE_HANDOFF_TARGET_FIRST_NODE_INDEX
         ],
-      controlPlanePublicationsOwner: {
+      controlPlanePublicationsOwner: publicationsOwnerOverRows({
         async listPublications() {
           return {rows: [latestPublicationRow]};
         },
@@ -325,11 +331,11 @@ test('reconcileClusterMembership publishes explicit handoff target without autho
               PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DURABLE_UPDATED_AT,
           };
         },
-        async upsertPublication(row, options = {}) {
+        async storeRow(row, options = {}) {
           persistedRows.push(row);
           persistOptions.push(options);
         },
-      },
+      }),
       authoritativeControlPlaneView: {
         canRead() {
           return true;
@@ -476,7 +482,7 @@ test('reconcileActiveGateMembershipPublication owns handoff write visibility',
     const coordinator = new MembershipPublicationCoordinator({
       resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
-      controlPlanePublicationsOwner: {
+      controlPlanePublicationsOwner: publicationsOwnerOverRows({
         async listPublications() {
           return {rows: [latestPublicationRow]};
         },
@@ -493,11 +499,11 @@ test('reconcileActiveGateMembershipPublication owns handoff write visibility',
             } :
             latestPublicationRow;
         },
-        async upsertPublication(row, options = {}) {
+        async storeRow(row, options = {}) {
           persistedRows.push(row);
           persistOptions.push(options);
         },
-      },
+      }),
       systemTableCache: {
         getAll(tableName) {
           if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
@@ -577,7 +583,7 @@ test('reconcileActiveGateMembershipPublication uses handoff baseline under publi
     const coordinator = new MembershipPublicationCoordinator({
       resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
-      controlPlanePublicationsOwner: {
+      controlPlanePublicationsOwner: publicationsOwnerOverRows({
         async listPublications() {
           listPublicationCalls.push(true);
           throw new Error(
@@ -589,10 +595,10 @@ test('reconcileActiveGateMembershipPublication uses handoff baseline under publi
             (row) => row.publication_id === publicationId,
           ) || null;
         },
-        async upsertPublication(row) {
+        async storeRow(row) {
           persistedRows.push(row);
         },
-      },
+      }),
       systemTableCache: {
         getAll() {
           throw new Error(
@@ -675,7 +681,7 @@ test('reconcileActiveGateMembershipPublication widens seed-only active-gate hand
     const coordinator = new MembershipPublicationCoordinator({
       resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
-      controlPlanePublicationsOwner: {
+      controlPlanePublicationsOwner: publicationsOwnerOverRows({
         async listPublications() {
           return {rows: [seedOnlyPublicationRow]};
         },
@@ -683,10 +689,10 @@ test('reconcileActiveGateMembershipPublication widens seed-only active-gate hand
           return persistedRows[persistedRows.length - 1] ||
             seedOnlyPublicationRow;
         },
-        async upsertPublication(row) {
+        async storeRow(row) {
           persistedRows.push(row);
         },
-      },
+      }),
       systemTableCache: {
         getAll(tableName) {
           if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
@@ -766,7 +772,7 @@ test('reconcileClusterMembership consumes active-gate owner reconcile handoff',
     const coordinator = new MembershipPublicationCoordinator({
       resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
-      controlPlanePublicationsOwner: {
+      controlPlanePublicationsOwner: publicationsOwnerOverRows({
         async listPublications() {
           return {rows: [latestPublicationRow]};
         },
@@ -774,10 +780,10 @@ test('reconcileClusterMembership consumes active-gate owner reconcile handoff',
           return persistedRows[persistedRows.length - 1] ||
             latestPublicationRow;
         },
-        async upsertPublication(row) {
+        async storeRow(row) {
           persistedRows.push(row);
         },
-      },
+      }),
       systemTableCache: {
         getAll(tableName) {
           if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
@@ -847,12 +853,7 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_REPLAY_TEST_NAME, async (t) => {
   const coordinator = new MembershipPublicationCoordinator({
     resolveIsControlPlanePublicationsWriteLeader: () => true,
     nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
-    reconcileQueue: {
-      enqueue(ownerKey, reason, context, options) {
-        enqueued.push({ownerKey, reason, context, options});
-        return true;
-      },
-    },
+    reconcileQueue: createRecordingReconcileQueue({enqueued}),
     now: () => PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NOW_MS,
   });
 
@@ -919,7 +920,7 @@ test('reconcileActiveGateMembershipPublication defers stale durable readback',
         ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
       ],
     };
-    const pending = new Map();
+    const pending = new SeedMap();
     const enqueued = [];
     const coordinator = new MembershipPublicationCoordinator({
       resolveIsControlPlanePublicationsWriteLeader: () => true,
@@ -927,25 +928,18 @@ test('reconcileActiveGateMembershipPublication defers stale durable readback',
         PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[
           PUBLICATION_CONVERGENCE_HANDOFF_TARGET_FIRST_NODE_INDEX
         ],
-      reconcileQueue: {
-        pending,
-        enqueue(ownerKey, reason, context, options) {
-          enqueued.push({ownerKey, reason, context, options});
-          pending.set(ownerKey, {context});
-          return true;
-        },
-      },
-      controlPlanePublicationsOwner: {
+      reconcileQueue: createRecordingReconcileQueue({pending, enqueued}),
+      controlPlanePublicationsOwner: publicationsOwnerOverRows({
         async listPublications() {
           return {rows: [latestPublicationRow]};
         },
         async getPublication() {
           return latestPublicationRow;
         },
-        async upsertPublication(row) {
+        async storeRow(row) {
           return row;
         },
-      },
+      }),
       systemTableCache: {
         getAll(tableName) {
           if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
@@ -1024,28 +1018,16 @@ test('reconcileActiveGateMembershipPublication defers stale durable readback',
 test('MembershipPublicationCoordinator bounds active-gate owner retry policy delay',
   async (t) => {
     let capturedRetryPolicy = null;
-    const pending = new Map();
+    const pending = new SeedMap();
     const coordinator = new MembershipPublicationCoordinator({
       resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId:
         PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[
           PUBLICATION_CONVERGENCE_HANDOFF_TARGET_FIRST_NODE_INDEX
         ],
-      reconcileQueue: {
-        pending,
-        get size() {
-          return pending.size;
-        },
-        has(ownerKey) {
-          return pending.has(ownerKey);
-        },
-        enqueue() {
-          return true;
-        },
-        configureRetryPolicy(policy) {
-          capturedRetryPolicy = policy;
-        },
-      },
+      reconcileQueue: createRecordingReconcileQueue({pending, onConfigureRetryPolicy: (policy) => {
+        capturedRetryPolicy = policy;
+      }}),
     });
     const retryableError = new Error('retryable publication write failed');
     retryableError.retryAfterMs = PUBLICATION_CONVERGENCE_LONG_RETRY_AFTER_MS;
@@ -1116,7 +1098,7 @@ test('reconcileActiveGateMembershipPublication bounds retryable write failure de
         ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
       ],
     };
-    const pending = new Map();
+    const pending = new SeedMap();
     const enqueued = [];
     const retryableError = new Error('DISTRIBUTED_PARTICIPANT_FAILURE');
     retryableError.retryAfterMs = PUBLICATION_CONVERGENCE_LONG_RETRY_AFTER_MS;
@@ -1127,31 +1109,18 @@ test('reconcileActiveGateMembershipPublication bounds retryable write failure de
         PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[
           PUBLICATION_CONVERGENCE_HANDOFF_TARGET_FIRST_NODE_INDEX
         ],
-      reconcileQueue: {
-        pending,
-        get size() {
-          return pending.size;
-        },
-        has(ownerKey) {
-          return pending.has(ownerKey);
-        },
-        enqueue(ownerKey, reason, context, options) {
-          enqueued.push({ownerKey, reason, context, options});
-          pending.set(ownerKey, {context});
-          return true;
-        },
-      },
-      controlPlanePublicationsOwner: {
+      reconcileQueue: createRecordingReconcileQueue({pending, enqueued}),
+      controlPlanePublicationsOwner: publicationsOwnerOverRows({
         async listPublications() {
           return {rows: [latestPublicationRow]};
         },
         async getPublication() {
           return latestPublicationRow;
         },
-        async upsertPublication() {
+        async storeRow() {
           throw retryableError;
         },
-      },
+      }),
       systemTableCache: {
         getAll(tableName) {
           if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
@@ -1215,7 +1184,7 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_TEST_NAME,
         ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
       ],
     };
-    const pending = new Map();
+    const pending = new SeedMap();
     const enqueued = [];
     const coordinator = new MembershipPublicationCoordinator({
       resolveIsControlPlanePublicationsWriteLeader: () => true,
@@ -1223,36 +1192,18 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_TEST_NAME,
         PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[
           PUBLICATION_CONVERGENCE_HANDOFF_TARGET_FIRST_NODE_INDEX
         ],
-      reconcileQueue: {
-        pending,
-        get size() {
-          return pending.size;
-        },
-        has(ownerKey) {
-          return pending.has(ownerKey);
-        },
-        enqueue(ownerKey, reason, context, options) {
-          enqueued.push({ownerKey, reason, context, options});
-          const pendingEntry = pending.get(ownerKey);
-          if (pendingEntry) {
-            pendingEntry.context = context;
-            return false;
-          }
-          pending.set(ownerKey, {context});
-          return true;
-        },
-      },
-      controlPlanePublicationsOwner: {
+      reconcileQueue: createRecordingReconcileQueue({pending, enqueued}),
+      controlPlanePublicationsOwner: publicationsOwnerOverRows({
         async listPublications() {
           return {rows: [latestPublicationRow]};
         },
         async getPublication() {
           return latestPublicationRow;
         },
-        async upsertPublication(row) {
+        async storeRow(row) {
           return row;
         },
-      },
+      }),
       systemTableCache: {
         getAll(tableName) {
           if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {

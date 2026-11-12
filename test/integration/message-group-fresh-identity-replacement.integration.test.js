@@ -230,7 +230,7 @@ async function ensureLeaderWithAppliedTerm(liveReplicas, preferredReplicaId = nu
   }
   if (!leader.raft.readStatus().currentTermApplied) {
     await leader.applyCDCEvent(TABLES.NODES, 'INSERT', {
-      id: `term-barrier-${leader.replicaId}-${Date.now()}`,
+      node_id: `term-barrier-${leader.replicaId}-${Date.now()}`,
       address: '127.0.0.1:7999',
       status: 'active',
     });
@@ -986,7 +986,7 @@ test('mg-1 survives physical seed storage loss from two distinct off-seed voters
         'off-seed voter leads at 2/3 quorum without the seed',
       );
       const postSeedLossRow = {
-        id: 'node-after-seed-loss',
+        node_id: 'node-after-seed-loss',
         address: '10.42.0.4:7000',
         status: 'active',
       };
@@ -996,7 +996,7 @@ test('mg-1 survives physical seed storage loss from two distinct off-seed voters
         assert.equal(
           await waitFor(
             () =>
-              voter.getWritableCache().get(TABLES.NODES, postSeedLossRow.id)
+              voter.getWritableCache().get(TABLES.NODES, postSeedLossRow.node_id)
                 ?.address === postSeedLossRow.address,
           ),
           true,
@@ -1044,7 +1044,7 @@ test('mg-1 survives physical seed storage loss from two distinct off-seed voters
 
       const reopenedLeader = await ensureLeaderWithAppliedTerm(liveReplicas());
       const postRestartRow = {
-        id: 'node-after-offseed-restart',
+        node_id: 'node-after-offseed-restart',
         address: '10.42.0.5:7000',
         status: 'active',
       };
@@ -1054,7 +1054,7 @@ test('mg-1 survives physical seed storage loss from two distinct off-seed voters
         assert.equal(
           await waitFor(
             () =>
-              voter.getWritableCache().get(TABLES.NODES, postRestartRow.id)
+              voter.getWritableCache().get(TABLES.NODES, postRestartRow.node_id)
                 ?.address === postRestartRow.address,
           ),
           true,
@@ -1071,7 +1071,7 @@ test('mg-1 survives physical seed storage loss from two distinct off-seed voters
           );
           assert.equal(
             entries.some(
-              (entry) => entry.command?.data?.id === postRestartRow.id,
+              (entry) => entry.command?.data?.node_id === postRestartRow.node_id,
             ),
             true,
             `${replicaId} durable store retains post-restart committed entry`,

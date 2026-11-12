@@ -23,6 +23,9 @@ import {
   withSuccessfulStorageReservationInsert,
 } from './test-helpers.js';
 import {
+  withReplicaOperationsCas,
+} from './durable-step-authority-fixture.js';
+import {
   createRecentIntentPolicyCoordinator,
   createRemoteHandoffCoordinator,
   RECENT_INTENT_NON_PRIORITY_OPERATION_ID,
@@ -68,7 +71,11 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
         affectedRows: 0,
       };
     };
-    const executeQuery = async (sql, params = []) => {
+    // The status/step UPDATE (and its compare-and-set) is the shared CAS
+    // store's, routed before the read match its WHERE would otherwise hit.
+    const executeQuery = withReplicaOperationsCas({
+      readRow: (operationId) => operationRows.get(operationId) || null,
+    }, async (sql, params = []) => {
       const normalizedSql = String(sql);
       if (normalizedSql.includes('WHERE operation_id = ?')) {
         const row = operationRows.get(params[0]) || null;
@@ -110,7 +117,7 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
         return {success: true, affectedRows: 1};
       }
       return {success: true, rows: [], affectedRows: 0};
-    };
+    });
 
     const reservationAwareExecuteQuery =
       withSuccessfulStorageReservationInsert(executeQuery);
@@ -346,7 +353,11 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
         affectedRows: 0,
       };
     };
-    const executeQuery = async (sql, params = []) => {
+    // The status/step UPDATE (and its compare-and-set) is the shared CAS
+    // store's, routed before the read match its WHERE would otherwise hit.
+    const executeQuery = withReplicaOperationsCas({
+      readRow: (operationId) => operationRows.get(operationId) || null,
+    }, async (sql, params = []) => {
       const normalizedSql = String(sql);
       if (normalizedSql.includes('WHERE operation_id = ?')) {
         const row = operationRows.get(params[0]) || null;
@@ -388,7 +399,7 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
         return {success: true, affectedRows: 1};
       }
       return {success: true, rows: [], affectedRows: 0};
-    };
+    });
 
     const reservationAwareExecuteQuery =
       withSuccessfulStorageReservationInsert(executeQuery);
@@ -534,7 +545,11 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
         affectedRows: 0,
       };
     };
-    const executeQuery = async (sql, params = []) => {
+    // The status/step UPDATE (and its compare-and-set) is the shared CAS
+    // store's, routed before the read match its WHERE would otherwise hit.
+    const executeQuery = withReplicaOperationsCas({
+      readRow: (operationId) => operationRows.get(operationId) || null,
+    }, async (sql, params = []) => {
       const normalizedSql = String(sql);
       if (normalizedSql.includes('WHERE operation_id = ?')) {
         const row = operationRows.get(params[0]) || null;
@@ -576,7 +591,7 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
         return {success: true, affectedRows: 1};
       }
       return {success: true, rows: [], affectedRows: 0};
-    };
+    });
 
     const reservationAwareExecuteQuery =
       withSuccessfulStorageReservationInsert(executeQuery);

@@ -56,6 +56,10 @@ const TRANSPORT_CONFIG_KEY = Object.freeze({
   CONNECTION_POOL_CLEANUP_INTERVAL_MS: 'transport.connectionPoolCleanupIntervalMs',
 });
 
+// ends-on: n/a lookback
+const ACK_TIMEOUT_QUARANTINE_LIVENESS_WINDOW_MS = 30000;
+const KEEPALIVE_PINGS_PER_LIVENESS_WINDOW = 3;
+
 const TRANSPORT_DEFAULT = Object.freeze({
   WS_PORT: LISTENER_PORT_DEFAULT.TRANSPORT_WEBSOCKET,
   WS_HOST: HOST.LOCALHOST,
@@ -71,12 +75,16 @@ const TRANSPORT_DEFAULT = Object.freeze({
   // joiners quarantined the alive-but-saturated seed — their only
   // control-plane path — within 1s of each other (closure record CL-007).
   // ends-on: n/a lookback
-  ACK_TIMEOUT_QUARANTINE_LIVENESS_WINDOW_MS: 30000,
+  ACK_TIMEOUT_QUARANTINE_LIVENESS_WINDOW_MS: ACK_TIMEOUT_QUARANTINE_LIVENESS_WINDOW_MS,
   // ends-on: the pinged peer returns a PONG
   PING_TIMEOUT_MS: 1000,
   RECONNECT_INTERVAL_MS: 1000,
   RECONNECT_MAX_ATTEMPTS: 10,
-  PING_INTERVAL_MS: 30000,
+  // Keepalive runs strictly inside the liveness window: an idle but healthy
+  // peer's PONG is always younger than the window the quarantine guard reads,
+  // so silence for a whole window is evidence, never the keepalive cadence.
+  PING_INTERVAL_MS: Math.floor(
+    ACK_TIMEOUT_QUARANTINE_LIVENESS_WINDOW_MS / KEEPALIVE_PINGS_PER_LIVENESS_WINDOW),
   // Consecutive unanswered keepalive pings before a stale-but-open connection is
   // severed. A peer that restarts on a new address can leave a half-open socket
   // that never emits close; without this the peer's stored address is never
@@ -293,6 +301,13 @@ const ROUTER_LOG_MSG = Object.freeze({
   BULK_CHANNEL_ADOPTED: 'Adopted identified bulk-channel socket',
   BULK_CHANNEL_NO_REGISTRY:
     'Closing bulk-channel socket: no bulk channel registry attached',
+  PING_TIMEOUT_SATISFIED_BY_INBOUND:
+    'Ping bound spent without a PONG; recent inbound traffic answers for the node',
+  CONNECTION_PING_TIMEOUT_SKIPPED_ALIVE:
+    'Keepalive PONGs missed; connection kept on recent inbound traffic',
+  PEER_TRAFFIC: 'Router peer traffic',
+  REMOTE_QUERY_SERVED: 'Router remote queries served',
+  ACK_TIMEOUT_DETAIL: 'Router ACK timeout detail',
 });
 
 const ROUTER_ERROR_MSG = Object.freeze({
@@ -303,6 +318,10 @@ const ROUTER_ERROR_MSG = Object.freeze({
   noConnectionToNode: (nodeId) => `No connection to node ${nodeId}`,
   connectionClosed: (nodeId) => `Connection to node ${nodeId} closed`,
   selfConnectionFailed: (message) => `Self-connection failed: ${message}`,
+  // An in-process endpoint is already registered on this port; the text is
+  // the listen error a real socket bind gives for the same condition.
+  addressInUse: (portKey) =>
+    `listen EADDRINUSE: address already in use 127.0.0.1:${portKey}`,
   noHandlerForAddress: (address) => `No handler registered for address ${address}`,
   QUERY_MESSAGE_GROUP_TRANSPORT_REQUIRED:
     'Query/data-plane message-group transport is not configured',

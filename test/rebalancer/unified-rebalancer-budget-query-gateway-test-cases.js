@@ -24,7 +24,7 @@ export function registerUnifiedRebalancerBudgetQueryGatewayTests(context) {
           if (sql.includes('SELECT config_value FROM config')) {
             return {success: true, rows: [{config_value: '7'}]};
           }
-          return {success: true, rows: [{total_count: 2}]};
+          return {success: true, rows: Array.from({length: 2}, (_unused, index) => ({operation_id: `op-${index}`}))};
         },
       },
     });
@@ -65,7 +65,7 @@ export function registerUnifiedRebalancerBudgetQueryGatewayTests(context) {
           if (sql.includes('SELECT config_value FROM config')) {
             return {success: true, rows: [{config_value: '5'}]};
           }
-          return {success: true, rows: [{total_count: 1}]};
+          return {success: true, rows: Array.from({length: 1}, (_unused, index) => ({operation_id: `op-${index}`}))};
         },
       },
     });

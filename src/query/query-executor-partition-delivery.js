@@ -60,6 +60,8 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
     // One entryId for every delivery of a write (the caller's, or minted
     // once): a re-delivery is never a fresh entry.
     const executionOptions = withWriteEntryIdentity(deliveryOptions, forRead);
+    // This owner's one re-send fact: every delivery carries the one entryId.
+    const writeIdentityKeyed = !forRead && Boolean(executionOptions?.entryId);
     const unknownOutcome = createUnknownOutcomeRedelivery({
       entryId: executionOptions?.entryId ?? null,
       forRead,
@@ -516,7 +518,8 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               !forRead &&
               this.isLeaderUnavailable(
                 redirectFailureMessage,
-                redirectResponse?.errorCode,
+                redirectResponse,
+                writeIdentityKeyed,
               )
             ) {
               widenWriteCandidate(response.leaderAddress);
@@ -590,7 +593,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           }
           if (
             !forRead &&
-            this.isLeaderUnavailable(errorMessage, response?.errorCode)
+            this.isLeaderUnavailable(errorMessage, response, writeIdentityKeyed)
           ) {
             recordCandidateFailure(
               errorMessage,
@@ -605,6 +608,8 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           // §1.12: For reads, treat transient failures as reasons
           // to try the next candidate rather than hard-failing.
           if (forRead) {
+            candidateState.observeCandidateTransportOutcome(
+              serviceInfo, deliveryTransportOf(delivery));
             this.logger.debug(QUERY_LOG_MSG.READ_CANDIDATE_TRANSIENT_FAILURE, {
               partitionId,
               address,
@@ -635,11 +640,11 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             error.message.length > 0 ?
               error.message :
               ERRORS.QUERY_FAILED;
-          if (deliverySubmitted && !this.isNoHandlerFailure(errorMessage)) {
+          if (deliverySubmitted && !this.isNoHandlerFailure(error)) {
             // Sent, and its answer never arrived: the write may have applied.
             unknownOutcome.observeLostAnswer(error);
           }
-          if (this.isNoHandlerFailure(errorMessage)) {
+          if (this.isNoHandlerFailure(error)) {
             await candidateState.handleNoHandlerCandidate(
               serviceInfo,
               address,
@@ -691,10 +696,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           }
           if (
             !forRead &&
-            this.isLeaderUnavailable(
-              errorMessage,
-              classifyThrownDeliveryError(error).errorCode,
-            )
+            this.isLeaderUnavailable(errorMessage, error, writeIdentityKeyed)
           ) {
             recordCandidateFailure(
               errorMessage,
@@ -709,6 +711,8 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           // §1.12: For reads, catch transient transport errors
           // and try the next candidate.
           if (forRead) {
+            candidateState.observeCandidateTransportOutcome(
+              serviceInfo, classifyThrownDeliveryError(error));
             this.logger.debug(QUERY_LOG_MSG.READ_CANDIDATE_TRANSIENT_FAILURE, {
               partitionId,
               address,

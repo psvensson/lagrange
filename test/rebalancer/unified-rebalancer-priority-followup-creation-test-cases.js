@@ -1,3 +1,5 @@
+import {stubAvailableNodes} from './available-node-plan-stub.js';
+
 export function registerUnifiedRebalancerPriorityFollowupCreationTests(context) {
   const {
     CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
@@ -61,7 +63,7 @@ export function registerUnifiedRebalancerPriorityFollowupCreationTests(context) 
           if (tableName === 'config') {
             return {success: true, rows: [{config_value: '6'}]};
           }
-          return {success: true, rows: [{total_count: 2}]};
+          return {success: true, rows: Array.from({length: 2}, (_unused, index) => ({operation_id: `op-${index}`}))};
         },
       };
       const rebalancer = createTestRebalancer({
@@ -105,8 +107,8 @@ export function registerUnifiedRebalancerPriorityFollowupCreationTests(context) 
       );
       t.equal(
         cdcCalls[0]?.options?.authoritativeReadMode,
-        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
-        'budget probes should report the canonical local-only authoritative read mode',
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_PREFERRED_OWNER_RPC_FALLBACK,
+        'budget probes read the local replica and ask the owner when it is not hosted here',
       );
       t.equal(
         cdcCalls[1]?.options?.queryOptions?.deliveryPriority,
@@ -137,10 +139,10 @@ export function registerUnifiedRebalancerPriorityFollowupCreationTests(context) 
 
     rebalancer.setLeader(true);
     rebalancer.getCurrentReplicas = () => [];
-    rebalancer.getAvailableNodes = () => ([
+    stubAvailableNodes(rebalancer, () => ([
       {node_id: 'node-1'},
       {node_id: 'node-2'},
-    ]);
+    ]));
     rebalancer.movePlanner.calculateTargetState = async () => ({
       targetReplicaCount: 2,
     });

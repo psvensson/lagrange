@@ -146,10 +146,15 @@ function peerIdOfIdentity(cluster, holder, replicaId) {
 function commitChange(cluster, type, replicaId, tickers) {
   const adds = type === RAFT_MEMBERSHIP_OPERATION.ADD_PEER;
   if (!adds && leaderOf(cluster) === replicaId) {
-    cluster.node(replicaId).transferLeadership({
-      successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.MOST_CAUGHT_UP});
-    assert.ok(settle(cluster, () => leaderOf(cluster) !== null &&
-      leaderOf(cluster) !== replicaId, tickers),
+    // The leader names only a voter that has answered it in this tenure (a
+    // voter just added has not yet): it is asked until leadership moved.
+    assert.ok(settle(cluster, () => {
+      if (leaderOf(cluster) === replicaId) {
+        cluster.node(replicaId).transferLeadership({
+          successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.MOST_CAUGHT_UP});
+      }
+      return leaderOf(cluster) !== null && leaderOf(cluster) !== replicaId;
+    }, tickers),
     `setup: ${replicaId} handed leadership over before its removal`);
   }
   const shows = () => {
@@ -555,7 +560,10 @@ test('B12: R-1a waits on a witness below its gate (whose view, folded at ' +
     const operation = {operationId: 'b12-replace', type: OperationType.REPLACE,
       entityType: SERVICE_TYPE.PARTITION, entityId: PARTITION_ID,
       partitionId: PARTITION_ID,
-      replicaId: TARGET, targetNodeId: 'b12-target-node'};
+      // A REPLACE names its source's node (the route to the source when it
+      // leads); the route is never invented from an absent field.
+      replicaId: TARGET, targetNodeId: 'b12-target-node',
+      sourceNodeId: 'h1-b-node'};
     const targetView = await readPartitionReplicaMembership({
       raft: cluster.node(TARGET), replicaId: TARGET, partitionId: PARTITION_ID,
       replicaIds: [], raftTimingConfig: null}, 'h1-b');

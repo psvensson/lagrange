@@ -49,6 +49,8 @@ import {registerReplicaHandlerIdentityEntryTests} from
   './replica-handler-identity-entry-test-cases.js';
 import {createReplicaLifecycleStateMachineFixture} from
   '../test-helpers/lifecycle-state-store.js';
+import {withRemovalServingSurface} from
+  '../test-helpers/partition-removal-serving-surface.js';
 import {bindRegisteredReplicaHandler} from
   '../test-helpers/replica-handler-identity-fixture.js';
 
@@ -214,18 +216,20 @@ function createMockCDCService(cache, options = {}) {
  * @return {Function} Factory function.
  */
 function createMockPartitionServiceFactory() {
-  return async (options) => bindRegisteredReplicaHandler({
-    partitionId: options.partitionId,
-    replicaId: options.replicaId,
-    initialized: true,
-    async shutdown() {},
-    async syncFromLeader() {},
-    // A CREATE target asks its leader to admit it after its SYNCING commit
-    // (replica-admission-from-committed-operation); this double admits.
-    async requestReplicaAdmission(operationId) {
-      return {operationId, state: 'admitted', lastOutcome: 'proposed'};
-    },
-  }, options);
+  // The production removal-serving surface (fence, drain) over an idle store.
+  return async (options) => bindRegisteredReplicaHandler(
+    withRemovalServingSurface({
+      partitionId: options.partitionId,
+      replicaId: options.replicaId,
+      initialized: true,
+      async shutdown() {},
+      async syncFromLeader() {},
+      // A CREATE target asks its leader to admit it after its SYNCING commit
+      // (replica-admission-from-committed-operation); this double admits.
+      async requestReplicaAdmission(operationId) {
+        return {operationId, state: 'admitted', lastOutcome: 'proposed'};
+      },
+    }), options);
 }
 
 /**

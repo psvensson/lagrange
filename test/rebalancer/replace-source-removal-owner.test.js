@@ -39,6 +39,9 @@ import {
   createReplaceWitness,
   deliveredReplaceWitnessResponse,
 } from './replace-witness-fixture.js';
+import {OPERATION_VISIBILITY_STATE, buildPresentOperationVisibility,
+  buildUnavailableOperationVisibility} from
+  '../../src/rebalancer/replica-operation-repository-operation-visibility.js';
 
 const PARTITION_ID = 'users-p1';
 const SOURCE_NODE_ID = 'seed-node';
@@ -185,11 +188,12 @@ function removalEffects(deliveries) {
     payload?.type === ReplicaOperationMessageType.REMOVE_REPLICA);
 }
 
-// SYNCING -> remove safety SAFE -> the removal-intent boundary.
+// SYNCING -> remove safety SAFE -> the removal-intent boundary, through the
+// owner's PROGRESS lifecycle (the cause the orphan sweep re-drives with).
 async function driveToRemovalIntent(harness) {
   harness.operation.workflowStep = WORKFLOW_STEP.SYNCING;
   harness.operation.status = ReplicaStatus.SYNCING;
-  await harness.coordinator.reconcileSyncingOperation(harness.operation);
+  await harness.coordinator.reconcileOperationProgress(harness.operation);
 }
 
 async function persistedOperation(harness) {
@@ -524,16 +528,18 @@ test('W8 (D2 boundary is durable): a stale in-memory copy cannot FAIL a ' +
     // The copy's durable read also lags (it read ACTIVE before the intent
     // landed): the terminal write itself is a CAS on that step.
     const repository = harness.coordinator.repository;
-    const baseRead = repository.queryReplicaOperationPersistenceAuthorityOperation
+    const baseRead = repository.queryReplicaOperationPersistenceAuthorityObservation
       .bind(repository);
-    repository.queryReplicaOperationPersistenceAuthorityOperation =
+    repository.queryReplicaOperationPersistenceAuthorityObservation =
       async (operation, options) => {
         const read = await baseRead(operation, options);
-        return read ? staleActiveCopy(read) : read;
+        return read.state === OPERATION_VISIBILITY_STATE.PRESENT ?
+          buildPresentOperationVisibility(staleActiveCopy(read.operation)) :
+          read;
       };
     await harness.owner.failOperation(
       staleActiveCopy(harness.operation), 'Timeout in ACTIVE step');
-    repository.queryReplicaOperationPersistenceAuthorityOperation = baseRead;
+    repository.queryReplicaOperationPersistenceAuthorityObservation = baseRead;
     t.equal((await persistedOperation(harness)).workflowStep,
       WORKFLOW_STEP.STOPPING,
       'the FAILED write is a CAS on the step it was admitted against');
@@ -587,15 +593,17 @@ test('W9 (R11/A11.1): the terminal-transition repair is not a second route ' +
         enforceDurableStepCas(harness);
         const repository = harness.coordinator.repository;
         const baseRead = repository
-          .queryReplicaOperationPersistenceAuthorityOperation.bind(repository);
-        repository.queryReplicaOperationPersistenceAuthorityOperation =
+          .queryReplicaOperationPersistenceAuthorityObservation.bind(repository);
+        repository.queryReplicaOperationPersistenceAuthorityObservation =
           async (operation, options) => {
             const read = await baseRead(operation, options);
-            return read ? staleActiveCopy(read) : read;
+            return read.state === OPERATION_VISIBILITY_STATE.PRESENT ?
+              buildPresentOperationVisibility(staleActiveCopy(read.operation)) :
+              read;
           };
         await harness.owner.failOperation(
           staleActiveCopy(harness.operation), 'Timeout in ACTIVE step');
-        repository.queryReplicaOperationPersistenceAuthorityOperation = baseRead;
+        repository.queryReplicaOperationPersistenceAuthorityObservation = baseRead;
         await fireHeldTimers(harness);
         await fireHeldTimers(harness);
         t.equal((await persistedOperation(harness)).workflowStep,
@@ -743,7 +751,7 @@ test('W12 (D2 pre-effect): target death before the intent fails the ' +
 async function deferredSnapshotOf(harness) {
   const fresh = await persistedOperation(harness);
   return harness.owner.resolveDeferredRetryVisibleOperation(
-    {operation: null, deferredOutcome: {reasonCode: 'visibility_deferred'}},
+    buildUnavailableOperationVisibility({reasonCode: 'visibility_deferred'}),
     fresh);
 }
 

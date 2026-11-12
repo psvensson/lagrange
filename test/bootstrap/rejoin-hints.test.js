@@ -24,6 +24,8 @@ import {
   CLUSTER_ID_CONFIG_KEY,
 } from '../../src/bootstrap/cluster-identity-constants.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {writeDurableConfigReplica} from
+  '../test-helpers/durable-config-replica-fixture.js';
 
 const LOCAL_NODE_ID = 'node-local';
 const LOCAL_NODE_ADDRESS = 'seed-node:8080';
@@ -329,10 +331,11 @@ test('resolveAutoRejoinStartupDecision keeps persisted seed role in seed mode',
     const dataDir = await mkdtemp(join(tmpdir(), 'rejoin-hints-'));
     t.after(() => rm(dataDir, {recursive: true, force: true}));
 
-    // Identity-era seed: the hints carry the durable cluster identity and
-    // the node passes it back as its startup expectation, so the cluster-id
-    // match is confirmed; live peer contact (probe true) supplies the
-    // recovery proof. A persisted seed role ALONE is no longer sufficient.
+    // Identity-era seed: the hints carry the cluster identity and the
+    // seed's own CONFIG replica holds the same row, so the cluster-id match
+    // is confirmed by two independent records; live peer contact (probe
+    // true) supplies the recovery proof. A persisted seed role ALONE is not
+    // sufficient.
     const persistence = new RejoinHintsPersistenceService({
       bootIncarnation: TEST_BOOT_INCARNATION,
       dataDir,
@@ -353,12 +356,12 @@ test('resolveAutoRejoinStartupDecision keeps persisted seed role in seed mode',
     });
 
     await persistence.persistNow();
+    await writeDurableConfigReplica(dataDir, {clusterId: CLUSTER_ID_A});
 
     const decision = await resolveAutoRejoinStartupDecision({
       dataDir,
       nodeId: LOCAL_NODE_ID,
       nodeAddress: LOCAL_NODE_ADDRESS,
-      expectedClusterId: CLUSTER_ID_A,
       probePeerAddress: async () => true,
     });
 

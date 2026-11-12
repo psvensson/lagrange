@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-09T17:56:57.094Z",
+  "generatedAt": "2026-11-11T10:41:43.150Z",
   "rawViolationCount": 87,
   "violations": [
     {
@@ -248,7 +248,7 @@
     },
     {
       "filePath": "src/node/replica-create-admission-owner.js",
-      "line": 74,
+      "line": 73,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -617,7 +617,7 @@
     },
     {
       "filePath": "src/rebalancer/background-priority-spread-release-tracker.js",
-      "line": 7,
+      "line": 43,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -635,7 +635,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-replace-handoff-attempt.js",
-      "line": 72,
+      "line": 108,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -662,7 +662,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-replace-owner-wake.js",
-      "line": 91,
+      "line": 92,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -761,7 +761,7 @@
     },
     {
       "filePath": "src/transport/message-router-delivery-lifetime.js",
-      "line": 8,
+      "line": 10,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -770,7 +770,7 @@
     },
     {
       "filePath": "src/transport/transport-semantic-outcome.js",
-      "line": 18,
+      "line": 23,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -779,7 +779,7 @@
     },
     {
       "filePath": "src/transport/transport-semantic-outcome.js",
-      "line": 19,
+      "line": 24,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",

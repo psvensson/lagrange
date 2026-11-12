@@ -204,6 +204,26 @@ exports.wasm_start = function() {
 
 /**
  * @param {number} handle
+ * @returns {any}
+ */
+exports.step_down_removed_leader = function(handle) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        wasm.step_down_removed_leader(retptr, handle);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        if (r2) {
+            throw takeObject(r1);
+        }
+        return takeObject(r0);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+    }
+};
+
+/**
+ * @param {number} handle
  * @param {any} cc
  */
 exports.propose_conf_change_v2 = function(handle, cc) {

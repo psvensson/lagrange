@@ -187,6 +187,10 @@ const REDRIVE_WAKES = Object.freeze({
     ([label, payload]) => ({label: `CONF_CHANGE_APPLIED: ${label}`,
       wake: (provider) => provider.emitEvent(RAFT_EVENT.CONF_CHANGE_APPLIED,
         payload)})),
+  [RAFT_EVENT.VOTER_LIVENESS_CHANGED]: [{
+    label: 'VOTER_LIVENESS_CHANGED: the leader\'s live voter set changed',
+    wake: (provider) =>
+      provider.emitEvent(RAFT_EVENT.VOTER_LIVENESS_CHANGED)}],
   [RAFT_EVENT.LEADER]: [{label: 'LEADER: this replica gains leadership',
     wake: (provider) => {
       provider.setRole(RaftRole.FOLLOWER);

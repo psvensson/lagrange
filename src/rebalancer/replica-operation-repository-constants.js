@@ -8,6 +8,14 @@ const REPLICA_OPERATION_REPOSITORY_ERROR_MSG = Object.freeze({
     'Terminal failed-create cleanup recovery read unavailable',
 });
 
+// The named states of getActualReplicaObservation (the authoritative
+// replica row read): OBSERVED, a corroborated ABSENT, or UNAVAILABLE.
+const ACTUAL_REPLICA_OBSERVATION_STATE = Object.freeze({
+  OBSERVED: 'observed',
+  ABSENT: 'absent',
+  UNAVAILABLE: 'unavailable',
+});
+
 const REPLICA_OPERATION_INSERT_SQL = `INSERT INTO replica_operations (
   operation_id, type, partition_id, replica_id, target_claim_key, source_node_id,
   target_node_id, status, workflow_step, created_at, updated_at,
@@ -26,6 +34,7 @@ const REPLICA_OPERATION_INSERT_SQL = `INSERT INTO replica_operations (
     ?, ?, ?, ?, ?, ?, ?, ?)`;
 
 export {
+  ACTUAL_REPLICA_OBSERVATION_STATE,
   REPLICA_OPERATION_INSERT_SQL,
   REPLICA_OPERATION_REPOSITORY_ERROR_CODE,
   REPLICA_OPERATION_REPOSITORY_ERROR_MSG,

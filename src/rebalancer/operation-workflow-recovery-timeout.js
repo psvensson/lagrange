@@ -8,11 +8,11 @@ import {
   PRE_SYNC_WORKFLOW_STEPS,
   RECONCILE_REPLICA_STATUS_WORKFLOW_STEPS,
   isActiveReplaceSourceRemovalPhase,
+  isReplaceExemptFromTimeBudget,
 } from './replica-operation-step-policy.js';
 import {resolveOperationCurrentStepEntry} from './operation-step-age.js';
 import {
   isPartitionReplace,
-  isReplaceExemptFromTimeBudget,
   isReplaceRemovalIntentDurable,
   isTargetFailureDetectorDead,
 } from './operation-workflow-replace-owner.js';
@@ -22,6 +22,10 @@ import {
 import {
   resolveOperationDrainOwnerAvailability,
 } from './operation-owner-availability-policy.js';
+import {
+  OPERATION_VISIBILITY_STATE,
+  readOperationVisibilityState,
+} from './replica-operation-repository-operation-visibility.js';
 
 // Fenced orphan adoption (audit findings 5+14): incomplete operations on
 // ORDINARY partitions whose recorded owner is remote join the sweep when
@@ -251,23 +255,26 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
             cachedIncompleteOps,
           ),
       });
-    const incompleteOps = Array.isArray(
-      incompleteOperationObservation?.operations,
-    ) ?
-      incompleteOperationObservation.operations :
-      [];
+    // DEFERRED carries no list. The sweep then wakes the cache-visible
+    // candidates only: each turn re-reads its row by id from the owner and
+    // decides nothing on an unanswered read or on what the projection lacks.
+    const incompleteOps = incompleteOperationObservation.state ===
+      INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED ?
+      cachedIncompleteOps :
+      incompleteOperationObservation.operations;
     if (
       incompleteOperationObservation.state ===
       INCOMPLETE_OPERATION_OBSERVATION_STATE.EMPTY
     ) {
       this.lastEmptyIncompleteOperationQueryAtMs = now;
+      // A confirmed-empty ledger still owes the reservation sweep: a hold
+      // whose operation is terminal is released only here (the restart
+      // routine that also released it had no production caller).
+      await this.reconcileReservationsOnSweep();
       return;
     }
     this.clearEmptyIncompleteOperationQueryDelay();
-    if (
-      incompleteOperationObservation.state ===
-      INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED
-    ) {
+    if (incompleteOps.length === 0) {
       return;
     }
 
@@ -281,19 +288,17 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
         operation, timeoutReconcileTasks)) {
         continue;
       }
-      const operationDrainSnapshot =
+      // Routing evidence only: no drain action, so it cannot decide in a lane.
+      const {ownerAction} =
         await this.buildPriorityRecoveryOperationDrainSnapshot(operation);
-      if (
-        await this.wakePriorityRecoveryRemoteOwnerFromDrainSnapshot(
-          operation,
-          operationDrainSnapshot,
-        )
-      ) {
+      const routingDrainSnapshot = Object.freeze({ownerAction});
+      if (await this.wakePriorityRecoveryRemoteOwnerFromDrainSnapshot(
+        operation, routingDrainSnapshot)) {
         continue;
       }
       if (
         !this.shouldEnterOperationLifecycleFromDrainSnapshot(
-          operationDrainSnapshot,
+          routingDrainSnapshot,
         )
       ) {
         continue;
@@ -313,16 +318,23 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
                 allowPriorityRecoveryDeferredVisibility: true,
               },
             );
+          // No owner answer: this tick decides nothing (no timeout is
+          // judged from the scan's copy); the next sweep tick reads again.
+          if (
+            readOperationVisibilityState(visibilityObservation) ===
+            OPERATION_VISIBILITY_STATE.UNAVAILABLE
+          ) {
+            return;
+          }
           const timeoutOperation = this.selectTimeoutReconcileOperation(
             visibilityObservation,
             operation,
           );
-          if (!timeoutOperation) {
+          if (!timeoutOperation ||
+              this.repository.isOperationTerminal(timeoutOperation)) {
             return;
           }
-          if (this.repository.isOperationTerminal(timeoutOperation)) {
-            return;
-          }
+          // Built after the lane wait; the one snapshot this turn decides on.
           const timeoutOperationDrainSnapshot =
             await this.buildPriorityRecoveryOperationDrainSnapshot(
               timeoutOperation,
@@ -346,6 +358,7 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
           await this.reconcileTimeoutOperation(
             timeoutOperation,
             this.resolveTimeoutCheckNowMs(),
+            timeoutOperationDrainSnapshot,
           );
         },
       ).catch((error) =>
@@ -362,7 +375,16 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
       await Promise.all(timeoutReconcileTasks);
     }
 
-    // Periodic reservation reconciliation (Req 4.4)
+    await this.reconcileReservationsOnSweep();
+  }
+
+  /**
+   * Periodic reservation reconciliation (Req 4.4); a failure is logged and
+   * the next sweep retries.
+   * @return {Promise<void>}
+   * @private
+   */
+  async reconcileReservationsOnSweep() {
     await this.reconcileReservations().catch((error) => {
       this.logger.warn(
         REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_RELEASE_FAILED,
@@ -387,8 +409,8 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
    * reconcile-to-truth core (reconcileOperationLifecycle) for EVERY locally-owned
    * non-terminal op that ground truth says is actionable, on the coordinator's
    * periodic timer — independent of which edge was supposed to fire. It uses the
-   * NON-DESTRUCTIVE PROGRESS cause (never RECOVERY), so the pre-sync FAIL semantics
-   * that make startup handleRecovery destructive can never fire here. It is bounded
+   * NON-DESTRUCTIVE PROGRESS cause: nothing here fails a row for being
+   * incomplete (restart included; there is no restart FAIL path). It is bounded
    * to be a SAFETY NET, not a competitor to the edge path:
    *   - locally-owned + single-flight (re-reads under the op lock → idempotent, no
    *     double-dispatch, preserves the single-writer guarantee);
@@ -432,9 +454,9 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
         visibilityReadMode:
           REPLICA_OPERATION_VISIBILITY_READ_MODE.CACHE_PREFERRED_SQL_FALLBACK,
       });
-    const incompleteOps = Array.isArray(observation?.operations) ?
-      observation.operations :
-      [];
+    // Orphan adoption fails or adopts work: only on an answered list (a
+    // DEFERRED observation carries none).
+    const incompleteOps = observation.operations;
     const ownedOps = incompleteOps.filter((op) =>
       op &&
       !this.repository.isOperationTerminal(op) &&
@@ -566,21 +588,9 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
     return PRE_SYNC_WORKFLOW_STEPS.has(step);
   }
 
-  resolveOperationLifecycleAction(
-    operation,
-    cause = OPERATION_WORKFLOW_OWNER_LITERAL.PROGRESS,
-  ) {
+  resolveOperationLifecycleAction(operation) {
     if (this.isRemoveInitialDispatchPhase(operation)) {
       return OPERATION_LIFECYCLE_ACTION.EXECUTE_REMOVE_DISPATCH;
-    }
-
-    if (cause === OPERATION_WORKFLOW_OWNER_LITERAL.RECOVERY) {
-      if (this.isPreSyncStep(operation.workflowStep)) {
-        return OPERATION_LIFECYCLE_ACTION.FAIL_PRE_SYNC_RECOVERY;
-      }
-      if (operation.workflowStep === WORKFLOW_STEP.STOPPING) {
-        return OPERATION_LIFECYCLE_ACTION.FAIL_STOPPING_RECOVERY;
-      }
     }
 
     if (

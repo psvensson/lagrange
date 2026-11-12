@@ -1,4 +1,7 @@
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
+  '../control-plane/control-plane-system-table-gateway-constants.js';
 import {readStateField} from '../utils/state-field-read.js';
+import {WORKFLOW_STEP_PROGRESS_RANK} from './replica-operation-step-policy.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
 import {
   COORDINATOR_CREATED_REMOTE_HANDOFF_MODE,
@@ -16,7 +19,6 @@ const {
   EXECUTOR_OUTCOME_FIELD,
   EXECUTOR_OUTCOME_TYPE,
   EXECUTOR_STEP_UPDATE_RECONCILE_WORKFLOW_STEPS,
-  NUM,
   OBSERVED_PROGRESS_RETRY_DELAY_MS,
   OPERATION_TRANSITION_REASON,
   OPERATION_WORKFLOW_OWNER_LITERAL,
@@ -58,16 +60,6 @@ const EXECUTOR_OUTCOME_REDRIVE_MAX_LANE_WAITS = 50;
 // while the blocking condition persists.
 const EXECUTOR_OUTCOME_RETRY_MAX_DELAY_MS = SHARED.TIME_MS.SECOND * 30;
 
-const EXECUTOR_OUTCOME_RETRY_WORKFLOW_STEP_RANK = Object.freeze(new Map([
-  [WORKFLOW_STEP.PENDING, 1],
-  [WORKFLOW_STEP.SENDING, 2],
-  [WORKFLOW_STEP.CREATING, NUM.THREE],
-  [WORKFLOW_STEP.SYNCING, NUM.FOUR],
-  [WORKFLOW_STEP.ACTIVE, NUM.FIVE],
-  [WORKFLOW_STEP.STOPPING, NUM.SIX],
-  [WORKFLOW_STEP.REMOVED, NUM.SEVEN],
-  [WORKFLOW_STEP.FAILED, NUM.SEVEN],
-]));
 
 const EXECUTOR_OUTCOME_RETRY_IDENTITY_FIELDS = Object.freeze([
   EXECUTOR_OUTCOME_FIELD.OPERATION_ID,
@@ -257,7 +249,7 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
 
   getExecutorOutcomeRetryWorkflowStepRank(outcome) {
     return (
-      EXECUTOR_OUTCOME_RETRY_WORKFLOW_STEP_RANK.get(
+      WORKFLOW_STEP_PROGRESS_RANK.get(
         outcome?.[EXECUTOR_OUTCOME_FIELD.WORKFLOW_STEP],
       ) ||
       -1
@@ -599,10 +591,13 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
       workflowStep,
     });
 
+    // Skipping the outcome on absence drops it, so absence is the owner's.
     const visibilityObservation =
       await this.repository.getOperationByIdVisibilityObservation(
         operationId,
         {
+          authoritativeReadMode:
+            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
           allowPriorityRecoveryDeferredVisibility: true,
         },
       );

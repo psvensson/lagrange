@@ -1,3 +1,4 @@
+import {COLUMN} from '../constants/index.js';
 import {resolveControlPlaneDiagnosticsLossAccounting} from
   './admin-control-snapshot-diagnostic-loss-accounting.js';
 import {createAdminControlSnapshotPublicationConvergenceDiagnosticsMethods} from
@@ -11,7 +12,6 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
   const {
     ADMIN_CACHE_DUMP,
     ADMIN_CONTROL_SNAPSHOT_LITERAL,
-    COLUMN,
     CONTROL_PLANE_DIAGNOSTICS_LEDGER_LIMIT,
     CONTROL_PLANE_PUBLICATION_STORY_NODE_STATE_FIELD,
     CONTROL_PLANE_PUBLICATION_STORY_SYNC_METHOD,
@@ -698,7 +698,6 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
         ),
         tableName: firstStringField(
           tableRow,
-          COLUMN.TABLE_NAME,
           ADMIN_CONTROL_SNAPSHOT_LITERAL.NAME,
         ),
         sourcePartitionId: firstStringField(

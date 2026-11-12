@@ -15,6 +15,8 @@ import {
   SYSTEM_TABLES,
   CDC_OPERATIONS,
 } from '../../src/cache/system-table-cache.js';
+import {getSystemCachePrimaryKeyField} from
+  '../../src/cache/system-cache-key-descriptor.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 
@@ -35,6 +37,16 @@ afterEach(() => {
 /**
  * Generate a random CDC event with valid data.
  */
+// A row carries its key in its table's declared key field (the cache owner's
+// descriptor), as every producer's row does.
+function keyedRow(tableName, {key, ...fields}) {
+  return {[getSystemCachePrimaryKeyField(tableName)]: key, ...fields};
+}
+
+function rowKeyOf(tableName, row) {
+  return row[getSystemCachePrimaryKeyField(tableName)];
+}
+
 const cdcEventArbitrary = fc.record({
   tableName: fc.constantFrom(...SYSTEM_TABLES),
   operation: fc.constantFrom(
@@ -42,13 +54,14 @@ const cdcEventArbitrary = fc.record({
     CDC_OPERATIONS.UPDATE,
     CDC_OPERATIONS.DELETE,
   ),
-  data: fc.record({
-    id: fc.uuid(),
+  fields: fc.record({
+    key: fc.uuid(),
     name: fc.string({minLength: 1, maxLength: 50}),
     status: fc.constantFrom('active', 'inactive', 'pending'),
     value: fc.integer({min: 0, max: 1000}),
   }),
-});
+}).map(({tableName, operation, fields}) =>
+  ({tableName, operation, data: keyedRow(tableName, fields)}));
 
 /**
  * Generate a sequence of CDC events.
@@ -88,7 +101,7 @@ test('Property 4: All listeners receive CDC events with correct data', async (t)
         for (const event of events) {
           // For UPDATE/DELETE, ensure the record exists first
           if (event.operation !== CDC_OPERATIONS.INSERT) {
-            if (!cache.has(event.tableName, event.data.id)) {
+            if (!cache.has(event.tableName, rowKeyOf(event.tableName, event.data))) {
               cache.applySystemTableChange(
                 event.tableName,
                 CDC_OPERATIONS.INSERT,
@@ -120,7 +133,8 @@ test('Property 4: All listeners receive CDC events with correct data', async (t)
 
             if (e1.tableName !== e2.tableName ||
                 e1.operation !== e2.operation ||
-                e1.record.id !== e2.record.id) {
+                rowKeyOf(e1.tableName, e1.record) !==
+                  rowKeyOf(e2.tableName, e2.record)) {
               return false;
             }
           }
@@ -253,13 +267,14 @@ test('Property 4: Notification record matches applied change', async (t) => {
     fc.asyncProperty(
       fc.record({
         tableName: fc.constantFrom(...SYSTEM_TABLES),
-        data: fc.record({
-          id: fc.uuid(),
+        fields: fc.record({
+          key: fc.uuid(),
           name: fc.string({minLength: 1, maxLength: 50}),
           status: fc.constantFrom('active', 'inactive'),
           value: fc.integer({min: 0, max: 1000}),
         }),
-      }),
+      }).map(({tableName, fields}) =>
+        ({tableName, data: keyedRow(tableName, fields)})),
       async ({tableName, data}) => {
         const cache = new SystemTableCache();
         let receivedRecord = null;
@@ -278,7 +293,7 @@ test('Property 4: Notification record matches applied change', async (t) => {
         }
 
         return (
-          receivedRecord.id === data.id &&
+          rowKeyOf(tableName, receivedRecord) === rowKeyOf(tableName, data) &&
           receivedRecord.name === data.name &&
           receivedRecord.status === data.status &&
           receivedRecord.value === data.value

@@ -367,7 +367,9 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
       });
       router.setQueryMessageGroupServiceResolver(() => ({
         async sendMessage() {
-          throw new Error('Connection to node node-2 closed');
+          // The carrier's failure is typed by its code; its text decides nothing.
+          throw Object.assign(new Error('Connection to node node-2 closed'),
+            {code: 'ROUTER_CONNECTION_CLOSED'});
         },
       }));
 
@@ -382,7 +384,7 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
       t.equal(result.transport.deferRetry, true,
         'query transport connection closure should defer while reconnect is armed');
       t.equal(result.transport.errorCode, 'ROUTER_CONNECTION_CLOSED',
-        'query transport closure should normalize to the canonical router error code');
+        'query transport closure keeps the canonical router error code');
       t.ok(result.transport.retryAfterMs > 0,
         'query transport closure should preserve a bounded retry hint');
 

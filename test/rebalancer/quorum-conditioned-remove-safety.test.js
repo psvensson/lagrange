@@ -542,7 +542,7 @@ test('RebalanceCoordinator - allows REMOVE when projected quorum remains safe', 
           partitionId: 'nodes-p1',
           replicaId: 'nodes-p1-r1',
           nodeId: 'node-a',
-          raftRole: 'leader',
+          raftRole: 'follower',
         }),
         createCriticalPartitionServiceRow({
           partitionId: 'nodes-p1',
@@ -615,7 +615,7 @@ test('RebalanceCoordinator - defers REPLACE remove until replacement is voter-re
             partitionId: 'nodes-p1',
             replicaId: 'nodes-p1-r1',
             nodeId: 'node-a',
-            raftRole: 'leader',
+            raftRole: 'follower',
           }),
           createCriticalPartitionServiceRow({
             partitionId: 'nodes-p1',
@@ -917,6 +917,18 @@ test('RebalanceCoordinator - defers critical REPLACE source removal until owner-
       );
 
       ownerReadServeReady = true;
+      // 2026-11-11 (R09, removal leadership gate): with the floor satisfied
+      // the leading source's only remaining wait is its one named handoff,
+      // to the replacement; once the replacement leads the removal is safe.
+      const handoffEvaluation =
+        await coordinator.workflowOwner.evaluateRemoveSafety(operation);
+      t.equal(handoffEvaluation.handoffRequest?.requestReplicaId,
+        `${PARTITION_ID}-r4`,
+        'the floor passes; the leading source hands off to the replacement');
+      for (const replicaId of [`${PARTITION_ID}-r1`, `${PARTITION_ID}-r4`]) {
+        coordinator.systemTableCache.merge('services', replicaId, {
+          raft_role: replicaId.endsWith('-r4') ? 'leader' : 'follower'});
+      }
 
       const retryEvaluation =
         await coordinator.workflowOwner.evaluateRemoveSafety(operation);

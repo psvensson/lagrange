@@ -146,14 +146,22 @@ test('W-D1b: a slow subscriber that does not acknowledge keeps its owed rows; no
     await leader.subscribeToCDCWithHandshake(fast, {subscriberId: 'fast'});
     await leader.subscribeToCDCWithHandshake(slow, {subscriberId: 'slow'});
     const keys = [];
+    const applied = new Set();
+    // Range shipping: the acknowledged prefix advances by whole vectors (a
+    // subscriber that refuses one row holds the vector that carries it), so
+    // the prefix both subscribers acknowledge is committed and pumped before
+    // the held rows exist. The reclamation rule under test is unchanged.
     for (let index = 0; index < W_D1B_WRITES; index += 1) {
+      if (index === W_D1B_HELD_FROM) {
+        await settleTicks();
+        await pump(timeSource, leader, proposed, applied);
+      }
       const command = upsertOf(leader, 'b', index);
       keys.push(eventKeyOf(command));
       if (index >= W_D1B_HELD_FROM) heldKeys.add(eventKeyOf(command));
       applyCommitted(leader, command);
     }
     await settleTicks();
-    const applied = new Set();
     await pump(timeSource, leader, proposed, applied);
     const held = ledgerFactsOf(leader);
     const retained = leader.db.prepare('SELECT event_key, delivered FROM _cdc_obligations ' +
@@ -340,22 +348,36 @@ test('W-D1e: acknowledgement-replay distinguishability - a CDC_DELIVERED committ
   }
 });
 
+// Recipient isolation: acknowledgement is taken at the frontier (the lowest
+// recipient cursor), so it is always a contiguous prefix of the ledger. A row
+// the recipient cannot complete (provisional coverage) therefore holds every
+// later row OWED rather than delivered-and-retained: the retained-delivered
+// bound of decision D1 is never approached from the lane, nothing is dropped,
+// and once the row completes everything is reclaimed. (Before, the lane
+// delivered and acknowledged past the row up to RETAINED_DELIVERED_MAX and
+// then answered ACKNOWLEDGEMENT_BACKPRESSURE.)
 test('W-D1f: pending work under budget - an owed row the lane cannot complete (provisional ' +
-  'coverage) keeps the delivered rows above it, the lane stops delivering past it at ' +
-  'RETAINED_DELIVERED_MAX (ACKNOWLEDGEMENT_BACKPRESSURE), nothing is dropped, and once the ' +
-  'row completes everything is reclaimed', async () => {
+  'coverage) keeps every later row owed (none is delivered-and-retained above it), nothing ' +
+  'is dropped, and once the row completes everything is reclaimed', async () => {
   const timeSource = new VirtualTimeSource();
   const {leader, proposed} = await startLeader({timeSource, ...CDC});
   try {
     const gate = {holding: true, hole: null, drives: new Set()};
     const acknowledging = acknowledgingCdcSubscriber();
-    await leader.subscribeToCDCWithHandshake(async (event) =>
-      gate.holding && event.eventKey === gate.hole ?
-        buildProvisionalCdcOutcome([event], W_D1F_RETRY_MS) : acknowledging(event),
+    // Range shipping: provisional coverage is over the exact vector, so the
+    // one row the lane cannot complete is given a body above the shipping
+    // byte bound and ships as a vector of its own (the hole stays one row);
+    // the lane still delivers past it, up to the retained-delivered bound.
+    await leader.subscribeToCDCWithHandshake(async (events) =>
+      gate.holding && events.some((event) => event.eventKey === gate.hole) ?
+        buildProvisionalCdcOutcome(events, W_D1F_RETRY_MS) : acknowledging(events),
     {subscriberId: 'f'});
     for (let index = 0; index < W_D1F_WRITES; index += 1) {
       const command = upsertOf(leader, 'f', index);
-      if (index === 0) gate.hole = eventKeyOf(command);
+      if (index === 0) {
+        gate.hole = eventKeyOf(command);
+        command.params = [command.params[0], 'h'.repeat(BOUND.SHIP_MAX_BYTES + 1)];
+      }
       applyCommitted(leader, command);
     }
     const applied = new Set();
@@ -373,19 +395,16 @@ test('W-D1f: pending work under budget - an owed row the lane cannot complete (p
     assert.deepEqual({
       held: {holeRetained,
         nothingReclaimed: held.progress === null,
-        retainedWithinBound: retainedDelivered <= BOUND.RETAINED_DELIVERED_MAX,
-        retainedReachedBound: retainedDelivered + BOUND.ACK_BATCH_MAX_EVENTS >=
-        BOUND.RETAINED_DELIVERED_MAX,
+        retainedDelivered,
         noneDropped: held.owed + held.delivered === W_D1F_WRITES},
       boundBelowTraffic: BOUND.RETAINED_DELIVERED_MAX < W_D1F_WRITES,
       backpressured: gate.drives.has(DRIVE.ACKNOWLEDGEMENT_BACKPRESSURE),
       released: {rows: released.rows, owed: released.owed, delivered: released.delivered,
         reclaimed: released.progress?.reclaimed ?? null},
     }, {
-      held: {holeRetained: 0, nothingReclaimed: true, retainedWithinBound: true,
-        retainedReachedBound: true, noneDropped: true},
+      held: {holeRetained: 0, nothingReclaimed: true, retainedDelivered: 0, noneDropped: true},
       boundBelowTraffic: true,
-      backpressured: true,
+      backpressured: false,
       released: {rows: 0, owed: 0, delivered: W_D1F_WRITES, reclaimed: String(W_D1F_WRITES)},
     });
   } finally {

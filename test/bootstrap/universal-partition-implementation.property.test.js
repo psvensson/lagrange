@@ -254,14 +254,14 @@ test('Property 32: No infrastructure distinction between system and user tables'
           let userCDCSubscribed = false;
 
           try {
-            systemPartition.subscribeToCDC(() => {});
+            void systemPartition.subscribeToCDCWithHandshake(() => {});
             systemCDCSubscribed = true;
           } catch (cdcErr) {
             console.warn('CDC subscription failed for system', cdcErr);
           }
 
           try {
-            userPartition.subscribeToCDC(() => {});
+            void userPartition.subscribeToCDCWithHandshake(() => {});
             userCDCSubscribed = true;
           } catch (cdcErr) {
             console.warn('CDC subscription failed for user', cdcErr);
