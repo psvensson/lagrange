@@ -280,6 +280,7 @@ test('every host requirement has a curated list of live tests', () => {
     requirements[file].includes(HOST_REQUIREMENT_LOOPBACK_REFUSAL)).sort(), [
     'test/bootstrap/fresh-seed-activation.integration.test.js',
     'test/bootstrap/seed-startup-listener-failure.integration.test.js',
+    'test/packaging/sea-bundle-smoke.test.js',
   ]);
   assert.deepEqual(hostRequirementsOf(root), requirements, 'placement reads the same record');
 });

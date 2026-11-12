@@ -10,9 +10,10 @@
 # loopback port in the test allocator's range is silently dropped (ETIMEDOUT
 # after 131-135 s), while a port that was listened on and closed is refused.
 #
-# Census of the 38 test files that mention ECONNREFUSED (2026-11-11): only
-# these two connect to a real closed loopback port and depend on its refusal.
-# The other 36 inject or match a synthetic refusal (a thrown Error, a recorded
+# The 2026-11-11 census of 38 files mentioning ECONNREFUSED found two real
+# loopback refusal consumers. A 2026-11-12 lab run exposed the SEA lifecycle
+# check, which expects the client's translated error rather than ECONNREFUSED
+# text. The other 36 original matches inject a synthetic refusal (a thrown Error, a recorded
 # `lastError` string, a fake client), name it in a comment, or observe a
 # container or pod network, not the host's loopback.
 #
@@ -21,6 +22,9 @@
 # fresh-seed-activation's child probes the not-yet-open public ports in a
 # 5 ms loop to bracket the first admission; dropped connects thin that
 # sampling to one per connect bound, so its R3 witness means less there.
+# sea-bundle-smoke runs the real bundled pg client against 127.0.0.1:1 and
+# expects a connection refusal before the unchanged child-process bound.
 
 test/bootstrap/fresh-seed-activation.integration.test.js
 test/bootstrap/seed-startup-listener-failure.integration.test.js
+test/packaging/sea-bundle-smoke.test.js
