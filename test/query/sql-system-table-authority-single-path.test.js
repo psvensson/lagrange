@@ -5,7 +5,8 @@ import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {buildControlPlaneReadAuthority} from
   '../../src/control-plane/control-plane-system-table-gateway-read-contracts.js';
-import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE as MODE} from
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE as MODE,
+  CONTROL_PLANE_READ_LEADER_MODE as LEADER, CONTROL_PLANE_READ_STRATEGY as STRATEGY} from
   '../../src/control-plane/control-plane-system-table-gateway-constants.js';
 import {createMockSystemCache} from './sql-query-engine-test-support.js';
 import {createCommittedServeEligibilityOwner} from
@@ -121,4 +122,39 @@ test('a structurally unclaimed keyless scan keeps its ordinary routed execution'
   t.equal(result.success, true, 'ordinary query planning remains available for this shape');
   t.equal(f.ownerCalls.length, 0, 'the authority adapter never claimed this shape');
   t.ok(f.routedCalls.length > 0, 'the normal transport actually answered');
+});
+
+for (const strategy of [STRATEGY.CACHE, STRATEGY.BOOTSTRAP_SNAPSHOT]) {
+  test(`the SQL owner adapter cannot execute a supplied ${strategy} contract`, async (t) => {
+    const f = fixture();
+    f.setOwnerAnswer({success: true, rows: [OWNER_ROW], source: 'local_partition_replica'});
+    const result = await f.engine.executeQuery(SQL, ['owner-row'], {
+      readAuthority: buildControlPlaneReadAuthority({strategy,
+        authoritativeReadMode: MODE.OWNER_LOCAL_ONLY}),
+    });
+    t.equal(result.success, false);
+    t.equal(f.ownerCalls.length, 0);
+    t.equal(f.routedCalls.length, 0);
+  });
+}
+
+test('an explicit owner token on an unclaimed projection cannot fall into ordinary SQL', async (t) => {
+  const f = fixture();
+  const readAuthority = buildControlPlaneReadAuthority({
+    authoritativeReadMode: MODE.OWNER_RPC_REQUIRED, leaderMode: LEADER.REQUIRED});
+  const unsupported = await f.engine.executeQuery('SELECT service_type FROM services', [], {
+    readAuthority,
+  });
+  t.equal(unsupported.success, false);
+  t.same(unsupported.rows, []);
+  t.equal(unsupported.error, 'authoritative_system_table_query_shape_unsupported');
+  t.equal(f.ownerCalls.length, 0);
+  t.equal(f.routedCalls.length, 0, 'ordinary planning cannot discard the selected authority');
+  f.setOwnerAnswer({success: true, rows: [OWNER_ROW], source: 'owner_rpc_lane'});
+  const supported = await f.engine.executeQuery(SQL, ['owner-row'], {readAuthority});
+  t.equal(supported.success, true);
+  t.same(supported.rows, [OWNER_ROW]);
+  t.equal(f.ownerCalls.length, 1);
+  t.equal(f.ownerCalls[0][3].readAuthority, readAuthority);
+  t.equal(f.routedCalls.length, 0);
 });

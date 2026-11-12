@@ -10,7 +10,8 @@ import {ControlPlaneSystemTableGateway} from
 import {buildControlPlaneReadAuthority} from
   '../../src/control-plane/control-plane-system-table-gateway-read-contracts.js';
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE as MODE,
-  CONTROL_PLANE_READ_LEADER_MODE as LEADER, GATEWAY_ERROR_MSG} from
+  CONTROL_PLANE_READ_LEADER_MODE as LEADER, CONTROL_PLANE_READ_STRATEGY as STRATEGY,
+  GATEWAY_ERROR_MSG} from
   '../../src/control-plane/control-plane-system-table-gateway-constants.js';
 import {CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE as SCOPE} from
   '../../src/control-plane/control-plane-cache-reconcile-constants.js';
@@ -68,6 +69,15 @@ const INVALID_TOKEN_CASES = [
     authoritativeObservationScope: SCOPE.COMPLETE_TABLE,
     toJSON() {calls.serializations += 1; return {...valid};}}),
   expected: {code: CONTRADICTION}},
+  ...[STRATEGY.CACHE, STRATEGY.BOOTSTRAP_SNAPSHOT].map((strategy) => ({
+    name: `${strategy} projection token`,
+    create: (_valid, calls) => Object.freeze({
+      ...buildControlPlaneReadAuthority({strategy,
+        authoritativeReadMode: MODE.OWNER_LOCAL_ONLY}),
+      toJSON() {calls.serializations += 1; return {strategy};},
+    }),
+    expected: {code: CONTRADICTION},
+  })),
 ];
 
 for (const invalid of INVALID_TOKEN_CASES) {
@@ -192,3 +202,40 @@ test('the actual view preserves typed owner unavailability and its existing retr
   t.equal(f.calls.queries.length, 2, 'a later ordinary request returns to the same owner');
   t.equal(f.view.inFlightReadsByKey.size, 0);
 });
+
+const INCOMPLETE_EMPTY_RELATIONSHIPS = [
+  {name: 'missing completeness', evidence: {rowSetComplete: undefined}},
+  {name: 'explicit incomplete', evidence: {rowSetComplete: false}},
+  {name: 'partial', evidence: {partial: true}},
+  ...['failedPartitions', 'partitionErrors', 'participantFailures'].flatMap((field) => [
+    {name: `${field} collection`, evidence: {[field]: ['unanswered-owner']}},
+    {name: `${field} count`, evidence: {[field]: 1}},
+  ]),
+];
+
+for (const control of INCOMPLETE_EMPTY_RELATIONSHIPS) {
+  test(`an empty ${control.name} service answer cannot certify absent node relationships`, async (t) => {
+    const f = repairFixture();
+    f.setServices({...answered([]), ...control.evidence});
+    const snapshot = await f.view.readNodeSnapshot(NODE_ID);
+    t.equal(snapshot.tables.services.rowSetComplete, false);
+    t.equal(snapshot.tables.partitions.success, false,
+      'an incomplete relationship cannot manufacture an empty dependent answer');
+    t.equal(snapshot.tables.partitions.source, UNAVAILABLE_SOURCE);
+    const incomplete = await f.reconciler.collectRepairNodeEvidenceContext(NODE_ID);
+    t.equal(incomplete.serviceEvidenceState, 'unavailable');
+    t.equal(incomplete.partitionEvidenceState, 'unavailable');
+    t.same(f.reconciliations.map((call) => call.tableName), [TABLES.NODES],
+      'neither unobserved absence reaches the actual cache reconciliation owner');
+    t.equal(f.calls.queries.filter((call) => call.tableName === TABLES.PARTITIONS).length, 0);
+    f.reconciliations.length = 0;
+    f.setServices(answered([]));
+    const complete = await f.reconciler.collectRepairNodeEvidenceContext(NODE_ID);
+    t.equal(complete.serviceEvidenceState, 'observed_empty_confirmed');
+    t.equal(complete.partitionEvidenceState, 'observed_empty_confirmed');
+    t.same(f.reconciliations.map((call) => call.tableName),
+      [TABLES.NODES, TABLES.SERVICES, TABLES.PARTITIONS],
+      'the same owner can later establish the complete empty relationship');
+    t.equal(f.view.inFlightReadsByKey.size, 0);
+  });
+}

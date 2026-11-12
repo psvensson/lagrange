@@ -133,3 +133,24 @@ relation for cache, bootstrap-snapshot and owner-local strategies; their normal
 declared local defaults remain valid. These controls still require first lab
 measurement before candidate acceptance. No production source is staged in this
 tests-only seal.
+
+## Independent core review and consumer closure
+
+Independent review of the seven-file root patch with SHA256
+d648b61f52b8df624e50b9f8592275b5377ab257d8e30d64df506d2bb564b570
+required three further corrections before source approval. A generic valid cache
+or bootstrap token can still enter direct view, CDC and SQL owner-read APIs. An
+empty incomplete SERVICES result still manufactures dependent partition absence,
+and the evidence reconciler confirms emptiness from the RPC source label alone.
+An explicitly selected token on an unsupported SQL projection is discarded when
+the adapter returns null to ordinary planning. These are the same authority
+boundary across consumers, so they remain within this interaction.
+
+New tests-only controls exercise those three actual public ingresses, the real
+view/reconciler/cache composition for nine incomplete empty-result shapes, and
+the public SQL unsupported projection. They retain positive explicit owner-local
+non-propagated reads, complete-empty recovery through the same owner, supported
+SQL with the same token, and the existing untokenized ordinary projection. The
+earlier CDC timeout fixture now names the canonical transport timeout constant;
+the historical first-red bytes are retained. No new control has been executed
+locally or accepted without its physical-lab result.

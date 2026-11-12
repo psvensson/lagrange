@@ -8,11 +8,13 @@ import {CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE as SCOPE} from
   '../../src/control-plane/control-plane-cache-reconcile-constants.js';
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE as MODE,
   CONTROL_PLANE_READ_LEADER_MODE as LEADER,
+  CONTROL_PLANE_READ_STRATEGY as STRATEGY,
   CONTROL_PLANE_READ_PROFILE as PROFILE} from
   '../../src/control-plane/control-plane-system-table-gateway-constants.js';
 import {INITIAL_PARTITION_IDS, SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {QUERY_ERROR_CODE} from '../../src/query/query-constants.js';
+import {ROUTER_MESSAGE_TIMEOUT_ERROR_CODE} from '../../src/transport/transport-error-codes.js';
 import {createLocalSystemTablePartitionServices, setupCDCTestLifecycle} from
   './cdc-integration-service-test-support.js';
 
@@ -25,7 +27,7 @@ const ROW = Object.freeze({node_id: 'canonical-owner-row', status: 'active'});
 const LOCAL_ROW = Object.freeze({node_id: 'local-candidate-row', status: 'active'});
 const SQL_ROW = Object.freeze({node_id: 'alternate-sql-row', status: 'active'});
 const UNAVAILABLE = Object.freeze({success: false, rows: [], deferRetry: true,
-  errorCode: QUERY_ERROR_CODE.ROUTER_MESSAGE_TIMEOUT, error: 'owner-unavailable'});
+  errorCode: ROUTER_MESSAGE_TIMEOUT_ERROR_CODE, error: 'owner-unavailable'});
 const PROFILES = Object.freeze([
   PROFILE.PLANNING, PROFILE.REPAIR_REQUIRED, PROFILE.TABLE_LIFECYCLE,
 ]);
@@ -139,6 +141,7 @@ test('explicit local-only success reads exactly the selected local owner', async
   const f = fixture({local: true});
   const result = await f.service.executeAuthoritativeSystemTableRead(TABLE, SQL, [], {
     readAuthority: buildControlPlaneReadAuthority({
+      strategy: STRATEGY.OWNER_LOCAL_NON_PROPAGATED,
       authoritativeReadMode: MODE.OWNER_LOCAL_ONLY,
       localReadConsistency: 'local_leader',
     }),
@@ -173,6 +176,22 @@ for (const mode of [...RETIRED_MODES, 'unknown-owner-mode']) {
 
 const COMPLETE_AUTHORITY_CONTRADICTION =
   'contradictory_control_plane_authoritative_read_authority';
+for (const strategy of [STRATEGY.CACHE, STRATEGY.BOOTSTRAP_SNAPSHOT]) {
+  test(`direct CDC owner read refuses a selected ${strategy} token before execution`, async (t) => {
+    const f = fixture({local: true});
+    const result = await f.service.executeAuthoritativeSystemTableRead(TABLE, SQL, [], {
+      readAuthority: buildControlPlaneReadAuthority({strategy,
+        authoritativeReadMode: MODE.OWNER_LOCAL_ONLY, localReadConsistency: 'local_leader'}),
+    });
+    t.equal(result.success, false);
+    t.equal(result.errorCode, COMPLETE_AUTHORITY_CONTRADICTION);
+    t.same(result.rows, []);
+    t.equal(f.calls.local.length, 0, 'projection intent cannot become an owner read');
+    t.equal(f.calls.owner.length, 0);
+    t.equal(f.calls.sql.length, 0);
+  });
+}
+
 const CONTRADICTORY_COMPLETE_INTENTS = Object.freeze([
   {authoritativeReadMode: MODE.OWNER_LOCAL_ONLY},
   {leaderMode: LEADER.ANY},
