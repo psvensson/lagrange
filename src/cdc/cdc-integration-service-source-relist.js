@@ -123,6 +123,13 @@ function readFailureReason(result) {
     result.errorCode : SOURCE_RELIST_FAILURE.READ_FAILED;
 }
 
+// Source image and page shape are checked before captured-image continuity.
+function isInvalidSourceImagePage(image, result, request, cursor) {
+  return image?.sourcePartition !== request.sourcePartition ||
+    !Number.isSafeInteger(image.appliedIndex) || image.appliedIndex < 0 ||
+    !isImagePage(result.imagePage, cursor);
+}
+
 // Why a page cannot be staged, or null. Every page must name page 0's image:
 // the same imageId, applied index and incarnation.
 function pageFailure(result, request, cursor, first) {
@@ -131,9 +138,7 @@ function pageFailure(result, request, cursor, first) {
     return SOURCE_RELIST_FAILURE.NOT_LEADER_WITNESSED;
   }
   const image = result.sourceImage;
-  if (image?.sourcePartition !== request.sourcePartition ||
-      !Number.isSafeInteger(image.appliedIndex) || image.appliedIndex < 0 ||
-      !isImagePage(result.imagePage, cursor)) {
+  if (isInvalidSourceImagePage(image, result, request, cursor)) {
     return SOURCE_RELIST_FAILURE.NO_SOURCE_IMAGE;
   }
   if (first !== null && (result.imagePage.imageId !== first.imageId ||
@@ -153,6 +158,11 @@ function stagePage(stage, tableName, rows) {
     stage.set(key, canonical);
   }
   return true;
+}
+
+function sourceImagePageFailureOutcome(result, failure) {
+  return {failure, error: result?.error ?? null,
+    retryAfterMs: getControlPlaneRetryAfterMs(result)};
 }
 
 /**
@@ -179,8 +189,7 @@ async function fetchSourceImage(readPage, request, stopped = () => false) {
       failure = SOURCE_RELIST_FAILURE.INVALID_ROWS;
     }
     if (failure !== null) {
-      return {failure, error: result?.error ?? null,
-        retryAfterMs: getControlPlaneRetryAfterMs(result)};
+      return sourceImagePageFailureOutcome(result, failure);
     }
     first ??= {imageId: result.imagePage.imageId, appliedIndex: result.sourceImage.appliedIndex,
       incarnation: result.sourceImage.incarnation ?? null};

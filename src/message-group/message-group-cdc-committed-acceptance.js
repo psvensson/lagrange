@@ -283,6 +283,12 @@ function capturedCdcIngress(service, wait, options) {
   });
 }
 
+function isCapturedCdcAcceptance(answer, wait, service) {
+  return isCommittedCdcOutcome(answer, wait.entry.events, service.groupId) ||
+    isAlreadyAppliedCdcOutcome(answer, wait.entry.events, service.groupId) ||
+    isProvisionalCdcOutcome(answer, wait.entry.events, service.groupId);
+}
+
 async function deliverCapturedCdc(service, wait, options, context) {
   const assertCurrent = () => assertCdcRequestCurrent(service, wait, context);
   assertCurrent();
@@ -308,9 +314,7 @@ async function deliverCapturedCdc(service, wait, options, context) {
     forwardCommand: (forward) => forwardCdcWithinWait(service, wait, forward),
   });
   assertCurrent();
-  return isCommittedCdcOutcome(answer, wait.entry.events, service.groupId) ||
-    isAlreadyAppliedCdcOutcome(answer, wait.entry.events, service.groupId) ||
-    isProvisionalCdcOutcome(answer, wait.entry.events, service.groupId) ?
+  return isCapturedCdcAcceptance(answer, wait, service) ?
     answer : {...unconfirmedCdcAcceptance(answer), cause: answer};
 }
 

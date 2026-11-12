@@ -1,0 +1,17 @@
+{
+  "schema": "bounded-maintenance-review/1",
+  "verdict": "approve",
+  "reviewer": "subagent:01a1cec4-93ba-7e22-830c-27fb30eb9dfe",
+  "scope": "Exact three CDC refactors and generated seal; no new semantic defect or decision-boundary finding. Independent bounded complexity maintenance only.",
+  "sourceManifestSha256": "a86dd2c9e4875fffc7457a769735e7a19fefeedc485c899fb0f1200e01444e78",
+  "patchSha256": "0bc2480616f34e9edd56b391b446701ff64731830f6c48e402796b29767c0db4",
+  "reportSha256": "fedfcef864870e55969cf8a5f34a2dd7cdada93a5cca48ec140ce55fca5cd66e",
+  "reviewReceiptSha256": "20acbb393af6fca520730ee38a5c77f5317f3761758e451a8f314fe539ecb031",
+  "artifactSha256": "8dc5b6a07b3f3a10b1872f45d060e1f9f61e97ecaa029da76bdc02e025122504",
+  "artifactUrl": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/cdc-source-replay-acceptance-complexity--lagrange-cdc-complexity-reviewed-20261112.tar.gz",
+  "residualGates": [
+    "Decision-boundary audit RED: three inherited findings, no registered allowances.",
+    "Quest remains open and incomplete; composed full complexity and integration verification pending.",
+    "No landing, historical CDC correctness, lab, release or publication approval."
+  ]
+}

@@ -121,6 +121,33 @@ function nextCdcTombstone(tombstone, deleteSource) {
     tombstone : versionStampsOf(deleteSource);
 }
 
+// Apply one visited event to its key's image; rejection leaves the sequence
+// owner free to visit the next event with the resulting predecessor image.
+function foldCdcEventIntoImage(tableName, image, event) {
+  const incoming = entryPositionOf(event.data, event.source);
+  const sameEntryOrder = compareSameEntryPositions(image.position, incoming);
+  if (sameEntryOrder < 0) return;
+  if (sameEntryOrder > 0) image.tombstone = null;
+  const deletes = event.operation === CACHE_CDC_OPERATIONS.DELETE;
+  if (!deletes && image.tombstone !== null) {
+    if (!writeSupersedesTombstone(event.data, image.tombstone)) return;
+    image.tombstone = null;
+  }
+  const folded = foldCdcEventOntoRow(tableName, image.row, event.operation,
+    event.data, sameEntryOrder);
+  if (folded.state === CDC_ROW_FOLD_STATE.DELETED) {
+    image.tombstone = nextCdcTombstone(image.tombstone,
+      buildDeletedRowTombstoneSource(image.row, event.data));
+  } else if (folded.state === CDC_ROW_FOLD_STATE.DELETE_ABSENT) {
+    image.tombstone = nextCdcTombstone(image.tombstone, event.data);
+  }
+  image.row = folded.row;
+  if (incoming !== null && (folded.accepted ||
+      folded.state === CDC_ROW_FOLD_STATE.DELETE_ABSENT)) {
+    image.position = incoming;
+  }
+}
+
 /**
  * Fold a sequence of CDC events (log order) onto keyed images, as the cache
  * applies them one by one: each event is first handed the row its key held
@@ -150,28 +177,7 @@ function foldCdcEventsOntoRows(tableName, events, readRow, visit) {
     }
     const image = images.get(event.key);
     visit(event, image.row === null ? null : fastJsonClone(image.row));
-    const incoming = entryPositionOf(event.data, event.source);
-    const sameEntryOrder = compareSameEntryPositions(image.position, incoming);
-    if (sameEntryOrder < 0) continue;
-    if (sameEntryOrder > 0) image.tombstone = null;
-    const deletes = event.operation === CACHE_CDC_OPERATIONS.DELETE;
-    if (!deletes && image.tombstone !== null) {
-      if (!writeSupersedesTombstone(event.data, image.tombstone)) continue;
-      image.tombstone = null;
-    }
-    const folded = foldCdcEventOntoRow(tableName, image.row, event.operation,
-      event.data, sameEntryOrder);
-    if (folded.state === CDC_ROW_FOLD_STATE.DELETED) {
-      image.tombstone = nextCdcTombstone(image.tombstone,
-        buildDeletedRowTombstoneSource(image.row, event.data));
-    } else if (folded.state === CDC_ROW_FOLD_STATE.DELETE_ABSENT) {
-      image.tombstone = nextCdcTombstone(image.tombstone, event.data);
-    }
-    image.row = folded.row;
-    if (incoming !== null && (folded.accepted ||
-        folded.state === CDC_ROW_FOLD_STATE.DELETE_ABSENT)) {
-      image.position = incoming;
-    }
+    foldCdcEventIntoImage(tableName, image, event);
   }
 }
 
