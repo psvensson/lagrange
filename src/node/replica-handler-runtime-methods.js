@@ -17,6 +17,9 @@ import {inspectSnapshotInstallArtifactsForGeneration,
   resolveReplicaCheckpointsRoot} from '../raft/snapshot-install.js';
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const CLEANUP_STORAGE_AUTHORITY_KIND = 'cleanup_owned';
+// The tracked metadata's field that names the replica's service.
+const LOCAL_REPLICA_SERVICE_FIELD = 'service';
+
 function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
   assignReplicaHandlerRuntimeMetadataMethods(ReplicaHandler, options);
   const {
@@ -180,6 +183,10 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
             `Replica cleanup ownership changed for ${replicaId}`,
           );
         }
+        // A current cleanup token is the cleanup owner's claim on a replica
+        // under a snapshot-install episode: nothing is inspected or removed
+        // before the episode's step in flight settled.
+        await this.snapshotInstallOwner.claimForCleanup(replicaId);
         this.assertGroupRetiredTombstoneBeforeDelete(partitionId,
           replicaId);
         const installGeneration = {
@@ -413,8 +420,17 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
         tableName: replicaInfo.tableName,
         nodeId: this.nodeId,
       });
-      // A member that missed its REMOVE must not linger in a retired group.
-      this.registerOperationTask(this.retireIfOpenedIntoRetiredGroup(replicaId)
+      this.checkRegisteredReplicaGroupStillExists(replicaId);
+    }
+    /**
+     * A member that missed its REMOVE must not linger in a retired group:
+     * asked for every replica this handler registers as opened from disk.
+     * @param {string} replicaId
+     * @return {void}
+     * @private
+     */
+    checkRegisteredReplicaGroupStillExists(replicaId) {
+      this.registerOperationTask(this.retireIfGroupEndedAsUnit(replicaId)
         .catch((error) => this.logger.warn(
           REPLICA_HANDLER_LOG_MSG.OPENED_INTO_RETIRED_GROUP,
           {replicaId, error: error?.message || String(error)})));
@@ -428,10 +444,12 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
      * tracked fields.
      * @param {string} replicaId - Replica ID being replaced.
      * @param {Object} service - Replacement partition service instance.
+     * @param {Object} custody - The custody of the replica's install episode
+     *   (the registry and the tracked metadata require it).
      * @return {Object} Updated local replica metadata.
      */
-    replaceLocalReplicaService(replicaId, service) {
-      this.localServices.set(replicaId, service);
+    replaceLocalReplicaService(replicaId, service, custody) {
+      this.localServices.set(replicaId, service, custody);
       const merged = this.setLocalReplica(replicaId, {
         replicaId,
         partitionId:
@@ -443,13 +461,14 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
           this.localReplicas.get(replicaId)?.tableName ||
           null,
         service,
-      });
+      }, custody);
       this.logger.info(REPLICA_HANDLER_LOG_MSG.REGISTERED_REPLICA, {
         replicaId,
         partitionId: merged.partitionId,
         tableName: merged.tableName,
         nodeId: this.nodeId,
       });
+      this.checkRegisteredReplicaGroupStillExists(replicaId);
       return merged;
     }
     /**
@@ -551,6 +570,7 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
         localReplicaCount: this.localReplicas.size,
         inProgressOperationCount: this.inProgressOperations.size,
         pendingRequestTracker,
+        snapshotInstalls: this.snapshotInstallOwner.readDiagnostics().replicas,
       };
     }
     /**
@@ -700,12 +720,22 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
     }
     /**
      * Update local replica metadata while preserving existing fields.
+     * The `service` field is the registry's second source
+     * (getTrackedService): for a replica under a live install episode it is
+     * written only with the episode's custody, like the registry entry;
+     * naming the service the episode is bound to changes nothing and passes.
      * @param {string} replicaId - Replica ID.
      * @param {Object} updates - Fields to merge.
+     * @param {Object|null} [custody] - The install episode's custody.
      * @return {Object} Updated local replica metadata.
      * @private
      */
-    setLocalReplica(replicaId, updates) {
+    setLocalReplica(replicaId, updates, custody = null) {
+      if (Object.hasOwn(updates, LOCAL_REPLICA_SERVICE_FIELD) &&
+          updates.service !==
+            this.snapshotInstallOwner.boundServiceOf(replicaId)) {
+        this.localServices.requireEpisodeCustody(replicaId, custody);
+      }
       const existing = this.localReplicas.get(replicaId) || {};
       const merged = {
         ...existing,

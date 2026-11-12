@@ -84,6 +84,7 @@ const VERIFICATION_QUESTS = Object.freeze([
   'load-admission-ingress-identity',
   'management-action-authority',
   'node-startup-natural-shutdown',
+  'partition-checkpoint-epoch-generation',
   'repository-legacy-fallback-closure',
   'retained-seed-original-handoff',
   'routing-overlay-complete-state-retirement',

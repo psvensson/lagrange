@@ -12,9 +12,11 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {
-  RAFT_SNAPSHOT_CADENCE_OUTCOME,
   createPartitionSnapshotCadence,
 } from '../../src/partition/partition-snapshot-cadence.js';
+import {
+  RAFT_SNAPSHOT_CADENCE_OUTCOME,
+} from '../../src/partition/partition-snapshot-progress-constants.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {
   listCheckpointGenerations,

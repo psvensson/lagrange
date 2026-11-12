@@ -10,10 +10,12 @@ import {
   listCheckpointGenerations,
 } from '../../src/raft/snapshot-checkpoint-store.js';
 import {
+  RAFT_SNAPSHOT_OFFER_RECEIVER,
   RAFT_SNAPSHOT_OFFER_ROUTE_OUTCOME,
   armSnapshotOfferRouter,
 } from '../../src/raft/snapshot-offer-router.js';
 import {
+  RAFT_SNAPSHOT_TRANSFER_ABORT_REASON,
   RAFT_SNAPSHOT_TRANSFER_MESSAGE_KIND,
   RAFT_SNAPSHOT_TRANSFER_OUTCOME,
 } from '../../src/raft/snapshot-transfer-constants.js';
@@ -66,6 +68,22 @@ afterEach(() => {
   LoggingService.resetInstance();
 });
 
+const ABSENT = Object.freeze({state: RAFT_SNAPSHOT_OFFER_RECEIVER.ABSENT});
+const ADMITTED = Object.freeze({admitted: true});
+
+function running(service) {
+  return Object.freeze({state: RAFT_SNAPSHOT_OFFER_RECEIVER.RUNNING, service});
+}
+
+// Every control frame the offering side receives, as it arrives.
+function controlFramesOf(connection) {
+  const frames = [];
+  connection.onMessage((data, isBinary) => {
+    if (isBinary !== true) frames.push(JSON.parse(String(data)));
+  });
+  return frames;
+}
+
 async function flushDeliveries() {
   await new Promise((resolve) => setImmediate(resolve));
   await new Promise((resolve) => setImmediate(resolve));
@@ -94,11 +112,16 @@ test('an OFFER for partition P routes to the P replica orchestrate with ' +
   });
   const outcomes = [];
   const orchestrated = [];
+  const admissions = [];
   try {
     armSnapshotOfferRouter({
       connection: channel.receiveConnection,
-      resolveLocalReplica: (raftGroupId) =>
-        raftGroupId === PARTITION_ID ? localService : null,
+      resolveReceiver: (raftGroupId) =>
+        raftGroupId === PARTITION_ID ? running(localService) : ABSENT,
+      admitOffer: async ({service, offer}) => {
+        admissions.push({service, kind: offer.kind});
+        return ADMITTED;
+      },
       orchestrate: ({service, socket, offer}) => {
         orchestrated.push({service, offer});
         // The orchestrate seam runs the real receive driver over the handed
@@ -129,6 +152,9 @@ test('an OFFER for partition P routes to the P replica orchestrate with ' +
     const received = await outcomes[0].completion;
     t.equal(received.outcome, RAFT_SNAPSHOT_TRANSFER_OUTCOME.COMPLETED,
       'the routed orchestration completes the transfer (replay worked)');
+    t.same(admissions, [{service: localService,
+      kind: RAFT_SNAPSHOT_TRANSFER_MESSAGE_KIND.OFFER}],
+    'the offer was admitted once, for the P replica, before the handoff');
     t.equal(orchestrated.length, 1, 'orchestrate ran exactly once');
     t.equal(orchestrated[0].service, localService,
       'the P replica service is handed to orchestrate');
@@ -151,8 +177,11 @@ test('a non-OFFER first frame is a typed refusal and the peek disarms',
     try {
       armSnapshotOfferRouter({
         connection: channel.receiveConnection,
-        resolveLocalReplica: () => {
+        resolveReceiver: () => {
           throw new Error('a non-offer frame must never resolve a replica');
+        },
+        admitOffer: () => {
+          throw new Error('a non-offer frame must never be admitted');
         },
         orchestrate: () => {
           throw new Error('a non-offer frame must never orchestrate');
@@ -189,7 +218,10 @@ test('an OFFER for an unknown raft group is a typed replica_not_found',
     try {
       armSnapshotOfferRouter({
         connection: channel.receiveConnection,
-        resolveLocalReplica: () => null,
+        resolveReceiver: () => ABSENT,
+        admitOffer: () => {
+          throw new Error('an unmapped offer must never be admitted');
+        },
         orchestrate: () => {
           throw new Error('an unmapped offer must never orchestrate');
         },
@@ -210,6 +242,100 @@ test('an OFFER for an unknown raft group is a typed replica_not_found',
     } finally {
       channel.close();
     }
+  });
+
+// One OFFER against a router whose node answers `receiver` and `admission`:
+// the route outcomes and the control frames the offering side got back.
+async function offerTo({receiver, admitOffer}) {
+  const channel = createAdoptedBulkConnectionPair();
+  const outcomes = [];
+  const answers = controlFramesOf(channel.serveConnection);
+  try {
+    armSnapshotOfferRouter({
+      connection: channel.receiveConnection,
+      resolveReceiver: () => receiver,
+      admitOffer,
+      orchestrate: () => {
+        throw new Error('a refused offer must never orchestrate');
+      },
+      onOutcome: (outcome) => outcomes.push(outcome),
+    });
+    channel.serveConnection.sendControl({
+      kind: RAFT_SNAPSHOT_TRANSFER_MESSAGE_KIND.OFFER,
+      transferId: TRANSFER_ID,
+      descriptor: {raftGroupId: PARTITION_ID},
+    });
+    await flushDeliveries();
+    await flushDeliveries();
+    return {outcomes, answers};
+  } finally {
+    channel.close();
+  }
+}
+
+const ABORT_KIND = RAFT_SNAPSHOT_TRANSFER_MESSAGE_KIND.ABORT;
+
+test('an OFFER for a replica stopped for an install is the typed ' +
+  'replica_installing, answered to the offering side', async (t) => {
+  const {outcomes, answers} = await offerTo({
+    receiver: Object.freeze({state: RAFT_SNAPSHOT_OFFER_RECEIVER.INSTALLING,
+      replicaId: REPLICA_ID}),
+    admitOffer: () => {
+      throw new Error('an installing replica must never be asked');
+    },
+  });
+  t.same(outcomes, [{
+    outcome: RAFT_SNAPSHOT_OFFER_ROUTE_OUTCOME.REPLICA_INSTALLING,
+    raftGroupId: PARTITION_ID}], 'one typed route outcome');
+  t.same(answers, [{kind: ABORT_KIND, transferId: TRANSFER_ID,
+    reason: RAFT_SNAPSHOT_TRANSFER_ABORT_REASON.REPLICA_INSTALLING}],
+  'the offering side is told installing, not replica_not_found');
+});
+
+test('an OFFER for a group the node runs two replicas of is the typed ' +
+  'receiver_ambiguous: nothing is asked or received', async (t) => {
+  const {outcomes, answers} = await offerTo({
+    receiver: Object.freeze({state: RAFT_SNAPSHOT_OFFER_RECEIVER.AMBIGUOUS}),
+    admitOffer: () => {
+      throw new Error('an ambiguous receiver must never be asked');
+    },
+  });
+  t.same(outcomes, [{
+    outcome: RAFT_SNAPSHOT_OFFER_ROUTE_OUTCOME.RECEIVER_AMBIGUOUS,
+    raftGroupId: PARTITION_ID}], 'one typed route outcome');
+  t.same(answers, [{kind: ABORT_KIND, transferId: TRANSFER_ID,
+    reason: RAFT_SNAPSHOT_TRANSFER_ABORT_REASON.RECEIVER_AMBIGUOUS}],
+  'the offering side is told why');
+});
+
+test('an OFFER the node does not admit is refused before anything is ' +
+  'received: not_admitted, with the admission, and a typed abort',
+async (t) => {
+  const admission = Object.freeze({admitted: false, decision: 'held',
+    reason: 'row_unobservable'});
+  const {outcomes, answers} = await offerTo({
+    receiver: running(Object.freeze({partitionId: PARTITION_ID})),
+    admitOffer: async () => admission,
+  });
+  t.same(outcomes, [{outcome: RAFT_SNAPSHOT_OFFER_ROUTE_OUTCOME.NOT_ADMITTED,
+    raftGroupId: PARTITION_ID, admission}], 'one typed route outcome');
+  t.same(answers, [{kind: ABORT_KIND, transferId: TRANSFER_ID,
+    reason: RAFT_SNAPSHOT_TRANSFER_ABORT_REASON.RECEIVER_NOT_ADMITTED}],
+  'the offering side is told the receiver was not admitted');
+});
+
+test('an admission that throws refuses the offer typed, with its detail',
+  async (t) => {
+    const {outcomes, answers} = await offerTo({
+      receiver: running(Object.freeze({partitionId: PARTITION_ID})),
+      admitOffer: () => {
+        throw new Error('the lifecycle read threw');
+      },
+    });
+    t.same(outcomes, [{outcome: RAFT_SNAPSHOT_OFFER_ROUTE_OUTCOME.NOT_ADMITTED,
+      raftGroupId: PARTITION_ID, detail: 'the lifecycle read threw'}]);
+    t.same(answers, [{kind: ABORT_KIND, transferId: TRANSFER_ID,
+      reason: RAFT_SNAPSHOT_TRANSFER_ABORT_REASON.RECEIVER_NOT_ADMITTED}]);
   });
 
 test('replaceLocalReplicaService swaps where registerExistingReplica ' +

@@ -123,6 +123,97 @@ behind the compacted boundary catch up through
 [`snapshot-catchup.js`](../src/raft/snapshot-catchup.js) and
 [`snapshot-install.js`](../src/raft/snapshot-install.js).
 
+One reader decides checkpoint validity for creation, compaction, serving and
+install. Creation reads the sealed image back through that reader before
+publishing it and answers the typed `image_rejected` refusal otherwise, so a
+generation directory never holds an image its own reader refuses. A partition
+image's `membershipEpoch` is the cluster's membership-publication epoch read by
+the identity owner; the checkpoint format does not compare it with the group's
+own raft-rs configuration generation (that equality is the message-group
+identity rule, stated in
+[`snapshot-checkpoint-constants.js`](../src/raft/snapshot-checkpoint-constants.js)).
+
+A partition's checkpoint cadence is its one image creation owner. A refused
+image attempt is not repeated on every sweep: the cadence keeps a standing
+refusal, stamped when the attempt completes, until the log advances or its
+checkpoint identity changes (spaced by a doubling interval) or until a
+one-minute bound; any compaction ends it. A generation the catch-up dispatch
+needs is sealed through the same owner, so a held image is not rebuilt for a
+lagging follower.
+
+A raft-rs replica image describes one of a closed table of entity kinds
+(`RAFT_RS_IMAGE_ENTITY_KINDS`: partition, message group); the table states
+both the epoch rule and the payload content rule of each, and any other kind is
+`corrupt_descriptor`.
+
+A generation is servable to a follower only when its image names that follower
+(its reserved identity, held by the image's committed configuration as a
+learner or a voter). A generation sealed before the leader applied the
+follower's admission is not: its installer refuses an image that does not name
+the receiver, every time. The dispatch then seals one through the cadence under
+the current configuration, and a follower this leader never admitted is the
+typed `generation_omits_follower`.
+
+Snapshot transfer contract: one bulk connection carries one transfer. The
+dispatching side dials it and closes it when its dispatch ends, whatever the
+outcome; the follower's offer router is one-shot per adopted connection and
+answers a typed abort when it does not route the offer: `replica_not_found`
+(the node holds no replica of the group), `replica_installing` (its replica is
+stopped for an install it already received and returns on its own),
+`receiver_not_admitted` (the node's lifecycle does not admit recreating the
+replica now; asked before anything is received), or `chunk_frame_invalid` for a
+first frame that is no offer. An open connection to the follower's node is that
+node's own transfer towards this one and is never reused: the dispatch answers
+`socket_unavailable`. The adopting side closes its lane too: when its receive
+ends, and when the connection delivers no frame for two minutes while it waits
+on the offering node (the bulk channel has no keepalive; typed
+`lane_idle_closed`). Generation selection and sealing run after the dispatch
+yields the consensus delivery turn.
+
+The follower side
+([`snapshot-catchup-install.js`](../src/raft/snapshot-catchup-install.js))
+receives, shuts the running service down, installs, and returns the replica.
+The shutdown is irreversible (a service is never re-initialized), so the
+replica's return has an owner: the node's replica handler
+([`replica-snapshot-install-owner.js`](../src/node/replica-snapshot-install-owner.js)).
+Admission is decided before the shutdown, when the offer arrives and again
+after the receive, by the named recreate-after-install admission
+([`replica-recreate-after-install-admission.js`](../src/node/replica-recreate-after-install-admission.js)):
+an ACTIVE or SYNCING row admits (a new replica behind its leader's compaction
+installs mid-create), a row owned by removal or cleanup refuses, a row that is
+unobservable or not yet SYNCING holds; a refusal or a hold is
+`recreate_not_admitted` with the replica untouched and running. After the
+shutdown the handler holds one recreation record per replica and reopens it
+over the database the install left (the installed image, or the old state when
+the install was rejected), retried on the replica's next lifecycle transition
+and every two seconds, until the replica runs, its row is owned by removal or
+cleanup, a REMOVE takes it over, or the handler stops. A create that waits on
+its replica continues with, and activates, the service that runs in its place.
+The record is in the handler's statistics (`snapshotInstalls`); every
+orchestration that does not end installed and recreated writes one typed line
+(`partition_snapshot_install_outcome`) and keeps the result in the replica's
+diagnostics.
+
+A leader's
+[`partition-snapshot-catchup-driver.js`](../src/partition/partition-snapshot-catchup-driver.js)
+keeps one record per follower the consensus runtime said needs a snapshot and
+asks the dispatcher again while the follower stays behind its boundary: on the
+next 1 s sweep when the follower node's single transfer slot was busy (several
+partitions lagging on one node are served one transfer at a time); when a newer
+checkpoint generation exists or the leader's identity changed after a dispatch
+that did not serve, and every 30 seconds otherwise; and only after five minutes
+when the dispatch served and the leader's progress for the follower has still
+not arrived. A dispatch in flight that reports no progress for one minute is
+aborted through its signal and settles typed, freeing the node's slot. The
+record closes when the leader's progress for the follower passes the boundary,
+when the committed configuration no longer names the follower, when leadership
+is lost, or when the service shuts down (flights in progress are aborted). Every cadence outcome other than a compaction or a
+nothing-to-do state, and every dispatch outcome other than served or
+slot-busy, is one typed log line (`partition_snapshot_cadence_outcome`,
+`partition_snapshot_catchup_dispatch_outcome`), folded while it persists;
+`PartitionService.getSnapshotCatchupDiagnostics()` answers the cadence's last
+outcome, last compaction and standing refusal, and the follower records.
+
 Operational boundaries:
 
 - Control-plane system partitions (`CONTROL_PLANE_PARTITION_IDS`) and in-memory

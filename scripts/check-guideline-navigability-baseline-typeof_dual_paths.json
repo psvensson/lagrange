@@ -1,7 +1,7 @@
 {
   "version": 1,
   "generatedAt": "2026-11-09T17:56:57.211Z",
-  "rawViolationCount": 603,
+  "rawViolationCount": 602,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
@@ -4121,15 +4121,6 @@
       "line": 130,
       "column": 9,
       "functionName": "eventSubscriber",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/raft/snapshot-catchup.js",
-      "line": 327,
-      "column": 9,
-      "functionName": "resolveExpectedIdentityValue",
       "kind": "typeof_dual_paths",
       "reason": "typeof dual path; keep one path and delete the other",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"

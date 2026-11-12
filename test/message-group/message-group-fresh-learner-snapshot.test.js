@@ -1,3 +1,4 @@
+import {SERVICE_TYPE} from '../../src/constants/service.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -99,7 +100,7 @@ async function hostAt(root) {
 
 function createAdmission() {
   const row = {operation_id: 'fresh-install', type: OperationType.REPLACE,
-    entity_type: 'message-group', entity_id: GROUP, partition_id: GROUP,
+    entity_type: SERVICE_TYPE.MESSAGE_GROUP, entity_id: GROUP, partition_id: GROUP,
     replica_id: TARGET, target_node_id: NODE, workflow_step: 'SENDING',
     updated_at: 11, completed_at: null, create_admission_state: null,
     create_admission_token: null, create_admission_replica_created_at: null,
@@ -159,7 +160,7 @@ test('fresh message-group learner installs a transferred raft-rs image and ' +
     const senderRoot = path.join(root, 'sender');
     const receiverRoot = path.join(root, 'receiver');
     const identity = {clusterId: 'fresh-cluster', raftGroupId: GROUP,
-      entity: {kind: 'message-group', id: GROUP},
+      entity: {kind: SERVICE_TYPE.MESSAGE_GROUP, id: GROUP},
       membershipEpoch: boundary.membershipGenerationIndex};
     const created = await createSqliteStateMachineCheckpoint({db: sourceDb,
       identity, checkpointsRoot: senderRoot, raftRsGroupId: GROUP});

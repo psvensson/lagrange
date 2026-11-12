@@ -52,6 +52,8 @@ const NO_CREATE_AUTHORITY = Object.freeze({});
 const NO_CREATE_AUTHORITY_JSON = '{}';
 const ABSENT_PREINSTALL_DIGEST = 'absent';
 const MARKER_KIND_FIELD = 'kind';
+// An install that presents no custody of its replica.
+const NO_CUSTODY = null;
 const INSTALL_MARKER_KINDS = new Set(
   Object.values(RAFT_SNAPSHOT_INSTALL_MARKER_KIND));
 
@@ -191,6 +193,24 @@ function markerMatchesCleanupGeneration(marker, generation) {
     authority?.attemptToken === generation.attemptToken;
 }
 
+// The install artifacts a replica's cleanup owns: a fresh-create marker of
+// the generation being cleaned, with its own staging file; and this replica's
+// own install debris in ANY state, staging included - a follower catch-up
+// marker naming the replica (a rejected install, or a swap that threw), or a
+// rejection recorded before any install was classified.
+function markerOwnedByCleanup(checkpointsRoot, marker, generation) {
+  if (markerKind(marker) ===
+      RAFT_SNAPSHOT_INSTALL_MARKER_KIND.RAFT_RS_FOLLOWER_CATCHUP) {
+    return marker.createAuthority.replicaId === generation.replicaId;
+  }
+  if (markerKind(marker) ===
+      RAFT_SNAPSHOT_INSTALL_MARKER_KIND.LEGACY_PARTITION) {
+    return marker.state === STATE.REJECTED;
+  }
+  return markerMatchesCleanupGeneration(marker, generation) &&
+    stagingBelongsToMarker(checkpointsRoot, marker);
+}
+
 function clearMarker(checkpointsRoot) {
   fs.rmSync(markerPath(checkpointsRoot), {force: true});
 }
@@ -210,8 +230,8 @@ function inspectSnapshotInstallArtifactsForGeneration(options) {
       outcomes: Object.freeze([])});
   }
   const marker = readMarker(checkpointsRoot);
-  if (!markerMatchesCleanupGeneration(marker, {replicaId, replicaCreatedAt,
-    attemptToken}) || !stagingBelongsToMarker(checkpointsRoot, marker)) {
+  if (!markerOwnedByCleanup(checkpointsRoot, marker, {replicaId,
+    replicaCreatedAt, attemptToken})) {
     return Object.freeze({allAbsent: false,
       outcomes: Object.freeze([{artifactPath: markerPath(checkpointsRoot),
         outcome: RAFT_SNAPSHOT_INSTALL_DETAIL.GENERATION_MISMATCH}])});
@@ -476,11 +496,21 @@ function followerCatchupStagedInstallMatches(checkpointsRoot, replicaDbPath,
     stagedInstallBindingMatches(stagingPath(checkpointsRoot), marker);
 }
 
+// The swap. A follower catch-up replaces the database of an established
+// replica, so it requires the custody of that replica's install episode,
+// read here, synchronously with the marker write and the rename (no await
+// follows the read): an episode another owner claimed swaps nothing. This is
+// beside the receiver lifecycle owner's journal check, which is the physical
+// evidence about openers the handler does not know.
 function swapPreparedInstall(checkpointsRoot, replicaDbPath, marker,
-  raftRsImage, authority = null) {
+  raftRsImage, authority = null, custody = NO_CUSTODY) {
   if (raftRsImage) {
-    const valid = markerKind(marker) ===
-        RAFT_SNAPSHOT_INSTALL_MARKER_KIND.RAFT_RS_FOLLOWER_CATCHUP ?
+    const followerCatchup = markerKind(marker) ===
+      RAFT_SNAPSHOT_INSTALL_MARKER_KIND.RAFT_RS_FOLLOWER_CATCHUP;
+    if (followerCatchup && (custody === NO_CUSTODY || custody.isHeld() !== true)) {
+      return false;
+    }
+    const valid = followerCatchup ?
       followerCatchupStagedInstallMatches(checkpointsRoot, replicaDbPath, marker) :
       freshStagedInstallMatches(checkpointsRoot, replicaDbPath, marker, authority);
     if (!valid) return false;
@@ -499,7 +529,8 @@ function swapPreparedInstall(checkpointsRoot, replicaDbPath, marker,
 // columns a message-group learner's recorded fact and open admission hold).
 async function commitPreparedInstall(options, marker, raftRsImage) {
   const swap = (authority = null) => swapPreparedInstall(
-    options.checkpointsRoot, options.replicaDbPath, marker, raftRsImage, authority);
+    options.checkpointsRoot, options.replicaDbPath, marker, raftRsImage, authority,
+    options.custody ?? NO_CUSTODY);
   const freshCreate = raftRsImage &&
     markerKind(marker) === RAFT_SNAPSHOT_INSTALL_MARKER_KIND.RAFT_RS_FRESH_CREATE;
   return freshCreate ? options.createAdmissionOwner.commitSnapshotInstall(
@@ -618,8 +649,12 @@ async function requestSnapshotInstall(options) {
   }
   const swapped = await commitPreparedInstall(options, marker, raftRsImage);
   if (!swapped) {
-    return rejectInstall(checkpointsRoot, marker,
-      REJECTION.CREATE_GENERATION_MISMATCH);
+    // Custody only ever goes from held to void: a follower catch-up whose
+    // custody is not held now was refused for it, or would be.
+    const custody = options.custody ?? NO_CUSTODY;
+    return rejectInstall(checkpointsRoot, marker, followerCatchup &&
+        (custody === NO_CUSTODY || custody.isHeld() !== true) ?
+      REJECTION.CUSTODY_NOT_HELD : REJECTION.CREATE_GENERATION_MISMATCH);
   }
   clearMarker(checkpointsRoot);
   return installResult(OUTCOME.INSTALLED, {installId, generationIndex});
@@ -723,8 +758,13 @@ function resolvePendingSnapshotInstall(options) {
     return installResult(OUTCOME.INSTALL_STATE_CONFLICT, {
       detail: 'installed_marker_nonce_mismatch'});
   }
-  return installResult(OUTCOME.REJECTED, {
-    reason: marker.rejectionReason, detail: 'prior_rejection_retained'});
+  // A rejection carries no later authority: its typed outcome was answered
+  // and logged when it was decided. The opener consumes the marker, with any
+  // staging file left beside it, and boots the old state.
+  removeStaging(checkpointsRoot);
+  clearMarker(checkpointsRoot);
+  return installResult(OUTCOME.REJECTED, {reason: marker.rejectionReason,
+    detail: RAFT_SNAPSHOT_INSTALL_DETAIL.PRIOR_REJECTION_CONSUMED});
 }
 
 async function recoverPendingSnapshotInstall(options) {

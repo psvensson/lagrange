@@ -18,7 +18,13 @@ import {
   PARTITION_SERVICE_EVENT,
 } from '../partition/partition-service-constants.js';
 
+import {
+  REPLICA_SNAPSHOT_INSTALL_ERROR_CODE,
+} from './replica-snapshot-install-constants.js';
+
 const FUNCTION_TYPE = 'function';
+// A replica with no live install episode: its registry entry needs no custody.
+const NO_EPISODE_CUSTODY = null;
 
 function detachListener(service, eventName, listener) {
   if (typeof service?.off === FUNCTION_TYPE) {
@@ -31,7 +37,11 @@ function detachListener(service, eventName, listener) {
 /**
  * The replica handler's live service map. Every set, delete and clear
  * attaches or detaches that service's membership relay, so no registration
- * path can bypass it.
+ * path can bypass it. It is also the one choke point of a replica's install
+ * episode (replica-snapshot-install-owner.js): while a replica is under a
+ * live episode its entry is written only by a caller presenting the
+ * episode's custody; any other set or delete THROWS
+ * REPLICA_UNDER_INSTALL_EPISODE and is counted (episodeRefusals).
  */
 class TrackedServiceRegistry extends Map {
   constructor() {
@@ -39,9 +49,38 @@ class TrackedServiceRegistry extends Map {
     this.membershipListeners = new Set();
     this.serviceListeners = new Set();
     this.relayByReplicaId = new Map();
+    this.episodeCustodyOf = () => NO_EPISODE_CUSTODY;
+    this.episodeRefusals = 0;
   }
 
-  set(replicaId, service) {
+  /**
+   * @param {Function} episodeCustodyOf - (replicaId) => the custody the
+   *   replica's live install episode requires, or null when it has none.
+   * @return {void}
+   */
+  bindInstallEpisodes(episodeCustodyOf) {
+    this.episodeCustodyOf = episodeCustodyOf;
+  }
+
+  /**
+   * Refuse a write for a replica under a live install episode that does not
+   * present the episode's custody.
+   * @param {string} replicaId
+   * @param {Object|null} custody - What the writer presents.
+   * @return {void}
+   */
+  requireEpisodeCustody(replicaId, custody) {
+    const required = this.episodeCustodyOf(replicaId);
+    if (required === NO_EPISODE_CUSTODY || required === custody) return;
+    this.episodeRefusals += 1;
+    throw Object.assign(new Error(
+      `Replica ${replicaId} is under a snapshot install episode`),
+    {code: REPLICA_SNAPSHOT_INSTALL_ERROR_CODE.REPLICA_UNDER_INSTALL_EPISODE,
+      replicaId});
+  }
+
+  set(replicaId, service, custody = NO_EPISODE_CUSTODY) {
+    this.requireEpisodeCustody(replicaId, custody);
     const previous = this.get(replicaId);
     this.detachRelay(replicaId);
     super.set(replicaId, service);
@@ -50,7 +89,8 @@ class TrackedServiceRegistry extends Map {
     return this;
   }
 
-  delete(replicaId) {
+  delete(replicaId, custody = NO_EPISODE_CUSTODY) {
+    this.requireEpisodeCustody(replicaId, custody);
     const previous = this.get(replicaId);
     this.detachRelay(replicaId);
     const deleted = super.delete(replicaId);

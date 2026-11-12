@@ -59,6 +59,9 @@ const RAFT_SNAPSHOT_INSTALL_REJECTION = Object.freeze({
   RAFT_RS_DESCRIPTOR_MISMATCH: 'raft_rs_descriptor_mismatch',
   CREATE_GENERATION_MISMATCH: 'create_generation_mismatch',
   RECEIVER_STATE_REFUSED: 'receiver_state_refused',
+  // A follower catch-up install whose replica is not (or no longer) under
+  // the install episode that presented its custody: nothing was swapped.
+  CUSTODY_NOT_HELD: 'custody_not_held',
 });
 
 // Marker exact-object shape.
@@ -82,6 +85,8 @@ const RAFT_SNAPSHOT_INSTALL_DETAIL = Object.freeze({
   GENERATION_MISMATCH: 'generation_mismatch',
   STAGED_CREATE_GENERATION_MISMATCH: 'staged_create_generation_mismatch',
   LEGACY_STAGING_NONCE_MISMATCH: 'legacy_staging_nonce_mismatch',
+  // A REJECTED marker met at open: consumed (marker and staging removed).
+  PRIOR_REJECTION_CONSUMED: 'prior_rejection_consumed',
 });
 const RAFT_SNAPSHOT_INSTALL_ARTIFACT_OUTCOME = Object.freeze({
   DELETED: 'deleted',

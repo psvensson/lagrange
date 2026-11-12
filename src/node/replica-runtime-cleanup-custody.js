@@ -62,15 +62,20 @@ async function settlePendingReplicaRuntimeCleanup(handler, replicaId, partitionI
 }
 
 /** Fence and release an exact failed CREATE, or retry its retained untracked object.
+ * A replica under a snapshot-install episode is claimed first (the failure
+ * of the create that owns it, or its superseded admission): the fence acts
+ * after the episode's step in flight settled.
  * @param {Object} handler - ReplicaHandler.
  * @param {string} replicaId - Requested replica identity.
  * @param {string} partitionId - Requested partition identity.
- * @param {Object|null} service - Returned service, possibly never routed.
+ * @param {Object|null} fenced - Returned service, possibly never routed.
  * @param {Error|null} primary - Original CREATE error, when present.
  * @return {Promise<boolean>} Whether an owned service completed shutdown.
  */
 async function fenceFailedReplicaCreateRuntime(handler, replicaId, partitionId,
-  service = null, primary = null) {
+  fenced = null, primary = null) {
+  const service = await handler.snapshotInstallOwner.claimForCreateFailure(
+    replicaId, fenced);
   if (!service) {
     const pending = [...handler.pendingRuntimeShutdowns].filter(([, identity]) =>
       identity.replicaId === replicaId && identity.partitionId === partitionId);
@@ -123,6 +128,9 @@ function shutdownReplicaHandler(handler, options) {
       handler.replicaCreateAdmissionRecoveryTask,
       handler.participantReleaseRecovery.shutdown(),
     ].filter(Boolean));
+    // The stop claims every snapshot-install episode and waits for each
+    // one's step in flight; nothing is installed or opened afterwards.
+    await handler.snapshotInstallOwner.shutdown();
     handler.removalConsensusExitRelease?.abort();
     for (const progress of handler.creationProgressByReplica.values()) {
       handler.creationProgressReporter.fail(progress,

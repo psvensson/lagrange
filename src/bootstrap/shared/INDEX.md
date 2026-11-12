@@ -41,7 +41,7 @@ documentClass: generated
 - [runtime-service-rebalancer-setup.js](runtime-service-rebalancer-setup.js) - RuntimeServiceRebalancerOwner - the single planning leader that reconciles active RUNTIME_SERVICE desired state to... (importers: many)
 - [service-installation-reconciler-setup.js](service-installation-reconciler-setup.js) - No leading comment; first export: attachServiceInstallationReconcilerOwner. (importers: few)
 - [service-lifecycle-command-owner-binding.js](service-lifecycle-command-owner-binding.js) - Bind one retained lifecycle command owner and its exact catalog gateway to the SQL runtime that currently owns... (importers: few)
-- [snapshot-catchup-wiring.js](snapshot-catchup-wiring.js) - Production wiring for the S1-S5 snapshot catch-up chain (quest raft-snapshot-live-rebuild, spec... (importers: few)
+- [snapshot-catchup-wiring.js](snapshot-catchup-wiring.js) - Production wiring for the S1-S5 snapshot catch-up chain (quest raft-snapshot-live-rebuild, spec... (importers: many)
 - [startup-convergence-gate.js](startup-convergence-gate.js) - Summarise the gate's own last observation when the caller supplies none. (importers: many)
 - [startup-runtime-surface-owner.js](startup-runtime-surface-owner.js) - No leading comment; first export: StartupRuntimeSurfaceOwner. (importers: few)
 - [startup-service-lifecycle-owner.js](startup-service-lifecycle-owner.js) - No leading comment; first export: STARTUP_RECONCILER_REQUIRED. (importers: few)

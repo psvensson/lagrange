@@ -16,9 +16,11 @@ import {
   PARTITION_SERVICE_OPERATION,
 } from '../../../src/partition/partition-service-constants.js';
 import {
-  RAFT_SNAPSHOT_CADENCE_OUTCOME,
   createPartitionSnapshotCadence,
 } from '../../../src/partition/partition-snapshot-cadence.js';
+import {
+  RAFT_SNAPSHOT_CADENCE_OUTCOME,
+} from '../../../src/partition/partition-snapshot-progress-constants.js';
 import {RAFT_ROLE} from '../../../src/raft/constants.js';
 import {
   warmHlcFromDurableWitnesses,
@@ -58,12 +60,18 @@ import {
   RAFT_SNAPSHOT_CATCHUP_DECISION_OUTCOME,
   RAFT_SNAPSHOT_CATCHUP_DISPATCH_OUTCOME,
   RAFT_SNAPSHOT_CATCHUP_INSTALL_OUTCOME,
+  RAFT_SNAPSHOT_RECREATION_STATE,
 } from '../../../src/raft/snapshot-catchup-constants.js';
 import {
   buildSnapshotCatchupIdentity,
+  createCheckpointSealer,
   dispatchSnapshotCatchup,
-  orchestrateSnapshotCatchupInstall,
 } from '../../../src/raft/snapshot-catchup.js';
+import {
+  orchestrateSnapshotCatchupInstall,
+} from '../../../src/raft/snapshot-catchup-install.js';
+import {buildReplacementServiceOptions} from
+  '../../../src/partition/partition-reopen-options.js';
 import {
   requestSnapshotInstall,
   resolveReplicaCheckpointsRoot,
@@ -101,7 +109,7 @@ const IDENTITY = buildSnapshotCatchupIdentity({
   clusterId: CLUSTER_ID,
   partitionId: PARTITION_ID,
   tableName: TABLE,
-  publicationRows: [{status: 'PUBLISHED', membership_epoch: SEALED_EPOCH}],
+  publicationRows: [{status: 'PUBLISHED', publication_epoch: SEALED_EPOCH}],
 });
 
 const SCHEMA = Object.freeze({
@@ -744,6 +752,11 @@ test('SN1/F5: lagging established follower catches up via snapshot install, ' +
 
     // Verify wiped (absent) and retired targets are refused before catching up r3:
     const r3Root = resolveReplicaCheckpointsRoot(r3DbPath);
+    const r3InodeBeforeInstall = fs.statSync(r3.dbPath).ino;
+    // The orchestration's steps: the shutdown, then the install.
+    const INSTALL_STEP = 2;
+    let steps = 0;
+    let custodyHeld = true;
     const {a, b} = createInProcWebSocketPair();
     const [dispatched, orchestrated] = await Promise.all([
       dispatchSnapshotCatchup({
@@ -753,7 +766,7 @@ test('SN1/F5: lagging established follower catches up via snapshot install, ' +
           partitionId: PARTITION_ID,
           tableName: TABLE,
         }),
-        db: r1.db,
+        sealGeneration: createCheckpointSealer(r1.db),
         socketProvider: () => a,
       }),
       orchestrateSnapshotCatchupInstall({
@@ -761,21 +774,27 @@ test('SN1/F5: lagging established follower catches up via snapshot install, ' +
         receiveOptions: {
           socket: b,
           checkpointsRoot: r3Root,
-          expectedIdentity: buildSnapshotCatchupIdentity({
+          expectedIdentity: () => buildSnapshotCatchupIdentity({
             partitionId: PARTITION_ID,
             tableName: TABLE,
           }),
         },
-        createPartitionService: async (replacementOptions) => {
-          const next = buildPartitionService(router, {
-            ...replacementOptions,
-            replicaIds,
-          });
-          await next.initialize();
-          return next;
-        },
-        registerReplacementService: (next) => {
-          replacementR3 = next;
+        // The install episode's seam, as this group's test plays it: the
+        // install is admitted, and ANOTHER OWNER CLAIMS THE EPISODE after the
+        // orchestration's own custody check, as the install step starts. The
+        // installer reads the custody at its swap and swaps nothing.
+        recreation: {
+          signal: new AbortController().signal,
+          custody: Object.freeze({isHeld: () => custodyHeld}),
+          admit: async () => ({admitted: true}),
+          receiveFailed: () => {},
+          step: (run) => {
+            steps += 1;
+            if (steps === INSTALL_STEP) custodyHeld = false;
+            return run();
+          },
+          recreate: async () => ({
+            state: RAFT_SNAPSHOT_RECREATION_STATE.RELEASED}),
         },
       }),
     ]);
@@ -784,10 +803,49 @@ test('SN1/F5: lagging established follower catches up via snapshot install, ' +
       dispatched.outcome,
       RAFT_SNAPSHOT_CATCHUP_DISPATCH_OUTCOME.SERVED,
       'leader serves the compacted boundary checkpoint to r3');
+    t.equal(r3.isShutdown, true, 'the shutdown step ran');
     t.equal(
       orchestrated.outcome,
-      RAFT_SNAPSHOT_CATCHUP_INSTALL_OUTCOME.INSTALLED_AND_RECREATED,
-      'r3 installs the checkpoint atomically and recreates PartitionService');
+      RAFT_SNAPSHOT_CATCHUP_INSTALL_OUTCOME.INSTALL_REJECTED,
+      'an install whose custody is void at the swap is rejected');
+    t.equal(orchestrated.install.reason,
+      RAFT_SNAPSHOT_INSTALL_REJECTION.CUSTODY_NOT_HELD,
+      'typed: the custody was not held');
+    t.equal(fs.statSync(r3.dbPath).ino, r3InodeBeforeInstall,
+      'nothing was swapped: the database file is the one r3 closed');
+    // The installer, asked directly for the same received generation over
+    // the same closed database: without custody it refuses, with a held
+    // custody it installs (the custody is the only difference).
+    const installRequest = {
+      replicaDbPath: r3.dbPath,
+      checkpointsRoot: r3Root,
+      generationIndex: orchestrated.transfer.descriptor.lastIncludedIndex,
+      expectedIdentity: buildSnapshotCatchupIdentity({
+        partitionId: PARTITION_ID,
+        tableName: TABLE,
+      }),
+      expectedReplicaIdentity: r3.replicaId,
+    };
+    const withoutCustody = await requestSnapshotInstall(installRequest);
+    t.same({outcome: withoutCustody.outcome, reason: withoutCustody.reason}, {
+      outcome: RAFT_SNAPSHOT_INSTALL_OUTCOME.REJECTED,
+      reason: RAFT_SNAPSHOT_INSTALL_REJECTION.CUSTODY_NOT_HELD},
+    'a follower catch-up install that presents no custody is rejected');
+    t.equal(fs.statSync(r3.dbPath).ino, r3InodeBeforeInstall,
+      'and swapped nothing');
+    const installed = await requestSnapshotInstall({...installRequest,
+      custody: Object.freeze({isHeld: () => true})});
+    t.equal(
+      installed.outcome,
+      RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED,
+      'r3 installs the checkpoint atomically under a held custody');
+    t.not(fs.statSync(r3.dbPath).ino, r3InodeBeforeInstall,
+      'the database file is the installed image');
+    replacementR3 = buildPartitionService(router, {
+      ...buildReplacementServiceOptions(r3),
+      replicaIds,
+    });
+    await replacementR3.initialize();
     t.ok(replacementR3, 'replacement service registered');
 
     const r3AfterInstallStatus = replacementR3.raft.readStatus();

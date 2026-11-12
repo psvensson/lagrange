@@ -31,6 +31,7 @@ import {LoggingService} from '../logging/logging-service.js';
 import {assertCritical} from '../utils/assert.js';
 import {TrackedServiceRegistry} from './replica-handler-membership-relay.js';
 import {createParticipantReleaseRecovery} from './replica-handler-release-recovery.js';
+import {createReplicaSnapshotInstallOwner} from './replica-snapshot-install-owner.js';
 import {createParticipantReleaseAuthorizationOwner} from
   './participant-release-authorization-owner.js';
 import {assignReplicaHandlerMembershipMethods} from
@@ -233,6 +234,9 @@ class ReplicaHandler extends EventEmitter {
     this.participantReleaseAuthorizationOwner =
       createParticipantReleaseAuthorizationOwner(this);
     this.participantReleaseRecovery = createParticipantReleaseRecovery(this);
+    this.snapshotInstallOwner = createReplicaSnapshotInstallOwner(this);
+    this.localServices.bindInstallEpisodes((replicaId) =>
+      this.snapshotInstallOwner.custodyOf(replicaId));
   }
 }
 

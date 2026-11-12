@@ -19,32 +19,33 @@
 //   entries < entryThreshold AND logBytes < byteThreshold:
 //     valid uncompacted checkpoint exists       -> COMPACTED / CHECKPOINTED
 //     otherwise                                 -> BELOW_THRESHOLD
+//   a refusal stands and nothing lifts it       -> HELD_AFTER_REFUSAL
 //   creation outcome !== CREATED                -> CREATION_REFUSED
 //   role lost across the creation await         -> LEADERSHIP_LOST_MID_CREATION
 //   compaction outcome === COMPACTED            -> COMPACTED (+ sweep)
 //   otherwise                                   -> CHECKPOINTED (+ sweep)
+//
+// A refused image attempt (CREATION_REFUSED, or a failure thrown from it)
+// leaves a standing refusal (partition-snapshot-cadence-refusal.js), stamped
+// when the attempt COMPLETES: the image is not rebuilt every sweep while its
+// reason cannot have changed, and any compaction ends it. This owner is the
+// partition's ONE image creation owner: a generation the catch-up dispatch
+// needs is sealed through sealForCatchup under the same refusal and the same
+// in-flight exclusion.
+// Every outcome but COMPACTED and the quiet states is one typed log line
+// (folded while it persists); readDiagnostics() answers the last outcome,
+// the last compaction and the standing refusal.
 
-import fs from 'node:fs';
-import path from 'node:path';
-
-import {CONFIG_KEY} from '../config/config-key-constants.js';
-import {ConfigurationManager} from '../config/configuration-manager.js';
-import {RAFT_ROLE} from '../raft/constants.js';
 import {RAFT_COMPACTION_OUTCOME} from '../raft/compaction-policy.js';
 import {RaftRsDurableStore} from '../raft/raft-rs-durable-store.js';
 import {
-  buildSnapshotCatchupIdentityFromCache,
+  createCheckpointSealer,
   listInFlightGenerationIndexes,
+  snapshotCheckpointIdentityKey,
 } from '../raft/snapshot-catchup.js';
 import {
   RAFT_CHECKPOINT_CREATION_OUTCOME,
-  RAFT_CHECKPOINT_VALIDATION_OUTCOME,
 } from '../raft/snapshot-checkpoint-constants.js';
-import {
-  createSqliteStateMachineCheckpoint,
-  listCheckpointGenerations,
-  readCheckpoint,
-} from '../raft/snapshot-checkpoint-store.js';
 import {
   compactRaftRsCommittedEntries,
 } from '../raft/snapshot-compaction.js';
@@ -54,163 +55,32 @@ import {
   sweepCheckpointGenerations,
 } from '../raft/snapshot-retention.js';
 
-import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
-
-const {
-  CONTROL_PLANE_PARTITION_IDS,
-  PARTITION_SERVICE_DEFAULT,
-} = PARTITION_SERVICE_SHARED;
-
-// Typed outcomes of one cadence tick.
-const RAFT_SNAPSHOT_CADENCE_OUTCOME = Object.freeze({
-  CHECKPOINTED: 'checkpointed',
-  COMPACTED: 'compacted',
-  BELOW_THRESHOLD: 'below_threshold',
-  NOT_LEADER: 'not_leader',
-  ALREADY_IN_FLIGHT: 'already_in_flight',
-  UNSUPPORTED_PARTITION: 'unsupported_partition',
-  COMMITTED_LOG_UNSUPPORTED: 'committed_log_unsupported',
-  CREATION_REFUSED: 'creation_refused',
-  LEADERSHIP_LOST_MID_CREATION: 'leadership_lost_mid_creation',
-  TICK_FAILED: 'tick_failed',
-});
-
-const CADENCE_KIB = 1024;
-const CADENCE_MIB = CADENCE_KIB * CADENCE_KIB;
-const UTF8_ENCODING = 'utf8';
-const RAFT_SNAPSHOT_CADENCE_DEFAULT = Object.freeze({
-  ENTRY_THRESHOLD: 10000,
-  BYTE_THRESHOLD_BYTES: 256 * CADENCE_MIB,
-});
-
-function tickResult(outcome, extra = {}) {
-  return Object.freeze({outcome, ...extra});
-}
-
-function resolveEntryThreshold(injected) {
-  if (Number.isSafeInteger(injected) && injected > 0) {
-    return injected;
-  }
-  const configured = ConfigurationManager.getInstance()
-    .get(CONFIG_KEY.RAFT_SNAPSHOT_THRESHOLD);
-  return Number.isSafeInteger(configured) && configured > 0 ?
-    configured :
-    RAFT_SNAPSHOT_CADENCE_DEFAULT.ENTRY_THRESHOLD;
-}
-
-function resolveByteThreshold(injected) {
-  return Number.isSafeInteger(injected) && injected > 0 ?
-    injected :
-    RAFT_SNAPSHOT_CADENCE_DEFAULT.BYTE_THRESHOLD_BYTES;
-}
-
-function isValidUncompactedCheckpoint(
-  service,
-  record,
-  checkpointDir,
-  generationIndex,
-) {
-  const validation = readCheckpoint({checkpointDir});
-  if (validation.outcome !== RAFT_CHECKPOINT_VALIDATION_OUTCOME.VALID) {
-    return null;
-  }
-  const {descriptor} = validation;
-  if (descriptor.lastIncludedIndex !== generationIndex) {
-    return null;
-  }
-  if (descriptor.raftRs && descriptor.raftRs.groupId !== service.partitionId) {
-    return null;
-  }
-  const entry = record.entries.find(
-    ({index}) => Number(index) === generationIndex);
-  if (!entry || Number(entry.term) !== descriptor.lastIncludedTerm) {
-    return null;
-  }
-  return {checkpointDir, descriptor};
-}
-
-function inspectCheckpointCoverage(
-  service,
-  checkpointsRoot,
-  record,
-  committedIndex,
-) {
-  const compactedIndex = Number(RaftRsDurableStore.readSnapshotIndexIn(
-    service.db, service.partitionId));
-  const generations = listCheckpointGenerations(checkpointsRoot);
-  const pinned = new Set(gatherRetentionPins({
-    checkpointsRoot,
-    inProcessPins: listInFlightGenerationIndexes(),
-  }));
-  let uncompactedCheckpoint = null;
-  for (const generationIndex of generations) {
-    if (generationIndex <= compactedIndex) {
-      continue;
-    }
-    const checkpointDir = path.join(checkpointsRoot, String(generationIndex));
-    const valid = generationIndex <= committedIndex ?
-      isValidUncompactedCheckpoint(
-        service, record, checkpointDir, generationIndex) :
-      null;
-    if (valid) {
-      uncompactedCheckpoint = valid;
-    } else if (!pinned.has(generationIndex)) {
-      fs.rmSync(checkpointDir, {recursive: true, force: true});
-    }
-  }
-  const checkpointedIndex = uncompactedCheckpoint ?
-    uncompactedCheckpoint.descriptor.lastIncludedIndex :
-    compactedIndex;
-  return {
-    compactedIndex,
-    checkpointedIndex,
-    uncompactedCheckpoint,
-  };
-}
-
-function measureEntryBytes(entry) {
-  if (typeof entry?.data === 'string') {
-    return Buffer.byteLength(entry.data, UTF8_ENCODING);
-  }
-  if (entry?.data instanceof Uint8Array) {
-    return entry.data.byteLength;
-  }
-  return 0;
-}
-
-function computePendingLogBytes(
-  service,
-  record,
-  checkpointedIndex,
-  committedIndex,
-) {
-  if (committedIndex <= checkpointedIndex) {
-    return 0;
-  }
-  if (Number.isFinite(service.pendingLogBytes) &&
-      service.pendingLogBytes >= 0) {
-    return service.pendingLogBytes;
-  }
-  let totalBytes = 0;
-  for (const entry of record.entries) {
-    const index = Number(entry.index);
-    if (index > checkpointedIndex && index <= committedIndex) {
-      totalBytes += measureEntryBytes(entry);
-    }
-  }
-  return totalBytes;
-}
-
-function isUnsupportedPartition(service) {
-  return service.dbPath === PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH ||
-    CONTROL_PLANE_PARTITION_IDS.has(service.partitionId);
-}
-
-function isLeaderReady(service) {
-  return service.role === RAFT_ROLE.LEADER &&
-    !service.isShutdown &&
-    Boolean(service.db?.open);
-}
+import {
+  NOT_REFUSED,
+  QUIET_OUTCOMES,
+  REFUSED_ATTEMPT_OUTCOMES,
+  outcomeReason,
+  tickFailed,
+  tickResult,
+} from './partition-snapshot-cadence-outcome.js';
+import {
+  evaluateCadenceThresholds,
+  isLeaderReady,
+  isUnsupportedPartition,
+  resolveCadenceIdentity,
+} from './partition-snapshot-cadence-coverage.js';
+import {
+  NO_STANDING_REFUSAL,
+  PARTITION_SNAPSHOT_CADENCE_ATTEMPT as ATTEMPT,
+  cadenceAttemptDecision,
+  standingRefusal,
+} from './partition-snapshot-cadence-refusal.js';
+import {createPartitionSnapshotOutcomeLog} from './partition-snapshot-outcome-log.js';
+import {
+  PARTITION_SNAPSHOT_PROGRESS_EVENT as EVENT,
+  PARTITION_SNAPSHOT_PROGRESS_LOG_MSG as LOG_MSG,
+  RAFT_SNAPSHOT_CADENCE_OUTCOME as OUTCOME,
+} from './partition-snapshot-progress-constants.js';
 
 function compactToGeneration(service, creation) {
   return compactRaftRsCommittedEntries(
@@ -221,38 +91,6 @@ function compactToGeneration(service, creation) {
       proof: {checkpointDir: creation.checkpointDir},
     },
   );
-}
-
-function evaluateCadenceThresholds(service, options, checkpointsRoot, record) {
-  const committedIndex = Number(record.appliedIndex);
-  const coverage = inspectCheckpointCoverage(
-    service, checkpointsRoot, record, committedIndex);
-  const pendingEntryCount = Math.max(
-    0, committedIndex - coverage.checkpointedIndex);
-  const pendingLogBytes = computePendingLogBytes(
-    service, record, coverage.checkpointedIndex, committedIndex);
-  const entryThreshold = resolveEntryThreshold(options.entryThreshold);
-  const byteThresholdBytes =
-    resolveByteThreshold(options.byteThresholdBytes);
-  const overEntryThreshold = pendingEntryCount >= entryThreshold;
-  const overByteThreshold = pendingLogBytes >= byteThresholdBytes;
-  return {
-    ...coverage,
-    pendingEntryCount,
-    pendingLogBytes,
-    entryThreshold,
-    byteThresholdBytes,
-    belowThreshold: pendingEntryCount <= 0 ||
-      (!overEntryThreshold && !overByteThreshold),
-  };
-}
-
-function resolveCadenceIdentity(service) {
-  return buildSnapshotCatchupIdentityFromCache({
-    partitionId: service.partitionId,
-    tableName: service.tableName || service.tableId || service.partitionId,
-    systemTableCache: service.systemTableCache,
-  });
 }
 
 function sweepAndCompactCheckpoint(service, checkpointsRoot, creation) {
@@ -273,8 +111,8 @@ function sweepAndCompactCheckpoint(service, checkpointsRoot, creation) {
       service.db, service.partitionId));
   return tickResult(
     compacted ?
-      RAFT_SNAPSHOT_CADENCE_OUTCOME.COMPACTED :
-      RAFT_SNAPSHOT_CADENCE_OUTCOME.CHECKPOINTED,
+      OUTCOME.COMPACTED :
+      OUTCOME.CHECKPOINTED,
     {
       creation,
       sweep,
@@ -292,22 +130,20 @@ async function runCheckpointAndCompaction(
   identity,
   options,
 ) {
-  const creation = await createSqliteStateMachineCheckpoint({
-    db: service.db,
+  const creation = await createCheckpointSealer(service.db)({
     identity,
     checkpointsRoot,
-    raftRsGroupId: service.partitionId,
     inProcessPins: listInFlightGenerationIndexes(),
   });
   if (creation.outcome !== RAFT_CHECKPOINT_CREATION_OUTCOME.CREATED) {
-    return tickResult(RAFT_SNAPSHOT_CADENCE_OUTCOME.CREATION_REFUSED, {
+    return tickResult(OUTCOME.CREATION_REFUSED, {
       creation,
     });
   }
   await options?.onAfterCreateCheckpoint?.(creation);
   if (!isLeaderReady(service)) {
     return tickResult(
-      RAFT_SNAPSHOT_CADENCE_OUTCOME.LEADERSHIP_LOST_MID_CREATION,
+      OUTCOME.LEADERSHIP_LOST_MID_CREATION,
       {
         creation,
         checkpointedIndex: creation.descriptor.lastIncludedIndex,
@@ -326,30 +162,111 @@ async function runCheckpointAndCompaction(
  * @param {number} [options.entryThreshold] committed-entry trigger override
  * @param {number} [options.byteThresholdBytes] pending-log-byte trigger override
  * @param {Function} [options.onAfterCreateCheckpoint] optional hook after creation
- * @return {Object} frozen {tick(nowMs), isInFlight()}
+ * @return {Object} frozen {tick(nowMs), isInFlight(), sealForCatchup(request),
+ *   readDiagnostics()}
  */
 function createPartitionSnapshotCadence(options) {
   const {service} = options;
-  const state = {inFlight: false};
+  const state = {
+    inFlight: false,
+    refusal: NO_STANDING_REFUSAL,
+    lastOutcome: null,
+    lastSuccess: null,
+    reportedSinceSuccess: 0,
+    observationFault: null,
+  };
+  const outcomeLog = createPartitionSnapshotOutcomeLog({
+    service,
+    event: EVENT.CADENCE_OUTCOME,
+    message: LOG_MSG.CADENCE_OUTCOME,
+  });
 
-  const evaluate = async (_nowMs) => {
+  // What one attempt is measured at: the caller's timestamp, the applied
+  // index and the checkpoint identity.
+  const attemptAt = (nowMs, record, identity) => Object.freeze({
+    nowMs,
+    appliedIndex: Number(record.appliedIndex),
+    identityKey: snapshotCheckpointIdentityKey(identity),
+  });
+  // The refusal standing after an attempt answered: renewed when it was
+  // refused, stamped at its COMPLETION (the attempt's timestamp plus what it
+  // took on the service clock, so a slow image build is spaced from its end),
+  // ended otherwise.
+  const refusalAfter = (attempt, startedAtMs, refused) => {
+    state.refusal = refused === NOT_REFUSED ? NO_STANDING_REFUSAL :
+      standingRefusal(state.refusal, Object.freeze({...attempt,
+        nowMs: attempt.nowMs + (service.timeSource.now() - startedAtMs)}), refused);
+  };
+
+  // One image attempt under the standing refusal: held, or made and the
+  // refusal renewed or lifted by what it answered.
+  const attemptCheckpoint = async (checkpointsRoot, record, nowMs) => {
+    const identity = resolveCadenceIdentity(service);
+    const attempt = attemptAt(nowMs, record, identity);
+    const decision = cadenceAttemptDecision(state.refusal, attempt);
+    if (decision === ATTEMPT.HELD) {
+      return tickResult(OUTCOME.HELD_AFTER_REFUSAL, {refusal: state.refusal});
+    }
+    const startedAtMs = service.timeSource.now();
+    const result = await runCheckpointAndCompaction(
+      service, checkpointsRoot, identity, options).catch(tickFailed);
+    refusalAfter(attempt, startedAtMs,
+      REFUSED_ATTEMPT_OUTCOMES.includes(result.outcome) ?
+        {outcome: result.outcome, reason: outcomeReason(result)} : NOT_REFUSED);
+    return decision === ATTEMPT.UNHELD ?
+      result :
+      tickResult(result.outcome, {...result, retryTrigger: decision});
+  };
+
+  // A generation for the catch-up dispatch, sealed by this owner: refused
+  // typed while a cadence attempt is in flight or a refusal stands that
+  // nothing lifts, and a refusal it draws is the cadence's own.
+  const sealForCatchup = async (request) => {
+    if (state.inFlight) {
+      return tickResult(RAFT_CHECKPOINT_CREATION_OUTCOME.SEALER_BUSY);
+    }
+    const startedAtMs = service.timeSource.now();
+    const attempt = attemptAt(startedAtMs, RaftRsDurableStore.readDurableRecordIn(
+      service.db, service.partitionId), request.identity);
+    if (cadenceAttemptDecision(state.refusal, attempt) === ATTEMPT.HELD) {
+      return tickResult(RAFT_CHECKPOINT_CREATION_OUTCOME.SEALER_HELD,
+        {refusal: state.refusal});
+    }
+    state.inFlight = true;
+    try {
+      const creation = await createCheckpointSealer(service.db)(request);
+      const refused = creation.outcome === RAFT_CHECKPOINT_CREATION_OUTCOME.CREATED ?
+        NOT_REFUSED : {outcome: OUTCOME.CREATION_REFUSED, reason: creation.outcome};
+      refusalAfter(attempt, startedAtMs, refused);
+      if (refused !== NOT_REFUSED) {
+        outcomeLog.report(service.partitionId,
+          {...refused, attempts: state.refusal.attempts});
+      }
+      return creation;
+    } finally {
+      state.inFlight = false;
+    }
+  };
+
+  const evaluate = async (nowMs) => {
     if (isUnsupportedPartition(service)) {
-      return tickResult(RAFT_SNAPSHOT_CADENCE_OUTCOME.UNSUPPORTED_PARTITION, {
+      return tickResult(OUTCOME.UNSUPPORTED_PARTITION, {
         partitionId: service.partitionId,
       });
     }
     if (state.inFlight) {
-      return tickResult(RAFT_SNAPSHOT_CADENCE_OUTCOME.ALREADY_IN_FLIGHT);
+      return tickResult(OUTCOME.ALREADY_IN_FLIGHT);
     }
     if (!isLeaderReady(service)) {
-      return tickResult(RAFT_SNAPSHOT_CADENCE_OUTCOME.NOT_LEADER, {
+      state.refusal = NO_STANDING_REFUSAL;
+      return tickResult(OUTCOME.NOT_LEADER, {
         role: service.role,
       });
     }
     if (!RaftRsDurableStore.hasDurableRecordIn(
       service.db, service.partitionId)) {
       return tickResult(
-        RAFT_SNAPSHOT_CADENCE_OUTCOME.COMMITTED_LOG_UNSUPPORTED, {
+        OUTCOME.COMMITTED_LOG_UNSUPPORTED, {
           partitionId: service.partitionId,
         });
     }
@@ -359,7 +276,7 @@ function createPartitionSnapshotCadence(options) {
     const thresholds = evaluateCadenceThresholds(
       service, options, checkpointsRoot, record);
     if (thresholds.belowThreshold && !thresholds.uncompactedCheckpoint) {
-      return tickResult(RAFT_SNAPSHOT_CADENCE_OUTCOME.BELOW_THRESHOLD, {
+      return tickResult(OUTCOME.BELOW_THRESHOLD, {
         checkpointedIndex: thresholds.checkpointedIndex,
         compactedIndex: thresholds.compactedIndex,
         pendingEntryCount: thresholds.pendingEntryCount,
@@ -374,26 +291,87 @@ function createPartitionSnapshotCadence(options) {
         return sweepAndCompactCheckpoint(
           service, checkpointsRoot, thresholds.uncompactedCheckpoint);
       }
-      const identity = resolveCadenceIdentity(service);
-      return await runCheckpointAndCompaction(
-        service, checkpointsRoot, identity, options);
+      return await attemptCheckpoint(checkpointsRoot, record, nowMs);
     } finally {
       state.inFlight = false;
     }
   };
 
+  // The visible record of one tick: the last outcome, the last compaction,
+  // one typed line for an outcome that neither compacted nor is quiet, and
+  // one line when a compaction ends a run of reported outcomes.
+  const observe = (result, nowMs) => {
+    const reason = outcomeReason(result);
+    state.lastOutcome = Object.freeze({outcome: result.outcome, reason, atMs: nowMs});
+    if (result.outcome === OUTCOME.COMPACTED) {
+      state.lastSuccess = Object.freeze({
+        outcome: result.outcome,
+        compactedUpToIndex: result.compactedUpToIndex,
+        atMs: nowMs,
+      });
+      if (state.reportedSinceSuccess > 0) {
+        service.logger.info(LOG_MSG.CADENCE_RECOVERED, {
+          event: EVENT.CADENCE_RECOVERED,
+          partitionId: service.partitionId,
+          compactedUpToIndex: result.compactedUpToIndex,
+          reportedOutcomes: state.reportedSinceSuccess,
+        });
+        state.reportedSinceSuccess = 0;
+      }
+      return;
+    }
+    if (QUIET_OUTCOMES.includes(result.outcome)) {
+      return;
+    }
+    state.reportedSinceSuccess += 1;
+    outcomeLog.report(service.partitionId, {
+      outcome: result.outcome,
+      reason,
+      detail: result.detail,
+      ...(state.refusal === NO_STANDING_REFUSAL ?
+        {} : {attempts: state.refusal.attempts}),
+    });
+  };
+
   return Object.freeze({
     async tick(nowMs) {
-      try {
-        return await evaluate(nowMs);
-      } catch (error) {
-        return tickResult(RAFT_SNAPSHOT_CADENCE_OUTCOME.TICK_FAILED, {
-          detail: error?.message,
-        });
+      const result = await evaluate(nowMs).catch(tickFailed);
+      if (result.outcome === OUTCOME.COMPACTED) {
+        state.refusal = NO_STANDING_REFUSAL;
       }
+      try {
+        observe(result, nowMs);
+      } catch (error) {
+        // The record of a tick never changes what the tick answered; a
+        // failing observation is itself kept for the diagnostics read.
+        state.observationFault = error?.message;
+      }
+      return result;
     },
     isInFlight() {
       return state.inFlight;
+    },
+    /**
+     * @param {Object} request {identity, checkpointsRoot, inProcessPins}
+     * @return {Promise<Object>} a typed creation result: the creation
+     *   owner's, or this sealer's sealer_busy / sealer_held_after_refusal /
+     *   sealer_failed (one vocabulary: RAFT_CHECKPOINT_CREATION_OUTCOME)
+     */
+    sealForCatchup(request) {
+      return sealForCatchup(request).catch((error) => tickResult(
+        RAFT_CHECKPOINT_CREATION_OUTCOME.SEALER_FAILED, {detail: error?.message}));
+    },
+    /**
+     * @return {Object} frozen {lastOutcome, lastSuccess, refusal,
+     *   observationFault}: each null until it has happened.
+     */
+    readDiagnostics() {
+      return Object.freeze({
+        lastOutcome: state.lastOutcome,
+        lastSuccess: state.lastSuccess,
+        refusal: state.refusal,
+        observationFault: state.observationFault,
+      });
     },
   });
 }
@@ -513,7 +491,6 @@ function evaluatePartitionSnapshotCadence(service) {
 }
 
 export {
-  RAFT_SNAPSHOT_CADENCE_OUTCOME,
   canCompactPartitionRaftLog,
   createPartitionSnapshotCadence,
   evaluatePartitionSnapshotCadence,
