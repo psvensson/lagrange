@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 import {fileURLToPath} from 'node:url';
-import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 import {
   prepareReplicaLifecycleForOriginalAllocation,
   RaftRsReplicaLifecycleOwner,
@@ -30,7 +30,7 @@ const IDENTITY = Object.freeze({groupId: 'original-group', peerId: '3',
   replicaIdentity: 'original-founder'});
 
 function fixture(t) {
-  const db = new Database(':memory:');
+  const db = new SQLiteConnection(':memory:');
   t.after(() => db.close());
   return {db, rows: () => db.prepare(`SELECT * FROM ${TABLE} ORDER BY peer_id`).all()};
 }

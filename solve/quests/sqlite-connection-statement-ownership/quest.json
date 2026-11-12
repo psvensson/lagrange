@@ -1,0 +1,60 @@
+{
+  "schema": "solve-quest/2",
+  "id": "sqlite-connection-statement-ownership",
+  "class": "fix",
+  "statement": "Cached fixed-SQL statements belong exclusively to the SQLite connection owning their native lifetime; supplied unowned handles are refused before SQL, mutation, or successful absence; cache and integer behavior are preserved and failed close retains cache custody.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/sqlite-connection-statement-ownership/evidence/receipt.json",
+      "requiredReceipts": [
+        "ownership",
+        "cache-integer",
+        "close-custody",
+        "production-composition",
+        "independent-review",
+        "negative-controls",
+        "static-guards"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "phase1-scope",
+      "statement": "Current authorized source scope: src/storage/sqlite-prepared-statement-owner.js, dedicated new test/storage tests, and this new Quest only. No existing consumers, production constructors, shared fixtures, F-owned files, primary formation log, commits, or pushes. Await parent serialization release for migration."
+    },
+    {
+      "id": "ownership",
+      "statement": "One SQLiteConnection extends Database inheritance edge in the existing module; preallocate both maps and holder before super, then only private-slot assignment. No registry, alias, facade, adoption, legacy path, schema/pragma/birth authority, or raised baseline."
+    },
+    {
+      "id": "refusal",
+      "statement": "Existing helpers invoke class-owned static private-brand bridge directly. Reject raw, closed raw, spoof/proxy/primitive/null before foreign property access including open. Ordinary Error code sqlite_statement_owner_missing; never TypeError/RangeError for missing ownership."
+    },
+    {
+      "id": "cache-integer",
+      "statement": "Same SQL/mode is stable within one connection and distinct across connections and modes; exact safeIntegers(true) before insertion. Preserve native defaultSafeIntegers behavior. Failed preparation/configuration is not cached; schema reprepare remains native."
+    },
+    {
+      "id": "close-custody",
+      "statement": "Native super.close first; clear both maps only after success. Uncached busy iterator refusal retains native handle and both cached identities; iterator return then close retry succeeds."
+    },
+    {
+      "id": "production-composition",
+      "statement": "After F freeze and parent serialization release, migrate actual cached-reader acquisitions and strict boundary assertions before SQL/early returns; retain independent raw utility handles. Verify partition/MG/WASM open/restart, original custody, hydration, checkpoint, install, schema and fixture callers. Phase1 tests cannot discharge this receipt."
+    },
+    {
+      "id": "independent-review",
+      "statement": "Exact candidate source, caller conversion, provenance and controls require independent implementation approval; prior design approval subagent:01a1ce40-d9e6-7b72-a890-ede72685fdca is design-only."
+    },
+    {
+      "id": "execution",
+      "statement": "Individual focused files only: thermal owner then flock /tmp/lagrange-local-test.lock nice -n15 node scripts/run-test-files.js --jobs 1 FILE. Probe reads retained evidence only. If completed repair fails verification preserve evidence and hand off higher Astra; expected red-first and deliberate mutation controls excluded."
+    },
+    {
+      "id": "proof-ceiling",
+      "statement": "Preallocation and installed native constructor/close source establish ordering, not recoverable private-slot/VM OOM proof. No full integration, service acceptance, release, commit or push claim from phase1."
+    }
+  ],
+  "sealedAt": "1b51362e0f7af24a5e373b8a57619d4cf13ec706"
+}

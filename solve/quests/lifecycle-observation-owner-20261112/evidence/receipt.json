@@ -1,0 +1,63 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "receipts": [
+    {
+      "id": "lifecycle-navigability",
+      "passed": true,
+      "status": "measured-pass",
+      "evidence": "test-output/lifecycle-observation-20261112/r4-final-check-guideline-navigability.json"
+    },
+    {
+      "id": "malformed-owner-parity",
+      "passed": true,
+      "status": "measured-pass",
+      "evidence": "test-output/lifecycle-observation-20261112/r4-final-focused.json"
+    },
+    {
+      "id": "valid-empty-and-terminal-controls",
+      "passed": true,
+      "status": "measured-pass",
+      "evidence": "test-output/lifecycle-observation-20261112/r4-final-focused.json"
+    },
+    {
+      "id": "scoped-owner-checks",
+      "passed": true,
+      "status": "measured-pass",
+      "evidence": "test-output/lifecycle-observation-20261112/candidate-manifest-r4.json"
+    },
+    {
+      "id": "independent-review",
+      "passed": true,
+      "status": "bounded-approve",
+      "evidence": "test-output/lifecycle-observation-20261112/final-review-r4.md",
+      "sha256": "bef3361d8e6d1061b1a7cb9755f27b4ac5b416066df0b03d410c3605fbd9469c",
+      "verifier": "subagent:01a1cecb-f75d-7b01-9607-f8e163796cb5"
+    }
+  ],
+  "remaining": "Bounded receipt satisfied subject to canonical probe. Quest remains open/unlanded. Parent owns inspector/SQLite composition and global verification; no integration, landing or publication approval.",
+  "testFileDigests": {
+    "test/raft/raft-rs-backend/lifecycle-record-validation.test.js": "e1041c1db4bb3d15926808854ad394b2619f3122aa088e6cf7023fd95b3307b8",
+    "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js": "e3c6faf7d45400ca7e5dc1c0790daf47fe1db5e97010ded282dd59c783aafe7e",
+    "test/raft/raft-rs-backend/replica-lifecycle-birth.test.js": "3ef7250fe762f53a153969cb8615ade2874ff48e3373b0d8cae78ef56d7a83cb",
+    "test/raft/raft-rs-backend/reseed-hold-durability.test.js": "94e94c49ec7fdc370cf871fab0a0c780d88a388d5fd953786d0461cd9f89f27e",
+    "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js": "1f581fa8db79e1affc031cb438bc4f977ea03fe2ea2242d7f0917efbf53bac17",
+    "test/raft/raft-rs-backend/operation-port-lifecycle.test.js": "abf1ab45e90e3fd113c3b52af804024b6ca2ab744149ce0251ab246803ad4a50",
+    "test/raft/raft-rs-backend/durable-own-group-record.test.js": "59ad58d7b95e4b25db04959e7eac1ddef8696bc30530ced9e5b750c4bed6400d",
+    "test/raft/raft-rs-backend/replica-freshness-closure.test.js": "d12773f398bd4505d21423586ed12ec96c9f24c63fa8d522c6638338140f5e00",
+    "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js": "cb72af8d4f3fa1ff3d4709f94b2bc9cb22e405ad036c86b916998472dc386e44",
+    "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js": "308d62ac00e646b6fdf0a089136519002524024d3e219169c4732b5a0f98d6b6",
+    "test/raft/raft-rs-original-allocation-lifecycle-operation.test.js": "f489cb8235290bda3c89ccb980bc78e3139826d5d5df5e047c4c681e0aa93a37",
+    "test/raft/raft-rs-original-allocation-store.test.js": "b6fd8d310ac7077fabb5021ac17d2343a07d07ca0581558720739161abb578a3",
+    "test/raft/raft-rs-original-allocation-preparation.test.js": "f3ee02273be0cbd49ef58985a15c76f6658702f5b5a10128580994281cac1c00",
+    "test/raft/raft-rs-original-allocation-cold-inspection.test.js": "d86c58510a346a4fc4037d35675846a7b220eff060c136a0cef19543a07f79f1",
+    "test/raft/snapshot-lifecycle-staging.test.js": "11cc18096603e99e199db98ee4bb351f706c05d36e53ef0024cc157255c36c51",
+    "test/raft/raft-rs-backend/lifecycle-table-writer-census.test.js": "022d1af87828b48a39615f211d649c4c6989fefd4952b8bb6575de5c8d4cc4ea",
+    "test/raft/raft-rs-backend/lifecycle-retirement-census.test.js": "e64bf4f8ec68e282c86e69a759092097740cdd10dd03fdcbbb35e331b33678a0",
+    "test/node/replica-lifecycle-durable-generation.test.js": "be9b22d6267b5cc9ff395a7db1b7778dab0de199c196d434437f085d78978630",
+    "test/raft/raft-rs-lifecycle-turn-admission.test.js": "ff45504dadadf5ae7979bedd9f4c9831afe4739f70f85fd5dc138c4915b759c9",
+    "test-output/lifecycle-observation-20261112/nested-container-regression.test.js": "e51c34addbab83215abc87cceacfd66e03f982bca7ded38d801bf7f306892810",
+    "test-output/lifecycle-observation-20261112/traversal-intrinsics-regression.test.js": "17a410c5356f47764fec601b7ff8692acf8ae798732bbb9a3570ca931ab4585b",
+    "test-output/lifecycle-observation-20261112/descriptor-refusal-regression.test.js": "ffc656ad496ce1d626bea9ca9b9c4e2e322c26057dd8f3ae43d14aef76db7cda"
+  }
+}

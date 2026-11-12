@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 import {
   WasmServiceReplica,
   ENTRY_TYPE,
@@ -89,15 +89,16 @@ function defaultOpts(overrides = {}) {
 }
 
 /**
- * A replica whose session KV store runs over a scratch connection: these
- * unit tests drive its message, apply and publication logic without opening
- * its consensus port (the raft-rs WASM group witness covers the port).
+ * A replica whose session KV store borrows an owned scratch connection:
+ * committed writes also enter the production application-transaction owner.
+ * These unit tests drive message, apply and publication logic without opening
+ * the consensus port (the raft-rs WASM group witness covers the port).
  * @param {Object} options - Replica options.
  * @return {WasmServiceReplica} The replica.
  */
 function createReplica(options) {
   const replica = new WasmServiceReplica(options);
-  replica.kvStore = new SessionKVStore(new Database(':memory:'));
+  replica.kvStore = new SessionKVStore(new SQLiteConnection(':memory:'));
   // Design SERVING-PUBLICATION-RETIREMENT-DESIGN-20261017 Revision 3 N5: user
   // paths are admitted only while the instance is READY (the serving fence
   // D3'). These unit cases drive them without opening a consensus port, so

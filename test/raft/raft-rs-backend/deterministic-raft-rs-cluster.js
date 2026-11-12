@@ -12,7 +12,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../../src/storage/sqlite-prepared-statement-owner.js';
 
 import {RaftRsDurableStore} from '../../../src/raft/raft-rs-durable-store.js';
 import {
@@ -95,7 +95,7 @@ class DeterministicRaftRsCluster {
    */
   addPeer(peerId, voters) {
     const dbFile = this.dbFileFor(peerId);
-    const db = new Database(dbFile);
+    const db = new SQLiteConnection(dbFile);
     const store = this.storeFactory(db, peerId);
     const handle = createRaftRsGroup({
       core: this.core,
@@ -172,7 +172,7 @@ class DeterministicRaftRsCluster {
    */
   startFresh(peerId) {
     const dbFile = this.dbFileFor(peerId);
-    const db = new Database(dbFile);
+    const db = new SQLiteConnection(dbFile);
     const store = this.storeFactory(db, peerId);
     const handle = createRaftRsGroup({
       core: this.core,
@@ -341,7 +341,7 @@ class DeterministicRaftRsCluster {
    */
   restart(peerId, options = {}) {
     const peer = this.peers.get(peerId);
-    const db = new Database(peer.dbFile);
+    const db = new SQLiteConnection(peer.dbFile);
     const store = this.storeFactory(db, peerId);
     const handle = restoreRaftRsGroup({
       core: this.core,

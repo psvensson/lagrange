@@ -12,6 +12,7 @@ import fs from 'node:fs';
 import {test} from 'node:test';
 
 import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../../src/storage/sqlite-prepared-statement-owner.js';
 
 import {PartitionNodeCluster} from './partition-node-cluster.js';
 import {bindingWireNumbers} from './committed-membership-oracles.js';
@@ -230,7 +231,7 @@ test('a founder born but never opened, its record tables empty, reads ' +
   const file = `${fs.mkdtempSync(`${process.env.TMPDIR ?? '/tmp'}/own-record-`)}/born.sqlite`;
   t.after(() => fs.rmSync(file.slice(0, file.lastIndexOf('/')),
     {recursive: true, force: true}));
-  const db = new Database(file);
+  const db = new SQLiteConnection(file);
   const born = db.transaction(() => prepareReplicaLifecycleForOriginalAllocation({
     db, groupId: PARTITION_ID, peerId: '7', replicaIdentity: LONE}))();
   assert.equal(born.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,

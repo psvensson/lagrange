@@ -1,3 +1,4 @@
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 // Quest retained-seed-original-handoff witness.
 // A cold restart of an original seed interrupted after ENABLE (participant
 // release) and before SERVICES / cluster_id registration completes the
@@ -145,7 +146,7 @@ function assertActualExpiry(report) {
 }
 
 function readOrigin(dbPath) {
-  const db = new Database(dbPath, {readonly: true, fileMustExist: true});
+  const db = new SQLiteConnection(dbPath, {readonly: true, fileMustExist: true});
   try {
     return readPartitionWriteOrigin(db);
   } finally {

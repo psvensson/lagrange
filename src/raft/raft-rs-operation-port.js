@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import Database from 'better-sqlite3';
+import {SQLiteConnection, assertSQLiteConnection} from '../storage/sqlite-prepared-statement-owner.js';
 import {REPLICA_DB_PRAGMA} from '../storage/storage-constants.js';
 import {LIFECYCLE_BIRTH, LIFECYCLE_ERROR, REPLICA_DATABASE_CREATION} from
   './raft-rs-replica-lifecycle-constants.js';
@@ -104,7 +104,7 @@ function openRaftRsReplicaDatabase({dbPath, groupId, replicaIdentity,
   }
   const creation = fileMustExist ? REPLICA_DATABASE_CREATION.EXISTING :
     acquireReplicaDatabaseFile(dbPath);
-  const db = new Database(dbPath, {fileMustExist: dbPath !== REPLICA_DATABASE_MEMORY});
+  const db = new SQLiteConnection(dbPath, {fileMustExist: dbPath !== REPLICA_DATABASE_MEMORY});
   takeDatabaseCustody(db);
   db.pragma(REPLICA_DB_PRAGMA.JOURNAL_MODE);
   db.pragma(REPLICA_DB_PRAGMA.SYNCHRONOUS);
@@ -341,6 +341,7 @@ function createRaftRsOperationPort(request) {
     request, RAFT_OPERATION_PORT_REQUEST.PEER_ID);
   const database = required(
     request, RAFT_OPERATION_PORT_REQUEST.DURABLE_STORAGE);
+  assertSQLiteConnection(database);
   const suppliedTiming = required(request, RAFT_OPERATION_PORT_REQUEST.TIMING);
   const resolvePeerAddress = required(
     request, RAFT_OPERATION_PORT_REQUEST.RESOLVE_PEER_ADDRESS);

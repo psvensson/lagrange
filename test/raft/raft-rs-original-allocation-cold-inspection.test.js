@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 import {createSeedOriginalAllocation} from
   '../../src/bootstrap/seed-original-allocation-declaration.js';
 import {RaftRsOriginalAllocationPreparation} from
@@ -49,7 +50,7 @@ function completeStorageFixture(t) {
   });
   const declaration = createPreparation().prepare(draft);
   for (const member of declaration.members) {
-    const db = new Database(member.dbPath, {fileMustExist: true});
+    const db = new SQLiteConnection(member.dbPath, {fileMustExist: true});
     try {
       const lifecycle = new RaftRsReplicaLifecycleOwner({db,
         groupId: member.groupId, peerId: member.peerId, replicaIdentity: member.replicaId});
@@ -83,7 +84,7 @@ for (const state of [STATE.SUBMITTED, STATE.TRANSFERRED]) {
   test(`cold inspection cannot reopen an original service right in ${state}`, (t) => {
     const f = completeStorageFixture(t);
     const member = f.declaration.members[0];
-    const db = new Database(member.dbPath, {fileMustExist: true});
+    const db = new SQLiteConnection(member.dbPath, {fileMustExist: true});
     try {
       transitionOriginalRight({db, member, right: COLUMN.SERVICE_RIGHT,
         from: STATE.UNUSED, to: STATE.SUBMITTED});
@@ -211,7 +212,7 @@ test('complete original cold inspection: current custody and exact rights', asyn
 // existing preparation API must reject these facts before its application
 // callback. The valid zero-progress and pending-prefix controls remain separate.
 function nativeRecordFixture(member, mutate) {
-  const db = new Database(member.dbPath, {fileMustExist: true});
+  const db = new SQLiteConnection(member.dbPath, {fileMustExist: true});
   const store = new RaftRsDurableStore(db);
   const confState = {voters: member.replicaIds.map(deriveRaftRsPeerId),
     learners: [], votersOutgoing: [], learnersNext: [], autoLeave: false};

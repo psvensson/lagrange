@@ -1,10 +1,10 @@
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 
-import Database from 'better-sqlite3';
 
 import {MessageGroupService} from
   '../../src/message-group/message-group-service.js';
@@ -155,7 +155,7 @@ test('fresh message-group learner installs a transferred raft-rs image and ' +
     const boundary = leader.raft.readStatus();
     for (const replica of FOUNDERS) await host.close(replica);
 
-    const sourceDb = new Database(host.dbPath(leader.replicaId));
+    const sourceDb = new SQLiteConnection(host.dbPath(leader.replicaId));
     const senderRoot = path.join(root, 'sender');
     const receiverRoot = path.join(root, 'receiver');
     const identity = {clusterId: 'fresh-cluster', raftGroupId: GROUP,
@@ -215,7 +215,7 @@ test('fresh message-group learner installs a transferred raft-rs image and ' +
       deferElection: true});
     assert.equal(restarted.raft.readStatus().confState.learners
       .includes(targetPeer), true, 'restart preserves the installed learner');
-    const durable = new Database(host.dbPath(TARGET), {readonly: true});
+    const durable = new SQLiteConnection(host.dbPath(TARGET), {readonly: true});
     try {
       assert.equal(RaftRsDurableStore.readCommittedEntriesIn(durable, GROUP)
         .some((entry) => entry.command?.data?.node_id === row.node_id), true,

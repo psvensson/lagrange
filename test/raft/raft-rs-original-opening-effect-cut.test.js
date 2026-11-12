@@ -1,3 +1,4 @@
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 // A successful earlier admission cannot authorize a later native effect after
 // timing callbacks revoke the attempt or a publication owner consumes its right.
 import test from 'node:test';
@@ -5,7 +6,6 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import Database from 'better-sqlite3';
 import {createSeedOriginalAllocation} from
   '../../src/bootstrap/seed-original-allocation-declaration.js';
 import {RaftRsOriginalAllocationPreparation} from
@@ -47,7 +47,7 @@ function fixture(t) {
   const declaration = preparation.prepare(draft);
   const member = declaration.members.find((entry) =>
     entry.replicaId === declaration.anchorReplicaId);
-  db = new Database(member.dbPath, {fileMustExist: true});
+  db = new SQLiteConnection(member.dbPath, {fileMustExist: true});
   const entries = [];
   setActualCoreEntryObserver((entry) => entries.push(entry));
   const request = {groupId: member.groupId, peerId: member.replicaId,

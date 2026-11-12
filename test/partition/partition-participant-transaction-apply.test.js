@@ -14,7 +14,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import {afterEach, beforeEach, test} from 'node:test';
-import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {RAFT_OPERATION_PORT_REQUEST} from '../../src/raft/raft-operation-port-request.js';
@@ -85,7 +85,7 @@ afterEach(() => {
 // row.
 async function imageFacts(replica, imagePath, transactionId) {
   await replica.db.backup(imagePath);
-  const image = new Database(imagePath);
+  const image = new SQLiteConnection(imagePath);
   try {
     const groupId = replica.controllablePort.request[RAFT_OPERATION_PORT_REQUEST.GROUP_ID];
     return {

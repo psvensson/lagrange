@@ -1,6 +1,7 @@
 // Original effect observation has no opening capability, native proposal,
 // migration, repair, application callback, publication or delivery side effect.
 import {isDeepStrictEqual} from 'node:util';
+import {assertSQLiteConnection} from '../storage/sqlite-prepared-statement-owner.js';
 import {SERVICE_TYPE} from '../constants/service.js';
 import {deepFreeze} from '../raft/raft-operation-port.js';
 import {RaftRsDurableStore} from '../raft/raft-rs-durable-store.js';
@@ -51,6 +52,7 @@ function observeOriginalSeedEffectsIn(db, declaration, member) {
 }
 
 function readOriginalSeedRetainedEffects({db, declaration, member}) {
+  assertSQLiteConnection(db);
   const identity = {groupId: member?.groupId, replicaId: member?.replicaId};
   if (db.inTransaction) {
     return deepFreeze({...identity, state: STATE.UNAVAILABLE, reason: REASON.TRANSACTION});

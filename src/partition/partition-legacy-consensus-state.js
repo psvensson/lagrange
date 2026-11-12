@@ -17,6 +17,7 @@
 // rows are inert.
 
 import {RaftRsDurableStore} from '../raft/raft-rs-durable-store.js';
+import {assertSQLiteConnection} from '../storage/sqlite-prepared-statement-owner.js';
 import {
   LEGACY_PARTITION_CONSENSUS_ERROR_MSG,
   LEGACY_PARTITION_CONSENSUS_OUTCOME,
@@ -78,6 +79,7 @@ const LEGACY_CONSENSUS_REASON_HOLDS = Object.freeze({
  *   outcome is a LEGACY_PARTITION_CONSENSUS_OUTCOME value.
  */
 function detectLegacyPartitionConsensusState({db, partitionId}) {
+  assertSQLiteConnection(db);
   const snapshot = readLegacyConsensusSnapshot(db);
   const reasons = Object.freeze(Object.values(LEGACY_PARTITION_CONSENSUS_REASON)
     .filter((reason) => LEGACY_CONSENSUS_REASON_HOLDS[reason](snapshot)));

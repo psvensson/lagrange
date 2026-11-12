@@ -10,7 +10,7 @@ import {historyDb, openHistory, lifecycle, applicationRows, HISTORY_ID} from './
 import {setCoreFaultInjector, setActualCoreEntryObserver} from '../../../src/raft/raft-rs-runtime-owner.js';
 import {RAFT_RS_TABLE} from '../../../src/raft/raft-rs-durable-store-constants.js';
 import {RAFT_OPERATION_OUTCOME as OUTCOME} from '../../../src/raft/raft-operation-port-constants.js';
-import {CORE_REFUSAL_KIND} from '../../../src/raft/raft-rs-runtime-owner-constants.js';
+import {CORE_REFUSAL_KIND, RUNTIME_PHASE} from '../../../src/raft/raft-rs-runtime-owner-constants.js';
 import {deriveRaftRsPeerId} from '../../../src/raft/raft-rs-peer-identity.js';
 import {prepareReplicaLifecycleForSnapshot} from '../../../src/raft/raft-rs-replica-lifecycle-owner.js';
 import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
@@ -68,37 +68,31 @@ test('a rejected pre-native constructor retains a genuinely never-opened retry',
 for (const failAfterWrite of [false, true]) {
   test(`bootstrap and establishment roll back together when history write fails ${failAfterWrite ? 'after SQL execution' : 'before SQL execution'}`, async (t) => {
     const f = fixture(t); let failing = true; let observed = 0;
-    const connection = new Proxy(f.db, {get(target, key) {
-      if (key === 'prepare') {
-        return (sql) => {
-          const statement = target.prepare(sql);
-          if (!/UPDATE\s+_raft_rs_replica_lifecycle\s+SET native_history_state/u.test(sql)) return statement;
-          return new Proxy(statement, {get(stmt, property) {
-            if (property === 'run') {
-              return (...args) => {
-                if (failing) {
-                  observed++;
-                  assert.equal(target.inTransaction, true, 'both writes share a real SQLite transaction');
-                  assert.equal(target.pragma('synchronous', {simple: true}), 2, 'establishment commit is FULL-synced');
-                  if (failAfterWrite) stmt.run(...args);
-                  throw new Error('injected establishment write failure');
-                }
-                return stmt.run(...args);
-              };
-            }
-            const value = Reflect.get(stmt, property, stmt);
-            return typeof value === 'function' ? value.bind(stmt) : value;
-          }});
-        };
+    const prepare = f.db.prepare.bind(f.db);
+    t.mock.method(f.db, 'prepare', (sql) => {
+      const statement = prepare(sql);
+      if (!/UPDATE\s+_raft_rs_replica_lifecycle\s+SET native_history_state/u.test(sql)) {
+        return statement;
       }
-      const value = Reflect.get(target, key, target);
-      return typeof value === 'function' ? value.bind(target) : value;
-    }});
+      const run = statement.run.bind(statement);
+      t.mock.method(statement, 'run', (...args) => {
+        if (failing) {
+          observed++;
+          assert.equal(f.db.inTransaction, true, 'both writes share a real SQLite transaction');
+          assert.equal(f.db.pragma('synchronous', {simple: true}), 2,
+            'establishment commit is FULL-synced');
+          if (failAfterWrite) run(...args);
+          throw new Error('injected establishment write failure');
+        }
+        return run(...args);
+      });
+      return statement;
+    });
     let unexpectedPort;
     try {
       assert.throws(
         () => {
-          unexpectedPort = f.open(undefined, connection);
+          unexpectedPort = f.open();
         },
         (error) => error.consensus?.outcome === OUTCOME.HOST_FAILURE,
         'failed atomic establishment must refuse construction');
@@ -161,19 +155,37 @@ test('identity-record acknowledgement still gates participation after local esta
 });
 
 test('unreadable exact lifecycle history is typed and cannot open native genesis', (t) => {
-  const f = fixture(t); const port = f.open(); port.close(); const before = f.entries.length;
-  const connection = new Proxy(f.db, {get(target, key) {
-    if (key === 'prepare') {
-      return (sql) => {
-        if (/SELECT native_history_state FROM/u.test(sql)) throw Object.assign(new Error('history IOERR'), {code: 'SQLITE_IOERR'});
-        return target.prepare(sql);
-      };
+  const f = fixture(t);
+  let failing = false;
+  let observed = 0;
+  const prepare = f.db.prepare.bind(f.db);
+  t.mock.method(f.db, 'prepare', (sql) => {
+    const statement = prepare(sql);
+    if (/SELECT native_history_state FROM/u.test(sql)) {
+      const get = statement.get.bind(statement);
+      t.mock.method(statement, 'get', (...args) => {
+        if (failing) {
+          observed++;
+          throw Object.assign(new Error('history IOERR'), {code: 'SQLITE_IOERR'});
+        }
+        return get(...args);
+      });
     }
-    const value = Reflect.get(target, key, target);
-    return typeof value === 'function' ? value.bind(target) : value;
-  }});
-  const held = f.open(undefined, connection).readStatus();
+    return statement;
+  });
+  const port = f.open();
+  port.close();
+  const before = f.entries.length;
+  const beforeFault = observed;
+  failing = true;
+  const refusedOpening = f.open();
+  assert.ok(observed > beforeFault, 'opening consumed the injected cached history read fault');
+  assert.equal(f.entries.length, before, 'refused opening entered no native operation');
+  const held = refusedOpening.readStatus();
   assert.equal(held.outcome, OUTCOME.HOST_FAILURE);
+  assert.equal(held.phase, RUNTIME_PHASE.DURABLE_RECORD_READ);
+  assert.equal(held.failure?.reason, 'history IOERR');
+  assert.equal(held.failure?.detail?.code, 'SQLITE_IOERR');
   assert.equal(f.entries.length, before);
 });
 

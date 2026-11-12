@@ -1,3 +1,4 @@
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -156,7 +157,7 @@ test('complete catalog is durably prepared and closed before any native history'
   assert.deepEqual(preparation.observeResources(), []);
   assert.equal(ownsDataDirectoryProcessOwner(directoryOwner, dataDir), true);
   for (const member of declaration.members) {
-    const db = new Database(member.dbPath, {readonly: true, fileMustExist: true});
+    const db = new SQLiteConnection(member.dbPath, {readonly: true, fileMustExist: true});
     try {
       const row = readOriginalAllocationRow({db, member});
       const anchor = member.replicaId === declaration.anchorReplicaId;
@@ -235,7 +236,7 @@ test('a cohort born before its declaration fails closed and is never reissued', 
   for (const member of f.draft.members) {
     const row = readDurableReplicaLifecycle(member.dbPath, member.groupId, member.replicaId);
     assert.equal(row.state, 'active', 'every founder was born before any declaration write');
-    const db = new Database(member.dbPath, {readonly: true, fileMustExist: true});
+    const db = new SQLiteConnection(member.dbPath, {readonly: true, fileMustExist: true});
     try {
       assert.equal(db.prepare(`SELECT native_history_state AS h FROM ${TABLE}
         WHERE replica_identity = ?`).get(member.replicaId).h, HISTORY.NEVER_OPENED);

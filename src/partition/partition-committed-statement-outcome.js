@@ -61,7 +61,7 @@ import {
   PARTITION_SQLITE_RESULT_CODE,
 } from './partition-committed-statement-outcome-constants.js';
 import {buildDurableCommitWitness} from './partition-write-kernel.js';
-import {preparedStatementOf} from '../storage/sqlite-prepared-statement-owner.js';
+import {assertSQLiteConnection, preparedStatementOf} from '../storage/sqlite-prepared-statement-owner.js';
 import {RETAINED_STORE_ERROR, retainedStoreError, readRetainedStoreRowsIn,
   isStoredInteger, isStoredNullableText, isStoredNullableInteger} from
   './partition-retained-store-observation.js';
@@ -88,6 +88,7 @@ function committedStatementEntryKey(command) {
 
 // Exact read-only census. Positions/result integers never round through Number.
 function readCommittedStatementCensusIn(db) {
+  assertSQLiteConnection(db);
   const sql = PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL;
   const rows = readRetainedStoreRowsIn(db, {table: sql.TABLE,
     select: sql.SELECT_ALL, create: sql.CREATE_TABLE});
@@ -119,6 +120,7 @@ function readCommittedStatementCensusIn(db) {
  * @param {Object} db - The partition's connection.
  */
 function createCommittedStatementOutcomeTable(db) {
+  assertSQLiteConnection(db);
   db.exec(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.CREATE_TABLE);
   const present = new Set(db
     .prepare(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.TABLE_COLUMNS)
@@ -172,9 +174,15 @@ function readCommittedStatementOutcome(service, entryKey) {
  *   `error` only for STATEMENT_FAILED, `result` (the statement's retained
  *   {changes, lastInsertRowid}, committedStatementResult) only for APPLIED.
  */
-function recordCommittedStatementOutcome(service, {entryKey, outcome, index,
+function recordCommittedStatementOutcome(service, outcome) {
+  insertCommittedStatementOutcome(service.db, outcome);
+}
+
+// The enclosing settlement already selected its database. Persistence must
+// use that native handle even when the service carrier changes during work.
+function insertCommittedStatementOutcome(db, {entryKey, outcome, index,
   term, error = null, result = null, ownerResultText = null}) {
-  preparedStatementOf(service.db, PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.INSERT).run(
+  preparedStatementOf(db, PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.INSERT).run(
     entryKey, outcome, index, term,
     error === null ? null : failureCodeOf(error),
     error === null ? null : String(error.message),
@@ -359,12 +367,14 @@ function settleRecordedCommittedStatement(service, {recorded, command,
  */
 function settleFailedCommittedStatement(service, {error, command, entryKey,
   index, term, identity, afterCommit, afterRollback}) {
-  if (!isDeterministicStatementFailure(error, service.db)) {
+  const {db} = service;
+  assertSQLiteConnection(db);
+  if (!isDeterministicStatementFailure(error, db)) {
     const failure = statementEnvironmentFailure(error);
     afterRollback(() => service.rejectCommittedWrite(command.entryId, failure));
     throw failure;
   }
-  recordCommittedStatementOutcome(service, {
+  insertCommittedStatementOutcome(db, {
     entryKey,
     outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED,
     index,

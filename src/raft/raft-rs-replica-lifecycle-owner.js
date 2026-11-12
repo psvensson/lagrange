@@ -3,15 +3,16 @@ import {deriveRaftRsPeerId} from './raft-rs-peer-identity.js';
 import {
   RAFT_OPERATION_OUTCOME,
 } from './raft-operation-port-constants.js';
-import {preparedStatementOf} from '../storage/sqlite-prepared-statement-owner.js';
+import {assertSQLiteConnection, preparedStatementOf} from '../storage/sqlite-prepared-statement-owner.js';
 import {commitDurably} from './raft-rs-durable-store.js';
 import {pendingTurn, settledTurn, turnChainValue} from './raft-rs-turn-answer.js';
 import {RAFT_RS_OPENING_HISTORY, RAFT_RS_OPENING_HISTORY_ERROR} from
   './raft-rs-opening-history-constants.js';
 import {LIFECYCLE_ERROR, LIFECYCLE_STATE, REPLICA_LIFECYCLE_TABLE,
-  LIFECYCLE_REASON, LIFECYCLE_BIRTH, REPLICA_DATABASE_CREATION,
-  retiredRefusalReason} from
+  LIFECYCLE_REASON, LIFECYCLE_BIRTH, REPLICA_DATABASE_CREATION} from
   './raft-rs-replica-lifecycle-constants.js';
+import {decodeReplicaLifecycleRow, lifecycleAdmissionOf, encodeLifecycleRetirement} from
+  './raft-rs-replica-lifecycle-record.js';
 import {ORIGINAL_ALLOCATION as ORIGINAL, ORIGINAL_ALLOCATION_REASON as ORIGINAL_REASON,
   ORIGINAL_ALLOCATION_COLUMN as ORIGINAL_COLUMN, ORIGINAL_RIGHT_SUCCESSOR,
   originalAllocationError} from './raft-rs-original-allocation-constants.js';
@@ -39,7 +40,6 @@ import {ORIGINAL_ALLOCATION as ORIGINAL, ORIGINAL_ALLOCATION_REASON as ORIGINAL_
 const RUNTIME_LIFECYCLE_OWNERS = new WeakMap();
 const LIFECYCLE_ADMIN_OUTCOME = Object.freeze({NOT_MANAGED: 'NOT_MANAGED'});
 const LIFECYCLE_CLAIM_REFUSED = 'REPLICA_LIFECYCLE_CLAIM_REFUSED';
-
 function frozenResult(outcome, reason, detail = null) {
   return Object.freeze({outcome, reason, detail});
 }
@@ -47,7 +47,7 @@ function frozenResult(outcome, reason, detail = null) {
 // This owner's fixed statements, each prepared once per database handle.
 const LIFECYCLE_SQL = Object.freeze({
   EMPTY_DATABASE: 'SELECT 1 FROM sqlite_master LIMIT 1',
-  IDENTITY_ROW: `SELECT peer_id, replica_identity, state, reason, incarnation
+  IDENTITY_ROW: `SELECT peer_id, replica_identity, state, reason, incarnation, retirement_evidence
     FROM ${REPLICA_LIFECYCLE_TABLE}
     WHERE group_id = ? AND (peer_id = ? OR replica_identity = ?)`,
   TABLE_PRESENT: 'SELECT 1 FROM sqlite_master WHERE type = \'table\' AND name = ?',
@@ -68,9 +68,9 @@ const LIFECYCLE_SQL = Object.freeze({
     SET state = 'retired', reason = ?, changed_at = ?, retirement_evidence = ?
     WHERE group_id = ? AND peer_id = ? AND replica_identity = ?`,
 });
-
 // The one table definition.
 function ensureLifecycleTable(db) {
+  assertSQLiteConnection(db);
   db.exec(`
     CREATE TABLE IF NOT EXISTS ${REPLICA_LIFECYCLE_TABLE} (
       group_id TEXT NOT NULL,
@@ -87,13 +87,11 @@ function ensureLifecycleTable(db) {
     )
   `);
 }
-
 // The row holding either half of this replica's identity in its group.
 function lifecycleIdentityRow(db, {groupId, peerId, replicaIdentity}) {
   return preparedStatementOf(db, LIFECYCLE_SQL.IDENTITY_ROW)
     .get(groupId, peerId, replicaIdentity);
 }
-
 function hasDurableRaftRecord(db, groupId) {
   const raftTables = db.prepare(`
     SELECT name FROM sqlite_master
@@ -105,7 +103,6 @@ function hasDurableRaftRecord(db, groupId) {
     db.prepare(`SELECT 1 FROM ${table} WHERE group_id = ? LIMIT 1`)
       .get(groupId) !== undefined);
 }
-
 // Ordinary opening only consumes a recorded generation. Missing evidence is
 // never repaired here, including a missing table, row or incarnation.
 function openLifecycleRecord(db, identity) {
@@ -122,10 +119,7 @@ function openLifecycleRecord(db, identity) {
     return frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED,
       LIFECYCLE_REASON.IDENTITY_MISMATCH);
   }
-  return row.state === LIFECYCLE_STATE.RETIRED ?
-    frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED, retiredRefusalReason(row.reason),
-      row.state) :
-    frozenResult(RAFT_OPERATION_OUTCOME.CORE_OK, LIFECYCLE_REASON.ACTIVE, row.state);
+  return lifecycleAdmissionOf(row);
 }
 
 // Only explicit allocation and private snapshot preparation call this writer.
@@ -155,6 +149,7 @@ class RaftRsReplicaLifecycleOwner {
   #waiters = [];
 
   constructor({db, groupId, peerId, replicaIdentity}) {
+    assertSQLiteConnection(db);
     this.#db = db;
     this.#groupId = groupId;
     this.#peerId = peerId;
@@ -230,7 +225,8 @@ class RaftRsReplicaLifecycleOwner {
     return this.active ?
       frozenResult(RAFT_OPERATION_OUTCOME.CORE_OK, LIFECYCLE_REASON.ACTIVE) :
       frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED,
-        this.#refusalReason || LIFECYCLE_REASON.RETIRED);
+        this.#retiring && this.#state === LIFECYCLE_STATE.ACTIVE ?
+          LIFECYCLE_STATE.RETIRED : this.#refusalReason);
   }
 
   /**
@@ -270,10 +266,7 @@ class RaftRsReplicaLifecycleOwner {
    * @return {Promise<Object>} Frozen outcome.
    */
   async retire(reason, evidence = null) {
-    if (this.#state === LIFECYCLE_STATE.RETIRED) {
-      return frozenResult(
-        RAFT_OPERATION_OUTCOME.CORE_REFUSED, LIFECYCLE_REASON.RETIRED);
-    }
+    const retirement = encodeLifecycleRetirement(reason, evidence);
     if (this.#state !== LIFECYCLE_STATE.ACTIVE) {
       return frozenResult(
         RAFT_OPERATION_OUTCOME.CORE_REFUSED, this.#refusalReason);
@@ -290,11 +283,11 @@ class RaftRsReplicaLifecycleOwner {
         RAFT_OPERATION_OUTCOME.CORE_REFUSED, this.#refusalReason);
     }
     // The reason and the evidence are written by the one UPDATE.
-    this.#writeRetired(String(reason || LIFECYCLE_REASON.RETIRED), evidence);
+    this.#writeRetired(retirement.reason, retirement.evidenceText);
     this.#state = LIFECYCLE_STATE.RETIRED;
-    this.#refusalReason = LIFECYCLE_REASON.RETIRED;
+    this.#refusalReason = retirement.refusal.reason;
     return frozenResult(
-      RAFT_OPERATION_OUTCOME.CORE_OK, LIFECYCLE_REASON.RETIRED);
+      RAFT_OPERATION_OUTCOME.CORE_OK, this.#refusalReason);
   }
 
   /**
@@ -320,13 +313,13 @@ class RaftRsReplicaLifecycleOwner {
    * The one retired-row UPDATE: state, reason, changed_at and the
    * retirement evidence (null for a reseed hold) are written together.
    * @param {string} reason - The durable reason.
-   * @param {Object|null} [evidence] - Verified group-retirement evidence.
+   * @param {string|null} evidenceText - Captured, validated evidence encoding.
    */
-  #writeRetired(reason, evidence = null) {
+  #writeRetired(reason, evidenceText) {
     commitDurably(this.#db, () => preparedStatementOf(this.#db, LIFECYCLE_SQL.RETIRE).run(
       reason,
       new Date().toISOString(),
-      evidence ? JSON.stringify(evidence) : null,
+      evidenceText,
       this.#groupId,
       this.#peerId,
       this.#replicaIdentity,
@@ -355,8 +348,9 @@ class RaftRsReplicaLifecycleOwner {
  * @return {Object} Immutable lifecycle outcome, never install permission.
  */
 function prepareReplicaLifecycleForSnapshot(request) {
-  const retained = request.receiverIncarnation ?? null;
   const {db, groupId, peerId, replicaIdentity} = request;
+  assertSQLiteConnection(db);
+  const retained = request.receiverIncarnation ?? null;
   const prepared = prepareLifecycleRecord(db, {groupId, peerId, replicaIdentity},
     retained === null ? randomUUID() : String(retained));
   if (prepared.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) return prepared;
@@ -370,7 +364,7 @@ function prepareReplicaLifecycleForSnapshot(request) {
     }
     // A snapshot is imported history. Never publish a staged lifecycle row
     // that could later authorize fresh genesis if the installed log is lost.
-    commitDurably(request.db, () => owner.recordOpeningHistory(incarnation));
+    commitDurably(db, () => owner.recordOpeningHistory(incarnation));
     return settledTurn(frozenResult(RAFT_OPERATION_OUTCOME.CORE_OK,
       LIFECYCLE_REASON.STAGING_PREPARED, Object.freeze({incarnation})));
   }));
@@ -391,8 +385,8 @@ function prepareReplicaLifecycleForSnapshot(request) {
  * @param {Object} request - {db, groupId, peerId, replicaIdentity}.
  * @return {Object} Frozen {outcome, reason, detail: {incarnation}|null}.
  */
-function prepareReplicaLifecycleForOriginalAllocation(request) {
-  const {db, groupId, peerId, replicaIdentity} = request;
+function prepareReplicaLifecycleForOriginalAllocation({db, groupId, peerId, replicaIdentity}) {
+  assertSQLiteConnection(db);
   if (!db.inTransaction) {
     throw new Error(LIFECYCLE_ERROR.TRANSACTION_REQUIRED);
   }
@@ -425,7 +419,8 @@ const ORIGINAL_ROW_FIELDS = Object.freeze(['state', 'incarnation',
   'native_history_state', ...ORIGINAL_COLUMNS]);
 const SQL_LIST_SEPARATOR = ', ';
 const ORIGINAL_SQL = Object.freeze({
-  EXACT_ROW: `SELECT ${ORIGINAL_ROW_FIELDS.join(SQL_LIST_SEPARATOR)}
+  EXACT_ROW: `SELECT ${ORIGINAL_ROW_FIELDS.join(SQL_LIST_SEPARATOR)},
+    peer_id, replica_identity, reason, retirement_evidence
     FROM ${REPLICA_LIFECYCLE_TABLE}
     WHERE group_id = ? AND peer_id = ? AND replica_identity = ?`,
   PREPARE_ROW: `UPDATE ${REPLICA_LIFECYCLE_TABLE}
@@ -452,6 +447,7 @@ const RIGHT_TRANSITION_SQL = Object.freeze(Object.fromEntries(
 // founder's file at its birth, and by a declaration read of a file that may
 // not be a founder's (an absent table or column there is ABSENT).
 function lifecycleColumns(db) {
+  assertSQLiteConnection(db);
   return new Set(db.prepare(`PRAGMA table_info(${REPLICA_LIFECYCLE_TABLE})`).all()
     .map(({name}) => name));
 }
@@ -474,6 +470,7 @@ function exactOriginalRow(db, member) {
   if (row?.incarnation !== member.incarnation || row?.state !== LIFECYCLE_STATE.ACTIVE) {
     throw originalAllocationError(ORIGINAL_REASON.IDENTITY, member.replicaId);
   }
+  decodeReplicaLifecycleRow(row);
   return Object.freeze(Object.fromEntries(ORIGINAL_ROW_FIELDS.map((field) =>
     [field, row[field] ?? null])));
 }
@@ -505,11 +502,14 @@ function readOriginalAllocationRow({db, member}) {
  * @return {Object} Frozen {state, declaration?, issue?}.
  */
 function readOriginalAllocationDeclaration({db, groupId, replicaIdentity}) {
+  assertSQLiteConnection(db);
   const present = lifecycleColumns(db);
   const row = !present.has(ORIGINAL_COLUMN.DECLARATION) ? undefined : db.prepare(`
-    SELECT ${ORIGINAL_COLUMN.DECLARATION}, ${ORIGINAL_COLUMN.ISSUE}
+    SELECT ${ORIGINAL_COLUMN.DECLARATION}, ${ORIGINAL_COLUMN.ISSUE},
+      peer_id, replica_identity, state, reason, incarnation, retirement_evidence
     FROM ${REPLICA_LIFECYCLE_TABLE} WHERE group_id = ? AND replica_identity = ?`)
     .get(groupId, replicaIdentity);
+  if (row !== undefined) decodeReplicaLifecycleRow(row);
   return row?.[ORIGINAL_COLUMN.DECLARATION] == null ?
     Object.freeze({state: ORIGINAL.ABSENT}) : Object.freeze({state: ORIGINAL.PRESENT,
       declaration: JSON.parse(row[ORIGINAL_COLUMN.DECLARATION]),
@@ -570,16 +570,17 @@ function prepareOriginalAllocationRow({db, declaration, member}) {
 }
 
 /**
- * Issue the allocation on its anchor: one compare-and-swap PREPARING ->
- * ISSUED of exactly this declaration and member, NEVER_OPENED, both rights
- * UNUSED. Anything else changes nothing and is a typed HOLD.
+ * Issue exactly this declaration/member on its NEVER_OPENED anchor via
+ * PREPARING -> ISSUED compare-and-swap with both rights UNUSED; else typed HOLD.
  * @param {Object} request - {db, declaration, anchor}.
  */
 function markOriginalAllocationIssued({db, declaration, anchor}) {
+  assertSQLiteConnection(db);
   if (anchor.replicaId !== declaration.anchorReplicaId) {
     throw originalAllocationError(ORIGINAL_REASON.IDENTITY, anchor.replicaId);
   }
   const declarationText = JSON.stringify(declaration);
+  readOriginalAllocationRow({db, member: anchor});
   commitOriginalWrite(db, anchor, () => preparedStatementOf(db, ORIGINAL_SQL.ISSUE)
     .run(ORIGINAL.ISSUED, anchor.groupId, anchor.peerId, anchor.replicaId,
       anchor.incarnation, declarationText, JSON.stringify(anchor), ORIGINAL.PREPARING,
@@ -757,6 +758,7 @@ async function withReplicaLifecycleClaim(request, work) {
  * @return {string} A LIFECYCLE_BIRTH.
  */
 function birthReplicaLifecycle({db, groupId, replicaIdentity, creation}) {
+  assertSQLiteConnection(db);
   return db.transaction(() => {
     if (db.prepare(LIFECYCLE_SQL.EMPTY_DATABASE).get() !== undefined) {
       return LIFECYCLE_BIRTH.NOT_EMPTY;

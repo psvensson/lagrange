@@ -1,3 +1,4 @@
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 // Original opening is a process-local continuation of complete preparation,
 // never permission reconstructed from a serialized original declaration.
 import test from 'node:test';
@@ -7,7 +8,6 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import Database from 'better-sqlite3';
 import {createSeedOriginalAllocation} from
   '../../src/bootstrap/seed-original-allocation-declaration.js';
 import {RaftRsOriginalAllocationPreparation} from
@@ -56,7 +56,7 @@ function fixture(t) {
 }
 
 function requestFor(f, member, extra = {}) {
-  const db = new Database(member.dbPath, {fileMustExist: true});
+  const db = new SQLiteConnection(member.dbPath, {fileMustExist: true});
   const resource = {db, port: null};
   f.resources.push(resource);
   const request = {groupId: member.groupId, peerId: member.replicaId,

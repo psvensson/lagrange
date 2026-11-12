@@ -1,3 +1,4 @@
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 // Real native command history, not the 141-member original-allocation or public
 // startup proof. No history is edited: one application callback fails, or one
 // exact native commit carrier is held, while native persistence runs normally.
@@ -7,7 +8,6 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
-import Database from 'better-sqlite3';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
@@ -57,7 +57,7 @@ function tableOptions() {
 }
 
 function passive(dbPath, partitionId) {
-  const db = new Database(dbPath, {readonly: true, fileMustExist: true});
+  const db = new SQLiteConnection(dbPath, {readonly: true, fileMustExist: true});
   try {
     const before = db.serialize();
     const native = RaftRsDurableStore.readRetainedHistoryIn(db, partitionId);

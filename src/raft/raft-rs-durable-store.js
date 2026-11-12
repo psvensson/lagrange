@@ -6,9 +6,8 @@
 // state. The applied progress and the configuration state are columns of one
 // row, so they are written by one statement and can never disagree.
 //
-// It keeps an ordered journal of the durable writes it made. The journal is
-// observability, not authority: it is what a caller reads to see the order the
-// writes happened in, while the record itself is what a restart reads.
+// Its journal records write order for observation; the durable record is
+// authoritative on restart.
 //
 // What survives what (owner decision O4, 2026-10-05, "option 2"): the
 // connection runs journal_mode WAL with synchronous NORMAL, so a commit
@@ -22,7 +21,7 @@
 // application's own writes - keeps NORMAL and may be lost to a power loss;
 // it is recomputed from the synced log on restart.
 
-import {preparedExactStatementOf, preparedStatementOf} from
+import {assertSQLiteConnection, preparedExactStatementOf, preparedStatementOf} from
   '../storage/sqlite-prepared-statement-owner.js';
 import {
   RAFT_RS_BOOLEAN_COLUMN,
@@ -265,6 +264,7 @@ function durableRecordOf({hardStateRow, appliedRow, snapshotRow, entryRows}) {
 }
 
 function readDurableRecordIn(db, groupId) {
+  assertSQLiteConnection(db);
   return durableRecordOf(readDurableRowsIn(db, groupId));
 }
 
@@ -311,6 +311,7 @@ class RaftRsDurableStore {
    * @param {Object} [options] - Options for the durable store.
    */
   constructor(db, options = {}) {
+    assertSQLiteConnection(db);
     this.db = db;
     this.maxJournalEntries =
       Number.isInteger(options?.maxJournalEntries) && options.maxJournalEntries >= 0 ?
@@ -659,6 +660,7 @@ class RaftRsDurableStore {
   // A caller composing application observations may own the enclosing read
   // transaction. The result describes that view; it grants no opening right.
   static readRetainedHistoryIn(db, groupId) {
+    assertSQLiteConnection(db);
     return db.transaction(() => readRetainedHistoryIn(db, groupId))();
   }
 
@@ -742,6 +744,7 @@ class RaftRsDurableStore {
     return readSnapshotIndexIn(db, groupId);
   }
   readSnapshotIndex(groupId) {
+    assertSQLiteConnection(this.db);
     return this.snapshotTablePresent && this.db.open ?
       readPresentSnapshotIndexIn(this.db, groupId) : 0n;
   }

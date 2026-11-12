@@ -7,15 +7,17 @@
  * beside the lifecycle row in the same read transaction.
  */
 import fs from 'node:fs';
-import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../storage/sqlite-prepared-statement-owner.js';
 import {DURABLE_FILE_PRESENCE, readDurableFilePresence} from
   '../storage/durable-file-presence.js';
 import {RaftRsDurableStore} from './raft-rs-durable-store.js';
 import {RAFT_RS_TABLE} from './raft-rs-durable-store-constants.js';
 import {RAFT_RS_OPENING_HISTORY} from './raft-rs-opening-history-constants.js';
 import {RAFT_OPERATION_OUTCOME} from './raft-operation-port-constants.js';
-import {LIFECYCLE_STATE, REPLICA_LIFECYCLE_TABLE, retiredRefusalReason} from
+import {LIFECYCLE_STATE, LIFECYCLE_REASON, REPLICA_LIFECYCLE_TABLE} from
   './raft-rs-replica-lifecycle-constants.js';
+import {LifecycleRecordRefusal, decodeReplicaLifecycleRow, lifecycleAdmissionOf} from
+  './raft-rs-replica-lifecycle-record.js';
 
 // What a held row says about the replica's consensus record (the `opening`
 // of a lifecycle read). NEVER_OPENED is positive, from one read snapshot: an
@@ -81,9 +83,8 @@ function validateReceiverLifecycleRow(row, request, imported) {
   if (receiverRowIdentityMismatch(row, request)) {
     return frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED, SNAPSHOT_RECEIVER_REASON.IDENTITY);
   }
-  if (row.state !== LIFECYCLE_STATE.ACTIVE) {
-    return frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED, retiredRefusalReason(row.reason));
-  }
+  const admission = lifecycleAdmissionOf(row);
+  if (admission.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) return admission;
   if (imported && row.native_history_state !== RAFT_RS_OPENING_HISTORY.ESTABLISHED) {
     return frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED, SNAPSHOT_RECEIVER_REASON.HISTORY);
   }
@@ -96,9 +97,6 @@ function snapshotReceiverRow(db, request, imported, readEstablished = false) {
   if (!holdsLifecycleRow(observed)) {
     return frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED, observed.reason);
   }
-  if (!imported && observed.opening !== DURABLE_LIFECYCLE_OPENING.NEVER_OPENED) {
-    return frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED, SNAPSHOT_RECEIVER_REASON.HISTORY);
-  }
   const rows = db.prepare(`SELECT * FROM ${REPLICA_LIFECYCLE_TABLE} LIMIT 2`).all();
   if (rows.length !== 1) {
     return frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED, SNAPSHOT_RECEIVER_REASON.IDENTITY);
@@ -106,6 +104,9 @@ function snapshotReceiverRow(db, request, imported, readEstablished = false) {
   const row = rows[0];
   const refused = validateReceiverLifecycleRow(row, request, imported);
   if (refused) return refused;
+  if (!imported && observed.opening !== DURABLE_LIFECYCLE_OPENING.NEVER_OPENED) {
+    return frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED, SNAPSHOT_RECEIVER_REASON.HISTORY);
+  }
   return readEstablished ? snapshotEstablishedReceiver(db, request, row.incarnation) :
     snapshotReceiverFresh(row.incarnation);
 }
@@ -143,7 +144,7 @@ function inspectSnapshotLifecycleFile(file, request, imported = false, readEstab
   if (filePresence.presence !== DURABLE_FILE_PRESENCE.PRESENT) {
     return frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED, SNAPSHOT_RECEIVER_REASON.UNAVAILABLE);
   }
-  const db = new Database(file, {readonly: true, fileMustExist: true});
+  const db = new SQLiteConnection(file, {readonly: true, fileMustExist: true});
   try {
     return db.transaction(() =>
       snapshotReceiverRow(db, request, imported, readEstablished))();
@@ -201,7 +202,7 @@ const DURABLE_LIFECYCLE_READ = Object.freeze({
   ROW_ABSENT: Object.freeze({state: UNREADABLE_STATE,
     reason: 'lifecycle-row-absent', ...NO_ROW_FIELDS}),
   ROW_INVALID: Object.freeze({state: UNREADABLE_STATE,
-    reason: 'lifecycle-row-invalid', ...NO_ROW_FIELDS}),
+    reason: LIFECYCLE_REASON.ROW_INVALID, ...NO_ROW_FIELDS}),
 });
 // What a failed read was reading (the `subject` of an UNREADABLE cause).
 const LIFECYCLE_READ_SUBJECT = Object.freeze({
@@ -224,20 +225,6 @@ function snapshotOf(lifecycle) {
 function unreadableBecause(code, subject) {
   return Object.freeze({...DURABLE_LIFECYCLE_READ.UNREADABLE,
     cause: Object.freeze({code, subject})});
-}
-
-// The recorded evidence, or null (none, or one that cannot be parsed).
-function retirementEvidenceOf(raw) {
-  if (typeof raw !== 'string' || raw.length === 0) {
-    return null;
-  }
-  try {
-    const evidence = JSON.parse(raw);
-    return evidence && typeof evidence === 'object' ?
-      Object.freeze(evidence) : null;
-  } catch (_error) {
-    return null;
-  }
 }
 
 // The consensus tables the database holds (none before a store opened it).
@@ -270,14 +257,14 @@ function lifecycleRowOf(db, groupId, replicaIdentity, progress) {
     WHERE group_id = ? AND replica_identity = ?
   `).get(String(groupId), String(replicaIdentity));
   if (row === undefined) return DURABLE_LIFECYCLE_READ.ROW_ABSENT;
-  if (typeof row.incarnation !== 'string' || row.incarnation.length === 0) {
-    return DURABLE_LIFECYCLE_READ.ROW_INVALID;
+  try {
+    const record = decodeReplicaLifecycleRow(row);
+    return Object.freeze({...record, opening: openingOf(db, row, progress), cause: null});
+  } catch (error) {
+    if (!(error instanceof LifecycleRecordRefusal)) throw error;
+    return Object.freeze({...DURABLE_LIFECYCLE_READ.ROW_INVALID, reason: error.code,
+      cause: Object.freeze({code: error.code, subject: LIFECYCLE_READ_SUBJECT.LIFECYCLE})});
   }
-  return Object.freeze({state: row.state, reason: String(row.reason ?? ''),
-    incarnation: row.incarnation,
-    peerId: String(row.peer_id),
-    retirementEvidence: retirementEvidenceOf(row.retirement_evidence),
-    opening: openingOf(db, row, progress), cause: null});
 }
 
 function holdsLifecycleRow(lifecycle) {
@@ -288,7 +275,7 @@ function holdsLifecycleRow(lifecycle) {
 function readPresentDatabase(dbPath, groupId, replicaIdentity, readBeside) {
   const progress = {subject: LIFECYCLE_READ_SUBJECT.FILE};
   try {
-    const db = new Database(dbPath, {readonly: true, fileMustExist: true});
+    const db = new SQLiteConnection(dbPath, {readonly: true, fileMustExist: true});
     try {
       return db.transaction(() => {
         const lifecycle = lifecycleRowOf(db, groupId, replicaIdentity,

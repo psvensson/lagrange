@@ -1,0 +1,135 @@
+{
+  "schema": "test-receipt/1",
+  "status": "incomplete",
+  "head": "1b51362e0f7af24a5e373b8a57619d4cf13ec706",
+  "phase": "phase2-frozen-for-fresh-independent-review",
+  "testFileDigests": {
+    "src/storage/sqlite-prepared-statement-owner.js": "4a5db10f9a9f3f3f65c108aa7e41aca10a741fd209b1a038bc18eabff54ee202",
+    "test/storage/sqlite-connection-statement-ownership-refusal.test.js": "ceac4d8ef5f8c5c526e817c6306ae7e4282c4e83f28087a74b62dc8ba3fcdc0d",
+    "package.json": "7c56bd6952c10baab826be0504498e97f3f0a8c13dd953dd164a5baffe093b0b",
+    "package-lock.json": "8ac4b4fb882a5a93a67f192b37167fe8d5884c9a6778ca5b4b2dff7b28b76b04",
+    "node_modules/better-sqlite3/package.json": "58e81504576abccfacbfd08dc9432dc3a00d0fc0454685cb7a76aaf976cf25a9",
+    "node_modules/better-sqlite3/lib/database.js": "50fe0b490f29174d961c4d1ae54f22973447ff1255fd710e785d201c0ebfb4d0",
+    "node_modules/better-sqlite3/lib/methods/wrappers.js": "a150a6271d23f4e5f8953b129f370ff096c7cdc4b812afbf080a6cf4ab741bcf",
+    "node_modules/better-sqlite3/src/better_sqlite3.cpp": "551abc7d9feea0ad2acb97f33125c5e8800d6d84a1da4390512d08743f924b1e",
+    "node_modules/better-sqlite3/build/Release/better_sqlite3.node": "d7d9272b12d11c1dc2bb787741b1b7c4037d336155f316ace3420410c28fda37",
+    "docs/steering/rules.md": "ff82e2e1318f964871a3655e39755f0410f11c8bdd5edc89e7ed1f0a16fdd08b",
+    "docs/steering/router.md": "b8e7f4cfc71d941a39a2e282af3e515c8391812e3345c9fafd2ab8cb082705d2",
+    "docs/steering/rule-set.json": "0ed0e1ad8d129bbdbfc565df42c437a7bb43f7344ce9d05d045a02c0440e29f5",
+    "/tmp/lagrange-prepared-statement-ownership-design-eaccbd37a-20261112.md": "93825f73dfd2acb9f9d2171095130f76ef1fee23e60028a892e7c12c5e6a3ee9",
+    "test/storage/sqlite-connection-statement-ownership-brand.test.js": "11c1abb8b6d073a6177eb6573ecd31c018b6adf51414cff50c3c42d7fdc7ede1",
+    "test/storage/sqlite-connection-statement-ownership.test.js": "868e44067c509389256df96e9a448db374b1d01409b46b3f90de055a9acae9bd"
+  },
+  "receipts": [
+    {
+      "id": "ownership",
+      "passed": true,
+      "claim": "Focused storage owner boundary only: real raw/closed raw/spoof/proxy/revoked proxy/primitive/null refused before foreign access, SQL or adoption; canonical helpers and brand-only closed assertion exercised."
+    },
+    {
+      "id": "cache-integer",
+      "passed": true,
+      "claim": "Native cache identity per connection/mode, BigInt large values and native defaultSafeIntegers preserved; failed prepare/configuration retry; migration/rollback and direct native reopen/image tests."
+    },
+    {
+      "id": "close-custody",
+      "passed": true,
+      "claim": "Native uncached busy iterator close refusal retains open handle and cached identities without prepare, iterator.return then successful close retry; held statements and closed cache hit/miss refuse."
+    },
+    {
+      "id": "production-composition",
+      "passed": false,
+      "reason": "F carry-in and Phase2 caller migration assembled;15 focused files187 reported cases pass. Complete affected cone, receiver72 repaired execution and exact final parent production composition remain unrun on lab."
+    },
+    {
+      "id": "independent-review",
+      "passed": false,
+      "reason": "Phase1 four-file approval unchanged (Turing01a1ce40-d9e6-7b72-a890-ede72685fdca); fresh Phase2 review is pending parent assignment."
+    },
+    {
+      "id": "negative-controls",
+      "passed": true,
+      "reason": "Three isolated mutants fail intended assertions: raw-handle adoption lacks required refusal; shared modes break identity and BigInt; clear-before-close loses identity after native busy refusal."
+    },
+    {
+      "id": "static-guards",
+      "passed": false,
+      "reason": "Scoped ESLint, strict size/complexity/cognitive/runtime grammar and impact pass.6 inherited F-baseline guideline findings retained and routed; no all-static-green claim or baseline waiver."
+    }
+  ],
+  "focusedResults": [
+    {
+      "file": "test/storage/sqlite-connection-statement-ownership-refusal.test.js",
+      "command": [
+        "flock",
+        "/tmp/lagrange-local-test.lock",
+        "nice",
+        "-n15",
+        "node",
+        "scripts/run-test-files.js",
+        "--jobs",
+        "1",
+        "test/storage/sqlite-connection-statement-ownership-refusal.test.js"
+      ],
+      "exitCode": 0,
+      "log": "/tmp/lagrange-statement-owner-phase1-20261112/green-0-run.log",
+      "sha256": "ed880d0192d9bb50846db2b67dd64326c1287af0426007c3f82f13a866765507"
+    },
+    {
+      "file": "test/storage/sqlite-connection-statement-ownership-brand.test.js",
+      "command": [
+        "flock",
+        "/tmp/lagrange-local-test.lock",
+        "nice",
+        "-n15",
+        "node",
+        "scripts/run-test-files.js",
+        "--jobs",
+        "1",
+        "test/storage/sqlite-connection-statement-ownership-brand.test.js"
+      ],
+      "exitCode": 0,
+      "log": "/tmp/lagrange-statement-owner-phase1-20261112/green-1-run.log",
+      "sha256": "54bf7cb168a4448318d774938173e4c7e05010a4e88779232b74b19a6ebf035d"
+    },
+    {
+      "file": "test/storage/sqlite-connection-statement-ownership.test.js",
+      "command": [
+        "flock",
+        "/tmp/lagrange-local-test.lock",
+        "nice",
+        "-n15",
+        "node",
+        "scripts/run-test-files.js",
+        "--jobs",
+        "1",
+        "test/storage/sqlite-connection-statement-ownership.test.js"
+      ],
+      "exitCode": 0,
+      "log": "/tmp/lagrange-statement-owner-phase1-stronger-20261112/green-run.log",
+      "sha256": "23854c0c51331381eb35af1aaf38f2f6a3bbee45c72454c1be4fe7df737106da"
+    }
+  ],
+  "failedVerification": {
+    "file": "/tmp/lagrange-statement-owner-phase1-20261112/after-eslint.log",
+    "sha256": "26de2d5a37b3b5e8561c6a59d5a6e44fb1f4a18278a32b589aeb797ee01ed368"
+  },
+  "limitations": [
+    "Migration NOT complete: Phase2 review and exact production/lab composition pending.",
+    "Receiver72 explicitly UNRUN on repaired bytes; lint does not prove staged fault engagement.",
+    "Separate permission witness no-skip composition pending; current skip unchanged.",
+    "All prior failure artifacts retained; compact proof inclusion list distinguishes external raw preservation.",
+    "Source/private-slot/native OOM and cache clearing proof ceilings remain Phase1 limits.",
+    "No commit, push, integration or primary checkout writes."
+  ],
+  "phase1ReviewManifest": {
+    "path": "solve/quests/sqlite-connection-statement-ownership/evidence/phase1-stronger-manifest.json",
+    "sha256": "533f6a01a3eaeb4eac97fe2b68a41197d4c0f5b66951bc8fd50b615a4e333de4"
+  },
+  "phase2CandidateTree": "6c4cc931f37e859e3fd70a429229a569027b5f09",
+  "phase2Evidence": {
+    "phase2-caller-provenance.json": "662bedc49b7d3548a6e412ca01ef5f1b3a0707fe58782585a99baf9e76ded480",
+    "phase2-verification.json": "962f6cf6e2c4ed0a5273bd1e0c7aa13971053cd5d30ede83a6c0cd28d092f8b5",
+    "phase2-failure-ledger.json": "f1f69c647677509c46c2b7775158102bd136fd2188ee35b9f0a962930aca9150"
+  }
+}

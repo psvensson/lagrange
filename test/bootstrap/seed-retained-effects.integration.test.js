@@ -1,3 +1,4 @@
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 // Actual RF1 native persistence and ordinary committed application. A direct
 // public native-port proposal supplies retained-history bytes only: this test
 // first proves the ordinary write path remains CUTOVER_PAUSED. The observer
@@ -9,7 +10,6 @@ import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 import {inspect as describe} from 'node:util';
-import Database from 'better-sqlite3';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
@@ -61,7 +61,7 @@ function environment(t) {
 }
 
 function inspect(declaration, member) {
-  const db = new Database(member.dbPath, {readonly: true, fileMustExist: true});
+  const db = new SQLiteConnection(member.dbPath, {readonly: true, fileMustExist: true});
   try {
     const before = db.serialize();
     const result = readOriginalSeedRetainedEffects({db, declaration, member});

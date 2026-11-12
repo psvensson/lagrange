@@ -11,7 +11,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
-import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 
 import {
   detectLegacyPartitionConsensusState,
@@ -44,7 +44,7 @@ function schemaOf(db) {
 }
 
 function withDatabase(work) {
-  const db = new Database(':memory:');
+  const db = new SQLiteConnection(':memory:');
   try {
     return work(db);
   } finally {

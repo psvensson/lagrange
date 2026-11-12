@@ -10,7 +10,7 @@
  * instead.
  */
 
-import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 import {
   PARTITION_SERVICE_REMOVAL_SERVING_METHODS,
   REMOVAL_SERVING_STATE,
@@ -28,7 +28,7 @@ const REMOVAL_DRAINED_ANSWER = Object.freeze({
  * @return {Object} The same double.
  */
 function withRemovalServingSurface(service) {
-  const db = new Database(':memory:');
+  const db = new SQLiteConnection(':memory:');
   openParticipantTransactionStore(db);
   return Object.assign(service, {
     db,

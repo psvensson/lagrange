@@ -20,7 +20,7 @@
 // a resource decision only: a recipient that meets it is answered typed
 // (EXPIRED) and restarts from page 0; its correctness never depends on when
 // expiry happens.
-import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../storage/sqlite-prepared-statement-owner.js';
 import {randomUUID} from 'node:crypto';
 import {NUM} from '../constants/numbers.js';
 import {TIME_MS} from '../constants/time.js';
@@ -83,9 +83,9 @@ function boundedLimit(requested, bound) {
 // private copy of an in-memory database (no second connection can see it).
 function openSnapshotDatabase(partition) {
   if (!partition.dbPath || partition.dbPath === PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH) {
-    return new Database(partition.db.serialize());
+    return new SQLiteConnection(partition.db.serialize());
   }
-  const snapshot = new Database(partition.dbPath, {readonly: true, fileMustExist: true});
+  const snapshot = new SQLiteConnection(partition.dbPath, {readonly: true, fileMustExist: true});
   snapshot.exec(BEGIN_READ);
   return snapshot;
 }

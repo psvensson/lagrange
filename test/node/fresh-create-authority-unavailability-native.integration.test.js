@@ -1,3 +1,4 @@
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 // Production-bound witness, quest fresh-create-failure-after-committed-admission
 // (receipt superseded under R09 on 2026-11-02: an INDUCED authority-read
 // unavailability replaces the live lottery). A real ReplicaHandler runs the real
@@ -476,7 +477,7 @@ const HELD_WITHOUT_BIRTH = Object.freeze({
     // The production birth, durable only in the log; the main file alone.
     write: (file) => {
       const whole = `${file}.whole`;
-      const db = new Database(whole);
+      const db = new SQLiteConnection(whole);
       db.pragma('journal_mode = WAL');
       raftRsLifecycleAdministration.birthReplica({db, creation: REPLICA_DATABASE_CREATION.NEW,
         groupId: PARTITION_ID,
@@ -490,7 +491,7 @@ const HELD_WITHOUT_BIRTH = Object.freeze({
   },
   'a database born for another replica identity': {
     write: (file) => {
-      const db = new Database(file);
+      const db = new SQLiteConnection(file);
       raftRsLifecycleAdministration.birthReplica({db, creation: REPLICA_DATABASE_CREATION.NEW,
         groupId: PARTITION_ID,
         replicaIdentity: `${PARTITION_ID}-r-somebody-else`});

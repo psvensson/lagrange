@@ -283,6 +283,28 @@ composes lifecycle and own-group record reads in one snapshot. Partition init
 receives a database from construction, not lifecycle administration or an
 independent birth/retirement capability.
 
+The lifecycle owner's shared row codec validates state, reason, incarnation, peer,
+replica identity and retirement-evidence representation before runtime admission,
+durable observation, snapshot admission or original-allocation use. Active rows
+have a NULL reason and NULL retirement evidence. Terminal rows retain a nonempty
+reason and either NULL evidence (absent) or a JSON object (including an empty
+object). Present malformed JSON, scalars, arrays, BLOBs and evidence on an active
+row are typed lifecycle refusals. They never become absent evidence or a held
+lifecycle row, and a readBeside callback does not run beside invalid authority.
+The codec validates the carrier; the group-retirement owner still verifies its
+workflow meaning before REMOVE persists it. It grants no new group authority.
+
+LIFECYCLE_STATE.RETIRED is the canonical durable terminal state and ordinary
+terminal admission refusal; the explicit reseed refusal retains its existing
+meaning across restart. No compatibility reader or alternate state alias exists.
+Retirement rejects malformed input with a typed exception before changing
+admission or awaiting active turns, so the existing awaited REMOVE path cannot
+ignore it and continue cleanup. Valid evidence is captured as JSON data before
+that await. Original-allocation reads use the same validity check, and issuance
+checks it before committing. Observation never repairs an invalid record, creates
+schema or infers history. The existing owner re-read can observe repaired facts;
+automatic recovery from corrupt authority is not claimed.
+
 This composition preserves the birth transaction's existing durability setting;
 it does not prove power-loss recovery, mount identity, external file replacement
 between acquisition and SQLite open, or complete coordinator crash recovery.

@@ -2,7 +2,7 @@
 // that do not run the preparation: the declaration owner's draft completed
 // with stamps the lifecycle owner itself minted, exactly as the preparation
 // forms it. A test never chooses an incarnation by hand.
-import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 import {createSeedOriginalAllocation, completeSeedOriginalAllocation} from
   '../../src/bootstrap/seed-original-allocation-declaration.js';
 import {prepareReplicaLifecycleForOriginalAllocation} from
@@ -15,7 +15,7 @@ import {prepareReplicaLifecycleForOriginalAllocation} from
  */
 function ownerStampedSeedDeclaration(identity, now) {
   const draft = createSeedOriginalAllocation({...identity, now});
-  const db = new Database(':memory:');
+  const db = new SQLiteConnection(':memory:');
   try {
     const incarnations = new Map(db.transaction(() => draft.members.map((member) => {
       const born = prepareReplicaLifecycleForOriginalAllocation({db, groupId: member.groupId,

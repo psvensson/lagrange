@@ -22,7 +22,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 
-import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../../src/storage/sqlite-prepared-statement-owner.js';
 
 import {createLoopbackTransport} from
   '../../partition/partition-service-test-support.js';
@@ -117,7 +117,7 @@ function sleep(ms) {
 // configuration entry of its log, its committed ConfState, and its applied
 // proposals through the store's own reader.
 function durableRecordOf(dbFile) {
-  const independent = new Database(dbFile, {readonly: true});
+  const independent = new SQLiteConnection(dbFile, {readonly: true});
   try {
     const confChangeEntries = independent.prepare(
       'SELECT log_index, entry_type FROM _raft_rs_log WHERE group_id = ? ' +

@@ -1,60 +1,117 @@
-// The prepared statements of one SQLite database handle, prepared once.
-//
-// A statement belongs to the handle that prepared it, so the statements are
-// held by handle identity: a file that is closed and reopened (a snapshot
-// install replaces a replica's database file) is another handle and starts
-// with no statements, and a closed handle's statements refuse exactly as
-// `prepare` on it would. SQLite re-prepares a held statement against the
-// current schema by itself, so a statement prepared before a migration reads
-// the migrated shape.
-//
-// Only fixed SQL text belongs here (an owner's own constants): every distinct
-// text is retained for the handle's lifetime. A statement is handed out for a
-// complete `get`, `all` or `run`; an open iterator would hold it busy.
+// The SQLite connection owns its prepared statements and their native lifetime.
+import Database from 'better-sqlite3';
 
-const STATEMENTS_BY_DATABASE = new WeakMap();
+const OWNER_MISSING = 'sqlite_statement_owner_missing';
+const OWNER_REQUIRED = 'Cached statements require an owned SQLiteConnection';
+const CONNECTION_CLOSED = 'The database connection is not open';
+const INTEGER_MODE = Object.freeze({DEFAULT: 'defaultInteger', EXACT: 'exactInteger'});
 
-function statementsOf(database) {
-  let statements = STATEMENTS_BY_DATABASE.get(database);
-  if (statements === undefined) {
-    statements = {defaultInteger: new Map(), exactInteger: new Map()};
-    STATEMENTS_BY_DATABASE.set(database, statements);
+/** Native SQLite connection with one cache per integer mode. */
+class SQLiteConnection extends Database {
+  #statements;
+
+  /**
+   * Allocate cache custody before acquiring the native handle.
+   * @param {string|Buffer} filename Native filename or serialized image.
+   * @param {Object} [options] Native better-sqlite3 options.
+   */
+  constructor(filename, options) {
+    const statements = {defaultInteger: new Map(), exactInteger: new Map()};
+    super(filename, options);
+    this.#statements = statements;
   }
-  return statements;
+
+  /**
+   * Validate ownership without reading any supplied property or open state.
+   * @param {*} database Supplied connection.
+   */
+  static assertOwner(database) {
+    if (database === null ||
+        (typeof database !== 'object' && typeof database !== 'function') ||
+        !(#statements in database)) {
+      const error = new Error(OWNER_REQUIRED);
+      error.code = OWNER_MISSING;
+      throw error;
+    }
+  }
+
+  static #statementOf(database, sql, integerMode) {
+    SQLiteConnection.assertOwner(database);
+    if (!database.open) throw new Error(CONNECTION_CLOSED);
+    const statements = database.#statements[integerMode];
+    let statement = statements.get(sql);
+    if (statement === undefined) {
+      statement = database.prepare(sql);
+      if (integerMode === INTEGER_MODE.EXACT) statement.safeIntegers(true);
+      statements.set(sql, statement);
+    }
+    return statement;
+  }
+
+  /**
+   * Canonical bridge to the connection's default-integer cache.
+   * @param {SQLiteConnection} database Owned open connection.
+   * @param {string} sql Fixed owner SQL text.
+   * @return {Object} Native statement, using the native default integer mode.
+   */
+  static preparedStatementOf(database, sql) {
+    return SQLiteConnection.#statementOf(database, sql, INTEGER_MODE.DEFAULT);
+  }
+
+  /**
+   * Canonical bridge to the connection's exact-integer cache.
+   * @param {SQLiteConnection} database Owned open connection.
+   * @param {string} sql Fixed owner SQL text.
+   * @return {Object} Native statement, configured for exact integers before retention.
+   */
+  static preparedExactStatementOf(database, sql) {
+    return SQLiteConnection.#statementOf(database, sql, INTEGER_MODE.EXACT);
+  }
+
+  /**
+   * A native busy refusal retains both the handle and its statement identities.
+   * @return {SQLiteConnection} This connection, after successful native close.
+   */
+  close() {
+    super.close();
+    this.#statements.defaultInteger.clear();
+    this.#statements.exactInteger.clear();
+    return this;
+  }
 }
 
 /**
- * This handle's statement for a fixed SQL text, prepared on first use.
- * @param {Object} database - An open better-sqlite3 database handle.
- * @param {string} sql - The owner's fixed SQL text.
- * @return {Object} The prepared statement.
+ * Brand-only assertion for boundaries before SQL, mutation or absence shortcuts.
+ * Closed owned connections still carry ownership; their domain decides open state.
+ * @param {*} database Supplied connection.
+ */
+function assertSQLiteConnection(database) {
+  SQLiteConnection.assertOwner(database);
+}
+
+/**
+ * This connection's statement for fixed SQL, prepared once on first use.
+ * Only fixed owner SQL belongs here: each text is retained until successful close.
+ * Callers complete get/all/run and never change shared statement modes or hold iterators.
+ * SQLite itself re-prepares held statements after schema changes.
+ * @param {SQLiteConnection} database Owned open connection.
+ * @param {string} sql Fixed owner SQL text.
+ * @return {Object} Native prepared statement.
  */
 function preparedStatementOf(database, sql) {
-  const statements = statementsOf(database).defaultInteger;
-  let statement = statements.get(sql);
-  if (statement === undefined) {
-    statement = database.prepare(sql);
-    statements.set(sql, statement);
-  }
-  return statement;
+  return SQLiteConnection.preparedStatementOf(database, sql);
 }
 
 /**
- * This handle's statement for a fixed SQL text that returns every integer as
- * an exact BigInt. It is a separate statement from the default one, so the
- * two integer modes of one text never share a statement.
- * @param {Object} database - An open better-sqlite3 database handle.
- * @param {string} sql - The owner's fixed SQL text.
- * @return {Object} The prepared statement, in safe-integer mode.
+ * This connection's separate statement returning every integer as an exact BigInt.
+ * @param {SQLiteConnection} database Owned open connection.
+ * @param {string} sql Fixed owner SQL text.
+ * @return {Object} Native prepared statement in safe-integer mode.
  */
 function preparedExactStatementOf(database, sql) {
-  const statements = statementsOf(database).exactInteger;
-  let statement = statements.get(sql);
-  if (statement === undefined) {
-    statement = database.prepare(sql).safeIntegers(true);
-    statements.set(sql, statement);
-  }
-  return statement;
+  return SQLiteConnection.preparedExactStatementOf(database, sql);
 }
 
-export {preparedExactStatementOf, preparedStatementOf};
+export {
+  SQLiteConnection, assertSQLiteConnection, preparedExactStatementOf, preparedStatementOf,
+};

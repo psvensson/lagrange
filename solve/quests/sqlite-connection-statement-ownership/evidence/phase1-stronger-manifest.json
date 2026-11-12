@@ -1,0 +1,225 @@
+{
+  "schema": "statement-owner-phase1-review/1",
+  "head": "1b51362e0f7af24a5e373b8a57619d4cf13ec706",
+  "branch": "wip/codex-statement-owner-20261112",
+  "ruleRevision": 5,
+  "rulesSource": "2fca51dc9a2f0344e23f0535dfa50fe0e000b674",
+  "candidate": {
+    "src/storage/sqlite-prepared-statement-owner.js": "4a5db10f9a9f3f3f65c108aa7e41aca10a741fd209b1a038bc18eabff54ee202",
+    "test/storage/sqlite-connection-statement-ownership-refusal.test.js": "ceac4d8ef5f8c5c526e817c6306ae7e4282c4e83f28087a74b62dc8ba3fcdc0d",
+    "test/storage/sqlite-connection-statement-ownership-brand.test.js": "11c1abb8b6d073a6177eb6573ecd31c018b6adf51414cff50c3c42d7fdc7ede1",
+    "test/storage/sqlite-connection-statement-ownership.test.js": "868e44067c509389256df96e9a448db374b1d01409b46b3f90de055a9acae9bd"
+  },
+  "previousManifest": {
+    "path": "/mnt/data/peter/projects/lagrange-codex-statement-owner-20261112/solve/quests/sqlite-connection-statement-ownership/evidence/phase1-manifest.json",
+    "sha256": "e9db60969d90bcb1b14d486b8c635668066464031ab91e74eed2a7dc0e28a9bc"
+  },
+  "dependencies": {
+    "src/storage/sqlite-prepared-statement-owner.js": "233aae30531603e863d460a332aead9689f9d52021fc6e0b03490aa6a258b9e0",
+    "test/storage/sqlite-connection-statement-ownership-refusal.test.js": "ceac4d8ef5f8c5c526e817c6306ae7e4282c4e83f28087a74b62dc8ba3fcdc0d",
+    "package.json": "7c56bd6952c10baab826be0504498e97f3f0a8c13dd953dd164a5baffe093b0b",
+    "package-lock.json": "8ac4b4fb882a5a93a67f192b37167fe8d5884c9a6778ca5b4b2dff7b28b76b04",
+    "node_modules/better-sqlite3/package.json": "58e81504576abccfacbfd08dc9432dc3a00d0fc0454685cb7a76aaf976cf25a9",
+    "node_modules/better-sqlite3/lib/database.js": "50fe0b490f29174d961c4d1ae54f22973447ff1255fd710e785d201c0ebfb4d0",
+    "node_modules/better-sqlite3/lib/methods/wrappers.js": "a150a6271d23f4e5f8953b129f370ff096c7cdc4b812afbf080a6cf4ab741bcf",
+    "node_modules/better-sqlite3/src/better_sqlite3.cpp": "551abc7d9feea0ad2acb97f33125c5e8800d6d84a1da4390512d08743f924b1e",
+    "node_modules/better-sqlite3/build/Release/better_sqlite3.node": "d7d9272b12d11c1dc2bb787741b1b7c4037d336155f316ace3420410c28fda37",
+    "docs/steering/rules.md": "ff82e2e1318f964871a3655e39755f0410f11c8bdd5edc89e7ed1f0a16fdd08b",
+    "docs/steering/router.md": "b8e7f4cfc71d941a39a2e282af3e515c8391812e3345c9fafd2ab8cb082705d2",
+    "docs/steering/rule-set.json": "0ed0e1ad8d129bbdbfc565df42c437a7bb43f7344ce9d05d045a02c0440e29f5",
+    "/tmp/lagrange-prepared-statement-ownership-design-eaccbd37a-20261112.md": "93825f73dfd2acb9f9d2171095130f76ef1fee23e60028a892e7c12c5e6a3ee9"
+  },
+  "static": [
+    {
+      "name": "eslint",
+      "command": [
+        "node",
+        "node_modules/eslint/bin/eslint.js",
+        "src/storage/sqlite-prepared-statement-owner.js",
+        "test/storage/sqlite-connection-statement-ownership-refusal.test.js",
+        "test/storage/sqlite-connection-statement-ownership-brand.test.js",
+        "test/storage/sqlite-connection-statement-ownership.test.js"
+      ],
+      "exitCode": 0
+    },
+    {
+      "name": "complexity",
+      "command": [
+        "node",
+        "scripts/check-complexity.js",
+        "--scoped",
+        "--strict",
+        "src/storage/sqlite-prepared-statement-owner.js",
+        "test/storage/sqlite-connection-statement-ownership-refusal.test.js",
+        "test/storage/sqlite-connection-statement-ownership-brand.test.js",
+        "test/storage/sqlite-connection-statement-ownership.test.js"
+      ],
+      "exitCode": 0
+    },
+    {
+      "name": "cognitive",
+      "command": [
+        "node",
+        "scripts/check-cognitive-complexity.js",
+        "--scoped",
+        "--strict",
+        "src/storage/sqlite-prepared-statement-owner.js",
+        "test/storage/sqlite-connection-statement-ownership-refusal.test.js",
+        "test/storage/sqlite-connection-statement-ownership-brand.test.js",
+        "test/storage/sqlite-connection-statement-ownership.test.js"
+      ],
+      "exitCode": 0
+    },
+    {
+      "name": "literals",
+      "command": [
+        "node",
+        "scripts/check-guideline-literals.js",
+        "src/storage/sqlite-prepared-statement-owner.js"
+      ],
+      "exitCode": 0
+    },
+    {
+      "name": "decision-boundaries",
+      "command": [
+        "node",
+        "scripts/check-guideline-decision-boundaries.js",
+        "src/storage/sqlite-prepared-statement-owner.js"
+      ],
+      "exitCode": 0
+    },
+    {
+      "name": "navigability",
+      "command": [
+        "node",
+        "scripts/check-guideline-navigability.js",
+        "src/storage/sqlite-prepared-statement-owner.js"
+      ],
+      "exitCode": 0
+    },
+    {
+      "name": "runtime",
+      "command": [
+        "node",
+        "scripts/check-runtime-grammar-contracts.js",
+        "src/storage/sqlite-prepared-statement-owner.js"
+      ],
+      "exitCode": 0
+    },
+    {
+      "name": "file-size",
+      "exitCode": 0,
+      "log": "/tmp/lagrange-statement-owner-phase1-stronger-20261112/file-size.log"
+    }
+  ],
+  "controls": [
+    {
+      "name": "foreign-adoption",
+      "command": [
+        "flock",
+        "/tmp/lagrange-local-test.lock",
+        "nice",
+        "-n15",
+        "node",
+        "scripts/run-test-files.js",
+        "--jobs",
+        "1",
+        "test-output/statement-owner-phase1-controls/foreign-adoption/test/storage/sqlite-connection-statement-ownership-refusal.test.js"
+      ],
+      "exitCode": 1,
+      "ownerSha256": "233aae30531603e863d460a332aead9689f9d52021fc6e0b03490aa6a258b9e0",
+      "testSha256": "ceac4d8ef5f8c5c526e817c6306ae7e4282c4e83f28087a74b62dc8ba3fcdc0d"
+    },
+    {
+      "name": "integer-collapse",
+      "command": [
+        "flock",
+        "/tmp/lagrange-local-test.lock",
+        "nice",
+        "-n15",
+        "node",
+        "scripts/run-test-files.js",
+        "--jobs",
+        "1",
+        "test-output/statement-owner-phase1-controls/integer-collapse/test/storage/sqlite-connection-statement-ownership.test.js"
+      ],
+      "exitCode": 1,
+      "ownerSha256": "0dfd5974a3aef45af6b961c0eacc31fefd52e600ab0a1e2b06a0beba4ecdf2df",
+      "testSha256": "868e44067c509389256df96e9a448db374b1d01409b46b3f90de055a9acae9bd"
+    },
+    {
+      "name": "clear-before-close",
+      "command": [
+        "flock",
+        "/tmp/lagrange-local-test.lock",
+        "nice",
+        "-n15",
+        "node",
+        "scripts/run-test-files.js",
+        "--jobs",
+        "1",
+        "test-output/statement-owner-phase1-controls/clear-before-close/test/storage/sqlite-connection-statement-ownership.test.js"
+      ],
+      "exitCode": 1,
+      "ownerSha256": "2e0b08ae7a022c0eb4d42381c8d45ad094daeedd63eb947aa5af3dee6f0379b1",
+      "testSha256": "868e44067c509389256df96e9a448db374b1d01409b46b3f90de055a9acae9bd"
+    }
+  ],
+  "reuse": {
+    "files": [
+      "test/storage/sqlite-connection-statement-ownership-refusal.test.js",
+      "test/storage/sqlite-connection-statement-ownership-brand.test.js"
+    ],
+    "cases": 5,
+    "reason": "Exact test, owner, package, lockfile, native binary, native source and retained logs verified unchanged; test style edit is only in independent native witness file."
+  },
+  "fresh": {
+    "file": "test/storage/sqlite-connection-statement-ownership.test.js",
+    "cases": 8,
+    "log": "/tmp/lagrange-statement-owner-phase1-stronger-20261112/green-run.log"
+  },
+  "ceiling": [
+    "Phase1 storage owner only; production callers still require migration after F freeze and exact remap.",
+    "No independent implementation approval.",
+    "No recoverable VM OOM claim; successful cache disposal source-inspected, not GC-timing proved.",
+    "No full suite, integration, commit, push or Quest completion."
+  ],
+  "artifacts": {
+    "/tmp/lagrange-statement-owner-phase1-stronger-20261112/attempt-record.json": "61cb35f7450cf520446f3b3c46f78b9ad8a5636b96209550d3c656b76f1903e7",
+    "/tmp/lagrange-statement-owner-phase1-stronger-20261112/candidate/src/storage/sqlite-prepared-statement-owner.js": "4a5db10f9a9f3f3f65c108aa7e41aca10a741fd209b1a038bc18eabff54ee202",
+    "/tmp/lagrange-statement-owner-phase1-stronger-20261112/candidate/test/storage/sqlite-connection-statement-ownership-brand.test.js": "11c1abb8b6d073a6177eb6573ecd31c018b6adf51414cff50c3c42d7fdc7ede1",
+    "/tmp/lagrange-statement-owner-phase1-stronger-20261112/candidate/test/storage/sqlite-connection-statement-ownership-refusal.test.js": "ceac4d8ef5f8c5c526e817c6306ae7e4282c4e83f28087a74b62dc8ba3fcdc0d",
+    "/tmp/lagrange-statement-owner-phase1-stronger-20261112/candidate/test/storage/sqlite-connection-statement-ownership.test.js": "868e44067c509389256df96e9a448db374b1d01409b46b3f90de055a9acae9bd",
+    "/tmp/lagrange-statement-owner-phase1-stronger-20261112/clear-before-close-run.log": "30d1264fa6f148ca53896c5f5eb5a2023a8f9ce61852d5ee0b520dd39e38b42a",
+    "/tmp/lagrange-statement-owner-phase1-stronger-20261112/clear-before-close-thermal.log": "0376301556cb1950db6925a210b8e58bb1429d18636deaedc828c2d051a04db3",
+    "/tmp/lagrange-statement-owner-phase1-stronger-20261112/cognitive.log": "a543e43553a46dc97e309997c5afb8e566747bd2e8c887379ba0238e149b1a1b",
+    "/tmp/lagrange-statement-owner-phase1-stronger-20261112/complexity.log": "bb5445b6e1062efe06695d191f8a67894aa250bd135d7c0836d01705bfe571ea",
+    "/tmp/lagrange-statement-owner-phase1-stronger-20261112/control-results.json": "c5461fa1330bc97e811c311d5f12eb39c250010d6b16ac322c5b55863c448a34",
+    "/tmp/lagrange-statement-owner-phase1-stronger-20261112/controls/clear-before-close/owner.js": "2e0b08ae7a022c0eb4d42381c8d45ad094daeedd63eb947aa5af3dee6f0379b1",
+    "/tmp/lagrange-statement-owner-phase1-stronger-20261112/controls/clear-before-close/result.tap": "af75158a08a2aaab322704ade95a67ae9e6e8e77c5bbf95638fba4110439ca51",
+    "/tmp/lagrange-statement-owner-phase1-stronger-20261112/controls/clear-before-close/witness.js": "868e44067c509389256df96e9a448db374b1d01409b46b3f90de055a9acae9bd",
+    "/tmp/lagrange-statement-owner-phase1-stronger-20261112/controls/foreign-adoption/owner.js": "233aae30531603e863d460a332aead9689f9d52021fc6e0b03490aa6a258b9e0",
+    "/tmp/lagrange-statement-owner-phase1-stronger-20261112/controls/foreign-adoption/result.tap": "b3c18ceb68740f0363d12b014547918b546a0d15794cb532481866f558bca6cf",
+    "/tmp/lagrange-statement-owner-phase1-stronger-20261112/controls/foreign-adoption/witness.js": "ceac4d8ef5f8c5c526e817c6306ae7e4282c4e83f28087a74b62dc8ba3fcdc0d",
+    "/tmp/lagrange-statement-owner-phase1-stronger-20261112/controls/integer-collapse/owner.js": "0dfd5974a3aef45af6b961c0eacc31fefd52e600ab0a1e2b06a0beba4ecdf2df",
+    "/tmp/lagrange-statement-owner-phase1-stronger-20261112/controls/integer-collapse/result.tap": "2b9cdfc4ac655f4ecc3125fe51050d29a14045a2cc496fdf7556d668c1afd8be",
+    "/tmp/lagrange-statement-owner-phase1-stronger-20261112/controls/integer-collapse/witness.js": "868e44067c509389256df96e9a448db374b1d01409b46b3f90de055a9acae9bd",
+    "/tmp/lagrange-statement-owner-phase1-stronger-20261112/decision-boundaries.log": "003c0cc8cccd85679402aa2c94bdc6ea534dd714e4c35b03e836da08195d3b6b",
+    "/tmp/lagrange-statement-owner-phase1-stronger-20261112/eslint.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/tmp/lagrange-statement-owner-phase1-stronger-20261112/file-size.log": "7112b1602044d1f8bb25f19cd788e0f0b279033837adbc77966d59e98f5beae2",
+    "/tmp/lagrange-statement-owner-phase1-stronger-20261112/foreign-adoption-run.log": "607d5b9e06e4d61b333d37c10a99ae3852bbd0c210789b1081441dc0526243af",
+    "/tmp/lagrange-statement-owner-phase1-stronger-20261112/foreign-adoption-thermal.log": "0376301556cb1950db6925a210b8e58bb1429d18636deaedc828c2d051a04db3",
+    "/tmp/lagrange-statement-owner-phase1-stronger-20261112/green-run.log": "23854c0c51331381eb35af1aaf38f2f6a3bbee45c72454c1be4fe7df737106da",
+    "/tmp/lagrange-statement-owner-phase1-stronger-20261112/green-thermal.log": "ce3570de312f9dbf92db2a10d644d2a4004892502f53c1575fa81c6aba6a9771",
+    "/tmp/lagrange-statement-owner-phase1-stronger-20261112/green.tap": "d418a46f0a3626823de58d4d41668537b4af3ea990748e7d212f626a2f38c945",
+    "/tmp/lagrange-statement-owner-phase1-stronger-20261112/inherited-receipt.json": "01af31339e4cc55a71b55117b40440fad5cf9bec88834cbd526aaa0e08318583",
+    "/tmp/lagrange-statement-owner-phase1-stronger-20261112/integer-collapse-run.log": "48b4390ab3c5aac586f60a0768b1c6748f7d6ff3de5b6a2a97b6506a54514fb0",
+    "/tmp/lagrange-statement-owner-phase1-stronger-20261112/integer-collapse-thermal.log": "0376301556cb1950db6925a210b8e58bb1429d18636deaedc828c2d051a04db3",
+    "/tmp/lagrange-statement-owner-phase1-stronger-20261112/literals.log": "a453994e7a95b1349a2c378e91c596cb3cc63c28ca31c917250dcc37f39d2ea4",
+    "/tmp/lagrange-statement-owner-phase1-stronger-20261112/navigability.log": "9b358ac448167638d6aab1c412a6347d1d38a9ab6cca5423653b66fa93b2194d",
+    "/tmp/lagrange-statement-owner-phase1-stronger-20261112/owner.patch": "d0fb830d9f7d75e80db95f873d38879fe4b7493dad62da3af2aeb6cd6aa6ff86",
+    "/tmp/lagrange-statement-owner-phase1-stronger-20261112/run-controls.py": "83d421c4807e63bdfa93808b728315b33c82a0daa7f480c1dc16cd0a21424959",
+    "/tmp/lagrange-statement-owner-phase1-stronger-20261112/runtime.log": "b4b6a8efb75dccfd5c74e8c04f78614d528b1c1eb71fcb926c02ca5ae05f196f",
+    "/tmp/lagrange-statement-owner-phase1-stronger-20261112/static-results.json": "3bbb8e26b7057614ff0bbd1f05739ce153df6875bde92272e42619741393f8b9"
+  }
+}

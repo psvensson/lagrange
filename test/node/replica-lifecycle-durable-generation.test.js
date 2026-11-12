@@ -1,3 +1,4 @@
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 import {allocateLifecycleFixture} from '../helpers/replica-lifecycle-fixture.js';
 /**
  * Durable lifecycle generation probe.
@@ -374,7 +375,7 @@ test('handler binds leader settlement before retire and durable deletion',
       status: ReplicaStatus.REMOVING,
       service: {raft: runtime},
     });
-    const lifecycleDb = new Database(':memory:');
+    const lifecycleDb = new SQLiteConnection(':memory:');
     t.teardown(() => lifecycleDb.close());
     const lifecycleRequest = {db: lifecycleDb, groupId: row.partition_id,
       peerId: 'peer-handler-order', replicaIdentity: row.service_id};

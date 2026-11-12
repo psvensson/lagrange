@@ -7,6 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../../src/storage/sqlite-prepared-statement-owner.js';
 import {createRaftRsOperationPort, openRaftRsReplicaDatabase} from
   '../../../src/raft/raft-rs-operation-port.js';
 import {RAFT_COMMITTED_ENTRY_APPLY_MODE} from '../../../src/raft/raft-operation-port-request.js';
@@ -78,7 +79,7 @@ for (const shape of ['application-only', 'lost-row', 'empty', 'truncated']) {
     eraseHistory(file, shape);
     const before = fs.readFileSync(file);
     const staged = `${file}.staged`;
-    const db = new Database(staged);
+    const db = new SQLiteConnection(staged);
     const prepared = prepareReplicaLifecycleForSnapshot({db, groupId: GROUP,
       replicaIdentity: REPLICA, peerId: PEER});
     assert.equal(prepared.outcome, OUTCOME.CORE_OK, 'authorized staging control');
@@ -109,7 +110,7 @@ for (const shape of ['empty', 'truncated']) {
     const file = fixture(t);
     eraseHistory(file, shape);
     assert.throws(() => construction(file), {code: 'lifecycle-birth-unproven'});
-    const db = new Database(file, {fileMustExist: true});
+    const db = new SQLiteConnection(file, {fileMustExist: true});
     const runtime = port(db);
     t.after(() => {
       runtime.close(); db.close();

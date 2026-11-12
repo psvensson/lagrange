@@ -314,12 +314,12 @@ test('storage_reservation_reconcile async wrapper records the section only ' +
 });
 
 test('stuck_transaction_heal section is recorded around the current participant hold sweep', async (t) => {
-  const {default: Database} = await import('better-sqlite3');
+  const {SQLiteConnection} = await import('../../src/storage/sqlite-prepared-statement-owner.js');
   const {PARTITION_SERVICE_PARTICIPANT_TRANSACTION_CADENCE_METHODS} =
     await import('../../src/partition/partition-service-participant-transaction-cadence-methods.js');
   const {openParticipantTransactionStore} =
     await import('../../src/partition/partition-participant-transaction-store.js');
-  const db = new Database(':memory:');
+  const db = new SQLiteConnection(':memory:');
   try {
     openParticipantTransactionStore(db);
     const service = Object.assign({

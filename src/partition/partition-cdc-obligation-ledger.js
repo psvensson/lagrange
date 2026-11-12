@@ -24,7 +24,7 @@ import {
   PARTITION_CDC_OBLIGATION_STANDING as STANDING,
   PARTITION_CDC_OBLIGATION_TABLE as TABLE,
 } from './partition-cdc-obligation-constants.js';
-import {preparedStatementOf} from '../storage/sqlite-prepared-statement-owner.js';
+import {assertSQLiteConnection, preparedStatementOf} from '../storage/sqlite-prepared-statement-owner.js';
 import {RETAINED_STORE_ERROR, retainedStoreError, retainedStoreTableExistsIn, readRetainedStoreRowsIn,
   isStoredInteger, isStoredNullableInteger} from './partition-retained-store-observation.js';
 
@@ -53,6 +53,7 @@ function isNonEmptyString(value) {
  *   committed entry recording the obligation.
  */
 function ensureCdcObligationLedger(db, {index, term, entryId}) {
+  assertSQLiteConnection(db);
   db.exec(SQL.CREATE_TABLE);
   db.exec(SQL.CREATE_OWED_INDEX);
   db.exec(SQL.CREATE_PROGRESS_TABLE);
@@ -122,6 +123,7 @@ function readCdcProgressCensusIn(db) {
 // compact progress of the reclaimed prefix. No DDL and no coercion of a
 // malformed flag to false or an exact index to Number.
 function readCdcObligationCensusIn(db) {
+  assertSQLiteConnection(db);
   const exists = retainedStoreTableExistsIn(db, TABLE);
   const raw = exists ? readRetainedStoreRowsIn(db, {table: TABLE,
     select: SQL.SELECT_ALL, create: SQL.CREATE_TABLE, indexes: [SQL.CREATE_OWED_INDEX]}) : [];

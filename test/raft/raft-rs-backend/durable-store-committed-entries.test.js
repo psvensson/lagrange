@@ -13,7 +13,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
-import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../../src/storage/sqlite-prepared-statement-owner.js';
 
 import {RaftRsDurableStore} from '../../../src/raft/raft-rs-durable-store.js';
 import {
@@ -57,7 +57,7 @@ function normalEntry(index, command) {
 }
 
 function withStore(work) {
-  const db = new Database(':memory:');
+  const db = new SQLiteConnection(':memory:');
   try {
     return work(new RaftRsDurableStore(db), db);
   } finally {
@@ -75,7 +75,7 @@ function applyAt(store, groupId, applied) {
 
 test('the readers are DDL-free: a database without the record has no ' +
   'applied proposals and no applied index, and gains no table', () => {
-  const db = new Database(':memory:');
+  const db = new SQLiteConnection(':memory:');
   try {
     const before = db.prepare(SCHEMA_TABLES_SQL).all();
     assert.deepEqual(

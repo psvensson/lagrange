@@ -27,6 +27,7 @@ import {test} from 'node:test';
 import {fileURLToPath} from 'node:url';
 
 import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../../src/storage/sqlite-prepared-statement-owner.js';
 
 import {
   buildDeterministicRaftIdMaps,
@@ -63,7 +64,7 @@ function scratchDirectory() {
 }
 
 function openRegistry(file) {
-  const db = new Database(file);
+  const db = new SQLiteConnection(file);
   return {db, registry: new RaftRsPeerIdentityRegistry(db)};
 }
 

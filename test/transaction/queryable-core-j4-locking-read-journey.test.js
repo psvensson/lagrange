@@ -1,3 +1,4 @@
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 /**
  * Unit J4: Composed User Journey Test for Locking Reads (SELECT ... FOR UPDATE).
  *
@@ -17,7 +18,6 @@
 
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import Database from 'better-sqlite3';
 
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -90,7 +90,7 @@ function createJourneyHarness(options = {}) {
   const partitionDbs = new Map();
   const partitionServices = new Map();
   for (const part of partitions) {
-    const db = new Database(':memory:');
+    const db = new SQLiteConnection(':memory:');
     partitionDbs.set(part.partition_id, db);
     partitionServices.set(part.partition_id, {db, partitionId: part.partition_id});
     registerPartitionDatabase(part.partition_id, db);
@@ -537,7 +537,7 @@ test('J4: fail-closed candidate reads (failed candidate read does not become saf
 
 test('J4: durable partition SQLite reservation survives simulated coordinator state reset', () => {
   clearAllReservations();
-  const db = new Database(':memory:');
+  const db = new SQLiteConnection(':memory:');
   try {
     registerPartitionDatabase('p1', db);
     const harness = {

@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 
@@ -71,12 +71,12 @@ afterEach(() => {
   AddressManager.resetInstance();
 });
 
-// A minimal service-shaped fixture over a real file-backed replica database
-// (the cadence reads dbPath/partitionId/role/isShutdown/db only).
+// A minimal service-shaped fixture over the replica's owned SQLite connection.
+// Cadence delegates its durable-record lookup to the production cached reader.
 function createServiceFixture(options = {}) {
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cadence-'));
   const dbPath = path.join(workDir, 'replica.db');
-  const db = new Database(dbPath);
+  const db = new SQLiteConnection(dbPath);
   const service = {
     dbPath,
     partitionId: options.partitionId || PARTITION_ID,

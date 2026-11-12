@@ -3,7 +3,7 @@
 // decision 2026-10-26, Q3; formerly the separate original-allocation store).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 import {prepareReplicaLifecycleForOriginalAllocation, readOriginalAllocationRow,
   prepareOriginalAllocationRow, markOriginalAllocationIssued, transitionOriginalRight} from
   '../../src/raft/raft-rs-replica-lifecycle-owner.js';
@@ -17,7 +17,7 @@ import {RAFT_RS_OPENING_HISTORY as HISTORY} from
   '../../src/raft/raft-rs-opening-history-constants.js';
 
 function fixture(t) {
-  const db = new Database(':memory:');
+  const db = new SQLiteConnection(':memory:');
   t.after(() => db.close());
   // Every statement the owner prepares on this handle (it holds each one,
   // prepared once): a seam acts on the held statement the owner reads.

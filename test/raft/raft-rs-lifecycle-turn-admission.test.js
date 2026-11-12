@@ -1,3 +1,4 @@
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 import {allocateLifecycleFixture} from '../helpers/replica-lifecycle-fixture.js';
 // The replica lifecycle owner admits one runtime turn at a time against its
 // retirement: the work answers a named turn, and the owner holds the
@@ -6,7 +7,6 @@ import {allocateLifecycleFixture} from '../helpers/replica-lifecycle-fixture.js'
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
-import Database from 'better-sqlite3';
 
 import {
   RaftRsReplicaLifecycleOwner,
@@ -21,7 +21,7 @@ function ownerOver(db) {
 }
 
 test('a settled turn releases the replica in the same run', async () => {
-  const db = new Database(':memory:');
+  const db = new SQLiteConnection(':memory:');
   try {
     const owner = ownerOver(db);
     const answer = owner.execute(() => settledTurn('done'));
@@ -35,7 +35,7 @@ test('a settled turn releases the replica in the same run', async () => {
 });
 
 test('a pending turn holds the replica until its promise settles', async () => {
-  const db = new Database(':memory:');
+  const db = new SQLiteConnection(':memory:');
   try {
     const owner = ownerOver(db);
     const {promise, resolve} = Promise.withResolvers();
@@ -58,7 +58,7 @@ test('a pending turn holds the replica until its promise settles', async () => {
 });
 
 test('a refused admission is a settled turn naming the refusal', async () => {
-  const db = new Database(':memory:');
+  const db = new SQLiteConnection(':memory:');
   try {
     const owner = ownerOver(db);
     await owner.retire('test-retirement');

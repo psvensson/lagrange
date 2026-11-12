@@ -1,3 +1,4 @@
+import {SQLiteConnection} from '../../../src/storage/sqlite-prepared-statement-owner.js';
 // The process-local raft-rs lifecycle registry is an exact-generation
 // projection (owner decision round 4, D2; invariant I10): every destructive
 // runtime effect carries the exact runtime generation it targets. Reusing a
@@ -5,7 +6,6 @@
 // to the old runtime can never retire, close or unregister the new one.
 import assert from 'node:assert/strict';
 import {test, afterEach} from 'node:test';
-import Database from 'better-sqlite3';
 import {allocateLifecycleFixture} from '../../helpers/replica-lifecycle-fixture.js';
 
 import {raftRsLifecycleAdministration} from
@@ -34,7 +34,7 @@ afterEach(() => {
   for (const db of databases.splice(0)) db.close();
 });
 function openGeneration(label) {
-  const db = new Database(':memory:');
+  const db = new SQLiteConnection(':memory:');
   databases.push(db);
   const request = {db, groupId: GROUP_ID, peerId: `peer-${label}`, replicaIdentity: REPLICA_ID};
   allocateLifecycleFixture(request);

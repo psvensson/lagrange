@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
-import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 import {
   prepareReplicaLifecycleForSnapshot,
   RaftRsReplicaLifecycleOwner,
@@ -20,7 +20,7 @@ const IDENTITY = {groupId: 'snapshot-stage-group', peerId: '7', replicaIdentity:
 function fixture(t) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'snapshot-lifecycle-owner-'));
   const file = path.join(directory, 'staging.sqlite');
-  const db = new Database(file);
+  const db = new SQLiteConnection(file);
   t.after(() => {
     if (db.open) db.close();
     fs.rmSync(directory, {recursive: true, force: true});

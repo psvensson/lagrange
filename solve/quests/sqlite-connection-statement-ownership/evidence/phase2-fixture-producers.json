@@ -1,0 +1,350 @@
+[
+  {
+    "file": "test/node/replica-handler-remove-closed-service.test.js",
+    "converted": [
+      {
+        "originalLine": 97,
+        "source": "const db = open ? new Database(':memory:') : null;"
+      },
+      {
+        "originalLine": 344,
+        "source": "const db = new Database(dbPath);"
+      }
+    ],
+    "reason": "Handle passed to durable/peer constructor, participant open, or explicit lifecycle preparation in the listed fixture function; other acquisitions retained."
+  },
+  {
+    "file": "test/node/replica-removal-required-ports.test.js",
+    "converted": [
+      {
+        "originalLine": 99,
+        "source": "const db = new Database(':memory:');"
+      }
+    ],
+    "reason": "Handle passed to durable/peer constructor, participant open, or explicit lifecycle preparation in the listed fixture function; other acquisitions retained."
+  },
+  {
+    "file": "test/node/replica-handler-owner-path-bypass-removal.test.js",
+    "converted": [
+      {
+        "originalLine": 293,
+        "source": "const db = new Database(':memory:'); // participant custody: idle"
+      }
+    ],
+    "reason": "Handle passed to durable/peer constructor, participant open, or explicit lifecycle preparation in the listed fixture function; other acquisitions retained."
+  },
+  {
+    "file": "test/query/scenario-a-transaction-coordination-fast-path.test.js",
+    "converted": [
+      {
+        "originalLine": 230,
+        "source": "const raftDb = new Database(':memory:');"
+      }
+    ],
+    "reason": "Handle passed to durable/peer constructor, participant open, or explicit lifecycle preparation in the listed fixture function; other acquisitions retained."
+  },
+  {
+    "file": "test/query/scenario-a-deep-stack-throughput-and-latency.test.js",
+    "converted": [
+      {
+        "originalLine": 273,
+        "source": "const db = new Database(':memory:');"
+      }
+    ],
+    "reason": "Handle passed to durable/peer constructor, participant open, or explicit lifecycle preparation in the listed fixture function; other acquisitions retained."
+  },
+  {
+    "file": "test/query/sql-query-engine-system-table-write-admission.test.js",
+    "converted": [
+      {
+        "originalLine": 304,
+        "source": "const db = new Database(':memory:');"
+      }
+    ],
+    "reason": "Handle passed to durable/peer constructor, participant open, or explicit lifecycle preparation in the listed fixture function; other acquisitions retained."
+  },
+  {
+    "file": "test/partition/partition-legacy-consensus-state.test.js",
+    "converted": [
+      {
+        "originalLine": 47,
+        "source": "const db = new Database(':memory:');"
+      }
+    ],
+    "reason": "Handle passed to durable/peer constructor, participant open, or explicit lifecycle preparation in the listed fixture function; other acquisitions retained."
+  },
+  {
+    "file": "test/partition/partition-port-refusal-outcomes.test.js",
+    "converted": [
+      {
+        "originalLine": 169,
+        "source": "const seeded = new Database(dbPath);"
+      }
+    ],
+    "reason": "Handle passed to durable/peer constructor, participant open, or explicit lifecycle preparation in the listed fixture function; other acquisitions retained."
+  },
+  {
+    "file": "test/partition/participant-origin-retained-history.test.js",
+    "converted": [
+      {
+        "originalLine": 30,
+        "source": "const db = new Database(':memory:');"
+      }
+    ],
+    "reason": "Handle passed to durable/peer constructor, participant open, or explicit lifecycle preparation in the listed fixture function; other acquisitions retained."
+  },
+  {
+    "file": "test/partition/partition-unreadable-durable-record.test.js",
+    "converted": [
+      {
+        "originalLine": 557,
+        "source": "const repair = new Database(dbPath);"
+      },
+      {
+        "originalLine": 690,
+        "source": "const capped = new Database(wholePath);"
+      }
+    ],
+    "reason": "Handle passed to durable/peer constructor, participant open, or explicit lifecycle preparation in the listed fixture function; other acquisitions retained."
+  },
+  {
+    "file": "test/partition/partition-participant-transaction-apply.test.js",
+    "converted": [
+      {
+        "originalLine": 88,
+        "source": "const image = new Database(imagePath);"
+      }
+    ],
+    "reason": "Handle passed to durable/peer constructor, participant open, or explicit lifecycle preparation in the listed fixture function; other acquisitions retained."
+  },
+  {
+    "file": "test/partition/learner-promotion-proof-committed-admission.test.js",
+    "converted": [
+      {
+        "originalLine": 196,
+        "source": "const db = new Database(file);"
+      }
+    ],
+    "reason": "Handle passed to durable/peer constructor, participant open, or explicit lifecycle preparation in the listed fixture function; other acquisitions retained."
+  },
+  {
+    "file": "test/diagnostics/raft-churn-sync-section-attribution.test.js",
+    "converted": [
+      {
+        "originalLine": 322,
+        "source": "const db = new Database(':memory:');"
+      }
+    ],
+    "reason": "Handle passed to durable/peer constructor, participant open, or explicit lifecycle preparation in the listed fixture function; other acquisitions retained."
+  },
+  {
+    "file": "test/raft/raft-rs-status-peer-resolution.test.js",
+    "converted": [
+      {
+        "originalLine": 54,
+        "source": "const db = new Database(':memory:');"
+      },
+      {
+        "originalLine": 73,
+        "source": "const db = new Database(':memory:');"
+      }
+    ],
+    "reason": "Handle passed to durable/peer constructor, participant open, or explicit lifecycle preparation in the listed fixture function; other acquisitions retained."
+  },
+  {
+    "file": "test/raft/raft-rs-original-allocation-store.test.js",
+    "converted": [
+      {
+        "originalLine": 20,
+        "source": "const db = new Database(':memory:');"
+      }
+    ],
+    "reason": "Handle passed to durable/peer constructor, participant open, or explicit lifecycle preparation in the listed fixture function; other acquisitions retained."
+  },
+  {
+    "file": "test/raft/raft-rs-original-allocation-lifecycle-operation.test.js",
+    "converted": [
+      {
+        "originalLine": 33,
+        "source": "const db = new Database(':memory:');"
+      }
+    ],
+    "reason": "Handle passed to durable/peer constructor, participant open, or explicit lifecycle preparation in the listed fixture function; other acquisitions retained."
+  },
+  {
+    "file": "test/raft/raft-rs-original-allocation-cold-inspection.test.js",
+    "converted": [
+      {
+        "originalLine": 52,
+        "source": "const db = new Database(member.dbPath, {fileMustExist: true});"
+      },
+      {
+        "originalLine": 214,
+        "source": "const db = new Database(member.dbPath, {fileMustExist: true});"
+      }
+    ],
+    "reason": "Handle passed to durable/peer constructor, participant open, or explicit lifecycle preparation in the listed fixture function; other acquisitions retained."
+  },
+  {
+    "file": "test/raft/snapshot-lifecycle-staging.test.js",
+    "converted": [
+      {
+        "originalLine": 23,
+        "source": "const db = new Database(file);"
+      }
+    ],
+    "reason": "Handle passed to durable/peer constructor, participant open, or explicit lifecycle preparation in the listed fixture function; other acquisitions retained."
+  },
+  {
+    "file": "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js",
+    "converted": [
+      {
+        "originalLine": 188,
+        "source": "const db = new Database(path.join(root, 'source.db'));"
+      },
+      {
+        "originalLine": 345,
+        "source": "const targetDb = new Database(targetDbPath);"
+      }
+    ],
+    "reason": "Handle passed to durable/peer constructor, participant open, or explicit lifecycle preparation in the listed fixture function; other acquisitions retained."
+  },
+  {
+    "file": "test/raft/raft-rs-backend/durable-store-committed-entries.test.js",
+    "converted": [
+      {
+        "originalLine": 60,
+        "source": "const db = new Database(':memory:');"
+      },
+      {
+        "originalLine": 78,
+        "source": "const db = new Database(':memory:');"
+      }
+    ],
+    "reason": "Handle passed to durable/peer constructor, participant open, or explicit lifecycle preparation in the listed fixture function; other acquisitions retained."
+  },
+  {
+    "file": "test/raft/raft-rs-backend/peer-identity.test.js",
+    "converted": [
+      {
+        "originalLine": 66,
+        "source": "const db = new Database(file);"
+      }
+    ],
+    "reason": "Handle passed to durable/peer constructor, participant open, or explicit lifecycle preparation in the listed fixture function; other acquisitions retained."
+  },
+  {
+    "file": "test/raft/raft-rs-backend/replica-freshness-closure.test.js",
+    "converted": [
+      {
+        "originalLine": 81,
+        "source": "const db = new Database(staged);"
+      }
+    ],
+    "reason": "Handle passed to durable/peer constructor, participant open, or explicit lifecycle preparation in the listed fixture function; other acquisitions retained."
+  },
+  {
+    "file": "test/raft/raft-rs-backend/durable-commit-sync.test.js",
+    "converted": [
+      {
+        "originalLine": 278,
+        "source": "const db = new Database(path.join(directory, `${peerId}.db`));"
+      },
+      {
+        "originalLine": 324,
+        "source": "const db = new Database(path.join(directory, `${name}.db`));"
+      }
+    ],
+    "reason": "Handle passed to durable/peer constructor, participant open, or explicit lifecycle preparation in the listed fixture function; other acquisitions retained."
+  },
+  {
+    "file": "test/raft/raft-rs-backend/durable-own-group-record.test.js",
+    "converted": [
+      {
+        "originalLine": 233,
+        "source": "const db = new Database(file);"
+      }
+    ],
+    "reason": "Handle passed to durable/peer constructor, participant open, or explicit lifecycle preparation in the listed fixture function; other acquisitions retained."
+  },
+  {
+    "file": "test/raft/raft-rs-backend/membership-generation-persistence.test.js",
+    "converted": [
+      {
+        "originalLine": 56,
+        "source": "const db = new Database(':memory:');"
+      },
+      {
+        "originalLine": 158,
+        "source": "let db = new Database(file);"
+      },
+      {
+        "originalLine": 170,
+        "source": "db = new Database(file);"
+      }
+    ],
+    "reason": "Handle passed to durable/peer constructor, participant open, or explicit lifecycle preparation in the listed fixture function; other acquisitions retained."
+  },
+  {
+    "file": "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+    "converted": [
+      {
+        "originalLine": 83,
+        "source": "const database = new Database(':memory:');"
+      },
+      {
+        "originalLine": 176,
+        "source": "const atomicDatabase = new Database(':memory:');"
+      },
+      {
+        "originalLine": 256,
+        "source": "const db = new Database(':memory:');"
+      },
+      {
+        "originalLine": 277,
+        "source": "const db = new Database(':memory:');"
+      }
+    ],
+    "reason": "Handle passed to durable/peer constructor, participant open, or explicit lifecycle preparation in the listed fixture function; other acquisitions retained."
+  },
+  {
+    "file": "test/raft/raft-rs-backend/persistence-admission.test.js",
+    "converted": [
+      {
+        "originalLine": 128,
+        "source": "const db = new Database(dbFile);"
+      }
+    ],
+    "reason": "Handle passed to durable/peer constructor, participant open, or explicit lifecycle preparation in the listed fixture function; other acquisitions retained."
+  },
+  {
+    "file": "test/bootstrap/seed-retained-effects-fixture.js",
+    "converted": [
+      {
+        "originalLine": 102,
+        "source": "const db = new Database(':memory:');"
+      }
+    ],
+    "reason": "Handle passed to durable/peer constructor, participant open, or explicit lifecycle preparation in the listed fixture function; other acquisitions retained."
+  },
+  {
+    "file": "test/bootstrap/seed-retained-effects-preparation.test.js",
+    "converted": [
+      {
+        "originalLine": 94,
+        "source": "const db = new Database(member.dbPath, {fileMustExist: true});"
+      }
+    ],
+    "reason": "Handle passed to durable/peer constructor, participant open, or explicit lifecycle preparation in the listed fixture function; other acquisitions retained."
+  },
+  {
+    "file": "test/integration/message-group-learner-runtime-authorization.integration.test.js",
+    "converted": [
+      {
+        "originalLine": 1166,
+        "source": "const db = new Database(replicaDbPath);"
+      }
+    ],
+    "reason": "Handle passed to durable/peer constructor, participant open, or explicit lifecycle preparation in the listed fixture function; other acquisitions retained."
+  }
+]

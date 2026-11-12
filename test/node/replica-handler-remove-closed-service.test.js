@@ -28,7 +28,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {afterEach, beforeEach, test} from 'node:test';
-import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 
 import {PartitionNodeCluster} from
   '../raft/raft-rs-backend/partition-node-cluster.js';
@@ -94,7 +94,7 @@ afterEach(() => fs.rmSync(dataDir, {recursive: true, force: true}));
 // The partition's own removal-serving methods over a connection that is open
 // (the participant store opened on it) or released by teardown.
 function partitionServingSurface(open) {
-  const db = open ? new Database(':memory:') : null;
+  const db = open ? new SQLiteConnection(':memory:') : null;
   if (db) openParticipantTransactionStore(db);
   const service = Object.assign({
     partitionId: PARTITION_ID, replicaId: REPLICA_ID, db,
@@ -341,7 +341,7 @@ function placeRetiredReplicaDatabase(dbPath) {
 
 function seedPreparedParticipant(dbPath) {
   placeRetiredReplicaDatabase(dbPath);
-  const db = new Database(dbPath);
+  const db = new SQLiteConnection(dbPath);
   try {
     openParticipantTransactionStore(db);
     insertParticipantTransactionRow(db, {...TX, sessionId: 'session-closed-1',
@@ -355,7 +355,7 @@ function seedPreparedParticipant(dbPath) {
 }
 
 function settlePreparedParticipant(dbPath) {
-  const db = new Database(dbPath);
+  const db = new SQLiteConnection(dbPath);
   try {
     updateParticipantTransactionDecided(db, {...TX,
       state: PARTICIPANT_TRANSACTION_STATE.COMMITTED,
@@ -369,7 +369,7 @@ function settlePreparedParticipant(dbPath) {
 
 function participantStateAt(dbPath) {
   if (!fs.existsSync(dbPath)) return null;
-  const db = new Database(dbPath, {readonly: true});
+  const db = new SQLiteConnection(dbPath, {readonly: true});
   try {
     return readParticipantTransactionRow(db, TX)?.state ?? null;
   } finally {

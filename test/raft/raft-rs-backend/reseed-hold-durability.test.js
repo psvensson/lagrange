@@ -1,3 +1,4 @@
+import {SQLiteConnection} from '../../../src/storage/sqlite-prepared-statement-owner.js';
 import {allocateLifecycleFixture} from '../../helpers/replica-lifecycle-fixture.js';
 // The durable record of a reseed hold (C2 of the identity-reuse correction;
 // the verifier's R3): the hold is in force in memory at once, and its
@@ -23,7 +24,6 @@ import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 
-import Database from 'better-sqlite3';
 
 import {
   capturingErrors,
@@ -145,7 +145,7 @@ async () => {
 test('D3: a retirement that waited on a turn which held the replica ' +
   'keeps the reseed-required reason', async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'reseed-retire-'));
-  const db = new Database(path.join(directory, 'replica.sqlite'));
+  const db = new SQLiteConnection(path.join(directory, 'replica.sqlite'));
   try {
     allocateLifecycleFixture({db, groupId: 'd3', peerId: '7', replicaIdentity: 'd3-a'});
     const owner = new RaftRsReplicaLifecycleOwner({db, groupId: 'd3',

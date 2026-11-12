@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 
 import {test} from '../../src/test-helpers/tap.js';
 
@@ -263,7 +263,7 @@ test('a below-boundary generation is skipped and an eligible one is created',
         generationIndex: leaderGeneration.boundaryIndex,
         identity: IDENTITY,
       });
-      const leaderDb = new Database(leaderDbPath);
+      const leaderDb = new SQLiteConnection(leaderDbPath);
       try {
         t.same(listCheckpointGenerations(servingRoot),
           [stale.boundaryIndex],
