@@ -29,7 +29,7 @@ function replicaStorageArtifactsAbsent(fs, dbPath) {
     !fs.existsSync(artifactPath));
 }
 
-async function removeReplicaStorageArtifacts(fs, dbPath, beforeRemove) {
+async function removeReplicaStorageArtifacts(fs, dbPath, beforeRemove, assertInstallUnchanged) {
   const outcomes = Array.from({length: 0});
   for (const artifactPath of replicaStorageArtifactPaths(dbPath)) {
     if (!fs.existsSync(artifactPath)) {
@@ -38,6 +38,9 @@ async function removeReplicaStorageArtifacts(fs, dbPath, beforeRemove) {
       continue;
     }
     await beforeRemove?.(artifactPath);
+    // The async owner callback has settled; no await separates this marker
+    // observation from unlink. Its caller owns the captured install identity.
+    assertInstallUnchanged?.();
     try {
       fs.unlinkSync(artifactPath);
       outcomes.push({artifactPath,

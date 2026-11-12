@@ -18,11 +18,8 @@ import {
   RAFT_CHECKPOINT_DESCRIPTOR_FILE,
   RAFT_CHECKPOINT_PAYLOAD_FILE,
 } from './snapshot-checkpoint-constants.js';
-import {
-  RAFT_SNAPSHOT_INSTALL_DIRNAME,
-  RAFT_SNAPSHOT_INSTALL_MARKER_FILE,
-  RAFT_SNAPSHOT_INSTALL_STATE,
-} from './snapshot-install-constants.js';
+import {RAFT_SNAPSHOT_INSTALL_STATE} from './snapshot-install-constants.js';
+import {inspectOwnedInstallArtifacts} from './snapshot-install-artifact-owner.js';
 import {
   RAFT_SNAPSHOT_TRANSFER_DIRNAME,
   RAFT_SNAPSHOT_TRANSFER_PROGRESS_MARKER_FILE,
@@ -40,7 +37,6 @@ const RAFT_SNAPSHOT_RETAINED_GENERATION_COUNT = 2;
 const NO_GENERATION_INDEX = 0;
 
 const DECIMAL_RADIX = 10;
-const UTF8 = 'utf8';
 
 // Install-marker states that pin their generation (an active install). A
 // REJECTED marker is not an active install per R4 and does NOT pin — its
@@ -102,26 +98,12 @@ function removeGenerationDirectory(generationDir) {
   fs.rmSync(generationDir, {recursive: true, force: true});
 }
 
-// S2 install-marker pin: the marker's generationIndex for the active-install
-// states only. Unreadable/corrupt markers pin nothing — the newest/bounded
-// rules still hold the recovery floor.
-function readInstallMarkerPin(checkpointsRoot) {
-  const markerFile = path.join(
-    checkpointsRoot,
-    RAFT_SNAPSHOT_INSTALL_DIRNAME,
-    RAFT_SNAPSHOT_INSTALL_MARKER_FILE);
-  try {
-    if (!fs.existsSync(markerFile)) {
-      return null;
-    }
-    const marker = JSON.parse(fs.readFileSync(markerFile, UTF8));
-    const pinning = PINNING_INSTALL_STATES.includes(marker?.state);
-    return pinning && Number.isSafeInteger(marker.generationIndex) ?
-      marker.generationIndex :
-      null;
-  } catch (_error) {
-    return null;
-  }
+// Marker shape, receiver/group and adjacent staging are decided by the one
+// install artifact owner. Unavailability cannot silently become an empty pin.
+function readInstallMarkerPin(checkpointsRoot, installTarget) {
+  const {marker} = inspectOwnedInstallArtifacts(checkpointsRoot, installTarget);
+  return marker !== null && PINNING_INSTALL_STATES.includes(marker.state) ?
+    marker.generationIndex : null;
 }
 
 // S3 transfer pins: every numeric transfer staging directory whose progress
@@ -150,7 +132,7 @@ function readTransferMarkerPins(checkpointsRoot) {
  */
 function gatherRetentionPins(options) {
   const pins = new Set();
-  const installPin = readInstallMarkerPin(options.checkpointsRoot);
+  const installPin = readInstallMarkerPin(options.checkpointsRoot, options.installTarget);
   if (installPin !== null) {
     pins.add(installPin);
   }
@@ -218,7 +200,8 @@ function collectGarbage(checkpointsRoot, partial, pinned, transferPins) {
 function sweepCheckpointGenerations(options) {
   const {checkpointsRoot} = options;
   const retainedCount = resolveRetainedCount(options.retainedGenerationCount);
-  const pinned = new Set(options.pinnedGenerationIndexes ?? []);
+  const pinned = new Set([...(options.pinnedGenerationIndexes ?? []),
+    ...gatherRetentionPins(options)]);
   const transferPins = new Set(readTransferMarkerPins(checkpointsRoot));
   const complete = [];
   const partial = [];

@@ -42,6 +42,7 @@ import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 // rows: this witness pins that an installed replica database fails closed with
 // the typed legacy-state outcome and brings up no consensus port.
 
+const INSTALL_RECEIVER_ID = 'snapshot-fixture-target';
 const TABLE = 'catchup_rows';
 const PARTITION_ID = 'catchup_rows-p1';
 const TERM = 4;
@@ -114,6 +115,7 @@ test('a snapshot-installed replica without an rs-raft record fails closed ' +
       checkpointsRoot,
       generationIndex: generation.boundaryIndex,
       expectedIdentity: IDENTITY,
+      expectedReplicaIdentity: INSTALL_RECEIVER_ID,
     });
     t.equal(installed.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED,
       'fixture: the replica is snapshot-installed');

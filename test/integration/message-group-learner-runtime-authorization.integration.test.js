@@ -1241,9 +1241,12 @@ test('snapshot receiver admission rejects unreadable receiver without overwritin
 test('snapshot receiver is revalidated after asynchronous CREATE commit admission', async (t) => {
   const {options, admitted} = await receiverInstallFixture(t, 'never-opened');
   const commit = admitted.owner.commitSnapshotInstall.bind(admitted.owner);
-  const liveDb = new Database(options.replicaDbPath);
-  liveDb.pragma('journal_mode = WAL');
+  let liveDb;
+  let engaged = 0;
   admitted.owner.commitSnapshotInstall = async (claim, mutation) => {
+    liveDb = new Database(options.replicaDbPath);
+    liveDb.pragma('journal_mode = WAL');
+    engaged += 1;
     // Capture the post-journal-mode image: the retirement below changes only WAL.
     const before = fs.readFileSync(options.replicaDbPath);
     liveDb.exec('UPDATE _raft_rs_replica_lifecycle SET state = \'retired\'');
@@ -1252,8 +1255,9 @@ test('snapshot receiver is revalidated after asynchronous CREATE commit admissio
   };
   try {
     const result = await requestSnapshotInstall(options);
-    assert.equal(result.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.REJECTED,
+    assert.equal(result.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALL_STATE_CONFLICT,
       'receiver WAL/history changes cannot be deleted by snapshot swap');
+    assert.equal(engaged, 1, 'the mutation crossed the actual CREATE commit await');
     assert.equal(liveDb.prepare('SELECT state FROM _raft_rs_replica_lifecycle').get().state, 'retired');
   } finally {
     if (liveDb?.open) liveDb.close();
@@ -1330,7 +1334,7 @@ for (const mutation of ['incarnation', 'retirement']) {
       return commit(claim, swap);
     };
     assert.equal((await requestSnapshotInstall(options)).outcome,
-      RAFT_SNAPSHOT_INSTALL_OUTCOME.REJECTED);
+      RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALL_STATE_CONFLICT);
     assert.equal(engaged, 1);
     assert.deepEqual(fs.readFileSync(options.replicaDbPath), before);
   });
@@ -1341,7 +1345,7 @@ test('snapshot receiver does not discard orphan WAL when the main database is ab
   const wal = options.replicaDbPath + '-wal';
   const bytes = Buffer.from('surviving-orphan-journal'); fs.writeFileSync(wal, bytes);
   assert.equal((await requestSnapshotInstall(options)).outcome,
-    RAFT_SNAPSHOT_INSTALL_OUTCOME.REJECTED);
+    RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALL_STATE_CONFLICT);
   assert.deepEqual(fs.readFileSync(wal), bytes);
   assert.equal(fs.existsSync(options.replicaDbPath), false);
 });

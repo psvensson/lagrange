@@ -19,7 +19,7 @@ import {RaftRsPeerIdentityRegistry} from
 import {removeSnapshotInstallArtifactsForGeneration, requestSnapshotInstall,
   recoverPendingSnapshotInstall} from
   '../../../src/raft/snapshot-install.js';
-import {RAFT_SNAPSHOT_INSTALL_OUTCOME,
+import {RAFT_SNAPSHOT_BOUNDARY_STATE_KEY, RAFT_SNAPSHOT_INSTALL_OUTCOME,
   RAFT_SNAPSHOT_INSTALL_REJECTION, RAFT_SNAPSHOT_INSTALL_DIRNAME,
   RAFT_SNAPSHOT_INSTALL_MARKER_FILE,
   RAFT_SNAPSHOT_INSTALL_STAGING_FILE} from
@@ -439,7 +439,7 @@ test('the canonical checkpoint owner seals a group-neutral raft-rs image',
       t.equal(stagedAdmission.row.create_admission_state, 'CLOSED',
         'the canonical durable repository records A CLOSED');
       const removed = await removeSnapshotInstallArtifactsForGeneration({
-        checkpointsRoot: staleRoot, replicaId: TARGET,
+        checkpointsRoot: staleRoot, replicaId: TARGET, partitionId: GROUP,
         replicaCreatedAt: stagedEvidence.replicaCreatedAt,
         attemptToken: stagedEvidence.attemptToken,
       });
@@ -492,11 +492,10 @@ test('the canonical checkpoint owner seals a group-neutral raft-rs image',
         createAdmissionOwner: stagedAdmission.owner,
         createAdmissionEvidence: stagedEvidence,
         createPhysicalWorkerClaim: stagedClaim});
-      t.equal(staleRetry.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.REJECTED,
-        'closed A cannot begin a late snapshot install after B admission');
-      t.equal(staleRetry.reason,
-        RAFT_SNAPSHOT_INSTALL_REJECTION.CREATE_ADMISSION_REQUIRED,
-        'late A install is refused by exact CREATE authority');
+      t.equal(staleRetry.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALL_STATE_CONFLICT,
+        'an earlier pending install cannot be overwritten by a late request');
+      t.equal(stagedAdmission.row.create_admission_state, 'CLOSED',
+        'A remains closed; conflict grants no CREATE authority');
       t.equal(sha256Digest(fs.readFileSync(successorDbPath)), successorDigest,
         'late A install preserves successor B bytes');
       const staleRecovery = await recoverPendingSnapshotInstall({
@@ -509,13 +508,13 @@ test('the canonical checkpoint owner seals a group-neutral raft-rs image',
         'stale A cannot overwrite a successor database at restart');
       const successorRead = new Database(successorDbPath, {readonly: true});
       const successorBinding = JSON.parse(successorRead.prepare(
-        'SELECT create_authority FROM _raft_snapshot_install_binding')
-        .pluck().get());
-      t.equal(successorBinding.operationId, successorEvidence.operationId,
+        'SELECT value FROM _raft_state WHERE key = ?')
+        .pluck().get(RAFT_SNAPSHOT_BOUNDARY_STATE_KEY.INSTALL_BINDING));
+      t.equal(successorBinding.createAuthority.operationId, successorEvidence.operationId,
         'successor B remains byte-owner after refusal');
       successorRead.close();
       const lateRemoved = await removeSnapshotInstallArtifactsForGeneration({
-        checkpointsRoot: staleRoot, replicaId: TARGET,
+        checkpointsRoot: staleRoot, replicaId: TARGET, partitionId: GROUP,
         replicaCreatedAt: stagedEvidence.replicaCreatedAt,
         attemptToken: stagedEvidence.attemptToken,
       });
@@ -529,7 +528,7 @@ test('the canonical checkpoint owner seals a group-neutral raft-rs image',
         createAuthority: successorAuthority});
       fs.writeFileSync(staleStaging, 'successor-staging');
       const staleCleanup = await removeSnapshotInstallArtifactsForGeneration({
-        checkpointsRoot: staleRoot, replicaId: TARGET,
+        checkpointsRoot: staleRoot, replicaId: TARGET, partitionId: GROUP,
         replicaCreatedAt: staleMarker.createAuthority.replicaCreatedAt,
         attemptToken: staleMarker.createAuthority.attemptToken,
       });

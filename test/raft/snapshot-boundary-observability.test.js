@@ -31,6 +31,7 @@ import {
 // partition warms from the rs-raft committed log only, and the snapshot-boundary
 // HLC on rs-raft is a recorded gap of the snapshot/catch-up quest (epic F5).
 
+const INSTALL_RECEIVER_ID = 'snapshot-fixture-target';
 const PARTITION_ID = 'sql_transactions-p1';
 const STATE_TABLE = 'sql_transactions';
 const TERM = 3;
@@ -77,6 +78,7 @@ async function createInstalledFixture() {
     checkpointsRoot,
     generationIndex: lastEntry.index,
     expectedIdentity: IDENTITY,
+    expectedReplicaIdentity: INSTALL_RECEIVER_ID,
   });
   const targetDb = new Database(targetDbPath);
   const targetAdapter = new SQLiteLogAdapter(

@@ -9,6 +9,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {SQLiteLogAdapter} from '../../src/raft/sqlite-log-adapter.js';
 import {SQLITE_RAFT_STATE_KEY} from '../../src/raft/sqlite-raft-state-constants.js';
 import {PartitionRaftStorage} from '../../src/partition/partition-raft-storage.js';
+import {RAFT_CHECKPOINT_PAYLOAD_FILE} from '../../src/raft/snapshot-checkpoint-constants.js';
 import {
   createSqliteStateMachineCheckpoint,
 } from '../../src/raft/snapshot-checkpoint-store.js';
@@ -21,6 +22,7 @@ import {
 import {
   RAFT_SNAPSHOT_BOUNDARY_STATE_KEY,
   RAFT_SNAPSHOT_INSTALL_DETAIL,
+  RAFT_SNAPSHOT_INSTALL_SIDECAR_SUFFIXES,
   RAFT_SNAPSHOT_INSTALL_DIRNAME,
   RAFT_SNAPSHOT_INSTALL_MARKER_FILE,
   RAFT_SNAPSHOT_INSTALL_MARKER_KIND,
@@ -34,12 +36,17 @@ import {
   writeAtomicDurable,
 } from '../../src/runtime/oci-host-agent-durable-files.js';
 
+import {markerValue, readMarker} from '../../src/raft/snapshot-install-marker.js';
+import {removeReplicaStorageArtifacts} from '../../src/node/replica-storage-artifacts.js';
+
+// Canonical marker transition: unknown or unbound crash debris is preserved.
 // raft-snapshot-atomic-install (R3): restart SHALL distinguish no install,
 // partial staging, complete uninstalled, installed, and rejected — every
 // crash point resolves idempotently via the install-nonce decision
 // procedure. Each subtest fabricates one exact durable crash state and
 // asserts the typed resolution.
 
+const REPLICA = 'restart-states-r2';
 const PARTITION_ID = 'replica_operations-p1';
 const STATE_TABLE = 'replica_operations';
 const TERM = 2;
@@ -86,427 +93,268 @@ async function createFixture() {
   };
 }
 
-function writeMarker(fixture, marker) {
-  fs.mkdirSync(fixture.installDir, {recursive: true});
-  writeAtomicDurable(
-    path.join(fixture.installDir, RAFT_SNAPSHOT_INSTALL_MARKER_FILE),
-    {rejectionReason: RAFT_SNAPSHOT_INSTALL_NO_REJECTION, ...marker});
-}
-
-function markerExists(fixture) {
-  return fs.existsSync(
-    path.join(fixture.installDir, RAFT_SNAPSHOT_INSTALL_MARKER_FILE));
+function markerFile(fixture) {
+  return path.join(fixture.installDir, RAFT_SNAPSHOT_INSTALL_MARKER_FILE);
 }
 
 function stagingFilePath(fixture) {
   return path.join(fixture.installDir, RAFT_SNAPSHOT_INSTALL_STAGING_FILE);
 }
 
-function readTargetInstallId(fixture) {
-  if (!fs.existsSync(fixture.targetDbPath)) return null;
+function writeMarker(fixture, state, binding, reason = RAFT_SNAPSHOT_INSTALL_NO_REJECTION) {
+  fs.mkdirSync(fixture.installDir, {recursive: true});
+  writeAtomicDurable(markerFile(fixture), markerValue(state, binding.installId,
+    binding.generationIndex, reason, binding));
+}
+
+function resolve(fixture) {
+  return resolvePendingSnapshotInstall({replicaDbPath: fixture.targetDbPath,
+    checkpointsRoot: fixture.checkpointsRoot,
+    expectedReplicaIdentity: REPLICA, expectedRaftGroupId: PARTITION_ID});
+}
+
+function cleanup(fixture) {
+  return {checkpointsRoot: fixture.checkpointsRoot, replicaId: REPLICA,
+    partitionId: PARTITION_ID, replicaCreatedAt: 1, attemptToken: 'cleanup-attempt'};
+}
+
+async function installedFixture(t) {
+  const fixture = await createFixture();
+  t.teardown(() => fixture.close());
+  const installed = await requestSnapshotInstall({replicaDbPath: fixture.targetDbPath,
+    checkpointsRoot: fixture.checkpointsRoot, generationIndex: fixture.generationIndex,
+    expectedIdentity: IDENTITY, expectedReplicaIdentity: REPLICA});
+  t.equal(installed.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED,
+    'production SQL install succeeds with explicit receiver identity');
   const db = new Database(fixture.targetDbPath, {readonly: true});
   try {
-    const row = db.prepare('SELECT value FROM _raft_state WHERE key = ?')
-      .get(RAFT_SNAPSHOT_BOUNDARY_STATE_KEY.INSTALL_ID);
-    return row ? row.value : null;
+    fixture.binding = JSON.parse(db.prepare('SELECT value FROM _raft_state WHERE key = ?')
+      .pluck().get(RAFT_SNAPSHOT_BOUNDARY_STATE_KEY.INSTALL_BINDING));
   } finally {
     db.close();
   }
+  return fixture;
 }
 
-test('no marker resolves to no_install with zero side effects', async (t) => {
+function preserved(t, file, before) {
+  t.ok(fs.existsSync(file), 'artifact remains');
+  t.equal(fs.readFileSync(file).equals(before), true, 'exact bytes remain');
+}
+
+test('no install artifacts resolves without side effects', async (t) => {
   const fixture = await createFixture();
-  try {
-    const resolution = resolvePendingSnapshotInstall({
-      replicaDbPath: fixture.targetDbPath,
-      checkpointsRoot: fixture.checkpointsRoot,
-    });
-    t.equal(resolution.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.NO_INSTALL,
-      'absence of the marker is the no-install state');
-  } finally {
-    fixture.close();
-  }
+  t.teardown(() => fixture.close());
+  t.equal(resolve(fixture).outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.NO_INSTALL);
 });
 
-test('a partial staging crash is discarded and boots the old state',
+for (const state of [RAFT_SNAPSHOT_INSTALL_STATE.STAGED,
+  RAFT_SNAPSHOT_INSTALL_STATE.INSTALLED]) {
+  test(`${state} after rename recognizes the production binding idempotently`, async (t) => {
+    const fixture = await installedFixture(t);
+    writeMarker(fixture, state, fixture.binding);
+    const before = fs.readFileSync(fixture.targetDbPath);
+    t.equal(resolve(fixture).outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED);
+    preserved(t, fixture.targetDbPath, before);
+    t.notOk(fs.existsSync(markerFile(fixture)));
+    t.equal(resolve(fixture).outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.NO_INSTALL);
+  });
+}
+
+test('a bound STAGED image completes its interrupted rename', async (t) => {
+  const fixture = await installedFixture(t);
+  fs.renameSync(fixture.targetDbPath, stagingFilePath(fixture));
+  writeMarker(fixture, RAFT_SNAPSHOT_INSTALL_STATE.STAGED, fixture.binding);
+  const before = fs.readFileSync(stagingFilePath(fixture));
+  t.equal(resolve(fixture).outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED);
+  preserved(t, fixture.targetDbPath, before);
+  t.notOk(fs.existsSync(stagingFilePath(fixture)));
+});
+
+test('unbound partial staging preserves all bytes with typed conflict', async (t) => {
+  const fixture = await installedFixture(t);
+  fs.rmSync(fixture.targetDbPath);
+  writeMarker(fixture, RAFT_SNAPSHOT_INSTALL_STATE.STAGING, fixture.binding);
+  fs.writeFileSync(stagingFilePath(fixture), 'partial bytes');
+  const before = fs.readFileSync(markerFile(fixture));
+  t.equal(resolve(fixture).outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALL_STATE_CONFLICT);
+  preserved(t, markerFile(fixture), before);
+  preserved(t, stagingFilePath(fixture), Buffer.from('partial bytes'));
+});
+
+test('a canonical marker with lost staging reports staging_lost without inventing bytes',
   async (t) => {
-    const fixture = await createFixture();
-    try {
-      writeMarker(fixture, {
-        state: RAFT_SNAPSHOT_INSTALL_STATE.STAGING,
-        installId: 'crashed-mid-staging',
-        generationIndex: fixture.generationIndex,
-      });
-      fs.writeFileSync(stagingFilePath(fixture), 'partial-bytes');
-      const resolution = resolvePendingSnapshotInstall({
-        replicaDbPath: fixture.targetDbPath,
-        checkpointsRoot: fixture.checkpointsRoot,
-      });
-      t.equal(resolution.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.NO_INSTALL,
-        'partial staging never installs');
-      t.notOk(fs.existsSync(stagingFilePath(fixture)),
-        'the partial staging file is discarded');
-      t.notOk(markerExists(fixture), 'the marker is cleared');
-    } finally {
-      fixture.close();
-    }
+    const fixture = await installedFixture(t);
+    fs.rmSync(fixture.targetDbPath);
+    writeMarker(fixture, RAFT_SNAPSHOT_INSTALL_STATE.STAGED, fixture.binding);
+    const result = resolve(fixture);
+    t.equal(result.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.REJECTED);
+    t.equal(result.reason, RAFT_SNAPSHOT_INSTALL_REJECTION.STAGING_LOST);
+    t.equal(readMarker(fixture.checkpointsRoot).state, RAFT_SNAPSHOT_INSTALL_STATE.REJECTED);
+    t.equal(resolve(fixture).detail, RAFT_SNAPSHOT_INSTALL_DETAIL.PRIOR_REJECTION_CONSUMED);
   });
 
-test('the staged-marker nonce decision procedure', async (t) => {
-  // A REAL completed install provides the durable artifacts the crash
-  // states are fabricated from.
-  await t.test('staged with staging present completes the swap (crash before rename)',
-    async (t) => {
-      const fixture = await createFixture();
-      try {
-        // Run a full install, then rewind: move the installed db back into
-        // the staging slot and reset the marker to staged — byte-identical
-        // to a crash after reconstruction, before the rename.
-        const installed = await requestSnapshotInstall({
-          replicaDbPath: fixture.targetDbPath,
-          checkpointsRoot: fixture.checkpointsRoot,
-          generationIndex: fixture.generationIndex,
-          expectedIdentity: IDENTITY,
-        });
-        t.equal(installed.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED,
-          'precondition: a full install succeeded');
-        fs.renameSync(fixture.targetDbPath, stagingFilePath(fixture));
-        writeMarker(fixture, {
-          state: RAFT_SNAPSHOT_INSTALL_STATE.STAGED,
-          installId: installed.installId,
-          generationIndex: fixture.generationIndex,
-        });
-        const resolution = resolvePendingSnapshotInstall({
-          replicaDbPath: fixture.targetDbPath,
-          checkpointsRoot: fixture.checkpointsRoot,
-        });
-        t.equal(resolution.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED,
-          'the swap suffix completes the install');
-        t.equal(readTargetInstallId(fixture), installed.installId,
-          'the installed database carries the marker nonce');
-        t.notOk(markerExists(fixture), 'the marker is cleared');
-      } finally {
-        fixture.close();
-      }
-    });
-
-  await t.test('staged after rename (marker update lost) is recognized by nonce',
-    async (t) => {
-      const fixture = await createFixture();
-      try {
-        const installed = await requestSnapshotInstall({
-          replicaDbPath: fixture.targetDbPath,
-          checkpointsRoot: fixture.checkpointsRoot,
-          generationIndex: fixture.generationIndex,
-          expectedIdentity: IDENTITY,
-        });
-        // Crash simulation: rename happened (target carries the nonce) but
-        // the marker still says staged and staging is gone.
-        writeMarker(fixture, {
-          state: RAFT_SNAPSHOT_INSTALL_STATE.STAGED,
-          installId: installed.installId,
-          generationIndex: fixture.generationIndex,
-        });
-        const resolution = resolvePendingSnapshotInstall({
-          replicaDbPath: fixture.targetDbPath,
-          checkpointsRoot: fixture.checkpointsRoot,
-        });
-        t.equal(resolution.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED,
-          'nonce match means the rename already happened');
-        t.notOk(markerExists(fixture), 'the marker is cleared');
-      } finally {
-        fixture.close();
-      }
-    });
-
-  await t.test('staged with staging lost and no rename is a typed rejection',
-    async (t) => {
-      const fixture = await createFixture();
-      try {
-        writeMarker(fixture, {
-          state: RAFT_SNAPSHOT_INSTALL_STATE.STAGED,
-          installId: 'never-renamed',
-          generationIndex: fixture.generationIndex,
-        });
-        const resolution = resolvePendingSnapshotInstall({
-          replicaDbPath: fixture.targetDbPath,
-          checkpointsRoot: fixture.checkpointsRoot,
-        });
-        t.equal(resolution.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.REJECTED,
-          'lost staging with no rename cannot install');
-        t.equal(resolution.reason,
-          RAFT_SNAPSHOT_INSTALL_REJECTION.STAGING_LOST,
-          'the typed staging_lost reason is recorded');
-        t.ok(markerExists(fixture),
-          'the rejected marker is retained for diagnosis');
-      } finally {
-        fixture.close();
-      }
-    });
-
-  await t.test('nonce match WITH staging present is the fail-closed conflict',
-    async (t) => {
-      const fixture = await createFixture();
-      try {
-        const installed = await requestSnapshotInstall({
-          replicaDbPath: fixture.targetDbPath,
-          checkpointsRoot: fixture.checkpointsRoot,
-          generationIndex: fixture.generationIndex,
-          expectedIdentity: IDENTITY,
-        });
-        writeMarker(fixture, {
-          state: RAFT_SNAPSHOT_INSTALL_STATE.STAGED,
-          installId: installed.installId,
-          generationIndex: fixture.generationIndex,
-        });
-        fs.writeFileSync(stagingFilePath(fixture), 'impossible-leftover');
-        const resolution = resolvePendingSnapshotInstall({
-          replicaDbPath: fixture.targetDbPath,
-          checkpointsRoot: fixture.checkpointsRoot,
-        });
-        t.equal(resolution.outcome,
-          RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALL_STATE_CONFLICT,
-          'the unreachable-under-atomic-rename state fails closed');
-        t.ok(markerExists(fixture), 'nothing is healed silently');
-      } finally {
-        fixture.close();
-      }
-    });
-});
-
-test('installed and rejected markers resolve per the state machine',
-  async (t) => {
-    await t.test('installed marker with matching nonce clears', async (t) => {
-      const fixture = await createFixture();
-      try {
-        const installed = await requestSnapshotInstall({
-          replicaDbPath: fixture.targetDbPath,
-          checkpointsRoot: fixture.checkpointsRoot,
-          generationIndex: fixture.generationIndex,
-          expectedIdentity: IDENTITY,
-        });
-        writeMarker(fixture, {
-          state: RAFT_SNAPSHOT_INSTALL_STATE.INSTALLED,
-          installId: installed.installId,
-          generationIndex: fixture.generationIndex,
-        });
-        const resolution = resolvePendingSnapshotInstall({
-          replicaDbPath: fixture.targetDbPath,
-          checkpointsRoot: fixture.checkpointsRoot,
-        });
-        t.equal(resolution.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED,
-          'a completed install is recognized');
-        t.notOk(markerExists(fixture), 'the marker is cleared');
-      } finally {
-        fixture.close();
-      }
-    });
-
-    await t.test('installed marker with foreign nonce is the conflict',
-      async (t) => {
-        const fixture = await createFixture();
-        try {
-          await requestSnapshotInstall({
-            replicaDbPath: fixture.targetDbPath,
-            checkpointsRoot: fixture.checkpointsRoot,
-            generationIndex: fixture.generationIndex,
-            expectedIdentity: IDENTITY,
-          });
-          writeMarker(fixture, {
-            state: RAFT_SNAPSHOT_INSTALL_STATE.INSTALLED,
-            installId: 'foreign-nonce',
-            generationIndex: fixture.generationIndex,
-          });
-          const resolution = resolvePendingSnapshotInstall({
-            replicaDbPath: fixture.targetDbPath,
-            checkpointsRoot: fixture.checkpointsRoot,
-          });
-          t.equal(resolution.outcome,
-            RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALL_STATE_CONFLICT,
-            'an installed marker the database does not corroborate fails closed');
-        } finally {
-          fixture.close();
-        }
-      });
-
-    // Supersedes the retained-rejection answer of quest
-    // raft-snapshot-atomic-install (recorded in the log of quest
-    // partition-checkpoint-epoch-generation, R09): a retained REJECTED marker
-    // blocked the replica's cleanup for ever, so the opener consumes it.
-    await t.test('a rejected marker boots the old state and is consumed, ' +
-      'with any staging file left beside it', async (t) => {
-      const fixture = await createFixture();
-      try {
-        writeMarker(fixture, {
-          state: RAFT_SNAPSHOT_INSTALL_STATE.REJECTED,
-          installId: 'was-rejected',
-          generationIndex: fixture.generationIndex,
-          rejectionReason:
-              RAFT_SNAPSHOT_INSTALL_REJECTION.IDENTITY_MISMATCH,
-        });
-        const staging = path.join(fixture.checkpointsRoot,
-          RAFT_SNAPSHOT_INSTALL_DIRNAME, RAFT_SNAPSHOT_INSTALL_STAGING_FILE);
-        fs.writeFileSync(staging, 'staging left by a crash');
-        const resolution = resolvePendingSnapshotInstall({
-          replicaDbPath: fixture.targetDbPath,
-          checkpointsRoot: fixture.checkpointsRoot,
-        });
-        t.equal(resolution.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.REJECTED,
-          'a prior rejection boots the old state');
-        t.equal(resolution.reason,
-          RAFT_SNAPSHOT_INSTALL_REJECTION.IDENTITY_MISMATCH,
-          'the recorded typed reason is surfaced');
-        t.equal(resolution.detail,
-          RAFT_SNAPSHOT_INSTALL_DETAIL.PRIOR_REJECTION_CONSUMED);
-        t.notOk(markerExists(fixture), 'the marker is consumed');
-        t.notOk(fs.existsSync(staging), 'and so is the staging file');
-        t.equal(resolvePendingSnapshotInstall({
-          replicaDbPath: fixture.targetDbPath,
-          checkpointsRoot: fixture.checkpointsRoot,
-        }).outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.NO_INSTALL,
-        'the next open finds no install');
-      } finally {
-        fixture.close();
-      }
-    });
-
-    // Consumption is for a follower catch-up rejection and one recorded
-    // before any install was classified (above). A fresh-create rejection
-    // belongs to its create generation: the opener keeps it and touches no
-    // staging file; that generation's cleanup removes it.
-    for (const [label, kind, consumed] of [
-      ['follower catch-up',
-        RAFT_SNAPSHOT_INSTALL_MARKER_KIND.RAFT_RS_FOLLOWER_CATCHUP, true],
-      ['fresh-create',
-        RAFT_SNAPSHOT_INSTALL_MARKER_KIND.RAFT_RS_FRESH_CREATE, false]]) {
-      await t.test(`a rejected ${label} marker met at open is ` +
-        `${consumed ? 'consumed' : 'retained for its create generation'}`,
-      async (t) => {
-        const fixture = await createFixture();
-        try {
-          const generation = {replicaId: 'restart-states-r2',
-            replicaCreatedAt: 7, attemptToken: 'attempt-7'};
-          writeMarker(fixture, {
-            state: RAFT_SNAPSHOT_INSTALL_STATE.REJECTED,
-            installId: 'was-rejected', generationIndex: fixture.generationIndex,
-            rejectionReason: RAFT_SNAPSHOT_INSTALL_REJECTION.STAGING_LOST,
-            kind, createAuthority: {...generation, partitionId: 'rows-p1'},
-            preInstallDigest: 'absent'});
-          fs.writeFileSync(stagingFilePath(fixture), 'another install staged this');
-          const open = () => resolvePendingSnapshotInstall({
-            replicaDbPath: fixture.targetDbPath,
-            checkpointsRoot: fixture.checkpointsRoot});
-          const resolution = open();
-          t.same({outcome: resolution.outcome, reason: resolution.reason,
-            detail: resolution.detail, marker: markerExists(fixture),
-            staging: fs.existsSync(stagingFilePath(fixture))},
-          {outcome: RAFT_SNAPSHOT_INSTALL_OUTCOME.REJECTED,
-            reason: RAFT_SNAPSHOT_INSTALL_REJECTION.STAGING_LOST,
-            detail: consumed ?
-              RAFT_SNAPSHOT_INSTALL_DETAIL.PRIOR_REJECTION_CONSUMED :
-              RAFT_SNAPSHOT_INSTALL_DETAIL.PRIOR_REJECTION_RETAINED,
-            marker: !consumed, staging: !consumed});
-          if (consumed) return;
-          t.equal(open().detail,
-            RAFT_SNAPSHOT_INSTALL_DETAIL.PRIOR_REJECTION_RETAINED,
-            'every later open answers the same retained rejection');
-          // Its own generation's cleanup owns it once the staging beside it
-          // is gone (a staging file it is not bound to is not its to remove).
-          const cleanup = {checkpointsRoot: fixture.checkpointsRoot, ...generation};
-          t.equal(inspectSnapshotInstallArtifactsForGeneration(cleanup).owned
-            === true, false, 'not owned beside a staging file of another install');
-          fs.rmSync(stagingFilePath(fixture));
-          t.equal(inspectSnapshotInstallArtifactsForGeneration({...cleanup,
-            attemptToken: 'another-attempt'}).owned === true, false,
-          'not owned by another create generation');
-          const removal = await removeSnapshotInstallArtifactsForGeneration(cleanup);
-          t.equal(removal.allAbsent, true,
-            'the create generation\'s cleanup removes the retained rejection');
-          t.notOk(markerExists(fixture));
-        } finally {
-          fixture.close();
-        }
-      });
-    }
+for (const state of [RAFT_SNAPSHOT_INSTALL_STATE.STAGING, RAFT_SNAPSHOT_INSTALL_STATE.REJECTED]) {
+  test(`${state} consumes only its bound staging and leaves the prior target absent`, async (t) => {
+    const fixture = await installedFixture(t);
+    fs.renameSync(fixture.targetDbPath, stagingFilePath(fixture));
+    writeMarker(fixture, state, fixture.binding, state === RAFT_SNAPSHOT_INSTALL_STATE.REJECTED ?
+      RAFT_SNAPSHOT_INSTALL_REJECTION.STAGING_LOST : RAFT_SNAPSHOT_INSTALL_NO_REJECTION);
+    t.equal(resolve(fixture).outcome, state === RAFT_SNAPSHOT_INSTALL_STATE.STAGING ?
+      RAFT_SNAPSHOT_INSTALL_OUTCOME.NO_INSTALL : RAFT_SNAPSHOT_INSTALL_OUTCOME.REJECTED);
+    t.notOk(fs.existsSync(fixture.targetDbPath));
+    t.notOk(fs.existsSync(stagingFilePath(fixture)));
+    t.notOk(fs.existsSync(markerFile(fixture)));
   });
+}
 
-test('no commit watermark is observable ahead of installed state', async (t) => {
-  const fixture = await createFixture();
-  try {
-    // Fabricate an OLD target replica with its own committed history.
-    const oldDb = new Database(fixture.targetDbPath);
-    const oldAdapter = new SQLiteLogAdapter(
-      oldDb, {address: PARTITION_ID, term: 1});
-    const oldEntry = oldAdapter.saveCommand({sql: 'old-row'}, 1);
-    oldAdapter.commit(oldEntry.index);
-    oldDb.close();
-    // A rejected install (stale epoch) must leave the old watermark intact.
-    const refused = await requestSnapshotInstall({
-      replicaDbPath: fixture.targetDbPath,
-      checkpointsRoot: fixture.checkpointsRoot,
-      generationIndex: fixture.generationIndex,
-      expectedIdentity: {...IDENTITY, membershipEpoch: SEALED_EPOCH + 1},
-    });
-    t.equal(refused.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.REJECTED,
-      'the stale-epoch install is rejected');
-    const db = new Database(fixture.targetDbPath, {readonly: true});
-    try {
-      const row = db.prepare('SELECT value FROM _raft_state WHERE key = ?')
-        .get(SQLITE_RAFT_STATE_KEY.COMMITTED_INDEX);
-      t.equal(Number(row.value), oldEntry.index,
-        'the old commit watermark is untouched by the rejected install');
-    } finally {
-      db.close();
-    }
-  } finally {
-    fixture.close();
-  }
+for (const field of ['kind', 'generationIndex', 'preInstallDigest', 'createAuthority']) {
+  test(`binding refuses a substituted ${field} without deleting staging`, async (t) => {
+    const fixture = await installedFixture(t);
+    fs.renameSync(fixture.targetDbPath, stagingFilePath(fixture));
+    const substitutions = {
+      kind: RAFT_SNAPSHOT_INSTALL_MARKER_KIND.RAFT_RS_FOLLOWER_CATCHUP,
+      generationIndex: fixture.binding.generationIndex + 1,
+      preInstallDigest: `sha256:${'0'.repeat(64)}`,
+      createAuthority: {...fixture.binding.createAuthority, entityId: 'another-table'},
+    };
+    writeMarker(fixture, RAFT_SNAPSHOT_INSTALL_STATE.STAGED,
+      {...fixture.binding, [field]: substitutions[field]});
+    const before = fs.readFileSync(stagingFilePath(fixture));
+    t.equal(resolve(fixture).outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALL_STATE_CONFLICT);
+    preserved(t, stagingFilePath(fixture), before);
+    t.equal(inspectSnapshotInstallArtifactsForGeneration(cleanup(fixture)).owned, false);
+  });
+}
+
+test('installed nonce plus a second staging file is a preserved conflict', async (t) => {
+  const fixture = await installedFixture(t);
+  writeMarker(fixture, RAFT_SNAPSHOT_INSTALL_STATE.STAGED, fixture.binding);
+  fs.copyFileSync(fixture.targetDbPath, stagingFilePath(fixture));
+  const before = fs.readFileSync(stagingFilePath(fixture));
+  t.equal(resolve(fixture).outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALL_STATE_CONFLICT);
+  preserved(t, stagingFilePath(fixture), before);
 });
 
-// Quest partition-checkpoint-epoch-generation (hand-over coverage model, C2):
-// a replica's cleanup owns that replica's own install debris in any state,
-// its staging file included; anything else still refuses the cleanup.
-test('a cleanup owns its replica\'s follower catch-up and rejected install ' +
-  'artifacts in any state, staging included', async (t) => {
-  const REPLICA = 'restart-states-r2';
-  const followerCatchup = (state, replicaId = REPLICA) => ({
-    state, installId: 'catch-up-install', generationIndex: 4,
-    kind: RAFT_SNAPSHOT_INSTALL_MARKER_KIND.RAFT_RS_FOLLOWER_CATCHUP,
-    createAuthority: {entityId: 'rows', entityType: 'partition',
-      partitionId: 'rows-p1', replicaId},
-    preInstallDigest: 'absent'});
-  const legacy = (state) => ({state, installId: 'legacy-install',
-    generationIndex: 4});
-  const cases = [
-    ['follower catch-up STAGED after a swap that threw',
-      followerCatchup(RAFT_SNAPSHOT_INSTALL_STATE.STAGED), true],
-    ['follower catch-up INSTALLED before its marker was cleared',
-      followerCatchup(RAFT_SNAPSHOT_INSTALL_STATE.INSTALLED), true],
-    ['follower catch-up REJECTED with staging after a crash',
-      followerCatchup(RAFT_SNAPSHOT_INSTALL_STATE.REJECTED), true],
-    ['a rejection recorded over an older staging file',
-      legacy(RAFT_SNAPSHOT_INSTALL_STATE.REJECTED), true],
-    ['a follower catch-up marker naming another replica',
-      followerCatchup(RAFT_SNAPSHOT_INSTALL_STATE.STAGED, 'another-replica'),
-      false],
-    ['an unclassified install that is not a rejection',
-      legacy(RAFT_SNAPSHOT_INSTALL_STATE.STAGED), false],
-  ];
-  for (const [label, marker, owned] of cases) {
-    const fixture = await createFixture();
-    try {
-      writeMarker(fixture, marker);
-      fs.writeFileSync(stagingFilePath(fixture), 'staging');
-      const generation = {checkpointsRoot: fixture.checkpointsRoot,
-        replicaId: REPLICA, replicaCreatedAt: 1, attemptToken: 'attempt'};
-      const inspection = inspectSnapshotInstallArtifactsForGeneration(generation);
-      t.equal(inspection.owned === true, owned, `${label}: owned ${owned}`);
-      const removal = await removeSnapshotInstallArtifactsForGeneration(generation);
-      t.equal(removal.allAbsent, owned, `${label}: removed ${owned}`);
-      t.equal(markerExists(fixture), !owned);
-      t.equal(fs.existsSync(stagingFilePath(fixture)), !owned);
-    } finally {
-      fixture.close();
-    }
+test('private observation supports a clean WAL-mode main without changing its bytes', async (t) => {
+  const fixture = await installedFixture(t);
+  const db = new Database(fixture.targetDbPath);
+  db.pragma('journal_mode = WAL');
+  db.close();
+  const before = fs.readFileSync(fixture.targetDbPath);
+  t.equal(before[18], 2, 'real SQLite close leaves WAL format in the main header');
+  for (const suffix of RAFT_SNAPSHOT_INSTALL_SIDECAR_SUFFIXES) {
+    t.notOk(fs.existsSync(`${fixture.targetDbPath}${suffix}`));
+  }
+  writeMarker(fixture, RAFT_SNAPSHOT_INSTALL_STATE.INSTALLED, fixture.binding);
+  t.equal(resolve(fixture).outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED);
+  preserved(t, fixture.targetDbPath, before);
+});
+
+test('invalid SQLite format bytes remain unowned even with a canonical marker', async (t) => {
+  const fixture = await installedFixture(t);
+  const bytes = fs.readFileSync(fixture.targetDbPath);
+  bytes[18] = 3;
+  fs.writeFileSync(fixture.targetDbPath, bytes);
+  writeMarker(fixture, RAFT_SNAPSHOT_INSTALL_STATE.INSTALLED, fixture.binding);
+  t.equal(resolve(fixture).outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALL_STATE_CONFLICT);
+  preserved(t, fixture.targetDbPath, bytes);
+});
+
+for (const state of Object.values(RAFT_SNAPSHOT_INSTALL_STATE)) {
+  test(`exact cleanup owns canonical bound ${state} staging`, async (t) => {
+    const fixture = await installedFixture(t);
+    fs.renameSync(fixture.targetDbPath, stagingFilePath(fixture));
+    writeMarker(fixture, state, fixture.binding, state === RAFT_SNAPSHOT_INSTALL_STATE.REJECTED ?
+      RAFT_SNAPSHOT_INSTALL_REJECTION.STAGING_LOST : RAFT_SNAPSHOT_INSTALL_NO_REJECTION);
+    const foreign = {...cleanup(fixture), partitionId: 'foreign-group'};
+    t.equal((await removeSnapshotInstallArtifactsForGeneration(foreign)).allAbsent, false);
+    t.equal((await removeSnapshotInstallArtifactsForGeneration(cleanup(fixture))).allAbsent, true);
+    t.equal((await removeSnapshotInstallArtifactsForGeneration(cleanup(fixture))).allAbsent, true);
+  });
+}
+
+test('install artifact cleanup rechecks marker after asynchronous callback', async (t) => {
+  const fixture = await installedFixture(t);
+  fs.renameSync(fixture.targetDbPath, stagingFilePath(fixture));
+  writeMarker(fixture, RAFT_SNAPSHOT_INSTALL_STATE.STAGED, fixture.binding);
+  const before = fs.readFileSync(stagingFilePath(fixture));
+  await t.rejects(removeSnapshotInstallArtifactsForGeneration({...cleanup(fixture),
+    beforeRemove: async () => {
+      queueMicrotask(() => writeAtomicDurable(markerFile(fixture), {successor: true}));
+    }}), {code: RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALL_STATE_CONFLICT});
+  preserved(t, stagingFilePath(fixture), before);
+});
+
+test('storage unlink rechecks marker after the callback promise settles', async (t) => {
+  const fixture = await installedFixture(t);
+  writeMarker(fixture, RAFT_SNAPSHOT_INSTALL_STATE.INSTALLED, fixture.binding);
+  const inspection = inspectSnapshotInstallArtifactsForGeneration(cleanup(fixture));
+  const before = fs.readFileSync(fixture.targetDbPath);
+  await t.rejects(removeReplicaStorageArtifacts(fs, fixture.targetDbPath, async () => {
+    queueMicrotask(() => writeAtomicDurable(markerFile(fixture), {successor: true}));
+  }, inspection.assertUnchanged), {code: RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALL_STATE_CONFLICT});
+  preserved(t, fixture.targetDbPath, before);
+});
+
+test('a rejected checkpoint neither creates a marker nor changes the old watermark', async (t) => {
+  const fixture = await installedFixture(t);
+  const before = fs.readFileSync(fixture.targetDbPath);
+  const rejected = await requestSnapshotInstall({replicaDbPath: fixture.targetDbPath,
+    checkpointsRoot: fixture.checkpointsRoot, generationIndex: fixture.generationIndex,
+    expectedReplicaIdentity: REPLICA,
+    expectedIdentity: {...IDENTITY, membershipEpoch: SEALED_EPOCH + 1}});
+  t.equal(rejected.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.REJECTED);
+  preserved(t, fixture.targetDbPath, before);
+  t.notOk(fs.existsSync(markerFile(fixture)));
+  const db = new Database(fixture.targetDbPath, {readonly: true});
+  t.equal(Number(db.prepare('SELECT value FROM _raft_state WHERE key = ?')
+    .pluck().get(SQLITE_RAFT_STATE_KEY.COMMITTED_INDEX)), fixture.generationIndex);
+  db.close();
+});
+
+for (const suffix of RAFT_SNAPSHOT_INSTALL_SIDECAR_SUFFIXES) {
+  test(`install cleanup preserves a new staging ${suffix} after its awaited callback`, async (t) => {
+    const fixture = await installedFixture(t);
+    fs.renameSync(fixture.targetDbPath, stagingFilePath(fixture));
+    writeMarker(fixture, RAFT_SNAPSHOT_INSTALL_STATE.STAGED, fixture.binding);
+    const before = fs.readFileSync(stagingFilePath(fixture));
+    const sidecar = `${stagingFilePath(fixture)}${suffix}`;
+    const bytes = Buffer.from(`new-${suffix}`);
+    await t.rejects(removeSnapshotInstallArtifactsForGeneration({...cleanup(fixture),
+      beforeRemove: async () => {
+        queueMicrotask(() => fs.writeFileSync(sidecar, bytes));
+      }}), {code: RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALL_STATE_CONFLICT});
+    preserved(t, stagingFilePath(fixture), before);
+    preserved(t, sidecar, bytes);
+  });
+}
+
+test('immutable binding equality is independent of authority property order', async (t) => {
+  const fixture = await installedFixture(t);
+  const authority = fixture.binding.createAuthority;
+  writeMarker(fixture, RAFT_SNAPSHOT_INSTALL_STATE.INSTALLED, {...fixture.binding,
+    createAuthority: {replicaId: authority.replicaId, partitionId: authority.partitionId,
+      entityType: authority.entityType, entityId: authority.entityId}});
+  t.equal(resolve(fixture).outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED);
+});
+
+test('a subsequent SQL checkpoint excludes the local install binding', async (t) => {
+  const fixture = await installedFixture(t);
+  const db = new Database(fixture.targetDbPath);
+  let created;
+  try {
+    created = await createSqliteStateMachineCheckpoint({db, identity: IDENTITY,
+      checkpointsRoot: path.join(fixture.workDir, 'next-checkpoints')});
+  } finally {
+    db.close();
+  }
+  const payload = new Database(path.join(created.checkpointDir, RAFT_CHECKPOINT_PAYLOAD_FILE),
+    {readonly: true});
+  try {
+    t.equal(payload.prepare('SELECT name FROM sqlite_master WHERE name = ?')
+      .get('_raft_state'), undefined, 'local nonce, binding and boundary state are all scrubbed');
+    t.equal(payload.prepare(`SELECT count(*) FROM ${STATE_TABLE}`).pluck().get(), 1);
+  } finally {
+    payload.close();
   }
 });

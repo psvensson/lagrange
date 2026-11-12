@@ -20,6 +20,7 @@ import {
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {
   REPLICA_CLEANUP_AUTHORITY_KIND,
+  REPLICA_CLEANUP_CONTINUATION,
   REPLICA_CLEANUP_ERROR_CODE,
   REPLICA_CLEANUP_LOG_MSG,
 } from './replica-cleanup-constants.js';
@@ -96,8 +97,9 @@ function rowIsReplacementForAuthority(row, authority) {
       Number.isFinite(row?.updated_at));
 }
 
-function throwCleanupReleaseDeferred(authority, effect, result = null) {
-  const error = cleanupDeferredError(authority.replicaId);
+function throwCleanupMutationDeferred(replicaId, effect, result = null, cause = null) {
+  const error = cleanupDeferredError(replicaId);
+  error.cause = cause;
   error.mutationOutcome = effect.outcome || null;
   error.retryAfterMs = Number.isFinite(result?.retryAfterMs) ?
     result.retryAfterMs : null;
@@ -115,7 +117,11 @@ REPLICA_CLEANUP_ERROR_CODE.CLEANUP_OWNER_DEFERRED) {
 }
 
 class ReplicaCleanupTombstoneOwner {
+  #removalContinuations;
   constructor(options = {}) {
+    // Issued handoffs only. A durable read can confirm this token, never adopt
+    // another claimant's token. Process loss uses the frozen startup sweep.
+    this.#removalContinuations = new Map();
     this.gateway = options.gateway;
     this.observe = options.observe;
     this.now = typeof options.now === 'function' ? options.now : Date.now;
@@ -235,7 +241,7 @@ class ReplicaCleanupTombstoneOwner {
     return await this.requireCurrent(authority) ? authority : null;
   }
 
-  async takeoverRemoving(removingAuthority, reason) {
+  async takeoverRemoving(removingAuthority, reason, service = null) {
     const removalToken = removingAuthority?.replicaState?.cleanupToken;
     const ownerToken = isFailedCreateRemoveToken(removalToken) ?
       removalToken : this.randomUUID();
@@ -285,14 +291,32 @@ class ReplicaCleanupTombstoneOwner {
     const observation = await this.observeReplica(whereClause.service_id);
     const authority = observation.available === true ?
       cleanupAuthorityFromRow(observation.row) : null;
-    if (authority?.ownerToken === ownerToken) return authority;
+    if (authority?.ownerToken === ownerToken) {
+      this.#removalContinuations.set(authority.replicaId, Object.freeze({
+        kind: REPLICA_CLEANUP_CONTINUATION.OWNED,
+        removalAuthority: removingAuthority, cleanupAuthority: authority, service,
+      }));
+      return authority;
+    }
     const effect = classifyControlPlaneMutationResult(result);
-    const error = cleanupDeferredError(whereClause.service_id);
-    error.cause = mutationError;
-    error.mutationOutcome = effect.outcome || null;
-    error.retryAfterMs = Number.isFinite(result?.retryAfterMs) ?
-      result.retryAfterMs : null;
-    throw error;
+    throwCleanupMutationDeferred(whereClause.service_id, effect, result, mutationError);
+  }
+
+  readRemovalContinuation(replicaId, partitionId, nodeId) {
+    const retained = this.#removalContinuations.get(replicaId);
+    if (!retained) return Object.freeze({kind: REPLICA_CLEANUP_CONTINUATION.UNOWNED});
+    if (retained.cleanupAuthority.partitionId !== partitionId ||
+        retained.cleanupAuthority.nodeId !== nodeId) {
+      throw cleanupDeferredError(replicaId, REPLICA_CLEANUP_ERROR_CODE.CLEANUP_IDENTITY_CONFLICT);
+    }
+    return retained;
+  }
+
+  finishRemovalContinuation(authority) {
+    const retained = this.#removalContinuations.get(authority.replicaId);
+    if (retained?.cleanupAuthority === authority) {
+      this.#removalContinuations.delete(authority.replicaId);
+    }
   }
 
   async requireCurrent(authority) {
@@ -423,11 +447,11 @@ class ReplicaCleanupTombstoneOwner {
     const effect = classifyControlPlaneMutationResult(result);
     const observation = await this.observeReplica(authority.replicaId);
     if (observation.available !== true) {
-      throwCleanupReleaseDeferred(authority, effect);
+      throwCleanupMutationDeferred(authority.replicaId, effect);
     }
     if (observation.row === null) return true;
     if (rowMatchesCleanupAuthority(observation.row, authority)) {
-      throwCleanupReleaseDeferred(authority, effect, result);
+      throwCleanupMutationDeferred(authority.replicaId, effect, result);
     }
     if (isCleanupTombstoneRow(observation.row)) {
       throw cleanupDeferredError(
@@ -449,4 +473,5 @@ export {
   ReplicaCleanupTombstoneOwner,
   cleanupDeferredError,
   isCleanupTombstoneRow,
+  rowMatchesCleanupAuthority,
 };

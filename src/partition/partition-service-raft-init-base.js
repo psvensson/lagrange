@@ -217,6 +217,8 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
       if (this.dbPath !== PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH) {
         const installResolution = resolvePendingSnapshotInstall({
           replicaDbPath: this.dbPath,
+          expectedReplicaIdentity: this.replicaId,
+          expectedRaftGroupId: this.partitionId,
         });
         if (installResolution.outcome ===
             RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALL_STATE_CONFLICT) {

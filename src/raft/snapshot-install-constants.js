@@ -13,6 +13,7 @@ const RAFT_SNAPSHOT_BOUNDARY_STATE_KEY = Object.freeze({
   LAST_INCLUDED_TERM: 'snapshotLastIncludedTerm',
   MAX_COMMITTED_HLC: 'maxCommittedHlc',
   INSTALL_ID: 'snapshotInstallId',
+  INSTALL_BINDING: 'snapshotInstallBinding',
 });
 
 // Durable install marker: {checkpointsRoot}/install/install-state.json plus
@@ -21,10 +22,12 @@ const RAFT_SNAPSHOT_BOUNDARY_STATE_KEY = Object.freeze({
 const RAFT_SNAPSHOT_INSTALL_DIRNAME = 'install';
 const RAFT_SNAPSHOT_INSTALL_MARKER_FILE = 'install-state.json';
 const RAFT_SNAPSHOT_INSTALL_STAGING_FILE = 'staging-payload';
+// Local install artifacts include rollback journals, unlike sealed payloads.
+const RAFT_SNAPSHOT_INSTALL_SIDECAR_SUFFIXES = Object.freeze(['-wal', '-shm', '-journal']);
 
 // Install state machine (R3: restart SHALL distinguish no install, partial
 // staging, complete uninstalled, installed, and rejected). "No install" is
-// the absence of the marker file.
+// the absence of every install artifact.
 const RAFT_SNAPSHOT_INSTALL_STATE = Object.freeze({
   STAGING: 'staging',
   STAGED: 'staged',
@@ -33,7 +36,7 @@ const RAFT_SNAPSHOT_INSTALL_STATE = Object.freeze({
 });
 
 const RAFT_SNAPSHOT_INSTALL_MARKER_KIND = Object.freeze({
-  LEGACY_PARTITION: 'legacy_partition',
+  PARTITION_STATE_MACHINE: 'partition_state_machine',
   RAFT_RS_FRESH_CREATE: 'raft_rs_fresh_create',
   RAFT_RS_FOLLOWER_CATCHUP: 'raft_rs_follower_catchup',
 });
@@ -74,22 +77,24 @@ const RAFT_SNAPSHOT_INSTALL_MARKER_FIELDS = Object.freeze([
   'createAuthority',
   'preInstallDigest',
 ]);
-const RAFT_SNAPSHOT_INSTALL_LEGACY_MARKER_FIELDS = Object.freeze([
-  'state',
-  'installId',
-  'generationIndex',
-  'rejectionReason',
-]);
 const RAFT_SNAPSHOT_INSTALL_NO_REJECTION = 'none';
 const RAFT_SNAPSHOT_INSTALL_DETAIL = Object.freeze({
   GENERATION_MISMATCH: 'generation_mismatch',
   STAGED_CREATE_GENERATION_MISMATCH: 'staged_create_generation_mismatch',
-  LEGACY_STAGING_NONCE_MISMATCH: 'legacy_staging_nonce_mismatch',
-  // A REJECTED marker met at open: a follower catch-up or unclassified one
-  // is consumed (marker and staging removed); a fresh-create one is retained
-  // for its create generation's cleanup.
+  STAGING_BINDING_MISMATCH: 'staging_binding_mismatch',
+  INVALID_MARKER: 'invalid_marker',
+  ARTIFACT_UNAVAILABLE: 'artifact_unavailable',
+  UNOWNED_ARTIFACT: 'unowned_artifact',
+  ARTIFACT_CHANGED: 'artifact_changed',
+  TARGET_MISMATCH: 'target_mismatch',
+  TARGET_CHANGED: 'target_changed',
+  SIDECAR_PRESENT: 'sidecar_present',
+  PENDING_INSTALL: 'pending_install',
+  STAGING_DISCARDED: 'staging_discarded',
+  INSTALLED_BINDING_MISMATCH: 'installed_binding_mismatch',
+  INSTALLED_WITH_STAGING: 'installed_with_staging',
+  // Only a validated, owned rejection can be consumed at open.
   PRIOR_REJECTION_CONSUMED: 'prior_rejection_consumed',
-  PRIOR_REJECTION_RETAINED: 'prior_rejection_retained',
 });
 const RAFT_SNAPSHOT_INSTALL_ARTIFACT_OUTCOME = Object.freeze({
   DELETED: 'deleted',
@@ -101,12 +106,12 @@ export {
   RAFT_SNAPSHOT_INSTALL_DETAIL,
   RAFT_SNAPSHOT_INSTALL_ARTIFACT_OUTCOME,
   RAFT_SNAPSHOT_INSTALL_MARKER_FIELDS,
-  RAFT_SNAPSHOT_INSTALL_LEGACY_MARKER_FIELDS,
   RAFT_SNAPSHOT_INSTALL_MARKER_KIND,
   RAFT_SNAPSHOT_INSTALL_MARKER_FILE,
   RAFT_SNAPSHOT_INSTALL_NO_REJECTION,
   RAFT_SNAPSHOT_INSTALL_OUTCOME,
   RAFT_SNAPSHOT_INSTALL_REJECTION,
   RAFT_SNAPSHOT_INSTALL_STAGING_FILE,
+  RAFT_SNAPSHOT_INSTALL_SIDECAR_SUFFIXES,
   RAFT_SNAPSHOT_INSTALL_STATE,
 };

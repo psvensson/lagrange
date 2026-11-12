@@ -40,14 +40,18 @@ import {
   REPLICA_SNAPSHOT_INSTALL_WAIT,
 } from '../../../src/node/replica-snapshot-install-constants.js';
 import {
+  RAFT_SNAPSHOT_BOUNDARY_STATE_KEY,
+  RAFT_SNAPSHOT_INSTALL_NO_REJECTION,
   RAFT_SNAPSHOT_INSTALL_DIRNAME,
   RAFT_SNAPSHOT_INSTALL_MARKER_FILE,
-  RAFT_SNAPSHOT_INSTALL_MARKER_KIND,
-  RAFT_SNAPSHOT_INSTALL_REJECTION,
   RAFT_SNAPSHOT_INSTALL_STAGING_FILE,
   RAFT_SNAPSHOT_INSTALL_STATE,
 } from '../../../src/raft/snapshot-install-constants.js';
-import {resolveReplicaCheckpointsRoot} from '../../../src/raft/snapshot-install.js';
+import {requestSnapshotInstall, resolveReplicaCheckpointsRoot} from
+  '../../../src/raft/snapshot-install.js';
+import {readInstallImage} from '../../../src/raft/snapshot-install-artifact-owner.js';
+import {markerValue} from '../../../src/raft/snapshot-install-marker.js';
+import {readCheckpoint} from '../../../src/raft/snapshot-checkpoint-store.js';
 import {ReplicaOperationField} from
   '../../../src/rebalancer/replica-operation-constants.js';
 import {ReplicaStatus} from '../../../src/rebalancer/replica-status.js';
@@ -88,20 +92,48 @@ function installFiles(dbPath) {
     staging: path.join(dir, RAFT_SNAPSHOT_INSTALL_STAGING_FILE)};
 }
 
-// An install marker of this replica's follower catch-up in `state`, and a
-// staging file beside it, as an interrupted install leaves them.
-function plantFollowerCatchupMarker(dbPath, replicaId, state) {
+function installedBinding(dbPath) {
+  return readInstallImage(dbPath, (db) => JSON.parse(db.prepare(
+    'SELECT value FROM _raft_state WHERE key = ?').pluck()
+    .get(RAFT_SNAPSHOT_BOUNDARY_STATE_KEY.INSTALL_BINDING)));
+}
+
+// Interrupt a real, closed-receiver install. Marker and binding come from
+// production; only the filesystem effect is faulted at the named crash point.
+async function plantFollowerCatchupMarker(world, dbPath, replicaId, state) {
   const files = installFiles(dbPath);
-  ensureDirectory(files.dir);
-  writeAtomicDurable(files.marker, {state, installId: 'interrupted-install',
-    generationIndex: 1,
-    rejectionReason: state === MARKER_STATE.REJECTED ?
-      RAFT_SNAPSHOT_INSTALL_REJECTION.CUSTODY_NOT_HELD : 'none',
-    kind: RAFT_SNAPSHOT_INSTALL_MARKER_KIND.RAFT_RS_FOLLOWER_CATCHUP,
-    createAuthority: {entityId: PARTITION_ID, entityType: 'partition',
-      partitionId: PARTITION_ID, replicaId},
-    preInstallDigest: 'absent'});
-  fs.writeFileSync(files.staging, 'staging left by the interrupted install');
+  const root = resolveReplicaCheckpointsRoot(dbPath);
+  const binding = installedBinding(dbPath);
+  const {descriptor} = readCheckpoint({checkpointDir:
+    path.join(root, String(binding.generationIndex))});
+  const expectedIdentity = {clusterId: descriptor.clusterId, raftGroupId: descriptor.raftGroupId,
+    entity: descriptor.entity, membershipEpoch: descriptor.membershipEpoch};
+  const rename = fs.renameSync;
+  const remove = fs.rmSync;
+  const crashCode = 'MARKER_FIXTURE_CRASH';
+  fs.renameSync = (source, target) => {
+    if (state === MARKER_STATE.STAGED && source === files.staging && target === dbPath) {
+      throw Object.assign(new Error(crashCode), {code: crashCode});
+    }
+    return rename(source, target);
+  };
+  fs.rmSync = (file, options) => {
+    if (state === MARKER_STATE.REJECTED && file === files.staging && fs.existsSync(file)) {
+      throw Object.assign(new Error(crashCode), {code: crashCode});
+    }
+    return remove(file, options);
+  };
+  try {
+    await assert.rejects(requestSnapshotInstall({replicaDbPath: dbPath,
+      checkpointsRoot: root, generationIndex: binding.generationIndex, expectedIdentity,
+      expectedReplicaIdentity: replicaId,
+      custody: state === MARKER_STATE.STAGED ?
+        world.handler.snapshotInstallOwner.custodyOf(replicaId) : null}), {code: crashCode});
+    assert.equal(JSON.parse(fs.readFileSync(files.marker, 'utf8')).state, state);
+  } finally {
+    fs.renameSync = rename;
+    fs.rmSync = remove;
+  }
   return files;
 }
 
@@ -205,8 +237,8 @@ SCENARIO, async () => {
 });
 
 for (const markerState of [MARKER_STATE.STAGED, MARKER_STATE.REJECTED]) {
-  test(`S-cleanup: a removal's cleanup, under its durable cleanup token, ` +
-    `completes over this replica's follower catch-up marker in state ` +
+  test('S-cleanup: a removal\'s cleanup, under its durable cleanup token, ' +
+    'completes over this replica\'s follower catch-up marker in state ' +
     `${markerState} with its staging file`, SCENARIO, async () => {
     await withFollowerBehindCompaction(async (world, replicaId, reconnect) => {
       const {handler} = world;
@@ -221,7 +253,7 @@ for (const markerState of [MARKER_STATE.STAGED, MARKER_STATE.REJECTED]) {
       reconnect();
       await waitFor(() => recreationOf(world, replicaId)?.hold ===
         HOLD.AWAITING_REMOVAL_OWNER, 'the recreation holds for the removal owner');
-      const files = plantFollowerCatchupMarker(dbPath, replicaId, markerState);
+      const files = await plantFollowerCatchupMarker(world, dbPath, replicaId, markerState);
       // The removal's reconcile (the REMOVE re-dispatch of a replica whose
       // REMOVING row is durable): claim, cleanup takeover, storage cleanup.
       const tokens = [];
@@ -292,9 +324,10 @@ test('S-conflict: an open refused by a real install-state conflict holds the ' +
     // the production opener fails closed, typed.
     faultNextOpen(world, replicaId, async () => {
       ensureDirectory(files.dir);
-      writeAtomicDurable(files.marker, {state: MARKER_STATE.INSTALLED,
-        installId: 'an-install-this-database-does-not-carry',
-        generationIndex: 1, rejectionReason: 'none'});
+      const binding = installedBinding(world.third.dbPath);
+      writeAtomicDurable(files.marker, markerValue(MARKER_STATE.INSTALLED,
+        'an-install-this-database-does-not-carry', binding.generationIndex,
+        RAFT_SNAPSHOT_INSTALL_NO_REJECTION, binding));
     });
     const clock = virtualClock(handler);
     reconnect();
@@ -349,7 +382,7 @@ SCENARIO, async () => {
   await withFollowerBehindCompaction(async (world, replicaId, reconnect) => {
     let files;
     faultNextOpen(world, replicaId, async () => {
-      files = plantFollowerCatchupMarker(world.third.dbPath, replicaId,
+      files = await plantFollowerCatchupMarker(world, world.third.dbPath, replicaId,
         MARKER_STATE.REJECTED);
     });
     reconnect();

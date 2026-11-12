@@ -10,7 +10,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {SQLiteLogAdapter} from '../../src/raft/sqlite-log-adapter.js';
 import {requestSnapshotInstall} from '../../src/raft/snapshot-install.js';
 import {
-  RAFT_SNAPSHOT_BOUNDARY_STATE_KEY,
+  RAFT_SNAPSHOT_INSTALL_SIDECAR_SUFFIXES,
   RAFT_SNAPSHOT_INSTALL_OUTCOME,
 } from '../../src/raft/snapshot-install-constants.js';
 import {
@@ -41,8 +41,7 @@ import {TEST_BOOT_INCARNATION} from
 
 // S4 recorded-gap guards (quest raft-snapshot-compacted-follower-catchup):
 // previously-untested lines pinned - (2) the committed-truncation witness TRIP
-// inside (boundary, committedIndex]; (3) stale target-sidecar deletion in
-// swapStagingIntoReplica; (4) the explicit per-socket maxPayload on the bulk
+// inside (boundary, committedIndex]; (3) unowned target-sidecar preservation; (4) the explicit per-socket maxPayload on the bulk
 // dial; (5) stale-staging cleanup at transfer accept.
 //
 // Gap (1), the wrong-term-at-boundary refusal and its no-dispatch disposition,
@@ -51,6 +50,7 @@ import {TEST_BOOT_INCARNATION} from
 // catch-up is an open release-blocking frontier of epic raft-rs-full-cutover
 // R5 ("snapshot/restart/catch-up under rs-raft durable state").
 
+const INSTALL_RECEIVER_ID = 'snapshot-fixture-target';
 const PARTITION_ID = 'sql_transactions-p1';
 const STATE_TABLE = 'sql_transactions';
 const TERM = 4;
@@ -147,37 +147,29 @@ test('gap 2: the truncation witness TRIPS inside (boundary, committedIndex]',
     }
   });
 
-test('gap 3: install deletes stale target sidecars and boots healthy',
-  async (t) => {
+// The later marker contract preserves unowned journals. Their age or a
+// missing main file grants no authority to discard their bytes.
+for (const suffix of RAFT_SNAPSHOT_INSTALL_SIDECAR_SUFFIXES) {
+  test(`gap 3: install refuses and preserves an orphan target ${suffix}`, async (t) => {
     const generation = await createSealedGenerationFixture();
     try {
       const targetDbPath = path.join(generation.workDir, 'target.db');
-      const staleWal = `${targetDbPath}-wal`;
-      fs.writeFileSync(staleWal, Buffer.from('stale-wal-garbage'));
+      const sidecar = `${targetDbPath}${suffix}`;
+      const bytes = Buffer.from(`unowned-${suffix}`);
+      fs.writeFileSync(sidecar, bytes);
       const installed = await requestSnapshotInstall({
-        replicaDbPath: targetDbPath,
-        checkpointsRoot: generation.checkpointsRoot,
-        generationIndex: generation.boundaryIndex,
-        expectedIdentity: IDENTITY,
+        replicaDbPath: targetDbPath, checkpointsRoot: generation.checkpointsRoot,
+        generationIndex: generation.boundaryIndex, expectedIdentity: IDENTITY,
+        expectedReplicaIdentity: INSTALL_RECEIVER_ID,
       });
-      t.equal(installed.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED,
-        'the install completes over the seeded stale sidecar');
-      t.notOk(fs.existsSync(staleWal),
-        'the stale -wal sidecar is deleted before the swap');
-      const db = new Database(targetDbPath, {readonly: true});
-      try {
-        const row = db.prepare(
-          'SELECT value FROM _raft_state WHERE key = ?',
-        ).get(RAFT_SNAPSHOT_BOUNDARY_STATE_KEY.LAST_INCLUDED_INDEX);
-        t.equal(Number(row?.value), generation.boundaryIndex,
-          'the installed db opens healthy with the boundary keys');
-      } finally {
-        db.close();
-      }
+      t.equal(installed.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALL_STATE_CONFLICT);
+      t.equal(fs.readFileSync(sidecar).equals(bytes), true, 'exact sidecar bytes survive');
+      t.notOk(fs.existsSync(targetDbPath), 'refusal does not create a receiver');
     } finally {
       generation.close();
     }
   });
+}
 
 test('gap 4: the bulk dial passes an explicit per-socket maxPayload',
   async (t) => {
@@ -248,6 +240,7 @@ test('gap 5: transfer accept sweeps stale staging, keeping its own directory',
       const receiver = createSnapshotTransferReceiver({
         checkpointsRoot: receiverRoot,
         expectedIdentity: IDENTITY,
+        expectedReplicaIdentity: INSTALL_RECEIVER_ID,
       });
       const admission = receiver.acceptOffer({
         kind: RAFT_SNAPSHOT_TRANSFER_MESSAGE_KIND.OFFER,

@@ -96,8 +96,10 @@ function compactToGeneration(service, creation) {
 function sweepAndCompactCheckpoint(service, checkpointsRoot, creation) {
   const sweep = sweepCheckpointGenerations({
     checkpointsRoot,
+    installTarget: {replicaId: service.replicaId, partitionId: service.partitionId},
     pinnedGenerationIndexes: gatherRetentionPins({
       checkpointsRoot,
+      installTarget: {replicaId: service.replicaId, partitionId: service.partitionId},
       inProcessPins: listInFlightGenerationIndexes(),
     }),
   });
@@ -130,7 +132,8 @@ async function runCheckpointAndCompaction(
   identity,
   options,
 ) {
-  const creation = await createCheckpointSealer(service.db)({
+  const creation = await createCheckpointSealer(service.db,
+    {replicaId: service.replicaId, partitionId: service.partitionId})({
     identity,
     checkpointsRoot,
     inProcessPins: listInFlightGenerationIndexes(),
@@ -234,7 +237,8 @@ function createPartitionSnapshotCadence(options) {
     }
     state.inFlight = true;
     try {
-      const creation = await createCheckpointSealer(service.db)(request);
+      const creation = await createCheckpointSealer(service.db,
+        {replicaId: service.replicaId, partitionId: service.partitionId})(request);
       const refused = creation.outcome === RAFT_CHECKPOINT_CREATION_OUTCOME.CREATED ?
         NOT_REFUSED : {outcome: OUTCOME.CREATION_REFUSED, reason: creation.outcome};
       refusalAfter(attempt, startedAtMs, refused);

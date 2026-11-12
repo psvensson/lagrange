@@ -440,8 +440,10 @@ async function createSqliteStateMachineCheckpoint(options) {
     // just-created generation is the newest complete one, so it survives.
     sweepCheckpointGenerations({
       checkpointsRoot,
+      installTarget: options.installTarget,
       pinnedGenerationIndexes: gatherRetentionPins({
         checkpointsRoot,
+        installTarget: options.installTarget,
         inProcessPins: options.inProcessPins,
       }),
     });

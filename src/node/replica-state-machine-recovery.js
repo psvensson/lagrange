@@ -1,3 +1,4 @@
+import {rowMatchesCleanupAuthority} from './replica-cleanup-tombstone-owner.js';
 import {
   SERVICE_TYPE,
   TABLES,
@@ -173,9 +174,7 @@ function isRemovalAuthorityCurrent(stateMachine, replicaId, authority) {
 }
 
 async function observeRemovalAuthority(
-  stateMachine,
-  replicaId,
-  authority,
+  stateMachine, replicaId, authority, cleanupAuthority = null,
 ) {
   if (!isRemovalAuthorityCurrent(stateMachine, replicaId, authority)) {
     return false;
@@ -186,11 +185,12 @@ async function observeRemovalAuthority(
   );
   return isRemovalAuthorityCurrent(stateMachine, replicaId, authority) &&
     observation.available === true &&
-    authorityMatchesRow(authority, observation.row);
+    (cleanupAuthority ? rowMatchesCleanupAuthority(observation.row, cleanupAuthority) :
+      authorityMatchesRow(authority, observation.row));
 }
 
-function buildRemovalAuthorityGuard(stateMachine, replicaId, authority) {
-  let exactDeleteAttempted = false;
+function buildRemovalAuthorityGuard(stateMachine, replicaId, authority, cleanupAuthority) {
+  let exactDeleteAttempted = cleanupAuthority !== null;
   let deletedGenerationBound = false;
   const isCurrent = () => isRemovalAuthorityCurrent(
     stateMachine,
@@ -266,13 +266,15 @@ async function completeDurableRemovalWithAuthority(
 ) {
   if (authority?.kind !== REMOVAL_AUTHORITY_KIND.REMOVING) return false;
   const run = async () => {
-    if (!await observeRemovalAuthority(stateMachine, replicaId, authority)) {
+    if (!await observeRemovalAuthority(stateMachine, replicaId, authority,
+      context.cleanupAuthority ?? null)) {
       return false;
     }
     const guard = buildRemovalAuthorityGuard(
       stateMachine,
       replicaId,
       authority,
+      context.cleanupAuthority ?? null,
     );
     if (await action(guard) !== true ||
         !await guard.requireComplete() ||
