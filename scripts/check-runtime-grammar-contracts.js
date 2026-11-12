@@ -318,8 +318,8 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
     ]),
   }),
   'src/control-plane/membership-publication-coordinator-reads.js': Object.freeze({
-    // The shared async reader accepts explicit preload input or a successful
-    // owner answer. Projection readers remain separate synchronous surfaces.
+    // Every async read consumes a successful owner answer. Raw caller rows
+    // belong only to the separate synchronous projection surfaces.
     forbiddenFragments: Object.freeze([
       'mergePlanningEvidenceRows',
       'shouldMergePlanningEvidenceRows',
@@ -346,7 +346,19 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
         forbiddenFragments: Object.freeze([
           'systemTableCache',
           'return []',
+          'preloadedRows',
+          'allowEmptyPreloadedRows',
         ]),
+      }),
+      Object.freeze({
+        functionName: 'readClusterMembershipCandidate',
+        requiredFragments: Object.freeze(['await this.readPublicationPlanningSnapshot(options)']),
+        forbiddenFragments: Object.freeze(['options.planningSnapshot']),
+      }),
+      Object.freeze({
+        functionName: 'deriveClusterMembershipCandidate',
+        requiredFragments: Object.freeze(['await this.readClusterMembershipCandidate(options)']),
+        forbiddenFragments: Object.freeze(['options.planningSnapshot']),
       }),
       Object.freeze({
         functionName: 'getAcknowledgementCandidateForNode',
@@ -369,6 +381,11 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
         functionName: 'readPublicationPlanningSnapshot',
         requiredFragments: Object.freeze([
           'readProfile: MEMBERSHIP_PUBLICATION_READ_PROFILE.PLANNING',
+        ]),
+        forbiddenFragments: Object.freeze([
+          'preloadedRows',
+          'options.latestPublicationRow',
+          'options.latestPublishedPublicationRow',
         ]),
       }),
     ]),

@@ -31,6 +31,10 @@ import {
   PUBLICATION_ACTIVE_GATE_HANDOFF_REASON,
   PUBLICATION_ACTIVE_GATE_HANDOFF_STATE,
 } from '../../src/control-plane/publication-active-gate-handoff-contract.js';
+import {
+  PRIORITY_PARTITION_CENSUS_STATE,
+  readPriorityPartitionCensusState,
+} from '../../src/control-plane/membership-publication-priority-partition-summary.js';
 import {publicationsOwnerOverRows} from
   './publication-owner-test-support.js';
 
@@ -62,7 +66,6 @@ const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DURABLE_UPDATED_AT = 3201;
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_FIRST_NODE_INDEX = 0;
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PENDING_START_INDEX = 1;
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_FIRST_PERSISTED_INDEX = 0;
-const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NO_ENQUEUE_COUNT = 0;
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_AUTHORITATIVE_READ_ERROR =
   'explicit handoff target should not require authoritative node repair';
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_BROAD_READ_ERROR =
@@ -107,8 +110,6 @@ const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_ENQUEUE_MESSAGE =
   'pending owner-key merge should still reach the owner queue once';
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_CONTEXT_MESSAGE =
   'pending owner-key merge should retain the complete handoff target';
-const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_ROW_MESSAGE =
-  'pending owner-key merge should retain the complete latest publication row';
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_ENQUEUE_COUNT = 1;
 const PUBLICATION_CONVERGENCE_HANDOFF_REPLAY_UNKNOWN_EPOCH = 0;
 const PUBLICATION_CONVERGENCE_HANDOFF_REPLAY_UNPUBLISHED_OBSERVATION =
@@ -304,6 +305,7 @@ test('reconcileClusterMembership publishes explicit handoff target without autho
     const nodeReadModes = [];
     const readinessRefreshModes = [];
     const persistedRows = [];
+    const durableRows = new Map([[latestPublicationRow.publication_id, latestPublicationRow]]);
     const persistOptions = [];
     const publicationReadOptions = [];
     const coordinator = new MembershipPublicationCoordinator({
@@ -314,24 +316,21 @@ test('reconcileClusterMembership publishes explicit handoff target without autho
         ],
       controlPlanePublicationsOwner: publicationsOwnerOverRows({
         async listPublications() {
-          return {success: true, rows: [latestPublicationRow]};
+          return {success: true, rows: [...durableRows.values()]};
         },
-        async getPublication(_publicationId, options = {}) {
+        async getPublication(publicationId, options = {}) {
           publicationReadOptions.push(options);
-          const persistedRow = persistedRows[persistedRows.length - 1];
-          if (!persistedRow) {
-            return latestPublicationRow;
-          }
-          return {
-            ...persistedRow,
+          return durableRows.get(publicationId) ?? null;
+        },
+        async storeRow(row, options = {}) {
+          persistedRows.push(row);
+          durableRows.set(row.publication_id, {
+            ...row,
             reason_code:
               PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DURABLE_REASON_CODE,
             updated_at:
               PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DURABLE_UPDATED_AT,
-          };
-        },
-        async storeRow(row, options = {}) {
-          persistedRows.push(row);
+          });
           persistOptions.push(options);
         },
       }),
@@ -480,30 +479,32 @@ test('reconcileActiveGateMembershipPublication owns handoff write visibility',
         PUBLICATION_CONVERGENCE_AUTH_REFRESH_PRIORITY_SUMMARY,
     };
     const persistedRows = [];
+    const durableRows = new Map([[latestPublicationRow.publication_id, latestPublicationRow]]);
     const persistOptions = [];
     const publicationReadOptions = [];
+    const reconcileQueue = createRecordingReconcileQueue();
+    t.teardown(() => reconcileQueue.shutdown());
     const coordinator = new MembershipPublicationCoordinator({
+      reconcileQueue,
       resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
       controlPlanePublicationsOwner: publicationsOwnerOverRows({
         async listPublications() {
-          return {success: true, rows: [latestPublicationRow]};
+          return {success: true, rows: [...durableRows.values()]};
         },
-        async getPublication(_publicationId, options = {}) {
+        async getPublication(publicationId, options = {}) {
           publicationReadOptions.push(options);
-          const persistedRow = persistedRows[persistedRows.length - 1];
-          return persistedRow ?
-            {
-              ...persistedRow,
-              reason_code:
-                PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DURABLE_REASON_CODE,
-              updated_at:
-                PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DURABLE_UPDATED_AT,
-            } :
-            latestPublicationRow;
+          return durableRows.get(publicationId) ?? null;
         },
         async storeRow(row, options = {}) {
           persistedRows.push(row);
+          durableRows.set(row.publication_id, {
+            ...row,
+            reason_code:
+              PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DURABLE_REASON_CODE,
+            updated_at:
+              PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DURABLE_UPDATED_AT,
+          });
           persistOptions.push(options);
         },
       }),
@@ -580,77 +581,115 @@ test('reconcileActiveGateMembershipPublication owns handoff write visibility',
     );
   });
 
-test('reconcileActiveGateMembershipPublication uses handoff baseline under publication read pressure',
+// The former read-pressure case allowed a handoff to invent the publication
+// baseline while its owner could not answer. A target is desired membership;
+// only a successful read from the same owner supplies the durable baseline.
+test('reconcileActiveGateMembershipPublication defers unavailable publication authority and resumes after the same owner heals',
   async (t) => {
+    const initialPublicationRow = {
+      publication_id: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLICATION_ID,
+      publication_kind: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_KIND,
+      publication_epoch: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EPOCH,
+      status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      published_active_node_ids: [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS],
+      required_ack_node_ids: [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS],
+      acknowledged_node_ids: [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS],
+    };
+    const durableRows = new Map([[initialPublicationRow.publication_id, initialPublicationRow]]);
     const persistedRows = [];
     const listPublicationCalls = [];
+    const broadTableReads = [];
+    const projectionReads = [];
+    const pending = new SeedMap();
+    const enqueued = [];
+    const reconcileQueue = createRecordingReconcileQueue({pending, enqueued});
+    t.teardown(() => reconcileQueue.shutdown());
+    let ownerReadable = false;
     const coordinator = new MembershipPublicationCoordinator({
       resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
+      reconcileQueue,
       controlPlanePublicationsOwner: publicationsOwnerOverRows({
-        async listPublications() {
-          listPublicationCalls.push(true);
-          throw new Error(
-            PUBLICATION_CONVERGENCE_HANDOFF_TARGET_AUTHORITATIVE_READ_ERROR,
-          );
+        async listPublications(options) {
+          listPublicationCalls.push({ownerReadable, options});
+          if (!ownerReadable) {
+            throw new Error('publication owner unavailable');
+          }
+          return {success: true, rows: [...durableRows.values()]};
         },
         async getPublication(publicationId) {
-          return persistedRows.find(
-            (row) => row.publication_id === publicationId,
-          ) || null;
+          return durableRows.get(publicationId) ?? null;
         },
         async storeRow(row) {
           persistedRows.push(row);
+          durableRows.set(row.publication_id, row);
         },
       }),
+      authoritativeControlPlaneView: {
+        canRead: () => true,
+        async readRows(tableName) {
+          broadTableReads.push(tableName);
+          throw new Error(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_BROAD_READ_ERROR);
+        },
+      },
       systemTableCache: {
-        getAll() {
-          throw new Error(
-            PUBLICATION_CONVERGENCE_HANDOFF_TARGET_BROAD_READ_ERROR,
-          );
+        getAll(tableName) {
+          projectionReads.push(tableName);
+          throw new Error(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_BROAD_READ_ERROR);
         },
       },
       now: () => PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NOW_MS,
     });
+    const handoff = {
+      publicationEpoch: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EPOCH,
+      expectedNodeIds: [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS],
+      publishedActiveNodeIds: [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS],
+      pendingReconcileNodeIds: [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PENDING_NODE_IDS],
+      pendingRecoveryNodeIds: [],
+      nextAction: PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+    };
 
-    const outcome =
-      await coordinator.reconcileActiveGateMembershipPublication({
-        publicationEpoch: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EPOCH,
-        expectedNodeIds: [
-          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS,
-        ],
-        publishedActiveNodeIds: [
-          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
-        ],
-        pendingReconcileNodeIds: [
-          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PENDING_NODE_IDS,
-        ],
-        pendingRecoveryNodeIds: [],
-        nextAction:
-          PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
-            .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
-      });
-
-    t.equal(
-      outcome.state,
-      ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME.PUBLISHED_VISIBLE,
-      'handoff baseline should let the owner publish without a prior publication list read',
-    );
-    t.equal(
-      listPublicationCalls.length,
-      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NO_ENQUEUE_COUNT,
-      'active-gate owner reconcile should not list publications before writing the explicit handoff target',
-    );
-    t.same(
-      outcome.publicationRow.publishedActiveNodeIds,
+    const unavailable = await coordinator.reconcileActiveGateMembershipPublication(handoff);
+    t.equal(unavailable.state,
+      ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME.WRITE_DEFERRED,
+      'unavailable publication authority must defer the handoff');
+    t.equal(unavailable.publicationRow, null, 'a desired target is never an observed publication');
+    t.equal(persistedRows.length, 0, 'owner read failure must precede and prevent every write');
+    t.ok(listPublicationCalls.length > 0, 'the canonical owner is asked before admission');
+    t.equal(unavailable.enqueued, true, 'the same owner retains a paced retry');
+    const retainedContext = pending.get(coordinator.buildOwnerKey())?.context;
+    t.same(retainedContext?.publishedActiveNodeIds,
       [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS],
-      'published row should cover the full active-gate handoff target',
-    );
-    t.equal(
-      persistedRows.length > 0,
-      true,
-      'owner command should persist the handoff publication row under read pressure',
-    );
+      'the unavailable owner retains desired membership for recovery');
+    t.equal(Object.hasOwn(retainedContext, 'latestPublicationRow'), false,
+      'a queued target carries no invented publication authority');
+    t.same(broadTableReads, [], 'the handoff route omits unrelated SQL inputs');
+    t.same(projectionReads, [], 'owner failure never switches to projected rows');
+
+    const callsBeforeHealing = listPublicationCalls.length;
+    ownerReadable = true;
+    const healed = await coordinator.reconcileActiveGateMembershipPublication(handoff);
+    t.equal(healed.state,
+      ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME.PUBLISHED_VISIBLE,
+      'the same owner can admit and confirm the target after its read heals');
+    t.ok(listPublicationCalls.length > callsBeforeHealing,
+      'healing re-reads the original publication owner');
+    t.same(healed.publicationRow.publishedActiveNodeIds,
+      [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS],
+      'the durable publication covers the retained handoff target');
+    t.equal(healed.publicationRow.publicationEpoch,
+      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NEXT_EPOCH,
+      'the epoch advances from the actual owner baseline');
+    t.equal(persistedRows.length, 1, 'healed admission lands one new publication');
+    t.equal(readPriorityPartitionCensusState(healed.publicationRow.priorityPartitionSummary),
+      PRIORITY_PARTITION_CENSUS_STATE.NOT_DERIVED,
+      'omitted census inputs cannot certify the admitted membership census');
+    t.ok(enqueued.some((entry) => entry.reason === 'priority_census_not_derived'),
+      'the existing owner queue retains the full census work after admission');
+    t.equal(pending.get(coordinator.buildOwnerKey())?.context?.deferNestedPriorityRecoveryPlanning,
+      false, 'the census wake overrides the omission flag retained by the earlier failed handoff');
+    t.same(broadTableReads, [], 'successful handoff admission still omits unrelated SQL reads');
+    t.same(projectionReads, [], 'successful handoff admission still reads only its owner');
   });
 
 test('reconcileActiveGateMembershipPublication widens seed-only active-gate handoff fixture',
@@ -682,19 +721,23 @@ test('reconcileActiveGateMembershipPublication widens seed-only active-gate hand
           PUBLICATION_CONVERGENCE_REPAIR_READY_LEASE_EXPIRES_AT,
       }));
     const persistedRows = [];
+    const durableRows = new Map([[seedOnlyPublicationRow.publication_id, seedOnlyPublicationRow]]);
+    const reconcileQueue = createRecordingReconcileQueue();
+    t.teardown(() => reconcileQueue.shutdown());
     const coordinator = new MembershipPublicationCoordinator({
+      reconcileQueue,
       resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
       controlPlanePublicationsOwner: publicationsOwnerOverRows({
         async listPublications() {
-          return {success: true, rows: [seedOnlyPublicationRow]};
+          return {success: true, rows: [...durableRows.values()]};
         },
-        async getPublication() {
-          return persistedRows[persistedRows.length - 1] ||
-            seedOnlyPublicationRow;
+        async getPublication(publicationId) {
+          return durableRows.get(publicationId) ?? null;
         },
         async storeRow(row) {
           persistedRows.push(row);
+          durableRows.set(row.publication_id, row);
         },
       }),
       systemTableCache: {
@@ -773,19 +816,23 @@ test('reconcileClusterMembership consumes active-gate owner reconcile handoff',
         PUBLICATION_CONVERGENCE_AUTH_REFRESH_PRIORITY_SUMMARY,
     };
     const persistedRows = [];
+    const durableRows = new Map([[latestPublicationRow.publication_id, latestPublicationRow]]);
+    const reconcileQueue = createRecordingReconcileQueue();
+    t.teardown(() => reconcileQueue.shutdown());
     const coordinator = new MembershipPublicationCoordinator({
+      reconcileQueue,
       resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
       controlPlanePublicationsOwner: publicationsOwnerOverRows({
         async listPublications() {
-          return {success: true, rows: [latestPublicationRow]};
+          return {success: true, rows: [...durableRows.values()]};
         },
-        async getPublication() {
-          return persistedRows[persistedRows.length - 1] ||
-            latestPublicationRow;
+        async getPublication(publicationId) {
+          return durableRows.get(publicationId) ?? null;
         },
         async storeRow(row) {
           persistedRows.push(row);
+          durableRows.set(row.publication_id, row);
         },
       }),
       systemTableCache: {
@@ -1240,7 +1287,6 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_TEST_NAME,
     const ownerKey = coordinator.buildOwnerKey();
     pending.set(ownerKey, {
       context: {
-        latestPublicationRow,
         publishedActiveNodeIds: [
           ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
         ],
@@ -1310,13 +1356,13 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_TEST_NAME,
       PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_CONTEXT_MESSAGE,
     );
     t.same(
-      mergedContext?.latestPublicationRow?.publishedActiveNodeIds,
+      mergedContext?.acknowledgedNodeIds,
       [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS],
-      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_ROW_MESSAGE,
+      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_CONTEXT_MESSAGE,
     );
-    t.same(
-      mergedContext?.latestPublicationRow?.requiredAckNodeIds,
-      [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS],
-      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_ROW_MESSAGE,
+    t.equal(
+      Object.hasOwn(mergedContext, 'latestPublicationRow'),
+      false,
+      'pending owner retry retains target intent without retaining row authority',
     );
   });

@@ -104,3 +104,115 @@ The Kubernetes controller comparison supports re-entering the ordinary control
 loop from current authoritative evidence rather than repairing a projection
 locally: https://kubernetes.io/docs/concepts/architecture/controller/ . It is
 design inspiration, not evidence of Lagrange behavior.
+
+## Revision after physical lab 2713 — raw input is not owner evidence
+
+The earlier preload exception above is superseded. Exact candidate
+`ebb1b35db214ab456dec52b26667c8a514b91141` (tree
+`1a49c8b50b8b2be816903b2a46eaed83b51c8b92`, source tree
+`8e413d25ebfb2dea10622bde567908eeb848f1dd`) failed the real acknowledgement
+wake witness in physical lab issue 2713. The complete 98,145-byte worker log has
+SHA-256 `67173df052add160698d23409f38ef4a846be5e272b0feeec44a8220f822bac1`.
+Seven of ten roots passed; the runner reported 1,143 assertions. All requested
+scopes closed. The acknowledgement witness observed one write while the
+canonical publication list was unavailable; expected zero. The other two
+failing roots require separate supplier tracing and are not blanket-classified
+as fixture failures.
+
+The first causal divergence is cache publication wake ->
+`buildReadyNodePublicationAdvancementOptions` -> async acknowledgement candidate
+-> `getLatestPublicationRow` -> `readTableRows`' raw preload return. A nonempty
+caller array answered before the canonical owner was asked. Source review also
+found direct `latestPublicationRow`/`latestPublishedPublicationRow` shortcuts in
+async planning and reconciliation, and `options.planningSnapshot` in async
+candidate derivation. This is a shared authority-ingress defect.
+
+Independent reviewer `/root/takeover_checkpoint` withdrew source approval for
+`ebb1b35db` and approved the corrected implementation scope: every requested
+asynchronous SQL row observation comes from the canonical owner; no raw-array,
+latest-row or caller-snapshot override. The same reads owner produces
+`{planningSnapshot, candidate}` from one read, and reconciliation consumes its
+latest rows and candidate together. The public candidate-only entry delegates
+to that producer. No snapshot brand, registry, alternate source, retry timer or
+new authority owner is introduced. Synchronous projection/intent surfaces stay
+explicit and cannot authorize writes. Active-gate handoffs must retain desired
+target/readiness ownership without adding an unrelated startup dependency;
+unrequested inputs and unavailable observations must remain distinct.
+
+The original real dispatch/writer red is preserved unchanged. Added controls
+cover populated and empty raw preloads, publication arrays with a plausible
+newer epoch, caller latest rows and caller planning snapshots. They require the
+canonical owner to be attempted, answered-empty to remain absence, and same
+owner recovery to succeed. Source and fixture changes remain unexecuted until
+fresh physical lab proof. No previous seal, failure, timeout or baseline is
+rewritten.
+
+Old tests-only lab issue 2694 closed with infrastructure cancellation during
+`npm ci` (exit 130, `CANCELLED_ORPHANED_EXECUTION`); its complete 161-byte stream
+contains no test command and is not product-red evidence.
+
+### Declared handoff omission and full-census continuation
+
+The reviewer approved preserving the existing explicit-target plus
+`deferNestedPriorityRecoveryPlanning` route after the canonical publication
+observation. That route omits unrelated SQL evidence and forces NOT_DERIVED;
+raw caller rows and summaries cannot certify it. This preserves the original
+formation dependency boundary. Ordinary planning still reads all named owners.
+The former fixture that expected a write under unavailable publication history
+was an assertion of the removed bypass, not a valid positive. It now preserves
+the refusal and same-owner recovery as separate phases. Success fixtures whose
+lists stayed frozen while their keyed reads observed writes now use one keyed
+durable row store for both observations. No cache-derived authority is added.
+
+A second shared continuation defect was identified while constructing recovery:
+an unavailable handoff can retain a pending explicit target with the omission
+flag true. A later census request with an empty context inherits that flag
+through the existing queue merge and omits census inputs again. The reviewer
+approved the existing owed-census producer setting the same flag explicitly
+false after caller context. Desired-target/exclusion merging remains owned by
+the existing queue. No new mode or timer is needed. The real queue witness now
+covers both ordinary handoff and this prior-pending-failure interleaving,
+including a held authoritative SQL read, NOT_DERIVED serving refusal, normal
+guarded DERIVED refresh, and serving after the same read proceeds.
+
+The guarded-write and held-write cadence witnesses migrate their controlled
+candidate seam to the canonical snapshot/candidate producer. Both retain actual
+publication-list observation. The cadence test blocks keyed confirming reads,
+leaving planning available, so it reaches its intended lost-write-answer
+boundary instead of failing before admission. All original write outcome,
+revision, cadence and teardown assertions remain. Dispatch tests now assert
+that cache/CDC wakes pass no publication array to acknowledgement.
+
+Runtime verification requested for the original ten roots plus the native
+publication guarded-write witness, held-write re-ask cadence, and dispatch
+node-state update root. Generated metadata and scoped static gates remain
+lab-only and pending. The preserved receipt.json describes its historical
+source and is not updated to claim this candidate passes.
+
+### Summary authority is part of the same boundary
+
+Final independent review found two remaining routes for donating a census:
+`...options` retained raw priority/lifecycle summaries in the async snapshot,
+and candidate derivation used an embedded readiness summary whenever current
+service/partition rows derived none. Both routes are removed. The readiness
+AVAILABLE surface remains planning input; its memoized/retained answer is not
+this invocation's SQL census. The publication candidate now states only its
+current-row derivation, or explicit NOT_DERIVED. The existing durable refresh
+rule still prevents an un-derived candidate from erasing an admitted census.
+
+History `3b5fe7b5e` introduced the embedded-summary alternative as D8 on
+2026-10-04; `a6dff7f2f` later introduced explicit NOT_DERIVED. The current
+single-census-owner contract and takeover no-fallback instruction supersede
+that earlier alternate authority. This is a source/contract finding, not an
+unrecorded runtime failure.
+
+New real coordinator/writer controls cover raw satisfied summaries on both
+ordinary and deferred target admission with authoritative-empty rows. A
+separate retained-owner witness supplies a satisfied summary through the
+readiness owner's AVAILABLE port while actual service/partition rows are
+empty. It requires NOT_DERIVED admission and serving refusal, retained periodic
+reconciliation debt, then a guarded derived census and serving after the same
+SQL owners return current rows. It also exercises the real no-downgrade path.
+The original no-input pure candidate expectation is explicitly changed from
+ABSENT to NOT_DERIVED to state this strengthened candidate contract. All new
+runtime controls remain pending physical-lab execution at this writing.

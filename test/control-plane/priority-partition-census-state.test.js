@@ -53,6 +53,9 @@ import {
   createRecordingReconcileQueue,
 } from '../helpers/recording-reconcile-queue.js';
 import {createPublicationStore} from './publication-owner-test-support.js';
+import {PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION} from
+  '../../src/control-plane/publication-active-gate-handoff-contract.js';
+import {OwnerKeyReconcileQueue} from '../../src/workflow/owner-key-reconcile-queue.js';
 
 const {DERIVED, NOT_DERIVED, ABSENT} = PRIORITY_PARTITION_CENSUS_STATE;
 const NODES = Object.freeze(['node-1', 'node-2', 'node-3']);
@@ -149,7 +152,7 @@ test('a candidate planned without census inputs asks for no summary refresh, and
   assert.equal(unchanged.changed, false);
   assert.equal(
     readPriorityPartitionCensusState(unchanged.priorityPartitionSummary),
-    ABSENT, 'the candidate derived no census');
+    NOT_DERIVED, 'the candidate explicitly states that it derived no census');
   assert.equal(unchanged.priorityPartitionSummaryChanged, false,
     'only a derived census moves the latest row\'s summary');
 
@@ -349,7 +352,9 @@ function retainedCensusRows() {
 // both coordinator and writer over the retained row, then run the actual
 // interval callback, queue, candidate derivation, guarded refresh and serve owner.
 // This is a coordinator-restart component witness, not native crash acceptance.
-function retainedCensusFixture(t, summary, {publicationPresent = true} = {}) {
+function retainedCensusFixture(t, summary, {
+  publicationPresent = true, scheduleDrainFn,
+} = {}) {
   const store = createPublicationStore({rows: publicationPresent ? [durableRow({
     priority_partition_summary: summary === null ? null : JSON.stringify(summary),
   })] : []});
@@ -393,6 +398,13 @@ function retainedCensusFixture(t, summary, {publicationPresent = true} = {}) {
     controlPlanePublicationsOwner: store.owner});
   retired.stopOwnerMembershipDriver();
   const coordinator = new MembershipPublicationCoordinator({...options,
+    ...(scheduleDrainFn === undefined ? {} : {
+      reconcileQueue: new OwnerKeyReconcileQueue({
+        name: 'retained-census-fixture', scheduleDrainFn,
+        reconcileFn: async (_key, _reasons, context) =>
+          coordinator.reconcileClusterMembership(context),
+      }),
+    }),
     controlPlanePublicationsOwner: new ControlPlanePublicationsOwner({
       controlPlaneSystemTableGateway: store.gateway, controlPlaneWriteRetryTimeoutMs: 0,
     })});
@@ -448,6 +460,149 @@ async function assertServeCensusState(fixture, eligible, reason = null) {
     assert.equal(isServeEligibilityAnswerEligible(answer), eligible);
     if (reason !== null) assert.ok(answer.reasons.includes(reason), JSON.stringify(answer));
   }
+}
+
+test('an AVAILABLE readiness summary cannot certify an empty row census; the retained owner resumes from real rows',
+  {timeout: scaleByMachineFactor(RESTART_TEST_TIMEOUT_MS)}, async (t) => {
+    const f = retainedCensusFixture(t, null, {publicationPresent: false});
+    const serviceRows = f.rows.get(TABLES.SERVICES);
+    const partitionRows = f.rows.get(TABLES.PARTITIONS);
+    f.rows.set(TABLES.SERVICES, []);
+    f.rows.set(TABLES.PARTITIONS, []);
+    let planningReads = 0;
+    f.coordinator.controlPlaneReadinessService
+      .getPriorityRecoveryPlanningSnapshotBestEffort = () => {
+        planningReads++;
+        return {priorityPartitionSummary: CENSUS};
+      };
+    const target = {publishedActiveNodeIds: [...NODES], requiredAckNodeIds: [...NODES],
+      acknowledgedNodeIds: [...NODES]};
+    const admission = f.coordinator.reconcileClusterMembership(target);
+    await f.writeReached;
+    f.releaseWrite();
+    const answer = await admission;
+    assert.ok(answer.publicationRow, 'the real writer admitted the desired target');
+    assert.ok(planningReads > 0, 'the readiness owner supplied its plausible retained summary');
+    const first = f.store.rows()[0];
+    assert.equal(readPriorityPartitionCensusState(
+      normalizeControlPlanePublicationRow(first).priorityPartitionSummary), NOT_DERIVED);
+    await assertServeCensusState(f, false, 'priority_spread_unstated');
+    await f.tick();
+    await f.coordinator.reconcileQueue.awaitCurrentWorkIdle();
+    assert.ok(f.requests.some(({reason}) => reason === 'priority_census_not_derived'),
+      'the real periodic driver retained the owed census');
+    assert.equal(readPriorityPartitionCensusState(normalizeControlPlanePublicationRow(
+      f.store.row(first.publication_id)).priorityPartitionSummary), NOT_DERIVED);
+    await assertServeCensusState(f, false, 'priority_spread_unstated');
+
+    f.rows.set(TABLES.SERVICES, serviceRows);
+    f.rows.set(TABLES.PARTITIONS, partitionRows);
+    await f.tick();
+    await f.coordinator.reconcileQueue.awaitCurrentWorkIdle();
+    const derived = normalizeControlPlanePublicationRow(f.store.row(first.publication_id));
+    assert.equal(f.store.rows().length, 1, 'the same durable publication is repaired');
+    assert.equal(readPriorityPartitionCensusState(derived.priorityPartitionSummary), DERIVED);
+    assert.equal(derived.priorityPartitionSummary.satisfied, true);
+    assert.equal(derived.priorityPartitionSummary.totalPriorityPartitionCount,
+      PRIORITY_CONTROL_PLANE_TABLE_IDS.size);
+    await assertServeCensusState(f, true);
+
+    f.rows.set(TABLES.SERVICES, []);
+    f.rows.set(TABLES.PARTITIONS, []);
+    const unDerived = await f.coordinator.reconcileClusterMembership(target);
+    assert.equal(readPriorityPartitionCensusState(unDerived.candidate.priorityPartitionSummary),
+      NOT_DERIVED);
+    assert.deepEqual(normalizeControlPlanePublicationRow(
+      f.store.row(first.publication_id)).priorityPartitionSummary,
+    derived.priorityPartitionSummary, 'an un-derived refresh cannot erase a durable census');
+  });
+
+for (const pendingUnavailableHandoff of [false, true]) {
+  test(`deferred handoff${pendingUnavailableHandoff ? ' after an unavailable attempt' : ''}: ` +
+    'the real queued census gates serving',
+  {timeout: scaleByMachineFactor(RESTART_TEST_TIMEOUT_MS)}, async (t) => {
+    const fullReadReached = Promise.withResolvers();
+    const fullReadReleased = Promise.withResolvers();
+    let paused = true;
+    const scheduled = [];
+    const resumeQueue = () => {
+      paused = false;
+      for (const callback of scheduled.splice(0)) setImmediate(callback);
+    };
+    // The production queue's declared scheduler port holds its pending input
+    // while the direct handoff heals. Its ordinary drain runs after resume.
+    const f = retainedCensusFixture(t, null, {publicationPresent: false,
+      scheduleDrainFn: (callback) => paused ?
+        scheduled.push(callback) : setImmediate(callback),
+    });
+    const view = f.coordinator.authoritativeControlPlaneView;
+    const readRows = view.readRows.bind(view);
+    let broadReads = 0;
+    view.readRows = async (...args) => {
+      broadReads++;
+      fullReadReached.resolve();
+      await fullReadReleased.promise;
+      return readRows(...args);
+    };
+    const target = {
+      publicationEpoch: 1,
+      expectedNodeIds: [...NODES],
+      publishedActiveNodeIds: [NODES[0]],
+      pendingReconcileNodeIds: NODES.slice(1),
+      nextAction: PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+    };
+    let handoff;
+    try {
+      if (pendingUnavailableHandoff) {
+        f.setReadOutcome('publication-unavailable');
+        const held = await f.coordinator.reconcileActiveGateMembershipPublication(target);
+        assert.equal(held.state, 'write_deferred');
+        assert.equal(f.store.writes.length, 0);
+        const queued = f.coordinator.reconcileQueue.readQueuedContext(
+          f.coordinator.buildOwnerKey());
+        assert.equal(queued.context.deferNestedPriorityRecoveryPlanning, true);
+        f.setReadOutcome('available');
+      }
+      handoff = f.coordinator.reconcileActiveGateMembershipPublication(target, {
+        // Plausible caller inputs must not certify a deferred census.
+        serviceRows: f.rows.get(TABLES.SERVICES),
+        partitionRows: f.rows.get(TABLES.PARTITIONS),
+        priorityPartitionSummary: CENSUS,
+      });
+      await f.writeReached;
+      assert.equal(broadReads, 0, 'deferred target admission asks no unrelated SQL owners');
+      assert.ok(f.store.reads.some((read) => read.params.length === 0),
+        'publication authority was actually observed before the admission');
+      f.releaseWrite();
+      const admitted = await handoff;
+      assert.equal(admitted.state, 'published_visible');
+      const queued = f.coordinator.reconcileQueue.readQueuedContext(
+        f.coordinator.buildOwnerKey());
+      assert.equal(queued.context.deferNestedPriorityRecoveryPlanning, false,
+        'the owed census supersedes every pending omitted-input intent');
+      resumeQueue();
+      await fullReadReached.promise;
+      const before = f.store.rows();
+      assert.equal(before.length, 1);
+      assert.equal(readPriorityPartitionCensusState(
+        normalizeControlPlanePublicationRow(before[0]).priorityPartitionSummary), NOT_DERIVED);
+      await assertServeCensusState(f, false, 'priority_spread_unstated');
+      fullReadReleased.resolve();
+      await f.coordinator.reconcileQueue.awaitCurrentWorkIdle();
+      const after = f.store.rows();
+      assert.equal(after.length, 1, 'the original publication is refreshed, not replaced');
+      assert.equal(after[0].publication_id, before[0].publication_id);
+      assert.equal(readPriorityPartitionCensusState(
+        normalizeControlPlanePublicationRow(after[0]).priorityPartitionSummary), DERIVED);
+      await assertServeCensusState(f, true);
+    } finally {
+      f.setReadOutcome('available');
+      fullReadReleased.resolve();
+      f.releaseWrite();
+      resumeQueue();
+      await handoff;
+    }
+  });
 }
 
 test('the async publication read consumes its owner even when a plausible cache row exists',

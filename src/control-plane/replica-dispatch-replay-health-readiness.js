@@ -58,7 +58,6 @@ const READY_NODE_PUBLICATION_ADVANCEMENT_OPTION = Object.freeze({
 });
 const READY_NODE_PUBLICATION_RECONCILE_FIELD = Object.freeze({
   ACKNOWLEDGED_NODE_IDS: 'acknowledgedNodeIds',
-  LATEST_PUBLICATION_ROW: 'latestPublicationRow',
   PUBLISHED_ACTIVE_NODE_IDS: 'publishedActiveNodeIds',
   REQUIRED_ACK_NODE_IDS: 'requiredAckNodeIds',
 });
@@ -443,8 +442,6 @@ class ReplicaDispatchReplayHealthReadiness extends ReplicaDispatchOperationExecu
     }
     return {
       ...context,
-      [READY_NODE_PUBLICATION_RECONCILE_FIELD.LATEST_PUBLICATION_ROW]:
-        publicationAdvancement.latestPublicationRow,
       [READY_NODE_PUBLICATION_RECONCILE_FIELD.PUBLISHED_ACTIVE_NODE_IDS]:
         publishedActiveNodeIds,
       [READY_NODE_PUBLICATION_RECONCILE_FIELD.REQUIRED_ACK_NODE_IDS]:
@@ -480,7 +477,7 @@ class ReplicaDispatchReplayHealthReadiness extends ReplicaDispatchOperationExecu
       publicationAdvancement.needsAcknowledgement === true &&
       nodeId === this.nodeId
     ) {
-      await this.acknowledgeMembershipPublicationForNode(nodeId, options);
+      await this.acknowledgeMembershipPublicationForNode(nodeId);
     }
     return true;
   }

@@ -183,8 +183,8 @@ export function registerReplicaDispatchNodeStatePublicationUpdateAckTests({
       acknowledgementCalls[PUBLICATION_UPDATE_ACK_FIRST_PUBLICATION_ROW_INDEX]
         ?.options?.[PUBLICATION_UPDATE_ACK_OPTION.PUBLICATION_ROWS]
         ?.[PUBLICATION_UPDATE_ACK_FIRST_PUBLICATION_ROW_INDEX],
-      publicationRow,
-      'cache-triggered acknowledgement should carry the visible publication row',
+      undefined,
+      'cache-triggered acknowledgement must leave row authority to the publications owner',
     );
 
     service.stop();
@@ -240,8 +240,8 @@ export function registerReplicaDispatchNodeStatePublicationUpdateAckTests({
       acknowledgementCalls[PUBLICATION_UPDATE_ACK_FIRST_PUBLICATION_ROW_INDEX]
         ?.options?.[PUBLICATION_UPDATE_ACK_OPTION.PUBLICATION_ROWS]
         ?.[PUBLICATION_UPDATE_ACK_FIRST_PUBLICATION_ROW_INDEX],
-      publicationRow,
-      'CDC-triggered acknowledgement should carry the visible publication row',
+      undefined,
+      'CDC-triggered acknowledgement must leave row authority to the publications owner',
     );
 
     service.stop();

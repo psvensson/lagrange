@@ -47,14 +47,14 @@ const MEMBERSHIP_PUBLICATION_WRITE_REFUSAL = Object.freeze({
   NOT_PUBLICATION_OWNER: 'not_publication_owner',
 });
 
-// The projection shows no acknowledgement owed by this node (the row is
+// The owner shows no acknowledgement owed by this node (the row is
 // closed, does not require the node, or already holds it): nothing is
-// written, and the row answered is the projected one, named as such.
-function acknowledgementNotOwed(projectedRow) {
+// written, and the answer retains the observed authoritative row.
+function acknowledgementNotOwed(observedRow) {
   return Object.freeze({
     outcome: PUBLICATION_WRITE_OUTCOME.UNCHANGED,
-    row: projectedRow,
-    rowSource: MEMBERSHIP_PUBLICATION_READ_SOURCE.CACHE_PREFERRED,
+    row: observedRow,
+    rowSource: MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED,
   });
 }
 
@@ -205,8 +205,8 @@ class MembershipPublicationCoordinatorPersist extends
     }
     const acknowledgementOwnerKey = `${this.buildOwnerKey()}:ack:` +
       JSON.stringify([publicationId, nodeId]);
-    // The projection's rows named the publication; they never reach the
-    // write (its base is the durable row).
+    // Wake hints never reach the write; its base is the durable row read
+    // by the publications owner at the guarded mutation boundary.
     const {publicationRow: _row, publicationRows: _rows, ...deliveryOptions} =
       options;
     const acknowledgementOptions = buildCriticalControlPlaneConvergenceOptions(

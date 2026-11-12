@@ -89,23 +89,11 @@ const CONTROL_PLANE_CRITICAL_CONVERGENCE_QUEUE_DECISION = Object.freeze([
 
 const MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD = Object.freeze({
   ACKNOWLEDGED_NODE_IDS: 'acknowledgedNodeIds',
-  ALLOW_EMPTY_PRELOADED_ROWS: 'allowEmptyPreloadedRows',
-  DEFER_NESTED_PRIORITY_RECOVERY_PLANNING:
-    'deferNestedPriorityRecoveryPlanning',
   EXCLUDED_NODE_IDS: 'excludedNodeIds',
-  LATEST_PUBLICATION_ROW: 'latestPublicationRow',
-  NODE_ENDPOINT_ROWS: 'nodeEndpointRows',
-  NODE_ROWS: 'nodeRows',
-  PARTITION_ROWS: 'partitionRows',
   PUBLISHED_ACTIVE_NODE_IDS: 'publishedActiveNodeIds',
   PUBLICATION_ACTIVE_GATE_HANDOFF: 'publicationActiveGateHandoff',
-  PUBLICATION_EPOCH: 'publicationEpoch',
-  PUBLICATION_EPOCH_SNAKE: 'publication_epoch',
-  READ_PROFILE: 'readProfile',
   READINESS_ENTRIES: 'readinessEntries',
-  REPLICA_OPERATION_ROWS: 'replicaOperationRows',
   REQUIRED_ACK_NODE_IDS: 'requiredAckNodeIds',
-  SERVICE_ROWS: 'serviceRows',
 });
 const MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_ABSENT = Symbol(
   'membership-publication-reconcile-context-absent',
@@ -132,12 +120,6 @@ const MEMBERSHIP_PUBLICATION_RECONCILE_HANDOFF_ROUTE_RESET_FIELDS =
     MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.REQUIRED_ACK_NODE_IDS,
     MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.ACKNOWLEDGED_NODE_IDS,
     MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.EXCLUDED_NODE_IDS,
-    MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.ALLOW_EMPTY_PRELOADED_ROWS,
-    MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.NODE_ROWS,
-    MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.NODE_ENDPOINT_ROWS,
-    MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.SERVICE_ROWS,
-    MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.PARTITION_ROWS,
-    MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.REPLICA_OPERATION_ROWS,
     MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.READINESS_ENTRIES,
   ]);
 const MEMBERSHIP_PUBLICATION_HANDOFF_NODE_COUNT_FIELD_BY_NODE_LIST =
@@ -339,40 +321,6 @@ function filterMembershipPublicationHandoffContext(
   return filteredHandoff;
 }
 
-function resolvePublicationRowEpoch(row) {
-  if (!row || typeof row !== 'object') {
-    return 0;
-  }
-  const epoch = Number(
-    row[MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.PUBLICATION_EPOCH] ??
-      row[
-        MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.PUBLICATION_EPOCH_SNAKE
-      ],
-  );
-  return Number.isFinite(epoch) && epoch > 0 ? epoch : 0;
-}
-
-function selectLatestPublicationRow(previousContext, nextContext) {
-  const previousRow =
-    previousContext[
-      MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.LATEST_PUBLICATION_ROW
-    ];
-  const nextRow =
-    nextContext[
-      MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.LATEST_PUBLICATION_ROW
-    ];
-  if (!isMembershipPublicationReconcileContext(previousRow)) {
-    return nextRow;
-  }
-  if (!isMembershipPublicationReconcileContext(nextRow)) {
-    return previousRow;
-  }
-  return resolvePublicationRowEpoch(nextRow) >=
-    resolvePublicationRowEpoch(previousRow) ?
-    nextRow :
-    previousRow;
-}
-
 function resolveMembershipPublicationReconcileMergeRoute(nextContext) {
   const evidence = Object.freeze({
     nextHasOwnerReconcileHandoff:
@@ -507,8 +455,6 @@ function mergeMembershipPublicationReconcileContext(previousContext, nextContext
   const mergedContext = {
     ...previousContext,
     ...nextContext,
-    [MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.LATEST_PUBLICATION_ROW]:
-      selectLatestPublicationRow(previousContext, nextContext),
   };
   if (publicationActiveGateHandoff) {
     mergedContext[

@@ -4,7 +4,7 @@ import {
   deriveMembershipPublicationCandidate,
 } from '../../src/control-plane/membership-publication-coordinator.js';
 import {buildMembershipPublicationTargetSnapshot} from '../../src/control-plane/membership-publication-target-selection.js';
-import {publicationsOwnerOverRows} from
+import {authoritativePlanningViewOverRows, publicationsOwnerOverRows} from
   './publication-owner-test-support.js';
 
 // The steady-trim that drops a durably non-serving node from PUBLISHED membership is
@@ -308,7 +308,7 @@ test('a non-pending closure witness never clears a durable spread gap',
 
 // Owner decision 4 (2026-10-04): the hop is ended by an EVENT. The reconcile
 // that writes the refreshed summary (clearing the durable gap) enqueues the
-// next reconcile itself, carrying the row it wrote; it does not wait for the
+// next reconcile itself, which rereads the owner; it does not wait for the
 // owner driver's periodic tick.
 test('the summary refresh that clears the durable gap enqueues the trimming reconcile',
   async (t) => {
@@ -339,34 +339,33 @@ test('the summary refresh that clears the durable gap enqueues the trimming reco
           durableRow = {...durableRow, ...row};
         },
       }),
-      systemTableCache: {
-        getAll(tableName) {
-          if (tableName === 'nodes') {
-            return RETAINED_NODE_IDS.map(buildNodeRow);
-          }
-          if (tableName === 'node_endpoints') {
-            return RETAINED_NODE_IDS.map(buildEndpointRow);
-          }
-          if (tableName === 'services') {
-            return [
-              ...RETAINED_NODE_IDS.map(buildServiceRow),
-              ...buildSpreadPriorityServiceRows(),
-            ];
-          }
-          if (tableName === 'partitions') {
-            return PRIORITY_TABLE_IDS.map((tableId) => ({
-              table_id: tableId,
-              table_name: tableId,
-              partition_id: `${tableId}-p1`,
-              state: 'NORMAL',
-            }));
-          }
-          if (tableName === 'control_plane_publications') {
-            return [durableRow];
-          }
-          return [];
-        },
-      },
+      authoritativeControlPlaneView: authoritativePlanningViewOverRows((tableName) => {
+        if (tableName === 'nodes') {
+          return RETAINED_NODE_IDS.map(buildNodeRow);
+        }
+        if (tableName === 'node_endpoints') {
+          return RETAINED_NODE_IDS.map(buildEndpointRow);
+        }
+        if (tableName === 'services') {
+          return [
+            ...RETAINED_NODE_IDS.map(buildServiceRow),
+            ...buildSpreadPriorityServiceRows(),
+          ];
+        }
+        if (tableName === 'partitions') {
+          return PRIORITY_TABLE_IDS.map((tableId) => ({
+            table_id: tableId,
+            table_name: tableId,
+            partition_id: `${tableId}-p1`,
+            state: 'NORMAL',
+          }));
+        }
+        if (tableName === 'control_plane_publications') {
+          return [durableRow];
+        }
+        if (tableName === 'replica_operations') return [];
+        throw new Error(`Unexpected planning table: ${tableName}`);
+      }),
       now: () => NOW_MS,
     });
     coordinator.enqueueClusterMembershipReconcile = (reason, context) => {

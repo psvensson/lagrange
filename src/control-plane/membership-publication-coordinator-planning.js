@@ -19,6 +19,8 @@ import {
   shouldPreferAuthoritativeMembershipState,
 } from './membership-publication-planning-evidence.js';
 import {MembershipPublicationCoordinatorReads} from './membership-publication-coordinator-reads.js';
+import {statePriorityPartitionSummary} from
+  './membership-publication-priority-partition-summary.js';
 
 function resolvePlanningLivenessContext(coordinator, options, nodeRows) {
   const recoveryEpochsByNodeId =
@@ -66,13 +68,36 @@ class MembershipPublicationCoordinatorPlanning extends
       readProfile: MEMBERSHIP_PUBLICATION_READ_PROFILE.PLANNING,
     };
     const latestPublicationRow =
-      options.latestPublicationRow || (await this.getLatestPublicationRow(planningReadOptions));
+      await this.getLatestPublicationRow(planningReadOptions);
     const latestPublishedPublicationRow =
-      options.latestPublishedPublicationRow ||
-      (readUpperStateField(latestPublicationRow?.status) ===
+      readUpperStateField(latestPublicationRow?.status) ===
       MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED ?
         latestPublicationRow :
-        await this.getLatestPublishedPublicationRow(planningReadOptions));
+        await this.getLatestPublishedPublicationRow(planningReadOptions);
+    if (hasExplicitMembershipPublicationTarget(options) &&
+        options.deferNestedPriorityRecoveryPlanning === true) {
+      // This existing handoff intent admits desired membership before a full
+      // census. These SQL inputs are not requested, never answered as empty.
+      // The admitted row must hold serving until the ordinary owner reconcile
+      // derives its census from actual rows. Caller rows/summaries cannot do so.
+      return buildMembershipPublicationEvidenceSnapshot({
+        ...options,
+        latestPublicationRow,
+        latestPublishedPublicationRow,
+        nodeRows: undefined,
+        nodeEndpointRows: undefined,
+        serviceRows: undefined,
+        partitionRows: undefined,
+        replicaOperationRows: undefined,
+        priorityPartitionSummary: statePriorityPartitionSummary(null),
+        membershipLifecycleSummary: null,
+        priorityRecoveryPlanningSnapshot: null,
+        publisherNodeId: options.publisherNodeId || this.nodeId,
+        localNodeId: this.nodeId,
+        localNodeResponsive: true,
+        nowMs: normalizePositiveInteger(options.nowMs, this.now()),
+      });
+    }
     const preferAuthoritativeMembershipState =
       hasExplicitMembershipPublicationTarget(options) !== true &&
       shouldPreferAuthoritativeMembershipState({
@@ -85,28 +110,24 @@ class MembershipPublicationCoordinatorPlanning extends
       readSource: preferAuthoritativeMembershipState ?
         MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED :
         MEMBERSHIP_PUBLICATION_READ_SOURCE.CACHE_PREFERRED,
-      preloadedRows: options.nodeRows,
     });
     const nodeEndpointRows = await this.readTableRows(TABLES.NODE_ENDPOINTS, {
       ...planningReadOptions,
       readSource: preferAuthoritativeMembershipState ?
         MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED :
         MEMBERSHIP_PUBLICATION_READ_SOURCE.CACHE_PREFERRED,
-      preloadedRows: options.nodeEndpointRows,
     });
     const serviceRows = await this.readTableRows(TABLES.SERVICES, {
       ...planningReadOptions,
       readSource: preferAuthoritativeMembershipState ?
         MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED :
         MEMBERSHIP_PUBLICATION_READ_SOURCE.CACHE_PREFERRED,
-      preloadedRows: options.serviceRows,
     });
     const partitionRows = await this.readTableRows(TABLES.PARTITIONS, {
       ...planningReadOptions,
       readSource: preferAuthoritativeMembershipState ?
         MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED :
         MEMBERSHIP_PUBLICATION_READ_SOURCE.CACHE_PREFERRED,
-      preloadedRows: options.partitionRows,
     });
     const replicaOperationRows = await this.readTableRows(
       TABLES.REPLICA_OPERATIONS,
@@ -115,7 +136,6 @@ class MembershipPublicationCoordinatorPlanning extends
         readSource: preferAuthoritativeMembershipState ?
           MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED :
           MEMBERSHIP_PUBLICATION_READ_SOURCE.CACHE_PREFERRED,
-        preloadedRows: options.replicaOperationRows,
       },
     );
     const readinessEntries = Array.isArray(options.readinessEntries) ?
@@ -170,6 +190,8 @@ class MembershipPublicationCoordinatorPlanning extends
       recoveryEpochsByNodeId,
       connectedNodeIds,
       nodeLivenessByNodeId,
+      priorityPartitionSummary: null,
+      membershipLifecycleSummary: null,
       priorityRecoveryPlanningSnapshot,
       publisherNodeId: options.publisherNodeId || this.nodeId,
       localNodeId: this.nodeId,

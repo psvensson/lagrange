@@ -2,7 +2,7 @@ import {
   INITIAL_PARTITION_IDS,
   SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
-import {publicationsOwnerOverRows} from
+import {authoritativePlanningViewOverRows, publicationsOwnerOverRows} from
   './publication-owner-test-support.js';
 
 const PRIORITY_REFRESH_NODE_IDS = Object.freeze([
@@ -125,6 +125,27 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
         closed_at: PRIORITY_REFRESH_OLD_TIMESTAMP_MS,
       };
       const persistedRows = [];
+      const readPlanningRows = (tableName) => {
+        if (tableName === SYSTEM_TABLE_NAME.NODES) {
+          return nodeRows;
+        }
+        if (tableName === SYSTEM_TABLE_NAME.NODE_ENDPOINTS) {
+          return nodeEndpointRows;
+        }
+        if (tableName === SYSTEM_TABLE_NAME.PARTITIONS) {
+          return partitionRows;
+        }
+        if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
+          return serviceRows;
+        }
+        if (tableName === SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS) {
+          return [durableRow];
+        }
+        if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
+          return [];
+        }
+        throw new Error(`Unexpected planning table: ${tableName}`);
+      };
       const coordinator = new MembershipPublicationCoordinator({
         nodeId: PRIORITY_REFRESH_NODE_IDS[PRIORITY_REFRESH_LOCAL_NODE_INDEX],
         resolveIsControlPlanePublicationsWriteLeader: () => true,
@@ -141,26 +162,8 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
             durableRow = row;
           },
         }),
-        systemTableCache: {
-          getAll(tableName) {
-            if (tableName === SYSTEM_TABLE_NAME.NODES) {
-              return nodeRows;
-            }
-            if (tableName === SYSTEM_TABLE_NAME.NODE_ENDPOINTS) {
-              return nodeEndpointRows;
-            }
-            if (tableName === SYSTEM_TABLE_NAME.PARTITIONS) {
-              return partitionRows;
-            }
-            if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
-              return serviceRows;
-            }
-            if (tableName === SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS) {
-              return [durableRow];
-            }
-            return [];
-          },
-        },
+        authoritativeControlPlaneView: authoritativePlanningViewOverRows(readPlanningRows),
+        systemTableCache: {getAll: readPlanningRows},
         now: () => PRIORITY_REFRESH_NOW_MS,
       });
 

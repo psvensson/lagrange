@@ -12,7 +12,6 @@ import {
   resolvePublicationActiveGateMembershipPublicationTarget,
 } from './publication-active-gate-handoff-contract.js';
 import {
-  MEMBERSHIP_PUBLICATION_KIND,
   MEMBERSHIP_PUBLICATION_READ_SOURCE,
   MEMBERSHIP_PUBLICATION_STATUS,
 } from './membership-publication-row-contract.js';
@@ -50,9 +49,7 @@ const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_REASON = 'active_gate_handoff
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_READ_PROFILE = 'diagnostics';
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_VISIBLE_WRITE_ATTEMPTS = 2;
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_TEXT = '';
-const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_ALLOW_EMPTY_PRELOADED_ROWS = true;
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_ROWS = Object.freeze([]);
-const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_ABSENT_ROW = null;
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_OUTCOME = Object.freeze({});
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME = Object.freeze({
   NO_CHANGE: 'no_change',
@@ -69,171 +66,16 @@ const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_VISIBILITY = Object.freeze({
   UNAVAILABLE: 'unavailable',
 });
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_DURABLE_READ_ANSWERED = 'answered';
-const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_FIELD = Object.freeze({
-  DEFER_NESTED_PRIORITY_RECOVERY_PLANNING: 'deferNestedPriorityRecoveryPlanning',
-  PUBLICATION_ROW: 'publicationRow',
-  PUBLICATION_CONVERGENCE: 'publicationConvergence',
-  PUBLISHED_MEMBERSHIP_OBSERVATION: 'publishedMembershipObservation',
-});
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD =
   Object.freeze({
     ACKNOWLEDGED_NODE_IDS: 'acknowledgedNodeIds',
-    ALLOW_EMPTY_PRELOADED_ROWS: 'allowEmptyPreloadedRows',
     DEFER_NESTED_PRIORITY_RECOVERY_PLANNING: 'deferNestedPriorityRecoveryPlanning',
-    LATEST_PUBLISHED_PUBLICATION_ROW: 'latestPublishedPublicationRow',
-    LATEST_PUBLICATION_ROW: 'latestPublicationRow',
-    NODE_ENDPOINT_ROWS: 'nodeEndpointRows',
-    NODE_ROWS: 'nodeRows',
-    PARTITION_ROWS: 'partitionRows',
     PUBLISHED_ACTIVE_NODE_IDS: 'publishedActiveNodeIds',
     PUBLICATION_ACTIVE_GATE_HANDOFF: 'publicationActiveGateHandoff',
     READ_PROFILE: 'readProfile',
     READINESS_ENTRIES: 'readinessEntries',
-    REPLICA_OPERATION_ROWS: 'replicaOperationRows',
     REQUIRED_ACK_NODE_IDS: 'requiredAckNodeIds',
-    SERVICE_ROWS: 'serviceRows',
   });
-function selectLatestActiveGateMembershipPublicationRow(rows = [], options = {}) {
-  const expectedStatus =
-    typeof options.status === 'string' ?
-      options.status.toUpperCase() :
-      null;
-  const normalizedRows = (Array.isArray(rows) ? rows : [])
-    .map((row) => {
-      if (!row || typeof row !== 'object') {
-        return ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_ABSENT_ROW;
-      }
-      return normalizeControlPlanePublicationRow(
-        row[
-          ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.PUBLICATION_ROW
-        ] || row,
-      );
-    })
-    .filter((row) =>
-      row &&
-      (expectedStatus === null || row.status === expectedStatus) &&
-      (
-        row.publicationId ||
-        row.publicationEpoch ||
-        // normalizeControlPlanePublicationRow decodes status to a string.
-        row.status.length > 0 ||
-        normalizeNodeIdList(row.publishedActiveNodeIds).length > 0
-      ),
-    );
-  if (normalizedRows.length === 0) {
-    return ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_ABSENT_ROW;
-  }
-  normalizedRows.sort((left, right) => {
-    const epochDelta =
-      (right.publicationEpoch || 0) -
-      (left.publicationEpoch || 0);
-    if (epochDelta !== 0) {
-      return epochDelta;
-    }
-    return (
-      (right.updatedAt || right.publishedAt || 0) -
-      (left.updatedAt || left.publishedAt || 0)
-    );
-  });
-  return normalizedRows[0] ||
-    ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_ABSENT_ROW;
-}
-function buildActiveGateMembershipPublicationPublishedBaselineRow(target) {
-  const handoffContract =
-    target?.handoffContract && typeof target.handoffContract === 'object' ?
-      target.handoffContract :
-      null;
-  const publishedActiveNodeIds = normalizeNodeIdList(
-    handoffContract?.publishedActiveNodeIds,
-  );
-  if (publishedActiveNodeIds.length === 0) {
-    return ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_ABSENT_ROW;
-  }
-  const publicationEpoch = normalizePositiveInteger(
-    handoffContract?.publicationEpoch,
-    1,
-  );
-  return {
-    publication_kind: MEMBERSHIP_PUBLICATION_KIND,
-    publication_epoch: publicationEpoch,
-    status: MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED,
-    published_active_node_ids: [...publishedActiveNodeIds],
-    required_ack_node_ids: [...publishedActiveNodeIds],
-    acknowledged_node_ids: [...publishedActiveNodeIds],
-  };
-}
-function resolveActiveGateMembershipPublicationLatestRow(
-  publicationActiveGateHandoff,
-  target,
-  options = {},
-) {
-  if (
-    !publicationActiveGateHandoff ||
-    typeof publicationActiveGateHandoff !== 'object' ||
-    Array.isArray(publicationActiveGateHandoff)
-  ) {
-    return ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_ABSENT_ROW;
-  }
-  const publicationConvergence =
-    publicationActiveGateHandoff[
-      ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_FIELD
-        .PUBLICATION_CONVERGENCE
-    ];
-  return selectLatestActiveGateMembershipPublicationRow([
-    options[
-      ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
-        .LATEST_PUBLICATION_ROW
-    ],
-    publicationActiveGateHandoff[
-      ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_FIELD
-        .PUBLISHED_MEMBERSHIP_OBSERVATION
-    ],
-    publicationConvergence,
-    publicationConvergence?.[
-      ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_FIELD
-        .PUBLISHED_MEMBERSHIP_OBSERVATION
-    ],
-    buildActiveGateMembershipPublicationPublishedBaselineRow(target),
-  ]);
-}
-function resolveActiveGateMembershipPublicationLatestPublishedRow(
-  publicationActiveGateHandoff,
-  target,
-  options = {},
-) {
-  const publicationConvergence =
-    publicationActiveGateHandoff[
-      ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_FIELD
-        .PUBLICATION_CONVERGENCE
-    ];
-  return selectLatestActiveGateMembershipPublicationRow(
-    [
-      options[
-        ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
-          .LATEST_PUBLISHED_PUBLICATION_ROW
-      ],
-      publicationActiveGateHandoff[
-        ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_FIELD
-          .PUBLISHED_MEMBERSHIP_OBSERVATION
-      ],
-      publicationConvergence?.[
-        ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_FIELD
-          .PUBLISHED_MEMBERSHIP_OBSERVATION
-      ],
-      buildActiveGateMembershipPublicationPublishedBaselineRow(target),
-    ],
-    {status: MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED},
-  );
-}
-function resolveActiveGateMembershipPublicationPreloadedRows(
-  options,
-  fieldName,
-) {
-  const rows = options[fieldName];
-  return Array.isArray(rows) ?
-    rows :
-    ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_ROWS;
-}
 function activeGateMembershipPublicationNodeListContainsAll(
   observedValues,
   targetValues,
@@ -292,18 +134,6 @@ function buildActiveGateMembershipPublicationReconcileContext({
   target,
   options,
 }) {
-  const latestPublicationRow =
-    resolveActiveGateMembershipPublicationLatestRow(
-      publicationActiveGateHandoff,
-      target,
-      options,
-    );
-  const latestPublishedPublicationRow =
-    resolveActiveGateMembershipPublicationLatestPublishedRow(
-      publicationActiveGateHandoff,
-      target,
-      options,
-    );
   return {
     ...options,
     readSource:
@@ -314,65 +144,18 @@ function buildActiveGateMembershipPublicationReconcileContext({
       .REQUIRED_ACK_NODE_IDS]: [...target.requiredAckNodeIds],
     [ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
       .ACKNOWLEDGED_NODE_IDS]: [...target.acknowledgedNodeIds],
-    [ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
-      .ALLOW_EMPTY_PRELOADED_ROWS]:
-      ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_ALLOW_EMPTY_PRELOADED_ROWS,
     [ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.READ_PROFILE]:
       ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_READ_PROFILE,
     [ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
       .DEFER_NESTED_PRIORITY_RECOVERY_PLANNING]: true,
-    [ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.NODE_ROWS]:
-      resolveActiveGateMembershipPublicationPreloadedRows(
-        options,
-        ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.NODE_ROWS,
-      ),
+    // The handoff carries desired membership and readiness-owner input.
+    // SQL rows are read by the ordinary planning owner on every reconcile.
     [ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
-      .NODE_ENDPOINT_ROWS]:
-      resolveActiveGateMembershipPublicationPreloadedRows(
-        options,
-        ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
-          .NODE_ENDPOINT_ROWS,
-      ),
-    [ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.SERVICE_ROWS]:
-      resolveActiveGateMembershipPublicationPreloadedRows(
-        options,
-        ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
-          .SERVICE_ROWS,
-      ),
-    [ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.PARTITION_ROWS]:
-      resolveActiveGateMembershipPublicationPreloadedRows(
-        options,
-        ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
-          .PARTITION_ROWS,
-      ),
-    [ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
-      .REPLICA_OPERATION_ROWS]:
-      resolveActiveGateMembershipPublicationPreloadedRows(
-        options,
-        ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
-          .REPLICA_OPERATION_ROWS,
-      ),
-    [ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
-      .READINESS_ENTRIES]:
-      resolveActiveGateMembershipPublicationPreloadedRows(
-        options,
-        ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
-          .READINESS_ENTRIES,
-      ),
+      .READINESS_ENTRIES]: Array.isArray(options.readinessEntries) ?
+      options.readinessEntries :
+      ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_ROWS,
     [ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
       .PUBLICATION_ACTIVE_GATE_HANDOFF]: publicationActiveGateHandoff,
-    ...(latestPublicationRow ?
-      {
-        [ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
-          .LATEST_PUBLICATION_ROW]: latestPublicationRow,
-      } :
-      {}),
-    ...(latestPublishedPublicationRow ?
-      {
-        [ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
-          .LATEST_PUBLISHED_PUBLICATION_ROW]: latestPublishedPublicationRow,
-      } :
-      {}),
   };
 }
 function buildActiveGateMembershipPublicationReconcileOutcome(
@@ -414,25 +197,6 @@ function buildActiveGateMembershipPublicationReconcileOutcome(
       } :
       {}),
   });
-}
-// The deferred re-run's context: the durable row a settled write reported
-// is its latest row; an unsettled write reports none, and the re-run reads
-// the durable owner.
-function buildActiveGateMembershipPublicationDeferredContext(
-  context,
-  reconcileOutcome = ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_OUTCOME,
-) {
-  const publicationRow = resolveActiveGateMembershipPublicationReconcileOutcomeRow(
-    reconcileOutcome,
-  );
-  return publicationRow ===
-    ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_OUTCOME ?
-    context :
-    {
-      ...context,
-      [ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
-        .LATEST_PUBLICATION_ROW]: publicationRow,
-    };
 }
 function shouldRouteActiveGateMembershipPublicationReconcile(options = {}) {
   return hasExplicitMembershipPublicationTarget(options) !== true &&
@@ -634,9 +398,7 @@ async function reconcileActiveGateMembershipPublication(
           // This reconcile planned without the census inputs: a row it
           // admitted states its census NOT_DERIVED, and the owner's full
           // reconcile is asked to derive it.
-          requestOwedPriorityCensus(coordinator, visibility.row,
-            {[ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
-              .LATEST_PUBLICATION_ROW]: visibility.row});
+          requestOwedPriorityCensus(coordinator, visibility.row, {});
           return buildActiveGateMembershipPublicationReconcileOutcome(
             ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME
               .PUBLISHED_VISIBLE,
@@ -674,18 +436,13 @@ async function reconcileActiveGateMembershipPublication(
         }
       }
     }
-    const deferredContext =
-      buildActiveGateMembershipPublicationDeferredContext(
-        context,
-        reconcileOutcome,
-      );
     const deferredPublicationRow =
       resolveActiveGateMembershipPublicationReconcileOutcomeRow(
         reconcileOutcome,
       );
     const rawEnqueueOutcome = coordinator.enqueueClusterMembershipReconcile(
       ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_REASON,
-      deferredContext,
+      context,
       ACTIVE_GATE_MEMBERSHIP_PUBLICATION_DEFERRED_WRITE_REQUEUE,
     );
     const controlPlaneConvergence =
@@ -729,18 +486,13 @@ async function reconcileActiveGateMembershipPublication(
     if (!deferredOutcome) {
       throw error;
     }
-    const deferredContext =
-      buildActiveGateMembershipPublicationDeferredContext(
-        context,
-        lastReconcileOutcome,
-      );
     const deferredPublicationRow =
       resolveActiveGateMembershipPublicationReconcileOutcomeRow(
         lastReconcileOutcome,
       );
     const rawEnqueueOutcome = coordinator.enqueueClusterMembershipReconcile(
       ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_REASON,
-      deferredContext,
+      context,
       ACTIVE_GATE_MEMBERSHIP_PUBLICATION_DEFERRED_WRITE_REQUEUE,
     );
     const queueOutcome =

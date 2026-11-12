@@ -187,4 +187,16 @@ function publicationsOwnerOverRows(rowAccess, options = {}) {
   };
 }
 
-export {createPublicationStore, publicationsOwnerOverRows};
+// Unit-test planning rows declared at the authoritative view seam. The caller
+// supplies the table observation directly; this helper never reads a cache or
+// supplies an empty answer for an omitted table.
+function authoritativePlanningViewOverRows(readTableRows) {
+  return {
+    canRead: () => true,
+    async readRows(tableName, _sql, _params, options) {
+      return {success: true, rows: await readTableRows(tableName, options)};
+    },
+  };
+}
+
+export {authoritativePlanningViewOverRows, createPublicationStore, publicationsOwnerOverRows};

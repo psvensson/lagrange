@@ -15,6 +15,12 @@ import {buildControlPlaneReadAuthority} from
   '../../src/control-plane/control-plane-system-table-gateway-read-contracts.js';
 import {MEMBERSHIP_PUBLICATION_READ_SOURCE} from
   '../../src/control-plane/membership-publication-row-contract.js';
+import {
+  PRIORITY_PARTITION_CENSUS_STATE,
+  readPriorityPartitionCensusState,
+} from '../../src/control-plane/membership-publication-priority-partition-summary.js';
+import {normalizeControlPlanePublicationRow} from
+  '../../src/control-plane/system-row-normalizers.js';
 import {createRecordingReconcileQueue} from '../helpers/recording-reconcile-queue.js';
 import {createPublicationStore} from './publication-owner-test-support.js';
 import {createService, initEnv} from './replica-dispatch-node-state-update-test-support.js';
@@ -172,3 +178,125 @@ test('the existing acknowledgement wake retains unavailable history and heals th
     assert.equal(timers.length, 1, 'the completed owner effect needs no second timer');
     assert.equal(service.membershipPublicationAckDeferredRetries.size, 0);
   });
+
+for (const preloadedRows of [[{node_id: 'projected-node'}], []]) {
+  test(`raw ${preloadedRows.length ? 'populated' : 'empty'} row input cannot replace the owner`,
+    async () => {
+      let supplied = {success: false, error: 'held node owner'};
+      let reads = 0;
+      const coordinator = new MembershipPublicationCoordinator(coordinatorOptions({
+        authoritativeControlPlaneView: {canRead: () => true, readRows: async () => {
+          reads++;
+          return supplied;
+        }},
+      }));
+      const options = {...REMOTE_READ, preloadedRows, allowEmptyPreloadedRows: true};
+      await assert.rejects(coordinator.readTableRows(TABLES.NODES, options), UNAVAILABLE);
+      supplied = {success: true, rows: []};
+      assert.deepEqual(await coordinator.readTableRows(TABLES.NODES, options), []);
+      supplied = {success: true, rows: [{node_id: 'owner-node'}]};
+      assert.deepEqual(await coordinator.readTableRows(TABLES.NODES, options), supplied.rows);
+      assert.equal(reads, 3, 'every answer belongs to the same canonical supplier');
+    });
+}
+
+for (const method of ['getLatestPublicationRow', 'getLatestPublishedPublicationRow']) {
+  test(`${method} cannot accept a publication array as authority`, async () => {
+    let supplied = {success: false, error: 'held publication owner'};
+    let reads = 0;
+    const coordinator = new MembershipPublicationCoordinator(coordinatorOptions({
+      controlPlanePublicationsOwner: {listPublications: async () => {
+        reads++;
+        return supplied;
+      }},
+    }));
+    const options = {...REMOTE_READ, publicationRows: [
+      {...PUBLICATION, publication_epoch: 99, status: 'PUBLISHED'},
+    ]};
+    await assert.rejects(coordinator[method](options), UNAVAILABLE);
+    supplied = {success: true, rows: []};
+    assert.equal(await coordinator[method](options), null);
+    supplied = {success: true, rows: [{...PUBLICATION, status: 'PUBLISHED'}]};
+    assert.equal((await coordinator[method](options)).publicationEpoch,
+      PUBLICATION.publication_epoch);
+    assert.equal(reads, 3);
+  });
+}
+
+for (const method of ['readPublicationPlanningSnapshot',
+  'deriveClusterMembershipCandidate', 'reconcileClusterMembership']) {
+  test(`${method} must read the owner despite caller latest rows and planning snapshot`,
+    async () => {
+      const store = createPublicationStore({rows: [PUBLICATION]});
+      store.control.readsUnavailable = true;
+      const coordinator = new MembershipPublicationCoordinator(coordinatorOptions({
+        resolveIsControlPlanePublicationsWriteLeader: () => true,
+        controlPlanePublicationsOwner: store.owner,
+        authoritativeControlPlaneView: {canRead: () => true,
+          readRows: async () => ({success: true, rows: []})},
+      }));
+      const latest = {...PUBLICATION, status: 'PUBLISHED'};
+      await assert.rejects(coordinator[method]({
+        latestPublicationRow: latest, latestPublishedPublicationRow: latest,
+        publicationRows: [latest], planningSnapshot: {
+          latestPublicationRow: latest, latestPublishedPublicationRow: latest,
+          nodeRows: [{node_id: NODE_ID, status: 'active'}],
+          nodeEndpointRows: [], serviceRows: [], partitionRows: [], replicaOperationRows: [],
+        },
+      }), UNAVAILABLE);
+      assert.equal(store.reads.length, 1, 'the canonical list was actually attempted');
+      assert.equal(store.writes.length, 0, 'caller observations cannot authorize a write');
+    });
+}
+
+for (const deferNestedPriorityRecoveryPlanning of [false, true]) {
+  test(`${deferNestedPriorityRecoveryPlanning ? 'deferred' : 'ordinary'} planning cannot admit a caller-supplied satisfied census`,
+    async (t) => {
+      const store = createPublicationStore();
+      const observedTables = [];
+      const coordinator = new MembershipPublicationCoordinator(coordinatorOptions({
+        resolveIsControlPlanePublicationsWriteLeader: () => true,
+        controlPlanePublicationsOwner: store.owner,
+        reconcileQueue: createRecordingReconcileQueue(),
+        authoritativeControlPlaneView: {canRead: () => true,
+          readRows: async (tableName) => {
+            observedTables.push(tableName);
+            return {success: true, rows: []};
+          }},
+      }));
+      t.after(() => coordinator.stopOwnerMembershipDriver());
+      const options = {
+        publishedActiveNodeIds: [NODE_ID], requiredAckNodeIds: [NODE_ID],
+        acknowledgedNodeIds: [NODE_ID], deferNestedPriorityRecoveryPlanning,
+        priorityPartitionSummary: {
+          satisfied: true, requiredDistinctNodeCount: 1, readyEligibleNodeCount: 1,
+          totalPriorityPartitionCount: 6, missingPartitionIds: [], blockedPartitions: [],
+        },
+        membershipLifecycleSummary: {
+          lifecycleState: 'published_active', publishedActiveNodeIds: [NODE_ID],
+          projectedServingNodeIds: ['donated-node'], locallyEligibleNodeIds: ['donated-node'],
+        },
+      };
+      const snapshot = await coordinator.readPublicationPlanningSnapshot(options);
+      assert.equal(snapshot.membershipLifecycleSummary, null,
+        'caller lifecycle observations cannot replace the derived owner summary');
+      assert.notEqual(readPriorityPartitionCensusState(snapshot.priorityPartitionSummary),
+        PRIORITY_PARTITION_CENSUS_STATE.DERIVED);
+      const candidate = await coordinator.deriveClusterMembershipCandidate(options);
+      assert.notEqual(readPriorityPartitionCensusState(candidate.priorityPartitionSummary),
+        PRIORITY_PARTITION_CENSUS_STATE.DERIVED);
+      const answer = await coordinator.reconcileClusterMembership(options);
+      assert.ok(answer.publicationRow, 'the explicit desired target was actually admitted');
+      assert.equal(store.writes.length, 1);
+      assert.equal(store.landed.length, 1);
+      const admitted = normalizeControlPlanePublicationRow(store.rows()[0]);
+      assert.equal(readPriorityPartitionCensusState(admitted.priorityPartitionSummary),
+        PRIORITY_PARTITION_CENSUS_STATE.NOT_DERIVED,
+        'the real writer cannot certify a census without its own row evidence');
+      assert.deepEqual([...new Set(observedTables)].sort(),
+        deferNestedPriorityRecoveryPlanning ? [] : [TABLES.NODES, TABLES.NODE_ENDPOINTS,
+          TABLES.SERVICES, TABLES.PARTITIONS, TABLES.REPLICA_OPERATIONS].sort());
+      assert.ok(store.reads.some((read) => read.params.length === 0),
+        'both routes attempted the actual publication owner');
+    });
+}

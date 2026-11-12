@@ -86,10 +86,6 @@ const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NODE_B_IDS = Object.freeze([
   PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
   PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[2],
 ]);
-const PUBLICATION_CONVERGENCE_HANDOFF_ONLY_PRELOADED_FIELD =
-  'nodeRows';
-const PUBLICATION_CONVERGENCE_HANDOFF_ONLY_ALLOW_EMPTY_FIELD =
-  'allowEmptyPreloadedRows';
 const PUBLICATION_CONVERGENCE_OWNER_QUEUE_RETRYABLE_DRAIN_FAILURE =
   'retryable_drain_failure';
 const PUBLICATION_CONVERGENCE_OWNER_QUEUE_DISTRIBUTED_FAILURE =
@@ -212,9 +208,6 @@ test('enqueueClusterMembershipReconcile merges pending explicit handoff targets'
     coordinator.enqueueClusterMembershipReconcile(
       PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_REASON_A,
       {
-        latestPublicationRow: {
-          publication_epoch: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EPOCH,
-        },
         publishedActiveNodeIds: [
           ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NODE_A_IDS,
         ],
@@ -229,10 +222,6 @@ test('enqueueClusterMembershipReconcile merges pending explicit handoff targets'
     coordinator.enqueueClusterMembershipReconcile(
       PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_REASON_B,
       {
-        latestPublicationRow: {
-          publication_epoch:
-            PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NEWER_EPOCH,
-        },
         publishedActiveNodeIds: [
           ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NODE_B_IDS,
         ],
@@ -279,9 +268,9 @@ test('enqueueClusterMembershipReconcile merges pending explicit handoff targets'
       'owner queue depth should expose the pending membership publication reconcile',
     );
     t.equal(
-      mergedContext?.latestPublicationRow?.publication_epoch,
-      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NEWER_EPOCH,
-      'pending context should retain the newest known publication row',
+      Object.hasOwn(mergedContext, 'latestPublicationRow'),
+      false,
+      'pending target merge carries no publication row authority',
     );
   });
 
@@ -298,9 +287,6 @@ test('enqueueClusterMembershipReconcile lets handoff-only owner wake clear stale
     const ownerKey = coordinator.buildOwnerKey();
     pending.set(ownerKey, {
       context: {
-        latestPublicationRow: {
-          publication_epoch: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EPOCH,
-        },
         publishedActiveNodeIds: [
           ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NODE_A_IDS,
         ],
@@ -310,19 +296,16 @@ test('enqueueClusterMembershipReconcile lets handoff-only owner wake clear stale
         acknowledgedNodeIds: [
           ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NODE_A_IDS,
         ],
-        [PUBLICATION_CONVERGENCE_HANDOFF_ONLY_ALLOW_EMPTY_FIELD]: true,
-        [PUBLICATION_CONVERGENCE_HANDOFF_ONLY_PRELOADED_FIELD]:
-          PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EMPTY_ROWS,
+        readinessEntries: [{
+          nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
+          dimensions: {clusterMemberHealthy: true},
+        }],
       },
     });
 
     coordinator.enqueueClusterMembershipReconcile(
       PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_REASON_B,
       {
-        latestPublicationRow: {
-          publication_epoch:
-            PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NEWER_EPOCH,
-        },
         publicationActiveGateHandoff: {
           publicationEpoch:
             PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NEWER_EPOCH,
@@ -371,20 +354,14 @@ test('enqueueClusterMembershipReconcile lets handoff-only owner wake clear stale
       'handoff-only owner wake should clear stale explicit acknowledged nodes',
     );
     t.equal(
-      Object.hasOwn(
-        mergedContext,
-        PUBLICATION_CONVERGENCE_HANDOFF_ONLY_ALLOW_EMPTY_FIELD,
-      ),
+      Object.hasOwn(mergedContext, 'readinessEntries'),
       false,
-      'handoff-only owner wake should clear stale empty-row read hints',
+      'handoff-only owner wake should clear prior readiness input with its stale target',
     );
     t.equal(
-      Object.hasOwn(
-        mergedContext,
-        PUBLICATION_CONVERGENCE_HANDOFF_ONLY_PRELOADED_FIELD,
-      ),
+      Object.hasOwn(mergedContext, 'latestPublicationRow'),
       false,
-      'handoff-only owner wake should not inherit stale preloaded rows',
+      'handoff-only recovery intent carries no publication row authority',
     );
     t.equal(
       mergedContext?.retainedContextMarker,
@@ -557,9 +534,6 @@ test('enqueueClusterMembershipReconcile merges retrying explicit handoff targets
       ownerKey,
       reasons: new Set([PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_REASON_A]),
       context: {
-        latestPublicationRow: {
-          publication_epoch: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EPOCH,
-        },
         publicationActiveGateHandoff: {
           publicationEpoch: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EPOCH,
           expectedNodeIds: [
@@ -590,10 +564,6 @@ test('enqueueClusterMembershipReconcile merges retrying explicit handoff targets
     coordinator.enqueueClusterMembershipReconcile(
       PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_REASON_B,
       {
-        latestPublicationRow: {
-          publication_epoch:
-            PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NEWER_EPOCH,
-        },
         publishedActiveNodeIds: [
           ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NODE_B_IDS,
         ],
@@ -645,9 +615,9 @@ test('enqueueClusterMembershipReconcile merges retrying explicit handoff targets
       'a later enqueue without a handoff never inherits the retrying one',
     );
     t.equal(
-      mergedContext?.latestPublicationRow?.publication_epoch,
-      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NEWER_EPOCH,
-      'retrying context should retain the newest known publication row',
+      Object.hasOwn(mergedContext, 'latestPublicationRow'),
+      false,
+      'retrying target merge carries no publication row authority',
     );
   });
 
@@ -674,9 +644,6 @@ test('enqueueClusterMembershipReconcile preserves retryable owner drain ' +
   const accepted = coordinator.enqueueClusterMembershipReconcile(
     PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_REASON_A,
     {
-      latestPublicationRow: {
-        publication_epoch: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EPOCH,
-      },
       publicationActiveGateHandoff: {
         publicationEpoch: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EPOCH,
         expectedNodeIds: [

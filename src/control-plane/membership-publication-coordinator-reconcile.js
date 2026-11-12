@@ -1,4 +1,3 @@
-import {readUpperStateField} from '../utils/state-field-read.js';
 import {CDC_CATCHUP_TRIGGER} from '../cdc/cdc-integration-service-authoritative-catchup.js';
 import {
   TABLES,
@@ -252,20 +251,9 @@ class MembershipPublicationCoordinatorReconcile extends
       },
       async () =>
         this.workflowCoordinator.runExclusive(ownerKey, async () => {
-          const latestPublicationRow =
-            convergenceOptions.latestPublicationRow ||
-            (await this.getLatestPublicationRow(convergenceOptions));
-          const latestPublishedPublicationRow =
-            convergenceOptions.latestPublishedPublicationRow ||
-            (readUpperStateField(latestPublicationRow?.status) ===
-            MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED ?
-              latestPublicationRow :
-              await this.getLatestPublishedPublicationRow(convergenceOptions));
-          const candidate = await this.deriveClusterMembershipCandidate({
-            ...convergenceOptions,
-            latestPublicationRow,
-            latestPublishedPublicationRow,
-          });
+          const {planningSnapshot, candidate} =
+            await this.readClusterMembershipCandidate(convergenceOptions);
+          const {latestPublicationRow, latestPublishedPublicationRow} = planningSnapshot;
           if (
             normalizeNodeIdList(candidate.publishedActiveNodeIds).length === 0
           ) {
@@ -308,7 +296,7 @@ class MembershipPublicationCoordinatorReconcile extends
               ) {
                 this.enqueueClusterMembershipReconcile(
                   PRIORITY_SUMMARY_REFRESHED_REASON,
-                  {latestPublicationRow: answer.publicationRow},
+                  {},
                   {selfRequeue: {changed: PRIORITY_SUMMARY_REFRESHED_REASON}},
                 );
               }

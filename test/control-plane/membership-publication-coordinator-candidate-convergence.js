@@ -47,7 +47,7 @@ import {
 } from './membership-publication-coordinator-candidate-fixtures.js';
 
 import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
-import {publicationsOwnerOverRows} from
+import {authoritativePlanningViewOverRows, publicationsOwnerOverRows} from
   './publication-owner-test-support.js';
 test('deriveMembershipPublicationCandidate keeps the latest in-flight publication membership as a convergence floor',
   async (t) => {
@@ -381,22 +381,10 @@ test('MembershipPublicationCoordinator reuses startup-owned admission evidence f
       },
       now: () => 1000,
     });
-    const coordinator = new MembershipPublicationCoordinator({
-      nodeId,
-      controlPlaneReadinessService: readinessService,
-      now: () => 1000,
-    });
-
-    const candidate = await coordinator.deriveClusterMembershipCandidate({
-      publisherNodeId: nodeId,
-      latestPublishedPublicationRow: {
-        publication_epoch: 30,
-        status: 'PUBLISHED',
-        published_active_node_ids: ['node-1', 'node-2', 'node-3'],
-        required_ack_node_ids: ['node-1', 'node-2', 'node-3'],
-        acknowledged_node_ids: ['node-1', 'node-2', 'node-3'],
-      },
+    const planningRows = {
       latestPublicationRow: {
+        publication_id: 'publication-startup-admission',
+        publication_kind: 'cluster_membership',
         publication_epoch: 30,
         status: 'PUBLISHED',
         published_active_node_ids: ['node-1', 'node-2', 'node-3'],
@@ -457,6 +445,29 @@ test('MembershipPublicationCoordinator reuses startup-owned admission evidence f
         {service_id: 'svc-3', node_id: nodeId, status: 'active'},
       ],
       nowMs: 1000,
+    };
+    const coordinator = new MembershipPublicationCoordinator({
+      nodeId,
+      controlPlaneReadinessService: readinessService,
+      controlPlanePublicationsOwner: {
+        async listPublications() {
+          return {success: true, rows: [planningRows.latestPublicationRow]};
+        },
+      },
+      authoritativeControlPlaneView: authoritativePlanningViewOverRows((tableName) => ({
+        [TABLES.NODES]: planningRows.nodeRows,
+        [TABLES.NODE_ENDPOINTS]: planningRows.nodeEndpointRows,
+        [TABLES.SERVICES]: planningRows.serviceRows,
+        [TABLES.PARTITIONS]: [],
+        [TABLES.REPLICA_OPERATIONS]: [],
+      })[tableName]),
+      now: () => 1000,
+    });
+
+    const candidate = await coordinator.deriveClusterMembershipCandidate({
+      publisherNodeId: nodeId,
+      readinessEntries: planningRows.readinessEntries,
+      nowMs: planningRows.nowMs,
     });
 
     t.same(
@@ -694,24 +705,26 @@ test(MEMBERSHIP_PUBLICATION_RECONCILE_TEST_NAME, async (t) => {
         },
       },
     },
-    systemTableCache: {
-      getAll(tableName) {
-        if (tableName === TABLES.NODES) {
-          return MEMBERSHIP_PUBLICATION_RECONCILE_BASELINE_NODE_IDS.map(
-            buildMembershipPublicationTrimNodeRow,
-          );
-        }
-        if (tableName === TABLES.SERVICES) {
-          return MEMBERSHIP_PUBLICATION_RECONCILE_BASELINE_NODE_IDS.map(
-            buildMembershipPublicationTrimServiceRow,
-          );
-        }
-        if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
-          return [latestPublicationRow];
-        }
+    authoritativeControlPlaneView: authoritativePlanningViewOverRows((tableName) => {
+      if (tableName === TABLES.NODES) {
+        return MEMBERSHIP_PUBLICATION_RECONCILE_BASELINE_NODE_IDS.map(
+          buildMembershipPublicationTrimNodeRow,
+        );
+      }
+      if (tableName === TABLES.SERVICES) {
+        return MEMBERSHIP_PUBLICATION_RECONCILE_BASELINE_NODE_IDS.map(
+          buildMembershipPublicationTrimServiceRow,
+        );
+      }
+      if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
+        return [latestPublicationRow];
+      }
+      if (tableName === TABLES.NODE_ENDPOINTS || tableName === TABLES.PARTITIONS ||
+          tableName === TABLES.REPLICA_OPERATIONS) {
         return MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_ROWS;
-      },
-    },
+      }
+      throw new Error(`Unexpected planning table: ${tableName}`);
+    }),
     now: () => MEMBERSHIP_PUBLICATION_RECONCILE_NOW_MS,
   });
 

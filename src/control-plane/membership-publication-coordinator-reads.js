@@ -181,13 +181,6 @@ class MembershipPublicationCoordinatorReads {
   }
 
   async readTableRows(tableName, options = {}) {
-    const preloadedRows = options.preloadedRows;
-    if (
-      Array.isArray(preloadedRows) &&
-      (preloadedRows.length > 0 || options.allowEmptyPreloadedRows === true)
-    ) {
-      return preloadedRows;
-    }
     return readRequiredOwnerRows(() => {
       if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS &&
           this.controlPlanePublicationsOwner) {
@@ -216,10 +209,9 @@ class MembershipPublicationCoordinatorReads {
   }
 
   async getLatestPublicationRow(options = {}) {
-    const publicationRows = await this.readTableRows(TABLES.CONTROL_PLANE_PUBLICATIONS, {
-      ...options,
-      preloadedRows: options.publicationRows,
-    });
+    const publicationRows = await this.readTableRows(
+      TABLES.CONTROL_PLANE_PUBLICATIONS, options,
+    );
     const normalizedRows = publicationRows
       .map((row) => normalizeControlPlanePublicationRow(row))
       .filter((row) => row.publicationKind === MEMBERSHIP_PUBLICATION_KIND)
@@ -250,10 +242,9 @@ class MembershipPublicationCoordinatorReads {
   }
 
   async getLatestPublishedPublicationRow(options = {}) {
-    const publicationRows = await this.readTableRows(TABLES.CONTROL_PLANE_PUBLICATIONS, {
-      ...options,
-      preloadedRows: options.publicationRows,
-    });
+    const publicationRows = await this.readTableRows(
+      TABLES.CONTROL_PLANE_PUBLICATIONS, options,
+    );
     const normalizedRows = publicationRows
       .map((row) => normalizeControlPlanePublicationRow(row))
       .filter(
@@ -530,10 +521,12 @@ class MembershipPublicationCoordinatorReads {
   }
 
   async deriveClusterMembershipCandidate(options = {}) {
-    const planningSnapshot =
-      options.planningSnapshot && typeof options.planningSnapshot === 'object' ?
-        options.planningSnapshot :
-        await this.readPublicationPlanningSnapshot(options);
+    const {candidate} = await this.readClusterMembershipCandidate(options);
+    return candidate;
+  }
+
+  async readClusterMembershipCandidate(options = {}) {
+    const planningSnapshot = await this.readPublicationPlanningSnapshot(options);
     // Increment 4: feed the SWIM verdict into the projection whenever a runtime
     // is wired (consumption is unconditional; the opt-out flag was retired
     // 2026-07-02). Asymmetric: `alive` protects a node from a false
@@ -555,7 +548,7 @@ class MembershipPublicationCoordinatorReads {
       swimVerdictByNodeId,
     });
     this._emitMembershipSwimDivergence(candidate?.membershipSwimInputs);
-    return candidate;
+    return {planningSnapshot, candidate};
   }
 
   // FD-upgrade (cutover §5 step 3): diff the SWIM detector's active set against the

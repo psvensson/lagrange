@@ -43,12 +43,11 @@ import {
   buildPublicationPlanningReadinessByNodeId,
 } from './membership-publication-readiness-repair.js';
 import {
-  PRIORITY_SPREAD_REQUIRED_DISTINCT_NODE_COUNT,
   buildDerivedPriorityPartitionSummary,
   isDerivedPriorityCensusChange,
   isReadinessPromotable,
-  normalizePriorityPartitionSummary,
   refreshPriorityPartitionSummary,
+  statePriorityPartitionSummary,
 } from './membership-publication-priority-partition-summary.js';
 import {
   buildMembershipPublicationAckCompletionSnapshot,
@@ -591,25 +590,6 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
     candidatePublicationStatus === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED ?
       publishedActiveNodeIds :
       publishedBaselineNodeIds;
-  const combinedPublicationEligibleNodeIds = [
-    ...new Set([
-      ...publicationLocallyEligibleNodeIds,
-      ...publicationProjectedServingNodeIds,
-      ...publishedActiveNodeIds,
-    ]),
-  ];
-  const normalizedPriorityPartitionSummary = normalizePriorityPartitionSummary(
-    planningSnapshot.priorityPartitionSummary ||
-      planningSnapshot.priorityRecoveryPlanningSnapshot?.priorityPartitionSummary,
-    {
-      requiredDistinctNodeCount: Math.min(
-        PRIORITY_SPREAD_REQUIRED_DISTINCT_NODE_COUNT,
-        combinedPublicationEligibleNodeIds.length,
-      ),
-      readyEligibleNodeCount: combinedPublicationEligibleNodeIds.length,
-    },
-    helperFns,
-  );
   const derivedPriorityPartitionSummary = buildDerivedPriorityPartitionSummary(
     {
       serviceRows: planningSnapshot.serviceRows,
@@ -621,12 +601,12 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
     },
     helperFns,
   );
-  // The fresh census wins whenever it is derivable (owner decision
-  // 2026-10-04): an earlier satisfied planning-snapshot summary never
-  // outranks the current rows. The embedded summary stands in only when the
-  // census cannot be derived (no service/partition rows here).
-  const priorityPartitionSummaryBase =
-    derivedPriorityPartitionSummary ?? normalizedPriorityPartitionSummary;
+  // This invocation's service and partition rows are the only census source.
+  // Readiness planning may retain an earlier summary; it cannot certify a new
+  // publication when these rows derive no census.
+  const priorityPartitionSummaryBase = statePriorityPartitionSummary(
+    derivedPriorityPartitionSummary,
+  );
   const reasonCode =
     typeof planningSnapshot.reasonCode === 'string' && planningSnapshot.reasonCode.length > 0 ?
       planningSnapshot.reasonCode :

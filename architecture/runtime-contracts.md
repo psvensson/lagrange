@@ -204,8 +204,9 @@ Required patterns:
 5. New system tables are classified in exactly one of
    `CDC_PROPAGATED_TABLES` or `CDC_NON_PROPAGATED_TABLES`.
 
-Membership publication planning and acknowledgement consume explicit admitted
-preload evidence or the canonical owner's successful row observation. The async
+Membership publication planning and acknowledgement consume the canonical
+owner's successful row observation. Raw row arrays, supplied latest rows and
+caller planning snapshots never answer an asynchronous authority read. The async
 reader never substitutes projected rows, merges them into an owner result, or
 answers an unavailable source with an empty list. The actual authoritative view
 validates success and array-valued rows before normalization; malformed success
@@ -215,7 +216,13 @@ formation reads remain explicitly local; remote owner evidence requires the
 owner RPC. Unavailability retains the existing driver/acknowledgement retry
 obligation with the original cause. Answered-empty is absence. The normal
 census derivation and guarded publication change alone establish the census
-used by serving; synchronous projection readers may only wake these owners.
+used by serving. A raw caller summary or the readiness planner's retained
+summary cannot certify a census when current service and partition rows do not
+derive one; that candidate states NOT_DERIVED. An un-derived refresh preserves
+an already durable census. Synchronous projection readers may only wake these owners.
+Reconciliation consumes the latest rows and candidate from the same planning
+read. Handoffs carry desired membership and readiness-owner input; each retry
+reads the SQL owners again instead of carrying a synthetic publication baseline.
 
 Superseded 2026-11-02 for gating decisions (R09, quest
 `serve-eligibility-committed-epoch-read`, epic `raft-rs-full-cutover`): pattern

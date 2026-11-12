@@ -228,6 +228,27 @@ test('detects publication planning code that replaces required authority with ca
       violation.target === PROJECTION_CACHE_FRAGMENT));
 });
 
+test('detects raw row and snapshot shortcuts at asynchronous publication ingress', async (t) => {
+  const violations = collectRuntimeGrammarContractViolationsFromSource(
+    [
+      'class MembershipPublicationCoordinator {',
+      '  async readTableRows(tableName, options) { return options.preloadedRows; }',
+      '  async deriveClusterMembershipCandidate(options) { return options.planningSnapshot; }',
+      '  async readClusterMembershipCandidate(options) { return options.planningSnapshot; }',
+      '}',
+    ].join('\n'),
+    PUBLICATION_COORDINATOR_FILE_PATH,
+  );
+  for (const [functionName, target] of [
+    ['readTableRows', 'preloadedRows'],
+    ['deriveClusterMembershipCandidate', 'options.planningSnapshot'],
+    ['readClusterMembershipCandidate', 'options.planningSnapshot'],
+  ]) {
+    t.ok(violations.some((violation) => violation.functionName === functionName &&
+      violation.target === target));
+  }
+});
+
 test('detects publication recovery gate code that skips summary authority',
   async (t) => {
     const violations = collectRuntimeGrammarContractViolationsFromSource(

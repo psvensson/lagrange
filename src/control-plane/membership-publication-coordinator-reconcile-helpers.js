@@ -82,7 +82,9 @@ function requestOwedPriorityCensus(coordinator, publicationRow, context) {
   }
   coordinator.enqueueClusterMembershipReconcile(
     PRIORITY_CENSUS_NOT_DERIVED_REASON,
-    context,
+    // A prior handoff may still be pending on this owner key. The owed
+    // census supersedes its omitted-input intent while retaining its target.
+    {...context, deferNestedPriorityRecoveryPlanning: false},
     {selfRequeue: {changed: PRIORITY_CENSUS_NOT_DERIVED_REASON}},
   );
   return true;

@@ -1,6 +1,8 @@
 // The cadence of a held publication write's re-ask, on a virtual clock: the
 // real coordinator, its real owner queue (timers on the clock) and the real
-// publications owner over a row store whose durable reads do not answer.
+// publications owner over a row store whose keyed confirmation reads do not
+// answer. Planning's list observation remains available, so this witness
+// reaches the write rather than failing before its admission.
 //
 // A write whose outcome the durable owner has not confirmed is still owed:
 // the reconcile re-asks itself. On unchanged input the re-ask backs off (it
@@ -39,6 +41,12 @@ async function turns() {
 function heldWriteOwner() {
   const clock = new VirtualTimeSource({startMs: START_MS});
   const store = createPublicationStore();
+  let keyedReadsUnavailable = false;
+  const readRows = store.gateway.readAuthoritativeRows.bind(store.gateway);
+  store.gateway.readAuthoritativeRows = async (...args) =>
+    keyedReadsUnavailable && args[2]?.length > 0 ?
+      {success: false, error: 'keyed confirming read unavailable'} :
+      readRows(...args);
   const runs = [];
   let coordinator = null;
   const reconcileQueue = new OwnerKeyReconcileQueue({
@@ -59,7 +67,7 @@ function heldWriteOwner() {
     now: () => clock.now(),
     logger: QUIET,
   });
-  coordinator.deriveClusterMembershipCandidate = async () => ({
+  let candidate = {
     publicationKind: 'cluster_membership',
     publicationEpoch: 8,
     publisherNodeId: 'node-1',
@@ -68,6 +76,13 @@ function heldWriteOwner() {
     acknowledgedNodeIds: [],
     changed: true,
     reasonCode: 'witness',
+  };
+  coordinator.readClusterMembershipCandidate = async (options) => ({
+    planningSnapshot: {
+      latestPublicationRow: await coordinator.getLatestPublicationRow(options),
+      latestPublishedPublicationRow: await coordinator.getLatestPublishedPublicationRow(options),
+    },
+    candidate,
   });
   const reconcile = coordinator.reconcileClusterMembership.bind(coordinator);
   coordinator.reconcileClusterMembership = async (options) => {
@@ -78,16 +93,15 @@ function heldWriteOwner() {
     run.settled = Boolean(answer.publicationRow);
     return answer;
   };
-  // The durable owner does not answer: every write's answer is lost and no
-  // read confirms it.
+  // Every write's answer is lost and its keyed confirming read is unavailable.
   const loseAnswers = () => {
-    store.control.readsUnavailable = true;
+    keyedReadsUnavailable = true;
     store.control.afterWrite = () => {
       throw new Error('write answer lost (witness)');
     };
   };
   const answerAgain = () => {
-    store.control.readsUnavailable = false;
+    keyedReadsUnavailable = false;
     store.control.afterWrite = null;
   };
   // Advance the clock in base steps, letting each released run finish.
@@ -98,14 +112,14 @@ function heldWriteOwner() {
     }
   };
   return {clock, store, coordinator, reconcileQueue, runs, loseAnswers,
-    answerAgain, advance};
+    answerAgain, advance, setCandidate: (next) => { candidate = next; }};
 }
 
 function gaps(runs) {
   return runs.slice(1).map((run, index) => run.atMs - runs[index].atMs);
 }
 
-test('a held publication write re-asks with a growing, bounded delay while the durable owner never answers', async (t) => {
+test('a held publication write re-asks with a growing, bounded delay while its confirming owner read is unavailable', async (t) => {
   const f = heldWriteOwner();
   t.after(() => f.coordinator.stopOwnerMembershipDriver());
   f.loseAnswers();
@@ -167,7 +181,7 @@ test('a wake from outside the held run supersedes the hold at once, and a settle
   assert.equal(f.reconcileQueue.heldRequeues.size, 0);
 
   // A later hold starts from the base delay again.
-  f.coordinator.deriveClusterMembershipCandidate = async () => ({
+  f.setCandidate({
     publicationKind: 'cluster_membership',
     publicationEpoch: 9,
     publisherNodeId: 'node-1',

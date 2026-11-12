@@ -22,12 +22,12 @@ entries and has older source; its source must not replace this baseline.
 
 | Interaction | Source custody and next owner |
 | --- | --- |
-| Census derivation and authoritative publication read | `da530fe5e6809c0896afea4c40032448b965585a` is composed as unverified WIP `4b7a55d22`; root owns independent review, caller closure and fresh lab proof. The preserved author receipt is not independent acceptance. |
-| CDC image, source position and occurrence effects | `/root/takeover_cdc` owns `work/cloud-cdc-image-effect-20261112`, from `57e396e440a48dce8c17b627514ad951c916c7ee`. That preservation has tests and no behavioral fix. The agent also owns composition of approved maintenance `9f6244542272d936da0281d2e00454149c6dd41c`, which overlaps the same source. |
-| Removal settlement, lifecycle generation and status effects | `/root/takeover_inventory` owns `work/cloud-settlement-generation-20261112`, from `7a1d2f4e82efe1e04aefac26292205debe86c328`. That preservation has test drafts and unchanged production. Design must carry original identity through membership, persistence, projection and rollback awaits. |
-| Checkpoint custody, receipts, inspection and recovery | Root retains the full original seal. Latest node receipt candidate is `df2ead4f6bc069b1d6def9bb2a236ed868fb999b`, an unreviewed sibling snapshot from `402253be1`. Compose only reviewed deltas with F; never replace F with the older source tree. Inspector v2 remains a proposal, with no approved implementation. |
-| Lifecycle observation | `a5800406e961bc645a85504634c4fde534122551` records bounded R4 approval, but its external exact-candidate packet must be recovered or reverified before composition. |
-| SQLite statement ownership | `188883de5b6b8790e536f91c9d00cb2f03f75c66` and `60b1c58fadb4a0f5688e40765ce2dbbb322524e1` have identical production. The latter adds rejected-source/evidence custody. Bounded outer-capture approval does not close the whole constructor migration. |
+| Census and publication authority | Root owns this branch. Physical lab 2713 rejected `ebb1b35db`: raw cache-wake rows bypassed the publication owner. Its complete log and withdrawn approval are preserved. Current correction removes async raw-row/latest/snapshot shortcuts, preserves declared deferred-census intent, and clears that intent on a full-census queue request. Source review and 13-root lab proof are pending. |
+| Authority read modes | Root owns `work/cloud-authority-mode-closure-20261112`. Tests-only `232bc7a1fc13bf2cfaf0a8ef46fb6bc9840dc7ed` has unchanged production. Lab 2745 is the first negative request. Approved design keeps only explicit local-owner and required owner-RPC paths, with no SQL/replica substitution or read-side overlay fabrication. |
+| CDC image, position and effects | `/root/takeover_cdc` owns `work/cloud-cdc-image-effect-20261112`. Original baseline 2688 is a verified causal red; bounded candidate 2699 passed. Latest `fb36911128429043abe57cc86bab2d0f68e83d89` is frozen and awaits proof. Source review still holds relister escaping-failure semantics and canonical one-source/table admission. |
+| Removal, lifecycle and runtime publication | `/root/takeover_inventory` owns `work/cloud-settlement-generation-20261112`. Canonical-generation candidate 2697 passed 8 roots/911 assertions. Corrected native baseline 2706 proves a stale completion damages a replacement. Candidate 2743 and additional red 2744 failed and require complete-log classification. New producer/caller freezes `7a49ad6b` and `dd896e1d` remain unaccepted. Native producer fixtures and the separate partition leader-write effect still need closure. |
+| SQLite and lifecycle observation composition | Root owns `work/cloud-sqlite-composition-20261112`: exact R4 lifecycle delta first, then reviewed SQLite WIP delta, with earlier F custody preserved. `a400e03aa456c85d97159ce9d68581869023dacd` passed three verified physical shards: 17 roots/519 assertions. Independent review still examines exact-handle capture; whole migration/static/full-run acceptance is not granted. Original `188883de` full run is now recovered as 2,065 passed/12 failed out of 2,077 roots, retained without rewriting. |
+| Checkpoint custody, inspection and recovery | Root retains the full original seal at `da5eb99bdc2893d1dd245d25a68d789490571c91`. The recovered directory-custody/inspection proposals and node receipt sibling `df2ead4f` are not approved implementation. All-handle ownership, original episode recovery and actual restart/useful follower proof remain required. |
 | Native role and package delivery | Role `b0ffa63cf8e287100c2b336f4c1dfeb66257b8b6` remains rejected/unfinished. Package `14d6b7a43ffdc8737aa9972f7b610d9f4f99f2c8` awaits validation/review; earlier staging/copy approvals certify negative diagnostics only. |
 
 F, the clock and fixture repairs, permission witnesses, historical resolver and
@@ -36,20 +36,24 @@ were checked against their preservation tips. Do not import them a second time.
 
 ### Lab execution and evidence
 
-`/root/takeover_lab` is the initial sole dispatcher. The existing authenticated
-lab mailbox is `psvensson/lagrange-lab`; no SSH credentials or service upgrade
-were needed. Fresh read-only requests are ping
-[#2663](https://github.com/psvensson/lagrange-lab/issues/2663), fleet observation
-[#2664](https://github.com/psvensson/lagrange-lab/issues/2664), runtime observation
-[#2665](https://github.com/psvensson/lagrange-lab/issues/2665), and handover-file
-observation [#2666](https://github.com/psvensson/lagrange-lab/issues/2666).
-The controller reports installed v0.2.2 source
-`53e262450fada3b4e706898201a3c732811ae4d0`, unpaused and authorized for the
-standing pool actor. Its uncertainty observation is retained; unknown jobs are
-not cleared or cancelled. Actual reservation admitted the bounded observation.
-Worker ownership, thermal and cleanup gates remain authoritative. No tests are
-run in the cloud workspace. Root owns observation and continuation of these
-requests; no unattended background supervisor is claimed.
+`/root/takeover_checkpoint` is the sole active lab coordinator and WIP transport
+owner. The mailbox is `psvensson/lagrange-lab`; installed controller v0.2.2 source
+`53e262450fada3b4e706898201a3c732811ae4d0` remains unchanged. Physical execution
+is restricted by worker guard to `local-workstation`, `adams-gamla`, and
+`tv-dator`. Host preferences are not placement constraints; every job verifies
+its actual host, source/tree, dependencies and cleanup scopes. All tests and
+static gates run on lab machines. WIP transport commits preserve exact Git
+trees; they do not grant landing, integration or release acceptance.
+
+Completed physical evidence includes census 2713 RED, canonical generation
+2697 PASS, CDC baseline 2688 RED and bounded candidate 2699 PASS, settlement
+2706 RED, and SQLite composition 2736/2737/2738 PASS. Complete log hashes and
+scope closure are recorded by the coordinator. Issue 2694 was cancelled during
+`npm ci`, before any tests; it is infrastructure evidence only. Issue 2696 on
+unreachable lenovo remains uncertain with source execution reported and no
+closed scopes. It is neither resubmitted nor cleared. No fail-once rerun,
+timeout increase, baseline increase, reservation rewrite or uncertainty reset
+is authorized by this progress.
 
 The sections below retain the last integration handover. New conclusions go in
 the relevant append-only Quest logs, and this section owns current scheduling.

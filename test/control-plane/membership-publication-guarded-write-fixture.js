@@ -133,8 +133,13 @@ function ownerCoordinatorOver(gateway, nodeId, candidateOf) {
   const built = coordinatorOver(gateway, nodeId, {coordinatorOptions: {
     resolveIsControlPlanePublicationsWriteLeader: () => true,
   }});
-  built.coordinator.deriveClusterMembershipCandidate = async (options) =>
-    candidateOf(options);
+  built.coordinator.readClusterMembershipCandidate = async (options) => {
+    const latestPublicationRow = await built.coordinator.getLatestPublicationRow(options);
+    const latestPublishedPublicationRow =
+      await built.coordinator.getLatestPublishedPublicationRow(options);
+    const planningSnapshot = {latestPublicationRow, latestPublishedPublicationRow};
+    return {planningSnapshot, candidate: candidateOf({...options, ...planningSnapshot})};
+  };
   // The reconcile's own re-asks (its declared self-requeue), observed.
   built.requeues = [];
   built.coordinator.enqueueClusterMembershipReconcile =
