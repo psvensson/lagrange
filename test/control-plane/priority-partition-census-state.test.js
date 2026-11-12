@@ -369,6 +369,8 @@ function retainedCensusFixture(t, summary, {publicationPresent = true} = {}) {
     if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
       return store.gateway.readAuthoritativeRows(tableName);
     }
+    if (readOutcome === 'input-throw') throw new Error('held input owner');
+    if (readOutcome === 'input-malformed-rows') return {success: true, rows: null};
     if (readOutcome === 'unavailable') return {success: false, error: 'held row source'};
     if (readOutcome === 'malformed') return {rows: null};
     return {success: true, rows: (rows.get(tableName) || []).map((row) => ({...row}))};
@@ -376,7 +378,9 @@ function retainedCensusFixture(t, summary, {publicationPresent = true} = {}) {
   const options = {nodeId: NODES[0], now: () => RESTART_NOW_MS,
     logger: QUIET_LOGGER,
     systemTableCache: {getAll: (tableName) => rows.get(tableName) || [], get: () => null},
-    authoritativeControlPlaneView: {canRead: () => true, readRows},
+    authoritativeControlPlaneView: {
+      canRead: () => readOutcome !== 'input-capability-unavailable', readRows,
+    },
     cdcIntegrationService: {canWriteSystemTableLocally: () => true},
     resolveIsControlPlanePublicationsWriteLeader: () => true,
     controlPlaneReadinessService: {getAllNodeReadiness: async () => NODES.map((nodeId) => ({
@@ -444,6 +448,50 @@ async function assertServeCensusState(fixture, eligible, reason = null) {
     assert.equal(isServeEligibilityAnswerEligible(answer), eligible);
     if (reason !== null) assert.ok(answer.reasons.includes(reason), JSON.stringify(answer));
   }
+}
+
+test('the async publication read consumes its owner even when a plausible cache row exists',
+  {timeout: scaleByMachineFactor(RESTART_TEST_TIMEOUT_MS)}, async (t) => {
+    const f = retainedCensusFixture(t, null);
+    let projectionReads = 0;
+    f.store.gateway.readProjectionRows = async () => {
+      projectionReads += 1;
+      return [durableRow({publication_id: 'cached-publication-99', publication_epoch: 99})];
+    };
+    const observed = await f.coordinator.getLatestPublicationRow();
+    assert.equal(observed.publicationId, 'publication-7');
+    assert.equal(projectionReads, 0, 'a cache list cannot substitute for the async owner read');
+    assert.equal(f.store.writes.length, 0);
+  });
+
+for (const outcome of ['input-capability-unavailable', 'input-malformed-rows',
+  'input-throw', 'unavailable', 'malformed']) {
+  test(`${outcome}: plausible cached inputs cannot certify a census; restored authority resumes`,
+    {timeout: scaleByMachineFactor(RESTART_TEST_TIMEOUT_MS)}, async (t) => {
+      const f = retainedCensusFixture(t, null);
+      const before = f.store.row('publication-7');
+      assert.equal(f.rows.get(TABLES.NODES).length, NODES.length,
+        'the cache has a complete plausible membership, so refusal is not vacuous');
+      f.setReadOutcome(outcome);
+      await assert.rejects(f.coordinator.readPublicationPlanningSnapshot(),
+        {code: 'AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE'});
+      await f.tick();
+      await f.coordinator.reconcileQueue.awaitCurrentWorkIdle();
+      assert.deepEqual(f.requests, []);
+      assert.equal(f.store.writes.length, 0);
+      assert.deepEqual(f.store.row('publication-7'), before);
+      await assertServeCensusState(f, false);
+      f.setReadOutcome('available');
+      await f.tick();
+      await f.writeReached;
+      assert.deepEqual(f.store.row('publication-7'), before);
+      await assertServeCensusState(f, false, 'priority_spread_unstated');
+      f.releaseWrite();
+      await f.coordinator.reconcileQueue.awaitCurrentWorkIdle();
+      const after = normalizeControlPlanePublicationRow(f.store.row('publication-7'));
+      assert.equal(readPriorityPartitionCensusState(after.priorityPartitionSummary), DERIVED);
+      await assertServeCensusState(f, true);
+    });
 }
 
 for (const [state, summary] of [[ABSENT, null],

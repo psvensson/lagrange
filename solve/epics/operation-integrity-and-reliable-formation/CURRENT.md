@@ -1,8 +1,58 @@
 # Formation integration continuation
 
-Last checked: 2026-11-12. Integration owner: current Codex session.
+Last checked: 2026-11-12. Integration owner: ChatGPT cloud takeover `/root`.
 Governing rule-set: revision 5; rules source
 `2fca51dc9a2f0344e23f0535dfa50fe0e000b674`.
+
+## Active cloud takeover
+
+The user authorized continued development from all pushed WIP, systematic
+diagnosis, historical and external-system research, removal of legacy/fallback
+semantics, parallel development, and all testing on lab machines. This supersedes
+the earlier sidecar-only/no-commit assignments and local-only execution choices;
+it does not waive independent review, any sealed acceptance, or publication gates.
+
+The source baseline is `fa70987b2833031ffe6054a9b12ee86bbb71d52c`, whose `src`
+tree is `da2038508a4d18efc6d1bbafdb9c6597636bcba5`. The new integration branch is
+`work/cloud-formation-takeover-20261112`. Preservation branches under
+`wip/preserve-20261112T120432Z/` are recovery inputs, not approved integrations.
+Their ordinary work branches often still point to an older base. Primary
+preservation `e05d4040fd195d43690a3edb3859c31212c3bd72` adds 73 formation-log
+entries and has older source; its source must not replace this baseline.
+
+| Interaction | Source custody and next owner |
+| --- | --- |
+| Census derivation and authoritative publication read | `da530fe5e6809c0896afea4c40032448b965585a` is composed as unverified WIP `4b7a55d22`; root owns independent review, caller closure and fresh lab proof. The preserved author receipt is not independent acceptance. |
+| CDC image, source position and occurrence effects | `/root/takeover_cdc` owns `work/cloud-cdc-image-effect-20261112`, from `57e396e440a48dce8c17b627514ad951c916c7ee`. That preservation has tests and no behavioral fix. The agent also owns composition of approved maintenance `9f6244542272d936da0281d2e00454149c6dd41c`, which overlaps the same source. |
+| Removal settlement, lifecycle generation and status effects | `/root/takeover_inventory` owns `work/cloud-settlement-generation-20261112`, from `7a1d2f4e82efe1e04aefac26292205debe86c328`. That preservation has test drafts and unchanged production. Design must carry original identity through membership, persistence, projection and rollback awaits. |
+| Checkpoint custody, receipts, inspection and recovery | Root retains the full original seal. Latest node receipt candidate is `df2ead4f6bc069b1d6def9bb2a236ed868fb999b`, an unreviewed sibling snapshot from `402253be1`. Compose only reviewed deltas with F; never replace F with the older source tree. Inspector v2 remains a proposal, with no approved implementation. |
+| Lifecycle observation | `a5800406e961bc645a85504634c4fde534122551` records bounded R4 approval, but its external exact-candidate packet must be recovered or reverified before composition. |
+| SQLite statement ownership | `188883de5b6b8790e536f91c9d00cb2f03f75c66` and `60b1c58fadb4a0f5688e40765ce2dbbb322524e1` have identical production. The latter adds rejected-source/evidence custody. Bounded outer-capture approval does not close the whole constructor migration. |
+| Native role and package delivery | Role `b0ffa63cf8e287100c2b336f4c1dfeb66257b8b6` remains rejected/unfinished. Package `14d6b7a43ffdc8737aa9972f7b610d9f4f99f2c8` awaits validation/review; earlier staging/copy approvals certify negative diagnostics only. |
+
+F, the clock and fixture repairs, permission witnesses, historical resolver and
+retention, admin timing, and the earlier bounded CDC witness already in `fa70987b`
+were checked against their preservation tips. Do not import them a second time.
+
+### Lab execution and evidence
+
+`/root/takeover_lab` is the initial sole dispatcher. The existing authenticated
+lab mailbox is `psvensson/lagrange-lab`; no SSH credentials or service upgrade
+were needed. Fresh read-only requests are ping
+[#2663](https://github.com/psvensson/lagrange-lab/issues/2663), fleet observation
+[#2664](https://github.com/psvensson/lagrange-lab/issues/2664), runtime observation
+[#2665](https://github.com/psvensson/lagrange-lab/issues/2665), and handover-file
+observation [#2666](https://github.com/psvensson/lagrange-lab/issues/2666).
+The controller reports installed v0.2.2 source
+`53e262450fada3b4e706898201a3c732811ae4d0`, unpaused and authorized for the
+standing pool actor. Its uncertainty observation is retained; unknown jobs are
+not cleared or cancelled. Actual reservation admitted the bounded observation.
+Worker ownership, thermal and cleanup gates remain authoritative. No tests are
+run in the cloud workspace. Root owns observation and continuation of these
+requests; no unattended background supervisor is claimed.
+
+The sections below retain the last integration handover. New conclusions go in
+the relevant append-only Quest logs, and this section owns current scheduling.
 
 ## Candidate and acceptance
 
