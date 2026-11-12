@@ -10,6 +10,8 @@ import {cancelParticipantAppliedPositionObservations} from
 
 const RUNTIME_CLEANUP_PENDING = 'Replica runtime cleanup is still pending';
 const RUNTIME_SHUTDOWN_FAILED = 'Replica handler still owns failed runtime shutdowns';
+const RUNTIME_SHUTDOWN_REQUIRED = 'REPLICA_RUNTIME_SHUTDOWN_REQUIRED';
+const RUNTIME_CLEANUP_CUSTODY_CHANGED = 'REPLICA_RUNTIME_CLEANUP_CUSTODY_CHANGED';
 const RELEASED_REPLICA_CREATE_ADMISSION_OWNER = null;
 const AggregateErrorConstructor = AggregateError;
 const objectDefineProperty = Object.defineProperty;
@@ -32,6 +34,49 @@ function exactFailureIterable(failures) {
       }};
     },
   };
+}
+
+// All replica host release paths share this exact-object custody owner. A
+// concurrent caller joins the retained attempt; only explicit re-entry after
+// failure starts another attempt, keeping the original primary error.
+function shutdownExactReplicaRuntime(handler, replicaId, partitionId, service, primary = null) {
+  let cell = handler.pendingRuntimeShutdowns.get(service);
+  if (!cell) {
+    cell = Object.freeze({replicaId, partitionId, primary, attempt: {promise: null}});
+    handler.pendingRuntimeShutdowns.set(service, cell);
+  }
+  if (cell.replicaId !== replicaId || cell.partitionId !== partitionId) {
+    return Promise.reject(Object.assign(new Error(RUNTIME_CLEANUP_CUSTODY_CHANGED), {
+      code: RUNTIME_CLEANUP_CUSTODY_CHANGED, deferRetry: true,
+    }));
+  }
+  if (cell.attempt.promise) return cell.attempt.promise;
+  const completion = Promise.withResolvers();
+  cell.attempt.promise = completion.promise;
+  const release = async () => {
+    try {
+      if (typeof service.shutdown !== 'function') {
+        throw Object.assign(new Error(RUNTIME_SHUTDOWN_REQUIRED), {
+          code: RUNTIME_SHUTDOWN_REQUIRED, deferRetry: false,
+        });
+      }
+      await service.shutdown();
+      if (handler.pendingRuntimeShutdowns.get(service) !== cell) {
+        throw Object.assign(new Error(RUNTIME_CLEANUP_CUSTODY_CHANGED), {
+          code: RUNTIME_CLEANUP_CUSTODY_CHANGED, deferRetry: true,
+        });
+      }
+      handler.pendingRuntimeShutdowns.delete(service);
+      return true;
+    } catch (cleanup) {
+      throw cell.primary === null ? cleanup :
+        withRaftOpeningCleanupFailure(cell.primary, cleanup);
+    } finally {
+      if (cell.attempt.promise === completion.promise) cell.attempt.promise = null;
+    }
+  };
+  release().then(completion.resolve, completion.reject);
+  return completion.promise;
 }
 
 /** Continue prior release before fresh physical work; this grants no CREATE authority.
@@ -79,21 +124,20 @@ async function fenceFailedReplicaCreateRuntime(handler, replicaId, partitionId,
     }
     return pending.length > 0;
   }
-  const retainedPrimary = primary ?? handler.pendingRuntimeShutdowns.get(service)?.primary ?? null;
-  handler.pendingRuntimeShutdowns.set(service, {replicaId, partitionId, primary: retainedPrimary});
-  try {
-    if (typeof service.shutdown === 'function') {
-      await service.shutdown();
-    }
-  } catch (cleanup) {
-    throw retainedPrimary === null ? cleanup :
-      withRaftOpeningCleanupFailure(retainedPrimary, cleanup);
-  }
-  handler.pendingRuntimeShutdowns.delete(service);
-  if (handler.localServices.get(replicaId) === service) {
+  const owner = handler.replicaStateMachine;
+  const ownerIncarnation = handler.ownerIncarnation;
+  const local = handler.localReplicas.get(replicaId);
+  const tracked = handler.localServices.get(replicaId);
+  await shutdownExactReplicaRuntime(handler, replicaId, partitionId, service, primary);
+  // This includes a factory whose publication failed after partially writing
+  // maps: cleanup may remove only the exact records it originally captured.
+  if (handler.replicaStateMachine !== owner || handler.ownerIncarnation !== ownerIncarnation ||
+      handler.localReplicas.get(replicaId) !== local ||
+      handler.localServices.get(replicaId) !== tracked) return true;
+  if (tracked === service) {
     handler.localServices.delete(replicaId);
   }
-  if (handler.localReplicas.get(replicaId)?.service === service) {
+  if (local?.service === service) {
     handler.setLocalReplica(replicaId, {
       service: null,
       createAdmissionOperationId: null,
@@ -136,16 +180,13 @@ function shutdownReplicaHandler(handler, options) {
     ]);
     const errors = [];
     for (const service of services) {
+      const retained = handler.pendingRuntimeShutdowns.get(service);
+      const replicaId = retained ? retained.replicaId : service.replicaId;
+      const partitionId = retained ? retained.partitionId : service.partitionId;
       try {
-        if (typeof service.shutdown === 'function') await service.shutdown();
-        handler.pendingRuntimeShutdowns.delete(service);
+        await shutdownExactReplicaRuntime(handler, replicaId, partitionId, service);
       } catch (error) {
         appendFailure(errors, error);
-        // Even a later routing change cannot discard the failed instance.
-        if (!handler.pendingRuntimeShutdowns.has(service)) {
-          handler.pendingRuntimeShutdowns.set(service,
-            {replicaId: service.replicaId, partitionId: service.partitionId});
-        }
       }
     }
     const observationFailures = cancelParticipantAppliedPositionObservations(handler);
@@ -171,5 +212,5 @@ function shutdownReplicaHandler(handler, options) {
   return promise;
 }
 
-export {settlePendingReplicaRuntimeCleanup, fenceFailedReplicaCreateRuntime,
+export {shutdownExactReplicaRuntime, settlePendingReplicaRuntimeCleanup, fenceFailedReplicaCreateRuntime,
   shutdownReplicaHandler};

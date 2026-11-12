@@ -69,6 +69,15 @@ function createPartitionRuntimePublication({incarnation, assertSourceCurrent}) {
       return publication.state === PUBLICATION_STATE.PUBLISHED &&
         service === runtime && service.isShutdown !== true && publication.binding === binding;
     },
+    retainedPublishedBinding(service) {
+      // Cleanup retains publication provenance after serving has stopped.
+      // This read grants no new publication, admission, or routing authority.
+      if (publication.state !== PUBLICATION_STATE.PUBLISHED || service !== runtime ||
+          publication.binding !== service.runtimeBinding) {
+        throw runtimePublicationRefused(source.service_id);
+      }
+      return publication.binding;
+    },
     publish(service, binding, commit, assertCurrent) {
       this.assertCurrent(service);
       if (binding?.service !== runtime || runtime.runtimeBinding !== binding ||
