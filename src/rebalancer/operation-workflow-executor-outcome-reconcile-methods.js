@@ -1,3 +1,6 @@
+import {EXECUTOR_FAILURE_RECONCILE_STATE, buildExecutorFailureOutcomeErrorLike,
+  buildExecutorFailureReconcileEvidence, resolveExecutorFailureReconcileState} from
+  './operation-workflow-executor-failure.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
 import {
@@ -24,28 +27,8 @@ const {
   REBALANCE_COORDINATOR_EVENT,
   REBALANCE_COORDINATOR_LOG_MSG,
   WORKFLOW_STEP,
-  classifySystemPartition,
   isRetryableControlPlaneError,
 } = SHARED;
-
-const EXECUTOR_FAILURE_RECONCILE_STATE = Object.freeze({
-  DEFER_RETRY: 'defer_retry',
-  FAIL_OPERATION: 'fail_operation',
-});
-
-const EXECUTOR_FAILURE_RECONCILE_STATE_TABLE = Object.freeze([
-  Object.freeze({
-    state: EXECUTOR_FAILURE_RECONCILE_STATE.DEFER_RETRY,
-    matches: (evidence) =>
-      evidence.retryableControlPlaneFailure === true &&
-      evidence.criticalSystemPartition === true &&
-      evidence.dispatchRetryableWorkflowStep === true,
-  }),
-  Object.freeze({
-    state: EXECUTOR_FAILURE_RECONCILE_STATE.FAIL_OPERATION,
-    matches: () => true,
-  }),
-]);
 
 // CL-029: bound on consecutive lane waits in the re-drive loop (each wait
 // is a full holder execution, not a poll); past it the timed retry owns
@@ -197,50 +180,16 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
     }
   }
 
-  buildExecutorFailureOutcomeErrorLike(
-    outcome,
-    fallbackMessage,
-  ) {
-    const errorMessage =
-      outcome?.[EXECUTOR_OUTCOME_FIELD.ERROR_MESSAGE] || fallbackMessage;
-    const error = new Error(errorMessage);
-    const errorCode = outcome?.[EXECUTOR_OUTCOME_FIELD.ERROR_CODE];
-    if (typeof errorCode === 'string' && errorCode.length > 0) {
-      error.code = errorCode;
-      error.errorCode = errorCode;
-    }
-    const retryAfterMs = outcome?.[EXECUTOR_OUTCOME_FIELD.RETRY_AFTER_MS];
-    if (Number.isFinite(retryAfterMs) && retryAfterMs > 0) {
-      error.retryAfterMs = Math.floor(retryAfterMs);
-    }
-    if (outcome?.[EXECUTOR_OUTCOME_FIELD.DEFER_RETRY] === true) {
-      error.deferRetry = true;
-    }
-    return error;
+  buildExecutorFailureOutcomeErrorLike(outcome, message) {
+    return buildExecutorFailureOutcomeErrorLike(outcome, message);
   }
 
-  buildExecutorFailureReconcileEvidence(operation, errorLike) {
-    return Object.freeze({
-      criticalSystemPartition:
-        classifySystemPartition({
-          partitionId: operation?.partitionId || null,
-        }).systemTable ||
-        (operation?.entityType || operation?.entity_type) ===
-          SHARED.UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
-      dispatchRetryableWorkflowStep:
-        this.isDispatchRetryableWorkflowStep(operation),
-      retryableControlPlaneFailure:
-        isRetryableControlPlaneError(errorLike),
-    });
+  buildExecutorFailureReconcileEvidence(operation, errorLike, outcome) {
+    return buildExecutorFailureReconcileEvidence(this, operation, errorLike, outcome);
   }
 
   resolveExecutorFailureReconcileState(evidence) {
-    return (
-      EXECUTOR_FAILURE_RECONCILE_STATE_TABLE.find((entry) =>
-        entry.matches(evidence),
-      )?.state ||
-      EXECUTOR_FAILURE_RECONCILE_STATE.FAIL_OPERATION
-    );
+    return resolveExecutorFailureReconcileState(evidence);
   }
 
   resolveRemoteOwnerHandoffModeForExecutorOutcome(operation, outcome) {
@@ -703,7 +652,7 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
         errorMessage || outcomeType,
       );
       const failureState = this.resolveExecutorFailureReconcileState(
-        this.buildExecutorFailureReconcileEvidence(operation, errorLike),
+        this.buildExecutorFailureReconcileEvidence(operation, errorLike, outcome),
       );
       if (
         failureState === EXECUTOR_FAILURE_RECONCILE_STATE.DEFER_RETRY &&

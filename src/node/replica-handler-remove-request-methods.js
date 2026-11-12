@@ -1,3 +1,4 @@
+import {buildFailedRemovalOutcome} from './replica-removal-debt-errors.js';
 import {
   ReplicaOperationField,
   ReplicaOperationMessageType,
@@ -16,8 +17,10 @@ import {
   REPLICA_HANDLER_ERROR_MSG,
   REPLICA_HANDLER_LOG_MSG,
 } from './replica-handler-constants.js';
-import {REPLICA_CLEANUP_AUTHORITY_KIND} from
+import {REPLICA_CLEANUP_COMPLETION, REPLICA_CLEANUP_CONTINUATION,
+  REPLICA_CLEANUP_ERROR_CODE} from
   './replica-cleanup-constants.js';
+import {cleanupDeferredError} from './replica-cleanup-tombstone-owner.js';
 import {
   REPLICA_HANDLER_LEADER_HANDOFF_STATE,
 } from './replica-handler-leader-handoff-methods.js';
@@ -63,20 +66,6 @@ function isLaterLifecycleGeneration(row, precondition) {
   return Number.isFinite(sourceVersion) &&
     Number.isFinite(row?.state_entered_at) &&
     row.state_entered_at > sourceVersion;
-}
-
-function matchesCleanupCompletionReceipt(
-  authority,
-  replicaId,
-  partitionId,
-  nodeId,
-  cleanupToken,
-) {
-  return authority?.kind === REPLICA_CLEANUP_AUTHORITY_KIND.COMPLETE &&
-    authority.replicaId === replicaId &&
-    authority.partitionId === partitionId &&
-    authority.nodeId === nodeId &&
-    authority.ownerToken === cleanupToken;
 }
 
 function validFailedCreateCleanupRequest(
@@ -245,40 +234,6 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
         authoritativeSnapshot: true,
       }) === true;
     }
-    async hasCompletedFailedCreateCleanupReceipt(
-      request,
-      replicaId,
-      partitionId,
-    ) {
-      const precondition = request?.[
-        ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
-      ];
-      if (!hasValidFailedCreateCleanupPrecondition(precondition)) return false;
-      const cleanupToken = buildFailedCreateRemoveToken(
-        request?.[ReplicaOperationField.OPERATION_ID],
-      );
-      if (!cleanupToken) return false;
-      const owner = this.getReplicaCleanupTombstoneOwner();
-      const observation = await owner.observeReplica(replicaId);
-      if (observation.available !== true) return false;
-      if (observation.row === null) {
-        return owner.isTerminalCleanupReplicaAbsent(
-          replicaId,
-          request?.[ReplicaOperationField.OPERATION_ID],
-        );
-      }
-      const authority = await owner.observeAuthority(replicaId);
-      const matchingReceipt = matchesCleanupCompletionReceipt(
-        authority,
-        replicaId,
-        partitionId,
-        this.nodeId,
-        cleanupToken,
-      );
-      if (!matchingReceipt) return false;
-      if (!await owner.isReceiptOperationTerminal(authority)) return true;
-      return owner.release(authority, {artifactsAbsent: true});
-    }
     async answerCompletedFailedCreateCleanupReceipt(
       request,
       operationId,
@@ -288,16 +243,29 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
       const precondition = request?.[
         ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
       ];
-      if (precondition === undefined ||
-          !await this.hasCompletedFailedCreateCleanupReceipt(
-            request,
-            replicaId,
-            partitionId,
-          )) return null;
-      return this.buildReplicaOperationResponse(
-        ReplicaOperationResponseStatus.COMPLETED,
-        {operationId, replicaId, nodeId: this.nodeId},
-      );
+      if (precondition === undefined) return null;
+      const decision = await this.getReplicaCleanupTombstoneOwner().resolveFailedCreateCompletion({
+        operationId, replicaId, partitionId, nodeId: this.nodeId, precondition,
+        operationType: request[ReplicaOperationField.OPERATION_TYPE],
+        entityType: request[ReplicaOperationField.ENTITY_TYPE],
+        entityId: request[ReplicaOperationField.ENTITY_ID],
+      });
+      const fields = {operationId, replicaId, nodeId: this.nodeId};
+      switch (decision.outcome) {
+      case REPLICA_CLEANUP_COMPLETION.NOT_APPLICABLE: return null;
+      case REPLICA_CLEANUP_COMPLETION.RECEIPT_RETAINED:
+      case REPLICA_CLEANUP_COMPLETION.RECEIPT_RELEASED:
+      case REPLICA_CLEANUP_COMPLETION.TERMINAL_ABSENT:
+        return this.buildReplicaOperationResponse(ReplicaOperationResponseStatus.COMPLETED, fields);
+      default: {
+        const code = decision.outcome === REPLICA_CLEANUP_COMPLETION.IDENTITY_CONFLICT ?
+          REPLICA_CLEANUP_ERROR_CODE.CLEANUP_IDENTITY_CONFLICT :
+          REPLICA_CLEANUP_ERROR_CODE.CLEANUP_OWNER_DEFERRED;
+        const error = decision.error || cleanupDeferredError(replicaId, code);
+        return this.buildReplicaOperationResponse(ReplicaOperationResponseStatus.ERROR,
+          {...fields, ...buildFailedRemovalOutcome(replicaId, error), error: error.message});
+      }
+      }
     }
     answerMissingRemoveReplica(replica, precondition, replicaId) {
       if (replica) return null;
@@ -319,6 +287,22 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
         },
       );
     }
+
+    answerRetainedRemovalRequest(request, continuation, groupRetirement) {
+      const {operationId, partitionId, replicaId} = request;
+      if (continuation.kind === REPLICA_CLEANUP_CONTINUATION.RETAINED) {
+        if (!this.hasInProgressReplicaRemoval(replicaId)) {
+          this.trackReplicaRemovalOperation(operationId, partitionId, replicaId);
+          this.startRemoveReplicaAsync(request, groupRetirement);
+        }
+        return this.answerRemoveInProgress(replicaId);
+      }
+      return this.buildReplicaOperationResponse(ReplicaOperationResponseStatus.ERROR, {
+        error: REPLICA_HANDLER_ERROR_MSG.REMOVE_CLEANUP_PRECONDITION_REFUSED,
+        replicaId, nodeId: this.nodeId,
+      });
+    }
+
     /**
      * Handle REMOVE_REPLICA request.
      * Returns immediately with 'initiated', then does async work.
@@ -381,6 +365,13 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
       const groupRetirement = await this.verifyRemoveGroupRetirement(request);
       if (groupRetirement !== null && groupRetirement.retire !== true) {
         return this.refuseRemoveGroupRetirement(request, groupRetirement);
+      }
+      const continuation = this.getReplicaCleanupTombstoneOwner().readRemovalRequestContinuation({
+        operationId, replicaId, partitionId, nodeId: this.nodeId,
+        precondition: failedCreateCleanupPrecondition,
+      });
+      if (continuation.kind !== REPLICA_CLEANUP_CONTINUATION.UNOWNED) {
+        return this.answerRetainedRemovalRequest(request, continuation, groupRetirement);
       }
       const receiptResponse =
         await this.answerCompletedFailedCreateCleanupReceipt(
@@ -470,6 +461,7 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
           return this.buildReplicaOperationResponse(
             ReplicaOperationResponseStatus.ERROR,
             {
+              ...buildFailedRemovalOutcome(replicaId, error),
               error: error.message,
               replicaId,
               nodeId: this.nodeId,

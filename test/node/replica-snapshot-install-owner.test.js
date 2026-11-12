@@ -499,10 +499,17 @@ test('a claim while the replacement opens: the product is released before ' +
     claim: CLAIM.CLEANUP, attempt: ATTEMPT.EPISODE_CLAIMED});
   assert.equal(opened[0].shutdowns, 1, 'its release was attempted');
   assert.equal(node.held(), node.service, 'it was never registered');
-  assert.deepEqual(node.replicaHandler.pendingRuntimeShutdowns.get(opened[0]),
-    {replicaId: REPLICA_ID, partitionId: PARTITION_ID, primary: null},
-    'the unreleased product is the handler\'s to release');
-  node.replicaHandler.pendingRuntimeShutdowns.delete(opened[0]);
+  const retained = node.replicaHandler.pendingRuntimeShutdowns.get(opened[0]);
+  assert.equal(retained.replicaId, REPLICA_ID);
+  assert.equal(retained.partitionId, PARTITION_ID);
+  assert.equal(retained.primary, null);
+  assert.equal(retained.releaseInFlight, null);
+  assert.equal(retained.lastFailure, node.record().releaseFailure,
+    'quiescence retains the exact failed physical release cause');
+  await node.replicaHandler.fenceFailedReplicaCreateRuntime(
+    REPLICA_ID, PARTITION_ID, node.service);
+  assert.equal(opened[0].shutdowns, 2, 'retry reaches the same unpublished product');
+  assert.equal(node.replicaHandler.pendingRuntimeShutdowns.size, 0);
 });
 
 test('a failing create claims the episode only when it owns the replica',
@@ -643,4 +650,69 @@ test('a create does not continue with a replica that was claimed, or ' +
       {state: STATE.CLAIMED, claim: CLAIM.CLEANUP});
     return true;
   });
+});
+
+
+test('factory completion after simultaneous claims retains product before release awaits', async (t) => {
+  const node = await hostedNode(t);
+  const opening = Promise.withResolvers(); const finishOpen = Promise.withResolvers();
+  const releasing = Promise.withResolvers(); const finishRelease = Promise.withResolvers();
+  let product;
+  node.open = async (options) => {
+    product = standIn({...options, async shutdown() {
+      this.shutdowns++;
+      releasing.resolve();
+      await finishRelease.promise;
+    }});
+    opening.resolve();
+    await finishOpen.promise;
+    return product;
+  };
+  const recreating = (await stopForInstall(node)).recreate();
+  await opening.promise;
+  let settled = false;
+  const removal = node.owner.claimForRemoval(REPLICA_ID);
+  const cleanup = node.owner.claimForCleanup(REPLICA_ID).then(() => {
+    settled = true;
+  });
+  finishOpen.resolve();
+  await releasing.promise;
+  assert.equal(settled, false, 'claim settlement waits for factory continuation');
+  assert.equal(node.replicaHandler.pendingRuntimeShutdowns.has(product), true,
+    'unpublished object has custody before awaiting shutdown');
+  assert.equal(node.held(), node.service, 'late product cannot publish');
+  finishRelease.resolve();
+  assert.equal(await removal, node.service, 'removal retains predecessor for consensus exit');
+  await cleanup;
+  await recreating;
+  assert.equal(product.shutdowns, 1, 'claimants do not duplicate release');
+  assert.equal(node.replicaHandler.pendingRuntimeShutdowns.size, 0);
+});
+
+test('failed unpublished product must release before recreation opens again', async (t) => {
+  let opens = 0;
+  let fail = true;
+  let product;
+  const node = await hostedNode(t, async () => {
+    opens++;
+    product = standIn({async shutdown() {
+      if (fail) throw new Error('retained product still open');
+      this.isShutdown = true;
+    }});
+    return product;
+  });
+  const register = node.replicaHandler.replaceLocalReplicaService;
+  node.replicaHandler.replaceLocalReplicaService = () => {
+    throw new Error('registration refused');
+  };
+  const episode = await stopForInstall(node);
+  await episode.recreate();
+  node.replicaHandler.replaceLocalReplicaService = register;
+  await episode.recreate();
+  assert.equal(opens, 1, 'retained release debt forbids another acquisition');
+  assert.equal(node.replicaHandler.pendingRuntimeShutdowns.has(product), true);
+  fail = false;
+  await episode.recreate();
+  assert.equal(opens, 2);
+  assert.equal(node.record().state, STATE.RUNNING);
 });

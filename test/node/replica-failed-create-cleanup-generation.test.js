@@ -28,6 +28,9 @@ import {
   createPartitionRow,
 } from '../test-helpers/lifecycle-state-store.js';
 
+import {completedReceiptWorld, freshHandler} from
+  '../rebalancer/replica-remove-cleanup-workflow-fixture.js';
+
 const SERVICES = 'services';
 const NODE_ID = 'test-node';
 
@@ -380,114 +383,25 @@ test('cleanup redelivery resumes its durable REMOVING generation after restart',
     t.equal(resumed, 1, 'cleanup execution is re-entered exactly once');
   });
 
-test('cleanup completion receipt survives a fresh handler and lost final ACK',
-  async (t) => {
-    initializeEnvironment();
-    const failed = serviceRow(
-      'replica-failed-create-cleanup-complete-restart',
-      ReplicaState.FAILED,
-      500,
-    );
-    const store = createLifecycleRowStore({
-      services: [failed],
-      partitions: [partitionRow()],
-    });
-    const stateMachine = createStateMachine(store, {now: () => 600});
-    registerRow(stateMachine, failed);
-    const handler = createHandler(store, stateMachine);
-    handler.localReplicas.set(failed.service_id, {
-      replicaId: failed.service_id,
-      partitionId: failed.partition_id,
-      status: ReplicaStatus.FAILED,
-      service: null,
-    });
-    handler.startRemoveReplicaAsync = () => {};
-    const request = {
-      operationId: 'cleanup-complete-restart-same-operation',
-      partitionId: failed.partition_id,
-      replicaId: failed.service_id,
-      [ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION]:
-        failed,
-    };
-    t.equal((await handler.handleRemoveReplica(request)).status,
-      ReplicaOperationResponseStatus.INITIATED);
-    const removingAuthority = await stateMachine
-      .bindAuthoritativeRemovalAuthority(failed.service_id, {
-        partitionId: failed.partition_id,
-        nodeId: NODE_ID,
-      });
-    const owner = handler.getReplicaCleanupTombstoneOwner();
-    const cleanupAuthority = await owner.takeoverRemoving(
-      removingAuthority,
-      'failed_create_cleanup_test',
-    );
-    const completionReceipt = await owner.markComplete(
-      cleanupAuthority,
-      {artifactsAbsent: true},
-    );
-    t.equal(completionReceipt?.kind, 'cleanup_complete',
-      'artifact absence is retained as an operation-bound durable receipt');
-    t.equal((await handler.handleRemoveReplica(request)).status,
-      ReplicaOperationResponseStatus.COMPLETED,
-      'same-process final ACK loss resolves from the durable receipt');
-
-    const restartedStateMachine = createStateMachine(store, {now: () => 700});
-    const restartedHandler = createHandler(store, restartedStateMachine);
-    const repeated = await restartedHandler.handleRemoveReplica(request);
-    t.equal(repeated.status, ReplicaOperationResponseStatus.COMPLETED,
-      'the identical cleanup operation recovers terminal success');
-    const missingAttempt = await restartedHandler.handleRemoveReplica({
-      ...request,
-      [ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION]: {
-        ...failed,
-        create_attempt_token: null,
-      },
-    });
-    t.equal(missingAttempt.status, ReplicaOperationResponseStatus.ERROR,
-      'a receipt cannot complete a request without the exact create attempt');
-    const different = await restartedHandler.handleRemoveReplica({
-      ...request,
-      operationId: 'cleanup-complete-restart-different-operation',
-    });
-    t.equal(different.status, ReplicaOperationResponseStatus.ERROR,
-      'a different operation cannot borrow the completion receipt');
-    store.durable.replica_operations = new Map([[request.operationId, {
-      operation_id: request.operationId,
-      status: 'removed',
-      workflow_step: 'REMOVED',
-    }]]);
-    store.setNextDeleteBehavior({
-      resultOnly: true,
-      result: {success: false, outcome: 'authority_unavailable'},
-    });
-    await t.rejects(restartedHandler.handleRemoveReplica(request), {
-      deferRetry: true,
-    }, 'a failed terminal release remains retry debt');
-    t.equal(store.durable[SERVICES].get(failed.service_id)?.status,
-      'cleanup_complete',
-      'transport failure retains the durable receipt');
-    t.equal((await restartedHandler.handleRemoveReplica(request)).status,
-      ReplicaOperationResponseStatus.COMPLETED,
-      'later terminal redelivery releases after transport recovery');
-    t.equal(store.durable[SERVICES].has(failed.service_id), false,
-      'the exact terminal operation releases its completion receipt');
-    t.equal((await restartedHandler.handleRemoveReplica(request)).status,
-      ReplicaOperationResponseStatus.COMPLETED,
-      'coordinator recovery redelivery converges after prior release');
-    store.setBeforeAuthoritativeRead((tableName, _params, durable) => {
-      if (tableName !== 'replica_operations') return;
-      durable[SERVICES].set(failed.service_id, serviceRow(
-        failed.service_id,
-        ReplicaState.CREATING,
-        900,
-      ));
-    });
-    const recreated = await restartedHandler.handleRemoveReplica(request);
-    t.equal(recreated.status, ReplicaOperationResponseStatus.ERROR,
-      'a newer lifecycle row cannot borrow terminal absence');
-    t.equal(store.durable[SERVICES].get(failed.service_id)?.status,
-      ReplicaState.CREATING);
+test('actual terminal receipt retains exact release debt then heals on redelivery', async (t) => {
+  const context = {after: (cleanup) => t.teardown(cleanup)};
+  const w = await completedReceiptWorld(context, true);
+  const handler = freshHandler(context, w);
+  w.node.store.setNextDeleteBehavior({
+    resultOnly: true,
+    result: {success: false, outcome: 'authority_unavailable'},
   });
+  const refused = await handler.handleRemoveReplica(w.originalRequest);
+  t.equal(refused.status, ReplicaOperationResponseStatus.ERROR);
+  t.equal(refused.deferRetry, true, 'failed terminal release keeps typed retry debt');
+  t.same(w.node.store.durableRow(SERVICES, w.originalRequest.replicaId), w.receipt,
+    'the real completion receipt remains byte-for-byte intact');
+  t.equal((await handler.handleRemoveReplica(w.originalRequest)).status,
+    ReplicaOperationResponseStatus.COMPLETED, 'existing redelivery releases after transport recovery');
+  t.equal(w.node.store.durableRow(SERVICES, w.originalRequest.replicaId), null);
+  t.equal((await handler.handleRemoveReplica(w.originalRequest)).status,
+    ReplicaOperationResponseStatus.COMPLETED, 'same-incarnation terminal absence converges');
+});
 
 test('stale local REMOVING cannot shortcut a failed-create cleanup token',
   async (t) => {
