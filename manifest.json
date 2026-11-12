@@ -1,0 +1,351 @@
+{
+  "stamp": "20261112T092600Z",
+  "scope": "36 takeover and handover worktrees; tracked plus nonignored untracked; ignored evidence archived separately",
+  "snapshots": [
+    {
+      "path": "/mnt/data/peter/projects/lagrange",
+      "head": "103f132c13268321445369d3b4c1183ca2c39c66",
+      "originalIndexSha256": "c61d4bc04df3b12694be37839b1efcee275bd7f257dd0ac213b43ec3aee2a8c8",
+      "stagedTree": "d4aa3e4e90822628aeb95bc95496e62cef9f0e87",
+      "workingTree": "7bc658c3512111ba446b30b1440cbc5d8e59d0d8",
+      "commit": "f1c38089f957b28a3d0b4e6b3e9b28c897d55aee",
+      "ref": "refs/heads/wip/preserve-20261112T092600Z/lagrange"
+    },
+    {
+      "path": "/mnt/data/peter/projects/lagrange-checkpoint-epoch",
+      "head": "da5eb99bdc2893d1dd245d25a68d789490571c91",
+      "originalIndexSha256": "1a2da8996b910c5e72d682b940f74ed37bcb685a0f1e8824d2cd4f19ba12fb6c",
+      "stagedTree": "7689e8691353b8516bfae21c8b0baaeef35f6ea3",
+      "workingTree": "f2bb00c442cbabcaefd449ba32cfe2a8f569c9f2",
+      "commit": "b16f4c62655f524dedd9ebfb94604df8428ab4fb",
+      "ref": "refs/heads/wip/preserve-20261112T092600Z/lagrange-checkpoint-epoch"
+    },
+    {
+      "path": "/mnt/data/peter/projects/lagrange-codex-admin-elapsed-20261112",
+      "head": "99fd5e781db086647794a5eae8a939a4d7775749",
+      "originalIndexSha256": "84b254179a72df89a21b1243fbfc2bd2f443465460a73f95f9de253bd890c0ee",
+      "stagedTree": "3fbf71c83dbab592f81ff762f8e1e3c52f7a7599",
+      "workingTree": "3fbf71c83dbab592f81ff762f8e1e3c52f7a7599",
+      "commit": "99fd5e781db086647794a5eae8a939a4d7775749",
+      "ref": "refs/heads/wip/preserve-20261112T092600Z/lagrange-codex-admin-elapsed-20261112"
+    },
+    {
+      "path": "/mnt/data/peter/projects/lagrange-codex-cdc-complexity-20261112",
+      "head": "3d3295afe7765554d7dacb2da108c3ea19f3b7fe",
+      "originalIndexSha256": "1e87b529316874f53b3cf06d618ed3fd5e8b3d0489d783d8a517a49adc0e045e",
+      "stagedTree": "21f2517cd51b17715150dd063cb28a7373b38f94",
+      "workingTree": "b97bc0714355a9a3a719d96895fc3321d621c45a",
+      "commit": "997664bd408938cf0fa3e44da3a10c56961e51c4",
+      "ref": "refs/heads/wip/preserve-20261112T092600Z/lagrange-codex-cdc-complexity-20261112"
+    },
+    {
+      "path": "/mnt/data/peter/projects/lagrange-codex-cdc-diagnosis-20261112",
+      "head": "01615acfa4b11ffa4026d981d4e30c0ccc29de09",
+      "originalIndexSha256": "a90e6d709813ce686027be2d7ef33cf262f0c3f8fd86414fc30e9ca08439c4c3",
+      "stagedTree": "0fb3a6cc0297aebbb30b5531df3925b58985b7fd",
+      "workingTree": "0fb3a6cc0297aebbb30b5531df3925b58985b7fd",
+      "commit": "01615acfa4b11ffa4026d981d4e30c0ccc29de09",
+      "ref": "refs/heads/wip/preserve-20261112T092600Z/lagrange-codex-cdc-diagnosis-20261112"
+    },
+    {
+      "path": "/mnt/data/peter/projects/lagrange-codex-cdc-setup-phases-20261112",
+      "head": "286fdcec2716f0363e0d5793098929ebe4994570",
+      "originalIndexSha256": "fa650beb79f85f720bf578184d900c55be96e51f892890a5361b043ac2666ce6",
+      "stagedTree": "62e7936fb902a4df91978299b1d1e57c342dce24",
+      "workingTree": "62e7936fb902a4df91978299b1d1e57c342dce24",
+      "commit": "286fdcec2716f0363e0d5793098929ebe4994570",
+      "ref": "refs/heads/wip/preserve-20261112T092600Z/lagrange-codex-cdc-setup-phases-20261112"
+    },
+    {
+      "path": "/mnt/data/peter/projects/lagrange-codex-checkpoint-20261112",
+      "head": "402253be1e371fd1090432d8e6117c5101c15efb",
+      "originalIndexSha256": "85335b55909c1ceef5bb00b0c1b2c53ad76e6736a1366ed26f32b4ae3f49ecbf",
+      "stagedTree": "f2bb00c442cbabcaefd449ba32cfe2a8f569c9f2",
+      "workingTree": "7dd122abba05f350a8fb1be3c70ad0fc7beacb32",
+      "commit": "e114cba6f239428001a0226d1352729fba96625a",
+      "ref": "refs/heads/wip/preserve-20261112T092600Z/lagrange-codex-checkpoint-20261112"
+    },
+    {
+      "path": "/mnt/data/peter/projects/lagrange-codex-checkpoint-continuation-repair-20261112",
+      "head": "402253be1e371fd1090432d8e6117c5101c15efb",
+      "originalIndexSha256": "51799ef1f999ca4d79ba8391888c2f74588072f350bda704e56c45ef85979d2a",
+      "stagedTree": "f2bb00c442cbabcaefd449ba32cfe2a8f569c9f2",
+      "workingTree": "441610de0f552f564461091ee2b540cc868781cb",
+      "commit": "6982f5a6186e536f1cf1087c529e9959e907f533",
+      "ref": "refs/heads/wip/preserve-20261112T092600Z/lagrange-codex-checkpoint-continuation-repair-20261112"
+    },
+    {
+      "path": "/mnt/data/peter/projects/lagrange-codex-checkpoint-marker-20261112",
+      "head": "402253be1e371fd1090432d8e6117c5101c15efb",
+      "originalIndexSha256": "2c97dbb873f4c0a2431d04275141eab7908c0664c81b466383713159255251c1",
+      "stagedTree": "f2bb00c442cbabcaefd449ba32cfe2a8f569c9f2",
+      "workingTree": "5193eb4b8edbce90438056c7864d6cbec3c2e89a",
+      "commit": "286a2a916799f78e0ca5b490f447bfaf31c727f3",
+      "ref": "refs/heads/wip/preserve-20261112T092600Z/lagrange-codex-checkpoint-marker-20261112"
+    },
+    {
+      "path": "/mnt/data/peter/projects/lagrange-codex-clock-fixture-20261112",
+      "head": "edba1fd47aa857df3055187252b697e2734b457d",
+      "originalIndexSha256": "75c4fbd5e1b09542809c7e17a4e70428f2bb19cd07f37b9758f00f4fddde7d4b",
+      "stagedTree": "427f8dd66e2d536103f6380b57e43ea01ca465c9",
+      "workingTree": "427f8dd66e2d536103f6380b57e43ea01ca465c9",
+      "commit": "edba1fd47aa857df3055187252b697e2734b457d",
+      "ref": "refs/heads/wip/preserve-20261112T092600Z/lagrange-codex-clock-fixture-20261112"
+    },
+    {
+      "path": "/mnt/data/peter/projects/lagrange-codex-f-compose-20261112",
+      "head": "aed5cba289b79a56560009d80693cfc0221521bc",
+      "originalIndexSha256": "3698c587ab0885b6e33a143907b5b59d221edb4c05c922966c328cf03e8a4663",
+      "stagedTree": "b8f0f6474fa013c8393460fa54e40a5be4793ea5",
+      "workingTree": "b8f0f6474fa013c8393460fa54e40a5be4793ea5",
+      "commit": "aed5cba289b79a56560009d80693cfc0221521bc",
+      "ref": "refs/heads/wip/preserve-20261112T092600Z/lagrange-codex-f-compose-20261112"
+    },
+    {
+      "path": "/mnt/data/peter/projects/lagrange-codex-foreground-trace-20261112",
+      "head": "be9d4c15fa599abb572f6f5e08ae11ff1d9c329c",
+      "originalIndexSha256": "0599f529e5954e43910b9977958e36686d28e43ec04eecf05075f0e4118a11f0",
+      "stagedTree": "ed6a891bd7817b9e29c6b7f8333cd1759cc3570e",
+      "workingTree": "ed6a891bd7817b9e29c6b7f8333cd1759cc3570e",
+      "commit": "be9d4c15fa599abb572f6f5e08ae11ff1d9c329c",
+      "ref": "refs/heads/wip/preserve-20261112T092600Z/lagrange-codex-foreground-trace-20261112"
+    },
+    {
+      "path": "/mnt/data/peter/projects/lagrange-codex-lab-fixtures-20261112",
+      "head": "525517350494e17b20b40f68ea3b5fe109b841f2",
+      "originalIndexSha256": "507401c70b23f1d3ea0735c7c22979a2944cb7e63b550f60df099f87848840c4",
+      "stagedTree": "5bc9ba82d789dc57e72d6780cd1e2f6d924e9a4a",
+      "workingTree": "5bc9ba82d789dc57e72d6780cd1e2f6d924e9a4a",
+      "commit": "525517350494e17b20b40f68ea3b5fe109b841f2",
+      "ref": "refs/heads/wip/preserve-20261112T092600Z/lagrange-codex-lab-fixtures-20261112"
+    },
+    {
+      "path": "/mnt/data/peter/projects/lagrange-codex-lifecycle-observation-20261112",
+      "head": "5e58474b13870c95ea6bd6175942c33984cd6ac9",
+      "originalIndexSha256": "e6634733aa26319cf9d9308a0ff781803ead7de859c94f80dac73f94efe95394",
+      "stagedTree": "1997459cd8188b7bc9a41742e68f9435a273a5c7",
+      "workingTree": "d1676679ad6241f11aa19d946e958f64f3db7765",
+      "commit": "b1e3fabf1d2d088c2c7372935456603d47a4d2c6",
+      "ref": "refs/heads/wip/preserve-20261112T092600Z/lagrange-codex-lifecycle-observation-20261112"
+    },
+    {
+      "path": "/mnt/data/peter/projects/lagrange-codex-npm-copy-feasibility-20261112",
+      "head": "5e58474b13870c95ea6bd6175942c33984cd6ac9",
+      "originalIndexSha256": "3bf10e23b1c7603781dee1d607b89be200ea9ce3f1805bcfaa80966e352caa9b",
+      "stagedTree": "1997459cd8188b7bc9a41742e68f9435a273a5c7",
+      "workingTree": "3177e15a6bbcc587a3ba9e9c76f16bbe4d3c2b62",
+      "commit": "2f2b1c5664086ef9f0a41483d6cfe15d239b0186",
+      "ref": "refs/heads/wip/preserve-20261112T092600Z/lagrange-codex-npm-copy-feasibility-20261112"
+    },
+    {
+      "path": "/mnt/data/peter/projects/lagrange-codex-npm-staging-20261112",
+      "head": "5e58474b13870c95ea6bd6175942c33984cd6ac9",
+      "originalIndexSha256": "2a22526c32f5d048601ba05a92ef2370a4dc8d64b2e391ac532b5fa119b3ed2e",
+      "stagedTree": "1997459cd8188b7bc9a41742e68f9435a273a5c7",
+      "workingTree": "87085a0e54ac0939a88c59665be45d714a794ca1",
+      "commit": "fa50543dc8f75d8001114cd78dddf7353de0b401",
+      "ref": "refs/heads/wip/preserve-20261112T092600Z/lagrange-codex-npm-staging-20261112"
+    },
+    {
+      "path": "/mnt/data/peter/projects/lagrange-codex-permission-witness-20261112",
+      "head": "eacbfe6a3ee02f22951ed7b833c75bf217d1ce80",
+      "originalIndexSha256": "76201e0df157195b617ff09b6415f110e75c8f7c35e65f4de561a7cb02fe5343",
+      "stagedTree": "5b7b44e5d37edd0820f9a4a5829798184cc4f7a2",
+      "workingTree": "5b7b44e5d37edd0820f9a4a5829798184cc4f7a2",
+      "commit": "eacbfe6a3ee02f22951ed7b833c75bf217d1ce80",
+      "ref": "refs/heads/wip/preserve-20261112T092600Z/lagrange-codex-permission-witness-20261112"
+    },
+    {
+      "path": "/mnt/data/peter/projects/lagrange-codex-retained-reference-20261112",
+      "head": "fbf3f3d11498878ef1389f2a8680354488db96b1",
+      "originalIndexSha256": "cfa862f92be29b963bd0f5c00039cf3e22d899b1683615f87262cde3dd1eca9f",
+      "stagedTree": "e507c302ee1454a534fb9a202f3d2f785d50b0af",
+      "workingTree": "e507c302ee1454a534fb9a202f3d2f785d50b0af",
+      "commit": "fbf3f3d11498878ef1389f2a8680354488db96b1",
+      "ref": "refs/heads/wip/preserve-20261112T092600Z/lagrange-codex-retained-reference-20261112"
+    },
+    {
+      "path": "/mnt/data/peter/projects/lagrange-codex-role-decoder-20261112",
+      "head": "eaccbd37a2794e6afbc46f4eb9d5434cc6a9802e",
+      "originalIndexSha256": "3e3a34698792f357670e828f0d7e030f242d3ea5ca7ae101dca794ba9985a310",
+      "stagedTree": "824cabd5a483e66c8d6eeb4283eebf733a2f34d5",
+      "workingTree": "dd29dae14612ed8d56546136c0c2481e4b904a5b",
+      "commit": "1360e24cb28d2a99e3120a47a124ac0041e2b9b2",
+      "ref": "refs/heads/wip/preserve-20261112T092600Z/lagrange-codex-role-decoder-20261112"
+    },
+    {
+      "path": "/mnt/data/peter/projects/lagrange-codex-statement-owner-20261112",
+      "head": "1b51362e0f7af24a5e373b8a57619d4cf13ec706",
+      "originalIndexSha256": "842d00332f1b89400f2ae07473d44ac3906010b127c16269185c82d3f9ce7a58",
+      "stagedTree": "ca1b6ce35085a6a1c060c250679f3e6ed6cde032",
+      "workingTree": "dc79af61ef7d4b6a4ad970dd404e72d6f68579fa",
+      "commit": "69921fdca157878f261d0a176b59ea1457a8c530",
+      "ref": "refs/heads/wip/preserve-20261112T092600Z/lagrange-codex-statement-owner-20261112"
+    },
+    {
+      "path": "/mnt/data/peter/projects/lagrange-codex-takeover-fixes-20261112",
+      "head": "42670d6170314dbb38719b9cccd8bc153aa79332",
+      "originalIndexSha256": "1d385254e6be1bfc5c4618442058bdd5c46980573fe35eb318d11e0c08460d31",
+      "stagedTree": "27c60aae21b4296df76d79bca4d0635f4e813001",
+      "workingTree": "27c60aae21b4296df76d79bca4d0635f4e813001",
+      "commit": "42670d6170314dbb38719b9cccd8bc153aa79332",
+      "ref": "refs/heads/wip/preserve-20261112T092600Z/lagrange-codex-takeover-fixes-20261112"
+    },
+    {
+      "path": "/mnt/data/peter/projects/lagrange-codex-tx1-design-retention-20261112",
+      "head": "47ade1897b6fc5877081d835ce882e95f9eb142a",
+      "originalIndexSha256": "5bb44558b1a787c3c72d341c7ddcbcc738be3957a3a3c8bd7752e8fd1a25a37a",
+      "stagedTree": "a69b7a453f967c90a3ea3e5fa3d03fbe88e52278",
+      "workingTree": "a69b7a453f967c90a3ea3e5fa3d03fbe88e52278",
+      "commit": "47ade1897b6fc5877081d835ce882e95f9eb142a",
+      "ref": "refs/heads/wip/preserve-20261112T092600Z/lagrange-codex-tx1-design-retention-20261112"
+    },
+    {
+      "path": "/mnt/data/peter/projects/lagrange-unit-a",
+      "head": "512ab8e8ccc21d619934d963d1c1b5fe99305179",
+      "originalIndexSha256": "fe7c065c525736fd6803d2f96e8070fca95c5089d4a3d12349d0093dd0e53a54",
+      "stagedTree": "e2340c111944402d79e700055dfed12cd838c020",
+      "workingTree": "e2340c111944402d79e700055dfed12cd838c020",
+      "commit": "512ab8e8ccc21d619934d963d1c1b5fe99305179",
+      "ref": "refs/heads/wip/preserve-20261112T092600Z/lagrange-unit-a"
+    },
+    {
+      "path": "/mnt/data/peter/projects/lagrange-unit-b",
+      "head": "3db61f1890b4890a0f23f1b6b744b000af773bbc",
+      "originalIndexSha256": "7a7c4ceda44fd2d3fb05e376bc92184cd5adf591a2f58ebbc90e76210a8b43ea",
+      "stagedTree": "b4802eea7cc4c804eac64c10426fd22e8e566f45",
+      "workingTree": "b4802eea7cc4c804eac64c10426fd22e8e566f45",
+      "commit": "3db61f1890b4890a0f23f1b6b744b000af773bbc",
+      "ref": "refs/heads/wip/preserve-20261112T092600Z/lagrange-unit-b"
+    },
+    {
+      "path": "/mnt/data/peter/projects/lagrange-unit-c",
+      "head": "71a109f7091afa4fd40f260f2e1bc63d6061a9b7",
+      "originalIndexSha256": "9eed95cc8e88ae53a30c89f7ee09a883d8ffd4c347ec95a00eebc76d89be7ff5",
+      "stagedTree": "ed7ecd919333b76db77227084d965ad78bbce315",
+      "workingTree": "ed7ecd919333b76db77227084d965ad78bbce315",
+      "commit": "71a109f7091afa4fd40f260f2e1bc63d6061a9b7",
+      "ref": "refs/heads/wip/preserve-20261112T092600Z/lagrange-unit-c"
+    },
+    {
+      "path": "/mnt/data/peter/projects/lagrange-unit-d",
+      "head": "84fdd682f40863d5c7ac2fa718f9e80733440def",
+      "originalIndexSha256": "967c147a4d393e83d1fbb2e19b521e283bd66b13cae283801073d969d90a6ca8",
+      "stagedTree": "8c0f343aeeba6879fe681a4cb62f72958d520769",
+      "workingTree": "8c0f343aeeba6879fe681a4cb62f72958d520769",
+      "commit": "84fdd682f40863d5c7ac2fa718f9e80733440def",
+      "ref": "refs/heads/wip/preserve-20261112T092600Z/lagrange-unit-d"
+    },
+    {
+      "path": "/mnt/data/peter/projects/lagrange-unit-e",
+      "head": "f11410ef767fd3690fa31876a23b0d1ee07824db",
+      "originalIndexSha256": "608e6848546b6643ad014437bd034abe5019d7a9ec944a3832f34dabd688f4f0",
+      "stagedTree": "b78927e7a7c802050cd9ef291b09c923aee15b4f",
+      "workingTree": "b78927e7a7c802050cd9ef291b09c923aee15b4f",
+      "commit": "f11410ef767fd3690fa31876a23b0d1ee07824db",
+      "ref": "refs/heads/wip/preserve-20261112T092600Z/lagrange-unit-e"
+    },
+    {
+      "path": "/mnt/data/peter/projects/lagrange-unit-f",
+      "head": "3ce07ba541407a3b604dce4f7e0659baac67fc4e",
+      "originalIndexSha256": "39f56e4bd81a256718570e886f84c94effa90f5b4161e1d8d08d7d3927a0f837",
+      "stagedTree": "0c2e8f74e64180454ef546504cf48e2a4c36987a",
+      "workingTree": "0c2e8f74e64180454ef546504cf48e2a4c36987a",
+      "commit": "3ce07ba541407a3b604dce4f7e0659baac67fc4e",
+      "ref": "refs/heads/wip/preserve-20261112T092600Z/lagrange-unit-f"
+    },
+    {
+      "path": "/mnt/data/peter/projects/lagrange-unit-g",
+      "head": "0eeaca1274bd71e2f8df945ec2afafb42ca38d1a",
+      "originalIndexSha256": "a7d550df1186fd00f017080608235bff89072e4e0033e63c87bf704e6437c6a9",
+      "stagedTree": "0319ce5b02ee8012fa0cf0ab1cc23f5b19549657",
+      "workingTree": "0319ce5b02ee8012fa0cf0ab1cc23f5b19549657",
+      "commit": "0eeaca1274bd71e2f8df945ec2afafb42ca38d1a",
+      "ref": "refs/heads/wip/preserve-20261112T092600Z/lagrange-unit-g"
+    },
+    {
+      "path": "/mnt/data/peter/projects/lagrange-unit-h",
+      "head": "707200bc7be1f158a3ba5b19060613b05575e41d",
+      "originalIndexSha256": "8de9828bd9c4cc8900f32ea21b864b2ec7cd8e66e412fc5e39a982acc64303ad",
+      "stagedTree": "9b22d40481419c3911fc40b5362203c53bc2359d",
+      "workingTree": "9b22d40481419c3911fc40b5362203c53bc2359d",
+      "commit": "707200bc7be1f158a3ba5b19060613b05575e41d",
+      "ref": "refs/heads/wip/preserve-20261112T092600Z/lagrange-unit-h"
+    },
+    {
+      "path": "/mnt/data/peter/projects/lagrange-unit-i",
+      "head": "10c4d05fa978f28e95c2d3790c27f9d3cb830b15",
+      "originalIndexSha256": "fe6ea96049cbc3e4660a9a885c789e2c8bf242157188fa8a9fc9f4bd0a217d10",
+      "stagedTree": "6e9bb120a4fb3f837c735ad48b467a08a464d8c3",
+      "workingTree": "6e9bb120a4fb3f837c735ad48b467a08a464d8c3",
+      "commit": "10c4d05fa978f28e95c2d3790c27f9d3cb830b15",
+      "ref": "refs/heads/wip/preserve-20261112T092600Z/lagrange-unit-i"
+    },
+    {
+      "path": "/mnt/data/peter/projects/lagrange-unit-j",
+      "head": "86921144c533a9130498aaf3f27e125c1339f63e",
+      "originalIndexSha256": "a12a6ce48b6accb3199de6347d51fa6e834cb6d3a7d8261293f6af80721be954",
+      "stagedTree": "d244df7304a1f79d158745774e70767b912b8f66",
+      "workingTree": "d244df7304a1f79d158745774e70767b912b8f66",
+      "commit": "86921144c533a9130498aaf3f27e125c1339f63e",
+      "ref": "refs/heads/wip/preserve-20261112T092600Z/lagrange-unit-j"
+    },
+    {
+      "path": "/mnt/data/peter/projects/lagrange-unit-k",
+      "head": "a407514fb282ea0005a65f1ddb1bff79ba8ff12f",
+      "originalIndexSha256": "92a3f4d01b57074feaa870f9b94c4b3939ac9cd62a790a1bb55b93e881eebd5b",
+      "stagedTree": "afd6b4a7f8ac56f2cd70b8e9d02a1e9a34ca8bc4",
+      "workingTree": "afd6b4a7f8ac56f2cd70b8e9d02a1e9a34ca8bc4",
+      "commit": "a407514fb282ea0005a65f1ddb1bff79ba8ff12f",
+      "ref": "refs/heads/wip/preserve-20261112T092600Z/lagrange-unit-k"
+    },
+    {
+      "path": "/mnt/data/peter/projects/lagrange-unit-l",
+      "head": "1fa498c86f378961a9d2068bef1a0c1ce6f36d3e",
+      "originalIndexSha256": "71e6da4edc2166b0ffff151cabf2f4ce346832b20435664276bbfe5b0a7d93ef",
+      "stagedTree": "6ed9dfe37e8d353291c340237fe336223cf75272",
+      "workingTree": "6ed9dfe37e8d353291c340237fe336223cf75272",
+      "commit": "1fa498c86f378961a9d2068bef1a0c1ce6f36d3e",
+      "ref": "refs/heads/wip/preserve-20261112T092600Z/lagrange-unit-l"
+    },
+    {
+      "path": "/mnt/data/peter/projects/lagrange-unit-m",
+      "head": "8d45e79c39a3c57d8469afab01ea94dc1d9d256a",
+      "originalIndexSha256": "e639bd51fe02b1974d324150c418484335012015beefffc15472c9874384aa12",
+      "stagedTree": "81a49ed8de3356f597c851b2471bc11f6445d028",
+      "workingTree": "81a49ed8de3356f597c851b2471bc11f6445d028",
+      "commit": "8d45e79c39a3c57d8469afab01ea94dc1d9d256a",
+      "ref": "refs/heads/wip/preserve-20261112T092600Z/lagrange-unit-m"
+    },
+    {
+      "path": "/mnt/data/peter/projects/lagrange-wip-lab",
+      "head": "fa70987b2833031ffe6054a9b12ee86bbb71d52c",
+      "originalIndexSha256": "3684b1951bdb507bed71b54918d91bb5fe190217e2a6dfa9b0e018193abd2d27",
+      "stagedTree": "7be30779d90365a5b4f0e52802d45316338389d4",
+      "workingTree": "7be30779d90365a5b4f0e52802d45316338389d4",
+      "commit": "fa70987b2833031ffe6054a9b12ee86bbb71d52c",
+      "ref": "refs/heads/wip/preserve-20261112T092600Z/lagrange-wip-lab"
+    }
+  ],
+  "evidenceArchives": [
+    {
+      "sha256": "cf2f201ee55f9533a9b82cb059169e204f1e6df11678bf70a02af01f2def230a",
+      "bytes": 144360389,
+      "asset": "fresh-formation-user-table-routability--lagrange-all-wip-evidence-20261112.tar.gz",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--lagrange-all-wip-evidence-20261112.tar.gz"
+    },
+    {
+      "sha256": "c586e851abc5dfc7a706d1a1f9ba2c92c66aa629a3e41d44d1278938726c10f2",
+      "bytes": 403022205,
+      "asset": "fresh-formation-user-table-routability--lagrange-npm-wip-evidence-20261112.tar.gz",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--lagrange-npm-wip-evidence-20261112.tar.gz"
+    },
+    {
+      "sha256": "44a1fba7b6e147fb6ec7f4d43af8c1fbf161e021af892b0bd384882543a6bb33",
+      "bytes": 513563,
+      "asset": "fresh-formation-user-table-routability--lagrange-wip-causal-diagnostics-20261112.tar.gz",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--lagrange-wip-causal-diagnostics-20261112.tar.gz"
+    }
+  ],
+  "preservedOriginalHeadsAndIndexes": true
+}
