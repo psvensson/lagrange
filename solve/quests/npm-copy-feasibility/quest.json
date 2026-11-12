@@ -1,0 +1,40 @@
+{
+  "schema": "solve-quest/2",
+  "id": "npm-copy-feasibility",
+  "class": "fix",
+  "statement": "On immutable source 5e58474b13870c95ea6bd6175942c33984cd6ac9, determine whether one shared nine-entry ESM graph using native copy-loader imports at canonical raw paths preserves the existing nested entry layout, raw closure and assets within unchanged actual tar budgets. Retain two-root measurements, named negative controls and independent review of a new diagnostic packet. A graph refusal is a valid measured negative outcome; runtime identity, import order, provenance, sourceDigest, delivery and release remain NOT_MEASURED.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/npm-copy-feasibility-evidence.js",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "unchanged-budgets",
+      "statement": "Keep 2100 entries, 8388608 packed bytes and 26214400 unpacked bytes; never infer acceptance from sizes."
+    },
+    {
+      "id": "canonical-copy",
+      "statement": "Preserve all canonical raw/asset/vendor paths and bytes, prove dedicated same-path raw copy attribution and forbid raw body attribution in generated JavaScript."
+    },
+    {
+      "id": "bounded-evidence",
+      "statement": "The measuring probe reads only this compact packet. Bulky evidence stays under fresh /tmp roots; reuse the verified baseline tar without rerunning its producer."
+    },
+    {
+      "id": "independent-review",
+      "statement": "Freeze PRE-RUN candidate and controls for coordinator independent approval before one fullgraph pair. Never self-approve or mark solved/land."
+    },
+    {
+      "id": "first-failure",
+      "statement": "Preserve first unexpected validation failure and stop for Astra without Sol repair or retry."
+    },
+    {
+      "id": "scope",
+      "statement": "Only the three new copy diagnostic JS files and this Quest may change. No production, integration, old r2, install, network, commit, push, publish or lab changes."
+    }
+  ],
+  "sealedAt": "5e58474b13870c95ea6bd6175942c33984cd6ac9"
+}

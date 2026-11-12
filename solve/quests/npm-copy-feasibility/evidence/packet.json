@@ -1,0 +1,357 @@
+{
+  "schema": "npm-copy-feasibility/1",
+  "source": "5e58474b13870c95ea6bd6175942c33984cd6ac9",
+  "limits": {
+    "entries": 2100,
+    "packed": 8388608,
+    "unpacked": 26214400
+  },
+  "ceiling": {
+    "runtimeIdentity": "NOT_MEASURED",
+    "importOrder": "NOT_MEASURED",
+    "runtimeProvenance": "NOT_MEASURED",
+    "sourceDigest": "NOT_MEASURED",
+    "delivery": "NOT_MEASURED",
+    "release": "NOT_MEASURED"
+  },
+  "outcome": "graph_refused",
+  "graph": {
+    "modules": 2109,
+    "raw": 742,
+    "compiled": 1367,
+    "edges": 9352,
+    "unclassified": 145,
+    "rawToCompiled": 0,
+    "digest": "93b5f34559b84d615df26871cf7dbb82b53c5e257923045dd1c162c6dccb81fa"
+  },
+  "violations": {
+    "count": 1,
+    "digest": "dd9429e1e7699fcce2e568aff9e77dda45d69fc8eca51c9cf83961b26e31e219",
+    "examples": [
+      "undeclared-import:src/debug-runtime/vscode-dwarf-parser-backend.js:@vscode/dwarf-debugging"
+    ],
+    "paths": {
+      "count": 0,
+      "digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "examples": []
+    },
+    "dependencies": {
+      "count": 1,
+      "digest": "dd9429e1e7699fcce2e568aff9e77dda45d69fc8eca51c9cf83961b26e31e219",
+      "examples": [
+        "undeclared-import:src/debug-runtime/vscode-dwarf-parser-backend.js:@vscode/dwarf-debugging"
+      ]
+    }
+  },
+  "runs": [
+    {
+      "entries": 797,
+      "packed": 4580668,
+      "unpacked": 22429353,
+      "tarSha256": "d302ca5233d87dc4328f39f39cc0114f392bba0f12eb012cd06ab4cbb9a8ea69",
+      "inventoryDigest": "4ca36fd7bef37755bf7673bdc4cf54f0c83e99cfd561163af2f76cc63a8087ff"
+    },
+    {
+      "entries": 797,
+      "packed": 4580668,
+      "unpacked": 22429353,
+      "tarSha256": "d302ca5233d87dc4328f39f39cc0114f392bba0f12eb012cd06ab4cbb9a8ea69",
+      "inventoryDigest": "4ca36fd7bef37755bf7673bdc4cf54f0c83e99cfd561163af2f76cc63a8087ff"
+    }
+  ],
+  "candidateDigest": "65b3270b87f49a2664da807c08dd93919475d0312c1cde87c5303ebabf7eab3e",
+  "candidate": [
+    {
+      "path": "scripts/npm-package-copy-diagnostic.js",
+      "sha256": "d3d634a547d88a88b81cffa926c4bec6995b564ccb6634a375e4108ac2e94837"
+    },
+    {
+      "path": "scripts/checks/npm-copy-feasibility-evidence.js",
+      "sha256": "4fca2cb756ebcf59683817f15b818b50b4fd4c9c54475fc95dd153d7dc437077"
+    },
+    {
+      "path": "test/scripts/npm-copy-feasibility-evidence.test.js",
+      "sha256": "7ab9943efb1e07ab494b1ea39cd5902280655e6c702080eb5304e258b9f83785"
+    },
+    {
+      "path": "solve/quests/npm-copy-feasibility/quest.json",
+      "sha256": "0682510da4c9d1be2625cee335d5d217c0d6c117afebffa8cb24a9dc19b8961e"
+    }
+  ],
+  "controls": [
+    {
+      "name": "missing-worker",
+      "rejected": true,
+      "reason": "missing-entry:src/threading/service-worker.js"
+    },
+    {
+      "name": "missing-computed",
+      "rejected": true,
+      "reason": "missing-entry:src/lagrange-runtime-startup.js"
+    },
+    {
+      "name": "changed-asset",
+      "rejected": true,
+      "reason": "preserved-bytes:src/admin/static/playback-viewer.html"
+    },
+    {
+      "name": "input-root-external",
+      "rejected": true,
+      "reason": "root-leak:src/public-api.js"
+    },
+    {
+      "name": "missing-raw-child",
+      "rejected": true,
+      "reason": "missing-preserved:src/raw/child.js"
+    },
+    {
+      "name": "raw-compiled-overlap",
+      "rejected": true,
+      "reason": "raw-compiled-overlap:src/raw/child.js"
+    },
+    {
+      "name": "raw-as-js",
+      "rejected": true,
+      "reason": "raw-output-body:src/raw/child.js"
+    },
+    {
+      "name": "renamed-copy",
+      "rejected": true,
+      "reason": "renamed-copy:src/raw/token.js:src/raw/renamed-token.js"
+    },
+    {
+      "name": "conflicting-output",
+      "rejected": true,
+      "reason": "conflicting-output:src/raw/token.js"
+    },
+    {
+      "name": "forged-count",
+      "rejected": true,
+      "reason": "packed-count"
+    },
+    {
+      "name": "forged-hash",
+      "rejected": true,
+      "reason": "packed-hash"
+    }
+  ],
+  "cliControls": [
+    {
+      "name": "existing-failure",
+      "passed": true
+    },
+    {
+      "name": "probe-existing",
+      "passed": true
+    },
+    {
+      "name": "existing-empty",
+      "passed": true
+    },
+    {
+      "name": "probe-fresh",
+      "passed": true
+    },
+    {
+      "name": "fresh-postadmission",
+      "passed": true,
+      "firstFailureSha256": "b78031a3b2a9e7d470287065e2c80d8e556a4f96eca4b1a75ef5d7d19cce16a7"
+    },
+    {
+      "name": "postadmission-retry",
+      "passed": true
+    }
+  ],
+  "review": {
+    "verdict": "approve",
+    "candidateDigest": "65b3270b87f49a2664da807c08dd93919475d0312c1cde87c5303ebabf7eab3e",
+    "measurementDigest": "19598e695ef270f4d706a0eb276f6c297596831b969563d8ccd08e806bff012d",
+    "sha256": "77ac6dfca30ffb2f4e824a052beec3003bab250e21ba5f627a15a3465d2226c4",
+    "verifier": "subagent:01a1cecc-2a65-7662-8906-3ed915cca71a",
+    "report": "/tmp/lagrange-npm-copy-independent-final-20261112/REVIEW.txt",
+    "scope": "Exact negative static diagnostic only; runtime/delivery/release NOT_MEASURED"
+  },
+  "artifactsRoot": "/tmp/lagrange-npm-copy-attempt1-20261112",
+  "copyLoads": {
+    "count": 338,
+    "digest": "0fac3c439a8631779bb58b7d0be8fe549b3129e74a3800171b7bfaf764f023e2"
+  },
+  "artifacts": [
+    {
+      "path": "a/classification.json",
+      "size": 1507278,
+      "sha256": "2998515ffba4555086095496965511987bfee2f7d3a1f33584925f51d2a45ea9"
+    },
+    {
+      "path": "a/copy-loads.json",
+      "size": 72384,
+      "sha256": "4c4524c1e9cfc318843074f6f865adc90022a8f7a6d03d228a55c7d95033ebd7"
+    },
+    {
+      "path": "a/emissions.json",
+      "size": 574074,
+      "sha256": "1384d066928d62338d723b1350fefb8ded62bc457402fd34888f07424fd76f99"
+    },
+    {
+      "path": "a/input-inventory.json",
+      "size": 367324,
+      "sha256": "e480ee4be216c2db61e8935641af18c9d97d366a51afbe11ae9994730629e8cb"
+    },
+    {
+      "path": "a/metafile.json",
+      "size": 2452175,
+      "sha256": "98a05cdd0cc83e0c9f596674847d528ab35313943567f91b2fa710cba69b6421"
+    },
+    {
+      "path": "a/npm-pack.json",
+      "size": 90282,
+      "sha256": "98660c2294fee6a10a21ebe2d8df72de60c7675fedd6a6b711004c77a7a0e6f1"
+    },
+    {
+      "path": "a/original-metafile.json",
+      "size": 2459714,
+      "sha256": "fa2a6fdc7db5aaaf7b6d634b4176f79a24204c6f796a13cccc4bc7e43c4c46a5"
+    },
+    {
+      "path": "a/packed/lagrange-server-0.4.0.tgz",
+      "size": 4580668,
+      "sha256": "d302ca5233d87dc4328f39f39cc0114f392bba0f12eb012cd06ab4cbb9a8ea69"
+    },
+    {
+      "path": "a/tar-list.txt",
+      "size": 80048,
+      "sha256": "ad5c102a87999c0b54b6ab8dba92fbbf055d8f37961cfdfcd36b7d3850248e5d"
+    },
+    {
+      "path": "a/tar-members.json",
+      "size": 133718,
+      "sha256": "d683bbd5fbcf12e4b3632a4df4d840ccdb8afb2bcbb60ef625fbb3f74b4a14b3"
+    },
+    {
+      "path": "a/verified-stage.json",
+      "size": 1388019,
+      "sha256": "3a9fb8abeee3f2ad3646077b1a03cea0fb8014cfcf800eb1125c1e4dbc4f2720"
+    },
+    {
+      "path": "b/classification.json",
+      "size": 1507278,
+      "sha256": "2998515ffba4555086095496965511987bfee2f7d3a1f33584925f51d2a45ea9"
+    },
+    {
+      "path": "b/copy-loads.json",
+      "size": 72384,
+      "sha256": "4c4524c1e9cfc318843074f6f865adc90022a8f7a6d03d228a55c7d95033ebd7"
+    },
+    {
+      "path": "b/emissions.json",
+      "size": 574074,
+      "sha256": "1384d066928d62338d723b1350fefb8ded62bc457402fd34888f07424fd76f99"
+    },
+    {
+      "path": "b/input-inventory.json",
+      "size": 367324,
+      "sha256": "e480ee4be216c2db61e8935641af18c9d97d366a51afbe11ae9994730629e8cb"
+    },
+    {
+      "path": "b/metafile.json",
+      "size": 2452175,
+      "sha256": "98a05cdd0cc83e0c9f596674847d528ab35313943567f91b2fa710cba69b6421"
+    },
+    {
+      "path": "b/npm-pack.json",
+      "size": 90282,
+      "sha256": "98660c2294fee6a10a21ebe2d8df72de60c7675fedd6a6b711004c77a7a0e6f1"
+    },
+    {
+      "path": "b/original-metafile.json",
+      "size": 2459714,
+      "sha256": "fa2a6fdc7db5aaaf7b6d634b4176f79a24204c6f796a13cccc4bc7e43c4c46a5"
+    },
+    {
+      "path": "b/packed/lagrange-server-0.4.0.tgz",
+      "size": 4580668,
+      "sha256": "d302ca5233d87dc4328f39f39cc0114f392bba0f12eb012cd06ab4cbb9a8ea69"
+    },
+    {
+      "path": "b/tar-list.txt",
+      "size": 80048,
+      "sha256": "ad5c102a87999c0b54b6ab8dba92fbbf055d8f37961cfdfcd36b7d3850248e5d"
+    },
+    {
+      "path": "b/tar-members.json",
+      "size": 133718,
+      "sha256": "d683bbd5fbcf12e4b3632a4df4d840ccdb8afb2bcbb60ef625fbb3f74b4a14b3"
+    },
+    {
+      "path": "b/verified-stage.json",
+      "size": 1388019,
+      "sha256": "3a9fb8abeee3f2ad3646077b1a03cea0fb8014cfcf800eb1125c1e4dbc4f2720"
+    },
+    {
+      "path": "baseline-binding.json",
+      "size": 291,
+      "sha256": "ccea053a523262f7aa16b834d6ef4e4370fcd046d6b0920304733c826a18c6a8"
+    },
+    {
+      "path": "baseline.json",
+      "size": 250070,
+      "sha256": "a9d2a78e471dd03b4c5f5fca7c2a6dd6a8eb3b56040cdc439de3f7d33ab73aec"
+    },
+    {
+      "path": "candidate.json",
+      "size": 606,
+      "sha256": "27e02562bd42aa47fc07ae503e9a0eee4d979e9a1aece730324ef4af905f46fd"
+    },
+    {
+      "path": "cli-controls.json",
+      "size": 454,
+      "sha256": "c23b1429e049373a8d2cf48c597154822934050164b7d28b7863e71051cd4fe3"
+    },
+    {
+      "path": "config.json",
+      "size": 425,
+      "sha256": "50764176b099937f539ca74fa455e2c8f41bf628ac72a1c289b53d82bcf26713"
+    },
+    {
+      "path": "controls.json",
+      "size": 1679,
+      "sha256": "a1d3fadcca719b82103ff11ee54eaab9e200e5e37091b7c3ed9c470becaeb1c6"
+    },
+    {
+      "path": "prerun-artifacts.json",
+      "size": 60774,
+      "sha256": "f7e8eb16763df5cfd61e61f94cfd85740119e29783a8ebe8b846443faa7c465e"
+    },
+    {
+      "path": "prerun-review.txt",
+      "size": 5746,
+      "sha256": "78b1dbb6a0363c92c96c891cfd4dbf8472ccec1762b4f0c6160c355310dbbeb8"
+    },
+    {
+      "path": "receipt-controls.json",
+      "size": 3010,
+      "sha256": "b51f1b99f71f96af5aee69c0e396e11028005a49f59afc68517643facf4e3be0"
+    },
+    {
+      "path": "run.json",
+      "size": 4595850,
+      "sha256": "bd7da247787b1604681564ad22c069ff0e74b14d53411711a05bbec02ed25977"
+    },
+    {
+      "path": "source.tar",
+      "size": 41031680,
+      "sha256": "b0e7a6f9aa4e06a18e51181aea5d9a7bf69f3a8f15caa1c645d35435c7f06bac"
+    },
+    {
+      "path": "toolchain.json",
+      "size": 21948,
+      "sha256": "9e068e15b8757269d08701c130183f894c5f497a7ab967dfcd0c703837404492"
+    },
+    {
+      "path": "validation.json",
+      "size": 1456,
+      "sha256": "cb0ff2133df6c794733d2463dc8aeb305ee2d754752e261d1b75506c8bc3edf2"
+    }
+  ],
+  "artifactsDigest": "74342da0382f3bbf114107603f3c2e3e3d37a1ac39b480efa8ccf447207672c0"
+}
