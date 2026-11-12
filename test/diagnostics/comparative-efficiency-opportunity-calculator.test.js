@@ -8,7 +8,7 @@ import {
 } from '../../src/diagnostics/comparative-efficiency-opportunity-calculator.js';
 import {
   serializeJsonData,
-} from '../../src/diagnostics/comparative-efficiency-opportunity-input-integrity.js';
+} from '../../src/utils/canonical-json-data.js';
 
 const FIXTURE_ROOT =
   'test/fixtures/comparative-efficiency-opportunity';
