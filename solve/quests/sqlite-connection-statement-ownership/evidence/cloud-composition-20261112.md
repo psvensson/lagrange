@@ -156,3 +156,31 @@ compaction consumers without introducing a second handle registry or rebinding
 path. The prototype-only completion fixture uses the existing explicit-handle
 `readDurableRecordIn` API. The causal controls are unchanged. Independent source
 review and exact-source lab renewal are required; no local execution occurred.
+
+## Verified immutable-store renewal
+
+Independent source review approved the bounded constructor-custody correction.
+Lab `2837` ran exact source commit
+`98c20b57ced8733eb9c964a4b2f6f4bcba6d06d2` (source tree
+`851b3716b66a214fc352c790ca1e9d3850c805af`) and passed all three roots and
+44 assertions: reference capture (32), native load (four), and native
+replacement (eight). Its complete 10,774-byte stream has SHA256
+`8a002c04d976d35c2293d00a4d83395f5d2a828e597af46010d195b98fc477bd`.
+Every one of the 12 native child records reports exit status zero, no signal,
+and no child error; all four R4 source digests match the exact Git objects.
+The four unchanged custody negatives from `2806` now pass. Native provenance
+remains SQLite 3.49.2 with the same source identifier and addon digest.
+
+Lab `2854` separately renewed the three completion-consumer roots on that exact
+candidate, passing six assertions. Its full 1,606-byte stream has SHA256
+`83ff9facd066fdcc847f21886e2b83141d402a819f19fe066e4695666fa7bf4e`.
+All scopes closed. These six roots and 50 assertions validate this bounded
+correction and its direct consumers; they do not resolve the other failures
+in the historical full migration or grant whole-epic acceptance.
+
+The immutable own data property also uses the language's enforced Proxy
+invariant: a get trap cannot report a different value for a nonwritable,
+nonconfigurable own data property. This supports the carrier choice; the actual
+SQLite controls, rather than the language rule alone, establish its observed
+effects here. Primary reference: ECMAScript 2024, section 10.5.8,
+https://tc39.es/ecma262/2024/multipage/ordinary-and-exotic-objects-behaviours.html#sec-proxy-object-internal-methods-and-internal-slots-get-p-receiver
