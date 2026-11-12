@@ -166,13 +166,19 @@ async function readOneAuthoritativeRow(
       workClass: 'critical',
     },
   );
-  if (result?.success !== true || !Array.isArray(result.rows) ||
-      result.rows.length > 1) {
+  const rows = result?.success === true && Array.isArray(result.rows) ?
+    result.rows : null;
+  const row = rows?.length === 1 ? rows[0] : null;
+  if (rows === null || rows.length > 1 ||
+      (rows.length === 1 &&
+        (row === null || typeof row !== 'object' || Array.isArray(row)))) {
     return Object.freeze({available: false, row: null});
   }
   return Object.freeze({
     available: true,
-    row: result.rows.length === 1 ? result.rows[0] : null,
+    // Selected lifecycle columns are scalar by contract. Own their snapshot
+    // without freezing the row carrier shared with other gateway consumers.
+    row: row === null ? null : Object.freeze({...row}),
   });
 }
 
