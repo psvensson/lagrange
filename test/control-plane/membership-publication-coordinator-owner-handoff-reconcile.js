@@ -232,7 +232,7 @@ test('readPublicationPlanningSnapshot uses authoritative membership evidence for
             rows:
               options.readAuthority?.authoritativeReadMode ===
                 CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-                  .OWNER_RPC_PREFERRED_SQL_FALLBACK ?
+                  .OWNER_RPC_REQUIRED ?
                 authoritativeNodeRows :
                 cachedNodeRows,
           };

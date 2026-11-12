@@ -204,6 +204,19 @@ Required patterns:
 5. New system tables are classified in exactly one of
    `CDC_PROPAGATED_TABLES` or `CDC_NON_PROPAGATED_TABLES`.
 
+Membership publication planning and acknowledgement consume explicit admitted
+preload evidence or the canonical owner's successful row observation. The async
+reader never substitutes projected rows, merges them into an owner result, or
+answers an unavailable source with an empty list. The actual authoritative view
+validates success and array-valued rows before normalization; malformed success
+does not become complete-empty authority. A present publications owner missing
+its required method refuses rather than selecting another source. Owner-local
+formation reads remain explicitly local; remote owner evidence requires the
+owner RPC. Unavailability retains the existing driver/acknowledgement retry
+obligation with the original cause. Answered-empty is absence. The normal
+census derivation and guarded publication change alone establish the census
+used by serving; synchronous projection readers may only wake these owners.
+
 Superseded 2026-11-02 for gating decisions (R09, quest
 `serve-eligibility-committed-epoch-read`, epic `raft-rs-full-cutover`): pattern
 1 no longer applies to a decision that grants serving. Per-node serve

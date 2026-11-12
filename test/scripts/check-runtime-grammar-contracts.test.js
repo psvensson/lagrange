@@ -53,7 +53,8 @@ const BUILD_PRIORITY_SPREAD_DECISION_FUNCTION = 'buildPrioritySpreadDecision';
 const FORBIDDEN_REPLICA_ROLES_FRAGMENT = 'replicaRoles';
 const MEMBERSHIP_PUBLICATION_WAKEUP_FRAGMENT =
   'enqueueMembershipPublicationReconcile';
-const MERGE_PLANNING_EVIDENCE_FRAGMENT = 'mergePlanningEvidenceRows';
+const REQUIRED_OWNER_ROWS_FRAGMENT = 'readRequiredOwnerRows';
+const PROJECTION_CACHE_FRAGMENT = 'systemTableCache';
 // Superseded 2026-10-04 (one-spread-authority): the decision used to be
 // required to read hasPriorityRecoverySpreadGap directly; it now must read the
 // one rule, resolvePrioritySpreadPending (census gap OR witness PENDING). The
@@ -207,31 +208,24 @@ test('detects priority planner code that does not tag standalone remove safety',
     );
   });
 
-test('detects publication planning code that drops merged evidence', async (t) => {
+test('detects publication planning code that replaces required authority with cache', async (t) => {
   const violations = collectRuntimeGrammarContractViolationsFromSource(
     [
-      'const readProfile = MEMBERSHIP_PUBLICATION_READ_PROFILE.PLANNING;',
-      'function shouldMergePlanningEvidenceRows() { return true; }',
       'class MembershipPublicationCoordinator {',
       '  readTableRows() {',
       '    return this.systemTableCache.getAll(tableName) || [];',
-      '  }',
-      '  readPublicationPlanningSnapshot() {',
-      '    return {readProfile: MEMBERSHIP_PUBLICATION_READ_PROFILE.PLANNING};',
       '  }',
       '}',
     ].join('\n'),
     PUBLICATION_COORDINATOR_FILE_PATH,
   );
 
-  t.equal(violations.length, 2);
-  t.same(
-    violations.map((violation) => violation.target).sort(),
-    [
-      MERGE_PLANNING_EVIDENCE_FRAGMENT,
-      MERGE_PLANNING_EVIDENCE_FRAGMENT,
-    ],
-  );
+  t.ok(violations.some((violation) =>
+    violation.functionName === 'readTableRows' &&
+      violation.target === REQUIRED_OWNER_ROWS_FRAGMENT));
+  t.ok(violations.some((violation) =>
+    violation.functionName === 'readTableRows' &&
+      violation.target === PROJECTION_CACHE_FRAGMENT));
 });
 
 test('detects publication recovery gate code that skips summary authority',

@@ -30,14 +30,11 @@ import {
   MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL,
   MEMBERSHIP_PUBLICATION_KIND,
   MEMBERSHIP_PUBLICATION_OWNER_KEY,
-  MEMBERSHIP_PUBLICATION_READ_PROFILE,
-  MEMBERSHIP_PUBLICATION_READ_SOURCE,
   MEMBERSHIP_PUBLICATION_STATUS,
 } from './membership-publication-row-contract.js';
 import {
   DISPATCH_RETRY_OWNER_LIST,
   buildDispatchRetryRowsAnswer,
-  buildMembershipPublicationAckRefreshDecision,
   isDispatchRetryOperation,
   listEquals,
   matchesDispatchRetryReadyNode,
@@ -45,17 +42,13 @@ import {
   normalizeNodeIdList,
   publicationRowIncludesNode,
   readMembershipPublicationConvergence,
-  safelyGetLatestMembershipPublicationRow,
 } from './membership-publication-row-helpers.js';
 import {
   buildLocalAuthoritativeMembershipReadOptions,
   buildPublicationAcknowledgementReadOptions,
   buildPublicationListReadOptions,
   deriveMembershipPublicationCandidate,
-  mergePlanningEvidenceRows,
-  normalizeTableRowsResult,
   resolveControlPlanePublicationsOwner,
-  shouldMergePlanningEvidenceRows,
 } from './membership-publication-planning-evidence.js';
 import {consumeReplicaOperationView} from './membership-publication-replica-operation-view.js';
 import {
@@ -88,41 +81,25 @@ function authoritativeRowSourceUnavailable(result) {
   );
   error.code = LOCAL_STR_AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE_CODE;
   error.cause = result?.error;
+  error.deferRetry = true;
   return error;
 }
 
-async function fetchDirectOwnerRows(
-  owner,
-  options,
-  authoritativeReadRequested,
-) {
-  if (
-    authoritativeReadRequested !== true &&
-    typeof owner.listPublicationsFromCache === 'function'
-  ) {
-    const cachedPublicationRows = normalizeTableRowsResult(
-      await owner.listPublicationsFromCache(options),
-    );
-    if (
-      cachedPublicationRows.length > 0 ||
-      typeof owner.listPublications !== 'function'
-    ) {
-      return {handled: true, rows: cachedPublicationRows};
+async function readRequiredOwnerRows(readRows) {
+  let result;
+  try {
+    result = await readRows();
+  } catch (error) {
+    if (error?.code === LOCAL_STR_AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE_CODE) {
+      throw error;
     }
+    throw authoritativeRowSourceUnavailable({error});
   }
-  if (typeof owner.listPublications === 'function') {
-    const publicationReadOptions = buildPublicationListReadOptions(options);
-    const result = await owner.listPublications(publicationReadOptions);
-    if (!isAuthoritativeControlPlaneRowReadSuccessful(result) ||
-        !Array.isArray(result.rows)) {
-      throw authoritativeRowSourceUnavailable(result);
-    }
-    return {
-      handled: true,
-      rows: result.rows,
-    };
+  if (!isAuthoritativeControlPlaneRowReadSuccessful(result) ||
+      !Array.isArray(result.rows)) {
+    throw authoritativeRowSourceUnavailable(result);
   }
-  return {handled: false, rows: []};
+  return result.rows;
 }
 
 class MembershipPublicationCoordinatorReads {
@@ -211,27 +188,22 @@ class MembershipPublicationCoordinatorReads {
     ) {
       return preloadedRows;
     }
-    const authoritativeReadRequested =
-      options.readSource ===
-        MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED;
-    if (
-      tableName === TABLES.CONTROL_PLANE_PUBLICATIONS &&
-      this.controlPlanePublicationsOwner
-    ) {
-      const pubResult = await fetchDirectOwnerRows(
-        this.controlPlanePublicationsOwner,
-        options,
-        authoritativeReadRequested,
-      );
-      if (pubResult.handled) {
-        return pubResult.rows;
+    return readRequiredOwnerRows(() => {
+      if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS &&
+          this.controlPlanePublicationsOwner) {
+        if (typeof this.controlPlanePublicationsOwner.listPublications !== 'function') {
+          throw authoritativeRowSourceUnavailable();
+        }
+        return this.controlPlanePublicationsOwner.listPublications(
+          buildPublicationListReadOptions(options),
+        );
       }
-    }
-    const isPlanningRead =
-      options.readProfile === MEMBERSHIP_PUBLICATION_READ_PROFILE.PLANNING;
-    const view = this.getAuthoritativeControlPlaneView();
-    if (view && typeof view.readRows === 'function' && view.canRead()) {
-      const result = await view.readRows(
+      const view = this.getAuthoritativeControlPlaneView();
+      if (!view || typeof view.readRows !== 'function' ||
+          typeof view.canRead !== 'function' || view.canRead() !== true) {
+        throw authoritativeRowSourceUnavailable();
+      }
+      return view.readRows(
         tableName,
         `SELECT * FROM ${tableName}`,
         [],
@@ -240,29 +212,7 @@ class MembershipPublicationCoordinatorReads {
           tableName,
         }),
       );
-      if (isAuthoritativeControlPlaneRowReadSuccessful(result)) {
-        const authoritativeRows = normalizeTableRowsResult(result);
-        if (
-          !isPlanningRead &&
-          shouldMergePlanningEvidenceRows(tableName, options) &&
-          typeof this.systemTableCache?.getAll === 'function'
-        ) {
-          return mergePlanningEvidenceRows(
-            tableName,
-            authoritativeRows,
-            this.systemTableCache.getAll(tableName) || [],
-          );
-        }
-        return authoritativeRows;
-      }
-      if (isPlanningRead) {
-        throw authoritativeRowSourceUnavailable(result);
-      }
-    }
-    if (typeof this.systemTableCache?.getAll === 'function') {
-      return this.systemTableCache.getAll(tableName) || [];
-    }
-    return [];
+    });
   }
 
   async getLatestPublicationRow(options = {}) {
@@ -414,43 +364,15 @@ class MembershipPublicationCoordinatorReads {
     if (!normalizedNodeId) {
       return null;
     }
-    const hasPreloadedPublicationRows = Array.isArray(options.publicationRows);
     const acknowledgementReadOptions = buildPublicationAcknowledgementReadOptions(
       options,
     );
-    const cachedPublicationRow =
-      this.getLatestPublicationRowSync({
-        ...options,
-        readSource: MEMBERSHIP_PUBLICATION_READ_SOURCE.CACHE_PREFERRED,
-      });
-    const initialPublicationRow =
-      cachedPublicationRow ||
-      (await safelyGetLatestMembershipPublicationRow(
-        this,
-        acknowledgementReadOptions,
-      ));
-    if (!initialPublicationRow || typeof initialPublicationRow !== 'object') {
+    const candidatePublicationRow = await this.getLatestPublicationRow(
+      acknowledgementReadOptions,
+    );
+    if (!candidatePublicationRow || typeof candidatePublicationRow !== 'object') {
       return null;
     }
-    const initialPublication = normalizeControlPlanePublicationRow(initialPublicationRow);
-    const refreshDecision = buildMembershipPublicationAckRefreshDecision({
-      normalizedPublication: initialPublication,
-      nodeId: normalizedNodeId,
-    });
-    const shouldAttemptAuthoritativeRefresh =
-      hasPreloadedPublicationRows !== true &&
-      cachedPublicationRow &&
-      refreshDecision.shouldRefresh;
-    const refreshedPublicationRow = shouldAttemptAuthoritativeRefresh ?
-      await safelyGetLatestMembershipPublicationRow(
-        this,
-        acknowledgementReadOptions,
-      ) :
-      null;
-    const candidatePublicationRow =
-      refreshedPublicationRow && typeof refreshedPublicationRow === 'object' ?
-        refreshedPublicationRow :
-        initialPublicationRow;
     const normalizedPublication = normalizeControlPlanePublicationRow(candidatePublicationRow);
     const requiredAckNodeIds = normalizeNodeIdList(normalizedPublication.requiredAckNodeIds);
     const acknowledgedNodeIds = normalizeNodeIdList(normalizedPublication.acknowledgedNodeIds);
@@ -463,7 +385,6 @@ class MembershipPublicationCoordinatorReads {
     return Object.freeze({
       nodeId: normalizedNodeId,
       publicationRow: candidatePublicationRow,
-      authoritativeRefreshAttempted: shouldAttemptAuthoritativeRefresh,
       publicationOwnerStream,
       ackState: publicationOwnerStream.ackState,
       terminal: this.isTerminalPublicationStatus(normalizedPublication.status),

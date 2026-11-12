@@ -1,9 +1,6 @@
 import {STATE_ABSENT, readUpperStateField} from '../utils/state-field-read.js';
 import {createHash} from 'node:crypto';
 import {v4 as uuidv4} from 'uuid';
-import {
-  TABLES,
-} from '../constants/index.js';
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from './control-plane-system-table-gateway.js';
 import {buildControlPlaneReadAuthority} from
   './control-plane-system-table-gateway-read-contracts.js';
@@ -34,8 +31,6 @@ import {buildMembershipEpochSnapshot} from './membership-epoch-contract.js';
 import {
   MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL,
   MEMBERSHIP_PUBLICATION_KIND,
-  MEMBERSHIP_PUBLICATION_PLANNING_EVIDENCE_KEY_FIELDS_BY_TABLE,
-  MEMBERSHIP_PUBLICATION_PLANNING_EVIDENCE_VERSION_FIELDS,
   MEMBERSHIP_PUBLICATION_READ_PROFILE,
   MEMBERSHIP_PUBLICATION_READ_SOURCE,
   MEMBERSHIP_PUBLICATION_STATUS,
@@ -70,97 +65,6 @@ function resolveNowMs(value) {
     Date.now();
 }
 
-function normalizeTableRowsResult(result) {
-  if (Array.isArray(result)) {
-    return result;
-  }
-  if (Array.isArray(result?.rows)) {
-    return result.rows;
-  }
-  return [];
-}
-
-function resolvePlanningEvidenceRowKey(tableName, row = {}) {
-  const keyFields =
-    MEMBERSHIP_PUBLICATION_PLANNING_EVIDENCE_KEY_FIELDS_BY_TABLE[tableName] || [];
-  for (const keyField of keyFields) {
-    const key = String(
-      row?.[keyField] || MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL.EMPTY,
-    ).trim();
-    if (key.length > 0) {
-      return key;
-    }
-  }
-  return MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL.EMPTY;
-}
-
-function resolvePlanningEvidenceRowVersion(row = {}) {
-  const versions = MEMBERSHIP_PUBLICATION_PLANNING_EVIDENCE_VERSION_FIELDS
-    .map((fieldName) => normalizePositiveInteger(row?.[fieldName], 0))
-    .filter((value) => value > 0);
-  if (versions.length === 0) {
-    return 0;
-  }
-  return Math.max(...versions);
-}
-
-function countPlanningEvidenceRowFields(row = {}) {
-  if (!row || typeof row !== 'object') {
-    return 0;
-  }
-  return Object.keys(row).length;
-}
-
-function comparePlanningEvidenceRows(leftRow = {}, rightRow = {}) {
-  const leftRank = {
-    version: resolvePlanningEvidenceRowVersion(leftRow),
-    fieldCount: countPlanningEvidenceRowFields(leftRow),
-  };
-  const rightRank = {
-    version: resolvePlanningEvidenceRowVersion(rightRow),
-    fieldCount: countPlanningEvidenceRowFields(rightRow),
-  };
-  const decisiveDelta = [
-    rightRank.version - leftRank.version,
-    rightRank.fieldCount - leftRank.fieldCount,
-  ].find((delta) => delta !== 0);
-  return typeof decisiveDelta === 'number' ? decisiveDelta : 0;
-}
-
-function mergePlanningEvidenceRows(tableName, authoritativeRows = [], projectionRows = []) {
-  const keyFields =
-    MEMBERSHIP_PUBLICATION_PLANNING_EVIDENCE_KEY_FIELDS_BY_TABLE[tableName] || [];
-  if (keyFields.length === 0) {
-    return authoritativeRows;
-  }
-  const rowByKey = new Map();
-  const unkeyedRows = [];
-  for (const row of [
-    ...normalizeTableRowsResult(authoritativeRows),
-    ...normalizeTableRowsResult(projectionRows),
-  ]) {
-    const key = resolvePlanningEvidenceRowKey(tableName, row);
-    if (key.length === 0) {
-      unkeyedRows.push(row);
-      continue;
-    }
-    const existingRow = rowByKey.get(key);
-    if (!existingRow || comparePlanningEvidenceRows(existingRow, row) >= 0) {
-      rowByKey.set(key, row);
-    }
-  }
-  return [
-    ...[...rowByKey.entries()]
-      .sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey))
-      .map(([, row]) => row),
-    ...unkeyedRows,
-  ];
-}
-
-function shouldMergePlanningEvidenceRows(_tableName, _options = {}) {
-  return false;
-}
-
 function resolveControlPlanePublicationsOwner(options = {}) {
   if (options.controlPlanePublicationsOwner) {
     return options.controlPlanePublicationsOwner;
@@ -186,16 +90,15 @@ function resolveMembershipPublicationReadProfile(readProfile = null) {
 
 function buildPublicationReadOptions(options = {}) {
   const readProfile = resolveMembershipPublicationReadProfile(options.readProfile);
-  return {
+  const readOptions = {
     ...options,
     readSource:
       MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED,
-    authoritativeReadMode:
-      readProfile === MEMBERSHIP_PUBLICATION_READ_PROFILE.DIAGNOSTICS ?
-        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED :
-        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+    authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
     readProfile,
   };
+  delete readOptions.replicaFallbackConsistency;
+  return readOptions;
 }
 
 function buildPublicationListReadOptions(options = {}) {
@@ -231,10 +134,7 @@ function resolveMembershipEvidenceAuthoritativeReadMode(options = {}) {
     options.readSource ===
       MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED
   ) {
-    return options.tableName === TABLES.NODES ?
-      CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-        .OWNER_RPC_PREFERRED_SQL_FALLBACK :
-      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED;
+    return CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED;
   }
   return CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY;
 }
@@ -244,13 +144,13 @@ function buildLocalAuthoritativeMembershipReadOptions(options = {}) {
   delete operationalOptions.authoritativeReadMode;
   delete operationalOptions.readAuthority;
   delete operationalOptions.readSource;
+  delete operationalOptions.replicaFallbackConsistency;
   return {
     ...operationalOptions,
     readAuthority: buildControlPlaneReadAuthority({
       authoritativeReadMode:
         resolveMembershipEvidenceAuthoritativeReadMode(options),
       localReadConsistency: options?.localReadConsistency,
-      replicaFallbackConsistency: options?.replicaFallbackConsistency,
       routingReadinessDimension: options?.routingReadinessDimension,
       purpose: options?.purpose,
     }),
@@ -683,21 +583,14 @@ export {
   buildPublicationMetadataRefreshRow,
   buildPublicationReadOptions,
   buildServingMemberStatesByNodeId,
-  comparePlanningEvidenceRows,
   closeAcknowledgedMetadataRefreshRow,
-  countPlanningEvidenceRowFields,
   deriveMembershipPublicationCandidate,
   deriveMembershipPublicationId,
   hasExplicitMembershipPublicationTarget,
-  mergePlanningEvidenceRows,
-  normalizeTableRowsResult,
   resolveControlPlanePublicationsOwner,
   resolveMembershipEvidenceAuthoritativeReadMode,
   resolveMembershipPublicationReadProfile,
   resolveObservedActiveNodeIds,
-  resolvePlanningEvidenceRowKey,
-  resolvePlanningEvidenceRowVersion,
   serializeMembershipPublicationRow,
-  shouldMergePlanningEvidenceRows,
   shouldPreferAuthoritativeMembershipState,
 };

@@ -318,16 +318,44 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
     ]),
   }),
   'src/control-plane/membership-publication-coordinator-reads.js': Object.freeze({
-    requiredFragments: Object.freeze([
+    // The shared async reader accepts explicit preload input or a successful
+    // owner answer. Projection readers remain separate synchronous surfaces.
+    forbiddenFragments: Object.freeze([
       'mergePlanningEvidenceRows',
       'shouldMergePlanningEvidenceRows',
+      'listPublicationsFromCache',
+      'safelyGetLatestMembershipPublicationRow',
     ]),
     functionContracts: Object.freeze([
       Object.freeze({
+        functionName: 'readRequiredOwnerRows',
+        requiredFragments: Object.freeze([
+          'isAuthoritativeControlPlaneRowReadSuccessful(result)',
+          'Array.isArray(result.rows)',
+          'authoritativeRowSourceUnavailable',
+        ]),
+      }),
+      Object.freeze({
         functionName: 'readTableRows',
         requiredFragments: Object.freeze([
-          'mergePlanningEvidenceRows',
-          'systemTableCache.getAll',
+          'readRequiredOwnerRows',
+          'listPublications',
+          'view.canRead()',
+          'view.readRows',
+        ]),
+        forbiddenFragments: Object.freeze([
+          'systemTableCache',
+          'return []',
+        ]),
+      }),
+      Object.freeze({
+        functionName: 'getAcknowledgementCandidateForNode',
+        requiredFragments: Object.freeze([
+          'this.getLatestPublicationRow(',
+        ]),
+        forbiddenFragments: Object.freeze([
+          'getLatestPublicationRowSync',
+          'cachedPublicationRow',
         ]),
       }),
     ]),

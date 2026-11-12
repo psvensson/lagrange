@@ -15,8 +15,6 @@ import {
 } from '../bootstrap/system-partition-classification.js';
 import {
   DISPATCH_RETRY_READY_NODE_PHASE,
-  MEMBERSHIP_PUBLICATION_ACK_REFRESH_DECISION_RULES,
-  MEMBERSHIP_PUBLICATION_ACK_REFRESH_STATE,
   MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL,
   MEMBERSHIP_PUBLICATION_STATUS,
   MEMBERSHIP_PUBLICATION_TARGET_NODE_STATE,
@@ -386,54 +384,6 @@ function resolveCarriedAcknowledgedNodeIds(options = {}) {
   return baselineAcknowledgedNodeIds.filter((nodeId) => requiredAckNodeIds.includes(nodeId));
 }
 
-function buildMembershipPublicationAckRefreshDecision(options = {}) {
-  const normalizedPublication = options.normalizedPublication || {};
-  const normalizedNodeId = normalizeMembershipPublicationNodeId(options.nodeId);
-  const requiredAckNodeIds = normalizeNodeIdList(
-    normalizedPublication.requiredAckNodeIds,
-  );
-  const acknowledgedNodeIds = normalizeNodeIdList(
-    normalizedPublication.acknowledgedNodeIds,
-  );
-  const terminalPublication = isTerminalMembershipPublicationStatus(
-    normalizedPublication.status,
-  );
-  const nodeRequired = requiredAckNodeIds.includes(normalizedNodeId);
-  const nodeAlreadyAcknowledged = acknowledgedNodeIds.includes(
-    normalizedNodeId,
-  );
-  const evidence = Object.freeze({
-    terminalPublication,
-    nodeRequired,
-    nodeAlreadyAcknowledged,
-  });
-  const decisionRule = MEMBERSHIP_PUBLICATION_ACK_REFRESH_DECISION_RULES.find(
-    (rule) => rule.matches(evidence),
-  );
-  const state = decisionRule.state;
-  return Object.freeze({
-    state,
-    reason: decisionRule.reason,
-    reasonCodes: Object.freeze([decisionRule.reason]),
-    terminalPublication,
-    nodeRequired,
-    nodeAlreadyAcknowledged,
-    shouldRefresh:
-      state === MEMBERSHIP_PUBLICATION_ACK_REFRESH_STATE.DURABLE_REQUIRED,
-  });
-}
-
-async function safelyGetLatestMembershipPublicationRow(coordinator, options = {}) {
-  if (!coordinator || typeof coordinator.getLatestPublicationRow !== 'function') {
-    return null;
-  }
-  try {
-    return await coordinator.getLatestPublicationRow(options);
-  } catch (_error) {
-    return null;
-  }
-}
-
 async function readMembershipPublicationConvergence(readinessService, nodeId, observedAt) {
   if (!readinessService || typeof readinessService !== 'object') {
     return null;
@@ -471,7 +421,6 @@ export {
   buildDispatchRetryRowsAnswer,
   abandonMembershipPublication,
   buildDispatchRetryReadyNodeEvidence,
-  buildMembershipPublicationAckRefreshDecision,
   buildMembershipPublicationTargetNodeDecision,
   buildTransitionHistoryEntry,
   collectMembershipPublicationEvidenceNodeIds,
@@ -494,5 +443,4 @@ export {
   resolveCarriedAcknowledgedNodeIds,
   resolveDispatchRetryNodeIds,
   resolveNowMs,
-  safelyGetLatestMembershipPublicationRow,
 };

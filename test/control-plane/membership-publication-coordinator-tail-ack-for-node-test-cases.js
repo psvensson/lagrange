@@ -6,7 +6,7 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
   MembershipPublicationCoordinator,
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
 }) {
-  test('acknowledgeMembershipPublicationForNode acknowledges a required node from cache',
+  test('acknowledgeMembershipPublicationForNode acknowledges a required node from owner history',
     async (t) => {
       const persistedRows = [];
       const getPublicationCalls = [];
@@ -40,6 +40,9 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
           },
         },
         controlPlanePublicationsOwner: publicationsOwnerOverRows({
+          async listPublications() {
+            return {success: true, rows: [durablePublicationRow]};
+          },
           async getPublication(publicationId) {
             getPublicationCalls.push(publicationId);
             return durablePublicationRow;
@@ -57,7 +60,7 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
       t.equal(
         persistedRows.length,
         1,
-        'cache-rooted required nodes should result in one acknowledgement persistence',
+        'owner-observed required nodes should result in one acknowledgement persistence',
       );
       t.match(
         persistedRows[0],
@@ -163,9 +166,9 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
         listPublicationsCalls[0],
         {
           authoritativeReadMode:
-          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
         },
-        'authoritative refresh should prefer owner-rpc publication history',
+        'authoritative refresh should require owner-rpc publication history',
       );
       t.equal(
         persistedRows.length,
@@ -258,9 +261,9 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
         listPublicationsCalls[0],
         {
           authoritativeReadMode:
-          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
         },
-        'empty-cache acknowledgement refresh should prefer owner-rpc publication history',
+        'empty-cache acknowledgement refresh should require owner-rpc publication history',
       );
       // Guarded write (2026-11-11): one authoritative read of the durable
       // row and a compare-and-set on its revision; the read-back that
@@ -374,9 +377,9 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
         listPublicationsCalls[0],
         {
           authoritativeReadMode:
-          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
         },
-        'pending-target-ack refresh should prefer owner-rpc publication history',
+        'pending-target-ack refresh should require owner-rpc publication history',
       );
       // Guarded write (2026-11-11): one authoritative read of the durable
       // row and a compare-and-set on its revision; the read-back that
@@ -490,9 +493,9 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
         listPublicationsCalls[0],
         {
           authoritativeReadMode:
-          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
         },
-        'terminal-cache refresh should prefer owner-rpc publication history',
+        'terminal-cache refresh should require owner-rpc publication history',
       );
       t.equal(
         persistedRows.length,
@@ -645,6 +648,9 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
           },
         },
         controlPlanePublicationsOwner: publicationsOwnerOverRows({
+          async listPublications() {
+            return {success: true, rows: [durablePublicationRow]};
+          },
           async getPublication() {
             const answered = durablePublicationRow;
             readCount += 1;
@@ -759,9 +765,9 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
         listPublicationsCalls[0],
         {
           authoritativeReadMode:
-          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
         },
-        'owner refresh should prefer owner-rpc publication history',
+        'owner refresh should require owner-rpc publication history',
       );
       t.equal(
         getPublicationCalls.length,
@@ -789,6 +795,15 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
   test('acknowledgeMembershipPublicationForNode does not persist duplicate node acknowledgements',
     async (t) => {
       const persistedRows = [];
+      const durablePublicationRow = {
+        publication_id: 'publication-22',
+        publication_kind: 'cluster_membership',
+        publication_epoch: 22,
+        status: 'ACK_PENDING',
+        published_active_node_ids: ['node-1', 'node-2'],
+        required_ack_node_ids: ['node-1', 'node-2'],
+        acknowledged_node_ids: ['node-1'],
+      };
       const coordinator = new MembershipPublicationCoordinator({
         nodeId: 'node-1',
         systemTableCache: {
@@ -796,20 +811,16 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
             if (tableName !== 'control_plane_publications') {
               return [];
             }
-            return [
-              {
-                publication_id: 'publication-22',
-                publication_kind: 'cluster_membership',
-                publication_epoch: 22,
-                status: 'ACK_PENDING',
-                published_active_node_ids: ['node-1', 'node-2'],
-                required_ack_node_ids: ['node-1', 'node-2'],
-                acknowledged_node_ids: ['node-1'],
-              },
-            ];
+            return [durablePublicationRow];
           },
         },
         controlPlanePublicationsOwner: publicationsOwnerOverRows({
+          async listPublications() {
+            return {success: true, rows: [durablePublicationRow]};
+          },
+          async getPublication() {
+            return durablePublicationRow;
+          },
           async storeRow(row) {
             persistedRows.push(row);
           },
@@ -847,6 +858,15 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
         SECOND_NODE_ID,
       ]);
       const persistedRows = [];
+      let durablePublicationRow = {
+        publication_id: PUBLICATION_ID,
+        publication_kind: PUBLICATION_KIND,
+        publication_epoch: PUBLICATION_EPOCH,
+        status: OPEN_STATUS,
+        published_active_node_ids: [...REQUIRED_NODE_IDS],
+        required_ack_node_ids: [...REQUIRED_NODE_IDS],
+        acknowledged_node_ids: [...REQUIRED_NODE_IDS],
+      };
       const coordinator = new MembershipPublicationCoordinator({
         nodeId: FIRST_NODE_ID,
         systemTableCache: {
@@ -854,34 +874,20 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
             if (tableName !== PUBLICATIONS_TABLE) {
               return [];
             }
-            return [
-              {
-                publication_id: PUBLICATION_ID,
-                publication_kind: PUBLICATION_KIND,
-                publication_epoch: PUBLICATION_EPOCH,
-                status: OPEN_STATUS,
-                published_active_node_ids: [...REQUIRED_NODE_IDS],
-                required_ack_node_ids: [...REQUIRED_NODE_IDS],
-                acknowledged_node_ids: [...REQUIRED_NODE_IDS],
-              },
-            ];
+            return [durablePublicationRow];
           },
         },
         controlPlanePublicationsOwner: publicationsOwnerOverRows({
+          async listPublications() {
+            return {success: true, rows: [durablePublicationRow]};
+          },
           // The change is computed from the durable row, never the cache.
           async getPublication() {
-            return persistedRows.at(-1) ?? {
-              publication_id: PUBLICATION_ID,
-              publication_kind: PUBLICATION_KIND,
-              publication_epoch: PUBLICATION_EPOCH,
-              status: OPEN_STATUS,
-              published_active_node_ids: [...REQUIRED_NODE_IDS],
-              required_ack_node_ids: [...REQUIRED_NODE_IDS],
-              acknowledged_node_ids: [...REQUIRED_NODE_IDS],
-            };
+            return durablePublicationRow;
           },
           async storeRow(row) {
             persistedRows.push(row);
+            durablePublicationRow = row;
           },
         }),
       });

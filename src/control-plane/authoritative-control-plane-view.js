@@ -32,7 +32,6 @@ const LOCAL_STR_SQL_QUERY_ENGINE = 'sql_query_engine';
 const LOCAL_STR_CDCINTEGRATIONSERVICE = 'cdcIntegrationService';
 const LOCAL_STR_MESSAGEROUTER = 'messageRouter';
 const LOCAL_STR_AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE = 'authoritative_row_source_unavailable';
-const LOCAL_STR_AUTHORITATIVE_QUERY_FAILED = 'authoritative_query_failed';
 
 const AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE = Object.freeze({
   LOCAL_PARTITION_REPLICA: 'local_partition_replica',
@@ -459,20 +458,24 @@ class AuthoritativeControlPlaneView {
             queryOptions,
           },
         );
-      const rows = freezeRows(result?.rows);
-      const source = normalizeReadSource(result?.source);
-      const readAuthorityWitnesses = freezeWitnesses(result);
+      const success = result?.success === true && Array.isArray(result.rows);
+      const rows = freezeRows(success ? result.rows : []);
+      const source = success ? normalizeReadSource(result.source) :
+        AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.UNAVAILABLE;
+      const readAuthorityWitnesses = success ? freezeWitnesses(result) : Object.freeze([]);
       const readAuthorityWitness =
-        readAuthorityWitnesses[0] || freezeWitness(result?.readAuthorityWitness);
-      const rowSetComplete = resolveRowSetComplete(result);
+        success ?
+          readAuthorityWitnesses[0] || freezeWitness(result.readAuthorityWitness) :
+          null;
+      const rowSetComplete = success && resolveRowSetComplete(result);
       const authoritativeObservation =
-        result?.authoritativeObservation &&
+        success && result.authoritativeObservation &&
           typeof result.authoritativeObservation === 'object' ?
           Object.freeze({...result.authoritativeObservation}) :
           null;
 
       return Object.freeze({
-        success: result?.success === true,
+        success,
         tableName,
         rows,
         count: rows.length,
@@ -482,8 +485,8 @@ class AuthoritativeControlPlaneView {
         readAuthorityWitnesses,
         authoritativeObservation,
         source,
-        localReadHit: result?.localReadHit === true,
-        localReplicaFallbackHit: result?.localReplicaFallbackHit === true,
+        localReadHit: success && result?.localReadHit === true,
+        localReplicaFallbackHit: success && result?.localReplicaFallbackHit === true,
         usedSqlFallback:
           result?.usedSqlFallback === true ||
           source === AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.SQL_QUERY_ENGINE,
@@ -499,9 +502,9 @@ class AuthoritativeControlPlaneView {
         snapshotVersion: resolveSnapshotVersion(rows),
         observedAt,
         observedAtMs,
-        error: result?.success === true ?
+        error: success ?
           null :
-          (result?.error || LOCAL_STR_AUTHORITATIVE_QUERY_FAILED),
+          (result?.error || LOCAL_STR_AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE),
       });
     })().finally(() => {
       if (this.inFlightReadsByKey.get(readKey) === inFlightRead) {

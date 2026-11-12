@@ -142,9 +142,9 @@ class MembershipPublicationCoordinatorPersist extends
 
   /**
    * This node's acknowledgement of the latest publication. A node
-   * acknowledges only for itself. The projection names the publication and
-   * whether an acknowledgement is owed (a hint); the write itself is a
-   * change of the durable row and never starts from the projected one.
+   * acknowledges only for itself. The required owner observation names the
+   * candidate; the write is a guarded change of that durable row. A projection
+   * may wake this interaction but cannot answer an unavailable owner read.
    * @param {string} nodeId - This node.
    * @param {Object} [options={}]
    * @return {Promise<Object|null>} The typed write outcome; null when no

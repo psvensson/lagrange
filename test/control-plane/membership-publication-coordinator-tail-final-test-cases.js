@@ -1148,12 +1148,12 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
     t.equal(
       nodeReadOptions.readAuthority?.authoritativeReadMode,
       CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-        .OWNER_RPC_PREFERRED_SQL_FALLBACK,
-      'published priority spread gaps should preserve fallback-capable authoritative node evidence',
+        .OWNER_RPC_REQUIRED,
+      'published priority spread gaps should require authoritative node evidence',
     );
     t.equal(
       serviceReadOptions.readAuthority?.authoritativeReadMode,
-      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
       'published priority spread gaps should use owner-rpc service evidence',
     );
     t.equal(
@@ -1327,7 +1327,7 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
 
     t.equal(
       operationReadOptions.readAuthority?.authoritativeReadMode,
-      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
       'published priority spread gaps should use owner-rpc replica operation evidence',
     );
     t.equal(
