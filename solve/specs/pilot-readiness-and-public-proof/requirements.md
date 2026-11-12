@@ -20,6 +20,15 @@ still requires only its existing 0.5 operational proof and does not claim
 
 ## Release allocation and current baseline
 
+Current planning reconciliation, 2026-11-12: source inspection compared main
+`ef93af85dcd6add82ff5b5fee21ca12d205c61cd` with WIP
+`dc29d85bedbbe4310bfcd4cf7e46e8b65a654b2d`. These are separate candidates;
+WIP-only owners are explicitly pinned below. No test, lab run, red measurement
+or receipt was produced by this documentation change. The epic's
+[current sequence](../../epics/pilot-readiness-and-public-proof.md#current-convergence-decision-2026-11-12)
+coordinates implementation; the following v0.4.0 description remains a dated
+release baseline, not a claim that later main implementation is absent.
+
 The exact reviewed release is v0.4.0 at
 `07206ba1c8bb396f4eb097a753915bb34580d824`, published on 2026-10-31.
 The release contains canonical artifact publication/store activation, binding
@@ -30,14 +39,20 @@ The single sequence is:
 
 1. **0.4.1 bounded correctness:** reject aggregate partial count/byte overflow
    instead of returning a truncated generic reduction; enforce the SQL byte
-   budget before a local batch is fully retained. These repairs consume the
-   current operation contract and do not reopen ordinary SQL optimization.
+   budget before a local batch is fully retained. Consume the admitted-reader
+   custody and truthful pgwire continuations under operation integrity. These
+   repairs consume the current contract and do not reopen ordinary SQL
+   optimization or add a global snapshot/API.
 2. **0.5 service and pilot milestone:** this epic retains Q2 typed selectors,
    Q3 explicit paged accumulation, Q4 structured partials and Q5 canonical
    multi-operation dispatch. The
    [standard HTTP service API](../standard-http-service-api/requirements.md)
    owns Hono/Fetch ingress, async guest integration and its bounded sequential
-   request-scoped SDK client. The owners integrate into one supported path.
+   request-scoped SDK client. The bounded read-worker/cancellation continuation
+   follows current storage custody and native API feasibility. A coherent cut,
+   mutating descriptor or optional SELECT alias requires its own capability
+   decision within these existing owners. The owners integrate into one
+   supported path.
 3. Q7–Q12 remain this epic's operational pilot work with their existing
    dependencies. Q11 cannot pass without Q7 and the other declared prerequisites.
    Existing accepted prerequisites, including Q6, are consumed rather than
@@ -67,11 +82,14 @@ cluster safety. Capability reports
 and management outcomes must never claim implemented operations from synthetic
 defaults; correcting a false positive does not authorize a new backup product.
 
-Existing sealed Quest acceptance remains binding. Q2–Q5 are proposed slots:
-their scenario names and gates below must become actual bounded Quest records
-and meaningful red witnesses before implementation. A proposed gate is not a
-run, a sealed verdict or a promise of performance. The epic's existing
-front-matter probe remains its recorded gate and is not rewritten here.
+Existing sealed Quest acceptance remains binding. Q2–Q5, Q10 and Q11 now have
+sealed main records and historical terminal logs; descriptions below of a
+proposed scenario are broader public-path requirements, not replacements for
+those records' script predicates. Preserve both the original acceptance and
+the outstanding production-composition obligation. New continuations are
+unsealed until an actual red witness is measured. A planning contract is not
+a run, a sealed verdict or a promise of performance. The epic's front-matter
+probe remains unchanged.
 
 A major feature's evidence must exercise real production composition: the
 generated compiled component, actual WASI worker/call bridge, canonical
@@ -113,7 +131,7 @@ This is public-path evidence substrate, not permission to build a new harness.
 
 ## Typed selector narrowing
 
-Quest slot: `call-selector-typed-parameter-narrowing` (Q2, proposed gate).
+Historical Quest: `call-selector-typed-parameter-narrowing` (Q2).
 
 - A distributed operation SHALL declare typed parameter slots for a fixed
   selector. Authorized invocation arguments supply values, not SQL syntax,
@@ -148,8 +166,10 @@ before implementation. No second planner or statement builder.
 
 ## Paged execution
 
-Quest slot: `call-shard-paged-execution` (Q3, proposed gate). Full contract:
+Historical Quest: `call-shard-paged-execution` (Q3). Full contract:
 [paged-execution.md](paged-execution.md).
+The unsealed 0.4.1 `retained-read-view-generation-custody` successor owns
+physical handle retirement and pressure; the existing Q3 seal is unchanged.
 
 - All inputs SHALL use one explicit bounded init/step/finish accumulator
   lifecycle, including the single-page case. State schema and bounds are
@@ -300,6 +320,70 @@ expiry/cleanup on independent nodes. The Hono journey consumes this same
 invocation identity behavior; source-level payload acceptance alone cannot
 satisfy the integration obligation.
 
+The durable authorities remain the existing
+[committed-statement outcomes](../../../src/partition/partition-committed-statement-outcome.js),
+[TX1 participant identity/content contract](../../../src/partition/partition-participant-transaction-bytes.js)
+and public invocation owner. They have different scopes: a public invocation,
+its attempt and its ordinal child statements are not interchangeable keys.
+The integration SHALL map those identities explicitly, compare stable identity
+with canonical semantic payload before accepting replay, and preserve the
+mutation/outcome atomicity owned by committed apply. It SHALL NOT introduce an
+`applied_calls` ledger or infer a durable commit from resource cancellation.
+Retain the actual committed result, or a durable reconstructible reference
+whose bytes share the outcome's lifetime. A `result_digest` can verify bytes
+but cannot return a lost result; replay must not recompute effects to recover it.
+
+An authoritative outcome lookup needs an implemented read fence to establish
+which committed history it has observed. The current
+[Raft ingress contract](../../../src/raft/raft-rs-ingress-constants.js) explicitly
+notes that its binding exports no `read_index`. Prove the supported native/API
+path and its quorum/applied-position semantics before claiming a linearizable
+outcome read. Snapshot-local applied position alone is insufficient. Without
+the required quorum or witness, the client may remain uncertain; do not
+automatically rerun a mutating operation to manufacture a definite answer.
+Even a successful linearizable ReadIndex followed by a missing outcome row
+does not prove an earlier in-flight proposal will never commit after that
+read. Preserve the original logical identity and semantic payload through any
+re-delivery, with apply-time deduplication; do not mint a fresh identity or
+infer permanent non-execution from an absence at one read position.
+
+Retention consumes the existing, **unmerged** WIP
+[system-table-retention epic](https://github.com/psvensson/lagrange/blob/dc29d85bedbbe4310bfcd4cf7e46e8b65a654b2d/solve/epics/system-table-retention.md)
+and [partition-statement-outcome-retention draft](https://github.com/psvensson/lagrange/blob/dc29d85bedbbe4310bfcd4cf7e46e8b65a654b2d/solve/quests/partition-statement-outcome-retention/quest.json).
+The main stabilization owner must reconcile these owners, table inventory,
+deletion dependencies and acceptance before implementation; the reference
+grants no integration or measurement credit. A bounded ring/TTL alone cannot
+distinguish a never-admitted key from a forgotten accepted intent. Define the
+authenticated key namespace and finite retry horizon, preserve parent/child
+references, and retain sufficient retirement evidence to refuse expired or
+retired intent instead of executing it afresh. A retirement floor requires an
+actual orderable identity component; opaque UUIDs do not acquire ordering by
+policy. If the protocol cannot distinguish expiry after metadata reclamation,
+stop claiming retry protection there and refuse the ambiguous retry path.
+
+### Conditional mutation is a separate capability decision — 0.5
+
+The initial distributed operation contract remains read-only. If a mutating
+operation descriptor is admitted later, the existing query/TX1 owners SHALL
+validate the complete declared read dependencies and mutation intent under
+the same transaction decision. Dependencies include absence observations,
+predicate/range reads and read-only participants, not only rows subsequently
+written; otherwise write skew remains possible. Use the existing conservative
+whole-partition generation/origin validation and participant prepare/commit contract; do not
+turn per-shard read views into an implicit cluster-wide snapshot or add another
+coordinator. A cross-shard read whose dependency cannot be represented and
+validated by that contract is unsupported, not silently ignored.
+
+A guest-provided `retrySafe` flag is not authority to rerun. Automatic retry
+requires proved deterministic, effect-free computation from newly validated
+inputs, a bounded whole-attempt restart and the original invocation deadline.
+External HTTP effects, time, randomness or an uncertain prior commit require
+their declared outcome/recovery policy. The capability's preregistered negative
+witnesses must include write skew/read-dependency change, same identity with
+different intent, a lost commit answer, and one participant unavailable after
+the durable decision. Descriptor authoring, SQL authorization and runtime
+effects must share that decision before any support claim is admitted.
+
 ## Learner promotion progress
 
 Quest: `learner-promotion-progress-proof` (Q6).
@@ -439,7 +523,51 @@ Quest: `postgres-compatibility-certification-matrix` (Q10).
   hand-editing the matrix without receipts or deleting a supported cell's
   test SHALL fail the gate (D12).
 
-Acceptance: `scenario-harness` scenario
+### Admitted wire contract correction — 0.4.1
+
+The unsealed
+[postgres-wire-description-contract](../../quests/postgres-wire-description-contract/quest.json)
+successor is coordinated by operation integrity. Q10's sealed
+[record](../../quests/postgres-compatibility-certification-matrix/quest.json)
+and terminal evidence stay unchanged. Source observation at main `ef93af85`:
+[`PgWireExtendedQueryHandler._handleDescribe`](../../../src/runtime/pgwire-extended-query-handler.js)
+answers `NoData` for both existing statements and portals without establishing
+whether they return rows. This is not a live driver regression receipt.
+
+For every admitted prepared-statement/portal shape, Describe SHALL expose the
+correct parameter count/types and result descriptor before Execute, including
+zero-row and NULL-valued results. Metadata discovery SHALL NOT execute effects
+or invoke guest code. Bind parameter formats/counts, row field counts/OIDs,
+NULL handling and DataRow encodings SHALL agree with that descriptor. Unknown
+or unsupported formats, portal suspension/resumption and statement classes
+receive an explicit protocol/feature error; do not send generic success or
+infer a stable schema from the first returned value. Existing supported matrix
+cells cannot be quietly downgraded to avoid their proof.
+
+Binary acceptance uses the existing protocol adapter and live external-client
+matrix: statement and portal Describe, zero rows, NULL/text/numeric values,
+parameter mismatch, attempted side effects during Describe, stale statement/
+portal lifetime, and supported versus refused formats. Predeclare named
+driver versions, SQLSTATEs and packet/result expectations, and make the witness
+red when truthful metadata or refusal is removed. Unsupported `SET` isolation
+requests SHALL be refused with the catalog's declared behavior; a no-op success
+cannot imply an isolation level that TX1 does not implement.
+
+An optional SELECT-shaped service-call alias remains a **0.5 capability
+decision**, not this repair's acceptance. If admitted, normalize it to the
+canonical lifecycle `PGWIRE_AUTH_ACTION.BINDING_CALL` (`pgwire.binding.call`)
+authorization/effect owner before execution;
+the current [text classifier](../../../src/query/pg/postgres-wire-adapter.js)
+otherwise defaults non-lifecycle text to `EXECUTE_QUERY`. Authorize one
+canonical invocation, not a privileged path disguised as a read. Use a stable
+JSON result or a fixed schema pinned to the admitted descriptor/revision;
+dynamic guest output cannot determine the wire schema after Describe. A
+cluster-routed CancelRequest is also a separate 0.5 decision consuming the
+[execution cancellation contract](scale-failure-certification.md#read-execution-isolation-and-cancellation-continuation--05),
+with authenticated session/operation/generation mapping and explicit unsupported
+behavior until proved. Neither choice requires a new SQL execution engine.
+
+Broader public-path acceptance (unchanged): `scenario-harness` scenario
 `postgres-compatibility-certification-matrix`, 3 consecutive, metric
 `priority`. Edition boundary: PostgreSQL compatibility is Community/AGPL
 scope per `edition-matrix.md`.

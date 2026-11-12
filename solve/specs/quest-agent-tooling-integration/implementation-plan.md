@@ -320,9 +320,14 @@ the selected product Quest's existing author.
 
 Before execution, select one bounded real Quest with a useful causal question,
 a declared user-visible result and an affordable actual interaction witness.
-Record the baseline, candidate, scope, participants and evidence obligations.
-Do not join an active writer's interaction or expand the pilot into formation
-or comparison acceptance merely to demonstrate a plugin.
+Derive its task view from current owners, source and existing records: baseline,
+candidate, scope, actual implementation/binding APIs, affected callers, relevant
+prior failures and evidence obligations. Name the paired invariants and a
+reachable counterexample to each material claim before choosing new machinery.
+Upstream documentation or an empty reference search cannot establish API or
+caller completeness. The existing product author owns the interaction; this
+pickup applies Q8's current contract and does not change component seals or
+expand the pilot into formation or comparison acceptance.
 
 Required journey:
 
@@ -348,12 +353,13 @@ identities, test/runner artifacts, review findings and Quest records. Account
 for session/model/tool differences; no replayed transcript or scripted success
 message may stand in for a live client invocation.
 
-Record observed diagnosis/review/queue/execution time, invalid-contract proposals
-caught, repeated repairs and tool costs where original timestamps or provider
-records exist. Missing values are unmeasured, never estimated. Historical pilot
-comparisons are descriptive unless task, source, model, configuration and
-execution conditions support a matched comparison. One successful pilot cannot
-establish a percentage productivity improvement or general defect-rate reduction.
+Record observed time to a discriminating observation, review, proof queue,
+execution and integration; invalid-contract proposals caught; repeated repairs
+of the same cause; and tool costs where original timestamps or provider records
+exist. Missing values are unmeasured, never estimated. Historical pilot comparisons
+are descriptive unless task, source, model, configuration and execution conditions
+support a matched comparison. One successful pilot cannot establish a percentage
+productivity improvement or general defect-rate reduction.
 
 The final verifier checks the entire declared integration and evidence chain.
 Outstanding required capabilities, material findings, publication requirements

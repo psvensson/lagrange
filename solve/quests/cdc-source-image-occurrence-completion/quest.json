@@ -1,0 +1,54 @@
+{
+  "schema": "solve-quest/2",
+  "id": "cdc-source-image-occurrence-completion",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "Installing or replacing a CDC source image preserves a coherent relationship between visible rows and processed occurrence identities. A message-group delivery frontier advances only after the corresponding source-image effects are accepted by their canonical application owner; refusal retains debt and finite recovery replays exactly the unfinished effects without losing rows or resurrecting stale data.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/cdc-source-image-occurrence-completion/evidence/receipt.json",
+      "requiredReceipts": [
+        "source-image-reset-replay-coherence",
+        "refused-application-retains-delivery-debt",
+        "partial-and-restart-occurrence-recovery",
+        "stale-generation-and-delete-fencing",
+        "bounded-progress-and-resource-custody",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "version-and-proof",
+      "statement": "Initial completion: 0.4.1 bounded correction under operation-integrity-and-reliable-formation. This is an unsealed proposal, not executed acceptance. Reconcile main ef93af85dcd6add82ff5b5fee21ca12d205c61cd with preserved WIP dc29d85bedbbe4310bfcd4cf7e46e8b65a654b2d before implementation; preserve historical seals and failed evidence. Use existing proof owners to obtain a genuine discriminating red before start, independently reviewed source and lab-executed proof on the actual interaction, including useful progress and resource release. A refuted source hypothesis must have a recorded counterexample disposition, not an invented fix or passing boolean."
+    },
+    {
+      "id": "owner-and-lineage",
+      "statement": "Continue the source-image/application frontier gap beyond solved cdc-recipient-domain-and-retained-debt and the existing catalog/cache incarnation owners. Keep recipient identity, outstanding obligation and occurrence-effect completion distinct. Trace the real cache source-image replacement, occurrence deduplication, message-group delivery application and acknowledgement consumers as one interaction; coordinate with canonical census and replica generation work before shared-owner edits."
+    },
+    {
+      "id": "falsifying-schedules",
+      "statement": "Reproduce image reset/replacement followed by a previously seen occurrence whose rows must be restored, interruption after partial application, a false/refused apply result, delayed duplicate delivery and restart between effect and acknowledgement. Prove the actual visible rows and retained debt, not only an applied flag or frontier number. Do not mark a delivery range complete merely because the callback returned without throwing. Include distinct ordinals for one key and authoritative later-image subsumption; a valid duplicate or unchanged authoritative row needs an explicit successful completion classification rather than a blanket false-is-failure rule."
+    },
+    {
+      "id": "atomic-effect-identity",
+      "statement": "Choose the existing owner-defined atomic boundary for source image incarnation, occurrence markers and installed effects; reject mixed generations and stale restoration after a legitimate delete. Do not clear global deduplication state, invent a second CDC acknowledgement authority, treat missing evidence as an empty successful image or repair product state from the harness."
+    },
+    {
+      "id": "recovery-and-pressure",
+      "statement": "Under finite availability the canonical wake resumes retained debt and reaches correct visible state; permanent refusal is typed and bounded. Include an initially empty image, multiple sources/recipients, duplicate replay, installation failure and cleanup. Preserve existing CDC fairness, actual owed-prefix pressure and admission bounds."
+    },
+    {
+      "id": "pinned-source-boundary",
+      "statement": "The combined defect hypothesis is pinned to WIP dc29d85bedbbe4310bfcd4cf7e46e8b65a654b2d, not a claim that its new files are already on main. Trace installSourceImage in src/cache/system-table-cache-source-image.js, CDCHandler.applyImmediate/processedEventIds in src/message-group/cdc-handler.js, applyCommittedCdcRange in src/message-group/message-group-cdc-source-range.js, and their production composition in message-group-service-raft-timing.js and cdc-integration-service-source-relist.js. Main already has the CDC handler; source-image/range additions require composition first. The open system-cache-reconciliation-ingress Quest remains the shared gateway implementation owner, and its narrower sealed acceptance must not be expanded into CDC completion."
+    },
+    {
+      "id": "production-return-contract",
+      "statement": "At pinned WIP dc29, message-group-service-raft-timing.js applyCommittedCdcChange discards CDCHandler.applyImmediate's Boolean and its applyMember callback returns undefined before applyCommittedCdcRange advances. Checking only applyMember === false cannot close the real interaction. Define and consume the owner's explicit completed/refused/failed outcome through both adapters; distinguish a valid already-applied occurrence from a marker whose effects were removed by image replacement."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ]
+}

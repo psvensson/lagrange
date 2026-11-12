@@ -1,6 +1,6 @@
 ---
 audience: agent
-last_reviewed: 2026-10-30
+last_reviewed: 2026-11-12
 ---
 
 # Quest workflow
@@ -44,7 +44,8 @@ Record the complete transition before implementing its parts: trigger,
 authoritative facts, permitted action, actual durable commit point,
 restart/lost-answer behavior and every remaining obligation's owner. Use
 existing owners first. Distinguish boundary-only tests from reachable
-production failures. A green primitive does not certify a complete operation.
+production failures. For each material claim, name a reachable counterexample
+and its discriminating witness; a green primitive does not certify an operation.
 
 ### Contract-first transition record checklist
 
@@ -52,14 +53,18 @@ Before any behavior-changing attempt, record the complete transition in the
 quest log or transition note:
 
 1. **Producer and consumer symbols**: Name the exact canonical endpoints,
-   functions, and exported types crossing the seam.
+   functions, exported types and affected callers. Census existing implementation
+   and actual binding APIs before proposing new machinery; an upstream API alone
+   does not establish that this repository exposes or consumes it.
 2. **Owner-defined shape**: Define concrete types and schemas owned by the
    producer; no untyped facades, hand-written duplicate shapes, or phantom
    fields.
 3. **Identity and generation**: Trace subject/domain, authority, incarnation,
-   epoch, term, or generation through every hop.
+   epoch, term, or generation through every hop; name the meaning of a read
+   version separately from a routing or membership epoch.
 4. **Ordering**: Specify event sequences, causal position, and monotonic
-   watermarks.
+   watermarks. Distinguish a local view, a per-owner freshness fence and a
+   consistent cut across owners; identify the mechanism supporting the claim.
 5. **Absent versus unavailable**: State explicit typed unavailability when
    authority is absent or uninitialized; zero silent fallback reads or default
    guesses.
@@ -68,7 +73,8 @@ quest log or transition note:
 7. **Retained obligations**: Account for in-flight operations, uncommitted
    leases, cold holds, and pending mutations.
 8. **Canonical wake and cleanup**: State the event-driven progression, resource
-   disposal, deregistration, and cancellation paths.
+   disposal and deregistration paths. Distinguish cancelling a wait, stopping
+   execution, releasing resources and settling effects already committed.
 
 This is an application of existing rules, not a new fixed subsystem count or
 permission to rewrite sealed acceptance. The current bounded cutover work is
@@ -98,6 +104,8 @@ Bound review to the candidate, affected interaction and acceptance. Return all
 reachable material findings together, then review repairs and what they
 invalidate. Retain applicable unaffected evidence; do not broaden acceptance
 or impose a fixed number of review rounds. Route unrelated findings to owners.
+When a recorded decision refines a general instruction, update the canonical
+owner guidance in the same change and preserve the historical decision.
 
 A change under `src/` lands only behind independent approval newer than the
 last attempt, naming the verifier and reviewed content. A standing rejection

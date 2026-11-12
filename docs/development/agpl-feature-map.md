@@ -313,6 +313,16 @@ repair stale assertions and unsupported claim text. Credit the repaired
 JSON-object HTTP body. Full URL/raw-byte HTTP preservation, awaiting application
 handlers and Hono authoring belong to the 0.5 standard HTTP contract.
 
+The 12 November reconciliation adds bounded source/evidence binding, CDC
+source-image occurrence completion, replica generation fencing, retained-read
+physical custody, truthful PG descriptions and current locking-read reservation
+corrections to the existing operation-integrity owner. Canonical census and
+checkpoint continuations retain their existing owners and preserved WIP evidence.
+Completed Quest seals stay historical; new gaps use unsealed follow-up proposals
+and require actual red measurements before sealing. WIP composition and the
+unchanged three-node formation journey remain required before the broad
+operation-integrity claim. This allocation adds no new query or HTTP surface.
+
 | Id | Item | Roadmap state | Scope notes |
 |----|------|---------------|-------------|
 | RM-0.2.9-published-operating-contract | Usable artifacts, operation integrity, reliable three-node formation and exact-candidate operating contract | 🔧 | Bounded installed-startup/artifact/publication and current-result correctness repairs, operation integrity across read authority/role publication/read-only observation/CREATE-retry-cleanup custody/deferred join-config-runtime handoffs/CDC fairness-cost/first-cause diagnostics, three-node fresh-formation user-table routability, genuine supported-use consumer checks, stale-assertion repair and accurate read/transaction/retry/recovery/comparison declarations. Existing stabilization and feature owners retain their work; owners: `solve/epics/operation-integrity-and-reliable-formation.md` and `solve/epics/release-0-2-7-stabilization.md`. Full composed five-node comparison, standard HTTP and service acceptance remains 0.5; no new HTTP/service-envelope features are included. |
@@ -344,6 +354,15 @@ This is an allocation of unfinished acceptance, not a new query-feature
 authorization or a claim that implemented index, locking-read or live-query
 components are absent. Preserve delivered implementations and accepted proof;
 the Hono change does not reopen them or enlarge their scope.
+
+The pilot owner also completes bounded execution/cancellation and replay
+qualification using the existing worker-hosted guests, per-shard retained read
+views, atomic partition statement outcomes and TX1. Stronger consistency or
+conditional-write modes require a 0.5 decision and proof only where an admitted
+journey needs them; otherwise they remain explicitly unsupported. Separate WAL
+pins and partition epochs cannot establish a global read cut. The existing WIP
+retention proposals must be reconciled through stabilization before admission;
+no new duplicate ledger or imported checker is assumed to exist on main.
 
 ### 1. Queryable Core Completion
 
@@ -553,9 +572,9 @@ authority.
 | RM-0.5-pilot-transport-security | Authenticated and encrypted node transport | 🔲 | Protect the supported transport before pilot use. Basic authentication, authorization and supported tenancy remain AGPL; organization-wide identity and policy administration belong to external 1.2 services. Contract: `docs/security.md`. |
 | RM-0.5-pilot-pg-authentication | Pilot PostgreSQL authentication and TLS | 🔲 | Qualify the selected driver/authentication profile, including SCRAM where required; preserve explicit trust/password/TLS limits. Enterprise identity integration remains 1.2. Contract: `architecture/postgres-wire.md`. |
 | RM-0.5-pilot-latency-groups | Working latency groups in the pilot envelope | 🔲 | Qualify automatic group formation and membership changes, group-aware routing/placement, representative traffic propagation and public locality diagnostics under the declared pilot topology and failures. Reuse canonical topology owners; latency groups do not assert geography or sovereignty, and named physically qualified cross-region profiles remain 1.2 AGPL work. A bounded owner/spec and proof are required; contract: `docs/operations-readiness.md`. |
-| RM-0.5-pilot-recovery-envelope | Bounded logs and pilot recovery certification | 🔲 | Qualify message-group compaction and multi-machine soak/recovery using delivered mechanisms and the inherited retention obligations completed by the stabilization owner. Name supported topology, capacity and fault cases; do not defer initial pilot proof to 0.9. Contract: `docs/operations-readiness.md`. |
+| RM-0.5-pilot-recovery-envelope | Bounded logs and pilot recovery certification | 🔲 | Qualify message-group compaction and multi-machine soak/recovery using delivered mechanisms and the inherited retention obligations completed by the stabilization owner. Reconcile the preserved system-table-retention proposals; require owner-defined safe horizons, refusal of retired operation identities and recoverable outcomes across lost replies. Coordinate the pilot's bounded execution/cancellation proof without cancelling committed apply. Name supported topology, capacity and fault cases; do not defer initial pilot proof to 0.9. Contracts: `docs/operations-readiness.md` and `solve/specs/pilot-readiness-and-public-proof/requirements.md`. |
 | RM-0.5-pilot-migration-upgrades | Pilot migration, upgrade and exit procedures | 🔲 | Data load, shadowing, cutover, rollback/exit and supported release-pair upgrade/downgrade rehearsals. Full user backup/restore/PITR mechanisms remain later AGPL 1.0 work; pilot export/reload limits must be explicit. Contract: `docs/migration.md`. |
-| RM-0.5-pilot-driver-certification | Named PostgreSQL-driver and SQL profiles | 🔲 | Certify the declared current subset and necessary metadata through actual drivers. Broader catalogs, window functions, sequences and index syntax are assigned to 1.1. Contract: `architecture/postgres-wire.md`. |
+| RM-0.5-pilot-driver-certification | Named PostgreSQL-driver and SQL profiles | 🔲 | Certify the declared current subset and necessary metadata through actual drivers. Keep framing/catalog behavior within the existing adapter; qualify cancellation and any table-valued call alias with canonical authorization, stable prepared-result shape and named pooler configuration. Current admitted-description defects are 0.4.1 repairs. Broader catalogs, window functions, sequences and index syntax are assigned to 1.1. Contract: `architecture/postgres-wire.md`. |
 | RM-0.5-pilot-operational-view | One public operating and diagnostics view | 🔲 | Correlate requests, shard runs, partials, placement, retries and typed failures; expose index state/build failures and live-query dependencies/frontiers/maintenance mode. Standard metrics/traces and export remain Community; paid fleet reporting is separate. |
 
 The existing PostgreSQL wire, dialect translation, supported CTE/subquery

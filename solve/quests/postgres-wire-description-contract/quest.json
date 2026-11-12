@@ -1,0 +1,38 @@
+{
+  "schema": "solve-quest/2",
+  "id": "postgres-wire-description-contract",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "Repair the currently admitted PostgreSQL extended-query description contract through the existing pgwire adapter and compatibility matrix: statement/portal Describe reports correct parameter and result metadata without executing effects, Bind and DataRow agree with that metadata including empty and NULL-valued results, and unsupported protocol or isolation behavior is explicitly refused. Consume the normative 0.4.1 continuation in solve/specs/pilot-readiness-and-public-proof/requirements.md without adding a second SQL engine or changing the sealed Q10 verdict.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/postgres-wire-description-contract/evidence/receipt.json",
+      "requiredReceipts": [
+        "live-driver-description-red-witness",
+        "statement-portal-parameter-result-description",
+        "empty-null-format-oid-row-agreement",
+        "describe-no-effects-and-portal-lifetime",
+        "unsupported-refusal-and-matrix-preservation",
+        "red-on-removal-and-independent-review"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "milestone-and-lineage",
+      "statement": "Initial completion is 0.4.1 because admitted extended-query behavior must be truthful. Preserve the sealed terminal postgres-compatibility-certification-matrix record and all supported cells. Optional SELECT service-call aliases, cluster-routed CancelRequest and new isolation/consistency capabilities remain separate 0.5 decisions."
+    },
+    {
+      "id": "one-adapter-and-support-owner",
+      "statement": "Use src/runtime/pgwire-extended-query-handler.js, src/query/pg/postgres-wire-adapter.js and the existing compatibility catalog/matrix. Metadata discovery cannot execute guest code or effects. Unknown formats, isolation or suspension behavior must follow declared typed refusal; a silent no-op or deleting a supported matrix cell cannot close the Quest."
+    },
+    {
+      "id": "no-implicit-service-alias",
+      "statement": "This Quest does not introduce a SELECT call alias. Any separately admitted alias must normalize into canonical BINDING_CALL authorization and invocation/effect ownership before execution, with a stable JSON result or a fixed descriptor-pinned schema; the ordinary EXECUTE_QUERY classifier cannot authorize it implicitly."
+    },
+    {
+      "id": "draft-proof-before-seal",
+      "statement": "This registration is unsealed and contains source observations only. Preregister named external-driver versions, wire packets, result/parameter descriptors, SQLSTATEs and adverse schedules, then obtain an actual production-adapter red witness before sealing. Exact-candidate live driver receipts, red-on-removal checks and independent verification are required; a script-symbol check or missing receipt is not proof."
+    }
+  ]
+}

@@ -34,8 +34,10 @@ work on the same interaction. Use the current summary, not another queue.
 Give a worker the quest and epic links; the owned interaction and writable
 scope; the candidate/base revision; sealed acceptance and applicable contracts;
 reproducer and relevant prior evidence; durable findings and ruled-out causes;
-and the requested result, constraints and handoff owner. Include only the
-context needed for that assignment. The generated
+and the requested result, constraints and handoff owner. Derive this compact
+task view from current source and existing records, including the relevant
+implementation/API census and counterexample; it is not another task ledger.
+Include only the context needed for that assignment. The generated
 [`command reference`](../steering/generated/solve-commands.md) owns supported
 operations; there is no required generic executor file or response protocol.
 

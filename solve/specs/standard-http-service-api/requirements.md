@@ -17,7 +17,7 @@ are not new runtime measurements or evidence of milestone acceptance.
 | Version | Initial completion | Authority retained |
 | --- | --- | --- |
 | 0.4.1 | Bounded correctness and truthful-claim repairs: complete reduction or explicit refusal, early byte budgets, and source/proof/publication reconciliation | Existing call, capability, comparison and release owners |
-| 0.5 | Hono/Fetch service entry, request-scoped client, coherent distributed service envelope and the complete public journey; unfinished 0.4 acceptance is explicitly carried forward | This spec owns HTTP and client integration; existing pilot and developer-journey specs own their respective contracts |
+| 0.5 | Hono/Fetch service entry, request-scoped client, bounded distributed service envelope and the complete public journey; unfinished 0.4 acceptance is explicitly carried forward | This spec owns HTTP and client integration; existing pilot and developer-journey specs own their respective contracts |
 | 0.6 | Real OCI provider using the same application, capability, operation and deployment identities | Existing service-portability and native OCI owners |
 | 2.0 | Advanced execution such as multistage exchange and deeper planning | Existing advanced-execution allocation |
 
@@ -26,6 +26,16 @@ scope. This amendment does not claim earlier SQL, pilot or release obligations
 closed and does not change edition ownership. A bounded patch need not wait for
 Hono or the full comparison programme. Scenario A comparison can advance
 independently of Hono through its existing owner; it is not another HTTP test.
+
+The 2026-11-12 planning reconciliation inspected main
+`ef93af85dcd6add82ff5b5fee21ca12d205c61cd` and separately pinned WIP
+`dc29d85bedbbe4310bfcd4cf7e46e8b65a654b2d`. The following v0.4.0 audit
+remains historical; newer main implementation is not erased by it. In
+particular [H4's record](../../quests/h4-http-invocation-recovery-and-cancellation/quest.json)
+and terminal log remain sealed and unchanged. The clarifications in sections
+5 and 6 are continuation requirements, not revised historical verdicts.
+No runtime tests, lab runs, receipts or native-API feasibility proof were
+performed for this amendment.
 
 ## 2. Verified 0.4.0 delta and recommendation changes
 
@@ -311,11 +321,16 @@ the limited replay contract explicit before accepting it. Revoked grants and
 expired credentials must not be bypassed by a retained successful response.
 
 Seal completed-response replay, conflicting reuse, in-progress work, terminal
-failure and uncertain outcome separately. State the retention window and storage
-budget. Expiry is not an eternal exactly-once promise: while an expired record is
-retained return its typed expired outcome; after metadata retention ends the
-contract cannot promise to detect every historical reuse. Clients must not retry
-an old intent beyond the advertised window as though deduplication persists.
+failure and uncertain outcome separately. State the retention window, storage
+budget and enforceable key-expiry protocol. Retained expired records return the
+typed expired outcome. Reclamation must not turn a retry of an accepted intent
+into fresh execution: retain sufficient parent/child lifetime or retirement
+evidence, or require a key namespace with an authenticated, enforceable horizon.
+An opaque key plus a TTL cache alone supplies no such distinction after eviction.
+When the protocol cannot resolve that ambiguity, refuse the ambiguous retry and
+limit the advertised guarantee; do not claim eternal exactly-once execution.
+The existing [pilot identity/retention continuation](../pilot-readiness-and-public-proof/requirements.md#direct-public-call-identity-and-replay--05)
+owns reconciliation with WIP retention work, without a second outcome store.
 
 Ordinary HTTP code may depend on time, randomness, external reads or effects.
 Stable child ordinals alone do not make restarting it safe. The initial contract
@@ -338,6 +353,23 @@ Keep operation lifetime distinct from an individual socket lifetime, bounded by
 the original deadline and durable state. No detached unowned execution remains.
 The guest Request.signal and context signal reflect that invocation-owned
 cancellation decision, not an automatic abort on any one waiter's disconnect.
+
+Cancellation has separate resource and durable-outcome observations. An HTTP
+timeout, disconnected waiter, interrupted readonly query or terminated guest
+does not prove that an already admitted mutation failed to commit. The existing
+statement-outcome/TX1/invocation owners remain authoritative, and an unavailable
+commit witness may leave the client uncertain. The public invocation key maps
+to its ordinal child identities; it does not replace every child command key.
+Do not interrupt committed apply to make a request appear cancelled.
+
+The 0.5 [read execution/cancellation continuation](../pilot-readiness-and-public-proof/scale-failure-certification.md#read-execution-isolation-and-cancellation-continuation--05)
+owns native API feasibility, connection/worker-generation fencing and measured
+resource quiescence. H4 consumes those facts and projects its waiter policy;
+it does not own another worker pool or interrupt registry. The current runtime
+uses JCO/V8 workers, so Wasmtime fuel/epoch assumptions are not evidence. A
+shared flag, JavaScript timer or worker termination request does not itself
+establish a native cancellation latency bound. Preserve late-result fences
+through closure, slot reuse and storage replacement.
 
 ## 6. Consume the distributed execution contract
 
@@ -368,6 +400,21 @@ is not a common global read snapshot. Arbitrary writes, distributed joins,
 automatic reduction reassociation and general multistage planning are not
 introduced by making HTTP handlers asynchronous. Future capabilities retain
 their existing owner and version allocation.
+
+The [paging contract](../pilot-readiness-and-public-proof/paged-execution.md)
+owns the immediate 0.4.1 physical reader-lifetime repair. Sharing that lifetime
+boundary with CDC does not merge query and hydration-image semantics. The
+admitted consistency remains `per_shard_retained_read_view`; a snapshot-local
+applied index cannot imply a coherent cross-shard cut or latest leader read.
+The existing query/TX1 owners must decide and prove any stronger 0.5 capability.
+
+Any later mutating operation descriptor consumes the
+[conditional mutation contract](../pilot-readiness-and-public-proof/requirements.md#conditional-mutation-is-a-separate-capability-decision--05):
+read dependencies and writes are validated under the same conservative
+whole-partition OCC and TX1 decision. A guest's `retrySafe` label is not proof
+that HTTP effects, randomness or uncertain commits can be repeated. Hono
+cannot implement conditional distributed commit or global snapshot semantics
+inside request middleware.
 
 ## 7. Ordered implementation packages and acceptance
 

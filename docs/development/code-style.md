@@ -127,7 +127,9 @@ second path alive beside the real one. Write the replacement form instead.
 
 - `owner_port_feature_detection`: `typeof this.x.y === 'function'` (or on a
   parameter member) to discover what an owner can do. Replace it with a named
-  collaborator passed to the constructor and validated once there.
+  collaborator validated at its owned wiring point: construction or declared
+  late binding. Validate each wiring; a replacement is an explicit transition
+  that invalidates derived memos. Reads before wiring return typed unavailable.
 - `identity_keyed_module_state`: a module-scope `new WeakMap()`, `Map()`,
   `Set()` or `WeakSet()` keyed by an owner's identity. Replace it with an
   owner-held field on the instance that owns the state.
@@ -143,8 +145,9 @@ second path alive beside the real one. Write the replacement form instead.
   `raft_role`, `workflow_step`, `phase` or `step` read. Replace it with a
   named state that the absent case decodes to explicitly.
 - `value_or_promise_then_checks`: `typeof x.then === 'function'` at a call
-  site. Replace it with an always-promise producer, so the caller always
-  awaits.
+  site. Declare the producer's outcome: always-promise for I/O; a named
+  settled-or-pending answer where synchronous completion is part of the
+  contract. Preserve turn ordering and declare apply mode at registration.
 - `two_source_fallback_reads`: `a.x || b.y`, one fact read from two roots.
   Replace it with one authority per fact and read only that authority.
 - `typeof_dual_paths`: a `typeof f === 'function'` test with a real else

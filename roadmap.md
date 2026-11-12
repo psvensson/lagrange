@@ -59,12 +59,12 @@ ordinary public entrypoint and real production composition. Existing applicable
 evidence is reused; a bounded repair can complete while a wider feature remains
 open with a named owner. Publication alone does not complete a feature.
 
-Target the bounded 0.4.1 correction candidate in the next several working days,
-subject to its acceptance. Review the integrated candidate, passing journeys and
-first blockers by 6 November 2026; use observed repair, review and integration
-throughput by 13 November to set or revise the 0.5 window. These are review
-horizons, not shipping promises or waiting periods. Independent 0.4.1 and 0.5 work
-can advance without creating another release sequence.
+The 12 November review keeps 0.4.1 first. Its next decision consumes the frozen
+candidate, actual formation result and remaining material findings; an elapsed
+calendar horizon cannot establish readiness. Use observed repair, review and
+integration throughput to set the 0.5 window after that evidence is available.
+Independent bounded research and implementation can advance when their consumed
+contracts are defined, without assigning two writers to one changing interaction.
 
 ## Released - 0.1 Internal coherence
 
@@ -127,6 +127,15 @@ error; an internal result limit must not silently discard contributions. Apply
 byte bounds before oversized partials consume the protected resource. Correct
 stale assertions and claim text, including comparative claims without qualified
 physical evidence. These are bounded repairs, not a new HTTP or query API.
+
+The reviewed correction sequence covers recovery of canonical membership and
+checkpoints, replica completion that cannot overwrite a newer generation,
+complete CDC application after image replacement, safe retirement of retained
+SQLite readers and truthful PostgreSQL descriptions. Current locking-read
+promises require authoritative participant reservations or explicit unsupported
+behavior. Future optimistic writes cannot substitute for that repair. Preserve
+valid earlier evidence and bind each new acceptance result to the actual
+integrated candidate; preserved development work alone is not a service pass.
 
 A new evaluator must be able to install a supported distribution, boot it,
 create/read data and restart within the advertised correction-release scope.
@@ -269,6 +278,30 @@ Scenario B comparison belong to 2.0. See
 
 A developer can install, load data, deploy a service, connect supported SQL
 clients, diagnose failure and rehearse recovery within a measured pilot profile.
+
+The pilot milestone completes execution and client qualification. Reuse existing
+worker-hosted guests, per-shard retained
+read views, the atomic partition statement-outcome ledger and TX1. First measure
+the actual synchronous SQL/control-loop interaction and prove a bounded worker
+path, including engine interrupt feasibility and exact-generation cleanup.
+Cancellation must distinguish execution stop, resource release and durable
+outcome; a shared-memory flag alone supplies none of those guarantees remotely.
+
+Within 0.5, decide and prove any stronger consistency or conditional mutation
+needed by the admitted service journey. Independently pinned WAL views are not a
+global consistent cut, routing epochs are not read versions, and a result digest
+is not replayable result storage. Reuse existing transaction owners for complete
+read-dependency validation and durable outcomes. An unavailable quorum can retain
+an unknown result; expired operation identities must not become new writes.
+Unrequired stronger modes remain explicitly unsupported, with the decision and
+its evidence owned here rather than an unversioned feature programme.
+
+Keep PostgreSQL framing and the bounded catalog shim behind the existing adapter.
+0.4.1 repairs descriptions of admitted behavior; 0.5 qualifies native cancellation
+and any table-valued call alias through the same authorized operation and a stable
+result schema. Named driver/pooler journeys establish compatibility. The existing
+WIP retention proposals remain owned by stabilization and must be reconciled
+before implementation; they supply no main integration or bounded-growth credit.
 
 - Cryptographically authenticate and encrypt node communication on the supported
   transport; this requirement does not wait for NATS or Veilid.

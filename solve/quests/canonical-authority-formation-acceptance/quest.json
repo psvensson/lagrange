@@ -27,6 +27,14 @@
         "cdc-recipient-domain-and-retained-debt-verified",
         "cache-replica-incarnation-coherence-verified",
         "load-admission-ingress-identity-verified",
+        "quest-evidence-and-candidate-binding-verified",
+        "cdc-source-image-occurrence-completion-verified",
+        "replica-settlement-generation-fencing-verified",
+        "locking-read-authoritative-reservations-verified",
+        "retained-read-view-generation-custody-verified",
+        "postgres-wire-description-contract-verified",
+        "retained-priority-census-owner-redrive-verified",
+        "partition-checkpoint-epoch-generation-verified",
         "independent-verification"
       ]
     }
@@ -75,6 +83,14 @@
     {
       "id": "additional-material-repairs",
       "statement": "Q13 catalog-authority-and-visible-reconciliation, Q14 cdc-recipient-domain-and-retained-debt, Q15 cache-replica-incarnation-coherence and Q16 load-admission-ingress-identity are required bounded repair/proof dependencies before frozen composition closure. Coordinate shared cache/gateway writers and retain Q6 policy behavior through composition. C1/C2 remain in the comparison epic; they do not silently broaden the sealed three-node service predicate. Any later comparison-source change needs current evidence applicability, not automatic reuse of a prior formation pass."
+    },
+    {
+      "id": "november-12-composition-continuations",
+      "statement": "Initial completion remains 0.4.1. Consume the six new bounded successor receipts named in doneWhen plus the existing retained-priority-census-owner-redrive and partition-checkpoint-epoch-generation outcomes. The census record is preserved at dc29d85bedbbe4310bfcd4cf7e46e8b65a654b2d; checkpoint at df2ead4f6bc069b1d6def9bb2a236ed868fb999b. They are sealed unmerged dependencies, not new local records or main proof: reconcile their original seals, authority constraints, full acceptance and candidate applicability before integrating. Preserve solved Q1/Q2/Q5/Q14 and other historical records. Reuse canonical owners with one writer per changing interaction; no plan, source hypothesis, narrow component approval or preserved WIP push substitutes for an executed outcome. The unchanged original formation receipt and separate comparison handoff remain mandatory."
+    },
+    {
+      "id": "source-bound-aggregate-inputs",
+      "statement": "The evidence-and-candidate-binding successor must establish actual execution/selection/acceptance integrity before newly revised receipts can close this aggregate. Validate every additional receipt through existing executed-report and proof authorities, including complete required phases, exact source scope, semantic outcome, independent review and applicability. Bind genuine failures and any refuted hypotheses. No hand-authored passed markers, missing candidate identity, new weaker predicate or status-only evidence may discharge a material finding. 0.5 retention, cancellation, stronger consistency and client expansion retain their separate existing owners; they are not silently added to the sealed three-node service predicate."
     }
   ],
   "verificationTemplates": [
