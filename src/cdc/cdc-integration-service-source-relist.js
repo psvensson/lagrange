@@ -71,6 +71,9 @@ const SOURCE_RELIST_LOG_MSG = Object.freeze({
   PAGE_FAILED: 'CDC source image page failed; the image restarts from page 0',
 });
 
+// The cause an installed image's authoritative watermark names.
+const SOURCE_RELIST_CAUSE_ID = 'cdc-source-relist';
+
 const RELIST_READ_AUTHORITY = buildControlPlaneReadAuthority({
   authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
   leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
@@ -91,23 +94,20 @@ function pageResult(partitionId) {
 }
 
 // Read one page through the owner-RPC query path, at the source's leader.
+// The executor answers every read failure typed; a throw is a defect, and it
+// ends this list at the source order, which logs it (RELIST_FAILED).
 async function readImagePage(service, request, cursor) {
   const queryExecutor = service.sqlQueryEngine?.queryExecutor ?? null;
   if (queryExecutor === null) {
     return {success: false, errorCode: SOURCE_RELIST_FAILURE.NO_QUERY_EXECUTOR};
   }
   const sql = `SELECT * FROM ${request.tableName}`;
-  try {
-    return await issueAuthoritativeReadStage(service, CDC_TERMINAL_STAGE.OWNER_RPC_READ,
-      () => queryExecutor.executeOnPartition(request.sourcePartition, sql, [], true, true, false, {
-        readAuthority: RELIST_READ_AUTHORITY,
-        buildRequest: pageRequest(sql, cursor),
-        buildSuccessResult: pageResult(request.sourcePartition),
-      }));
-  } catch (error) {
-    return {success: false, errorCode: SOURCE_RELIST_FAILURE.READ_FAILED,
-      error: error?.message ?? String(error)};
-  }
+  return issueAuthoritativeReadStage(service, CDC_TERMINAL_STAGE.OWNER_RPC_READ,
+    () => queryExecutor.executeOnPartition(request.sourcePartition, sql, [], true, true, false, {
+      readAuthority: RELIST_READ_AUTHORITY,
+      buildRequest: pageRequest(sql, cursor),
+      buildSuccessResult: pageResult(request.sourcePartition),
+    }));
 }
 
 function isImagePage(page, cursor) {
@@ -116,10 +116,17 @@ function isImagePage(page, cursor) {
     Number.isSafeInteger(page.byteCount) && page.byteCount >= 0;
 }
 
+// A failed read restarts under its own code (an image expired, a leader
+// changed); a failure the reader typed with no code is READ_FAILED.
+function readFailureReason(result) {
+  return typeof result?.errorCode === 'string' ?
+    result.errorCode : SOURCE_RELIST_FAILURE.READ_FAILED;
+}
+
 // Why a page cannot be staged, or null. Every page must name page 0's image:
 // the same imageId, applied index and incarnation.
 function pageFailure(result, request, cursor, first) {
-  if (result?.success !== true) return result?.errorCode ?? SOURCE_RELIST_FAILURE.READ_FAILED;
+  if (result?.success !== true) return readFailureReason(result);
   if (!isValidLeaderReadAuthorityWitness(result.readAuthorityWitness, request.sourcePartition)) {
     return SOURCE_RELIST_FAILURE.NOT_LEADER_WITNESSED;
   }
@@ -228,7 +235,7 @@ function installFetchedImage(service, token, image) {
       term: image.witness.term ?? null, appliedIndex: image.appliedIndex,
       commitIndex: image.witness.commitIndex ?? null,
       servingNodeId: image.witness.servingNodeId ?? null, partitionId: image.sourcePartition,
-      causeId: 'cdc-source-relist'});
+      causeId: SOURCE_RELIST_CAUSE_ID});
   }
   return installed;
 }
@@ -285,7 +292,10 @@ async function relistSourceTable(service, request) {
   }
   // The cell as it stands after the (synchronous) install, or after none.
   const cell = service.cacheMutationTarget.sourceOrder.positionOf(request.sourcePartition);
-  logImage(service, record, listed.installed?.admission ?? listed.outcome,
+  // An installed image's outcome is its admission; else the list's own.
+  const imageOutcome = listed.installed === undefined ? listed.outcome :
+    listed.installed.admission;
+  logImage(service, record, imageOutcome,
     {state: cell.state, appliedIndex: cell.position?.logIndex ?? null,
       upserted: listed.installed?.upserted ?? 0, deleted: listed.installed?.deleted ?? 0});
   if (listed.outcome === SOURCE_RELIST_OUTCOME.STOPPED) return listed.outcome;
