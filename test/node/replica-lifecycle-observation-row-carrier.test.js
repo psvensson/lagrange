@@ -45,10 +45,7 @@ const INVALID_SINGLETONS = [
 test('malformed singleton carriers stay unavailable and a later owner read remains useful', async (t) => {
   const calls = [];
   const alternateReads = {cache: 0, sql: 0};
-  const readCache = () => {
-    alternateReads.cache += 1;
-    return [];
-  };
+  const readCache = () => [];
   let rows = [];
   const gateway = new ControlPlaneSystemTableGateway({
     nodeId: SERVICE_ROW.node_id,
@@ -71,6 +68,13 @@ test('malformed singleton carriers stay unavailable and a later owner read remai
       },
     },
   });
+  // Routing diagnostics inspect cache rows after the owner result. Count
+  // selection of the cache-answer strategy without changing its behavior.
+  const executeCacheRead = gateway.executeCacheRead.bind(gateway);
+  gateway.executeCacheRead = (...args) => {
+    alternateReads.cache += 1;
+    return executeCacheRead(...args);
+  };
   const reader = {getControlPlaneSystemTableGateway: () => gateway};
   for (const [label, value] of INVALID_SINGLETONS) {
     rows = [value];

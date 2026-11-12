@@ -44,10 +44,7 @@ const ORIGINAL_PARTITION = Object.freeze({
 function createObservationOwner(read) {
   const calls = [];
   const alternateReads = {cache: 0, sql: 0};
-  const readCache = () => {
-    alternateReads.cache += 1;
-    return [];
-  };
+  const readCache = () => [];
   const gateway = new ControlPlaneSystemTableGateway({
     nodeId: ORIGINAL_SERVICE.node_id,
     cdcIntegrationService: {
@@ -64,6 +61,13 @@ function createObservationOwner(read) {
       },
     },
   });
+  // Routing diagnostics inspect cache rows after the owner result. Count
+  // selection of the cache-answer strategy without changing its behavior.
+  const executeCacheRead = gateway.executeCacheRead.bind(gateway);
+  gateway.executeCacheRead = (...args) => {
+    alternateReads.cache += 1;
+    return executeCacheRead(...args);
+  };
   return {
     gateway,
     reader: {getControlPlaneSystemTableGateway: () => gateway},
