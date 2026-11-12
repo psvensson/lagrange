@@ -660,7 +660,7 @@ test('getReplaceTargetReplicaId returns replicaId when different from source', a
   t.equal(repo.getReplaceTargetReplicaId(op), 'tgt-r2');
 });
 
-test('queryIncompleteOperations requests bounded local replica fallback for authoritative replica_operations reads', async (t) => {
+test('queryIncompleteOperations requires owner RPC and retains declared local leader consistency', async (t) => {
   const authoritativeReadCalls = [];
   const repo = createTestRepository({
     systemTableCache: {
@@ -672,10 +672,10 @@ test('queryIncompleteOperations requests bounded local replica fallback for auth
       readRows: async (_tableName, _sql, _params, options = {}) => {
         authoritativeReadCalls.push(options);
         if (
-          options?.replicaFallbackConsistency !==
-          LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA
+          options?.localReadConsistency !== LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.LOCAL_LEADER ||
+          options?.authoritativeReadMode !== CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED
         ) {
-          return {success: false, rows: [], error: 'missing_replica_fallback'};
+          return {success: false, rows: [], error: 'incorrect_operation_read_authority'};
         }
         return {
           success: true,
@@ -695,13 +695,16 @@ test('queryIncompleteOperations requests bounded local replica fallback for auth
   t.equal(
     operations.operations.length,
     1,
-    'authoritative incomplete-operation reads should remain visible through the bounded local replica fallback lane',
+    'authoritative incomplete-operation reads return the owner-confirmed operation',
   );
   t.equal(
-    authoritativeReadCalls[0]?.replicaFallbackConsistency,
-    LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
-    'replica_operations owner reads should request bounded local replica fallback',
+    authoritativeReadCalls[0]?.localReadConsistency,
+    LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.LOCAL_LEADER,
+    'the caller retains its declared local consistency without broadening to any replica',
   );
+  t.equal(authoritativeReadCalls[0]?.authoritativeReadMode,
+    CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED);
+  t.notOk(Object.hasOwn(authoritativeReadCalls[0], 'replicaFallbackConsistency'));
   t.equal(
     authoritativeReadCalls[0]?.coalescingKey,
     TEST_REPLICA_OPERATION_OWNER_READ_COALESCING_KEY,
@@ -714,7 +717,7 @@ test('queryIncompleteOperations requests bounded local replica fallback for auth
   );
 });
 
-test('persistOperationUpdate requests bounded local replica fallback for authoritative replica_operations confirmation', async (t) => {
+test('persistOperationUpdate confirms through the required ledger owner', async (t) => {
   const authoritativeReadCalls = [];
   const confirmedUpdatedAt = 200;
   const repo = createTestRepository({
@@ -724,8 +727,8 @@ test('persistOperationUpdate requests bounded local replica fallback for authori
       readRows: async (_tableName, _sql, _params, options = {}) => {
         authoritativeReadCalls.push(options);
         if (
-          options?.replicaFallbackConsistency !==
-          LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA
+          options?.localReadConsistency !== LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.LOCAL_LEADER ||
+          options?.authoritativeReadMode !== CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED
         ) {
           return {success: true, rows: []};
         }
@@ -755,13 +758,17 @@ test('persistOperationUpdate requests bounded local replica fallback for authori
   t.equal(
     persisted,
     true,
-    'authoritative confirmation should succeed once the shared replica fallback contract exposes the persisted row',
+    'the canonical owner supplies the persisted row for confirmation',
   );
   t.equal(
-    authoritativeReadCalls[0]?.replicaFallbackConsistency,
-    LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
-    'persistence confirmation should reuse the bounded local replica fallback contract',
+    authoritativeReadCalls[0]?.localReadConsistency,
+    LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.LOCAL_LEADER,
+    'the caller retains its original declared local consistency',
   );
+  t.equal(authoritativeReadCalls[0]?.authoritativeReadMode,
+    CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED);
+  t.equal(authoritativeReadCalls.length, 1, 'one confirmation attempt reads only the owner');
+  t.notOk(Object.hasOwn(authoritativeReadCalls[0], 'replicaFallbackConsistency'));
 });
 
 test('zero-change operation insert collision confirms through the ledger leader',

@@ -5,7 +5,7 @@ import {
 import {createImmediatePressureGovernor} from
   './control-plane-system-table-gateway-pressure-test-fixture.js';
 
-// The gateway's read side: SQL fallback under pressure, typed read deferral,
+// The gateway's read side: owner authority under pressure, typed read deferral,
 // bootstrap snapshot scope, read single-flight and delivery priority, routing
 // gap diagnostics, and bounded read retention with its diagnostics.
 export function registerControlPlaneSystemTableGatewayReadTailTests({
@@ -19,7 +19,7 @@ export function registerControlPlaneSystemTableGatewayReadTailTests({
   GATEWAY_ROUTING_GAP_OWNER_MISSING,
   GATEWAY_ROUTING_IDENTITY_MISSING,
 }) {
-  test('ControlPlaneSystemTableGateway readRows disables SQL fallback under ' +
+  test('ControlPlaneSystemTableGateway readRows retains owner authority under ' +
     'pressure degrade', async (t) => {
     let sqlFallbackUsed = false;
     const gateway = new ControlPlaneSystemTableGateway({
@@ -44,8 +44,8 @@ export function registerControlPlaneSystemTableGatewayReadTailTests({
         ) {
           t.equal(
             options.readAuthority.authoritativeReadMode,
-            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
-            'pressure degrade should disable routed SQL fallback',
+            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+            'pressure cannot change the selected owner path',
           );
           return {
             success: false,

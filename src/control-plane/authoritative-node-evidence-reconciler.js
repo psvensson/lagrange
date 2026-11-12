@@ -5,6 +5,8 @@ import {
 import {ControlPlaneDiagnosticsLedger} from
   './control-plane-diagnostics-ledger.js';
 import {OperationLane} from '../workflow/operation-lane.js';
+import {isCompleteAuthoritativeReadResult} from
+  './control-plane-system-table-gateway-read-contracts.js';
 import {
   CONTROL_PLANE_CACHE_RECONCILE_INTENT,
 } from './control-plane-cache-reconcile-constants.js';
@@ -59,7 +61,6 @@ const AUTHORITATIVE_TABLE_EVIDENCE_STATE = Object.freeze({
 });
 const AUTHORITATIVE_CONFIRMED_EMPTY_SOURCE = Object.freeze({
   OWNER_RPC_LANE: 'owner_rpc_lane',
-  SQL_QUERY_ENGINE: 'sql_query_engine',
 });
 const REPAIR_OUTCOME_FAILED = 'failed';
 const REPAIR_OUTCOME_REPAIRED = 'repaired';
@@ -111,9 +112,8 @@ function buildRepairOutcome(options = {}) {
 
 function isConfirmedEmptyAuthoritativeRead(readResult = null) {
   const source = String(readResult?.source || '');
-  return source === AUTHORITATIVE_CONFIRMED_EMPTY_SOURCE.OWNER_RPC_LANE ||
-    source === AUTHORITATIVE_CONFIRMED_EMPTY_SOURCE.SQL_QUERY_ENGINE ||
-    readResult?.usedSqlFallback === true;
+  return isCompleteAuthoritativeReadResult(readResult) &&
+    source === AUTHORITATIVE_CONFIRMED_EMPTY_SOURCE.OWNER_RPC_LANE;
 }
 
 function resolveAuthoritativeTableEvidence(readResult = null) {
@@ -121,7 +121,8 @@ function resolveAuthoritativeTableEvidence(readResult = null) {
     readResult.rows :
     EMPTY_REPAIR_ROWS;
   const rowCount = rows.length;
-  if (readResult?.success !== true) {
+  if (readResult?.success !== true ||
+      rowCount === 0 && !isCompleteAuthoritativeReadResult(readResult)) {
     return Object.freeze({
       state: AUTHORITATIVE_TABLE_EVIDENCE_STATE.UNAVAILABLE,
       rows: EMPTY_REPAIR_ROWS,

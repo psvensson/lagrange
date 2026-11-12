@@ -154,3 +154,94 @@ SQL with the same token, and the existing untokenized ordinary projection. The
 earlier CDC timeout fixture now names the canonical transport timeout constant;
 the historical first-red bytes are retained. No new control has been executed
 locally or accepted without its physical-lab result.
+
+## Original reply classification and selected-token custody
+
+Job 2953 is fully verified on exact f8ab785c/source68d: 23,241 bytes,
+SHA256 82e70c7788f18efc024f8c9a51c80abc480f66eee0af574e08c24149f29703be,
+198 classified assertions. Nine failures occur at the completeness assertion:
+LOCAL accepts all three positive numeric failure counts; RPC accepts all three
+failure arrays and all three counts. Missing/false completeness, explicit partial
+answers and LOCAL failure arrays are already refused. The later same-owner
+complete-answer controls execute and pass. This supports one classifier of the
+original result before either leaf or the view loses failure fields. It does not
+establish a recipient-retirement or catchup-sweep fix by itself.
+
+Independent review of R2 (patch SHA256
+8d5e154658e4be74422c88dd5da747eb3c096207bc0d1c2463a6308a5a2ee566)
+found the three R1 gaps closed, but required two further corrections. Runtime
+validation still depended on replaceable array iteration, and LOCAL with a
+required-leader token could use any-replica consistency or return unwitnessed
+rows. The indexed traversal precedent is the retained-seed original handoff
+review's V4 committed-vector finding, recorded 2026-10-23. The July 18 structural
+token commit 3a9c5bd41 also documents the earlier lost leader-pin family. These
+are shared authority obligations, not local caller exceptions.
+
+Tests-only seal 4641db16 retains source68d and adds actual gateway/view ingress
+controls for frozen accessors, inherited mutable fields, proxies, serialization
+hooks, nonenumerable or missing fields and invalid leader values. Ordinary and
+null-prototype complete data tokens must retain exact identity. Seal f46c89cf
+adds targeted mutable iterator/every/some controls and actual CDC LOCAL leader
+obligations, with same-owner witnessed healing and ordinary any-replica follower
+success retained. Both seals were independently reviewed before lab submission;
+no passing candidate result is claimed here.
+
+R3 uses indexed canonical-field and failure-vector traversal. LOCAL+REQUIRED
+requires explicit local-leader consistency, and the existing witness owner now
+enforces required-leader evidence for each local leaf before aggregation as well
+as for the RPC answer. The private local helper consumes the selected token; its
+unused public delegate/export is removed, and its sole leaf-test probe enters
+the canonical execution function with the same token and assertions. The frozen
+R3 patch SHA256 is
+ad12d75543a2f54366f8bbcf1b573d6e0275376fec0024460a2a707620dda7a3.
+Independent source review and physical candidate evidence remain required.
+
+The local producer still has an existing multi-port dispatcher and a secondary
+buildRemoteReadAuthorityWitness call when the read result omits a witness. R3's
+controlled partition-answer tests do not close those native producer contracts.
+Direct owner-RPC helper exports also require a complete caller/boundary review.
+The CDC catchup audit separately found that destructive sweeping and complete
+freshness could ignore a correctly normalized incomplete result; its own real
+cache controls and same-owner complete continuation remain in progress. No
+whole-codebase absence of fallback logic or full-epic acceptance is asserted.
+
+## Retained confirmation ownership, expanded original
+
+Job 2989 is fully verified on f263b9a4/source68d: two failed roots, 196
+classified assertions (gateway 100, repository 96), 119,190 bytes, SHA256
+46d07ea031e336687adf46f550a94c1b1a19135e1aea19e05a8a742db0e3519c.
+The original deletes a replacement witness after a held read and a witness
+installed by the final observer. Both unavailable-confirmation cases preserve
+the thrown mutation cause but delete their retained witness cell. Missing or
+cloned expected cells authorize deletion; a zero-budget outer confirmation
+starts an inner delay and performs two reads; a prior mismatch converts later
+unavailability to missing. The unchanged held witness positive passes.
+
+The same run measures flat RPC plus projection intent executing the cache, and
+all three nonauthoritative-strategy constructors fail the refusal controls.
+The staged design keeps one canonical strategy relation, one RPC observation per
+outer confirmation attempt, and exact-cell cleanup only after positive owner
+confirmation. These source changes have independent review, but their candidate
+lab proof and full caller/static closure remain outstanding.
+
+## Source checkpoint after independent R3 review
+
+Independent review approves the bounded R3 source: indexed validation, one
+leader-witness enforcement owner for RPC and every local leaf, and canonical
+local helper custody. A final caller census found a raw-draft erasure boundary:
+the gateway could replace an invalid original strategy or empty consistency
+before the constructor examined it. Tests-only seal 8cca61d4/source68d adds five
+actual ingress controls, including direct executeRead, with same-gateway default
+recovery. The follow-up source reuses the same draft assertion on both original
+intent and options after supplied-token validation and before normalization.
+The shared assertion/export and readiness's direct canonical mode imports also
+have independent review. The unused copied readiness mode vocabulary is removed.
+
+This source checkpoint includes the independently reviewed repository custody
+correction and mode caller migrations. It is WIP transport, not acceptance. The
+terminal relister fixture migration depends on the CDC resource composition;
+the isolated authority candidate must not claim that consumer is already green.
+Complete physical original streams, selected candidate roots, affected callers,
+generated metadata, scoped static gates and integration remain required. Native
+local producer fallback removal and the direct RPC helper boundary are still
+separate open source obligations.

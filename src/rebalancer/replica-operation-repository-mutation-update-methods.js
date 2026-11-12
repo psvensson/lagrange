@@ -10,6 +10,7 @@ import {operationCarriesMessageGroupMembership} from
   './replica-operation-message-group-membership-fields.js';
 import {
   OPERATION_VISIBILITY_STATE,
+  buildOperationVisibilityUnavailableError,
   presentOperationOf,
   readOperationVisibilityState,
 } from './replica-operation-repository-operation-visibility.js';
@@ -87,24 +88,25 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
     // Post-write witness + (optional) authoritative visibility confirmation
     // for a persisted update that changed rows.
     // Record the owner-persisted-transition witness, confirm persistence
-    // through the authority, and clear the witness unless the confirmation
-    // deferred (a deferred confirm must keep the witness so the retry can
-    // still observe the pending write). Returns the confirmation visibility so
+    // through the authority, and settle only the same witness after a positive
+    // confirmation. A deferred answer or thrown read failure retains custody
+    // for the existing retry/expiry owner. Returns the confirmation visibility so
     // callers that key on CONFIRMED/operation can read it. Shared by the
     // post-insert confirm in persistNewOperationUnlocked and
     // confirmPersistedOperationUpdate.
     async confirmPersistenceThroughWitness(operation) {
-      this.recordOwnerPersistedTransitionVisibilityWitness(operation);
+      const operationId = operation.operationId;
+      const witness = this.recordOwnerPersistedTransitionVisibilityWitness(operation);
       let visibility = null;
       try {
         visibility = await this.confirmReplicaOperationPersistence(operation);
       } finally {
         if (
-          visibility?.confirmationState !==
-          REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.DEFERRED
+          visibility?.confirmationState ===
+          REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.CONFIRMED
         ) {
           this.clearOwnerPersistedTransitionVisibilityWitness(
-            operation.operationId,
+            operationId, witness,
           );
         }
       }
@@ -386,6 +388,9 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
           operation,
         );
       const authorityState = readOperationVisibilityState(authorityObservation);
+      if (authorityState === OPERATION_VISIBILITY_STATE.UNAVAILABLE) {
+        throw buildOperationVisibilityUnavailableError(authorityObservation, operation.operationId);
+      }
       const authoritativeOperation = authorityObservation.operation;
       const visibilitySatisfied = this.isReplicaOperationVisibilitySatisfied(
         operation,
@@ -488,11 +493,11 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
     // terminal, null otherwise (idempotent replay, lagging non-terminal row,
     // or missing row — the zero-change divergence arm re-inserts).
     async queryConflictingTerminalAuthorityOperation(operation) {
-      const authoritativeOperation = presentOperationOf(
-        await this.queryReplicaOperationPersistenceAuthorityObservation(
-          operation,
-        ),
-      );
+      const observation = await this.queryReplicaOperationPersistenceAuthorityObservation(operation);
+      if (readOperationVisibilityState(observation) === OPERATION_VISIBILITY_STATE.UNAVAILABLE) {
+        throw buildOperationVisibilityUnavailableError(observation, operation.operationId);
+      }
+      const authoritativeOperation = presentOperationOf(observation);
       if (!authoritativeOperation) {
         return null;
       }

@@ -19,7 +19,6 @@ import {
 import {PRESSURE_WORK_CLASS} from '../../src/control-plane/pressure-governor.js';
 import {
   buildControlPlaneReadAuthority,
-  resolveAuthoritativeReadModeContract,
   resolveControlPlaneReadIntent,
   resolveReadProfileOptions,
 } from '../../src/control-plane/control-plane-system-table-gateway-read-contracts.js';
@@ -29,6 +28,9 @@ const SQL = 'SELECT * FROM nodes';
 const CRITICAL_DELIVERY_PRIORITY = 'critical';
 const RETIRED_OR_UNOWNED_OPTION_KEYS = Object.freeze([
   'undefined', 'requireAuthoritative', 'preferAuthoritativeRead',
+  'preferOwnerRpcRead', 'requireOwnerRpcRead', 'allowOwnerRpcFallback',
+  'confirmEmptyOwnerLocalReadWithOwnerRpc', 'allowSqlFallback',
+  'replicaFallbackConsistency',
 ]);
 
 const PROFILE_DEFAULTS = Object.freeze([
@@ -36,8 +38,6 @@ const PROFILE_DEFAULTS = Object.freeze([
     profile: PROFILE.DIAGNOSTICS,
     strategy: STRATEGY.AUTHORITATIVE_REQUIRED,
     authoritativeReadMode: MODE.OWNER_RPC_REQUIRED,
-    requireOwnerRpcRead: true,
-    allowSqlFallback: false,
     routingReadinessDimension: DIMENSION.REPAIR_ELIGIBLE,
     deliveryPriority: undefined,
     workClass: undefined,
@@ -45,9 +45,7 @@ const PROFILE_DEFAULTS = Object.freeze([
   {
     profile: PROFILE.PLANNING,
     strategy: STRATEGY.AUTHORITATIVE,
-    authoritativeReadMode: MODE.OWNER_RPC_PREFERRED_SQL_FALLBACK,
-    requireOwnerRpcRead: false,
-    allowSqlFallback: true,
+    authoritativeReadMode: MODE.OWNER_RPC_REQUIRED,
     routingReadinessDimension: DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
     deliveryPriority: undefined,
     workClass: undefined,
@@ -55,9 +53,7 @@ const PROFILE_DEFAULTS = Object.freeze([
   {
     profile: PROFILE.REPAIR_REQUIRED,
     strategy: STRATEGY.AUTHORITATIVE_REQUIRED,
-    authoritativeReadMode: MODE.OWNER_RPC_PREFERRED_SQL_FALLBACK,
-    requireOwnerRpcRead: false,
-    allowSqlFallback: true,
+    authoritativeReadMode: MODE.OWNER_RPC_REQUIRED,
     routingReadinessDimension: DIMENSION.REPAIR_ELIGIBLE,
     deliveryPriority: CRITICAL_DELIVERY_PRIORITY,
     workClass: PRESSURE_WORK_CLASS.CRITICAL,
@@ -65,9 +61,7 @@ const PROFILE_DEFAULTS = Object.freeze([
   {
     profile: PROFILE.TABLE_LIFECYCLE,
     strategy: STRATEGY.AUTHORITATIVE_REQUIRED,
-    authoritativeReadMode: MODE.OWNER_RPC_PREFERRED_SQL_FALLBACK,
-    requireOwnerRpcRead: false,
-    allowSqlFallback: true,
+    authoritativeReadMode: MODE.OWNER_RPC_REQUIRED,
     routingReadinessDimension: DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
     deliveryPriority: CRITICAL_DELIVERY_PRIORITY,
     workClass: undefined,
@@ -87,29 +81,25 @@ function resolveProfiledReadAuthority(options) {
   return {
     profiledOptions,
     readAuthority,
-    contract: resolveAuthoritativeReadModeContract(readAuthority),
   };
 }
 
-test('the profile vocabulary under test is the whole vocabulary', async (t) => {
+test('the profile and single-path mode vocabularies are complete', async (t) => {
   t.same(
     PROFILE_DEFAULTS.map((expected) => expected.profile).sort(),
     Object.values(PROFILE).sort(),
   );
+  t.same(Object.values(MODE).sort(), ['owner_local_only', 'owner_rpc_required']);
 });
 
 for (const expected of PROFILE_DEFAULTS) {
   test(`profile ${expected.profile} applies its authority defaults`, async (t) => {
-    const {profiledOptions, readAuthority, contract} =
+    const {profiledOptions, readAuthority} =
       resolveProfiledReadAuthority({readProfile: expected.profile});
 
     t.equal(readAuthority.readProfile, expected.profile);
     t.equal(readAuthority.strategy, expected.strategy);
     t.equal(readAuthority.authoritativeReadMode, expected.authoritativeReadMode);
-    t.equal(contract.authoritativeReadMode, expected.authoritativeReadMode);
-    t.equal(contract.preferOwnerRpcRead, true);
-    t.equal(contract.requireOwnerRpcRead, expected.requireOwnerRpcRead);
-    t.equal(contract.allowSqlFallback, expected.allowSqlFallback);
     t.equal(
       readAuthority.routingReadinessDimension,
       expected.routingReadinessDimension,
@@ -121,12 +111,14 @@ for (const expected of PROFILE_DEFAULTS) {
         Object.hasOwn(profiledOptions, key),
         `profile resolution writes no "${key}" option`,
       );
+      t.notOk(Object.hasOwn(readAuthority, key),
+        `the token carries no duplicate or retired "${key}" authority`);
     }
   });
 
   test(`an explicit caller value wins over profile ${expected.profile}`,
     async (t) => {
-      const {profiledOptions, readAuthority, contract} =
+      const {profiledOptions, readAuthority} =
         resolveProfiledReadAuthority({
           readProfile: expected.profile,
           strategy: STRATEGY.CACHE,
@@ -138,8 +130,6 @@ for (const expected of PROFILE_DEFAULTS) {
 
       t.equal(readAuthority.strategy, STRATEGY.CACHE);
       t.equal(readAuthority.authoritativeReadMode, MODE.OWNER_LOCAL_ONLY);
-      t.equal(contract.preferOwnerRpcRead, false);
-      t.equal(contract.allowOwnerRpcFallback, false);
       t.equal(
         readAuthority.routingReadinessDimension, DIMENSION.ROUTING_READY);
       t.equal(profiledOptions.deliveryPriority, 'readiness');
@@ -159,6 +149,6 @@ test('the retired routing booleans do not change a read\'s authority',
     t.equal(plain.readAuthority.strategy, STRATEGY.AUTHORITATIVE);
     t.equal(
       plain.readAuthority.authoritativeReadMode,
-      MODE.OWNER_LOCAL_PREFERRED_OWNER_RPC_FALLBACK,
+      MODE.OWNER_RPC_REQUIRED,
     );
   });

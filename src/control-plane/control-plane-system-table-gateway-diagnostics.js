@@ -288,9 +288,6 @@ function buildGatewayOperationLedgerDiagnostics(
       systemTableDiagnostics.localReadHit === true ||
       result?.source ===
         CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.LOCAL_PARTITION_REPLICA,
-    localReplicaFallbackHit:
-      result?.localReplicaFallbackHit === true ||
-      systemTableDiagnostics.localReplicaFallbackHit === true,
     ...(typeof routedToNode === 'string' &&
     routedToNode.length > 0 ?
       {

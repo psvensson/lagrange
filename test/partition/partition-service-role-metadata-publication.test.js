@@ -1030,7 +1030,7 @@ test('PartitionService - post-handoff leader publication reads the remote ' +
   t.equal(readCalls.length, 1);
   t.equal(
     readCalls[0]?.options?.authoritativeReadMode,
-    CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+    CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
     'a remote replacement must confirm the CAS row through its owner');
   t.equal(readCalls[0]?.options?.deliveryPriority, 'critical');
   t.equal(readCalls[0]?.options?.workClass, PRESSURE_WORK_CLASS.CRITICAL);

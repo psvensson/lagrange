@@ -10,6 +10,8 @@ import {
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
 import {ReplicaOperationRepository} from '../../src/rebalancer/replica-operation-repository.js';
+import {OPERATION_VISIBILITY_STATE} from
+  '../../src/rebalancer/replica-operation-repository-operation-visibility.js';
 import {
   REPLICA_OPERATION_UPDATE_DISPOSITION,
 } from '../../src/rebalancer/replica-operation-update-disposition.js';
@@ -129,7 +131,7 @@ function makeReadRouter({localRows, authorityRows, readModes}) {
     }
     if (
       options.authoritativeReadMode ===
-      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED_SQL_FALLBACK
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED
     ) {
       return {success: true, rows: authorityRows};
     }
@@ -164,10 +166,9 @@ test(
       'authority-confirmed terminal visibility should clear the retained repair state',
     );
     t.ok(
-      readModes.includes(
-        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED_SQL_FALLBACK,
-      ),
-      'a stale local confirmation must escalate to the ledger authority',
+      readModes.length > 0 && readModes.every((mode) =>
+        mode === CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED),
+      'every confirmation observes the ledger authority despite the stale local row',
     );
   },
 );
@@ -193,10 +194,9 @@ test(
       'missing local ledger visibility should not strand a confirmed authority row',
     );
     t.ok(
-      readModes.includes(
-        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED_SQL_FALLBACK,
-      ),
-      'an empty local confirmation must escalate to the ledger authority',
+      readModes.length > 0 && readModes.every((mode) =>
+        mode === CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED),
+      'every confirmation observes the ledger authority when the local row is absent',
     );
   },
 );
@@ -229,20 +229,20 @@ test(
       'missing authority rows must keep repair armed instead of claiming success',
     );
     t.ok(
-      readModes.includes(
-        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED_SQL_FALLBACK,
-      ),
-      'the no-weakening case should still prove it checked the authority',
+      readModes.length > 0 && readModes.every((mode) =>
+        mode === CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED),
+      'the no-weakening case observes only the canonical owner',
     );
   },
 );
 
 test(
-  'a failed escalated read must not erase local terminal-conflict evidence',
+  'unavailable terminal authority retains the pending subject until the owner confirms its winner',
   async (t) => {
     const readModes = [];
     const projectedRow = makeRow({operation_id: 'op-conflict-guard-read-fail'});
-    // A DIFFERENT durable terminal state already won locally.
+    // The local projection says a different terminal won. Only the owner
+    // can establish that conflict; unavailability grants no terminal write.
     const conflictingLocalRow = makeRow({
       operation_id: projectedRow.operation_id,
       status: 'failed',
@@ -250,6 +250,7 @@ test(
       updated_at: TEST_TERMINAL_AT_MS + 1,
       completed_at: TEST_TERMINAL_AT_MS + 1,
     });
+    let ownerAvailable = false;
     const repository = createRepository(async (_tableName, _sql, _params, options = {}) => {
       readModes.push(options.authoritativeReadMode);
       if (
@@ -258,43 +259,37 @@ test(
       ) {
         return {success: true, rows: [conflictingLocalRow]};
       }
-      // Escalated read is unreachable (pressure-deferred / transport failure).
-      return {success: false, rows: [], error: 'Message timeout'};
+      return ownerAvailable ? {success: true, rows: [conflictingLocalRow]} :
+        {success: false, rows: [], error: 'Message timeout'};
     });
     const projectedOperation = repository.rowToOperation(projectedRow);
+    const retained = cloneOperation(projectedOperation);
 
-    const rejected =
-      await repository.shouldRejectConflictingTerminalTransitionMutation(
+    await t.rejects(
+      repository.shouldRejectConflictingTerminalTransitionMutation(
         projectedOperation,
-      );
-
-    t.equal(
-      rejected,
-      true,
-      'a locally visible different terminal row must reject even when the escalated read fails',
-    );
-    t.ok(
-      readModes.includes(
-        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED_SQL_FALLBACK,
       ),
-      'the guard escalated before falling back to local evidence',
+      {visibilityState: OPERATION_VISIBILITY_STATE.UNAVAILABLE, deferRetry: true},
+      'unknown authority is a typed refusal, never a false conflict guard or local adoption',
     );
+    t.same(projectedOperation, retained, 'the pending subject is unchanged while its owner is unavailable');
+    t.same(readModes, [CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED]);
+    ownerAvailable = true;
+    readModes.length = 0;
+    t.equal(await repository.shouldRejectConflictingTerminalTransitionMutation(projectedOperation), true,
+      'the original conflict rejection remains when the same owner confirms the winner',
+    );
+    t.same(readModes, [CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED]);
   },
 );
 
 test(
-  'the escalated confirmation read is pinned to the ledger authority leader',
+  'every confirmation read is pinned to the ledger authority leader',
   async (t) => {
-    const escalatedReads = [];
+    const ownerReads = [];
     const terminalRow = makeRow({operation_id: 'op-leader-pin'});
     const repository = createRepository(async (_tableName, _sql, _params, options = {}) => {
-      if (
-        options.authoritativeReadMode ===
-        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY
-      ) {
-        return {success: true, rows: []};
-      }
-      escalatedReads.push(options);
+      ownerReads.push(options);
       return {success: true, rows: [terminalRow]};
     });
     const projectedOperation = repository.rowToOperation(terminalRow);
@@ -302,11 +297,12 @@ test(
 
     await runTerminalTransitionRepairAttempt(owner, projectedOperation.operationId);
 
-    t.ok(escalatedReads.length > 0, 'the escalated read must run');
+    t.ok(ownerReads.length > 0, 'the owner read must run');
     t.ok(
-      escalatedReads.every((options) =>
+      ownerReads.every((options) =>
+        options.authoritativeReadMode === CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED &&
         options.leaderMode === CONTROL_PLANE_READ_LEADER_MODE.PREFERRED),
-      'every escalated read must pin to the partition leader so a self-stale replica cannot serve it',
+      'every confirmation keeps the declared owner and partition leader requirement',
     );
   },
 );

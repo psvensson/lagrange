@@ -21,7 +21,7 @@ import {
 const CACHE_REPAIR_READ_AUTHORITY = buildControlPlaneReadAuthority({
   authoritativeReadMode:
     CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-      .OWNER_LOCAL_PREFERRED_OWNER_RPC_FALLBACK,
+      .OWNER_RPC_REQUIRED,
 });
 const CACHE_ABSENCE_REPAIR_READ_AUTHORITY = buildControlPlaneReadAuthority({
   authoritativeReadMode:

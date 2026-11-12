@@ -8,25 +8,25 @@ import {
   selectLocalPartitionWitness,
 } from './cdc-integration-service-local-system-table-routing.js';
 import {
-  buildOwnerRpcSqlFallbackQueryOptions,
   executeAuthoritativeOwnerRpcRead,
-  executeAuthoritativeSqlFallbackRead,
   getLocalQueryTransportReadiness,
-  maybeReseedBootstrapOverlay,
   normalizeAuthoritativeReadLocalQueryTransport,
-  shouldRetryOwnerRpcReadViaSqlFallback,
 } from './cdc-integration-service-owner-rpc-read-execution.js';
 import {
-  resolveAuthoritativeReadModeContract,
+  assertControlPlaneOwnerReadAuthority,
+  hasAuthoritativeReadFailureEvidence,
+  isCompleteAuthoritativeReadResult,
 } from '../control-plane/control-plane-system-table-gateway-read-contracts.js';
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
+  '../control-plane/control-plane-system-table-gateway-constants.js';
+import {enforceRequiredLeaderReadAuthority} from
+  '../control-plane/control-plane-authoritative-read-witness.js';
 const {
   AUTHORITATIVE_READ_SOURCE,
   AUTHORITATIVE_ROW_VERSION_FIELD_CANDIDATES,
-  CDC_INTEGRATION_SERVICE_ERROR,
   CDC_INTEGRATION_SERVICE_LITERAL,
   CONTROL_PLANE_READINESS_DIMENSION,
   INITIAL_PARTITION_IDS,
-  QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
   SERVICE_STATUS,
   SERVICE_TYPE,
   SYSTEM_TABLE_NAME,
@@ -237,28 +237,13 @@ function mergeAuthoritativeSystemTableRowSets(service, tableName, rowSets) {
   return [...mergedRows.values()];
 }
 
-function hasLocalAuthoritativeReadFailureEvidence(result) {
-  return [
-    result?.failedPartitions,
-    result?.partitionErrors,
-    result?.participantFailures,
-  ].some((collection) => Array.isArray(collection) && collection.length > 0);
-}
-
 function localAuthoritativeReadRowsAreUsable(result) {
   return (
     result?.success === true &&
     result?.partial !== true &&
     result?.rowSetComplete !== false &&
-    !hasLocalAuthoritativeReadFailureEvidence(result) &&
+    !hasAuthoritativeReadFailureEvidence(result) &&
     Array.isArray(result.rows)
-  );
-}
-
-function isLocalPartitionRowSetComplete(result) {
-  return (
-    localAuthoritativeReadRowsAreUsable(result) &&
-    result?.rowSetComplete === true
   );
 }
 
@@ -292,14 +277,14 @@ async function queryLocalAuthoritativeSystemTableRows(
   tableName,
   sql,
   params = [],
-  options = {},
+  readAuthority,
 ) {
   const expectedPartitionIds = resolveSystemTablePartitionIds(
     service,
     tableName,
   );
   const localServices = resolveLocalSystemTableServices(service, tableName, {
-    consistency: options.consistency,
+    consistency: readAuthority.localReadConsistency,
   });
 
   if (localServices.length === 0) {
@@ -324,15 +309,21 @@ async function queryLocalAuthoritativeSystemTableRows(
         continue;
       }
 
-      rowSets.push(result.rows);
       const witness = selectLocalPartitionWitness(
         service,
         partitionService,
         result,
       );
+      const authorized = enforceRequiredLeaderReadAuthority(
+        {...result, readAuthorityWitness: witness}, partitionService.partitionId, readAuthority);
+      if (authorized.success !== true) {
+        return {...UNAVAILABLE_LOCAL_READ_SNAPSHOT,
+          error: authorized.error, authorityFailureReason: authorized.authorityFailureReason};
+      }
+      rowSets.push(result.rows);
       if (witness) {
         collectedWitnesses.push(witness);
-        if (isLocalPartitionRowSetComplete(result)) {
+        if (isCompleteAuthoritativeReadResult(result)) {
           completePartitionCount += 1;
         }
       }
@@ -500,7 +491,6 @@ function normalizeLocalSystemTableWriteResult(result) {
 function buildAuthoritativeReadDeliveryOptions(options, readAuthority) {
   return {
     readAuthority,
-    cacheFallbackPredicate: options?.cacheFallbackPredicate,
     workClass: options?.workClass,
     deliveryPriority: options?.deliveryPriority,
   };
@@ -516,6 +506,25 @@ function attachAuthoritativeReadQueryOptions(deliveryOptions, options) {
   };
 }
 
+function unavailableAuthoritativeRead(baseDiagnostics) {
+  return {
+    success: false,
+    error: CDC_INTEGRATION_SERVICE_LITERAL.AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE,
+    rows: [],
+    rowSetComplete: false,
+    authoritativeObservation: ABSENT_OBSERVATION_VALUE,
+    readAuthorityWitness: ABSENT_WITNESS_VALUE,
+    readAuthorityWitnesses: EMPTY_WITNESS_ARRAY,
+    localReadHit: false,
+    queryTimeoutMs: baseDiagnostics.queryTimeoutMs,
+    systemTableDiagnostics: {
+      ...baseDiagnostics,
+      localReadHit: false,
+      routedToNode: null,
+    },
+  };
+}
+
 async function executeAuthoritativeSystemTableRead(
   service,
   tableName,
@@ -523,71 +532,49 @@ async function executeAuthoritativeSystemTableRead(
   params = [],
   options = {},
 ) {
-  const readAuthority = options?.readAuthority || null;
-  if (!readAuthority || Object.isFrozen(readAuthority) !== true) {
-    return {
-      success: false,
-      error: CDC_INTEGRATION_SERVICE_ERROR.READ_AUTHORITY_REQUIRED,
-      rows: [],
-    };
+  let readAuthority;
+  try {
+    readAuthority = assertControlPlaneOwnerReadAuthority(options?.readAuthority);
+  } catch (error) {
+    return {success: false, rows: [], rowSetComplete: false,
+      error: error.message, errorCode: error.code};
   }
-  const authoritativeReadModeContract =
-    resolveAuthoritativeReadModeContract(readAuthority);
+  const authoritativeReadMode = readAuthority.authoritativeReadMode;
   const canonicalOptions = attachAuthoritativeReadQueryOptions(
     buildAuthoritativeReadDeliveryOptions(options, readAuthority),
     options,
   );
   const statement = sql || `SELECT * FROM ${tableName}`;
-  const requireOwnerRpcRead =
-    authoritativeReadModeContract.requireOwnerRpcRead;
-  const preferredConsistency =
-    readAuthority.localReadConsistency;
-  const preferOwnerRpcRead =
-    authoritativeReadModeContract.preferOwnerRpcRead;
-  const allowOwnerRpcFallback =
-    authoritativeReadModeContract.allowOwnerRpcFallback;
   const baseDiagnostics = buildSystemTableOperationDiagnostics(
     service,
     tableName,
     canonicalOptions,
   );
-
-  let localRead = {
-    available: false,
-    rows: [],
-  };
-  let localReplicaFallbackHit = false;
-
-  const readLocalAuthoritativeRows = async () => {
-    localRead = await queryLocalAuthoritativeSystemTableRows(
+  if (authoritativeReadMode === CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED) {
+    const ownerResult = await executeAuthoritativeOwnerRpcRead(
       service,
       tableName,
       statement,
       params,
-      {
-        consistency: preferredConsistency,
-      },
+      canonicalOptions,
+      baseDiagnostics,
+      getLocalQueryTransportReadiness(service),
     );
+    return ownerResult === null ? unavailableAuthoritativeRead(baseDiagnostics) : ownerResult;
+  }
 
-    if (
-      !localRead.available &&
-      readAuthority.replicaFallbackConsistency &&
-      readAuthority.replicaFallbackConsistency !== preferredConsistency
-    ) {
-      localRead = await queryLocalAuthoritativeSystemTableRows(
-        service,
-        tableName,
-        statement,
-        params,
-        {
-          consistency: readAuthority.replicaFallbackConsistency,
-        },
-      );
-      localReplicaFallbackHit = localRead.available;
-    }
-  };
-
-  const buildLocalReadResult = () => ({
+  const localRead = await queryLocalAuthoritativeSystemTableRows(
+    service,
+    tableName,
+    statement,
+    params,
+    readAuthority,
+  );
+  if (localRead.available !== true) {
+    return {...unavailableAuthoritativeRead(baseDiagnostics),
+      ...localRead, success: false};
+  }
+  return {
     success: true,
     rows: localRead.rows,
     count: localRead.rows.length,
@@ -595,193 +582,28 @@ async function executeAuthoritativeSystemTableRead(
     rowSetComplete: localRead.rowSetComplete === true,
     readAuthorityWitness: localRead.readAuthorityWitness || ABSENT_WITNESS_VALUE,
     readAuthorityWitnesses: Array.isArray(localRead.readAuthorityWitnesses) ?
-      localRead.readAuthorityWitnesses :
-      EMPTY_WITNESS_ARRAY,
-    authoritativeObservation:
-      localRead.authoritativeObservation || ABSENT_OBSERVATION_VALUE,
+      localRead.readAuthorityWitnesses : EMPTY_WITNESS_ARRAY,
+    authoritativeObservation: localRead.authoritativeObservation || ABSENT_OBSERVATION_VALUE,
     source: AUTHORITATIVE_READ_SOURCE.LOCAL_PARTITION_REPLICA,
     localReadHit: true,
-    localReplicaFallbackHit,
     queryTimeoutMs: baseDiagnostics.queryTimeoutMs,
     systemTableDiagnostics: {
       ...baseDiagnostics,
       localReadHit: true,
-      localReplicaFallbackHit,
       routedToNode: null,
       deniedByReadiness: false,
-    },
-  });
-
-  await readLocalAuthoritativeRows();
-
-  const shouldConfirmEmptyLocalReadWithOwnerRpc =
-    authoritativeReadModeContract.confirmEmptyLocalReadWithOwnerRpc === true &&
-    allowOwnerRpcFallback &&
-    localRead.available &&
-    localRead.rows.length === 0 &&
-    !preferOwnerRpcRead &&
-    !requireOwnerRpcRead;
-
-  if (
-    localRead.available &&
-    !preferOwnerRpcRead &&
-    !requireOwnerRpcRead &&
-    !shouldConfirmEmptyLocalReadWithOwnerRpc
-  ) {
-    return buildLocalReadResult();
-  }
-
-  const localQueryTransportReadiness = getLocalQueryTransportReadiness(service);
-
-  if (
-    localQueryTransportReadiness?.ready === false &&
-    !allowOwnerRpcFallback
-  ) {
-    return {
-      success: false,
-      error:
-        localQueryTransportReadiness.reason ||
-        CDC_INTEGRATION_SERVICE_LITERAL.QUERY_DATA_PLANE_TRANSPORT_NOT_READY,
-      errorCode: QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
-      deferRetry: true,
-      retryAfterMs: localQueryTransportReadiness.retryAfterMs,
-      localQueryTransport: {
-        state:
-          localQueryTransportReadiness.state ||
-          CDC_INTEGRATION_SERVICE_LITERAL.DEFERRED,
-        ready: false,
-        reason: localQueryTransportReadiness.reason || null,
-        retryAfterMs: localQueryTransportReadiness.retryAfterMs,
-      },
-      rows: [],
-      source: AUTHORITATIVE_READ_SOURCE.QUERY_TRANSPORT_PREFLIGHT,
-      localReadHit: false,
-      localReplicaFallbackHit: false,
-      queryTimeoutMs: baseDiagnostics.queryTimeoutMs,
-      systemTableDiagnostics: {
-        ...baseDiagnostics,
-        localReadHit: false,
-        localReplicaFallbackHit: false,
-        routedToNode: null,
-        deniedByReadiness: true,
-      },
-    };
-  }
-
-  if (
-    localQueryTransportReadiness?.ready === false &&
-    preferOwnerRpcRead &&
-    localRead.available &&
-    !requireOwnerRpcRead
-  ) {
-    return buildLocalReadResult();
-  }
-
-  if (!allowOwnerRpcFallback) {
-    if (preferOwnerRpcRead && localRead.available && !requireOwnerRpcRead) {
-      return buildLocalReadResult();
-    }
-
-    return {
-      success: false,
-      error:
-        CDC_INTEGRATION_SERVICE_LITERAL.AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE,
-      rows: [],
-      rowSetComplete: false,
-      authoritativeObservation: ABSENT_OBSERVATION_VALUE,
-      localReadHit: false,
-      localReplicaFallbackHit: false,
-      queryTimeoutMs: baseDiagnostics.queryTimeoutMs,
-      systemTableDiagnostics: {
-        ...baseDiagnostics,
-        localReadHit: false,
-        localReplicaFallbackHit: false,
-        routedToNode: null,
-      },
-    };
-  }
-
-  const ownerRpcResult = await executeAuthoritativeOwnerRpcRead(
-    service,
-    tableName,
-    statement,
-    params,
-    canonicalOptions,
-    baseDiagnostics,
-    localQueryTransportReadiness,
-  );
-
-  if (ownerRpcResult !== null) {
-    if (
-      ownerRpcResult.success !== true &&
-      preferOwnerRpcRead &&
-      localRead.available &&
-      !requireOwnerRpcRead
-    ) {
-      return buildLocalReadResult();
-    }
-
-    if (
-      shouldRetryOwnerRpcReadViaSqlFallback(
-        ownerRpcResult,
-        canonicalOptions,
-        localQueryTransportReadiness,
-      )
-    ) {
-      const sqlFallbackResult = await executeAuthoritativeSqlFallbackRead(
-        service,
-        tableName,
-        statement,
-        params,
-        options,
-        baseDiagnostics,
-        localQueryTransportReadiness,
-      );
-
-      if (sqlFallbackResult !== null) {
-        return sqlFallbackResult;
-      }
-    }
-
-    return ownerRpcResult;
-  }
-
-  if (preferOwnerRpcRead && localRead.available && !requireOwnerRpcRead) {
-    return buildLocalReadResult();
-  }
-
-  return {
-    success: false,
-    error:
-      CDC_INTEGRATION_SERVICE_LITERAL.AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE,
-    rows: [],
-    rowSetComplete: false,
-    authoritativeObservation: ABSENT_OBSERVATION_VALUE,
-    localReadHit: false,
-    localReplicaFallbackHit: false,
-    queryTimeoutMs: baseDiagnostics.queryTimeoutMs,
-    systemTableDiagnostics: {
-      ...baseDiagnostics,
-      localReadHit: false,
-      localReplicaFallbackHit: false,
-      routedToNode: null,
     },
   };
 }
 
 export {
-  buildOwnerRpcSqlFallbackQueryOptions,
   buildSystemTableOperationDiagnostics,
   executeAuthoritativeOwnerRpcRead,
-  executeAuthoritativeSqlFallbackRead,
   executeAuthoritativeSystemTableRead,
   getLocalQueryTransportReadiness,
-  maybeReseedBootstrapOverlay,
   mergeAuthoritativeSystemTableRowSets,
   normalizeAuthoritativeReadLocalQueryTransport,
   normalizeLocalSystemTableWriteResult,
-  queryLocalAuthoritativeSystemTableRows,
-  shouldRetryOwnerRpcReadViaSqlFallback,
 };
 
 export const extractAuthoritativeRowVersion = resolveAuthoritativeRowVersion;

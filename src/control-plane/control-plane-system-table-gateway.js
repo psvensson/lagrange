@@ -266,6 +266,5 @@ export {
   CONTROL_PLANE_READ_LEADER_MODE,
   CONTROL_PLANE_READ_PROFILE,
   CONTROL_PLANE_READ_STRATEGY,
-  CONTROL_PLANE_REPLICA_FALLBACK_CONSISTENCY,
   resolveControlPlaneSystemTableDeliverySource,
 } from './control-plane-system-table-gateway-shared.js';

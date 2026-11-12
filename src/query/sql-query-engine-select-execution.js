@@ -5,9 +5,9 @@ import {
   createSQLQueryEngineProvisioningMethods,
 } from './sql-query-engine-provisioning-methods.js';
 import {throwIfCancellationRequested} from './query-cancellation.js';
-import {buildControlPlaneReadAuthority} from
+import {assertControlPlaneOwnerReadAuthority, buildControlPlaneReadAuthority} from
   '../control-plane/control-plane-system-table-gateway-read-contracts.js';
-import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE, CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_ERROR} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
 import {coordinatorTableParticipantRefusal} from
   './distributed/distributed-transaction-participant-admission.js';
@@ -38,11 +38,27 @@ const LOCAL_STR_LITERAL = 'literal';
 const LOCAL_STR_PARAMETER = 'parameter';
 const LOCAL_STR_COLUMN_REF = 'column_ref';
 const LOCAL_STR_STAR = 'star';
+const AUTHORITATIVE_SELECT_PROJECTION_UNSUPPORTED =
+  'authoritative_system_table_projection_unsupported';
+const AUTHORITATIVE_SELECT_SHAPE_UNSUPPORTED =
+  'authoritative_system_table_query_shape_unsupported';
+
+function unsupportedAuthoritativeSelect(tableName) {
+  return {success: false, rows: [], tableName,
+    error: AUTHORITATIVE_SELECT_SHAPE_UNSUPPORTED};
+}
+
+function describeAuthoritativeSelectShape(engine, tableName, ast, rawSql) {
+  if (!rawSql || !engine.isSystemTable(tableName) ||
+      (Array.isArray(ast?.joins) && ast.joins.length > 0)) return null;
+  const projectsPrimaryKey = engine.systemTableSelectProjectsPrimaryKey(tableName, ast);
+  return projectsPrimaryKey || engine.isBoundedSystemTablePrimaryKeyLookup(tableName, ast) ?
+    {projectsPrimaryKey} : null;
+}
 
 const {
   AuthoritativeControlPlaneView,
   CONTROL_PLANE_READINESS_DIMENSION,
-  LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
   QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
   QUERY_LOG_MSG,
@@ -288,13 +304,16 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
 
   async executeSelectOwned(ast, params, sessionId, queryOptions, rawSql,
     transactionRead = null) {
+    if (queryOptions.readAuthority !== undefined && (transactionRead || !ast.from)) {
+      return unsupportedAuthoritativeSelect(ast.from?.name || null);
+    }
     if (!ast.from) {
       return this.executeFromlessSelect(ast, params, sessionId, queryOptions,
         transactionRead);
     }
 
     const tableName = ast.from.name;
-    const authoritativeLocalResult = transactionRead ? null :
+    const authoritativeResult = transactionRead ? null :
       await this.tryExecuteAuthoritativeSystemTableSelect(
         tableName,
         ast,
@@ -302,8 +321,8 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
         params,
         queryOptions,
       );
-    if (authoritativeLocalResult) {
-      return authoritativeLocalResult;
+    if (authoritativeResult) {
+      return authoritativeResult;
     }
 
     const planResolution =
@@ -403,9 +422,9 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
   }
 
   /**
-   * Prefer node-local authoritative reads for single-table system-table
-   * selects when a local partition replica is available. This avoids routing
-   * hot control-plane reads back through the cluster under pressure.
+   * Claim supported system-table query shapes before checking owner availability.
+   * A claimed read keeps its selected authority and failure; null names only a
+   * shape this adapter does not execute.
    * @param {string} tableName
    * @param {Object} ast
    * @param {string|null} rawSql
@@ -421,65 +440,46 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
     params,
     queryOptions = {},
   ) {
-    const authoritativeControlPlaneView =
-      this.getAuthoritativeControlPlaneView();
-    if (
-      !rawSql ||
-      !this.isSystemTable(tableName) ||
-      !authoritativeControlPlaneView ||
-      (Array.isArray(ast?.joins) && ast.joins.length > 0)
-    ) {
-      return null;
+    let readAuthority = null;
+    if (queryOptions.readAuthority !== undefined) {
+      try {
+        readAuthority = assertControlPlaneOwnerReadAuthority(queryOptions.readAuthority);
+      } catch (error) {
+        return {success: false, rows: [], tableName, error: error.message, errorCode: error.code};
+      }
     }
-    // The node-local read merges per-replica row sets keyed by the primary
-    // key, so a projection without the key would have every row silently
-    // dropped. Bounded pk lookups are exempt: their empty local reads are
-    // confirmed through the owner lane, which masks the drop.
-    if (
-      !this.systemTableSelectProjectsPrimaryKey(tableName, ast) &&
-      !this.shouldConfirmEmptyAuthoritativeSystemTableRead(tableName, ast)
-    ) {
-      return null;
+    const shape = describeAuthoritativeSelectShape(this, tableName, ast, rawSql);
+    if (shape === null) {
+      return readAuthority === null ? null : unsupportedAuthoritativeSelect(tableName);
     }
-
-    const confirmEmptyLocalReadWithOwnerRpc =
-      this.shouldConfirmEmptyAuthoritativeSystemTableRead(tableName, ast);
-    const suppliedReadAuthority =
-      queryOptions?.readAuthority &&
-      Object.isFrozen(queryOptions.readAuthority) === true &&
-      (queryOptions.readAuthority.authoritativeReadMode ===
-        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY ||
-        queryOptions.readAuthority.authoritativeReadMode ===
-          CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-            .OWNER_LOCAL_CONFIRM_EMPTY_WITH_OWNER_RPC ||
-        queryOptions.readAuthority.authoritativeReadMode ===
-          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED) ?
-        queryOptions.readAuthority :
-        null;
-    const readAuthority = suppliedReadAuthority ||
-      buildControlPlaneReadAuthority({
-        authoritativeReadMode: confirmEmptyLocalReadWithOwnerRpc ?
-          CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-            .OWNER_LOCAL_CONFIRM_EMPTY_WITH_OWNER_RPC :
-          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
-        localReadConsistency:
-          LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.LOCAL_LEADER,
-        replicaFallbackConsistency: confirmEmptyLocalReadWithOwnerRpc ?
-          LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA :
-          null,
+    if (readAuthority === null) {
+      readAuthority = buildControlPlaneReadAuthority({
+        authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
       });
+    }
+    // The local row merger requires primary keys. A bounded key lookup with a
+    // different projection can use the RPC owner; an explicit local contract
+    // cannot change source or silently turn those projected rows into absence.
+    if (!shape.projectsPrimaryKey && readAuthority.authoritativeReadMode ===
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY) {
+      return {success: false, rows: [], tableName,
+        error: AUTHORITATIVE_SELECT_PROJECTION_UNSUPPORTED};
+    }
+    const authoritativeControlPlaneView = this.getAuthoritativeControlPlaneView();
+    if (typeof authoritativeControlPlaneView?.readRows !== 'function') {
+      return {success: false, rows: [], tableName, deferRetry: true,
+        error: CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_ERROR.AUTHORITATIVE_READ_OWNER_UNAVAILABLE};
+    }
     const executableSql = this.queryExecutor.buildSelectSQL(ast);
-    const localResult = await authoritativeControlPlaneView.readRows(
+    const ownerResult = await authoritativeControlPlaneView.readRows(
       tableName,
       executableSql,
       params,
-      {
-        readAuthority,
-        queryTimeoutMs: queryOptions?.timeoutMs,
-      },
+      {readAuthority, queryTimeoutMs: queryOptions?.timeoutMs},
     );
-    if (!localResult?.success) {
-      return null;
+    if (ownerResult?.success !== true) {
+      return ownerResult || {success: false, rows: [], tableName, deferRetry: true,
+        error: CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_ERROR.AUTHORITATIVE_READ_OWNER_UNAVAILABLE};
     }
 
     const partitions = this.getTablePartitions(tableName)
@@ -487,7 +487,7 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       .filter((partitionId) => typeof partitionId === 'string');
 
     return {
-      ...localResult,
+      ...ownerResult,
       partitions,
       tableName,
       distributedPlan: null,
@@ -532,14 +532,14 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
   }
 
   /**
-   * Determine whether one system-table read should confirm empty local rows
-   * through the authoritative owner lane before accepting the result.
+   * Whether one system-table query is bounded by its single primary key.
+   * This is structural eligibility, independent of owner availability.
    * @param {string} tableName
    * @param {Object} ast
    * @return {boolean}
    * @private
    */
-  shouldConfirmEmptyAuthoritativeSystemTableRead(tableName, ast) {
+  isBoundedSystemTablePrimaryKeyLookup(tableName, ast) {
     const primaryKeyColumns = this.getSystemTablePrimaryKeyColumns(tableName);
     if (primaryKeyColumns.length !== 1) {
       return false;

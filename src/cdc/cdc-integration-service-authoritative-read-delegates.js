@@ -9,20 +9,15 @@ import {
   executeLocalSystemTableRead as executeLocalSystemTableReadFromHelpers,
 } from './cdc-integration-service-local-system-table-routing.js';
 import {
-  buildOwnerRpcSqlFallbackQueryOptions,
   buildSystemTableOperationDiagnostics,
   executeAuthoritativeOwnerRpcRead as executeAuthoritativeOwnerRpcReadFromHelpers,
-  executeAuthoritativeSqlFallbackRead as executeAuthoritativeSqlFallbackReadFromHelpers,
   executeAuthoritativeSystemTableRead as executeAuthoritativeSystemTableReadFromHelpers,
   getLocalQueryTransportReadiness,
   isAuthoritativeRepairRowNewer as isAuthoritativeRepairRowNewerFromHelpers,
-  maybeReseedBootstrapOverlay,
   mergeAuthoritativeSystemTableRowSets,
   normalizeAuthoritativeReadLocalQueryTransport,
   normalizeLocalSystemTableWriteResult,
-  queryLocalAuthoritativeSystemTableRows,
   extractAuthoritativeRowVersion,
-  shouldRetryOwnerRpcReadViaSqlFallback,
 } from './cdc-integration-service-authoritative-read-flow.js';
 
 const CDC_INTEGRATION_SERVICE_AUTHORITATIVE_READ_CONSTRUCTOR = 'constructor';
@@ -167,32 +162,6 @@ class CDCIntegrationServiceAuthoritativeReadDelegates {
   }
 
   /**
-   * Read authoritative rows from node-local system partition replicas when
-   * available.
-   * @param {string} tableName
-   * @param {string} sql
-   * @param {Array<*>} params
-   * @param {Object} [options]
-   * @param {string} [options.consistency]
-   * @return {Promise<{available: boolean, rows: Array<Object>}>}
-   * @private
-   */
-  async queryLocalAuthoritativeSystemTableRows(
-    tableName,
-    sql,
-    params = [],
-    options = {},
-  ) {
-    return queryLocalAuthoritativeSystemTableRows(
-      this,
-      tableName,
-      sql,
-      params,
-      options,
-    );
-  }
-
-  /**
    * Build bounded routing diagnostics for one system-table operation.
    * @param {string} tableName
    * @param {Object} [options={}]
@@ -211,44 +180,8 @@ class CDCIntegrationServiceAuthoritativeReadDelegates {
     );
   }
 
-  shouldRetryOwnerRpcReadViaSqlFallback(
-    ownerRpcResult,
-    options = {},
-    localQueryTransportReadiness = null,
-  ) {
-    return shouldRetryOwnerRpcReadViaSqlFallback(
-      ownerRpcResult,
-      options,
-      localQueryTransportReadiness,
-    );
-  }
-
-  buildOwnerRpcSqlFallbackQueryOptions(queryOptions = {}, baseDiagnostics = {}) {
-    return buildOwnerRpcSqlFallbackQueryOptions(queryOptions, baseDiagnostics);
-  }
-
-  async executeAuthoritativeSqlFallbackRead(
-    tableName,
-    statement,
-    params,
-    options,
-    baseDiagnostics,
-    localQueryTransportReadiness = null,
-  ) {
-    return executeAuthoritativeSqlFallbackReadFromHelpers(
-      this,
-      tableName,
-      statement,
-      params,
-      options,
-      baseDiagnostics,
-      localQueryTransportReadiness,
-    );
-  }
-
   /**
-   * Execute an authoritative system-table read. Prefers local partition
-   * replicas and falls back to the routed SQL engine when necessary.
+   * Execute the single local-owner or owner-RPC path selected at ingress.
    * @param {string} tableName
    * @param {string} sql
    * @param {Array<*>} params
@@ -328,22 +261,6 @@ class CDCIntegrationServiceAuthoritativeReadDelegates {
    */
   getLocalQueryTransportReadiness() {
     return getLocalQueryTransportReadiness(this);
-  }
-
-  /**
-   * Re-seed the SQL query engine bootstrap routing overlay when a
-   * query fails with TABLE_NOT_FOUND or PARTITION_NOT_FOUND. This
-   * breaks the circular dependency after seed restart where empty
-   * cache + deleted overlay prevents authoritative discovery repair.
-   * Reuses the existing seedBootstrapRoutingOverlayFromSnapshots
-   * mechanism on the SQL query engine.
-   * @param {string} tableName
-   * @param {Object|null} queryResult
-   * @return {{reseeded: boolean}}
-   * @private
-   */
-  maybeReseedBootstrapOverlay(tableName, queryResult) {
-    return maybeReseedBootstrapOverlay(this, tableName, queryResult);
   }
 
   /**

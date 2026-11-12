@@ -1359,8 +1359,8 @@ async (t) => {
     t.equal(
       authoritativeReadOptions[0].options.readAuthority
         ?.replicaFallbackConsistency,
-      null,
-      'visibility verification must not fall back to a possibly stale local replica',
+      undefined,
+      'visibility verification carries no alternate replica consistency',
     );
   } finally {
     ConfigurationManager.resetInstance();

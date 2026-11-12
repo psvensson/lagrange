@@ -118,15 +118,15 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
       t.equal(
         authoritativeReadCalls[0]?.options?.readAuthority
           ?.authoritativeReadMode,
-        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED_SQL_FALLBACK,
-        'replica_operations visibility reads should prefer owner RPC with SQL fallback',
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+        'replica_operations visibility reads must require the owner RPC authority',
       );
     } finally {
       await coordinator.shutdown();
     }
   });
 
-  test('storage reservation cleanup reads opt into authoritative SQL fallback',
+  test('storage reservation cleanup reads require canonical owner RPC',
     async (t) => {
       const gatewayCalls = [];
       const coordinator = createCoordinator({
@@ -223,8 +223,8 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
           t.equal(
             call.options.authoritativeReadMode,
             CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-              .OWNER_RPC_PREFERRED_SQL_FALLBACK,
-            `reservation cleanup should opt into routed authoritative SQL fallback for ${call.sql}`,
+              .OWNER_RPC_REQUIRED,
+            `reservation cleanup must require the owner RPC authority for ${call.sql}`,
           );
           t.equal(
             call.options.timeoutMs,
@@ -310,8 +310,8 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
       t.equal(
         authoritativeReadCalls[0]?.options?.readAuthority
           ?.authoritativeReadMode,
-        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED_SQL_FALLBACK,
-        'canonical replica_operations visibility reads should prefer owner RPC with SQL fallback',
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+        'canonical replica_operations visibility reads must require the owner RPC authority',
       );
     } finally {
       await coordinator.shutdown();

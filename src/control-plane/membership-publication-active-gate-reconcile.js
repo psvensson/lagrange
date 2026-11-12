@@ -15,7 +15,7 @@ import {
   MEMBERSHIP_PUBLICATION_READ_SOURCE,
   MEMBERSHIP_PUBLICATION_STATUS,
 } from './membership-publication-row-contract.js';
-import {normalizeNodeIdList, normalizePositiveInteger} from './membership-publication-row-helpers.js';
+import {normalizeNodeIdList} from './membership-publication-row-helpers.js';
 import {
   buildPublicationReadOptions,
   hasExplicitMembershipPublicationTarget,

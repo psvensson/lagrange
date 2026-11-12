@@ -203,7 +203,7 @@ const STORAGE_RESERVATION_READ_QUERY_OPTIONS = Object.freeze({
   // SQL-backed view instead of leaving stale reservations behind.
   authoritativeReadMode:
     CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-      .OWNER_RPC_PREFERRED_SQL_FALLBACK,
+      .OWNER_RPC_REQUIRED,
 });
 const PRIORITY_RECENT_INTENT_TTL_MS = TIME_MS.MINUTE * 2;
 const RECENT_OPERATION_INTENT_VISIBILITY_STATE = Object.freeze({

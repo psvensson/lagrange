@@ -422,7 +422,7 @@ async function fetchAuthoritativeTableRows(
   const {budgetMs, cancellationToken} = preflight;
   const readOptions = {
     authoritativeReadMode:
-      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_CONFIRM_EMPTY_WITH_OWNER_RPC,
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
     leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
     timeoutMs: budgetMs,
     ...(cancellationToken ? {cancellationToken} : {}),

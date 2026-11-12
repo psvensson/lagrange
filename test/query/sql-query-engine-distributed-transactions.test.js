@@ -1343,7 +1343,7 @@ test('SQLQueryEngine - retryable control-plane deferred non-transactional ' +
 
 test('SQLQueryEngine - readDistributedTransactionRow and ' +
   'readDistributedTransactionRecoveryState use ' +
-  'OWNER_LOCAL_PREFERRED_OWNER_RPC_FALLBACK for non-hosting nodes in >3-node clusters',
+  'OWNER_RPC_REQUIRED for non-hosting nodes in >3-node clusters',
 async (t) => {
   const capturedCalls = [];
   const sampleRow = {
@@ -1367,7 +1367,7 @@ async (t) => {
     controlPlaneSystemTableGateway: {
       async readAuthoritativeRows(tableName, sql, params, options = {}) {
         capturedCalls.push({tableName, sql, params, options});
-        if (options.authoritativeReadMode === 'owner_local_only') {
+        if (options.authoritativeReadMode !== 'owner_rpc_required') {
           return {
             success: false,
             rows: [],
@@ -1388,7 +1388,7 @@ async (t) => {
   t.same(
     decisionRow,
     sampleRow,
-    'readDistributedTransactionRow should succeed on non-hosting nodes via owner-RPC fallback',
+    'readDistributedTransactionRow should succeed on non-hosting nodes via the RPC owner',
   );
 
   const recoveryState = await engine.readDistributedTransactionRecoveryState(
@@ -1397,7 +1397,7 @@ async (t) => {
   t.equal(
     recoveryState?.state,
     'available',
-    'readDistributedTransactionRecoveryState should succeed on non-hosting nodes via owner-RPC fallback',
+    'readDistributedTransactionRecoveryState should succeed on non-hosting nodes via the RPC owner',
   );
   t.equal(
     capturedCalls.length,
@@ -1405,10 +1405,10 @@ async (t) => {
     'decision read + before/participants/after recovery reads should all invoke readAuthoritativeRows',
   );
   for (const call of capturedCalls) {
-    t.not(
+    t.equal(
       call.options?.authoritativeReadMode,
-      'owner_local_only',
-      `${call.tableName} authoritative read must allow owner-RPC fallback for >3-node RF=3 clusters`,
+      'owner_rpc_required',
+      `${call.tableName} authoritative read selects the RPC owner for >3-node RF=3 clusters`,
     );
     t.equal(
       call.options?.workClass,

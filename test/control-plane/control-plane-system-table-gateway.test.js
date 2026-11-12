@@ -104,12 +104,12 @@ test('ControlPlaneSystemTableGateway readRows uses authoritative recovery-' +
   t.equal(
     calls[0].options.readAuthority.localReadConsistency,
     'local_leader',
-    'gateway should prefer local authoritative reads',
+    'gateway should retain the declared local consistency',
   );
   t.equal(
-    calls[0].options.readAuthority.replicaFallbackConsistency,
-    'any_replica',
-    'gateway should keep bounded replica fallback',
+    calls[0].options.readAuthority.authoritativeReadMode,
+    CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+    'authoritative reads should select the owner RPC lane',
   );
   t.equal(
     calls[0].options.queryOptions.routingReadinessDimension,
@@ -151,7 +151,6 @@ async (t) => {
     [],
     {
       localReadConsistency: 'local_leader',
-      replicaFallbackConsistency: 'local_leader',
       authoritativeReadMode:
         CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
       leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
@@ -172,8 +171,8 @@ async (t) => {
   );
   t.equal(
     calls[0]?.options?.readAuthority?.replicaFallbackConsistency,
-    'local_leader',
-    'gateway should preserve explicit replica-fallback consistency',
+    undefined,
+    'the token should contain no alternate consistency',
   );
   t.equal(calls[0]?.options?.readAuthority?.leaderMode,
     CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
@@ -230,7 +229,6 @@ test('ControlPlaneSystemTableGateway records enriched read operation ' +
           rows: [{node_id: 'node-a'}],
           source: 'local_partition_replica',
           localReadHit: true,
-          localReplicaFallbackHit: true,
           queryTimeoutMs: 987,
           systemTableDiagnostics: {
             partitionId: 'nodes-p1',
@@ -258,7 +256,6 @@ test('ControlPlaneSystemTableGateway records enriched read operation ' +
     operationClass: 'read',
     tableName: TABLES.NODES,
     localReadHit: true,
-    localReplicaFallbackHit: true,
     partitionId: 'nodes-p1',
     leaderNodeId: 'node-a',
     serviceRowCount: 3,
@@ -297,14 +294,14 @@ test('ControlPlaneSystemTableGateway executeRead honors explicit routed ' +
   }, {
     authoritativeReadMode:
       CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-        .OWNER_RPC_PREFERRED_SQL_FALLBACK,
+        .OWNER_RPC_REQUIRED,
   });
 
   t.equal(result.success, true, 'authoritative read should still succeed');
   t.equal(calls.length, 1, 'gateway should execute one authoritative read');
   t.equal(
     calls[0].options.readAuthority.authoritativeReadMode,
-    CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED_SQL_FALLBACK,
+    CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
     'gateway should pass explicit routed-authoritative opt-in to the owner',
   );
 });
@@ -652,7 +649,7 @@ async (t) => {
   );
 });
 
-test('ControlPlaneSystemTableGateway readAuthoritativeRows bypasses legacy ' +
+test('ControlPlaneSystemTableGateway readAuthoritativeRows declares its ' +
   'strategy inference', async (t) => {
   const calls = [];
   const gateway = new ControlPlaneSystemTableGateway({
@@ -680,7 +677,7 @@ test('ControlPlaneSystemTableGateway readAuthoritativeRows bypasses legacy ' +
     {
       authoritativeReadMode:
         CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-          .OWNER_RPC_PREFERRED_SQL_FALLBACK,
+          .OWNER_RPC_REQUIRED,
     },
   );
 
@@ -688,7 +685,7 @@ test('ControlPlaneSystemTableGateway readAuthoritativeRows bypasses legacy ' +
   t.equal(calls.length, 1, 'authoritative helper should route one owner read');
   t.equal(
     calls[0].options.readAuthority.authoritativeReadMode,
-    CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED_SQL_FALLBACK,
+    CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
     'authoritative helper should preserve authoritative read options',
   );
 });
@@ -829,8 +826,8 @@ test('ControlPlaneSystemTableGateway executeRead routes owner-local reads ' +
   );
   t.equal(
     authoritativeCalls[0].options.readAuthority.replicaFallbackConsistency,
-    'any_replica',
-    'owner-local reads should keep bounded local replica fallback',
+    undefined,
+    'owner-local reads should carry one declared consistency',
   );
   t.equal(
     authoritativeCalls[0].options.queryOptions.routingReadinessDimension,
@@ -890,8 +887,8 @@ test('ControlPlaneSystemTableGateway owner-local reads fail closed when the ' +
     'gateway should not silently route through the query engine');
 });
 
-test('ControlPlaneSystemTableGateway owner-local reads honor explicit routed ' +
-  'authoritative fallback opt-in', async (t) => {
+test('ControlPlaneSystemTableGateway explicit owner RPC mode selects the ' +
+  'declared authority at ingress', async (t) => {
   const authoritativeCalls = [];
   const gateway = new ControlPlaneSystemTableGateway({
     nodeId: 'node-gateway',
@@ -905,7 +902,7 @@ test('ControlPlaneSystemTableGateway owner-local reads honor explicit routed ' +
         authoritativeCalls.push({tableName, sql, params, options});
         if (options.readAuthority.authoritativeReadMode !==
           CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-            .OWNER_RPC_PREFERRED_SQL_FALLBACK) {
+            .OWNER_RPC_REQUIRED) {
           return {
             success: false,
             error: 'authoritative_row_source_unavailable',
@@ -914,15 +911,15 @@ test('ControlPlaneSystemTableGateway owner-local reads honor explicit routed ' +
         }
         return {
           success: true,
-          rows: [{operation_id: 'op-sql'}],
-          source: 'sql_query_engine',
+          rows: [{operation_id: 'op-owner-rpc'}],
+          source: 'owner_rpc_lane',
         };
       },
     },
     sqlQueryEngine: {
       async executeQuery() {
         throw new Error(
-          'gateway should keep routed authoritative fallback inside the CDC owner path',
+          'gateway must use the declared CDC owner RPC lane',
         );
       },
     },
@@ -937,19 +934,19 @@ test('ControlPlaneSystemTableGateway owner-local reads honor explicit routed ' +
   }, {
     authoritativeReadMode:
       CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-        .OWNER_RPC_PREFERRED_SQL_FALLBACK,
+        .OWNER_RPC_REQUIRED,
     preferLeader: false,
   });
 
-  t.equal(result.success, true, 'owner-local read should succeed via routed authoritative fallback');
+  t.equal(result.success, true, 'the explicitly selected owner RPC read succeeds');
   t.equal(
     result.rows[0]?.operation_id,
-    'op-sql',
+    'op-owner-rpc',
     'gateway should surface the routed authoritative result',
   );
   t.equal(
     authoritativeCalls[0]?.options?.readAuthority?.authoritativeReadMode,
-    CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED_SQL_FALLBACK,
+    CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
     'owner-local reads should pass the explicit routed-authoritative opt-in to the owner',
   );
   t.equal(

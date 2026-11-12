@@ -1,44 +1,25 @@
 import {
-  CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE,
-  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
-  CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_LOCAL_READ_CONSISTENCY,
   CONTROL_PLANE_READ_OUTCOME,
-  CONTROL_PLANE_READ_LEADER_MODE,
-  CONTROL_PLANE_REPLICA_FALLBACK_CONSISTENCY,
   CONTROL_PLANE_READ_STRATEGY,
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL,
   PRESSURE_GOVERNOR_ACTION,
   PRESSURE_WORK_CLASS,
+  assertControlPlaneReadAuthorityMatchesIntent,
+  assertFlatReadAuthorityDraft,
   buildControlPlaneReadAuthority,
   buildPressureAdmissionFailure,
   normalizeCoalescingToken,
   normalizeReadStrategy,
   normalizeSystemTableName,
   resolveControlPlaneReadIntent,
-  resolveAuthoritativeReadModeContract,
   resolveReadProfileOptions,
 } from './control-plane-system-table-gateway-shared.js';
-
-function enforceCompleteObservationAuthority(options) {
-  if (
-    options?.authoritativeObservationScope !==
-    CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE.COMPLETE_TABLE
-  ) {
-    return options;
-  }
-  return {
-    ...options,
-    authoritativeReadMode:
-      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
-    leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
-  };
-}
 
 const controlPlaneSystemTableGatewayReadDispatchMethods = {
   async readRows(tableName, sql, params = [], options = {}) {
     const cdcIntegrationService = this.resolveCdcIntegrationService();
-    const {readIntent, readProfile} = resolveControlPlaneReadIntent(
+    const {readIntent} = resolveControlPlaneReadIntent(
       tableName,
       sql,
       params,
@@ -46,13 +27,7 @@ const controlPlaneSystemTableGatewayReadDispatchMethods = {
       typeof cdcIntegrationService?.executeAuthoritativeSystemTableRead ===
         'function',
     );
-    return this.executeRead(
-      readIntent,
-      {
-        ...options,
-        readProfile,
-      },
-    );
+    return this.executeRead(readIntent, options);
   },
 
   /**
@@ -64,28 +39,30 @@ const controlPlaneSystemTableGatewayReadDispatchMethods = {
    * @return {Promise<Object>}
    */
   async executeRead(readIntent = {}, options = {}) {
+    // Validate the supplied token first, then the original drafts before
+    // normalization can erase an explicit strategy or consistency choice.
+    const selectedAuthority = options.readAuthority === undefined ? null :
+      assertControlPlaneReadAuthorityMatchesIntent(
+        options.readAuthority, readIntent?.strategy, options);
+    assertFlatReadAuthorityDraft(readIntent);
+    assertFlatReadAuthorityDraft(options);
     const tableName = normalizeSystemTableName(readIntent?.tableName);
     const strategy = normalizeReadStrategy(readIntent?.strategy);
     const sql = readIntent?.sql || null;
     const params = Array.isArray(readIntent?.params) ? readIntent.params : [];
-    const profiledOptions = enforceCompleteObservationAuthority(
-      resolveReadProfileOptions(options),
-    );
+    // A caller's selected contract precedes profile defaults and request
+    // identity. Defaults may schedule a read; they cannot replace its owner.
+    const profiledOptions = resolveReadProfileOptions(options);
     const mergedOptions = {
       ...profiledOptions,
       strategy,
     };
-    mergedOptions.readAuthority = buildControlPlaneReadAuthority({
-      ...mergedOptions,
-      localReadConsistency:
-        mergedOptions.localReadConsistency ||
-        CONTROL_PLANE_LOCAL_READ_CONSISTENCY,
-      replicaFallbackConsistency:
-        mergedOptions.replicaFallbackConsistency ||
-        CONTROL_PLANE_REPLICA_FALLBACK_CONSISTENCY,
-    });
-    const authoritativeReadModeContract =
-      resolveAuthoritativeReadModeContract(mergedOptions.readAuthority);
+    mergedOptions.readAuthority = selectedAuthority === null ?
+      buildControlPlaneReadAuthority({
+        ...mergedOptions,
+        localReadConsistency:
+          mergedOptions.localReadConsistency || CONTROL_PLANE_LOCAL_READ_CONSISTENCY,
+      }) : selectedAuthority;
     const requestKey = this.buildReadRequestKey(
       tableName,
       sql,
@@ -99,7 +76,7 @@ const controlPlaneSystemTableGatewayReadDispatchMethods = {
       strategy,
       readProfile: mergedOptions?.readProfile || null,
       authoritativeReadMode:
-        authoritativeReadModeContract.authoritativeReadMode,
+        mergedOptions.readAuthority.authoritativeReadMode,
       workloadClass: mergedOptions?.workloadClass || null,
       workClass: mergedOptions?.workClass || PRESSURE_WORK_CLASS.INTERACTIVE,
       coalescingKey: normalizeCoalescingToken(mergedOptions?.coalescingKey),
@@ -181,11 +158,9 @@ const controlPlaneSystemTableGatewayReadDispatchMethods = {
         tableName,
         strategy,
         authoritativeReadMode:
-          authoritativeReadModeContract.authoritativeReadMode,
+          mergedOptions.readAuthority.authoritativeReadMode,
         workloadClass: mergedOptions?.workloadClass || null,
-        routingReadinessDimension:
-          mergedOptions?.routingReadinessDimension ||
-          CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+        routingReadinessDimension: mergedOptions.readAuthority.routingReadinessDimension,
         outcome: result?.outcome || null,
         success: result?.success === true,
         rowCount: Number.isFinite(result?.rowCount) ?
@@ -194,7 +169,6 @@ const controlPlaneSystemTableGatewayReadDispatchMethods = {
             result.rows.length :
             0,
         source: result?.source || null,
-        usedSqlFallback: result?.usedSqlFallback === true,
         error: result?.success === true ? null : result?.error || null,
         ...this.buildOperationLedgerDiagnostics(
           tableName,
@@ -210,11 +184,9 @@ const controlPlaneSystemTableGatewayReadDispatchMethods = {
         tableName,
         strategy,
         authoritativeReadMode:
-          authoritativeReadModeContract.authoritativeReadMode,
+          mergedOptions.readAuthority.authoritativeReadMode,
         workloadClass: mergedOptions?.workloadClass || null,
-        routingReadinessDimension:
-          mergedOptions?.routingReadinessDimension ||
-          CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+        routingReadinessDimension: mergedOptions.readAuthority.routingReadinessDimension,
         outcome: error?.outcome || CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY,
         success: false,
         rowCount: 0,

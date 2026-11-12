@@ -499,9 +499,8 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
    * Re-verify a positive cache-local hold against the shared typed placement
    * contract. Every actionable ledger partition must be authoritatively spread;
    * unreadable, partial, SQL/cache-sourced, or still-unspread evidence holds.
-   * OWNER_RPC_REQUIRED is deliberate: OWNER_RPC_PREFERRED may fall back to an
-   * ANY_REPLICA local answer after RPC failure, recreating the stale-cache
-   * liveness lock this release path exists to escape.
+   * OWNER_RPC_REQUIRED keeps this observation on the canonical owner lane;
+   * an unavailable read retains the ledger hold until that owner answers.
    * @param {Object} engagedHold
    * @return {Promise<boolean>}
    * @private

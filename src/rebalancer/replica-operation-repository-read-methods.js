@@ -365,6 +365,7 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
    * @param {string} operationId
    * @param {object} [options]
    * @param {string} [options.authoritativeReadMode]
+   * @param {boolean} [options.singleAttempt] Caller owns the retry cadence.
    * @return {Promise<object>} Frozen named-state observation.
    */
     async queryAuthoritativeOperationVisibilityObservation(operationId, options = {}) {
@@ -378,7 +379,7 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
         this.getOwnerPersistedTransitionVisibilityFallbackOperation(operationId) :
         null);
       const ownerPersistedTransitionWitness = allowOwnerPersistedTransitionDeferredVisibility ?
-        this.getOwnerPersistedTransitionVisibilityWitness(
+        this.captureOwnerPersistedTransitionVisibilityWitness(
           operationId,
           expectedOperation,
         ) :
@@ -403,7 +404,7 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
           ...readQueryOptions,
           leaderMode: options?.leaderMode,
           retryOnRetryableFailure:
-            options?.authoritativeReadMode !==
+            options?.singleAttempt !== true && options?.authoritativeReadMode !==
             CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
           timeoutBudget: options?.timeoutBudget,
         },
@@ -503,7 +504,8 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
         operation,
       )
       ) {
-        this.clearOwnerPersistedTransitionVisibilityWitness(operationId);
+        this.clearOwnerPersistedTransitionVisibilityWitness(operationId,
+          ownerPersistedTransitionWitness);
       }
       return isCoordinatorOwnedOperationType(operation?.type) ?
         buildPresentOperationVisibility(operation) :

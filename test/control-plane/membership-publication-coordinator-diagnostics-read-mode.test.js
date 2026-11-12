@@ -46,7 +46,6 @@ const DIAGNOSTICS_READ_OPTIONS = Object.freeze({
 });
 const OWNER_RPC_REQUIRED_READ_MODE =
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED;
-const UNUSED_REPLICA_FALLBACK_CONSISTENCY = 'local_replica';
 
 function buildPublicationRow(options = {}) {
   return {
@@ -116,10 +115,7 @@ test('getLatestClusterPublication uses owner-rpc publication history for diagnos
       });
 
     const latestPublication =
-      await coordinator.getLatestClusterPublication({
-        ...DIAGNOSTICS_READ_OPTIONS,
-        replicaFallbackConsistency: UNUSED_REPLICA_FALLBACK_CONSISTENCY,
-      });
+      await coordinator.getLatestClusterPublication(DIAGNOSTICS_READ_OPTIONS);
 
     t.equal(
       listPublicationCalls.length,

@@ -48,7 +48,7 @@ test('AuthoritativeControlPlaneView reads canonical node/service evidence ' +
               node_id: FIXTURE_NODE_ID,
               last_heartbeat: FIXTURE_LAST_HEARTBEAT_MS,
             }],
-            source: 'sql_query_engine',
+            source: 'owner_rpc_lane',
           };
         }
         return {
@@ -58,7 +58,7 @@ test('AuthoritativeControlPlaneView reads canonical node/service evidence ' +
             node_id: FIXTURE_NODE_ID,
             status: 'ACTIVE',
           }],
-          source: 'local_partition_replica',
+          source: 'owner_rpc_lane',
         };
       },
     },
@@ -71,32 +71,32 @@ test('AuthoritativeControlPlaneView reads canonical node/service evidence ' +
     t.equal(
       call.options.readAuthority.localReadConsistency,
       'local_leader',
-      'authoritative reads must start from the leader-local consistency',
+      'the token retains the declared local consistency without executing a local alternate',
     );
     t.equal(
       call.options.readAuthority.authoritativeReadMode,
-      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED_SQL_FALLBACK,
-      'one named mode permits the canonical SQL fallback',
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+      'one named mode selects the RPC owner',
     );
     t.equal(
       call.options.queryOptions?.routingReadinessDimension,
       CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-      'authoritative fallback should stay on control-plane recovery routing',
+      'the owner read stays on control-plane recovery routing',
     );
     t.equal(
       call.options.queryOptions?.allowReadinessAuthoritativeRefresh,
       false,
-      'authoritative fallback must not recurse into readiness refresh',
+      'the owner read must not recurse into readiness refresh',
     );
     t.match(
       String(call.options.queryOptions?.sessionId || ''),
       /^authoritative-control-plane-read:/,
-      'authoritative fallback should isolate the SQL session',
+      'the owner read isolates its query session',
     );
     t.equal(
       call.options.readAuthority.replicaFallbackConsistency,
-      'any_replica',
-      'node/service repair should retry against a local replica before routed SQL',
+      undefined,
+      'node/service repair carries no alternate replica policy',
     );
   }
 
@@ -110,23 +110,27 @@ test('AuthoritativeControlPlaneView reads canonical node/service evidence ' +
   );
   t.equal(
     snapshot.tables.nodes.source,
-    AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.SQL_QUERY_ENGINE,
+    AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.OWNER_RPC_LANE,
   );
   t.equal(
     snapshot.tables.services.source,
-    AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.LOCAL_PARTITION_REPLICA,
+    AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.OWNER_RPC_LANE,
   );
   t.equal(
     snapshot.source,
-    AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.MIXED,
-    'snapshot should retain mixed-source visibility diagnostics',
+    AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.OWNER_RPC_LANE,
+    'snapshot retains the selected owner source',
   );
 });
 
-test('AuthoritativeControlPlaneView readNodeSnapshot enables bounded ' +
-  'any-replica fallback before routed SQL for node/service repair',
+test('AuthoritativeControlPlaneView readNodeSnapshot retains an explicit ' +
+  'local any-replica contract for node/service repair',
 async (t) => {
   const calls = [];
+  const authority = buildControlPlaneReadAuthority({
+    authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+    localReadConsistency: 'any_replica',
+  });
   const view = new AuthoritativeControlPlaneView({
     nodeId: FIXTURE_LOCAL_NODE_ID,
     now: () => FIXTURE_NOW_MS,
@@ -138,8 +142,7 @@ async (t) => {
         options,
       ) {
         calls.push({tableName, sql, params, options});
-        if (options?.readAuthority?.replicaFallbackConsistency !==
-          'any_replica') {
+        if (options.readAuthority !== authority) {
           return {
             success: false,
             error: 'authoritative_row_source_unavailable',
@@ -169,23 +172,23 @@ async (t) => {
     },
   });
 
-  const snapshot = await view.readNodeSnapshot(FIXTURE_NODE_ID);
+  const snapshot = await view.readNodeSnapshot(FIXTURE_NODE_ID, {readAuthority: authority});
 
   t.equal(snapshot.tables.nodes.success, true,
-    'node evidence should succeed through the bounded local follower fallback');
+    'node evidence succeeds through the explicitly selected local owner');
   t.equal(snapshot.tables.services.success, true,
-    'service evidence should succeed through the bounded local follower fallback');
+    'service evidence succeeds through the explicitly selected local owner');
   t.equal(snapshot.tables.nodes.source,
     AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.LOCAL_PARTITION_REPLICA,
-    'node repair should avoid routed SQL when a local replica can satisfy it');
+    'node repair retains the local-only source');
   t.equal(snapshot.tables.services.source,
     AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.LOCAL_PARTITION_REPLICA,
-    'service repair should avoid routed SQL when a local replica can satisfy it');
+    'service repair retains the local-only source');
   for (const call of calls) {
     t.equal(
-      call.options?.readAuthority?.replicaFallbackConsistency,
+      call.options?.readAuthority?.localReadConsistency,
       'any_replica',
-      'node/service repair should request bounded any-replica fallback before routed SQL',
+      'node/service repair preserves its explicitly declared consistency',
     );
     t.equal(
       call.options?.queryOptions?.allowReadinessAuthoritativeRefresh,
@@ -293,7 +296,7 @@ test('AuthoritativeControlPlaneView preserves the owner-lane priority hint ' +
       deliveryPriority: 'critical',
       readAuthority: buildControlPlaneReadAuthority({
         authoritativeReadMode:
-          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
         leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
       }),
     },
@@ -317,8 +320,8 @@ test('AuthoritativeControlPlaneView preserves the owner-lane priority hint ' +
   );
   t.equal(
     calls[0]?.options?.readAuthority?.authoritativeReadMode,
-    CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
-    'one named mode carries the no-SQL-fallback policy',
+    CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+    'one named mode selects the RPC owner',
   );
   t.equal(
     calls[0]?.options?.queryOptions?.workloadClass,
@@ -369,7 +372,7 @@ test('AuthoritativeControlPlaneView stamps one canonical delivery source for ' +
 });
 
 test('AuthoritativeControlPlaneView keeps in-flight reads distinct when ' +
-  'replica fallback policy differs', async (t) => {
+  'explicit local consistency differs', async (t) => {
   const calls = [];
   let releaseRead = null;
   const readBlocked = new Promise((resolve) => {
@@ -403,8 +406,8 @@ test('AuthoritativeControlPlaneView keeps in-flight reads distinct when ' +
       readAuthority: buildControlPlaneReadAuthority({
         authoritativeReadMode:
           CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-            .OWNER_RPC_PREFERRED_SQL_FALLBACK,
-        replicaFallbackConsistency: 'any_replica',
+            .OWNER_LOCAL_ONLY,
+        localReadConsistency: 'any_replica',
       }),
     },
   );
@@ -412,22 +415,26 @@ test('AuthoritativeControlPlaneView keeps in-flight reads distinct when ' +
     TABLES.NODES,
     `SELECT * FROM ${TABLES.NODES} WHERE node_id = ?`,
     [FIXTURE_NODE_ID],
+    {readAuthority: buildControlPlaneReadAuthority({
+      authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+      localReadConsistency: 'local_leader',
+    })},
   );
   await Promise.resolve();
 
   t.equal(
     calls.length,
     2,
-    'reads with different replica fallback contracts should not coalesce',
+    'reads with different selected local consistency cannot coalesce',
   );
 
   releaseRead();
   await Promise.all([firstRead, secondRead]);
   t.same(
     calls.map((call) =>
-      call.options?.readAuthority?.replicaFallbackConsistency || null),
-    ['any_replica', null],
-    'the in-flight cache key should preserve the requested fallback policy',
+      call.options?.readAuthority?.localReadConsistency),
+    ['any_replica', 'local_leader'],
+    'the in-flight key preserves the requested consistency',
   );
 });
 
@@ -460,7 +467,7 @@ test('AuthoritativeControlPlaneView keeps preferred and required leader ' +
   const readOptions = {
     readAuthority: buildControlPlaneReadAuthority({
       authoritativeReadMode:
-        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
     }),
   };
 
@@ -635,7 +642,7 @@ test('AuthoritativeControlPlaneView readRows fails with a typed deferred ' +
   );
 });
 
-test('AuthoritativeControlPlaneView delegates fallback to the CDC owner',
+test('AuthoritativeControlPlaneView preserves the CDC owner refusal',
   async (t) => {
     const calls = [];
     const view = new AuthoritativeControlPlaneView({
@@ -670,8 +677,8 @@ test('AuthoritativeControlPlaneView delegates fallback to the CDC owner',
       'the view must not create a second fallback authority');
     t.equal(
       calls[0].options.readAuthority.authoritativeReadMode,
-      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED_SQL_FALLBACK,
-      'one token delegates the complete fallback policy to CDC',
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+      'one token selects the RPC owner at CDC',
     );
     t.equal(result.success, false,
       'the view preserves the owner result instead of reinterpreting it');

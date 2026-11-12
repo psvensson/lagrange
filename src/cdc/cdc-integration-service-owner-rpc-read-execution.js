@@ -1,39 +1,24 @@
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
 import {resolveControlPlaneSystemTableDeliverySource} from '../control-plane/control-plane-system-table-gateway-shared.js';
-import {resolveAuthoritativeReadModeContract} from
-  '../control-plane/control-plane-system-table-gateway-read-contracts.js';
-import {isValidLeaderReadAuthorityWitness} from
+import {enforceRequiredLeaderReadAuthority} from
   '../control-plane/control-plane-authoritative-read-witness.js';
 import {CONTROL_PLANE_READ_LEADER_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
 import {CDC_TERMINAL_STAGE} from './cdc-constants.js';
 import {issueAuthoritativeReadStage} from './cdc-terminal-gate.js';
+import {isCompleteAuthoritativeReadResult} from
+  '../control-plane/control-plane-system-table-gateway-read-contracts.js';
 
 const {
-  ADDRESS,
   AUTHORITATIVE_READ_SOURCE,
   CDC_INTEGRATION_SERVICE_LITERAL,
-  CDC_LOG_MSG,
   CONTROL_PLANE_READINESS_DIMENSION,
-  ENTITY_TYPE,
   INITIAL_PARTITION_IDS,
-  QUERY_ERROR_CODE,
-  QUERY_ERROR_MSG,
   QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
-  SERVICE_STATUS,
-  SERVICE_TYPE,
   normalizeLocalQueryTransportReadiness,
 } = CDC_INTEGRATION_SERVICE_SHARED;
 
-const AUTHORITATIVE_SQL_FALLBACK_SOURCE = 'sql_query_engine';
-const AUTHORITATIVE_SQL_FALLBACK_SESSION_SUFFIX = ':owner-rpc-recovery';
-const AUTHORITATIVE_SQL_FALLBACK_PREFER_LEADER = false;
-const AUTHORITATIVE_SQL_FALLBACK_QUERY_TIMEOUT_ERROR_MESSAGES = Object.freeze([
-  QUERY_ERROR_MSG.QUERY_TIMEOUT,
-]);
 const AUTHORITATIVE_OWNER_RPC_READ_PREFER_LEADER = false;
-const AUTHORITATIVE_LEADER_WITNESS_FAILURE =
-  'authoritative_owner_leader_witness_required';
 
 function extractReadAuthorityWitness(result) {
   const candidate = result?.readAuthorityWitness;
@@ -47,14 +32,6 @@ function extractReadAuthorityWitnesses(result, readAuthorityWitness) {
     return result.readAuthorityWitnesses;
   }
   return readAuthorityWitness ? [readAuthorityWitness] : [];
-}
-
-function isNormalizedRowSetComplete(result, success) {
-  return Boolean(
-    success &&
-      result?.partial !== true &&
-      result?.rowSetComplete === true,
-  );
 }
 
 function normalizeAuthoritativeQueryRowSet(queryResult) {
@@ -76,71 +53,13 @@ function normalizeAuthoritativeQueryRowSet(queryResult) {
     rows,
     count: rows.length,
     rowCount: rows.length,
-    rowSetComplete: isNormalizedRowSetComplete(result, success, rows.length),
+    rowSetComplete: isCompleteAuthoritativeReadResult(result),
     readAuthorityWitness,
     readAuthorityWitnesses: extractReadAuthorityWitnesses(
       result,
       readAuthorityWitness,
     ),
   };
-}
-
-function isRequiredLeaderReadSuccess(queryResult, readAuthority) {
-  return queryResult?.success === true &&
-    readAuthority?.leaderMode === CONTROL_PLANE_READ_LEADER_MODE.REQUIRED;
-}
-
-function enforceRequiredLeaderReadAuthority(
-  queryResult,
-  partitionId,
-  readAuthority,
-) {
-  if (!isRequiredLeaderReadSuccess(queryResult, readAuthority)) {
-    return queryResult;
-  }
-  const witness = queryResult?.readAuthorityWitness;
-  if (isValidLeaderReadAuthorityWitness(witness, partitionId)) {
-    return queryResult;
-  }
-  return {
-    ...queryResult,
-    success: false,
-    rows: [],
-    error: CDC_INTEGRATION_SERVICE_LITERAL.AUTHORITATIVE_QUERY_FAILED,
-    authorityFailureReason: AUTHORITATIVE_LEADER_WITNESS_FAILURE,
-  };
-}
-
-function isAuthoritativeSqlFallbackQueryTimeoutMessage(errorMessage) {
-  if (typeof errorMessage !== 'string') {
-    return false;
-  }
-
-  const normalizedMessage = errorMessage.trim();
-  if (
-    AUTHORITATIVE_SQL_FALLBACK_QUERY_TIMEOUT_ERROR_MESSAGES.includes(
-      normalizedMessage,
-    )
-  ) {
-    return true;
-  }
-
-  if (
-    !normalizedMessage.startsWith(QUERY_ERROR_MSG.QUERY_TIMEOUT_AFTER_PREFIX) ||
-    !normalizedMessage.endsWith(QUERY_ERROR_MSG.QUERY_TIMEOUT_AFTER_SUFFIX)
-  ) {
-    return false;
-  }
-
-  const timeoutValue = Number(
-    normalizedMessage.slice(
-      QUERY_ERROR_MSG.QUERY_TIMEOUT_AFTER_PREFIX.length,
-      normalizedMessage.length -
-        QUERY_ERROR_MSG.QUERY_TIMEOUT_AFTER_SUFFIX.length,
-    ),
-  );
-
-  return Number.isInteger(timeoutValue) && timeoutValue > 0;
 }
 
 function normalizeAuthoritativeReadLocalQueryTransport(
@@ -157,115 +76,6 @@ function normalizeAuthoritativeReadLocalQueryTransport(
     null;
 }
 
-function shouldRetryOwnerRpcReadViaSqlFallback(
-  ownerRpcResult,
-  options = {},
-  localQueryTransportReadiness = null,
-) {
-  const authoritativeReadModeContract =
-    resolveAuthoritativeReadModeContract(options?.readAuthority);
-  if (
-    ownerRpcResult?.success === true ||
-    authoritativeReadModeContract.allowSqlFallback !== true
-  ) {
-    return false;
-  }
-
-  if (authoritativeReadModeContract.requireOwnerRpcRead === true) {
-    return false;
-  }
-
-  if (localQueryTransportReadiness?.ready === false) {
-    return false;
-  }
-
-  const errorMessage =
-    typeof ownerRpcResult?.error === 'string' ?
-      ownerRpcResult.error :
-      ownerRpcResult?.error?.message || ownerRpcResult?.message;
-
-  // No transport code widens this fallback: the code list it once held named
-  // two members QUERY_ERROR_CODE never had (dead since 2026-04), and a router
-  // failure on an owner read reaches here only through the hints below, as
-  // it always did (census: the fallback mode is owed its own unit).
-  return (
-    isAuthoritativeSqlFallbackQueryTimeoutMessage(errorMessage) ||
-    ownerRpcResult?.deferRetry === true ||
-    (
-      Number.isFinite(ownerRpcResult?.retryAfterMs) &&
-      ownerRpcResult.retryAfterMs > 0
-    )
-  );
-}
-
-function buildOwnerRpcSqlFallbackQueryOptions(
-  queryOptions = {},
-  baseDiagnostics = {},
-) {
-  const resolvedQueryOptions =
-    queryOptions && typeof queryOptions === 'object' ? queryOptions : {};
-
-  const sessionId =
-    typeof resolvedQueryOptions.sessionId === 'string' &&
-    resolvedQueryOptions.sessionId.length > 0 ?
-      `${resolvedQueryOptions.sessionId}${AUTHORITATIVE_SQL_FALLBACK_SESSION_SUFFIX}` :
-      null;
-
-  return {
-    ...resolvedQueryOptions,
-    routingReadinessDimension:
-      resolvedQueryOptions.routingReadinessDimension ||
-      baseDiagnostics.routingReadinessDimension ||
-      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-    preferLeader: AUTHORITATIVE_SQL_FALLBACK_PREFER_LEADER,
-    ...(sessionId ? {sessionId} : {}),
-  };
-}
-
-async function executeAuthoritativeSqlFallbackRead(
-  service,
-  _tableName,
-  statement,
-  params,
-  options,
-  baseDiagnostics,
-  localQueryTransportReadiness = null,
-) {
-  if (typeof service.sqlQueryEngine?.executeQuery !== 'function') {
-    return null;
-  }
-
-  const queryResult = await issueAuthoritativeReadStage(service,
-    CDC_TERMINAL_STAGE.SQL_FALLBACK_READ,
-    () => service.sqlQueryEngine.executeQuery(
-      statement,
-      params,
-      buildOwnerRpcSqlFallbackQueryOptions(
-        options?.queryOptions,
-        baseDiagnostics,
-      ),
-    ));
-
-  return {
-    ...normalizeAuthoritativeQueryRowSet(queryResult),
-    source: AUTHORITATIVE_SQL_FALLBACK_SOURCE,
-    usedSqlFallback: true,
-    localReadHit: false,
-    localReplicaFallbackHit: false,
-    queryTimeoutMs: baseDiagnostics.queryTimeoutMs,
-    localQueryTransport: normalizeAuthoritativeReadLocalQueryTransport(
-      localQueryTransportReadiness,
-    ),
-    systemTableDiagnostics: {
-      ...baseDiagnostics,
-      localReadHit: false,
-      localReplicaFallbackHit: false,
-      routedToNode: baseDiagnostics.leaderNodeId || null,
-      deniedByReadiness: baseDiagnostics.deniedByReadiness === true,
-    },
-  };
-}
-
 function getLocalQueryTransportReadiness(service) {
   if (
     !service.messageRouter ||
@@ -280,77 +90,6 @@ function getLocalQueryTransportReadiness(service) {
   );
 }
 
-function maybeReseedBootstrapOverlay(service, tableName, queryResult) {
-  const errorCode = queryResult?.errorCode || null;
-
-  if (
-    errorCode !== QUERY_ERROR_CODE.TABLE_NOT_FOUND &&
-    errorCode !== QUERY_ERROR_CODE.PARTITION_NOT_FOUND
-  ) {
-    return {
-      reseeded: false,
-    };
-  }
-
-  if (
-    !service.sqlQueryEngine ||
-    typeof service.sqlQueryEngine.installRecoveryRoutingOverlayEntry !==
-      'function'
-  ) {
-    return {
-      reseeded: false,
-    };
-  }
-
-  const partitionId = INITIAL_PARTITION_IDS[tableName] || null;
-  if (!partitionId) {
-    return {
-      reseeded: false,
-    };
-  }
-
-  const connectedNodes = service.messageRouter ?
-    service.messageRouter.getConnectedNodes() :
-    [];
-  if (connectedNodes.length === 0) {
-    return {
-      reseeded: false,
-    };
-  }
-
-  service.logger.info(CDC_LOG_MSG.OVERLAY_RESEED_ON_TABLE_NOT_FOUND, {
-    nodeId: service.nodeId,
-    tableName,
-    partitionId,
-    connectedNodeCount: connectedNodes.length,
-    originalError: queryResult?.error || null,
-  });
-
-  const serviceRows = connectedNodes.map((nodeId) => ({
-    partition_id: partitionId,
-    service_type: SERVICE_TYPE.PARTITION,
-    status: SERVICE_STATUS.ACTIVE,
-    node_id: nodeId,
-    address:
-      `${nodeId}${ADDRESS.SEPARATOR}` +
-      `${ENTITY_TYPE.PARTITION}${ADDRESS.SEPARATOR}` +
-      `${partitionId}`,
-  }));
-
-  // The reseed is the owner-RPC read's retry stage: it passes the gate too.
-  const installed = issueAuthoritativeReadStage(service,
-    CDC_TERMINAL_STAGE.OVERLAY_RESEED,
-    () => service.sqlQueryEngine.installRecoveryRoutingOverlayEntry(
-      partitionId,
-      tableName,
-      serviceRows,
-    ));
-
-  return {
-    reseeded: installed === true,
-  };
-}
-
 function buildOwnerRpcReadResult({
   baseDiagnostics,
   localQueryTransportReadiness,
@@ -360,7 +99,6 @@ function buildOwnerRpcReadResult({
     ...normalizeAuthoritativeQueryRowSet(queryResult),
     source: AUTHORITATIVE_READ_SOURCE.OWNER_RPC_LANE,
     localReadHit: false,
-    localReplicaFallbackHit: false,
     queryTimeoutMs: baseDiagnostics.queryTimeoutMs,
     localQueryTransport: normalizeAuthoritativeReadLocalQueryTransport(
       localQueryTransportReadiness,
@@ -368,7 +106,6 @@ function buildOwnerRpcReadResult({
     systemTableDiagnostics: {
       ...baseDiagnostics,
       localReadHit: false,
-      localReplicaFallbackHit: false,
       routedToNode:
         queryResult?.participantNodeId ||
         baseDiagnostics.leaderNodeId ||
@@ -436,7 +173,7 @@ async function executeAuthoritativeOwnerRpcRead(
 
   // Default owner-RPC reads route to "an owner" replica (preferLeader=false),
   // which can be served by the caller's OWN local replica. Leader preference
-  // changes ordering for compatibility callers. A required-leader token is
+  // changes routing order. A required-leader token is
   // stronger: query routing excludes followers and this owner boundary rejects
   // a success without the serving replica's current leader witness. The routing
   // readiness dimension remains CONTROL_PLANE_RECOVERY_ELIGIBLE, so a
@@ -445,7 +182,7 @@ async function executeAuthoritativeOwnerRpcRead(
     readAuthority.leaderMode !== CONTROL_PLANE_READ_LEADER_MODE.ANY ?
       true : AUTHORITATIVE_OWNER_RPC_READ_PREFER_LEADER;
 
-  const issueOwnerRpcRead = () => issueAuthoritativeReadStage(service,
+  const queryResult = await issueAuthoritativeReadStage(service,
     CDC_TERMINAL_STAGE.OWNER_RPC_READ,
     () => queryExecutor.executeOnPartition(
       partitionId,
@@ -456,36 +193,6 @@ async function executeAuthoritativeOwnerRpcRead(
       false,
       executionOptions,
     ));
-  const queryResult = await issueOwnerRpcRead();
-
-  if (!queryResult?.success) {
-    const reseedResult = maybeReseedBootstrapOverlay(
-      service,
-      tableName,
-      queryResult,
-    );
-
-    if (reseedResult.reseeded) {
-      const retryResult = await issueOwnerRpcRead();
-
-      service.logger.info(CDC_LOG_MSG.OVERLAY_RESEED_RETRY_RESULT, {
-        nodeId: service.nodeId,
-        tableName,
-        retrySuccess: retryResult?.success ?? false,
-      });
-
-      return buildOwnerRpcReadResult({
-        baseDiagnostics,
-        localQueryTransportReadiness,
-        queryResult: enforceRequiredLeaderReadAuthority(
-          retryResult?.success ? retryResult : retryResult || queryResult,
-          partitionId,
-          readAuthority,
-        ),
-      });
-    }
-  }
-
   return buildOwnerRpcReadResult({
     baseDiagnostics,
     localQueryTransportReadiness,
@@ -498,11 +205,7 @@ async function executeAuthoritativeOwnerRpcRead(
 }
 
 export {
-  buildOwnerRpcSqlFallbackQueryOptions,
   executeAuthoritativeOwnerRpcRead,
-  executeAuthoritativeSqlFallbackRead,
   getLocalQueryTransportReadiness,
-  maybeReseedBootstrapOverlay,
   normalizeAuthoritativeReadLocalQueryTransport,
-  shouldRetryOwnerRpcReadViaSqlFallback,
 };

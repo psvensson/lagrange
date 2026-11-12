@@ -391,7 +391,6 @@ test('unavailable policy cannot lower the minimum-five REMOVE floor or terminali
             leaderMode: 'required',
             preferLeader: true,
             localReadConsistency: 'local_leader',
-            replicaFallbackConsistency: 'local_leader',
           });
 
           fault.inject(world);
@@ -497,7 +496,6 @@ test('unavailable policy cannot lower the minimum-five REMOVE floor or terminali
             leaderMode: 'required',
             preferLeader: true,
             localReadConsistency: 'local_leader',
-            replicaFallbackConsistency: 'local_leader',
           });
 
           fault.inject(world);

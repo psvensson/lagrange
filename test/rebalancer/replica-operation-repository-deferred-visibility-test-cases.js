@@ -524,7 +524,7 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
 
   test(
     'getOperationsByEntityAuthoritativeObservation does not downgrade a ' +
-      'confirmed terminal ADD through stale SQL fallback',
+      'confirmed terminal ADD through an unexpected weaker read mode',
     async (t) => {
       const authoritativeReads = [];
       const creatingRow = makeRow({
@@ -566,8 +566,8 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
                 retryAfterMs: 25,
               };
             }
-            // This is the live failure shape: owner RPC is unavailable, so
-            // OWNER_RPC_PREFERRED_SQL_FALLBACK admits an older replica row.
+            // A weaker, unexpected authority mode would expose an older row.
+            // The required owner mode above remains explicitly unavailable.
             return {success: true, rows: [creatingRow]};
           },
         },
@@ -628,7 +628,7 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
       t.equal(
         entityRead?.authoritativeReadMode,
         CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
-        'one strict mode prevents fallback to an older SQL replica',
+        'one strict authority mode prevents an older replica from answering',
       );
     },
   );
@@ -810,8 +810,7 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
   );
 
   test(
-    'queryAuthoritativeOperationById uses the cache-preferred visibility ' +
-      'read contract when strict owner RPC is not required',
+    'queryAuthoritativeOperationById requires owner RPC under its default visibility policy',
     async (t) => {
       const capturedReads = [];
       const repo = createTestRepository({
@@ -840,8 +839,8 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
       );
       t.equal(
         capturedReads[0]?.options?.authoritativeReadMode,
-        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED_SQL_FALLBACK,
-        'authoritative visibility reads should prefer owner RPC with SQL fallback',
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+        'authoritative visibility reads must require the owner RPC authority',
       );
     },
   );

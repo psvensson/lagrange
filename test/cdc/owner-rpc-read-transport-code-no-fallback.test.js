@@ -1,11 +1,6 @@
-// A router failure code on an owner read never widens the SQL fallback by
-// itself (D2 sibling, 2026-11-11). The fallback's code list named two
-// members QUERY_ERROR_CODE never had, so it was dead; repairing the constants
-// would have revived it, answering a failed owner read with a follower SQL
-// read (preferLeader false, no leader witness). Entered at the production
-// entry point, executeAuthoritativeSystemTableRead, in the
-// OWNER_RPC_PREFERRED_SQL_FALLBACK mode: a coded transport failure without
-// retry hints is the caller's failure, and no SQL read is issued.
+// A transport failure returned by the requested owner lane is retained with
+// its exact code. A plausible ordinary SQL answer cannot satisfy the read.
+// This preserves the original D2 regression while removing its retired mode.
 import {afterEach, beforeEach, test} from '../../src/test-helpers/tap.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
 import {SYSTEM_TABLE_NAME} from
@@ -59,7 +54,7 @@ async function readThroughOwner(ownerRpcFailure) {
     SYSTEM_TABLE_NAME.NODES, 'SELECT * FROM nodes WHERE node_id = ?', ['n1'], {
       readAuthority: buildControlPlaneReadAuthority({
         authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-          .OWNER_RPC_PREFERRED_SQL_FALLBACK,
+          .OWNER_RPC_REQUIRED,
         localReadConsistency: 'local_leader'}),
       queryOptions: {timeoutMs: 1234}});
   service.markShuttingDown();
@@ -76,7 +71,8 @@ for (const [code, error] of [
       error, errorCode: code, rows: []});
     t.equal(sqlReads.length, 0, 'no SQL fallback read was issued');
     t.equal(result.success, false, 'the read failed');
-    t.equal(result.source === 'sql_query_engine', false,
-      'the answer is not the fallback\'s');
+    t.equal(result.source, 'owner_rpc_lane', 'the answer retains its chosen owner');
+    t.equal(result.errorCode, code, 'the transport code survives the authority boundary');
+    t.equal(result.error, error, 'the original transport reason survives');
   });
 }

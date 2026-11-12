@@ -262,7 +262,7 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options) {
     readAuthority: suppliedReadAuthority || buildControlPlaneReadAuthority({
       authoritativeReadMode:
         CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-          .OWNER_LOCAL_PREFERRED_OWNER_RPC_FALLBACK,
+          .OWNER_RPC_REQUIRED,
     }),
   };
   const summary = {

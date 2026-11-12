@@ -107,8 +107,8 @@ export function registerUnifiedRebalancerPriorityFollowupCreationTests(context) 
       );
       t.equal(
         cdcCalls[0]?.options?.authoritativeReadMode,
-        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_PREFERRED_OWNER_RPC_FALLBACK,
-        'budget probes read the local replica and ask the owner when it is not hosted here',
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+        'budget probes require the canonical owner RPC path',
       );
       t.equal(
         cdcCalls[1]?.options?.queryOptions?.deliveryPriority,

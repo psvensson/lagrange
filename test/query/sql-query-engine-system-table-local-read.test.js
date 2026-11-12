@@ -4,9 +4,10 @@ import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
   '../../src/control-plane/control-plane-system-table-gateway.js';
+import {buildControlPlaneReadAuthority} from
+  '../../src/control-plane/control-plane-system-table-gateway-read-contracts.js';
 import {
   executeAuthoritativeSystemTableRead,
-  queryLocalAuthoritativeSystemTableRows,
 } from '../../src/cdc/cdc-integration-service-authoritative-read-flow.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
@@ -67,7 +68,7 @@ function createMockSystemCache(tableName = SYSTEM_TABLE_NAME.SERVICES) {
   };
 }
 
-test('SQLQueryEngine - single-table system selects prefer local authoritative reads',
+test('SQLQueryEngine - claimed system selects retain the RPC owner answer',
   async (t) => {
     const deliveries = [];
     const cdcReads = [];
@@ -118,7 +119,7 @@ test('SQLQueryEngine - single-table system selects prefer local authoritative re
               service_id: 'svc-1',
               service_type: 'partition',
             }],
-            source: 'local_partition_replica',
+            source: 'owner_rpc_lane',
             success: true,
           };
         },
@@ -133,8 +134,8 @@ test('SQLQueryEngine - single-table system selects prefer local authoritative re
     );
     const readAuthority = serviceRead.options.readAuthority;
 
-    t.equal(result.success, true, 'should succeed from local authoritative rows');
-    t.equal(result.rows.length, 1, 'should return local authoritative rows');
+    t.equal(result.success, true, 'should succeed from the selected owner rows');
+    t.equal(result.rows.length, 1, 'should return the selected owner rows');
     t.equal(result.rowSetComplete, true, 'should preserve rowSetComplete');
     t.equal(
       result.readAuthorityWitness.appliedIndex,
@@ -158,24 +159,24 @@ test('SQLQueryEngine - single-table system selects prefer local authoritative re
     );
     t.equal(
       readAuthority.authoritativeReadMode,
-      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
-      'should not recurse into routed SQL from the SQL engine fast path',
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+      'the SQL adapter selects the RPC owner before attempting the read',
     );
     t.equal(
       readAuthority.localReadConsistency,
-      'local_leader',
-      'full-table system select must require local_leader consistency',
+      null,
+      'the default RPC contract makes no alternate local-read request',
     );
     t.equal(
       readAuthority.replicaFallbackConsistency,
-      null,
-      'full-table system select must not silently fall back to any_replica',
+      undefined,
+      'the canonical token carries no alternate replica consistency',
     );
     t.equal(deliveries.length, 0, 'should bypass routed query delivery');
     t.same(result.partitions, ['services-p1'], 'should still report the target partition');
   });
 
-test('SQLQueryEngine - system-table local reads reuse AuthoritativeControlPlaneView',
+test('SQLQueryEngine - claimed system-table reads reuse AuthoritativeControlPlaneView',
   async (t) => {
     const deliveries = [];
     const authoritativeReads = [];
@@ -202,7 +203,7 @@ test('SQLQueryEngine - system-table local reads reuse AuthoritativeControlPlaneV
               service_type: 'partition',
             }],
             rowCount: 1,
-            source: 'local_partition_replica',
+            source: 'owner_rpc_lane',
           };
         },
       },
@@ -217,14 +218,14 @@ test('SQLQueryEngine - system-table local reads reuse AuthoritativeControlPlaneV
     t.equal(authoritativeReads[0].tableName, SYSTEM_TABLE_NAME.SERVICES);
     t.equal(
       authoritativeReads[0].options.readAuthority?.authoritativeReadMode,
-      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
     );
     t.equal(deliveries.length, 0,
       'shared authoritative reads should still bypass routed delivery');
     t.equal(result.rows.length, 1);
   });
 
-test('SQLQueryEngine - PG system-table reads execute normalized SQLite SQL locally',
+test('SQLQueryEngine - PG system-table reads send normalized SQLite SQL to the owner',
   async (t) => {
     const authoritativeReads = [];
     const engine = new SQLQueryEngine({
@@ -252,8 +253,8 @@ test('SQLQueryEngine - PG system-table reads execute normalized SQLite SQL local
     t.same(authoritativeReads[0].params, ['svc-1']);
   });
 
-test('SQLQueryEngine - bounded system-table primary-key lookups confirm ' +
-  'empty local reads through the owner lane', async (t) => {
+test('SQLQueryEngine - bounded system-table primary-key lookups use ' +
+  'the RPC owner lane', async (t) => {
   const authoritativeReads = [];
   const engine = new SQLQueryEngine({
     controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
@@ -283,14 +284,14 @@ test('SQLQueryEngine - bounded system-table primary-key lookups confirm ' +
   t.equal(
     authoritativeReads[0].options.readAuthority?.authoritativeReadMode,
     CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-      .OWNER_LOCAL_CONFIRM_EMPTY_WITH_OWNER_RPC,
-    'bounded primary-key lookups should confirm empty local reads via owner RPC',
+      .OWNER_RPC_REQUIRED,
+    'bounded primary-key lookups select the RPC owner',
   );
   t.equal(
     authoritativeReads[0].options.readAuthority
       ?.replicaFallbackConsistency,
-    'any_replica',
-    'bounded primary-key lookups should still allow local replica reads first',
+    undefined,
+    'bounded primary-key lookups carry no local fallback contract',
   );
   t.same(result.rows, [{ack_id: 'log-1'}],
     'bounded lookup should return the authoritative rows');
@@ -315,7 +316,7 @@ test('SQLQueryEngine - routed system-table queries default to critical delivery 
     });
 
     const result = await engine.executeQuery(
-      'SELECT * FROM services WHERE service_type = \'partition\'',
+      'SELECT service_type FROM services WHERE service_type = \'partition\'',
     );
 
     t.equal(result.success, true, 'routed system-table query should succeed');
@@ -393,12 +394,16 @@ test('SQLQueryEngine - system selects that do not project the primary key ' +
   const starResult = await engine.executeQuery('SELECT * FROM services');
   t.ok(
     servicesReads().length > 0,
-    'star selects keep the local authoritative fast path',
+    'star selects use the claimed authoritative path',
   );
   t.equal(starResult.success, true, 'star select should succeed');
 });
 
 test('SQLQueryEngine - real executeAuthoritativeSystemTableRead local-leader path attaches witness, completeness, and authoritativeObservation', async (t) => {
+  const readAuthority = buildControlPlaneReadAuthority({
+    authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+    localReadConsistency: 'local_leader',
+  });
   const localLeaderPartitionService = {
     appliedIndex: 31,
     commitIndex: 31,
@@ -476,7 +481,7 @@ test('SQLQueryEngine - real executeAuthoritativeSystemTableRead local-leader pat
     systemCache: createMockSystemCache(),
   });
 
-  const result = await engine.executeQuery('SELECT * FROM services');
+  const result = await engine.executeQuery('SELECT * FROM services', [], {readAuthority});
   t.equal(result.success, true, 'real local-leader read should succeed');
   t.equal(result.rowSetComplete, true, 'real local-leader read should mark rowSetComplete');
   t.equal(result.readAuthorityWitness.role, 'leader', 'witness role should be leader');
@@ -518,6 +523,7 @@ test('SQLQueryEngine - real executeAuthoritativeSystemTableRead local-leader pat
   });
   const unsealedResult = await engine.executeQuery(
     'SELECT * FROM services WHERE status = \'active\'',
+    [], {readAuthority},
   );
   t.equal(
     unsealedResult.rowSetComplete,
@@ -572,12 +578,12 @@ test('SQLQueryEngine - real executeAuthoritativeSystemTableRead local-leader pat
   ]) {
     localLeaderPartitionService.executeLocalQuery = async () =>
       incompletePayload;
-    const probeOut = await queryLocalAuthoritativeSystemTableRows(
+    const probeOut = await executeAuthoritativeSystemTableRead(
       realCdcService,
       SYSTEM_TABLE_NAME.SERVICES,
       'SELECT * FROM services',
       [],
-      {consistency: 'local_leader'},
+      {readAuthority},
     );
     t.equal(probeOut.rowSetComplete, false);
     t.equal(probeOut.authoritativeObservation, null);

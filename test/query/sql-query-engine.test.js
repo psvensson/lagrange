@@ -1043,7 +1043,7 @@ async (t) => {
 });
 
 test('SQLQueryEngine - authoritative routing overlay refresh requests ' +
-  'bounded local replica fallback for control-plane routing repair', async (t) => {
+  'the explicit local-replica contract for control-plane routing repair', async (t) => {
   const partitionId = 'replica_operations-p1';
   const authoritativeReads = [];
   const engine = new SQLQueryEngine({
@@ -1070,13 +1070,13 @@ test('SQLQueryEngine - authoritative routing overlay refresh requests ' +
       async readRows(tableName, _sql, params, options) {
         authoritativeReads.push({tableName, params, options});
         if (
-          options?.readAuthority?.replicaFallbackConsistency !==
+          options?.readAuthority?.localReadConsistency !==
           LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA
         ) {
           return {
             success: false,
             rows: [],
-            error: 'expected_any_replica_fallback',
+            error: 'expected_explicit_local_replica_consistency',
           };
         }
         if (tableName === TABLES.PARTITIONS) {
@@ -1120,17 +1120,17 @@ test('SQLQueryEngine - authoritative routing overlay refresh requests ' +
       .refreshPartitionRouting(partitionId);
 
   t.equal(refreshed, true,
-    'authoritative routing refresh should succeed through bounded local replica fallback');
+    'authoritative routing refresh should succeed through its explicit local owner');
   t.equal(authoritativeReads.length, 2,
     'routing repair should still read both partition and service metadata');
   t.same(
     authoritativeReads.map((entry) =>
-      entry.options?.readAuthority?.replicaFallbackConsistency),
+      entry.options?.readAuthority?.localReadConsistency),
     [
       LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
       LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
     ],
-    'routing repair should request bounded local replica fallback for both authoritative reads',
+    'routing repair declares the same local consistency for both reads',
   );
   const candidates = engine.queryExecutor.getPartitionServiceCandidates(
     partitionId,
@@ -1139,7 +1139,7 @@ test('SQLQueryEngine - authoritative routing overlay refresh requests ' +
   t.ok(
     candidates.some((candidate) =>
       candidate.address === 'new-owner/partition/replica_operations-p1-r5'),
-    'runtime routing should expose the repaired service row after fallback-backed refresh',
+    'runtime routing should expose the repaired service row after the local owner refresh',
   );
 });
 

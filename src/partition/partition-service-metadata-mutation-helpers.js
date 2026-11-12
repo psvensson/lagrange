@@ -157,7 +157,7 @@ function buildMetadataMutationReadOptions(owner, deliveryOptions = {}) {
     // services/partitions system-table group. Owner-local-only confirmation
     // can therefore retry forever without ever reaching the CAS write.
     authoritativeReadMode:
-      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
     routingReadinessDimension:
       owner.getMetadataPublicationReadinessDimension(),
   };

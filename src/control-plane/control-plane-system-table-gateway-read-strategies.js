@@ -5,10 +5,10 @@ import {
   CONTROL_PLANE_READ_STRATEGY,
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_ERROR,
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL,
-  CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_SOURCE,
   INITIAL_PARTITION_IDS,
   canonicalizeSystemTableRow,
   buildAuthoritativeControlPlaneReadRequestOptions,
+  isCompleteAuthoritativeReadResult,
   normalizePhaseScope,
   stableSerialize,
 } from './control-plane-system-table-gateway-shared.js';
@@ -17,11 +17,6 @@ import {isValidLeaderReadAuthorityWitness} from
 
 const COMPLETE_TABLE_READ_SQL_PATTERN =
   /^SELECT\s+\*\s+FROM\s+([A-Za-z_][A-Za-z0-9_]*)\s*;?$/iu;
-const AUTHORITATIVE_READ_FAILURE_COLLECTION_FIELDS = Object.freeze([
-  'failedPartitions',
-  'partitionErrors',
-  'participantFailures',
-]);
 const authoritativeObservationReceiptsByGateway = new WeakMap();
 
 function resolveAuthoritativeObservationReceiptRegistry(gateway) {
@@ -45,25 +40,6 @@ function authoritativeReadRowsMatchSnapshot(tableName, rows, snapshot) {
   }
   const currentSnapshot = snapshotAuthoritativeReadRows(tableName, rows);
   return currentSnapshot.every((row, index) => row === snapshot[index]);
-}
-
-function hasAuthoritativeReadFailureEvidence(result = {}) {
-  if (result?.partial === true) {
-    return true;
-  }
-  return AUTHORITATIVE_READ_FAILURE_COLLECTION_FIELDS.some((fieldName) => {
-    const value = result?.[fieldName];
-    return Array.isArray(value) ?
-      value.length > 0 :
-      Number.isFinite(value) && value > 0;
-  });
-}
-
-function isCompleteAuthoritativeReadResult(result = {}) {
-  return result?.success === true &&
-    result?.rowSetComplete === true &&
-    Array.isArray(result?.rows) &&
-    !hasAuthoritativeReadFailureEvidence(result);
 }
 
 function isCompleteTableReadRequest(tableName, sql, params) {
@@ -374,52 +350,15 @@ const controlPlaneSystemTableGatewayReadStrategyMethods = {
       tableName,
       sql,
     });
-    const {
-      authoritativeReadModeContract,
-      requestOptions,
-    } = buildAuthoritativeControlPlaneReadRequestOptions(
+    const {requestOptions} = buildAuthoritativeControlPlaneReadRequestOptions(
       options.readAuthority,
       options,
       queryOptions,
     );
-    const allowSqlFallback = authoritativeReadModeContract.allowSqlFallback;
     if (
       typeof cdcIntegrationService?.executeAuthoritativeSystemTableRead !==
       'function'
     ) {
-      if (
-        allowSqlFallback &&
-        strategy !== CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED
-      ) {
-        const sqlQueryEngine = this.resolveSqlQueryEngine();
-        if (typeof sqlQueryEngine?.executeQuery === 'function') {
-          const result = await sqlQueryEngine.executeQuery(
-            sql,
-            params,
-            queryOptions,
-          );
-          return this.attachAuthoritativeObservationReceipt(
-            this.buildGatewayReadResult(
-              result,
-              tableName,
-              strategy,
-              result?.success === true ?
-                CONTROL_PLANE_READ_OUTCOME.AUTHORITATIVE :
-                CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY,
-              {
-                source:
-                  CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_SOURCE.SQL_QUERY_ENGINE,
-                usedSqlFallback: true,
-              },
-            ),
-            tableName,
-            sql,
-            params,
-            strategy,
-            observationOptions,
-          );
-        }
-      }
       return this.buildUnavailableGatewayReadResult(
         tableName,
         strategy,
@@ -499,27 +438,11 @@ const controlPlaneSystemTableGatewayReadStrategyMethods = {
         },
       );
     }
-    const sqlQueryEngine = this.resolveSqlQueryEngine();
-    if (typeof sqlQueryEngine?.executeQuery !== 'function') {
-      return this.buildUnavailableGatewayReadResult(
-        tableName,
-        CONTROL_PLANE_READ_STRATEGY.OWNER_LOCAL_NON_PROPAGATED,
-        CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY,
-        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_ERROR.SQL_QUERY_ENGINE_UNAVAILABLE,
-      );
-    }
-    const result = await sqlQueryEngine.executeQuery(
-      sql,
-      params,
-      queryOptions,
-    );
-    return this.buildGatewayReadResult(
-      result,
+    return this.buildUnavailableGatewayReadResult(
       tableName,
       CONTROL_PLANE_READ_STRATEGY.OWNER_LOCAL_NON_PROPAGATED,
-      result?.success === false ?
-        CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY :
-        CONTROL_PLANE_READ_OUTCOME.OWNER_LOCAL_NON_PROPAGATED,
+      CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY,
+      CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_ERROR.AUTHORITATIVE_READ_OWNER_UNAVAILABLE,
     );
   },
 

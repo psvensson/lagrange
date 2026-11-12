@@ -8,7 +8,6 @@ import {
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {
   buildControlPlaneReadAuthority,
-  resolveAuthoritativeReadModeContract,
 } from
   '../../src/control-plane/control-plane-system-table-gateway-read-contracts.js';
 import {
@@ -151,13 +150,7 @@ async (t) => {
       observedReadContracts.push({
         purpose: options.readAuthority?.purpose || null,
         mode: options.readAuthority?.authoritativeReadMode,
-        allowSqlFallback:
-          resolveAuthoritativeReadModeContract(options.readAuthority)
-            .allowSqlFallback,
         leaderMode: options.readAuthority?.leaderMode,
-        requireOwnerRpcRead:
-          resolveAuthoritativeReadModeContract(options.readAuthority)
-            .requireOwnerRpcRead,
       });
       return executeAuthoritativeOwnerRpcRead(
         ownerRpcService,
@@ -196,7 +189,7 @@ async (t) => {
   const hostileReadAuthority = {
     purpose: 'ordinary',
     authoritativeReadMode:
-      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
     preferOwnerRpcReadLeader: false,
     requireOwnerRpcReadLeader: false,
   };
@@ -225,11 +218,9 @@ async (t) => {
     {
       purpose: CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL,
       mode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
-      allowSqlFallback: false,
       leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
-      requireOwnerRpcRead: true,
     },
-    'the named API owns the complete authority and fallback contract',
+    'the named API owns the complete authority token',
   );
 
   const ordinaryResult = await authoritativeView.readRows(
@@ -239,7 +230,7 @@ async (t) => {
     {
       readAuthority: buildControlPlaneReadAuthority({
         authoritativeReadMode:
-          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
         leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
       }),
     },

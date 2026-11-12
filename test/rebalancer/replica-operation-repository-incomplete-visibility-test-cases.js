@@ -248,8 +248,8 @@ export function registerReplicaOperationRepositoryIncompleteVisibilityTests({
       );
       t.equal(
         capturedReads[0]?.options?.authoritativeReadMode,
-        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED_SQL_FALLBACK,
-        'empty cache visibility should prefer owner RPC with SQL fallback',
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+        'empty cache visibility must require the owner RPC authority',
       );
     },
   );

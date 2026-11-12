@@ -120,20 +120,26 @@ function assignReplicaOperationRepositoryVisibilityMethods(
     }
     recordOwnerPersistedTransitionVisibilityWitness(operation) {
       if (!operation?.operationId) {
-        return;
+        return null;
       }
-      this.ownerPersistedTransitionVisibilityWitnesses.set(operation.operationId, {
+      const observedOperation = Object.freeze(this.cloneIncompleteOperationObservation(operation));
+      const witness = Object.freeze({
         recordedAtMs: this.timeSource.now(),
-        operation: this.cloneIncompleteOperationObservation(operation),
+        operation: observedOperation,
       });
+      this.ownerPersistedTransitionVisibilityWitnesses.set(observedOperation.operationId, witness);
+      return witness;
     }
-    clearOwnerPersistedTransitionVisibilityWitness(operationId) {
-      if (!operationId) {
-        return;
+    clearOwnerPersistedTransitionVisibilityWitness(operationId, expectedWitness) {
+      if (!operationId || !expectedWitness ||
+          this.ownerPersistedTransitionVisibilityWitnesses.get(operationId) !== expectedWitness) {
+        return false;
       }
-      this.ownerPersistedTransitionVisibilityWitnesses.delete(operationId);
+      return this.ownerPersistedTransitionVisibilityWitnesses.delete(operationId);
     }
-    getOwnerPersistedTransitionVisibilityWitness(operationId, expectedOperation = null) {
+    // Internal custody capture. The public getter below remains a copied
+    // observation; only this exact retained cell grants settlement authority.
+    captureOwnerPersistedTransitionVisibilityWitness(operationId, expectedOperation = null) {
       if (!operationId) {
         return null;
       }
@@ -145,19 +151,25 @@ function assignReplicaOperationRepositoryVisibilityMethods(
         this.timeSource.now() - witness.recordedAtMs >
       this.resolveOwnerPersistedTransitionVisibilityGraceMs()
       ) {
-        this.ownerPersistedTransitionVisibilityWitnesses.delete(operationId);
+        this.clearOwnerPersistedTransitionVisibilityWitness(operationId, witness);
         return null;
       }
+      if (this.ownerPersistedTransitionVisibilityWitnesses.get(operationId) !== witness) return null;
       if (
         expectedOperation &&
       !this.isReplicaOperationVisibilitySatisfied(expectedOperation, witness.operation)
       ) {
         return null;
       }
-      return {
+      return witness;
+    }
+    getOwnerPersistedTransitionVisibilityWitness(operationId, expectedOperation = null) {
+      const witness = this.captureOwnerPersistedTransitionVisibilityWitness(
+        operationId, expectedOperation);
+      return witness ? {
         recordedAtMs: witness.recordedAtMs,
         operation: this.cloneIncompleteOperationObservation(witness.operation),
-      };
+      } : null;
     }
     getOwnerPersistedTransitionVisibilityFallbackOperation(
       operationId,
@@ -214,7 +226,7 @@ function assignReplicaOperationRepositoryVisibilityMethods(
       if (!operation?.operationId) {
         return operation;
       }
-      const witness = this.getOwnerPersistedTransitionVisibilityWitness(
+      const witness = this.captureOwnerPersistedTransitionVisibilityWitness(
         operation.operationId,
       );
       const witnessOperation = witness?.operation || null;
@@ -222,7 +234,7 @@ function assignReplicaOperationRepositoryVisibilityMethods(
         return operation;
       }
       if (this.isReplicaOperationVisibilitySatisfied(witnessOperation, operation)) {
-        this.clearOwnerPersistedTransitionVisibilityWitness(operation.operationId);
+        this.clearOwnerPersistedTransitionVisibilityWitness(operation.operationId, witness);
         return operation;
       }
       if (

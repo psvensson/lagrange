@@ -67,11 +67,6 @@ const LOCAL_AUTHORITATIVE_REPLICA_OPERATION_ROW = Object.freeze({
   operation_id: LOCAL_AUTHORITATIVE_REPLICA_OPERATION_ID,
   workflow_step: 'LOCAL_ONLY_QUERY',
 });
-const DEFAULT_AUTHORITATIVE_READ_AUTHORITY = buildControlPlaneReadAuthority({
-  authoritativeReadMode:
-    CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-      .OWNER_LOCAL_PREFERRED_OWNER_RPC_FALLBACK,
-});
 
 function buildAuthoritativeReadOptions(authority = {}, operational = {}) {
   return {
@@ -79,7 +74,7 @@ function buildAuthoritativeReadOptions(authority = {}, operational = {}) {
     readAuthority: buildControlPlaneReadAuthority({
       authoritativeReadMode:
         CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-          .OWNER_LOCAL_PREFERRED_OWNER_RPC_FALLBACK,
+          .OWNER_LOCAL_ONLY,
       ...authority,
     }),
   };
@@ -132,7 +127,7 @@ test('CDCIntegrationService - steady-state system table writes skip local follow
     );
   });
 
-test('CDCIntegrationService - authoritative cache confirmation prefers local partition replicas',
+test('CDCIntegrationService - authoritative cache confirmation uses the requested owner RPC lane',
   async (t) => {
     const operationId = 'op-local-repair';
     const authoritativeRow = {
@@ -143,7 +138,14 @@ test('CDCIntegrationService - authoritative cache confirmation prefers local par
     };
     // The real cache: the writable owner and its read view.
     const cache = new SystemTableCache();
+    let localReads = 0;
+    const ownerReads = [];
     const sqlQueryEngine = {
+      queryExecutor: {async executeOnPartition(partitionId, sql, params) {
+        ownerReads.push({partitionId, sql, params});
+        t.equal(params[0], operationId, 'owner read preserves bound parameters');
+        return {success: true, rows: [{...authoritativeRow}]};
+      }},
       executedQueries: [],
       async executeQuery(sql, params = []) {
         this.executedQueries.push({sql, params});
@@ -162,6 +164,7 @@ test('CDCIntegrationService - authoritative cache confirmation prefers local par
         SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
         {
           async executeQuery(sql, params) {
+            localReads += 1;
             t.equal(
               params[0],
               operationId,
@@ -189,27 +192,29 @@ test('CDCIntegrationService - authoritative cache confirmation prefers local par
       true,
       null,
       null,
-      {fallbackPhase: 'recovery'},
     );
 
     t.equal(repaired?.visibilityState, 'visible',
       'should confirm the authoritative row without routed SQL');
     t.equal(repaired?.authoritativeVisibilityConfirmed, true,
-      'local authoritative confirmation should preserve the confirmation state');
+      'owner RPC confirmation should preserve the confirmation state');
     t.match(cache.get(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, operationId), authoritativeRow,
       'authoritative confirmation should hydrate the writable cache target');
     t.equal(
       sqlQueryEngine.executedQueries.length,
       0,
-      'should not use routed SQL when local authoritative replicas are available',
+      'owner confirmation does not call ordinary routed SQL',
     );
+    t.equal(ownerReads.length, 1, 'one authoritative owner read confirms the row');
+    t.equal(localReads, 0, 'healthy local rows are not probed by an RPC-required repair');
     t.equal(divergenceEvents.length, 1,
-      'local authoritative confirmation should emit a cache-lag divergence');
+      'owner RPC confirmation should emit a cache-lag divergence');
   });
 
-test('CDCIntegrationService - leader-only authoritative reads fall back to the owner RPC lane',
+test('CDCIntegrationService - explicit owner-RPC reads preserve their lane with a local follower present',
   async (t) => {
     const ownerRpcReads = [];
+    let localReads = 0;
     const service = new CDCIntegrationService({
       nodeId: 'test-node',
       sqlQueryEngine: {
@@ -229,7 +234,7 @@ test('CDCIntegrationService - leader-only authoritative reads fall back to the o
               success: true,
               participantNodeId: 'node-sql-leader',
               rows: [{
-                operation_id: 'op-sql-fallback',
+                operation_id: 'op-owner-read',
                 workflow_step: 'PENDING',
               }],
             };
@@ -241,6 +246,7 @@ test('CDCIntegrationService - leader-only authoritative reads fall back to the o
         {
           isLeader: false,
           async executeQuery() {
+            localReads += 1;
             return {
               success: true,
               rows: [{
@@ -256,27 +262,29 @@ test('CDCIntegrationService - leader-only authoritative reads fall back to the o
     const result = await service.executeAuthoritativeSystemTableRead(
       SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       'SELECT * FROM replica_operations WHERE operation_id = ?',
-      ['op-sql-fallback'],
+      ['op-owner-read'],
       buildAuthoritativeReadOptions({
+        authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
         localReadConsistency: 'local_leader',
       }, {
         queryOptions: {timeoutMs: 1234},
       }),
     );
 
-    t.equal(result.source, 'owner_rpc_lane', 'should fall back when no local leader is available');
+    t.equal(result.source, 'owner_rpc_lane', 'the explicitly selected owner lane supplies the answer');
     t.equal(ownerRpcReads.length, 1, 'should use the owner RPC lane once');
+    t.equal(localReads, 0, 'the local follower is not probed');
     t.equal(ownerRpcReads[0]?.options?.timeoutMs, 1234, 'should preserve query options');
     t.equal(
       ownerRpcReads[0]?.options?.routingReadinessDimension,
       CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-      'owner RPC fallback should default to recovery eligibility when callers omit a readiness dimension',
+      'owner RPC read should default to recovery eligibility when callers omit a readiness dimension',
     );
-    t.equal(result.localReadHit, false, 'owner RPC fallback should not mark a local read hit');
+    t.equal(result.localReadHit, false, 'owner RPC read should not mark a local read hit');
     t.equal(result.systemTableDiagnostics?.routedToNode, 'node-sql-leader',
-      'owner RPC fallback should record the routed leader hint');
+      'owner RPC read should record the routed leader hint');
     t.equal(result.systemTableDiagnostics?.queryTimeoutMs, 1234,
-      'owner RPC fallback should record the query timeout');
+      'owner RPC read should record the query timeout');
   });
 
 test('CDCIntegrationService - owner-RPC authoritative reads preserve critical execution options',
@@ -336,75 +344,51 @@ test('CDCIntegrationService - owner-RPC authoritative reads preserve critical ex
     );
   });
 
-test('CDCIntegrationService - leader-only authoritative reads can fall back to local replicas',
+// The historical fixture weakened local_leader to any_replica on failure.
+// One explicit local consistency now refuses that follower until it leads.
+test('CDCIntegrationService - local leader reads refuse follower substitution and heal locally',
   async (t) => {
-    const sqlReads = [];
-    const service = new CDCIntegrationService({
-      nodeId: 'test-node',
+    let localReads = 0;
+    let ownerReads = 0;
+    let sqlReads = 0;
+    const operationId = 'op-local-leader-only';
+    const localServices = createLocalSystemTablePartitionServices(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+      {isLeader: false, async executeQuery(sql, params) {
+        localReads += 1;
+        t.same(params, [operationId], 'same local owner preserves query parameters');
+        return {success: true, rows: [{operation_id: operationId, workflow_step: 'PENDING'}]};
+      }});
+    const service = new CDCIntegrationService({nodeId: 'test-node',
+      partitionServicesProvider: () => localServices,
       sqlQueryEngine: {
-        queryExecutor: {
-          getPartitionRoutingSnapshot() {
-            return {
-              canonicalLeaderNodeId: 'node-local-leader',
-              serviceRowCount: 2,
-              routableServiceCount: 1,
-              deniedByNodeId: {},
-            };
-          },
-        },
-        async executeQuery(sql, params = [], options = {}) {
-          sqlReads.push({sql, params, options});
-          return {
-            success: true,
-            rows: [],
-          };
-        },
-      },
-      partitionServicesProvider: () => createLocalSystemTablePartitionServices(
-        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-        {
-          isLeader: false,
-          async executeQuery(sql, params) {
-            t.equal(
-              params[0],
-              'op-local-fallback',
-              'local replica fallback should preserve query parameters',
-            );
-            return {
-              success: true,
-              rows: [{
-                operation_id: 'op-local-fallback',
-                workflow_step: 'PENDING',
-              }],
-            };
-          },
-        },
-      ),
-    });
+        queryExecutor: {async executeOnPartition() {
+          ownerReads += 1;
+          return {success: true, rows: [{operation_id: operationId}]};
+        }},
+        async executeQuery() { sqlReads += 1; return {success: true, rows: []}; },
+      }});
     service.initialize();
-
-    const result = await service.executeAuthoritativeSystemTableRead(
-      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-      'SELECT * FROM replica_operations WHERE operation_id = ?',
-      ['op-local-fallback'],
-      buildAuthoritativeReadOptions({
-        localReadConsistency: 'local_leader',
-        replicaFallbackConsistency: 'any_replica',
-      }),
-    );
-
-    t.equal(
-      result.source,
-      'local_partition_replica',
-      'should use a local follower before routed SQL when replica fallback is allowed',
-    );
-    t.equal(sqlReads.length, 0, 'should not reach routed SQL fallback');
-    t.equal(result.rows.length, 1, 'should return the local replica rows');
-    t.equal(result.localReadHit, true, 'local replica read should mark a local read hit');
-    t.equal(result.localReplicaFallbackHit, true,
-      'local replica fallback should record the fallback path');
-    t.equal(result.systemTableDiagnostics?.leaderNodeId, null,
-      'local replica fallback should not reconstruct a retired routing-snapshot leader hint');
+    const options = buildAuthoritativeReadOptions({localReadConsistency: 'local_leader'});
+    const failed = await service.executeAuthoritativeSystemTableRead(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+      LOCAL_AUTHORITATIVE_REPLICA_OPERATION_SQL, [operationId], options);
+    t.equal(failed.success, false, 'a follower cannot satisfy local leader consistency');
+    t.same(failed.rows, []);
+    t.equal(localReads, 0, 'the refused follower is never read');
+    t.equal(ownerReads, 0);
+    t.equal(sqlReads, 0);
+    for (const partition of localServices.values()) partition.isLeader = true;
+    const recovered = await service.executeAuthoritativeSystemTableRead(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+      LOCAL_AUTHORITATIVE_REPLICA_OPERATION_SQL, [operationId], options);
+    t.equal(recovered.success, true, 'the same local owner can answer after becoming leader');
+    t.equal(recovered.source, 'local_partition_replica');
+    t.equal(recovered.localReadHit, true);
+    t.same(recovered.rows, [{operation_id: operationId, workflow_step: 'PENDING'}]);
+    t.equal(localReads, 1);
+    t.equal(ownerReads, 0);
+    t.equal(sqlReads, 0);
+    t.equal(recovered.systemTableDiagnostics?.leaderNodeId, null,
+      'the local answer does not reconstruct a retired routing-snapshot leader hint');
+    service.markShuttingDown();
   });
 
 test('CDCIntegrationService - leader-only authoritative reads honor live leader methods',
@@ -504,10 +488,10 @@ test('CDCIntegrationService - leader-only authoritative reads honor live leader 
     }]);
   });
 
-test('CDCIntegrationService - bounded empty local authoritative reads ' +
-  'confirm through owner RPC',
+test('CDCIntegrationService - projected owner-RPC rows and explicit empty local reads keep their source',
 async (t) => {
   let ownerRpcReadCount = 0;
+  let localReadCount = 0;
   const service = new CDCIntegrationService({
     nodeId: 'test-node',
     sqlQueryEngine: {
@@ -556,6 +540,7 @@ async (t) => {
       {
         isLeader: false,
         async executeQuery(sql, params) {
+          localReadCount += 1;
           t.match(sql, /SELECT log_id AS ack_id FROM logs/i,
             'local probe should preserve the original SQL');
           t.same(params, ['log-a', 'log-b'],
@@ -577,20 +562,20 @@ async (t) => {
     buildAuthoritativeReadOptions({
       authoritativeReadMode:
         CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-          .OWNER_LOCAL_CONFIRM_EMPTY_WITH_OWNER_RPC,
+          .OWNER_RPC_REQUIRED,
       localReadConsistency: 'local_leader',
-      replicaFallbackConsistency: 'any_replica',
     }, {
       queryOptions: {timeoutMs: 321},
     }),
   );
 
   t.equal(ownerRpcReadCount, 1,
-    'empty local authoritative reads should be confirmed through owner RPC');
+    'the projected read uses the requested owner directly');
+  t.equal(localReadCount, 0, 'an RPC-required read does not probe the empty local replica');
   t.equal(result.success, true,
     'owner confirmation should succeed');
   t.equal(result.source, 'owner_rpc_lane',
-    'owner confirmation should win when local replicas are empty');
+    'the RPC source is selected before observing local rows');
   t.equal(result.localReadHit, false,
     'owner-confirmed empty local reads must not report a local hit');
   t.same(result.rows, [
@@ -599,6 +584,14 @@ async (t) => {
   ], 'owner confirmation should return the authoritative rows');
   t.equal(result.systemTableDiagnostics?.routedToNode, 'node-sql-leader',
     'owner confirmation should record the routed leader');
+  const local = await service.executeAuthoritativeSystemTableRead(SYSTEM_TABLE_NAME.LOGS,
+    'SELECT log_id AS ack_id FROM logs WHERE log_id IN (?, ?)', ['log-a', 'log-b'],
+    buildAuthoritativeReadOptions({localReadConsistency: 'any_replica'}));
+  t.equal(local.success, true, 'the explicitly requested local empty set is a valid answer');
+  t.same(local.rows, []);
+  t.equal(local.source, 'local_partition_replica');
+  t.equal(localReadCount, 1);
+  t.equal(ownerRpcReadCount, 1, 'an empty local answer never triggers another owner lane');
 });
 
 test('CDCIntegrationService - local authoritative reads prefer the ' +
@@ -706,7 +699,7 @@ async (t) => {
   );
 });
 
-test('CDCIntegrationService - authoritative reads can prefer owner RPC over ' +
+test('CDCIntegrationService - authoritative reads select required owner RPC with ' +
   'available local replicas',
 async (t) => {
   let localReadCount = 0;
@@ -721,7 +714,7 @@ async (t) => {
             success: true,
             participantNodeId: 'node-sql-leader',
             rows: [{
-              operation_id: 'op-owner-rpc-preferred',
+              operation_id: 'op-owner-rpc-selected',
               workflow_step: 'OWNER_RPC',
             }],
           };
@@ -751,7 +744,7 @@ async (t) => {
           return {
             success: true,
             rows: [{
-              operation_id: 'op-owner-rpc-preferred',
+              operation_id: 'op-owner-rpc-selected',
               workflow_step: 'LOCAL_REPLICA',
             }],
           };
@@ -764,26 +757,26 @@ async (t) => {
   const result = await service.executeAuthoritativeSystemTableRead(
     SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
     'SELECT * FROM replica_operations WHERE operation_id = ?',
-    ['op-owner-rpc-preferred'],
+    ['op-owner-rpc-selected'],
     buildAuthoritativeReadOptions({
       authoritativeReadMode:
-        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
       localReadConsistency: 'local_leader',
     }),
   );
 
-  t.equal(localReadCount, 1,
-    'owner-rpc preference should keep one local read available as a fallback');
+  t.equal(localReadCount, 0,
+    'the owner-RPC contract does not probe the available local replica');
   t.equal(ownerRpcReadCount, 1,
-    'owner-rpc preference should query the owner lane even when a local replica is available');
+    'owner-rpc selection should query the owner lane even when a local replica is available');
   t.equal(result.source, 'owner_rpc_lane',
-    'owner-rpc preference should select the owner lane result');
+    'owner-rpc selection should select the owner lane result');
   t.equal(result.localReadHit, false,
-    'owner-rpc preference should not report a local authoritative hit when owner RPC wins');
+    'owner-rpc selection should not report a local authoritative hit when owner RPC wins');
   t.same(result.rows, [{
-    operation_id: 'op-owner-rpc-preferred',
+    operation_id: 'op-owner-rpc-selected',
     workflow_step: 'OWNER_RPC',
-  }], 'owner-rpc preference should return the owner lane rows');
+  }], 'owner-rpc selection should return the owner lane rows');
 });
 
 test('CDCIntegrationService - strict owner-RPC authoritative reads fail ' +
@@ -849,8 +842,8 @@ async (t) => {
     }),
   );
 
-  t.equal(localReadCount, 1,
-    'strict owner-rpc mode may still probe local rows but must not return them');
+  t.equal(localReadCount, 0,
+    'strict owner-rpc mode never probes local rows when its owner fails');
   t.equal(ownerRpcReadCount, 1,
     'strict owner-rpc mode should still attempt owner-rpc reads');
   t.equal(result.success, false,
@@ -866,8 +859,7 @@ async (t) => {
   );
 });
 
-test('CDCIntegrationService - strict owner-RPC reads still use owner lane ' +
-  'when SQL fallback is disabled',
+test('CDCIntegrationService - strict owner-RPC reads succeed on their declared owner lane',
 async (t) => {
   let ownerRpcReadCount = 0;
   const service = new CDCIntegrationService({
@@ -926,57 +918,50 @@ async (t) => {
   }], 'strict owner-rpc mode should return owner-lane rows');
 });
 
-test('CDCIntegrationService - authoritative reads defer before owner RPC fallback when local query transport is not ready and fallback is disabled',
+test('CDCIntegrationService - owner-RPC reads retain the transport owner refusal and retry hint',
   async (t) => {
-    let sqlReadCount = 0;
-    const service = new CDCIntegrationService({
-      nodeId: 'test-node',
+    let sqlReads = 0;
+    let ownerReads = 0;
+    let healed = false;
+    const service = new CDCIntegrationService({nodeId: 'test-node',
       sqlQueryEngine: {
+        queryExecutor: {async executeOnPartition() {
+          ownerReads += 1;
+          return healed ? {success: true, rows: [{operation_id: 'op-deferred'}]} :
+            {success: false, rows: [], errorCode: 'ROUTER_QUERY_TRANSPORT_NOT_READY',
+              error: 'query ingress owner not ready', deferRetry: true, retryAfterMs: 321};
+        }},
         async executeQuery() {
-          sqlReadCount++;
-          return {
-            success: true,
-            rows: [{operation_id: 'op-should-not-run'}],
-          };
+          sqlReads += 1;
+          return {success: true, rows: [{operation_id: 'op-should-not-run'}]};
         },
-      },
-      partitionServicesProvider: () => new Map(),
-    });
+      }, partitionServicesProvider: () => new Map()});
     service.initialize();
-    service.setMessageRouter({
-      getQueryDataPlaneTransportReadiness() {
-        return {
-          ready: false,
-          reason: 'query ingress owner not ready',
-          retryAfterMs: 321,
-        };
-      },
+    service.setMessageRouter({getQueryDataPlaneTransportReadiness() {
+      return {ready: healed, reason: 'query ingress owner not ready', retryAfterMs: 321};
+    }});
+    const options = buildAuthoritativeReadOptions({
+      authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
     });
-
-    const result = await service.executeAuthoritativeSystemTableRead(
-      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-      'SELECT * FROM replica_operations WHERE operation_id = ?',
-      ['op-deferred'],
-      buildAuthoritativeReadOptions({
-        authoritativeReadMode:
-          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
-      }),
-    );
-
-    t.equal(result.success, false,
-      'authoritative read should fail closed while local query transport is unavailable');
-    t.equal(result.errorCode, 'ROUTER_QUERY_TRANSPORT_NOT_READY',
-      'authoritative read should preserve the canonical typed transport error');
-    t.equal(result.deferRetry, true,
-      'authoritative read should preserve typed defer semantics');
-    t.equal(result.retryAfterMs, 321,
-      'authoritative read should preserve retryAfterMs from the transport owner');
-    t.equal(result.error, 'query ingress owner not ready',
-      'authoritative read should preserve the owner reason');
-    t.equal(result.source, 'query_transport_preflight',
-      'authoritative read should report the preflight gate as the source');
-    t.equal(sqlReadCount, 0,
-      'authoritative read should not fan out through routed SQL when local query transport is not ready');
+    const result = await service.executeAuthoritativeSystemTableRead(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+      LOCAL_AUTHORITATIVE_REPLICA_OPERATION_SQL, ['op-deferred'], options);
+    t.equal(result.success, false);
+    t.equal(result.errorCode, 'ROUTER_QUERY_TRANSPORT_NOT_READY');
+    t.equal(result.deferRetry, true);
+    t.equal(result.retryAfterMs, 321);
+    t.equal(result.error, 'query ingress owner not ready');
+    t.equal(result.source, 'owner_rpc_lane', 'the chosen owner retains the typed failure');
+    t.equal(ownerReads, 1);
+    t.equal(sqlReads, 0, 'transport unavailability does not select ordinary SQL');
+    healed = true;
+    const recovered = await service.executeAuthoritativeSystemTableRead(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+      LOCAL_AUTHORITATIVE_REPLICA_OPERATION_SQL, ['op-deferred'], options);
+    t.equal(recovered.success, true);
+    t.equal(recovered.source, 'owner_rpc_lane');
+    t.same(recovered.rows, [{operation_id: 'op-deferred'}]);
+    t.equal(ownerReads, 2);
+    t.equal(sqlReads, 0);
+    service.markShuttingDown();
   });
 
 test('CDCIntegrationService - authoritative merge prefers fresher heartbeat rows',
@@ -1120,117 +1105,68 @@ test('CDCIntegrationService - identical flat replica rows skip JSON ranking',
     t.end();
   });
 
-test('CDCIntegrationService - authoritative read re-seeds bootstrap ' +
-  'overlay when the owner RPC lane returns partition-not-found (uses ' +
-  'installRecoveryRoutingOverlayEntry)', async (t) => {
-  // Regression: after seed restart, follower cache is empty and bootstrap
-  // overlay was deleted. executeAuthoritativeSystemTableRead must re-seed
-  // the overlay via installRecoveryRoutingOverlayEntry using connected
-  // nodes from the message router, then retry the query so the circular
-  // dependency (empty cache → no partitions → Table not found → repair
-  // fails → cache stays empty) is broken.
-  const tableName = SYSTEM_TABLE_NAME.NODES;
-  const expectedPartitionId = INITIAL_PARTITION_IDS[tableName];
-  const queryAttempts = [];
-  let installCalls = 0;
-  let installedServiceRows = null;
-
-  const mockSqlEngine = {
-    installRecoveryRoutingOverlayEntry(partitionId, tbl, serviceRows) {
-      installCalls++;
-      installedServiceRows = serviceRows;
-      t.equal(partitionId, expectedPartitionId,
-        'overlay install should use the initial partition ID');
-      t.equal(tbl, tableName,
-        'overlay install should reference the correct table');
-      return true;
-    },
-  };
-  mockSqlEngine.queryExecutor = {
-    async executeOnPartition(partitionId, sql, params = [], _forRead,
-      _preferLeader, _preferSameLatencyGroup, options = {}) {
-      queryAttempts.push({partitionId, sql, params, options});
-      if (queryAttempts.length === 1) {
-        return {
-          success: false,
-          error: `${QUERY_ERROR_MSG.TABLE_NOT_FOUND_PREFIX}${tableName}`,
-          errorCode: QUERY_ERROR_CODE.PARTITION_NOT_FOUND,
-        };
-      }
-      return {
-        success: true,
-        participantNodeId: 'seed-node',
-        rows: [{node_id: 'node-recovered', status: 'active'}],
-        count: 1,
-      };
-    },
-    getPartitionRoutingSnapshot() {
-      return {
-        canonicalLeaderNodeId: 'seed-node',
-        serviceRowCount: 2,
-        routableServiceCount: 2,
-        deniedByNodeId: {},
-      };
-    },
-  };
-
-  const connectedNodeIds = ['seed-node', 'peer-node-2'];
-  const mockMessageRouter = {
-    getConnectedNodes() {
-      return connectedNodeIds;
-    },
-  };
-
-  const service = new CDCIntegrationService({
-    nodeId: 'follower-node',
-    sqlQueryEngine: mockSqlEngine,
-    partitionServicesProvider: () => new Map(),
+// The historical read-side overlay repair fabricated service authority from
+// connected nodes. Routing recovery now belongs to its existing owner; the read
+// retains the failure and a later call can succeed after that owner heals.
+test('CDCIntegrationService - partition-not-found does not fabricate an overlay or retry the read',
+  async (t) => {
+    const tableName = SYSTEM_TABLE_NAME.NODES;
+    const expectedPartitionId = INITIAL_PARTITION_IDS[tableName];
+    const queryAttempts = [];
+    let overlayInstalls = 0;
+    let connectedNodeReads = 0;
+    let healed = false;
+    const service = new CDCIntegrationService({nodeId: 'follower-node',
+      partitionServicesProvider: () => new Map(),
+      sqlQueryEngine: {
+        installRecoveryRoutingOverlayEntry() { overlayInstalls += 1; return true; },
+        queryExecutor: {async executeOnPartition(partitionId, sql, params, _forRead,
+          _preferLeader, _preferSameLatencyGroup, options) {
+          queryAttempts.push({partitionId, sql, params, options});
+          return healed ? {success: true, participantNodeId: 'seed-node',
+            rows: [{node_id: 'node-recovered', status: 'active'}], count: 1} :
+            {success: false, error: `${QUERY_ERROR_MSG.TABLE_NOT_FOUND_PREFIX}${tableName}`,
+              errorCode: QUERY_ERROR_CODE.PARTITION_NOT_FOUND, rows: []};
+        }},
+      }});
+    service.initialize();
+    service.setMessageRouter({getConnectedNodes() {
+      connectedNodeReads += 1;
+      return ['seed-node', 'peer-node-2'];
+    }});
+    const options = buildAuthoritativeReadOptions({
+      authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+    });
+    const failed = await service.executeAuthoritativeSystemTableRead(tableName,
+      `SELECT * FROM ${tableName}`, [], options);
+    t.equal(failed.success, false);
+    t.equal(failed.errorCode, QUERY_ERROR_CODE.PARTITION_NOT_FOUND);
+    t.equal(failed.source, 'owner_rpc_lane');
+    t.equal(queryAttempts.length, 1, 'one unavailable owner is not retried inside the read');
+    t.equal(overlayInstalls, 0, 'the reader cannot fabricate a routing overlay');
+    t.equal(connectedNodeReads, 0, 'connected-node presence is not service authority');
+    healed = true;
+    const recovered = await service.executeAuthoritativeSystemTableRead(tableName,
+      `SELECT * FROM ${tableName}`, [], options);
+    t.equal(recovered.success, true, 'a later same-owner read succeeds after real availability changes');
+    t.same(recovered.rows, [{node_id: 'node-recovered', status: 'active'}]);
+    t.equal(recovered.source, 'owner_rpc_lane');
+    t.equal(queryAttempts.length, 2);
+    for (const read of queryAttempts) {
+      t.equal(read.partitionId, expectedPartitionId);
+      t.equal(read.options.allowReadinessAuthoritativeRefresh, true,
+        'the routing owner retains its existing readiness repair authority');
+    }
+    t.equal(overlayInstalls, 0);
+    t.equal(connectedNodeReads, 0);
+    service.markShuttingDown();
   });
-  service.initialize();
-  service.setMessageRouter(mockMessageRouter);
-
-  const result = await service.executeAuthoritativeSystemTableRead(
-    tableName,
-    `SELECT * FROM ${tableName}`,
-    [],
-    {readAuthority: DEFAULT_AUTHORITATIVE_READ_AUTHORITY},
-  );
-
-  t.equal(result.success, true,
-    'authoritative read should succeed after overlay re-seed');
-  t.equal(result.rows.length, 1,
-    'should return the rows from the retried query');
-  t.equal(result.source, 'owner_rpc_lane',
-    'source should report the owner RPC lane after retry');
-  t.equal(queryAttempts.length, 2,
-    'should attempt the query twice (fail + retry)');
-  t.equal(
-    queryAttempts[0].options.allowReadinessAuthoritativeRefresh,
-    true,
-    'owner RPC reads should keep routing-triggered readiness repair enabled',
-  );
-  t.equal(
-    queryAttempts[1].options.allowReadinessAuthoritativeRefresh,
-    true,
-    'retry should keep readiness repair enabled',
-  );
-  t.equal(installCalls, 1,
-    'should install recovery overlay exactly once');
-  t.equal(installedServiceRows.length, connectedNodeIds.length,
-    'should create one service row per connected node');
-  t.equal(installedServiceRows[0].partition_id, expectedPartitionId,
-    'service row should carry the correct partition_id');
-  t.equal(installedServiceRows[0].node_id, connectedNodeIds[0],
-    'service row node_id should match connected node');
-  t.ok(installedServiceRows[0].address.includes(expectedPartitionId),
-    'service row address should contain the partition ID');
-});
 
 test('CDCIntegrationService - authoritative read does not re-seed ' +
   'overlay for non-partition-not-found errors', async (t) => {
-  // Ensure the overlay re-seed path only triggers for TABLE_NOT_FOUND,
-  // not for other SQL failures.
+  // Other owner failures also cannot engage a read-side overlay writer.
   let installCalls = 0;
+  let ownerReads = 0;
   const mockSqlEngine = {
     installRecoveryRoutingOverlayEntry() {
       installCalls++;
@@ -1239,6 +1175,7 @@ test('CDCIntegrationService - authoritative read does not re-seed ' +
   };
   mockSqlEngine.queryExecutor = {
     async executeOnPartition() {
+      ownerReads += 1;
       return {
         success: false,
         error: 'Connection refused',
@@ -1273,11 +1210,14 @@ test('CDCIntegrationService - authoritative read does not re-seed ' +
     SYSTEM_TABLE_NAME.NODES,
     'SELECT * FROM nodes',
     [],
-    {readAuthority: DEFAULT_AUTHORITATIVE_READ_AUTHORITY},
+    buildAuthoritativeReadOptions({
+      authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+    }),
   );
 
   t.equal(result.success, false,
     'should return failure for non-table-not-found errors');
+  t.equal(ownerReads, 1, 'the actual owner refusal was consumed');
   t.equal(installCalls, 0,
     'should not re-seed overlay for non-table-not-found errors');
 });

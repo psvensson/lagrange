@@ -18,7 +18,10 @@ import {
 } from '../node/node-readiness-policy.js';
 import {PRESSURE_STATE} from '../rebalancer/storage-capacity-constants.js';
 import {AuthoritativeControlPlaneView} from './authoritative-control-plane-view.js';
-import {LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY} from '../cdc/cdc-integration-service.js';
+import {LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY} from
+  '../cdc/cdc-integration-service-shared-constants.js';
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
+  './control-plane-system-table-gateway-constants.js';
 import {createControlPlaneRuntimeBundle} from './control-plane-runtime-bundle.js';
 import {
   AUTHORITY_DESCRIPTOR_STATE,
@@ -143,25 +146,17 @@ const READINESS_ERROR_MSG = Object.freeze({
     'ControlPlaneReadinessService requires ' +
     'cdcGroupPropagationService for strict readiness evaluation',
 });
-const MEMBERSHIP_PUBLICATION_AUTHORITATIVE_READ_MODE = Object.freeze({
-  DIAGNOSTICS: 'owner_rpc_required',
-  PLANNING: 'owner_rpc_preferred_sql_fallback',
-});
 const MEMBERSHIP_PUBLICATION_READ_OPTIONS = Object.freeze({
-  authoritativeReadMode:
-    MEMBERSHIP_PUBLICATION_AUTHORITATIVE_READ_MODE.DIAGNOSTICS,
+  authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
   readProfile: 'diagnostics',
   localReadConsistency: LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.LOCAL_LEADER,
-  replicaFallbackConsistency: LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.LOCAL_LEADER,
   workClass: 'control-plane-readiness',
   deliveryPriority: 'readiness',
 });
 const MEMBERSHIP_PUBLICATION_PLANNING_READ_OPTIONS = Object.freeze({
-  authoritativeReadMode:
-    MEMBERSHIP_PUBLICATION_AUTHORITATIVE_READ_MODE.PLANNING,
+  authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
   readProfile: 'planning',
   localReadConsistency: LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.LOCAL_LEADER,
-  replicaFallbackConsistency: LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
   workClass: 'control-plane-planning',
   deliveryPriority: 'readiness',
 });
@@ -397,7 +392,6 @@ export const CONTROL_PLANE_READINESS_SERVICE_SHARED = {
   DurableWorkflowCoordinator,
   LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
   LoggingService,
-  MEMBERSHIP_PUBLICATION_AUTHORITATIVE_READ_MODE,
   MEMBERSHIP_PUBLICATION_PLANNING,
   MEMBERSHIP_PUBLICATION_PLANNING_READ_OPTIONS,
   MEMBERSHIP_PUBLICATION_PLANNING_SOURCE,

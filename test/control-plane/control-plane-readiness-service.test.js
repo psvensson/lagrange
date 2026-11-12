@@ -1283,7 +1283,7 @@ async (t) => {
       if (
         readMode !==
         CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-          .OWNER_LOCAL_PREFERRED_OWNER_RPC_FALLBACK
+          .OWNER_RPC_REQUIRED
       ) {
         return {
           success: false,

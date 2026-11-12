@@ -639,12 +639,12 @@ async (t) => {
     t.equal(
       read.options.readAuthority.authoritativeReadMode,
       CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-        .OWNER_RPC_PREFERRED_SQL_FALLBACK,
+        .OWNER_RPC_REQUIRED,
     );
     t.equal(
       read.options.readAuthority.replicaFallbackConsistency,
-      'any_replica',
-      'readiness repair should prefer a local replica repair read before routed SQL',
+      undefined,
+      'readiness repair carries no alternate replica consistency',
     );
     t.equal(
       read.options?.queryOptions?.routingReadinessDimension,
@@ -780,7 +780,7 @@ test('ControlPlaneReadinessService repairs self readiness through the ' +
         const queryOptions = options?.queryOptions || {};
         if (options?.readAuthority?.authoritativeReadMode !==
               CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-                .OWNER_RPC_PREFERRED_SQL_FALLBACK ||
+                .OWNER_RPC_REQUIRED ||
             queryOptions?.routingReadinessDimension !==
               CONTROL_PLANE_READINESS_DIMENSION
                 .CONTROL_PLANE_RECOVERY_ELIGIBLE ||
@@ -840,8 +840,8 @@ test('ControlPlaneReadinessService repairs self readiness through the ' +
     t.equal(
       read.options?.readAuthority?.authoritativeReadMode,
       CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-        .OWNER_RPC_PREFERRED_SQL_FALLBACK,
-      'one repair mode allows canonical SQL fallback',
+        .OWNER_RPC_REQUIRED,
+      'repair selects the canonical owner RPC lane',
     );
     t.equal(
       read.options?.queryOptions?.routingReadinessDimension,
@@ -1009,7 +1009,7 @@ test('ControlPlaneReadinessService exposes active priority control-plane recover
     const asyncPlanningReadCount = publicationReadOptions.filter(
       (options) => options?.readProfile === 'planning' &&
         options?.authoritativeReadMode ===
-          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED_SQL_FALLBACK,
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
     ).length;
     t.equal(
       diagnosticsReadOptions?.authoritativeReadMode,
@@ -1023,8 +1023,8 @@ test('ControlPlaneReadinessService exposes active priority control-plane recover
     );
     t.equal(
       diagnosticsReadOptions?.replicaFallbackConsistency,
-      LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.LOCAL_LEADER,
-      'membership publication diagnostics should avoid any-replica fallback',
+      undefined,
+      'membership publication diagnostics carry no alternate consistency',
     );
     t.equal(
       diagnosticsReadOptions?.queryTimeoutMs,
@@ -1147,8 +1147,8 @@ test('ControlPlaneReadinessService exposes a normalized membership publication p
     t.equal(
       planningPublicationReadOptions?.authoritativeReadMode,
       CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-        .OWNER_RPC_PREFERRED_SQL_FALLBACK,
-      'planning snapshots should use the best-effort owner-RPC publication mode',
+        .OWNER_RPC_REQUIRED,
+      'planning snapshots should use the required owner RPC publication mode',
     );
     t.equal(
       planningPublicationReadOptions?.localReadConsistency,
@@ -1157,8 +1157,8 @@ test('ControlPlaneReadinessService exposes a normalized membership publication p
     );
     t.equal(
       planningPublicationReadOptions?.replicaFallbackConsistency,
-      LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
-      'planning snapshots should fallback to any replica when needed',
+      undefined,
+      'planning snapshots should carry no alternate replica consistency',
     );
     t.equal(
       planningPublicationReadOptions?.workClass,

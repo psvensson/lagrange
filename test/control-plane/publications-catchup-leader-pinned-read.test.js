@@ -63,7 +63,7 @@ test('deferred publications catch-up requests a LEADER-pinned owner-RPC read',
     t.equal(seenReadOptions.length, 1, 'the catch-up issues one authoritative read');
     t.equal(
       seenReadOptions[0]?.readAuthority?.authoritativeReadMode,
-      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
       'the read routes through the authoritative owner',
     );
     t.equal(
@@ -106,7 +106,7 @@ test('owner-RPC read pins to the leader only when the flag is set', async (t) =>
     [],
     {readAuthority: buildControlPlaneReadAuthority({
       authoritativeReadMode:
-        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
       leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
     })},
     {},
@@ -124,7 +124,7 @@ test('owner-RPC read pins to the leader only when the flag is set', async (t) =>
     [],
     {readAuthority: buildControlPlaneReadAuthority({
       authoritativeReadMode:
-        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
     })},
     {},
   );

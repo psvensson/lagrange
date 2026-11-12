@@ -131,7 +131,7 @@ import {
   INITIAL_PARTITION_IDS, SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {NODE_STATUS} from '../../src/node/node-constants.js';
-import {relistSourceTable} from '../../src/cdc/cdc-integration-service-source-relist.js';
+import {registerSourceRelister} from '../../src/cdc/cdc-integration-service-source-relist.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
   '../../src/control-plane/control-plane-system-table-gateway-constants.js';
@@ -1028,27 +1028,32 @@ test('in flight (K5): the catch-up\'s read is in flight at the mark and ' +
   assertCatchupSummaryHonest(catchup.outcome.value, ['nodes']);
 });
 
-test('in flight (S2): the catch-up\'s local read is in flight at the mark ' +
-  'and answers unusable: no owner-RPC read, no SQL fallback', async () => {
-  const held = heldAnswers();
-  const composed = composeReadFlow({
-    localPartition: {
+// Catch-up now selects the owner RPC lane. The explicit local-only read
+// remains an independent terminal boundary, and never switches source.
+test('in flight (S2): an explicit local read answers unusable after the mark without another read',
+  async () => {
+    const held = heldAnswers();
+    const composed = composeReadFlow({localPartition: {
       partitionId: INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.NODES],
       read: () => held.hold(),
       write: () => Promise.resolve({success: true}),
-    },
+    }});
+    const local = track(composed.cdcIntegrationService.executeAuthoritativeSystemTableRead(
+      SYSTEM_TABLE_NAME.NODES, 'SELECT * FROM nodes', [], {
+        readAuthority: buildControlPlaneReadAuthority({
+          authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+          localReadConsistency: 'local_leader',
+        }),
+      }));
+    await untilQueued(held);
+    composed.cdcIntegrationService.markShuttingDown();
+    held.answer({success: false, error: 'local replica not ready', rows: []});
+    await assertNothingAfterTheMark(composed);
+    assert.notEqual(local.outcome, null, 'the local read settles');
+    assert.equal(local.outcome.value.success, false);
+    assert.deepEqual(local.outcome.value.rows, []);
+    assert.equal(composed.cache.has('nodes', IN_FLIGHT_ROW.node_id), false);
   });
-  const catchup = track(composed.cdcIntegrationService
-    .hydrateCdcPropagatedTablesFromAuthority({
-      trigger: CDC_CATCHUP_TRIGGER.JOIN_CATCHUP,
-      tables: ['nodes']}));
-  await untilQueued(held);
-  composed.cdcIntegrationService.markShuttingDown();
-  held.answer({success: false, error: 'local replica not ready', rows: []});
-  await assertNothingAfterTheMark(composed);
-  assert.notEqual(catchup.outcome, null, 'the catch-up settles');
-  assertCatchupSummaryHonest(catchup.outcome.value, ['nodes']);
-});
 
 // The visibility repair (its one remaining entry: the projection owner's
 // repairCacheVisibilityHole) has its authoritative read in flight when the
@@ -1227,6 +1232,13 @@ test('routing: with only the gate answering terminal, no read, repair ' +
     service.hydrateCdcPropagatedTablesFromAuthority({
       trigger: CDC_CATCHUP_TRIGGER.JOIN_CATCHUP,
       tables: ['nodes']}));
+  const localRead = await settle(service.executeAuthoritativeSystemTableRead('nodes',
+    'SELECT * FROM nodes', [], {
+      readAuthority: buildControlPlaneReadAuthority({
+        authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+        localReadConsistency: 'local_leader',
+      }),
+    }));
   const refreshed = await settle(
     service.refreshAuthoritativeCacheRow('nodes', IN_FLIGHT_ROW.node_id));
   const repaired = await settle(service.repairCacheVisibilityHole(
@@ -1246,6 +1258,9 @@ test('routing: with only the gate answering terminal, no read, repair ' +
     'every repair apply is refused at the gate');
   assert.notEqual(directRepair, true, 'a direct apply answers not applied');
   assert.ok(gateCalls.length > 0, 'the operations consulted the gate');
+  assert.ok(gateCalls.includes(CDC_CONSTANTS.CDC_TERMINAL_STAGE.LOCAL_READ),
+    'the explicitly requested local read consulted its gate');
+  assert.equal(localRead.value?.success, false, 'the refused local read does not succeed');
   assert.equal(catchup.value?.tablesHydrated ?? 0, 0,
     'the refused catch-up counts nothing caught up');
   assert.notEqual(refreshed.value, true, 'the refused refresh claims nothing');
@@ -1254,14 +1269,13 @@ test('routing: with only the gate answering terminal, no read, repair ' +
   assert.ok(write.error instanceof Error, 'the refused write is not a success');
 });
 
-// Structural leg, per hop: every read issue, overlay reseed, repair apply and
+// Structural leg, per hop: every read issue, repair apply and
 // engine or partition submission is gated in the same synchronous step, with
 // no await between the owner's gate and the effect. The owner is live (the
-// gate lets everything through); the flows exercise every stage: a reseed
-// retry, the local read and its owner-RPC fallback, the SQL fallback, the
+// gate lets everything through); the flows exercise both explicit read modes,
 // visibility repair and its retry, the refresh entry point, the routed write's
 // local leg and engine hop, and the bootstrap direct write.
-test('routing: every read, reseed, repair apply and submission is gated in ' +
+test('routing: every read, repair apply and submission is gated in ' +
   'the same synchronous step', async () => {
   const ungated = [];
   const seen = new Set();
@@ -1320,13 +1334,19 @@ test('routing: every read, reseed, repair apply and submission is gated in ' +
     }
     await settled;
   };
-  // A reseed retry, then the local read's owner-RPC fallback, then a deferred
-  // owner-RPC answer that may take the SQL fallback.
+  // Owner unavailability is observed by the existing catch-up owner. The
+  // explicitly requested local read is exercised independently.
   rpcAnswers.push({success: false, errorCode: 'TABLE_NOT_FOUND',
     error: 'Table not found: nodes'});
   await settle(service.hydrateCdcPropagatedTablesFromAuthority({
     trigger: CDC_CATCHUP_TRIGGER.JOIN_CATCHUP,
     tables: ['nodes']}));
+  await settle(service.executeAuthoritativeSystemTableRead('nodes', 'SELECT * FROM nodes', [], {
+    readAuthority: buildControlPlaneReadAuthority({
+      authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+      localReadConsistency: 'local_leader',
+    }),
+  }));
   rpcAnswers.push({success: false, deferRetry: true, retryAfterMs: 1,
     error: 'deferred'});
   await settle(service.refreshAuthoritativeCacheRow('nodes', 'other-node'));
@@ -1371,11 +1391,13 @@ test('routing: every read, reseed, repair apply and submission is gated in ' +
     },
   });
   wireGate(noLocalQuery.cdcIntegrationService);
-  await settle(noLocalQuery.cdcIntegrationService
-    .hydrateCdcPropagatedTablesFromAuthority({
-      trigger: CDC_CATCHUP_TRIGGER.JOIN_CATCHUP,
-      tables: ['nodes']}),
-  noLocalQuery.timeSource);
+  await settle(noLocalQuery.cdcIntegrationService.executeAuthoritativeSystemTableRead(
+    'nodes', 'SELECT * FROM nodes', [], {
+      readAuthority: buildControlPlaneReadAuthority({
+        authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+        localReadConsistency: 'local_leader',
+      }),
+    }), noLocalQuery.timeSource);
   const fanOut = composeReadFlow({
     onSeam,
     localPartition: {
@@ -1394,15 +1416,15 @@ test('routing: every read, reseed, repair apply and submission is gated in ' +
       'VALUES (?, ?, ?)',
     [IN_FLIGHT_ROW.node_id, IN_FLIGHT_ROW.node_address, IN_FLIGHT_ROW.status]),
   fanOut.timeSource);
-  // The SQL fallback of an owner-RPC-preferred read whose owner answer is
-  // deferred.
+  // A deferred owner-RPC read retains that owner's answer without an
+  // ordinary SQL read or a fabricated routing overlay.
   rpcAnswers.push({success: false, deferRetry: true, retryAfterMs: 1,
     error: 'deferred'});
   await settle(service.executeAuthoritativeSystemTableRead('nodes',
     'SELECT * FROM nodes', [], {
       readAuthority: buildControlPlaneReadAuthority({
         authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-          .OWNER_RPC_PREFERRED_SQL_FALLBACK,
+          .OWNER_RPC_REQUIRED,
       }),
     }));
   // The sweep entry point, with the owner's own mutation snapshot.
@@ -1424,17 +1446,25 @@ test('routing: every read, reseed, repair apply and submission is gated in ' +
   // The cell owes a list (as a new group member's node marks it).
   service.cacheMutationTarget.sourceOrder.requireListed(nodesPartition,
     SYSTEM_TABLE_NAME.NODES);
-  await settle(relistSourceTable(service, {sourcePartition: nodesPartition,
-    tableName: SYSTEM_TABLE_NAME.NODES}));
+  const listed = new Promise((resolve) => {
+    const release = service.cacheMutationTarget.sourceOrder.onCurrent((sourcePartition) => {
+      if (sourcePartition !== nodesPartition) return;
+      release();
+      resolve();
+    });
+  });
+  registerSourceRelister(service);
+  await settle(listed);
   await yieldTurns(SETTLE_TURNS);
 
-  for (const exercised of ['ownerRpcReads', 'overlayReseeds', 'localReads',
+  assert.equal(seen.has('overlayReseeds'), false, 'no read-side overlay algorithm is invoked');
+  for (const exercised of ['ownerRpcReads', 'localReads',
     'localWrites', 'engineSubmissions', 'cacheChanges']) {
     assert.ok(seen.has(exercised), `the flows exercise ${exercised}`);
   }
   assert.deepEqual(ungated, [],
     'every effect is gated in the same synchronous step as the owner\'s gate');
-  // Every read, reseed, apply and submission call site in the owner is one
+  // Every read, apply and submission call site in the owner is one
   // the flows exercised through the gate.
   const effectSites = [...new Set(censusCallSites(REPOSITORY_ROOT,
     CDC_OWNER_FILES, EFFECT_METHODS).map((site) =>

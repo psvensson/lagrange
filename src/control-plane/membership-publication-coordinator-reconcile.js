@@ -119,7 +119,7 @@ class MembershipPublicationCoordinatorReconcile extends
           trigger: CDC_CATCHUP_TRIGGER.PUBLICATIONS_SWEEP,
           readAuthority: buildControlPlaneReadAuthority({
             authoritativeReadMode:
-              CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+              CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
             leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
           }),
         });
@@ -184,7 +184,7 @@ class MembershipPublicationCoordinatorReconcile extends
             DEFERRED_PROPAGATED_CATCHUP_MAX_ATTEMPTS_PER_TABLE,
           readAuthority: buildControlPlaneReadAuthority({
             authoritativeReadMode:
-              CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+              CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
             leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
           }),
         });

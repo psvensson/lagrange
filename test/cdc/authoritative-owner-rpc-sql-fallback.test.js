@@ -7,7 +7,6 @@ import {
   SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
-  QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
 } from '../../src/query/query-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -19,10 +18,11 @@ import {buildControlPlaneReadAuthority} from
   '../../src/control-plane/control-plane-system-table-gateway-read-contracts.js';
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
   '../../src/control-plane/control-plane-system-table-gateway-constants.js';
+import {ROUTER_MESSAGE_TIMEOUT_ERROR_CODE} from '../../src/transport/transport-error-codes.js';
 
 const TEST_NODE_ID = 'test-node';
 const TEST_SEED_NODE_ID = 'node-seed';
-const TEST_AUTHORITATIVE_NODE_ID = 'node-owner-rpc-timeout-fallback';
+const TEST_AUTHORITATIVE_NODE_ID = 'node-owner-rpc-timeout-recovery';
 const TEST_NODE_STATUS = 'active';
 const TEST_CONNECTION_STATE = 'ready';
 const TEST_LOCAL_READ_CONSISTENCY = 'local_leader';
@@ -33,17 +33,14 @@ const TEST_QUERY_TIMEOUT_AFTER_MS = 3000;
 const TEST_QUERY_TIMEOUT_AFTER_MESSAGE =
   `${QUERY_ERROR_MSG.QUERY_TIMEOUT_AFTER_PREFIX}${TEST_QUERY_TIMEOUT_AFTER_MS}` +
   QUERY_ERROR_MSG.QUERY_TIMEOUT_AFTER_SUFFIX;
-const TEST_ROUTED_SQL_SOURCE = 'sql_query_engine';
+const TEST_OWNER_RPC_SOURCE = 'owner_rpc_lane';
 const TEST_NODES_SQL = 'SELECT * FROM nodes WHERE node_id = ?';
-const TEST_OWNER_RPC_SQL_FALLBACK_NAME =
-  'CDCIntegrationService - owner-RPC preferred SQL fallback recovers ' +
-  'timeout-shaped nodes reads through routed SQL';
-const TEST_OWNER_RPC_MESSAGE_ONLY_SQL_FALLBACK_NAME =
-  'CDCIntegrationService - owner-RPC preferred SQL fallback recovers ' +
-  'message-only query-timeout-shaped nodes reads through routed SQL';
+const TEST_OWNER_RPC_TIMEOUT_NAME =
+  'CDCIntegrationService - a timeout-shaped owner read refuses SQL and heals through the same owner';
+const TEST_OWNER_RPC_MESSAGE_ONLY_TIMEOUT_NAME =
+  'CDCIntegrationService - a message-only owner timeout refuses SQL and heals through the same owner';
 const TEST_OWNER_RPC_REPAIR_READ_LEADER_FIRST_NAME =
-  'CDCIntegrationService - owner-RPC preferred repair reads do not force ' +
-  'leader-first routing';
+  'CDCIntegrationService - required owner-RPC repair reads preserve declared leader routing';
 const TEST_ROUTING_SNAPSHOT_SERVICE_ROW_COUNT = 2;
 const TEST_ROUTING_SNAPSHOT_ROUTABLE_SERVICE_COUNT = 2;
 const TEST_LAST_HEARTBEAT_MS = 5000;
@@ -83,128 +80,84 @@ afterEach(() => {
   LoggingService.resetInstance();
 });
 
-async function assertOwnerRpcSqlFallbackRecovers(t, ownerRpcFailure) {
+// The historical fixture required a different source to answer after an owner
+// failure. The single-path contract retains that failure, then permits a new
+// read through the same owner when it actually heals. SQL remains plausible bait.
+async function assertOwnerRpcRecovery(t, ownerRpcFailure) {
   const ownerRpcReads = [];
-  const sqlFallbackReads = [];
+  const sqlReads = [];
+  let healed = false;
   const service = new CDCIntegrationService({
     nodeId: TEST_NODE_ID,
     sqlQueryEngine: {
       queryExecutor: {
-        getPartitionRoutingSnapshot() {
-          return TEST_ROUTING_SNAPSHOT;
-        },
-        async executeOnPartition(
-          partitionId,
-          sql,
-          params = [],
-          _forRead,
-          preferLeader,
-          _preferSameLatencyGroup,
-          options = {},
-        ) {
-          ownerRpcReads.push({partitionId, sql, params, preferLeader, options});
-          return ownerRpcFailure;
+        getPartitionRoutingSnapshot: () => TEST_ROUTING_SNAPSHOT,
+        async executeOnPartition(partitionId, sql, params, forRead, preferLeader,
+          preferSameLatencyGroup, options) {
+          ownerRpcReads.push({partitionId, sql, params, forRead, preferLeader,
+            preferSameLatencyGroup, options});
+          return healed ? {success: true, rows: [{...TEST_AUTHORITATIVE_NODE_ROW}]} : ownerRpcFailure;
         },
       },
-      async executeQuery(sql, params = [], options = {}) {
-        sqlFallbackReads.push({sql, params, options});
-        return {
-          success: true,
-          rows: [{...TEST_AUTHORITATIVE_NODE_ROW}],
-        };
+      async executeQuery(sql, params, options) {
+        sqlReads.push({sql, params, options});
+        return {success: true, rows: [{...TEST_AUTHORITATIVE_NODE_ROW}]};
       },
     },
     partitionServicesProvider: TEST_EMPTY_MAP_FACTORY,
   });
   service.initialize();
   service.setMessageRouter({
-    getQueryDataPlaneTransportReadiness() {
-      return TEST_LOCAL_QUERY_TRANSPORT_READINESS;
-    },
+    getQueryDataPlaneTransportReadiness: () => TEST_LOCAL_QUERY_TRANSPORT_READINESS,
   });
-
-  const result = await service.executeAuthoritativeSystemTableRead(
-    SYSTEM_TABLE_NAME.NODES,
-    TEST_NODES_SQL,
-    [TEST_AUTHORITATIVE_NODE_ID],
-    {
-      readAuthority: buildControlPlaneReadAuthority({
-        authoritativeReadMode:
-          CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-            .OWNER_RPC_PREFERRED_SQL_FALLBACK,
-        localReadConsistency: TEST_LOCAL_READ_CONSISTENCY,
-      }),
-      queryOptions: {timeoutMs: TEST_TIMEOUT_MS},
-    },
-  );
-
-  t.equal(
-    ownerRpcReads.length,
-    1,
-    'owner-rpc preferred reads should still attempt the owner lane first',
-  );
-  t.equal(
-    ownerRpcReads[0]?.partitionId,
-    INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.NODES],
-    'owner-rpc preferred reads should target the canonical nodes partition',
-  );
-  t.equal(
-    sqlFallbackReads.length,
-    1,
-    'timeout-shaped owner-rpc failures should recover through routed SQL',
-  );
-  t.equal(
-    result.success,
-    true,
-    'routed SQL fallback should recover the authoritative nodes read',
-  );
-  t.equal(
-    result.source,
-    TEST_ROUTED_SQL_SOURCE,
-    'routed SQL fallback should surface the canonical SQL source',
-  );
-  t.equal(
-    result.localReadHit,
-    false,
-    'routed SQL fallback should not report a local authoritative hit',
-  );
-  t.same(
-    result.rows,
-    [{...TEST_AUTHORITATIVE_NODE_ROW}],
-    'routed SQL fallback should return the authoritative node rows',
-  );
-  t.equal(
-    sqlFallbackReads[0]?.options?.routingReadinessDimension,
-    CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-    'routed SQL fallback should preserve recovery-eligible routing',
-  );
-  t.equal(
-    sqlFallbackReads[0]?.options?.timeoutMs,
-    TEST_TIMEOUT_MS,
-    'routed SQL fallback should preserve the query timeout budget',
-  );
-  t.equal(
-    sqlFallbackReads[0]?.options?.preferLeader,
-    false,
-    'routed SQL fallback should avoid leader-first repair routing',
-  );
+  const options = {
+    readAuthority: buildControlPlaneReadAuthority({
+      authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+      localReadConsistency: TEST_LOCAL_READ_CONSISTENCY,
+    }),
+    queryOptions: {timeoutMs: TEST_TIMEOUT_MS},
+  };
+  try {
+    const failed = await service.executeAuthoritativeSystemTableRead(SYSTEM_TABLE_NAME.NODES,
+      TEST_NODES_SQL, [TEST_AUTHORITATIVE_NODE_ID], options);
+    t.equal(ownerRpcReads.length, 1, 'one requested owner attempt');
+    t.equal(sqlReads.length, 0, 'an owner timeout never invokes ordinary SQL');
+    t.equal(failed.success, false, 'the unavailable owner remains the failure');
+    t.equal(failed.source, TEST_OWNER_RPC_SOURCE);
+    t.equal(failed.localReadHit, false);
+    t.same(failed.rows, []);
+    t.equal(failed.errorCode, ownerRpcFailure.errorCode, 'preserve the original typed cause');
+    t.equal(failed.error, ownerRpcFailure.error, 'preserve the original message-only cause');
+    t.equal(failed.retryAfterMs, ownerRpcFailure.retryAfterMs, 'preserve the owner retry hint');
+    healed = true;
+    const recovered = await service.executeAuthoritativeSystemTableRead(SYSTEM_TABLE_NAME.NODES,
+      TEST_NODES_SQL, [TEST_AUTHORITATIVE_NODE_ID], options);
+    t.equal(recovered.success, true, 'the same owner can satisfy a later read after healing');
+    t.equal(recovered.source, TEST_OWNER_RPC_SOURCE);
+    t.same(recovered.rows, [{...TEST_AUTHORITATIVE_NODE_ROW}]);
+    t.equal(ownerRpcReads.length, 2, 'healing does not introduce another execution lane');
+    t.equal(sqlReads.length, 0);
+    for (const read of ownerRpcReads) {
+      t.equal(read.partitionId, INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.NODES]);
+      t.equal(read.sql, TEST_NODES_SQL);
+      t.same(read.params, [TEST_AUTHORITATIVE_NODE_ID]);
+      t.equal(read.options.routingReadinessDimension,
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE);
+      t.equal(read.options.timeoutMs, TEST_TIMEOUT_MS);
+      t.equal(read.preferLeader, false, 'the ANY leader contract does not acquire a leader pin');
+    }
+  } finally {
+    service.markShuttingDown();
+  }
 }
 
-test(TEST_OWNER_RPC_SQL_FALLBACK_NAME, async (t) => {
-  await assertOwnerRpcSqlFallbackRecovers(t, {
-    success: false,
-    errorCode: QUERY_ERROR_CODE.ROUTER_MESSAGE_TIMEOUT,
-    retryAfterMs: TEST_RETRY_AFTER_MS,
-    rows: [],
-  });
+test(TEST_OWNER_RPC_TIMEOUT_NAME, async (t) => {
+  await assertOwnerRpcRecovery(t, {success: false, errorCode: ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
+    retryAfterMs: TEST_RETRY_AFTER_MS, rows: []});
 });
 
-test(TEST_OWNER_RPC_MESSAGE_ONLY_SQL_FALLBACK_NAME, async (t) => {
-  await assertOwnerRpcSqlFallbackRecovers(t, {
-    success: false,
-    error: TEST_QUERY_TIMEOUT_AFTER_MESSAGE,
-    rows: [],
-  });
+test(TEST_OWNER_RPC_MESSAGE_ONLY_TIMEOUT_NAME, async (t) => {
+  await assertOwnerRpcRecovery(t, {success: false, error: TEST_QUERY_TIMEOUT_AFTER_MESSAGE, rows: []});
 });
 
 test(TEST_OWNER_RPC_REPAIR_READ_LEADER_FIRST_NAME, async (t) => {
@@ -253,7 +206,7 @@ test(TEST_OWNER_RPC_REPAIR_READ_LEADER_FIRST_NAME, async (t) => {
       readAuthority: buildControlPlaneReadAuthority({
         authoritativeReadMode:
           CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-            .OWNER_RPC_PREFERRED_SQL_FALLBACK,
+            .OWNER_RPC_REQUIRED,
       }),
       queryOptions: {timeoutMs: TEST_TIMEOUT_MS},
     },

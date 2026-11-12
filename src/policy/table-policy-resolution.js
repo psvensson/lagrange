@@ -42,7 +42,6 @@ const AUTHORITATIVE_POLICY_READ_OPTIONS = Object.freeze({
   leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
   preferLeader: true,
   localReadConsistency: CONTROL_PLANE_LOCAL_READ_CONSISTENCY,
-  replicaFallbackConsistency: CONTROL_PLANE_LOCAL_READ_CONSISTENCY,
 });
 
 function policyReadUnavailable(reason, context = {}) {

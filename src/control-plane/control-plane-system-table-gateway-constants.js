@@ -61,7 +61,6 @@ const CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL = Object.freeze({
 });
 
 const CONTROL_PLANE_LOCAL_READ_CONSISTENCY = 'local_leader';
-const CONTROL_PLANE_REPLICA_FALLBACK_CONSISTENCY = 'any_replica';
 const CONTROL_PLANE_ROUTING_SNAPSHOT_FIELD = Object.freeze({
   CANONICAL_LEADER_IDENTITY_STATE: 'canonicalLeaderIdentityState',
   CANONICAL_LEADER_NODE_ID: 'canonicalLeaderNodeId',
@@ -106,12 +105,6 @@ const CONTROL_PLANE_READ_PROFILE = Object.freeze({
 });
 const CONTROL_PLANE_AUTHORITATIVE_READ_MODE = Object.freeze({
   OWNER_LOCAL_ONLY: 'owner_local_only',
-  OWNER_LOCAL_PREFERRED_OWNER_RPC_FALLBACK:
-    'owner_local_preferred_owner_rpc_fallback',
-  OWNER_LOCAL_CONFIRM_EMPTY_WITH_OWNER_RPC:
-    'owner_local_confirm_empty_with_owner_rpc',
-  OWNER_RPC_PREFERRED: 'owner_rpc_preferred',
-  OWNER_RPC_PREFERRED_SQL_FALLBACK: 'owner_rpc_preferred_sql_fallback',
   OWNER_RPC_REQUIRED: 'owner_rpc_required',
 });
 const CONTROL_PLANE_READ_LEADER_MODE = Object.freeze({
@@ -180,6 +173,12 @@ const CONTROL_PLANE_GATEWAY_ERROR_CODE = Object.freeze({
   PUBLICATIONS_UPSERT_FORBIDDEN: 'CONTROL_PLANE_PUBLICATIONS_UPSERT_FORBIDDEN',
 });
 const GATEWAY_ERROR_MSG = Object.freeze({
+  AUTHORITATIVE_READ_AUTHORITY_CONTRADICTORY:
+    'contradictory_control_plane_authoritative_read_authority',
+  AUTHORITATIVE_READ_MODE_UNSUPPORTED:
+    'unsupported_control_plane_authoritative_read_mode',
+  AUTHORITATIVE_READ_LEADER_MODE_UNSUPPORTED:
+    'unsupported_control_plane_read_leader_mode',
   AUTHORITATIVE_READ_AUTHORITY_TOKEN_REQUIRED:
     'authoritative read request requires the frozen ingress authority token',
   CDC_REQUIRED: 'ControlPlaneSystemTableGateway requires cdcIntegrationService',
@@ -234,7 +233,6 @@ export {
   CONTROL_PLANE_READ_LEADER_MODE,
   CONTROL_PLANE_READ_PROFILE,
   CONTROL_PLANE_READ_STRATEGY,
-  CONTROL_PLANE_REPLICA_FALLBACK_CONSISTENCY,
   CONTROL_PLANE_ROUTING_SNAPSHOT_FIELD,
   CONTROL_PLANE_SQL_OPERATION,
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_ERROR,

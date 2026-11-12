@@ -173,7 +173,7 @@ test('CL-001 variant D: the deferred catch-up is rate-limited to one authoritati
     trigger: CDC_CATCHUP_TRIGGER.PUBLICATIONS_SWEEP,
     readAuthority: buildControlPlaneReadAuthority({
       authoritativeReadMode:
-        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
       leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
     }),
   },
@@ -264,7 +264,7 @@ test('steady-state-hydration-covers-routing-tables: the sibling sweep asks for '
     'publications keeps its own tighter, leader-pinned sweep');
   t.same(swept.readAuthority, buildControlPlaneReadAuthority({
     authoritativeReadMode:
-      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
     leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
   }),
   'the routing sweep prefers the authoritative leader so a witnessed complete ' +
@@ -487,7 +487,7 @@ async (t) => {
   service.executeAuthoritativeSystemTableRead =
     async (tableName, _sql, _params, options = {}) => {
       const ownerPreferred = options.readAuthority?.authoritativeReadMode ===
-        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED;
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED;
       const leaderPreferred = options.readAuthority?.leaderMode ===
         CONTROL_PLANE_READ_LEADER_MODE.PREFERRED;
       const readsFromLeader = ownerPreferred && leaderPreferred;

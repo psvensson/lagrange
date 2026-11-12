@@ -50,8 +50,8 @@ function registerSqlQueryEngineExecutionTestCases({
   createMockSystemCache,
   mockPartitionData,
 }) {
-  test('SQLQueryEngine - authoritative system-table selects request bounded ' +
-    'local replica fallback before owner RPC', async (t) => {
+  test('SQLQueryEngine - authoritative system-table selects request the ' +
+    'RPC owner without a local alternate', async (t) => {
     const authoritativeReads = [];
     const engine = new SQLQueryEngine({
       controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
@@ -65,7 +65,7 @@ function registerSqlQueryEngineExecutionTestCases({
             rows: [{
               log_id: params[0],
             }],
-            source: 'local_partition_replica',
+            source: 'owner_rpc_lane',
           };
         },
       },
@@ -79,24 +79,24 @@ function registerSqlQueryEngineExecutionTestCases({
     t.equal(result.success, true,
       'authoritative system-table reads should succeed');
     t.equal(result.rows.length, 1,
-      'authoritative local rows should be returned');
+      'authoritative owner rows should be returned');
     t.equal(
       authoritativeReads.length,
       1,
-      'system-table SELECT should use one authoritative local read',
+      'system-table SELECT should use one selected owner read',
     );
     t.equal(
       authoritativeReads[0]?.options?.readAuthority
         ?.replicaFallbackConsistency,
-      'any_replica',
-      'system-table SELECT should allow bounded local replica fallback before owner RPC',
+      undefined,
+      'system-table SELECT carries no alternate replica contract',
     );
     t.equal(
       authoritativeReads[0]?.options?.readAuthority
         ?.authoritativeReadMode,
       CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-        .OWNER_LOCAL_CONFIRM_EMPTY_WITH_OWNER_RPC,
-      'bounded primary-key SELECT should confirm an empty local read with the owner',
+        .OWNER_RPC_REQUIRED,
+      'bounded primary-key SELECT selects the RPC owner',
     );
   });
 

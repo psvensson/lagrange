@@ -209,13 +209,13 @@ test('Witness 1: transactional cold-metadata SELECT refreshes complete ' +
     observedReadModes,
     [
       CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-        .OWNER_LOCAL_CONFIRM_EMPTY_WITH_OWNER_RPC,
+        .OWNER_RPC_REQUIRED,
       CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-        .OWNER_LOCAL_CONFIRM_EMPTY_WITH_OWNER_RPC,
+        .OWNER_RPC_REQUIRED,
       CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-        .OWNER_LOCAL_CONFIRM_EMPTY_WITH_OWNER_RPC,
+        .OWNER_RPC_REQUIRED,
     ],
-    'catalog authority refresh must use owner-local with owner-RPC fallback/confirmation',
+    'catalog authority refresh must select the owner-RPC path',
   );
   t.same(
     selectResult.partitions,

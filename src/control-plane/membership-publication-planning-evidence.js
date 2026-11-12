@@ -97,7 +97,6 @@ function buildPublicationReadOptions(options = {}) {
     authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
     readProfile,
   };
-  delete readOptions.replicaFallbackConsistency;
   return readOptions;
 }
 
@@ -144,7 +143,6 @@ function buildLocalAuthoritativeMembershipReadOptions(options = {}) {
   delete operationalOptions.authoritativeReadMode;
   delete operationalOptions.readAuthority;
   delete operationalOptions.readSource;
-  delete operationalOptions.replicaFallbackConsistency;
   return {
     ...operationalOptions,
     readAuthority: buildControlPlaneReadAuthority({

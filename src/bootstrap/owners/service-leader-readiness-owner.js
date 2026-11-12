@@ -493,7 +493,7 @@ class ServiceLeaderReadinessOwner {
       readAuthority: buildControlPlaneReadAuthority({
         authoritativeReadMode:
           CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
-        replicaFallbackConsistency:
+        localReadConsistency:
           LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
       }),
       queryTimeoutMs,
