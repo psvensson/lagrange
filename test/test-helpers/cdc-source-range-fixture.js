@@ -6,7 +6,7 @@
 // index 0 installs (an empty source at its start), through the cache owner's
 // own install (SystemTableCacheSourceOrder.recordListedPosition).
 import {SOURCE_RELIST_OUTCOME, isSourceRange} from
-  '../../src/cache/system-table-cache-cdc-observation.js';
+  '../../src/cache/system-table-cache-source-order.js';
 import {CDC_COMPLETION} from '../../src/cdc/cdc-delivery-outcome.js';
 import {installSourceImage} from '../../src/cache/system-table-cache-source-image.js';
 import {fetchSourceImage} from '../../src/cdc/cdc-integration-service-source-relist.js';

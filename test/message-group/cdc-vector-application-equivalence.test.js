@@ -22,7 +22,7 @@ import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {afterEach, beforeEach, test} from 'node:test';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
-import {SOURCE_POSITION_STATE} from '../../src/cache/system-table-cache-cdc-observation.js';
+import {SOURCE_POSITION_STATE} from '../../src/cache/system-table-cache-source-order.js';
 import {captureCdcEvents} from '../../src/cdc/cdc-event-envelope.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';

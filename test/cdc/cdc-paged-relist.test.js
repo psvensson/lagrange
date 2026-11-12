@@ -23,7 +23,7 @@ import {afterEach, beforeEach, test} from 'node:test';
 import {INITIAL_PARTITION_IDS, getSchemaByTableName} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
-import {SOURCE_POSITION_STATE} from '../../src/cache/system-table-cache-cdc-observation.js';
+import {SOURCE_POSITION_STATE} from '../../src/cache/system-table-cache-source-order.js';
 import {captureCdcEvents} from '../../src/cdc/cdc-event-envelope.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
 import {SOURCE_RELIST_FAILURE} from '../../src/cdc/cdc-integration-service-source-relist.js';

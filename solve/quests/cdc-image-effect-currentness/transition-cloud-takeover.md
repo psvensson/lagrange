@@ -1,0 +1,184 @@
+# CDC image and retained effect transition
+
+Status: independent source-based design review approved by `/root`; behavioral
+implementation in progress, no candidate lab validation or repair acceptance.
+Candidate base: `57e396e440a48dce8c17b627514ad951c916c7ee` plus the independently
+reviewed maintenance source from `9f6244542272d936da0281d2e00454149c6dd41c`
+(local composition `36c8baca4`). The generated import seal requires regeneration
+on the lab. This note reconstructs the interaction from preserved source and
+tests; it does not claim to recover the unavailable original `/tmp` R2 packet.
+
+## Claim and first divergence
+
+The sealed seven-case predicate remains unchanged. A source image at position P
+replaces the actual table state. An occurrence remembered by a handler before
+that replacement is not proof that its effect remains in the table. Conversely,
+an occurrence covered by P cannot become applicable merely because a handler's
+bounded deduplication entry or a tombstone expired. The current implementation
+violates both directions. A third demonstrated case advances a range position
+after a wall-clock authoritative-absence fence rejected its restoring member.
+
+Preserved evidence: `evidence/observations.json`, `evidence/receipt.json`,
+`test/cdc/cdc-image-effect-currentness.test.js`, and the explicitly diagnostic
+`test/cdc/cdc-image-effect-design-r2-controls.test.js`. The latter's expected
+defects are historical observations, not repair acceptance assertions.
+
+Source inspection establishes an additional participating producer:
+`recordCommittedOperationCdc` applies local committed events through
+`applyCommittedPartitionCdcEventToCache`, dropping occurrence and source-position
+metadata on that route. It must participate in the same change. Otherwise an
+image can invalidate local effects with no comparable occurrence at their cache
+boundary. This is not a physical reproduction of permanent stranding or SQL loss.
+
+## Existing owners and proposed transition
+
+The existing `SystemTableCacheSourceOrder` owns source incarnation, contiguous
+published position, per-key source positions, image admission, and relisting.
+It will also own whether an occurrence's effect remains in its current table.
+There is no second journal, timer, retry loop, durable receipt store, or fallback.
+
+1. **Producer identity.** The ledger's `readCdcLedgerIncarnation` supplies the
+   source incarnation in the existing canonical `sourceRange`. `eventOf`
+   supplies the immutable occurrence, source log index, and ordinal. Capture
+   the vector and its range in the same source transaction; pass that immutable
+   range to every application and buffer. This explicitly supersedes the
+   earlier proposal to add an incarnation field to every event. Retained
+   canonical event bytes remain unchanged. No incarnation is guessed from an
+   event key, replica name, HLC, or current recipient cell. Missing range on a
+   durable application is refusal, never an ordinary-event fallback.
+2. **Complete-vector admission.** The already canonical `sourceRange` remains
+   the admission and contiguity contract. All durable members must belong to
+   its partition and incarnation, be ordered inside its bounds, and name its
+   final position. Invalid input is refused before cache effects. Validation
+   establishes internal consistency, not proof that an omitted position never
+   existed: completeness remains the source transaction's ledger obligation.
+   An individual buffered delivery still retains its producer metadata; it
+   cannot advance the published range position.
+3. **Actual effect, one cache owner.** Handler-local `processedEventIds` cannot
+   decide a durable occurrence. The cache source-order owner first rejects a
+   member covered by the installed/committed prefix of the same incarnation.
+   For members above that prefix it consumes the per-key applied source position
+   already recorded by the cache. A receipt from another image, another source
+   incarnation, or a row changed through a different authority cannot suppress
+   application. Bounded per-key retention may lose a performance shortcut; it
+   may not turn a covered prefix into an applicable event.
+4. **Image replacement.** An admitted complete image replaces the table and
+   the source-order basis in one synchronous owner span. Reset only that table's
+   per-key effect positions and obsolete absence fences, including absent keys
+   and equal rows. Preserve unrelated tables. The new prefix rejects old
+   occurrences independently of per-key or handler retention. Stage a whole
+   detached table and publish its table map, key/absence basis, and prefix
+   before any observer notification. Thus reentrant readers see the complete
+   publication. Reentrant writers run after publication; if they replace its
+   basis they invalidate the captured effect context. No effect receipt may
+   escape a partially installed table.
+5. **External reconciliation.** An authoritative row repair or complete absence
+   observation without a comparable source position cannot leave the old source
+   prefix certified after replacing its effects. The cache owner invalidates
+   the affected source basis and schedules the existing relister. Pre-read
+   mutation snapshots bind to the current image generation so a read begun
+   before replacement cannot reinstall old absence afterwards. Source-image
+   observation publication must preserve the exact installed token instead of
+   invalidating its own result. This is typed read-model unavailability with an
+   owned continuation, not a fabricated current position.
+6. **Commit and response.** `applyCommittedCdcRange` advances the contiguous
+   position only when every uncovered member has an actual accepted or
+   source-position-covered effect in the current image. Typed APPLIED/COVERED
+   results must carry the exact cell and effect-generation context throughout
+   the vector. A mere callback return,
+   handled event, HLC comparison, or remembered delivery is insufficient. A
+   rejected/failed application leaves the source GAP and owns a re-list; native
+   after-commit group receipt semantics remain distinct from member cache
+   currency. A committed group may acknowledge while a member owes an image
+   only because that member retains the actual source-cell relist continuation,
+   including exceptions and listener failures. Transient wait identity binds
+   the complete range to the unchanged canonical event digest, so two ledger
+   incarnations cannot share a waiter merely because event bytes match.
+7. **Local source application.** Capture the canonical vector and range inside
+   the source transaction, then apply it after commit through the same cache
+   source-effect boundary. Before a baseline image exists, local/provisional
+   row visibility cannot publish a contiguous source position. Owed ledger
+   entries and existing relisting retain recovery responsibility.
+
+## Failure, recovery, and resource obligations
+
+| Edge | Owner outcome and continuation |
+| --- | --- |
+| Durable range/incarnation missing or malformed | Canonical input refusal; no effect, no success receipt |
+| Range predecessor missing or incarnation differs | Existing POSITION_GAP, no range advancement, existing relister |
+| Duplicate current occurrence | Covered only by current source prefix or current per-key effect evidence |
+| Image replaces a provisional effect | Table effect evidence is invalidated; retained committed replay reapplies |
+| Buffered occurrence covered by image | Refused by source prefix even after ID eviction and tombstone expiry |
+| Authoritative absence rejects a purported new effect | Cannot advance source position; invalidate basis and re-list |
+| Mutation/read races image installation | Exact image generation rejects stale continuation; current owner re-drives |
+| Mid-vector exception or reentrant write | No successful range position; cache GAP and existing re-list |
+| Response lost | Ledger obligation remains; identical occurrence/range retries, no reminting |
+| Handler replacement or second group | Same node cache owns applicability; no handler-specific authority |
+| Per-key bound reached | Existing bounded map may evict evidence; prefix protection remains permanent until image replacement |
+
+This proposal introduces no durable state or new retry owner. Cache clear and
+source replacement clear transient effect evidence with existing source cells.
+Finite-failure progress depends on the existing authoritative image producer
+becoming available; refusal alone is not completion.
+
+## Scope and proof
+
+Source boundary: cache source-order/image/row-apply/absence/observation owners;
+unchanged CDC event envelope; obligation vector and local after-commit capture; gateway
+cache reconciliation; handler; committed range and provisional application.
+The exact paths will be recorded with the implementation attempt. Independently
+approved maintenance is composed before changing the overlapping acceptance
+module. The role decoder/proposal-error work is not included.
+
+Independent review also requires the coupled authoritative-repair generation
+capture to cover every real supplier, including point repairs, complete-table
+reconciliation, absence sweeps, catch-up, and heartbeat publication projection.
+The source-order owner holds the generation; no second registry is introduced.
+
+The touched authority closure contains pre-existing local/RPC and SQL fallback
+modes. `/root` authorized their canonical migration with one actual read
+authority per caller: OWNER_LOCAL_ONLY remains a legitimate bootstrap domain;
+OWNER_RPC_REQUIRED serves leader-confirmed repair. Full migration of the
+read-contract owner and its rebalancer/query callers is a coupled follow-up
+commit, with no compatibility aliases. Formation must show it introduces no
+bootstrap authority cycle. It is not silently included in a seven-case claim.
+
+Lab baseline: immutable job 2688 at
+https://github.com/psvensson/lagrange-lab/issues/2688, request
+`651e6d2564e3456a9d6cf83fe172aa86`, Node 22.23.2 and fresh dependencies, ran the
+unchanged-source seven-case witness at `57e396e440a48dce8c17b627514ad951c916c7ee`.
+Parent observed the intended P10/E11 divergence: joining/before row with
+position 11 CURRENT; no-provisional and after-image controls were correct.
+Full stdout SHA256 reported by coordinator:
+`563499d03a1edbefc730061d2b770d299642531766a8f01789cc89a2a9af214c`.
+This establishes baseline reproduction only.
+
+Before landing, lab evidence must cover the sealed seven scenarios and their
+control engagement, plus: old covered buffer after image, expired/evicted
+deduplication and tombstones, equal/empty image, other handler, overlapping
+ranges, same-entry siblings, delete/recreate, reused positions across source
+incarnations, unknown incarnation refusal, local committed producer metadata,
+authoritative absence before/after image, stale pre-read continuation,
+reentrant listener, partial application failure, and unrelated-table isolation.
+Run the current owner interaction cones in parallel on lab machines; regenerate
+the import graph and run affected static guards there. No local tests, weakened
+baselines, skipped negative controls, timeout changes, or release claim.
+
+## Historical and external comparisons
+
+`230cdd6811e60f798aa063acb4d92014c42fbc6d` repaired event identity so same-entry
+siblings no longer collided on timestamp. Preserve that occurrence identity.
+`af485777bc4ac19484a4f9b5018e0264512451bb` clarified image SUPERSEDED naming;
+it did not bind retained effects to image replacement. The preserved r1
+counterfactual proves that simply clearing deduplication reopens covered events.
+
+The official etcd watch guarantees bind ordered, complete revision delivery to
+an explicit revision, and progress means all earlier events were delivered.
+Kubernetes list/watch starts changes after the collection resource version;
+an object's own modification version is not the collection's currency proof.
+These support the distinction between occurrence identity, held effects, and
+published contiguous position; they are comparisons, not imported Lagrange
+contracts or proof of this implementation.
+
+- https://etcd.io/docs/v3.6/learning/api_guarantees/
+- https://kubernetes.io/docs/reference/using-api/api-concepts/

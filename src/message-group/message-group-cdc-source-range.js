@@ -2,7 +2,7 @@
 // Stage 3). The group's log is the delivery unit; each member's node cache is
 // the state it feeds. When a committed CDC_BATCH applies, every member decides
 // the range against its own cache's position cell
-// (system-table-cache-cdc-observation.js): a range whose predecessor this
+// (system-table-cache-source-order.js): a range whose predecessor this
 // node has not applied is a GAP - no member is merged, the cell records the
 // gap and the table is listed again; otherwise members at or below the cell's
 // position are refused as already applied, the rest are applied in source
@@ -10,12 +10,14 @@
 //
 // The replica also keeps, per source partition, the highest range its
 // group's log committed (in that source incarnation): once a range committed
-// here, every member applied it or listed past it, so the leader answers a
-// replay of it already-applied without proposing it again. Volatile and
+// here, every member either applied it or retained a source-cell relist debt,
+// so the leader answers a replay of group receipt without proposing it again.
+// This is not member-cache currency. Volatile and
 // bounded by the number of source partitions; a restarted replica proposes
 // again (members skip by position).
-import {SOURCE_RANGE_DECISION, SystemTableCacheSourceOrder} from
-  '../cache/system-table-cache-cdc-observation.js';
+import {SOURCE_EFFECT_STATE, SOURCE_RANGE_DECISION, SystemTableCacheSourceOrder, isSourceVector} from
+  '../cache/system-table-cache-source-order.js';
+import {CDC_EVENT_IDENTITY} from '../constants/cdc-lifecycle-constants.js';
 import {CDC_PROPAGATED_TABLES} from '../cache/cdc-table-policy.js';
 import {INITIAL_PARTITION_IDS} from '../bootstrap/system-table-schemas-constants.js';
 
@@ -107,6 +109,10 @@ function memberPositionOf(event) {
  */
 function applyCommittedCdcRange(service, committed, events, applyMember) {
   const range = committed.command.sourceRange;
+  if (!isSourceVector(range, events)) {
+    throw Object.assign(new Error(CDC_EVENT_IDENTITY.INVALID_MESSAGE),
+      {code: CDC_EVENT_IDENTITY.INVALID_CODE});
+  }
   const tableName = events[0].tableName;
   committed.effects.afterCommit.push(() => recordGroupCommittedRange(service, range));
   const sourceOrder = service.cdcHandler.cache.sourceOrder;
@@ -119,12 +125,25 @@ function applyCommittedCdcRange(service, committed, events, applyMember) {
     return {decision: classified.decision, applied: 0, skipped: events.length};
   }
   let applied = 0;
-  for (let index = 0; index < events.length; index += 1) {
-    if (sourceOrder.memberApplied(range, memberPositionOf(events[index]))) continue;
-    applyMember(events[index]);
-    applied += 1;
+  const context = sourceOrder.captureEffectContext(range.sourcePartition, tableName);
+  try {
+    for (let index = 0; index < events.length; index += 1) {
+      if (sourceOrder.memberApplied(range, memberPositionOf(events[index]))) continue;
+      const effect = applyMember(events[index]);
+      if (!sourceOrder.effectCoversContext(effect, context)) {
+        sourceOrder.recordGap(range, tableName);
+        return {decision: SOURCE_RANGE_DECISION.GAP, applied, skipped: events.length - applied};
+      }
+      if (effect.state === SOURCE_EFFECT_STATE.APPLIED) applied += 1;
+    }
+  } catch (error) {
+    sourceOrder.recordGap(range, tableName);
+    throw error;
   }
-  sourceOrder.advance(range, tableName);
+  if (!sourceOrder.advance(range, tableName, context)) {
+    sourceOrder.recordGap(range, tableName);
+    return {decision: SOURCE_RANGE_DECISION.GAP, applied, skipped: events.length - applied};
+  }
   return {decision: classified.decision, applied, skipped: events.length - applied};
 }
 

@@ -1,0 +1,25 @@
+{
+  "schema": "solve-quest/2",
+  "id": "cdc-source-replay-acceptance-complexity",
+  "class": "fix",
+  "statement": "Simplify four newly introduced CDC image/replay/acceptance routines within their existing owners so all touched functions remain at or below cyclomatic complexity12 while preserving exact read/apply ordering, outcomes, group identity and obligations. Complexity maintenance only; no historical CDC correctness or release claim.",
+  "constraints": [
+    {
+      "id": "scope",
+      "statement": "Exactly src/cdc/cdc-integration-service-source-relist.js, src/cache/system-table-cache-cdc-fold.js and src/message-group/message-group-cdc-committed-acceptance.js; existing meaningful witnesses, required registry/generated metadata and own Quest only. No fallback/retries/deadlines/baseline changes; no commits or pushes."
+    }
+  ],
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/cdc-source-replay-acceptance-complexity/evidence/receipt.json",
+      "requiredReceipts": [
+        "complexity",
+        "semantic-witnesses",
+        "static-checks",
+        "independent-review"
+      ]
+    }
+  },
+  "sealedAt": "3d3295afe7765554d7dacb2da108c3ea19f3b7fe"
+}

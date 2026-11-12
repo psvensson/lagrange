@@ -22,6 +22,7 @@ import {captureCdcEvents, copyCdcEvent} from '../cdc/cdc-event-envelope.js';
 import {hasDurableCdcEvents} from '../cdc/cdc-delivery-outcome.js';
 import {registerCdcCommittedAcceptance} from './message-group-cdc-committed-acceptance.js';
 import {applyCommittedCdcRange} from './message-group-cdc-source-range.js';
+import {SOURCE_EFFECT_STATE} from '../cache/system-table-cache-source-order.js';
 
 function isValidTimingConfig(timingConfig, hasTickInterval) {
   const tickIntervalMs = timingConfig.tickIntervalMs;
@@ -37,8 +38,11 @@ function isValidTimingConfig(timingConfig, hasTickInterval) {
 // announcement runs once the entry's transaction has committed, and reports
 // its own failure: an announcement cannot reverse what committed.
 function applyCommittedCdcChange(service, change, {index, effects},
-  announcement) {
-  service.cdcHandler.applyImmediate(change, {skipSubscriptionCheck: true});
+  announcement, sourceRange) {
+  const outcome = sourceRange === undefined ?
+    service.cdcHandler.applyImmediate(change, {skipSubscriptionCheck: true}) :
+    service.cdcHandler.applySourceEvent(change, sourceRange);
+  if (sourceRange !== undefined && outcome.state === SOURCE_EFFECT_STATE.UNAVAILABLE) return outcome;
   effects.afterCommit.push(() => {
     try {
       service.emit(MESSAGE_GROUP_SERVICE_LITERAL.CDCAPPLIED, announcement);
@@ -49,6 +53,7 @@ function applyCommittedCdcChange(service, change, {index, effects},
       );
     }
   });
+  return outcome;
 }
 
 const COMMITTED_COMMAND_APPLICATION = Object.freeze({
@@ -68,7 +73,7 @@ const COMMITTED_COMMAND_APPLICATION = Object.freeze({
       service.normalizeCDCBatchEvents(committed.command.events);
     const applyMember = (event) => {
       const causeId = normalizeCauseId(event.causeId);
-      applyCommittedCdcChange(service, {
+      return applyCommittedCdcChange(service, {
         ...copyCdcEvent(event),
         causeId,
       }, committed, {
@@ -77,7 +82,7 @@ const COMMITTED_COMMAND_APPLICATION = Object.freeze({
         data: event.data,
         logIndex: committed.index,
         causeId,
-      });
+      }, committed.command.sourceRange);
     };
     // A durable range is decided against this node's position cell (CDC
     // Stage 3): applied, already applied, or a gap that lists the table.

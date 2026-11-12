@@ -155,25 +155,10 @@ function evictAuthoritativeAbsentSystemTableRowsFromCache(
   );
 }
 
-function resolveCommittedCdcObservedAtMs(observedAtMs, nowFn) {
-  if (Number.isFinite(observedAtMs)) {
-    return observedAtMs;
-  }
-  if (typeof nowFn !== 'function') {
-    return Date.now();
-  }
-  return nowFn();
-}
-
 function applyCommittedPartitionCdcEventToCache(
-  systemTableCache, cdcEvent, observedAtMs, nowFn,
+  systemTableCache, cdcEvent, sourceRange, observedAtMs,
 ) {
-  if (!isWritableCacheTarget(systemTableCache) || !cdcEvent?.tableName ||
-      !cdcEvent?.operation || !cdcEvent?.data) return;
-  applyCacheRow(systemTableCache, cdcEvent.tableName, cdcEvent.operation, cdcEvent.data, {
-    causeId: cdcEvent.causeId,
-    cdcObservedAtMs: resolveCommittedCdcObservedAtMs(observedAtMs, nowFn),
-  });
+  return systemTableCache.applySourceCdcEvent(cdcEvent, sourceRange, observedAtMs);
 }
 
 function hasUsableCacheTargets(writableCache, readableCache) {
@@ -770,9 +755,9 @@ const controlPlaneSystemTableGatewayCacheReconciliationMethods = {
     return buildReconciliationSuccess(context, mutationCount, publication);
   },
 
-  applyCommittedPartitionCdcEventToCache(systemTableCache, cdcEvent, observedAtMs) {
-    applyCommittedPartitionCdcEventToCache(
-      systemTableCache, cdcEvent, observedAtMs, this.now,
+  applyCommittedPartitionCdcEventToCache(systemTableCache, cdcEvent, sourceRange, observedAtMs) {
+    return applyCommittedPartitionCdcEventToCache(
+      systemTableCache, cdcEvent, sourceRange, observedAtMs,
     );
   },
 };

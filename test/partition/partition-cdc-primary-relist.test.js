@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import {COLUMN} from '../../src/constants/index.js';
 import {afterEach, beforeEach, test} from 'node:test';
 import {SOURCE_RANGE_DECISION, SOURCE_RELIST_OUTCOME, SystemTableCacheSourceOrder} from
-  '../../src/cache/system-table-cache-cdc-observation.js';
+  '../../src/cache/system-table-cache-source-order.js';
 import {CDC_COMPLETION, buildCommittedCdcOutcome, unknownCdcAcceptance} from
   '../../src/cdc/cdc-delivery-outcome.js';
 import {PARTITION_CDC_COMMAND, PARTITION_CDC_OBLIGATION_BOUND as BOUND,

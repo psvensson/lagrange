@@ -329,6 +329,7 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options) {
             authoritativeObservedAtMs:
               readResult.readAuthorityWitness.observedAtMs,
             authoritativeReadStartedAtMs: readStartedAtMs,
+            sourceGeneration: mutationSnapshot.sourceGeneration,
           } :
           undefined;
         const primaryKeyField = service.getPrimaryKeyField(tableName);
@@ -368,6 +369,7 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options) {
         }
         if (readFromLeader && !isTerminal()) {
           const observationReceipt = {
+            sourceGeneration: mutationSnapshot.sourceGeneration,
             observedAtMs: readResult.readAuthorityWitness.observedAtMs,
             term: readResult.readAuthorityWitness.term ?? null,
             appliedIndex: readResult.readAuthorityWitness.appliedIndex ?? null,

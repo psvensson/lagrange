@@ -22,7 +22,7 @@
 // table being listed (the cache holds the same rows after the swap), so the
 // peak is the cache plus RELIST_IMAGES_MAX staged tables.
 import {SOURCE_IMAGE_ADMISSION, SOURCE_POSITION_STATE, SOURCE_RELIST_OUTCOME,
-  SystemTableCacheSourceOrder} from '../cache/system-table-cache-cdc-observation.js';
+  SystemTableCacheSourceOrder} from '../cache/system-table-cache-source-order.js';
 import {installSourceImage} from '../cache/system-table-cache-source-image.js';
 import {isUsableSystemCacheKey, resolveSystemCacheRowKey} from
   '../cache/system-cache-key-descriptor.js';
@@ -72,7 +72,6 @@ const SOURCE_RELIST_LOG_MSG = Object.freeze({
 });
 
 // The cause an installed image's authoritative watermark names.
-const SOURCE_RELIST_CAUSE_ID = 'cdc-source-relist';
 
 const RELIST_READ_AUTHORITY = buildControlPlaneReadAuthority({
   authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
@@ -123,6 +122,13 @@ function readFailureReason(result) {
     result.errorCode : SOURCE_RELIST_FAILURE.READ_FAILED;
 }
 
+// Source image and page shape are checked before captured-image continuity.
+function isInvalidSourceImagePage(image, result, request, cursor) {
+  return image?.sourcePartition !== request.sourcePartition ||
+    !Number.isSafeInteger(image.appliedIndex) || image.appliedIndex < 0 ||
+    !isImagePage(result.imagePage, cursor);
+}
+
 // Why a page cannot be staged, or null. Every page must name page 0's image:
 // the same imageId, applied index and incarnation.
 function pageFailure(result, request, cursor, first) {
@@ -131,9 +137,7 @@ function pageFailure(result, request, cursor, first) {
     return SOURCE_RELIST_FAILURE.NOT_LEADER_WITNESSED;
   }
   const image = result.sourceImage;
-  if (image?.sourcePartition !== request.sourcePartition ||
-      !Number.isSafeInteger(image.appliedIndex) || image.appliedIndex < 0 ||
-      !isImagePage(result.imagePage, cursor)) {
+  if (isInvalidSourceImagePage(image, result, request, cursor)) {
     return SOURCE_RELIST_FAILURE.NO_SOURCE_IMAGE;
   }
   if (first !== null && (result.imagePage.imageId !== first.imageId ||
@@ -153,6 +157,11 @@ function stagePage(stage, tableName, rows) {
     stage.set(key, canonical);
   }
   return true;
+}
+
+function sourceImagePageFailureOutcome(result, failure) {
+  return {failure, error: result?.error ?? null,
+    retryAfterMs: getControlPlaneRetryAfterMs(result)};
 }
 
 /**
@@ -179,8 +188,7 @@ async function fetchSourceImage(readPage, request, stopped = () => false) {
       failure = SOURCE_RELIST_FAILURE.INVALID_ROWS;
     }
     if (failure !== null) {
-      return {failure, error: result?.error ?? null,
-        retryAfterMs: getControlPlaneRetryAfterMs(result)};
+      return sourceImagePageFailureOutcome(result, failure);
     }
     first ??= {imageId: result.imagePage.imageId, appliedIndex: result.sourceImage.appliedIndex,
       incarnation: result.sourceImage.incarnation ?? null};
@@ -229,15 +237,7 @@ function logImage(service, record, outcome, extra = {}) {
 // watermark (term and applied index; no observation time: the position
 // orders what follows the image, never a wall-clock fence).
 function installFetchedImage(service, token, image) {
-  const installed = installSourceImage(service.cacheMutationTarget, token, image);
-  if (installed.admission === SOURCE_IMAGE_ADMISSION.INSTALL) {
-    service.cacheMutationTarget.recordAuthoritativeObservation(image.tableName, {
-      term: image.witness.term ?? null, appliedIndex: image.appliedIndex,
-      commitIndex: image.witness.commitIndex ?? null,
-      servingNodeId: image.witness.servingNodeId ?? null, partitionId: image.sourcePartition,
-      causeId: SOURCE_RELIST_CAUSE_ID});
-  }
-  return installed;
+  return installSourceImage(service.cacheMutationTarget, token, image);
 }
 
 async function listOneImage(service, request, record, terminal) {

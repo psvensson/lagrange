@@ -95,7 +95,8 @@ function entryPositionOf(data, options) {
       !Number.isSafeInteger(options?.sourceLogIndex) ||
       !Number.isSafeInteger(options?.sourceOrdinal)) return null;
   return Object.freeze({hlc, partition: options.sourcePartition,
-    logIndex: options.sourceLogIndex, ordinal: options.sourceOrdinal});
+    logIndex: options.sourceLogIndex, ordinal: options.sourceOrdinal,
+    incarnation: options.sourceIncarnation, eventKey: options.eventKey});
 }
 
 /**
@@ -108,6 +109,7 @@ function entryPositionOf(data, options) {
 function compareSameEntryPositions(applied, incoming) {
   if (incoming === null || applied === undefined || applied === null ||
       applied.hlc !== incoming.hlc || applied.partition !== incoming.partition ||
+      applied.incarnation !== incoming.incarnation ||
       applied.logIndex !== incoming.logIndex) {
     return 0;
   }
@@ -119,6 +121,33 @@ function compareSameEntryPositions(applied, incoming) {
 function nextCdcTombstone(tombstone, deleteSource) {
   return tombstone !== null && !writeSupersedesTombstone(deleteSource, tombstone) ?
     tombstone : versionStampsOf(deleteSource);
+}
+
+// Apply one visited event to its key's image; rejection leaves the sequence
+// owner free to visit the next event with the resulting predecessor image.
+function foldCdcEventIntoImage(tableName, image, event) {
+  const incoming = entryPositionOf(event.data, event.source);
+  const sameEntryOrder = compareSameEntryPositions(image.position, incoming);
+  if (sameEntryOrder < 0) return;
+  if (sameEntryOrder > 0) image.tombstone = null;
+  const deletes = event.operation === CACHE_CDC_OPERATIONS.DELETE;
+  if (!deletes && image.tombstone !== null) {
+    if (!writeSupersedesTombstone(event.data, image.tombstone)) return;
+    image.tombstone = null;
+  }
+  const folded = foldCdcEventOntoRow(tableName, image.row, event.operation,
+    event.data, sameEntryOrder);
+  if (folded.state === CDC_ROW_FOLD_STATE.DELETED) {
+    image.tombstone = nextCdcTombstone(image.tombstone,
+      buildDeletedRowTombstoneSource(image.row, event.data));
+  } else if (folded.state === CDC_ROW_FOLD_STATE.DELETE_ABSENT) {
+    image.tombstone = nextCdcTombstone(image.tombstone, event.data);
+  }
+  image.row = folded.row;
+  if (incoming !== null && (folded.accepted ||
+      folded.state === CDC_ROW_FOLD_STATE.DELETE_ABSENT)) {
+    image.position = incoming;
+  }
 }
 
 /**
@@ -150,28 +179,7 @@ function foldCdcEventsOntoRows(tableName, events, readRow, visit) {
     }
     const image = images.get(event.key);
     visit(event, image.row === null ? null : fastJsonClone(image.row));
-    const incoming = entryPositionOf(event.data, event.source);
-    const sameEntryOrder = compareSameEntryPositions(image.position, incoming);
-    if (sameEntryOrder < 0) continue;
-    if (sameEntryOrder > 0) image.tombstone = null;
-    const deletes = event.operation === CACHE_CDC_OPERATIONS.DELETE;
-    if (!deletes && image.tombstone !== null) {
-      if (!writeSupersedesTombstone(event.data, image.tombstone)) continue;
-      image.tombstone = null;
-    }
-    const folded = foldCdcEventOntoRow(tableName, image.row, event.operation,
-      event.data, sameEntryOrder);
-    if (folded.state === CDC_ROW_FOLD_STATE.DELETED) {
-      image.tombstone = nextCdcTombstone(image.tombstone,
-        buildDeletedRowTombstoneSource(image.row, event.data));
-    } else if (folded.state === CDC_ROW_FOLD_STATE.DELETE_ABSENT) {
-      image.tombstone = nextCdcTombstone(image.tombstone, event.data);
-    }
-    image.row = folded.row;
-    if (incoming !== null && (folded.accepted ||
-        folded.state === CDC_ROW_FOLD_STATE.DELETE_ABSENT)) {
-      image.position = incoming;
-    }
+    foldCdcEventIntoImage(tableName, image, event);
   }
 }
 

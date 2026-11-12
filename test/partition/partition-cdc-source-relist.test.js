@@ -12,7 +12,7 @@
 import assert from 'node:assert/strict';
 import {afterEach, beforeEach, test} from 'node:test';
 import {SOURCE_RANGE_DECISION, SOURCE_RELIST_OUTCOME, SystemTableCacheSourceOrder} from
-  '../../src/cache/system-table-cache-cdc-observation.js';
+  '../../src/cache/system-table-cache-source-order.js';
 import {CDC_COMPLETION, buildAlreadyAppliedCdcOutcome, buildCommittedCdcOutcome,
   unknownCdcAcceptance} from '../../src/cdc/cdc-delivery-outcome.js';
 import {COLUMN, SERVICE_STATUS, TABLES} from '../../src/constants/index.js';

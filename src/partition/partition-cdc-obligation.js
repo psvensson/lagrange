@@ -60,45 +60,42 @@ import {
 import {registerCdcAcknowledgementProposer} from
   './partition-cdc-obligation-delivery.js';
 import {eventCdcSourceScope} from '../cdc/cdc-source-scope-evidence.js';
-import {CDC_PIPELINE_METRIC} from '../constants/cdc-lifecycle-constants.js';
+import {CDC_EVENT_IDENTITY, CDC_PIPELINE_METRIC} from '../constants/cdc-lifecycle-constants.js';
 import {isTableCdcObligationRecorded} from '../cache/cdc-table-policy.js';
 import {applyCommittedPartitionCdcEventToCache} from
   '../control-plane/control-plane-system-table-gateway-cache-reconciliation.js';
+import {eventOf, sourceRangeOf} from './partition-cdc-obligation-vector.js';
+import {captureCdcEvents} from '../cdc/cdc-event-envelope.js';
+import {SOURCE_EFFECT_STATE, isSourceVector} from '../cache/system-table-cache-source-order.js';
+import {CDC_ERROR_CODE} from '../cdc/cdc-constants.js';
 
 const FAILED_LOCAL_COMMITTED_CDC_APPLY =
   'Failed local committed CDC apply';
 
-function resolveServiceWritableCache(service) {
-  return service?.cdcIntegrationService?.cacheMutationTarget ||
-    service?.systemTableCache ||
-    null;
-}
-
-function applySingleCommittedEventToCache(service, writableCache, event, timestamp) {
-  if (!event?.cdcEvent) {
-    return;
-  }
+function applySingleCommittedEventToCache(service, writableCache, event, range, timestamp) {
   try {
-    applyCommittedPartitionCdcEventToCache(
-      writableCache,
-      event.cdcEvent,
-      timestamp,
-    );
+    return applyCommittedPartitionCdcEventToCache(writableCache, event, range, timestamp);
   } catch (err) {
+    writableCache.sourceOrder.retainEffectRecovery(event, range);
     service?.logger?.debug?.(FAILED_LOCAL_COMMITTED_CDC_APPLY, {
       error: err?.message,
     });
+    return {state: SOURCE_EFFECT_STATE.UNAVAILABLE};
   }
 }
 
-function applyCommittedEventsToPartitionState(service, events) {
-  const writableCache = resolveServiceWritableCache(service);
+function applyCommittedEventsToPartitionState(service, events, range) {
+  const writableCache = service.cdcIntegrationService?.cacheMutationTarget;
   if (!writableCache) {
-    return;
+    // The source ledger still owns these obligations. Once this node binds
+    // its cache and joins a group, requireSourcePositions owes the image.
+    service.logger.debug(FAILED_LOCAL_COMMITTED_CDC_APPLY,
+      {error: CDC_ERROR_CODE.CACHE_OWNER_UNBOUND});
+    return {state: SOURCE_EFFECT_STATE.UNAVAILABLE};
   }
-  const timestamp = service?.timeSource?.now?.() ?? Date.now();
+  const timestamp = service.timeSource.now();
   for (const event of events) {
-    applySingleCommittedEventToCache(service, writableCache, event, timestamp);
+    applySingleCommittedEventToCache(service, writableCache, event, range, timestamp);
   }
 }
 
@@ -246,8 +243,17 @@ function recordCommittedOperationCdc(service, committed, events) {
   ensureCdcObligationLedger(service.db,
     {index, term: committed.term, entryId: command.entryId ?? null});
   for (const event of events) insertCdcObligation(service.db, event);
+  // The source transaction captures one exact vector and its ledger range.
+  // No after-commit consumer guesses incarnation or occurrence position from
+  // the current cache. These are the same canonical event bytes as delivery.
+  const localEvents = captureCdcEvents(events.map((event) => eventOf(event, 0)));
+  const sourceRange = sourceRangeOf(service, events);
+  if (!isSourceVector(sourceRange, localEvents)) {
+    throw Object.assign(new Error(CDC_EVENT_IDENTITY.INVALID_MESSAGE),
+      {code: CDC_EVENT_IDENTITY.INVALID_CODE});
+  }
   committed.afterCommit(() => {
-    applyCommittedEventsToPartitionState(service, events);
+    applyCommittedEventsToPartitionState(service, localEvents, sourceRange);
     for (let ordinal = 0; ordinal < recorded; ordinal += 1) {
       service.cdcPipelineMetrics.increment(CDC_PIPELINE_METRIC.EVENTS_GENERATED);
     }

@@ -7,7 +7,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {SOURCE_POSITION_STATE, SOURCE_RELIST_OUTCOME} from
-  '../../src/cache/system-table-cache-cdc-observation.js';
+  '../../src/cache/system-table-cache-source-order.js';
 import {CDC_PROPAGATED_TABLES} from '../../src/cache/cdc-table-policy.js';
 import {INITIAL_PARTITION_IDS} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {pump, recipientFixture} from './message-group-native-custody-fixture.js';

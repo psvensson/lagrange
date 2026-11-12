@@ -148,8 +148,8 @@ async function runCase(t, scenario) {
   const provisional = () => {
     for (const host of scenario.both ? f.hosts : [f.hosts[0]]) {
       for (const event of events) {
-        if (scenario.buffered) host.cdcHandler.handleEvent(event);
-        else host.cdcHandler.applyImmediate(event);
+        if (scenario.buffered) host.cdcHandler.handleEvent(event, {sourceRange: range});
+        else host.cdcHandler.applyImmediate(event, {sourceRange: range});
       }
       if (scenario.buffered) host.cdcHandler.flushAllBuffers();
     }

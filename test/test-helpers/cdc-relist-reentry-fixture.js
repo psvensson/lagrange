@@ -19,7 +19,7 @@
 import {withSurface} from '../query/unknown-outcome-surface-fixture.js';
 import assert from 'node:assert/strict';
 import {SOURCE_RELIST_OUTCOME, isSourceRange} from
-  '../../src/cache/system-table-cache-cdc-observation.js';
+  '../../src/cache/system-table-cache-source-order.js';
 import {installSourceImage} from '../../src/cache/system-table-cache-source-image.js';
 import {buildPartitionCdcPropagationSubscriber} from
   '../../src/bootstrap/shared/partition-cdc-propagation-subscriber.js';

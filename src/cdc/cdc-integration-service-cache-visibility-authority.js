@@ -128,6 +128,9 @@ function applyAuthoritativeCacheRepairRow(
   options = {},
 ) {
   const cache = requireCacheMutationTarget(service);
+  if (cache.sourceOrder.tableGeneration(tableName) !== options.sourceGeneration) {
+    return false;
+  }
   if (!row || typeof row !== 'object') {
     return false;
   }
@@ -159,6 +162,7 @@ function applyAuthoritativeCacheRepairRow(
     authoritativeObservedAtMs: options.authoritativeObservedAtMs,
     authoritativeReadStartedAtMs:
       options.authoritativeReadStartedAtMs,
+    sourceGeneration: options.sourceGeneration,
   };
   const repairRow = Object.assign(
     {},

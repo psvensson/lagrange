@@ -12,7 +12,7 @@ import {
 } from './constants.js';
 import {copyCdcEvent} from '../cdc/cdc-event-envelope.js';
 import {hasDurableCdcEvents} from '../cdc/cdc-delivery-outcome.js';
-import {isSourceRange} from '../cache/system-table-cache-cdc-observation.js';
+import {isSourceVector} from '../cache/system-table-cache-source-order.js';
 import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
 import {CDC_OPERATION} from '../constants/index.js';
 import {isDeepStrictEqual} from 'node:util';
@@ -33,7 +33,7 @@ function isClosedCdcBatchShape(command) {
   if (!Array.isArray(command.events) || command.events.length === 0) return false;
   const keys = Object.keys(command).length;
   return hasDurableCdcEvents(command.events) ?
-    keys === CDC_BATCH_KEYS.DURABLE && isSourceRange(command.sourceRange) :
+    keys === CDC_BATCH_KEYS.DURABLE && isSourceVector(command.sourceRange, command.events) :
     keys === CDC_BATCH_KEYS.ORDINARY;
 }
 
