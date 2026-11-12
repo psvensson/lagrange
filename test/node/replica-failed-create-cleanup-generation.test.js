@@ -72,8 +72,6 @@ function createStateMachine(store, options = {}) {
 }
 
 function registerRow(stateMachine, row) {
-  const durableVersionColumn = Number.isFinite(row.state_entered_at) ?
-    'state_entered_at' : 'updated_at';
   return stateMachine.registerReplicaSnapshot(row.service_id, {
     partitionId: row.partition_id,
     nodeId: row.node_id,
@@ -86,9 +84,8 @@ function registerRow(stateMachine, row) {
     cleanupToken: row.cleanup_token,
     createAttemptToken: row.create_attempt_token,
     createdAt: row.created_at,
-    durableVersionColumn,
-    durableVersion: row[durableVersionColumn],
-    durableUpdatedAt: row.updated_at,
+    durableVersionColumn: 'state_entered_at',
+    durableVersion: row.state_entered_at,
     authoritativeSnapshot: true,
   });
 }

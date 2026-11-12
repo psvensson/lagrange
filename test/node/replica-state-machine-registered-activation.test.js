@@ -30,6 +30,7 @@ function registeredRow(overrides = {}) {
     cleanup_token: null,
     create_attempt_token: null,
     created_at: 10,
+    state_entered_at: 100,
     updated_at: 100,
     ...overrides,
   };
@@ -207,8 +208,8 @@ test('ReplicaStateMachine registered activation refuses a newer REMOVING generat
       cleanup_token: null,
       create_attempt_token: null,
       created_at: 10,
-      updated_at: 100,
-    }, 'activation CAS should carry the observed legacy generation');
+      state_entered_at: 100,
+    }, 'activation CAS should carry the observed canonical generation');
     t.equal(writer.row.status, 'removing');
     t.equal(writer.row.state_entered_at, 200,
       'the newer REMOVING generation must remain intact');
@@ -505,8 +506,8 @@ test('exact registered activation replaces tracked CREATING while an ' +
     serviceId: 'p1-r1',
     serviceType: 'partition',
     serviceAddress: 'node-a/partition/p1-r1',
-    durableVersionColumn: 'updated_at',
-    durableVersion: registrationEvidence.updated_at,
+    durableVersionColumn: 'state_entered_at',
+    durableVersion: registrationEvidence.state_entered_at,
   }), true, 'tracked ordinary lifecycle begins from durable version evidence');
   t.equal(stateMachine.registerReplicaSnapshot('p1-r1', {
     partitionId: 'p1',
@@ -528,7 +529,7 @@ test('exact registered activation replaces tracked CREATING while an ' +
   t.equal(activated.status, 'active');
   t.match(stateMachine.getState('p1-r1'), {
     state: 'active',
-    durableVersion: registrationEvidence.updated_at + 1,
+    durableVersion: registrationEvidence.state_entered_at + 1,
   }, 'exact branded authority installs ACTIVE over stale tracked CREATING');
   t.equal(invalidTransitions.length, 1,
     'exact activation adds no invalid-transition warning');

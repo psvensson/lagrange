@@ -3,9 +3,44 @@ import {
   CDC_OPERATIONS,
   SystemTableCache,
 } from '../../src/cache/system-table-cache.js';
-import {TABLES} from '../../src/constants/index.js';
+import {SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
+import {
+  areAuthoritativeSystemTableCacheRowsAligned,
+  hasCompleteAuthoritativeSystemTableCacheAlignmentRow,
+} from '../../src/cache/system-table-cache-authoritative-reconciliation.js';
 
 const SERVICE_ID = 'priority-partition-r4';
+
+test('authoritative service alignment requires a lifecycle generation while ' +
+  'cleanup receipts keep their separate version', (t) => {
+  const row = {
+    service_id: SERVICE_ID,
+    replica_id: SERVICE_ID,
+    service_type: 'partition',
+    partition_id: 'priority-partition',
+    node_id: 'node-b',
+    address: `node-b/partition/${SERVICE_ID}`,
+    status: 'active',
+    updated_at: 3000,
+  };
+  t.equal(hasCompleteAuthoritativeSystemTableCacheAlignmentRow(TABLES.SERVICES, row),
+    false, 'updated_at does not complete a lifecycle observation');
+  t.equal(areAuthoritativeSystemTableCacheRowsAligned(TABLES.SERVICES, row, row),
+    false, 'two incomplete observations cannot certify alignment');
+  const canonical = {...row, state_entered_at: 1000};
+  t.equal(areAuthoritativeSystemTableCacheRowsAligned(
+    TABLES.SERVICES, canonical, canonical), true,
+  'canonical lifecycle observations still align');
+  const receipt = {...row, service_type: SERVICE_TYPE.PARTITION_CLEANUP,
+    status: 'cleanup_owned', cleanup_token: 'cleanup-exact'};
+  t.equal(hasCompleteAuthoritativeSystemTableCacheAlignmentRow(
+    TABLES.SERVICES, receipt), true,
+  'cleanup receipt authority still owns its updated_at version');
+  t.equal(areAuthoritativeSystemTableCacheRowsAligned(
+    TABLES.SERVICES, receipt, receipt), true,
+  'unchanged receipt generation still aligns');
+  t.end();
+});
 
 function seedRoleAdvancedSyncingRow(cache) {
   cache.applySystemTableChange(

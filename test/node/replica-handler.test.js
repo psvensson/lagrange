@@ -1079,7 +1079,7 @@ test('ReplicaHandler', async (t) => {
           cleanupToken: null,
           createAttemptToken: null,
           createdAt: 1,
-          durableVersionColumn: 'updated_at',
+          durableVersionColumn: 'state_entered_at',
           durableVersion: 1,
           authoritativeSnapshot: true,
         },

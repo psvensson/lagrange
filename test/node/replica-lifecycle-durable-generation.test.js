@@ -143,8 +143,6 @@ function createStateMachine(store, options = {}) {
 }
 
 function registerRow(stateMachine, row) {
-  const durableVersionColumn = Number.isFinite(row.state_entered_at) ?
-    'state_entered_at' : 'updated_at';
   return stateMachine.registerReplicaSnapshot(row.service_id, {
     partitionId: row.partition_id,
     nodeId: row.node_id,
@@ -155,9 +153,8 @@ function registerRow(stateMachine, row) {
     replicaIdentity: row.replica_id,
     groupId: row.group_id,
     createdAt: row.created_at,
-    durableVersionColumn,
-    durableVersion: row[durableVersionColumn],
-    durableUpdatedAt: row.updated_at,
+    durableVersionColumn: 'state_entered_at',
+    durableVersion: row.state_entered_at,
     authoritativeSnapshot: true,
   });
 }
@@ -699,11 +696,11 @@ test('malformed authoritative recovery cannot poison a later valid generation',
       ReplicaState.FAILED, 'later valid authority converges normally');
   });
 
-test('legacy updated_at generation survives bind and cleanup takeover CAS',
+test('missing lifecycle generation refuses cleanup until canonical authority returns',
   async (t) => {
     initializeEnvironment();
     const row = serviceRow(
-      'replica-legacy-generation',
+      'replica-canonical-generation-required',
       ReplicaState.REMOVING,
       700,
     );
@@ -715,13 +712,25 @@ test('legacy updated_at generation survives bind and cleanup takeover CAS',
     });
     const {handler, stateMachine} = prepareRemovingHandler(t, store, row);
     handler.cleanupRemovedReplicaLocalRuntime = async () => {};
-    await runRemoval(handler, row, 'legacy-remove');
+    const context = {partitionId: row.partition_id, nodeId: row.node_id};
+    const unavailable = await stateMachine.bindAuthoritativeRemovalAuthority(
+      row.service_id, context);
+    t.equal(unavailable.kind, 'conflict',
+      'row metadata timestamp cannot bind lifecycle cleanup authority');
+    t.equal(store.mutations.length, 0, 'refusal issues no destructive mutation');
+    t.equal(stateMachine.getState(row.service_id), null,
+      'refusal installs no local lifecycle generation');
+    const canonical = {...row, state_entered_at: 701};
+    store.durable[SERVICES].set(row.service_id, cloneRow(canonical));
+    store.project(SERVICES, canonical);
+    await runRemoval(handler, canonical, 'canonical-generation-remove');
     const takeover = store.mutations.find((mutation) =>
       mutation.operation === 'update' &&
       mutation.data?.status === 'cleanup_owned');
-    t.equal(takeover?.whereClause.updated_at, 700);
-    t.equal('state_entered_at' in takeover.whereClause, false,
-      'legacy generation is never relabeled before cleanup takeover');
+    t.equal(takeover?.whereClause.state_entered_at, 701,
+      'restored lifecycle authority supplies the exact cleanup predicate');
+    t.equal('updated_at' in takeover.whereClause, false,
+      'ordinary lifecycle cleanup does not borrow the receipt version domain');
     t.equal(stateMachine.getState(row.service_id), null);
   });
 

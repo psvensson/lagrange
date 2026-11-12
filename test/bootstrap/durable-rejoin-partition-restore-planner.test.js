@@ -23,6 +23,49 @@ function createCache(rowsByTable) {
   };
 }
 
+test('durable restore refuses a row timestamp as lifecycle authority and ' +
+  'resumes from the canonical generation', (t) => {
+  const service = {
+    service_id: 'canonical-p1-r1',
+    replica_id: 'canonical-p1-r1',
+    service_type: SERVICE_TYPE.PARTITION,
+    node_id: 'durable-node',
+    partition_id: 'canonical-p1',
+    status: 'active',
+    address: 'durable-node/partition/canonical-p1-r1',
+    updated_at: 3000,
+  };
+  const rows = new Map([
+    [TABLES.SERVICES, [service]],
+    [TABLES.TABLES, [{table_id: 'canonical-table', table_name: 'canonical-table',
+      schema_definition: JSON.stringify({
+        columns: [{name: 'id', type: 'TEXT', primaryKey: true}],
+      })}]],
+    [TABLES.PARTITIONS, [{partition_id: service.partition_id,
+      table_id: 'canonical-table', table_name: 'canonical-table',
+      leader_node_id: service.node_id}]],
+    [TABLES.REPLICA_OPERATIONS, []],
+  ]);
+  const warnings = [];
+  const options = {systemTableCache: createCache(rows), nodeId: service.node_id,
+    dataDir: '/tmp/durable-rejoin-canonical-generation',
+    logger: {warn: (message, fields) => warnings.push({message, fields})}};
+  t.same(buildDurableRejoinPartitionRestorePlans(options), [],
+    'a row with updated_at alone cannot open a runtime');
+  t.equal(warnings[0]?.fields.errorCode,
+    'DURABLE_REJOIN_LIFECYCLE_GENERATION_UNAVAILABLE',
+    'the missing fact is an explicit unavailable generation');
+  t.equal(warnings[0]?.fields.deferRetry, true,
+    'the refusal retains recovery responsibility');
+  service.state_entered_at = 100;
+  const plans = buildDurableRejoinPartitionRestorePlans(options);
+  t.equal(plans.length, 1, 'restored canonical observation resumes the same planner');
+  t.match(plans[0]?.lifecycleAuthority,
+    {durableVersionColumn: 'state_entered_at', durableVersion: 100},
+    'the planner carries the lifecycle generation unchanged');
+  t.end();
+});
+
 test('buildDurableRejoinPartitionRestorePlans derives canonical local restore plans',
   async (t) => {
     const schemaDefinition = {
@@ -50,6 +93,8 @@ test('buildDurableRejoinPartitionRestorePlans derives canonical local restore pl
         node_id: 'durable-node',
         partition_id: 'nodes-p1',
         status: 'active',
+        state_entered_at: 100,
+        updated_at: 100,
         address: 'durable-node/partition/nodes-p1-r1',
       }, {
         service_id: 'nodes-p1-r2',
@@ -58,6 +103,8 @@ test('buildDurableRejoinPartitionRestorePlans derives canonical local restore pl
         node_id: 'peer-node-2',
         partition_id: 'nodes-p1',
         status: 'active',
+        state_entered_at: 100,
+        updated_at: 100,
         address: 'peer-node-2/partition/nodes-p1-r2',
       }, {
         service_id: 'nodes-p1-r3',
@@ -66,6 +113,8 @@ test('buildDurableRejoinPartitionRestorePlans derives canonical local restore pl
         node_id: 'peer-node-3',
         partition_id: 'nodes-p1',
         status: 'active',
+        state_entered_at: 100,
+        updated_at: 100,
         address: 'peer-node-3/partition/nodes-p1-r3',
       }, {
         service_id: 'nodes-p1-r4',
@@ -74,6 +123,8 @@ test('buildDurableRejoinPartitionRestorePlans derives canonical local restore pl
         node_id: 'other-node',
         partition_id: 'nodes-p1',
         status: 'active',
+        state_entered_at: 100,
+        updated_at: 100,
         address: 'other-node/partition/nodes-p1-r4',
       }]],
     ]);
@@ -128,6 +179,8 @@ test('buildDurableRejoinPartitionRestorePlans fails closed PER PARTITION when me
         node_id: 'durable-node',
         partition_id: 'nodes-p1',
         status: 'active',
+        state_entered_at: 100,
+        updated_at: 100,
       }]],
     ]);
 
@@ -192,6 +245,8 @@ test('buildDurableRejoinPartitionRestorePlans skips a schema-less partition ' +
       node_id: 'durable-node',
       partition_id: 'nodes-p1',
       status: 'active',
+      state_entered_at: 100,
+      updated_at: 100,
       address: 'durable-node/partition/nodes-p1-r1',
     }, {
       service_id: 'tbl-dynamic-p1-r1',
@@ -200,6 +255,8 @@ test('buildDurableRejoinPartitionRestorePlans skips a schema-less partition ' +
       node_id: 'durable-node',
       partition_id: 'tbl-dynamic-p1',
       status: 'active',
+      state_entered_at: 100,
+      updated_at: 100,
       address: 'durable-node/partition/tbl-dynamic-p1-r1',
     }]],
   ]);
@@ -254,6 +311,8 @@ test('buildDurableRejoinPartitionRestorePlans skips over-target local restore ' 
       node_id: 'seed-node',
       partition_id: 'control_plane_publications-p1',
       status: 'active',
+      state_entered_at: 100,
+      updated_at: 100,
       address: 'seed-node/partition/control_plane_publications-p1-r1',
     }, {
       service_id: 'control_plane_publications-p1-r2',
@@ -262,6 +321,8 @@ test('buildDurableRejoinPartitionRestorePlans skips over-target local restore ' 
       node_id: 'peer-node-2',
       partition_id: 'control_plane_publications-p1',
       status: 'active',
+      state_entered_at: 100,
+      updated_at: 100,
       address: 'peer-node-2/partition/control_plane_publications-p1-r2',
     }, {
       service_id: 'control_plane_publications-p1-r3',
@@ -270,6 +331,8 @@ test('buildDurableRejoinPartitionRestorePlans skips over-target local restore ' 
       node_id: 'peer-node-3',
       partition_id: 'control_plane_publications-p1',
       status: 'active',
+      state_entered_at: 100,
+      updated_at: 100,
       address: 'peer-node-3/partition/control_plane_publications-p1-r3',
     }, {
       service_id: 'control_plane_publications-p1-r4',
@@ -278,6 +341,8 @@ test('buildDurableRejoinPartitionRestorePlans skips over-target local restore ' 
       node_id: 'durable-node',
       partition_id: 'control_plane_publications-p1',
       status: 'active',
+      state_entered_at: 100,
+      updated_at: 100,
       address: 'durable-node/partition/control_plane_publications-p1-r4',
     }]],
     [TABLES.REPLICA_OPERATIONS, []],
@@ -325,6 +390,8 @@ test('buildDurableRejoinPartitionRestorePlans keeps over-target local restore ' 
       node_id: 'seed-node',
       partition_id: 'control_plane_publications-p1',
       status: 'active',
+      state_entered_at: 100,
+      updated_at: 100,
       address: 'seed-node/partition/control_plane_publications-p1-r1',
     }, {
       service_id: 'control_plane_publications-p1-r2',
@@ -333,6 +400,8 @@ test('buildDurableRejoinPartitionRestorePlans keeps over-target local restore ' 
       node_id: 'peer-node-2',
       partition_id: 'control_plane_publications-p1',
       status: 'active',
+      state_entered_at: 100,
+      updated_at: 100,
       address: 'peer-node-2/partition/control_plane_publications-p1-r2',
     }, {
       service_id: 'control_plane_publications-p1-r3',
@@ -341,6 +410,8 @@ test('buildDurableRejoinPartitionRestorePlans keeps over-target local restore ' 
       node_id: 'peer-node-3',
       partition_id: 'control_plane_publications-p1',
       status: 'active',
+      state_entered_at: 100,
+      updated_at: 100,
       address: 'peer-node-3/partition/control_plane_publications-p1-r3',
     }, {
       service_id: 'control_plane_publications-p1-r4',
@@ -349,6 +420,8 @@ test('buildDurableRejoinPartitionRestorePlans keeps over-target local restore ' 
       node_id: 'durable-node',
       partition_id: 'control_plane_publications-p1',
       status: 'active',
+      state_entered_at: 100,
+      updated_at: 100,
       address: 'durable-node/partition/control_plane_publications-p1-r4',
     }]],
     [TABLES.REPLICA_OPERATIONS, [{

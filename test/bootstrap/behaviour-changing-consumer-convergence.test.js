@@ -319,6 +319,8 @@ function makeRejoinCache(partitionRow) {
     service_id: `rejoin-r${replicaIndex}`,
     partition_id: 'p1',
     status: 'active',
+    state_entered_at: 100,
+    updated_at: 100,
     address: `${nodeId}:9000`,
   });
   return makeCache({

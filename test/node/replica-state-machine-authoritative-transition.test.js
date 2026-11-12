@@ -5,6 +5,10 @@ import {
   ReplicaState,
   ReplicaStateMachine,
 } from '../../src/node/replica-state-machine.js';
+import {
+  buildReplicaLifecycleMutationPredicateFromState,
+  isReplicaLifecycleMutationPredicate,
+} from '../../src/node/replica-state-machine-lifecycle-observation.js';
 
 const NODE_ID = 'test-node';
 const SERVICES = 'services';
@@ -106,6 +110,7 @@ function createOwnerFixture(
   const stateMachine = new ReplicaStateMachine({
     nodeId: NODE_ID,
     controlPlaneSystemTableGateway: gateway,
+    systemTableCache: options.systemTableCache,
     now: () => 999,
   });
   return {mutations, rows, stateMachine};
@@ -167,6 +172,70 @@ test('authoritative lifecycle CAS cannot mutate a same-key replacement with ' +
   t.equal(stateMachine.getState(source.service_id)?.state,
     ReplicaState.ACTIVE,
     'local lifecycle never commits FAILED for the replacement key');
+});
+
+test('authoritative lifecycle mutation refuses a missing canonical generation ' +
+  'even when updated_at is present', async (t) => {
+  initializeEnvironment();
+  for (const value of [undefined, null, NaN, '100']) {
+    const source = serviceRow('replica-canonical-generation', ReplicaState.ACTIVE, 100);
+    source.state_entered_at = value;
+    if (value === undefined) delete source.state_entered_at;
+    const {mutations, stateMachine} = createOwnerFixture(source);
+    t.equal(await stateMachine.transitionAuthoritativeReplicaGeneration(
+      source, ReplicaState.FAILED, {timestamp: 200}), false,
+    `generation ${String(value)} is refused before mutation`);
+    t.equal(mutations.length, 0, 'updated_at cannot authorize any owner effect');
+    t.equal(stateMachine.getState(source.service_id), null,
+      'missing generation installs no local lifecycle');
+  }
+});
+
+function canonicalSnapshotContext(row) {
+  return {
+    partitionId: row.partition_id,
+    nodeId: row.node_id,
+    state: row.status,
+    serviceId: row.service_id,
+    serviceType: row.service_type,
+    serviceAddress: row.address,
+    replicaIdentity: row.replica_id,
+    groupId: row.group_id,
+    createdAt: row.created_at,
+    durableVersionColumn: 'state_entered_at',
+    durableVersion: row.state_entered_at,
+    authoritativeSnapshot: true,
+  };
+}
+
+test('recovery requires the original canonical generation and never borrows ' +
+  'a cache version or a different column', async (t) => {
+  initializeEnvironment();
+  const row = serviceRow('replica-explicit-snapshot-generation', ReplicaState.ACTIVE, 100);
+  const {stateMachine} = createOwnerFixture(row, 'applied', {
+    systemTableCache: {get: () => ({...row, state_entered_at: 900, updated_at: 1000})},
+  });
+  const context = canonicalSnapshotContext(row);
+  for (const column of [undefined, 'updated_at', 'foreign_column']) {
+    t.equal(stateMachine.registerReplicaSnapshot(row.service_id, {
+      ...context,
+      durableVersionColumn: column,
+    }), false, `snapshot column ${String(column)} is refused`);
+    t.equal(stateMachine.getState(row.service_id), null,
+      'the cache cannot supply missing snapshot authority');
+  }
+  t.equal(stateMachine.registerReplicaSnapshot(row.service_id, {
+    ...context, durableVersion: undefined, stateEnteredAt: 100, durableUpdatedAt: 100,
+  }), false, 'a differently shaped hint cannot supply the declared generation');
+  t.equal(stateMachine.registerReplicaSnapshot(row.service_id, context), true,
+    'explicit canonical generation remains admissible');
+  t.equal(stateMachine.getState(row.service_id).durableVersion, 100,
+    'the source generation is retained despite a newer cache value');
+  t.equal(isReplicaLifecycleMutationPredicate(
+    buildReplicaLifecycleMutationPredicateFromState({
+      ...stateMachine.getState(row.service_id), durableVersionColumn: 'updated_at',
+    }),
+  ), false, 'a tracked state cannot introduce a noncanonical CAS column');
 });
 
 test('authoritative lifecycle CAS independently fences replica and group ' +
