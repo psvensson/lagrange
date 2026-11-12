@@ -34,10 +34,28 @@ external resource. The active-ancestor set belongs to one serialization and is
 released through `finally`; it is not a registry of application identities.
 
 The original serializer and hostile-intrinsics helper blobs are identical on
-the main base and the preserved original9248 tree. Original lab3194 must be read
-in full before attributing its result. A later pass on this extracted PR still
-requires its own exact source identity, selected caller coverage, generated
-metadata and static gates. This note grants no merge or release acceptance.
+the main base and the preserved original9248 tree. The complete lab 3194 stream
+now verifies twelve failures among the fourteen retained controls; its nested
+proxy refusal and repeated acyclic subtree positive pass. All four original
+utility subtests also pass. The deleted facade block contains eleven identity
+assertions plus its subtest result, accounting for twelve classified assertions.
+The companion local-row failures remain outside this PR's scope.
+
+Exact published candidate `b280e0a88f9f7319d6f7655b16bb28f64349e2fb` passed
+lab 3241 with utility 73 plus actual calculator 501, totaling 574 assertions. The
+complete logs and exact tree bindings are recorded in the append-only log.
+Lab 3242 generated metadata successfully and passed the source-index audit and
+three-file strict complexity checks. Its fast-static failure reports 34 brace
+layout errors. The independently reviewed correction changes only whitespace
+in the utility test; all statements and assertions remain. Because the import
+seal hashes raw test bytes, canonical generation must run again on that
+corrected input. The old generated seal is not reused.
+
+Canonical selection against the pinned main base yields 810 unique roots,
+including existing CDC impact and coupled witnesses. All remain required;
+direct passing roots do not replace this selection. The corrected candidate
+still owes canonical metadata, selected caller execution, static gates and
+exact merge acceptance. This note grants no merge or release acceptance.
 
 History inspected while developing the shared correction includes the earlier
 canonical-JSON extraction and the retained-seed controls for mutable array
