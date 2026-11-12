@@ -1,7 +1,8 @@
 # Census continuation and authoritative read closure
 
-Status: proposed extension for independent review; preserved census source is
-composed as unverified WIP. No additional production change has been made.
+Status: revised design independently approved for implementation by
+`/root/takeover_checkpoint` on 2026-11-12. Approval is for the contract and
+discriminators, not source acceptance. Preserved census source remains WIP.
 
 ## Evidence and history
 
@@ -11,8 +12,11 @@ read paths in `membership-publication-coordinator-reads.js`: a cache publication
 list before the owner list, cache rows after a missing/unavailable authoritative
 view, and silent empty rows after neither source answered. A successful view
 answer with non-array rows is also normalized to empty. These are source-derived
-findings; the fresh lab candidate result is pending. The baseline six-file lab
-comparison passed 1,004 assertions; it does not contain the new negative cases.
+findings. Fresh physical-lab job #2671 on exact `da530fe5` passed six files and
+1,016 assertions; baseline #2672 passed six files and 1,004 assertions. The
+baseline does not contain the candidate's negative cases. Both completed with
+all execution, container and thermal scopes closed; neither result certifies
+the newly found authority substitutions below.
 
 Historical `a6dff7f2f` introduced NOT_DERIVED and its periodic continuation but
 excluded retained ABSENT. `0d9d6a9a2` removed a swallowed rediscovery exception.
@@ -53,6 +57,17 @@ projection surfaces; their existence cannot rescue a failed async read.
 7. The only durable effect remains the publications owner's existing guarded
    revision update after current-row census derivation. Repeated ticks coalesce
    through the existing owner queue and become idle after DERIVED.
+8. Validate `success` and array-valued `rows` in the real
+   `AuthoritativeControlPlaneView` before freezing or normalizing the supplier's
+   answer. A malformed successful result cannot acquire complete-empty authority
+   at this producer boundary. Failure carries no successful row-set witness.
+9. `getAcknowledgementCandidateForNode` consumes the same required owner read,
+   preserving explicit admitted preload input. Remove the caught-null helper,
+   cached candidate substitution and obsolete refresh decision. Unavailability
+   is typed refusal; a successful empty list is absence. The existing error
+   producer marks its typed unavailability `deferRetry: true` while preserving
+   the original cause, so the existing dispatch acknowledgement continuation
+   can retain debt without depending on the supplier's message text.
 
 This changes the shared async reader rather than adding a census-only exception.
 Success-intended caller fixtures must supply the canonical owner/view contract;
@@ -62,8 +77,9 @@ repository-wide cleanup claim from this bounded repair.
 
 ## Review and proof
 
-Requested source scope: coordinator reads, its existing planning read-authority
-builder, and any direct caller whose explicit read intent needs migration.
+Approved source scope: coordinator reads, its existing planning read-authority
+builder, the real view's supplier-answer validation, obsolete acknowledgement
+helpers/contracts and direct callers whose explicit read intent needs migration.
 The original census helper change and all original witnesses remain. Add the
 interaction to the existing runtime/impact contract rather than a second owner.
 
@@ -75,6 +91,14 @@ and successful empty. The newly reached outcomes must use the actual driver,
 queue, publications writer and serve owner. Preserve source-bound red and green
 controls, affected caller suites and static results. No local tests, timeout
 increases, baseline increases or automatic rerun of failed tests.
+
+Independent review required two additions before implementation: the malformed
+answer discriminator must pass through the actual view producer, and the
+acknowledgement consumer must retain failure/absence rather than reuse its old
+cached row. Both are included in the tests-only continuation, including the
+real dispatch retry wake and guarded publications writer after availability
+returns. A present publications owner missing its method cannot route to an
+alternate view. A missing or throwing view capability is typed unavailable.
 
 The Kubernetes controller comparison supports re-entering the ordinary control
 loop from current authoritative evidence rather than repairing a projection
