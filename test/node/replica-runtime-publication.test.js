@@ -284,6 +284,27 @@ test('reentrant owner replacement cannot finish publication under the new lifeti
   t.equal(captureReplicaRuntimeObservation(f.handler, f.row.service_id).sourceEvidence, null);
 });
 
+test('a handler-only producer cannot grant a host-map effect', async (t) => {
+  const f = await publicationFixture(t);
+  const service = f.construct();
+  const foreignHost = new Map();
+  let refused;
+  try {
+    f.publish(service, f.row, null, foreignHost);
+  } catch (error) {
+    refused = error;
+  }
+  t.equal(refused?.code, PARTITION_RUNTIME_PUBLICATION_REFUSED);
+  t.equal(service.runtimeBinding, undefined, 'refusal precedes immutable binding');
+  t.equal(foreignHost.size, 0);
+  t.equal(f.handler.localServices.size, 0);
+  t.equal(f.handler.localReplicas.size, 0);
+  f.publish(service);
+  t.equal(f.handler.localServices.get(f.row.service_id), service,
+    'the same original admission still permits its declared handler-only effect');
+  t.equal(service.runtimePublication.assertCurrent(service), true);
+});
+
 test('real PartitionService requires publication authority and fixture cleanup revokes it',
   async (t) => {
     initializeEnvironment();

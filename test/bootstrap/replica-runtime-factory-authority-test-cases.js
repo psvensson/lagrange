@@ -15,18 +15,20 @@ import {createLifecycleCdcService, createLifecycleServiceRow, createLifecycleSta
   '../test-helpers/lifecycle-state-store.js';
 import {bindRegisteredReplicaHandler} from '../test-helpers/replica-handler-identity-fixture.js';
 import {initializeTestEnvironment} from './node-joining-service-test-support.js';
+import {registerReplicaRuntimeCreateIngressTests} from
+  './replica-runtime-create-ingress-test-cases.js';
 
 // These factory publication controls retain a real authoritative ACTIVE
 // admission before the real constructor. Only the per-instance initialize
 // method is held; they do not claim native opening or fresh CREATE birth.
-function bootstrapFactoryFixture(t) {
+function bootstrapFactoryFixture(t, source = {}) {
   initializeTestEnvironment();
   const service = new BootstrapService({bootIncarnation: 1, nodeId: 'factory-seed',
     nodeAddress: 'ws://localhost:19103', wsPort: 19103,
     config: {partitionDbPath: ':memory:'}});
   const row = createLifecycleServiceRow({replicaId: 'factory-p1-r1', partitionId: 'factory-p1',
     nodeId: service.nodeId, status: 'active', createdAt: 100, stateEnteredAt: 101,
-    createAttemptToken: 'factory-original-attempt'});
+    createAttemptToken: 'factory-original-attempt', ...source});
   const store = createLifecycleStateStore({services: [row]});
   service.cdcIntegrationService = createLifecycleCdcService({store});
   service.getSystemTableCache = () => store.cache;
@@ -94,6 +96,43 @@ function prepareControlledRuntime(t, f, partition) {
 }
 
 function registerReplicaRuntimeFactoryAuthorityTests(restoreFixture) {
+  registerReplicaRuntimeCreateIngressTests({bootstrapFactoryFixture, publishSuccessor});
+  test('bootstrap publication refuses a foreign host map before binding and retains its original destination',
+    async (t) => {
+      const f = bootstrapFactoryFixture(t);
+      const originalHost = f.service.partitionServices;
+      const foreignHost = new Map();
+      let partition;
+      const options = await bootstrapFactoryOptions(f, (created) => {
+        partition = created;
+        prepareControlledRuntime(t, f, partition);
+      });
+      const publishOriginal = options.publishRuntime;
+      options.publishRuntime = (runtime, hostServices) => {
+        t.equal(hostServices, originalHost, 'the real factory retained its original host');
+        let refused;
+        try {
+          publishOriginal(runtime, foreignHost);
+        } catch (error) {
+          refused = error;
+        }
+        t.equal(refused?.code, PARTITION_RUNTIME_PUBLICATION_REFUSED);
+        t.equal(runtime.runtimeBinding, undefined,
+          'a foreign destination cannot install an immutable lifecycle binding');
+        t.equal(foreignHost.size, 0, 'no foreign host effect');
+        t.equal(originalHost.size, 0, 'no original host effect before its own publication');
+        t.equal(f.handler.localServices.size, 0, 'no physical registry effect');
+        t.equal(f.handler.localReplicas.size, 0, 'no local metadata effect');
+        return publishOriginal(runtime, hostServices);
+      };
+      const created = await f.handler.createPartitionService(options);
+      t.equal(created, partition);
+      t.equal(originalHost.get(f.row.replica_id), partition,
+        'the unchanged original destination still publishes the exact runtime');
+      t.equal(f.handler.localServices.get(f.row.replica_id), partition);
+      t.equal(partition.runtimePublication.assertCurrent(partition), true);
+    });
+
   for (const changed of ['host', 'holder', 'unchanged']) {
     test(`CREATE retains its factory producer across the first cleanup await: ${changed}`, async (t) => {
       const f = bootstrapFactoryFixture(t);
