@@ -507,7 +507,7 @@ function installSettlementSuccessor(t, world, generation) {
   const stateStore = source.lifecycleStore;
   // Replacement is the controlled external actor at the shared row seam.
   stateStore.durable.services.set(s, {...row});
-  stateStore.cache.upsert('services', row);
+  stateStore.project('services', row);
   cache.upsert('services', row);
   const successor = createRemovalSourceHandler({cluster, replicaId: s,
     partitionId, nodeId: source.handler.nodeId, cache, stateStore,
