@@ -280,3 +280,15 @@ No metric baseline or timeout was raised. The callback formatting is corrected
 without changing its behavior; the clipped fifth lint error requires full
 diagnostic observation. Shared CDC boundary ownership and source complexity
 remain open. Acceptance is not granted by the passing runtime roots.
+
+### Uncapped lint diagnosis
+
+Lab `2934` observed all 36 changed JavaScript paths at exact `dc2f96c8` without
+the fast-static excerpt limit. Its full 5,109-byte stream has SHA256
+`e65da30f858cf8b11eba28391ec07f9e8ad92617909ca7b7810b37e5dabb5854`.
+The four held-write formatting errors are gone. The sole remaining error is the
+unused `normalizePositiveInteger` import in the active-gate reconcile owner.
+The four ignored-tail warnings are unchanged; no ignore or suppression policy
+was altered. This seal removes that unused import. It makes no new runtime or
+static-pass claim. The two shared CDC boundary findings and strict complexity
+findings still require their own source closure and lab evidence.
