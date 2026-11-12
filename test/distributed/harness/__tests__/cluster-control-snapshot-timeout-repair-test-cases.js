@@ -8,6 +8,7 @@
  */
 
 import './cluster-control-snapshot-timeout-repair-selected-source-test-cases.js';
+import './cluster-control-snapshot-selected-source-retry-clock-test-cases.js';
 import './cluster-control-snapshot-timeout-repair-load-aggregation-test-cases.js';
 import './cluster-control-snapshot-timeout-repair-deadline-test-cases.js';
 import './cluster-control-snapshot-timeout-repair-forced-transport-test-cases.js';

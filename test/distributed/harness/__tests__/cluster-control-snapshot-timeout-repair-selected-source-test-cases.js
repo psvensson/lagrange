@@ -13,9 +13,6 @@ import {
   SELECTED_SNAPSHOT_SOURCE_TIMEOUT_EMPTY_NODE_IDS,
   SELECTED_SNAPSHOT_SOURCE_TIMEOUT_ERROR,
   SELECTED_SNAPSHOT_SOURCE_TIMEOUT_FALLBACK_NODE_ID,
-  SELECTED_SNAPSHOT_SOURCE_TIMEOUT_INITIAL_PROBE_DRIFT_MS,
-  SELECTED_SNAPSHOT_SOURCE_TIMEOUT_INITIAL_PROBE_MIN_MS,
-  SELECTED_SNAPSHOT_SOURCE_TIMEOUT_INITIAL_PROBE_TIMEOUT_MS,
   SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LATE_RETRY_FLOOR_TEST_NAME,
   SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_INITIAL_TIMEOUT_MS,
   SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_HANDOFF_RETURN_TEST_NAME,
@@ -31,7 +28,6 @@ import {
   SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_ERROR,
   SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_ID,
   SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_IDS,
-  SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_TEST_NAME,
   SELECTED_SNAPSHOT_SOURCE_TIMEOUT_REMAINING_WITNESS_DELAY_MS,
   SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RETRY_AFTER_TOLERANCE_MS,
   SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RETRY_EXHAUSTED_TEST_NAME,
@@ -383,145 +379,6 @@ test(SELECTED_SNAPSHOT_SOURCE_TIMEOUT_TEST_NAME, async () => {
       call.skipBootstrapReadiness === true,
     ),
     SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.INHERITED_READINESS_EXCLUDED,
-  );
-});
-
-test(SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_TEST_NAME, async () => {
-  const cluster = createCluster({
-    size: SNAPSHOT_REPLAY_TEST_CLUSTER_SIZE,
-    docker: {socketPath: SNAPSHOT_REPLAY_TEST_DOCKER_SOCKET_PATH},
-    image: SNAPSHOT_REPLAY_TEST_IMAGE,
-  });
-  const snapshotProbeCalls = [];
-  const resetCalls = [];
-  let selectedSnapshotLaneReset = false;
-
-  for (const nodeId of SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS) {
-    cluster._nodes.set(nodeId, {
-      id: nodeId,
-      role:
-        nodeId === SNAPSHOT_REPLAY_TEST_NODE_ID.SEED ?
-          NODE_ROLES.SEED :
-          NODE_ROLES.JOINER,
-      _resetAdminSocket(lane) {
-        resetCalls.push({nodeId, lane});
-        if (
-          nodeId === SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_ID &&
-          lane === SELECTED_SNAPSHOT_SOURCE_TIMEOUT_SNAPSHOT_LANE
-        ) {
-          selectedSnapshotLaneReset = true;
-        }
-      },
-      async getStatus() {
-        return {rows: [{status: SERVICE_STATUS.ACTIVE}]};
-      },
-      async getReachabilityDiagnostics(options = {}) {
-        return {
-          reachable:
-            nodeId === SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_ID,
-          adminReady:
-            nodeId === SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_ID,
-          reachableBy:
-            nodeId === SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_ID ?
-              SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE :
-              null,
-          lastError: null,
-          skipBootstrapReadiness: options.skipBootstrapReadiness === true,
-        };
-      },
-      async getControlSnapshot(options = {}) {
-        snapshotProbeCalls.push({
-          nodeId,
-          timeoutMs: options.timeoutMs,
-          lane: options.lane,
-          forceRepair: options.forceRepair === true,
-          forceAuthoritativeRepair:
-            options.forceAuthoritativeRepair === true,
-        });
-        if (nodeId === SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_ID) {
-          if (selectedSnapshotLaneReset !== true) {
-            throw new Error(SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_ERROR);
-          }
-          return {
-            rows: [{
-              nodes: SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_IDS,
-              capturedAtMs:
-                SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_CAPTURED_AT_MS,
-            }],
-          };
-        }
-        throw new Error(
-          SELECTED_SNAPSHOT_SOURCE_TIMEOUT_UNSELECTED_ERROR_PREFIX + nodeId,
-        );
-      },
-      async getLogs(_options) {
-        return SNAPSHOT_REPLAY_TEST_EMPTY_LOG;
-      },
-    });
-  }
-
-  const coverage = await cluster._probeControlSnapshotCoverage(
-    Date.now() + SNAPSHOT_REPLAY_TEST_DEADLINE_EXTENSION_MS,
-    SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS,
-  );
-  const selectedCalls = snapshotProbeCalls.filter((call) => {
-    return call.nodeId === SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_ID;
-  });
-
-  assert.strictEqual(
-    coverage.selectedSnapshotNodeId,
-    SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_ID,
-    SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.SELECTED_RETRY_SOURCE,
-  );
-  assert.strictEqual(
-    coverage.selectedError,
-    null,
-    SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.SELECTED_RETRY_RECOVERY,
-  );
-  assert.deepStrictEqual(
-    resetCalls,
-    [{
-      nodeId: SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_ID,
-      lane: SELECTED_SNAPSHOT_SOURCE_TIMEOUT_SNAPSHOT_LANE,
-    }],
-    SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.SELECTED_LANE_RESET,
-  );
-  assert.strictEqual(
-    coverage.bestCoverageNodeCount,
-    SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_IDS.length,
-  );
-  assert.strictEqual(
-    selectedCalls.length,
-    SNAPSHOT_REPLAY_TEST_BOUNDED_RETRY_CALL_COUNT,
-    SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.STARTUP_RETRY_COUNT,
-  );
-  assert.ok(
-    selectedCalls[SNAPSHOT_REPLAY_TEST_FIRST_CALL_INDEX].timeoutMs >=
-      SELECTED_SNAPSHOT_SOURCE_TIMEOUT_INITIAL_PROBE_MIN_MS &&
-      selectedCalls[SNAPSHOT_REPLAY_TEST_FIRST_CALL_INDEX].timeoutMs <=
-      SELECTED_SNAPSHOT_SOURCE_TIMEOUT_INITIAL_PROBE_TIMEOUT_MS,
-    SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.STARTUP_RETRY_TIMEOUT_FLOOR,
-  );
-  assert.ok(
-    selectedCalls[SNAPSHOT_REPLAY_TEST_RETRY_CALL_INDEX].timeoutMs <
-      selectedCalls[SNAPSHOT_REPLAY_TEST_FIRST_CALL_INDEX].timeoutMs,
-    SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.STARTUP_RETRY_TIMEOUT_FLOOR,
-  );
-  assert.ok(
-    selectedCalls[SNAPSHOT_REPLAY_TEST_RETRY_CALL_INDEX].timeoutMs >=
-      SELECTED_SNAPSHOT_SOURCE_TIMEOUT_STARTUP_RETRY_TIMEOUT_MS -
-        SELECTED_SNAPSHOT_SOURCE_TIMEOUT_INITIAL_PROBE_DRIFT_MS &&
-      selectedCalls[SNAPSHOT_REPLAY_TEST_RETRY_CALL_INDEX].timeoutMs <=
-        SELECTED_SNAPSHOT_SOURCE_TIMEOUT_STARTUP_RETRY_TIMEOUT_MS,
-    SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.STARTUP_RETRY_SCALED_TIMEOUT,
-  );
-  assert.ok(
-    snapshotProbeCalls.every((call) =>
-      call.lane === SELECTED_SNAPSHOT_SOURCE_TIMEOUT_SNAPSHOT_LANE &&
-      call.forceRepair === false &&
-      call.forceAuthoritativeRepair === false,
-    ),
-    SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.RETRY_SNAPSHOT_LANE,
   );
 });
 
