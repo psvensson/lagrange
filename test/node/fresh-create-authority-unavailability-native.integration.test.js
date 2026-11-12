@@ -40,8 +40,10 @@ import {
 } from '../../src/rebalancer/replica-create-admission-token.js';
 import {buildPresentOperationVisibility} from
   '../../src/rebalancer/replica-operation-repository-operation-visibility.js';
-import {buildFailedCreateCleanupToken} from
-  '../../src/rebalancer/failed-create-cleanup-token.js';
+import {
+  buildFailedCreateCleanupToken,
+  buildFailedCreateRemoveToken,
+} from '../../src/rebalancer/failed-create-cleanup-token.js';
 import {admitCreateTerminalFailure, decideFailedCreateTargetCleanup} from
   '../../src/rebalancer/operation-workflow-replace-terminal-admission.js';
 import {createLifecycleControlPlaneGatewayForCache} from
@@ -635,4 +637,103 @@ async (t) => {
   const driven = await driveRemove(run, {operationId: 'remove-unclaimed',
     partitionId: PARTITION_ID, replicaId: run.replicaId}, HOLD_POLLS);
   assertHeld(run, driven, [SOLE_FOUNDER_RETIREMENT.NOT_CLAIMED], 'unclaimed');
+});
+
+// The claimed cleanup's operation can end while the node still holds (the
+// coordinator fails a REMOVE that stays in STOPPING past its bound, and
+// never mints another for a row that is no longer FAILED). The node's own
+// REMOVING re-drive then carries the removal, with no operation: it reads
+// the failed-create claim the durable row still holds.
+const REDRIVE_POLLS = 80;
+
+// No removal of the replica runs on the node (operation or re-drive).
+async function removalQuiescent(run) {
+  for (let attempt = 0; attempt < REDRIVE_POLLS; attempt += 1) {
+    if (!run.handler.hasInProgressReplicaRemoval(run.replicaId) &&
+        run.handler.removingRedrives.size === 0 &&
+        run.handler.removalExecutions.size === 0) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, REMOVE_POLL_MS));
+  }
+  assert.fail('setup: the removal never became quiescent');
+}
+
+async function redriveUntilSettled(run) {
+  const failures = [];
+  const onFailure = (event) => failures.push({errorCode: event.errorCode,
+    deferralReasons: event.deferralReasons});
+  run.handler.on('replicaRemovalFailed', onFailure);
+  try {
+    // The lifecycle owner's REMOVING timeout, due now: its own checker
+    // emits the re-drive signal.
+    run.handler.replicaStateMachine.timeouts[ReplicaStatus.REMOVING] = -1;
+    for (let attempt = 0; attempt < REDRIVE_POLLS; attempt += 1) {
+      run.handler.replicaStateMachine.checkTimeoutsNow();
+      await new Promise((resolve) => setTimeout(resolve, REMOVE_POLL_MS));
+      if (!fs.existsSync(run.dbPath) || failures.length >= 3) {
+        break;
+      }
+    }
+    return failures;
+  } finally {
+    run.handler.off('replicaRemovalFailed', onFailure);
+  }
+}
+
+test('a claimed REMOVE that held until its operation ended is finished by ' +
+  'the node\'s REMOVING re-drive under the claim its row still holds',
+{timeout: TEST_TIMEOUT_MS}, async (t) => {
+  environment(t);
+  const {run, row} = await failedCreate(t, {label: 'redrive'});
+  // A hold that clears: the database is unreadable while the operation
+  // drives the removal, and readable again after the operation ended.
+  dropSidecars(run);
+  const kept = fs.readFileSync(run.dbPath);
+  fs.writeFileSync(run.dbPath, Buffer.alloc(8192, 0x5a));
+  const driven = await driveRemove(run, claimedRemoveRequest(run, row), 4);
+  assert.equal(driven.completed, null, 'setup: the claimed REMOVE holds');
+  const claimed = run.store.durableRow(TABLES.SERVICES, run.replicaId);
+  assert.deepEqual({status: claimed?.status, previous: claimed?.previous_state,
+    token: claimed?.cleanup_token},
+  {status: ReplicaStatus.REMOVING, previous: ReplicaStatus.FAILED,
+    token: buildFailedCreateRemoveToken(`cleanup-${run.operationId}`)},
+  'setup: the row is REMOVING out of FAILED under the cleanup\'s remove token');
+  // The operation is over: nothing dispatches it again, and its last
+  // execution has ended deferred before the database is readable again.
+  await removalQuiescent(run);
+  dropSidecars(run);
+  fs.writeFileSync(run.dbPath, kept);
+  await new Promise((resolve) => setTimeout(resolve, 5 * REMOVE_POLL_MS));
+  assert.equal(fs.existsSync(run.dbPath), true,
+    'nothing finishes the cleanup on its own once its operation ended');
+  // A REMOVE under a
+  // new operation id cannot take the claim over (its token is not the
+  // row's, and the row is no longer FAILED).
+  const successor = await run.handler.handleRemoveReplica({
+    ...claimedRemoveRequest(run, row),
+    operationId: `cleanup-successor-${run.operationId}`});
+  assert.equal(successor.status, ReplicaOperationResponseStatus.ERROR,
+    `a successor claimed REMOVE is refused (${JSON.stringify(successor)})`);
+  const failures = await redriveUntilSettled(run);
+  assert.deepEqual(DATABASE_FILE_SUFFIXES.filter((suffix) =>
+    fs.existsSync(`${run.dbPath}${suffix}`)), [],
+  `the re-drive retired the sole founder's group (${JSON.stringify(failures)})`);
+});
+
+test('the REMOVING re-drive of an ordinary removal reads no failed-create ' +
+  'claim: a sole member without a port stays', {timeout: TEST_TIMEOUT_MS},
+async (t) => {
+  environment(t);
+  const {run} = await failedCreate(t, {label: 'redrive-unclaimed'});
+  const driven = await driveRemove(run, {operationId: 'remove-unclaimed',
+    partitionId: PARTITION_ID, replicaId: run.replicaId}, 4);
+  assert.equal(driven.completed, null, 'setup: the ordinary REMOVE holds');
+  await removalQuiescent(run);
+  const failures = await redriveUntilSettled(run);
+  assert.ok(failures.length >= 1, 'the re-drive ran and deferred');
+  assert.deepEqual(failures.at(-1), {
+    errorCode: REPLICA_REMOVAL_CONSENSUS_EXIT_DEFERRED,
+    deferralReasons: [...UNANSWERED, SOLE_FOUNDER_RETIREMENT.NOT_CLAIMED]});
+  assert.equal(fs.existsSync(run.dbPath), true, 'the database is kept');
 });

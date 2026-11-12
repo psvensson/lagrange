@@ -12,7 +12,9 @@
  *  - the claim (replica-failed-create-removal-claim.js, the one predicate
  *    the REMOVE's admission uses): the replica's authoritative services row
  *    is REMOVING out of FAILED under this removal's own failed-create remove
- *    token, for the FAILED row the cleanup was decided on;
+ *    token, for the FAILED row the cleanup was decided on - or, for the
+ *    node's REMOVING re-drive (no operation), under the failed-create remove
+ *    token that row still holds;
  *  - the replica's own durable record (raft-rs-durable-own-group-record.js):
  *    its applied configuration names it as the only member, and it holds no
  *    history (nothing was ever proposed in it).
@@ -42,8 +44,10 @@ import {
 } from '../raft/raft-rs-durable-own-group-record.js';
 import {buildFailedCreateRemoveToken} from
   '../rebalancer/failed-create-cleanup-token.js';
-import {matchesClaimedFailedCreateRemoval} from
-  './replica-failed-create-removal-claim.js';
+import {
+  isRowOwnedFailedCreateRemoval,
+  matchesClaimedFailedCreateRemoval,
+} from './replica-failed-create-removal-claim.js';
 
 const SOLE_FOUNDER_RETIREMENT = Object.freeze({
   RETIRES_GROUP: 'sole_founder_failed_create_retires_group',
@@ -68,11 +72,24 @@ function stateOfRecord(record) {
     STATE.RETIRES_GROUP : STATE.NOT_SOLE_FOUNDER;
 }
 
+// The claim, by who drives the removal: a REMOVE operation owns its token
+// and precondition; the REMOVING re-drive (no operation) reads the claim its
+// durable row holds (replica-failed-create-removal-claim.js).
+function isOwnFailedCreateClaim(handler, request, row) {
+  if (request.operationId === null) {
+    return isRowOwnedFailedCreateRemoval(row, {replicaId: request.replicaId,
+      partitionId: request.partitionId, nodeId: handler.nodeId});
+  }
+  return matchesClaimedFailedCreateRemoval(row,
+    request.failedCreatePrecondition,
+    buildFailedCreateRemoveToken(request.operationId));
+}
+
 /**
  * Decide whether this removal retires its replica's group as its sole
  * founder's failed create.
  * @param {Object} handler - The ReplicaHandler (replicaStateMachine,
- *   getPartitionDbPath).
+ *   getPartitionDbPath, nodeId).
  * @param {Object} request - {operationId, partitionId, replicaId,
  *   failedCreatePrecondition}.
  * @return {Promise<Object>} Frozen {state, membership, history, cause}.
@@ -83,9 +100,7 @@ async function decideSoleFounderRetirement(handler, request) {
   if (observation?.available !== true) {
     return decision(STATE.CLAIM_UNAVAILABLE);
   }
-  if (!matchesClaimedFailedCreateRemoval(observation.row,
-    request.failedCreatePrecondition,
-    buildFailedCreateRemoveToken(request.operationId))) {
+  if (!isOwnFailedCreateClaim(handler, request, observation.row)) {
     return decision(STATE.NOT_CLAIMED);
   }
   const record = raftRsLifecycleAdministration.readReplicaOwnGroupRecord(

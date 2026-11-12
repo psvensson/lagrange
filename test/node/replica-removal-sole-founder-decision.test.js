@@ -110,7 +110,7 @@ const NOT_THE_CLAIM = Object.freeze({
   'the row is not a later generation than the precondition':
     {row: {state_entered_at: PRECONDITION.state_entered_at}},
   'the row is absent': {absent: true},
-  'the removal carries no precondition (an ordinary REMOVE, a re-drive)':
+  'the removal carries no precondition (an ordinary REMOVE)':
     {request: {failedCreatePrecondition: null}},
   'the removal is another operation': {request: {operationId: 'another-op'}},
 });
@@ -127,3 +127,66 @@ for (const [label, {row = {}, request = {}, absent = false}] of
     assert.equal(handler.fileReads, 0);
   });
 }
+
+// The node's REMOVING re-drive carries no operation: it reads the claim
+// from the durable row alone (isRowOwnedFailedCreateRemoval).
+const REDRIVE = Object.freeze({operationId: null, partitionId: PARTITION_ID,
+  replicaId: REPLICA_ID, reason: 'removing_redrive'});
+
+test('the REMOVING re-drive (no operation) retires the group under the ' +
+  'failed-create remove token its row holds, whichever operation wrote it',
+async (t) => {
+  const cluster = loneFounder(t);
+  const handler = Object.assign(handlerOver(cluster, {available: true,
+    row: {...CLAIMED,
+      cleanup_token: buildFailedCreateRemoveToken('an-ended-operation')}}),
+  {nodeId: NODE_ID});
+  assert.equal((await decideSoleFounderRetirement(handler, REDRIVE)).state,
+    STATE.RETIRES_GROUP);
+  assert.equal(handler.fileReads, 1);
+  const absent = Object.assign(handlerOver(cluster, {available: true,
+    row: null}), {nodeId: NODE_ID});
+  assert.equal((await decideSoleFounderRetirement(absent, REDRIVE)).state,
+    STATE.NOT_CLAIMED, 'no row, no claim');
+});
+
+const NOT_ROW_OWNED = Object.freeze({
+  'the row is not REMOVING': {status: ReplicaStatus.FAILED},
+  'the row did not come out of FAILED': {previous_state: ReplicaStatus.ACTIVE},
+  'the row holds the create\'s cleanup token, not a remove token':
+    {cleanup_token: 'failed-create:op'},
+  'the row holds no token': {cleanup_token: null},
+  'the row is another node\'s': {node_id: 'another-node'},
+  'the row is another partition\'s': {partition_id: 'another-partition'},
+  'the row names another replica': {replica_id: 'another-replica'},
+  'the row is another service\'s': {service_id: 'another-replica'},
+});
+
+for (const [label, row] of Object.entries(NOT_ROW_OWNED)) {
+  test(`the re-drive is NOT_CLAIMED when ${label}; the file is not consulted`,
+    async (t) => {
+      const cluster = loneFounder(t);
+      const handler = Object.assign(handlerOver(cluster,
+        {available: true, row: {...CLAIMED, ...row}}), {nodeId: NODE_ID});
+      assert.equal((await decideSoleFounderRetirement(handler, REDRIVE)).state,
+        STATE.NOT_CLAIMED);
+      assert.equal(handler.fileReads, 0);
+    });
+}
+
+test('a removal that carries an operation never reads the row-owned claim: ' +
+  'another operation\'s token on the row is NOT_CLAIMED', async (t) => {
+  const cluster = loneFounder(t);
+  const handler = Object.assign(handlerOver(cluster, {available: true,
+    row: CLAIMED}), {nodeId: NODE_ID});
+  for (const request of [
+    {...REQUEST, operationId: 'a-successor-operation'},
+    {...REQUEST, operationId: 'a-successor-operation',
+      failedCreatePrecondition: null},
+    {operationId: 'a-plain-remove', partitionId: PARTITION_ID,
+      replicaId: REPLICA_ID}]) {
+    assert.equal((await decideSoleFounderRetirement(handler, request)).state,
+      STATE.NOT_CLAIMED, JSON.stringify(request));
+  }
+  assert.equal(handler.fileReads, 0);
+});
