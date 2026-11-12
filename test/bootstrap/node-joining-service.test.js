@@ -92,6 +92,16 @@ const TEST_CONTACT_SEED_ATTEMPT_NOW_MS = 1000;
 const TEST_CONTACT_SEED_HTTP_TIMEOUT_MS = 50;
 const TEST_CONTACT_SEED_RETRY_TIMEOUT_MS = 100;
 
+function cacheFromDeclaredRows(rowsByTable) {
+  const cache = new SystemTableCache();
+  for (const [tableName, rows] of rowsByTable) {
+    for (const row of rows) {
+      cache.applySystemTableChange(tableName, CDC_OPERATION.INSERT, row);
+    }
+  }
+  return cache;
+}
+
 function createDurableRejoinSystemTableCache() {
   const schemaDefinition = {
     tableName: 'nodes',
@@ -155,15 +165,7 @@ function createDurableRejoinSystemTableCache() {
       create_attempt_token: null,
     }]],
   ]);
-  return {
-    getAll: (tableName) => rowsByTable.get(tableName) || [],
-    get(tableName, key) {
-      return (rowsByTable.get(tableName) || []).find((row) =>
-        row.partition_id === key || row.table_id === key ||
-          row.service_id === key,
-      ) || null;
-    },
-  };
+  return cacheFromDeclaredRows(rowsByTable);
 }
 
 test('NodeJoiningService - initialization', async (t) => {
@@ -1152,19 +1154,7 @@ test('NodeJoiningService - durable rejoin restore recreates stale local ' +
       create_attempt_token: null,
     }]],
   ]);
-  const systemTableCache = {
-    getAll(tableName) {
-      return rowsByTable.get(tableName) || [];
-    },
-    get(tableName, key) {
-      const rows = rowsByTable.get(tableName) || [];
-      return rows.find((row) =>
-        row.partition_id === key ||
-          row.table_id === key ||
-          row.service_id === key,
-      ) || null;
-    },
-  };
+  const systemTableCache = cacheFromDeclaredRows(rowsByTable);
   installNodeJoiningRestoreOwner(
     service,
     systemTableCache,
@@ -1351,19 +1341,7 @@ test('NodeJoiningService - durable rejoin restore repairs stale runtime when ' +
     }]],
     [TABLES.SERVICES, serviceRows],
   ]);
-  const systemTableCache = {
-    getAll(tableName) {
-      return rowsByTable.get(tableName) || [];
-    },
-    get(tableName, key) {
-      const rows = rowsByTable.get(tableName) || [];
-      return rows.find((row) =>
-        row.partition_id === key ||
-          row.table_id === key ||
-          row.service_id === key,
-      ) || null;
-    },
-  };
+  const systemTableCache = cacheFromDeclaredRows(rowsByTable);
   installNodeJoiningRestoreOwner(
     service,
     systemTableCache,
@@ -1469,19 +1447,7 @@ test('NodeJoiningService - durable rejoin restore fails closed until restored pa
         create_attempt_token: null,
       }]],
     ]);
-    const systemTableCache = {
-      getAll(tableName) {
-        return rowsByTable.get(tableName) || [];
-      },
-      get(tableName, key) {
-        const rows = rowsByTable.get(tableName) || [];
-        return rows.find((row) =>
-          row.partition_id === key ||
-          row.table_id === key ||
-          row.service_id === key,
-        ) || null;
-      },
-    };
+    const systemTableCache = cacheFromDeclaredRows(rowsByTable);
 
     installNodeJoiningRestoreOwner(service, systemTableCache);
     await t.rejects(
@@ -1577,19 +1543,7 @@ test('NodeJoiningService - durable rejoin restore skips ambiguous over-target ' 
     }]],
     [TABLES.REPLICA_OPERATIONS, []],
   ]);
-  const systemTableCache = {
-    getAll(tableName) {
-      return rowsByTable.get(tableName) || [];
-    },
-    get(tableName, key) {
-      const rows = rowsByTable.get(tableName) || [];
-      return rows.find((row) =>
-        row.partition_id === key ||
-        row.table_id === key ||
-        row.service_id === key,
-      ) || null;
-    },
-  };
+  const systemTableCache = cacheFromDeclaredRows(rowsByTable);
 
   const restored =
     await service.restoreDurableRejoinLocalPartitionServices(
