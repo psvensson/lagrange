@@ -1,0 +1,38 @@
+{
+  "schema": "test-receipt/1",
+  "status": "incomplete",
+  "receipts": [
+    {
+      "id": "complexity",
+      "passed": true
+    },
+    {
+      "id": "semantic-witnesses",
+      "passed": true
+    },
+    {
+      "id": "static-checks",
+      "passed": false
+    },
+    {
+      "id": "independent-review",
+      "passed": false
+    }
+  ],
+  "baseline": {
+    "violations": 4,
+    "threshold": 12,
+    "externalEvidence": "/tmp/lagrange-cdc-complexity-repair-20261112/baseline-complexity.json"
+  },
+  "evidence": {
+    "packet": "/tmp/lagrange-cdc-complexity-repair-20261112",
+    "sourceManifestSha256": "a0131c682b60c322b079d1ca362251e0ee7bc712d2704e8d9ec7e332bca8a0bb",
+    "positiveRuns": "command-receipts.json",
+    "staticFailure": "static-command-receipts.json"
+  },
+  "limitations": [
+    "STOP for Astra reimplementation after first unexpected decision-boundary audit failure.",
+    "Four existing witness suites19reportedcases pass; historical CDC/foreground correctness not closed.",
+    "No independent review, full complexity/integration acceptance, commit or push."
+  ]
+}
