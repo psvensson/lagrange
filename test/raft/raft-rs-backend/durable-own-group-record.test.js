@@ -18,10 +18,13 @@ import {bindingWireNumbers} from './committed-membership-oracles.js';
 import {
   DURABLE_OWN_HISTORY as HISTORY,
   DURABLE_OWN_MEMBERSHIP as MEMBERSHIP,
-  readDurableOwnGroupRecord,
 } from '../../../src/raft/raft-rs-durable-own-group-record.js';
 import {raftRsLifecycleAdministration} from
   '../../../src/raft/raft-rs-lifecycle-administration.js';
+
+// The one public read of a replica's own group record.
+const readDurableOwnGroupRecord =
+  raftRsLifecycleAdministration.readReplicaOwnGroupRecord;
 import {prepareReplicaLifecycleForOriginalAllocation} from
   '../../../src/raft/raft-rs-replica-lifecycle-owner.js';
 import {RaftRsDurableStore} from
@@ -100,7 +103,7 @@ function sha256(file) {
 }
 
 test('a lone founder reads SOLE_MEMBER with no history, before and after ' +
-  'its election; the administration serves the same read', (t) => {
+  'its election', (t) => {
   const cluster = new PartitionNodeCluster({partitionId: PARTITION_ID,
     replicaIds: [LONE]});
   t.after(() => cluster.dispose());
@@ -112,8 +115,6 @@ test('a lone founder reads SOLE_MEMBER with no history, before and after ' +
   assert.deepEqual(record, SOLE_EMPTY,
     'elected (its empty first entry applied)');
   assert.equal(Object.isFrozen(record), true, 'the answer is frozen');
-  assert.deepEqual(raftRsLifecycleAdministration.readReplicaOwnGroupRecord(
-    cluster.dbFileOf(LONE), PARTITION_ID, LONE), SOLE_EMPTY);
 });
 
 test('a lone founder that applied a proposal holds history; compacted by ' +

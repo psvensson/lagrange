@@ -1,12 +1,15 @@
 import {
   DURABLE_LIFECYCLE_READ,
   readDurableReplicaLifecycle,
+  readDurableReplicaLifecycleBeside,
   retireReplicaLifecycle,
   withReplicaLifecycleClaim,
 } from './raft-rs-replica-lifecycle-owner.js';
 import {LIFECYCLE_STATE} from './raft-rs-replica-lifecycle-constants.js';
-import {readDurableOwnGroupRecord} from
-  './raft-rs-durable-own-group-record.js';
+import {
+  durableOwnGroupRecordOf,
+  readOwnGroupRecordIn,
+} from './raft-rs-durable-own-group-record.js';
 
 // Retire the exact runtime generation the caller holds (its own operation
 // port); never the current runtime of a reused logical name. A retirement
@@ -15,6 +18,16 @@ function retireReplica(replicaIdentity, reason, {groupId, runtime,
   evidence = null}) {
   return retireReplicaLifecycle({runtime, groupId, replicaIdentity, reason,
     evidence});
+}
+
+// What one replica database file's own record says about its group, in one
+// read snapshot of the file (raft-rs-durable-own-group-record.js).
+function readReplicaOwnGroupRecord(dbPath, groupId, replicaIdentity) {
+  const {lifecycle, beside} = readDurableReplicaLifecycleBeside(dbPath,
+    groupId, replicaIdentity, (db) => readOwnGroupRecordIn(db, groupId));
+  return durableOwnGroupRecordOf({
+    readable: lifecycle.state !== DURABLE_LIFECYCLE_READ.UNREADABLE.state,
+    peerId: lifecycle.peerId, record: beside});
 }
 
 // Whether a durable lifecycle read is a retirement for exactly this reason
@@ -53,8 +66,8 @@ const raftRsLifecycleAdministration = Object.freeze({
   readReplicaLifecycle: Object.freeze(readDurableReplicaLifecycle),
   // What that file's own record says about its group: the replica's applied
   // configuration against its own peer id, and whether any history is held
-  // (raft-rs-durable-own-group-record.js). Throws when it cannot be read.
-  readReplicaOwnGroupRecord: Object.freeze(readDurableOwnGroupRecord),
+  // (raft-rs-durable-own-group-record.js); UNREADABLE when it cannot be read.
+  readReplicaOwnGroupRecord: Object.freeze(readReplicaOwnGroupRecord),
   isRetiredFor: Object.freeze(isRetiredFor),
   isRetired: Object.freeze(isRetired),
   isAbsent: Object.freeze(isAbsent),

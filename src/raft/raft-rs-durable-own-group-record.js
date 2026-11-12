@@ -4,11 +4,14 @@
  * from its database file without opening a runtime (2026-11-11): its applied
  * configuration (the raft-rs ConfState persisted with its applied index)
  * against its own peer id (its lifecycle row), and whether the record holds
- * any history. Both come from one read snapshot of the file, opened by the
- * lifecycle owner's read (readDurableReplicaLifecycleBeside): read-only, no
- * database created, no page changed (the connection may leave the file's
- * shared-memory sidecars, which are removed with the database).
- * Inputs: the replica's database file, its group and its replica identity.
+ * any history. Both come from one read snapshot of the file: the lifecycle
+ * administration opens it through the lifecycle owner's read
+ * (readDurableReplicaLifecycleBeside), which runs readOwnGroupRecordIn
+ * beside the row - read-only, no database created, no page changed (the
+ * connection may leave the file's shared-memory sidecars, which are removed
+ * with the database). This module never opens the file itself.
+ * Inputs: that snapshot's lifecycle read (readable or not, its peer id) and
+ * the record read beside it (null without a lifecycle row).
  * Canonical output: a frozen {membership, history}:
  *  membership (DURABLE_OWN_MEMBERSHIP)
  *   SOLE_MEMBER       the applied configuration names this replica as its
@@ -33,10 +36,6 @@
  * Prohibited: a write, or a verdict from an unreadable file.
  */
 import {RaftRsDurableStore} from './raft-rs-durable-store.js';
-import {
-  DURABLE_LIFECYCLE_READ,
-  readDurableReplicaLifecycleBeside,
-} from './raft-rs-replica-lifecycle-owner.js';
 
 const DURABLE_OWN_MEMBERSHIP = Object.freeze({
   SOLE_MEMBER: 'durable-own-membership-sole-member',
@@ -86,21 +85,28 @@ function historyOf(record) {
 }
 
 /**
- * One replica's own durable group record, in one read snapshot.
- * @param {string} dbPath - The replica's database file.
+ * The group's durable record, read in the lifecycle read's snapshot `db`.
+ * @param {Object} db - The read-only connection of that snapshot.
  * @param {string} groupId
- * @param {string} replicaIdentity
+ * @return {Object} The durable store's record of the group.
+ */
+function readOwnGroupRecordIn(db, groupId) {
+  return RaftRsDurableStore.readDurableRecordIn(db, groupId);
+}
+
+/**
+ * One replica's own durable group record, from one read snapshot.
+ * @param {Object} snapshot - {readable, peerId, record}: whether the
+ *   snapshot could be read, the lifecycle row's peer id, and the record read
+ *   beside the row (null without a row).
  * @return {Object} Frozen {membership, history}.
  */
-function readDurableOwnGroupRecord(dbPath, groupId, replicaIdentity) {
-  const {lifecycle, beside: record} = readDurableReplicaLifecycleBeside(
-    dbPath, groupId, replicaIdentity,
-    (db) => RaftRsDurableStore.readDurableRecordIn(db, groupId));
-  if (lifecycle.state === DURABLE_LIFECYCLE_READ.UNREADABLE.state) {
+function durableOwnGroupRecordOf({readable, peerId, record}) {
+  if (!readable) {
     return UNREADABLE;
   }
   return record === null ? NO_LIFECYCLE_ROW : Object.freeze({
-    membership: membershipOf(record, lifecycle.peerId),
+    membership: membershipOf(record, peerId),
     history: historyOf(record),
   });
 }
@@ -108,5 +114,6 @@ function readDurableOwnGroupRecord(dbPath, groupId, replicaIdentity) {
 export {
   DURABLE_OWN_HISTORY,
   DURABLE_OWN_MEMBERSHIP,
-  readDurableOwnGroupRecord,
+  durableOwnGroupRecordOf,
+  readOwnGroupRecordIn,
 };
