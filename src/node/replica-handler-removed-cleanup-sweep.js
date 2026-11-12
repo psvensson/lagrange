@@ -22,7 +22,7 @@ import {SERVICE_TYPE} from '../constants/index.js';
 import {
   REPLICA_CLEANUP_ACQUIRE_OUTCOME,
 } from './replica-cleanup-tombstone-owner.js';
-import {REPLICA_CLEANUP_AUTHORITY_KIND} from
+import {REPLICA_CLEANUP_AUTHORITY_KIND, REPLICA_CLEANUP_COMPLETION} from
   './replica-cleanup-constants.js';
 import {replicaStorageArtifactsAbsent} from './replica-storage-artifacts.js';
 import {isFailedCreateRemoveToken} from
@@ -149,10 +149,9 @@ async function completeSweepCleanup(owner, authority, fs, dbPath) {
     const completed = authority.kind ===
       REPLICA_CLEANUP_AUTHORITY_KIND.COMPLETE ?
       authority : await owner.markComplete(authority, {artifactsAbsent: true});
-    if (!completed || !await owner.isReceiptOperationTerminal(completed)) {
-      return completed || false;
-    }
-    return owner.release(completed, {artifactsAbsent: true});
+    if (!completed) return false;
+    const decision = await owner.releaseCompletionReceipt(completed);
+    return decision.outcome === REPLICA_CLEANUP_COMPLETION.RECEIPT_RELEASED;
   }
   return owner.release(authority, {artifactsAbsent: true});
 }

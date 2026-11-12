@@ -41,6 +41,7 @@
 // on a doubling backoff. Every hold and end is one typed log line;
 // readDiagnostics is the visible state (getStats().snapshotInstalls).
 
+import {releaseReplicaRuntime, releaseReplicaCleanupDebt} from './replica-runtime-cleanup-custody.js';
 import {RAFT_SNAPSHOT_RECREATION_STATE as RECREATION} from
   '../raft/snapshot-catchup-constants.js';
 import {RAFT_SNAPSHOT_OFFER_RECEIVER as RECEIVER} from
@@ -154,6 +155,7 @@ function recordDiagnostics(record) {
     removalOperations: record.removalOperations.size,
     retryBoundMs: record.backoffMs,
     install: record.install,
+    releaseFailure: record.releaseFailure,
     startedAtMs: record.startedAtMs,
     lastAttemptAtMs: record.lastAttemptAtMs,
   });
@@ -271,11 +273,11 @@ function createReplicaSnapshotInstallOwner(handler) {
   // retries it and refuses a new create of the replica meanwhile.
   const releaseProduct = async (record, replacement) => {
     try {
-      await replacement.shutdown();
-    } catch {
-      handler.pendingRuntimeShutdowns.set(replacement, {
-        replicaId: record.replicaId, partitionId: record.partitionId,
-        primary: null});
+      await releaseReplicaRuntime(handler, replacement, record.replicaId, record.partitionId);
+    } catch (error) {
+      // Episode settlement is quiescence only. The host retains the exact
+      // release failure; removal must separately prove physical closure.
+      record.releaseFailure = error;
     }
   };
 
@@ -323,9 +325,18 @@ function createReplicaSnapshotInstallOwner(handler) {
     let interruption = interruptionOf(record);
     if (interruption !== NOT_INTERRUPTED) return attemptAnswer(interruption);
     try {
-      await record.previous.shutdown();
+      await releaseReplicaRuntime(handler, record.previous, record.replicaId, record.partitionId);
     } catch (error) {
       return attemptAnswer(ATTEMPT.PREVIOUS_SERVICE_NOT_RELEASED, error.message);
+    }
+    interruption = interruptionOf(record);
+    if (interruption !== NOT_INTERRUPTED) return attemptAnswer(interruption);
+    // A prior unpublished product may still own the database even after its
+    // episode step settled. The existing retry must release it before opening.
+    try {
+      await releaseReplicaCleanupDebt(handler, record.replicaId, record.partitionId);
+    } catch (error) {
+      return attemptAnswer(ATTEMPT.RUNTIME_RELEASE_DEFERRED, error.code);
     }
     interruption = interruptionOf(record);
     if (interruption !== NOT_INTERRUPTED) return attemptAnswer(interruption);
@@ -414,7 +425,7 @@ function createReplicaSnapshotInstallOwner(handler) {
       retryTimer: NO_RETRY_TIMER, attemptInFlight: NOTHING_IN_FLIGHT,
       stepInFlight: NOTHING_IN_FLIGHT, claimSettled: NOTHING_IN_FLIGHT,
       removalOperations: new Set(), abort: new AbortController(),
-      install: NO_INSTALL_OUTCOME, ended, settleEnded,
+      install: NO_INSTALL_OUTCOME, releaseFailure: null, ended, settleEnded,
     };
     record.custody = Object.freeze({replicaId: record.replicaId,
       isHeld: () => record.live});

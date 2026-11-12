@@ -191,7 +191,10 @@ test('P7 lost cleanup outcomes resolve by authoritative token observation',
     const takeover = await cleanupOwner(store, 'token-takeover', 500)
       .takeoverRemoving({
         replicaState: {serviceId: 'r7', partitionId: PARTITION_ID,
-          nodeId: NODE_ID},
+          nodeId: NODE_ID, createdAt: 400, createAttemptToken: null,
+          state: 'removing', serviceType: 'partition', replicaIdentity: 'r7',
+          groupId: null, cleanupToken: null, lifecycleIdentityAuthoritative: true,
+          durableVersionColumn: 'state_entered_at', durableVersion: 400},
         durableVersionColumn: 'state_entered_at',
         durableVersion: 400,
       }, 'token-proof');

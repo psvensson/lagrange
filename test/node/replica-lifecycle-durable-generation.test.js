@@ -845,27 +845,36 @@ test('generation-specific cleanup takeovers cannot coalesce old and new lifetime
   async (t) => {
     initializeEnvironment();
     const writes = [];
-    const owner = new ReplicaCleanupTombstoneOwner({
-      gateway: {
-        async submitMutation(mutation, options) {
-          writes.push({mutation, options});
-          return mutationResult(false);
-        },
-      },
-      observe: async () => ({available: false, row: null}),
-      randomUUID: (() => {
-        let token = 0;
-        return () => `token-${++token}`;
-      })(),
-    });
+    let token = 0;
     for (const generation of [1300, 25]) {
+      const row = serviceRow('replica-coalescing', ReplicaState.REMOVING,
+        generation, 'partition-coalescing');
+      let submitted = false;
+      // Different process lifetimes have separate continuation custody. A
+      // live owner cannot abandon its first retained intent for a successor.
+      const owner = new ReplicaCleanupTombstoneOwner({
+        gateway: {
+          async submitMutation(mutation, options) {
+            writes.push({mutation, options});
+            submitted = true;
+            return mutationResult(false);
+          },
+        },
+        observe: async () => ({available: !submitted, row: submitted ? null : row}),
+        randomUUID: () => `token-${++token}`,
+        now: () => generation,
+      });
       await t.rejects(owner.takeoverRemoving({
         durableVersionColumn: 'state_entered_at',
         durableVersion: generation,
         replicaState: {
-          serviceId: 'replica-coalescing',
-          partitionId: 'partition-coalescing',
-          nodeId: NODE_ID,
+          serviceId: row.service_id, serviceType: row.service_type,
+          partitionId: row.partition_id, nodeId: row.node_id,
+          replicaIdentity: row.replica_id, groupId: row.group_id,
+          createdAt: row.created_at, createAttemptToken: row.create_attempt_token,
+          cleanupToken: row.cleanup_token, state: row.status,
+          durableVersionColumn: 'state_entered_at', durableVersion: generation,
+          lifecycleIdentityAuthoritative: true,
         },
       }), {code: REPLICA_CLEANUP_ERROR_CODE.CLEANUP_OWNER_DEFERRED});
     }
