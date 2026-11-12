@@ -558,16 +558,11 @@ class MembershipPublicationCoordinatorReads {
     if (!readinessService || typeof readinessService !== 'object') {
       return false;
     }
-    let publicationConvergence = null;
-    try {
-      publicationConvergence = await readMembershipPublicationConvergence(
-        readinessService,
-        nodeId,
-        this.now(),
-      );
-    } catch (_error) {
-      publicationConvergence = null;
-    }
+    const publicationConvergence = await readMembershipPublicationConvergence(
+      readinessService,
+      nodeId,
+      this.now(),
+    );
     return shouldUseAuthoritativePriorityRecoveryRediscovery(nodeId, {
       cacheVisible: false,
       publicationConvergence,

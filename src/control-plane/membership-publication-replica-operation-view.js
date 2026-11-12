@@ -22,12 +22,12 @@ const ABSENT_VIEW = Object.freeze({
 const MALFORMED_REPLICA_OPERATION_ROW_MSG =
   'Malformed replica_operations row excluded from membership publication reads';
 
-function malformed(operation, reason, error) {
+function malformed(operationId, reason, error) {
   return Object.freeze({
     state: REPLICA_OPERATION_VIEW_STATE.MALFORMED,
     view: null,
     reason,
-    operationId: operation.operation_id ?? operation.operationId ?? null,
+    operationId: operationId ?? null,
     error,
   });
 }
@@ -41,13 +41,16 @@ function readReplicaOperationView(operation) {
     return ABSENT_VIEW;
   }
   const isDatabaseRow = Object.hasOwn(operation, 'operation_id');
+  // Each shape names its id in its one spelling.
+  const operationId = isDatabaseRow ? operation.operation_id :
+    operation.operationId;
   let stepsHistory = isDatabaseRow ? operation.steps_history :
     operation.stepsHistory;
   if (typeof stepsHistory === 'string') {
     try {
       stepsHistory = JSON.parse(stepsHistory);
     } catch (error) {
-      return malformed(operation,
+      return malformed(operationId,
         REPLICA_OPERATION_VIEW_MALFORMED_REASON.STEPS_HISTORY_UNPARSABLE, error);
     }
   }
@@ -78,7 +81,7 @@ function readReplicaOperationView(operation) {
   try {
     identity = assertCanonicalRebalancerEntityIdentity(normalized);
   } catch (error) {
-    return malformed(operation,
+    return malformed(operationId,
       REPLICA_OPERATION_VIEW_MALFORMED_REASON.ENTITY_IDENTITY_INVALID, error);
   }
   return Object.freeze({

@@ -63,7 +63,7 @@ const MEMBERSHIP_PUBLICATION_CHANGE_REFUSAL = Object.freeze({
 
 const UPDATED_AT_COLUMN = 'updated_at';
 
-function isMembershipPublicationStatusTransitionAllowed(fromStatus, toStatus) {
+function isAllowedMembershipPublicationStatusTransition(fromStatus, toStatus) {
   const allowed = MEMBERSHIP_PUBLICATION_STATUS_TRANSITIONS[fromStatus];
   return Array.isArray(allowed) && allowed.includes(toStatus);
 }
@@ -92,7 +92,7 @@ function settleNextRow(durableRow, nextRow, nowMs) {
   }
   const fromStatus = normalizeControlPlanePublicationRow(durableRow).status;
   const toStatus = normalizeControlPlanePublicationRow(candidate).status;
-  if (!isMembershipPublicationStatusTransitionAllowed(fromStatus, toStatus)) {
+  if (!isAllowedMembershipPublicationStatusTransition(fromStatus, toStatus)) {
     return refusePublicationChange(
       MEMBERSHIP_PUBLICATION_CHANGE_REFUSAL.STATUS_TRANSITION_NOT_ALLOWED);
   }

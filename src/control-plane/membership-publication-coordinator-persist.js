@@ -33,6 +33,7 @@ import {
 } from './membership-publication-coordinator-reconcile-helpers.js';
 import {statePriorityPartitionSummary} from
   './membership-publication-priority-partition-summary.js';
+import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
 
 // Why the coordinator refused a publication write before asking the
 // publications owner (the owner's and the change's own refusals are named by
@@ -180,7 +181,7 @@ class MembershipPublicationCoordinatorPersist extends
         serializeMembershipPublicationRow(candidatePublicationRow));
     }
     return this.acknowledgePublication(
-      candidatePublicationRow.publication_id || candidatePublicationRow.publicationId,
+      normalizeControlPlanePublicationRow(candidatePublicationRow).publicationId,
       normalizedNodeId,
       options,
     );
