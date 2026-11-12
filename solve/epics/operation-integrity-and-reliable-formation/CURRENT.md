@@ -6,12 +6,24 @@ Governing rule-set: revision 5; rules source
 
 ## Candidate and acceptance
 
-The takeover baseline is `d0f86d73cfd3272cc35788dab113b9741f70ec3b`, verified
+The takeover baseline was `d0f86d73cfd3272cc35788dab113b9741f70ec3b`, verified
 against origin. Its source matches `21a82d45b`; the later commit adds the
-[handover and reports](HANDOVER-2026-11-12.md). Neither has a lab result or
-independent approval of the composed source. The prior handover lab run
-was `22f9791e9`, with 12 failing files; the takeover run below supersedes it
-for its own exact candidate. Nothing is landed.
+[handover and reports](HANDOVER-2026-11-12.md).
+
+The latest completed full lab is **`5e58474b13870c95ea6bd6175942c33984cd6ac9`**:
+2,758 passed, 13 failed out of 2,771 files; 107,251 runner assertions. Source
+remained clean throughout. Four remote hosts and controller placement ran it.
+The copied evidence manifest is
+`/tmp/lagrange-full-lab-5e58474b1-evidence-20261112/manifest.json`, SHA-256
+`ce80197c4f09b39662877a24d35192d682dc5c294a08eb1d38b733b02e276042`.
+The earlier takeover run at `eaccbd37a` had 28 failures. No whole-integration
+approval or landing has occurred. The later reviewed CDC witness is composed
+as `35d74da00`; that delta has no execution result on F yet.
+The reviewed historical-reference resolver is composed as `fc43b3a43` from
+preserved WIP `b7e5aca62`. Its regenerated metadata covers 2,775 tests; shard
+and source-index audits pass. Integration inventory found two new test-fixture
+clones: 625 groups / 22,875 lines versus 623 / 22,817. A separate Astra
+continuation owns the shared-fixture repair; no baseline is raised.
 
 The [formation Quest](../../quests/fresh-formation-user-table-routability/quest.json)
 retains its sealed acceptance. Its authoritative continuation log remains in
@@ -70,8 +82,13 @@ are preserved; no source writer works in the primary checkout.
   80-file/37-mutation report does not cover the final snapshot. Checkpoint
   evidence and continuation log belong in its isolated candidate; the primary
   checkout does not contain that Quest. Stronger-model implementation of the
-  exact-object custody core is now underway; destructive cleanup wiring,
-  durable continuation and canonical marker closure remain dependent work.
+  exact-object custody core has bounded independent approval. Dependent
+  cleanup/REMOVE/recreation work now passes the native no-unlink and finite
+  recovery witnesses, but independent review reproduced additional finite-loss
+  recovery failures. Its rejected candidate remains frozen while the coordinator
+  prepares a separate repair. Composition with F
+  remains required. Canonical marker closure is a separate parallel worktree;
+  broader CREATE continuation and full acceptance remain open.
 - Lab fixture repair: the required cache subscription contract exposed a
   family of incomplete test doubles. Stronger-model repair in
   `lagrange-codex-lab-fixtures-20261112` has 26 focused files passing with
@@ -90,19 +107,50 @@ are preserved; no source writer works in the primary checkout.
   but fresh review rejected four more production transitions: invalid announce
   does not withdraw leadership, inbound reads stale authority, removed-leader
   decisions ignore refusal, and row publication restores retained leadership.
-  It remains excluded; a fresh Astra max-effort worker owns reimplementation. CDC timing/occurrence failures
-  remain under diagnosis; package/solve budgets and census closure remain open.
+  It remains excluded. The subsequent 73-path repair passed 48 focused files
+  with 2,622 assertions and four engaged negative controls. Fresh independent
+  review nevertheless reproduced learner/voter confusion, WASM forwarding
+  without valid leadership tenure, and failure to recover an unchanged native
+  follower leader identity. The sealed rejection is retained; fresh Astra
+  author `01a1cedb-5e41-7eb3-bcae-f82a7581de61` owns the repair. CDC timing/occurrence failures
+  remain under diagnosis. The bounded native CDC negative-phase repair has
+  independent approval and is composed as `35d74da00`; historical JOINED
+  causality remains unresolved. A separate diagnostic WIP `be9d4c15f` on
+  locked `tv-dator` reproduced the foreground timeout before fixture setup
+  completed: only `fixture-start` appeared, before any retry/stop assertion.
+  The specific startup cause remains unknown; the 215-file selected lab run
+  is still in progress. Package/solve budgets
+  and census closure remain open.
   The independently approved retention plan selects only superseded v3/v5/v7
-  designs. Its prerequisite historical-reference checker repair is underway
-  in a separate Quest; no relocation has occurred.
+  designs. Its prerequisite historical-reference checker r3 has independent
+  approval in a separate Quest; the whitespace-only correction has independent
+  syntax-equivalence applicability. Its receipt uses `complete` where the probe
+  requires `pass`; metric zero is not completion, and correction is assigned
+  with the duplication repair. A separately sealed retention Quest has now
+  archived the exact three historical files through canonical upload,
+  re-download and member/source-blob verification in its isolated worktree.
+  All other original solve bytes remain unchanged. The retained archive SHA is
+  `7e59d557879a4d2018a75fa6292c4f97091731df6e999bd2278a5ce854185a8a`.
+  Active footprint there is 20,883,131 bytes (88,389 bytes headroom); historical
+  reference validation passes. Independent post-relocation review and integration
+  remain pending. Existing 18 missing required proofs and migration-inventory
+  absence remain separate failures. Packaging has an independently
+  approved diagnostic prototype plan; the prototype is being implemented,
+  with no package-delivery or installed-provenance approval.
 - Statement cache: Phase 1 of `sqlite-connection-statement-ownership` now
   has independent approval of the owner and three dedicated test files, with
   13 passing cases and engaged negative controls. Its receipt remains incomplete.
-  Production constructor/caller migration against frozen F is now with Astra
-  after the first positive witness used a nonexistent lifecycle table. Nine
-  refusal cases passed; this failure is a witness defect, not a demonstrated
-  product regression. The stopped candidate and exact failure are preserved. It must preserve freshness, resource custody, integer modes
-  and cache performance; full composition needs fresh independent review.
+  Production constructor/caller migration against frozen F reached a frozen
+  95-path candidate with 15 focused files and 187 passing cases. Independent
+  reviewer `01a1cec3-bbef-7f71-86de-41c00c07da42` rejected it: origin-history
+  inspection touches connection state and starts SQL before brand validation,
+  and original-allocation issuance changes synchronous settings before refusal.
+  Fresh Astra max-effort worker `01a1cecf-6752-7082-a44b-d5b864e739a1` owns the
+  entry-boundary repair and systematic sibling inspection. Generic uncached
+  transaction callers remain valid. The rejected manifest is
+  `73327edb822156b7ef395bdd8da6db8c1c43528463f005b55faa10238e3f66d6`.
+  Receiver integration tests, separate permission/guideline repairs and full
+  composed lab verification remain open; no migration approval is claimed.
 
 Repository implementation now defaults to `gpt-6.1-sol`; difficult ownership
 repair uses `gpt-6-astra`. A failed implementation verification transfers to a

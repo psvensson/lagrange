@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2748,
+    "ordinary": 2749,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2774,
-  "digest": "fnv1a32-4c52016a",
+  "censusSize": 2775,
+  "digest": "fnv1a32-a2030162",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -2422,6 +2422,7 @@
     "test/scripts/generate-source-owner-index.test.js": "ordinary",
     "test/scripts/git-invocation-owner.test.js": "ordinary",
     "test/scripts/helper-import-closure.test.js": "ordinary",
+    "test/scripts/historical-evidence-reference-resolution.test.js": "ordinary",
     "test/scripts/historical-record-exemptions.test.js": "ordinary",
     "test/scripts/home-lab-cli-guidelines.test.js": "ordinary",
     "test/scripts/impact-contract-registry.test.js": "ordinary",
