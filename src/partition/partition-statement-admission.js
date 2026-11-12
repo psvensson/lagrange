@@ -5,8 +5,7 @@
 // - executeQuery (the query wire and every internal caller), sessionless and
 //   legacy sessionId-only session statements alike, and executeLocalQuery
 //   (the unreplicated bootstrap path);
-// - the CDC bootstrap direct path's head check, and the local system-table
-//   read (its raw-prepare fallback);
+// - the CDC bootstrap direct path's head check;
 // - the committed SQL apply, where an offending committed statement is
 //   recorded STATEMENT_FAILED `partition_write_statement_refused`, a function
 //   of the command bytes and the replicated schema, identical on every
@@ -432,31 +431,10 @@ function partitionStatementRefusalAnswer(service, sql, refused) {
     refusalLayer: refused.refusalLayer, partitionId: service.partitionId ?? null};
 }
 
-/**
- * Read rows through the owner on a partition that offers only its
- * connection (the local system-table read): reads only.
- * @param {Object} service - The partition (its db).
- * @param {string} sql - The read.
- * @param {Array} [params] - The bound params.
- * @return {Object} {success: true, rows} or the refusal answer.
- */
-function readAdmittedPartitionRows(service, sql, params = []) {
-  const admission = admitPartitionStatement(service, sql, params, PATH.READ_ONLY);
-  if (!admission.admitted) {
-    return partitionStatementRefusalAnswer(service, sql, admission);
-  }
-  return {
-    success: true,
-    rows: admission.statement.all(...params),
-    rowSetComplete: true,
-  };
-}
-
 export {
   admitPartitionStatement,
   classifyPartitionStatementHead,
   partitionStatementRefusalAnswer,
-  readAdmittedPartitionRows,
   runAdmittedPartitionStatement,
   runCommittedPartitionStatement,
   statementRefusalError,

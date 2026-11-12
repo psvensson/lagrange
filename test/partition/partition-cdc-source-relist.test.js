@@ -17,7 +17,8 @@ import {CDC_COMPLETION, buildAlreadyAppliedCdcOutcome, buildCommittedCdcOutcome,
   unknownCdcAcceptance} from '../../src/cdc/cdc-delivery-outcome.js';
 import {COLUMN, SERVICE_STATUS, TABLES} from '../../src/constants/index.js';
 import {INITIAL_PARTITION_IDS} from '../../src/bootstrap/system-table-schemas-constants.js';
-import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE, CONTROL_PLANE_READ_LEADER_MODE} from
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE, CONTROL_PLANE_READ_LEADER_MODE,
+  CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_ERROR} from
   '../../src/control-plane/control-plane-system-table-gateway-constants.js';
 import {NODE_STATE} from '../../src/constants/node-state.js';
 import {PARTITION_CDC_COMMAND, PARTITION_CDC_OBLIGATION_BOUND as BOUND,
@@ -322,16 +323,25 @@ test('S3-D measure 3: a refusing recipient past RELIST_LAG_ROWS leaves the front
 // Explicit owner-row input to the real lifecycle read boundary. These rows
 // model independent membership answers using shared fixture identities. The
 // owner rows can diverge from the sender's cache; this is not a native
-// membership read.
+// membership read. Only the declared complete-cohort query is modeled.
+// Injecting this dependency also wakes metadata point-read owners, whose
+// unrelated requests remain visible and receive typed unavailability.
 function lifecycleAuthority(timeSource, rowsByTable,
   changeResult = (_tableName, result) => result) {
   const reads = [];
   const requests = [];
   return {reads, requests, timeSource, nodeId: 'node-a',
     executeAuthoritativeSystemTableRead: async (tableName, sql, params, options) => {
+      const modeledCohort = Object.hasOwn(rowsByTable, tableName) &&
+        sql === `SELECT * FROM ${tableName}` && Array.isArray(params) && params.length === 0;
+      requests.push({tableName, sql, params, options, modeledCohort});
+      if (!modeledCohort) {
+        return {success: false, rows: [], rowSetComplete: false,
+          errorCode: CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_ERROR.AUTHORITATIVE_READ_OWNER_UNAVAILABLE,
+          error: 'The controlled lifecycle owner models only its complete cohort queries'};
+      }
       reads.push(tableName);
-      requests.push({tableName, sql, params, options});
-      return changeResult(tableName, {success: true, rows: rowsByTable[tableName] ?? [],
+      return changeResult(tableName, {success: true, rows: rowsByTable[tableName],
         rowSetComplete: true, source: 'owner_rpc_lane',
         readAuthorityWitness: {state: 'observed', partitionId: INITIAL_PARTITION_IDS[tableName],
           role: RAFT_ROLE.LEADER, servingNodeId: 'node-a', servingReplicaId: 'r1',
@@ -428,14 +438,18 @@ for (const tableName of [TABLES.SERVICES, TABLES.NODES]) {
         'all actual source obligations remain held');
       assert.equal(readCdcObligationProgress(f.leader.db), null,
         'there is no reclaimed prefix from the incomplete answer');
-      for (const request of authority.requests) {
-        assert.equal(Object.isFrozen(request.options.readAuthority), true);
+      const cohortRequests = authority.requests.filter((request) => request.modeledCohort);
+      assert.ok(cohortRequests.length > 0, 'the actual lifecycle cohort read is engaged');
+      for (const request of cohortRequests) {
+        const context = `${request.tableName}: ${request.sql}, ` +
+          `params=${JSON.stringify(request.params)}`;
+        assert.equal(Object.isFrozen(request.options.readAuthority), true, context);
         assert.equal(request.options.readAuthority.authoritativeReadMode,
-          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED);
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED, context);
         assert.equal(request.options.readAuthority.leaderMode,
-          CONTROL_PLANE_READ_LEADER_MODE.REQUIRED);
-        assert.equal(request.sql, `SELECT * FROM ${request.tableName}`);
-        assert.deepEqual(request.params, []);
+          CONTROL_PLANE_READ_LEADER_MODE.REQUIRED, context);
+        assert.equal(request.sql, `SELECT * FROM ${request.tableName}`, context);
+        assert.deepEqual(request.params, [], context);
       }
 
       phase = 'complete-active';

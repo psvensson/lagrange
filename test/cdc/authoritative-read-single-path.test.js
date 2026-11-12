@@ -59,7 +59,7 @@ function fixture({local = false, leader = true} = {}) {
   };
   const partitions = local ? createLocalSystemTablePartitionServices(TABLE, {
     isLeader: leader,
-    async executeQuery(...args) {
+    async executeLocalQuery(...args) {
       calls.local.push(args);
       return {success: true, rows: [LOCAL_ROW]};
     },

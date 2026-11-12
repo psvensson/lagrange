@@ -20,6 +20,8 @@ import {
   applyCDCIntegrationServiceCacheVisibilityWait,
 } from '../../src/cdc/cdc-integration-service-cache-visibility-wait.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {getSystemCachePrimaryKeyField} from
+  '../../src/cache/system-cache-key-descriptor.js';
 import {CDC_OPERATION, TABLES} from '../../src/constants/index.js';
 import {INITIAL_PARTITION_IDS} from
   '../../src/bootstrap/system-table-schemas-constants.js';
@@ -33,11 +35,15 @@ applyCDCIntegrationServiceCacheVisibilityWait(
   AuthoritativeCatchupCacheRepairHost,
 );
 
-function createServiceStub({readResults}) {
+// These bounded-loop controls declare their local or remote intent explicitly.
+// Rows and complete leader answers below are modeled producer facts; actual CDC
+// ingress, token custody and same-owner healing live in the custody root.
+function createServiceStub({readResults, bootstrapMode}) {
   const applied = [];
   const reads = [];
   const sleeps = [];
   return {
+    bootstrapMode,
     applied,
     reads,
     sleeps,
@@ -48,7 +54,7 @@ function createServiceStub({readResults}) {
       sleeps.push(delayMs);
     },
     logger: {info: () => {}, warn: () => {}, debug: () => {}, error: () => {}},
-    getPrimaryKeyField: () => 'id',
+    getPrimaryKeyField: getSystemCachePrimaryKeyField,
     executeAuthoritativeSystemTableRead: async (tableName) => {
       reads.push(tableName);
       const queue = readResults[tableName];
@@ -77,6 +83,7 @@ function createLeaderCatchupService(cache, rows, observedAtMs) {
   service.executeAuthoritativeSystemTableRead = async () => ({
     success: true,
     rows,
+    rowSetComplete: true,
     source: 'owner_rpc_lane',
     readAuthorityWitness: {
       state: 'observed',
@@ -158,6 +165,7 @@ test(
       error() {},
     };
     service.getPrimaryKeyField = () => 'node_id';
+    service.bootstrapMode = true;
     service.executeAuthoritativeSystemTableRead = async () => ({
       success: true,
       rows,
@@ -259,11 +267,14 @@ test(
 test('CL-014: authoritative catch-up hydration', async (t) => {
   await t.test('applies all rows from every readable table', async (t) => {
     const service = createServiceStub({
+      bootstrapMode: true,
       readResults: {
         control_plane_publications: [
-          {success: true, rows: [{id: 'pub-5', epoch: 5}, {id: 'pub-4', epoch: 4}]},
+          {success: true, rows: [
+            {publication_id: 'pub-5', epoch: 5}, {publication_id: 'pub-4', epoch: 4},
+          ]},
         ],
-        nodes: [{success: true, rows: [{id: 'node-1'}]}],
+        nodes: [{success: true, rows: [{node_id: 'node-1'}]}],
       },
     });
 
@@ -288,13 +299,14 @@ test('CL-014: authoritative catch-up hydration', async (t) => {
       'and continue to the next table',
     async (t) => {
       const service = createServiceStub({
+        bootstrapMode: true,
         readResults: {
           control_plane_publications: [
             {success: false, error: 'pressure', retryAfterMs: 25, deferRetry: true},
             {success: false, error: 'pressure', retryAfterMs: 25, deferRetry: true},
             {success: false, error: 'pressure', retryAfterMs: 25, deferRetry: true},
           ],
-          services: [{success: true, rows: [{id: 'svc-1'}]}],
+          services: [{success: true, rows: [{service_id: 'svc-1'}]}],
         },
       });
 
@@ -318,6 +330,7 @@ test('CL-014: authoritative catch-up hydration', async (t) => {
 
   await t.test('a throwing read never escapes', async (t) => {
     const service = createServiceStub({
+      bootstrapMode: true,
       readResults: {
         control_plane_publications: [new Error('boom')],
         services: [{success: true, rows: []}],
@@ -333,18 +346,22 @@ test('CL-014: authoritative catch-up hydration', async (t) => {
     t.equal(summary.tablesHydrated, 1, 'remaining tables processed');
   });
 
-  await t.test('rows without a primary key are skipped safely', async (t) => {
+  await t.test('a malformed row set refuses before applying a valid prefix', async (t) => {
     const service = createServiceStub({
+      bootstrapMode: true,
       readResults: {
-        services: [{success: true, rows: [{id: 'ok'}, {other: 'no-key'}]}],
+        services: [{success: true, rows: [{service_id: 'ok'}, {other: 'no-key'}]}],
       },
     });
     const summary = await hydrateCdcPropagatedTablesFromAuthority(service, {
       trigger: CDC_CATCHUP_TRIGGER.JOIN_CATCHUP,
       tables: ['services'],
     });
-    t.equal(summary.rowsApplied, 1, 'keyless row skipped');
-    t.equal(summary.tablesHydrated, 1, 'table still counts as hydrated');
+    t.same(service.reads, ['services'], 'the declared source returns the malformed set');
+    t.same(service.applied, [], 'whole-set validation refuses before any prefix repair');
+    t.equal(summary.rowsApplied, 0, 'no row from the malformed set is applied');
+    t.equal(summary.tablesHydrated, 0, 'the malformed table is not hydrated');
+    t.same(summary.tablesFailed, ['services'], 'the table retains its repair obligation');
   });
 
   await t.test(
@@ -353,13 +370,15 @@ test('CL-014: authoritative catch-up hydration', async (t) => {
     async (t) => {
       const sweeps = [];
       const service = createServiceStub({
+        bootstrapMode: false,
         readResults: {
-          // A leader-witnessed owner read is complete enough to authorize a sweep.
+          // The owner explicitly returns a complete, leader-witnessed row set.
           services: [
             {
               success: true,
               // The declared key of a services row (no other field stands in).
               rows: [{service_id: 'svc-1'}],
+              rowSetComplete: true,
               source: 'owner_rpc_lane',
               readAuthorityWitness: {
                 state: 'observed',
@@ -371,12 +390,12 @@ test('CL-014: authoritative catch-up hydration', async (t) => {
               },
             },
           ],
-          // The owner-RPC lane may be served by a stale follower. It can
-          // hydrate, but cannot authorize cache-only deletion.
+          // A stale owner follower cannot establish complete leader authority.
           message_groups: [
             {
               success: true,
               rows: [],
+              rowSetComplete: true,
               source: 'owner_rpc_lane',
               readAuthorityWitness: {
                 state: 'observed',
@@ -393,6 +412,7 @@ test('CL-014: authoritative catch-up hydration', async (t) => {
             {
               success: true,
               rows: [],
+              rowSetComplete: true,
               source: 'owner_rpc_lane',
               readAuthorityWitness: {
                 state: 'observed',
@@ -511,6 +531,7 @@ test('CL-014: a successful non-array row set fails closed', async (t) => {
   service.executeAuthoritativeSystemTableRead = async () => ({
     success: true,
     rows: null,
+    rowSetComplete: true,
     source: 'owner_rpc_lane',
     readAuthorityWitness: {
       state: 'observed',
@@ -609,6 +630,7 @@ test(
       return {
         success: true,
         rows: [],
+        rowSetComplete: true,
         source: 'owner_rpc_lane',
         readAuthorityWitness: {
           state: 'observed',
@@ -653,6 +675,7 @@ test(
       return {
         success: true,
         rows: [],
+        rowSetComplete: true,
         source: 'owner_rpc_lane',
         readAuthorityWitness: {
           state: 'observed',
@@ -707,6 +730,7 @@ test(
     service.executeAuthoritativeSystemTableRead = async () => ({
       success: true,
       rows: [],
+      rowSetComplete: true,
       source: 'owner_rpc_lane',
       readAuthorityWitness: {
         state: 'observed',
@@ -942,6 +966,7 @@ test('catch-up retries spent on a deferred table log one wait_bound_spent ' +
   const deferredAnswer =
     {success: false, error: 'pressure', retryAfterMs: 25, deferRetry: true};
   const service = createServiceStub({
+    bootstrapMode: true,
     readResults: {
       nodes: [deferredAnswer, deferredAnswer],
       services: [new Error('boom')],
@@ -978,6 +1003,7 @@ test('a table whose catch-up retries are spent again with the same failure ' +
   const capture = captureLogger();
   for (let round = 0; round < 2; round += 1) {
     const service = createServiceStub({
+      bootstrapMode: true,
       readResults: {nodes: [deferredAnswer, deferredAnswer]},
     });
     service.logger = capture.logger;

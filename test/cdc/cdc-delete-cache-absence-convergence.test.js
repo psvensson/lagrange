@@ -567,7 +567,7 @@ test(
           SYSTEM_TABLE_NAME.SERVICES,
           {
             isLeader: false,
-            async executeQuery() {
+            async executeLocalQuery() {
               return {success: true, rows: []};
             },
           },

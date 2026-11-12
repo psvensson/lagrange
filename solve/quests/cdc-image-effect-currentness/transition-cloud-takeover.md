@@ -834,3 +834,460 @@ The original generated patch could not be recovered after its staged worktree
 closed; generator success/digests remain stdout evidence only. No reconstruction
 or generator rerun is claimed. The next metadata producer must capture its patch
 with Node before its worktree closes.
+
+
+## Canonical cache effect ownership and measured-complexity decomposition
+
+Original2950's production gateway audit flags the standalone source-effect
+module's direct cache mutation. Root approved consolidating that entire effect
+application in existing SystemTableCache.applySourceCdcEvent and deleting the
+forwarding module, preserving public API, SourceOrder basis owner and all typed
+outcomes/recovery. The exact callsite guard transfers its existing count1 to the
+canonical class, with no count growth, matcher change or production-audit waiver.
+Both impact lists already retain that canonical class; only the deleted path is
+removed. Existing imports have the same effective dependencies through the class.
+
+Root also approved private phase decomposition for measured complexity. The
+canonical applySystemTableChange still visibly owns source invalidation before
+any tombstone mutation/fence, row-fold application, exact-context source recording,
+mutation revision, observation and both notifications. Input capture is read-only
+and retains refusal ordering: generation then exact effect context before row-key
+reads. The fold switch and observer payload publication remain private to this
+same owner. Source vector/member position predicates and per-key coverage use the
+same captured intrinsics and order; supplied sweep snapshot and revision-only
+observation hint predicates remain inside their existing owners. No second state,
+clock, scheduler, decoder or authority path is added. Raw class source is below
+the existing800-line bound; the actual required gates remain lab-owned.
+
+This is a reviewable unverified maintenance candidate over655894. Original21da
+runtime results remain claims about that exact seal, not automatic acceptance of
+this refactor. Catchup completeness remains unchanged pending3076 first-original
+and root's canonical classifier composition. No local tests/checkers executed.
+
+
+### Independent b39 review correction
+
+Root independently read b39 ownership/policy/mutation phases and accepted their design, requesting two exact preservation corrections: defer range.sourcePartition read until original event/table guards, and consume the pre-effect incomingVersionAccepted capture instead of rereading folded.accepted after observers. Both are restored; numeric position predicate also retains original comparison operators/short circuit. This is order restoration only; no new controls or local execution. Remaining metrics/lint are a separate active slice.
+
+
+## Remaining measured metric phases and lint editing
+
+Root's independent final review approved b39+2c4 canonical cache ownership and
+order-restoration slice for lab verification. This next unverified maintenance
+slice addresses the remaining measured non-catchup function complexity within
+existing owners. CDC construction resolves its existing writable dependency,
+partition-provider and logger choices in private synchronous functions. CDC event
+conversion keeps durable row bytes and ordinary row normalization separate;
+ordering diagnostics remain before the same apply try/catch. The canonical
+handler retains both actual apply calls. Relist image result processing and image
+diagnostics are private synchronous phases: original capture/currentness checks,
+awaits, slot try/finally, reentrant observer recheck and paced retry stay in place.
+Projection cache selection remains synchronous unless the original explicit
+provider is async. Raft timing calculation is private; validation, configuration
+assignment, configureTick, optional runtime interval, log and return keep order.
+No asynchronous wrapper, clock, registry, alternative authority or gate change
+was added by these extractions.
+
+The original3003 lint locations were corrected through source edits: braces,
+indentation, line wrapping, unused imports and padded blank lines. Assertions,
+held effects, native controls and timing bounds remain unchanged. This does not
+claim lint passed; the next exact lab static run must measure it. Raw R2 root is
+1442 lines and cache/source-order files are696/731 lines, below existing file-size
+thresholds; no local checker was executed. Catchup's measured59/cognitive112 is
+still an open independent phase and is not hidden by this freeze. Root-owned
+executeOwnerLocalRead complexity is handled by the authority composition.
+
+
+## Paged fixture import failure and bounded correction
+
+Original3087 on exact655894 executed zero assertions. Its complete2078-byte
+stream SHA256`09ebd054f4f82c3576597d38ff91c18d87856b8cfd0217b280628f40af6bd605`
+stopped at module instantiation: the new fixture imported private
+SOURCE_RELIST_STATE, which the source-order module does not export. No stopped,
+reset or recovery outcome was measured in this attempt. The original is retained.
+
+Source inspection confirms positionOf exposes its diagnostic relist value and
+existing R2 controls already assert literal`no_relister` and`idle`. Root
+independently reviewed and approved blob`7e36f125e84bb62750c254f1505b9c3316fb2fbb`:
+remove only the invalid named import and use those same public diagnostic values.
+All semantic assertions, exact image-page checks, waits and clocks are unchanged;
+no production export or behavior is added. This tests-only correction stays on
+655894/source355a0121ec928d076ae2dc14cb44d7ddd0b90b54 for one affected-root lab
+renewal, independent of active maintenance source. No local execution.
+
+
+## Catchup completeness and selected-token controls (tests-only)
+
+Root independently reviewed and approved test blob
+`dbb64749d68b455e90db5e2b43b7eaf2e6bb89f8` on the unchanged resource source
+`21da553a06fd5580c3abd0f7b183559e0a957185` / source tree
+`4d6bee138b142836e7f246bef9fc650801324f5c`. The controls execute actual
+CDC catchup, authoritative read flow and SystemTableCache through controlled RPC
+and local partition ports. They are not native membership or snapshot proof.
+
+The nine incomplete original owner forms must preserve an unseen cached row,
+complete observation debt and the same selected token before same-owner complete
+healing. Explicit null/mutable authority must refuse before any owner/effect and
+then accept a later valid token. Explicit bootstrap local positive repair remains
+provisional: no remote prerequisite, absence sweep or complete watermark.
+
+Root approved the corresponding design boundary: only an omitted token may be
+constructed; a supplied token must pass the canonical owner assertion unchanged.
+Remote full-collection catchup requires the existing canonical complete-result
+classifier before absence, freshness or hydrated claims. The controlled bootstrap
+positive may repair keys without claiming collection completeness. The production
+correction will consume the composed canonical classifier rather than introduce a
+second decoder. These tests are frozen before that correction for a first lab
+original. No local execution or acceptance claim.
+
+
+## Catchup original3076 and canonical consumer correction
+
+The exact tests-only6396 original3076 (remote908b2e56f9e3b4205340c78cd177aebfb07d9be6,
+source4d6bee138b142836e7f246bef9fc650801324f5c) is complete:13 cases,2 pass,11 fail.
+Its full16579-byte stream SHA256
+`27482200cd537754aefa54c20ad0abb9d0e8e8a7785570d59a4297b727e9b4c6` is retained at
+`lab-access-20261112/cdc-catchup-authority-red-worker.log` in the shared workspace.
+Null and mutable supplied tokens first fail missing expected rejection. Each of
+nine incomplete original owner forms first fails because the previously unseen
+cached row was actually removed (test154/assertNoCompleteEffect93). Later repair,
+sweep, freshness, exact-token and same-owner healing assertions were not reached.
+The explicit bootstrap provisional positive and separate complete RPC positive
+passed. This is actual CDC/read-flow/cache composition with controlled owner ports,
+not native membership or snapshot proof. The coordinator verified source and full
+custody; this author independently inspected the original hash and failure sites.
+
+History ties the fault to owners rather than just the latest normalizer:
+`d29c7d8c84` introduced truthy/frozen token replacement;`194f42d496` changed default
+lane intent while retaining that admission hole. Initial catchup`77a048b08b`,
+absence sweep`8af2ae3b88`, leader/generation reconciliation`a8f546c344`, empty sweep
+`620bb94600` and complete receipt`51e2801ef3` progressively added destructive and
+complete effects without requiring original result completeness. The existing
+etcd and Kubernetes collection/version references above inform the separation of
+positive observations from complete absence authority; they are not project proof.
+
+The reviewed authority/CDC composition7f was independently checked against both
+parents before this branch fast-forwarded. Reviewed paged7386 and catchup6396
+controls then merged at8a397b6f6094656ab263e4279a93835e75285371, retaining both
+append-only evidence histories and the identical source tree
+`b2cc2e5d8c8b8003460af7b351572903598cb4cf`.
+
+The new catchup attempt consumes the actual shared
+`assertControlPlaneOwnerReadAuthority` for every supplied token; only undefined
+permits construction. One exact request/token is retained across all tables and
+bounded retries. Selected RPC complete effects require the existing canonical
+`isCompleteAuthoritativeReadResult` on the original result plus matching leader
+witness and valid whole row set. Selected LOCAL stays provisional even if an
+answer claims another lane: no absence sweep or complete observation can be
+borrowed from response shape. Original per-attempt mutation snapshot/generation
+precedes the read, and the same snapshot reaches repair/sweep/receipt after the
+read. No authority switches, new decoder, retry clock or registry are introduced.
+
+Private phases separate setup, read admission, synchronous effects and per-table
+retry. The same retry hints, bounds, shutdown-aware delay and terminal effect gates
+remain. The only added async boundary is the per-table helper return, after its
+failure/hydration bookkeeping and before the next table's existing terminal check;
+there is no new await between snapshot/read result and synchronous effects.
+Physical completeness, race/terminal controls and measured complexity remain owed.
+
+Coupled fixture audit found older modeled hydration controls that already omit
+canonical table keys/local intent under8a. Root requested their untouched original
+on8a before any passing/settled claim. Draft migration explicitly declares local
+bootstrap for bounded-loop models and canonical keys, while intended complete
+leader answers explicitly supply rowSetComplete. The old keyless-prefix success
+expectation contradicts the existing whole-set validator; proposed replacement
+retains engagement and requires zero prefix effects/failed table. Complete race,
+absence, retry and watermark assertions remain unchanged. The new custody root's
+bootstrap fixture uses the canonical executeLocalQuery port, anticipating the
+independently reviewed producer closure; no compatibility adapter is added.
+
+## Separate systemic configureTick typed-turn debt
+
+Independent reviewer takeover_inventory found a pre-existing typed-result hole
+while reviewing4f16's semantic-preserving timing extraction. Full source caller
+census contains four configureTick consumers: upper applyRaftTimingConfig in
+`src/message-group/message-group-service-raft-timing.js` and
+`src/partition/partition-service-raft-init-base.js` treat the result as a boolean;
+their applyRuntimeTickInterval siblings correctly require settled plus CORE_OK.
+The producer in`src/raft/raft-rs-operation-port.js` returns a named settled turn,
+including a truthy settled CORE_REFUSED/CLOSED from dispatch. Thus an omitted or
+unchanged tick can report runtime success and log application despite refusal;
+a changed tick can proceed to a second configuration call after the first failed.
+
+Historical owner migration`2d4dfcf60b2e438bf70e0cb9434b3a7780a98f5a`
+(always-promise-port-answers,2026-11-08) changed configureTick to named turns and
+migrated the two interval helpers, but omitted both upper consumers. The current
+maintenance extraction retains that behavior and does not claim it correct.
+Downstream`src/config/dynamic-config-startup-wiring.js` counts true as runtime
+applied; its separate desired configuration acceptance is not runtime proof.
+`leadershipTransferWindowMaxMsOf` in partition-service-raft-membership-administration
+also consumes raftTimingConfig as timing evidence. Both upper methods assign that
+field before native configuration, while initialization separately uses it as
+configuration input, so desired-versus-applied custody needs an explicit design.
+
+Required independent slice: producer-shaped controls for both actual service
+methods across omitted/unchanged/changed tick and settled CORE_REFUSED/CLOSED versus
+CORE_OK, proving refusal cannot log/report success or start a second interval
+application and the same owner later succeeds. An actual closed operation-port
+control can establish typed refusal without claiming native leadership acquisition.
+Audit desired/applied field consumers before deciding publication order. Existing
+operation-port turn tests establish settlement but not these upper consumers.
+No behavioral fix, local execution or acceptance is bundled into4f16/catchup.
+
+
+## Catchup owned-row-vector controls (tests-only on8a)
+
+Pre-freeze independent source review found that catchup validates with live
+rows.every, later applies with for-of, and consults a separate service key provider.
+RPC normalization retains the original row vector; LOCAL merging separately
+iterates it, so neither leaf currently proves owned membership. This repeats the
+retained-input/intrinsic/key-custody pattern, not an isolated completeness failure.
+Root approved new discriminators on unchanged8a/sourceb2 before capture correction.
+
+Nineteen added actual-CDC/cache controls exercise own every/iterator carriers,
+sparse membership, key accessor, row/nested serialization hooks, nested array
+accessor, proxy row, inherited key and duplicate keys; all refuse before effects
+and heal through the same selected owner. Two valid-vector controls alter the live
+Array every/iterator only for the target row shape, restore before final assertions,
+and require the real complete repair/sweep to remain useful without that callback.
+A first-repair mutation changes the borrowed vector's second key, nested data and
+membership; admitted rows must retain their original data. Two divergent/throwing
+service key providers must never reinterpret captured canonical keys. Four malformed
+selected-token controls install throwing tables/attempts/now/clock dependencies;
+canonical token refusal must precede them, then the same service heals.
+
+These controls extend the13 original authority/completeness controls, whose original
+3076 remains separate evidence. No source is changed, no callbacks are assumed
+unreachable, and no new result is claimed. Root owns the proposed one shared
+captureSystemTableRows(tableName, rows) data API and canonical JSON capture utility;
+this lane will consume its reviewed frozen {rows, keys} through indexed repair and
+sweep paths. Capturing data supplies no authority or completeness on its own.
+
+Root independently read and bounded-APPROVED blob`f0ff069fc0a3abb90a96b1d088782760203d3f7c` for its first lab original. This approves the19 new control obligations and unchanged8a source seal, not any result or candidate correction. Later assertions remain unmeasured until the full original stream establishes their engagement.
+
+
+## Reviewed producer/control composition and paged3121 evidence
+
+Root authorized composition of independently reviewed authority producer8c6b4732
+with preserved initial catchup5426 and tests-onlye260. Producer source files match
+8c exactly; no production conflict occurred. Documentation conflicts were pure
+append-only suffixes and both histories were retained. The sole test auto-merge
+combines the existing canonical bootstrap-port declaration with the19 new controls.
+Original8a ande260 first-original source seals remain unchanged. The current source
+still lacks owned row-vector capture and early selected-token precedence; root owns
+the one shared capture API, so this composition is not a candidate acceptance claim.
+
+Coordinator fully verified paged-only3121 on7386 (remote435fc84c6dbbd36f1d7cf5d0a82b79ee3e0c2f6e,
+tree66540e2968afcba8e671b3afd7f68a8779459a2a):one root,9 assertions PASS,
+Node22.23.2/SQLite identity and all terminal scopes matched. Full1220-byte original
+stream SHA256`22552c417dae05a2cc04089a25de93a166a01b3b40210d2008b7bc5961ff0ed1`
+is retained at lab-access-20261112/cdc-paged-stop-import-fixture-worker.log.
+The earlier3087 zero-assertion import failure and3001 original diagnostic failure
+remain separate. This establishes the stop/reset/resource continuation controls on
+that exact source; it does not certify later maintenance or this composition.
+
+
+## Owned row capture: language-level design references
+
+The official ECMAScript 2025 algorithms clarify why ordinary collection and JSON
+operations cannot establish the required ownership boundary. Array.prototype.every
+skips absent elements and observes values when visited; its success therefore does
+not establish a dense, retained vector. SerializeJSONProperty looks up and calls
+toJSON, so general JSON serialization can execute input-owned behavior. Native JSON
+parse's InternalizeJSONProperty visits descendants before invoking the reviver,
+which supports freezing the newly parsed data through one captured reviver after
+the existing strict serializer has admitted it.
+
+Primary references:
+- https://tc39.es/ecma262/2025/multipage/indexed-collections.html#sec-array.prototype.every
+- https://tc39.es/ecma262/2025/multipage/structured-data.html#sec-serializejsonproperty
+- https://tc39.es/ecma262/2025/multipage/structured-data.html#sec-internalizejsonproperty
+
+These are design references, not evidence that project callers are safe. The
+project proof remains the exact sealed caller and serializer controls, including
+reentrant mutation, nested accessors, cycles, canonical keys, and same-owner useful
+recovery. One shared capture owner will retain data only; it cannot grant leader
+authority, source currentness, row-set completeness, or absence permission.
+
+
+## Retained witness across cache callbacks: tests-only extension
+
+Source inspection found a coupled retained-evidence boundary: RPC normalization
+keeps the answer's original readAuthorityWitness object, the native partition
+producer returns a mutable plain witness, and catchup rereads it after row and
+absence callbacks. A retained row vector alone cannot protect that observation
+from a callback changing its time or serving identity between admission and
+publication. Root approved two discriminators before the consumer correction.
+
+The actual cache onCacheApplyChange callback mutates the borrowed witness during
+one real row repair or one real absence deletion. Each control first requires the
+callback and original owner read to engage, then checks original repair and sweep
+times, original published receipt fields, actual cache state, and later useful
+progress from the same owner at a timestamp below the injected future stamp. The
+controlled owner ports are explicit; this is not native consensus-serving proof.
+Upstream zero-accessor/proxy witness admission remains a separate boundary, since
+these controls supply a plain mutable witness and measure retention after admission.
+
+The extension preserves all32 prior catchup controls on the unchanged8a source.
+Coordinator confirms the e260 packet was not submitted and holds the prepared
+normal-output request for this reviewed extension; original e260,8a and3076 remain
+immutable history. No execution or candidate result is claimed.
+
+Root independently read both controls and the real cache apply/sweep listener owners, and bounded-APPROVED test blob`57334d12348c2352d1ac9a8ac330f484be823057` for first-original lab measurement. This approves engagement and intended obligations only, not runtime success or source correction.
+
+
+## Local note merge correction
+
+An append-only merge resolver refused a non-prefix history because earlier merged
+suffixes were retained between common entries. The orchestration incorrectly
+continued after that refusal and committed conflict markers in the two note files
+in local unaccepted, untransported merge e9cdc19fc. Production source was unchanged. The notes
+are reconstructed from the exact pre-merge parent plus only the new control
+branch suffix; all earlier entries and text remain intact. This correction is
+metadata only, and no test, transport, or acceptance was based on the bad note
+representation. Subsequent dependent operations stop on a failed command.
+
+
+## Reviewed owned catchup and absence consumer checkpoint
+
+Composition18fa49c03 retains the reviewed shared primitive349b and all original
+catchup controls through a82b. The three consumer source changes use that one
+canonical data owner: catchup selects its original token before optional setup,
+then captures original rows, canonical keys and witness data before consulting
+cache currentness or invoking repair callbacks. One frozen receipt carries the
+original observation time, serving fields and pre-read source generation through
+repair, absence and publication. Indexed effects do not consult a second key
+provider or skip an admitted row as a missing-key success.
+
+The cache absence owner captures the complete canonical key membership before
+any deletion. Visibility repair no longer repeats row normalization and key
+selection before calling that owner; it passes the original row set through the
+existing terminal-gated reconciliation entry. Keyed positive repair retains its
+existing canonicalization owner. No new fallback, decoder, registry, timer or
+clock is introduced. Completeness and original leader authority remain separate
+from data capture; bootstrap local rows remain provisional.
+
+Root independently read the complete three-source plus impact delta and the
+actual witness, cache listener, sweep and reconciliation owners, and bounded-
+APPROVED patch0905aea378bad906cb6dfb81a6b950c88d82e72331335426fd3c39bb152a1dc4.
+The pre-read snapshot, retry and terminal gates remain in place. Manual impact
+edges now include shared capture owners and canonical capture, serializer and
+anti-entropy roots. Generated metadata and all project checks remain lab-only.
+Upstream hostile witness carriers and broader cache protocol obligations are not
+certified by these plain retained-witness controls.
+
+Coordinator also supplied the complete original3110 combined4c3 stream:
+139376 bytes, SHA256a25ac7c8289448da0d3c420c1647db0f11ec11f61c462a64399022d00deca0b5,
+retained at lab-access-20261112/authority-cdc-composed-core-worker.log. R2 was57/58:
+token receipt case57 reached its final image-prefix assertion and saw null versus
+P10; bootstrap token case58 passed. Shutdown was23/24: structural case24 reported
+the repair apply callsite unexercised. Recipient was7/19: all twelve new cases
+passed initial refusal/debt checks, then saw ANY versus REQUIRED in the captured
+request assertion; later healing and retirement were not reached. These original
+failures remain under causal inspection and are not accepted by this checkpoint.
+The a82b and9248 first-original packets are separate, still awaiting lab evidence;
+no test or static result is attributed to this consumer source.
+
+
+## Reviewed composed fixture dispositions after original 3110
+
+The source composition at 2ff733de93057a49afbc04d501ce56f59c3ef8d0 retains the
+reviewed catchup consumer 02673 and local-image owner 9ff8. Its source tree is
+62f344b7fdbff370380cf3870fb50da182d1f14b. Rule-set revision 5 and the current
+owners were re-read on resume. This checkpoint changes no production source.
+
+Original 3110 remains immutable: the 139376-byte full log has SHA256
+ a25ac7c8289448da0d3c420c1647db0f11ec11f61c462a64399022d00deca0b5. Its three first
+failure boundaries have distinct fixture dispositions:
+
+- R2 case 57 had already passed token identity, scope, generation-bound receipt,
+  reconciliation and freshness assertions. Its final expectation that the prior
+  CDC image prefix remained current contradicted the canonical observation
+  owner's synchronous basis invalidation. The revised control preserves all
+  earlier assertions, requires GAP, null position and retained NO_RELISTER debt,
+  then registers the real service relister and requires one useful image read,
+  the later row and CURRENT at image 11. No receipt is treated as a source prefix.
+- Shutdown case 24 had reached the structural census and found the cache repair
+  callsite unexercised. Its default controlled owner answer lacked the leader
+  witness required by the real refresh owner. A separate witnessed answer now
+  goes through actual refresh, with a unique row required absent before and
+  present afterward and a true result. Existing terminal gates, callsite census,
+  unavailable/deferred controls, resource and iteration bounds are unchanged.
+- The twelve recipient cases had passed initial refusal and ledger-debt checks,
+  then asserted REQUIRED over every request captured by a port shared with
+  metadata mutation helpers. Source inspection shows dependency injection can
+  schedule a metadata helper microtask flush, and its point-read token selects
+  RPC with default ANY. Original 3110 did not print SQL, so the identification of
+  that particular observed request remains provisional. The controlled port now
+  answers only its declared table plus exact whole-cohort SQL and empty params,
+  retains every request, and gives unrelated requests typed unavailability. A
+  nonzero engaged cohort is required before checking its immutable RPC/REQUIRED
+  token, SQL and params. Classification never depends on the authority value
+  under assertion. All active-membership, retirement, acknowledgement and actual
+  reclamation assertions remain; their later outcomes are still unmeasured.
+
+The impact contract and paired witnesses also now include the composed canonical
+local read flow, delegate/routing closure and actual local-row custody/read roots.
+No threshold, matcher, gate or baseline changed. Root independently read the full
+four-path patch ef52794c37631fb3646f092d95a503978e7a541e2c7eefe989b657f1dbae71bb
+and bounded-approved these dispositions for a new exact lab measurement. This is
+fixture/source review, not runtime or whole-epic acceptance.
+
+Coordinator confirms first-original 3195 was submitted exactly once: reviewed
+ a82b52c8420244ff7b343dd7373800573be24e9b maps to remote
+36dbfff1b11e5d12f6f0af99965b596a2c35838f with exact tree
+ ec37ecf8f5237635c4a3d8fba3bb0a0409a741e8 and unchanged source b2cc2e5d. Request
+ e710e0e5bb9440eb833e25cd5e65b073 combines the unchanged hydration root and the
+34-case catchup custody root. Earlier 8a/e260 issue attempts created no test jobs.
+No execution or result is inferred from submission. All lab dispatch remains
+exclusively with the coordinator; this author has issued no external job posts.
+
+
+## Deferred metadata mutation authority finding for the next small cut
+
+Source-only finding, reread at preserved CDC 058de776d6fcfe6d6d82b0fff367f1cde364631c
+and current main49fba99e1ad27acf83a75fdcee1f89a061377de4. No new production change or
+physical failure is claimed here. This does not belong to the standalone
+canonical-json-nested-data PR or supersede any prior publication Quest receipt.
+
+The existing AuthoritativeRowMutationHelper still has two cache-derived
+completion routes. resolveFlushAdmission calls syncFromCache when the optional
+readAuthoritativeRow callback is absent. probeAuthoritativeRow explicitly calls
+resolveLegacyCacheDedupResult when a supplied callback returns supported:false.
+Both routes can set persistedValue and clear matching pendingValue from the
+merged cache. The same source comment records the historical locally seeded
+voter-ready row problem: visible cache equality is not proof that the durable
+write landed. The 947fbe658 helper correction preserved ordinary unavailable-read
+retry, but retained the supported:false escape. This finding is not a claim that
+all current callers exercise it or that earlier tests establish a new failure.
+
+The actual partition suppliers are readAuthoritativeRoleRow and
+readAuthoritativeLeaderRow in partition-service-metadata-mutation-helpers.js.
+They return supported:false when the gateway/read capability is absent. Their
+hasAuthoritativeReadOwner precheck also counts sqlQueryEngine.executeQuery as
+read authority even though the composed explicit OWNER_RPC_REQUIRED read path
+has no SQL fallback. That is a concrete precheck/enforcement mismatch to resolve
+at the existing metadata-publication/read-owner wiring seam, not by restoring
+SQL fallback. The adjacent local routing selector still recognizes executeQuery,
+executeLocalQuery or raw db.prepare as service capability; those declarations
+must be reconciled with the actual canonical local read port in any later
+wiring/capability cut, not copied into another discovery predicate.
+
+Owner disposition: route through the existing metadata mutation/publication
+owner and repository-legacy-fallback-closure integration. A bounded successor
+must census actual partition, message-group and WASM suppliers and late binding;
+represent missing authority as typed unavailable with the helper's existing
+retry/wake instead of allowing cache equality to certify persistence. Preserve
+legitimate explicit local-owner formation behavior and canonical RPC behavior.
+No second scheduler, read algorithm, compatibility alias or clock is proposed.
+
+Required discriminating schedule before that correction: a locally seeded cache
+row already equals the queued role/leader value while the durable row differs;
+the authoritative dependency is absent or reports unsupported. No pending value
+may settle and no cache-derived durable-success result may escape. Rebind the
+same canonical owner with a readable row, then prove the guarded durable write
+or genuine durable equality completes through the existing helper and retry
+owner. Include a SQL-executor-only capability case and the actual named local
+port case so declaration and enforcement agree. Original unavailable-read
+controls and historical receipts remain unchanged. This is a durable routed
+follow-up, not additional JSON acceptance or a production expansion.

@@ -434,6 +434,7 @@ test('SQLQueryEngine - real executeAuthoritativeSystemTableRead local-leader pat
     },
     async executeLocalQuery() {
       return {
+        readAuthorityWitness: this.buildRemoteReadAuthorityWitness(false),
         rowSetComplete: true,
         rows: [{
           node_id: 'test-node',
@@ -576,8 +577,10 @@ test('SQLQueryEngine - real executeAuthoritativeSystemTableRead local-leader pat
       success: true,
     },
   ]) {
-    localLeaderPartitionService.executeLocalQuery = async () =>
-      incompletePayload;
+    localLeaderPartitionService.executeLocalQuery = async () => ({
+      ...incompletePayload,
+      readAuthorityWitness: localLeaderPartitionService.buildRemoteReadAuthorityWitness(false),
+    });
     const probeOut = await executeAuthoritativeSystemTableRead(
       realCdcService,
       SYSTEM_TABLE_NAME.SERVICES,

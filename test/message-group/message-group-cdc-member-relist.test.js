@@ -24,12 +24,13 @@ test('a joining member lists every propagated source it holds no position of, wi
       `${source}: the joined member knows its cache is stale before any range`);
   }
   const listed = [];
-  registerModeledRelister(t, sourceOrder, service.timeSource, async ({sourcePartition, tableName}) => {
-    listed.push(sourcePartition);
-    sourceOrder.recordListedPosition({sourcePartition, tableName, incarnation: 'quiet',
-      appliedIndex: 3});
-    return SOURCE_RELIST_OUTCOME.RETRY;
-  });
+  registerModeledRelister(t, sourceOrder, service.timeSource,
+    async ({sourcePartition, tableName}) => {
+      listed.push(sourcePartition);
+      sourceOrder.recordListedPosition({sourcePartition, tableName, incarnation: 'quiet',
+        appliedIndex: 3});
+      return SOURCE_RELIST_OUTCOME.RETRY;
+    });
   await pump(f);
   assert.deepEqual([...listed].sort(), [...sources].sort(), 'each source listed once');
   for (const source of sources) {

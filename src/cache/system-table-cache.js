@@ -6,6 +6,8 @@
  */
 
 import {TABLES} from '../constants/index.js';
+import {CDC_EVENT_IDENTITY} from '../constants/cdc-lifecycle-constants.js';
+import {captureCdcEvents} from '../cdc/cdc-event-envelope.js';
 import {resolveTimeSource} from '../time/time-source.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {normalizeCauseId} from '../utils/cause-id.js';
@@ -51,8 +53,8 @@ import {
   resetSharedRowReadStats,
 } from './system-table-cache-observation-methods.js';
 import {updateSystemTableCacheCdcObservation} from './system-table-cache-cdc-observation.js';
-import {SystemTableCacheSourceOrder} from './system-table-cache-source-order.js';
-import {applySourceCdcEvent} from './system-table-cache-source-effect-application.js';
+import {SOURCE_EFFECT_STATE, SystemTableCacheSourceOrder, isSourceMember} from
+  './system-table-cache-source-order.js';
 
 /**
  * System table names that are cached.
@@ -63,6 +65,16 @@ const SYSTEM_TABLES = CACHE_SYSTEM_TABLES;
  * CDC operation types.
  */
 const CDC_OPERATIONS = CACHE_CDC_OPERATIONS;
+const SOURCE_EFFECT_APPLICATION_FAILED = 'CDC source effect application failed; image recovery owed';
+
+function effectOutcome(state, context) {
+  return Object.freeze({state, context});
+}
+
+function unavailableEffect(cache, event, range, context) {
+  cache.sourceOrder.retainEffectRecovery(event, range);
+  return effectOutcome(SOURCE_EFFECT_STATE.UNAVAILABLE, context);
+}
 
 // The production next-turn hop for a cache-change notification. Listeners are
 // deliberately NOT called inside the mutating turn, so a listener can never
@@ -166,6 +178,98 @@ function cacheWriteIsFenced(options) {
       readAuthorityWitness: options.readAuthorityWitness || null,
     },
   );
+}
+
+function captureSourceMutationBasis(cache, tableName, mutationMode, options) {
+  const sourceGeneration = cache.sourceOrder.tableGeneration(tableName);
+  const sourceGenerationSupplied = Object.hasOwn(options, 'sourceGeneration');
+  if ((sourceGenerationSupplied || mutationMode ===
+      SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_OBSERVATION_RECONCILIATION) &&
+      options.sourceGeneration !== sourceGeneration) return null;
+  const sourceEffectSupplied = Object.hasOwn(options, 'sourceEffectContext');
+  if (sourceEffectSupplied && !cache.sourceOrder.applicationContextIsCurrent(
+    options.sourceEffectContext, tableName, options)) return null;
+  return {sourceEffectSupplied};
+}
+
+function captureCacheMutationInput(cache, tableName, operation, data, options) {
+  cache.validateTableName(tableName);
+  cache.validateOperation(operation);
+  const causeId = normalizeCauseId(options?.causeId);
+  const mutationMode = options?.mutationMode || SYSTEM_TABLE_CACHE_MUTATION_MODE.CDC_MERGE;
+  cache.validateMutationMode(mutationMode, operation, tableName, options);
+  const basis = captureSourceMutationBasis(cache, tableName, mutationMode, options);
+  if (basis === null) return null;
+  const pkField = getSystemCachePrimaryKeyField(tableName);
+  const key = resolveSystemCacheRowKey(tableName, data);
+  if (!data || typeof key === 'undefined') {
+    throw new Error(CACHE_ERROR_MSG.primaryKeyMissing(pkField));
+  }
+  cache.validateMutationKey(mutationMode, operation, key);
+  const table = cache.tables.get(tableName);
+  const authoritativeAbsence = mutationMode ===
+    SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_ABSENCE_RECONCILIATION;
+  const completeAuthoritativePresence = mutationMode ===
+    SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_OBSERVATION_RECONCILIATION;
+  const sameEntryOrder = cache.sourceOrder.compareInSameEntry(tableName, key, data, options);
+  if (sameEntryOrder < 0) return null;
+  return {causeId, mutationMode, ...basis, table, key, authoritativeAbsence,
+    completeAuthoritativePresence, sameEntryOrder};
+}
+
+function applyFoldedCacheMutation(cache, input, folded, existing, tableName,
+  operation, data, options) {
+  const {table, key, authoritativeAbsence} = input;
+  let recordForNotification = null;
+  switch (folded.state) {
+  case CDC_ROW_FOLD_STATE.STALE_BACKFILLED:
+  case CDC_ROW_FOLD_STATE.STALE_IGNORED:
+  case CDC_ROW_FOLD_STATE.DELETE_SUPERSEDED:
+    if (folded.state === CDC_ROW_FOLD_STATE.STALE_BACKFILLED) {
+      table.set(key, folded.row);
+      recordForNotification = folded.row;
+    }
+    cache.logger.debug(CACHE_LOG_MSG.STALE_EVENT_IGNORED, {tableName, key,
+      operation, existingUpdatedAt: cache.getRecordTimestamp(existing),
+      incomingUpdatedAt: cache.getRecordTimestamp(data),
+      backfilledFields: folded.backfilledFields});
+    break;
+  case CDC_ROW_FOLD_STATE.DELETE_ABSENT:
+    // Reordered DELETE still leaves a fence against its late INSERT.
+    cache.tombstoneStore.record(tableName, key, data, {authoritativeAbsence,
+      authoritativeObservedAtMs: options?.authoritativeObservedAtMs});
+    cache.logger.debug(CACHE_LOG_MSG.DELETE_ON_MISSING_KEY_IGNORED, {tableName, key});
+    break;
+  case CDC_ROW_FOLD_STATE.DELETED:
+    recordForNotification = existing;
+    table.delete(key);
+    cache.tombstoneStore.record(tableName, key,
+      buildDeletedRowTombstoneSource(existing, data), {authoritativeAbsence,
+        authoritativeObservedAtMs: options?.authoritativeObservedAtMs});
+    break;
+  default:
+    table.set(key, folded.row);
+    recordForNotification = folded.row;
+  }
+  return recordForNotification;
+}
+
+function sourceFoldRecordsPosition(sourceEffectSupplied, incomingVersionAccepted, folded) {
+  return sourceEffectSupplied &&
+    (incomingVersionAccepted || folded.state === CDC_ROW_FOLD_STATE.DELETE_ABSENT);
+}
+
+function publishAppliedCacheChange(cache, tableName, operation, data,
+  recordForNotification, causeId, tableMutationRevision) {
+  cache.lastAppliedAtMsByTableName.set(tableName, cache.timeSource.now());
+  cache.lastAppliedCauseIdByTableName.set(tableName, causeId);
+  // Both observer channels share the same apply-time snapshot and metadata.
+  const appliedChangeRecord = cache.deepClone(recordForNotification);
+  const appliedChangeMetadata = Object.freeze({causeId, tableMutationRevision,
+    originHlc: data?.updated_at_hlc || data?.updatedAtHlc ||
+      recordForNotification?.updated_at_hlc || recordForNotification?.updatedAtHlc || null});
+  cache.notifyApplyListeners(tableName, operation, appliedChangeRecord, appliedChangeMetadata);
+  cache.notifyListeners(tableName, operation, appliedChangeRecord, appliedChangeMetadata);
 }
 
 /**
@@ -297,163 +401,86 @@ class SystemTableCache {
    * @throws {Error} If operation is invalid or data is missing required fields.
    */
   applySystemTableChange(tableName, operation, data, options = {}) {
-    this.validateTableName(tableName);
-    this.validateOperation(operation);
-
-    const causeId = normalizeCauseId(options?.causeId);
-    const mutationMode = options?.mutationMode ||
-      SYSTEM_TABLE_CACHE_MUTATION_MODE.CDC_MERGE;
-    this.validateMutationMode(mutationMode, operation, tableName, options);
-    const sourceGeneration = this.sourceOrder.tableGeneration(tableName);
-    const sourceGenerationSupplied = Object.hasOwn(options, 'sourceGeneration');
-    if ((sourceGenerationSupplied || mutationMode ===
-        SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_OBSERVATION_RECONCILIATION) &&
-        options.sourceGeneration !== sourceGeneration) return false;
-    const sourceEffectSupplied = Object.hasOwn(options, 'sourceEffectContext');
-    if (sourceEffectSupplied && !this.sourceOrder.applicationContextIsCurrent(
-      options.sourceEffectContext, tableName, options)) return false;
-
-    // Get the primary key field for this table
-    const pkField = getSystemCachePrimaryKeyField(tableName);
-    const key = resolveSystemCacheRowKey(tableName, data);
-
-    if (!data || typeof key === 'undefined') {
-      throw new Error(CACHE_ERROR_MSG.primaryKeyMissing(pkField));
-    }
-    this.validateMutationKey(mutationMode, operation, key);
-
-    const table = this.tables.get(tableName);
-    const authoritativeAbsence = mutationMode ===
-      SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_ABSENCE_RECONCILIATION;
-    const completeAuthoritativePresence = mutationMode ===
-      SYSTEM_TABLE_CACHE_MUTATION_MODE
-        .AUTHORITATIVE_OBSERVATION_RECONCILIATION;
-    let recordForNotification = null;
-    let incomingVersionAccepted = false;
-    const sameEntryOrder = this.sourceOrder.compareInSameEntry(tableName, key, data, options);
-    if (sameEntryOrder < 0) return false;
-    // Generic authority cannot preserve source currency. Invalidate before
-    // either row writes or tombstone mutation, and before every notification.
-    // An invalid supplied source context is refused above, never reclassified.
+    const input = captureCacheMutationInput(this, tableName, operation, data, options);
+    if (input === null) return false;
+    const {causeId, mutationMode, sourceEffectSupplied, table, key,
+      completeAuthoritativePresence, sameEntryOrder} = input;
+    // Generic authority invalidates both currency and per-key basis before
+    // any tombstone mutation or row effect. Invalid source contexts refused
+    // during input capture never reach this generic-authority transition.
     if (!sourceEffectSupplied) this.sourceOrder.invalidateTable(tableName);
     if (sameEntryOrder > 0) this.tombstoneStore.clearKey(tableName, key);
-
-    // A write (INSERT/UPDATE/UPSERT) for a key under an active DELETE tombstone is
-    // a reordered, causally-older resurrection — reject it. A causally-newer write
-    // clears the tombstone inside the check and proceeds (legitimate re-create).
+    // The tombstone fence may itself clear a causally superseded tombstone.
     if (cacheWriteIsFenced({
-      cache: this,
-      table,
-      tableName,
-      operation,
-      key,
-      data,
-      completeAuthoritativePresence,
+      cache: this, table, tableName, operation, key, data, completeAuthoritativePresence,
       authoritativeObservedAtMs: options?.authoritativeObservedAtMs,
-      authoritativeReadStartedAtMs:
-        options?.authoritativeReadStartedAtMs,
+      authoritativeReadStartedAtMs: options?.authoritativeReadStartedAtMs,
       readAuthorityWitness: options?.readAuthorityWitness,
     })) {
       this.logger.debug(CACHE_LOG_MSG.WRITE_FENCED_BY_TOMBSTONE, {tableName, key, operation});
       return false;
     }
-
-    // Every CDC-merge row is the one fold's; authoritative modes own their
-    // row replacement, while complete images publish through the image owner.
     const existing = table.has(key) ? table.get(key) : null;
     const folded = resolveAppliedRow({tableName, existing, operation, data,
       mutationMode, sameEntryOrder});
-    incomingVersionAccepted = folded.accepted;
-    switch (folded.state) {
-    case CDC_ROW_FOLD_STATE.STALE_BACKFILLED:
-    case CDC_ROW_FOLD_STATE.STALE_IGNORED:
-    case CDC_ROW_FOLD_STATE.DELETE_SUPERSEDED:
-      if (folded.state === CDC_ROW_FOLD_STATE.STALE_BACKFILLED) {
-        table.set(key, folded.row);
-        recordForNotification = folded.row;
-      }
-      this.logger.debug(CACHE_LOG_MSG.STALE_EVENT_IGNORED, {tableName, key,
-        operation, existingUpdatedAt: this.getRecordTimestamp(existing),
-        incomingUpdatedAt: this.getRecordTimestamp(data),
-        backfilledFields: folded.backfilledFields});
-      break;
-    case CDC_ROW_FOLD_STATE.DELETE_ABSENT:
-      // Reorder case: the DELETE arrived before its INSERT. Leave a tombstone so
-      // the late INSERT cannot resurrect the row.
-      this.tombstoneStore.record(tableName, key, data, {authoritativeAbsence,
-        authoritativeObservedAtMs: options?.authoritativeObservedAtMs});
-      this.logger.debug(CACHE_LOG_MSG.DELETE_ON_MISSING_KEY_IGNORED, {tableName, key});
-      break;
-    case CDC_ROW_FOLD_STATE.DELETED:
-      recordForNotification = existing;
-      table.delete(key);
-      this.tombstoneStore.record(tableName, key,
-        buildDeletedRowTombstoneSource(existing, data), {authoritativeAbsence,
-          authoritativeObservedAtMs: options?.authoritativeObservedAtMs});
-      break;
-    default:
-      table.set(key, folded.row);
-      recordForNotification = folded.row;
-    }
-
-    if (sourceEffectSupplied &&
-        (incomingVersionAccepted || folded.state === CDC_ROW_FOLD_STATE.DELETE_ABSENT)) {
+    const incomingVersionAccepted = folded.accepted;
+    const recordForNotification = applyFoldedCacheMutation(
+      this, input, folded, existing, tableName, operation, data, options);
+    if (sourceFoldRecordsPosition(sourceEffectSupplied, incomingVersionAccepted, folded)) {
       this.sourceOrder.record(tableName, key, data, options);
     }
     this.logger.debug(CACHE_LOG_MSG.APPLIED_CDC_EVENT, {tableName, operation, key, causeId});
-
-    // Notify listeners after applying the change
+    // A mutation revision is visible before observation and either observer.
     const tableMutationRevision = recordForNotification ?
-      this.recordTableMutation(tableName, key) :
-      null;
+      this.recordTableMutation(tableName, key) : null;
     updateSystemTableCacheCdcObservation({
-      cache: this,
-      tableName,
-      key,
-      operation,
-      data,
-      options,
-      recordForNotification,
+      cache: this, tableName, key, operation, data, options, recordForNotification,
       incomingVersionAccepted,
-      observationTable:
-        this.lastCdcObservationByTableName.get(tableName),
+      observationTable: this.lastCdcObservationByTableName.get(tableName),
       resultingRow: table.get(key),
     });
     if (recordForNotification) {
-      this.lastAppliedAtMsByTableName.set(tableName, this.timeSource.now());
-      this.lastAppliedCauseIdByTableName.set(tableName, causeId);
-      // One immutable per-apply snapshot shared by both channels: the
-      // apply-time (synchronous) listeners and the existing deferred change
-      // notification observe identical payload without a second clone.
-      const appliedChangeRecord = this.deepClone(recordForNotification);
-      const appliedChangeMetadata = Object.freeze({
-        causeId,
-        tableMutationRevision,
-        originHlc:
-          data?.updated_at_hlc ||
-          data?.updatedAtHlc ||
-          recordForNotification?.updated_at_hlc ||
-          recordForNotification?.updatedAtHlc ||
-          null,
-      });
-      this.notifyApplyListeners(
-        tableName,
-        operation,
-        appliedChangeRecord,
-        appliedChangeMetadata,
-      );
-      this.notifyListeners(
-        tableName,
-        operation,
-        appliedChangeRecord,
-        appliedChangeMetadata,
-      );
+      publishAppliedCacheChange(this, tableName, operation, data,
+        recordForNotification, causeId, tableMutationRevision);
     }
     return incomingVersionAccepted;
   }
 
-  applySourceCdcEvent(event, sourceRange, observedAtMs) {
-    return applySourceCdcEvent(this, event, sourceRange, observedAtMs);
+  // Source-order decides whether this exact occurrence still has an effect.
+  // The cache owns applying it and retaining recovery if an observer replaces
+  // its source context; a handler's receipt cannot certify that effect.
+  applySourceCdcEvent(input, range, observedAtMs) {
+    const event = captureCdcEvents([input])[0];
+    if (!isSourceMember(range, event) || typeof event.eventKey !== 'string') {
+      throw Object.assign(new Error(CDC_EVENT_IDENTITY.INVALID_MESSAGE),
+        {code: CDC_EVENT_IDENTITY.INVALID_CODE});
+    }
+    const metadata = {...event, sourceIncarnation: range.incarnation};
+    const order = this.sourceOrder;
+    const key = resolveSystemCacheRowKey(event.tableName, event.data);
+    const context = order.captureEffectContext(
+      event.sourcePartition, event.tableName, range.incarnation);
+    const decision = order.classifyEffect(event.tableName, key, event.data, metadata);
+    if (decision === SOURCE_EFFECT_STATE.COVERED) return effectOutcome(decision, context);
+    if (decision === SOURCE_EFFECT_STATE.UNAVAILABLE) {
+      return unavailableEffect(this, event, range, context);
+    }
+    try {
+      this.applySystemTableChange(event.tableName, event.operation, event.data, {
+        ...metadata, cdcObservedAtMs: observedAtMs, sourceEffectContext: context,
+      });
+    } catch (error) {
+      // Both the committed source and this cache retain their existing
+      // obligations even when a row callback throws.
+      const outcome = unavailableEffect(this, event, range, context);
+      this.logger.error(SOURCE_EFFECT_APPLICATION_FAILED, {tableName: event.tableName,
+        sourcePartition: event.sourcePartition, eventKey: event.eventKey, error: error.message});
+      return outcome;
+    }
+    return order.effectContextIsCurrent(context) &&
+      order.classifyEffect(event.tableName, key, event.data, metadata) ===
+        SOURCE_EFFECT_STATE.COVERED ? effectOutcome(SOURCE_EFFECT_STATE.APPLIED, context) :
+        unavailableEffect(this, event, range, context);
   }
 
   /**

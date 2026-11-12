@@ -184,6 +184,18 @@ function captureSourceRange(range) {
     through: objectFreeze({logIndex: range.through.logIndex, ordinal: range.through.ordinal})});
 }
 
+function isSourceOccurrencePosition(event) {
+  return !(!numberIsSafeInteger(event.sourceLogIndex) || event.sourceLogIndex < 1 ||
+    !numberIsSafeInteger(event.sourceOrdinal) || event.sourceOrdinal < 0);
+}
+
+function isSourceVectorMember(event, tableName, range) {
+  return !!event && typeof tableName === 'string' && tableName.length > 0 &&
+    event.tableName === tableName && event.sourcePartition === range.sourcePartition &&
+    typeof event.eventKey === 'string' && event.eventKey.length > 0 &&
+    isSourceOccurrencePosition(event);
+}
+
 // This checks internal consistency, not ledger completeness. The source
 // transaction owns which obligations exist between predecessor and tail.
 function isSourceVector(range, events) {
@@ -193,12 +205,7 @@ function isSourceVector(range, events) {
   let previous = range.after;
   for (let index = 0; index < events.length; index += 1) {
     const event = events[index];
-    if (!event || typeof tableName !== 'string' || tableName.length === 0 ||
-        event.tableName !== tableName ||
-        event.sourcePartition !== range.sourcePartition ||
-        typeof event.eventKey !== 'string' || event.eventKey.length === 0 ||
-        !numberIsSafeInteger(event.sourceLogIndex) || event.sourceLogIndex < 1 ||
-        !numberIsSafeInteger(event.sourceOrdinal) || event.sourceOrdinal < 0) return false;
+    if (!isSourceVectorMember(event, tableName, range)) return false;
     const position = {logIndex: event.sourceLogIndex, ordinal: event.sourceOrdinal};
     if (compareSourcePositions(previous, position) >= 0) return false;
     previous = position;
@@ -208,14 +215,18 @@ function isSourceVector(range, events) {
 
 function isSourceMember(range, event) {
   if (!isSourceRange(range) || typeof range.incarnation !== 'string' ||
-      event.sourcePartition !== range.sourcePartition ||
-      !numberIsSafeInteger(event.sourceLogIndex) || event.sourceLogIndex < 1 ||
-      !numberIsSafeInteger(event.sourceOrdinal) || event.sourceOrdinal < 0) {
+      event.sourcePartition !== range.sourcePartition || !isSourceOccurrencePosition(event)) {
     return false;
   }
   const position = {logIndex: event.sourceLogIndex, ordinal: event.sourceOrdinal};
   return compareSourcePositions(range.after, position) < 0 &&
     compareSourcePositions(position, range.through) <= 0;
+}
+
+function effectReceiptCovers(applied, incoming) {
+  return applied?.partition === incoming.partition &&
+    applied.incarnation === incoming.incarnation &&
+    compareSourcePositions(incoming, applied) <= 0;
 }
 
 // The within-entry rule's position of one event.
@@ -224,7 +235,8 @@ function cellSnapshot(cell) {
     incarnation: cell.incarnation, state: cell.state, position: cell.position,
     need: cell.need, relist: cell.relist, lists: cell.lists,
     relistFailures: cell.relistFailures, lastRelistFailure: cell.lastRelistFailure,
-    diagnosticFailures: cell.diagnosticFailures, lastDiagnosticFailure: cell.lastDiagnosticFailure});
+    diagnosticFailures: cell.diagnosticFailures,
+    lastDiagnosticFailure: cell.lastDiagnosticFailure});
 }
 
 class SystemTableCacheSourceOrder {
@@ -341,9 +353,7 @@ class SystemTableCacheSourceOrder {
       if (compareSourcePositions(incoming, cell.position) <= 0) return SOURCE_EFFECT_STATE.COVERED;
     }
     const applied = this.tables.get(tableName)?.get(key);
-    return applied?.partition === incoming.partition &&
-      applied.incarnation === incoming.incarnation &&
-      compareSourcePositions(incoming, applied) <= 0 ?
+    return effectReceiptCovers(applied, incoming) ?
       SOURCE_EFFECT_STATE.COVERED : SOURCE_EFFECT_STATE.APPLY;
   }
 
@@ -456,7 +466,8 @@ class SystemTableCacheSourceOrder {
   memberApplied(range, position) {
     const cell = this.cells.get(range.sourcePartition);
     return cell !== undefined && cell.position !== null &&
-      cell.incarnation === range.incarnation && compareSourcePositions(position, cell.position) <= 0;
+      cell.incarnation === range.incarnation &&
+      compareSourcePositions(position, cell.position) <= 0;
   }
 
   /**
@@ -475,7 +486,9 @@ class SystemTableCacheSourceOrder {
 
   settleNeed(cell) {
     const before = cell.state;
-    if (cell.need !== null && compareSourcePositions(cell.need, cell.position) <= 0) cell.need = null;
+    if (cell.need !== null && compareSourcePositions(cell.need, cell.position) <= 0) {
+      cell.need = null;
+    }
     cell.state = cell.need === null ? SOURCE_POSITION_STATE.CURRENT : SOURCE_POSITION_STATE.GAP;
     if (cell.state === SOURCE_POSITION_STATE.GAP) this.requestRelist(cell);
     else if (before !== SOURCE_POSITION_STATE.CURRENT) {
@@ -560,8 +573,10 @@ class SystemTableCacheSourceOrder {
       if (cell.relist === SOURCE_RELIST_STATE.FAULTED) return;
       const newlyUnbound = cell.relist !== SOURCE_RELIST_STATE.NO_RELISTER;
       cell.relist = SOURCE_RELIST_STATE.NO_RELISTER;
-      if (newlyUnbound) this.emitDiagnostic(cell, () => this.logger?.warn?.(
-        SOURCE_ORDER_LOG_MSG.NO_RELISTER, cellSnapshot(cell)));
+      if (newlyUnbound) {
+        this.emitDiagnostic(cell, () => this.logger?.warn?.(
+          SOURCE_ORDER_LOG_MSG.NO_RELISTER, cellSnapshot(cell)));
+      }
       return;
     }
     cell.relist = SOURCE_RELIST_STATE.RUNNING;
@@ -569,7 +584,8 @@ class SystemTableCacheSourceOrder {
   }
 
   cellOwesRelist(cell) {
-    return this.cells.get(cell.sourcePartition) === cell && cell.state === SOURCE_POSITION_STATE.GAP;
+    return this.cells.get(cell.sourcePartition) === cell &&
+      cell.state === SOURCE_POSITION_STATE.GAP;
   }
 
   emitDiagnostic(cell, emit) {
@@ -595,7 +611,8 @@ class SystemTableCacheSourceOrder {
     if (!this.cellOwesRelist(cell) || this.relister !== owner) return SOURCE_RELIST_OUTCOME.RETRY;
     try {
       await owner.paceAfterFailure(request, cause);
-      return owner.isStopped() === true ? SOURCE_RELIST_OUTCOME.STOPPED : SOURCE_RELIST_OUTCOME.RETRY;
+      return owner.isStopped() === true ?
+        SOURCE_RELIST_OUTCOME.STOPPED : SOURCE_RELIST_OUTCOME.RETRY;
     } catch (pacingCause) {
       cell.lastRelistFailure = objectFreeze({cause, pacingCause});
       return SOURCE_RELIST_OUTCOME.FAULTED;
@@ -614,7 +631,9 @@ class SystemTableCacheSourceOrder {
     if (!this.cellOwesRelist(cell)) return;
     // Registration while RUNNING is retained by the captured owner identity.
     // A terminal or faulted old owner must not consume the new owner's wake.
-    if (this.relister !== owner || outcome === SOURCE_RELIST_OUTCOME.RETRY) this.requestRelist(cell);
+    if (this.relister !== owner || outcome === SOURCE_RELIST_OUTCOME.RETRY) {
+      this.requestRelist(cell);
+    }
   }
 
   async runRelist(cell, owner) {

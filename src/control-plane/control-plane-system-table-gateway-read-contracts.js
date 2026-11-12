@@ -246,7 +246,7 @@ function assertCompleteTableReadAuthority(fields) {
 
 // An already selected token is consumed by identity, never normalized again.
 // Completeness is an authority obligation; it cannot override explicit intent.
-function assertControlPlaneReadAuthority(readAuthority) {
+function assertReadAuthorityFields(readAuthority) {
   const fields = readFrozenAuthorityFields(readAuthority);
   for (let index = 0; index < READ_AUTHORITY_FIELDS.length; index += 1) {
     const field = READ_AUTHORITY_FIELDS[index];
@@ -258,16 +258,37 @@ function assertControlPlaneReadAuthority(readAuthority) {
   }
   assertLocalLeaderReadAuthority(fields);
   assertCompleteTableReadAuthority(fields);
+  return fields;
+}
+
+function assertControlPlaneReadAuthority(readAuthority) {
+  const fields = assertReadAuthorityFields(readAuthority);
   assertReadAuthoritySerializationShape(readAuthority, fields);
   return readAuthority;
 }
 
-function assertControlPlaneOwnerReadAuthority(readAuthority) {
-  assertControlPlaneReadAuthority(readAuthority);
-  if (readAuthority.strategy === CONTROL_PLANE_READ_STRATEGY.CACHE ||
-      readAuthority.strategy === CONTROL_PLANE_READ_STRATEGY.BOOTSTRAP_SNAPSHOT) {
+function assertOwnerReadAuthorityFields(readAuthority) {
+  const fields = assertReadAuthorityFields(readAuthority);
+  if (fields.strategy === CONTROL_PLANE_READ_STRATEGY.CACHE ||
+      fields.strategy === CONTROL_PLANE_READ_STRATEGY.BOOTSTRAP_SNAPSHOT) {
     throw contradictoryReadAuthority();
   }
+  return fields;
+}
+
+function assertControlPlaneOwnerReadAuthority(readAuthority) {
+  const fields = assertOwnerReadAuthorityFields(readAuthority);
+  assertReadAuthoritySerializationShape(readAuthority, fields);
+  return readAuthority;
+}
+
+function assertControlPlaneOwnerRpcReadAuthority(readAuthority) {
+  const fields = assertOwnerReadAuthorityFields(readAuthority);
+  if (fields.authoritativeReadMode !==
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED) {
+    throw contradictoryReadAuthority();
+  }
+  assertReadAuthoritySerializationShape(readAuthority, fields);
   return readAuthority;
 }
 
@@ -576,6 +597,7 @@ export {
   applyProfileDefault,
   applyReadWorkloadProfileDefaults,
   assertControlPlaneOwnerReadAuthority,
+  assertControlPlaneOwnerRpcReadAuthority,
   assertControlPlaneReadAuthority,
   assertControlPlaneReadAuthorityMatchesIntent,
   assertFlatReadAuthorityDraft,

@@ -1,5 +1,7 @@
-import {types} from 'node:util';
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
+import {captureSystemTableRows} from '../cache/system-cache-key-descriptor.js';
+import {appendOwnArrayValue, isNonEmptyText, serializeJsonData} from
+  '../utils/canonical-json-data.js';
 import {
   buildLocalAuthoritativeObservation,
   executeLocalSystemTableRead,
@@ -23,7 +25,6 @@ import {enforceRequiredLeaderReadAuthority} from
   '../control-plane/control-plane-authoritative-read-witness.js';
 const {
   AUTHORITATIVE_READ_SOURCE,
-  AUTHORITATIVE_ROW_VERSION_FIELD_CANDIDATES,
   CDC_INTEGRATION_SERVICE_LITERAL,
   CONTROL_PLANE_READINESS_DIMENSION,
   INITIAL_PARTITION_IDS,
@@ -32,15 +33,13 @@ const {
   SYSTEM_TABLE_NAME,
 } = CDC_INTEGRATION_SERVICE_SHARED;
 
-const arrayIsArray = Array.isArray;
-const canonicalObjectPrototype = Object.prototype;
-const isProxy = types.isProxy.bind(types);
-const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
-const objectGetPrototypeOf = Object.getPrototypeOf;
+const objectFreeze = Object.freeze;
 const objectHasOwn = Object.hasOwn;
 const objectKeys = Object.keys;
-const JSON_SERIALIZATION_HOOK_PROPERTY = 'toJSON';
-const DATA_DESCRIPTOR_VALUE_PROPERTY = 'value';
+const CanonicalMap = Map;
+const mapGet = Function.prototype.call.bind(Map.prototype.get);
+const mapHas = Function.prototype.call.bind(Map.prototype.has);
+const mapSet = Function.prototype.call.bind(Map.prototype.set);
 const ABSENT_WITNESS_VALUE = null;
 const EMPTY_WITNESS_ARRAY = Object.freeze([]);
 const ABSENT_OBSERVATION_VALUE = null;
@@ -54,187 +53,67 @@ const UNAVAILABLE_LOCAL_READ_SNAPSHOT = Object.freeze({
   authoritativeObservation: ABSENT_OBSERVATION_VALUE,
 });
 
-function isFlatJsonValue(value) {
-  return value === null || value === undefined ||
-    typeof value === 'string' ||
-    typeof value === 'number' ||
-    typeof value === 'boolean';
-}
-
-function hasJsonHook(value, prototype) {
-  if (objectGetOwnPropertyDescriptor(
-    value,
-    JSON_SERIALIZATION_HOOK_PROPERTY,
-  )) {
-    return true;
-  }
-  return prototype === canonicalObjectPrototype &&
-    objectGetOwnPropertyDescriptor(
-      canonicalObjectPrototype,
-      JSON_SERIALIZATION_HOOK_PROPERTY,
-    ) !== undefined;
-}
-
-function isInspectableFlatJsonRecord(value) {
-  if (
-    !value ||
-    typeof value !== 'object' ||
-    arrayIsArray(value) ||
-    isProxy(value)
-  ) {
-    return false;
-  }
-  const prototype = objectGetPrototypeOf(value);
-  return (
-    prototype === canonicalObjectPrototype || prototype === null
-  ) && !hasJsonHook(value, prototype);
-}
-
-function hasEquivalentFlatJsonOwnValue(candidate, existing, key) {
-  const candidateDescriptor = objectGetOwnPropertyDescriptor(candidate, key);
-  const existingDescriptor = objectGetOwnPropertyDescriptor(existing, key);
-  return Boolean(
-    candidateDescriptor &&
-    existingDescriptor &&
-    objectHasOwn(candidateDescriptor, DATA_DESCRIPTOR_VALUE_PROPERTY) &&
-    objectHasOwn(existingDescriptor, DATA_DESCRIPTOR_VALUE_PROPERTY) &&
-    isFlatJsonValue(candidateDescriptor.value) &&
-    candidateDescriptor.value === existingDescriptor.value,
-  );
-}
-
-function areEquivalentFlatJsonRows(candidate, existing) {
-  if (
-    !isInspectableFlatJsonRecord(candidate) ||
-    !isInspectableFlatJsonRecord(existing)
-  ) return false;
+function areEquivalentFlatCapturedRows(candidate, existing) {
   const candidateKeys = objectKeys(candidate);
   const existingKeys = objectKeys(existing);
-  if (candidateKeys.length !== existingKeys.length) {
-    return false;
-  }
-  for (const key of candidateKeys) {
-    if (!hasEquivalentFlatJsonOwnValue(candidate, existing, key)) {
-      return false;
-    }
+  if (candidateKeys.length !== existingKeys.length) return false;
+  for (let index = 0; index < candidateKeys.length; index += 1) {
+    const key = candidateKeys[index];
+    if (!objectHasOwn(existing, key) || candidate[key] !== existing[key]) return false;
   }
   return true;
 }
 
-function resolveAuthoritativeRowVersion(service, row) {
-  if (!row || typeof row !== 'object') {
-    return null;
+function capturedRowEncoding(row, encodings) {
+  let encoded = mapGet(encodings, row);
+  if (encoded === undefined) {
+    encoded = serializeJsonData(row, {sortKeys: true});
+    mapSet(encodings, row, encoded);
   }
+  return encoded;
+}
 
-  for (const fieldName of AUTHORITATIVE_ROW_VERSION_FIELD_CANDIDATES) {
-    const value = row[fieldName];
-    if (value === undefined || value === null) {
+function indexCapturedRows(captured) {
+  const byKey = new CanonicalMap();
+  for (let index = 0; index < captured.keys.length; index += 1) {
+    mapSet(byKey, captured.keys[index], captured.rows[index]);
+  }
+  return byKey;
+}
+
+function capturedImagesAgree(captured, prior, encodings) {
+  if (captured.rows.length !== prior.captured.rows.length) return false;
+  for (let index = 0; index < captured.keys.length; index += 1) {
+    const row = captured.rows[index];
+    const existing = mapGet(prior.byKey, captured.keys[index]);
+    if (existing === undefined) return false;
+    if (!areEquivalentFlatCapturedRows(row, existing) &&
+        capturedRowEncoding(row, encodings) !== capturedRowEncoding(existing, encodings)) return false;
+  }
+  return true;
+}
+
+function mergeCapturedPartitionImages(images) {
+  const partitions = new CanonicalMap();
+  const keys = new CanonicalMap();
+  const encodings = new CanonicalMap();
+  const rows = [];
+  for (let imageIndex = 0; imageIndex < images.length; imageIndex += 1) {
+    const {partitionId, captured} = images[imageIndex];
+    const prior = mapGet(partitions, partitionId);
+    if (prior) {
+      if (!capturedImagesAgree(captured, prior, encodings)) return null;
       continue;
     }
-
-    const comparable = service.normalizeComparableCacheFieldValue(value);
-    if (comparable !== null) {
-      return comparable;
-    }
-
-    if (typeof value === 'string' && value.length > 0) {
-      return value;
+    mapSet(partitions, partitionId, {captured, byKey: indexCapturedRows(captured)});
+    for (let index = 0; index < captured.keys.length; index += 1) {
+      const key = captured.keys[index];
+      if (mapHas(keys, key)) return null;
+      mapSet(keys, key, partitionId);
+      appendOwnArrayValue(rows, captured.rows[index]);
     }
   }
-
-  return null;
-}
-
-function getAuthoritativeRepairRowRank(service, row, rowRanks) {
-  const existingRank = rowRanks?.get(row);
-  if (existingRank) return existingRank;
-  const rank = {
-    row,
-    serializedLength: null,
-    version: resolveAuthoritativeRowVersion(service, row),
-  };
-  rowRanks?.set(row, rank);
-  return rank;
-}
-
-function getAuthoritativeRepairRowSerializedLength(rank) {
-  if (rank.serializedLength === null) {
-    rank.serializedLength = JSON.stringify(rank.row).length;
-  }
-  return rank.serializedLength;
-}
-
-function compareAuthoritativeRepairRows(
-  service,
-  candidate,
-  existing,
-  rowRanks = null,
-) {
-  const candidateRank = getAuthoritativeRepairRowRank(
-    service,
-    candidate,
-    rowRanks,
-  );
-  const existingRank = getAuthoritativeRepairRowRank(
-    service,
-    existing,
-    rowRanks,
-  );
-  const candidateVersion = candidateRank.version;
-  const existingVersion = existingRank.version;
-
-  if (candidateVersion !== null && existingVersion !== null) {
-    if (candidateVersion === existingVersion) {
-      if (areEquivalentFlatJsonRows(candidate, existing)) {
-        return false;
-      }
-      return getAuthoritativeRepairRowSerializedLength(candidateRank) >
-        getAuthoritativeRepairRowSerializedLength(existingRank);
-    }
-    return candidateVersion > existingVersion;
-  }
-
-  if (candidateVersion !== null) {
-    return true;
-  }
-
-  if (existingVersion !== null) {
-    return false;
-  }
-
-  if (areEquivalentFlatJsonRows(candidate, existing)) {
-    return false;
-  }
-
-  return getAuthoritativeRepairRowSerializedLength(candidateRank) >
-    getAuthoritativeRepairRowSerializedLength(existingRank);
-}
-
-function mergeAuthoritativeSystemTableRowSets(service, tableName, rowSets) {
-  const keyField = service.getPrimaryKeyField(tableName);
-  const mergedRows = new Map();
-  const rowRanks = new Map();
-
-  for (const rowSet of rowSets) {
-    const rows = Array.isArray(rowSet) ? rowSet : [];
-    for (const row of rows) {
-      const key = row?.[keyField] ?? row?.id ?? null;
-      if (key === null || key === undefined) {
-        continue;
-      }
-      const existing = mergedRows.get(key);
-      if (!existing || compareAuthoritativeRepairRows(
-        service,
-        row,
-        existing,
-        rowRanks,
-      )) {
-        mergedRows.set(key, row);
-      }
-    }
-  }
-
-  return [...mergedRows.values()];
+  return objectFreeze(rows);
 }
 
 function localAuthoritativeReadRowsAreUsable(result) {
@@ -242,8 +121,7 @@ function localAuthoritativeReadRowsAreUsable(result) {
     result?.success === true &&
     result?.partial !== true &&
     result?.rowSetComplete !== false &&
-    !hasAuthoritativeReadFailureEvidence(result) &&
-    Array.isArray(result.rows)
+    !hasAuthoritativeReadFailureEvidence(result)
   );
 }
 
@@ -296,7 +174,10 @@ async function queryLocalAuthoritativeSystemTableRows(
   let completePartitionCount = 0;
   let available = false;
 
-  for (const partitionService of localServices) {
+  for (let serviceIndex = 0; serviceIndex < localServices.length; serviceIndex += 1) {
+    const partitionService = localServices[serviceIndex];
+    const partitionId = partitionService.partitionId;
+    if (!isNonEmptyText(partitionId)) return UNAVAILABLE_LOCAL_READ_SNAPSHOT;
     try {
       const result = await executeLocalSystemTableRead(
         service,
@@ -309,20 +190,22 @@ async function queryLocalAuthoritativeSystemTableRows(
         continue;
       }
 
+      const captured = captureSystemTableRows(tableName, result.rows);
+      if (!captured) return UNAVAILABLE_LOCAL_READ_SNAPSHOT;
+
       const witness = selectLocalPartitionWitness(
-        service,
-        partitionService,
+        partitionId,
         result,
       );
       const authorized = enforceRequiredLeaderReadAuthority(
-        {...result, readAuthorityWitness: witness}, partitionService.partitionId, readAuthority);
+        {...result, readAuthorityWitness: witness}, partitionId, readAuthority);
       if (authorized.success !== true) {
         return {...UNAVAILABLE_LOCAL_READ_SNAPSHOT,
           error: authorized.error, authorityFailureReason: authorized.authorityFailureReason};
       }
-      rowSets.push(result.rows);
+      appendOwnArrayValue(rowSets, objectFreeze({partitionId, captured}));
       if (witness) {
-        collectedWitnesses.push(witness);
+        appendOwnArrayValue(collectedWitnesses, witness);
         if (isCompleteAuthoritativeReadResult(result)) {
           completePartitionCount += 1;
         }
@@ -343,6 +226,8 @@ async function queryLocalAuthoritativeSystemTableRows(
     }
   }
 
+  const rows = mergeCapturedPartitionImages(rowSets);
+  if (!rows) return UNAVAILABLE_LOCAL_READ_SNAPSHOT;
   const rowSetComplete = available &&
     completePartitionCount === localServices.length &&
     rowSets.length === localServices.length &&
@@ -363,9 +248,7 @@ async function queryLocalAuthoritativeSystemTableRows(
 
   return {
     available,
-    rows: available ?
-      mergeAuthoritativeSystemTableRowSets(service, tableName, rowSets) :
-      EMPTY_ROW_ARRAY,
+    rows: available ? rows : EMPTY_ROW_ARRAY,
     rowSetComplete,
     readAuthorityWitness: primaryWitness,
     readAuthorityWitnesses: collectedWitnesses,
@@ -598,13 +481,8 @@ async function executeAuthoritativeSystemTableRead(
 
 export {
   buildSystemTableOperationDiagnostics,
-  executeAuthoritativeOwnerRpcRead,
   executeAuthoritativeSystemTableRead,
   getLocalQueryTransportReadiness,
-  mergeAuthoritativeSystemTableRowSets,
   normalizeAuthoritativeReadLocalQueryTransport,
   normalizeLocalSystemTableWriteResult,
 };
-
-export const extractAuthoritativeRowVersion = resolveAuthoritativeRowVersion;
-export const isAuthoritativeRepairRowNewer = compareAuthoritativeRepairRows;

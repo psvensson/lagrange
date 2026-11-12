@@ -1,6 +1,7 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
+import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
 import {
   QUERY_ROUTING_REPAIR_REASON,
 } from '../../src/query/query-constants.js';
@@ -44,6 +45,29 @@ const TEST_PRIORITY_CONTROL_PLANE_TRANSACTION_OPERATION = 'COMMIT';
 const TEST_PRIORITY_CONTROL_PLANE_TRANSACTION_ID = 'tx-priority-1';
 const TEST_PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_SOURCE =
   'query:transaction:replica_operations-p1:tx-priority-1:COMMIT';
+
+// Preserve the real SELECT renderer, authoritative view and CDC RPC owner.
+// The controlled partition transport records the actual routing decision.
+function attachControlledOwnerRead(t, engine) {
+  const calls = [];
+  let genericSelectCalls = 0;
+  engine.queryExecutor.executeSelect = async () => {
+    genericSelectCalls += 1;
+    throw new Error('a claimed authoritative SELECT must retain its owner');
+  };
+  engine.queryExecutor.executeOnPartition = async (
+    partitionId, sql, params, forRead, preferLeader, preferSameLatencyGroup, executionOptions,
+  ) => {
+    calls.push({partitionId, sql, params, forRead, preferLeader,
+      preferSameLatencyGroup, executionOptions});
+    return {success: true, rows: [{log_id: 'log-1'}], rowSetComplete: true};
+  };
+  const cdc = new CDCIntegrationService({nodeId: engine.nodeId,
+    sqlQueryEngine: engine, systemTableCache: engine.systemCache});
+  engine.setCDCIntegrationService(cdc);
+  t.teardown(() => cdc.markShuttingDown());
+  return {calls, genericSelectCalls: () => genericSelectCalls};
+}
 
 function registerSqlQueryEngineExecutionTestCases({
   createMockMessageRouter,
@@ -310,31 +334,27 @@ function registerSqlQueryEngineExecutionTestCases({
         },
       },
     });
-    let capturedExecutionOptions = null;
-    engine.queryExecutor = {
-      async executeSelect(_ast, _partitionIds, _params, executionOptions = {}) {
-        capturedExecutionOptions = executionOptions;
-        return {
-          success: true,
-          rows: [],
-          count: 0,
-          distributedMetrics: {},
-        };
-      },
-    };
+    const owner = attachControlledOwnerRead(t, engine);
 
     const result = await engine.executeQuery(
       'SELECT * FROM logs WHERE log_id = \'log-1\'',
     );
 
     t.equal(result.success, true, 'system-table select should still succeed');
+    t.same(result.rows, [{log_id: 'log-1'}], 'the real owner returns the requested row');
+    t.equal(owner.calls.length, 1, 'the bounded SELECT makes one owner RPC read');
+    t.equal(owner.genericSelectCalls(), 0, 'the authoritative SELECT retains its declared path');
+    t.equal(owner.calls[0]?.partitionId, partitionId);
+    t.equal(owner.calls[0]?.forRead, true);
+    t.equal(owner.calls[0]?.executionOptions?.readAuthority?.authoritativeReadMode,
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED);
     t.equal(
-      capturedExecutionOptions?.preferLeader,
+      owner.calls[0]?.preferLeader,
       false,
       'recovery-lane system-table SELECT should prefer any eligible replica',
     );
     t.equal(
-      capturedExecutionOptions?.routingReadinessDimension,
+      owner.calls[0]?.executionOptions?.routingReadinessDimension,
       CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
       'system-table select should default to the recovery-eligible routing lane',
     );
@@ -392,18 +412,7 @@ function registerSqlQueryEngineExecutionTestCases({
           },
         },
       });
-      let capturedExecutionOptions = null;
-      engine.queryExecutor = {
-        async executeSelect(_ast, _partitionIds, _params, executionOptions = {}) {
-          capturedExecutionOptions = executionOptions;
-          return {
-            success: true,
-            rows: [],
-            count: 0,
-            distributedMetrics: {},
-          };
-        },
-      };
+      const owner = attachControlledOwnerRead(t, engine);
 
       const result = await engine.executeQuery(
         'SELECT * FROM logs WHERE log_id = \'log-1\'',
@@ -412,13 +421,20 @@ function registerSqlQueryEngineExecutionTestCases({
       );
 
       t.equal(result.success, true, 'system-table select should still succeed');
+      t.same(result.rows, [{log_id: 'log-1'}], 'the real owner returns the requested row');
+      t.equal(owner.calls.length, 1, 'the bounded SELECT makes one owner RPC read');
+      t.equal(owner.genericSelectCalls(), 0, 'the authoritative SELECT retains its declared path');
+      t.equal(owner.calls[0]?.partitionId, partitionId);
+      t.equal(owner.calls[0]?.forRead, true);
+      t.equal(owner.calls[0]?.executionOptions?.readAuthority?.authoritativeReadMode,
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED);
       t.equal(
-        capturedExecutionOptions?.preferLeader,
+        owner.calls[0]?.preferLeader,
         false,
         'explicit replica-preferred routing should reach query execution',
       );
       t.equal(
-        capturedExecutionOptions?.routingReadinessDimension,
+        owner.calls[0]?.executionOptions?.routingReadinessDimension,
         CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
         'replica-preferred system-table select should keep recovery routing',
       );

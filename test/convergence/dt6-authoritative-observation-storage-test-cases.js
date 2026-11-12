@@ -137,7 +137,6 @@ function registerGatewayObservationStorageWitnesses({t, withLeaderWitness,
       );
     },
   );
-
 }
 
 export {registerGatewayObservationStorageWitnesses};

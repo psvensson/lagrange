@@ -137,8 +137,9 @@ for (const assigned of [false, true]) {
       const after = RaftRsDurableStore.readDurableRecordIn(service.db, GROUP_ID);
       assert.deepEqual(after, before, 'malformed vector did not propose or mutate native history');
       assert.deepEqual(events, expected, 'refusal does not normalize caller bytes');
-      for (const event of events) assert.equal(service.systemTableCache.has(TABLES.CONFIG,
-        event.data.config_key), false);
+      for (const event of events) {
+        assert.equal(service.systemTableCache.has(TABLES.CONFIG, event.data.config_key), false);
+      }
       const durable = [events[0]];
       const answer = await measuredApply(f, service, durable, withSourceRange(durable));
       assertNativeResult(f, durable, answer);

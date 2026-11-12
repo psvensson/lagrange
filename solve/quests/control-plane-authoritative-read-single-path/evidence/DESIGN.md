@@ -262,3 +262,304 @@ is explicitly open pending tests-only seal 6396e877 and its shared-classifier
 correction. The later CDC cache ownership/metric slice b39aa4a7/2c4f213b is not in
 this checkpoint. No generated metadata, scoped static or integration acceptance
 is inferred from either parent's selected passes.
+
+## CDC maintenance composition for the next bounded correction
+
+The next composition retains both reviewed parents and adds the independently
+reviewed b39aa4a7, 2c4f213b and 4f16baec CDC maintenance slices. The sole shared
+source merge is the synchronous cache projection helper: comparison against
+both parents preserves the canonical complete-result classifier, owner-only
+local execution, pre-read generation and token-owned observation scope/phase.
+Cache source effects now enter the existing SystemTableCache owner directly;
+the exact sanctioned callsite count moves with that owner, without increasing
+the guardrail or changing its matcher. The relist slot/finally, currentness
+checks and post-observer recheck retain their original order.
+
+This commit is a development composition, not a passing static or integration
+receipt. Original catchup job 3076 is now verified and proves malformed-token
+replacement and nine incomplete-result absence effects; the behavior correction
+must consume the shared authority validator/classifier in this composition.
+The separately reviewed paged fixture import correction 7386f323 is not yet
+included. The adjacent configureTick typed-result consumer issue is a separate
+open systemic audit, not covered by the timing helper extraction review.
+
+## Verified consumer original and selected authority candidate
+
+Original job 3009 is fully verified at tests-only 4641db16/source68d: four roots,
+625 classified assertions, 277,224 bytes, SHA256
+9564725b24df4842001feac390b390a6d6f67fac8a6b79da9967774c412d66e5.
+Projection tokens enter direct owner reads, nine incomplete empty SERVICES
+answers fabricate dependent PARTITIONS absence, and explicit SQL authority can
+enter unclaimed ordinary routes. Malformed gateway carriers are accepted or
+replaced, while the view invokes accessor/proxy/serialization behavior. The
+ordinary and null-prototype valid view tokens preserve their identity. This is
+the original source receipt, not a certification of the later correction.
+
+Candidate 3088 at 0d45a8d1/source d0b05dca is fully verified PASS: three CDC roots,
+379 assertions (local leader 46, completeness 198, selected path 135), 1,530 bytes,
+SHA256 e5a8781df9a3cf37286d6d5b179371fb9e2fb591f24b34fdeacf575fd435109c.
+Candidate 3089 on that same source has three passing roots (gateway 155,
+owned-data 281, SQL 56) and two failing assertions within the 187-assertion view
+root. Its 16,315-byte stream has SHA256
+689cdc9aa834e361a4b417efb42516be1a0dd56c3be8b401226424738c7d453f.
+The remaining view failures are typed refusal: CACHE and BOOTSTRAP carriers
+with an own serialization hook refuse before every identity/admission/read
+effect, but report TOKEN_REQUIRED before the owner-strategy contradiction. The
+next source keeps one owned-data validator and checks owner semantics before
+the final serialization shape. It neither executes the hook nor admits the
+carrier. Repository/caller/composed results remain separate pending full review.
+
+## Producer custody and removal of the local read alternatives
+
+Tests-only seal dc3e938c705df3835c4721f5e93caf93fd49f3a7 retains source d0b05dca;
+its owner-read-producer-contract root has independent review and its first
+physical original is job 3120. It exercises actual CDC dispatch, unavailable
+declared local ports, no post-read witness reconstruction, direct RPC token
+admission before dependency access, and same-owner recovery. The final case
+uses the actual PartitionService and SQLite with the existing controllable
+consensus seam; it does not claim native Raft leadership proof.
+
+History locates the reconstructed witness in c1c57b1d92137ee184d1c6bcc813793364e47f1f
+(2026-11-08 complete-leader provenance change). The raw-database admitted read
+helper is present in 54dd2d7ce (2026-10-27 deterministic admission release).
+The correction gives CDC one local execution port, executeLocalQuery. The
+actual producer returns its witness synchronously with its SELECT rows, and
+CDC can consume only that result's witness. Missing ports remain unavailable.
+The direct RPC kernel validates canonical owner authority and RPC mode before
+reading its query engine, then carries the exact token and its selected routing
+dimension. The unused service RPC delegate and flow re-export are removed.
+
+A full source/test reference census found readAdmittedPartitionRows and the
+READ_ONLY admission path served only the deleted database fallback and their
+own tests. Both API and path are removed. Statement-admission controls retain
+the two production query ports and all their malformed-SQL refusal checks;
+the local SELECT positive now reaches the real local port. The new CDC missing
+port controls separately require zero calls to the forbidden database and
+executeQuery alternatives. Declared read fixtures migrate their explicit port;
+the deliberate alternate-port negatives remain unchanged.
+
+Frozen source review patch is authority-read-producer-review.patch, SHA256
+5ecfb692e9cb2490852b56fb3bb6df220d6f3d88c72be3842470ea9d5d218a09.
+Independent review, first-original evidence, candidate lab results and static
+closure remain required. The touched write-metrics file's pre-existing size
+debt remains explicit; no threshold is changed. No local execution occurred.
+
+The producer source and caller closure received independent bounded approval.
+A second reviewed delta, patch SHA256
+67592ee407d3f0b0c1dfe00d9c11d69f08a24f26179803a9f2e692a70e462deb,
+deduplicates insert/upsert row-operation construction privately within the same
+write-metrics owner. It preserves the initialized check, keys then values then
+SQL construction, and resolves proposeWrite only after the operation is built.
+This removes the touched file's size excess without another module/owner,
+comment trimming, a threshold change or a widened fallback.
+
+Verified job 3090 on 0d45/source d0b05dca is 57,420 bytes, SHA256
+37a6adac805f9ae2312bcddddd9b7b318f5aa11e22224517710ba81cf8a31b38.
+The single-authority confirmation root passes 96 assertions; existing
+confirmation-authority and remove-retry roots pass 41 and 20. The 452-assertion
+repository root has two older fixture mismatches. Case 80 expects the removed
+local-only confirmation. Case 16 answers terminal only to LOCAL and makes RPC
+unavailable, so the corrected RPC-only confirmation retains its pending
+terminal witness. The observed count of one is that retained terminal witness;
+the no-CREATING and deferred assertions pass. It is not proof of a stale SQL row
+being returned, nor proof that confirmation occurred.
+
+The independently reviewed fixture migration first lets the selected RPC owner
+confirm terminal state, proves one RPC read and exact witness settlement, then
+makes the same owner unavailable for entity observation. All prior monotonicity
+and refusal assertions remain. The tail case expects the declared RPC mode.
+The broader entity observer's existing projected/persisted-row alternatives
+remain an explicit separate audit; this migration does not authorize them.
+No source repository fallback was restored. Physical candidate and complete
+static/composition evidence are still outstanding.
+
+## Owned row-vector controls on the unchanged producer candidate
+
+The next tests-only slice retains source 269f1908ec7e402be3088b863567a0ef058ac0eb
+from 8c6b4732c5069e8cd893720043f5ac177ff9aa00. Sixteen actual CDC local-read
+controls use the declared executeLocalQuery port and its original-result leader
+witness. They require refusal of alias-only, invalid and duplicate canonical
+keys, sparse/accessor/proxy vectors, inherited/accessor/proxy rows and equal-version
+serialization hooks. Refusal retains zero callbacks, no fabricated rows or complete
+absence, no RPC/SQL alternative, and a later useful read from the same owner.
+Positive controls retain ordinary and null-prototype JSON data across caller
+mutation after return and across the next actual local partition read. A second
+key provider cannot reinterpret the original row membership or canonical keys.
+
+Nine controls added to the existing canonical JSON root exercise nested array
+accessors, own iterator/serialization hooks, extra array fields, proxies, inherited
+hole getters, record/array cycles and repeated acyclic shared subtrees. They use
+only the existing serializer API, so the first-original run does not depend on an
+unimplemented capture export. Numeric prototype mutation is restored before test
+assertions. Independent CDC review approves local blob
+329ddbed064bf50da472b6eabd2d3f33cc7427f3 and utility blob
+4d0c40155fb58f84941dfc60c5d2ae797abdd9df. Physical original evidence is pending;
+none of these controls has executed locally.
+
+The shared source proposal is one owned JSON capture operation in the existing
+canonical serializer and one canonical system-table row/key capture operation in
+the existing key-descriptor owner. This is data capture, not an authority grant.
+The serializer currently validates records but reads nested array indices without
+first applying its own dense-data predicate. Its recursion also lacks explicit
+cycle refusal. The row merge currently borrows caller arrays and rows across
+awaits and accepts a second key provider plus an id alias. Source changes remain
+separate from this original test seal.
+
+The recurring bug class is not limited to this leaf: the parallel catchup controls
+are sealed at e26004a5159acde1cfcafa5b6139bb5df24ad0cf on unchanged b2cc2e5d source.
+Catchup, visibility reconciliation and absence sweep require the same captured
+membership. A separate bootstrap topology snapshot merge also accepts id aliases
+and JSON serialization hooks, behind retained/cache/local-source selection. That
+owner is an explicit further proof obligation; this CDC slice does not certify it.
+The existing Oct 23 retained-seed iterator incident and canonical-data extraction
+history establish the prior project pattern. No fallback, timeout, assertion or
+source-size budget is widened by these controls.
+
+The post-producer caller census found two additional controlled LOCAL fixtures
+still exposing only executeQuery: authoritative-local-leader-custody and
+authoritative-read-completeness-custody. Their explicit producer declarations now
+use executeLocalQuery, with all answers, counters, witnesses and assertions
+unchanged. Independent checkpoint review approves exact blobs
+40ef7c928a908c034bf5e1e22021278365be5778 and
+d1bdd69d4926e1b24d7ec3ce351e04e1f928ea97. The earlier 0d PASS evidence remains
+bound to its older source; these migrated consumers require execution on the new
+producer. Intentional missing-port controls and actual write ports are retained.
+
+The same census identifies a separate rebalancer budget owner that still chooses
+gateway.executeQuery when readAuthoritativeRows is missing, plus a local-ledger
+fixture without its now-selected RPC route. Those are further source/fixture
+obligations requiring actual owner controls and formation-dependency analysis;
+renaming their ports or restoring local fallback would not discharge them.
+
+## Extended original: complete image agreement and serializer options
+
+Independent review of the proposed shared primitive found inherited option
+access: serializeJsonData reads spacing/sortKeys from default or partial records.
+Five existing-API controls now require no inherited getter, own accessor or proxy
+callbacks, while retaining normal serialization, sorting, spacing and digest
+output. They join the existing nine nested-array/cycle controls on unchanged
+source 269f1908ec7e402be3088b863567a0ef058ac0eb.
+
+The local merge's version-candidate list mixes heartbeat, lease, HLC, schema and
+other timestamps, including aliases. It has no declared common persisted order
+for a conflicting partition image; JSON length does not establish one. Four
+actual local-read controls refuse conflicting same-partition images, including
+complete empty versus nonempty, and retain useful same-owner recovery. A positive
+requires agreement by canonical membership despite row/field ordering. The earlier
+next-read mutation fixture now gives its second replica the same original image;
+its old disjoint images accidentally required an unsafe same-partition union.
+The mutation and owned first-answer obligations remain; 45c is retained as the
+earlier tests-only record. This is an explicit contract correction, not a green
+claim for the obsolete expectation.
+
+Independent CDC review approves local blob
+8351be37e825cb993b413ab011ad89ab8f3e92c2 and utility blob
+7a0ecb7bb1befc8d02212e799c91b11bfed7b386. There has been no local execution.
+The original45c request had not executed when this extension was prepared; its
+replacement must retain both seal identities and one original physical attempt.
+Canonical row capture also requires a keyed row result: scalar/projected CDC
+callers require an explicit census and refusal rather than another read port.
+
+## Shared capture source checkpoint
+
+Independent bounded review approves source patch
+1325da96fe7743bdc5b790011b643eb2605514f1eb4331a29ac29521f077a7e0.
+The existing canonical serializer now applies its dense-data admission to every
+nested array and tracks only active ancestors for explicit cycle refusal. Its
+own CanonicalJsonDataError remains a TypeError with the original message. Optional
+serializer fields are read only from owned data descriptors after admission;
+omitted fields never consult Object.prototype. Unexpected failures propagate.
+
+captureJsonData uses that one serializer plus captured native JSON.parse and a
+bottom-up freezing reviver. captureSystemTableRows, in the existing canonical key
+owner, accepts only declared system tables and unique nonempty canonical string
+keys, and retains frozen row/key vectors. It catches only the serializer's own
+validation error. The existing key predicate now uses the shared intrinsic-safe
+text predicate. There is no new read authority, registry or alternate decoder.
+The forwarding diagnostics integrity module is deleted; its two production
+importers and one direct test importer now address the existing canonical owner.
+Only its obsolete forwarding-identity test is retired, replaced by deep ownership
+and captured-native primitive coverage. All functional diagnostics tests remain.
+
+ECMAScript 2025's Array.prototype.every skips holes and reads values as visited;
+SerializeJSONProperty calls callable toJSON hooks. InternalizeJSONProperty visits
+descendants before the reviver, which supports freezing the freshly parsed data
+without another recursive decoder. Primary sources inspected:
+https://tc39.es/ecma262/2025/multipage/indexed-collections.html#sec-array.prototype.every
+and https://tc39.es/ecma262/2025/multipage/structured-data.html#sec-internalizejsonproperty
+and https://tc39.es/ecma262/2025/multipage/structured-data.html#sec-serializejsonproperty.
+
+This is a shared primitive checkpoint. CDC local image, catchup row/receipt and
+sweep consumers are not yet integrated on this source. The existing general
+getSystemCachePrimaryKeyFieldOrFallback API and bootstrap topology merge remain
+separate explicit deletion/migration obligations. Generated indexes, dependency
+selection, all static checks and all test execution remain lab-only and pending;
+no earlier lab pass is attributed to this new tree.
+
+## Local partition-image consumer checkpoint
+
+Independent bounded review approves patch
+5d6315103cda95f7cc33f57bf27a74043564336f8cc75f46c2d2dde677312368.
+The CDC local flow captures the partition identity before each await, then owns
+the answer's canonical row/key vector before another read. Replicas of the same
+partition must agree on canonical membership and values, independently of row or
+field order. Conflicting images, malformed rows and cross-partition key collisions
+return unavailable with no rows or complete absence. The returned vector and all
+descendants are owned and frozen. Required-leader evidence remains attached to the
+original answer and original partition identity.
+
+The local path no longer consults a second key provider, id alias, mixed timestamp
+candidate list or serialized payload length to choose authority. Three unused
+public CDC merge/rank/version delegates and their exports are deleted; the caller
+census found only the internal flow and two direct helper tests. Bootstrap's
+separately owned similarly named method remains an explicit further obligation.
+
+The three affected older tests now exercise real local reads. The 128 hook-bearing
+rows are refused before callbacks; 128 agreeing flat replicas retain useful owned
+data without the mutable global serializer; and a heartbeat disagreement refuses
+until the same stable replica instances agree. The old serialization-ranking work
+counter is retired with the deleted ranking operation. The remaining global-hook
+counter is explicitly a callback-independence check, not a zero-cost ownership
+claim. All 21 controls in the independently reviewed original9248 remain unchanged.
+
+Verified first-original3120 at dc3/source d0b is 43,836 bytes, SHA256
+dd102692085d01444904c459c395ac058fe35a695c4b9612c3957c57ed664d92.
+All nine original producer controls fail: missing local ports invoke executeQuery
+or the database; missing result witnesses are rebuilt; invalid RPC tokens reach
+dependencies; and the actual PartitionService SQLite read returns no witness.
+The same-owner later reads engage. This closes the causal original gate for the
+reviewed 8c6 producer, using source-equivalent d475's two explicit port fixtures.
+It does not establish a candidate pass for that producer or for this image slice.
+
+Catchup's separately reviewed consumer02673 retains captured membership and witness
+scalars through repair, sweep and receipt publication. Integration, first-original
+9248/a82, affected callers, static/generation/impact checks and physical candidate
+execution remain outstanding. No native serving, formation or complete-epic claim
+is made by these source checkpoints.
+
+## Selected caller fixture closure and PR split boundary
+
+Verified originals3099 (59,518 bytes, SHA256
+5b3fa6a87bb571f33c485097bfe073b63ecbfa172fbc9d8855e69219ee38fe3e)
+and3100 (32,014 bytes, SHA256
+690082967a13885f85ab82630952026e76039967e155da18fa6854629a3c91fd)
+remain unchanged. The four-path fixture correction is independently bounded
+APPROVED at patch63b186f43771434970f68374cf03da6ba8c09c2bcc4e9a4c2f080db44d0447a2.
+
+The reconciler's intended complete-empty answers now declare completeness;
+separate local/RPC missing-completeness controls preserve unavailable state and
+all cached evidence. The gateway's intended RPC positive declares AUTHORITATIVE,
+while its former local/RPC contradiction remains a zero-effect negative. The
+membership driver uses the actual full coordinator and owner queue, retaining
+NOT_DERIVED census work under a declared held scheduler. No later drain is
+claimed. Complete witnessed owner answers retain the original stale-local bait,
+epoch40 convergence, deletion sweep and publication-before-repair assertions.
+The SQL controls retain the same bounded SELECT, real SQL renderer, authoritative
+view and CDC owner; only the partition transport is controlled, and generic
+SELECT execution must remain unused.
+
+Production source remains62f344b7fdbff370380cf3870fb50da182d1f14b. Candidate
+functional/static evidence is still pending. The user requested smaller PRs on
+2026-11-12; independent source/evidence cuts will be prepared against a verified
+repository base. A draft PR records review scope and outstanding gates and does
+not convert any composed or earlier-source pass into exact-PR acceptance.

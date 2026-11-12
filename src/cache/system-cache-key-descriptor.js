@@ -8,7 +8,14 @@
 import {
   SYSTEM_TABLE_SCHEMAS,
 } from '../bootstrap/system-table-schemas-constants.js';
+import {CanonicalJsonDataError, appendOwnArrayValue, captureJsonData,
+  isDenseDataArray, isNonEmptyText, isRecord} from '../utils/canonical-json-data.js';
 
+const objectFreeze = Object.freeze;
+const objectHasOwn = Object.hasOwn;
+const CanonicalSet = Set;
+const setAdd = Function.prototype.call.bind(Set.prototype.add);
+const setHas = Function.prototype.call.bind(Set.prototype.has);
 
 const SYSTEM_CACHE_KEY_DESCRIPTOR_ERROR_MSG = Object.freeze({
   missingDescriptor: (tableName) =>
@@ -96,13 +103,41 @@ function resolveSystemCacheRowKey(tableName, row) {
 }
 
 function isUsableSystemCacheKey(value) {
-  return typeof value === 'string' && value.trim().length > 0;
+  return isNonEmptyText(value);
+}
+
+// This operation captures data, not read authority. Each consumer still owns
+// its original serving evidence and whether that evidence permits an effect.
+function captureSystemTableRows(tableName, rows) {
+  if (typeof tableName !== 'string' || !objectHasOwn(SYSTEM_CACHE_KEY_DESCRIPTOR, tableName) ||
+      !isDenseDataArray(rows)) return null;
+  const keyField = SYSTEM_CACHE_KEY_DESCRIPTOR[tableName];
+  if (!isNonEmptyText(keyField)) return null;
+  let capturedRows;
+  try {
+    capturedRows = captureJsonData(rows);
+  } catch (error) {
+    if (error instanceof CanonicalJsonDataError) return null;
+    throw error;
+  }
+  const keys = [];
+  const seen = new CanonicalSet();
+  for (let index = 0; index < capturedRows.length; index += 1) {
+    const row = capturedRows[index];
+    if (!isRecord(row) || !objectHasOwn(row, keyField)) return null;
+    const key = row[keyField];
+    if (!isUsableSystemCacheKey(key) || setHas(seen, key)) return null;
+    setAdd(seen, key);
+    appendOwnArrayValue(keys, key);
+  }
+  return objectFreeze({rows: capturedRows, keys: objectFreeze(keys)});
 }
 
 export {
   SYSTEM_CACHE_KEY_DESCRIPTOR,
   SYSTEM_CACHE_KEY_DESCRIPTOR_ERROR_MSG,
   SYSTEM_CACHE_KEY_FALLBACK,
+  captureSystemTableRows,
   getSystemCachePrimaryKeyField,
   getSystemCachePrimaryKeyFieldOrFallback,
   isUsableSystemCacheKey,

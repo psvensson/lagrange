@@ -165,18 +165,21 @@ test('AuthoritativeNodeEvidenceReconciler preserves cached node evidence ' +
           success: true,
           rows: [],
           source: 'local_partition_replica',
+          rowSetComplete: true,
           localReadHit: true,
         },
         services: {
           success: true,
           rows: [],
           source: 'local_partition_replica',
+          rowSetComplete: true,
           localReadHit: true,
         },
         partitions: {
           success: true,
           rows: [],
           source: 'local_partition_replica',
+          rowSetComplete: true,
           localReadHit: true,
         },
       },
@@ -232,16 +235,19 @@ test('AuthoritativeNodeEvidenceReconciler distinguishes confirmed empty ' +
           success: true,
           rows: [],
           source: 'owner_rpc_lane',
+          rowSetComplete: true,
         },
         services: {
           success: true,
           rows: [],
           source: 'owner_rpc_lane',
+          rowSetComplete: true,
         },
         partitions: {
           success: true,
           rows: [],
           source: 'owner_rpc_lane',
+          rowSetComplete: true,
         },
       },
     },
@@ -282,6 +288,28 @@ test('AuthoritativeNodeEvidenceReconciler distinguishes confirmed empty ' +
     'confirmed empty refreshes should still preserve cached partition evidence',
   );
 });
+
+for (const source of ['local_partition_replica', 'owner_rpc_lane']) {
+  test(`AuthoritativeNodeEvidenceReconciler treats ${source} empty answers ` +
+    'without completeness as unavailable and retains cached evidence', async (t) => {
+    const nodeId = `node-incomplete-${source}`;
+    const cache = createCacheWithNodeEvidence(nodeId);
+    const tableNames = [TABLES.NODES, TABLES.SERVICES, TABLES.PARTITIONS];
+    const before = tableNames.map((tableName) => cache.getAll(tableName));
+    const tables = Object.fromEntries(tableNames.map((tableName) =>
+      [tableName, {success: true, rows: [], source}]));
+    const reconciler = createNodeEvidenceReconciler({nodeId, cache, snapshot: {tables}});
+
+    t.equal(await reconciler.ensureNodeEvidence(nodeId), false,
+      'an incomplete empty answer cannot report a repair');
+    const latestRepair = reconciler.getLatestRepair(nodeId);
+    for (const field of ['nodeEvidenceState', 'serviceEvidenceState', 'partitionEvidenceState']) {
+      t.equal(latestRepair?.[field], 'unavailable', `${field} retains the missing proof`);
+    }
+    t.same(tableNames.map((tableName) => cache.getAll(tableName)), before,
+      'all original node, service and partition evidence remains intact');
+  });
+}
 
 test('AuthoritativeNodeEvidenceReconciler repairs partition owner rows ' +
   'for the node service set', async (t) => {

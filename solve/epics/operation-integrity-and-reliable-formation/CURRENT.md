@@ -22,17 +22,96 @@ entries and has older source; its source must not replace this baseline.
 
 | Interaction | Source custody and next owner |
 | --- | --- |
-| Census and publication authority | Root owns this branch. Physical lab 2713 rejected `ebb1b35db`: raw cache-wake rows bypassed the publication owner. Its complete log and withdrawn approval are preserved. Current correction removes async raw-row/latest/snapshot shortcuts, preserves declared deferred-census intent, and clears that intent on a full-census queue request. Source review and 13-root lab proof are pending. |
-| Authority read modes | Root owns `work/cloud-authority-mode-closure-20261112`. Tests-only `232bc7a1fc13bf2cfaf0a8ef46fb6bc9840dc7ed` has unchanged production. Lab 2745 is the first negative request. Approved design keeps only explicit local-owner and required owner-RPC paths, with no SQL/replica substitution or read-side overlay fabrication. |
-| CDC image, position and effects | `/root/takeover_cdc` owns `work/cloud-cdc-image-effect-20261112`. Original baseline 2688 is a verified causal red; bounded candidate 2699 passed. Latest `fb36911128429043abe57cc86bab2d0f68e83d89` is frozen and awaits proof. Source review still holds relister escaping-failure semantics and canonical one-source/table admission. |
-| Removal, lifecycle and runtime publication | `/root/takeover_inventory` owns `work/cloud-settlement-generation-20261112`. Canonical-generation candidate 2697 passed 8 roots/911 assertions. Corrected native baseline 2706 proves a stale completion damages a replacement. Candidate 2743 and additional red 2744 failed and require complete-log classification. New producer/caller freezes `7a49ad6b` and `dd896e1d` remain unaccepted. Native producer fixtures and the separate partition leader-write effect still need closure. |
-| SQLite and lifecycle observation composition | Root owns `work/cloud-sqlite-composition-20261112`: exact R4 lifecycle delta first, then reviewed SQLite WIP delta, with earlier F custody preserved. `a400e03aa456c85d97159ce9d68581869023dacd` passed three verified physical shards: 17 roots/519 assertions. Independent review still examines exact-handle capture; whole migration/static/full-run acceptance is not granted. Original `188883de` full run is now recovered as 2,065 passed/12 failed out of 2,077 roots, retained without rewriting. |
+| Census and publication authority | Root retains `554ffb5fb02bbe1819782efd49ae2fd7af4dbdd0`; bounded 13-root/1,334-assertion functional proof passed. Strict complexity and other static debt remain open. Original2713's raw cache-wake bypass and withdrawn approval remain preserved. |
+| Authority read modes and local image custody | Root's reviewed composition is `1c0c958de924f408da6b3d3cd172c7f7f3b39ef7`, source `62f344b7fdbff370380cf3870fb50da182d1f14b`. Two-mode ingress, result-owned witnesses, canonical local image agreement, shared capture and selected caller fixture corrections are source reviewed. Original3120 proves the producer defects. Producer-only candidate batches3206/3207/3208 and originals3194/3195 are separate from the composed candidate; no whole-composition pass is claimed. |
+| CDC image, position and effects | `/root/takeover_cdc` owns this interaction, composed into the same source62f344b7. Paged-stop control3121 passed9 cases. Original3110 retains the R2 receipt, terminal repair and recipient fixture failures; reviewed corrections058de776 retain owed source debt and all semantic assertions. Catchup now captures row/key membership and witness scalars before repair callbacks. Exact candidate/static proof remains open. |
+| Removal, lifecycle and runtime publication | `/root/takeover_inventory` retains `8643ed370113986570d62e1361b0ad1f9409b363`. Generation2697 passed8 roots/911 assertions; immutable observation2954/2973 and exact cleanup2890/2891 have bounded causal evidence. Runtime publication406 passed55 controls, but first-cleanup/reentrant factory3122 still exposes forbidden effects. Seed diagnostic3129 proves setup rejection before intended reentry; corrected original/candidate pair0fed72d4/3a14c0e2 awaits proof. Nominal producer/factory332 is source reviewed; full5183 callers, early public CREATE custody, generic STOP and native replacement remain open. Broad new source expansion is paused while extracting PRs. |
+| SQLite and lifecycle observation composition | `0d89fcdc31df9f1384840a0f50a3de690d7ca8e6` records the bounded immutable-store correction98c20. Original2806 proves mutable connection retargeting; exact candidate2837/2854 passed6 roots/50 assertions, including native child records. The broader strict SQLite acquisition migration remains on HOLD; its old full run retains12 failures. Independent draft PR204 now contains only constructor connection immutability and focused controls on verified main; its own original3247 reproduces foreign database effects in all four negative cases. |
 | Checkpoint custody, inspection and recovery | Root retains the full original seal at `da5eb99bdc2893d1dd245d25a68d789490571c91`. The recovered directory-custody/inspection proposals and node receipt sibling `df2ead4f` are not approved implementation. All-handle ownership, original episode recovery and actual restart/useful follower proof remain required. |
 | Native role and package delivery | Role `b0ffa63cf8e287100c2b336f4c1dfeb66257b8b6` remains rejected/unfinished. Package `14d6b7a43ffdc8737aa9972f7b610d9f4f99f2c8` awaits validation/review; earlier staging/copy approvals certify negative diagnostics only. |
 
 F, the clock and fixture repairs, permission witnesses, historical resolver and
 retention, admin timing, and the earlier bounded CDC witness already in `fa70987b`
 were checked against their preservation tips. Do not import them a second time.
+
+### Smaller PRs requested by the user
+
+On 2026-11-12 the user requested closing bounded work through smaller PRs. Live
+main was verified at18:23:07UTC as
+`49fba99e1ad27acf83a75fdcee1f89a061377de4`; the former local main `ef93af85d`
+is stale. Extracted branches must be checked against the verified live base and
+retain their own exact proof. Existing large WIP branches remain preserved.
+
+| Cut | Owner and current boundary |
+| --- | --- |
+| Canonical JSON nested-data validation | [PR203](https://github.com/psvensson/lagrange/pull/203). Six code/test paths plus four scope/review records. First isolated local `dc52cfcb0a9f7d08405f4096e284cc285ca7cf70` was published as `b280e0a88f9f7319d6f7655b16bb28f64349e2fb`, identical tree `ca01bd7a54cc686b174b877b5f2f2c7cd907c131`. Independent source review APPROVE. Original 3194 verifies twelve failures and two positives among fourteen retained controls on the identical base serializer/helper. Exact candidate 3241 verifies PASS: two roots/574 assertions, utility 73 and actual calculator 501. Disjoint caller 3246 is fully verified: three roots/67 assertions, giving five roots/641 assertions on that initial candidate. Metadata/static 3242 passed generation and all checks except 34 brace-style errors; canonical selection requires 810 unique roots. The reviewed whitespace-only correction and current evidence are local `d9a901a24d025e63b3501ea3ab2803dd482bc0f6`, published `fb03e86177e003ab21779cd0f932d2d0bafe6826`, identical tree `70c017a795a0604f708154d13748e06f2232ae01`, unchanged product source. Fresh canonical generation, static checks, selected execution and exact merge proof remain pending. No row-capture API or broader CDC implementation is included. |
+| Durable store constructor connection | [PR204](https://github.com/psvensson/lagrange/pull/204). Two authored paths: six added constructor lines and five focused native SQLite controls. Local candidate `223ad16ae23c73ae96c0a778776e5a56b7ccfb25`, published `3e1d1fa4dc61107f25927e480485323bc7417bcc`, tree `59693a7f15ed4bfa8fb00950b334b84d90ca8a6e`; tests-only original local `317a38f0c3f14a263d3035785ee68afe666ac06b`, published `292670255f07dd17213c60e2e93a316fda94e3cb`. Root independently APPROVES the complete controls and source. Both sides retain test blob `39d8b3ccdf429852090ca441233667b19206831e`. Original 3247 fully verifies four negative controls exposing foreign effects before failing, with the unchanged-owner positive passing. Exact candidate 3255 fully verifies all five cases PASS. Canonical metadata, selected callers and static gates remain pending. The broader strict SQLiteConnection migration is not imported. |
+| Immutable lifecycle observation | Next candidate: five-line3356302 correction has bounded original/candidate evidence but needs a coherent main-base control extraction. No broad runtime constructor migration is implied. |
+| CDC and authority follow-ups | Keep canonical read contract, row ownership, local-image agreement and catchup/receipt consumers as explicit dependent cuts. Do not open the whole runtime/factory stack as a small independent PR. |
+
+The coordinator verified all94 live-main workflows. Main-targeted PRs
+automatically start hosted tests with retry-on-failure, conflicting with the
+standing lab-only/no-retry instruction. Both PRs were created against
+`review/lagrange-split-base-20261112`, initially verified at exact main49fba.
+The only other PR workflow has TiDB-specific paths that neither cut touches.
+Main delivery and its required merge gates remain pending; no skip marker or
+workflow edit is included.
+
+The coordinator subsequently observed both PRs merged into that review branch:
+PR203 at 19:03:06 UTC, merge `908e551732b4ce956759a0a93166caea736e7871`,
+and PR204 at 19:03:23 UTC, merge `10f3e795981b45b68bdfbee93fa6d1674d2a1a7f`.
+GitHub attributes both to `psvensson`; the event mechanism is unverified. The
+coordinator issued no ready, merge or retarget operation and preserves these
+observed changes. The review ref now points to the latter merge. Live main
+still points to `49fba99e1ad27acf83a75fdcee1f89a061377de4`. A review-branch
+merge does not establish completed acceptance or main delivery.
+
+Fresh metadata/selection/static requests are registered as lab3264 for the
+immutable store candidate `3e1d1fa4` and lab3265 for corrected JSON `fb03e861`.
+They remain individual-head evidence. Their generated seals cannot be combined
+or applied to the merged review tree because each binds a different raw source
+and test universe. The next integration checkpoint must regenerate and freeze
+metadata on combined review `10f3e795`, then select against fixed main49fba.
+Its actual selected count must be conserved across three disjoint physical
+shares; the initial JSON count810 is not assumed for the combined tree.
+No separate overlapping PR-wide test cones are scheduled. All required
+selected roots, first failures, exact identities and child-scope closure remain
+mandatory; the review merges waive none of these obligations.
+
+The verified direct JSON candidate log is 1,409 bytes, SHA256
+`2ac20ef0d58f2655b0a504d8555f7bf86bac538776dcdc05f15cce1579bf0ca0`.
+Its disjoint caller log is 1,492 bytes, SHA256
+`72e26d2cafa0b9f5c5fe7ed5820355a16485b82fbdf04b9600897bea6ad0ca9f`:
+buffer 48, property 11 and router 8 assertions, with exit 0 and closed scopes.
+Its original3194 stream is 57,010 bytes, SHA256
+`762e874c70a41bb6b0d6b7df042fa0402c74f0dc4b2d21b9cb85c78b62c308bd`;
+the companion local-row failures are preserved outside this small PR's scope.
+The twelve fewer candidate utility assertions come only from the deleted facade
+identity subtest. Original store3247 is 9,654 bytes, SHA256
+`71c8f50d931f7bb83e394d78461d7b836a98ac6e76c7dd17362d4c67afd46574`.
+Assignment/accessor substitution redirects actual reads and writes, a closed
+replacement manufactures snapshot absence, and reentrant substitution lets a
+write escape the transaction on the original database. These diagnostics were
+captured before the first failing assertion; later negative assertions are not
+claimed reached. Candidate store 3255 is 1,293 bytes, SHA256
+`4bc15a19a8658aed134903ba6d1e58be0da360486052dd11ffa6d4aef0949948`;
+the identical five-case root passes on the constructor correction with the
+original native SQLite identity. These streams retain exact source identities
+and closed physical scopes. The JSON metadata/static stream is 13,123 bytes,
+SHA256 `aa8e18b619e2a5bcb11d139179f77ea141b587eff4b9c5eb2dd4f449c9bfdb31`.
+Its sole failed stage is test brace formatting, corrected by independently
+reviewed patch `8d238d589e062a7c7cd5a58a3234ba9fb3a123c17647255cad0cc2537b25bc9d`.
+All statements and assertions remain; raw-byte test hashing requires a fresh
+generated seal. The old generated patch is retained as evidence for its exact
+input and is not reused. These bounded results do not discharge canonical
+selected callers, the final corrected static gates or main merge acceptance.
+
+After these cuts, the next small extraction candidates are CDC retry-delay timer
+custody and immutable lifecycle observation. Each needs its own main-base source
+review and physical proof. The larger CDC image/effect chain must retain its
+ledger/range producer, application adapters, cache owner and relister together;
+main lacks those prerequisites. The metadata mutation cache-dedup finding is
+preserved in the CDC Quest at `fbf3a52d5` and remains separate follow-up work.
 
 ### Lab execution and evidence
 
@@ -45,10 +124,9 @@ its actual host, source/tree, dependencies and cleanup scopes. All tests and
 static gates run on lab machines. WIP transport commits preserve exact Git
 trees; they do not grant landing, integration or release acceptance.
 
-Completed physical evidence includes census 2713 RED, canonical generation
-2697 PASS, CDC baseline 2688 RED and bounded candidate 2699 PASS, settlement
-2706 RED, and SQLite composition 2736/2737/2738 PASS. Complete log hashes and
-scope closure are recorded by the coordinator. Issue 2694 was cancelled during
+Complete log hashes, exact source identities and scope closure are recorded in
+the owning Quest logs and by the coordinator. Earlier results remain historical
+measurements rather than proof of a later composition. Issue2694 was cancelled during
 `npm ci`, before any tests; it is infrastructure evidence only. Issue 2696 on
 unreachable lenovo remains uncertain with source execution reported and no
 closed scopes. It is neither resubmitted nor cleared. No fail-once rerun,

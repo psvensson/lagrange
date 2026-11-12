@@ -3,6 +3,9 @@ import {CDC_CATCHUP_TRIGGER} from '../../src/cdc/cdc-integration-service-authori
 import {
   MembershipPublicationCoordinatorReconcile,
 } from '../../src/control-plane/membership-publication-coordinator-reconcile.js';
+import {MembershipPublicationCoordinator} from
+  '../../src/control-plane/membership-publication-coordinator.js';
+import {OwnerKeyReconcileQueue} from '../../src/workflow/owner-key-reconcile-queue.js';
 import {
   resolveDeferredPropagatedCatchupCooldownMs,
 } from '../../src/control-plane/membership-publication-coordinator-reconcile-helpers.js';
@@ -80,6 +83,7 @@ function makeAuthorityService(
     success: true,
     source: AUTHORITATIVE_READ_SOURCE.OWNER_RPC_LANE,
     rows: tableName === authoritativeTable ? authorityRows : [],
+    rowSetComplete: true,
     readAuthorityWitness: {
       state: 'observed',
       partitionId: INITIAL_PARTITION_IDS[tableName],
@@ -365,13 +369,14 @@ test('CL-001 variant D DEEPER LAYER (2026-06-18): the catch-up routes through th
   service.executeAuthoritativeSystemTableRead =
     async (_tableName, _sql, _params, options = {}) => {
       const owner = options.readAuthority?.authoritativeReadMode ===
-        'owner_rpc_preferred';
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED;
       reads.push(owner ? 'owner' : 'local');
       return owner ?
         {
           success: true,
           source: AUTHORITATIVE_READ_SOURCE.OWNER_RPC_LANE,
           rows: [publicationRow(40, 2000)],
+          rowSetComplete: true,
           readAuthorityWitness: {
             state: 'observed',
             partitionId: INITIAL_PARTITION_IDS[PUBLICATIONS],
@@ -419,14 +424,39 @@ test('CL-001 variant D DEEPER LAYER (2026-06-18): the catch-up routes through th
 // A node that resolves as the publications WRITE-LEADER (Tier-0 raft-live via
 // canWriteSystemTableLocally=true) drives the OWNER path of the periodic driver,
 // NOT the follower catch-up branch. assertSingleMembershipPartition and the
-// readiness-trace fields are out of scope here, so they are stubbed; the planning
-// snapshot is injected to put the owner on the no-deficit (would-skip) branch.
-function makeLeaderDriverCoordinator({cache, cdcIntegrationService, now, planningSnapshot}) {
-  const coordinator = makeFollowerDriverCoordinator({cache, cdcIntegrationService, now});
+// readiness-trace fields are out of scope here, so they are stubbed. The actual
+// coordinator and owner queue retain the owed census. Its declared scheduler
+// holds the later drain while this test observes the current driver turn.
+function makeLeaderDriverCoordinator(t, {cache, cdcIntegrationService, now, planningSnapshot}) {
+  const scheduledDrains = [];
+  let coordinator;
+  const reconcileQueue = new OwnerKeyReconcileQueue({
+    name: 'deferred-catchup-membership-owner',
+    reconcileFn: async (_ownerKey, _reasons, context) =>
+      coordinator.reconcileClusterMembership(context),
+    scheduleDrainFn: (drain) => scheduledDrains.push(drain),
+    now,
+  });
+  const logger = {warn() {}, info() {}, debug() {}, error() {}};
+  reconcileQueue.logger = logger;
+  coordinator = new MembershipPublicationCoordinator({
+    nodeId: 'N1', systemTableCache: cache, cdcIntegrationService, now, logger,
+    reconcileQueue, resolveIsControlPlanePublicationsWriteLeader: () => true,
+  });
+  t.teardown(() => reconcileQueue.shutdown());
   coordinator.assertSingleMembershipPartition = () => {};
   coordinator._buildPublicationReadinessTraceFields = () => ({});
   coordinator.readPublicationPlanningSnapshot = async () => planningSnapshot;
-  return coordinator;
+  return {coordinator, scheduledDrains};
+}
+
+function assertRetainedCensus(t, coordinator, scheduledDrains) {
+  const pending = coordinator.reconcileQueue.pending.get(coordinator.buildOwnerKey());
+  t.same([...pending.reasons], ['priority_census_not_derived'],
+    'the actual owner queue retains the census obligation');
+  t.equal(pending.context.deferNestedPriorityRecoveryPlanning, false,
+    'the queued continuation requests the full census');
+  t.equal(scheduledDrains.length, 1, 'the real queue schedules one retained continuation');
 }
 
 test('CL-001 variant D OWNER FACE (2026-06-19): a rejoined publications WRITE-LEADER ' +
@@ -450,7 +480,7 @@ test('CL-001 variant D OWNER FACE (2026-06-19): a rejoined publications WRITE-LE
     nodeRows: [],
     readinessByNodeId: {},
   };
-  const coordinator = makeLeaderDriverCoordinator(
+  const {coordinator, scheduledDrains} = makeLeaderDriverCoordinator(t,
     {cache, cdcIntegrationService: service, now: () => 5000, planningSnapshot});
 
   t.equal(coordinator.getLatestPublicationRowSync().publicationEpoch, 19,
@@ -465,6 +495,7 @@ test('CL-001 variant D OWNER FACE (2026-06-19): a rejoined publications WRITE-LE
     'and its frozen cache converged to the committed epoch 40 (RED on revert: the owner ' +
     'path skipped without ever catching up, serving epoch 19 to the consistency probe ' +
     'forever as publication_epochs_disagree)');
+  assertRetainedCensus(t, coordinator, scheduledDrains);
 });
 
 test('a publications write-leader with a membership deficit still sweeps a ' +
@@ -496,6 +527,7 @@ async (t) => {
         success: true,
         source: AUTHORITATIVE_READ_SOURCE.OWNER_RPC_LANE,
         rows: [],
+        rowSetComplete: true,
         readAuthorityWitness: {
           state: 'observed',
           partitionId: INITIAL_PARTITION_IDS[tableName],
@@ -528,7 +560,7 @@ async (t) => {
     nodeRows: [...MEMBERS, 'N4'].map((nodeId) => ({node_id: nodeId})),
     readinessByNodeId: {},
   };
-  const coordinator = makeLeaderDriverCoordinator({
+  const {coordinator, scheduledDrains} = makeLeaderDriverCoordinator(t, {
     cache,
     cdcIntegrationService: service,
     now: () => 5000,
@@ -546,6 +578,7 @@ async (t) => {
     'the publication deficit retains the normal owner drive outcome');
   t.equal(publicationDriveCount, 1,
     'the membership publication turn runs before the catch-up repair');
+  assertRetainedCensus(t, coordinator, scheduledDrains);
   t.ok(readSources.length > 0 && readSources.every((source) => source === 'leader'),
     'every routing-table catch-up read prefers its semantic owner leader');
   t.equal(cache.getAll(TABLES.SERVICES).length, 0,
@@ -561,7 +594,7 @@ test('a publications write-leader without a planning snapshot still reaches ' +
       seen.push(options);
     },
   };
-  const coordinator = makeLeaderDriverCoordinator({
+  const {coordinator} = makeLeaderDriverCoordinator(t, {
     cache: new SystemTableCache(),
     cdcIntegrationService: service,
     now: () => 5000,
@@ -585,7 +618,7 @@ test('a publications write-leader whose planning read fails still reaches the ' 
       seen.push(options);
     },
   };
-  const coordinator = makeLeaderDriverCoordinator({
+  const {coordinator} = makeLeaderDriverCoordinator(t, {
     cache: new SystemTableCache(),
     cdcIntegrationService: service,
     now: () => 5000,

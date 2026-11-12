@@ -890,6 +890,7 @@ test('ControlPlaneSystemTableGateway owner-local reads fail closed when the ' +
 test('ControlPlaneSystemTableGateway explicit owner RPC mode selects the ' +
   'declared authority at ingress', async (t) => {
   const authoritativeCalls = [];
+  let sqlQueryCalls = 0;
   const gateway = new ControlPlaneSystemTableGateway({
     nodeId: 'node-gateway',
     cdcIntegrationService: {
@@ -918,6 +919,7 @@ test('ControlPlaneSystemTableGateway explicit owner RPC mode selects the ' +
     },
     sqlQueryEngine: {
       async executeQuery() {
+        sqlQueryCalls += 1;
         throw new Error(
           'gateway must use the declared CDC owner RPC lane',
         );
@@ -925,18 +927,32 @@ test('ControlPlaneSystemTableGateway explicit owner RPC mode selects the ' +
     },
   });
 
-  const result = await gateway.executeRead({
+  const readIntent = {
     owner: 'replica-operation-repository',
     tableName: TABLES.REPLICA_OPERATIONS,
     sql: 'SELECT * FROM replica_operations WHERE 1 = 0',
     params: [],
-    strategy: CONTROL_PLANE_READ_STRATEGY.OWNER_LOCAL_NON_PROPAGATED,
-  }, {
+    strategy: CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE,
+  };
+  const readOptions = {
     authoritativeReadMode:
       CONTROL_PLANE_AUTHORITATIVE_READ_MODE
         .OWNER_RPC_REQUIRED,
     preferLeader: false,
-  });
+  };
+  let contradiction;
+  try {
+    await gateway.executeRead({...readIntent,
+      strategy: CONTROL_PLANE_READ_STRATEGY.OWNER_LOCAL_NON_PROPAGATED}, readOptions);
+  } catch (error) {
+    contradiction = error;
+  }
+  t.equal(contradiction?.code, 'contradictory_control_plane_authoritative_read_authority',
+    'an explicit local strategy cannot be overridden by an RPC mode');
+  t.equal(authoritativeCalls.length, 0, 'the contradictory request never reaches the owner');
+  t.equal(sqlQueryCalls, 0, 'the contradictory request never reaches SQL execution');
+
+  const result = await gateway.executeRead(readIntent, readOptions);
 
   t.equal(result.success, true, 'the explicitly selected owner RPC read succeeds');
   t.equal(
@@ -947,13 +963,15 @@ test('ControlPlaneSystemTableGateway explicit owner RPC mode selects the ' +
   t.equal(
     authoritativeCalls[0]?.options?.readAuthority?.authoritativeReadMode,
     CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
-    'owner-local reads should pass the explicit routed-authoritative opt-in to the owner',
+    'the authoritative strategy preserves the selected RPC owner',
   );
   t.equal(
     authoritativeCalls[0]?.options?.queryOptions?.preferLeader,
     false,
-    'owner-local reads should preserve replica-preferred routing intent',
+    'authoritative reads should preserve replica-preferred routing intent',
   );
+  t.equal(authoritativeCalls.length, 1, 'the valid request performs one owner read');
+  t.equal(sqlQueryCalls, 0, 'the valid request retains its declared owner path');
 });
 
 test('ControlPlaneSystemTableGateway emits read telemetry with owner and ' +

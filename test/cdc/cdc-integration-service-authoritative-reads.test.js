@@ -80,6 +80,27 @@ function buildAuthoritativeReadOptions(authority = {}, operational = {}) {
   };
 }
 
+function readerForLocalReplicaRows(t, tableName, rows) {
+  const partitionId = INITIAL_PARTITION_IDS[tableName];
+  const partitions = new Map();
+  let reads = 0;
+  for (let index = 0; index < rows.length; index += 1) {
+    partitions.set(`local-replica-${index}`, {partitionId,
+      replicaId: `${partitionId}-r${index}`, initialized: true, isLeader: true,
+      async executeLocalQuery() {reads += 1; return {success: true, rows: [rows[index]]};},
+    });
+  }
+  const engine = createMockSqlQueryEngine();
+  const service = new CDCIntegrationService({nodeId: 'test-node', sqlQueryEngine: engine,
+    partitionServicesProvider: () => partitions});
+  service.initialize();
+  t.teardown(() => service.markShuttingDown());
+  return {read: () => service.executeAuthoritativeSystemTableRead(tableName,
+    `SELECT * FROM ${tableName}`, [], buildAuthoritativeReadOptions({
+      localReadConsistency: 'any_replica',
+    })), reads: () => reads, sqlCalls: engine.executedQueries};
+}
+
 test('CDCIntegrationService - steady-state system table writes skip local followers and use routed SQL',
   async (t) => {
     const mockSqlEngine = createMockSqlQueryEngine();
@@ -163,7 +184,7 @@ test('CDCIntegrationService - authoritative cache confirmation uses the requeste
       partitionServicesProvider: () => createLocalSystemTablePartitionServices(
         SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
         {
-          async executeQuery(sql, params) {
+          async executeLocalQuery(sql, params) {
             localReads += 1;
             t.equal(
               params[0],
@@ -245,7 +266,7 @@ test('CDCIntegrationService - explicit owner-RPC reads preserve their lane with 
         SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
         {
           isLeader: false,
-          async executeQuery() {
+          async executeLocalQuery() {
             localReads += 1;
             return {
               success: true,
@@ -353,7 +374,7 @@ test('CDCIntegrationService - local leader reads refuse follower substitution an
     let sqlReads = 0;
     const operationId = 'op-local-leader-only';
     const localServices = createLocalSystemTablePartitionServices(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-      {isLeader: false, async executeQuery(sql, params) {
+      {isLeader: false, async executeLocalQuery(sql, params) {
         localReads += 1;
         t.same(params, [operationId], 'same local owner preserves query parameters');
         return {success: true, rows: [{operation_id: operationId, workflow_step: 'PENDING'}]};
@@ -539,7 +560,7 @@ async (t) => {
       SYSTEM_TABLE_NAME.LOGS,
       {
         isLeader: false,
-        async executeQuery(sql, params) {
+        async executeLocalQuery(sql, params) {
           localReadCount += 1;
           t.match(sql, /SELECT log_id AS ack_id FROM logs/i,
             'local probe should preserve the original SQL');
@@ -739,7 +760,7 @@ async (t) => {
       SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       {
         isLeader: true,
-        async executeQuery() {
+        async executeLocalQuery() {
           localReadCount += 1;
           return {
             success: true,
@@ -816,7 +837,7 @@ async (t) => {
       SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       {
         isLeader: true,
-        async executeQuery() {
+        async executeLocalQuery() {
           localReadCount += 1;
           return {
             success: true,
@@ -964,7 +985,7 @@ test('CDCIntegrationService - owner-RPC reads retain the transport owner refusal
     service.markShuttingDown();
   });
 
-test('CDCIntegrationService - authoritative merge prefers fresher heartbeat rows',
+test('CDCIntegrationService - heartbeat disagreement refuses until the local replica images agree',
   async (t) => {
     const partitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.NODES];
     const olderRow = {
@@ -981,16 +1002,17 @@ test('CDCIntegrationService - authoritative merge prefers fresher heartbeat rows
       last_heartbeat: 5000,
       ready_lease_expires_at: 20000,
     };
-    const service = new CDCIntegrationService({
-      nodeId: 'test-node',
-      sqlQueryEngine: createMockSqlQueryEngine(),
-      partitionServicesProvider: () => new Map([
+    let agree = false;
+    let localReads = 0;
+    const engine = createMockSqlQueryEngine();
+    const partitions = new Map([
         ['nodes-leader', {
           partitionId,
           replicaId: `${partitionId}-r1`,
           initialized: true,
           isLeader: true,
-          async executeQuery() {
+          async executeLocalQuery() {
+            localReads += 1;
             return {
               success: true,
               rows: [{...olderRow}],
@@ -1002,18 +1024,21 @@ test('CDCIntegrationService - authoritative merge prefers fresher heartbeat rows
           replicaId: `${partitionId}-r2`,
           initialized: true,
           isLeader: false,
-          async executeQuery() {
+          async executeLocalQuery() {
+            localReads += 1;
             return {
               success: true,
-              rows: [{...newerRow}],
+              rows: [{...(agree ? olderRow : newerRow)}],
             };
           },
         }],
-      ]),
-    });
+    ]);
+    const service = new CDCIntegrationService({nodeId: 'test-node', sqlQueryEngine: engine,
+      partitionServicesProvider: () => partitions});
     service.initialize();
+    t.teardown(() => service.markShuttingDown());
 
-    const result = await service.executeAuthoritativeSystemTableRead(
+    const read = () => service.executeAuthoritativeSystemTableRead(
       SYSTEM_TABLE_NAME.NODES,
       'SELECT * FROM nodes WHERE node_id = ?',
       ['node-merge-freshness'],
@@ -1022,16 +1047,23 @@ test('CDCIntegrationService - authoritative merge prefers fresher heartbeat rows
       }),
     );
 
-    t.equal(result.success, true, 'authoritative local read should succeed');
-    t.equal(result.source, 'local_partition_replica',
-      'authoritative read should stay on local replicas');
-    t.equal(result.rows.length, 1, 'replica rows should merge by primary key');
-    t.same(result.rows[0], newerRow,
-      'merged authoritative row should retain freshest heartbeat evidence');
+    const refused = await read();
+    t.equal(localReads, 2, 'both declared replicas actually answer');
+    t.equal(refused.success, false, 'heartbeat and lease values do not order competing images');
+    t.equal(refused.error, 'authoritative_row_source_unavailable');
+    t.same(refused.rows, []);
+    t.equal(refused.rowSetComplete, false);
+    agree = true;
+    const healed = await read();
+    t.equal(healed.success, true, 'the same original owners remain useful after agreement');
+    t.equal(healed.source, 'local_partition_replica');
+    t.same(healed.rows, [olderRow], 'the agreeing original image is retained without timestamp election');
+    t.equal(localReads, 4);
+    t.same(engine.executedQueries, [], 'refusal never selects another execution lane');
   });
 
-test('CDCIntegrationService - authoritative merge ranks each replica row once',
-  (t) => {
+test('CDCIntegrationService - local read refuses row serialization hooks before replica arbitration',
+  async (t) => {
     let serializations = 0;
     const rows = Array.from({length: 128}, (_unused, index) => ({
       node_id: 'node-merge-rank',
@@ -1046,27 +1078,19 @@ test('CDCIntegrationService - authoritative merge ranks each replica row once',
         };
       },
     }));
-    const service = new CDCIntegrationService({
-      nodeId: 'test-node',
-      sqlQueryEngine: createMockSqlQueryEngine(),
-    });
-    service.initialize();
-
-    const merged = service.mergeAuthoritativeSystemTableRowSets(
-      SYSTEM_TABLE_NAME.NODES,
-      rows.map((row) => [row]),
-    );
-
-    t.equal(serializations, rows.length,
-      'each candidate is serialized once even across many replica copies');
-    t.equal(merged.length, 1, 'replica copies merge by primary key');
-    t.equal(merged[0], rows.at(-1),
-      'the most complete equal-version row remains authoritative');
-    t.end();
+    const reader = readerForLocalReplicaRows(t, SYSTEM_TABLE_NAME.NODES, rows);
+    const result = await reader.read();
+    t.equal(reader.reads(), 1, 'the first actual local answer engages row admission');
+    t.equal(serializations, 0, 'caller hooks cannot rank or transform authoritative data');
+    t.equal(result.success, false);
+    t.equal(result.error, 'authoritative_row_source_unavailable');
+    t.same(result.rows, []);
+    t.equal(result.rowSetComplete, false);
+    t.same(reader.sqlCalls, []);
   });
 
-test('CDCIntegrationService - identical flat replica rows skip JSON ranking',
-  (t) => {
+test('CDCIntegrationService - identical flat replica images retain owned data without global JSON hooks',
+  async (t) => {
     const sourceRow = {
       operation_id: 'operation-flat-copy',
       updated_at: 5_000,
@@ -1075,11 +1099,7 @@ test('CDCIntegrationService - identical flat replica rows skip JSON ranking',
       error: null,
     };
     const rows = Array.from({length: 128}, () => ({...sourceRow}));
-    const service = new CDCIntegrationService({
-      nodeId: 'test-node',
-      sqlQueryEngine: createMockSqlQueryEngine(),
-    });
-    service.initialize();
+    const reader = readerForLocalReplicaRows(t, SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, rows);
 
     const originalStringify = JSON.stringify;
     let serializations = 0;
@@ -1087,22 +1107,23 @@ test('CDCIntegrationService - identical flat replica rows skip JSON ranking',
       serializations += 1;
       return originalStringify(...args);
     };
-    let merged;
+    let result;
     try {
-      merged = service.mergeAuthoritativeSystemTableRowSets(
-        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-        rows.map((row) => [row]),
-      );
+      result = await reader.read();
     } finally {
       JSON.stringify = originalStringify;
     }
 
     t.equal(serializations, 0,
-      'equivalent flat replica copies do not enter JSON length ranking');
-    t.equal(merged.length, 1, 'replica copies still merge by primary key');
-    t.equal(merged[0], rows[0],
-      'the first equivalent replica copy remains authoritative');
-    t.end();
+      'captured data never consults a mutable global JSON serializer');
+    t.equal(reader.reads(), rows.length, 'all declared replica images are actually read');
+    t.equal(result.success, true);
+    t.same(result.rows, [sourceRow]);
+    t.ok(Object.isFrozen(result.rows));
+    t.ok(Object.isFrozen(result.rows[0]));
+    rows[0].steps_history = 'caller mutation';
+    t.same(result.rows, [sourceRow], 'the coalesced image does not borrow its first producer row');
+    t.same(reader.sqlCalls, []);
   });
 
 // The historical read-side overlay repair fabricated service authority from

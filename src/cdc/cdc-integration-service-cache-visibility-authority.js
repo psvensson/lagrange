@@ -98,27 +98,6 @@ function authoritativeCacheSweepInputsValid(
   );
 }
 
-function canonicalizeCompleteAuthoritativeRows(
-  service,
-  tableName,
-  authoritativeRows,
-) {
-  const primaryKeyField = service.getPrimaryKeyField(tableName);
-  const canonicalRows = [];
-  for (const row of authoritativeRows) {
-    if (!row || typeof row !== 'object') {
-      return null;
-    }
-    const canonicalRow = canonicalizeSystemTableRow(tableName, row);
-    if (canonicalRow[primaryKeyField] === undefined ||
-        canonicalRow[primaryKeyField] === null) {
-      return null;
-    }
-    canonicalRows.push(canonicalRow);
-  }
-  return canonicalRows;
-}
-
 function applyAuthoritativeCacheRepairRow(
   service,
   tableName,
@@ -208,16 +187,10 @@ function applyAuthoritativeCacheSweepRows(
   )) {
     return 0;
   }
-  const canonicalRows = canonicalizeCompleteAuthoritativeRows(
-    service,
-    tableName,
-    authoritativeRows,
-  );
-  if (!canonicalRows) {
-    return 0;
-  }
+  // The cache's absence owner captures the canonical membership before any
+  // effect. This caller cannot reinterpret it through a second key provider.
   const result = cache.reconcileAgainstAuthoritativeTruth(
-    {[tableName]: canonicalRows},
+    {[tableName]: authoritativeRows},
     {
       evictOlderThanMs: options?.readStartedAtMs,
       authoritativeObservedAtMs: options.authoritativeObservedAtMs,

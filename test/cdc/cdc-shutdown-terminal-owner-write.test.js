@@ -920,7 +920,8 @@ function composeReadFlow({
       isLeader: true,
       getRole: () => 'leader',
       executeQuery(...args) {
-        // A partition without a local query path reads through executeQuery.
+        // This alternate read port remains observable so a missing canonical
+        // local query port cannot silently route a read through it.
         const isRead = /^\s*select/iu.test(String(args[0]));
         count(isRead ? 'localReads' : 'localWrites');
         return isRead ? localPartition.read(...args) :
@@ -1350,6 +1351,20 @@ test('routing: every read, repair apply and submission is gated in ' +
   rpcAnswers.push({success: false, deferRetry: true, retryAfterMs: 1,
     error: 'deferred'});
   await settle(service.refreshAuthoritativeCacheRow('nodes', 'other-node'));
+  // A successful repair requires the original owner answer's leader witness.
+  // This unique row must reach the real guarded repair call site.
+  const repairRow = {...IN_FLIGHT_ROW, node_id: 'guarded-repair-node'};
+  assert.equal(composed.cache.has('nodes', repairRow.node_id), false);
+  rpcAnswers.push({success: true, rows: [repairRow], rowSetComplete: true,
+    readAuthorityWitness: {
+      state: 'observed', partitionId: INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.NODES],
+      role: RAFT_ROLE.LEADER, servingNodeId: 'peer-node', servingReplicaId: 'nodes-r1',
+      observedAtMs: composed.timeSource.now(),
+    }});
+  const refreshed = track(service.refreshAuthoritativeCacheRow('nodes', repairRow.node_id));
+  await settle(refreshed.done);
+  assert.equal(refreshed.outcome?.value, true, 'the witnessed owner row is actually repaired');
+  assert.equal(composed.cache.get('nodes', repairRow.node_id)?.node_id, repairRow.node_id);
   // The visibility repair (the projection owner's entry point).
   rpcAnswers.push({success: true, rows: []});
   await settle(service.repairCacheVisibilityHole('nodes', 'repair-node',
@@ -1378,9 +1393,9 @@ test('routing: every read, repair apply and submission is gated in ' +
   bootstrap.timeSource);
   await yieldTurns(SETTLE_TURNS);
 
-  // A local partition with no local query path (reads via executeQuery), the
-  // bootstrap direct read, and the bootstrap direct fan-out when the raft lane
-  // fails; the sweep entry point.
+  // A local partition with no canonical local query port refuses the read;
+  // the later flows exercise the bootstrap direct read, direct write fan-out
+  // when the raft lane fails, and the sweep entry point.
   const noLocalQuery = composeReadFlow({
     onSeam,
     localPartition: {

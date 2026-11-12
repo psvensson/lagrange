@@ -10,14 +10,10 @@ import {
 } from './cdc-integration-service-local-system-table-routing.js';
 import {
   buildSystemTableOperationDiagnostics,
-  executeAuthoritativeOwnerRpcRead as executeAuthoritativeOwnerRpcReadFromHelpers,
   executeAuthoritativeSystemTableRead as executeAuthoritativeSystemTableReadFromHelpers,
   getLocalQueryTransportReadiness,
-  isAuthoritativeRepairRowNewer as isAuthoritativeRepairRowNewerFromHelpers,
-  mergeAuthoritativeSystemTableRowSets,
   normalizeAuthoritativeReadLocalQueryTransport,
   normalizeLocalSystemTableWriteResult,
-  extractAuthoritativeRowVersion,
 } from './cdc-integration-service-authoritative-read-flow.js';
 
 const CDC_INTEGRATION_SERVICE_AUTHORITATIVE_READ_CONSTRUCTOR = 'constructor';
@@ -126,42 +122,6 @@ class CDCIntegrationServiceAuthoritativeReadDelegates {
   }
 
   /**
-   * Normalize one authoritative row version into a comparable value.
-   * @param {Object|null} row
-   * @return {number|string|null}
-   * @private
-   */
-  extractAuthoritativeRowVersion(row) {
-    return extractAuthoritativeRowVersion(this, row);
-  }
-
-  /**
-   * Prefer the fresher authoritative repair row.
-   * @param {Object} candidate
-   * @param {Object} existing
-   * @return {boolean}
-   * @private
-   */
-  isAuthoritativeRepairRowNewer(candidate, existing) {
-    return isAuthoritativeRepairRowNewerFromHelpers(
-      this,
-      candidate,
-      existing,
-    );
-  }
-
-  /**
-   * Merge replicated authoritative row sets by primary key.
-   * @param {string} tableName
-   * @param {Array<Array<Object>>} rowSets
-   * @return {Array<Object>}
-   * @private
-   */
-  mergeAuthoritativeSystemTableRowSets(tableName, rowSets) {
-    return mergeAuthoritativeSystemTableRowSets(this, tableName, rowSets);
-  }
-
-  /**
    * Build bounded routing diagnostics for one system-table operation.
    * @param {string} tableName
    * @param {Object} [options={}]
@@ -218,37 +178,6 @@ class CDCIntegrationServiceAuthoritativeReadDelegates {
       sql,
       params,
       options,
-    );
-  }
-
-  /**
-   * Execute the recovery read over the owner-partition RPC lane instead of
-   * the generic SQL query engine route.
-   * @param {string} tableName
-   * @param {string} statement
-   * @param {Array<*>} params
-   * @param {Object} options
-   * @param {Object} baseDiagnostics
-   * @param {Object|null} localQueryTransportReadiness
-   * @return {Promise<Object|null>}
-   * @private
-   */
-  async executeAuthoritativeOwnerRpcRead(
-    tableName,
-    statement,
-    params,
-    options,
-    baseDiagnostics,
-    localQueryTransportReadiness = null,
-  ) {
-    return executeAuthoritativeOwnerRpcReadFromHelpers(
-      this,
-      tableName,
-      statement,
-      params,
-      options,
-      baseDiagnostics,
-      localQueryTransportReadiness,
     );
   }
 

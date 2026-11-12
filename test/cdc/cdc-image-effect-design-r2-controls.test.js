@@ -191,12 +191,17 @@ test('every synchronous image observer sees the complete table and prefix, inclu
     position: f.cache.sourceOrder.positionOf(SOURCE).position});
   f.cache.sourceOrder.onCurrent(observe);
   f.cache.onCacheApplyChange(observe);
-  f.cache.onCacheApplyChange(() => { throw new Error('controlled image observer failure'); });
-  f.cache.sourceOrder.onCurrent(() => { throw new Error('controlled current observer failure'); });
+  f.cache.onCacheApplyChange(() => {
+    throw new Error('controlled image observer failure');
+  });
+  f.cache.sourceOrder.onCurrent(() => {
+    throw new Error('controlled current observer failure');
+  });
   assert.equal(f.install([rowA, rowB]).admission, 'install');
   assert.ok(seen.length >= 2, 'both source-current and row observers engaged');
-  for (const snapshot of seen) assert.deepEqual(snapshot,
-    {keys: ['a', 'b'], position: imagePosition(10)});
+  for (const snapshot of seen) {
+    assert.deepEqual(snapshot, {keys: ['a', 'b'], position: imagePosition(10)});
+  }
   assertImagePrefix(f);
 });
 
@@ -271,9 +276,12 @@ for (const transition of ['unchanged', 'clear', 'foreign-cache']) {
       await readStarted.promise;
       if (transition === 'clear') cache.clear();
       const target = transition === 'foreign-cache' ? new SystemTableCache() : cache;
-      if (transition === 'unchanged') assert.equal(target.sourceOrder.tableGeneration(TABLE), before);
-      else assert.notEqual(target.sourceOrder.tableGeneration(TABLE), before,
-        'the changed owner or lifetime actually changes the generation');
+      if (transition === 'unchanged') {
+        assert.equal(target.sourceOrder.tableGeneration(TABLE), before);
+      } else {
+        assert.notEqual(target.sourceOrder.tableGeneration(TABLE), before,
+          'the changed owner or lifetime actually changes the generation');
+      }
       heldRead.resolve({success: true, rows: [], rowSetComplete: true,
         readAuthorityWitness: {state: 'observed', partitionId: SOURCE, role: 'leader',
           servingNodeId: 'pre-cell-source', servingReplicaId: 'pre-cell-source-r1',
@@ -287,8 +295,10 @@ for (const transition of ['unchanged', 'clear', 'foreign-cache']) {
       assert.equal(reconciled.success, transition === 'unchanged');
       assert.equal(target.getLastAuthoritativeObservedAtMs(TABLE),
         transition === 'unchanged' ? 2000 : null);
-      if (transition !== 'unchanged') assert.equal(reconciled.error,
-        CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.CACHE_NOT_RECONCILED);
+      if (transition !== 'unchanged') {
+        assert.equal(reconciled.error,
+          CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.CACHE_NOT_RECONCILED);
+      }
       assert.equal(target.sourceOrder.cells.size, 0, 'observation does not invent source currency');
     });
 }
@@ -311,7 +321,9 @@ test('malformed complete vectors refuse before any member effect or group receip
     let applied = 0;
     const committed = {command: {sourceRange}, index: 1, effects: {afterCommit: []}};
     assert.throws(() => applyCommittedCdcRange(f.hosts[0], committed, events,
-      () => { applied += 1; }));
+      () => {
+        applied += 1;
+      }));
     assert.equal(applied, 0);
     assert.equal(committed.effects.afterCommit.length, 0);
     assertImagePrefix(f);
@@ -424,7 +436,9 @@ function integrationWithImage(t, f, row, index, beforeRead = null) {
           servingNodeId: 'r2-source', servingReplicaId: 'r2-source-replica',
           observedAtMs: 3000, term: 1, appliedIndex: index, commitIndex: index}});
     }}}});
-  service.logger = {...silent, error(_message, fields) { failures.resolve(fields); },
+  service.logger = {...silent, error(_message, fields) {
+    failures.resolve(fields);
+  },
     info(_message, fields) {
       if (fields?.tableName === TABLE && fields.outcome === 'install') installed.resolve(fields);
     }};
@@ -523,18 +537,32 @@ for (const shape of ['message-getter', 'conversion']) {
     const f = fixture(t);
     let engagements = 0;
     const hostileCause = () => shape === 'message-getter' ? Object.defineProperty({}, 'message', {
-      get() { engagements += 1; throw new Error('message must not be read'); },
-    }) : {toString() { engagements += 1; throw new Error('cause must not be converted'); }};
+      get() {
+        engagements += 1;
+        throw new Error('message must not be read');
+      },
+    }) : {toString() {
+      engagements += 1;
+      throw new Error('cause must not be converted');
+    }};
     const cause = hostileCause();
     const diagnosticCause = hostileCause();
     const recovery = integrationWithImage(t, f, eventOf(CDC_OPERATION.INSERT, 11).data, 11,
-      (reads) => { if (reads === 1) throw cause; });
+      (reads) => {
+        if (reads === 1) throw cause;
+      });
     const observed = [];
     const errors = [];
     const logger = recovery.service.logger;
     recovery.service.logger = {...logger,
-      error(_message, fields) { errors.push(fields); throw diagnosticCause; },
-      info(message, fields) { observed.push(fields); logger.info(message, fields); },
+      error(_message, fields) {
+        errors.push(fields);
+        throw diagnosticCause;
+      },
+      info(message, fields) {
+        observed.push(fields);
+        logger.info(message, fields);
+      },
     };
     registerSourceRelister(recovery.service);
     await nextTurn();
@@ -563,7 +591,9 @@ test('throwing handler listener cannot turn a refused vector into current source
   f.install();
   const event = eventOf(CDC_OPERATION.INSERT, 11);
   const recovery = integrationWithImage(t, f, event.data, 11);
-  f.hosts[0].cdcHandler.on('eventApplied', () => { throw new Error('controlled handler listener'); });
+  f.hosts[0].cdcHandler.on('eventApplied', () => {
+    throw new Error('controlled handler listener');
+  });
   assert.throws(() => f.commit([event]), /controlled handler listener/u);
   assert.equal(f.cache.sourceOrder.positionOf(SOURCE).state, 'gap');
   assert.deepEqual(f.cache.sourceOrder.positionOf(SOURCE).position, imagePosition(10));
@@ -584,7 +614,10 @@ test('an escaping image-attempt failure retains its cause and uses the owner pac
   const delays = [];
   let failed = false;
   f.clock.now = () => {
-    if (!failed) { failed = true; throw cause; }
+    if (!failed) {
+      failed = true;
+      throw cause;
+    }
     return now();
   };
   f.clock.setTimeout = (callback, delay) => {
@@ -621,10 +654,16 @@ for (const wake of ['registration', 'new-gap']) {
     let failed = false;
     let pacingCalls = 0;
     f.clock.now = () => {
-      if (!failed) { failed = true; throw cause; }
+      if (!failed) {
+        failed = true;
+        throw cause;
+      }
       return now();
     };
-    f.clock.setTimeout = () => { pacingCalls += 1; throw pacingCause; };
+    f.clock.setTimeout = () => {
+      pacingCalls += 1;
+      throw pacingCause;
+    };
     registerSourceRelister(recovery.service);
     await nextTurn();
     const faulted = f.cache.sourceOrder.positionOf(SOURCE);
@@ -662,11 +701,17 @@ for (const terminal of [false, true]) {
     const recovery = integrationWithImage(t, f, eventOf(CDC_OPERATION.INSERT, 11).data, 11);
     const refuse = recovery.service.refuseIfTerminal.bind(recovery.service);
     let first = true;
-    if (terminal) recovery.service.markShuttingDown();
-    else recovery.service.refuseIfTerminal = (...args) => {
-      if (first) { first = false; return new Error('false terminal answer'); }
-      return refuse(...args);
-    };
+    if (terminal) {
+      recovery.service.markShuttingDown();
+    } else {
+      recovery.service.refuseIfTerminal = (...args) => {
+        if (first) {
+          first = false;
+          return new Error('false terminal answer');
+        }
+        return refuse(...args);
+      };
+    }
     registerDirectRelisterOwner(recovery.service);
     await nextTurn();
     const cell = f.cache.sourceOrder.positionOf(SOURCE);
@@ -687,7 +732,9 @@ for (const completion of ['clock', 'shutdown']) {
     const f = fixture(t);
     const recovery = integrationWithImage(t, f, eventOf(CDC_OPERATION.INSERT, 11).data, 11);
     let completed = false;
-    const pending = recovery.service.delayUntilShutdown(500).then(() => { completed = true; });
+    const pending = recovery.service.delayUntilShutdown(500).then(() => {
+      completed = true;
+    });
     assert.equal(recovery.service.shutdownReleases.size, 1);
     assert.equal(f.clock.pendingTimerCount(), 1);
     if (completion === 'clock') f.clock.advance(500);
@@ -739,13 +786,18 @@ test('a failed cancellation of the relist pace retains FAULTED and both original
     const clearTimeout = f.clock.clearTimeout.bind(f.clock);
     let failed = false;
     f.clock.now = () => {
-      if (!failed) { failed = true; throw cause; }
+      if (!failed) {
+        failed = true;
+        throw cause;
+      }
       return now();
     };
     registerSourceRelister(recovery.service);
     await nextTurn();
     assert.equal(f.clock.pendingTimerCount(), 1);
-    f.clock.clearTimeout = () => { throw pacingCause; };
+    f.clock.clearTimeout = () => {
+      throw pacingCause;
+    };
     assert.doesNotThrow(() => recovery.service.markShuttingDown());
     await nextTurn();
     const cell = f.cache.sourceOrder.positionOf(SOURCE);
@@ -957,21 +1009,39 @@ for (const fault of ['warn-call', 'warn-property', 'message-property', 'conversi
       const diagnosticFailure = new Error('observer diagnostic failed');
       let cause = new Error('source current listener failed');
       const logger = {...silent};
-      if (fault === 'warn-call') logger.warn = () => { throw diagnosticFailure; };
-      if (fault === 'warn-property') Object.defineProperty(logger, 'warn', {
-        get() { throw diagnosticFailure; },
-      });
-      if (fault === 'message-property') Object.defineProperty(cause, 'message', {
-        get() { throw diagnosticFailure; },
-      });
+      if (fault === 'warn-call') {
+        logger.warn = () => {
+          throw diagnosticFailure;
+        };
+      }
+      if (fault === 'warn-property') {
+        Object.defineProperty(logger, 'warn', {
+          get() {
+            throw diagnosticFailure;
+          },
+        });
+      }
+      if (fault === 'message-property') {
+        Object.defineProperty(cause, 'message', {
+          get() {
+            throw diagnosticFailure;
+          },
+        });
+      }
       if (fault === 'conversion') {
-        cause = {[Symbol.toPrimitive]() { throw diagnosticFailure; }};
+        cause = {[Symbol.toPrimitive]() {
+          throw diagnosticFailure;
+        }};
         logger.warn = (_message, fields) => String(fields.error);
       }
       f.cache.sourceOrder.logger = logger;
       let observed = 0;
-      f.cache.sourceOrder.onCurrent(() => { throw cause; });
-      f.cache.sourceOrder.onCurrent(() => { observed += 1; });
+      f.cache.sourceOrder.onCurrent(() => {
+        throw cause;
+      });
+      f.cache.sourceOrder.onCurrent(() => {
+        observed += 1;
+      });
       assert.doesNotThrow(() => f.install());
       assert.equal(observed, 1, 'a diagnostic cannot prevent the next actual currentness observer');
       assertImagePrefix(f);
@@ -1043,7 +1113,10 @@ test('a noncanonical image source refuses before staging or changing any cell or
   const count = f.cache.sourceOrder.cells.size;
   const clone = f.cache.deepClone.bind(f.cache);
   let staged = 0;
-  f.cache.deepClone = (...args) => { staged += 1; return clone(...args); };
+  f.cache.deepClone = (...args) => {
+    staged += 1;
+    return clone(...args);
+  };
   assert.throws(() => installSourceImage(f.cache, token, image),
     {code: CDC_EVENT_IDENTITY.INVALID_CODE});
   assert.equal(staged, 0);
@@ -1061,7 +1134,9 @@ test('canonical source identity cannot be retargeted after cache construction', 
   const count = f.cache.sourceOrder.cells.size;
   const basis = f.cache.sourceOrder.tableGeneration(TABLE);
   try {
-    assert.throws(() => { INITIAL_PARTITION_IDS[TABLE] = wrongSource; }, TypeError);
+    assert.throws(() => {
+      INITIAL_PARTITION_IDS[TABLE] = wrongSource;
+    }, TypeError);
     assert.equal(INITIAL_PARTITION_IDS[TABLE], original);
     const event = {...eventOf(CDC_OPERATION.INSERT, 11), sourcePartition: wrongSource};
     const range = {...rangeOf([event]), sourcePartition: wrongSource};
@@ -1225,7 +1300,9 @@ for (const failure of ['acquisition', 'shutdown-cancellation']) {
       await nextTurn();
       if (failure === 'shutdown-cancellation') {
         assert.equal(service.shutdownReleases.size, 1, 'the ordinary internal image pace is held');
-        f.clock.clearTimeout = () => { throw pacingCause; };
+        f.clock.clearTimeout = () => {
+          throw pacingCause;
+        };
         assert.doesNotThrow(() => service.markShuttingDown());
         await nextTurn();
       }
@@ -1321,7 +1398,19 @@ test('a supplied complete-table token alone retains its scope and mints the gene
       'the canonical reconciliation owner accepts the actual minted receipt');
     assert.equal(f.cache.getLastAuthoritativeObservedAtMs(TABLE), f.clock.now());
     assert.equal(f.cache.sourceOrder.tableGeneration(TABLE), generation);
-    assertImagePrefix(f);
+    const invalidated = f.cache.sourceOrder.positionOf(SOURCE);
+    assert.equal(invalidated.state, 'gap');
+    assert.equal(invalidated.position, null,
+      'an authoritative receipt invalidates the former CDC image prefix');
+    assert.equal(invalidated.relist, 'no_relister',
+      'the existing source owner retains debt until its relister is registered');
+    const row = eventOf(CDC_OPERATION.UPSERT, 11, KEY, 0, {status: 'ready'}).data;
+    const recovery = integrationWithImage(t, f, row, 11);
+    registerSourceRelister(recovery.service);
+    await recovery.installed;
+    assert.equal(recovery.reads(), 1, 'registration resumes the retained source debt');
+    assert.equal(f.cache.get(TABLE, KEY).status, 'ready');
+    assertImagePrefix(f, 11);
   });
 
 test('a supplied bootstrap token alone carries its phase to the snapshot provider', async (t) => {
@@ -1340,8 +1429,12 @@ test('a supplied bootstrap token alone carries its phase to the snapshot provide
   const gateway = new ControlPlaneSystemTableGateway({
     nodeId: 'supplied-bootstrap-token-reader', systemTableCache: f.cache,
     now: () => f.clock.now(),
-    cdcIntegrationService: {executeAuthoritativeSystemTableRead() { ownerReads += 1; }},
-    sqlQueryEngine: {executeQuery() { sqlReads += 1; }},
+    cdcIntegrationService: {executeAuthoritativeSystemTableRead() {
+      ownerReads += 1;
+    }},
+    sqlQueryEngine: {executeQuery() {
+      sqlReads += 1;
+    }},
   });
   const result = await gateway.executeRead({tableName: TABLE,
     strategy: CONTROL_PLANE_READ_STRATEGY.BOOTSTRAP_SNAPSHOT,

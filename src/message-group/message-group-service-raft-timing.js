@@ -34,6 +34,30 @@ function isValidTimingConfig(timingConfig, hasTickInterval) {
     timingConfig.electionTimeoutMinMs <= timingConfig.electionTimeoutMaxMs;
 }
 
+function buildReplicaTimingConfig(service, timingConfig, hasTickInterval,
+  heartbeatMs, tickIntervalMs) {
+  const {electionMinMs, electionMaxMs, jitterMs} = computeReplicaElectionTimeouts({
+    replicaId: service.replicaId,
+    replicaIds: service.replicaIds,
+    baseElectionMinMs: timingConfig.electionTimeoutMinMs,
+    baseElectionMaxMs: timingConfig.electionTimeoutMaxMs,
+    electionJitterPerReplicaMs: RAFT_ELECTION_TIMING.JITTER_PER_REPLICA_MS,
+  });
+  return {jitterMs, configuration: {
+    heartbeatMs,
+    baseElectionMinMs: timingConfig.electionTimeoutMinMs,
+    baseElectionMaxMs: timingConfig.electionTimeoutMaxMs,
+    electionMinMs,
+    electionMaxMs,
+    tickIntervalMs: hasTickInterval ?
+      tickIntervalMs : service.raftTimingConfig?.tickIntervalMs || null,
+  }};
+}
+
+function shouldRearmRaftElection(service) {
+  return service.replicaIds.length > 1 && (!service.deferElection || service.electionStarted);
+}
+
 // One committed CDC change applied to the system-table cache. Its applied
 // announcement runs once the entry's transaction has committed, and reports
 // its own failure: an announcement cannot reverse what committed.
@@ -42,7 +66,9 @@ function applyCommittedCdcChange(service, change, {index, effects},
   const outcome = sourceRange === undefined ?
     service.cdcHandler.applyImmediate(change, {skipSubscriptionCheck: true}) :
     service.cdcHandler.applySourceEvent(change, sourceRange);
-  if (sourceRange !== undefined && outcome.state === SOURCE_EFFECT_STATE.UNAVAILABLE) return outcome;
+  if (sourceRange !== undefined && outcome.state === SOURCE_EFFECT_STATE.UNAVAILABLE) {
+    return outcome;
+  }
   effects.afterCommit.push(() => {
     try {
       service.emit(MESSAGE_GROUP_SERVICE_LITERAL.CDCAPPLIED, announcement);
@@ -130,28 +156,11 @@ function assignRaftTiming(serviceClass) {
       }
       const heartbeatMs = timingConfig.heartbeatIntervalMs;
       const tickIntervalMs = timingConfig.tickIntervalMs;
-      const {electionMinMs, electionMaxMs, jitterMs} =
-        computeReplicaElectionTimeouts({
-          replicaId: this.replicaId,
-          replicaIds: this.replicaIds,
-          baseElectionMinMs: timingConfig.electionTimeoutMinMs,
-          baseElectionMaxMs: timingConfig.electionTimeoutMaxMs,
-          electionJitterPerReplicaMs:
-            RAFT_ELECTION_TIMING.JITTER_PER_REPLICA_MS,
-        });
-      this.raftTimingConfig = {
-        heartbeatMs,
-        baseElectionMinMs: timingConfig.electionTimeoutMinMs,
-        baseElectionMaxMs: timingConfig.electionTimeoutMaxMs,
-        electionMinMs,
-        electionMaxMs,
-        tickIntervalMs: hasTickInterval ?
-          tickIntervalMs :
-          this.raftTimingConfig?.tickIntervalMs || null,
-      };
-      const shouldRearmTimer =
-        this.replicaIds.length > 1 &&
-        (!this.deferElection || this.electionStarted);
+      const {configuration, jitterMs} = buildReplicaTimingConfig(
+        this, timingConfig, hasTickInterval, heartbeatMs, tickIntervalMs);
+      const {electionMinMs, electionMaxMs} = configuration;
+      this.raftTimingConfig = configuration;
+      const shouldRearmTimer = shouldRearmRaftElection(this);
       const applied = this.raft?.configureTick?.({
         heartbeatMs,
         electionMinMs,

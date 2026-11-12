@@ -28,6 +28,12 @@ function resetSharedRowReadStats() {
   sharedRowReadEngagements = 0;
 }
 
+function hasAuthoritativeRevisionObservation(options) {
+  return Number.isSafeInteger(options?.term) ||
+    Number.isSafeInteger(options?.appliedIndex) ||
+    Number.isSafeInteger(options?.commitIndex);
+}
+
 class SystemTableCacheObservationMethods {
   /**
      * Record the latest applied schema version for one system table.
@@ -196,11 +202,7 @@ class SystemTableCacheObservationMethods {
     this.validateTableName(tableName);
     const observedAtMs = Number(options.observedAtMs);
     if (!Number.isFinite(observedAtMs) || observedAtMs < 0) {
-      if (
-        Number.isSafeInteger(options?.term) ||
-        Number.isSafeInteger(options?.appliedIndex) ||
-        Number.isSafeInteger(options?.commitIndex)
-      ) {
+      if (hasAuthoritativeRevisionObservation(options)) {
         recordAuthoritativeTableObservation(this, tableName, null, options);
       }
       return this.getLastAuthoritativeObservedAtMs(tableName);

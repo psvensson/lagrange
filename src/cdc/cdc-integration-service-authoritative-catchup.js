@@ -35,7 +35,11 @@ import {
   captureAuthoritativeCacheSweepSnapshot,
   requireCacheMutationTarget,
 } from './cdc-integration-service-cache-visibility-authority.js';
-import {buildControlPlaneReadAuthority} from
+import {
+  assertControlPlaneOwnerReadAuthority,
+  buildControlPlaneReadAuthority,
+  isCompleteAuthoritativeReadResult,
+} from
   '../control-plane/control-plane-system-table-gateway-read-contracts.js';
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE, CONTROL_PLANE_READ_LEADER_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
@@ -45,10 +49,9 @@ import {isValidLeaderReadAuthorityWitness} from
   '../control-plane/control-plane-authoritative-read-witness.js';
 import {SYSTEM_TABLE_CACHE_MUTATION_MODE} from
   '../cache/cache-constants.js';
-import {
-  isUsableSystemCacheKey,
-  resolveSystemCacheRowKey,
-} from '../cache/system-cache-key-descriptor.js';
+import {captureSystemTableRows} from '../cache/system-cache-key-descriptor.js';
+import {CanonicalJsonDataError, captureJsonData, isRecord} from
+  '../utils/canonical-json-data.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
 const CATCHUP_DEFAULT = Object.freeze({
@@ -113,62 +116,264 @@ const CATCHUP_LOG_MSG = Object.freeze({
 const CATCHUP_FAILURE_MSG = Object.freeze({
   INVALID_ROW_SET: 'complete authoritative read returned an invalid row set',
   MALFORMED_ROW_SET: 'authoritative read returned a malformed row set',
+  INCOMPLETE_ROW_SET: 'authoritative read did not prove a complete leader row set',
   OBSERVATION_NOT_ADVANCED:
     'complete authoritative observation did not advance cache truth',
   UNAVAILABLE: 'authoritative read unavailable',
 });
 
-function successfulAuthoritativeRows(readResult) {
-  return readResult?.success === true && Array.isArray(readResult.rows) ?
-    readResult.rows :
-    null;
+function captureCatchupReadWitness(readResult) {
+  const witness = readResult?.readAuthorityWitness;
+  if (!isRecord(witness)) return null;
+  try {
+    return captureJsonData(witness);
+  } catch (error) {
+    if (error instanceof CanonicalJsonDataError) return null;
+    throw error;
+  }
 }
 
-function readIsFromWitnessedLeader(tableName, readResult) {
+function readIsFromWitnessedLeader(tableName, readResult, witness) {
   return readResult?.source === AUTHORITATIVE_READ_SOURCE.OWNER_RPC_LANE &&
     isValidLeaderReadAuthorityWitness(
-      readResult.readAuthorityWitness,
+      witness,
       INITIAL_PARTITION_IDS[tableName],
     );
 }
 
-function completeObservationAdvances(service, tableName, readResult) {
-  if (!readIsFromWitnessedLeader(tableName, readResult)) {
+function completeObservationAdvances(service, tableName, witness, readFromLeader) {
+  if (!readFromLeader) {
     return true;
   }
   const currentObservedAtMs = requireCacheMutationTarget(service)
     .getLastAuthoritativeObservedAtMs(tableName);
   const incomingObservedAtMs = Math.floor(
-    Number(readResult.readAuthorityWitness.observedAtMs),
+    Number(witness.observedAtMs),
   );
   return !Number.isFinite(currentObservedAtMs) ||
     incomingObservedAtMs > currentObservedAtMs;
-}
-
-function completeAuthoritativeRowsAreValid(tableName, rows) {
-  if (!Array.isArray(rows)) {
-    return false;
-  }
-  const keys = new Set();
-  return rows.every((row) => {
-    if (!row || typeof row !== 'object' || Array.isArray(row)) {
-      return false;
-    }
-    const key = resolveSystemCacheRowKey(tableName, row);
-    const keyUsable = isUsableSystemCacheKey(key);
-    const normalizedKey = String(key);
-    if (!keyUsable || keys.has(normalizedKey)) {
-      return false;
-    }
-    keys.add(normalizedKey);
-    return true;
-  });
 }
 
 function authoritativeReadFailure(readResult) {
   return readResult?.success === true ?
     CATCHUP_FAILURE_MSG.MALFORMED_ROW_SET :
     readResult?.error || CATCHUP_FAILURE_MSG.UNAVAILABLE;
+}
+
+function catchupTablesOf(options) {
+  return Array.isArray(options.tables) && options.tables.length > 0 ?
+    options.tables : CDC_PROPAGATED_TABLES;
+}
+
+function catchupAttemptsOf(options) {
+  return Number.isFinite(options.maxAttemptsPerTable) && options.maxAttemptsPerTable > 0 ?
+    Math.floor(options.maxAttemptsPerTable) : CATCHUP_DEFAULT.MAX_ATTEMPTS_PER_TABLE;
+}
+
+function catchupReadOptionsOf(service, options) {
+  const readAuthority = options.readAuthority;
+  if (readAuthority !== undefined) {
+    return {readAuthority: assertControlPlaneOwnerReadAuthority(readAuthority)};
+  }
+  // Bootstrap can use its declared local owner before remote formation. A
+  // supplied token, including a malformed one, is never replaced by this draft.
+  return {readAuthority: buildControlPlaneReadAuthority({
+    authoritativeReadMode: service.bootstrapMode === true ?
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY :
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+    leaderMode: service.bootstrapMode === true ?
+      CONTROL_PLANE_READ_LEADER_MODE.ANY : CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
+  })};
+}
+
+function classifyCatchupRead(run, tableName, readResult) {
+  const capturedRows = captureSystemTableRows(tableName, readResult?.rows);
+  const witness = captureCatchupReadWitness(readResult);
+  const readFromLeader = readIsFromWitnessedLeader(tableName, readResult, witness);
+  const observationAdvances = completeObservationAdvances(
+    run.service, tableName, witness, readFromLeader,
+  );
+  const localBootstrapRead = run.readOptions.readAuthority.authoritativeReadMode ===
+    CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY;
+  const completeRowsValid = capturedRows !== null;
+  // Complete effects require the original owner's whole result, not only its
+  // positive rows and witness. A selected local read remains provisional even
+  // if a returned answer claims a different source lane.
+  const completeOwnerRead = !localBootstrapRead && readFromLeader &&
+    isCompleteAuthoritativeReadResult(readResult);
+  const rowCapture = observationAdvances && completeRowsValid &&
+    readResult?.success === true && (localBootstrapRead || completeOwnerRead) ? capturedRows : null;
+  return {observationAdvances, completeRowsValid, completeOwnerRead,
+    localBootstrapRead, rowCapture, witness};
+}
+
+function catchupReadFailure(admission, readResult) {
+  if (!admission.observationAdvances) {
+    return CATCHUP_FAILURE_MSG.OBSERVATION_NOT_ADVANCED;
+  }
+  if (!admission.completeRowsValid) {
+    return CATCHUP_FAILURE_MSG.INVALID_ROW_SET;
+  }
+  if (readResult?.success === true && !admission.localBootstrapRead &&
+      !admission.completeOwnerRead) {
+    return CATCHUP_FAILURE_MSG.INCOMPLETE_ROW_SET;
+  }
+  return authoritativeReadFailure(readResult);
+}
+
+function catchupRepairOptions(observationReceipt, readStartedAtMs) {
+  if (observationReceipt === null) {
+    return undefined;
+  }
+  return {
+    mutationMode: SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_OBSERVATION_RECONCILIATION,
+    authoritativeObservedAtMs: observationReceipt.observedAtMs,
+    authoritativeReadStartedAtMs: readStartedAtMs,
+    sourceGeneration: observationReceipt.sourceGeneration,
+  };
+}
+
+function applyCatchupRows(run, tableName, rowCapture, repairOptions) {
+  for (let index = 0; index < rowCapture.rows.length; index += 1) {
+    const applied = run.service.applyAuthoritativeCacheRepair(
+      tableName, CATCHUP_DEFAULT.UPSERT_OPERATION,
+      rowCapture.rows[index], rowCapture.keys[index], repairOptions,
+    );
+    if (applied) {
+      run.summary.rowsApplied += 1;
+    }
+  }
+}
+
+function captureCatchupObservationReceipt(admission, mutationSnapshot) {
+  if (!admission.completeOwnerRead) return null;
+  const witness = admission.witness;
+  return Object.freeze({
+    sourceGeneration: mutationSnapshot.sourceGeneration,
+    observedAtMs: witness.observedAtMs,
+    term: witness.term ?? null,
+    appliedIndex: witness.appliedIndex ?? null,
+    commitIndex: witness.commitIndex ?? null,
+    servingNodeId: witness.servingNodeId ?? null,
+    partitionId: witness.partitionId ?? null,
+    causeId: 'cdc-authoritative-catchup',
+  });
+}
+
+function publishCatchupObservation(service, tableName, observationReceipt) {
+  return Number.isFinite(requireCacheMutationTarget(service).recordAuthoritativeObservation(
+    tableName, observationReceipt,
+  ));
+}
+
+function applyCatchupEvidence(run, tableName, admission,
+  mutationSnapshot, readStartedAtMs) {
+  let observationPublished = admission.localBootstrapRead;
+  const observationReceipt = captureCatchupObservationReceipt(admission, mutationSnapshot);
+  const repairOptions = catchupRepairOptions(
+    observationReceipt, readStartedAtMs,
+  );
+  applyCatchupRows(run, tableName, admission.rowCapture, repairOptions);
+  // Only a complete witnessed leader response can remove cache-only rows. The
+  // original pre-read snapshot guards both that absence and complete freshness
+  // against image replacement or overlapping cache effects while the read waits.
+  if (observationReceipt !== null) {
+    run.summary.rowsSwept += run.service.applyAuthoritativeCacheSweep(
+      tableName, admission.rowCapture.rows, {
+        readStartedAtMs,
+        mutationSnapshot,
+        authoritativeObservedAtMs: observationReceipt.observedAtMs,
+      },
+    );
+  }
+  if (observationReceipt !== null && !run.isTerminal()) {
+    observationPublished = publishCatchupObservation(
+      run.service, tableName, observationReceipt,
+    );
+  }
+  // The canonical apply gate refuses effects if the owner becomes terminal
+  // during the read; such a table cannot be reported hydrated.
+  return !run.isTerminal() && observationPublished;
+}
+
+function catchupRetryDecision(run, tableName, attempt, readResult, admission,
+  firstReadStartedAtMs) {
+  const retryAfterMs = getControlPlaneRetryAfterMs(readResult);
+  const deferred = retryAfterMs > 0 || readResult?.deferRetry === true;
+  const lastFailure = catchupReadFailure(admission, readResult);
+  if (!deferred || attempt >= run.maxAttemptsPerTable) {
+    if (deferred) {
+      reportCatchupTableRetriesSpent(run.service, {
+        tableName,
+        attempts: attempt,
+        lastFailure,
+        retryAfterMs,
+        elapsedMs: run.now() - firstReadStartedAtMs,
+      });
+    }
+    return {delayMs: null, lastFailure};
+  }
+  return {
+    delayMs: retryAfterMs > 0 ? retryAfterMs : CATCHUP_DEFAULT.RETRY_FALLBACK_DELAY_MS,
+    lastFailure,
+  };
+}
+
+function recordFailedCatchupTable(run, tableName, lastFailure) {
+  const failure = run.isTerminal() ? CDC_ERROR_CODE.SHUT_DOWN : lastFailure;
+  const deferredEntry = `${tableName}: ${failure}`;
+  run.summary.tablesFailed.push(tableName);
+  run.service.logger?.warn?.(CATCHUP_LOG_MSG.TABLE_FAILED, {
+    tableName,
+    error: failure,
+    attempts: run.maxAttemptsPerTable,
+    detail: deferredEntry,
+  });
+}
+
+async function hydrateCatchupTable(run, tableName) {
+  let hydrated = false;
+  let lastFailure = null;
+  let firstReadStartedAtMs = null;
+  for (let attempt = 1; attempt <= run.maxAttemptsPerTable; attempt += 1) {
+    let readResult = null;
+    const mutationSnapshot = captureAuthoritativeCacheSweepSnapshot(run.service, tableName);
+    const readStartedAtMs = run.now();
+    firstReadStartedAtMs ??= readStartedAtMs;
+    try {
+      readResult = await run.service.executeAuthoritativeSystemTableRead(
+        tableName, `SELECT * FROM ${tableName}`, [], run.readOptions,
+      );
+    } catch (error) {
+      lastFailure = error?.message || String(error);
+      break;
+    }
+    const admission = classifyCatchupRead(run, tableName, readResult);
+    if (admission.rowCapture !== null) {
+      hydrated = applyCatchupEvidence(
+        run, tableName, admission, mutationSnapshot, readStartedAtMs,
+      );
+      if (!hydrated) {
+        lastFailure = CATCHUP_FAILURE_MSG.OBSERVATION_NOT_ADVANCED;
+      }
+      run.summary.tablesHydrated += hydrated ? 1 : 0;
+      break;
+    }
+    const retry = catchupRetryDecision(
+      run, tableName, attempt, readResult, admission, firstReadStartedAtMs,
+    );
+    lastFailure = retry.lastFailure;
+    if (retry.delayMs === null) {
+      break;
+    }
+    await run.service.delayUntilShutdown(retry.delayMs);
+    if (run.isTerminal()) {
+      break;
+    }
+  }
+  if (!hydrated) {
+    recordFailedCatchupTable(run, tableName, lastFailure);
+  }
 }
 
 /**
@@ -203,7 +408,7 @@ function recordCatchupRepairs(service, trigger, summary) {
  *
  * @param {Object} service - CDCIntegrationService instance (provides
  *   executeAuthoritativeSystemTableRead, applyAuthoritativeCacheRepair,
- *   getPrimaryKeyField, logger, delayUntilShutdown, isShuttingDown).
+ *   logger, delayUntilShutdown, isShuttingDown).
  * @param {Object} options
  * @param {string} options.trigger - The CDC_CATCHUP_TRIGGER that runs this
  *   catch-up; a missing or unknown one throws CDC_CATCHUP_REFUSAL.
@@ -216,57 +421,18 @@ function recordCatchupRepairs(service, trigger, summary) {
  */
 async function hydrateCdcPropagatedTablesFromAuthority(service, options) {
   refuseUnnamedCatchup(options?.trigger);
-  const tables = Array.isArray(options.tables) && options.tables.length > 0 ?
-    options.tables :
-    CDC_PROPAGATED_TABLES;
-  const maxAttemptsPerTable =
-    Number.isFinite(options.maxAttemptsPerTable) &&
-    options.maxAttemptsPerTable > 0 ?
-      Math.floor(options.maxAttemptsPerTable) :
-      CATCHUP_DEFAULT.MAX_ATTEMPTS_PER_TABLE;
-  // The retry delay is the owner's delayUntilShutdown: it arms on the
-  // service's clock and markShuttingDown (the owner's terminal boundary)
-  // releases it at once. Once terminal, the owner's gate refuses every read
-  // stage and every cache repair or sweep this catch-up would issue
-  // (cdc-terminal-gate.js), and the catch-up's own loop starts no further
-  // table or attempt. A table counts hydrated only when its rows were applied
-  // while the owner was live; every table not caught up is reported failed,
-  // and the summary carries the owner's typed SHUT_DOWN code. `now` is NOT a
-  // timer: it stamps
-  // readStartedAtMs, which the sweep compares against row updated_at and
-  // tombstone times the cache stamps on the wall clock, so it stays on that
-  // clock - a virtual stamp here would leave the sweep inert and fence every
-  // tombstoned key.
+  // Select authority before consulting optional work or clock dependencies.
+  // This exact request is retained for every table and retry.
+  const readOptions = catchupReadOptionsOf(service, options);
+  const tables = catchupTablesOf(options);
+  const maxAttemptsPerTable = catchupAttemptsOf(options);
+  // Retry uses the owner's clock and shutdown-aware delay. The data stamp is
+  // also in the owner-clock domain used by row/tombstone and observation
+  // producers; an explicit projection of the caller's owner clock still wins.
   const clock = resolveTimeSource(service);
   const isTerminal = () =>
     Boolean(service.refuseIfTerminal?.(CDC_TERMINAL_STAGE.CACHE_REPAIR));
-  // readStartedAtMs is a DATA STAMP compared against row updated_at, tombstone
-  // instants and the authoritative observation boundary. It moves to this
-  // service's clock only because every one of those producers now reads an
-  // owner TimeSource too: the cache watermark, the tombstone store through its
-  // parent cache, and the HLC physical component through this service. Moving
-  // the consumer alone left the sweep inert - the verifier measured rowsSwept
-  // 0 against 1 - which was evidence that the DOMAIN was incomplete, not that
-  // the consumer was wrong. An explicit options.now still wins for callers
-  // passing a projection of their own owner clock.
-  const now = typeof options.now === 'function' ?
-    options.now :
-    () => clock.now();
-  // One authority for the attempt. Bootstrap may explicitly read its local
-  // owners before remote formation; steady-state reconciliation requires the
-  // RPC leader. A failed attempt never switches authority.
-  const suppliedReadAuthority =
-    options?.readAuthority && Object.isFrozen(options.readAuthority) === true ?
-      options.readAuthority : null;
-  const readOptions = {
-    readAuthority: suppliedReadAuthority || buildControlPlaneReadAuthority({
-      authoritativeReadMode:
-        service.bootstrapMode === true ? CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY :
-          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
-      leaderMode: service.bootstrapMode === true ? CONTROL_PLANE_READ_LEADER_MODE.ANY :
-        CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
-    }),
-  };
+  const now = typeof options.now === 'function' ? options.now : () => clock.now();
   const summary = {
     tablesAttempted: 0,
     tablesHydrated: 0,
@@ -274,171 +440,16 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options) {
     rowsSwept: 0,
     tablesFailed: [],
   };
-
+  const run = {service, summary, maxAttemptsPerTable, readOptions, now, isTerminal};
   for (const tableName of tables) {
-    // The catch-up's own loop ends at terminal too: it starts no table after
-    // the mark (each table left is reported failed).
+    // Each unattempted table is reported failed after the terminal boundary.
     if (isTerminal()) {
       summary.tablesFailed.push(tableName);
       continue;
     }
     summary.tablesAttempted += 1;
-    let hydrated = false;
-    let lastFailure = null;
-    let firstReadStartedAtMs = null;
-
-    for (let attempt = 1; attempt <= maxAttemptsPerTable; attempt += 1) {
-      let readResult = null;
-      const mutationSnapshot =
-        captureAuthoritativeCacheSweepSnapshot(service, tableName);
-      const readStartedAtMs = now();
-      firstReadStartedAtMs ??= readStartedAtMs;
-      try {
-        readResult = await service.executeAuthoritativeSystemTableRead(
-          tableName,
-          `SELECT * FROM ${tableName}`,
-          [],
-          readOptions,
-        );
-      } catch (error) {
-        lastFailure = error?.message || String(error);
-        break;
-      }
-
-      const observationAdvances = completeObservationAdvances(
-        service,
-        tableName,
-        readResult,
-      );
-      const readFromLeader = readIsFromWitnessedLeader(
-        tableName,
-        readResult,
-      );
-      const localBootstrapRead = readOptions.readAuthority.authoritativeReadMode ===
-        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY;
-      const completeRowsValid = completeAuthoritativeRowsAreValid(tableName, readResult?.rows);
-      const rows = observationAdvances && completeRowsValid &&
-        (localBootstrapRead || readFromLeader) ?
-        successfulAuthoritativeRows(readResult) :
-        null;
-      if (rows) {
-        let observationPublished = localBootstrapRead;
-        const repairOptions = readFromLeader ?
-          {
-            mutationMode:
-              SYSTEM_TABLE_CACHE_MUTATION_MODE
-                .AUTHORITATIVE_OBSERVATION_RECONCILIATION,
-            authoritativeObservedAtMs:
-              readResult.readAuthorityWitness.observedAtMs,
-            authoritativeReadStartedAtMs: readStartedAtMs,
-            sourceGeneration: mutationSnapshot.sourceGeneration,
-          } :
-          undefined;
-        const primaryKeyField = service.getPrimaryKeyField(tableName);
-        for (const row of rows) {
-          const key = row?.[primaryKeyField];
-          if (key === undefined || key === null) {
-            continue;
-          }
-          const applied = service.applyAuthoritativeCacheRepair(
-            tableName,
-            CATCHUP_DEFAULT.UPSERT_OPERATION,
-            row,
-            key,
-            repairOptions,
-          );
-          if (applied) {
-            summary.rowsApplied += 1;
-          }
-        }
-        // Anti-entropy backstop: the UPSERT loop above cannot remove a row that a
-        // lost DELETE resurrected. Sweep cache-only rows absent from `rows` — but
-        // ONLY when the read came from the witnessed authoritative LEADER. The
-        // owner-RPC lane can also be served by a lagging owner follower, while a
-        // local-replica read can be stale or empty; neither may authorize removal
-        // of live cache rows. (Race-guarded against writes newer than the read.)
-        if (readFromLeader) {
-          summary.rowsSwept += service.applyAuthoritativeCacheSweep(
-            tableName,
-            rows,
-            {
-              readStartedAtMs,
-              mutationSnapshot,
-              authoritativeObservedAtMs:
-                readResult.readAuthorityWitness.observedAtMs,
-            },
-          );
-        }
-        if (readFromLeader && !isTerminal()) {
-          const observationReceipt = {
-            sourceGeneration: mutationSnapshot.sourceGeneration,
-            observedAtMs: readResult.readAuthorityWitness.observedAtMs,
-            term: readResult.readAuthorityWitness.term ?? null,
-            appliedIndex: readResult.readAuthorityWitness.appliedIndex ?? null,
-            commitIndex: readResult.readAuthorityWitness.commitIndex ?? null,
-            servingNodeId:
-              readResult.readAuthorityWitness.servingNodeId ?? null,
-            partitionId: readResult.readAuthorityWitness.partitionId ?? null,
-            causeId: 'cdc-authoritative-catchup',
-          };
-          observationPublished = Number.isFinite(
-            requireCacheMutationTarget(service).recordAuthoritativeObservation(
-              tableName,
-              observationReceipt,
-            ));
-        }
-        // The apply gate refused these rows if the owner turned terminal
-        // while the read was in flight: the table is not hydrated then.
-        hydrated = !isTerminal() && observationPublished;
-        if (!hydrated) lastFailure = CATCHUP_FAILURE_MSG.OBSERVATION_NOT_ADVANCED;
-        summary.tablesHydrated += hydrated ? 1 : 0;
-        break;
-      }
-
-      const retryAfterMs = getControlPlaneRetryAfterMs(readResult);
-      const deferred =
-        retryAfterMs > 0 ||
-        readResult?.deferRetry === true;
-      lastFailure = !observationAdvances ?
-        CATCHUP_FAILURE_MSG.OBSERVATION_NOT_ADVANCED :
-        completeRowsValid ?
-          authoritativeReadFailure(readResult) :
-          CATCHUP_FAILURE_MSG.INVALID_ROW_SET;
-      if (!deferred || attempt >= maxAttemptsPerTable) {
-        if (deferred) {
-          reportCatchupTableRetriesSpent(service, {
-            tableName,
-            attempts: attempt,
-            lastFailure,
-            retryAfterMs,
-            elapsedMs: now() - firstReadStartedAtMs,
-          });
-        }
-        break;
-      }
-      await service.delayUntilShutdown(
-        retryAfterMs > 0 ?
-          retryAfterMs :
-          CATCHUP_DEFAULT.RETRY_FALLBACK_DELAY_MS,
-      );
-      if (isTerminal()) {
-        break;
-      }
-    }
-
-    if (!hydrated) {
-      const failure = isTerminal() ? CDC_ERROR_CODE.SHUT_DOWN : lastFailure;
-      const deferredEntry = `${tableName}: ${failure}`;
-      summary.tablesFailed.push(tableName);
-      service.logger?.warn?.(CATCHUP_LOG_MSG.TABLE_FAILED, {
-        tableName,
-        error: failure,
-        attempts: maxAttemptsPerTable,
-        detail: deferredEntry,
-      });
-    }
+    await hydrateCatchupTable(run, tableName);
   }
-
   if (isTerminal()) {
     summary.code = CDC_ERROR_CODE.SHUT_DOWN;
   }
@@ -450,7 +461,6 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options) {
     rowsSwept: summary.rowsSwept,
     tablesFailed: summary.tablesFailed,
   });
-
   return summary;
 }
 
