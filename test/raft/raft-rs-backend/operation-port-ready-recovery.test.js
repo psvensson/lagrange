@@ -2,7 +2,7 @@ import {buildDeliveryEnvelope} from '../../../src/transport/transport-semantic-o
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
-import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../../src/storage/sqlite-prepared-statement-owner.js';
 
 import {RaftRsDurableStore} from
   '../../../src/raft/raft-rs-durable-store.js';
@@ -37,24 +37,18 @@ function appliedIndex(replica) {
 }
 
 function faultableDatabase(database, fault) {
-  return new Proxy(database, {
-    get(target, property) {
-      if (property === 'transaction') {
-        return (work) => {
-          const transaction = target.transaction(work);
-          return (...args) => {
-            if (fault.failNextTransaction) {
-              fault.failNextTransaction = false;
-              throw new Error('injected SQLite transaction failure');
-            }
-            return transaction(...args);
-          };
-        };
+  const original = database.transaction.bind(database);
+  database.transaction = (work) => {
+    const transaction = original(work);
+    return (...args) => {
+      if (fault.failNextTransaction) {
+        fault.failNextTransaction = false;
+        throw new Error('injected SQLite transaction failure');
       }
-      const value = Reflect.get(target, property, target);
-      return typeof value === 'function' ? value.bind(target) : value;
-    },
-  });
+      return transaction(...args);
+    };
+  };
+  return database;
 }
 
 test('Ready snapshot entries and hard state share one SQLite commit point',
@@ -80,7 +74,7 @@ test('Ready snapshot entries and hard state share one SQLite commit point',
     for (const table of [
       '_raft_rs_snapshot', '_raft_rs_log', '_raft_rs_hard_state',
     ]) {
-      const database = new Database(':memory:');
+      const database = new SQLiteConnection(':memory:');
       try {
         const store = new RaftRsDurableStore(database);
         database.exec(`
@@ -173,7 +167,7 @@ test('every Ready delivery failure is a per-peer outcome and never reconstructs 
 
 test('application effects and durable applied progress commit atomically',
   async () => {
-    const atomicDatabase = new Database(':memory:');
+    const atomicDatabase = new SQLiteConnection(':memory:');
     try {
       const atomicStore = new RaftRsDurableStore(atomicDatabase);
       atomicDatabase.exec(
@@ -253,7 +247,7 @@ test('application effects and durable applied progress commit atomically',
 
 test('an async committed membership applier cannot advance durable progress',
   () => {
-    const db = new Database(':memory:');
+    const db = new SQLiteConnection(':memory:');
     try {
       const store = new RaftRsDurableStore(db);
       assert.throws(() => applyCommittedEntryTransaction({store,
@@ -274,7 +268,7 @@ test('an async committed membership applier cannot advance durable progress',
 test('a committed membership applier answers nothing, synchronously',
   () => {
     for (const answer of [true, null, 0]) {
-      const db = new Database(':memory:');
+      const db = new SQLiteConnection(':memory:');
       try {
         const store = new RaftRsDurableStore(db);
         assert.throws(() => applyCommittedEntryTransaction({store,

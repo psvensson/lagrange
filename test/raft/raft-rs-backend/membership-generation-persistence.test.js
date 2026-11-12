@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 
-import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../../src/storage/sqlite-prepared-statement-owner.js';
 
 import {
   COMMITTED_MEMBERSHIP_READ_PURPOSE,
@@ -53,7 +53,7 @@ function oldRecordSchema(db) {
 
 test('existing records gain a neutral generation and ordinary applies ' +
   'preserve the last configuration-only generation', () => {
-  const db = new Database(':memory:');
+  const db = new SQLiteConnection(':memory:');
   try {
     oldRecordSchema(db);
     db.prepare(`
@@ -155,7 +155,7 @@ test('generation, ConfState and snapshot boundaries survive rollback and a ' +
   'physical SQLite reopen', () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'membership-gen-'));
   const file = path.join(directory, 'replica.sqlite');
-  let db = new Database(file);
+  let db = new SQLiteConnection(file);
   try {
     let store = new RaftRsDurableStore(db);
     store.putAppliedState(GROUP, '5', EMPTY, undefined, '4');
@@ -167,7 +167,7 @@ test('generation, ConfState and snapshot boundaries survive rollback and a ' +
     store.putSnapshot(GROUP, {metadata: {index: '9', term: '2',
       confState: EMPTY, membershipGenerationIndex: '7'}});
     db.close();
-    db = new Database(file);
+    db = new SQLiteConnection(file);
     store = new RaftRsDurableStore(db);
     const restored = store.readDurableRecord(GROUP);
     assert.equal(restored.membershipGenerationIndex, '4');

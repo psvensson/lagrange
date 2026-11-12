@@ -1,3 +1,4 @@
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -1060,7 +1061,7 @@ test('mg-1 survives physical seed storage loss from two distinct off-seed voters
           true,
           `${replicaId} commits and hydrates new CDC state after full off-seed restart`,
         );
-        const durableDb = new Database(
+        const durableDb = new SQLiteConnection(
           replicaId === 'mg-1-r4' ? b4 : c5,
           {readonly: true},
         );

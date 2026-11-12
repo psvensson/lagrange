@@ -1,3 +1,4 @@
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 // Fault the actual better-sqlite3 methods after acquisition. The startup ledger
 // is real; no native Raft opening or complete public startup is claimed here.
 import test from 'node:test';
@@ -168,7 +169,7 @@ test('post-ISSUED close failure retains only the exact failed handle and never r
   assert.equal(captured.open, false);
   assert.deepEqual(f.preparation.observeResources(), []);
   const anchor = f.draft.members.find((m) => m.replicaId === f.draft.anchorReplicaId);
-  const read = new Database(anchor.dbPath, {readonly: true, fileMustExist: true});
+  const read = new SQLiteConnection(anchor.dbPath, {readonly: true, fileMustExist: true});
   try {
     // The failed preparation returned nothing: read the declaration it issued.
     const issued = JSON.parse(read.prepare(`SELECT ${COLUMN.DECLARATION} AS issued

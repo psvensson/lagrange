@@ -1,3 +1,4 @@
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 // Actual native seed startup and retained-directory restart. This measures
 // cleanup/retry custody and the first existing admission frontier, not
 // automatic partial-seed recovery, public process reentry or startup latency.
@@ -5,7 +6,6 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {test} from 'node:test';
 import {isDeepStrictEqual} from 'node:util';
-import Database from 'better-sqlite3';
 
 import {BOOTSTRAP_CLEANUP_STEP, BOOTSTRAP_PHASE, CLEANUP_RESULT} from
   '../../src/bootstrap/bootstrap-constants.js';
@@ -166,7 +166,7 @@ async function assertTopLevelRetry(host) {
 function readRetainedOrigin(host) {
   assert.equal(host.selected.db.open, false,
     'independent retained-state evidence requires the real old connection closed');
-  const db = new Database(host.selected.dbPath, {readonly: true, fileMustExist: true});
+  const db = new SQLiteConnection(host.selected.dbPath, {readonly: true, fileMustExist: true});
   try {
     return readPartitionWriteOrigin(db);
   } finally {

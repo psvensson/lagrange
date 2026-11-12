@@ -229,11 +229,17 @@
         "src/node/replica-state-machine-failed-create-claim.js",
         "src/node/replica-handler-remove-request-methods.js",
         "src/node/replica-cleanup-tombstone-owner.js",
-        "src/transport/transport-semantic-outcome.js"
+        "src/transport/transport-semantic-outcome.js",
+        "src/node/replica-failed-create-removal-claim.js",
+        "src/node/replica-removal-sole-founder.js",
+        "src/node/replica-removal-participation.js",
+        "src/node/replica-handler-remove-execution-methods.js"
       ],
       "tests": [
         "test/rebalancer/terminal-failed-add-target-cleanup.test.js",
-        "test/node/replica-failed-create-cleanup-generation.test.js"
+        "test/node/replica-failed-create-cleanup-generation.test.js",
+        "test/node/fresh-create-authority-unavailability-native.integration.test.js",
+        "test/node/replica-removal-sole-founder-decision.test.js"
       ]
     },
     "critical-create-admission-topology-ordering": {
@@ -587,9 +593,10 @@
       ]
     },
     "raft-rs-runtime-lifecycle-entry": {
-      "description": "The replica lifecycle owner admits each semantic operation before the runtime owner can enter the raft-rs core, and durable retirement waits for admitted operations before becoming terminal. A constructor refused before runtime admission publishes no membership reservation owner or native handle; each service initialization retains the exact named consensus failure and releases its own opening resources before reporting refusal. Exact-incarnation native opening history is NEVER_OPENED or ESTABLISHED in the existing lifecycle row; legacy NULL is unknown. Bootstrap and establishment commit atomically at FULL before participation; intact history restores, while absent native state cannot reopen an established or unknown incarnation. Host prior-existence remains independent for complete storage loss. If startup cleanup also fails, the original typed refusal and immutable owner retry answer remain primary; the actual secondary failure is retained, exact unclosed resources remain with the service lifecycle, initialize stays held, and existing shutdown retries that same cleanup without a new scheduler. Failed WASM teardown is CLEANUP_REQUIRED, not STOPPED. Each runtime turn captures its finite inbound extent after successful execution admission, checks current execution before dequeue, and leaves later accepted envelopes with the existing queue and owned wake; no later arrival enlarges that captured extent.",
+      "description": "The replica lifecycle owner admits each semantic operation before the runtime owner can enter the raft-rs core, and durable retirement waits for admitted operations before becoming terminal. A constructor refused before runtime admission publishes no membership reservation owner or native handle; each service initialization retains the exact named consensus failure and releases its own opening resources before reporting refusal. Exact-incarnation native opening history is NEVER_OPENED or ESTABLISHED in the existing lifecycle row; legacy NULL is unknown. Bootstrap and establishment commit atomically at FULL before participation; intact history restores, while absent native state cannot reopen an established or unknown incarnation. Host prior-existence remains independent for complete storage loss. If startup cleanup also fails, the original typed refusal and immutable owner retry answer remain primary; the actual secondary failure is retained, exact unclosed resources remain with the service lifecycle, initialize stays held, and existing shutdown retries that same cleanup without a new scheduler. Failed WASM teardown is CLEANUP_REQUIRED, not STOPPED. Each runtime turn captures its finite inbound extent after successful execution admission, checks current execution before dequeue, and leaves later accepted envelopes with the existing queue and owned wake; no later arrival enlarges that captured extent. Ordinary opening consumes an existing lifecycle row and incarnation without birth or migration. Only explicit database allocation, original preparation and private snapshot staging may create lifecycle records. Snapshot admission and swap consume the canonical NEVER_OPENED observation; existing rowless files are unavailable, while positive absent-target facts require separate exact CREATE authority. Construction returns NEW or EXISTING to the WASM local-record and writer owners; schema emptiness or a creation-only table list never grants formatting. Database construction requires synchronous service custody immediately after native acquisition, before pragmas or birth; failed boot cleanup retains both errors and the exact handle through the existing shutdown owner.",
       "owners": [
         "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/raft/raft-rs-replica-lifecycle-observation.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -612,7 +619,9 @@
         "src/wasm-service/wasm-service-replica.js",
         "src/wasm-service/wasm-service-replica-lifecycle.js",
         "src/wasm-service/wasm-service-constants.js",
-        "src/node/replica-transport-handler-identity.js"
+        "src/node/replica-transport-handler-identity.js",
+        "src/wasm-service/wasm-creation-opening.js",
+        "src/wasm-service/wasm-writer-state.js"
       ],
       "tests": [
         "test/raft/raft-rs-backend/operation-port-lifecycle.test.js",
@@ -623,7 +632,14 @@
         "test/raft/raft-rs-backend/startup-cleanup.integration.test.js",
         "test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js",
         "test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js",
-        "test/wasm-service/wasm-strong-write-native-completion.test.js"
+        "test/wasm-service/wasm-strong-write-native-completion.test.js",
+        "test/raft/raft-rs-backend/replica-lifecycle-birth.test.js",
+        "test/node/fresh-create-authority-unavailability-native.integration.test.js",
+        "test/raft/raft-rs-backend/replica-freshness-closure.test.js",
+        "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js",
+        "test/wasm-service/wasm-creation-bound-native.test.js",
+        "test/wasm-service/wasm-creation-local-record.test.js",
+        "test/wasm-service/wasm-writer-state-v1.test.js"
       ]
     },
     "raft-rs-runtime-application-transaction": {
@@ -1085,6 +1101,7 @@
       "owners": [
         "src/raft/snapshot-install.js",
         "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/raft/raft-rs-replica-lifecycle-observation.js",
         "src/raft/snapshot-receiver-admission.js"
       ],
       "tests": [
@@ -2169,6 +2186,118 @@
         "test/bootstrap/pgwire-startup-safety-gate.test.js",
         "test/bootstrap/cleanup-ownership-order-characterization.test.js"
       ]
+    },
+    "sqlite-connection-statement-ownership": {
+      "description": "The acquired SQLiteConnection exclusively owns cached fixed-SQL statements and native close custody. Replica constructors, original preparation, hydration/checkpoint/install readers and cached SQL consumers use that same connection identity. Supplied foreign handles refuse before SQL, mutation or successful absence; schema/census expose UNAVAILABLE. Fixtures preserve native connection identity when injecting faults; independent direct-SQL inspection handles stay raw.",
+      "owners": [
+        "src/storage/sqlite-prepared-statement-owner.js",
+        "src/raft/raft-rs-operation-port.js",
+        "src/raft/raft-rs-preparation-custody.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/raft/raft-rs-replica-lifecycle-observation.js",
+        "src/raft/raft-rs-durable-store.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-snapshot-witness.js",
+        "src/raft/snapshot-checkpoint-store.js",
+        "src/raft/snapshot-install.js",
+        "src/partition/partition-hydration-image-pages.js",
+        "src/partition/partition-participant-transaction-store.js",
+        "src/partition/partition-cdc-obligation-ledger.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-locking-read-reservation.js",
+        "src/query/distributed/distributed-transaction-schema-enforcement.js",
+        "src/query/distributed/distributed-transaction-release-census.js",
+        "test/bootstrap/seed-retained-effects-fixture.js",
+        "test/raft/raft-rs-backend/deterministic-raft-rs-cluster.js",
+        "test/raft/raft-rs-backend/runtime-replacement-review-child.js",
+        "test/test-helpers/learner-process-loss-worker.js",
+        "test/test-helpers/original-allocation-declaration-fixture.js",
+        "test/test-helpers/original-allocation-durable-reader.js",
+        "test/test-helpers/partition-removal-serving-surface.js",
+        "test/test-helpers/transaction-coordinator-group-fixture.js",
+        "test/test-helpers/transaction-persistence-gateway.js"
+      ],
+      "tests": [
+        "test/storage/sqlite-connection-statement-ownership.test.js",
+        "test/storage/sqlite-connection-statement-ownership-brand.test.js",
+        "test/storage/sqlite-connection-statement-ownership-refusal.test.js",
+        "test/storage/sqlite-connection-production-boundaries.test.js",
+        "test/storage/sqlite-prepared-statement-owner.test.js",
+        "test/query/transaction-schema-enforcement.test.js",
+        "test/query/transaction-release-census.test.js",
+        "test/raft/raft-rs-original-allocation-custody.test.js",
+        "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
+        "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js",
+        "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+        "test/raft/raft-rs-status-peer-resolution.test.js",
+        "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js",
+        "test/partition/partition-cdc-source-relist.test.js",
+        "test/partition/partition-unreadable-durable-record.test.js",
+        "test/raft/raft-rs-backend/message-group-on-raft-rs.test.js",
+        "test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js",
+        "test/storage/sqlite-connection-hydration.test.js",
+        "test/bootstrap/retained-seed-original-handoff.integration.test.js",
+        "test/bootstrap/seed-original-attempt-lifetime.test.js",
+        "test/bootstrap/seed-release-failure-custody.test.js",
+        "test/bootstrap/seed-retained-effects-preparation.test.js",
+        "test/bootstrap/seed-retained-effects.integration.test.js",
+        "test/diagnostics/raft-churn-sync-section-attribution.test.js",
+        "test/integration/message-group-fresh-identity-replacement.integration.test.js",
+        "test/integration/message-group-learner-join.integration.test.js",
+        "test/integration/message-group-learner-runtime-authorization.integration.test.js",
+        "test/message-group/message-group-fresh-learner-snapshot.test.js",
+        "test/migration/migration-partition-alter-routing.test.js",
+        "test/node/fresh-create-authority-unavailability-native.integration.test.js",
+        "test/node/replica-handler-owner-path-bypass-removal.test.js",
+        "test/node/replica-handler-remove-closed-service.test.js",
+        "test/node/replica-lifecycle-durable-generation.test.js",
+        "test/node/replica-removal-required-ports.test.js",
+        "test/partition/committed-statement-outcome.test.js",
+        "test/partition/learner-promotion-proof-committed-admission.test.js",
+        "test/partition/participant-origin-retained-history.integration.test.js",
+        "test/partition/participant-origin-retained-history.test.js",
+        "test/partition/participant-release-native-application-order.test.js",
+        "test/partition/partition-cdc-acknowledgement-refusal.test.js",
+        "test/partition/partition-legacy-consensus-state.test.js",
+        "test/partition/partition-participant-transaction-apply.test.js",
+        "test/partition/partition-port-refusal-outcomes.test.js",
+        "test/partition/partition-runtime-reconstruction-leadership.test.js",
+        "test/partition/partition-service-hlc-monotonicity.test.js",
+        "test/partition/partition-statement-admission.test.js",
+        "test/partition/partition-transaction.property.test.js",
+        "test/partition/replica-admission-from-committed-operation.test.js",
+        "test/partition/replicated-sql-determinism-three-replica.test.js",
+        "test/partition/settled-replay-preserves-result.test.js",
+        "test/query/scenario-a-deep-stack-throughput-and-latency.test.js",
+        "test/query/scenario-a-transaction-coordination-fast-path.test.js",
+        "test/query/sql-query-engine-system-table-write-admission.test.js",
+        "test/raft/raft-rs-backend/durable-commit-sync.test.js",
+        "test/raft/raft-rs-backend/durable-own-group-record.test.js",
+        "test/raft/raft-rs-backend/durable-store-committed-entries.test.js",
+        "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js",
+        "test/raft/raft-rs-backend/membership-generation-persistence.test.js",
+        "test/raft/raft-rs-backend/multi-replica-runtime-prerequisites.test.js",
+        "test/raft/raft-rs-backend/partition-peer-admission.test.js",
+        "test/raft/raft-rs-backend/partition-snapshot-compaction-catchup.test.js",
+        "test/raft/raft-rs-backend/peer-identity.test.js",
+        "test/raft/raft-rs-backend/persistence-admission.test.js",
+        "test/raft/raft-rs-backend/replica-freshness-closure.test.js",
+        "test/raft/raft-rs-backend/replica-lifecycle-birth.test.js",
+        "test/raft/raft-rs-backend/reseed-hold-durability.test.js",
+        "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js",
+        "test/raft/raft-rs-lifecycle-turn-admission.test.js",
+        "test/raft/raft-rs-original-allocation-cold-inspection.test.js",
+        "test/raft/raft-rs-original-allocation-lifecycle-operation.test.js",
+        "test/raft/raft-rs-original-allocation-preparation.test.js",
+        "test/raft/raft-rs-original-allocation-store.test.js",
+        "test/raft/raft-rs-original-opening-authority.test.js",
+        "test/raft/raft-rs-original-opening-effect-cut.test.js",
+        "test/raft/raft-rs-original-opening.test.js",
+        "test/raft/snapshot-lifecycle-staging.test.js",
+        "test/transaction/queryable-core-j4-locking-read-journey.test.js",
+        "test/transaction/session-transaction-isolation.test.js",
+        "test/integration/message-group-learner-process-loss.integration.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -2373,7 +2502,7 @@
       ]
     },
     "failed-create-target-authoritative-cleanup": {
-      "description": "OperationWorkflowOwner terminal admission and repair must carry the exact lifecycle generation through repository persistence and ReplicaHandler cleanup, while projections remain non-authoritative.",
+      "description": "OperationWorkflowOwner terminal admission and repair must carry the exact lifecycle generation through repository persistence and ReplicaHandler cleanup, while projections remain non-authoritative. A terminal REMOVE does not discharge its REMOVING row claim. Operationless redrive consumes that same authoritative claim, while a request carrying an operation must match its own token and precondition; sole-founder cleanup still requires sole membership and empty history.",
       "endpoints": [
         {
           "id": "operation-workflow-terminal-owner",
@@ -2392,14 +2521,20 @@
           "owners": [
             "src/node/replica-state-machine-failed-create-claim.js",
             "src/node/replica-handler-remove-request-methods.js",
-            "src/node/replica-cleanup-tombstone-owner.js"
+            "src/node/replica-cleanup-tombstone-owner.js",
+            "src/node/replica-failed-create-removal-claim.js",
+            "src/node/replica-removal-sole-founder.js",
+            "src/node/replica-removal-participation.js",
+            "src/node/replica-handler-remove-execution-methods.js"
           ]
         }
       ],
       "contract": "failed-create-target-authoritative-cleanup",
       "witnessTests": [
         "test/rebalancer/terminal-failed-add-target-cleanup.test.js",
-        "test/node/replica-failed-create-cleanup-generation.test.js"
+        "test/node/replica-failed-create-cleanup-generation.test.js",
+        "test/node/fresh-create-authority-unavailability-native.integration.test.js",
+        "test/node/replica-removal-sole-founder-decision.test.js"
       ]
     },
     "critical-create-hold-topology-guard-order": {
@@ -2641,7 +2776,7 @@
       }
     },
     "raft-rs-runtime-lifecycle-entry": {
-      "description": "Lifecycle admission and core entry must remain one boundary: retirement cannot race an admitted operation, and queued ingress must recheck lifecycle before worker-side core entry. Refused construction leaves earlier exact owners intact and service initialization consumes the canonical failure without bypassing its cleanup. The lifecycle history fact and the runtime bootstrap transaction share one durable opening boundary, including process-crash recovery and genuine never-opened retries. If startup cleanup also fails, the original typed refusal and immutable owner retry answer remain primary; the actual secondary failure is retained, exact unclosed resources remain with the service lifecycle, initialize stays held, and existing shutdown retries that same cleanup without a new scheduler. Failed WASM teardown is CLEANUP_REQUIRED, not STOPPED.",
+      "description": "Lifecycle admission and core entry must remain one boundary: retirement cannot race an admitted operation, and queued ingress must recheck lifecycle before worker-side core entry. Refused construction leaves earlier exact owners intact and service initialization consumes the canonical failure without bypassing its cleanup. The lifecycle history fact and the runtime bootstrap transaction share one durable opening boundary, including process-crash recovery and genuine never-opened retries. If startup cleanup also fails, the original typed refusal and immutable owner retry answer remain primary; the actual secondary failure is retained, exact unclosed resources remain with the service lifecycle, initialize stays held, and existing shutdown retries that same cleanup without a new scheduler. Failed WASM teardown is CLEANUP_REQUIRED, not STOPPED. The existing backend construction seam exclusively acquires a new database name and births its lifecycle before application DDL. An existing empty or truncated file is unproven and cannot be reborn. Read-only lifecycle and snapshot observations remain one implementation under the lifecycle owner; they cannot mint or retire a generation. Ordinary opening consumes an existing lifecycle row and incarnation without birth or migration. Only explicit database allocation, original preparation and private snapshot staging may create lifecycle records. Snapshot admission and swap consume the canonical NEVER_OPENED observation; existing rowless files are unavailable, while positive absent-target facts require separate exact CREATE authority. Construction returns NEW or EXISTING to the WASM local-record and writer owners; schema emptiness or a creation-only table list never grants formatting. Database construction requires synchronous service custody immediately after native acquisition, before pragmas or birth; failed boot cleanup retains both errors and the exact handle through the existing shutdown owner.",
       "endpoints": [
         {
           "id": "durable-lifecycle-admission",
@@ -2662,7 +2797,10 @@
             "src/wasm-service/wasm-service-replica.js",
             "src/wasm-service/wasm-service-replica-lifecycle.js",
             "src/wasm-service/wasm-service-constants.js",
-            "src/node/replica-transport-handler-identity.js"
+            "src/node/replica-transport-handler-identity.js",
+            "src/raft/raft-rs-replica-lifecycle-observation.js",
+            "src/wasm-service/wasm-creation-opening.js",
+            "src/wasm-service/wasm-writer-state.js"
           ]
         },
         {
@@ -2685,7 +2823,14 @@
         "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
         "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
         "test/raft/raft-opening-cleanup-error.test.js",
-        "test/raft/raft-rs-backend/startup-cleanup.integration.test.js"
+        "test/raft/raft-rs-backend/startup-cleanup.integration.test.js",
+        "test/raft/raft-rs-backend/replica-lifecycle-birth.test.js",
+        "test/node/fresh-create-authority-unavailability-native.integration.test.js",
+        "test/raft/raft-rs-backend/replica-freshness-closure.test.js",
+        "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js",
+        "test/wasm-service/wasm-creation-bound-native.test.js",
+        "test/wasm-service/wasm-creation-local-record.test.js",
+        "test/wasm-service/wasm-writer-state-v1.test.js"
       ]
     },
     "raft-rs-runtime-application-transaction": {
@@ -3226,7 +3371,8 @@
         {
           "id": "receiver-lifecycle-preparation",
           "owners": [
-            "src/raft/raft-rs-replica-lifecycle-owner.js"
+            "src/raft/raft-rs-replica-lifecycle-owner.js",
+            "src/raft/raft-rs-replica-lifecycle-observation.js"
           ]
         }
       ],
@@ -4632,6 +4778,53 @@
         "test/bootstrap/guarded-runtime-service-handler.test.js",
         "test/bootstrap/pgwire-startup-safety-gate.test.js",
         "test/bootstrap/cleanup-ownership-order-characterization.test.js"
+      ]
+    },
+    "sqlite-connection-statement-ownership": {
+      "description": "The acquired SQLiteConnection exclusively owns cached fixed-SQL statements and native close custody. Replica constructors, original preparation, hydration/checkpoint/install readers and cached SQL consumers use that same connection identity. Supplied foreign handles refuse before SQL, mutation or successful absence; schema/census expose UNAVAILABLE. Fixtures preserve native connection identity when injecting faults; independent direct-SQL inspection handles stay raw.",
+      "endpoints": [
+        {
+          "id": "native-connection-statement-owner",
+          "owners": [
+            "src/storage/sqlite-prepared-statement-owner.js"
+          ]
+        },
+        {
+          "id": "acquisition-and-cached-consumers",
+          "owners": [
+            "src/raft/raft-rs-operation-port.js",
+            "src/raft/raft-rs-preparation-custody.js",
+            "src/raft/raft-rs-replica-lifecycle-owner.js",
+            "src/raft/raft-rs-replica-lifecycle-observation.js",
+            "src/raft/raft-rs-durable-store.js",
+            "src/raft/raft-rs-peer-identity.js",
+            "src/raft/raft-rs-snapshot-witness.js",
+            "src/raft/snapshot-checkpoint-store.js",
+            "src/raft/snapshot-install.js",
+            "src/partition/partition-hydration-image-pages.js",
+            "src/partition/partition-participant-transaction-store.js",
+            "src/partition/partition-cdc-obligation-ledger.js",
+            "src/partition/partition-committed-statement-outcome.js",
+            "src/partition/partition-locking-read-reservation.js",
+            "src/query/distributed/distributed-transaction-schema-enforcement.js",
+            "src/query/distributed/distributed-transaction-release-census.js",
+            "test/bootstrap/seed-retained-effects-fixture.js",
+            "test/raft/raft-rs-backend/deterministic-raft-rs-cluster.js",
+            "test/raft/raft-rs-backend/runtime-replacement-review-child.js",
+            "test/test-helpers/learner-process-loss-worker.js",
+            "test/test-helpers/original-allocation-declaration-fixture.js",
+            "test/test-helpers/original-allocation-durable-reader.js",
+            "test/test-helpers/partition-removal-serving-surface.js",
+            "test/test-helpers/transaction-coordinator-group-fixture.js",
+            "test/test-helpers/transaction-persistence-gateway.js"
+          ]
+        }
+      ],
+      "contract": "sqlite-connection-statement-ownership",
+      "witnessTests": [
+        "test/storage/sqlite-connection-production-boundaries.test.js",
+        "test/storage/sqlite-prepared-statement-owner.test.js",
+        "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js"
       ]
     }
   }

@@ -1,3 +1,4 @@
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 /**
  * Partition HLC cross-leader / cross-restart monotonicity.
  *
@@ -14,7 +15,6 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import Database from 'better-sqlite3';
 
 import {test} from '../../src/test-helpers/tap.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
@@ -160,7 +160,7 @@ const SCHEMA_TABLES_SQL =
 
 test('Fix 2: warm-up is a no-op without an rs-raft record and fails closed ' +
   'on an undecodable applied command', async (t) => {
-  const db = new Database(':memory:');
+  const db = new SQLiteConnection(':memory:');
   try {
     const updates = [];
     const hlcClock = {update: (hlc) => updates.push(hlc)};
@@ -185,7 +185,7 @@ test('Fix 2: an undecodable applied command fails partition init closed',
     const dbPath = path.join(dir, 'replica-1.db');
     let partition = null;
     try {
-      const seeded = new Database(dbPath);
+      const seeded = new SQLiteConnection(dbPath);
       writeUndecodableAppliedEntry(seeded, 'hlc-mono-partition');
       seeded.close();
       partition = buildPartition({dbPath});

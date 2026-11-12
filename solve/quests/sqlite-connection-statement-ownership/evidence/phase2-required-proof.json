@@ -1,0 +1,42 @@
+{
+  "schema": "sqlite-phase2-required-proof/1",
+  "purpose": "Explicit compact proof inclusion list for parent composition/review; source delta is in candidate manifest. Never stage the whole Quest directory.",
+  "include": [
+    "solve/quests/sqlite-connection-statement-ownership/quest.json",
+    "solve/quests/sqlite-connection-statement-ownership/log.ndjson",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/receipt.json",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/PHASE2-REVIEW.md",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-candidate-manifest.json",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-required-proof.json",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-caller-provenance.json",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-verification.json",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failure-ledger.json",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase1-manifest.json",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase1-stronger-manifest.json",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-f-composition.json",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/PHASE2-STOP.md",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/PHASE2-STRONGER-STOP.md",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-manifest.json",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-stronger-failed-manifest.json",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-fixture-producers.json",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-stronger-fixture-selection.json"
+  ],
+  "externalRawArchive": {
+    "path": "/tmp/lagrange-sqlite-phase2-max-20261112-raw-preservation.tar.gz",
+    "sha256": "b9867ee5d631c3970000547829ab13338e8e62d0dc89cac0efbd86cca2191486",
+    "bytes": 2870116,
+    "members": 724,
+    "reopenedAndEveryMemberVerified": true,
+    "inventory": {
+      "path": "/tmp/lagrange-sqlite-phase2-max-20261112-raw-inventory.json",
+      "sha256": "829e2cd72132915a594eeb0be92903cb7516ca80cd2d27ac8ca23751df2c37c1"
+    },
+    "originals": "All preserved in place. Additional archive only; no canonical-store upload or deletion claimed."
+  },
+  "excludeFromDefaultCommit": [
+    "evidence/phase2-failed-candidate/",
+    "evidence/phase2-stronger-failed-source/",
+    "historical full failed-source copies, status snapshots, obsolete whole-tree patches and raw logs"
+  ],
+  "externalReferences": "All historical manifests/notes keep original references. Raw originals remain in place; archive maps them under quest-before-final-packet and max-continuation. Parent owns canonical evidence-store upload and reference verification."
+}

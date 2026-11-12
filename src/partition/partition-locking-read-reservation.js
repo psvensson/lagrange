@@ -21,7 +21,7 @@ import {
   LOCKING_READ_LOCAL_EXPIRY,
   LOCKING_READ_RESERVATION_OUTCOME,
 } from '../query/sql-locking-read-constants.js';
-import {preparedStatementOf} from '../storage/sqlite-prepared-statement-owner.js';
+import {assertSQLiteConnection, preparedStatementOf} from '../storage/sqlite-prepared-statement-owner.js';
 
 export {
   LOCKING_READ_RESERVATION_KIND,
@@ -91,6 +91,7 @@ const RESERVATION_SQL = Object.freeze({
  * @param {Object} db - SQLite database instance.
  */
 function ensureTableInitialized(db) {
+  if (db !== null && db !== undefined) assertSQLiteConnection(db);
   if (!db || db.open === false || INITIALIZED_DBS.has(db)) return false;
   try {
     db.exec(RESERVATION_SQL.DDL);
@@ -237,6 +238,7 @@ function insertDbReservation(db, record) {
  * @param {Object} db - SQLite database instance.
  */
 export function registerPartitionDatabase(partitionId, db) {
+  if (db !== null && db !== undefined) assertSQLiteConnection(db);
   if (partitionId && db && typeof db.prepare === 'function') {
     PARTITION_DBS.set(partitionId, db);
     ensureTableInitialized(db);
@@ -251,7 +253,8 @@ export function registerPartitionDatabase(partitionId, db) {
  * @return {Object|null}
  */
 function resolvePartitionStore(partitionId, explicitDb) {
-  const store = explicitDb || PARTITION_DBS.get(partitionId) || null;
+  if (explicitDb !== null && explicitDb !== undefined) assertSQLiteConnection(explicitDb);
+  const store = explicitDb ?? PARTITION_DBS.get(partitionId) ?? null;
   if (store && store.open !== false) {
     registerPartitionDatabase(partitionId, store);
     return store;
@@ -540,6 +543,7 @@ function releaseStoreTransactionReservations(transactionId, explicitDb) {
  * @return {number} Count of released reservations.
  */
 export function releaseTransactionReservations(transactionId, options = {}) {
+  if (options.db !== null && options.db !== undefined) assertSQLiteConnection(options.db);
   if (!transactionId) return 0;
   const released = releaseMemoryTransactionReservations(transactionId);
   releaseStoreTransactionReservations(transactionId, options.db || null);
@@ -614,6 +618,7 @@ function releaseStoreSessionReservations(sessionId, explicitDb) {
  * @return {number} Count of released reservations.
  */
 export function releaseSessionReservations(sessionId, options = {}) {
+  if (options.db !== null && options.db !== undefined) assertSQLiteConnection(options.db);
   if (!sessionId) return 0;
   const released = releaseMemorySessionReservations(sessionId);
   releaseStoreSessionReservations(sessionId, options.db || null);
@@ -627,6 +632,7 @@ export function releaseSessionReservations(sessionId, options = {}) {
  * @return {number} Count of swept reservations.
  */
 export function sweepExpiredReservations(db) {
+  if (db !== null && db !== undefined) assertSQLiteConnection(db);
   if (!db || db.open === false) return 0;
   try {
     ensureTableInitialized(db);

@@ -1,3 +1,4 @@
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 // What a failed statement in a committed entry means (quest
 // raft-rs-single-path-partition-cutover, verification round 1: B2 and F-i).
 //
@@ -133,7 +134,7 @@ function partitionOptions(partitionId, dbPath) {
 // log entry with its bytes) through the store owner's own reader, on a read
 // view of an independent connection that runs no DDL, plus the outcome rows.
 function wholeDurableRecord(dbPath, partitionId) {
-  const independent = new Database(dbPath, {readonly: true});
+  const independent = new SQLiteConnection(dbPath, {readonly: true});
   try {
     const view = Object.create(RaftRsDurableStore.prototype);
     view.db = independent;
@@ -146,7 +147,7 @@ function wholeDurableRecord(dbPath, partitionId) {
 // The durable record on a connection of the test's own, through the store
 // owner's readers: the applied index and the applied proposals.
 function durableRecord(dbPath, partitionId) {
-  const independent = new Database(dbPath, {readonly: true});
+  const independent = new SQLiteConnection(dbPath, {readonly: true});
   try {
     return {
       appliedIndex: Number(

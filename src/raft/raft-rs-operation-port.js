@@ -1,3 +1,8 @@
+import fs from 'node:fs';
+import {SQLiteConnection} from '../storage/sqlite-prepared-statement-owner.js';
+import {REPLICA_DB_PRAGMA} from '../storage/storage-constants.js';
+import {LIFECYCLE_BIRTH, LIFECYCLE_ERROR, REPLICA_DATABASE_CREATION} from
+  './raft-rs-replica-lifecycle-constants.js';
 import {resolveTimeSource} from '../time/time-source.js';
 import {
   runRaftApplySlice,
@@ -54,6 +59,7 @@ import {normalizeMembershipTransition} from
   './raft-rs-membership-transition.js';
 import {
   RaftRsReplicaLifecycleOwner,
+  birthReplicaLifecycle,
   registerRuntimeLifecycle,
   unregisterRuntimeLifecycle,
 } from './raft-rs-replica-lifecycle-owner.js';
@@ -66,6 +72,49 @@ import {
   createRuntimeDispatcher,
   verifyRaftRsBinding,
 } from './raft-rs-runtime-owner.js';
+
+const REPLICA_DATABASE_MEMORY = ':memory:';
+const EXCLUSIVE_CREATE_FLAGS = 'wx';
+const FILE_EXISTS_CODE = 'EEXIST';
+
+// Acquire a new name exclusively. An existing empty/truncated file is not
+// new; inability to acquire or open never authorizes a lifecycle birth.
+function acquireReplicaDatabaseFile(dbPath) {
+  if (dbPath === REPLICA_DATABASE_MEMORY) return REPLICA_DATABASE_CREATION.NEW;
+  try {
+    fs.closeSync(fs.openSync(dbPath, EXCLUSIVE_CREATE_FLAGS));
+    return REPLICA_DATABASE_CREATION.NEW;
+  } catch (error) {
+    if (error.code === FILE_EXISTS_CODE) return REPLICA_DATABASE_CREATION.EXISTING;
+    throw error;
+  }
+}
+
+/**
+ * Construct storage before application DDL. The service takes custody of the
+ * exact native handle synchronously at acquisition, before pragmas or birth.
+ * Its existing failed-open cleanup retains that handle if close fails.
+ * @param {Object} request - Path, identity, fileMustExist, takeDatabaseCustody.
+ * @return {Object} Frozen {db, creation}; custody stays with the named service.
+ */
+function openRaftRsReplicaDatabase({dbPath, groupId, replicaIdentity,
+  fileMustExist = false, takeDatabaseCustody}) {
+  if (typeof takeDatabaseCustody !== 'function') {
+    throw new TypeError(LIFECYCLE_ERROR.DATABASE_CUSTODY_REQUIRED);
+  }
+  const creation = fileMustExist ? REPLICA_DATABASE_CREATION.EXISTING :
+    acquireReplicaDatabaseFile(dbPath);
+  const db = new SQLiteConnection(dbPath, {fileMustExist: dbPath !== REPLICA_DATABASE_MEMORY});
+  takeDatabaseCustody(db);
+  db.pragma(REPLICA_DB_PRAGMA.JOURNAL_MODE);
+  db.pragma(REPLICA_DB_PRAGMA.SYNCHRONOUS);
+  const birth = birthReplicaLifecycle({db, groupId, replicaIdentity, creation});
+  if (birth === LIFECYCLE_BIRTH.UNPROVEN) {
+    throw Object.assign(new Error(birth), {code: birth});
+  }
+  return Object.freeze({db, creation: birth === LIFECYCLE_BIRTH.BORN ?
+    REPLICA_DATABASE_CREATION.NEW : REPLICA_DATABASE_CREATION.EXISTING});
+}
 
 const EVENTS = new Set([
   RAFT_EVENT.LEADER,
@@ -576,12 +625,12 @@ function createRaftRsOperationPort(request) {
   // replace a live same-name owner: unregistering after overwrite would lose
   // that owner's entry rather than restore it. The port's exact close releases
   // only the callback it actually published.
-  const unregisterMembershipOwner = registerPeerIdentityReservationOwner({
+  const unregisterMembershipOwner = lifecycle.active ? registerPeerIdentityReservationOwner({
     groupId,
     localReplicaIdentity: replicaIdentity,
     reserve: (joiningReplicaIdentity) =>
       registry.registerReplica(joiningReplicaIdentity),
-  });
+  }) : null;
   function close() {
     if (closed) {
       return coreOk(ALREADY_CLOSED);
@@ -591,7 +640,7 @@ function createRaftRsOperationPort(request) {
     listeners.clear();
     const result = closeDispatcher(dispatcher, lifecycle);
     unregisterRuntimeLifecycle(port, lifecycle);
-    unregisterMembershipOwner();
+    if (unregisterMembershipOwner !== null) unregisterMembershipOwner();
     return result;
   }
   return finalizePortOpen({
@@ -609,4 +658,5 @@ function createRaftRsOperationPort(request) {
 // The runtime owner is private to this constructor (the operation-boundary
 // audit), so the binding verdict a dry run reports is passed through here: a
 // digest and load check that returns a state and never dispatches.
-export {createRaftRsOperationPort, peerResolutionOf, verifyRaftRsBinding};
+export {createRaftRsOperationPort, openRaftRsReplicaDatabase,
+  peerResolutionOf, verifyRaftRsBinding};

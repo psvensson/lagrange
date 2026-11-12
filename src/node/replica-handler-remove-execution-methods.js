@@ -434,10 +434,19 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
       return readReplicaLifecycleFile(this, partitionId, replicaId);
     }
 
+    // One administration-owned read of this replica's group record;
+    // returns the frozen {membership, history, cause} answer.
+    readReplicaOwnGroupRecord(partitionId, replicaId) {
+      return raftRsLifecycleAdministration.readReplicaOwnGroupRecord(
+        this.getPartitionDbPath(partitionId, replicaId), partitionId, replicaId);
+    }
+
     /**
      * The lifecycle administration's verdicts on one durable lifecycle read:
      * the read itself plus retired, groupRetired (retired with its whole
-     * group), absent (no row) and holdsRow. Never a verdict from absence.
+     * group), absent (the database positively not there), holdsRow and
+     * neverOpened (its born row in a database that never opened its
+     * consensus record). Never a verdict from a read that failed.
      * @param {Object} lifecycle - readReplicaDurableLifecycle's answer.
      * @return {Object} Frozen read with its verdicts.
      * @private
@@ -446,7 +455,8 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
       const admin = raftRsLifecycleAdministration;
       return Object.freeze({...lifecycle, retired: admin.isRetired(lifecycle),
         groupRetired: admin.isRetiredFor(lifecycle, GROUP_RETIREMENT_REASON),
-        absent: admin.isAbsent(lifecycle), holdsRow: admin.holdsRow(lifecycle)});
+        absent: admin.isAbsent(lifecycle), holdsRow: admin.holdsRow(lifecycle),
+        neverOpened: admin.isNeverOpened(lifecycle)});
     }
 
     /**

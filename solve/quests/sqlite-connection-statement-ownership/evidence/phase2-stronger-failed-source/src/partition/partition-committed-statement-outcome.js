@@ -1,0 +1,405 @@
+// The terminal outcome of every committed statement: the one owner of what a
+// committed statement's result is, for the partition's committed-entry
+// application.
+//
+// A committed entry is applied inside the SQLite transaction that also
+// advances the rs-raft applied state. Its statement ends in exactly one of
+// these named outcomes (PARTITION_COMMITTED_COMMAND_OUTCOME):
+//
+// - APPLIED: the statement ran. Its outcome row is written in the same
+//   transaction.
+// - STATEMENT_FAILED: the statement failed deterministically (a constraint,
+//   schema or binding error every replica reproduces from the same command
+//   over the same state). The entry is consumed, its outcome row carries the
+//   failure's code and message, and the proposer's write is reported as that
+//   failure.
+// - STATEMENT_ENVIRONMENT_FAILED: the failure is the host's environment
+//   (busy, locked, I/O, full, out of memory...). It is not the statement's
+//   outcome and is never consumed: the application fails closed, the
+//   transaction rolls back (so no outcome row exists) and the committed entry
+//   is delivered again when the host recovers. Consuming it would let one
+//   replica skip an entry every other replica applies.
+//
+// The outcome row (PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL) is the
+// authority for an entry key the partition has already settled: a retry of
+// the same entry key - in process, on another replica, or after a restart -
+// is never executed again. It resolves from the row: an APPLIED row as the
+// applied statement's own result again (the affected-row count and last
+// insert rowid the row retained, named by PARTITION_SETTLED_REPLAY - a replay
+// never reports an applied write as zero rows), a STATEMENT_FAILED row as the
+// original failure, each with `replayOfLogIndex`. There is no in-memory replay state: a retry is
+// answered from the row before it is proposed, and one that was proposed
+// anyway (its original not yet applied here when it was proposed) is answered
+// from the row when it is applied - the same answer either way.
+//
+// The nullable insert-result contract (TX1 owner ruling 2026-10-11, design
+// revision 10, 0.0.14): an APPLIED statement's result carries
+// `lastInsertRowid` only when the inserted row's identity is established by
+// the statement itself - an INSERT or REPLACE with no DO UPDATE clause that
+// changed at least one row. It is null for every ON CONFLICT DO UPDATE (a
+// mixed batch of inserted and updated rows included), every statement that
+// changed no row, and every UPDATE, DELETE and DDL statement, because the
+// connection's last insert rowid is then connection state (a rolled-back c'
+// validation, the self-check's ceiling plant, an rs-raft log append) and
+// differs between replicas. The row and the answer are the same on every
+// replica; a consumer (the query owner) reads null as "no inserted-row
+// identity", never as a row id. committedStatementResult applies it.
+
+import {
+  PARTITION_SERVICE_ERROR_MSG, PARTITION_SERVICE_EVENT,
+  PARTITION_SERVICE_LOG_MSG, PARTITION_SERVICE_VALUE,
+  PARTITION_COMMITTED_COMMAND_ERROR_CODE,
+  PARTITION_COMMITTED_COMMAND_OUTCOME,
+} from './partition-service-constants.js';
+import {
+  PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL,
+  PARTITION_COMMITTED_STATEMENT_RECORD_STATE,
+  PARTITION_COMMITTED_STATEMENT_RESULT_COLUMNS,
+  PARTITION_DETERMINISTIC_STATEMENT_BINDING_ERRORS,
+  PARTITION_DETERMINISTIC_STATEMENT_SQLITE_CODES,
+  PARTITION_SETTLED_REPLAY,
+  PARTITION_SQLITE_RESULT_CODE,
+} from './partition-committed-statement-outcome-constants.js';
+import {buildDurableCommitWitness} from './partition-write-kernel.js';
+import {assertSQLiteConnection, preparedStatementOf} from '../storage/sqlite-prepared-statement-owner.js';
+import {RETAINED_STORE_ERROR, retainedStoreError, readRetainedStoreRowsIn,
+  isStoredInteger, isStoredNullableText, isStoredNullableInteger} from
+  './partition-retained-store-observation.js';
+import {
+  PARTITION_STATEMENT_REFUSAL_CODE,
+  refusalLayerFieldOf,
+} from './partition-statement-admission-constants.js';
+
+const NO_COMMITTED_STATEMENT_KEY = null;
+
+// The same identity is used by apply, replay answers and cold observation.
+// The one key is the command's entryId; a command without one (not a
+// non-empty string) has no key, and the application refuses it before its
+// statement runs (PARTITION_COMMITTED_COMMAND_OUTCOME.ENTRY_ID_MISSING_REFUSED).
+function isCommittedStatementKeyed(command) {
+  const entryId = command?.entryId;
+  return typeof entryId === 'string' && entryId.length > 0;
+}
+
+function committedStatementEntryKey(command) {
+  return isCommittedStatementKeyed(command) ?
+    `entry:${command.entryId}` : NO_COMMITTED_STATEMENT_KEY;
+}
+
+// Exact read-only census. Positions/result integers never round through Number.
+function readCommittedStatementCensusIn(db) {
+  const sql = PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL;
+  const rows = readRetainedStoreRowsIn(db, {table: sql.TABLE,
+    select: sql.SELECT_ALL, create: sql.CREATE_TABLE});
+  for (const row of rows) {
+    if (typeof row.entry_key !== 'string' || row.entry_key.length === 0 ||
+        typeof row.outcome !== 'string' || !isStoredInteger(row.log_index, 1n) ||
+        !isStoredInteger(row.term, 1n) || !isStoredNullableInteger(row.changes, 0n) ||
+        !isStoredNullableInteger(row.last_insert_rowid) ||
+        !isStoredNullableText(row.failure_code) || !isStoredNullableText(row.failure_message) ||
+        !isStoredNullableText(row.owner_result_text)) {
+      throw retainedStoreError(RETAINED_STORE_ERROR.ROW_CONTRARY, sql.TABLE);
+    }
+  }
+  return rows.map((row) => Object.freeze({
+    entryKey: row.entry_key, outcome: row.outcome,
+    logIndex: String(row.log_index), term: String(row.term),
+    failureCode: row.failure_code, failureMessage: row.failure_message,
+    changes: row.changes === null ? null : String(row.changes),
+    lastInsertRowid: row.last_insert_rowid === null ? null : String(row.last_insert_rowid),
+    ownerResultText: row.owner_result_text,
+  }));
+}
+
+/**
+ * Create the outcome table (DDL; run once at partition initialization, after
+ * the legacy-state detector). A table created before APPLIED rows retained
+ * their result gains the result columns here; the rows it holds keep NULL
+ * there (they retain no result).
+ * @param {Object} db - The partition's connection.
+ */
+function createCommittedStatementOutcomeTable(db) {
+  assertSQLiteConnection(db);
+  db.exec(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.CREATE_TABLE);
+  const present = new Set(db
+    .prepare(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.TABLE_COLUMNS)
+    .all().map((column) => column.name));
+  for (const [column, addColumn] of Object.entries(
+    PARTITION_COMMITTED_STATEMENT_RESULT_COLUMNS)) {
+    if (!present.has(column)) {
+      db.exec(addColumn);
+    }
+  }
+}
+
+const UNSETTLED_RECORD = Object.freeze({
+  state: PARTITION_COMMITTED_STATEMENT_RECORD_STATE.UNSETTLED,
+});
+
+/**
+ * The recorded terminal outcome of an entry key: SETTLED with the record, or
+ * UNSETTLED when no committed statement with that key has been settled.
+ * @param {Object} service - The partition (its `db`).
+ * @param {string} entryKey - The committed entry key.
+ * @return {Object} Frozen {state} (a PARTITION_COMMITTED_STATEMENT_RECORD_STATE)
+ *   and, when SETTLED, {outcome, logIndex, term, failureCode, failureMessage,
+ *   changes, lastInsertRowid}; the last two are null for a row that retains
+ *   no result.
+ */
+function readCommittedStatementOutcome(service, entryKey) {
+  const row = preparedStatementOf(service.db,
+    PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.SELECT_BY_ENTRY_KEY).get(entryKey);
+  if (row === undefined) {
+    return UNSETTLED_RECORD;
+  }
+  return Object.freeze({
+    state: PARTITION_COMMITTED_STATEMENT_RECORD_STATE.SETTLED,
+    outcome: row.outcome,
+    logIndex: Number(row.log_index),
+    term: Number(row.term),
+    failureCode: row.failure_code,
+    failureMessage: row.failure_message,
+    changes: row.changes,
+    lastInsertRowid: row.last_insert_rowid,
+    ...(row.owner_result_text === null ? {} : {ownerResultText: row.owner_result_text}),
+  });
+}
+
+/**
+ * Record an entry key's terminal outcome, inside the application
+ * transaction.
+ * @param {Object} service - The partition (its `db`).
+ * @param {Object} outcome - {entryKey, outcome, index, term, error, result};
+ *   `error` only for STATEMENT_FAILED, `result` (the statement's retained
+ *   {changes, lastInsertRowid}, committedStatementResult) only for APPLIED.
+ */
+function recordCommittedStatementOutcome(service, {entryKey, outcome, index,
+  term, error = null, result = null, ownerResultText = null}) {
+  preparedStatementOf(service.db, PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.INSERT).run(
+    entryKey, outcome, index, term,
+    error === null ? null : failureCodeOf(error),
+    error === null ? null : String(error.message),
+    result === null ? null : result.changes,
+    result === null ? null : result.lastInsertRowid,
+    ownerResultText);
+}
+
+/**
+ * The applied result a settled APPLIED record answers with: the retained
+ * affected-row count and last insert rowid, or - for a row that retains none
+ * - no count at all; each named by its PARTITION_SETTLED_REPLAY state.
+ * @param {Object} recorded - The SETTLED APPLIED record.
+ * @return {Object} The result fields of the answer.
+ */
+function settledAppliedResult(recorded) {
+  if (recorded.changes === null || recorded.changes === undefined) {
+    return {settledReplay: PARTITION_SETTLED_REPLAY.OUTCOME_NOT_RETAINED};
+  }
+  return {
+    changes: recorded.changes,
+    lastInsertRowid: recorded.lastInsertRowid,
+    settledReplay: PARTITION_SETTLED_REPLAY.OUTCOME_RETAINED,
+  };
+}
+
+/**
+ * The code a statement failure is recorded and reported with: its SQLite
+ * result code, or the JavaScript error's name for a binding error.
+ * @param {*} error - What the statement threw.
+ * @return {string} The failure code.
+ */
+function failureCodeOf(error) {
+  return String(error?.code ?? error?.name);
+}
+
+/**
+ * The SQLite primary result code of an error, or null when the error carries
+ * no SQLite result code.
+ * @param {*} error - What the statement threw.
+ * @return {string|null} `SQLITE_<PRIMARY>` or null.
+ */
+function sqlitePrimaryCode(error) {
+  const code = typeof error?.code === 'string' ? error.code : null;
+  if (code === null || !code.startsWith(PARTITION_SQLITE_RESULT_CODE.PREFIX)) {
+    return null;
+  }
+  return code.split(PARTITION_SQLITE_RESULT_CODE.SEPARATOR)
+    .slice(0, PARTITION_SQLITE_RESULT_CODE.PRIMARY_SEGMENTS)
+    .join(PARTITION_SQLITE_RESULT_CODE.SEPARATOR);
+}
+
+/**
+ * Whether a statement failure is deterministic: every replica applying the
+ * same command over the same state fails it the same way.
+ * @param {*} error - What the statement threw.
+ * @param {Object} db - The partition's connection.
+ * @return {boolean} Whether the failure is the statement's own outcome.
+ */
+function isDeterministicStatementFailure(error, db) {
+  // The statement-admission owner's refusal is a function of the command
+  // bytes and the replicated schema and rows: every replica refuses alike.
+  if (error?.code === PARTITION_STATEMENT_REFUSAL_CODE) {
+    return true;
+  }
+  const primaryCode = sqlitePrimaryCode(error);
+  if (primaryCode !== null) {
+    return PARTITION_DETERMINISTIC_STATEMENT_SQLITE_CODES.has(primaryCode);
+  }
+  return db?.open === true &&
+    PARTITION_DETERMINISTIC_STATEMENT_BINDING_ERRORS.has(error?.name);
+}
+
+/**
+ * The environmental failure the application fails closed with: typed, with
+ * what the host raised as its cause.
+ * @param {*} error - What the statement threw.
+ * @return {Error} The typed error.
+ */
+function statementEnvironmentFailure(error) {
+  const failure = new Error(
+    `${PARTITION_SERVICE_ERROR_MSG.COMMITTED_STATEMENT_ENVIRONMENT_FAILED}` +
+    ` (${error?.code ?? error?.name}): ${error?.message}`);
+  failure.code =
+    PARTITION_COMMITTED_COMMAND_ERROR_CODE.STATEMENT_ENVIRONMENT_FAILED;
+  failure.outcome =
+    PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_ENVIRONMENT_FAILED;
+  failure.cause = error;
+  return failure;
+}
+
+/**
+ * The answer to a settled entry key, built from its outcome row alone: the
+ * same answer wherever and whenever it is asked - a retry before it is
+ * proposed, in process or after a restart, or a retry that was proposed and
+ * reached the application. An APPLIED row answers the applied statement's
+ * result it retained (settledAppliedResult), with the durable commit witness
+ * this replica attests (the entry and the term and index it was applied at);
+ * a STATEMENT_FAILED row answers the original failure. A replay carries no
+ * origin HLC: the asking command's timestamp is not the applied statement's
+ * (no change event carries it), and the outcome row retains no origin, so a
+ * replay cannot prove a projection position.
+ * @param {Object} service - The partition (its identity).
+ * @param {Object} settled - {recorded, command}: the SETTLED record and the
+ *   command asking.
+ * @return {Object} The write result.
+ */
+function answerSettledStatement(service, {recorded, command}) {
+  const settledAt = {
+    partitionId: service.partitionId,
+    logIndex: recorded.logIndex,
+    replayOfLogIndex: recorded.logIndex,
+  };
+  if (recorded.outcome === PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED) {
+    return {
+      success: true,
+      ...settledAppliedResult(recorded),
+      ...settledAt,
+      ...(typeof command.entryId === 'string' && command.entryId.length > 0 ?
+        {durableCommitWitness: buildDurableCommitWitness({
+          partitionId: service.partitionId,
+          leaderNodeId: service.nodeId,
+          leaderReplicaId: service.replicaId,
+          logEntry: {term: recorded.term, index: recorded.logIndex,
+            data: command},
+        })} : {}),
+    };
+  }
+  return {
+    success: false,
+    error: recorded.failureMessage,
+    failureCode: recorded.failureCode,
+    // The statement-admission owner's refusal layer, read from the record.
+    ...refusalLayerFieldOf(recorded.failureCode, recorded.failureMessage),
+    committed: true,
+    outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED,
+    ...settledAt,
+  };
+}
+
+/**
+ * Settle a committed entry whose entry key already has a recorded outcome:
+ * the statement is not executed again, and the proposer's write resolves to
+ * the settled answer. Nothing new is recorded - the first outcome stays the
+ * authority.
+ * @param {Object} service - The partition.
+ * @param {Object} replay - {recorded, command, afterCommit}.
+ * @return {string} A PARTITION_COMMITTED_COMMAND_OUTCOME.
+ */
+function settleRecordedCommittedStatement(service, {recorded, command,
+  afterCommit}) {
+  afterCommit(() => service.resolveCommittedWrite(command.entryId,
+    answerSettledStatement(service, {recorded, command})));
+  if (recorded.outcome !== PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED) {
+    return PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED;
+  }
+  afterCommit(() => {
+    service.logger.debug(PARTITION_SERVICE_LOG_MSG.APPLYING_COMMITTED_ENTRY, {
+      partitionId: service.partitionId,
+      commandType: command.type,
+      skippedReplay: true,
+      replayOfLogIndex: recorded.logIndex,
+    });
+    service.emit(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, {
+      partitionId: service.partitionId,
+      command,
+    });
+  });
+  return PARTITION_COMMITTED_COMMAND_OUTCOME.REPLAYED;
+}
+
+/**
+ * Settle a committed entry whose statement threw: an environmental failure
+ * fails the application closed (the proposer's write is rejected with the
+ * typed error after the rollback; nothing is recorded or consumed); any other
+ * failure is STATEMENT_FAILED - recorded with its code and message, the entry
+ * consumed, and the proposer's write resolved as the failure it is.
+ * @param {Object} service - The partition.
+ * @param {Object} failure - {error, command, entryKey, index, term,
+ *   identity, afterCommit, afterRollback}.
+ * @return {string} A PARTITION_COMMITTED_COMMAND_OUTCOME.
+ */
+function settleFailedCommittedStatement(service, {error, command, entryKey,
+  index, term, identity, afterCommit, afterRollback}) {
+  if (!isDeterministicStatementFailure(error, service.db)) {
+    const failure = statementEnvironmentFailure(error);
+    afterRollback(() => service.rejectCommittedWrite(command.entryId, failure));
+    throw failure;
+  }
+  recordCommittedStatementOutcome(service, {
+    entryKey,
+    outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED,
+    index,
+    term,
+    error,
+  });
+  service.logger.error(PARTITION_SERVICE_ERROR_MSG.APPLY_COMMITTED_FAILED, {
+    partitionId: service.partitionId,
+    error: error.message,
+    sql: command.sql.substring(0, PARTITION_SERVICE_VALUE.CDC_REDACTION_LIMIT),
+    params: command.params || [],
+  });
+  afterCommit(() => service.resolveCommittedWrite(command.entryId, {
+    success: false,
+    error: error.message,
+    failureCode: failureCodeOf(error),
+    ...refusalLayerFieldOf(failureCodeOf(error), String(error.message)),
+    committed: true,
+    outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED,
+    ...identity,
+  }));
+  return PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED;
+}
+
+export {
+  committedStatementEntryKey,
+  isCommittedStatementKeyed,
+  readCommittedStatementCensusIn,
+  answerSettledStatement,
+  createCommittedStatementOutcomeTable,
+  isDeterministicStatementFailure,
+  readCommittedStatementOutcome,
+  recordCommittedStatementOutcome,
+  settleFailedCommittedStatement,
+  settleRecordedCommittedStatement,
+  statementEnvironmentFailure,
+};

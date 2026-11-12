@@ -1,3 +1,4 @@
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 // A user session transaction never contains consensus persistence, and a
 // session's ROLLBACK can never erase consensus rows (quest
 // raft-rs-single-path-partition-cutover, F6 layer 1, witnesses W1, W2 and W6
@@ -26,7 +27,6 @@ import path from 'node:path';
 import {performance} from 'node:perf_hooks';
 import {test} from 'node:test';
 
-import Database from 'better-sqlite3';
 
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
@@ -85,7 +85,7 @@ function resetEnvironment() {
 }
 
 function withIndependent(dbPath, read) {
-  const independent = new Database(dbPath, {readonly: true});
+  const independent = new SQLiteConnection(dbPath, {readonly: true});
   try {
     return read(independent);
   } finally {

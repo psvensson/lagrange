@@ -1,3 +1,4 @@
+import {openReplicaDatabaseFixture} from '../../helpers/replica-database-fixture.js';
 // A cluster whose peers are real partition operation ports: each one is what
 // `createRaftRsOperationPort(request)` returned for a request shaped exactly
 // as `PartitionService` shapes it.
@@ -16,7 +17,6 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import Database from 'better-sqlite3';
 import assert from 'node:assert/strict';
 import {SQLITE_STORE_PRAGMA} from '../../../src/storage/sqlite-store-constants.js';
 import {RAFT_RS_SYNCHRONOUS_PRAGMA} from
@@ -219,7 +219,8 @@ class PartitionNodeCluster {
    */
   buildReplica(replicaId, bootstrapReplicaIds, extraRequest = {}) {
     const dbFile = this.dbFileOf(replicaId);
-    const openedDatabase = new Database(dbFile);
+    const openedDatabase = openReplicaDatabaseFixture({dbPath: dbFile,
+      groupId: this.partitionId, replicaIdentity: replicaId}).db;
     // Use the partition's WAL journal, retaining FULL synchronization for ALL
     // fixture commits, including every reopen. WAL's connection default can
     // be NORMAL, so select FULL explicitly rather than relying on that default.

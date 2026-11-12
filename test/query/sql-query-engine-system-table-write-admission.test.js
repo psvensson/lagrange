@@ -11,7 +11,7 @@
  */
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 import {test} from '../../src/test-helpers/tap.js';
-import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 import {openParticipantTransactionStore} from
   '../../src/partition/partition-participant-transaction-store.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
@@ -301,7 +301,7 @@ test('a partition refuses a routed client write to its system table',
 // the logical partition has been selected, inside that partition's database.
 test('Logs user DML preserves exact parser identity and client origin through ' +
   'routing and partition execution', async (t) => {
-  const db = new Database(':memory:');
+  const db = new SQLiteConnection(':memory:');
   t.teardown(() => db.close());
   openParticipantTransactionStore(db);
   db.exec('CREATE TABLE Logs (id TEXT PRIMARY KEY, total INTEGER)');

@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 
 import {peerResolutionOf} from '../../src/raft/raft-rs-operation-port.js';
 import {RaftRsPeerIdentityRegistry} from '../../src/raft/raft-rs-peer-identity.js';
@@ -51,7 +51,7 @@ function namedPeerIds(group, observation) {
 
 test('a shaped status reads each named peer once and is byte-identical to the base shape',
   () => {
-    const db = new Database(':memory:');
+    const db = new SQLiteConnection(':memory:');
     try {
       const {registry, reads} = countingRegistry(db);
       const ids = reserve(registry);
@@ -70,7 +70,7 @@ test('a shaped status reads each named peer once and is byte-identical to the ba
   });
 
 test('one reservation read gives a peer its identity and committed node', () => {
-  const db = new Database(':memory:');
+  const db = new SQLiteConnection(':memory:');
   try {
     const {registry, reads} = countingRegistry(db);
     const ids = reserve(registry);
@@ -106,25 +106,20 @@ function countingDatabase(db) {
     }
     return typeof value === 'function' ? value.bind(target) : value;
   }});
-  const proxy = new Proxy(db, {get(target, property) {
-    if (property === 'prepare') {
-      return (sql) => {
-        const statement = target.prepare(sql);
-        return sql.includes(IDENTITY_TABLE) ? counted(statement) : statement;
-      };
-    }
-    const value = Reflect.get(target, property, target);
-    return typeof value === 'function' ? value.bind(target) : value;
-  }});
-  return {proxy, executions};
+  const prepare = db.prepare.bind(db);
+  db.prepare = (sql) => {
+    const statement = prepare(sql);
+    return sql.includes(IDENTITY_TABLE) ? counted(statement) : statement;
+  };
+  return {database: db, executions};
 }
 
 test('the role-and-term read answers the status read\'s role and term and reads no identity',
   async (t) => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'role-and-term-'));
     const db = historyDb(path.join(dir, 'replica.db'));
-    const {proxy, executions} = countingDatabase(db);
-    const port = openHistory(proxy);
+    const {database, executions} = countingDatabase(db);
+    const port = openHistory(database);
     t.after(() => {
       port.close();
       db.close();
@@ -152,9 +147,9 @@ test('a leader\'s status read of a three-replica group reads each peer\'s reserv
     const cluster = new PartitionNodeCluster({partitionId: 'status-peer-reads',
       replicaIds: ['spr-a', 'spr-b', 'spr-c'],
       wrapDatabase: (replicaId, db) => {
-        const {proxy, executions} = countingDatabase(db);
+        const {database, executions} = countingDatabase(db);
         counters.set(replicaId, executions);
-        return proxy;
+        return database;
       }});
     t.after(() => cluster.dispose());
     cluster.tickers = ['spr-a'];

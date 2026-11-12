@@ -1,3 +1,5 @@
+import {openReplicaDatabaseFixture} from '../helpers/replica-database-fixture.js';
+
 // Component proof: real SQLite and application transactions, not native RF3/Ready proof.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
@@ -28,10 +30,11 @@ const write = (changes = {}, identity = {}) => writerCommandFromDelivery({
 });
 
 function fixture(t, path = ':memory:', service = SERVICE) {
-  const db = new Database(path);
+  const {db, creation} = openReplicaDatabaseFixture({dbPath: path,
+    groupId: service, replicaIdentity: service});
   t.after(() => db.close());
   const {state, kv} = db.transaction(() => ({
-    state: new WasmWriterState(db, service), kv: new SessionKVStore(db),
+    state: new WasmWriterState(db, service, creation), kv: new SessionKVStore(db),
   }))();
   let index = 0;
   // The transaction is real; positions are supplied component inputs, not Raft positions.
@@ -173,10 +176,11 @@ test('WasmWriterState same-file restart retains generation fence and exact curre
   const dir = mkdtempSync(join(tmpdir(), 'wasm-writer-v1-'));
   t.after(() => rmSync(dir, {recursive: true, force: true}));
   const path = join(dir, 'application.sqlite');
-  const db = new Database(path);
+  const {db, creation} = openReplicaDatabaseFixture({dbPath: path,
+    groupId: SERVICE, replicaIdentity: SERVICE});
   try {
     const {state, kv} = db.transaction(() => ({
-      state: new WasmWriterState(db, SERVICE), kv: new SessionKVStore(db),
+      state: new WasmWriterState(db, SERVICE, creation), kv: new SessionKVStore(db),
     }))();
     const apply = db.transaction((cmd, index) => state.apply(cmd, kv, index, 1));
     apply(init(), 1);
@@ -258,4 +262,25 @@ test('WasmWriter codec maximum escaped legal shapes fit every retained logical b
   assert.throws(() => write({value: Buffer.alloc(32769)}), {code: R.INVALID});
   assert.throws(() => canonicalWriterCommand({...command, extra: true}), {code: R.INVALID});
   assert.throws(() => canonicalWriterCommand({...command, value: 'YQ'}), {code: R.INVALID});
+});
+
+test('empty schema without allocation authority cannot initialize a writer', (t) => {
+  const db = new Database(':memory:');
+  t.after(() => db.close());
+  assert.throws(() => new WasmWriterState(db, SERVICE), {code: R.FORMAT});
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM sqlite_schema').get().n, 0);
+});
+
+test('existing allocation with missing writer records cannot reformat as fresh', (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'wasm-writer-lost-format-'));
+  t.after(() => rmSync(dir, {recursive: true, force: true}));
+  const path = join(dir, 'application.sqlite');
+  const allocation = openReplicaDatabaseFixture({dbPath: path,
+    groupId: SERVICE, replicaIdentity: SERVICE});
+  allocation.db.close();
+  const reopened = openReplicaDatabaseFixture({dbPath: path,
+    groupId: SERVICE, replicaIdentity: SERVICE});
+  t.after(() => reopened.db.close());
+  assert.throws(() => new WasmWriterState(reopened.db, SERVICE, reopened.creation),
+    {code: R.FORMAT});
 });

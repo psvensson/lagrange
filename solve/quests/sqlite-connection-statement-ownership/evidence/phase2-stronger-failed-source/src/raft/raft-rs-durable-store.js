@@ -1,0 +1,800 @@
+// The durable Raft record of one replica's raft-rs groups, in that replica's
+// own SQLite database.
+//
+// What it preserves: the log entries, the hard state (term, vote and commit
+// index), the applied progress, the configuration state, and the snapshot
+// state. The applied progress and the configuration state are columns of one
+// row, so they are written by one statement and can never disagree.
+//
+// It keeps an ordered journal of the durable writes it made. The journal is
+// observability, not authority: it is what a caller reads to see the order the
+// writes happened in, while the record itself is what a restart reads.
+//
+// What survives what (owner decision O4, 2026-10-05, "option 2"): the
+// connection runs journal_mode WAL with synchronous NORMAL, so a commit
+// survives a process crash. A Ready raft-rs says must be synced (a changed
+// term or vote, appended entries, a snapshot) is committed SYNCED: SQLite
+// fsyncs the WAL as part of its COMMIT, before the runtime hands any of that
+// Ready's messages to the transport, so a granted vote and an acknowledged
+// append also survive a power loss or an OS crash. Because the WAL is
+// append-only, that sync also makes every earlier commit of the file durable.
+// Everything else - commit-index-only hard state, applied progress, the
+// application's own writes - keeps NORMAL and may be lost to a power loss;
+// it is recomputed from the synced log on restart.
+
+import {assertSQLiteConnection, preparedExactStatementOf, preparedStatementOf} from
+  '../storage/sqlite-prepared-statement-owner.js';
+import {
+  RAFT_RS_BOOLEAN_COLUMN,
+  RAFT_RS_COMMIT_DURABILITY,
+  RAFT_RS_CONF_STATE_FIELD,
+  RAFT_RS_CONF_STATE_MEMBER_FIELDS,
+  RAFT_RS_MEMBERSHIP_GENERATION_COLUMN,
+  RAFT_RS_PARTICIPATION_GATE_COLUMNS,
+  RAFT_RS_PERSISTENCE_ADMISSION,
+  RAFT_RS_RECORD_COMPATIBILITY,
+  RAFT_RS_RECORD_TABLES,
+  RAFT_RS_RETAINED_HISTORY_REASON,
+  RAFT_RS_SCHEMA_SQL,
+  RAFT_RS_SQL,
+  RAFT_RS_STORE_ERROR_CODE,
+  RAFT_RS_STORE_ERROR_MSG,
+  RAFT_RS_SYNCHRONOUS_PRAGMA,
+  RAFT_RS_TABLE,
+  RAFT_RS_ZERO_INDEX,
+} from './raft-rs-durable-store-constants.js';
+import {RAFT_RS_HOST_WRITE} from './raft-rs-host-contract.js';
+import {decodeCommittedProposal} from './raft-rs-proposal-codec.js';
+import {RAFT_RS_ENTRY_TYPE} from './raft-rs-ready-loop-constants.js';
+import {raftRsConfStateKey} from './raft-rs-conf-state-key.js';
+import {retainedHistoryError, retainedHistoryOf, validateRetainedRows} from
+  './raft-rs-retained-history.js';
+import {
+  compactRaftRsCommittedPrefix,
+  encodeSnapshotWitnessData,
+  readCompactedMaxHlcIn,
+  readPresentSnapshotIndexIn,
+  readSnapshotIndexIn,
+} from './raft-rs-snapshot-witness.js';
+
+const DECIMAL_DIGITS = /^\d+$/u;
+const DEFAULT_MAX_JOURNAL_ENTRIES = 256;
+const PAYLOAD_ENCODING = 'base64';
+// The log table and the applied-state table.
+const LOG_AND_APPLIED_STATE_TABLE_COUNT = 2;
+const MAX_SAFE_RAFT_POSITION = BigInt(Number.MAX_SAFE_INTEGER);
+const SNAPSHOT_MEMBERSHIP_GENERATION_BOUNDARY_ERROR =
+  'raft-rs snapshot membership generation exceeds or ' +
+  'contradicts its applied boundary';
+
+/**
+ * Convert a raft-rs decimal string into the BigInt SQLite binds exactly.
+ * @param {string} value - A 64-bit value as a decimal string.
+ * @return {bigint} The same value.
+ */
+function toExactInteger(value) {
+  if (typeof value !== 'string' || !DECIMAL_DIGITS.test(value)) {
+    throw new Error(RAFT_RS_STORE_ERROR_MSG.notAnIndex(value));
+  }
+  return BigInt(value);
+}
+
+/**
+ * Convert what SQLite returned back into a raft-rs decimal string.
+ * @param {bigint|number} value - A column value read with safe integers.
+ * @return {string} The decimal string.
+ */
+function fromExactInteger(value) {
+  return String(value);
+}
+
+/**
+ * A nullable column read with safe integers, as a decimal string or null.
+ * @param {bigint|number|null|undefined} value - The column value.
+ * @return {string|null} The decimal string, or null.
+ */
+function nullableExactInteger(value) {
+  return value === null || value === undefined ? null :
+    fromExactInteger(value);
+}
+
+function exactSnapshotMembershipGeneration({generation, snapshotIndex,
+  confState, appliedRow}) {
+  if (generation === null) {
+    return null;
+  }
+  const exactGeneration = toExactInteger(generation);
+  const exceedsBoundary = exactGeneration > snapshotIndex ||
+    exactGeneration > MAX_SAFE_RAFT_POSITION;
+  const currentGeneration = appliedRow === undefined ? null :
+    BigInt(appliedRow.membership_generation_index);
+  const regresses = currentGeneration !== null &&
+    currentGeneration <= snapshotIndex &&
+    exactGeneration < currentGeneration;
+  const contradictsCurrent = currentGeneration !== null &&
+    exactGeneration === currentGeneration &&
+    snapshotIndex >= BigInt(appliedRow.applied_index) &&
+    raftRsConfStateKey(confState) !==
+      raftRsConfStateKey(confStateFromRow(appliedRow));
+  if (exceedsBoundary || regresses || contradictsCurrent) {
+    throw new Error(SNAPSHOT_MEMBERSHIP_GENERATION_BOUNDARY_ERROR);
+  }
+  return exactGeneration;
+}
+
+/**
+ * The empty configuration, used when a group has no record yet.
+ * @return {Object} A ConfState with no members.
+ */
+function emptyConfState() {
+  return {
+    [RAFT_RS_CONF_STATE_FIELD.VOTERS]: [],
+    [RAFT_RS_CONF_STATE_FIELD.LEARNERS]: [],
+    [RAFT_RS_CONF_STATE_FIELD.VOTERS_OUTGOING]: [],
+    [RAFT_RS_CONF_STATE_FIELD.LEARNERS_NEXT]: [],
+    [RAFT_RS_CONF_STATE_FIELD.AUTO_LEAVE]: false,
+  };
+}
+
+/**
+ * The member columns of a ConfState, as the row stores them.
+ * @param {Object} confState - A ConfState from the core.
+ * @return {Array} The four member lists as JSON text, then the auto-leave flag.
+ */
+function confStateColumns(confState) {
+  const members = RAFT_RS_CONF_STATE_MEMBER_FIELDS.map((field) =>
+    JSON.stringify(confState?.[field] || []));
+  const autoLeave = confState?.[RAFT_RS_CONF_STATE_FIELD.AUTO_LEAVE] === true ?
+    RAFT_RS_BOOLEAN_COLUMN.TRUE :
+    RAFT_RS_BOOLEAN_COLUMN.FALSE;
+  return [...members, autoLeave];
+}
+
+/**
+ * Rebuild a ConfState from the row that stores it.
+ * @param {Object} row - A row of the applied-state or snapshot table.
+ * @return {Object} The ConfState.
+ */
+function confStateFromRow(row) {
+  const confState = {};
+  for (const field of RAFT_RS_CONF_STATE_MEMBER_FIELDS) {
+    const column = field.replace(/[A-Z]/gu, (letter) =>
+      `_${letter.toLowerCase()}`);
+    confState[field] = JSON.parse(row[column]);
+  }
+  confState[RAFT_RS_CONF_STATE_FIELD.AUTO_LEAVE] =
+    Number(row.auto_leave) === RAFT_RS_BOOLEAN_COLUMN.TRUE;
+  return confState;
+}
+
+/**
+ * One read of a record table. A read that fails (the table is missing, the
+ * file is unreadable or corrupt) throws an error that names the table beside
+ * SQLite's own code, so its reader can say which part of the record it could
+ * not read.
+ * @param {string} table - The record table the read reaches.
+ * @param {Function} read - The read.
+ * @return {*} What the read returned.
+ */
+function readRecordTable(table, read) {
+  try {
+    return read();
+  } catch (error) {
+    throw Object.assign(new Error(String(error?.message || error),
+      {cause: error}), {code: error?.code, table});
+  }
+}
+
+/**
+ * Run work as one SQLite transaction whose COMMIT is synced to disk.
+ *
+ * `PRAGMA synchronous` is a per-connection setting that SQLite refuses to
+ * change inside a transaction, and in WAL mode FULL makes every COMMIT fsync
+ * the WAL. So the connection is raised to FULL before BEGIN and set back to
+ * its own level after COMMIT or ROLLBACK. better-sqlite3 is synchronous and
+ * nothing here awaits, so no other transaction can run on the connection in
+ * between. A connection already at FULL or above is left as it is; a call
+ * made while a transaction is open is refused, typed, because its commit
+ * could not be synced here.
+ * @param {Object} db - A better-sqlite3 database.
+ * @param {Function} work - The transaction's work.
+ * @return {*} Whatever the work returned.
+ */
+function commitDurably(db, work) {
+  if (db.inTransaction) {
+    throw Object.assign(
+      new Error(RAFT_RS_STORE_ERROR_MSG.DURABLE_COMMIT_INSIDE_TRANSACTION),
+      {code: RAFT_RS_STORE_ERROR_CODE.DURABLE_COMMIT_INSIDE_TRANSACTION});
+  }
+  const level = db.pragma(RAFT_RS_SYNCHRONOUS_PRAGMA.READ, {simple: true});
+  if (level >= RAFT_RS_SYNCHRONOUS_PRAGMA.FULL_LEVEL) {
+    return db.transaction(work)();
+  }
+  db.pragma(RAFT_RS_SYNCHRONOUS_PRAGMA.SET_FULL);
+  try {
+    return db.transaction(work)();
+  } finally {
+    db.pragma(RAFT_RS_SYNCHRONOUS_PRAGMA.setLevel(level));
+  }
+}
+
+function readDurableRowsIn(db, groupId) {
+  const hardStateRow = readRecordTable(RAFT_RS_TABLE.HARD_STATE, () =>
+    preparedExactStatementOf(db, RAFT_RS_SQL.SELECT_HARD_STATE).get(groupId));
+  const appliedRow = readRecordTable(RAFT_RS_TABLE.APPLIED_STATE, () =>
+    preparedExactStatementOf(db, RAFT_RS_SQL.SELECT_APPLIED_STATE).get(groupId));
+  const snapshotRow = readRecordTable(RAFT_RS_TABLE.SNAPSHOT, () =>
+    preparedExactStatementOf(db, RAFT_RS_SQL.SELECT_SNAPSHOT).get(groupId));
+  const entryRows = readRecordTable(RAFT_RS_TABLE.LOG, () =>
+    preparedExactStatementOf(db, RAFT_RS_SQL.SELECT_LOG_ENTRIES).all(groupId));
+  return {hardStateRow, appliedRow, snapshotRow, entryRows};
+}
+
+function durableRecordOf({hardStateRow, appliedRow, snapshotRow, entryRows}) {
+  return {
+    hardState: hardStateRow ? {
+      term: fromExactInteger(hardStateRow.term),
+      vote: fromExactInteger(hardStateRow.vote),
+      commit: fromExactInteger(hardStateRow.commit_index),
+    } : null,
+    appliedIndex: appliedRow ? fromExactInteger(appliedRow.applied_index) :
+      RAFT_RS_ZERO_INDEX,
+    confState: appliedRow ? confStateFromRow(appliedRow) : emptyConfState(),
+    bootstrapIndex: nullableExactInteger(appliedRow?.bootstrap_index),
+    admissionIndex: nullableExactInteger(appliedRow?.admission_index),
+    membershipGenerationIndex: appliedRow ?
+      fromExactInteger(appliedRow.membership_generation_index) :
+      RAFT_RS_ZERO_INDEX,
+    entries: entryRows.map((row) => ({
+      index: fromExactInteger(row.log_index),
+      term: fromExactInteger(row.term),
+      entryType: Number(row.entry_type),
+      ...(row.data === null ? {} : {data: row.data}),
+    })),
+    snapshot: snapshotRow ? {
+      ...(snapshotRow.data === null ? {} : {data: snapshotRow.data}),
+      metadata: {
+        index: fromExactInteger(snapshotRow.snapshot_index),
+        term: fromExactInteger(snapshotRow.snapshot_term),
+        confState: confStateFromRow(snapshotRow),
+        membershipGenerationIndex:
+          nullableExactInteger(snapshotRow.membership_generation_index),
+      },
+    } : null,
+  };
+}
+
+function readDurableRecordIn(db, groupId) {
+  assertSQLiteConnection(db);
+  return durableRecordOf(readDurableRowsIn(db, groupId));
+}
+
+function durableRecordExists(record) {
+  return record.hardState !== null || record.entries.length > 0 ||
+    record.confState.voters.length > 0;
+}
+
+function readRetainedHistoryIn(db, groupId) {
+  let rows;
+  try {
+    rows = readDurableRowsIn(db, groupId);
+  } catch (cause) {
+    throw Object.assign(new Error(RAFT_RS_RETAINED_HISTORY_REASON.OBSERVATION, {cause}),
+      {code: RAFT_RS_STORE_ERROR_CODE.RETAINED_HISTORY_UNAVAILABLE});
+  }
+  validateRetainedRows(rows);
+  try {
+    return retainedHistoryOf(durableRecordOf(rows));
+  } catch (cause) {
+    if (cause.code === RAFT_RS_STORE_ERROR_CODE.RETAINED_HISTORY_INVALID) throw cause;
+    throw retainedHistoryError(RAFT_RS_RETAINED_HISTORY_REASON.OBSERVATION, cause);
+  }
+}
+
+/**
+ * How durably one Ready must commit: raft-rs's own `Ready::must_sync`, which
+ * the binding reports as `mustSync`. A Ready that does not say is synced.
+ * @param {Object} ready - A Ready from the core.
+ * @return {string} A RAFT_RS_COMMIT_DURABILITY state.
+ */
+function readyCommitDurability(ready) {
+  return ready.mustSync === false ?
+    RAFT_RS_COMMIT_DURABILITY.CONNECTION_DEFAULT :
+    RAFT_RS_COMMIT_DURABILITY.SYNCED;
+}
+
+/**
+ * The durable Raft record for the raft-rs-wasm backend.
+ */
+class RaftRsDurableStore {
+  /**
+   * @param {Object} db - The replica's own better-sqlite3 database.
+   * @param {Object} [options] - Options for the durable store.
+   */
+  constructor(db, options = {}) {
+    assertSQLiteConnection(db);
+    this.db = db;
+    this.maxJournalEntries =
+      Number.isInteger(options?.maxJournalEntries) && options.maxJournalEntries >= 0 ?
+        options.maxJournalEntries :
+        DEFAULT_MAX_JOURNAL_ENTRIES;
+    this.journal = [];
+    this.journalWriteCount = 0;
+    this.ownTransactionDepth = 0;
+    this.syncCommitCount = 0;
+    this.totalSyncMs = 0;
+    this.batchedEntryCount = 0;
+    this.multiEntryReadyCount = 0;
+    this.createRecordTables();
+    this.addMembershipGenerationColumns();
+    // A fact since open: this store creates the table and nothing drops it here.
+    this.snapshotTablePresent = this.tablePresent(RAFT_RS_TABLE.SNAPSHOT);
+  }
+
+  tablePresent(table) {
+    return preparedStatementOf(this.db, RAFT_RS_SCHEMA_SQL.SELECT_TABLE_PRESENT)
+      .get(table) !== undefined;
+  }
+
+  // Create all record tables atomically when none exist yet; partial records
+  // stay incomplete so readers fail closed naming the missing table.
+  createRecordTables() {
+    if (RAFT_RS_RECORD_TABLES.some((table) => this.tablePresent(table))) {
+      return;
+    }
+    this.transaction(() => {
+      this.db.exec(RAFT_RS_SQL.CREATE_LOG_TABLE);
+      this.db.exec(RAFT_RS_SQL.CREATE_HARD_STATE_TABLE);
+      this.db.exec(RAFT_RS_SQL.CREATE_APPLIED_STATE_TABLE);
+      this.db.exec(RAFT_RS_SQL.CREATE_SNAPSHOT_TABLE);
+    });
+  }
+
+  // The configuration-only generation was added after the record shipped.
+  // It is additive on every complete or partial record: missing record tables
+  // remain missing (and therefore fail closed). An applied row gains neutral
+  // generation 0; an old snapshot stays null because native metadata cannot
+  // identify the sender's configuration-only generation.
+  addMembershipGenerationColumns() {
+    const upgrades = [
+      [RAFT_RS_TABLE.APPLIED_STATE, RAFT_RS_SQL.SELECT_APPLIED_STATE_COLUMNS,
+        RAFT_RS_SQL.ADD_APPLIED_MEMBERSHIP_GENERATION],
+      [RAFT_RS_TABLE.SNAPSHOT, RAFT_RS_SQL.SELECT_SNAPSHOT_COLUMNS,
+        RAFT_RS_SQL.ADD_SNAPSHOT_MEMBERSHIP_GENERATION],
+    ];
+    for (const [table, columnsSql, alterSql] of upgrades) {
+      if (!this.tablePresent(table)) {
+        continue;
+      }
+      const columns = new Set(this.db.prepare(columnsSql).all()
+        .map(({name}) => name));
+      if (!columns.has(RAFT_RS_MEMBERSHIP_GENERATION_COLUMN)) {
+        this.db.exec(alterSql);
+      }
+    }
+  }
+
+  /**
+   * Record that a durable write happened, in order.
+   * @param {string} write - A RAFT_RS_HOST_WRITE name.
+   * @param {Object} detail - What the write carried.
+   * @private
+   */
+  record(write, detail) {
+    this.journalWriteCount += 1;
+    if (this.maxJournalEntries <= 0) {
+      return;
+    }
+    if (this.journal.length >= this.maxJournalEntries) {
+      this.journal.splice(0, this.journal.length - this.maxJournalEntries + 1);
+    }
+    this.journal.push(Object.freeze({write, ...detail}));
+  }
+
+  /**
+   * Safely and idempotently close the database connection if open.
+   */
+  close() {
+    if (this.db && this.db.open) {
+      this.db.close();
+    }
+  }
+
+  /** The durable writes made so far, in the order they were made.
+   * @return {Array<Object>} The journal. */
+  writesMade() {
+    return this.journal.slice();
+  }
+
+  /**
+   * Whether the store may write now: only when its connection is in
+   * autocommit or inside a transaction the store itself opened. A transaction
+   * someone else opened on the shared connection (a user session's `BEGIN`)
+   * would absorb the write, and its ROLLBACK would erase consensus rows.
+   * @return {string} A RAFT_RS_PERSISTENCE_ADMISSION state.
+   */
+  persistenceAdmission() {
+    return this.db.inTransaction && this.ownTransactionDepth === 0 ?
+      RAFT_RS_PERSISTENCE_ADMISSION.USER_TRANSACTION_OPEN :
+      RAFT_RS_PERSISTENCE_ADMISSION.ADMITTED;
+  }
+
+  /**
+   * Refuse, with a typed error, a write the connection cannot admit.
+   * @private
+   */
+  admitWrite() {
+    const admission = this.persistenceAdmission();
+    if (admission !== RAFT_RS_PERSISTENCE_ADMISSION.ADMITTED) {
+      throw Object.assign(
+        new Error(RAFT_RS_STORE_ERROR_MSG.USER_TRANSACTION_OPEN),
+        {code: RAFT_RS_STORE_ERROR_CODE.USER_TRANSACTION_OPEN, admission});
+    }
+  }
+
+  /**
+   * Run a unit of work as one SQLite transaction the store opens itself;
+   * refused while a transaction the store did not open is in progress.
+   * @param {Function} work - The work to run.
+   * @param {string} [durability] - A RAFT_RS_COMMIT_DURABILITY state; the
+   *   connection's own setting unless SYNCED.
+   * @return {*} Whatever the work returned.
+   */
+  transaction(work,
+    durability = RAFT_RS_COMMIT_DURABILITY.CONNECTION_DEFAULT) {
+    this.admitWrite();
+    this.ownTransactionDepth += 1;
+    const synced = durability === RAFT_RS_COMMIT_DURABILITY.SYNCED;
+    try {
+      return synced ? commitDurably(this.db, work) : this.db.transaction(work)();
+    } finally {
+      if (synced) this.syncCommitCount += 1;
+      this.ownTransactionDepth -= 1;
+    }
+  }
+
+  getDurableSyncStats() {
+    return {syncCommitCount: this.syncCommitCount, totalSyncMs: this.totalSyncMs,
+      batchedEntryCount: this.batchedEntryCount, multiEntryReadyCount: this.multiEntryReadyCount};
+  }
+
+  /**
+   * Persist the storage-bearing portion of one Ready atomically, synced to
+   * disk when raft-rs says it must be (see the header). Called before any of
+   * the Ready's messages are sent.
+   * @param {string} groupId - The group.
+   * @param {Object} ready - A Ready from the core.
+   */
+  persistReady(groupId, ready) {
+    const entries = ready.entries || [];
+    const durability = readyCommitDurability(ready);
+    return this.transaction(() => {
+      if (ready.snapshot) {
+        this.putSnapshot(groupId, ready.snapshot);
+      }
+      this.appendEntries(groupId, entries);
+      if (ready.hardState) {
+        this.putHardState(groupId, ready.hardState);
+      }
+      if (durability === RAFT_RS_COMMIT_DURABILITY.SYNCED) {
+        this.batchedEntryCount += entries.length;
+        if (entries.length > 1) this.multiEntryReadyCount += 1;
+      }
+    }, durability);
+  }
+
+  /**
+   * Durably append entries, replacing any conflicting suffix first, exactly as
+   * raft-rs's own storage append does.
+   * @param {string} groupId - The group.
+   * @param {Array<Object>} entries - Ready entries from the core.
+   */
+  appendEntries(groupId, entries) {
+    this.admitWrite();
+    if (entries.length === 0) {
+      return;
+    }
+    preparedStatementOf(this.db, RAFT_RS_SQL.DELETE_LOG_FROM)
+      .run(groupId, toExactInteger(entries[0].index));
+    const insert = preparedStatementOf(this.db, RAFT_RS_SQL.INSERT_LOG_ENTRY);
+    for (const entry of entries) {
+      insert.run(
+        groupId,
+        toExactInteger(entry.index),
+        toExactInteger(entry.term),
+        entry.entryType,
+        entry.data === undefined ? null : entry.data,
+      );
+    }
+    this.record(RAFT_RS_HOST_WRITE.ENTRIES, {
+      groupId,
+      firstIndex: entries[0].index,
+      lastIndex: entries[entries.length - 1].index,
+    });
+  }
+
+  /**
+   * Durably store the hard state: term, vote and commit index together.
+   * @param {string} groupId - The group.
+   * @param {Object} hardState - {term, vote, commit} as decimal strings.
+   */
+  putHardState(groupId, hardState) {
+    this.admitWrite();
+    preparedStatementOf(this.db, RAFT_RS_SQL.UPSERT_HARD_STATE).run(
+      groupId,
+      toExactInteger(hardState.term),
+      toExactInteger(hardState.vote),
+      toExactInteger(hardState.commit),
+    );
+    this.record(RAFT_RS_HOST_WRITE.HARD_STATE, {groupId, ...hardState});
+  }
+
+  /**
+   * Durably move the commit index the LightReady reported.
+   * @param {string} groupId - The group.
+   * @param {string} commitIndex - The commit index as a decimal string.
+   */
+  putCommitIndex(groupId, commitIndex) {
+    this.admitWrite();
+    preparedStatementOf(this.db, RAFT_RS_SQL.UPSERT_COMMIT_INDEX)
+      .run(groupId, toExactInteger(commitIndex));
+    this.record(RAFT_RS_HOST_WRITE.COMMIT_INDEX, {groupId, commitIndex});
+  }
+
+  /**
+   * Durably record the applied index together with the configuration state
+   * that index includes. One statement writes both columns: there is no way
+   * to move one without the other.
+   * @param {string} groupId - The group.
+   * @param {string} appliedIndex - The applied index as a decimal string.
+   * @param {Object} confState - The ConfState the core reported.
+   * @param {string} [write] - Which contract write this is.
+   */
+  putAppliedState(groupId, appliedIndex, confState,
+    write = RAFT_RS_HOST_WRITE.CONF_STATE_AND_APPLIED,
+    membershipGenerationIndex = null) {
+    this.admitWrite();
+    const generation = membershipGenerationIndex === null ? null :
+      toExactInteger(membershipGenerationIndex);
+    preparedStatementOf(this.db, RAFT_RS_SQL.UPSERT_APPLIED_STATE).run(
+      groupId,
+      toExactInteger(appliedIndex),
+      ...confStateColumns(confState),
+      generation,
+      generation,
+    );
+    this.record(write, {groupId, appliedIndex, confState,
+      membershipGenerationIndex});
+  }
+
+  /**
+   * Durably record a created group's first applied state (index 0, its
+   * bootstrap configuration) together with its participation gate: the
+   * committed index its bootstrap configuration was read at and, when that
+   * configuration already names this replica a voter, its admission index.
+   * One statement, like every applied-state write.
+   * @param {string} groupId - The group.
+   * @param {Object} confState - The bootstrap ConfState the core reported.
+   * @param {Object} gate - {bootstrapIndex, admissionIndex} as decimal
+   *   strings; admissionIndex null while this replica is not admitted.
+   */
+  putBootstrapAppliedState(groupId, confState, {bootstrapIndex,
+    admissionIndex, membershipGenerationIndex = RAFT_RS_ZERO_INDEX}) {
+    this.admitWrite();
+    preparedStatementOf(this.db, RAFT_RS_SQL.UPSERT_BOOTSTRAP_APPLIED_STATE).run(
+      groupId,
+      toExactInteger(RAFT_RS_ZERO_INDEX),
+      ...confStateColumns(confState),
+      toExactInteger(bootstrapIndex),
+      admissionIndex === null ? null : toExactInteger(admissionIndex),
+      toExactInteger(membershipGenerationIndex),
+    );
+    this.record(RAFT_RS_HOST_WRITE.CONF_STATE_AND_APPLIED, {groupId,
+      appliedIndex: RAFT_RS_ZERO_INDEX, confState, bootstrapIndex,
+      admissionIndex, membershipGenerationIndex});
+  }
+
+  /**
+   * Durably record the index of the applied entry that admitted this replica
+   * as a voter. Called inside the application transaction of that entry.
+   * @param {string} groupId - The group.
+   * @param {string} admissionIndex - The entry's index as a decimal string.
+   */
+  putAdmissionIndex(groupId, admissionIndex) {
+    this.admitWrite();
+    preparedStatementOf(this.db, RAFT_RS_SQL.UPDATE_ADMISSION_INDEX)
+      .run(toExactInteger(admissionIndex), groupId);
+  }
+
+  /**
+   * Durably store a snapshot and the configuration it carries.
+   * @param {string} groupId - The group.
+   * @param {Object} snapshot - A Ready snapshot from the core. Its optional
+   *   metadata.membershipGenerationIndex must come from the later checkpoint
+   *   owner; native SnapshotMetadata alone leaves it null.
+   */
+  putSnapshot(groupId, snapshot, membershipGenerationIndex = null) {
+    this.admitWrite();
+    const metadata = snapshot.metadata || {};
+    const snapshotIndex = metadata.index || RAFT_RS_ZERO_INDEX;
+    const generation = metadata.membershipGenerationIndex ??
+      membershipGenerationIndex;
+    const exactSnapshotIndex = toExactInteger(snapshotIndex);
+    const confState = metadata.confState || emptyConfState();
+    const appliedRow = preparedExactStatementOf(this.db, RAFT_RS_SQL.SELECT_APPLIED_STATE)
+      .get(groupId);
+    const exactGeneration = exactSnapshotMembershipGeneration({generation,
+      snapshotIndex: exactSnapshotIndex, confState, appliedRow});
+    preparedStatementOf(this.db, RAFT_RS_SQL.UPSERT_SNAPSHOT).run(
+      groupId,
+      exactSnapshotIndex,
+      toExactInteger(metadata.term || RAFT_RS_ZERO_INDEX),
+      snapshot.data === undefined ? null : snapshot.data,
+      ...confStateColumns(confState),
+      exactGeneration,
+    );
+    this.record(RAFT_RS_HOST_WRITE.SNAPSHOT, {
+      groupId,
+      index: snapshotIndex,
+      membershipGenerationIndex: generation === null ? null :
+        String(generation),
+    });
+  }
+
+  /**
+   * Read one group's whole durable Raft record. A table it cannot read is
+   * named on the error it throws (readRecordTable).
+   * @param {string} groupId - The group.
+   * @return {Object} {hardState, confState, appliedIndex, bootstrapIndex,
+   *   admissionIndex, entries, snapshot}; the two gate indices are decimal
+   *   strings, or null when the record holds none.
+   */
+  readDurableRecord(groupId) {
+    return readDurableRecordIn(this.db, groupId);
+  }
+
+  static readDurableRecordIn(db, groupId) {
+    return readDurableRecordIn(db, groupId);
+  }
+
+  // One read snapshot, no DDL or normalization before raw-row validation.
+  // A caller composing application observations may own the enclosing read
+  // transaction. The result describes that view; it grants no opening right.
+  static readRetainedHistoryIn(db, groupId) {
+    assertSQLiteConnection(db);
+    return db.transaction(() => readRetainedHistoryIn(db, groupId))();
+  }
+
+  /**
+   * The hard-state and applied-state rows of one group.
+   * @param {string} groupId - The group.
+   * @return {Object} {hardStateRow, appliedRow}, each undefined when absent.
+   * @private
+   */
+  readProgressRows(groupId) {
+    return {
+      hardStateRow: readRecordTable(RAFT_RS_TABLE.HARD_STATE, () =>
+        preparedExactStatementOf(this.db, RAFT_RS_SQL.SELECT_HARD_STATE).get(groupId)),
+      appliedRow: readRecordTable(RAFT_RS_TABLE.APPLIED_STATE, () =>
+        preparedExactStatementOf(this.db, RAFT_RS_SQL.SELECT_APPLIED_STATE).get(groupId)),
+    };
+  }
+
+  /**
+   * Read one group's durable progress without its log: the commit index of
+   * its hard state and its applied index.
+   * @param {string} groupId - The group.
+   * @return {Object} {commitIndex, appliedIndex} as decimal strings (zero
+   *   when the group has no such row).
+   */
+  readDurableProgress(groupId) {
+    const {hardStateRow, appliedRow} = this.readProgressRows(groupId);
+    return {
+      commitIndex: hardStateRow ?
+        fromExactInteger(hardStateRow.commit_index) : RAFT_RS_ZERO_INDEX,
+      appliedIndex: appliedRow ?
+        fromExactInteger(appliedRow.applied_index) : RAFT_RS_ZERO_INDEX,
+    };
+  }
+
+  /**
+   * Read one group's applied NORMAL proposals at or below the durable applied
+   * index, each decoded through the proposal codec. Read-only and DDL-free.
+   * @param {Object} db - An open better-sqlite3 database.
+   * @param {string} groupId - The group.
+   * @return {Array<Object>} Frozen {index, term, command} records in log order.
+   */
+  static readCommittedEntriesIn(db, groupId) {
+    const {present} = preparedStatementOf(db,
+      RAFT_RS_SQL.COUNT_LOG_AND_APPLIED_STATE_TABLES).get();
+    if (present !== LOG_AND_APPLIED_STATE_TABLE_COUNT) {
+      return [];
+    }
+    return preparedExactStatementOf(db, RAFT_RS_SQL.SELECT_APPLIED_PROPOSAL_ENTRIES)
+      .all(groupId, RAFT_RS_ENTRY_TYPE.NORMAL)
+      .map((row) => Object.freeze({
+        index: fromExactInteger(row.log_index),
+        term: fromExactInteger(row.term),
+        command: decodeCommittedProposal(
+          Buffer.from(row.data, PAYLOAD_ENCODING)),
+      }));
+  }
+
+  /**
+   * Read one group's durable applied index from an existing connection (read-only).
+   * @param {Object} db - An open better-sqlite3 database.
+   * @param {string} groupId - The group.
+   * @return {string|null} The applied index as a decimal string, or null.
+   */
+  static readAppliedIndexIn(db, groupId) {
+    const {present} = preparedStatementOf(db, RAFT_RS_SQL.COUNT_APPLIED_STATE_TABLE).get();
+    if (present === 0) {
+      return null;
+    }
+    const row = preparedExactStatementOf(db, RAFT_RS_SQL.SELECT_APPLIED_STATE).get(groupId);
+    return row ? fromExactInteger(row.applied_index) : null;
+  }
+
+  static encodeSnapshotWitnessData(maxCommittedHlc) {
+    return encodeSnapshotWitnessData(maxCommittedHlc);
+  }
+  static readCompactedMaxHlcIn(db, groupId) {
+    return readCompactedMaxHlcIn(db, groupId);
+  }
+  static readSnapshotIndexIn(db, groupId) {
+    return readSnapshotIndexIn(db, groupId);
+  }
+  readSnapshotIndex(groupId) {
+    assertSQLiteConnection(this.db);
+    return this.snapshotTablePresent && this.db.open ?
+      readPresentSnapshotIndexIn(this.db, groupId) : 0n;
+  }
+  compactCommittedPrefix(groupId, options) {
+    return compactRaftRsCommittedPrefix(this, groupId, options);
+  }
+
+  /**
+   * Whether the record's schema carries the participation gate columns.
+   * @return {string} A RAFT_RS_RECORD_COMPATIBILITY state.
+   */
+  recordCompatibility() {
+    const columns = new Set(readRecordTable(RAFT_RS_TABLE.APPLIED_STATE, () =>
+      this.db.prepare(RAFT_RS_SQL.SELECT_APPLIED_STATE_COLUMNS).all())
+      .map((row) => row.name));
+    if (columns.size === 0) {
+      return RAFT_RS_RECORD_COMPATIBILITY.TABLE_MISSING;
+    }
+    return RAFT_RS_PARTICIPATION_GATE_COLUMNS.every((column) =>
+      columns.has(column)) ? RAFT_RS_RECORD_COMPATIBILITY.COMPATIBLE :
+      RAFT_RS_RECORD_COMPATIBILITY.PRE_GATE;
+  }
+
+  /**
+   * Whether this group has a durable record to come back from.
+   * @param {string} groupId - The group.
+   * @return {boolean} Whether a record exists.
+   */
+  hasDurableRecord(groupId) {
+    return durableRecordExists(this.readDurableRecord(groupId));
+  }
+
+  /**
+   * Whether a group has a durable record in a database without opening a store.
+   * @param {Object} db - A better-sqlite3 database.
+   * @param {string} groupId - The group.
+   * @return {boolean} Whether a record exists.
+   */
+  static hasDurableRecordIn(db, groupId) {
+    const tablePresent = preparedStatementOf(db, RAFT_RS_SCHEMA_SQL.SELECT_TABLE_PRESENT);
+    if (!RAFT_RS_RECORD_TABLES.every((table) =>
+      tablePresent.get(table) !== undefined)) {
+      return false;
+    }
+    return durableRecordExists(readDurableRecordIn(db, groupId));
+  }
+}
+
+export {
+  RaftRsDurableStore,
+  commitDurably,
+};

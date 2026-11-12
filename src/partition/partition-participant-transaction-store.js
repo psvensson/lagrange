@@ -9,12 +9,13 @@
 // created with the partition, outside any command, identically on every
 // replica, by the open hook the lifecycle owner runs on each connection.
 
-import fs from 'node:fs';
 import Database from 'better-sqlite3';
+import {DURABLE_FILE_PRESENCE, readDurableFilePresence} from
+  '../storage/durable-file-presence.js';
 import {PARTICIPANT_COMMIT_OUTCOME} from '../constants/transactions.js';
 import {stampParticipantConnection} from './partition-participant-transaction-connection.js';
 import {RaftRsDurableStore} from '../raft/raft-rs-durable-store.js';
-import {preparedStatementOf} from '../storage/sqlite-prepared-statement-owner.js';
+import {assertSQLiteConnection, preparedStatementOf} from '../storage/sqlite-prepared-statement-owner.js';
 import {deepFreeze} from '../raft/raft-operation-port.js';
 import {RAFT_RS_RETAINED_ENTRY_KIND as ENTRY_KIND,
   RAFT_RS_RETAINED_ENTRY_PHASE as ENTRY_PHASE,
@@ -46,6 +47,7 @@ const ONE_ROW = 1;
  * @return {string} A PARTICIPANT_STORE_CONNECTION_STATE.
  */
 function participantStoreConnectionStateOf(db) {
+  if (db !== null && db !== undefined) assertSQLiteConnection(db);
   return db === null || db === undefined || db.open === false ?
     CONNECTION_STATE.CLOSED : CONNECTION_STATE.OPEN;
 }
@@ -87,6 +89,7 @@ const OUTCOME_OF_STATE = Object.freeze({
  * @param {Object} db - The partition's newly opened connection.
  */
 function openParticipantTransactionStore(db) {
+  assertSQLiteConnection(db);
   stampParticipantConnection(db);
   db.exec(SQL.CREATE_TABLE);
   db.exec(SQL.CREATE_STATE_INDEX);
@@ -196,6 +199,7 @@ function originHistoryOf(history, row, partitionId) {
  * @return {Object} Frozen named observation, never opening/admission authority.
  */
 function readPartitionWriteOriginHistory(db, partitionId) {
+  assertSQLiteConnection(db);
   if (db.inTransaction) {
     return Object.freeze({state: ORIGIN_STATE.UNAVAILABLE, reason: ORIGIN_REASON.TRANSACTION});
   }
@@ -215,6 +219,7 @@ function readPartitionWriteOriginHistory(db, partitionId) {
 // Compose with the native and other application owners in the caller's single
 // read snapshot. No connection stamp or initialization is permitted here.
 function readPartitionWriteOriginIn(db, partitionId, history) {
+  assertSQLiteConnection(db);
   if (!db.inTransaction) throw new Error(ORIGIN_REASON.TRANSACTION);
   const rows = readRetainedStoreRowsIn(db, {table: SQL.GENERATION_TABLE,
     select: SQL.SELECT_ALL_GENERATION, create: SQL.CREATE_GENERATION_TABLE});
@@ -227,6 +232,7 @@ function readPartitionWriteOriginIn(db, partitionId, history) {
 }
 
 function readParticipantTransactionCensusIn(db) {
+  assertSQLiteConnection(db);
   if (!db.inTransaction) throw new Error(ORIGIN_REASON.TRANSACTION);
   const rows = readRetainedStoreRowsIn(db, {table: SQL.TABLE,
     select: SQL.SELECT_ALL_PARTICIPANTS, create: SQL.CREATE_TABLE,
@@ -288,16 +294,22 @@ function isPartitionReserved(db) {
  * The durable participant custody of a partition database file, read on an
  * independent read-only connection (the removal owner's read once the
  * partition's own connection is released): ACTIVE while a PREPARED row
- * reserves it, IDLE when none does (no file, or no participant table:
- * nothing was ever PREPARED there), UNAVAILABLE when the file cannot be
- * read - never IDLE on a read that failed.
+ * reserves it, IDLE when none does (a positively absent file, or no
+ * participant table: nothing was ever PREPARED there), UNAVAILABLE when the
+ * file cannot be read or its presence cannot be established - never IDLE on
+ * a read or a lookup that failed.
  * @param {string} dbPath - The partition database file.
  * @return {string} A PARTICIPANT_TRANSACTION_CUSTODY.
  */
 function readDurableParticipantCustodyAt(dbPath) {
   try {
-    if (!fs.existsSync(dbPath)) {
-      return CUSTODY.IDLE;
+    // Only a positively absent file is IDLE: a lookup that failed (a
+    // directory that cannot be searched, a path through a non-directory)
+    // is UNAVAILABLE, as an unreadable file is.
+    const file = readDurableFilePresence(dbPath).presence;
+    if (file !== DURABLE_FILE_PRESENCE.PRESENT) {
+      return file === DURABLE_FILE_PRESENCE.ABSENT ? CUSTODY.IDLE :
+        CUSTODY.UNAVAILABLE;
     }
     const db = new Database(dbPath, {readonly: true, fileMustExist: true});
     try {

@@ -1,5 +1,5 @@
+import {openReplicaDatabaseFixture} from '../../helpers/replica-database-fixture.js';
 // Real operation port and SQLite; no substitute history or consensus owner.
-import Database from 'better-sqlite3';
 import {createRaftRsOperationPort} from '../../../src/raft/raft-rs-operation-port.js';
 import {RAFT_COMMITTED_ENTRY_APPLY_MODE, RAFT_OPERATION_PORT_REQUEST as REQUEST} from
   '../../../src/raft/raft-operation-port-request.js';
@@ -20,7 +20,8 @@ function historyRequest(db, overrides = {}) {
     snapshotCatchupNeeded: () => undefined, ...overrides};
 }
 export function historyDb(file) {
-  const db = new Database(file);
+  const db = openReplicaDatabaseFixture({dbPath: file,
+    groupId: HISTORY_ID.groupId, replicaIdentity: HISTORY_ID.peerId}).db;
   db.pragma('journal_mode=WAL'); db.pragma('synchronous=NORMAL');
   db.exec('CREATE TABLE IF NOT EXISTS history_witness (marker TEXT PRIMARY KEY, log_index INTEGER)');
   return db;

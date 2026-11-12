@@ -1,3 +1,4 @@
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 // Actual allocation, custody and operation-port owners. No public-startup,
 // native crash durability or complete handoff claim is made by these tests.
 import test from 'node:test';
@@ -5,7 +6,6 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import Database from 'better-sqlite3';
 import {createSeedOriginalAllocation} from
   '../../src/bootstrap/seed-original-allocation-declaration.js';
 import {RaftRsOriginalAllocationPreparation} from
@@ -59,7 +59,7 @@ function fixture(t) {
     fs.rmSync(dataDir, {recursive: true, force: true});
   });
   function native(member, opening, extra = {}) {
-    const db = new Database(member.dbPath, {fileMustExist: true});
+    const db = new SQLiteConnection(member.dbPath, {fileMustExist: true});
     const resource = {db, port: null};
     resources.push(resource);
     const request = {groupId: member.groupId, peerId: member.replicaId,

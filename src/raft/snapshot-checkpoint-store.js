@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {randomBytes} from 'node:crypto';
 
-import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../storage/sqlite-prepared-statement-owner.js';
 
 import {
   ensureDirectory,
@@ -383,7 +383,7 @@ async function createSqliteStateMachineCheckpoint(options) {
   const stagingPayload = path.join(stagingDir, RAFT_CHECKPOINT_PAYLOAD_FILE);
   try {
     await db.backup(stagingPayload);
-    const copyDb = new Database(stagingPayload);
+    const copyDb = new SQLiteConnection(stagingPayload);
     let prepared;
     try {
       prepared = options.raftRsGroupId ?
@@ -459,7 +459,7 @@ function validatePayloadAgainstDescriptor(checkpointDir, descriptor) {
   }
   if (descriptor.payloadKind ===
       RAFT_CHECKPOINT_PAYLOAD_KIND.RAFT_RS_REPLICA_IMAGE) {
-    const payloadDb = new Database(payloadPath, {readonly: true});
+    const payloadDb = new SQLiteConnection(payloadPath, {readonly: true});
     try {
       let reservations;
       try {

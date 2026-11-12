@@ -1,3 +1,4 @@
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 // The production release recipient must keep its one attempt pending after
 // ENABLE until every current native voter has published the committed origin.
 // The transport fault below acknowledges the exact commit carriers while
@@ -8,7 +9,6 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import {test} from 'node:test';
 
-import Database from 'better-sqlite3';
 
 import {formAdmittedGroup} from './partition-admitted-group-fixture.js';
 import {attachPartitionReleaseOwners} from './partition-release-fixture.js';
@@ -125,7 +125,7 @@ function lastIndexOf(record) {
 // A passive read view: no operation-port command, facts read, status read or
 // tick can be caused by this helper.
 function durableView(dbPath, partitionId = PARTITION_ID) {
-  const db = new Database(dbPath, {readonly: true});
+  const db = new SQLiteConnection(dbPath, {readonly: true});
   try {
     const store = Object.create(RaftRsDurableStore.prototype);
     store.db = db;

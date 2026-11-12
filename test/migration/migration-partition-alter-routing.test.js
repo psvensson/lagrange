@@ -1,8 +1,8 @@
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import Database from 'better-sqlite3';
 
 import {test} from '../../src/test-helpers/tap.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
@@ -24,7 +24,7 @@ const PARTITION_ID = 'test-partition';
 // the store's DDL-free committed-entry reader: the operation the routed ALTER
 // committed as is the log's, never the partition's in-memory view.
 function readLastAppliedCommandIndependently(dbPath) {
-  const independent = new Database(dbPath, {readonly: true});
+  const independent = new SQLiteConnection(dbPath, {readonly: true});
   try {
     const applied =
       RaftRsDurableStore.readCommittedEntriesIn(independent, PARTITION_ID);

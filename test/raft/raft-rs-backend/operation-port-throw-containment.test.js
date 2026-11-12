@@ -1,3 +1,4 @@
+import {openReplicaDatabaseFixture} from '../../helpers/replica-database-fixture.js';
 // One containment boundary at the port (quest
 // raft-rs-single-path-partition-cutover, F-ah (b) after verification round
 // 5): a throw the runtime owner did not type - here the caller's own event
@@ -18,7 +19,6 @@ import {test} from 'node:test';
 import {setImmediate as nextEventLoopTurn} from 'node:timers/promises';
 import {VirtualTimeSource} from '../../../src/time/time-source.js';
 
-import Database from 'better-sqlite3';
 
 import {RAFT_ROLE} from '../../../src/raft/constants.js';
 import {
@@ -78,7 +78,8 @@ async function advanceScheduledClock(clock, spanMs) {
 
 // A lone replica's port, from the request PartitionService hands its
 // backend (the contract owner's field names).
-function lonePort(groupId, {deferElection, db = new Database(IN_MEMORY), timeSource = null}) {
+function lonePort(groupId, {deferElection, db = openReplicaDatabaseFixture({dbPath: IN_MEMORY,
+  groupId, replicaIdentity: `${groupId}-r1`}).db, timeSource = null}) {
   const replicaId = `${groupId}-r1`;
   const port = createRaftRsOperationPort({
     [RAFT_OPERATION_PORT_REQUEST.GROUP_ID]: groupId,

@@ -1,10 +1,10 @@
+import {openReplicaDatabaseFixture} from '../../helpers/replica-database-fixture.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import {test} from 'node:test';
 import {fileURLToPath} from 'node:url';
 
-import Database from 'better-sqlite3';
 
 import {PartitionService} from
   '../../../src/partition/partition-service.js';
@@ -55,7 +55,7 @@ function minimalPartitionRequest(overrides = {}) {
     [RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_PEER_IDS]: [REPLICA_ID],
     [RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]:
       genesisStamp([REPLICA_ID], {}),
-    [RAFT_OPERATION_PORT_REQUEST.DURABLE_STORAGE]: new Database(':memory:'),
+    [RAFT_OPERATION_PORT_REQUEST.DURABLE_STORAGE]: openReplicaDatabaseFixture({dbPath: ':memory:', groupId: PARTITION_ID, replicaIdentity: REPLICA_ID}).db,
     [RAFT_OPERATION_PORT_REQUEST.TIMING]: TIMING,
     [RAFT_OPERATION_PORT_REQUEST.SUBSTRATE]: {},
     [RAFT_OPERATION_PORT_REQUEST.DEFER_ELECTION]: true,

@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {randomBytes} from 'node:crypto';
 import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../storage/sqlite-prepared-statement-owner.js';
 import {ENTITY_TYPE} from '../constants/addresses.js';
 import {ensureDirectory, exactKeys, fsyncDirectory, readCanonicalJson,
   sha256Digest, writeAtomicDurable} from
@@ -394,7 +395,7 @@ function raftRsInstalledImageMatches(checkpointsRoot, replicaDbPath, marker) {
   if (checkpoint.outcome !== RAFT_CHECKPOINT_VALIDATION_OUTCOME.VALID ||
       checkpoint.descriptor.payloadKind !==
         RAFT_CHECKPOINT_PAYLOAD_KIND.RAFT_RS_REPLICA_IMAGE) return false;
-  const db = new Database(replicaDbPath, {readonly: true});
+  const db = new SQLiteConnection(replicaDbPath, {readonly: true});
   try {
     const record = RaftRsDurableStore.readDurableRecordIn(
       db, checkpoint.descriptor.raftRs.groupId);
@@ -608,7 +609,7 @@ async function requestSnapshotInstall(options) {
   if (sha256Digest(stagedBytes) !== validation.descriptor.payloadDigest) {
     return rejectInstall(checkpointsRoot, marker, REJECTION.STAGING_DIGEST_MISMATCH);
   }
-  const stagingDb = new Database(stagingPath(checkpointsRoot));
+  const stagingDb = new SQLiteConnection(stagingPath(checkpointsRoot));
   try {
     populateStagedInstallDb({stagingDb, descriptor: validation.descriptor,
       options, marker, installId, localElection, raftRsImage, followerCatchup,

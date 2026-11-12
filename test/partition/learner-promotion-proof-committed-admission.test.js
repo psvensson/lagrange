@@ -32,7 +32,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -193,7 +193,7 @@ function createLeader(_t, {cacheRows = [], role = RAFT_ROLE.LEADER,
   dbFile} = {}) {
   const file = dbFile ?? path.join(
     fs.mkdtempSync(path.join(os.tmpdir(), TEMP_PREFIX)), 'replica.db');
-  const db = new Database(file);
+  const db = new SQLiteConnection(file);
   const registry = new RaftRsPeerIdentityRegistry(db);
   registry.registerReplica(LEADER_REPLICA);
   const partition = new PartitionService(withFoundingStamp({

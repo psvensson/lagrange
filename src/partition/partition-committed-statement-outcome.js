@@ -46,6 +46,8 @@
 // identity", never as a row id. committedStatementResult applies it.
 
 import {
+  PARTITION_SERVICE_ERROR_MSG, PARTITION_SERVICE_EVENT,
+  PARTITION_SERVICE_LOG_MSG, PARTITION_SERVICE_VALUE,
   PARTITION_COMMITTED_COMMAND_ERROR_CODE,
   PARTITION_COMMITTED_COMMAND_OUTCOME,
 } from './partition-service-constants.js';
@@ -58,8 +60,8 @@ import {
   PARTITION_SETTLED_REPLAY,
   PARTITION_SQLITE_RESULT_CODE,
 } from './partition-committed-statement-outcome-constants.js';
-import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
-import {preparedStatementOf} from '../storage/sqlite-prepared-statement-owner.js';
+import {buildDurableCommitWitness} from './partition-write-kernel.js';
+import {assertSQLiteConnection, preparedStatementOf} from '../storage/sqlite-prepared-statement-owner.js';
 import {RETAINED_STORE_ERROR, retainedStoreError, readRetainedStoreRowsIn,
   isStoredInteger, isStoredNullableText, isStoredNullableInteger} from
   './partition-retained-store-observation.js';
@@ -67,14 +69,6 @@ import {
   PARTITION_STATEMENT_REFUSAL_CODE,
   refusalLayerFieldOf,
 } from './partition-statement-admission-constants.js';
-
-const {
-  PARTITION_SERVICE_ERROR_MSG,
-  PARTITION_SERVICE_EVENT,
-  PARTITION_SERVICE_LOG_MSG,
-  PARTITION_SERVICE_VALUE,
-  buildDurableCommitWitness,
-} = PARTITION_SERVICE_SHARED;
 
 const NO_COMMITTED_STATEMENT_KEY = null;
 
@@ -94,6 +88,7 @@ function committedStatementEntryKey(command) {
 
 // Exact read-only census. Positions/result integers never round through Number.
 function readCommittedStatementCensusIn(db) {
+  assertSQLiteConnection(db);
   const sql = PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL;
   const rows = readRetainedStoreRowsIn(db, {table: sql.TABLE,
     select: sql.SELECT_ALL, create: sql.CREATE_TABLE});
@@ -125,6 +120,7 @@ function readCommittedStatementCensusIn(db) {
  * @param {Object} db - The partition's connection.
  */
 function createCommittedStatementOutcomeTable(db) {
+  assertSQLiteConnection(db);
   db.exec(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.CREATE_TABLE);
   const present = new Set(db
     .prepare(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.TABLE_COLUMNS)
@@ -365,6 +361,7 @@ function settleRecordedCommittedStatement(service, {recorded, command,
  */
 function settleFailedCommittedStatement(service, {error, command, entryKey,
   index, term, identity, afterCommit, afterRollback}) {
+  assertSQLiteConnection(service.db);
   if (!isDeterministicStatementFailure(error, service.db)) {
     const failure = statementEnvironmentFailure(error);
     afterRollback(() => service.rejectCommittedWrite(command.entryId, failure));

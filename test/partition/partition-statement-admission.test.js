@@ -1,3 +1,4 @@
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 /**
  * TX1 (quest replicated-transaction-decision-and-apply) participant increment
  * 2: witnesses of the statement-admission owner
@@ -334,7 +335,7 @@ test('TX1 admission A3: single-quoted names (a column list, an UPDATE or DO UPDA
 
 // The real group's applied index, read from a replica's database file.
 function appliedIndexOf(group, member, partitionId) {
-  const db = new Database(group.dbFileOf(member), {readonly: true});
+  const db = new SQLiteConnection(group.dbFileOf(member), {readonly: true});
   try {
     return Number(RaftRsDurableStore.readAppliedIndexIn(db, partitionId));
   } finally {

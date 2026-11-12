@@ -8,7 +8,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import {test} from '../../src/test-helpers/tap.js';
-import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 import {
   openParticipantTransactionStore,
 } from
@@ -290,7 +290,7 @@ test('ReplicaHandler owner-path bypass regressions: removal', async (t) => {
       const drainGate = new Promise((resolve) => {
         releaseDrain = resolve;
       });
-      const db = new Database(':memory:'); // participant custody: idle
+      const db = new SQLiteConnection(':memory:'); // participant custody: idle
       openParticipantTransactionStore(db);
       t.teardown(() => db.close());
       const partitionService = {
