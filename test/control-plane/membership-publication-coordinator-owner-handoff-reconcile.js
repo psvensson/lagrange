@@ -216,7 +216,7 @@ test('readPublicationPlanningSnapshot uses authoritative membership evidence for
       nodeId: PUBLICATION_CONVERGENCE_AUTH_REFRESH_NODE_ID,
       controlPlanePublicationsOwner: {
         async listPublications() {
-          return {rows: [latestPublicationRow]};
+          return {success: true, rows: [latestPublicationRow]};
         },
       },
       authoritativeControlPlaneView: {
@@ -314,7 +314,7 @@ test('reconcileClusterMembership publishes explicit handoff target without autho
         ],
       controlPlanePublicationsOwner: publicationsOwnerOverRows({
         async listPublications() {
-          return {rows: [latestPublicationRow]};
+          return {success: true, rows: [latestPublicationRow]};
         },
         async getPublication(_publicationId, options = {}) {
           publicationReadOptions.push(options);
@@ -487,7 +487,7 @@ test('reconcileActiveGateMembershipPublication owns handoff write visibility',
       nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
       controlPlanePublicationsOwner: publicationsOwnerOverRows({
         async listPublications() {
-          return {rows: [latestPublicationRow]};
+          return {success: true, rows: [latestPublicationRow]};
         },
         async getPublication(_publicationId, options = {}) {
           publicationReadOptions.push(options);
@@ -687,7 +687,7 @@ test('reconcileActiveGateMembershipPublication widens seed-only active-gate hand
       nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
       controlPlanePublicationsOwner: publicationsOwnerOverRows({
         async listPublications() {
-          return {rows: [seedOnlyPublicationRow]};
+          return {success: true, rows: [seedOnlyPublicationRow]};
         },
         async getPublication() {
           return persistedRows[persistedRows.length - 1] ||
@@ -778,7 +778,7 @@ test('reconcileClusterMembership consumes active-gate owner reconcile handoff',
       nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
       controlPlanePublicationsOwner: publicationsOwnerOverRows({
         async listPublications() {
-          return {rows: [latestPublicationRow]};
+          return {success: true, rows: [latestPublicationRow]};
         },
         async getPublication() {
           return persistedRows[persistedRows.length - 1] ||
@@ -935,7 +935,7 @@ test('reconcileActiveGateMembershipPublication defers stale durable readback',
       reconcileQueue: createRecordingReconcileQueue({pending, enqueued}),
       controlPlanePublicationsOwner: publicationsOwnerOverRows({
         async listPublications() {
-          return {rows: [latestPublicationRow]};
+          return {success: true, rows: [latestPublicationRow]};
         },
         async getPublication() {
           return latestPublicationRow;
@@ -1119,7 +1119,7 @@ test('reconcileActiveGateMembershipPublication bounds retryable write failure de
       reconcileQueue: createRecordingReconcileQueue({pending, enqueued}),
       controlPlanePublicationsOwner: publicationsOwnerOverRows({
         async listPublications() {
-          return {rows: [latestPublicationRow]};
+          return {success: true, rows: [latestPublicationRow]};
         },
         async getPublication() {
           return latestPublicationRow;
@@ -1218,7 +1218,7 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_TEST_NAME,
       reconcileQueue: createRecordingReconcileQueue({pending, enqueued}),
       controlPlanePublicationsOwner: publicationsOwnerOverRows({
         async listPublications() {
-          return {rows: [latestPublicationRow]};
+          return {success: true, rows: [latestPublicationRow]};
         },
         async getPublication() {
           return latestPublicationRow;

@@ -59,7 +59,7 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
         nodeId: 'node-1',
         controlPlanePublicationsOwner: publicationsOwnerOverRows({
           async listPublications() {
-            return {rows: [latestPublicationRow]};
+            return {success: true, rows: [latestPublicationRow]};
           },
           // The durable read the owner's guarded write is computed from.
           async getPublication(publicationId) {
@@ -218,7 +218,7 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
         nodeId: 'node-1',
         controlPlanePublicationsOwner: publicationsOwnerOverRows({
           async listPublications() {
-            return {rows: [latestPublicationRow]};
+            return {success: true, rows: [latestPublicationRow]};
           },
           // The durable read the owner's guarded write is computed from.
           async getPublication(publicationId) {
@@ -366,7 +366,7 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
         nodeId: 'node-1',
         controlPlanePublicationsOwner: publicationsOwnerOverRows({
           async listPublications() {
-            return {rows: [durableRow]};
+            return {success: true, rows: [durableRow]};
           },
           async getPublication(publicationId, options) {
             t.equal(
@@ -560,7 +560,7 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
           },
           async listPublications() {
             authoritativeReadCount += 1;
-            return {rows: [latestPublicationRow]};
+            return {success: true, rows: [latestPublicationRow]};
           },
           // The durable read the owner's guarded write is computed from.
           async getPublication(publicationId) {
@@ -676,7 +676,7 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
         controlPlanePublicationsOwner: publicationsOwnerOverRows({
           async listPublications(options = {}) {
             authoritativeReadOptions = options;
-            return {rows: [latestPublicationRow]};
+            return {success: true, rows: [latestPublicationRow]};
           },
           async getPublication(publicationId) {
             return latestPublicationRow.publication_id === publicationId ?
@@ -1105,7 +1105,7 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
       nodeId: nodeOneId,
       controlPlanePublicationsOwner: {
         async listPublications() {
-          return {rows: [latestPublicationRow]};
+          return {success: true, rows: [latestPublicationRow]};
         },
       },
       authoritativeControlPlaneView: {
@@ -1282,7 +1282,7 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
       nodeId: nodeOneId,
       controlPlanePublicationsOwner: {
         async listPublications() {
-          return {rows: [latestPublicationRow]};
+          return {success: true, rows: [latestPublicationRow]};
         },
       },
       authoritativeControlPlaneView: {

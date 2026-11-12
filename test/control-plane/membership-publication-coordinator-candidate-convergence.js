@@ -663,7 +663,7 @@ test(MEMBERSHIP_PUBLICATION_RECONCILE_TEST_NAME, async (t) => {
     resolveIsControlPlanePublicationsWriteLeader: () => true,
     controlPlanePublicationsOwner: publicationsOwnerOverRows({
       async listPublications() {
-        return {rows: [latestPublicationRow]};
+        return {success: true, rows: [latestPublicationRow]};
       },
       // The durable read the owner's guarded write is computed from.
       async getPublication(publicationId) {

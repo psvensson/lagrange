@@ -327,7 +327,7 @@ test('the summary refresh that clears the durable gap enqueues the trimming reco
       resolveIsControlPlanePublicationsWriteLeader: () => true,
       controlPlanePublicationsOwner: publicationsOwnerOverRows({
         async listPublications() {
-          return {rows: [durableRow]};
+          return {success: true, rows: [durableRow]};
         },
         // The durable read the owner's guarded write is computed from.
         async getPublication(publicationId) {

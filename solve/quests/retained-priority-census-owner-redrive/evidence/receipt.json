@@ -1,0 +1,262 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "sourceHead": "fa70987b2833031ffe6054a9b12ee86bbb71d52c",
+  "productionMatchesHead": false,
+  "command": [
+    "npm",
+    "run",
+    "test:file",
+    "--",
+    "test/control-plane/priority-partition-census-state.test.js"
+  ],
+  "execution": {
+    "label": "final-green",
+    "command": [
+      "npm",
+      "run",
+      "test:file",
+      "--",
+      "test/control-plane/priority-partition-census-state.test.js"
+    ],
+    "startedAtUtc": "2026-11-12T10:41:11.732878+00:00",
+    "endedAtUtc": "2026-11-12T10:41:12.662558+00:00",
+    "exitCode": 0
+  },
+  "testFileDigests": {
+    "src/control-plane/membership-publication-coordinator-reconcile-helpers.js": "f585877c2af85c1904c154e35ddeb47384af0d5af59a49c2c5a2574cbb778880",
+    "src/control-plane/membership-publication-coordinator-reads.js": "5b22aa46d89fc493b0cf528a014e203020c5b213267981dfd5e7f06eda5b8be5",
+    "test/control-plane/priority-partition-census-state.test.js": "a9352eba7dcb590d05917774b00b72d267a95cd008e30e3f177afe4b1094c63d",
+    "test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js": "899bc73feb910591e4863e930e1714f78cc46dd2def4853d38bd424e8a61e426",
+    "test/control-plane/membership-count-neutral-steady-trim.test.js": "5d4c652a037a58c14f6428fb8bfcf6aa061f926da748b833f67d3eafe5705e8e",
+    "test/control-plane/membership-publication-candidate-planning-surface.test.js": "74f99df83669510ae23d2d162ed2e386f9114339edf62f301f1048c9867d4c26",
+    "test/control-plane/membership-publication-coordinator-candidate-convergence.js": "c361d995327ed6266ad62c137ef80c210249fa46dcd2e19e575e322ad32df11f",
+    "test/control-plane/membership-publication-coordinator-diagnostics-read-mode.test.js": "3108a1250bfe1a6ac2fa6a5d2add4d8ffd33942b6ae8c3309178841fe5a31feb",
+    "test/control-plane/membership-publication-coordinator-owner-handoff-reconcile.js": "d86c85b92e8727d73a3b889f2234b21a69682ad7770dfa13650ec32d659c2105",
+    "test/control-plane/membership-publication-coordinator-priority-refresh-test-cases.js": "23819b192f591591f41a5b3ebf7af105099a7924c601e2236b6e991224b8e7e6",
+    "test/control-plane/membership-publication-coordinator-reconcile-queue-merge.js": "1799b0427a86aaa16248700f54574afc9517efbb892102fe7888262c4891bb25",
+    "test/control-plane/membership-publication-coordinator-recovery-eligible-reopen.js": "489dfbb794d0aca1b99fe49126fb409a4b0200c899c6b1ef084a188c8d475bab",
+    "test/control-plane/membership-publication-coordinator-tail-ack-for-node-test-cases.js": "6aff4de5e869f18e5e98fdc26cce6ce38807be1f1ec1ec4125b24440641cf2d3",
+    "test/control-plane/membership-publication-coordinator-tail-final-test-cases.js": "f5e1772416afc82f5dffeb7fa5cc973497ea5675f09db1fb0abb6c9172a12991",
+    "test/control-plane/membership-publication-coordinator-tail-more-test-cases.js": "142721296d14abbcb1f754bc55a26a1d5f1561417a4484c22cc18c68df9fb815",
+    "test/control-plane/membership-publication-coordinator-tail-test-cases.js": "67b64404d473562e568cd9dcf4dcc225cf1c1639a2678dff80b0733f4122f422"
+  },
+  "receipts": [
+    {
+      "id": "retained-absent-periodic-owner-redrive",
+      "passed": true,
+      "caseNumbers": [
+        7,
+        8,
+        10
+      ]
+    },
+    {
+      "id": "not-derived-normal-owner-continuation",
+      "passed": true,
+      "caseNumbers": [
+        9
+      ]
+    },
+    {
+      "id": "serve-held-until-guarded-derivation",
+      "passed": true,
+      "caseNumbers": [
+        8,
+        9,
+        10
+      ]
+    },
+    {
+      "id": "publication-and-read-absence-distinguished",
+      "passed": true,
+      "caseNumbers": [
+        11,
+        12,
+        13
+      ]
+    },
+    {
+      "id": "derived-semantics-and-driver-idempotency",
+      "passed": true,
+      "caseNumbers": [
+        8,
+        9,
+        10,
+        18,
+        19
+      ]
+    },
+    {
+      "id": "authoritative-publication-observation-and-recovery",
+      "passed": true,
+      "caseNumbers": [
+        13,
+        14,
+        15,
+        16,
+        17
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "number": 1,
+      "name": "the census state reader names derived, not derived and absent",
+      "passed": true
+    },
+    {
+      "number": 2,
+      "name": "a NOT_DERIVED summary survives the row codec and normalization, and never equals a census",
+      "passed": true
+    },
+    {
+      "number": 3,
+      "name": "every reader of the spread rule holds on a NOT_DERIVED summary",
+      "passed": true
+    },
+    {
+      "number": 4,
+      "name": "a candidate planned without census inputs asks for no summary refresh, and the row admitted from it states NOT_DERIVED",
+      "passed": true
+    },
+    {
+      "number": 5,
+      "name": "the owner's admission never admits a row without a summary, and admits a derived census as it is",
+      "passed": true
+    },
+    {
+      "number": 6,
+      "name": "the owner's refresh never replaces a derived census with NOT_DERIVED, and states NOT_DERIVED on a row that has no summary",
+      "passed": true
+    },
+    {
+      "number": 7,
+      "name": "the owner driver asks for a full reconcile while the latest durable census is absent or NOT_DERIVED, and for nothing once derived",
+      "passed": true
+    },
+    {
+      "number": 8,
+      "name": "retained absent census: real periodic driver repairs through the owner before serve",
+      "passed": true
+    },
+    {
+      "number": 9,
+      "name": "retained not_derived census: real periodic driver repairs through the owner before serve",
+      "passed": true
+    },
+    {
+      "number": 10,
+      "name": "retained ABSENT derives an unsatisfied census from deficient current rows and stays closed",
+      "passed": true
+    },
+    {
+      "number": 11,
+      "name": "absent and malformed publication identities are not a retained absent census",
+      "passed": true
+    },
+    {
+      "number": 12,
+      "name": "unavailable or malformed authoritative input-table reads create no census request",
+      "passed": true
+    },
+    {
+      "number": 13,
+      "name": "the direct authoritative owner answers successful empty publication history as absence",
+      "passed": true
+    },
+    {
+      "number": 14,
+      "name": "publication-unavailable: direct reader refuses, real driver stays idle, restored source repairs",
+      "passed": true
+    },
+    {
+      "number": 15,
+      "name": "publication-malformed: direct reader refuses, real driver stays idle, restored source repairs",
+      "passed": true
+    },
+    {
+      "number": 16,
+      "name": "publication-missing-outcome: direct reader refuses, real driver stays idle, restored source repairs",
+      "passed": true
+    },
+    {
+      "number": 17,
+      "name": "publication-failed-with-rows: direct reader refuses, real driver stays idle, restored source repairs",
+      "passed": true
+    },
+    {
+      "number": 18,
+      "name": "DERIVED satisfied=true keeps its existing driver and actual serve semantics",
+      "passed": true
+    },
+    {
+      "number": 19,
+      "name": "DERIVED satisfied=false keeps its existing driver and actual serve semantics",
+      "passed": true
+    }
+  ],
+  "evidence": {
+    "red": {
+      "sourceHead": "fa70987b2833031ffe6054a9b12ee86bbb71d52c",
+      "caseCount": 19,
+      "pass": 11,
+      "fail": 8,
+      "cancelled": 0,
+      "rawTap": "/tmp/lagrange-retained-absent-census-astra-20261112/final-red-tap/test/control-plane/priority-partition-census-state.test.js.tap",
+      "sha256": "b0d07baa332007990a8ee06f8d5e567fa28c42bc36f4d3fdd78b9b559c1b1e0f",
+      "testSha256": "a9352eba7dcb590d05917774b00b72d267a95cd008e30e3f177afe4b1094c63d"
+    },
+    "green": {
+      "caseCount": 19,
+      "pass": 19,
+      "fail": 0,
+      "cancelled": 0,
+      "rawTap": "/tmp/lagrange-retained-absent-census-astra-20261112/final-green-tap/test/control-plane/priority-partition-census-state.test.js.tap",
+      "sha256": "ce9efe8f0e4017d8631a22029f4cb5311073fdefbc3ffcfee660aa230961f180"
+    },
+    "callerProof": {
+      "files": 6,
+      "passed": 6,
+      "failed": 0,
+      "reportedAssertions": 1143,
+      "stdout": "/tmp/lagrange-retained-absent-census-astra-20261112/caller-green.stdout",
+      "sha256": "ea55f9a46ae9304a34f690f8dba06015c7f4ab181cfc451c6678439649781bbc",
+      "rawTapDirectory": "/tmp/lagrange-retained-absent-census-astra-20261112/caller-green-tap",
+      "applicability": "All two production files and thirteen migrated fixture files are byte-identical to that measured caller candidate; only the dedicated census witness changed afterward. Other tracked source remains base HEAD."
+    },
+    "initialSealRedReceiptSha256": "ec1d6f4a81e5474b9a2ede3d1ad73c75f82430e47ff59482fb3266e804af02a5"
+  },
+  "limitations": [
+    "Owner-backed gateway component and coordinator reconstruction; not native process-crash or distributed release acceptance.",
+    "First lint failures, one-write fixture assumption and 3000 ms publication-read timeout remain preserved."
+  ],
+  "guardrails": {
+    "decisionBoundary": 0,
+    "runtimeGrammar": 0,
+    "newLiterals": 0,
+    "opaqueConstantNames": 0,
+    "fileSizeViolations": 0,
+    "scopedCyclomaticInheritedSites": 3,
+    "readTableRowsComplexity": {
+      "before": 25,
+      "after": 21
+    },
+    "scopedCognitiveViolations": 0,
+    "metadataGateway": {
+      "baseExitCode": 1,
+      "candidateExitCode": 1,
+      "outputIdentical": true,
+      "inheritedViolations": [
+        "src/cache/system-table-cache-source-image.js: direct-cache-mutation",
+        "src/cdc/cdc-recipient-lifecycle.js: direct-authoritative-read-bypass"
+      ]
+    }
+  },
+  "review": {
+    "state": "pending-independent-review",
+    "authorModel": "gpt-6-astra",
+    "effort": "max",
+    "commitPushIntegrationAuthorized": false
+  }
+}

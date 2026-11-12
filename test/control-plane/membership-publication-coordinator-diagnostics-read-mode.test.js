@@ -78,6 +78,7 @@ function buildCoordinatorWithPublicationOwner(options = {}) {
       async listPublications(readOptions = {}) {
         listPublicationCalls.push(readOptions);
         return {
+          success: true,
           rows: options.ownerPublicationRows || EMPTY_ROWS,
         };
       },

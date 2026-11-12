@@ -744,7 +744,7 @@ test('AdminControlSnapshot handoff reconcile defers when publication readback is
     const upsertedRows = [];
     const publicationOwner = publicationsOwnerOverRows({
       async listPublications() {
-        return [
+        return {success: true, rows: [
           {
             publication_id:
               ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_STALE_PUBLICATION_ID,
@@ -764,7 +764,7 @@ test('AdminControlSnapshot handoff reconcile defers when publication readback is
               ...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
             ],
           },
-        ];
+        ]};
       },
       async getPublication() {
         publicationReadbackAttempts += 1;

@@ -80,6 +80,17 @@ const LOCAL_STR_AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE =
 const LOCAL_STR_AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE_CODE =
   'AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE';
 
+function authoritativeRowSourceUnavailable(result) {
+  const message = result?.error || LOCAL_STR_AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE;
+  const error = new Error(
+    typeof message === LOCAL_STR_STRING ?
+      message : LOCAL_STR_AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE,
+  );
+  error.code = LOCAL_STR_AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE_CODE;
+  error.cause = result?.error;
+  return error;
+}
+
 async function fetchDirectOwnerRows(
   owner,
   options,
@@ -101,11 +112,14 @@ async function fetchDirectOwnerRows(
   }
   if (typeof owner.listPublications === 'function') {
     const publicationReadOptions = buildPublicationListReadOptions(options);
+    const result = await owner.listPublications(publicationReadOptions);
+    if (!isAuthoritativeControlPlaneRowReadSuccessful(result) ||
+        !Array.isArray(result.rows)) {
+      throw authoritativeRowSourceUnavailable(result);
+    }
     return {
       handled: true,
-      rows: normalizeTableRowsResult(
-        await owner.listPublications(publicationReadOptions),
-      ),
+      rows: result.rows,
     };
   }
   return {handled: false, rows: []};
@@ -242,16 +256,7 @@ class MembershipPublicationCoordinatorReads {
         return authoritativeRows;
       }
       if (isPlanningRead) {
-        const message = result?.error ||
-          LOCAL_STR_AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE;
-        const error = new Error(
-          typeof message === LOCAL_STR_STRING ?
-            message :
-            LOCAL_STR_AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE,
-        );
-        error.code = LOCAL_STR_AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE_CODE;
-        error.cause = result?.error;
-        throw error;
+        throw authoritativeRowSourceUnavailable(result);
       }
     }
     if (typeof this.systemTableCache?.getAll === 'function') {

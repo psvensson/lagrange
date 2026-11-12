@@ -1,0 +1,35 @@
+{
+  "schema": "solve-quest/2",
+  "id": "retained-priority-census-owner-redrive",
+  "class": "fix",
+  "statement": "On restart with a positively present authoritative membership publication whose canonical priority census is ABSENT or NOT_DERIVED, the existing periodic driver requests the normal full reconcile even with no membership or acknowledgement deficit. Canonical current rows derive the census and the existing guarded publication writer lands it before the actual ServeEligibilityOwner may serve. The direct publications-owner read consumes explicit successful row observations: answered-empty is absence; unavailable or malformed observations refuse without an invented empty list, and finite restored availability resumes the same existing owner path. DERIVED satisfied and unsatisfied semantics and repeated-driver idempotency remain unchanged.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/retained-priority-census-owner-redrive/evidence/receipt.json",
+      "requiredReceipts": [
+        "retained-absent-periodic-owner-redrive",
+        "not-derived-normal-owner-continuation",
+        "serve-held-until-guarded-derivation",
+        "publication-and-read-absence-distinguished",
+        "derived-semantics-and-driver-idempotency",
+        "authoritative-publication-observation-and-recovery"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "single-census-owner",
+      "statement": "Keep canonical census decoding, derivation, guarded writer and committed serve decision authoritative. No legacy reader, alternate derivation, fabricated satisfaction, new default, polling, deadline or readiness change. No unrelated table mutation. Election wake gaps remain separately owned."
+    },
+    {
+      "id": "bounded-authority",
+      "statement": "No commits, pushes or integration. Focused thermal/flock verification only. Preserve every first failure and distinguish the expected causal red from fixture or validation failures. The lower-model first ESLint failure was preserved and handed back; user-authorized gpt-6-astra/max continuation owns this repair. Freeze the completed candidate for distinct independent review."
+    },
+    {
+      "id": "authorized-read-boundary-expansion",
+      "statement": "Parent authorized the existing direct-owner authoritative read validation interaction after the preserved 3000 ms failure. Production scope is reconcile-helpers.js and coordinator-reads.js only; align success-intended caller fixture observations with the canonical gateway shape. No new owner format, success inference, fallback/cache substitute or timeout widening. Review includes producer, all direct reader consumers and finite recovery."
+    }
+  ],
+  "sealedAt": "fa70987b2833031ffe6054a9b12ee86bbb71d52c"
+}

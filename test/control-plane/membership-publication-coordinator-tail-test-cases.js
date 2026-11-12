@@ -885,6 +885,7 @@ export function registerMembershipPublicationCoordinatorTailTests({
         controlPlanePublicationsOwner: {
           async listPublications() {
             return {
+              success: true,
               rows: [
                 {
                   publication_id: 'publication-11',

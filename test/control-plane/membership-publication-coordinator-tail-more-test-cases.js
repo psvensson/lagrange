@@ -97,6 +97,7 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
           },
           async listPublications() {
             return {
+              success: true,
               rows: [
                 {
                   publication_id: 'publication-12',
@@ -155,7 +156,7 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
         nodeId: 'node-1',
         controlPlanePublicationsOwner: publicationsOwnerOverRows({
           async listPublications() {
-            return {rows: [latestPublicationRow]};
+            return {success: true, rows: [latestPublicationRow]};
           },
           // The durable read the owner's guarded write is computed from.
           async getPublication(publicationId) {
@@ -974,7 +975,7 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
         nodeId: 'node-1',
         controlPlanePublicationsOwner: publicationsOwnerOverRows({
           async listPublications() {
-            return {rows: [latestPublicationRow]};
+            return {success: true, rows: [latestPublicationRow]};
           },
           // The durable read the owner's guarded write is computed from.
           async getPublication(publicationId) {
@@ -1142,7 +1143,7 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
         nodeId: 'node-1',
         controlPlanePublicationsOwner: publicationsOwnerOverRows({
           async listPublications() {
-            return {rows: [latestPublicationRow]};
+            return {success: true, rows: [latestPublicationRow]};
           },
           // The durable read the owner's guarded write is computed from.
           async getPublication(publicationId) {

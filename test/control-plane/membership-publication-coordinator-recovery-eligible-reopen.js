@@ -898,7 +898,7 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_RETRY_VISIBLE_TEST_NAME,
       reconcileQueue: createRecordingReconcileQueue({pending, enqueued}),
       controlPlanePublicationsOwner: publicationsOwnerOverRows({
         async listPublications() {
-          return {rows: [latestPublicationRow]};
+          return {success: true, rows: [latestPublicationRow]};
         },
         async getPublication(publicationId) {
           const persistedRow = persistedRows[persistedRows.length - 1];
@@ -1017,7 +1017,7 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_STALE_VISIBLE_TEST_NAME,
       reconcileQueue: createRecordingReconcileQueue({pending, enqueued}),
       controlPlanePublicationsOwner: publicationsOwnerOverRows({
         async listPublications() {
-          return {rows: [latestPublicationRow]};
+          return {success: true, rows: [latestPublicationRow]};
         },
         async getPublication(publicationId) {
           const persistedRow =
@@ -1136,7 +1136,7 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_READBACK_FAILURE_TEST_NAME,
       reconcileQueue: createRecordingReconcileQueue({pending, enqueued}),
       controlPlanePublicationsOwner: publicationsOwnerOverRows({
         async listPublications() {
-          return {rows: [latestPublicationRow]};
+          return {success: true, rows: [latestPublicationRow]};
         },
         async getPublication(publicationId) {
           // The durable owner stops answering once the write has landed:

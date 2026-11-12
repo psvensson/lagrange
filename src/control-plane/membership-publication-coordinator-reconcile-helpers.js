@@ -48,20 +48,29 @@ const PRIORITY_SUMMARY_REFRESHED_REASON = 'priority_summary_refreshed';
 // row with the census. The handoff-routed reconcile asks for it when its
 // publication is durably visible (the admission is what changed), and the
 // owner driver asks again on every tick while the latest durable row still
-// states NOT_DERIVED (bounded by OWNER_MEMBERSHIP_DRIVER_INTERVAL_MS).
+// states NOT_DERIVED or its retained census is ABSENT (bounded by
+// OWNER_MEMBERSHIP_DRIVER_INTERVAL_MS). Only a present membership publication
+// owes this continuation; missing authority is not a census state.
 const PRIORITY_CENSUS_NOT_DERIVED_REASON = 'priority_census_not_derived';
 
 function isPriorityCensusOwed(publicationRow) {
-  return Boolean(publicationRow) && typeof publicationRow === 'object' &&
-    readPriorityPartitionCensusState(
-      normalizeControlPlanePublicationRow(publicationRow)
-        .priorityPartitionSummary,
-    ) === PRIORITY_PARTITION_CENSUS_STATE.NOT_DERIVED;
+  if (!publicationRow || typeof publicationRow !== 'object') {
+    return false;
+  }
+  const publication = normalizeControlPlanePublicationRow(publicationRow);
+  if (!publication.publicationId ||
+      publication.publicationKind !== MEMBERSHIP_PUBLICATION_KIND ||
+      !(publication.publicationEpoch > 0)) {
+    return false;
+  }
+  const censusState = readPriorityPartitionCensusState(publication.priorityPartitionSummary);
+  return censusState === PRIORITY_PARTITION_CENSUS_STATE.ABSENT ||
+    censusState === PRIORITY_PARTITION_CENSUS_STATE.NOT_DERIVED;
 }
 
 /**
  * Ask the owner's queue for the full reconcile that derives the priority
- * census of a row that states NOT_DERIVED.
+ * census of a present row whose census is ABSENT or NOT_DERIVED.
  * @param {Object} coordinator
  * @param {Object|null} publicationRow - The latest durable publication row.
  * @param {Object} context - The reconcile context of the request.

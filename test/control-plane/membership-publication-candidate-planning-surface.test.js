@@ -21,7 +21,7 @@ function createCoordinator({availableAnswer, ownerReadAnswer, calls}) {
     nodeId: NODE_ID,
     controlPlanePublicationsOwner: {
       async listPublications() {
-        return {rows: []};
+        return {success: true, rows: []};
       },
     },
     authoritativeControlPlaneView: {

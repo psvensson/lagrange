@@ -131,7 +131,7 @@ test('reconcileActiveGateMembershipPublication reports bounded critical queue pr
       reconcileQueue: createRecordingReconcileQueue({pending, enqueued}),
       controlPlanePublicationsOwner: publicationsOwnerOverRows({
         async listPublications() {
-          return {rows: [latestPublicationRow]};
+          return {success: true, rows: [latestPublicationRow]};
         },
         async getPublication() {
           return latestPublicationRow;

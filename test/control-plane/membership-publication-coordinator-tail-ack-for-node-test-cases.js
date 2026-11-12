@@ -126,6 +126,7 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
           async listPublications(options = {}) {
             listPublicationsCalls.push(options);
             return {
+              success: true,
               rows: [
                 {
                   publication_id: 'publication-21',
@@ -230,6 +231,7 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
           async listPublications(options = {}) {
             listPublicationsCalls.push(options);
             return {
+              success: true,
               rows: [durablePublicationRow],
             };
           },
@@ -345,6 +347,7 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
           async listPublications(options = {}) {
             listPublicationsCalls.push(options);
             return {
+              success: true,
               rows: [durablePublicationRow],
             };
           },
@@ -460,6 +463,7 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
           async listPublications(options = {}) {
             listPublicationsCalls.push(options);
             return {
+              success: true,
               rows: [durablePublicationRow],
             };
           },
@@ -564,7 +568,7 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
         controlPlanePublicationsOwner: publicationsOwnerOverRows({
           async listPublications(options = {}) {
             listPublicationsCalls.push(options);
-            return {rows: [durablePublicationRow]};
+            return {success: true, rows: [durablePublicationRow]};
           },
           async getPublication() {
             return durablePublicationRow;
@@ -711,6 +715,7 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
           async listPublications(options) {
             listPublicationsCalls.push(options);
             return {
+              success: true,
               rows: [
                 {
                   publication_id: 'publication-23',
