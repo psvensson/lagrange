@@ -1,0 +1,35 @@
+{
+  "schema": "solve-quest/2",
+  "id": "tx1-superseded-design-retention",
+  "class": "fix",
+  "statement": "Restore the active solve footprint budget by relocating exactly the independently reviewed superseded TX1 design revisions v3, v5 and v7 through the canonical verified evidence store, preserving historical references and all current contracts and required proof.",
+  "constraints": [
+    {
+      "id": "exact-selection",
+      "statement": "Only solve/quests/replicated-transaction-decision-and-apply/design-leg-a-v3-2026-10-10.md, design-leg-a-v5-2026-10-10.md and design-leg-a-v7-2026-10-10.md in that same directory may leave the tree; source commit 1b51362e0f7af24a5e373b8a57619d4cf13ec706, total 341910 bytes. Use canonical evidence relocate with this Quest as id and record-to. No overwrites."
+    },
+    {
+      "id": "preserve-authority",
+      "statement": "Preserve every log, Quest statement, required proof, v8/v9/v10, seam, current design and owner decision byte-for-byte. No source implementation, baseline increase, historical-reference rewriting, alternate catalog or acceptance supersession. Source checker already independently approved separately."
+    },
+    {
+      "id": "bounded-proof",
+      "statement": "Re-download and hash the archive and every member against the exact source blobs before removal. Verify inventory, protected identities, historical reference resolution, staged scope, append-only history and current active footprint below 20971520 bytes with at least 65536 bytes headroom. Preserve unrelated missing proof and migration inventory failures as separate gates; no formation, TX1 or release acceptance claim."
+    }
+  ],
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/tx1-superseded-design-retention/evidence/receipt.json",
+      "requiredReceipts": [
+        "exact-selection",
+        "verified-bundle",
+        "protected-identities",
+        "historical-references",
+        "active-budget",
+        "independent-review"
+      ]
+    }
+  },
+  "sealedAt": "fc43b3a4310c316ea8573066a482301e60d697c0"
+}
