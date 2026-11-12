@@ -1,3 +1,4 @@
+import {serviceRoleObservation} from '../test-helpers/service-role-observation.js';
 // Exercise the real row owner and authoritative-read interface. SQLite holds
 // the fault-injected observation; this is not a Raft or public-startup witness.
 import assert from 'node:assert/strict';
@@ -41,6 +42,8 @@ function fixture({delta = {}, lost = true, observation = 'exact'} = {}) {
 }
 
 const request = {
+  service: {raft: {readRoleAndTerm: () =>
+    (serviceRoleObservation('follower', 1))}},
   partitionId: 'original-p1', replicaId: 'original-p1-r1', nodeId: 'original-node',
   timestamp: 1000,
   extraFields: {created_at: 1000, state_entered_at: 1000, updated_at: 1000,

@@ -62,9 +62,9 @@ test('a step-down the binding refuses at the apply is entered at the end of ' +
   const uncommitted = removedLeader('9', ['1', '2']);
   assert.equal(removedLeaderAtApply({peerId: '1',
     confState: uncommitted.value.confState, observe: () => uncommitted,
-    stepDown: refusing}), false, 'refused at the apply: not stepped down');
+    stepDown: refusing}).value.steppedDown, false, 'refused at the apply: not stepped down');
   assert.equal(removedLeaderAtDrainEnd({peerId: '1', observed: uncommitted,
-    stepDown: taking, queueTransfer: (transfer) => queued.push(transfer)}),
+    stepDown: taking, queueTransfer: (transfer) => queued.push(transfer)}).value.steppedDown,
   true, 'entered at the end of the drain: the caller drains its Ready');
   assert.deepEqual(entered, [`refused:${STEP_DOWN}`, `taken:${STEP_DOWN}`]);
   // Everything committed and a live voter: a transfer, started only at the
@@ -72,9 +72,9 @@ test('a step-down the binding refuses at the apply is entered at the end of ' +
   const committed = removedLeader('10', ['1', '2']);
   assert.equal(removedLeaderAtApply({peerId: '1',
     confState: committed.value.confState, observe: () => committed,
-    stepDown: taking}), false);
+    stepDown: taking}).value.steppedDown, false);
   assert.equal(removedLeaderAtDrainEnd({peerId: '1', observed: committed,
-    stepDown: taking, queueTransfer: (transfer) => queued.push(transfer)}),
+    stepDown: taking, queueTransfer: (transfer) => queued.push(transfer)}).value.steppedDown,
   false);
   assert.deepEqual({entered: entered.length, queued: queued.length},
     {entered: 2, queued: 1});
@@ -82,7 +82,7 @@ test('a step-down the binding refuses at the apply is entered at the end of ' +
   assert.equal(removedLeaderAtApply({peerId: '1',
     confState: {voters: ['1', '2'], votersOutgoing: [], learners: []},
     observe: () => assert.fail('no observation is read'),
-    stepDown: taking}), false);
+    stepDown: taking}).value.steppedDown, false);
 });
 
 const A = 'own-removal-a';

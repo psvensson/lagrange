@@ -53,6 +53,7 @@ const PARTITION_WRITE_LEADERSHIP_REFUSAL = Object.freeze({
   CONSENSUS_HOST_FAILURE: 'partition_write_consensus_host_failure',
   OUTCOME_UNKNOWN: 'partition_write_outcome_unknown',
   CONSENSUS_REFUSED: 'partition_write_consensus_refused',
+  CONSENSUS_INVALID: 'partition_write_consensus_invalid',
   BACKPRESSURE: 'partition_write_backpressure',
   SERVICE_SHUTDOWN: 'partition_write_service_shutdown',
   COMMIT_DEADLINE_EXCEEDED: 'partition_write_commit_deadline_exceeded',
@@ -373,7 +374,20 @@ function recoveryRefusalMessage({reason, phase, retryAfterMs}) {
 // group held by its host failure (the port's recovery outcome, carried as
 // read; an open user session that holds the recovery is its own code), or no
 // leadership here. Answered at once; nothing is proposed.
-function buildPartitionWriteLeadershipRefusal(status, partitionId) {
+function coreRefusedLeadershipAnswer(status, partitionId) {
+  const message = status.retryable === true ?
+    ERRORS.WRITE_CONSENSUS_REFUSED : ERRORS.WRITE_CONSENSUS_INVALID;
+  return {
+    success: false,
+    error: `${message}: ${status.reason} (phase ${status.phase})`,
+    failureCode: status.retryable === true ?
+      REFUSAL.CONSENSUS_REFUSED : REFUSAL.CONSENSUS_INVALID,
+    consensus: status,
+    partitionId,
+  };
+}
+
+function heldOrNonLeaderAnswer(status, partitionId) {
   if (!isHeldByHostFailure(status)) {
     return {
       success: false,
@@ -399,6 +413,11 @@ function buildPartitionWriteLeadershipRefusal(status, partitionId) {
   };
 }
 
+function buildPartitionWriteLeadershipRefusal(status, partitionId) {
+  return status.outcome === RAFT_OPERATION_OUTCOME.CORE_REFUSED ?
+    coreRefusedLeadershipAnswer(status, partitionId) : heldOrNonLeaderAnswer(status, partitionId);
+}
+
 // The answer of a pending write released without an answer from consensus,
 // from what the proposal queue knew of it and why it was released ({cause},
 // a PARTITION_WRITE_RELEASE_CAUSE, and the deadline for a passed commit
@@ -406,14 +425,17 @@ function buildPartitionWriteLeadershipRefusal(status, partitionId) {
 // answers, so its outcome is not known here; a write never handed to it was
 // not proposed. The one builder of every released write's answer.
 function buildReleasedPendingWriteAnswer({entryId, proposal, logIndex},
-  partitionId, {cause, deadlineMs}) {
+  partitionId, {cause, deadlineMs, consensusRefusal}) {
   const proposed = proposal === PROPOSAL_QUEUE_PROPOSAL_STATE.PROPOSED;
+  if (!proposed && consensusRefusal !== undefined) {
+    return {...buildPartitionWriteLeadershipRefusal(consensusRefusal, partitionId), entryId};
+  }
   const unproposed = RELEASED_UNPROPOSED_ANSWER[cause];
   return {
     success: false,
     error: proposed ? ERRORS.WRITE_OUTCOME_UNKNOWN : unproposed.error,
     failureCode: proposed ? REFUSAL.OUTCOME_UNKNOWN : unproposed.failureCode,
-    consensus: {
+    consensus: consensusRefusal ?? {
       reason: cause,
       ...(deadlineMs === undefined ? {} : {deadlineMs}),
     },

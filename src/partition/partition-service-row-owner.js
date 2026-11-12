@@ -1,3 +1,4 @@
+import {readReplicaRoleAndTerm, readReplicaServiceRole, isReplicaServiceLeader} from '../raft/replica-leadership-state.js';
 import {AddressManager} from '../address/address-manager.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
@@ -12,7 +13,7 @@ import {
   SERVICE_STATUS,
   SERVICE_TYPE,
 } from '../constants/index.js';
-import {RAFT_ROLE} from '../raft/constants.js';
+
 import {normalizePublishedRaftRole} from '../raft/published-raft-role.js';
 import {classifyControlPlaneMutationResult} from
   '../control-plane/control-plane-mutation-outcome-classifier.js';
@@ -75,26 +76,8 @@ function assertRequiredString(value, errorMessage) {
   }
 }
 
-function isLeaderPartitionService(service) {
-  return service?.isLeader === true ||
-    (typeof service?.isLeaderReplica === 'function' &&
-      service.isLeaderReplica());
-}
-
 function resolvePartitionRaftRole(service) {
-  if (isLeaderPartitionService(service)) {
-    return normalizePublishedRaftRole(RAFT_ROLE.LEADER, {
-      collapseLeaderToFollower: true,
-    });
-  }
-
-  if (typeof service?.getRole === 'function') {
-    return normalizePublishedRaftRole(service.getRole(), {
-      collapseLeaderToFollower: true,
-    });
-  }
-
-  return normalizePublishedRaftRole(service?.role, {
+  return normalizePublishedRaftRole(readReplicaServiceRole(service), {
     collapseLeaderToFollower: true,
   });
 }
@@ -256,8 +239,7 @@ class PartitionServiceRowOwner {
   }
 
   async publishCanonicalLeaderNodeId(row, service = null) {
-    const isLeader = isLeaderPartitionService(service) ||
-      row?.raft_role === RAFT_ROLE.LEADER;
+    const isLeader = isReplicaServiceLeader(service);
     if (!row ||
         row.service_type !== SERVICE_TYPE.PARTITION ||
         row.status !== SERVICE_STATUS.ACTIVE ||
@@ -359,6 +341,8 @@ class PartitionServiceRowOwner {
         PARTITION_SERVICE_ROW_OWNER_ERROR.LIFECYCLE_OWNER_REQUIRED,
       );
     }
+    // Admission precedes the durable activation, not only its later leader publication.
+    readReplicaRoleAndTerm(options.service);
     const row = await this.replicaStateMachine.activateRegisteredReplica({
       partitionId: options.partitionId,
       replicaId: options.replicaId,

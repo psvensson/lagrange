@@ -15,6 +15,7 @@ import {EventEmitter} from 'node:events';
 import {AddressManager} from '../address/address-manager.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {NodeService} from '../node/node-service.js';
+import {readReplicaRoleAndTerm, readReplicaServiceRole, isReplicaServiceLeader, requireReplicaServiceLeader, readReplicaLeaderRoute} from '../raft/replica-leadership-state.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {isRaftRsTransportEnvelope} from '../raft/raft-packet-utils.js';
 import {RAFT_OPERATION_OUTCOME} from
@@ -393,20 +394,24 @@ class WasmServiceReplica extends EventEmitter {
   _handleRead(payload) {
     const refusal = this.heldCreationRefusal();
     if (refusal !== null) return refusal;
+    const activeLeader = isReplicaServiceLeader(this);
     const decision = routeRead(
       this.readConsistency,
-      this.isLeader,
+      activeLeader,
       this.safetyInterval,
     );
 
     if (decision.forwardToLeader) {
-      this.logger.debug(
-        WASM_SERVICE_LOG_MSG.READ_FORWARDED_TO_LEADER, {
-          replicaId: this.replicaId,
-          leaderId: this.leaderId,
-        },
-      );
-      return {forwarded: true, leaderId: this.leaderId};
+      const route = readReplicaLeaderRoute(this);
+      if (!route.local) {
+        this.logger.debug(
+          WASM_SERVICE_LOG_MSG.READ_FORWARDED_TO_LEADER, {
+            replicaId: this.replicaId,
+            leaderId: route.leaderId,
+          },
+        );
+        return {forwarded: true, leaderId: route.leaderId};
+      }
     }
 
     this.logger.debug(
@@ -433,8 +438,9 @@ class WasmServiceReplica extends EventEmitter {
   async _handleWrite(payload) {
     const refusal = this.heldCreationRefusal();
     if (refusal !== null) return refusal;
-    if (!this.isLeader) {
-      return {forwarded: true, leaderId: this.leaderId};
+    const route = readReplicaLeaderRoute(this);
+    if (!route.local) {
+      return {forwarded: true, leaderId: route.leaderId};
     }
 
     const entry = {
@@ -489,6 +495,7 @@ class WasmServiceReplica extends EventEmitter {
     if (!this.raft) {
       throw new Error(WASM_SERVICE_ERROR_MSG.SERVICE_NOT_READY);
     }
+    requireReplicaServiceLeader(this);
     const answer = await turnChainValue(
       this.raft.propose(encodeCommittedCommand(entry)));
     if (answer?.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
@@ -542,14 +549,11 @@ class WasmServiceReplica extends EventEmitter {
   }
 
   /**
-   * The port's current term, or null when it reports none.
-   * @return {number|null}
+   * The port's current term, preserving its typed refusal on failure.
+   * @return {number}
    */
   resolveCurrentTermSafe() {
-    const status = this.raft?.readStatus();
-    const term = Number(status?.term);
-    return status?.outcome === RAFT_OPERATION_OUTCOME.CORE_OK &&
-      Number.isFinite(term) ? term : null;
+    return readReplicaRoleAndTerm(this).term;
   }
 
   /**
@@ -624,7 +628,8 @@ class WasmServiceReplica extends EventEmitter {
    * @return {Promise<void>}
    * @private
    */
-  async writeRoleUpdate(role, updatedAt = Date.now(), options = {}) {
+  async writeRoleUpdate(_announcedRole, updatedAt = Date.now(), options = {}) {
+    const role = readReplicaServiceRole(this);
     const writerPayload = {
       serviceId: this.replicaId,
       serviceDefinitionId: this.serviceDefinitionId,
@@ -667,9 +672,10 @@ class WasmServiceReplica extends EventEmitter {
   async writeLeaderNodeUpdate(
     leaderNodeId,
     updatedAt = Date.now(),
-    role = this.role,
+    _announcedRole,
     options = {},
   ) {
+    const role = readReplicaServiceRole(this);
     const writerPayload = {
       serviceId: this.replicaId,
       serviceDefinitionId: this.serviceDefinitionId,

@@ -130,7 +130,7 @@ documentClass: generated
 - [partition-service-metadata-delivery-methods.js](partition-service-metadata-delivery-methods.js) - Queue a raft role update for persistence. (importers: few)
 - [partition-service-metadata-mutation-helpers.js](partition-service-metadata-mutation-helpers.js) - No leading comment; first export: LEADER_PUBLICATION_RETRY_BUDGET_ATTEMPTS. (importers: few)
 - [partition-service-participant-transaction-cadence-methods.js](partition-service-participant-transaction-cadence-methods.js) - The service facade for the current participant hold cadence. (importers: few)
-- [partition-service-raft-init-base.js](partition-service-raft-init-base.js) - Resolve the current raft term when a live raft instance exists; the leadership-state helper passes it with the... (importers: one)
+- [partition-service-raft-init-base.js](partition-service-raft-init-base.js) - Read the current owned term; unavailable or invalid consensus throws its exact typed result instead of granting a... (importers: one)
 - [partition-service-raft-lifecycle-wiring.js](partition-service-raft-lifecycle-wiring.js) - Relay the port's consensus announcements as the partition service's own CONSENSUS_OBSERVED event, as data: the... (importers: few)
 - [partition-service-raft-membership-administration.js](partition-service-raft-membership-administration.js) - The partition's one path to admitting a peer into its raft configuration, through the group-neutral admission owner:... (importers: hub)
 - [partition-service-raft-peer-cache-reconciliation.js](partition-service-raft-peer-cache-reconciliation.js) - Re-drive the latched membership proposals on the events that can release them: the deferred row-driven retirements,... (importers: many)

@@ -1,15 +1,9 @@
+import {readReplicaRoleAndTerm, readReplicaServiceRole, isReplicaServiceLeader} from '../raft/replica-leadership-state.js';
 import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
 
 const MESSAGE_GROUP_SERVICE_LEADERSHIP_STATE_RUNTIME_LITERAL = {
   CONSTRUCTOR: 'constructor',
 };
-
-// The core's own role and term through this replica's port (no peer is
-// resolved); null without a port or while the port does not answer CORE_OK.
-function readCoreRoleAndTerm(service) {
-  const read = service.raft?.readRoleAndTerm();
-  return read?.outcome === RAFT_OPERATION_OUTCOME.CORE_OK ? read : null;
-}
 
 function createMessageGroupServiceLeadershipStateRuntimeMethods(deps = {}) {
   const {
@@ -33,8 +27,9 @@ function createMessageGroupServiceLeadershipStateRuntimeMethods(deps = {}) {
      * @private
      */
     isCurrentRaftLeader() {
-      return this.isLeaderReplica() &&
-        readCoreRoleAndTerm(this)?.role === RaftRole.LEADER;
+      if (!this.isLeaderReplica()) return false;
+      const read = this.raft.readRoleAndTerm();
+      return read.outcome === RAFT_OPERATION_OUTCOME.CORE_OK && read.role === RaftRole.LEADER;
     }
     cancelLeaderOwnedActivation() {
       this.leaderActivationGate.cancel({clearActivatedTerm: true});
@@ -132,7 +127,8 @@ function createMessageGroupServiceLeadershipStateRuntimeMethods(deps = {}) {
      * @return {boolean} True if leader.
      */
     isLeaderReplica() {
-      return this.role === RaftRole.LEADER;
+      return this.isLeader === true && this.leadershipTenure != null &&
+      isReplicaServiceLeader(this);
     }
     /**
      * Get the current leader ID.
@@ -148,16 +144,15 @@ function createMessageGroupServiceLeadershipStateRuntimeMethods(deps = {}) {
      * @return {string} Current role.
      */
     getRole() {
-      return this.role;
+      return readReplicaServiceRole(this);
     }
     /**
-     * Get the current term: the core's own, or the last term this replica
-     * published while it has no readable core.
+     * Get the core's current term, or throw with the exact refused Raft answer.
+     * No committed ledger projection can substitute for current authority.
      * @return {number} Current term.
      */
     getCurrentTerm() {
-      const term = readCoreRoleAndTerm(this)?.term;
-      return Number.isFinite(term) ? term : this.operationLedger.currentTerm;
+      return readReplicaRoleAndTerm(this).term;
     }
   }
 

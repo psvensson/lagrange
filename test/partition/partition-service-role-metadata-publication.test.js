@@ -1,3 +1,6 @@
+import {serviceRoleObservation} from '../test-helpers/service-role-observation.js';
+import {RAFT_OPERATION_OUTCOME} from '../../src/raft/raft-operation-port-constants.js';
+import {settledTurn} from '../../src/raft/raft-rs-turn-answer.js';
 /**
  * Unit tests for PartitionService.
  * Tests SQLite-backed Raft group for data storage.
@@ -55,6 +58,14 @@ import {
 import {withFoundingStamp} from './partition-founding-stamp.js';
 import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 
+
+// Component controls supply the canonical observation independently of cached fields.
+function setObservedRole(replica, role) {
+  replica.raft = Object.freeze({
+    readRoleAndTerm: () => Object.freeze(serviceRoleObservation(role, 1)),
+    close: () => settledTurn({outcome: RAFT_OPERATION_OUTCOME.CORE_OK}),
+  });
+}
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -481,6 +492,7 @@ test(
     };
     partition.roleMutationHelper.clearTimeoutFn = () => {};
 
+    setObservedRole(partition, RaftRole.FOLLOWER);
     partition.role = RaftRole.LEARNER;
     partition.leaderId = 'replica-1';
 
@@ -645,6 +657,7 @@ test(
       bootstrapReadinessState: readinessState,
     }));
 
+    setObservedRole(partition, RaftRole.LEADER);
     partition.pendingRoleUpdate = RaftRole.LEADER;
     partition.persistedRole = null;
 
@@ -699,6 +712,7 @@ test(
 
     await partition.initialize();
     partition.isLeader = true;
+    partition.leadershipTenure ??= Object.freeze({term: 1});
     partition.systemTableCache = {
       get: () => null,
       filter: () => [],
@@ -767,6 +781,7 @@ test(
 
     await partition.initialize();
     partition.isLeader = true;
+    partition.leadershipTenure ??= Object.freeze({term: 1});
     partition.systemTableCache = {
       get: () => null,
       filter: () => [],
@@ -944,7 +959,9 @@ test('PartitionService - initial leader publication routes while partitions ' +
     cdcIntegrationService: mockCdcIntegrationService,
   }));
 
+  setObservedRole(partition, RaftRole.LEADER);
   partition.isLeader = true;
+  partition.leadershipTenure ??= Object.freeze({term: 1});
   partition.isPartitionsLeaderAvailable = () => false;
   partition.leaderNodeMutationHelper.pendingValue = 'fresh-node';
 
@@ -1018,7 +1035,9 @@ test('PartitionService - post-handoff leader publication reads the remote ' +
         }],
       };
     };
+  setObservedRole(partition, RaftRole.LEADER);
   partition.isLeader = true;
+  partition.leadershipTenure ??= Object.freeze({term: 1});
   partition.leaderNodeMutationHelper.pendingValue = 'replacement-node';
 
   const result = await partition.flushLeaderNodeUpdate();
@@ -1325,6 +1344,7 @@ test('PartitionService - initializeRebalancer passes sqlQueryEngine to gateway',
     partition.tablePolicyService = mockTablePolicyService;
     partition.messageRouter = mockMessageRouter;
     partition.isLeader = true;
+    partition.leadershipTenure ??= Object.freeze({term: 1});
     partition.setSqlQueryEngine(mockSqlQueryEngine);
 
     // Rebalancer should now exist
@@ -1409,6 +1429,7 @@ async (t) => {
   partition.tablePolicyService = mockTablePolicyService;
   partition.messageRouter = mockMessageRouter;
   partition.isLeader = true;
+  partition.leadershipTenure ??= Object.freeze({term: 1});
   partition.setSqlQueryEngine(firstEngine);
 
   t.ok(partition.rebalancer, 'rebalancer should be initialized');

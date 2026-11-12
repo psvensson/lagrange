@@ -1,3 +1,4 @@
+import {serviceRoleObservation} from '../test-helpers/service-role-observation.js';
 /**
  * The membership epoch a promotion proof binds is a refusal-only freshness
  * guard over the committed decision (PR #184 review finding 2): the leader
@@ -115,6 +116,7 @@ function createLeaderPort({role, learnerInConfiguration, learnerMatchIndex}) {
   const learnerPeer = deriveRaftRsPeerId(LEARNER_REPLICA);
   const learners = learnerInConfiguration ? [learnerPeer] : [];
   return {
+    readRoleAndTerm: () => Object.freeze(serviceRoleObservation(role, TERM)),
     readStatus: () => Object.freeze({
       outcome: RAFT_OPERATION_OUTCOME.CORE_OK, role, term: TERM,
       commitIndex: COMMIT_INDEX, appliedIndex: COMMIT_INDEX, peers: [],
@@ -223,6 +225,7 @@ function createLearnerAgainst(leader, learnerCache, duringRoundTrip) {
   // The learner hears its leader: its own live status names it at its
   // committed address (the proof goes there, never to a cached row).
   learner.raft = {
+    readRoleAndTerm: () => Object.freeze(serviceRoleObservation(RAFT_ROLE.FOLLOWER, TERM)),
     readStatus: () => Object.freeze({outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
       groupId: PARTITION_ID, replicaIdentity: LEARNER_REPLICA,
       role: RAFT_ROLE.LEARNER, term: TERM, leaderId: LEADER_REPLICA,

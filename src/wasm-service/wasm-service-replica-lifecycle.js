@@ -22,7 +22,7 @@ import {
 import {RAFT_ROLE} from '../raft/constants.js';
 import {RAFT_EVENT} from '../raft/raft-operation-port-constants.js';
 import {withRaftOpeningCleanupFailure} from '../raft/raft-operation-port.js';
-import {wireReplicaLifecycleEvents} from '../raft/replica-leadership-state.js';
+import {readReplicaRoleAndTerm, wireReplicaLifecycleEvents} from '../raft/replica-leadership-state.js';
 import {SessionKVStore} from './session-kv-store.js';
 import {WasmWriterState} from './wasm-writer-state.js';
 import {
@@ -121,7 +121,12 @@ function openReplicaResources(replica, metadataPhase) {
   wireReplicaLifecycleEvents(replica, {
     events: RAFT_EVENT,
     roles: RAFT_ROLE,
-    getCurrentTerm: () => replica.resolveCurrentTermSafe(),
+    getCurrentTerm: () => readReplicaRoleAndTerm(replica).term,
+    onObservationRefused: ({refusal, active}) => {
+      if (active) replica.onBecameFollower();
+      replica.logger.error(RAFT_EVENT.ROLE_OBSERVATION_REFUSED,
+        {replicaId: replica.replicaId, consensus: refusal});
+    },
     onLeader: () => replica.onBecameLeader(),
     onFollower: () => replica.onBecameFollower(),
     onCandidate: () => replica.onBecameFollower(),

@@ -1,3 +1,4 @@
+import {serviceRoleObservation} from '../test-helpers/service-role-observation.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -326,6 +327,8 @@ test('mg-1 survives physical seed storage loss from two distinct off-seed voters
         groupId: GROUP_ID,
         replicaId,
         nodeId,
+        service: {raft: {readRoleAndTerm: () =>
+          (serviceRoleObservation('follower', 1))}},
         timestamp: createdAt,
         status: SERVICE_STATUS.ACTIVE,
         extraFields: {

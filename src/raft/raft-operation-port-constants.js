@@ -8,6 +8,8 @@ const RAFT_EVENT = Object.freeze({
   LEADER_CHANGE: 'leader change',
   COMMIT: 'commit',
   TERM_CHANGE: 'term change',
+  // Exact typed refusal of the latest native role observation; never a role.
+  ROLE_OBSERVATION_REFUSED: 'role observation refused',
   // A payload-free wake emitted after the runtime successfully publishes a
   // newly applied position. Consumers re-read their canonical owner.
   APPLIED_PROGRESS: 'applied progress',
@@ -54,6 +56,12 @@ const RAFT_CONSENSUS_STARTUP_OUTCOME = Object.freeze({
 const RAFT_OPERATION = Object.freeze({
   READ_COMMITTED_MEMBERSHIP: 'readCommittedMembership',
   PROPOSE_MEMBERSHIP_TRANSITION: 'proposeMembershipTransition',
+});
+
+// This replica's place in the applied native configuration, independent of
+// its election role and of its incarnation's participation gate.
+const RAFT_REPLICA_MEMBERSHIP = Object.freeze({
+  VOTER: 'voter', LEARNER: 'learner', ABSENT: 'absent',
 });
 
 const RAFT_MEMBERSHIP_TRANSITION_STAGE = Object.freeze({
@@ -245,6 +253,7 @@ export {
   RAFT_MEMBERSHIP_OPERATION,
   RAFT_MEMBERSHIP_TRANSITION_REASON,
   RAFT_MEMBERSHIP_TRANSITION_STAGE,
+  RAFT_REPLICA_MEMBERSHIP,
   RAFT_MEMBERSHIP_RESERVATION_OUTCOME,
   RAFT_OPERATION,
   RAFT_OPERATION_OUTCOME,

@@ -50,6 +50,7 @@ const CORE_CALL_WITHOUT_HANDLE = new Set([
 // equal it, so the first observation is always announced.
 const CONF_STATE_NOT_ANNOUNCED = 'conf-state-not-announced';
 const CORE_OPERATION = Object.freeze({
+  STATUS: 'status',
   CONF_STATE: 'conf_state',
   SEED_STORAGE: 'seed_storage',
   SET_CONF_STATE: 'set_conf_state',
@@ -76,6 +77,7 @@ const RUNTIME_COMMAND = Object.freeze({
 });
 const RUNTIME_EVENT = Object.freeze({
   TERM_CHANGE: RAFT_EVENT.TERM_CHANGE,
+  ROLE_OBSERVATION_REFUSED: RAFT_EVENT.ROLE_OBSERVATION_REFUSED,
   LEADER_CHANGE: RAFT_EVENT.LEADER_CHANGE,
   APPLIED_PROGRESS: RAFT_EVENT.APPLIED_PROGRESS,
   MEMBERSHIP_CHANGED: RAFT_EVENT.MEMBERSHIP_CHANGED,
@@ -123,6 +125,7 @@ const RUNTIME_PHASE = Object.freeze({
   DISPATCH: 'dispatch',
   ADMISSION: 'admission',
   PROGRESS_PROBE: 'progress-probe',
+  STATUS_OBSERVATION: 'status-observation',
   LEADERSHIP_TRANSFER: 'leadership-transfer',
   // The bootstrap membership the port was handed failed the stamp validator
   // (absent, or invalid): the port does not open.
@@ -157,7 +160,7 @@ const RUNTIME_REASON = Object.freeze({
   ENTRIES_APPLIED: 'entries-applied',
   READY_DRAIN_BOUND_EXCEEDED: 'ready drain bound exceeded',
   DRAINED: 'drained',
-  UNKNOWN: 'unknown',
+  INVALID_NATIVE_ROLE: 'invalid-native-role',
   NOT_ACTIVE_VOTER: 'not-an-active-voter',
   UNKNOWN_OPERATION: 'unknown-operation',
   INBOUND_ENQUEUED: 'inbound-enqueued',

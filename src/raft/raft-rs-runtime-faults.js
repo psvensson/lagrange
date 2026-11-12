@@ -7,13 +7,13 @@
 // logging (restore-path fence).
 
 import {deepFreeze} from './raft-operation-port.js';
+import {observeNativeRoleAndTerm} from './raft-rs-status-observation.js';
 import {RAFT_OPERATION_OUTCOME} from './raft-operation-port-constants.js';
 import {inboundStepRefusal} from './raft-rs-local-log-guard.js';
 import {recordInboundStepRefusal} from './raft-rs-peer-delivery.js';
 import {persistenceAdmitted} from './raft-rs-persistence-admission.js';
 import {
   NO_LEADER,
-  ROLE,
   ROLE_LEADER,
   RUNTIME_FAULT_REPORT,
   RUNTIME_PHASE,
@@ -93,14 +93,14 @@ function recordReseedHold(group) {
 
 // What the guard reads of the receiving group, as the runtime last observed
 // it after a stepped envelope's Ready (the core is not entered for it).
-function guardInputs(group) {
-  const status = group.lastStatus ?? {};
+function guardInputs(group, role) {
+  const status = group.statusObservation.status;
   return {
     gateOpen: group.gateOpen === true,
     lastIndex: group.persistedLastIndex,
     term: BigInt(status.term ?? 0),
     leaderKnown: (status.lead ?? NO_LEADER) !== NO_LEADER,
-    leading: ROLE[status.raftState] === ROLE_LEADER,
+    leading: role === ROLE_LEADER,
     confState: group.statusObservation?.confState ?? null,
   };
 }
@@ -124,7 +124,12 @@ function isPowerOfTwo(count) {
  */
 function refuseInboundStep(group, envelope, runtimeGeneration) {
   const message = envelope.message;
-  const refused = inboundStepRefusal(message, guardInputs(group));
+  const observedRole = observeNativeRoleAndTerm(group.statusObservation.status);
+  if (observedRole.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
+    recordInboundStepRefusal(group, envelope, observedRole);
+    return observedRole;
+  }
+  const refused = inboundStepRefusal(message, guardInputs(group, observedRole.role));
   if (refused === null) {
     return null;
   }

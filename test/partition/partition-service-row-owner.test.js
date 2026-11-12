@@ -1,3 +1,4 @@
+import {serviceRoleObservation} from '../test-helpers/service-role-observation.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   BootstrapJoinAdmissionOwner,
@@ -49,9 +50,7 @@ test('PartitionServiceRowOwner - activateReplica delegates lifecycle to ReplicaS
       partitionId: 'p1',
       replicaId: 'p1-r1',
       nodeId: 'node-a',
-      service: {
-        isLeaderReplica: () => true,
-      },
+      service: roleService('leader'),
     });
 
     t.equal(row.status, 'active', 'activation should project active status');
@@ -106,9 +105,7 @@ test('PartitionServiceRowOwner - critical system partitions use critical service
       partitionId: 'services-p1',
       replicaId: 'services-p1-r2',
       nodeId: 'node-b',
-      service: {
-        isLeaderReplica: () => true,
-      },
+      service: roleService('leader'),
     });
 
     t.equal(harness.lifecycleCalls.length, 1);
@@ -158,10 +155,7 @@ test('PartitionServiceRowOwner - follower activation does not rewrite canonical 
       partitionId: 'p1',
       replicaId: 'p1-r2',
       nodeId: 'node-b',
-      service: {
-        isLeaderReplica: () => false,
-        getRole: () => 'follower',
-      },
+      service: roleService('follower'),
     });
 
     t.equal(harness.lifecycleCalls.length, 1);
@@ -182,7 +176,7 @@ test('PartitionServiceRowOwner - registerReplica uses insert-only admission',
       },
     });
 
-    await owner.registerReplica({
+    await owner.registerReplica({service: roleService('follower'),
       partitionId: 'p1',
       replicaId: 'p1-r2',
       nodeId: 'node-b',
@@ -214,12 +208,12 @@ test('PartitionServiceRowOwner - same-ID recreation cannot reuse a durable ' +
     },
   });
 
-  const first = await owner.registerReplica({
+  const first = await owner.registerReplica({service: roleService('follower'),
     partitionId: 'p1',
     replicaId: 'p1-r-incarnation',
     nodeId: 'node-a',
   });
-  const recreated = await owner.registerReplica({
+  const recreated = await owner.registerReplica({service: roleService('follower'),
     partitionId: 'p1',
     replicaId: 'p1-r-incarnation',
     nodeId: 'node-a',
@@ -310,7 +304,7 @@ test('PartitionServiceRowOwner + BootstrapJoinAdmissionOwner preserve canonical 
       partitionId,
       replicaId,
       nodeId: 'seed-node',
-      service: {isLeaderReplica: () => true, getRole: () => 'leader'},
+      service: roleService('leader'),
     });
     t.equal(registration.raft_role, 'follower',
       `${partitionId} registration collapses leader to follower in services.raft_role`);
@@ -319,7 +313,7 @@ test('PartitionServiceRowOwner + BootstrapJoinAdmissionOwner preserve canonical 
       replicaId,
       nodeId: 'seed-node',
       registrationEvidence: registration,
-      service: {isLeaderReplica: () => true, getRole: () => 'leader'},
+      service: roleService('leader'),
     });
     t.equal(partitions.get(partitionId).leader_node_id, 'seed-node',
       `${partitionId} publishes canonical leader_node_id from live Raft authority`);
@@ -341,14 +335,14 @@ test('PartitionServiceRowOwner + BootstrapJoinAdmissionOwner preserve canonical 
     partitionId: nodesPartitionId,
     replicaId: `${nodesPartitionId}-r2`,
     nodeId: 'node-2',
-    service: {isLeaderReplica: () => false, getRole: () => 'follower'},
+    service: roleService('follower'),
   });
   await owner.activateReplica({
     partitionId: nodesPartitionId,
     replicaId: `${nodesPartitionId}-r2`,
     nodeId: 'node-2',
     registrationEvidence: node2Registration,
-    service: {isLeaderReplica: () => true, getRole: () => 'leader'},
+    service: roleService('leader'),
   });
   services.set(`${nodesPartitionId}-r1`, {
     ...services.get(`${nodesPartitionId}-r1`),
@@ -400,3 +394,8 @@ test('PartitionServiceRowOwner + BootstrapJoinAdmissionOwner preserve canonical 
   t.equal(joinAdmissionOwner.getLeaderPartitionForTable('multi_part_table'), null,
     'explicitly refuses multi-partition tables');
 });
+
+// Controlled service observation; row fixtures do not stand in for native proof.
+function roleService(role) {
+  return {raft: {readRoleAndTerm: () => (serviceRoleObservation(role, 1))}};
+}

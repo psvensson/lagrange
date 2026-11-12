@@ -19,7 +19,8 @@ import {
   reserveAndAdmitGroupPeer,
   takeGroupAdmissionsInFlight,
 } from '../raft/raft-rs-group-membership-admission.js';
-import {wireReplicaLifecycleEvents} from '../raft/replica-leadership-state.js';
+import {wireReplicaLifecycleEvents} from
+  '../raft/replica-leadership-state.js';
 import {resolveReplicaRaftTiming} from '../raft/replica-raft-timing.js';
 import {isPeerRowStatusAdmissible} from '../rebalancer/replica-status.js';
 import {
@@ -317,6 +318,14 @@ function assignRaftLifecycle(serviceClass) {
       wireReplicaLifecycleEvents(this, {
         events: RAFT_EVENT,
         roles: RaftRole,
+        onObservationRefused: ({refusal, active}) => {
+          if (active) {
+            this.cancelLeaderOwnedActivation();
+            this.updateRebalancerLeadership();
+          }
+          this.logger.error(MESSAGE_GROUP_SERVICE_LOG_MSG.LEADERSHIP_OBSERVATION_REFUSED,
+            {groupId: this.groupId, replicaId: this.replicaId, consensus: refusal});
+        },
         getCurrentTerm: () => this.getCurrentTerm(),
         normalizeLeaderId: (candidate) =>
           this.normalizeLeaderReplicaId(candidate),

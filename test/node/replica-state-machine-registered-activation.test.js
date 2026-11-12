@@ -1,3 +1,4 @@
+import {serviceRoleObservation} from '../test-helpers/service-role-observation.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
@@ -144,7 +145,7 @@ async function createRegistrationEvidenceFixture(options = {}) {
     partitionId: 'p1',
     replicaId: 'p1-r1',
     nodeId: 'node-a',
-    service: {getRole: () => 'follower'},
+    service: roleService('follower'),
     status: 'stopped',
   });
   return {
@@ -223,7 +224,7 @@ test('ReplicaStateMachine replays exact INSERT evidence after clock advance',
     t.equal(Object.isFrozen(registrationEvidence), true,
       'INSERT-bound evidence must be immutable');
     await t.rejects(
-      owner.activateReplica({
+      owner.activateReplica({service: roleService('follower'),
         isEffectHandlerCurrent: () => true,
         partitionId: 'p1',
         replicaId: 'p1-r2',
@@ -236,7 +237,7 @@ test('ReplicaStateMachine replays exact INSERT evidence after clock advance',
     t.equal(fixture.updateCount, 0,
       'cross-identity evidence must refuse before mutation');
 
-    const activated = await owner.activateReplica({
+    const activated = await owner.activateReplica({service: roleService('follower'),
       isEffectHandlerCurrent: () => true,
       partitionId: 'p1',
       replicaId: 'p1-r1',
@@ -252,7 +253,7 @@ test('ReplicaStateMachine replays exact INSERT evidence after clock advance',
       'the canonical lifecycle owner should bind the applied generation');
     fixture.setReadsAvailable(true);
     fixture.setOwnerNow(10_000);
-    const replayed = await owner.activateReplica({
+    const replayed = await owner.activateReplica({service: roleService('follower'),
       isEffectHandlerCurrent: () => true,
       partitionId: 'p1',
       replicaId: 'p1-r1',
@@ -273,7 +274,7 @@ test('PartitionServiceRowOwner redrives deferred branded evidence through ' +
   const {owner, registrationEvidence, stateMachine} = fixture;
   const originalRow = {...fixture.durableRow};
   let handlerChecks = 0;
-  const options = {
+  const options = {service: roleService('follower'),
     isEffectHandlerCurrent: () => {
       handlerChecks += 1;
       return true;
@@ -310,7 +311,7 @@ test('PartitionServiceRowOwner redrives deferred branded evidence through ' +
     state_entered_at: originalRow.state_entered_at,
   }, 'the CAS is bound to the exact original birth and lifecycle generation');
 
-  await t.rejects(owner.activateReplica({
+  await t.rejects(owner.activateReplica({service: roleService('follower'),
     ...options,
     registrationEvidence: Object.freeze({...registrationEvidence}),
   }), {code: REPLICA_REGISTERED_ACTIVATION_ERROR_CODE.SOURCE_CHANGED},
@@ -378,7 +379,7 @@ test('ReplicaStateMachine refuses branded evidence after durable generation chan
     });
 
     await t.rejects(
-      owner.activateReplica({
+      owner.activateReplica({service: roleService('follower'),
         isEffectHandlerCurrent: () => true,
         partitionId: 'p1',
         replicaId: 'p1-r1',
@@ -403,7 +404,7 @@ test('ReplicaStateMachine refuses old registration evidence after same-ID ' +
     partitionId: 'p1',
     replicaId: 'p1-r1',
     nodeId: 'node-a',
-    service: {getRole: () => 'follower'},
+    service: roleService('follower'),
     status: 'stopped',
   });
   const recreatedRow = fixture.durableRow;
@@ -411,7 +412,7 @@ test('ReplicaStateMachine refuses old registration evidence after same-ID ' +
     'the fixture explicitly removes then recreates through the creation owner');
 
   await t.rejects(
-    owner.activateReplica({
+    owner.activateReplica({service: roleService('follower'),
       isEffectHandlerCurrent: () => true,
       partitionId: 'p1',
       replicaId: 'p1-r1',
@@ -517,7 +518,7 @@ test('exact registered activation replaces tracked CREATING while an ' +
   t.equal(stateMachine.getState('p1-r1')?.state, 'creating',
     'refused snapshot preserves the tracked ordinary lifecycle');
 
-  const activated = await owner.activateReplica({
+  const activated = await owner.activateReplica({service: roleService('follower'),
     isEffectHandlerCurrent: () => true,
     partitionId: 'p1',
     replicaId: 'p1-r1',
@@ -549,7 +550,7 @@ async (t) => {
     raft_role: 'leader',
     updated_at: registrationEvidence.updated_at + 50,
   });
-  const activated = await owner.activateReplica({
+  const activated = await owner.activateReplica({service: roleService('follower'),
     isEffectHandlerCurrent: () => true,
     partitionId: 'p1', replicaId: 'p1-r1', nodeId: 'node-a',
     registrationEvidence,
@@ -568,7 +569,7 @@ async (t) => {
   });
   const transitioned = second.durableRow;
   await t.rejects(
-    second.owner.activateReplica({
+    second.owner.activateReplica({service: roleService('follower'),
       isEffectHandlerCurrent: () => true,
       partitionId: 'p1', replicaId: 'p1-r1', nodeId: 'node-a',
       registrationEvidence: second.registrationEvidence,
@@ -604,11 +605,16 @@ test('partition activation lost acknowledgement resolves by generation even ' +
     replicaStateMachine: createStateMachine(150), now: () => 100});
   const registrationEvidence = await owner.registerReplica({
     partitionId: 'p1', replicaId: 'p1-r1', nodeId: 'node-a',
-    service: {getRole: () => 'follower'}, status: 'stopped'});
-  const activated = await owner.activateReplica({isEffectHandlerCurrent: () => true,
+    service: roleService('follower'), status: 'stopped'});
+  const activated = await owner.activateReplica({service: roleService('follower'), isEffectHandlerCurrent: () => true,
     partitionId: 'p1',
     replicaId: 'p1-r1', nodeId: 'node-a', registrationEvidence});
   t.equal(activated.status, 'active',
     'the exact destination generation is recognized despite updated_at');
   t.equal(durableRow.state_entered_at, activated.state_entered_at);
 });
+
+// Controlled service observation; row fixtures do not stand in for native proof.
+function roleService(role) {
+  return {raft: {readRoleAndTerm: () => (serviceRoleObservation(role, 1))}};
+}

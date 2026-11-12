@@ -1,3 +1,4 @@
+import {readReplicaRoleAndTerm, readReplicaServiceRole, isReplicaServiceLeader} from '../raft/replica-leadership-state.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {PartitionServiceCdcStreamBase} from './partition-service-cdc-stream-base.js';
 import {createPartitionLocalServiceStatusRecord} from
@@ -583,7 +584,8 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
    * @return {boolean} True if leader.
    */
   isLeaderReplica() {
-    return this.role === RaftRole.LEADER;
+    return this.isLeader === true && this.leadershipTenure != null &&
+      isReplicaServiceLeader(this);
   }
   /**
    * Get the current leader ID.
@@ -597,15 +599,14 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
    * @return {string} Current role.
    */
   getRole() {
-    return this.role;
+    return readReplicaServiceRole(this);
   }
   /**
    * Get the current term, as the consensus port's readStatus reports it.
-   * @return {number} Current term; 0 while no port is up or its status is
-   *   not synchronously readable.
+   * @return {number} Current term; throws with the exact unavailable/refused answer.
    */
   getCurrentTerm() {
-    return this.resolveCurrentTermSafe() ?? 0;
+    return readReplicaRoleAndTerm(this).term;
   }
   /**
    * Get the partition state.

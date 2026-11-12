@@ -1,3 +1,4 @@
+import {readReplicaServiceRole, isReplicaServiceLeader} from '../raft/replica-leadership-state.js';
 import {readStateField} from '../utils/state-field-read.js';
 // How a WASM service replica publishes its role and its group's leader node
 // to its services row: each value flows through an authoritative row
@@ -58,6 +59,13 @@ function serviceRowWhereClause(replica, column, cachedRow) {
 function createWasmServiceRoleMutationHelper(replica) {
   return new AuthoritativeRowMutationHelper({
     tableName: SYSTEM_TABLE_NAME.SERVICES,
+    prepareFlush: ({pendingValue, flushingValue}) => {
+      const role = readReplicaServiceRole(replica);
+      const stale = flushingValue !== role;
+      return {skip: stale, clearPending: stale && pendingValue !== role,
+        reason: stale ? FLUSH_REASON_NOT_OWNER : FLUSH_REASON_READY};
+    },
+    readLiveValue: () => readReplicaServiceRole(replica),
     buildWhereClause: (_role, context = {}) =>
       serviceRowWhereClause(replica, COLUMN.RAFT_ROLE, context.cachedRow),
     buildUpdateData: (role, updatedAt) => ({
@@ -100,22 +108,25 @@ function createWasmServiceLeaderNodeMutationHelper(replica) {
       serviceRowWhereClause(replica, COLUMN.NODE_ID, context.cachedRow),
     buildUpdateData: (leaderNodeId, updatedAt) => ({
       [COLUMN.NODE_ID]: leaderNodeId,
-      [COLUMN.RAFT_ROLE]: replica.role,
+      [COLUMN.RAFT_ROLE]: readReplicaServiceRole(replica),
       [COLUMN.UPDATED_AT]: updatedAt,
     }),
     buildExpectedCacheFields: (leaderNodeId) => ({
       [COLUMN.NODE_ID]: leaderNodeId,
-      [COLUMN.RAFT_ROLE]: replica.role,
+      [COLUMN.RAFT_ROLE]: readReplicaServiceRole(replica),
     }),
     readRowFromCache: (systemTableCache) =>
       cachedServiceRow(replica, systemTableCache),
     readValueFromCache: (systemTableCache) =>
       cachedServiceRow(replica, systemTableCache)?.[COLUMN.NODE_ID] || null,
-    prepareFlush: () => ({
-      skip: !replica.isLeader,
-      clearPending: !replica.isLeader,
-      reason: replica.isLeader ? FLUSH_REASON_READY : FLUSH_REASON_NOT_OWNER,
-    }),
+    prepareFlush: () => {
+      const activeLeader = isReplicaServiceLeader(replica);
+      return {
+        skip: !activeLeader,
+        clearPending: !activeLeader,
+        reason: activeLeader ? FLUSH_REASON_READY : FLUSH_REASON_NOT_OWNER,
+      };
+    },
     isWriteReady: () => replica.isServicesLeaderAvailable(),
     retryDelayMs: METADATA_FLUSH_RETRY_DELAY_MS,
     systemTableCache: replica.systemTableCache,

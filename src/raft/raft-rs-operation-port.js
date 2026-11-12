@@ -73,6 +73,7 @@ const EVENTS = new Set([
   RAFT_EVENT.CANDIDATE,
   RAFT_EVENT.LEADER_CHANGE,
   RAFT_EVENT.TERM_CHANGE,
+  RAFT_EVENT.ROLE_OBSERVATION_REFUSED,
   RAFT_EVENT.APPLIED_PROGRESS,
   RAFT_EVENT.COMMITTED_PREFIX_DIVERGENCE,
   RAFT_EVENT.MEMBERSHIP_CHANGED,
@@ -341,7 +342,16 @@ function createRaftRsOperationPort(request) {
   const listeners = new Map();
   const emit = (eventName, ...args) => {
     for (const listener of listeners.get(eventName) || []) {
-      listener(...args.map((value) => deepFreeze(value)));
+      try {
+        listener(...args.map((value) => deepFreeze(value)));
+      } catch (error) {
+        // A synchronous diagnostic read can rethrow the very refusal being
+        // published. It is still this observation's answer, not a new host
+        // failure, and must not prevent other consumers from withdrawing.
+        if (eventName !== RAFT_EVENT.ROLE_OBSERVATION_REFUSED || error?.raftResult !== args[0]) {
+          throw error;
+        }
+      }
     }
   };
   const identityRecorded =
@@ -517,7 +527,8 @@ function createRaftRsOperationPort(request) {
     readStatus: () => execute({type: 'read-status'}).result,
     // This replica's role and term from the same observation a status read
     // answers from, without resolving any peer: {outcome: CORE_OK, role,
-    // term}, or the status read's own failure. Settles in this run.
+    // term, membership, gateOpen}, or the status read's own failure.
+    // Role is election state, independent of membership. Settles in this run.
     readRoleAndTerm: () =>
       execute({type: RUNTIME_COMMAND.READ_ROLE_AND_TERM}).result,
     // The committed configuration as frozen data ({purpose} is a

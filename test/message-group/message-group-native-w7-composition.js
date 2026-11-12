@@ -1,3 +1,4 @@
+import {serviceRoleObservation} from '../test-helpers/service-role-observation.js';
 // Multi-router, multi-target native CDC composition for W1, W2, W7 and W9.
 // Reuses the single-target provisional-route helpers without duplicating code.
 import {founderNodeIdsOfPlacement} from
@@ -74,6 +75,7 @@ function activeServiceRow(groupId, replicaId, nodeId, role = RAFT_ROLE.FOLLOWER)
       groupId,
       replicaId,
       nodeId,
+      service: {raft: {readRoleAndTerm: () => (serviceRoleObservation(role, 1))}},
       timestamp: 1,
       status: SERVICE_STATUS.ACTIVE,
     }),

@@ -30,6 +30,8 @@ import {
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_OPERATION,
 } from '../../src/partition/partition-service-constants.js';
+import {observeNativeRoleAndTerm} from '../../src/raft/raft-rs-status-observation.js';
+import {isRetryableWriteFailureCode} from '../../src/partition/partition-write-kernel.js';
 import {ERRORS} from '../../src/constants/errors.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
   '../../src/partition/partition-write-kernel.js';
@@ -1039,4 +1041,37 @@ test('AD: a committed write whose side effect throws after its commit is ' +
     error: AD_PLANTED_SIDE_EFFECT_FAILURE}],
   'the side effect\'s failure is logged with the entry');
   await partition.shutdown();
+});
+
+
+test('PartitionService applyWrite retains invalid native role before any proposal', async (t) => {
+  const partition = createPartition('invalid-role-write', ['invalid-role-r1']);
+  await partition.initialize();
+  t.teardown(() => partition.shutdown());
+  partition.controllablePort.setRole(RAFT_ROLE.LEADER);
+  await resumeFixtureParticipantAdmission(partition);
+  const port = partition.raft;
+  const refused = observeNativeRoleAndTerm({raftState: 'constructor', term: 1});
+  let malformed = true;
+  let proposals = 0;
+  partition.raft = Object.freeze({...port,
+    readRoleAndTerm: () => malformed ? refused : port.readRoleAndTerm()});
+  partition.controllablePort.setProposeHandler(async (entry) => {
+    proposals++;
+    partition.controllablePort.commit(entry);
+  });
+  const write = {type: PARTITION_SERVICE_OPERATION.INSERT,
+    sql: 'INSERT INTO test_table (id, value) VALUES (?, ?)',
+    params: ['role-row', 'retained'], entryId: 'role-entry'};
+  const result = await partition.applyWrite(write);
+  t.equal(result.success, false);
+  t.same(result.consensus, refused, 'exact refusal survives public write answer');
+  t.equal(isRetryableWriteFailureCode(result.failureCode), false);
+  t.equal(proposals, 0, 'no proposal entered consensus');
+  t.equal(partition.db.prepare('SELECT COUNT(*) AS n FROM test_table').get().n, 0);
+  malformed = false;
+  const accepted = await partition.applyWrite(write);
+  t.equal(accepted.success, true, 'same entry becomes usable after valid owner read');
+  t.equal(proposals, 1);
+  t.equal(partition.db.prepare('SELECT COUNT(*) AS n FROM test_table').get().n, 1);
 });

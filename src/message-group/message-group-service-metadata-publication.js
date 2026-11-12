@@ -1,3 +1,4 @@
+import {readReplicaServiceRole, isReplicaServiceLeader} from '../raft/replica-leadership-state.js';
 import {readStateField} from '../utils/state-field-read.js';
 /**
  * Message Group Service - metadata publication readiness and authoritative
@@ -208,7 +209,7 @@ function assignMetadataPublication(serviceClass) {
           }
           const targetRole = flushingValue ?? pendingValue;
           // Born FOLLOWER (message-group-service-state); unstated -> STATE_ABSENT.
-          const liveRole = readStateField(this.role);
+          const liveRole = readReplicaServiceRole(this);
           const staleRoleFlush = isStaleRoleFlushForLiveRole(
             targetRole,
             liveRole,
@@ -224,7 +225,7 @@ function assignMetadataPublication(serviceClass) {
           };
         },
         readLiveValue: (expectedRole) =>
-          resolveComparableLiveRole(expectedRole, this.role),
+          resolveComparableLiveRole(expectedRole, readReplicaServiceRole(this)),
         readRowFromCache: (systemTableCache) =>
           systemTableCache?.get?.(TABLES.SERVICES, this.replicaId) || null,
         readValueFromCache: (systemTableCache) => {
@@ -290,15 +291,18 @@ function assignMetadataPublication(serviceClass) {
           );
           return cached?.[COLUMN.LEADER_NODE_ID] || null;
         },
-        prepareFlush: () => ({
-          skip: !this.publishLeaderNodeMetadata || !this.isLeader,
-          clearPending: !this.publishLeaderNodeMetadata || !this.isLeader,
-          reason: !this.publishLeaderNodeMetadata ?
-            FLUSH_SKIP_DISABLED :
-            !this.isLeader ?
-              FLUSH_SKIP_NOT_OWNER :
-              FLUSH_SKIP_READY,
-        }),
+        prepareFlush: () => {
+          const activeLeader = isReplicaServiceLeader(this);
+          return {
+            skip: !this.publishLeaderNodeMetadata || !activeLeader,
+            clearPending: !this.publishLeaderNodeMetadata || !activeLeader,
+            reason: !this.publishLeaderNodeMetadata ?
+              FLUSH_SKIP_DISABLED :
+              !activeLeader ?
+                FLUSH_SKIP_NOT_OWNER :
+                FLUSH_SKIP_READY,
+          };
+        },
         isWriteReady: () => this.isMessageGroupsLeaderAvailable(),
         systemTableCache: this.systemTableCache,
         cdcIntegrationService: this.cdcIntegrationService,

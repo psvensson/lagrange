@@ -6,6 +6,7 @@
 // real one; only the host's address answer is the fixture's.
 import {PEER_DELIVERY_OUTCOME} from '../../src/raft/raft-rs-runtime-owner-constants.js';
 
+const IDENTITY_TABLE = 'raft_rs_peer_identity';
 const SELF = 'shape-self';
 const LEADER = 'shape-leader';
 const VOTER = 'shape-voter';
@@ -72,4 +73,31 @@ function observations(ids) {
   };
 }
 
-export {groupOf, hostAddress, observations, reserve};
+// The real port over a database whose peer-identity statements count their
+// executions.
+function countingDatabase(db) {
+  const executions = {count: 0};
+  const counted = (statement) => new Proxy(statement, {get(target, property) {
+    const value = Reflect.get(target, property, target);
+    if (['get', 'all', 'run'].includes(property)) {
+      return (...args) => {
+        executions.count += 1;
+        return value.apply(target, args);
+      };
+    }
+    return typeof value === 'function' ? value.bind(target) : value;
+  }});
+  const proxy = new Proxy(db, {get(target, property) {
+    if (property === 'prepare') {
+      return (sql) => {
+        const statement = target.prepare(sql);
+        return sql.includes(IDENTITY_TABLE) ? counted(statement) : statement;
+      };
+    }
+    const value = Reflect.get(target, property, target);
+    return typeof value === 'function' ? value.bind(target) : value;
+  }});
+  return {proxy, executions};
+}
+
+export {countingDatabase, groupOf, hostAddress, observations, reserve};

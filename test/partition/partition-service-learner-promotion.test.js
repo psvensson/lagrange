@@ -1,3 +1,4 @@
+import {serviceRoleObservation} from '../test-helpers/service-role-observation.js';
 /**
  * Unit tests for PartitionService.
  * Tests SQLite-backed Raft group for data storage.
@@ -201,6 +202,7 @@ test('PartitionService - learner promotes one temporary replacement voter above 
   }));
 
   // Manually set role to learner (simulating post-initialization state)
+  partition.raft = {readRoleAndTerm: () => (serviceRoleObservation(RaftRole.FOLLOWER, 1))};
   partition.role = RaftRole.LEARNER;
   partition.leaderId = 'replica-1';
 
@@ -291,6 +293,7 @@ test('PartitionService - learner promotes one temporary replacement voter above 
     systemTableCache: mockCache,
   }));
 
+  partition.raft = {readRoleAndTerm: () => (serviceRoleObservation(RaftRole.FOLLOWER, 1))};
   partition.role = RaftRole.LEARNER;
   partition.leaderId = 'nodes-p1-r1';
 
@@ -394,6 +397,7 @@ test('PartitionService - learner promotion discounts stale local voter row',
       systemTableCache: mockCache,
     }));
 
+    partition.raft = {readRoleAndTerm: () => (serviceRoleObservation(RaftRole.FOLLOWER, 1))};
     partition.role = RaftRole.LEARNER;
     partition.leaderId = TEST_STALE_LOCAL_PROMOTION_LEADER_REPLICA_ID;
 
@@ -463,6 +467,7 @@ test('PartitionService - learner promotes when voter count would be odd', async 
   }));
 
   // Manually set role to learner (simulating post-initialization state)
+  partition.raft = {readRoleAndTerm: () => (serviceRoleObservation(RaftRole.FOLLOWER, 1))};
   partition.role = RaftRole.LEARNER;
   partition.leaderId = 'replica-1';
 
@@ -528,6 +533,7 @@ test('PartitionService - learner promotion deferred until leader is known', asyn
     systemTableCache: mockCache,
   }));
 
+  partition.raft = {readRoleAndTerm: () => (serviceRoleObservation(RaftRole.FOLLOWER, 1))};
   partition.role = RaftRole.LEARNER;
   partition.leaderId = null;
 
@@ -608,6 +614,7 @@ test(
       learnerCatchUpCheckIntervalMs: 1000,
     }));
 
+    partition.raft = {readRoleAndTerm: () => (serviceRoleObservation(RaftRole.FOLLOWER, 1))};
     partition.role = RaftRole.LEARNER;
     partition.leaderId = null;
     await partition.checkLearnerPromotion();
@@ -749,6 +756,7 @@ test(
       systemTableCache: mockCache,
     }));
 
+    partition.raft = {readRoleAndTerm: () => (serviceRoleObservation(RaftRole.FOLLOWER, 1))};
     partition.role = RaftRole.LEARNER;
     partition.leaderId = 'replica-1';
 
@@ -867,6 +875,7 @@ test(
       systemTableCache: mockCache,
     }));
 
+    partition.raft = {readRoleAndTerm: () => (serviceRoleObservation(RaftRole.FOLLOWER, 1))};
     partition.role = RaftRole.LEARNER;
     partition.leaderId = 'replica-1';
 
@@ -1008,6 +1017,7 @@ test(
         },
       },
     };
+    partition.raft = {readRoleAndTerm: () => (serviceRoleObservation(RaftRole.FOLLOWER, 1))};
     partition.role = RaftRole.LEARNER;
     partition.leaderId = 'replica-1';
 
@@ -1129,6 +1139,7 @@ test(
       systemTableCache: mockCache,
     }));
 
+    partition.raft = {readRoleAndTerm: () => (serviceRoleObservation(RaftRole.FOLLOWER, 1))};
     partition.role = RaftRole.LEARNER;
     partition.leaderId = 'replica-1';
 
@@ -1199,14 +1210,16 @@ test(
       systemTableCache: mockCache,
     }));
 
+    partition.raft = {readRoleAndTerm: () => (serviceRoleObservation(RaftRole.FOLLOWER, 1))};
     partition.role = RaftRole.LEARNER;
     partition.leaderId = null;
     // The learner hears its leader: its own live raft status names it, at
     // its committed address (C4: never a startup hint or a cached row).
-    partition.raft = {readStatus: () => ({outcome: 'CORE_OK',
-      groupId: 'test-partition', replicaIdentity: 'replica-3',
-      leaderId: 'replica-1', leaderAddress: 'node-1/partition/replica-1',
-      leaderAddressStatus: 'resolved', role: RaftRole.LEARNER, peers: []})};
+    partition.raft = {readRoleAndTerm: () => (serviceRoleObservation(RaftRole.FOLLOWER, 1)),
+      readStatus: () => ({outcome: 'CORE_OK',
+        groupId: 'test-partition', replicaIdentity: 'replica-3',
+        leaderId: 'replica-1', leaderAddress: 'node-1/partition/replica-1',
+        leaderAddressStatus: 'resolved', role: RaftRole.LEARNER, peers: []})};
     let electionStarted = false;
     partition.startElection = () => {
       electionStarted = true;

@@ -1,3 +1,4 @@
+import {serviceRoleObservation} from '../test-helpers/service-role-observation.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import Database from 'better-sqlite3';
@@ -143,7 +144,7 @@ test('operation-authority-contract: canonical operation authority contract shape
 
     // Campaign to elect genuine native leader
     port.campaign();
-    applyReplicaLeadership(service, 'leader');
+    applyReplicaLeadership(service, 'leader', service.raft.readRoleAndTerm().term);
 
     const leaderAuth = service.readPartitionConsensusAuthority();
     assert.equal(leaderAuth.outcome, 'core-ok', 'outcome is core-ok');
@@ -204,7 +205,7 @@ test('invalid-authority-refused: hand-set role and uncertified consensus are ref
 
   // Test 2a: Hand-set role + stubbed term ({term: 4}) without native consensus MUST be refused
   service.raft = {readStatus: () => ({term: 4})};
-  applyReplicaLeadership(service, 'leader');
+  applyReplicaLeadership(service, 'leader', 4);
   assert.equal(evaluatePartitionQuorumAuthority(viewOwner, inventory).hasPartitionQuorum, false,
     'hand-set role with stubbed term refused');
 
@@ -248,6 +249,7 @@ test('invalid-authority-refused: hand-set role and uncertified consensus are ref
 
   // Test 2e: Pending unapplied conf change
   service.raft = {
+    readRoleAndTerm: () => (serviceRoleObservation('leader', 4)),
     readStatus: () => ({
       outcome: 'CORE_OK',
       role: 'leader',
@@ -256,7 +258,7 @@ test('invalid-authority-refused: hand-set role and uncertified consensus are ref
       confState: {voters: [REPLICA_ID]},
     }),
   };
-  applyReplicaLeadership(service, 'leader');
+  applyReplicaLeadership(service, 'leader', service.raft.readRoleAndTerm().term);
   assert.equal(evaluatePartitionQuorumAuthority(viewOwner, inventory).hasPartitionQuorum, false,
     'unapplied pending conf change refused');
 
@@ -274,6 +276,7 @@ test('invalid-authority-refused: hand-set role and uncertified consensus are ref
 
   // Test 2g: Empty voters
   service.raft = {
+    readRoleAndTerm: () => (serviceRoleObservation('leader', 4)),
     readStatus: () => ({
       outcome: 'CORE_OK',
       role: 'leader',
@@ -428,7 +431,7 @@ test('real-native-producer-consumer-action: real native consensus leader execute
 
     // Campaign port in real WASM Raft to become leader
     port.campaign();
-    applyReplicaLeadership(service, 'leader');
+    applyReplicaLeadership(service, 'leader', service.raft.readRoleAndTerm().term);
 
     const viewOwner = buildViewOwner(service);
     const inventory = buildTestInventory();
@@ -514,7 +517,7 @@ test('refusal-recovery-and-cleanup: refusal during quorum loss, recovery on rest
 
     // 2. Recovery on campaign & leadership promotion
     port.campaign();
-    applyReplicaLeadership(service, 'leader');
+    applyReplicaLeadership(service, 'leader', service.raft.readRoleAndTerm().term);
 
     const res = await mgmt.submitOperation(
       buildOperationEnvelope(MANAGEMENT_OPERATION_KIND.TRANSITION_RELEASE, releaseParams),

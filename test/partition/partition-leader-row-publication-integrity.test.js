@@ -1,3 +1,4 @@
+import {serviceRoleObservation} from '../test-helpers/service-role-observation.js';
 import t from 'tap';
 import {
   isCriticalLeaderPublication,
@@ -149,7 +150,7 @@ t.test('row-owner leader publication rides the critical lane for ordinary ' +
     nodeId: NODE_SELF,
     partitionId: ORDINARY_PARTITION,
     replicaId: `${ORDINARY_PARTITION}-r1`,
-    service: {isLeaderReplica: () => true},
+    service: roleService('leader'),
   });
   const leaderUpdate = updates.find((u) => u.tableName === 'partitions');
   t.ok(leaderUpdate, 'canonical leader publication happened');
@@ -324,3 +325,8 @@ t.test('the spent leader-publication retry budget logs one wait_bound_spent ' +
   t.equal(capture.errors().length, 1, 'no second ERROR in another shape');
   t.end();
 });
+
+// Controlled service observation; row fixtures do not stand in for native proof.
+function roleService(role) {
+  return {raft: {readRoleAndTerm: () => (serviceRoleObservation(role, 1))}};
+}

@@ -2169,6 +2169,61 @@
         "test/bootstrap/pgwire-startup-safety-gate.test.js",
         "test/bootstrap/cleanup-ownership-order-characterization.test.js"
       ]
+    },
+    "raft-native-role-consumer-authority": {
+      "description": "One decoder owns integer native roles 0..3. The native STATUS result boundary retains exact invalid-native-role refusal before its single ROLE_OBSERVATION_REFUSED event; reentrant reads and row diagnostics cannot recursively notify or preserve tenure. Read, transfer, probe, announce, apply/drain and pre-step observational refresh consume that owner. Invalid ingress is recorded and returned without step; a valid refresh reopens admission while only normal announcement renews tenure. Partition, MG and WASM adapters withdraw owned effects once, preserve typed refusal and forbid stale role publication through row builders and deferred writers. Removed-leader invalid apply retains durable replay custody without application/advance. Unavailable service/port throws exact HOST_FAILURE; no field/ledger/row fallback. Source controls remain distinct from native valid-invalid-valid, re-entry, scheduler, removal and durable row controls. An event listener rethrowing the identical retained refusal cannot interrupt later consumers or become a new host failure; unrelated exceptions keep existing behavior. Partition and WASM term adapters preserve the same typed refusal. Election role is separate from same-observation membership and participation: learners remain publishable while gated; voter claims require admission. Active service leadership additionally requires lifecycle tenure. Invalid-to-valid normal announcement restores role, term and leader even unchanged; reads alone mint no tenure. Bootstrap, CDC, handler, query, row and WASM request/writer consumers share these owners. Native committed promotion and follower recovery controls cover producer meaning; controlled fixture schemas are not native acceptance.",
+      "owners": [
+        "src/raft/raft-rs-status-observation.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/raft/raft-rs-runtime-owner-constants.js",
+        "src/raft/raft-rs-leadership-transfer.js",
+        "src/message-group/message-group-service-leadership-state-runtime-methods.js",
+        "src/message-group/message-group-service-raft-lifecycle.js",
+        "src/raft/replica-leadership-state.js",
+        "src/partition/partition-service-raft-write-commit.js",
+        "src/partition/partition-write-kernel.js",
+        "src/constants/errors.js",
+        "src/control-plane/control-plane-error-classification.js",
+        "src/query/query-executor-write-retry-routing.js",
+        "src/raft/raft-rs-conf-change-admission.js",
+        "src/raft/raft-rs-membership-transition-runtime.js",
+        "src/message-group/constants.js",
+        "src/raft/raft-rs-runtime-faults.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-rs-operation-port.js",
+        "src/raft/raft-rs-removed-leader-step-down.js",
+        "src/partition/partition-service-raft-lifecycle-wiring.js",
+        "src/partition/partition-service-split-accessor-base.js",
+        "src/partition/partition-service-row-owner.js",
+        "src/partition/partition-service-metadata-mutation-helpers.js",
+        "src/message-group/message-group-service-row-owner.js",
+        "src/message-group/message-group-service-metadata-publication.js",
+        "src/wasm-service/wasm-service-replica-lifecycle.js",
+        "src/wasm-service/wasm-service-replica.js",
+        "src/wasm-service/wasm-service-metadata-mutation-helpers.js",
+        "src/partition/partition-service-raft-init-base.js",
+        "src/node/replica-handler-runtime-methods.js",
+        "src/query/sql-query-engine-routing-metadata-methods.js",
+        "src/bootstrap/owners/service-leader-readiness-owner.js",
+        "src/bootstrap/shared/partition-service-activation.js",
+        "src/cdc/cdc-integration-service-local-system-table-routing.js",
+        "src/wasm-service/wasm-writer-completion.js"
+      ],
+      "tests": [
+        "test/raft/raft-rs-native-role-publication.test.js",
+        "test/raft/raft-rs-native-role-caller-closure.test.js",
+        "test/raft/raft-rs-status-peer-resolution.test.js",
+        "test/partition/partition-service-write-commit.test.js",
+        "test/raft/raft-rs-native-role-removed-leader.test.js",
+        "test/raft/raft-rs-native-role-service-withdrawal.test.js",
+        "test/partition/partition-write-kernel.test.js",
+        "test/message-group/message-group-service-row-owner.test.js",
+        "test/partition/partition-service-row-owner.test.js",
+        "test/raft/raft-rs-native-service-membership.test.js",
+        "test/raft/raft-rs-native-service-routing.test.js",
+        "test/raft/raft-rs-native-follower-recovery.test.js",
+        "test/raft/raft-rs-native-service-authority-consumers.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -4632,6 +4687,72 @@
         "test/bootstrap/guarded-runtime-service-handler.test.js",
         "test/bootstrap/pgwire-startup-safety-gate.test.js",
         "test/bootstrap/cleanup-ownership-order-characterization.test.js"
+      ]
+    },
+    "raft-native-role-consumer-authority": {
+      "description": "One decoder owns integer native roles 0..3. The native STATUS result boundary retains exact invalid-native-role refusal before its single ROLE_OBSERVATION_REFUSED event; reentrant reads and row diagnostics cannot recursively notify or preserve tenure. Read, transfer, probe, announce, apply/drain and pre-step observational refresh consume that owner. Invalid ingress is recorded and returned without step; a valid refresh reopens admission while only normal announcement renews tenure. Partition, MG and WASM adapters withdraw owned effects once, preserve typed refusal and forbid stale role publication through row builders and deferred writers. Removed-leader invalid apply retains durable replay custody without application/advance. Unavailable service/port throws exact HOST_FAILURE; no field/ledger/row fallback. Source controls remain distinct from native valid-invalid-valid, re-entry, scheduler, removal and durable row controls. An event listener rethrowing the identical retained refusal cannot interrupt later consumers or become a new host failure; unrelated exceptions keep existing behavior. Partition and WASM term adapters preserve the same typed refusal. Election role is separate from same-observation membership and participation: learners remain publishable while gated; voter claims require admission. Active service leadership additionally requires lifecycle tenure. Invalid-to-valid normal announcement restores role, term and leader even unchanged; reads alone mint no tenure. Bootstrap, CDC, handler, query, row and WASM request/writer consumers share these owners. Native committed promotion and follower recovery controls cover producer meaning; controlled fixture schemas are not native acceptance.",
+      "endpoints": [
+        {
+          "id": "native-role-observation-and-transfer",
+          "owners": [
+            "src/raft/raft-rs-status-observation.js",
+            "src/raft/raft-rs-runtime-owner.js",
+            "src/raft/raft-rs-runtime-owner-constants.js",
+            "src/raft/raft-rs-leadership-transfer.js",
+            "src/raft/raft-rs-conf-change-admission.js",
+            "src/raft/raft-rs-membership-transition-runtime.js",
+            "src/raft/raft-rs-runtime-faults.js",
+            "src/raft/raft-operation-port-constants.js",
+            "src/raft/raft-rs-operation-port.js",
+            "src/raft/raft-rs-removed-leader-step-down.js"
+          ]
+        },
+        {
+          "id": "service-authority-consumers",
+          "owners": [
+            "src/message-group/message-group-service-leadership-state-runtime-methods.js",
+            "src/message-group/message-group-service-raft-lifecycle.js",
+            "src/raft/replica-leadership-state.js",
+            "src/partition/partition-service-raft-write-commit.js",
+            "src/partition/partition-write-kernel.js",
+            "src/constants/errors.js",
+            "src/control-plane/control-plane-error-classification.js",
+            "src/query/query-executor-write-retry-routing.js",
+            "src/message-group/constants.js",
+            "src/partition/partition-service-raft-lifecycle-wiring.js",
+            "src/partition/partition-service-split-accessor-base.js",
+            "src/partition/partition-service-row-owner.js",
+            "src/partition/partition-service-metadata-mutation-helpers.js",
+            "src/message-group/message-group-service-row-owner.js",
+            "src/message-group/message-group-service-metadata-publication.js",
+            "src/wasm-service/wasm-service-replica-lifecycle.js",
+            "src/wasm-service/wasm-service-replica.js",
+            "src/wasm-service/wasm-service-metadata-mutation-helpers.js",
+            "src/partition/partition-service-raft-init-base.js",
+            "src/node/replica-handler-runtime-methods.js",
+            "src/query/sql-query-engine-routing-metadata-methods.js",
+            "src/bootstrap/owners/service-leader-readiness-owner.js",
+            "src/bootstrap/shared/partition-service-activation.js",
+            "src/cdc/cdc-integration-service-local-system-table-routing.js",
+            "src/wasm-service/wasm-writer-completion.js"
+          ]
+        }
+      ],
+      "contract": "raft-native-role-consumer-authority",
+      "witnessTests": [
+        "test/raft/raft-rs-native-role-publication.test.js",
+        "test/raft/raft-rs-native-role-caller-closure.test.js",
+        "test/raft/raft-rs-status-peer-resolution.test.js",
+        "test/partition/partition-service-write-commit.test.js",
+        "test/raft/raft-rs-native-role-removed-leader.test.js",
+        "test/raft/raft-rs-native-role-service-withdrawal.test.js",
+        "test/partition/partition-write-kernel.test.js",
+        "test/message-group/message-group-service-row-owner.test.js",
+        "test/partition/partition-service-row-owner.test.js",
+        "test/raft/raft-rs-native-service-membership.test.js",
+        "test/raft/raft-rs-native-service-routing.test.js",
+        "test/raft/raft-rs-native-follower-recovery.test.js",
+        "test/raft/raft-rs-native-service-authority-consumers.test.js"
       ]
     }
   }

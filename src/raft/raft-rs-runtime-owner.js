@@ -85,7 +85,7 @@ import {
   recoveryRetryWindowMsOf,
   tuningOf,
 } from './raft-rs-runtime-tuning.js';
-import {observedRole, observedTerm, shapeGroupObservation} from
+import {observeNativeRoleAndTerm, observeReplicaRoleAndTerm, shapeGroupObservation} from
   './raft-rs-status-observation.js';
 import {
   confChangeProposalRefusal,
@@ -277,7 +277,8 @@ function groupFailed(group, failed) {
     durableProgress: durableProgressOf(group),
   } : freshRecovery(group, failure, now);
   group.health = RECOVERY_REQUIRED;
-  announceNoRole(group);
+  // A native-role refusal was already retained and announced by its producer.
+  if (failed.reason !== RUNTIME_REASON.INVALID_NATIVE_ROLE) announceNoRole(group);
   return failed;
 }
 
@@ -378,14 +379,30 @@ function invokeCore(group, operation, ...args) {
     groupId: group.groupId,
     runtimeGeneration,
   }));
+  let value;
   try {
     const parameters = CORE_CALL_WITHOUT_HANDLE.has(operation) ?
       args : [group.handle, ...args];
     coreFaultInjector?.(group.groupId, operation, args);
-    return {ok: true, value: core[operation](...parameters)};
+    value = core[operation](...parameters);
   } catch (error) {
     return coreCallFailure(group, operation, args, error);
   }
+  return operation === CORE_OPERATION.STATUS ? retainNativeStatus(group, value) :
+    {ok: true, value};
+}
+
+// Every native status producer enters here, including command admission and
+// apply decisions. Retain a refusal before notifying so reentrant consumers
+// cannot observe older authority. Invalid observations need no configuration.
+function retainNativeStatus(group, status) {
+  const role = observeNativeRoleAndTerm(status);
+  if (role.outcome === CORE_OK) return {ok: true, value: status};
+  const previous = observeNativeRoleAndTerm(group.lastStatus);
+  group.statusObservation = {status};
+  group.lastStatus = status;
+  if (previous.outcome === CORE_OK) group.emit(RUNTIME_EVENT.ROLE_OBSERVATION_REFUSED, role);
+  return {ok: false, result: role};
 }
 
 // A core refusal is the operation's typed answer; anything else is a trap
@@ -613,9 +630,9 @@ function resumeAfterReconstruction(group, expectedGeneration) {
   if (group.gateOpen && isSoleVoter(conf.value, group.peerId)) {
     return campaignGroup(group, expectedGeneration);
   }
-  announce(group, expectedGeneration);
-  return settledTurn(
-    outcome(CORE_OK, {reason: RUNTIME_REASON.RUNTIME_RECONSTRUCTED}));
+  const announced = announce(group, expectedGeneration);
+  return settledTurn(announced.outcome === CORE_OK ?
+    outcome(CORE_OK, {reason: RUNTIME_REASON.RUNTIME_RECONSTRUCTED}) : announced);
 }
 
 // The shared attempt's typed answer is also the reentrant admission fence.
@@ -1180,9 +1197,10 @@ function resolveCommittedEntryConfState(group, expectedGeneration, entry) {
     if (!set.ok) {
       return set;
     }
-    removedLeaderAtApply({peerId: group.peerId, confState: applied.value,
+    const removal = removedLeaderAtApply({peerId: group.peerId, confState: applied.value,
       observe: () => readGroupObservation(group, expectedGeneration),
       stepDown: (primitive) => invokeCoreAt(group, expectedGeneration, primitive)});
+    if (!removal.ok) return removal;
     return {...applied, decoded: decoded.value, membershipContext};
   }
   return invokeCoreAt(
@@ -1196,6 +1214,10 @@ function resolveCommittedEntryConfState(group, expectedGeneration, entry) {
 // application callback. A core failure (the runtime is replaced) or a stale
 // continuation is answered as it is.
 function unresolvedCommittedEntry(group, failed) {
+  // The Ready was taken and native configuration may already have changed.
+  // Preserve the refusal while retaining existing reconstruction custody:
+  // replay the unapplied durable entry after the producer becomes readable.
+  if (failed.reason === RUNTIME_REASON.INVALID_NATIVE_ROLE) return groupFailed(group, failed);
   return failed.outcome === CORE_REFUSED ?
     groupHostFailure(group, RUNTIME_PHASE.APPLICATION,
       {message: failed.reason, detail: {coreOperation: failed.phase}}) :
@@ -1393,7 +1415,9 @@ function drainReady(group, expectedGeneration, startCycles = 0) {
     }
     if (!hasReady.value) {
       // A removed leader that stepped down here left a Ready: drained now.
-      if (announce(group, expectedGeneration)) continue;
+      const announced = announce(group, expectedGeneration);
+      if (announced.outcome !== CORE_OK) return settledTurn(announced);
+      if (announced.steppedDown) continue;
       return settledTurn(outcome(CORE_OK, {reason: RUNTIME_REASON.DRAINED}));
     }
 
@@ -1431,6 +1455,7 @@ function semanticLeaderIdentity(group, lead) {
   if (lead === NO_LEADER) {
     return null;
   }
+  if (lead === group.peerId) return group.replicaIdentity;
   try {
     const identity = group.resolvePeerIdentity(lead);
     return identity.status === RAFT_RS_PEER_IDENTITY_RESOLUTION.RESERVED ?
@@ -1442,37 +1467,29 @@ function semanticLeaderIdentity(group, lead) {
 }
 
 function announce(group, expectedGeneration) {
-  const status = invokeCoreAt(group, expectedGeneration, 'status');
+  const status = invokeCoreAt(group, expectedGeneration, CORE_OPERATION.STATUS);
   if (!status.ok) {
-    return false;
+    return status.result;
   }
   const now = status.value;
+  const roleAndTerm = observeNativeRoleAndTerm(now);
   const before = group.lastStatus;
   group.lastStatus = now;
   // Sampled first: the observation recorded below carries this liveness.
   const livenessChanged = sampleVoterLiveness(group.voterLiveness, now,
     tuningOf(group.timing).electionTick,
-    (status) => ROLE[status.raftState] === ROLE_LEADER);
+    () => roleAndTerm.role === ROLE_LEADER);
   const observed = recordStatusObservation(group, expectedGeneration, now);
   if (livenessChanged) {
     group.emit(RUNTIME_EVENT.VOTER_LIVENESS_CHANGED);
   }
-  const steppedDown = removedLeaderAtDrainEnd({peerId: group.peerId, observed,
+  const removal = removedLeaderAtDrainEnd({peerId: group.peerId, observed,
     stepDown: (primitive) => invokeCoreAt(group, expectedGeneration, primitive),
     queueTransfer: (transfer) => queueRemovedLeaderTransfer(group, transfer)});
+  if (!removal.ok) return removal.result;
   announceAppliedProgress(group, expectedGeneration, observed);
-  if (before && now.raftState !== before.raftState) {
-    group.emit(ROLE[now.raftState] || ROLE[0]);
-  }
-  if (before && now.term !== before.term) {
-    group.emit(RUNTIME_EVENT.TERM_CHANGE, Number(now.term));
-  }
-  if (before && now.lead !== before.lead) {
-    group.emit(
-      RUNTIME_EVENT.LEADER_CHANGE,
-      semanticLeaderIdentity(group, now.lead),
-    );
-  }
+  const publication = announceStatusChanges(group, before, now, roleAndTerm);
+  if (publication.outcome !== CORE_OK || group.lastStatus !== now) return publication;
   if (observed.ok) {
     announceMembership(group, observed.value, now);
   }
@@ -1483,7 +1500,30 @@ function announce(group, expectedGeneration) {
   if (settlement !== null) {
     group.emit(RUNTIME_EVENT.CONF_CHANGE_APPLIED, settlement);
   }
-  return steppedDown;
+  return outcome(CORE_OK, {steppedDown: removal.value.steppedDown});
+}
+
+// Only a successfully decoded observation can publish role/term changes.
+function announceStatusChanges(group, before, now, roleAndTerm) {
+  if (before === null) return roleAndTerm;
+  const recovering = observeNativeRoleAndTerm(before).outcome !== CORE_OK;
+  if (recovering || now.raftState !== before.raftState) {
+    group.emit(roleAndTerm.role);
+  }
+  // A synchronous listener can observe invalidity and withdraw this entire
+  // generation. Do not publish the rest of its formerly valid facts.
+  if (group.lastStatus !== now) return observeNativeRoleAndTerm(group.lastStatus);
+  if (recovering || now.term !== before.term) {
+    group.emit(RUNTIME_EVENT.TERM_CHANGE, Number(now.term));
+  }
+  if (group.lastStatus !== now) return observeNativeRoleAndTerm(group.lastStatus);
+  if (recovering || now.lead !== before.lead) {
+    group.emit(
+      RUNTIME_EVENT.LEADER_CHANGE,
+      semanticLeaderIdentity(group, now.lead),
+    );
+  }
+  return group.lastStatus === now ? roleAndTerm : observeNativeRoleAndTerm(group.lastStatus);
 }
 
 // The voters this group's leader counts live (raft-rs-voter-liveness.js).
@@ -1518,7 +1558,7 @@ function announceAppliedProgress(group, expectedGeneration, observed) {
 // would drop is deferred typed - read from the core's status and
 // configuration in this turn (verification V2, round 2 F-1).
 function refusedConfChange(group, expectedGeneration, change) {
-  const status = invokeCoreAt(group, expectedGeneration, 'status');
+  const status = invokeCoreAt(group, expectedGeneration, CORE_OPERATION.STATUS);
   if (!status.ok) {
     return status.result;
   }
@@ -1554,7 +1594,7 @@ function announceMembership(group, {confState, appliedIndex}, status) {
 // is separate, so recording them resolves no address.
 function readGroupObservation(group, expectedGeneration, rawStatus = null) {
   const status = rawStatus === null ?
-    invokeCoreAt(group, expectedGeneration, 'status') :
+    invokeCoreAt(group, expectedGeneration, CORE_OPERATION.STATUS) :
     {ok: true, value: rawStatus};
   if (!status.ok) {
     return status;
@@ -1603,12 +1643,13 @@ function readGroupStatus(group, expectedGeneration, answer) {
 }
 
 // What a status-kind read answers from an observation of the core: the whole
-// shaped status, or this replica's role and term alone (its readRoleAndTerm:
+// shaped status, or this replica's election role, term and participation (readRoleAndTerm:
 // no peer, leader or progress is resolved, so no identity is read). `fresh`
 // answers an observation the read itself recorded, `recorded` the one the
 // last completed core entry recorded (shaped once, SHAPED_STATUS), and
 // `ofStatus` a status a queued read answered.
 const STATUS_ANSWER = Object.freeze({
+  command: RUNTIME_COMMAND.READ_STATUS,
   fresh: shapeGroupStatus,
   recorded: (group, observation) => {
     if (!SHAPED_STATUS.has(observation)) {
@@ -1619,15 +1660,13 @@ const STATUS_ANSWER = Object.freeze({
   ofStatus: (status) => status,
 });
 const ROLE_AND_TERM_ANSWER = Object.freeze({
-  fresh: (_group, observation) => roleAndTermOf(observation.status),
-  recorded: (_group, observation) => roleAndTermOf(observation.status),
+  command: RUNTIME_COMMAND.READ_ROLE_AND_TERM,
+  fresh: observeReplicaRoleAndTerm,
+  recorded: observeReplicaRoleAndTerm,
   ofStatus: (status) => status.outcome === CORE_OK ?
-    outcome(CORE_OK, {role: status.role, term: status.term}) : status,
+    outcome(CORE_OK, {role: status.role, term: status.term,
+      membership: status.membership, gateOpen: status.gateOpen}) : status,
 });
-
-function roleAndTermOf(status) {
-  return outcome(CORE_OK, {role: observedRole(status), term: observedTerm(status)});
-}
 
 // Every drain that completes a core entry ends in announce, which records the
 // core's facts here for readStatus to answer while the queue is busy.
@@ -1697,7 +1736,7 @@ function readStatusObserved(group, answer) {
   }
   if (group.inbound.length > 0) {
     const read = enqueue(group, () =>
-      perform(group, {type: RUNTIME_COMMAND.READ_STATUS}));
+      perform(group, {type: answer.command}));
     if (read.settled) {
       return settledTurn(answer.ofStatus(read.result));
     }
@@ -1710,7 +1749,7 @@ function campaignGroup(group, expectedGeneration) {
   if (!group.gateOpen) {
     return settledTurn(participationGateClosed());
   }
-  const status = invokeCoreAt(group, expectedGeneration, 'status');
+  const status = invokeCoreAt(group, expectedGeneration, CORE_OPERATION.STATUS);
   if (!status.ok) {
     return settledTurn(status.result);
   }
@@ -1779,11 +1818,13 @@ function probePeerProgress(group, expectedGeneration, replicaIdentity) {
     return settledTurn(observed.result);
   }
   const {status, confState} = observed.value;
+  const role = observeNativeRoleAndTerm(status);
+  if (role.outcome !== CORE_OK) return settledTurn(role);
   const peerId = configuredPeerOf(group, confState, replicaIdentity);
   if (peerId === undefined) {
     return settledTurn(probeRefusal(RUNTIME_REASON.NOT_A_PEER));
   }
-  if (ROLE[status.raftState] !== ROLE_LEADER) {
+  if (role.role !== ROLE_LEADER) {
     return settledTurn(probeRefusal(RUNTIME_REASON.NOT_LEADER));
   }
   const progress = (status.progress || []).find((item) =>
@@ -1852,6 +1893,8 @@ const COMMAND_OPERATION = Object.freeze({
       readGroupStatus(group, generation, STATUS_ANSWER), command.query)),
   [RUNTIME_COMMAND.READ_STATUS]: (group, command, generation) =>
     settledTurn(readGroupStatus(group, generation, STATUS_ANSWER)),
+  [RUNTIME_COMMAND.READ_ROLE_AND_TERM]: (group, command, generation) =>
+    settledTurn(readGroupStatus(group, generation, ROLE_AND_TERM_ANSWER)),
   [RUNTIME_COMMAND.CAMPAIGN]: (group, command, generation) =>
     campaignGroup(group, generation),
   [RUNTIME_COMMAND.DRAIN_INBOUND]: () =>
@@ -1887,7 +1930,7 @@ function gatedCommandRefusal(group, command, expectedGeneration) {
   if (command.type !== TICK_COMMAND) {
     return participationGateClosed();
   }
-  const status = invokeCoreAt(group, expectedGeneration, 'status');
+  const status = invokeCoreAt(group, expectedGeneration, CORE_OPERATION.STATUS);
   if (!status.ok) {
     return status.result;
   }
@@ -1899,7 +1942,8 @@ function gatedCommandRefusal(group, command, expectedGeneration) {
 // core is entered for a status read only: no tick (a founder would campaign
 // and vote for itself), no proposal, campaign, transfer or probe.
 const COMMANDS_BEFORE_IDENTITY_RECORD = new Set([
-  RUNTIME_COMMAND.READ_STATUS, RUNTIME_COMMAND.DRAIN_INBOUND]);
+  RUNTIME_COMMAND.READ_STATUS, RUNTIME_COMMAND.READ_ROLE_AND_TERM,
+  RUNTIME_COMMAND.DRAIN_INBOUND]);
 
 function settlePrimitiveInvocation(group, command, expectedGeneration, invoked) {
   if (Array.isArray(command.extraBatch) && command.extraBatch.length > 0) {
@@ -1992,13 +2036,22 @@ function acknowledgePendingSnapshot(group, expectedGeneration, message) {
 }
 
 function stepOneInbound(group, expectedGeneration, envelope) {
+  // Admission observes the producer in this queued turn, including after a
+  // refused previous turn. Continuous inbound cannot pin an obsolete refusal.
+  const observed = recordStatusObservation(group, expectedGeneration);
+  if (!observed.ok) {
+    if (observed.result.reason === RUNTIME_REASON.INVALID_NATIVE_ROLE) {
+      recordInboundStepRefusal(group, envelope, observed.result);
+    }
+    return {done: true, result: observed.result};
+  }
   // The local-log guard decides before the core is entered: a refused
   // envelope is recorded against its sender and never stepped; one that
   // proves this replica's history lost holds the group and ends the turn.
   const guarded = refuseInboundStep(group, envelope, expectedGeneration);
   if (guarded !== null) {
-    if (group.reseedHold !== null) {
-      return {done: true, result: group.reseedHold};
+    if (group.reseedHold !== null || guarded.reason === RUNTIME_REASON.INVALID_NATIVE_ROLE) {
+      return {done: true, result: guarded};
     }
     return {done: false};
   }
@@ -2105,6 +2158,9 @@ function perform(group, command) {
   // a status is read without draining, and every other command is a typed,
   // retryable deferral that leaves the group usable.
   if (!persistenceAdmitted(group)) {
+    if (command.type === RUNTIME_COMMAND.READ_ROLE_AND_TERM) {
+      return readStatusUndrained(group, ROLE_AND_TERM_ANSWER);
+    }
     return command.type === RUNTIME_COMMAND.READ_STATUS ?
       readStatusUndrained(group, STATUS_ANSWER) : settledTurn(hostFailure(
         RUNTIME_PHASE.READY_PERSISTENCE, RUNTIME_REASON.USER_TRANSACTION_OPEN));
@@ -2381,7 +2437,7 @@ function createRuntimeDispatcher(request) {
     throw Object.assign(new Error(opened.reason), {consensus: opened,
       ...(released.ok ? {} : {cleanupFailure: released.result})});
   }
-  const first = opening.ok ? invokeCore(group, 'status') : {ok: false};
+  const first = opening.ok ? invokeCore(group, CORE_OPERATION.STATUS) : {ok: false};
   if (first.ok) {
     group.lastStatus = first.value;
     recordStatusObservation(group, runtimeGeneration, first.value);

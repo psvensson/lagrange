@@ -1,3 +1,4 @@
+import {readReplicaServiceRole} from '../raft/replica-leadership-state.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {retireNodeTransportHandler} from './replica-transport-handler-identity.js';
 import {settlePendingReplicaRuntimeCleanup, fenceFailedReplicaCreateRuntime,
@@ -676,13 +677,7 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
       if (!service) {
         return null;
       }
-      const role =
-        typeof service.getRole === REPLICA_HANDLER_TYPEOF.FUNCTION ?
-          service.getRole() :
-          service.role;
-      return typeof role === REPLICA_HANDLER_TYPEOF.STRING ?
-        role.toLowerCase() :
-        null;
+      return readReplicaServiceRole(service);
     }
     /**
      * Build the canonical service address for a tracked replica.

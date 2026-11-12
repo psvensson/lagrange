@@ -1,3 +1,4 @@
+import {serviceRoleObservation} from '../test-helpers/service-role-observation.js';
 /** Source retention, leadership handoff, quorum-absence lane release vs
  * source-own applied absence retirement, and exact-generation cleanup
  * (FreshMG 6.C slices C3 & C4).
@@ -108,6 +109,8 @@ function createServicesOwner(root, nowFn) {
         groupId,
         replicaId,
         nodeId,
+        service: {raft: {readRoleAndTerm: () =>
+          (serviceRoleObservation('follower', 1))}},
         timestamp: createdAt,
         status,
         extraFields: {

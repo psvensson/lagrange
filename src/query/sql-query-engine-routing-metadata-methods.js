@@ -1,3 +1,4 @@
+import {readReplicaLeaderRoute} from '../raft/replica-leadership-state.js';
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {
   REPLICATION_TARGET_SOURCE,
@@ -241,6 +242,8 @@ const appendNewerServices = (nextServices, currServiceRows, overServices, overRe
 
 const extractRows = (result) => Array.isArray(result?.rows) ? result.rows : [];
 const isPartitionService = (s) => s?.service_type === SERVICE_TYPE.PARTITION;
+const isInitializedLocalPartition = (service, partitionId) =>
+  service != null && service.partitionId === partitionId && service.initialized === true;
 
 const buildRefreshedOverlayEntry = (
   partitionResult, serviceResult, capturedCacheBaseline, resolver,
@@ -438,7 +441,7 @@ class SQLQueryEngineRoutingMetadataMethods {
   }
 
   _buildLocalRuntimeServiceRow(service, partitionId, rawRole) {
-    if (!service || service.partitionId !== partitionId || service.initialized !== true) {
+    if (!isInitializedLocalPartition(service, partitionId)) {
       return null;
     }
     const replicaId = normalizeText(service.replicaId);
@@ -478,9 +481,9 @@ class SQLQueryEngineRoutingMetadataMethods {
     if (!partitionServices || typeof partitionServices.values !== LOCAL_STR_FUNCTION) return [];
     const serviceRows = [];
     for (const service of partitionServices.values()) {
-      const rawRole = typeof service?.getRole === LOCAL_STR_FUNCTION ?
-        service.getRole() : service?.role;
-      const row = this._buildLocalRuntimeServiceRow(service, partitionId, rawRole);
+      if (!isInitializedLocalPartition(service, partitionId)) continue;
+      const route = readReplicaLeaderRoute(service);
+      const row = this._buildLocalRuntimeServiceRow(service, partitionId, route.role);
       if (row) serviceRows.push(row);
     }
     return serviceRows;

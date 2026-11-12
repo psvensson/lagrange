@@ -316,7 +316,7 @@ async function runTenureResetWhileHeld(f, subscriber, target3FirstHopAddr) {
   );
   applyReplicaDemotion(f.producerLeader, RAFT_ROLE.FOLLOWER);
   resetCdcObligationLane(f.producerLeader.cdcDelivery);
-  applyReplicaLeadership(f.producerLeader, RAFT_ROLE.LEADER);
+  applyReplicaLeadership(f.producerLeader, RAFT_ROLE.LEADER, f.producerLeader.getCurrentTerm());
   resetCdcObligationLane(f.producerLeader.cdcDelivery);
   assert.deepEqual(
     f.producerLeader.cdcDelivery.getCdcObligationDiagnostics().recipients,

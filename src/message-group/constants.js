@@ -111,6 +111,7 @@ const MESSAGE_GROUP_SERVICE_ERROR_MSG = Object.freeze({
 });
 
 const MESSAGE_GROUP_SERVICE_LOG_MSG = Object.freeze({
+  LEADERSHIP_OBSERVATION_REFUSED: 'Message-group leadership observation refused',
   CDC_RESUBSCRIBE_ON_LEADER:
     'Re-subscribing to CDC tables on leadership gain',
   CDC_RESUBSCRIBE_ON_LEADER_COMPLETE:

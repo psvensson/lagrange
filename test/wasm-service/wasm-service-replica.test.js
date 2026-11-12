@@ -1,3 +1,4 @@
+import {serviceRoleObservation} from '../test-helpers/service-role-observation.js';
 import {describe, it, beforeEach, afterEach} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -45,6 +46,15 @@ import {TEST_BOOT_INCARNATION} from
 /**
  * Initialize the singletons a WasmServiceReplica reads.
  */
+
+// Component controls supply the canonical observation independently of cached fields.
+function setObservedRole(replica, role) {
+  replica.raft = Object.freeze({
+    readRoleAndTerm: () => Object.freeze(serviceRoleObservation(role, 1)),
+    close: () => settledTurn({outcome: RAFT_OPERATION_OUTCOME.CORE_OK}),
+  });
+}
+
 function initEnv() {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
@@ -297,7 +307,10 @@ describe('WasmServiceReplica', () => {
       async () => {
         const replica = createReplica(defaultOpts());
         let received = null;
+        replica.isLeader = true;
+        replica.leadershipTenure = Object.freeze({term: 1});
         replica.raft = {
+          readRoleAndTerm: () => serviceRoleObservation('leader'),
           propose: (command) => {
             received = command;
             return pendingTurn(
@@ -314,7 +327,10 @@ describe('WasmServiceReplica', () => {
 
     it('rejects a proposal its port refused', async () => {
       const replica = createReplica(defaultOpts());
+      replica.isLeader = true;
+      replica.leadershipTenure = Object.freeze({term: 1});
       replica.raft = {
+        readRoleAndTerm: () => serviceRoleObservation('leader'),
         propose: () => settledTurn({
           outcome: RAFT_OPERATION_OUTCOME.CORE_REFUSED,
           reason: 'not-leader',
@@ -477,6 +493,7 @@ describe('WasmServiceReplica', () => {
         const replica = createReplica(defaultOpts({
           readConsistency: READ_CONSISTENCY_MODE.EVENTUAL,
         }));
+        setObservedRole(replica, RAFT_ROLE.FOLLOWER);
         replica.kvStore.applySet(
           'sess-1', 'key-1', Buffer.from('data'),
         );
@@ -500,6 +517,7 @@ describe('WasmServiceReplica', () => {
         const replica = createReplica(defaultOpts({
           readConsistency: READ_CONSISTENCY_MODE.LEADER_ONLY,
         }));
+        setObservedRole(replica, RAFT_ROLE.FOLLOWER);
         replica.leaderId = 'wsr-leader';
         const result = await replica.handleMessage({
           payload: {
@@ -515,6 +533,7 @@ describe('WasmServiceReplica', () => {
 
     it('should forward writes when not leader', async () => {
       const replica = createReplica(defaultOpts());
+      setObservedRole(replica, RAFT_ROLE.FOLLOWER);
       replica.leaderId = 'wsr-leader';
       const result = await replica.handleMessage({
         payload: {
@@ -552,6 +571,7 @@ describe('WasmServiceReplica', () => {
           writePayload = payload;
         },
       }));
+      setObservedRole(replica, RAFT_ROLE.LEADER);
       replica.pendingRoleUpdate = RAFT_ROLE.LEADER;
       replica.persistedRole = RAFT_ROLE.FOLLOWER;
 
@@ -576,6 +596,7 @@ describe('WasmServiceReplica', () => {
             },
           },
         }));
+        setObservedRole(replica, RAFT_ROLE.LEADER);
         replica.pendingRoleUpdate = RAFT_ROLE.LEADER;
         replica.persistedRole = RAFT_ROLE.FOLLOWER;
 
@@ -605,7 +626,9 @@ describe('WasmServiceReplica', () => {
           writePayload = payload;
         },
       }));
+      setObservedRole(replica, RAFT_ROLE.LEADER);
       replica.isLeader = true;
+      replica.leadershipTenure ??= Object.freeze({term: 1});
       replica.role = RAFT_ROLE.LEADER;
       replica.pendingLeaderNodeUpdate = 'node-1';
       replica.persistedLeaderNodeId = null;
@@ -631,7 +654,9 @@ describe('WasmServiceReplica', () => {
             },
           },
         }));
+        setObservedRole(replica, RAFT_ROLE.LEADER);
         replica.isLeader = true;
+        replica.leadershipTenure ??= Object.freeze({term: 1});
         replica.role = RAFT_ROLE.LEADER;
         replica.pendingLeaderNodeUpdate = 'node-2';
         replica.persistedLeaderNodeId = null;
@@ -658,6 +683,7 @@ describe('WasmServiceReplica', () => {
         const replica = createReplica(defaultOpts({
           systemTableCache: createWriteReadySystemTableCache(),
         }));
+        setObservedRole(replica, RAFT_ROLE.FOLLOWER);
         replica.isLeader = false;
         replica.pendingLeaderNodeUpdate = 'node-2';
 
@@ -677,6 +703,7 @@ describe('WasmServiceReplica', () => {
             filter: () => [],
           },
         }));
+        setObservedRole(replica, RAFT_ROLE.LEADER);
         replica.pendingRoleUpdate = RAFT_ROLE.LEADER;
         replica.persistedRole = RAFT_ROLE.FOLLOWER;
 
@@ -695,7 +722,9 @@ describe('WasmServiceReplica', () => {
             filter: () => [],
           },
         }));
+        setObservedRole(replica, RAFT_ROLE.LEADER);
         replica.isLeader = true;
+        replica.leadershipTenure ??= Object.freeze({term: 1});
         replica.role = RAFT_ROLE.LEADER;
         replica.pendingLeaderNodeUpdate = 'node-2';
 

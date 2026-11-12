@@ -1,3 +1,4 @@
+import {readReplicaServiceRole} from '../../raft/replica-leadership-state.js';
 import {AddressManager} from '../../address/address-manager.js';
 import {isExactReplicaHandlerRegistered} from
   '../../node/replica-transport-handler-identity.js';
@@ -40,10 +41,7 @@ function valueOrNull(value) {
 }
 
 function currentPartitionRuntimeRole(service) {
-  if (typeof service?.getRole === 'function') {
-    return service.getRole();
-  }
-  return valueOrNull(service?.role);
+  return readReplicaServiceRole(service);
 }
 
 function capturePartitionRuntimeEvidence(service) {

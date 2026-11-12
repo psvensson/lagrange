@@ -19,16 +19,16 @@
     "services-runtime": 161,
     "solver-tooling": 7,
     "storage-partition": 237,
-    "storage-raft": 158,
+    "storage-raft": 166,
     "test-infrastructure": 175,
     "transactions": 18,
     "transport-messaging": 127,
     "wasm-toolchain": 74
   },
-  "censusSize": 2772,
-  "digest": "fnv1a32-538dc1bb",
+  "censusSize": 2780,
+  "digest": "fnv1a32-4673acde",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-7a3b45e3",
+  "observationDigest": "fnv1a32-3d8bb9e5",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1902,6 +1902,14 @@
     "test/raft/raft-rs-backend/zero-legacy-consensus-runtime.test.js": "storage-raft",
     "test/raft/raft-rs-conf-change-admission-live-quorum.test.js": "storage-raft",
     "test/raft/raft-rs-lifecycle-turn-admission.test.js": "storage-raft",
+    "test/raft/raft-rs-native-follower-recovery.test.js": "storage-raft",
+    "test/raft/raft-rs-native-role-caller-closure.test.js": "storage-raft",
+    "test/raft/raft-rs-native-role-publication.test.js": "storage-raft",
+    "test/raft/raft-rs-native-role-removed-leader.test.js": "storage-raft",
+    "test/raft/raft-rs-native-role-service-withdrawal.test.js": "storage-raft",
+    "test/raft/raft-rs-native-service-authority-consumers.test.js": "storage-raft",
+    "test/raft/raft-rs-native-service-membership.test.js": "storage-raft",
+    "test/raft/raft-rs-native-service-routing.test.js": "storage-raft",
     "test/raft/raft-rs-original-allocation-cold-inspection.test.js": "storage-raft",
     "test/raft/raft-rs-original-allocation-custody.test.js": "storage-raft",
     "test/raft/raft-rs-original-allocation-lifecycle-operation.test.js": "storage-raft",
@@ -18012,6 +18020,79 @@
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/transport/transport-semantic-outcome.js"
+      ]
+    },
+    "test/raft/raft-rs-native-follower-recovery.test.js": {
+      "files": [
+        "src/raft/raft-rs-binding-owner.js",
+        "test/raft/native-service-role-fixture.js",
+        "test/raft/raft-rs-backend/transfer-leadership-driver.js"
+      ]
+    },
+    "test/raft/raft-rs-native-role-caller-closure.test.js": {
+      "files": [
+        "src/control-plane/control-plane-error-classification.js",
+        "src/partition/partition-service-raft-write-commit.js",
+        "src/partition/partition-write-kernel.js",
+        "src/query/query-executor-write-retry-routing.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-rs-removed-leader-step-down.js",
+        "src/raft/raft-rs-status-observation.js"
+      ]
+    },
+    "test/raft/raft-rs-native-role-publication.test.js": {
+      "files": [
+        "src/message-group/message-group-service-row-owner.js",
+        "src/message-group/message-group-service.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-binding-owner.js",
+        "src/raft/raft-rs-runtime-owner-constants.js",
+        "test/raft/raft-rs-backend/opening-history-native-fixture.js"
+      ]
+    },
+    "test/raft/raft-rs-native-role-removed-leader.test.js": {
+      "files": [
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-rs-binding-owner.js",
+        "test/raft/raft-rs-backend/transfer-leadership-driver.js"
+      ]
+    },
+    "test/raft/raft-rs-native-role-service-withdrawal.test.js": {
+      "files": [
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-rs-binding-owner.js",
+        "test/raft/raft-rs-backend/startup-cleanup-native-fixture.js"
+      ]
+    },
+    "test/raft/raft-rs-native-service-authority-consumers.test.js": {
+      "files": [
+        "src/cdc/cdc-integration-service-local-system-table-routing.js",
+        "src/query/sql-query-engine-routing-metadata-methods.js",
+        "src/raft/raft-rs-binding-owner.js",
+        "test/raft/native-service-role-fixture.js"
+      ]
+    },
+    "test/raft/raft-rs-native-service-membership.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/transport/transport-semantic-outcome.js"
+      ]
+    },
+    "test/raft/raft-rs-native-service-routing.test.js": {
+      "files": [
+        "src/raft/raft-rs-binding-owner.js",
+        "src/wasm-service/wasm-service-constants.js",
+        "test/raft/raft-rs-backend/startup-cleanup-native-fixture.js"
       ]
     },
     "test/raft/raft-rs-original-allocation-cold-inspection.test.js": {

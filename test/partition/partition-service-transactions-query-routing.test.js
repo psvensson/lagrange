@@ -1,3 +1,4 @@
+import {serviceRoleObservation} from '../test-helpers/service-role-observation.js';
 /**
  * Unit tests for PartitionService.
  * Tests SQLite-backed Raft group for data storage.
@@ -271,6 +272,7 @@ test(
       systemTableCache: mockCache,
     }));
 
+    partition.raft = {readRoleAndTerm: () => (serviceRoleObservation(RaftRole.FOLLOWER, 1))};
     partition.role = RaftRole.LEARNER;
     partition.leaderId = null;
     let electionStarted = false;
@@ -283,7 +285,8 @@ test(
     const status = {outcome: 'CORE_OK', groupId: 'test-partition',
       replicaIdentity: 'replica-3', role: RaftRole.LEARNER, peers: [],
       leaderId: null, leaderAddress: null, leaderAddressStatus: 'no-leader'};
-    partition.raft = {readStatus: () => status};
+    partition.raft = {readRoleAndTerm: () => (serviceRoleObservation(RaftRole.FOLLOWER, 1)),
+      readStatus: () => status};
     await checkLearnerPromotionWithGrantedProof(partition);
     t.equal(partition.leaderId, null,
       'canonical leader metadata never seeds the leader replica');
@@ -382,6 +385,7 @@ test('PartitionService - critical partition defers second learner when replaceme
     systemTableCache: mockCache,
   }));
 
+  partition.raft = {readRoleAndTerm: () => (serviceRoleObservation(RaftRole.FOLLOWER, 1))};
   partition.role = RaftRole.LEARNER;
   partition.leaderId = 'replica-1';
 
@@ -482,6 +486,7 @@ test('PartitionService - learner promotes when multiple learners reach odd count
   }));
 
   // Manually set role to learner
+  partition.raft = {readRoleAndTerm: () => (serviceRoleObservation(RaftRole.FOLLOWER, 1))};
   partition.role = RaftRole.LEARNER;
   partition.leaderId = 'replica-1';
 
@@ -575,6 +580,7 @@ test('PartitionService - learner defers when multiple learners would exceed targ
     systemTableCache: mockCache,
   }));
 
+  partition.raft = {readRoleAndTerm: () => (serviceRoleObservation(RaftRole.FOLLOWER, 1))};
   partition.role = RaftRole.LEARNER;
   partition.leaderId = 'replica-1';
 
@@ -678,6 +684,7 @@ test('PartitionService - learner deferred when all learners would still be even'
   }));
 
   // Manually set role to learner
+  partition.raft = {readRoleAndTerm: () => (serviceRoleObservation(RaftRole.FOLLOWER, 1))};
   partition.role = RaftRole.LEARNER;
   partition.leaderId = 'replica-1';
 
@@ -820,6 +827,7 @@ test(
       systemTableCache: mockCache,
     }));
     let electionStarted = false;
+    partition.raft = {readRoleAndTerm: () => (serviceRoleObservation(RaftRole.FOLLOWER, 1))};
     partition.role = RaftRole.LEARNER;
     partition.leaderId = leaderReplicaId;
     partition.startElection = () => {
@@ -959,6 +967,7 @@ test(
       systemTableCache: mockCache,
     }));
 
+    partition.raft = {readRoleAndTerm: () => (serviceRoleObservation(RaftRole.FOLLOWER, 1))};
     partition.role = RaftRole.LEARNER;
     partition.leaderId = 'replica-1';
 

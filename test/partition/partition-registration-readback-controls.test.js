@@ -1,3 +1,4 @@
+import {serviceRoleObservation} from '../test-helpers/service-role-observation.js';
 // Owner-level controls for ordinary births as well as reserved original births.
 // Real SQLite retains the observed row; the gateway injects lost/uncertain answers.
 // These tests do not claim real consensus or public-startup coverage.
@@ -7,8 +8,9 @@ import Database from 'better-sqlite3';
 import {PartitionServiceRowOwner, isPartitionRegistrationEvidence} from
   '../../src/partition/partition-service-row-owner.js';
 
-const request = Object.freeze({partitionId: 'readback-p1',
-  replicaId: 'readback-p1-r1', nodeId: 'readback-node', timestamp: 2000});
+const request = Object.freeze({service: {raft: {readRoleAndTerm: () =>
+  (serviceRoleObservation('follower', 1))}}, partitionId: 'readback-p1',
+replicaId: 'readback-p1-r1', nodeId: 'readback-node', timestamp: 2000});
 
 function fixture({change = (row) => row, lost = false, applied = false} = {}) {
   const db = new Database(':memory:');

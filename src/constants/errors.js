@@ -31,6 +31,8 @@ const ERRORS = Object.freeze({
   WRITE_BACKPRESSURE:
     'Partition write backpressure: the proposal queue is at capacity and the ' +
     'write was not proposed',
+  WRITE_CONSENSUS_INVALID:
+    'Consensus observation refused write admission; no proposal was submitted',
   WRITE_CONSENSUS_REFUSED:
     'The consensus port refused the proposal; the write was not proposed',
   WRITE_COMMIT_DEADLINE_EXCEEDED:

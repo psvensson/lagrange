@@ -60,6 +60,6 @@ documentClass: generated
 - [wasm-service-serving-state.js](wasm-service-serving-state.js) - The one serving fence of a WasmServiceReplica instance (design SERVING-PUBLICATION-RETIREMENT-DESIGN-20261017 D3',... (importers: many)
 - [wasm-writer-client.js](wasm-writer-client.js) - Caller custody: the supplied storage adapter owns durable atomic revision CAS. (importers: one)
 - [wasm-writer-codec.js](wasm-writer-codec.js) - No leading comment; first export: canonicalWriterCommand. (importers: many)
-- [wasm-writer-completion.js](wasm-writer-completion.js) - Local interest only. (importers: one)
+- [wasm-writer-completion.js](wasm-writer-completion.js) - No leading comment; first export: WasmWriterCompletion. (importers: one)
 - [wasm-writer-profile.js](wasm-writer-profile.js) - The v1 application profile is replicated by identifier, never replica-local tuning. (importers: hub)
 - [wasm-writer-state.js](wasm-writer-state.js) - No leading comment; first export: WasmWriterState. (importers: few)

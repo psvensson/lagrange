@@ -32,7 +32,7 @@ documentClass: generated
 - [cdc-integration-service-fallback-diagnostics.js](cdc-integration-service-fallback-diagnostics.js) - Remove authoritative fallback samples that are older than the active window. (importers: one)
 - [cdc-integration-service-insert-normalization.js](cdc-integration-service-insert-normalization.js) - Normalize schema default values (strip quotes, parse numbers). (importers: few)
 - [cdc-integration-service-lifecycle.js](cdc-integration-service-lifecycle.js) - Lifecycle, dependency-injection, and write-router-strategy methods for the CDC integration service. (importers: one)
-- [cdc-integration-service-local-system-table-routing.js](cdc-integration-service-local-system-table-routing.js) - No leading comment; first export: selectLocalPartitionWitness. (importers: few)
+- [cdc-integration-service-local-system-table-routing.js](cdc-integration-service-local-system-table-routing.js) - No leading comment; first export: selectLocalPartitionWitness. (importers: many)
 - [cdc-integration-service-mutation-operations.js](cdc-integration-service-mutation-operations.js) - System-table mutation write methods (insert/update/delete/upsert) plus the thin delegators over the normalization,... (importers: one)
 - [cdc-integration-service-mutations.js](cdc-integration-service-mutations.js) - Delete a row from a system table. (importers: one)
 - [cdc-integration-service-node-join.js](cdc-integration-service-node-join.js) - Derive WebSocket address from node REST address. (importers: one)
