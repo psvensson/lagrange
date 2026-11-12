@@ -1,3 +1,4 @@
+import {allocateLifecycleFixture} from '../helpers/replica-lifecycle-fixture.js';
 /**
  * Durable lifecycle generation probe.
  *
@@ -373,29 +374,25 @@ test('handler binds leader settlement before retire and durable deletion',
       status: ReplicaStatus.REMOVING,
       service: {raft: runtime},
     });
-    const raftLifecycle = new RaftRsReplicaLifecycleOwner({
-      groupId: row.partition_id,
-      peerId: 'peer-handler-order',
-      replicaIdentity: row.service_id,
-      db: {
-        // The members the lifecycle row's durable commit uses.
-        inTransaction: false,
-        pragma: () => 1,
-        transaction: (work) => work,
-        exec() {},
-        prepare(sql) {
-          return {
-            all: () => [],
-            get: () => undefined,
-            run: () => {
-              if (sql.includes('SET state = \'retired\'')) {
-                order.push('raft-retire');
-              }
-            },
-          };
-        },
-      },
-    });
+    const lifecycleDb = new Database(':memory:');
+    t.teardown(() => lifecycleDb.close());
+    const lifecycleRequest = {db: lifecycleDb, groupId: row.partition_id,
+      peerId: 'peer-handler-order', replicaIdentity: row.service_id};
+    allocateLifecycleFixture(lifecycleRequest);
+    const prepare = lifecycleDb.prepare.bind(lifecycleDb);
+    lifecycleDb.prepare = (sql) => {
+      const statement = prepare(sql);
+      if (sql.includes('SET state = \'retired\'')) {
+        const run = statement.run.bind(statement);
+        statement.run = (...args) => {
+          const result = run(...args);
+          order.push('raft-retire');
+          return result;
+        };
+      }
+      return statement;
+    };
+    const raftLifecycle = new RaftRsReplicaLifecycleOwner(lifecycleRequest);
     registerRuntimeLifecycle(runtime, raftLifecycle);
     t.teardown(() => unregisterRuntimeLifecycle(runtime, raftLifecycle));
 

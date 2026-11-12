@@ -11,6 +11,7 @@ import {setCoreFaultInjector, setActualCoreEntryObserver} from '../../../src/raf
 import {RAFT_RS_TABLE} from '../../../src/raft/raft-rs-durable-store-constants.js';
 import {RAFT_OPERATION_OUTCOME as OUTCOME} from '../../../src/raft/raft-operation-port-constants.js';
 import {CORE_REFUSAL_KIND} from '../../../src/raft/raft-rs-runtime-owner-constants.js';
+import {deriveRaftRsPeerId} from '../../../src/raft/raft-rs-peer-identity.js';
 import {prepareReplicaLifecycleForSnapshot} from '../../../src/raft/raft-rs-replica-lifecycle-owner.js';
 import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
@@ -178,7 +179,8 @@ test('unreadable exact lifecycle history is typed and cannot open native genesis
 
 test('an imported staging history can never act as a never-opened allocation', (t) => {
   const f = fixture(t);
-  const request = {db: f.db, groupId: HISTORY_ID.groupId, peerId: '7', replicaIdentity: 'receiver'};
+  const request = {db: f.db, groupId: HISTORY_ID.groupId,
+    peerId: deriveRaftRsPeerId(HISTORY_ID.peerId), replicaIdentity: HISTORY_ID.peerId};
   const result = prepareReplicaLifecycleForSnapshot(request);
   assert.equal(result.outcome, OUTCOME.CORE_OK);
   assert.equal(lifecycle(f.db).native_history_state, 'established', 'snapshot staging establishes imported history before it can be published');

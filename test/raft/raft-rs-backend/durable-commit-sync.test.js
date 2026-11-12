@@ -1,3 +1,4 @@
+import {allocateLifecycleFixture} from '../../helpers/replica-lifecycle-fixture.js';
 // Receipts:
 //   raft-persist-commits-with-full-sync-before-any-message-of-its-ready
 //   commit-index-only-persist-pays-no-sync
@@ -392,6 +393,9 @@ test('the reseed hold and the retirement row commit at FULL', async () => {
   const observer = installDurableCommitObserver();
   try {
     const {db} = scratchStore(directory, 'lifecycle');
+    for (const groupId of ['held', 'retired']) {
+      allocateLifecycleFixture({db, groupId, peerId: '1', replicaIdentity: `replica-${groupId}`});
+    }
     const held = new RaftRsReplicaLifecycleOwner({db, groupId: 'held',
       peerId: '1', replicaIdentity: 'replica-held'});
     const retired = new RaftRsReplicaLifecycleOwner({db, groupId: 'retired',

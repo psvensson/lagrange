@@ -1,3 +1,5 @@
+import {openReplicaDatabaseFixture} from '../helpers/replica-database-fixture.js';
+
 // COMPONENT oracle of the receiver-local creation record as a named phase
 // machine (design SERVING-PUBLICATION-RETIREMENT-DESIGN-20261017 D2'/D2, N14):
 // real SQLite file, real metadata binding/token from the component owner, no
@@ -67,10 +69,11 @@ async function component(t) {
       dataDirectoryManager: {getWasmServiceFileIdentity: () => storage}};
   }
   function fresh() {
-    const db = openFile(path);
+    const {db, creation} = openReplicaDatabaseFixture({dbPath: path,
+      groupId: identity.groupId, replicaIdentity: identity.replicaId});
     open.push(db);
     const owner = replica(db, OPENING.FRESH);
-    db.transaction(() => openWasmCreationRecords(owner))();
+    db.transaction(() => openWasmCreationRecords(owner, creation))();
     return {db, owner};
   }
   function reopen(db) {
@@ -297,9 +300,15 @@ test('R1-A/N13 the by-path reader classifies (opening, file) and the seven ident
   assert.equal(read(unclaimed), 'ABSENT_UNCLAIMED', '(null, no file)');
   assert.equal(read(), 'ABSENT_CLAIMED', '(claimed, no file)');
   assert.equal(existsSync(c.path), false, 'the reader never creates the file');
-  c.openFile().close();
-  assert.equal(read(unclaimed), 'ABSENT_UNCLAIMED', '(null, zero tables): a FRESH precondition');
-  assert.equal(read(), 'ABSENT_CLAIMED', '(claimed, zero tables)');
+  const empty = `${c.path}.empty`;
+  openFile(empty).close();
+  assert.equal(inspectWasmCreationLocal(empty, unclaimed, c.binding).outcome,
+    'ABSENT_UNCLAIMED', 'inventory has no local creation record');
+  assert.equal(inspectWasmCreationLocal(empty, identity, c.binding).outcome,
+    'ABSENT_CLAIMED', 'inventory observes the external claim separately');
+  assert.throws(() => openReplicaDatabaseFixture({dbPath: empty,
+    groupId: c.identity.groupId, replicaIdentity: c.identity.replicaId}),
+  {code: 'lifecycle-birth-unproven'}, 'inventory absence cannot grant allocation');
   const {db} = c.fresh();
   assert.equal(read(unclaimed), 'CONTENT_CONFLICT', '(null, tables): cannot arise');
   assert.equal(read(), LOCAL_PHASE.ADMITTED);

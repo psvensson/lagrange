@@ -1,3 +1,4 @@
+import {openReplicaDatabaseFixture} from '../helpers/replica-database-fixture.js';
 // Deterministic application counterexample, conditional on legitimate same-service-ID
 // recreation into a new application database without a creation-origin guard.
 // Real SQLite transactions; supplied positions are component inputs, NOT RF3 evidence.
@@ -8,7 +9,7 @@ import {createHash} from 'node:crypto';
 import {mkdtempSync, readFileSync, rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import Database from 'better-sqlite3';
+
 import {WasmWriterState} from '../../src/wasm-service/wasm-writer-state.js';
 import {SessionKVStore} from '../../src/wasm-service/session-kv-store.js';
 import {WASM_WRITER_PROFILE as P, WRITER_REASON as R} from
@@ -64,7 +65,8 @@ function temporaryDirectory(t) {
 }
 
 function openApplication(path, serviceId = SERVICE, binding = null) {
-  const db = new Database(path);
+  const {db, creation} = openReplicaDatabaseFixture({dbPath: path,
+    groupId: serviceId, replicaIdentity: serviceId});
   try {
     if (binding !== null) {
       db.exec(
@@ -74,7 +76,7 @@ function openApplication(path, serviceId = SERVICE, binding = null) {
       db.prepare('INSERT INTO _wasm_creation_root (id,binding) VALUES (1,?)')
         .run(encodeInstanceJson(binding, 4096));
     }
-    const {state, kv} = db.transaction(() => ({state: new WasmWriterState(db, serviceId),
+    const {state, kv} = db.transaction(() => ({state: new WasmWriterState(db, serviceId, creation),
       kv: new SessionKVStore(db)}))();
     const apply = db.transaction((command, index) => state.apply(command, kv, index, 1));
     const observe = () => ({meta: state.meta(), slots: state.allSlots.all(),

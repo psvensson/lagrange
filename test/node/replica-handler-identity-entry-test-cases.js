@@ -1,3 +1,4 @@
+import {openReplicaDatabaseFixture} from '../helpers/replica-database-fixture.js';
 // The CREATE_REPLICA production entry (handleCreateReplica) over the durable
 // row an earlier life of the replica left, with the REAL rs-raft port (the
 // WASM core) opened from exactly the options the handler passes:
@@ -18,7 +19,6 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import Database from 'better-sqlite3';
 
 import {createRaftRsOperationPort} from
   '../../src/raft/raft-rs-operation-port.js';
@@ -305,7 +305,8 @@ export async function registerReplicaHandlerIdentityEntryTests({
   // openedOf() - the opened ports of the node process currently up.
   function twoVoterGroup(directory, replicaId, openedOf) {
     const founders = [PEER_ID, replicaId];
-    const peerDb = new Database(path.join(directory, `${PEER_ID}.db`));
+    const peerDb = openReplicaDatabaseFixture({dbPath: path.join(directory, `${PEER_ID}.db`),
+      groupId: PARTITION_ID, replicaIdentity: PEER_ID}).db;
     let peer = null;
     const portAt = (address) => address === addressOf(PEER_ID) ? peer :
       openedOf().findLast((entry) => entry.port !== null && !entry.closed)

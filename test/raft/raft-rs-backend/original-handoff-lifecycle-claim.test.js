@@ -1,8 +1,8 @@
+import {openReplicaDatabaseFixture} from '../../helpers/replica-database-fixture.js';
 // R1 prerequisite: one exact-runtime lifecycle participation claim, not a
 // second mutex. Full registered activation and public startup are not invoked.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import Database from 'better-sqlite3';
 import {createRaftRsOperationPort} from '../../../src/raft/raft-rs-operation-port.js';
 import {RAFT_COMMITTED_ENTRY_APPLY_MODE, RAFT_OPERATION_PORT_REQUEST as REQUEST} from
   '../../../src/raft/raft-operation-port-request.js';
@@ -17,7 +17,8 @@ const TIMING = Object.freeze({heartbeatMs: 50, electionMinMs: 150,
 const deferred = () => Promise.withResolvers();
 
 function generation(t) {
-  const db = new Database(':memory:');
+  const db = openReplicaDatabaseFixture({dbPath: ':memory:',
+    groupId: GROUP, replicaIdentity: REPLICA}).db;
   const port = createRaftRsOperationPort({groupId: GROUP, peerId: REPLICA,
     peerAddress: 'local-replica', durableStorage: db, timing: TIMING,
     bootstrapPeerIds: [REPLICA], bootstrapMembership: genesisStamp([REPLICA], {}),

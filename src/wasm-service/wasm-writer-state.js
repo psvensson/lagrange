@@ -1,5 +1,6 @@
+import {REPLICA_DATABASE_CREATION} from '../raft/raft-rs-replica-lifecycle-constants.js';
 import {KV_TABLE_NAME} from './session-kv-store.js';
-import {isCreationOnlyDatabase, readWasmCreationBinding, boundWasmInitialization} from
+import {readWasmCreationBinding, boundWasmInitialization} from
   './wasm-creation-opening.js';
 // Fixed application records. All apply calls join the existing Raft SQLite transaction.
 import {WASM_WRITER_PROFILE as P, WRITER_ACTION as A, WRITER_STATUS as S,
@@ -76,11 +77,11 @@ function validateSlot(row, slot, meta) {
 }
 
 class WasmWriterState {
-  constructor(db, serviceId) {
+  constructor(db, serviceId, creation = REPLICA_DATABASE_CREATION.EXISTING) {
     this.db = db;
     this.creationRootDigest = writerDigest(readWasmCreationBinding(db));
     const tables = db.prepare(SQL.TABLES).all().map((row) => row.name);
-    if (tables.length === 0 || isCreationOnlyDatabase(tables)) {
+    if (creation === REPLICA_DATABASE_CREATION.NEW) {
       boundedJson({serviceId}, P.metadataBytes);
       db.exec(SQL.CREATE);
       db.prepare(SQL.PUT_META).run(JSON.stringify({format: P.id, serviceId, initialization: null}));

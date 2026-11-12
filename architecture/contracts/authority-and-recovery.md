@@ -221,6 +221,72 @@ owners. Do not collapse these lifetimes into one DONE flag or use ordinary
 terminal status as proof of committed absence. Any change to a sealed
 source-retirement/cleanup contract requires explicit supersession.
 
+### Failed-create cleanup with an unreadable lifecycle
+
+The replica lifecycle owner distinguishes a positively absent database from a
+present database without its lifecycle table or its own identity row. The latter
+reads are UNREADABLE (`lifecycle-table-absent` or `lifecycle-row-absent`), never
+proof of absence or of a never-opened replica. This includes databases from
+released versions whose CREATE failed before the lifecycle table was created.
+Without another existing teardown authority, their cleanup remains HOLD; this
+composition does not infer or backfill a never-opened marker for them.
+
+The removal participation owner rechecks through the existing REMOVE dispatch
+and REMOVING redrive. A readable authoritative lifecycle or the group's positive
+REMOVED answer can resolve the missing fact under the existing teardown rules;
+elapsed time and an ended operation cannot. If the missing evidence cannot be
+recovered, automatic cleanup progress remains unresolved. This is a fail-closed
+limitation, not completed recovery or authorization for manual deletion.
+
+### Replica construction and lifecycle observation composition
+
+The existing raft-rs construction seam (`raft-rs-operation-port.js`) owns opening
+and configuring the replica database before the partition creates application
+schema. It acquires a new filesystem name exclusively; the lifecycle owner's
+`birthReplicaLifecycle` consumes that construction fact and writes the marker in
+its first transaction. A present empty or truncated database returns UNPROVEN,
+not NEW, and startup cleanup releases its handle without minting a row. A crash after
+file acquisition but before birth can therefore leave an explicit HOLD. Memory
+databases have new connection-local storage. Nonempty databases retain their
+existing lifecycle and the existing port's opening checks. Ordinary lifecycle
+construction reads an existing exact row and incarnation or refuses; it never
+creates the table, inserts a row or stamps a missing incarnation. Explicit
+original-allocation preparation and private snapshot staging retain their named
+creation operations. Message-group and WASM creation use the same database
+construction seam as partitions; retained-file opening cannot create a successor
+if the file disappears. Construction returns its explicit NEW or EXISTING
+allocation result with the owned database. Immediately after native acquisition,
+the service must synchronously take custody, before any pragma or birth operation.
+Construction never privately closes that handle: the existing failed-startup
+cleanup retains it and both failures if release fails, including partition boot
+errors before port construction. A lifecycle-refused port publishes no membership
+reservation owner and cannot replace an earlier same-name owner. WASM local creation records and writer
+formatting consume that result in their existing synchronous opening transaction;
+empty schema and lists of permitted metadata tables no longer grant formatting.
+On an existing file, missing writer/creation records remain a format refusal.
+
+Snapshot initial admission and final swap revalidation consume the lifecycle
+observation owner's same NEVER_OPENED classification as removal. Existing empty,
+truncated, application-only and rowless databases are refused. A positively
+absent target is a distinct `snapshot-receiver-target-absent` fact, never a fresh
+lifecycle; only the installer's separate exact CREATE admission permits creating
+that target. A staged image retains or mints its receiver-local incarnation in
+private preparation and records ESTABLISHED before installation. Neither a valid
+checkpoint nor CREATE authority repairs missing history in an existing receiver.
+
+`raft-rs-replica-lifecycle-observation.js` is the lifecycle owner's read-only
+implementation for both removal snapshots and snapshot-receiver inspection.
+The owner retains the named public reads, all row writes, native-history
+establishment, original-allocation rights and exact-runtime custody. Its
+constants module owns the shared outcome vocabulary. The administration still
+composes lifecycle and own-group record reads in one snapshot. Partition init
+receives a database from construction, not lifecycle administration or an
+independent birth/retirement capability.
+
+This composition preserves the birth transaction's existing durability setting;
+it does not prove power-loss recovery, mount identity, external file replacement
+between acquisition and SQLite open, or complete coordinator crash recovery.
+
 ## Threat model and proof claims
 
 Protect genuine SQL/service/network mutation boundaries and private
