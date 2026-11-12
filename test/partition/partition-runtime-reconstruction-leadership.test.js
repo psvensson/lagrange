@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 // A host failure of one partition's group is that group's own failure
 // (quest raft-rs-single-path-partition-cutover: F-m after verification round
 // 2, B6 after verification round 3).
@@ -60,7 +61,7 @@ import {
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {PartitionService} from '../../src/partition/partition-service.js';
+
 import {participantCutoverPauseOf} from
   '../../src/partition/partition-participant-transaction-pause.js';
 import * as partitionConstants from
@@ -355,7 +356,7 @@ async function withLonePartitions(extraOptions, body, raft = {}) {
   let releaseOwners = null;
   const open = async (partitionId, options = extraOptions) => {
     const dbPath = path.join(directory, `${partitionId}-${DB_FILE}`);
-    const partition = new PartitionService(withFoundingStamp({
+    const partition = createPartitionServiceFixture(withFoundingStamp({
       ...tableOptions(),
       partitionId,
       replicaId: `${partitionId}-r1`,

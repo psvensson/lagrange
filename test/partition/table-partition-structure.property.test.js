@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 /**
  * Property-based test for Table Partition Structure.
  * **Property 4: Table Partition Structure**
@@ -12,10 +13,7 @@ import fc from 'fast-check';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {resumeFixtureParticipantAdmission} from
   '../test-helpers/participant-transaction-fixture.js';
-import {
-  PartitionService,
-  RaftRole,
-} from '../../src/partition/partition-service.js';
+import {RaftRole} from '../../src/partition/partition-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
@@ -101,7 +99,7 @@ test('Property 4: Tables are implemented as SQLite-backed Raft partitions', asyn
         const partitionId = `${tableId}-p1`;
         const replicaId = `${partitionId}-r1`;
 
-        const partition = new PartitionService(withFoundingStamp({
+        const partition = createPartitionServiceFixture(withFoundingStamp({
           partitionId,
           tableId,
           tableName: tableId,
@@ -163,7 +161,7 @@ test('Property 4: Partitions maintain Raft consensus state', async (t) => {
         const partitionId = `${tableId}-p1`;
         const replicaId = `${partitionId}-r1`;
 
-        const partition = new PartitionService(withFoundingStamp({
+        const partition = createPartitionServiceFixture(withFoundingStamp({
           partitionId,
           tableId,
           replicaId,
@@ -237,7 +235,7 @@ test('Property 4: Partition data is persisted in SQLite', async (t) => {
           ],
         };
 
-        const partition = new PartitionService(withFoundingStamp({
+        const partition = createPartitionServiceFixture(withFoundingStamp({
           systemTableCache: new SystemTableCache(),
           partitionId: `${tableId}-p1`,
           tableId,

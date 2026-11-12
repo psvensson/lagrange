@@ -51,7 +51,7 @@ import {createReplicaLifecycleStateMachineFixture} from
   '../test-helpers/lifecycle-state-store.js';
 import {withRemovalServingSurface} from
   '../test-helpers/partition-removal-serving-surface.js';
-import {bindRegisteredReplicaHandler} from
+import {bindAdmittedReplicaHandler, bindRegisteredReplicaHandler} from
   '../test-helpers/replica-handler-identity-fixture.js';
 
 // Lifecycle scenarios: every create carries the committed-membership stamp
@@ -217,7 +217,7 @@ function createMockCDCService(cache, options = {}) {
  */
 function createMockPartitionServiceFactory() {
   // The production removal-serving surface (fence, drain) over an idle store.
-  return async (options) => bindRegisteredReplicaHandler(
+  return async (options) => bindAdmittedReplicaHandler(
     withRemovalServingSurface({
       partitionId: options.partitionId,
       replicaId: options.replicaId,

@@ -346,13 +346,15 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
       return Array.from(replicasById.values());
     }
     /**
-     * Register an existing replica (created during bootstrap).
-     * Stores only the service reference in localServices.
-     * This method is idempotent - duplicate registrations are ignored.
+     * Publish a replica constructed under retained original authority.
+     * Replaying the exact service and binding preserves its current status
+     * and re-enters the open-time retirement observation.
      * @param {Object} replicaInfo - Replica information.
      * @param {string} replicaInfo.replicaId - Unique replica identifier.
      * @param {string} replicaInfo.partitionId - Partition identifier.
      * @param {string} replicaInfo.tableName - Table name.
+     * @param {Object} replicaInfo.sourceEvidence - Original lifecycle source.
+     * @param {Object} replicaInfo.lifecycleOwner - Original lifecycle owner.
      * @param {string} replicaInfo.status - Replica status the caller states.
      * @param {Object} [replicaInfo.service] - Partition service instance.
      */
@@ -374,13 +376,13 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
     }
     /**
      * Swap a tracked replica's LIVE service instance (snapshot-install
-     * recreate, S6). DISTINCT from registerExistingReplica, whose
-     * idempotent early-return makes it unusable for a swap: this method
-     * overwrites the localServices entry AND the tracked metadata's service
-     * reference for an already-registered replica, preserving the remaining
-     * tracked fields.
+     * recreate, S6). The caller retains the exact predecessor observation
+     * before reconstruction. Both runtime maps publish through that original
+     * admission; ordinary registration only replays an identical runtime.
      * @param {string} replicaId - Replica ID being replaced.
      * @param {Object} service - Replacement partition service instance.
+     * @param {Object} expected - Original predecessor runtime observation.
+     * @param {Map} [hostServices] - Producer's runtime custody map.
      * @return {Object} Updated local replica metadata.
      */
     replaceLocalReplicaService(replicaId, service, expected, hostServices) {

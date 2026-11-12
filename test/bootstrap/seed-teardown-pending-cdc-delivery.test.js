@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 // The seed teardown completes when the latency topology stops while a
 // partition's CDC delivery is held inside the propagation service.
 //
@@ -8,8 +9,10 @@
 // it unsettled, PartitionService.shutdown awaited it, and
 // ReplicaHandler.shutdown never completed.
 //
-// Composition: a real in-memory single-replica PartitionService registered
-// with a real ReplicaHandler the way bootstrap registers seed partitions; its
+// Teardown/CDC composition: a real in-memory single-replica PartitionService
+// retains declared construction birth before opening, then actual row-owner
+// INSERT/seal/activation publishes its exact service and lifecycle owner. This
+// reduced-schema fixture does not prove original-seed startup admission. Its
 // CDC subscriber is the seed's real propagation step
 // (SeedRuntimeBridgeOwner.propagatePartitionCDCEvent) into a real
 // CDCGroupPropagationService; the teardown steps are the seed cleanup's own,
@@ -26,9 +29,9 @@ import {PARTITION_SERVICE_CDC} from '../../src/partition/partition-service-const
 import assert from 'node:assert/strict';
 import {afterEach, beforeEach, test} from 'node:test';
 
-import {PartitionService} from '../../src/partition/partition-service.js';
 import {ReplicaHandler} from '../../src/node/replica-handler.js';
-import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {PartitionServiceRowOwner} from '../../src/partition/partition-service-row-owner.js';
+import {isReplicaServiceHandlerBound} from '../../src/node/replica-transport-handler-identity.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {COLUMN} from '../../src/constants/index.js';
@@ -51,6 +54,8 @@ import {
   setupConfig,
 } from '../topology/cdc-group-propagation-service-harness.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {createLoopbackTransport} from '../partition/partition-service-test-support.js';
+import {createLifecycleStateStore, createPartitionRow} from '../test-helpers/lifecycle-state-store.js';
 import {resumeFixtureParticipantAdmission} from
   '../test-helpers/participant-transaction-fixture.js';
 
@@ -119,13 +124,24 @@ function startPropagationService() {
 }
 
 test('the seed teardown completes when the latency topology stops inside a ' +
-  'partition CDC delivery\'s propagation wave', async () => {
+  'partition CDC delivery\'s propagation wave', async (t) => {
   const propagation = startPropagationService();
   const topology = {cdcGroupPropagationService: propagation};
   const bridge = new SeedRuntimeBridgeOwner({
     delegates: {getLatencyTopology: () => topology},
   });
-  const partition = new PartitionService(withFoundingStamp({
+  const lifecycle = createLifecycleStateStore({partitions: [createPartitionRow({
+    partitionId: 'replica_operations-p1', nodeId: NODE_ID,
+  })]});
+  const handler = new ReplicaHandler({nodeId: NODE_ID,
+    systemTableCache: lifecycle.cache, cdcIntegrationService: {},
+    controlPlaneSystemTableGateway: lifecycle.gateway,
+    createPartitionService: async () => { throw new Error('the teardown witness performs no CREATE'); },
+  });
+  const owner = handler.replicaStateMachine;
+  const birth = Object.freeze({created_at: 1, state_entered_at: 1, updated_at: 1,
+    create_attempt_token: null});
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: 'replica_operations-p1',
     tableId: 'replica_operations',
     tableName: 'replica_operations',
@@ -134,10 +150,26 @@ test('the seed teardown completes when the latency topology stops inside a ' +
     nodeId: NODE_ID,
     dbPath: ':memory:',
     schema: SCHEMA,
-    systemTableCache: new SystemTableCache(),
-  }));
+    systemTableCache: lifecycle.cache,
+    transport: createLoopbackTransport(),
+    resolveHandlerRetirementLane: () => owner,
+  }), {birth});
+  t.after(async () => {
+    await LatencyTopologySetup.stop(topology);
+    await handler.shutdown();
+    await partition.shutdown();
+  });
   await partition.initialize();
   await resumeFixtureParticipantAdmission(partition);
+  const rowOwner = new PartitionServiceRowOwner({systemTableWriter: lifecycle.gateway,
+    replicaStateMachine: owner});
+  const registrationEvidence = await rowOwner.registerReplica({partitionId: partition.partitionId,
+    replicaId: REPLICA_ID, nodeId: NODE_ID, service: partition, status: 'stopped', extraFields: birth});
+  const active = await rowOwner.activateReplica({partitionId: partition.partitionId,
+    replicaId: REPLICA_ID, nodeId: NODE_ID, service: partition, registrationEvidence,
+    isEffectHandlerCurrent: () => isReplicaServiceHandlerBound(partition, owner)});
+  handler.registerExistingReplica({replicaId: REPLICA_ID, partitionId: partition.partitionId,
+    tableName: partition.tableName, service: partition, sourceEvidence: active, lifecycleOwner: owner});
   const sourceMessageGroup = createDurableSourceMessageGroupService(SOURCE_GROUP_ID);
   // The seed's subscriber, built by its one producer: it selects the source
   // group and propagates through the seed's latency topology.
@@ -151,22 +183,6 @@ test('the seed teardown completes when the latency topology stops inside a ' +
       propagatePartitionCdcVector(bridge.delegates.getLatencyTopology(), 'no topology',
         selected, events, deliveryContext),
   }), {subscriberId: 'seed-hydration', role: PARTITION_SERVICE_CDC.SUBSCRIBER_ROLE_PROPAGATION});
-  const handler = new ReplicaHandler({
-    nodeId: NODE_ID,
-    systemTableCache: new SystemTableCache(),
-    cdcIntegrationService: {},
-    // Never called: the seed's partition is registered, not created.
-    createPartitionService: async () => {
-      throw new Error('the witness creates no replica');
-    },
-  });
-  handler.registerExistingReplica({
-    replicaId: REPLICA_ID,
-    partitionId: 'replica_operations-p1',
-    tableName: 'replica_operations',
-    service: partition,
-  });
-
   // A rebalancer completion commits on the seed's partition; its CDC
   // delivery's propagation wave waits in its retry delay.
   await partition.insertData('replica_operations',

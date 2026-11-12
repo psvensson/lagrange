@@ -21,8 +21,11 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
-import {createLifecycleStateStore} from
+import {createLifecycleServiceRow, createLifecycleStateStore} from
   '../test-helpers/lifecycle-state-store.js';
+import {createRestoredPartitionServiceFixture} from
+  '../test-helpers/restored-partition-service-fixture.js';
+import {bindAdmittedReplicaHandler} from '../test-helpers/replica-handler-identity-fixture.js';
 
 // Lifecycle scenarios: every create carries the committed-membership stamp
 // its scenario's creator would have produced (owner decision O1).
@@ -70,13 +73,13 @@ function createMockCDCService(cache) {
  */
 function createMockPartitionServiceFactory() {
   return async (options) => {
-    return {
+    return bindAdmittedReplicaHandler({
       partitionId: options.partitionId,
       replicaId: options.replicaId,
       initialized: true,
       async shutdown() {},
       async syncFromLeader() {},
-    };
+    }, options);
   };
 }
 
@@ -259,8 +262,12 @@ test('ReplicaHandler cache-based state access', async (t) => {
     handler.shutdown();
   });
 
-  t.test('registerExistingReplica stores only service reference', async (t) => {
+  t.test('registerExistingReplica publishes the exact restored runtime and binding', async (t) => {
     const cache = createSeededCache();
+    const source = createLifecycleServiceRow({replicaId: 'replica-1',
+      partitionId: 'partition-1', nodeId: 'test-node', status: ReplicaStatus.ACTIVE,
+      createdAt: 100, stateEnteredAt: 100});
+    cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', source);
     const mockCDC = createMockCDCService(cache);
 
     const handler = new ReplicaHandler({
@@ -273,24 +280,15 @@ test('ReplicaHandler cache-based state access', async (t) => {
 
     handler.initialize();
 
-    const mockService = {
-      partitionId: 'partition-1',
-      replicaId: 'replica-1',
-      async shutdown() {},
-    };
-
-    // Register replica with service
-    handler.registerExistingReplica({
-      replicaId: 'replica-1',
-      partitionId: 'partition-1',
-      tableName: 'test_table',
-      status: ReplicaStatus.ACTIVE,
-      service: mockService,
-    });
+    const registration = await createRestoredPartitionServiceFixture(handler, source,
+      {tableId: 'table-1', tableName: 'test_table'});
+    handler.registerExistingReplica(registration);
 
     // Verify service is stored in localServices
     t.ok(handler.localServices.has('replica-1'), 'service stored in localServices');
-    t.equal(handler.localServices.get('replica-1'), mockService, 'correct service reference');
+    t.equal(handler.localServices.get('replica-1'), registration.service, 'correct service reference');
+    t.equal(handler.localReplicas.get('replica-1').runtimeBinding,
+      registration.service.runtimeBinding, 'the exact owner association is retained');
 
     handler.shutdown();
   });

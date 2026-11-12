@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 /**
  * Preservation Property Tests: CDC Sliding Window Catchup
  *
@@ -130,7 +131,7 @@ function initializeTestConfig() {
  * buffering.
  */
 function createTestPartition() {
-  return new PartitionService(withFoundingStamp({
+  return createPartitionServiceFixture(withFoundingStamp({
     partitionId: TEST_PARTITION_ID,
     tableId: TEST_TABLE_ID,
     tableName: TEST_TABLE_NAME,

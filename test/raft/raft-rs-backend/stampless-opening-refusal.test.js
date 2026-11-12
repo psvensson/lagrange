@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../../test-helpers/partition-service-fixture.js';
 // V1a (verification O1 round 1, verify-o1-seed-genesis rebuilt): a replica
 // is opened from a stamp or from the durable-record bootstrap, never from an
 // absent stamp. At ab7669fd0 the port read an absent stamp as a GENESIS of
@@ -24,7 +25,7 @@ import {
 import {ConfigurationManager} from
   '../../../src/config/configuration-manager.js';
 import {LoggingService} from '../../../src/logging/logging-service.js';
-import {PartitionService} from '../../../src/partition/partition-service.js';
+
 import {ENTITY_TYPE} from '../../../src/constants/addresses.js';
 import {isConsensusInitRefusal} from '../../../src/raft/raft-operation-port.js';
 import {
@@ -130,7 +131,7 @@ test('V1a: a partition service built without a bootstrap membership cannot ' +
   LoggingService.resetInstance();
   ConfigurationManager.getInstance().initialize({node: {id: 'v1a-node'}});
   LoggingService.getInstance().initialize({level: 'error'});
-  const service = new PartitionService({
+  const service = createPartitionServiceFixture({
     partitionId: 'v1a-third-origin',
     tableId: 'v1a-table',
     tableName: 'v1a-table',

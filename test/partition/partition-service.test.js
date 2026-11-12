@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 /**
  * Unit tests for PartitionService.
  * Tests SQLite-backed Raft group for data storage.
@@ -234,7 +235,7 @@ test('PartitionService - constructor requires replicaId', async (t) => {
 });
 
 test('PartitionService - initializes with in-memory database', async (t) => {
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: 'test-partition-1',
     tableId: 'test-table',
     replicaId: 'replica-1',
@@ -286,7 +287,7 @@ test('PartitionService - repairs legacy sql_transactions replicas by adding tran
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'partition-service-sql-tx-'));
     const dbPath = path.join(tempDir, 'sql-transactions.db');
 
-    const legacyPartition = new PartitionService(withFoundingStamp({
+    const legacyPartition = createPartitionServiceFixture(withFoundingStamp({
       partitionId: 'sql_transactions-p1',
       tableId: SYSTEM_TABLE_NAME.SQL_TRANSACTIONS,
       tableName: SYSTEM_TABLE_NAME.SQL_TRANSACTIONS,
@@ -299,7 +300,7 @@ test('PartitionService - repairs legacy sql_transactions replicas by adding tran
     await legacyPartition.initialize();
     await legacyPartition.shutdown();
 
-    const repairedPartition = new PartitionService(withFoundingStamp({
+    const repairedPartition = createPartitionServiceFixture(withFoundingStamp({
       partitionId: 'sql_transactions-p1',
       tableId: SYSTEM_TABLE_NAME.SQL_TRANSACTIONS,
       tableName: SYSTEM_TABLE_NAME.SQL_TRANSACTIONS,
@@ -342,7 +343,7 @@ test('PartitionService - persists a participant commit outcome across restart, k
   'its identity; COMMIT requires PREPARED and absence is UNKNOWN', async (t) => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'partition-outcome-'));
   const dbPath = path.join(tempDir, 'outcome.db');
-  const buildPartition = () => new PartitionService(withFoundingStamp({
+  const buildPartition = () => createPartitionServiceFixture(withFoundingStamp({
     partitionId: 'outcome-p1',
     tableId: 'outcome_rows',
     tableName: 'outcome_rows',
@@ -404,7 +405,7 @@ test('PartitionService - persists a participant commit outcome across restart, k
 test('PartitionService - suppresses lifecycle logs and emits stage callbacks', async (t) => {
   const stageEvents = [];
   const infoMessages = [];
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: 'stage-partition-1',
     tableId: 'stage_table',
     tableName: 'stage_table',
@@ -639,7 +640,7 @@ test('PartitionService - leader mutation helper guards owner writes with observe
     });
 
     let capturedWhereClause = null;
-    const partition = new PartitionService(withFoundingStamp({
+    const partition = createPartitionServiceFixture(withFoundingStamp({
       partitionId: 'guarded-partition-1',
       tableId: 'guarded_table',
       tableName: 'guarded_table',
@@ -675,7 +676,7 @@ test('PartitionService - leader mutation helper guards owner writes with observe
 test('PartitionService - flushes services role update when local services leader exists',
   async (t) => {
     const updates = [];
-    const partition = new PartitionService(withFoundingStamp({
+    const partition = createPartitionServiceFixture(withFoundingStamp({
       partitionId: 'services-p1',
       tableId: 'services',
       tableName: 'services',
@@ -723,7 +724,7 @@ test('PartitionService - flushes services role update when local services leader
 test('PartitionService - flushes partition leader update when local partitions leader exists',
   async (t) => {
     const updates = [];
-    const partition = new PartitionService(withFoundingStamp({
+    const partition = createPartitionServiceFixture(withFoundingStamp({
       partitionId: 'partitions-p1',
       tableId: 'partitions',
       tableName: 'partitions',
@@ -792,7 +793,7 @@ test('PartitionService - creates table from schema', async (t) => {
     ],
   };
 
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: 'test-partition-2',
     tableId: 'users',
     tableName: 'users',
@@ -830,7 +831,7 @@ test('PartitionService - executeQuery for SELECT', async (t) => {
     ],
   };
 
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: 'test-partition-3',
     tableId: 'items',
     tableName: 'items',
@@ -912,7 +913,7 @@ test('PartitionService - updateData modifies records', async (t) => {
     ],
   };
 
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: 'test-partition-4',
     tableId: 'tasks',
     tableName: 'tasks',
@@ -957,7 +958,7 @@ test('PartitionService - deleteData removes records', async (t) => {
     ],
   };
 
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: 'test-partition-5',
     tableId: 'records',
     tableName: 'records',
@@ -996,7 +997,7 @@ test('PartitionService - generates CDC events on insert', async (t) => {
     ],
   };
 
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: 'test-partition-6',
     tableId: CDC_TABLE,
     tableName: CDC_TABLE,
@@ -1042,7 +1043,7 @@ test('PartitionService - generates CDC events on insert', async (t) => {
 // not replicated input), and neither does a non-propagated control table.
 // Five committed writes to a partition's own table, then its ledger counts.
 async function ledgerAfterFiveWrites(options, rowOf) {
-  const partition = new PartitionService(withFoundingStamp({replicaIds: [options.replicaId],
+  const partition = createPartitionServiceFixture(withFoundingStamp({replicaIds: [options.replicaId],
     dbPath: ':memory:', systemTableCache: new SystemTableCache(), ...options}));
   await partition.initialize();
   await resumeFixtureParticipantAdmission(partition);
@@ -1092,7 +1093,7 @@ test('PartitionService - generates CDC events on update', async (t) => {
     ],
   };
 
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: 'test-partition-7',
     tableId: CDC_TABLE,
     tableName: CDC_TABLE,
@@ -1135,7 +1136,7 @@ test('PartitionService - suppresses CDC for no-op updates', async (t) => {
     ],
   };
 
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: 'test-partition-7-noop',
     tableId: CDC_TABLE,
     tableName: CDC_TABLE,
@@ -1176,7 +1177,7 @@ test('PartitionService - generates CDC events on delete', async (t) => {
     ],
   };
 
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: 'test-partition-8',
     tableId: CDC_TABLE,
     tableName: CDC_TABLE,
@@ -1225,7 +1226,7 @@ test('PartitionService - generates CDC UPSERT events on upsert', async (t) => {
     ],
   };
 
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: 'test-partition-upsert-cdc',
     tableId: CDC_TABLE,
     tableName: CDC_TABLE,
@@ -1278,7 +1279,7 @@ test('PartitionService - raw SQL INSERT OR REPLACE generates CDC UPSERT', async 
     ],
   };
 
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: 'test-partition-sql-upsert',
     tableId: CDC_TABLE,
     tableName: CDC_TABLE,
@@ -1336,7 +1337,7 @@ test('PartitionService - raw SQL nested parenthesized DELETE preserves composite
       ],
     };
 
-    const partition = new PartitionService(withFoundingStamp({
+    const partition = createPartitionServiceFixture(withFoundingStamp({
       partitionId: 'test-partition-sql-delete-composite',
       tableId: 'services',
       tableName: 'services',
@@ -1399,7 +1400,7 @@ test('PartitionService - follower applyCommittedEntry must not emit CDC', async 
     ],
   };
 
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: 'test-follower-cdc',
     tableId: CDC_TABLE,
     tableName: CDC_TABLE,

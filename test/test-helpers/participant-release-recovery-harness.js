@@ -22,7 +22,13 @@ import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {createInProcessMockTransport} from './replica-handler-identity-fixture.js';
 import {captureParticipantReleaseObservationTimer} from
   './participant-release-observer-resource-fixture.js';
-import {startLeader} from './participant-transaction-fixture.js';
+import {PARTITION_ID, REPLICAS, startAdmittedLeader} from './participant-transaction-fixture.js';
+import {createLifecycleServiceRow, createLifecycleStateStore} from './lifecycle-state-store.js';
+import {assertDurableRejoinStorageAdmission} from
+  '../../src/bootstrap/durable-rejoin-storage-admission.js';
+import {createReplicaRuntimePublication, publishReplicaRuntime} from
+  '../../src/node/replica-runtime-publication.js';
+import {captureReplicaRuntimeObservation} from '../../src/node/replica-runtime-observation.js';
 
 function retainFailure(current, next, message) {
   return current === null ? next : new AggregateError([current, next], message);
@@ -180,25 +186,64 @@ async function withActualHandler(measure, options = {}) {
   const transport = createInProcessMockTransport();
   let failure = null;
   try {
-    const {leader} = await startLeader(options.leader);
-    acquired.leader = leader;
+    const source = createLifecycleServiceRow({replicaId: REPLICAS[0],
+      partitionId: options.leader?.partitionId ?? PARTITION_ID,
+      nodeId: 'test-node', status: 'active', createdAt: 1, stateEnteredAt: 1});
+    const store = createLifecycleStateStore({services: [source]});
+    const systemTableCache = options.leader?.systemTableCache ?? store.cache;
     const handlerTimeSource = options.timeSource ??
-      new VirtualTimeSource({startMs: leader.timeSource.now()});
+      new VirtualTimeSource({startMs: Date.now()});
     const handler = new ReplicaHandler({
-      nodeId: leader.nodeId,
+      nodeId: source.node_id,
       ownerIncarnation: 1,
-      systemTableCache: leader.systemTableCache,
+      systemTableCache,
+      controlPlaneSystemTableGateway: store.gateway,
       cdcIntegrationService: {},
-      createPartitionService: () => leader,
+      createPartitionService: () => { throw new Error('the release fixture performs no CREATE'); },
       messageRouter: transport,
       dataDir: acquired.directory,
       timeSource: handlerTimeSource,
     });
     acquired.handler = handler;
     handler.registerWithRouter(transport);
-    handler.localServices.set(leader.replicaId, leader);
+    const owner = handler.replicaStateMachine;
+    const admitRestore = () => assertDurableRejoinStorageAdmission(owner, {
+      restoringExistingReplica: true, replicaId: source.replica_id, lifecycleAuthority: source,
+    });
+    const restored = await admitRestore();
+    const construction = {...options.leader, systemTableCache, transport,
+      resolveHandlerRetirementLane: () => owner};
+    const {leader} = await startAdmittedLeader({...construction,
+      runtimePublication: createReplicaRuntimePublication(handler, restored.row,
+        restored.admission)});
+    acquired.leader = leader;
+    publishReplicaRuntime(handler, {replicaId: source.replica_id, service: leader,
+      sourceEvidence: restored.row, lifecycleOwner: owner});
     acquired.timerCapture = captureParticipantReleaseObservationTimer(leader, handlerTimeSource);
-    await measure({handler, leader, transport, timeSource: handlerTimeSource});
+    const createReplacement = async () => {
+      const expected = captureReplicaRuntimeObservation(handler, source.replica_id);
+      const replacement = await startAdmittedLeader({...construction,
+        runtimePublication: createReplicaRuntimePublication(handler, expected.sourceEvidence,
+          expected.admission, expected.service)});
+      return {...replacement, expected};
+    };
+    const restoreAfterDeletion = async () => {
+      const admission = await admitRestore();
+      const replacement = await startAdmittedLeader({...construction,
+        runtimePublication: createReplicaRuntimePublication(handler, admission.row,
+          admission.admission)});
+      try {
+        publishReplicaRuntime(handler, {replicaId: source.replica_id, service: replacement.leader,
+          sourceEvidence: admission.row, lifecycleOwner: owner});
+      } catch (error) {
+        await handler.fenceFailedReplicaCreateRuntime(source.replica_id, source.partition_id,
+          replacement.leader, error);
+        throw error;
+      }
+      return replacement;
+    };
+    await measure({handler, leader, transport, timeSource: handlerTimeSource,
+      createReplacement, restoreAfterDeletion});
   } catch (error) {
     failure = error;
   }

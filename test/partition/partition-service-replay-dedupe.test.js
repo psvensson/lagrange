@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {PARTITION_COMMITTED_COMMAND_OUTCOME} from
@@ -18,7 +19,7 @@ async function commitThroughPort(partition, command) {
 
 test('PartitionService skips replayed committed entries when entryId is stable',
   async (t) => {
-    const partition = new PartitionService(withFoundingStamp({
+    const partition = createPartitionServiceFixture(withFoundingStamp({
       partitionId: 'test-partition',
       tableId: 'dedupe_table',
       tableName: 'dedupe_table',
@@ -65,7 +66,7 @@ test('PartitionService skips replayed committed entries when entryId is stable',
 test(
   'PartitionService proposeWrite stamps stable entryId for replay dedupe',
   async (t) => {
-    const partition = new PartitionService(withFoundingStamp({
+    const partition = createPartitionServiceFixture(withFoundingStamp({
       partitionId: 'test-partition',
       tableId: 'dedupe_table',
       tableName: 'dedupe_table',
@@ -125,7 +126,7 @@ test(
 test(
   'PartitionService consumes a duplicate-key INSERT with no applied instance of its entry identity as a failed statement, not a replay',
   async (t) => {
-    const partition = new PartitionService(withFoundingStamp({
+    const partition = createPartitionServiceFixture(withFoundingStamp({
       partitionId: 'test-partition',
       tableId: 'dedupe_table',
       tableName: 'dedupe_table',

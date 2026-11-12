@@ -6,6 +6,7 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
+import {bindAdmittedReplicaHandler} from '../test-helpers/replica-handler-identity-fixture.js';
 import fc from 'fast-check';
 import fs from 'fs';
 import path from 'path';
@@ -60,13 +61,13 @@ function createMockCDCService(cache) {
  */
 function createMockPartitionServiceFactory() {
   return async (options) => {
-    return {
+    return bindAdmittedReplicaHandler({
       partitionId: options.partitionId,
       replicaId: options.replicaId,
       initialized: true,
       async shutdown() {},
       async syncFromLeader() {},
-    };
+    }, options);
   };
 }
 

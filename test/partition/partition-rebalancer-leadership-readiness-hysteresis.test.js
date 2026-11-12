@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 /**
  * Falsifier: rebalancer-leadership readiness hysteresis.
  *
@@ -102,7 +103,7 @@ const DRAINING_SNAPSHOT = {
 };
 
 function createPartitionService() {
-  return new PartitionService(withFoundingStamp({
+  return createPartitionServiceFixture(withFoundingStamp({
     partitionId: PARTITION_ID,
     tableId: TABLE_ID,
     replicaId: REPLICA_ID,

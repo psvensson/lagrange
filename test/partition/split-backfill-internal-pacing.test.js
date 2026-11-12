@@ -1,7 +1,8 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {PartitionService} from '../../src/partition/partition-service.js';
+
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
 import {CDC_TABLE, resumeFixtureParticipantAdmission} from
@@ -37,7 +38,7 @@ function createSnapshotDb(rows) {
 }
 
 function createPartition(partitionId = 'ratings-source') {
-  return new PartitionService(withFoundingStamp({
+  return createPartitionServiceFixture(withFoundingStamp({
     partitionId,
     tableId: `tbl-${CDC_TABLE}`,
     tableName: CDC_TABLE,

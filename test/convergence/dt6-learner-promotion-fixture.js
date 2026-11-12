@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 /**
  * Shared five-node learner-promotion fixture for the dt6 learner-promotion
  * witnesses (quests learner-promotion-progress-proof and
@@ -377,7 +378,7 @@ function assertLeaderCommitIndex(leader, expected, stage) {
 }
 
 async function createLeader(transport, cache) {
-  const leader = new PartitionService(withFoundingStamp({
+  const leader = createPartitionServiceFixture(withFoundingStamp({
     partitionId: PARTITION_ID,
     tableId: TABLE_NAME,
     tableName: TABLE_NAME,
@@ -458,7 +459,7 @@ function placementAddresses(placement) {
 async function admitLiveVoter(topology, replicaId, nodeId, options = {}) {
   const placement = placementWith(topology, replicaId, nodeId);
   const voterCache = createPlacementCache(placement);
-  const voter = new PartitionService(withFoundingStamp({
+  const voter = createPartitionServiceFixture(withFoundingStamp({
     partitionId: PARTITION_ID,
     tableId: TABLE_NAME,
     tableName: TABLE_NAME,
@@ -537,7 +538,7 @@ function learnerHearsLeaderBeforeReplication(learner) {
 }
 
 async function createLearner(transport, cache, options = {}) {
-  const learner = new PartitionService(withFoundingStamp({
+  const learner = createPartitionServiceFixture(withFoundingStamp({
     partitionId: PARTITION_ID,
     tableId: TABLE_NAME,
     tableName: TABLE_NAME,

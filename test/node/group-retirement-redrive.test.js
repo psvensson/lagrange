@@ -375,7 +375,7 @@ test('W4g a record with no frozen set whose leader already retired: ' +
     'the record stays retiring (its only future exit: an operator fact)');
 });
 
-test('W4e a member restarting before any re-dispatch retires itself on ' +
+test('W4e retained-runtime retirement re-observation before re-dispatch retires on ' +
   'the verified record; an unreadable record retires nothing',
 async (t) => {
   const world = openGroupWorld(t, {partitionId: 'redrive-open', voters: 3});
@@ -386,12 +386,12 @@ async (t) => {
   await owner.finalizeSplitDissolutionIfReady(WORKFLOW_ID);
   await settleTurns(world);
   const reopen = async (replicaId) => {
-    const {handler, service} = world.sources.get(replicaId);
+    const {handler, service, registration} = world.sources.get(replicaId);
     service.tableId = TABLE_ID;
-    handler.localReplicas.delete(replicaId);
-    handler.localServices.delete(replicaId);
-    handler.registerExistingReplica({replicaId,
-      partitionId: world.partitionId, service});
+    // This fixture retains one live native runtime. Re-enter the production
+    // open-time observer with its original registration; it is not a native
+    // restart witness and cannot recreate authority by deleting its maps.
+    handler.registerExistingReplica(registration);
     await settleTurns(world);
   };
   // Unreadable record: never evidence.
@@ -410,7 +410,7 @@ async (t) => {
   world.authoritativeTablesReadAvailable = true;
   await reopen(away);
   t.equal(await driveUntilRemoved(world, [away]), true,
-    'the restarted member completed its own removal');
+    'the retained member completed its own removal after re-observation');
   assertMemberRetired(t, world, away, 'W4e');
   t.ok(deliveriesTo(world, away).every((delivery) => delivery.lost),
     'no owner re-dispatch reached it (every delivery was lost)');

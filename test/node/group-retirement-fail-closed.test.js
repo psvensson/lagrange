@@ -123,8 +123,9 @@ test('F5 NOT_FOUND is not an acknowledgement', async (t) => {
 
 // B1 (P3a): a member that never answered; its services row is deleted (any
 // deleter). The step never completes on it; when the member itself comes
-// back (a restart: the open-time safety net retires it on the still-retiring
-// record) its own answer completes the step.
+// re-enters its open-time retirement observer on the still-retiring record,
+// its own answer completes the step. The fixture retains the native runtime;
+// this is not evidence of an actual native restart.
 test('B1 a deleted services row never completes the step; the member\'s ' +
   'own answer does', async (t) => {
   const world = openGroupWorld(t, {partitionId: 'live-b1', voters: 3});
@@ -147,12 +148,9 @@ test('B1 a deleted services row never completes the step; the member\'s ' +
   t.same(world.exitsOf(gone), [], 'gone never retired');
   t.same(owner.groupRetirementRedrive.unacknowledged().map((entry) =>
     entry.unacknowledgedReplicaIds), [[gone]], 'gone stays listed');
-  // gone restarts: the safety net reads the still-retiring record.
-  const {handler, service} = world.sources.get(gone);
-  handler.localReplicas.delete(gone);
-  handler.localServices.delete(gone);
-  handler.registerExistingReplica({replicaId: gone,
-    partitionId: world.partitionId, service});
+  // Re-observation retains the original exact runtime and admission evidence.
+  const {handler, registration} = world.sources.get(gone);
+  handler.registerExistingReplica(registration);
   t.equal(await driveUntilRemoved(world, [gone]), true,
     'the safety net retired gone');
   t.ok(retired(world, gone), 'as group-retired');

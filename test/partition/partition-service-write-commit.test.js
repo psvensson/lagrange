@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -184,7 +185,7 @@ test('PartitionService retains the durable witness for completed idempotent repl
   async (t) => {
     // Production construction: a lone rs-raft leader commits and applies its
     // own proposal.
-    const partition = new PartitionService(withFoundingStamp({
+    const partition = createPartitionServiceFixture(withFoundingStamp({
       partitionId: 'commit-replay',
       tableId: 'test_table',
       tableName: 'test_table',
@@ -411,7 +412,7 @@ test(
     'outcome, not a host failure',
   async (t) => {
     // Production construction: a lone rs-raft leader.
-    const partition = new PartitionService(withFoundingStamp({
+    const partition = createPartitionServiceFixture(withFoundingStamp({
       partitionId: 'statement-failed',
       tableId: 'test_table',
       tableName: 'test_table',

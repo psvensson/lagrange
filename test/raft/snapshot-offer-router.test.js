@@ -1,9 +1,18 @@
-import {EventEmitter} from 'node:events';
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ReplicaHandler} from '../../src/node/replica-handler.js';
+import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
+import {PartitionService} from '../../src/partition/partition-service.js';
+import {createReplicaRuntimePublication} from '../../src/node/replica-runtime-publication.js';
+import {captureReplicaRuntimeObservation} from '../../src/node/replica-runtime-observation.js';
+import {PARTITION_RUNTIME_PUBLICATION_REFUSED} from
+  '../../src/partition/partition-runtime-publication.js';
+import {createRestoredPartitionServiceFixture} from
+  '../test-helpers/restored-partition-service-fixture.js';
+import {createLifecycleServiceRow, createLifecycleStateStore} from
+  '../test-helpers/lifecycle-state-store.js';
 import {
   bulkConnectionTransferSocket,
 } from '../../src/raft/bulk-connection-transfer-socket.js';
@@ -34,8 +43,8 @@ import {
 // consumed OFFER — the deterministic red direction); a non-OFFER first
 // frame is a typed refusal; an unknown raftGroupId is a typed refusal; and
 // ReplicaHandler.replaceLocalReplicaService swaps localServices + the
-// tracked service where registerExistingReplica's idempotent early-return
-// cannot.
+// tracked service from its original predecessor, while ordinary registration
+// refuses a different runtime.
 
 const PARTITION_ID = 'offer_rows-p1';
 const STATE_TABLE = 'offer_rows';
@@ -213,36 +222,41 @@ test('an OFFER for an unknown raft group is a typed replica_not_found',
     }
   });
 
-test('replaceLocalReplicaService swaps where registerExistingReplica ' +
-  'cannot', async (t) => {
+test('replaceLocalReplicaService consumes the retained predecessor that registration cannot replace',
+  async (t) => {
+  const source = createLifecycleServiceRow({replicaId: REPLICA_ID, partitionId: PARTITION_ID,
+    nodeId: 'offer-router-node', status: 'active', createdAt: 100, stateEnteredAt: 100});
+  const store = createLifecycleStateStore({services: [source]});
+  const owner = new ReplicaStateMachine({nodeId: source.node_id,
+    systemTableCache: store.cache, controlPlaneSystemTableGateway: store.gateway});
   const handler = new ReplicaHandler({
-    nodeId: 'offer-router-node',
-    systemTableCache: {filter: () => []},
+    nodeId: source.node_id,
+    systemTableCache: store.cache,
+    controlPlaneSystemTableGateway: store.gateway,
     cdcIntegrationService: {},
-    // The lifecycle owner's event port (the handler subscribes to it).
-    replicaStateMachine: new EventEmitter(),
+    replicaStateMachine: owner,
     createPartitionService: async () => ({}),
   });
-  const original = {partitionId: PARTITION_ID, tableName: STATE_TABLE};
-  const replacement = {partitionId: PARTITION_ID, tableName: STATE_TABLE};
-  handler.registerExistingReplica({
-    replicaId: REPLICA_ID,
-    partitionId: PARTITION_ID,
-    tableName: STATE_TABLE,
-    service: original,
+  const registration = await createRestoredPartitionServiceFixture(handler, source,
+    {tableId: STATE_TABLE, tableName: STATE_TABLE});
+  const original = registration.service;
+  handler.registerExistingReplica(registration);
+  const expected = captureReplicaRuntimeObservation(handler, REPLICA_ID);
+  const replacement = new PartitionService({partitionId: PARTITION_ID, replicaId: REPLICA_ID,
+    tableId: STATE_TABLE, tableName: STATE_TABLE, nodeId: source.node_id,
+    runtimePublication: createReplicaRuntimePublication(handler, expected.sourceEvidence,
+      expected.admission, original), resolveHandlerRetirementLane: () => owner});
+  t.teardown(async () => {
+    await Promise.all([original.shutdown(), replacement.shutdown()]);
+    await owner.clear();
   });
-  // The distinctness pin: registerExistingReplica early-returns on a
-  // duplicate and can never swap the live service.
-  handler.registerExistingReplica({
-    replicaId: REPLICA_ID,
-    partitionId: PARTITION_ID,
-    tableName: STATE_TABLE,
-    service: replacement,
-  });
+  t.throws(() => handler.registerExistingReplica({...registration, service: replacement}),
+    {code: PARTITION_RUNTIME_PUBLICATION_REFUSED},
+    'a new runtime cannot use idempotent registration to replace its predecessor');
   t.equal(handler.localServices.get(REPLICA_ID), original,
-    'registerExistingReplica is idempotent-by-early-return (no swap)');
+    'refused registration preserves the original runtime');
   const statusBeforeSwap = handler.localReplicas.get(REPLICA_ID).status;
-  const merged = handler.replaceLocalReplicaService(REPLICA_ID, replacement);
+  const merged = handler.replaceLocalReplicaService(REPLICA_ID, replacement, expected);
   t.equal(handler.localServices.get(REPLICA_ID), replacement,
     'replaceLocalReplicaService swaps the localServices entry');
   t.equal(handler.localReplicas.get(REPLICA_ID).service, replacement,

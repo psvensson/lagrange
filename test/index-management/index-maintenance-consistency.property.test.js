@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 /**
  * Property-based test for Index Maintenance Consistency.
  * **Property 15: Index Maintenance Consistency**
@@ -9,7 +10,7 @@
 
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
-import {PartitionService} from '../../src/partition/partition-service.js';
+
 import {IndexService} from '../../src/index-management/index-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -81,7 +82,7 @@ const dataArbitrary = fc.record({
  * Create a partition with a schema that includes indexable columns.
  */
 async function createTestPartition(partitionId, tableName) {
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId,
     tableId: tableName,
     tableName,

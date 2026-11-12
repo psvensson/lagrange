@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../../test-helpers/partition-service-fixture.js';
 // PR117: production initialization consumes the real runtime's opening refusal.
 // No constructor is stubbed. A shared-core trap is injected through the existing
 // native-call seam; the three service initializers and their cleanup are real.
@@ -6,7 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {PartitionNodeCluster} from './partition-node-cluster.js';
-import {PartitionService} from '../../../src/partition/partition-service.js';
+
 import {MessageGroupService} from '../../../src/message-group/message-group-service.js';
 import {WasmServiceReplica} from '../../../src/wasm-service/wasm-service-replica.js';
 import {MessageRouter} from '../../../src/transport/message-router.js';
@@ -113,7 +114,7 @@ function buildService(fixture, kind) {
     timeSource: fixture.clock, deferElection: true, systemTableCache: new SystemTableCache()};
   let service;
   if (kind === 'partition') {
-    service = new PartitionService({...options, partitionId: id, tableId: `${id}-table`,
+    service = createPartitionServiceFixture({...options, partitionId: id, tableId: `${id}-table`,
       tableName: 'opening_refusal_rows', bootstrapMembership: genesisStamp([replicaId], {})});
   } else if (kind === 'message-group') {
     service = new MessageGroupService({...options, groupId: id});

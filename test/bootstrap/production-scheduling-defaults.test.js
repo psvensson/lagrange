@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 // What a production node schedules on: the replicas it hosts, and the
 // reconciler it converges with.
 //
@@ -244,7 +245,7 @@ function suppliedClockBootstrapService(t, clock) {
  * @return {Promise<PartitionService>}
  */
 async function startPartitionReplica(open, label, authorities) {
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: `${TABLE_ID}-${label}`,
     tableId: TABLE_ID,
     replicaId: `${TABLE_ID}-${label}-r1`,

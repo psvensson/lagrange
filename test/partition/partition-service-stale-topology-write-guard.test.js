@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 /**
  * Split-brain write-acceptance guard (write-routing-repair-under-control-plane-moves).
  *
@@ -27,7 +28,7 @@ import {resumeFixtureParticipantAdmission} from
   '../test-helpers/participant-transaction-fixture.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {PartitionService} from '../../src/partition/partition-service.js';
+
 import {withFoundingStamp} from './partition-founding-stamp.js';
 
 beforeEach(() => {
@@ -45,7 +46,7 @@ afterEach(() => {
 });
 
 function createSelfOnlyPartition(id) {
-  return new PartitionService(withFoundingStamp({
+  return createPartitionServiceFixture(withFoundingStamp({
     partitionId: id,
     tableId: 'test_table',
     tableName: 'test_table',

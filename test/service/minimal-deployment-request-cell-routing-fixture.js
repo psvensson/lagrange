@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 import {createHash} from 'node:crypto';
 import Database from 'better-sqlite3';
 
@@ -27,7 +28,7 @@ import {
 } from
   '../../src/control-plane/owners/request-binding-service-definition-contract.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
-import {PartitionService} from '../../src/partition/partition-service.js';
+
 import {RuntimeDriverRegistry} from
   '../../src/runtime/runtime-driver-registry.js';
 import {ServiceRuntimeLifecycle} from
@@ -340,7 +341,7 @@ class MemoryInvocationJournal {
 class SqliteInvocationJournal {
   constructor() {
     this.insertOperationIds = [];
-    this.partition = new PartitionService(withFoundingStamp({
+    this.partition = createPartitionServiceFixture(withFoundingStamp({
       dbPath: SQLITE_MEMORY_DATABASE,
       partitionId: WASM_OPERATIONS_PROOF_PARTITION,
       replicaId: WASM_OPERATIONS_PROOF_REPLICA,

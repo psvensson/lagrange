@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
@@ -10,7 +11,7 @@ import {
   MessageGroupService,
   RaftRole,
 } from '../../src/message-group/message-group-service.js';
-import {PartitionService} from '../../src/partition/partition-service.js';
+
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {CDC_OPERATION} from '../../src/constants/cdc.js';
@@ -62,7 +63,7 @@ function createRecordingLogger() {
 }
 
 function createReplayTestPartition(nodeId) {
-  return new PartitionService(withFoundingStamp({
+  return createPartitionServiceFixture(withFoundingStamp({
     partitionId: 'cdc-pressure-p1',
     tableId: 'cdc_pressure_nodes',
     tableName: SYSTEM_TABLE_NAME.NODES,

@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 /**
  * Falsifier: rebalancer-leadership readiness EDGE-GATE (no-edge fan-out skip).
  *
@@ -93,7 +94,7 @@ const RECOVERY_DIP_SNAPSHOT = {
 };
 
 function createPartitionService() {
-  return new PartitionService(withFoundingStamp({
+  return createPartitionServiceFixture(withFoundingStamp({
     partitionId: PARTITION_ID,
     tableId: TABLE_ID,
     replicaId: REPLICA_ID,

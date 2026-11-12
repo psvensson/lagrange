@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 /**
  * Property-based test for Universal Partition Implementation.
  * **Property 32: Universal Partition Implementation**
@@ -102,7 +103,7 @@ test('Property 32: System tables use same PartitionService as user tables', asyn
     const replicaIds = INITIAL_REPLICA_IDS[tableName];
     const replicaId = replicaIds[0];
 
-    const partition = new PartitionService(withFoundingStamp({
+    const partition = createPartitionServiceFixture(withFoundingStamp({
       partitionId,
       tableId: tableName,
       tableName,
@@ -141,7 +142,7 @@ test('Property 32: User tables use same PartitionService as system tables', asyn
         const partitionId = `${tableId}-p1`;
         const replicaId = `${partitionId}-r1`;
 
-        const partition = new PartitionService(withFoundingStamp({
+        const partition = createPartitionServiceFixture(withFoundingStamp({
           partitionId,
           tableId,
           tableName: tableId,
@@ -197,7 +198,7 @@ test('Property 32: No infrastructure distinction between system and user tables'
         const userReplicaId = `${userPartitionId}-r1`;
 
         // Create system table partition
-        const systemPartition = new PartitionService(withFoundingStamp({
+        const systemPartition = createPartitionServiceFixture(withFoundingStamp({
           partitionId: systemPartitionId,
           tableId: systemTableName,
           tableName: systemTableName,
@@ -208,7 +209,7 @@ test('Property 32: No infrastructure distinction between system and user tables'
         }));
 
         // Create user table partition
-        const userPartition = new PartitionService(withFoundingStamp({
+        const userPartition = createPartitionServiceFixture(withFoundingStamp({
           partitionId: userPartitionId,
           tableId: userTableId,
           tableName: userTableId,

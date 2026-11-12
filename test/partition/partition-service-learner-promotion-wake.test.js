@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 /**
  * Learner-promotion proof-channel wake (quest
  * learner-promotion-proof-channel-wake): unit seams of the promotion owner
@@ -14,11 +15,7 @@
  */
 
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
-import {
-  PartitionService,
-  RaftRole,
-  CDCOperation,
-} from '../../src/partition/partition-service.js';
+import {RaftRole, CDCOperation} from '../../src/partition/partition-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {
@@ -71,7 +68,7 @@ afterEach(() => {
 });
 
 function createLearner(options = {}) {
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: PARTITION_ID,
     tableId: 'wake-table',
     replicaId: LEARNER_REPLICA_ID,

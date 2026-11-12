@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 // Real native command history, not the 141-member original-allocation or public
 // startup proof. No history is edited: one application callback fails, or one
 // exact native commit carrier is held, while native persistence runs normally.
@@ -10,7 +11,7 @@ import {test} from 'node:test';
 import Database from 'better-sqlite3';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {PartitionService} from '../../src/partition/partition-service.js';
+
 import {enableParticipantTransactionAdmission} from
   '../../src/partition/partition-participant-transaction-request.js';
 import {readPartitionWriteOrigin, readPartitionWriteOriginHistory} from
@@ -164,7 +165,7 @@ test('a real committed ENABLE remains pending through cold inspection and replay
     const services = [];
     const pending = [];
     t.after(() => closeServices(services, pending, directory));
-    const first = new PartitionService(withFoundingStamp(options));
+    const first = createPartitionServiceFixture(withFoundingStamp(options));
     services.push(first);
     await first.initialize();
     await turnChainValue(first.raft.campaign());
@@ -201,7 +202,7 @@ test('a real committed ENABLE remains pending through cold inspection and replay
     assert.equal(cold.native.appliedIndex, held.native.appliedIndex);
     assert.deepEqual(cold.native.record.entries, durableEntries);
 
-    const reopened = new PartitionService({...options,
+    const reopened = createPartitionServiceFixture({...options,
       bootstrapMembership: durableRecordBootstrap(), identityExisted: true});
     services.push(reopened);
     await reopened.initialize();

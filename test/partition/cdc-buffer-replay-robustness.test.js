@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 /**
  * The volatile CDC buffer's retry accounting: growth stats and the replay
  * delay derived from a downstream retryAfter hint.
@@ -44,7 +45,7 @@ function initializeTestConfig() {
  * Uses the nodes system table so CDC events are eligible for buffering.
  */
 function createTestPartition() {
-  return new PartitionService(withFoundingStamp({
+  return createPartitionServiceFixture(withFoundingStamp({
     partitionId: TEST_PARTITION_ID,
     tableId: TEST_TABLE_ID,
     tableName: TEST_TABLE_NAME,

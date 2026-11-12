@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 // The process-global AddressManager registry is not a peer-location authority.
 //
 // AddressManager is a singleton holding two mutable sets of generated
@@ -47,9 +48,7 @@ import {
 } from '../../src/message-group/message-group-service.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {NodeService} from '../../src/node/node-service.js';
-import {
-  PartitionService, RaftRole,
-} from '../../src/partition/partition-service.js';
+import {RaftRole} from '../../src/partition/partition-service.js';
 import {
   PARTITION_SERVICE_OPERATION,
 } from '../../src/partition/partition-service-constants.js';
@@ -171,7 +170,7 @@ function recordingTransport(sent) {
 // it campaigns when the witness says so), with the authoritative cache naming
 // its peer; the peer is admitted once the partition leads.
 function buildPartition({cache, peerAddresses, sent}) {
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: PARTITION_ID,
     tableId: PARTITION_TABLE,
     tableName: PARTITION_TABLE,
@@ -313,7 +312,7 @@ test('one node mutating the shared registry cannot move another node destination
       ['node-b', `${PARTITION_ID}-r3`, `${PARTITION_ID}-r4`],
     ]) {
       const peerAddress = `${nodeId}/${ENTITY_TYPE.PARTITION}/${peerId}`;
-      const partition = new PartitionService(withFoundingStamp({
+      const partition = createPartitionServiceFixture(withFoundingStamp({
         partitionId: PARTITION_ID,
         tableId: PARTITION_TABLE,
         tableName: PARTITION_TABLE,

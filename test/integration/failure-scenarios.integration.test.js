@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 import {createMockControlPlaneReadinessService} from '../rebalancer/test-helpers.js';
 /**
  * Failure scenario integration tests.
@@ -15,7 +16,7 @@ import {
   ReplicaStatus,
   TERMINAL_STATUSES,
 } from '../../src/rebalancer/replica-status.js';
-import {PartitionService} from '../../src/partition/partition-service.js';
+
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
@@ -148,7 +149,7 @@ async function createStandaloneLocalPartition({
   schema,
 }) {
   const replicaId = `${partitionId}-r1`;
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId,
     tableId,
     tableName,

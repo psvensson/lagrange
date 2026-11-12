@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 // A durable record that cannot be read is its group's own typed host failure,
 // never an escaping throw (quest raft-rs-single-path-partition-cutover, F-ah
 // after verification round 5).
@@ -46,7 +47,7 @@ import {answerOf, countEscapes} from
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {PartitionService} from '../../src/partition/partition-service.js';
+
 import {PARTITION_SERVICE_OPERATION} from
   '../../src/partition/partition-service-constants.js';
 import {ENTITY_TYPE} from '../../src/constants/addresses.js';
@@ -265,7 +266,7 @@ async function withLonePartitions(body) {
   let releaseOwners = null;
   const open = async (partitionId, extra = {}) => {
     const dbPath = path.join(directory, `${partitionId}-${DB_FILE}`);
-    const partition = new PartitionService(withFoundingStamp({
+    const partition = createPartitionServiceFixture(withFoundingStamp({
       ...loneOptions(partitionId, dbPath), transport,
       systemTableCache: new SystemTableCache(), ...extra}));
     services.push(partition);
@@ -391,7 +392,7 @@ test('F-ah: a lone partition restarted while its record table is still ' +
     } finally {
       damage.close();
     }
-    const restarted = new PartitionService(
+    const restarted = createPartitionServiceFixture(
       withFoundingStamp(loneOptions(partition.partitionId, dbPath)));
     const escapes = countEscapes();
     let error = null;
@@ -535,7 +536,7 @@ test('F-ap: a follower restarted while its record table is missing is ' +
       damage.close();
     }
 
-    const refused = new PartitionService(withFoundingStamp(restartOptions));
+    const refused = createPartitionServiceFixture(withFoundingStamp(restartOptions));
     restarts.push(refused);
     let error = null;
     try {
@@ -562,7 +563,7 @@ test('F-ap: a follower restarted while its record table is missing is ' +
     } finally {
       repair.close();
     }
-    const restored = new PartitionService(withFoundingStamp(restartOptions));
+    const restored = createPartitionServiceFixture(withFoundingStamp(restartOptions));
     restarts.push(restored);
     await restored.initialize();
     releaseOwners.host(restored);
@@ -721,7 +722,7 @@ test('F-ao: the durable record\'s tables are created whole or not at all, ' +
       byHand.close();
     }
     const partialTables = recordTablesOf(partialPath);
-    const partial = new PartitionService(
+    const partial = createPartitionServiceFixture(
       withFoundingStamp(loneOptions('fao-partial', partialPath)));
     let error = null;
     try {

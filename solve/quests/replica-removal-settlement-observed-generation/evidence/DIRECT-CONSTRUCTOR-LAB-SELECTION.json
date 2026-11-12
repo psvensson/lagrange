@@ -1,0 +1,127 @@
+{
+  "schema": "manual-lab-selection/1",
+  "sourceBase": "dd896e1d549e8f40a8dab9e4e08f4a804a9aff0d",
+  "scope": "Direct edited roots grouped from existing checked-in classification. This is not a generated proof cone; helper consumers and refreshed graph/census must be selected on a lab machine.",
+  "canonicalCommand": "npm run test:file -- <path>",
+  "groups": {
+    "unit/transport-messaging/ordinary": [
+      "test/address/address-manager-peer-location-authority.test.js"
+    ],
+    "bootstrap/bootstrap-membership/ordinary": [
+      "test/bootstrap/contract-first-authoring-fidelity.test.js",
+      "test/bootstrap/management-action-authority.test.js",
+      "test/bootstrap/management-v1-route-authority.test.js",
+      "test/bootstrap/production-scheduling-defaults.test.js",
+      "test/bootstrap/replication-target-authority.test.js",
+      "test/bootstrap/universal-partition-implementation.property.test.js"
+    ],
+    "unit/cdc-metadata/ordinary": [
+      "test/cdc/cdc-confirmation-wiring.test.js",
+      "test/cdc/cdc-observability.test.js",
+      "test/migration/migration-partition-alter-routing.test.js"
+    ],
+    "unit/convergence-topology/ordinary": [
+      "test/convergence/dt-movielens-canonical-leader-publication-retained-wake.test.js",
+      "test/convergence/dt6-voter-surplus-promotion-drain-livelock.test.js"
+    ],
+    "unit/distributed-harness/ordinary": [
+      "test/distributed/harness/rolling-restart-acknowledged-write-durability-visibility.test.js"
+    ],
+    "unit/query-sql/ordinary": [
+      "test/index-management/index-maintenance-consistency.property.test.js",
+      "test/index-management/index-service.test.js",
+      "test/index-management/queryable-core-j3-local-compound-index-journey.test.js",
+      "test/query/settled-replay-sql-surface.test.js"
+    ],
+    "integration/cdc-metadata/ordinary": [
+      "test/integration/cdc-bootstrap-control-plane-pressure.integration.test.js",
+      "test/integration/cdc-subscription-catchup.integration.test.js"
+    ],
+    "integration/placement-rebalance/ordinary": [
+      "test/integration/cross-node-replica-placement.integration.test.js"
+    ],
+    "integration/distributed-harness/ordinary": [
+      "test/integration/failure-scenarios.integration.test.js"
+    ],
+    "integration/query-sql/ordinary": [
+      "test/integration/sql-workflow.integration.test.js"
+    ],
+    "UNCLASSIFIED/UNCLASSIFIED/UNCLASSIFIED": [
+      "test/node/replica-runtime-publication.test.js"
+    ],
+    "unit/storage-partition/ordinary": [
+      "test/partition/cdc-buffer-replay-robustness.test.js",
+      "test/partition/cdc-generation.property.test.js",
+      "test/partition/cdc-sliding-window-catchup.preservation.test.js",
+      "test/partition/child-partition-leader-propagation.test.js",
+      "test/partition/committed-statement-outcome.test.js",
+      "test/partition/complete-peer-list.property.test.js",
+      "test/partition/default-replica-count.property.test.js",
+      "test/partition/learner-promotion-proof-committed-admission.test.js",
+      "test/partition/learner-promotion-proof-epoch-guard.test.js",
+      "test/partition/participant-release-control-three-member.test.js",
+      "test/partition/participant-release-protocol.test.js",
+      "test/partition/partition-consensus-hold-log.test.js",
+      "test/partition/partition-leader-address-from-raft-status.test.js",
+      "test/partition/partition-port-refusal-outcomes.test.js",
+      "test/partition/partition-rebalancer-dependency-wiring-characterization.test.js",
+      "test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js",
+      "test/partition/partition-rebalancer-readiness-edge-gate.test.js",
+      "test/partition/partition-replication-restart-attempt-handoff.test.js",
+      "test/partition/partition-runtime-reconstruction-leadership.test.js",
+      "test/partition/partition-service-cdc-log-suppression.test.js",
+      "test/partition/partition-service-hlc-monotonicity.test.js",
+      "test/partition/partition-service-learner-promotion-wake.test.js",
+      "test/partition/partition-service-learner-promotion.test.js",
+      "test/partition/partition-service-qualified-table-name.test.js",
+      "test/partition/partition-service-raft-propose-metrics.test.js",
+      "test/partition/partition-service-replay-dedupe.test.js",
+      "test/partition/partition-service-role-metadata-publication.test.js",
+      "test/partition/partition-service-shutdown-timers.test.js",
+      "test/partition/partition-service-size-split-transport.test.js",
+      "test/partition/partition-service-sqlite-metrics.test.js",
+      "test/partition/partition-service-stale-topology-write-guard.test.js",
+      "test/partition/partition-service-transactions-query-routing.test.js",
+      "test/partition/partition-service-write-commit.test.js",
+      "test/partition/partition-service.test.js",
+      "test/partition/partition-unreadable-durable-record.test.js",
+      "test/partition/peer-admission-unparsable-address.test.js",
+      "test/partition/raft-leadership-stability.property.test.js",
+      "test/partition/replica-operations-schema-migration.test.js",
+      "test/partition/settled-replay-preserves-result.test.js",
+      "test/partition/split-backfill-internal-pacing.test.js",
+      "test/partition/table-partition-structure.property.test.js"
+    ],
+    "integration/storage-partition/ordinary": [
+      "test/partition/participant-origin-retained-history.integration.test.js"
+    ],
+    "unit/storage-raft/ordinary": [
+      "test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js",
+      "test/raft/raft-rs-backend/partition-peer-admission.test.js",
+      "test/raft/raft-rs-backend/single-path-partition-cutover.test.js",
+      "test/raft/raft-rs-backend/stampless-opening-refusal.test.js",
+      "test/raft/snapshot-cadence.test.js"
+    ],
+    "unit/placement-rebalance/ordinary": [
+      "test/rebalancer/replica-operation-membership-epoch-binding.test.js"
+    ]
+  },
+  "editedHelpers": [
+    "test/bootstrap/replication-identity-variation-fixture.js",
+    "test/convergence/dt6-learner-promotion-fixture.js",
+    "test/partition/participant-release-query-engine-fixture.js",
+    "test/partition/partition-rs-raft-restart-fixture.js",
+    "test/partition/partition-service-test-support.js",
+    "test/query/unknown-outcome-surface-fixture.js",
+    "test/raft/raft-rs-backend/committed-membership-harness.js",
+    "test/raft/raft-rs-backend/startup-cleanup-native-fixture.js",
+    "test/service/minimal-deployment-request-cell-routing-fixture.js",
+    "test/test-helpers/transaction-coordinator-group-fixture.js"
+  ],
+  "excludedProducerEdits": {
+    "test/bootstrap/seed-teardown-pending-cdc-delivery.test.js": "Real seed attachment still needs original producer registration; generic authority excluded.",
+    "test/partition/partition-release-fixture.js": "Release host and replacement producers still need retained admission; generic authority excluded.",
+    "test/test-helpers/participant-release-protocol-fixture.js": "Native release/control construction and replacement producers still need retained admission; generic authority excluded.",
+    "test/integration/replica-handler-metadata-propagation.integration.test.js": "Actual CREATE factory carrier migration is separate from the direct-constructor chunk."
+  }
+}

@@ -35,6 +35,12 @@ import {
   CONTROL_PLANE_READ_LEADER_MODE,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {ReplicaHandler} from '../../src/node/replica-handler.js';
+import {captureReplicaAdmission} from '../../src/node/replica-state-machine-serialization.js';
+import {createReplicaRuntimePublication, publishReplicaRuntime} from
+  '../../src/node/replica-runtime-publication.js';
+import {attachPartitionRuntimePublication} from
+  '../../src/partition/partition-runtime-publication.js';
+import {bindRegisteredReplicaHandler} from '../test-helpers/replica-handler-identity-fixture.js';
 import {
   ReplicaState,
   ReplicaStateMachine,
@@ -367,12 +373,18 @@ test('handler binds leader settlement before retire and durable deletion',
     // The replica's own runtime: production retires exactly the runtime the
     // removal holds (its service's operation port), never a logical name.
     const runtime = Object.freeze({});
-    handler.localReplicas.set(row.service_id, {
-      replicaId: row.service_id,
-      partitionId: row.partition_id,
-      status: ReplicaStatus.REMOVING,
-      service: {raft: runtime},
-    });
+    t.equal(registerRow(stateMachine, row), true, 'the original full REMOVING source is installed');
+    const publication = createReplicaRuntimePublication(handler, row,
+      captureReplicaAdmission(stateMachine, row.service_id));
+    const service = {replicaId: row.replica_id, partitionId: row.partition_id,
+      nodeId: row.node_id, raft: runtime, isShutdown: false};
+    attachPartitionRuntimePublication(service, publication);
+    bindRegisteredReplicaHandler(service, {nodeId: row.node_id,
+      resolveHandlerRetirementLane: () => stateMachine});
+    publishReplicaRuntime(handler, {replicaId: row.replica_id, service,
+      sourceEvidence: row, lifecycleOwner: stateMachine});
+    t.equal(handler.getTrackedService(row.service_id), service,
+      'the runtime is published through the canonical tracker before removal');
     const lifecycleDb = new Database(':memory:');
     t.teardown(() => lifecycleDb.close());
     const lifecycleRequest = {db: lifecycleDb, groupId: row.partition_id,

@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 // The metamorphic identity fixture for the replication policy authority
 // contract.
 //
@@ -55,7 +56,7 @@ function restoreIdentityDeclarations(snapshot) {
 
 function buildIdentityFixture() {
   const table = SYSTEM_TABLE_NAME.REPLICA_OPERATIONS;
-  const partitionService = new PartitionService(withFoundingStamp({
+  const partitionService = createPartitionServiceFixture(withFoundingStamp({
     partitionId: `${table}-p1`,
     tableId: table,
     replicaId: INITIAL_REPLICA_IDS[table][0],

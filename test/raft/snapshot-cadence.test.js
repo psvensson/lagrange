@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -176,7 +177,7 @@ test('ENGAGEMENT: the 1s prepared-state-hold sweep ticks the cadence on a ' +
     const replicaId = `${PARTITION_ID}-r1`;
     const peerReplicaId = `${PARTITION_ID}-r2`;
     const addressManager = AddressManager.getInstance();
-    service = new PartitionService(withFoundingStamp({
+    service = createPartitionServiceFixture(withFoundingStamp({
       partitionId: PARTITION_ID,
       tableId: STATE_TABLE,
       tableName: STATE_TABLE,

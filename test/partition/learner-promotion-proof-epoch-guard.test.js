@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 /**
  * The membership epoch a promotion proof binds is a refusal-only freshness
  * guard over the committed decision (PR #184 review finding 2): the leader
@@ -22,7 +23,7 @@
  */
 
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
-import {PartitionService} from '../../src/partition/partition-service.js';
+
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
@@ -132,7 +133,7 @@ function createLeaderPort({role, learnerInConfiguration, learnerMatchIndex}) {
 }
 
 function createPartition(replicaId, nodeId) {
-  return new PartitionService(withFoundingStamp({
+  return createPartitionServiceFixture(withFoundingStamp({
     partitionId: PARTITION_ID, tableId: 'epoch_guard', replicaId,
     replicaIds: [replicaId], nodeId, dbPath: ':memory:'}));
 }

@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -5,7 +6,7 @@ import path from 'node:path';
 import Database from 'better-sqlite3';
 
 import {test} from '../../src/test-helpers/tap.js';
-import {PartitionService} from '../../src/partition/partition-service.js';
+
 import {
   PARTITION_SERVICE_MIGRATION_OPERATION,
   PARTITION_SERVICE_OPERATION,
@@ -40,7 +41,7 @@ test('migration ALTER is routed through dedicated partition Raft operation',
       path.join(os.tmpdir(), 'migration-partition-alter-routing-'));
     t.teardown(() => fs.rmSync(directory, {recursive: true, force: true}));
     const dbPath = path.join(directory, 'partition.sqlite');
-    const partition = new PartitionService(withFoundingStamp({
+    const partition = createPartitionServiceFixture(withFoundingStamp({
       partitionId: PARTITION_ID,
       tableId: 'users-table',
       tableName: 'users',

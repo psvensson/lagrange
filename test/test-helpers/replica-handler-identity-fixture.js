@@ -6,6 +6,8 @@
  */
 
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {attachPartitionRuntimePublication} from
+  '../../src/partition/partition-runtime-publication.js';
 
 /**
  * The exact-identity handler API over a handler map, for in-process transport
@@ -106,6 +108,17 @@ function bindRegisteredReplicaHandler(service, options = {}) {
   });
 }
 
+// A CREATE factory double consumes the actual production admission supplied
+// before construction. This helper neither invents birth/source fields nor
+// makes an unbound runtime current from a logical ID.
+function bindAdmittedReplicaHandler(service, options) {
+  service.nodeId = options.nodeId;
+  attachPartitionRuntimePublication(service, options.runtimePublication);
+  options.onRuntimeCreated(service);
+  service.runtimePublication.assertCurrent(service);
+  return bindRegisteredReplicaHandler(service, options);
+}
+
 /**
  * Model a lifecycle-state-machine test whose replicas' exact handlers are
  * registered: every transition carries an exact-handler check that holds.
@@ -121,6 +134,7 @@ function withRegisteredActivationHandler(stateMachine) {
 }
 
 export {
+  bindAdmittedReplicaHandler,
   bindRegisteredReplicaHandler,
   createIdentityTransport,
   createInProcessMockTransport,

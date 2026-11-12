@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 /**
  * A services row whose address is not a unified address never raises an
  * untyped failure in peer admission (quest
@@ -23,10 +24,7 @@ import path from 'node:path';
 import {test} from 'node:test';
 
 import {createLoopbackTransport} from './partition-service-test-support.js';
-import {
-  CDCOperation,
-  PartitionService,
-} from '../../src/partition/partition-service.js';
+import {CDCOperation} from '../../src/partition/partition-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
@@ -103,7 +101,7 @@ test('(a) a leader refuses an unparsable row typed from its reconcile hop ' +
   process.on('uncaughtException', onUncaught);
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'unparsable-'));
   const cache = new SystemTableCache();
-  const leader = new PartitionService(withFoundingStamp({
+  const leader = createPartitionServiceFixture(withFoundingStamp({
     partitionId: PARTITION_ID, tableId: 'unparsable_table',
     tableName: 'unparsable_table', replicaId: LEADER, replicaIds: [LEADER],
     peerAddresses: [`${LEADER_NODE}/partition/${LEADER}`], nodeId: LEADER_NODE,

@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 // Witness for the replication-target-authority quest.
 // Raw node:test so --test-name-pattern selects exactly one scenario.
 import test from 'node:test';
@@ -761,7 +762,7 @@ test('production-handoff-cannot-mutate-the-declaration', () => {
   const table = SYSTEM_TABLE_NAME.REPLICA_OPERATIONS;
   const declaredLength = INITIAL_REPLICA_IDS[table].length;
 
-  const service = new PartitionService(withFoundingStamp({
+  const service = createPartitionServiceFixture(withFoundingStamp({
     partitionId: `${table}-p1`,
     tableId: table,
     replicaId: INITIAL_REPLICA_IDS[table][0],

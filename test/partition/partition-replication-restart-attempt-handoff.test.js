@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {PARTITION_SERVICE_SHARED} from
@@ -273,7 +274,7 @@ test('stale split and merge delta replay uses the target registry and ' +
   'preserves a newer target-authoritative write', async (t) => {
   for (const family of ['split', 'merge']) {
     const targetId = `${family}-target`;
-    const target = new PartitionService(withFoundingStamp({
+    const target = createPartitionServiceFixture(withFoundingStamp({
       partitionId: targetId,
       tableId: 'tbl-users',
       tableName: 'users',

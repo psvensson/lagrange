@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 // A replay of an already committed write never tells its caller the write
 // did not happen (owner ruling on the raft-rs cutover: the raft-rs
 // reset/replay case in which an applied write came back "success, zero rows
@@ -36,7 +37,7 @@ import {attachPartitionReleaseOwners} from './partition-release-fixture.js';
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {PartitionService} from '../../src/partition/partition-service.js';
+
 import {
   PARTITION_SERVICE_MESSAGE_TYPE,
   PARTITION_SERVICE_OPERATION,
@@ -178,7 +179,7 @@ async function withLonePartitions(body, raft = {}) {
   const services = [];
   const open = async (partitionId) => {
     const dbPath = path.join(directory, `${partitionId}-${DB_FILE}`);
-    const partition = new PartitionService(withFoundingStamp({
+    const partition = createPartitionServiceFixture(withFoundingStamp({
       ...tableOptions(),
       partitionId,
       replicaId: `${partitionId}-r1`,

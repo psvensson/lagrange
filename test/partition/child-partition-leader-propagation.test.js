@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 /**
  * Regression test: child partition leader election updates partitions row.
  *
@@ -143,7 +144,7 @@ function createMockCdcIntegrationService() {
  * @return {PartitionService} child partition service
  */
 function createChildPartition(cdcIntegrationService, systemTableCache) {
-  return new PartitionService(withFoundingStamp({
+  return createPartitionServiceFixture(withFoundingStamp({
     partitionId: CHILD_PARTITION_ID,
     tableId: CHILD_TABLE_ID,
     tableName: CHILD_TABLE_NAME,
@@ -302,7 +303,7 @@ test('leader_node_id write is not issued without cdcIntegrationService',
     const cache = createMockSystemTableCache();
     // Create partition without cdcIntegrationService — the helper
     // should queue the value but not attempt a write.
-    const partition = new PartitionService(withFoundingStamp({
+    const partition = createPartitionServiceFixture(withFoundingStamp({
       partitionId: CHILD_PARTITION_ID,
       tableId: CHILD_TABLE_ID,
       tableName: CHILD_TABLE_NAME,

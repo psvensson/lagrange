@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 /**
  * Property-based test for Default Replica Count.
  * **Property 5: Default Replica Count**
@@ -9,7 +10,7 @@
 
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
-import {PartitionService} from '../../src/partition/partition-service.js';
+
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {AddressManager} from '../../src/address/address-manager.js';
@@ -70,7 +71,7 @@ test('Property 5: Default replica count is 3', async (t) => {
           addressManager.format('test-node', 'partition', replicaId),
         );
 
-        const partition = new PartitionService(withFoundingStamp({
+        const partition = createPartitionServiceFixture(withFoundingStamp({
           partitionId,
           tableId,
           replicaId: replicaIds[0],
@@ -131,7 +132,7 @@ test('Property 5: Partition reports correct replica count', async (t) => {
           addressManager.format('test-node', 'partition', replicaId),
         );
 
-        const partition = new PartitionService(withFoundingStamp({
+        const partition = createPartitionServiceFixture(withFoundingStamp({
           partitionId,
           tableId,
           replicaId: replicaIds[0],
@@ -197,7 +198,7 @@ test('Property 5: Replica count is odd for Raft quorum', async (t) => {
           addressManager.format('test-node', 'partition', replicaId),
         );
 
-        const partition = new PartitionService(withFoundingStamp({
+        const partition = createPartitionServiceFixture(withFoundingStamp({
           partitionId,
           tableId,
           replicaId: replicaIds[0],

@@ -13,7 +13,7 @@ import {
 } from
   '../test-helpers/lifecycle-state-store.js';
 import {withRemovalServingSurface} from '../test-helpers/partition-removal-serving-surface.js';
-import {bindRegisteredReplicaHandler} from '../test-helpers/replica-handler-identity-fixture.js';
+import {bindAdmittedReplicaHandler} from '../test-helpers/replica-handler-identity-fixture.js';
 
 const TEST_NODE_ID = 'test-node';
 const TEST_PARTITION_ID = 'partition-1';
@@ -84,7 +84,7 @@ function createMockCDCService(cache) {
 
 // A partition-service double factory (the production removal-serving surface).
 function createMockPartitionServiceFactory() {
-  return async (options) => bindRegisteredReplicaHandler(withRemovalServingSurface({
+  return async (options) => bindAdmittedReplicaHandler(withRemovalServingSurface({
     partitionId: options.partitionId,
     replicaId: options.replicaId,
     initialized: true,

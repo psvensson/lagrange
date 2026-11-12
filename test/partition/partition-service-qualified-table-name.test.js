@@ -1,15 +1,16 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 import assert from 'node:assert/strict';
 import {describe, test} from 'node:test';
 
 import Database from 'better-sqlite3';
 
-import {PartitionService} from '../../src/partition/partition-service.js';
+
 import {withFoundingStamp} from './partition-founding-stamp.js';
 
 describe('partition service qualified table names', () => {
   test('creates the global access-policy identity as one SQLite identifier',
     () => {
-      const partition = new PartitionService(withFoundingStamp({
+      const partition = createPartitionServiceFixture(withFoundingStamp({
         partitionId: 'qualified-table-p1',
         replicaId: 'qualified-table-p1-r1',
         replicaIds: ['qualified-table-p1-r1'],

@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 /**
  * Unit tests for PartitionService.
  * Tests SQLite-backed Raft group for data storage.
@@ -107,7 +108,7 @@ test(
     });
 
     const transport = createLoopbackTransport();
-    const leader = new PartitionService(withFoundingStamp({
+    const leader = createPartitionServiceFixture(withFoundingStamp({
       partitionId: 'stable-join-partition',
       tableId: 'stable_join_table',
       tableName: 'stable_join_table',
@@ -120,7 +121,7 @@ test(
     }));
     // The joiner is created the way a CREATE target is: from the
     // committed-membership stamp its leader served (it asks that leader).
-    const createJoiner = async () => new PartitionService(withFoundingStamp({
+    const createJoiner = async () => createPartitionServiceFixture(withFoundingStamp({
       partitionId: 'stable-join-partition',
       tableId: 'stable_join_table',
       tableName: 'stable_join_table',
@@ -260,7 +261,7 @@ test(
       },
     };
 
-    const partition = new PartitionService(withFoundingStamp({
+    const partition = createPartitionServiceFixture(withFoundingStamp({
       partitionId: 'test-partition',
       tableId: 'test-table',
       replicaId: 'replica-3',
@@ -371,7 +372,7 @@ test('PartitionService - critical partition defers second learner when replaceme
     },
   };
 
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: `${SYSTEM_TABLE_NAME.CONFIG}-p1`,
     tableId: SYSTEM_TABLE_NAME.CONFIG,
     replicaId: 'replica-5',
@@ -470,7 +471,7 @@ test('PartitionService - learner promotes when multiple learners reach odd count
   };
 
   // Create partition as one of the learners
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'test-table',
     replicaId: 'replica-4',
@@ -564,7 +565,7 @@ test('PartitionService - learner defers when multiple learners would exceed targ
     },
   };
 
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'test-table',
     replicaId: 'replica-4',
@@ -666,7 +667,7 @@ test('PartitionService - learner deferred when all learners would still be even'
   };
 
   // Create partition as the learner
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'test-table',
     replicaId: 'replica-4',
@@ -809,7 +810,7 @@ test(
       },
     };
 
-    const partition = new PartitionService(withFoundingStamp({
+    const partition = createPartitionServiceFixture(withFoundingStamp({
       partitionId: criticalPartitionId,
       tableId: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       replicaId: currentReplicaId,
@@ -948,7 +949,7 @@ test(
       },
     };
 
-    const partition = new PartitionService(withFoundingStamp({
+    const partition = createPartitionServiceFixture(withFoundingStamp({
       partitionId: 'test-partition',
       tableId: 'test-table',
       replicaId: 'replica-4',
@@ -1023,7 +1024,7 @@ test('PartitionService - countPendingLearners counts learner replicas', async (t
     },
   };
 
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'test-table',
     replicaId: 'replica-5',
@@ -1094,7 +1095,7 @@ test('PartitionService - countActiveVoters excludes learners, failed replicas, '
     },
   };
 
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'test-table',
     replicaId: 'replica-7',
@@ -1110,7 +1111,7 @@ test('PartitionService - countActiveVoters excludes learners, failed replicas, '
 });
 
 test('PartitionService - handleRemoteQuery returns redirect for writes on follower', async (t) => {
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'test-table',
     replicaId: 'replica-1',
@@ -1144,7 +1145,7 @@ test('PartitionService - handleRemoteQuery returns redirect for writes on follow
 });
 
 test('PartitionService - handleRemoteQuery executes reads on follower', async (t) => {
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'test-table',
     replicaId: 'replica-1',
@@ -1179,7 +1180,7 @@ test('PartitionService - handleRemoteQuery executes reads on follower', async (t
 test(
   'PartitionService - remote read witness is captured before query execution',
   async (t) => {
-    const partition = new PartitionService(withFoundingStamp({
+    const partition = createPartitionServiceFixture(withFoundingStamp({
       partitionId: 'read-witness-boundary-partition',
       tableId: 'read-witness-boundary-table',
       replicaId: 'read-witness-boundary-partition-r1',
@@ -1231,7 +1232,7 @@ test(
 );
 
 test('PartitionService - removal drain waits for a query admitted before its serving fence', async (t) => {
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'test-table',
     replicaId: 'replica-1',
@@ -1281,7 +1282,7 @@ test('PartitionService - removal drain waits for a query admitted before its ser
 });
 
 test('PartitionService - isWriteQuery detects write operations', async (t) => {
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'test-table',
     replicaId: 'replica-1',

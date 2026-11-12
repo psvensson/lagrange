@@ -1,3 +1,4 @@
+import {PartitionService} from '../../src/partition/partition-service.js';
 /**
  * Integration test: ReplicaHandler metadata propagation handling.
  *
@@ -18,7 +19,7 @@ import {scenarioStampingReplicaHandler} from
 // Lifecycle scenarios: every create carries the committed-membership stamp
 // its scenario's creator would have produced (owner decision O1).
 const ReplicaHandler = scenarioStampingReplicaHandler(ProductionReplicaHandler);
-import {PartitionService} from '../../src/partition/partition-service.js';
+
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
@@ -138,7 +139,9 @@ test('ReplicaHandler metadata propagation integration', {timeout: 30000}, async 
           // S-F2), retired through the executor's lifecycle owner.
           transport: createIdentityTransport(),
           resolveHandlerRetirementLane: options.resolveHandlerRetirementLane,
+          runtimePublication: options.runtimePublication,
         }));
+        options.onRuntimeCreated(service);
         await service.initialize();
         return service;
       },

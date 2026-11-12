@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from './partition-service-fixture.js';
 /**
  * The integrated TX1 fixture (quest replicated-transaction-decision-and-apply,
  * design revision 10, sections 10.2 and 11): the real SQLQueryEngine and its
@@ -313,7 +314,7 @@ async function withTransactionGroup(name, body) {
       const member = members[index];
       await stopped.shutdown();
       return async () => {
-        const restarted = new PartitionService(withFoundingStamp({
+        const restarted = createPartitionServiceFixture(withFoundingStamp({
           tableId: GROUP_TABLE,
           tableName: GROUP_TABLE,
           schema: GROUP_SCHEMA,

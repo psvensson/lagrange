@@ -56,6 +56,7 @@ import {TRANSACTION_CLASSIFIER_LIST_VERSION} from
 import {
   ControllableConsensusPort,
   createControllablePartitionService,
+  createAdmittedControllablePartitionService,
 } from '../partition/partition-service-test-support.js';
 
 const PARTITION_ID = 'tx1-v3';
@@ -387,9 +388,9 @@ function committedQueryOf(entryId, sql) {
 // A fixture replica: the fixture table unless `extra.tableName` names
 // another (a production system table, with `extra.schema`, and optionally
 // its production `extra.partitionId`).
-function createReplica(replicaId, extra = {}) {
+function replicaConstructionOptions(replicaId, extra = {}) {
   const replicaIds = extra.replicaIds ?? [...REPLICAS];
-  return createControllablePartitionService({
+  return {
     partitionId: extra.partitionId ?? PARTITION_ID,
     tableId: extra.tableName ?? TABLE,
     tableName: extra.tableName ?? TABLE,
@@ -412,6 +413,19 @@ function createReplica(replicaId, extra = {}) {
     // The leader's determinism self-check, injectable (design v6 section 3.3).
     ...(extra.determinismSelfCheck ?
       {transactionDeterminismSelfCheck: extra.determinismSelfCheck} : {}),
+  };
+}
+
+function createReplica(replicaId, extra = {}) {
+  return createControllablePartitionService(replicaConstructionOptions(replicaId, extra),
+    new ControllableConsensusPort());
+}
+
+function createAdmittedReplica(replicaId, extra) {
+  return createAdmittedControllablePartitionService({
+    ...replicaConstructionOptions(replicaId, extra),
+    runtimePublication: extra.runtimePublication,
+    resolveHandlerRetirementLane: extra.resolveHandlerRetirementLane,
   }, new ControllableConsensusPort());
 }
 
@@ -428,7 +442,10 @@ async function retireFixtureParticipants(replicas, failure, message) {
 // applies the partition's generation origin first, at GENERATION_ORIGIN_INDEX
 // (transaction admission enabled on the partition, design 0.0.13).
 async function startReplica(replicaId, extra) {
-  const replica = createReplica(replicaId, extra);
+  return startConstructedReplica(createReplica(replicaId, extra), extra);
+}
+
+async function startConstructedReplica(replica, extra) {
   try {
     await replica.initialize();
     recordResidentAppliedProgressListeners(replica);
@@ -444,6 +461,15 @@ async function startReplica(replicaId, extra) {
 }
 async function startLeader(extra) {
   const leader = await startReplica(REPLICAS[0], extra);
+  return leadConstructedReplica(leader, extra);
+}
+
+async function startAdmittedLeader(extra) {
+  const leader = await startConstructedReplica(createAdmittedReplica(REPLICAS[0], extra), extra);
+  return leadConstructedReplica(leader, extra);
+}
+
+async function leadConstructedReplica(leader, extra) {
   try {
     leader.role = 'leader';
     leader.isLeader = true;
@@ -1108,6 +1134,7 @@ async function decidedOnTwoReplicas(tx, operations, setup) {
 }
 
 export {
+  startAdmittedLeader,
   changeFixtureParticipantMembership,
   cleanOwnedParticipantFixture,
   deferFixtureParticipantMembership,

@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 import {deliveryTransportOf, isDeliveredTransportDeliveryOutcome} from '../../src/transport/transport-semantic-outcome.js';
 /**
  * Cross-node replica placement integration tests.
@@ -18,7 +19,7 @@ import {NodeService} from '../../src/node/node-service.js';
 import {AddressManager} from '../../src/address/address-manager.js';
 import {ServiceThreadManager} from '../../src/threading/service-thread-manager.js';
 import {MessageGroupService} from '../../src/message-group/message-group-service.js';
-import {PartitionService} from '../../src/partition/partition-service.js';
+
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {UnifiedRebalancer, EntityType} from '../../src/rebalancer/unified-rebalancer.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
@@ -296,7 +297,7 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
         const partitionId = 'test-partition-1';
         const schema = createTestSchema('test_table');
 
-        resources.seedPartition = new PartitionService(withFoundingStamp({
+        resources.seedPartition = createPartitionServiceFixture(withFoundingStamp({
           partitionId,
           tableId: 'test_table',
           tableName: 'test_table',

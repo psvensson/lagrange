@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 import t from 'tap';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
@@ -224,7 +225,7 @@ function createLearnerPartitionService({
   leaderReplicaId,
   deferrals,
 }) {
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: PARTITION_ID,
     tableId: TABLE_ID,
     tableName: TABLE_ID,

@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 /**
  * CDC subscription handshake + catch-up integration tests.
  *
@@ -5,7 +6,7 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {PartitionService} from '../../src/partition/partition-service.js';
+
 import {
   ConfigurationManager,
 } from '../../src/config/configuration-manager.js';
@@ -52,7 +53,7 @@ const ROW_VALUE_THREE = 3;
 const ROW_VALUE_FOUR = 4;
 
 function createPartition() {
-  return new PartitionService(withFoundingStamp({
+  return createPartitionServiceFixture(withFoundingStamp({
     partitionId: TEST_IDS.PARTITION_ID,
     tableId: TEST_IDS.TABLE_ID,
     tableName: TEST_IDS.TABLE_ID,

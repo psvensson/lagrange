@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../../test-helpers/partition-service-fixture.js';
 import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -5,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {ConfigurationManager} from '../../../src/config/configuration-manager.js';
 import {LoggingService} from '../../../src/logging/logging-service.js';
-import {PartitionService} from '../../../src/partition/partition-service.js';
+
 import {QueryExecutor} from '../../../src/query/query-executor.js';
 import {SQLParser} from '../../../src/query/sql-parser.js';
 import {DistributedWriteCoordinator} from
@@ -63,7 +64,7 @@ const arrayFind = Function.call.bind(Array.prototype.find);
 const arrayMap = Function.call.bind(Array.prototype.map);
 
 function createEndToEndPartition() {
-  return new PartitionService(withFoundingStamp({
+  return createPartitionServiceFixture(withFoundingStamp({
     partitionId: 'user_load_logs-p1',
     tableId: 'user_load_logs',
     tableName: 'user_load_logs',
@@ -118,7 +119,7 @@ function createEndToEndCoordinator(partition) {
 }
 
 function createRun13Partition(nodeId, dbPath) {
-  return new PartitionService(withFoundingStamp({
+  return createPartitionServiceFixture(withFoundingStamp({
     partitionId: RUN13_PARTITION_ID,
     tableId: 'benchmark_events',
     tableName: 'benchmark_events',

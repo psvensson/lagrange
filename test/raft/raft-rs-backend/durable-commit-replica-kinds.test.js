@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../../test-helpers/partition-service-fixture.js';
 // Receipt: every-replica-kind-takes-the-durable-persist-path
 //
 // The three kinds of consensus replica - partition, message group and WASM
@@ -27,7 +28,7 @@ import {LoggingService} from '../../../src/logging/logging-service.js';
 import {MessageGroupService} from
   '../../../src/message-group/message-group-service.js';
 import {NodeService} from '../../../src/node/node-service.js';
-import {PartitionService} from '../../../src/partition/partition-service.js';
+
 import {PARTITION_SERVICE_OPERATION} from
   '../../../src/partition/partition-service-constants.js';
 import {RAFT_OPERATION_OUTCOME} from
@@ -135,7 +136,7 @@ test('partition replica: the persist path syncs, the application does not',
       'durable-kinds-partition-'));
     const dbPath = path.join(directory, 'partition.sqlite');
     const observer = installDurableCommitObserver();
-    const service = new PartitionService(withFoundingStamp({
+    const service = createPartitionServiceFixture(withFoundingStamp({
       partitionId: 'durable-kinds-partition',
       tableId: 'kinds_rows',
       tableName: 'kinds_rows',

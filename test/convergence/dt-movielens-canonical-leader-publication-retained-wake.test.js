@@ -1,10 +1,11 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {COLUMN, TABLES} from '../../src/constants/index.js';
 import {RUNTIME_REPLICA_STATUS} from '../../src/constants/runtime.js';
-import {PartitionService} from '../../src/partition/partition-service.js';
+
 import {
   RUNTIME_REPLICA_STATE_PROJECTION_EVENT,
   RuntimeReplicaStateProjectionOwner,
@@ -118,7 +119,7 @@ test(
         return false;
       },
     };
-    const partition = new PartitionService(withFoundingStamp({
+    const partition = createPartitionServiceFixture(withFoundingStamp({
       partitionId: PARTITION_ID,
       tableId: TABLES.SERVICES,
       tableName: TABLES.SERVICES,

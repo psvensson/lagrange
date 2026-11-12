@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../../test-helpers/partition-service-fixture.js';
 // A partition admits a joining replica exactly once (epic finding F16).
 //
 // Real PartitionService replicas built by production construction on the
@@ -179,7 +180,7 @@ async () => {
   const operations = [FOLLOWER, JOINER].map((member) =>
     committedAddOperation(PARTITION_ID, member));
   const build = (member, members, cache, extra = {}) => {
-    const service = new PartitionService(withFoundingStamp({
+    const service = createPartitionServiceFixture(withFoundingStamp({
       partitionId: PARTITION_ID,
       tableId: TABLE_NAME,
       tableName: TABLE_NAME,

@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../../test-helpers/partition-service-fixture.js';
 // A partition on real PartitionService replicas (rs-raft backend, one
 // database file each) whose new replicas are created through the production
 // committed-membership chain: the creation owner's bootstrap read routed to
@@ -259,7 +260,7 @@ function createCommittedMembershipHarness(partitionId) {
     fs.mkdirSync(path.dirname(dbPathOf(member)), {recursive: true});
     // A founder is built with its founding list's GENESIS stamp (V1a: the
     // port opens nothing without a stamp or the durable-record bootstrap).
-    const service = new PartitionService(withFoundingStamp({
+    const service = createPartitionServiceFixture(withFoundingStamp({
       partitionId,
       tableId: TABLE_NAME,
       tableName: TABLE_NAME,

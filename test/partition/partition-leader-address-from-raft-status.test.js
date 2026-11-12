@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 /**
  * The partition leader address for write forwarding, redirects, split/merge
  * forwarding, the learner promotion proof and the replica admission request
@@ -76,7 +77,7 @@ function statusPort(status) {
 }
 
 function follower({status, leaderId = null, rows = [], leaderAddressHint}) {
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: PARTITION_ID, tableId: 'orders', replicaId: SELF,
     replicaIds: [SELF], nodeId: 'node-self', dbPath: ':memory:',
     ...(leaderAddressHint ? {leaderAddress: leaderAddressHint} : {}),

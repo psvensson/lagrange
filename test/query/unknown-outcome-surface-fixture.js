@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 // The production write surface the unknown-outcome witnesses drive: lone
 // rs-raft leaders (one per table) or a three-replica group behind the real
 // SQLQueryEngine, QueryExecutor, distributed write coordinator and the
@@ -21,10 +22,7 @@ import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {TABLES} from '../../src/constants/index.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {
-  CDCOperation,
-  PartitionService,
-} from '../../src/partition/partition-service.js';
+import {CDCOperation} from '../../src/partition/partition-service.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {tuningOf} from '../../src/raft/raft-rs-runtime-tuning.js';
@@ -250,7 +248,7 @@ async function startLoneLeader(directory, table) {
   const dbPath = path.join(directory, `${partitionId}.sqlite`);
   const tableRow = {table_name: table, primaryKey: keyOf(table),
     active_partition_version: ACTIVE_PARTITION_VERSION};
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     tableId: table, tableName: table, partitionId, replicaId,
     replicaIds: [replicaId], nodeId: NODE_ID, dbPath,
     systemTableCache: {

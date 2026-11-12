@@ -180,6 +180,12 @@ test('real PartitionService requires publication authority and fixture cleanup r
       replicaId: 'fixture-r1', nodeId: 'fixture-node'};
     t.throws(() => new PartitionService(options), REFUSED,
       'the production constructor has no unguarded admission path');
+    const revoked = createPartitionServiceFixture({...options, replicaId: 'fixture-revoked'});
+    revoked.fixtureRuntimeAdmission.revoke();
+    t.equal(revoked.isShutdown, false, 'revocation is independent of the shutdown flag');
+    t.throws(() => revoked.runtimePublication.assertCurrent(revoked), REFUSED,
+      'explicit fixture revocation refuses the still-constructed exact runtime');
+    await revoked.shutdown();
     const service = createPartitionServiceFixture(options);
     t.equal(service.runtimePublication.assertCurrent(service), true);
     await service.shutdown();

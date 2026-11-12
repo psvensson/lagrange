@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 // A partition restarted over a committed rs-raft log.
 //
 // The committed commands reach the rs-raft durable store the one way
@@ -137,7 +138,7 @@ async function restartOverCommittedCommands(options, commands) {
     }
   };
   try {
-    const first = new PartitionService(withFoundingStamp(partitionOptions));
+    const first = createPartitionServiceFixture(withFoundingStamp(partitionOptions));
     try {
       await first.initialize();
       await leadAlone(first);
@@ -160,7 +161,7 @@ async function restartOverCommittedCommands(options, commands) {
     assert.equal(before.committed.length, expectedNonOriginCommands.length,
       'precondition: every proposed non-origin command is committed and applied in the ' +
       `rs-raft store (${JSON.stringify(before)})`);
-    restarted = new PartitionService(withFoundingStamp(partitionOptions));
+    restarted = createPartitionServiceFixture(withFoundingStamp(partitionOptions));
     await restarted.initialize();
     return {
       restarted,

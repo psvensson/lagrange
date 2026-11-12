@@ -294,13 +294,19 @@ for (const [label, family, aborted] of [
   });
 }
 
-test('L5 a replica opened with its record unreadable WARNs once',
+test('L5 retained-runtime retirement re-observation WARNs once for an unreadable record',
   async (t) => {
     const world = openGroupWorld(t, {partitionId: 'live-l5', voters: 3});
     const [, member] = world.members;
     install(world);
     world.authoritativeTablesReadAvailable = false;
-    const {handler, service} = world.sources.get(member);
+    const {handler, registration} = world.sources.get(member);
+    const observeRetirement = handler.retireIfOpenedIntoRetiredGroup.bind(handler);
+    let observations = 0;
+    handler.retireIfOpenedIntoRetiredGroup = (replicaId) => {
+      observations += 1;
+      return observeRetirement(replicaId);
+    };
     const warnings = [];
     const logger = handler.logger;
     handler.logger = Object.assign(Object.create(logger), {
@@ -310,12 +316,10 @@ test('L5 a replica opened with its record unreadable WARNs once',
       },
     });
     for (let reopen = 0; reopen < 3; reopen += 1) {
-      handler.localReplicas.delete(member);
-      handler.localServices.delete(member);
-      handler.registerExistingReplica({replicaId: member,
-        partitionId: world.partitionId, service});
+      handler.registerExistingReplica(registration);
       await settle(world, 3);
     }
+    t.equal(observations, 3, 'each idempotent attachment invokes the actual retirement observer');
     t.equal(warnings.length, 1, 'one WARN across three unreadable opens');
     t.equal(warnings[0]?.replicaId, member, 'it names the replica');
     t.same(world.exitsOf(member), [], 'it stays un-retired');

@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 /**
  * Membership-epoch NULL rehydration (quest membership-epoch-null-rehydration).
  *
@@ -41,8 +42,7 @@ import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {NUM} from '../../src/constants/index.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {PartitionService} from
-  '../../src/partition/partition-service.js';
+
 import {
   REBALANCE_COORDINATOR_SHARED,
 } from '../../src/rebalancer/rebalance-coordinator-shared.js';
@@ -244,7 +244,7 @@ async function openSharedDurableReplicaOperations() {
     return sharedDurable;
   }
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), TEMP_DIR_PREFIX));
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: DURABLE_PARTITION_ID,
     tableId: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
     tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,

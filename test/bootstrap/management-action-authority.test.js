@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 import {openReplicaDatabaseFixture} from '../helpers/replica-database-fixture.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -121,7 +122,7 @@ function buildOperationEnvelope(kind, parameters = {}, clusterId = CLUSTER_ID) {
 test('operation-authority-contract: canonical operation authority contract shape and fields', async () => {
   const {port, db} = createInMemoryNativeRaftPort();
   try {
-    const service = new PartitionService({
+    const service = createPartitionServiceFixture({
       partitionId: PARTITION_ID,
       tableId: 'app',
       tableName: 'app',
@@ -188,7 +189,7 @@ test('operation-authority-contract: canonical operation authority contract shape
 });
 
 test('invalid-authority-refused: hand-set role and uncertified consensus are refused', async () => {
-  const service = new PartitionService({
+  const service = createPartitionServiceFixture({
     partitionId: PARTITION_ID,
     tableId: 'app',
     tableName: 'app',
@@ -414,7 +415,7 @@ test('mutation-time-identity-and-freshness: mutation point revalidates configura
 test('real-native-producer-consumer-action: real native consensus leader executes management operation', async () => {
   const {port, db} = createInMemoryNativeRaftPort();
   try {
-    const service = new PartitionService({
+    const service = createPartitionServiceFixture({
       partitionId: PARTITION_ID,
       tableId: 'app',
       tableName: 'app',
@@ -468,7 +469,7 @@ test('real-native-producer-consumer-action: real native consensus leader execute
 test('refusal-recovery-and-cleanup: refusal during quorum loss, recovery on restoration, and clean resource teardown', async () => {
   const {port, db} = createInMemoryNativeRaftPort();
   try {
-    const service = new PartitionService({
+    const service = createPartitionServiceFixture({
       partitionId: PARTITION_ID,
       tableId: 'app',
       tableName: 'app',

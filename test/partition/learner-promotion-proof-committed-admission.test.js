@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 /**
  * Learner promotion proof answered from the committed configuration and the
  * leader's own progress, and every partition peer addressed from the node
@@ -34,7 +35,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import Database from 'better-sqlite3';
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
-import {PartitionService} from '../../src/partition/partition-service.js';
+
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
@@ -196,7 +197,7 @@ function createLeader(_t, {cacheRows = [], role = RAFT_ROLE.LEADER,
   const db = new Database(file);
   const registry = new RaftRsPeerIdentityRegistry(db);
   registry.registerReplica(LEADER_REPLICA);
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: PARTITION_ID,
     tableId: 'replica_operations',
     replicaId: LEADER_REPLICA,

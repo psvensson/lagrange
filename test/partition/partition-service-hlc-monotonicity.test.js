@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 /**
  * Partition HLC cross-leader / cross-restart monotonicity.
  *
@@ -17,7 +18,7 @@ import path from 'node:path';
 import Database from 'better-sqlite3';
 
 import {test} from '../../src/test-helpers/tap.js';
-import {PartitionService} from '../../src/partition/partition-service.js';
+
 import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
 import {PARTITION_SERVICE_OPERATION} from
   '../../src/partition/partition-service-constants.js';
@@ -39,7 +40,7 @@ import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 const SCHEMA = {columns: [{name: 'id', type: 'TEXT', primaryKey: true}]};
 
 function buildPartition(overrides = {}) {
-  return new PartitionService(withFoundingStamp({
+  return createPartitionServiceFixture(withFoundingStamp({
     partitionId: 'hlc-mono-partition',
     tableId: 't',
     tableName: 't',

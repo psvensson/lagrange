@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 /**
  * Wiring tests for CDC confirmation in PartitionService write methods.
  * Verifies that insertData, updateData, upsertData, deleteData correctly
@@ -56,7 +57,7 @@ async function createWiredPartition(cache) {
     timeoutMs: SHORT_TIMEOUT_MS,
   });
 
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: 'wiring-p1',
     tableId: 'nodes',
     tableName: 'nodes',

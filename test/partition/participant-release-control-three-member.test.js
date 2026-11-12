@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 // Real admitted three-member SQL_TRANSACTIONS control group. Every release
 // action reaches the original ReplicaHandler and PartitionService owners over
 // actual loopback transport; this fixture never supplies a fabricated Raft
@@ -63,7 +64,7 @@ test('three actual current SQL control voters share one PAUSE census and each re
         nodeId: NODE_ID, ownerIncarnation: 1,
         systemTableCache: leader.systemTableCache,
         cdcIntegrationService: {},
-        createPartitionService: (options) => new PartitionService(options),
+        createPartitionService: (options) => createPartitionServiceFixture(options),
         messageRouter: transport,
         dataDir: path.dirname(group.dbFileOf(MEMBERS[0])),
       });

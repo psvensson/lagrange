@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
@@ -174,7 +175,7 @@ test('real partition service interaction proves refusal, recovery and cleanup', 
     nodeId: TEST_NODE_ID,
     dbPath: TEST_MEMORY_DB,
   });
-  const realPartition = new PartitionService(partitionOptions);
+  const realPartition = createPartitionServiceFixture(partitionOptions);
   await realPartition.initialize();
 
   try {

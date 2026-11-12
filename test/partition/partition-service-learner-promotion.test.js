@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 /**
  * Unit tests for PartitionService.
  * Tests SQLite-backed Raft group for data storage.
@@ -80,7 +81,7 @@ afterEach(() => {
 
 test('PartitionService - setRebalanceCoordinator replaces local coordinator',
   async (t) => {
-    const partition = new PartitionService(withFoundingStamp({
+    const partition = createPartitionServiceFixture(withFoundingStamp({
       partitionId: 'test-partition-24',
       tableId: 'services',
       tableName: 'services',
@@ -189,7 +190,7 @@ test('PartitionService - learner promotes one temporary replacement voter above 
   };
 
   // Create partition without initializing to test checkLearnerPromotion directly
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'test-table',
     replicaId: 'replica-4', // New replica joining
@@ -280,7 +281,7 @@ test('PartitionService - learner promotes one temporary replacement voter above 
     },
   };
 
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: 'nodes-p1',
     tableId: 'nodes',
     replicaId: 'nodes-p1-r4',
@@ -383,7 +384,7 @@ test('PartitionService - learner promotion discounts stale local voter row',
       },
     };
 
-    const partition = new PartitionService(withFoundingStamp({
+    const partition = createPartitionServiceFixture(withFoundingStamp({
       partitionId: TEST_STALE_LOCAL_PROMOTION_PARTITION_ID,
       tableId: SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS,
       replicaId: TEST_STALE_LOCAL_PROMOTION_LOCAL_REPLICA_ID,
@@ -451,7 +452,7 @@ test('PartitionService - learner promotes when voter count would be odd', async 
   };
 
   // Create partition without initializing to test checkLearnerPromotion directly
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'test-table',
     replicaId: 'replica-3', // New replica joining
@@ -517,7 +518,7 @@ test('PartitionService - learner promotion deferred until leader is known', asyn
     },
   };
 
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'test-table',
     replicaId: 'replica-3',
@@ -596,7 +597,7 @@ test(
       },
     };
 
-    const partition = new PartitionService(withFoundingStamp({
+    const partition = createPartitionServiceFixture(withFoundingStamp({
       partitionId: 'test-partition',
       tableId: 'test-table',
       replicaId: 'replica-3',
@@ -643,7 +644,7 @@ test(
       reasons: [LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING],
     });
 
-    const partition = new PartitionService(withFoundingStamp({
+    const partition = createPartitionServiceFixture(withFoundingStamp({
       partitionId: `${SYSTEM_TABLE_NAME.SQL_TRANSACTIONS}-p1`,
       tableId: SYSTEM_TABLE_NAME.SQL_TRANSACTIONS,
       replicaId: 'replica-3',
@@ -738,7 +739,7 @@ test(
       },
     };
 
-    const partition = new PartitionService(withFoundingStamp({
+    const partition = createPartitionServiceFixture(withFoundingStamp({
       partitionId: `${SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS}-p1`,
       tableId: SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
       replicaId: 'replica-5',
@@ -855,7 +856,7 @@ test(
       },
     };
 
-    const partition = new PartitionService(withFoundingStamp({
+    const partition = createPartitionServiceFixture(withFoundingStamp({
       partitionId,
       tableId: SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
       replicaId: 'replica-6',
@@ -954,7 +955,7 @@ test(
       },
     };
 
-    const partition = new PartitionService(withFoundingStamp({
+    const partition = createPartitionServiceFixture(withFoundingStamp({
       partitionId,
       tableId: SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
       replicaId: 'replica-5',
@@ -1118,7 +1119,7 @@ test(
       },
     };
 
-    const partition = new PartitionService(withFoundingStamp({
+    const partition = createPartitionServiceFixture(withFoundingStamp({
       partitionId,
       tableId: SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
       replicaId: 'replica-4',
@@ -1188,7 +1189,7 @@ test(
       },
     };
 
-    const partition = new PartitionService(withFoundingStamp({
+    const partition = createPartitionServiceFixture(withFoundingStamp({
       partitionId: 'test-partition',
       tableId: 'test-table',
       replicaId: 'replica-3',

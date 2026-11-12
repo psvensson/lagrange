@@ -37,7 +37,6 @@ import {
   resetFixtureSingletons,
   sendRegisteredFixtureParticipantObservation as sendRegisteredObservation,
   settle,
-  startLeader,
   track,
 } from '../test-helpers/participant-transaction-fixture.js';
 
@@ -537,7 +536,8 @@ test('ordinary membership refusal avoids OBS-only generation projection and muta
 test('registry replacement and deletion promptly retire old observers before held facts return',
   async () => {
     for (const mutation of ['replace', 'delete']) {
-      await withActualHandler(async ({handler, leader, transport, timeSource}) => {
+      await withActualHandler(async ({handler, leader, transport, timeSource,
+        createReplacement, restoreAfterDeletion}) => {
         const request = await currentObservationRequest(handler, leader);
         const membership = deferCommittedMembership(leader);
         const timerBaseline = observationTimerOwnedCount(timeSource);
@@ -547,9 +547,10 @@ test('registry replacement and deletion promptly retire old observers before hel
         let replacement = null;
         let failure = null;
         try {
-          ({leader: replacement} = await startLeader());
           if (mutation === 'replace') {
-            handler.replaceLocalReplicaService(leader.replicaId, replacement);
+            const constructed = await createReplacement();
+            replacement = constructed.leader;
+            handler.replaceLocalReplicaService(leader.replicaId, replacement, constructed.expected);
           } else {
             assert.equal(handler.localServices.delete(leader.replicaId), true);
           }
@@ -564,7 +565,7 @@ test('registry replacement and deletion promptly retire old observers before hel
           assert.equal(observationListenerCount(leader), 0);
           assert.equal(observationTimerOwnedCount(timeSource), timerBaseline);
           if (mutation === 'delete') {
-            handler.localServices.set(leader.replicaId, replacement);
+            ({leader: replacement} = await restoreAfterDeletion());
           }
           const successorRequest = await currentObservationRequest(handler, replacement);
           const successor = await sendRegisteredObservation(handler, transport,
@@ -1352,7 +1353,7 @@ test('direct recovery shutdown clears held debt and ignores later owner events',
   }));
 
 test('service replacement during awaited facts cannot reopen the stale object',
-  async () => withActualHandler(async ({handler, leader}) => {
+  async () => withActualHandler(async ({handler, leader, createReplacement}) => {
     const request = await currentResumeRequest(handler, leader);
     const membership = deferCommittedMembership(leader);
     let replacement = null;
@@ -1361,8 +1362,9 @@ test('service replacement during awaited facts cannot reopen the stale object',
       const resume = membership.trackSettlement('resume',
         resumeParticipantCutoverAdmission(handler, leader, request));
       await membership.started;
-      ({leader: replacement} = await startLeader());
-      handler.localServices.set(leader.replicaId, replacement);
+      const constructed = await createReplacement();
+      replacement = constructed.leader;
+      handler.replaceLocalReplicaService(leader.replicaId, replacement, constructed.expected);
       membership.release();
       assert.equal(await resume, OUTCOME.STALE);
       assert.equal(participantReleaseAdmissionOf(leader).state, ADMISSION.CLOSED,

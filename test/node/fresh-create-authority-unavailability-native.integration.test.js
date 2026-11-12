@@ -22,6 +22,9 @@ import Database from 'better-sqlite3';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ReplicaHandler} from '../../src/node/replica-handler.js';
+import {assertDurableRejoinStorageAdmission} from
+  '../../src/bootstrap/durable-rejoin-storage-admission.js';
+import {createReplicaRuntimePublication} from '../../src/node/replica-runtime-publication.js';
 import {runtimeBuildProvenance} from '../../src/diagnostics/runtime-build-provenance.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
@@ -227,6 +230,7 @@ async function runCreate(t, {label, refusals, coFounders = [],
           systemTableCache: cache} :
         withFoundingStamp({...options, transport, systemTableCache: cache});
       const service = new PartitionService(serviceOptions);
+      options.onRuntimeCreated(service);
       beforeInitialize?.(service);
       await service.initialize();
       // The lone founder of this fixture group leads (as a founded group's
@@ -809,8 +813,19 @@ test('restart of an established replica whose file was truncated refuses rebirth
       run.replicaId).opening, DURABLE_LIFECYCLE_OPENING.OPENED);
     dropSidecars(run);
     fs.truncateSync(run.dbPath, 0);
-    const restarted = new PartitionService(run.serviceOptions);
-    t.after(() => restarted.shutdown());
+    const source = run.store.durableRow(SYSTEM_TABLE_NAME.SERVICES, run.replicaId);
+    const restoredHandler = new ReplicaHandler({nodeId: NODE_ID, ownerIncarnation: 102,
+      systemTableCache: run.store.cache, controlPlaneSystemTableGateway: run.store.gateway,
+      cdcIntegrationService: {}, dataDir: run.handler.dataDir,
+      createPartitionService: () => { throw new Error('this witness restores an existing birth'); }});
+    const owner = restoredHandler.replicaStateMachine;
+    const admission = await assertDurableRejoinStorageAdmission(owner, {
+      restoringExistingReplica: true, replicaId: run.replicaId, lifecycleAuthority: source,
+    });
+    const restarted = new PartitionService({...run.serviceOptions,
+      runtimePublication: createReplicaRuntimePublication(restoredHandler, admission.row,
+        admission.admission), resolveHandlerRetirementLane: () => owner});
+    t.after(async () => { await restarted.shutdown(); await restoredHandler.shutdown(); });
     await assert.rejects(restarted.initialize(), {code: LIFECYCLE_BIRTH.UNPROVEN});
     const read = readDurableReplicaLifecycle(run.dbPath, PARTITION_ID, run.replicaId);
     assert.equal(read.reason, 'lifecycle-table-absent');

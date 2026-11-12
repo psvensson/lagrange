@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 /**
  * Unit tests for CDC pipeline observability improvements.
  *
@@ -8,7 +9,7 @@
  */
 
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
-import {PartitionService} from '../../src/partition/partition-service.js';
+
 import {CDCPipelineMetrics} from '../../src/cdc/cdc-pipeline-metrics.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -38,7 +39,7 @@ test('CDC observability - warning log when no subscribers and buffer full',
     const warnLogs = [];
     const metrics = new CDCPipelineMetrics();
 
-    const partition = new PartitionService(withFoundingStamp({
+    const partition = createPartitionServiceFixture(withFoundingStamp({
       partitionId: 'obs-test-p1',
       tableId: 'nodes',
       tableName: 'nodes',

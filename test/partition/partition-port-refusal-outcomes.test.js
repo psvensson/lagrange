@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 // A partition never reports a consensus operation its port refused as done
 // (quest raft-rs-single-path-partition-cutover, verification round 1: F-f and
 // F-h; rules R07 and R11).
@@ -33,7 +34,7 @@ import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {PartitionService} from '../../src/partition/partition-service.js';
+
 import {ENTITY_TYPE} from '../../src/constants/addresses.js';
 import {answerCommittedOperations, committedAddOperation} from
   './committed-operation-gateway-fixture.js';
@@ -175,7 +176,7 @@ test('F-f: production construction over an inert rs-raft record (no ' +
     } finally {
       seeded.close();
     }
-    const service = new PartitionService(withFoundingStamp(partitionOptions(partitionId, dbPath)));
+    const service = createPartitionServiceFixture(withFoundingStamp(partitionOptions(partitionId, dbPath)));
     const error = await refusedInitialization(service);
     try {
       assert.ok(error !== null,

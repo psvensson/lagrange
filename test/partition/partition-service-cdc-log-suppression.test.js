@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 /**
  * Guards against write amplification from CDC row-fetch info logs.
  */
@@ -13,7 +14,7 @@ import {
 import {withFoundingStamp} from './partition-founding-stamp.js';
 
 function createTestPartitionService() {
-  return new PartitionService(withFoundingStamp({
+  return createPartitionServiceFixture(withFoundingStamp({
     partitionId: 'partition-1',
     tableId: 'table-1',
     replicaId: 'partition-1-r1',

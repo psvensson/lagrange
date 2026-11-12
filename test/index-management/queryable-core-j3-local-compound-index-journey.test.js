@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 /**
  * Unit J3: Local and compound indexes lifecycle, fail-closed materialization,
  * uniqueness, hydration & planner journey.
@@ -55,7 +56,7 @@ const ORDERS_SCHEMA = {
  * @return {Promise<PartitionService>} Initialized partition service.
  */
 async function createTestPartition(partitionId, replicaId) {
-  const ps = new PartitionService(withFoundingStamp({
+  const ps = createPartitionServiceFixture(withFoundingStamp({
     partitionId,
     tableId: 'orders',
     tableName: 'orders',

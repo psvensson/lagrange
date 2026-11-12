@@ -15,6 +15,7 @@ import {
   evaluateLearnerPromotionProof,
 } from '../../src/raft/learner-promotion-progress.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 import {handlerIdentityApi} from
   '../test-helpers/replica-handler-identity-fixture.js';
 
@@ -53,6 +54,14 @@ export function createControllablePartitionService(
   options,
   controllablePort = new ControllableConsensusPort(),
 ) {
+  return createPartitionServiceFixture(options, {construct: (owned) =>
+    new ControllablePartitionService(owned, controllablePort)});
+}
+
+// Publication/producer suites supply the production capability acquired before
+// construction. No fixture authority is substituted at this entry point.
+export function createAdmittedControllablePartitionService(options,
+  controllablePort = new ControllableConsensusPort()) {
   return new ControllablePartitionService(options, controllablePort);
 }
 

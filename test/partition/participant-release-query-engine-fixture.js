@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 // The existing seed bridge composes the real QueryEngine, CDC authoritative
 // reads and gateway over native coordinator/progress partitions. Only routing
 // metadata and transport observation are fixture-owned; no drain answer is.
@@ -10,7 +11,7 @@ import {SQL_TRANSACTION_PARTICIPANTS_SCHEMA} from
   '../../src/bootstrap/system-table-workflow-schema-definitions.js';
 import {INITIAL_PARTITION_IDS} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
-import {CDCOperation, PartitionService} from '../../src/partition/partition-service.js';
+import {CDCOperation} from '../../src/partition/partition-service.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {QUERY_OPERATION} from '../../src/query/query-constants.js';
 import {PARTICIPANT_RELEASE_TYPE} from
@@ -48,7 +49,7 @@ async function attachQueryRelease({group, owners}) {
   const transport = control.transport;
   const partitionId = INITIAL_PARTITION_IDS[TABLES.SQL_TRANSACTION_PARTICIPANTS];
   const replicaId = `${partitionId}-release-fixture-r1`;
-  const progress = new PartitionService(withFoundingStamp({
+  const progress = createPartitionServiceFixture(withFoundingStamp({
     partitionId, replicaId, replicaIds: [replicaId], nodeId: control.nodeId,
     tableId: TABLES.SQL_TRANSACTION_PARTICIPANTS,
     tableName: TABLES.SQL_TRANSACTION_PARTICIPANTS,

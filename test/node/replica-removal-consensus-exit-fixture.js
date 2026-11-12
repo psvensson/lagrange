@@ -265,11 +265,13 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
   const publication = createReplicaRuntimePublication(handler, initialRow,
     captureReplicaAdmission(replicaStateMachine, replicaId));
   attachPartitionRuntimePublication(service, publication);
-  publishReplicaRuntime(handler, {replicaId, service, sourceEvidence: initialRow,
-    lifecycleOwner: replicaStateMachine});
+  const registration = Object.freeze({replicaId, partitionId, service,
+    sourceEvidence: Object.freeze({...initialRow}), lifecycleOwner: replicaStateMachine});
+  publishReplicaRuntime(handler, registration);
   return {
     handler,
     service,
+    registration,
     lifecycleStore,
     outcomes,
     exits,

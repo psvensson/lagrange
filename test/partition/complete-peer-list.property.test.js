@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 /**
  * Property-based test for Complete Peer List.
  * **Property 4: Complete Peer List**
@@ -95,7 +96,7 @@ test('Property 4: PartitionService receives complete peer list', async (t) => {
         try {
           // Create all partitions with the complete peer list
           for (let i = 0; i < replicaCount; i++) {
-            const partition = new PartitionService(withFoundingStamp({
+            const partition = createPartitionServiceFixture(withFoundingStamp({
               partitionId,
               tableId,
               replicaId: expectedReplicaIds[i],
@@ -179,7 +180,7 @@ test('Property 4: Peer list includes self', async (t) => {
 
         try {
           for (let i = 0; i < replicaCount; i++) {
-            const partition = new PartitionService(withFoundingStamp({
+            const partition = createPartitionServiceFixture(withFoundingStamp({
               partitionId,
               tableId,
               replicaId: replicaIds[i],
@@ -245,7 +246,7 @@ test('Property 4: Peer list enables Raft group formation', async (t) => {
 
         try {
           for (let i = 0; i < replicaCount; i++) {
-            const partition = new PartitionService(withFoundingStamp({
+            const partition = createPartitionServiceFixture(withFoundingStamp({
               partitionId,
               tableId,
               replicaId: replicaIds[i],
@@ -322,7 +323,7 @@ test('Property 4: Incomplete peer list prevents premature leadership', async (t)
 
         const mockTransport = createMockTransport();
 
-        const partition = new PartitionService(withFoundingStamp({
+        const partition = createPartitionServiceFixture(withFoundingStamp({
           partitionId,
           tableId,
           replicaId,
@@ -384,7 +385,7 @@ test('Property 4: Peer addresses use unified format', async (t) => {
 
         const mockTransport = createMockTransport();
 
-        const partition = new PartitionService(withFoundingStamp({
+        const partition = createPartitionServiceFixture(withFoundingStamp({
           partitionId,
           tableId,
           replicaId,

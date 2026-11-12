@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 /**
  * End-to-end SQL workflow integration tests.
  * Tests CREATE TABLE, INSERT, SELECT, UPDATE, DELETE, partition split/merge.
@@ -111,7 +112,7 @@ function createMockCDCService() {
  * @return {PartitionService} Partition service.
  */
 function createTestPartition(options = {}) {
-  return new PartitionService(withFoundingStamp({
+  return createPartitionServiceFixture(withFoundingStamp({
     partitionId: options.partitionId || 'test-partition-1',
     tableId: options.tableId || 'test-table',
     tableName: options.tableName || 'users',

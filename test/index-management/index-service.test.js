@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 /**
  * Unit tests for IndexService.
  * Tests index creation, storage in indices system table, and index management.
@@ -6,7 +7,7 @@
 
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {IndexService, IndexType} from '../../src/index-management/index-service.js';
-import {PartitionService} from '../../src/partition/partition-service.js';
+
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
@@ -518,7 +519,7 @@ test('IndexService - handleCDCEvent updates on DELETE', async (t) => {
 });
 
 test('IndexService - creates SQLite index on partitions', async (t) => {
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'users-table',
     tableName: 'users',
@@ -578,7 +579,7 @@ test('IndexService - creates indices on new partition via CDC', async (t) => {
   const cdcService = createMockCDCService();
 
   // Create a partition that will be added later
-  const newPartition = new PartitionService(withFoundingStamp({
+  const newPartition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: 'new-partition',
     tableId: 'users-table',
     tableName: 'users',
@@ -645,7 +646,7 @@ test('IndexService - creates indices on new partition via CDC', async (t) => {
 test('IndexService - ensureIndicesOnPartition creates all', async (t) => {
   const cdcService = createMockCDCService();
 
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'users-table',
     tableName: 'users',
@@ -720,7 +721,7 @@ test('IndexService - ensureIndicesOnPartition creates all', async (t) => {
 test('IndexService - rebuildIndex recreates on partitions', async (t) => {
   const cdcService = createMockCDCService();
 
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'users-table',
     tableName: 'users',

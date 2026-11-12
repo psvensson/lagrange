@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 /**
  * PartitionService Raft Propose Metrics Tests
  * Verifies metrics.partition.raft_propose log emission from proposeWrite().
@@ -30,7 +31,7 @@ afterEach(() => {
 });
 
 function createPartition(id) {
-  return new PartitionService(withFoundingStamp({
+  return createPartitionServiceFixture(withFoundingStamp({
     partitionId: id,
     tableId: 'test_table',
     tableName: 'test_table',

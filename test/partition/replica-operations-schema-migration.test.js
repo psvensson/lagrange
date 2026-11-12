@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -14,8 +15,7 @@ import {
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {PartitionService} from
-  '../../src/partition/partition-service.js';
+
 import {withFoundingStamp} from './partition-founding-stamp.js';
 
 const PREVIOUS_REPLICA_OPERATIONS_SCHEMA = Object.freeze({
@@ -67,7 +67,7 @@ test('replica_operations restart migrates every current durable owner column',
       path.join(os.tmpdir(), 'replica-operation-schema-migration-'),
     );
     const dbPath = path.join(tempDir, 'replica-operations.db');
-    const previousPartition = new PartitionService(
+    const previousPartition = createPartitionServiceFixture(
       withFoundingStamp(buildPartitionOptions(dbPath, PREVIOUS_REPLICA_OPERATIONS_SCHEMA)),
     );
 
@@ -85,7 +85,7 @@ test('replica_operations restart migrates every current durable owner column',
       );
       await previousPartition.shutdown();
 
-      const currentPartition = new PartitionService(
+      const currentPartition = createPartitionServiceFixture(
         withFoundingStamp(buildPartitionOptions(dbPath, REPLICA_OPERATIONS_SCHEMA)),
       );
       try {

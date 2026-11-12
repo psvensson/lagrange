@@ -10,6 +10,7 @@ import {
 import {REPLICA_HANDLER_LEADER_HANDOFF_BRANCH} from
   '../../src/node/replica-handler-leader-handoff-methods.js';
 import {
+  createLifecycleServiceRow,
   createLifecycleControlPlaneGatewayForCache,
   createReplicaLifecycleStateMachineFixture,
 } from '../test-helpers/lifecycle-state-store.js';
@@ -18,6 +19,8 @@ import {bindRegisteredReplicaHandler} from
   '../test-helpers/replica-handler-identity-fixture.js';
 import {registerReplicaHandlerRouterAdmissionTests} from
   './replica-handler-router-admission-test-cases.js';
+import {createRestoredPartitionServiceFixture} from
+  '../test-helpers/restored-partition-service-fixture.js';
 
 export async function registerReplicaHandlerTailMoreTests({
   t,
@@ -54,6 +57,10 @@ export async function registerReplicaHandlerTailMoreTests({
 }) {
   t.test('registerExistingReplica - registers and is idempotent', async (t) => {
     const cache = createSeededCache();
+    const source = createLifecycleServiceRow({replicaId: 'replica-1',
+      partitionId: 'partition-1', nodeId: 'test-node', status: ReplicaStatus.ACTIVE,
+      createdAt: 100, stateEnteredAt: 100});
+    cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', source);
     const mockCDC = createMockCDCService(cache);
 
     const handler = new ReplicaHandler({
@@ -66,13 +73,9 @@ export async function registerReplicaHandlerTailMoreTests({
 
     handler.initialize();
 
-    // Register replica
-    handler.registerExistingReplica({
-      replicaId: 'replica-1',
-      partitionId: 'partition-1',
-      tableName: 'test_table',
-      status: ReplicaStatus.ACTIVE,
-    });
+    const registration = await createRestoredPartitionServiceFixture(handler, source,
+      {tableId: 'table-1', tableName: 'test_table'});
+    handler.registerExistingReplica(registration);
 
     const replica = handler.getLocalReplica('replica-1');
     t.ok(replica, 'replica registered');
@@ -80,9 +83,7 @@ export async function registerReplicaHandlerTailMoreTests({
 
     // Register again (idempotent)
     handler.registerExistingReplica({
-      replicaId: 'replica-1',
-      partitionId: 'partition-1',
-      tableName: 'test_table',
+      ...registration,
       status: ReplicaStatus.SYNCING, // Different status
     });
 

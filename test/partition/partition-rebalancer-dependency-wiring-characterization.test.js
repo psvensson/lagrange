@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 /**
  * Characterization tests: Partition/rebalancer dependency wiring.
  *
@@ -75,7 +76,7 @@ afterEach(() => {
  * @return {PartitionService} Partition service instance.
  */
 function createPartitionService(overrides = {}) {
-  return new PartitionService(withFoundingStamp({
+  return createPartitionServiceFixture(withFoundingStamp({
     partitionId: PARTITION_ID,
     tableId: TABLE_ID,
     replicaId: REPLICA_ID,

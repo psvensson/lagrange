@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 /**
  * PartitionService SQLite Metrics Tests
  * Verifies metrics.partition.sqlite log emission from executeQuery().
@@ -29,7 +30,7 @@ afterEach(() => {
 });
 
 function createPartition(id) {
-  return new PartitionService(withFoundingStamp({
+  return createPartitionServiceFixture(withFoundingStamp({
     partitionId: id,
     tableId: 'test_table',
     tableName: 'test_table',

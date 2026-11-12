@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 // What a client of the SQL surface sees when its write is replayed (owner
 // ruling on the raft-rs cutover: a replay of an already committed
 // write never tells its caller the write did not happen).
@@ -26,7 +27,7 @@ import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {TABLES} from '../../src/constants/index.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {PartitionService} from '../../src/partition/partition-service.js';
+
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {classifyControlPlaneMutationResult} from
   '../../src/control-plane/control-plane-mutation-outcome-classifier.js';
@@ -132,7 +133,7 @@ async function withSurface(body) {
   const replicaId = `${partitionId}-r1`;
   const address = `${NODE_ID}/partition/${replicaId}`;
   const dbPath = path.join(directory, 'partition.sqlite');
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = createPartitionServiceFixture(withFoundingStamp({
     tableId: TABLE_NAME, tableName: TABLE_NAME, partitionId, replicaId,
     replicaIds: [replicaId], nodeId: NODE_ID, dbPath,
     systemTableCache: {

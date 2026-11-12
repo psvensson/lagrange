@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 // The real PartitionService/Raft application and lifecycle recipient, with
 // only the transport hop in process. No injected eligibility booleans.
 import assert from 'node:assert/strict';
@@ -948,7 +949,7 @@ async function seedDurableServicesAndControlOrigin(directory) {
   const seedTransport = createInProcessMockTransport();
   const controlDbPath = path.join(directory, 'sql-transactions.db');
   const servicesDbPath = path.join(directory, 'services.db');
-  const seedControl = new PartitionService(withFoundingStamp({
+  const seedControl = createPartitionServiceFixture(withFoundingStamp({
     nodeId: NODE, partitionId: CONTROL_PARTITION,
     replicaId: CONTROL_SERVICE_REPLICA, replicaIds: [CONTROL_SERVICE_REPLICA],
     tableId: SQL_TRANSACTIONS_SCHEMA.tableName,
@@ -956,7 +957,7 @@ async function seedDurableServicesAndControlOrigin(directory) {
     schema: SQL_TRANSACTIONS_SCHEMA, dbPath: controlDbPath,
     systemTableCache: cache, deferElection: true,
   }));
-  const seedServices = new PartitionService(withFoundingStamp({
+  const seedServices = createPartitionServiceFixture(withFoundingStamp({
     nodeId: NODE, partitionId: SERVICES_PARTITION,
     replicaId: SERVICES_REPLICA, replicaIds: [SERVICES_REPLICA],
     tableId: SERVICES_SCHEMA.tableName, tableName: SERVICES_SCHEMA.tableName,
@@ -1031,7 +1032,7 @@ async function runIdempotentConfChangeAutonomousRecoveryCase({
       messageRouter: transport, dataDir: directory,
     });
     handler.registerWithRouter(transport);
-    controlService = new PartitionService(withFoundingStamp({
+    controlService = createPartitionServiceFixture(withFoundingStamp({
       nodeId: NODE, partitionId: CONTROL_PARTITION,
       replicaId: CONTROL_SERVICE_REPLICA, replicaIds: [CONTROL_SERVICE_REPLICA],
       tableId: SQL_TRANSACTIONS_SCHEMA.tableName,
@@ -1040,7 +1041,7 @@ async function runIdempotentConfChangeAutonomousRecoveryCase({
       bootstrapMembership: durableRecordBootstrap(),
       systemTableCache: cache, deferElection: true,
     }));
-    service = new PartitionService(withFoundingStamp({
+    service = createPartitionServiceFixture(withFoundingStamp({
       nodeId: NODE, partitionId: SERVICES_PARTITION,
       replicaId: SERVICES_REPLICA, replicaIds: [SERVICES_REPLICA],
       tableId: SERVICES_SCHEMA.tableName, tableName: SERVICES_SCHEMA.tableName,

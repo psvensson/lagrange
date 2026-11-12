@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 // A contained programming error is named in the partition's log (quest
 // raft-rs-single-path-partition-cutover, F-an after verification round 6).
 //
@@ -159,7 +160,7 @@ async function verifyContainedHoldLogScenario({
   quietEnvironment();
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), TEMP_PREFIX));
   const clock = createDeterministicClock(INITIAL_CLOCK_MS);
-  const service = new PartitionService(withFoundingStamp({
+  const service = createPartitionServiceFixture(withFoundingStamp({
     partitionId,
     tableId: TABLE_NAME,
     tableName: TABLE_NAME,

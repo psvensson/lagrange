@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 /**
  * management-v1 fail-closed authority, proven through the BootstrapAPI Fastify
  * server as production composes it (real HTTP requests on a listening port).
@@ -912,7 +913,7 @@ test('production composition rejects incomplete inventories, duplicate/learner r
 
 test('PartitionService.prototype.getStatus contract parity, ready-node quorum, and ' +
   'prototype-pollution hardening', async (t) => {
-  const realAppService = new PartitionService({
+  const realAppService = createPartitionServiceFixture({
     partitionId: 'p-app',
     tableId: 'app',
     tableName: 'app',

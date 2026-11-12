@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 /**
  * Property-based test for CDC Generation.
  * **Property 6: Change Data Capture Generation**
@@ -40,7 +41,7 @@ afterEach(() => {
  * @return {PartitionService} The partition, not yet initialized.
  */
 function createPropertyPartition(partitionId, tableName) {
-  return new PartitionService(withFoundingStamp({
+  return createPartitionServiceFixture(withFoundingStamp({
     partitionId,
     tableId: tableName,
     tableName,

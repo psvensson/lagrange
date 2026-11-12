@@ -1,3 +1,4 @@
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 // What a failed statement in a committed entry means (quest
 // raft-rs-single-path-partition-cutover, verification round 1: B2 and F-i).
 //
@@ -42,7 +43,7 @@ import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {PartitionService} from '../../src/partition/partition-service.js';
+
 import {
   PARTITION_COMMITTED_COMMAND_ERROR_CODE,
   PARTITION_COMMITTED_COMMAND_OUTCOME,
@@ -213,7 +214,7 @@ async function withPartition(partitionId, body) {
   const dbPath = path.join(directory, DB_FILE);
   const services = [];
   const open = async () => {
-    const service = new PartitionService(withFoundingStamp(partitionOptions(partitionId, dbPath)));
+    const service = createPartitionServiceFixture(withFoundingStamp(partitionOptions(partitionId, dbPath)));
     services.push(service);
     await service.initialize();
     await resumeFixtureParticipantAdmission(service);
