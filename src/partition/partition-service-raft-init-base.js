@@ -56,6 +56,8 @@ import {openParticipantTransactionStore} from
   './partition-participant-transaction-store.js';
 import {REPLICA_DB_PRAGMA} from '../storage/storage-constants.js';
 import {turnChainValue} from '../raft/raft-rs-turn-answer.js';
+import {raftRsLifecycleAdministration} from
+  '../raft/raft-rs-lifecycle-administration.js';
 
 const {
   CONFIG_KEY,
@@ -250,6 +252,13 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
         throw legacyPartitionConsensusStateError(
           legacyConsensusState, this.partitionId);
       }
+      // The database's first transaction (a file this open created): the
+      // lifecycle owner births this replica's never-opened row before any
+      // DDL, so a create refused anywhere after this line leaves a file that
+      // says whose it is and that it never opened its consensus record. A
+      // database that already holds anything is left as it is.
+      raftRsLifecycleAdministration.birthReplica({db: this.db,
+        groupId: this.partitionId, replicaIdentity: this.replicaId});
       createCommittedStatementOutcomeTable(this.db);
       openParticipantTransactionStore(this.db);
       if (this.schema) {

@@ -81,7 +81,7 @@ test('the claim and the sole, empty record together retire the group',
     assert.deepEqual(await decideSoleFounderRetirement(handler, REQUEST), {
       state: STATE.RETIRES_GROUP,
       membership: DURABLE_OWN_MEMBERSHIP.SOLE_MEMBER,
-      history: DURABLE_OWN_HISTORY.EMPTY});
+      history: DURABLE_OWN_HISTORY.EMPTY, cause: null});
     assert.equal(handler.fileReads, 1);
   });
 
@@ -90,7 +90,8 @@ test('an authoritative row that cannot be read is CLAIM_UNAVAILABLE; the ' +
   const cluster = loneFounder(t);
   const handler = handlerOver(cluster, {available: false, row: CLAIMED});
   assert.deepEqual(await decideSoleFounderRetirement(handler, REQUEST),
-    {state: STATE.CLAIM_UNAVAILABLE, membership: null, history: null});
+    {state: STATE.CLAIM_UNAVAILABLE, membership: null, history: null,
+      cause: null});
   assert.equal(handler.fileReads, 0);
 });
 
@@ -122,7 +123,7 @@ for (const [label, {row = {}, request = {}, absent = false}] of
       row: absent ? null : {...CLAIMED, ...row}});
     assert.deepEqual(await decideSoleFounderRetirement(handler,
       {...REQUEST, ...request}),
-    {state: STATE.NOT_CLAIMED, membership: null, history: null});
+    {state: STATE.NOT_CLAIMED, membership: null, history: null, cause: null});
     assert.equal(handler.fileReads, 0);
   });
 }

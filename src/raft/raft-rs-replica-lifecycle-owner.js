@@ -1,6 +1,9 @@
 import {randomUUID} from 'node:crypto';
 import fs from 'node:fs';
 import Database from 'better-sqlite3';
+import {DURABLE_FILE_PRESENCE, readDurableFilePresence} from
+  '../storage/durable-file-presence.js';
+import {deriveRaftRsPeerId} from './raft-rs-peer-identity.js';
 import {
   RAFT_OPERATION_OUTCOME,
 } from './raft-operation-port-constants.js';
@@ -909,25 +912,68 @@ async function withReplicaLifecycleClaim(request, work) {
 }
 
 // What a read of a replica database's lifecycle row found when it holds no
-// such row, or cannot say: none is a lifecycle state. ABSENT is positive: no
-// database file, or a lifecycle table that holds no row for the identity.
-// A database that cannot be read, and a database file WITHOUT the lifecycle
-// table (nothing tells a database the lifecycle owner never opened from one
-// that lost the write-ahead log holding its tables), are UNREADABLE and
-// TABLE_ABSENT: neither is ever read as "no lifecycle".
+// such row, or cannot say: none is a lifecycle state. ABSENT is positive and
+// is one fact only: the database file is not there (durable-file-presence.js;
+// a lookup that failed is never an absence). Everything else that holds no
+// row for the identity is UNREADABLE, each with its own reason and, where a
+// read failed, its cause {code, subject}: the file's presence unknown or its
+// database not readable (UNREADABLE), a database without the lifecycle table
+// (TABLE_ABSENT: every database is born with the table, so one without it
+// lost it or was never born by this owner), and a table without a row for
+// the identity (ROW_ABSENT: every database is born with its replica's row,
+// so the file is another replica's or lost its row).
 const NO_ROW_FIELDS = Object.freeze({incarnation: null, peerId: null,
-  retirementEvidence: null});
+  retirementEvidence: null, opening: null, cause: null});
+const UNREADABLE_STATE = 'unreadable';
 const DURABLE_LIFECYCLE_READ = Object.freeze({
-  ABSENT: Object.freeze({state: 'absent', reason: 'lifecycle-row-absent',
+  ABSENT: Object.freeze({state: 'absent', reason: 'lifecycle-database-absent',
     ...NO_ROW_FIELDS}),
-  UNREADABLE: Object.freeze({state: 'unreadable',
+  UNREADABLE: Object.freeze({state: UNREADABLE_STATE,
     reason: 'lifecycle-database-unreadable', ...NO_ROW_FIELDS}),
-  TABLE_ABSENT: Object.freeze({state: 'unreadable',
+  TABLE_ABSENT: Object.freeze({state: UNREADABLE_STATE,
     reason: 'lifecycle-table-absent', ...NO_ROW_FIELDS}),
+  ROW_ABSENT: Object.freeze({state: UNREADABLE_STATE,
+    reason: 'lifecycle-row-absent', ...NO_ROW_FIELDS}),
 });
+// What a held row says about the replica's consensus record (the `opening`
+// of a lifecycle read). NEVER_OPENED is positive, from one read snapshot: an
+// active row whose native history was never established (the row's own
+// monotonic fact: establishment is written in the transaction that persists
+// the first consensus state, and never reverts) in a database holding no row
+// in any consensus table. Such a replica never voted, logged or applied
+// anything: its database holds its schema and nothing a group depends on.
+const DURABLE_LIFECYCLE_OPENING = Object.freeze({
+  NEVER_OPENED: 'lifecycle-never-opened',
+  OPENED: 'lifecycle-opened',
+});
+// What a failed read was reading (the `subject` of an UNREADABLE cause).
+const LIFECYCLE_READ_SUBJECT = Object.freeze({
+  FILE: 'replica-database-file',
+  SCHEMA: 'replica-database-schema',
+  LIFECYCLE: REPLICA_LIFECYCLE_TABLE,
+  CONSENSUS: 'consensus-record-tables',
+  BESIDE: 'beside-record',
+});
+const UNCODED_READ_FAILURE = 'lifecycle-read-failed';
 const NOTHING_BESIDE = Object.freeze({beside: null});
-const UNREADABLE_SNAPSHOT = Object.freeze({
-  lifecycle: DURABLE_LIFECYCLE_READ.UNREADABLE, ...NOTHING_BESIDE});
+// The birth of a replica database (birthReplicaLifecycle).
+const LIFECYCLE_BIRTH = Object.freeze({
+  BORN: 'lifecycle-born',
+  NOT_EMPTY: 'lifecycle-birth-database-not-empty',
+});
+const SELECT_ANY_SCHEMA_OBJECT = 'SELECT 1 FROM sqlite_master LIMIT 1';
+const SELECT_CONSENSUS_TABLES = `SELECT name FROM sqlite_master
+  WHERE type = 'table' AND name IN (${Object.values(RAFT_RS_TABLE)
+    .map((name) => `'${name}'`).join(SQL_LIST_SEPARATOR)})`;
+
+function snapshotOf(lifecycle) {
+  return Object.freeze({lifecycle, ...NOTHING_BESIDE});
+}
+
+function unreadableBecause(code, subject) {
+  return Object.freeze({...DURABLE_LIFECYCLE_READ.UNREADABLE,
+    cause: Object.freeze({code, subject})});
+}
 
 // The recorded evidence, or null (none, or one that cannot be parsed).
 function retirementEvidenceOf(raw) {
@@ -943,24 +989,42 @@ function retirementEvidenceOf(raw) {
   }
 }
 
-function lifecycleRowOf(db, groupId, replicaIdentity) {
+// The consensus tables the database holds (none before a store opened it).
+function consensusTablesIn(db) {
+  return db.prepare(SELECT_CONSENSUS_TABLES).all().map(({name}) => name);
+}
+
+function openingOf(db, row, progress) {
+  if (row.state !== LIFECYCLE_STATE.ACTIVE ||
+      row.native_history_state !== RAFT_RS_OPENING_HISTORY.NEVER_OPENED) {
+    return DURABLE_LIFECYCLE_OPENING.OPENED;
+  }
+  progress.subject = LIFECYCLE_READ_SUBJECT.CONSENSUS;
+  return hasFreshReceiverConsensusRows(db, consensusTablesIn(db)) ?
+    DURABLE_LIFECYCLE_OPENING.OPENED : DURABLE_LIFECYCLE_OPENING.NEVER_OPENED;
+}
+
+// `progress.subject` names what is being read, for the cause of a failure.
+function lifecycleRowOf(db, groupId, replicaIdentity, progress) {
+  progress.subject = LIFECYCLE_READ_SUBJECT.SCHEMA;
   const table = db.prepare(`
     SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?
   `).get(REPLICA_LIFECYCLE_TABLE);
   if (table === undefined) {
     return DURABLE_LIFECYCLE_READ.TABLE_ABSENT;
   }
-  // Every column: an older table has no incarnation or evidence column.
+  progress.subject = LIFECYCLE_READ_SUBJECT.LIFECYCLE;
   const row = db.prepare(`
     SELECT * FROM ${REPLICA_LIFECYCLE_TABLE}
     WHERE group_id = ? AND replica_identity = ?
   `).get(String(groupId), String(replicaIdentity));
-  return row === undefined ? DURABLE_LIFECYCLE_READ.ABSENT :
+  return row === undefined ? DURABLE_LIFECYCLE_READ.ROW_ABSENT :
     Object.freeze({state: row.state, reason: String(row.reason ?? ''),
       incarnation: typeof row.incarnation === 'string' &&
         row.incarnation.length > 0 ? row.incarnation : null,
       peerId: String(row.peer_id),
-      retirementEvidence: retirementEvidenceOf(row.retirement_evidence)});
+      retirementEvidence: retirementEvidenceOf(row.retirement_evidence),
+      opening: openingOf(db, row, progress), cause: null});
 }
 
 function holdsLifecycleRow(lifecycle) {
@@ -968,12 +1032,35 @@ function holdsLifecycleRow(lifecycle) {
     lifecycle.state === LIFECYCLE_STATE.RETIRED;
 }
 
+function readPresentDatabase(dbPath, groupId, replicaIdentity, readBeside) {
+  const progress = {subject: LIFECYCLE_READ_SUBJECT.FILE};
+  try {
+    const db = new Database(dbPath, {readonly: true, fileMustExist: true});
+    try {
+      return db.transaction(() => {
+        const lifecycle = lifecycleRowOf(db, groupId, replicaIdentity,
+          progress);
+        if (readBeside === null || !holdsLifecycleRow(lifecycle)) {
+          return snapshotOf(lifecycle);
+        }
+        progress.subject = LIFECYCLE_READ_SUBJECT.BESIDE;
+        return Object.freeze({lifecycle, beside: readBeside(db)});
+      })();
+    } finally {
+      db.close();
+    }
+  } catch (error) {
+    return snapshotOf(unreadableBecause(typeof error?.code === 'string' ?
+      error.code : UNCODED_READ_FAILURE, progress.subject));
+  }
+}
+
 /**
  * The durable lifecycle row of exactly one (group, replica identity) and,
  * when the file holds that row, whatever else its reader takes from the SAME
  * read snapshot of the file - read read-only, without opening a runtime or
  * creating a database. `readBeside(db)` runs only beside a held row; a read
- * of it that throws makes the whole answer UNREADABLE.
+ * of it that throws makes the whole answer UNREADABLE (cause subject BESIDE).
  * @param {string} dbPath - The replica's database file.
  * @param {string} groupId
  * @param {string} replicaIdentity
@@ -982,24 +1069,15 @@ function holdsLifecycleRow(lifecycle) {
  */
 function readDurableReplicaLifecycleBeside(dbPath, groupId, replicaIdentity,
   readBeside) {
-  try {
-    if (!fs.existsSync(dbPath)) {
-      return Object.freeze({lifecycle: DURABLE_LIFECYCLE_READ.ABSENT,
-        ...NOTHING_BESIDE});
-    }
-    const db = new Database(dbPath, {readonly: true, fileMustExist: true});
-    try {
-      return db.transaction(() => {
-        const lifecycle = lifecycleRowOf(db, groupId, replicaIdentity);
-        return Object.freeze({lifecycle, beside: readBeside !== null &&
-          holdsLifecycleRow(lifecycle) ? readBeside(db) : null});
-      })();
-    } finally {
-      db.close();
-    }
-  } catch (_error) {
-    return UNREADABLE_SNAPSHOT;
+  const file = readDurableFilePresence(dbPath);
+  if (file.presence === DURABLE_FILE_PRESENCE.ABSENT) {
+    return snapshotOf(DURABLE_LIFECYCLE_READ.ABSENT);
   }
+  if (file.presence !== DURABLE_FILE_PRESENCE.PRESENT) {
+    return snapshotOf(unreadableBecause(file.cause.code,
+      LIFECYCLE_READ_SUBJECT.FILE));
+  }
+  return readPresentDatabase(dbPath, groupId, replicaIdentity, readBeside);
 }
 
 /**
@@ -1007,23 +1085,52 @@ function readDurableReplicaLifecycleBeside(dbPath, groupId, replicaIdentity,
  * read-only from a replica database file without opening a runtime or
  * creating a database (the read-only connection may leave the file's
  * shared-memory sidecars; it never changes a page of the database):
- * {state, reason, incarnation, peerId, retirementEvidence} (a row born
- * before the stamp, never opened since, reads incarnation null). A missing
- * file or row is ABSENT; a database that cannot be read, or a file without
- * the lifecycle table, is UNREADABLE - never a lifecycle state, never ABSENT.
+ * {state, reason, incarnation, peerId, retirementEvidence, opening, cause}.
+ * ABSENT is the positively missing file alone; a database that cannot be
+ * read, one without the lifecycle table and one without a row for the
+ * identity are UNREADABLE with their reason (and cause) - never a lifecycle
+ * state, never ABSENT. A held row says whether the replica was NEVER_OPENED.
  * @param {string} dbPath - The replica's database file.
  * @param {string} groupId
  * @param {string} replicaIdentity
  * @return {Object} Frozen {state, reason, incarnation, peerId,
- *   retirementEvidence}.
+ *   retirementEvidence, opening, cause}.
  */
 function readDurableReplicaLifecycle(dbPath, groupId, replicaIdentity) {
   return readDurableReplicaLifecycleBeside(dbPath, groupId, replicaIdentity,
     null).lifecycle;
 }
 
+/**
+ * The birth of a replica database: its creator calls this on the connection
+ * it just opened, before any other statement that writes. In a database that
+ * holds nothing yet (its first transaction) it creates the lifecycle table
+ * and births this replica's row - active, a fresh incarnation, native
+ * history NEVER_OPENED - through the one open-or-birth of the row the port's
+ * lifecycle owner later reads back (openLifecycleRecord): the file is bound
+ * to its replica identity before anything else exists in it. A database
+ * that already holds anything is left exactly as it is (NOT_EMPTY): its row,
+ * or its lack of one, stays what its history made it.
+ * @param {Object} request - {db, groupId, replicaIdentity}.
+ * @return {string} A LIFECYCLE_BIRTH.
+ */
+function birthReplicaLifecycle({db, groupId, replicaIdentity}) {
+  return db.transaction(() => {
+    if (db.prepare(SELECT_ANY_SCHEMA_OBJECT).get() !== undefined) {
+      return LIFECYCLE_BIRTH.NOT_EMPTY;
+    }
+    openLifecycleRecord(db, {groupId, replicaIdentity,
+      peerId: deriveRaftRsPeerId(replicaIdentity)}, randomUUID());
+    return LIFECYCLE_BIRTH.BORN;
+  }).immediate();
+}
+
 export {
+  DURABLE_LIFECYCLE_OPENING,
   DURABLE_LIFECYCLE_READ,
+  LIFECYCLE_BIRTH,
+  LIFECYCLE_READ_SUBJECT,
+  birthReplicaLifecycle,
   RaftRsReplicaLifecycleOwner,
   readDurableReplicaLifecycle,
   readDurableReplicaLifecycleBeside,

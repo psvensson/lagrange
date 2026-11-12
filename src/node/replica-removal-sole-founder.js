@@ -19,9 +19,9 @@
  * Inputs: the removal's execution request ({operationId, partitionId,
  * replicaId, failedCreatePrecondition}); the state machine's authoritative
  * lifecycle read; the raft lifecycle administration's own-group-record read.
- * Canonical output: a frozen {state, membership, history}
- * (SOLE_FOUNDER_RETIREMENT; membership and history are the record's states,
- * null when the record was not read):
+ * Canonical output: a frozen {state, membership, history, cause}
+ * (SOLE_FOUNDER_RETIREMENT; membership, history and cause are the record's,
+ * null when the record was not read; cause is why it was unreadable):
  *   RETIRES_GROUP      both facts hold: the cleanup may proceed;
  *   NOT_CLAIMED        the row is not this removal's failed-create claim (an
  *                      ordinary REMOVE never retires a last voter: only its
@@ -56,7 +56,7 @@ const STATE = SOLE_FOUNDER_RETIREMENT;
 
 function decision(state, record = null) {
   return Object.freeze({state, membership: record?.membership ?? null,
-    history: record?.history ?? null});
+    history: record?.history ?? null, cause: record?.cause ?? null});
 }
 
 function stateOfRecord(record) {
@@ -75,7 +75,7 @@ function stateOfRecord(record) {
  *   getPartitionDbPath).
  * @param {Object} request - {operationId, partitionId, replicaId,
  *   failedCreatePrecondition}.
- * @return {Promise<Object>} Frozen {state, membership, history}.
+ * @return {Promise<Object>} Frozen {state, membership, history, cause}.
  */
 async function decideSoleFounderRetirement(handler, request) {
   const observation = await handler.replicaStateMachine

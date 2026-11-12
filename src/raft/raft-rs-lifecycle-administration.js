@@ -1,5 +1,7 @@
 import {
+  DURABLE_LIFECYCLE_OPENING,
   DURABLE_LIFECYCLE_READ,
+  birthReplicaLifecycle,
   readDurableReplicaLifecycle,
   retireReplicaLifecycle,
   withReplicaLifecycleClaim,
@@ -30,10 +32,18 @@ function isRetired(lifecycle) {
   return lifecycle?.state === LIFECYCLE_STATE.RETIRED;
 }
 
-// Whether a durable lifecycle read found no row for the identity (its
-// database, or its row, is gone) - never an unreadable database.
+// Whether a durable lifecycle read found the replica's database positively
+// absent (never a lookup that failed, an unreadable database, or a database
+// without the table or the row).
 function isAbsent(lifecycle) {
   return lifecycle?.state === DURABLE_LIFECYCLE_READ.ABSENT.state;
+}
+
+// Whether a durable lifecycle read found the replica's own active row in a
+// database that never opened its consensus record: born, never established,
+// no row in any consensus table.
+function isNeverOpened(lifecycle) {
+  return lifecycle?.opening === DURABLE_LIFECYCLE_OPENING.NEVER_OPENED;
 }
 
 // Whether a durable lifecycle read found a row (active or retired) for the
@@ -44,6 +54,9 @@ function holdsRow(lifecycle) {
 }
 
 const raftRsLifecycleAdministration = Object.freeze({
+  // The birth of a replica database: its creator's first write (the
+  // lifecycle table and this replica's never-opened row).
+  birthReplica: Object.freeze(birthReplicaLifecycle),
   retireReplica: Object.freeze(retireReplica),
   // The same native participation owner holds this scope through settlement.
   // This does not replace the node lifecycle lane or activation-effect section.
@@ -53,11 +66,12 @@ const raftRsLifecycleAdministration = Object.freeze({
   readReplicaLifecycle: Object.freeze(readDurableReplicaLifecycle),
   // What that file's own record says about its group: the replica's applied
   // configuration against its own peer id, and whether any history is held
-  // (raft-rs-durable-own-group-record.js). Throws when it cannot be read.
+  // (raft-rs-durable-own-group-record.js).
   readReplicaOwnGroupRecord: Object.freeze(readDurableOwnGroupRecord),
   isRetiredFor: Object.freeze(isRetiredFor),
   isRetired: Object.freeze(isRetired),
   isAbsent: Object.freeze(isAbsent),
+  isNeverOpened: Object.freeze(isNeverOpened),
   holdsRow: Object.freeze(holdsRow),
 });
 

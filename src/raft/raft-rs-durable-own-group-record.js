@@ -9,7 +9,8 @@
  * database created, no page changed (the connection may leave the file's
  * shared-memory sidecars, which are removed with the database).
  * Inputs: the replica's database file, its group and its replica identity.
- * Canonical output: a frozen {membership, history}:
+ * Canonical output: a frozen {membership, history, cause} (cause: the
+ * lifecycle read's {reason, code, subject} when UNREADABLE, else null):
  *  membership (DURABLE_OWN_MEMBERSHIP)
  *   SOLE_MEMBER       the applied configuration names this replica as its
  *                     only voter and names nobody else in any role: no other
@@ -18,10 +19,10 @@
  *                     stale file of a former member reads SHARED for ever:
  *                     only its group can say it was removed);
  *   NO_CONFIGURATION  the record holds no configuration (no member at all);
- *   NO_LIFECYCLE_ROW  the file is absent, or its lifecycle table holds no
- *                     row for the identity: its peer id is unknown;
- *   UNREADABLE        the file, its lifecycle table or its record cannot be
- *                     read.
+ *   NO_LIFECYCLE_ROW  the file is positively absent: no record exists;
+ *   UNREADABLE        the file, its lifecycle table, its row for the
+ *                     identity or its record cannot be read (a database
+ *                     without the table or the row included).
  *  history (DURABLE_OWN_HISTORY)
  *   EMPTY    no log entry carries a payload and no snapshot is stored:
  *            nothing was ever proposed in the group (a configuration change
@@ -53,11 +54,18 @@ const DURABLE_OWN_HISTORY = Object.freeze({
 const NO_LIFECYCLE_ROW = Object.freeze({
   membership: DURABLE_OWN_MEMBERSHIP.NO_LIFECYCLE_ROW,
   history: DURABLE_OWN_HISTORY.UNKNOWN,
+  cause: null,
 });
-const UNREADABLE = Object.freeze({
-  membership: DURABLE_OWN_MEMBERSHIP.UNREADABLE,
-  history: DURABLE_OWN_HISTORY.UNKNOWN,
-});
+
+function unreadableBecause(lifecycle) {
+  return Object.freeze({
+    membership: DURABLE_OWN_MEMBERSHIP.UNREADABLE,
+    history: DURABLE_OWN_HISTORY.UNKNOWN,
+    cause: Object.freeze({reason: lifecycle.reason,
+      code: lifecycle.cause?.code ?? null,
+      subject: lifecycle.cause?.subject ?? null}),
+  });
+}
 // The field a durable log entry carries its payload in (the durable store's
 // record omits it for an entry without one).
 const ENTRY_PAYLOAD_FIELD = 'data';
@@ -90,18 +98,19 @@ function historyOf(record) {
  * @param {string} dbPath - The replica's database file.
  * @param {string} groupId
  * @param {string} replicaIdentity
- * @return {Object} Frozen {membership, history}.
+ * @return {Object} Frozen {membership, history, cause}.
  */
 function readDurableOwnGroupRecord(dbPath, groupId, replicaIdentity) {
   const {lifecycle, beside: record} = readDurableReplicaLifecycleBeside(
     dbPath, groupId, replicaIdentity,
     (db) => RaftRsDurableStore.readDurableRecordIn(db, groupId));
   if (lifecycle.state === DURABLE_LIFECYCLE_READ.UNREADABLE.state) {
-    return UNREADABLE;
+    return unreadableBecause(lifecycle);
   }
   return record === null ? NO_LIFECYCLE_ROW : Object.freeze({
     membership: membershipOf(record, lifecycle.peerId),
     history: historyOf(record),
+    cause: null,
   });
 }
 
