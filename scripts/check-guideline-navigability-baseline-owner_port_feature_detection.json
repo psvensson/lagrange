@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-11T06:26:21.790Z",
-  "rawViolationCount": 2035,
+  "generatedAt": "2026-11-11T19:00:28.945Z",
+  "rawViolationCount": 2034,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
@@ -11048,16 +11048,7 @@
     },
     {
       "filePath": "src/partition/partition-service-raft-init-base.js",
-      "line": 343,
-      "column": 12,
-      "functionName": "<anonymous>",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-service-raft-init-base.js",
-      "line": 448,
+      "line": 447,
       "column": 10,
       "functionName": "initializeUnserialized",
       "kind": "owner_port_feature_detection",
@@ -11273,7 +11264,7 @@
     },
     {
       "filePath": "src/partition/partition-snapshot-cadence.js",
-      "line": 420,
+      "line": 398,
       "column": 11,
       "functionName": "resolveCompactionTargetFn",
       "kind": "owner_port_feature_detection",
@@ -11282,7 +11273,7 @@
     },
     {
       "filePath": "src/partition/partition-snapshot-cadence.js",
-      "line": 424,
+      "line": 402,
       "column": 6,
       "functionName": "resolveCompactionTargetFn",
       "kind": "owner_port_feature_detection",
@@ -11291,7 +11282,7 @@
     },
     {
       "filePath": "src/partition/partition-snapshot-cadence.js",
-      "line": 427,
+      "line": 405,
       "column": 6,
       "functionName": "resolveCompactionTargetFn",
       "kind": "owner_port_feature_detection",
@@ -11300,7 +11291,7 @@
     },
     {
       "filePath": "src/partition/partition-snapshot-cadence.js",
-      "line": 430,
+      "line": 408,
       "column": 6,
       "functionName": "resolveCompactionTargetFn",
       "kind": "owner_port_feature_detection",
@@ -11309,7 +11300,7 @@
     },
     {
       "filePath": "src/partition/partition-snapshot-cadence.js",
-      "line": 471,
+      "line": 449,
       "column": 38,
       "functionName": "runServiceLogCompaction",
       "kind": "owner_port_feature_detection",
@@ -13532,7 +13523,7 @@
     },
     {
       "filePath": "src/raft/snapshot-catchup.js",
-      "line": 132,
+      "line": 137,
       "column": 6,
       "functionName": "readCachedPublicationRows",
       "kind": "owner_port_feature_detection",
@@ -13541,7 +13532,7 @@
     },
     {
       "filePath": "src/raft/snapshot-catchup.js",
-      "line": 135,
+      "line": 140,
       "column": 6,
       "functionName": "readCachedPublicationRows",
       "kind": "owner_port_feature_detection",
@@ -13550,7 +13541,7 @@
     },
     {
       "filePath": "src/raft/snapshot-catchup.js",
-      "line": 147,
+      "line": 152,
       "column": 6,
       "functionName": "readCachedClusterId",
       "kind": "owner_port_feature_detection",

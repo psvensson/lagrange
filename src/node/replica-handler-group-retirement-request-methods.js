@@ -103,7 +103,7 @@ function assignReplicaHandlerGroupRetirementRequestMethods(ReplicaHandler) {
      * @return {Promise<Object|null>} The REMOVE answer, or null.
      * @private
      */
-    async retireIfOpenedIntoRetiredGroup(replicaId) {
+    async retireIfGroupEndedAsUnit(replicaId) {
       const replica = this.getLocalReplica(replicaId);
       const tableId = this.resolveReplicaTableId(replica);
       const hint = tableId !== null ?
@@ -295,6 +295,14 @@ function assignReplicaHandlerGroupRetirementRequestMethods(ReplicaHandler) {
       const partitionId = request?.[ReplicaOperationField.PARTITION_ID];
       const replicaId = request?.[ReplicaOperationField.REPLICA_ID];
       const reason = request?.[ReplicaOperationField.REASON];
+      // An accepted removal holds the replica's snapshot-install episode (no
+      // open, an open in flight released) by its operation id, from here,
+      // synchronously, until this task ends on any path: its durable
+      // REMOVING row claims the episode; a deferred, failed or thrown write,
+      // and the early return on shutdown, lift the hold and the replica
+      // returns.
+      const liftInstallHold =
+        this.snapshotInstallOwner.holdForRemoval(replicaId, operationId);
       this.registerOperationTask(
         new Promise((resolve) => {
           setImmediate(() => {
@@ -322,7 +330,7 @@ function assignReplicaHandlerGroupRetirementRequestMethods(ReplicaHandler) {
               }),
             );
           });
-        }),
+        }).finally(liftInstallHold),
       );
     }
   }

@@ -53,6 +53,7 @@ import {createCommittedStatementOutcomeTable} from
 import {openParticipantTransactionStore} from
   './partition-participant-transaction-store.js';
 import {REPLICA_DB_PRAGMA} from '../storage/storage-constants.js';
+import {PARTITION_SERVICE_ERROR_CODE} from './partition-service-constants.js';
 import {turnChainValue} from '../raft/raft-rs-turn-answer.js';
 
 const {
@@ -219,10 +220,10 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
         });
         if (installResolution.outcome ===
             RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALL_STATE_CONFLICT) {
-          throw new Error(
+          throw Object.assign(new Error(
             `${PARTITION_SERVICE_ERROR_MSG.SNAPSHOT_INSTALL_STATE_CONFLICT}: ` +
             `${installResolution.detail}`,
-          );
+          ), {code: PARTITION_SERVICE_ERROR_CODE.SNAPSHOT_INSTALL_STATE_CONFLICT});
         }
         // Recorded-gap closure (S4): sweep stale transfer staging at the
         // same closed-handle boot boundary — no transfer is in flight
@@ -339,11 +340,10 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
         this.applyCommittedEntry(committed),
       [RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY_MODE]:
         RAFT_COMMITTED_ENTRY_APPLY_MODE.SYNCHRONOUS,
+      // The catch-up driver records the follower, asks the dispatcher seam
+      // (onSnapshotCatchupNeeded) and re-asks while the follower stays behind.
       [RAFT_OPERATION_PORT_REQUEST.SNAPSHOT_CATCHUP_NEEDED]: (decision) => {
-        if (typeof this.onSnapshotCatchupNeeded ===
-            PARTITION_SERVICE_TYPE.FUNCTION) {
-          this.onSnapshotCatchupNeeded(decision);
-        }
+        this.requestSnapshotCatchupDispatch(decision);
       },
     });
     await this.refuseConsensusHeldAtOpen();

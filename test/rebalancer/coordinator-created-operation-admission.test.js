@@ -6,6 +6,8 @@ import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {ReplicaOperationResponseStatus} from
   '../../src/rebalancer/replica-operation-constants.js';
 import {OPERATION_METADATA_KEY} from '../../src/rebalancer/replica-operation-progress.js';
+import {REPLICA_SNAPSHOT_INSTALL_ERROR_CODE} from
+  '../../src/node/replica-snapshot-install-constants.js';
 import {
   OPERATION_WORKFLOW_OWNER_SHARED,
 } from '../../src/rebalancer/operation-workflow-owner-shared.js';
@@ -406,6 +408,98 @@ test('lost CREATE response adopts durable admission and cannot terminalize ' +
       'admission winning the terminal CAS race is retained');
     t.equal(retained.length, 1,
       'the race winner converges on the same retained-progress owner');
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+// Quest partition-checkpoint-epoch-generation (hand-over coverage model, cell
+// 13): a CREATE that replays while its replica is under a snapshot-install
+// episode is answered by the node with the typed deferral
+// REPLICA_UNDER_INSTALL_EPISODE (deferRetry). The replayed operation carries
+// its durable CREATE admission, so the dispatch owner retains it as delivered
+// progress and never settles it failed; a user partition is not a
+// control-plane retry target, so nothing else would defer it.
+test('a CREATE replay deferred by a snapshot-install episode is retained by ' +
+  'its durable admission and never fails the operation', async (t) => {
+  const coordinator = createAdmissionCoordinator();
+  const owner = coordinator.workflowOwner;
+  const operation = {
+    operationId: 'add-replay-under-install-episode',
+    type: OperationType.ADD,
+    partitionId: 'user-install-episode-p1',
+    replicaId: 'user-install-episode-p1-r4',
+    sourceNodeId: 'node-source',
+    targetNodeId: 'node-local',
+    status: 'sending',
+    workflowStep: WORKFLOW_STEP.SENDING,
+    createdAt: Date.now(),
+    updatedAt: 101,
+    completedAt: null,
+    entityType: 'partition',
+    entityId: 'user-install-episode-p1',
+    stepsHistory: [],
+  };
+  const admitted = {
+    ...operation,
+    createAdmissionState: 'ADMITTED',
+    createAdmissionToken: 'install-episode-admission',
+    createAdmissionReplicaCreatedAt: 303,
+    createAdmissionAttemptToken: 'install-episode-admission:attempt:1',
+    createAdmissionAttemptSeq: 1,
+    createAdmissionWorkflowUpdatedAt: 101,
+    createAdmissionOwnerIncarnation: 7,
+  };
+  const deferral = {
+    status: ReplicaOperationResponseStatus.ERROR,
+    error: 'CREATE deferred: the replica is under a snapshot install episode',
+    errorCode: REPLICA_SNAPSHOT_INSTALL_ERROR_CODE.REPLICA_UNDER_INSTALL_EPISODE,
+    deferRetry: true,
+    operationId: operation.operationId,
+    replicaId: operation.replicaId,
+    nodeId: 'node-local',
+  };
+  const retained = [];
+  const failures = [];
+  const steps = [];
+  owner.repository.isOperationLocallyOwned = () => true;
+  owner.repository.isReplaceRemoveDispatchPhase = () => false;
+  owner.repository.getReplaceSourceReplicaId = () => null;
+  owner.isCreateRearmDispatchPhase = () => false;
+  owner.isPriorityRecoverySupersededTargetFailureApplicable = () => false;
+  owner.evaluateRemoveSafety = async () => null;
+  owner.clearDeferredSafetyBlockState = () => {};
+  owner.deliverReplicaOperationRequest = async () => buildDeliveryEnvelope(
+    {acknowledged: true}, deferral);
+  owner.retainDeliveredCreateProgress = (candidate, response) => {
+    if (response?.status !== ReplicaOperationResponseStatus.IN_PROGRESS) {
+      return false;
+    }
+    retained.push(candidate.createAdmissionAttemptToken);
+    return true;
+  };
+  owner.updateStep = async (_operation, step) => {
+    steps.push(step);
+  };
+  owner.failOperation = async (_candidate, message, options) => {
+    failures.push({message, options});
+    return {committed: true};
+  };
+  try {
+    owner.repository.getOperationByIdVisibilityObservation = async () => ({
+      operation: admitted,
+      deferredOutcome: null,
+    });
+    const replayed = await owner.executeOperationInternal({...operation}, {});
+    t.same({skipped: replayed.skipped, failed: replayed.success === false &&
+        replayed.skipped !== true, failures, retained, steps},
+    {skipped: true, failed: false, failures: [],
+      retained: [admitted.createAdmissionAttemptToken],
+      steps: [WORKFLOW_STEP.SENDING]},
+    'the deferred replay stays owned by the delivered-progress retry: the ' +
+    'dispatch step is the only step, nothing advances or settles on the answer');
+    t.equal(owner.dispatchRetryTimerByOperationId.has(operation.operationId),
+      false, 'a user partition arms no control-plane dispatch retry');
   } finally {
     await coordinator.shutdown();
   }

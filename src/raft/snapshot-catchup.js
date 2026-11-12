@@ -5,18 +5,21 @@
 // (emitted by the consensus catch-up decision owner) into a served snapshot transfer — resolve the
 // follower nodeId from the unified address, select the NEWEST eligible
 // sealed generation (index >= the leader boundary; anything older is an
-// unbounded install-dispatch loop, not benign), create one via S1 creation
-// when none exists (an installed leader re-checkpoints at its own boundary
-// thanks to the S2 fallback), and serve it over an injected channel with
-// per-follower single-flight. Follower side: drive the received generation
-// through the established closed-handle boundary — shutdown, install,
-// recreate via the injected PartitionService factory, and hand the
-// replacement to the caller's registry callback (this module NEVER mutates
-// replica registries itself; production wiring is S6 scope). Every refusal
-// or failure is a typed frozen outcome.
+// unbounded install-dispatch loop, not benign) that the reader holds valid
+// under the leader's current identity, seal one through the caller's
+// generation sealer when none is servable, and serve it over an injected
+// channel with per-follower single-flight. One channel carries ONE transfer:
+// the dispatch closes the channel it was given when it ends, whatever the
+// outcome, so the next dispatch is dialled afresh and the follower's
+// one-shot offer router is never asked twice. A generation is servable to a
+// follower only when its image names that follower (an image sealed before
+// this leader applied the follower's admission is refused by its installer,
+// every time). The follower side is snapshot-catchup-install.js. Every
+// refusal or failure is a typed frozen outcome.
+
+import path from 'node:path';
 
 import {AddressManager} from '../address/address-manager.js';
-import {buildReplacementServiceOptions} from '../partition/partition-reopen-options.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-key-constants.js';
 import {ENTITY_TYPE} from '../constants/addresses.js';
@@ -31,34 +34,31 @@ import {
 import {RaftRsDurableStore} from './raft-rs-durable-store.js';
 import {
   RAFT_CHECKPOINT_CREATION_OUTCOME,
+  RAFT_CHECKPOINT_VALIDATION_OUTCOME,
 } from './snapshot-checkpoint-constants.js';
 import {
   createSqliteStateMachineCheckpoint,
   listCheckpointGenerations,
+  readCheckpoint,
 } from './snapshot-checkpoint-store.js';
 import {
   RAFT_SNAPSHOT_CATCHUP_DECISION_OUTCOME,
   RAFT_SNAPSHOT_CATCHUP_DISPATCH_OUTCOME,
-  RAFT_SNAPSHOT_CATCHUP_INSTALL_OUTCOME,
   RAFT_SNAPSHOT_DEFAULT_CLUSTER_ID,
 } from './snapshot-catchup-constants.js';
-import {requestSnapshotInstall} from './snapshot-install.js';
-import {RAFT_SNAPSHOT_INSTALL_OUTCOME} from './snapshot-install-constants.js';
+import {snapshotImageAdmitsReceiver} from './snapshot-receiver-admission.js';
 import {
   RAFT_SNAPSHOT_TRANSFER_OUTCOME,
 } from './snapshot-transfer-constants.js';
-import {
-  receiveSnapshotTransfer,
-  serveSnapshotTransfer,
-} from './snapshot-transfer.js';
+import {serveSnapshotTransfer} from './snapshot-transfer.js';
 
 const DISPATCH = RAFT_SNAPSHOT_CATCHUP_DISPATCH_OUTCOME;
-const INSTALL_ORCHESTRATION = RAFT_SNAPSHOT_CATCHUP_INSTALL_OUTCOME;
 const CATCHUP_TYPEOF = Object.freeze({
   FUNCTION: 'function',
 });
 const TRANSFER_ID_PREFIX = 'snapshot-catchup';
 const TRANSFER_ID_SEPARATOR = '-';
+const IDENTITY_KEY_SEPARATOR = '\u0000';
 
 // Default per-process single-flight registry (nodeId -> in-flight value).
 // The value starts as the SELECTION_PENDING placeholder and becomes the
@@ -84,10 +84,6 @@ function listInFlightGenerationIndexes(
 }
 
 function dispatchResult(outcome, extra = {}) {
-  return Object.freeze({outcome, ...extra});
-}
-
-function orchestrationResult(outcome, extra = {}) {
   return Object.freeze({outcome, ...extra});
 }
 
@@ -174,10 +170,26 @@ function buildSnapshotCatchupIdentityFromCache(options) {
   });
 }
 
+/**
+ * One comparable key of the part of a checkpoint identity that can change
+ * under a running replica (the cluster identity becoming visible, the
+ * membership epoch advancing): equal keys seal and accept the same images.
+ * @param {Object} identity checkpoint identity
+ * @return {string} the identity's key
+ */
+function snapshotCheckpointIdentityKey(identity) {
+  return [identity.clusterId, String(identity.membershipEpoch)]
+    .join(IDENTITY_KEY_SEPARATOR);
+}
+
+// The follower's node and replica identity as its unified address names
+// them (the address the consensus runtime resolved from the committed
+// reservation), or the typed unresolved answer.
 function resolveFollowerNodeId(followerAddress) {
   try {
-    return {resolved: true, nodeId:
-      AddressManager.getInstance().parse(followerAddress).nodeId};
+    const parsed = AddressManager.getInstance().parse(followerAddress);
+    return {resolved: true, nodeId: parsed.nodeId,
+      replicaIdentity: parsed.serviceId};
   } catch (error) {
     return {resolved: false, detail: error.message};
   }
@@ -186,44 +198,135 @@ function resolveFollowerNodeId(followerAddress) {
 // Newest sealed generation whose index is at or above the leader boundary
 // (strictly `index >= leaderBoundary`: pre-install generations below the
 // boundary can exist while retention is S5 scope, and serving one dispatches
-// an install the follower immediately outgrows — an unbounded loop).
-function selectNewestEligibleGeneration(checkpointsRoot, leaderBoundary) {
+// an install the follower immediately outgrows — an unbounded loop) AND that
+// the checkpoint reader holds valid under the leader's CURRENT identity AND
+// whose image names the follower. A generation the reader refuses (partial,
+// corrupt, or sealed under an older membership epoch than the leader's
+// identity now carries) is not servable: the sender would abort it as
+// generation_unavailable or every receiver at the current epoch would refuse
+// it as stale_epoch, for ever. Neither is one sealed before this leader
+// applied the follower's admission: its installer refuses an image that does
+// not name it, for ever. With none servable the dispatch seals one under the
+// current identity and the current configuration (below).
+function selectNewestEligibleGeneration(checkpointsRoot, leaderBoundary,
+  identity, followerReplicaIdentity) {
   const eligible = listCheckpointGenerations(checkpointsRoot)
     .filter((generationIndex) => generationIndex >= leaderBoundary);
-  return eligible.length > 0 ?
-    {found: true, generationIndex: eligible[eligible.length - 1]} :
-    {found: false};
+  for (let position = eligible.length - 1; position >= 0; position -= 1) {
+    const servable = readCheckpoint({
+      checkpointDir: path.join(checkpointsRoot, String(eligible[position])),
+      expectedIdentity: identity,
+    });
+    if (servable.outcome === RAFT_CHECKPOINT_VALIDATION_OUTCOME.VALID &&
+        snapshotImageAdmitsReceiver(servable.descriptor, followerReplicaIdentity)) {
+      return {found: true, generationIndex: eligible[position]};
+    }
+  }
+  return {found: false};
+}
+
+/**
+ * The generation sealer over one replica database: one S1 creation, as a
+ * raft-rs replica image when the database holds a raft-rs record of the
+ * identity's group. A partition's checkpoint cadence wraps this one in its
+ * standing refusal and is the sealer its dispatcher passes.
+ * @param {Object} db live better-sqlite3 handle
+ * @return {Function} async ({identity, checkpointsRoot, inProcessPins}) ->
+ *   typed creation result
+ */
+function createCheckpointSealer(db) {
+  return ({identity, checkpointsRoot, inProcessPins}) => {
+    const hasRaftRsRecord = Boolean(db && identity?.raftGroupId &&
+      RaftRsDurableStore.hasDurableRecordIn(db, identity.raftGroupId));
+    return createSqliteStateMachineCheckpoint({db, identity, checkpointsRoot,
+      ...(hasRaftRsRecord ? {raftRsGroupId: identity.raftGroupId} : {}),
+      inProcessPins});
+  };
+}
+
+// None servable: the sealer builds one under the current identity and
+// configuration, sparing the other dispatches' pins; the image it sealed
+// must name the follower too.
+async function sealServableGeneration(options) {
+  const {checkpointsRoot, identity, follower} = options;
+  const created = await options.sealGeneration({identity, checkpointsRoot,
+    inProcessPins: listInFlightGenerationIndexes(options.inflightByFollower)});
+  if (created.outcome !== RAFT_CHECKPOINT_CREATION_OUTCOME.CREATED) {
+    return {ok: false, outcome: DISPATCH.CHECKPOINT_CREATION_FAILED,
+      detail: {creation: created}};
+  }
+  const generationIndex = created.descriptor.lastIncludedIndex;
+  const named = snapshotImageAdmitsReceiver(
+    created.descriptor, follower.replicaIdentity);
+  return named ? {ok: true, generationIndex} :
+    {ok: false, outcome: DISPATCH.GENERATION_OMITS_FOLLOWER,
+      detail: {generationIndex}};
 }
 
 async function resolveServableGeneration(options) {
-  const {checkpointsRoot, leaderBoundary, identity, db} = options;
+  const {checkpointsRoot, leaderBoundary, identity, follower} = options;
   const existing = selectNewestEligibleGeneration(
-    checkpointsRoot, leaderBoundary);
-  if (existing.found) {
-    // Recorded synchronously with selection (no await between select and
-    // set): the S5 sweep must never observe a served generation unpinned.
-    options.recordInFlightGeneration(existing.generationIndex);
-    return {ok: true, generationIndex: existing.generationIndex};
+    checkpointsRoot, leaderBoundary, identity, follower.replicaIdentity);
+  // Recorded synchronously with selection (no await between select and
+  // set): the S5 sweep must never observe a served generation unpinned.
+  const generation = existing.found ?
+    {ok: true, generationIndex: existing.generationIndex} :
+    await sealServableGeneration(options);
+  if (generation.ok) {
+    options.recordInFlightGeneration(generation.generationIndex);
   }
-  // The create-if-none fallback threads the OTHER dispatches' in-flight
-  // generation pins into creation so its opportunistic retention sweep
-  // cannot remove a generation mid-serve.
-  const hasRaftRsRecord = Boolean(
-    db && identity?.raftGroupId &&
-    RaftRsDurableStore.hasDurableRecordIn(db, identity.raftGroupId),
-  );
-  const created = await createSqliteStateMachineCheckpoint({
-    db,
-    identity,
-    checkpointsRoot,
-    ...(hasRaftRsRecord ? {raftRsGroupId: identity.raftGroupId} : {}),
-    inProcessPins: listInFlightGenerationIndexes(options.inflightByFollower),
+  return generation;
+}
+
+// One turn of the event loop. A dispatch is started from the consensus
+// runtime's notification, inside its delivery turn; everything after the
+// follower's slot is claimed (reading and hashing a whole image to select
+// it, sealing one) runs after this yield, never in that turn.
+function nextEventLoopTurn() {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
+// The transfer of one resolved generation over the channel the provider
+// answers, the channel closed when the transfer ends.
+async function serveResolvedGeneration(options, follower, generationIndex) {
+  const {decision, checkpointsRoot, signal} = options;
+  const socket = await options.socketProvider({
+    followerNodeId: follower.nodeId,
+    followerAddress: decision.followerAddress,
+    signal,
   });
-  if (created.outcome !== RAFT_CHECKPOINT_CREATION_OUTCOME.CREATED) {
-    return {ok: false, creation: created};
+  if (!socket) {
+    return dispatchResult(DISPATCH.SOCKET_UNAVAILABLE, {
+      followerNodeId: follower.nodeId,
+      generationIndex,
+    });
   }
-  options.recordInFlightGeneration(created.descriptor.lastIncludedIndex);
-  return {ok: true, generationIndex: created.descriptor.lastIncludedIndex};
+  try {
+    options.onProgress?.();
+    const transfer = await serveSnapshotTransfer({
+      socket,
+      checkpointsRoot,
+      generationIndex,
+      transferId: options.transferId || [TRANSFER_ID_PREFIX, follower.nodeId,
+        String(generationIndex)].join(TRANSFER_ID_SEPARATOR),
+      chunkSizeBytes: options.chunkSizeBytes,
+      tokenBucket: options.tokenBucket,
+      signal,
+      onChunkServed: options.onProgress,
+    });
+    const served =
+      transfer.outcome === RAFT_SNAPSHOT_TRANSFER_OUTCOME.COMPLETED;
+    return dispatchResult(
+      served ? DISPATCH.SERVED : DISPATCH.TRANSFER_ABORTED, {
+        followerNodeId: follower.nodeId,
+        generationIndex,
+        transfer,
+      });
+  } finally {
+    // One turn later: a typed abort this side sent is delivered first.
+    await nextEventLoopTurn();
+    socket.close();
+  }
 }
 
 /**
@@ -237,18 +340,25 @@ async function resolveServableGeneration(options) {
  * @param {Object} options.decision typed decision from consensus catch-up
  * @param {string} options.checkpointsRoot leader durable checkpoint root
  * @param {Object} options.identity leader checkpoint identity
- * @param {Object} options.db live better-sqlite3 handle (creation fallback)
+ * @param {Function} options.sealGeneration async ({identity,
+ *   checkpointsRoot, inProcessPins}) -> typed creation result; asked only
+ *   when no sealed generation is servable (createCheckpointSealer(db), or a
+ *   partition's cadence sealer)
  * @param {Function} options.socketProvider async ({followerNodeId,
- *   followerAddress}) -> socket-like serving channel
+ *   followerAddress, signal}) -> socket-like serving channel, owned (and
+ *   closed) by this dispatch
  * @param {string} [options.transferId] override transfer id
  * @param {number} [options.chunkSizeBytes] chunk geometry override
  * @param {Object} [options.tokenBucket] sender pacing bucket
- * @param {AbortSignal} [options.signal] cancellation signal
+ * @param {AbortSignal} [options.signal] cancellation signal: stops the
+ *   dial and the transfer; checked before a channel is opened
+ * @param {Function} [options.onProgress] called when the generation is
+ *   resolved, the channel obtained and each chunk served
  * @param {Map} [options.inflightByFollower] injected single-flight registry
  * @return {Promise<Object>} typed frozen dispatch result
  */
 async function dispatchSnapshotCatchup(options) {
-  const {decision, checkpointsRoot, identity, db} = options;
+  const {decision, checkpointsRoot, identity} = options;
   if (decision?.outcome !==
       RAFT_SNAPSHOT_CATCHUP_DECISION_OUTCOME.INSTALL_SNAPSHOT) {
     return dispatchResult(DISPATCH.NOT_INSTALL_DECISION, {
@@ -271,143 +381,41 @@ async function dispatchSnapshotCatchup(options) {
   }
   inflightByFollower.set(follower.nodeId, INFLIGHT_SELECTION_PENDING);
   try {
+    await nextEventLoopTurn();
     const generation = await resolveServableGeneration({
       checkpointsRoot,
       leaderBoundary: decision.leaderBoundary,
       identity,
-      db,
+      follower,
+      sealGeneration: options.sealGeneration,
       inflightByFollower,
       recordInFlightGeneration: (generationIndex) =>
         inflightByFollower.set(follower.nodeId, generationIndex),
     });
     if (!generation.ok) {
-      return dispatchResult(DISPATCH.CHECKPOINT_CREATION_FAILED, {
-        followerNodeId: follower.nodeId,
-        creation: generation.creation,
-      });
+      return dispatchResult(generation.outcome,
+        {followerNodeId: follower.nodeId, ...generation.detail});
     }
-    const socket = await options.socketProvider({
-      followerNodeId: follower.nodeId,
-      followerAddress: decision.followerAddress,
-    });
-    if (!socket) {
-      return dispatchResult(DISPATCH.SOCKET_UNAVAILABLE, {
+    options.onProgress?.();
+    if (options.signal?.aborted) {
+      return dispatchResult(DISPATCH.CANCELLED, {
         followerNodeId: follower.nodeId,
         generationIndex: generation.generationIndex,
       });
     }
-    const transferId = options.transferId || [
-      TRANSFER_ID_PREFIX,
-      follower.nodeId,
-      String(generation.generationIndex),
-    ].join(TRANSFER_ID_SEPARATOR);
-    const transfer = await serveSnapshotTransfer({
-      socket,
-      checkpointsRoot,
-      generationIndex: generation.generationIndex,
-      transferId,
-      chunkSizeBytes: options.chunkSizeBytes,
-      tokenBucket: options.tokenBucket,
-      signal: options.signal,
-    });
-    const served =
-      transfer.outcome === RAFT_SNAPSHOT_TRANSFER_OUTCOME.COMPLETED;
-    return dispatchResult(
-      served ? DISPATCH.SERVED : DISPATCH.TRANSFER_ABORTED, {
-        followerNodeId: follower.nodeId,
-        generationIndex: generation.generationIndex,
-        transfer,
-      });
+    return await serveResolvedGeneration(
+      options, follower, generation.generationIndex);
   } finally {
     inflightByFollower.delete(follower.nodeId);
   }
 }
 
-function resolveExpectedIdentityValue(expectedIdentity) {
-  return typeof expectedIdentity === CATCHUP_TYPEOF.FUNCTION ?
-    expectedIdentity() :
-    expectedIdentity;
-}
-
-
-/**
- * Follower-side install orchestration: receive the offered generation, shut
- * the running PartitionService down (the established closed-handle
- * boundary), install atomically, then construct a NEW PartitionService over
- * the same dbPath via the injected factory and hand it to
- * registerReplacementService. A shutdown instance is never re-initialized
- * (isShutdown is one-way) and the remove path (which deletes the db) is
- * never used. On install rejection the old state boots per the S2 marker
- * semantics — no blind recreate. Every stage failure is typed.
- * @param {Object} options orchestration request
- * @param {Object} options.service the running (compacted-behind) service
- * @param {Object} options.receiveOptions receiveSnapshotTransfer options
- *   ({socket, checkpointsRoot, expectedIdentity, ...})
- * @param {Function} options.createPartitionService async factory receiving
- *   the frozen replacement options derived from the old service
- * @param {Function} options.registerReplacementService callback receiving
- *   the new service (registry handoff — the caller swaps its own maps)
- * @return {Promise<Object>} typed frozen orchestration result
- */
-async function orchestrateSnapshotCatchupInstall(options) {
-  const {service, receiveOptions} = options;
-  const transfer = await receiveSnapshotTransfer(receiveOptions);
-  if (transfer.outcome !== RAFT_SNAPSHOT_TRANSFER_OUTCOME.COMPLETED) {
-    return orchestrationResult(INSTALL_ORCHESTRATION.RECEIVE_FAILED,
-      {transfer});
-  }
-  try {
-    await service.shutdown();
-  } catch (error) {
-    return orchestrationResult(INSTALL_ORCHESTRATION.SHUTDOWN_FAILED, {
-      transfer,
-      detail: error.message,
-    });
-  }
-  const install = await requestSnapshotInstall({
-    replicaDbPath: service.dbPath,
-    checkpointsRoot: receiveOptions.checkpointsRoot,
-    generationIndex: transfer.descriptor.lastIncludedIndex,
-    expectedIdentity: resolveExpectedIdentityValue(
-      receiveOptions.expectedIdentity),
-    expectedReplicaIdentity: service.replicaId,
-  });
-  if (install.outcome !== RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED) {
-    return orchestrationResult(INSTALL_ORCHESTRATION.INSTALL_REJECTED,
-      {transfer, install});
-  }
-  let replacement;
-  try {
-    replacement = await options.createPartitionService(
-      buildReplacementServiceOptions(service));
-  } catch (error) {
-    return orchestrationResult(INSTALL_ORCHESTRATION.RECREATE_FAILED, {
-      transfer,
-      install,
-      detail: error.message,
-    });
-  }
-  try {
-    options.registerReplacementService(replacement);
-  } catch (error) {
-    return orchestrationResult(INSTALL_ORCHESTRATION.REGISTER_FAILED, {
-      transfer,
-      install,
-      service: replacement,
-      detail: error.message,
-    });
-  }
-  return orchestrationResult(INSTALL_ORCHESTRATION.INSTALLED_AND_RECREATED, {
-    transfer,
-    install,
-    service: replacement,
-  });
-}
-
 export {
   buildSnapshotCatchupIdentity,
   buildSnapshotCatchupIdentityFromCache,
+  createCheckpointSealer,
   dispatchSnapshotCatchup,
   listInFlightGenerationIndexes,
-  orchestrateSnapshotCatchupInstall,
+  resolveFollowerNodeId,
+  snapshotCheckpointIdentityKey,
 };

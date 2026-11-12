@@ -28,19 +28,39 @@ const RAFT_SNAPSHOT_CATCHUP_DISPATCH_OUTCOME = Object.freeze({
   CHECKPOINT_CREATION_FAILED: 'checkpoint_creation_failed',
   SOCKET_UNAVAILABLE: 'socket_unavailable',
   TRANSFER_ABORTED: 'transfer_aborted',
+  // The caller's signal aborted the dispatch before a transfer began.
+  CANCELLED: 'dispatch_cancelled',
+  // The generation sealed for the follower does not name it: this leader
+  // has not applied the follower's admission, so nothing it can seal now is
+  // installable by that follower.
+  GENERATION_OMITS_FOLLOWER: 'generation_omits_follower',
 });
 
-// Typed outcomes of one follower-side install orchestration run. Only
-// INSTALLED_AND_RECREATED represents recovery progress; INSTALL_REJECTED
-// deliberately does NOT recreate — the old state boots per the S2 marker
-// semantics.
+// Typed outcomes of one follower-side install orchestration run. The
+// replica is untouched and running after RECEIVE_FAILED and
+// RECREATE_NOT_ADMITTED (decided before the shutdown). Every later outcome
+// carries `recreation`, the recreation owner's typed answer for the replica
+// it stopped: only INSTALLED_AND_RECREATED is recovery progress;
+// INSTALL_REJECTED, INSTALL_FAULTED and SHUTDOWN_FAILED reopen the state the
+// install left (the S2 marker semantics pick the database at open);
+// RECREATE_PENDING is the owner still retrying, RECREATE_RELEASED the owner
+// handing the stopped replica to its removal or cleanup owner.
 const RAFT_SNAPSHOT_CATCHUP_INSTALL_OUTCOME = Object.freeze({
   INSTALLED_AND_RECREATED: 'installed_and_recreated',
   RECEIVE_FAILED: 'receive_failed',
+  RECREATE_NOT_ADMITTED: 'recreate_not_admitted',
   SHUTDOWN_FAILED: 'shutdown_failed',
   INSTALL_REJECTED: 'install_rejected',
-  RECREATE_FAILED: 'recreate_failed',
-  REGISTER_FAILED: 'register_failed',
+  INSTALL_FAULTED: 'install_faulted',
+  RECREATE_PENDING: 'recreate_pending',
+  RECREATE_RELEASED: 'recreate_released',
+});
+
+// What the recreation owner answers for a replica stopped for an install.
+const RAFT_SNAPSHOT_RECREATION_STATE = Object.freeze({
+  RUNNING: 'running',
+  PENDING: 'pending',
+  RELEASED: 'released',
 });
 
 // Deployment-default cluster identity (S4 identity pinning, superseded by
@@ -79,5 +99,6 @@ export {
   RAFT_SNAPSHOT_CATCHUP_DISPATCH_OUTCOME,
   RAFT_SNAPSHOT_CATCHUP_INSTALL_OUTCOME,
   RAFT_SNAPSHOT_DEFAULT_CLUSTER_ID,
+  RAFT_SNAPSHOT_RECREATION_STATE,
   buildSnapshotCatchupDecision,
 };

@@ -20,6 +20,9 @@ import {
   RAFT_RS_CHECKPOINT_PEER_RESERVATION_FIELDS,
   RAFT_RS_CHECKPOINT_PEER_RESERVATION_OPTIONAL_FIELDS,
   RAFT_RS_CHECKPOINT_REASON,
+  RAFT_RS_IMAGE_EPOCH_RULE,
+  NOT_A_RAFT_RS_IMAGE_ENTITY_KIND,
+  raftRsImageEntityKindRules,
 } from './snapshot-checkpoint-constants.js';
 import {learnerAdmissionMatchesReservation} from './raft-rs-committed-membership-context.js';
 import {validatedRaftRsPeerIdentityReservations} from
@@ -157,14 +160,30 @@ function validRaftRsDescriptor(raftRs) {
       reservation.learnerAdmission, reservation, raftRs));
 }
 
+// The envelope against the closed table of raft-rs image entity kinds: a
+// kind the table does not name describes no raft-rs image; a kind whose
+// identity defines membershipEpoch as the image's own configuration
+// generation is held to that; for an opaque-epoch kind the epoch is the
+// identity owner's and is not compared with anything in the image.
+function epochHoldsEntityKindRule(descriptor) {
+  const rules = raftRsImageEntityKindRules(descriptor.entity.kind);
+  if (rules === NOT_A_RAFT_RS_IMAGE_ENTITY_KIND) {
+    return false;
+  }
+  return rules.epoch === RAFT_RS_IMAGE_EPOCH_RULE.OPAQUE ||
+    BigInt(descriptor.raftRs.membershipGenerationIndex) ===
+      BigInt(descriptor.membershipEpoch);
+}
+
+// The image's raft-rs section against its envelope: the same group and the
+// same applied boundary (index and term), all quantities of that group's log.
 function raftRsDescriptorMatchesEnvelope(descriptor) {
   const raftRs = descriptor.raftRs;
   return validRaftRsDescriptor(raftRs) &&
     raftRs.groupId === descriptor.raftGroupId &&
     BigInt(raftRs.appliedIndex) === BigInt(descriptor.lastIncludedIndex) &&
     BigInt(raftRs.appliedTerm) === BigInt(descriptor.lastIncludedTerm) &&
-    BigInt(raftRs.membershipGenerationIndex) ===
-      BigInt(descriptor.membershipEpoch);
+    epochHoldsEntityKindRule(descriptor);
 }
 
 // Structural field checks beyond exact-object shape, evaluated as one table:

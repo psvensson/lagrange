@@ -5,9 +5,13 @@
 // (which carry only `raft_rs_peer_identity`), and enforces the
 // `PREPARED_TRANSACTIONS_PENDING` gate and HLC non-regression across compaction.
 
-import {ENTITY_TYPE} from '../constants/addresses.js';
 import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
 import {RaftRsDurableStore} from './raft-rs-durable-store.js';
+import {
+  NOT_A_RAFT_RS_IMAGE_ENTITY_KIND,
+  RAFT_RS_IMAGE_CONTENT_RULE,
+  raftRsImageEntityKindRules,
+} from './snapshot-checkpoint-constants.js';
 
 const NO_COMMITTED_HLC = '0';
 const RAFT_RS_PEER_TABLE = 'raft_rs_peer_identity';
@@ -93,7 +97,9 @@ function computeRaftRsMaxCommittedHlc(copyDb, groupId) {
  * dropping all `_raft_*` tables; message-group checkpoints additionally drop
  * all non-`sqlite_` tables except `raft_rs_peer_identity`.
  * @param {Object} copyDb - Open better-sqlite3 checkpoint copy.
- * @param {string} [entityKind] - Descriptor entity kind.
+ * @param {string} entityKind - Descriptor entity kind: one the closed table
+ *   of raft-rs image entity kinds names (the creation owner refuses any
+ *   other before it scrubs).
  */
 function scrubRaftRsCheckpointPayload(copyDb, entityKind) {
   const raftTables = copyDb.prepare(SELECT_RAFT_LOCAL_TABLES_SQL)
@@ -102,7 +108,8 @@ function scrubRaftRsCheckpointPayload(copyDb, entityKind) {
   for (const table of raftTables) {
     copyDb.exec(`DROP TABLE IF EXISTS ${quotedIdentifier(table)}`);
   }
-  if (entityKind !== ENTITY_TYPE.PARTITION) {
+  if (raftRsImageEntityKindRules(entityKind).content ===
+      RAFT_RS_IMAGE_CONTENT_RULE.PEER_IDENTITY_ONLY) {
     const tables = copyDb.prepare(SELECT_USER_TABLES_SQL)
       .all()
       .map(({name}) => name)
@@ -129,7 +136,11 @@ function validateRaftRsPayloadTables(payloadDb, descriptor) {
     .all()
     .map(({name}) => name)
     .filter((name) => !name.startsWith('sqlite_'));
-  if (descriptor.entity?.kind === ENTITY_TYPE.PARTITION) {
+  const rules = raftRsImageEntityKindRules(descriptor.entity?.kind);
+  if (rules === NOT_A_RAFT_RS_IMAGE_ENTITY_KIND) {
+    return false;
+  }
+  if (rules.content === RAFT_RS_IMAGE_CONTENT_RULE.PARTITION_STATE) {
     if (!tables.includes(RAFT_RS_PEER_TABLE)) {
       return false;
     }

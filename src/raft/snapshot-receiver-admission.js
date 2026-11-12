@@ -26,6 +26,25 @@ function isSnapshotPeerInConfState(raft, peerId, allowEstablishedReceiver) {
  * @param {Object} options - Receiver path, validated descriptor and CREATE identity.
  * @return {Object} Immutable owner result, not install permission.
  */
+/**
+ * Whether an image can be installed by one receiver at all: a raft-rs
+ * replica image must reserve the receiver's identity and hold the reserved
+ * peer in its committed configuration (learner or voter). An image sealed
+ * before its leader applied the receiver's admission names it nowhere, and
+ * the installer refuses it. An image of another payload kind names no peers.
+ * @param {Object} descriptor - A valid checkpoint descriptor.
+ * @param {string} replicaIdentity - The receiver's replica identity.
+ * @return {boolean}
+ */
+function snapshotImageAdmitsReceiver(descriptor, replicaIdentity) {
+  if (descriptor.payloadKind !== RAFT_CHECKPOINT_PAYLOAD_KIND.RAFT_RS_REPLICA_IMAGE) {
+    return true;
+  }
+  const raft = descriptor.raftRs;
+  const peer = raft.peerReservations.find((row) => row.replicaIdentity === replicaIdentity);
+  return isSnapshotPeerInConfState(raft, peer?.peerId, true);
+}
+
 function inspectSnapshotReceiver({replicaDbPath, descriptor, replicaIdentity,
   stagedDbPath = null, allowEstablishedReceiver = false}) {
   const raft = descriptor?.raftRs;
@@ -67,4 +86,5 @@ function snapshotReceiverStillAdmitted(checkpointsRoot, replicaDbPath, marker) {
   }).outcome === RAFT_OPERATION_OUTCOME.CORE_OK;
 }
 
-export {inspectSnapshotReceiver, snapshotReceiverStillAdmitted};
+export {inspectSnapshotReceiver, snapshotImageAdmitsReceiver,
+  snapshotReceiverStillAdmitted};

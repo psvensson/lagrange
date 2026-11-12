@@ -290,7 +290,7 @@ function openSnapshotTransferSender(options) {
  * chunk-request with a digested binary chunk frame (paced through the
  * optional sender-side token bucket), and finish on complete/abort/close.
  * @param {Object} options {socket, checkpointsRoot, generationIndex,
- *   transferId, chunkSizeBytes?, tokenBucket?, signal?}
+ *   transferId, chunkSizeBytes?, tokenBucket?, signal?, onChunkServed?}
  * @return {Promise<Object>} typed terminal result
  */
 // Serve one requested chunk: read + frame it, pace the send through the
@@ -357,6 +357,7 @@ async function serveSnapshotTransfer(options) {
         if (aborted) {
           return aborted;
         }
+        options.onChunkServed?.();
       }
     }
   } finally {

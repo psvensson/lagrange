@@ -1,3 +1,4 @@
+import {SERVICE_TYPE} from '../../../src/constants/service.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -40,7 +41,7 @@ function identity() {
   return {
     clusterId: 'cluster-fresh-mg',
     raftGroupId: GROUP,
-    entity: {kind: 'message-group', id: GROUP},
+    entity: {kind: SERVICE_TYPE.MESSAGE_GROUP, id: GROUP},
     membershipEpoch: Number(MEMBERSHIP_GENERATION),
   };
 }
@@ -97,7 +98,7 @@ function admissionFixture({terminal = false, operationId = 'fresh-mg-install',
   attemptToken = 'attempt-fresh-mg', now = 20,
   repository = admissionRepository(), owner = null} = {}) {
   const row = {operation_id: operationId, type: OperationType.REPLACE,
-    entity_type: 'message-group', entity_id: GROUP, partition_id: GROUP,
+    entity_type: SERVICE_TYPE.MESSAGE_GROUP, entity_id: GROUP, partition_id: GROUP,
     replica_id: TARGET, target_node_id: 'node-d', workflow_step: 'SENDING',
     updated_at: 11, completed_at: terminal ? 12 : null,
     create_admission_state: null, create_admission_token: null,

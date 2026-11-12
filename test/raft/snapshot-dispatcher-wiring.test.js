@@ -41,6 +41,10 @@ import {
 } from '../../src/transport/inproc-transport.js';
 import {createSealedSourceGeneration} from './snapshot-catchup-fixture.js';
 import {waitForCondition} from './bulk-transfer-socket-fixture.js';
+import {
+  createInProcBulkNetwork,
+  nodeDirectoryCache,
+} from './snapshot-wiring-inproc-fixture.js';
 import {genesisStamp} from
   '../../src/raft/raft-committed-membership-stamp.js';
 import {
@@ -288,20 +292,26 @@ test('the wired dispatcher types SOCKET_UNAVAILABLE for an unreachable ' +
   }
 });
 
-test('the wired dispatcher serves a real transfer over an existing bulk ' +
-  'connection (no driver token bucket — pacing stays with sendChunkFrame)',
+test('the wired dispatcher dials its own bulk connection, serves a real ' +
+  'transfer over it and closes it (no driver token bucket — pacing stays ' +
+  'with sendChunkFrame); an open connection to the node is never reused',
 async (t) => {
   const fixture = await createProductionShapedGeneration('wiring-serve-');
-  const registry = createBulkTransferChannelRegistry({nodeId: NODE_ID});
-  const peerRegistry = createBulkTransferChannelRegistry(
-    {nodeId: PEER_NODE_ID});
+  const network = createInProcBulkNetwork();
+  const registry = network.registryFor(NODE_ID, `ws://${NODE_ID}:7000`);
+  const peerRegistry = network.registryFor(
+    PEER_NODE_ID, `ws://${PEER_NODE_ID}:7000`);
   const receiveRoot = fs.mkdtempSync(
     path.join(os.tmpdir(), 'wiring-serve-recv-'));
   try {
-    const pair = createInProcWebSocketPair();
-    registry.adoptIncomingSocket({nodeId: PEER_NODE_ID, ws: pair.a});
-    const peerConnection = peerRegistry.adoptIncomingSocket(
-      {nodeId: NODE_ID, ws: pair.b});
+    // The peer receives on whatever bulk connection it adopts.
+    const receptions = [];
+    peerRegistry.onAdopt((connection) => receptions.push(
+      receiveSnapshotTransfer({
+        socket: bulkConnectionTransferSocket(connection),
+        checkpointsRoot: receiveRoot,
+        expectedIdentity: PRODUCTION_IDENTITY,
+      })));
     const service = {
       partitionId: PARTITION_ID,
       tableName: STATE_TABLE,
@@ -310,28 +320,44 @@ async (t) => {
     };
     attachSnapshotCatchupDispatcher({
       service,
-      systemTableCache: createStubSystemTableCache(),
+      systemTableCache: nodeDirectoryCache({
+        nodes: {[PEER_NODE_ID]: `ws://${PEER_NODE_ID}:7000`},
+        readEpoch: () => null,
+      }),
       messageRouter: createStubRouter(registry),
     });
-    const [dispatched, received] = await Promise.all([
-      service.onSnapshotCatchupNeeded(buildSnapshotCatchupDecision({
-        outcome: RAFT_SNAPSHOT_CATCHUP_DECISION_OUTCOME.INSTALL_SNAPSHOT,
-        followerAddress: FOLLOWER_ADDRESS,
-        startIndex: 1,
-        failedIndex: fixture.boundaryIndex,
-        leaderBoundary: fixture.boundaryIndex,
-      })),
-      receiveSnapshotTransfer({
-        socket: bulkConnectionTransferSocket(peerConnection),
-        checkpointsRoot: receiveRoot,
-        expectedIdentity: PRODUCTION_IDENTITY,
-      }),
-    ]);
+    const decision = buildSnapshotCatchupDecision({
+      outcome: RAFT_SNAPSHOT_CATCHUP_DECISION_OUTCOME.INSTALL_SNAPSHOT,
+      followerAddress: FOLLOWER_ADDRESS,
+      startIndex: 1,
+      failedIndex: fixture.boundaryIndex,
+      leaderBoundary: fixture.boundaryIndex,
+    });
+    const dispatched = await service.onSnapshotCatchupNeeded(decision);
     t.equal(dispatched.outcome,
       RAFT_SNAPSHOT_CATCHUP_DISPATCH_OUTCOME.SERVED,
-      'the production dispatcher serves over the existing bulk connection');
-    t.equal(received.outcome, RAFT_SNAPSHOT_TRANSFER_OUTCOME.COMPLETED,
+      'the production dispatcher serves over the connection it dialled');
+    t.equal((await receptions[0]).outcome,
+      RAFT_SNAPSHOT_TRANSFER_OUTCOME.COMPLETED,
       'the peer receives the complete generation');
+    t.equal(network.dials(), 1, 'one dial for the one dispatch');
+    t.equal(registry.getConnection(PEER_NODE_ID), null,
+      'the dispatch closed its connection when it ended');
+
+    // An OPEN connection to the follower's node is that node's own transfer
+    // towards this one: the lane is busy, typed, and nothing is sent into it.
+    const pair = createInProcWebSocketPair();
+    const foreign = registry.adoptIncomingSocket(
+      {nodeId: PEER_NODE_ID, ws: pair.a});
+    const strayFrames = [];
+    pair.b.on('message', (frame) => strayFrames.push(frame));
+    const busy = await service.onSnapshotCatchupNeeded(decision);
+    t.equal(busy.outcome,
+      RAFT_SNAPSHOT_CATCHUP_DISPATCH_OUTCOME.SOCKET_UNAVAILABLE,
+      'a busy lane is the typed socket_unavailable refusal');
+    t.equal(foreign.isOpen(), true, 'the other transfer\'s connection stays open');
+    t.same(strayFrames, [], 'and receives nothing from this dispatch');
+    t.equal(network.dials(), 1, 'no dial replaced it');
   } finally {
     registry.closeAll();
     peerRegistry.closeAll();

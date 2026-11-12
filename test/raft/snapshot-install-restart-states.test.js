@@ -13,13 +13,17 @@ import {
   createSqliteStateMachineCheckpoint,
 } from '../../src/raft/snapshot-checkpoint-store.js';
 import {
+  inspectSnapshotInstallArtifactsForGeneration,
+  removeSnapshotInstallArtifactsForGeneration,
   requestSnapshotInstall,
   resolvePendingSnapshotInstall,
 } from '../../src/raft/snapshot-install.js';
 import {
   RAFT_SNAPSHOT_BOUNDARY_STATE_KEY,
+  RAFT_SNAPSHOT_INSTALL_DETAIL,
   RAFT_SNAPSHOT_INSTALL_DIRNAME,
   RAFT_SNAPSHOT_INSTALL_MARKER_FILE,
+  RAFT_SNAPSHOT_INSTALL_MARKER_KIND,
   RAFT_SNAPSHOT_INSTALL_NO_REJECTION,
   RAFT_SNAPSHOT_INSTALL_OUTCOME,
   RAFT_SNAPSHOT_INSTALL_REJECTION,
@@ -325,31 +329,105 @@ test('installed and rejected markers resolve per the state machine',
         }
       });
 
-    await t.test('a rejected marker boots the old state and is retained',
+    // Supersedes the retained-rejection answer of quest
+    // raft-snapshot-atomic-install (recorded in the log of quest
+    // partition-checkpoint-epoch-generation, R09): a retained REJECTED marker
+    // blocked the replica's cleanup for ever, so the opener consumes it.
+    await t.test('a rejected marker boots the old state and is consumed, ' +
+      'with any staging file left beside it', async (t) => {
+      const fixture = await createFixture();
+      try {
+        writeMarker(fixture, {
+          state: RAFT_SNAPSHOT_INSTALL_STATE.REJECTED,
+          installId: 'was-rejected',
+          generationIndex: fixture.generationIndex,
+          rejectionReason:
+              RAFT_SNAPSHOT_INSTALL_REJECTION.IDENTITY_MISMATCH,
+        });
+        const staging = path.join(fixture.checkpointsRoot,
+          RAFT_SNAPSHOT_INSTALL_DIRNAME, RAFT_SNAPSHOT_INSTALL_STAGING_FILE);
+        fs.writeFileSync(staging, 'staging left by a crash');
+        const resolution = resolvePendingSnapshotInstall({
+          replicaDbPath: fixture.targetDbPath,
+          checkpointsRoot: fixture.checkpointsRoot,
+        });
+        t.equal(resolution.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.REJECTED,
+          'a prior rejection boots the old state');
+        t.equal(resolution.reason,
+          RAFT_SNAPSHOT_INSTALL_REJECTION.IDENTITY_MISMATCH,
+          'the recorded typed reason is surfaced');
+        t.equal(resolution.detail,
+          RAFT_SNAPSHOT_INSTALL_DETAIL.PRIOR_REJECTION_CONSUMED);
+        t.notOk(markerExists(fixture), 'the marker is consumed');
+        t.notOk(fs.existsSync(staging), 'and so is the staging file');
+        t.equal(resolvePendingSnapshotInstall({
+          replicaDbPath: fixture.targetDbPath,
+          checkpointsRoot: fixture.checkpointsRoot,
+        }).outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.NO_INSTALL,
+        'the next open finds no install');
+      } finally {
+        fixture.close();
+      }
+    });
+
+    // Consumption is for a follower catch-up rejection and one recorded
+    // before any install was classified (above). A fresh-create rejection
+    // belongs to its create generation: the opener keeps it and touches no
+    // staging file; that generation's cleanup removes it.
+    for (const [label, kind, consumed] of [
+      ['follower catch-up',
+        RAFT_SNAPSHOT_INSTALL_MARKER_KIND.RAFT_RS_FOLLOWER_CATCHUP, true],
+      ['fresh-create',
+        RAFT_SNAPSHOT_INSTALL_MARKER_KIND.RAFT_RS_FRESH_CREATE, false]]) {
+      await t.test(`a rejected ${label} marker met at open is ` +
+        `${consumed ? 'consumed' : 'retained for its create generation'}`,
       async (t) => {
         const fixture = await createFixture();
         try {
+          const generation = {replicaId: 'restart-states-r2',
+            replicaCreatedAt: 7, attemptToken: 'attempt-7'};
           writeMarker(fixture, {
             state: RAFT_SNAPSHOT_INSTALL_STATE.REJECTED,
-            installId: 'was-rejected',
-            generationIndex: fixture.generationIndex,
-            rejectionReason:
-              RAFT_SNAPSHOT_INSTALL_REJECTION.IDENTITY_MISMATCH,
-          });
-          const resolution = resolvePendingSnapshotInstall({
+            installId: 'was-rejected', generationIndex: fixture.generationIndex,
+            rejectionReason: RAFT_SNAPSHOT_INSTALL_REJECTION.STAGING_LOST,
+            kind, createAuthority: {...generation, partitionId: 'rows-p1'},
+            preInstallDigest: 'absent'});
+          fs.writeFileSync(stagingFilePath(fixture), 'another install staged this');
+          const open = () => resolvePendingSnapshotInstall({
             replicaDbPath: fixture.targetDbPath,
-            checkpointsRoot: fixture.checkpointsRoot,
-          });
-          t.equal(resolution.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.REJECTED,
-            'a prior rejection boots the old state');
-          t.equal(resolution.reason,
-            RAFT_SNAPSHOT_INSTALL_REJECTION.IDENTITY_MISMATCH,
-            'the recorded typed reason is surfaced');
-          t.ok(markerExists(fixture), 'the marker is retained for diagnosis');
+            checkpointsRoot: fixture.checkpointsRoot});
+          const resolution = open();
+          t.same({outcome: resolution.outcome, reason: resolution.reason,
+            detail: resolution.detail, marker: markerExists(fixture),
+            staging: fs.existsSync(stagingFilePath(fixture))},
+          {outcome: RAFT_SNAPSHOT_INSTALL_OUTCOME.REJECTED,
+            reason: RAFT_SNAPSHOT_INSTALL_REJECTION.STAGING_LOST,
+            detail: consumed ?
+              RAFT_SNAPSHOT_INSTALL_DETAIL.PRIOR_REJECTION_CONSUMED :
+              RAFT_SNAPSHOT_INSTALL_DETAIL.PRIOR_REJECTION_RETAINED,
+            marker: !consumed, staging: !consumed});
+          if (consumed) return;
+          t.equal(open().detail,
+            RAFT_SNAPSHOT_INSTALL_DETAIL.PRIOR_REJECTION_RETAINED,
+            'every later open answers the same retained rejection');
+          // Its own generation's cleanup owns it once the staging beside it
+          // is gone (a staging file it is not bound to is not its to remove).
+          const cleanup = {checkpointsRoot: fixture.checkpointsRoot, ...generation};
+          t.equal(inspectSnapshotInstallArtifactsForGeneration(cleanup).owned
+            === true, false, 'not owned beside a staging file of another install');
+          fs.rmSync(stagingFilePath(fixture));
+          t.equal(inspectSnapshotInstallArtifactsForGeneration({...cleanup,
+            attemptToken: 'another-attempt'}).owned === true, false,
+          'not owned by another create generation');
+          const removal = await removeSnapshotInstallArtifactsForGeneration(cleanup);
+          t.equal(removal.allAbsent, true,
+            'the create generation\'s cleanup removes the retained rejection');
+          t.notOk(markerExists(fixture));
         } finally {
           fixture.close();
         }
       });
+    }
   });
 
 test('no commit watermark is observable ahead of installed state', async (t) => {
@@ -382,5 +460,53 @@ test('no commit watermark is observable ahead of installed state', async (t) => 
     }
   } finally {
     fixture.close();
+  }
+});
+
+// Quest partition-checkpoint-epoch-generation (hand-over coverage model, C2):
+// a replica's cleanup owns that replica's own install debris in any state,
+// its staging file included; anything else still refuses the cleanup.
+test('a cleanup owns its replica\'s follower catch-up and rejected install ' +
+  'artifacts in any state, staging included', async (t) => {
+  const REPLICA = 'restart-states-r2';
+  const followerCatchup = (state, replicaId = REPLICA) => ({
+    state, installId: 'catch-up-install', generationIndex: 4,
+    kind: RAFT_SNAPSHOT_INSTALL_MARKER_KIND.RAFT_RS_FOLLOWER_CATCHUP,
+    createAuthority: {entityId: 'rows', entityType: 'partition',
+      partitionId: 'rows-p1', replicaId},
+    preInstallDigest: 'absent'});
+  const legacy = (state) => ({state, installId: 'legacy-install',
+    generationIndex: 4});
+  const cases = [
+    ['follower catch-up STAGED after a swap that threw',
+      followerCatchup(RAFT_SNAPSHOT_INSTALL_STATE.STAGED), true],
+    ['follower catch-up INSTALLED before its marker was cleared',
+      followerCatchup(RAFT_SNAPSHOT_INSTALL_STATE.INSTALLED), true],
+    ['follower catch-up REJECTED with staging after a crash',
+      followerCatchup(RAFT_SNAPSHOT_INSTALL_STATE.REJECTED), true],
+    ['a rejection recorded over an older staging file',
+      legacy(RAFT_SNAPSHOT_INSTALL_STATE.REJECTED), true],
+    ['a follower catch-up marker naming another replica',
+      followerCatchup(RAFT_SNAPSHOT_INSTALL_STATE.STAGED, 'another-replica'),
+      false],
+    ['an unclassified install that is not a rejection',
+      legacy(RAFT_SNAPSHOT_INSTALL_STATE.STAGED), false],
+  ];
+  for (const [label, marker, owned] of cases) {
+    const fixture = await createFixture();
+    try {
+      writeMarker(fixture, marker);
+      fs.writeFileSync(stagingFilePath(fixture), 'staging');
+      const generation = {checkpointsRoot: fixture.checkpointsRoot,
+        replicaId: REPLICA, replicaCreatedAt: 1, attemptToken: 'attempt'};
+      const inspection = inspectSnapshotInstallArtifactsForGeneration(generation);
+      t.equal(inspection.owned === true, owned, `${label}: owned ${owned}`);
+      const removal = await removeSnapshotInstallArtifactsForGeneration(generation);
+      t.equal(removal.allAbsent, owned, `${label}: removed ${owned}`);
+      t.equal(markerExists(fixture), !owned);
+      t.equal(fs.existsSync(stagingFilePath(fixture)), !owned);
+    } finally {
+      fixture.close();
+    }
   }
 });

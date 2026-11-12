@@ -43,6 +43,8 @@ import {
   REPLICA_HANDLER_LOG_MSG,
   REPLICA_HANDLER_TYPEOF,
 } from './replica-handler-constants.js';
+import {refuseCreateDuringInstallEpisode} from
+  './replica-recreate-after-install-admission.js';
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const CREATE_OWNER_DEFERRED_CODE = 'CREATE_OWNER_DEFERRED';
 const EMPTY_ADMISSION_STEPS_HISTORY = Object.freeze([]);
@@ -740,6 +742,8 @@ function assignReplicaHandlerCreateAdmissionMethods(ReplicaHandler) {
       }
     }
     async handleCreateReplica(request) {
+      const heldByInstall = refuseCreateDuringInstallEpisode(this, request);
+      if (heldByInstall) return heldByInstall;
       const operationId = request?.[ReplicaOperationField.OPERATION_ID];
       const operationType = explicitCreateOperationType(request);
       const admissionEvidence = internalCreateAdmissionEvidence(

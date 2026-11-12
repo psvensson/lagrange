@@ -55,6 +55,18 @@ const RAFT_SNAPSHOT_TRANSFER_ABORT_REASON = Object.freeze({
   PUBLICATION_INVALID: 'publication_invalid',
   TRANSFER_CANCELLED: 'transfer_cancelled',
   CHANNEL_CLOSED: 'channel_closed',
+  // The receiving node holds no running replica of the offered raft group.
+  REPLICA_NOT_FOUND: 'replica_not_found',
+  // The receiving node's replica of the group is stopped for a snapshot
+  // install it already received: it returns on its own and takes no offer.
+  REPLICA_INSTALLING: 'replica_installing',
+  // The receiving node's lifecycle does not admit recreating the replica
+  // after an install now (its row is unobservable, not yet syncing, or owned
+  // by removal or cleanup): nothing was received and the replica runs on.
+  RECEIVER_NOT_ADMITTED: 'receiver_not_admitted',
+  // The receiving node runs more than one replica of the offered group: the
+  // offer names a group, not a replica, so nothing is received for either.
+  RECEIVER_AMBIGUOUS: 'receiver_ambiguous',
 });
 
 // Terminal transfer outcomes for one sender/receiver run.
