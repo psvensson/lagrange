@@ -84,6 +84,14 @@ logs, required proof artifacts and paths outside `solve/`, and removes
 nothing when any member fails. The inventory is where an old path is looked
 up: its shard names the bundle, the bundle's sha256 and its release URL.
 Historical documents that cite a relocated path stay as they are.
+The local reader in `scripts/solve/relocation-records.js` verifies inventory,
+shard and verification identity, member hashes, containment, uniqueness and
+protected-member exclusions. Both relocation acceptance and documentation
+validation consume that owner. Reading records never retrieves an asset or
+certifies present-day remote availability. Inventory custody establishes byte
+reachability, not authority to supersede an active design: each retention
+Quest must retain its reviewed eligible path/source/hash/role list and protected
+current-file identities.
 
 Relocation records live in `solve/changes/evidence-relocation/<quest>/`,
 named by the record quest (`--record-to`, default the `--id` quest):

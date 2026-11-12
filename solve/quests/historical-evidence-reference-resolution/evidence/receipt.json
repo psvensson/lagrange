@@ -1,0 +1,50 @@
+{
+  "schema": "test-receipt/1",
+  "status": "complete",
+  "receipts": [
+    {
+      "id": "old-reference",
+      "passed": true
+    },
+    {
+      "id": "custody-controls",
+      "passed": true
+    },
+    {
+      "id": "catalog-compatibility",
+      "passed": true
+    },
+    {
+      "id": "focused-regressions",
+      "passed": true
+    },
+    {
+      "id": "static-checks",
+      "passed": true
+    },
+    {
+      "id": "independent-review",
+      "passed": true
+    }
+  ],
+  "limitations": [
+    "No landing, upload, removal, publication, current budget or semantic supersession acceptance.",
+    "Catalog validates local recorded custody, not current remote asset availability.",
+    "Map/Set/iterator replacement is not exhaustively tested; static snapshot filesystem assumed."
+  ],
+  "evidence": {
+    "packet": "/tmp/lagrange-retained-reference-r3-20261112",
+    "sourceManifestSha256": "b83714e492ceb07e2d25351784e9763ac64873a7a0032188f0aa09d64b44516e",
+    "commands": "command-receipts.json",
+    "focused": "focused.log",
+    "sourceDerived": "source-derived-controls.json",
+    "priorRejectedPacket": "/tmp/lagrange-retained-reference-stronger-20261112/r2-final-candidate-manifest.json"
+  },
+  "review": {
+    "verifier": "subagent:01a1ce51-fcb6-7880-bad1-a4aa6324e162",
+    "verdict": "approve",
+    "packetSha256": "58cb6aac2622e7de28a3fe0e8965346967c26a0d2f1d8777df4093722a10f56d",
+    "sourceManifestSha256": "b83714e492ceb07e2d25351784e9763ac64873a7a0032188f0aa09d64b44516e",
+    "scope": "bounded source implementation only; no landing or relocation"
+  }
+}
