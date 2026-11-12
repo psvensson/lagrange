@@ -15,7 +15,8 @@ import {settledTurn, turnChainValue} from '../../src/raft/raft-rs-turn-answer.js
 import {createReplicaRuntimePublication, publishReplicaRuntime} from
   '../../src/node/replica-runtime-publication.js';
 import {captureReplicaRuntimeObservation} from '../../src/node/replica-runtime-observation.js';
-import {attachPartitionRuntimePublication, PARTITION_RUNTIME_PUBLICATION_REFUSED} from
+import {attachPartitionRuntimePublication, bindPartitionRuntimeLifecycle,
+  PARTITION_RUNTIME_PUBLICATION_REFUSED} from
   '../../src/partition/partition-runtime-publication.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
@@ -141,6 +142,24 @@ test('an admitted producer cannot publish into another handler sharing its lifec
     t.equal(published.service, service);
     t.equal(service.runtimePublication.assertCurrent(service), true,
       'the unchanged original destination remains publishable');
+  });
+
+test('first lifecycle binding refuses a foreign owner before installing immutable runtime identity',
+  async (t) => {
+    const f = await publicationFixture(t);
+    const service = f.construct();
+    const foreign = new ReplicaStateMachine({nodeId: f.row.node_id,
+      systemTableCache: f.store.cache, controlPlaneSystemTableGateway: f.store.gateway});
+    t.teardown(() => foreign.clear());
+    t.throws(() => bindPartitionRuntimeLifecycle(service, foreign, f.row), REFUSED);
+    t.equal(service.runtimeBinding, undefined,
+      'a foreign first binder cannot poison the original producer with an immutable association');
+    t.equal(service.runtimePublication.assertCurrent(service), true,
+      'the original retained admission survives the refused binding');
+    const binding = bindPartitionRuntimeLifecycle(service, f.owner, f.row);
+    t.equal(binding.owner, f.owner);
+    t.equal(f.publish(service).runtimeBinding, binding,
+      'the original owner still binds and publishes the exact same runtime');
   });
 
 test('replacement consumes its original predecessor and revokes the old publication', async (t) => {
