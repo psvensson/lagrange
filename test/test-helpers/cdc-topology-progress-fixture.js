@@ -19,8 +19,8 @@ import {countCdcObligations} from '../../src/partition/partition-cdc-obligation-
 import {createDurableSourceMessageGroupService, createMessageGroupServiceRow,
   createTopologyCache, deliveredEventsOf, putTopologyRow, removeTopologyRow} from
   '../topology/cdc-group-propagation-service-harness.js';
-import {CDC_TABLE as TABLE, applyCommitted, committedQueryOf, settleTicks, shutdownAll,
-  startLeader} from
+import {CDC_TABLE as TABLE, applyCommitted, committedQueryOf, recordFixtureSetupStage,
+  settleTicks, shutdownAll, startLeader} from
   './participant-transaction-fixture.js';
 import {delayedClock, driveAfterBackoff} from './cdc-delivery-progress-fixture.js';
 
@@ -159,9 +159,13 @@ function buildSubscriber(f, index) {
 // (role SUBSCRIBER_ROLE_PROPAGATION); its recipients are the source group and
 // the target groups of its propagation. `otherSubscriber` adds the second,
 // role-less subscriber some older witnesses use.
-async function topologyProgressFixture(t, {otherSubscriber = true} = {}) {
+async function topologyProgressFixture(t, {otherSubscriber = true, setupTrace = null} = {}) {
+  recordFixtureSetupStage(setupTrace, 'topology-setup:begin');
   const clock = delayedClock();
-  const {leader, proposed} = await startLeader({tableName: TABLE, timeSource: clock});
+  recordFixtureSetupStage(setupTrace, 'topology-leader:begin');
+  const {leader, proposed} = await startLeader({tableName: TABLE, timeSource: clock, setupTrace});
+  recordFixtureSetupStage(setupTrace, 'topology-leader:end');
+  recordFixtureSetupStage(setupTrace, 'topology-compose:begin');
   const f = {clock, leader, proposed, ready: false, projection: controlledProjection(),
     sourceCalls: [], sourceDigests: [], targetCalls: [], subscriberCalls: [], hooks: [],
     sourceMode: RESPONSE.NATIVE, targetMode: RESPONSE.WEAK, otherMode: RESPONSE.NATIVE,
@@ -172,19 +176,31 @@ async function topologyProgressFixture(t, {otherSubscriber = true} = {}) {
   });
   Object.assign(f, buildTopology(f));
   leader.controllablePort.setRole(RAFT_ROLE.FOLLOWER);
+  recordFixtureSetupStage(setupTrace, 'topology-compose:end');
+  recordFixtureSetupStage(setupTrace, 'topology-subscribe-propagation:begin');
   await leader.subscribeToCDCWithHandshake(buildSubscriber(f, 0),
     {subscriberId: 'topology-progress-0', role: PARTITION_SERVICE_CDC.SUBSCRIBER_ROLE_PROPAGATION});
+  recordFixtureSetupStage(setupTrace, 'topology-subscribe-propagation:end');
   if (otherSubscriber) {
+    recordFixtureSetupStage(setupTrace, 'topology-subscribe-other:begin');
     await leader.subscribeToCDCWithHandshake(buildSubscriber(f, 1),
       {subscriberId: 'topology-progress-1'});
+    recordFixtureSetupStage(setupTrace, 'topology-subscribe-other:end');
   }
+  recordFixtureSetupStage(setupTrace, 'topology-source-row:begin');
   addTopologySourceRow(f, 'A');
   leader.controllablePort.setRole(RAFT_ROLE.LEADER);
+  recordFixtureSetupStage(setupTrace, 'topology-source-row:end');
+  recordFixtureSetupStage(setupTrace, 'topology-settle:begin');
   await settleTicks();
+  recordFixtureSetupStage(setupTrace, 'topology-settle:end');
+  recordFixtureSetupStage(setupTrace, 'topology-preconditions:begin');
   assert.equal(f.subscriberCalls.length, 0);
   assert.deepEqual(countCdcObligations(leader.db), {owed: 1, delivered: 0});
   f.ready = true;
   f.drive = () => driveAfterBackoff(leader, clock);
+  recordFixtureSetupStage(setupTrace, 'topology-preconditions:end');
+  recordFixtureSetupStage(setupTrace, 'topology-setup:end');
   return f;
 }
 

@@ -66,9 +66,9 @@ function observeRetryDecisions(t, service, barrier = false, trace = null) {
 }
 
 
-async function durableFixture(t, maxAttempts, trace = null) {
+async function durableFixture(t, maxAttempts, trace = null, setupTrace = null) {
   trace?.('fixture-start');
-  const f = await topologyProgressFixture(t);
+  const f = await topologyProgressFixture(t, {setupTrace});
   trace?.('fixture-ready');
   f.topology.deliveryRetryMaxAttempts = maxAttempts;
   f.topology.deliveryRetryDelayMs = RETRY_DELAY_MS;
@@ -113,8 +113,8 @@ async function assertStoppedDrive(f, drive) {
   assertDurableDebt(f);
 }
 
-async function barrierFixture(t, maxAttempts, trace = null) {
-  const f = await durableFixture(t, maxAttempts, trace);
+async function barrierFixture(t, maxAttempts, trace = null, setupTrace = null) {
+  const f = await durableFixture(t, maxAttempts, trace, setupTrace);
   f.observed = observeRetryDecisions(t, f.topology, true, trace);
   return f;
 }
@@ -126,7 +126,7 @@ test('foreground consumer rechecks stop after actual ATTEMPTS_EXHAUSTED',
     const trace = (stage, fields = {}) => stages.push({stage,
       elapsedMs: diagnosticNow() - started, ...fields});
     t.after(() => t.diagnostic(JSON.stringify({cdcForegroundStages: stages})));
-    const f = await barrierFixture(t, 1, trace);
+    const f = await barrierFixture(t, 1, trace, {stages, started});
     trace('drive-start');
     const drive = f.drive();
     assert.equal((await f.observed.reached).state, RETRY.ATTEMPTS_EXHAUSTED);

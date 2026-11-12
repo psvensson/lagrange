@@ -12,6 +12,7 @@ import {createHash} from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import {performance} from 'node:perf_hooks';
 import Database from 'better-sqlite3';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -84,6 +85,15 @@ const SETTLE_TICKS = 25;
 // partition-rs-raft-restart-fixture.js), so the controllable replicas apply
 // it at index 2 too and the PREPAREs this fixture builds carry that origin.
 const GENERATION_ORIGIN_INDEX = 2;
+const fixtureDiagnosticNow = performance.now.bind(performance);
+
+// Passive setup observations share the caller's existing buffer and time origin.
+// This data-only recorder never invokes a supplied observation callback.
+function recordFixtureSetupStage(setupTrace, stage, replicaId = null) {
+  if (setupTrace === null) return;
+  setupTrace.stages.push({stage, elapsedMs: fixtureDiagnosticNow() - setupTrace.started,
+    replicaId});
+}
 
 const V3 = Object.freeze({
   PREPARE_COMMAND: 'PARTICIPANT_PREPARE',
@@ -428,13 +438,22 @@ async function retireFixtureParticipants(replicas, failure, message) {
 // applies the partition's generation origin first, at GENERATION_ORIGIN_INDEX
 // (transaction admission enabled on the partition, design 0.0.13).
 async function startReplica(replicaId, extra) {
+  const setupTrace = extra?.setupTrace ?? null;
+  recordFixtureSetupStage(setupTrace, 'replica-create:begin', replicaId);
   const replica = createReplica(replicaId, extra);
+  recordFixtureSetupStage(setupTrace, 'replica-create:end', replicaId);
   try {
+    recordFixtureSetupStage(setupTrace, 'replica-initialize:begin', replicaId);
     await replica.initialize();
+    recordFixtureSetupStage(setupTrace, 'replica-initialize:end', replicaId);
+    recordFixtureSetupStage(setupTrace, 'replica-listeners:begin', replicaId);
     recordResidentAppliedProgressListeners(replica);
+    recordFixtureSetupStage(setupTrace, 'replica-listeners:end', replicaId);
     if (extra?.generationOrigin !== false && originOf(replica) === null) {
+      recordFixtureSetupStage(setupTrace, 'replica-generation-origin:begin', replicaId);
       replica.controllablePort.committedIndex = GENERATION_ORIGIN_INDEX - 1;
       applyCommitted(replica, originCommandOf());
+      recordFixtureSetupStage(setupTrace, 'replica-generation-origin:end', replicaId);
     }
     return replica;
   } catch (error) {
@@ -443,8 +462,12 @@ async function startReplica(replicaId, extra) {
   }
 }
 async function startLeader(extra) {
+  const setupTrace = extra?.setupTrace ?? null;
+  recordFixtureSetupStage(setupTrace, 'leader-replica:begin', REPLICAS[0]);
   const leader = await startReplica(REPLICAS[0], extra);
+  recordFixtureSetupStage(setupTrace, 'leader-replica:end', REPLICAS[0]);
   try {
+    recordFixtureSetupStage(setupTrace, 'leader-controls:begin', REPLICAS[0]);
     leader.role = 'leader';
     leader.isLeader = true;
     leader.leaderId = leader.replicaId;
@@ -453,8 +476,11 @@ async function startLeader(extra) {
     leader.controllablePort.setProposeHandler(async (entry) => {
       proposed.push({...entry});
     });
+    recordFixtureSetupStage(setupTrace, 'leader-controls:end', REPLICAS[0]);
     if (extra?.generationOrigin !== false && extra?.releaseAdmission !== false) {
-      await resumeFixtureParticipantAdmission(leader);
+      recordFixtureSetupStage(setupTrace, 'leader-admission:begin', REPLICAS[0]);
+      await resumeFixtureParticipantAdmission(leader, setupTrace);
+      recordFixtureSetupStage(setupTrace, 'leader-admission:end', REPLICAS[0]);
     }
     return {leader, proposed};
   } catch (error) {
@@ -497,7 +523,8 @@ function changeFixtureParticipantMembership(leader, replicaId = REPLICAS[1]) {
     memberIds: [...memberIds]});
 }
 
-async function resumeFixtureParticipantAdmission(leader) {
+async function resumeFixtureParticipantAdmission(leader, setupTrace = null) {
+  recordFixtureSetupStage(setupTrace, 'admission-membership:begin', leader.replicaId);
   const port = leader.controllablePort;
   if (port) {
     setFixtureParticipantMembership(leader, [leader.replicaId],
@@ -512,6 +539,7 @@ async function resumeFixtureParticipantAdmission(leader) {
       term: port.term, leaderId: leader.replicaId, gateOpen: true,
     });
   }
+  recordFixtureSetupStage(setupTrace, 'admission-membership:end', leader.replicaId);
   if (originOf(leader) === null) {
     const priorProposeHandler = port?.proposeHandler ?? null;
     if (port) {
@@ -521,7 +549,9 @@ async function resumeFixtureParticipantAdmission(leader) {
     }
     let enabled;
     try {
+      recordFixtureSetupStage(setupTrace, 'admission-enable-origin:begin', leader.replicaId);
       enabled = await enableParticipantTransactionAdmission(leader);
+      recordFixtureSetupStage(setupTrace, 'admission-enable-origin:end', leader.replicaId);
     } finally {
       if (port) port.setProposeHandler(priorProposeHandler);
     }
@@ -534,13 +564,17 @@ async function resumeFixtureParticipantAdmission(leader) {
   // As release recovery does before it runs a cutover: an admission whose
   // proof no longer matches the current runtime is closed first.
   invalidateParticipantReleaseAdmission(leader);
+  recordFixtureSetupStage(setupTrace, 'admission-facts:begin', leader.replicaId);
   const facts = await readParticipantReleaseFacts(handler, leader);
+  recordFixtureSetupStage(setupTrace, 'admission-facts:end', leader.replicaId);
   const release = releaseIdentityOf({partitionId: leader.partitionId,
     targetBuildDigest: facts.buildDigest,
     configurationKey: facts.membership.configurationKey,
     membershipGenerationIndex: facts.membership.membershipGenerationIndex});
+  recordFixtureSetupStage(setupTrace, 'admission-resume:begin', leader.replicaId);
   const outcome = await resumeParticipantCutoverAdmission(handler, leader,
     {release, census: [facts]});
+  recordFixtureSetupStage(setupTrace, 'admission-resume:end', leader.replicaId);
   if (outcome !== 'resumed') {
     throw new Error(`fixture participant release refused: ${outcome}`);
   }
@@ -1108,6 +1142,7 @@ async function decidedOnTwoReplicas(tx, operations, setup) {
 }
 
 export {
+  recordFixtureSetupStage,
   changeFixtureParticipantMembership,
   cleanOwnedParticipantFixture,
   deferFixtureParticipantMembership,
