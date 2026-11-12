@@ -216,14 +216,22 @@ async function transitionAuthoritativeReplicaGeneration(
   newState,
   context = {},
 ) {
-  if (!isAuthoritativeLifecycleTransitionRequest(evidence, newState)) {
+  // Capture only canonical source facts and the caller's transition values
+  // before queueing. A later caller edit cannot redirect the lane, read,
+  // expected destination, or exact lifecycle predicate to another intent.
+  const source = Object.freeze({
+    ...buildReplicaLifecycleMutationPredicateFromRow(evidence),
+    address: evidence?.address,
+  });
+  const request = Object.freeze({...context});
+  if (!isAuthoritativeLifecycleTransitionRequest(source, newState)) {
     return false;
   }
-  const admission = context.runtimeObservation ?
-    context.runtimeObservation.admission : captureReplicaAdmission(stateMachine, evidence.service_id);
-  return turnChainValue(runSerializedReplicaMutation(stateMachine, evidence.service_id,
+  const admission = request.runtimeObservation ?
+    request.runtimeObservation.admission : captureReplicaAdmission(stateMachine, source.service_id);
+  return turnChainValue(runSerializedReplicaMutation(stateMachine, source.service_id,
     () => pendingTurn(applyAuthoritativeLifecycleInLane(
-      stateMachine, evidence, newState, context, admission,
+      stateMachine, source, newState, request, admission,
     ))));
 }
 

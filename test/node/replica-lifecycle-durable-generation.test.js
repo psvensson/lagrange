@@ -37,6 +37,8 @@ import {
 import {ReplicaHandler} from '../../src/node/replica-handler.js';
 import {advanceReplicaRevision, captureReplicaAdmission} from
   '../../src/node/replica-state-machine-serialization.js';
+import {observeAuthoritativeReplicaLifecycle, readAuthoritativePartitionLeader} from
+  '../../src/node/replica-state-machine-lifecycle-observation.js';
 import {createReplicaRuntimePublication, publishReplicaRuntime} from
   '../../src/node/replica-runtime-publication.js';
 import {attachPartitionRuntimePublication} from
@@ -451,6 +453,66 @@ test('recovery second read cannot absorb a delayed prior-generation debt complet
   t.equal(stateMachine.replicaRevisionByReplicaId.get(replicaId), acceptedRevision);
   t.equal(store.mutations.length, mutationsBefore, 'no stale lifecycle or leader write occurs');
 });
+
+test('canonical lifecycle observations own immutable row snapshots from the shared gateway', async (t) => {
+  initializeEnvironment();
+  const row = serviceRow('observation-owned-snapshot', ReplicaState.ACTIVE, 100);
+  const leader = partitionRow();
+  const store = createLifecycleRowStore({services: [row], partitions: [leader]});
+  const read = store.gateway.readAuthoritativeRows.bind(store.gateway);
+  const borrowed = [];
+  store.gateway.readAuthoritativeRows = async (...args) => {
+    const result = await read(...args);
+    borrowed.push(result.rows[0]);
+    return result;
+  };
+  const stateMachine = createStateMachine(store);
+  const observed = await observeAuthoritativeReplicaLifecycle(stateMachine, row.service_id);
+  const observedLeader = await readAuthoritativePartitionLeader(stateMachine, row.partition_id);
+  t.equal(observed.available, true);
+  t.not(observed.row, borrowed[0], 'lifecycle evidence owns its row independently of the gateway result');
+  t.not(observedLeader, borrowed[1], 'leader evidence shares the same snapshot boundary');
+  t.equal(Object.isFrozen(observed.row), true);
+  t.equal(Object.isFrozen(observedLeader), true);
+  Object.assign(borrowed[0], {service_id: 'foreign', status: ReplicaState.FAILED,
+    address: 'foreign/partition/foreign', state_entered_at: 999});
+  Object.assign(borrowed[1], {leader_node_id: 'foreign', updated_at: 999});
+  t.same(observed.row, row, 'coalesced consumers cannot rewrite prior lifecycle evidence');
+  t.same(observedLeader, leader, 'coalesced consumers cannot rewrite prior leader evidence');
+});
+
+for (const mutateBorrowed of [false, true]) {
+  test(`recovery retains its first observed row through its second read: borrowed mutation ${mutateBorrowed}`,
+    async (t) => {
+      initializeEnvironment();
+      const row = serviceRow('recovery-borrowed-source', ReplicaState.CREATING, 100);
+      const foreign = serviceRow('recovery-unrelated-source', ReplicaState.ACTIVE, 500, 'foreign-partition');
+      const store = createLifecycleRowStore({services: [row], partitions: [partitionRow()]});
+      store.durable[SERVICES].set(foreign.service_id, cloneRow(foreign));
+      const read = store.gateway.readAuthoritativeRows.bind(store.gateway);
+      let borrowed;
+      store.gateway.readAuthoritativeRows = async (...args) => {
+        const result = await read(...args);
+        if (args[0] === SERVICES && !borrowed) borrowed = result.rows[0];
+        return result;
+      };
+      const stateMachine = createStateMachine(store, {now: () => 300});
+      const held = holdRecoveryRead(store, 2);
+      const recovering = stateMachine.handleNodeRecovery({systemTableCache: store.cache});
+      await held.started;
+      t.equal(stateMachine.getState(row.service_id)?.state, ReplicaState.CREATING,
+        'the original first observation was accepted before continuation was suspended');
+      if (mutateBorrowed) Object.assign(borrowed, foreign);
+      held.release();
+      t.equal((await recovering).total, 1, 'the same original source completes its recovery transition');
+      t.equal(store.durable[SERVICES].get(row.service_id)?.status, ReplicaState.FAILED);
+      t.equal(stateMachine.getState(row.service_id)?.state, ReplicaState.FAILED);
+      t.same(store.durable[SERVICES].get(foreign.service_id), foreign,
+        'borrowed object edits cannot redirect the recovery effect to another replica');
+      t.equal(stateMachine.getState(foreign.service_id), null);
+      t.equal(store.mutations.filter((mutation) => mutation.tableName === SERVICES).length, 1);
+    });
+}
 
 test('unchanged recovery settles its original debt and source failure leaves it owned', async (t) => {
   initializeEnvironment();

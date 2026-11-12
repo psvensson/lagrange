@@ -39,6 +39,8 @@ import {REPLICA_LIFECYCLE_TABLE} from
   '../../src/raft/raft-rs-replica-lifecycle-constants.js';
 import {RAFT_RS_OPENING_HISTORY as HISTORY} from
   '../../src/raft/raft-rs-opening-history-constants.js';
+import {registerOriginalSeedRuntimeHostingTests} from
+  './seed-original-runtime-hosting-test-cases.js';
 
 const NODE_ID = 'original-startup-node';
 const NODE_ADDRESS = 'http://127.0.0.1:18081';
@@ -509,6 +511,8 @@ function pausedWorkEntered(entered, work) {
     assert.fail('the actual owner completed without reaching its controlled await');
   })]);
 }
+
+registerOriginalSeedRuntimeHostingTests({fixture, replicaOptions, queueReplica, pausedWorkEntered});
 
 async function assertShutdownJoins(shutdown) {
   let settled = false;

@@ -116,6 +116,33 @@ test('published runtime authority survives its own lifecycle status revisions an
     t.equal(hostServices.get(f.row.service_id), service);
   });
 
+test('an admitted producer cannot publish into another handler sharing its lifecycle owner',
+  async (t) => {
+    const f = await publicationFixture(t);
+    const service = f.construct();
+    const foreign = new ReplicaHandler({nodeId: f.row.node_id, ownerIncarnation: 1,
+      replicaStateMachine: f.owner, systemTableCache: f.store.cache,
+      controlPlaneSystemTableGateway: f.store.gateway, cdcIntegrationService: {},
+      createPartitionService: () => { throw new Error('no construction in destination control'); }});
+    t.teardown(async () => {
+      foreign.shuttingDown = true;
+      await foreign.participantReleaseRecovery.shutdown();
+      foreign.localServices.clear();
+    });
+    t.throws(() => publishReplicaRuntime(foreign, {replicaId: f.row.service_id, service,
+      sourceEvidence: f.row, lifecycleOwner: f.owner}), REFUSED,
+    'a matching lifecycle owner does not replace the original handler admission');
+    t.equal(foreign.getTrackedService(f.row.service_id), null);
+    t.equal(foreign.localReplicas.has(f.row.service_id), false);
+    t.equal(f.handler.getTrackedService(f.row.service_id), null);
+    t.equal(service.runtimePublication.assertCurrent(service), true,
+      'refused foreign destination does not consume the original admitted producer');
+    const published = f.publish(service);
+    t.equal(published.service, service);
+    t.equal(service.runtimePublication.assertCurrent(service), true,
+      'the unchanged original destination remains publishable');
+  });
+
 test('replacement consumes its original predecessor and revokes the old publication', async (t) => {
   const f = await publicationFixture(t);
   const first = f.construct();

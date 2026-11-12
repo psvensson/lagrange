@@ -16,6 +16,8 @@ import {
   buildObservedReplicaWhereClause,
   guardedUpdateApplied,
 } from './failure-detector-control-plane-guards.js';
+import {buildReplicaLifecycleMutationPredicateFromRow} from
+  './replica-state-machine-lifecycle-observation.js';
 
 async function markFailureDetectorReplicasAsFailed(detector, nodeId, now) {
   // Keep class method dispatch so tests or subclasses can override each step.
@@ -39,10 +41,14 @@ async function markFailureDetectorReplicasAsFailed(detector, nodeId, now) {
 
 async function markFailureDetectorPartitionReplicaAsFailed(
   detector,
-  replica,
+  callerReplica,
   nodeId,
   now,
 ) {
+  const replica = Object.freeze({
+    ...buildReplicaLifecycleMutationPredicateFromRow(callerReplica),
+    address: callerReplica?.address,
+  });
   try {
     const stateMachine = detector.getPartitionReplicaStateMachine(nodeId);
     const applied = await stateMachine
@@ -102,10 +108,14 @@ async function markFailureDetectorPartitionReplicaAsFailed(
 
 async function markFailureDetectorMessageGroupReplicaAsFailed(
   detector,
-  replica,
+  callerReplica,
   nodeId,
   now,
 ) {
+  const replica = Object.freeze({
+    ...buildObservedReplicaWhereClause(callerReplica),
+    address: callerReplica?.address,
+  });
   try {
     const result = await detector.getControlPlaneSystemTableGateway().submitMutation({
       operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,

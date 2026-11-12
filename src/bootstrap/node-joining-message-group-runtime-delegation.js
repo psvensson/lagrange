@@ -5,6 +5,7 @@ import {isEndpointCurrentForNode} from
 import {captureReplicaRuntimeObservation, isReplicaRuntimeObservationCurrent,
   runtimeObservationChangedError} from '../node/replica-runtime-observation.js';
 import {settlePartitionServiceActiveAdmission} from './shared/partition-service-activation.js';
+import {shutdownExactReplicaRuntime} from '../node/replica-runtime-cleanup-custody.js';
 
 const {
   COLUMN,
@@ -99,18 +100,40 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
     const options =
       directOptions ||
       this.resolveJoinReplicaOptions(serviceId, UNIFIED_SERVICE_TYPE.PARTITION);
-    const partition = this.partitionServices.get(options.replicaId);
+    const hostServices = this.partitionServices;
+    const partition = hostServices.get(options.replicaId);
     if (!partition) {
       return {status: SERVICE_LIFECYCLE_STATE.STOPPED};
     }
-    if (typeof partition.shutdown === 'function') {
-      await partition.shutdown();
+    const replicaId = options.replicaId;
+    const handler = this.replicaHandler;
+    const owner = this.replicaStateMachine;
+    const lifecycleHolder = this.replicaLifecycleOwner;
+    const bootIncarnation = this.bootIncarnation;
+    const handlerIncarnation = handler?.ownerIncarnation;
+    const ownerIncarnation = owner?.ownerIncarnation;
+    const local = handler?.localReplicas.get(replicaId);
+    const binding = partition.runtimePublication.retainedPublishedBinding(partition);
+    if (!handler || !owner || handler.replicaStateMachine !== owner ||
+        binding.owner !== owner || binding.ownerIncarnation !== ownerIncarnation ||
+        local?.service !== partition || local.runtimeBinding !== binding ||
+        handler.localServices.get(replicaId) !== partition) {
+      throw runtimeObservationChangedError(replicaId);
     }
-    // partition.shutdown() already retired its exact transport handler in the
-    // replica lane; a raw by-address unregister here could remove a successor's.
-    this.partitionServices.delete(options.replicaId);
-    this.replicaHandler?.localServices?.delete?.(options.replicaId);
-    this.replicaHandler?.localReplicas?.delete?.(options.replicaId);
+    await shutdownExactReplicaRuntime(handler, replicaId, options.partitionId, partition);
+    // A shutdown completion owns its original tuple, never the current
+    // occupant of that logical ID. Prepublication failures stay in the
+    // factory's exact-object custody and cannot enter this published stop.
+    if (this.partitionServices === hostServices && this.replicaHandler === handler &&
+        this.replicaStateMachine === owner && handler.replicaStateMachine === owner &&
+        this.replicaLifecycleOwner === lifecycleHolder && this.bootIncarnation === bootIncarnation &&
+        handler.ownerIncarnation === handlerIncarnation && owner.ownerIncarnation === ownerIncarnation &&
+        hostServices.get(replicaId) === partition && handler.localServices.get(replicaId) === partition &&
+        handler.localReplicas.get(replicaId) === local) {
+      hostServices.delete(replicaId);
+      handler.localServices.delete(replicaId);
+      handler.localReplicas.delete(replicaId);
+    }
     return {status: SERVICE_LIFECYCLE_STATE.STOPPED};
   }
   /**

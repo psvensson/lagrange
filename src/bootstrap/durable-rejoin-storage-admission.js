@@ -33,13 +33,16 @@ async function assertDurableRejoinStorageAdmission(
     throw durableRejoinAuthorityChanged(replicaId);
   }
   const admission = captureReplicaAdmission(replicaStateMachine, replicaId);
+  const debt = replicaStateMachine.canonicalLeaderClearDebtByReplicaId.get(replicaId);
+  const isCurrent = () => isReplicaAdmissionCurrent(replicaStateMachine, replicaId, admission) &&
+    replicaStateMachine.canonicalLeaderClearDebtByReplicaId.get(replicaId) === debt;
   const restore = async () => {
-    if (!isReplicaAdmissionCurrent(replicaStateMachine, replicaId, admission)) {
+    if (!isCurrent()) {
       throw durableRejoinAuthorityChanged(replicaId);
     }
     const observation = await observeAuthoritativeReplicaLifecycle(replicaStateMachine, replicaId);
     if (observation.available !== true ||
-        !isReplicaAdmissionCurrent(replicaStateMachine, replicaId, admission) ||
+        !isCurrent() ||
         !rowMatchesReplicaLifecyclePredicate(observation.row, source) ||
         !installAuthoritativeReplicaLifecycleInLane(replicaStateMachine, replicaId,
           observation.row, admission)) throw durableRejoinAuthorityChanged(replicaId);

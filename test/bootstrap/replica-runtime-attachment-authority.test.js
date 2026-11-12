@@ -16,6 +16,8 @@ import {PARTITION_RUNTIME_PUBLICATION_REFUSED} from
 import {bindRegisteredReplicaHandler} from '../test-helpers/replica-handler-identity-fixture.js';
 import {createLifecycleServiceRow, createLifecycleStateStore} from
   '../test-helpers/lifecycle-state-store.js';
+import {registerReplicaRuntimeFactoryAuthorityTests} from
+  './replica-runtime-factory-authority-test-cases.js';
 
 function quietLogger() {
   return {
@@ -56,6 +58,8 @@ function restoreFixture(t, beforeAuthoritativeRead) {
   });
   return {service, row, store, owner, handler, options};
 }
+
+registerReplicaRuntimeFactoryAuthorityTests(restoreFixture);
 
 async function publishedRestore(t, f) {
   const admission = await assertDurableRejoinStorageAdmission(f.owner, f.options);
@@ -206,6 +210,109 @@ test('missing shutdown method is a retained release failure', async (t) => {
   t.equal(f.handler.pendingRuntimeShutdowns.has(partition), false);
 });
 
+test('joined runtime cleanup retains the first actual primary without another shutdown attempt', async (t) => {
+  const f = restoreFixture(t);
+  const {partition, shutdown} = await publishedRestore(t, f);
+  const entered = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  const primary = new Error('original CREATE failure joining existing release');
+  const later = new Error('later CREATE failure cannot replace original cause');
+  const cleanup = new Error('controlled exact-runtime shutdown failure');
+  let attempts = 0;
+  partition.shutdown = async () => {
+    attempts += 1;
+    entered.resolve();
+    await release.promise;
+    throw cleanup;
+  };
+  const first = f.handler.fenceFailedReplicaCreateRuntime(f.row.replica_id,
+    f.row.partition_id, partition);
+  await entered.promise;
+  const cell = f.handler.pendingRuntimeShutdowns.get(partition);
+  const second = f.handler.fenceFailedReplicaCreateRuntime(f.row.replica_id,
+    f.row.partition_id, partition, primary);
+  const third = f.handler.fenceFailedReplicaCreateRuntime(f.row.replica_id,
+    f.row.partition_id, partition, later);
+  const results = Promise.allSettled([first, second, third]);
+  t.equal(f.handler.pendingRuntimeShutdowns.get(partition), cell);
+  t.equal(attempts, 1, 'adding causal context does not start another physical release');
+  release.resolve();
+  for (const result of await results) {
+    t.equal(result.status, 'rejected');
+    t.equal(result.reason?.cause, primary, 'every joined caller retains the first actual primary');
+    t.equal(result.reason?.errors?.[1], cleanup);
+  }
+  partition.shutdown = shutdown;
+  t.equal(await f.handler.fenceFailedReplicaCreateRuntime(f.row.replica_id,
+    f.row.partition_id, partition, later), true, 'explicit retry releases the same owned object');
+});
+
+test('a live runtime cleanup carrier cannot be replaced or discarded', async (t) => {
+  const f = restoreFixture(t);
+  const {partition, shutdown} = await publishedRestore(t, f);
+  const entered = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  partition.shutdown = async () => {
+    entered.resolve();
+    await release.promise;
+    return shutdown();
+  };
+  const pending = f.handler.fenceFailedReplicaCreateRuntime(f.row.replica_id,
+    f.row.partition_id, partition);
+  await entered.promise;
+  const originalMap = f.handler.pendingRuntimeShutdowns;
+  const cell = originalMap.get(partition);
+  t.throws(() => {
+    f.handler.pendingRuntimeShutdowns = new Map([[partition, cell]]);
+  }, TypeError, 'owner construction seals the exact cleanup carrier');
+  t.equal(f.handler.pendingRuntimeShutdowns, originalMap);
+  release.resolve();
+  t.equal(await pending, true);
+  t.equal(originalMap.has(partition), false,
+    'completion releases the same map/cell that originally retained the runtime');
+});
+
+test('a wrong-subject cleanup cannot acquire the original runtime primary failure', async (t) => {
+  const f = restoreFixture(t);
+  const {partition, shutdown} = await publishedRestore(t, f);
+  const entered = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  const foreignPrimary = new Error('foreign replica must not acquire the retained cause');
+  const originalPrimary = new Error('first failure of the original admitted subject');
+  const cleanup = new Error('controlled exact-runtime shutdown failure');
+  let attempts = 0;
+  partition.shutdown = async () => {
+    attempts += 1;
+    entered.resolve();
+    await release.promise;
+    throw cleanup;
+  };
+  const first = f.handler.fenceFailedReplicaCreateRuntime(f.row.replica_id,
+    f.row.partition_id, partition);
+  await entered.promise;
+  const cell = f.handler.pendingRuntimeShutdowns.get(partition);
+  await t.rejects(f.handler.fenceFailedReplicaCreateRuntime('foreign-replica',
+    f.row.partition_id, partition, foreignPrimary),
+  {code: 'REPLICA_RUNTIME_CLEANUP_CUSTODY_CHANGED'});
+  t.equal(f.handler.pendingRuntimeShutdowns.get(partition), cell,
+    'rejected subject cannot replace the original custody cell');
+  t.equal(cell.failure.primary, null,
+    'rejected subject cannot latch its cause before identity validation');
+  const joined = f.handler.fenceFailedReplicaCreateRuntime(f.row.replica_id,
+    f.row.partition_id, partition, originalPrimary);
+  const results = Promise.allSettled([first, joined]);
+  t.equal(attempts, 1, 'the legitimate join retains the original physical attempt');
+  release.resolve();
+  for (const result of await results) {
+    t.equal(result.status, 'rejected');
+    t.equal(result.reason?.cause, originalPrimary);
+    t.equal(result.reason?.errors?.[1], cleanup);
+  }
+  partition.shutdown = shutdown;
+  t.equal(await f.handler.fenceFailedReplicaCreateRuntime(f.row.replica_id,
+    f.row.partition_id, partition), true);
+});
+
 test('join attachment retains the exact restored ACTIVE source without another activation',
   async (t) => {
     const f = restoreFixture(t);
@@ -297,6 +404,52 @@ test('held restore read refuses a changed lifecycle admission without adopting i
       'old read completion neither installs a snapshot nor issues a newer admission');
     t.equal(f.store.mutations.length, 0);
 });
+
+for (const debtDisposition of ['replaced', 'removed', 'unchanged']) {
+  test(`durable restore preserves original debt ownership when ${debtDisposition} during read`, async (t) => {
+    const f = restoreFixture(t);
+    await assertDurableRejoinStorageAdmission(f.owner, f.options);
+    f.store.setBeforeMutation((mutation) => {
+      if (mutation.tableName === 'partitions') throw new Error('leader effect unavailable');
+    });
+    t.equal(await f.owner.transition(f.row.replica_id, 'failed', {
+      partitionId: f.row.partition_id, timestamp: 200, reason: 'retained-old-debt',
+    }), true);
+    f.store.setBeforeMutation(null);
+    const originalState = f.owner.replicas.get(f.row.replica_id);
+    const originalDebt = f.owner.canonicalLeaderClearDebtByReplicaId.get(f.row.replica_id);
+    t.ok(originalDebt, 'actual durable transition retained its leader-clear obligation');
+    const successor = {...f.row, state_entered_at: 300, updated_at: 300,
+      created_at: 250, create_attempt_token: 'restored-successor-attempt'};
+    f.store.durable.services.set(f.row.replica_id, {...successor});
+    f.store.project('services', successor);
+    const entered = Promise.withResolvers();
+    const release = Promise.withResolvers();
+    f.store.setBeforeAuthoritativeRead(async () => { entered.resolve(); await release.promise; });
+    const options = {...f.options, lifecycleAuthority: successor};
+    const pending = assertDurableRejoinStorageAdmission(f.owner, options);
+    await entered.promise;
+    const revision = f.owner.replicaRevisionByReplicaId.get(f.row.replica_id);
+    const expectedDebt = debtDisposition === 'replaced' ? Object.freeze({...originalDebt}) :
+      debtDisposition === 'removed' ? undefined : originalDebt;
+    if (expectedDebt) f.owner.canonicalLeaderClearDebtByReplicaId.set(f.row.replica_id, expectedDebt);
+    else f.owner.canonicalLeaderClearDebtByReplicaId.delete(f.row.replica_id);
+    release.resolve();
+    if (debtDisposition === 'unchanged') {
+      t.same((await pending).row, successor,
+        'unchanged original admission/debt permits its own accepted successor install');
+      t.equal(f.owner.getState(f.row.replica_id)?.state, 'active');
+      t.equal(f.owner.canonicalLeaderClearDebtByReplicaId.has(f.row.replica_id), false);
+    } else {
+      await t.rejects(pending, {code: 'DURABLE_REJOIN_LIFECYCLE_AUTHORITY_CHANGED'});
+      t.equal(f.owner.replicas.get(f.row.replica_id), originalState);
+      t.equal(f.owner.replicaRevisionByReplicaId.get(f.row.replica_id), revision,
+        'read completion cannot adopt a new local revision');
+      t.equal(f.owner.canonicalLeaderClearDebtByReplicaId.get(f.row.replica_id), expectedDebt,
+        'old restore never deletes or recreates changed debt');
+    }
+  });
+}
 
 test('seed handler attachment asserts the exact installed ACTIVE generation ' +
   'without publishing a second snapshot', async (t) => {

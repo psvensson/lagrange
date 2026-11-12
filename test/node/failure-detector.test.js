@@ -14,12 +14,14 @@ import {
   FAILURE_REPAIR_INTENT_ABSENT_VALUE,
   FAILURE_REPAIR_INTENT_REASON_CODE,
   FAILURE_REPAIR_INTENT_TRANSITION_TYPE,
+  createInMemoryFailureRepairIntentRecorder,
 } from '../../src/node/failure-repair-intent-contract.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {createCanonicalLifecycleServiceRow} from
+import {createCanonicalLifecycleServiceRow, createLifecycleServiceRow,
+  createLifecycleStateStore, createPartitionRow} from
   '../test-helpers/lifecycle-state-store.js';
 
 const TEST_EVENT_NODE_FAILURE = 'event:nodeFailure';
@@ -585,6 +587,71 @@ test('FailureDetector - marks replicas as failed on node failure', async (t) => 
   );
   t.end();
 });
+
+for (const replicaType of ['partition', 'message_group_replica']) {
+  for (const mutateSubject of [false, true]) {
+    test(`FailureDetector retains ${replicaType} repair subject with caller mutation ${mutateSubject}`,
+      async (t) => {
+        const source = {...createLifecycleServiceRow({
+          replicaId: 'observed-replica', partitionId: 'observed-partition',
+          nodeId: 'observed-node', status: ReplicaStatus.ACTIVE,
+          createdAt: 10, stateEnteredAt: 100, updatedAt: 100,
+        }), service_type: replicaType,
+        ...(replicaType === 'message_group_replica' ? {
+          partition_id: null, group_id: 'observed-group',
+        } : {})};
+        const other = {...source, service_id: 'foreign-replica', replica_id: 'foreign-replica',
+          node_id: 'foreign-node', partition_id: replicaType === 'partition' ? 'foreign-partition' : null,
+          group_id: replicaType === 'message_group_replica' ? 'foreign-group' : null,
+          address: 'foreign-node/partition/foreign-replica'};
+        const store = createLifecycleStateStore({services: [source, other],
+          partitions: [createPartitionRow({partitionId: 'observed-partition', nodeId: 'observed-node'})],
+          preserveRowsExactly: true});
+        const entered = Promise.withResolvers();
+        const release = Promise.withResolvers();
+        store.setBeforeMutation(async (mutation) => {
+          if (mutation.tableName !== SYSTEM_TABLE_NAME.SERVICES) return;
+          entered.resolve();
+          await release.promise;
+        });
+        // This is the actual production normalizer/recorder boundary. Its
+        // in-memory storage does not establish replicated repair durability.
+        const recorder = createInMemoryFailureRepairIntentRecorder();
+        const detector = new FailureDetector({nodeId: 'failure-observer',
+          systemTableCache: store.cache, cdcIntegrationService: {},
+          controlPlaneSystemTableGateway: store.gateway,
+          failureRepairIntentRecorder: recorder, now: () => 200});
+        const events = [];
+        detector.on('replicaFailed', (event) => events.push(event));
+        const callerSubject = {...source};
+        const pending = replicaType === 'partition' ?
+          detector.markReplicaAsFailed(callerSubject, source.node_id, 200) :
+          detector.markMessageGroupReplicaAsFailed(callerSubject, source.node_id, 200);
+        await entered.promise;
+        if (mutateSubject) Object.assign(callerSubject, other);
+        release.resolve();
+        await pending;
+        t.equal(store.durable.services.get(source.service_id).status, ReplicaStatus.FAILED,
+          'the actual source predicate applied before its continuation');
+        t.same(store.durable.services.get(other.service_id), other,
+          'the substituted subject remains byte-for-byte unchanged');
+        const records = recorder.getRecords();
+        t.equal(records.length, 1);
+        t.equal(records[0].serviceId, source.service_id);
+        t.equal(records[0].nodeId, source.node_id);
+        t.equal(records[0].sourceNodeId, 'failure-observer');
+        t.equal(records[0].observedAt, 200);
+        const subjectField = replicaType === 'partition' ? 'partitionId' : 'groupId';
+        const sourceField = replicaType === 'partition' ? 'partition_id' : 'group_id';
+        t.equal(records[0][subjectField], source[sourceField],
+          'repair intent keeps the exact originally observed entity');
+        t.equal(events.length, 1);
+        t.equal(events[0].serviceId, source.service_id);
+        t.equal(events[0][subjectField], source[sourceField],
+          'wake event cannot be redirected by a later caller edit');
+      });
+  }
+}
 
 test('FailureDetector - detects node recovery', async (t) => {
   const mockCDC = createMockCDCService();

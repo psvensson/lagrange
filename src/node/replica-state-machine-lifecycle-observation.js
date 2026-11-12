@@ -166,7 +166,10 @@ async function readOneAuthoritativeRow(
   }
   return Object.freeze({
     available: true,
-    row: result.rows.length === 1 ? result.rows[0] : null,
+    // The selected SQL columns are scalar facts. Own their immutable
+    // snapshot before any consumer carries it across another await; the
+    // gateway result may be shared with other coalesced readers.
+    row: result.rows.length === 1 ? Object.freeze({...result.rows[0]}) : null,
   });
 }
 

@@ -9,6 +9,9 @@ import {
   buildReplicaLifecycleMutationPredicateFromState,
   isReplicaLifecycleMutationPredicate,
 } from '../../src/node/replica-state-machine-lifecycle-observation.js';
+import {runSerializedReplicaMutation} from
+  '../../src/node/replica-state-machine-serialization.js';
+import {pendingTurn, turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 const NODE_ID = 'test-node';
 const SERVICES = 'services';
@@ -212,6 +215,51 @@ function canonicalSnapshotContext(row) {
     durableVersion: row.state_entered_at,
     authoritativeSnapshot: true,
   };
+}
+
+for (const boundary of ['queued', 'read']) {
+  test(`authoritative lifecycle retains immutable caller evidence across ${boundary} boundary`,
+    async (t) => {
+      initializeEnvironment();
+      const source = serviceRow(`immutable-source-${boundary}`, ReplicaState.ACTIVE, 100);
+      const other = serviceRow(`immutable-other-${boundary}`, ReplicaState.ACTIVE, 100);
+      const entered = Promise.withResolvers();
+      const release = Promise.withResolvers();
+      const {mutations, rows, stateMachine} = createOwnerFixture(source, 'applied', {
+        ...(boundary === 'read' ? {async afterServicesRead() {
+          entered.resolve();
+          await release.promise;
+        }} : {}),
+      });
+      rows[SERVICES].set(other.service_id, {...other});
+      let prior = Promise.resolve();
+      if (boundary === 'queued') {
+        prior = turnChainValue(runSerializedReplicaMutation(stateMachine, source.service_id,
+          () => pendingTurn(release.promise.then(() => true))));
+      }
+      const callerEvidence = {...source};
+      const callerContext = {timestamp: 200, reason: 'original-caller-intent'};
+      const pending = stateMachine.transitionAuthoritativeReplicaGeneration(
+        callerEvidence, ReplicaState.FAILED, callerContext);
+      if (boundary === 'read') await entered.promise;
+      Object.assign(callerEvidence, other);
+      callerEvidence.address = 'mutated-caller-address';
+      callerContext.timestamp = 900;
+      callerContext.reason = 'mutated-caller-intent';
+      release.resolve();
+      await prior;
+      t.equal(await pending, true, 'the originally admitted source completes unchanged');
+      t.same(rows[SERVICES].get(other.service_id), other,
+        'caller mutation cannot redirect the pending operation to another replica');
+      t.equal(stateMachine.getState(other.service_id), null,
+        'no local snapshot is installed for the substituted identity');
+      const mutation = mutations.find((item) => item.tableName === SERVICES);
+      t.equal(mutation?.whereClause.service_id, source.service_id);
+      t.equal(mutation?.data.state_entered_at, 200, 'original transition time is retained');
+      t.equal(mutation?.data.trigger_reason, 'original-caller-intent');
+      t.equal(stateMachine.getState(source.service_id)?.serviceAddress, source.address,
+        'the original authoritative address remains associated with the source');
+    });
 }
 
 test('recovery requires the original canonical generation and never borrows ' +

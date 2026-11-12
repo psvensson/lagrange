@@ -199,7 +199,9 @@ class ReplicaHandler extends EventEmitter {
     this.inProgressOperations = new Map();
     this.operationTasks = new Set();
     // Exact unreleased objects, not a second active/routable replica registry.
-    this.pendingRuntimeShutdowns = new Map();
+    Object.defineProperty(this, 'pendingRuntimeShutdowns', {
+      value: new Map(), enumerable: true,
+    });
     this.shuttingDown = false;
     this.shutdownPromise = null;
     this.replicaCreateAdmissionRecoveryBarrier = null;
