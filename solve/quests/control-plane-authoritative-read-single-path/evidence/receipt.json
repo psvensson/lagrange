@@ -1,0 +1,47 @@
+{
+  "schema": "test-receipt/1",
+  "status": "incomplete",
+  "head": "ebb1b35db214ab456dec52b26667c8a514b91141",
+  "receipts": [
+    {
+      "id": "owner-unavailability-no-alternate-success",
+      "passed": false,
+      "reason": "Lab baseline and implementation verification pending."
+    },
+    {
+      "id": "same-owner-finite-recovery",
+      "passed": false,
+      "reason": "Lab baseline and implementation verification pending."
+    },
+    {
+      "id": "local-only-no-consistency-downgrade",
+      "passed": false,
+      "reason": "Lab baseline and implementation verification pending."
+    },
+    {
+      "id": "invalid-mode-refusal",
+      "passed": false,
+      "reason": "Lab baseline and implementation verification pending."
+    },
+    {
+      "id": "no-read-side-routing-fabrication",
+      "passed": false,
+      "reason": "Lab baseline and implementation verification pending."
+    },
+    {
+      "id": "caller-and-status-closure",
+      "passed": false,
+      "reason": "Lab baseline and implementation verification pending."
+    },
+    {
+      "id": "independent-review",
+      "passed": false,
+      "reason": "Lab baseline and implementation verification pending."
+    },
+    {
+      "id": "lab-static-and-affected-cone",
+      "passed": false,
+      "reason": "Lab baseline and implementation verification pending."
+    }
+  ]
+}
