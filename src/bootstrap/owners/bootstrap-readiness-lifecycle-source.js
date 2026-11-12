@@ -300,20 +300,20 @@ const BOOTSTRAP_READINESS_LIFECYCLE_SOURCE_METHODS = Object.freeze({
 
   evaluateFollowedLifecycle(follow, wakeSource) {
     const transitionsBefore = follow.readinessState.getSnapshot().transitionCount;
-    let snapshot;
+    let snapshot = null;
     try {
       snapshot = follow.readinessState.evaluate();
     } catch (error) {
       // Reported, never swallowed: the lifecycle keeps its last projection
-      // and the next evaluation by any consumer raises the same failure.
+      // (no transition) and the next evaluation by any consumer raises the
+      // same failure.
       this.getLogger()?.error?.(LIFECYCLE_FOLLOW_EVALUATION_FAILED, {
         seedNodeId: this.getSeedNodeId(),
         wakeSource,
         error: error?.message || String(error),
       });
-      return;
     }
-    if (snapshot.transitionCount !== transitionsBefore) {
+    if (snapshot !== null && snapshot.transitionCount !== transitionsBefore) {
       this.getLogger()?.info?.(LIFECYCLE_TRANSITION_ON_SOURCE_EVENT, {
         seedNodeId: this.getSeedNodeId(),
         wakeSource,
