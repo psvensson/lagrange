@@ -172,3 +172,23 @@ test('an answered empty service relationship yields a declared empty partition r
   t.same(f.reconciliations.map((call) => call.tableName),
     [TABLES.NODES, TABLES.SERVICES, TABLES.PARTITIONS]);
 });
+
+test('the actual view preserves typed owner unavailability and its existing retry hint', async (t) => {
+  const f = viewFixture();
+  const failure = Object.freeze({...UNAVAILABLE, errorCode: 'ROUTER_CONNECTION_CLOSED',
+    deferRetry: true, retryAfterMs: 25});
+  f.setServices(failure);
+  const unavailable = await f.view.readRows(TABLES.SERVICES, 'SELECT * FROM services');
+  t.equal(unavailable.success, false);
+  t.equal(unavailable.error, failure.error);
+  t.equal(unavailable.errorCode, failure.errorCode, 'the original owner classification survives');
+  t.equal(unavailable.deferRetry, true, 'a typed deferred read cannot become an untyped failure');
+  t.equal(unavailable.retryAfterMs, failure.retryAfterMs, 'the existing owner retry hint is unchanged');
+  t.equal(f.calls.queries.length, 1);
+  f.setServices(answered([SERVICE_ROW]));
+  const healed = await f.view.readRows(TABLES.SERVICES, 'SELECT * FROM services');
+  t.equal(healed.success, true);
+  t.same(healed.rows, [SERVICE_ROW]);
+  t.equal(f.calls.queries.length, 2, 'a later ordinary request returns to the same owner');
+  t.equal(f.view.inFlightReadsByKey.size, 0);
+});
