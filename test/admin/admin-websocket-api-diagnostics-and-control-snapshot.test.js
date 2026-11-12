@@ -339,6 +339,7 @@ test('AdminWebSocketAPI - local control snapshot endpoint shape and non-mutation
       url: '/api/admin/control-snapshot?scope=local',
     });
     const elapsedMs = Date.now() - startedAt;
+    t.comment({adminLocalSnapshotElapsedMs: elapsedMs});
     const payload = response.json();
 
     t.equal(response.statusCode, 200, 'should return 200 for local snapshot');
