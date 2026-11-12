@@ -195,7 +195,7 @@
       ]
     },
     "replica-durable-generation-cleanup": {
-      "description": "Exact durable replica generations, SERVICES-key cleanup ownership, storage deletion, startup admission, and live-row creation form one lifecycle closure contract.",
+      "description": "Exact durable replica generations, SERVICES-key cleanup ownership, storage deletion, startup admission, and live-row creation form one lifecycle closure contract. Snapshot episode settlement does not authorize deletion: exact tracked and retained runtime release must complete, failed physical release retains typed retry debt, the cleanup owner resumes only its issued handoff in the existing serialized removal lane, and recreation drains unpublished products before another acquisition.",
       "owners": [
         "src/node/replica-cleanup-tombstone-owner.js",
         "src/node/replica-handler-remove-execution-methods.js",
@@ -208,13 +208,26 @@
         "src/bootstrap/rejoin-hints-durable-evidence.js",
         "src/cdc/cdc-integration-service-mutations.js",
         "src/node/replica-handler-create-admission-methods.js",
-        "src/node/replica-create-admission-owner.js"
+        "src/node/replica-create-admission-owner.js",
+        "src/node/replica-runtime-cleanup-custody.js",
+        "src/node/replica-handler-runtime-methods.js",
+        "src/node/replica-removal-cleanup.js",
+        "src/node/replica-handler-remove-request-methods.js",
+        "src/node/replica-snapshot-install-owner.js",
+        "src/node/replica-snapshot-install-constants.js",
+        "src/node/replica-cleanup-constants.js"
       ],
       "tests": [
         "test/node/replica-lifecycle-durable-generation.test.js",
         "test/node/replica-handler.test.js",
         "test/partition/partition-service-cleanup-token-schema.test.js",
-        "test/node/replica-create-timeout-replay-custody.test.js"
+        "test/node/replica-create-timeout-replay-custody.test.js",
+        "test/node/replica-cleanup-release-continuation.test.js",
+        "test/node/replica-runtime-exact-custody.test.js",
+        "test/node/replica-snapshot-install-owner.test.js",
+        "test/raft/raft-rs-backend/partition-snapshot-install-failed-release.test.js",
+        "test/raft/raft-rs-backend/partition-snapshot-install-release-control.test.js",
+        "test/node/replica-removal-consensus-exit.test.js"
       ]
     },
     "failed-create-target-authoritative-cleanup": {
@@ -2361,7 +2374,14 @@
             "src/bootstrap/rejoin-hints-durable-evidence.js",
             "src/cdc/cdc-integration-service-mutations.js",
             "src/node/replica-handler-create-admission-methods.js",
-            "src/node/replica-create-admission-owner.js"
+            "src/node/replica-create-admission-owner.js",
+            "src/node/replica-runtime-cleanup-custody.js",
+            "src/node/replica-handler-runtime-methods.js",
+            "src/node/replica-removal-cleanup.js",
+            "src/node/replica-handler-remove-request-methods.js",
+            "src/node/replica-snapshot-install-owner.js",
+            "src/node/replica-snapshot-install-constants.js",
+            "src/node/replica-cleanup-constants.js"
           ]
         }
       ],
@@ -2370,7 +2390,13 @@
         "test/node/replica-lifecycle-durable-generation.test.js",
         "test/node/replica-handler.test.js",
         "test/partition/partition-service-cleanup-token-schema.test.js",
-        "test/node/replica-create-timeout-replay-custody.test.js"
+        "test/node/replica-create-timeout-replay-custody.test.js",
+        "test/node/replica-cleanup-release-continuation.test.js",
+        "test/node/replica-runtime-exact-custody.test.js",
+        "test/node/replica-snapshot-install-owner.test.js",
+        "test/raft/raft-rs-backend/partition-snapshot-install-failed-release.test.js",
+        "test/raft/raft-rs-backend/partition-snapshot-install-release-control.test.js",
+        "test/node/replica-removal-consensus-exit.test.js"
       ]
     },
     "failed-create-target-authoritative-cleanup": {

@@ -104,6 +104,7 @@ const REPLICA_RECREATE_ATTEMPT = Object.freeze({
   NOT_ATTEMPTED: 'not_attempted',
   RECREATED: 'recreated',
   PREVIOUS_SERVICE_NOT_RELEASED: 'previous_service_not_released',
+  RUNTIME_RELEASE_DEFERRED: 'runtime_release_deferred',
   ADMISSION_HELD: 'admission_held',
   ADMISSION_REFUSED: 'admission_refused',
   CREATE_THREW: 'create_threw',

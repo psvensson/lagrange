@@ -1,7 +1,7 @@
 import {readStateField} from '../utils/state-field-read.js';
 import {retireNodeTransportHandler} from './replica-transport-handler-identity.js';
 import {settlePendingReplicaRuntimeCleanup, fenceFailedReplicaCreateRuntime,
-  shutdownReplicaHandler} from './replica-runtime-cleanup-custody.js';
+  shutdownReplicaHandler, releaseReplicaCleanupDebt} from './replica-runtime-cleanup-custody.js';
 import {
   assignReplicaHandlerRuntimeMetadataMethods,
 } from './replica-handler-runtime-metadata-methods.js';
@@ -10,6 +10,7 @@ import {
 } from './replica-handler-removed-cleanup-sweep.js';
 import {removeReplicaStorageArtifacts} from
   './replica-storage-artifacts.js';
+import {REPLICA_CLEANUP_ERROR_CODE} from './replica-cleanup-constants.js';
 import {isCleanupTombstoneRow} from
   './replica-cleanup-tombstone-owner.js';
 import {inspectSnapshotInstallArtifactsForGeneration,
@@ -133,16 +134,6 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
       service = null,
       storageAuthority = null,
     ) {
-      if (
-        service &&
-        typeof service.shutdown === REPLICA_HANDLER_TYPEOF.FUNCTION
-      ) {
-        this.logger.debug(REPLICA_HANDLER_LOG_MSG.GRACEFUL_SHUTDOWN, {
-          replicaId,
-          nodeId: this.nodeId,
-        });
-        await service.shutdown();
-      }
       if (storageAuthority?.kind === CLEANUP_STORAGE_AUTHORITY_KIND &&
           !await this.getReplicaCleanupTombstoneOwner()
             .requireCurrent(storageAuthority)) {
@@ -154,6 +145,7 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
         partitionId,
         replicaId,
         storageAuthority,
+        service,
       );
     }
     /**
@@ -163,12 +155,21 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
      * @return {Promise<void>}
      * @private
      */
-    async cleanupReplicaResources(partitionId, replicaId, storageAuthority) {
+    async cleanupReplicaResources(partitionId, replicaId, storageAuthority,
+      service = this.getTrackedService(replicaId)) {
       if (storageAuthority?.kind !== CLEANUP_STORAGE_AUTHORITY_KIND) {
         throw new Error(
           `Replica storage cleanup lacks authority for ${replicaId}`,
         );
       }
+      const requireCapturedRuntime = () => {
+        if (this.getTrackedService(replicaId) !== service) {
+          throw Object.assign(new Error(`Replica runtime changed for ${replicaId}`), {
+            code: REPLICA_CLEANUP_ERROR_CODE.CLEANUP_OWNERSHIP_CHANGED,
+            deferRetry: true,
+          });
+        }
+      };
       const dbPath = this.getPartitionDbPath(partitionId, replicaId);
       this.logger.debug(REPLICA_HANDLER_LOG_MSG.CLEANUP_RESOURCES, {
         replicaId,
@@ -187,6 +188,9 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
         // under a snapshot-install episode: nothing is inspected or removed
         // before the episode's step in flight settled.
         await this.snapshotInstallOwner.claimForCleanup(replicaId);
+        requireCapturedRuntime();
+        await releaseReplicaCleanupDebt(this, replicaId, partitionId, service);
+        requireCapturedRuntime();
         this.assertGroupRetiredTombstoneBeforeDelete(partitionId,
           replicaId);
         const installGeneration = {
@@ -210,6 +214,7 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
             `Replica cleanup ownership changed for ${replicaId}`,
           );
         }
+        requireCapturedRuntime();
         const removal = await removeReplicaStorageArtifacts(
           fs,
           dbPath,
@@ -220,6 +225,7 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
                 `Replica cleanup ownership changed for ${replicaId}`,
               );
             }
+            requireCapturedRuntime();
           },
         );
         const installRemoval =
@@ -232,6 +238,7 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
                   `Replica cleanup ownership changed for ${replicaId}`,
                 );
               }
+              requireCapturedRuntime();
             },
           });
         if (!removal.allAbsent || !installRemoval.allAbsent) {
@@ -251,9 +258,6 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
           storageAuthority,
         );
       } catch (error) {
-        if (error?.code === REPLICA_HANDLER_ERRNO.ENOENT) {
-          return;
-        }
         this.logger.warn(REPLICA_HANDLER_LOG_MSG.CLEANUP_FAILED, {
           replicaId,
           dbPath,
