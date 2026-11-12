@@ -115,9 +115,9 @@ export function createDurableCdcEvent({
   eventKey = 'durable-event-1',
   sourceLogIndex = 1,
 } = {}) {
+  const timestamp = new HLCTimestamp(1000, 0, 'durable-source').toString();
   return {
-    tableName, operation, data,
-    timestamp: new HLCTimestamp(1000, 0, 'durable-source').toString(),
+    tableName, operation, data: {...data, [COLUMN.UPDATED_AT_HLC]: timestamp}, timestamp,
     sourcePartition: DURABLE_SOURCE_PARTITION,
     sourceReplica: `${DURABLE_SOURCE_PARTITION}-r1`,
     eventKey, entryId: eventKey, sourceLogIndex, sourceOrdinal: 0,

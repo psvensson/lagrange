@@ -146,7 +146,8 @@ function isSourceVector(range, events) {
   let previous = range.after;
   for (let index = 0; index < events.length; index += 1) {
     const event = events[index];
-    if (!event || typeof tableName !== 'string' || event.tableName !== tableName ||
+    if (!event || typeof tableName !== 'string' || tableName.length === 0 ||
+        event.tableName !== tableName ||
         event.sourcePartition !== range.sourcePartition ||
         typeof event.eventKey !== 'string' || event.eventKey.length === 0 ||
         !Number.isSafeInteger(event.sourceLogIndex) || event.sourceLogIndex < 1 ||
@@ -210,17 +211,22 @@ class SystemTableCacheSourceOrder {
     return cell;
   }
 
-  captureEffectContext(sourcePartition, tableName) {
+  captureEffectContext(sourcePartition, tableName, incarnation) {
     const cell = this.cellOf(sourcePartition, tableName);
-    if (cell.tableName !== tableName) {
+    if (cell.tableName !== tableName || typeof incarnation !== 'string' || incarnation.length === 0) {
       throw Object.assign(new Error(CDC_EVENT_IDENTITY.INVALID_MESSAGE),
         {code: CDC_EVENT_IDENTITY.INVALID_CODE});
     }
-    return Object.freeze({cell, generation: cell.effectGeneration});
+    return Object.freeze({cell, incarnation, generation: cell.effectGeneration});
+  }
+
+  sourceTableMatches(sourcePartition, tableName) {
+    const cell = this.cells.get(sourcePartition);
+    return cell === undefined || cell.tableName === null || cell.tableName === tableName;
   }
 
   effectContextIsCurrent(context) {
-    return context?.cell !== undefined &&
+    return context?.cell !== undefined && context.cell !== null &&
       this.cells.get(context.cell.sourcePartition) === context.cell &&
       context.cell.effectGeneration === context.generation;
   }
@@ -228,8 +234,15 @@ class SystemTableCacheSourceOrder {
   effectCoversContext(effect, context) {
     return (effect?.state === SOURCE_EFFECT_STATE.APPLIED ||
       effect?.state === SOURCE_EFFECT_STATE.COVERED) &&
-      effect.context?.cell === context.cell && effect.context.generation === context.generation &&
+      effect.context?.cell === context.cell && effect.context.incarnation === context.incarnation &&
+      effect.context.generation === context.generation &&
       this.effectContextIsCurrent(context);
+  }
+
+  applicationContextIsCurrent(context, tableName, metadata) {
+    return this.effectContextIsCurrent(context) && context.cell.tableName === tableName &&
+      context.cell.sourcePartition === metadata.sourcePartition &&
+      context.incarnation === metadata.sourceIncarnation;
   }
 
   tableGeneration(tableName) {
@@ -257,6 +270,9 @@ class SystemTableCacheSourceOrder {
     if (incoming === null || typeof incoming.incarnation !== 'string' ||
         typeof incoming.eventKey !== 'string') return SOURCE_EFFECT_STATE.UNAVAILABLE;
     const cell = this.cellOf(incoming.partition, tableName);
+    if (cell.incarnation !== null && cell.incarnation !== incoming.incarnation) {
+      return SOURCE_EFFECT_STATE.UNAVAILABLE;
+    }
     if (cell.position !== null) {
       if (cell.incarnation !== incoming.incarnation) return SOURCE_EFFECT_STATE.UNAVAILABLE;
       if (comparePositions(incoming, cell.position) <= 0) return SOURCE_EFFECT_STATE.COVERED;
@@ -437,9 +453,10 @@ class SystemTableCacheSourceOrder {
    * @param {Object} image - {sourcePartition, incarnation, appliedIndex}.
    * @return {string} A SOURCE_IMAGE_ADMISSION.
    */
-  admitImage(token, {sourcePartition, incarnation, appliedIndex}) {
+  admitImage(token, {sourcePartition, tableName, incarnation, appliedIndex}) {
     const cell = this.cells.get(sourcePartition);
-    if (cell !== token.cell || cell.effectGeneration !== token.generation ||
+    if (cell !== token.cell || cell.tableName !== tableName ||
+        cell.effectGeneration !== token.generation ||
         (cell.incarnation !== token.incarnation && cell.incarnation !== incarnation)) {
       return SOURCE_IMAGE_ADMISSION.CELL_CHANGED;
     }

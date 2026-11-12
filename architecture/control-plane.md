@@ -214,7 +214,7 @@ a reordered DELETE-before-INSERT from resurrecting a row, and an authoritative
 catch-up anti-entropy sweep removes any row a genuinely-lost DELETE left behind.
 After a missed or late DELETE all replica caches converge to authoritative absence
 within a bounded interval. See
-[CDC apply convergence semantics](runtime-components.md#cdc-apply-convergence-semantics-order-insensitive).
+[CDC apply convergence semantics](runtime-components.md#cdc-source-images-and-retained-effects).
 
 #### `services` Row Ownership Matrix
 

@@ -130,9 +130,14 @@ The exact paths will be recorded with the implementation attempt. Independently
 approved maintenance is composed before changing the overlapping acceptance
 module. The role decoder/proposal-error work is not included.
 
-Independent review also requires the coupled authoritative-repair generation
-capture to cover every real supplier, including point repairs, complete-table
-reconciliation, absence sweeps, catch-up, and heartbeat publication projection.
+Independent review approved a narrower authority distinction after the full
+caller census: complete-table reconciliation, complete absence sweeps and
+catch-up publication retain the original image generation. Generic keyed
+repair always invalidates source currency and per-key evidence before any row
+or tombstone mutation, and owes the existing relister. It does not mint a new
+token protocol across heartbeat, runtime definition or SQL metadata suppliers.
+Invalid supplied source contexts (including null, stale, foreign-table and
+foreign-cache contexts) refuse before effects and never use the generic path.
 The source-order owner holds the generation; no second registry is introduced.
 
 The touched authority closure contains pre-existing local/RPC and SQL fallback
@@ -182,3 +187,56 @@ contracts or proof of this implementation.
 
 - https://etcd.io/docs/v3.6/learning/api_guarantees/
 - https://kubernetes.io/docs/reference/using-api/api-concepts/
+
+## Current verification scope
+
+Early candidate `dd3dd8b04` was transported as the exact tree
+`ada08dfb` to remote `d8371e18b2e492808398e678800d5228007452fa`. Lab job 2699
+passed the sealed seven-case root: all seven scenario receipts passed, including
+the five baseline failures and repeated/lost-receipt stability. Coordinator
+verified all custody scopes closed and the emitted artifacts were newly written.
+Full log SHA256: `14c31ebe083b3d7b95474c78db3931e60c39e268a55c17d5ed2016a4904e1c6e`.
+This is narrow causal evidence. Subsequent context fencing, complete-authority
+suppliers, local producer tests, mixed-range refusal, exception recovery and
+interaction controls require their own exact candidate lab runs and independent
+review. No physical formation, general correctness, or release claim is made.
+
+The actual ledger producer emits ordered durable members only. Mixed
+durable/positionless vectors are refused before proposal; ordinary CDC and
+ordinary CDC_BATCH remain their explicit separate domain. Old native mixed
+fixtures inferred a tail position for their ordinary member; their historical
+bytes are preserved at `57e396e4`. Their successor controls require refusal plus
+valid ordinary and durable domains, preserving full-vector native membership and
+immutable event digest checks.
+
+## Diagnostic observer and waiter boundary refinement
+
+Source review after frozen candidate `194f42d496b18e2e01f275c019f62687f6b3eb4b`
+found that LoggingService.log invokes its persistence flushCallback synchronously.
+A relist error or completion diagnostic could therefore throw outside the read
+catch and strand the existing source gap. Root approved isolating diagnostics
+inside the current per-image attempt record: retain latest original cause and
+latest diagnostic error/count, use no alternate sink or new state owner, and
+return through the same paced relister. The state used to select that pace is
+read after the diagnostic callback, so a reentrant authority mutation still owes
+a paced image. Image-slot acquire/release contains only internal Promise
+resolvers, and record creation precedes acquisition; all acquired slots have
+one finally release. A failed scheduling clock is not replaced by another clock.
+
+The additional native receiver control holds actual Raft append envelopes.
+It admits identical event bytes under two explicitly different ledger ranges,
+releases the first native command independently, and requires that its receipt
+leave the replacement ledger waiter pending. Event-only identity would join
+the second admission or settle it with the old receipt. This is a custody proof
+using synthetic canonical ledger input; the source SQL/ledger producer proof
+remains the real native-custody and local-obligation witnesses.
+
+The RF1 mixed refusal control now exercises valid durable receipt before
+ordinary ingress because ordinary ingress deliberately invalidates source
+currency. This is fixture sequencing, with both positive domains preserved;
+it does not restore an ordinary-member tail position in a ranged vector.
+
+Root additionally owns only executeOwnerLocalRead in gateway-read-strategies
+for its remaining local SQL fallback deletion. Generation capture and complete
+receipt minting remain in the CDC lane. The prior frozen candidate and its lab
+requests remain unchanged; these controls require a new exact source transport.

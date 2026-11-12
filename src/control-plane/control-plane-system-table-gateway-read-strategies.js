@@ -85,6 +85,7 @@ function canMintAuthoritativeObservationReceipt(options) {
       options.params,
     ) &&
     options.causeId !== null &&
+    options.sourceGeneration !== undefined &&
     Number.isFinite(options.readStartedAtMs) &&
     options.readStartedAtMs >= 0 &&
     isValidLeaderReadAuthorityWitness(
@@ -238,6 +239,7 @@ const controlPlaneSystemTableGatewayReadStrategyMethods = {
       params,
       causeId,
       readStartedAtMs: options?.authoritativeReadStartedAtMs,
+      sourceGeneration: options?.sourceGeneration,
     })) {
       return {
         ...result,
@@ -255,6 +257,7 @@ const controlPlaneSystemTableGatewayReadStrategyMethods = {
       tableName,
       observedAtMs: Math.floor(result.readAuthorityWitness.observedAtMs),
       readStartedAtMs: Math.floor(options.authoritativeReadStartedAtMs),
+      sourceGeneration: options.sourceGeneration,
       causeId,
       rowSetComplete: true,
       ...extractReadAuthorityWitnessRevisionFields(result.readAuthorityWitness),
@@ -365,61 +368,26 @@ const controlPlaneSystemTableGatewayReadStrategyMethods = {
    */
   async executeAuthoritativeRead(tableName, sql, params, strategy, options) {
     const authoritativeReadStartedAtMs = Math.floor(this.now());
+    const cdcIntegrationService = this.resolveCdcIntegrationService();
     const observationOptions = {
       ...options,
       authoritativeReadStartedAtMs,
+      sourceGeneration:
+        cdcIntegrationService?.cacheMutationTarget?.sourceOrder?.tableGeneration(tableName),
     };
-    const cdcIntegrationService = this.resolveCdcIntegrationService();
     const queryOptions = this.buildQueryOptions(options, {
       tableName,
       sql,
     });
-    const {
-      authoritativeReadModeContract,
-      requestOptions,
-    } = buildAuthoritativeControlPlaneReadRequestOptions(
+    const {requestOptions} = buildAuthoritativeControlPlaneReadRequestOptions(
       options.readAuthority,
       options,
       queryOptions,
     );
-    const allowSqlFallback = authoritativeReadModeContract.allowSqlFallback;
     if (
       typeof cdcIntegrationService?.executeAuthoritativeSystemTableRead !==
       'function'
     ) {
-      if (
-        allowSqlFallback &&
-        strategy !== CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED
-      ) {
-        const sqlQueryEngine = this.resolveSqlQueryEngine();
-        if (typeof sqlQueryEngine?.executeQuery === 'function') {
-          const result = await sqlQueryEngine.executeQuery(
-            sql,
-            params,
-            queryOptions,
-          );
-          return this.attachAuthoritativeObservationReceipt(
-            this.buildGatewayReadResult(
-              result,
-              tableName,
-              strategy,
-              result?.success === true ?
-                CONTROL_PLANE_READ_OUTCOME.AUTHORITATIVE :
-                CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY,
-              {
-                source:
-                  CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_SOURCE.SQL_QUERY_ENGINE,
-                usedSqlFallback: true,
-              },
-            ),
-            tableName,
-            sql,
-            params,
-            strategy,
-            observationOptions,
-          );
-        }
-      }
       return this.buildUnavailableGatewayReadResult(
         tableName,
         strategy,

@@ -226,6 +226,7 @@ function hasCompleteObservationInputs(
 function hasAuthoritativeObservationStorage(writableCache, readableCache) {
   return Boolean(
     typeof writableCache.recordAuthoritativeObservation === 'function' &&
+    typeof writableCache.sourceOrder?.tableGeneration === 'function' &&
     typeof readableCache.getLastAuthoritativeObservedAtMs === 'function' &&
     typeof readableCache.getLastAuthoritativeObservedCauseId === 'function',
   );
@@ -266,6 +267,10 @@ function validateObservationRequest(options) {
     options.readableCache,
   )) {
     return CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.CONTRACT_INVALID;
+  }
+  if (options.receipt.sourceGeneration !==
+      options.writableCache.sourceOrder.tableGeneration(options.tableName)) {
+    return CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.CACHE_NOT_RECONCILED;
   }
   return null;
 }
@@ -382,7 +387,7 @@ function applyMissingRowDeletes(options) {
       options.tableName,
       CDC_OPERATION.DELETE,
       cachedRow,
-      options.causeOptions,
+      options.deleteOptions,
     );
     if (Array.isArray(options.changedRowIds)) {
       options.changedRowIds.push(String(key));
@@ -483,6 +488,7 @@ function buildPublishedAuthoritativeObservationPayload(
   return {
     observedAtMs: requestedObservedAtMs,
     causeId: receipt.causeId,
+    sourceGeneration: receipt.sourceGeneration,
     term: receipt.term ?? null,
     appliedIndex: receipt.appliedIndex ?? null,
     commitIndex: receipt.commitIndex ?? null,
@@ -609,6 +615,7 @@ function applyCacheReconciliation(context, indexes) {
           .AUTHORITATIVE_OBSERVATION_RECONCILIATION,
       authoritativeObservedAtMs: context.receipt.observedAtMs,
       authoritativeReadStartedAtMs: context.receipt.readStartedAtMs,
+      sourceGeneration: context.receipt.sourceGeneration,
     } :
     context.causeOptions;
   const mutationOptions = {
@@ -622,6 +629,10 @@ function applyCacheReconciliation(context, indexes) {
     writableCache: context.writableCache,
     causeOptions: context.causeOptions,
     upsertOptions,
+    deleteOptions: context.observationRequested ? {
+      ...upsertOptions,
+      mutationMode: SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_ABSENCE_RECONCILIATION,
+    } : context.causeOptions,
     deleteMissingPolicy: context.deleteMissingPolicy,
     changedRowIds: context.changedRowIds,
   };

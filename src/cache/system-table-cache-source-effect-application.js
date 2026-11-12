@@ -26,7 +26,7 @@ function applySourceCdcEvent(cache, input, range, observedAtMs) {
   const metadata = {...event, sourceIncarnation: range.incarnation};
   const order = cache.sourceOrder;
   const key = resolveSystemCacheRowKey(event.tableName, event.data);
-  const context = order.captureEffectContext(event.sourcePartition, event.tableName);
+  const context = order.captureEffectContext(event.sourcePartition, event.tableName, range.incarnation);
   const decision = order.classifyEffect(event.tableName, key, event.data, metadata);
   if (decision === SOURCE_EFFECT_STATE.COVERED) return effectOutcome(decision, context);
   if (decision === SOURCE_EFFECT_STATE.UNAVAILABLE) {

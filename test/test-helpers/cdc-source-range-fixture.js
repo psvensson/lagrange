@@ -18,8 +18,7 @@ const TEST_SOURCE_INCARNATION = 'test-source-incarnation';
 const LEDGER_START = Object.freeze({logIndex: 0, ordinal: -1});
 
 function positionOf(event) {
-  return {logIndex: Number.isSafeInteger(event.sourceLogIndex) ? event.sourceLogIndex : 1,
-    ordinal: Number.isSafeInteger(event.sourceOrdinal) ? event.sourceOrdinal : 0};
+  return {logIndex: event.sourceLogIndex, ordinal: event.sourceOrdinal};
 }
 
 /**

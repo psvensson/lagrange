@@ -65,7 +65,6 @@ function applyDeletionVisibilityRepair(service, observation) {
   const cacheRepaired = service.applyAuthoritativeCacheRepair(tableName,
     repair.operation, repair.row, key, {
       authoritativeObservedAtMs,
-      sourceGeneration: observation.sourceGeneration,
     });
   const visible = service.isCacheExpectationSatisfied(tableName, key, false, expectedFields);
   service.recordAuthoritativeFallbackSignal({tableName, key, expectPresent: false, phase,

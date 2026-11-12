@@ -20,7 +20,7 @@
  * the authoritative owner path and apply the rows through the canonical
  * merge-safe cache repair. This closes the window for ALL propagated
  * tables, not just the one that happened to bite, and reuses the existing
- * authoritative read flow (owner-RPC fallback, pressure deferral) and
+ * authoritative read flow (explicit local bootstrap or owner RPC, pressure deferral) and
  * applyAuthoritativeCacheRepair (canonicalization + stale-merge guards in
  * the cache itself).
  */
@@ -37,7 +37,7 @@ import {
 } from './cdc-integration-service-cache-visibility-authority.js';
 import {buildControlPlaneReadAuthority} from
   '../control-plane/control-plane-system-table-gateway-read-contracts.js';
-import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE, CONTROL_PLANE_READ_LEADER_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
 import {INITIAL_PARTITION_IDS} from
   '../bootstrap/system-table-schemas-constants.js';
@@ -252,17 +252,19 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options) {
   const now = typeof options.now === 'function' ?
     options.now :
     () => clock.now();
-  // The catch-up interaction accepts exactly one authority token. Callers that
-  // need leader-pinned owner reads construct that token at their own boundary;
-  // the default remains the join-time local-first/owner-fallback policy.
+  // One authority for the attempt. Bootstrap may explicitly read its local
+  // owners before remote formation; steady-state reconciliation requires the
+  // RPC leader. A failed attempt never switches authority.
   const suppliedReadAuthority =
     options?.readAuthority && Object.isFrozen(options.readAuthority) === true ?
       options.readAuthority : null;
   const readOptions = {
     readAuthority: suppliedReadAuthority || buildControlPlaneReadAuthority({
       authoritativeReadMode:
-        CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-          .OWNER_LOCAL_PREFERRED_OWNER_RPC_FALLBACK,
+        service.bootstrapMode === true ? CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY :
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+      leaderMode: service.bootstrapMode === true ? CONTROL_PLANE_READ_LEADER_MODE.ANY :
+        CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
     }),
   };
   const summary = {
@@ -312,15 +314,15 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options) {
         tableName,
         readResult,
       );
-      const completeRowsValid = !readFromLeader ||
-        completeAuthoritativeRowsAreValid(
-          tableName,
-          readResult?.rows,
-        );
-      const rows = observationAdvances && completeRowsValid ?
+      const localBootstrapRead = readOptions.readAuthority.authoritativeReadMode ===
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY;
+      const completeRowsValid = completeAuthoritativeRowsAreValid(tableName, readResult?.rows);
+      const rows = observationAdvances && completeRowsValid &&
+        (localBootstrapRead || readFromLeader) ?
         successfulAuthoritativeRows(readResult) :
         null;
       if (rows) {
+        let observationPublished = localBootstrapRead;
         const repairOptions = readFromLeader ?
           {
             mutationMode:
@@ -379,14 +381,16 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options) {
             partitionId: readResult.readAuthorityWitness.partitionId ?? null,
             causeId: 'cdc-authoritative-catchup',
           };
-          requireCacheMutationTarget(service).recordAuthoritativeObservation(
-            tableName,
-            observationReceipt,
-          );
+          observationPublished = Number.isFinite(
+            requireCacheMutationTarget(service).recordAuthoritativeObservation(
+              tableName,
+              observationReceipt,
+            ));
         }
         // The apply gate refused these rows if the owner turned terminal
         // while the read was in flight: the table is not hydrated then.
-        hydrated = !isTerminal();
+        hydrated = !isTerminal() && observationPublished;
+        if (!hydrated) lastFailure = CATCHUP_FAILURE_MSG.OBSERVATION_NOT_ADVANCED;
         summary.tablesHydrated += hydrated ? 1 : 0;
         break;
       }

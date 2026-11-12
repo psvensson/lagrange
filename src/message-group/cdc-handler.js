@@ -9,7 +9,7 @@ import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
 import {CDC_OPERATION} from '../constants/index.js';
-import {CDC_PIPELINE_METRIC} from '../constants/cdc-lifecycle-constants.js';
+import {CDC_EVENT_IDENTITY, CDC_PIPELINE_METRIC} from '../constants/cdc-lifecycle-constants.js';
 import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
 import {
   getSystemCachePrimaryKeyFieldOrFallback,
@@ -17,8 +17,8 @@ import {
 import {canonicalizeSystemTableRow} from '../control-plane/system-row-normalizers.js';
 import {resolveTimeSource} from '../time/time-source.js';
 import {reportCdcEventAppliedToCache} from './cdc-handler-apply-diagnostics.js';
-import {copyCdcEventMetadata} from '../cdc/cdc-event-envelope.js';
-import {SOURCE_EFFECT_STATE, captureSourceRange} from
+import {captureCdcEvents, copyCdcEventMetadata} from '../cdc/cdc-event-envelope.js';
+import {SOURCE_EFFECT_STATE, captureSourceRange, isSourceMember} from
   '../cache/system-table-cache-source-order.js';
 
 const LOCAL_STR_CDCHANDLER_REQUIRES_A_SYSTEMTABLECACHE = 'CDCHandler requires a SystemTableCache';
@@ -78,7 +78,15 @@ class CDCEvent {
       Number.isFinite(receivedAtMs) ? receivedAtMs : Date.now();
     Object.assign(this, copyCdcEventMetadata({tableName, operation, data, timestamp,
       sourcePartition, ...metadata}));
-    if (Object.hasOwn(this, 'eventKey')) this.sourceRange = captureSourceRange(sourceRange);
+    if (Object.hasOwn(this, 'eventKey')) {
+      Object.assign(this, captureCdcEvents([{...this}])[0]);
+      this.sourceRange = captureSourceRange(sourceRange);
+      if (!isSourceMember(this.sourceRange, this)) {
+        throw Object.assign(new Error(CDC_EVENT_IDENTITY.INVALID_MESSAGE),
+          {code: CDC_EVENT_IDENTITY.INVALID_CODE});
+      }
+      Object.freeze(this);
+    }
   }
 
   /**

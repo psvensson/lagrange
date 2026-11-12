@@ -58,9 +58,8 @@ function captureCdcRequestRange(options) {
   }
 }
 
-function capturedCdcCommandIdentity(command) {
-  return digest({sourceRange: command.sourceRange,
-    eventDigest: cdcCommitWaitIdentity(command.events)});
+function cdcRangeWaitIdentity(events, sourceRange) {
+  return digest({sourceRange, eventDigest: cdcCommitWaitIdentity(events)});
 }
 
 // The typed gap answer: nothing proposed, the table is listed again here;
@@ -161,7 +160,7 @@ function reserveCdcWait(service, command, timeoutMs, parent) {
       return {answer: buildAlreadyAppliedCdcOutcome(events, service.groupId,
         classified.committed.through, classified.committed.incarnation)};
     }
-    const key = capturedCdcCommandIdentity({...command, events});
+    const key = cdcRangeWaitIdentity(events, command.sourceRange);
     if (queue.has(key)) {
       const first = joinableWait(service, key);
       return first === null ? {answer: duplicateInFlightAcceptance(service, key)} :
@@ -248,7 +247,8 @@ function provisionalCdcIngress(service, wait, options) {
   }
   const range = wait.command.sourceRange;
   const order = service.cdcHandler.cache.sourceOrder;
-  const context = order.captureEffectContext(range.sourcePartition, wait.entry.events[0].tableName);
+  const context = order.captureEffectContext(range.sourcePartition,
+    wait.entry.events[0].tableName, range.incarnation);
   try {
     for (let index = 0; index < wait.entry.events.length; index += 1) {
       const outcome = service.cdcHandler.applySourceEvent(wait.entry.events[index], range);
@@ -395,7 +395,7 @@ function registerCdcCommittedAcceptance(service, committed, lifetime) {
   if (committed.command.type !== MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH) return;
   const {events} = committed.command;
   if (!hasDurableCdcEvents(events) || lifetime === null) return;
-  const key = capturedCdcCommandIdentity(committed.command);
+  const key = cdcRangeWaitIdentity(events, committed.command.sourceRange);
   const entry = service.cdcCommitWaiters.get(key);
   if (!entry || entry.lifetime !== lifetime) return;
   const settle = (answer) => {
@@ -414,5 +414,5 @@ function retireCdcCommitWaiters(service) {
   service.cdcCommitWaiters.release(() => unknownCdcAcceptance());
 }
 
-export {applyDurableCdcBatch, registerCdcCommittedAcceptance,
+export {applyDurableCdcBatch, cdcRangeWaitIdentity, registerCdcCommittedAcceptance,
   retireCdcCommitWaiters};

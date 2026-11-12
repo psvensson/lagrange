@@ -47,9 +47,10 @@ afterEach(() => {
 });
 
 function sourceEvent() {
+  const timestamp = new HLCTimestamp(1000, 0, 'guard-producer').toString();
   return {tableName: TABLES.CONFIG, operation: CDC_OPERATION.INSERT,
-    data: {config_key: KEY, config_value: 'guard-body', nested: {values: [1, 2]}},
-    timestamp: new HLCTimestamp(1000, 0, 'guard-producer').toString(),
+    data: {config_key: KEY, config_value: 'guard-body', nested: {values: [1, 2]},
+      updated_at_hlc: timestamp}, timestamp,
     sourcePartition: SOURCE_PARTITION, sourceReplica: `${SOURCE_PARTITION}-r1`,
     eventKey: 'guard-occurrence', entryId: 'guard-occurrence', sourceLogIndex: 7, sourceOrdinal: 0};
 }

@@ -190,6 +190,7 @@ test('SystemTableCache combines CDC and authoritative owner revisions monotonica
   );
 
   cache.recordAuthoritativeObservation(TABLE_NAME, {
+    sourceGeneration: cache.sourceOrder.tableGeneration(TABLE_NAME),
     observedAtMs: 2_200,
     causeId: 'auth-obs-1',
     term: 4,

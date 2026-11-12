@@ -72,10 +72,14 @@ function groupCommittedThroughOf(service, range) {
  *   need?}.
  */
 function classifyDurableRangeAtLeader(service, range, tableName) {
+  const sourceOrder = service.cdcHandler.cache.sourceOrder;
+  if (!sourceOrder.sourceTableMatches(range.sourcePartition, tableName)) {
+    throw Object.assign(new Error(CDC_EVENT_IDENTITY.INVALID_MESSAGE),
+      {code: CDC_EVENT_IDENTITY.INVALID_CODE});
+  }
   if (!service.isCurrentRaftLeader()) return {decision: DURABLE_RANGE_DECISION.APPLY};
   const committed = groupCommittedThroughOf(service, range);
   if (committed !== null) return {decision: DURABLE_RANGE_DECISION.ALREADY_APPLIED, committed};
-  const sourceOrder = service.cdcHandler.cache.sourceOrder;
   const classified = sourceOrder.classifyRange(range);
   if (classified.decision === SOURCE_RANGE_DECISION.GAP) {
     sourceOrder.recordGap(range, tableName);
@@ -109,13 +113,14 @@ function memberPositionOf(event) {
  */
 function applyCommittedCdcRange(service, committed, events, applyMember) {
   const range = committed.command.sourceRange;
-  if (!isSourceVector(range, events)) {
+  const sourceOrder = service.cdcHandler.cache.sourceOrder;
+  if (!isSourceVector(range, events) ||
+      !sourceOrder.sourceTableMatches(range.sourcePartition, events[0].tableName)) {
     throw Object.assign(new Error(CDC_EVENT_IDENTITY.INVALID_MESSAGE),
       {code: CDC_EVENT_IDENTITY.INVALID_CODE});
   }
   const tableName = events[0].tableName;
   committed.effects.afterCommit.push(() => recordGroupCommittedRange(service, range));
-  const sourceOrder = service.cdcHandler.cache.sourceOrder;
   const classified = sourceOrder.classifyRange(range);
   if (classified.decision === SOURCE_RANGE_DECISION.GAP) {
     sourceOrder.recordGap(range, tableName);
@@ -125,7 +130,7 @@ function applyCommittedCdcRange(service, committed, events, applyMember) {
     return {decision: classified.decision, applied: 0, skipped: events.length};
   }
   let applied = 0;
-  const context = sourceOrder.captureEffectContext(range.sourcePartition, tableName);
+  const context = sourceOrder.captureEffectContext(range.sourcePartition, tableName, range.incarnation);
   try {
     for (let index = 0; index < events.length; index += 1) {
       if (sourceOrder.memberApplied(range, memberPositionOf(events[index]))) continue;

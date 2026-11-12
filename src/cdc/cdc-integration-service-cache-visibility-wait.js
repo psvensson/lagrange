@@ -16,7 +16,6 @@ import {
   authoritativeReadRowsAreValid,
   captureAuthoritativeCacheSweepSnapshot,
   captureCacheRecordBeforeAbsenceRepair,
-  requireCacheMutationTarget,
   resolveCacheVisibilityRepairReadAuthority,
 } from './cdc-integration-service-cache-visibility-authority.js';
 import {isDeletedRowObservationSatisfied, repairDeletedRowVisibility} from
@@ -141,8 +140,6 @@ class CDCIntegrationServiceCacheVisibilityWait {
       return false;
     }
     const primaryKeyField = this.getPrimaryKeyField(tableName);
-    const sourceGeneration = requireCacheMutationTarget(this)
-      .sourceOrder.tableGeneration(tableName);
     const queryResult = await this.executeAuthoritativeSystemTableRead(
       tableName,
       `SELECT * FROM ${tableName} WHERE ${primaryKeyField} = ?`,
@@ -175,7 +172,7 @@ class CDCIntegrationServiceCacheVisibilityWait {
       CDC_OPERATION.UPSERT,
       authoritativeRow,
       key,
-      {mutationMode, sourceGeneration},
+      {mutationMode},
     );
     if (repairApplied !== true) {
       return false;
@@ -218,8 +215,6 @@ class CDCIntegrationServiceCacheVisibilityWait {
     const readAuthority = resolveCacheVisibilityRepairReadAuthority(
       expectPresent,
     );
-    const sourceGeneration = requireCacheMutationTarget(this)
-      .sourceOrder.tableGeneration(tableName);
     const cachedRecordBeforeAuthoritativeRead =
       captureCacheRecordBeforeAbsenceRepair(
         this,
@@ -307,7 +302,7 @@ class CDCIntegrationServiceCacheVisibilityWait {
           CDC_OPERATION.UPSERT,
           matchingRow,
           key,
-          {originHlc: options.originHlc, sourceGeneration},
+          {originHlc: options.originHlc},
         );
       }
       const cacheExpectationSatisfied = this.isCacheExpectationSatisfied(
@@ -338,7 +333,6 @@ class CDCIntegrationServiceCacheVisibilityWait {
     return repairDeletedRowVisibility(this, {
       tableName, key, primaryKeyField, expectedFields, rows, phase,
       authoritativeObservedAtMs: queryResult.readAuthorityWitness?.observedAtMs,
-      sourceGeneration,
       projectionBeforeRead: cachedRecordBeforeAuthoritativeRead,
       projectionAfterRead: cachedRecordAfterAuthoritativeRead,
     });

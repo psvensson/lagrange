@@ -22,7 +22,10 @@ import {readCommittedStatementOutcome} from
   '../../src/partition/partition-committed-statement-outcome.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {tuningOf} from '../../src/raft/raft-rs-runtime-tuning.js';
-import {cdcCommitWaitIdentity, isCommittedCdcOutcome} from '../../src/cdc/cdc-delivery-outcome.js';
+import {isCommittedCdcOutcome} from '../../src/cdc/cdc-delivery-outcome.js';
+import {cdcRangeWaitIdentity} from
+  '../../src/message-group/message-group-cdc-committed-acceptance.js';
+import {sourceRangeOf} from '../../src/partition/partition-cdc-obligation-vector.js';
 import {readOwedCdcObligations, readCdcObligation, readCdcObligationProgress,
   readCdcObligationStanding} from '../../src/partition/partition-cdc-obligation-ledger.js';
 import {PARTITION_CDC_COMMAND, PARTITION_CDC_OBLIGATION_STANDING} from
@@ -242,7 +245,8 @@ function recipientInvocationOf(producer) {
 
 function observePendingNativeDelivery(f, producer) {
   const invocation = recipientInvocationOf(producer);
-  const key = cdcCommitWaitIdentity([f.event]);
+  const owed = readCdcObligation(producer.leader.db, f.event.eventKey);
+  const key = cdcRangeWaitIdentity([f.event], sourceRangeOf(producer.leader, [owed]));
   const queue = f.services[0].cdcCommitWaiters;
   const wait = queue.get(key);
   assert.ok(invocation, 'the source retains its actual uncommitted invocation');

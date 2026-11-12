@@ -247,7 +247,7 @@ Delivery is point-in-time with no global ordering, so the cache apply path is
 order-insensitive: an origin write HLC stamped onto `data` drives an HLC-LWW
 compare, DELETE tombstones fence reordered resurrections, and an authoritative
 catch-up sweep removes rows left by a genuinely-lost DELETE. See
-[CDC apply convergence semantics](runtime-components.md#cdc-apply-convergence-semantics-order-insensitive).
+[CDC apply convergence semantics](runtime-components.md#cdc-source-images-and-retained-effects).
 
 ### CDC Continuity During Topology Transitions
 

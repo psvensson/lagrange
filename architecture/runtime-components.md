@@ -148,48 +148,53 @@ AdminWebSocketAPI debug route adapter
 - Provides read-only wrapper for safe access
 - Supports cache change listeners for reactive updates
 
-#### CDC apply convergence semantics (order-insensitive)
+#### CDC source images and retained effects
 
-CDC fan-out is point-in-time delivery with no global ordering, so the apply path
-is a convergent state CRDT — the same set of events converges to the same cache
-regardless of delivery order, drop, or duplication
-(`src/cache/system-table-cache-row-merge.js`, `src/cache/system-table-cache.js`):
+`SystemTableCacheSourceOrder` owns the source ledger incarnation, contiguous
+position, per-key retained effect evidence, image generation, and existing
+re-list continuation. Durable events carry the canonical source range beside
+the unchanged event vector. Every member must name the same table and partition,
+strictly increase within that range, and agree with its final position. This
+validates internal consistency; completeness is the source transaction's ledger
+obligation, not an inference from numeric adjacency.
 
-- **HLC-LWW compare.** `isStaleForExistingRecord` prefers each row's origin write
-  HLC (`updated_at_hlc`, carried end-to-end on CDC `data` — see CDCIntegrationService /
-  PartitionService) over wall-clock `updated_at`. The HLC is a total causal order
-  (physical, logical, nodeId), so equal-millisecond UPDATE ties and cross-leader
-  wall-clock skew resolve deterministically and identically on every replica. When a
-  row carries no HLC the path falls back to the prior wall-clock comparison.
-- **DELETE tombstones.** A DELETE records a per-table tombstone keyed by row key +
-  delete HLC. A later-delivered but causally-older write (a reordered DELETE-before-
-  INSERT) is fenced and cannot resurrect the row; a genuinely-newer write supersedes
-  and clears the tombstone (legitimate re-create). Tombstones are GC'd by a TTL plus a
-  per-table size cap.
-- **Anti-entropy sweep.** `reconcileAgainstAuthoritativeTruth(snapshot, {evictOlderThanMs})`
-  evicts cache-only rows absent from a COMPLETE authoritative row set — the backstop for
-  a genuinely-lost DELETE (no tombstone could form). It is wired into the authoritative
-  catch-up (see CDCIntegrationService) and runs only against owner-authoritative reads,
-  with a race guard that preserves rows newer than the read snapshot.
+A handler's delivery receipt is diagnostic. The shared cache decides whether a
+durable occurrence is already covered by the current prefix or by a retained
+per-key effect from the same incarnation. Otherwise the one source-effect
+application owner runs the row fold and returns APPLIED, COVERED, or UNAVAILABLE,
+bound to the exact source cell and generation. A committed range advances only
+when all members have matching retained effects. A generic row repair, clear,
+reentrant replacement, or failed effect cannot let an old callback certify the
+new cell. Group-log receipt and member-cache currency are separate facts; a
+refused local effect retains the existing source re-list continuation.
+
+`installSourceImage` stages a complete detached table, then publishes its map,
+per-key/absence basis, diagnostic revision and source prefix in one synchronous
+span before notifying readers. Equal rows and absent keys participate in this
+publication. There is no per-row source-image mutation mode. The image clears
+obsolete wall-clock absence fences; a covered occurrence stays covered after
+handler receipt eviction or tombstone expiry.
+
+Generic keyed reconciliation may expose provisional rows but invalidates source
+currency and per-key evidence before any row or tombstone mutation. Its existing
+re-list owner restores the complete source basis. Complete-table observations
+and absence sweeps additionally retain their original image generation, so a
+late complete read cannot replace a newer image or publish an old absence
+frontier. HLC merge decisions and boolean row callbacks never certify a source
+range's actual effects.
 
 #### Sanctioned direct applySystemTableChange call sites
 
-Direct `applySystemTableChange` usage is constrained to the following paths:
-
-1. `src/message-group/cdc-handler.js` (`CDCHandler.applyEvent`) -
-   canonical CDC cache-apply owner path.
-2. `src/cache/cache-hydration-service.js`
-   (`CacheHydrationService` default `cdcEventApplier`) -
-   bootstrap hydration exception while seeding cache state.
-3. `src/bootstrap/node-joining-service.js`
-   (`NodeJoiningService.hydrateSystemCacheFromSnapshots`) -
-   join-time bootstrap hydration exception before CDC subscriptions activate.
-4. `src/bootstrap/node-joining-service.js`
-   (`NodeJoiningService.registerMessageGroupService`) -
-   bootstrap timing exception: eagerly seed local services cache after seed
-   registration to avoid join-time cache races before CDC fanout arrives.
-
-No other source file may call `applySystemTableChange` directly.
+The exact callsite inventory is enforced by
+`test/config/system-cache-write-callsite-guardrails.test.js`. The durable path is
+`src/cache/system-table-cache-source-effect-application.js`; ordinary unpositioned
+CDC remains in `src/message-group/cdc-handler.js`. Generic authoritative repair
+enters through `src/cdc/cdc-integration-service-cache-visibility-authority.js`
+and `src/control-plane/control-plane-system-table-gateway-cache-reconciliation.js`.
+The guard also names the existing bootstrap and owner-local projection suppliers.
+All generic calls invalidate source currency; none creates a durable occurrence
+or claims complete source effects. Complete images have the single atomic
+publication path described above, with no parallel per-row image route.
 
 ### CDCIntegrationService
 - Routes all system table writes through SQL

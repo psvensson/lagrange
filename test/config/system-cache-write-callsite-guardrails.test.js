@@ -13,15 +13,12 @@ const SANCTIONED_APPLY_CALL_COUNTS = Object.freeze({
   'bootstrap/node-joining-cdc-subscription-and-backfill.js': 1,
   'bootstrap/phases/create-message-group-phase.js': 1,
   'bootstrap/phases/query-system-state-phase.js': 2,
-  // The cache owner's own install of a complete leader image (CDC Stage 3
-  // re-list, design note S3.9): rows swapped and the source position recorded
-  // in one synchronous span, in the owner-defined SOURCE_IMAGE_REPLACEMENT
-  // mode that applySystemTableChange validates. It lives in src/cache and is
-  // reached only through installSourceImage (one caller: the relister, under
-  // the CDC owner's terminal gate). Its writes must take the one mutation
-  // path (generations, wakes, tombstones); a cache-internal second path would
-  // be the competing authority this guardrail exists to prevent.
-  'cache/system-table-cache-source-image.js': 1,
+  // The one durable-occurrence boundary delegates rows to the cache fold
+  // and accepts only an effect retained by the exact source context. Image
+  // publication stages and swaps the complete map and its source/absence
+  // basis before notifications; the old per-row image mutation mode is gone.
+  // This transfers the existing sanctioned callsite, without adding one.
+  'cache/system-table-cache-source-effect-application.js': 1,
   // The CDC authoritative cache-repair owner. 55a42ef57 (one CDC terminal
   // gate at the owner) extracted the repair body out of
   // cdc-integration-service-cache-visibility-wait.js into the module-private

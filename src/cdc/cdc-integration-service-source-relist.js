@@ -71,8 +71,6 @@ const SOURCE_RELIST_LOG_MSG = Object.freeze({
   PAGE_FAILED: 'CDC source image page failed; the image restarts from page 0',
 });
 
-// The cause an installed image's authoritative watermark names.
-
 const RELIST_READ_AUTHORITY = buildControlPlaneReadAuthority({
   authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
   leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
@@ -93,8 +91,8 @@ function pageResult(partitionId) {
 }
 
 // Read one page through the owner-RPC query path, at the source's leader.
-// The executor answers every read failure typed; a throw is a defect, and it
-// ends this list at the source order, which logs it (RELIST_FAILED).
+// The executor answers ordinary failures typed. An unexpected throw remains
+// a defect diagnostic and returns to this same owner's paced image retry.
 async function readImagePage(service, request, cursor) {
   const queryExecutor = service.sqlQueryEngine?.queryExecutor ?? null;
   if (queryExecutor === null) {
@@ -126,6 +124,8 @@ function readFailureReason(result) {
 function isInvalidSourceImagePage(image, result, request, cursor) {
   return image?.sourcePartition !== request.sourcePartition ||
     !Number.isSafeInteger(image.appliedIndex) || image.appliedIndex < 0 ||
+    !(image.incarnation === null ||
+      (typeof image.incarnation === 'string' && image.incarnation.length > 0)) ||
     !isImagePage(result.imagePage, cursor);
 }
 
@@ -191,7 +191,7 @@ async function fetchSourceImage(readPage, request, stopped = () => false) {
       return sourceImagePageFailureOutcome(result, failure);
     }
     first ??= {imageId: result.imagePage.imageId, appliedIndex: result.sourceImage.appliedIndex,
-      incarnation: result.sourceImage.incarnation ?? null};
+      incarnation: result.sourceImage.incarnation};
     bytes += result.imagePage.byteCount;
     if (result.imagePage.last) {
       return {image: {sourcePartition: request.sourcePartition, tableName: request.tableName,
@@ -219,18 +219,33 @@ function acquireImageSlot(service) {
   return new Promise((resolve) => slots.waiting.push(resolve));
 }
 
-function countRestart(record, reason) {
+function countRestart(record, reason, error = null) {
   record.restarts += 1;
   record.restartReasons[reason] = (record.restartReasons[reason] ?? 0) + 1;
+  record.lastFailure = {reason, error};
+}
+
+// The logger can call its persistence sink synchronously. A diagnostic is
+// an observer of this attempt, never custody of the owed image or its pace.
+// Keep its failure in the same bounded attempt record; do not switch sinks.
+function emitImageDiagnostic(record, emit) {
+  try {
+    emit();
+  } catch (error) {
+    record.diagnosticFailures += 1;
+    record.lastDiagnosticError = error?.message ?? String(error);
+  }
 }
 
 // The one line per image: table, pages, rows, bytes, duration, restarts.
 function logImage(service, record, outcome, extra = {}) {
-  service.logger?.info?.(SOURCE_RELIST_LOG_MSG.IMAGE, {
+  emitImageDiagnostic(record, () => service.logger?.info?.(SOURCE_RELIST_LOG_MSG.IMAGE, {
     tableName: record.tableName, sourcePartition: record.sourcePartition, outcome,
     pages: record.pages, rows: record.rows, bytes: record.bytes,
     durationMs: service.timeSource.now() - record.startedAtMs, restarts: record.restarts,
-    restartReasons: record.restartReasons, ...extra});
+    restartReasons: record.restartReasons, lastFailure: record.lastFailure,
+    diagnosticFailures: record.diagnosticFailures,
+    lastDiagnosticError: record.lastDiagnosticError, ...extra}));
 }
 
 // Rows and position, in one synchronous span, plus the table's authoritative
@@ -259,9 +274,10 @@ async function listOneImage(service, request, record, terminal) {
       }
       countRestart(record, SOURCE_RELIST_FAILURE.CELL_CHANGED);
     } else {
-      countRestart(record, fetched.failure);
-      service.logger?.debug?.(SOURCE_RELIST_LOG_MSG.PAGE_FAILED, {...request,
-        failure: fetched.failure, error: fetched.error});
+      countRestart(record, fetched.failure, fetched.error);
+      emitImageDiagnostic(record, () => service.logger?.debug?.(
+        SOURCE_RELIST_LOG_MSG.PAGE_FAILED, {...request,
+          failure: fetched.failure, error: fetched.error}));
     }
     const hintMs = fetched.retryAfterMs ?? 0;
     await service.delayUntilShutdown(hintMs > 0 ? hintMs :
@@ -281,12 +297,18 @@ async function listOneImage(service, request, record, terminal) {
 async function relistSourceTable(service, request) {
   const terminal = () => Boolean(service.refuseIfTerminal(CDC_TERMINAL_STAGE.CACHE_REPAIR));
   if (terminal()) return SOURCE_RELIST_OUTCOME.STOPPED;
-  const release = await acquireImageSlot(service);
   const record = {...request, startedAtMs: service.timeSource.now(), pages: 0, rows: 0,
-    bytes: 0, restarts: 0, restartReasons: {}};
+    bytes: 0, restarts: 0, restartReasons: {}, lastFailure: null,
+    diagnosticFailures: 0, lastDiagnosticError: null};
+  const release = await acquireImageSlot(service);
   let listed;
   try {
     listed = await listOneImage(service, request, record, terminal);
+  } catch (error) {
+    countRestart(record, SOURCE_RELIST_FAILURE.READ_FAILED, error?.message ?? String(error));
+    emitImageDiagnostic(record, () => service.logger.error(SOURCE_RELIST_LOG_MSG.PAGE_FAILED,
+      {...request, failure: SOURCE_RELIST_FAILURE.READ_FAILED, error: record.lastFailure.error}));
+    listed = {outcome: SOURCE_RELIST_OUTCOME.RETRY};
   } finally {
     release();
   }
@@ -299,7 +321,10 @@ async function relistSourceTable(service, request) {
     {state: cell.state, appliedIndex: cell.position?.logIndex ?? null,
       upserted: listed.installed?.upserted ?? 0, deleted: listed.installed?.deleted ?? 0});
   if (listed.outcome === SOURCE_RELIST_OUTCOME.STOPPED) return listed.outcome;
-  if (cell.state !== SOURCE_POSITION_STATE.GAP) return SOURCE_RELIST_OUTCOME.RETRY;
+  // Logging can itself reenter an authoritative mutation. Decide the pace
+  // from the current cell after every observer, not the pre-log snapshot.
+  if (service.cacheMutationTarget.sourceOrder.positionOf(request.sourcePartition).state !==
+      SOURCE_POSITION_STATE.GAP) return SOURCE_RELIST_OUTCOME.RETRY;
   await service.delayUntilShutdown(SOURCE_RELIST_BOUND.RELIST_RETRY_DELAY_MS);
   return terminal() ? SOURCE_RELIST_OUTCOME.STOPPED : SOURCE_RELIST_OUTCOME.RETRY;
 }

@@ -206,7 +206,7 @@ class SystemTableCacheObservationMethods {
       return this.getLastAuthoritativeObservedAtMs(tableName);
     }
     const sourceGeneration = this.sourceOrder.tableGeneration(tableName);
-    if (sourceGeneration !== null && options.sourceGeneration !== sourceGeneration) return null;
+    if (options.sourceGeneration !== sourceGeneration) return null;
     const normalizedObservedAtMs = Math.floor(observedAtMs);
     const currentObservedAtMs =
         this.lastAuthoritativeObservedAtMsByTableName.get(tableName);

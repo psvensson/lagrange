@@ -303,10 +303,15 @@ class SystemTableCache {
     const causeId = normalizeCauseId(options?.causeId);
     const mutationMode = options?.mutationMode ||
       SYSTEM_TABLE_CACHE_MUTATION_MODE.CDC_MERGE;
-    const sourceGeneration = this.sourceOrder.tableGeneration(tableName);
-    if (mutationMode !== SYSTEM_TABLE_CACHE_MUTATION_MODE.CDC_MERGE &&
-        sourceGeneration !== null && options.sourceGeneration !== sourceGeneration) return false;
     this.validateMutationMode(mutationMode, operation, tableName, options);
+    const sourceGeneration = this.sourceOrder.tableGeneration(tableName);
+    const sourceGenerationSupplied = Object.hasOwn(options, 'sourceGeneration');
+    if ((sourceGenerationSupplied || mutationMode ===
+        SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_OBSERVATION_RECONCILIATION) &&
+        options.sourceGeneration !== sourceGeneration) return false;
+    const sourceEffectSupplied = Object.hasOwn(options, 'sourceEffectContext');
+    if (sourceEffectSupplied && !this.sourceOrder.applicationContextIsCurrent(
+      options.sourceEffectContext, tableName, options)) return false;
 
     // Get the primary key field for this table
     const pkField = getSystemCachePrimaryKeyField(tableName);
@@ -327,6 +332,10 @@ class SystemTableCache {
     let incomingVersionAccepted = false;
     const sameEntryOrder = this.sourceOrder.compareInSameEntry(tableName, key, data, options);
     if (sameEntryOrder < 0) return false;
+    // Generic authority cannot preserve source currency. Invalidate before
+    // either row writes or tombstone mutation, and before every notification.
+    // An invalid supplied source context is refused above, never reclassified.
+    if (!sourceEffectSupplied) this.sourceOrder.invalidateTable(tableName);
     if (sameEntryOrder > 0) this.tombstoneStore.clearKey(tableName, key);
 
     // A write (INSERT/UPDATE/UPSERT) for a key under an active DELETE tombstone is
@@ -354,7 +363,6 @@ class SystemTableCache {
     const existing = table.has(key) ? table.get(key) : null;
     const folded = resolveAppliedRow({tableName, existing, operation, data,
       mutationMode, sameEntryOrder});
-    if (options.sourceEffectContext === undefined) this.sourceOrder.invalidateTable(tableName);
     incomingVersionAccepted = folded.accepted;
     switch (folded.state) {
     case CDC_ROW_FOLD_STATE.STALE_BACKFILLED:
@@ -388,7 +396,8 @@ class SystemTableCache {
       recordForNotification = folded.row;
     }
 
-    if (incomingVersionAccepted || folded.state === CDC_ROW_FOLD_STATE.DELETE_ABSENT) {
+    if (sourceEffectSupplied &&
+        (incomingVersionAccepted || folded.state === CDC_ROW_FOLD_STATE.DELETE_ABSENT)) {
       this.sourceOrder.record(tableName, key, data, options);
     }
     this.logger.debug(CACHE_LOG_MSG.APPLIED_CDC_EVENT, {tableName, operation, key, causeId});
