@@ -1,9 +1,13 @@
 #!/usr/bin/env node
 
 import {spawnSync} from 'node:child_process';
-
 import {ACTION, authorizeAction, isAuthorized} from './action-authority.js';
 import {spawnGit} from './checks/git-invocation.js';
+import {
+  PACKAGE_NAME, REGISTRY_URL, packageStructureChecks, publicationMetadataChecks,
+  inspectPackageSourceSelection,
+  validatePackedSourceSelection,
+} from './npm-package-source-selection.js';
 import {createHash} from 'node:crypto';
 import {
   access,
@@ -20,9 +24,7 @@ import {fileURLToPath, pathToFileURL} from 'node:url';
 
 const SCRIPT_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 const REPOSITORY_ROOT = resolve(SCRIPT_DIRECTORY, '..');
-const PACKAGE_NAME = 'lagrange-server';
 const PRODUCT_NAME = 'lagrange';
-const REGISTRY_URL = 'https://registry.npmjs.org/';
 const COMMAND_TIMEOUT_MS = 120000;
 const COMMAND_OUTPUT_MAX_BYTES = 16 * 1024 * 1024;
 // npm processes a provenance-signed publish asynchronously and says so:
@@ -40,17 +42,6 @@ const NPM_COMMAND = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const TEXT_ENCODING = 'utf8';
 const ARGUMENT_SEPARATOR = ' ';
 const RELEASE_ERROR_NAME = 'NpmReleaseError';
-const PACKAGE_ROOT_EXPORT = '.';
-const PUBLIC_API_MAIN = 'src/public-api.js';
-const PUBLIC_API_EXPORT = './src/public-api.js';
-const LAGRANGE_BIN_PATH = './src/sea-entry.js';
-const ADMIN_BIN_NAME = 'lagrange-admin';
-const ADMIN_BIN_PATH = './src/cli/bin/lagrange-admin.js';
-const PACKAGE_SOURCE_PATH = 'src/';
-const PACKAGE_WIT_PATH = 'wit/';
-const COMPONENTIZE_DEPENDENCY = '@bytecodealliance/componentize-js';
-const DISTRIBUTED_SQL_KEYWORD = 'distributed-sql';
-const PUBLIC_ACCESS = 'public';
 const PACKAGE_JSON_FILENAME = 'package.json';
 const CONSUMER_PACKAGE_NAME = 'lagrange-server-install-smoke';
 const MODULE_PACKAGE_TYPE = 'module';
@@ -114,21 +105,6 @@ const INSTALL_PATH_LABEL = Object.freeze({
   ADMIN: 'lagrange-admin bin',
 });
 const MANIFEST_ERROR = Object.freeze({
-  LOCK_VERSION: 'package-lock.json root version must match package.json',
-  MAIN: 'package.json main must expose src/public-api.js',
-  EXPORT: 'package.json root export must expose src/public-api.js',
-  LAGRANGE_BIN: 'package.json must retain the lagrange executable',
-  ADMIN_BIN: 'package.json must retain the lagrange-admin executable',
-  FILES: 'package.json files must explicitly include src/',
-  WIT_FILES: 'package.json files must explicitly include wit/',
-  COMPONENTIZE_DEP:
-    'package.json dependencies must include @bytecodealliance/componentize-js',
-  AUTHOR: 'package.json author must be non-empty',
-  HOMEPAGE: 'package.json homepage must be non-empty',
-  BUGS: 'package.json bugs.url must be non-empty',
-  KEYWORDS: 'package.json keywords must identify the distributed SQL package',
-  ACCESS: 'package.json publishConfig.access must be public',
-  PROVENANCE: 'package.json publishConfig.provenance must be true',
   ONE_ARTIFACT: 'expected one packed artifact',
   PACKED_VERSION: 'packed artifact version must match package.json',
   GIT_HEAD: 'candidate tarball must contain a full gitHead',
@@ -212,62 +188,20 @@ async function readJson(filePath) {
 
 function assertManifestCondition(condition, message) {
   if (!condition) {
-    throw new NpmReleaseError(
-      RELEASE_OUTCOME.PACKAGE_MANIFEST_INVALID,
-      message,
-    );
+    throw new NpmReleaseError(RELEASE_OUTCOME.PACKAGE_MANIFEST_INVALID, message);
   }
 }
 
 function validatePackageStructure(packageJson, packageLock) {
-  const rootLock = packageLock.packages?.[''];
-  assertManifestCondition(packageJson.name === PACKAGE_NAME,
-    `package.json name must be ${PACKAGE_NAME}`);
-  assertManifestCondition(packageLock.name === PACKAGE_NAME,
-    `package-lock.json name must be ${PACKAGE_NAME}`);
-  assertManifestCondition(rootLock?.name === PACKAGE_NAME,
-    `package-lock.json root package name must be ${PACKAGE_NAME}`);
-  assertManifestCondition(rootLock?.version === packageJson.version,
-    MANIFEST_ERROR.LOCK_VERSION);
-  assertManifestCondition(packageJson.main === PUBLIC_API_MAIN,
-    MANIFEST_ERROR.MAIN);
-  assertManifestCondition(
-    packageJson.exports?.[PACKAGE_ROOT_EXPORT] === PUBLIC_API_EXPORT,
-    MANIFEST_ERROR.EXPORT,
-  );
-  assertManifestCondition(packageJson.bin?.lagrange === LAGRANGE_BIN_PATH,
-    MANIFEST_ERROR.LAGRANGE_BIN);
-  assertManifestCondition(
-    packageJson.bin?.[ADMIN_BIN_NAME] === ADMIN_BIN_PATH,
-    MANIFEST_ERROR.ADMIN_BIN,
-  );
-  assertManifestCondition(Array.isArray(packageJson.files) &&
-    packageJson.files.includes(PACKAGE_SOURCE_PATH),
-  MANIFEST_ERROR.FILES);
-  assertManifestCondition(Array.isArray(packageJson.files) &&
-    packageJson.files.includes(PACKAGE_WIT_PATH),
-  MANIFEST_ERROR.WIT_FILES);
-  assertManifestCondition(
-    Boolean(packageJson.dependencies?.[COMPONENTIZE_DEPENDENCY]),
-    MANIFEST_ERROR.COMPONENTIZE_DEP,
-  );
+  for (const check of packageStructureChecks(packageJson, packageLock)) {
+    assertManifestCondition(check.valid, check.message);
+  }
 }
 
 function validatePublicationMetadata(packageJson) {
-  assertManifestCondition(Boolean(packageJson.author),
-    MANIFEST_ERROR.AUTHOR);
-  assertManifestCondition(Boolean(packageJson.homepage),
-    MANIFEST_ERROR.HOMEPAGE);
-  assertManifestCondition(Boolean(packageJson.bugs?.url),
-    MANIFEST_ERROR.BUGS);
-  assertManifestCondition(packageJson.keywords?.includes(DISTRIBUTED_SQL_KEYWORD),
-    MANIFEST_ERROR.KEYWORDS);
-  assertManifestCondition(packageJson.publishConfig?.access === PUBLIC_ACCESS,
-    MANIFEST_ERROR.ACCESS);
-  assertManifestCondition(packageJson.publishConfig?.provenance === true,
-    MANIFEST_ERROR.PROVENANCE);
-  assertManifestCondition(packageJson.publishConfig?.registry === REGISTRY_URL,
-    `package.json publishConfig.registry must be ${REGISTRY_URL}`);
+  for (const check of publicationMetadataChecks(packageJson)) {
+    assertManifestCondition(check.valid, check.message);
+  }
 }
 
 async function validateWorkspaceManifest() {
@@ -276,6 +210,15 @@ async function validateWorkspaceManifest() {
   validatePackageStructure(packageJson, packageLock);
   validatePublicationMetadata(packageJson);
   return packageJson;
+}
+
+function validateSourceSelection(action) {
+  try {
+    return action();
+  } catch (error) {
+    throw new NpmReleaseError(RELEASE_OUTCOME.PACKAGE_MANIFEST_INVALID,
+      error.message, error);
+  }
 }
 
 function parsePackOutput(output) {
@@ -323,57 +266,49 @@ function headCommit() {
 
 async function buildNpmPackage(options = {}) {
   const packageJson = await validateWorkspaceManifest();
+  const selection = validateSourceSelection(() =>
+    inspectPackageSourceSelection(REPOSITORY_ROOT, packageJson));
   const gitHead = resolveGitHead(options.gitHead);
-  const outputDirectory = resolve(
-    options.outputDirectory || join(REPOSITORY_ROOT, 'dist/npm'),
-  );
+  const outputDirectory = resolve(options.outputDirectory || join(REPOSITORY_ROOT, 'dist/npm'));
   const temporaryRoot = await mkdtemp(join(tmpdir(), 'lagrange-npm-pack-'));
   const preliminaryDirectory = join(temporaryRoot, 'preliminary');
   const stagingDirectory = join(temporaryRoot, 'staging');
   await Promise.all([
     mkdir(outputDirectory, {recursive: true}),
-    mkdir(preliminaryDirectory),
-    mkdir(stagingDirectory),
+    mkdir(preliminaryDirectory), mkdir(stagingDirectory),
   ]);
   try {
     const preliminary = parsePackOutput(runChecked(NPM_COMMAND, [
-      'pack',
-      '--json',
-      '--ignore-scripts',
-      '--pack-destination',
-      preliminaryDirectory,
+      'pack', '--json', '--ignore-scripts', '--pack-destination', preliminaryDirectory,
     ]));
     const preliminaryTarball = join(preliminaryDirectory, preliminary.filename);
-    const extractArguments = [
-      COMMAND_ARGUMENT.TAR_EXTRACT_GZIP,
-      preliminaryTarball,
-      COMMAND_ARGUMENT.TAR_DIRECTORY,
-      stagingDirectory,
-    ];
-    runChecked(TAR_COMMAND, extractArguments);
+    runChecked(TAR_COMMAND, [COMMAND_ARGUMENT.TAR_EXTRACT_GZIP, preliminaryTarball,
+      COMMAND_ARGUMENT.TAR_DIRECTORY, stagingDirectory]);
     const stagedPackageRoot = join(stagingDirectory, 'package');
     const stagedManifestPath = join(stagedPackageRoot, 'package.json');
     const stagedManifest = await readJson(stagedManifestPath);
+    const preliminarySelection = validateSourceSelection(() =>
+      validatePackedSourceSelection(stagedPackageRoot, selection, preliminary, packageJson));
     stagedManifest.gitHead = gitHead;
-    await writeFile(
-      stagedManifestPath,
-      `${JSON.stringify(stagedManifest, null, 2)}\n`,
-      TEXT_ENCODING,
-    );
+    await writeFile(stagedManifestPath,
+      `${JSON.stringify(stagedManifest, null, 2)}\n`, TEXT_ENCODING);
     const packed = parsePackOutput(runChecked(NPM_COMMAND, [
-      'pack',
-      '--json',
-      '--ignore-scripts',
-      '--pack-destination',
-      outputDirectory,
+      'pack', '--json', '--ignore-scripts', '--pack-destination', outputDirectory,
     ], {cwd: stagedPackageRoot}));
     assertManifestCondition(packed.name === PACKAGE_NAME,
       `packed artifact name must be ${PACKAGE_NAME}`);
     assertManifestCondition(packed.version === packageJson.version,
       MANIFEST_ERROR.PACKED_VERSION);
+    const finalRoot = join(temporaryRoot, 'final');
+    await mkdir(finalRoot);
+    runChecked(TAR_COMMAND, [COMMAND_ARGUMENT.TAR_EXTRACT_GZIP,
+      join(outputDirectory, packed.filename), COMMAND_ARGUMENT.TAR_DIRECTORY, finalRoot]);
+    const finalSelection = validateSourceSelection(() =>
+      validatePackedSourceSelection(join(finalRoot, 'package'), selection, packed, stagedManifest));
     return {
-      ...packed,
-      gitHead,
+      ...packed, gitHead,
+      sourceSelection: {sourceFingerprint: selection.sourceFingerprint,
+        excluded: selection.excluded, preliminary: preliminarySelection, final: finalSelection},
       tarballPath: join(outputDirectory, packed.filename),
     };
   } finally {

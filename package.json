@@ -25,6 +25,8 @@
     "src/",
     "!src/test-helpers/",
     "!src/**/INDEX.md",
+    "!src/debug-runtime/dwarf-index-pipeline.js",
+    "!src/debug-runtime/vscode-dwarf-parser-backend.js",
     "wit/",
     "vendor/raft-rs-wasm/",
     "CHANGELOG.md"

@@ -1,0 +1,40 @@
+{
+  "schema": "solve-quest/2",
+  "id": "npm-development-source-selection",
+  "class": "fix",
+  "statement": "At base fa70987b2833031ffe6054a9b12ee86bbb71d52c, make the production npm selection exclude exactly the independently approved unwired DWARF development pair, preserving their checkout bodies and every other selected source/asset/vendor body. The canonical buildNpmPackage must freshly reject incoming references, unsupported target forms and selector/source/preliminary/final-pack disagreement, using PACKAGE_MANIFEST_INVALID, and proceed after correction through that same path. Retain real base behavior red, W2-W6 focused source/tar controls, exact candidate binding and independent W7 review. Installed behavior, native-copy integration, identity, provenance, operational acceptance and release are not claimed.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/npm-development-source-selection-evidence.js",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "approved-contract",
+      "statement": "M1-M7 and W1-W7 in independently approved DESIGN REVIEW SHA256 21f82052217b55e767f6ceda38d2116f31806bc76149cac861398860993d7452 are binding."
+    },
+    {
+      "id": "one-selection-owner",
+      "statement": "package.json remains npm selection authority; release build calls one fresh syntax-only selection guard, never product imports or historical graph authorization."
+    },
+    {
+      "id": "real-red-and-packs",
+      "statement": "Retain genuine base behavior red before changing selection/guard, real offline preliminary/final npm selections and byte equality in private Git snapshots. A missing packet is only evidence readiness red."
+    },
+    {
+      "id": "bounded-scope",
+      "statement": "Only package exactpair selectors, release wiring, named selection helper, focused release test, own compact Quest/checker and design-named required generated outputs may change. No src bodies, lock, dependencies, budgets, integration or old diagnostics."
+    },
+    {
+      "id": "failure-and-review",
+      "statement": "First unexpected failure stops Sol for Astra with immutable command/cause/candidate evidence. No selfrepair, retry, selfapproval, commit, push, publish, land or solved."
+    },
+    {
+      "id": "evidence-ceiling",
+      "statement": "Selection/closure and tar retention are separate from integrated artifact, installation, workers, identity, provenance, operational timeout and release acceptance."
+    }
+  ],
+  "sealedAt": "fa70987b2833031ffe6054a9b12ee86bbb71d52c"
+}
