@@ -35,7 +35,8 @@ import {
   CONTROL_PLANE_READ_LEADER_MODE,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {ReplicaHandler} from '../../src/node/replica-handler.js';
-import {captureReplicaAdmission} from '../../src/node/replica-state-machine-serialization.js';
+import {advanceReplicaRevision, captureReplicaAdmission} from
+  '../../src/node/replica-state-machine-serialization.js';
 import {createReplicaRuntimePublication, publishReplicaRuntime} from
   '../../src/node/replica-runtime-publication.js';
 import {attachPartitionRuntimePublication} from
@@ -339,6 +340,137 @@ test('restart recovery replaces only newer durable generations and fences ABA',
     t.equal(stateMachine.getState(abaDurable.service_id)?.state,
       ReplicaState.FAILED);
   });
+
+function holdRecoveryRead(store, ordinal) {
+  let release;
+  let reached;
+  let reads = 0;
+  const held = new Promise((resolve) => { release = resolve; });
+  const started = new Promise((resolve) => { reached = resolve; });
+  store.setBeforeAuthoritativeRead(async (tableName) => {
+    if (tableName !== SERVICES || ++reads !== ordinal) return;
+    reached();
+    await held;
+  });
+  return {release, started};
+}
+
+async function recoveryDebtFixture(t, replicaId) {
+  const row = serviceRow(replicaId, ReplicaState.ACTIVE, 800);
+  const store = createLifecycleRowStore({services: [row], partitions: [partitionRow()]});
+  const stateMachine = createStateMachine(store, {now: () => 900});
+  registerRow(stateMachine, row);
+  store.setBeforeMutation((mutation) => {
+    if (mutation.tableName === PARTITIONS) throw new Error('leader-clear unavailable');
+  });
+  t.equal(await stateMachine.transition(replicaId, ReplicaState.FAILED,
+    {partitionId: row.partition_id, reason: 'recovery-debt-fixture'}), true);
+  store.setBeforeMutation(null);
+  const debt = stateMachine.canonicalLeaderClearDebtByReplicaId.get(replicaId);
+  t.ok(debt, 'real durable transition retains its unconfirmed leader effect');
+  return {row, store, stateMachine, debt};
+}
+
+test('recovery initial read cannot adopt an independently advanced local revision',
+  async (t) => {
+    initializeEnvironment();
+    const row = serviceRow('recovery-held-initial-generation', ReplicaState.CREATING, 100);
+    const authoritative = {...row, state_entered_at: 200, updated_at: 200};
+    const store = createLifecycleRowStore({services: [authoritative]});
+    const stateMachine = createStateMachine(store, {now: () => 300});
+    registerRow(stateMachine, row);
+    const originalState = stateMachine.replicas.get(row.service_id);
+    const held = holdRecoveryRead(store, 1);
+    const recovering = stateMachine.handleNodeRecovery({systemTableCache: store.cache});
+    await held.started;
+    // The same owner invalidation primitive used by clear/transition advances
+    // while the external read is held; this unit witness introduces no row.
+    const advancedRevision = advanceReplicaRevision(stateMachine, row.service_id);
+    held.release();
+    t.equal((await recovering).total, 0, 'old recovery cannot borrow the later revision');
+    t.equal(stateMachine.replicas.get(row.service_id), originalState,
+      'no authoritative snapshot is installed by the stale read');
+    t.equal(stateMachine.replicaRevisionByReplicaId.get(row.service_id), advancedRevision);
+    t.equal(store.mutations.length, 0, 'stale recovery issues no durable effect');
+  });
+
+for (const disposition of ['replaced', 'removed']) {
+  test(`recovery initial read preserves debt ${disposition} while it is held`, async (t) => {
+    initializeEnvironment();
+    const {row, store, stateMachine, debt} = await recoveryDebtFixture(t,
+      `recovery-held-initial-debt-${disposition}`);
+    const replicaId = row.service_id;
+    const originalState = stateMachine.replicas.get(replicaId);
+    const revision = stateMachine.replicaRevisionByReplicaId.get(replicaId);
+    const held = holdRecoveryRead(store, 1);
+    const mutationsBefore = store.mutations.length;
+    const recovering = stateMachine.handleNodeRecovery({systemTableCache: store.cache});
+    await held.started;
+    const replacement = disposition === 'replaced' ? Object.freeze({...debt}) : undefined;
+    if (replacement) stateMachine.canonicalLeaderClearDebtByReplicaId.set(replicaId, replacement);
+    else stateMachine.canonicalLeaderClearDebtByReplicaId.delete(replicaId);
+    held.release();
+    t.equal((await recovering).total, 0);
+    t.equal(stateMachine.canonicalLeaderClearDebtByReplicaId.get(replicaId), replacement,
+      'old recovery cannot replace, recreate or delete another debt cell');
+    t.equal(stateMachine.canonicalLeaderClearSettlementByReplicaId.has(replicaId), false,
+      'old recovery cannot certify another owner’s effect');
+    t.equal(stateMachine.replicas.get(replicaId), originalState);
+    t.equal(stateMachine.replicaRevisionByReplicaId.get(replicaId), revision);
+    t.equal(store.mutations.length, mutationsBefore, 'invalidated read issues no leader mutation');
+  });
+}
+
+test('recovery second read cannot absorb a delayed prior-generation debt completion', async (t) => {
+  initializeEnvironment();
+  const {row, store, stateMachine, debt} = await recoveryDebtFixture(t,
+    'recovery-held-second-debt');
+  const replicaId = row.service_id;
+  const creating = {...row, status: ReplicaState.CREATING,
+    created_at: 1000, state_entered_at: 1000, updated_at: 1000,
+    create_attempt_token: 'recovery-new-attempt'};
+  store.durable[SERVICES].set(replicaId, cloneRow(creating));
+  store.project(SERVICES, creating);
+  const held = holdRecoveryRead(store, 2);
+  const mutationsBefore = store.mutations.length;
+  const recovering = stateMachine.handleNodeRecovery({systemTableCache: store.cache});
+  await held.started;
+  const acceptedState = stateMachine.replicas.get(replicaId);
+  const acceptedRevision = stateMachine.replicaRevisionByReplicaId.get(replicaId);
+  t.equal(acceptedState.state, ReplicaState.CREATING,
+    'first read installed its own accepted source before the shared transition read');
+  t.equal(stateMachine.canonicalLeaderClearDebtByReplicaId.has(replicaId), false);
+  // An independently completing effect still carries its exact earlier cell.
+  // This is a debt-ownership unit seam, not a new lifecycle source admission.
+  stateMachine.canonicalLeaderClearDebtByReplicaId.set(replicaId, debt);
+  held.release();
+  t.equal((await recovering).total, 0, 'the shared read refuses changed debt ownership');
+  t.equal(stateMachine.canonicalLeaderClearDebtByReplicaId.get(replicaId), debt);
+  t.equal(stateMachine.replicas.get(replicaId), acceptedState,
+    'second read cannot replace its accepted state or proceed to FAILED');
+  t.equal(stateMachine.replicaRevisionByReplicaId.get(replicaId), acceptedRevision);
+  t.equal(store.mutations.length, mutationsBefore, 'no stale lifecycle or leader write occurs');
+});
+
+test('unchanged recovery settles its original debt and source failure leaves it owned', async (t) => {
+  initializeEnvironment();
+  const {row, store, stateMachine, debt} = await recoveryDebtFixture(t,
+    'recovery-unchanged-debt');
+  const replicaId = row.service_id;
+  const originalState = stateMachine.replicas.get(replicaId);
+  store.setAuthoritativeReadAvailable(false);
+  const mutationsBefore = store.mutations.length;
+  t.equal((await stateMachine.handleNodeRecovery({systemTableCache: store.cache})).total, 0);
+  t.equal(stateMachine.canonicalLeaderClearDebtByReplicaId.get(replicaId), debt);
+  t.equal(store.mutations.length, mutationsBefore, 'unavailable source produces no effect');
+  store.setAuthoritativeReadAvailable(true);
+  t.equal((await stateMachine.handleNodeRecovery({systemTableCache: store.cache})).total, 0);
+  t.equal(stateMachine.replicas.get(replicaId), originalState);
+  t.equal(stateMachine.canonicalLeaderClearDebtByReplicaId.has(replicaId), false);
+  t.equal(stateMachine.canonicalLeaderClearSettlementByReplicaId.get(replicaId)?.replicaState,
+    originalState, 'unchanged original source completes the actual leader obligation');
+  t.equal(store.mutations.length, mutationsBefore + 1);
+});
 
 test('handler binds leader settlement before retire and durable deletion',
   async (t) => {
