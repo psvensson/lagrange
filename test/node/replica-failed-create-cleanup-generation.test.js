@@ -401,7 +401,6 @@ test('cleanup completion receipt survives a fresh handler and lost final ACK',
       status: ReplicaStatus.FAILED,
       service: null,
     });
-    handler.startRemoveReplicaAsync = () => {};
     const request = {
       operationId: 'cleanup-complete-restart-same-operation',
       partitionId: failed.partition_id,
@@ -411,22 +410,11 @@ test('cleanup completion receipt survives a fresh handler and lost final ACK',
     };
     t.equal((await handler.handleRemoveReplica(request)).status,
       ReplicaOperationResponseStatus.INITIATED);
-    const removingAuthority = await stateMachine
-      .bindAuthoritativeRemovalAuthority(failed.service_id, {
-        partitionId: failed.partition_id,
-        nodeId: NODE_ID,
-      });
+    await Promise.all([...handler.operationTasks]);
     const owner = handler.getReplicaCleanupTombstoneOwner();
-    const cleanupAuthority = await owner.takeoverRemoving(
-      removingAuthority,
-      'failed_create_cleanup_test',
-    );
-    const completionReceipt = await owner.markComplete(
-      cleanupAuthority,
-      {artifactsAbsent: true},
-    );
+    const completionReceipt = await owner.observeAuthority(failed.service_id);
     t.equal(completionReceipt?.kind, 'cleanup_complete',
-      'artifact absence is retained as an operation-bound durable receipt');
+      'the real executor retains artifact absence as an operation-bound durable receipt');
     t.equal((await handler.handleRemoveReplica(request)).status,
       ReplicaOperationResponseStatus.COMPLETED,
       'same-process final ACK loss resolves from the durable receipt');

@@ -597,10 +597,23 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
     );
   }
 
+  async redriveStoppingExecutor(operation) {
+    const replay = await this.executeOperationFromReconcilePath(operation);
+    return replay?.success === true &&
+      replay.status !== ReplicaOperationResponseStatus.IN_PROGRESS;
+  }
+
   async reconcileStoppingOperationProgress(operation) {
     if (isReplaceRemovalIntentDurable(operation)) {
       const result = await this.runReplaceStoppingOwner(operation);
       return result?.success === true;
+    }
+    // SERVICES absence does not prove the executor settled its exact runtime
+    // and cleanup completion debt. The durable REMOVE keeps its executor as
+    // completion owner, including after a lost DELETE acknowledgement.
+    if (operation.type === OperationType.REMOVE &&
+        operation.entityType === UNIFIED_SERVICE_TYPE.PARTITION) {
+      return this.redriveStoppingExecutor(operation);
     }
     const removingReplicaId =
       operation.type === OperationType.REPLACE ?
@@ -671,16 +684,7 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
       return true;
     }
 
-    const replayResult =
-      await this.executeOperationFromReconcilePath(operation);
-    if (
-      replayResult?.success === true &&
-      replayResult.status !== ReplicaOperationResponseStatus.IN_PROGRESS
-    ) {
-      return true;
-    }
-
-    return false;
+    return this.redriveStoppingExecutor(operation);
   }
 
   // BR7: the effect is observed without a recorded intent; record it and

@@ -195,7 +195,7 @@
       ]
     },
     "replica-durable-generation-cleanup": {
-      "description": "Exact durable replica generations, SERVICES-key cleanup ownership, storage deletion, startup admission, and live-row creation form one lifecycle closure contract.",
+      "description": "Exact durable replica generations, SERVICES-key cleanup ownership, storage deletion, startup admission, and live-row creation form one lifecycle closure contract. Snapshot episode settlement does not authorize deletion: exact tracked and retained runtime release must complete, failed physical release retains typed retry debt, the cleanup owner resumes only its issued handoff in the existing serialized removal lane, and recreation drains unpublished products before another acquisition. Issued takeover, release and completion phases retain exact local debt across lost observations; ordinary REMOVE outcomes return through the existing operation retry and executor ingress, never terminalizing from projected absence or a receipt while local debt remains.",
       "owners": [
         "src/node/replica-cleanup-tombstone-owner.js",
         "src/node/replica-handler-remove-execution-methods.js",
@@ -208,13 +208,32 @@
         "src/bootstrap/rejoin-hints-durable-evidence.js",
         "src/cdc/cdc-integration-service-mutations.js",
         "src/node/replica-handler-create-admission-methods.js",
-        "src/node/replica-create-admission-owner.js"
+        "src/node/replica-create-admission-owner.js",
+        "src/node/replica-runtime-cleanup-custody.js",
+        "src/node/replica-handler-runtime-methods.js",
+        "src/node/replica-removal-cleanup.js",
+        "src/node/replica-handler-remove-request-methods.js",
+        "src/node/replica-snapshot-install-owner.js",
+        "src/node/replica-snapshot-install-constants.js",
+        "src/node/replica-cleanup-constants.js"
       ],
       "tests": [
         "test/node/replica-lifecycle-durable-generation.test.js",
         "test/node/replica-handler.test.js",
         "test/partition/partition-service-cleanup-token-schema.test.js",
-        "test/node/replica-create-timeout-replay-custody.test.js"
+        "test/node/replica-create-timeout-replay-custody.test.js",
+        "test/node/replica-cleanup-release-continuation.test.js",
+        "test/node/replica-runtime-exact-custody.test.js",
+        "test/node/replica-snapshot-install-owner.test.js",
+        "test/raft/raft-rs-backend/partition-snapshot-install-failed-release.test.js",
+        "test/raft/raft-rs-backend/partition-snapshot-install-release-control.test.js",
+        "test/node/replica-removal-consensus-exit.test.js",
+        "test/node/replica-cleanup-mutation-continuation.test.js",
+        "test/rebalancer/replica-remove-cleanup-workflow.test.js",
+        "test/rebalancer/replica-remove-debt-consumer.test.js",
+        "test/node/replica-cleanup-token-authority.test.js",
+        "test/node/replica-failed-create-cleanup-generation.test.js",
+        "test/rebalancer/rebalance-coordinator-stopping-reconcile.test.js"
       ]
     },
     "failed-create-target-authoritative-cleanup": {
@@ -2170,6 +2189,28 @@
         "test/bootstrap/pgwire-startup-safety-gate.test.js",
         "test/bootstrap/cleanup-ownership-order-characterization.test.js"
       ]
+    },
+    "replica-removal-workflow-continuation": {
+      "description": "The replica cleanup owner retains issued takeover, release and completion intents with exact generation and runtime custody. Executor failures carry typed retained REMOVE debt to the existing operation retry owner. STOPPING requests executor completion even after SERVICES absence, and exact request ingress settles local obligations before a receipt can complete the operation. No new timer, observed-token adoption or CREATE continuation policy.",
+      "owners": [
+        "src/node/replica-cleanup-tombstone-owner.js",
+        "src/node/replica-cleanup-constants.js",
+        "src/node/replica-handler-remove-request-methods.js",
+        "src/node/replica-handler-remove-execution-methods.js",
+        "src/node/replica-removal-cleanup.js",
+        "src/node/replica-state-machine-recovery.js",
+        "src/rebalancer/operation-workflow-executor-failure.js",
+        "src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js",
+        "src/rebalancer/operation-workflow-recovery-observation.js"
+      ],
+      "tests": [
+        "test/rebalancer/replica-remove-cleanup-workflow.test.js",
+        "test/rebalancer/replica-remove-debt-consumer.test.js",
+        "test/node/replica-cleanup-mutation-continuation.test.js",
+        "test/node/replica-cleanup-release-continuation.test.js",
+        "test/node/replica-failed-create-cleanup-generation.test.js",
+        "test/rebalancer/rebalance-coordinator-stopping-reconcile.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -2340,7 +2381,7 @@
       ]
     },
     "replica-durable-generation-cleanup": {
-      "description": "Lifecycle CAS, cleanup-key arbitration, physical storage deletion, and every storage-open admission must preserve one exact durable owner for a logical replica identity.",
+      "description": "Lifecycle CAS, cleanup-key arbitration, physical storage deletion, and every storage-open admission must preserve one exact durable owner for a logical replica identity. Issued takeover, release and completion phases retain exact local debt across lost observations; ordinary REMOVE outcomes return through the existing operation retry and executor ingress, never terminalizing from projected absence or a receipt while local debt remains.",
       "endpoints": [
         {
           "id": "durable-lifecycle-generation",
@@ -2361,7 +2402,14 @@
             "src/bootstrap/rejoin-hints-durable-evidence.js",
             "src/cdc/cdc-integration-service-mutations.js",
             "src/node/replica-handler-create-admission-methods.js",
-            "src/node/replica-create-admission-owner.js"
+            "src/node/replica-create-admission-owner.js",
+            "src/node/replica-runtime-cleanup-custody.js",
+            "src/node/replica-handler-runtime-methods.js",
+            "src/node/replica-removal-cleanup.js",
+            "src/node/replica-handler-remove-request-methods.js",
+            "src/node/replica-snapshot-install-owner.js",
+            "src/node/replica-snapshot-install-constants.js",
+            "src/node/replica-cleanup-constants.js"
           ]
         }
       ],
@@ -2370,7 +2418,19 @@
         "test/node/replica-lifecycle-durable-generation.test.js",
         "test/node/replica-handler.test.js",
         "test/partition/partition-service-cleanup-token-schema.test.js",
-        "test/node/replica-create-timeout-replay-custody.test.js"
+        "test/node/replica-create-timeout-replay-custody.test.js",
+        "test/node/replica-cleanup-release-continuation.test.js",
+        "test/node/replica-runtime-exact-custody.test.js",
+        "test/node/replica-snapshot-install-owner.test.js",
+        "test/raft/raft-rs-backend/partition-snapshot-install-failed-release.test.js",
+        "test/raft/raft-rs-backend/partition-snapshot-install-release-control.test.js",
+        "test/node/replica-removal-consensus-exit.test.js",
+        "test/node/replica-cleanup-mutation-continuation.test.js",
+        "test/rebalancer/replica-remove-cleanup-workflow.test.js",
+        "test/rebalancer/replica-remove-debt-consumer.test.js",
+        "test/node/replica-cleanup-token-authority.test.js",
+        "test/node/replica-failed-create-cleanup-generation.test.js",
+        "test/rebalancer/rebalance-coordinator-stopping-reconcile.test.js"
       ]
     },
     "failed-create-target-authoritative-cleanup": {
@@ -4634,6 +4694,39 @@
         "test/bootstrap/guarded-runtime-service-handler.test.js",
         "test/bootstrap/pgwire-startup-safety-gate.test.js",
         "test/bootstrap/cleanup-ownership-order-characterization.test.js"
+      ]
+    },
+    "replica-removal-workflow-continuation": {
+      "description": "The replica cleanup owner retains issued takeover, release and completion intents with exact generation and runtime custody. Executor failures carry typed retained REMOVE debt to the existing operation retry owner. STOPPING requests executor completion even after SERVICES absence, and exact request ingress settles local obligations before a receipt can complete the operation. No new timer, observed-token adoption or CREATE continuation policy.",
+      "endpoints": [
+        {
+          "id": "replica-removal-cleanup-owner",
+          "owners": [
+            "src/node/replica-cleanup-tombstone-owner.js",
+            "src/node/replica-cleanup-constants.js",
+            "src/node/replica-handler-remove-request-methods.js",
+            "src/node/replica-handler-remove-execution-methods.js",
+            "src/node/replica-removal-cleanup.js",
+            "src/node/replica-state-machine-recovery.js"
+          ]
+        },
+        {
+          "id": "removal-workflow-continuation-owner",
+          "owners": [
+            "src/rebalancer/operation-workflow-executor-failure.js",
+            "src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js",
+            "src/rebalancer/operation-workflow-recovery-observation.js"
+          ]
+        }
+      ],
+      "contract": "replica-removal-workflow-continuation",
+      "witnessTests": [
+        "test/rebalancer/replica-remove-cleanup-workflow.test.js",
+        "test/rebalancer/replica-remove-debt-consumer.test.js",
+        "test/node/replica-cleanup-mutation-continuation.test.js",
+        "test/node/replica-cleanup-release-continuation.test.js",
+        "test/node/replica-failed-create-cleanup-generation.test.js",
+        "test/rebalancer/rebalance-coordinator-stopping-reconcile.test.js"
       ]
     }
   }
