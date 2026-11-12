@@ -1,0 +1,34 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "no-provisional",
+      "passed": true
+    },
+    {
+      "id": "provisional-after-image",
+      "passed": true
+    },
+    {
+      "id": "provisional-before-image",
+      "passed": false
+    },
+    {
+      "id": "all-handlers-sharing-cache",
+      "passed": false
+    },
+    {
+      "id": "buffered-before-image",
+      "passed": false
+    },
+    {
+      "id": "same-entry-siblings",
+      "passed": false
+    },
+    {
+      "id": "delete-recreate",
+      "passed": false
+    }
+  ]
+}

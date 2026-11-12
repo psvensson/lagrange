@@ -1,0 +1,44 @@
+{
+  "schema": "solve-quest/2",
+  "id": "cdc-image-effect-currentness",
+  "class": "fix",
+  "statement": "A complete source image and subsequent committed CDC ranges keep the table's row effects and source position consistent: occurrence deduplication cannot suppress effects the image replaced, across every handler sharing that cache. Preserve source occurrence identity, same-entry sibling order, delete/recreate semantics and repeated/lost-receipt replay idempotence.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/cdc-image-effect-currentness/evidence/receipt.json",
+      "requiredReceipts": [
+        "no-provisional",
+        "provisional-after-image",
+        "provisional-before-image",
+        "all-handlers-sharing-cache",
+        "buffered-before-image",
+        "same-entry-siblings",
+        "delete-recreate"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "owner-interaction",
+      "statement": "The existing image/source-order owner decides which occurrence effects remain in its current table image. Review the bounded owner interaction before production edits. Source range position and row effect must advance together; handler-local occurrence memory is not effect authority."
+    },
+    {
+      "id": "isolation",
+      "statement": "Only the new isolated checkout and /tmp/lagrange-cdc-image-effect-20261112 may be written. No commits, push, primary/integration/other-worktree writes or copying separately approved unintegrated complexity cleanup."
+    },
+    {
+      "id": "bounded-proof",
+      "statement": "Use independent reconstructed production-owner witnesses with substituted transport and committed-entry delivery. Do not claim original review scripts, physical Raft, SQL loss, permanent stranding, service acceptance or whole-integration approval. Scoped tests only, thermal gate then flock /tmp/lagrange-local-test.lock nice -n15 node scripts/run-test-files.js --jobs 1 FILE. Preserve and stop on any unexpected failed verification for Astra."
+    },
+    {
+      "id": "no-workaround",
+      "statement": "No legacy/fallback, global cache clear, occurrence reminting, retry budget change, owner bypass or broadened local/lab run. Preserve identities, siblings and source order. Coordinate overlap with relist/fold/committed-acceptance complexity work before touching it."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ],
+  "sealedAt": "fa70987b2833031ffe6054a9b12ee86bbb71d52c"
+}
