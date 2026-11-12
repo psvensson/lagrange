@@ -1,0 +1,138 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "receipts": [
+    {
+      "id": "exact-selection",
+      "passed": true
+    },
+    {
+      "id": "verified-bundle",
+      "passed": true
+    },
+    {
+      "id": "protected-identities",
+      "passed": true
+    },
+    {
+      "id": "historical-references",
+      "passed": true
+    },
+    {
+      "id": "active-budget",
+      "passed": true
+    },
+    {
+      "id": "independent-review",
+      "passed": true
+    }
+  ],
+  "sourceCommit": "1b51362e0f7af24a5e373b8a57619d4cf13ec706",
+  "reviewedBase": "fc43b3a4310c316ea8573066a482301e60d697c0",
+  "eligibleHistoricalMembers": [
+    {
+      "path": "solve/quests/replicated-transaction-decision-and-apply/design-leg-a-v3-2026-10-10.md",
+      "bytes": 75912,
+      "sha256": "ff1ac72a8f2cbdb3d2c75c48f093803cb6e7a6329661ae0179bff21373a7b9c5",
+      "addedCommit": "54dd2d7ce7c086ffb7015ec74a71ce3eadbceec3",
+      "sourceBlob": "3f13122376cf8f986409f86fe1d34a86e27333c1",
+      "matches": true,
+      "role": "explicitly superseded historical TX1 design; not current acceptance"
+    },
+    {
+      "path": "solve/quests/replicated-transaction-decision-and-apply/design-leg-a-v5-2026-10-10.md",
+      "bytes": 105252,
+      "sha256": "c07ec52d3ee9c33293a47515f4966c56389c968d66050372f842e5ad88b60101",
+      "addedCommit": "54dd2d7ce7c086ffb7015ec74a71ce3eadbceec3",
+      "sourceBlob": "2abc4a66189118aee0dad5cb4f3eb5b3b43d367f",
+      "matches": true,
+      "role": "explicitly superseded historical TX1 design; not current acceptance"
+    },
+    {
+      "path": "solve/quests/replicated-transaction-decision-and-apply/design-leg-a-v7-2026-10-10.md",
+      "bytes": 160746,
+      "sha256": "c7af2d32478c6679edd481df150b604679b87180901ac483fac62d69f44c41ec",
+      "addedCommit": "54dd2d7ce7c086ffb7015ec74a71ce3eadbceec3",
+      "sourceBlob": "214411b0100ebf3a13db987bd507ab8eb7810bdf",
+      "matches": true,
+      "role": "explicitly superseded historical TX1 design; not current acceptance"
+    }
+  ],
+  "protectedIdentities": [
+    {
+      "path": "solve/quests/replicated-transaction-decision-and-apply/quest.json",
+      "bytes": 3519,
+      "sha256": "fb4dea7c7bc98b57dd6afaf2a195412d2b67fbd2f8d490539f8c8fbd64c7193f"
+    },
+    {
+      "path": "solve/quests/replicated-transaction-decision-and-apply/log.ndjson",
+      "bytes": 387677,
+      "sha256": "689fe297cc44ff89e52002bc4a915c85520a99afff4b7826f08b6980bfe3d102"
+    },
+    {
+      "path": "solve/quests/replicated-transaction-decision-and-apply/evidence/receipt.json",
+      "bytes": 13397,
+      "sha256": "aa71ae72657e5c7dcd74716fd4a1f03c6168fafc24d283cd12cac57a458ca166"
+    },
+    {
+      "path": "solve/quests/replicated-transaction-decision-and-apply/design-leg-a-v8-2026-10-10.md",
+      "bytes": 188201,
+      "sha256": "4f46dae4ba8630165b37fbef36a9c4cf2aad1f2195c1bd6b3b2604983cb1bb9b"
+    },
+    {
+      "path": "solve/quests/replicated-transaction-decision-and-apply/design-leg-a-v9-2026-10-10.md",
+      "bytes": 206780,
+      "sha256": "6006953e021ddca6e57c7ffeb24760a8b48012bc14d9c1d6d1359855283b96d2"
+    },
+    {
+      "path": "solve/quests/replicated-transaction-decision-and-apply/design-leg-a-v10-2026-10-10.md",
+      "bytes": 244200,
+      "sha256": "154cef9a99764fadc16a11cf6e32d059c8a18816a2e235db3ba1c58fac8b4eab"
+    },
+    {
+      "path": "solve/quests/replicated-transaction-decision-and-apply/seam-2026-10-10.md",
+      "bytes": 41990,
+      "sha256": "4796f8a774fef2163e93edd64959dec1b75413c8995b1df3bc32d466b627e6a5"
+    },
+    {
+      "path": "solve/quests/replicated-transaction-decision-and-apply/owner-decisions-2026-10-10.md",
+      "bytes": 22361,
+      "sha256": "168364af158c3a48d1e5e0efb90538251326e8d11efbfe03d73c4fe02a4548b3"
+    }
+  ],
+  "archivedEvidence": {
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/tx1-superseded-design-retention--tx1-historical-designs-1b51362e0-2026-11-12.tar.gz",
+    "bytes": 117395,
+    "sha256": "7e59d557879a4d2018a75fa6292c4f97091731df6e999bd2278a5ce854185a8a",
+    "manifestSha256": "b2f270025fecd36037ea109150f827458b116dda7d17e8946eeb8c38631843f5",
+    "verifiedAt": "2026-11-12T08:31:55.062434+00:00"
+  },
+  "reviewEvidenceBundle": {
+    "sha256": "1756e6b30cd3481c7bcd620d110dac31bfe8ec0f67862304f7da1411a6e3b98b",
+    "bytes": 606990,
+    "asset": "tx1-superseded-design-retention--lagrange-tx1-design-retention-reviewed-20261112.tar.gz",
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/tx1-superseded-design-retention--lagrange-tx1-design-retention-reviewed-20261112.tar.gz"
+  },
+  "review": {
+    "verifier": "subagent:01a1ce51-fcb6-7880-bad1-a4aa6324e162",
+    "verdict": "approve",
+    "scope": "bounded retention only",
+    "sealSha256": "ed6c20174e48d6cfdaad6897d0ea00611bd70569fc3fd405b1c6776a71904f2c",
+    "reportSha256": "55ee76ba16098fdfd66d4f68e646db988d5ee6044592c2287759260f179d9f02",
+    "candidateManifestSha256": "cf4adff3d48203178ff17de82ac9f68007cd1d962a7d273790e48c89927b1bb4"
+  },
+  "budgetApplicability": {
+    "reviewedActiveBytes": 20883131,
+    "budgetBytes": 20971520,
+    "requiredHeadroomBytes": 65536,
+    "permittedAdditionalActiveBytes": 22853,
+    "reviewedReceiptBytes": 467,
+    "finalReceiptGrowthBytes": 5243
+  },
+  "limits": [
+    "No landing, source integration, TX1, formation, publication or release acceptance.",
+    "18 previously missing required proof artifacts and missing legacy migration inventory remain unresolved.",
+    "Separate source-checker duplication and receipt repair plus final metadata composition remain open.",
+    "All 3500 original retained solve files are byte-identical; only three named historical members removed."
+  ]
+}

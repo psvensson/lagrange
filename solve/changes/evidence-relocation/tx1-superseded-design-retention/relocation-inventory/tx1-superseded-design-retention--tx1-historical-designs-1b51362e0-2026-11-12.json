@@ -1,0 +1,13 @@
+{
+  "schema": "solve-relocation-shard/1",
+  "bundle": "tx1-superseded-design-retention--tx1-historical-designs-1b51362e0-2026-11-12.tar.gz",
+  "bundleSha256": "7e59d557879a4d2018a75fa6292c4f97091731df6e999bd2278a5ce854185a8a",
+  "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/tx1-superseded-design-retention--tx1-historical-designs-1b51362e0-2026-11-12.tar.gz",
+  "sourceCommit": "1b51362e0f7af24a5e373b8a57619d4cf13ec706",
+  "root": "solve/quests/replicated-transaction-decision-and-apply/",
+  "files": [
+    ["design-leg-a-v3-2026-10-10.md","ff1ac72a8f2cbdb3d2c75c48f093803cb6e7a6329661ae0179bff21373a7b9c5",75912],
+    ["design-leg-a-v5-2026-10-10.md","c07ec52d3ee9c33293a47515f4966c56389c968d66050372f842e5ad88b60101",105252],
+    ["design-leg-a-v7-2026-10-10.md","c7af2d32478c6679edd481df150b604679b87180901ac483fac62d69f44c41ec",160746]
+  ]
+}

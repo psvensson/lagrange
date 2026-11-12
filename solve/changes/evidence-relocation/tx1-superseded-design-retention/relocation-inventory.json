@@ -1,0 +1,14 @@
+{
+  "schema": "solve-relocation-inventory/1",
+  "bundles": [
+    {
+      "bundle": "tx1-superseded-design-retention--tx1-historical-designs-1b51362e0-2026-11-12.tar.gz",
+      "bundleSha256": "7e59d557879a4d2018a75fa6292c4f97091731df6e999bd2278a5ce854185a8a",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/tx1-superseded-design-retention--tx1-historical-designs-1b51362e0-2026-11-12.tar.gz",
+      "sourceCommit": "1b51362e0f7af24a5e373b8a57619d4cf13ec706",
+      "root": "solve/quests/replicated-transaction-decision-and-apply/",
+      "files": 3,
+      "shard": "relocation-inventory/tx1-superseded-design-retention--tx1-historical-designs-1b51362e0-2026-11-12.json"
+    }
+  ]
+}
