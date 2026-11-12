@@ -129,3 +129,20 @@ must run on the final exact source; no generated artifact is copied from the
 donor. The existing selected cone is preserved even if broader than these
 early witnesses. No source acceptance, solved status, merge or release claim
 follows from this proposal or the historical donor passes.
+
+## Candidate after the original freeze
+
+The tests-only original is `16396e3d1e21a6c4b7ce0569ce71b863866f385b`, tree
+`480bc51cc818d50eac91b28094f2cff6f4c7d19a`. Root independently approved its
+complete controls and design before candidate authoring. That verdict is not
+a lab result or approval of the later source change.
+
+The candidate changes only `delayUntilShutdown` and its adjacent comment.
+The method captures the original clock, contains cancellation failure, removes
+the exact shutdown hold on acquisition failure, and defers reentrant shutdown
+settlement until acquisition returns or throws. Its source-file SHA256 is
+`5bb296e5c51c6d5a374e480d592fe85b39cb66a1075391b04d5fdc2b977cebf4`.
+The eleven-control test file is unchanged from the original, SHA256
+`072afdbe221424574062116235b44f1a2ee28a3819943c98791a20626555edf8`.
+Original physical measurement, independent candidate source review, candidate
+execution and canonical generated/static/selected-cone proof remain open.
