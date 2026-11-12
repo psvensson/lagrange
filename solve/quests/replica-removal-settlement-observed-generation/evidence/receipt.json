@@ -1,0 +1,38 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pending",
+  "receipts": [
+    {
+      "id": "native-membership-race",
+      "passed": false
+    },
+    {
+      "id": "native-successor-preserved",
+      "passed": false
+    },
+    {
+      "id": "status-effect-generation",
+      "passed": false
+    },
+    {
+      "id": "rollback-and-retry",
+      "passed": false
+    },
+    {
+      "id": "unchanged-and-removal-controls",
+      "passed": false
+    },
+    {
+      "id": "scoped-static-guards",
+      "passed": false
+    },
+    {
+      "id": "independent-review",
+      "passed": false
+    }
+  ],
+  "limitations": [
+    "No native reproduction or repair executed yet.",
+    "No landing, integration, formation or release acceptance."
+  ]
+}

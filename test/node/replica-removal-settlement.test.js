@@ -76,6 +76,8 @@ import {
   nextTurns,
   partitionServiceRow,
 } from './replica-removal-consensus-exit-fixture.js';
+import {createLifecycleServiceRow} from
+  '../test-helpers/lifecycle-state-store.js';
 
 const ELECTION_ROUNDS = 400;
 const REMOVING_BOUND_MS = 61_000;
@@ -459,3 +461,162 @@ test('a removal with no port asks its group only through the handler\'s ' +
     'an untyped failure (not REPLICA_REMOVAL_CONSENSUS_EXIT_DEFERRED); ' +
     'nothing retired');
 });
+
+// Delay delivery, not the native decision: the real port has already answered.
+function pauseNextMembershipAnswer(service) {
+  const port = service.raft;
+  let release;
+  let reached;
+  let waiting = true;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  const observed = new Promise((resolve) => {
+    reached = resolve;
+  });
+  service.raft = new Proxy({}, {get: (_target, key) => {
+    if (key === RAFT_OPERATION.READ_COMMITTED_MEMBERSHIP) {
+      return async (request) => {
+        const answer = await port[key](request);
+        if (waiting) {
+          waiting = false;
+          reached(answer);
+          await gate;
+        }
+        return answer;
+      };
+    }
+    const value = port[key];
+    return typeof value === 'function' ? value.bind(port) : value;
+  }});
+  return {observed, release};
+}
+
+// A fresh real native opening at the same logical ID. The common lifecycle
+// fixture is the metadata transport boundary; the real state machine still
+// owns its full-identity CAS and every status transition.
+function installSettlementSuccessor(t, world, generation) {
+  const {source, s, partitionId, cache} = world;
+  source.service.raft.close();
+  const cluster = new PartitionNodeCluster({partitionId, replicaIds: [s]});
+  const elected = cluster.settle(() => cluster.leaderReplicaId() === s,
+    {rounds: ELECTION_ROUNDS});
+  const row = createLifecycleServiceRow({replicaId: s, partitionId,
+    nodeId: source.handler.nodeId, status: ReplicaStatus.ACTIVE,
+    createdAt: generation, stateEnteredAt: generation});
+  const stateStore = source.lifecycleStore;
+  // Replacement is the controlled external actor at the shared row seam.
+  stateStore.durable.services.set(s, {...row});
+  stateStore.cache.upsert('services', row);
+  cache.upsert('services', row);
+  const successor = createRemovalSourceHandler({cluster, replicaId: s,
+    partitionId, nodeId: source.handler.nodeId, cache, stateStore,
+    rowOf: () => ({...row, createdAt: generation,
+      stateEnteredAt: generation})});
+  const handler = source.handler;
+  handler.replicaStateMachine = successor.handler.replicaStateMachine;
+  handler.localServices.set(s, successor.service);
+  handler.localReplicas.set(s, successor.handler.localReplicas.get(s));
+  t.teardown(async () => {
+    await successor.dispose();
+    cluster.dispose();
+  });
+  return {cluster, service: successor.service, elected, row};
+}
+
+async function beginPausedSettlement(t, world) {
+  t.equal(world.elected, true, 'setup: the native survivor leads the group');
+  const pause = pauseNextMembershipAnswer(world.source.service);
+  relayPartitionConsensusObservations(world.source.service);
+  await removeThroughLeader(world);
+  const answer = await pause.observed;
+  t.notOk(durableAppliedState(world.cluster.replica(world.s).dbFile,
+    world.partitionId).voters.includes(world.sPeer),
+  'setup: the actual native runtime applied its own removal');
+  t.equal(world.cache.get('services', world.s)?.status, ReplicaStatus.ACTIVE,
+    'setup: the real status writer has not run while the native answer is held');
+  return {...pause, answer};
+}
+
+test('settlement held native membership: unchanged runtime still fences and ' +
+  'marks its own generation FAILED', async (t) => {
+  const world = openWorld(t, 'settle-generation-current');
+  const pause = await beginPausedSettlement(t, world);
+  t.ok(pause.answer, 'the actual native read reached the delivery barrier');
+  pause.release();
+  await nextTurns();
+  t.equal(world.cache.get('services', world.s)?.status, ReplicaStatus.FAILED,
+    'the unchanged native runtime still settles through the real writer');
+  t.equal(world.source.service.admissionFenced, true,
+    'the same observed runtime is fenced');
+});
+
+for (const generation of [1, 2]) {
+  test(`settlement held native membership preserves successor generation ${generation}`,
+    async (t) => {
+      const world = openWorld(t, `settle-generation-replace-${generation}`);
+      const pause = await beginPausedSettlement(t, world);
+      const successor = installSettlementSuccessor(t, world, generation);
+      t.equal(successor.elected, true, 'the successor is an actual native leader');
+      t.equal(durableLifecycleState(successor.cluster.replica(world.s).dbFile,
+        world.partitionId), 'active', 'the successor native lifecycle is ACTIVE');
+      const pending = captureLog(world.source.handler, 'info',
+        REPLICA_HANDLER_LOG_MSG.REMOVAL_SETTLEMENT_PENDING);
+      pause.release();
+      await nextTurns();
+      t.same({row: world.cache.get('services', world.s)?.status,
+        createdAt: world.cache.get('services', world.s)?.created_at,
+        local: world.source.handler.getLocalReplica(world.s)?.status,
+        lifecycle: world.source.handler.replicaStateMachine.getState(world.s)?.state,
+        runtime: world.source.handler.getTrackedService(world.s) === successor.service,
+        fenced: successor.service.admissionFenced},
+      {row: ReplicaStatus.ACTIVE, createdAt: generation,
+        local: ReplicaStatus.ACTIVE, lifecycle: ReplicaStatus.ACTIVE,
+        runtime: true, fenced: false},
+      'old membership cannot mutate the real ACTIVE successor through the status owner');
+      t.equal(world.source.service.admissionFenced, false,
+        'a superseded observed runtime is not fenced after the await');
+      t.equal(pending.length, 0, 'stale work creates no retry debt for the successor');
+      t.equal(world.source.handler.removalSettlementRereads.has(world.s), false,
+        'the successor inherits no old settlement re-read');
+    });
+}
+
+test('settlement replacement at the fence cannot redirect FAILED to the ' +
+  'new native runtime', async (t) => {
+  const world = openWorld(t, 'settle-generation-at-write');
+  const pause = await beginPausedSettlement(t, world);
+  const fence = world.source.service.fenceServingAdmissionForRemoval;
+  let successor;
+  world.source.service.fenceServingAdmissionForRemoval = () => {
+    fence();
+    successor = installSettlementSuccessor(t, world, 2);
+  };
+  pause.release();
+  await nextTurns();
+  t.equal(successor?.elected, true, 'replacement occurred at the real fence boundary');
+  t.same({row: world.cache.get('services', world.s)?.status,
+    local: world.source.handler.getLocalReplica(world.s)?.status,
+    lifecycle: world.source.handler.replicaStateMachine.getState(world.s)?.state,
+    fenced: successor?.service.admissionFenced},
+  {row: ReplicaStatus.ACTIVE, local: ReplicaStatus.ACTIVE,
+    lifecycle: ReplicaStatus.ACTIVE, fenced: false},
+  'the status write owner preserves the successor after the pre-fence check');
+});
+
+test('settlement held native membership yields to the real concurrent removal',
+  async (t) => {
+    const world = openWorld(t, 'settle-generation-removal');
+    const pause = await beginPausedSettlement(t, world);
+    const warnings = captureLog(world.source.handler, 'warn',
+      REPLICA_HANDLER_LOG_MSG.REMOVED_OUTSIDE_REMOVAL);
+    const ack = await world.source.removeRequest('op-concurrent-settlement');
+    t.equal(ack.status, 'initiated', 'the actual removal owner admitted its operation');
+    t.equal(world.source.handler.inProgressOperations.size > 0, true,
+      'the original settlement is released while removal really runs');
+    pause.release();
+    await settleRemoval(world, 'op-concurrent-settlement');
+    t.equal(warnings.length, 0, 'settlement did not race its separate FAILED write');
+    t.equal(world.source.handler.getLocalReplica(world.s)?.status,
+      ReplicaStatus.REMOVED, 'the real removal owner completed its own transition');
+  });

@@ -133,11 +133,12 @@ function durableLifecycleState(dbFile, groupId) {
  * @param {Object} options.cache - The world's system-table cache (get,
  *   upsert, delete, filter).
  * @param {Function} options.rowOf - (status) => the replica's services row.
+ * @param {Object|null} [options.stateStore] - Shared metadata transport fixture.
  * @return {Object} {handler, service, outcomes, exits, removeRequest,
  *   dispose}.
  */
 function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
-  cache, rowOf}) {
+  cache, rowOf, stateStore = null}) {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(),
     'replica-removal-exit-'));
   const outcomes = [];
@@ -150,7 +151,7 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
     stateEnteredAt: 1,
     ...rowOf(ReplicaStatus.ACTIVE),
   });
-  const lifecycleStore = createLifecycleStateStore({
+  const lifecycleStore = stateStore || createLifecycleStateStore({
     services: [initialRow],
     partitions: [createPartitionRow({
       partitionId,
@@ -258,6 +259,7 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
   return {
     handler,
     service,
+    lifecycleStore,
     outcomes,
     exits,
     removeRequest(operationId, reason = 'rebalancing') {

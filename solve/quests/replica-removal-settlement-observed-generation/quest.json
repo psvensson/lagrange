@@ -1,0 +1,40 @@
+{
+  "schema": "solve-quest/2",
+  "id": "replica-removal-settlement-observed-generation",
+  "class": "fix",
+  "statement": "A replica removal settlement may fence or mark FAILED only the exact runtime and durable lifecycle generation whose applied membership it observed; stale membership, status retries, queued effects and late failures must preserve an ACTIVE successor and retain owner-defined retry debt.",
+  "constraints": [
+    {
+      "id": "observed-owner-pair",
+      "statement": "Capture the exact tracked runtime and lifecycle-owner full source evidence before membership awaits; keep that same observation across retry. The status-write owner and existing lifecycle CAS own conditional persistence and local publication/rollback."
+    },
+    {
+      "id": "bounded-scope",
+      "statement": "Only the removal-settlement/status interaction, smallest existing lifecycle persistence effect seam, current native/direct owner witnesses, interaction registration and canonical generated artifacts may change. Keep Hypatia role/startup and Huygens R5 cleanup-receipt work distinct; no foreign worktree writes."
+    },
+    {
+      "id": "real-native-proof",
+      "statement": "Exercise the real subscription, real native membership answer, un-intercepted production status writer, ACTIVE successor control and concurrent removal. A write intent spy is not successor safety proof. State the lifecycle-store fixture ceiling and retain all first failures."
+    },
+    {
+      "id": "unchanged-guards",
+      "statement": "No fallback, new scheduler, timeout or baseline increases. Scoped thermal/flock tests only; preserve any unexpected verification failure and hand back to Astra. No commits, push, integration, landing or publication in this sidecar."
+    }
+  ],
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/replica-removal-settlement-observed-generation/evidence/receipt.json",
+      "requiredReceipts": [
+        "native-membership-race",
+        "native-successor-preserved",
+        "status-effect-generation",
+        "rollback-and-retry",
+        "unchanged-and-removal-controls",
+        "scoped-static-guards",
+        "independent-review"
+      ]
+    }
+  },
+  "sealedAt": "fa70987b2833031ffe6054a9b12ee86bbb71d52c"
+}
