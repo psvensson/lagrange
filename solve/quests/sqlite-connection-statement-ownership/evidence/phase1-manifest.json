@@ -1,0 +1,72 @@
+{
+  "head": "1b51362e0f7af24a5e373b8a57619d4cf13ec706",
+  "branch": "wip/codex-statement-owner-20261112",
+  "ruleRevision": 5,
+  "changedSourceAndTestDigests": {
+    "src/storage/sqlite-prepared-statement-owner.js": "4a5db10f9a9f3f3f65c108aa7e41aca10a741fd209b1a038bc18eabff54ee202",
+    "test/storage/sqlite-connection-statement-ownership-refusal.test.js": "ceac4d8ef5f8c5c526e817c6306ae7e4282c4e83f28087a74b62dc8ba3fcdc0d",
+    "test/storage/sqlite-connection-statement-ownership-brand.test.js": "11c1abb8b6d073a6177eb6573ecd31c018b6adf51414cff50c3c42d7fdc7ede1",
+    "test/storage/sqlite-connection-statement-ownership.test.js": "034d30f5ded2b8a62bd0a9197130a2dfbf8b755cfe7597ea8c473455160eb509"
+  },
+  "baseline": {
+    "head": "1b51362e0f7af24a5e373b8a57619d4cf13ec706",
+    "branch": "wip/codex-statement-owner-20261112",
+    "ruleRevision": 5,
+    "node": "v22.23.2",
+    "digests": {
+      "src/storage/sqlite-prepared-statement-owner.js": "233aae30531603e863d460a332aead9689f9d52021fc6e0b03490aa6a258b9e0",
+      "test/storage/sqlite-connection-statement-ownership-refusal.test.js": "ceac4d8ef5f8c5c526e817c6306ae7e4282c4e83f28087a74b62dc8ba3fcdc0d",
+      "package.json": "7c56bd6952c10baab826be0504498e97f3f0a8c13dd953dd164a5baffe093b0b",
+      "package-lock.json": "8ac4b4fb882a5a93a67f192b37167fe8d5884c9a6778ca5b4b2dff7b28b76b04",
+      "node_modules/better-sqlite3/package.json": "58e81504576abccfacbfd08dc9432dc3a00d0fc0454685cb7a76aaf976cf25a9",
+      "node_modules/better-sqlite3/lib/database.js": "50fe0b490f29174d961c4d1ae54f22973447ff1255fd710e785d201c0ebfb4d0",
+      "node_modules/better-sqlite3/lib/methods/wrappers.js": "a150a6271d23f4e5f8953b129f370ff096c7cdc4b812afbf080a6cf4ab741bcf",
+      "node_modules/better-sqlite3/src/better_sqlite3.cpp": "551abc7d9feea0ad2acb97f33125c5e8800d6d84a1da4390512d08743f924b1e",
+      "node_modules/better-sqlite3/build/Release/better_sqlite3.node": "d7d9272b12d11c1dc2bb787741b1b7c4037d336155f316ace3420410c28fda37",
+      "docs/steering/rules.md": "ff82e2e1318f964871a3655e39755f0410f11c8bdd5edc89e7ed1f0a16fdd08b",
+      "docs/steering/router.md": "b8e7f4cfc71d941a39a2e282af3e515c8391812e3345c9fafd2ab8cb082705d2",
+      "docs/steering/rule-set.json": "0ed0e1ad8d129bbdbfc565df42c437a7bb43f7344ce9d05d045a02c0440e29f5",
+      "/tmp/lagrange-prepared-statement-ownership-design-eaccbd37a-20261112.md": "93825f73dfd2acb9f9d2171095130f76ef1fee23e60028a892e7c12c5e6a3ee9"
+    }
+  },
+  "artifacts": {
+    "/tmp/lagrange-statement-owner-phase1-20261112/after-eslint.log": "26de2d5a37b3b5e8561c6a59d5a6e44fb1f4a18278a32b589aeb797ee01ed368",
+    "/tmp/lagrange-statement-owner-phase1-20261112/baseline-manifest.json": "21d57f1eea0697e42f3a055690df49bb28f44d992df5ea81061b1b5bd314f72c",
+    "/tmp/lagrange-statement-owner-phase1-20261112/baseline-receipt.json": "fed08a6116979f185ebb5694c6fc42958386380dcef409a3b557197d33c7e506",
+    "/tmp/lagrange-statement-owner-phase1-20261112/baseline-run.log": "0a20af1f39dbe6fda1e715aab9273182a815742d6a0c0a2682bc6698e2e07679",
+    "/tmp/lagrange-statement-owner-phase1-20261112/baseline-thermal.log": "dedd747bf80c5fed6fa03b86b2bf858d1a399bc95b6620cc749c148aea2c1d10",
+    "/tmp/lagrange-statement-owner-phase1-20261112/before-check-guideline-decision-boundaries.js.log": "003c0cc8cccd85679402aa2c94bdc6ea534dd714e4c35b03e836da08195d3b6b",
+    "/tmp/lagrange-statement-owner-phase1-20261112/before-check-guideline-literals.js.log": "a453994e7a95b1349a2c378e91c596cb3cc63c28ca31c917250dcc37f39d2ea4",
+    "/tmp/lagrange-statement-owner-phase1-20261112/before-check-guideline-navigability.js.log": "3e12851ae207228ace111ea00917a9610cb58a8e99ba86baf414735c7a024cc4",
+    "/tmp/lagrange-statement-owner-phase1-20261112/before-check-runtime-grammar-contracts.js.log": "b4b6a8efb75dccfd5c74e8c04f78614d528b1c1eb71fcb926c02ca5ae05f196f",
+    "/tmp/lagrange-statement-owner-phase1-20261112/failed-verification-manifest.json": "28c05484cd679ad5fe1dacace2dfb47697d4c42cd94e5c03a4729ed2f344235b",
+    "/tmp/lagrange-statement-owner-phase1-20261112/focused-results.json": "3dbdc8f7a37bea48776afc489b3f5adc28e0480ed480cd43396d081f5f34130d",
+    "/tmp/lagrange-statement-owner-phase1-20261112/green-0-run.log": "ed880d0192d9bb50846db2b67dd64326c1287af0426007c3f82f13a866765507",
+    "/tmp/lagrange-statement-owner-phase1-20261112/green-0-thermal.log": "e114a16781c3a3418b055866402d800bd75824dc99dd3ca068d90218b548a38f",
+    "/tmp/lagrange-statement-owner-phase1-20261112/green-0.tap": "fa5a974f2e6ec9d8a43d4bb13174b718903c22fa7d3559150eb03ecf4ca6afd7",
+    "/tmp/lagrange-statement-owner-phase1-20261112/green-1-run.log": "54bf7cb168a4448318d774938173e4c7e05010a4e88779232b74b19a6ebf035d",
+    "/tmp/lagrange-statement-owner-phase1-20261112/green-1-thermal.log": "e114a16781c3a3418b055866402d800bd75824dc99dd3ca068d90218b548a38f",
+    "/tmp/lagrange-statement-owner-phase1-20261112/green-1.tap": "317215e21b6a4ed406d34a77ab6cea91cdcb52c35ae23ab54baf33af474e764e",
+    "/tmp/lagrange-statement-owner-phase1-20261112/green-2-run.log": "6b4848a5feb7356b33e587b28a0223b164b6293d13adc9f98a2e8a9c6c45ecbe",
+    "/tmp/lagrange-statement-owner-phase1-20261112/green-2-thermal.log": "e114a16781c3a3418b055866402d800bd75824dc99dd3ca068d90218b548a38f",
+    "/tmp/lagrange-statement-owner-phase1-20261112/green-2.tap": "4e713594bb48f35afdf4c2cd0e432de55a3e3bebee82d3c17ccfbfed26f42afb",
+    "/tmp/lagrange-statement-owner-phase1-20261112/static-results.json": "9bc42d4dc0f7060be0246736239d7090653953b24c29203e64e29ba427c39b2d"
+  },
+  "migrationApi": {
+    "module": "src/storage/sqlite-prepared-statement-owner.js",
+    "exports": [
+      "SQLiteConnection",
+      "assertSQLiteConnection",
+      "preparedStatementOf",
+      "preparedExactStatementOf"
+    ],
+    "construction": "new SQLiteConnection(filenameOrBuffer, nativeOptions)",
+    "boundary": "assertSQLiteConnection(database) before SQL, mutations and successful-absence branches; no return value; accepts closed owned handles",
+    "error": "ordinary Error.code sqlite_statement_owner_missing",
+    "helpers": "existing signatures unchanged; supplied handle must have private owner brand"
+  },
+  "handoff": {
+    "owner": "parent integration agent 01a1cadf-45ee-7f40-b056-8602e60a1925",
+    "next": "higher Astra reimplementation/continuation before further verification; parent must release serialization after F freeze before migration"
+  }
+}

@@ -1,0 +1,157 @@
+{
+  "schema": "sqlite-boundary-repair-audit/1",
+  "scope": "supplied connections at cached-owner entrypoints, direct snapshot siblings, their production callers/acquisitions; source inspection is not a whole-program execution proof",
+  "rules": {
+    "revision": 5,
+    "source": "2fca51dc9a2f0344e23f0535dfa50fe0e000b674"
+  },
+  "inspectedSourceHashes": {
+    "src/partition/partition-cdc-obligation-ledger.js": "c1d703dda4674f0392a79f429b309cf7b067d32fd4ae4560eb093e4b9532ed12",
+    "src/partition/partition-committed-statement-outcome.js": "d6ab1b2e59c8dcb2ee67131c3a931a47245271961ee2e729dfb0845b34973081",
+    "src/partition/partition-hydration-image-pages.js": "7f1ff2443427b040156e881323c387904ff9b9c8c11a2d409af9fc84fafe4c4b",
+    "src/partition/partition-locking-read-reservation.js": "c7872a4431f42e5a4492c23cef25b384848cf57552f81e93d01f5dc8600d262b",
+    "src/partition/partition-participant-transaction-store.js": "60f0db96b2ea58ca40645c4e13128e8ebc340f9d27d6fc38cace70ac3111fae9",
+    "src/raft/raft-rs-durable-store.js": "0b54363e2d4a539e631945c520cec345ce666f8248aad2a9ba2c81cb1e5289c3",
+    "src/raft/raft-rs-operation-port.js": "9554d28d1c9e54d2dfef95efc4fe3f653a1f94444a4f75ee07d022b754416d65",
+    "src/raft/raft-rs-peer-identity.js": "feeee05e4e24c2e3db8e4c3f2b7f83297bdf8eb7e8617434fad8ce4b39ee4751",
+    "src/raft/raft-rs-preparation-custody.js": "862aec20a0ada089fec1f675be38088b5e8ef3b82c798fb8c4725391242a6b97",
+    "src/raft/raft-rs-replica-lifecycle-observation.js": "bc2856899bbed866779f3dce28b953e2de3ef559f2e5cdcc65446b37ae6e9b4c",
+    "src/raft/raft-rs-replica-lifecycle-owner.js": "67bd24190da2eb0c0227bf2ce40d79a8ee27edf491282f8eee6d2ac023325a15",
+    "src/raft/raft-rs-snapshot-witness.js": "bd7938cdf2a595c764b665e6088eb760431b88c5b2cdc5747da231d25c259283",
+    "src/raft/snapshot-checkpoint-store.js": "169ff3f012a62e67049ed00dd935759779006a17215c4dcee31343c186c6bd02",
+    "src/raft/snapshot-install.js": "015c841c64c5579dc2aa0d9e5c400b6cd24bb8bcbc454dca78853ad06b7522bb",
+    "src/storage/sqlite-prepared-statement-owner.js": "4a5db10f9a9f3f3f65c108aa7e41aca10a741fd209b1a038bc18eabff54ee202",
+    "src/query/distributed/distributed-transaction-schema-enforcement.js": "6c10e54c20c5e52090e8d5712420da934b4061d58d57857f532e19b95dc0885f",
+    "src/query/distributed/distributed-transaction-release-census.js": "a268846fff90c8f813f0fb678c6f8794229df5fef66cb673d1bc0e2c044d2345",
+    "src/partition/partition-retained-store-observation.js": "6075de77f4a5462f00113429ea799b805e2327729bc23f8d08d8de228b027390",
+    "src/raft/raft-rs-durable-own-group-record.js": "92a155cbe565cd739ecec696ae33a8b8790a1c8db7b4954d7862b8cd995e9a80",
+    "src/bootstrap/seed-retained-partition-effects.js": "64568e19c838a5aa13ca10f1458868fae8a7f20c9010c83d9f1e0a42f12c0e83",
+    "src/raft/raft-rs-original-allocation-preparation.js": "c0e12d334a293af6fe9ee64f1c3b08bf23aba892a25847287e8995ec8ff93116"
+  },
+  "history": {
+    "earliestFoundBoundaryIntroduction": "54dd2d7ce (2026-10-27 release commit); exact git log results retained externally",
+    "cacheIntroduction": "81c4c6c31 (2026-11-11) introduced module WeakMaps and lazy raw adoption",
+    "cacheExtensions": [
+      "86921144c",
+      "bd7d4f2eb",
+      "7d095b44b"
+    ],
+    "firstDivergence": "Private-brand enforcement was added beneath outer transaction, pragma, snapshot-read and failure-settlement work; later rejection cannot undo prior property access or mutation.",
+    "priorAcceptedWork": "Phase1 constructor preallocation/private brand/integer caches/native-close-first preserved. The two rejected Phase2 wrappers and five measured siblings use its existing brand assertion.",
+    "records": [
+      {
+        "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/cache-history.txt",
+        "sha256": "c7a0945c3f928f3a22610ece177649aa9bdbe0c84ebf4eadcd0b5b86aef05482"
+      },
+      {
+        "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/origin-history.txt",
+        "sha256": "f89b8ce2bc69077717173e83a7463236ed170f8f696a8e05562ff7a04371f517"
+      },
+      {
+        "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/issuance-history.txt",
+        "sha256": "f89b8ce2bc69077717173e83a7463236ed170f8f696a8e05562ff7a04371f517"
+      }
+    ]
+  },
+  "repairedEntries": [
+    {
+      "file": "src/partition/partition-participant-transaction-store.js",
+      "beforeSha256": "7877c97fdedd611c32c6d398b8f4f94ad4b0a0cdff373fab7fdf3d30991e7c11",
+      "afterSha256": "60f0db96b2ea58ca40645c4e13128e8ebc340f9d27d6fc38cace70ac3111fae9",
+      "addedEntryAssertions": [
+        "readPartitionWriteOriginHistory",
+        "readPartitionWriteOriginIn",
+        "readParticipantTransactionCensusIn"
+      ],
+      "remainingAstIdentical": true
+    },
+    {
+      "file": "src/raft/raft-rs-replica-lifecycle-owner.js",
+      "beforeSha256": "6d0100170af497c92a5aeab2dbf15fbdf6154d71ca8ebb7ffc0d1cb768449c05",
+      "afterSha256": "67bd24190da2eb0c0227bf2ce40d79a8ee27edf491282f8eee6d2ac023325a15",
+      "addedEntryAssertions": [
+        "markOriginalAllocationIssued"
+      ],
+      "remainingAstIdentical": true
+    },
+    {
+      "file": "src/partition/partition-cdc-obligation-ledger.js",
+      "beforeSha256": "d0def43cbfc230c984d2dd09c34a0c74ac1bc6bb47d6314b0da83235784c9f1d",
+      "afterSha256": "c1d703dda4674f0392a79f429b309cf7b067d32fd4ae4560eb093e4b9532ed12",
+      "addedEntryAssertions": [
+        "readCdcObligationCensusIn"
+      ],
+      "remainingAstIdentical": true
+    },
+    {
+      "file": "src/partition/partition-committed-statement-outcome.js",
+      "beforeSha256": "d8bb7f6cbea925607458e48d3c053a6587bf0081b3067023263666c9e92bab60",
+      "afterSha256": "d6ab1b2e59c8dcb2ee67131c3a931a47245271961ee2e729dfb0845b34973081",
+      "addedEntryAssertions": [
+        "readCommittedStatementCensusIn",
+        "settleFailedCommittedStatement"
+      ],
+      "remainingAstIdentical": true
+    }
+  ],
+  "siblingDispositions": [
+    {
+      "owner": "partition participant store",
+      "checked": "open/stamp; generation/origin reads and writes; transaction row reads/writes; reservations; read snapshots",
+      "result": "Three snapshot entries now assert first. Other cached readers/writers reach canonical brand before DB property/SQL; open validates before stamp/DDL. null/undefined connection absence remains its existing explicit CLOSED contract. File custody inspection opens its own uncached native connection and stays raw."
+    },
+    {
+      "owner": "replica lifecycle",
+      "checked": "constructor, birth, original preparation, snapshot preparation, declaration/row read, prepare row, issuance, right transition, private retirement/opening-history writes",
+      "result": "Issuance now asserts before request evaluation and commitOriginalWrite. Other supplied cached boundaries reach existing assertion or first cached read before any DB access/mutation; private instance operations borrow constructor-validated #db. No new lifecycle authority."
+    },
+    {
+      "owner": "CDC ledger and committed statement outcome",
+      "checked": "init, all exported database readers/writers, retained censuses, failed/replayed settlement",
+      "result": "Both exported censuses now guard before uncached read-snapshot mechanics. Failure settlement now guards before db.open, error conversion and rollback callback. Other cache operations validate via the canonical bridge. Pure outcome/replay/classification helpers do not acquire statement custody."
+    },
+    {
+      "owner": "durable store, peer identity, snapshot witness, own-group record",
+      "checked": "constructors, static record/history/applied/committed readers, snapshot absence paths and forwarding own-group reader",
+      "result": "Constructors validate before mutation; cached standalone entrypoints assert explicitly or enter the validating cache before DB work. Instance DB work is constructor-owned; hostile later replacement of public fields is not a new host-JS tampering claim. Generic commitDurably remains byte-identical and its raw uncached contract is exercised positively."
+    },
+    {
+      "owner": "locking-read reservations",
+      "checked": "acquire/check/register/release transaction/release session/sweep and their helpers",
+      "result": "Supplied non-null handles validate before registration, DB property access, mutation, catches or empty-key exits. Existing registry/memory reservation semantics unchanged; no registry is used or added for statement ownership."
+    },
+    {
+      "owner": "schema enforcement and release census",
+      "checked": "read/install and census delegation",
+      "result": "Canonical bridge validates first; existing intentional UNAVAILABLE conversion follows validation with zero foreign DB effects. No new catch fallback or successful absence from unavailable reads."
+    },
+    {
+      "owner": "acquisitions and production callers",
+      "checked": "operation-port open, preparation custody, lifecycle file/snapshot observations, hydration images, checkpoint copy/validation, snapshot install, retained partition-effects composition",
+      "result": "These acquire SQLiteConnection at the existing custody seam before using their own cached readers. Source backup/serialization and direct-SQL inspection remain independent uncached operations. observePartitionEffectsIn first delegates to the now-guarded origin reader. No adoption path or additional constructor/registry/fallback was introduced."
+    }
+  ],
+  "negativeWitnesses": {
+    "cases": 64,
+    "matrixEntries": 27,
+    "rawAndGetterCases": 54,
+    "rawOpenTransactionCases": 4,
+    "closedRawCases": 3,
+    "explicitUnavailableComposition": 1,
+    "positiveRawDurableCommit": 1,
+    "positiveOwnedBirth": 1,
+    "redFailures": 18,
+    "redMechanisms": [
+      "origin history BEGIN/ROLLBACK before UNAVAILABLE",
+      "issuance PRAGMA read/FULL/BEGIN/ROLLBACK/restore1 before AggregateError",
+      "four snapshot readers touch foreign inTransaction and schema SQL; CDC may answer empty",
+      "failed settlement touches open or registers afterRollback"
+    ]
+  },
+  "limits": [
+    "Direct negative witnesses exercise real exported boundaries on in-memory native SQLite or adversarial property getters.",
+    "No production-composition, full affected cone, native-child rerun, receiver72, permission no-skip or lab acceptance.",
+    "Six inherited guideline sites in hydration/lifecycle observation stay HOLD and byte-unchanged.",
+    "No independent approval supplied by this author."
+  ]
+}

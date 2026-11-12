@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {performance} from 'node:perf_hooks';
 import {test} from 'node:test';
-import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {PartitionResolver} from '../../src/query/partition-resolver.js';
@@ -227,7 +227,7 @@ test('Scenario A fast path: Priorities 3, 4, and 6 on partition staging, determi
     clearFixtureSingletons();
   }
 
-  const raftDb = new Database(':memory:');
+  const raftDb = new SQLiteConnection(':memory:');
   const store = new RaftRsDurableStore(raftDb);
   try {
     store.persistReady('p-1', {

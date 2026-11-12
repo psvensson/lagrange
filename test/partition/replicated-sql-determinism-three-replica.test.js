@@ -1,3 +1,4 @@
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 /**
  * Three-replica integration proof for deterministic replicated SQL admission.
  *
@@ -112,7 +113,7 @@ afterEach(() => {
 });
 
 function readAppliedIndex(group, member, partitionId) {
-  const db = new Database(group.dbFileOf(member), {readonly: true});
+  const db = new SQLiteConnection(group.dbFileOf(member), {readonly: true});
   try {
     return Number(RaftRsDurableStore.readAppliedIndexIn(db, partitionId));
   } finally {

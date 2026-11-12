@@ -1,7 +1,7 @@
 // Resource custody is part of lifecycle preparation, never allocation authority.
 // Keep failed acquisitions reachable even after the public startup ledger has
 // unwound and no runtime handle was returned to its caller.
-import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../storage/sqlite-prepared-statement-owner.js';
 import {ORIGINAL_ALLOCATION_REASON as REASON,
   originalAllocationError} from './raft-rs-original-allocation-constants.js';
 
@@ -22,7 +22,7 @@ class RaftRsPreparationCustody {
       // Nothing callback-capable may intervene between return and assignment.
       // A native constructor failure returns no handle; that dependency owns
       // its internal cleanup, separately from the formatter-failure window.
-      slot.db = new Database(member.dbPath, options);
+      slot.db = new SQLiteConnection(member.dbPath, options);
       slot.state = SLOT_STATE.OPEN;
       return slot.db;
     } catch (error) {

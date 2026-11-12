@@ -1,3 +1,4 @@
+import {openReplicaDatabaseFixture} from '../helpers/replica-database-fixture.js';
 /** Real repository -> group-admission owner -> three real raft-rs operation ports.
  * Operation SQL uses a canonical file-backed fixture, NOT distributed SQL.
  * Runtime transports are the existing in-process inbox harness. Sender/recipient
@@ -12,6 +13,7 @@ import {test} from 'node:test';
 import {fixture, GROUP, FOUNDERS, TARGET, NODE, SUCCESSOR, O, NOW} from
   '../test-helpers/learner-operation-fixture.js';
 import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 import * as admission from '../../src/raft/raft-rs-group-membership-admission.js';
 import * as portContract from '../../src/raft/raft-operation-port-constants.js';
 import {ReplicaOperationRepository} from '../../src/rebalancer/replica-operation-repository.js';
@@ -1163,14 +1165,21 @@ async function receiverInstallFixture(t, state) {
   const replicaDbPath = f.cluster.dbFileOf(TARGET);
   let incarnation = null;
   if (state !== 'absent') {
-    const db = new Database(replicaDbPath);
+    const requestIdentity = {groupId: state === 'foreign-group' ? 'foreign' : GROUP,
+      replicaIdentity: state === 'conflicting-identity' ? 'foreign-replica' : TARGET};
+    const db = state === 'empty-shell' || state === 'orphan-native' ?
+      new SQLiteConnection(replicaDbPath) :
+      openReplicaDatabaseFixture({dbPath: replicaDbPath, ...requestIdentity}).db;
     try {
       db.exec('CREATE TABLE receiver_witness (value TEXT)');
       db.prepare('INSERT INTO receiver_witness VALUES (?)').run('do-not-erase');
       if (state !== 'empty-shell' && state !== 'orphan-native') {
-        const request = {db, groupId: state === 'foreign-group' ? 'foreign' : GROUP,
-          peerId: state === 'conflicting-peer' ? '17' : deriveRaftRsPeerId(TARGET),
-          replicaIdentity: state === 'conflicting-identity' ? 'foreign-replica' : TARGET};
+        const peerId = state === 'conflicting-peer' ? '17' :
+          deriveRaftRsPeerId(requestIdentity.replicaIdentity);
+        if (state === 'conflicting-peer') {
+          db.prepare('UPDATE _raft_rs_replica_lifecycle SET peer_id = ?').run(peerId);
+        }
+        const request = {db, ...requestIdentity, peerId};
         const owner = new RaftRsReplicaLifecycleOwner(request);
         incarnation = owner.incarnation;
         if (state === 'retired') await owner.retire('removed-by-owner');
@@ -1197,7 +1206,7 @@ async function receiverInstallFixture(t, state) {
     createPhysicalWorkerClaim: admitted.worker}};
 }
 for (const state of ['retired', 'conflicting-peer', 'conflicting-identity', 'foreign-group',
-  'unknown', 'established-missing', 'orphan-native', 'contradictory-never-opened']) {
+  'unknown', 'established-missing', 'orphan-native', 'contradictory-never-opened', 'empty-shell']) {
   test(`snapshot receiver admission refuses ${state} without erasing surviving bytes`, async (t) => {
     const {options} = await receiverInstallFixture(t, state);
     const before = fs.readFileSync(options.replicaDbPath);
@@ -1208,12 +1217,14 @@ for (const state of ['retired', 'conflicting-peer', 'conflicting-identity', 'for
     assert.equal(fs.existsSync(path.join(options.checkpointsRoot, 'install', 'staging-payload')), false);
   });
 }
-for (const state of ['absent', 'empty-shell', 'never-opened']) {
+// F's construction contract refuses the formerly accepted historyless shell.
+// Only an absent target or an explicitly born receiver permits this CREATE.
+for (const state of ['absent', 'never-opened']) {
   test(`snapshot receiver admission permits ${state} and preserves allocated incarnation`, async (t) => {
     const {options, incarnation} = await receiverInstallFixture(t, state);
     const result = await requestSnapshotInstall(options);
     assert.equal(result.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED, JSON.stringify(result));
-    const db = new Database(options.replicaDbPath, {readonly: true});
+    const db = new SQLiteConnection(options.replicaDbPath, {readonly: true});
     try {
       const row = db.prepare('SELECT * FROM _raft_rs_replica_lifecycle').get();
       assert.equal(row.native_history_state, 'established');

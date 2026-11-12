@@ -46,6 +46,7 @@ import {
   LEGACY_PARTITION_CONSENSUS_OUTCOME,
 } from './partition-legacy-consensus-state-constants.js';
 import {
+  cleanupRefusedPartitionStartup,
   refusePartitionConsensusHeldAtOpen,
   refusePartitionConsensusStartup,
   openPartitionConsensusPort,
@@ -54,13 +55,12 @@ import {createCommittedStatementOutcomeTable} from
   './partition-committed-statement-outcome.js';
 import {openParticipantTransactionStore} from
   './partition-participant-transaction-store.js';
-import {REPLICA_DB_PRAGMA} from '../storage/storage-constants.js';
 import {turnChainValue} from '../raft/raft-rs-turn-answer.js';
+import {openRaftRsReplicaDatabase} from '../raft/raft-rs-operation-port.js';
 
 const {
   CONFIG_KEY,
   ConfigurationManager,
-  Database,
   PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_EVENT,
@@ -203,59 +203,65 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     // pragmas, legacy-state refusal, schema DDL) is synchronous by design; tag it
     // so bootstrap-batch stalls attribute in the watchdog's siteDeltas
     // instead of reporting as unexplained gaps (round-10).
-    trackSyncSection(PARTITION_REPLICA_INIT_SYNC_SECTION_SITE, () => {
-      if (this.dbPath !== PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH) {
-        const dbDir = path.dirname(this.dbPath);
-        if (!fs.existsSync(dbDir)) {
-          fs.mkdirSync(dbDir, {recursive: true});
-          this.logger.debug(PARTITION_SERVICE_LOG_MSG.CREATED_PARTITION_DIR, {
-            path: dbDir,
+    try {
+      trackSyncSection(PARTITION_REPLICA_INIT_SYNC_SECTION_SITE, () => {
+        if (this.dbPath !== PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH) {
+          const dbDir = path.dirname(this.dbPath);
+          if (!fs.existsSync(dbDir)) {
+            fs.mkdirSync(dbDir, {recursive: true});
+            this.logger.debug(PARTITION_SERVICE_LOG_MSG.CREATED_PARTITION_DIR, {
+              path: dbDir,
+            });
+          }
+        }
+        // Snapshot-install boot boundary: resolve pending install remnants
+        // while NO handle is open; a nonce conflict fails the boot closed.
+        if (this.dbPath !== PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH) {
+          const installResolution = resolvePendingSnapshotInstall({
+            replicaDbPath: this.dbPath,
           });
+          if (installResolution.outcome ===
+              RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALL_STATE_CONFLICT) {
+            throw new Error(
+              `${PARTITION_SERVICE_ERROR_MSG.SNAPSHOT_INSTALL_STATE_CONFLICT}: ` +
+              `${installResolution.detail}`,
+            );
+          }
+          // Recorded-gap closure (S4): sweep stale transfer staging at the
+          // same closed-handle boot boundary — no transfer is in flight
+          // during init, so every staged transfer directory here is a
+          // leftover.
+          cleanupStaleTransferStaging(
+            resolveReplicaCheckpointsRoot(this.dbPath));
         }
-      }
-      // Snapshot-install boot boundary: resolve pending install remnants
-      // while NO handle is open; a nonce conflict fails the boot closed.
-      if (this.dbPath !== PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH) {
-        const installResolution = resolvePendingSnapshotInstall({
-          replicaDbPath: this.dbPath,
+        this.reportInitializationStage(PARTITION_SERVICE_INIT_STAGE.OPENING_DB, {
+          dbPath: this.dbPath,
         });
-        if (installResolution.outcome ===
-            RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALL_STATE_CONFLICT) {
-          throw new Error(
-            `${PARTITION_SERVICE_ERROR_MSG.SNAPSHOT_INSTALL_STATE_CONFLICT}: ` +
-            `${installResolution.detail}`,
-          );
+        this.db = openRaftRsReplicaDatabase({dbPath: this.dbPath,
+          groupId: this.partitionId, replicaIdentity: this.replicaId,
+          takeDatabaseCustody: (db) => {
+            this.db = db;
+          }}).db;
+        // Before any DDL and before the port: a database holding the retired
+        // backend's consensus state and no rs-raft record is never reused.
+        const legacyConsensusState = detectLegacyPartitionConsensusState({
+          db: this.db, partitionId: this.partitionId});
+        if (legacyConsensusState.outcome ===
+            LEGACY_PARTITION_CONSENSUS_OUTCOME.DETECTED) {
+          this.db.close();
+          this.db = null;
+          throw legacyPartitionConsensusStateError(
+            legacyConsensusState, this.partitionId);
         }
-        // Recorded-gap closure (S4): sweep stale transfer staging at the
-        // same closed-handle boot boundary — no transfer is in flight
-        // during init, so every staged transfer directory here is a
-        // leftover.
-        cleanupStaleTransferStaging(
-          resolveReplicaCheckpointsRoot(this.dbPath));
-      }
-      this.reportInitializationStage(PARTITION_SERVICE_INIT_STAGE.OPENING_DB, {
-        dbPath: this.dbPath,
+        createCommittedStatementOutcomeTable(this.db);
+        openParticipantTransactionStore(this.db);
+        if (this.schema) {
+          this.createTable();
+        }
       });
-      this.db = new Database(this.dbPath);
-      this.db.pragma(REPLICA_DB_PRAGMA.JOURNAL_MODE);
-      this.db.pragma(REPLICA_DB_PRAGMA.SYNCHRONOUS);
-      // Before any DDL and before the port: a database holding the retired
-      // backend's consensus state and no rs-raft record is never reused.
-      const legacyConsensusState = detectLegacyPartitionConsensusState({
-        db: this.db, partitionId: this.partitionId});
-      if (legacyConsensusState.outcome ===
-          LEGACY_PARTITION_CONSENSUS_OUTCOME.DETECTED) {
-        this.db.close();
-        this.db = null;
-        throw legacyPartitionConsensusStateError(
-          legacyConsensusState, this.partitionId);
-      }
-      createCommittedStatementOutcomeTable(this.db);
-      openParticipantTransactionStore(this.db);
-      if (this.schema) {
-        this.createTable();
-      }
-    });
+    } catch (primary) {
+      await cleanupRefusedPartitionStartup(this, primary);
+    }
     if (this.transport) {
       // Kept as this replica's exact handler identity (owner decision N2).
       this.transportHandler = this.handleTransportMessage.bind(this);

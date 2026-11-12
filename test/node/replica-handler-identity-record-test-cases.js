@@ -1,3 +1,4 @@
+import {openReplicaDatabaseFixture} from '../helpers/replica-database-fixture.js';
 // The CREATE_REPLICA target's identity record (verifier N3): createReplicaAsync
 // hands its port a pending record whenever the prior-existence fact is not
 // yet durable, and only the durable SYNCING write - through the status
@@ -78,7 +79,8 @@ function portRequest(options, db, overrides = {}) {
 // membership with a second voter and its transport).
 function realPortFactory(directory, opened, overridesFor = () => ({})) {
   return async (options) => {
-    const db = new Database(path.join(directory, `${options.replicaId}.db`));
+    const db = openReplicaDatabaseFixture({dbPath: path.join(directory, `${options.replicaId}.db`),
+      groupId: options.partitionId, replicaIdentity: options.replicaId}).db;
     const request = portRequest(options, db, overridesFor(options));
     const entry = {options, port: null, refusal: null, closed: false};
     opened.push(entry);
@@ -161,7 +163,8 @@ function isVirgin(record) {
 // SYNCING row: gated (virgin) or, for the control, one that led.
 function leaveEarlierAttempt(replicaId, {voted}) {
   return (directory) => {
-    const db = new Database(path.join(directory, `${replicaId}.db`));
+    const db = openReplicaDatabaseFixture({dbPath: path.join(directory, `${replicaId}.db`),
+      groupId: PARTITION_ID, replicaIdentity: replicaId}).db;
     const pending = Promise.withResolvers();
     pending.promise.catch(() => undefined);
     const port = createRaftRsOperationPort(portRequest({

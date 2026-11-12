@@ -1,0 +1,366 @@
+{
+  "schema": "sqlite-caller-provenance/1",
+  "scope": "Static caller census completed for mapped migration; fresh independent review and production/lab composition still required.",
+  "rawCensus": {
+    "path": "/tmp/lagrange-sqlite-phase2-max-20261112/caller-census.json",
+    "sha256": "cd684499e0a7bedc45332bb4ac942144e0c2de1670afa08b9b00c614d006fa83",
+    "filesParsed": 280,
+    "constructorSites": 396,
+    "ownedSites": 124,
+    "nativeSitesAfterManualResolution": 272,
+    "manualResolutions": [
+      {
+        "file": "src/partition/partition-service-split-accessor-base.js",
+        "line": 371,
+        "constructor": "Database",
+        "module": null,
+        "kind": "unresolved",
+        "source": "new Database(this.dbPath, {readonly: true, fileMustExist: true})",
+        "resolvedModule": "better-sqlite3",
+        "resolution": "PARTITION_SERVICE_SHARED.Database destructured at line19; src/partition/partition-service-shared.js imports native Database at line4 and exports it in shared object at line252. Split/merge backfill passes it only to native prepare/iterate/all.",
+        "support": {
+          "src/partition/partition-service-split-accessor-base.js": "c62f7c5faa1f3bba6af164026cb231d529588add2ae474774fb164cf5ed535bd",
+          "src/partition/partition-service-shared.js": "7713df06a99e57d5987122ece4eed77c764818b8e5d57dfc79eda495e4b98c43",
+          "src/partition/partition-service-merge-replication-methods.js": "4c801df6b7cc992d871d6af282dd3718b3e5b5eb5732a14fc36193b44d5a5c06"
+        }
+      }
+    ],
+    "remainingUnresolvedMappedConstructorBindings": 0,
+    "limitations": "src and test JavaScript; lexical imports and eslint-scope binding resolution for native or owned constructors including assignments and dynamic imports; factory calls separately recorded. Manual dataflow classifications remain separate; this is not a whole-program runtime proof."
+  },
+  "productionOwnedAcquisitions": [
+    {
+      "file": "src/partition/partition-hydration-image-pages.js",
+      "line": 86,
+      "constructor": "SQLiteConnection",
+      "module": "src/storage/sqlite-prepared-statement-owner.js",
+      "kind": "owned-connection",
+      "source": "new SQLiteConnection(partition.db.serialize())",
+      "route": "PartitionHydrationImages opens serialized memory or readonly file snapshot -> CDC ledger incarnation + partition applied index readers; final page releases only image connection.",
+      "fileSha256": "7f1ff2443427b040156e881323c387904ff9b9c8c11a2d409af9fc84fafe4c4b"
+    },
+    {
+      "file": "src/partition/partition-hydration-image-pages.js",
+      "line": 88,
+      "constructor": "SQLiteConnection",
+      "module": "src/storage/sqlite-prepared-statement-owner.js",
+      "kind": "owned-connection",
+      "source": "new SQLiteConnection(partition.dbPath, {readonly: true, fileMustExist: true})",
+      "route": "PartitionHydrationImages opens serialized memory or readonly file snapshot -> CDC ledger incarnation + partition applied index readers; final page releases only image connection.",
+      "fileSha256": "7f1ff2443427b040156e881323c387904ff9b9c8c11a2d409af9fc84fafe4c4b"
+    },
+    {
+      "file": "src/raft/raft-rs-operation-port.js",
+      "line": 107,
+      "constructor": "SQLiteConnection",
+      "module": "src/storage/sqlite-prepared-statement-owner.js",
+      "kind": "owned-connection",
+      "source": "new SQLiteConnection(dbPath, {fileMustExist: dbPath !== REPLICA_DATABASE_MEMORY})",
+      "route": "openRaftRsReplicaDatabase -> F exclusive construction/birth -> Partition/MessageGroup/WASM operation ports -> durable/peer/lifecycle/participant cached consumers; one owned handle retained through release.",
+      "fileSha256": "9554d28d1c9e54d2dfef95efc4fe3f653a1f94444a4f75ee07d022b754416d65"
+    },
+    {
+      "file": "src/raft/raft-rs-preparation-custody.js",
+      "line": 25,
+      "constructor": "SQLiteConnection",
+      "module": "src/storage/sqlite-prepared-statement-owner.js",
+      "kind": "owned-connection",
+      "source": "new SQLiteConnection(member.dbPath, options)",
+      "route": "RaftRsPreparationCustody acquires the original-allocation writer/reader handle and releases it through native close; original lifecycle SQL needs same brand.",
+      "fileSha256": "862aec20a0ada089fec1f675be38088b5e8ef3b82c798fb8c4725391242a6b97"
+    },
+    {
+      "file": "src/raft/raft-rs-replica-lifecycle-observation.js",
+      "line": 146,
+      "constructor": "SQLiteConnection",
+      "module": "src/storage/sqlite-prepared-statement-owner.js",
+      "kind": "owned-connection",
+      "source": "new SQLiteConnection(file, {readonly: true, fileMustExist: true})",
+      "route": "Readonly lifecycle retirement/original-right inspection -> lifecycle and durable cached reads; file existence/refusal policy unchanged.",
+      "fileSha256": "bc2856899bbed866779f3dce28b953e2de3ef559f2e5cdcc65446b37ae6e9b4c"
+    },
+    {
+      "file": "src/raft/raft-rs-replica-lifecycle-observation.js",
+      "line": 291,
+      "constructor": "SQLiteConnection",
+      "module": "src/storage/sqlite-prepared-statement-owner.js",
+      "kind": "owned-connection",
+      "source": "new SQLiteConnection(dbPath, {readonly: true, fileMustExist: true})",
+      "route": "Readonly lifecycle retirement/original-right inspection -> lifecycle and durable cached reads; file existence/refusal policy unchanged.",
+      "fileSha256": "bc2856899bbed866779f3dce28b953e2de3ef559f2e5cdcc65446b37ae6e9b4c"
+    },
+    {
+      "file": "src/raft/snapshot-checkpoint-store.js",
+      "line": 386,
+      "constructor": "SQLiteConnection",
+      "module": "src/storage/sqlite-prepared-statement-owner.js",
+      "kind": "owned-connection",
+      "source": "new SQLiteConnection(stagingPayload)",
+      "route": "Checkpoint mutable copy scrub and descriptor validation readers -> RaftRsDurableStore/snapshot/participant cached consumers; no foreign-handle adoption.",
+      "fileSha256": "169ff3f012a62e67049ed00dd935759779006a17215c4dcee31343c186c6bd02"
+    },
+    {
+      "file": "src/raft/snapshot-checkpoint-store.js",
+      "line": 462,
+      "constructor": "SQLiteConnection",
+      "module": "src/storage/sqlite-prepared-statement-owner.js",
+      "kind": "owned-connection",
+      "source": "new SQLiteConnection(payloadPath, {readonly: true})",
+      "route": "Checkpoint mutable copy scrub and descriptor validation readers -> RaftRsDurableStore/snapshot/participant cached consumers; no foreign-handle adoption.",
+      "fileSha256": "169ff3f012a62e67049ed00dd935759779006a17215c4dcee31343c186c6bd02"
+    },
+    {
+      "file": "src/raft/snapshot-install.js",
+      "line": 398,
+      "constructor": "SQLiteConnection",
+      "module": "src/storage/sqlite-prepared-statement-owner.js",
+      "kind": "owned-connection",
+      "source": "new SQLiteConnection(replicaDbPath, {readonly: true})",
+      "route": "Installed checkpoint reader and staging image writer -> durable/lifecycle cached consumers; independent install-binding/state readers remain native direct SQL.",
+      "fileSha256": "015c841c64c5579dc2aa0d9e5c400b6cd24bb8bcbc454dca78853ad06b7522bb"
+    },
+    {
+      "file": "src/raft/snapshot-install.js",
+      "line": 612,
+      "constructor": "SQLiteConnection",
+      "module": "src/storage/sqlite-prepared-statement-owner.js",
+      "kind": "owned-connection",
+      "source": "new SQLiteConnection(stagingPath(checkpointsRoot))",
+      "route": "Installed checkpoint reader and staging image writer -> durable/lifecycle cached consumers; independent install-binding/state readers remain native direct SQL.",
+      "fileSha256": "015c841c64c5579dc2aa0d9e5c400b6cd24bb8bcbc454dca78853ad06b7522bb"
+    }
+  ],
+  "retainedProductionRawAcquisitions": [
+    {
+      "path": "src/storage/sqlite-store.js",
+      "line": 74,
+      "source": "this.db = new Database(this.dbPath);",
+      "classification": "Independent generic SQLiteStore. All three test importers (storage unit/property and minimal-deployment runtime readiness) use its executeQuery API only; no production importer or cached-owner call.",
+      "fileSha256": "479437b43e42d6122f25e1858e01e73dc9c3eb1203cca63d482331f24eb032bc"
+    },
+    {
+      "path": "src/storage/data-directory-process-owner.js",
+      "line": 38,
+      "source": "database = new Database(lockPath);",
+      "classification": "Independent directory-lock database; no cached replica reader.",
+      "fileSha256": "463e4004cb3f26a7dd3e4d77ea6d39712dfe61721770adf0b59b314b9ec5f77c"
+    },
+    {
+      "path": "src/partition/partition-participant-transaction-store.js",
+      "line": 311,
+      "source": "const db = new Database(dbPath, {readonly: true, fileMustExist: true});",
+      "classification": "readDurableParticipantCustodyAt by-path reader checks presence and custody rows through direct prepare, not cached readStatementOf.",
+      "fileSha256": "7877c97fdedd611c32c6d398b8f4f94ad4b0a0cdff373fab7fdf3d30991e7c11"
+    },
+    {
+      "path": "src/partition/partition-service-split-accessor-base.js",
+      "line": 371,
+      "source": "const snapshotDb = new Database(this.dbPath, {readonly: true, fileMustExist: true});",
+      "classification": "Pinned split backfill row-query iterator uses native prepare only; no cached replica reader in this path. Existing in-memory facade outside scope.",
+      "fileSha256": "c62f7c5faa1f3bba6af164026cb231d529588add2ae474774fb164cf5ed535bd"
+    },
+    {
+      "path": "src/wasm-service/wasm-creation-opening.js",
+      "line": 185,
+      "source": "const db = new Database(target.dbPath, {fileMustExist: true});",
+      "classification": "tombstoneWasmCreationLocal and readCreationLocalAt by-path creation-local SQL only; commitDurably does not use cached statements.",
+      "fileSha256": "431cd1a23ef3b45aa284d31f47eb8d3d64eacdc19aaa4c81ad88b2438567a72f"
+    },
+    {
+      "path": "src/wasm-service/wasm-creation-opening.js",
+      "line": 339,
+      "source": "db = new Database(dbPath, {readonly: true, fileMustExist: true});",
+      "classification": "tombstoneWasmCreationLocal and readCreationLocalAt by-path creation-local SQL only; commitDurably does not use cached statements.",
+      "fileSha256": "431cd1a23ef3b45aa284d31f47eb8d3d64eacdc19aaa4c81ad88b2438567a72f"
+    },
+    {
+      "path": "src/diagnostics/runtime-build-provenance.js",
+      "line": 41,
+      "source": "const db = new Database(':memory:');",
+      "classification": "In-memory SQLite compile/version provenance query only, direct prepare.",
+      "fileSha256": "208821d22644d767da6b013337e3ce59edb007e9143d30e4b0808f5e0b17ba57"
+    },
+    {
+      "path": "src/raft/snapshot-install.js",
+      "line": 146,
+      "source": "const db = new Database(file, {readonly: true});",
+      "classification": "stagedInstallBindingMatches, stagingHasInstallBinding, readDurableStateValue inspect binding/_raft_state via direct native prepare. Installed image record and staging Raft handle acquisitions converted separately.",
+      "fileSha256": "015c841c64c5579dc2aa0d9e5c400b6cd24bb8bcbc454dca78853ad06b7522bb"
+    },
+    {
+      "path": "src/raft/snapshot-install.js",
+      "line": 167,
+      "source": "const db = new Database(file, {readonly: true});",
+      "classification": "stagedInstallBindingMatches, stagingHasInstallBinding, readDurableStateValue inspect binding/_raft_state via direct native prepare. Installed image record and staging Raft handle acquisitions converted separately.",
+      "fileSha256": "015c841c64c5579dc2aa0d9e5c400b6cd24bb8bcbc454dca78853ad06b7522bb"
+    },
+    {
+      "path": "src/raft/snapshot-install.js",
+      "line": 246,
+      "source": "const db = new Database(dbPath, {readonly: true});",
+      "classification": "stagedInstallBindingMatches, stagingHasInstallBinding, readDurableStateValue inspect binding/_raft_state via direct native prepare. Installed image record and staging Raft handle acquisitions converted separately.",
+      "fileSha256": "015c841c64c5579dc2aa0d9e5c400b6cd24bb8bcbc454dca78853ad06b7522bb"
+    },
+    {
+      "path": "src/bootstrap/local-cluster-identity.js",
+      "line": 123,
+      "source": "database = new Database(dbPath, {readonly: true, fileMustExist: true});",
+      "classification": "readDurableClusterIdentitySnapshot by-path local identity direct prepare only.",
+      "fileSha256": "f45917fca8fb18465dc3d3b278067950bd28bf8370a568b1069276ee64f4a2af"
+    },
+    {
+      "path": "src/bootstrap/rejoin-hints-durable-evidence.js",
+      "line": 240,
+      "source": "database = new Database(dbPath, {readonly: true, fileMustExist: true});",
+      "classification": "readServicesRowsFromReplicaDbOutcome and readNodesRowsFromReplicaDbOutcome inspect table existence and rows with direct native prepare only.",
+      "fileSha256": "ec8df0fbd6bb84fd008fa403462f59628806ac51c0bb9ecc21c86abd632e07dc"
+    },
+    {
+      "path": "src/bootstrap/rejoin-hints-durable-evidence.js",
+      "line": 338,
+      "source": "database = new Database(dbPath, {readonly: true, fileMustExist: true});",
+      "classification": "readServicesRowsFromReplicaDbOutcome and readNodesRowsFromReplicaDbOutcome inspect table existence and rows with direct native prepare only.",
+      "fileSha256": "ec8df0fbd6bb84fd008fa403462f59628806ac51c0bb9ecc21c86abd632e07dc"
+    },
+    {
+      "path": "src/service/call-shard-read-view-manager.js",
+      "line": 65,
+      "source": "const readerDb = new Database(dbPath, {readonly: true});",
+      "classification": "Pinned WAL read view; its SQL keyset page queries call native prepare directly, no cached-owner reader.",
+      "fileSha256": "f1415411b1fd25825e72fb247511974f58174c09b9172bc84a9cab8ccef741db"
+    }
+  ],
+  "newlyTracedFixtureProducers": [
+    {
+      "path": "test/diagnostics/raft-churn-sync-section-attribution.test.js",
+      "fileSha256": "603426313927f83786b965c5d82006c8550f3b8a82b5e748eaf603ccfab1f6e6",
+      "route": "Dynamic producer import corrected to canonical SQLiteConnection before RaftRsDurableStore construction."
+    },
+    {
+      "path": "test/test-helpers/learner-process-loss-worker.js",
+      "fileSha256": "9bcd18d7ea710d8f14783fa3514133296c26c16f64cbe3ea7a140fc098102223",
+      "route": "openNative(saved) -> RaftRsDurableStore/peer registry -> runtime operation port. Separate operation ledger stays raw direct SQL."
+    },
+    {
+      "path": "test/test-helpers/transaction-persistence-gateway.js",
+      "fileSha256": "101f45a3e154ae7bda301e6b4934f5db754b0fc825e53f6a8cef0634fe5ac77c",
+      "route": "Default gateway.db -> readTransactionSchemaEnforcement/readTransactionReleaseCensus in real caller tests. Supplied options.db remains caller-owned; group coordinator supplied store used only for direct SQL."
+    },
+    {
+      "path": "test/partition/partition-cdc-acknowledgement-refusal.test.js",
+      "fileSha256": "6aecf2ba84ed2e6d90b4e062aee63c69de31ab10f23f41a0a50b850eed14a9c6",
+      "route": "Owner DB -> CDC acknowledgement consumer -> countCdcObligations cached read."
+    },
+    {
+      "path": "test/node/replica-handler-remove-closed-service.test.js",
+      "fileSha256": "4fefcc6299f3a97054817ab691524475267cda8966f3086bd7e89699fcac951b",
+      "route": "participantStateAt readonly observer -> readParticipantTransactionRow; earlier direct runtime fixtures also owned."
+    },
+    {
+      "path": "test/raft/raft-rs-backend/message-group-on-raft-rs.test.js",
+      "fileSha256": "6f4923a2eaf1d1e689367d80a37dfb612076242e8c0331982f07b234e49d70bb",
+      "route": "Independent readonly applied-entry observer -> RaftRsDurableStore.readCommittedEntriesIn."
+    },
+    {
+      "path": "test/raft/raft-rs-backend/multi-replica-runtime-prerequisites.test.js",
+      "fileSha256": "3dc428ea8dc9696c567957bb0f893e9cb0b101a2816f73eb22cd1e894362f92d",
+      "route": "Readonly applied-index observer -> RaftRsDurableStore.readAppliedIndexIn."
+    },
+    {
+      "path": "test/raft/raft-rs-backend/partition-peer-admission.test.js",
+      "fileSha256": "5367b2d31aa926f9b69efc4bd10487121b478547c0b33fbd578c172300c1581d",
+      "route": "Readonly admission-entry observer -> RaftRsDurableStore.readCommittedEntriesIn."
+    },
+    {
+      "path": "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
+      "fileSha256": "01c805c65fbe6af90378d596e2c12de07adb93e2b33e2274ac912913b4ea9f63",
+      "route": "Fault instrumentation stays on actual owned connection and native cached Statement methods; no connection Proxy."
+    },
+    {
+      "path": "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+      "fileSha256": "141cca277fc4f2b3c2773ab30aa84c5fb77f70ee7ffa135ddec0b1c95258840b",
+      "route": "Transaction fault injection wraps real owned connection.transaction and returns same connection."
+    },
+    {
+      "path": "test/raft/raft-rs-status-peer-resolution.test.js",
+      "fileSha256": "30356d3a2694bb31284a383a8fd54b997283da10f404d5b702da103f25ec4d16",
+      "route": "Counting prepares return native statement proxies; connection identity stays actual owned database."
+    },
+    {
+      "path": "test/raft/raft-rs-backend/runtime-replacement-review-child.js",
+      "fileSha256": "dc420231e326e00772ab3f4062657858019aa1eb89c73f785aa790c6a04cf915",
+      "route": "Prepare/Get/All instrumentation observes cached reads after warmup without proxying the connection."
+    },
+    {
+      "path": "test/partition/partition-unreadable-durable-record.test.js",
+      "fileSha256": "f5ac166b10d064d9ccc63b9e057697ad2b63bcf7245b49271002bd369d7f0481",
+      "route": "F-ao scratch/capped/partial files born explicitly through canonical fixture creator before intentional partial durable schema."
+    },
+    {
+      "path": "test/integration/message-group-learner-runtime-authorization.integration.test.js",
+      "fileSha256": "a1fe0c7127896cad80a1a5ef45e4d84ca335d71d997d7ca9280c960ecd0c9ea0",
+      "route": "F receiver fixture births actual never-opened allocation; empty-shell/orphan-native remain deliberately historyless. Receiver72 UNRUN on repaired bytes."
+    },
+    {
+      "path": "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js",
+      "fileSha256": "2157a910442179eb97d36b7b74708a82c3369c9c08188d0c2234de1f4a32dfc6",
+      "route": "Isolated copy includes F replica-database-fixture and exact hash; copied whole src contains its transitive production imports."
+    },
+    {
+      "path": "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js",
+      "fileSha256": "31a5786d970a3e99ccc1c341e3b86b68195c47b653bd38b8f1948622e6eca221",
+      "route": "Same isolated helper copy closure, with child receipt proving actual native trap."
+    }
+  ],
+  "priorFixtureRouteEvidence": [
+    {
+      "path": "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-fixture-producers.json",
+      "sha256": "ba6dec2677a77d7be483822785bce88f1b726f3d0ad593e5509cb4e849eccd82"
+    },
+    {
+      "path": "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-stronger-fixture-selection.json",
+      "sha256": "be5f01e9a85173975afe5761af69b943771655e41486004398091e2dd5b1a9bd"
+    }
+  ],
+  "rawReferenceAudit": {
+    "path": "/tmp/lagrange-sqlite-phase2-max-20261112/raw-use-census.json",
+    "sha256": "2e490091ac40f8709e7a03f3c24ef86930611f6e3be04ba8159e2e3cfb8c039d",
+    "variables": 242,
+    "withNontrivialReferences": 135,
+    "limitations": "Variable-declaration references only; complementary full constructor/import census covers assignments and dynamic import producers."
+  },
+  "retainedFixtureClassifications": [
+    "Raw readonly/tamper/oracle handles stay raw only when actual consumers use native prepare/exec/pragma directly; readonly status alone does not exempt cached reads (four such observers converted).",
+    "Legacy-named SQLiteLogAdapter/PartitionRaftStorage fixture paths use native SQL only; checkpoint copy and validation internals allocate owned handles independently. This is a boundary classification, not approval of unrelated historical code.",
+    "SessionKVStore/WasmWriterState raw format-refusal cases never enter cached replica readers.",
+    "Control-plane operation ledgers, schema/registration fixtures, query-engine SQL bridges and independent committed-membership oracles use native SQL directly.",
+    "Startup/release raw DB fixtures exercise close custody with controlled port doubles, with no cached SQL execution.",
+    "Generic SQLiteStore and createTable fixtures are direct SQL only. The initial temporary conversions of minimal-deployment-request-cell-routing-fixture and partition-service-qualified-table-name were reverted; neither is in Phase2 delta.",
+    "Intentional foreign/closed/proxy raw handles remain in negative ownership witnesses. No canonical bridge override or adoption was added.",
+    "PARTITION_SERVICE_SHARED.Database and its pre-existing in-memory split-reader facade are outside cached-owner migration. Existing fallback/debt in that owner is not silently approved by this census."
+  ],
+  "graphScope": {
+    "path": "test/shards/impact-contracts.json",
+    "sha256": "cf9a9fafeb39868f1fed5f594bb1d9ae97953446eca6b60397733720f554402f",
+    "contract": "sqlite-connection-statement-ownership",
+    "ownersAndIndirectFixtureProducers": 26,
+    "tests": 79,
+    "exactSourceAllowlist": {
+      "path": "/tmp/lagrange-sqlite-phase2-max-20261112/source-allowlist.json",
+      "sha256": "0da0fc213dda31f4ff4253799668c5bf2d9636ad1589399d040de016e7060e74",
+      "paths": 99
+    }
+  },
+  "isolatedChildClosure": {
+    "path": "/tmp/lagrange-sqlite-phase2-max-20261112/child-copy-closure.json",
+    "sha256": "ea5141373bb8db0c926810a77f0ff1c1154a528cc6412185606968ef1b54265e",
+    "modulesPerChild": 235,
+    "helpers": [
+      "test/helpers/replica-database-fixture.js"
+    ],
+    "replicaLifecycleFixtureReachable": false,
+    "uncoveredRelativeImports": 0,
+    "sourceSymlinkFallback": false,
+    "existingDependencySetup": "node_modules dependency directory symlink unchanged; no checkout source symlink"
+  }
+}

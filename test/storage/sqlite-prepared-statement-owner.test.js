@@ -12,7 +12,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 
-import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 
 import {
   ensureCdcObligationLedger,
@@ -59,7 +59,7 @@ function snapshotAt(index) {
 // One replica file as an opened replica holds it: its Raft record with a
 // snapshot row, and its own reserved peer identity with a committed node.
 function openReplica(file, snapshotIndex, replica) {
-  const db = new Database(file);
+  const db = new SQLiteConnection(file);
   const store = new RaftRsDurableStore(db);
   store.putSnapshot(GROUP_ID, snapshotAt(snapshotIndex));
   const registry = new RaftRsPeerIdentityRegistry(db);
@@ -101,7 +101,7 @@ test('repeated raft status reads prepare nothing after the first', () => {
 
 test('repeated CDC ledger reads prepare nothing after the first, and see a ' +
   'ledger created after an absent read', () => {
-  const db = new Database(':memory:');
+  const db = new SQLiteConnection(':memory:');
   assert.equal(readCdcLedgerNewest(db), null);
   assert.deepEqual(readOwedCdcObligations(db), []);
   ensureCdcObligationLedger(db, {index: 3, term: 2, entryId: 'entry-3'});
@@ -120,7 +120,7 @@ test('repeated CDC ledger reads prepare nothing after the first, and see a ' +
 });
 
 test('a ledger whose creating transaction rolled back reads absent again', () => {
-  const db = new Database(':memory:');
+  const db = new SQLiteConnection(':memory:');
   db.exec('BEGIN');
   ensureCdcObligationLedger(db, {index: 3, term: 2, entryId: 'entry-3'});
   insertCdcObligation(db, {eventKey: 'event-3', logIndex: 3, term: 2, ordinal: 0,
@@ -149,7 +149,7 @@ test('a replaced and reopened database file is read through its own ' +
     built.db.close();
     before.db.close();
     fs.renameSync(image, file);
-    const db = new Database(file);
+    const db = new SQLiteConnection(file);
     const store = new RaftRsDurableStore(db);
     const registry = new RaftRsPeerIdentityRegistry(db);
 
@@ -174,7 +174,7 @@ test('a replaced and reopened database file is read through its own ' +
 
 test('a store opened on a record without its snapshot table reads no ' +
   'snapshot index', () => {
-  const db = new Database(':memory:');
+  const db = new SQLiteConnection(':memory:');
   db.exec(RAFT_RS_SQL.CREATE_LOG_TABLE);
   const store = new RaftRsDurableStore(db);
   assert.equal(store.readSnapshotIndex(GROUP_ID), 0n);
@@ -186,7 +186,7 @@ test('a store opened on a record without its snapshot table reads no ' +
 
 test('one handle holds one statement per text and integer mode, and a held ' +
   'statement reads a migrated schema', () => {
-  const db = new Database(':memory:');
+  const db = new SQLiteConnection(':memory:');
   db.exec('CREATE TABLE facts (name TEXT PRIMARY KEY, value INTEGER)');
   db.prepare('INSERT INTO facts VALUES (?, ?)').run('answer', 42);
   const statement = preparedStatementOf(db, SELECT_VALUE);
@@ -202,7 +202,7 @@ test('one handle holds one statement per text and integer mode, and a held ' +
   db.exec('ALTER TABLE facts ADD COLUMN note TEXT DEFAULT \'added\'');
   assert.deepEqual(all.all(), [{name: 'answer', value: 42, note: 'added'}]);
 
-  const other = new Database(':memory:');
+  const other = new SQLiteConnection(':memory:');
   other.exec('CREATE TABLE facts (name TEXT PRIMARY KEY, value INTEGER)');
   assert.notEqual(preparedStatementOf(other, SELECT_VALUE), statement);
   assert.equal(preparedStatementOf(other, SELECT_VALUE).get('answer'), undefined);

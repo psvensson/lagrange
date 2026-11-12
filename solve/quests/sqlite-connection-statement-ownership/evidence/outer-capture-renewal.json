@@ -1,0 +1,52 @@
+{
+  "schema": "sqlite-outer-capture-lab-handoff/1",
+  "status": "BOUNDED_APPROVED_RENEWED_WIP",
+  "sourceTree": "e3fb1210ca43e31d6b04e6214d1d269c07c064a6",
+  "generatedTree": "56c890a0d7d2878cbd8c4e87739715bb137cd28c",
+  "boundedIndependentReview": {
+    "reportSha256": "5a834b7121fca508177065e5c31a01c1d19e69bdf4cb6ce1f53ee52e2917ec9d",
+    "sealSha256": "8ed09f04e1ffe05b0cb1f44db676914cc322dd64036e96c9c7639a446171925f",
+    "verifier": "subagent:01a1cee8-eb8f-7da3-b329-7e26bae565eb",
+    "verdict": "APPROVE_BOUNDED"
+  },
+  "authorFocusedCases": 343,
+  "independentFocusedCases": 51,
+  "renewal": {
+    "files": 3,
+    "cases": 84,
+    "pass": 84,
+    "fail": 0,
+    "skip": 0
+  },
+  "nativeChildClosureModules": [
+    235,
+    235
+  ],
+  "receiverCases": 72,
+  "sourceGeneratedNativeBytesUnchanged": true,
+  "evidence": {
+    "archive": "/tmp/lagrange-sqlite-outer-capture-renewal-20261112.tar.gz",
+    "archiveSha256": "7cf346cb2b459c94110523f34533e50b65eb2c3ba5525ea4591bc0c3a87e1d9d",
+    "archiveBytes": 2601439,
+    "members": 72,
+    "reopenedEveryMember": true,
+    "evidenceSealSha256": "87c722d547f975a2f9fdec1164b5df68c160424d2b1eb7dcdf1ed7af4820b944",
+    "manifestSha256": "9d3832e22a220bd37dee45007330a1bc15627863190d932e0ba6cbf5c492dbba",
+    "resultsSha256": "83339b46830096e9c99d09d9b9c466edd4ef523ab84cfe923d6c2e841c42902e",
+    "sourceTree": "e3fb1210ca43e31d6b04e6214d1d269c07c064a6",
+    "generatedTree": "56c890a0d7d2878cbd8c4e87739715bb137cd28c",
+    "labSelectionPath": "/tmp/lagrange-sqlite-outer-capture-renewal-20261112/lab-tests.txt",
+    "labSelectionSha256": "d8f6b5c4c5e8a1097f4e7270746e0f165a43149c43c8859eca75446410b64a81",
+    "tests": 1794
+  },
+  "selectionScope": "15 source/generated repair paths versus rejected tree; no separate safety-spine/full integration selection",
+  "pending": [
+    "full1794 affected cone/lab",
+    "permission/no-skip composition",
+    "six inherited static guideline sites",
+    "whole migration/service acceptance",
+    "canonical retention/upload confirmation"
+  ],
+  "wholeMigration": "HOLD",
+  "commitPurpose": "Remote WIP preservation for parent lab scheduling, not landing/integration/release."
+}

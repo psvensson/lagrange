@@ -1,0 +1,86 @@
+[
+  {
+    "path": "src/storage/sqlite-store.js",
+    "line": 74,
+    "source": "this.db = new Database(this.dbPath);",
+    "classification": "Independent generic SQLiteStore handle. Reviewed design found no importing production module; test-driven indirect callers remain to audit before full closure."
+  },
+  {
+    "path": "src/storage/data-directory-process-owner.js",
+    "line": 38,
+    "source": "database = new Database(lockPath);",
+    "classification": "Independent directory-lock database; no cached replica reader."
+  },
+  {
+    "path": "src/partition/partition-participant-transaction-store.js",
+    "line": 311,
+    "source": "const db = new Database(dbPath, {readonly: true, fileMustExist: true});",
+    "classification": "readDurableParticipantCustodyAt by-path reader checks presence and custody rows through direct prepare, not cached readStatementOf."
+  },
+  {
+    "path": "src/partition/partition-service-split-accessor-base.js",
+    "line": 371,
+    "source": "const snapshotDb = new Database(this.dbPath, {readonly: true, fileMustExist: true});",
+    "classification": "Pinned split backfill row-query iterator uses native prepare only; no cached replica reader in this path. Existing in-memory facade outside scope."
+  },
+  {
+    "path": "src/wasm-service/wasm-creation-opening.js",
+    "line": 185,
+    "source": "const db = new Database(target.dbPath, {fileMustExist: true});",
+    "classification": "tombstoneWasmCreationLocal and readCreationLocalAt by-path creation-local SQL only; commitDurably does not use cached statements."
+  },
+  {
+    "path": "src/wasm-service/wasm-creation-opening.js",
+    "line": 339,
+    "source": "db = new Database(dbPath, {readonly: true, fileMustExist: true});",
+    "classification": "tombstoneWasmCreationLocal and readCreationLocalAt by-path creation-local SQL only; commitDurably does not use cached statements."
+  },
+  {
+    "path": "src/diagnostics/runtime-build-provenance.js",
+    "line": 41,
+    "source": "const db = new Database(':memory:');",
+    "classification": "In-memory SQLite compile/version provenance query only, direct prepare."
+  },
+  {
+    "path": "src/raft/snapshot-install.js",
+    "line": 146,
+    "source": "const db = new Database(file, {readonly: true});",
+    "classification": "stagedInstallBindingMatches, stagingHasInstallBinding, readDurableStateValue inspect binding/_raft_state via direct native prepare. Installed image record and staging Raft handle acquisitions converted separately."
+  },
+  {
+    "path": "src/raft/snapshot-install.js",
+    "line": 167,
+    "source": "const db = new Database(file, {readonly: true});",
+    "classification": "stagedInstallBindingMatches, stagingHasInstallBinding, readDurableStateValue inspect binding/_raft_state via direct native prepare. Installed image record and staging Raft handle acquisitions converted separately."
+  },
+  {
+    "path": "src/raft/snapshot-install.js",
+    "line": 246,
+    "source": "const db = new Database(dbPath, {readonly: true});",
+    "classification": "stagedInstallBindingMatches, stagingHasInstallBinding, readDurableStateValue inspect binding/_raft_state via direct native prepare. Installed image record and staging Raft handle acquisitions converted separately."
+  },
+  {
+    "path": "src/bootstrap/local-cluster-identity.js",
+    "line": 123,
+    "source": "database = new Database(dbPath, {readonly: true, fileMustExist: true});",
+    "classification": "readDurableClusterIdentitySnapshot by-path local identity direct prepare only."
+  },
+  {
+    "path": "src/bootstrap/rejoin-hints-durable-evidence.js",
+    "line": 240,
+    "source": "database = new Database(dbPath, {readonly: true, fileMustExist: true});",
+    "classification": "readServicesRowsFromReplicaDbOutcome and readNodesRowsFromReplicaDbOutcome inspect table existence and rows with direct native prepare only."
+  },
+  {
+    "path": "src/bootstrap/rejoin-hints-durable-evidence.js",
+    "line": 338,
+    "source": "database = new Database(dbPath, {readonly: true, fileMustExist: true});",
+    "classification": "readServicesRowsFromReplicaDbOutcome and readNodesRowsFromReplicaDbOutcome inspect table existence and rows with direct native prepare only."
+  },
+  {
+    "path": "src/service/call-shard-read-view-manager.js",
+    "line": 65,
+    "source": "const readerDb = new Database(dbPath, {readonly: true});",
+    "classification": "Pinned WAL read view; its SQL keyset page queries call native prepare directly, no cached-owner reader."
+  }
+]

@@ -15,7 +15,7 @@
  * coordinator's write discipline (insert once, update after, decide once,
  * read back), not the system partitions' replication.
  */
-import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 import {CDC_OPERATION, TABLES} from '../../src/constants/index.js';
 import {buildSystemTableMutationSqlParts} from
   '../../src/cdc/cdc-system-table-mutation-sql-helpers.js';
@@ -82,7 +82,7 @@ function executeMutation(db, mutation) {
  * @return {Object} The gateway double.
  */
 function createTransactionPersistenceGateway(options = {}) {
-  const db = options.db ?? new Database(':memory:');
+  const db = options.db ?? new SQLiteConnection(':memory:');
   for (const tableName of COORDINATOR_TABLES) {
     db.exec(generateCreateTableSQL(getSchemaByTableName(tableName)));
   }

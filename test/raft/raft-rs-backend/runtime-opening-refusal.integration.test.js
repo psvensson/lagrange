@@ -1,3 +1,4 @@
+import {openReplicaDatabaseFixture} from '../../helpers/replica-database-fixture.js';
 import {createRaftOperationPort, isConsensusInitRefusal} from '../../../src/raft/raft-operation-port.js';
 import {closeMessageGroupConsensus} from '../../../src/message-group/message-group-consensus-port.js';
 import {closeWasmServiceConsensus} from '../../../src/wasm-service/wasm-service-consensus-port.js';
@@ -84,7 +85,8 @@ for (const phase of ['unhealthy', 'replacing']) {
       const fixture = await createFixture(t);
       const groupId = collision ? EXISTING_GROUP : 'refused-new-group';
       const replicaId = collision ? EXISTING_REPLICA : 'refused-new-replica';
-      const database = new Database(path.join(fixture.directory, 'refused.db'));
+      const database = openReplicaDatabaseFixture({dbPath: path.join(fixture.directory, 'refused.db'),
+        groupId, replicaIdentity: replicaId}).db;
       database.pragma('journal_mode = WAL'); database.pragma('synchronous = FULL');
       fixture.databases.push(database);
       const request = {...fixture.survivor.replica(EXISTING_REPLICA).request,
@@ -492,6 +494,48 @@ for (const edge of ['status', 'campaign']) {
     } finally {
       healed = true; service.roleMutationHelper.shutdown = original;
       await service.shutdown(); nativePort?.close();
+    }
+  });
+}
+
+for (const kind of KINDS) {
+  test(`database construction custody: ${kind} retains pragma failure and failed close`, async (t) => {
+    const fixture = await createFixture(t);
+    const service = buildService(fixture, kind);
+    const pragma = Database.prototype.pragma;
+    const close = Database.prototype.close;
+    const primary = new Error('construction pragma failed');
+    const cleanup = new Error('construction close failed before effect');
+    let acquired;
+    Database.prototype.pragma = function(...args) {
+      if (this.name === service.dbPath) {
+        acquired = this; throw primary;
+      }
+      return pragma.apply(this, args);
+    };
+    Database.prototype.close = function(...args) {
+      if (this === acquired) throw cleanup;
+      return close.apply(this, args);
+    };
+    let failure;
+    try {
+      await service.initialize();
+    } catch (error) {
+      failure = error;
+    } finally {
+      Database.prototype.pragma = pragma;
+      Database.prototype.close = close;
+    }
+    try {
+      assert.ok(acquired, 'native database was acquired');
+      assert.equal(service.db, acquired, 'service retains exact unclosed construction handle');
+      assert.equal(acquired.open, true);
+      assert.equal(failure.cause, primary, 'primary failure survives failed cleanup');
+      assert.ok(failure.errors.includes(cleanup));
+      await service.shutdown();
+      assert.equal(acquired.open, false, 'existing shutdown retries exact cleanup');
+    } finally {
+      if (acquired?.open) close.call(acquired);
     }
   });
 }

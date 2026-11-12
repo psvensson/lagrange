@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 import {refuseUnderProbe} from '../../src/test-helpers/probe-guard.js';
 import {fixture, GROUP, FOUNDERS, TARGET, NODE, SUCCESSOR, O, NOW} from
   './learner-operation-fixture.js';
@@ -122,7 +123,7 @@ function openOperations(file, clock, nodeId) {
 }
 function openNative(saved) {
   assert.ok(fs.statSync(saved.file).size > 0, 'recovery must use an existing native file');
-  const db = new Database(saved.file, {fileMustExist: true});
+  const db = new SQLiteConnection(saved.file, {fileMustExist: true});
   db.pragma('journal_mode = WAL'); db.pragma('synchronous = FULL');
   assert.equal(db.pragma('journal_mode', {simple: true}), 'wal');
   assert.equal(db.pragma('synchronous', {simple: true}), 2);

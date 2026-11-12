@@ -1,0 +1,278 @@
+[
+  {
+    "path": "test/node/replica-lifecycle-durable-generation.test.js",
+    "lineBefore": 377,
+    "before": "const lifecycleDb = new Database(':memory:');",
+    "readerEvidence": "    const lifecycleDb = new Database(':memory:');\n    t.teardown(() => lifecycleDb.close());\n    const lifecycleRequest = {db: lifecycleDb, groupId: row.partition_id,\n      peerId: 'peer-handler-order', replicaIdentity: row.service_id};\n    allocateLifecycleFixture(lifecycleRequest);\n    const prepare = lifecycleDb.prepare.bind(lifecycleDb);\n    lifecycleDb.prepare = (sql) => {\n      const statement = prepare(sql);\n      if (sql.includes('SET state = \\'retired\\'')) {\n        const run = statement.run.bind(statement);\n        statement.run = (...args) => {\n          const result = run(...args);\n          order.push('raft-retire');\n          return result;\n        };\n"
+  },
+  {
+    "path": "test/raft/raft-rs-lifecycle-turn-admission.test.js",
+    "lineBefore": 24,
+    "before": "const db = new Database(':memory:');",
+    "readerEvidence": "  const db = new Database(':memory:');\n  try {\n    const owner = ownerOver(db);\n    const answer = owner.execute(() => settledTurn('done'));\n    assert.equal(answer.settled, true);\n    assert.equal(answer.result, 'done');\n    const retired = await owner.retire('test-retirement');\n    assert.equal(retired.outcome, 'CORE_OK');\n  } finally {\n    db.close();\n  }\n});\n\ntest('a pending turn holds the replica until its promise settles', async () => {\n  const db = new Database(':memory:');\n"
+  },
+  {
+    "path": "test/raft/raft-rs-lifecycle-turn-admission.test.js",
+    "lineBefore": 38,
+    "before": "const db = new Database(':memory:');",
+    "readerEvidence": "  const db = new Database(':memory:');\n  try {\n    const owner = ownerOver(db);\n    const {promise, resolve} = Promise.withResolvers();\n    const answer = owner.execute(() => pendingTurn(promise));\n    assert.equal(answer.settled, false);\n    const order = [];\n    const retiring = owner.retire('test-retirement').then(() => {\n      order.push('retired');\n    });\n    await null;\n    await null;\n    assert.deepEqual(order, [], 'retirement waits for the pending turn');\n    resolve('later');\n    assert.equal(await answer.pending, 'later');\n"
+  },
+  {
+    "path": "test/raft/raft-rs-lifecycle-turn-admission.test.js",
+    "lineBefore": 61,
+    "before": "const db = new Database(':memory:');",
+    "readerEvidence": "  const db = new Database(':memory:');\n  try {\n    const owner = ownerOver(db);\n    await owner.retire('test-retirement');\n    let ran = false;\n    const answer = owner.execute(() => {\n      ran = true;\n      return settledTurn('never');\n    });\n    assert.equal(ran, false);\n    assert.equal(answer.settled, true);\n    assert.equal(answer.result.outcome, 'CORE_REFUSED');\n  } finally {\n    db.close();\n  }\n"
+  },
+  {
+    "path": "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js",
+    "lineBefore": 37,
+    "before": "const db = new Database(':memory:');",
+    "readerEvidence": "  const db = new Database(':memory:');\n  databases.push(db);\n  const request = {db, groupId: GROUP_ID, peerId: `peer-${label}`, replicaIdentity: REPLICA_ID};\n  allocateLifecycleFixture(request);\n  const owner = new RaftRsReplicaLifecycleOwner(request);\n  const runtime = Object.freeze({label});\n  registerRuntimeLifecycle(runtime, owner);\n  return {owner, runtime, get retired() {\n    return owner.active ? [] : [label];\n  }};\n}\n\nfunction retire(generation, reason = 'delayed-g1-work') {\n  return retireReplicaLifecycle({runtime: generation.runtime,\n    groupId: GROUP_ID, replicaIdentity: REPLICA_ID, reason});\n"
+  },
+  {
+    "path": "test/raft/raft-rs-backend/reseed-hold-durability.test.js",
+    "lineBefore": 148,
+    "before": "const db = new Database(path.join(directory, 'replica.sqlite'));",
+    "readerEvidence": "  const db = new Database(path.join(directory, 'replica.sqlite'));\n  try {\n    allocateLifecycleFixture({db, groupId: 'd3', peerId: '7', replicaIdentity: 'd3-a'});\n    const owner = new RaftRsReplicaLifecycleOwner({db, groupId: 'd3',\n      peerId: '7', replicaIdentity: 'd3-a'});\n    let finishTurn = null;\n    // The admitted work answers a pending turn (raft-rs-turn-answer.js).\n    const turn = owner.execute(() => pendingTurn(new Promise((resolve) => {\n      finishTurn = resolve;\n    })));\n    const retirement = owner.retire('group-retired');\n    assert.equal(owner.holdForReseed().outcome,\n      RAFT_OPERATION_OUTCOME.CORE_OK, 'the in-flight turn held the replica');\n    finishTurn();\n    await turn.pending;\n"
+  },
+  {
+    "path": "test/raft/raft-rs-backend/partition-snapshot-compaction-catchup.test.js",
+    "lineBefore": 843,
+    "before": "const retiredDb = new Database(retiredDbPath);",
+    "readerEvidence": "    const retiredDb = new Database(retiredDbPath);\n    allocateLifecycleFixture({db: retiredDb, groupId: PARTITION_ID,\n      peerId: '3', replicaIdentity: r3Id});\n    const retiredOwner = new RaftRsReplicaLifecycleOwner({\n      db: retiredDb,\n      groupId: PARTITION_ID,\n      peerId: '3',\n      replicaIdentity: r3Id,\n    });\n    await retiredOwner.retire('retired-test');\n    retiredDb.close();\n    const retiredRefusal = await requestSnapshotInstall({\n      replicaDbPath: retiredDbPath,\n      checkpointsRoot: r3Root,\n      generationIndex: boundaryIndex,\n"
+  },
+  {
+    "path": "test/raft/raft-rs-backend/replica-lifecycle-birth.test.js",
+    "lineBefore": 64,
+    "before": "const db = new Database(file);",
+    "readerEvidence": "  const db = new Database(file);\n  db.pragma(REPLICA_DB_PRAGMA.JOURNAL_MODE);\n  db.pragma(REPLICA_DB_PRAGMA.SYNCHRONOUS);\n  const birth = administration.birthReplica({db, creation: REPLICA_DATABASE_CREATION.NEW,\n    groupId: GROUP,\n    replicaIdentity});\n  return {db, birth};\n}\n\nfunction read(file, replicaIdentity = REPLICA) {\n  return readDurableReplicaLifecycle(file, GROUP, replicaIdentity);\n}\n\nfunction unreadable(reason, cause = null) {\n  return {...DURABLE_LIFECYCLE_READ.UNREADABLE, reason, cause};\n"
+  },
+  {
+    "path": "test/raft/raft-rs-backend/replica-lifecycle-birth.test.js",
+    "lineBefore": 121,
+    "before": "const db = new Database(file);",
+    "readerEvidence": "  const db = new Database(file);\n  db.exec('CREATE TABLE partition_rows (k TEXT PRIMARY KEY)');\n  assert.equal(administration.birthReplica({db, creation: REPLICA_DATABASE_CREATION.NEW,\n    groupId: GROUP,\n    replicaIdentity: REPLICA}), LIFECYCLE_BIRTH.NOT_EMPTY);\n  db.close();\n  assert.deepEqual(read(file), unreadable('lifecycle-table-absent'));\n  assert.equal(administration.isNeverOpened(read(file)), false);\n  assert.equal(administration.isAbsent(read(file)), false);\n});\n\ntest('never opened is the born row AND no consensus row: an established ' +\n  'row, a consensus row beside a never-established row, and a retired row ' +\n  'are each not never-opened', (t) => {\n  const dir = directory(t);\n"
+  },
+  {
+    "path": "test/message-group/message-group-fresh-learner-snapshot.test.js",
+    "lineBefore": 158,
+    "before": "const sourceDb = new Database(host.dbPath(leader.replicaId));",
+    "readerEvidence": "    const sourceDb = new Database(host.dbPath(leader.replicaId));\n    const senderRoot = path.join(root, 'sender');\n    const receiverRoot = path.join(root, 'receiver');\n    const identity = {clusterId: 'fresh-cluster', raftGroupId: GROUP,\n      entity: {kind: 'message-group', id: GROUP},\n      membershipEpoch: boundary.membershipGenerationIndex};\n    const created = await createSqliteStateMachineCheckpoint({db: sourceDb,\n      identity, checkpointsRoot: senderRoot, raftRsGroupId: GROUP});\n    sourceDb.close();\n    assert.equal(created.outcome, 'created');\n    const {a, b} = createInProcWebSocketPair();\n    const [served, received] = await Promise.all([\n      serveSnapshotTransfer({socket: a, checkpointsRoot: senderRoot,\n        generationIndex: created.descriptor.lastIncludedIndex,\n        transferId: 'fresh-mg-transfer', chunkSizeBytes: 4096}),\n"
+  },
+  {
+    "path": "test/message-group/message-group-fresh-learner-snapshot.test.js",
+    "lineBefore": 218,
+    "before": "const durable = new Database(host.dbPath(TARGET), {readonly: true});",
+    "readerEvidence": "    const durable = new Database(host.dbPath(TARGET), {readonly: true});\n    try {\n      assert.equal(RaftRsDurableStore.readCommittedEntriesIn(durable, GROUP)\n        .some((entry) => entry.command?.data?.node_id === row.node_id), true,\n      'restart retains the post-boundary command in the learner record');\n    } finally {\n      durable.close();\n    }\n    const afterRestart = {node_id: 'after-restart', address: '10.8.0.5:7000',\n      status: 'active'};\n    await liveLeader.applyCDCEvent(TABLES.NODES, 'INSERT', afterRestart);\n    assert.equal(await waitFor(() => restarted.getWritableCache()\n      .get(TABLES.NODES, afterRestart.node_id)?.address === afterRestart.address),\n    true, 'the restarted learner continues catching real commands');\n  } finally {\n"
+  },
+  {
+    "path": "test/migration/migration-partition-alter-routing.test.js",
+    "lineBefore": 27,
+    "before": "const independent = new Database(dbPath, {readonly: true});",
+    "readerEvidence": "  const independent = new Database(dbPath, {readonly: true});\n  try {\n    const applied =\n      RaftRsDurableStore.readCommittedEntriesIn(independent, PARTITION_ID);\n    return applied.at(-1)?.command;\n  } finally {\n    independent.close();\n  }\n}\n\ntest('migration ALTER is routed through dedicated partition Raft operation',\n  async (t) => {\n    const directory = fs.mkdtempSync(\n      path.join(os.tmpdir(), 'migration-partition-alter-routing-'));\n    t.teardown(() => fs.rmSync(directory, {recursive: true, force: true}));\n"
+  },
+  {
+    "path": "test/transaction/queryable-core-j4-locking-read-journey.test.js",
+    "lineBefore": 93,
+    "before": "const db = new Database(':memory:');",
+    "readerEvidence": "    const db = new Database(':memory:');\n    partitionDbs.set(part.partition_id, db);\n    partitionServices.set(part.partition_id, {db, partitionId: part.partition_id});\n    registerPartitionDatabase(part.partition_id, db);\n  }\n\n  seedPartitionDb(partitionDbs.get('accounts-p1'), 'accounts', [\n    {id: 1, balance: 100},\n    {id: 2, balance: 200},\n  ]);\n  seedPartitionDb(partitionDbs.get('accounts-p2'), 'accounts', [\n    {id: 150, balance: 500},\n  ]);\n  seedPartitionDb(partitionDbs.get('reg-p1'), 'regional_inventory', [\n    {region: 'us-east', sku: 'item-1', stock: 50},\n"
+  },
+  {
+    "path": "test/transaction/queryable-core-j4-locking-read-journey.test.js",
+    "lineBefore": 540,
+    "before": "const db = new Database(':memory:');",
+    "readerEvidence": "  const db = new Database(':memory:');\n  try {\n    registerPartitionDatabase('p1', db);\n    const harness = {\n      tableName: 'accounts',\n      partitionId: 'p1',\n      pkValues: [42],\n      transactionId: 'tx-persisted',\n      sessionId: 's-persisted',\n      db,\n    };\n\n    // Acquire reservation backed by SQLite\n    const acq = checkRowReservationConflict(harness);\n    assert.equal(acq.conflict, false);\n"
+  },
+  {
+    "path": "test/transaction/session-transaction-isolation.test.js",
+    "lineBefore": 88,
+    "before": "const independent = new Database(dbPath, {readonly: true});",
+    "readerEvidence": "  const independent = new Database(dbPath, {readonly: true});\n  try {\n    return read(independent);\n  } finally {\n    independent.close();\n  }\n}\n\n/**\n * The partition's durable rs-raft record, on an independent connection.\n * @param {string} dbPath - The partition database.\n * @param {string} groupId - The partition id (the group).\n * @return {Object} The durable applied index.\n */\nfunction durableRecordOf(dbPath, groupId) {\n"
+  },
+  {
+    "path": "test/partition/participant-origin-retained-history.integration.test.js",
+    "lineBefore": 60,
+    "before": "const db = new Database(dbPath, {readonly: true, fileMustExist: true});",
+    "readerEvidence": "  const db = new Database(dbPath, {readonly: true, fileMustExist: true});\n  try {\n    const before = db.serialize();\n    const native = RaftRsDurableStore.readRetainedHistoryIn(db, partitionId);\n    const origin = readPartitionWriteOriginHistory(db, partitionId);\n    assert.deepEqual(db.serialize(), before, 'inspection writes no SQLite bytes');\n    assert.equal(db.inTransaction, false, 'inspection settles its read snapshot');\n    return {native, origin};\n  } finally {\n    db.close();\n  }\n}\n\nfunction holdOriginApplication(service) {\n  const original = service.applyCommittedEntry;\n"
+  },
+  {
+    "path": "test/partition/replicated-sql-determinism-three-replica.test.js",
+    "lineBefore": 115,
+    "before": "const db = new Database(group.dbFileOf(member), {readonly: true});",
+    "readerEvidence": "  const db = new Database(group.dbFileOf(member), {readonly: true});\n  try {\n    return Number(RaftRsDurableStore.readAppliedIndexIn(db, partitionId));\n  } finally {\n    db.close();\n  }\n}\n\nfunction readReplicaSnapshot(group, member) {\n  const db = new Database(group.dbFileOf(member), {readonly: true});\n  try {\n    const rows = db.prepare(\n      'SELECT id, created_at, payload FROM events ORDER BY id ASC',\n    ).all();\n    const outcomes = db.prepare(\n"
+  },
+  {
+    "path": "test/partition/settled-replay-preserves-result.test.js",
+    "lineBefore": 133,
+    "before": "const independent = new Database(dbPath, {readonly: true});",
+    "readerEvidence": "  const independent = new Database(dbPath, {readonly: true});\n  try {\n    return read(independent);\n  } finally {\n    independent.close();\n  }\n}\n\nfunction rowCount(dbPath) {\n  return readOnly(dbPath, (db) => db.prepare(COUNT_SQL).get().count);\n}\n\nfunction valuesOf(dbPath) {\n  return readOnly(dbPath, (db) => db.prepare(\n    `SELECT id, value FROM ${TABLE_NAME} ORDER BY id`).all());\n"
+  },
+  {
+    "path": "test/partition/partition-service-hlc-monotonicity.test.js",
+    "lineBefore": 163,
+    "before": "const db = new Database(':memory:');",
+    "readerEvidence": "  const db = new Database(':memory:');\n  try {\n    const updates = [];\n    const hlcClock = {update: (hlc) => updates.push(hlc)};\n    const service = {db, partitionId: 'hlc-mono-partition'};\n    warmHlcFromDurableWitnesses({service, hlcClock});\n    t.strictSame({updates, tables: db.prepare(SCHEMA_TABLES_SQL).all()},\n      {updates: [], tables: []},\n      'no record: nothing to warm from, and the warm-up created no table');\n\n    writeUndecodableAppliedEntry(db, service.partitionId);\n    t.throws(() => warmHlcFromDurableWitnesses({service, hlcClock}),\n      {code: RAFT_RS_PROPOSAL_CODEC_ERROR.UNDECODABLE},\n      'an undecodable applied command propagates the typed codec error');\n  } finally {\n"
+  },
+  {
+    "path": "test/partition/partition-unreadable-durable-record.test.js",
+    "lineBefore": 163,
+    "before": "const independent = new Database(dbPath, {readonly: true});",
+    "readerEvidence": "  const independent = new Database(dbPath, {readonly: true});\n  try {\n    const view = Object.create(RaftRsDurableStore.prototype);\n    view.db = independent;\n    return view.readDurableRecord(groupId);\n  } finally {\n    independent.close();\n  }\n}\n\n// How many log entries a group's durable log holds, by the store owner's own\n// log statement (the log table stays readable when another table is lost).\nfunction logEntryCount(dbPath, groupId) {\n  const independent = new Database(dbPath, {readonly: true});\n  try {\n"
+  },
+  {
+    "path": "test/partition/participant-release-native-application-order.test.js",
+    "lineBefore": 128,
+    "before": "const db = new Database(dbPath, {readonly: true});",
+    "readerEvidence": "  const db = new Database(dbPath, {readonly: true});\n  try {\n    const store = Object.create(RaftRsDurableStore.prototype);\n    store.db = db;\n    const record = store.readDurableRecord(partitionId);\n    return Object.freeze({\n      applied: BigInt(record.appliedIndex),\n      commit: BigInt(record.hardState?.commit ?? 0),\n      last: lastIndexOf(record),\n      term: BigInt(record.hardState?.term ?? 0),\n      origin: readPartitionWriteOrigin(db),\n      rows: db.prepare(SELECT_IDS_SQL).all().map(({id}) => id),\n    });\n  } finally {\n    db.close();\n"
+  },
+  {
+    "path": "test/partition/committed-statement-outcome.test.js",
+    "lineBefore": 136,
+    "before": "const independent = new Database(dbPath, {readonly: true});",
+    "readerEvidence": "  const independent = new Database(dbPath, {readonly: true});\n  try {\n    const view = Object.create(RaftRsDurableStore.prototype);\n    view.db = independent;\n    return view.readDurableRecord(partitionId);\n  } finally {\n    independent.close();\n  }\n}\n\n// The durable record on a connection of the test's own, through the store\n// owner's readers: the applied index and the applied proposals.\nfunction durableRecord(dbPath, partitionId) {\n  const independent = new Database(dbPath, {readonly: true});\n  try {\n"
+  },
+  {
+    "path": "test/partition/committed-statement-outcome.test.js",
+    "lineBefore": 149,
+    "before": "const independent = new Database(dbPath, {readonly: true});",
+    "readerEvidence": "  const independent = new Database(dbPath, {readonly: true});\n  try {\n    return {\n      appliedIndex: Number(\n        RaftRsDurableStore.readAppliedIndexIn(independent, partitionId)),\n      applied: RaftRsDurableStore.readCommittedEntriesIn(\n        independent, partitionId).map((record) => ({\n        index: Number(record.index),\n        entryId: record.command.entryId,\n      })),\n    };\n  } finally {\n    independent.close();\n  }\n}\n"
+  },
+  {
+    "path": "test/partition/partition-statement-admission.test.js",
+    "lineBefore": 337,
+    "before": "const db = new Database(group.dbFileOf(member), {readonly: true});",
+    "readerEvidence": "  const db = new Database(group.dbFileOf(member), {readonly: true});\n  try {\n    return Number(RaftRsDurableStore.readAppliedIndexIn(db, partitionId));\n  } finally {\n    db.close();\n  }\n}\n// A replica's rows and outcome rows, read from its database file.\nfunction groupStateOf(group, member) {\n  const db = new Database(group.dbFileOf(member), {readonly: true});\n  try {\n    return {rows: rowsOf({db}), outcomes: outcomeRows({db})};\n  } finally {\n    db.close();\n  }\n"
+  },
+  {
+    "path": "test/partition/partition-transaction.property.test.js",
+    "lineBefore": 72,
+    "before": "const independent = new Database(dbPath, {readonly: true});",
+    "readerEvidence": "  const independent = new Database(dbPath, {readonly: true});\n  try {\n    return read(independent);\n  } finally {\n    independent.close();\n  }\n}\n\nfunction durableAppliedIndex(dbPath, partitionId) {\n  return readIndependently(dbPath, (independent) =>\n    Number(RaftRsDurableStore.readAppliedIndexIn(independent, partitionId)));\n}\n\nfunction visibleRowIds(dbPath, rowId) {\n  return readIndependently(dbPath, (independent) => independent\n"
+  },
+  {
+    "path": "test/partition/partition-runtime-reconstruction-leadership.test.js",
+    "lineBefore": 193,
+    "before": "const independent = new Database(dbPath, {readonly: true});",
+    "readerEvidence": "  const independent = new Database(dbPath, {readonly: true});\n  try {\n    const view = Object.create(RaftRsDurableStore.prototype);\n    view.db = independent;\n    return view.readDurableRecord(groupId);\n  } finally {\n    independent.close();\n  }\n}\n\n// The facts a reconstruction of another group would move: the durable\n// record (term, hard state, every log entry) and the runtime generation.\nfunction untouchedFacts(service, dbPath) {\n  const record = durableRecordOf(dbPath, service.partitionId);\n  return {\n"
+  },
+  {
+    "path": "test/integration/message-group-learner-runtime-authorization.integration.test.js",
+    "lineBefore": 1217,
+    "before": "const db = new Database(options.replicaDbPath, {readonly: true});",
+    "readerEvidence": "    const db = new Database(options.replicaDbPath, {readonly: true});\n    try {\n      const row = db.prepare('SELECT * FROM _raft_rs_replica_lifecycle').get();\n      assert.equal(row.native_history_state, 'established');\n      if (incarnation !== null) {\n        assert.equal(row.incarnation, incarnation,\n          'snapshot import must preserve the receiver allocation, not mint a new incarnation');\n      }\n      assert.equal(RaftRsDurableStore.readDurableRecordIn(db, GROUP).appliedIndex,\n        String(options.generationIndex));\n    } finally {\n      db.close();\n    }\n  });\n}\n"
+  },
+  {
+    "path": "test/integration/message-group-fresh-identity-replacement.integration.test.js",
+    "lineBefore": 1063,
+    "before": "const durableDb = new Database(",
+    "readerEvidence": "        const durableDb = new Database(\n          replicaId === 'mg-1-r4' ? b4 : c5,\n          {readonly: true},\n        );\n        try {\n          const entries = RaftRsDurableStore.readCommittedEntriesIn(\n            durableDb,\n            GROUP_ID,\n          );\n          assert.equal(\n            entries.some(\n              (entry) => entry.command?.data?.node_id === postRestartRow.node_id,\n            ),\n            true,\n            `${replicaId} durable store retains post-restart committed entry`,\n"
+  },
+  {
+    "path": "test/integration/message-group-learner-join.integration.test.js",
+    "lineBefore": 147,
+    "before": "const durable = new Database(world.dbPath, {readonly: true});",
+    "readerEvidence": "  const durable = new Database(world.dbPath, {readonly: true});\n  try {\n    return RaftRsDurableStore.readDurableRecordIn(durable, GROUP).confState.voters.map(String);\n  } finally {\n    durable.close();\n  }\n}\n\ntest('a recorded learner CREATE joins the real group as a non-voting learner, installs, opens and ' +\n  'runs only after the leader acknowledges it caught up', async (t) => {\n  const f = await createFixture(t);\n  const termBefore = leaderStatus(f).term;\n  const {world, send, outcomes, genesisCreates, handler, answer} = await joinRunning(t, f);\n  assert.equal(answer.outcome, OUTCOME.RUNNING, JSON.stringify(answer));\n\n"
+  },
+  {
+    "path": "test/integration/message-group-learner-join.integration.test.js",
+    "lineBefore": 188,
+    "before": "const durable = new Database(world.dbPath, {readonly: true});",
+    "readerEvidence": "  const durable = new Database(world.dbPath, {readonly: true});\n  try {\n    assert.equal(durable.prepare('SELECT learner_admission FROM raft_rs_peer_identity ' +\n      'WHERE replica_identity = ?').get(TARGET).learner_admission, recordedOrigin(f),\n    'the installed image carries the recorded learner\\'s exact committed origin');\n    const record = RaftRsDurableStore.readDurableRecordIn(durable, GROUP);\n    assert.ok(record.confState.learners.map(String).includes(TARGET_PEER));\n  } finally {\n    durable.close();\n  }\n\n  const proposed = turnChainValue(f.cluster.propose(leaderOf(f), {type: 'MESSAGE', messageId: 'b2-after-install'}));\n  assert.equal(proposed.outcome, 'CORE_OK', JSON.stringify(proposed));\n  const commitIndex = () => leaderStatus(f).commitIndex;\n  assert.equal(await world.until(() => commitIndex() > answer.commitIndex &&\n"
+  },
+  {
+    "path": "test/bootstrap/seed-release-failure-custody.test.js",
+    "lineBefore": 169,
+    "before": "const db = new Database(host.selected.dbPath, {readonly: true, fileMustExist: true});",
+    "readerEvidence": "  const db = new Database(host.selected.dbPath, {readonly: true, fileMustExist: true});\n  try {\n    return readPartitionWriteOrigin(db);\n  } finally {\n    db.close();\n  }\n}\n\nasync function assertRetainedRestartFrontier(host, t) {\n  assert.deepEqual(readRetainedOrigin(host), host.selected.after);\n  const result = await host.restart();\n  assert.equal(host.retained.startupServicesAdmission.state, DURABLE_EVIDENCE_STATE.READABLE);\n  assert.equal(host.retained.startupServicesAdmission.empty, false,\n    'native retained state is not virgin storage despite missing SERVICES rows');\n  assert.deepEqual(host.retained.startupServicesAdmission.rows, []);\n"
+  },
+  {
+    "path": "test/bootstrap/retained-seed-original-handoff.integration.test.js",
+    "lineBefore": 148,
+    "before": "const db = new Database(dbPath, {readonly: true, fileMustExist: true});",
+    "readerEvidence": "  const db = new Database(dbPath, {readonly: true, fileMustExist: true});\n  try {\n    return readPartitionWriteOrigin(db);\n  } finally {\n    db.close();\n  }\n}\n\nfunction assertDirectoryReacquired(directory) {\n  const owner = acquireDataDirectoryProcessOwner(directory);\n  owner.release();\n}\n\nfunction readSystemTableRows(declaration, tableName, orderBy) {\n  const members = declaration.members.filter((member) => member.tableName === tableName);\n"
+  },
+  {
+    "path": "test/bootstrap/seed-original-attempt-lifetime.test.js",
+    "lineBefore": 136,
+    "before": "const db = new Database(member.dbPath, {readonly: true, fileMustExist: true});",
+    "readerEvidence": "  const db = new Database(member.dbPath, {readonly: true, fileMustExist: true});\n  try {\n    return readOriginalAllocationRow({db, member});\n  } finally {\n    db.close();\n  }\n}\n\nfunction declarationOf(f) {\n  const anchor = originalSeedAnchor(f.dataDir);\n  const db = new Database(anchor.dbPath, {readonly: true, fileMustExist: true});\n  try {\n    const row = db.prepare(`SELECT ${COLUMN.DECLARATION} FROM ${REPLICA_LIFECYCLE_TABLE}\n      WHERE group_id = ? AND peer_id = ? AND replica_identity = ?`)\n      .get(anchor.groupId, anchor.peerId, anchor.replicaId);\n"
+  },
+  {
+    "path": "test/bootstrap/seed-retained-effects.integration.test.js",
+    "lineBefore": 64,
+    "before": "const db = new Database(member.dbPath, {readonly: true, fileMustExist: true});",
+    "readerEvidence": "  const db = new Database(member.dbPath, {readonly: true, fileMustExist: true});\n  try {\n    const before = db.serialize();\n    const result = readOriginalSeedRetainedEffects({db, declaration, member});\n    assert.deepEqual(db.serialize(), before, 'observer leaves physical SQLite bytes unchanged');\n    assert.equal(db.inTransaction, false);\n    assert.equal(result.state, STATE.ACCEPTED, describe(result, {depth: 8}));\n    assert.equal(result.groupId, member.groupId);\n    assert.equal(result.replicaId, member.replicaId);\n    return result;\n  } finally {\n    db.close();\n  }\n}\n\n"
+  },
+  {
+    "path": "test/raft/raft-rs-original-opening-effect-cut.test.js",
+    "lineBefore": 50,
+    "before": "db = new Database(member.dbPath, {fileMustExist: true});",
+    "readerEvidence": "  db = new Database(member.dbPath, {fileMustExist: true});\n  const entries = [];\n  setActualCoreEntryObserver((entry) => entries.push(entry));\n  const request = {groupId: member.groupId, peerId: member.replicaId,\n    peerAddress: 'local-original', durableStorage: db,\n    bootstrapPeerIds: member.replicaIds, bootstrapMembership: member.membership,\n    identityExisted: false, timing: TIMING, deferElection: true,\n    resolvePeerAddress: () => 'local-original', sendToPeer: () => {},\n    applyCommittedEntry: () => {},\n    [REQUEST.APPLY_COMMITTED_ENTRY_MODE]: RAFT_COMMITTED_ENTRY_APPLY_MODE.SYNCHRONOUS,\n    [REQUEST.ORIGINAL_ALLOCATION_OPENING]: preparation.openingFor(member.replicaId)};\n  const open = () => {\n    port = createRaftRsOperationPort(request);\n    return port;\n  };\n"
+  },
+  {
+    "path": "test/raft/raft-rs-original-opening-authority.test.js",
+    "lineBefore": 62,
+    "before": "const db = new Database(member.dbPath, {fileMustExist: true});",
+    "readerEvidence": "    const db = new Database(member.dbPath, {fileMustExist: true});\n    const resource = {db, port: null};\n    resources.push(resource);\n    const request = {groupId: member.groupId, peerId: member.replicaId,\n      peerAddress: `raft-rs://replica-${member.replicaId}`, durableStorage: db,\n      bootstrapPeerIds: member.replicaIds, bootstrapMembership: member.membership,\n      identityExisted: false, timing: TIMING, deferElection: true,\n      resolvePeerAddress: (id) => `raft-rs://replica-${id}`,\n      sendToPeer: () => {}, applyCommittedEntry: () => {},\n      [REQUEST.APPLY_COMMITTED_ENTRY_MODE]: RAFT_COMMITTED_ENTRY_APPLY_MODE.SYNCHRONOUS,\n      [REQUEST.ORIGINAL_ALLOCATION_OPENING]: opening, ...extra};\n    return {db, request, open: () => {\n      resource.port = createRaftRsOperationPort(request);\n      return resource.port;\n    }};\n"
+  },
+  {
+    "path": "test/raft/raft-rs-original-opening.test.js",
+    "lineBefore": 59,
+    "before": "const db = new Database(member.dbPath, {fileMustExist: true});",
+    "readerEvidence": "  const db = new Database(member.dbPath, {fileMustExist: true});\n  const resource = {db, port: null};\n  f.resources.push(resource);\n  const request = {groupId: member.groupId, peerId: member.replicaId,\n    peerAddress: `raft-rs://replica-${member.replicaId}`,\n    durableStorage: db, bootstrapPeerIds: member.replicaIds,\n    bootstrapMembership: member.membership, identityExisted: false,\n    timing: TIMING, deferElection: true,\n    resolvePeerAddress: (id) => `raft-rs://replica-${id}`,\n    sendToPeer: () => {}, applyCommittedEntry: () => {},\n    [REQUEST.APPLY_COMMITTED_ENTRY_MODE]: RAFT_COMMITTED_ENTRY_APPLY_MODE.SYNCHRONOUS,\n    ...extra};\n  return {request, resource};\n}\n\n"
+  },
+  {
+    "path": "test/raft/raft-rs-original-allocation-preparation.test.js",
+    "lineBefore": 159,
+    "before": "const db = new Database(member.dbPath, {readonly: true, fileMustExist: true});",
+    "readerEvidence": "    const db = new Database(member.dbPath, {readonly: true, fileMustExist: true});\n    try {\n      const row = readOriginalAllocationRow({db, member});\n      const anchor = member.replicaId === declaration.anchorReplicaId;\n      assert.equal(row[COLUMN.DECLARATION], JSON.stringify(declaration));\n      assert.equal(row[COLUMN.ISSUE], anchor ? STATE.ISSUED : STATE.PREPARING);\n      assert.equal(row[COLUMN.SERVICE_RIGHT], STATE.UNUSED);\n      assert.equal(row[COLUMN.IDENTITY_RIGHT], anchor ? STATE.UNUSED : null);\n      assert.equal(row.native_history_state, HISTORY.NEVER_OPENED);\n      assert.equal(RaftRsDurableStore.hasDurableRecordIn(db, member.groupId), false);\n    } finally {\n      db.close();\n    }\n  }\n  assert.throws(() => preparation.prepare(draft), hold(REASON.REENTRANT));\n"
+  },
+  {
+    "path": "test/raft/raft-rs-original-allocation-preparation.test.js",
+    "lineBefore": 238,
+    "before": "const db = new Database(member.dbPath, {readonly: true, fileMustExist: true});",
+    "readerEvidence": "    const db = new Database(member.dbPath, {readonly: true, fileMustExist: true});\n    try {\n      assert.equal(db.prepare(`SELECT native_history_state AS h FROM ${TABLE}\n        WHERE replica_identity = ?`).get(member.replicaId).h, HISTORY.NEVER_OPENED);\n      assert.equal(RaftRsDurableStore.hasDurableRecordIn(db, member.groupId), false);\n    } finally {\n      db.close();\n    }\n  }\n  const successor = new RaftRsOriginalAllocationPreparation({directoryOwner: f.directoryOwner,\n    ...f.identity});\n  t.after(() => successor.close());\n  assert.equal(successor.readDeclaration(originalSeedAnchor(f.dataDir)).state, STATE.ABSENT,\n    'no declaration was issued');\n  const retry = new RaftRsOriginalAllocationPreparation({directoryOwner: f.directoryOwner,\n"
+  },
+  {
+    "path": "test/raft/raft-rs-original-allocation-cold-inspection.test.js",
+    "lineBefore": 87,
+    "before": "const db = new Database(member.dbPath, {fileMustExist: true});",
+    "readerEvidence": "    const db = new Database(member.dbPath, {fileMustExist: true});\n    try {\n      transitionOriginalRight({db, member, right: COLUMN.SERVICE_RIGHT,\n        from: STATE.UNUSED, to: STATE.SUBMITTED});\n      if (state === STATE.TRANSFERRED) {\n        transitionOriginalRight({db, member, right: COLUMN.SERVICE_RIGHT,\n          from: STATE.SUBMITTED, to: STATE.TRANSFERRED});\n      }\n      const before = readOriginalAllocationRow({db, member});\n      const owner = f.createPreparation();\n      let applicationCalls = 0;\n      assert.throws(() => owner.inspect(f.declaration, () => {\n        applicationCalls++;\n        return STATE.HISTORY_ACCEPTED;\n      }), hold(REASON.SPENT));\n"
+  },
+  {
+    "path": "test/raft/raft-rs-original-allocation-custody.test.js",
+    "lineBefore": 171,
+    "before": "const read = new Database(anchor.dbPath, {readonly: true, fileMustExist: true});",
+    "readerEvidence": "  const read = new Database(anchor.dbPath, {readonly: true, fileMustExist: true});\n  try {\n    // The failed preparation returned nothing: read the declaration it issued.\n    const issued = JSON.parse(read.prepare(`SELECT ${COLUMN.DECLARATION} AS issued\n      FROM ${TABLE} WHERE replica_identity = ?`).get(anchor.replicaId).issued);\n    const issuedAnchor = issued.members.find((m) => m.replicaId === issued.anchorReplicaId);\n    assert.equal(readOriginalAllocationRow({db: read, member: issuedAnchor})[COLUMN.ISSUE],\n      STATE.ISSUED,\n      'cleanup cannot undo a durable issue or turn it into a new original allocation');\n  } finally {\n    read.close();\n  }\n});\n"
+  },
+  {
+    "path": "test/partition/partition-service-hlc-monotonicity.test.js",
+    "before": "new Database(dbPath)",
+    "readerEvidence": "Traced direct lifecycle birth, native-port, participant decision, durable-store seeding or checkpoint owner invocation."
+  },
+  {
+    "path": "test/node/replica-handler-remove-closed-service.test.js",
+    "before": "new Database(dbPath);",
+    "readerEvidence": "Traced direct lifecycle birth, native-port, participant decision, durable-store seeding or checkpoint owner invocation."
+  },
+  {
+    "path": "test/node/fresh-create-authority-unavailability-native.integration.test.js",
+    "before": "new Database(whole)",
+    "readerEvidence": "Traced direct lifecycle birth, native-port, participant decision, durable-store seeding or checkpoint owner invocation."
+  },
+  {
+    "path": "test/node/fresh-create-authority-unavailability-native.integration.test.js",
+    "before": "new Database(file)",
+    "readerEvidence": "Traced direct lifecycle birth, native-port, participant decision, durable-store seeding or checkpoint owner invocation."
+  },
+  {
+    "path": "test/raft/raft-rs-backend/replica-freshness-closure.test.js",
+    "before": "new Database(file, {fileMustExist: true})",
+    "readerEvidence": "Traced direct lifecycle birth, native-port, participant decision, durable-store seeding or checkpoint owner invocation."
+  },
+  {
+    "path": "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js",
+    "before": "new Database(corruptPath)",
+    "readerEvidence": "Traced direct lifecycle birth, native-port, participant decision, durable-store seeding or checkpoint owner invocation."
+  }
+]

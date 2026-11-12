@@ -1,0 +1,218 @@
+{
+  "schema": "sqlite-phase2-failure-ledger/1",
+  "policy": "Every first failure preserved before repair; new source causes distinguished from F fixture and inherited guard findings. No original removed; no retry-until-green or baseline increase.",
+  "failures": [
+    {
+      "id": "phase1-carry-in-unexpected-lint",
+      "firstCause": "Prior Phase1 lint rejection; subsequent independently approved four-file candidate unchanged.",
+      "retainedEvidence": [
+        {
+          "path": "/tmp/lagrange-sqlite-phase2-max-20261112/prior-receipt.json",
+          "sha256": "72b7adc0ad987ca19fb4d17941ae40c3cb315c4aa5203870901573b559667397"
+        },
+        {
+          "path": "solve/quests/sqlite-connection-statement-ownership/evidence/phase1-stronger-manifest.json",
+          "sha256": "533f6a01a3eaeb4eac97fe2b68a41197d4c0f5b66951bc8fd50b615a4e333de4"
+        }
+      ],
+      "disposition": "Historical Phase1; approval is bounded to unchanged four files. Original raw/controls preserved in external Phase1 directories."
+    },
+    {
+      "id": "phase2-first-positive-witness",
+      "firstCause": "Positive fixture queried invented _replica_lifecycle; canonical table is _raft_rs_replica_lifecycle. PASS9/FAIL1.",
+      "retainedEvidence": [
+        {
+          "path": "solve/quests/sqlite-connection-statement-ownership/evidence/PHASE2-STOP.md",
+          "sha256": "a5a3001452254895124841ce725ad116e49eacd2ce4749fc11ed7cc957342907"
+        },
+        {
+          "path": "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-manifest.json",
+          "sha256": "b8fa7ebafdea297b52a801a4f950a07cd4fe86651c6ea8e344cb71cd8d36dbd4"
+        },
+        {
+          "path": "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-red-first.log",
+          "sha256": "50456982dd41dd4918ca0d9034af2360a494efb504b0cf390c03af69603d7e05"
+        }
+      ],
+      "disposition": "Canonical owner constant repair by stronger continuation; boundary witness subsequently extended to22 passing cases."
+    },
+    {
+      "id": "phase2-stronger-first-lint",
+      "firstCause": "Diagnostic fixture dynamic import still named Database; SQLiteConnection at acquisition was undefined.",
+      "retainedEvidence": [
+        {
+          "path": "solve/quests/sqlite-connection-statement-ownership/evidence/PHASE2-STRONGER-STOP.md",
+          "sha256": "ef12dfad36ebe4bc6d477efcc03bcf25b5ac878299c6886213d4d6cc2bf3d40c"
+        },
+        {
+          "path": "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-stronger-failed-manifest.json",
+          "sha256": "d42c51c447767fb84ffaadeb3240ae620fa568adf6ca977acbf4c615b911b187"
+        },
+        {
+          "path": "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-stronger-eslint-first.log",
+          "sha256": "a0fa2d0c3f1b9a9ca304e1c69cdcf066025f23703ee6dfad89a23d286f3e1a1d"
+        }
+      ],
+      "disposition": "Canonical dynamic producer import repaired; scoped ESLint passed. Diagnostic runtime file remains for lab."
+    },
+    {
+      "id": "max-01-private-brand-proxy",
+      "firstCause": "History fault witnesses passed database Proxies; brand refusal preempted intended SQL fault. PASS13/FAIL3.",
+      "retainedEvidence": [
+        {
+          "path": "/tmp/lagrange-sqlite-phase2-max-20261112/failure-01/manifest.json",
+          "sha256": "dc9c7aaffa2c3a64aa4a15c3518088b6f146c10a5b6a042073595a600e45f641"
+        },
+        {
+          "path": "/tmp/lagrange-sqlite-phase2-max-20261112/runtime-history-01.log",
+          "sha256": "23c610143fc90d3620afbc466778701a73e93fdddbcf282cd0b1c2c42be818ca"
+        }
+      ],
+      "disposition": "All three reds retained; real connection/Statement instrumentation replaces connection proxies across affected fixtures."
+    },
+    {
+      "id": "max-02-stale-proxy-name",
+      "firstCause": "First rewrite left return proxy after renaming to database; ESLint rejected unused database and undefined proxy.",
+      "retainedEvidence": [
+        {
+          "path": "/tmp/lagrange-sqlite-phase2-max-20261112/failure-02/manifest.json",
+          "sha256": "9effbe4727369887e81d0bb2e01ba17f9e66a756cb025e3ff50a682e46e7888a"
+        },
+        {
+          "path": "/tmp/lagrange-sqlite-phase2-max-20261112/eslint-proxy-01.log",
+          "sha256": "7ebe19908df0f3eaf96e74c7bc7fb1afe5e9138716e1a75505c8c6a9a5743d0d"
+        }
+      ],
+      "disposition": "Stale local reference repaired; source and first lint preserved."
+    },
+    {
+      "id": "max-03-overpinned-engagement",
+      "firstCause": "History read fault counted twice across open/status; absolute equality1 failed. PASS15/FAIL1.",
+      "retainedEvidence": [
+        {
+          "path": "/tmp/lagrange-sqlite-phase2-max-20261112/failure-03/manifest.json",
+          "sha256": "a8a93eb81f45f7bf90f2c2ae14cabf640531282ac6a8a3b7ba760fa299a84e38"
+        },
+        {
+          "path": "/tmp/lagrange-sqlite-phase2-max-20261112/runtime-history-02.log",
+          "sha256": "1a080da3d65e01a328b2a79ee93cfaec9685478f8b74c37dffc88a59a2147fcd"
+        }
+      ],
+      "disposition": "Phase snapshot after setup + engagement before status + actual HOST_FAILURE/SQLITE_IOERR/no-native-entry. Intermediate16pass run superseded by strengthened04; no weakened setup-only control."
+    },
+    {
+      "id": "max-04-impact-shape",
+      "firstCause": "New contract entry placed under coupledPairs lacked endpoint/witness shape; metadata also stale.",
+      "retainedEvidence": [
+        {
+          "path": "/tmp/lagrange-sqlite-phase2-max-20261112/failure-04/manifest.json",
+          "sha256": "dfe39cc6409923213c81f015a84ba2d4e6691e2411e622a3c9e0fff2b1c7ccab"
+        },
+        {
+          "path": "/tmp/lagrange-sqlite-phase2-max-20261112/impact-01.log",
+          "sha256": "c919a264dea475b03bee5749532778722c524958ced7b45fac9ce7b4692b3226"
+        }
+      ],
+      "disposition": "Correct contract + two endpoints/witnesses; final metadata and impact audit PASS. No baseline raise."
+    },
+    {
+      "id": "max-05-file-size",
+      "firstCause": "Durable-store measured801 lines over800 after added assertions.",
+      "retainedEvidence": [
+        {
+          "path": "/tmp/lagrange-sqlite-phase2-max-20261112/static-source-manifest.json",
+          "sha256": "9f05996d7309cef4028f591f72b00f6ccc3972fd67b1eedaa70765a20e3c6ee2"
+        },
+        {
+          "path": "/tmp/lagrange-sqlite-phase2-max-20261112/static-size-01.log",
+          "sha256": "735af7de9a2015b9bade81125cfe62ed439ce33b7b9c49ca5c10adf9256e0484"
+        }
+      ],
+      "disposition": "Shortened existing journal comment by one line, without code edits; strict size nowPASS."
+    },
+    {
+      "id": "inherited-static-rules",
+      "firstCause": "One hydration literal, two hydration page decisions, three F lifecycle navigability sites reported by scoped guards.",
+      "retainedEvidence": [
+        {
+          "path": "/tmp/lagrange-sqlite-phase2-max-20261112/static-literals-01.log",
+          "sha256": "2e44488e5cca9cd6b525114a996c3d77239111057eb1c816b6eeba1a1ddc2c70"
+        },
+        {
+          "path": "/tmp/lagrange-sqlite-phase2-max-20261112/static-decisions-01.log",
+          "sha256": "cde848ca1fdecf009b43980e629271dafb808bd30b80240aae8a7bb975041afc"
+        },
+        {
+          "path": "/tmp/lagrange-sqlite-phase2-max-20261112/static-navigability-01.log",
+          "sha256": "f5a98cdf08007410b145b705cd93c0466fdca5c5d57b27167f6a583fbad6443d"
+        },
+        {
+          "path": "/tmp/lagrange-sqlite-phase2-max-20261112/static-baseline-comparison.json",
+          "sha256": "c124ac236cab08dc62359e95505fba1a276d29bd32665834e95573e90ee7c4d7"
+        }
+      ],
+      "disposition": "Before/after F detector site identities match; routed parent. Still unresolved static gates, not waived."
+    },
+    {
+      "id": "F-ao-partial-schema-fixture",
+      "firstCause": "FullF lab case expected partial durable-schema refusal but raw file lacked explicit lifecycle birth; got lifecycle-birth-unproven first.",
+      "retainedEvidence": [
+        {
+          "path": "/tmp/lagrange-sqlite-phase2-max-20261112/f-fixture-regressions/manifest.json",
+          "sha256": "864eb2eb5651211facf9f75118e23d3c22c0281be32223a7638dfccfac06b87f"
+        },
+        {
+          "path": "/tmp/lagrange-sqlite-phase2-max-20261112/f-fixture-note.json",
+          "sha256": "1a4b5ccfdcc9662f2c5151990a8fdb49a8ae4f3e6601eaa28b3b8ec0f45db14d"
+        }
+      ],
+      "disposition": "Explicit canonical birth before intentional partial DDL including scratch budget overhead. Focused file6pass; runtime freshness unchanged."
+    },
+    {
+      "id": "F-receiver-fixture-eight-reds",
+      "firstCause": "FullF receiver file64pass/8fail: fixture assumed lifecycle constructor births; unknown setup missing table; positives history absent; staged controls did not engage.",
+      "retainedEvidence": [
+        {
+          "path": "/tmp/lagrange-sqlite-phase2-max-20261112/f-fixture-regressions/manifest.json",
+          "sha256": "864eb2eb5651211facf9f75118e23d3c22c0281be32223a7638dfccfac06b87f"
+        },
+        {
+          "path": "/tmp/lagrange-sqlite-phase2-max-20261112/f-receiver-note.json",
+          "sha256": "3fab4a2c8afbd12507b71e5d973b8166b8d738bc767cbee99e990b8849afb247"
+        }
+      ],
+      "disposition": "Explicit creator for never-opened; malformed fixtures retain deliberate corruption. Historyless empty-shell now refusal under reviewed F and explicit user supersession; no seal edited. Full72 repaired cases UNRUN."
+    },
+    {
+      "id": "F-isolated-child-fixture-twelve-reds",
+      "firstCause": "FullF load4/replacement8 exit1 before native entry: partition-node-cluster imports helper outside copy list.",
+      "retainedEvidence": [
+        {
+          "path": "/tmp/lagrange-sqlite-phase2-max-20261112/f-child-composition/manifest.json",
+          "sha256": "659016e26765844dde50cc1b2215ab05f0e65f5dff54e334b5277829c84d97e2"
+        }
+      ],
+      "disposition": "Copied helper + parent directories + SHA equality, whole relative closure235 each. Final4+8 PASS with12 actual native trap receipts; no source symlink fallback."
+    },
+    {
+      "id": "max-06-evidence-helper-serialization",
+      "firstCause": "Auxiliary AST equivalence helper JSON.stringify encountered a BigInt literal and threw before comparison. Product unchanged; not a product or focused test failure.",
+      "retainedEvidence": [
+        {
+          "path": "/tmp/lagrange-sqlite-phase2-max-20261112/failure-06/manifest.json",
+          "sha256": "5efb8fad7618d652b36d2a1cd08efa5ca58855461bdb4a115f23fb6d0312eaa2"
+        },
+        {
+          "path": "/tmp/lagrange-sqlite-phase2-max-20261112/failure-06/first-output.txt",
+          "sha256": "f989a1e6ef02572b8ebbf7f27c4981755ce3366833301a8da85c95f16c04af26"
+        },
+        {
+          "path": "/tmp/lagrange-sqlite-phase2-max-20261112/failure-06/original-applicability-check.mjs",
+          "sha256": "4a9830b08dbc1746402313366097b08b1f3aaf37f15dbe6104ffb70f21d25da5"
+        }
+      ],
+      "disposition": "Canonical AST comparison now omits source positions and represents BigInt explicitly. Final applicability comparison passes; no product-byte change and no runtime rerun."
+    }
+  ],
+  "scopeCorrection": "static-source first snapshot had98 allowlisted paths and missed runtime-opening-history; standalone lint existed, final99 allowlist adds it and final scoped lint/size include it. Earlier createTable fixture conversions were reverted after direct-only call tracing."
+}

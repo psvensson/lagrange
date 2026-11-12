@@ -1,34 +1,20 @@
 import {randomUUID} from 'node:crypto';
-import fs from 'node:fs';
-import Database from 'better-sqlite3';
+import {deriveRaftRsPeerId} from './raft-rs-peer-identity.js';
 import {
   RAFT_OPERATION_OUTCOME,
 } from './raft-operation-port-constants.js';
-import {
-  COMMITTED_MEMBERSHIP_REFUSAL,
-} from './raft-committed-membership-constants.js';
-import {preparedStatementOf} from '../storage/sqlite-prepared-statement-owner.js';
-import {commitDurably, RaftRsDurableStore} from './raft-rs-durable-store.js';
+import {assertSQLiteConnection, preparedStatementOf} from '../storage/sqlite-prepared-statement-owner.js';
+import {commitDurably} from './raft-rs-durable-store.js';
 import {pendingTurn, settledTurn, turnChainValue} from './raft-rs-turn-answer.js';
-import {RAFT_RS_TABLE} from './raft-rs-durable-store-constants.js';
 import {RAFT_RS_OPENING_HISTORY, RAFT_RS_OPENING_HISTORY_ERROR} from
   './raft-rs-opening-history-constants.js';
-import {LIFECYCLE_ERROR, LIFECYCLE_STATE, REPLICA_LIFECYCLE_TABLE} from
+import {LIFECYCLE_ERROR, LIFECYCLE_STATE, REPLICA_LIFECYCLE_TABLE,
+  LIFECYCLE_REASON, LIFECYCLE_BIRTH, REPLICA_DATABASE_CREATION,
+  retiredRefusalReason} from
   './raft-rs-replica-lifecycle-constants.js';
 import {ORIGINAL_ALLOCATION as ORIGINAL, ORIGINAL_ALLOCATION_REASON as ORIGINAL_REASON,
   ORIGINAL_ALLOCATION_COLUMN as ORIGINAL_COLUMN, ORIGINAL_RIGHT_SUCCESSOR,
   originalAllocationError} from './raft-rs-original-allocation-constants.js';
-
-const SNAPSHOT_RECEIVER_REASON = Object.freeze({
-  FRESH: 'snapshot-receiver-fresh',
-  HISTORY: 'snapshot-receiver-history-present',
-  IDENTITY: 'snapshot-receiver-identity-mismatch',
-  UNAVAILABLE: 'snapshot-receiver-unavailable',
-  JOURNAL: 'snapshot-receiver-journal-pending',
-  STAGING: 'snapshot-receiver-staging-mismatch',
-});
-const SNAPSHOT_RECEIVER_JOURNALS = Object.freeze(['-wal', '-journal']);
-const FILE_ABSENT_CODE = 'ENOENT';
 
 // `incarnation` is the replica incarnation stamp: minted once, when the row
 // is born, never replaced and never reused by a later replica of the same
@@ -53,40 +39,17 @@ const FILE_ABSENT_CODE = 'ENOENT';
 const RUNTIME_LIFECYCLE_OWNERS = new WeakMap();
 const LIFECYCLE_ADMIN_OUTCOME = Object.freeze({NOT_MANAGED: 'NOT_MANAGED'});
 const LIFECYCLE_CLAIM_REFUSED = 'REPLICA_LIFECYCLE_CLAIM_REFUSED';
-const LIFECYCLE_REASON = Object.freeze({
-  MISSING: 'lifecycle-record-missing',
-  ACTIVE: 'lifecycle-active',
-  CLAIM_SETTLED: 'lifecycle-claim-settled',
-  OBSERVATION_UNAVAILABLE: 'lifecycle-observation-unavailable',
-  STAGING_PREPARED: 'snapshot-lifecycle-prepared',
-  ORIGINAL_PREPARED: 'original-allocation-lifecycle-prepared',
-  ORIGINAL_ROW_PRESENT: 'original-allocation-lifecycle-row-present',
-  IDENTITY_MISMATCH: 'lifecycle-identity-mismatch',
-  RETIRED: 'retired',
-  STALE_RUNTIME_GENERATION: 'runtime-generation-not-registered',
-  // A replica whose own history was proven lost while it ran (owner decision
-  // O4): retired with this reason, it is refused with it, also after a
-  // restart.
-  RESEED_REQUIRED: COMMITTED_MEMBERSHIP_REFUSAL.RESEED_REQUIRED,
-});
-
-// The refusal a retired row answers: a reseed hold keeps its own reason.
-function retiredRefusalReason(reason) {
-  return reason === LIFECYCLE_REASON.RESEED_REQUIRED ?
-    LIFECYCLE_REASON.RESEED_REQUIRED : LIFECYCLE_REASON.RETIRED;
-}
-
 function frozenResult(outcome, reason, detail = null) {
   return Object.freeze({outcome, reason, detail});
 }
 
 // This owner's fixed statements, each prepared once per database handle.
 const LIFECYCLE_SQL = Object.freeze({
-  IDENTITY_ROW: `SELECT peer_id, replica_identity, state, reason
+  EMPTY_DATABASE: 'SELECT 1 FROM sqlite_master LIMIT 1',
+  IDENTITY_ROW: `SELECT peer_id, replica_identity, state, reason, incarnation
     FROM ${REPLICA_LIFECYCLE_TABLE}
     WHERE group_id = ? AND (peer_id = ? OR replica_identity = ?)`,
-  STAMP_UNSTAMPED: `UPDATE ${REPLICA_LIFECYCLE_TABLE} SET incarnation = ?
-    WHERE group_id = ? AND peer_id = ? AND incarnation IS NULL`,
+  TABLE_PRESENT: 'SELECT 1 FROM sqlite_master WHERE type = \'table\' AND name = ?',
   BIRTH: `INSERT INTO ${REPLICA_LIFECYCLE_TABLE}
     (group_id, peer_id, replica_identity, state, reason, changed_at,
       incarnation, native_history_state)
@@ -104,9 +67,9 @@ const LIFECYCLE_SQL = Object.freeze({
     SET state = 'retired', reason = ?, changed_at = ?, retirement_evidence = ?
     WHERE group_id = ? AND peer_id = ? AND replica_identity = ?`,
 });
-
 // The one table definition.
 function ensureLifecycleTable(db) {
+  assertSQLiteConnection(db);
   db.exec(`
     CREATE TABLE IF NOT EXISTS ${REPLICA_LIFECYCLE_TABLE} (
       group_id TEXT NOT NULL,
@@ -123,20 +86,11 @@ function ensureLifecycleTable(db) {
     )
   `);
 }
-
 // The row holding either half of this replica's identity in its group.
 function lifecycleIdentityRow(db, {groupId, peerId, replicaIdentity}) {
   return preparedStatementOf(db, LIFECYCLE_SQL.IDENTITY_ROW)
     .get(groupId, peerId, replicaIdentity);
 }
-
-// A row born before the stamp existed gets one, once: the update never
-// replaces a stamp.
-function stampUnstampedRow(db, {groupId, peerId}, incarnation) {
-  preparedStatementOf(db, LIFECYCLE_SQL.STAMP_UNSTAMPED)
-    .run(incarnation, groupId, peerId);
-}
-
 function hasDurableRaftRecord(db, groupId) {
   const raftTables = db.prepare(`
     SELECT name FROM sqlite_master
@@ -148,34 +102,41 @@ function hasDurableRaftRecord(db, groupId) {
     db.prepare(`SELECT 1 FROM ${table} WHERE group_id = ? LIMIT 1`)
       .get(groupId) !== undefined);
 }
-
-// Open (birth, when absent) one replica's row. The stamp a birth or an
-// unstamped row receives is this owner's: its constructor's randomUUID, or the
-// receiver incarnation a snapshot staging retains. No caller passes a mint.
-// Frozen {outcome, reason, detail: the row's lifecycle state, null if none}.
-function openLifecycleRecord(db, identity, incarnation) {
-  const {groupId, peerId, replicaIdentity} = identity;
-  ensureLifecycleTable(db);
-  const row = lifecycleIdentityRow(db, identity);
-  if (row === undefined && hasDurableRaftRecord(db, groupId)) {
+// Ordinary opening only consumes a recorded generation. Missing evidence is
+// never repaired here, including a missing table, row or incarnation.
+function openLifecycleRecord(db, identity) {
+  if (preparedStatementOf(db, LIFECYCLE_SQL.TABLE_PRESENT)
+    .get(REPLICA_LIFECYCLE_TABLE) === undefined) {
     return frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED, LIFECYCLE_REASON.MISSING);
   }
-  if (row === undefined) {
-    preparedStatementOf(db, LIFECYCLE_SQL.BIRTH).run(groupId, peerId,
-      replicaIdentity, new Date().toISOString(), incarnation,
-      RAFT_RS_OPENING_HISTORY.NEVER_OPENED);
-    return frozenResult(RAFT_OPERATION_OUTCOME.CORE_OK, LIFECYCLE_REASON.ACTIVE,
-      LIFECYCLE_STATE.ACTIVE);
+  const row = lifecycleIdentityRow(db, identity);
+  if (row === undefined || typeof row.incarnation !== 'string' ||
+      row.incarnation.length === 0) {
+    return frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED, LIFECYCLE_REASON.MISSING);
   }
-  if (row.peer_id !== peerId || row.replica_identity !== replicaIdentity) {
+  if (row.peer_id !== identity.peerId || row.replica_identity !== identity.replicaIdentity) {
     return frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED,
       LIFECYCLE_REASON.IDENTITY_MISMATCH);
   }
-  stampUnstampedRow(db, identity, incarnation);
   return row.state === LIFECYCLE_STATE.RETIRED ?
     frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED, retiredRefusalReason(row.reason),
       row.state) :
     frozenResult(RAFT_OPERATION_OUTCOME.CORE_OK, LIFECYCLE_REASON.ACTIVE, row.state);
+}
+
+// Only explicit allocation and private snapshot preparation call this writer.
+// It cannot be reached through ordinary runtime opening.
+function prepareLifecycleRecord(db, identity, incarnation) {
+  ensureLifecycleTable(db);
+  if (lifecycleIdentityRow(db, identity) === undefined) {
+    if (hasDurableRaftRecord(db, identity.groupId)) {
+      return frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED, LIFECYCLE_REASON.MISSING);
+    }
+    preparedStatementOf(db, LIFECYCLE_SQL.BIRTH).run(identity.groupId, identity.peerId,
+      identity.replicaIdentity, new Date().toISOString(), incarnation,
+      RAFT_RS_OPENING_HISTORY.NEVER_OPENED);
+  }
+  return openLifecycleRecord(db, identity);
 }
 
 class RaftRsReplicaLifecycleOwner {
@@ -190,12 +151,12 @@ class RaftRsReplicaLifecycleOwner {
   #waiters = [];
 
   constructor({db, groupId, peerId, replicaIdentity}) {
+    assertSQLiteConnection(db);
     this.#db = db;
     this.#groupId = groupId;
     this.#peerId = peerId;
     this.#replicaIdentity = replicaIdentity;
-    const opened = openLifecycleRecord(db, {groupId, peerId, replicaIdentity},
-      randomUUID());
+    const opened = openLifecycleRecord(db, {groupId, peerId, replicaIdentity});
     this.#state = opened.detail;
     this.#refusalReason = opened.outcome === RAFT_OPERATION_OUTCOME.CORE_OK ?
       null : opened.reason;
@@ -210,6 +171,7 @@ class RaftRsReplicaLifecycleOwner {
   }
 
   get incarnation() {
+    if (this.#state === null) return null;
     const row = preparedStatementOf(this.#db, LIFECYCLE_SQL.INCARNATION)
       .get(this.#groupId, this.#peerId, this.#replicaIdentity);
     return typeof row?.incarnation === 'string' ? row.incarnation : null;
@@ -351,7 +313,6 @@ class RaftRsReplicaLifecycleOwner {
       RAFT_OPERATION_OUTCOME.CORE_OK, LIFECYCLE_REASON.RESEED_REQUIRED);
   }
 
-
   /**
    * The one retired-row UPDATE: state, reason, changed_at and the
    * retirement evidence (null for a reseed hold) are written together.
@@ -391,13 +352,12 @@ class RaftRsReplicaLifecycleOwner {
  * @return {Object} Immutable lifecycle outcome, never install permission.
  */
 function prepareReplicaLifecycleForSnapshot(request) {
-  const retained = request.receiverIncarnation ?? null;
   const {db, groupId, peerId, replicaIdentity} = request;
-  // A retained receiver incarnation is born (or stamped) here by this owner
-  // before its class opens the row; the class never takes a caller's mint.
-  if (retained !== null) {
-    openLifecycleRecord(db, {groupId, peerId, replicaIdentity}, String(retained));
-  }
+  assertSQLiteConnection(db);
+  const retained = request.receiverIncarnation ?? null;
+  const prepared = prepareLifecycleRecord(db, {groupId, peerId, replicaIdentity},
+    retained === null ? randomUUID() : String(retained));
+  if (prepared.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) return prepared;
   const owner = new RaftRsReplicaLifecycleOwner({db, groupId, peerId, replicaIdentity});
   // Synchronous work: the admitted turn settles in this run.
   return turnChainValue(owner.execute(() => {
@@ -408,7 +368,7 @@ function prepareReplicaLifecycleForSnapshot(request) {
     }
     // A snapshot is imported history. Never publish a staged lifecycle row
     // that could later authorize fresh genesis if the installed log is lost.
-    commitDurably(request.db, () => owner.recordOpeningHistory(incarnation));
+    commitDurably(db, () => owner.recordOpeningHistory(incarnation));
     return settledTurn(frozenResult(RAFT_OPERATION_OUTCOME.CORE_OK,
       LIFECYCLE_REASON.STAGING_PREPARED, Object.freeze({incarnation})));
   }));
@@ -429,8 +389,8 @@ function prepareReplicaLifecycleForSnapshot(request) {
  * @param {Object} request - {db, groupId, peerId, replicaIdentity}.
  * @return {Object} Frozen {outcome, reason, detail: {incarnation}|null}.
  */
-function prepareReplicaLifecycleForOriginalAllocation(request) {
-  const {db, groupId, peerId, replicaIdentity} = request;
+function prepareReplicaLifecycleForOriginalAllocation({db, groupId, peerId, replicaIdentity}) {
+  assertSQLiteConnection(db);
   if (!db.inTransaction) {
     throw new Error(LIFECYCLE_ERROR.TRANSACTION_REQUIRED);
   }
@@ -440,7 +400,8 @@ function prepareReplicaLifecycleForOriginalAllocation(request) {
     return frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED,
       LIFECYCLE_REASON.ORIGINAL_ROW_PRESENT);
   }
-  // Only the identity reaches the owner: its own mint stamps the row.
+  const prepared = prepareLifecycleRecord(db, identity, randomUUID());
+  if (prepared.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) return prepared;
   const owner = new RaftRsReplicaLifecycleOwner({db, ...identity});
   const admission = owner.admission();
   if (admission.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) return admission;
@@ -489,6 +450,7 @@ const RIGHT_TRANSITION_SQL = Object.freeze(Object.fromEntries(
 // founder's file at its birth, and by a declaration read of a file that may
 // not be a founder's (an absent table or column there is ABSENT).
 function lifecycleColumns(db) {
+  assertSQLiteConnection(db);
   return new Set(db.prepare(`PRAGMA table_info(${REPLICA_LIFECYCLE_TABLE})`).all()
     .map(({name}) => name));
 }
@@ -542,6 +504,7 @@ function readOriginalAllocationRow({db, member}) {
  * @return {Object} Frozen {state, declaration?, issue?}.
  */
 function readOriginalAllocationDeclaration({db, groupId, replicaIdentity}) {
+  assertSQLiteConnection(db);
   const present = lifecycleColumns(db);
   const row = !present.has(ORIGINAL_COLUMN.DECLARATION) ? undefined : db.prepare(`
     SELECT ${ORIGINAL_COLUMN.DECLARATION}, ${ORIGINAL_COLUMN.ISSUE}
@@ -607,12 +570,12 @@ function prepareOriginalAllocationRow({db, declaration, member}) {
 }
 
 /**
- * Issue the allocation on its anchor: one compare-and-swap PREPARING ->
- * ISSUED of exactly this declaration and member, NEVER_OPENED, both rights
- * UNUSED. Anything else changes nothing and is a typed HOLD.
+ * Issue exactly this declaration/member on its NEVER_OPENED anchor via
+ * PREPARING -> ISSUED compare-and-swap with both rights UNUSED; else typed HOLD.
  * @param {Object} request - {db, declaration, anchor}.
  */
 function markOriginalAllocationIssued({db, declaration, anchor}) {
+  assertSQLiteConnection(db);
   if (anchor.replicaId !== declaration.anchorReplicaId) {
     throw originalAllocationError(ORIGINAL_REASON.IDENTITY, anchor.replicaId);
   }
@@ -655,135 +618,6 @@ function transitionOriginalRight({db, member, right, from, to}) {
       declarationText, before[ORIGINAL_COLUMN.MEMBER]),
   (row) => hasOriginalFields(row, {[right]: to,
     [ORIGINAL_COLUMN.DECLARATION]: declarationText}));
-}
-
-// The receiver's one lifecycle row names another group, peer or replica, or
-// carries no incarnation.
-function receiverRowIdentityMismatch(row, request) {
-  return row.group_id !== request.groupId ||
-    row.peer_id !== request.peerId || row.replica_identity !== request.replicaIdentity ||
-    typeof row.incarnation !== 'string' || row.incarnation.length === 0;
-}
-
-function snapshotEstablishedReceiver(db, request, incarnation) {
-  if (!RaftRsDurableStore.hasDurableRecordIn(db, request.groupId)) {
-    return frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED, SNAPSHOT_RECEIVER_REASON.HISTORY);
-  }
-  RaftRsDurableStore.readRetainedHistoryIn(db, request.groupId);
-  const record = RaftRsDurableStore.readDurableRecordIn(db, request.groupId);
-  const snapIndex = BigInt(request.snapshotAppliedIndex ?? '0');
-  if (record.bootstrapIndex === null || record.hardState === null ||
-      BigInt(record.appliedIndex) > snapIndex || BigInt(record.hardState.commit) > snapIndex) {
-    return frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED, SNAPSHOT_RECEIVER_REASON.HISTORY);
-  }
-  return frozenResult(RAFT_OPERATION_OUTCOME.CORE_OK, SNAPSHOT_RECEIVER_REASON.FRESH,
-    Object.freeze({incarnation, bootstrapIndex: record.bootstrapIndex,
-      admissionIndex: record.admissionIndex, hardState: Object.freeze({...record.hardState}),
-      appliedIndex: record.appliedIndex}));
-}
-
-function hasFreshReceiverConsensusRows(db, tables) {
-  return Object.values(RAFT_RS_TABLE).some((table) =>
-    tables.includes(table) &&
-    Boolean(db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get()));
-}
-
-function validateReceiverLifecycleRow(row, request, imported) {
-  if (receiverRowIdentityMismatch(row, request)) {
-    return frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED, SNAPSHOT_RECEIVER_REASON.IDENTITY);
-  }
-  if (row.state !== LIFECYCLE_STATE.ACTIVE) {
-    return frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED, retiredRefusalReason(row.reason));
-  }
-  const required = imported ? RAFT_RS_OPENING_HISTORY.ESTABLISHED :
-    RAFT_RS_OPENING_HISTORY.NEVER_OPENED;
-  if (row.native_history_state !== required) {
-    return frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED, SNAPSHOT_RECEIVER_REASON.HISTORY);
-  }
-}
-
-// A native FRESH_CREATE cannot replace established receiver history. Reseed or
-// live catchup needs its own existing authority; a valid checkpoint is not it.
-function snapshotReceiverRow(db, request, imported, readEstablished = false) {
-  const names = [REPLICA_LIFECYCLE_TABLE, ...Object.values(RAFT_RS_TABLE)];
-  const tables = db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table'
-    AND name IN (${names.map(() => '?').join(',')})`).all(...names)
-    .map(({name}) => name);
-  if (!imported && hasFreshReceiverConsensusRows(db, tables)) {
-    return frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED, SNAPSHOT_RECEIVER_REASON.HISTORY);
-  }
-  const rows = tables.includes(REPLICA_LIFECYCLE_TABLE) ?
-    db.prepare(`SELECT * FROM ${REPLICA_LIFECYCLE_TABLE} LIMIT 2`).all() : [];
-  if (rows.length === 0 && !imported) return snapshotReceiverFresh(null);
-  if (rows.length !== 1) {
-    return frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED, SNAPSHOT_RECEIVER_REASON.IDENTITY);
-  }
-  const row = rows[0];
-  const refused = validateReceiverLifecycleRow(row, request, imported);
-  if (refused) return refused;
-  return readEstablished ? snapshotEstablishedReceiver(db, request, row.incarnation) :
-    snapshotReceiverFresh(row.incarnation);
-}
-
-function snapshotReceiverFresh(incarnation) {
-  return frozenResult(RAFT_OPERATION_OUTCOME.CORE_OK, SNAPSHOT_RECEIVER_REASON.FRESH,
-    Object.freeze({incarnation}));
-}
-
-function snapshotFileStat(file) {
-  try {
-    return fs.lstatSync(file);
-  } catch (error) {
-    if (error.code === FILE_ABSENT_CODE) return null;
-    throw error;
-  }
-}
-
-function inspectSnapshotLifecycleFile(file, request, imported = false, readEstablished = false) {
-  // Never discard uncheckpointed receiver bytes. A read-only SQLite handle is
-  // not proof that another writer has relinquished the required closed boundary.
-  for (const suffix of SNAPSHOT_RECEIVER_JOURNALS) {
-    const journal = snapshotFileStat(`${file}${suffix}`);
-    if (journal && (!journal.isFile() || journal.size > 0)) {
-      return frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED, SNAPSHOT_RECEIVER_REASON.JOURNAL);
-    }
-  }
-  const stat = snapshotFileStat(file);
-  if (!stat && !imported) return snapshotReceiverFresh(null);
-  if (!stat?.isFile()) {
-    return frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED, SNAPSHOT_RECEIVER_REASON.UNAVAILABLE);
-  }
-  const db = new Database(file, {readonly: true, fileMustExist: true});
-  try {
-    return snapshotReceiverRow(db, request, imported, readEstablished);
-  } finally {
-    db.close();
-  }
-}
-
-/** Read receiver facts, without creating or migrating lifecycle/native state.
- * A caller must re-read before swap; this result is not durable permission.
- * @param {Object} request - Exact identity, receiverDbPath and optional stagedDbPath.
- * @return {Object} Frozen fresh-receiver/incarnation result or typed refusal.
- */
-function inspectReplicaLifecycleForSnapshot(request) {
-  try {
-    const established = request.allowEstablishedReceiver === true;
-    const receiver = inspectSnapshotLifecycleFile(
-      request.receiverDbPath, request, established, established);
-    if (receiver.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK || !request.stagedDbPath) {
-      return receiver;
-    }
-    const staged = inspectSnapshotLifecycleFile(request.stagedDbPath, request, true);
-    if (staged.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK ||
-        receiver.detail.incarnation !== null &&
-        receiver.detail.incarnation !== staged.detail.incarnation) {
-      return frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED, SNAPSHOT_RECEIVER_REASON.STAGING);
-    }
-    return receiver;
-  } catch (_error) {
-    return frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED, SNAPSHOT_RECEIVER_REASON.UNAVAILABLE);
-  }
 }
 
 /**
@@ -838,7 +672,6 @@ async function retireReplicaLifecycle({runtime, groupId, replicaIdentity,
   }
   return owner.retire(reason, evidence);
 }
-
 
 function lifecycleClaimError(lifecycle, cause = undefined) {
   return Object.assign(new Error(LIFECYCLE_CLAIM_REFUSED,
@@ -917,125 +750,31 @@ async function withReplicaLifecycleClaim(request, work) {
   return claimed.pending;
 }
 
-// What a read of a replica database's lifecycle row found when it holds no
-// such row, or cannot say: none is a lifecycle state. ABSENT is positive: no
-// database file, or a lifecycle table that holds no row for the identity.
-// A database that cannot be read, and a database file WITHOUT the lifecycle
-// table (nothing tells a database the lifecycle owner never opened from one
-// that lost the write-ahead log holding its tables), are UNREADABLE and
-// TABLE_ABSENT: neither is ever read as "no lifecycle".
-const NO_ROW_FIELDS = Object.freeze({incarnation: null, peerId: null,
-  retirementEvidence: null});
-const DURABLE_LIFECYCLE_READ = Object.freeze({
-  ABSENT: Object.freeze({state: 'absent', reason: 'lifecycle-row-absent',
-    ...NO_ROW_FIELDS}),
-  UNREADABLE: Object.freeze({state: 'unreadable',
-    reason: 'lifecycle-database-unreadable', ...NO_ROW_FIELDS}),
-  TABLE_ABSENT: Object.freeze({state: 'unreadable',
-    reason: 'lifecycle-table-absent', ...NO_ROW_FIELDS}),
-});
-const NOTHING_BESIDE = Object.freeze({beside: null});
-const UNREADABLE_SNAPSHOT = Object.freeze({
-  lifecycle: DURABLE_LIFECYCLE_READ.UNREADABLE, ...NOTHING_BESIDE});
-
-// The recorded evidence, or null (none, or one that cannot be parsed).
-function retirementEvidenceOf(raw) {
-  if (typeof raw !== 'string' || raw.length === 0) {
-    return null;
-  }
-  try {
-    const evidence = JSON.parse(raw);
-    return evidence && typeof evidence === 'object' ?
-      Object.freeze(evidence) : null;
-  } catch (_error) {
-    return null;
-  }
-}
-
-function lifecycleRowOf(db, groupId, replicaIdentity) {
-  const table = db.prepare(`
-    SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?
-  `).get(REPLICA_LIFECYCLE_TABLE);
-  if (table === undefined) {
-    return DURABLE_LIFECYCLE_READ.TABLE_ABSENT;
-  }
-  // Every column: an older table has no incarnation or evidence column.
-  const row = db.prepare(`
-    SELECT * FROM ${REPLICA_LIFECYCLE_TABLE}
-    WHERE group_id = ? AND replica_identity = ?
-  `).get(String(groupId), String(replicaIdentity));
-  return row === undefined ? DURABLE_LIFECYCLE_READ.ABSENT :
-    Object.freeze({state: row.state, reason: String(row.reason ?? ''),
-      incarnation: typeof row.incarnation === 'string' &&
-        row.incarnation.length > 0 ? row.incarnation : null,
-      peerId: String(row.peer_id),
-      retirementEvidence: retirementEvidenceOf(row.retirement_evidence)});
-}
-
-function holdsLifecycleRow(lifecycle) {
-  return lifecycle.state === LIFECYCLE_STATE.ACTIVE ||
-    lifecycle.state === LIFECYCLE_STATE.RETIRED;
-}
-
-/**
- * The durable lifecycle row of exactly one (group, replica identity) and,
- * when the file holds that row, whatever else its reader takes from the SAME
- * read snapshot of the file - read read-only, without opening a runtime or
- * creating a database. `readBeside(db)` runs only beside a held row; a read
- * of it that throws makes the whole answer UNREADABLE.
- * @param {string} dbPath - The replica's database file.
- * @param {string} groupId
- * @param {string} replicaIdentity
- * @param {Function|null} readBeside - (db) => value, or null.
- * @return {Object} Frozen {lifecycle, beside}; beside is null without a row.
+/** Birth exactly a newly acquired empty database before application DDL.
+ * The one row writer mints its incarnation and NEVER_OPENED marker atomically.
+ * Nonempty files stay unchanged; an empty existing file is UNPROVEN.
+ * @param {Object} request - {db, groupId, replicaIdentity, creation}.
+ * @return {string} A LIFECYCLE_BIRTH.
  */
-function readDurableReplicaLifecycleBeside(dbPath, groupId, replicaIdentity,
-  readBeside) {
-  try {
-    if (!fs.existsSync(dbPath)) {
-      return Object.freeze({lifecycle: DURABLE_LIFECYCLE_READ.ABSENT,
-        ...NOTHING_BESIDE});
+function birthReplicaLifecycle({db, groupId, replicaIdentity, creation}) {
+  assertSQLiteConnection(db);
+  return db.transaction(() => {
+    if (db.prepare(LIFECYCLE_SQL.EMPTY_DATABASE).get() !== undefined) {
+      return LIFECYCLE_BIRTH.NOT_EMPTY;
     }
-    const db = new Database(dbPath, {readonly: true, fileMustExist: true});
-    try {
-      return db.transaction(() => {
-        const lifecycle = lifecycleRowOf(db, groupId, replicaIdentity);
-        return Object.freeze({lifecycle, beside: readBeside !== null &&
-          holdsLifecycleRow(lifecycle) ? readBeside(db) : null});
-      })();
-    } finally {
-      db.close();
+    if (creation !== REPLICA_DATABASE_CREATION.NEW) {
+      return LIFECYCLE_BIRTH.UNPROVEN;
     }
-  } catch (_error) {
-    return UNREADABLE_SNAPSHOT;
-  }
-}
-
-/**
- * The durable lifecycle row of exactly one (group, replica identity), read
- * read-only from a replica database file without opening a runtime or
- * creating a database (the read-only connection may leave the file's
- * shared-memory sidecars; it never changes a page of the database):
- * {state, reason, incarnation, peerId, retirementEvidence} (a row born
- * before the stamp, never opened since, reads incarnation null). A missing
- * file or row is ABSENT; a database that cannot be read, or a file without
- * the lifecycle table, is UNREADABLE - never a lifecycle state, never ABSENT.
- * @param {string} dbPath - The replica's database file.
- * @param {string} groupId
- * @param {string} replicaIdentity
- * @return {Object} Frozen {state, reason, incarnation, peerId,
- *   retirementEvidence}.
- */
-function readDurableReplicaLifecycle(dbPath, groupId, replicaIdentity) {
-  return readDurableReplicaLifecycleBeside(dbPath, groupId, replicaIdentity,
-    null).lifecycle;
+    prepareLifecycleRecord(db, {groupId, replicaIdentity,
+      peerId: deriveRaftRsPeerId(replicaIdentity)}, randomUUID());
+    return LIFECYCLE_BIRTH.BORN;
+  }).immediate();
 }
 
 export {
-  DURABLE_LIFECYCLE_READ,
+  LIFECYCLE_BIRTH,
+  birthReplicaLifecycle,
   RaftRsReplicaLifecycleOwner,
-  readDurableReplicaLifecycle,
-  readDurableReplicaLifecycleBeside,
   prepareReplicaLifecycleForSnapshot,
   prepareReplicaLifecycleForOriginalAllocation,
   prepareOriginalAllocationRow,
@@ -1043,9 +782,18 @@ export {
   transitionOriginalRight,
   readOriginalAllocationRow,
   readOriginalAllocationDeclaration,
-  inspectReplicaLifecycleForSnapshot,
   registerRuntimeLifecycle,
   retireReplicaLifecycle,
   withReplicaLifecycleClaim,
   unregisterRuntimeLifecycle,
 };
+
+// Public observations stay under this owner; their implementation is read-only.
+export {
+  DURABLE_LIFECYCLE_OPENING,
+  DURABLE_LIFECYCLE_READ,
+  LIFECYCLE_READ_SUBJECT,
+  inspectReplicaLifecycleForSnapshot,
+  readDurableReplicaLifecycle,
+  readDurableReplicaLifecycleBeside,
+} from './raft-rs-replica-lifecycle-observation.js';

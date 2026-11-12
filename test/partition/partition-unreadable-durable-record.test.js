@@ -33,6 +33,8 @@ import path from 'node:path';
 import {test} from 'node:test';
 
 import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
+import {openReplicaDatabaseFixture} from '../helpers/replica-database-fixture.js';
 
 import {formAdmittedGroup} from './partition-admitted-group-fixture.js';
 import {attachPartitionReleaseOwners} from './partition-release-fixture.js';
@@ -159,7 +161,7 @@ function restoreAppliedRecord(store, groupId, saved) {
 }
 
 function durableRecordOf(dbPath, groupId) {
-  const independent = new Database(dbPath, {readonly: true});
+  const independent = new SQLiteConnection(dbPath, {readonly: true});
   try {
     const view = Object.create(RaftRsDurableStore.prototype);
     view.db = independent;
@@ -554,7 +556,7 @@ test('F-ap: a follower restarted while its record table is missing is ' +
 
     // The table restored from the store owner's own DDL, its row through
     // the store owner's own writer.
-    const repair = new Database(dbPath);
+    const repair = new SQLiteConnection(dbPath);
     try {
       repair.exec(RAFT_RS_SQL.CREATE_APPLIED_STATE_TABLE);
       restoreAppliedRecord(new RaftRsDurableStore(repair), partitionId,
@@ -676,8 +678,11 @@ test('F-ao: the durable record\'s tables are created whole or not at all, ' +
 {timeout: TEST_TIMEOUT_MS}, async () => {
   await withLonePartitions(async ({open, directory}) => {
     // The pages the first two tables take, by the store owner's own DDL on
-    // a scratch database.
-    const scratch = new Database(path.join(directory, `scratch-${DB_FILE}`));
+    // a scratch database with the same explicitly born lifecycle overhead.
+    const scratch = openReplicaDatabaseFixture({
+      dbPath: path.join(directory, `scratch-${DB_FILE}`),
+      groupId: 'fao-scratch', replicaIdentity: 'fao-scratch-r1',
+    }).db;
     let pagesForTwoTables = 0;
     try {
       scratch.exec(RAFT_RS_SQL.CREATE_LOG_TABLE);
@@ -687,7 +692,8 @@ test('F-ao: the durable record\'s tables are created whole or not at all, ' +
       scratch.close();
     }
     const wholePath = path.join(directory, `fao-whole-${DB_FILE}`);
-    const capped = new Database(wholePath);
+    const capped = openReplicaDatabaseFixture({dbPath: wholePath,
+      groupId: 'fao-whole', replicaIdentity: 'fao-whole-r1'}).db;
     let failure = null;
     try {
       capped.pragma(`max_page_count = ${pagesForTwoTables}`);
@@ -704,7 +710,7 @@ test('F-ao: the durable record\'s tables are created whole or not at all, ' +
     assert.deepEqual(recordTablesOf(wholePath), [],
       'the failed creation left no record table');
     // The page limit was that connection's own; the partition opens the
-    // file afresh.
+    // file afresh, consuming its existing birth record.
     const {partition} = await open('fao-whole');
     assert.equal((await insert(partition, 'row-0', 'whole', 'fao-whole'))
       .success, true, 'a partition initializes on that database and serves ' +
@@ -713,7 +719,8 @@ test('F-ao: the durable record\'s tables are created whole or not at all, ' +
       'with the whole record');
 
     const partialPath = path.join(directory, `fao-partial-${DB_FILE}`);
-    const byHand = new Database(partialPath);
+    const byHand = openReplicaDatabaseFixture({dbPath: partialPath,
+      groupId: 'fao-partial', replicaIdentity: 'fao-partial-r1'}).db;
     try {
       byHand.exec(RAFT_RS_SQL.CREATE_LOG_TABLE);
       byHand.exec(RAFT_RS_SQL.CREATE_HARD_STATE_TABLE);

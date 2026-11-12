@@ -20,6 +20,7 @@
  * answer after the group's leadership moves.
  */
 import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
@@ -72,7 +73,7 @@ function initializeGroupEnvironment(nodeId) {
 }
 
 function readReplica(dbPath, read) {
-  const db = new Database(dbPath, {readonly: true});
+  const db = new SQLiteConnection(dbPath, {readonly: true});
   try {
     return read(db);
   } finally {

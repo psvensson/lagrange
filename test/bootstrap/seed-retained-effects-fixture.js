@@ -1,7 +1,7 @@
 // Storage-owner fixtures. Native persistence/replay is measured separately in
 // seed-retained-effects.integration.test.js; these never claim native execution.
 import assert from 'node:assert/strict';
-import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 import {SERVICE_TYPE} from '../../src/constants/index.js';
 import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
@@ -99,7 +99,7 @@ function createApplicationOwners(db, declaration, member) {
 function fixture(t, tableName = SYSTEM_TABLE_NAME.MESSAGE_GROUPS) {
   const declaration = originalDeclaration();
   const member = memberOf(declaration, tableName);
-  const db = new Database(':memory:');
+  const db = new SQLiteConnection(':memory:');
   t.after(() => db.close());
   const store = new RaftRsDurableStore(db);
   const confState = {voters: declaration.members.filter((candidate) =>

@@ -1,0 +1,697 @@
+{
+  "schema": "sqlite-phase2-verification/1",
+  "status": "scoped-checks-finished; not migration acceptance",
+  "focusedFiles": 15,
+  "focusedCasesReported": 187,
+  "focused": [
+    {
+      "file": "test/storage/sqlite-connection-production-boundaries.test.js",
+      "currentTestSha256": "12d25585956454bea482efe24857880ee889fc6eb5243c63efd247a76949e1bb",
+      "casesReported": 22,
+      "durationMs": 620,
+      "log": {
+        "path": "/tmp/lagrange-sqlite-phase2-max-20261112/boundaries-01.log",
+        "sha256": "93fb88bd8e08d9040a4f3f274ab6f866fb7f30ac155ff66725289486302184f9"
+      },
+      "command": [
+        "flock",
+        "/tmp/lagrange-local-test.lock",
+        "nice",
+        "-n",
+        "15",
+        "node",
+        "scripts/run-test-files.js",
+        "--jobs",
+        "1",
+        "test/storage/sqlite-connection-production-boundaries.test.js"
+      ],
+      "thermalGate": "scripts/checks/wait-for-thermal-headroom.js",
+      "retriedByRunner": false
+    },
+    {
+      "file": "test/partition/partition-unreadable-durable-record.test.js",
+      "currentTestSha256": "f5ac166b10d064d9ccc63b9e057697ad2b63bcf7245b49271002bd369d7f0481",
+      "casesReported": 6,
+      "durationMs": 9585,
+      "log": {
+        "path": "/tmp/lagrange-sqlite-phase2-max-20261112/unreadable-record-01.log",
+        "sha256": "30617cd02cee80ab9aa897c26004114740f42f59838ed113608877edd3feee2b"
+      },
+      "command": [
+        "flock",
+        "/tmp/lagrange-local-test.lock",
+        "nice",
+        "-n",
+        "15",
+        "node",
+        "scripts/run-test-files.js",
+        "--jobs",
+        "1",
+        "test/partition/partition-unreadable-durable-record.test.js"
+      ],
+      "thermalGate": "scripts/checks/wait-for-thermal-headroom.js",
+      "retriedByRunner": false
+    },
+    {
+      "file": "test/storage/sqlite-prepared-statement-owner.test.js",
+      "currentTestSha256": "585324471a4bf151393bb04dba07d312fba5ad0ca31c6714cd057b2f608d98bf",
+      "casesReported": 6,
+      "durationMs": 382,
+      "log": {
+        "path": "/tmp/lagrange-sqlite-phase2-max-20261112/cached-consumers-01.log",
+        "sha256": "314b3244e0377d4cd44026a76bb4c5e76d2fdba8d2b40b5162dbeb94221863c1"
+      },
+      "command": [
+        "flock",
+        "/tmp/lagrange-local-test.lock",
+        "nice",
+        "-n",
+        "15",
+        "node",
+        "scripts/run-test-files.js",
+        "--jobs",
+        "1",
+        "test/storage/sqlite-prepared-statement-owner.test.js"
+      ],
+      "thermalGate": "scripts/checks/wait-for-thermal-headroom.js",
+      "retriedByRunner": false
+    },
+    {
+      "file": "test/query/transaction-schema-enforcement.test.js",
+      "currentTestSha256": "1cbd497a49e88bc0706395d13f909516470e547e1483f41ba2f5abb6bef2d42c",
+      "casesReported": 5,
+      "durationMs": 472,
+      "log": {
+        "path": "/tmp/lagrange-sqlite-phase2-max-20261112/schema-01.log",
+        "sha256": "2daa05e1e6ea877b2b1695d083dbe58a594220d670650220488fa0b86fb5c4ae"
+      },
+      "command": [
+        "flock",
+        "/tmp/lagrange-local-test.lock",
+        "nice",
+        "-n",
+        "15",
+        "node",
+        "scripts/run-test-files.js",
+        "--jobs",
+        "1",
+        "test/query/transaction-schema-enforcement.test.js"
+      ],
+      "thermalGate": "scripts/checks/wait-for-thermal-headroom.js",
+      "retriedByRunner": false
+    },
+    {
+      "file": "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js",
+      "currentTestSha256": "0dc21d1ecb8a702d33475a2c42bf3d2837a4cacdb2804fddc32b88db76668f4d",
+      "casesReported": 85,
+      "durationMs": 2491,
+      "log": {
+        "path": "/tmp/lagrange-sqlite-phase2-max-20261112/checkpoint-install-01.log",
+        "sha256": "b22e1d94fef37dd727d31e7b4e4236efff217f7c943fb6ea9fecee7165c158cc"
+      },
+      "command": [
+        "flock",
+        "/tmp/lagrange-local-test.lock",
+        "nice",
+        "-n",
+        "15",
+        "node",
+        "scripts/run-test-files.js",
+        "--jobs",
+        "1",
+        "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js"
+      ],
+      "thermalGate": "scripts/checks/wait-for-thermal-headroom.js",
+      "retriedByRunner": false
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
+      "currentTestSha256": "01c805c65fbe6af90378d596e2c12de07adb93e2b33e2274ac912913b4ea9f63",
+      "casesReported": 16,
+      "durationMs": 3007,
+      "log": {
+        "path": "/tmp/lagrange-sqlite-phase2-max-20261112/runtime-history-04.log",
+        "sha256": "05bbf3929b9036f91099c3f08152e4c966475b8220a367099354dfcd83ebf82a"
+      },
+      "command": [
+        "flock",
+        "/tmp/lagrange-local-test.lock",
+        "nice",
+        "-n",
+        "15",
+        "node",
+        "scripts/run-test-files.js",
+        "--jobs",
+        "1",
+        "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js"
+      ],
+      "thermalGate": "scripts/checks/wait-for-thermal-headroom.js",
+      "retriedByRunner": false
+    },
+    {
+      "file": "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+      "currentTestSha256": "141cca277fc4f2b3c2773ab30aa84c5fb77f70ee7ffa135ddec0b1c95258840b",
+      "casesReported": 8,
+      "durationMs": 1690,
+      "log": {
+        "path": "/tmp/lagrange-sqlite-phase2-max-20261112/ready-recovery-01.log",
+        "sha256": "7f88efb44a7726d17523ec7a989721cbfccb8200b147b96aa721d1ed4eae3934"
+      },
+      "command": [
+        "flock",
+        "/tmp/lagrange-local-test.lock",
+        "nice",
+        "-n",
+        "15",
+        "node",
+        "scripts/run-test-files.js",
+        "--jobs",
+        "1",
+        "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js"
+      ],
+      "thermalGate": "scripts/checks/wait-for-thermal-headroom.js",
+      "retriedByRunner": false
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js",
+      "currentTestSha256": "31a5786d970a3e99ccc1c341e3b86b68195c47b653bd38b8f1948622e6eca221",
+      "casesReported": 8,
+      "durationMs": 4397,
+      "log": {
+        "path": "/tmp/lagrange-sqlite-phase2-max-20261112/native-replacement-02.log",
+        "sha256": "6b70d32d74e0f576391b30794a1d48f3fe65cd93662321f11441ed701acdb6a1"
+      },
+      "command": [
+        "flock",
+        "/tmp/lagrange-local-test.lock",
+        "nice",
+        "-n",
+        "15",
+        "node",
+        "scripts/run-test-files.js",
+        "--jobs",
+        "1",
+        "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js"
+      ],
+      "thermalGate": "scripts/checks/wait-for-thermal-headroom.js",
+      "retriedByRunner": false
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js",
+      "currentTestSha256": "2157a910442179eb97d36b7b74708a82c3369c9c08188d0c2234de1f4a32dfc6",
+      "casesReported": 4,
+      "durationMs": 1747,
+      "log": {
+        "path": "/tmp/lagrange-sqlite-phase2-max-20261112/native-load-01.log",
+        "sha256": "d49963360782baeb928053fa50436f18f800011f5e500e6d0dcbdd7a09ea15ba"
+      },
+      "command": [
+        "flock",
+        "/tmp/lagrange-local-test.lock",
+        "nice",
+        "-n",
+        "15",
+        "node",
+        "scripts/run-test-files.js",
+        "--jobs",
+        "1",
+        "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js"
+      ],
+      "thermalGate": "scripts/checks/wait-for-thermal-headroom.js",
+      "retriedByRunner": false
+    },
+    {
+      "file": "test/raft/raft-rs-original-allocation-custody.test.js",
+      "currentTestSha256": "37678ed1698661639fc9f3bddf6a068cbcfde381b6da7265751a22a8bec923dc",
+      "casesReported": 4,
+      "durationMs": 5847,
+      "log": {
+        "path": "/tmp/lagrange-sqlite-phase2-max-20261112/original-custody-01.log",
+        "sha256": "23edc2cf30c6da82dc07080c8226220ef62d55dbd701e614eaf71a7341ec8870"
+      },
+      "command": [
+        "flock",
+        "/tmp/lagrange-local-test.lock",
+        "nice",
+        "-n",
+        "15",
+        "node",
+        "scripts/run-test-files.js",
+        "--jobs",
+        "1",
+        "test/raft/raft-rs-original-allocation-custody.test.js"
+      ],
+      "thermalGate": "scripts/checks/wait-for-thermal-headroom.js",
+      "retriedByRunner": false
+    },
+    {
+      "file": "test/partition/partition-cdc-source-relist.test.js",
+      "currentTestSha256": "60a9ad8bc7a91f50d92803876a8e70593131871beaac030290ac37183c1240f1",
+      "casesReported": 7,
+      "durationMs": 4381,
+      "log": {
+        "path": "/tmp/lagrange-sqlite-phase2-max-20261112/hydration-image-01.log",
+        "sha256": "fdb513ca381a9bb6015836f2d3fc1f8ea66b908d8d8b1f35a250382b677950ad"
+      },
+      "command": [
+        "flock",
+        "/tmp/lagrange-local-test.lock",
+        "nice",
+        "-n",
+        "15",
+        "node",
+        "scripts/run-test-files.js",
+        "--jobs",
+        "1",
+        "test/partition/partition-cdc-source-relist.test.js"
+      ],
+      "thermalGate": "scripts/checks/wait-for-thermal-headroom.js",
+      "retriedByRunner": false
+    },
+    {
+      "file": "test/raft/raft-rs-backend/message-group-on-raft-rs.test.js",
+      "currentTestSha256": "6f4923a2eaf1d1e689367d80a37dfb612076242e8c0331982f07b234e49d70bb",
+      "casesReported": 6,
+      "durationMs": 4979,
+      "log": {
+        "path": "/tmp/lagrange-sqlite-phase2-max-20261112/message-group-01.log",
+        "sha256": "7f26a297de9aa7894437771778fd4fe396c4e3f1a05a774b0186e7850edea7a4"
+      },
+      "command": [
+        "flock",
+        "/tmp/lagrange-local-test.lock",
+        "nice",
+        "-n",
+        "15",
+        "node",
+        "scripts/run-test-files.js",
+        "--jobs",
+        "1",
+        "test/raft/raft-rs-backend/message-group-on-raft-rs.test.js"
+      ],
+      "thermalGate": "scripts/checks/wait-for-thermal-headroom.js",
+      "retriedByRunner": false
+    },
+    {
+      "file": "test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js",
+      "currentTestSha256": "66e6250debf5eba21629c2c5420aa40980e5dd1917c9c000d86a3190e72c18eb",
+      "casesReported": 4,
+      "durationMs": 1965,
+      "log": {
+        "path": "/tmp/lagrange-sqlite-phase2-max-20261112/wasm-group-01.log",
+        "sha256": "780a3af1fdadd1ea3dcab88f206ea08d8ca1725c10bf91d310a08f28f9529b55"
+      },
+      "command": [
+        "flock",
+        "/tmp/lagrange-local-test.lock",
+        "nice",
+        "-n",
+        "15",
+        "node",
+        "scripts/run-test-files.js",
+        "--jobs",
+        "1",
+        "test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js"
+      ],
+      "thermalGate": "scripts/checks/wait-for-thermal-headroom.js",
+      "retriedByRunner": false
+    },
+    {
+      "file": "test/raft/raft-rs-status-peer-resolution.test.js",
+      "currentTestSha256": "30356d3a2694bb31284a383a8fd54b997283da10f404d5b702da103f25ec4d16",
+      "casesReported": 4,
+      "durationMs": 784,
+      "log": {
+        "path": "/tmp/lagrange-sqlite-phase2-max-20261112/peer-status-01.log",
+        "sha256": "9c7085c7256265a41cc7f3baf3be294829c4c9684d188b421dbd51659a83191e"
+      },
+      "command": [
+        "flock",
+        "/tmp/lagrange-local-test.lock",
+        "nice",
+        "-n",
+        "15",
+        "node",
+        "scripts/run-test-files.js",
+        "--jobs",
+        "1",
+        "test/raft/raft-rs-status-peer-resolution.test.js"
+      ],
+      "thermalGate": "scripts/checks/wait-for-thermal-headroom.js",
+      "retriedByRunner": false
+    },
+    {
+      "file": "test/storage/sqlite-connection-hydration.test.js",
+      "currentTestSha256": "17e53e2401ab331ab5372628f0efa353a62403479ebf651fd02acbd0f2f7b3ac",
+      "casesReported": 2,
+      "durationMs": 595,
+      "log": {
+        "path": "/tmp/lagrange-sqlite-phase2-max-20261112/hydration-storage-01.log",
+        "sha256": "e4af52138eed29d2dfbdff39cae390784219a28d9e5b9baba2a78ac2dcecedbc"
+      },
+      "command": [
+        "flock",
+        "/tmp/lagrange-local-test.lock",
+        "nice",
+        "-n",
+        "15",
+        "node",
+        "scripts/run-test-files.js",
+        "--jobs",
+        "1",
+        "test/storage/sqlite-connection-hydration.test.js"
+      ],
+      "thermalGate": "scripts/checks/wait-for-thermal-headroom.js",
+      "retriedByRunner": false
+    }
+  ],
+  "applicability": "These are focused component/composition executions, not a full cone. Tests executed on candidate implementation with no semantic production edit afterward; final durable-store delta is comment-only to meet size. Native load/replacement were rerun after that comment edit and every copied source hash matches the final bytes. Other focused test source hashes name the current candidate; logs do not independently certify a full-tree runtime manifest. Full lab must bind its own exact candidate.",
+  "childEntryProof": {
+    "exactSourceDigests": {
+      "load-recovery": {
+        "test/helpers/replica-database-fixture.js": "95dea8eafb2d6f52ee89e8f4029b5d0f32ca9e834f02216bec614546fac15e42",
+        "src/storage/sqlite-prepared-statement-owner.js": "4a5db10f9a9f3f3f65c108aa7e41aca10a741fd209b1a038bc18eabff54ee202",
+        "src/raft/raft-rs-runtime-owner.js": "9c8c4d163c6622afbcc8fca7d0207a6d8edd219d352d1be124409fc6445b4563",
+        "src/raft/raft-rs-binding-owner.js": "a2e87da5ee50b52875a5c77139ae5491ad7f7b3ddd1e4a849d77bce63edbde6b",
+        "src/raft/raft-rs-operation-port.js": "9554d28d1c9e54d2dfef95efc4fe3f653a1f94444a4f75ee07d022b754416d65",
+        "src/raft/raft-rs-durable-store.js": "0b54363e2d4a539e631945c520cec345ce666f8248aad2a9ba2c81cb1e5289c3",
+        "src/raft/raft-rs-application-transaction-owner.js": "6296b27a8ca52dc8865084949dbc4ccdfe46a98c80f0db906778d051919f2ab1",
+        "test/raft/raft-rs-backend/partition-node-cluster.js": "4d4767165e7a792d6058bfc662a6f9277c8083ddab3a1b641acb203ab1d53cb6",
+        "test/raft/raft-rs-backend/runtime-load-recovery-child.js": "032317b3886d20e0ade5507012faf9321123cad1ea39661f2728b18f62d9f55a"
+      },
+      "replacement-review": {
+        "test/helpers/replica-database-fixture.js": "95dea8eafb2d6f52ee89e8f4029b5d0f32ca9e834f02216bec614546fac15e42",
+        "src/storage/sqlite-prepared-statement-owner.js": "4a5db10f9a9f3f3f65c108aa7e41aca10a741fd209b1a038bc18eabff54ee202",
+        "src/raft/raft-rs-runtime-owner.js": "9c8c4d163c6622afbcc8fca7d0207a6d8edd219d352d1be124409fc6445b4563",
+        "src/raft/raft-rs-binding-owner.js": "a2e87da5ee50b52875a5c77139ae5491ad7f7b3ddd1e4a849d77bce63edbde6b",
+        "src/raft/raft-rs-operation-port.js": "9554d28d1c9e54d2dfef95efc4fe3f653a1f94444a4f75ee07d022b754416d65",
+        "src/raft/raft-rs-durable-store.js": "0b54363e2d4a539e631945c520cec345ce666f8248aad2a9ba2c81cb1e5289c3",
+        "src/raft/raft-rs-application-transaction-owner.js": "6296b27a8ca52dc8865084949dbc4ccdfe46a98c80f0db906778d051919f2ab1",
+        "src/time/time-source.js": "c4bf713ffca20541e11f079eeacf6cb51892ef722c0993a6277c7edd4ca48311",
+        "test/raft/raft-rs-backend/runtime-replacement-review-child.js": "dc420231e326e00772ab3f4062657858019aa1eb89c73f785aa790c6a04cf915",
+        "test/raft/raft-rs-backend/partition-node-cluster.js": "4d4767165e7a792d6058bfc662a6f9277c8083ddab3a1b641acb203ab1d53cb6"
+      }
+    },
+    "scenarios": [
+      {
+        "kind": "load-recovery",
+        "scenario": "changed-glue",
+        "phase": "complete",
+        "traps": 1,
+        "groupsRestored": 2,
+        "artifactsRestored": true,
+        "raw": {
+          "path": "/tmp/lagrange-sqlite-phase2-max-20261112/child-final/load-recovery-changed-glue.json",
+          "sha256": "607117d2362d11c88b72a972e99bacece637bb47e75943904d8c6beb6875c00f"
+        }
+      },
+      {
+        "kind": "load-recovery",
+        "scenario": "control",
+        "phase": "complete",
+        "traps": 1,
+        "groupsRestored": 2,
+        "artifactsRestored": true,
+        "raw": {
+          "path": "/tmp/lagrange-sqlite-phase2-max-20261112/child-final/load-recovery-control.json",
+          "sha256": "8a502ef742ad0f6314ec0578e0264c94c84b34f879c0a129db1941cb2c0ceb08"
+        }
+      },
+      {
+        "kind": "load-recovery",
+        "scenario": "missing-glue",
+        "phase": "complete",
+        "traps": 1,
+        "groupsRestored": 2,
+        "artifactsRestored": true,
+        "raw": {
+          "path": "/tmp/lagrange-sqlite-phase2-max-20261112/child-final/load-recovery-missing-glue.json",
+          "sha256": "39dc18a57b33471162a6aab885ffffe889510040f7f7d041f6f1b75d7bb3a747"
+        }
+      },
+      {
+        "kind": "load-recovery",
+        "scenario": "repeated-refusal",
+        "phase": "complete",
+        "traps": 1,
+        "groupsRestored": 2,
+        "artifactsRestored": true,
+        "raw": {
+          "path": "/tmp/lagrange-sqlite-phase2-max-20261112/child-final/load-recovery-repeated-refusal.json",
+          "sha256": "2474276a0d798fee8356921f285f66e068757442279819e059e0bfef2e68f852"
+        }
+      },
+      {
+        "kind": "replacement-review",
+        "scenario": "close-during-restore",
+        "phase": "complete",
+        "traps": 1,
+        "raw": {
+          "path": "/tmp/lagrange-sqlite-phase2-max-20261112/child-final/replacement-review-close-during-restore.json",
+          "sha256": "2b82042f5ee8c24a9429bd0575f2453a5bbfdb7635bf13f3721f1170bf223de1"
+        }
+      },
+      {
+        "kind": "replacement-review",
+        "scenario": "control",
+        "phase": "complete",
+        "traps": 1,
+        "raw": {
+          "path": "/tmp/lagrange-sqlite-phase2-max-20261112/child-final/replacement-review-control.json",
+          "sha256": "340217a9496b60f044af293659c500f8e166a902ad3a6211283e5360bca5d192"
+        }
+      },
+      {
+        "kind": "replacement-review",
+        "scenario": "last-close",
+        "phase": "complete",
+        "traps": 1,
+        "raw": {
+          "path": "/tmp/lagrange-sqlite-phase2-max-20261112/child-final/replacement-review-last-close.json",
+          "sha256": "ba6bf6b82f4c221c8fa745eabb0cba1146de2d04a6895806e0799579402ccb67"
+        }
+      },
+      {
+        "kind": "replacement-review",
+        "scenario": "mixed-clocks",
+        "phase": "complete",
+        "traps": 1,
+        "raw": {
+          "path": "/tmp/lagrange-sqlite-phase2-max-20261112/child-final/replacement-review-mixed-clocks.json",
+          "sha256": "05dc9e41d35f40b3eb2cae337712eec95707f3a805b1c3384041c07594a6072a"
+        }
+      },
+      {
+        "kind": "replacement-review",
+        "scenario": "partial-restore",
+        "phase": "complete",
+        "traps": 1,
+        "raw": {
+          "path": "/tmp/lagrange-sqlite-phase2-max-20261112/child-final/replacement-review-partial-restore.json",
+          "sha256": "0efd2f265f3abc48549a6a2055d761d0636b512ee849427d34ddfa52578bfdf9"
+        }
+      },
+      {
+        "kind": "replacement-review",
+        "scenario": "reentrant-restore",
+        "phase": "complete",
+        "traps": 1,
+        "raw": {
+          "path": "/tmp/lagrange-sqlite-phase2-max-20261112/child-final/replacement-review-reentrant-restore.json",
+          "sha256": "bdc440e335b7f0655069166d41629fa4f67de1e9bca014a1ecbd1eb55750e2ed"
+        }
+      },
+      {
+        "kind": "replacement-review",
+        "scenario": "reload-backoff",
+        "phase": "complete",
+        "traps": 1,
+        "raw": {
+          "path": "/tmp/lagrange-sqlite-phase2-max-20261112/child-final/replacement-review-reload-backoff.json",
+          "sha256": "d572593d6f8563f1d0b9b719c8e492e40a1f9eef22c4c56dda8b551d254464d0"
+        }
+      },
+      {
+        "kind": "replacement-review",
+        "scenario": "trap-during-restore",
+        "phase": "complete",
+        "traps": 1,
+        "raw": {
+          "path": "/tmp/lagrange-sqlite-phase2-max-20261112/child-final/replacement-review-trap-during-restore.json",
+          "sha256": "2f6043a6a453d2835d6ede7e40c97bbb6a5db5c0b243dea5db5f522b81a5b590"
+        }
+      }
+    ],
+    "closure": {
+      "path": "/tmp/lagrange-sqlite-phase2-max-20261112/child-copy-closure.json",
+      "sha256": "ea5141373bb8db0c926810a77f0ff1c1154a528cc6412185606968ef1b54265e"
+    },
+    "allHashComparisonsPass": true,
+    "sourceFallbackAdded": false
+  },
+  "faultEngagement": {
+    "path": "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
+    "assertions": "Set failing only after successful setup/open/close; snapshot observed; open the refused port; require observed > snapshot before status inspection; native entry count unchanged; HOST_FAILURE / DURABLE_RECORD_READ retains history IOERR and SQLITE_IOERR. Connection and canonical bridge remain unchanged."
+  },
+  "static": [
+    {
+      "name": "eslint",
+      "exitCode": 0,
+      "log": {
+        "path": "/tmp/lagrange-sqlite-phase2-max-20261112/static-eslint-01.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "name": "size",
+      "exitCode": 1,
+      "log": {
+        "path": "/tmp/lagrange-sqlite-phase2-max-20261112/static-size-01.log",
+        "sha256": "735af7de9a2015b9bade81125cfe62ed439ce33b7b9c49ca5c10adf9256e0484"
+      }
+    },
+    {
+      "name": "complexity",
+      "exitCode": 0,
+      "log": {
+        "path": "/tmp/lagrange-sqlite-phase2-max-20261112/static-complexity-01.log",
+        "sha256": "bb5445b6e1062efe06695d191f8a67894aa250bd135d7c0836d01705bfe571ea"
+      }
+    },
+    {
+      "name": "cognitive",
+      "exitCode": 0,
+      "log": {
+        "path": "/tmp/lagrange-sqlite-phase2-max-20261112/static-cognitive-01.log",
+        "sha256": "a543e43553a46dc97e309997c5afb8e566747bd2e8c887379ba0238e149b1a1b"
+      }
+    },
+    {
+      "name": "literals",
+      "exitCode": 1,
+      "log": {
+        "path": "/tmp/lagrange-sqlite-phase2-max-20261112/static-literals-01.log",
+        "sha256": "2e44488e5cca9cd6b525114a996c3d77239111057eb1c816b6eeba1a1ddc2c70"
+      }
+    },
+    {
+      "name": "decisions",
+      "exitCode": 1,
+      "log": {
+        "path": "/tmp/lagrange-sqlite-phase2-max-20261112/static-decisions-01.log",
+        "sha256": "cde848ca1fdecf009b43980e629271dafb808bd30b80240aae8a7bb975041afc"
+      }
+    },
+    {
+      "name": "navigability",
+      "exitCode": 1,
+      "log": {
+        "path": "/tmp/lagrange-sqlite-phase2-max-20261112/static-navigability-01.log",
+        "sha256": "f5a98cdf08007410b145b705cd93c0466fdca5c5d57b27167f6a583fbad6443d"
+      }
+    },
+    {
+      "name": "grammar",
+      "exitCode": 0,
+      "log": {
+        "path": "/tmp/lagrange-sqlite-phase2-max-20261112/static-grammar-01.log",
+        "sha256": "c1f2b1a094098b8475908e4a81a9d8c9f12f0b4934bcecd8d38a8d1feb725e0c"
+      }
+    },
+    {
+      "name": "size-02",
+      "exitCode": 0,
+      "log": {
+        "path": "/tmp/lagrange-sqlite-phase2-max-20261112/static-size-02.log",
+        "sha256": "7112b1602044d1f8bb25f19cd788e0f0b279033837adbc77966d59e98f5beae2"
+      }
+    },
+    {
+      "name": "eslint-02",
+      "exitCode": 0,
+      "log": {
+        "path": "/tmp/lagrange-sqlite-phase2-max-20261112/static-eslint-02.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  ],
+  "impact": {
+    "exitCode": 0,
+    "log": {
+      "path": "/tmp/lagrange-sqlite-phase2-max-20261112/impact-03.log",
+      "sha256": "2d2bf202250e6baceee228777b496142adc711bfeeb3eb2dcd86340a715f761f"
+    },
+    "contracts": 97,
+    "coupledPairs": 71
+  },
+  "metadata": {
+    "log": {
+      "path": "/tmp/lagrange-sqlite-phase2-max-20261112/metadata-02.log",
+      "sha256": "667d7971986eff267161f6d003372007f685f761eb3a868f018b64e39b3200bc"
+    },
+    "generatedTestCount": 2779,
+    "integrationAction": "Parent regenerates on final composed production bytes."
+  },
+  "inheritedGuardFindings": {
+    "comparison": {
+      "path": "/tmp/lagrange-sqlite-phase2-max-20261112/static-baseline-comparison.json",
+      "sha256": "c124ac236cab08dc62359e95505fba1a276d29bd32665834e95573e90ee7c4d7"
+    },
+    "baseline": "b8f0f6474fa013c8393460fa54e40a5be4793ea5",
+    "literal": {
+      "file": "src/partition/partition-hydration-image-pages.js",
+      "line": 139,
+      "kind": "images_held literal"
+    },
+    "decisions": {
+      "file": "src/partition/partition-hydration-image-pages.js",
+      "lines": [
+        129,
+        131
+      ],
+      "kinds": [
+        "independent_if_semantic_returns",
+        "raw_null_empty_state_outcome"
+      ]
+    },
+    "navigability": {
+      "file": "src/raft/raft-rs-replica-lifecycle-observation.js",
+      "lines": [
+        238,
+        17,
+        85
+      ],
+      "kinds": [
+        "catch_returns_default retirementEvidenceOf",
+        "retiredRefusalReason import identifier",
+        "retiredRefusalReason call identifier"
+      ],
+      "beforeAfterSiteHashesEqual": true
+    },
+    "disposition": "Reported to parent; unchanged F carry-in findings still block an all-static-green claim. No baseline increases or inherited-code waiver."
+  },
+  "unrun": [
+    {
+      "file": "test/integration/message-group-learner-runtime-authorization.integration.test.js",
+      "casesExpected": 72,
+      "state": "EXPLICITLY UNRUN on repaired bytes; lint is not execution or staged-fault engagement."
+    },
+    {
+      "scope": "complete affected production/fixture cone on parent lab",
+      "state": "UNRUN on this Phase2 candidate; fullF lab5e58474b1 cannot certify these repairs."
+    },
+    {
+      "scope": "fresh Phase2 independent review",
+      "state": "Parent assigns; no Phase2 approval."
+    },
+    {
+      "scope": "permission witness no-skip composition",
+      "state": "Separate worker Newton 01a1ce9a-e326; current skip unchanged."
+    }
+  ],
+  "sourceApplicability": {
+    "path": "/tmp/lagrange-sqlite-phase2-max-20261112/final-applicability.json",
+    "sha256": "157ce4eea3bef9d2fe2933d6787f6c436b7aa323682bc59b2bb3db748cb4e2ce",
+    "helperFirstFailureRetained": "phase2-failure-ledger.json max-06"
+  }
+}

@@ -1,3 +1,4 @@
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 // A host failure of one partition's group is that group's own failure
 // (quest raft-rs-single-path-partition-cutover: F-m after verification round
 // 2, B6 after verification round 3).
@@ -190,7 +191,7 @@ function waitForParticipantRelease(service, waitFor = (predicate) =>
 // The whole durable record of a group, through the store owner's own reader
 // on a read view of an independent connection (no DDL, nothing written).
 function durableRecordOf(dbPath, groupId) {
-  const independent = new Database(dbPath, {readonly: true});
+  const independent = new SQLiteConnection(dbPath, {readonly: true});
   try {
     const view = Object.create(RaftRsDurableStore.prototype);
     view.db = independent;

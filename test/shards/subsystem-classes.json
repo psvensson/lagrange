@@ -18,17 +18,17 @@
     "runtime-primitives": 24,
     "services-runtime": 161,
     "solver-tooling": 7,
-    "storage-partition": 237,
-    "storage-raft": 158,
+    "storage-partition": 244,
+    "storage-raft": 160,
     "test-infrastructure": 175,
     "transactions": 18,
     "transport-messaging": 127,
     "wasm-toolchain": 74
   },
-  "censusSize": 2772,
-  "digest": "fnv1a32-538dc1bb",
+  "censusSize": 2781,
+  "digest": "fnv1a32-485c6190",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-6c7a55ef",
+  "observationDigest": "fnv1a32-724a78fc",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1868,7 +1868,9 @@
     "test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js": "storage-raft",
     "test/raft/raft-rs-backend/removed-leader-binding-step-down.test.js": "storage-raft",
     "test/raft/raft-rs-backend/removed-leader-step-down.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/replica-freshness-closure.test.js": "storage-raft",
     "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/replica-lifecycle-birth.test.js": "storage-raft",
     "test/raft/raft-rs-backend/replica-membership-witness.test.js": "storage-raft",
     "test/raft/raft-rs-backend/reseed-hold-durability.test.js": "storage-raft",
     "test/raft/raft-rs-backend/restart-from-durable-record.test.js": "storage-raft",
@@ -2608,6 +2610,13 @@
     "test/storage/data-directory-manager.test.js": "storage-partition",
     "test/storage/data-directory-validation.property.test.js": "storage-partition",
     "test/storage/persistent-storage-paths.property.test.js": "storage-partition",
+    "test/storage/sqlite-connection-hydration.test.js": "storage-partition",
+    "test/storage/sqlite-connection-outer-boundaries.test.js": "storage-partition",
+    "test/storage/sqlite-connection-production-boundaries.test.js": "storage-partition",
+    "test/storage/sqlite-connection-reference-capture.test.js": "storage-partition",
+    "test/storage/sqlite-connection-statement-ownership-brand.test.js": "storage-partition",
+    "test/storage/sqlite-connection-statement-ownership-refusal.test.js": "storage-partition",
+    "test/storage/sqlite-connection-statement-ownership.test.js": "storage-partition",
     "test/storage/sqlite-prepared-statement-owner.test.js": "storage-partition",
     "test/storage/sqlite-store.property.test.js": "storage-partition",
     "test/storage/sqlite-store.test.js": "storage-partition",
@@ -11964,6 +11973,8 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/bootstrap/system-table-workflow-schema-definitions.js",
+        "src/control-plane/control-plane-runtime-bundle.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/node/replica-removal-consensus-exit.js",
         "src/node/replica-removal-debt-errors.js",
         "src/node/replica-removal-group-verdict.js",
@@ -11971,6 +11982,7 @@
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
@@ -11978,6 +11990,8 @@
         "src/rebalancer/replica-operation-constants.js",
         "src/rebalancer/replica-operation-repository-operation-visibility.js",
         "src/rebalancer/replica-status.js",
+        "test/cdc/cdc-integration-service-test-support.js",
+        "test/rebalancer/committed-membership-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/lifecycle-state-store.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
@@ -12805,6 +12819,7 @@
     },
     "test/node/replica-removal-sole-founder-decision.test.js": {
       "files": [
+        "src/node/replica-handler-remove-execution-methods.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
@@ -16855,7 +16870,6 @@
         "src/raft/raft-rs-durable-store.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
-        "src/raft/raft-rs-replica-lifecycle-owner.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/transport/transport-semantic-outcome.js"
       ],
@@ -17447,6 +17461,11 @@
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
+    "test/raft/raft-rs-backend/partition-snapshot-compaction-catchup.test.js": {
+      "files": [
+        "src/raft/raft-rs-replica-lifecycle-owner.js"
+      ]
+    },
     "test/raft/raft-rs-backend/peer-identity.test.js": {
       "files": [
         "src/raft/raft-rs-host-contract.js",
@@ -17524,6 +17543,12 @@
         "test/raft/raft-rs-backend/transfer-leadership-driver.js"
       ]
     },
+    "test/raft/raft-rs-backend/replica-freshness-closure.test.js": {
+      "files": [
+        "src/raft/raft-rs-operation-port.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js"
+      ]
+    },
     "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js": {
       "files": [
         "src/node/replica-create-admission-owner.js",
@@ -17534,6 +17559,16 @@
         "src/raft/snapshot-install-constants.js",
         "src/raft/snapshot-install.js",
         "src/runtime/oci-host-agent-durable-files.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/replica-lifecycle-birth.test.js": {
+      "files": [
+        "src/partition/partition-participant-transaction-constants.js",
+        "src/partition/partition-participant-transaction-store.js",
+        "src/raft/raft-rs-durable-store.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/storage/storage-constants.js"
       ]
     },
     "test/raft/raft-rs-backend/replica-membership-witness.test.js": {
@@ -17672,7 +17707,9 @@
         "src/raft/raft-rs-binding-owner.js",
         "src/raft/raft-rs-durable-store.js",
         "src/raft/raft-rs-operation-port.js",
-        "src/raft/raft-rs-runtime-owner.js"
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/storage/sqlite-prepared-statement-owner.js",
+        "test/helpers/replica-database-fixture.js"
       ],
       "directories": [
         "src",
@@ -17722,7 +17759,9 @@
         "src/raft/raft-rs-durable-store.js",
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
-        "src/time/time-source.js"
+        "src/storage/sqlite-prepared-statement-owner.js",
+        "src/time/time-source.js",
+        "test/helpers/replica-database-fixture.js"
       ],
       "directories": [
         "src",
@@ -18012,6 +18051,11 @@
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/transport/transport-semantic-outcome.js"
+      ]
+    },
+    "test/raft/raft-rs-lifecycle-turn-admission.test.js": {
+      "files": [
+        "src/raft/raft-rs-replica-lifecycle-owner.js"
       ]
     },
     "test/raft/raft-rs-original-allocation-cold-inspection.test.js": {
@@ -24826,6 +24870,54 @@
       ],
       "directories": [
         "data/storage-load"
+      ]
+    },
+    "test/storage/sqlite-connection-hydration.test.js": {
+      "files": [
+        "src/partition/partition-cdc-obligation-ledger.js",
+        "src/partition/partition-hydration-image-pages.js",
+        "src/storage/sqlite-prepared-statement-owner.js"
+      ]
+    },
+    "test/storage/sqlite-connection-outer-boundaries.test.js": {
+      "files": [
+        "src/bootstrap/seed-original-allocation-declaration.js",
+        "src/bootstrap/seed-retained-effects-constants.js",
+        "src/partition/partition-legacy-consensus-state-constants.js",
+        "src/partition/partition-legacy-consensus-state.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-opening-history-constants.js",
+        "src/raft/raft-rs-original-allocation-constants.js",
+        "src/raft/raft-rs-original-allocation-preparation.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/storage/data-directory-process-owner.js",
+        "test/test-helpers/original-allocation-declaration-fixture.js"
+      ]
+    },
+    "test/storage/sqlite-connection-production-boundaries.test.js": {
+      "files": [
+        "src/partition/partition-cdc-obligation-ledger.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-locking-read-reservation.js",
+        "src/partition/partition-participant-transaction-store.js",
+        "src/query/distributed/distributed-transaction-release-census.js",
+        "src/query/distributed/distributed-transaction-schema-enforcement.js",
+        "src/raft/raft-rs-original-allocation-constants.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/storage/sqlite-prepared-statement-owner.js"
+      ]
+    },
+    "test/storage/sqlite-connection-reference-capture.test.js": {
+      "files": [
+        "src/partition/partition-committed-statement-outcome-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-locking-read-reservation.js",
+        "src/partition/partition-service-constants.js",
+        "src/raft/raft-rs-opening-history-constants.js",
+        "src/raft/raft-rs-replica-lifecycle-constants.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js"
       ]
     },
     "test/storage/sqlite-prepared-statement-owner.test.js": {

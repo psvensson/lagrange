@@ -1,8 +1,13 @@
+import {openReplicaDatabaseFixture} from '../../helpers/replica-database-fixture.js';
+
+import {snapshotReceiverStillAdmitted} from '../../../src/raft/snapshot-receiver-admission.js';
+import {REPLICA_LIFECYCLE_TABLE} from '../../../src/raft/raft-rs-replica-lifecycle-constants.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
 import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../../src/storage/sqlite-prepared-statement-owner.js';
 import {sha256Digest, writeAtomicDurable} from
   '../../../src/runtime/oci-host-agent-durable-files.js';
 
@@ -140,10 +145,48 @@ async function withRenameFault(options, work) {
   }
 }
 
+function receiverFile(file, shape) {
+  if (shape === 'empty') return fs.writeFileSync(file, '');
+  const db = shape === 'application-only' ? new Database(file) :
+    openReplicaDatabaseFixture({dbPath: file, groupId: GROUP, replicaIdentity: TARGET}).db;
+  db.exec('CREATE TABLE application_rows (k TEXT PRIMARY KEY)');
+  if (shape === 'lost-row') db.exec(`DELETE FROM ${REPLICA_LIFECYCLE_TABLE}`);
+  db.close();
+  if (shape === 'truncated') fs.truncateSync(file, 0);
+}
+
+async function checkExistingReceiverInstall(t, root, targetPeer) {
+  for (const shape of ['application-only', 'lost-row', 'empty', 'truncated', 'born']) {
+    const target = path.join(root, `${shape}.db`);
+    const checkpointsRoot = path.join(root, `receiver-${shape}`);
+    fs.cpSync(path.join(root, 'checkpoints', APPLIED_INDEX),
+      path.join(checkpointsRoot, APPLIED_INDEX), {recursive: true});
+    receiverFile(target, shape);
+    const before = fs.readFileSync(target);
+    const admission = admissionFixture({operationId: `receiver-${shape}`});
+    const evidence = await admission.owner.claim(admission.request);
+    const claim = await admission.owner.claimPhysicalWorker(evidence);
+    const result = await requestSnapshotInstall({replicaDbPath: target, checkpointsRoot,
+      generationIndex: Number(APPLIED_INDEX), expectedIdentity: identity(),
+      expectedReplicaIdentity: TARGET, expectedPeerId: targetPeer,
+      createAdmissionOwner: admission.owner, createAdmissionEvidence: evidence,
+      createPhysicalWorkerClaim: claim});
+    if (shape === 'born') {
+      t.equal(result.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED,
+        'explicitly born receiver installs through actual CREATE and snapshot owners');
+    } else {
+      t.equal(result.reason, RAFT_SNAPSHOT_INSTALL_REJECTION.RECEIVER_STATE_REFUSED,
+        `${shape}: CREATE authorization cannot replace lifecycle evidence`);
+      t.same(fs.readFileSync(target), before, `${shape}: no receiver bytes replaced`);
+    }
+    admission.owner.releasePhysicalWorker(claim);
+  }
+}
+
 test('the canonical checkpoint owner seals a group-neutral raft-rs image',
   async (t) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fresh-mg-rs-image-'));
-    const db = new Database(path.join(root, 'source.db'));
+    const db = new SQLiteConnection(path.join(root, 'source.db'));
     try {
       const registry = new RaftRsPeerIdentityRegistry(db);
       const voters = FOUNDERS.map((replica) => registry.registerReplica(replica));
@@ -168,7 +211,7 @@ test('the canonical checkpoint owner seals a group-neutral raft-rs image',
       for (const invalidPeerId of ['0', '7', '01']) {
         const corruptPath = path.join(root, `corrupt-source-${invalidPeerId}.db`);
         await db.backup(corruptPath);
-        const corruptDb = new Database(corruptPath);
+        const corruptDb = new SQLiteConnection(corruptPath);
         try {
           corruptDb.prepare('UPDATE raft_rs_peer_identity SET raft_peer_id = ? ' +
             'WHERE replica_identity = ?').run(invalidPeerId, TARGET);
@@ -272,6 +315,7 @@ test('the canonical checkpoint owner seals a group-neutral raft-rs image',
         t.equal(fs.existsSync(forgedTarget), false,
           `matched peer ${invalidPeerId} cannot materialize a target`);
       }
+      await checkExistingReceiverInstall(t, root, targetPeer);
       const targetDbPath = path.join(root, 'target.db');
       const direct = await requestSnapshotInstall({replicaDbPath: targetDbPath,
         checkpointsRoot: path.join(root, 'checkpoints'),
@@ -299,7 +343,7 @@ test('the canonical checkpoint owner seals a group-neutral raft-rs image',
       });
       t.equal(installed.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED,
         'terminal settlement after admission preserves the exact install');
-      const targetDb = new Database(targetDbPath);
+      const targetDb = new SQLiteConnection(targetDbPath);
       try {
         const restored = new RaftRsDurableStore(targetDb).readDurableRecord(GROUP);
         t.equal(restored.appliedIndex, APPLIED_INDEX);
@@ -421,6 +465,16 @@ test('the canonical checkpoint owner seals a group-neutral raft-rs image',
       const staleMarker = JSON.parse(fs.readFileSync(staleMarkerPath, 'utf8'));
       t.equal(staleMarker.state, 'staged',
         'failed real install retains its durable STAGED boundary');
+      t.equal(snapshotReceiverStillAdmitted(staleRoot, successorDbPath, staleMarker), true,
+        'real STAGED marker permits its positively absent target');
+      for (const shape of ['application-only', 'lost-row', 'empty', 'truncated']) {
+        receiverFile(successorDbPath, shape);
+        const before = fs.readFileSync(successorDbPath);
+        t.equal(snapshotReceiverStillAdmitted(staleRoot, successorDbPath, staleMarker), false,
+          `${shape}: final swap lifecycle revalidation refuses unproven storage`);
+        t.same(fs.readFileSync(successorDbPath), before, 'revalidation is read-only');
+        fs.unlinkSync(successorDbPath);
+      }
       const delayedA = path.join(root, 'delayed-a-install');
       fs.cpSync(staleInstallDir, delayedA, {recursive: true});
       t.equal(await stagedAdmission.owner.closeForLifecycle({

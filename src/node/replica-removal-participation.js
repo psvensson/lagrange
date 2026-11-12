@@ -17,12 +17,15 @@
  *  - requireRemovalTeardownAuthority: teardown proceeds only on exact
  *    evidence - REMOVAL_APPLIED (the replica's own applied configuration no
  *    longer names it), GROUP_RETIRED (the verified group-retirement
- *    authority), or, without a port, a durable lifecycle that holds no record
- *    or is already retired, the group's answer that the removal applied, or
- *    - when no leader answers - the sole founder's failed create retiring
- *    its own group (replica-removal-sole-founder.js); anything else is the
- *    typed retryable REPLICA_REMOVAL_CONSENSUS_EXIT_DEFERRED, nothing
- *    retired.
+ *    authority), or, without a port, one of three positive durable facts of
+ *    the replica's own database - it is not there (ABSENT), its lifecycle is
+ *    already retired, or it was born and NEVER_OPENED its consensus record -
+ *    or the group's answer that the removal applied, or - when no leader
+ *    answers - the sole founder's failed create retiring its own group
+ *    (replica-removal-sole-founder.js); anything else is the typed retryable
+ *    REPLICA_REMOVAL_CONSENSUS_EXIT_DEFERRED, nothing retired, its
+ *    deferralReasons naming every state it was decided from (a lifecycle
+ *    that could not be read with its reason and cause).
  *  - requireRemovalParticipantCustodySettled: nothing irreversible while the
  *    participant owner holds the replica (a PREPARED row, volatile work) or
  *    its custody cannot be read; the typed retryable
@@ -70,6 +73,7 @@ const REMOVAL_CONSENSUS_EXIT_WAIT = Object.freeze({
     '(removal committed)',
 });
 const ANSWER_SEPARATOR = ', ';
+const CAUSE_SEPARATOR = ':';
 // The exits on which the replica's port may retire and its state go.
 const TEARDOWN_EXITS = Object.freeze(new Set([
   REPLICA_CONSENSUS_EXIT_REASON.REMOVAL_APPLIED,
@@ -209,16 +213,24 @@ function leaveConsensus(handler, request, service, removal) {
 
 /**
  * Teardown authority from one consensus exit (throws the typed deferral
- * when there is none). Without a port (a removal resumed after a restart)
- * the replica's durable lifecycle decides first: no record (it never held
- * consensus state) or a retired one (its retirement already happened)
- * permits the cleanup. An active record asks the group (its leader's
- * committed configuration): its removal applied permits the cleanup; still
- * a member is STILL_MEMBER_WITHOUT_PORT; no leader answering asks the one
- * remaining owner - the sole founder's failed create, which retires its own
- * group from its durable claim and its own durable record - and is otherwise
- * the ordinary deferral. Each deferral is re-asked when the removal is
- * re-driven (the coordinator's re-dispatch, the REMOVING re-drive).
+ * when there is none). Without a port (a removal resumed after a restart, a
+ * create that failed) the replica's durable lifecycle decides first, on a
+ * positive fact only: its database is not there, its row is retired (its
+ * retirement already happened), or its row was born and the replica never
+ * opened its consensus record (it never voted, logged or applied anything:
+ * the file holds its schema and nothing a group depends on; this holds for
+ * any REMOVE, as the absent database does). Everything else - an active
+ * record, or a lifecycle that cannot be read (no table, no row for the
+ * identity, an unreadable file: each named in the deferral with its cause) -
+ * asks the group (its leader's committed configuration): its removal applied
+ * permits the cleanup; still a member is STILL_MEMBER_WITHOUT_PORT; no
+ * leader answering asks the one remaining owner - the sole founder's failed
+ * create, which retires its own group from its durable claim and its own
+ * durable record - and is otherwise the ordinary deferral. Each deferral is
+ * re-asked when the removal is re-driven (the coordinator's re-dispatch, the
+ * REMOVING re-drive); the event that clears a hold on an unreadable
+ * lifecycle is the group's answer that the removal applied, or the file
+ * becoming readable again.
  * @param {Object} handler
  * @param {Object} request - {operationId, partitionId, replicaId}.
  * @param {Object} exit - Frozen {reason}.
@@ -234,15 +246,19 @@ async function requireRemovalTeardownAuthority(handler, request, exit) {
     const lifecycle = handler.lifecycleVerdictsOf(
       handler.readReplicaDurableLifecycle(request.partitionId,
         request.replicaId));
-    if (lifecycle.absent || lifecycle.retired) {
+    if (lifecycle.absent || lifecycle.retired || lifecycle.neverOpened) {
+      logLifecycleTeardown(handler, request, lifecycle);
       return;
     }
+    reasons.push(...unreadableLifecycleReasonsOf(lifecycle));
     groupVerdict = await readGroupVerdictOnOwnRemoval(handler, request);
     // The group's leader outranks the replica's own file: the sole-founder
     // owner is asked only when no leader answered.
     const soleFounder = groupVerdict === GROUP_REMOVAL_VERDICT.UNANSWERED ?
       await decideSoleFounderRetirement(handler, request) : null;
-    logGroupVerdict(handler, request, {groupVerdict, soleFounder});
+    logGroupVerdict(handler, request, {groupVerdict, soleFounder,
+      lifecycle: {state: lifecycle.state, reason: lifecycle.reason,
+        cause: lifecycle.cause}});
     if (groupVerdict === GROUP_REMOVAL_VERDICT.REMOVED ||
         soleFounder?.state === SOLE_FOUNDER_RETIREMENT.RETIRES_GROUP) {
       return;
@@ -259,11 +275,38 @@ async function requireRemovalTeardownAuthority(handler, request, exit) {
 }
 
 // The named states of a sole-founder decision that was asked: its state,
-// then the record's membership and history when the record was read.
+// then the record's membership and history when the record was read, then
+// why the record was unreadable.
 function namedStatesOf(soleFounder) {
   return soleFounder === null ? [] : [soleFounder.state,
-    soleFounder.membership, soleFounder.history].filter((state) =>
-    state !== null);
+    soleFounder.membership, soleFounder.history,
+    ...causeReasonsOf(soleFounder.cause)].filter((state) => state !== null);
+}
+
+// A read's cause as deferral reasons: its reason, then `subject:code` of
+// the failed read when one failed (a missing table or row has only a reason).
+const NO_CAUSE_REASONS = Object.freeze([]);
+function causeReasonsOf(cause) {
+  if (cause === null) {
+    return NO_CAUSE_REASONS;
+  }
+  return [cause.reason, ...(cause.code === null ? [] :
+    [`${cause.subject}${CAUSE_SEPARATOR}${cause.code}`])];
+}
+
+// A lifecycle that holds no row and is not absent could not be read: its
+// reason and cause are deferral reasons. A held (active) row adds none.
+function unreadableLifecycleReasonsOf(lifecycle) {
+  return lifecycle.holdsRow ? [] : causeReasonsOf({reason: lifecycle.reason,
+    code: lifecycle.cause?.code ?? null,
+    subject: lifecycle.cause?.subject ?? null});
+}
+
+function logLifecycleTeardown(handler, request, lifecycle) {
+  handler.logger.info(REPLICA_HANDLER_LOG_MSG.REMOVE_GROUP_VERDICT, {
+    partitionId: request.partitionId, replicaId: request.replicaId,
+    nodeId: handler.nodeId, lifecycle: {state: lifecycle.state,
+      reason: lifecycle.reason, opening: lifecycle.opening}});
 }
 
 function logGroupVerdict(handler, request, answers) {

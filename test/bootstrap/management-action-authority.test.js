@@ -1,6 +1,6 @@
+import {openReplicaDatabaseFixture} from '../helpers/replica-database-fixture.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import Database from 'better-sqlite3';
 import {createRaftRsOperationPort} from '../../src/raft/raft-rs-operation-port.js';
 import {
   RAFT_COMMITTED_ENTRY_APPLY_MODE,
@@ -33,7 +33,7 @@ const PARTITION_ID = 'p-app';
 const REPLICA_ID = 'p-app-node-1';
 
 function createInMemoryNativeRaftPort(overrides = {}) {
-  const db = new Database(':memory:');
+  const db = openReplicaDatabaseFixture({dbPath: ':memory:', groupId: PARTITION_ID, replicaIdentity: REPLICA_ID}).db;
   db.pragma('journal_mode=WAL');
   const port = createRaftRsOperationPort({
     groupId: PARTITION_ID,

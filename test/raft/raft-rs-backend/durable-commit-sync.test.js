@@ -1,3 +1,4 @@
+import {allocateLifecycleFixture} from '../../helpers/replica-lifecycle-fixture.js';
 // Receipts:
 //   raft-persist-commits-with-full-sync-before-any-message-of-its-ready
 //   commit-index-only-persist-pays-no-sync
@@ -21,7 +22,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 
-import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../../src/storage/sqlite-prepared-statement-owner.js';
 
 import {RaftRsDurableStore} from '../../../src/raft/raft-rs-durable-store.js';
 import {
@@ -274,7 +275,7 @@ test('a snapshot-bearing Ready from the real core commits at FULL',
     try {
       const storeOf = new Map();
       for (const peerId of ['1', '2']) {
-        const db = new Database(path.join(directory, `${peerId}.db`));
+        const db = new SQLiteConnection(path.join(directory, `${peerId}.db`));
         db.pragma(REPLICA_DB_PRAGMA.JOURNAL_MODE);
         db.pragma(REPLICA_DB_PRAGMA.SYNCHRONOUS);
         dbs.push(db);
@@ -320,7 +321,7 @@ test('a snapshot-bearing Ready from the real core commits at FULL',
   });
 
 function scratchStore(directory, name, {synchronous} = {}) {
-  const db = new Database(path.join(directory, `${name}.db`));
+  const db = new SQLiteConnection(path.join(directory, `${name}.db`));
   db.pragma(REPLICA_DB_PRAGMA.JOURNAL_MODE);
   db.pragma(synchronous ?? REPLICA_DB_PRAGMA.SYNCHRONOUS);
   return {db, store: new RaftRsDurableStore(db)};
@@ -392,6 +393,9 @@ test('the reseed hold and the retirement row commit at FULL', async () => {
   const observer = installDurableCommitObserver();
   try {
     const {db} = scratchStore(directory, 'lifecycle');
+    for (const groupId of ['held', 'retired']) {
+      allocateLifecycleFixture({db, groupId, peerId: '1', replicaIdentity: `replica-${groupId}`});
+    }
     const held = new RaftRsReplicaLifecycleOwner({db, groupId: 'held',
       peerId: '1', replicaIdentity: 'replica-held'});
     const retired = new RaftRsReplicaLifecycleOwner({db, groupId: 'retired',

@@ -6,13 +6,12 @@
 // The DDL beside each column name is the participant vocabulary's; a fresh
 // cluster creates the columns from the schema definitions and this adds
 // nothing to it.
-import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
   PARTICIPANT_COORDINATOR_TABLE_COLUMNS as COLUMNS,
   PARTICIPANT_TRANSACTION_LOG_MSG as LOG_MSG,
 } from './partition-participant-transaction-constants.js';
 
-const {SYSTEM_TABLE_NAME} = PARTITION_SERVICE_SHARED;
 const TABLE_INFO_PREFIX = 'PRAGMA table_info(';
 const TABLE_INFO_SUFFIX = ')';
 const ALTER_TABLE_PREFIX = 'ALTER TABLE ';

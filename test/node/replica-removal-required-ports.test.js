@@ -16,7 +16,7 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 import {ReplicaHandler} from '../../src/node/replica-handler.js';
 import {EXECUTOR_OUTCOME_TYPE} from
   '../../src/rebalancer/executor-outcome-constants.js';
@@ -96,7 +96,7 @@ test('a removal with no tracked service drains nothing: the named ' +
 
 test('a drain on a port without its subscribe fails loudly instead of ' +
   'waiting without the APPLIED_PROGRESS wake', async (t) => {
-  const db = new Database(':memory:');
+  const db = new SQLiteConnection(':memory:');
   openParticipantTransactionStore(db);
   const service = Object.assign({
     partitionId: PARTITION_ID, replicaId: SOURCE, db,

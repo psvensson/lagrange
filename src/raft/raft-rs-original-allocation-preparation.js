@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {isDeepStrictEqual} from 'node:util';
+import {assertSQLiteConnection} from '../storage/sqlite-prepared-statement-owner.js';
 import {deepFreeze} from './raft-operation-port.js';
 import {SERVICE_TYPE} from '../constants/service.js';
 import {validateOriginalSeedDeclaration, validateOriginalSeedDraft,
@@ -164,16 +165,18 @@ function requireOriginalOpening(opening) {
  * @return {Function} Final synchronous check immediately before native entry.
  */
 function consumeOriginalAllocationOpening(opening, request) {
+  const db = request[PORT_REQUEST.DURABLE_STORAGE];
+  assertSQLiteConnection(db);
   const record = requireOriginalOpening(opening);
   record.assertCurrent();
   if (record.consumed) {
     throw originalAllocationError(REASON.OPENING_CONSUMED, record.member.replicaId);
   }
-  record.validate(request, false);
+  record.validate(request, db, false);
   record.assertCurrent();
   // Even construction failure cannot turn this into another opening right.
   record.consumed = true;
-  record.db = request[PORT_REQUEST.DURABLE_STORAGE];
+  record.db = db;
   return (incarnation) => {
     record.assertCurrent();
     if (incarnation !== record.member.incarnation) {
@@ -182,7 +185,7 @@ function consumeOriginalAllocationOpening(opening, request) {
     // Argument evaluation can revoke the attempt or consume durable rights.
     // Re-read through the same owner at the final native-effect cut. The cold
     // application classifier runs here, once, after caller inputs are owned.
-    record.validate(request, true);
+    record.validate(request, db, true);
     record.assertCurrent();
   };
 }
@@ -563,8 +566,8 @@ class RaftRsOriginalAllocationPreparation {
         admitted: false,
         db: null,
         assertCurrent: () => this.#assertCurrent(),
-        validate: (request, final) =>
-          this.#validateOpeningRequest(member, request, final),
+        validate: (request, db, final) =>
+          this.#validateOpeningRequest(member, request, db, final),
       });
       this.#openings.set(replicaId, opening);
     }
@@ -618,19 +621,18 @@ class RaftRsOriginalAllocationPreparation {
     }
   }
 
-  #validateOpeningRequest(member, request, final) {
+  #validateOpeningRequest(member, request, db, final) {
     this.#assertCurrent();
     if (this.#openingValidationActive) throw originalAllocationError(REASON.REENTRANT);
     this.#openingValidationActive = true;
     try {
-      this.#validateMemberOpening(member, request, final);
+      this.#validateMemberOpening(member, request, db, final);
     } finally {
       this.#openingValidationActive = false;
     }
   }
 
-  #assertMemberOpeningRequest(member, request, cold) {
-    const db = request[PORT_REQUEST.DURABLE_STORAGE];
+  #assertMemberOpeningRequest(member, request, db, cold) {
     const peers = request[PORT_REQUEST.BOOTSTRAP_PEER_IDS];
     if (request[PORT_REQUEST.GROUP_ID] !== member.groupId ||
         request[PORT_REQUEST.PEER_ID] !== member.replicaId ||
@@ -671,10 +673,9 @@ class RaftRsOriginalAllocationPreparation {
     this.#finishRead();
   }
 
-  #validateMemberOpening(member, request, final) {
-    const db = request[PORT_REQUEST.DURABLE_STORAGE];
+  #validateMemberOpening(member, request, db, final) {
     const cold = this.#openingMode === STATE.COLD_RECOVERY;
-    this.#assertMemberOpeningRequest(member, request, cold);
+    this.#assertMemberOpeningRequest(member, request, db, cold);
     try {
       if (db.inTransaction) throw originalAllocationError(REASON.OBSERVATION, member.replicaId);
       if (cold) {

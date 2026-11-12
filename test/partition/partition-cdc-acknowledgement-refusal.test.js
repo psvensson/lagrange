@@ -2,7 +2,7 @@
 // 2026-11-11), on the real refusal owner with a lane in its real initial
 // shape; the ledger count is read from an empty in-memory ledger.
 import assert from 'node:assert/strict';
-import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 import {test} from 'node:test';
 import {ACKNOWLEDGEMENT_REFUSAL_OUTCOME as OUTCOME, isQuarantinedObligation,
   isTerminalAcknowledgementRefusal, resolveAcknowledgementRefusal} from
@@ -15,7 +15,7 @@ function fixture() {
   const errors = [];
   const resumed = [];
   const lane = createCdcObligationLane('tenure-1');
-  const owner = {partitionId: 'p1', replicaId: 'r1', db: new Database(':memory:'),
+  const owner = {partitionId: 'p1', replicaId: 'r1', db: new SQLiteConnection(':memory:'),
     logger: {error: (message, context) => errors.push({message, context})}};
   const members = [{eventKey: 'k1', logIndex: 5, ordinal: 0},
     {eventKey: 'k2', logIndex: 6, ordinal: 0}];

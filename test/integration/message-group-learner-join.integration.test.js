@@ -1,3 +1,4 @@
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 /** Current CREATE through a real learner join (FreshMG 6.B slice B2).
  * The B1 chain (real operation row, membership claim, authorization CAS,
  * native ADD_LEARNER on three real raft-rs founders, recorder, CREATE
@@ -144,7 +145,7 @@ function learnerProgress(f) {
 
 /** The learner's own applied voters, read from its durable record. */
 function learnerDurableVoters(world) {
-  const durable = new Database(world.dbPath, {readonly: true});
+  const durable = new SQLiteConnection(world.dbPath, {readonly: true});
   try {
     return RaftRsDurableStore.readDurableRecordIn(durable, GROUP).confState.voters.map(String);
   } finally {
@@ -185,7 +186,7 @@ test('a recorded learner CREATE joins the real group as a non-voting learner, in
   assert.ok(leaderStatus(f).followerProgress[TARGET] >=
     answer.installedIndex, 'the leader\'s own progress for the learner');
 
-  const durable = new Database(world.dbPath, {readonly: true});
+  const durable = new SQLiteConnection(world.dbPath, {readonly: true});
   try {
     assert.equal(durable.prepare('SELECT learner_admission FROM raft_rs_peer_identity ' +
       'WHERE replica_identity = ?').get(TARGET).learner_admission, recordedOrigin(f),

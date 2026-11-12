@@ -2,7 +2,7 @@
 // held application and replay are measured in the companion integration file.
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {encodeProposal} from '../../src/raft/raft-rs-proposal-codec.js';
 import {RAFT_RS_ENTRY_TYPE} from '../../src/raft/raft-rs-ready-loop-constants.js';
@@ -27,7 +27,7 @@ const STAMP = Object.freeze({timestamp: new HLCTimestamp(1234, 0, 'node-a').toSt
 const ORIGIN = Object.freeze(buildGenerationOriginCommand(PARTITION, STAMP));
 
 function fixture(t) {
-  const db = new Database(':memory:');
+  const db = new SQLiteConnection(':memory:');
   t.after(() => db.close());
   const store = new RaftRsDurableStore(db);
   openParticipantTransactionStore(db);

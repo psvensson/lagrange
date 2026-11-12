@@ -43,18 +43,26 @@ function makeGroup(suffix) {
   const id = `${name}-replica`;
   const cluster = new PartitionNodeCluster({partitionId: name, replicaIds: [id], tempRoot: root,
     substrateFor: () => ({timeSource: scenario === 'mixed-clocks' && suffix === 'b' ? otherClock : clock}),
-    wrapDatabase: (_id, db) => new Proxy(db, {get(target, property) {
-      if (property === 'prepare') {
-        return (sql) => {
-          if (suffix === readFault.target && readFault.enabled && /^\s*SELECT/iu.test(sql) && /_raft_rs_/u.test(sql)) {
-            throw Object.assign(new Error('injected real-store read unavailability'), {code: 'SQLITE_IOERR'});
+    wrapDatabase: (_id, db) => {
+      const prepare = db.prepare.bind(db);
+      db.prepare = (sql) => {
+        const statement = prepare(sql);
+        if (/^\s*SELECT/iu.test(sql) && /_raft_rs_/u.test(sql)) {
+          for (const method of ['get', 'all']) {
+            const read = statement[method].bind(statement);
+            statement[method] = (...args) => {
+              if (suffix === readFault.target && readFault.enabled) {
+                throw Object.assign(new Error('injected real-store read unavailability'),
+                  {code: 'SQLITE_IOERR'});
+              }
+              return read(...args);
+            };
           }
-          return target.prepare(sql);
-        };
-      }
-      const value = Reflect.get(target, property, target);
-      return typeof value === 'function' ? value.bind(target) : value;
-    }}),
+        }
+        return statement;
+      };
+      return db;
+    },
     applyFor(replicaId, marker, {index}) {
       cluster.replica(replicaId).db.prepare('INSERT INTO review_witness VALUES (?, ?)').run(marker, index);
     }});
