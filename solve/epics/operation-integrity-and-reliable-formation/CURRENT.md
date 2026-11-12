@@ -22,8 +22,13 @@ as `35d74da00`; that delta has no execution result on F yet.
 The reviewed historical-reference resolver is composed as `fc43b3a43` from
 preserved WIP `b7e5aca62`. Its regenerated metadata covers 2,775 tests; shard
 and source-index audits pass. Integration inventory found two new test-fixture
-clones: 625 groups / 22,875 lines versus 623 / 22,817. A separate Astra
-continuation owns the shared-fixture repair; no baseline is raised.
+clones: 625 groups / 22,875 lines versus 623 / 22,817. The independently
+approved shared-fixture repair is composed as `10554f4bc`; its isolated
+measurement restored 623 / 22,817 without changing the baseline. Reviewed
+three-file historical retention is composed as `8b476b914`, and the reviewed
+permission-witness repair as `d12c804e6`. These later changes have no full-lab
+result. Metadata and owner-inventory remeasurement are complete; complexity
+remains over budget, while both duplication ratchets pass.
 
 The [formation Quest](../../quests/fresh-formation-user-table-routability/quest.json)
 retains its sealed acceptance. Its authoritative continuation log remains in
@@ -32,25 +37,15 @@ are preserved; no source writer works in the primary checkout.
 
 ## Current work
 
-- Integration: metadata (2,772 tests), source indexes and owner inventory are
-  regenerated. The source-index and shard audits pass. Cognitive complexity
-  is tightened from 145 to the measured 144. The fixed-input inventory refresh
-  completed; it records a complexity failure of 1,702 versus baseline 1,697,
-  which is retained, not waived. Cycle and both duplication ratchets pass.
-  These changes are committed and pushed as
-  `eaccbd37a2794e6afbc46f4eb9d5434cc6a9802e`. Its full lab run completed
-  across five hosts plus controller placement: 2,741 passed and 28 failed
-  out of 2,769 files, with 107,019 assertions. Source stayed frozen for that
-  run. First failures remain in
-  `/tmp/lagrange-takeover-20261112-full-lab-eaccbd37a.log` and placement logs.
-  A rehashed copy is in `/tmp/lagrange-takeover-full-lab-eaccbd37a-20261112`;
-  its manifest SHA-256 is
-  `302a6da9f29ee4353a0d486da104ab213bc92d43b086a46ab81fa08c6fe06b07`.
-  The [verified evidence bundle](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--lagrange-takeover-full-lab-eaccbd37a-20261112.tar.gz)
-  is retained in the evidence store. Reviewed repairs and refreshed metadata
-  were subsequently pushed at `1b51362e0`; that tip has no full-lab result.
-  The first inventory measurement rejected changing inputs;
-  a subsequent run was interrupted. Neither supersedes the completed result.
+- Integration: regenerated metadata covers 2,775 tests; shard and source-index
+  audits pass at `d12c804e6` plus generated outputs. Completed inventory refresh
+  measures complexity 1,701 versus baseline 1,697, cognitive complexity 144/144,
+  cycles 0/0, source duplication 33 groups / 1,064 lines and test duplication
+  623 groups / 22,817 lines. The first earlier
+  inventory refusal and interrupted attempt remain retained. Historical
+  `eaccbd37a` full-lab failures are in the
+  [verified evidence bundle](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--lagrange-takeover-full-lab-eaccbd37a-20261112.tar.gz).
+  Current full-lab evidence remains tied to the exact source named above.
 - F: r4 staged tree `b8f0f6474fa013c8393460fa54e40a5be4793ea5` has
   fresh independent bounded approval. All 56 manifest paths were rehashed;
   32 focused files passed with 1,270 reported assertions. Preserved as
@@ -100,43 +95,48 @@ are preserved; no source writer works in the primary checkout.
   `6313ab6a2` from WIP `fddbae1be`. The stronger clock-fixture repair passed its
   owning suite, mutation controls and independent review, and is integrated
   locally as `da7485545`; its lower-model syntax failure remains retained.
-  Native-role decoding passed focused tests but independent review rejected
-  caller closure: transfer can bypass it, message-group reads can substitute
-  a ledger term, and partition writes can lose its refusal classification.
-  Stronger-model caller repair passed 19 focused files / 1,051 assertions
-  but fresh review rejected four more production transitions: invalid announce
-  does not withdraw leadership, inbound reads stale authority, removed-leader
-  decisions ignore refusal, and row publication restores retained leadership.
-  It remains excluded. The subsequent 73-path repair passed 48 focused files
-  with 2,622 assertions and four engaged negative controls. Fresh independent
-  review nevertheless reproduced learner/voter confusion, WASM forwarding
-  without valid leadership tenure, and failure to recover an unchanged native
-  follower leader identity. The sealed rejection is retained; fresh Astra
+  Native-role decoding remains excluded after successive independent caller
+  closure rejections. The latest reproduced learner/voter confusion, WASM
+  forwarding without valid tenure, and failure to recover an unchanged native
+  follower leader identity despite focused green tests. All rejected source,
+  witnesses and verdicts remain retained. Fresh Astra
   author `01a1cedb-5e41-7eb3-bcae-f82a7581de61` owns the repair. CDC timing/occurrence failures
   remain under diagnosis. The bounded native CDC negative-phase repair has
   independent approval and is composed as `35d74da00`; historical JOINED
   causality remains unresolved. A separate diagnostic WIP `be9d4c15f` on
   locked `tv-dator` reproduced the foreground timeout before fixture setup
   completed: only `fixture-start` appeared, before any retry/stop assertion.
-  The specific startup cause remains unknown; the 215-file selected lab run
-  is still in progress. Package/solve budgets
+  That selected lab completed with 207 passes and eight failures in 215 files,
+  with 5,402 assertions. The package test also exceeded its unchanged 180,000 ms
+  deadline; its cause remains unknown. Independently reviewed setup-phase
+  tracing is preserved and pushed as `286fdcec2`; its canonical 319-file cone
+  is running on locked `tv-dator`. Its first case again times out at 4,200 ms:
+  initialization finishes at 23.589 ms, but admission-facts begins at 44.490 ms
+  and has no end before cancellation. Six later cases pass. Investigation now
+  follows that facts-gathering owner; the internal cause remains unknown.
+  The wider cone is not an identical workload comparison. Package delivery
   and census closure remain open.
   The independently approved retention plan selects only superseded v3/v5/v7
   designs. Its prerequisite historical-reference checker r3 has independent
   approval in a separate Quest; the whitespace-only correction has independent
-  syntax-equivalence applicability. Its receipt uses `complete` where the probe
-  requires `pass`; metric zero is not completion, and correction is assigned
-  with the duplication repair. A separately sealed retention Quest has now
+  syntax-equivalence applicability. The receipt status correction and shared
+  fixture repair have independent approval and are composed as `10554f4bc`:
+  105 focused assertions pass, and the canonical probe reports metric zero and
+  done=true. Earlier failures and the original status error remain retained.
+  A separately sealed retention Quest has now
   archived the exact three historical files through canonical upload,
   re-download and member/source-blob verification in its isolated worktree.
   All other original solve bytes remain unchanged. The retained archive SHA is
   `7e59d557879a4d2018a75fa6292c4f97091731df6e999bd2278a5ce854185a8a`.
-  Active footprint there is 20,883,131 bytes (88,389 bytes headroom); historical
-  reference validation passes. Independent post-relocation review and integration
-  remain pending. Existing 18 missing required proofs and migration-inventory
-  absence remain separate failures. Packaging has an independently
-  approved diagnostic prototype plan; the prototype is being implemented,
-  with no package-delivery or installed-provenance approval.
+  Final independently reviewed isolated footprint is 20,888,374 bytes
+  (83,146 bytes headroom), including retained proof; historical reference
+  validation passes. Preserved as `47ade1897`, integrated as `8b476b914`.
+  Existing 18 missing required proofs and migration-inventory absence remain
+  separate failures. Packaging's independently reviewed prototype produces
+  797 entries within size budgets, but 3,460 incorrect relative imports and
+  one development-only dependency prevent execution. Its outcome is
+  graph_refused, not package acceptance. A separately approved native-copy
+  diagnostic design is continuing; product identity and provenance are unproved.
 - Statement cache: Phase 1 of `sqlite-connection-statement-ownership` now
   has independent approval of the owner and three dedicated test files, with
   13 passing cases and engaged negative controls. Its receipt remains incomplete.
@@ -145,12 +145,29 @@ are preserved; no source writer works in the primary checkout.
   reviewer `01a1cec3-bbef-7f71-86de-41c00c07da42` rejected it: origin-history
   inspection touches connection state and starts SQL before brand validation,
   and original-allocation issuance changes synchronous settings before refusal.
-  Fresh Astra max-effort worker `01a1cecf-6752-7082-a44b-d5b864e739a1` owns the
-  entry-boundary repair and systematic sibling inspection. Generic uncached
+  Fresh Astra max-effort repair added entry validation at seven affected
+  boundaries; 162 focused cases and nine scoped checks pass. Candidate tree
+  `e005dfa408f0b84c6e81cc0cb2ff869e4a182c5d` is frozen for fresh independent
+  review by `01a1cee7-8a29-77c2-ac41-2fd529a66b10`. Generic uncached
   transaction callers remain valid. The rejected manifest is
   `73327edb822156b7ef395bdd8da6db8c1c43528463f005b55faa10238e3f66d6`.
   Receiver integration tests, separate permission/guideline repairs and full
   composed lab verification remain open; no migration approval is claimed.
+- Permission witnesses: independently approved six-file repair replaces four
+  successful skips with real unprivileged EACCES premises and checks framework
+  bindings without executing arbitrary source. The isolated focused runs pass
+  125 + 7 + 21 assertions with zero skips/todos. Parent verified six source and
+  22 dependency hashes and reopened all 179 downloaded archive members.
+  Compact required proof is 8,443 bytes. Preserved as `eacbfe6a3`, integrated
+  as `d12c804e6`; SQLite constructor composition and full-lab proof remain open.
+- Checkpoint inspection: the marker investigation reproduced a read-only
+  lifecycle inspection creating WAL/SHM sidecars beside a closed WAL-format
+  database, after which strict install preflight refuses the image. This is
+  a concrete owner-interaction blocker. Exact inspection ownership and an
+  independently reviewed repair design are being investigated; the sidecar
+  guard remains intact. No immutable-open assumption or cleanup bypass is
+  authorized by this finding. Cleanup continuation repair and lifecycle
+  observation repair remain separate candidates awaiting fresh review.
 
 Repository implementation now defaults to `gpt-6.1-sol`; difficult ownership
 repair uses `gpt-6-astra`. A failed implementation verification transfers to a

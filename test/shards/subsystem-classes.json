@@ -28,7 +28,7 @@
   "censusSize": 2775,
   "digest": "fnv1a32-8e10ad80",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-d9521ab5",
+  "observationDigest": "fnv1a32-489c357c",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -4947,6 +4947,10 @@
       ]
     },
     "test/config/test-configuration-compliance.property.test.js": {
+      "files": [
+        "src/test-helpers/tap.js",
+        "test/test-helpers/permission-witness.js"
+      ],
       "directories": [
         "test"
       ]
@@ -22255,7 +22259,8 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/cluster-node-owner-operations.js",
-        "test/distributed/harness/container-memory-working-set.js"
+        "test/distributed/harness/container-memory-working-set.js",
+        "test/scripts/historical-evidence-custody-fixture.js"
       ],
       "directories": [
         "architecture",
