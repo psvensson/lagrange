@@ -8,8 +8,9 @@
 // exists only in the working tree is invisible to the gate, because the gate
 // proves the pushed sha and nothing else.
 //
-// Proved against a DISPOSABLE repository: a copy of scripts/ and the sealed
-// shards, plus a small product tree (one source module, one spawnable
+// Proved against a DISPOSABLE repository: a copy of scripts/ (with the
+// modules outside it that the spawned scripts import) and the sealed shards,
+// plus a small product tree (one source module, one spawnable
 // script, one fixture file, one fixture directory) and the tests that observe
 // each of them, classified by the real generators inside the fixture.
 import assert from 'node:assert/strict';
@@ -34,6 +35,7 @@ import {
   SUBSYSTEM_MANIFEST_PATH,
 } from '../../scripts/checks/test-subsystem-classification-constants.js';
 import {execGit} from '../../scripts/checks/git-invocation.js';
+import {loadSealedImporters} from '../../scripts/checks/helper-import-closure.js';
 
 const root = process.cwd();
 const UTF8 = 'utf8';
@@ -86,6 +88,32 @@ function run(argv, options = {}) {
     {cwd: repo, encoding: UTF8, env: env(), ...options});
 }
 
+// The modules outside scripts/ that the scripts this file spawns import, as
+// the sealed import graph of this repository names them (a script may import
+// a constant from src/): the fixture carries them so the spawned scripts load.
+function spawnedScriptsForeignClosure() {
+  const sealed = loadSealedImporters(root);
+  assert.ok(sealed.ok, `the sealed import graph: ${sealed.problem}`);
+  const imports = new Map();
+  for (const [imported, importers] of Object.entries(sealed.importers)) {
+    for (const importer of importers) {
+      imports.set(importer, [...(imports.get(importer) ?? []), imported]);
+    }
+  }
+  const closure = new Set();
+  const frontier = [SELECTOR, RUNNER, MATERIALIZER, GRAPH_PRODUCER];
+  while (frontier.length > 0) {
+    const current = frontier.pop();
+    if (closure.has(current)) continue;
+    closure.add(current);
+    frontier.push(...(imports.get(current) ?? []));
+  }
+  // Builtins and packages are graph nodes too; only repository files copy.
+  const tracked = new Set(git(['ls-files'], root).split('\n'));
+  return [...closure].filter((file) => tracked.has(file) &&
+    !file.startsWith('scripts/')).sort();
+}
+
 const TEST_PREAMBLE =
   'import assert from \'node:assert/strict\';\n' +
   'import {test} from \'node:test\';\n';
@@ -94,6 +122,10 @@ function buildFixtureRepo() {
   fs.mkdirSync(path.join(repo, 'test'), {recursive: true});
   fs.cpSync(path.join(root, 'scripts'), path.join(repo, 'scripts'),
     {recursive: true});
+  for (const file of spawnedScriptsForeignClosure()) {
+    fs.mkdirSync(path.dirname(path.join(repo, file)), {recursive: true});
+    fs.copyFileSync(path.join(root, file), path.join(repo, file));
+  }
   fs.cpSync(path.join(root, 'test/shards'), path.join(repo, 'test/shards'),
     {recursive: true});
   // The curated shards name this repository's tests; the disposable one has
