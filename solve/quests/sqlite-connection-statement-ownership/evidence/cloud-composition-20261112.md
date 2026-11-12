@@ -98,3 +98,38 @@ No production constructor, alias, adoption path, or brand assertion changes.
 The proposed renewal is the exact three canonical test:file roots on a lab
 runner, plus current composition metadata/static gates later. This is a source
 causal disposition and unverified fixture migration, not a pass or acceptance.
+
+## Constructor-bound durable-store custody controls
+
+Independent source review of `a400e03aa456c85d97159ce9d68581869023dacd`
+found that `RaftRsDurableStore` validates its constructor input but retains it in
+a writable, configurable public `db` property. `readSnapshotIndex` validates one
+property read and then rereads that carrier for open-state absence and SQL.
+`readProgressRows`, `putSnapshot`, transaction admission/execution and compaction
+also reread the carrier. No production reassignment was found. The existing
+prototype-only completion-consumer fixture is a separate fixture issue; its
+supported explicit-handle reader is `readDurableRecordIn`.
+
+The parent approved the shared-owner design: constructor brand assertion first,
+then one immutable, nonconfigurable own database value, with a local captured
+handle at the snapshot read boundary. A successful mutable-store rebind is not a
+supported contract. This is a source-derived hypothesis until the lab records
+the new controls; no production correction is included in this tests-only seal.
+
+The existing reference-capture root now attempts direct assignment and accessor
+replacement on actual constructed stores with two real SQLite connections. It
+observes snapshot/progress reads, actual transaction writes, foreign SQL/property
+effects, rollback and useful progress after finite failure. A closed raw
+replacement must not turn A's present snapshot into successful absence. Raw input
+still fails before foreign inspection, and an unchanged owned store remains a
+positive control. These assertions cover SQLite owner custody, not a native Raft
+service journey or arbitrary allocation failure.
+
+The runtime-load and runtime-replacement child manifests now explicitly digest
+the lifecycle constants, record codec, owner and observation source files. Their
+existing physical full-source copy, native scenarios, assertions and budgets are
+unchanged. The intended lab roots are the reference-capture root for the first
+red, then the same unchanged controls on the source correction; both native
+roots renew their recorded source closure. No local test, checker, generator,
+dependency install or acceptance gate was executed. Existing 17-root/519-assertion
+lab success remains bounded to `a400`; the full migration remains on HOLD.

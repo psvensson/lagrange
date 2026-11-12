@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import Database from 'better-sqlite3';
 import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
+import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {acquireRowReservation, releaseTransactionReservations, releaseSessionReservations,
   getTransactionReservations, clearAllReservations, registerPartitionDatabase} from
   '../../src/partition/partition-locking-read-reservation.js';
@@ -32,6 +33,9 @@ const RESERVATIONS = '_lagrange_locking_read_reservations';
 const ENTRY_KEY = 'entry:capture-entry';
 const CONSTRAINT_CODE = 'SQLITE_CONSTRAINT_UNIQUE';
 const MISSING = 'sqlite_statement_owner_missing';
+const STORE_GROUP = 'capture-store-group';
+const STORE_CONF = Object.freeze({voters: ['1'], learners: [], votersOutgoing: [],
+  learnersNext: [], autoLeave: false});
 
 function observed(work) {
   try {
@@ -40,6 +44,156 @@ function observed(work) {
     return {error};
   }
 }
+
+function populatedStore(db, snapshotIndex, appliedIndex, commitIndex) {
+  const store = new RaftRsDurableStore(db);
+  store.putHardState(STORE_GROUP, {term: '2', vote: '1', commit: commitIndex});
+  store.putAppliedState(STORE_GROUP, appliedIndex, STORE_CONF);
+  store.putSnapshot(STORE_GROUP, {metadata: {
+    index: snapshotIndex, term: '2', confState: STORE_CONF,
+  }});
+  return store;
+}
+
+// These are actual constructed stores and native connections. Retargeting is
+// attempted on the public carrier; no borrowed prototype or fake store bypasses
+// construction. The witness covers SQLite custody, not a native Raft journey.
+function storePair(t) {
+  const effects = [];
+  const a = new SQLiteConnection(':memory:');
+  const b = new SQLiteConnection(':memory:', {verbose: (sql) => effects.push({sql})});
+  const store = populatedStore(a, '41', '42', '43');
+  populatedStore(b, '91', '92', '93');
+  const restore = monitor(b, effects);
+  effects.length = 0;
+  t.after(() => {
+    restore();
+    if (a.open) a.close();
+    if (b.open) b.close();
+  });
+  return {a, b, store, effects, restore};
+}
+
+for (const retarget of ['assignment', 'accessor']) {
+  test(`RaftRsDurableStore refuses ${retarget} retargeting before snapshot, progress and transaction effects`,
+    (t) => {
+      const f = storePair(t);
+      let carrierReads = 0;
+      const accepted = retarget === 'assignment' ? Reflect.set(f.store, 'db', f.b) :
+        Reflect.defineProperty(f.store, 'db', {configurable: true, get() {
+          return ++carrierReads === 1 ? f.a : f.b;
+        }});
+      const snapshot = observed(() => f.store.readSnapshotIndex(STORE_GROUP));
+      const progress = observed(() => f.store.readDurableProgress(STORE_GROUP));
+      const write = observed(() => f.store.transaction(() =>
+        f.store.putCommitIndex(STORE_GROUP, '44')));
+      const bEffects = [...f.effects];
+      f.restore();
+      const aRecord = RaftRsDurableStore.readDurableRecordIn(f.a, STORE_GROUP);
+      const bRecord = RaftRsDurableStore.readDurableRecordIn(f.b, STORE_GROUP);
+      t.diagnostic(JSON.stringify({accepted, carrierReads,
+        snapshot: String(snapshot.value), progress: progress.value,
+        aCommit: aRecord.hardState.commit, bCommit: bRecord.hardState.commit, bEffects}));
+      assert.equal(accepted, false, 'constructed store custody cannot be reassigned or redefined');
+      assert.equal(carrierReads, 0, 'a rejected accessor never becomes the store carrier');
+      assert.equal(snapshot.error, undefined);
+      assert.equal(snapshot.value, 41n, 'snapshot observation belongs to constructor-selected A');
+      assert.equal(progress.error, undefined);
+      assert.deepEqual(progress.value, {commitIndex: '43', appliedIndex: '42'});
+      assert.equal(write.error, undefined);
+      assert.equal(aRecord.hardState.commit, '44', 'the real transaction writes A');
+      assert.equal(bRecord.hardState.commit, '93', 'B keeps its independent durable prefix');
+      assert.deepEqual(bEffects, [], 'B has no foreign property or SQL effects');
+    });
+}
+
+test('RaftRsDurableStore cannot turn a present A snapshot into absence through a closed raw replacement',
+  (t) => {
+    const a = new SQLiteConnection(':memory:');
+    const store = populatedStore(a, '41', '42', '43');
+    const raw = new Database(':memory:');
+    raw.close();
+    const effects = [];
+    const replacement = new Proxy(raw, {get(target, key) {
+      effects.push(String(key));
+      return Reflect.get(target, key, target);
+    }});
+    let reads = 0;
+    t.after(() => a.close());
+    const accepted = Reflect.defineProperty(store, 'db', {configurable: true, get() {
+      return ++reads === 1 ? a : replacement;
+    }});
+    const answer = observed(() => store.readSnapshotIndex(STORE_GROUP));
+    t.diagnostic(JSON.stringify({accepted, reads, effects, value: String(answer.value),
+      error: answer.error?.message}));
+    assert.equal(accepted, false);
+    assert.equal(answer.error, undefined);
+    assert.equal(answer.value, 41n, 'closed foreign state cannot manufacture successful absence');
+    assert.equal(reads, 0);
+    assert.deepEqual(effects, []);
+  });
+
+test('RaftRsDurableStore keeps rollback and later useful progress on A after a reentrant retarget attempt',
+  (t) => {
+    const f = storePair(t);
+    const failure = new Error('finite transaction failure');
+    let accepted;
+    const rejected = observed(() => f.store.transaction(() => {
+      accepted = Reflect.set(f.store, 'db', f.b);
+      f.store.putCommitIndex(STORE_GROUP, '44');
+      throw failure;
+    }));
+    const aCommitAfterRollback =
+      RaftRsDurableStore.readDurableRecordIn(f.a, STORE_GROUP).hardState.commit;
+    const healed = observed(() => f.store.transaction(() =>
+      f.store.putCommitIndex(STORE_GROUP, '45')));
+    const bEffects = [...f.effects];
+    f.restore();
+    const aRecord = RaftRsDurableStore.readDurableRecordIn(f.a, STORE_GROUP);
+    const bRecord = RaftRsDurableStore.readDurableRecordIn(f.b, STORE_GROUP);
+    t.diagnostic(JSON.stringify({accepted, aCommitAfterRollback,
+      aCommit: aRecord.hardState.commit,
+      bCommit: bRecord.hardState.commit, bEffects}));
+    assert.equal(accepted, false);
+    assert.equal(rejected.error, failure, 'the original transaction failure is retained');
+    assert.equal(aCommitAfterRollback, '43', 'A rolled back its uncommitted change');
+    assert.equal(healed.error, undefined, 'the same store progresses after the finite failure');
+    assert.equal(aRecord.hardState.commit, '45');
+    assert.equal(bRecord.hardState.commit, '93', 'no write escaped A into another connection');
+    assert.deepEqual(bEffects, []);
+    assert.equal(f.a.inTransaction, false);
+    assert.equal(f.b.inTransaction, false);
+  });
+
+for (const closed of [false, true]) {
+  test(`RaftRsDurableStore refuses ${closed ? 'closed' : 'open'} raw input before foreign inspection`,
+    (t) => {
+      const raw = new Database(':memory:');
+      if (closed) raw.close();
+      t.after(() => { if (raw.open) raw.close(); });
+      const effects = [];
+      const supplied = new Proxy(raw, {get(target, key) {
+        effects.push(String(key));
+        return Reflect.get(target, key, target);
+      }});
+      const answer = observed(() => new RaftRsDurableStore(supplied));
+      assert.equal(answer.error?.code, MISSING);
+      assert.equal(answer.error?.constructor, Error);
+      assert.deepEqual(effects, [], 'brand refusal precedes open state, SQL and absence shortcuts');
+    });
+}
+
+test('RaftRsDurableStore stable constructor ownership preserves useful snapshot and progress operations',
+  (t) => {
+    const f = storePair(t);
+    assert.equal(f.store.readSnapshotIndex(STORE_GROUP), 41n);
+    assert.deepEqual(f.store.readDurableProgress(STORE_GROUP),
+      {commitIndex: '43', appliedIndex: '42'});
+    f.store.transaction(() => f.store.putCommitIndex(STORE_GROUP, '44'));
+    assert.deepEqual(f.store.readDurableProgress(STORE_GROUP),
+      {commitIndex: '44', appliedIndex: '42'});
+    assert.deepEqual(f.effects, []);
+  });
 
 function carrier(a, b, stable = false, ownedReads = 1) {
   let reads = 0;

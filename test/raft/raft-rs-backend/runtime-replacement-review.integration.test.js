@@ -30,6 +30,10 @@ for (const scenario of ['control', 'partial-restore', 'reentrant-restore', 'relo
       for (const file of [DATABASE_FIXTURE, 'src/storage/sqlite-prepared-statement-owner.js',
         'src/raft/raft-rs-runtime-owner.js', 'src/raft/raft-rs-binding-owner.js',
         'src/raft/raft-rs-operation-port.js', 'src/raft/raft-rs-durable-store.js',
+        'src/raft/raft-rs-replica-lifecycle-constants.js',
+        'src/raft/raft-rs-replica-lifecycle-record.js',
+        'src/raft/raft-rs-replica-lifecycle-owner.js',
+        'src/raft/raft-rs-replica-lifecycle-observation.js',
         'src/raft/raft-rs-application-transaction-owner.js', 'src/time/time-source.js', CHILD, `${DIR}/partition-node-cluster.js`]) {
         sourceDigests[file] = digest(path.join(ROOT, file));
         assert.equal(digest(path.join(directory, file)), sourceDigests[file]);
