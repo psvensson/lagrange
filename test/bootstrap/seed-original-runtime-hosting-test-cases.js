@@ -31,6 +31,8 @@ import {captureReplicaAdmission, runSerializedReplicaMutation} from
 import {installAuthoritativeReplicaLifecycleInLane} from
   '../../src/node/replica-state-machine-recovery.js';
 import {settledTurn, turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
+import {ORIGINAL_ALLOCATION, ORIGINAL_ALLOCATION_REASON} from
+  '../../src/raft/raft-rs-original-allocation-constants.js';
 
 const HOSTING_FACT = 'current_lifecycle_registry';
 const REFUSED = {code: PARTITION_RUNTIME_PUBLICATION_REFUSED};
@@ -81,6 +83,37 @@ function controlledObservation(handler, runtime, read) {
   return observeParticipantAppliedPosition(handler, runtime, request, read,
     (_handler, _runtime, _request, _port, assessment) =>
       ({answer: assessment.answer, refreshEligible: false}));
+}
+
+async function originalRegistrationInfo(f, handler) {
+  const owner = handler.replicaStateMachine;
+  // The same declared metadata transport seam as the canonical handoff
+  // control below. Preparation, row birth, INSERT sealing and lane install
+  // are production owners; this is not replicated service provisioning.
+  const writer = new BootstrapSystemTableWriter({
+    async insertSystemTableRow(table, row) {
+      const parts = buildSystemTableMutationSqlParts(CDC_OPERATION.INSERT, row);
+      commitDurably(f.runtime.db, () => f.runtime.db.prepare(
+        `INSERT INTO ${table} (${parts.columns}) VALUES (${parts.placeholders})`).run(...parts.values));
+      return {success: true, affectedRows: 1};
+    },
+    async readAuthoritativeRows(_table, sql, params) {
+      return {success: true, rows: f.runtime.db.prepare(sql).all(...params)};
+    },
+  }, f.service.partitionServices);
+  const rowOwner = new PartitionServiceRowOwner({systemTableWriter: writer,
+    replicaStateMachine: owner});
+  const registration = originalSeedServiceRegistration(f.preparation, f.options.replicaId, writer);
+  const evidence = await rowOwner.registerReplica({partitionId: f.options.partitionId,
+    replicaId: f.options.replicaId, nodeId: f.service.nodeId, service: f.runtime,
+    status: SERVICE_STATUS.CREATING, originalRegistration: registration});
+  const admission = captureReplicaAdmission(owner, f.options.replicaId);
+  await turnChainValue(runSerializedReplicaMutation(owner, f.options.replicaId,
+    () => settledTurn(installAuthoritativeReplicaLifecycleInLane(
+      owner, f.options.replicaId, evidence, admission))));
+  return {replicaId: f.options.replicaId, partitionId: f.options.partitionId,
+    tableName: f.options.tableName, service: f.runtime, sourceEvidence: evidence,
+    lifecycleOwner: owner, hostServices: f.service.partitionServices};
 }
 
 function registerOriginalSeedRuntimeHostingTests(owners) {
@@ -367,6 +400,60 @@ function registerOriginalSeedRuntimeHostingTests(owners) {
         f.runtime.shutdown = shutdown;
       }
     });
+
+  for (const changed of ['preparation', 'host-map', 'lifecycle-holder']) {
+    test(`canonical hosting transfer retains its source after reentrant ${changed} change`,
+      async (t) => {
+        const f = await openedOriginal(t, owners);
+        const handler = f.service.acquireReplicaHandler();
+        const info = await originalRegistrationInfo(f, handler);
+        const host = f.service.partitionServices;
+        const holder = f.service.replicaLifecycleOwner;
+        const registry = handler.localServices;
+        const setLocal = handler.setLocalReplica.bind(handler);
+        const setService = registry.set.bind(registry);
+        const setHost = host.set.bind(host);
+        let observed = 0;
+        let laterRegistryWrites = 0;
+        let laterHostWrites = 0;
+        registry.set = (...args) => {
+          laterRegistryWrites += 1;
+          return setService(...args);
+        };
+        host.set = (...args) => {
+          laterHostWrites += 1;
+          return setHost(...args);
+        };
+        handler.setLocalReplica = (...args) => {
+          const record = setLocal(...args);
+          observed += 1;
+          if (changed === 'preparation') f.preparation.revoke();
+          if (changed === 'host-map') f.service.partitionServices = new Map(host);
+          if (changed === 'lifecycle-holder') {
+            f.service.replicaLifecycleOwner = new ReplicaLifecycleOwner();
+          }
+          return record;
+        };
+        try {
+          const expected = changed === 'preparation' ?
+            {code: ORIGINAL_ALLOCATION.HOLD, reason: ORIGINAL_ALLOCATION_REASON.CLOSED} : REFUSED;
+          assert.throws(() => handler.registerExistingReplica(info), expected);
+          assert.equal(observed, 1, 'the canonical metadata effect reached its original observer');
+          assert.equal(laterRegistryWrites, 0, 'revocation precedes the next physical registry write');
+          assert.equal(laterHostWrites, 0, 'revocation precedes the next Bootstrap map write');
+          assert.throws(() => f.runtime.runtimePublication.assertCurrent(f.runtime), REFUSED);
+          assert.equal(registry.get(f.options.replicaId), f.runtime,
+            'the exact partial resource remains in original cleanup custody');
+          assert.equal(host.get(f.options.replicaId), f.runtime);
+        } finally {
+          handler.setLocalReplica = setLocal;
+          registry.set = setService;
+          host.set = setHost;
+          f.service.partitionServices = host;
+          f.service.replicaLifecycleOwner = holder;
+        }
+      });
+  }
 
   test('canonical registration consumes only its exact original hosted runtime', async (t) => {
     const f = await openedOriginal(t, owners);

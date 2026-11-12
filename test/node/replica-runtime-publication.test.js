@@ -213,6 +213,59 @@ test('failed map publication retains a refused exact runtime for cleanup', async
   t.equal(captureReplicaRuntimeObservation(f.handler, f.row.service_id).sourceEvidence, null);
 });
 
+test('reentrant lifecycle advancement cannot renew a queued runtime publication', async (t) => {
+  const f = await publicationFixture(t);
+  const first = f.construct();
+  f.publish(first);
+  const second = f.construct(f.row, first);
+  const hostServices = new Map([[f.row.service_id, first]]);
+  const setLocal = f.handler.setLocalReplica.bind(f.handler);
+  let advanced = false;
+  let advanceTurn;
+  f.handler.setLocalReplica = (...args) => {
+    const record = setLocal(...args);
+    advanceTurn = runSerializedReplicaMutation(f.owner, f.row.service_id, () => {
+      advanced = installAuthoritativeReplicaLifecycleInLane(f.owner, f.row.service_id,
+        {...f.row, status: 'failed', state_entered_at: 200},
+        captureReplicaAdmission(f.owner, f.row.service_id));
+      return settledTurn(advanced);
+    });
+    return record;
+  };
+  t.throws(() => f.publish(second, f.row, first, hostServices), REFUSED,
+    'the original admission must remain current after its own metadata observer');
+  t.ok(advanceTurn?.settled, 'the existing idle lane ran synchronously in the observer');
+  await turnChainValue(advanceTurn);
+  t.equal(advanced, true, 'the existing lifecycle lane accepted the newer canonical observation');
+  t.equal(f.handler.getTrackedService(f.row.service_id), first,
+    'old publication cannot overwrite its exact original predecessor after authority changes');
+  t.equal(hostServices.get(f.row.service_id), first);
+  t.throws(() => second.runtimePublication.assertCurrent(second), REFUSED);
+});
+
+test('reentrant predecessor replacement cannot be normalized into the publishing runtime',
+  async (t) => {
+    const f = await publicationFixture(t);
+    const first = f.construct();
+    f.publish(first);
+    const second = f.construct(f.row, first);
+    const hostile = {replicaId: f.row.replica_id, partitionId: f.row.partition_id};
+    const hostServices = new Map([[f.row.service_id, first]]);
+    const setLocal = f.handler.setLocalReplica.bind(f.handler);
+    f.handler.setLocalReplica = (...args) => {
+      const record = setLocal(...args);
+      // A hostile map mutation is an interference control, never publication
+      // authority for this stand-in or for the candidate being committed.
+      f.handler.localServices.set(f.row.service_id, hostile);
+      return record;
+    };
+    t.throws(() => f.publish(second, f.row, first, hostServices), REFUSED);
+    t.equal(f.handler.getTrackedService(f.row.service_id), hostile,
+      'a stale continuation does not overwrite the changed predecessor');
+    t.equal(hostServices.get(f.row.service_id), first);
+    t.throws(() => second.runtimePublication.assertCurrent(second), REFUSED);
+  });
+
 test('reentrant owner replacement cannot finish publication under the new lifetime', async (t) => {
   const f = await publicationFixture(t);
   const service = f.construct();
