@@ -14,16 +14,21 @@ import {
   isPartitionCleanupServiceRow,
 } from '../constants/index.js';
 import {
+  buildFailedCreateRemoveToken,
+  isFailedCreateCleanupToken,
   isFailedCreateRemoveToken,
   parseFailedCreateRemoveOperationId,
 } from '../rebalancer/failed-create-cleanup-token.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {
   REPLICA_CLEANUP_AUTHORITY_KIND,
+  REPLICA_CLEANUP_CONTINUATION,
+  REPLICA_CLEANUP_PHASE,
   REPLICA_CLEANUP_ERROR_CODE,
   REPLICA_CLEANUP_LOG_MSG,
 } from './replica-cleanup-constants.js';
-import {observeAuthoritativeReplicaLifecycle} from
+import {buildReplicaLifecycleMutationPredicateFromState, isReplicaLifecycleMutationPredicate,
+  observeAuthoritativeReplicaLifecycle, rowMatchesReplicaLifecycle} from
   './replica-state-machine-lifecycle-observation.js';
 
 const REPLICA_CLEANUP_SERVICE_TYPE = SERVICE_TYPE.PARTITION_CLEANUP;
@@ -61,25 +66,60 @@ function cleanupAuthorityFromRow(row) {
   });
 }
 
-function rowMatchesCleanupIdentity(row, authority) {
-  if (!authority) return false;
-  const expected = {
+function cleanupMutationPredicate(authority) {
+  return {
     service_id: authority.replicaId,
+    service_type: REPLICA_CLEANUP_SERVICE_TYPE,
     partition_id: authority.partitionId,
     node_id: authority.nodeId,
+    status: authority.kind,
     cleanup_token: authority.ownerToken,
     created_at: authority.replicaCreatedAt,
     create_attempt_token: authority.createAttemptToken,
+    updated_at: authority.updatedAt,
   };
-  return Object.entries(expected).every(([field, value]) =>
-    (row[field] ?? null) === value);
 }
 
 function rowMatchesCleanupAuthority(row, authority) {
-  return isCleanupTombstoneRow(row) &&
-    rowMatchesCleanupIdentity(row, authority) &&
-    row.status === authority?.kind &&
-    row.updated_at === authority?.updatedAt;
+  return isCleanupTombstoneRow(row) && Boolean(authority) &&
+    Object.entries(cleanupMutationPredicate(authority)).every(([field, value]) =>
+      (row[field] ?? null) === value);
+}
+
+// An issued intent permits resolving its own effect, not acquiring cleanup
+// authority from absence or from another claimant's observed token.
+function rowMatchesRemovalContinuation(row, continuation) {
+  if (continuation?.kind !== REPLICA_CLEANUP_CONTINUATION.RETAINED) return false;
+  if (rowMatchesCleanupAuthority(row, continuation.cleanupAuthority)) return true;
+  switch (continuation.phase) {
+  case REPLICA_CLEANUP_PHASE.TAKEOVER:
+    return rowMatchesReplicaLifecycle(row, continuation.removalAuthority.replicaState);
+  case REPLICA_CLEANUP_PHASE.RELEASE:
+    return row === null;
+  case REPLICA_CLEANUP_PHASE.COMPLETE:
+    return rowMatchesCleanupAuthority(row, continuation.completionAuthority);
+  default:
+    return false;
+  }
+}
+
+function matchesRemovalRequest(retained, request) {
+  const {operationId, replicaId, partitionId, nodeId, precondition} = request;
+  const authority = retained.cleanupAuthority;
+  if (authority.replicaId !== replicaId || authority.partitionId !== partitionId ||
+      authority.nodeId !== nodeId) return false;
+  if (isFailedCreateRemoveToken(authority.ownerToken) &&
+      authority.ownerToken !== buildFailedCreateRemoveToken(operationId)) return false;
+  if (precondition === undefined) return true;
+  const original = retained.removalAuthority.replicaState;
+  const expected = {service_id: replicaId, replica_id: original.replicaIdentity,
+    service_type: original.serviceType, group_id: original.groupId,
+    partition_id: partitionId, node_id: nodeId, status: ReplicaStatus.FAILED,
+    created_at: authority.replicaCreatedAt, create_attempt_token: authority.createAttemptToken};
+  return Object.entries(expected).every(([key, value]) => precondition?.[key] === value) &&
+    isFailedCreateCleanupToken(precondition.cleanup_token) &&
+    Number.isFinite(precondition.state_entered_at) &&
+    precondition.state_entered_at < retained.removalAuthority.durableVersion;
 }
 
 function rowIsReplacementForAuthority(row, authority) {
@@ -96,8 +136,9 @@ function rowIsReplacementForAuthority(row, authority) {
       Number.isFinite(row?.updated_at));
 }
 
-function throwCleanupReleaseDeferred(authority, effect, result = null) {
-  const error = cleanupDeferredError(authority.replicaId);
+function throwCleanupMutationDeferred(replicaId, effect, result = null, cause = null) {
+  const error = cleanupDeferredError(replicaId);
+  error.cause = cause;
   error.mutationOutcome = effect.outcome || null;
   error.retryAfterMs = Number.isFinite(result?.retryAfterMs) ?
     result.retryAfterMs : null;
@@ -115,7 +156,11 @@ REPLICA_CLEANUP_ERROR_CODE.CLEANUP_OWNER_DEFERRED) {
 }
 
 class ReplicaCleanupTombstoneOwner {
+  #removalContinuations;
   constructor(options = {}) {
+    // Issued intents precede effects, including uncertain acknowledgements.
+    // Durable reads confirm this token; process loss uses the startup sweep.
+    this.#removalContinuations = new Map();
     this.gateway = options.gateway;
     this.observe = options.observe;
     this.now = typeof options.now === 'function' ? options.now : Date.now;
@@ -145,6 +190,7 @@ class ReplicaCleanupTombstoneOwner {
       previous_state: null,
       address: null,
       cleanup_token: this.randomUUID(),
+      create_attempt_token: null,
       trigger_reason: reason || 'startup_orphan_cleanup',
       error_message: null,
       created_at: now,
@@ -235,20 +281,59 @@ class ReplicaCleanupTombstoneOwner {
     return await this.requireCurrent(authority) ? authority : null;
   }
 
-  async takeoverRemoving(removingAuthority, reason) {
+  async takeoverRemoving(removingAuthority, reason, service = null) {
+    const replicaId = removingAuthority.replicaState.serviceId;
+    let retained = this.#removalContinuations.get(replicaId);
+    if (!retained) {
+      retained = this.prepareRemovalTakeover(removingAuthority, reason, service);
+      this.#removalContinuations.set(replicaId, retained);
+    }
+    if (retained.removalAuthority !== removingAuthority || retained.service !== service) {
+      throw cleanupDeferredError(replicaId, REPLICA_CLEANUP_ERROR_CODE.CLEANUP_IDENTITY_CONFLICT);
+    }
+    const before = await this.observeReplica(replicaId);
+    if (before.available !== true) throw cleanupDeferredError(replicaId);
+    if (rowMatchesCleanupAuthority(before.row, retained.cleanupAuthority)) {
+      this.retainRemovalPhase(retained.cleanupAuthority, REPLICA_CLEANUP_PHASE.PHYSICAL);
+      return retained.cleanupAuthority;
+    }
+    if (retained.phase !== REPLICA_CLEANUP_PHASE.TAKEOVER ||
+        !rowMatchesReplicaLifecycle(before.row, removingAuthority.replicaState)) {
+      throw cleanupDeferredError(replicaId, REPLICA_CLEANUP_ERROR_CODE.CLEANUP_OWNERSHIP_CHANGED);
+    }
+    let result = null;
+    let mutationError = null;
+    try {
+      result = await this.gateway.submitMutation(retained.mutation, {
+        allowCoalescing: false,
+        coalescingKey: `services:${replicaId}:cleanup-takeover:` + retained.cleanupAuthority.ownerToken,
+        deliveryPriority: REPLICA_CLEANUP_CRITICAL_WORK,
+        workClass: REPLICA_CLEANUP_CRITICAL_WORK,
+      });
+    } catch (error) {
+      mutationError = error;
+    }
+    const observation = await this.observeReplica(replicaId);
+    if (observation.available === true &&
+        rowMatchesCleanupAuthority(observation.row, retained.cleanupAuthority)) {
+      this.retainRemovalPhase(retained.cleanupAuthority, REPLICA_CLEANUP_PHASE.PHYSICAL);
+      return retained.cleanupAuthority;
+    }
+    throwCleanupMutationDeferred(replicaId,
+      classifyControlPlaneMutationResult(result), result, mutationError);
+  }
+
+  prepareRemovalTakeover(removingAuthority, reason, service) {
     const removalToken = removingAuthority?.replicaState?.cleanupToken;
     const ownerToken = isFailedCreateRemoveToken(removalToken) ?
       removalToken : this.randomUUID();
     const updatedAt = this.now();
-    const whereClause = {
-      service_id: removingAuthority.replicaState.serviceId,
-      service_type: SERVICE_TYPE.PARTITION,
-      partition_id: removingAuthority.replicaState.partitionId,
-      node_id: removingAuthority.replicaState.nodeId,
-      status: 'removing',
-      [removingAuthority.durableVersionColumn]:
-        removingAuthority.durableVersion,
-    };
+    const whereClause = buildReplicaLifecycleMutationPredicateFromState(
+      removingAuthority.replicaState);
+    if (!isReplicaLifecycleMutationPredicate(whereClause)) {
+      throw cleanupDeferredError(removingAuthority.replicaState.serviceId,
+        REPLICA_CLEANUP_ERROR_CODE.CLEANUP_IDENTITY_CONFLICT);
+    }
     const data = {
       service_type: REPLICA_CLEANUP_SERVICE_TYPE,
       status: REPLICA_CLEANUP_AUTHORITY_KIND.OWNED,
@@ -263,36 +348,75 @@ class ReplicaCleanupTombstoneOwner {
       error_message: null,
       updated_at: updatedAt,
     };
-    let result = null;
-    let mutationError = null;
-    try {
-      result = await this.gateway.submitMutation({
+    const state = removingAuthority.replicaState;
+    const cleanupAuthority = Object.freeze({kind: REPLICA_CLEANUP_AUTHORITY_KIND.OWNED,
+      nodeId: state.nodeId, ownerToken, partitionId: state.partitionId,
+      replicaId: state.serviceId, replicaCreatedAt: state.createdAt,
+      createAttemptToken: state.createAttemptToken ?? null, updatedAt});
+    return Object.freeze({kind: REPLICA_CLEANUP_CONTINUATION.RETAINED,
+      phase: REPLICA_CLEANUP_PHASE.TAKEOVER, removalAuthority: removingAuthority,
+      cleanupAuthority, service, reason,
+      mutation: Object.freeze({
         operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
         tableName: TABLES.SERVICES,
-        whereClause,
-        data,
-      }, {
-        allowCoalescing: false,
-        coalescingKey: `services:${whereClause.service_id}:cleanup-takeover:` +
-          ownerToken,
-        deliveryPriority: REPLICA_CLEANUP_CRITICAL_WORK,
-        workClass: REPLICA_CLEANUP_CRITICAL_WORK,
-      });
-    } catch (error) {
-      mutationError = error;
-      // Resolve apply-then-ACK-loss through the owner-required reread below.
+        whereClause: Object.freeze(whereClause), data: Object.freeze(data),
+      })});
+  }
+
+  retainRemovalPhase(authority, phase, completionAuthority = null) {
+    const retained = this.#removalContinuations.get(authority.replicaId);
+    if (!retained || retained.cleanupAuthority !== authority) return;
+    const advances = retained.phase === REPLICA_CLEANUP_PHASE.TAKEOVER &&
+      phase === REPLICA_CLEANUP_PHASE.PHYSICAL ||
+      retained.phase === REPLICA_CLEANUP_PHASE.PHYSICAL &&
+      [REPLICA_CLEANUP_PHASE.RELEASE, REPLICA_CLEANUP_PHASE.COMPLETE].includes(phase);
+    if (retained.phase !== phase && !advances) {
+      throw cleanupDeferredError(authority.replicaId,
+        REPLICA_CLEANUP_ERROR_CODE.CLEANUP_IDENTITY_CONFLICT);
     }
-    const observation = await this.observeReplica(whereClause.service_id);
-    const authority = observation.available === true ?
-      cleanupAuthorityFromRow(observation.row) : null;
-    if (authority?.ownerToken === ownerToken) return authority;
-    const effect = classifyControlPlaneMutationResult(result);
-    const error = cleanupDeferredError(whereClause.service_id);
-    error.cause = mutationError;
-    error.mutationOutcome = effect.outcome || null;
-    error.retryAfterMs = Number.isFinite(result?.retryAfterMs) ?
-      result.retryAfterMs : null;
-    throw error;
+    this.#removalContinuations.set(authority.replicaId, Object.freeze({
+      ...retained, phase, completionAuthority,
+    }));
+  }
+
+  removalCleanupPhase(authority) {
+    const retained = this.#removalContinuations.get(authority.replicaId);
+    if (retained?.cleanupAuthority !== authority) {
+      throw cleanupDeferredError(authority.replicaId,
+        REPLICA_CLEANUP_ERROR_CODE.CLEANUP_IDENTITY_CONFLICT);
+    }
+    return retained.phase;
+  }
+
+  readRemovalContinuation(replicaId, partitionId, nodeId) {
+    const retained = this.#removalContinuations.get(replicaId);
+    if (!retained) return Object.freeze({kind: REPLICA_CLEANUP_CONTINUATION.UNOWNED});
+    if (retained.cleanupAuthority.partitionId !== partitionId ||
+        retained.cleanupAuthority.nodeId !== nodeId) {
+      throw cleanupDeferredError(replicaId, REPLICA_CLEANUP_ERROR_CODE.CLEANUP_IDENTITY_CONFLICT);
+    }
+    return retained;
+  }
+
+  readRemovalRequestContinuation(request) {
+    const retained = this.#removalContinuations.get(request.replicaId);
+    if (!retained) return Object.freeze({kind: REPLICA_CLEANUP_CONTINUATION.UNOWNED});
+    return matchesRemovalRequest(retained, request) ? retained :
+      Object.freeze({kind: REPLICA_CLEANUP_CONTINUATION.REFUSED});
+  }
+
+  finishRemovalContinuation(authority) {
+    const retained = this.#removalContinuations.get(authority.replicaId);
+    if (retained?.cleanupAuthority === authority) {
+      this.#removalContinuations.delete(authority.replicaId);
+    }
+  }
+
+  ownsRemovalCompletionReceipt(removalAuthority, receipt) {
+    const retained = this.#removalContinuations.get(removalAuthority?.replicaState?.serviceId);
+    return retained?.removalAuthority === removalAuthority &&
+      retained?.phase === REPLICA_CLEANUP_PHASE.COMPLETE &&
+      retained.completionAuthority === receipt;
   }
 
   async requireCurrent(authority) {
@@ -301,28 +425,39 @@ class ReplicaCleanupTombstoneOwner {
       rowMatchesCleanupAuthority(observation.row, authority);
   }
 
+  plannedRemovalCompletion(authority) {
+    const retained = this.#removalContinuations.get(authority.replicaId);
+    return retained?.cleanupAuthority === authority &&
+      retained.phase === REPLICA_CLEANUP_PHASE.COMPLETE ?
+      retained.completionAuthority : Object.freeze({...authority,
+        kind: REPLICA_CLEANUP_AUTHORITY_KIND.COMPLETE,
+        updatedAt: Math.max(this.now(), authority.updatedAt + 1)});
+  }
+
   async markComplete(authority, completion = {}) {
     if (completion.artifactsAbsent !== true ||
         authority?.kind !== REPLICA_CLEANUP_AUTHORITY_KIND.OWNED ||
-        !isFailedCreateRemoveToken(authority.ownerToken) ||
-        !await this.requireCurrent(authority)) return false;
-    const updatedAt = Math.max(this.now(), authority.updatedAt + 1);
+        !isFailedCreateRemoveToken(authority.ownerToken)) return false;
+    const retained = this.#removalContinuations.get(authority.replicaId);
+    const planned = this.plannedRemovalCompletion(authority);
+    const before = await this.observeReplica(authority.replicaId);
+    if (before.available !== true) return false;
+    if (retained?.completionAuthority === planned &&
+        rowMatchesCleanupAuthority(before.row, planned)) return planned;
+    if (!rowMatchesCleanupAuthority(before.row, authority)) return false;
+    this.retainRemovalPhase(authority, REPLICA_CLEANUP_PHASE.COMPLETE, planned);
+    return this.submitCleanupCompletion(authority, planned);
+  }
+
+  async submitCleanupCompletion(authority, planned) {
     try {
       await this.gateway.submitMutation({
         operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
         tableName: TABLES.SERVICES,
-        whereClause: {
-          service_id: authority.replicaId,
-          service_type: REPLICA_CLEANUP_SERVICE_TYPE,
-          partition_id: authority.partitionId,
-          node_id: authority.nodeId,
-          status: authority.kind,
-          cleanup_token: authority.ownerToken,
-          updated_at: authority.updatedAt,
-        },
+        whereClause: cleanupMutationPredicate(authority),
         data: {
           status: REPLICA_CLEANUP_AUTHORITY_KIND.COMPLETE,
-          updated_at: updatedAt,
+          updated_at: planned.updatedAt,
         },
       }, {
         allowCoalescing: false,
@@ -338,10 +473,8 @@ class ReplicaCleanupTombstoneOwner {
       });
     }
     const observation = await this.observeReplica(authority.replicaId);
-    const completed = observation.available === true ?
-      cleanupAuthorityFromRow(observation.row) : null;
-    return completed?.kind === REPLICA_CLEANUP_AUTHORITY_KIND.COMPLETE &&
-      completed.ownerToken === authority.ownerToken ? completed : false;
+    return observation.available === true &&
+      rowMatchesCleanupAuthority(observation.row, planned) ? planned : false;
   }
 
   async observeAuthority(replicaId) {
@@ -395,21 +528,19 @@ class ReplicaCleanupTombstoneOwner {
 
   async release(authority, completion = {}) {
     if (completion.artifactsAbsent !== true) return false;
-    if (!await this.requireCurrent(authority)) return false;
+    const retained = this.#removalContinuations.get(authority.replicaId);
+    const before = await this.observeReplica(authority.replicaId);
+    if (before.available !== true) throw cleanupDeferredError(authority.replicaId);
+    if (retained?.cleanupAuthority === authority &&
+        retained.phase === REPLICA_CLEANUP_PHASE.RELEASE && before.row === null) return true;
+    if (!rowMatchesCleanupAuthority(before.row, authority)) return false;
+    this.retainRemovalPhase(authority, REPLICA_CLEANUP_PHASE.RELEASE);
     let result;
     try {
       result = await this.gateway.submitMutation({
         operation: CONTROL_PLANE_MUTATION_OPERATION.DELETE,
         tableName: TABLES.SERVICES,
-        whereClause: {
-          service_id: authority.replicaId,
-          service_type: REPLICA_CLEANUP_SERVICE_TYPE,
-          partition_id: authority.partitionId,
-          node_id: authority.nodeId,
-          status: authority.kind,
-          cleanup_token: authority.ownerToken,
-          updated_at: authority.updatedAt,
-        },
+        whereClause: cleanupMutationPredicate(authority),
       }, {
         allowCoalescing: false,
         coalescingKey: `services:${authority.replicaId}:cleanup-release:` +
@@ -420,14 +551,18 @@ class ReplicaCleanupTombstoneOwner {
     } catch (_error) {
       result = null;
     }
+    return this.confirmCleanupRelease(authority, result);
+  }
+
+  async confirmCleanupRelease(authority, result) {
     const effect = classifyControlPlaneMutationResult(result);
     const observation = await this.observeReplica(authority.replicaId);
     if (observation.available !== true) {
-      throwCleanupReleaseDeferred(authority, effect);
+      throwCleanupMutationDeferred(authority.replicaId, effect);
     }
     if (observation.row === null) return true;
     if (rowMatchesCleanupAuthority(observation.row, authority)) {
-      throwCleanupReleaseDeferred(authority, effect, result);
+      throwCleanupMutationDeferred(authority.replicaId, effect, result);
     }
     if (isCleanupTombstoneRow(observation.row)) {
       throw cleanupDeferredError(
@@ -449,4 +584,6 @@ export {
   ReplicaCleanupTombstoneOwner,
   cleanupDeferredError,
   isCleanupTombstoneRow,
+  rowMatchesCleanupAuthority,
+  rowMatchesRemovalContinuation,
 };

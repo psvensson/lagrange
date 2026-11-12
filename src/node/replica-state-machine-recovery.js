@@ -1,3 +1,4 @@
+import {rowMatchesRemovalContinuation} from './replica-cleanup-tombstone-owner.js';
 import {
   SERVICE_TYPE,
   TABLES,
@@ -173,9 +174,7 @@ function isRemovalAuthorityCurrent(stateMachine, replicaId, authority) {
 }
 
 async function observeRemovalAuthority(
-  stateMachine,
-  replicaId,
-  authority,
+  stateMachine, replicaId, authority, cleanupContinuation = null,
 ) {
   if (!isRemovalAuthorityCurrent(stateMachine, replicaId, authority)) {
     return false;
@@ -186,11 +185,12 @@ async function observeRemovalAuthority(
   );
   return isRemovalAuthorityCurrent(stateMachine, replicaId, authority) &&
     observation.available === true &&
-    authorityMatchesRow(authority, observation.row);
+    (cleanupContinuation ? rowMatchesRemovalContinuation(observation.row, cleanupContinuation) :
+      authorityMatchesRow(authority, observation.row));
 }
 
-function buildRemovalAuthorityGuard(stateMachine, replicaId, authority) {
-  let exactDeleteAttempted = false;
+function buildRemovalAuthorityGuard(stateMachine, replicaId, authority, context) {
+  let exactDeleteAttempted = (context.cleanupContinuation ?? null) !== null;
   let deletedGenerationBound = false;
   const isCurrent = () => isRemovalAuthorityCurrent(
     stateMachine,
@@ -198,7 +198,8 @@ function buildRemovalAuthorityGuard(stateMachine, replicaId, authority) {
     authority,
   );
   const completionReceipt = createRemovalCompletionReceiptVerifier({
-    stateMachine, replicaId, authority, isAuthorityCurrent: isCurrent,
+    stateMachine, replicaId, isAuthorityCurrent: isCurrent,
+    ownsCompletionReceipt: context.ownsCompletionReceipt,
   });
   const requireAbsent = async () => {
     if (!deletedGenerationBound || !isCurrent()) return false;
@@ -266,13 +267,15 @@ async function completeDurableRemovalWithAuthority(
 ) {
   if (authority?.kind !== REMOVAL_AUTHORITY_KIND.REMOVING) return false;
   const run = async () => {
-    if (!await observeRemovalAuthority(stateMachine, replicaId, authority)) {
+    if (!await observeRemovalAuthority(stateMachine, replicaId, authority,
+      context.cleanupContinuation ?? null)) {
       return false;
     }
     const guard = buildRemovalAuthorityGuard(
       stateMachine,
       replicaId,
       authority,
+      context,
     );
     if (await action(guard) !== true ||
         !await guard.requireComplete() ||

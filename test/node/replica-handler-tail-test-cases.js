@@ -1249,10 +1249,8 @@ export async function registerReplicaHandlerTailTests({
       const trackedService = {
         async shutdown() {
           shutdownCalls += 1;
+          if (shutdownCalls === 1) throw new Error(TEST_REMOVED_CLEANUP_DEFERRED_ERROR);
         },
-      };
-      handler.cleanupReplicaResources = async () => {
-        throw new Error(TEST_REMOVED_CLEANUP_DEFERRED_ERROR);
       };
       handler.localServices.set(
         TEST_REMOVED_CLEANUP_REPLICA_ID,

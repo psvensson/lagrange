@@ -1,3 +1,4 @@
+import {buildFailedRemovalOutcome} from './replica-removal-debt-errors.js';
 import {
   ReplicaOperationField,
   ReplicaOperationMessageType,
@@ -16,7 +17,7 @@ import {
   REPLICA_HANDLER_ERROR_MSG,
   REPLICA_HANDLER_LOG_MSG,
 } from './replica-handler-constants.js';
-import {REPLICA_CLEANUP_AUTHORITY_KIND} from
+import {REPLICA_CLEANUP_AUTHORITY_KIND, REPLICA_CLEANUP_CONTINUATION} from
   './replica-cleanup-constants.js';
 import {
   REPLICA_HANDLER_LEADER_HANDOFF_STATE,
@@ -319,6 +320,22 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
         },
       );
     }
+
+    answerRetainedRemovalRequest(request, continuation, groupRetirement) {
+      const {operationId, partitionId, replicaId} = request;
+      if (continuation.kind === REPLICA_CLEANUP_CONTINUATION.RETAINED) {
+        if (!this.hasInProgressReplicaRemoval(replicaId)) {
+          this.trackReplicaRemovalOperation(operationId, partitionId, replicaId);
+          this.startRemoveReplicaAsync(request, groupRetirement);
+        }
+        return this.answerRemoveInProgress(replicaId);
+      }
+      return this.buildReplicaOperationResponse(ReplicaOperationResponseStatus.ERROR, {
+        error: REPLICA_HANDLER_ERROR_MSG.REMOVE_CLEANUP_PRECONDITION_REFUSED,
+        replicaId, nodeId: this.nodeId,
+      });
+    }
+
     /**
      * Handle REMOVE_REPLICA request.
      * Returns immediately with 'initiated', then does async work.
@@ -381,6 +398,13 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
       const groupRetirement = await this.verifyRemoveGroupRetirement(request);
       if (groupRetirement !== null && groupRetirement.retire !== true) {
         return this.refuseRemoveGroupRetirement(request, groupRetirement);
+      }
+      const continuation = this.getReplicaCleanupTombstoneOwner().readRemovalRequestContinuation({
+        operationId, replicaId, partitionId, nodeId: this.nodeId,
+        precondition: failedCreateCleanupPrecondition,
+      });
+      if (continuation.kind !== REPLICA_CLEANUP_CONTINUATION.UNOWNED) {
+        return this.answerRetainedRemovalRequest(request, continuation, groupRetirement);
       }
       const receiptResponse =
         await this.answerCompletedFailedCreateCleanupReceipt(
@@ -470,6 +494,7 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
           return this.buildReplicaOperationResponse(
             ReplicaOperationResponseStatus.ERROR,
             {
+              ...buildFailedRemovalOutcome(replicaId, error),
               error: error.message,
               replicaId,
               nodeId: this.nodeId,

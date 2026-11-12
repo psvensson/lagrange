@@ -30,7 +30,7 @@ documentClass: generated
 - [oci-container-driver.js](oci-container-driver.js) - OCI_Container_Driver - runtime driver for OCI container workloads behind a feature gate. (importers: many)
 - [oci-host-agent-admission-table.js](oci-host-agent-admission-table.js) - No leading comment; first export: createOciHostAgentAdmissionTable. (importers: one)
 - [oci-host-agent-durable-errors.js](oci-host-agent-durable-errors.js) - No leading comment; first export: OCI_HOST_AGENT_DURABLE_ERROR. (importers: many)
-- [oci-host-agent-durable-files.js](oci-host-agent-durable-files.js) - Durably and atomically replace `file` with `bytes`, synchronously. (importers: many)
+- [oci-host-agent-durable-files.js](oci-host-agent-durable-files.js) - Durably and atomically replace `file` with `bytes`, synchronously. (importers: hub)
 - [oci-host-agent-engine-identity.js](oci-host-agent-engine-identity.js) - Labelled identity resolution and typed result construction for the OCI host-agent Engine translation. (importers: one)
 - [oci-host-agent-engine-translation.js](oci-host-agent-engine-translation.js) - OCI host-agent Engine translation for the six C1 operations. (importers: one)
 - [oci-host-agent-enrollment.js](oci-host-agent-enrollment.js) - No leading comment; first export: OCI_HOST_AGENT_ENROLLMENT_POINT. (importers: one)
