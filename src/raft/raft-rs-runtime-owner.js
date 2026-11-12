@@ -2287,6 +2287,7 @@ function createRuntimeDispatcher(request) {
     sendToPeer: request.sendToPeer,
     resolvePeerAddress: request.resolvePeerAddress,
     resolvePeerIdentity: request.resolvePeerIdentity,
+    addressOfPeer: request.addressOfPeer,
     resolvePeerNodeId: request.resolvePeerNodeId,
     applyCommittedEntry: request.applyCommittedEntry,
     applyCommittedMembershipContext: request.applyCommittedMembershipContext,

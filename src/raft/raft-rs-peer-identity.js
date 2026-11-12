@@ -59,6 +59,9 @@ const ABSENT_ORIGIN_EVIDENCE = Object.freeze({
   coverage: RAFT_RS_LEARNER_ORIGIN_COVERAGE.ABSENT, encoded: null});
 const UNVOUCHED_ORIGIN_EVIDENCE = Object.freeze({
   coverage: RAFT_RS_LEARNER_ORIGIN_COVERAGE.UNVOUCHED, encoded: null});
+const UNRESERVED_PEER = Object.freeze({
+  status: RAFT_RS_PEER_IDENTITY_RESOLUTION.UNRESERVED, replicaIdentity: null,
+  nodeId: null});
 
 function validatedRaftRsPeerIdentityReservations(reservations) {
   if (!Array.isArray(reservations)) {
@@ -336,21 +339,21 @@ class RaftRsPeerIdentityRegistry {
   }
 
   /**
-   * What this registry holds for a raft peer identity, as a named state: a
-   * peer the committed configuration names may have been reserved only on
-   * another replica, which is an observation, not a failure.
+   * What this registry holds for a raft peer identity, as a named state, in
+   * one read of its reservation: a peer the committed configuration names
+   * may have been reserved only on another replica, which is an
+   * observation, not a failure.
    * @param {string} raftPeerId - The identity.
-   * @return {Object} Frozen {status, replicaIdentity}: RESERVED with the
-   *   replica, or UNRESERVED with replicaIdentity null.
+   * @return {Object} Frozen {status, replicaIdentity, nodeId}: RESERVED with
+   *   the replica and its committed node (null where none is recorded), or
+   *   UNRESERVED with both null.
    */
-  resolveReplicaIdentity(raftPeerId) {
+  resolvePeer(raftPeerId) {
     const reservation = this.reservationOfPeerId(raftPeerId);
-    return Object.freeze(reservation === undefined ? {
-      status: RAFT_RS_PEER_IDENTITY_RESOLUTION.UNRESERVED,
-      replicaIdentity: null,
-    } : {
+    return reservation === undefined ? UNRESERVED_PEER : Object.freeze({
       status: RAFT_RS_PEER_IDENTITY_RESOLUTION.RESERVED,
       replicaIdentity: reservation.replica_identity,
+      nodeId: reservation.node_id,
     });
   }
 }

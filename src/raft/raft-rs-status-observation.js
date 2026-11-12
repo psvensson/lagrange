@@ -29,18 +29,34 @@ function setNativeStatusObserver(observer) {
   nativeStatusObserver = typeof observer === 'function' ? observer : null;
 }
 
+// One status read resolves each peer id it names once: the leader, every
+// configured peer and every peer in the leader's progress share one
+// reservation read per id (its identity and its committed node).
+function peerResolverOf(group) {
+  const resolved = new Map();
+  return (id) => {
+    const key = String(id);
+    let identity = resolved.get(key);
+    if (identity === undefined) {
+      identity = group.resolvePeerIdentity(id);
+      resolved.set(key, identity);
+    }
+    return identity;
+  };
+}
+
 // One configured peer's identity and address, each a named state. A peer
 // whose identity this replica never reserved is reported, not thrown: its
 // reservation lives on the replica that admitted it.
-function resolvePeerObservation(group, id) {
-  const identity = group.resolvePeerIdentity(id);
+function resolvePeerObservation(group, resolvePeer, id) {
+  const identity = resolvePeer(id);
   if (identity.status === RAFT_RS_PEER_IDENTITY_RESOLUTION.UNRESERVED) {
     return {replicaIdentity: null, address: null,
       addressStatus: PEER_ADDRESS_STATUS.UNRESERVED};
   }
   try {
     return {replicaIdentity: identity.replicaIdentity,
-      address: group.resolvePeerAddress(id),
+      address: group.addressOfPeer(identity, id),
       addressStatus: PEER_ADDRESS_STATUS.RESOLVED};
   } catch {
     // Status is an observation. A temporarily unavailable address is not
@@ -50,12 +66,12 @@ function resolvePeerObservation(group, id) {
   }
 }
 
-function peerSnapshot(group, confState) {
+function peerSnapshot(group, resolvePeer, confState) {
   return [...confState.voters, ...confState.learners]
     .filter((id) => id !== group.peerId)
     .map((id) => ({
       peerId: id,
-      ...resolvePeerObservation(group, id),
+      ...resolvePeerObservation(group, resolvePeer, id),
       learner: confState.learners.includes(id),
       delivery: group.peerDelivery.get(String(id)) || NO_DELIVERY_OBSERVED,
     }));
@@ -63,12 +79,12 @@ function peerSnapshot(group, confState) {
 
 // The leader a status names: its identity, address and their state. An
 // unreserved leader is the same observation as an unreserved peer.
-function leaderObservation(group, lead) {
+function leaderObservation(group, resolvePeer, lead) {
   if (lead === NO_LEADER) {
     return {leaderId: null, leaderAddress: null,
       leaderAddressStatus: PEER_ADDRESS_STATUS.NO_LEADER};
   }
-  const observed = resolvePeerObservation(group, lead);
+  const observed = resolvePeerObservation(group, resolvePeer, lead);
   return {leaderId: observed.replicaIdentity, leaderAddress: observed.address,
     leaderAddressStatus: observed.addressStatus};
 }
@@ -78,7 +94,7 @@ function leaderObservation(group, lead) {
 // this replica's identity record). Whether the peer can be addressed is the
 // transport's concern, never a reason to drop its progress; an id this
 // replica never reserved has no identity to key it by.
-function followerProgressSnapshot(group, status) {
+function followerProgressSnapshot(group, resolvePeer, status) {
   const progress = Array.isArray(status?.progress) ? status.progress : [];
   const snapshot = {};
   for (const item of progress) {
@@ -86,7 +102,7 @@ function followerProgressSnapshot(group, status) {
       continue;
     }
     const matched = Number(item?.matched);
-    const identity = group.resolvePeerIdentity(item?.id);
+    const identity = resolvePeer(item?.id);
     if (Number.isFinite(matched) &&
         identity.status === RAFT_RS_PEER_IDENTITY_RESOLUTION.RESERVED) {
       snapshot[identity.replicaIdentity] = matched;
@@ -122,11 +138,12 @@ function currentTermApplied(status) {
  */
 function shapeGroupObservation(group, observation, leaderIdentityUnresolved) {
   const {status, confState} = observation;
+  const resolvePeer = peerResolverOf(group);
   let leader;
   let peers;
   try {
-    leader = leaderObservation(group, status.lead);
-    peers = peerSnapshot(group, confState);
+    leader = leaderObservation(group, resolvePeer, status.lead);
+    peers = peerSnapshot(group, resolvePeer, confState);
   } catch (error) {
     // The registry itself could not be read: a host failure, not a peer's
     // reservation state.
@@ -159,7 +176,7 @@ function shapeGroupObservation(group, observation, leaderIdentityUnresolved) {
     peerCount: Math.max(0,
       confState.voters.length + confState.learners.length - 1),
     peers,
-    followerProgress: followerProgressSnapshot(group, status),
+    followerProgress: followerProgressSnapshot(group, resolvePeer, status),
     // The raft peer ids the leader counts live in its current tenure (its
     // voter-liveness record; only itself when it does not lead).
     liveVoters: observation.voterLiveness.liveVoters,

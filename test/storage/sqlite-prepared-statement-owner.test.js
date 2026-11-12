@@ -81,7 +81,7 @@ test('repeated raft status reads prepare nothing after the first', () => {
   const {db, store, registry, peerId} = openReplica(':memory:', '7', REPLICA);
   const read = () => ({
     snapshotIndex: store.readSnapshotIndex(GROUP_ID),
-    resolution: registry.resolveReplicaIdentity(peerId),
+    resolution: registry.resolvePeer(peerId),
     nodeId: registry.committedNodeIdOf(REPLICA),
     progress: store.readDurableProgress(GROUP_ID),
   });
@@ -93,7 +93,8 @@ test('repeated raft status reads prepare nothing after the first', () => {
   assert.equal(prepares.count, 0);
   assert.equal(first.snapshotIndex, 7n);
   assert.deepEqual(first.resolution,
-    {status: RAFT_RS_PEER_IDENTITY_RESOLUTION.RESERVED, replicaIdentity: REPLICA});
+    {status: RAFT_RS_PEER_IDENTITY_RESOLUTION.RESERVED, replicaIdentity: REPLICA,
+      nodeId: NODE_ID});
   assert.equal(first.nodeId, NODE_ID);
   db.close();
 });
