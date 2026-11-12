@@ -152,6 +152,8 @@ function registerRow(stateMachine, row) {
     serviceAddress: row.address,
     replicaIdentity: row.replica_id,
     groupId: row.group_id,
+    cleanupToken: row.cleanup_token,
+    createAttemptToken: row.create_attempt_token,
     createdAt: row.created_at,
     durableVersionColumn: 'state_entered_at',
     durableVersion: row.state_entered_at,
@@ -768,11 +770,89 @@ test('durable FAILED apply records debt and stale debt cannot clear replacement'
     store.durable[SERVICES].set(row.service_id, cloneRow(replacement));
     t.equal(await stateMachine.settleCanonicalLeaderClearDebt(row.service_id),
       false, 'stale debt refuses before touching the leader row');
+    t.equal(stateMachine.getState(row.service_id)?.state, ReplicaState.FAILED,
+      'the old debt cannot install a foreign observation as its own continuation');
+    t.equal(stateMachine.canonicalLeaderClearDebtByReplicaId.has(
+      row.service_id), true, 'the old completion cannot clear retained debt');
+    registerRow(stateMachine, replacement);
     t.equal(stateMachine.getState(row.service_id)?.state, ReplicaState.ACTIVE);
     t.equal(stateMachine.getState(row.service_id)?.durableVersion, 50,
-      'authoritative clock-reset replacement supersedes old debt');
+      'an independent authoritative recovery installs the clock-reset replacement');
     t.equal(stateMachine.canonicalLeaderClearDebtByReplicaId.has(
       row.service_id), false, 'old generation debt is atomically fenced');
+  });
+
+test('leader-clear write completion cannot adopt the revision advanced by shutdown',
+  async (t) => {
+    initializeEnvironment();
+    const row = serviceRow('replica-held-leader-effect', ReplicaState.ACTIVE, 800);
+    const store = createLifecycleRowStore({services: [row], partitions: [partitionRow()]});
+    const stateMachine = createStateMachine(store, {now: () => 900});
+    registerRow(stateMachine, row);
+    let release;
+    let reached;
+    const held = new Promise((resolve) => { release = resolve; });
+    const started = new Promise((resolve) => { reached = resolve; });
+    store.setBeforeMutation(async (mutation) => {
+      if (mutation.tableName !== PARTITIONS) return;
+      reached();
+      await held;
+      throw new Error('finite leader-clear transport failure');
+    });
+    const transition = stateMachine.transition(row.service_id, ReplicaState.FAILED,
+      {partitionId: row.partition_id, reason: 'observed-runtime-failure'});
+    await started;
+    t.equal(store.durable[SERVICES].get(row.service_id).status, ReplicaState.FAILED,
+      'the actual lifecycle CAS applied before its leader effect was held');
+    const clearing = stateMachine.clear();
+    const closedRevision = stateMachine.replicaRevisionByReplicaId.get(row.service_id);
+    release();
+    t.equal(await transition, false, 'shutdown invalidates the original local admission');
+    await clearing;
+    t.equal(stateMachine.canonicalLeaderClearDebtByReplicaId.has(row.service_id), false,
+      'old completion cannot manufacture debt at a revision it did not admit');
+    t.equal(stateMachine.replicaRevisionByReplicaId.get(row.service_id), closedRevision,
+      'old completion neither adopts nor advances the closed owner revision');
+  });
+
+test('held leader-debt readback preserves the exact retained debt after shutdown invalidation',
+  async (t) => {
+    initializeEnvironment();
+    const row = serviceRow('replica-held-leader-debt-read', ReplicaState.ACTIVE, 800);
+    const store = createLifecycleRowStore({services: [row], partitions: [partitionRow()]});
+    const stateMachine = createStateMachine(store, {now: () => 900});
+    registerRow(stateMachine, row);
+    store.setBeforeMutation((mutation) => {
+      if (mutation.tableName === PARTITIONS) throw new Error('leader-clear unavailable');
+    });
+    t.equal(await stateMachine.transition(row.service_id, ReplicaState.FAILED,
+      {partitionId: row.partition_id, reason: 'runtime-failed'}), true);
+    const debt = stateMachine.canonicalLeaderClearDebtByReplicaId.get(row.service_id);
+    t.ok(debt, 'actual durable apply retains its unconfirmed side-effect obligation');
+    store.setBeforeMutation(null);
+    let release;
+    let reached;
+    const held = new Promise((resolve) => { release = resolve; });
+    const started = new Promise((resolve) => { reached = resolve; });
+    store.setBeforeAuthoritativeRead(async (tableName) => {
+      if (tableName !== SERVICES) return;
+      reached();
+      await held;
+    });
+    const mutationsBefore = store.mutations.length;
+    const settling = stateMachine.settleCanonicalLeaderClearDebt(row.service_id);
+    await started;
+    const clearing = stateMachine.clear();
+    const closedRevision = stateMachine.replicaRevisionByReplicaId.get(row.service_id);
+    release();
+    t.equal(await settling, false, 'readback cannot borrow shutdown’s later admission');
+    await clearing;
+    t.equal(stateMachine.canonicalLeaderClearDebtByReplicaId.get(row.service_id), debt,
+      'old completion cannot delete or replace the retained exact debt cell');
+    t.equal(store.mutations.length, mutationsBefore,
+      'invalidated readback issues no later leader mutation');
+    t.equal(stateMachine.replicaRevisionByReplicaId.get(row.service_id), closedRevision,
+      'held work never adopts a new revision');
   });
 
 test('new authoritative generation fences stale REMOVING uncertainty',

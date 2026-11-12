@@ -77,13 +77,17 @@ function createOwnerFixture(
         return {success: false, rows: []};
       }
       const row = rows[tableName]?.get(params[0]) || null;
-      return {success: true, rows: row ? [{...row}] : []};
+      const answer = {success: true, rows: row ? [{...row}] : []};
+      if (tableName === SERVICES && options.afterServicesRead) {
+        await options.afterServicesRead(answer);
+      }
+      return answer;
     },
     async submitMutation(mutation) {
       mutations.push(structuredClone(mutation));
       if (mutation.tableName === SERVICES &&
           typeof options.beforeServicesMutation === 'function') {
-        options.beforeServicesMutation(rows[SERVICES], mutation);
+        await options.beforeServicesMutation(rows[SERVICES], mutation);
       }
       const key = mutation.tableName === SERVICES ?
         mutation.whereClause.service_id :
@@ -201,6 +205,8 @@ function canonicalSnapshotContext(row) {
     serviceAddress: row.address,
     replicaIdentity: row.replica_id,
     groupId: row.group_id,
+    cleanupToken: row.cleanup_token,
+    createAttemptToken: row.create_attempt_token,
     createdAt: row.created_at,
     durableVersionColumn: 'state_entered_at',
     durableVersion: row.state_entered_at,
@@ -236,6 +242,67 @@ test('recovery requires the original canonical generation and never borrows ' +
       ...stateMachine.getState(row.service_id), durableVersionColumn: 'updated_at',
     }),
   ), false, 'a tracked state cannot introduce a noncanonical CAS column');
+});
+
+test('authoritative lifecycle admission stays behind the original serialized ' +
+  'source while a prior transition and read delivery are held', async (t) => {
+  initializeEnvironment();
+  const source = serviceRow('replica-held-original-admission', ReplicaState.ACTIVE, 100);
+  let releaseMutation;
+  let mutationReached;
+  const mutationHeld = new Promise((resolve) => { releaseMutation = resolve; });
+  const mutationStarted = new Promise((resolve) => { mutationReached = resolve; });
+  let releaseRead;
+  const readHeld = new Promise((resolve) => { releaseRead = resolve; });
+  const {mutations, rows, stateMachine} = createOwnerFixture(source, 'applied', {
+    async beforeServicesMutation(_rows, mutation) {
+      if (mutation.data.status === ReplicaState.REMOVING) {
+        mutationReached();
+        await mutationHeld;
+      }
+    },
+    async afterServicesRead() {
+      await readHeld;
+    },
+  });
+  t.equal(stateMachine.registerReplicaSnapshot(source.service_id,
+    canonicalSnapshotContext(source)), true, 'original source is tracked');
+  const removing = stateMachine.transition(source.service_id, ReplicaState.REMOVING,
+    {timestamp: 200, reason: 'winning-removal'});
+  await mutationStarted;
+  const obsolete = stateMachine.transitionAuthoritativeReplicaGeneration(
+    source, ReplicaState.FAILED, {timestamp: 300, reason: 'old-observation'});
+  // Delivery is a controlled transport boundary. The already admitted removal
+  // completes before any source read can deliver an old row to the contender.
+  await new Promise((resolve) => setImmediate(resolve));
+  releaseMutation();
+  t.equal(await removing, true, 'the first admitted exact transition completes');
+  releaseRead();
+  t.equal(await obsolete, false, 'the old admission cannot be recaptured after delivery');
+  t.equal(mutations.filter((mutation) => mutation.tableName === SERVICES).length, 1,
+    'the stale observation never reinstalls its source and reaches another lifecycle CAS');
+  t.match(stateMachine.getState(source.service_id), {
+    state: ReplicaState.REMOVING, durableVersion: 200,
+  }, 'the winning local source remains intact');
+  t.equal(rows[SERVICES].get(source.service_id).state_entered_at, 200,
+    'the exact durable generation remains intact');
+});
+
+test('recovery SAME identity includes the original create attempt token', async (t) => {
+  initializeEnvironment();
+  const source = {...serviceRow('replica-create-attempt-source', ReplicaState.ACTIVE, 100),
+    create_attempt_token: 'attempt-one'};
+  const {stateMachine} = createOwnerFixture(source);
+  t.equal(stateMachine.registerReplicaSnapshot(source.service_id,
+    canonicalSnapshotContext(source)), true);
+  const revision = stateMachine.replicaRevisionByReplicaId.get(source.service_id);
+  const replacement = {...source, create_attempt_token: 'attempt-two'};
+  t.equal(stateMachine.registerReplicaSnapshot(source.service_id,
+    canonicalSnapshotContext(replacement)), true);
+  t.equal(stateMachine.getState(source.service_id).createAttemptToken, 'attempt-two',
+    'same numeric birth/version cannot collapse two producer attempts');
+  t.equal(stateMachine.replicaRevisionByReplicaId.get(source.service_id), revision + 1,
+    'a different attempt invalidates every admission of the old attempt');
 });
 
 test('authoritative lifecycle CAS independently fences replica and group ' +
