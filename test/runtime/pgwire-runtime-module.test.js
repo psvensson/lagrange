@@ -390,18 +390,28 @@ describe('pgwire-runtime-module', () => {
 
       const client = net.createConnection(port, '127.0.0.1');
       await new Promise((resolve) => client.on('connect', resolve));
+      const clientClosed = new Promise((resolve) =>
+        client.once('close', resolve));
+      // A reset is one way the server's teardown may reach the client.
+      client.on('error', () => {});
 
       await mod.stop(ctx);
 
-      // Server should no longer accept connections
-      const c2 = net.createConnection(port, '127.0.0.1');
+      // The accepted connection was closed by the server's teardown.
+      await clientClosed;
+      // The module no longer runs the listener...
+      const health = await mod.health(ctx);
+      assert.equal(health.status, HEALTH_STATUS.UNHEALTHY);
+      assert.ok(health.detail.includes(PGWIRE_MODULE_ERROR.NOT_STARTED));
+      // ...and no socket listens on its port: the port binds again. A new
+      // connect is not asked: what a host answers on a just-closed loopback
+      // port is the host's network, not the module's listener.
+      const rebound = net.createServer();
       await new Promise((resolve, reject) => {
-        c2.on('error', () => resolve());
-        c2.on('connect', () => {
-          c2.destroy();
-          reject(new Error('should not connect'));
-        });
+        rebound.once('error', reject);
+        rebound.listen(port, '127.0.0.1', resolve);
       });
+      await new Promise((resolve) => rebound.close(resolve));
     });
 
     it('should be idempotent (stop when not running)', async () => {
