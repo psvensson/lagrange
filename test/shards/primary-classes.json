@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2415,
+    "unit": 2416,
     "integration": 124,
     "bootstrap": 228,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2774,
-  "digest": "fnv1a32-d8ee8f71",
+  "censusSize": 2775,
+  "digest": "fnv1a32-c9d1be86",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1815,6 +1815,7 @@
     "test/raft/raft-rs-backend/inbound-drain-owned-timer.test.js": "unit",
     "test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js": "integration",
     "test/raft/raft-rs-backend/joining-genesis-tripwire.test.js": "unit",
+    "test/raft/raft-rs-backend/lifecycle-record-validation.test.js": "unit",
     "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js": "unit",
     "test/raft/raft-rs-backend/lifecycle-retirement-census.test.js": "unit",
     "test/raft/raft-rs-backend/lifecycle-table-writer-census.test.js": "unit",

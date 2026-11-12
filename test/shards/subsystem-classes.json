@@ -19,16 +19,16 @@
     "services-runtime": 161,
     "solver-tooling": 7,
     "storage-partition": 237,
-    "storage-raft": 160,
+    "storage-raft": 161,
     "test-infrastructure": 175,
     "transactions": 18,
     "transport-messaging": 127,
     "wasm-toolchain": 74
   },
-  "censusSize": 2774,
-  "digest": "fnv1a32-220c0f0c",
+  "censusSize": 2775,
+  "digest": "fnv1a32-0d023848",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-d5da5967",
+  "observationDigest": "fnv1a32-55739659",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1834,6 +1834,7 @@
     "test/raft/raft-rs-backend/inbound-drain-owned-timer.test.js": "storage-raft",
     "test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js": "storage-raft",
     "test/raft/raft-rs-backend/joining-genesis-tripwire.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/lifecycle-record-validation.test.js": "storage-raft",
     "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js": "storage-raft",
     "test/raft/raft-rs-backend/lifecycle-retirement-census.test.js": "storage-raft",
     "test/raft/raft-rs-backend/lifecycle-table-writer-census.test.js": "storage-raft",
@@ -17082,6 +17083,22 @@
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/transport/transport-semantic-outcome.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/lifecycle-record-validation.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-original-allocation-constants.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-replica-lifecycle-constants.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/raft/raft-rs-replica-lifecycle-record.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/helpers/hostile-intrinsics.js"
       ]
     },
     "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js": {

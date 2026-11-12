@@ -1,0 +1,34 @@
+{
+  "schema": "solve-quest/2",
+  "id": "lifecycle-observation-owner-20261112",
+  "class": "fix",
+  "statement": "Repair the six F lifecycle navigability violations and their semantic cause: one lifecycle row codec and named admission operation must reject malformed state, reason and evidence through runtime, removal and snapshot reads without rewriting durable values or manufacturing absent evidence. Preserve valid nullable evidence, canonical terminal state and reseed refusal. Bounded repair only; no global acceptance.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/lifecycle-observation-owner-20261112/evidence/receipt.json",
+      "requiredReceipts": [
+        "lifecycle-navigability",
+        "malformed-owner-parity",
+        "valid-empty-and-terminal-controls",
+        "scoped-owner-checks",
+        "independent-review"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "isolated",
+      "statement": "Only this new worktree at 5e58474b13870c95ea6bd6175942c33984cd6ac9. No commits, pushes, primary Quest log or integration writes."
+    },
+    {
+      "id": "bounded",
+      "statement": "Lifecycle owner/constants/observation and one shared row codec if needed, dedicated tests, existing named contract/registry and generated metadata as necessary. No role/cache, SQLite migration or unrelated repair."
+    },
+    {
+      "id": "proof",
+      "statement": "Preserve first reds, exact file hashes, canonical scoped guards, thermal plus flock /tmp/lagrange-local-test.lock, no full local tests; fresh independent Astra max review. No higher escalation tier claimed."
+    }
+  ],
+  "sealedAt": "5e58474b13870c95ea6bd6175942c33984cd6ac9"
+}

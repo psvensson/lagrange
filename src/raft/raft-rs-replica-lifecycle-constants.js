@@ -26,7 +26,10 @@ const LIFECYCLE_REASON = Object.freeze({
   ORIGINAL_PREPARED: 'original-allocation-lifecycle-prepared',
   ORIGINAL_ROW_PRESENT: 'original-allocation-lifecycle-row-present',
   IDENTITY_MISMATCH: 'lifecycle-identity-mismatch',
-  RETIRED: 'retired',
+  ROW_INVALID: 'lifecycle-row-invalid',
+  STATE_INVALID: 'lifecycle-state-invalid',
+  REASON_INVALID: 'lifecycle-reason-invalid',
+  EVIDENCE_INVALID: 'lifecycle-evidence-invalid',
   STALE_RUNTIME_GENERATION: 'runtime-generation-not-registered',
   // A replica whose own history was proven lost while it ran (owner decision
   // O4): retired with this reason, it is refused with it, also after a
@@ -45,12 +48,5 @@ const REPLICA_DATABASE_CREATION = Object.freeze({
   EXISTING: 'replica-database-existing',
 });
 
-// Shared by the owner's runtime refusal and its read-only snapshot observation.
-function retiredRefusalReason(reason) {
-  return reason === COMMITTED_MEMBERSHIP_REFUSAL.RESEED_REQUIRED ?
-    COMMITTED_MEMBERSHIP_REFUSAL.RESEED_REQUIRED : LIFECYCLE_STATE.RETIRED;
-}
-
 export {LIFECYCLE_ERROR, LIFECYCLE_STATE, REPLICA_LIFECYCLE_TABLE,
-  LIFECYCLE_REASON, LIFECYCLE_BIRTH, REPLICA_DATABASE_CREATION,
-  retiredRefusalReason};
+  LIFECYCLE_REASON, LIFECYCLE_BIRTH, REPLICA_DATABASE_CREATION};
