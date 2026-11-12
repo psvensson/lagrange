@@ -4,6 +4,8 @@ import {positionRecipients, registerLeaderRelister, sourceRangeOfEvents} from
   '../test-helpers/cdc-source-range-fixture.js';
 import {readCdcLedgerIncarnation} from '../../src/partition/partition-cdc-obligation-ledger.js';
 import {awaitRecipientBackoff} from '../test-helpers/cdc-delivery-progress-fixture.js';
+import {disarmProducerRetryTimer, elapseProducerBackoff} from
+  '../message-group/message-group-native-provisional-route-fixture.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -408,6 +410,7 @@ test(
     // row the seed bridge carried is idempotent).
     f.producerLeader.unsubscribeFromCDC(seedBridge);
     await subscribeWithoutEagerDrive(f, joiningBridge, 'w2-joining-subscriber');
+    disarmProducerRetryTimer(f);
 
     // Now add remoteTarget to source cache + LATENCY_GROUPS to exercise GROUPED mode
     // on debtSmall and SAFE mode on debt2MiB
@@ -447,16 +450,19 @@ test(
       LATENCY_PROPAGATION_MODE.GROUPED,
     );
 
-    // W9 2-MiB paired negative control: reject the >2-MiB remote delivery on the
-    // first pass and verify debt2MiB remains undelivered in the source ledger.
-    let reject2MiBOnce = true;
+    // Recovery of the target's earlier position gap must be available during
+    // this control: only the transport refusal may hold the 2-MiB delivery.
+    registerLeaderRelister([...f.services.values()], () => f.producerLeader);
+    // Keep refusal across two owned attempts, so an earlier wave cannot
+    // consume the negative control before the assertion's drive starts.
+    const refusals = [];
     f.interceptSend = async ({router, envelope}) => {
       if (
-        reject2MiBOnce &&
         router === 'routerA' &&
         cdcEvents(envelope).some((item) => item.eventKey === debt2MiB.eventKey)
       ) {
-        reject2MiBOnce = false;
+        const debt = readCdcObligation(f.producerLeader.db, debt2MiB.eventKey);
+        refusals.push({eventKey: debt.eventKey, delivered: debt.delivered});
         return {
           overrideResult: buildDeliveryEnvelope(
             {acknowledged: true},
@@ -480,8 +486,26 @@ test(
       return origPropagate(opts);
     };
 
-    const twoMiBNegativeDrive = await driveLane(f, 'w9-2mib-negative-pass');
+    const negativeDrive = async () => {
+      await elapseProducerBackoff(f);
+      return driveWithPump(f, () => {
+        assert.equal(f.producerLeader.cdcDelivery.getCdcObligationDiagnostics().inFlight,
+          false, 'negative driver owns idle recipients before starting its wave');
+        return f.producerLeader.cdcDelivery.driveCdcObligations('w9-2mib-negative-pass');
+      });
+    };
+    const firstNegativeDrive = await negativeDrive();
+    assert.equal(firstNegativeDrive.state, DRIVE.HELD_BY_SUBSCRIBER);
+    assert.ok(refusals.length > 0, 'first wave engaged the actual remote refusal');
+    assert.equal(refusals[0].eventKey, debt2MiB.eventKey);
+    assert.equal(refusals[0].delivered, false, 'target debt was owed at first refusal');
+    const firstRefusalCount = refusals.length;
+    const twoMiBNegativeDrive = await negativeDrive();
     assert.equal(twoMiBNegativeDrive.state, DRIVE.HELD_BY_SUBSCRIBER);
+    assert.ok(refusals.length > firstRefusalCount,
+      'second owned wave encounters the still-active target refusal');
+    assert.equal(f.producerLeader.cdcDelivery.getCdcObligationDiagnostics().inFlight,
+      false, 'negative recipients settled before the control is released');
     assert.equal(
       readCdcObligation(f.producerLeader.db, debt2MiB.eventKey).delivered,
       false,
@@ -489,9 +513,7 @@ test(
     );
     f.interceptSend = null;
 
-    // The target's node owes a list for the rows it missed (CDC Stage 3):
-    // its relister lists the source leader's image.
-    registerLeaderRelister([...f.services.values()], () => f.producerLeader);
+    // Only the positive phase releases the transport refusal.
     await pumpMulti(f);
     const fullDrive = await driveLane(f, 'w1-w2-w9-full-pass');
     assert.equal(fullDrive.state, DRIVE.DRAINED);
