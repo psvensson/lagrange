@@ -44,6 +44,25 @@ const LOCAL_STR_EVENTERROR = 'eventError';
 const LOCAL_STR_CDC_HANDLER_SHUTDOWN = 'CDC handler shutdown';
 const LOCAL_STR_SHUTDOWN = 'shutdown';
 
+function incomingCdcRow(event) {
+  return Object.hasOwn(event, 'eventKey') ? event.data : normalizeCDCEventData(event);
+}
+
+function reportOutOfOrderCdcEvent(handler, tableName, key, timestamp) {
+  const lastTimestamp = key !== null && key !== undefined ?
+    handler.getLastAppliedTimestampForKey(tableName, key) :
+    handler.lastAppliedTimestamp.get(tableName);
+  if (!lastTimestamp) return;
+  const lastTs = HLCTimestamp.fromString(lastTimestamp);
+  const eventTs = HLCTimestamp.fromString(timestamp);
+  if (eventTs.compare(lastTs) < 0) {
+    handler.logger.warn(LOCAL_STR_OUT_OF_ORDER_CDC_EVENT_DETECTED, {
+      tableName, key, eventTimestamp: timestamp, lastTimestamp,
+    });
+    // Still apply: the cache owns conflicts and source applicability.
+  }
+}
+
 /**
  * CDC event structure.
  */
@@ -102,7 +121,7 @@ class CDCEvent {
     return new CDCEvent(
       event?.tableName,
       event?.operation,
-      Object.hasOwn(event, 'eventKey') ? event.data : normalizeCDCEventData(event),
+      incomingCdcRow(event),
       event?.timestamp,
       event?.sourcePartition ?? null,
       event?.causeId ?? null,
@@ -142,7 +161,10 @@ function normalizeCDCEventData(event) {
     event?.whereClause && typeof event.whereClause === 'object' ?
       event.whereClause :
       null;
+  return canonicalizeCdcMutationRow(event, data, whereClause);
+}
 
+function canonicalizeCdcMutationRow(event, data, whereClause) {
   if (event?.operation === CDC_OPERATIONS.DELETE) {
     const normalizedDeleteData = whereClause ? {...whereClause} : data;
     return canonicalizeSystemTableRow(event?.tableName, normalizedDeleteData);
@@ -480,24 +502,7 @@ class CDCHandler extends EventEmitter {
     } = event;
     const key = event.getKey();
 
-    // Check timestamp ordering
-    const lastTimestamp =
-      key !== null && key !== undefined ?
-        this.getLastAppliedTimestampForKey(tableName, key) :
-        this.lastAppliedTimestamp.get(tableName);
-    if (lastTimestamp) {
-      const lastTs = HLCTimestamp.fromString(lastTimestamp);
-      const eventTs = HLCTimestamp.fromString(timestamp);
-      if (eventTs.compare(lastTs) < 0) {
-        this.logger.warn(LOCAL_STR_OUT_OF_ORDER_CDC_EVENT_DETECTED, {
-          tableName,
-          key,
-          eventTimestamp: timestamp,
-          lastTimestamp,
-        });
-        // Still apply - the cache handles conflicts
-      }
-    }
+    reportOutOfOrderCdcEvent(this, tableName, key, timestamp);
 
     try {
       // Canonical CDC apply path: all steady-state cache mutations flow here.
@@ -507,17 +512,19 @@ class CDCHandler extends EventEmitter {
       if (sourceOutcome !== undefined && sourceOutcome.state !== SOURCE_EFFECT_STATE.APPLIED) {
         return sourceOutcome;
       }
-      if (sourceOutcome === undefined) this.cache.applySystemTableChange(tableName, operation, data, {
-        causeId,
-        cdcObservedAtMs: receivedAt,
-        timestamp,
-        sourcePartition: event.sourcePartition,
-        sourceReplica: event.sourceReplica,
-        sourceLogIndex: event.sourceLogIndex,
-        sourceOrdinal: event.sourceOrdinal,
-        eventKey: event.eventKey,
-        entryId: event.entryId,
-      });
+      if (sourceOutcome === undefined) {
+        this.cache.applySystemTableChange(tableName, operation, data, {
+          causeId,
+          cdcObservedAtMs: receivedAt,
+          timestamp,
+          sourcePartition: event.sourcePartition,
+          sourceReplica: event.sourceReplica,
+          sourceLogIndex: event.sourceLogIndex,
+          sourceOrdinal: event.sourceOrdinal,
+          eventKey: event.eventKey,
+          entryId: event.entryId,
+        });
+      }
 
       // Track successful delivery to cache
       if (this.cdcPipelineMetrics) {

@@ -32,7 +32,8 @@ function positionOf(event) {
 function registerModeledRelister(t, sourceOrder, timeSource, list) {
   const service = new CDCIntegrationService({nodeId: 'source-relist-model', timeSource});
   const release = sourceOrder.registerRelister({
-    list: (request) => service.isShuttingDown === true ? SOURCE_RELIST_OUTCOME.STOPPED : list(request),
+    list: (request) => service.isShuttingDown === true ?
+      SOURCE_RELIST_OUTCOME.STOPPED : list(request),
     isStopped: () => service.isShuttingDown === true,
     paceAfterFailure: () => service.delayUntilShutdown(SOURCE_RELIST_BOUND.RELIST_RETRY_DELAY_MS),
   });

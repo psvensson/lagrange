@@ -28,7 +28,10 @@ function capturePort() {
   const sourceCalls = [];
   return {calls, sourceCalls, port: {applySystemTableChange(...args) {
     calls.push(args);
-  }, applySourceCdcEvent(...args) { sourceCalls.push(args); return {state: 'applied'}; }}};
+  }, applySourceCdcEvent(...args) {
+    sourceCalls.push(args);
+    return {state: 'applied'};
+  }}};
 }
 
 test('owned ingress preserves row identity, operation and source metadata', () => {
@@ -85,7 +88,9 @@ test('subset failures are contained per row; committed and full-reconcile failur
   const port = {applySystemTableChange(...args) {
     attempts.push(args);
     throw failure;
-  }, applySourceCdcEvent() { throw failure; }};
+  }, applySourceCdcEvent() {
+    throw failure;
+  }};
   const logs = [];
   const cache = new SystemTableCache();
   const gateway = new ControlPlaneSystemTableGateway({systemTableCache: cache});

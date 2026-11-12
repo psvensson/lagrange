@@ -23,7 +23,7 @@ import {afterEach, beforeEach, test} from 'node:test';
 import {INITIAL_PARTITION_IDS, getSchemaByTableName} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
-import {SOURCE_IMAGE_ADMISSION, SOURCE_POSITION_STATE, SOURCE_RELIST_STATE} from
+import {SOURCE_IMAGE_ADMISSION, SOURCE_POSITION_STATE} from
   '../../src/cache/system-table-cache-source-order.js';
 import {captureCdcEvents} from '../../src/cdc/cdc-event-envelope.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
@@ -433,7 +433,7 @@ test('(e) a recipient stopped mid-image installs nothing and the old rows stay; 
   assert.equal(stoppedDuringImage, true);
   assert.deepEqual(recipient.table(), [['stale-1', 'stale']], 'no partial rows are visible');
   assert.equal(recipient.cell().state, SOURCE_POSITION_STATE.GAP);
-  assert.equal(recipient.cell().relist, SOURCE_RELIST_STATE.NO_RELISTER);
+  assert.equal(recipient.cell().relist, 'no_relister');
   assert.equal(recipient.images.length, 0,
     'the detached request cannot publish an image diagnostic for its old registration');
   assert.equal(stoppedIntegration.sourceRelisterRelease, null);
@@ -484,7 +484,7 @@ test('(e) a recipient stopped mid-image installs nothing and the old rows stay; 
     'only the replacement cell publishes its completed image');
   assert.equal(recipient.images.at(-1).outcome, SOURCE_IMAGE_ADMISSION.INSTALL);
   assert.equal(recipient.cell().state, SOURCE_POSITION_STATE.CURRENT);
-  assert.equal(recipient.cell().relist, SOURCE_RELIST_STATE.IDLE);
+  assert.equal(recipient.cell().relist, 'idle');
   assert.deepEqual(recipient.table(), source.table());
   assert.equal(typeof recipient.integration.sourceRelisterRelease, 'function');
   assert.equal(recipient.integration.shutdownReleases.size, 0);

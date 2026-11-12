@@ -2207,7 +2207,6 @@
       "owners": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/cache/system-table-cache-source-order.js",
-        "src/cache/system-table-cache-source-effect-application.js",
         "src/cache/system-table-cache-source-image.js",
         "src/cache/system-table-cache.js",
         "src/cache/system-table-cache-cdc-fold.js",
@@ -4768,7 +4767,6 @@
           "owners": [
             "src/bootstrap/system-table-schemas-constants.js",
             "src/cache/system-table-cache-source-order.js",
-            "src/cache/system-table-cache-source-effect-application.js",
             "src/cache/system-table-cache-source-image.js",
             "src/cache/system-table-cache.js",
             "src/cache/system-table-cache-cdc-fold.js",

@@ -34,6 +34,25 @@ const {
   VALID_SYSTEM_TABLES,
 } = CDC_INTEGRATION_SERVICE_SHARED;
 
+function resolveWritableCacheTarget(options) {
+  return options.cacheMutationTarget ||
+    (typeof options.systemTableCache?.applySystemTableChange === 'function' ?
+      options.systemTableCache : null);
+}
+
+function resolvePartitionServicesProvider(options) {
+  return options.partitionServicesProvider instanceof Map ?
+    () => options.partitionServicesProvider :
+    typeof options.partitionServicesProvider === 'function' ?
+      options.partitionServicesProvider : null;
+}
+
+function resolveIntegrationLogger() {
+  const loggingService = LoggingService.getInstance();
+  return loggingService.isInitialized() ?
+    loggingService.forSubsystem(CDC_SUBSYSTEM.INTEGRATION) : console;
+}
+
 /**
  * CDC integration service: the single public owner of system-table writes,
  * authoritative reads, post-write cache visibility, and CDC event dispatch.
@@ -54,23 +73,13 @@ class CDCIntegrationService extends EventEmitter {
     // be driven on a virtual clock instead of reaching the ambient one.
     this.timeSource = resolveTimeSource(options);
     this.systemTableCache = options.systemTableCache || null;
-    this.cacheMutationTarget =
-      options.cacheMutationTarget ||
-      (typeof options.systemTableCache?.applySystemTableChange ===
-      'function' ?
-        options.systemTableCache :
-        null);
+    this.cacheMutationTarget = resolveWritableCacheTarget(options);
 
     // Bootstrap mode for seed node direct writes
     this.bootstrapMode = false;
     this.bootstrapCompleted = false;
     this.localPartitionServices = null;
-    this.partitionServicesProvider =
-      options.partitionServicesProvider instanceof Map ?
-        () => options.partitionServicesProvider :
-        typeof options.partitionServicesProvider === 'function' ?
-          options.partitionServicesProvider :
-          null;
+    this.partitionServicesProvider = resolvePartitionServicesProvider(options);
     this.writeRouter = this.createSqlWriteRouter();
 
     // HLC clock for timestamps. The HLC is this service's child, not its own
@@ -83,10 +92,7 @@ class CDCIntegrationService extends EventEmitter {
     });
 
     // Logging
-    const loggingService = LoggingService.getInstance();
-    this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem(CDC_SUBSYSTEM.INTEGRATION) :
-      console;
+    this.logger = resolveIntegrationLogger();
 
     // Configuration
     const config = ConfigurationManager.getInstance();

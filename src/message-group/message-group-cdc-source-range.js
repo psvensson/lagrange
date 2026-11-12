@@ -126,7 +126,8 @@ function applyCommittedCdcRange(service, committed, events, applyMember) {
     return {decision: classified.decision, applied: 0, skipped: events.length};
   }
   let applied = 0;
-  const context = sourceOrder.captureEffectContext(range.sourcePartition, tableName, range.incarnation);
+  const context = sourceOrder.captureEffectContext(
+    range.sourcePartition, tableName, range.incarnation);
   try {
     for (let index = 0; index < events.length; index += 1) {
       if (sourceOrder.memberApplied(range, memberPositionOf(events[index]))) continue;

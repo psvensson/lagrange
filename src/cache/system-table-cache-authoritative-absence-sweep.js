@@ -48,6 +48,12 @@ function mutationSnapshotEntriesValid(tableName, entries) {
   });
 }
 
+function suppliedSweepSnapshotIsCurrent(cache, tableName, supplied) {
+  return supplied?.tableName === tableName &&
+    supplied.sourceGeneration === cache.sourceOrder.tableGeneration(tableName) &&
+    mutationSnapshotEntriesValid(tableName, supplied.entries);
+}
+
 function getSweepMutationSnapshot(cache, tableName, options) {
   const suppliedSnapshots = options?.mutationSnapshots;
   if (
@@ -55,11 +61,7 @@ function getSweepMutationSnapshot(cache, tableName, options) {
     Object.prototype.hasOwnProperty.call(suppliedSnapshots, tableName)
   ) {
     const supplied = suppliedSnapshots[tableName];
-    return supplied?.tableName === tableName &&
-      supplied.sourceGeneration === cache.sourceOrder.tableGeneration(tableName) &&
-      mutationSnapshotEntriesValid(tableName, supplied.entries) ?
-      supplied :
-      null;
+    return suppliedSweepSnapshotIsCurrent(cache, tableName, supplied) ? supplied : null;
   }
   if (Object.prototype.hasOwnProperty.call(
     options || {},

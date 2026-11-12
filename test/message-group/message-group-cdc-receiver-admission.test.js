@@ -189,7 +189,8 @@ for (const batch of [true]) {
       const occupiedEvent = sourceEvent(1);
       try {
         const occupied = await occupyNativeSlot(f, leader, occupiedEvent);
-        const key = cdcRangeWaitIdentity([occupiedEvent], withSourceRange([occupiedEvent]).sourceRange);
+        const key = cdcRangeWaitIdentity(
+          [occupiedEvent], withSourceRange([occupiedEvent]).sourceRange);
         const entry = queue.get(key);
         assert.ok(entry, 'the existing queue retains the admitted native occurrence');
         const invalid = sourceEvent(2);
@@ -405,7 +406,8 @@ async function heldForwardFixture(t, event, {holdFollowerReplication = true} = {
   const queue = configureOneSlot(follower);
   const hold = holdNativeForwardAnswer(f, event, follower);
   if (!holdFollowerReplication) hold.releaseNativePackets();
-  return {f, follower, queue, hold, key: cdcRangeWaitIdentity([event], withSourceRange([event]).sourceRange)};
+  return {f, follower, queue, hold,
+    key: cdcRangeWaitIdentity([event], withSourceRange([event]).sourceRange)};
 }
 
 async function releaseHeldForward(f, hold) {

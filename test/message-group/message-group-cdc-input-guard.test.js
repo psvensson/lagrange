@@ -200,13 +200,25 @@ for (const entry of ENTRIES) {
       let callbacks = 0;
       const accessor = range();
       Object.defineProperty(accessor, 'incarnation', {enumerable: true,
-        get() { callbacks += 1; return 'test-source-incarnation'; }});
+        get() {
+          callbacks += 1;
+          return 'test-source-incarnation';
+        }});
       const nestedAccessor = range();
       Object.defineProperty(nestedAccessor.after, 'logIndex', {enumerable: true,
-        get() { callbacks += 1; return 0; }});
+        get() {
+          callbacks += 1;
+          return 0;
+        }});
       const pair = Proxy.revocable(range(), {
-        get(target, property) { callbacks += 1; return Reflect.get(target, property); },
-        ownKeys(target) { callbacks += 1; return Reflect.ownKeys(target); },
+        get(target, property) {
+          callbacks += 1;
+          return Reflect.get(target, property);
+        },
+        ownKeys(target) {
+          callbacks += 1;
+          return Reflect.ownKeys(target);
+        },
       });
       for (const malformed of [accessor, nestedAccessor, pair.proxy]) {
         await refuse(f, calls, entry, events, () => [], () => events, malformed);

@@ -182,24 +182,24 @@ async function runCase(t, scenario) {
 }
 
 test('an image replacement retains row effect and source position together across replay',
-async (t) => {
-  const results = [];
-  for (const scenario of cases) results.push(await runCase(t, scenario));
-  const receipt = {schema: 'test-receipt/1', status: results.every((r) => r.passed) ?
-    'pass' : 'fail', receipts: results.map(({id, passed}) => ({id, passed}))};
-  const evidence = new URL('../../solve/quests/cdc-image-effect-currentness/evidence/',
-    import.meta.url);
-  fs.mkdirSync(evidence, {recursive: true});
-  fs.writeFileSync(new URL('receipt.json', evidence), `${JSON.stringify(receipt, null, 2)}\n`);
-  fs.writeFileSync(new URL('observations.json', evidence), `${JSON.stringify(results, null, 2)}\n`);
-  for (const result of results) {
-    t.diagnostic(`${result.id}: ${JSON.stringify(result.timeline)}`);
-  }
-  for (const result of results) {
-    assert.deepEqual(result.timeline.find((seen) => seen.stage === 'image-installed').position,
-      {logIndex: 10, ordinal: Number.MAX_SAFE_INTEGER}, `${result.id}: image position`);
-    assert.deepEqual(result.timeline.find((seen) => seen.stage === 'committed-replay'),
-      {stage: 'committed-replay', ...result.expected}, `${result.id}: row AND position`);
-    assert.equal(result.passed, true, `${result.id}: lost receipt and repeated replay`);
-  }
-});
+  async (t) => {
+    const results = [];
+    for (const scenario of cases) results.push(await runCase(t, scenario));
+    const receipt = {schema: 'test-receipt/1', status: results.every((r) => r.passed) ?
+      'pass' : 'fail', receipts: results.map(({id, passed}) => ({id, passed}))};
+    const evidence = new URL('../../solve/quests/cdc-image-effect-currentness/evidence/',
+      import.meta.url);
+    fs.mkdirSync(evidence, {recursive: true});
+    fs.writeFileSync(new URL('receipt.json', evidence), `${JSON.stringify(receipt, null, 2)}\n`);
+    fs.writeFileSync(new URL('observations.json', evidence), `${JSON.stringify(results, null, 2)}\n`);
+    for (const result of results) {
+      t.diagnostic(`${result.id}: ${JSON.stringify(result.timeline)}`);
+    }
+    for (const result of results) {
+      assert.deepEqual(result.timeline.find((seen) => seen.stage === 'image-installed').position,
+        {logIndex: 10, ordinal: Number.MAX_SAFE_INTEGER}, `${result.id}: image position`);
+      assert.deepEqual(result.timeline.find((seen) => seen.stage === 'committed-replay'),
+        {stage: 'committed-replay', ...result.expected}, `${result.id}: row AND position`);
+      assert.equal(result.passed, true, `${result.id}: lost receipt and repeated replay`);
+    }
+  });

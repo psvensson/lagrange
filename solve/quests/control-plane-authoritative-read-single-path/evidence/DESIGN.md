@@ -262,3 +262,23 @@ is explicitly open pending tests-only seal 6396e877 and its shared-classifier
 correction. The later CDC cache ownership/metric slice b39aa4a7/2c4f213b is not in
 this checkpoint. No generated metadata, scoped static or integration acceptance
 is inferred from either parent's selected passes.
+
+## CDC maintenance composition for the next bounded correction
+
+The next composition retains both reviewed parents and adds the independently
+reviewed b39aa4a7, 2c4f213b and 4f16baec CDC maintenance slices. The sole shared
+source merge is the synchronous cache projection helper: comparison against
+both parents preserves the canonical complete-result classifier, owner-only
+local execution, pre-read generation and token-owned observation scope/phase.
+Cache source effects now enter the existing SystemTableCache owner directly;
+the exact sanctioned callsite count moves with that owner, without increasing
+the guardrail or changing its matcher. The relist slot/finally, currentness
+checks and post-observer recheck retain their original order.
+
+This commit is a development composition, not a passing static or integration
+receipt. Original catchup job 3076 is now verified and proves malformed-token
+replacement and nine incomplete-result absence effects; the behavior correction
+must consume the shared authority validator/classifier in this composition.
+The separately reviewed paged fixture import correction 7386f323 is not yet
+included. The adjacent configureTick typed-result consumer issue is a separate
+open systemic audit, not covered by the timing helper extraction review.

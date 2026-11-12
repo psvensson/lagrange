@@ -14,7 +14,6 @@ import {
   CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE,
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   CONTROL_PLANE_READ_LEADER_MODE,
-  CONTROL_PLANE_READ_STRATEGY,
   ControlPlaneSystemTableGateway,
 } from
   '../../src/control-plane/control-plane-system-table-gateway.js';
@@ -233,7 +232,8 @@ t.test(
       TABLES.SERVICE_ENDPOINTS,
       {
         observedAtMs: priorObservedAtMs,
-        sourceGeneration: fixture.writableCache.sourceOrder.tableGeneration(TABLES.SERVICE_ENDPOINTS),
+        sourceGeneration:
+          fixture.writableCache.sourceOrder.tableGeneration(TABLES.SERVICE_ENDPOINTS),
         causeId: 'prior-complete-empty-observation',
       },
     );
@@ -278,7 +278,8 @@ t.test(
       TABLES.SERVICE_ENDPOINTS,
       {
         observedAtMs: newerObservedAtMs,
-        sourceGeneration: fixture.writableCache.sourceOrder.tableGeneration(TABLES.SERVICE_ENDPOINTS),
+        sourceGeneration:
+          fixture.writableCache.sourceOrder.tableGeneration(TABLES.SERVICE_ENDPOINTS),
         causeId: 'newer-complete-observation',
       },
     );
@@ -848,7 +849,8 @@ t.test(
       TABLES.SERVICE_ENDPOINTS,
       {
         observedAtMs: AUTHORITATIVE_OBSERVED_AT_MS - 1,
-        sourceGeneration: fixture.writableCache.sourceOrder.tableGeneration(TABLES.SERVICE_ENDPOINTS),
+        sourceGeneration:
+          fixture.writableCache.sourceOrder.tableGeneration(TABLES.SERVICE_ENDPOINTS),
         causeId: 'older-observation',
       },
     );

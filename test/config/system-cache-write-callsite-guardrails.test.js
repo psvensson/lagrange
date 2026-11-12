@@ -13,12 +13,12 @@ const SANCTIONED_APPLY_CALL_COUNTS = Object.freeze({
   'bootstrap/node-joining-cdc-subscription-and-backfill.js': 1,
   'bootstrap/phases/create-message-group-phase.js': 1,
   'bootstrap/phases/query-system-state-phase.js': 2,
-  // The one durable-occurrence boundary delegates rows to the cache fold
+  // The cache's one durable-occurrence boundary delegates rows to its fold
   // and accepts only an effect retained by the exact source context. Image
   // publication stages and swaps the complete map and its source/absence
   // basis before notifications; the old per-row image mutation mode is gone.
   // This transfers the existing sanctioned callsite, without adding one.
-  'cache/system-table-cache-source-effect-application.js': 1,
+  'cache/system-table-cache.js': 1,
   // The CDC authoritative cache-repair owner. 55a42ef57 (one CDC terminal
   // gate at the owner) extracted the repair body out of
   // cdc-integration-service-cache-visibility-wait.js into the module-private

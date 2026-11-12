@@ -689,7 +689,6 @@ test('W9: an isolated canonical CONFIG vector commits all 65 remote native membe
     false,
     'W9 negative control: mutated 65th vector element is rejected',
   );
-
 });
 
 test(

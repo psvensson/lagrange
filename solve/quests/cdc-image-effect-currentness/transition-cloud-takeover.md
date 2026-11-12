@@ -834,3 +834,108 @@ The original generated patch could not be recovered after its staged worktree
 closed; generator success/digests remain stdout evidence only. No reconstruction
 or generator rerun is claimed. The next metadata producer must capture its patch
 with Node before its worktree closes.
+
+
+## Canonical cache effect ownership and measured-complexity decomposition
+
+Original2950's production gateway audit flags the standalone source-effect
+module's direct cache mutation. Root approved consolidating that entire effect
+application in existing SystemTableCache.applySourceCdcEvent and deleting the
+forwarding module, preserving public API, SourceOrder basis owner and all typed
+outcomes/recovery. The exact callsite guard transfers its existing count1 to the
+canonical class, with no count growth, matcher change or production-audit waiver.
+Both impact lists already retain that canonical class; only the deleted path is
+removed. Existing imports have the same effective dependencies through the class.
+
+Root also approved private phase decomposition for measured complexity. The
+canonical applySystemTableChange still visibly owns source invalidation before
+any tombstone mutation/fence, row-fold application, exact-context source recording,
+mutation revision, observation and both notifications. Input capture is read-only
+and retains refusal ordering: generation then exact effect context before row-key
+reads. The fold switch and observer payload publication remain private to this
+same owner. Source vector/member position predicates and per-key coverage use the
+same captured intrinsics and order; supplied sweep snapshot and revision-only
+observation hint predicates remain inside their existing owners. No second state,
+clock, scheduler, decoder or authority path is added. Raw class source is below
+the existing800-line bound; the actual required gates remain lab-owned.
+
+This is a reviewable unverified maintenance candidate over655894. Original21da
+runtime results remain claims about that exact seal, not automatic acceptance of
+this refactor. Catchup completeness remains unchanged pending3076 first-original
+and root's canonical classifier composition. No local tests/checkers executed.
+
+
+### Independent b39 review correction
+
+Root independently read b39 ownership/policy/mutation phases and accepted their design, requesting two exact preservation corrections: defer range.sourcePartition read until original event/table guards, and consume the pre-effect incomingVersionAccepted capture instead of rereading folded.accepted after observers. Both are restored; numeric position predicate also retains original comparison operators/short circuit. This is order restoration only; no new controls or local execution. Remaining metrics/lint are a separate active slice.
+
+
+## Remaining measured metric phases and lint editing
+
+Root's independent final review approved b39+2c4 canonical cache ownership and
+order-restoration slice for lab verification. This next unverified maintenance
+slice addresses the remaining measured non-catchup function complexity within
+existing owners. CDC construction resolves its existing writable dependency,
+partition-provider and logger choices in private synchronous functions. CDC event
+conversion keeps durable row bytes and ordinary row normalization separate;
+ordering diagnostics remain before the same apply try/catch. The canonical
+handler retains both actual apply calls. Relist image result processing and image
+diagnostics are private synchronous phases: original capture/currentness checks,
+awaits, slot try/finally, reentrant observer recheck and paced retry stay in place.
+Projection cache selection remains synchronous unless the original explicit
+provider is async. Raft timing calculation is private; validation, configuration
+assignment, configureTick, optional runtime interval, log and return keep order.
+No asynchronous wrapper, clock, registry, alternative authority or gate change
+was added by these extractions.
+
+The original3003 lint locations were corrected through source edits: braces,
+indentation, line wrapping, unused imports and padded blank lines. Assertions,
+held effects, native controls and timing bounds remain unchanged. This does not
+claim lint passed; the next exact lab static run must measure it. Raw R2 root is
+1442 lines and cache/source-order files are696/731 lines, below existing file-size
+thresholds; no local checker was executed. Catchup's measured59/cognitive112 is
+still an open independent phase and is not hidden by this freeze. Root-owned
+executeOwnerLocalRead complexity is handled by the authority composition.
+
+
+## Paged fixture import failure and bounded correction
+
+Original3087 on exact655894 executed zero assertions. Its complete2078-byte
+stream SHA256`09ebd054f4f82c3576597d38ff91c18d87856b8cfd0217b280628f40af6bd605`
+stopped at module instantiation: the new fixture imported private
+SOURCE_RELIST_STATE, which the source-order module does not export. No stopped,
+reset or recovery outcome was measured in this attempt. The original is retained.
+
+Source inspection confirms positionOf exposes its diagnostic relist value and
+existing R2 controls already assert literal`no_relister` and`idle`. Root
+independently reviewed and approved blob`7e36f125e84bb62750c254f1505b9c3316fb2fbb`:
+remove only the invalid named import and use those same public diagnostic values.
+All semantic assertions, exact image-page checks, waits and clocks are unchanged;
+no production export or behavior is added. This tests-only correction stays on
+655894/source355a0121ec928d076ae2dc14cb44d7ddd0b90b54 for one affected-root lab
+renewal, independent of active maintenance source. No local execution.
+
+
+## Catchup completeness and selected-token controls (tests-only)
+
+Root independently reviewed and approved test blob
+`dbb64749d68b455e90db5e2b43b7eaf2e6bb89f8` on the unchanged resource source
+`21da553a06fd5580c3abd0f7b183559e0a957185` / source tree
+`4d6bee138b142836e7f246bef9fc650801324f5c`. The controls execute actual
+CDC catchup, authoritative read flow and SystemTableCache through controlled RPC
+and local partition ports. They are not native membership or snapshot proof.
+
+The nine incomplete original owner forms must preserve an unseen cached row,
+complete observation debt and the same selected token before same-owner complete
+healing. Explicit null/mutable authority must refuse before any owner/effect and
+then accept a later valid token. Explicit bootstrap local positive repair remains
+provisional: no remote prerequisite, absence sweep or complete watermark.
+
+Root approved the corresponding design boundary: only an omitted token may be
+constructed; a supplied token must pass the canonical owner assertion unchanged.
+Remote full-collection catchup requires the existing canonical complete-result
+classifier before absence, freshness or hydrated claims. The controlled bootstrap
+positive may repair keys without claiming collection completeness. The production
+correction will consume the composed canonical classifier rather than introduce a
+second decoder. These tests are frozen before that correction for a first lab
+original. No local execution or acceptance claim.

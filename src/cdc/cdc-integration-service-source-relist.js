@@ -305,6 +305,24 @@ function installFetchedImage(cache, token, image) {
   return installSourceImage(cache, token, image);
 }
 
+function finishFetchedImage(service, request, record, cache, token, fetched) {
+  if (fetched.image) {
+    const installed = installFetchedImage(cache, token, fetched.image);
+    if (installed.admission !== SOURCE_IMAGE_ADMISSION.CELL_CHANGED) {
+      Object.assign(record, {pages: fetched.image.pages, rows: fetched.image.rows.length,
+        bytes: fetched.image.bytes});
+      return {outcome: SOURCE_RELIST_OUTCOME.RETRY, installed};
+    }
+    countRestart(record, SOURCE_RELIST_FAILURE.CELL_CHANGED);
+  } else {
+    countRestart(record, fetched.failure, fetched.error);
+    emitImageDiagnostic(record, () => service.logger?.debug?.(
+      SOURCE_RELIST_LOG_MSG.PAGE_FAILED, {...request,
+        failure: fetched.failure, error: fetched.error}));
+  }
+  return {outcome: SOURCE_IMAGE_ATTEMPT_OUTCOME.RESTART, retryAfterMs: fetched.retryAfterMs ?? 0};
+}
+
 async function listImageAttempt(service, request, record, terminal) {
   const stopped = terminal();
   if (!request.isCurrent()) return {outcome: SOURCE_RELIST_OUTCOME.RETRY};
@@ -312,7 +330,9 @@ async function listImageAttempt(service, request, record, terminal) {
   const cache = service.cacheMutationTarget;
   const sourceOrder = cache.sourceOrder;
   const slot = await acquireImageSlot(service);
-  if (slot.state === SOURCE_IMAGE_SLOT_STATE.STOPPED) return {outcome: SOURCE_RELIST_OUTCOME.STOPPED};
+  if (slot.state === SOURCE_IMAGE_SLOT_STATE.STOPPED) {
+    return {outcome: SOURCE_RELIST_OUTCOME.STOPPED};
+  }
   try {
     const stoppedAfterAcquire = terminal();
     if (!request.isCurrent()) return {outcome: SOURCE_RELIST_OUTCOME.RETRY};
@@ -325,21 +345,7 @@ async function listImageAttempt(service, request, record, terminal) {
     const stoppedAfterFetch = terminal();
     if (!request.isCurrent()) return {outcome: SOURCE_RELIST_OUTCOME.RETRY};
     if (fetched.stopped || stoppedAfterFetch) return {outcome: SOURCE_RELIST_OUTCOME.STOPPED};
-    if (fetched.image) {
-      const installed = installFetchedImage(cache, token, fetched.image);
-      if (installed.admission !== SOURCE_IMAGE_ADMISSION.CELL_CHANGED) {
-        Object.assign(record, {pages: fetched.image.pages, rows: fetched.image.rows.length,
-          bytes: fetched.image.bytes});
-        return {outcome: SOURCE_RELIST_OUTCOME.RETRY, installed};
-      }
-      countRestart(record, SOURCE_RELIST_FAILURE.CELL_CHANGED);
-    } else {
-      countRestart(record, fetched.failure, fetched.error);
-      emitImageDiagnostic(record, () => service.logger?.debug?.(
-        SOURCE_RELIST_LOG_MSG.PAGE_FAILED, {...request,
-          failure: fetched.failure, error: fetched.error}));
-    }
-    return {outcome: SOURCE_IMAGE_ATTEMPT_OUTCOME.RESTART, retryAfterMs: fetched.retryAfterMs ?? 0};
+    return finishFetchedImage(service, request, record, cache, token, fetched);
   } finally {
     slot.release();
   }
@@ -364,6 +370,17 @@ async function listOneImage(service, request, record, terminal) {
     await paceImageRetry(service, record.lastFailure, hintMs > 0 ? hintMs :
       SOURCE_RELIST_BOUND.RELIST_RETRY_DELAY_MS);
   }
+}
+
+function reportListedImage(service, request, sourceOrder, record, listed) {
+  // The cell as it stands after the (synchronous) install, or after none.
+  const cell = sourceOrder.positionOf(request.sourcePartition);
+  // An installed image's outcome is its admission; else the list's own.
+  const imageOutcome = listed.installed === undefined ? listed.outcome :
+    listed.installed.admission;
+  logImage(service, record, imageOutcome,
+    {state: cell.state, appliedIndex: cell.position?.logIndex ?? null,
+      upserted: listed.installed?.upserted ?? 0, deleted: listed.installed?.deleted ?? 0});
 }
 
 /**
@@ -396,21 +413,15 @@ async function relistSourceTable(service, request) {
     listed = {outcome: SOURCE_RELIST_OUTCOME.RETRY, failure: record.lastFailure};
   }
   if (!request.isCurrent()) return SOURCE_RELIST_OUTCOME.RETRY;
-  // The cell as it stands after the (synchronous) install, or after none.
-  const cell = sourceOrder.positionOf(request.sourcePartition);
-  // An installed image's outcome is its admission; else the list's own.
-  const imageOutcome = listed.installed === undefined ? listed.outcome :
-    listed.installed.admission;
-  logImage(service, record, imageOutcome,
-    {state: cell.state, appliedIndex: cell.position?.logIndex ?? null,
-      upserted: listed.installed?.upserted ?? 0, deleted: listed.installed?.deleted ?? 0});
+  reportListedImage(service, request, sourceOrder, record, listed);
   if (listed.outcome === SOURCE_RELIST_OUTCOME.STOPPED) return listed.outcome;
   // Logging can itself reenter an authoritative mutation. Decide the pace
   // from the current cell after every observer, not the pre-log snapshot.
   if (!request.isCurrent() ||
       sourceOrder.positionOf(request.sourcePartition).state !==
       SOURCE_POSITION_STATE.GAP) return SOURCE_RELIST_OUTCOME.RETRY;
-  await paceImageRetry(service, listed.failure ?? listed, SOURCE_RELIST_BOUND.RELIST_RETRY_DELAY_MS);
+  await paceImageRetry(service, listed.failure ?? listed,
+    SOURCE_RELIST_BOUND.RELIST_RETRY_DELAY_MS);
   return terminal() ? SOURCE_RELIST_OUTCOME.STOPPED : SOURCE_RELIST_OUTCOME.RETRY;
 }
 

@@ -91,6 +91,16 @@ function extractReadAuthorityWitnessRevisionFields(witness) {
   };
 }
 
+function readCacheProjectionRows(systemTableCache, tableName, cachePredicate) {
+  if (cachePredicate && typeof systemTableCache?.filter === 'function') {
+    return systemTableCache.filter(tableName, cachePredicate) || [];
+  }
+  if (typeof systemTableCache?.getAll === 'function') {
+    return systemTableCache.getAll(tableName) || [];
+  }
+  return [];
+}
+
 const controlPlaneSystemTableGatewayReadStrategyMethods = {
   /**
    * @param {string} tableName
@@ -129,13 +139,8 @@ const controlPlaneSystemTableGatewayReadStrategyMethods = {
         options,
       );
       rows = Array.isArray(cacheRows) ? cacheRows : [];
-    } else if (
-      cachePredicate &&
-      typeof systemTableCache?.filter === 'function'
-    ) {
-      rows = systemTableCache.filter(tableName, cachePredicate) || [];
-    } else if (typeof systemTableCache?.getAll === 'function') {
-      rows = systemTableCache.getAll(tableName) || [];
+    } else {
+      rows = readCacheProjectionRows(systemTableCache, tableName, cachePredicate);
     }
 
     return {
