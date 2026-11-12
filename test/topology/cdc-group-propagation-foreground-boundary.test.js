@@ -2,6 +2,7 @@
 // on the actual source ledger/subscriber/topology fixture with controlled
 // recipient answers; they do not claim native recipient commit proof.
 import assert from 'node:assert/strict';
+import {performance} from 'node:perf_hooks';
 import {afterEach, beforeEach, test} from 'node:test';
 
 import {WAIT_BOUND_SPENT_EVENT} from '../../src/logging/wait-bound-spent.js';
@@ -18,6 +19,7 @@ import {setupConfig, teardownConfig} from './cdc-group-propagation-service-harne
 import {scaleByMachineFactor} from '../../scripts/test-machine-factor.js';
 
 const RETRY_DELAY_MS = 50;
+const diagnosticNow = performance.now.bind(performance);
 // A hang guard over the real source fixture (its first leader start warms the
 // runtime), scaled for the host like every work-bound budget.
 const TEST_TIMEOUT_MS = 3000;
@@ -46,13 +48,14 @@ function spentReports(entries) {
 
 // The barrier holds only the already-computed result. The production helper
 // still decides, schedules, sleeps and observes stop through its real owners.
-function observeRetryDecisions(t, service, barrier = false) {
+function observeRetryDecisions(t, service, barrier = false, trace = null) {
   const decisions = [];
   const reached = Promise.withResolvers();
   const released = Promise.withResolvers();
   const actual = service.waitForForegroundRetry.bind(service);
   service.waitForForegroundRetry = async (...args) => {
     const decision = await actual(...args);
+    trace?.('retry-decision', {state: decision.state});
     decisions.push(decision);
     reached.resolve(decision);
     if (barrier) await released.promise;
@@ -63,8 +66,10 @@ function observeRetryDecisions(t, service, barrier = false) {
 }
 
 
-async function durableFixture(t, maxAttempts) {
+async function durableFixture(t, maxAttempts, trace = null) {
+  trace?.('fixture-start');
   const f = await topologyProgressFixture(t);
+  trace?.('fixture-ready');
   f.topology.deliveryRetryMaxAttempts = maxAttempts;
   f.topology.deliveryRetryDelayMs = RETRY_DELAY_MS;
   f.topology.deliveryRetryMaxDelayMs = RETRY_DELAY_MS;
@@ -108,20 +113,29 @@ async function assertStoppedDrive(f, drive) {
   assertDurableDebt(f);
 }
 
-async function barrierFixture(t, maxAttempts) {
-  const f = await durableFixture(t, maxAttempts);
-  f.observed = observeRetryDecisions(t, f.topology, true);
+async function barrierFixture(t, maxAttempts, trace = null) {
+  const f = await durableFixture(t, maxAttempts, trace);
+  f.observed = observeRetryDecisions(t, f.topology, true, trace);
   return f;
 }
 
 test('foreground consumer rechecks stop after actual ATTEMPTS_EXHAUSTED',
   {timeout: scaleByMachineFactor(TEST_TIMEOUT_MS)}, async (t) => {
-    const f = await barrierFixture(t, 1);
+    const stages = [];
+    const started = diagnosticNow();
+    const trace = (stage, fields = {}) => stages.push({stage,
+      elapsedMs: diagnosticNow() - started, ...fields});
+    t.after(() => t.diagnostic(JSON.stringify({cdcForegroundStages: stages})));
+    const f = await barrierFixture(t, 1, trace);
+    trace('drive-start');
     const drive = f.drive();
     assert.equal((await f.observed.reached).state, RETRY.ATTEMPTS_EXHAUSTED);
+    trace('retry-decision-consumed');
     f.topology.stop();
+    trace('stop-returned');
     f.observed.release();
     await assertStoppedDrive(f, drive);
+    trace('stopped-drive-asserted');
   });
 
 test('foreground consumer rechecks stop after actual sleep returns ADVANCE',
