@@ -25,10 +25,14 @@ are preserved; no source writer works in the primary checkout.
   completed; it records a complexity failure of 1,702 versus baseline 1,697,
   which is retained, not waived. Cycle and both duplication ratchets pass.
   These changes are committed and pushed as
-  `eaccbd37a2794e6afbc46f4eb9d5434cc6a9802e`. Its full lab run is active
-  across five hosts plus controller placement; the integration tree stays
-  frozen. First failures remain in
+  `eaccbd37a2794e6afbc46f4eb9d5434cc6a9802e`. Its full lab run completed
+  across five hosts plus controller placement: 2,741 passed and 28 failed
+  out of 2,769 files, with 107,019 assertions. Source stayed frozen for that
+  run. First failures remain in
   `/tmp/lagrange-takeover-20261112-full-lab-eaccbd37a.log` and placement logs.
+  A rehashed copy is in `/tmp/lagrange-takeover-full-lab-eaccbd37a-20261112`;
+  its manifest SHA-256 is
+  `302a6da9f29ee4353a0d486da104ab213bc92d43b086a46ab81fa08c6fe06b07`.
   The first inventory measurement rejected changing inputs;
   a subsequent run was interrupted. Neither supersedes the completed result.
 - F: compose `1046d897d` and `3ce07ba54` in an isolated worktree, preserving
@@ -63,12 +67,14 @@ are preserved; no source writer works in the primary checkout.
 - Lab fixture repair: the required cache subscription contract exposed a
   family of incomplete test doubles. Stronger-model repair in
   `lagrange-codex-lab-fixtures-20261112` has 26 focused files passing with
-  1,242 assertions and awaits independent review. Its original lower-model
+  1,242 assertions and independent bounded approval. It is integrated as
+  `38cd22346`. Its original lower-model
   failure is retained. Production fallbacks and test bounds are unchanged.
 - Other isolated work: direct example-owner import and SEA host requirement
-  are independently approved only as a bounded delta, preserved in WIP
-  `fddbae1be`. A clock-fixture repair is under stronger-model implementation
-  after a lower-model syntax failure. Closed native-role decoding has a
+  are independently approved only as a bounded delta, integrated as
+  `6313ab6a2` from WIP `fddbae1be`. A stronger clock-fixture repair passed its
+  owning suite and mutation controls and awaits independent review;
+  its lower-model syntax failure remains retained. Closed native-role decoding has a
   red-first malformed-role witness. CDC timing/occurrence failures remain
   under diagnosis; package/solve budgets and census closure remain open.
 
