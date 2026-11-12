@@ -1,3 +1,4 @@
+import {buildFailedRemovalOutcome} from './replica-removal-debt-errors.js';
 import {
   ReplicaOperationField,
   ReplicaOperationMessageType,
@@ -470,6 +471,7 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
           return this.buildReplicaOperationResponse(
             ReplicaOperationResponseStatus.ERROR,
             {
+              ...buildFailedRemovalOutcome(replicaId, error),
               error: error.message,
               replicaId,
               nodeId: this.nodeId,
