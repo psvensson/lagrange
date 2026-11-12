@@ -31,6 +31,8 @@ import {buildClusterIncarnationFence} from '../../src/bootstrap/cluster-incarnat
 import fs from 'node:fs';
 
 import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
+import {publicationsOwnerOverRows} from
+  './publication-owner-test-support.js';
 const NOW = 10_000;
 // The real startup-branch fences (src/lagrange-runtime-startup.js): the seed
 // boots over a fresh data directory; a joiner persists rejoin hints first.
@@ -219,15 +221,15 @@ function buildNodesCache(rows) {
 
 function buildFormationPublicationStorageOwner() {
   let durableRow = null;
-  return {
-    async upsertPublication(row) {
+  return publicationsOwnerOverRows({
+    async storeRow(row) {
       durableRow = row;
       return row;
     },
     async getPublication() {
       return durableRow;
     },
-  };
+  });
 }
 
 test('formation release handoff retains one generation across a reopened ' +
@@ -528,15 +530,15 @@ test('formation barrier consumes the seed-owned durable contract on a distinct '
   });
   const ownerReady = buildAuthority();
   let durablePublicationRow = null;
-  const storageOwner = {
-    async upsertPublication(row) {
+  const storageOwner = publicationsOwnerOverRows({
+    async storeRow(row) {
       durablePublicationRow = row;
       return row;
     },
     async getPublication() {
       return durablePublicationRow;
     },
-  };
+  });
   const cache = buildNodesCache(rows);
   const seedService = createReadinessServiceForTest({
     nodeId: 'seed',
@@ -1001,8 +1003,8 @@ async (t) => {
   let writeCount = 0;
   const durableGenerations = [];
   const coordinator = new FormationReleaseHandoffPublicationCoordinator({
-    getStorageOwner: () => ({
-      async upsertPublication(row) {
+    getStorageOwner: () => (publicationsOwnerOverRows({
+      async storeRow(row) {
         writeCount += 1;
         if (writeCount === 1) await firstGate;
         durableRow = row;
@@ -1010,7 +1012,7 @@ async (t) => {
       async getPublication() {
         return durableRow;
       },
-    }),
+    })),
     onDurable: (durable) => {
       durableGenerations.push(durable.observedPublicationEpoch);
     },
@@ -1036,8 +1038,8 @@ async (t) => {
   let ignoredRow = null;
   const mismatchedCoordinator =
     new FormationReleaseHandoffPublicationCoordinator({
-      getStorageOwner: () => ({
-        async upsertPublication(row) {
+      getStorageOwner: () => (publicationsOwnerOverRows({
+        async storeRow(row) {
           ignoredRow = row;
         },
         async getPublication() {
@@ -1047,7 +1049,7 @@ async (t) => {
             canonicalNodeIds: [...contract.canonicalNodeIds, 'extra-node'],
           }, NOW);
         },
-      }),
+      })),
       onDurable: () => {
         mismatchedDurableCalls += 1;
       },
@@ -1072,15 +1074,15 @@ async (t) => {
   ];
   const collisionCoordinator =
     new FormationReleaseHandoffPublicationCoordinator({
-      getStorageOwner: () => ({
-        async upsertPublication() {},
+      getStorageOwner: () => (publicationsOwnerOverRows({
+        async storeRow() {},
         async getPublication() {
           return buildFormationReleaseHandoffPublicationRow({
             ...contract,
             canonicalNodeIds: durableCanonicalNodeIds,
           }, NOW);
         },
-      }),
+      })),
       onDurable: () => {
         collisionDurableCalls += 1;
       },
@@ -1114,8 +1116,8 @@ async (t) => {
   let shutdownRearmCalls = 0;
   const shutdownCoordinator =
     new FormationReleaseHandoffPublicationCoordinator({
-      getStorageOwner: () => ({
-        async upsertPublication(row) {
+      getStorageOwner: () => (publicationsOwnerOverRows({
+        async storeRow(row) {
           shutdownWrites += 1;
           await shutdownGate;
           durableRow = row;
@@ -1123,7 +1125,7 @@ async (t) => {
         async getPublication() {
           return durableRow;
         },
-      }),
+      })),
       onDurable: () => {
         shutdownDurableCalls += 1;
       },

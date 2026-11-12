@@ -106,6 +106,11 @@ const FAIL_OPERATION_CALLER_FILES = Object.freeze([
   'operation-workflow-recovery-status-reconcile.js',
   'operation-workflow-replace-owner.js',
   'operation-workflow-stopping-starvation.js',
+  // Durable-first step writes: a step write typed permanent, and an owed
+  // step write whose operation budget is spent, settle through the same
+  // failure owner; its post-intent admission stays authoritative for REPLACE.
+  'operation-workflow-transition-orchestration.js',
+  'operation-workflow-transition-retry.js',
 ]);
 const FAILURE_FACADE_FILE = 'rebalance-coordinator-owner-facade.js';
 const FAILURE_LANE_FILE = 'operation-workflow-owner-execution-lane.js';
@@ -524,10 +529,14 @@ test('P1 edge (target status REMOVED after the intent): with the target ' +
   }
 });
 
+// Re-premised 2026-11-11 (R09, universal removal leadership rule): an
+// ordinary partition's LEADING source now gets the one named handoff like
+// every partition's, so "leadership is not moved first" is the follower
+// source under a third leader (retained, no handoff). Assertions unchanged.
 test('P1 (ordinary partition, no handoff): the same implication holds ' +
   'where leadership is not moved first', async (t) => {
   const world = await openReplaceWorld({partitionId: ORDINARY_PARTITION_ID,
-    sourceHandler: true});
+    sourceLeads: false, sourceHandler: true});
   try {
     world.currentEdge = 'ordinary';
     await driveToIntent(world);
@@ -809,16 +818,34 @@ test('P1\' (D2): after the durable intent no elapsed time, sweep, stale ' +
     t.ok(electAmongLive(world) !== null, 'a surviving member leads');
     // The survivors learn the leader over the next heartbeats; each entry
     // re-reads the authority.
-    for (let round = 0; round < 12 && (await readPersisted(world))
-      .workflowStep === WORKFLOW_STEP.STOPPING; round += 1) {
-      await world.coordinator.reconcileOperationProgress(
-        await readPersisted(world));
-      await settleTurns();
-      world.group.advance();
-    }
+    const enterUntilTerminal = async () => {
+      for (let round = 0; round < 12 && (await readPersisted(world))
+        .workflowStep === WORKFLOW_STEP.STOPPING; round += 1) {
+        await world.coordinator.reconcileOperationProgress(
+          await readPersisted(world));
+        await settleTurns();
+        world.group.advance();
+      }
+    };
+    await enterUntilTerminal();
+    // The source's row (which names the generation its removal is
+    // cancelled for) is gone from the owner's view: the cancel cannot be
+    // asked, and an unanswered cancel records nothing (2026-11-11).
+    t.equal((await readPersisted(world)).workflowStep,
+      WORKFLOW_STEP.STOPPING, 'no cancel answered: it waits');
+    t.equal(readReplaceOwnerDiagnostic(owner, world.operation.operationId)
+      ?.reason, REPLACE_WAIT_REASON.SOURCE_REMOVAL_CANCEL_PENDING,
+    'named: the source removal\'s cancellation is pending');
+    t.equal(world.terminalWrites.length, 0, 'no terminal write');
+    // The source node's own row reaches the owner again: the cancel is
+    // asked, its node cancels, and the source is retained.
+    const sourceRow = (await world.sourceHandler.handler.replicaStateMachine
+      .observeAuthoritativeReplicaLifecycle(world.sourceReplicaId)).row;
+    world.cache.upsert('services', sourceRow);
+    await enterUntilTerminal();
     const persisted = await readPersisted(world);
     t.equal(persisted.workflowStep, WORKFLOW_STEP.FAILED,
-      'target dead, source still a voter: FAILED');
+      'target dead, source still a voter, its removal cancelled: FAILED');
     t.match(String(persisted.errorMessage), POST_INTENT_TARGET_DEATH,
       'the one admitted post-intent failure');
     t.equal(world.group.sourceCommittedVoter(world.sourceReplicaId), true,

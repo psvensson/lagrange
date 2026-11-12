@@ -8,6 +8,7 @@ import {canonicalizeSchemaProvisioningIntent} from
   '../../src/query/schema-provisioning-intent.js';
 import {TableCreationService} from
   '../../src/query/table-creation-service.js';
+import {createTableThroughDurableJob} from './table-creation-durable-job-fixture.js';
 import {CDC_TABLE_POLICY_REFUSAL} from '../../src/cache/cdc-table-policy.js';
 import {POLICY_ERROR_CODE} from '../../src/policy/policy-constants.js';
 
@@ -30,6 +31,9 @@ function createService(submittedMutations) {
     },
     cdcIntegrationService: {},
     controlPlaneSystemTableGateway: {
+      async readRows() {
+        return {success: true, rows: []};
+      },
       async submitMutation(mutation, options) {
         submittedMutations.push({mutation, options});
         return {
@@ -85,7 +89,7 @@ test('CREATE TABLE projects its sparse split policy in the table insert',
     const submittedMutations = [];
     const service = createService(submittedMutations);
 
-    const result = await service.executeCreateTableProvisioning(
+    const result = await createTableThroughDurableJob(service,
       new SQLParser(CREATE_WITH_POLICY_SQL).parse(),
     );
 
@@ -120,7 +124,7 @@ test('CREATE TABLE validates programmatic table-policy options before writes',
     };
 
     await t.rejects(
-      service.executeCreateTableProvisioning(ast),
+      createTableThroughDurableJob(service, ast),
       {code: POLICY_ERROR_CODE.POLICY_INVALID},
     );
     t.equal(submittedMutations.length, 0,
@@ -139,7 +143,7 @@ test('CREATE TABLE refuses a table policy that requests external CDC, typed, bef
   ast.options = {tablePolicy: {externalCdcAllowed: true}};
   let refusal = null;
   try {
-    await service.executeCreateTableProvisioning(ast);
+    await createTableThroughDurableJob(service, ast);
   } catch (error) {
     refusal = error.code ?? error.message;
   }

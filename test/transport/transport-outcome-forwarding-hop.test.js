@@ -25,6 +25,7 @@ const HOP2 = 'forward-hop-2';
 const HOP1_ADDRESS = `${HOP1}/service/forwarder`;
 const HOP2_ADDRESS = `${HOP2}/service/recipient`;
 const FIELD_VALUES = Object.freeze({
+  acknowledgement: ['acknowledged', 'unacknowledged', 'not_sent', 'rejected', '', null],
   deliveryState: [STATE.DELIVERED, STATE.DEFERRED, STATE.FAILED, '', null, 1],
   deferRetry: [true, false, 'yes'],
   errorCode: [null, '', 'x', 'ROUTER_CONNECTION_CLOSED', 'router_no_connection'],
@@ -104,6 +105,6 @@ test('a forwarded delivery keeps hop1 transport its own and is a fixed point',
       }
       if (problems.length > 0) violations.push(`${entry.name}: ${problems.join(', ')}`);
     }
-    t.equal(size, 3 * (1 + 6 + 3 + 5 + 3 + 2 + 5), 'the whole matrix was forwarded');
+    t.equal(size, 3 * (1 + 6 + 6 + 3 + 5 + 3 + 2 + 5), 'the whole matrix was forwarded');
     t.same(violations, [], 'every forwarded delivery keeps each hop in its own namespace');
   });

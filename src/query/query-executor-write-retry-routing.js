@@ -6,9 +6,17 @@ import {
 import {
   QueryExecutorCanonicalLeaderRoutingMethods,
 } from './query-executor-canonical-leader-routing-methods.js';
+import {
+  TRANSPORT_DELIVERY_FAILURE,
+  classifyTransportDeliveryFailure,
+  mayResendAfterTransportFailure,
+} from '../transport/transport-delivery-failure.js';
+import {
+  isPartitionWriteFailureCode,
+  isReroutableWriteFailureCode,
+} from '../partition/partition-write-kernel.js';
 
 const {
-  COLUMN,
   CONTROL_PLANE_READ_PURPOSE,
   CONTROL_PLANE_READ_LEADER_MODE,
   CONTROL_PLANE_WRITE_RETRY_DECISION_STATE,
@@ -17,7 +25,6 @@ const {
   QUERY_EXECUTOR_ROUTING_OPTION_FIELD,
   QUERY_ROUTING_REPAIR_REASON,
   SYSTEM_TABLE_NAMES,
-  TRANSPORT_ERROR_MSG,
   isRetryableControlPlaneError,
   normalizeParticipantRetryAfterMs,
 } = QUERY_EXECUTOR_SHARED;
@@ -366,44 +373,43 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
   }
 
   /**
-   * Check if an error represents a stale no-handler transport witness.
-   * @param {string} errorMessage - Error message.
+   * Whether a failure is the transport's wrong-owner answer: the target
+   * serves nothing at the address (a stale no-handler witness).
+   * @param {*} failure - The thrown Error or the delivery reading.
    * @return {boolean}
    * @private
    */
-  isNoHandlerFailure(errorMessage) {
-    return (
-      typeof errorMessage === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-      errorMessage.includes(ERRORS.NO_HANDLER_FOR_ADDRESS)
-    );
+  isNoHandlerFailure(failure) {
+    return classifyTransportDeliveryFailure(failure) ===
+      TRANSPORT_DELIVERY_FAILURE.WRONG_OWNER;
   }
 
   /**
-   * Check if an error indicates missing partition leadership.
-   * @param {string} errorMessage - Error message.
-   * @return {boolean} True if leader is unavailable.
+   * Whether a failed write is sent again (to the next candidate). A
+   * transport failure is decided by the transport's one delivery-failure
+   * decision and this write's one fact: whether every delivery carries the
+   * same entryId (an ambiguous failure is re-sent only then). A partition
+   * answer is decided by the write kernel's code, or by the errors owner's
+   * text when only its text reached here (the forwarding follower's
+   * 'Failed to forward write to leader' answer has no code yet).
+   * @param {string} errorMessage - The failure's text.
+   * @param {*} failure - The thrown Error or the delivery reading.
+   * @param {boolean} identityKeyed - Every delivery carries one entryId.
+   * @return {boolean} True if the write is routed again.
    * @private
    */
-  isLeaderUnavailable(errorMessage, errorCode = null) {
-    if (errorCode === QUERY_EXECUTOR_LITERAL.STRING_ROUTER_CONNECTION_CLOSED) {
-      return true;
+  isLeaderUnavailable(errorMessage, failure = null, identityKeyed = false) {
+    const transportFailure = classifyTransportDeliveryFailure(failure);
+    if (transportFailure !== TRANSPORT_DELIVERY_FAILURE.NOT_TRANSPORT) {
+      return mayResendAfterTransportFailure(transportFailure, {identityKeyed});
     }
-    return (
-      errorMessage &&
-      (isReroutableWriteError(errorMessage) ||
-        errorMessage.includes(TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT) ||
-        errorMessage.includes(ERRORS.NO_HANDLER_FOR_ADDRESS) ||
-        (errorMessage.includes(
-          QUERY_EXECUTOR_LITERAL.STRING_CONNECTION_TO_NODE,
-        ) &&
-          errorMessage.includes(QUERY_EXECUTOR_LITERAL.STRING_CLOSED)) ||
-        errorMessage.includes(
-          QUERY_EXECUTOR_LITERAL.STRING_NO_CONNECTION_TO_NODE,
-        ) ||
-        errorMessage.includes(
-          QUERY_EXECUTOR_LITERAL.STRING_FAILED_TO_FORWARD_WRITE_TO_LEADER,
-        ))
-    );
+    if (isPartitionWriteFailureCode(failure?.failureCode)) {
+      return isReroutableWriteFailureCode(failure.failureCode,
+        {carriesEntryId: identityKeyed});
+    }
+    return typeof errorMessage === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
+      (isReroutableWriteError(errorMessage) || errorMessage.includes(
+        QUERY_EXECUTOR_LITERAL.STRING_FAILED_TO_FORWARD_WRITE_TO_LEADER));
   }
 
   /**
@@ -415,7 +421,6 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
   resolvePartitionTableName(partitionId) {
     const partition = this.getPartitionRecord(partitionId);
     const tableName =
-      partition?.[COLUMN.TABLE_NAME] ??
       partition?.table_name ??
       partition?.tableName ??
       partition?.table_id ??

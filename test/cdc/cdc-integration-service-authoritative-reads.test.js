@@ -32,6 +32,8 @@ import {
 import {
 } from '../../src/control-plane/timeout-budget.js';
 import {CDC_EVENT} from '../../src/cdc/cdc-constants.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {createReadOnlyCache} from '../../src/cache/read-only-system-table-cache.js';
 import {
 } from '../../src/control-plane/read-model-contract.js';
 import {
@@ -139,9 +141,8 @@ test('CDCIntegrationService - authoritative cache confirmation prefers local par
       workflow_step: 'CREATING',
       updated_at: 500,
     };
-    const cacheState = {
-      row: null,
-    };
+    // The real cache: the writable owner and its read view.
+    const cache = new SystemTableCache();
     const sqlQueryEngine = {
       executedQueries: [],
       async executeQuery(sql, params = []) {
@@ -155,19 +156,8 @@ test('CDCIntegrationService - authoritative cache confirmation prefers local par
     const service = new CDCIntegrationService({
       nodeId: 'test-node',
       sqlQueryEngine,
-      systemTableCache: {
-        has() {
-          return Boolean(cacheState.row);
-        },
-        get() {
-          return cacheState.row;
-        },
-      },
-      cacheMutationTarget: {
-        applySystemTableChange(_tableName, _operation, row) {
-          cacheState.row = {...row};
-        },
-      },
+      systemTableCache: createReadOnlyCache(cache),
+      cacheMutationTarget: cache,
       partitionServicesProvider: () => createLocalSystemTablePartitionServices(
         SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
         {
@@ -206,7 +196,7 @@ test('CDCIntegrationService - authoritative cache confirmation prefers local par
       'should confirm the authoritative row without routed SQL');
     t.equal(repaired?.authoritativeVisibilityConfirmed, true,
       'local authoritative confirmation should preserve the confirmation state');
-    t.same(cacheState.row, authoritativeRow,
+    t.match(cache.get(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, operationId), authoritativeRow,
       'authoritative confirmation should hydrate the writable cache target');
     t.equal(
       sqlQueryEngine.executedQueries.length,

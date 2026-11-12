@@ -544,5 +544,11 @@ export async function run(cluster) {
   const report = buildReport({deps, logScan, seedNode, startedAtMs, state,
     userTable}, results);
   throwOnUnmetClaim(state, results, report);
-  return report;
+  return {
+    ...report,
+    diagnostics: {
+      freshFormationRoutability: report,
+    },
+    status: 'passed',
+  };
 }

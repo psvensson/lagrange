@@ -104,11 +104,11 @@ function buildProductionCacheRefreshHost({
     error: () => {},
   };
   host.systemTableCache = cache;
-  host.cacheMutationTarget = dropRepair ? {
-    applySystemTableChange() {
-      return true;
-    },
-  } : cache;
+  // dropRepair: the same real cache, with only its write seam dropping the
+  // repair (reads, snapshots and observations stay the cache's own).
+  host.cacheMutationTarget = dropRepair ?
+    Object.assign(Object.create(cache), {applySystemTableChange: () => true}) :
+    cache;
   host.getPrimaryKeyField = () => 'service_id';
   host.executeAuthoritativeSystemTableRead =
     async () => ({success: true, rows: [authoritativeRow]});

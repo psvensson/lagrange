@@ -14,7 +14,6 @@ import {TABLES} from '../constants/index.js';
 import {normalizeControlPlanePublicationRow} from '../control-plane/system-row-normalizers.js';
 import {CONTROL_PLANE_DELIVERY_PRIORITY} from '../control-plane/control-plane-constants.js';
 import {
-  PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION,
   PUBLICATION_ACTIVE_GATE_HANDOFF_STATE,
   resolvePublicationActiveGateMembershipPublicationTarget,
 } from '../control-plane/publication-active-gate-handoff-contract.js';
@@ -27,8 +26,11 @@ import {
   buildMembershipPublicationHandoffEnqueueOutcome,
   buildMembershipPublicationHandoffOutcome,
   isMembershipPublicationHandoffControlPlaneConvergence,
-  resolveOwnerRecoveryWaitHandoffReasonCode,
 } from './admin-control-membership-publication-handoff-outcomes.js';
+import {
+  MEMBERSHIP_PUBLICATION_OWNER_RECOVERY_WAIT,
+  resolveMembershipPublicationOwnerRecoveryWait,
+} from '../control-plane/membership-publication-owner-recovery-wait.js';
 import {AdminControlSnapshotControlPlaneDiagnostics} from './admin-control-snapshot-control-plane-diagnostics.js';
 import {isRecoverableControlSnapshotPublicationReadError} from './admin-control-snapshot-repair-diagnostics.js';
 import {MEMBERSHIP_PUBLICATION_READ_SOURCE} from
@@ -207,47 +209,6 @@ function buildDeferredMembershipPublicationReconcileOptions(options = {}) {
       MEMBERSHIP_PUBLICATION_HANDOFF_DEFERRED_SKIP_WRITE_READBACK,
   };
 }
-function isMembershipPublicationOwnerRecoveryWaitTarget(target = null) {
-  return target &&
-    typeof target === 'object' &&
-    !Array.isArray(target) &&
-    target.handoffContract?.nextAction ===
-      PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.WAIT_OWNER_RECOVERY &&
-    (
-      Number(target.pendingRecoveryCount) > 0 ||
-      Array.isArray(target.pendingRecoveryNodeIds) &&
-        target.pendingRecoveryNodeIds.length > 0
-    );
-}
-function buildOwnerRecoveryWaitReconcileOptions(options = {}) {
-  const publicationActiveGateHandoff =
-    options[
-      MEMBERSHIP_PUBLICATION_RECONCILE_FIELD
-        .PUBLICATION_ACTIVE_GATE_HANDOFF
-    ];
-  const latestPublicationRow =
-    resolveMembershipPublicationHandoffLatestPublicationRow(
-      publicationActiveGateHandoff,
-    );
-  return {
-    ...MEMBERSHIP_PUBLICATION_RECONCILE_OPTIONS,
-    ...(latestPublicationRow ?
-      {
-        [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.LATEST_PUBLICATION_ROW]:
-          latestPublicationRow,
-      } :
-      {}),
-    [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.PUBLICATION_ACTIVE_GATE_HANDOFF]:
-      publicationActiveGateHandoff,
-    [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.READ_PROFILE]:
-      MEMBERSHIP_PUBLICATION_READ_PROFILE_DIAGNOSTICS,
-    [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD
-      .DEFER_NESTED_PRIORITY_RECOVERY_PLANNING]:
-      MEMBERSHIP_PUBLICATION_HANDOFF_DEFER_NESTED_PRIORITY_RECOVERY,
-    [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.SKIP_PUBLICATION_WRITE_READBACK]:
-      MEMBERSHIP_PUBLICATION_HANDOFF_DEFERRED_SKIP_WRITE_READBACK,
-  };
-}
 function enqueueMembershipPublicationReconcileFallback(
   membershipPublicationService,
   reconcileOptions,
@@ -326,47 +287,37 @@ async function maybeReconcileAuthoritativeMembershipPublication(
       publicationActiveGateHandoff,
     );
   if (membershipPublicationTarget.reconcileRequired !== true) {
+    // The owner's wait predicate, consumed: an owner-recovery wait is the
+    // owner's to answer (its outcome names ownerRecoveryWait); this
+    // diagnostic never queues the handoff it read for the owner to replay.
     if (
-      isMembershipPublicationOwnerRecoveryWaitTarget(
+      resolveMembershipPublicationOwnerRecoveryWait(
         membershipPublicationTarget,
-      ) === true
+      ) ===
+        MEMBERSHIP_PUBLICATION_OWNER_RECOVERY_WAIT.AWAITING_RECOVERY_PROGRESS
     ) {
-      if (!membershipPublicationService) {
-        const recoveryWaitReason =
-          MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_REASON_OWNER_RECOVERY_WAIT_SERVICE_UNAVAILABLE;
-        const controlPlaneConvergence =
-          buildMembershipPublicationHandoffControlPlaneConvergence({
-            reasonCode: recoveryWaitReason,
-          });
-        return buildMembershipPublicationHandoffOutcome(
-          MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_STATE.WRITE_DEFERRED,
-          {
-            target: membershipPublicationTarget,
-            reasonCode: recoveryWaitReason,
-            retryAfterMs: resolveMembershipPublicationHandoffRetryAfterMs(
-              controlPlaneConvergence?.retryAfterMs,
-            ),
-            controlPlaneConvergence,
-          },
-        );
+      if (membershipPublicationService) {
+        return await membershipPublicationService
+          .reconcileActiveGateMembershipPublication(
+            publicationActiveGateHandoff,
+            options,
+          );
       }
-      const enqueueOutcome = enqueueMembershipPublicationReconcileFallback(
-        membershipPublicationService,
-        buildOwnerRecoveryWaitReconcileOptions(options),
-      );
+      const recoveryWaitReason =
+        MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_REASON_OWNER_RECOVERY_WAIT_SERVICE_UNAVAILABLE;
+      const controlPlaneConvergence =
+        buildMembershipPublicationHandoffControlPlaneConvergence({
+          reasonCode: recoveryWaitReason,
+        });
       return buildMembershipPublicationHandoffOutcome(
         MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_STATE.WRITE_DEFERRED,
         {
           target: membershipPublicationTarget,
-          enqueued: enqueueOutcome.accepted,
-          reasonCode: resolveOwnerRecoveryWaitHandoffReasonCode(
-            enqueueOutcome,
-          ),
+          reasonCode: recoveryWaitReason,
           retryAfterMs: resolveMembershipPublicationHandoffRetryAfterMs(
-            enqueueOutcome.controlPlaneConvergence?.retryAfterMs,
+            controlPlaneConvergence?.retryAfterMs,
           ),
-          controlPlaneConvergence:
-            enqueueOutcome.controlPlaneConvergence,
+          controlPlaneConvergence,
         },
       );
     }

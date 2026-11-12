@@ -1192,7 +1192,7 @@ export function registerReplicaOperationRepositoryTailMoreTests({
     }
   });
 
-  test('coordinator.queryOperationById delegates to repository', async (t) => {
+  test('coordinator.queryOperationProjectionById delegates to repository', async (t) => {
     const coordinator = createTestCoordinator();
     try {
       const move = {
@@ -1207,7 +1207,7 @@ export function registerReplicaOperationRepositoryTailMoreTests({
         sourceNodeId: TEST_NODE_ID,
       };
       const created = await coordinator.createOperation(move);
-      const queried = await coordinator.queryOperationById(created.operationId);
+      const queried = await coordinator.queryOperationProjectionById(created.operationId);
 
       t.ok(queried, 'should find the created operation');
       t.equal(queried.operationId, created.operationId);

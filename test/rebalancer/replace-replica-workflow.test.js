@@ -16,7 +16,6 @@ import {
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from '../../src/rebalancer/operation-workflow-owner-shared.js';
-import {ROUTER_ERROR_MSG} from '../../src/constants/transport.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
 import {MoveType} from '../../src/rebalancer/unified-rebalancer.js';
 import {createTestCoordinator, createTestRebalancer} from './test-helpers.js';
@@ -660,7 +659,7 @@ test('REPLACE replica workflow', async (t) => {
     try {
       const result = await coordinator.executeOperation(activeReplaceOperation);
       const persistedOperation =
-        await coordinator.queryOperationById(TEST_COMPLETED_REMOVE_OPERATION_ID);
+        await coordinator.queryOperationProjectionById(TEST_COMPLETED_REMOVE_OPERATION_ID);
 
       t.equal(
         deliveries.length,
@@ -799,7 +798,7 @@ test('REPLACE replica workflow', async (t) => {
         );
 
         const persistedBeforeRetry =
-          await coordinator.queryOperationById(operation.operationId);
+          await coordinator.queryOperationProjectionById(operation.operationId);
         t.equal(
           persistedBeforeRetry.workflowStep,
           WORKFLOW_STEP.SENDING,
@@ -817,7 +816,7 @@ test('REPLACE replica workflow', async (t) => {
         }
 
         const persistedAfterRetry =
-          await coordinator.queryOperationById(operation.operationId);
+          await coordinator.queryOperationProjectionById(operation.operationId);
         t.equal(deliveries.length, 2, 'deferred retry should replay dispatch');
         t.equal(
           persistedAfterRetry.workflowStep,
@@ -926,7 +925,7 @@ test('REPLACE replica workflow', async (t) => {
       );
 
       const persistedBeforeRetry =
-        await coordinator.queryOperationById(operation.operationId);
+        await coordinator.queryOperationProjectionById(operation.operationId);
       t.equal(
         persistedBeforeRetry.workflowStep,
         WORKFLOW_STEP.SENDING,
@@ -949,7 +948,7 @@ test('REPLACE replica workflow', async (t) => {
       }
 
       const persistedAfterRetry =
-        await coordinator.queryOperationById(operation.operationId);
+        await coordinator.queryOperationProjectionById(operation.operationId);
       t.equal(deliveries.length, 2, 'deferred retry should replay dispatch');
       t.equal(
         persistedAfterRetry.workflowStep,
@@ -985,11 +984,9 @@ test('REPLACE replica workflow', async (t) => {
     ReplicaStatus,
     ReplicaOperationMessageType,
     ReplicaOperationResponseStatus,
-    ROUTER_ERROR_MSG,
     createTestCoordinator,
     TEST_REPLACE_REMOVE_SAFETY_BLOCKED,
     TEST_PRIORITY_SPREAD_PENDING,
-    TEST_VISIBILITY_OBSERVATION_STATE_PRESENT,
     TEST_AUTHORITATIVE_OPERATION_READ_DEFERRED,
   });
 

@@ -38,6 +38,10 @@ import {
   WORKFLOW_STEP,
 } from '../../src/constants/index.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
+import {buildAnsweredIncompleteOperationListObservation} from
+  '../../src/rebalancer/incomplete-operation-list-observation.js';
+import {buildPresentOperationVisibility} from
+  '../../src/rebalancer/replica-operation-repository-operation-visibility.js';
 
 const {
   OPERATION_WORKFLOW_OWNER_REASON,
@@ -179,7 +183,7 @@ async (t) => {
     },
     rebalanceCoordinator: {
       repository: {
-        async queryAuthoritativeOperationById(operationId, options = {}) {
+        async getOperationByIdVisibilityObservation(operationId, options = {}) {
           repositoryReadCalls += 1;
           t.equal(
             operationId,
@@ -191,7 +195,7 @@ async (t) => {
             undefined,
             'dispatch retry rehydration should use the repository default mode',
           );
-          return {...authoritativeOperation};
+          return buildPresentOperationVisibility(authoritativeOperation);
         },
       },
       async dispatchOperation(operation) {
@@ -890,7 +894,7 @@ test('ReplicaDispatchService ready-node retry uses authoritative fallback for pr
         repository: {
           async queryIncompleteOperations(options) {
             authoritativeQueryOptions.push(options);
-            return [priorityOperation];
+            return buildAnsweredIncompleteOperationListObservation([priorityOperation]);
           },
         },
       },
@@ -1045,7 +1049,10 @@ test(READY_RETRY_OWNER_STARTING_TEST_NAME,
       rebalanceCoordinator: {
         repository: {
           async queryIncompleteOperations() {
-            return [priorityOperation];
+            return buildAnsweredIncompleteOperationListObservation([priorityOperation]);
+          },
+          async getOperationByIdVisibilityObservation() {
+            return buildPresentOperationVisibility(priorityOperation);
           },
         },
         dispatchOperation(operation) {

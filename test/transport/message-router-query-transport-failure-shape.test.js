@@ -47,7 +47,9 @@ test('query transport failures are read through the owner conversion only',
       router.buildCanonicalDeferredQueryTransportOutcome(MESSAGE_ID, MESSAGE_ID, failure);
     t.same(deferred(thrownFailure()), {messageId: MESSAGE_ID, correlationId: MESSAGE_ID,
       acknowledged: false, error: TEXT, deferRetry: true, retryAfterMs: RETRY_HINT_MS,
-      errorCode: ROUTER_CONNECTION_CLOSED_ERROR_CODE},
+      errorCode: ROUTER_CONNECTION_CLOSED_ERROR_CODE,
+      // The failure does not say whether a frame left: the owner names that.
+      acknowledgement: 'unestablished'},
     'a thrown Error yields the canonical deferred outcome');
     const notAnError = deferred({message: TEXT, code: ROUTER_CONNECTION_CLOSED_ERROR_CODE,
       deferRetry: true});

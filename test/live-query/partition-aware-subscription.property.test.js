@@ -613,7 +613,6 @@ test('Property 35: Change evaluation produces correct notifications', async (t) 
         const insertChange = {
           operation: 'INSERT',
           data: row,
-          old_data: null,
           hlc_timestamp: '123:0:node1',
         };
 
@@ -631,8 +630,7 @@ test('Property 35: Change evaluation produces correct notifications', async (t) 
         // Test DELETE
         const deleteChange = {
           operation: 'DELETE',
-          data: null,
-          old_data: row,
+          data: row,
           hlc_timestamp: '124:0:node1',
         };
 
@@ -696,10 +694,16 @@ test('Property 35: UPDATE evaluation handles enter/exit/stay correctly', async (
         const oldMatches = oldAmount > threshold;
         const newMatches = newAmount > threshold;
 
+        // The row's previous version reaches the result the way a row does
+        // (an INSERT); the UPDATE names only the row it leaves.
+        group.evaluateChange({
+          operation: 'INSERT',
+          data: oldRow,
+          hlc_timestamp: '124:0:node1',
+        });
         const updateChange = {
           operation: 'UPDATE',
           data: newRow,
-          old_data: oldRow,
           hlc_timestamp: '125:0:node1',
         };
 

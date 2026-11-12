@@ -22,7 +22,7 @@ use console_error_panic_hook::set_once as set_panic_hook;
 use protobuf::Message as PbMessage;
 use raft::prelude::*;
 use raft::storage::MemStorage;
-use raft::{Config, GetEntriesContext, RawNode};
+use raft::{Config, GetEntriesContext, RawNode, StateRole, INVALID_ID};
 use raft_proto::ConfChangeI;
 
 use slog::o;
@@ -347,6 +347,14 @@ struct JsPersistedStateOut {
     entries: Vec<JsEntryOut>,
     #[serde(skip_serializing_if = "Option::is_none")]
     snapshot: Option<JsSnapshotOut>,
+}
+
+// FORK: what `step_down_removed_leader` answers once the leader stepped down.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct JsSteppedDownOut {
+    stepped_down: bool,
+    term: String,
 }
 
 #[derive(Serialize)]
@@ -710,6 +718,61 @@ pub fn status(handle: u32) -> Result<JsValue, JsValue> {
             pending_conf_index: pending_conf_index.to_string(),
             promotable,
             progress,
+        };
+        swb::to_value(&js).map_err(|e| jserr(&format!("serde: {e}")))
+    })
+}
+
+// FORK: the step-down raft-rs leaves undone for a leader its own applied
+// configuration removed (raft.rs post_conf_change: "This node is leader and
+// was removed or demoted ... TODO(tbg): step down (for sanity)"). raft-rs
+// keeps such a leader leading with no Progress for itself: it drops every
+// proposal, its heartbeats keep the voters that remain from electing, and
+// the two places that advance its commit index unwrap the Progress it no
+// longer has (`maybe_commit` from an append response, `on_persist_entries`
+// from a persisted Ready), which aborts the module. RawNode offers the host
+// no way out: MsgCheckQuorum is refused as a local message and a node that
+// is not promotable cannot campaign.
+//
+// This is the transition raft-rs's own check-quorum makes
+// (step_leader, MsgCheckQuorum: `become_follower(term, INVALID_ID)`), at the
+// current term, and only in the one state the TODO names. In every other
+// state nothing is changed and the refusal names the state:
+//   - not leader;
+//   - still promotable (a voter of its own configuration: a legitimate
+//     leader is never deposed here);
+//   - still holds its own Progress (demoted to a learner: it keeps
+//     replicating and committing, and is not the removed leader);
+//   - a Ready is outstanding and messages are queued: `advance_append`
+//     refuses new messages from a node that is not leader (raw_node.rs
+//     advance_append, "not leader but has new msg after advance"), so the
+//     step-down waits for that advance.
+// It is no membership convenience: it proposes nothing and changes no
+// configuration.
+#[wasm_bindgen]
+pub fn step_down_removed_leader(handle: u32) -> Result<JsValue, JsValue> {
+    with_node(handle, |n| {
+        let ready_outstanding = n.pending_ready.is_some();
+        let raft = &mut n.rn.raft;
+        if raft.state != StateRole::Leader {
+            return Err(jserr("step_down_removed_leader: not leader"));
+        }
+        if raft.promotable() {
+            return Err(jserr("step_down_removed_leader: still promotable"));
+        }
+        if raft.prs().get(raft.id).is_some() {
+            return Err(jserr("step_down_removed_leader: still holds its own progress"));
+        }
+        if ready_outstanding && !raft.msgs.is_empty() {
+            return Err(jserr(
+                "step_down_removed_leader: ready outstanding with queued messages",
+            ));
+        }
+        let term = raft.term;
+        raft.become_follower(term, INVALID_ID);
+        let js = JsSteppedDownOut {
+            stepped_down: true,
+            term: term.to_string(),
         };
         swb::to_value(&js).map_err(|e| jserr(&format!("serde: {e}")))
     })

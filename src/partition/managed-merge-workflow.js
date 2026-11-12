@@ -546,14 +546,17 @@ class ManagedMergeWorkflow {
         childProvisioningTargetNodeIdsByPartitionId:
           targetNodeIdsByPartitionId,
         minimumRoutableReplicaCount: input.mergeBootstrapReplicaCount,
+        timeoutBudget: input.executionTimeoutBudget,
       });
     const targetProvisioningAdmission =
       provisioningAdmissionByPartitionId[input.mergedPartitionId] || null;
     if (targetProvisioningAdmission &&
         targetProvisioningAdmission.allowed !== true) {
-      throw new Error(
+      // An unsettled target defers the merge (retryable), never fails it.
+      throw Object.assign(new Error(
         MANAGED_MERGE_ERROR_MSG.TARGET_PROVISIONING_NOT_VIABLE,
-      );
+      ), {retryable:
+        targetProvisioningAdmission.unsettledTargetNodePlans?.length > 0});
     }
     return {targetNodeIdsByPartitionId, targetProvisioningAdmission};
   }

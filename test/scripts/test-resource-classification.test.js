@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {spawnSync} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import {test} from 'node:test';
@@ -16,9 +17,13 @@ import {
   RESOURCE_CLASSES,
   RESOURCE_CLASS_EXCLUSIVE,
   RESOURCE_CLASS_EXTERNAL_TOOLCHAIN,
+  PLACED_ORDINARY_LANE_JOBS_ENV,
   RESOURCE_CLASS_JOBS,
   RESOURCE_CLASS_MANIFEST_PATH,
   RESOURCE_CLASS_ORDINARY,
+  THERMAL_SOURCE_MEASURED,
+  placedOrdinaryLaneJobs,
+  placedOrdinaryLaneJobsShell,
 } from '../../scripts/checks/test-resource-classification-constants.js';
 import {planLane} from '../../scripts/plan-test-lane.js';
 
@@ -196,4 +201,63 @@ test('the 0.5 WASI service tests run in the serial toolchain lane', () => {
     assert.equal(manifest.classes[file], RESOURCE_CLASS_EXTERNAL_TOOLCHAIN,
       `${file} drives the WASM toolchain and starts real component Cells`);
   }
+});
+
+// A placed lab host's ordinary lane: two thirds of its processors, between
+// the lane's own count and eight, at most one per whole GiB, within its cap.
+const GIB_KIB = 1024 * 1024;
+const MEASURED = THERMAL_SOURCE_MEASURED;
+const PLACED_ORDINARY_TABLE = Object.freeze([
+  // [cores, memKiB, thermal, expected, why]
+  [12, Math.round(15.4 * GIB_KIB), MEASURED, 8, 'a 12-thread 15 GiB host: two thirds, 8'],
+  [12, Math.round(7.5 * GIB_KIB), MEASURED, 7, 'a 12-thread 7.5 GiB host: one per whole GiB'],
+  [8, Math.round(15.5 * GIB_KIB), MEASURED, 5, 'an 8-thread host: two thirds of 8'],
+  [4, Math.round(15.6 * GIB_KIB), MEASURED, 3, 'a 4-thread host: its cap, as today'],
+  [20, 32 * GIB_KIB, MEASURED, 8, 'never past eight'],
+  [6, 16 * GIB_KIB, MEASURED, 4, 'two thirds below the lane\'s own count: its own count'],
+  [12, 3 * GIB_KIB, MEASURED, 4, 'memory never lowers below the lane\'s own count'],
+  [12, null, MEASURED, 4, 'unreadable memory: no raise'],
+  [12, 16 * GIB_KIB, 'unmeasurable', 4, 'no thermal source: no raise the gate cannot hold'],
+  [12, 16 * GIB_KIB, null, 4, 'unknown thermal: no raise'],
+  [2, 16 * GIB_KIB, MEASURED, 1, 'a two-thread host: its cap of one'],
+  [1, 16 * GIB_KIB, MEASURED, 1, 'a one-thread host: one'],
+  [null, 16 * GIB_KIB, MEASURED, null, 'unknown processors: nothing set'],
+  [0, 16 * GIB_KIB, MEASURED, null, 'zero processors is unknown'],
+]);
+
+test('a placed host raises its ordinary lane by one rule, never past cores less one', () => {
+  for (const [cores, memKiB, thermal, expected, why] of PLACED_ORDINARY_TABLE) {
+    assert.equal(placedOrdinaryLaneJobs({cores, memKiB, thermal}), expected, why);
+  }
+  assert.equal(RESOURCE_CLASS_JOBS[RESOURCE_CLASS_ORDINARY], 4,
+    'the unplaced ordinary lane - the controller, CI, any local run - is unchanged');
+});
+
+// The placement shell computes the count on the host; the planner prices the
+// host with the JS rule. The generated shell, run with stubbed facts, must
+// say exactly what the function says, so the split matches what runs.
+test('the placement shell\'s generated arithmetic equals the planner\'s rule', () => {
+  const snippet = placedOrdinaryLaneJobsShell().join('\n');
+  const cases = [...PLACED_ORDINARY_TABLE,
+    // Shapes only the shell can receive: what getconf or awk print.
+    ['', 16 * GIB_KIB, MEASURED, null, 'empty processors'],
+    ['12x', 16 * GIB_KIB, MEASURED, null, 'garbled processors'],
+    [12, '', MEASURED, 4, 'empty memory'],
+    [12, '16x', MEASURED, 4, 'garbled memory'],
+    [12, 0, MEASURED, 4, 'zero memory'],
+  ];
+  const script = cases.map(([cores, memKiB, thermal]) =>
+    `cores='${cores ?? ''}' mem_kib='${memKiB ?? ''}' thermal='${thermal ?? ''}'\n` +
+    `${snippet}\nprintf '%s\\n' "\${${PLACED_ORDINARY_LANE_JOBS_ENV}-unset}"`).join('\n');
+  const ran = spawnSync('sh', ['-c', script], {encoding: 'utf8', env: {PATH: process.env.PATH}});
+  assert.equal(ran.status, 0, ran.stderr);
+  const said = ran.stdout.trim().split('\n');
+  assert.equal(said.length, cases.length, ran.stdout);
+  cases.forEach(([cores, memKiB, thermal, expected, why], index) => {
+    const js = typeof cores === 'number' || cores === null ?
+      placedOrdinaryLaneJobs({cores, memKiB: typeof memKiB === 'number' ? memKiB : null,
+        thermal}) : null;
+    assert.equal(js, expected, `the function: ${why}`);
+    assert.equal(said[index], expected === null ? 'unset' : String(expected), `the shell: ${why}`);
+  });
 });

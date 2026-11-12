@@ -117,6 +117,9 @@ test('Unit: host-network mode allocates per-node ports and host IPs', async () =
     env1[CONTAINER_ENV_KEYS.SEED_NODE_ADDRESS],
     '10.128.0.1:' + PORTS.REST,
   );
+  // Only the seed declares the formation size: the topology's node count.
+  assert.strictEqual(env0.LAGRANGE_FORMATION_TARGET_NODE_COUNT, '2');
+  assert.strictEqual(env1.LAGRANGE_FORMATION_TARGET_NODE_COUNT, undefined);
 });
 
 test('Unit: single-host keeps bridge mode (no host-network env)', async () => {

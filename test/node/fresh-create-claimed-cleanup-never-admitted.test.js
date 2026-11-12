@@ -73,8 +73,8 @@ test('a claimed failed create that was never admitted is removed as a typed no-o
     const accepted = await handler.handleRemoveReplica(request);
     t.equal(accepted.status, ReplicaOperationResponseStatus.INITIATED);
     const first = await outcome;
-    t.ok(first.removed || /deletion deferred/u.test(String(first.event?.error)),
-      'the first pass completes or leaves typed retryable removal debt ' +
+    t.equal(first.removed, true,
+      'the first pass completes through the claimed cleanup completion receipt ' +
         '(no RemoveNode wait for a never-admitted replica)');
     const replay = await handler.handleRemoveReplica(request);
     t.equal(replay.status, ReplicaOperationResponseStatus.COMPLETED,

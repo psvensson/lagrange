@@ -21,7 +21,8 @@ import {PARTITION_LEADERSHIP_TRANSFER_MESSAGE} from
 import {isPartitionReserved} from './partition-participant-transaction-store.js';
 import {PARTICIPANT_TRANSACTION_LOG_MSG} from
   './partition-participant-transaction-constants.js';
-import {PARTITION_CDC_ADMISSION_STATE, admitCdcOwedWork, cdcDrainAdmissionClass} from
+import {PARTITION_CDC_ADMISSION_STATE, admitCdcOwedWork, cdcDrainAdmissionClass,
+  logCdcRetirementReserve} from
   './partition-cdc-owed-admission.js';
 import {pausedWriteAnswerOf} from './partition-participant-transaction-pause.js';
 import {turnChainValue} from '../raft/raft-rs-turn-answer.js';
@@ -464,6 +465,7 @@ function startAdmittedPartitionWrite(service, options) {
 
 function startPartitionRaftWriteCommit(service, options) {
   const cdcAdmission = admitCdcOwedWork(service, options.entry);
+  logCdcRetirementReserve(service, options.entry, cdcAdmission);
   if (cdcAdmission.state === PARTITION_CDC_ADMISSION_STATE.REFUSED) {
     return Promise.resolve(cdcAdmission.answer);
   }

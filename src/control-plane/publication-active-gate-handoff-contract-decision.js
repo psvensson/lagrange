@@ -24,113 +24,6 @@ import {
   normalizePublicationActiveGateHandoffNodeIdList,
 } from './publication-active-gate-handoff-contract-helpers.js';
 
-function collectPublicationActiveGateActivePendingReconcileNodeIds(evidence) {
-  const publishedSet = new Set(evidence.publishedActiveNodeIds || []);
-  return (evidence.pendingReconcileNodeIds || [])
-    .filter((nodeId) => !publishedSet.has(nodeId));
-}
-
-const PUBLICATION_ACTIVE_GATE_HANDOFF_DECISION_RULES = Object.freeze([
-  // CL-001 variant A: an OPEN publication with pending recovery-eligible acks
-  // must re-drive the owner reconcile to CLOSE, even when the published set has
-  // no deficit. This signal is only populated by the owner-driven reconcile
-  // path (it filters to ack-eligible pending nodes as a thrash guard), so the
-  // served/active-gate snapshot path — which leaves it empty — is unaffected and
-  // its promotion semantics are unchanged.
-  Object.freeze({
-    state: PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
-    reasonCode:
-      PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING,
-    nextAction:
-      PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
-        .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
-    runtimePromotionAllowed: false,
-    matches: (evidence) =>
-      Array.isArray(evidence.ownerAckCompletionPendingNodeIds) &&
-      evidence.ownerAckCompletionPendingNodeIds.length > 0,
-  }),
-  Object.freeze({
-    state: PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
-    reasonCode:
-      PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING,
-    nextAction:
-      PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
-        .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
-    runtimePromotionAllowed: false,
-    matches: (evidence) => {
-      if (
-        evidence.reconcileRequirement !==
-        PUBLICATION_ACTIVE_GATE_HANDOFF_RECONCILE_REQUIREMENT.REQUIRED
-      ) {
-        return false;
-      }
-      const activePendingReconcileNodeIds =
-        collectPublicationActiveGateActivePendingReconcileNodeIds(evidence);
-      if (
-        activePendingReconcileNodeIds.length === 0 &&
-        evidence.pendingRecoveryNodeIds.length > 0
-      ) {
-        return false;
-      }
-      if (activePendingReconcileNodeIds.length === 0) {
-        return true;
-      }
-      return activePendingReconcileNodeIds.length > 0;
-    },
-  }),
-  Object.freeze({
-    state: PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.UNAVAILABLE,
-    reasonCode:
-      PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.EXPECTED_COHORT_UNAVAILABLE,
-    nextAction:
-      PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.OBSERVE_OWNER_HANDOFF,
-    runtimePromotionAllowed: false,
-    matches: (evidence) =>
-      evidence.expectedNodeIds.length === 0,
-  }),
-  Object.freeze({
-    state: PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
-    reasonCode:
-      PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING,
-    nextAction:
-      PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
-        .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
-    runtimePromotionAllowed: false,
-    matches: (evidence) =>
-      collectPublicationActiveGateActivePendingReconcileNodeIds(evidence)
-        .length > 0,
-  }),
-  Object.freeze({
-    state: PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
-    reasonCode:
-      PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING,
-    nextAction:
-      PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.WAIT_OWNER_RECOVERY,
-    runtimePromotionAllowed: false,
-    matches: (evidence) =>
-      evidence.pendingRecoveryNodeIds.length > 0,
-  }),
-  Object.freeze({
-    state: PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.DEGRADED,
-    reasonCode:
-      PUBLICATION_ACTIVE_GATE_HANDOFF_REASON
-        .PUBLISHED_ACTIVE_COVERAGE_INCOMPLETE,
-    nextAction:
-      PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.OBSERVE_OWNER_HANDOFF,
-    runtimePromotionAllowed: false,
-    matches: (evidence) =>
-      evidence.missingPublishedNodeIds.length > 0,
-  }),
-  Object.freeze({
-    state: PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.COMPLETE,
-    reasonCode: PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.COMPLETE,
-    nextAction:
-      PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.ADMIT_ACTIVE_GATE,
-    runtimePromotionAllowed: true,
-    matches: () => true,
-  }),
-]);
-
 const PUBLICATION_ACTIVE_GATE_HANDOFF_RECONCILE_REQUIREMENT_RULES =
   Object.freeze([
     Object.freeze({
@@ -188,12 +81,6 @@ const PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_DECISION_RULES = Object.freeze([
     matches: () => true,
   }),
 ]);
-
-function decidePublicationActiveGateHandoff(evidence) {
-  return PUBLICATION_ACTIVE_GATE_HANDOFF_DECISION_RULES.find((rule) =>
-    rule.matches(evidence),
-  );
-}
 
 function resolvePublicationActiveGateOwnerOutcomeState(contract = null) {
   if (!isPublicationActiveGateHandoffRecord(contract)) {
@@ -259,6 +146,19 @@ function buildPublicationActiveGateOwnerOutcomeContract(value = {}) {
   });
 }
 
+const PUBLICATION_ACTIVE_GATE_ACKNOWLEDGEMENT_EVIDENCE = Object.freeze({
+  // Every required node is published.
+  ACKNOWLEDGED: 'acknowledged',
+  // A required node is not published.
+  PENDING: 'pending',
+  // No node is required (every expected node is itself waiting, or none is
+  // expected): nothing was checked, so nothing is satisfied.
+  NO_REQUIRED_NODE: 'no_required_node',
+});
+
+// The nodes whose publication the consumer requires: every expected node
+// except one that is itself waiting (a per-node fact). The cluster recovery
+// gate excuses none.
 function buildPublicationActiveGateAcknowledgementRule(value = {}) {
   const pendingRecoveryNodeIdSet = new Set(
     normalizePublicationActiveGateHandoffNodeIdList(
@@ -281,11 +181,22 @@ function buildPublicationActiveGateAcknowledgementRule(value = {}) {
   const pendingAckNodeIds = requiredAckNodeIds.filter((nodeId) =>
     !publishedNodeIdSet.has(nodeId),
   );
+  let acknowledgementEvidence =
+    PUBLICATION_ACTIVE_GATE_ACKNOWLEDGEMENT_EVIDENCE.ACKNOWLEDGED;
+  if (requiredAckNodeIds.length === 0) {
+    acknowledgementEvidence =
+      PUBLICATION_ACTIVE_GATE_ACKNOWLEDGEMENT_EVIDENCE.NO_REQUIRED_NODE;
+  } else if (pendingAckNodeIds.length > 0) {
+    acknowledgementEvidence =
+      PUBLICATION_ACTIVE_GATE_ACKNOWLEDGEMENT_EVIDENCE.PENDING;
+  }
   return Object.freeze({
     requiredAckNodeIds,
     acknowledgedNodeIds,
     pendingAckNodeIds,
-    acknowledgementSatisfied: pendingAckNodeIds.length === 0,
+    acknowledgementEvidence,
+    acknowledgementSatisfied: acknowledgementEvidence ===
+      PUBLICATION_ACTIVE_GATE_ACKNOWLEDGEMENT_EVIDENCE.ACKNOWLEDGED,
   });
 }
 
@@ -378,10 +289,8 @@ function isPublicationActiveGateHandoffRecord(value) {
 }
 
 export {
-  PUBLICATION_ACTIVE_GATE_HANDOFF_DECISION_RULES,
   PUBLICATION_ACTIVE_GATE_HANDOFF_RECONCILE_REQUIREMENT_RULES,
   PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_DECISION_RULES,
-  decidePublicationActiveGateHandoff,
   resolvePublicationActiveGateOwnerOutcomeState,
   resolvePublicationActiveGateOwnerOutcomeFreshness,
   buildPublicationActiveGateOwnerOutcomeContract,

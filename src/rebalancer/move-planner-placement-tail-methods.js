@@ -10,9 +10,13 @@
  * @module rebalancer/move-planner
  */
 
+import {RAFT_ROLE} from '../raft/constants.js';
+import {isExplicitNonLeaderRaftRole} from
+  '../raft/replica-voter-readiness.js';
 import {
   MOVE_REASON,
   REBALANCER_ENTITY_TYPE,
+  REBALANCER_LOG_MSG,
   REBALANCER_MOVE_TYPE,
   MOVE_PLANNER_ERROR_MSG,
 } from './rebalancer-constants.js';
@@ -123,6 +127,84 @@ class MovePlannerPlacementTailMethods {
         this.moveStateProvider.replicaId.trim() :
         MOVE_PLANNER_LITERAL.EMPTY_STRING;
     return replicaId.length > 0 ? replicaId : null;
+  }
+
+  /**
+   * The classifier of removal-source leadership for one plan. A partition
+   * planner that holds its partition's own live Raft leadership decides from
+   * that alone: the leader is its own replica and no other, whatever cached
+   * services rows or the partition row's leader node say (several replicas
+   * share a node during seed formation, and a stale or role-less row would
+   * otherwise mark every co-located replica as the leader and leave the
+   * source choice to row order). Without that authority the cached row
+   * evidence classifies, as before.
+   * @return {function(Object): boolean}
+   * @private
+   */
+  buildRemovalSourceLeaderClassifier() {
+    const liveLeaderReplicaId =
+      this.resolveRemovalSourcePartitionLeaderReplicaId();
+    if (liveLeaderReplicaId) {
+      return (replica) => Boolean(replica) &&
+        (replica.replica_id || replica.service_id) === liveLeaderReplicaId;
+    }
+    const partitionLeaderNodeId =
+      this.resolveRemovalSourcePartitionLeaderNodeId();
+    return (replica) => {
+      if (!replica) {
+        return false;
+      }
+      const role =
+        typeof replica.raft_role === MOVE_PLANNER_LITERAL.STRING ?
+          replica.raft_role.trim().toLowerCase() :
+          null;
+      if (role === RAFT_ROLE.LEADER) {
+        return true;
+      }
+      // A partition leader_node_id identifies the hosting node, not the
+      // individual replica. Preserve per-replica role evidence; use the
+      // node-level owner only when the service row has no recognized role.
+      if (isExplicitNonLeaderRaftRole(role)) {
+        return false;
+      }
+      // Removal candidates are services rows: node_id is their one spelling.
+      return (
+        !!partitionLeaderNodeId &&
+        replica.node_id === partitionLeaderNodeId
+      );
+    };
+  }
+
+  /**
+   * Diagnostic (no behavior): one info line per CHANGED spread plan decision
+   * of a priority control-plane partition (the caller's precondition; no
+   * read happens here) - the cure-condition evidence the cure policy owner
+   * classified, the REPLACE count it left, and whether the REPLACE source it
+   * leaves is the leader.
+   * @param {Object} decision - {evidence, cureCondition, replaceCount}.
+   * @param {Array<Object>} replaceCandidates - Removal candidates in
+   *   selection order.
+   * @private
+   */
+  logPrioritySpreadPlanDecision(decision, replaceCandidates) {
+    const source = decision.replaceCount > 0 ? replaceCandidates[0] : null;
+    const fields = {
+      entityId: this.entityId,
+      ...decision.evidence,
+      cureCondition: decision.cureCondition,
+      plannedReplaceCount: decision.replaceCount,
+      replaceSourceReplicaId: source ? source.replicaId : null,
+      sourceIsLeader: source ? source.sourceIsLeader === true : null,
+      nonLeaderSourceCandidateCount: replaceCandidates.filter(
+        (candidate) => candidate.sourceIsLeader !== true).length,
+      plannerHoldsLeadership: this.moveStateProvider?.isLeader === true,
+    };
+    const decisionKey = JSON.stringify(fields);
+    if (this.lastPrioritySpreadPlanDecisionKey === decisionKey) {
+      return;
+    }
+    this.lastPrioritySpreadPlanDecisionKey = decisionKey;
+    this.logger.info(REBALANCER_LOG_MSG.PRIORITY_SPREAD_PLAN_DECISION, fields);
   }
 
   buildPlacementOwnerPolicyDecision(options = {}) {

@@ -178,7 +178,7 @@ class RebalanceCoordinatorOperationIntentMethods {
 
     let cacheVisibleOperation = null;
     try {
-      cacheVisibleOperation = await this.queryOperationById(cachedOperationId);
+      cacheVisibleOperation = await this.queryOperationProjectionById(cachedOperationId);
     } catch (error) {
       this.logger.debug(
         LOCAL_STR_FAILED_TO_REFRESH_RECENT_OPERATION_INTEN,
@@ -201,6 +201,10 @@ class RebalanceCoordinatorOperationIntentMethods {
         cacheVisibleOperation :
         cachedOperation;
 
+    // null is the owner's confirmed absence. An unanswered read throws its
+    // typed unavailability to the creating caller: the remembered intent is
+    // kept (no second operation is created) and no cached copy is reused or
+    // re-armed in its place; creation waits for the owner's answer.
     const authoritativeOperation =
       await this.repository.queryAuthoritativeOperationById(cachedOperationId, {
         authoritativeReadMode:

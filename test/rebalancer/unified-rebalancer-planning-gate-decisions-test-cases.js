@@ -1,3 +1,7 @@
+import {
+  statePrioritySpreadReleaseReadiness,
+} from './priority-spread-release-condition-fixture.js';
+
 export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
   const {
     CONTROL_PLANE_READINESS_DIMENSION,
@@ -45,6 +49,15 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
     TEST_REBALANCE_PLANNING_GATE_DECISION,
     TEST_REBALANCE_PLANNING_GATE_SCHEDULE_MODE,
   } = context;
+
+  // The fence's CLEAR needs the operation ledger owner's census, kept per
+  // coordinator: one evaluation requests it (an UNAVAILABLE observation,
+  // which neither starts nor rearms the dwell) and one macrotask lets the
+  // mock owner answer at the current instant.
+  async function answerFenceCensus(rebalancer) {
+    rebalancer.resolvePrioritySpreadPlanningGateDecision();
+    await new Promise((resolve) => setImmediate(resolve));
+  }
 
   test('UnifiedRebalancer defers background planning when local control-plane mutation readiness is unhealthy',
     async (t) => {
@@ -553,6 +566,13 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
       const sharedReadinessOwner = {};
       const replacementReadinessOwner = {};
       const independentReadinessOwner = {};
+      for (const readinessOwner of [
+        sharedReadinessOwner,
+        replacementReadinessOwner,
+        independentReadinessOwner,
+      ]) {
+        statePrioritySpreadReleaseReadiness(readinessOwner);
+      }
       const observer = createTestRebalancer({
         entityId: 'observer-p1',
         entityType: EntityType.PARTITION,
@@ -636,6 +656,7 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
           'the shared ordinary-work fence must never defer a priority partition',
         );
 
+        await answerFenceCensus(lateBackgroundEntity);
         const firstClearDecision =
           lateBackgroundEntity.resolvePrioritySpreadPlanningGateDecision();
         t.equal(
@@ -659,6 +680,9 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
         convergenceCoordinator.controlPlaneReadinessService =
           replacementReadinessOwner;
         independentObserver.setRebalanceCoordinator(convergenceCoordinator);
+        // The original-owner entity keeps its own coordinator; its census is
+        // answered so its sample is the first HELD one after the merge.
+        await answerFenceCensus(originalOwnerBackgroundEntity);
         const convergedOwnerDecision =
           originalOwnerBackgroundEntity
             .resolvePrioritySpreadPlanningGateDecision();
@@ -677,6 +701,8 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
           replacementReadinessOwner,
           'an invalid owner rebind must retain the valid fenced owner',
         );
+        // The rebind changes the census owner: the new coordinator answers.
+        await answerFenceCensus(lateBackgroundEntity);
         const invalidRebindDecision =
           lateBackgroundEntity.resolvePrioritySpreadPlanningGateDecision();
         t.equal(
@@ -716,6 +742,9 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
           observationHandoffMs,
           'a boundary recheck must preserve the existing maturity deadline',
         );
+        // Past half the window that evaluation requested a census refresh;
+        // let it answer so the window-end census is not borderline.
+        await new Promise((resolve) => setImmediate(resolve));
 
         nowMs += observationHandoffMs - 1;
         const lastHeldDecision =
@@ -918,6 +947,7 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
           null,
           'the later cache snapshot must prove every priority partition clear',
         );
+        await answerFenceCensus(lateBackgroundEntity);
         const lateClearDecision =
           lateBackgroundEntity.resolvePrioritySpreadPlanningGateDecision();
         t.equal(
@@ -943,6 +973,7 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
 
       let nowMs = 1000;
       const sharedReadinessOwner = {};
+      statePrioritySpreadReleaseReadiness(sharedReadinessOwner);
       const visibleReplicaOperations = [];
       const systemTableCache = createMockCache();
       const filterCachedRows = systemTableCache.filter;
@@ -1019,6 +1050,7 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
 
       try {
         observer.resolvePrioritySpreadPlanningGateDecision();
+        await answerFenceCensus(backgroundEntity);
         const firstClearDecision =
           backgroundEntity.resolvePrioritySpreadPlanningGateDecision();
         t.equal(
@@ -1043,39 +1075,41 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
         schemaOperation.updated_at = nowMs;
         schemaOperation.completed_at = nowMs;
 
-        nowMs += 11_000;
-        const missedIntervalDecision =
+        // Supersedes the quiescence-anchor pin (quest
+        // formation-background-release-quiescence-anchor-live): ordinary
+        // topology work, in flight or drained, no longer resets the maturity
+        // clock. The fence stands for priority control-plane placement only;
+        // the background work it released would otherwise restart it for
+        // every other entity (lab f4: a 70 s window behind moves ~66 s apart
+        // never matured).
+        const firstClearAtMs = 1000;
+        nowMs += 5_000;
+        const afterOrdinaryDrainDecision =
           backgroundEntity.resolvePrioritySpreadPlanningGateDecision();
         t.equal(
-          missedIntervalDecision.blocker.stableElapsedMs,
-          11_000,
-          'a retained terminal row should recover work missed between evaluations',
+          afterOrdinaryDrainDecision.blocker.stableElapsedMs,
+          nowMs - firstClearAtMs,
+          'ordinary work drained between evaluations does not reset the clock',
         );
-        t.equal(
-          missedIntervalDecision.blocker.stableRemainingMs,
-          59_000,
-          'the scheduled recheck should preserve the post-drain maturity deadline',
-        );
+        // That evaluation, past half the window, requested a census refresh.
+        await new Promise((resolve) => setImmediate(resolve));
 
         const admissionStableWindowMs =
           backgroundEntity.periodicCheckIntervalMs;
         const observationHandoffMs =
           backgroundEntity
             .getBackgroundPrioritySpreadObservationHandoffMs();
-        nowMs = schemaOperation.completed_at + admissionStableWindowMs;
-        const admissionBoundaryDecision =
-          backgroundEntity.resolvePrioritySpreadPlanningGateDecision();
         t.equal(
-          admissionBoundaryDecision.blocker.stableRemainingMs,
-          observationHandoffMs,
-          'ordinary work should remain fenced through the observation handoff',
+          afterOrdinaryDrainDecision.blocker.requiredStableMs,
+          admissionStableWindowMs + observationHandoffMs,
+          'the window is the admission interval plus the observation handoff',
         );
-
-        nowMs += observationHandoffMs;
+        nowMs = firstClearAtMs + admissionStableWindowMs +
+          observationHandoffMs;
         t.equal(
           backgroundEntity.resolvePrioritySpreadPlanningGateDecision(),
           null,
-          'ordinary work should release after full post-drain stability',
+          'ordinary work releases one full window after the first clear',
         );
 
         visibleReplicaOperations.push({

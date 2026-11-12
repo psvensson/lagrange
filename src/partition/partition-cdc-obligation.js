@@ -243,7 +243,8 @@ function recordCommittedOperationCdc(service, committed, events) {
   if (recorded === 0) {
     return recorded;
   }
-  ensureCdcObligationLedger(service.db);
+  ensureCdcObligationLedger(service.db,
+    {index, term: committed.term, entryId: command.entryId ?? null});
   for (const event of events) insertCdcObligation(service.db, event);
   committed.afterCommit(() => {
     applyCommittedEventsToPartitionState(service, events);

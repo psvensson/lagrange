@@ -1,4 +1,5 @@
 import {assertDeliveryOpen, deliveryAbortReason} from './message-router-delivery-lifetime.js';
+import {TRANSPORT_ACKNOWLEDGEMENT} from './transport-acknowledgement.js';
 import {
   ROUTER_ERROR_MSG,
   TRANSPORT_DEFAULT,
@@ -637,7 +638,9 @@ class OutboundDeliveryRegistryOwner {
     while (queue.pending.length > TRANSPORT_NUM.ZERO) {
       const item = queue.pending.shift();
       if (item) {
-        item.resolve({acknowledged: false, error: errorMessage});
+        // A queued item never left this router.
+        item.resolve({acknowledged: false, error: errorMessage,
+          acknowledgement: TRANSPORT_ACKNOWLEDGEMENT.NOT_SENT});
       }
     }
   }

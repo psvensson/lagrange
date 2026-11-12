@@ -501,6 +501,7 @@ test('tracks the bounded runtime grammar hotspot set explicitly', async (t) => {
       'src/node/replica-handler-remove-request-methods.js',
       'src/rebalancer/move-planner-move-calculation-methods.js',
       'src/rebalancer/operation-workflow-owner-execution-lane.js',
+      'src/rebalancer/operation-workflow-removal-leadership-gate.js',
       'src/rebalancer/priority-publication-handoff.js',
       'src/rebalancer/priority-publication-leader-safety.js',
       'src/rebalancer/priority-publication-safety-topology.js',

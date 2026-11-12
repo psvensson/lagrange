@@ -5,6 +5,14 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {TABLES} from '../../src/constants/index.js';
+import {propagatePartitionCdcVector} from
+  '../../src/bootstrap/shared/partition-cdc-propagation-subscriber.js';
+import {JOINING_ERROR_MSG} from '../../src/bootstrap/node-joining-constants.js';
+
+// The joiner's propagation call, as its registration composes it.
+const joinerPropagation = (service) => (messageGroupService, events, deliveryContext) =>
+  propagatePartitionCdcVector(service.latencyTopology, JOINING_ERROR_MSG.LATENCY_TOPOLOGY_MISSING,
+    messageGroupService, events, deliveryContext);
 
 function setupEnvironment() {
   ConfigurationManager.resetInstance();
@@ -29,14 +37,14 @@ test('BootstrapService partition CDC propagation requires topology owner',
     const service = new BootstrapService({bootIncarnation: 1, nodeId: 'node-a'});
 
     await assert.rejects(
-      service.seedCacheHydrationPhase
+      service.seedCacheHydrationPhase.delegates
         .propagatePartitionCDCEvent(
           {},
-          {
+          [{
             tableName: TABLES.NODES,
             operation: 'INSERT',
             data: {node_id: 'node-z'},
-          },
+          }],
         ),
       /Latency topology services are not initialized/,
     );
@@ -66,18 +74,20 @@ test('BootstrapService delegates partition CDC propagation to topology owner',
       data: {node_id: 'node-z'},
     };
 
-    const result = await service.seedCacheHydrationPhase
+    const result = await service.seedCacheHydrationPhase.delegates
       .propagatePartitionCDCEvent(
         messageGroupService,
-        cdcEvent,
+        [cdcEvent],
       );
 
     assert.equal(result.success, true);
     assert.equal(result.delegated, true);
+    // The topology owner is handed the vector: its events, in order.
     assert.equal(calls.length, 1);
-    assert.equal(calls[0].tableName, cdcEvent.tableName);
-    assert.equal(calls[0].operation, cdcEvent.operation);
-    assert.deepEqual(calls[0].data, cdcEvent.data);
+    assert.equal(calls[0].events.length, 1);
+    assert.equal(calls[0].events[0].tableName, cdcEvent.tableName);
+    assert.equal(calls[0].events[0].operation, cdcEvent.operation);
+    assert.deepEqual(calls[0].events[0].data, cdcEvent.data);
     assert.equal(calls[0].sourceMessageGroupService, messageGroupService);
 
     teardownEnvironment();
@@ -94,13 +104,13 @@ test('NodeJoiningService partition CDC propagation requires topology owner',
     });
 
     await assert.rejects(
-      service.propagatePartitionCDCEvent(
+      joinerPropagation(service)(
         {},
-        {
+        [{
           tableName: TABLES.NODES,
           operation: 'INSERT',
           data: {node_id: 'node-z'},
-        },
+        }],
       ),
       /Latency topology services are not initialized/,
     );
@@ -134,17 +144,19 @@ test('NodeJoiningService delegates partition CDC propagation to topology owner',
       data: {node_id: 'node-z'},
     };
 
-    const result = await service.propagatePartitionCDCEvent(
+    const result = await joinerPropagation(service)(
       messageGroupService,
-      cdcEvent,
+      [cdcEvent],
     );
 
     assert.equal(result.success, true);
     assert.equal(result.delegated, true);
+    // The topology owner is handed the vector: its events, in order.
     assert.equal(calls.length, 1);
-    assert.equal(calls[0].tableName, cdcEvent.tableName);
-    assert.equal(calls[0].operation, cdcEvent.operation);
-    assert.deepEqual(calls[0].data, cdcEvent.data);
+    assert.equal(calls[0].events.length, 1);
+    assert.equal(calls[0].events[0].tableName, cdcEvent.tableName);
+    assert.equal(calls[0].events[0].operation, cdcEvent.operation);
+    assert.deepEqual(calls[0].events[0].data, cdcEvent.data);
     assert.equal(calls[0].sourceMessageGroupService, messageGroupService);
 
     teardownEnvironment();

@@ -4,7 +4,6 @@ import {NUM, STRING, TIME_MS} from '../constants/index.js';
 const LIVE_QUERY_SUBSYSTEM = Object.freeze({
   QUERY_GROUP: 'query-group',
   LIVE_QUERY_MANAGER: 'live-query-manager',
-  LIVE_QUERY_SERVICE: 'live-query-service',
 });
 
 const LIVE_QUERY_EVENT = Object.freeze({
@@ -18,6 +17,12 @@ const LIVE_QUERY_EVENT = Object.freeze({
   SNAPSHOT: 'snapshot',
   ERROR: 'error',
 });
+
+// The row fields a live-query event may carry, each named once (the
+// "Event fields" contract of architecture/live-query-data-plane.md): `data`,
+// the row the event is about; the row before an update; `rows`, the result
+// of a snapshot or reset.
+const LIVE_QUERY_EVENT_ROW_FIELDS = Object.freeze(['data', 'oldData', 'rows']);
 
 const LIVE_QUERY_AST_TYPE = Object.freeze({
   AGGR_FUNC: 'aggr_func',
@@ -72,11 +77,8 @@ const LIVE_QUERY_GROUP_STATE = Object.freeze({
 });
 
 const LIVE_QUERY_LOG_MSG = Object.freeze({
-  RENEWED: 'Live query renewed',
-  CLEANED_UP: 'Live query cleaned up',
   CLIENT_JOINED: 'Client joined query group',
   CLIENT_LEFT: 'Client left query group',
-  NO_PARTITION_KEY_FILTER: 'Live query without partition key filter',
   PARTITIONS_LOOKUP_FAILED: 'Failed to find partitions for query',
   FAILED_SEND_CLIENT: 'Failed to send to client',
   UNSUBSCRIBED_PARTITION: 'Unsubscribed from partition',
@@ -89,8 +91,6 @@ const LIVE_QUERY_LOG_MSG = Object.freeze({
   SNAPSHOT_ENGINE_UNAVAILABLE: 'SQL query engine not available for snapshot',
   SNAPSHOT_SENT: 'Snapshot sent to client',
   SNAPSHOT_FAILED: 'Failed to send snapshot',
-  QUERY_RENEWED: 'Live query renewed',
-  QUERY_RESUMED: 'Live query resumed',
   QUERY_UNREGISTERED: 'Live query unregistered',
   GROUP_REMOVED: 'Query group removed',
   CLIENT_DISCONNECTED_CLEANUP: 'Client disconnected - cleaned up subscriptions',
@@ -104,10 +104,12 @@ const LIVE_QUERY_LOG_MSG = Object.freeze({
 const LIVE_QUERY_ERROR_MSG = Object.freeze({
   INVALID_SQL: 'Invalid SQL: expected string',
   LIVE_REQUIRES_SELECT: 'LIVE must be followed by SELECT statement',
-  CURSOR_TOO_OLD: 'Cursor too old - full resync required',
   MAX_QUERIES_EXCEEDED_PREFIX: 'Maximum concurrent live queries exceeded (',
   MAX_QUERIES_EXCEEDED_SUFFIX: ')',
-  QUERY_GROUP_NOT_FOUND_PREFIX: 'Query group not found: ',
+});
+
+const LIVE_QUERY_ERROR_CODE = Object.freeze({
+  ROW_KEY_MISSING: 'LIVE_QUERY_ROW_KEY_MISSING',
 });
 
 const LIVE_QUERY_DEFAULT_VALUE = Object.freeze({
@@ -144,7 +146,6 @@ const LIVE_QUERY_CURSOR = Object.freeze({
 const LIVE_QUERY_EMIT = Object.freeze({
   CHANGE: 'change',
   SUBSCRIPTION_CREATED: 'subscription-created',
-  SUBSCRIPTION_RENEWED: 'subscription-renewed',
   SUBSCRIPTION_REMOVED: 'subscription-removed',
   SUBSCRIPTION_EXPIRED: 'subscription-expired',
 });
@@ -153,14 +154,12 @@ const LIVE_QUERY_CONFIG_KEY = Object.freeze({
   DEFAULT_TTL_MS: CONFIG_KEY.LIVE_QUERY_DEFAULT_TTL_MS,
   MAX_PER_CLIENT: CONFIG_KEY.LIVE_QUERY_MAX_PER_CLIENT,
   CLEANUP_INTERVAL_MS: CONFIG_KEY.LIVE_QUERY_CLEANUP_INTERVAL_MS,
-  CURSOR_RETENTION_MS: CONFIG_KEY.LIVE_QUERY_CURSOR_RETENTION_MS,
 });
 
 const LIVE_QUERY_DEFAULTS = Object.freeze({
   DEFAULT_TTL_MS: TIME_MS.SECOND * NUM.TEN * NUM.THREE,
   MAX_PER_CLIENT: NUM.HUNDRED,
   CLEANUP_INTERVAL_MS: TIME_MS.SECOND * NUM.FIVE,
-  CURSOR_RETENTION_MS: TIME_MS.MINUTE * NUM.FIVE,
 });
 
 export {
@@ -170,10 +169,12 @@ export {
   LIVE_QUERY_DEFAULTS,
   LIVE_QUERY_DEFAULT_VALUE,
   LIVE_QUERY_EMIT,
+  LIVE_QUERY_ERROR_CODE,
   LIVE_QUERY_ERROR_MSG,
   LIVE_QUERY_EVENT,
   LIVE_QUERY_GROUP_STATE,
   LIVE_QUERY_LOG_MSG,
+  LIVE_QUERY_EVENT_ROW_FIELDS,
   LIVE_QUERY_OPERATION,
   LIVE_QUERY_OPERATOR,
   LIVE_QUERY_REGEX,

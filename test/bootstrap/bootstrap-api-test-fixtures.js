@@ -6,6 +6,24 @@ import {
 import {
   buildProjectionReadinessContract,
 } from '../../src/control-plane/projection-readiness-state.js';
+import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
+import {SERVER_IDENTITY_STATE} from '../../src/bootstrap/join-cluster-identity.js';
+
+const TEST_CLUSTER_ID = '00000000-0000-4000-8000-000000000000';
+
+/**
+ * For test files about other bootstrap concerns: every BootstrapAPI in this
+ * process knows its cluster identity (the durable owner's KNOWN answer), so
+ * the join identity gate (join-cluster-identity.js, witnessed in
+ * cluster-identity-join-gate.test.js) admits and the response carries the id.
+ * @param {string} [clusterId]
+ */
+export function answerKnownClusterIdentity(clusterId = TEST_CLUSTER_ID) {
+  BootstrapAPI.prototype.readClusterIdentity = async () => Object.freeze({
+    state: SERVER_IDENTITY_STATE.KNOWN, reason: null, cause: null,
+    facts: Object.freeze({clusterId}),
+  });
+}
 
 const EMPTY_REASONS = Object.freeze([]);
 

@@ -1,3 +1,7 @@
+import {
+  METADATA_AUTHORITY_REFRESH_OUTCOME,
+  METADATA_AUTHORITY_UNAVAILABLE_REASON,
+} from './metadata-authority-outcome-constants.js';
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
@@ -37,17 +41,6 @@ const TIMEOUT_MESSAGE_REGEX = /\b(?:timed?\s*out|timeout|deadline)\b/iu;
 const CANCELLED_MESSAGE_REGEX = /\b(?:cancel(?:led|ed)?|aborted)\b/iu;
 const REQUIRED_CATALOG_RESULT_COUNT = 3;
 
-const METADATA_AUTHORITY_REFRESH_OUTCOME = Object.freeze({
-  FOUND: 'FOUND',
-  ABSENT: 'ABSENT',
-  UNAVAILABLE: 'UNAVAILABLE',
-});
-
-const METADATA_AUTHORITY_UNAVAILABLE_REASON = Object.freeze({
-  TIMEOUT: 'timeout',
-  CANCELLED: 'cancelled',
-  AUTHORITY_READ_FAILED: 'authority_read_failed',
-});
 
 const METADATA_AUTHORITY_ERROR_CODE = Object.freeze({
   ROUTING_METADATA_UNAVAILABLE: 'ROUTING_METADATA_UNAVAILABLE',

@@ -268,7 +268,8 @@ test('checkAdd - blocks when capacity accounting has no readable data source',
     t.equal(result.reason, ADMISSION_REASON.CAPACITY_ACCOUNTING_UNAVAILABLE);
     t.equal(
       result.decisionType,
-      STORAGE_ADMISSION_DECISION_TYPE.BLOCKED,
+      STORAGE_ADMISSION_DECISION_TYPE.DEFERRED,
+      'an unknown accounting total holds retryably',
     );
     t.same(result.blockingReasons, [
       STORAGE_ADMISSION_REASON.INSUFFICIENT_PLACEMENT_ELIGIBLE_NODES,
@@ -282,6 +283,67 @@ test('checkAdd - blocks when capacity accounting has no readable data source',
       null,
       STORAGE_CAPACITY_ERROR_MSG.ACCOUNTING_SOURCE_REQUIRED,
     );
+    t.end();
+  });
+
+// Paired witness, gate 3: capacity admission reads reserved bytes from the
+// accounting owner's source tables. A reservations read that fails is an
+// unknown total: admission HOLDS (deferred, retryable) instead of counting
+// zero reserved bytes, and decides on the rows once the read answers. The
+// failure is injected at the gateway read port.
+test('checkAdd - holds on a failed reservations read and decides once it answers',
+  async (t) => {
+    initializeConfig();
+    const port = {reservationsAnswer: false, reservations: []};
+    const nowMs = Date.now();
+    const rowsOf = {
+      [TABLES.NODES]: () => [{
+        [COLUMN.NODE_ID]: 'node-port',
+        [COLUMN.STORAGE_BUDGET_BYTES]: NUM.HUNDRED,
+      }],
+      [TABLES.STORAGE_RESERVATIONS]: () => port.reservations,
+    };
+    const accounting = new StorageCapacityAccountingService({
+      controlPlaneSystemTableGateway: {
+        supportsReadRows: () => true,
+        async readRows(tableName) {
+          if (tableName === TABLES.STORAGE_RESERVATIONS &&
+              !port.reservationsAnswer) {
+            return {success: false, errorCode: 'ROUTER_NO_CONNECTION', rows: []};
+          }
+          return {success: true, rows: (rowsOf[tableName] || (() => []))()};
+        },
+      },
+    });
+    const admission = new StorageAdmissionService({
+      accountingService: accounting,
+      controlPlaneReadinessService: createReadinessService({
+        'node-port': createReadiness('node-port'),
+      }),
+    });
+    const request = {targetNodeId: 'node-port', estimatedBytes: NUM.TEN};
+
+    const held = await admission.checkAdd(request);
+    t.equal(held.allowed, false, 'no admission on an unknown reserved total');
+    t.equal(held.reason, ADMISSION_REASON.CAPACITY_ACCOUNTING_UNAVAILABLE);
+    t.equal(held.decisionType, STORAGE_ADMISSION_DECISION_TYPE.DEFERRED,
+      'the hold is retryable');
+
+    port.reservationsAnswer = true;
+    port.reservations = [{
+      [COLUMN.TARGET_NODE_ID]: 'node-port',
+      [COLUMN.STATUS]: RESERVATION_STATUS.ACTIVE,
+      [COLUMN.ESTIMATED_BYTES]: NUM.HUNDRED - 1,
+      [COLUMN.EXPIRES_AT]: nowMs + NUM.THOUSAND * NUM.HUNDRED,
+      [COLUMN.OPERATION_ID]: 'op-reserved',
+    }];
+    const counted = await admission.checkAdd(request);
+    t.equal(counted.reason, ADMISSION_REASON.BUDGET_EXCEEDED,
+      'the answered reservation is counted');
+
+    port.reservations = [];
+    const admitted = await admission.checkAdd(request);
+    t.equal(admitted.allowed, true, 'admits once the owner answers with room');
     t.end();
   });
 

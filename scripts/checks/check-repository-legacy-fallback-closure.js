@@ -9,6 +9,7 @@ const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayFind = Function.call.bind(Array.prototype.find);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayMap = Function.call.bind(Array.prototype.map);
+const arraySome = Function.call.bind(Array.prototype.some);
 const stringEndsWith = Function.call.bind(String.prototype.endsWith);
 const stringIncludes = Function.call.bind(String.prototype.includes);
 const stringTrim = Function.call.bind(String.prototype.trim);
@@ -21,11 +22,17 @@ const CENSUS_PATH = 'data/fallback-census/census.json';
 const CLASSIFICATION_PATH = 'scripts/checks/code-navigability-fallback-classification.json';
 const EXPECTED_CENSUS_SCHEMA = 'fallback-census/1';
 const EXPECTED_TOTAL_CENSUS_SITES = 2685;
-const EXPECTED_ACTIVE_SRC_SITES = 2682;
-const EXPECTED_RETIRED_SITES = 9;
+const EXPECTED_ACTIVE_SRC_SITES = 2669;
+const EXPECTED_RETIRED_SITES = 22;
 const ROW_UNCLASSIFIED = 'fallback_sites_unclassified';
 const ZERO_COUNT = 0;
 const JS_EXTENSION = '.js';
+// An executable witness names source, declares a test and asserts.
+const WITNESS_MARKER = objectFreeze({
+  SOURCE_REFERENCE: 'src/',
+  TEST_DECLARATIONS: objectFreeze(['test(', 'Tests(']),
+  ASSERTIONS: objectFreeze(['assert.', 't.', 'test,']),
+});
 
 const REASON_CENSUS_MISSING = 'Census file missing or schema mismatch';
 const REASON_CLASSIFICATION_INVALID = 'Classification file missing or invalid';
@@ -62,9 +69,17 @@ const PROHIBITED_RUNTIME_TERMS = objectFreeze([
 ]);
 
 const SCANNED_RUNTIME_DIRECTORIES = objectFreeze([
+  'src/admin',
+  'src/cache',
+  'src/cdc',
   'src/control-plane',
-  'src/rebalancer',
   'src/diagnostics',
+  'src/node',
+  'src/partition',
+  'src/policy',
+  'src/query',
+  'src/rebalancer',
+  'src/topology',
 ]);
 
 const KEY_AFFECTED_WITNESS_FILES = objectFreeze([
@@ -78,6 +93,16 @@ const KEY_AFFECTED_WITNESS_FILES = objectFreeze([
 
 const RETIRED_ROLLING_UPGRADE_TERM = 'options.nowMs || Date.now()';
 const ROLLING_UPGRADE_PATH = 'src/bootstrap/owners/rolling-upgrade-owner.js';
+const ADMIN_DIAGNOSTICS_PATH =
+  'src/admin/admin-control-snapshot-control-plane-diagnostics.js';
+const RETIRED_ADMIN_DIAGNOSTICS_TERMS = objectFreeze([
+  'row.table_name || row.tableName',
+  'row.partition_id || row.partitionId',
+  'row.service_id || row.serviceId',
+  'row.node_id || row.nodeId',
+  'row.leader_node_id || row.leaderNodeId',
+  'row.replica_count ?? row.replicaCount',
+]);
 
 const LIMITS_STATEMENT =
   'Coverage classes indicate observed execution in census runs, not proof of code death';
@@ -245,16 +270,29 @@ function auditZeroUnresolvedViolations(root = REPO_ROOT) {
   };
 }
 
+function collectJsFilesRecursively(dirPath, collected = []) {
+  if (!fs.existsSync(dirPath)) {
+    return collected;
+  }
+  const entries = fs.readdirSync(dirPath, {withFileTypes: true});
+  for (const entry of entries) {
+    const entryPath = path.join(dirPath, entry.name);
+    if (entry.isDirectory()) {
+      collectJsFilesRecursively(entryPath, collected);
+    } else if (entry.isFile() && stringEndsWith(entry.name, JS_EXTENSION)) {
+      collected.push(entryPath);
+    }
+  }
+  return collected;
+}
+
 function auditCanonicalCallerAndExportClosure(root = REPO_ROOT) {
   const violations = [];
 
   for (const relativeDir of SCANNED_RUNTIME_DIRECTORIES) {
     const fullDir = path.resolve(root, relativeDir);
-    if (!fs.existsSync(fullDir)) continue;
-    const files = fs.readdirSync(fullDir);
-    for (const file of files) {
-      if (!stringEndsWith(file, JS_EXTENSION)) continue;
-      const filePath = path.join(fullDir, file);
+    const files = collectJsFilesRecursively(fullDir);
+    for (const filePath of files) {
       const content = fs.readFileSync(filePath, UTF8);
       for (const term of PROHIBITED_RUNTIME_TERMS) {
         if (stringIncludes(content, term)) {
@@ -272,6 +310,16 @@ function auditCanonicalCallerAndExportClosure(root = REPO_ROOT) {
     }
   }
 
+  const adminDiagnosticsPath = path.resolve(root, ADMIN_DIAGNOSTICS_PATH);
+  if (fs.existsSync(adminDiagnosticsPath)) {
+    const content = fs.readFileSync(adminDiagnosticsPath, UTF8);
+    for (const term of RETIRED_ADMIN_DIAGNOSTICS_TERMS) {
+      if (stringIncludes(content, term)) {
+        violations.push({filePath: adminDiagnosticsPath, term});
+      }
+    }
+  }
+
   return {
     isClosureComplete: violations.length === ZERO_COUNT,
     violationsCount: violations.length,
@@ -279,9 +327,25 @@ function auditCanonicalCallerAndExportClosure(root = REPO_ROOT) {
   };
 }
 
+function isExecutableWitnessFile(root, relativeFile) {
+  const fullPath = path.resolve(root, relativeFile);
+  if (!fs.existsSync(fullPath)) {
+    return false;
+  }
+  const content = fs.readFileSync(fullPath, UTF8);
+  const {SOURCE_REFERENCE, TEST_DECLARATIONS, ASSERTIONS} = WITNESS_MARKER;
+  const includesAny = (markers) =>
+    arraySome(markers, (marker) => stringIncludes(content, marker));
+  return (
+    stringIncludes(content, SOURCE_REFERENCE) &&
+    includesAny(TEST_DECLARATIONS) &&
+    includesAny(ASSERTIONS)
+  );
+}
+
 function verifyAffectedOwnerProofs(root = REPO_ROOT) {
   const existingWitnesses = arrayFilter(KEY_AFFECTED_WITNESS_FILES, (file) =>
-    fs.existsSync(path.resolve(root, file)));
+    isExecutableWitnessFile(root, file));
 
   return {
     allWitnessesPresent: existingWitnesses.length === KEY_AFFECTED_WITNESS_FILES.length,

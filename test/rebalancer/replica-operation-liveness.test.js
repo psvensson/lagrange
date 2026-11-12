@@ -1,4 +1,6 @@
 import {test} from '../../src/test-helpers/tap.js';
+import {REPLICA_OPERATION_TARGET_NODE_SOURCE} from
+  '../../src/rebalancer/replica-operation-progress.js';
 import {
   isReplicaOperationInFlight,
   isReplicaOperationStale,
@@ -584,10 +586,18 @@ test(
       'REMOVE',
       'failed stop/remove rows should infer REMOVE when the persisted type is absent',
     );
+    // The row carries no target node and its history names no peer
+    // address: a readiness snapshot left in old history entries is ignored,
+    // and the target node is the named unavailable outcome.
     t.equal(
       record.targetNodeId,
-      'seed-node',
-      'failed source-removal rows should keep their target/source node identity for diagnostics',
+      '',
+      'a readiness snapshot in old history is not a node identity',
+    );
+    t.equal(
+      record.targetNodeIdSource,
+      REPLICA_OPERATION_TARGET_NODE_SOURCE.UNAVAILABLE,
+      'the missing target node is named unavailable',
     );
   },
 );
@@ -731,5 +741,49 @@ test(
       true,
       'operation updated after owner node restart should not be ignored',
     );
+  },
+);
+
+test(
+  'normalizeReplicaOperationRecord names where the target node id came from',
+  async (t) => {
+    const fromRow = normalizeReplicaOperationRecord({
+      operation_id: 'op-target-from-row',
+      type: 'ADD',
+      status: 'creating',
+      workflow_step: 'CREATING',
+      replica_id: 'orders-p3-r2',
+      target_node_id: 'node-7',
+      steps_history: JSON.stringify([{
+        step: 'PENDING',
+        replicaIds: ['orders-p3-r2'],
+        peerAddresses: ['node-9/partition/orders-p3-r2'],
+        readinessSnapshot: {nodeId: 'node-8'},
+      }]),
+      updated_at: 100,
+    }, {nowMs: 200});
+    t.equal(fromRow.targetNodeId, 'node-7',
+      'the operation row\'s own target node is the authority');
+    t.equal(fromRow.targetNodeIdSource,
+      REPLICA_OPERATION_TARGET_NODE_SOURCE.OPERATION_ROW);
+
+    const fromPeerAddress = normalizeReplicaOperationRecord({
+      operation_id: 'op-target-from-peer-address',
+      type: 'ADD',
+      status: 'creating',
+      workflow_step: 'CREATING',
+      replica_id: 'orders-p3-r2',
+      steps_history: JSON.stringify([{
+        step: 'PENDING',
+        replicaIds: ['orders-p3-r2'],
+        peerAddresses: ['node-9/partition/orders-p3-r2'],
+        readinessSnapshot: {nodeId: 'node-8'},
+      }]),
+      updated_at: 100,
+    }, {nowMs: 200});
+    t.equal(fromPeerAddress.targetNodeId, 'node-9',
+      'without a row field the replica\'s recorded peer address names it');
+    t.equal(fromPeerAddress.targetNodeIdSource,
+      REPLICA_OPERATION_TARGET_NODE_SOURCE.PEER_ADDRESS);
   },
 );

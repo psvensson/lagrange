@@ -68,11 +68,17 @@ const CDC_GROUP_PROPAGATION_LOG_MSG = Object.freeze({
   STARTED: 'CDCGroupPropagationService started',
   STOPPED: 'CDCGroupPropagationService stopped',
   RETRYING_DELIVERY_FAILURES: 'Retrying CDC propagation delivery failures',
+  DURABLE_WAVE_FINISHED: 'CDC durable wave finished',
+  DURABLE_WAVE_REFUSED: 'CDC durable wave refused',
+  TARGET_SKIPPED: 'CDC target skipped',
 });
 
 const CDC_GROUP_PROPAGATION_ERROR_MSG = Object.freeze({
   MISSING_NODE_ID: 'CDCGroupPropagationService requires nodeId',
   MISSING_CACHE: 'CDCGroupPropagationService requires systemTableCache',
+  MISSING_CACHE_CHANGE_PORT:
+    'CDCGroupPropagationService requires the node\'s SystemTableCache (or its read-only view): ' +
+    'every bound propagation watches its recipient-domain tables through its change port',
   MISSING_TREE_SERVICE: 'CDCGroupPropagationService requires latencyTreeService',
   NOT_INITIALIZED: 'CDCGroupPropagationService must be initialized first',
   MISSING_MESSAGE_GROUP_SERVICE:

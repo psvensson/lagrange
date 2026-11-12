@@ -68,6 +68,19 @@ const FORMATION_LIVENESS_DEPENDENCY_PARTITION_IDS = new Set([
   INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.NODES],
 ]);
 
+// The priority control-plane tables whose traffic rides the critical transport
+// lane. The set only selects transport lanes: consensus traffic
+// (raft/constants.js), routed system-table mutations
+// (resolveSystemTableMutationDeliveryPriority) and message-group transport
+// targets; the rebalancer does not read it. Placement, spread, recovery and
+// formation gates read PRIORITY_CONTROL_PLANE_TABLE_ID_LIST, which holds
+// SQL_WRITE_OPERATIONS. It is absent here by design: high-volume transaction
+// bookkeeping stays on the background lane so it cannot starve replica
+// operations (resolveRoutedDeliveryPriority in
+// src/query/sql-query-engine-table-routing-methods.js), and the bulk appends
+// of the two transaction tables were demoted in b1acc899f
+// (RAFT_TRANSPORT_BACKGROUND_APPEND_PARTITION_IDS). Widening the set remains
+// the owner's decision.
 const CRITICAL_TRANSPORT_CONTROL_PLANE_TABLE_IDS = new Set([
   SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
   SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,

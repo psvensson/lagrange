@@ -252,15 +252,11 @@ function decodeCachedPartitionRow(row) {
 }
 
 function findCachedTableRow(cache, tableName) {
-  const directRow = cache.get?.(SYSTEM_TABLE_NAME.TABLES, tableName) || null;
-  if (directRow) {
-    return directRow;
-  }
-  const allRows = cache.getAll?.(SYSTEM_TABLE_NAME.TABLES) || [];
-  return allRows.find((row) => {
-    const decoded = decodeCachedTableRow(row);
-    return decoded.tableName === tableName || decoded.tableId === tableName;
-  }) || null;
+  return cache.get(SYSTEM_TABLE_NAME.TABLES, tableName) ||
+    cache.find(SYSTEM_TABLE_NAME.TABLES, (row) => {
+      const decoded = decodeCachedTableRow(row);
+      return decoded.tableName === tableName || decoded.tableId === tableName;
+    }) || null;
 }
 
 function resolveActiveTableVersionFromCache(cache, tableName) {
@@ -304,11 +300,7 @@ function resolvePartitionRowsFromCache(cache, tableName) {
     }
     return isMatchingNormalPartitionVersion(decoded, activeVersion);
   };
-  return typeof cache.filter === 'function' ?
-    cache.filter(SYSTEM_TABLE_NAME.PARTITIONS, partitionPredicate) :
-    typeof cache.getAll === 'function' ?
-      (cache.getAll(SYSTEM_TABLE_NAME.PARTITIONS) || []).filter(partitionPredicate) :
-      [];
+  return cache.filter(SYSTEM_TABLE_NAME.PARTITIONS, partitionPredicate);
 }
 
 function resolveServicesForPartition(partitionServices, partitionId) {

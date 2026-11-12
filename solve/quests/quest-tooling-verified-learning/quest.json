@@ -1,0 +1,50 @@
+{
+  "schema": "solve-quest/2",
+  "id": "quest-tooling-verified-learning",
+  "epic": "quest-agent-tooling-integration",
+  "statement": "Adapt Compound Engineering knowledge capture so a verified resolution produces the smallest useful prevention in the existing test, check, code or documentation owner, with append-only Quest findings linking evidence and rejected approaches. A later real agent session retrieves the lesson and checks its applicability against current source before use; unverified hypotheses and stale lessons never become authority.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/quest-tooling-verified-learning/evidence/receipt.json",
+      "requiredReceipts": [
+        "verified-resolution-and-prevention-choice",
+        "canonical-owner-capture-with-provenance",
+        "append-only-correction-and-stale-lesson-disposition",
+        "later-session-retrieval-and-applicability",
+        "no-baseline-growth-or-parallel-memory-authority",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "planning-only",
+      "statement": "Unsealed draft created for implementation planning. Required receipt IDs are obligations, not results. No receipt or seal may be fabricated. Prepare a genuinely measuring negative witness through the existing proof owners before start; missing evidence remains non-measuring. Refine an unsealed draft or explicitly supersede a changed seal."
+    },
+    {
+      "id": "existing-authority-and-no-fallback",
+      "statement": "Current AGENTS, routed owners and the user remain authoritative. Use the existing Quest workflow, append-only records, independent review and publication path. No parallel task or memory authority, legacy adapter, silent fallback, invented producer shape, weakened gate or increased ratchet baseline."
+    },
+    {
+      "id": "real-evidence-and-claim-boundaries",
+      "statement": "Retain actual source, worktree, host, tool/configuration versions and execution provenance. Do not use, create or generate mock, fake or emulated information in comparative system measurements. Isolated validator controls are never measured system results. Tooling acceptance cannot establish formation, native durability, product release or benchmark acceptance."
+    },
+    {
+      "id": "scope-and-independent-review",
+      "statement": "Use one writer per changing interaction, preserve unrelated work and route out-of-scope findings. Review the affected owner contract before dependent implementation and bind independent verification to the actual candidate and evidence. A plugin's own success report or agreeing reviewers cannot substitute for proof."
+    },
+    {
+      "id": "owned-scope",
+      "statement": "Selected learning skill and existing documentation, findings and regression owners. Do not create a second solutions/task/memory store or edit global personal memory. A product regression or lint change remains in the responsible implementation Quest."
+    },
+    {
+      "id": "plan-and-dependencies",
+      "statement": "Q5: Verified learning and reuse. Implementation contract: solve/specs/quest-agent-tooling-integration/implementation-plan.md#q5-compound-engineering-verified-learning. Prerequisites: Q3, Q4. Dependencies are coordination instructions, not an implemented scheduler. No implementation agent or run is assigned by this draft."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ]
+}

@@ -132,6 +132,43 @@ test('UnifiedRebalancer - skips REMOVE when coordinator safety preflight blocks'
   }
 });
 
+// A leading rebalancer for nodes-p1 whose ADD target node-unready is not
+// ready; every move goes through mockCoordinator.
+function createUnreadyAddTargetRebalancer(mockCoordinator) {
+  const rebalancer = new UnifiedRebalancer({
+    entityId: 'nodes-p1',
+    entityType: EntityType.PARTITION,
+    nodeId: 'seed-node',
+    systemTableCache: createMockCache([
+      createReadyNode('seed-node'),
+      createReadyNode('node-unready'),
+    ]),
+    cdcIntegrationService: {
+      insertSystemTableRow: async () => ({success: true}),
+      updateSystemTableRow: async () => ({success: true}),
+    },
+    tablePolicyService: {
+      getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
+    },
+    messageRouter: {
+      getConnectionState: () => 'connected',
+      deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {
+        status: 'completed',
+      })),
+      pingNode: async () => true,
+      isOutboundQueueAvailable: () => true,
+    },
+    rebalanceCoordinator: mockCoordinator,
+    controlPlaneReadinessService: createAlwaysReadyReadinessService(),
+  });
+
+  rebalancer.initialize();
+  // Moves execute only under the rebalancer's own leadership.
+  rebalancer.setLeader(true);
+  rebalancer.isNodeReady = async (nodeId) => nodeId !== 'node-unready';
+  return rebalancer;
+}
+
 test('UnifiedRebalancer - defers non-failed REMOVE when no ADD target is ready',
   async (t) => {
     ConfigurationManager.resetInstance();
@@ -158,35 +195,7 @@ test('UnifiedRebalancer - defers non-failed REMOVE when no ADD target is ready',
       }),
     };
 
-    const rebalancer = new UnifiedRebalancer({
-      entityId: 'nodes-p1',
-      entityType: EntityType.PARTITION,
-      nodeId: 'seed-node',
-      systemTableCache: createMockCache([
-        createReadyNode('seed-node'),
-        createReadyNode('node-unready'),
-      ]),
-      cdcIntegrationService: {
-        insertSystemTableRow: async () => ({success: true}),
-        updateSystemTableRow: async () => ({success: true}),
-      },
-      tablePolicyService: {
-        getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
-      },
-      messageRouter: {
-        getConnectionState: () => 'connected',
-        deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {
-          status: 'completed',
-        })),
-        pingNode: async () => true,
-        isOutboundQueueAvailable: () => true,
-      },
-      rebalanceCoordinator: mockCoordinator,
-      controlPlaneReadinessService: createAlwaysReadyReadinessService(),
-    });
-
-    rebalancer.initialize();
-    rebalancer.isNodeReady = async (nodeId) => nodeId !== 'node-unready';
+    const rebalancer = createUnreadyAddTargetRebalancer(mockCoordinator);
     try {
       const results = await rebalancer.executeRebalancingMoves([
         {
@@ -246,35 +255,7 @@ test('UnifiedRebalancer - continues standalone-safe cleanup REMOVE when ADD targ
       }),
     };
 
-    const rebalancer = new UnifiedRebalancer({
-      entityId: 'nodes-p1',
-      entityType: EntityType.PARTITION,
-      nodeId: 'seed-node',
-      systemTableCache: createMockCache([
-        createReadyNode('seed-node'),
-        createReadyNode('node-unready'),
-      ]),
-      cdcIntegrationService: {
-        insertSystemTableRow: async () => ({success: true}),
-        updateSystemTableRow: async () => ({success: true}),
-      },
-      tablePolicyService: {
-        getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
-      },
-      messageRouter: {
-        getConnectionState: () => 'connected',
-        deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {
-          status: 'completed',
-        })),
-        pingNode: async () => true,
-        isOutboundQueueAvailable: () => true,
-      },
-      rebalanceCoordinator: mockCoordinator,
-      controlPlaneReadinessService: createAlwaysReadyReadinessService(),
-    });
-
-    rebalancer.initialize();
-    rebalancer.isNodeReady = async (nodeId) => nodeId !== 'node-unready';
+    const rebalancer = createUnreadyAddTargetRebalancer(mockCoordinator);
     try {
       const results = await rebalancer.executeRebalancingMoves([
         {

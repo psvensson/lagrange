@@ -2,7 +2,7 @@
 // retains retry custody; this owner forwards one exact vector in the live grant.
 import {captureCdcEvents} from '../cdc/cdc-event-envelope.js';
 import {CDC_COMPLETION, hasDurableCdcEvents, isCommittedCdcDelivery, isProvisionalCdcDelivery,
-  unknownCdcAcceptance} from '../cdc/cdc-delivery-outcome.js';
+  unconfirmedCdcAcceptance, unknownCdcAcceptance} from '../cdc/cdc-delivery-outcome.js';
 import {CDC_DELIVERY_REMAINING_MS, cdcDeliveryBudgetError, checkedCdcRemainingMs,
   createCdcDeliveryBudget, prepareCdcDeliveryMessage} from
   '../cdc/cdc-delivery-budget.js';
@@ -121,11 +121,6 @@ function captureCdcForwardRequest(service, payload, batch) {
   return {payload, incoming, durable, context};
 }
 
-function exactForwardPayload(payload, events) {
-  return payload.type === MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE.LATENCY_CDC_PROPAGATION_BATCH ?
-    {...payload, events} : {...payload, ...events[0]};
-}
-
 function forwardEventContext(service, events, options) {
   const event = arrayFind(events, (item) =>
     service.shouldUseStrictCDCForwarding(item)) ?? events[0];
@@ -241,7 +236,10 @@ function createMessageGroupForwardingOwnerNativeDeliveryMethods() {
 
     async observeDurableCdcForwardFailure(target, answer, message, options) {
       const service = this.service;
-      if (service.shouldSuppressForwardTarget(answer, message)) this.suppressForwardTarget(target);
+      // A duplicate in flight is the recipient's own open work, never a fault
+      // of this route: it suppresses nothing.
+      if (answer?.error !== CDC_COMPLETION.DUPLICATE_IN_FLIGHT &&
+          service.shouldSuppressForwardTarget(answer, message)) this.suppressForwardTarget(target);
       if (this.isNativeCdcForwardTarget(target) ||
           !service.shouldRepairForwardTopology(message)) return false;
       await this.repairDurableCdcForwardTopology({serviceId: target.serviceId,
@@ -264,7 +262,10 @@ function createMessageGroupForwardingOwnerNativeDeliveryMethods() {
       const context = readCdcForwardContext(service,
         combinedCdcForwardContext(payload, incomingOptions));
       const options = {...incomingOptions, ...context, ...budget};
-      const events = captureCdcEvents(arrayIsArray(payload.events) ? payload.events : [payload]);
+      // A durable vector travels only as the batch message.
+      if (payload.type !== MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE.LATENCY_CDC_PROPAGATION_BATCH ||
+          !arrayIsArray(payload.events)) throw cdcDeliveryBudgetError(CDC_COMPLETION.INVALID);
+      const events = captureCdcEvents(payload.events);
       assertCdcTerminalEvents(events, context);
       if (context.cdcForwardMode === MESSAGE_GROUP_CDC_FORWARD_MODE.NATIVE_COMMIT ||
           context.relayDepth >= CDC_FORWARD_MAX_RELAY_DEPTH) return unknownCdcAcceptance();
@@ -274,8 +275,7 @@ function createMessageGroupForwardingOwnerNativeDeliveryMethods() {
           errorMessage: MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN}, options);
         decision = this.resolveCdcIngressDecision(forwardEventContext(service, events, options));
       }
-      return this.deliverDurableCdcDecision(decision, exactForwardPayload(payload, events),
-        events, options);
+      return this.deliverDurableCdcDecision(decision, {...payload, events}, events, options);
     },
 
     async deliverDurableCdcDecision(decision, payload, events, options) {
@@ -289,7 +289,9 @@ function createMessageGroupForwardingOwnerNativeDeliveryMethods() {
         const provisional = await this.tryAddressedDurableCdcIngress(events, options);
         if (provisional !== null) return provisional;
       }
-      if (result.answer !== null) return {...unknownCdcAcceptance(), cause: result.answer};
+      if (result.answer !== null) {
+        return {...unconfirmedCdcAcceptance(result.answer), cause: result.answer};
+      }
       if (result.error) throw result.error;
       return unknownCdcAcceptance();
     },

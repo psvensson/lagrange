@@ -197,10 +197,15 @@ function durableOf(cluster, replicaId) {
 function commitVoterChange(cluster, type, identity) {
   const adds = type === RAFT_MEMBERSHIP_OPERATION.ADD_PEER;
   if (!adds && leaderOf(cluster) === identity) {
-    cluster.node(identity).transferLeadership({
-      successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.MOST_CAUGHT_UP});
-    assert.ok(settle(cluster, () => leaderOf(cluster) !== null &&
-      leaderOf(cluster) !== identity, liveReplicas(cluster)),
+    // The leader names only a voter that has answered it in this tenure (a
+    // voter just added has not yet): it is asked until leadership moved.
+    assert.ok(settle(cluster, () => {
+      if (leaderOf(cluster) === identity) {
+        cluster.node(identity).transferLeadership({
+          successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.MOST_CAUGHT_UP});
+      }
+      return leaderOf(cluster) !== null && leaderOf(cluster) !== identity;
+    }, liveReplicas(cluster)),
     `setup: ${identity} handed leadership over before its removal`);
   }
   const shows = () => {

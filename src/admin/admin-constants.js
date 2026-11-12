@@ -17,6 +17,9 @@ const ADMIN_ROUTE = Object.freeze({
   TEST_RUN_STOP: '/api/admin/test-runs/:runId/stop',
   TEST_RUN_STREAM: '/api/admin/test-runs/:runId/stream',
   SERVICE_DIAGNOSTICS: '/api/admin/diagnostics/services',
+  // Node health: an explicit collection call, never a table (the owner is
+  // src/diagnostics/node-health-collection.js). `?sinceMs=` bounds the slice.
+  NODE_HEALTH: '/api/admin/diagnostics/health',
   CDC_DIAGNOSTICS: '/api/admin/diagnostics/cdc',
   PARTITION_DIAGNOSTICS: '/api/admin/diagnostics/partitions',
   SQL_DIAGNOSTICS: '/api/admin/diagnostics/sql',
@@ -168,6 +171,10 @@ const ADMIN_MESSAGE_TYPE = Object.freeze({
   CACHE_DUMP: 'cache_dump',
   CDC_EVENT: 'cdc_event',
   QUERY_RESULT: 'query_result',
+  // The answer to a live_query_subscribe that succeeds: the subscription id,
+  // its queryId, the partitions it monitors and its expiry. Never an event; a
+  // failed subscribe is answered by the subscription's error event.
+  LIVE_QUERY_SUBSCRIBED: 'live_query_subscribed',
   LIVE_QUERY_EVENT: 'live_query_event',
   ERROR: 'error',
   // Incoming

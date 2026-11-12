@@ -54,6 +54,8 @@ const ORDINARY_PRIORITY_TRANSACTION_PARTITION_ID = 'sql_transactions-p1';
 const ORDINARY_PRIORITY_WRITE_PARTITION_ID = 'sql_write_operations-p1';
 const CRITICAL_REMOVE_LANE_CONFLICT_OPERATION_ID =
   'op-critical-remove-lane-conflict';
+import {stubAnsweredIncompleteOperationsRead} from
+  './incomplete-operations-read-stub.js';
 const CRITICAL_REMOVE_LANE_TARGET_REPLICA_ID =
   `${EMERGENCY_TRANSPORT_PARTITION_ID}-r4`;
 const CRITICAL_REMOVE_LANE_CONFLICT_REPLICA_ID =
@@ -448,13 +450,13 @@ async (t) => {
     isEmergencyPriorityPartition: (partitionId) =>
       partitionId === 'control_plane_publications-p1',
   });
-  coordinator.queryIncompleteOperations = async () => ([
+  stubAnsweredIncompleteOperationsRead(coordinator, () => ([
     {
       type: OperationType.REPLACE,
       partitionId: 'control_plane_publications-p1',
       workflowStep: WORKFLOW_STEP.SENDING,
     },
-  ]);
+  ]));
 
   try {
     const canStartOrdinaryPriority = await coordinator
@@ -526,7 +528,7 @@ async (t) => {
     isEmergencyPriorityPartition: (partitionId) =>
       partitionId === 'control_plane_publications-p1',
   });
-  coordinator.queryIncompleteOperations = async () => ([
+  stubAnsweredIncompleteOperationsRead(coordinator, () => ([
     {
       type: OperationType.REPLACE,
       partitionId: 'sql_transactions-p1',
@@ -537,7 +539,7 @@ async (t) => {
       partitionId: 'control_plane_publications-p1',
       workflowStep: WORKFLOW_STEP.SENDING,
     },
-  ]);
+  ]));
 
   try {
     const canStartSecondOrdinaryPriority = await coordinator
@@ -615,7 +617,7 @@ async (t) => {
       partitionId === REPLICA_OPERATION_EMERGENCY_PARTITION_ID
     ),
   });
-  coordinator.queryIncompleteOperations = async () => ([
+  stubAnsweredIncompleteOperationsRead(coordinator, () => ([
     {
       type: OperationType.REPLACE,
       partitionId: ORDINARY_PRIORITY_TRANSACTION_PARTITION_ID,
@@ -626,7 +628,7 @@ async (t) => {
       partitionId: EMERGENCY_TRANSPORT_PARTITION_ID,
       workflowStep: WORKFLOW_STEP.SENDING,
     },
-  ]);
+  ]));
 
   try {
     const canStartReplicaOperationRecovery = await coordinator

@@ -12,6 +12,7 @@ import fc from 'fast-check';
 import {TableCreationService} from '../../src/query/table-creation-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {createTableThroughDurableJob} from './table-creation-durable-job-fixture.js';
 
 /**
  * SQL reserved keywords to avoid in column/table names.
@@ -48,6 +49,12 @@ class MockCDCIntegrationService {
 
   async updateSystemTableRow() {
     return {success: true};
+  }
+
+  // The metadata authority's answer: no committed row before this create
+  // (an unreadable authority is never read as absent).
+  async executeAuthoritativeSystemTableRead() {
+    return {success: true, rows: []};
   }
 
   getPartitionRows() {
@@ -105,7 +112,7 @@ test('Property 44: Initial partition has full key range [NULL, NULL)', async (t)
           cdcIntegrationService: mockCDC,
         });
 
-        const result = await service.executeCreateTableProvisioning(ast);
+        const result = await createTableThroughDurableJob(service, ast);
 
         if (!result.success) {
           return false;
@@ -164,7 +171,7 @@ test('Property 44: Initial partition is linked to correct table', async (t) => {
           cdcIntegrationService: mockCDC,
         });
 
-        const result = await service.executeCreateTableProvisioning(ast);
+        const result = await createTableThroughDurableJob(service, ast);
 
         if (!result.success) {
           return false;
@@ -235,7 +242,7 @@ test('Property 44: Exactly one partition created for new table', async (t) => {
           cdcIntegrationService: mockCDC,
         });
 
-        const result = await service.executeCreateTableProvisioning(ast);
+        const result = await createTableThroughDurableJob(service, ast);
 
         if (!result.success) {
           return false;

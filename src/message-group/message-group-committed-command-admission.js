@@ -11,6 +11,8 @@ import {
   MESSAGE_GROUP_SERVICE_ERROR_MSG,
 } from './constants.js';
 import {copyCdcEvent} from '../cdc/cdc-event-envelope.js';
+import {hasDurableCdcEvents} from '../cdc/cdc-delivery-outcome.js';
+import {isSourceRange} from '../cache/system-table-cache-cdc-observation.js';
 import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
 import {CDC_OPERATION} from '../constants/index.js';
 import {isDeepStrictEqual} from 'node:util';
@@ -23,6 +25,18 @@ function isEventObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
+const CDC_BATCH_KEYS = Object.freeze({ORDINARY: 2, DURABLE: 3});
+
+// The closed shape of a CDC_BATCH: a durable vector names the source range
+// it was shipped as (CDC Stage 3); an ordinary one carries none.
+function isClosedCdcBatchShape(command) {
+  if (!Array.isArray(command.events) || command.events.length === 0) return false;
+  const keys = Object.keys(command).length;
+  return hasDurableCdcEvents(command.events) ?
+    keys === CDC_BATCH_KEYS.DURABLE && isSourceRange(command.sourceRange) :
+    keys === CDC_BATCH_KEYS.ORDINARY;
+}
+
 // Retained observation must not reuse live normalization, which can drop
 // malformed members and mint timestamps. This neither applies nor ACKs events.
 function retainedMessageGroupEvents(command) {
@@ -31,8 +45,7 @@ function retainedMessageGroupEvents(command) {
     const {type: _type, ...event} = command;
     events = [event];
   } else if (command?.type === MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH &&
-      Object.keys(command).length === 2 && Array.isArray(command.events) &&
-      command.events.length > 0) {
+      isClosedCdcBatchShape(command)) {
     events = command.events;
   } else return null;
   try {
@@ -65,6 +78,14 @@ function isMessageGroupCommandType(type) {
  *   type} with a MESSAGE_GROUP_COMMAND_REFUSAL reason.
  */
 function admitMessageGroupCommand(command) {
+  // A durable event commits only inside a ranged CDC_BATCH (CDC Stage 3).
+  const refusedShape = command?.type === MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH ?
+    !isClosedCdcBatchShape(command) :
+    command?.type === MESSAGE_GROUP_COMMAND_TYPE.CDC && hasDurableCdcEvents([command]);
+  if (refusedShape) {
+    return Object.freeze({admitted: false, reason: MESSAGE_GROUP_COMMAND_REFUSAL.CDC_BATCH_SHAPE,
+      type: command.type});
+  }
   if (isMessageGroupCommandType(command?.type)) {
     return ADMITTED;
   }

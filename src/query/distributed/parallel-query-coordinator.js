@@ -11,6 +11,7 @@ import {METRICS_LOG_TAG, TABLES} from '../../constants/index.js';
 import {
   QUERY_CONFIG_KEY,
   QUERY_DEFAULTS,
+  QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
   QUERY_LOG_MSG,
   QUERY_SUBSYSTEM,
@@ -379,10 +380,10 @@ class ParallelQueryCoordinator {
             timeoutMs: effectiveTimeoutMs,
             startedAtMs: chunkStartedAtMs,
           });
-          reject(new Error(
+          reject(Object.assign(new Error(
             `${QUERY_ERROR_MSG.QUERY_TIMEOUT_AFTER_PREFIX}` +
             `${effectiveTimeoutMs}${QUERY_ERROR_MSG.QUERY_TIMEOUT_AFTER_SUFFIX}`,
-          ));
+          ), {code: QUERY_ERROR_CODE.COORDINATOR_QUERY_TIMEOUT}));
         }, effectiveTimeoutMs);
       });
 

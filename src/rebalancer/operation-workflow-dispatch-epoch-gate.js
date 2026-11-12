@@ -19,6 +19,9 @@ import {
   operationCarriesReplicaCreateAdmission,
 } from './replica-operation-create-admission-fields.js';
 import {DISPATCH_PENDING_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
+import {
+  isTerminalTransitionOutcomeSettled,
+} from './operation-workflow-terminal-reservation-release.js';
 
 const {
   OperationType,
@@ -31,6 +34,10 @@ const DISPATCH_EPOCH_UNAVAILABLE_PREFIX =
 const STALE_DISPATCH_EPOCH_PREFIX =
   'Stale dispatch for published membership epoch ';
 const DISPATCH_EPOCH_BINDING_SOURCE = 'dispatch candidate';
+// Deliberately not prefixed with STALE_DISPATCH_EPOCH_PREFIX: the dispatch
+// service reads that prefix as a settled terminal.
+const STALE_DISPATCH_TERMINAL_UNSETTLED =
+  'terminal write for a stale dispatch epoch has not settled';
 
 // BR6 (quest replace-source-removal-owner): the fence is this gate's own
 // contract - an ADD/REPLACE still queued before its create reached an
@@ -136,6 +143,23 @@ async function ensureDispatchMembershipEpochOrSkip(owner, operation) {
     Object.assign(operation, terminalOutcome.operation);
     return null;
   }
+  if (!isTerminalTransitionOutcomeSettled(terminalOutcome)) {
+    // The stale operation's terminal write did not settle, so its durable
+    // row is still live and the terminal-transition repair armed by
+    // failOperation owns the retry. Nothing is seeded into the cache,
+    // cleared or reported terminal from an uncommitted outcome.
+    return owner.buildSkippedOperationResult(
+      REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
+      operation.operationId,
+      {
+        error: STALE_DISPATCH_TERMINAL_UNSETTLED,
+        requestedMembershipPublicationEpoch: planningEpoch,
+        currentMembershipPublicationEpoch: currentEpoch,
+      },
+    );
+  }
+  // The row is durably terminal (this write, a replay of it, or the terminal
+  // that won): the cache receives a row read from, or committed to, authority.
   if (
     typeof owner.repository?.applyLocalPriorityOperationProgressRow ===
     'function'
@@ -154,5 +178,6 @@ async function ensureDispatchMembershipEpochOrSkip(owner, operation) {
 
 export {
   STALE_DISPATCH_EPOCH_PREFIX,
+  STALE_DISPATCH_TERMINAL_UNSETTLED,
   ensureDispatchMembershipEpochOrSkip,
 };

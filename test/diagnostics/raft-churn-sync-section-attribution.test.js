@@ -16,6 +16,8 @@ import {
 import {
   RAFT_CHURN_SYNC_SECTION,
 } from '../../src/diagnostics/raft-churn-sync-sections.js';
+import {buildAbsentOperationVisibility} from
+  '../../src/rebalancer/replica-operation-repository-operation-visibility.js';
 
 function siteSnapshot(site) {
   return getSharedSyncSectionRegistry().snapshot().sites[site];
@@ -223,8 +225,10 @@ async (t) => {
     emit(eventName, payload) {
       this.events.push([eventName, payload]);
     }
-    async queryOperationById() {
-      return null;
+    get repository() {
+      // The owner confirms the operation absent.
+      return {getOperationByIdVisibilityObservation: async () =>
+        buildAbsentOperationVisibility()};
     }
     isOperationTerminal() {
       return false;

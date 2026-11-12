@@ -3,9 +3,14 @@
  *
  * Unlike the in-memory reservation harness, this test closes and reopens the
  * canonical replica_operations and storage_reservations SQLite tables between
- * owners. The fresh owner must reconstruct one progress obligation from those
- * rows, remain fail closed while strict operation authority is unavailable,
- * and cross the existing reservation dispatch gate once authority returns.
+ * owners. The fresh owner runs the production restart path (the coordinator
+ * timer tick: step-budget timeout sweep, then orphan sweep) over those rows.
+ * It must remain fail closed while strict operation authority is unavailable,
+ * never fail the pre-effect PENDING row merely for being incomplete, and keep
+ * the one exact capacity hold: no duplicate operation generation, no duplicate
+ * hold, no fresh creation events or accounting. The deleted restart routine's
+ * reservation-backed re-drive (and its allowCreate:false restart check) has no
+ * successor: a pre-effect row is re-driven or timed out by its own owner.
  */
 
 import Database from 'better-sqlite3';
@@ -40,6 +45,7 @@ import {
   createCoordinatorWithStorage,
   createDeterministicTimerQueue,
   initializeConfig,
+  runRestartTimerTick,
 } from './reservation-dispatch-gate-test-harness.js';
 
 const RUNTIME_SERVICE_ID = 'sys-postgres-wire';
@@ -153,8 +159,9 @@ function runtimeMove() {
   };
 }
 
-test('file-backed restart adopts one durable operation/reservation and ' +
-  'dispatches once after strict authority returns', async (t) => {
+test('file-backed restart retains one durable operation/reservation through ' +
+  'the production restart tick and never fails it for being incomplete',
+async (t) => {
   initializeConfig();
   const directory = fs.mkdtempSync(path.join(
     os.tmpdir(),
@@ -216,9 +223,7 @@ test('file-backed restart adopts one durable operation/reservation and ' +
     clearTimeoutFn: restartTimers.clearTimeoutFn,
   }).coordinator;
   const dispatchCalls = [];
-  const sequence = [];
-  const reservationObservations = [];
-  const freshAuthorityFaultCount = observeStrictAuthorityFault(restarted);
+  const reservationOutcomes = [];
   let operationCreatedEvents = 0;
   let reservationCreatedEvents = 0;
   restarted.on(REBALANCE_COORDINATOR_EVENT.OPERATION_CREATED, () => {
@@ -231,18 +236,11 @@ test('file-backed restart adopts one durable operation/reservation and ' +
     restarted.ensureReservationForOperation.bind(restarted);
   restarted.ensureReservationForOperation = async (operation, options = {}) => {
     const attempt = await ensureReservation(operation, options);
-    const observation = {
-      allowCreate: options.allowCreate,
-      outcome: attempt?.outcome,
-      authorityUnavailable: attempt?.authorityUnavailable === true,
-    };
-    reservationObservations.push(observation);
-    sequence.push({kind: 'reservation', ...observation});
+    reservationOutcomes.push(attempt?.outcome);
     return attempt;
   };
   restarted.workflowOwner.repository.isOperationLocallyOwned = () => true;
   restarted.workflowOwner.executeOperationInternal = async (operation) => {
-    sequence.push({kind: 'execute', operationId: operation.operationId});
     dispatchCalls.push(operation.operationId);
     return {success: true, operationId: operation.operationId};
   };
@@ -251,23 +249,19 @@ test('file-backed restart adopts one durable operation/reservation and ' +
       'restart constructs a distinct workflow owner over the reopened file');
     t.equal(restarted.hasStorageReservationSupport(), true,
       'the fresh coordinator engages canonical storage reservation support');
-    const recovery = await restarted.workflowOwner.handleRecovery();
-    t.ok(freshAuthorityFaultCount() > 0,
-      'the fresh owner reaches the typed strict-authority fault during recovery');
+    await runRestartTimerTick(restarted);
     t.same(dispatchCalls, [],
       'strict owner-authority loss permits no dispatch after reopen');
-    t.equal(activeProgressOwnerCount(
+    t.ok(activeProgressOwnerCount(
       restarted.workflowOwner,
       TEST_OPERATION_ID,
-    ), 1, 'the fresh owner reconstructs exactly one canonical retry');
-    t.equal(recovery.markedFailed, 0,
-      'the durable PENDING obligation is not terminalized');
+    ) <= 1, 'the fresh owner holds at most one progress owner for the row');
     t.equal(reopenedStore.row(
       'replica_operations',
       'operation_id',
       TEST_OPERATION_ID,
     )?.workflow_step, WORKFLOW_STEP.PENDING,
-    'the reopened SQL operation remains PENDING before the retry wake');
+    'the restart tick does not fail the durable PENDING obligation');
     t.equal(reopenedStore.count('replica_operations'), 1,
       'restart inserts no duplicate operation generation');
     t.equal(reopenedStore.count('storage_reservations'), 1,
@@ -280,80 +274,33 @@ test('file-backed restart adopts one durable operation/reservation and ' +
     t.equal(retainedReservation?.created_at, originalReservation?.created_at,
       'restart retains the same exact hold rather than replacing it');
     t.equal(retainedReservation?.status, RESERVATION_STATUS.ACTIVE,
-      'the retained hold stays ACTIVE while authority is unavailable');
+      'the retained hold stays ACTIVE while its operation is live');
     t.equal(operationCreatedEvents, 0,
-      'restart recovery emits no fresh operation-created event');
+      'restart emits no fresh operation-created event');
     t.equal(reservationCreatedEvents, 0,
-      'restart recovery emits no fresh reservation-created event');
+      'restart emits no fresh reservation-created event');
     t.equal(restarted.stats.operationsCreated, 0,
-      'restart recovery increments no operation creation statistic');
+      'restart increments no operation creation statistic');
     t.equal(restarted.stats.reservationsCreated, 0,
-      'restart recovery increments no reservation creation statistic');
+      'restart increments no reservation creation statistic');
 
     restarted.restoreOperationAuthority();
-    t.equal(await restartTimers.runNext(), true,
-      'the reconstructed retry observes restored strict authority');
-    t.same(dispatchCalls, [TEST_OPERATION_ID],
-      'the existing reservation gate dispatches exactly once');
-    const recoveryAuthorityFailureIndex = sequence.findIndex((entry) =>
-      entry.kind === 'reservation' &&
-      entry.allowCreate === false &&
-      entry.outcome === OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED &&
-      entry.authorityUnavailable === true);
-    const ordinaryGateObservationIndex = sequence.findIndex((entry) =>
-      entry.kind === 'reservation' &&
-      entry.allowCreate !== false &&
-      entry.outcome ===
-        OPERATION_RESERVATION_ATTEMPT_OUTCOME.ALREADY_ACTIVE);
-    const executeIndex = sequence.findIndex((entry) =>
-      entry.kind === 'execute');
-    t.ok(recoveryAuthorityFailureIndex >= 0,
-      'recovery-specific no-create check fails closed on typed authority loss');
-    t.ok(ordinaryGateObservationIndex > recoveryAuthorityFailureIndex,
-      'retained recovery obligation reaches the ordinary gate after authority');
-    t.ok(executeIndex > ordinaryGateObservationIndex,
-      'physical execution starts only after the ordinary reservation gate');
-    t.same(
-      reservationObservations.filter((entry) =>
-        entry.outcome ===
-          OPERATION_RESERVATION_ATTEMPT_OUTCOME.ALREADY_ACTIVE),
-      [
-        {
-          allowCreate: undefined,
-          outcome: 'already_active',
-          authorityUnavailable: false,
-        },
-      ],
-      'the ordinary last-responsible gate adopts the exact hold exactly once',
-    );
-    t.equal(activeProgressOwnerCount(
-      restarted.workflowOwner,
-      TEST_OPERATION_ID,
-    ), 0, 'the one dispatch consumes the sole progress owner');
+    await restarted.checkTimeouts();
     t.equal(reopenedStore.count('replica_operations'), 1,
-      'dispatch creates no second operation row');
+      'a later tick with authority restored inserts no second operation row');
     t.equal(reopenedStore.count('storage_reservations'), 1,
-      'dispatch creates no second reservation row');
+      'a later tick with authority restored inserts no second reservation row');
     t.equal(reopenedStore.row(
       'storage_reservations',
       'reservation_id',
       TEST_RESERVATION_ID,
     )?.created_at, originalReservation?.created_at,
-    'dispatch continues under the original capacity hold');
-    t.equal(reopenedStore.row(
-      'storage_reservations',
-      'reservation_id',
-      TEST_RESERVATION_ID,
-    )?.status, RESERVATION_STATUS.ACTIVE,
-    'dispatch preserves the original ACTIVE reservation status');
-    t.equal(operationCreatedEvents, 0,
-      'dispatch recovery emits no fresh operation-created event');
-    t.equal(reservationCreatedEvents, 0,
-      'dispatch recovery emits no fresh reservation-created event');
-    t.equal(restarted.stats.operationsCreated, 0,
-      'dispatch recovery creates no operation statistic');
+    'the original capacity hold remains the sole hold');
     t.equal(restarted.stats.reservationsCreated, 0,
-      'dispatch recovery creates no reservation statistic');
+      'a later tick creates no reservation statistic');
+    t.notOk(reservationOutcomes.includes(
+      OPERATION_RESERVATION_ATTEMPT_OUTCOME.CREATED),
+    'no reservation attempt after restart creates a second hold');
   } finally {
     await restarted.shutdown();
     reopenedStore.close();

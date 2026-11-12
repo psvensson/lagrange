@@ -61,6 +61,9 @@ import {insertViaUpsert} from
   '../test-helpers/endpoint-incarnation-fixture.js';
 import {publishRegisteredEndpoint} from
   '../test-helpers/endpoint-incarnation-fixture.js';
+import {buildCommittedCdcOutcome} from '../../src/cdc/cdc-delivery-outcome.js';
+import {beginDurableCdcInvocation, createDurableCdcEvent} from
+  '../topology/cdc-group-propagation-service-harness.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 import {createIdentityTransport} from
   '../test-helpers/replica-handler-identity-fixture.js';
@@ -467,7 +470,6 @@ test('NodeJoiningService - full join hosts its own message group; mg-1 ' +
   // Add 3 replicas on the same node (seed-node-1) with leader role and addresses
   // This satisfies the leader readiness check
   systemTableCache.applySystemTableChange('services', 'INSERT', {
-    id: 'mg-1-r1',
     service_id: 'mg-1-r1',
     replica_id: 'mg-1-r1',
     group_id: 'mg-1',
@@ -478,7 +480,6 @@ test('NodeJoiningService - full join hosts its own message group; mg-1 ' +
     status: 'active',
   });
   systemTableCache.applySystemTableChange('services', 'INSERT', {
-    id: 'mg-1-r2',
     service_id: 'mg-1-r2',
     replica_id: 'mg-1-r2',
     group_id: 'mg-1',
@@ -489,7 +490,6 @@ test('NodeJoiningService - full join hosts its own message group; mg-1 ' +
     status: 'active',
   });
   systemTableCache.applySystemTableChange('services', 'INSERT', {
-    id: 'mg-1-r3',
     service_id: 'mg-1-r3',
     replica_id: 'mg-1-r3',
     group_id: 'mg-1',
@@ -1044,10 +1044,15 @@ test('NodeJoiningService - CDC propagation reuses captured ingress when operatio
         },
         upsertSystemTableRow: async () => true,
       });
-      service.propagatePartitionCDCEvent = async (messageGroupService, cdcEvent) => {
-        propagatedMessageGroupService = messageGroupService;
-        propagatedEvent = cdcEvent;
-      };
+      // The durable subscriber contract: the vector is handed to
+      // propagation whole and answered over that exact vector.
+      service.latencyTopology = {cdcGroupPropagationService: {
+        propagateCDCEvent: async ({events, sourceMessageGroupService}) => {
+          propagatedMessageGroupService = sourceMessageGroupService;
+          propagatedEvent = events;
+          return buildCommittedCdcOutcome(events, sourceMessageGroupService.groupId,
+            {index: 1, term: 1});
+        }}};
 
       NodeService.getInstance = () => ({
         getSystemTableCache() {
@@ -1093,12 +1098,11 @@ test('NodeJoiningService - CDC propagation reuses captured ingress when operatio
 
       service.messageGroupServices = new Map();
 
-      const cdcEvent = {
+      const cdcEvent = [createDurableCdcEvent({
         tableName: TABLES.SQL_TRANSACTIONS,
-        operation: 'UPSERT',
         data: {transaction_id: 'tx-1'},
-      };
-      await capturedSubscriber(cdcEvent);
+      })];
+      await capturedSubscriber(cdcEvent, beginDurableCdcInvocation());
 
       t.equal(
         propagatedMessageGroupService,
@@ -1108,7 +1112,7 @@ test('NodeJoiningService - CDC propagation reuses captured ingress when operatio
       t.same(
         propagatedEvent,
         cdcEvent,
-        'join CDC propagation should forward the original CDC event through the captured ingress',
+        'join CDC propagation should forward the delivered vector through the captured ingress',
       );
     } finally {
       ReplicaHandlerSetup.create = originalReplicaHandlerCreate;

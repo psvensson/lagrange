@@ -115,6 +115,9 @@ import {
 import {
   createBootstrapServiceRuntimeMethods,
 } from './bootstrap-service-runtime-methods.js';
+import {MessageGroupServiceRegistry} from './shared/message-group-service-registry.js';
+import {PartitionServiceRegistry} from './shared/partition-service-registry.js';
+import {declareFormationTarget} from '../config/formation-target-node-count.js';
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_FUNCTION = 'function';
@@ -214,6 +217,10 @@ class BootstrapService extends EventEmitter {
     this.bootstrapReadinessState = options.readinessState || null;
     this.startupServicesAdmission = options.startupServicesAdmission || null;
     this.membershipOwnerOutcome = options.membershipOwnerOutcome || null;
+    // The declared formation size (positive integer, or absent = UNDECLARED);
+    // required only when this node founds a cluster (FRESH_SEED).
+    this.formationTargetDeclaration =
+      declareFormationTarget(options.formationTargetNodeCount);
     this.sqlQueryEngine = options.sqlQueryEngine || null;
     this.onLocalAdminRuntimeReady =
       typeof options.onLocalAdminRuntimeReady === LOCAL_STR_FUNCTION ?
@@ -247,14 +254,14 @@ class BootstrapService extends EventEmitter {
       });
 
     // Services created during bootstrap
-    this.messageGroupServices = new Map();
+    this.messageGroupServices = new MessageGroupServiceRegistry();
     this.messageGroupSelectionOwner =
       new BootstrapMessageGroupSelectionOwner({
         delegates: {
           getMessageGroupServices: () => this.messageGroupServices,
         },
       });
-    this.partitionServices = new Map();
+    this.partitionServices = new PartitionServiceRegistry();
     this.transport = null;
     // MessageRouter for unified local/remote message routing
     this.messageRouter = null;

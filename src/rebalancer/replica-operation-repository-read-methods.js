@@ -7,8 +7,18 @@ import {
   assignReplicaOperationRepositoryIncompleteReadMethods,
 } from './replica-operation-repository-incomplete-read-methods.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+import {
+  OPERATION_VISIBILITY_STATE,
+  buildAbsentOperationVisibility,
+  buildOperationListUnavailableError,
+  buildOperationVisibilityUnavailableError,
+  buildPresentOperationVisibility,
+  buildUnavailableOperationVisibility,
+  readOperationVisibilityState,
+} from './replica-operation-repository-operation-visibility.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
+const IN_FLIGHT_DEDUPE_SCOPE = 'in-flight operations for a move intent';
 const REPLICA_OPERATION_READ_COALESCING_KEY_SEPARATOR = ':';
 const REPLICA_OPERATION_READ_BY_ID_COALESCING_KEY_PREFIX =
   'replica-operation';
@@ -70,9 +80,12 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
     isCoordinatorOwnedOperationType,
     isRetryableControlPlaneError,
     readAuthoritativeControlPlaneRows,
-    resolveAuthoritativeReadModeContract,
     shouldDeferReplicaOperationOwnerRead,
   } = options;
+  // The create dedupe read is the owner's: absence decides a create.
+  const IN_FLIGHT_DEDUPE_READ_OPTIONS = Object.freeze({
+    authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+  });
 
   class ReplicaOperationRepositoryReadMethods {
   /**
@@ -312,11 +325,16 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
     }
 
     /**
-   * Query a single operation by ID (cache-first, SQL fallback).
+   * ADVISORY projection read of one operation: the local cache row, else an
+   * owner-preferred read that may fall back to local SQL. It is never
+   * authority: null means "not visible in the projection" (a cache miss
+   * with an empty or FAILED fallback read), never confirmed absence. A
+   * consumer that discharges, completes or drops work on what it reads uses
+   * getOperationByIdVisibilityObservation with OWNER_RPC_REQUIRED instead.
    * @param {string} operationId
    * @return {Promise<object|null>}
    */
-    async queryOperationById(operationId) {
+    async queryOperationProjectionById(operationId) {
       const cachedRow = this.getReplicaOperationRowFromCache(operationId);
       if (cachedRow) {
         return this.rowToOperation(cachedRow);
@@ -338,11 +356,16 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
     }
 
     /**
-   * Query a single operation by ID from the authoritative owner path only.
+   * Read one operation from the authoritative owner path only and classify
+   * the answer into the by-id visibility contract
+   * (replica-operation-repository-operation-visibility.js): PRESENT, ABSENT
+   * (the read succeeded and holds no coordinator-owned row) or UNAVAILABLE
+   * (the read failed, or the owner deferred it). A failed read is never
+   * ABSENT and no projected row is ever returned.
    * @param {string} operationId
    * @param {object} [options]
    * @param {string} [options.authoritativeReadMode]
-   * @return {Promise<object|null>}
+   * @return {Promise<object>} Frozen named-state observation.
    */
     async queryAuthoritativeOperationVisibilityObservation(operationId, options = {}) {
       const allowPriorityRecoveryDeferredVisibility =
@@ -429,26 +452,23 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
             source,
           });
         }
-        if (
-          !deferredOutcome &&
-          options?.requireAbsenceConfirmation === true &&
-          !isEmptyRead
-        ) {
-          // The read FAILED rather than returning an empty row set: absence
-          // is unconfirmed, and a caller that demanded confirmation must see
-          // an explicit deferral, never a silent null it cannot distinguish
-          // from a confirmed-empty authoritative read.
-          deferredOutcome = this.buildUnconfirmedAbsenceVisibilityOutcome({
-            retryAfterMs: this.getRetryableReplicaOperationReadRetryDelayMs(result),
-            queryDurationMs,
-            operationId,
-          });
+        if (!deferredOutcome && !isEmptyRead) {
+          // The read FAILED rather than returning an empty row set: that is
+          // unavailability for every caller, never absence.
+          deferredOutcome = this.buildAuthoritativeReadUnavailableOutcome(
+            result,
+            {
+              retryAfterMs:
+                this.getRetryableReplicaOperationReadRetryDelayMs(result),
+              queryDurationMs,
+              operationId,
+            },
+          );
         }
 
-        return Object.freeze({
-          operation: null,
-          deferredOutcome,
-        });
+        return deferredOutcome ?
+          buildUnavailableOperationVisibility(deferredOutcome) :
+          buildAbsentOperationVisibility();
       }
 
       const matchingRow =
@@ -465,9 +485,8 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
         ownerPersistedTransitionWitness,
       )
       ) {
-        return Object.freeze({
-          operation: null,
-          deferredOutcome: this.buildOwnerPersistedTransitionDeferredVisibilityOutcome({
+        return buildUnavailableOperationVisibility(
+          this.buildOwnerPersistedTransitionDeferredVisibilityOutcome({
             retryAfterMs: this.replicaOperationAuthoritativeVisibilityRetryDelayMs,
             queryDurationMs,
             operationId,
@@ -475,7 +494,7 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
             REPLICA_OPERATION_VISIBILITY_OUTCOME_SOURCE
               .OWNER_PERSISTED_TRANSITION_STALE_READ,
           }),
-        });
+        );
       }
       if (
         ownerPersistedTransitionWitness &&
@@ -486,33 +505,73 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
       ) {
         this.clearOwnerPersistedTransitionVisibilityWitness(operationId);
       }
-      return Object.freeze({
-        operation: isCoordinatorOwnedOperationType(operation?.type) ? operation : null,
-        deferredOutcome: null,
-      });
+      return isCoordinatorOwnedOperationType(operation?.type) ?
+        buildPresentOperationVisibility(operation) :
+        buildAbsentOperationVisibility();
     }
 
+    /**
+     * The authoritative operation, or null for a CONFIRMED absence at the
+     * requested read mode. An unavailable read throws the typed retryable
+     * error (buildOperationVisibilityUnavailableError); it is never null.
+     * @param {string} operationId
+     * @param {Object} [options]
+     * @return {Promise<Object|null>}
+     */
     async queryAuthoritativeOperationById(operationId, options = {}) {
       const observation = await this.queryAuthoritativeOperationVisibilityObservation(operationId, {
         authoritativeReadMode: options?.authoritativeReadMode,
         leaderMode: options?.leaderMode,
         allowPriorityRecoveryDeferredVisibility: false,
       });
+      if (
+        readOperationVisibilityState(observation) ===
+        OPERATION_VISIBILITY_STATE.UNAVAILABLE
+      ) {
+        throw buildOperationVisibilityUnavailableError(observation, operationId);
+      }
       return observation.operation;
     }
 
     /**
-     * Query the authoritative operation holding one durable runtime target
-     * identity claim.
-     * @param {string} targetClaimKey
-     * @return {Promise<object|null>}
+     * The by-id visibility contract for a keyed authoritative row read: a
+     * failed read is UNAVAILABLE (typed), an empty answer ABSENT, a row of a
+     * coordinator-owned type PRESENT.
+     * @param {Object} result
+     * @param {Object} unavailableContext - {retryAfterMs, queryDurationMs}.
+     * @return {Object}
+     * @private
      */
-    async queryAuthoritativeOperationByTargetClaimKey(targetClaimKey) {
+    classifyAuthoritativeOperationRowRead(result, unavailableContext = {}) {
+      if (result?.success !== true || !Array.isArray(result.rows)) {
+        return buildUnavailableOperationVisibility(
+          this.buildAuthoritativeReadUnavailableOutcome(result, {
+            retryAfterMs: this.getRetryableReplicaOperationReadRetryDelayMs(result),
+            ...unavailableContext,
+          }),
+        );
+      }
+      if (result.rows.length === 0) {
+        return buildAbsentOperationVisibility();
+      }
+      const operation = this.rowToOperation(result.rows[0]);
+      return isCoordinatorOwnedOperationType(operation?.type) ?
+        buildPresentOperationVisibility(operation) :
+        buildAbsentOperationVisibility();
+    }
+
+    /**
+     * Observe the authoritative operation holding one durable runtime target
+     * identity claim (named state: PRESENT / ABSENT / UNAVAILABLE).
+     * @param {string} targetClaimKey
+     * @return {Promise<Object>}
+     */
+    async observeAuthoritativeOperationByTargetClaimKey(targetClaimKey) {
       if (
         typeof targetClaimKey !== 'string' ||
         targetClaimKey.length === 0
       ) {
-        return null;
+        return buildAbsentOperationVisibility();
       }
       const result = await this.executeReplicaOperationsRead(
         SQL.SELECT_OPERATION_BY_TARGET_CLAIM,
@@ -523,30 +582,20 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
           retryOnRetryableFailure: true,
         },
       );
-      if (
-        result?.success !== true ||
-        !Array.isArray(result.rows) ||
-        result.rows.length === 0
-      ) {
-        return null;
-      }
-      const operation = this.rowToOperation(result.rows[0]);
-      return isCoordinatorOwnedOperationType(operation?.type) ?
-        operation :
-        null;
+      return this.classifyAuthoritativeOperationRowRead(result);
     }
 
     /**
-     * Query the authoritative operation retaining one message-group
-     * membership lane. The nullable unique key is released only by the
-     * membership owner after it proves definitive non-admission or a fresh
-     * committed absence.
+     * Observe the authoritative operation retaining one message-group
+     * membership lane (named state). The nullable unique key is released
+     * only by the membership owner after it proves definitive non-admission
+     * or a fresh committed absence.
      * @param {string} laneKey
-     * @return {Promise<object|null>}
+     * @return {Promise<Object>}
      */
-    async queryAuthoritativeOperationByMessageGroupMembershipLane(laneKey) {
+    async observeAuthoritativeOperationByMessageGroupMembershipLane(laneKey) {
       if (typeof laneKey !== 'string' || laneKey.length === 0) {
-        return null;
+        return buildAbsentOperationVisibility();
       }
       const result = await this.executeReplicaOperationsRead(
         SQL.SELECT_OPERATION_BY_MESSAGE_GROUP_MEMBERSHIP_LANE,
@@ -557,21 +606,27 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
           retryOnRetryableFailure: true,
         },
       );
-      if (
-        result?.success !== true ||
-        !Array.isArray(result.rows) ||
-        result.rows.length === 0
-      ) {
-        return null;
-      }
-      const operation = this.rowToOperation(result.rows[0]);
-      return isCoordinatorOwnedOperationType(operation?.type) ?
-        operation :
-        null;
+      return this.classifyAuthoritativeOperationRowRead(result);
     }
 
+    /**
+     * The workflow owner's by-id visibility read: the authoritative
+     * observation, with this owner's own persisted-transition witness
+     * honoured as a deferral (an empty or lagging read behind a transition
+     * this owner just committed is UNAVAILABLE, not ABSENT) unless the
+     * caller turns it off. It reads nothing else: no cache row and no
+     * owner-preferred SQL fallback stand in for the owner.
+     * @param {string} operationId
+     * @param {Object} [options]
+     * @param {string} [options.authoritativeReadMode]
+     * @param {string} [options.leaderMode]
+     * @param {boolean} [options.allowPriorityRecoveryDeferredVisibility]
+     * @param {boolean} [options.allowOwnerPersistedTransitionDeferredVisibility]
+     *   Default true.
+     * @return {Promise<Object>} Frozen named-state observation.
+     */
     async getOperationByIdVisibilityObservation(operationId, options = {}) {
-      const authoritativeObservation = await this.queryAuthoritativeOperationVisibilityObservation(
+      return this.queryAuthoritativeOperationVisibilityObservation(
         operationId,
         {
           authoritativeReadMode: options?.authoritativeReadMode,
@@ -580,36 +635,25 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
           options?.allowPriorityRecoveryDeferredVisibility === true,
           allowOwnerPersistedTransitionDeferredVisibility:
           options?.allowOwnerPersistedTransitionDeferredVisibility !== false,
-          requireAbsenceConfirmation:
-          options?.requireAbsenceConfirmation === true,
         },
-      );
-      if (authoritativeObservation?.operation) {
-        return this.buildOperationVisibilityObservation(authoritativeObservation.operation, null);
-      }
-      const ownerPersistedFallbackOperation =
-      options?.allowOwnerPersistedTransitionDeferredVisibility === false ?
-        null :
-        this.getOwnerPersistedTransitionVisibilityFallbackOperation(operationId);
-      const cacheFallbackOperation = await this.queryOperationById(operationId);
-      const fallbackOperation =
-      ownerPersistedFallbackOperation || cacheFallbackOperation;
-      return this.buildOperationVisibilityObservation(
-        fallbackOperation,
-        authoritativeObservation?.deferredOutcome || null,
       );
     }
 
     /**
-   * Query for an existing in-flight operation matching a move intent.
-   * @param {string} partitionId
-   * @param {string} targetNodeId
-   * @param {string} entityType
-   * @param {string} entityId
-   * @param {object} move
-   * @param {Function} operationMatchesMoveIntent
-   * @return {Promise<object|null>}
-   */
+     * The create dedupe read: the existing in-flight operation matching a
+     * move intent, as the owner answers it. A read that did not answer
+     * throws the typed list unavailability: "no existing operation" is never
+     * inferred from a failed read and no cache row stands in for the owner,
+     * so creation waits rather than risk a duplicate.
+     * @param {string} partitionId
+     * @param {string} targetNodeId
+     * @param {string} entityType
+     * @param {string} entityId
+     * @param {object} move
+     * @param {Function} operationMatchesMoveIntent
+     * @return {Promise<object|null>} The matching operation, or null when
+     *   the owner answered with none.
+     */
     async queryExistingInFlightOperation(
       partitionId,
       targetNodeId,
@@ -617,56 +661,21 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
       entityId,
       move,
       operationMatchesMoveIntent,
-      options = {},
     ) {
-      const readOptions =
-      options?.readOptions && typeof options.readOptions === 'object' ? options.readOptions : null;
-      const authoritativeReadContract = resolveAuthoritativeReadModeContract(readOptions || {});
-      const allowCacheFallbackOnReadFailure =
-      options?.allowCacheFallbackOnReadFailure === false ?
-        false :
-        authoritativeReadContract.authoritativeReadMode !==
-          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED;
       const result = await this.executeReplicaOperationsRead(
         SQL.SELECT_IN_FLIGHT_FOR_ENTITY_NODE,
         [partitionId, targetNodeId, entityType, entityId],
-        readOptions,
+        IN_FLIGHT_DEDUPE_READ_OPTIONS,
       );
-      if (result.success && Array.isArray(result.rows)) {
-        if (result.rows.length === 0) {
-          return null;
-        }
-        const operations = result.rows.map((row) => this.rowToOperation(row));
-        return (
-          operations.find((operation) => {
-            return (
-              !this.isOperationTerminal(operation) &&
-            operationMatchesMoveIntent(operation, move, entityType, entityId)
-            );
-          }) || null
-        );
+      if (!result.success || !Array.isArray(result.rows)) {
+        throw buildOperationListUnavailableError(result, IN_FLIGHT_DEDUPE_SCOPE);
       }
-      if (!allowCacheFallbackOnReadFailure) {
-        return null;
-      } // Fallback path for degraded SQL-read conditions.
-      const cachedRows = this.filterReplicaOperationRowsFromCache((row) => {
-        if (!row || row.partition_id !== partitionId || row.target_node_id !== targetNodeId) {
-          return false;
-        }
-        return row.entity_type === entityType && row.entity_id === entityId;
-      });
-      if (cachedRows === null) {
-        return null;
-      }
-      const cachedOperations = cachedRows.map((row) => this.rowToOperation(row));
-      return (
-        cachedOperations.find((operation) => {
-          return (
-            !this.isOperationTerminal(operation) &&
-          operationMatchesMoveIntent(operation, move, entityType, entityId)
-          );
-        }) || null
-      );
+      return result.rows
+        .map((row) => this.rowToOperation(row))
+        .find((operation) =>
+          !this.isOperationTerminal(operation) &&
+          operationMatchesMoveIntent(operation, move, entityType, entityId)) ||
+        null;
     }
   }
 

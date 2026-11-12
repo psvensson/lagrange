@@ -1,6 +1,8 @@
 import {readFileSync} from 'node:fs';
 import {spawnSync} from 'node:child_process';
 import {test} from '../../src/test-helpers/tap.js';
+import {REBALANCER_LOCAL_MUTATION_READINESS_WAKE_METHODS} from
+  '../../src/rebalancer/rebalancer-local-mutation-readiness-wake.js';
 import {UnifiedRebalancerMoveExecution} from
   '../../src/rebalancer/unified-rebalancer-move-execution.js';
 
@@ -89,6 +91,11 @@ function buildExecutionSelf(thrownError) {
 
 test('interlock skip label fidelity - skipped move result carries the admission reason code', async (t) => {
   const self = buildExecutionSelf(buildInterlockShapedError());
+  // The creation-error path asks the wake owner whether to arm a wait; an
+  // interlock refusal is not a transient re-entry and arms none.
+  self.armOperationCreationAdmissionWake =
+    REBALANCER_LOCAL_MUTATION_READINESS_WAKE_METHODS
+      .armOperationCreationAdmissionWake;
   // Bind the prototype chain methods the fake references lazily.
   for (const name of [
     'buildSkippedMoveResult',

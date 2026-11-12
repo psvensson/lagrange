@@ -20,9 +20,11 @@
  *  - a's durable lifecycle row, compared with its own value at setup.
  */
 
+import {mock} from 'node:test';
 import {test} from '../../src/test-helpers/tap.js';
-import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {LoggingService} from '../../src/logging/logging-service.js';
+import {WAIT_BOUND_SPENT_EVENT} from '../../src/logging/wait-bound-spent.js';
+import {REPLICA_HANDLER_DEFAULT} from
+  '../../src/node/replica-handler-constants.js';
 import {EXECUTOR_OUTCOME_TYPE} from
   '../../src/rebalancer/executor-outcome-constants.js';
 import {ReplicaOperationResponseStatus} from
@@ -34,41 +36,16 @@ import {REPLICA_CONSENSUS_EXIT_REASON} from
   '../../src/node/replica-removal-consensus-exit.js';
 import {retirePartitionRaftPeer} from
   '../../src/partition/partition-service-raft-membership-administration.js';
-import {PartitionNodeCluster} from
-  '../raft/raft-rs-backend/partition-node-cluster.js';
-import {
-  durableAppliedState,
-  durableHardState,
-  foldAt,
-  logFold,
-} from '../raft/raft-rs-backend/committed-membership-oracles.js';
-import {createMockCache} from '../rebalancer/test-helpers.js';
-import {
-  createRemovalSourceHandler,
-  durableLifecycleState,
-} from './replica-removal-consensus-exit-fixture.js';
+import {openTwoVoterRemovalWorld} from
+  './replica-removal-consensus-exit-fixture.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 const PARTITION_ID = 'users-p7';
 const SOURCE = `${PARTITION_ID}-r1`;
 const LEADER = `${PARTITION_ID}-r2`;
 const NODE_OF = Object.freeze({[SOURCE]: 'node-a', [LEADER]: 'node-b'});
-const ELECTION_ROUNDS = 400;
 const QUIET_ROUNDS = 60;
 const EXIT_ROUNDS = 40;
-
-function serviceRow(replicaId, status) {
-  return {
-    service_id: replicaId,
-    replica_id: replicaId,
-    partition_id: PARTITION_ID,
-    node_id: NODE_OF[replicaId],
-    service_type: 'partition',
-    status,
-    raft_role: 'follower',
-    address: `${NODE_OF[replicaId]}/partition/${replicaId}`,
-  };
-}
 
 function nextTurns(turns = 20) {
   let chain = Promise.resolve();
@@ -79,46 +56,8 @@ function nextTurns(turns = 20) {
 }
 
 function openWorld(t) {
-  ConfigurationManager.resetInstance();
-  LoggingService.resetInstance();
-  ConfigurationManager.getInstance().initialize({});
-  LoggingService.getInstance().initialize({level: 'error'});
-  const cluster = new PartitionNodeCluster({partitionId: PARTITION_ID,
-    replicaIds: [SOURCE, LEADER]});
-  cluster.tickers = [LEADER];
-  const elected = cluster.settle(() =>
-    cluster.leaderReplicaId() === LEADER,
-  {rounds: ELECTION_ROUNDS});
-  const peerIds = Object.freeze({
-    [SOURCE]: String(cluster.raftPeerIdOf(SOURCE)),
-    [LEADER]: String(cluster.raftPeerIdOf(LEADER)),
-  });
-  const cache = createMockCache({services: [
-    serviceRow(SOURCE, ReplicaStatus.ACTIVE),
-    serviceRow(LEADER, ReplicaStatus.ACTIVE)]});
-  const source = createRemovalSourceHandler({cluster, replicaId: SOURCE,
-    partitionId: PARTITION_ID, nodeId: NODE_OF[SOURCE], cache,
-    rowOf: (status) => serviceRow(SOURCE, status)});
-  const world = {cluster, cache, source, peerIds, elected,
-    sourceDb: cluster.replica(SOURCE).dbFile,
-    leaderDb: cluster.replica(LEADER).dbFile};
-  world.lifecycleAtSetup = durableLifecycleState(world.sourceDb, PARTITION_ID);
-  // The committed configuration: the fold of the leader's durable log over
-  // the founders, at the leader's durable commit index.
-  world.committedVoters = () => foldAt(logFold(world.leaderDb, PARTITION_ID,
-    [peerIds[SOURCE], peerIds[LEADER]]),
-  Number(durableHardState(world.leaderDb, PARTITION_ID).commit)).voters;
-  world.sourceAppliedVoters = () =>
-    durableAppliedState(world.sourceDb, PARTITION_ID).voters;
-  world.sourceLifecycle = () =>
-    durableLifecycleState(world.sourceDb, PARTITION_ID);
-  t.teardown(async () => {
-    await source.dispose();
-    cluster.dispose();
-    ConfigurationManager.resetInstance();
-    LoggingService.resetInstance();
-  });
-  return world;
+  return openTwoVoterRemovalWorld(t, {partitionId: PARTITION_ID,
+    source: SOURCE, leader: LEADER, nodeOf: NODE_OF});
 }
 
 test('generic REMOVE in a two-voter group: the removed follower acks its ' +
@@ -193,4 +132,70 @@ test('generic REMOVE in a two-voter group: the removed follower acks its ' +
   cluster.settle(applied, {rounds: 200});
   t.equal(applied(), true,
     'the remaining voter keeps quorum (a write through it commits)');
+});
+
+// Task 2 (2026-11-11): a spent wait never retires a voter. The same REMOVE,
+// but its RemoveNode is delayed past the consensus-exit bound: the bound is
+// reported once and spent, the source keeps its port and keeps voting (in
+// {source, leader} a write commits only with its ack), and when the removal
+// later commits its teardown completes on its applied removal.
+test('generic REMOVE whose commit is delayed past the wait: the spent wait ' +
+  'keeps the voter, the group keeps writing, and the later commit tears it ' +
+  'down', async (t) => {
+  mock.timers.enable({apis: ['setTimeout']});
+  t.teardown(() => mock.timers.reset());
+  const world = openWorld(t);
+  const {cluster, cache, source, peerIds} = world;
+  t.equal(world.elected, true, 'setup: the other voter leads');
+  const alarms = [];
+  const error = source.handler.logger.error.bind(source.handler.logger);
+  source.handler.logger.error = (message, fields) => {
+    if (fields?.event === WAIT_BOUND_SPENT_EVENT) alarms.push(fields);
+    return error(message, fields);
+  };
+  const ack = await source.removeRequest('op-delayed-commit');
+  t.equal(ack.status, ReplicaOperationResponseStatus.INITIATED, 'accepted');
+  await nextTurns();
+  t.equal(cache.get('services', SOURCE)?.status, ReplicaStatus.REMOVING,
+    'its row reads REMOVING');
+
+  // Nothing proposes the removal; the bound is spent twice.
+  for (let spent = 0; spent < 2; spent += 1) {
+    mock.timers.tick(REPLICA_HANDLER_DEFAULT.REMOVAL_CONSENSUS_EXIT_BACKSTOP_MS);
+    await nextTurns();
+  }
+  t.equal(alarms.length, 1, 'the spent wait is reported once');
+  t.equal(world.sourceLifecycle(), world.lifecycleAtSetup,
+    'a spent wait retires nothing: its lifecycle is unchanged');
+  t.equal(cluster.node(SOURCE).readStatus().outcome,
+    RAFT_OPERATION_OUTCOME.CORE_OK, 'its port still answers');
+  t.same(world.committedVoters(), [peerIds[SOURCE], peerIds[LEADER]].sort(),
+    'it is still a committed voter');
+  t.same(source.exits, [], 'it never left consensus');
+  const marker = 'write-past-the-spent-wait';
+  const applied = () => cluster.replica(LEADER).appliedCommands.some(
+    (command) => JSON.stringify(command).includes(marker));
+  await turnChainValue(cluster.propose(LEADER, marker));
+  cluster.settle(applied, {rounds: 200});
+  t.equal(applied(), true,
+    'it keeps voting: a write in {source, leader} commits with its ack');
+
+  // The removal commits late: the same wait, woken by its applied removal.
+  await retirePartitionRaftPeer({raft: cluster.node(LEADER),
+    partitionId: PARTITION_ID, replicaId: LEADER}, SOURCE);
+  for (let round = 0; round < EXIT_ROUNDS && !source.outcomes.some(([type]) =>
+    type === EXECUTOR_OUTCOME_TYPE.REPLICA_REMOVE_COMPLETED); round += 1) {
+    cluster.settle(() => false, {rounds: 10});
+    await nextTurns();
+  }
+  t.same(world.committedVoters(), [peerIds[LEADER]],
+    'the removal committed');
+  t.same(source.exits.map((exit) => exit.reason),
+    [REPLICA_CONSENSUS_EXIT_REASON.REMOVAL_APPLIED],
+    'it left consensus on its applied removal');
+  t.not(world.sourceLifecycle(), world.lifecycleAtSetup, 'then it retired');
+  t.equal(cache.get('services', SOURCE) ?? null, null, 'its row is deleted');
+  t.ok(source.outcomes.some(([type]) =>
+    type === EXECUTOR_OUTCOME_TYPE.REPLICA_REMOVE_COMPLETED),
+  'the removal completed');
 });

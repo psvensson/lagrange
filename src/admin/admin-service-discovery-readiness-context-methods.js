@@ -1,3 +1,4 @@
+import {COLUMN} from '../constants/index.js';
 import {readLowerStateField} from '../utils/state-field-read.js';
 import {
   buildProjectionReadinessState,
@@ -43,7 +44,6 @@ function assignAdminServiceDiscoveryReadinessContextMethods(
     AUTHORITATIVE_DISCOVERY_REPAIR_REASON_CONTROL_SNAPSHOT,
     AUTHORITATIVE_DISCOVERY_REPAIR,
     buildControlPlaneWorkloadProfile,
-    COLUMN,
     CONTROL_PLANE_DELIVERY_PRIORITY,
     CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR,
     CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE,

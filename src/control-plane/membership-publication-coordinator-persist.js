@@ -1,24 +1,13 @@
-import {readStateField} from '../utils/state-field-read.js';
 import {
   CONTROL_PLANE_CONVERGENCE_CLASS,
-  isControlPlaneWriterShutDown,
 } from './control-plane-error-classification.js';
-import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
-import {publicationRowSatisfiesDesiredState} from './control-plane-publication-merge.js';
 import {
+  MEMBERSHIP_PUBLICATION_READ_SOURCE,
   MEMBERSHIP_PUBLICATION_WORKFLOW_STEP,
-  PUBLICATION_WRITE_MAX_ATTEMPTS,
 } from './membership-publication-row-contract.js';
 import {
-  listEquals,
-  normalizePositiveInteger,
-} from './membership-publication-row-helpers.js';
-import {
-  buildPublicationReadOptions,
-  mergePublicationRows,
   serializeMembershipPublicationRow,
 } from './membership-publication-planning-evidence.js';
-import {acknowledgeMembershipPublication} from './membership-publication-acknowledgement.js';
 import {MembershipPublicationCoordinatorPlanning} from './membership-publication-coordinator-planning.js';
 import {
   readActiveGateMembershipPublicationVisibleRow,
@@ -30,58 +19,31 @@ import {
   CONTROL_PLANE_CRITICAL_CONVERGENCE_OPERATION,
   buildCriticalControlPlaneConvergenceOptions,
 } from './membership-publication-control-plane-convergence.js';
-import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+import {
+  PUBLICATION_WRITE_OUTCOME,
+  refused,
+} from './owners/control-plane-publication-change.js';
+import {
+  membershipPublicationAcknowledgementChange,
+  membershipPublicationRefreshChange,
+  membershipPublicationTimeoutAbandonChange,
+} from './membership-publication-row-changes.js';
+import {
+  shouldDeferMembershipReconcileToWriteLeader,
+} from './membership-publication-coordinator-reconcile-helpers.js';
+import {MEMBERSHIP_PUBLICATION_WRITE_REFUSAL} from
+  './membership-publication-write-refusal.js';
 
-const PUBLICATION_WRITE_UNCONFIRMED_OUTCOME =
-  'unconfirmed_row_returned_as_persisted';
-const PUBLICATION_WRITE_CONFIRMATION_WAIT = Object.freeze({
-  wait: 'PUBLICATION_WRITE_MAX_ATTEMPTS',
-  awaited: 'durable publication row satisfying the desired state after ' +
-    'upsert + readback',
-});
 
-// Every publication write attempt is spent without a readback that
-// satisfies the desired row. The caller still gets the unconfirmed row
-// (unchanged behaviour; the owner finding is recorded in the quest log).
-function reportPublicationWriteUnconfirmed(coordinator, spent) {
-  reportWaitBoundSpent(coordinator.logger, {
-    ...PUBLICATION_WRITE_CONFIRMATION_WAIT,
-    boundMs: null,
-    lastObserved: () => ({
-      attempts: spent.maxAttempts,
-      outcome: PUBLICATION_WRITE_UNCONFIRMED_OUTCOME,
-      status: readStateField(spent.row?.status),
-      publicationEpoch: spent.row?.publication_epoch ?? null,
-      acknowledgedCount: Array.isArray(spent.row?.acknowledged_node_ids) ?
-        spent.row.acknowledged_node_ids.length :
-        null,
-    }),
-    scope: {
-      nodeId: coordinator.nodeId ?? null,
-      publicationId: spent.publicationId,
-    },
+// The projection shows no acknowledgement owed by this node (the row is
+// closed, does not require the node, or already holds it): nothing is
+// written, and the row answered is the projected one, named as such.
+function acknowledgementNotOwed(projectedRow) {
+  return Object.freeze({
+    outcome: PUBLICATION_WRITE_OUTCOME.UNCHANGED,
+    row: projectedRow,
+    rowSource: MEMBERSHIP_PUBLICATION_READ_SOURCE.CACHE_PREFERRED,
   });
-}
-
-// What a failed publication write leaves to do. A failed answer does not
-// prove the row is absent (a committed write can answer failed), so while
-// attempts remain the durable row is read back and the write re-attempted.
-// The one exception is the CDC service's terminal shut-down answer: nothing
-// can be read back or re-attempted through a torn-down writer.
-const PUBLICATION_WRITE_FAILURE_NEXT_STEP = Object.freeze({
-  VERIFY_AND_REATTEMPT: 'verify_and_reattempt',
-  FAIL: 'fail',
-});
-
-function resolvePublicationWriteFailureNextStep(
-  error,
-  canVerifyPersistedRow,
-  attemptsLeft,
-) {
-  return canVerifyPersistedRow && attemptsLeft > 0 &&
-    !isControlPlaneWriterShutDown(error) ?
-    PUBLICATION_WRITE_FAILURE_NEXT_STEP.VERIFY_AND_REATTEMPT :
-    PUBLICATION_WRITE_FAILURE_NEXT_STEP.FAIL;
 }
 
 class MembershipPublicationCoordinatorPersist extends
@@ -102,103 +64,134 @@ class MembershipPublicationCoordinatorPersist extends
     });
   }
 
-  async persistPublicationRow(row, options = {}) {
+  // The delivery options of one publication write of this coordinator.
+  buildPublicationWriteOptions(options = {}, operation =
+  CONTROL_PLANE_CRITICAL_CONVERGENCE_OPERATION.MEMBERSHIP_PUBLICATION) {
     const ownerKey =
       options[CONTROL_PLANE_CONVERGENCE_FIELD
         .CONTROL_PLANE_CONVERGENCE_OWNER_KEY] || this.buildOwnerKey();
-    const publicationOptions = buildCriticalControlPlaneConvergenceOptions(
-      options,
-      {
+    return {
+      ...buildCriticalControlPlaneConvergenceOptions(options, {
         ownerKey,
         operation:
           options[CONTROL_PLANE_CONVERGENCE_FIELD
-            .CONTROL_PLANE_CONVERGENCE_OPERATION] ||
-          CONTROL_PLANE_CRITICAL_CONVERGENCE_OPERATION.MEMBERSHIP_PUBLICATION,
-      },
-    );
-    let persistedRow = serializeMembershipPublicationRow(row);
-    if (
-      this.controlPlanePublicationsOwner &&
-      typeof this.controlPlanePublicationsOwner.upsertPublication === 'function'
-    ) {
-      const publicationId = persistedRow.publication_id || null;
-      const canVerifyPersistedRow =
-        publicationId &&
-        options.skipPublicationWriteReadback !== true &&
-        typeof this.controlPlanePublicationsOwner.getPublication === 'function';
-      const maxAttempts = normalizePositiveInteger(
-        options.publicationWriteMaxAttempts,
-        PUBLICATION_WRITE_MAX_ATTEMPTS,
-      );
-      for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-        if (canVerifyPersistedRow) {
-          const currentRow = await this.controlPlanePublicationsOwner.getPublication(
-            publicationId,
-            buildPublicationReadOptions(publicationOptions),
-          );
-          persistedRow = serializeMembershipPublicationRow(
-            mergePublicationRows(persistedRow, currentRow),
-          );
-        }
-        try {
-          await this.controlPlanePublicationsOwner.upsertPublication(
-            persistedRow,
-            publicationOptions,
-          );
-        } catch (error) {
-          if (
-            resolvePublicationWriteFailureNextStep(
-              error,
-              canVerifyPersistedRow,
-              maxAttempts - attempt - 1,
-            ) === PUBLICATION_WRITE_FAILURE_NEXT_STEP.FAIL
-          ) {
-            throw error;
-          }
-          const durableRow = await this.controlPlanePublicationsOwner.getPublication(
-            publicationId,
-            buildPublicationReadOptions(publicationOptions),
-          );
-          if (publicationRowSatisfiesDesiredState(durableRow, persistedRow)) {
-            return serializeMembershipPublicationRow(
-              mergePublicationRows(durableRow, persistedRow),
-            );
-          }
-          persistedRow = serializeMembershipPublicationRow(
-            mergePublicationRows(durableRow, persistedRow),
-          );
-          continue;
-        }
-        if (!canVerifyPersistedRow) {
-          return persistedRow;
-        }
-        if (options.skipPublicationWriteReadback === true) {
-          return persistedRow;
-        }
-        const durableRow = await this.controlPlanePublicationsOwner.getPublication(
-          publicationId,
-          buildPublicationReadOptions(publicationOptions),
-        );
-        if (publicationRowSatisfiesDesiredState(durableRow, persistedRow)) {
-          return serializeMembershipPublicationRow(mergePublicationRows(durableRow, persistedRow));
-        }
-        persistedRow = serializeMembershipPublicationRow(
-          mergePublicationRows(durableRow, persistedRow),
-        );
-      }
-      reportPublicationWriteUnconfirmed(this, {
-        maxAttempts,
-        publicationId,
-        row: persistedRow,
-      });
-    }
-    return persistedRow;
+            .CONTROL_PLANE_CONVERGENCE_OPERATION] || operation,
+      }),
+      logger: this.logger,
+    };
   }
 
-  async acknowledgePublication(publicationId, nodeId, options = {}) {
-    const acknowledgementOwnerKey = `${this.buildOwnerKey()}:ack:${publicationId}`;
-    const acknowledgementOptions = buildCriticalControlPlaneConvergenceOptions(
+  /**
+   * Admit a new publication row (insert-only, revision 1).
+   * @param {Object} row - The candidate row.
+   * @param {Object} [options={}] - The reconcile's convergence options.
+   * @return {Promise<Object>} The typed write outcome.
+   */
+  async admitPublicationRow(row, options = {}) {
+    if (!this.controlPlanePublicationsOwner) {
+      return refused(MEMBERSHIP_PUBLICATION_WRITE_REFUSAL
+        .PUBLICATIONS_OWNER_UNAVAILABLE);
+    }
+    const {logger: _logger, ...admissionOptions} =
+      this.buildPublicationWriteOptions(options);
+    return this.controlPlanePublicationsOwner.admitPublication(
+      serializeMembershipPublicationRow(row),
+      admissionOptions,
+    );
+  }
+
+  /**
+   * Refresh a publication row's summaries and complete the acknowledgements
+   * the owner's recovery-eligible rule names, as a change of the durable row.
+   * @param {string} publicationId
+   * @param {Object} refresh - {priorityPartitionSummary,
+   *   membershipLifecycleSummary, acknowledgedNodeIds}.
+   * @param {Object} [options={}] - The reconcile's convergence options.
+   * @return {Promise<Object>} The typed write outcome.
+   */
+  async refreshPublicationRow(publicationId, refresh, options = {}) {
+    if (!this.controlPlanePublicationsOwner) {
+      return refused(MEMBERSHIP_PUBLICATION_WRITE_REFUSAL
+        .PUBLICATIONS_OWNER_UNAVAILABLE);
+    }
+    return this.controlPlanePublicationsOwner.applyPublicationChange(
+      publicationId,
+      membershipPublicationRefreshChange({...refresh, now: () => this.now()}),
+      this.buildPublicationWriteOptions(options),
+    );
+  }
+
+  /**
+   * This node's acknowledgement of the latest publication. A node
+   * acknowledges only for itself. The projection names the publication and
+   * whether an acknowledgement is owed (a hint); the write itself is a
+   * change of the durable row and never starts from the projected one.
+   * @param {string} nodeId - This node.
+   * @param {Object} [options={}]
+   * @return {Promise<Object|null>} The typed write outcome; null when no
+   *   publication is visible to acknowledge.
+   */
+  async acknowledgeMembershipPublicationForNode(nodeId, options = {}) {
+    const normalizedNodeId = String(nodeId || '').trim();
+    if (!normalizedNodeId) {
+      return null;
+    }
+    if (normalizedNodeId !== this.nodeId) {
+      return refused(MEMBERSHIP_PUBLICATION_WRITE_REFUSAL.NOT_SELF);
+    }
+    const acknowledgementCandidate = await this.getAcknowledgementCandidateForNode(
+      normalizedNodeId,
       options,
+    );
+    if (!acknowledgementCandidate || typeof acknowledgementCandidate !== 'object') {
+      return null;
+    }
+    const candidatePublicationRow = acknowledgementCandidate.publicationRow;
+    if (!candidatePublicationRow || typeof candidatePublicationRow !== 'object') {
+      return null;
+    }
+    if (
+      acknowledgementCandidate.terminal === true ||
+      acknowledgementCandidate.requiresAcknowledgement !== true ||
+      (
+        acknowledgementCandidate.alreadyAcknowledged === true &&
+        acknowledgementCandidate.allRequiredAcknowledged !== true
+      )
+    ) {
+      return acknowledgementNotOwed(
+        serializeMembershipPublicationRow(candidatePublicationRow));
+    }
+    return this.acknowledgePublication(
+      candidatePublicationRow.publication_id || candidatePublicationRow.publicationId,
+      normalizedNodeId,
+      options,
+    );
+  }
+
+  /**
+   * Record `nodeId`'s acknowledgement of a publication as a change of the
+   * durable row. The lane is keyed by (publication, node): a second call for
+   * the same pair joins the running one (the same change of the same row);
+   * a call for another node never joins it - it runs on its own key and the
+   * row's revision orders the two writes.
+   * @param {string} publicationId
+   * @param {string} nodeId
+   * @param {Object} [options={}]
+   * @return {Promise<Object>} The typed write outcome.
+   */
+  async acknowledgePublication(publicationId, nodeId, options = {}) {
+    if (!this.controlPlanePublicationsOwner) {
+      return refused(MEMBERSHIP_PUBLICATION_WRITE_REFUSAL
+        .PUBLICATIONS_OWNER_UNAVAILABLE);
+    }
+    const acknowledgementOwnerKey = `${this.buildOwnerKey()}:ack:` +
+      JSON.stringify([publicationId, nodeId]);
+    // The projection's rows named the publication; they never reach the
+    // write (its base is the durable row).
+    const {publicationRow: _row, publicationRows: _rows, ...deliveryOptions} =
+      options;
+    const acknowledgementOptions = buildCriticalControlPlaneConvergenceOptions(
+      deliveryOptions,
       {
         ownerKey: acknowledgementOwnerKey,
         operation: CONTROL_PLANE_CRITICAL_CONVERGENCE_OPERATION.PUBLICATION_ACK,
@@ -210,44 +203,38 @@ class MembershipPublicationCoordinatorPersist extends
         [CONTROL_PLANE_CONVERGENCE_FIELD.CONTROL_PLANE_CONVERGENCE_CLASS]:
           CONTROL_PLANE_CONVERGENCE_CLASS.CRITICAL,
       },
-      async () => {
-        let existingRow = null;
-        if (
-          this.controlPlanePublicationsOwner &&
-          typeof this.controlPlanePublicationsOwner.getPublication === 'function'
-        ) {
-          existingRow = await this.controlPlanePublicationsOwner.getPublication(
-            publicationId,
-            buildPublicationReadOptions(acknowledgementOptions),
-          );
-        }
-        const baseRow = mergePublicationRows(
-          existingRow,
-          acknowledgementOptions.publicationRow || null,
-        );
-        if (!baseRow) {
-          return null;
-        }
-        const normalizedBaseRow = normalizeControlPlanePublicationRow(baseRow);
-        const acknowledgedRow = acknowledgeMembershipPublication({
-          publicationRow: baseRow,
-          nodeId,
-          nowMs: this.now(),
-          timeoutMs: acknowledgementOptions.timeoutMs,
-          timeoutReasonCode: acknowledgementOptions.timeoutReasonCode,
-        });
-        const normalizedAcknowledgedRow = normalizeControlPlanePublicationRow(acknowledgedRow);
-        const acknowledgementChanged =
-          normalizedAcknowledgedRow.status !== normalizedBaseRow.status ||
-          !listEquals(
-            normalizedAcknowledgedRow.acknowledgedNodeIds,
-            normalizedBaseRow.acknowledgedNodeIds,
-          );
-        if (!acknowledgementChanged) {
-          return acknowledgedRow;
-        }
-        return this.persistPublicationRow(acknowledgedRow, acknowledgementOptions);
-      },
+      () => this.controlPlanePublicationsOwner.applyPublicationChange(
+        publicationId,
+        membershipPublicationAcknowledgementChange({
+          nodeId, now: () => this.now()}),
+        {...acknowledgementOptions, logger: this.logger},
+      ),
+    );
+  }
+
+  /**
+   * Abandon a publication whose acknowledgement timed out. The decision is
+   * the publication owner's (the publications write leader): an acknowledger
+   * never abandons.
+   * @param {string} publicationId
+   * @param {Object} options - {timeoutMs, reasonCode}.
+   * @return {Promise<Object>} The typed write outcome.
+   */
+  async abandonTimedOutPublication(publicationId, options = {}) {
+    if (!this.controlPlanePublicationsOwner) {
+      return refused(MEMBERSHIP_PUBLICATION_WRITE_REFUSAL
+        .PUBLICATIONS_OWNER_UNAVAILABLE);
+    }
+    if (shouldDeferMembershipReconcileToWriteLeader(this)) {
+      return refused(MEMBERSHIP_PUBLICATION_WRITE_REFUSAL
+        .NOT_PUBLICATION_OWNER);
+    }
+    const {timeoutMs, reasonCode, ...deliveryOptions} = options;
+    return this.controlPlanePublicationsOwner.applyPublicationChange(
+      publicationId,
+      membershipPublicationTimeoutAbandonChange({
+        timeoutMs, reasonCode, now: () => this.now()}),
+      this.buildPublicationWriteOptions(deliveryOptions),
     );
   }
 

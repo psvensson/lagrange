@@ -148,6 +148,8 @@ const REBALANCER_LOG_MSG = Object.freeze({
   STABILIZATION_RESET: 'State change recorded, resetting stabilization timer',
   SKIP_TRANSITIONAL: 'Replicas in transition, skipping move calculation',
   SKIP_PENDING: 'Pending moves exist, skipping move calculation',
+  PRIORITY_SPREAD_PLAN_DECISION:
+    'Priority spread plan decision: cure evidence and chosen REPLACE source',
   SKIP_REMOVE_REMOVING: 'Skipping REMOVE for replica already in removing state',
   SKIP_ADD_TRANSITIONAL: 'Skipping ADD for node with transitional replica',
   DEFER_ADD_DEGRADED:
@@ -166,6 +168,9 @@ const REBALANCER_LOG_MSG = Object.freeze({
   SKIP_BATCH_UNREADY: 'Skipping moves for unready node',
   NODE_DISCONNECTED_BATCH: 'Node disconnected during batch execution',
   NOT_LEADER_SKIP: 'Not leader, skipping rebalance',
+  LEADERSHIP_LOST_DURING_REBALANCE:
+    'Leadership lost during a rebalance pass; nothing further is planned ' +
+    'or executed',
   NO_AVAILABLE_NODES: 'Skipping rebalance - no available nodes in cache',
   NO_REBALANCE_NEEDED: 'No rebalancing needed',
   MESSAGE_GROUP_MEMBERSHIP_CHANGE_PARKED:
@@ -191,6 +196,8 @@ const REBALANCER_LOG_MSG = Object.freeze({
     'Deferring non-system rebalancing until priority control-plane partitions spread',
   WAIT_CONTROL_PLANE_PRIORITY_STABILITY:
     'Deferring non-system rebalancing until priority control-plane placement remains stable',
+  PRIORITY_SPREAD_FENCE_RELEASED:
+    'Released non-system rebalancing after priority control-plane placement remained stable',
   WAIT_TRANSPORT_BACKPRESSURE:
     'Waiting for local transport backpressure to clear before planning',
   PRIORITY_RECOVERY_PLANNING_GATE_DIAGNOSTIC:
@@ -213,7 +220,6 @@ const REBALANCE_COORDINATOR_EVENT = Object.freeze({
   STEP_CHANGED: 'stepChanged',
   OPERATION_COMPLETED: 'operationCompleted',
   OPERATION_FAILED: 'operationFailed',
-  RECOVERY_COMPLETED: 'recoveryCompleted',
   RECOVERY_FAILED: 'recoveryFailed',
   RESERVATION_CREATED: 'reservationCreated',
   RESERVATION_RELEASED: 'reservationReleased',
@@ -258,12 +264,7 @@ const REBALANCE_COORDINATOR_LOG_MSG = Object.freeze({
   OPERATION_TIMED_OUT: 'Operation timed out',
   SKIP_PERSIST_NO_CDC: 'CDC integration service not available, skipping persistence',
   PERSIST_FAILED: 'Failed to persist operation',
-  RECOVERY_START: 'Starting recovery process',
-  RECOVERY_FOUND: 'Found incomplete operations during recovery',
-  RECOVERY_MARK_FAILED: 'Marked incomplete operation as failed during recovery',
-  RECOVERY_MARK_REMOVE_FAILED: 'Marked incomplete removal operation as failed during recovery',
   RECOVERY_PROCESS_ERROR: 'Error processing operation during recovery',
-  RECOVERY_COMPLETED: 'Recovery process completed',
   MEMBERSHIP_DEBT_SWEEP_UNAVAILABLE:
     'Message-group membership debt census unavailable; debt retained until the next trigger',
   MEMBERSHIP_DEBT_RECORDED: 'Message-group learner outcome recorded from durable debt',
@@ -308,6 +309,8 @@ const REBALANCE_COORDINATOR_LOG_MSG = Object.freeze({
   OPERATION_LEDGER_QUORUM_SPREAD_HOLD:
     'Operation-ledger quorum concentrated on one node; deferring dependent ' +
     'operation admission until the ledger spreads',
+  OPERATION_LEDGER_QUORUM_SPREAD_HOLD_NOT_ENGAGED:
+    'Operation-ledger quorum-spread hold evaluated and not engaged',
   PRIORITY_RECOVERY_DRAIN_SETTLED:
     'Priority recovery drain settled operation',
   STEPS_HISTORY_PARSE_ERROR: 'Failed to parse steps_history JSON',
@@ -474,6 +477,9 @@ const READINESS_SKIP_DETAIL = Object.freeze({
   OUTBOUND_QUEUE_UNAVAILABLE: 'outbound_queue',
   PING_FAILED: 'ping',
   REPAIR_INELIGIBLE: 'repair_ineligible',
+  // The planning readiness owner answered neither ready nor not-ready (a
+  // rebuild is queued): not a final no; its publication wakes the entity.
+  READINESS_DEFERRED: 'readiness_deferred',
 });
 
 const REBALANCER_QUEUE_NAME = Object.freeze({

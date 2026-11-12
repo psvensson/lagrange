@@ -1,3 +1,6 @@
+import {publicationsOwnerOverRows} from
+  './publication-owner-test-support.js';
+
 export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
   test,
   MembershipPublicationCoordinator,
@@ -17,7 +20,7 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
         acknowledged_node_ids: [],
       };
       const coordinator = new MembershipPublicationCoordinator({
-        nodeId: 'seed-node',
+        nodeId: 'node-1',
         systemTableCache: {
           getAll(tableName) {
             if (tableName !== 'control_plane_publications') {
@@ -36,20 +39,20 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
             ];
           },
         },
-        controlPlanePublicationsOwner: {
+        controlPlanePublicationsOwner: publicationsOwnerOverRows({
           async getPublication(publicationId) {
             getPublicationCalls.push(publicationId);
             return durablePublicationRow;
           },
-          async upsertPublication(row) {
+          async storeRow(row) {
             persistedRows.push(row);
             durablePublicationRow = row;
           },
-        },
+        }),
       });
 
       const publicationRow =
-      await coordinator.acknowledgeMembershipPublicationForNode('node-1');
+      (await coordinator.acknowledgeMembershipPublicationForNode('node-1')).row;
 
       t.equal(
         persistedRows.length,
@@ -93,7 +96,7 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
         acknowledged_node_ids: [],
       };
       const coordinator = new MembershipPublicationCoordinator({
-        nodeId: 'seed-node',
+        nodeId: 'node-1',
         systemTableCache: {
           getAll(tableName) {
             if (tableName !== 'control_plane_publications') {
@@ -112,7 +115,7 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
             ];
           },
         },
-        controlPlanePublicationsOwner: {
+        controlPlanePublicationsOwner: publicationsOwnerOverRows({
           async listPublications(options = {}) {
             listPublicationsCalls.push(options);
             return {
@@ -133,15 +136,15 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
             getPublicationCalls.push(publicationId);
             return durablePublicationRow;
           },
-          async upsertPublication(row) {
+          async storeRow(row) {
             persistedRows.push(row);
             durablePublicationRow = row;
           },
-        },
+        }),
       });
 
       const publicationRow =
-      await coordinator.acknowledgeMembershipPublicationForNode('node-1');
+      (await coordinator.acknowledgeMembershipPublicationForNode('node-1')).row;
 
       t.equal(
         listPublicationsCalls.length,
@@ -200,7 +203,7 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
         acknowledged_node_ids: [SECOND_NODE_ID],
       };
       const coordinator = new MembershipPublicationCoordinator({
-        nodeId: 'seed-node',
+        nodeId: FIRST_NODE_ID,
         systemTableCache: {
           getAll(tableName) {
             if (tableName !== PUBLICATIONS_TABLE) {
@@ -209,7 +212,7 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
             return [];
           },
         },
-        controlPlanePublicationsOwner: {
+        controlPlanePublicationsOwner: publicationsOwnerOverRows({
           async listPublications(options = {}) {
             listPublicationsCalls.push(options);
             return {
@@ -220,15 +223,15 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
             getPublicationCalls.push(publicationId);
             return durablePublicationRow;
           },
-          async upsertPublication(row) {
+          async storeRow(row) {
             persistedRows.push(row);
             durablePublicationRow = row;
           },
-        },
+        }),
       });
 
       const publicationRow =
-      await coordinator.acknowledgeMembershipPublicationForNode(FIRST_NODE_ID);
+      (await coordinator.acknowledgeMembershipPublicationForNode(FIRST_NODE_ID)).row;
 
       t.equal(
         listPublicationsCalls.length,
@@ -298,7 +301,7 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
         acknowledged_node_ids: [SECOND_NODE_ID],
       };
       const coordinator = new MembershipPublicationCoordinator({
-        nodeId: 'seed-node',
+        nodeId: FIRST_NODE_ID,
         systemTableCache: {
           getAll(tableName) {
             if (tableName !== PUBLICATIONS_TABLE) {
@@ -317,7 +320,7 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
             ];
           },
         },
-        controlPlanePublicationsOwner: {
+        controlPlanePublicationsOwner: publicationsOwnerOverRows({
           async listPublications(options = {}) {
             listPublicationsCalls.push(options);
             return {
@@ -328,15 +331,15 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
             getPublicationCalls.push(publicationId);
             return durablePublicationRow;
           },
-          async upsertPublication(row) {
+          async storeRow(row) {
             persistedRows.push(row);
             durablePublicationRow = row;
           },
-        },
+        }),
       });
 
       const publicationRow =
-      await coordinator.acknowledgeMembershipPublicationForNode(FIRST_NODE_ID);
+      (await coordinator.acknowledgeMembershipPublicationForNode(FIRST_NODE_ID)).row;
 
       t.equal(
         listPublicationsCalls.length,
@@ -406,7 +409,7 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
         acknowledged_node_ids: [SECOND_NODE_ID],
       };
       const coordinator = new MembershipPublicationCoordinator({
-        nodeId: 'seed-node',
+        nodeId: FIRST_NODE_ID,
         systemTableCache: {
           getAll(tableName) {
             if (tableName !== PUBLICATIONS_TABLE) {
@@ -425,7 +428,7 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
             ];
           },
         },
-        controlPlanePublicationsOwner: {
+        controlPlanePublicationsOwner: publicationsOwnerOverRows({
           async listPublications(options = {}) {
             listPublicationsCalls.push(options);
             return {
@@ -436,15 +439,15 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
             getPublicationCalls.push(publicationId);
             return durablePublicationRow;
           },
-          async upsertPublication(row) {
+          async storeRow(row) {
             persistedRows.push(row);
             durablePublicationRow = row;
           },
-        },
+        }),
       });
 
       const publicationRow =
-      await coordinator.acknowledgeMembershipPublicationForNode(FIRST_NODE_ID);
+      (await coordinator.acknowledgeMembershipPublicationForNode(FIRST_NODE_ID)).row;
 
       t.equal(
         listPublicationsCalls.length,
@@ -504,7 +507,7 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
         acknowledged_node_ids: [],
       };
       const coordinator = new MembershipPublicationCoordinator({
-        nodeId: 'seed-node',
+        nodeId: 'node-1',
         systemTableCache: {
           getAll(tableName) {
             if (tableName !== 'control_plane_publications') {
@@ -523,7 +526,7 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
             ];
           },
         },
-        controlPlanePublicationsOwner: {
+        controlPlanePublicationsOwner: publicationsOwnerOverRows({
           async listPublications(options = {}) {
             listPublicationsCalls.push(options);
             return {rows: [durablePublicationRow]};
@@ -531,15 +534,15 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
           async getPublication() {
             return durablePublicationRow;
           },
-          async upsertPublication(row) {
+          async storeRow(row) {
             persistedRows.push(row);
             durablePublicationRow = row;
           },
-        },
+        }),
       });
 
       const publicationRow =
-      await coordinator.acknowledgeMembershipPublicationForNode('node-1');
+      (await coordinator.acknowledgeMembershipPublicationForNode('node-1')).row;
 
       t.equal(
         listPublicationsCalls.length,
@@ -577,7 +580,7 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
         updated_at: 2500,
       };
       const coordinator = new MembershipPublicationCoordinator({
-        nodeId: 'seed-node',
+        nodeId: 'node-2',
         systemTableCache: {
           getAll(tableName) {
             if (tableName !== 'control_plane_publications') {
@@ -596,11 +599,11 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
             ];
           },
         },
-        controlPlanePublicationsOwner: {
+        controlPlanePublicationsOwner: publicationsOwnerOverRows({
           async getPublication() {
             return durablePublicationRow;
           },
-          async upsertPublication(row) {
+          async storeRow(row) {
             upsertCallCount += 1;
             if (upsertCallCount === 1) {
               durablePublicationRow = {
@@ -613,11 +616,11 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
             }
             durablePublicationRow = row;
           },
-        },
+        }),
       });
 
       const publicationRow =
-      await coordinator.acknowledgeMembershipPublicationForNode('node-2');
+      (await coordinator.acknowledgeMembershipPublicationForNode('node-2')).row;
 
       t.equal(
         upsertCallCount,
@@ -651,7 +654,7 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
       const getPublicationCalls = [];
       const persistedRows = [];
       const coordinator = new MembershipPublicationCoordinator({
-        nodeId: 'seed-node',
+        nodeId: 'node-3',
         systemTableCache: {
           getAll(tableName) {
             if (tableName !== 'control_plane_publications') {
@@ -670,7 +673,7 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
             ];
           },
         },
-        controlPlanePublicationsOwner: {
+        controlPlanePublicationsOwner: publicationsOwnerOverRows({
           async listPublications(options) {
             listPublicationsCalls.push(options);
             return {
@@ -699,14 +702,14 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
               acknowledged_node_ids: [],
             };
           },
-          async upsertPublication(row) {
+          async storeRow(row) {
             persistedRows.push(row);
           },
-        },
+        }),
       });
 
       const publicationRow =
-      await coordinator.acknowledgeMembershipPublicationForNode('node-3');
+      (await coordinator.acknowledgeMembershipPublicationForNode('node-3')).row;
 
       t.equal(
         listPublicationsCalls.length,
@@ -748,7 +751,7 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
     async (t) => {
       const persistedRows = [];
       const coordinator = new MembershipPublicationCoordinator({
-        nodeId: 'seed-node',
+        nodeId: 'node-1',
         systemTableCache: {
           getAll(tableName) {
             if (tableName !== 'control_plane_publications') {
@@ -767,15 +770,15 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
             ];
           },
         },
-        controlPlanePublicationsOwner: {
-          async upsertPublication(row) {
+        controlPlanePublicationsOwner: publicationsOwnerOverRows({
+          async storeRow(row) {
             persistedRows.push(row);
           },
-        },
+        }),
       });
 
       const publicationRow =
-      await coordinator.acknowledgeMembershipPublicationForNode('node-1');
+      (await coordinator.acknowledgeMembershipPublicationForNode('node-1')).row;
 
       t.equal(
         persistedRows.length,
@@ -806,7 +809,7 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
       ]);
       const persistedRows = [];
       const coordinator = new MembershipPublicationCoordinator({
-        nodeId: 'seed-node',
+        nodeId: FIRST_NODE_ID,
         systemTableCache: {
           getAll(tableName) {
             if (tableName !== PUBLICATIONS_TABLE) {
@@ -825,15 +828,15 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
             ];
           },
         },
-        controlPlanePublicationsOwner: {
-          async upsertPublication(row) {
+        controlPlanePublicationsOwner: publicationsOwnerOverRows({
+          async storeRow(row) {
             persistedRows.push(row);
           },
-        },
+        }),
       });
 
       const publicationRow =
-      await coordinator.acknowledgeMembershipPublicationForNode(FIRST_NODE_ID);
+      (await coordinator.acknowledgeMembershipPublicationForNode(FIRST_NODE_ID)).row;
 
       t.equal(
         persistedRows.length,

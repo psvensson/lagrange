@@ -22,6 +22,9 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import {test} from '../../src/test-helpers/tap.js';
+import Database from 'better-sqlite3';
+import {openParticipantTransactionStore} from '../../src/partition/partition-participant-transaction-store.js';
+import {REPLICA_CONSENSUS_EXIT_REASON} from '../../src/node/replica-removal-consensus-exit.js';
 import {
   OperationType,
   ReplicaStatus,
@@ -53,6 +56,8 @@ import {
   createCanonicalLifecycleServiceRow,
   createLifecycleCdcServiceForCache,
 } from '../test-helpers/lifecycle-state-store.js';
+import {REMOVAL_DRAINED_ANSWER, withRemovalServingSurface} from
+  '../test-helpers/partition-removal-serving-surface.js';
 import {bindRegisteredReplicaHandler} from
   '../test-helpers/replica-handler-identity-fixture.js';
 import {OwnerPathReplicaHandler as ReplicaHandler} from
@@ -125,12 +130,9 @@ function createMockCDCService(cache) {
   return createLifecycleCdcServiceForCache(cache);
 }
 
-/**
- * Create a mock partition service factory.
- * @return {Function} Factory that returns a minimal partition service.
- */
+// A partition-service double factory (the production removal-serving surface).
 function createMockPartitionServiceFactory() {
-  return async (options) => bindRegisteredReplicaHandler({
+  return async (options) => bindRegisteredReplicaHandler(withRemovalServingSurface({
     partitionId: options.partitionId,
     replicaId: options.replicaId,
     initialized: true,
@@ -139,7 +141,7 @@ function createMockPartitionServiceFactory() {
     async requestReplicaAdmission(operationId) {
       return {operationId, state: 'admitted', lastOutcome: 'proposed'};
     },
-  }, options);
+  }), options);
 }
 
 /**
@@ -721,16 +723,21 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
       const drainGate = new Promise((resolve) => {
         releaseDrain = resolve;
       });
+      const db = new Database(':memory:'); // participant custody: idle
+      openParticipantTransactionStore(db);
+      t.teardown(() => db.close());
       const partitionService = {
         partitionId: TEST_PARTITION_ID,
         replicaId: TEST_REPLICA_ID,
         initialized: true,
+        db,
         fenceServingAdmissionForRemoval() {
           fenceCount += 1;
         },
         async waitForRemovalServingDrain() {
           drainWaitCount += 1;
           await drainGate;
+          return REMOVAL_DRAINED_ANSWER;
         },
         async shutdown() {},
         async syncFromLeader() {},
@@ -826,6 +833,8 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
       handler.controlPlaneSystemTableGateway = gateway;
       handler.replicaStateMachine.controlPlaneSystemTableGateway = gateway;
       handler.replicaCleanupTombstoneOwner = null;
+      handler.awaitReplicaRemovalConsensusExit = async () => // portless stub
+        ({reason: REPLICA_CONSENSUS_EXIT_REASON.REMOVAL_APPLIED});
 
       const removed = waitForReplicaEvent(
         handler,

@@ -121,7 +121,6 @@ const REPLICA_DISPATCH_SERVICE_LITERAL = Object.freeze({
     'membership_publication_owner_dispatch_retry',
   MESSAGE_DASH_GROUP_INGRESS_READINESS_UNAVAILABLE:
     'message-group ingress readiness unavailable',
-  MESSAGE_TIMEOUT: 'Message timeout',
   NO_CONNECTION_TO_NODE: 'No connection to node',
   NODE_ROW_MISSING: 'NODE_ROW_MISSING',
   NODE_STATE_UPDATE_SOURCE_CHANGED:

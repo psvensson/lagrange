@@ -15,6 +15,7 @@ import {
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {UnifiedRebalancer} from '../../src/rebalancer/unified-rebalancer.js';
 import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
+import {buildServeCohortAnswerFromNodeRows} from './priority-spread-release-condition-fixture.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
@@ -182,6 +183,7 @@ function createMockRpcClient() {
  * @return {Object} Mock cache.
  */
 function createMockCache(options = {}) {
+  const changeListeners = new Set();
   const {
     nodes = [],
     services = [],
@@ -289,6 +291,10 @@ function createMockCache(options = {}) {
       }
       return table.delete(key);
     },
+    // The production cache's change seam: listeners are held, and this
+    // mock never emits a change.
+    onCacheChange: (listener) => changeListeners.add(listener),
+    offCacheChange: (listener) => changeListeners.delete(listener),
   };
 }
 
@@ -322,6 +328,15 @@ function createMockControlPlaneReadinessService(options = {}) {
         nodeRows: readNodeRows(),
       };
     },
+    // The committed serve record's cohort answer, from the same node rows
+    // and liveness projection as the rest of this mock.
+    answerServeCohort: (nodeIds) => buildServeCohortAnswerFromNodeRows({
+      nodeIds,
+      nodeRows: readNodeRows(),
+      isNodeRowEligible: (nodeRow) => project(nodeRow).readyNow === true,
+      absentNodeEligible: defaultRepairEligible,
+      readAtMs: now(),
+    }),
     getNodeReadinessSync(nodeId) {
       if (readinessByNodeId[nodeId]) return readinessByNodeId[nodeId];
       const nodeRow = readNodeRows().find((row) => row.node_id === nodeId);
@@ -707,6 +722,7 @@ function answerFixtureReplaceWitness(cache, payload) {
       String(sourceRow?.status || '').toLowerCase());
   const leader = fixtureWitnessLeader(cache, partitionId, rows,
     payload[ReplicaOperationField.REPLICA_ID]);
+
   return {
     status: ReplicaOperationResponseStatus.COMPLETED,
     [ReplicaOperationField.MEMBERSHIP]: {
@@ -803,10 +819,13 @@ function createMockCoordinator({controlPlaneReadinessService = null,
   return {
     // This controlled owner models an empty operation ledger unless the test
     // supplies its entity reader. It is not a cache fallback or a real read.
-    getOperationsByEntity(entityType, entityId, options) {
-      return readOperationsByEntity(entityType, entityId, options);
+    getAuthoritativeOperationsByEntity(entityType, entityId) {
+      return readOperationsByEntity(entityType, entityId);
     },
     getMoveSafetyError: () => null,
+    // The operation ledger owner's cluster-wide census answers an empty
+    // ledger (the release fence's CLEAR rests on it).
+    repository: {queryClusterWideIncompleteOperations: async () => []},
     createOperation: async (move) => ({
       operationId: 'op-' + Date.now(),
       type: move.type,
@@ -1305,6 +1324,11 @@ function createTestCoordinator(options = {}) {
       return baseCreateOperation(normalizedMove);
     };
   }
+  // The durable replica_operations store the owner reads answer from: a row
+  // another writer committed (it is also replicated into the cache).
+  coordinator.testReplicaOperationLedger = Object.freeze({
+    commit: (row) => syncReplicaOperationRow(row),
+  });
   return coordinator;
 }
 

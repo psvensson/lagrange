@@ -15,6 +15,7 @@ import {
 import {AUTHORITATIVE_READ_SOURCE} from
   '../../src/cdc/cdc-integration-service-shared-constants.js';
 import {TABLES} from '../../src/constants/index.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 
 // The variant-D publications catch-up exists to escape a frozen follower's own
 // stale local control_plane_publications replica. preferOwnerRpcRead alone routes
@@ -33,6 +34,8 @@ test('deferred publications catch-up requests a LEADER-pinned owner-RPC read',
   async (t) => {
     const seenReadOptions = [];
     const service = {
+      // The one cache owner of the catch-up's snapshots: the real writable cache.
+      cacheMutationTarget: new SystemTableCache(),
       logger: {warn() {}, info() {}, debug() {}, error() {}},
       async executeAuthoritativeSystemTableRead(_table, _sql, _params, options) {
         seenReadOptions.push(options);

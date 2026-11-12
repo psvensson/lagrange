@@ -27,7 +27,12 @@ import {rowToWorkflow, serializeWorkflow} from
 import {
   runAdminActivity,
 } from '../diagnostics/formation-owner-attribution.js';
+import {
+  TYPED_DISTRIBUTED_FAILURE_DECISION,
+  classifyTypedDistributedFailure,
+} from '../control-plane/control-plane-error-classification.js';
 
+const RELEASE_NOTHING = () => Promise.resolve();
 const TRANSIENT_ERROR_FRAGMENT = Object.freeze({
   CANCEL_CODE: 'CANCEL',
   CANCEL_MESSAGE: 'cancel',
@@ -135,7 +140,22 @@ function buildInitialRow(intent, workflow) {
   };
 }
 
+// Whether a failed provisioning step leaves the job PENDING for another
+// attempt. The control plane's one classifier decides first: a terminal
+// failure (a permanent code, a permanent participant of a failed fan-out,
+// the writer's shut-down answer) ends the job and a retryable one keeps it.
+// A stopped one keeps it too: its outcome belongs to another owner (this
+// node's shutdown, transaction recovery), never a permanent job failure.
+// A failure the classifier leaves unclassified is the job's own to decide,
+// by the provisioning codes and texts listed above.
 export function isTransientProvisioningError(error) {
+  if (!error) {
+    return false;
+  }
+  const decision = classifyTypedDistributedFailure(error);
+  if (decision !== TYPED_DISTRIBUTED_FAILURE_DECISION.UNCLASSIFIED) {
+    return decision !== TYPED_DISTRIBUTED_FAILURE_DECISION.TERMINAL;
+  }
   const code = String(error?.code || error?.errorCode || '').toUpperCase();
   const message = String(error?.message || '').toLowerCase();
   return TRANSIENT_PROVISIONING_CODES.has(code) ||
@@ -240,6 +260,11 @@ class SchemaProvisioningJobOwner {
     this.retrySetTimeoutFn = options.retrySetTimeoutFn || setTimeout;
     this.retryClearTimeoutFn = options.retryClearTimeoutFn || clearTimeout;
     this.retryTimersByWorkflowId = new Map();
+    // The founding provisioner's release of this job's held, unstamped
+    // founding operations (a partial founding the job's retry would have
+    // completed). A composition that founds nothing holds nothing.
+    this.releaseHeldFoundingOperations =
+      options.releaseHeldFoundingOperations || RELEASE_NOTHING;
     this.shuttingDown = false;
     this.workflowCoordinator = options.workflowCoordinator ||
       new DurableWorkflowCoordinator({
@@ -441,6 +466,12 @@ class SchemaProvisioningJobOwner {
 
   async transitionTerminal(intent, workflow, options = {}) {
     const renewedWorkflow = await this.assertOwnership(workflow);
+    // A held founder never outlives its job: before the job ends (succeeded
+    // with a cohort that left a held founder out, or failed after a partial
+    // founding), every founding operation of this job still held unstamped
+    // is failed. A release that cannot complete throws, and the job stays
+    // non-terminal for its retry or resume.
+    await this.releaseHeldFoundingOperations(intent);
     await this.workflowCoordinator.transitionStep(workflow.workflowId, {
       nextStep: options.nextStep,
       reason: options.reason,

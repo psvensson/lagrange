@@ -28,10 +28,13 @@ import {
 } from './operation-workflow-replace-owner.js';
 
 import {isLiveCreateTargetStatus} from './replica-status.js';
+import {ACTUAL_REPLICA_OBSERVATION_STATE} from './replica-operation-repository-constants.js';
 import {buildFailedCreateCleanupToken} from
   './failed-create-cleanup-token.js';
 import {assertCanonicalRebalancerEntityIdentity} from
   './rebalancer-entity-identity.js';
+import {presentOperationOf} from
+  './replica-operation-repository-operation-visibility.js';
 
 const {
   EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
@@ -128,30 +131,27 @@ function isPartitionAdd(operation) {
  * @return {Promise<string>}
  */
 async function readReplaceDurableStep(owner, operation) {
-  const authoritative = typeof owner.repository
-    ?.queryReplicaOperationPersistenceAuthorityOperation ===
-      OPERATION_WORKFLOW_OWNER_LITERAL.FUNCTION ?
-    await owner.repository.queryReplicaOperationPersistenceAuthorityOperation(
-      operation) : null;
+  const authoritative = presentOperationOf(
+    await owner.repository.queryReplicaOperationPersistenceAuthorityObservation(
+      operation));
   // The persistence authority's step, else the operation's own.
   return readStateField(authoritative?.workflowStep, operation.workflowStep);
 }
 
 async function observeCreateTarget(owner, operation) {
-  return typeof owner.repository?.getActualReplicaObservation ===
-    OPERATION_WORKFLOW_OWNER_LITERAL.FUNCTION ?
-    owner.repository.getActualReplicaObservation(
-      operation.replicaId,
-      operation.partitionId,
-      operation.targetNodeId,
-      ADD_TARGET_LIVENESS_READ,
-    ) : null;
+  return owner.repository.getActualReplicaObservation(
+    operation.replicaId,
+    operation.partitionId,
+    operation.targetNodeId,
+    ADD_TARGET_LIVENESS_READ,
+  );
 }
 
 /**
  * D2's admission of a terminal FAILED for a partition REPLACE, decided on
  * the DURABLE step: before the durable intent every existing failure
- * applies; after it, only target death with the source still a voter. The
+ * applies; after it, only target death with the source retained (its node
+ * cancelled the source's removal, 2026-11-11). The
  * admitted write is a CAS on the step it was admitted against, so a copy
  * that read before the intent landed cannot write FAILED past it.
  * @param {Object} owner
@@ -185,13 +185,13 @@ async function admitReplaceTerminalFailure(owner, operation, options = {}) {
  */
 async function admitAddTerminalFailure(owner, operation) {
   const [observation, durableStep] = await Promise.all([
-    observeCreateTarget(owner, operation),
-    readReplaceDurableStep(owner, operation),
-  ]);
-  const live = observation?.state === OPERATION_WORKFLOW_OWNER_LITERAL
-    .OBSERVED && isLiveCreateTargetStatus(observation.lifecycleStatus);
+    observeCreateTarget(owner, operation), readReplaceDurableStep(owner, operation)]);
+  // UNAVAILABLE never shows a non-live target: refused (held); the step re-asks.
+  const answered = observation.state !== ACTUAL_REPLICA_OBSERVATION_STATE.UNAVAILABLE;
+  const live = observation.state === ACTUAL_REPLICA_OBSERVATION_STATE.OBSERVED &&
+    isLiveCreateTargetStatus(observation.lifecycleStatus);
   return Object.freeze({
-    admitted: !live,
+    admitted: answered && !live,
     expectedWorkflowStep: durableStep,
     completeInstead: live,
     stepMetadata: null,

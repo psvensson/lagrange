@@ -3,6 +3,8 @@ import {
   LIFECYCLE_REASON,
 } from '../lifecycle-controller-constants.js';
 import {CONTROL_PLANE_WRITE_HEALTH_STATE} from '../control-plane-write-health-owner.js';
+import {priorityRecoveryTransportRetryAfterMs} from
+  '../../control-plane/priority-recovery-transport-retry-hint.js';
 
 const PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE =
   'priority_control_plane_recovery_diagnostics_unavailable';
@@ -62,84 +64,6 @@ const BOOTSTRAP_CONTROL_PLANE_RECOVERY_HEALTH_METHODS = Object.freeze({
           this.getSeedNodeId(),
           Date.now(),
         );
-      return this.buildPriorityControlPlaneRecoveryHealthFromDiagnostics(
-        membershipPublication,
-      );
-    } catch (error) {
-      return this.buildPriorityControlPlaneRecoveryUnavailableHealth(
-        PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.DIAGNOSTICS_READ_FAILED,
-        error,
-      );
-    }
-  },
-  async getPriorityControlPlaneRecoveryHealthAsync() {
-    const service = this.getControlPlaneReadinessService();
-    const observedAt = Date.now();
-    if (!service || typeof service !== 'object') {
-      return this.buildPriorityControlPlaneRecoveryUnavailableHealth(
-        PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.SERVICE_UNAVAILABLE,
-      );
-    }
-    if (
-      typeof service.getPriorityControlPlaneRecoveryHealth === 'function'
-    ) {
-      try {
-        return await service.getPriorityControlPlaneRecoveryHealth(
-          this.getSeedNodeId(),
-          observedAt,
-        );
-      } catch (error) {
-        return this.buildPriorityControlPlaneRecoveryUnavailableHealth(
-          PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.DIAGNOSTICS_READ_FAILED,
-          error,
-        );
-      }
-    }
-    if (typeof service.getControlPlanePublicationStory === 'function') {
-      try {
-        const publicationStory = await service.getControlPlanePublicationStory(
-          this.getSeedNodeId(),
-          observedAt,
-        );
-        if (
-          publicationStory?.membershipPublication &&
-          typeof publicationStory.membershipPublication === 'object'
-        ) {
-          return this.buildPriorityControlPlaneRecoveryHealthFromDiagnostics(
-            publicationStory.membershipPublication,
-          );
-        }
-      } catch (error) {
-        return this.buildPriorityControlPlaneRecoveryUnavailableHealth(
-          PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.DIAGNOSTICS_READ_FAILED,
-          error,
-        );
-      }
-    }
-    const membershipPublicationReader =
-      typeof service.getMembershipPublicationDiagnostics === 'function' ?
-        () =>
-          service.getMembershipPublicationDiagnostics(
-            this.getSeedNodeId(),
-            observedAt,
-          ) :
-        typeof service.getMembershipPublicationDiagnosticsSync ===
-            'function' ?
-          () =>
-            Promise.resolve(
-              service.getMembershipPublicationDiagnosticsSync(
-                this.getSeedNodeId(),
-                observedAt,
-              ),
-            ) :
-          null;
-    if (!membershipPublicationReader) {
-      return this.buildPriorityControlPlaneRecoveryUnavailableHealth(
-        PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.DIAGNOSTICS_PROVIDER_UNAVAILABLE,
-      );
-    }
-    try {
-      const membershipPublication = await membershipPublicationReader();
       return this.buildPriorityControlPlaneRecoveryHealthFromDiagnostics(
         membershipPublication,
       );
@@ -240,23 +164,16 @@ const BOOTSTRAP_CONTROL_PLANE_RECOVERY_HEALTH_METHODS = Object.freeze({
     if (error) {
       details.error = error?.message || String(error);
     }
-    const isWebSocketClosed = error && (
-      String(error).includes('WebSocket') ||
-      String(error).includes('closed') ||
-      String(error).includes('transport')
-    );
-    if (isWebSocketClosed) {
-      details.retryAfterMs = 15000;
+    const retryAfterMs = priorityRecoveryTransportRetryAfterMs(error);
+    if (retryAfterMs !== undefined) {
+      details.retryAfterMs = retryAfterMs;
     }
-    const health = {
+    return {
       healthy: false,
       reasonCode: PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE,
       details,
+      ...(retryAfterMs !== undefined ? {retryAfterMs} : {}),
     };
-    if (isWebSocketClosed) {
-      health.retryAfterMs = 15000;
-    }
-    return health;
   },
   getControlPlaneWriteHealth() {
     const provider = this.getControlPlaneWriteHealthProvider();

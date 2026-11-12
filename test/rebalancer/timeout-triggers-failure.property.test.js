@@ -33,7 +33,12 @@ const TIMEOUT_SELECTION_STALE_UPDATED_AT_MS = 10_000;
 const TIMEOUT_SELECTION_ADVANCED_UPDATED_AT_MS = 20_000;
 const TIMEOUT_SELECTION_FAILED_UPDATED_AT_MS = 30_000;
 
-test('timeout reconcile uses the most advanced same-operation snapshot',
+// SUPERSEDED (R09): this pinned "a cache-observed SENDING outranks a stale
+// PENDING owner read" (the sweep let a cache copy win when it was ahead). The
+// superseding rule is "an operation's step advances only by its committed
+// row": the sweep decides on the owner read; a cache copy is a wake hint,
+// with one exception - a terminal row is committed and final.
+test('timeout reconcile decides on the owner read, never on a cache copy ahead of it',
   async (t) => {
     const {coordinator} = createTimeoutTestCoordinator();
     const stalePendingOperation = {
@@ -67,8 +72,19 @@ test('timeout reconcile uses the most advanced same-operation snapshot',
         );
       t.equal(
         selectedAdvanced.workflowStep,
-        WORKFLOW_STEP.SENDING,
-        'cache-observed SENDING should outrank a stale PENDING owner read',
+        WORKFLOW_STEP.PENDING,
+        'a cache-observed SENDING does not outrank the PENDING owner read',
+      );
+
+      const selectedCachedTerminal =
+        coordinator.workflowOwner.selectTimeoutReconcileOperation(
+          {operation: advancedSendingOperation},
+          terminalFailedOperation,
+        );
+      t.equal(
+        selectedCachedTerminal.workflowStep,
+        WORKFLOW_STEP.FAILED,
+        'a cached terminal row is final and is not rewound by a lagging read',
       );
 
       const selectedTerminal =

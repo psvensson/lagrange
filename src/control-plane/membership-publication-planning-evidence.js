@@ -20,7 +20,6 @@ import {
   normalizeControlPlanePublicationRow,
   serializeControlPlanePublicationRow,
 } from './system-row-normalizers.js';
-import {mergeControlPlanePublicationRows} from './control-plane-publication-merge.js';
 import {
   PUBLICATION_RECOVERY_MACHINE_ACTION,
   PUBLICATION_RECOVERY_MACHINE_CONTEXT,
@@ -32,9 +31,6 @@ import {
   shouldPreferAuthoritativeMembershipState as shouldPreferAuthoritativeMembershipStateCore,
 } from './membership-publication-planning.js';
 import {buildMembershipEpochSnapshot} from './membership-epoch-contract.js';
-import {
-  assertCanonicalRebalancerEntityIdentity,
-} from '../rebalancer/rebalancer-entity-identity.js';
 import {
   MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL,
   MEMBERSHIP_PUBLICATION_KIND,
@@ -187,53 +183,6 @@ function resolveMembershipPublicationReadProfile(readProfile = null) {
     MEMBERSHIP_PUBLICATION_READ_PROFILE.DIAGNOSTICS :
     MEMBERSHIP_PUBLICATION_READ_PROFILE.PLANNING;
 }
-
-function normalizeReplicaOperationView(operation) {
-  if (!operation || typeof operation !== 'object') {
-    return null;
-  }
-  const isDatabaseRow = Object.hasOwn(operation, 'operation_id');
-  let stepsHistory = isDatabaseRow ? operation.steps_history :
-    operation.stepsHistory;
-  if (typeof stepsHistory === 'string') {
-    try {
-      stepsHistory = JSON.parse(stepsHistory);
-    } catch (_error) {
-      return null;
-    }
-  }
-  if (!Array.isArray(stepsHistory)) {
-    stepsHistory = [];
-  }
-  const normalized = isDatabaseRow ? {
-    operationId: operation.operation_id,
-    type: operation.type,
-    partitionId: operation.partition_id,
-    replicaId: operation.replica_id,
-    sourceNodeId: operation.source_node_id,
-    targetNodeId: operation.target_node_id,
-    status: operation.status,
-    workflowStep: operation.workflow_step,
-    createdAt: operation.created_at,
-    updatedAt: operation.updated_at,
-    completedAt: operation.completed_at,
-    errorMessage: operation.error_message,
-    stepsHistory,
-    entityType: operation.entity_type,
-    entityId: operation.entity_id,
-  } : {
-    ...operation,
-    stepsHistory,
-  };
-  try {
-    const identity = assertCanonicalRebalancerEntityIdentity(normalized);
-    return {...normalized, ...identity};
-  } catch (_error) {
-    return null;
-  }
-}
-
-const mergePublicationRows = mergeControlPlanePublicationRows;
 
 function buildPublicationReadOptions(options = {}) {
   const readProfile = resolveMembershipPublicationReadProfile(options.readProfile);
@@ -741,8 +690,6 @@ export {
   deriveMembershipPublicationId,
   hasExplicitMembershipPublicationTarget,
   mergePlanningEvidenceRows,
-  mergePublicationRows,
-  normalizeReplicaOperationView,
   normalizeTableRowsResult,
   resolveControlPlanePublicationsOwner,
   resolveMembershipEvidenceAuthoritativeReadMode,

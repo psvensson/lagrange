@@ -23,6 +23,9 @@ import {releaseTransactionReservations} from
 import {
   resolveWriteExecutionPlanWithAuthorityRefresh,
 } from './sql-query-engine-metadata-authority-refresh.js';
+import {PARTITION_CDC_ADMISSION_CLASS, cdcAdmissionClassFieldsOf,
+  cdcAdmissionClassNotDirectRefusal, cdcAdmissionClassOfIntent} from
+  '../partition/partition-cdc-admission-class.js';
 
 
 const {
@@ -129,6 +132,10 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
         this.resolveWriteFencePartitionVersion(tableInfo),
       // The statement's origin travels to every partition it is routed to.
       [STATEMENT_INGRESS_FIELD]: resolveStatementIngress(queryOptions),
+      // A lifecycle owner's intent becomes the partition-boundary class here
+      // (the engine entry already refused any intent it may not carry).
+      ...cdcAdmissionClassFieldsOf(
+        cdcAdmissionClassOfIntent(queryOptions).admissionClass),
     }, queryOptions);
   }
 
@@ -536,6 +543,15 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
    * @private
    */
   async runOwnedWriteStatement(statement) {
+    // A classified write reaches its partition as one committed write entry
+    // (DIRECT_AUTOCOMMIT); a participant transaction carries no class, so a
+    // plan that would need one is refused typed rather than lose it.
+    if (cdcAdmissionClassOfIntent(statement.queryOptions).admissionClass ===
+        PARTITION_CDC_ADMISSION_CLASS.RECIPIENT_RETIREMENT &&
+        this.resolveWriteTransactionOwnership(statement.sessionId,
+          statement.writePlan) !== WRITE_TRANSACTION_OWNERSHIP.DIRECT_AUTOCOMMIT) {
+      return {settled: cdcAdmissionClassNotDirectRefusal()};
+    }
     return this.runOwnedWriteStatementAttempt(statement, 1, null);
   }
 

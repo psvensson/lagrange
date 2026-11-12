@@ -20,6 +20,8 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeState} from '../../src/node/node-lifecycle-state-machine.js';
 import {CDC_OPERATION} from '../../src/constants/index.js';
+import {createCdcEventHandlerContext} from
+  './cdc-event-handler-context-fixture.js';
 
 // Valid node states for property testing
 const VALID_NODE_STATES = [
@@ -65,27 +67,6 @@ beforeEach(() => {
 afterEach(() => {
   cleanupTestEnvironment();
 });
-
-/**
- * Create a mock event context for testing.
- * @return {Object} Mock event context with event tracking.
- */
-function createMockEventContext() {
-  const events = [];
-  let nodeStateChanges = 0;
-  return {
-    epochManager: null,
-    rebalancer: null,
-    messageRouter: null,
-    events,
-    emit(eventName, data) {
-      events.push({eventName, data});
-    },
-    incrementEpochChanges: () => {},
-    incrementNodeStateChanges: () => nodeStateChanges++,
-    getNodeStateChanges: () => nodeStateChanges,
-  };
-}
 
 /**
  * Arbitrary for generating valid node IDs (alphanumeric, 1-20 chars).
@@ -137,7 +118,7 @@ test('Property: Node state tracking reflects most recent state', async (t) => {
     fc.property(
       nodeStateEventSequenceArb,
       (eventSequence) => {
-        const context = createMockEventContext();
+        const context = createCdcEventHandlerContext();
         const handler = new CDCEventHandler({
           nodeId: 'test-handler-node',
           eventContext: context,
@@ -179,7 +160,7 @@ test('Property: Events emitted only on actual state changes', async (t) => {
     fc.property(
       nodeStateEventSequenceArb,
       (eventSequence) => {
-        const context = createMockEventContext();
+        const context = createCdcEventHandlerContext();
         const handler = new CDCEventHandler({
           nodeId: 'test-handler-node',
           eventContext: context,
@@ -232,7 +213,7 @@ test('Property: Consecutive duplicate states do not emit events', async (t) => {
       nodeStateArb,
       fc.integer({min: 2, max: 10}),
       (nodeId, state, repeatCount) => {
-        const context = createMockEventContext();
+        const context = createCdcEventHandlerContext();
         const handler = new CDCEventHandler({
           nodeId: 'test-handler-node',
           eventContext: context,
@@ -276,7 +257,7 @@ test('Property: State tracking is independent per node', async (t) => {
         const nodeId1 = seq1.nodeId;
         const nodeId2 = nodeId1 === seq2.nodeId ? seq2.nodeId + '-alt' : seq2.nodeId;
 
-        const context = createMockEventContext();
+        const context = createCdcEventHandlerContext();
         const handler = new CDCEventHandler({
           nodeId: 'test-handler-node',
           eventContext: context,
@@ -325,7 +306,7 @@ test('Property: Emitted events contain correct state values', async (t) => {
     fc.property(
       nodeStateEventSequenceArb,
       (eventSequence) => {
-        const context = createMockEventContext();
+        const context = createCdcEventHandlerContext();
         const handler = new CDCEventHandler({
           nodeId: 'test-handler-node',
           eventContext: context,

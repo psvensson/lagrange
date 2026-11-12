@@ -8,6 +8,10 @@
 // to system entities in the evaluator.
 
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
+import {
+  COMMITTED_VOTER_CREDIT_NOT_REQUIRED,
+  describeCommittedVoterCreditWait,
+} from './operation-workflow-committed-voter-floor.js';
 
 const {
   OPERATION_WORKFLOW_OWNER_LITERAL,
@@ -35,8 +39,11 @@ function isRemoveSafetyGuardPassed(guardResult) {
 }
 
 /**
- * Guard a REPLACE-remove initial dispatch on the replacement replica being
- * voter-ready. Returns a deferred evaluation when the guard fails, or
+ * Guard a REPLACE-remove dispatch on the replacement replica being
+ * voter-ready: it passes the strict participation read, or the group's own
+ * committed evidence proves it a live voter
+ * (operation-workflow-committed-voter-floor.js). A services row alone never
+ * suffices. Returns a deferred evaluation when the guard fails, or
  * REMOVE_SAFETY_GUARD_PASSED when it passes.
  * @param {Object} context
  * @param {Object} operation
@@ -54,16 +61,11 @@ function evaluateReplaceReplacementVoterReady(context, operation, input) {
     );
   }
   const replacementReplicaVoterReady =
-    input.priorityRecoveryCompletionSafe === true ?
-      context.isVoterReadyReplicaTopology(input.replacementReplicaRow) :
-      context.isVoterReadyRoutableReplica(
-        input.replacementReplicaRow,
-        input.removeSafetyReadiness,
-      ) ||
-        context.isPriorityActiveReplaceTopologyVoterEvidenceSufficient(
-          operation,
-          input.replacementReplicaRow,
-        );
+    context.isVoterReadyRoutableReplica(
+      input.replacementReplicaRow,
+      input.removeSafetyReadiness,
+    ) ||
+    input.committedVoterCredit.replacementCommittedLiveVoter;
   if (!replacementReplicaVoterReady) {
     return context.buildDeferredRemoveSafetyEvaluationForOperation(
       operation,
@@ -71,7 +73,8 @@ function evaluateReplaceReplacementVoterReady(context, operation, input) {
         operation.partitionId +
         OPERATION_WORKFLOW_OWNER_LITERAL.REPLACEMENT_REPLICA_2 +
         input.replacementReplicaId +
-        OPERATION_WORKFLOW_OWNER_LITERAL.IS_NOT_VOTER_DASH_READY,
+        OPERATION_WORKFLOW_OWNER_LITERAL.IS_NOT_VOTER_DASH_READY +
+        describeCommittedVoterCreditWait(input.committedVoterCredit),
     );
   }
   return REMOVE_SAFETY_GUARD_PASSED;
@@ -150,7 +153,9 @@ async function evaluateUniversalPartitionRemoveSafety(
         replacementReplicaId: input.replacementReplicaId,
         replacementReplicaRow: input.replacementReplicaRow,
         removeSafetyReadiness: input.removeSafetyReadiness,
-        priorityRecoveryCompletionSafe: false,
+        // An ordinary partition's replacement is decided by the strict
+        // participation read alone; no committed-voter credit is consulted.
+        committedVoterCredit: COMMITTED_VOTER_CREDIT_NOT_REQUIRED,
       },
     );
     if (!isRemoveSafetyGuardPassed(replacementGuard)) {

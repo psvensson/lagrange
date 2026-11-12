@@ -313,7 +313,9 @@ export function registerCdcNonLeaderPropagationTailMoreTests({
         router.deliver = async (address) => {
           attempts.push(address);
           return buildDeliveryEnvelope(
-            {acknowledged: false, error: TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT});
+            {acknowledged: false, error: TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT,
+                errorCode: 'ROUTER_MESSAGE_TIMEOUT', deferRetry: true,
+                acknowledgement: 'unacknowledged'});
         };
 
         await t.rejects(

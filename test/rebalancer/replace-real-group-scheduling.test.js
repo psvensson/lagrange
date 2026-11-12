@@ -68,6 +68,8 @@ import {
 } from './replace-real-group-harness.js';
 import {RAFT_RS_MESSAGE_TYPE} from
   '../../src/raft/raft-rs-ingress-constants.js';
+import {presentOperationOf} from
+  '../../src/rebalancer/replica-operation-repository-operation-visibility.js';
 
 test('T5-prime installs the canonical waiter and fallback before returning ' +
   'from a re-sent removal effect', async (t) => {
@@ -359,8 +361,8 @@ async (t) => {
     for (const [label, world, expected] of [
       ['decide-first', first, expectedFirst],
       ['process-first', second, WORKFLOW_STEP.FAILED]]) {
-      const durable = await world.coordinator.repository
-        .queryReplicaOperationPersistenceAuthorityOperation(world.operation);
+      const durable = presentOperationOf(await world.coordinator.repository
+        .queryReplicaOperationPersistenceAuthorityObservation(world.operation));
       t.equal(durable.workflowStep, expected,
         `${label}: the first terminal stands (authority read)`);
       const landed = world.terminalWrites.filter((write) =>
@@ -483,7 +485,7 @@ async (t) => {
     const baseEvaluate = owner.evaluateRemoveSafety.bind(owner);
     owner.evaluateRemoveSafety = async (operation) => {
       const evaluation = await baseEvaluate(operation);
-      first.cache.upsert('replica_operations', concurrentRemoveRow(first));
+      first.coordinator.testReplicaOperationLedger.commit(concurrentRemoveRow(first));
       owner.evaluateRemoveSafety = baseEvaluate;
       return evaluation;
     };
@@ -492,12 +494,12 @@ async (t) => {
     t.equal(first.removeEffects.length, 0,
       'decide-first: the effect is withheld (WAIT)');
     // Process-first: the REMOVE is there before SAFE.
-    second.cache.upsert('replica_operations', concurrentRemoveRow(second));
+    second.coordinator.testReplicaOperationLedger.commit(concurrentRemoveRow(second));
     await second.coordinator.executeOperation(await readPersisted(second));
     await settleTurns();
     t.equal(second.removeEffects.length, 0, 'process-first: deferred');
     for (const world of [first, second]) {
-      world.cache.upsert('replica_operations', {...concurrentRemoveRow(world),
+      world.coordinator.testReplicaOperationLedger.commit({...concurrentRemoveRow(world),
         status: ReplicaStatus.FAILED, workflow_step: WORKFLOW_STEP.FAILED,
         completed_at: Date.now()});
       await world.coordinator.executeOperation(await readPersisted(world));
@@ -523,7 +525,7 @@ test('S11 (T5\' re-send): a concurrent operation active at STOPPING defers ' +
     world.eventsSuppressed = true;
     t.equal(world.removeEffects.length, 1, 'setup: the first effect left');
     world.clockOffsetMs += 61_000;
-    world.cache.upsert('replica_operations', concurrentRemoveRow(world));
+    world.coordinator.testReplicaOperationLedger.commit(concurrentRemoveRow(world));
     await world.coordinator.reconcileOperationProgress(
       await readPersisted(world));
     await settleTurns();
@@ -596,8 +598,8 @@ test('S13: a terminal written elsewhere between SAFE and the effect - the ' +
     t.equal(landed, true, 'setup: the remote terminal landed after SAFE');
     t.equal(world.removeEffects.length, 0,
       'no REMOVE_REPLICA leaves for an operation that became terminal');
-    const durable = await world.coordinator.repository
-      .queryReplicaOperationPersistenceAuthorityOperation(world.operation);
+    const durable = presentOperationOf(await world.coordinator.repository
+      .queryReplicaOperationPersistenceAuthorityObservation(world.operation));
     t.equal(durable.workflowStep, WORKFLOW_STEP.FAILED, 'the terminal stands');
   } finally {
     await disposeWorld(world);
@@ -692,7 +694,11 @@ for (const [shapeName, shape] of Object.entries(STALE_LEADER_SHAPES)) {
     test(`${label}: leader change x R-1a - the stale leader's answer never ` +
       'retires; the corroborated new leader decides; RETIRE only through ' +
       'it', async (t) => {
-      const world = await openReplaceWorld({sourceLeads: false});
+      // The premise is a target that leads and is then deposed: the source
+      // leads at creation, so the named handoff moves leadership to the
+      // target (BR11 as superseded 2026-11-11 retains a third leader; these
+      // cells formerly opened with one and relied on the handoff away).
+      const world = await openReplaceWorld({sourceLeads: true});
       try {
         const {deposed, newLeader} = await deposeTargetLeader(world, shape);
         t.equal(world.group.sourceCommittedVoter(world.sourceReplicaId), true,

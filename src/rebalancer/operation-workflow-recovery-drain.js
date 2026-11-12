@@ -7,10 +7,6 @@ import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './opera
 import {
   isTerminalTransitionOutcomeSettled,
 } from './operation-workflow-terminal-reservation-release.js';
-import {OPERATION_RESERVATION_RECOVERY_OUTCOME} from
-  './operation-reservation-attempt-outcome.js';
-import {reconcileReservationBackedPendingOperation} from
-  './operation-workflow-reservation-recovery.js';
 
 import {
   REPLACE_OWNER_UNAVAILABLE_SOURCE_RETAINED,
@@ -751,40 +747,6 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
     return isTerminalTransitionOutcomeSettled(
       await this.completeOperation(operation),
     );
-  }
-
-  async reconcileRecoveryOperation(op) {
-    const reservationRecoveryOutcome =
-      await reconcileReservationBackedPendingOperation(this, op);
-    if (
-      reservationRecoveryOutcome !==
-      OPERATION_RESERVATION_RECOVERY_OUTCOME.NOT_APPLICABLE
-    ) {
-      return reservationRecoveryOutcome;
-    }
-    await this.reconcileOperationLifecycle(op, {
-      cause: OPERATION_WORKFLOW_OWNER_LITERAL.RECOVERY,
-    });
-    return OPERATION_RESERVATION_RECOVERY_OUTCOME.LIFECYCLE_RECONCILED;
-  }
-
-  async reconcileSyncingOperation(operation) {
-    this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.RECONCILE_SYNCING, {
-      operationId: operation.operationId,
-      partitionId: operation.partitionId,
-      targetNodeId: operation.targetNodeId,
-    });
-
-    const progressed = await this.reconcileOperationLifecycle(operation, {
-      cause: 'recovery',
-    });
-    if (!progressed) {
-      this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.RECONCILE_IN_PROGRESS, {
-        operationId: operation.operationId,
-        partitionId: operation.partitionId,
-        workflowStep: operation.workflowStep,
-      });
-    }
   }
 }
 

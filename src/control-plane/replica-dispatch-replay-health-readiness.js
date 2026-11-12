@@ -6,6 +6,14 @@ import {
   isActiveReplaceSourceRemovalPhase,
 } from '../rebalancer/replica-operation-step-policy.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+import {isPublicationWriteObligationRetained} from
+  './owners/control-plane-publication-change.js';
+import {
+  armDeferredMembershipPublicationAckRetry,
+  deferMembershipPublicationAckRetry,
+  resolveMembershipPublicationAckRetryAfterMs,
+  retainMembershipPublicationAck,
+} from './replica-dispatch-membership-publication-ack-retention.js';
 
 const {
   COLUMN,
@@ -16,10 +24,7 @@ const {
   RECONCILE_REASON,
   REPLICA_DISPATCH_SERVICE_LITERAL,
   STATE,
-  getControlPlaneErrorMessage,
-  getControlPlaneRetryAfterMs,
   isCoordinatorOwnedOperationType,
-  isRetryableControlPlaneError,
   resolveReadyNodePublicationAdvancementState,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
 
@@ -47,7 +52,6 @@ function reportDispatchReadinessRefreshSpent(service, spent) {
 
 const READY_NODE_PUBLICATION_ADVANCEMENT_EMPTY_OPTIONS = Object.freeze({});
 const READY_NODE_PUBLICATION_ADVANCEMENT_NODE_ROW_UNAVAILABLE = null;
-const READY_NODE_PUBLICATION_RECONCILE_SKIP_WRITE_READBACK = true;
 const READY_NODE_PUBLICATION_RECONCILE_EMPTY_LIST = Object.freeze([]);
 const READY_NODE_PUBLICATION_ADVANCEMENT_OPTION = Object.freeze({
   PUBLICATION_ROWS: 'publicationRows',
@@ -57,7 +61,6 @@ const READY_NODE_PUBLICATION_RECONCILE_FIELD = Object.freeze({
   LATEST_PUBLICATION_ROW: 'latestPublicationRow',
   PUBLISHED_ACTIVE_NODE_IDS: 'publishedActiveNodeIds',
   REQUIRED_ACK_NODE_IDS: 'requiredAckNodeIds',
-  SKIP_PUBLICATION_WRITE_READBACK: 'skipPublicationWriteReadback',
 });
 
 function normalizeReadyNodePublicationReconcileNodeIds(values = []) {
@@ -448,8 +451,6 @@ class ReplicaDispatchReplayHealthReadiness extends ReplicaDispatchOperationExecu
         publishedActiveNodeIds,
       [READY_NODE_PUBLICATION_RECONCILE_FIELD.ACKNOWLEDGED_NODE_IDS]:
         publishedActiveNodeIds,
-      [READY_NODE_PUBLICATION_RECONCILE_FIELD.SKIP_PUBLICATION_WRITE_READBACK]:
-        READY_NODE_PUBLICATION_RECONCILE_SKIP_WRITE_READBACK,
     };
   }
 
@@ -472,7 +473,13 @@ class ReplicaDispatchReplayHealthReadiness extends ReplicaDispatchOperationExecu
         publicationAdvancement,
       ),
     );
-    if (publicationAdvancement.needsAcknowledgement === true) {
+    // A node acknowledges only for itself: another node's READY row is the
+    // publication owner's reason to reconcile (above), never this node's
+    // reason to acknowledge on that node's behalf.
+    if (
+      publicationAdvancement.needsAcknowledgement === true &&
+      nodeId === this.nodeId
+    ) {
       await this.acknowledgeMembershipPublicationForNode(nodeId, options);
     }
     return true;
@@ -536,65 +543,20 @@ class ReplicaDispatchReplayHealthReadiness extends ReplicaDispatchOperationExecu
   }
 
   resolveMembershipPublicationAckRetryAfterMs(error) {
-    const retryAfterMs = getControlPlaneRetryAfterMs(error);
-    if (Number.isFinite(retryAfterMs) && retryAfterMs > 0) {
-      return Math.max(1, Math.floor(retryAfterMs));
-    }
-    return this.nodeStateUpdateRetryAfterMs;
+    return resolveMembershipPublicationAckRetryAfterMs(this, error);
   }
 
   armDeferredMembershipPublicationAckRetry(nodeId, retryAfterMs) {
-    return this.setTimeoutFn(() => {
-      this.membershipPublicationAckDeferredRetries.delete(nodeId);
-      if (!this.isNodeReady(nodeId)) {
-        return;
-      }
-      this.scheduleReadyNodeMembershipPublicationAdvance(
-        nodeId,
-        READY_NODE_PUBLICATION_ADVANCEMENT_NODE_ROW_UNAVAILABLE,
-        RECONCILE_REASON.CONTROL_PLANE_PUBLICATION_ACK_RETRY,
-      );
-    }, retryAfterMs);
+    return armDeferredMembershipPublicationAckRetry(this, nodeId,
+      retryAfterMs);
   }
 
   deferMembershipPublicationAckRetry(nodeId, error) {
-    if (!nodeId || !isRetryableControlPlaneError(error)) {
-      return false;
-    }
-    const retryAfterMs =
-      this.resolveMembershipPublicationAckRetryAfterMs(error);
-    const desiredAttemptAt = Date.now() + retryAfterMs;
-    const existing =
-      this.membershipPublicationAckDeferredRetries.get(nodeId);
-    if (existing) {
-      existing.error = getControlPlaneErrorMessage(error);
-      if (desiredAttemptAt < existing.nextAttemptAt) {
-        if (existing.timeoutHandle) {
-          this.clearTimeoutFn(existing.timeoutHandle);
-        }
-        existing.nextAttemptAt = desiredAttemptAt;
-        existing.timeoutHandle = this.armDeferredMembershipPublicationAckRetry(
-          nodeId,
-          retryAfterMs,
-        );
-      }
-      return true;
-    }
+    return deferMembershipPublicationAckRetry(this, nodeId, error);
+  }
 
-    this.membershipPublicationAckDeferredRetries.set(nodeId, {
-      error: getControlPlaneErrorMessage(error),
-      nextAttemptAt: desiredAttemptAt,
-      timeoutHandle: this.armDeferredMembershipPublicationAckRetry(
-        nodeId,
-        retryAfterMs,
-      ),
-    });
-    this.logger.info(DISPATCH_LOG_MSG.MEMBERSHIP_PUBLICATION_ACK_DEFERRED, {
-      nodeId,
-      retryAfterMs,
-      error: getControlPlaneErrorMessage(error),
-    });
-    return true;
+  retainMembershipPublicationAck(nodeId, retained) {
+    return retainMembershipPublicationAck(this, nodeId, retained);
   }
 
   /**
@@ -639,15 +601,22 @@ class ReplicaDispatchReplayHealthReadiness extends ReplicaDispatchOperationExecu
     }
 
     try {
-      if (options === READY_NODE_PUBLICATION_ADVANCEMENT_EMPTY_OPTIONS) {
-        return await membershipPublicationService.acknowledgeMembershipPublicationForNode(
-          nodeId,
-        );
+      const acknowledgement =
+        options === READY_NODE_PUBLICATION_ADVANCEMENT_EMPTY_OPTIONS ?
+          await membershipPublicationService
+            .acknowledgeMembershipPublicationForNode(nodeId) :
+          await membershipPublicationService
+            .acknowledgeMembershipPublicationForNode(nodeId, options);
+      if (isPublicationWriteObligationRetained(acknowledgement)) {
+        // Not settled (unknown, or refused for a reason that says nothing
+        // about the row): the obligation is kept, never released.
+        this.retainMembershipPublicationAck(nodeId, {
+          retryAfterMs: this.nodeStateUpdateRetryAfterMs,
+          error: acknowledgement.reason,
+          publicationId: acknowledgement.publicationId,
+        });
       }
-      return await membershipPublicationService.acknowledgeMembershipPublicationForNode(
-        nodeId,
-        options,
-      );
+      return acknowledgement;
     } catch (error) {
       this.logger.warn(DISPATCH_LOG_MSG.MEMBERSHIP_PUBLICATION_ACK_FAILED, {
         nodeId,

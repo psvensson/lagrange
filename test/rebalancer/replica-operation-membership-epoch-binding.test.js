@@ -338,7 +338,7 @@ async (t) => {
     );
 
     const rehydrated =
-      await coordinator.repository.queryOperationById(created.operationId);
+      await coordinator.repository.queryOperationProjectionById(created.operationId);
     t.ok(rehydrated, 'the SQL route rehydrates the operation');
     t.equal(
       rehydrated[EPOCH_FIELD],
@@ -363,7 +363,7 @@ async (t) => {
       systemTableCache: createMockCache({replicaOperations: [cacheRow]}),
     });
     try {
-      const fromCache = await cached.coordinator.repository.queryOperationById(
+      const fromCache = await cached.coordinator.repository.queryOperationProjectionById(
         created.operationId,
       );
       t.ok(fromCache, 'the cache route rehydrates the operation');
@@ -399,7 +399,7 @@ async (t) => {
       'the bound-zero create persists integer 0',
     );
     const rehydrated =
-      await coordinator.repository.queryOperationById(created.operationId);
+      await coordinator.repository.queryOperationProjectionById(created.operationId);
     t.equal(rehydrated[EPOCH_FIELD], CURRENT_EPOCH_ZERO,
       'SQL 0 rehydrates as in-memory 0');
     t.same(
@@ -431,7 +431,7 @@ async (t) => {
       'the bound create persists integer 2',
     );
     const rehydrated =
-      await coordinator.repository.queryOperationById(created.operationId);
+      await coordinator.repository.queryOperationProjectionById(created.operationId);
     t.equal(rehydrated[EPOCH_FIELD], CURRENT_EPOCH_TWO,
       'SQL 2 rehydrates as in-memory 2');
   } finally {
@@ -451,7 +451,7 @@ async (t) => {
       buildAddMove('p-null-e4', undefined),
     );
     const rehydrated =
-      await coordinator.repository.queryOperationById(created.operationId);
+      await coordinator.repository.queryOperationProjectionById(created.operationId);
     const {deliveredRequests, failedOperations, dispatch} =
       wireEpochDispatchProbe(coordinator);
 
@@ -495,7 +495,7 @@ async (t) => {
       buildAddMove('p-stale-e5', CURRENT_EPOCH_ONE),
     );
     const rehydrated =
-      await coordinator.repository.queryOperationById(created.operationId);
+      await coordinator.repository.queryOperationProjectionById(created.operationId);
     t.equal(rehydrated[EPOCH_FIELD], CURRENT_EPOCH_ONE,
       'the bound epoch rehydrates as 1');
     setCurrentEpoch(CURRENT_EPOCH_TWO);
@@ -530,7 +530,7 @@ async (t) => {
       buildAddMove('p-current-e6', CURRENT_EPOCH_TWO),
     );
     const rehydrated =
-      await coordinator.repository.queryOperationById(created.operationId);
+      await coordinator.repository.queryOperationProjectionById(created.operationId);
     const {deliveredRequests, failedOperations, dispatch} =
       wireEpochDispatchProbe(coordinator);
 
@@ -572,7 +572,7 @@ async (t) => {
       );
       await expectInvalidBindingRejection(
         t,
-        () => coordinator.repository.queryOperationById(operationId),
+        () => coordinator.repository.queryOperationProjectionById(operationId),
         `durable ${label}`,
       );
     }
@@ -605,7 +605,7 @@ async (t) => {
     try {
       await expectInvalidBindingRejection(
         t,
-        () => cached.coordinator.repository.queryOperationById(
+        () => cached.coordinator.repository.queryOperationProjectionById(
           'op-numeric-text',
         ),
         'cache string epoch',

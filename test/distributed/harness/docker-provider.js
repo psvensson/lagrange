@@ -16,6 +16,9 @@ import {
   FAILURE_STDERR_LOG_TAIL_BYTES,
 } from './constants.js';
 import {buildImageContext} from './docker-build-context.js';
+import {
+  CONTAINER_NETWORK_COUNTER_SCOPE,
+} from './run-health/resource-sample-vocabulary.js';
 import {readContainerLogWindow} from './container-log-window.js';
 import {RETIREMENT, imageIdOf, retirePreviousImage} from './docker-image-retirement.js';
 import {resolveDockerMemoryWorkingSetBytes} from
@@ -1061,7 +1064,10 @@ class DockerProvider {
   async getContainerStats(containerId) {
     const container = this._docker.getContainer(containerId);
     const raw = await container.stats({stream: false});
-    return parseContainerStats(raw);
+    return {
+      ...parseContainerStats(raw),
+      networkCounterScope: containerNetworkCounterScope(raw),
+    };
   }
 
   /**
@@ -1366,6 +1372,17 @@ function parseCpuPercent(stats) {
   const normalizedCount = Math.max(cpuCount, MIN_CPU_COUNT);
 
   return (cpuDelta / systemDelta) * normalizedCount * PERCENT_MULTIPLIER;
+}
+
+// Docker reports per-container network counters only for a container with
+// a network namespace of its own. A host-network container has none, so its
+// stats carry no `networks` entry; parseNetworks then yields zeros that are
+// NOT measurements, and this scope is how a reader tells the two apart.
+function containerNetworkCounterScope(stats) {
+  const networks = stats?.networks;
+  return networks && typeof networks === 'object' ?
+    CONTAINER_NETWORK_COUNTER_SCOPE.CONTAINER_NAMESPACE :
+    CONTAINER_NETWORK_COUNTER_SCOPE.NOT_REPORTED;
 }
 
 function parseNetworks(stats) {

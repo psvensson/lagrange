@@ -8,9 +8,10 @@ import {
   LIFECYCLE_EVENT,
   LIFECYCLE_LEGACY_STATE,
   LIFECYCLE_PHASE,
-  LIFECYCLE_PROBE_STATUS_CLASS,
   LIFECYCLE_REASON,
 } from './lifecycle-controller-constants.js';
+import {classifyLifecycleProbeStatusCode} from './lifecycle-probe-status-class.js';
+import {normalizeReasons, sameReasons, uniqueReasons} from './lifecycle-reasons.js';
 
 const HARD_CLASS = LIFECYCLE_DEPENDENCY_CLASS.HARD;
 const SOFT_CLASS = LIFECYCLE_DEPENDENCY_CLASS.SOFT;
@@ -36,18 +37,14 @@ const NO_FAILURE_COUNT = 0;
 const FAILURE_COUNT_STEP = 1;
 const LIFECYCLE_DEPENDENCY_NAME_REQUIRED_ERROR =
   'Lifecycle dependency name is required';
+const LIFECYCLE_DEPENDENCY_SOURCE_BOUND_ERROR =
+  'Lifecycle dependencies are read from the bound source; setDependency is refused';
 const UNKNOWN_LIFECYCLE_PHASE_ERROR_PREFIX = 'Unknown lifecycle phase: ';
 const INVALID_LIFECYCLE_PHASE_TRANSITION_ERROR_PREFIX =
   'Invalid lifecycle phase transition: ';
 const INVALID_LIFECYCLE_PHASE_TRANSITION_SEPARATOR = ' -> ';
 const UNKNOWN_EVALUATION_STATE_ERROR_PREFIX =
   'Unknown lifecycle evaluation state: ';
-const PROBE_STATUS_SUCCESS_MIN = 200;
-const PROBE_STATUS_SUCCESS_MAX = 300;
-const PROBE_STATUS_CLIENT_ERROR_MIN = 400;
-const PROBE_STATUS_CLIENT_ERROR_MAX = 500;
-const PROBE_STATUS_SERVER_ERROR_MIN = 500;
-const PROBE_STATUS_SERVER_ERROR_MAX = 600;
 const LIFECYCLE_EVALUATION_STATE = Object.freeze({
   DRAINING: 'draining',
   STARTUP_PENDING: 'startup_pending',
@@ -100,6 +97,8 @@ class LifecycleController extends EventEmitter {
     this._consecutiveFailureCount = ZERO_COUNT;
     this._stableWindowStartedAt = null;
     this._dependencies = new Map();
+    this._dependencySource = null;
+    this._readingDependencySource = false;
     this._transitionCount = ZERO_COUNT;
     this._transitionHistory = [];
     this._probeStatusCounts = new Map();
@@ -120,6 +119,39 @@ class LifecycleController extends EventEmitter {
    * @param {Object|null} [options.details]
    */
   setDependency(name, ready, options = {}) {
+    if (this._dependencySource !== null) {
+      throw new Error(LIFECYCLE_DEPENDENCY_SOURCE_BOUND_ERROR);
+    }
+    this.storeDependency(name, ready, options);
+  }
+
+  /**
+   * Bind the one live source of the dependencies: every evaluation re-reads
+   * it, so no projection rests on a value an earlier caller sampled.
+   * @param {function(): Array<Object>} readDependencies - Returns {name,
+   *   ready, reasonCode, classification, demotionPolicy, details} per entry.
+   */
+  bindDependencySource(readDependencies) {
+    this._dependencySource = readDependencies;
+  }
+
+  readDependenciesFromSource() {
+    if (this._dependencySource === null) {
+      return;
+    }
+    this._readingDependencySource = true;
+    try {
+      const dependencies = this._dependencySource();
+      this._dependencies.clear();
+      for (const dependency of dependencies) {
+        this.storeDependency(dependency.name, dependency.ready, dependency);
+      }
+    } finally {
+      this._readingDependencySource = false;
+    }
+  }
+
+  storeDependency(name, ready, options) {
     if (typeof name !== TYPE_STRING || name.length === PHASE_RANK_INIT) {
       throw new Error(LIFECYCLE_DEPENDENCY_NAME_REQUIRED_ERROR);
     }
@@ -149,6 +181,13 @@ class LifecycleController extends EventEmitter {
    * @return {Object}
    */
   evaluate() {
+    // A source that consults the lifecycle while it is being read is answered
+    // the last completed projection: the read is never re-entered, and no
+    // projection is made from a dependency set that is still being read.
+    if (this._readingDependencySource) {
+      return this.getSnapshot();
+    }
+    this.readDependenciesFromSource();
     const now = this._now();
     const previousPhase = this._phase;
     const previousLegacyState = this.resolveLegacyState(previousPhase, {
@@ -174,7 +213,7 @@ class LifecycleController extends EventEmitter {
 
     if (previousPhase !== this._phase ||
         previousReady !== this._ready ||
-        !this.sameReasons(previousReasons, this._reasons)) {
+        !sameReasons(previousReasons, this._reasons)) {
       this.recordTransition({
         previousPhase,
         previousLegacyState,
@@ -232,7 +271,7 @@ class LifecycleController extends EventEmitter {
         ready: false,
         phase: LIFECYCLE_PHASE.DEGRADED,
         consecutiveFailureCount: NO_FAILURE_COUNT,
-        reasons: this.uniqueReasons([
+        reasons: uniqueReasons([
           LIFECYCLE_REASON.NODE_DRAINING,
           ...context.hardReasons,
         ]),
@@ -372,8 +411,8 @@ class LifecycleController extends EventEmitter {
     });
     const previousReady = this._ready;
     const previousReasons = this._reasons;
-    const reasons = this.normalizeReasons(options.reasons);
-    const degradedReasons = this.normalizeReasons(options.degradedReasons);
+    const reasons = normalizeReasons(options.reasons);
+    const degradedReasons = normalizeReasons(options.degradedReasons);
 
     this._phase = phase;
     this._ready = typeof options.ready === TYPE_BOOLEAN ?
@@ -428,7 +467,7 @@ class LifecycleController extends EventEmitter {
     if (typeof endpoint !== TYPE_STRING || endpoint.length === ZERO_COUNT) {
       return;
     }
-    const statusClass = this.classifyProbeStatusCode(statusCode);
+    const statusClass = classifyLifecycleProbeStatusCode(statusCode);
     const key = endpoint + ':' + statusClass;
     this._probeStatusCounts.set(
       key,
@@ -511,31 +550,6 @@ class LifecycleController extends EventEmitter {
     }));
   }
 
-  /**
-   * Classify probe status into a coarse status class.
-   * @param {*} statusCode
-   * @return {string}
-   */
-  classifyProbeStatusCode(statusCode) {
-    if (!Number.isFinite(statusCode)) {
-      return LIFECYCLE_PROBE_STATUS_CLASS.UNKNOWN;
-    }
-    const normalizedStatus = Math.floor(statusCode);
-    if (normalizedStatus >= PROBE_STATUS_SUCCESS_MIN &&
-        normalizedStatus < PROBE_STATUS_SUCCESS_MAX) {
-      return LIFECYCLE_PROBE_STATUS_CLASS.SUCCESS_2XX;
-    }
-    if (normalizedStatus >= PROBE_STATUS_CLIENT_ERROR_MIN &&
-        normalizedStatus < PROBE_STATUS_CLIENT_ERROR_MAX) {
-      return LIFECYCLE_PROBE_STATUS_CLASS.CLIENT_4XX;
-    }
-    if (normalizedStatus >= PROBE_STATUS_SERVER_ERROR_MIN &&
-        normalizedStatus < PROBE_STATUS_SERVER_ERROR_MAX) {
-      return LIFECYCLE_PROBE_STATUS_CLASS.SERVER_5XX;
-    }
-    return LIFECYCLE_PROBE_STATUS_CLASS.UNKNOWN;
-  }
-
   collectDependencyStatus() {
     const hardReasons = [];
     const immediateHardReasons = [];
@@ -565,9 +579,9 @@ class LifecycleController extends EventEmitter {
     }
 
     return {
-      hardReasons: this.uniqueReasons(hardReasons),
-      immediateHardReasons: this.uniqueReasons(immediateHardReasons),
-      softReasons: this.uniqueReasons(softReasons),
+      hardReasons: uniqueReasons(hardReasons),
+      immediateHardReasons: uniqueReasons(immediateHardReasons),
+      softReasons: uniqueReasons(softReasons),
       startupComplete,
     };
   }
@@ -596,32 +610,6 @@ class LifecycleController extends EventEmitter {
   isTransitionAllowed(fromPhase, toPhase) {
     const allowedTransitions = LIFECYCLE_ALLOWED_TRANSITIONS[fromPhase] || EMPTY_REASONS;
     return allowedTransitions.includes(toPhase);
-  }
-
-  normalizeReasons(reasons) {
-    if (!Array.isArray(reasons)) {
-      return [];
-    }
-    return this.uniqueReasons(
-      reasons.filter((reason) =>
-        typeof reason === TYPE_STRING && reason.length > ZERO_COUNT),
-    );
-  }
-
-  uniqueReasons(reasons) {
-    return [...new Set(reasons)];
-  }
-
-  sameReasons(a, b) {
-    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) {
-      return false;
-    }
-    for (let index = ZERO_COUNT; index < a.length; index += ONE_COUNT) {
-      if (a[index] !== b[index]) {
-        return false;
-      }
-    }
-    return true;
   }
 
   updateBlockedReasonDurations(now, previousReasons) {

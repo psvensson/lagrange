@@ -7,6 +7,9 @@ import {COLUMN, SERVICE_STATUS, SERVICE_TYPE, TABLES} from
 import {CANONICAL_LEADER_IDENTITY_STATE} from
   '../../src/query/canonical-leader-routing.js';
 
+// The partitions row's table column (COLUMN names no TABLE_NAME; the
+// owner reads this column).
+const PARTITION_TABLE_NAME_COLUMN = 'table_name';
 const SEED_NODE_ID = 'seed-node-1';
 const PARTITION_ID = 'nodes-p1';
 const SYSTEM_TABLE_PARTITION_ID = 'partitions-p1';
@@ -34,7 +37,7 @@ const PRIORITY_SERVICE_ROWS = Object.freeze([
 ]);
 const CACHE_PARTITION_ROW = Object.freeze({
   [COLUMN.PARTITION_ID]: PARTITION_ID,
-  [COLUMN.TABLE_NAME]: TABLES.NODES,
+  [PARTITION_TABLE_NAME_COLUMN]: TABLES.NODES,
   [COLUMN.LEADER_NODE_ID]: SEED_NODE_ID,
   [COLUMN.CREATED_AT]: 100,
   [COLUMN.UPDATED_AT]: 200,
@@ -63,7 +66,7 @@ function createSystemTableCache(options = {}) {
         ...getCachePartitionRows(),
         {
           [COLUMN.PARTITION_ID]: SYSTEM_TABLE_PARTITION_ID,
-          [COLUMN.TABLE_NAME]: TABLES.PARTITIONS,
+          [PARTITION_TABLE_NAME_COLUMN]: TABLES.PARTITIONS,
           [COLUMN.LEADER_NODE_ID]: SEED_NODE_ID,
           [COLUMN.CREATED_AT]: 100,
           [COLUMN.UPDATED_AT]: 200,
@@ -222,7 +225,7 @@ test(
     const warnings = [];
     const priorityCachePartitionRow = {
       [COLUMN.PARTITION_ID]: PRIORITY_PARTITION_ID,
-      [COLUMN.TABLE_NAME]: TABLES.SQL_TRANSACTIONS,
+      [PARTITION_TABLE_NAME_COLUMN]: TABLES.SQL_TRANSACTIONS,
       [COLUMN.LEADER_NODE_ID]: SEED_NODE_ID,
       [COLUMN.CREATED_AT]: 100,
       [COLUMN.UPDATED_AT]: 200,
@@ -284,7 +287,7 @@ test(
   async (t) => {
     const priorityCachePartitionRow = {
       [COLUMN.PARTITION_ID]: PRIORITY_PARTITION_ID,
-      [COLUMN.TABLE_NAME]: TABLES.SQL_TRANSACTIONS,
+      [PARTITION_TABLE_NAME_COLUMN]: TABLES.SQL_TRANSACTIONS,
       [COLUMN.LEADER_NODE_ID]: SEED_NODE_ID,
       [COLUMN.CREATED_AT]: 100,
       [COLUMN.UPDATED_AT]: 200,
@@ -322,7 +325,7 @@ test(
   async (t) => {
     const priorityCachePartitionRow = {
       [COLUMN.PARTITION_ID]: PRIORITY_PARTITION_ID,
-      [COLUMN.TABLE_NAME]: TABLES.SQL_TRANSACTIONS,
+      [PARTITION_TABLE_NAME_COLUMN]: TABLES.SQL_TRANSACTIONS,
       [COLUMN.LEADER_NODE_ID]: SEED_NODE_ID,
       [COLUMN.CREATED_AT]: 100,
       [COLUMN.UPDATED_AT]: 200,
@@ -370,7 +373,7 @@ test(
     let nowMs = 1000;
     const priorityCachePartitionRow = {
       [COLUMN.PARTITION_ID]: PRIORITY_PARTITION_ID,
-      [COLUMN.TABLE_NAME]: TABLES.SQL_TRANSACTIONS,
+      [PARTITION_TABLE_NAME_COLUMN]: TABLES.SQL_TRANSACTIONS,
       [COLUMN.LEADER_NODE_ID]: SEED_NODE_ID,
       [COLUMN.CREATED_AT]: 100,
       [COLUMN.UPDATED_AT]: 200,
@@ -425,7 +428,7 @@ test(
     let nowMs = 1000;
     const priorityCachePartitionRow = {
       [COLUMN.PARTITION_ID]: PRIORITY_PARTITION_ID,
-      [COLUMN.TABLE_NAME]: TABLES.SQL_TRANSACTIONS,
+      [PARTITION_TABLE_NAME_COLUMN]: TABLES.SQL_TRANSACTIONS,
       [COLUMN.LEADER_NODE_ID]: SEED_NODE_ID,
       [COLUMN.CREATED_AT]: 100,
       [COLUMN.UPDATED_AT]: 200,
@@ -522,7 +525,7 @@ test(
   async (t) => {
     const priorityStablePartitionRow = {
       [COLUMN.PARTITION_ID]: PRIORITY_PARTITION_ID,
-      [COLUMN.TABLE_NAME]: TABLES.SQL_TRANSACTIONS,
+      [PARTITION_TABLE_NAME_COLUMN]: TABLES.SQL_TRANSACTIONS,
       [COLUMN.LEADER_NODE_ID]: SEED_NODE_ID,
       [COLUMN.CREATED_AT]: 100,
       [COLUMN.UPDATED_AT]: 200,
@@ -605,7 +608,7 @@ test(
     const userPartitionId = 'users-p1';
     const userCachePartitionRow = {
       [COLUMN.PARTITION_ID]: userPartitionId,
-      [COLUMN.TABLE_NAME]: 'users',
+      [PARTITION_TABLE_NAME_COLUMN]: 'users',
       [COLUMN.LEADER_NODE_ID]: SEED_NODE_ID,
       [COLUMN.CREATED_AT]: 100,
       [COLUMN.UPDATED_AT]: 200,
@@ -857,6 +860,21 @@ test(
       warnings.every((entry) =>
         entry.message.includes('retaining cached system-table rows')),
       'throttled warnings should preserve the original fallback warning',
+    );
+  },
+);
+
+test(
+  'BootstrapTopologySnapshotOwner reads local partition rows through the cache contract ' +
+    'and never reads a cache without it as "no partitions"',
+  async (t) => {
+    const owner = createOwner();
+    const cacheWithoutFilter = {getAll: () => [CACHE_PARTITION_ROW]};
+    owner.delegates.getSystemTableCache = () => cacheWithoutFilter;
+    t.throws(
+      () => owner.queryLocalAuthoritativePartitionRowSets(TABLE_NAME),
+      TypeError,
+      'a cache without filter() is a broken collaborator, not an empty partition set',
     );
   },
 );

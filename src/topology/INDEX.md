@@ -7,15 +7,16 @@ documentClass: generated
 
 ## Files
 
-- [cdc-group-propagation-constants.js](cdc-group-propagation-constants.js) - Constants for CDCGroupPropagationService. (importers: many)
+- [cdc-group-propagation-constants.js](cdc-group-propagation-constants.js) - Constants for CDCGroupPropagationService. (importers: hub)
 - [cdc-group-propagation-delivery-methods.js](cdc-group-propagation-delivery-methods.js) - The foreground retry loop and its pressure gate for CDCGroupPropagationService's durable wave. (importers: one)
-- [cdc-group-propagation-durable-delivery.js](cdc-group-propagation-durable-delivery.js) - No leading comment; first export: propagateDurableCdcEvent. (importers: one)
+- [cdc-group-propagation-durable-delivery.js](cdc-group-propagation-durable-delivery.js) - No leading comment; first export: deliverCdcVectorToRecipient. (importers: one)
 - [cdc-group-propagation-durable-plan.js](cdc-group-propagation-durable-plan.js) - The topology owner's synchronous observation of the existing routing plan. (importers: few)
 - [cdc-group-propagation-foreground-retry.js](cdc-group-propagation-foreground-retry.js) - One foreground retry wait decision for the source-owned durable wave. (importers: one)
 - [cdc-group-propagation-lifecycle-methods.js](cdc-group-propagation-lifecycle-methods.js) - Stop-lifecycle methods for CDCGroupPropagationService: the one guard every arm site and post-attempt path checks,... (importers: one)
 - [cdc-group-propagation-retry-wait-report.js](cdc-group-propagation-retry-wait-report.js) - CDC group propagation retries are bounded by attempt counts and the live source invocation duration. (importers: few)
 - [cdc-group-propagation-routing.js](cdc-group-propagation-routing.js) - No leading comment; first export: buildGroupedContext. (importers: few)
 - [cdc-group-propagation-service.js](cdc-group-propagation-service.js) - CDCGroupPropagationService - single owner for topology-aware CDC fanout. (importers: many)
+- [cdc-group-propagation-wave-diagnostics.js](cdc-group-propagation-wave-diagnostics.js) - Diagnostics for the durable CDC propagation delivery (log lines only). (importers: few)
 - [group-selection-constants.js](group-selection-constants.js) - Constants for GroupSelectionService. (importers: one)
 - [group-selection-service.js](group-selection-service.js) - GroupSelectionService - single owner for deterministic group leadership. (importers: few)
 - [latency-group-manager-assignment-helpers.js](latency-group-manager-assignment-helpers.js) - Assignment and lifecycle helpers for LatencyGroupManager. (importers: one)

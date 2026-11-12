@@ -129,6 +129,7 @@ const OPERATION_WORKFLOW_OWNER_LITERAL = Object.freeze({
   COORDINATOR_CREATED_REMOTE_HANDOFF: 'coordinator_created_remote_handoff',
   CRITICAL: 'critical',
   CRITICAL_PARTITION: 'Critical partition ',
+  DEFERRED_STEP_WRITE: 'deferred_step_write',
   DELETE: 'DELETE',
   DOES_NOT_INCLUDE_PROJECTED_VOTER_DASH_READY_NODES:
     ' does not include projected voter-ready nodes ',
@@ -148,10 +149,6 @@ const OPERATION_WORKFLOW_OWNER_LITERAL = Object.freeze({
     ' is no longer in the current eligible cohort for ',
   IS_NOT_VOTER_DASH_READY: ' is not voter-ready',
   IS_UNAVAILABLE: ' is unavailable',
-  NODE_RECOVERY_DASH_INCOMPLETE_OPERATION:
-    'Node recovery - incomplete operation',
-  NODE_RECOVERY_DASH_INCOMPLETE_REMOVAL_OPERATION:
-    'Node recovery - incomplete removal operation',
   OBJECT: 'object',
   OBSERVED: 'observed',
   OBSERVED_PROGRESS: 'observed_progress',
@@ -160,8 +157,6 @@ const OPERATION_WORKFLOW_OWNER_LITERAL = Object.freeze({
     'OperationWorkflowOwner requires getActualReplicaStatus()',
   PARTITION_SAFETY_CHECK: ' partition safety check',
   PRIORITY_CLAIM_CAS: 'priority_claim_cas',
-  PRIORITY_CLAIM_DEFERRED_LOCAL: 'priority_claim_deferred_local',
-  PRIORITY_PROGRESS_DEFERRED_LOCAL: 'priority_progress_deferred_local',
   PRIORITY_ACTIVE_REPLACE_RESUME: 'priority_active_replace_resume',
   PRIORITY_CONTROL_DASH_PLANE_PARTITION: 'Priority control-plane partition ',
   PRIORITY_RECOVERY_TARGET_NODE: 'Priority recovery target node ',
@@ -184,7 +179,6 @@ const OPERATION_WORKFLOW_OWNER_LITERAL = Object.freeze({
     ' published membership safety is unavailable',
   RECOVERY_PROJECTION_MEMBERSHIP: 'recovery projection membership',
   QUESTION_MARK: '?',
-  RECOVERY: 'recovery',
   REPLACE_SOURCE_LEADER_HANDOFF: 'replace_source_leader_handoff',
   REPLACE_SOURCE_REMOVAL: 'replace_source_removal',
   REPLACEMENT_REPLICA: ' replacement replica',
@@ -195,11 +189,8 @@ const OPERATION_WORKFLOW_OWNER_LITERAL = Object.freeze({
     'Replica failed during operation reconciliation',
   REPLICA_FAILED_DURING_REMOVE_RECONCILIATION:
     'Replica failed during remove reconciliation',
-  REPLICA_FAILED_DURING_SYNC: 'Replica failed during sync',
   REPLICA_MISSING_DURING_STOPPING_RECONCILIATION:
     'Replica missing during STOPPING reconciliation',
-  REPLICA_NOT_FOUND_DURING_RECOVERY_RECONCILIATION:
-    'Replica not found during recovery reconciliation',
   REQUIREMENT: 'requirement',
   RETRYABLE_CONTROL_DASH_PLANE_TRANSITION_FAILURE:
     'Retryable control-plane transition failure',
@@ -207,10 +198,12 @@ const OPERATION_WORKFLOW_OWNER_LITERAL = Object.freeze({
   SAFETY_CHECK_UNAVAILABLE_2: 'safety check unavailable',
   SAFE_REMOVAL_UNAVAILABLE_SUFFIX: ' is unavailable for safe removal',
   SOURCE_LEADER: ' source leader ',
+  STEP_WRITE_DEFERRED: 'operation step write deferred after its effect',
   STRING: 'string',
   STOPPING_SOURCE_REMOVAL_OBSERVATION_DEFERRED:
     'control_plane_pressure_degraded while observing STOPPING source removal',
   SYNTHETIC_UPSERT: 'UPSERT',
+  TIMEOUT: 'timeout',
   TRANSITION_RETRY_RESUME: 'transition_retry_resume',
   TOPOLOGY_OPERATOR_WITNESS_BOUNDARY_UNAVAILABLE:
     'topology_operator_witness_boundary_unavailable',
@@ -281,8 +274,6 @@ const OPERATION_LIFECYCLE_ACTION = Object.freeze({
   FAIL_PRIORITY_RECOVERY_DRAIN_STALE: 'fail_priority_recovery_drain_stale',
   FAIL_PRIORITY_RECOVERY_SUPERSEDED_TARGET:
     'fail_priority_recovery_superseded_target',
-  FAIL_PRE_SYNC_RECOVERY: 'fail_pre_sync_recovery',
-  FAIL_STOPPING_RECOVERY: 'fail_stopping_recovery',
   EXECUTE_ACTIVE_REPLACE: 'execute_active_replace',
   EXECUTE_REMOVE_DISPATCH: 'execute_remove_dispatch',
   RECONCILE_STOPPING: 'reconcile_stopping',
@@ -307,6 +298,7 @@ const REMOVE_SAFETY_HANDOFF_FAILURE_POLICY = Object.freeze({
 const OPERATION_SINGLE_FLIGHT_KEY_SEPARATOR = ':';
 
 const OPERATION_WORKFLOW_OWNER_REASON = Object.freeze({
+  CREATE_IN_PROGRESS: 'create_in_progress',
   OPERATION_ID_REQUIRED: 'operation_id_required',
   OPERATION_NOT_DISPATCHABLE: 'operation_not_dispatchable',
   OPERATION_NOT_FOUND: 'operation_not_found',
@@ -334,6 +326,7 @@ const OBSERVED_PROGRESS_RELEVANT_SERVICE_STATUSES = Object.freeze(
     ReplicaStatus.SYNCING,
     ReplicaStatus.ACTIVE,
     ReplicaStatus.REMOVING,
+    ReplicaStatus.REMOVED,
     ReplicaStatus.FAILED,
   ]),
 );
@@ -364,13 +357,6 @@ const PRIORITY_REMOVE_SAFETY_MEMBERSHIP_SOURCE = Object.freeze({
   PUBLISHED_MEMBERSHIP: 'published membership',
   RECOVERY_PROJECTION_MEMBERSHIP: 'recovery projection membership',
 });
-const REPLACE_SOURCE_LEADER_HANDOFF_REQUIRED_PARTITION_IDS = new Set([
-  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS],
-  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.REPLICA_OPERATIONS],
-  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SQL_TRANSACTIONS],
-  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS],
-  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS],
-]);
 const PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE = Object.freeze({
   SAFE: 'safe',
   NOT_APPLICABLE: 'not_applicable',
@@ -596,7 +582,6 @@ export const OPERATION_WORKFLOW_OWNER_SHARED = {
   REMOVE_SAFETY_READINESS_DIMENSION,
   REMOVE_SAFETY_READ_QUERY_OPTIONS,
   REMOVE_SAFETY_SQL,
-  REPLACE_SOURCE_LEADER_HANDOFF_REQUIRED_PARTITION_IDS,
   REPLICA_OPERATION_DISPATCH_TIMEOUT_MS,
   REPLICA_OPERATION_DISPATCH_TIMEOUT_RETRY_AFTER_MS,
   REPLICA_OPERATION_VISIBILITY_READ_MODE,

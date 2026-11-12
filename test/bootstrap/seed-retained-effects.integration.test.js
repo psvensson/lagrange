@@ -210,17 +210,17 @@ for (const tableName of FOUNDATION_TABLES) {
     assert.equal(replayed.obligations.rows[0].delivered, '0');
     const cache = new SystemTableCache();
     const received = [];
-    const subscriber = {
-      canAcceptCDCEvent: () => true,
-      async handleCDCEvent(event) {
+    // The durable subscriber contract: one vector of owed events per call.
+    const subscriber = Object.assign(async (events) => {
+      for (const event of events) {
         received.push(event);
         cache.applySystemTableChange(event.tableName, event.operation, event.data);
-        // Cache visibility is provisional recipient work, never a forged MG
-        // committed receipt and never permission to clear the source debt.
-        return buildProvisionalCdcOutcome([event], PROVISIONAL_RETRY_MS);
-      },
-    };
-    reopened.subscribeToCDC(subscriber);
+      }
+      // Cache visibility is provisional recipient work, never a forged MG
+      // committed receipt and never permission to clear the source debt.
+      return buildProvisionalCdcOutcome(events, PROVISIONAL_RETRY_MS);
+    }, {canAcceptCDCEvent: () => true});
+    void reopened.subscribeToCDCWithHandshake(subscriber);
     if (reopened.raft.readStatus().role !== RAFT_ROLE.LEADER) {
       await turnChainValue(reopened.raft.campaign());
     }

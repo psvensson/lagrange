@@ -84,13 +84,13 @@ test('ControlPlanePublicationsOwner marks publication mutations as ' +
   'critical deferrable writes', async (t) => {
   const gatewayCalls = [];
   const gateway = {
-    async upsertSystemTableRow(tableName, row, options) {
+    async insertSystemTableRow(tableName, row, options) {
       gatewayCalls.push({
         tableName,
         row,
         options,
       });
-      return {success: true};
+      return {success: true, affectedRows: 1};
     },
   };
 
@@ -98,7 +98,7 @@ test('ControlPlanePublicationsOwner marks publication mutations as ' +
     controlPlaneSystemTableGateway: gateway,
   });
 
-  await owner.upsertPublication({
+  await owner.admitPublication({
     publication_id: TEST_PUBLICATION_ID,
     status: TEST_PUBLICATION_STATUS_OPEN,
   });
@@ -106,7 +106,7 @@ test('ControlPlanePublicationsOwner marks publication mutations as ' +
   t.equal(
     gatewayCalls.length,
     1,
-    'publication owner should route the upsert through the gateway',
+    'publication owner should route the admission through the gateway',
   );
   t.equal(
     gatewayCalls[0]?.tableName,
@@ -139,13 +139,13 @@ test('ControlPlanePublicationsOwner honors explicit non-deferred ' +
   'publication mutations', async (t) => {
   const gatewayCalls = [];
   const gateway = {
-    async upsertSystemTableRow(tableName, row, options) {
+    async insertSystemTableRow(tableName, row, options) {
       gatewayCalls.push({
         tableName,
         row,
         options,
       });
-      return {success: true};
+      return {success: true, affectedRows: 1};
     },
   };
 
@@ -153,7 +153,7 @@ test('ControlPlanePublicationsOwner honors explicit non-deferred ' +
     controlPlaneSystemTableGateway: gateway,
   });
 
-  await owner.upsertPublication(
+  await owner.admitPublication(
     {
       publication_id: TEST_PUBLICATION_ID,
       status: TEST_PUBLICATION_STATUS_OPEN,

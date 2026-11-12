@@ -15,12 +15,19 @@ import {
 } from './rebalancer-planning-gate-constants.js';
 import {
   isBackgroundPrioritySpreadReleaseActive,
-  observeActiveBackgroundPrioritySpreadReleaseBlocked,
-  observeActiveBackgroundPrioritySpreadOperationDrain,
+  observeActiveBackgroundPrioritySpreadTransitionDrains,
   observeBackgroundPrioritySpreadBlocked,
   registerBackgroundPrioritySpreadReleaseWake,
   resolveBackgroundPrioritySpreadStableRelease,
 } from './background-priority-spread-release-tracker.js';
+import {
+  BACKGROUND_SPREAD_FENCE_EXEMPTION,
+  classifyBackgroundSpreadFenceExemption,
+} from './background-spread-fence-exemption.js';
+import {
+  buildBackgroundPrioritySpreadFenceLogContext,
+  observeBackgroundPrioritySpreadReleaseCondition,
+} from './background-priority-spread-release-condition.js';
 import {
   readExpectedReplicaCount,
 } from '../control-plane/membership-publication-priority-partition-canonical-data.js';
@@ -194,6 +201,41 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
   },
 
   /**
+   * One active-fence observation: the drained fence-holding transitions
+   * (an id not seen before rearms the dwell) and the durable
+   * release condition, with the evidence both log lines carry.
+   * @param {number} observedAt
+   * @return {{releaseConditionState: string, fenceLogContext: Object}}
+   * @private
+   */
+  observeActivePrioritySpreadFence(observedAt) {
+    const readinessOwner = this.controlPlaneReadinessService;
+    const newlyDrainedOperationIds =
+      observeActiveBackgroundPrioritySpreadTransitionDrains({
+        readinessOwner,
+        drainedOperationIds:
+          this.getDrainedFenceHoldingOperationIds({observedAt}),
+        observedAt,
+      });
+    const releaseCondition =
+      observeBackgroundPrioritySpreadReleaseCondition(this, {observedAt});
+    return Object.freeze({
+      releaseConditionState: releaseCondition.state,
+      fenceLogContext: buildBackgroundPrioritySpreadFenceLogContext({
+        releaseCondition,
+        globalTopologyBlockingOperationCount:
+          this.getGlobalTopologyBlockingInFlightOperations().filter(
+            (operation) => this.isTopologySettlingInFlightOperation(
+              operation,
+              {nowMs: observedAt},
+            ),
+          ).length,
+        newlyDrainedOperationIds,
+      }),
+    });
+  },
+
+  /**
    * Advance the shared ordinary-work release fence for one evaluation
    * that observed no priority spread blocker, then resolve the
    * stabilizing defer decision for non-priority entities. Priority
@@ -203,54 +245,53 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
    * re-enqueue them on placement-eligibility and operation-terminal
    * edges), so they observe the clear that starts the stability window
    * and resolve the stable release that wakes parked ordinary entities.
-   * The window law itself is unchanged — release still requires the full
-   * continuous-clear interval, and any blocked or in-flight observation
-   * still rearms it.
+   * The window's length is unchanged; what it measures is the durable
+   * release condition (no unfinished priority control-plane transition of
+   * any phase, every required member node serve-eligible): the dwell runs
+   * only from an observation that the condition holds, and an observation
+   * that it does not hold, or that an input is unavailable, rearms it, as
+   * does a newly drained priority control-plane transition. Ordinary
+   * (non-priority) work is no input: the background moves this fence
+   * releases would otherwise close it again for every other entity, a
+   * livelock by construction. The planner's in-flight count is still
+   * reported, as evidence only.
    * @param {boolean} priorityPartition
    * @return {Object|null}
    * @private
    */
   resolveClearedPrioritySpreadFenceDecision(priorityPartition) {
     const observedAt = this.nowFn();
-    let globalTopologyBlockingOperationCount = 0;
-    let latestTopologyDrain = null;
-    if (isBackgroundPrioritySpreadReleaseActive({
-      readinessOwner: this.controlPlaneReadinessService,
-    })) {
-      const globalTopologyBlockingOperations =
-        this.getGlobalTopologyBlockingInFlightOperations().filter(
-          (operation) => this.isTopologySettlingInFlightOperation(
-            operation,
-            {nowMs: observedAt},
-          ),
-        );
-      globalTopologyBlockingOperationCount =
-        globalTopologyBlockingOperations.length;
-      if (globalTopologyBlockingOperationCount > 0) {
-        observeActiveBackgroundPrioritySpreadReleaseBlocked({
-          readinessOwner: this.controlPlaneReadinessService,
-          observedAt,
-        });
-      } else {
-        latestTopologyDrain =
-          this.getLatestGlobalTopologyShapingOperationDrain({observedAt});
-        observeActiveBackgroundPrioritySpreadOperationDrain({
-          readinessOwner: this.controlPlaneReadinessService,
-          drainedAt: latestTopologyDrain?.drainedAtMs,
-        });
-      }
-    }
+    const readinessOwner = this.controlPlaneReadinessService;
+    const fenceActive =
+      isBackgroundPrioritySpreadReleaseActive({readinessOwner});
+    const fenceObservation = fenceActive ?
+      this.observeActivePrioritySpreadFence(observedAt) :
+      null;
+    const fenceLogContext = fenceObservation?.fenceLogContext || null;
+    const releaseConditionState = fenceObservation?.releaseConditionState;
+    const requiredStableMs = this.getBackgroundPrioritySpreadStableWindowMs();
     const stableReleaseBlocker =
       resolveBackgroundPrioritySpreadStableRelease({
-        readinessOwner: this.controlPlaneReadinessService,
+        readinessOwner,
         observedAt,
-        requiredStableMs:
-          this.getBackgroundPrioritySpreadStableWindowMs(),
+        requiredStableMs,
+        releaseConditionState,
       });
+    if (fenceActive && !stableReleaseBlocker) {
+      // The release instant: the evidence the fence released on.
+      this.logger.info(REBALANCER_LOG_MSG.PRIORITY_SPREAD_FENCE_RELEASED, {
+        entityId: this.entityId,
+        entityType: this.entityType,
+        releasedAtMs: observedAt,
+        requiredStableMs,
+        ...fenceLogContext,
+      });
+    }
     if (
       priorityPartition ||
       !stableReleaseBlocker ||
-      this.isRuntimeServiceDesiredStateDeficit()
+      classifyBackgroundSpreadFenceExemption(this) !==
+        BACKGROUND_SPREAD_FENCE_EXEMPTION.NOT_EXEMPT
     ) {
       return REBALANCE_PLANNING_GATE_NOT_APPLICABLE;
     }
@@ -274,11 +315,7 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
         clearObservedAtMs: stableReleaseBlocker.clearObservedAtMs,
         lastBlockedObservedAtMs:
           stableReleaseBlocker.lastBlockedObservedAtMs,
-        globalTopologyBlockingOperationCount,
-        latestTopologyDrainAtMs:
-          latestTopologyDrain?.drainedAtMs || null,
-        latestTopologyDrainOperationId:
-          latestTopologyDrain?.operationId || null,
+        ...fenceLogContext,
       },
       scheduleDelayMs,
     });
@@ -711,11 +748,32 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
       // stamp is diagnostic, and it belongs to the owner all the same.
       observedAtMs: this.nowFn(),
     });
+    const previousDiagnostic =
+      this.lastPriorityRecoveryPlanningGateDiagnostic || null;
+    const diagnosticChanged =
+      !previousDiagnostic ||
+      previousDiagnostic.entityId !== diagnostic.entityId ||
+      previousDiagnostic.nodeId !== diagnostic.nodeId ||
+      previousDiagnostic.isLeader !== diagnostic.isLeader ||
+      previousDiagnostic.winningGate !== diagnostic.winningGate ||
+      previousDiagnostic.planningState !== diagnostic.planningState ||
+      previousDiagnostic.shouldBypass !== diagnostic.shouldBypass ||
+      previousDiagnostic.bypassState !== diagnostic.bypassState ||
+      previousDiagnostic.operationCreationRequired !==
+        diagnostic.operationCreationRequired ||
+      previousDiagnostic.operationCreationScope !==
+        diagnostic.operationCreationScope ||
+      previousDiagnostic.operationCreationPartitionId !==
+        diagnostic.operationCreationPartitionId ||
+      previousDiagnostic.syncPlanningSnapshotAvailable !==
+        diagnostic.syncPlanningSnapshotAvailable;
     this.lastPriorityRecoveryPlanningGateDiagnostic = diagnostic;
-    this.logger.info(
-      REBALANCER_LOG_MSG.PRIORITY_RECOVERY_PLANNING_GATE_DIAGNOSTIC,
-      diagnostic,
-    );
+    if (diagnosticChanged) {
+      this.logger.info(
+        REBALANCER_LOG_MSG.PRIORITY_RECOVERY_PLANNING_GATE_DIAGNOSTIC,
+        diagnostic,
+      );
+    }
     return diagnostic;
   },
 };

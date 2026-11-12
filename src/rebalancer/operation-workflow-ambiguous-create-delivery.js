@@ -3,6 +3,11 @@ import {OPERATION_WORKFLOW_OWNER_SHARED} from
 import {operationCarriesReplicaCreateAdmission} from
   './replica-operation-create-admission-fields.js';
 import {isTerminalSuccessfulCreateOperation} from './replica-status.js';
+import {
+  OPERATION_VISIBILITY_STATE,
+  buildUnavailableOperationVisibility,
+  readOperationVisibilityState,
+} from './replica-operation-repository-operation-visibility.js';
 
 const {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
@@ -14,6 +19,8 @@ const {
   SYSTEM_TABLE_NAME,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
+const OBSERVE_CREATE_DELIVERY_READ_THREW =
+  'create_delivery_owner_read_threw';
 const CREATE_DISPATCH_IDENTITY_FIELDS = Object.freeze([
   'operationId',
   'type',
@@ -51,7 +58,14 @@ async function observeCreateDeliveryAdmission(owner, operation) {
       },
     );
   } catch (error) {
-    return {operation: null, deferredOutcome: error};
+    // A read that threw answered nothing: unavailability, never absence.
+    return buildUnavailableOperationVisibility({
+      reasonCode: OBSERVE_CREATE_DELIVERY_READ_THREW,
+      errorCode: error?.errorCode || error?.code || null,
+      retryAfterMs: Number.isFinite(error?.retryAfterMs) ?
+        error.retryAfterMs :
+        null,
+    });
   }
 }
 
@@ -127,7 +141,13 @@ async function resolveAmbiguousCreateDeliveryFailure(
     REBALANCE_COORDINATOR_ERROR_MSG.MESSAGE_NOT_ACKED,
   );
   const observation = await observeCreateDeliveryAdmission(owner, operation);
-  const authoritativeOperation = observation?.operation || null;
+  // Only a PRESENT owner row decides; an ABSENT or UNAVAILABLE answer is
+  // authority divergence: the delivery defers and is observed again.
+  const authoritativeOperation =
+    readOperationVisibilityState(observation) ===
+      OPERATION_VISIBILITY_STATE.PRESENT ?
+      observation.operation :
+      null;
   if (isRetainedAdmission(owner, operation, authoritativeOperation)) {
     Object.assign(operation, authoritativeOperation);
     return buildRetainedCreateDelivery(operation, errorMsg, owner);

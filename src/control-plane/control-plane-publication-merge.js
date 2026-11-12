@@ -89,13 +89,6 @@ function arePublicationNodeListsEqual(left = [], right = []) {
   );
 }
 
-function doesPublicationNodeListCover(actual = [], expected = []) {
-  const actualSet = new Set(normalizePublicationNodeIdList(actual));
-  return normalizePublicationNodeIdList(expected).every((value) =>
-    actualSet.has(value),
-  );
-}
-
 function getPublicationRowEpoch(row) {
   return normalizePublicationPositiveInteger(
     row?.publication_epoch ?? row?.publicationEpoch,
@@ -121,6 +114,26 @@ function selectLatestRowByTimestamp(primaryRow, secondaryRow) {
   return primaryTimestamp >= secondaryTimestamp ? primaryRow : secondaryRow;
 }
 
+// The durable row revision (publication_revision), when the row carries one.
+function getPublicationRowRevision(row) {
+  const revision = row?.publication_revision ?? row?.rowRevision;
+  return Number.isInteger(revision) ? revision : null;
+}
+
+// Two copies of one durable row are ordered by the owner's row revision
+// (every accepted change advances it), never by the writers' clocks. Only
+// copies that carry no revision (a candidate, a derived observation) are
+// still ordered by their timestamps.
+function selectLatestRowOfEpoch(primaryRow, secondaryRow) {
+  const primaryRevision = getPublicationRowRevision(primaryRow);
+  const secondaryRevision = getPublicationRowRevision(secondaryRow);
+  if (primaryRevision !== null && secondaryRevision !== null &&
+      primaryRevision !== secondaryRevision) {
+    return primaryRevision > secondaryRevision ? primaryRow : secondaryRow;
+  }
+  return selectLatestRowByTimestamp(primaryRow, secondaryRow);
+}
+
 function selectLatestRow(primaryRow, secondaryRow) {
   const primaryEpoch = getPublicationRowEpoch(primaryRow);
   const secondaryEpoch = getPublicationRowEpoch(secondaryRow);
@@ -128,7 +141,7 @@ function selectLatestRow(primaryRow, secondaryRow) {
     if (primaryEpoch !== secondaryEpoch) {
       return primaryEpoch > secondaryEpoch ? primaryRow : secondaryRow;
     }
-    return selectLatestRowByTimestamp(primaryRow, secondaryRow);
+    return selectLatestRowOfEpoch(primaryRow, secondaryRow);
   }
   if (Number.isFinite(primaryEpoch)) {
     return primaryRow || null;
@@ -341,7 +354,12 @@ function mergeControlPlanePublicationRows(primaryRow, secondaryRow) {
         publishedAt || updatedAt :
       null;
 
+  const mergedRevision = Math.max(
+    getPublicationRowRevision(primaryRow) ?? -1,
+    getPublicationRowRevision(secondaryRow) ?? -1,
+  );
   return serializeControlPlanePublicationRow({
+    ...(mergedRevision >= 0 ? {publication_revision: mergedRevision} : {}),
     publication_id:
       primaryRow?.publication_id ||
       primaryRow?.publicationId ||
@@ -419,61 +437,8 @@ function mergeControlPlanePublicationRows(primaryRow, secondaryRow) {
   });
 }
 
-function publicationRowSatisfiesDesiredState(actualRow, desiredRow) {
-  if (!actualRow || !desiredRow) {
-    return false;
-  }
-  const actual = normalizeControlPlanePublicationRow(actualRow);
-  const desired = normalizeControlPlanePublicationRow(desiredRow);
-  if (actual.publicationId !== desired.publicationId) {
-    return false;
-  }
-  if (
-    !arePublicationNodeListsEqual(
-      actual.publishedActiveNodeIds,
-      desired.publishedActiveNodeIds,
-    )
-  ) {
-    return false;
-  }
-  if (
-    !arePublicationNodeListsEqual(
-      actual.requiredAckNodeIds,
-      desired.requiredAckNodeIds,
-    )
-  ) {
-    return false;
-  }
-  if (
-    !doesPublicationNodeListCover(
-      actual.acknowledgedNodeIds,
-      desired.acknowledgedNodeIds,
-    )
-  ) {
-    return false;
-  }
-  if (
-    desired.priorityPartitionSummary &&
-    JSON.stringify(actual.priorityPartitionSummary || null) !==
-      JSON.stringify(desired.priorityPartitionSummary)
-  ) {
-    return false;
-  }
-  if (desired.status === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED) {
-    return actual.status === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED;
-  }
-  if (desired.status === CONTROL_PLANE_PUBLICATION_STATUS.SUPERSEDED) {
-    return actual.status === CONTROL_PLANE_PUBLICATION_STATUS.SUPERSEDED;
-  }
-  if (desired.status === CONTROL_PLANE_PUBLICATION_STATUS.ABANDONED) {
-    return actual.status === CONTROL_PLANE_PUBLICATION_STATUS.ABANDONED;
-  }
-  return true;
-}
-
 export {
   CONTROL_PLANE_PUBLICATION_STATUS,
   mergeControlPlanePublicationRows,
   normalizePublicationNodeIdList,
-  publicationRowSatisfiesDesiredState,
 };

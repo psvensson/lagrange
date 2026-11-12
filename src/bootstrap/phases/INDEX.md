@@ -15,7 +15,7 @@ documentClass: generated
 - [query-system-state-phase-constants.js](query-system-state-phase-constants.js) - No leading comment; first export: JOIN_NODE_REGISTRATION_MAX_ATTEMPTS. (importers: few)
 - [query-system-state-phase-snapshot-helpers.js](query-system-state-phase-snapshot-helpers.js) - No leading comment; first export: applyBootstrapTopologyEpoch. (importers: one)
 - [query-system-state-phase.js](query-system-state-phase.js) - Query System State Phase - handles system cache hydration from bootstrap snapshots, node registration, endpoint... (importers: few)
-- [seed-cache-hydration-cdc-subscription.js](seed-cache-hydration-cdc-subscription.js) - Subscribe message groups to CDC events from a partition. (importers: one)
+- [seed-cache-hydration-cdc-subscription.js](seed-cache-hydration-cdc-subscription.js) - Raise the node-ready rebalance trigger for each event of a nodes vector, comparing each event with its predecessor:... (importers: few)
 - [seed-cache-hydration-phase.js](seed-cache-hydration-phase.js) - Seed Cache Hydration Phase - handles Phase 5 of seed bootstrap: populating the system cache from local partitions,... (importers: few)
 - [seed-cleanup-handler.js](seed-cleanup-handler.js) - Seed Cleanup Handler - handles bootstrap failure cleanup and graceful shutdown for the seed bootstrap service. (importers: few)
 - [seed-contact-candidate-policy.js](seed-contact-candidate-policy.js) - Seed-contact candidate policy - keeps route rotation and retry evidence accounting separate from the HTTP contact owner. (importers: few)

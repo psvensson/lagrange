@@ -25,7 +25,7 @@ const BACKSTOP_WAIT = 'REPLICA_HANDLER_DEFAULT.REMOVAL_CONSENSUS_EXIT_BACKSTOP_M
 const WAIT_SOURCE = new URL(
   '../../src/node/replica-removal-consensus-exit.js', import.meta.url);
 const CALLER_SOURCE = new URL(
-  '../../src/node/replica-handler-remove-execution-methods.js', import.meta.url);
+  '../../src/node/replica-removal-participation.js', import.meta.url);
 
 // A port whose committed read keeps naming the retiring replica a voter, so
 // only the backstop can end the wait.

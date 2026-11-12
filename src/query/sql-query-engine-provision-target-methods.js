@@ -1,5 +1,7 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {throwIfCancellationRequested} from './query-cancellation.js';
+import {SERVE_ELIGIBILITY_UNAVAILABLE_REASON} from
+  '../control-plane/serve-eligibility-record-decision.js';
 import {founderNodeIdsOfPlacement} from
   '../raft/raft-rs-committed-peer-address.js';
 
@@ -132,6 +134,7 @@ class SQLQueryEngineProvisionTargetMethods {
     );
 
     const readiness = this.controlPlaneReadinessService;
+    let serveReadFailure = null;
     let cohort = readiness && typeof readiness.answerServeCohort === LOCAL_STR_FUNCTION ?
       readiness.answerServeCohort() :
       null;
@@ -142,25 +145,19 @@ class SQLQueryEngineProvisionTargetMethods {
     ) {
       const waitBudgetMs = Number.isFinite(options.maxWaitMs) && options.maxWaitMs > 0 ?
         options.maxWaitMs : this.tablePartitionProvisioningTimeoutMs;
-      try {
-        await readiness.readServeEligibility({
-          timeoutMs: waitBudgetMs,
-          timeoutBudget: options.timeoutBudget || null,
-          cancellationToken: options.cancellationToken || null,
-          signal: options.signal || null,
-        });
-      } catch (waitError) {
+      // A read that fails is the refusal's cause, never a quieter re-read.
+      serveReadFailure = await readiness.readServeEligibility({
+        timeoutMs: waitBudgetMs,
+        timeoutBudget: options.timeoutBudget || null,
+        cancellationToken: options.cancellationToken || null,
+        signal: options.signal || null,
+      }).then(() => null, (cause) => {
         throwIfCancellationRequested(cancellationToken);
-        if (options.signal?.aborted) {
-          throw waitError;
-        }
-        this.logger?.debug?.(
-          QUERY_LOG_MSG.TABLE_PARTITION_TARGET_NODE_WAIT_TIMEOUT,
-          {error: waitError?.message},
-        );
-      }
+        if (options.signal?.aborted) throw cause;
+        return cause;
+      });
       throwIfCancellationRequested(cancellationToken);
-      cohort = readiness.answerServeCohort();
+      if (serveReadFailure === null) cohort = readiness.answerServeCohort();
     }
 
     const resolution =
@@ -178,6 +175,8 @@ class SQLQueryEngineProvisionTargetMethods {
         partitionId,
         targetNodeIds: resolvedNodeIds,
         schemaJobId: options.schemaJobId,
+        timeoutBudget: options.timeoutBudget || null,
+        cancellationToken,
       });
     }
 
@@ -193,13 +192,16 @@ class SQLQueryEngineProvisionTargetMethods {
     const epoch = cohort?.epoch || lastDiagnostics?.epoch || null;
     const failOnTimeout = options.failOnTimeout !== false;
 
-    if (resolvedNodeIds.length < quorumCount) {
-      const uniqueReasons = collectCohortUnavailabilityReasons(cohort);
+    if (serveReadFailure !== null || resolvedNodeIds.length < quorumCount) {
+      const uniqueReasons = serveReadFailure !== null ?
+        [SERVE_ELIGIBILITY_UNAVAILABLE_REASON.READ_FAILED] :
+        collectCohortUnavailabilityReasons(cohort);
       const retryAfterMs = cohort?.retryAfterMs || this.tablePartitionProvisioningTimeoutMs;
 
-      const error = new Error(
+      const error = new Error(serveReadFailure !== null ?
+        `Provisioning unavailable: committed serve-eligibility read failed for partition ${partitionId}: ${serveReadFailure?.message}` :
         `Provisioning unavailable: quorum not reachable for partition ${partitionId} (have ${resolvedNodeIds.length}, quorum ${quorumCount})`,
-      );
+      {cause: serveReadFailure ?? undefined});
       error.code = QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE;
       error.errorCode = QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE;
       error.epoch = epoch;
@@ -225,6 +227,7 @@ class SQLQueryEngineProvisionTargetMethods {
         epoch,
         reasons: uniqueReasons,
         retryAfterMs,
+        refusal: error,
         contractOutcome: buildOwnerContractOutcome({
           contractState: OWNER_CONTRACT_STATE.DEFERRED,
           nextAction: OWNER_CONTRACT_NEXT_ACTION.RETRY,
@@ -297,6 +300,7 @@ class SQLQueryEngineProvisionTargetMethods {
       reasonCodes: Object.freeze(reasonCodes),
       reasons: reasonCodes,
       epoch: options.epoch || diagnostics?.epoch || null,
+      refusal: options.refusal ?? null,
     };
   }
 

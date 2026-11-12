@@ -591,7 +591,7 @@ class ServiceLeaderReadinessOwner {
 
     if (ready) {
       this.getLogger().info(
-        BOOTSTRAP_API_LOG_MSG.LEADERS_READY || LOCAL_STR_ALL_SERVICE_LEADERS_READY,
+        LOCAL_STR_ALL_SERVICE_LEADERS_READY,
         {
           seedNodeId: this.getSeedNodeId(),
           elapsedMs: 0,

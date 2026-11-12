@@ -6,6 +6,7 @@
  * contract as the production gateway; projection is an independently
  * controllable consequence rather than mutation authority.
  */
+import {EventEmitter} from 'node:events';
 import {SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
 
 const DEFAULT_NODE_ID = 'test-node';
@@ -534,7 +535,8 @@ function createReplicaLifecycleStateMachineFixture(
   options = {},
 ) {
   const store = options.store || createLifecycleStateStore(options);
-  return {
+  // The lifecycle owner is an event port (its TIMEOUT re-drive signal).
+  return Object.assign(new EventEmitter(), {
     getState() {
       return null;
     },
@@ -544,8 +546,7 @@ function createReplicaLifecycleStateMachineFixture(
         row: store.durableRow(TABLES.SERVICES, replicaId),
       };
     },
-    ...overrides,
-  };
+  }, overrides);
 }
 
 export {

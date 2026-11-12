@@ -2,6 +2,7 @@
 // source group and all target groups. Native RF1 groups commit/apply; only the
 // inter-group transport and route projection are controlled. This does not
 // measure source partition writes/ACKs, membership setup, or physical network cost.
+import {positionRecipients} from '../test-helpers/cdc-source-range-fixture.js';
 import assert from 'node:assert/strict';
 import {afterEach, test} from 'node:test';
 import {CDC_OPERATION, COLUMN, TABLES} from '../../src/constants/index.js';
@@ -11,7 +12,7 @@ import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outc
 import {CDCGroupPropagationService} from '../../src/topology/cdc-group-propagation-service.js';
 import {LATENCY_PROPAGATION_MODE} from '../../src/topology/latency-topology-constants.js';
 import {pump, recipientFixture, NODE_ID} from '../message-group/message-group-native-custody-fixture.js';
-import {createDurableCdcEvent, createDurablePropagationRequest, createGroupRow,
+import {createDurableCdcEvent, propagateToEveryRecipient, createGroupRow,
   createMessageGroupServiceRow, createTopologyCache, setupConfig, teardownConfig} from
   './cdc-group-propagation-service-harness.js';
 
@@ -53,6 +54,8 @@ async function healthyWaves(t, duplicateProposals) {
     });
   }
   const services = fixtures.map((f) => f.services[0]);
+  // CDC Stage 3: every recipient node starts from the synthetic source's start.
+  positionRecipients(services, createDurableCdcEvent().sourcePartition, TABLES.CONFIG);
   const [source] = services;
   let deliveries = 0;
   const topology = new CDCGroupPropagationService({nodeId: NODE_ID,
@@ -67,7 +70,7 @@ async function healthyWaves(t, duplicateProposals) {
       const target = services.find((s) => s.unifiedAddress === address);
       assert.ok(target, 'the transport reaches a real target owner');
       return buildDeliveryEnvelope({acknowledged: true},
-        await target.handleLatencyCdcPropagationMessage(`cost-${deliveries}`,
+        await target.handleLatencyCdcPropagationBatchMessage(`cost-${deliveries}`,
           options.prepareDeliveryMessage(payload, options.remainingMs())));
     }},
     latencyTreeService: {getRoutingOrder: () => services.map((s) => s.groupId)},
@@ -85,7 +88,7 @@ async function healthyWaves(t, duplicateProposals) {
       sourceLogIndex: wave + 1});
     let result;
     let failure;
-    const pending = topology.propagateCDCEvent(createDurablePropagationRequest(source, event))
+    const pending = propagateToEveryRecipient(topology, source, [event])
       .then((value) => {
         result = value;
       }, (error) => {

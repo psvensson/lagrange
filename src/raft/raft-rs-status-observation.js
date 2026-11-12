@@ -160,6 +160,9 @@ function shapeGroupObservation(group, observation, leaderIdentityUnresolved) {
       confState.voters.length + confState.learners.length - 1),
     peers,
     followerProgress: followerProgressSnapshot(group, status),
+    // The raft peer ids the leader counts live in its current tenure (its
+    // voter-liveness record; only itself when it does not lead).
+    liveVoters: observation.voterLiveness.liveVoters,
     // Delivered envelopes the core refused to step, per sender (the runtime
     // owner's observation; each was dropped and answered nothing).
     inboundStepRefusals: [...group.inboundStepRefusals.values()],

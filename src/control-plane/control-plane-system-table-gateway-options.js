@@ -7,6 +7,7 @@ import {
   getRemainingBudgetMs,
   resolveControlPlaneSystemTableDeliverySource,
 } from './control-plane-system-table-gateway-shared.js';
+import {CDC_ADMISSION_INTENT_FIELD} from '../partition/partition-cdc-admission-class.js';
 
 /**
  * @param {Object} gateway
@@ -184,6 +185,10 @@ function buildGatewayWriteOptions(gateway, options = {}, context = {}) {
     options,
     CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.REPLACEPENDINGKEY,
   );
+  // The lifecycle owner's CDC admission intent (partition-cdc-admission-
+  // class.js) rides the write: this option set is a pick-list, so it is
+  // added here deliberately.
+  writeOptions = copyOption(writeOptions, options, CDC_ADMISSION_INTENT_FIELD);
   writeOptions = applyMutationWorkloadProfileDefaults(writeOptions, options);
   if (typeof deliverySource === 'string' &&
     deliverySource.length > CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ZERO) {
