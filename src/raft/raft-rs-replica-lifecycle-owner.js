@@ -7,6 +7,7 @@ import {
 import {
   COMMITTED_MEMBERSHIP_REFUSAL,
 } from './raft-committed-membership-constants.js';
+import {preparedStatementOf} from '../storage/sqlite-prepared-statement-owner.js';
 import {commitDurably, RaftRsDurableStore} from './raft-rs-durable-store.js';
 import {pendingTurn, settledTurn, turnChainValue} from './raft-rs-turn-answer.js';
 import {RAFT_RS_TABLE} from './raft-rs-durable-store-constants.js';
@@ -29,16 +30,13 @@ const SNAPSHOT_RECEIVER_REASON = Object.freeze({
 const SNAPSHOT_RECEIVER_JOURNALS = Object.freeze(['-wal', '-journal']);
 const FILE_ABSENT_CODE = 'ENOENT';
 
-// Columns added after the table first shipped: an older database gains them
-// (NULL for its existing rows) the first time a lifecycle owner opens it.
 // `incarnation` is the replica incarnation stamp: minted once, when the row
-// is born (or, for a row born before the column existed, the first time its
-// owner opens it), never replaced and never reused by a later replica of the
-// same name (a later replica is a new row: its database was deleted, or its
-// row removed, before it could be born). `retirement_evidence` is the
-// verified group-retirement evidence a retirement recorded with the row.
-const LIFECYCLE_ADDED_COLUMNS = Object.freeze(['incarnation',
-  'retirement_evidence', 'native_history_state']);
+// is born, never replaced and never reused by a later replica of the same
+// name (a later replica is a new row: its database was deleted, or its row
+// removed, before it could be born). `retirement_evidence` is the verified
+// group-retirement evidence a retirement recorded with the row. Every
+// released table (the table first shipped in 0.2.6) was created with these
+// columns, so no open probes or adds them.
 // Durable lifecycle generation is the persistent authority. Runtime-instance
 // identity is the exact process-local projection of that generation: the
 // registry holds one entry per opened runtime (the frozen operation port a
@@ -82,18 +80,32 @@ function frozenResult(outcome, reason, detail = null) {
   return Object.freeze({outcome, reason, detail});
 }
 
-// An older table gains the columns added since it was created.
-function addMissingLifecycleColumns(db) {
-  const present = new Set(db.prepare(`PRAGMA table_info(${REPLICA_LIFECYCLE_TABLE})`)
-    .all().map((column) => column.name));
-  for (const column of LIFECYCLE_ADDED_COLUMNS) {
-    if (!present.has(column)) {
-      db.exec(`ALTER TABLE ${REPLICA_LIFECYCLE_TABLE} ADD COLUMN ${column} TEXT`);
-    }
-  }
-}
+// This owner's fixed statements, each prepared once per database handle.
+const LIFECYCLE_SQL = Object.freeze({
+  IDENTITY_ROW: `SELECT peer_id, replica_identity, state, reason
+    FROM ${REPLICA_LIFECYCLE_TABLE}
+    WHERE group_id = ? AND (peer_id = ? OR replica_identity = ?)`,
+  STAMP_UNSTAMPED: `UPDATE ${REPLICA_LIFECYCLE_TABLE} SET incarnation = ?
+    WHERE group_id = ? AND peer_id = ? AND incarnation IS NULL`,
+  BIRTH: `INSERT INTO ${REPLICA_LIFECYCLE_TABLE}
+    (group_id, peer_id, replica_identity, state, reason, changed_at,
+      incarnation, native_history_state)
+    VALUES (?, ?, ?, 'active', NULL, ?, ?, ?)`,
+  INCARNATION: `SELECT incarnation FROM ${REPLICA_LIFECYCLE_TABLE}
+    WHERE group_id = ? AND peer_id = ? AND replica_identity = ?`,
+  OPENING_HISTORY: `SELECT native_history_state FROM ${REPLICA_LIFECYCLE_TABLE}
+    WHERE group_id = ? AND peer_id = ? AND replica_identity = ?
+      AND incarnation = ? AND state = 'active'`,
+  RECORD_OPENING_HISTORY: `UPDATE ${REPLICA_LIFECYCLE_TABLE}
+    SET native_history_state = ?
+    WHERE group_id = ? AND peer_id = ? AND replica_identity = ?
+      AND incarnation = ? AND state = 'active'`,
+  RETIRE: `UPDATE ${REPLICA_LIFECYCLE_TABLE}
+    SET state = 'retired', reason = ?, changed_at = ?, retirement_evidence = ?
+    WHERE group_id = ? AND peer_id = ? AND replica_identity = ?`,
+});
 
-// The one table definition; an older table gains the columns added since.
+// The one table definition.
 function ensureLifecycleTable(db) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS ${REPLICA_LIFECYCLE_TABLE} (
@@ -110,25 +122,19 @@ function ensureLifecycleTable(db) {
       UNIQUE (group_id, replica_identity)
     )
   `);
-  addMissingLifecycleColumns(db);
 }
 
 // The row holding either half of this replica's identity in its group.
 function lifecycleIdentityRow(db, {groupId, peerId, replicaIdentity}) {
-  return db.prepare(`
-    SELECT peer_id, replica_identity, state, reason
-    FROM ${REPLICA_LIFECYCLE_TABLE}
-    WHERE group_id = ? AND (peer_id = ? OR replica_identity = ?)
-  `).get(groupId, peerId, replicaIdentity);
+  return preparedStatementOf(db, LIFECYCLE_SQL.IDENTITY_ROW)
+    .get(groupId, peerId, replicaIdentity);
 }
 
 // A row born before the stamp existed gets one, once: the update never
 // replaces a stamp.
 function stampUnstampedRow(db, {groupId, peerId}, incarnation) {
-  db.prepare(`
-    UPDATE ${REPLICA_LIFECYCLE_TABLE} SET incarnation = ?
-    WHERE group_id = ? AND peer_id = ? AND incarnation IS NULL
-  `).run(incarnation, groupId, peerId);
+  preparedStatementOf(db, LIFECYCLE_SQL.STAMP_UNSTAMPED)
+    .run(incarnation, groupId, peerId);
 }
 
 function hasDurableRaftRecord(db, groupId) {
@@ -155,13 +161,9 @@ function openLifecycleRecord(db, identity, incarnation) {
     return frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED, LIFECYCLE_REASON.MISSING);
   }
   if (row === undefined) {
-    db.prepare(`
-      INSERT INTO ${REPLICA_LIFECYCLE_TABLE}
-        (group_id, peer_id, replica_identity, state, reason, changed_at,
-          incarnation, native_history_state)
-      VALUES (?, ?, ?, 'active', NULL, ?, ?, ?)
-    `).run(groupId, peerId, replicaIdentity, new Date().toISOString(),
-      incarnation, RAFT_RS_OPENING_HISTORY.NEVER_OPENED);
+    preparedStatementOf(db, LIFECYCLE_SQL.BIRTH).run(groupId, peerId,
+      replicaIdentity, new Date().toISOString(), incarnation,
+      RAFT_RS_OPENING_HISTORY.NEVER_OPENED);
     return frozenResult(RAFT_OPERATION_OUTCOME.CORE_OK, LIFECYCLE_REASON.ACTIVE,
       LIFECYCLE_STATE.ACTIVE);
   }
@@ -208,10 +210,8 @@ class RaftRsReplicaLifecycleOwner {
   }
 
   get incarnation() {
-    const row = this.#db.prepare(`
-      SELECT incarnation FROM ${REPLICA_LIFECYCLE_TABLE}
-      WHERE group_id = ? AND peer_id = ? AND replica_identity = ?
-    `).get(this.#groupId, this.#peerId, this.#replicaIdentity);
+    const row = preparedStatementOf(this.#db, LIFECYCLE_SQL.INCARNATION)
+      .get(this.#groupId, this.#peerId, this.#replicaIdentity);
     return typeof row?.incarnation === 'string' ? row.incarnation : null;
   }
 
@@ -222,11 +222,8 @@ class RaftRsReplicaLifecycleOwner {
    * @return {string} Owner-defined opening history state.
    */
   openingHistory(incarnation) {
-    const row = this.#db.prepare(`
-      SELECT native_history_state FROM ${REPLICA_LIFECYCLE_TABLE}
-      WHERE group_id = ? AND peer_id = ? AND replica_identity = ?
-        AND incarnation = ? AND state = 'active'
-    `).get(this.#groupId, this.#peerId, this.#replicaIdentity, incarnation);
+    const row = preparedStatementOf(this.#db, LIFECYCLE_SQL.OPENING_HISTORY)
+      .get(this.#groupId, this.#peerId, this.#replicaIdentity, incarnation);
     if (row === undefined) {
       throw new Error(RAFT_RS_OPENING_HISTORY_ERROR.IDENTITY_CHANGED);
     }
@@ -252,12 +249,9 @@ class RaftRsReplicaLifecycleOwner {
     // Validate the predecessor even on an idempotent update. No missing row
     // or invalid state is promoted to an established incarnation.
     this.openingHistory(incarnation);
-    const result = this.#db.prepare(`
-      UPDATE ${REPLICA_LIFECYCLE_TABLE} SET native_history_state = ?
-      WHERE group_id = ? AND peer_id = ? AND replica_identity = ?
-        AND incarnation = ? AND state = 'active'
-    `).run(RAFT_RS_OPENING_HISTORY.ESTABLISHED, this.#groupId,
-      this.#peerId, this.#replicaIdentity, incarnation);
+    const result = preparedStatementOf(this.#db, LIFECYCLE_SQL.RECORD_OPENING_HISTORY)
+      .run(RAFT_RS_OPENING_HISTORY.ESTABLISHED, this.#groupId, this.#peerId,
+        this.#replicaIdentity, incarnation);
     if (result.changes !== 1) {
       throw new Error(RAFT_RS_OPENING_HISTORY_ERROR.IDENTITY_CHANGED);
     }
@@ -365,12 +359,7 @@ class RaftRsReplicaLifecycleOwner {
    * @param {Object|null} [evidence] - Verified group-retirement evidence.
    */
   #writeRetired(reason, evidence = null) {
-    commitDurably(this.#db, () => this.#db.prepare(`
-      UPDATE ${REPLICA_LIFECYCLE_TABLE}
-      SET state = 'retired', reason = ?, changed_at = ?,
-        retirement_evidence = ?
-      WHERE group_id = ? AND peer_id = ? AND replica_identity = ?
-    `).run(
+    commitDurably(this.#db, () => preparedStatementOf(this.#db, LIFECYCLE_SQL.RETIRE).run(
       reason,
       new Date().toISOString(),
       evidence ? JSON.stringify(evidence) : null,
@@ -433,8 +422,10 @@ function prepareReplicaLifecycleForSnapshot(request) {
  * and the declaration consumes the returned stamp. Birth is once: any row
  * already holding this identity, in any state, is refused and left
  * unchanged, as is durable native history without a row. The row is born
- * NEVER_OPENED and is never marked established here. No owner, runtime
- * handle, registration or retirement capability is returned.
+ * NEVER_OPENED and is never marked established here, on a file formatted
+ * with the allocation columns in the same transaction (so no founder row
+ * exists on an unformatted file). No owner, runtime handle, registration or
+ * retirement capability is returned.
  * @param {Object} request - {db, groupId, peerId, replicaIdentity}.
  * @return {Object} Frozen {outcome, reason, detail: {incarnation}|null}.
  */
@@ -453,6 +444,7 @@ function prepareReplicaLifecycleForOriginalAllocation(request) {
   const owner = new RaftRsReplicaLifecycleOwner({db, ...identity});
   const admission = owner.admission();
   if (admission.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) return admission;
+  formatOriginalAllocationColumns(db);
   return frozenResult(RAFT_OPERATION_OUTCOME.CORE_OK,
     LIFECYCLE_REASON.ORIGINAL_PREPARED,
     Object.freeze({incarnation: owner.incarnation}));
@@ -461,25 +453,60 @@ function prepareReplicaLifecycleForOriginalAllocation(request) {
 // Original seed allocation (owner decision 2026-10-26, Q3): the five
 // allocation columns and the two original rights are fields of a founder's
 // row, and this owner is their only writer. Only the original issuer formats
-// the optional columns; other readers never migrate a file to find a grant.
+// the optional columns, at a founder's birth and in its transaction; other
+// readers never migrate a file to find a grant. A founder's row therefore
+// lives only on a formatted file, and its reads name the columns without
+// asking the file for them.
 const ORIGINAL_COLUMNS = Object.freeze(Object.values(ORIGINAL_COLUMN));
 const ORIGINAL_ROW_FIELDS = Object.freeze(['state', 'incarnation',
   'native_history_state', ...ORIGINAL_COLUMNS]);
 const SQL_LIST_SEPARATOR = ', ';
+const ORIGINAL_SQL = Object.freeze({
+  EXACT_ROW: `SELECT ${ORIGINAL_ROW_FIELDS.join(SQL_LIST_SEPARATOR)}
+    FROM ${REPLICA_LIFECYCLE_TABLE}
+    WHERE group_id = ? AND peer_id = ? AND replica_identity = ?`,
+  PREPARE_ROW: `UPDATE ${REPLICA_LIFECYCLE_TABLE}
+    SET ${ORIGINAL_COLUMNS.map((column) => `${column} = ?`).join(SQL_LIST_SEPARATOR)}
+    WHERE group_id = ? AND peer_id = ? AND replica_identity = ?
+      AND incarnation = ? AND state = 'active'
+      AND ${ORIGINAL_COLUMN.DECLARATION} IS NULL`,
+  ISSUE: `UPDATE ${REPLICA_LIFECYCLE_TABLE}
+    SET ${ORIGINAL_COLUMN.ISSUE} = ? WHERE group_id = ? AND peer_id = ?
+      AND replica_identity = ? AND incarnation = ? AND state = 'active'
+      AND ${ORIGINAL_COLUMN.DECLARATION} = ? AND ${ORIGINAL_COLUMN.MEMBER} = ?
+      AND ${ORIGINAL_COLUMN.ISSUE} = ? AND native_history_state = ?
+      AND ${ORIGINAL_COLUMN.IDENTITY_RIGHT} = ? AND ${ORIGINAL_COLUMN.SERVICE_RIGHT} = ?`,
+});
+// One fixed statement per right column (SERVICE_RIGHT, IDENTITY_RIGHT).
+const RIGHT_TRANSITION_SQL = Object.freeze(Object.fromEntries(
+  [ORIGINAL_COLUMN.SERVICE_RIGHT, ORIGINAL_COLUMN.IDENTITY_RIGHT].map((right) =>
+    [right, `UPDATE ${REPLICA_LIFECYCLE_TABLE}
+    SET ${right} = ? WHERE group_id = ? AND peer_id = ? AND replica_identity = ?
+      AND incarnation = ? AND state = 'active' AND ${right} = ?
+      AND ${ORIGINAL_COLUMN.DECLARATION} = ? AND ${ORIGINAL_COLUMN.MEMBER} = ?`])));
 
+// The columns a lifecycle table holds: read by the issuer that formats a
+// founder's file at its birth, and by a declaration read of a file that may
+// not be a founder's (an absent table or column there is ABSENT).
 function lifecycleColumns(db) {
   return new Set(db.prepare(`PRAGMA table_info(${REPLICA_LIFECYCLE_TABLE})`).all()
     .map(({name}) => name));
 }
 
-// Exactly this member's active row by named columns; one the file does not
-// have yet reads null. A missing or changed identity is a typed HOLD.
-function exactOriginalRow(db, member) {
+// One ALTER per allocation column the founder's file does not have yet.
+function formatOriginalAllocationColumns(db) {
   const present = lifecycleColumns(db);
-  const [stateField, ...optional] = ORIGINAL_ROW_FIELDS;
-  const row = db.prepare(`SELECT ${[stateField, ...optional.filter((field) =>
-    present.has(field))].join(SQL_LIST_SEPARATOR)} FROM ${REPLICA_LIFECYCLE_TABLE}
-    WHERE group_id = ? AND peer_id = ? AND replica_identity = ?`)
+  for (const column of ORIGINAL_COLUMNS) {
+    if (!present.has(column)) {
+      db.exec(`ALTER TABLE ${REPLICA_LIFECYCLE_TABLE} ADD COLUMN ${column} TEXT`);
+    }
+  }
+}
+
+// Exactly this member's active row by named columns. A missing or changed
+// identity is a typed HOLD.
+function exactOriginalRow(db, member) {
+  const row = preparedStatementOf(db, ORIGINAL_SQL.EXACT_ROW)
     .get(member.groupId, member.peerId, member.replicaId);
   if (row?.incarnation !== member.incarnation || row?.state !== LIFECYCLE_STATE.ACTIVE) {
     throw originalAllocationError(ORIGINAL_REASON.IDENTITY, member.replicaId);
@@ -555,18 +582,12 @@ function hasOriginalFields(row, fields) {
 }
 
 /**
- * Format the allocation columns (current schema: one ALTER per missing
- * column) and write a born NEVER_OPENED founder's declaration, member, issue
- * PREPARING and UNUSED rights (the identity right only on the anchor).
+ * Write a born NEVER_OPENED founder's declaration, member, issue PREPARING
+ * and UNUSED rights (the identity right only on the anchor); its birth
+ * formatted the allocation columns.
  * @param {Object} request - {db, declaration, member}.
  */
 function prepareOriginalAllocationRow({db, declaration, member}) {
-  const present = lifecycleColumns(db);
-  for (const column of ORIGINAL_COLUMNS) {
-    if (!present.has(column)) {
-      db.exec(`ALTER TABLE ${REPLICA_LIFECYCLE_TABLE} ADD COLUMN ${column} TEXT`);
-    }
-  }
   const before = exactOriginalRow(db, member);
   if (before.native_history_state !== RAFT_RS_OPENING_HISTORY.NEVER_OPENED ||
       ORIGINAL_COLUMNS.some((column) => before[column] !== null)) {
@@ -579,11 +600,7 @@ function prepareOriginalAllocationRow({db, declaration, member}) {
     [ORIGINAL_COLUMN.IDENTITY_RIGHT]: member.replicaId === declaration.anchorReplicaId ?
       ORIGINAL.UNUSED : null,
     native_history_state: RAFT_RS_OPENING_HISTORY.NEVER_OPENED};
-  commitOriginalWrite(db, member, () => db.prepare(`UPDATE ${REPLICA_LIFECYCLE_TABLE}
-    SET ${ORIGINAL_COLUMNS.map((column) => `${column} = ?`).join(SQL_LIST_SEPARATOR)}
-    WHERE group_id = ? AND peer_id = ? AND replica_identity = ?
-      AND incarnation = ? AND state = 'active'
-      AND ${ORIGINAL_COLUMN.DECLARATION} IS NULL`)
+  commitOriginalWrite(db, member, () => preparedStatementOf(db, ORIGINAL_SQL.PREPARE_ROW)
     .run(...ORIGINAL_COLUMNS.map((column) => fields[column]),
       member.groupId, member.peerId, member.replicaId, member.incarnation),
   (row) => hasOriginalFields(row, fields));
@@ -600,12 +617,7 @@ function markOriginalAllocationIssued({db, declaration, anchor}) {
     throw originalAllocationError(ORIGINAL_REASON.IDENTITY, anchor.replicaId);
   }
   const declarationText = JSON.stringify(declaration);
-  commitOriginalWrite(db, anchor, () => db.prepare(`UPDATE ${REPLICA_LIFECYCLE_TABLE}
-    SET ${ORIGINAL_COLUMN.ISSUE} = ? WHERE group_id = ? AND peer_id = ?
-      AND replica_identity = ? AND incarnation = ? AND state = 'active'
-      AND ${ORIGINAL_COLUMN.DECLARATION} = ? AND ${ORIGINAL_COLUMN.MEMBER} = ?
-      AND ${ORIGINAL_COLUMN.ISSUE} = ? AND native_history_state = ?
-      AND ${ORIGINAL_COLUMN.IDENTITY_RIGHT} = ? AND ${ORIGINAL_COLUMN.SERVICE_RIGHT} = ?`)
+  commitOriginalWrite(db, anchor, () => preparedStatementOf(db, ORIGINAL_SQL.ISSUE)
     .run(ORIGINAL.ISSUED, anchor.groupId, anchor.peerId, anchor.replicaId,
       anchor.incarnation, declarationText, JSON.stringify(anchor), ORIGINAL.PREPARING,
       RAFT_RS_OPENING_HISTORY.NEVER_OPENED, ORIGINAL.UNUSED, ORIGINAL.UNUSED),
@@ -638,10 +650,7 @@ function transitionOriginalRight({db, member, right, from, to}) {
     throw originalAllocationError(ORIGINAL_REASON.SPENT, member.replicaId);
   }
   const declarationText = before[ORIGINAL_COLUMN.DECLARATION];
-  commitOriginalWrite(db, member, () => db.prepare(`UPDATE ${REPLICA_LIFECYCLE_TABLE}
-    SET ${right} = ? WHERE group_id = ? AND peer_id = ? AND replica_identity = ?
-      AND incarnation = ? AND state = 'active' AND ${right} = ?
-      AND ${ORIGINAL_COLUMN.DECLARATION} = ? AND ${ORIGINAL_COLUMN.MEMBER} = ?`)
+  commitOriginalWrite(db, member, () => preparedStatementOf(db, RIGHT_TRANSITION_SQL[right])
     .run(to, member.groupId, member.peerId, member.replicaId, member.incarnation, from,
       declarationText, before[ORIGINAL_COLUMN.MEMBER]),
   (row) => hasOriginalFields(row, {[right]: to,

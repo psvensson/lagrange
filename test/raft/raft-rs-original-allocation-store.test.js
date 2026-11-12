@@ -19,6 +19,20 @@ import {RAFT_RS_OPENING_HISTORY as HISTORY} from
 function fixture(t) {
   const db = new Database(':memory:');
   t.after(() => db.close());
+  // Every statement the owner prepares on this handle (it holds each one,
+  // prepared once): a seam acts on the held statement the owner reads.
+  const prepared = [];
+  const prepare = db.prepare.bind(db);
+  db.prepare = (sql) => {
+    const statement = prepare(sql);
+    prepared.push(statement);
+    return statement;
+  };
+  const heldStatement = (matches) => {
+    const found = prepared.filter((statement) => matches(statement.source));
+    assert.equal(found.length, 1, 'the owner holds one such statement');
+    return found[0];
+  };
   const identity = {groupId: 'original-group', peerId: '1', replicaId: 'original-replica'};
   // The owner births the row and mints the stamp; the member carries it.
   const born = db.transaction(() => prepareReplicaLifecycleForOriginalAllocation({db,
@@ -30,7 +44,7 @@ function fixture(t) {
     anchorReplicaId: member.replicaId, members: [member]});
   prepareOriginalAllocationRow({db, declaration, member});
   const row = () => readOriginalAllocationRow({db, member});
-  return {db, member, declaration, row};
+  return {db, member, declaration, row, heldStatement};
 }
 
 // Positional shorthands for the owner's request-object operations.
@@ -166,9 +180,8 @@ test('failure inside actual transaction rolls back and preserves both errors', (
 });
 
 test('unreadable post-COMMIT observation does not restore UNUSED', (t) => {
-  const {db, member, row} = fixture(t);
+  const {db, member, row, heldStatement} = fixture(t);
   const transaction = db.transaction.bind(db);
-  const prepare = db.prepare.bind(db);
   const primary = new Error('lost-commit-answer');
   const unavailable = new Error('readback-unavailable');
   let committed = false;
@@ -177,15 +190,18 @@ test('unreadable post-COMMIT observation does not restore UNUSED', (t) => {
     committed = true;
     throw primary;
   };
-  db.prepare = (sql) => {
-    // The owner's named-column row read, never the PRAGMA or the write.
-    if (committed && sql.startsWith('SELECT state, incarnation')) throw unavailable;
-    return prepare(sql);
+  // The owner's named-column row read (the handle's held statement), never
+  // the write.
+  const rowRead = heldStatement((sql) => sql.startsWith('SELECT state, incarnation'));
+  const get = rowRead.get;
+  rowRead.get = function(...args) {
+    if (committed) throw unavailable;
+    return get.apply(this, args);
   };
   assert.throws(() => move(db, member, COLUMN.SERVICE_RIGHT,
     STATE.UNUSED, STATE.SUBMITTED), (error) => error instanceof AggregateError &&
       error.errors[0] === primary && error.errors[1] === unavailable);
-  db.prepare = prepare;
+  rowRead.get = get;
   assert.equal(row()[COLUMN.SERVICE_RIGHT], STATE.SUBMITTED);
   assert.throws(() => move(db, member, COLUMN.SERVICE_RIGHT,
     STATE.UNUSED, STATE.SUBMITTED), hold(REASON.SPENT));

@@ -35,11 +35,9 @@ function loseRows(db) {
     }
   })();
 }
-function makeLegacy(db) {
-  const columns = db.prepare('PRAGMA table_info(_raft_rs_replica_lifecycle)').all();
-  if (columns.some((column) => column.name === 'native_history_state')) {
-    db.exec('ALTER TABLE _raft_rs_replica_lifecycle DROP COLUMN native_history_state');
-  }
+// A row whose opening history is not recorded (NULL reads UNKNOWN).
+function makeUnknownHistory(db) {
+  db.exec('UPDATE _raft_rs_replica_lifecycle SET native_history_state = NULL');
 }
 function assertLost(f, open = () => f.open()) {
   const before = f.entries.length;
@@ -121,9 +119,9 @@ for (const failAfterWrite of [false, true]) {
 }
 
 for (const lose of [false, true]) {
-  test(`legacy lifecycle with ${lose ? 'lost' : 'intact'} native record`, async (t) => {
+  test(`unknown opening history with ${lose ? 'lost' : 'intact'} native record`, async (t) => {
     const f = fixture(t); const port = f.open(); await turnChainValue(port.campaign()); await turnChainValue(port.propose('legacy-committed'));
-    const before = lifecycle(f.db); port.close(); makeLegacy(f.db);
+    const before = lifecycle(f.db); port.close(); makeUnknownHistory(f.db);
     if (lose) {
       loseRows(f.db);
       assertLost(f);
@@ -262,9 +260,6 @@ test('an incarnation change during opening cannot inherit the old grant', (t) =>
 
 test('invalid persisted history is unavailable, not an inferred fresh allocation', (t) => {
   const f = fixture(t); const port = f.open(); port.close();
-  if (!f.db.prepare('PRAGMA table_info(_raft_rs_replica_lifecycle)').all().some((c) => c.name === 'native_history_state')) {
-    f.db.exec('ALTER TABLE _raft_rs_replica_lifecycle ADD COLUMN native_history_state TEXT');
-  }
   f.db.prepare('UPDATE _raft_rs_replica_lifecycle SET native_history_state = \'corrupt-state\'').run();
   const before = f.entries.length;
   const status = f.open().readStatus();
