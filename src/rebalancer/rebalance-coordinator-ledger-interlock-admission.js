@@ -189,6 +189,10 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
     }
     const isDisruptiveSelfMove =
       selfMoveEngagement === OPERATION_LEDGER_HOLD_ENGAGEMENT_OUTCOME.IDLE_ONLY;
+    // The entity a deferral names: every caller passes the move's canonical
+    // identity (normalizeRebalancerEntityIdentity).
+    const deferredScope = {partitionId: partitionId || null,
+      entityType: context.entityType, entityId: context.entityId};
 
     // The owner's list: DEFERRED carries none, so nothing below admits on
     // it (each branch holds on `observation.deferredOutcome`).
@@ -238,11 +242,7 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
           throw this.createDeferredOperationVisibilityError(
             normalizedMoveType,
             observation,
-            {
-              partitionId: partitionId || null,
-              entityType: context?.entityType || SERVICE_TYPE.PARTITION,
-              entityId: context?.entityId || partitionId || null,
-            },
+            deferredScope,
           );
         }
         return;
@@ -268,11 +268,7 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
         throw this.createDeferredOperationVisibilityError(
           normalizedMoveType,
           observation,
-          {
-            partitionId: partitionId || null,
-            entityType: context?.entityType || SERVICE_TYPE.PARTITION,
-            entityId: context?.entityId || partitionId || null,
-          },
+          deferredScope,
         );
       }
       return;
@@ -286,11 +282,7 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
       throw this.createDeferredOperationVisibilityError(
         normalizedMoveType,
         observation,
-        {
-          partitionId: partitionId || null,
-          entityType: context?.entityType || SERVICE_TYPE.PARTITION,
-          entityId: context?.entityId || partitionId || null,
-        },
+        deferredScope,
       );
     }
     const liveLedgerSelfMove = await this.resolveEngagedLedgerSelfMove(
