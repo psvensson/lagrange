@@ -21,6 +21,81 @@ const SAMPLE = Object.freeze({
   label: 'canonical sample',
 });
 
+const NON_DATA_ARRAYS = [
+  {name: 'own index accessor', create(calls) {
+    const value = [];
+    Object.defineProperty(value, 0, {enumerable: true, get() {calls.count += 1; return 1;}});
+    return value;
+  }},
+  {name: 'own iterator getter', create(calls) {
+    const value = [1];
+    Object.defineProperty(value, Symbol.iterator, {get() {calls.count += 1; return null;}});
+    return value;
+  }},
+  {name: 'own serialization hook', create(calls) {
+    const value = [1];
+    value.toJSON = () => {calls.count += 1; return [];};
+    return value;
+  }},
+  {name: 'extra own data field', create() {const value = [1]; value.extra = true; return value;}},
+  {name: 'proxy', create(calls) {
+    return new Proxy([1], {get(target, key, receiver) {
+      calls.count += 1;
+      return Reflect.get(target, key, receiver);
+    }});
+  }},
+];
+
+for (const carrier of NON_DATA_ARRAYS) {
+  tap.test(`canonical serialization refuses a nested array with ${carrier.name}`, (t) => {
+    const calls = {count: 0};
+    const nested = {rows: [{detail: carrier.create(calls)}]};
+    let failure;
+    try {serializeJsonData(nested);} catch (error) {failure = error;}
+    t.equal(calls.count, 0, 'canonical serialization never invokes data-carrier callbacks');
+    t.type(failure, TypeError);
+    t.equal(failure?.message, 'canonical JSON data required');
+    t.end();
+  });
+}
+
+tap.test('canonical serialization refuses a nested hole before an inherited index getter', (t) => {
+  const detail = [1];
+  detail.length = 2;
+  let invoked = 0;
+  let failure;
+  withHostileIntrinsics([
+    polluteWithAccessor(Array.prototype, 1, {get() {invoked += 1; return 2;}}),
+  ], () => {
+    try {serializeJsonData({detail});} catch (error) {failure = error;}
+  });
+  t.equal(invoked, 0);
+  t.type(failure, TypeError);
+  t.equal(failure?.message, 'canonical JSON data required');
+  t.end();
+});
+
+for (const kind of ['record', 'array']) {
+  tap.test(`canonical serialization refuses a cyclic ${kind} as non-data`, (t) => {
+    const value = kind === 'record' ? {} : [];
+    if (kind === 'record') value.self = value;
+    else value[0] = value;
+    let failure;
+    try {serializeJsonData({nested: value});} catch (error) {failure = error;}
+    t.type(failure, TypeError);
+    t.equal(failure?.message, 'canonical JSON data required');
+    t.end();
+  });
+}
+
+tap.test('canonical serialization retains dense nested data and repeated shared subtrees', (t) => {
+  const shared = {values: [1, null, true, 'data']};
+  const nullPrototype = Object.assign(Object.create(null), {left: shared, right: shared});
+  t.equal(serializeJsonData(nullPrototype),
+    '{"left":{"values":[1,null,true,"data"]},"right":{"values":[1,null,true,"data"]}}');
+  t.end();
+});
+
 tap.test('the diagnostics surface re-exports the shared owner', (t) => {
   for (const [name, exported] of Object.entries(sharedSurface)) {
     t.equal(diagnosticsSurface[name], exported,

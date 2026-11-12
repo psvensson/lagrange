@@ -29,7 +29,7 @@ function fixture({leader = true} = {}) {
   let answer = {success: true, rows: [ROW], rowSetComplete: true};
   const partitions = createLocalSystemTablePartitionServices(TABLE, {
     isLeader: leader,
-    async executeQuery() {calls.local += 1; return answer;},
+    async executeLocalQuery() {calls.local += 1; return answer;},
   });
   const service = new CDCIntegrationService({nodeId: NODE_ID,
     partitionServicesProvider: () => partitions,
