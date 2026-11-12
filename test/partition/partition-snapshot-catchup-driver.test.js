@@ -34,6 +34,8 @@ import {
   buildSnapshotCatchupDecision,
 } from '../../src/raft/snapshot-catchup-constants.js';
 import {resolveReplicaCheckpointsRoot} from '../../src/raft/snapshot-install.js';
+import {RAFT_SNAPSHOT_TRANSFER_ABORT_REASON as ABORT_REASON} from
+  '../../src/raft/snapshot-transfer-constants.js';
 import {leaderStatusOf} from '../test-helpers/raft-leader-status-fixture.js';
 
 const PARTITION_ID = 'drv_rows-p1';
@@ -296,6 +298,57 @@ test('the record closes when the leader\'s progress for the follower is ' +
   assert.ok(inFlight.world.calls[0].dispatch, 'the seam is given an abort signal');
   assert.equal(inFlight.world.calls[0].dispatch.signal.aborted, true);
 });
+
+// Quest partition-checkpoint-epoch-generation: the receiver's refusals of an
+// offer during an install episode. On the wire a removal in progress and a
+// lifecycle that does not admit are both receiver_not_admitted. None of them
+// is a failed transfer toward a give-up (the driver has none), none makes the
+// leader seal again (the offered generation stays servable; a re-ask is
+// triggered only by the bound, a NEWER generation or a changed identity), and
+// each is a hold with a clearing event read from the leader's own status.
+for (const reason of [ABORT_REASON.REPLICA_INSTALLING,
+  ABORT_REASON.RECEIVER_AMBIGUOUS, ABORT_REASON.RECEIVER_NOT_ADMITTED]) {
+  test(`an offer refused ${reason} is re-asked on the bound only, for as ` +
+    'long as the follower stays behind, and the record closes from the ' +
+    'leader\'s progress or the configuration', async () => {
+    const refused = Object.freeze({outcome: DISPATCH.TRANSFER_ABORTED,
+      transfer: Object.freeze({outcome: 'aborted', reason})});
+    const world = serviceDouble(() => refused);
+    world.sealGeneration(BOUNDARY);
+    await world.driver.dispatch(DECISION);
+    assert.deepEqual(dispatchLines(world).map(({fields}) =>
+      [fields.outcome, fields.reason]), [[DISPATCH.TRANSFER_ABORTED, reason]],
+    'the refusal is one typed line');
+    const ROUNDS = 12;
+    for (let round = 1; round <= ROUNDS; round += 1) {
+      assert.deepEqual(await sweepAfter(world, REASK_BOUND_MS - 1), [],
+        'not re-asked before the bound: the same generation, the same identity');
+      assert.deepEqual(await sweepAfter(world, REASK_BOUND_MS),
+        [TRIGGER.BOUND_ELAPSED]);
+      assert.deepEqual({attempts: world.follower().attempts,
+        reason: world.follower().lastReason,
+        outcome: world.follower().lastOutcome, inFlight: world.follower().inFlight},
+      {attempts: round + 1, reason, outcome: DISPATCH.TRANSFER_ABORTED,
+        inFlight: false}, 'refused again: the record stays, no give-up');
+    }
+    assert.deepEqual(world.calls.map(({decision}) => decision.leaderBoundary),
+      Array(ROUNDS + 1).fill(BOUNDARY), 'every re-ask is the same decision');
+    // The clearing events. The episode ends and the replica catches up ...
+    world.status = statusOf([{...THE_FOLLOWER, matched: BOUNDARY}]);
+    await world.driver.sweep(world.follower().settledAtMs + 1000);
+    assert.deepEqual(world.closings(), [CLOSE.PAST_BOUNDARY]);
+    // ... or the removal that refused the offer completes: the committed
+    // configuration no longer names the follower.
+    const removed = serviceDouble(() => refused);
+    await removed.driver.dispatch(DECISION);
+    removed.status = statusOf([ANOTHER_VOTER]);
+    await removed.driver.sweep(removed.follower().settledAtMs + 1000);
+    assert.deepEqual({closings: removed.closings(),
+      open: removed.driver.readDiagnostics().followers.length,
+      asked: removed.calls.length},
+    {closings: [CLOSE.NOT_IN_CONFIGURATION], open: 0, asked: 1});
+  });
+}
 
 test('a sweep with no record reads nothing; an unreadable status keeps the record', async () => {
   const idle = serviceDouble(() => SERVED);

@@ -547,6 +547,43 @@ function gateAdmissions(world) {
   return gates;
 }
 
+// One call of `target[method]` is held at a gate: the first one made while
+// `when()` holds. Earlier and later calls pass straight through. Answers
+// {reached, open()}; the held call runs the real method once the gate opens.
+function holdCall(target, method, when) {
+  const real = target[method];
+  const gate = Promise.withResolvers();
+  const reached = Promise.withResolvers();
+  let armed = true;
+  target[method] = async function heldCall(...args) {
+    if (armed && when()) {
+      armed = false;
+      reached.resolve();
+      await gate.promise;
+    }
+    return real.apply(this, args);
+  };
+  return {open: gate.resolve, reached: reached.promise};
+}
+
+// One authoritative read of a replica's lifecycle row is held at the control
+// plane (in production a round trip of unbounded duration): the first one
+// made while `when()` holds. Every other read passes.
+function holdLifecycleRead(world, replicaId, when) {
+  const gate = Promise.withResolvers();
+  const reached = Promise.withResolvers();
+  let armed = true;
+  world.store.setBeforeAuthoritativeRead(async (tableName, params) => {
+    if (armed && tableName === TABLES.SERVICES && params.includes(replicaId) &&
+        when()) {
+      armed = false;
+      reached.resolve();
+      await gate.promise;
+    }
+  });
+  return {open: gate.resolve, reached: reached.promise};
+}
+
 // Cut a replica off: its unified address takes every message and answers
 // nothing; reconnect() points the address at the replica's CURRENT service.
 function cutOff(world, service) {
@@ -624,6 +661,8 @@ export {
   enterRowState,
   faultNextOpen,
   gateAdmissions,
+  holdCall,
+  holdLifecycleRead,
   holdNextOpen,
   reaskAfter,
   recreationOf,

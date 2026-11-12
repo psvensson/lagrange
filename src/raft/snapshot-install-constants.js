@@ -85,8 +85,11 @@ const RAFT_SNAPSHOT_INSTALL_DETAIL = Object.freeze({
   GENERATION_MISMATCH: 'generation_mismatch',
   STAGED_CREATE_GENERATION_MISMATCH: 'staged_create_generation_mismatch',
   LEGACY_STAGING_NONCE_MISMATCH: 'legacy_staging_nonce_mismatch',
-  // A REJECTED marker met at open: consumed (marker and staging removed).
+  // A REJECTED marker met at open: a follower catch-up or unclassified one
+  // is consumed (marker and staging removed); a fresh-create one is retained
+  // for its create generation's cleanup.
   PRIOR_REJECTION_CONSUMED: 'prior_rejection_consumed',
+  PRIOR_REJECTION_RETAINED: 'prior_rejection_retained',
 });
 const RAFT_SNAPSHOT_INSTALL_ARTIFACT_OUTCOME = Object.freeze({
   DELETED: 'deleted',
