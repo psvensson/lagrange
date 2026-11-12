@@ -173,12 +173,6 @@ function createMockCDCService(cache, options = {}) {
       return {success: true, operation: 'INSERT', tableName, data};
     },
     async updateSystemTableRow(tableName, whereClause, data) {
-      const current = cache?.get?.(tableName, whereClause.service_id);
-      if (data.status === 'cleanup_owned' &&
-          Number.isFinite(current?.updated_at) &&
-          current.updated_at >= data.updated_at) {
-        data = {...data, updated_at: current.updated_at + 1};
-      }
       const merged = {...whereClause, ...data};
       operations.push({type: 'update', tableName, whereClause, data: merged});
       cache?.applySystemTableChange(tableName, 'UPDATE', merged);

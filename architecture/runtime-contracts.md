@@ -153,6 +153,23 @@ Required patterns:
 8. Physical partition storage cleanup requires a current durable cleanup owner
    on the same `services.service_id` primary key. A live row and a cleanup owner
    cannot coexist, and ordinary creation is INSERT-only at that key.
+   Snapshot episode settlement establishes quiescence, not physical closure.
+   Cleanup must consume the host's exact captured runtime and every matching
+   retained release before unlink. Failed shutdown retains the object and cause
+   and returns typed retry debt. Before submitting a takeover, release or
+   completion mutation, the cleanup owner retains that exact intent and phase
+   (original lifecycle generation, cleanup token, incarnation and captured
+   runtime). A lost observation resumes the issued effect through the same
+   serialized completion lane; only its release phase can confirm absence,
+   and only its completion phase can confirm the exact planned receipt.
+   Reads and mutations consume the same full cleanup predicate. Ordinary
+   user REMOVE failures retain the existing operation retry owner. STOPPING
+   reconciliation asks the executor to settle local debt even when SERVICES
+   is absent; request ingress consumes the owner's typed continuation before
+   receipt shortcuts. It cannot adopt another claimant's token or a successor
+   runtime. Process-loss cleanup retains the existing frozen-token
+   startup sweep. Recreation drains unpublished products before its lifecycle
+   admission read and next factory open; the existing episode wake owns retry.
 
 Forbidden patterns:
 

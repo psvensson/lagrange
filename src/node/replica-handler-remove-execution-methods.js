@@ -1,3 +1,7 @@
+import {REPLICA_REMOVE_EXECUTION_REASON, takeoverRemovingRowForCleanupOrThrow,
+  completeCleanupTombstoneOrThrow, runRemovalEffectsOrThrow,
+  resumeRemovalCleanup} from './replica-removal-cleanup.js';
+import {REPLICA_CLEANUP_CONTINUATION} from './replica-cleanup-constants.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {WORKFLOW_STEP} from '../constants/index.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
@@ -6,8 +10,6 @@ import {
 } from '../control-plane/control-plane-error-classification.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {EXECUTOR_OUTCOME_TYPE} from '../rebalancer/executor-outcome-constants.js';
-import {isFailedCreateRemoveToken} from
-  '../rebalancer/failed-create-cleanup-token.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {raftRsLifecycleAdministration} from
   '../raft/raft-rs-lifecycle-administration.js';
@@ -32,9 +34,6 @@ import {GROUP_RETIREMENT_REASON} from
   '../partition/group-retirement-evidence.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
-const REPLICA_REMOVE_EXECUTION_REASON = Object.freeze({
-  DURABLE_REMOVE_CLEANUP_COMPLETE: 'durable_remove_cleanup_complete',
-});
 const REMOVAL_CONSENSUS_EXIT_WAIT = Object.freeze({
   wait: 'REPLICA_HANDLER_DEFAULT.REMOVAL_CONSENSUS_EXIT_BACKSTOP_MS',
   awaited: 'retiring replica\'s applied configuration no longer names it ' +
@@ -142,87 +141,6 @@ async function settleCanonicalLeaderClearOrThrow(
   );
 }
 
-async function takeoverRemovingRowForCleanupOrThrow(
-  handler,
-  replicaId,
-  authority,
-  guard,
-  reason,
-) {
-  if (!await guard.requireRemoving() || !guard.isCurrent()) {
-    throw removalRowDeleteDeferred(replicaId);
-  }
-  const admissionClosed = await handler.getReplicaCreateAdmissionOwner()
-    .closeForLifecycle(authority.replicaState);
-  if (admissionClosed !== true || !guard.isCurrent() ||
-      guard.beginExactDelete() !== true) {
-    throw removalRowDeleteDeferred(replicaId);
-  }
-  const cleanupAuthority = await handler.getReplicaCleanupTombstoneOwner()
-    .takeoverRemoving(authority, reason);
-  if (!cleanupAuthority || !guard.isCurrent()) {
-    throw removalRowDeleteDeferred(replicaId);
-  }
-  return cleanupAuthority;
-}
-
-async function completeCleanupTombstoneOrThrow(
-  handler,
-  replicaId,
-  partitionId,
-  service,
-  cleanupAuthority,
-  guard,
-) {
-  const owner = handler.getReplicaCleanupTombstoneOwner();
-  if (!await owner.requireCurrent(cleanupAuthority) || !guard.isCurrent()) {
-    throw removalRowDeleteDeferred(replicaId);
-  }
-  await handler.cleanupRemovedReplicaLocalRuntime(
-    replicaId,
-    partitionId,
-    service,
-    cleanupAuthority,
-  );
-  if (isFailedCreateRemoveToken(cleanupAuthority.ownerToken)) {
-    const completionReceipt = await owner.markComplete(
-      cleanupAuthority,
-      {artifactsAbsent: true},
-    );
-    if (!completionReceipt ||
-        !await guard.confirmCleanupComplete(completionReceipt)) {
-      throw removalRowDeleteDeferred(replicaId);
-    }
-    return true;
-  }
-  if (!await owner.requireCurrent(cleanupAuthority) ||
-      !await owner.release(cleanupAuthority, {artifactsAbsent: true}) ||
-      !await guard.confirmDeleted()) {
-    throw removalRowDeleteDeferred(replicaId);
-  }
-  return true;
-}
-
-async function runRemovalEffectsOrThrow(
-  handler,
-  replicaId,
-  authority,
-  action,
-  onComplete,
-  context,
-) {
-  const applied = await handler.replicaStateMachine
-    .completeDurableRemovalWithAuthority(
-      replicaId,
-      authority,
-      action,
-      onComplete,
-      context,
-    );
-  if (applied !== true) throw removalRowDeleteDeferred(replicaId);
-  return true;
-}
-
 /**
  * When the retiring replica leaves consensus. A replica of a group retired
  * as a unit (a verified group-retirement REMOVE, owner decision 2026-10-04)
@@ -255,6 +173,15 @@ function leaveConsensus(handler, request, service) {
 
 async function performReplicaRemoval(handler, request, lifecycle, execution) {
   const {operationId, partitionId, replicaId} = request;
+  const continuation = handler.getReplicaCleanupTombstoneOwner()
+    .readRemovalContinuation(replicaId, partitionId, handler.nodeId);
+  if (continuation.kind === REPLICA_CLEANUP_CONTINUATION.RETAINED) {
+    execution.service = continuation.service;
+    execution.retiringRowDurable = true;
+    await resumeRemovalCleanup(handler, replicaId, partitionId, continuation);
+    execution.serviceRowRemoved = true;
+    return true;
+  }
   // A group retired as a unit records its retirement as such - on the
   // REMOVING row (the row-driven reconcile proposes no conf change for it)
   // and on the durable lifecycle row.
@@ -321,6 +248,7 @@ async function performReplicaRemoval(handler, request, lifecycle, execution) {
         authority,
         guard,
         reason,
+        service,
       );
       try {
         await completeCleanupTombstoneOrThrow(
@@ -341,9 +269,10 @@ async function performReplicaRemoval(handler, request, lifecycle, execution) {
         );
         throw error;
       }
-      return execution.serviceRowRemoved && guard.requireAbsent();
+      return execution.serviceRowRemoved && guard.requireComplete();
     },
     () => {
+      if (handler.getTrackedService(replicaId) !== service) return;
       if (!execution.cleanupError) handler.localServices.delete(replicaId);
       handler.setLocalReplica(replicaId, {
         replicaId,
@@ -359,6 +288,11 @@ async function performReplicaRemoval(handler, request, lifecycle, execution) {
       serviceId: replicaId,
     },
   );
+  const completed = handler.getReplicaCleanupTombstoneOwner()
+    .readRemovalContinuation(replicaId, partitionId, handler.nodeId);
+  if (completed.kind === REPLICA_CLEANUP_CONTINUATION.RETAINED) {
+    handler.getReplicaCleanupTombstoneOwner().finishRemovalContinuation(completed.cleanupAuthority);
+  }
   return true;
 }
 
@@ -401,7 +335,8 @@ async function handleReplicaRemovalFailure(handler, request, execution,
     WORKFLOW_STEP.FAILED,
     buildFailedRemovalOutcome(replicaId, error),
   );
-  if (!execution.serviceRowRemoved) {
+  if (!execution.serviceRowRemoved &&
+      handler.getTrackedService(replicaId) === execution.service) {
     if (!execution.retiringRowDurable) {
       try {
         await handler.persistReplicaStatusWithRetry(
@@ -674,6 +609,11 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
      * @private
      */
     async reconcileRemovedReplicaCleanup(replicaId, partitionId) {
+      const continuation = this.getReplicaCleanupTombstoneOwner()
+        .readRemovalContinuation(replicaId, partitionId, this.nodeId);
+      if (continuation.kind === REPLICA_CLEANUP_CONTINUATION.RETAINED) {
+        return resumeRemovalCleanup(this, replicaId, partitionId, continuation);
+      }
       const lifecycleSnapshot =
         this.buildReplicaRemovalLifecycleSnapshot(replicaId);
       const trackedStatus = lifecycleSnapshot.trackedStatus;
@@ -695,6 +635,8 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
       // Durable REMOVING: the removal's claim on an install episode.
       const trackedService =
         await this.snapshotInstallOwner.claimForRemoval(replicaId);
+      await this.awaitReplicaRemovalConsensusExit(trackedService, {replicaId, partitionId});
+      this.throwIfShuttingDown();
       const removingAuthority = await settleCanonicalLeaderClearOrThrow(
         this,
         replicaId,
@@ -711,6 +653,7 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
             removingAuthority,
             guard,
             REPLICA_REMOVE_EXECUTION_REASON.DURABLE_REMOVE_CLEANUP_COMPLETE,
+            trackedService,
           );
           await completeCleanupTombstoneOrThrow(
             this,
@@ -723,6 +666,7 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
           return true;
         },
         () => {
+          if (this.getTrackedService(replicaId) !== trackedService) return;
           this.localServices.delete(replicaId);
           this.setLocalReplica(replicaId, {
             replicaId,
@@ -739,6 +683,12 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
           serviceId: replicaId,
         },
       );
+      const completed = this.getReplicaCleanupTombstoneOwner()
+        .readRemovalContinuation(replicaId, partitionId, this.nodeId);
+      if (completed.kind === REPLICA_CLEANUP_CONTINUATION.RETAINED) {
+        this.getReplicaCleanupTombstoneOwner()
+          .finishRemovalContinuation(completed.cleanupAuthority);
+      }
       return true;
     }
     /**
