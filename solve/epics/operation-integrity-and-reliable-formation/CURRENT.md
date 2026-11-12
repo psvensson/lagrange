@@ -33,6 +33,9 @@ are preserved; no source writer works in the primary checkout.
   A rehashed copy is in `/tmp/lagrange-takeover-full-lab-eaccbd37a-20261112`;
   its manifest SHA-256 is
   `302a6da9f29ee4353a0d486da104ab213bc92d43b086a46ab81fa08c6fe06b07`.
+  The [verified evidence bundle](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--lagrange-takeover-full-lab-eaccbd37a-20261112.tar.gz)
+  is retained in the evidence store. Reviewed repairs and refreshed metadata
+  were subsequently pushed at `1b51362e0`; that tip has no full-lab result.
   The first inventory measurement rejected changing inputs;
   a subsequent run was interrupted. Neither supersedes the completed result.
 - F: compose `1046d897d` and `3ce07ba54` in an isolated worktree, preserving
@@ -72,11 +75,19 @@ are preserved; no source writer works in the primary checkout.
   failure is retained. Production fallbacks and test bounds are unchanged.
 - Other isolated work: direct example-owner import and SEA host requirement
   are independently approved only as a bounded delta, integrated as
-  `6313ab6a2` from WIP `fddbae1be`. A stronger clock-fixture repair passed its
-  owning suite and mutation controls and awaits independent review;
-  its lower-model syntax failure remains retained. Closed native-role decoding has a
-  red-first malformed-role witness. CDC timing/occurrence failures remain
-  under diagnosis; package/solve budgets and census closure remain open.
+  `6313ab6a2` from WIP `fddbae1be`. The stronger clock-fixture repair passed its
+  owning suite, mutation controls and independent review, and is integrated
+  locally as `da7485545`; its lower-model syntax failure remains retained.
+  Native-role decoding passed focused tests but independent review rejected
+  caller closure: transfer can bypass it, message-group reads can substitute
+  a ledger term, and partition writes can lose its refusal classification.
+  Stronger-model repair owns those paths. CDC timing/occurrence failures
+  remain under diagnosis; package/solve budgets and census closure remain open.
+- Statement cache: an independently reviewed connection-lifetime design is
+  being implemented in a separate `sqlite-connection-statement-ownership`
+  Quest. Its first phase touches only the storage owner and dedicated tests.
+  Constructor and caller migration waits for F to freeze and must preserve
+  its freshness policy, exact resource custody and existing cache performance.
 
 Repository implementation now defaults to `gpt-6.1-sol`; difficult ownership
 repair uses `gpt-6-astra`. A failed implementation verification transfers to a
