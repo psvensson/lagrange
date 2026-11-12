@@ -42,8 +42,7 @@ const INVALID_SINGLETONS = [
   ['array', []],
 ];
 
-test('malformed singleton carriers stay unavailable and a later owner read remains useful',
-async (t) => {
+test('malformed singleton carriers stay unavailable and a later owner read remains useful', async (t) => {
   const calls = [];
   const alternateReads = {cache: 0, sql: 0};
   const readCache = () => {
@@ -77,7 +76,7 @@ async (t) => {
     rows = [value];
     const observation = await observeAuthoritativeReplicaLifecycle(
       reader, SERVICE_ROW.service_id);
-    t.deepEqual(observation, {available: false, row: null},
+    t.strictSame(observation, {available: false, row: null},
       `${label} singleton cannot supply an observation or prove absence`);
   }
 
@@ -87,17 +86,17 @@ async (t) => {
   rows = [];
   const absent = await observeAuthoritativeReplicaLifecycle(reader, SERVICE_ROW.service_id);
 
-  t.deepEqual(legitimate, {available: true, row: SERVICE_ROW},
+  t.strictSame(legitimate, {available: true, row: SERVICE_ROW},
     'the same owner can provide a useful legitimate row after malformed results');
-  t.deepEqual(absent, {available: true, row: null},
+  t.strictSame(absent, {available: true, row: null},
     'a completed empty row array still proves absence');
-  t.deepEqual(calls, Array.from({length: INVALID_SINGLETONS.length + 2}, () => ({
+  t.strictSame(calls, Array.from({length: INVALID_SINGLETONS.length + 2}, () => ({
     tableName: TABLES.SERVICES,
     params: [SERVICE_ROW.service_id],
     mode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
     leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
   })), 'every observation uses its own canonical owner read for the same subject');
-  t.deepEqual(alternateReads, {cache: 0, sql: 0},
+  t.strictSame(alternateReads, {cache: 0, sql: 0},
     'invalid results never select another read authority');
   t.equal(gateway.activeOwnerWorkCount(), 0, 'all gateway read work has completed');
 });

@@ -73,7 +73,7 @@ function createObservationOwner(read) {
 }
 
 function assertOwnerCalls(t, owner, expected) {
-  t.deepEqual(owner.calls.map((call) => ({
+  t.strictSame(owner.calls.map((call) => ({
     tableName: call.tableName,
     params: call.params,
     mode: call.options.readAuthority.authoritativeReadMode,
@@ -84,14 +84,13 @@ function assertOwnerCalls(t, owner, expected) {
     mode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
     leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
   })), 'only the declared canonical owner reads execute');
-  t.deepEqual(owner.alternateReads, {cache: 0, sql: 0},
+  t.strictSame(owner.alternateReads, {cache: 0, sql: 0},
     'no cache or SQL alternative supplies an observation');
   t.equal(owner.gateway.activeOwnerWorkCount(), 0,
     'all accepted gateway reads have completed');
 }
 
-test('coalesced lifecycle observations retain their captured facts across a later read',
-async (t) => {
+test('coalesced lifecycle observations retain their captured facts across a later read', async (t) => {
   const serviceRow = {...ORIGINAL_SERVICE};
   const partitionRow = {...ORIGINAL_PARTITION};
   const serviceEntered = Promise.withResolvers();
@@ -133,19 +132,18 @@ async (t) => {
   t.equal(peer.available, true, 'the coalesced observation is available');
   t.not(first.row, serviceRow, 'the first observation owns a distinct row');
   t.not(peer.row, first.row, 'coalesced observers own independent rows');
-  t.deepEqual(first.row, ORIGINAL_SERVICE,
+  t.strictSame(first.row, ORIGINAL_SERVICE,
     'the first source identity and generation survive the later await');
-  t.deepEqual(peer.row, ORIGINAL_SERVICE,
+  t.strictSame(peer.row, ORIGINAL_SERVICE,
     'the coalesced observation retains the same original scalar facts');
-  t.deepEqual(partition, ORIGINAL_PARTITION, 'the later owner read remains useful');
+  t.strictSame(partition, ORIGINAL_PARTITION, 'the later owner read remains useful');
   assertOwnerCalls(t, owner, [
     [TABLES.SERVICES, ORIGINAL_SERVICE.service_id],
     [TABLES.PARTITIONS, ORIGINAL_PARTITION.partition_id],
   ]);
 });
 
-test('consumer writes cannot alter a captured lifecycle observation or its owner',
-async (t) => {
+test('consumer writes cannot alter a captured lifecycle observation or its owner', async (t) => {
   const row = {...ORIGINAL_SERVICE};
   const owner = createObservationOwner(async () => ({success: true, rows: [row]}));
   const observation = await observeAuthoritativeReplicaLifecycle(
@@ -159,14 +157,13 @@ async (t) => {
   t.equal(statusWrite, false, 'ordinary property writes are refused');
   t.equal(addressWrite, false, 'property replacement is refused');
   t.equal(attemptDelete, false, 'source identity deletion is refused');
-  t.deepEqual(observation.row, ORIGINAL_SERVICE, 'captured facts remain useful');
-  t.deepEqual(row, ORIGINAL_SERVICE, 'consumer writes cannot mutate the shared owner row');
+  t.strictSame(observation.row, ORIGINAL_SERVICE, 'captured facts remain useful');
+  t.strictSame(row, ORIGINAL_SERVICE, 'consumer writes cannot mutate the shared owner row');
   t.equal(Object.isFrozen(row), false, 'the read owner retains its original mutable row');
   assertOwnerCalls(t, owner, [[TABLES.SERVICES, ORIGINAL_SERVICE.service_id]]);
 });
 
-test('later accessor replacement on a borrowed row cannot redirect a lifecycle read',
-async (t) => {
+test('later accessor replacement on a borrowed row cannot redirect a lifecycle read', async (t) => {
   const row = {...ORIGINAL_SERVICE};
   const owner = createObservationOwner(async () => ({success: true, rows: [row]}));
   const captured = await readAuthoritativeReplicaLifecycle(
@@ -192,8 +189,7 @@ async (t) => {
   assertOwnerCalls(t, owner, [[TABLES.SERVICES, ORIGINAL_SERVICE.service_id]]);
 });
 
-test('partition observations keep original facts while a fresh read sees owner changes',
-async (t) => {
+test('partition observations keep original facts while a fresh read sees owner changes', async (t) => {
   const row = {...ORIGINAL_PARTITION};
   const owner = createObservationOwner(async () => ({success: true, rows: [row]}));
   const original = await readAuthoritativePartitionLeader(
@@ -205,8 +201,8 @@ async (t) => {
   const consumerWrite = Reflect.set(fresh, 'leader_node_id', 'consumer-leader');
 
   t.not(original, row, 'the original partition observation owns its row');
-  t.deepEqual(original, ORIGINAL_PARTITION, 'later facts cannot rewrite the first observation');
-  t.deepEqual(fresh, {...ORIGINAL_PARTITION, leader_node_id: 'later-leader', updated_at: 223},
+  t.strictSame(original, ORIGINAL_PARTITION, 'later facts cannot rewrite the first observation');
+  t.strictSame(fresh, {...ORIGINAL_PARTITION, leader_node_id: 'later-leader', updated_at: 223},
     'a new completed owner read captures new facts');
   t.equal(consumerWrite, false, 'the new partition observation is also immutable');
   t.equal(row.leader_node_id, 'later-leader', 'consumer writes do not retarget owner facts');
@@ -216,8 +212,7 @@ async (t) => {
   ]);
 });
 
-test('lifecycle observations preserve absent, unavailable and ambiguous read outcomes',
-async (t) => {
+test('lifecycle observations preserve absent, unavailable and ambiguous read outcomes', async (t) => {
   const results = [
     {success: true, rows: []},
     {success: false, rows: [{...ORIGINAL_SERVICE}], error: 'owner-unavailable'},
@@ -231,9 +226,9 @@ async (t) => {
   const ambiguous = await observeAuthoritativeReplicaLifecycle(
     owner.reader, ORIGINAL_SERVICE.service_id);
 
-  t.deepEqual(absent, {available: true, row: null}, 'authoritative absence stays available');
-  t.deepEqual(unavailable, {available: false, row: null}, 'owner failure stays unavailable');
-  t.deepEqual(ambiguous, {available: false, row: null}, 'multiple rows remain unavailable');
+  t.strictSame(absent, {available: true, row: null}, 'authoritative absence stays available');
+  t.strictSame(unavailable, {available: false, row: null}, 'owner failure stays unavailable');
+  t.strictSame(ambiguous, {available: false, row: null}, 'multiple rows remain unavailable');
   assertOwnerCalls(t, owner, [
     [TABLES.SERVICES, ORIGINAL_SERVICE.service_id],
     [TABLES.SERVICES, ORIGINAL_SERVICE.service_id],
