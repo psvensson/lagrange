@@ -8,6 +8,7 @@ import {readTransactionSchemaEnforcement, TRANSACTION_SCHEMA_ENFORCEMENT_STATE} 
 import {PARTICIPANT_TRANSACTION_DECISION as DECISION} from
   '../../partition/partition-participant-transaction-constants.js';
 import {TRANSACTION_STATUS} from './distributed-transaction-coordinator-constants.js';
+import {preparedStatementOf} from '../../storage/sqlite-prepared-statement-owner.js';
 
 const TRANSACTION_RELEASE_SEMANTIC_VERSION = 'tx1-query-set-v1';
 // The one terminal status a released transaction reaches for its decision.
@@ -21,7 +22,6 @@ const TRANSACTION_RELEASE_CENSUS_STATE = Object.freeze({
 });
 const REQUIRED_COLUMNS = Object.freeze(['transaction_id', 'session_id', 'transaction_epoch',
   'participant_set_text', 'participant_set_state', 'decision', 'decision_text', 'decision_digest']);
-const CENSUS_SCHEMA_SQL = 'PRAGMA table_info(sql_transactions)';
 const CENSUS_ROWS_SQL = 'SELECT * FROM sql_transactions ORDER BY transaction_id';
 
 function censusResult(state, rowGenerationDigest = null, legacy = [], recoverable = [],
@@ -40,12 +40,13 @@ function readTransactionReleaseCensus(database) {
       TRANSACTION_SCHEMA_ENFORCEMENT_STATE.REQUIRED].includes(enforcement.state)) {
       return censusResult(TRANSACTION_RELEASE_CENSUS_STATE.UNAVAILABLE, null, [], [], enforcement);
     }
-    const columns = new Set(database.prepare(CENSUS_SCHEMA_SQL).all().map((row) => row.name));
-    const rows = database.prepare(CENSUS_ROWS_SQL).all();
+    // The schema owner's read named every column the table lacks.
+    const missing = new Set(enforcement.missingColumns);
+    const rows = preparedStatementOf(database, CENSUS_ROWS_SQL).all();
     const canonicalRows = rows.map((row) => Object.fromEntries(
       Object.keys(row).sort().map((key) => [key, row[key]])));
     const digest = createHash('sha256').update(JSON.stringify(canonicalRows)).digest('hex');
-    if (!REQUIRED_COLUMNS.every((name) => columns.has(name))) {
+    if (REQUIRED_COLUMNS.some((name) => missing.has(name))) {
       return censusResult(rows.length === 0 ? TRANSACTION_RELEASE_CENSUS_STATE.EMPTY_LEGACY_SCHEMA :
         TRANSACTION_RELEASE_CENSUS_STATE.HELD, digest, rows.map((row) => row.transaction_id),
       [], enforcement);

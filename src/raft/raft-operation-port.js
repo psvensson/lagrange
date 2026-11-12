@@ -19,6 +19,7 @@ const RAFT_OPERATION_PORT_METHODS = Object.freeze([
   'tick',
   'campaign',
   'readStatus',
+  'readRoleAndTerm',
   RAFT_OPERATION.READ_COMMITTED_MEMBERSHIP,
   RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION,
   'configureTick',

@@ -206,6 +206,37 @@ function normalizedConfChange(change, registry) {
   })};
 }
 
+/**
+ * How the runtime resolves a raft peer id through this replica's registry:
+ * one reservation read gives the peer's identity and committed node, and an
+ * address exists only for a reserved identity (the runtime records an
+ * unreserved peer's delivery as that peer's own outcome). The host
+ * addresses the peer from its committed node (null where this replica holds
+ * none), never from a lookup of its own.
+ * @param {RaftRsPeerIdentityRegistry} registry - This replica's registry.
+ * @param {Function} hostAddress - (replicaIdentity, nodeId) => address.
+ * @return {Object} {resolvePeerIdentity, addressOfPeer, resolvePeerAddress,
+ *   resolvePeerNodeId}.
+ */
+function peerResolutionOf(registry, hostAddress) {
+  const resolvePeerIdentity = (raftPeerId) => registry.resolvePeer(raftPeerId);
+  // The address of a peer already resolved (resolvePeerIdentity's answer).
+  const addressOfPeer = (peer, raftPeerId) => {
+    if (peer.status === RAFT_RS_PEER_IDENTITY_RESOLUTION.UNRESERVED) {
+      throw new Error(RAFT_RS_PEER_IDENTITY_ERROR_MSG.unreserved(raftPeerId));
+    }
+    return hostAddress(peer.replicaIdentity, peer.nodeId);
+  };
+  return {
+    resolvePeerIdentity,
+    addressOfPeer,
+    resolvePeerAddress: (raftPeerId) =>
+      addressOfPeer(resolvePeerIdentity(raftPeerId), raftPeerId),
+    resolvePeerNodeId: (replicaIdentity) =>
+      registry.committedNodeIdOf(replicaIdentity),
+  };
+}
+
 function resolveOriginalNativeEntry(request, nativeInputs) {
   if (!Object.hasOwn(
     request, RAFT_OPERATION_PORT_REQUEST.ORIGINAL_ALLOCATION_OPENING,
@@ -338,22 +369,7 @@ function createRaftRsOperationPort(request) {
     timers,
     sendToPeer: required(
       request, RAFT_OPERATION_PORT_REQUEST.SEND_TO_PEER),
-    // An address exists only for a reserved identity; the runtime records
-    // an unreserved peer's delivery as that peer's own outcome. The host
-    // addresses the peer from its committed node (null where this replica
-    // holds none), never from a lookup of its own.
-    resolvePeerAddress: (raftPeerId) => {
-      const identity = registry.resolveReplicaIdentity(raftPeerId);
-      if (identity.status === RAFT_RS_PEER_IDENTITY_RESOLUTION.UNRESERVED) {
-        throw new Error(RAFT_RS_PEER_IDENTITY_ERROR_MSG.unreserved(raftPeerId));
-      }
-      return resolvePeerAddress(identity.replicaIdentity,
-        registry.committedNodeIdOf(identity.replicaIdentity));
-    },
-    resolvePeerIdentity: (raftPeerId) =>
-      registry.resolveReplicaIdentity(raftPeerId),
-    resolvePeerNodeId: (replicaIdentity) =>
-      registry.committedNodeIdOf(replicaIdentity),
+    ...peerResolutionOf(registry, resolvePeerAddress),
     applyCommittedEntry: committedEntryApplication(required(
       request, RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY)),
     applyCommittedMembershipContext: (context, position) => {
@@ -499,6 +515,11 @@ function createRaftRsOperationPort(request) {
     // A status read never waits (the runtime's readStatusNow): its turn
     // settles in this run, and the status is answered as is.
     readStatus: () => execute({type: 'read-status'}).result,
+    // This replica's role and term from the same observation a status read
+    // answers from, without resolving any peer: {outcome: CORE_OK, role,
+    // term}, or the status read's own failure. Settles in this run.
+    readRoleAndTerm: () =>
+      execute({type: RUNTIME_COMMAND.READ_ROLE_AND_TERM}).result,
     // The committed configuration as frozen data ({purpose} is a
     // COMMITTED_MEMBERSHIP_READ_PURPOSE; a bootstrap read by default).
     [RAFT_OPERATION.READ_COMMITTED_MEMBERSHIP]: (readRequest) => {
@@ -588,4 +609,4 @@ function createRaftRsOperationPort(request) {
 // The runtime owner is private to this constructor (the operation-boundary
 // audit), so the binding verdict a dry run reports is passed through here: a
 // digest and load check that returns a state and never dispatches.
-export {createRaftRsOperationPort, verifyRaftRsBinding};
+export {createRaftRsOperationPort, peerResolutionOf, verifyRaftRsBinding};

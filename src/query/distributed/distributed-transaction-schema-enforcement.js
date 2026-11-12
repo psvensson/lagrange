@@ -4,6 +4,7 @@
 import {createHash} from 'node:crypto';
 import {SQL_TRANSACTIONS_SCHEMA} from '../../bootstrap/system-table-workflow-schema-definitions.js';
 import {TABLES} from '../../constants/tables.js';
+import {preparedStatementOf} from '../../storage/sqlite-prepared-statement-owner.js';
 import {resolveLogicalTableName} from
   '../../bootstrap/system-table-schema-shared-constants.js';
 
@@ -62,11 +63,11 @@ function enforcementResult(state, columns = [], trigger = null, missingColumns =
 
 function readTransactionSchemaEnforcement(database) {
   try {
-    const columns = database.prepare(SCHEMA_SQL).all();
+    const columns = preparedStatementOf(database, SCHEMA_SQL).all();
     const byName = new Map(columns.map((column) => [column.name, column]));
     const missing = SQL_TRANSACTIONS_SCHEMA.columns.filter((column) =>
       !byName.has(column.name)).map((column) => column.name);
-    const trigger = database.prepare(TRIGGER_SQL).get('trigger', TRIGGER_NAME,
+    const trigger = preparedStatementOf(database, TRIGGER_SQL).get('trigger', TRIGGER_NAME,
       TABLES.SQL_TRANSACTIONS)?.sql ?? null;
     if (columns.length === 0) return enforcementResult(STATE.UNAVAILABLE);
     const shapeValid = byName.get('transaction_id')?.pk === 1 &&

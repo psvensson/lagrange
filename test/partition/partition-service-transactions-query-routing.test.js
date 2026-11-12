@@ -1198,6 +1198,9 @@ test(
       readStatus: () => deepFreeze({
         ...realPort.readStatus(), term: observedTerm,
       }),
+      readRoleAndTerm: () => deepFreeze({
+        ...realPort.readRoleAndTerm(), term: observedTerm,
+      }),
     });
     const originalDateNow = Date.now;
     let nowMs = 100;

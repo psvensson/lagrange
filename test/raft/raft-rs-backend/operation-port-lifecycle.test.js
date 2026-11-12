@@ -13,7 +13,7 @@ import {turnChainValue} from
 
 const ACTIVE_OPERATIONS = Object.freeze([
   'tick', 'step', 'propose', 'proposeConfChange', 'transferLeadership',
-  'probePeerProgress', 'campaign', 'readStatus', 'configureTick',
+  'probePeerProgress', 'campaign', 'readStatus', 'readRoleAndTerm', 'configureTick',
   'startScheduling',
 ]);
 
@@ -126,6 +126,7 @@ test('durable retirement refuses every active operation before core entry after 
         turnChainValue(port.probePeerProgress('retired-peer')),
         turnChainValue(port.campaign()),
         port.readStatus(),
+        port.readRoleAndTerm(),
         turnChainValue(port.configureTick(10)),
         turnChainValue(port.startScheduling()),
       ];

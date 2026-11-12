@@ -4,11 +4,11 @@ const MESSAGE_GROUP_SERVICE_LEADERSHIP_STATE_RUNTIME_LITERAL = {
   CONSTRUCTOR: 'constructor',
 };
 
-// The core's own status through this replica's port; null without a port or
-// while the port does not answer CORE_OK.
-function readCoreStatus(service) {
-  const status = service.raft?.readStatus();
-  return status?.outcome === RAFT_OPERATION_OUTCOME.CORE_OK ? status : null;
+// The core's own role and term through this replica's port (no peer is
+// resolved); null without a port or while the port does not answer CORE_OK.
+function readCoreRoleAndTerm(service) {
+  const read = service.raft?.readRoleAndTerm();
+  return read?.outcome === RAFT_OPERATION_OUTCOME.CORE_OK ? read : null;
 }
 
 function createMessageGroupServiceLeadershipStateRuntimeMethods(deps = {}) {
@@ -34,7 +34,7 @@ function createMessageGroupServiceLeadershipStateRuntimeMethods(deps = {}) {
      */
     isCurrentRaftLeader() {
       return this.isLeaderReplica() &&
-        readCoreStatus(this)?.role === RaftRole.LEADER;
+        readCoreRoleAndTerm(this)?.role === RaftRole.LEADER;
     }
     cancelLeaderOwnedActivation() {
       this.leaderActivationGate.cancel({clearActivatedTerm: true});
@@ -156,7 +156,7 @@ function createMessageGroupServiceLeadershipStateRuntimeMethods(deps = {}) {
      * @return {number} Current term.
      */
     getCurrentTerm() {
-      const term = readCoreStatus(this)?.term;
+      const term = readCoreRoleAndTerm(this)?.term;
       return Number.isFinite(term) ? term : this.operationLedger.currentTerm;
     }
   }

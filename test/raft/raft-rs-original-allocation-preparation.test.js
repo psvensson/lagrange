@@ -217,10 +217,14 @@ test('inspection refuses a declaration that lacks its lifecycle-owner stamps', (
 test('a cohort born before its declaration fails closed and is never reissued', (t) => {
   const f = fixture(t);
   const failure = new Error('declaration write failed after every birth');
-  const originalExec = Database.prototype.exec;
-  const fault = t.mock.method(Database.prototype, 'exec', function(sql, ...rest) {
-    if (/ALTER TABLE[\s\S]*original_allocation/u.test(sql)) throw failure;
-    return Reflect.apply(originalExec, this, [sql, ...rest]);
+  const originalPrepare = Database.prototype.prepare;
+  // The declaration write's first step: its read of the born founder's
+  // allocation row (every birth has committed, and formatted its file, by then).
+  const fault = t.mock.method(Database.prototype, 'prepare', function(sql, ...rest) {
+    if (/^SELECT state, incarnation, native_history_state, original_allocation/u.test(sql)) {
+      throw failure;
+    }
+    return Reflect.apply(originalPrepare, this, [sql, ...rest]);
   });
   try {
     assert.throws(() => f.preparation.prepare(f.draft), (error) => error === failure);

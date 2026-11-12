@@ -259,7 +259,7 @@ function validParticipantCensusRow(row) {
  * @param {{index: number, term: number}} position - The origin's position.
  */
 function recordPartitionWriteOrigin(db, {index, term}) {
-  if (db.prepare(SQL.RECORD_ORIGIN).run(index, term).changes !== ONE_ROW) {
+  if (preparedStatementOf(db, SQL.RECORD_ORIGIN).run(index, term).changes !== ONE_ROW) {
     throw new Error(STORE_ERROR.ORIGIN_UPDATE_NOT_ONE_ROW);
   }
 }
@@ -270,7 +270,7 @@ function recordPartitionWriteOrigin(db, {index, term}) {
  * @param {Object} db - The partition's connection.
  */
 function advancePartitionWriteGeneration(db) {
-  if (db.prepare(SQL.ADVANCE_GENERATION).run().changes !== ONE_ROW) {
+  if (preparedStatementOf(db, SQL.ADVANCE_GENERATION).run().changes !== ONE_ROW) {
     throw new Error(STORE_ERROR.GENERATION_ROW_MISSING);
   }
 }
@@ -381,7 +381,7 @@ function textOrNull(value) {
  * @param {Object} row - The row, in the command's field names.
  */
 function insertParticipantTransactionRow(db, row) {
-  db.prepare(SQL.INSERT_ROW).run({
+  preparedStatementOf(db, SQL.INSERT_ROW).run({
     transactionId: row.transactionId,
     participantId: row.participantId,
     sessionId: textOrNull(row.sessionId),
@@ -414,7 +414,7 @@ function insertParticipantTransactionRow(db, row) {
  *   refusalCause, refusalDetail}.
  */
 function updateParticipantTransactionDecided(db, decided) {
-  const moved = db.prepare(SQL.UPDATE_DECIDED).run({
+  const moved = preparedStatementOf(db, SQL.UPDATE_DECIDED).run({
     transactionId: decided.transactionId,
     participantId: decided.participantId,
     state: decided.state,
