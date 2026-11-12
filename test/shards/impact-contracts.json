@@ -2215,6 +2215,7 @@
         "src/cache/system-table-cache-observation-methods.js",
         "src/cache/system-table-cache-authoritative-absence-sweep.js",
         "src/cache/system-table-cache-tombstone-store.js",
+        "src/cdc/cdc-integration-service.js",
         "src/cdc/cdc-integration-service-source-relist.js",
         "src/cdc/cdc-integration-service-lifecycle.js",
         "src/cdc/cdc-integration-service-authoritative-catchup.js",
@@ -4780,6 +4781,7 @@
         {
           "id": "source-and-repair-ingress",
           "owners": [
+            "src/cdc/cdc-integration-service.js",
             "src/cdc/cdc-integration-service-source-relist.js",
             "src/cdc/cdc-integration-service-lifecycle.js",
             "src/cdc/cdc-integration-service-authoritative-catchup.js",

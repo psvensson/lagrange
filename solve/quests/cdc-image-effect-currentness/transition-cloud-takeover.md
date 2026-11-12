@@ -608,3 +608,64 @@ execution proof. Existing successful S3-C input now explicitly declares that its
 controlled row set is complete. No semantic assertion is weakened. These controls
 are frozen on the a8d7 production prefix; resource/source corrections remain
 uncommitted and are excluded. No local test, checker or generator was run.
+
+
+## Resource and registration candidate after original 2895
+
+The exact tests-only35b9 job 2895 (request b398db36f7a649b1ab3b04638f1bb379,
+remote c67be901930121ed0713da773989981c543f8122, whole tree
+ff5dfcdc951e6ea5e62cf9f4bf0d794d5faa0b3d) ended FAIL on local-workstation with all
+custody scopes closed. Its original 25,919-byte stream is retained in
+lab-access-20261112/cdc-owner-lifetime-red-read2-worker.log, SHA256
+50d4bde7333aec28649c4481f97efdb8807934df31e91236c6cc1b9d981a08de. It reports one root,
+55 assertions, 43 passing and 12 failing. Cases50/51 first fail with the old cell
+still RUNNING after held target replacement/removal;52 observes the absent release
+capability, so its later stale-release assertions did not run;53 accepts terminal
+registration;54 attempts three delays where one is required;55 escapes from
+shutdown cancellation before its later retained-fault checks. Existing case35 now
+reaches outer-pace cancellation, beyond the earlier2834 pre-cancellation blocker.
+Neither original stream is superseded or rerun.
+
+The unverified candidate implements the approved state transitions through the
+existing owners. A source registration returns its exact idempotent release;
+release detaches only that record. RUNNING custody stays with its original attempt
+until its await unwinds, then a retained replacement-registration wake runs or the
+old GAP becomes NO_RELISTER. A genuine pacing fault remains FAULTED even if
+shutdown detached its owner. The CDC service has one release slot, releases it
+before target replacement/removal and terminal shutdown, and refuses terminal
+registration. Late writable-cache injection calls the same canonical target
+setter. Explicit map-row fixture registrations dispose their own release.
+
+Every complete fetch attempt captures its cache target and original cell/owner
+request, checks that request before/after acquisition and page awaits, and
+releases its physical slot before the existing retry/hint delay. A queued acquire
+owns its exact waiter and shutdown hold; cancellation grants no slot, and grant
+disposes that hold before exposing its owned idempotent release. This preserves
+the existing two-slot bound and permits a third available source to progress while
+two others pace. No new timer, scheduler or recovery registry is introduced.
+
+A failed delay acquisition removes its shutdown hold. A failed cancellation
+rejects with its original error and does not interrupt the remaining release loop;
+the original uncleared timer remains a clock-owned obligation until it actually
+fires. An internal image pace failure crosses the relister boundary in the one
+SourceRelistPacingFault value, privately branded without property interrogation or
+coercion. Source-order records the original attempt and exact pacing cause once
+and publishes FAULTED without another delay. An unrelated escaped attempt still
+uses that same registered owner's existing 500ms shutdown-aware pace. Original
+controls and their assertions are unchanged; one additional positive control
+covers the late writable-target caller closure.
+
+The named interaction scope now includes the constructor's exact release slot.
+The terminal structural test uses the registered relister rather than calling an
+unbound live request; its authority-mode changes are separately root-owned and it
+must be measured on the composed candidate. Resource source is ready for fresh
+independent review and lab measurement. Recipient completeness controls remain
+separate and await their first physical red; their production caller is unchanged
+at this checkpoint. No local tests, static checkers, generators or syntax probes
+were executed, and this is not an acceptance or landing claim.
+
+For the separate completeness correction, Kubernetes' primary API documentation
+keeps a collection's version constant across pages and requires consuming the
+continuation until completion. That is design inspiration for distinguishing a
+complete collection from a successful subset, not proof of this implementation:
+https://kubernetes.io/docs/reference/using-api/api-concepts/#retrieving-large-results-sets-in-chunks

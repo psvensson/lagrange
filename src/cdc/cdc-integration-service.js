@@ -130,6 +130,8 @@ class CDCIntegrationService extends EventEmitter {
     this.isShuttingDown = false;
     // The write-side waits markShuttingDown releases.
     this.shutdownReleases = new Set();
+    // The exact writable-cache relister registration owned by this lifecycle.
+    this.sourceRelisterRelease = null;
   }
 }
 

@@ -131,7 +131,7 @@ import {
   INITIAL_PARTITION_IDS, SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {NODE_STATUS} from '../../src/node/node-constants.js';
-import {relistSourceTable} from '../../src/cdc/cdc-integration-service-source-relist.js';
+import {registerSourceRelister} from '../../src/cdc/cdc-integration-service-source-relist.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
   '../../src/control-plane/control-plane-system-table-gateway-constants.js';
@@ -1424,8 +1424,15 @@ test('routing: every read, reseed, repair apply and submission is gated in ' +
   // The cell owes a list (as a new group member's node marks it).
   service.cacheMutationTarget.sourceOrder.requireListed(nodesPartition,
     SYSTEM_TABLE_NAME.NODES);
-  await settle(relistSourceTable(service, {sourcePartition: nodesPartition,
-    tableName: SYSTEM_TABLE_NAME.NODES}));
+  const listed = new Promise((resolve) => {
+    const release = service.cacheMutationTarget.sourceOrder.onCurrent((sourcePartition) => {
+      if (sourcePartition !== nodesPartition) return;
+      release();
+      resolve();
+    });
+  });
+  registerSourceRelister(service);
+  await settle(listed);
   await yieldTurns(SETTLE_TURNS);
 
   for (const exercised of ['ownerRpcReads', 'overlayReseeds', 'localReads',

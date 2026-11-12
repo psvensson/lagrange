@@ -122,7 +122,25 @@ const SOURCE_ORDER_LOG_MSG = Object.freeze({
 const SOURCE_RELIST_ERROR = Object.freeze({
   OWNER_REQUIRED: 'CDC source relister requires list, isStopped and paceAfterFailure',
   INVALID_OUTCOME: 'CDC source relister returned an invalid or nonterminal stopped outcome',
+  PACING_FAILED: 'CDC source relister could not pace its retained attempt',
 });
+
+// One owned fault value crosses the relister boundary when its own pace
+// already failed. A private brand never interrogates arbitrary thrown values.
+class SourceRelistPacingFault extends Error {
+  #failure;
+
+  constructor(cause, pacingCause) {
+    super(SOURCE_RELIST_ERROR.PACING_FAILED);
+    this.#failure = objectFreeze({cause, pacingCause});
+    objectFreeze(this);
+  }
+
+  static failureOf(value) {
+    return value !== null && typeof value === 'object' && #failure in value ?
+      value.#failure : null;
+  }
+}
 
 // A list at applied index P holds every event of every entry at or below P.
 const LISTED_ORDINAL = Number.MAX_SAFE_INTEGER;
@@ -346,6 +364,7 @@ class SystemTableCacheSourceOrder {
    *   isStopped(), and paceAfterFailure(request, cause). The list installs
    *   its image through recordListedPosition; only actual shutdown is STOPPED.
    * @param {Object} [logger] - Where an owed list without a relister is said.
+   * @return {Function} Idempotent release of this exact registration.
    */
   registerRelister(relister, logger = null) {
     const {list, isStopped, paceAfterFailure} = relister;
@@ -353,12 +372,19 @@ class SystemTableCacheSourceOrder {
         typeof paceAfterFailure !== 'function') throw new Error(SOURCE_RELIST_ERROR.OWNER_REQUIRED);
     // A registration is itself the wake, including re-registration of the
     // same service after its sole clock has recovered. Capture its methods.
-    this.relister = objectFreeze({list: list.bind(relister), isStopped: isStopped.bind(relister),
+    const owner = objectFreeze({list: list.bind(relister), isStopped: isStopped.bind(relister),
       paceAfterFailure: paceAfterFailure.bind(relister)});
+    this.relister = owner;
     this.logger = logger;
     for (const cell of this.cells.values()) {
       if (cell.state === SOURCE_POSITION_STATE.GAP) this.requestRelist(cell);
     }
+    return () => {
+      if (this.relister !== owner) return false;
+      this.relister = null;
+      for (const cell of this.cells.values()) this.requestRelist(cell);
+      return true;
+    };
   }
 
   /**
@@ -530,6 +556,8 @@ class SystemTableCacheSourceOrder {
   requestRelist(cell) {
     if (!this.cellOwesRelist(cell) || cell.relist === SOURCE_RELIST_STATE.RUNNING) return;
     if (this.relister === null) {
+      // Detaching a lifecycle does not settle a failed clock's obligation.
+      if (cell.relist === SOURCE_RELIST_STATE.FAULTED) return;
       const newlyUnbound = cell.relist !== SOURCE_RELIST_STATE.NO_RELISTER;
       cell.relist = SOURCE_RELIST_STATE.NO_RELISTER;
       if (newlyUnbound) this.emitDiagnostic(cell, () => this.logger?.warn?.(
@@ -555,9 +583,13 @@ class SystemTableCacheSourceOrder {
     }
   }
 
-  async paceFailedRelist(cell, owner, request, cause) {
+  recordRelistFailure(cell, cause, pacingCause = null) {
     cell.relistFailures += 1;
-    cell.lastRelistFailure = objectFreeze({cause, pacingCause: null});
+    cell.lastRelistFailure = objectFreeze({cause, pacingCause});
+  }
+
+  async paceFailedRelist(cell, owner, request, cause) {
+    this.recordRelistFailure(cell, cause);
     this.emitDiagnostic(cell, () => this.logger?.warn?.(SOURCE_ORDER_LOG_MSG.RELIST_FAILED,
       {...cellSnapshot(cell), error: cause}));
     if (!this.cellOwesRelist(cell) || this.relister !== owner) return SOURCE_RELIST_OUTCOME.RETRY;
@@ -586,7 +618,8 @@ class SystemTableCacheSourceOrder {
   }
 
   async runRelist(cell, owner) {
-    const request = objectFreeze({sourcePartition: cell.sourcePartition, tableName: cell.tableName});
+    const request = objectFreeze({sourcePartition: cell.sourcePartition, tableName: cell.tableName,
+      isCurrent: () => this.cells.get(cell.sourcePartition) === cell && this.relister === owner});
     let outcome;
     try {
       // Relist work starts after the synchronous gap publication completes.
@@ -601,7 +634,13 @@ class SystemTableCacheSourceOrder {
         }
       }
     } catch (cause) {
-      outcome = await this.paceFailedRelist(cell, owner, request, cause);
+      const failure = SourceRelistPacingFault.failureOf(cause);
+      if (failure !== null) {
+        this.recordRelistFailure(cell, failure.cause, failure.pacingCause);
+        outcome = SOURCE_RELIST_OUTCOME.FAULTED;
+      } else {
+        outcome = await this.paceFailedRelist(cell, owner, request, cause);
+      }
     } finally {
       this.finishRelist(cell, owner, outcome);
     }
@@ -669,5 +708,5 @@ class SystemTableCacheSourceOrder {
 }
 
 export {SOURCE_EFFECT_STATE, SOURCE_IMAGE_ADMISSION, SOURCE_POSITION_STATE, SOURCE_RANGE_DECISION,
-  SOURCE_RELIST_OUTCOME, SystemTableCacheSourceOrder, captureSourceRange,
+  SOURCE_RELIST_OUTCOME, SourceRelistPacingFault, SystemTableCacheSourceOrder, captureSourceRange,
   compareSourcePositions, isSourceMember, isSourceRange, isSourceVector};

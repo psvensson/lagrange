@@ -1252,3 +1252,24 @@ for (const failure of ['acquisition', 'shutdown-cancellation']) {
       assertImagePrefix(f, 12);
     });
 }
+
+
+test('late writable cache injection uses the same owned relister registration', async (t) => {
+  const f = fixture(t);
+  const recovery = heldTargetRelister(t, f);
+  recovery.service.setCacheMutationTarget(null);
+  recovery.service.initialize();
+  await nextTurn();
+  assert.equal(recovery.queries.length, 0);
+  assert.equal(recovery.service.sourceRelisterRelease, null);
+  recovery.service.setSystemTableCache(f.cache);
+  await nextTurn();
+  assert.equal(recovery.queries.length, 1);
+  assert.equal(typeof recovery.service.sourceRelisterRelease, 'function');
+  recovery.queries[0].release.resolve();
+  await nextTurn();
+  assertImagePrefix(f, 11);
+  assert.equal(recovery.service.relistImageSlots.held, 0);
+  recovery.service.markShuttingDown();
+  assert.equal(recovery.service.sourceRelisterRelease, null);
+});
