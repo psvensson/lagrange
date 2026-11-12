@@ -56,7 +56,7 @@ function createPublicationStore(options = {}) {
     if (control.afterWrite) {
       await control.afterWrite(entry);
     }
-    return {success: true, affectedRows};
+    return {success: true, partitionResult: {affectedRows}};
   }
   const gateway = {
     async readAuthoritativeRows(tableName, _sql, params = [], readOptions) {
@@ -155,21 +155,21 @@ function publicationsOwnerOverRows(rowAccess, options = {}) {
     },
     async insertSystemTableRow(_tableName, row, writeOptions = {}) {
       if (await durableRead(row[KEY], writeOptions)) {
-        return {success: true, affectedRows: 0};
+        return {success: true, partitionResult: {affectedRows: 0}};
       }
       await storeRow(storedValue(row), writeOptions);
-      return {success: true, affectedRows: 1};
+      return {success: true, partitionResult: {affectedRows: 1}};
     },
     async updateSystemTableRow(_tableName, whereClause, data,
       writeOptions = {}) {
       const row = await durableRead(whereClause[KEY], writeOptions);
       if (!row || !Object.keys(whereClause).every((column) =>
         sameValue(row[column], whereClause[column]))) {
-        return {success: true, affectedRows: 0};
+        return {success: true, partitionResult: {affectedRows: 0}};
       }
       await storeRow({...storedValue(row), ...storedValue(data)},
         writeOptions);
-      return {success: true, affectedRows: 1};
+      return {success: true, partitionResult: {affectedRows: 1}};
     },
   };
   const owner = new ControlPlanePublicationsOwner({

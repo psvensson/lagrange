@@ -305,7 +305,7 @@ test('N interleaved changes leave revisions 1..N+1 with no gap',
     const update = store.gateway.updateSystemTableRow;
     store.gateway.updateSystemTableRow = async (...args) => {
       const answer = await update(...args);
-      if (answer.affectedRows === 1) {
+      if (answer.partitionResult.affectedRows === 1) {
         seen.push(args[2].publication_revision);
       }
       return answer;

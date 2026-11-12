@@ -90,8 +90,21 @@ const WRITE_ANSWER = Object.freeze({
   UNANSWERED: 'unanswered',
 });
 
+// The row count of a publication write, as its one producer answers it: the
+// CDC integration owner's mutation result carries the partition's answer
+// (the gateway's SQL path never writes this table: it is fenced).
 function affectedRowsOf(result) {
-  return Number(result?.partitionResult?.affectedRows ?? result?.affectedRows);
+  return Number(result?.partitionResult?.affectedRows);
+}
+
+// A durable read the leader did not answer, with what it failed on.
+function unavailableDurableRead(error) {
+  return {state: DURABLE_READ.UNAVAILABLE, storedRow: null, error};
+}
+
+// A write whose answer did not arrive, with what it failed on.
+function unansweredWrite(error) {
+  return {answer: WRITE_ANSWER.UNANSWERED, error};
 }
 
 function classifyWriteAnswer(result) {
@@ -181,12 +194,11 @@ class ControlPlanePublicationsOwner extends SystemMetadataOwnerBase {
           ...AUTHORITATIVE_ROW_READ}),
       );
     } catch (error) {
-      return {state: DURABLE_READ.UNAVAILABLE, storedRow: null, error};
+      return unavailableDurableRead(error);
     }
     if (!isAuthoritativeControlPlaneRowReadSuccessful(result) ||
         !Array.isArray(result.rows)) {
-      return {state: DURABLE_READ.UNAVAILABLE, storedRow: null,
-        error: result?.error ?? null};
+      return unavailableDurableRead(result?.error ?? null);
     }
     return {
       state: DURABLE_READ.ANSWERED,
@@ -201,7 +213,8 @@ class ControlPlanePublicationsOwner extends SystemMetadataOwnerBase {
     try {
       return {answer: classifyWriteAnswer(await submit()), error: null};
     } catch (error) {
-      return {answer: WRITE_ANSWER.UNANSWERED, error};
+      // The owner base raises a refused or failed write: it was not answered.
+      return unansweredWrite(error);
     }
   }
 
