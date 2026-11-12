@@ -335,3 +335,90 @@ The broader entity observer's existing projected/persisted-row alternatives
 remain an explicit separate audit; this migration does not authorize them.
 No source repository fallback was restored. Physical candidate and complete
 static/composition evidence are still outstanding.
+
+## Owned row-vector controls on the unchanged producer candidate
+
+The next tests-only slice retains source 269f1908ec7e402be3088b863567a0ef058ac0eb
+from 8c6b4732c5069e8cd893720043f5ac177ff9aa00. Sixteen actual CDC local-read
+controls use the declared executeLocalQuery port and its original-result leader
+witness. They require refusal of alias-only, invalid and duplicate canonical
+keys, sparse/accessor/proxy vectors, inherited/accessor/proxy rows and equal-version
+serialization hooks. Refusal retains zero callbacks, no fabricated rows or complete
+absence, no RPC/SQL alternative, and a later useful read from the same owner.
+Positive controls retain ordinary and null-prototype JSON data across caller
+mutation after return and across the next actual local partition read. A second
+key provider cannot reinterpret the original row membership or canonical keys.
+
+Nine controls added to the existing canonical JSON root exercise nested array
+accessors, own iterator/serialization hooks, extra array fields, proxies, inherited
+hole getters, record/array cycles and repeated acyclic shared subtrees. They use
+only the existing serializer API, so the first-original run does not depend on an
+unimplemented capture export. Numeric prototype mutation is restored before test
+assertions. Independent CDC review approves local blob
+329ddbed064bf50da472b6eabd2d3f33cc7427f3 and utility blob
+4d0c40155fb58f84941dfc60c5d2ae797abdd9df. Physical original evidence is pending;
+none of these controls has executed locally.
+
+The shared source proposal is one owned JSON capture operation in the existing
+canonical serializer and one canonical system-table row/key capture operation in
+the existing key-descriptor owner. This is data capture, not an authority grant.
+The serializer currently validates records but reads nested array indices without
+first applying its own dense-data predicate. Its recursion also lacks explicit
+cycle refusal. The row merge currently borrows caller arrays and rows across
+awaits and accepts a second key provider plus an id alias. Source changes remain
+separate from this original test seal.
+
+The recurring bug class is not limited to this leaf: the parallel catchup controls
+are sealed at e26004a5159acde1cfcafa5b6139bb5df24ad0cf on unchanged b2cc2e5d source.
+Catchup, visibility reconciliation and absence sweep require the same captured
+membership. A separate bootstrap topology snapshot merge also accepts id aliases
+and JSON serialization hooks, behind retained/cache/local-source selection. That
+owner is an explicit further proof obligation; this CDC slice does not certify it.
+The existing Oct 23 retained-seed iterator incident and canonical-data extraction
+history establish the prior project pattern. No fallback, timeout, assertion or
+source-size budget is widened by these controls.
+
+The post-producer caller census found two additional controlled LOCAL fixtures
+still exposing only executeQuery: authoritative-local-leader-custody and
+authoritative-read-completeness-custody. Their explicit producer declarations now
+use executeLocalQuery, with all answers, counters, witnesses and assertions
+unchanged. Independent checkpoint review approves exact blobs
+40ef7c928a908c034bf5e1e22021278365be5778 and
+d1bdd69d4926e1b24d7ec3ce351e04e1f928ea97. The earlier 0d PASS evidence remains
+bound to its older source; these migrated consumers require execution on the new
+producer. Intentional missing-port controls and actual write ports are retained.
+
+The same census identifies a separate rebalancer budget owner that still chooses
+gateway.executeQuery when readAuthoritativeRows is missing, plus a local-ledger
+fixture without its now-selected RPC route. Those are further source/fixture
+obligations requiring actual owner controls and formation-dependency analysis;
+renaming their ports or restoring local fallback would not discharge them.
+
+## Extended original: complete image agreement and serializer options
+
+Independent review of the proposed shared primitive found inherited option
+access: serializeJsonData reads spacing/sortKeys from default or partial records.
+Five existing-API controls now require no inherited getter, own accessor or proxy
+callbacks, while retaining normal serialization, sorting, spacing and digest
+output. They join the existing nine nested-array/cycle controls on unchanged
+source 269f1908ec7e402be3088b863567a0ef058ac0eb.
+
+The local merge's version-candidate list mixes heartbeat, lease, HLC, schema and
+other timestamps, including aliases. It has no declared common persisted order
+for a conflicting partition image; JSON length does not establish one. Four
+actual local-read controls refuse conflicting same-partition images, including
+complete empty versus nonempty, and retain useful same-owner recovery. A positive
+requires agreement by canonical membership despite row/field ordering. The earlier
+next-read mutation fixture now gives its second replica the same original image;
+its old disjoint images accidentally required an unsafe same-partition union.
+The mutation and owned first-answer obligations remain; 45c is retained as the
+earlier tests-only record. This is an explicit contract correction, not a green
+claim for the obsolete expectation.
+
+Independent CDC review approves local blob
+8351be37e825cb993b413ab011ad89ab8f3e92c2 and utility blob
+7a0ecb7bb1befc8d02212e799c91b11bfed7b386. There has been no local execution.
+The original45c request had not executed when this extension was prepared; its
+replacement must retain both seal identities and one original physical attempt.
+Canonical row capture also requires a keyed row result: scalar/projected CDC
+callers require an explicit census and refusal rather than another read port.

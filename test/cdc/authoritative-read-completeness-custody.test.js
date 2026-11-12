@@ -33,7 +33,7 @@ function fixture(mode, initialAnswer) {
   const calls = {local: 0, rpc: 0, sql: 0};
   const partitions = mode === MODE.OWNER_LOCAL_ONLY ?
     createLocalSystemTablePartitionServices(TABLE, {
-      async executeQuery() {
+      async executeLocalQuery() {
         calls.local += 1;
         return answer;
       },
