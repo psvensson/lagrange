@@ -4784,6 +4784,8 @@
             "src/cdc/cdc-integration-service.js",
             "src/cdc/cdc-integration-service-source-relist.js",
             "src/cdc/cdc-integration-service-lifecycle.js",
+            "src/cdc/cdc-recipient-lifecycle.js",
+            "src/partition/partition-cdc-recipient-lifecycle.js",
             "src/cdc/cdc-integration-service-authoritative-catchup.js",
             "src/cdc/cdc-integration-service-cache-visibility-authority.js",
             "src/control-plane/control-plane-system-table-gateway-cache-reconciliation.js",

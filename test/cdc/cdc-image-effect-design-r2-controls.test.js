@@ -18,9 +18,12 @@ import {SOURCE_RELIST_BOUND, registerSourceRelister, relistSourceTable} from
 import {CDC_OPERATION, TABLES} from '../../src/constants/index.js';
 import {CDC_EVENT_IDENTITY} from '../../src/constants/cdc-lifecycle-constants.js';
 import {CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR,
-  CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE, CONTROL_PLANE_READ_STRATEGY,
+  CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE, CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
+  CONTROL_PLANE_PHASE_SCOPE, CONTROL_PLANE_READ_LEADER_MODE, CONTROL_PLANE_READ_STRATEGY,
   ControlPlaneSystemTableGateway} from
   '../../src/control-plane/control-plane-system-table-gateway.js';
+import {buildControlPlaneReadAuthority} from
+  '../../src/control-plane/control-plane-system-table-gateway-read-contracts.js';
 import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
 import {CDCHandler} from '../../src/message-group/cdc-handler.js';
 import {MESSAGE_GROUP_COMMAND_TYPE} from '../../src/message-group/constants.js';
@@ -1272,4 +1275,87 @@ test('late writable cache injection uses the same owned relister registration', 
   assert.equal(recovery.service.relistImageSlots.held, 0);
   recovery.service.markShuttingDown();
   assert.equal(recovery.service.sourceRelisterRelease, null);
+});
+
+test('a supplied complete-table token alone retains its scope and mints the generation-bound receipt',
+  async (t) => {
+    const f = fixture(t);
+    f.install();
+    const generation = f.cache.sourceOrder.tableGeneration(TABLE);
+    const readAuthority = buildControlPlaneReadAuthority({
+      strategy: CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED,
+      authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+      leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
+      authoritativeObservationScope: CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE.COMPLETE_TABLE,
+    });
+    const calls = [];
+    const gateway = new ControlPlaneSystemTableGateway({
+      nodeId: 'supplied-complete-token-reader', systemTableCache: f.cache,
+      now: () => f.clock.now(),
+      cdcIntegrationService: {cacheMutationTarget: f.cache,
+        executeAuthoritativeSystemTableRead(tableName, sql, params, options) {
+          calls.push({tableName, sql, params, options});
+          return {success: true, rows: [], rowSetComplete: true,
+            readAuthorityWitness: {state: 'observed', partitionId: SOURCE, role: 'leader',
+              servingNodeId: 'supplied-token-owner', servingReplicaId: 'supplied-token-owner-r1',
+              observedAtMs: f.clock.now(), term: 1, appliedIndex: 10, commitIndex: 10}};
+        }},
+    });
+    const result = await gateway.executeRead({tableName: TABLE, sql: `SELECT * FROM ${TABLE}`,
+      params: [], strategy: CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED},
+    {sessionId: 'supplied-complete-token-read', readAuthority});
+    assert.equal(result.success, true);
+    assert.equal(result.authoritativeObservation?.scope,
+      CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE.COMPLETE_TABLE,
+      'the only declared scope lives in the supplied token');
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].options.readAuthority, readAuthority,
+      'the actual owner consumes the exact selected token');
+    assert.equal(result.authoritativeObservation.sourceGeneration, generation);
+    assert.equal(result.authoritativeObservation.causeId, 'supplied-complete-token-read');
+    const reconciled = await gateway.reconcileAuthoritativeCacheRows(TABLE, result.rows, {
+      cacheMutationTarget: f.cache, systemTableCache: f.cache, cachedRows: [],
+      authoritativeObservation: result.authoritativeObservation,
+    });
+    assert.equal(reconciled.success, true,
+      'the canonical reconciliation owner accepts the actual minted receipt');
+    assert.equal(f.cache.getLastAuthoritativeObservedAtMs(TABLE), f.clock.now());
+    assert.equal(f.cache.sourceOrder.tableGeneration(TABLE), generation);
+    assertImagePrefix(f);
+  });
+
+test('a supplied bootstrap token alone carries its phase to the snapshot provider', async (t) => {
+  const f = fixture(t);
+  const rows = [eventOf(CDC_OPERATION.INSERT, 10).data];
+  const readAuthority = buildControlPlaneReadAuthority({
+    strategy: CONTROL_PLANE_READ_STRATEGY.BOOTSTRAP_SNAPSHOT,
+    authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+    leaderMode: CONTROL_PLANE_READ_LEADER_MODE.ANY,
+    phaseScope: CONTROL_PLANE_PHASE_SCOPE.BOOTSTRAP,
+  });
+  let snapshotCalls = 0;
+  let ownerReads = 0;
+  let sqlReads = 0;
+  let receivedAuthority = null;
+  const gateway = new ControlPlaneSystemTableGateway({
+    nodeId: 'supplied-bootstrap-token-reader', systemTableCache: f.cache,
+    now: () => f.clock.now(),
+    cdcIntegrationService: {executeAuthoritativeSystemTableRead() { ownerReads += 1; }},
+    sqlQueryEngine: {executeQuery() { sqlReads += 1; }},
+  });
+  const result = await gateway.executeRead({tableName: TABLE,
+    strategy: CONTROL_PLANE_READ_STRATEGY.BOOTSTRAP_SNAPSHOT,
+    readBootstrapSnapshot(_intent, options) {
+      snapshotCalls += 1;
+      receivedAuthority = options.readAuthority;
+      return rows;
+    }}, {readAuthority});
+  assert.equal(result.success, true, 'the selected token supplies the declared bootstrap phase');
+  assert.equal(snapshotCalls, 1);
+  assert.equal(receivedAuthority, readAuthority);
+  assert.equal(receivedAuthority.phaseScope, CONTROL_PLANE_PHASE_SCOPE.BOOTSTRAP);
+  assert.deepEqual(result.rows, rows);
+  assert.equal(ownerReads, 0);
+  assert.equal(sqlReads, 0);
+  assert.equal(f.cache.has(TABLE, KEY), false, 'reading a snapshot does not publish cache authority');
 });

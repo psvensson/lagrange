@@ -669,3 +669,168 @@ keeps a collection's version constant across pages and requires consuming the
 continuation until completion. That is design inspiration for distinguishing a
 complete collection from a successful subset, not proof of this implementation:
 https://kubernetes.io/docs/reference/using-api/api-concepts/#retrieving-large-results-sets-in-chunks
+
+
+## Exact selected-token receipt and bootstrap controls
+
+Independent reviewer subagent:/root/takeover_inventory read the four production
+files in a8d7e271 to 21da553a and their owning continuations/controls. Its verdict
+is APPROVE for bounded source review and lab measurement only: exact registration
+release, retained RUNNING custody and replacement wake, idempotent slot release,
+queued shutdown ownership, captured cell/cache checks and private fault retention
+were accepted. Physical candidate results, impact gates, recipient completeness
+and whole CDC closure remain open. Root owns final composition.
+
+Root's supplied-token audit found two downstream consumers still read duplicated
+flat request fields: attachAuthoritativeObservationReceipt reads flat observation
+scope, and executeBootstrapSnapshotRead reads intent/flat phase. Even preserving
+an already-built token at ingress would lose these two intents. Root owns ingress
+selection/conflict checks and the canonical shared completeness classifier; this
+lane owns those two downstream consumers. No second field authority or fallback
+will be retained.
+
+Two new tests-only controls are frozen on unchanged 21da production. The complete
+read builds an explicit RPC_REQUIRED, REQUIRED-leader, COMPLETE_TABLE token and
+passes only that token plus a session ID through the actual gateway. It requires
+a real receipt bound to the original source generation, the exact token at the
+owner, and successful canonical reconciliation. The bootstrap control supplies an
+explicit LOCAL_ONLY bootstrap-strategy token with its phase only inside that
+token, and requires the snapshot provider to receive that exact token while no
+owner RPC, SQL read or cache mutation occurs. The existing source/generation
+fixture is used; no token constructor default can hide the requested read mode.
+Original controls remain unchanged. Root will review these controls before their
+first physical red; production scope/phase consumers are not changed yet.
+
+
+## Verified resource core and first recipient completeness failure
+
+The exact 21da resource candidate ran as job2949, request
+059745236d8e47efa5e31bef5bd42d56, remote97dbfd09af1778d5ebac66a792b481e634471e3e,
+whole tree f61e9977b19fb9e78f6c00396f5de67545f3feab. Its three canonical roots
+passed 61 classified assertions: the seven-scenario currentness aggregate (one),
+56 R2 controls, and four reconciliation ingress assertions. The original
+28,629-byte stream is lab-access-20261112/cdc-resource-core-artifacts-worker.log,
+SHA256 e912957491fba892637573ebf1c6be849d54849f9f27ac69f386cd6f874027cc.
+The coordinator verified source, terminal custody and fresh before/after artifact
+writes. All seven receipt scenarios passed. Exact newly written artifacts are in
+lab-access-20261112/cdc-resource-core-2949-97dbfd09: receipt.json SHA256
+3bd1711829872ea5d122c5deb6ae5f483b2894a94eb649ba1f0b7fa5f3fcaf1d and
+observations.json SHA256
+349d9fc04e31cfe65a1907055d2cdc5b0b73d8e40659164166905b983b68915e.
+This is bounded resource/core evidence, not the remaining native/cache/recovery,
+static or composed-head acceptance.
+
+Separately, tests-only509 ran as job2936, request
+9c30a20b8c864b89871f0344f01ac899, remote03d7eb2663cf226079390f45b1851022dc870eff.
+The original 78,992-byte stream is
+lab-access-20261112/cdc-recipient-completeness-red-worker.log, SHA256
+2f8617a78f428e238c2c3d6cf8425d3b596dbc8ee9f763c20ca97ece040dddd7.
+It reports 19 cases: the original seven pass and every one of the twelve new
+SERVICES/NODES incompleteness variants fails at the actual recipient being
+DETACHED (line422). Missing/false completeness, partial success and positive
+failure collections/counts therefore cross the real detach boundary. Later
+proposal, reclaimed-prefix and same-owner healing assertions were not reached in
+those failing cases; they remain candidate obligations. Source and terminal
+custody were verified by the coordinator, and this author independently matched
+the full stream hash and all twelve first-failure entries. The original is retained.
+
+The approved correction reads both membership tables through one named
+AuthoritativeControlPlaneView per lifecycle operation. That view receives the
+exact CDC service, node/router dependencies and that service's timeSource; no
+ambient clock fallback, singleton or registry is added. Both reads retain the
+same frozen RPC_REQUIRED and REQUIRED-leader token. The lifecycle caller accepts
+only view-classified complete rows with the existing matching leader witness.
+The root author's canonical completeness classifier and view normalization own
+partial/failure evidence; this caller does not introduce another classifier.
+The change is composition-dependent: the old view in this isolated tree still
+drops failure fields and is not a standalone complete candidate.
+
+The controlled lifecycle authority fixture now receives the original f.clock at
+its two construction sites, and its provenance comment correctly describes
+independent owner answers sharing fixture identities. Its assertions and actual
+source ledger/detach/reclamation boundaries are unchanged. The named interaction
+includes the recipient read caller and its existing partition detach owner.
+History2a373dd859a7d2be416fea67b823c98b5c25d1e4 introduced this direct read and
+620bb94600df128f20e5d6c2d0d20598ec903bc5 evolved lifecycle representation without
+adding completeness; both were researched before the tests-only seal.
+
+The resource cancellation model also agrees with the Go context primary contract:
+cancellation requests termination without waiting for work to finish, and stopping
+an associated callback does not prove a callback already running has completed.
+This inspired retaining exact RUNNING custody and observing the actual original
+timer's cleanup; it is not implementation proof: https://pkg.go.dev/context#CancelFunc
+and https://pkg.go.dev/context#AfterFunc.
+
+No local test, generator, linter, syntax check or other checker was run. The
+recipient caller delta is an unverified WIP for independent source review and
+composition with the root-owned authority closure, not a solved or landing claim.
+
+
+## Supplied-token consumer correction after original2974
+
+Root independently approved the bounded recipient80a8483e source/test/impact
+delta: per-operation view, exact original service clock, same immutable token,
+canonical view completeness plus matching witness, and explicit fixture clock.
+That source approval remains composition-dependent, with no old-view green claim.
+
+Job2974 measured exact tests-only9a18 on remote b1e713 (the coordinator retains
+the complete transport mapping). Its original 16,655-byte stream is
+lab-access-20261112/cdc-token-consumer-red-worker.log, SHA256
+e9a1a7d923dbc18b4c45e20f6ec62fcd80b653ec927dba972a62b80b68501b2c.
+The R2 root reports 58 tests, 56 passing and two failing. Case57 first fails at
+line1309: a scope declared only in the selected token is undefined in the result.
+Its later source-generation receipt/reconciliation assertions were not measured.
+Case58 first fails at line1354: bootstrap success is false when only the selected
+token carries its phase; later provider custody assertions were not measured.
+The coordinator verified full original source/custody and this author matched
+its complete hash and first-failure entries. No renewal replaced the original.
+
+The approved two-consumer correction reads receipt scope solely from
+options.readAuthority.authoritativeObservationScope, and bootstrap phase solely
+from options.readAuthority.phaseScope. The existing phase normalizer and snapshot
+provider remain in place. Neither consumer reconstructs a token or consults an
+alternate flat authority field. Root owns ingress preservation, validation and
+shared completeness; the combined candidate is required for the later receipt,
+provider custody and successful reconciliation proof. One surplus test blank
+line is removed; assertions are unchanged. No local execution occurred.
+
+
+## Resource candidate cache/native originals and paged shutdown disposition
+
+Coordinator verified exact21da / remote97dbfd09 on the five-root native job3002:
+38 classified assertions passed, including real bootstrap occurrence delivery3,
+membership2, mixed vector3, input guard10 and receiver admission20. The complete
+2,058-byte original stream has SHA256
+`ec2ad461d7fbf1986509f17e4f147b19775427f20555c9e596cb5db18df3293d`;
+source/native/clean/terminal custody matched. This bounds the claim to that seal.
+
+Exact21da cache job3001 completed five roots/101 assertions, four roots passed;
+paged relist passed8/9. Complete6,063-byte original SHA256
+`02e9e8b99e8fffad83c90642861c5bd126cfa422ed4e90cc176b81ecc8cf9970`
+is preserved. Case(e) first failed dereferencing an absent image diagnostic after
+shutdown; its old-row/no-partial-effect and GAP assertions had passed. Its later
+restart/reset assertions were unexecuted. Property(g) measured48 installs,
+26 superseded images and516 interleaved commits in that original run.
+
+Source trace: exact registration release makes the old request non-current.
+The production relister checks that request after fetch and before logging, so
+an obsolete attempt cannot publish an image outcome for its old registration.
+The fixture's old stopped-diagnostic and later CELL_CHANGED restart diagnostic
+expectations assumed the previous longer lifetime. Root independently reviewed
+and approved replacement blob`d9a3807f66992500b537648761febdb0391d7fef`.
+The revised case preserves row/GAP/restart/reset/table-equality assertions and
+checks page2 shutdown, GAP/NO_RELISTER, released registration/recipient holds,
+slots/queue/timers, new registration convergence, exact obsolete image page1
+termination, one valid replacement image and final CURRENT/IDLE. Source-owned
+abandoned image expiry is separate and is not claimed released by these recipient
+checks. Production source stays93ac. Request only this affected root; do not repeat
+the other four passing cache roots. No local execution or broader acceptance.
+
+Original metadata2950 succeeded in generators and dependency/impact audits but
+reported lint/complexity and two ownership violations. Uncapped lint3003 retained
+183 errors/zero warnings in27,736 bytes, SHA256
+`44c2f69df33485724500f27eb9e8c20ad1f3c75a26b50b44b8f76f037fda4702`.
+The original generated patch could not be recovered after its staged worktree
+closed; generator success/digests remain stdout evidence only. No reconstruction
+or generator rerun is claimed. The next metadata producer must capture its patch
+with Node before its worktree closes.

@@ -320,21 +320,23 @@ test('S3-D measure 3: a refusing recipient past RELIST_LAG_ROWS leaves the front
 });
 
 // Explicit owner-row input to the real lifecycle read boundary. These rows
-// model the membership owner's answer; they are not copied from the sender's
-// route cache and do not prove a native membership-owner read.
-function lifecycleAuthority(rowsByTable, changeResult = (_tableName, result) => result) {
+// model independent membership answers using shared fixture identities. The
+// owner rows can diverge from the sender's cache; this is not a native
+// membership read.
+function lifecycleAuthority(timeSource, rowsByTable,
+  changeResult = (_tableName, result) => result) {
   const reads = [];
   const requests = [];
-  return {reads, requests, executeAuthoritativeSystemTableRead: async (
-    tableName, sql, params, options) => {
-    reads.push(tableName);
-    requests.push({tableName, sql, params, options});
-    return changeResult(tableName, {success: true, rows: rowsByTable[tableName] ?? [],
-      rowSetComplete: true, source: 'owner_rpc_lane',
-      readAuthorityWitness: {state: 'observed', partitionId: INITIAL_PARTITION_IDS[tableName],
-        role: RAFT_ROLE.LEADER, servingNodeId: 'node-a', servingReplicaId: 'r1',
-        observedAtMs: 1}});
-  }};
+  return {reads, requests, timeSource, nodeId: 'node-a',
+    executeAuthoritativeSystemTableRead: async (tableName, sql, params, options) => {
+      reads.push(tableName);
+      requests.push({tableName, sql, params, options});
+      return changeResult(tableName, {success: true, rows: rowsByTable[tableName] ?? [],
+        rowSetComplete: true, source: 'owner_rpc_lane',
+        readAuthorityWitness: {state: 'observed', partitionId: INITIAL_PARTITION_IDS[tableName],
+          role: RAFT_ROLE.LEADER, servingNodeId: 'node-a', servingReplicaId: 'r1',
+          observedAtMs: 1}});
+    }};
 }
 
 test('S3-C measure 2: a dead group pins the frontier; cache omission alone detaches nothing; ' +
@@ -343,7 +345,7 @@ test('S3-C measure 2: a dead group pins the frontier; cache omission alone detac
   const f = await stage3Fixture(t);
   f.target = () => unknownCdcAcceptance();
   const services = [{...targetService(f)}];
-  const authority = lifecycleAuthority({[TABLES.SERVICES]: services, [TABLES.NODES]: [
+  const authority = lifecycleAuthority(f.clock, {[TABLES.SERVICES]: services, [TABLES.NODES]: [
     {[COLUMN.NODE_ID]: TARGET_NODE, [COLUMN.STATUS]: 'active'}]});
   f.leader.cdcIntegrationService = authority;
   for (const id of ['B', 'C', 'D']) addTopologySourceRow(f, id);
@@ -400,7 +402,7 @@ for (const tableName of [TABLES.SERVICES, TABLES.NODES]) {
       const nodes = [{[COLUMN.NODE_ID]: TARGET_NODE, [COLUMN.STATUS]: NODE_STATE.ACTIVE},
         {[COLUMN.NODE_ID]: active[COLUMN.NODE_ID], [COLUMN.STATUS]: NODE_STATE.ACTIVE}];
       let phase = 'incomplete';
-      const authority = lifecycleAuthority({[TABLES.SERVICES]: services,
+      const authority = lifecycleAuthority(f.clock, {[TABLES.SERVICES]: services,
         [TABLES.NODES]: nodes}, (queriedTable, result) => {
         if (phase !== 'incomplete' || queriedTable !== tableName) return result;
         // The services subset hides an active replica. The nodes subset has

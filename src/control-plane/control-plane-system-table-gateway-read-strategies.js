@@ -223,7 +223,7 @@ const controlPlaneSystemTableGatewayReadStrategyMethods = {
     options,
   ) {
     if (
-      options?.authoritativeObservationScope !==
+      options?.readAuthority?.authoritativeObservationScope !==
       CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE.COMPLETE_TABLE
     ) {
       return result;
@@ -499,9 +499,7 @@ const controlPlaneSystemTableGatewayReadStrategyMethods = {
    * @private
    */
   async executeBootstrapSnapshotRead(tableName, readIntent, options) {
-    const phaseScope = normalizePhaseScope(
-      readIntent?.phaseScope || options?.phaseScope,
-    );
+    const phaseScope = normalizePhaseScope(options?.readAuthority?.phaseScope);
     if (!phaseScope) {
       return this.buildBootstrapSnapshotFailureResult(
         tableName,

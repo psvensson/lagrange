@@ -6,12 +6,13 @@
 // group's lifecycle is its replica rows': the message_groups row carries no
 // lifecycle column (MESSAGE_GROUPS_SCHEMA), so it is not read.
 //
-// A message group is STOPPED when the services partition's leader holds at
-// least one replica row of the group and every one of them is stopped: its
-// status is stopped, or the nodes partition's leader holds its node in a
-// terminal state (stopped, failed). Any active replica on a live node makes it
+// A message group is STOPPED when the services partition's leader holds a
+// complete cohort with at least one replica row of the group, and every row
+// is stopped: its status is stopped, or the nodes partition's leader holds
+// its node in a terminal state (stopped, failed). Any active replica on a live node makes it
 // ACTIVE. No row at all is NOT_ESTABLISHED (absence is not evidence, R07);
-// an unreadable or non-leader answer is UNAVAILABLE. Only STOPPED detaches.
+// an incomplete, unreadable or non-leader answer is UNAVAILABLE. Only STOPPED
+// detaches.
 // Detaching is safe by construction (CDC Stage 3): a group that returns is a
 // new recipient whose first range answers a gap, and it lists again.
 import {COLUMN, SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../constants/index.js';
@@ -19,6 +20,8 @@ import {NODE_STATE} from '../constants/node-state.js';
 import {INITIAL_PARTITION_IDS} from '../bootstrap/system-table-schemas-constants.js';
 import {isValidLeaderReadAuthorityWitness} from
   '../control-plane/control-plane-authoritative-read-witness.js';
+import {AuthoritativeControlPlaneView} from
+  '../control-plane/authoritative-control-plane-view.js';
 import {buildControlPlaneReadAuthority} from
   '../control-plane/control-plane-system-table-gateway-read-contracts.js';
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE, CONTROL_PLANE_READ_LEADER_MODE} from
@@ -41,10 +44,11 @@ const LIFECYCLE_READ_OPTIONS = Object.freeze({
   }),
 });
 
-async function leaderRows(service, tableName) {
-  const result = await service.executeAuthoritativeSystemTableRead(tableName,
+async function leaderRows(view, tableName) {
+  const result = await view.readRows(tableName,
     `SELECT * FROM ${tableName}`, [], LIFECYCLE_READ_OPTIONS);
-  return result?.success === true && Array.isArray(result.rows) &&
+  return result?.success === true && result.rowSetComplete === true &&
+    Array.isArray(result.rows) &&
     isValidLeaderReadAuthorityWitness(result.readAuthorityWitness,
       INITIAL_PARTITION_IDS[tableName]) ? result.rows : null;
 }
@@ -63,13 +67,19 @@ async function readRecipientGroupLifecycle(service, groupId) {
   if (service === null || service === undefined) {
     return evidence(CDC_RECIPIENT_LIFECYCLE.UNAVAILABLE, {groupId});
   }
-  const services = await leaderRows(service, TABLES.SERVICES);
+  const view = new AuthoritativeControlPlaneView({
+    nodeId: service.nodeId,
+    cdcIntegrationService: service,
+    messageRouter: service.messageRouter,
+    now: () => service.timeSource.now(),
+  });
+  const services = await leaderRows(view, TABLES.SERVICES);
   if (services === null) return evidence(CDC_RECIPIENT_LIFECYCLE.UNAVAILABLE, {groupId});
   const replicas = services.filter((row) =>
     row?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP &&
     resolveMessageGroupId(row) === groupId);
   if (replicas.length === 0) return evidence(CDC_RECIPIENT_LIFECYCLE.NOT_ESTABLISHED, {groupId});
-  const nodes = await leaderRows(service, TABLES.NODES);
+  const nodes = await leaderRows(view, TABLES.NODES);
   if (nodes === null) return evidence(CDC_RECIPIENT_LIFECYCLE.UNAVAILABLE, {groupId});
   const nodeState = new Map(nodes.map((row) => [row?.[COLUMN.NODE_ID], row?.[COLUMN.STATUS]]));
   const stopped = replicas.every((row) => row[COLUMN.STATUS] === SERVICE_STATUS.STOPPED ||
