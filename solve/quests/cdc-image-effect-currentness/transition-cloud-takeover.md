@@ -565,3 +565,46 @@ the typed original attempt reason and raw cause, demand one clock attempt, and
 distinguish promise rejection from actual timer cleanup. No local tests or
 checkers were run. Resource edits awaiting this new red remain uncommitted and
 are not part of that tests-only source identity.
+
+
+## Recipient lifecycle completeness and canonical read boundary
+
+The original census metadata audit at job 2881 reported a direct cache mutation
+in source-image and a direct authoritative read in cdc-recipient-lifecycle. The
+former describes de756's old per-row image publication; this branch's reviewed
+atomic whole-table publication removes that actual unsafe loop. No checker or
+allowlist change is needed. Exact composed-head static proof remains owed.
+
+The recipient read is a genuine coupled authority gap. The direct CDC-service
+read accepted success, array rows and a leader witness without a complete row-set
+claim. A partial services answer containing only stopped replicas could therefore
+reach partition-cdc-recipient-lifecycle's real detach, advance the recipient
+frontier and permit acknowledgement/reclamation while an active replica was
+omitted. The interaction was introduced in 2a373dd859a7d2be416fea67b823c98b5c25d1e4;
+620bb94600df128f20e5d6c2d0d20598ec903bc5 corrected the membership representation and
+extended the same lifecycle policy to primary recipients, but did not add row-set
+completeness. Those historical changes remain intact.
+
+Root approved the bounded correction: construct the named
+AuthoritativeControlPlaneView for this operation, pass the exact immutable
+RPC_REQUIRED + REQUIRED-leader token, and consume trustworthy rowSetComplete for
+the complete queried services/nodes cohort. Incomplete, partial or failed-partition
+results remain UNAVAILABLE and leave the existing source debt/continuation intact.
+Root owns moving the existing completeness classifier from gateway strategies to
+the canonical read-contract owner and making the view derive its completeness
+through that one helper. The view currently drops raw failure flags, so checking
+them only after normalization would conceal a contradictory success. This caller
+will not add a parallel normalizer or route through the polymorphic helper merely
+to avoid the audit.
+
+Tests-first controls extend the real source/ledger S3-C path with missing/false
+completeness, partial results, failed partition counts, partition errors and
+participant failures for both queried tables. They observe actual recipient state,
+DELIVERED proposals, held ledger rows and reclaimed-prefix state. The same owner
+then reveals a complete active cohort (still held) and finally records complete
+retirement (actual detach and committed reclamation). Membership row answers are
+controlled input to the actual lifecycle/view path, not native membership-owner
+execution proof. Existing successful S3-C input now explicitly declares that its
+controlled row set is complete. No semantic assertion is weakened. These controls
+are frozen on the a8d7 production prefix; resource/source corrections remain
+uncommitted and are excluded. No local test, checker or generator was run.
