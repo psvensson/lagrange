@@ -1,3 +1,4 @@
+import {readReplicaServiceRole, isReplicaServiceLeader} from '../raft/replica-leadership-state.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {
@@ -272,7 +273,7 @@ function createRoleMutationHelper(owner) {
     prepareFlush: ({pendingValue, flushingValue} = {}) => {
       const targetRole = flushingValue ?? pendingValue;
       // Born FOLLOWER (partition-service-core-base); unstated -> STATE_ABSENT.
-      const liveRole = readStateField(owner.role);
+      const liveRole = readReplicaServiceRole(owner);
       const staleRoleFlush = isStaleRoleFlushForLiveRole(targetRole, liveRole);
       return {
         skip: staleRoleFlush,
@@ -284,7 +285,7 @@ function createRoleMutationHelper(owner) {
       };
     },
     readLiveValue: (expectedRole) =>
-      resolveComparableLiveRole(expectedRole, owner.role),
+      resolveComparableLiveRole(expectedRole, readReplicaServiceRole(owner)),
     readRowFromCache: (systemTableCache) =>
       systemTableCache?.get?.(TABLES.SERVICES, owner.replicaId) || null,
     readValueFromCache: (systemTableCache) => {
@@ -371,13 +372,16 @@ function createLeaderNodeMutationHelper(owner) {
       );
       return cached?.[COLUMN.LEADER_NODE_ID] || null;
     },
-    prepareFlush: () => ({
-      skip: !owner.isLeader,
-      clearPending: !owner.isLeader,
-      reason: !owner.isLeader ?
-        PARTITION_SERVICE_LITERAL.NOT_OWNER :
-        PARTITION_SERVICE_LITERAL.READY,
-    }),
+    prepareFlush: () => {
+      const activeLeader = isReplicaServiceLeader(owner);
+      return {
+        skip: !activeLeader,
+        clearPending: !activeLeader,
+        reason: !activeLeader ?
+          PARTITION_SERVICE_LITERAL.NOT_OWNER :
+          PARTITION_SERVICE_LITERAL.READY,
+      };
+    },
     // The canonical gateway owns route readiness and returns a typed retryable
     // outcome. Pre-gating here on the same missing partitions leader prevents
     // a newly elected user partition from publishing the ownership needed to

@@ -1,3 +1,4 @@
+import {readReplicaLeaderRoute} from '../raft/replica-leadership-state.js';
 // Local interest only. Durable outcomes and replay decisions belong to WasmWriterState.
 import {resolveTimeSource} from '../time/time-source.js';
 import {WASM_WRITER_PROFILE as P, WRITER_STATUS as S, WRITER_REASON as R} from
@@ -25,8 +26,9 @@ class WasmWriterCompletion {
       return Promise.resolve({status: S.REFUSED, reason: R.INVALID, identity: null});
     }
     if (!this.replica.initialized) return Promise.resolve(refused(command, R.NOT_READY));
-    if (!this.replica.isLeader) {
-      return Promise.resolve({forwarded: true, leaderId: this.replica.leaderId});
+    const route = readReplicaLeaderRoute(this.replica);
+    if (!route.local) {
+      return Promise.resolve({forwarded: true, leaderId: route.leaderId});
     }
     if (!Number.isFinite(deadlineMs) || deadlineMs <= 0 || deadlineMs > P.interestMs) {
       return Promise.resolve(refused(command, R.INVALID));

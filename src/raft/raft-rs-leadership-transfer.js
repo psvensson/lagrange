@@ -14,6 +14,7 @@
 // enters the core; the runtime owner remains its only caller that does.
 
 import {deepFreeze} from './raft-operation-port.js';
+import {observeNativeRoleAndTerm} from './raft-rs-status-observation.js';
 import {
   RAFT_LEADERSHIP_TRANSFER_SUCCESSOR,
   RAFT_OPERATION_OUTCOME,
@@ -58,10 +59,6 @@ function transferableVoters(confState) {
     .filter((raftPeerId) => !learners.has(raftPeerId)));
 }
 
-function roleOf(status) {
-  return ROLE[status.raftState] || ROLE_FOLLOWER;
-}
-
 // {successor: NAMED, replicaIdentity} resolved to the raft id the replica's
 // registry reserved for it, {successor: MOST_CAUGHT_UP} as it is, or the
 // refusal naming how the request missed the canonical shape.
@@ -95,7 +92,7 @@ function decideNamedTransfer({status, confState}, target) {
   if (!transferableVoters(confState).has(target)) {
     return {answer: transferRefusal(RUNTIME_REASON.TARGET_NOT_VOTER)};
   }
-  const role = roleOf(status);
+  const role = observeNativeRoleAndTerm(status).role;
   if (role === ROLE_LEADER) {
     return {transferee: target,
       accepted: transferAccepted(RUNTIME_REASON.TRANSFER_REQUESTED)};
@@ -124,7 +121,7 @@ function noTransfereeRefusal(decision) {
 // tenure first, the lowest raft id on a tie. Only the leader holds that
 // progress.
 function decideMostCaughtUpTransfer(observation, peerId) {
-  if (roleOf(observation.status) !== ROLE_LEADER) {
+  if (observeNativeRoleAndTerm(observation.status).role !== ROLE_LEADER) {
     return {answer: transferRefusal(RUNTIME_REASON.NOT_LEADER)};
   }
   const decided = decideCoreTransferee(peerId, observation);
@@ -146,6 +143,10 @@ function decideMostCaughtUpTransfer(observation, peerId) {
  *   step's Ready drained.
  */
 function decideLeadershipTransfer(peerId, observation, command) {
+  const role = observeNativeRoleAndTerm(observation.status);
+  if (role.outcome !== CORE_OK) {
+    return {answer: role};
+  }
   return command.successor === RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED ?
     decideNamedTransfer(observation, command.target) :
     decideMostCaughtUpTransfer(observation, peerId);
@@ -178,7 +179,7 @@ function hasProgress(status, raftPeerId) {
 function droppedByLeadershipTransfer(refused, peerId, {status}) {
   return refused.outcome === CORE_REFUSED &&
     String(refused.reason).endsWith(RAFT_RS_CORE_REFUSAL_TEXT.PROPOSAL_DROPPED) &&
-    roleOf(status) === ROLE_LEADER &&
+    observeNativeRoleAndTerm(status).role === ROLE_LEADER &&
     hasProgress(status, peerId);
 }
 
@@ -251,11 +252,11 @@ function stepDown(cause) {
 // Removed outright: no voter, outgoing voter or learner entry - the leader
 // without progress for itself. A leader demoted to a learner keeps its
 // progress and its writes (CA9) and is not this case.
-function isRemovedLeader(peerId, {status, confState}) {
+function isRemovedLeader(peerId, confState, role) {
   const configured = new Set([...(confState.voters || []),
     ...(confState.votersOutgoing || []),
     ...(confState.learners || [])].map(String));
-  return roleOf(status) === ROLE_LEADER && !configured.has(String(peerId));
+  return role === ROLE_LEADER && !configured.has(String(peerId));
 }
 
 /**
@@ -268,7 +269,9 @@ function isRemovedLeader(peerId, {status, confState}) {
  *   STEP_DOWN and {transfer} (the transfer command) for TRANSFER.
  */
 function removedLeaderAction(peerId, observation) {
-  if (!isRemovedLeader(peerId, observation)) {
+  const observed = observeNativeRoleAndTerm(observation.status);
+  if (observed.outcome !== CORE_OK) return observed;
+  if (!isRemovedLeader(peerId, observation.confState, observed.role)) {
     return NOT_A_REMOVED_LEADER;
   }
   if (BigInt(observation.status.commit) < BigInt(observation.lastIndex)) {

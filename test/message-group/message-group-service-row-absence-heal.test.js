@@ -1,3 +1,4 @@
+import {serviceRoleObservation} from '../test-helpers/service-role-observation.js';
 /**
  * Message-group activation keeps creation authority separate.
  */
@@ -14,7 +15,8 @@ const REPLICA_OPTIONS = Object.freeze({
   groupId: 'mg-1',
   replicaId: 'mg-1-r1',
   nodeId: 'node-a',
-  service: {isLeaderReplica: () => false},
+  service: {raft: {readRoleAndTerm: () =>
+    (serviceRoleObservation('follower', 1))}},
   isEffectHandlerCurrent: () => true,
 });
 

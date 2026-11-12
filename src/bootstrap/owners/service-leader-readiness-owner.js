@@ -1,3 +1,4 @@
+import {isReplicaServiceLeader} from '../../raft/replica-leadership-state.js';
 import {assertCritical} from '../../utils/assert.js';
 import {
   ADDRESS,
@@ -6,7 +7,7 @@ import {
   SERVICE_TYPE,
   TABLES,
 } from '../../constants/index.js';
-import {RAFT_ROLE} from '../../raft/constants.js';
+
 import {
   getMissingSystemServiceLeaderCount,
   getMissingSystemServiceLeaders,
@@ -78,13 +79,7 @@ function isLiveServiceLeader(service) {
     return false;
   }
 
-  const role = typeof service.getRole === 'function' ?
-    service.getRole() :
-    service.role;
-  return service.isLeader === true ||
-    role === RAFT_ROLE.LEADER ||
-    (typeof service.isLeaderReplica === 'function' &&
-      service.isLeaderReplica());
+  return isReplicaServiceLeader(service);
 }
 
 function collectMissingPartitionIds(missing = {}) {

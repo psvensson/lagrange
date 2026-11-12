@@ -7,6 +7,7 @@ import {
   RAFT_OPERATION_OUTCOME,
 } from '../../src/raft/raft-operation-port-constants.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
+import {readReplicaLeaderRoute} from '../../src/raft/replica-leadership-state.js';
 import {ControllableConsensusPort} from
   './partition-service-test-support.js';
 
@@ -75,6 +76,9 @@ test('partition raft lifecycle records campaign, election, and leader change',
     fixture.consensusPort.setTerm(8);
     fixture.consensusPort.setRole('leader');
     fixture.consensusPort.setTerm(9);
+    // The port already observes its demotion when it announces another leader.
+    // Exercise the leader-change callback alone, with a coherent owned role.
+    fixture.consensusPort.role = 'follower';
     fixture.consensusPort.emitLeaderChange('orders-p1-r1');
 
     const evidence = fixture.records.filter(
@@ -124,3 +128,24 @@ test('partition raft lifecycle records campaign, election, and leader change',
     assert.equal(evidence[3].partitionId, 'orders-p1');
     assert.equal(evidence[3].nodeId, 'node-b');
   });
+
+test('a conflicting controlled leader notification cannot retain routing authority', () => {
+  // Deliberately contradictory component input, not a native transition claim.
+  // Keep its permission withdrawal coverage separate from coherent role events.
+  const {service, consensusPort} = buildService();
+  wirePartitionRaftLifecycleEvents(service, () => false);
+  consensusPort.setRole('leader');
+  const previousTenure = service.leadershipTenure;
+  consensusPort.emitLeaderChange('orders-p1-r1');
+  assert.equal(service.raft.readRoleAndTerm().role, 'leader');
+  assert.equal(service.isLeader, false);
+  assert.equal(service.leadershipTenure, null);
+  assert.throws(() => readReplicaLeaderRoute(service), {
+    raftResult: {outcome: 'CORE_REFUSED', reason: 'replica-routing-unavailable',
+      phase: 'replica-service-authority', retryable: true, recoveryRequired: false},
+  }, 'a valid retained election role cannot route a withdrawn service');
+  consensusPort.setRole('leader');
+  assert.notEqual(service.leadershipTenure, previousTenure);
+  assert.equal(readReplicaLeaderRoute(service).local, true,
+    'the subsequent owner announcement grants a new tenure');
+});

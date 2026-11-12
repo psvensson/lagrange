@@ -1,4 +1,5 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {readReplicaRoleAndTerm} from '../raft/replica-leadership-state.js';
 import {trackSyncSection} from '../diagnostics/event-loop-gap-watchdog.js';
 import {
   RAFT_OPERATION_OUTCOME,
@@ -82,22 +83,12 @@ const SERVICE_SHUTDOWN = 'partition_service_shutdown';
 
 class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
   /**
-   * Resolve the current raft term when a live raft instance exists; the
-   * leadership-state helper passes it with the leadership event so the
-   * owner-local canonical leader projection can mint a tenure claim. A null
-   * return simply mints no claim — fail-closed.
-   * @return {number|null}
+   * Read the current owned term; unavailable or invalid consensus throws
+   * its exact typed result instead of granting a termless proof.
+   * @return {number}
    */
   resolveCurrentTermSafe() {
-    if (!this.raft) {
-      return null;
-    }
-    try {
-      const term = Number(this.raft.readStatus().term);
-      return Number.isFinite(term) ? term : null;
-    } catch {
-      return null;
-    }
+    return readReplicaRoleAndTerm(this).term;
   }
 
 
@@ -405,7 +396,12 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
         PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON.INITIAL_DELAY,
       );
     }
-    wirePartitionRaftLifecycleEvents(this, shouldIgnoreDemotionEvent);
+    try {
+      wirePartitionRaftLifecycleEvents(this, shouldIgnoreDemotionEvent);
+    } catch (error) {
+      if (error?.raftResult === undefined) throw error;
+      await refusePartitionConsensusStartup(this, error.raftResult);
+    }
     // The peers this replica joins are the ones its opened configuration
     // names (owner decision O1), each addressed from its committed node by
     // the port (C3); nothing here reads a row or proposes an admission:

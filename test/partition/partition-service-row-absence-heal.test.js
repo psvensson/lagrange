@@ -1,3 +1,4 @@
+import {serviceRoleObservation} from '../test-helpers/service-role-observation.js';
 /**
  * Partition SERVICES identity acquisition after authoritative absence.
  *
@@ -17,7 +18,7 @@ const REPLICA_OPTIONS = Object.freeze({
   partitionId: 'services-p1',
   replicaId: 'services-p1-r1',
   nodeId: 'node-a',
-  service: {isLeaderReplica: () => false},
+  service: roleService('follower'),
 });
 
 function cloneRow(row) {
@@ -185,3 +186,8 @@ test('PartitionServiceRowOwner - failed INSERT without authoritative ' +
   t.equal(harness.upserts.length, 0,
     'unavailability is never translated into an UPSERT heal');
 });
+
+// Controlled service observation; row fixtures do not stand in for native proof.
+function roleService(role) {
+  return {raft: {readRoleAndTerm: () => (serviceRoleObservation(role, 1))}};
+}

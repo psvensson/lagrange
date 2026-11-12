@@ -349,6 +349,31 @@ function assertCodeRouting(t, REFUSAL, owners) {
 // after verification round 6): an unknown outcome is routed again by its
 // code only by a caller that re-proposes the write under its own entryId,
 // and never by its text.
+test('observation withdrawal retains refusal and distinguishes queued from proposed writes', (t) => {
+  const {buildReleasedPendingWriteAnswer, PARTITION_WRITE_RELEASE_CAUSE: CAUSE,
+    PARTITION_WRITE_LEADERSHIP_REFUSAL: CODE, isReroutableWriteFailureCode,
+    isRetryableWriteFailureCode} = partitionWriteKernel;
+  const {PROPOSAL_QUEUE_PROPOSAL_STATE: STATE} = proposalQueueConstants;
+  const consensusRefusal = Object.freeze({outcome: RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+    reason: 'invalid-native-role', phase: 'status-observation', retryable: false,
+    recoveryRequired: false});
+  const release = (proposal) => buildReleasedPendingWriteAnswer({entryId: TEST_ENTRY_ID,
+    proposal, logIndex: proposal === STATE.PROPOSED ? TEST_LOG_INDEX : null}, TEST_PARTITION_ID,
+  {cause: CAUSE.LEADERSHIP_LOST, consensusRefusal});
+  const queued = release(STATE.QUEUED);
+  t.equal(queued.failureCode, CODE.CONSENSUS_INVALID);
+  t.same(queued.consensus, consensusRefusal, 'unproposed write retains exact refusal');
+  t.equal(queued.entryId, TEST_ENTRY_ID);
+  t.equal(isReroutableWriteFailureCode(queued.failureCode), false);
+  t.equal(isRetryableWriteFailureCode(queued.failureCode), false);
+  const proposed = release(STATE.PROPOSED);
+  t.equal(proposed.failureCode, CODE.OUTCOME_UNKNOWN, 'already proposed write retains uncertain outcome');
+  t.same(proposed.consensus, consensusRefusal, 'unknown outcome retains its invalid-observation cause');
+  t.equal(proposed.entryId, TEST_ENTRY_ID);
+  t.equal(proposed.logIndex, TEST_LOG_INDEX);
+  t.end();
+});
+
 test('partition write kernel types every release and proposal refusal, and ' +
   'its routable codes and texts agree but for the unknown outcome under its ' +
   'entryId', async (t) => {

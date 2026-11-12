@@ -1,3 +1,4 @@
+import {serviceRoleObservation} from './service-role-observation.js';
 /**
  * Test-layer fixtures for the message-group activation effect boundary
  * (owner decision N2): a gated durable SERVICES row behind the registration
@@ -98,6 +99,7 @@ function createMessageGroupReplicaRuntime(replica) {
   const service = {groupId: replica.groupId, replicaId: replica.replicaId,
     unifiedAddress: replica.address, transport: replica.router,
     isLeaderReplica: () => false,
+    raft: {readRoleAndTerm: () => (serviceRoleObservation('follower', 1))},
     receiveMessage: () => (null)};
   if (replica.register !== false) {
     registerMessageGroupTransportHandler(service, {

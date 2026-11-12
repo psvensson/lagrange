@@ -1,3 +1,4 @@
+import {isReplicaServiceLeader} from '../raft/replica-leadership-state.js';
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
 import {CDC_TERMINAL_STAGE} from './cdc-constants.js';
 import {issueAuthoritativeReadStage} from './cdc-terminal-gate.js';
@@ -345,53 +346,9 @@ function isUsablePartitionService(partitionService) {
   );
 }
 
-function hasMatchingLeaderReplicaIdentity(partitionService) {
-  const leaderId = partitionService.getLeaderId ?
-    partitionService.getLeaderId() :
-    partitionService.leaderId;
-  const replicaId =
-    partitionService.replicaId !== undefined ?
-      partitionService.replicaId :
-      partitionService.replica_id;
-  return (
-    typeof leaderId === 'string' &&
-    typeof replicaId === 'string' &&
-    leaderId.length > 0 &&
-    leaderId === replicaId
-  );
-}
-
 function resolveLeaderRole(partitionService) {
-  if (!isUsablePartitionService(partitionService)) {
-    return false;
-  }
-  // CL-017(a): the LIVE raft role accessor decides when it exists. The
-  // static flags (isLeader, leaderId===replicaId) can go stale across
-  // leadership churn, and a stale claim here routes local system-table
-  // writes at a replica whose database may have diverged from the group
-  // (the witnessed post-churn 'No row found for CDC update' on rows the
-  // real group committed). Flags remain only as fallback for services
-  // exposing no live accessor.
-  if (typeof partitionService.getRole === 'function') {
-    const liveRole = String(partitionService.getRole() || '').toLowerCase();
-    return liveRole === CDC_INTEGRATION_SERVICE_LITERAL.LEADER;
-  }
-  if (partitionService.isLeader === true) {
-    return true;
-  }
-  if (
-    typeof partitionService.isLeaderReplica === 'function' &&
-    partitionService.isLeaderReplica() === true
-  ) {
-    return true;
-  }
-  // PartitionService constructs its role (FOLLOWER) and keeps it current; no
-  // live service exposes a separate raftRole spelling.
-  const role = String(partitionService.role).toLowerCase();
-  if (role === CDC_INTEGRATION_SERVICE_LITERAL.LEADER) {
-    return true;
-  }
-  return hasMatchingLeaderReplicaIdentity(partitionService);
+  return isUsablePartitionService(partitionService) &&
+    isReplicaServiceLeader(partitionService);
 }
 
 function resolvePartitionServicesForSegment(service) {

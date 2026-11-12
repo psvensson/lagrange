@@ -1,3 +1,4 @@
+import {serviceRoleObservation} from '../test-helpers/service-role-observation.js';
 // Public durable DEFER through the committed-acceptance owner (lead O1): a
 // public receive at a native follower whose leader route is UNAVAILABLE and
 // whose cache selection yields no target is admitted, then the forward owner
@@ -27,6 +28,8 @@ function occurrence(index) {
   // An unrelated group's row, so provisional hydration cannot change routing.
   const data = MessageGroupServiceRowOwner.buildServiceRow({groupId: PROBE_GROUP,
     replicaId: `${PROBE_GROUP}-r${index}`, nodeId: NODE_ID, timestamp: 3,
+    service: {raft: {readRoleAndTerm: () =>
+      (serviceRoleObservation('follower', 1))}},
     status: SERVICE_STATUS.ACTIVE});
   return {tableName: TABLES.SERVICES, operation: CDC_OPERATION.INSERT, data,
     timestamp: new HLCTimestamp(5000 + index, 0, 'public-defer').toString(),

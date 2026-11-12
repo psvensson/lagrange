@@ -5,13 +5,14 @@
 // only shape what it read.
 
 import {deepFreeze} from './raft-operation-port.js';
-import {RAFT_OPERATION_OUTCOME} from './raft-operation-port-constants.js';
+import {RAFT_OPERATION_OUTCOME, RAFT_REPLICA_MEMBERSHIP as MEMBERSHIP} from './raft-operation-port-constants.js';
 import {
   NO_LEADER,
   PEER_ADDRESS_STATUS,
   PEER_DELIVERY_OUTCOME,
   ROLE,
   ROLE_LEADER,
+  RUNTIME_PHASE,
   RUNTIME_REASON,
 } from './raft-rs-runtime-owner-constants.js';
 import {
@@ -118,8 +119,8 @@ function followerProgressSnapshot(group, resolvePeer, status) {
 // current term has committed and been applied here, so no entry of an earlier
 // term that this replica has not applied can commit any more. A replica that
 // does not lead, or a status missing either index, answers false.
-function currentTermApplied(status) {
-  if (ROLE[status.raftState] !== ROLE_LEADER ||
+function currentTermApplied(status, role) {
+  if (role !== ROLE_LEADER ||
       status.applied === undefined || status.applied === null ||
       status.pendingConfIndex === undefined || status.pendingConfIndex === null) {
     return false;
@@ -127,14 +128,39 @@ function currentTermApplied(status) {
   return BigInt(status.applied) > BigInt(status.pendingConfIndex);
 }
 
+const INVALID_NATIVE_ROLE = deepFreeze({outcome: RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+  reason: RUNTIME_REASON.INVALID_NATIVE_ROLE, phase: RUNTIME_PHASE.STATUS_OBSERVATION,
+  retryable: false, recoveryRequired: false});
+
 // The role and the term a core status names: the shaped status's and the
 // role-and-term read's, from one rule.
-function observedRole(status) {
-  return ROLE[status.raftState] || RUNTIME_REASON.UNKNOWN;
+function observeNativeRoleAndTerm(status) {
+  const nativeRole = status?.raftState;
+  // The binding serializes StateRole as u32. Never coerce a string or read
+  // an inherited dictionary member as a role, and never invent a follower.
+  if (!Number.isInteger(nativeRole) || !Object.hasOwn(ROLE, nativeRole)) {
+    return INVALID_NATIVE_ROLE;
+  }
+  return deepFreeze({outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+    role: ROLE[nativeRole], term: Number(status.term)});
 }
 
-function observedTerm(status) {
-  return Number(status.term);
+// Outgoing voters still vote in a joint configuration, including those due
+// to become learners on leaving it. No progress/identity/address read is needed.
+function replicaMembership(peerId, confState) {
+  if (confState.voters.includes(peerId) || confState.votersOutgoing.includes(peerId)) {
+    return MEMBERSHIP.VOTER;
+  }
+  return confState.learners.includes(peerId) ? MEMBERSHIP.LEARNER : MEMBERSHIP.ABSENT;
+}
+
+function observeReplicaRoleAndTerm(group, observation) {
+  const election = observeNativeRoleAndTerm(observation.status);
+  if (election.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) return election;
+  return deepFreeze({...election,
+    membership: replicaMembership(group.peerId, observation.confState),
+    gateOpen: observation.participation.gateOpen,
+  });
 }
 
 /**
@@ -148,6 +174,10 @@ function observedTerm(status) {
  */
 function shapeGroupObservation(group, observation, leaderIdentityUnresolved) {
   const {status, confState} = observation;
+  const roleAndTerm = observeReplicaRoleAndTerm(group, observation);
+  if (roleAndTerm.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
+    return roleAndTerm;
+  }
   const resolvePeer = peerResolverOf(group);
   let leader;
   let peers;
@@ -164,13 +194,13 @@ function shapeGroupObservation(group, observation, leaderIdentityUnresolved) {
     groupId: group.groupId,
     replicaIdentity: group.replicaIdentity,
     peerId: group.peerId,
-    term: observedTerm(status),
+    term: roleAndTerm.term,
     commitIndex: Number(status.commit),
     // The core holds a proposed configuration change it has not applied
     // (the conf-change admission's own pending check).
     confChangePending:
       BigInt(status.pendingConfIndex ?? 0) > BigInt(status.applied ?? 0),
-    currentTermApplied: currentTermApplied(status),
+    currentTermApplied: currentTermApplied(status, roleAndTerm.role),
     // The runtime's applied index of this same observation (the one its
     // confState came from), and the persisted last index of the log it
     // applies from: equal when every entry this replica holds has applied.
@@ -179,7 +209,8 @@ function shapeGroupObservation(group, observation, leaderIdentityUnresolved) {
     configurationKey: observation.configurationKey,
     membershipGenerationIndex: observation.membershipGenerationIndex,
     lifecycleIncarnation: observation.lifecycleIncarnation,
-    role: observedRole(status),
+    role: roleAndTerm.role,
+    membership: roleAndTerm.membership,
     ...leader,
     voters: confState.voters,
     voterCount: confState.voters.length,
@@ -205,5 +236,5 @@ function shapeGroupObservation(group, observation, leaderIdentityUnresolved) {
   return result;
 }
 
-export {observedRole, observedTerm, shapeGroupObservation,
+export {observeNativeRoleAndTerm, observeReplicaRoleAndTerm, shapeGroupObservation,
   setNativeStatusObserver};

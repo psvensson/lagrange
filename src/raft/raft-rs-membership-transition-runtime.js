@@ -1,3 +1,4 @@
+import {observeNativeRoleAndTerm} from './raft-rs-status-observation.js';
 import {confChangeProposalRefusal} from './raft-rs-conf-change-admission.js';
 import {liveVotersOf} from './raft-rs-voter-liveness.js';
 import {tuningOf} from './raft-rs-runtime-tuning.js';
@@ -18,7 +19,7 @@ import {
   RAFT_MEMBERSHIP_TRANSITION_STAGE,
   RAFT_OPERATION_OUTCOME,
 } from './raft-operation-port-constants.js';
-import {CORE_OPERATION, ROLE, ROLE_LEADER} from
+import {CORE_OPERATION, ROLE_LEADER} from
   './raft-rs-runtime-owner-constants.js';
 
 const MEMBERSHIP_TRANSITION_MEMBER_ROLE = Object.freeze({
@@ -200,6 +201,22 @@ function transitionOwnerRefusal(context) {
   return null;
 }
 
+function observeTransitionLeadership(group, status, command) {
+  const role = observeNativeRoleAndTerm(status);
+  if (role.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) return {refusal: role};
+  if (group.membershipGenerationKnown !== true) {
+    return {refusal: membershipTransitionRefusal(
+      RAFT_MEMBERSHIP_TRANSITION_REASON.CONFIGURATION_GENERATION_UNAVAILABLE)};
+  }
+  const currentTerm = canonicalIndexValue(status.term);
+  if (role.role !== ROLE_LEADER ||
+      currentTerm === null || currentTerm !== command.expectedLeaderTerm) {
+    return {refusal: membershipTransitionRefusal(
+      RAFT_MEMBERSHIP_TRANSITION_REASON.STALE_LEADERSHIP)};
+  }
+  return {currentTerm};
+}
+
 function transitionState(context) {
   const {group, expectedGeneration, command, invokeCoreAt,
     leaderReplicaIdOf} = context;
@@ -209,16 +226,9 @@ function transitionState(context) {
   if (!status.ok || !conf.ok) {
     return {refusal: status.ok ? conf.result : status.result};
   }
-  if (group.membershipGenerationKnown !== true) {
-    return {refusal: membershipTransitionRefusal(
-      RAFT_MEMBERSHIP_TRANSITION_REASON.CONFIGURATION_GENERATION_UNAVAILABLE)};
-  }
-  const currentTerm = canonicalIndexValue(status.value.term);
-  if (ROLE[status.value.raftState] !== ROLE_LEADER ||
-      currentTerm === null || currentTerm !== command.expectedLeaderTerm) {
-    return {refusal: membershipTransitionRefusal(
-      RAFT_MEMBERSHIP_TRANSITION_REASON.STALE_LEADERSHIP)};
-  }
+  const leadership = observeTransitionLeadership(group, status.value, command);
+  if (leadership.refusal) return leadership;
+  const {currentTerm} = leadership;
   if (raftRsConfStateKey(conf.value) !== command.expectedConfigurationKey ||
       Number(group.membershipGenerationIndex) !==
         command.expectedMembershipGenerationIndex) {

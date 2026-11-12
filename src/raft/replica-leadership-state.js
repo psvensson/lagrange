@@ -1,3 +1,7 @@
+import {assertRaftOperationSucceeded, deepFreeze} from './raft-operation-port.js';
+import {RAFT_EVENT, RAFT_OPERATION_OUTCOME,
+  RAFT_REPLICA_MEMBERSHIP as MEMBERSHIP} from './raft-operation-port-constants.js';
+import {RAFT_ROLE} from './constants.js';
 import {TYPEOF} from '../constants/index.js';
 
 
@@ -19,10 +23,80 @@ function normalizeReplicaLeaderId(nextLeaderId, options = {}) {
     nextLeaderId;
 }
 
-function resolveReplicaTerm(replica) {
-  return typeof replica.resolveCurrentTermSafe === 'function' ?
-    replica.resolveCurrentTermSafe() :
-    null;
+const CONSENSUS_UNAVAILABLE = deepFreeze({
+  outcome: RAFT_OPERATION_OUTCOME.HOST_FAILURE,
+  reason: 'replica-consensus-unavailable', phase: 'replica-role-and-term',
+  retryable: true, recoveryRequired: false,
+});
+
+// One read adapter for service consumers, never a retained field or ledger.
+function readReplicaRoleAndTerm(replica) {
+  return assertRaftOperationSucceeded(replica?.raft == null ? CONSENSUS_UNAVAILABLE :
+    replica.raft.readRoleAndTerm());
+}
+
+const SERVICE_AUTHORITY_REFUSAL = Object.freeze({
+  MEMBERSHIP: 'replica-membership-unavailable',
+  PARTICIPATION: 'replica-participation-unavailable',
+  ROUTING: 'replica-routing-unavailable',
+  LEADERSHIP: 'replica-leadership-unavailable',
+});
+const SERVICE_AUTHORITY_PHASE = 'replica-service-authority';
+
+function refuseServiceAuthority(reason) {
+  return assertRaftOperationSucceeded(deepFreeze({
+    outcome: RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+    reason, phase: SERVICE_AUTHORITY_PHASE, retryable: true, recoveryRequired: false,
+  }));
+}
+
+// Service role is membership-sensitive. A learner remains publishable while
+// its participation gate is closed; a voter claim requires its admission.
+function serviceRoleOf(observed) {
+  if (observed.membership === MEMBERSHIP.LEARNER) return RAFT_ROLE.LEARNER;
+  if (observed.membership !== MEMBERSHIP.VOTER) {
+    return refuseServiceAuthority(SERVICE_AUTHORITY_REFUSAL.MEMBERSHIP);
+  }
+  if (observed.gateOpen !== true) {
+    return refuseServiceAuthority(SERVICE_AUTHORITY_REFUSAL.PARTICIPATION);
+  }
+  return observed.role;
+}
+
+function readReplicaServiceRole(replica) {
+  return serviceRoleOf(readReplicaRoleAndTerm(replica));
+}
+
+function activeServiceLeader(replica, observed) {
+  return serviceRoleOf(observed) === RAFT_ROLE.LEADER &&
+    replica.isLeader === true && replica.leadershipTenure != null &&
+    replica.leadershipTenure.term === observed.term;
+}
+
+function isReplicaServiceLeader(replica) {
+  return activeServiceLeader(replica, readReplicaRoleAndTerm(replica));
+}
+
+function requireReplicaServiceLeader(replica) {
+  if (!isReplicaServiceLeader(replica)) {
+    refuseServiceAuthority(SERVICE_AUTHORITY_REFUSAL.LEADERSHIP);
+  }
+}
+
+// A successful observation alone cannot restore lifecycle-owned routing.
+// Reconsideration happens on the next normal announcement, never in this read.
+function readReplicaLeaderRoute(replica) {
+  const observed = readReplicaRoleAndTerm(replica);
+  const role = serviceRoleOf(observed);
+  if (activeServiceLeader(replica, observed)) {
+    return {local: true, leaderId: replica.replicaId, role};
+  }
+  if (observed.role !== RAFT_ROLE.LEADER &&
+      typeof replica.leaderId === 'string' && replica.leaderId.length > 0 &&
+      replica.leaderId !== replica.replicaId) {
+    return {local: false, leaderId: replica.leaderId, role};
+  }
+  return refuseServiceAuthority(SERVICE_AUTHORITY_REFUSAL.ROUTING);
 }
 
 /**
@@ -59,13 +133,12 @@ function renewReplicaLeadershipTenureOnTerm(replica, term) {
   mintReplicaLeadershipTenure(replica, observedTerm);
 }
 
-function applyReplicaLeadership(replica, role) {
+function applyReplicaLeadership(replica, role, term) {
   replica.role = role;
   replica.isLeader = true;
   replica.leaderId = replica.replicaId;
   // The term is resolved once per leadership edge: the tenure token and
   // the tenure claim below carry the same value.
-  const term = resolveReplicaTerm(replica);
   mintReplicaLeadershipTenure(replica, term);
   if (typeof replica.queueRoleUpdate === 'function') {
     replica.queueRoleUpdate(role);
@@ -89,6 +162,16 @@ function clearReplicaLeaderUpdateState(replica) {
   if (typeof replica.clearLocalCanonicalLeaderNodeIdIfOwned === 'function') {
     replica.clearLocalCanonicalLeaderNodeIdIfOwned();
   }
+}
+
+// Invalidity withdraws permissions; it does not assert a follower role.
+function withdrawReplicaLeadership(replica) {
+  const active = replica.isLeader === true || replica.leadershipTenure != null;
+  replica.isLeader = false;
+  replica.leaderId = null;
+  endReplicaLeadershipTenure(replica);
+  clearReplicaLeaderUpdateState(replica);
+  return active;
 }
 
 function applyReplicaDemotion(replica, role) {
@@ -133,7 +216,10 @@ function eventSubscriber(raft) {
 
 function wireReplicaLifecycleEvents(replica, options = {}) {
   const raft = options.raft || replica.raft;
-  const subscribe = eventSubscriber(raft);
+  // A publication dedupe key only. Every permission still reads its owner;
+  // the first config announcement need not repeat initial role publication.
+  let publishedMembership = readReplicaRoleAndTerm({raft}).membership;
+  const rawSubscribe = eventSubscriber(raft);
   const events = options.events || {};
   const roles = options.roles || {};
   const shouldIgnoreLeaderEvent = optionFunction(
@@ -147,6 +233,30 @@ function wireReplicaLifecycleEvents(replica, options = {}) {
   const onCandidate = optionFunction(options, 'onCandidate');
   const onLeaderChange = optionFunction(options, 'onLeaderChange');
   const onTermChange = optionFunction(options, 'onTermChange');
+  const onObservationRefused = optionFunction(options, 'onObservationRefused');
+  const consumeRefusal = (refusal) => {
+    const active = withdrawReplicaLeadership(replica);
+    onObservationRefused({refusal, active});
+    return refusal;
+  };
+  const subscribe = (event, listener) => rawSubscribe(event, (...args) => {
+    try {
+      return listener(...args);
+    } catch (error) {
+      if (error.raftResult === undefined) throw error;
+      return consumeRefusal(error.raftResult);
+    }
+  });
+  rawSubscribe(RAFT_EVENT.ROLE_OBSERVATION_REFUSED, consumeRefusal);
+  // A committed promotion need not change StateRole. Refresh its projection
+  // without changing the catch-up workflow stage or granting leader tenure.
+  subscribe(RAFT_EVENT.MEMBERSHIP_CHANGED, () => {
+    const observed = readReplicaRoleAndTerm(replica);
+    if (observed.membership === publishedMembership) return;
+    publishedMembership = observed.membership;
+    const role = serviceRoleOf(observed);
+    if (typeof replica.queueRoleUpdate === 'function') replica.queueRoleUpdate(role);
+  });
   const normalizeLeaderId = optionFunction(
     options, 'normalizeLeaderId', null);
 
@@ -154,17 +264,19 @@ function wireReplicaLifecycleEvents(replica, options = {}) {
     if (shouldIgnoreLeaderEvent(events.LEADER)) {
       return;
     }
-    applyReplicaLeadership(replica, roles.LEADER);
-    onLeader({term: getCurrentTerm()});
+    const term = getCurrentTerm();
+    applyReplicaLeadership(replica, roles.LEADER, term);
+    onLeader({term});
   });
 
   subscribe(events.FOLLOWER, () => {
     if (shouldIgnoreDemotionEvent(events.FOLLOWER)) {
       return;
     }
-    applyReplicaDemotion(replica, roles.FOLLOWER);
+    const term = getCurrentTerm();
+    applyReplicaDemotion(replica, readReplicaServiceRole(replica));
     onFollower({
-      term: getCurrentTerm(),
+      term,
       demotedByLeaderChange: false,
     });
   });
@@ -173,21 +285,23 @@ function wireReplicaLifecycleEvents(replica, options = {}) {
     if (shouldIgnoreDemotionEvent(events.CANDIDATE)) {
       return;
     }
-    applyReplicaDemotion(replica, roles.CANDIDATE);
-    onCandidate({term: getCurrentTerm()});
+    const term = getCurrentTerm();
+    applyReplicaDemotion(replica, readReplicaServiceRole(replica));
+    onCandidate({term});
   });
 
   subscribe(events.LEADER_CHANGE, (nextLeaderId) => {
+    const term = getCurrentTerm();
     const previousLeaderId = replica.leaderId;
     const demoted = reconcileReplicaLeaderChange(
       replica,
       nextLeaderId,
-      roles.FOLLOWER,
+      readReplicaServiceRole(replica),
       {normalizeLeaderId},
     );
     if (demoted) {
       onFollower({
-        term: getCurrentTerm(),
+        term,
         demotedByLeaderChange: true,
       });
     }
@@ -196,7 +310,7 @@ function wireReplicaLifecycleEvents(replica, options = {}) {
       leaderId: replica.leaderId,
       previousLeaderId,
       rawLeaderId: nextLeaderId,
-      term: getCurrentTerm(),
+      term,
     });
   });
 
@@ -207,6 +321,12 @@ function wireReplicaLifecycleEvents(replica, options = {}) {
 }
 
 export {
+  readReplicaRoleAndTerm,
+  readReplicaServiceRole,
+  isReplicaServiceLeader,
+  requireReplicaServiceLeader,
+  readReplicaLeaderRoute,
+  withdrawReplicaLeadership,
   applyReplicaLeadership,
   applyReplicaDemotion,
   endReplicaLeadershipTenure,

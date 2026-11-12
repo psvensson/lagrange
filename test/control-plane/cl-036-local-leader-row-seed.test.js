@@ -1,3 +1,4 @@
+import {serviceRoleObservation} from '../test-helpers/service-role-observation.js';
 import t from 'tap';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {SYSTEM_TABLE_NAME} from
@@ -93,7 +94,7 @@ t.test('CL-036 wiring: the shared Raft leader transition reaches the row owner',
   context.replicaId = `${PARTITION_ID}-r4`;
   context.replicaIds = [context.replicaId, `${PARTITION_ID}-r2`];
 
-  applyReplicaLeadership(context, 'leader');
+  applyReplicaLeadership(context, 'leader', null);
 
   t.equal(context.isLeader, true, 'Raft transition establishes local ownership');
   t.equal(
@@ -371,6 +372,7 @@ t.test(
       replicaId: `${PARTITION_ID}-r4`,
       nodeId: REPLACEMENT_NODE_ID,
       isLeader: true,
+      raft: {readRoleAndTerm: () => (serviceRoleObservation('leader', 1))},
       systemTableCache: cache,
       cdcIntegrationService: {
         updateSystemTableRow: async (tableName, whereClause, data, options) => {
@@ -443,6 +445,7 @@ t.test(
       replicaId: `${PARTITION_ID}-r4`,
       nodeId: REPLACEMENT_NODE_ID,
       isLeader: true,
+      raft: {readRoleAndTerm: () => (serviceRoleObservation('leader', 1))},
       systemTableCache: cache,
       cdcIntegrationService: {
         updateSystemTableRow: async (...args) => {

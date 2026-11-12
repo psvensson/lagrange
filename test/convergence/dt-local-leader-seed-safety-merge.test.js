@@ -264,7 +264,7 @@ t.test(
     'prefers it over the lagging durable leader',
   async (t) => {
     const {replica, cache} = buildElectionReplica({term: 11});
-    applyReplicaLeadership(replica, 'leader');
+    applyReplicaLeadership(replica, 'leader', 11);
     const seededRow = cache.get(SYSTEM_TABLE_NAME.PARTITIONS, PARTITION_ID);
     t.equal(
       seededRow.leader_node_id,
@@ -307,11 +307,11 @@ t.test(
 );
 
 t.test(
-  'a replica without a term resolver mints NO claim — fail-closed, the ' +
+  'a leadership observation without a term mints NO claim — fail-closed, the ' +
     'preference stays off',
   async (t) => {
     const {replica, cache} = buildElectionReplica({withTermResolver: false});
-    applyReplicaLeadership(replica, 'leader');
+    applyReplicaLeadership(replica, 'leader', null);
     const seededRow = cache.get(SYSTEM_TABLE_NAME.PARTITIONS, PARTITION_ID);
     t.equal(
       seededRow.leader_node_id,
@@ -344,7 +344,7 @@ t.test(
   async (t) => {
     const successorNode = 'node-successor';
     const {replica, cache} = buildElectionReplica({term: 13});
-    applyReplicaLeadership(replica, 'leader');
+    applyReplicaLeadership(replica, 'leader', 13);
     const successorRow = {
       partition_id: PARTITION_ID,
       leader_node_id: successorNode,

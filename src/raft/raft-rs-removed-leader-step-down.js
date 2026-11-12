@@ -28,6 +28,7 @@
 // the core's facts then. A trap fails the runtime as any core call's does;
 // the caller's next core call answers it.
 
+import {RAFT_OPERATION_OUTCOME} from './raft-operation-port-constants.js';
 import {RAFT_RS_CORE_PRIMITIVE} from './raft-rs-core-constants.js';
 import {
   REMOVED_LEADER_ACTION,
@@ -39,17 +40,27 @@ function namesPeer(confState, peerId) {
     ...(confState.learners || [])].map(String).includes(String(peerId));
 }
 
+const NO_STEP_DOWN = Object.freeze({ok: true, value: {steppedDown: false}});
+
 function settle(peerId, observed, {stepDown, queueTransfer}) {
-  if (!observed.ok) {
-    return false;
-  }
+  if (!observed.ok) return observed;
   const decided = removedLeaderAction(peerId, observed.value);
+  if (decided.outcome === RAFT_OPERATION_OUTCOME.CORE_REFUSED) {
+    return {ok: false, result: decided};
+  }
   if (decided.action === REMOVED_LEADER_ACTION.TRANSFER) {
     queueTransfer(decided.transfer);
-    return false;
+    return NO_STEP_DOWN;
   }
-  return decided.action === REMOVED_LEADER_ACTION.STEP_DOWN &&
-    stepDown(RAFT_RS_CORE_PRIMITIVE.STEP_DOWN_REMOVED_LEADER).ok;
+  if (decided.action !== REMOVED_LEADER_ACTION.STEP_DOWN) return NO_STEP_DOWN;
+  const stepped = stepDown(RAFT_RS_CORE_PRIMITIVE.STEP_DOWN_REMOVED_LEADER);
+  // This primitive can refuse while a Ready still has messages. The existing
+  // drain-end entry retries it after advance; observation refusal above never
+  // takes this path. Traps/host failures retain their exact operation result.
+  if (!stepped.ok && stepped.result.outcome !== RAFT_OPERATION_OUTCOME.CORE_REFUSED) {
+    return stepped;
+  }
+  return {ok: true, value: {steppedDown: stepped.ok}};
 }
 
 const NO_TRANSFER_AT_APPLY = Object.freeze({queueTransfer() {}});
@@ -62,10 +73,10 @@ const NO_TRANSFER_AT_APPLY = Object.freeze({queueTransfer() {}});
  * @param {Function} input.observe - () => the group's observation
  *   ({ok, value}) read now.
  * @param {Function} input.stepDown - (primitive) => the core call's answer.
- * @return {boolean} Whether the replica stepped down.
+ * @return {Object} {ok, value: {steppedDown}} or {ok: false, result}.
  */
 function removedLeaderAtApply({peerId, confState, observe, stepDown}) {
-  return !namesPeer(confState, peerId) &&
+  return namesPeer(confState, peerId) ? NO_STEP_DOWN :
     settle(peerId, observe(), {stepDown, ...NO_TRANSFER_AT_APPLY});
 }
 
@@ -78,8 +89,8 @@ function removedLeaderAtApply({peerId, confState, observe, stepDown}) {
  * @param {Function} input.stepDown - (primitive) => the core call's answer.
  * @param {Function} input.queueTransfer - (transfer) => queues the transfer
  *   command as the group's next turn.
- * @return {boolean} Whether the replica stepped down: the core holds a Ready
- *   the caller drains.
+ * @return {Object} {ok, value: {steppedDown}} or {ok: false, result}.
+ *   A successful step-down leaves a Ready the caller drains.
  */
 function removedLeaderAtDrainEnd({peerId, observed, stepDown, queueTransfer}) {
   return settle(peerId, observed, {stepDown, queueTransfer});

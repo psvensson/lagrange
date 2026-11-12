@@ -421,6 +421,9 @@ async function executeHandedOffWriteCommit(service, options, handoff) {
 function partitionWriteLeadershipRefusalOf(service) {
   // Only the role (or the read's own failure) decides: no peer is resolved.
   const consensusStatus = service.raft.readRoleAndTerm();
+  if (consensusStatus.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
+    return buildPartitionWriteLeadershipRefusal(consensusStatus, service.partitionId);
+  }
   const commitMode = resolvePartitionWriteCommitMode({
     replicaIds: service.replicaIds,
     raftState: consensusStatus.role,

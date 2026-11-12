@@ -1,3 +1,4 @@
+import {serviceRoleObservation} from '../test-helpers/service-role-observation.js';
 // Real released SERVICES producer, RF1 source MG and RF5 target MG. The only
 // fault is transport custody: native G/F1 traffic and the unchanged B envelope.
 import {founderNodeIdsOfPlacement} from
@@ -138,6 +139,7 @@ function activeProjection(groupId, replicaId, role = RAFT_ROLE.FOLLOWER) {
   // Cache inputs deliberately describe a stale routing projection. They are
   // never native role, membership, lifecycle authorization or readiness facts.
   return {...MessageGroupServiceRowOwner.buildServiceRow({groupId, replicaId,
+    service: {raft: {readRoleAndTerm: () => (serviceRoleObservation(role, 1))}},
     nodeId: NODE_ID, timestamp: 1, status: SERVICE_STATUS.ACTIVE}), raft_role: role};
 }
 

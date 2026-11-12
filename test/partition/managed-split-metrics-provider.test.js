@@ -736,6 +736,7 @@ function wireRealLeadershipEdge(replica) {
   };
   wireReplicaLifecycleEvents(replica, {
     raft: port,
+    getCurrentTerm: () => replica.resolveCurrentTermSafe(),
     events: {LEADER: 'leader', FOLLOWER: 'follower', CANDIDATE: 'candidate',
       LEADER_CHANGE: 'leader-change', TERM_CHANGE: 'term-change'},
     roles: {LEADER: 'leader', FOLLOWER: 'follower', CANDIDATE: 'candidate'},

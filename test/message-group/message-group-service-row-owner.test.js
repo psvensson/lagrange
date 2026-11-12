@@ -1,3 +1,4 @@
+import {serviceRoleObservation} from '../test-helpers/service-role-observation.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
 import {MessageGroupServiceRowOwner as RowOwner} from
@@ -7,6 +8,8 @@ import {createLifecycleCdcService, createLifecycleServiceRow} from
   '../test-helpers/lifecycle-state-store.js';
 
 const REPLICA_ID = 'mg-1-r1';
+const leaderObservation = {raft: {readRoleAndTerm: () =>
+  (serviceRoleObservation('leader', 1))}};
 // Activation runs through the replica lifecycle owner, bound to the exact
 // transport handler; these fixtures model a registered handler.
 class MessageGroupServiceRowOwner extends RowOwner {
@@ -28,7 +31,7 @@ function stoppedRow(overrides = {}) {
 }
 function activation(owner) {
   return owner.activateReplica({groupId: 'mg-1', replicaId: REPLICA_ID,
-    nodeId: 'node-a', service: {isLeaderReplica: () => true}});
+    nodeId: 'node-a', service: leaderObservation});
 }
 
 test('MessageGroupServiceRowOwner activates exact STOPPED incarnation by UPDATE',
@@ -138,7 +141,7 @@ test('MessageGroupServiceRowOwner activation evidence survives non-lifecycle ' +
 async (t) => {
   const writer = createLifecycleCdcService({services: []});
   const owner = new MessageGroupServiceRowOwner({systemTableWriter: writer});
-  const leader = {isLeaderReplica: () => true};
+  const leader = leaderObservation;
   const register = (replicaId, timestamp) => owner.registerReplica({
     groupId: 'mg-1', replicaId, nodeId: 'node-a', service: leader,
     timestamp, status: 'stopped'});
@@ -188,7 +191,7 @@ test('MessageGroupServiceRowOwner removal survives role writes while the ' +
 async (t) => {
   const writer = createLifecycleCdcService({services: []});
   const owner = new MessageGroupServiceRowOwner({systemTableWriter: writer});
-  const leader = {isLeaderReplica: () => true};
+  const leader = leaderObservation;
   const lifecycle = (replicaId, status, timestamp) =>
     owner.updateReplicaStatus({groupId: 'mg-1', replicaId, nodeId: 'node-a',
       service: leader, status, timestamp});
@@ -250,7 +253,7 @@ test('MessageGroupServiceRowOwner lost registration INSERT resolves by ' +
   const owner = new MessageGroupServiceRowOwner({systemTableWriter: writer});
   const registered = await owner.registerReplica({groupId: 'mg-1',
     replicaId: 'mg-1-r1', nodeId: 'node-a',
-    service: {isLeaderReplica: () => true}, timestamp: 2_100,
+    service: leaderObservation, timestamp: 2_100,
     status: 'stopped'});
   t.equal(registered.state_entered_at, 2_100,
     'the lost INSERT is recognized by identity and generation G');
@@ -260,7 +263,7 @@ test('MessageGroupServiceRowOwner stamps a strictly newer generation when ' +
   'the clock is unchanged or regressed (S-F1)', async (t) => {
   const writer = createLifecycleCdcService({services: []});
   const owner = new MessageGroupServiceRowOwner({systemTableWriter: writer});
-  const leader = {isLeaderReplica: () => true};
+  const leader = leaderObservation;
   const lifecycle = (status, timestamp) =>
     owner.updateReplicaStatus({groupId: 'mg-1', replicaId: REPLICA_ID,
       nodeId: 'node-a', service: leader, status, timestamp});
@@ -296,7 +299,8 @@ test('MessageGroupServiceRowOwner rebirth at the same or a regressed clock ' +
   const writer = createLifecycleCdcService({services: []});
   const owner = new MessageGroupServiceRowOwner({systemTableWriter: writer});
   const register = (timestamp) => owner.registerReplica({groupId: 'mg-1',
-    replicaId: REPLICA_ID, nodeId: 'node-a', timestamp, status: 'stopped'});
+    replicaId: REPLICA_ID, nodeId: 'node-a', service: leaderObservation,
+    timestamp, status: 'stopped'});
   const removal = (stoppedRow) => owner.removeReplica({groupId: 'mg-1',
     replicaId: REPLICA_ID, nodeId: 'node-a', stoppedRow});
 
@@ -340,3 +344,27 @@ test('MessageGroupServiceRowOwner registration is a STOPPED birth: an ' +
   t.equal(writer.calls.length, 0, 'no row is written');
   t.equal(writer.store.durableRow(TABLES.SERVICES, REPLICA_ID), null);
 });
+
+
+test('row publication refuses invalid authority before durable mutation and recovers explicitly',
+  async (t) => {
+    const refusal = Object.freeze({outcome: 'CORE_REFUSED', reason: 'invalid-native-role',
+      phase: 'status-observation', retryable: false, recoveryRequired: false});
+    let observed = refusal;
+    const service = {isLeader: false, role: 'leader', getRole: () => 'leader',
+      raft: {readRoleAndTerm: () => observed}};
+    const writer = createLifecycleCdcService({services: [stoppedRow()]});
+    const owner = new MessageGroupServiceRowOwner({now: () => 1234, systemTableWriter: writer});
+    const options = {groupId: 'mg-1', replicaId: REPLICA_ID, nodeId: 'node-a', service};
+    await t.rejects(owner.activateReplica(options), {raftResult: refusal});
+    t.equal(writer.calls.length, 0, 'no INSERT/UPDATE attempts on refusal');
+    t.equal(writer.store.durableRow(TABLES.SERVICES, REPLICA_ID).status, 'stopped');
+    t.throws(() => MessageGroupServiceRowOwner.buildServiceRow({...options, service: null}),
+      {raftResult: {outcome: 'HOST_FAILURE', reason: 'replica-consensus-unavailable'}},
+      'absent service authority is explicitly unavailable');
+    observed = serviceRoleObservation('follower', 2);
+    const row = await owner.activateReplica(options);
+    t.equal(row.raft_role, 'follower', 'valid owner role wins over stale leader fields and methods');
+    t.equal(writer.store.durableRow(TABLES.SERVICES, REPLICA_ID).raft_role, 'follower');
+    t.equal(writer.calls.length, 1, 'one valid durable mutation');
+  });

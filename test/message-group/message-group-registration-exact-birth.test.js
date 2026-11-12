@@ -1,3 +1,4 @@
+import {serviceRoleObservation} from '../test-helpers/service-role-observation.js';
 // The existing MG row owner and canonical read route, with real SQLite holding
 // an injected authoritative observation. Not a native consensus/startup proof.
 import assert from 'node:assert/strict';
@@ -9,6 +10,8 @@ import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE, CONTROL_PLANE_READ_LEADER_MODE} f
   '../../src/control-plane/control-plane-system-table-gateway.js';
 
 const request = Object.freeze({groupId: 'original-mg', replicaId: 'original-mg-r1',
+  service: {raft: {readRoleAndTerm: () =>
+    (serviceRoleObservation('follower', 1))}},
   nodeId: 'original-node', status: 'stopped', timestamp: 1000,
   extraFields: {created_at: 1000, state_entered_at: 1000, updated_at: 1000,
     create_attempt_token: 'reserved-original-mg-creation'}});

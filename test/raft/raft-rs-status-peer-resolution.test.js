@@ -17,7 +17,7 @@ import {shapeGroupObservation} from '../../src/raft/raft-rs-status-observation.j
 import {RAFT_OPERATION_OUTCOME as OUTCOME} from
   '../../src/raft/raft-operation-port-constants.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
-import {groupOf, hostAddress, observations, reserve} from
+import {countingDatabase, groupOf, hostAddress, observations, reserve} from
   './raft-rs-status-shape-fixture.js';
 import {historyDb, openHistory} from
   './raft-rs-backend/opening-history-native-fixture.js';
@@ -25,7 +25,6 @@ import {PartitionNodeCluster} from './raft-rs-backend/partition-node-cluster.js'
 
 const EXPECTED = JSON.parse(fs.readFileSync(new URL(
   './raft-rs-status-shape-expected.json', import.meta.url), 'utf8'));
-const IDENTITY_TABLE = 'raft_rs_peer_identity';
 
 // The registry's reservation reads, counted on the real registry.
 function countingRegistry(db) {
@@ -60,9 +59,54 @@ test('a shaped status reads each named peer once and is byte-identical to the ba
         reads.count = 0;
         const shaped = shapeGroupObservation(group, observation,
           (error) => ({unresolved: String(error)}));
-        assert.equal(JSON.stringify(shaped), EXPECTED[name], `${name}: byte-identical`);
+        const {membership, ...priorShape} = shaped;
+        assert.equal(membership, 'voter', 'the configured subject is a voter');
+        assert.equal(JSON.stringify(priorShape), EXPECTED[name], `${name}: prior fields byte-identical`);
         assert.equal(reads.count, namedPeerIds(group, observation).size,
           `${name}: one reservation read per named peer`);
+      }
+    } finally {
+      db.close();
+    }
+  });
+
+test('malformed native raft roles are refused before a status is published',
+  async (t) => {
+    const db = new Database(':memory:');
+    try {
+      const {registry} = countingRegistry(db);
+      const ids = reserve(registry);
+      const group = groupOf(ids, peerResolutionOf(registry, hostAddress));
+      const valid = observations(ids).followerOfReservedLeader;
+      const malformed = [
+        ['missing', (status) => {
+          delete status.raftState;
+        }],
+        ['null', (status) => {
+          status.raftState = null;
+        }],
+        ['string', (status) => {
+          status.raftState = '2';
+        }],
+        ['out of range', (status) => {
+          status.raftState = 4;
+        }],
+        ['prototype key', (status) => {
+          status.raftState = '__proto__';
+        }],
+        ['inherited key', (status) => {
+          status.raftState = 'constructor';
+        }],
+      ];
+      for (const [label, corrupt] of malformed) {
+        await t.test(label, () => {
+          const status = {...valid.status};
+          corrupt(status);
+          const result = shapeGroupObservation(group, {...valid, status},
+            (error) => ({unresolved: String(error)}));
+          assert.equal(result.outcome, OUTCOME.CORE_REFUSED);
+          assert.equal(result.reason, 'invalid-native-role');
+        });
       }
     } finally {
       db.close();
@@ -92,33 +136,6 @@ test('one reservation read gives a peer its identity and committed node', () => 
   }
 });
 
-// The real port over a database whose peer-identity statements count their
-// executions.
-function countingDatabase(db) {
-  const executions = {count: 0};
-  const counted = (statement) => new Proxy(statement, {get(target, property) {
-    const value = Reflect.get(target, property, target);
-    if (['get', 'all', 'run'].includes(property)) {
-      return (...args) => {
-        executions.count += 1;
-        return value.apply(target, args);
-      };
-    }
-    return typeof value === 'function' ? value.bind(target) : value;
-  }});
-  const proxy = new Proxy(db, {get(target, property) {
-    if (property === 'prepare') {
-      return (sql) => {
-        const statement = target.prepare(sql);
-        return sql.includes(IDENTITY_TABLE) ? counted(statement) : statement;
-      };
-    }
-    const value = Reflect.get(target, property, target);
-    return typeof value === 'function' ? value.bind(target) : value;
-  }});
-  return {proxy, executions};
-}
-
 test('the role-and-term read answers the status read\'s role and term and reads no identity',
   async (t) => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'role-and-term-'));
@@ -139,7 +156,7 @@ test('the role-and-term read answers the status read\'s role and term and reads 
       executions.count = 0;
       const read = port.readRoleAndTerm();
       assert.deepEqual(read, {outcome: OUTCOME.CORE_OK, role: status.role,
-        term: status.term}, `${phase}: the status read's role and term`);
+        term: status.term, membership: status.membership, gateOpen: status.gateOpen}, `${phase}: the status read's role and term`);
       assert.equal(read.role, phase);
       assert.ok(Object.isFrozen(read));
       assert.equal(executions.count, 0, `${phase}: no peer identity is read`);
@@ -169,6 +186,7 @@ test('a leader\'s status read of a three-replica group reads each peer\'s reserv
     assert.equal(executions.count, 3, 'the leader and its two peers, one read each');
     executions.count = 0;
     assert.deepEqual(cluster.node('spr-a').readRoleAndTerm(),
-      {outcome: OUTCOME.CORE_OK, role: 'leader', term: status.term});
+      {outcome: OUTCOME.CORE_OK, role: 'leader', term: status.term,
+        membership: 'voter', gateOpen: true});
     assert.equal(executions.count, 0);
   });

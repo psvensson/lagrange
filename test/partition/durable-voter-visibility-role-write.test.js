@@ -1,3 +1,5 @@
+import {serviceRoleObservation} from '../test-helpers/service-role-observation.js';
+
 import {test} from '../../src/test-helpers/tap.js';
 import {PartitionServiceCoreBase} from
   '../../src/partition/partition-service-core-base.js';
@@ -162,11 +164,13 @@ function createRoleHelperForReplica({
   cache,
   store,
   warns,
-  initialRole = null,
+  initialRole = RAFT_ROLE.FOLLOWER,
 }) {
+  let observedRole = initialRole;
   const svc = {
     replicaId,
     role: initialRole,
+    raft: {readRoleAndTerm: () => Object.freeze(serviceRoleObservation(observedRole, 1))},
     partitionId: LEDGER_PARTITION_ID,
     systemTableCache: cache,
     cdcIntegrationService: store.cdcIntegrationService,
@@ -199,6 +203,9 @@ function createRoleHelperForReplica({
       .bind(svc);
   const helper = PartitionServiceCoreBase.prototype.createRoleMutationHelper.call(svc);
   helper._owner = svc;
+  helper.observeRole = (role) => {
+    observedRole = role;
+  };
   return helper;
 }
 
@@ -496,12 +503,14 @@ test('durable voter visibility - in-flight learner flush superseded during readA
 
   const helper = createRoleHelperForReplica({replicaId, cache, store, warns});
   // Start an in-flight learner flush that pauses inside readAuthoritativeRoleRow.
+  helper.observeRole(RAFT_ROLE.LEARNER);
   helper.queue(RAFT_ROLE.LEARNER);
   await new Promise((resolve) => setTimeout(resolve, 5));
   t.equal(helper.inFlight, true, 'initial learner flush is in flight');
 
   // While the authoritative probe for learner is in flight, the replica
   // promotes to follower and queues the voter role.
+  helper.observeRole(RAFT_ROLE.FOLLOWER);
   helper.queue(RAFT_ROLE.FOLLOWER);
   releaseFirstProbe();
 
@@ -661,6 +670,7 @@ test('durable voter visibility - leader replica flushes collapsed follower voter
   // If the replica steps down to follower, a stale 'leader' role flush or
   // cached 'leader' value is fenced by the live role check.
   helper._owner.role = RAFT_ROLE.FOLLOWER;
+  helper.observeRole(RAFT_ROLE.FOLLOWER);
   cache.applySystemTableChange(
     SERVICES,
     'upsert',

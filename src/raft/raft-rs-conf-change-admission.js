@@ -51,12 +51,12 @@
 // Nothing here reads a row or the core itself.
 
 import {deepFreeze} from './raft-operation-port.js';
+import {observeNativeRoleAndTerm} from './raft-rs-status-observation.js';
 import {
   RAFT_MEMBERSHIP_CHANGE_REFUSAL,
   RAFT_OPERATION_OUTCOME,
 } from './raft-operation-port-constants.js';
 import {
-  ROLE,
   ROLE_LEADER,
   RUNTIME_PHASE,
   RUNTIME_REASON,
@@ -146,6 +146,22 @@ function hasPendingConfChange(status) {
   return BigInt(status.pendingConfIndex ?? 0) > BigInt(status.applied ?? 0);
 }
 
+function confChangeRoleRefusal(status, leaderReplicaIdOf) {
+  const role = observeNativeRoleAndTerm(status);
+  if (role.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) return role;
+  if (role.role !== ROLE_LEADER) {
+    return deepFreeze({
+      outcome: RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+      reason: RAFT_MEMBERSHIP_CHANGE_REFUSAL.NOT_LEADER,
+      phase: RUNTIME_PHASE.ADMISSION,
+      retryable: true,
+      recoveryRequired: false,
+      leaderReplicaId: leaderReplicaIdOf(status.lead),
+    });
+  }
+  return null;
+}
+
 /**
  * The answer to a conf-change proposal the core must not be handed, or null
  * when the leader's core takes it. A replica that does not lead answers
@@ -168,16 +184,8 @@ function hasPendingConfChange(status) {
  */
 function confChangeProposalRefusal({status, confState, change,
   leaderReplicaIdOf, liveVoters}) {
-  if (ROLE[status.raftState] !== ROLE_LEADER) {
-    return deepFreeze({
-      outcome: RAFT_OPERATION_OUTCOME.CORE_REFUSED,
-      reason: RAFT_MEMBERSHIP_CHANGE_REFUSAL.NOT_LEADER,
-      phase: RUNTIME_PHASE.ADMISSION,
-      retryable: true,
-      recoveryRequired: false,
-      leaderReplicaId: leaderReplicaIdOf(status.lead),
-    });
-  }
+  const roleRefusal = confChangeRoleRefusal(status, leaderReplicaIdOf);
+  if (roleRefusal !== null) return roleRefusal;
   if (leavesNoVoter(confState, change)) {
     return deepFreeze({
       outcome: RAFT_OPERATION_OUTCOME.CORE_REFUSED,

@@ -1,4 +1,5 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {readReplicaRoleAndTerm} from '../raft/replica-leadership-state.js';
 import {RAFT_EVENT} from '../raft/raft-operation-port-constants.js';
 import {createConsensusHoldLog} from './partition-consensus-hold-log.js';
 import {
@@ -42,10 +43,10 @@ function wirePartitionRaftLifecycleEvents(
   // among them) was not proposed, and this replica does not lead. Its
   // participant staging sessions are discarded with it (TX1 design 7: they
   // hold nothing durable and no connection state).
-  const releasePendingWrites = () => {
+  const releasePendingWrites = (consensusRefusal) => {
     service.releasePendingCommittedWrites(
       (pending) => buildReleasedPendingWriteAnswer(pending, service.partitionId,
-        {cause: PARTITION_WRITE_RELEASE_CAUSE.LEADERSHIP_LOST}));
+        {cause: PARTITION_WRITE_RELEASE_CAUSE.LEADERSHIP_LOST, consensusRefusal}));
     discardParticipantSessions(service);
   };
   // Every announcement is also where the partition sees its group held (the
@@ -63,7 +64,16 @@ function wirePartitionRaftLifecycleEvents(
       TERM_CHANGE: PARTITION_SERVICE_REASON.TERM_CHANGE,
     },
     roles: RaftRole,
-    getCurrentTerm: () => service.raft.readStatus().term,
+    getCurrentTerm: () => readReplicaRoleAndTerm(service).term,
+    onObservationRefused: ({refusal, active}) => {
+      if (active) {
+        releasePendingWrites(refusal);
+        service.cancelLeaderOwnedActivation();
+        service.updateRebalancerLeadership();
+      }
+      service.logger.error(RAFT_EVENT.ROLE_OBSERVATION_REFUSED,
+        {partitionId: service.partitionId, replicaId: service.replicaId, consensus: refusal});
+    },
     normalizeLeaderId: (candidate) =>
       service.normalizeLeaderReplicaId(candidate),
     shouldIgnoreDemotionEvent,

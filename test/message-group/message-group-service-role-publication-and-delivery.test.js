@@ -1,3 +1,6 @@
+import {serviceRoleObservation} from '../test-helpers/service-role-observation.js';
+import {settledTurn} from '../../src/raft/raft-rs-turn-answer.js';
+import {RAFT_OPERATION_OUTCOME} from '../../src/raft/raft-operation-port-constants.js';
 /**
  * Unit tests for MessageGroupService.
  * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5
@@ -49,6 +52,16 @@ import {
 } from '../../src/control-plane/pressure-governor.js';
 import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
 import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
+
+
+// Publication/message component controls: the native lifecycle is exercised
+// separately by raft-rs-native-role-service-withdrawal.test.js.
+function setObservedRole(replica, role) {
+  replica.raft = Object.freeze({
+    readRoleAndTerm: () => Object.freeze(serviceRoleObservation(role, 1)),
+    close: () => settledTurn({outcome: RAFT_OPERATION_OUTCOME.CORE_OK}),
+  });
+}
 
 const TEST_CRITICAL_TRANSPORT_PARTITION_ADDRESS =
   'seed-node/partition/control_plane_publications-p1-r1';
@@ -386,6 +399,7 @@ test(
       }));
 
       service.systemTableCache = systemTableCache;
+      setObservedRole(service, RaftRole.LEADER);
       service.pendingRoleUpdate = RaftRole.LEADER;
       service.persistedRole = null;
 
@@ -422,6 +436,7 @@ test('MessageGroupService - flushes services role update when local services lea
       }));
 
       service.systemTableCache = new SystemTableCache();
+      setObservedRole(service, RaftRole.LEADER);
       service.pendingRoleUpdate = RaftRole.LEADER;
       service.persistedRole = null;
 
@@ -477,7 +492,9 @@ test('MessageGroupService - flushes message-group leader update when local owner
       }));
 
       service.systemTableCache = new SystemTableCache();
+      setObservedRole(service, RaftRole.LEADER);
       service.isLeader = true;
+      service.leadershipTenure ??= Object.freeze({term: 1});
       service.pendingLeaderNodeUpdate = nodeId;
       service.persistedLeaderNodeId = null;
 
@@ -555,6 +572,7 @@ test(
           [COLUMN.READY_LEASE_EXPIRES_AT]: null,
         },
       );
+      setObservedRole(service, RaftRole.LEADER);
       service.pendingRoleUpdate = RaftRole.LEADER;
       service.persistedRole = null;
 

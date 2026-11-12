@@ -53,6 +53,8 @@ const DEFAULT_PORT_STATE = Object.freeze({
   replicaIdentity: null,
   peerId: 1,
   role: RAFT_ROLE.FOLLOWER,
+  // Explicit controlled participation, independent of the election-role knob.
+  membership: 'voter',
   term: 1,
   leaderId: null,
   leaderAddress: null,
@@ -330,6 +332,7 @@ export class ControllableConsensusPort {
           lastIndex: this.committedIndex,
           followerProgress: {...this.followerProgress},
           role: this.role,
+          membership: this.membership,
           leaderId: this.leaderId,
           leaderAddress,
           leaderAddressStatus,
@@ -351,7 +354,8 @@ export class ControllableConsensusPort {
       // The port's role-and-term read: the role and term of this double's
       // own status.
       readRoleAndTerm: () => deepFreeze({
-        outcome: RAFT_OPERATION_OUTCOME.CORE_OK, role: this.role, term: this.term}),
+        outcome: RAFT_OPERATION_OUTCOME.CORE_OK, role: this.role, term: this.term,
+        membership: this.membership, gateOpen: this.gateOpen}),
       // The fake holds no committed configuration; a test that needs one
       // answers through committedMembershipHandler.
       readCommittedMembership: (request) => this.committedMembershipHandler ?

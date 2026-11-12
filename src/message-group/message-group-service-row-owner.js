@@ -8,7 +8,7 @@ import {
   SERVICE_TYPE,
   isPartitionCleanupServiceRow,
 } from '../constants/index.js';
-import {RAFT_ROLE} from '../raft/constants.js';
+import {readReplicaServiceRole} from '../raft/replica-leadership-state.js';
 import {normalizePublishedRaftRole} from '../raft/published-raft-role.js';
 import {classifyControlPlaneMutationResult} from
   '../control-plane/control-plane-mutation-outcome-classifier.js';
@@ -65,25 +65,17 @@ function assertRequiredString(value, errorMessage) {
   }
 }
 
+function messageGroupRowIdentity({groupId, replicaId, nodeId}) {
+  assertRequiredString(groupId, MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR.GROUP_ID_REQUIRED);
+  assertRequiredString(replicaId, MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR.REPLICA_ID_REQUIRED);
+  assertRequiredString(nodeId, MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR.NODE_ID_REQUIRED);
+  return {service_id: replicaId, service_type: SERVICE_TYPE.MESSAGE_GROUP,
+    node_id: nodeId, group_id: groupId, replica_id: replicaId};
+}
+
 function resolveMessageGroupRaftRole(service) {
-  const isLeader = service?.isLeader === true ||
-    (typeof service?.isLeaderReplica === 'function' &&
-      service.isLeaderReplica());
-  if (isLeader) {
-    return normalizePublishedRaftRole(RAFT_ROLE.LEADER, {
-      collapseLeaderToFollower: false,
-    });
-  }
-
-  if (typeof service?.getRole === 'function') {
-    return normalizePublishedRaftRole(service.getRole(), {
-      collapseLeaderToFollower: false,
-    });
-  }
-
-  return normalizePublishedRaftRole(service?.role, {
-    collapseLeaderToFollower: false,
-  });
+  const role = readReplicaServiceRole(service);
+  return normalizePublishedRaftRole(role, {collapseLeaderToFollower: false});
 }
 
 function messageGroupCreateError(replicaId, code, cause = null) {
@@ -248,7 +240,10 @@ async function persistMessageGroupActivation(owner, source, options) {
   const transitionAt = nextLifecycleStateEntry(
     options.timestamp ?? owner.now(), previousFloor);
   const updates = {status: options.status,
-    raft_role: resolveMessageGroupRaftRole(options.service),
+    // STOPPED is lifecycle retirement, including after the consensus handle
+    // closed. It does not publish a new role or require live role authority.
+    ...(options.status === SERVICE_STATUS.ACTIVE ?
+      {raft_role: resolveMessageGroupRaftRole(options.service)} : {}),
     address: source.address, state_entered_at: transitionAt,
     updated_at: transitionAt};
   let result = null;
@@ -354,7 +349,6 @@ class MessageGroupServiceRowOwner {
 
   static buildServiceRow(options = {}) {
     const {
-      groupId,
       replicaId,
       nodeId,
       service = null,
@@ -363,18 +357,7 @@ class MessageGroupServiceRowOwner {
       extraFields = null,
     } = options;
 
-    assertRequiredString(
-      groupId,
-      MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR.GROUP_ID_REQUIRED,
-    );
-    assertRequiredString(
-      replicaId,
-      MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR.REPLICA_ID_REQUIRED,
-    );
-    assertRequiredString(
-      nodeId,
-      MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR.NODE_ID_REQUIRED,
-    );
+    const identity = messageGroupRowIdentity(options);
 
     const address = AddressManager.getInstance().format(
       nodeId,
@@ -383,12 +366,8 @@ class MessageGroupServiceRowOwner {
     );
 
     return {
-      service_id: replicaId,
-      service_type: SERVICE_TYPE.MESSAGE_GROUP,
-      node_id: nodeId,
+      ...identity,
       partition_id: null,
-      group_id: groupId,
-      replica_id: replicaId,
       raft_role: resolveMessageGroupRaftRole(service),
       status,
       address,
@@ -535,10 +514,8 @@ class MessageGroupServiceRowOwner {
   }
 
   async resolveStatusSource(options) {
-    const identity = MessageGroupServiceRowOwner.buildServiceRow({
-      ...options,
-      timestamp: options.timestamp ?? this.now(),
-    });
+    if (options.status === SERVICE_STATUS.ACTIVE) resolveMessageGroupRaftRole(options.service);
+    const identity = messageGroupRowIdentity(options);
     const initial = options.registrationEvidence ?
       {available: true, row: options.registrationEvidence} :
       await observeMessageGroupService(

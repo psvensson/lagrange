@@ -1,3 +1,5 @@
+import {serviceRoleObservation} from '../test-helpers/service-role-observation.js';
+import {settledTurn} from '../../src/raft/raft-rs-turn-answer.js';
 // COMPONENT boundary: real replica/application/SQLite owners; consensus entry
 // delivery is controlled here and is NOT a native RF3 or quorum witness.
 import assert from 'node:assert/strict';
@@ -52,6 +54,10 @@ function openComponent(path) {
   const store = new RaftRsDurableStore(db);
   replica.lifecycleState = STATE.READY;
   replica.isLeader = true;
+  replica.leadershipTenure = Object.freeze({term: 1});
+  // Independent controlled observation and lifecycle grant; neither stands for native proof.
+  replica.raft = {readRoleAndTerm: () => serviceRoleObservation('leader'),
+    close: () => settledTurn({outcome: 'CORE_OK'})};
   let index = Number(store.readDurableRecord(SERVICE).appliedIndex);
   const proposed = [];
   // The only controlled authority boundary: no claim that these callbacks

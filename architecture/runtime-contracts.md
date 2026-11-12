@@ -58,6 +58,96 @@ Forbidden runtime patterns:
 - feature-local implementations of existing cache/read/write/retry primitives
 - shadow state for lifecycle, readiness, admission, leader, or routing truth
 
+## Native Role Observation And Service Admission
+
+`raft-rs-status-observation.js` owns the native election-role decoder. Only integer
+roles 0 through 3 carry election observations. Invalidity is exactly
+`{outcome: CORE_REFUSED, reason: invalid-native-role, phase: status-observation,
+retryable: false, recoveryRequired: false}`, frozen and without a role or term.
+The runtime's native STATUS result boundary is its single publication producer:
+reads, transfer, probe, campaign, apply and announce all pass through it. It
+retains invalid status in both the read observation and announcement comparison
+before publishing `RAFT_EVENT.ROLE_OBSERVATION_REFUSED` with that typed answer.
+One valid-to-invalid transition publishes once. Synchronous listeners may read
+again, including diagnostic row consumers, without recursive events or repeated
+tenure withdrawal. A listener that rethrows the identical canonical refusal does
+not interrupt later listeners or convert that observation into a host failure;
+unrelated listener exceptions retain existing behavior. No getter owns another
+notification path.
+
+Fresh, recorded and queued reads, membership and transfer admission, and removed
+leader decisions preserve the same refusal before a success or mutation. Inward
+admission refreshes the observation before the local-log guard: native status and
+configuration only, no tick, step or drive. Invalidity is recorded against the
+sender and returned by the turn; it never steps the envelope. A fresh valid
+observation permits inward admission again. A valid read alone does not renew
+withdrawn service tenure. The next normal announcement republishes role, term and
+leader in that order against the retained invalid comparison, including unchanged
+term and leader. A recovered leader receives a new tenure token; a recovered
+follower regains its known leader without acquiring tenure. Reentrant invalidation
+stops publication of the withdrawn observation's remaining facts.
+
+Compact and full observations include `membership` (`voter`, `learner`, `absent`)
+and `gateOpen` from the same native configuration and participation observation.
+Incoming or outgoing voter membership takes precedence over `learnersNext` during
+joint consensus. Election follower is not proof of voter membership. Compact
+sampling resolves no peer identities. The existing public read wrapper may drain
+delivered inbound work; that work can announce lifecycle changes. An idle fresh
+sample alone does not announce or grant anything.
+
+`readReplicaRoleAndTerm` is the shared service adapter. It returns the operation
+port's current observation or throws its exact answer as `error.raftResult`;
+an absent service/port is explicitly `HOST_FAILURE / replica-consensus-unavailable`.
+No field, ledger, cached row or zero term substitutes for this authority.
+Partition, message-group and WASM lifecycle adapters consume refusal by withdrawing
+leader permissions and tenure, clearing pending leader publication, cancelling
+owned activation or timer work and reporting the exact refusal. They do not
+manufacture a follower event, role or term. A false leader flag alone is not
+readiness, recovery or durability proof.
+
+`readReplicaServiceRole` maps an observed learner to service learner even while
+its participation gate is closed. A voter role requires admission; absent or
+unadmitted membership refuses explicitly. Row builders, current-role accessors,
+ReplicaHandler voter readiness and deferred role publishers use this adapter.
+Committed promotion refreshes role publication even when election StateRole stays
+follower; it does not skip the partition's existing catch-up and election workflow.
+Initial lifecycle wiring captures current membership for publication deduplication.
+A typed refusal at that read follows the existing startup cleanup owner. When
+initialization owns cleanup, disposal finishes before rejection. When an external
+shutdown already owns cleanup and awaits initialization, initialization rejects
+first and the external owner retains the disposal settlement. The same native
+refusal is preserved; ordinary wiring errors retain their existing propagation.
+Invalid or unavailable authority cannot publish an
+invented follower, stale leader or null success. MG STOPPED retirement writes only
+lifecycle fields, so it can finish after port closure without asserting a new role;
+registration and ACTIVE still require current role authority. Partition pending
+write release preserves the exact refusal: an unproposed write is terminal
+`partition_write_consensus_invalid` (neither retryable nor reroutable); an already
+proposed write retains its unknown outcome and original entry identity. WASM read
+and write routing require an owned destination before forwarding.
+
+`isReplicaServiceLeader` additionally requires the lifecycle-owned leader grant
+and a tenure matching the observed term. Bootstrap readiness, CDC local leader
+routing and deferred leader publication cannot regrant authority from a valid
+election observation. `readReplicaLeaderRoute` uses that grant for local leadership
+or the lifecycle-announced nonlocal leader for forwarding; otherwise it throws
+`CORE_REFUSED / replica-routing-unavailable`. Query ACTIVE overlays consume that
+decision. WASM read consistency remains owned by `routeRead`: permitted local
+follower reads need no leader destination, while forwarding consumes the complete
+route decision. WASM writes and direct writer-interest admission share the route
+owner; direct proposal requires active leadership. These typed service-authority
+refusals are retryable without reconstruction, reconsidered on normal lifecycle
+announcement. No read mints tenure or substitutes a retained field for membership.
+
+Removed-leader apply and drain both consume typed settlement. Invalidity after a
+Ready was taken stops application and advance; the existing group recovery owner
+retains replay custody for that unapplied durable entry. This bounded reconstruction
+case is distinct from ordinary observation refusal, which never rebuilds the core.
+The `raft-native-role-consumer-authority` contract and witnesses bind this whole
+interaction. Native controls corrupt the binding's status result and exercise real
+SQLite, runtime queues, service lifecycle and row consumers; they do not claim the
+unmodified Rust producer emits malformed status or prove physical failure domains.
+
 ## Retained Native History And Participant Origin
 
 `RaftRsDurableStore.readRetainedHistoryIn` owns the DDL-free read snapshot of

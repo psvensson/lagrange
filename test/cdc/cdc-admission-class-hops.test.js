@@ -1,3 +1,4 @@
+import {serviceRoleObservation} from '../test-helpers/service-role-observation.js';
 // The CDC admission class (dead-recipient measure 1, owner ruling
 // 2026-11-11) is set only by a lifecycle owner and survives every hop that
 // builds its options from a pick-list; a client cannot declare it. Each hop
@@ -191,6 +192,8 @@ test('the lifecycle owners declare the class on exactly their retirement writes'
   // Message-group replica: STOPPED transition and staged removal; ACTIVE never.
   const rowOwner = new MessageGroupServiceRowOwner({systemTableWriter: writer});
   const live = {...MessageGroupServiceRowOwner.buildServiceRow({groupId: 'g1', replicaId: 'g1-r1',
+    service: {raft: {readRoleAndTerm: () =>
+      (serviceRoleObservation('follower', 1))}},
     nodeId: NODE, status: SERVICE_STATUS.ACTIVE, timestamp: 10})};
   const stopped = await rowOwner.updateReplicaStatus({groupId: 'g1', replicaId: 'g1-r1',
     nodeId: NODE, status: SERVICE_STATUS.STOPPED, registrationEvidence: live});
