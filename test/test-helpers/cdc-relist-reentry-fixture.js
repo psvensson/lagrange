@@ -8,8 +8,8 @@
 //   the real committed acceptance (applyDurableCdcBatch: range capture and
 //   validation, the leader's range decision, proposal, commit, application),
 //   the real CDCHandler and SystemTableCache with its position cell, and a
-//   relister built from the production fetch and install (fetchSourceImage,
-//   installSourceImage) over the source leader's image query.
+//   production CDCIntegrationService relister over the source leader's
+//   actual image query, including its bounded slots, pace and shutdown.
 // Substitutes (ports): the owner-RPC hop of the image query is a direct call;
 // the sender's cache holds only what a witness puts in it; a second recipient
 // group (the frontier holder) is a transport answer that commits every range;
@@ -18,21 +18,20 @@
 // evaluates the query engine's module cycle.)
 import {withSurface} from '../query/unknown-outcome-surface-fixture.js';
 import assert from 'node:assert/strict';
-import {SOURCE_RELIST_OUTCOME, isSourceRange} from
-  '../../src/cache/system-table-cache-cdc-observation.js';
-import {installSourceImage} from '../../src/cache/system-table-cache-source-image.js';
+import {SOURCE_IMAGE_ADMISSION, isSourceRange} from
+  '../../src/cache/system-table-cache-source-order.js';
 import {buildPartitionCdcPropagationSubscriber} from
   '../../src/bootstrap/shared/partition-cdc-propagation-subscriber.js';
 import {CDC_COMPLETION, buildCommittedCdcOutcome, buildProvisionalCdcOutcome,
   unknownCdcAcceptance} from '../../src/cdc/cdc-delivery-outcome.js';
-import {fetchSourceImage} from '../../src/cdc/cdc-integration-service-source-relist.js';
+import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
+import {registerSourceRelister} from '../../src/cdc/cdc-integration-service-source-relist.js';
 import {COLUMN, TABLES} from '../../src/constants/index.js';
 import {countCdcObligations, readCdcLedgerNewest, readCdcObligationProgress} from
   '../../src/partition/partition-cdc-obligation-ledger.js';
-import {PARTITION_HYDRATION_IMAGE_PAGE_FIELD, PARTITION_HYDRATION_IMAGE_QUERY_FIELD} from
+import {PARTITION_HYDRATION_IMAGE_PAGE_FIELD} from
   '../../src/partition/partition-service-hydration-image-methods.js';
 import {PARTITION_SERVICE_CDC} from '../../src/partition/partition-service-constants.js';
-import {QUERY_MESSAGE_TYPE} from '../../src/query/query-constants.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {CDCGroupPropagationService} from '../../src/topology/cdc-group-propagation-service.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
@@ -46,6 +45,7 @@ const HOLDER_NODE = 'reentry-holder-node';
 const WRITE_BATCH = 64;
 const POLL_MS = 5;
 const SETTLE_BUDGET_MS = 60000;
+const SOURCE_OWNER_UNAVAILABLE = 'reentry_source_owner_unavailable';
 const INSERT_CONFIG = `INSERT INTO ${TABLES.CONFIG} (config_key, config_value, value_type, ` +
   'default_value, created_at) VALUES (?, ?, ?, ?, ?)';
 
@@ -63,33 +63,46 @@ const RECIPIENT_MODE = Object.freeze({
 
 const positionOf = (row) => ({logIndex: row.logIndex, ordinal: row.ordinal});
 
-function imageQuery(tableName, cursor) {
-  return {type: QUERY_MESSAGE_TYPE.QUERY, sql: `SELECT * FROM ${tableName}`, params: [],
-    [PARTITION_HYDRATION_IMAGE_QUERY_FIELD]: true, [PARTITION_HYDRATION_IMAGE_PAGE_FIELD]: cursor};
-}
-
-// The production fetch and install of one source image, counted. Only the
-// source table is listed (the group's other propagated sources have no
-// partition in this composition).
-function registerCountedRelister(f, recipient) {
+// The actual relister fetches and publishes the source's image. Other tables
+// have no hosted owner in this composition, so their debt remains unavailable
+// through the real pace until shutdown. Only the query hop is replaced.
+function registerCountedRelister(t, f, recipient) {
   const cache = recipient.group.cdcHandler.cache;
-  cache.sourceOrder.registerRelister(async (request) => {
-    if (request.sourcePartition !== f.partition.partitionId) return SOURCE_RELIST_OUTCOME.STOPPED;
-    const token = cache.sourceOrder.beginImage(request.sourcePartition);
-    if (token === null) return SOURCE_RELIST_OUTCOME.STOPPED;
-    const image = {appliedIndex: null, installed: false};
-    recipient.images.push(image);
-    const fetched = await fetchSourceImage((cursor) =>
-      f.partition.handleRemoteQuery(imageQuery(request.tableName, cursor)), request);
-    assert.ok(fetched.image, `the leader served the image: ${fetched.failure}`);
-    image.appliedIndex = fetched.image.appliedIndex;
-    // The witness's writes while this image is in flight (fetched, not yet
-    // installed).
-    if (recipient.duringImage) await recipient.duringImage(image);
-    installSourceImage(cache, token, fetched.image);
-    image.installed = true;
-    return SOURCE_RELIST_OUTCOME.STOPPED;
-  });
+  let image = null;
+  const service = new CDCIntegrationService({nodeId: recipient.group.nodeId,
+    cacheMutationTarget: cache, timeSource: f.partition.timeSource,
+    sqlQueryEngine: {queryExecutor: {async executeOnPartition(partitionId, _sql, _params,
+      _forRead, _preferLeader, _sameGroup, options) {
+      if (partitionId !== f.partition.partitionId) {
+        return {success: false, errorCode: SOURCE_OWNER_UNAVAILABLE};
+      }
+      const message = options.buildRequest();
+      if (message[PARTITION_HYDRATION_IMAGE_PAGE_FIELD].page === 0) {
+        image = {appliedIndex: null, installed: false};
+        recipient.images.push(image);
+      }
+      const answer = await f.partition.handleRemoteQuery(message);
+      assert.equal(answer.success, true, `the source leader refused its image: ${answer.errorCode}`);
+      image.appliedIndex = answer.sourceImage.appliedIndex;
+      // All pages have been fetched, but the production relister has not
+      // installed them. Preserve the original held-image write schedule.
+      if (answer.imagePage.last && recipient.duringImage) await recipient.duringImage(image);
+      return options.buildSuccessResult(answer);
+    }}}});
+  const logger = recipient.group.logger;
+  service.logger = {
+    debug: (...args) => logger.debug(...args), warn: (...args) => logger.warn(...args),
+    error: (...args) => logger.error(...args),
+    info(message, fields) {
+      if (fields.sourcePartition === f.partition.partitionId &&
+          (fields.outcome === SOURCE_IMAGE_ADMISSION.INSTALL ||
+          fields.outcome === SOURCE_IMAGE_ADMISSION.SUPERSEDED)) image.installed = true;
+      logger.info(message, fields);
+    },
+  };
+  recipient.relistService = service;
+  t.after(() => service.markShuttingDown());
+  registerSourceRelister(service);
 }
 
 // The recipient group's answer under the witness's mode; every shipped range
@@ -125,7 +138,7 @@ async function realRecipient(t, f, groupId) {
   const recipient = {native, group: native.services[0], images: [], shipped: [],
     mode: RECIPIENT_MODE.REAL, duringImage: null, beforeAnswer: null, answers: []};
   recipient.port = recipientPort(f, recipient);
-  registerCountedRelister(f, recipient);
+  registerCountedRelister(t, f, recipient);
   f.recipients.push(recipient);
   return recipient;
 }
@@ -274,6 +287,7 @@ async function withRelistReentry(t, body, {holder = false} = {}) {
       f.neverSettled.resolve(unknownCdcAcceptance());
       for (const subscriber of [...f.subscribers]) detachRecipient(f, subscriber);
       f.topology.stop();
+      for (const recipient of f.recipients) recipient.relistService.markShuttingDown();
       await Promise.allSettled(f.recipients.flatMap((recipient) =>
         recipient.native.services.map((service) => service.shutdown())));
     }

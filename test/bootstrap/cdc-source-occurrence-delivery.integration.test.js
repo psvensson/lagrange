@@ -14,7 +14,7 @@ import {test} from 'node:test';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {CDC_OPERATION, TABLES} from '../../src/constants/index.js';
-import {CONFIG_SCHEMA} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {CONFIG_SCHEMA, INITIAL_PARTITION_IDS} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {PARTICIPANT_CUTOVER_OUTCOME} from
   '../../src/partition/partition-participant-transaction-cutover-constants.js';
@@ -82,7 +82,7 @@ const shipsAlone = (label) =>
   `${label}:${'v'.repeat(PARTITION_CDC_OBLIGATION_BOUND.SHIP_MAX_BYTES)}`;
 const W1_IDENTICAL_VALUE = shipsAlone('identical-value');
 
-const W9_VECTOR_SOURCE = 'w9-vector-source';
+const W9_VECTOR_SOURCE = INITIAL_PARTITION_IDS[TABLES.CONFIG];
 
 async function setupReleasedConfigProducer(t, f, {configPartId, tempPrefix}) {
   const members = [1, 2, 3].map((n) => [`${configPartId}-r${n}`, NODE_A]);
@@ -137,7 +137,7 @@ async function driveLane(f, reason) {
 
 test(
   'W1, W2 and W9: distinct same-row occurrences, seed/join bridges, ' +
-    'grouped/safe/zero-target waves, 2-MiB CONFIG SQL and 65-event MG vector',
+    'grouped/safe/zero-target waves and 2-MiB CONFIG SQL',
   async (t) => {
     ConfigurationManager.resetInstance();
     LoggingService.resetInstance();
@@ -179,7 +179,7 @@ test(
     wrapRouterDelivery(f, routerA, f.deliverA, 'routerA');
     wrapRouterDelivery(f, routerB, f.deliverB, 'routerB');
 
-    const configPartId = 'config-w1-w2-w9';
+    const configPartId = INITIAL_PARTITION_IDS[TABLES.CONFIG];
     await setupReleasedConfigProducer(t, f, {
       configPartId,
       tempPrefix: 'mg-w1-w2-w9-part-',
@@ -265,69 +265,6 @@ test(
       hints: [nodeAddressOf(NODE_B, 'mg-w2-target-r1')],
       table: TABLES.CONFIG,
     });
-
-    // W9 over-64 vector at the remote MG boundary over real remote router encoding
-    const baseEvent = JSON.parse(debtSmall.eventJson);
-    const vector65 = Array.from({length: 65}, (_unused, idx) =>
-      copyCdcEvent({
-        ...baseEvent,
-        data: {...baseEvent.data, config_key: `w9-vec-key-${idx}`},
-        // A synthetic source of its own (CDC Stage 3 positions are per
-        // source): this vector must not move the real source's position.
-        sourcePartition: W9_VECTOR_SOURCE,
-        eventKey: `w9-vec-event-${idx}`,
-        entryId: `w9-vec-entry-${idx}`,
-        sourceLogIndex: 100 + idx,
-        sourceOrdinal: 0,
-      }),
-    );
-    // CDC Stage 3: the remote group listed the synthetic source at its start,
-    // and the vector names its source range.
-    positionRecipients([remoteTarget], W9_VECTOR_SOURCE, TABLES.CONFIG);
-    const batchDelivery = await driveWithPump(f, () =>
-      routerA.deliver(
-        remoteTarget.unifiedAddress,
-        {
-          type: LATENCY_TOPOLOGY_MESSAGE_TYPE.CDC_PROPAGATION_BATCH,
-          events: vector65,
-          sourceRange: sourceRangeOfEvents(vector65),
-          sourceNodeId: NODE_A,
-          sourceGroupId: 'mg-w2-source',
-          targetGroupId: 'mg-w2-target',
-          [CDC_DELIVERY_REMAINING_MS]: 5000,
-        },
-        {targetNodeId: NODE_B, timeoutMs: 5000},
-      ),
-    );
-    assert.equal(
-      isCommittedCdcDelivery(batchDelivery, vector65, 'mg-w2-target'),
-      true,
-      'over-64 durable batch vector commits all 65 occurrences without truncation',
-    );
-    assert.equal(deliveryAnswerOf(batchDelivery).cdcCommitted.length, 65);
-    // W9 65-event vector paired negative controls: truncated 64-event receipt or
-    // mutated 65th occurrence identity must fail committed verification.
-    const truncated64Delivery = buildDeliveryEnvelope(
-      {acknowledged: true},
-      {
-        ...deliveryAnswerOf(batchDelivery),
-        cdcCommitted: deliveryAnswerOf(batchDelivery).cdcCommitted.slice(0, 64),
-      },
-    );
-    assert.equal(
-      isCommittedCdcDelivery(truncated64Delivery, vector65, 'mg-w2-target'),
-      false,
-      'W9 negative control: 64-event truncated receipt is rejected for 65-event vector',
-    );
-    const mutated65Vector = [
-      ...vector65.slice(0, 64),
-      {...vector65[64], eventKey: 'w9-vec-event-64-mutated'},
-    ];
-    assert.equal(
-      isCommittedCdcDelivery(batchDelivery, mutated65Vector, 'mg-w2-target'),
-      false,
-      'W9 negative control: mutated 65th vector element is rejected',
-    );
 
     // Both production bridges propagate this partition, one at a time: the
     // partition holds one propagation subscriber. The seed's
@@ -452,7 +389,7 @@ test(
 
     // Recovery of the target's earlier position gap must be available during
     // this control: only the transport refusal may hold the 2-MiB delivery.
-    registerLeaderRelister([...f.services.values()], () => f.producerLeader);
+    registerLeaderRelister(t, [...f.services.values()], () => f.producerLeader);
     // Keep refusal across two owned attempts, so an earlier wave cannot
     // consume the negative control before the assertion's drive starts.
     const refusals = [];
@@ -611,6 +548,150 @@ test(
   },
 );
 
+
+// The historical fixture put two independently positioned CONFIG sources in
+// one target cache. Whole-table images have one canonical source; the synthetic
+// vector boundary therefore owns a separate world. It proves actual remote
+// encoding/native membership, not delivery of these invented occurrences from
+// the real source ledger. The W1/W2/W9 scenario above retains that ledger proof.
+test('W9: an isolated canonical CONFIG vector commits all 65 remote native members', async (t) => {
+  ConfigurationManager.resetInstance();
+  LoggingService.resetInstance();
+  ConfigurationManager.getInstance().initialize({
+    node: {id: NODE_A},
+    logging: {level: 'fatal'},
+    raft: {
+      heartbeatIntervalMs: 20,
+      electionTimeoutMinMs: 150,
+      electionTimeoutMaxMs: 300,
+    },
+  });
+  LoggingService.getInstance().initialize({level: 'fatal'});
+
+  const {routerA, routerB, portA, portB} = await connectTwoRouters(24385, 24386);
+  const f = {
+    phase: 'setup',
+    routerA,
+    routerB,
+    deliverA: routerA.deliver,
+    deliverB: routerB.deliver,
+    nodeRows: [
+      activeNodeRow(NODE_A, portA, 'mg-w2-source'),
+      activeNodeRow(NODE_B, portB, 'mg-w2-target'),
+    ],
+    services: new Map(),
+    serviceRouters: new Map(),
+    cutPeers: new Map(),
+    events: [],
+    native: [],
+    heldNative: [],
+    heldApplications: [],
+    applicationSettlements: new Set(),
+    subscribers: [],
+    interceptSend: null,
+    maxObservedInFlight: 0,
+    directory: fs.mkdtempSync(path.join(os.tmpdir(), 'mg-w9-vector-')),
+  };
+  wrapRouterDelivery(f, routerA, f.deliverA, 'routerA');
+  wrapRouterDelivery(f, routerB, f.deliverB, 'routerB');
+
+  const configPartId = INITIAL_PARTITION_IDS[TABLES.CONFIG];
+  await setupReleasedConfigProducer(t, f, {
+    configPartId,
+    tempPrefix: 'mg-w9-vector-part-',
+  });
+
+  const debt = await writeReleasedSql(f.producer, f.producerLeader,
+    'INSERT INTO config (config_key, config_value, value_type, default_value, created_at) ' +
+    'VALUES (?, ?, ?, ?, ?)', ['w9-vector-base', 'small-value', 'string', '', 1],
+    'w9-vector-base', TABLES.CONFIG);
+
+  f.source = await openMultiReplica(f, {
+    groupId: 'mg-w2-source',
+    replicaId: 'mg-w2-source-r1',
+    replicas: ['mg-w2-source-r1'],
+    nodeId: NODE_A,
+    router: routerA,
+    rows: [],
+    hints: [nodeAddressOf(NODE_A, 'mg-w2-source-r1')],
+    table: TABLES.CONFIG,
+  });
+  const remoteTarget = await openMultiReplica(f, {
+    groupId: 'mg-w2-target',
+    replicaId: 'mg-w2-target-r1',
+    replicas: ['mg-w2-target-r1'],
+    nodeId: NODE_B,
+    router: routerB,
+    rows: [],
+    hints: [nodeAddressOf(NODE_B, 'mg-w2-target-r1')],
+    table: TABLES.CONFIG,
+  });
+
+  // W9 over-64 vector at the remote MG boundary over real remote router encoding
+  const baseEvent = JSON.parse(debt.eventJson);
+  const vector65 = Array.from({length: 65}, (_unused, idx) =>
+    copyCdcEvent({
+      ...baseEvent,
+      data: {...baseEvent.data, config_key: `w9-vec-key-${idx}`},
+      // Synthetic occurrence identities in this isolated canonical source
+      // world. The original SQL/ledger scenario runs in a different test.
+      sourcePartition: W9_VECTOR_SOURCE,
+      eventKey: `w9-vec-event-${idx}`,
+      entryId: `w9-vec-entry-${idx}`,
+      sourceLogIndex: 100 + idx,
+      sourceOrdinal: 0,
+    }),
+  );
+  // CDC Stage 3: this isolated recipient starts at the canonical source origin,
+  // and the vector names its source range.
+  positionRecipients([remoteTarget], W9_VECTOR_SOURCE, TABLES.CONFIG);
+  const batchDelivery = await driveWithPump(f, () =>
+    routerA.deliver(
+      remoteTarget.unifiedAddress,
+      {
+        type: LATENCY_TOPOLOGY_MESSAGE_TYPE.CDC_PROPAGATION_BATCH,
+        events: vector65,
+        sourceRange: sourceRangeOfEvents(vector65),
+        sourceNodeId: NODE_A,
+        sourceGroupId: 'mg-w2-source',
+        targetGroupId: 'mg-w2-target',
+        [CDC_DELIVERY_REMAINING_MS]: 5000,
+      },
+      {targetNodeId: NODE_B, timeoutMs: 5000},
+    ),
+  );
+  assert.equal(
+    isCommittedCdcDelivery(batchDelivery, vector65, 'mg-w2-target'),
+    true,
+    'over-64 durable batch vector commits all 65 occurrences without truncation',
+  );
+  assert.equal(deliveryAnswerOf(batchDelivery).cdcCommitted.length, 65);
+  // W9 65-event vector paired negative controls: truncated 64-event receipt or
+  // mutated 65th occurrence identity must fail committed verification.
+  const truncated64Delivery = buildDeliveryEnvelope(
+    {acknowledged: true},
+    {
+      ...deliveryAnswerOf(batchDelivery),
+      cdcCommitted: deliveryAnswerOf(batchDelivery).cdcCommitted.slice(0, 64),
+    },
+  );
+  assert.equal(
+    isCommittedCdcDelivery(truncated64Delivery, vector65, 'mg-w2-target'),
+    false,
+    'W9 negative control: 64-event truncated receipt is rejected for 65-event vector',
+  );
+  const mutated65Vector = [
+    ...vector65.slice(0, 64),
+    {...vector65[64], eventKey: 'w9-vec-event-64-mutated'},
+  ];
+  assert.equal(
+    isCommittedCdcDelivery(batchDelivery, mutated65Vector, 'mg-w2-target'),
+    false,
+    'W9 negative control: mutated 65th vector element is rejected',
+  );
+
+});
+
 test(
   'W9: 65 distinct native target groups complete across remote router window of 2',
   async (t) => {
@@ -654,7 +735,7 @@ test(
     wrapRouterDelivery(f, routerA, f.deliverA, 'routerA');
     wrapRouterDelivery(f, routerB, f.deliverB, 'routerB');
 
-    const configPartId = 'config-w9-65';
+    const configPartId = INITIAL_PARTITION_IDS[TABLES.CONFIG];
     await setupReleasedConfigProducer(t, f, {
       configPartId,
       tempPrefix: 'mg-w9-65-part-',

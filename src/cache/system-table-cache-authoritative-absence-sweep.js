@@ -48,7 +48,7 @@ function mutationSnapshotEntriesValid(tableName, entries) {
   });
 }
 
-function getSweepMutationEntries(cache, tableName, options) {
+function getSweepMutationSnapshot(cache, tableName, options) {
   const suppliedSnapshots = options?.mutationSnapshots;
   if (
     suppliedSnapshots &&
@@ -56,8 +56,9 @@ function getSweepMutationEntries(cache, tableName, options) {
   ) {
     const supplied = suppliedSnapshots[tableName];
     return supplied?.tableName === tableName &&
+      supplied.sourceGeneration === cache.sourceOrder.tableGeneration(tableName) &&
       mutationSnapshotEntriesValid(tableName, supplied.entries) ?
-      supplied.entries :
+      supplied :
       null;
   }
   if (Object.prototype.hasOwnProperty.call(
@@ -69,7 +70,7 @@ function getSweepMutationEntries(cache, tableName, options) {
   const captured = cache.captureTableMutationSnapshot(tableName);
   return captured?.tableName === tableName &&
     mutationSnapshotEntriesValid(tableName, captured.entries) ?
-    captured.entries :
+    captured :
     null;
 }
 
@@ -96,6 +97,7 @@ function authoritativeSweepTableInputsValid(
 }
 
 function recordAuthoritativeAbsence(cache, tableName, key, row, options) {
+  cache.sourceOrder.invalidateTable(tableName);
   cache.tombstoneStore.record(tableName, key, row, {
     authoritativeAbsence: true,
     authoritativeObservedAtMs: options?.authoritativeObservedAtMs,
@@ -136,8 +138,6 @@ function removeSnapshotEntry(cache, tableName, entry, options, removed) {
     return;
   }
   const table = cache.tables.get(tableName);
-  table.delete(key);
-  cache.lastCdcObservationByTableName.get(tableName).delete(key);
   recordAuthoritativeAbsence(
     cache,
     tableName,
@@ -145,6 +145,8 @@ function removeSnapshotEntry(cache, tableName, entry, options, removed) {
     currentSnapshot.record,
     options,
   );
+  table.delete(key);
+  cache.lastCdcObservationByTableName.get(tableName).delete(key);
   removed.push({tableName, key});
   cache.logger.debug(CACHE_LOG_MSG.ANTI_ENTROPY_SWEEP_DELETE, {tableName, key});
   // The same watermark, and therefore the same clock authority: the cache's.
@@ -193,11 +195,12 @@ function reconcileSystemTableCacheAgainstAuthoritativeTruth(
     if (!authoritativeKeys) {
       continue;
     }
-    const mutationEntries = getSweepMutationEntries(cache, tableName, options);
-    if (!Array.isArray(mutationEntries)) {
+    const mutationSnapshot = getSweepMutationSnapshot(cache, tableName, options);
+    if (mutationSnapshot === null) {
       continue;
     }
-    for (const entry of mutationEntries) {
+    for (const entry of mutationSnapshot.entries) {
+      if (mutationSnapshot.sourceGeneration !== cache.sourceOrder.tableGeneration(tableName)) break;
       if (!authoritativeKeys.has(entry?.key)) {
         removeSnapshotEntry(cache, tableName, entry, options, removed);
       }
@@ -206,6 +209,7 @@ function reconcileSystemTableCacheAgainstAuthoritativeTruth(
       tableName,
       {
         observedAtMs: options?.authoritativeObservedAtMs,
+        sourceGeneration: mutationSnapshot.sourceGeneration,
         causeId: `authoritative-absence-sweep:${tableName}`,
       },
     );

@@ -23,7 +23,8 @@ import {afterEach, beforeEach, test} from 'node:test';
 import {INITIAL_PARTITION_IDS, getSchemaByTableName} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
-import {SOURCE_POSITION_STATE} from '../../src/cache/system-table-cache-cdc-observation.js';
+import {SOURCE_IMAGE_ADMISSION, SOURCE_POSITION_STATE, SOURCE_RELIST_STATE} from
+  '../../src/cache/system-table-cache-source-order.js';
 import {captureCdcEvents} from '../../src/cdc/cdc-event-envelope.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
 import {SOURCE_RELIST_FAILURE} from '../../src/cdc/cdc-integration-service-source-relist.js';
@@ -104,7 +105,11 @@ async function sourceOf(t, {replicas: count = 1, file = true} = {}) {
     changes.forEach(([operation, data], ordinal) => {
       if (operation === CDC_OPERATION.DELETE) source.rows.delete(data.group_id);
       else source.rows.set(data.group_id, data);
-      source.events.push({tableName: TABLE, operation, data, timestamp: command.timestamp,
+      // The shipping lane is modelled, but its payload uses the real producer's
+      // original command stamp. A wall time is not a substitute source identity.
+      const stamped = replicas[0].syncCDCGeneratorDependencies().stampOriginHlc(
+        data, command.timestamp);
+      source.events.push({tableName: TABLE, operation, data: stamped, timestamp: command.timestamp,
         sourcePartition: SOURCE, sourceReplica: replicas[0].replicaId,
         eventKey: `paged-${logIndex}-${ordinal}`, entryId: command.entryId,
         sourceLogIndex: logIndex, sourceOrdinal: ordinal});
@@ -415,14 +420,27 @@ test('(e) a recipient stopped mid-image installs nothing and the old rows stay; 
   source.bulk(12, 'g');
   const recipient = recipientOf(source, {pageRows: 4});
   seedStaleRows(recipient, ['stale-1']);
+  const stoppedIntegration = recipient.integration;
+  let stoppedDuringImage = false;
   recipient.hook = async (cursor) => {
-    if (cursor.page === 2) recipient.integration.markShuttingDown();
+    if (cursor.page === 2) {
+      stoppedDuringImage = true;
+      stoppedIntegration.markShuttingDown();
+    }
   };
   recipient.cache.sourceOrder.requireListed(SOURCE, TABLE);
   await recipient.run(2);
+  assert.equal(stoppedDuringImage, true);
   assert.deepEqual(recipient.table(), [['stale-1', 'stale']], 'no partial rows are visible');
   assert.equal(recipient.cell().state, SOURCE_POSITION_STATE.GAP);
-  assert.equal(recipient.images.at(-1).outcome, 'stopped');
+  assert.equal(recipient.cell().relist, SOURCE_RELIST_STATE.NO_RELISTER);
+  assert.equal(recipient.images.length, 0,
+    'the detached request cannot publish an image diagnostic for its old registration');
+  assert.equal(stoppedIntegration.sourceRelisterRelease, null);
+  assert.equal(stoppedIntegration.shutdownReleases.size, 0);
+  assert.equal(stoppedIntegration.relistImageSlots.held, 0);
+  assert.equal(stoppedIntegration.relistImageSlots.waiting.length, 0);
+  assert.equal(recipient.clock.pendingTimerCount(), 0);
 
   // The recipient restarts: its new service lists the gapped table.
   recipient.hook = null;
@@ -431,11 +449,18 @@ test('(e) a recipient stopped mid-image installs nothing and the old rows stay; 
   await recipient.run();
   assert.equal(recipient.cell().state, SOURCE_POSITION_STATE.CURRENT);
   assert.deepEqual(recipient.table(), source.table());
+  assert.equal(recipient.images.length, 1);
+  assert.equal(recipient.images[0].outcome, SOURCE_IMAGE_ADMISSION.INSTALL);
 
   // The cache is reset mid-image: the stage of the old cell is never installed.
+  const imageCountBeforeReset = recipient.images.length;
+  const resetRequests = [];
+  let discardedImageId = null;
   recipient.hook = async (cursor) => {
+    resetRequests.push({imageId: cursor.imageId, page: cursor.page});
     if (cursor.page === 1 && recipient.hook.fired !== true) {
       recipient.hook.fired = true;
+      discardedImageId = cursor.imageId;
       recipient.cache.clear();
       seedStaleRows(recipient, ['after-clear']);
       recipient.cache.sourceOrder.requireListed(SOURCE, TABLE);
@@ -447,13 +472,25 @@ test('(e) a recipient stopped mid-image installs nothing and the old rows stay; 
     after: positionOf(source.events.at(-1)), through: {logIndex: source.appliedIndex() + 1,
       ordinal: 0}}, TABLE);
   await recipient.run();
-  // The discarded list's backoff elapses: it finds the new cell listed.
+  // Advancing the existing retry clock cannot revive the displaced request.
   recipient.clock.advance(RELIST_RETRY_MS);
   await settle();
-  assert.equal(recipient.images.some((image) =>
-    image.restartReasons[SOURCE_RELIST_FAILURE.CELL_CHANGED] === 1), true,
-  'the install refused the reset cell');
+  assert.equal(typeof discardedImageId, 'string');
+  assert.deepEqual(resetRequests.slice(0, 2).map((request) => request.page), [0, 1]);
+  assert.deepEqual(resetRequests.filter((request) => request.imageId === discardedImageId)
+    .map((request) => request.page), [1],
+  'the displaced request stops at the held page instead of fetching the obsolete image');
+  assert.equal(recipient.images.length, imageCountBeforeReset + 1,
+    'only the replacement cell publishes its completed image');
+  assert.equal(recipient.images.at(-1).outcome, SOURCE_IMAGE_ADMISSION.INSTALL);
+  assert.equal(recipient.cell().state, SOURCE_POSITION_STATE.CURRENT);
+  assert.equal(recipient.cell().relist, SOURCE_RELIST_STATE.IDLE);
   assert.deepEqual(recipient.table(), source.table());
+  assert.equal(typeof recipient.integration.sourceRelisterRelease, 'function');
+  assert.equal(recipient.integration.shutdownReleases.size, 0);
+  assert.equal(recipient.integration.relistImageSlots.held, 0);
+  assert.equal(recipient.integration.relistImageSlots.waiting.length, 0);
+  assert.equal(recipient.clock.pendingTimerCount(), 0);
 });
 
 test('(f) a row larger than a page ships alone; a row above the absolute per-row bound is ' +

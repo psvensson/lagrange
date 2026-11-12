@@ -1,0 +1,41 @@
+{
+  "schema": "test-receipt/1",
+  "status": "incomplete",
+  "receipts": [
+    {
+      "id": "complexity",
+      "passed": true
+    },
+    {
+      "id": "semantic-witnesses",
+      "passed": true
+    },
+    {
+      "id": "static-checks",
+      "passed": false
+    },
+    {
+      "id": "independent-review",
+      "passed": true
+    }
+  ],
+  "baseline": {
+    "violations": 4,
+    "threshold": 12,
+    "externalEvidence": "/tmp/lagrange-cdc-complexity-repair-20261112/baseline-complexity.json"
+  },
+  "evidence": {
+    "packet": "/tmp/lagrange-cdc-complexity-repair-20261112/astra/final",
+    "sourceManifestSha256": "a86dd2c9e4875fffc7457a769735e7a19fefeedc485c899fb0f1200e01444e78",
+    "positiveRuns": "command-receipts.json",
+    "staticRuns": "static-command-receipts.json",
+    "accessorCalibration": "calibration-receipts.json",
+    "decisionComparison": "decision-comparison.json",
+    "independentReview": "solve/quests/cdc-source-replay-acceptance-complexity/evidence/independent-maintenance-review.json"
+  },
+  "limitations": [
+    "Final focused proof: 4 files, 19 runner-reported cases; 9 bounded accessor calibrations. Historical CDC correctness remains open.",
+    "Scoped decision-boundary audit remains red at three inherited sites; original had four. No exemptions or baseline changes; separate integration gates remain.",
+    "Independent maintenance review APPROVE only; static remains RED and Quest remains open. No composed full complexity/lab acceptance, landing or publication."
+  ]
+}

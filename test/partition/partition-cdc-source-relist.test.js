@@ -12,11 +12,14 @@
 import assert from 'node:assert/strict';
 import {afterEach, beforeEach, test} from 'node:test';
 import {SOURCE_RANGE_DECISION, SOURCE_RELIST_OUTCOME, SystemTableCacheSourceOrder} from
-  '../../src/cache/system-table-cache-cdc-observation.js';
+  '../../src/cache/system-table-cache-source-order.js';
 import {CDC_COMPLETION, buildAlreadyAppliedCdcOutcome, buildCommittedCdcOutcome,
   unknownCdcAcceptance} from '../../src/cdc/cdc-delivery-outcome.js';
 import {COLUMN, SERVICE_STATUS, TABLES} from '../../src/constants/index.js';
 import {INITIAL_PARTITION_IDS} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE, CONTROL_PLANE_READ_LEADER_MODE} from
+  '../../src/control-plane/control-plane-system-table-gateway-constants.js';
+import {NODE_STATE} from '../../src/constants/node-state.js';
 import {PARTITION_CDC_COMMAND, PARTITION_CDC_OBLIGATION_BOUND as BOUND,
   PARTITION_CDC_RECIPIENT_DETACH_REASON as DETACH_REASON,
   PARTITION_CDC_RECIPIENT_STATE as RECIPIENT_STATE} from
@@ -36,7 +39,8 @@ import {LATENCY_PROPAGATION_MODE} from '../../src/topology/latency-topology-cons
 import {CDC_TABLE, clearFixtureSingletons, resetFixtureSingletons, settleTicks} from
   '../test-helpers/participant-transaction-fixture.js';
 import {commitAcknowledgements} from '../test-helpers/cdc-delivery-progress-fixture.js';
-import {assertShippedSourceRange} from '../test-helpers/cdc-source-range-fixture.js';
+import {assertShippedSourceVector, registerModeledRelister} from
+  '../test-helpers/cdc-source-range-fixture.js';
 import {RESPONSE, TARGET_GROUP, TARGET_NODE, addRequiredGroup, addTopologySourceRow,
   omitTarget, targetService, topologyProgressFixture, updateTargetService} from '../test-helpers/cdc-topology-progress-fixture.js';
 
@@ -90,20 +94,20 @@ async function leaderImage(f, tableName) {
 
 // A Stage 3 recipient model of one target group: the real position cell, and
 // a re-list that is the source leader's real paged hydration-image answer.
-function stage3Recipient(f, groupId = TARGET_GROUP) {
+function stage3Recipient(t, f, groupId = TARGET_GROUP) {
   const cell = new SystemTableCacheSourceOrder();
   const model = {cell, rows: new Map(), lists: [], refusing: false, applied: 0, groupId};
-  cell.registerRelister(async ({sourcePartition, tableName}) => {
+  registerModeledRelister(t, cell, f.clock, async ({sourcePartition, tableName}) => {
     const answer = await leaderImage(f, tableName);
     model.lists.push(answer.sourceImage);
     model.rows = new Map(answer.rows.map((row) => [row.id, row.value]));
     cell.recordListedPosition({sourcePartition, tableName,
       incarnation: answer.sourceImage.incarnation, appliedIndex: answer.sourceImage.appliedIndex});
-    return SOURCE_RELIST_OUTCOME.STOPPED;
+    return SOURCE_RELIST_OUTCOME.RETRY;
   });
   model.answer = (payload) => {
-    assertShippedSourceRange(payload.sourceRange);
     const events = deliveredEventsOf(payload);
+    assertShippedSourceVector(payload.sourceRange, events);
     if (model.refusing) {
       return {...unknownCdcAcceptance(CDC_COMPLETION.BACKPRESSURE), retryAfterMs: 40};
     }
@@ -113,13 +117,16 @@ function stage3Recipient(f, groupId = TARGET_GROUP) {
       return {...unknownCdcAcceptance(CDC_COMPLETION.POSITION_GAP),
         retryAfterMs: GAP_RETRY_AFTER_MS};
     }
+    const context = cell.captureEffectContext(range.sourcePartition,
+      events[0].tableName, range.incarnation);
     for (const event of events) {
       if (cell.memberApplied(range, {logIndex: event.sourceLogIndex,
         ordinal: event.sourceOrdinal})) continue;
       model.rows.set(event.data.id, event.data.value);
       model.applied += 1;
     }
-    cell.advance(range, events[0].tableName);
+    assert.equal(cell.advance(range, events[0].tableName, context), true,
+      'the synchronous model row effects remain bound to their source generation');
     return buildCommittedCdcOutcome(events, groupId, {index: 30 + model.applied, term: 2});
   };
   return model;
@@ -164,7 +171,7 @@ async (t) => {
 test('S3-L2 every shipped vector names its source range: partition, ledger incarnation, the ' +
   'predecessor from the ledger and its last row', async (t) => {
   const f = await stage3Fixture(t);
-  const recipient = stage3Recipient(f);
+  const recipient = stage3Recipient(t, f);
   f.target = recipient.answer;
   await f.drive();
   await settleTicks();
@@ -183,7 +190,7 @@ test('S3-L3 a recipient with no position answers a gap, re-lists once from the l
   'newest position as of the gapped range (design note S3.11)',
 async (t) => {
   const f = await stage3Fixture(t);
-  const recipient = stage3Recipient(f);
+  const recipient = stage3Recipient(t, f);
   f.target = recipient.answer;
   // The recipient's first contact: the row A range against an unknown cell.
   recipient.cell.recordGap({sourcePartition: f.leader.partitionId, incarnation: 'stale',
@@ -249,7 +256,7 @@ test('S3-L5 a group that becomes a recipient after the last write is contacted w
     'the newest event is kept beside the ledger (the position probe)');
 
   const joiner = 'progress-group-c';
-  const recipient = stage3Recipient(f, joiner);
+  const recipient = stage3Recipient(t, f, joiner);
   f.target = (payload) => payload.targetGroupId === joiner ? recipient.answer(payload) :
     buildCommittedCdcOutcome(deliveredEventsOf(payload), payload.targetGroupId,
       {index: 9, term: 2});
@@ -275,7 +282,7 @@ test('S3-D measure 3: a refusing recipient past RELIST_LAG_ROWS leaves the front
   'MUST_RELIST, writes are never refused for capacity, and on return it re-lists once, ' +
   'streams, and equals the source', async (t) => {
   const f = await stage3Fixture(t);
-  const recipient = stage3Recipient(f);
+  const recipient = stage3Recipient(t, f);
   f.target = recipient.answer;
   // Its first contact gaps (no position) and lists; then it streams.
   await retryHeld(f);
@@ -312,17 +319,24 @@ test('S3-D measure 3: a refusing recipient past RELIST_LAG_ROWS leaves the front
   assert.deepEqual(recipient.rows, sourceRowsOf(f), 'the recipient equals the source');
 });
 
-// The membership owner's authoritative rows, as the CDC integration service's
-// leader-witnessed read answers them.
-function lifecycleAuthority(rowsByTable) {
+// Explicit owner-row input to the real lifecycle read boundary. These rows
+// model independent membership answers using shared fixture identities. The
+// owner rows can diverge from the sender's cache; this is not a native
+// membership read.
+function lifecycleAuthority(timeSource, rowsByTable,
+  changeResult = (_tableName, result) => result) {
   const reads = [];
-  return {reads, executeAuthoritativeSystemTableRead: async (tableName) => {
-    reads.push(tableName);
-    return {success: true, rows: rowsByTable[tableName] ?? [],
-      readAuthorityWitness: {state: 'observed', partitionId: INITIAL_PARTITION_IDS[tableName],
-        role: RAFT_ROLE.LEADER, servingNodeId: 'node-a', servingReplicaId: 'r1',
-        observedAtMs: 1}};
-  }};
+  const requests = [];
+  return {reads, requests, timeSource, nodeId: 'node-a',
+    executeAuthoritativeSystemTableRead: async (tableName, sql, params, options) => {
+      reads.push(tableName);
+      requests.push({tableName, sql, params, options});
+      return changeResult(tableName, {success: true, rows: rowsByTable[tableName] ?? [],
+        rowSetComplete: true, source: 'owner_rpc_lane',
+        readAuthorityWitness: {state: 'observed', partitionId: INITIAL_PARTITION_IDS[tableName],
+          role: RAFT_ROLE.LEADER, servingNodeId: 'node-a', servingReplicaId: 'r1',
+          observedAtMs: 1}});
+    }};
 }
 
 test('S3-C measure 2: a dead group pins the frontier; cache omission alone detaches nothing; ' +
@@ -331,7 +345,7 @@ test('S3-C measure 2: a dead group pins the frontier; cache omission alone detac
   const f = await stage3Fixture(t);
   f.target = () => unknownCdcAcceptance();
   const services = [{...targetService(f)}];
-  const authority = lifecycleAuthority({[TABLES.SERVICES]: services, [TABLES.NODES]: [
+  const authority = lifecycleAuthority(f.clock, {[TABLES.SERVICES]: services, [TABLES.NODES]: [
     {[COLUMN.NODE_ID]: TARGET_NODE, [COLUMN.STATUS]: 'active'}]});
   f.leader.cdcIntegrationService = authority;
   for (const id of ['B', 'C', 'D']) addTopologySourceRow(f, id);
@@ -361,3 +375,88 @@ test('S3-C measure 2: a dead group pins the frontier; cache omission alone detac
   await commitAcknowledgements(f);
   assert.equal(countCdcObligations(f.leader.db).owed, 0, 'later writes drain as well');
 });
+
+
+const INCOMPLETE_LIFECYCLE_ANSWERS = [
+  ['missing completeness', () => ({rowSetComplete: undefined})],
+  ['incomplete row set', () => ({rowSetComplete: false})],
+  ['partial result', () => ({partial: true})],
+  ['failed partition count', () => ({failedPartitions: 1})],
+  ['partition errors', (tableName) => ({partitionErrors: [
+    {partitionId: INITIAL_PARTITION_IDS[tableName], error: 'controlled unavailable owner'}]})],
+  ['participant failures', () => ({participantFailures: [{error: 'controlled failed read'}]})],
+];
+
+for (const tableName of [TABLES.SERVICES, TABLES.NODES]) {
+  for (const [label, failureFields] of INCOMPLETE_LIFECYCLE_ANSWERS) {
+    test(`S3-C complete retirement: ${tableName} ${label} cannot detach or reclaim; ` +
+      'the same owner can later establish active membership and complete retirement', async (t) => {
+      const f = await stage3Fixture(t);
+      f.target = () => unknownCdcAcceptance();
+      const stopped = {...targetService(f), [COLUMN.STATUS]: SERVICE_STATUS.STOPPED};
+      const active = {...targetService(f),
+        [COLUMN.SERVICE_ID]: `${TARGET_GROUP}-still-active`,
+        [COLUMN.REPLICA_ID]: `${TARGET_GROUP}-still-active`,
+        [COLUMN.NODE_ID]: 'still-active-node'};
+      const services = [stopped, active];
+      const nodes = [{[COLUMN.NODE_ID]: TARGET_NODE, [COLUMN.STATUS]: NODE_STATE.ACTIVE},
+        {[COLUMN.NODE_ID]: active[COLUMN.NODE_ID], [COLUMN.STATUS]: NODE_STATE.ACTIVE}];
+      let phase = 'incomplete';
+      const authority = lifecycleAuthority(f.clock, {[TABLES.SERVICES]: services,
+        [TABLES.NODES]: nodes}, (queriedTable, result) => {
+        if (phase !== 'incomplete' || queriedTable !== tableName) return result;
+        // The services subset hides an active replica. The nodes subset has
+        // terminal evidence but cannot certify the complete queried cohort.
+        const rows = tableName === TABLES.SERVICES ? [stopped] : nodes.map((row) =>
+          ({...row, [COLUMN.STATUS]: NODE_STATE.STOPPED}));
+        return {...result, rows, ...failureFields(tableName)};
+      });
+      f.leader.cdcIntegrationService = authority;
+      for (const id of ['B', 'C', 'D']) addTopologySourceRow(f, id);
+      await retryHeld(f);
+      assert.equal(countCdcObligations(f.leader.db).owed, 4,
+        'the actual refusing recipient holds the source ledger');
+
+      omitTarget(f);
+      await retryHeld(f);
+      assert.equal(authority.reads.includes(tableName), true,
+        'the incomplete owner answer reached the lifecycle decision');
+      assert.notEqual(targetOf(f).state, RECIPIENT_STATE.DETACHED,
+        'a partial or contradictory success cannot retire a real recipient');
+      assert.equal(f.acks().length, 0, 'no delivered command crosses the proposal boundary');
+      assert.equal(countCdcObligations(f.leader.db).owed, 4,
+        'all actual source obligations remain held');
+      assert.equal(readCdcObligationProgress(f.leader.db), null,
+        'there is no reclaimed prefix from the incomplete answer');
+      for (const request of authority.requests) {
+        assert.equal(Object.isFrozen(request.options.readAuthority), true);
+        assert.equal(request.options.readAuthority.authoritativeReadMode,
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED);
+        assert.equal(request.options.readAuthority.leaderMode,
+          CONTROL_PLANE_READ_LEADER_MODE.REQUIRED);
+        assert.equal(request.sql, `SELECT * FROM ${request.tableName}`);
+        assert.deepEqual(request.params, []);
+      }
+
+      phase = 'complete-active';
+      updateTargetService(f, {});
+      await retryHeld(f);
+      assert.notEqual(targetOf(f).state, RECIPIENT_STATE.DETACHED,
+        'the same owner now reveals the complete active cohort');
+      assert.equal(f.acks().length, 0);
+      assert.equal(countCdcObligations(f.leader.db).owed, 4);
+
+      phase = 'complete-retirement';
+      active[COLUMN.STATUS] = SERVICE_STATUS.STOPPED;
+      updateTargetService(f, {});
+      await retryHeld(f);
+      assert.deepEqual({state: targetOf(f).state, reason: targetOf(f).detachReason},
+        {state: RECIPIENT_STATE.DETACHED, reason: DETACH_REASON.LIFECYCLE},
+        'only complete leader-witnessed retirement reaches the detach boundary');
+      await commitAcknowledgements(f);
+      assert.equal(countCdcObligations(f.leader.db).owed, 0,
+        'the actual committed acknowledgement reclaims the retired recipient prefix');
+      assert.equal(Number(readCdcObligationProgress(f.leader.db).reclaimed), 4);
+    });
+  }
+}

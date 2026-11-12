@@ -28,8 +28,9 @@ function occurrence(index) {
   const data = MessageGroupServiceRowOwner.buildServiceRow({groupId: PROBE_GROUP,
     replicaId: `${PROBE_GROUP}-r${index}`, nodeId: NODE_ID, timestamp: 3,
     status: SERVICE_STATUS.ACTIVE});
-  return {tableName: TABLES.SERVICES, operation: CDC_OPERATION.INSERT, data,
-    timestamp: new HLCTimestamp(5000 + index, 0, 'public-defer').toString(),
+  const timestamp = new HLCTimestamp(5000 + index, 0, 'public-defer').toString();
+  return {tableName: TABLES.SERVICES, operation: CDC_OPERATION.INSERT,
+    data: {...data, updated_at_hlc: timestamp}, timestamp,
     sourcePartition: 'public-defer', eventKey: `public-defer-${index}`,
     entryId: `public-defer-${index}`, sourceLogIndex: index, sourceOrdinal: 0};
 }

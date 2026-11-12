@@ -181,7 +181,8 @@ class SystemTableCacheObservationMethods {
         mutationRevision: keyRevisions.get(key) || 0,
       }),
     );
-    return Object.freeze({tableName, entries: Object.freeze(entries)});
+    return Object.freeze({tableName, entries: Object.freeze(entries),
+      sourceGeneration: this.sourceOrder.tableGeneration(tableName)});
   }
 
   /**
@@ -204,6 +205,8 @@ class SystemTableCacheObservationMethods {
       }
       return this.getLastAuthoritativeObservedAtMs(tableName);
     }
+    const sourceGeneration = this.sourceOrder.tableGeneration(tableName);
+    if (options.sourceGeneration !== sourceGeneration) return null;
     const normalizedObservedAtMs = Math.floor(observedAtMs);
     const currentObservedAtMs =
         this.lastAuthoritativeObservedAtMsByTableName.get(tableName);
@@ -213,6 +216,7 @@ class SystemTableCacheObservationMethods {
     ) {
       return currentObservedAtMs;
     }
+    this.sourceOrder.invalidateTable(tableName);
     this.lastAuthoritativeObservedAtMsByTableName.set(
       tableName,
       normalizedObservedAtMs,

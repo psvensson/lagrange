@@ -1,0 +1,821 @@
+[
+  {
+    "id": "no-provisional",
+    "timeline": [
+      {
+        "stage": "paged-relist-before-provisional",
+        "row": {
+          "status": "joining",
+          "address": "before",
+          "boot_incarnation": "boot-1"
+        },
+        "position": null,
+        "state": "gap"
+      },
+      {
+        "stage": "paged-relist-after-provisional",
+        "row": {
+          "status": "joining",
+          "address": "before",
+          "boot_incarnation": "boot-1"
+        },
+        "position": null,
+        "state": "gap"
+      },
+      {
+        "stage": "image-installed",
+        "row": {
+          "status": "joining",
+          "address": "before",
+          "boot_incarnation": "boot-1"
+        },
+        "position": {
+          "logIndex": 10,
+          "ordinal": 9007199254740991
+        },
+        "state": "current"
+      },
+      {
+        "stage": "committed-replay",
+        "row": {
+          "status": "ready",
+          "address": "after",
+          "boot_incarnation": "boot-1"
+        },
+        "position": {
+          "logIndex": 11,
+          "ordinal": 0
+        },
+        "state": "current"
+      },
+      {
+        "stage": "lost-receipt-replay",
+        "row": {
+          "status": "ready",
+          "address": "after",
+          "boot_incarnation": "boot-1"
+        },
+        "position": {
+          "logIndex": 11,
+          "ordinal": 0
+        },
+        "state": "current"
+      },
+      {
+        "stage": "other-handler-repeated-replay",
+        "row": {
+          "status": "ready",
+          "address": "after",
+          "boot_incarnation": "boot-1"
+        },
+        "position": {
+          "logIndex": 11,
+          "ordinal": 0
+        },
+        "state": "current"
+      }
+    ],
+    "expected": {
+      "row": {
+        "status": "ready",
+        "address": "after",
+        "boot_incarnation": "boot-1"
+      },
+      "position": {
+        "logIndex": 11,
+        "ordinal": 0
+      },
+      "state": "current"
+    },
+    "image": {
+      "tableName": "nodes",
+      "sourcePartition": "nodes-p1",
+      "outcome": "install",
+      "pages": 2,
+      "rows": 1,
+      "bytes": 512,
+      "durationMs": 0,
+      "restarts": 0,
+      "restartReasons": {},
+      "state": "current",
+      "appliedIndex": 10,
+      "upserted": 0,
+      "deleted": 0
+    },
+    "pages": [
+      {
+        "imageId": null,
+        "page": 0
+      },
+      {
+        "imageId": "independent-image-at-10",
+        "page": 1
+      }
+    ],
+    "leaderDecision": "already_applied",
+    "replayStable": true,
+    "passed": true
+  },
+  {
+    "id": "provisional-after-image",
+    "timeline": [
+      {
+        "stage": "paged-relist-before-provisional",
+        "row": {
+          "status": "joining",
+          "address": "before",
+          "boot_incarnation": "boot-1"
+        },
+        "position": null,
+        "state": "gap"
+      },
+      {
+        "stage": "paged-relist-after-provisional",
+        "row": {
+          "status": "joining",
+          "address": "before",
+          "boot_incarnation": "boot-1"
+        },
+        "position": null,
+        "state": "gap"
+      },
+      {
+        "stage": "image-installed",
+        "row": {
+          "status": "joining",
+          "address": "before",
+          "boot_incarnation": "boot-1"
+        },
+        "position": {
+          "logIndex": 10,
+          "ordinal": 9007199254740991
+        },
+        "state": "current"
+      },
+      {
+        "stage": "committed-replay",
+        "row": {
+          "status": "ready",
+          "address": "after",
+          "boot_incarnation": "boot-1"
+        },
+        "position": {
+          "logIndex": 11,
+          "ordinal": 0
+        },
+        "state": "current"
+      },
+      {
+        "stage": "lost-receipt-replay",
+        "row": {
+          "status": "ready",
+          "address": "after",
+          "boot_incarnation": "boot-1"
+        },
+        "position": {
+          "logIndex": 11,
+          "ordinal": 0
+        },
+        "state": "current"
+      },
+      {
+        "stage": "other-handler-repeated-replay",
+        "row": {
+          "status": "ready",
+          "address": "after",
+          "boot_incarnation": "boot-1"
+        },
+        "position": {
+          "logIndex": 11,
+          "ordinal": 0
+        },
+        "state": "current"
+      }
+    ],
+    "expected": {
+      "row": {
+        "status": "ready",
+        "address": "after",
+        "boot_incarnation": "boot-1"
+      },
+      "position": {
+        "logIndex": 11,
+        "ordinal": 0
+      },
+      "state": "current"
+    },
+    "image": {
+      "tableName": "nodes",
+      "sourcePartition": "nodes-p1",
+      "outcome": "install",
+      "pages": 2,
+      "rows": 1,
+      "bytes": 512,
+      "durationMs": 0,
+      "restarts": 0,
+      "restartReasons": {},
+      "state": "current",
+      "appliedIndex": 10,
+      "upserted": 0,
+      "deleted": 0
+    },
+    "pages": [
+      {
+        "imageId": null,
+        "page": 0
+      },
+      {
+        "imageId": "independent-image-at-10",
+        "page": 1
+      }
+    ],
+    "leaderDecision": "already_applied",
+    "replayStable": true,
+    "passed": true
+  },
+  {
+    "id": "provisional-before-image",
+    "timeline": [
+      {
+        "stage": "paged-relist-before-provisional",
+        "row": {
+          "status": "joining",
+          "address": "before",
+          "boot_incarnation": "boot-1"
+        },
+        "position": null,
+        "state": "gap"
+      },
+      {
+        "stage": "paged-relist-after-provisional",
+        "row": {
+          "status": "ready",
+          "address": "after",
+          "boot_incarnation": "boot-1"
+        },
+        "position": null,
+        "state": "gap"
+      },
+      {
+        "stage": "image-installed",
+        "row": {
+          "status": "joining",
+          "address": "before",
+          "boot_incarnation": "boot-1"
+        },
+        "position": {
+          "logIndex": 10,
+          "ordinal": 9007199254740991
+        },
+        "state": "current"
+      },
+      {
+        "stage": "committed-replay",
+        "row": {
+          "status": "joining",
+          "address": "before",
+          "boot_incarnation": "boot-1"
+        },
+        "position": {
+          "logIndex": 11,
+          "ordinal": 0
+        },
+        "state": "current"
+      },
+      {
+        "stage": "lost-receipt-replay",
+        "row": {
+          "status": "joining",
+          "address": "before",
+          "boot_incarnation": "boot-1"
+        },
+        "position": {
+          "logIndex": 11,
+          "ordinal": 0
+        },
+        "state": "current"
+      },
+      {
+        "stage": "other-handler-repeated-replay",
+        "row": {
+          "status": "joining",
+          "address": "before",
+          "boot_incarnation": "boot-1"
+        },
+        "position": {
+          "logIndex": 11,
+          "ordinal": 0
+        },
+        "state": "current"
+      }
+    ],
+    "expected": {
+      "row": {
+        "status": "ready",
+        "address": "after",
+        "boot_incarnation": "boot-1"
+      },
+      "position": {
+        "logIndex": 11,
+        "ordinal": 0
+      },
+      "state": "current"
+    },
+    "image": {
+      "tableName": "nodes",
+      "sourcePartition": "nodes-p1",
+      "outcome": "install",
+      "pages": 2,
+      "rows": 1,
+      "bytes": 512,
+      "durationMs": 0,
+      "restarts": 0,
+      "restartReasons": {},
+      "state": "current",
+      "appliedIndex": 10,
+      "upserted": 1,
+      "deleted": 0
+    },
+    "pages": [
+      {
+        "imageId": null,
+        "page": 0
+      },
+      {
+        "imageId": "independent-image-at-10",
+        "page": 1
+      }
+    ],
+    "leaderDecision": "already_applied",
+    "replayStable": true,
+    "passed": false
+  },
+  {
+    "id": "all-handlers-sharing-cache",
+    "timeline": [
+      {
+        "stage": "paged-relist-before-provisional",
+        "row": {
+          "status": "joining",
+          "address": "before",
+          "boot_incarnation": "boot-1"
+        },
+        "position": null,
+        "state": "gap"
+      },
+      {
+        "stage": "paged-relist-after-provisional",
+        "row": {
+          "status": "ready",
+          "address": "after",
+          "boot_incarnation": "boot-1"
+        },
+        "position": null,
+        "state": "gap"
+      },
+      {
+        "stage": "image-installed",
+        "row": {
+          "status": "joining",
+          "address": "before",
+          "boot_incarnation": "boot-1"
+        },
+        "position": {
+          "logIndex": 10,
+          "ordinal": 9007199254740991
+        },
+        "state": "current"
+      },
+      {
+        "stage": "committed-replay",
+        "row": {
+          "status": "joining",
+          "address": "before",
+          "boot_incarnation": "boot-1"
+        },
+        "position": {
+          "logIndex": 11,
+          "ordinal": 0
+        },
+        "state": "current"
+      },
+      {
+        "stage": "lost-receipt-replay",
+        "row": {
+          "status": "joining",
+          "address": "before",
+          "boot_incarnation": "boot-1"
+        },
+        "position": {
+          "logIndex": 11,
+          "ordinal": 0
+        },
+        "state": "current"
+      },
+      {
+        "stage": "other-handler-repeated-replay",
+        "row": {
+          "status": "joining",
+          "address": "before",
+          "boot_incarnation": "boot-1"
+        },
+        "position": {
+          "logIndex": 11,
+          "ordinal": 0
+        },
+        "state": "current"
+      }
+    ],
+    "expected": {
+      "row": {
+        "status": "ready",
+        "address": "after",
+        "boot_incarnation": "boot-1"
+      },
+      "position": {
+        "logIndex": 11,
+        "ordinal": 0
+      },
+      "state": "current"
+    },
+    "image": {
+      "tableName": "nodes",
+      "sourcePartition": "nodes-p1",
+      "outcome": "install",
+      "pages": 2,
+      "rows": 1,
+      "bytes": 512,
+      "durationMs": 0,
+      "restarts": 0,
+      "restartReasons": {},
+      "state": "current",
+      "appliedIndex": 10,
+      "upserted": 1,
+      "deleted": 0
+    },
+    "pages": [
+      {
+        "imageId": null,
+        "page": 0
+      },
+      {
+        "imageId": "independent-image-at-10",
+        "page": 1
+      }
+    ],
+    "leaderDecision": "already_applied",
+    "replayStable": true,
+    "passed": false
+  },
+  {
+    "id": "buffered-before-image",
+    "timeline": [
+      {
+        "stage": "paged-relist-before-provisional",
+        "row": {
+          "status": "joining",
+          "address": "before",
+          "boot_incarnation": "boot-1"
+        },
+        "position": null,
+        "state": "gap"
+      },
+      {
+        "stage": "paged-relist-after-provisional",
+        "row": {
+          "status": "ready",
+          "address": "after",
+          "boot_incarnation": "boot-1"
+        },
+        "position": null,
+        "state": "gap"
+      },
+      {
+        "stage": "image-installed",
+        "row": {
+          "status": "joining",
+          "address": "before",
+          "boot_incarnation": "boot-1"
+        },
+        "position": {
+          "logIndex": 10,
+          "ordinal": 9007199254740991
+        },
+        "state": "current"
+      },
+      {
+        "stage": "committed-replay",
+        "row": {
+          "status": "joining",
+          "address": "before",
+          "boot_incarnation": "boot-1"
+        },
+        "position": {
+          "logIndex": 11,
+          "ordinal": 0
+        },
+        "state": "current"
+      },
+      {
+        "stage": "lost-receipt-replay",
+        "row": {
+          "status": "joining",
+          "address": "before",
+          "boot_incarnation": "boot-1"
+        },
+        "position": {
+          "logIndex": 11,
+          "ordinal": 0
+        },
+        "state": "current"
+      },
+      {
+        "stage": "other-handler-repeated-replay",
+        "row": {
+          "status": "joining",
+          "address": "before",
+          "boot_incarnation": "boot-1"
+        },
+        "position": {
+          "logIndex": 11,
+          "ordinal": 0
+        },
+        "state": "current"
+      }
+    ],
+    "expected": {
+      "row": {
+        "status": "ready",
+        "address": "after",
+        "boot_incarnation": "boot-1"
+      },
+      "position": {
+        "logIndex": 11,
+        "ordinal": 0
+      },
+      "state": "current"
+    },
+    "image": {
+      "tableName": "nodes",
+      "sourcePartition": "nodes-p1",
+      "outcome": "install",
+      "pages": 2,
+      "rows": 1,
+      "bytes": 512,
+      "durationMs": 0,
+      "restarts": 0,
+      "restartReasons": {},
+      "state": "current",
+      "appliedIndex": 10,
+      "upserted": 1,
+      "deleted": 0
+    },
+    "pages": [
+      {
+        "imageId": null,
+        "page": 0
+      },
+      {
+        "imageId": "independent-image-at-10",
+        "page": 1
+      }
+    ],
+    "leaderDecision": "already_applied",
+    "replayStable": true,
+    "passed": false
+  },
+  {
+    "id": "same-entry-siblings",
+    "timeline": [
+      {
+        "stage": "paged-relist-before-provisional",
+        "row": {
+          "status": "joining",
+          "address": "before",
+          "boot_incarnation": "boot-1"
+        },
+        "position": null,
+        "state": "gap"
+      },
+      {
+        "stage": "paged-relist-after-provisional",
+        "row": {
+          "status": "ready",
+          "address": "sibling-last",
+          "boot_incarnation": "boot-1"
+        },
+        "position": null,
+        "state": "gap"
+      },
+      {
+        "stage": "image-installed",
+        "row": {
+          "status": "joining",
+          "address": "before",
+          "boot_incarnation": "boot-1"
+        },
+        "position": {
+          "logIndex": 10,
+          "ordinal": 9007199254740991
+        },
+        "state": "current"
+      },
+      {
+        "stage": "committed-replay",
+        "row": {
+          "status": "joining",
+          "address": "before",
+          "boot_incarnation": "boot-1"
+        },
+        "position": {
+          "logIndex": 11,
+          "ordinal": 1
+        },
+        "state": "current"
+      },
+      {
+        "stage": "lost-receipt-replay",
+        "row": {
+          "status": "joining",
+          "address": "before",
+          "boot_incarnation": "boot-1"
+        },
+        "position": {
+          "logIndex": 11,
+          "ordinal": 1
+        },
+        "state": "current"
+      },
+      {
+        "stage": "other-handler-repeated-replay",
+        "row": {
+          "status": "joining",
+          "address": "before",
+          "boot_incarnation": "boot-1"
+        },
+        "position": {
+          "logIndex": 11,
+          "ordinal": 1
+        },
+        "state": "current"
+      }
+    ],
+    "expected": {
+      "row": {
+        "status": "ready",
+        "address": "sibling-last",
+        "boot_incarnation": "boot-1"
+      },
+      "position": {
+        "logIndex": 11,
+        "ordinal": 1
+      },
+      "state": "current"
+    },
+    "image": {
+      "tableName": "nodes",
+      "sourcePartition": "nodes-p1",
+      "outcome": "install",
+      "pages": 2,
+      "rows": 1,
+      "bytes": 512,
+      "durationMs": 0,
+      "restarts": 0,
+      "restartReasons": {},
+      "state": "current",
+      "appliedIndex": 10,
+      "upserted": 1,
+      "deleted": 0
+    },
+    "pages": [
+      {
+        "imageId": null,
+        "page": 0
+      },
+      {
+        "imageId": "independent-image-at-10",
+        "page": 1
+      }
+    ],
+    "leaderDecision": "already_applied",
+    "replayStable": true,
+    "passed": false
+  },
+  {
+    "id": "delete-recreate",
+    "timeline": [
+      {
+        "stage": "paged-relist-before-provisional",
+        "row": {
+          "status": "joining",
+          "address": "before",
+          "boot_incarnation": "boot-1"
+        },
+        "position": null,
+        "state": "gap"
+      },
+      {
+        "stage": "paged-relist-after-provisional",
+        "row": {
+          "status": "ready",
+          "address": "after",
+          "boot_incarnation": "boot-2"
+        },
+        "position": null,
+        "state": "gap"
+      },
+      {
+        "stage": "image-installed",
+        "row": {
+          "status": "joining",
+          "address": "before",
+          "boot_incarnation": "boot-1"
+        },
+        "position": {
+          "logIndex": 10,
+          "ordinal": 9007199254740991
+        },
+        "state": "current"
+      },
+      {
+        "stage": "committed-replay",
+        "row": {
+          "status": "joining",
+          "address": "before",
+          "boot_incarnation": "boot-1"
+        },
+        "position": {
+          "logIndex": 11,
+          "ordinal": 1
+        },
+        "state": "current"
+      },
+      {
+        "stage": "lost-receipt-replay",
+        "row": {
+          "status": "joining",
+          "address": "before",
+          "boot_incarnation": "boot-1"
+        },
+        "position": {
+          "logIndex": 11,
+          "ordinal": 1
+        },
+        "state": "current"
+      },
+      {
+        "stage": "other-handler-repeated-replay",
+        "row": {
+          "status": "joining",
+          "address": "before",
+          "boot_incarnation": "boot-1"
+        },
+        "position": {
+          "logIndex": 11,
+          "ordinal": 1
+        },
+        "state": "current"
+      }
+    ],
+    "expected": {
+      "row": {
+        "status": "ready",
+        "address": "after",
+        "boot_incarnation": "boot-2"
+      },
+      "position": {
+        "logIndex": 11,
+        "ordinal": 1
+      },
+      "state": "current"
+    },
+    "image": {
+      "tableName": "nodes",
+      "sourcePartition": "nodes-p1",
+      "outcome": "install",
+      "pages": 2,
+      "rows": 1,
+      "bytes": 512,
+      "durationMs": 0,
+      "restarts": 0,
+      "restartReasons": {},
+      "state": "current",
+      "appliedIndex": 10,
+      "upserted": 1,
+      "deleted": 0
+    },
+    "pages": [
+      {
+        "imageId": null,
+        "page": 0
+      },
+      {
+        "imageId": "independent-image-at-10",
+        "page": 1
+      }
+    ],
+    "leaderDecision": "already_applied",
+    "replayStable": true,
+    "passed": false
+  }
+]

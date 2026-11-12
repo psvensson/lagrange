@@ -61,6 +61,7 @@ function canMintAuthoritativeObservationReceipt(options) {
       options.params,
     ) &&
     options.causeId !== null &&
+    options.sourceGeneration !== undefined &&
     Number.isFinite(options.readStartedAtMs) &&
     options.readStartedAtMs >= 0 &&
     isValidLeaderReadAuthorityWitness(
@@ -198,7 +199,7 @@ const controlPlaneSystemTableGatewayReadStrategyMethods = {
     options,
   ) {
     if (
-      options?.authoritativeObservationScope !==
+      options?.readAuthority?.authoritativeObservationScope !==
       CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE.COMPLETE_TABLE
     ) {
       return result;
@@ -214,6 +215,7 @@ const controlPlaneSystemTableGatewayReadStrategyMethods = {
       params,
       causeId,
       readStartedAtMs: options?.authoritativeReadStartedAtMs,
+      sourceGeneration: options?.sourceGeneration,
     })) {
       return {
         ...result,
@@ -231,6 +233,7 @@ const controlPlaneSystemTableGatewayReadStrategyMethods = {
       tableName,
       observedAtMs: Math.floor(result.readAuthorityWitness.observedAtMs),
       readStartedAtMs: Math.floor(options.authoritativeReadStartedAtMs),
+      sourceGeneration: options.sourceGeneration,
       causeId,
       rowSetComplete: true,
       ...extractReadAuthorityWitnessRevisionFields(result.readAuthorityWitness),
@@ -341,11 +344,13 @@ const controlPlaneSystemTableGatewayReadStrategyMethods = {
    */
   async executeAuthoritativeRead(tableName, sql, params, strategy, options) {
     const authoritativeReadStartedAtMs = Math.floor(this.now());
+    const cdcIntegrationService = this.resolveCdcIntegrationService();
     const observationOptions = {
       ...options,
       authoritativeReadStartedAtMs,
+      sourceGeneration:
+        cdcIntegrationService?.cacheMutationTarget?.sourceOrder?.tableGeneration(tableName),
     };
-    const cdcIntegrationService = this.resolveCdcIntegrationService();
     const queryOptions = this.buildQueryOptions(options, {
       tableName,
       sql,
@@ -454,9 +459,7 @@ const controlPlaneSystemTableGatewayReadStrategyMethods = {
    * @private
    */
   async executeBootstrapSnapshotRead(tableName, readIntent, options) {
-    const phaseScope = normalizePhaseScope(
-      readIntent?.phaseScope || options?.phaseScope,
-    );
+    const phaseScope = normalizePhaseScope(options?.readAuthority?.phaseScope);
     if (!phaseScope) {
       return this.buildBootstrapSnapshotFailureResult(
         tableName,

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
+import {INITIAL_PARTITION_IDS} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {CDC_OPERATION, TABLES} from '../../src/constants/index.js';
 import {SYSTEM_TABLE_CACHE_MUTATION_MODE} from '../../src/cache/cache-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
@@ -13,16 +14,25 @@ import {
 } from '../../src/control-plane/control-plane-system-table-gateway-cache-reconciliation.js';
 
 const ROW = Object.freeze({node_id: 'n1', status: 'active', updated_at: 1000});
+const SOURCE = INITIAL_PARTITION_IDS.nodes;
+const RANGE = Object.freeze({sourcePartition: SOURCE, incarnation: 'ingress-source',
+  after: Object.freeze({logIndex: 0, ordinal: -1}),
+  through: Object.freeze({logIndex: 1, ordinal: 0})});
+const occurrence = (operation, data = ROW) => ({tableName: TABLES.NODES, operation,
+  data: {...data, updated_at_hlc: '1000:0:origin'}, timestamp: '1000:0:origin',
+  sourcePartition: SOURCE, eventKey: `ingress-${operation}`, entryId: 'ingress-entry',
+  sourceLogIndex: 1, sourceOrdinal: 0, causeId: 'committed-cause'});
 
 function capturePort() {
   const calls = [];
-  return {calls, port: {applySystemTableChange(...args) {
+  const sourceCalls = [];
+  return {calls, sourceCalls, port: {applySystemTableChange(...args) {
     calls.push(args);
-  }}};
+  }, applySourceCdcEvent(...args) { sourceCalls.push(args); return {state: 'applied'}; }}};
 }
 
 test('owned ingress preserves row identity, operation and source metadata', () => {
-  const {port, calls} = capturePort();
+  const {port, calls, sourceCalls} = capturePort();
   const gateway = new ControlPlaneSystemTableGateway({systemTableCache: port});
   gateway.applySystemTableRowsToCache = () => {
     throw new Error('retired gateway mutation method must not run');
@@ -36,15 +46,14 @@ test('owned ingress preserves row identity, operation and source metadata', () =
     mutationMode: SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_ABSENCE_RECONCILIATION,
   }]);
   for (const operation of [CDC_OPERATION.INSERT, CDC_OPERATION.UPDATE, CDC_OPERATION.DELETE]) {
-    applyCommittedPartitionCdcEventToCache(port, {
-      tableName: TABLES.NODES, operation, data: ROW, causeId: 'committed-cause',
-    }, 0);
-    assert.deepEqual(calls.at(-1), [TABLES.NODES, operation, ROW, {
-      causeId: 'committed-cause', cdcObservedAtMs: 0,
-    }]);
-    assert.equal(calls.at(-1)[2], ROW);
+    const event = occurrence(operation);
+    assert.equal(applyCommittedPartitionCdcEventToCache(port, event, RANGE, 0).state, 'applied');
+    assert.deepEqual(sourceCalls.at(-1), [event, RANGE, 0]);
+    assert.equal(sourceCalls.at(-1)[0], event, 'complete occurrence crosses the existing gateway');
+    assert.equal(sourceCalls.at(-1)[1], RANGE, 'immutable source range remains explicit');
   }
-  assert.equal(calls.length, 5);
+  assert.equal(calls.length, 2, 'durable ingress never takes the generic row mutation route');
+  assert.equal(sourceCalls.length, 3);
 });
 
 test('read-only views use only the gateway-owned writable target', () => {
@@ -76,7 +85,7 @@ test('subset failures are contained per row; committed and full-reconcile failur
   const port = {applySystemTableChange(...args) {
     attempts.push(args);
     throw failure;
-  }};
+  }, applySourceCdcEvent() { throw failure; }};
   const logs = [];
   const cache = new SystemTableCache();
   const gateway = new ControlPlaneSystemTableGateway({systemTableCache: cache});
@@ -89,9 +98,8 @@ test('subset failures are contained per row; committed and full-reconcile failur
   assert.equal(attempts.length, 4, 'each valid row is attempted despite prior refusal');
   assert.equal(logs.length, 4);
   assert.ok(logs.every((entry) => entry[1].error === failure.message));
-  assert.throws(() => applyCommittedPartitionCdcEventToCache(port, {
-    tableName: TABLES.NODES, operation: CDC_OPERATION.INSERT, data: ROW,
-  }, 0), (error) => error === failure);
+  assert.throws(() => applyCommittedPartitionCdcEventToCache(port,
+    occurrence(CDC_OPERATION.INSERT), RANGE, 0), (error) => error === failure);
   await assert.rejects(gateway.reconcileAuthoritativeCacheRows(TABLES.NODES, [ROW], {
     cacheMutationTarget: port, systemTableCache: cache,
   }), (error) => error === failure);
@@ -102,10 +110,8 @@ test('subset failures are contained per row; committed and full-reconcile failur
 test('real-cache CDC provenance and authoritative-absence fencing stay distinct', () => {
   const cache = new SystemTableCache();
   const row = {...ROW, updated_at_hlc: '1000:0:origin'};
-  applyCommittedPartitionCdcEventToCache(cache, {
-    tableName: TABLES.NODES, operation: CDC_OPERATION.INSERT, data: row,
-    causeId: 'cdc-row',
-  }, 0);
+  const event = {...occurrence(CDC_OPERATION.INSERT, row), causeId: 'cdc-row'};
+  assert.equal(applyCommittedPartitionCdcEventToCache(cache, event, RANGE, 0).state, 'applied');
   assert.deepEqual(cache.getLastCdcObservation(TABLES.NODES, ROW.node_id), {
     observedAtMs: 0, originHlc: row.updated_at_hlc,
   });

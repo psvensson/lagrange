@@ -16,20 +16,28 @@
  */
 import assert from 'node:assert/strict';
 import {afterEach, beforeEach, test} from 'node:test';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {createReadOnlyCache} from '../../src/cache/read-only-system-table-cache.js';
+import {installSourceImage} from '../../src/cache/system-table-cache-source-image.js';
+import {eventOf, sourceRangeOf} from '../../src/partition/partition-cdc-obligation-vector.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
+import {CONFIG_SCHEMA, INITIAL_PARTITION_IDS} from
+  '../../src/bootstrap/system-table-schemas-constants.js';
+import {TABLES} from '../../src/constants/index.js';
 import {
   PARTITION_CDC_COMMAND,
   PARTITION_CDC_OBLIGATION_BOUND,
   PARTITION_CDC_OBLIGATION_DRIVE_STATE,
   PARTITION_CDC_OBLIGATION_FAILURE_CODE,
 } from '../../src/partition/partition-cdc-obligation-constants.js';
-import {buildCdcAcknowledgementCommand, cdcObligationEventKeyDigest} from
+import {buildCdcAcknowledgementCommand, cdcObligationEventKeyDigest, readCdcLedgerIncarnation,
+  readCdcObligation} from
   '../../src/partition/partition-cdc-obligation-ledger.js';
 import {proposeCdcAcknowledgement} from '../../src/partition/partition-cdc-obligation.js';
 import {buildProvisionalCdcOutcome} from '../../src/cdc/cdc-delivery-outcome.js';
 import {
   CDC_TABLE, GENERATION_ORIGIN_INDEX, PARTITION_ID, REPLICAS, applyCommitted,
-  clearFixtureSingletons, durableAppliedIndex,
+  clearFixtureSingletons, committedQueryOf, durableAppliedIndex,
   resetFixtureSingletons, settleTicks, shutdownAll, startLeader, startReplica,
 } from '../test-helpers/participant-transaction-fixture.js';
 import {acknowledgingCdcSubscriber} from '../test-helpers/acknowledging-cdc-subscriber.js';
@@ -412,65 +420,124 @@ test('W-D1f: pending work under budget - an owed row the lane cannot complete (p
   }
 });
 
-test('W-D1g: applyCommittedEventsToPartitionState updates cdcIntegrationService.cacheMutationTarget ' +
-  'when service.systemTableCache is a read-only proxy', async () => {
-  const appliedChanges = [];
-  const readOnlyCache = {
-    applySystemTableChange() {
-      throw new Error('ReadOnlySystemTableCache cannot mutate system table cache');
-    },
-  };
-  const writableCache = {
-    applySystemTableChange(tableName, operation, data, timestamp) {
-      appliedChanges.push({tableName, operation, data, timestamp});
-    },
-  };
-  const {leader} = await startLeader({...CDC});
+// These controls cross the actual cache boundary, so they use a production
+// schema/key. Earlier ledger-only tests deliberately retain the id/value model.
+const LOCAL_CDC_TABLE = TABLES.CONFIG;
+const LOCAL_CDC = Object.freeze({tableName: LOCAL_CDC_TABLE, schema: CONFIG_SCHEMA,
+  partitionId: INITIAL_PARTITION_IDS[LOCAL_CDC_TABLE]});
+const LOCAL_IMAGE_SQL = `SELECT * FROM ${LOCAL_CDC_TABLE}`;
+
+function localUpsertOf(leader, tag, index) {
+  const command = committedQueryOf(`${tag}-${index}`,
+    `INSERT OR REPLACE INTO ${LOCAL_CDC_TABLE} ` +
+    '(config_key, config_value, value_type, default_value, created_at) VALUES (?, ?, ?, ?, ?)');
+  command.params = [`r-${index}`, `${tag}-${index}`, 'string', '', 1];
+  command.timestamp = leader.hlcClock.now().toString();
+  return command;
+}
+
+test('W-D1g: local committed application preserves the exact ledger occurrence and range ' +
+  'through the real writable cache when the partition holds a read-only view', async () => {
+  const {leader} = await startLeader(LOCAL_CDC);
+  const cache = new SystemTableCache({timeSource: leader.timeSource});
   try {
-    leader.systemTableCache = readOnlyCache;
-    leader.cdcIntegrationService = {cacheMutationTarget: writableCache};
-    applyCommitted(leader, upsertOf(leader, 'g', 1));
-    assert.equal(appliedChanges.length, 1);
-    assert.equal(appliedChanges[0].tableName, CDC_TABLE);
-    assert.equal(appliedChanges[0].data.id, 'r-1');
-    assert.equal(appliedChanges[0].data.value, 'g-1');
+    leader.systemTableCache = createReadOnlyCache(cache);
+    leader.cdcIntegrationService = {cacheMutationTarget: cache};
+    const command = localUpsertOf(leader, 'g', 1);
+    assert.equal(applyCommitted(leader, command), null);
+    assert.equal(cache.get(LOCAL_CDC_TABLE, 'r-1').config_value, 'g-1');
+    const owed = readCdcObligation(leader.db, eventKeyOf(command));
+    const sourceRange = sourceRangeOf(leader, [owed]);
+    const incoming = eventOf(owed, 0);
+    const retained = cache.sourceOrder.tables.get(LOCAL_CDC_TABLE).get('r-1');
+    assert.equal(retained.eventKey, owed.eventKey);
+    assert.equal(retained.logIndex, owed.logIndex);
+    assert.equal(retained.ordinal, owed.ordinal);
+    assert.equal(retained.incarnation, readCdcLedgerIncarnation(leader.db));
+    assert.equal(cache.sourceOrder.positionOf(leader.partitionId).position, null,
+      'local visibility does not fabricate a contiguous image prefix');
+    cache.sourceOrder.requireListed(leader.partitionId, LOCAL_CDC_TABLE);
+    const token = cache.sourceOrder.beginImage(leader.partitionId);
+    assert.equal(installSourceImage(cache, token, {sourcePartition: leader.partitionId,
+      tableName: LOCAL_CDC_TABLE, incarnation: sourceRange.incarnation,
+      appliedIndex: owed.logIndex - 1, rows: []}).admission, 'install');
+    assert.equal(cache.has(LOCAL_CDC_TABLE, 'r-1'), false, 'an earlier image really replaces the local effect');
+    assert.equal(cache.applySourceCdcEvent(incoming, sourceRange, leader.timeSource.now()).state,
+      'applied');
+    assert.equal(cache.get(LOCAL_CDC_TABLE, 'r-1').config_value, 'g-1');
+    assert.equal(cache.applySourceCdcEvent(incoming, sourceRange, leader.timeSource.now()).state,
+      'covered');
+    assert.equal(ledgerFactsOf(leader).owed, 1, 'local cache visibility never acknowledges the ledger');
   } finally {
     await shutdownAll(leader);
   }
 });
 
-
-test('W-D1h: a local cache apply failure stays with the partition catch and preserves committed CDC debt', async () => {
-  const {leader} = await startLeader({...CDC});
-  const attempts = [];
-  const failures = [];
-  const originalDebug = leader.logger.debug;
-  leader.logger.debug = function(message, fields) {
-    if (message === 'Failed local committed CDC apply') failures.push(fields);
-    else originalDebug.call(this, message, fields);
-  };
-  leader.cdcIntegrationService = {cacheMutationTarget: {
-    applySystemTableChange(tableName, operation, row, options) {
-      attempts.push({tableName, operation, row, options});
-      if (attempts.length === 1) throw new Error('controlled cache refusal');
-    },
-  }};
-  try {
-    for (const index of [1, 2]) {
-      assert.equal(applyCommitted(leader, upsertOf(leader, 'cache-failure', index)), null,
-        'committed SQL application completes');
+test('W-D1h: a real cache notification scheduling failure retains source and local recovery debt',
+  async () => {
+    const {leader} = await startLeader(LOCAL_CDC);
+    let notifications = 0;
+    const failures = [];
+    const cache = new SystemTableCache({timeSource: leader.timeSource,
+      scheduleCacheChangeNotification(callback) {
+        notifications += 1;
+        if (notifications === 1) throw new Error('controlled cache notification failure');
+        callback();
+      }});
+    cache.logger = {debug() {}, warn() {}, info() {}, error(message, fields) {
+      failures.push({message, ...fields});
+    }};
+    cache.onCacheChange(() => {});
+    leader.cdcIntegrationService = {cacheMutationTarget: cache};
+    try {
+      for (const index of [1, 2]) {
+        assert.equal(applyCommitted(leader, localUpsertOf(leader, 'cache-failure', index)), null,
+          'committed SQL application completes');
+      }
+      assert.equal(notifications, 2, 'later committed occurrences still reach the real cache');
+      assert.equal(failures.length, 1);
+      assert.equal(failures[0].error, 'controlled cache notification failure');
+      const cell = cache.sourceOrder.positionOf(leader.partitionId);
+      assert.equal(cell.state, 'gap');
+      assert.equal(cell.position, null);
+      assert.equal(cell.relist, 'no_relister', 'local recovery debt survives until relister binding');
+      const facts = ledgerFactsOf(leader);
+      assert.equal(facts.owed, 2, 'cache refusal cannot discharge durable obligations');
+      assert.equal(facts.delivered, 0);
+      assert.equal(leader.db.prepare(LOCAL_IMAGE_SQL).all().length, 2);
+    } finally {
+      await shutdownAll(leader);
     }
-    assert.equal(attempts.length, 2, 'later committed events still reach cache application');
-    assert.equal(failures.length, 1, 'the existing partition boundary records the one failure');
-    assert.equal(failures[0].error, 'controlled cache refusal');
-    assert.ok(attempts.every((attempt) => Number.isFinite(attempt.options.cdcObservedAtMs)),
-      'the partition provides its observation timestamp');
-    const facts = ledgerFactsOf(leader);
-    assert.equal(facts.owed, 2, 'a cache catch cannot discharge durable obligations');
-    assert.equal(facts.delivered, 0, 'cache application never invents an ACK');
-    assert.equal(leader.db.prepare(IMAGE_SQL).all().length, 2);
-  } finally {
-    leader.logger.debug = originalDebug;
-    await shutdownAll(leader);
-  }
-});
+  });
+
+test('W-D1i: a noncanonical local source cannot bind table effects; canonical source still progresses',
+  async () => {
+    const cache = new SystemTableCache();
+    let source;
+    try {
+      ({leader: source} = await startLeader({...LOCAL_CDC, partitionId: PARTITION_ID}));
+      source.cdcIntegrationService = {cacheMutationTarget: cache};
+      const wrong = localUpsertOf(source, 'wrong-source', 1);
+      assert.equal(source.partitionId, PARTITION_ID,
+        'the real committed source is internally consistent but not the system table source');
+      assert.equal(applyCommitted(source, wrong), null);
+      assert.equal(source.db.prepare(LOCAL_IMAGE_SQL).all().length, 1,
+        'cache admission cannot rewrite the already committed SQL owner');
+      assert.equal(ledgerFactsOf(source).owed, 1, 'the actual source still retains delivery debt');
+      assert.equal(cache.has(LOCAL_CDC_TABLE, 'r-1'), false);
+      assert.equal(cache.sourceOrder.cells.size, 0, 'invalid source does not acquire a cache cell');
+      assert.equal(cache.sourceOrder.tables.has(LOCAL_CDC_TABLE), false);
+      await shutdownAll(source);
+      source = null;
+      ({leader: source} = await startLeader(LOCAL_CDC));
+      source.cdcIntegrationService = {cacheMutationTarget: cache};
+      const canonical = localUpsertOf(source, 'canonical-source', 1);
+      assert.equal(applyCommitted(source, canonical), null);
+      assert.equal(cache.get(LOCAL_CDC_TABLE, 'r-1').config_value, 'canonical-source-1');
+      assert.equal(cache.sourceOrder.cells.size, 1);
+      assert.equal(cache.sourceOrder.cells.has(source.partitionId), true);
+      assert.equal(ledgerFactsOf(source).owed, 1);
+    } finally {
+      if (source !== null && source !== undefined) await shutdownAll(source);
+    }
+  });

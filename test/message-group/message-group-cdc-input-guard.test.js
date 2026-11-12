@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import {afterEach, beforeEach, test} from 'node:test';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {INITIAL_PARTITION_IDS} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {CDC_OPERATION, TABLES} from '../../src/constants/index.js';
 import {CDC_EVENT_IDENTITY} from '../../src/constants/cdc-lifecycle-constants.js';
@@ -20,7 +21,7 @@ import {GROUP_ID, NODE_ID, pump, recipientFixture as nativeRecipientFixture} fro
   './message-group-native-custody-fixture.js';
 import {positionRecipients, withSourceRange} from '../test-helpers/cdc-source-range-fixture.js';
 
-const SOURCE_PARTITION = 'guard-source';
+const SOURCE_PARTITION = INITIAL_PARTITION_IDS[TABLES.CONFIG];
 const KEY = 'guard-native-row';
 const ENTRIES = ['direct', 'forward-handler'];
 
@@ -30,7 +31,7 @@ const ENTRIES = ['direct', 'forward-handler'];
 // travels with its source range.
 async function recipientFixture(...args) {
   const f = await nativeRecipientFixture(...args);
-  positionRecipients(f.services, SOURCE_PARTITION);
+  positionRecipients(f.services, SOURCE_PARTITION, TABLES.CONFIG);
   return f;
 }
 
@@ -47,9 +48,10 @@ afterEach(() => {
 });
 
 function sourceEvent() {
+  const timestamp = new HLCTimestamp(1000, 0, 'guard-producer').toString();
   return {tableName: TABLES.CONFIG, operation: CDC_OPERATION.INSERT,
-    data: {config_key: KEY, config_value: 'guard-body', nested: {values: [1, 2]}},
-    timestamp: new HLCTimestamp(1000, 0, 'guard-producer').toString(),
+    data: {config_key: KEY, config_value: 'guard-body', nested: {values: [1, 2]},
+      updated_at_hlc: timestamp}, timestamp,
     sourcePartition: SOURCE_PARTITION, sourceReplica: `${SOURCE_PARTITION}-r1`,
     eventKey: 'guard-occurrence', entryId: 'guard-occurrence', sourceLogIndex: 7, sourceOrdinal: 0};
 }
@@ -97,21 +99,21 @@ function observeEffects(t, service) {
     });
   };
   wrap(service, 'proposeCDCCommand', 'proposals');
-  wrap(service.cdcHandler, 'applyImmediate', 'applications');
+  wrap(service.cdcHandler, 'applySourceEvent', 'applications');
   wrap(service, 'applyCDCBatch', 'direct');
   wrap(service, 'handleLatencyCdcPropagationBatchMessage', 'forward-handler');
   return calls;
 }
 
-function startEntry(service, entry, events, install = () => []) {
+function startEntry(service, entry, events, install = () => [],
+  sourceRange = withSourceRange([sourceEvent()]).sourceRange) {
   // Restore all global mutations before yielding to native/runtime work. The
   // actual async method's synchronous admission prefix runs inside this cut.
   // The source range is named from a plain source event, never from the
   // (possibly hostile) input under test: it travels beside the events.
-  const rangeOf = () => withSourceRange([sourceEvent()]).sourceRange;
-  const payload = {events, targetGroupId: GROUP_ID, sourceRange: rangeOf(),
+  const payload = {events, targetGroupId: GROUP_ID, sourceRange,
     [CDC_DELIVERY_REMAINING_MS]: service.deliveryTimeoutMs};
-  const direct = {sourceRange: rangeOf()};
+  const direct = {sourceRange};
   return withHostileIntrinsics(install(), () => entry === 'direct' ?
     service.applyCDCBatch(events, direct) :
     service.handleLatencyCdcPropagationBatchMessage('guard-entry', payload));
@@ -132,13 +134,14 @@ async function settleEntry(f, operation) {
   return observed;
 }
 
-async function refuse(f, calls, entry, events, install = () => [], callerView = () => events) {
+async function refuse(f, calls, entry, events, install = () => [], callerView = () => events,
+  sourceRange = withSourceRange([sourceEvent()]).sourceRange) {
   const service = f.services[0];
   const expected = structuredClone(callerView());
   const before = nativeState(service);
   const pendingBefore = service.cdcCommitWaiters.size;
   const counters = {...calls};
-  const result = await settleEntry(f, startEntry(service, entry, events, install));
+  const result = await settleEntry(f, startEntry(service, entry, events, install, sourceRange));
   assert.ok(result.error?.code === CDC_EVENT_IDENTITY.INVALID_CODE ||
     result.error?.code === CDC_COMPLETION.INVALID, result.error?.stack ?? 'typed refusal required');
   assert.equal(result.answer, undefined);
@@ -167,6 +170,65 @@ async function accept(f, calls, entry, events, install = () => []) {
 }
 
 for (const entry of ENTRIES) {
+  test(`a valid range from a noncanonical table source refuses before ${entry} effects`, async (t) => {
+    const f = await recipientFixture(t, KEY, {replicaCount: 1});
+    const service = f.services[0];
+    const calls = observeEffects(t, service);
+    const order = service.cdcHandler.cache.sourceOrder;
+    const wrongSource = 'config-p2';
+    const events = [{...sourceEvent(), sourcePartition: wrongSource,
+      sourceReplica: 'config-p2-r1'}];
+    const range = withSourceRange(events).sourceRange;
+    const count = order.cells.size;
+    const generation = order.tableGeneration(TABLES.CONFIG);
+    assert.equal(order.cells.has(wrongSource), false);
+    await refuse(f, calls, entry, events, () => [], () => events, range);
+    assert.equal(order.cells.size, count, 'rejected source identity cannot create recovery state');
+    assert.equal(order.cells.has(wrongSource), false);
+    assert.equal(order.tableGeneration(TABLES.CONFIG), generation);
+    await accept(f, calls, entry, [sourceEvent()]);
+  });
+}
+
+for (const entry of ENTRIES) {
+  test(`canonical source range refuses callbacks and inherited positions through ${entry}`,
+    async (t) => {
+      const f = await recipientFixture(t, KEY, {replicaCount: 1});
+      const calls = observeEffects(t, f.services[0]);
+      const events = [sourceEvent()];
+      const range = () => withSourceRange(events).sourceRange;
+      let callbacks = 0;
+      const accessor = range();
+      Object.defineProperty(accessor, 'incarnation', {enumerable: true,
+        get() { callbacks += 1; return 'test-source-incarnation'; }});
+      const nestedAccessor = range();
+      Object.defineProperty(nestedAccessor.after, 'logIndex', {enumerable: true,
+        get() { callbacks += 1; return 0; }});
+      const pair = Proxy.revocable(range(), {
+        get(target, property) { callbacks += 1; return Reflect.get(target, property); },
+        ownKeys(target) { callbacks += 1; return Reflect.ownKeys(target); },
+      });
+      for (const malformed of [accessor, nestedAccessor, pair.proxy]) {
+        await refuse(f, calls, entry, events, () => [], () => events, malformed);
+      }
+      pair.revoke();
+      await refuse(f, calls, entry, events, () => [], () => events, pair.proxy);
+      assert.equal(callbacks, 0, 'range refusal happens before any caller callback or proxy trap');
+      const inherited = range();
+      const incarnation = inherited.incarnation;
+      delete inherited.incarnation;
+      await refuse(f, calls, entry, events, () => [
+        pollutePrototypeProperty(Object.prototype, 'incarnation', incarnation),
+        replacePrototypeProperty(Object, 'hasOwn', () => true),
+      ], () => events, inherited);
+      const coerced = range();
+      coerced.after.ordinal = '-1';
+      await refuse(f, calls, entry, events, () => [
+        replacePrototypeProperty(Number, 'isSafeInteger', () => true),
+      ], () => events, coerced);
+      await accept(f, calls, entry, events);
+    });
+
   test(`durable identity guards refuse before effects through ${entry}`, async (t) => {
     const f = await recipientFixture(t, KEY, {replicaCount: 1});
     const calls = observeEffects(t, f.services[0]);

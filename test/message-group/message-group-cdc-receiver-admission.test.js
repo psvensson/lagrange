@@ -4,6 +4,7 @@
 import assert from 'node:assert/strict';
 import {afterEach, beforeEach, test} from 'node:test';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {INITIAL_PARTITION_IDS} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {CDC_OPERATION, TABLES} from '../../src/constants/index.js';
 import {CDC_EVENT_IDENTITY} from '../../src/constants/cdc-lifecycle-constants.js';
@@ -12,9 +13,12 @@ import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {isRaftRsTransportEnvelope} from '../../src/raft/raft-packet-utils.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
-import {CDC_COMPLETION, cdcCommitWaitIdentity, isAlreadyAppliedCdcOutcome, isCommittedCdcOutcome,
+import {installSourceImage} from '../../src/cache/system-table-cache-source-image.js';
+import {CDC_COMPLETION, isAlreadyAppliedCdcOutcome, isCommittedCdcOutcome,
   unknownCdcAcceptance} from
   '../../src/cdc/cdc-delivery-outcome.js';
+import {cdcRangeWaitIdentity} from
+  '../../src/message-group/message-group-cdc-committed-acceptance.js';
 import {CDC_DELIVERY_REMAINING_MS, cdcDeliveryBudgetError, createCdcDeliveryBudget} from
   '../../src/cdc/cdc-delivery-budget.js';
 import {MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE, MESSAGE_GROUP_COMMAND_TYPE} from
@@ -33,12 +37,14 @@ const RECEIVED_BUDGET_MS = 100;
 const ORDINARY_TABLE = 'c4_ordinary_rows';
 
 
+const SOURCE_PARTITION = INITIAL_PARTITION_IDS[TABLES.CONFIG];
+
 // CDC Stage 3: every recipient node starts from a known position of the
 // synthetic source (a list of it at its start), and every durable vector
 // travels with its source range.
 async function recipientFixture(...args) {
   const f = await nativeRecipientFixture(...args);
-  positionRecipients(f.services, 'receiver-source');
+  positionRecipients(f.services, SOURCE_PARTITION, TABLES.CONFIG);
   return f;
 }
 
@@ -55,10 +61,10 @@ afterEach(() => {
 });
 
 function sourceEvent(index) {
+  const timestamp = new HLCTimestamp(1000 + index, 0, 'receiver-source').toString();
   return {tableName: TABLES.CONFIG, operation: CDC_OPERATION.INSERT,
-    data: {config_key: KEY, config_value: `receiver-body-${index}`},
-    timestamp: new HLCTimestamp(1000 + index, 0, 'receiver-source').toString(),
-    sourcePartition: 'receiver-source', sourceReplica: 'receiver-source-r1',
+    data: {config_key: KEY, config_value: `receiver-body-${index}`, updated_at_hlc: timestamp}, timestamp,
+    sourcePartition: SOURCE_PARTITION, sourceReplica: `${SOURCE_PARTITION}-r1`,
     eventKey: `receiver-occurrence-${index}`, entryId: `receiver-occurrence-${index}`,
     sourceLogIndex: index + 10, sourceOrdinal: 0};
 }
@@ -183,7 +189,7 @@ for (const batch of [true]) {
       const occupiedEvent = sourceEvent(1);
       try {
         const occupied = await occupyNativeSlot(f, leader, occupiedEvent);
-        const key = cdcCommitWaitIdentity([occupiedEvent]);
+        const key = cdcRangeWaitIdentity([occupiedEvent], withSourceRange([occupiedEvent]).sourceRange);
         const entry = queue.get(key);
         assert.ok(entry, 'the existing queue retains the admitted native occurrence');
         const invalid = sourceEvent(2);
@@ -290,7 +296,7 @@ test('public follower CDC receiver cannot bypass occupied ProposalQueue admissio
     assertHeldNativeAnswer(f, hold, firstEvent);
     assert.equal(occupied.settled, false);
     assert.equal(queue.isFull, true, 'admitted forwarding owns the existing queue slot');
-    const key = cdcCommitWaitIdentity([firstEvent]);
+    const key = cdcRangeWaitIdentity([firstEvent], withSourceRange([firstEvent]).sourceRange);
     const entry = queue.get(key);
     assert.ok(entry);
     assert.equal(queue.isResponsePending(key), true);
@@ -331,7 +337,7 @@ test('public follower CDC deadline retires response while raw forwarding retains
     assert.equal(follower.raft.readStatus().role, RAFT_ROLE.FOLLOWER);
     const queue = configureOneSlot(follower);
     const event = sourceEvent(1);
-    const key = cdcCommitWaitIdentity([event]);
+    const key = cdcRangeWaitIdentity([event], withSourceRange([event]).sourceRange);
     const hold = holdNativeForwardAnswer(f, event, follower);
     try {
       const pending = receive(follower, event, true, 'expiring-public-follower', RECEIVED_BUDGET_MS);
@@ -399,7 +405,7 @@ async function heldForwardFixture(t, event, {holdFollowerReplication = true} = {
   const queue = configureOneSlot(follower);
   const hold = holdNativeForwardAnswer(f, event, follower);
   if (!holdFollowerReplication) hold.releaseNativePackets();
-  return {f, follower, queue, hold, key: cdcCommitWaitIdentity([event])};
+  return {f, follower, queue, hold, key: cdcRangeWaitIdentity([event], withSourceRange([event]).sourceRange)};
 }
 
 async function releaseHeldForward(f, hold) {
@@ -899,6 +905,56 @@ test('C5 an identical vector arriving while the first one\'s response is pending
   await settle(f, second, 'the joiner settles with it');
   assertNativeCommitted(f, event, first);
   assert.deepEqual(second.answer, first.answer, 'the same committed receipt, bound to its digest');
+});
+
+test('identical event bytes in a replacement ledger have distinct native waiter custody', async (t) => {
+  const f = await recipientFixture(t, KEY);
+  const leader = f.services[0];
+  const event = sourceEvent(1);
+  const original = withSourceRange([event]);
+  const replacement = {sourceRange: {...original.sourceRange,
+    incarnation: 'receiver-replacement-ledger'}};
+  f.holdEntries = true;
+  const first = observe(leader.applyCDCBatch([event], original));
+  try {
+    await pump(f);
+    assert.equal(first.settled, false);
+    const originalPackets = f.held.splice(0);
+    assert.ok(originalPackets.length > 0, 'the first native append is held at the real transport');
+    const cache = leader.cdcHandler.cache;
+    cache.sourceOrder.recordGap(replacement.sourceRange, TABLES.CONFIG);
+    assert.equal(installSourceImage(cache, cache.sourceOrder.beginImage(event.sourcePartition), {
+      sourcePartition: event.sourcePartition, tableName: TABLES.CONFIG,
+      incarnation: replacement.sourceRange.incarnation, appliedIndex: 0, rows: [],
+    }).admission, 'install');
+    const second = observe(leader.applyCDCBatch([event], replacement));
+    await pump(f);
+    assert.equal(second.settled, false);
+    assert.equal(leader.cdcCommitWaiters.size, 2,
+      'replacement incarnation is admitted independently, never joined by event digest');
+    assert.equal(nativeEntry(leader, event).entries.length, 2,
+      'the real native log retains the two different ranged commands');
+    // Release only the earlier envelopes through the unchanged native port.
+    // Later append packets remain held by the fixture's normal schedule.
+    for (const item of originalPackets) {
+      await Reflect.apply(f.deliver, f.router, [item.address, item.envelope, ...item.options]);
+    }
+    await pump(f);
+    assert.equal(first.settled, true, 'the earlier native command commits');
+    assert.equal(isCommittedCdcOutcome(first.answer, [event], GROUP_ID), true);
+    assert.equal(second.settled, false, 'the old receipt cannot settle the replacement waiter');
+    assert.equal(leader.cdcCommitWaiters.size, 1);
+    releaseNativePackets(f);
+    await settle(f, second, 'the replacement settles only after its own native application');
+    assert.equal(isCommittedCdcOutcome(second.answer, [event], GROUP_ID), true);
+    assert.equal(second.answer.cdcVectorDigest, first.answer.cdcVectorDigest,
+      'the event bytes are identical; the range supplies the differing identity');
+    assert.notEqual(second.answer.cdcCommitted[0].logIndex, first.answer.cdcCommitted[0].logIndex);
+    assert.equal(leader.cdcCommitWaiters.size, 0);
+  } finally {
+    releaseNativePackets(f);
+    await pump(f);
+  }
 });
 
 test('C5 an identical vector whose first response retired while its raw forward is open is ' +

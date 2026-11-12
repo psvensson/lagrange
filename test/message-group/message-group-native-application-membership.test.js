@@ -1,8 +1,9 @@
-// Real native mixed-command application under a selective iterator fault.
+// Real native ledger-batch application under a selective iterator fault.
 // Test input is not a source SQL occurrence; source ledger/ACK proof is separate.
 import assert from 'node:assert/strict';
 import {afterEach, beforeEach, test} from 'node:test';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {INITIAL_PARTITION_IDS} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {CDC_OPERATION, TABLES} from '../../src/constants/index.js';
 import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
@@ -15,15 +16,17 @@ import {GROUP_ID, NODE_ID, pump, recipientFixture as nativeRecipientFixture} fro
 import {positionRecipients, withSourceRange} from '../test-helpers/cdc-source-range-fixture.js';
 
 const KEY = 'membership-durable';
-const ORDINARY_KEY = 'membership-ordinary';
+const SIBLING_KEY = 'membership-sibling';
 
+
+const SOURCE_PARTITION = INITIAL_PARTITION_IDS[TABLES.CONFIG];
 
 // CDC Stage 3: every recipient node starts from a known position of the
 // synthetic source (a list of it at its start), and every durable vector
 // travels with its source range.
 async function recipientFixture(...args) {
   const f = await nativeRecipientFixture(...args);
-  positionRecipients(f.services, 'membership-config');
+  positionRecipients(f.services, SOURCE_PARTITION, TABLES.CONFIG);
   return f;
 }
 
@@ -39,14 +42,16 @@ afterEach(() => {
   LoggingService.resetInstance();
 });
 
-function mixedInput() {
+function ledgerInput() {
   const timestamp = new HLCTimestamp(1000, 0, 'membership-source').toString();
   return [{tableName: TABLES.CONFIG, operation: CDC_OPERATION.INSERT,
-    data: {config_key: KEY, config_value: 'durable-value'}, timestamp,
-    sourcePartition: 'membership-config', sourceReplica: 'membership-config-r1',
+    data: {config_key: KEY, config_value: 'durable-value', updated_at_hlc: timestamp}, timestamp,
+    sourcePartition: SOURCE_PARTITION, sourceReplica: `${SOURCE_PARTITION}-r1`,
     eventKey: 'membership-write', entryId: 'membership-write', sourceLogIndex: 5, sourceOrdinal: 0},
   {tableName: TABLES.CONFIG, operation: CDC_OPERATION.INSERT,
-    data: {config_key: ORDINARY_KEY, config_value: 'ordinary-value'}, timestamp}];
+    data: {config_key: SIBLING_KEY, config_value: 'sibling-value', updated_at_hlc: timestamp}, timestamp,
+    sourcePartition: SOURCE_PARTITION, sourceReplica: `${SOURCE_PARTITION}-r1`,
+    eventKey: 'membership-sibling', entryId: 'membership-write', sourceLogIndex: 5, sourceOrdinal: 1}];
 }
 
 function observeCommittedApplication(t, service, attacked) {
@@ -65,7 +70,7 @@ function observeCommittedApplication(t, service, attacked) {
     const replace = () => replacePrototypeProperty(Array.prototype, Symbol.iterator, function() {
       if (this[0]?.eventKey === 'membership-write') {
         intercepted += 1;
-        // If the application asks the public iterator, its ordinary sibling
+        // If the application asks the public iterator, its second ledger sibling
         // disappears. Unrelated scheduler/effect arrays keep their own members.
         return Reflect.apply(originalIterator, [this[0]], []);
       }
@@ -76,7 +81,7 @@ function observeCommittedApplication(t, service, attacked) {
         faultInstallations += 1;
         const probe = committed.command.events[Symbol.iterator]();
         assert.equal(probe.next().value, committed.command.events[0]);
-        assert.equal(probe.next().done, true, 'the installed fault omits the ordinary sibling');
+        assert.equal(probe.next().done, true, 'the installed fault omits the ledger sibling');
       }
       return Reflect.apply(original, this, [committed, lifetime]);
     });
@@ -84,7 +89,7 @@ function observeCommittedApplication(t, service, attacked) {
     observations.push({index: committed.index, term: committed.term, command: before,
       inTransaction: this.db.inTransaction,
       durable: this.systemTableCache.get(TABLES.CONFIG, KEY)?.config_value,
-      ordinary: this.systemTableCache.get(TABLES.CONFIG, ORDINARY_KEY)?.config_value});
+      sibling: this.systemTableCache.get(TABLES.CONFIG, SIBLING_KEY)?.config_value});
     return result;
   };
   t.after(() => {
@@ -98,7 +103,7 @@ for (const attacked of [false, true]) {
     async (t) => {
       const f = await recipientFixture(t, KEY, {replicaCount: 1});
       const service = f.services[0];
-      const expected = mixedInput();
+      const expected = ledgerInput();
       const input = structuredClone(expected);
       const observed = observeCommittedApplication(t, service, attacked);
       let answer;
@@ -110,7 +115,7 @@ for (const attacked of [false, true]) {
         returned = true;
         stateAtReturn = {record: RaftRsDurableStore.readDurableRecordIn(service.db, GROUP_ID),
           durable: service.systemTableCache.get(TABLES.CONFIG, KEY)?.config_value,
-          ordinary: service.systemTableCache.get(TABLES.CONFIG, ORDINARY_KEY)?.config_value};
+          sibling: service.systemTableCache.get(TABLES.CONFIG, SIBLING_KEY)?.config_value};
       }, (error) => {
         failure = error; returned = true;
       });
@@ -124,13 +129,13 @@ for (const attacked of [false, true]) {
       assert.equal(applied.inTransaction, true, 'the observation is inside the real application txn');
       assert.deepEqual(applied.command.events, expected, 'native member order and stamps are exact');
       assert.equal(applied.durable, 'durable-value');
-      assert.equal(applied.ordinary, 'ordinary-value', 'ordinary sibling was applied before receipt');
+      assert.equal(applied.sibling, 'sibling-value', 'ledger sibling was applied before receipt');
       assert.equal(observed.installed(), attacked ? 1 : 0, 'the selected fault reaches actual apply');
       assert.equal(observed.intercepted(), attacked ? 1 : 0,
         'only the deliberate probe consults the replaced iterator; application uses actual indices');
       assert.equal(isCommittedCdcOutcome(answer, expected, GROUP_ID), true);
       const receipt = answer.cdcCommitted[0];
-      assert.equal(answer.cdcCommitted.length, 1);
+      assert.equal(answer.cdcCommitted.length, 2);
       assert.equal(BigInt(receipt.logIndex), BigInt(applied.index));
       assert.equal(BigInt(receipt.term), BigInt(applied.term));
       const retained = stateAtReturn.record.entries.find((item) =>
@@ -140,6 +145,6 @@ for (const attacked of [false, true]) {
       assert.ok(BigInt(stateAtReturn.record.hardState.commit) >= BigInt(receipt.logIndex));
       assert.ok(BigInt(stateAtReturn.record.appliedIndex) >= BigInt(receipt.logIndex));
       assert.equal(stateAtReturn.durable, 'durable-value');
-      assert.equal(stateAtReturn.ordinary, 'ordinary-value');
+      assert.equal(stateAtReturn.sibling, 'sibling-value');
     });
 }

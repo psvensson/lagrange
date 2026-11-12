@@ -206,6 +206,7 @@ test('complete-observation UPSERT mode requires read-boundary evidence', (t) => 
     'an incomplete temporal proof does not mutate the cache');
 
   cache.recordAuthoritativeObservation(TABLES.SERVICES, {
+    sourceGeneration: cache.sourceOrder.tableGeneration(TABLES.SERVICES),
     observedAtMs: 2000,
     causeId: 'newer-complete-observation',
   });
@@ -288,6 +289,7 @@ test('complete presence must be strictly later than a key tombstone', (t) => {
     updated_at_hlc: '200-0-owner',
   });
   const completeReadStartedAtMs = Date.now() + 1;
+  const sourceGeneration = cache.sourceOrder.tableGeneration(TABLES.SERVICES);
 
   cache.applySystemTableChange(
     TABLES.SERVICES,
@@ -299,6 +301,7 @@ test('complete presence must be strictly later than a key tombstone', (t) => {
           .AUTHORITATIVE_OBSERVATION_RECONCILIATION,
       authoritativeObservedAtMs: 200,
       authoritativeReadStartedAtMs: completeReadStartedAtMs,
+      sourceGeneration,
     },
   );
   t.equal(cache.has(TABLES.SERVICES, row.service_id), false,
@@ -314,6 +317,7 @@ test('complete presence must be strictly later than a key tombstone', (t) => {
           .AUTHORITATIVE_OBSERVATION_RECONCILIATION,
       authoritativeObservedAtMs: 201,
       authoritativeReadStartedAtMs: completeReadStartedAtMs,
+      sourceGeneration,
     },
   );
   t.same(cache.get(TABLES.SERVICES, row.service_id), row,

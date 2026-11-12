@@ -6,7 +6,8 @@ import {
 import {ERRORS} from '../constants/errors.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
   '../partition/partition-write-kernel.js';
-import {registerSourceRelister} from './cdc-integration-service-source-relist.js';
+import {registerSourceRelister, releaseSourceRelister} from
+  './cdc-integration-service-source-relist.js';
 
 const {
   CDCEventHandler,
@@ -37,7 +38,7 @@ class CDCIntegrationServiceLifecycleMethods {
       !this.cacheMutationTarget &&
       typeof cache?.applySystemTableChange === 'function'
     ) {
-      this.cacheMutationTarget = cache;
+      this.setCacheMutationTarget(cache);
     }
   }
 
@@ -46,6 +47,7 @@ class CDCIntegrationServiceLifecycleMethods {
    * @param {Object} cache - Writable SystemTableCache instance.
    */
   setCacheMutationTarget(cache) {
+    releaseSourceRelister(this);
     this.cacheMutationTarget = cache;
     if (this.initialized) registerSourceRelister(this);
   }
@@ -159,6 +161,7 @@ class CDCIntegrationServiceLifecycleMethods {
    */
   markShuttingDown() {
     this.isShuttingDown = true;
+    releaseSourceRelister(this);
     const releases = [...this.shutdownReleases];
     this.shutdownReleases.clear();
     for (const release of releases) {
@@ -183,24 +186,37 @@ class CDCIntegrationServiceLifecycleMethods {
 
   /**
    * A write's retry delay on this service's clock, held until shutdown:
-   * shutdown ends it at once, so no timer outlives the terminal state.
+   * shutdown cancels it at once. A broken cancellation rejects with its
+   * original cause; the uncleared timer remains the clock's obligation.
    * @param {number} delayMs
    * @return {Promise<void>} Settles at the delay or at shutdown.
    */
   delayUntilShutdown(delayMs) {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       let timer = null;
       const stopHolding = this.holdUntilShutdown(() => {
-        this.timeSource.clearTimeout(timer);
+        if (timer !== null) {
+          try {
+            this.timeSource.clearTimeout(timer);
+          } catch (error) {
+            reject(error);
+            return;
+          }
+        }
         resolve();
       });
       if (this.isShuttingDown === true) {
         return;
       }
-      timer = this.timeSource.setTimeout(() => {
+      try {
+        timer = this.timeSource.setTimeout(() => {
+          stopHolding();
+          resolve();
+        }, delayMs);
+      } catch (error) {
         stopHolding();
-        resolve();
-      }, delayMs);
+        reject(error);
+      }
     });
   }
 

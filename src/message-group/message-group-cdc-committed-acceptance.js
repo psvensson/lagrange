@@ -1,18 +1,19 @@
 // MessageGroupService's transient response custody. Only its native
 // application afterCommit can produce an accepted receipt; this queue stores
 // no durable outcome and cannot discharge the source ledger's obligation.
-import {CDC_EVENT_METADATA_FIELD, captureCdcEvents} from
+import {captureCdcEvents} from
   '../cdc/cdc-event-envelope.js';
 import {CDC_COMPLETION, buildAlreadyAppliedCdcOutcome, buildCommittedCdcOutcome,
   buildProvisionalCdcOutcome, cdcCommitWaitIdentity, hasDurableCdcEvents,
   isAlreadyAppliedCdcOutcome, isCommittedCdcOutcome, isProvisionalCdcOutcome,
   unconfirmedCdcAcceptance, unknownCdcAcceptance} from
   '../cdc/cdc-delivery-outcome.js';
-import {isSourceRange} from '../cache/system-table-cache-cdc-observation.js';
+import {captureSourceRange, isSourceVector} from
+  '../cache/system-table-cache-source-order.js';
 import {DURABLE_RANGE_DECISION, classifyDurableRangeAtLeader} from
   './message-group-cdc-source-range.js';
 import {assertCdcDeliveryInvocation} from '../cdc/cdc-delivery-invocation.js';
-import {appendOwnArrayValue, copyArrayByIndex, isDenseDataArray, isRecord} from
+import {appendOwnArrayValue, digest} from
   '../utils/canonical-json-data.js';
 import {createTimeoutBudget, getRemainingBudgetMs} from '../control-plane/timeout-budget.js';
 import {PROPOSAL_QUEUE_DEFAULT, PROPOSAL_QUEUE_BACKPRESSURE_CODE} from
@@ -21,7 +22,6 @@ import {MESSAGE_GROUP_COMMAND_TYPE} from './constants.js';
 import {MESSAGE_GROUP_CDC_FORWARD_MODE} from './message-group-forwarding-owner-constants.js';
 import {proposeMessageGroupCommand} from './message-group-proposal-routing.js';
 
-const objectHasOwn = Object.hasOwn;
 const objectFreeze = Object.freeze;
 const objectAssign = Object.assign;
 const numberIsFinite = Number.isFinite;
@@ -50,12 +50,16 @@ function invalidCdcInput() {
 
 // The source range of a durable vector (CDC Stage 3), captured once. Every
 // durable vector carries one: there is no positionless durable form.
-function captureSourceRange(options) {
-  const range = options.sourceRange;
-  if (!isSourceRange(range)) throw invalidCdcInput();
-  return objectFreeze({sourcePartition: range.sourcePartition, incarnation: range.incarnation,
-    after: objectFreeze({logIndex: range.after.logIndex, ordinal: range.after.ordinal}),
-    through: objectFreeze({logIndex: range.through.logIndex, ordinal: range.through.ordinal})});
+function captureCdcRequestRange(options) {
+  try {
+    return captureSourceRange(options.sourceRange);
+  } catch {
+    throw invalidCdcInput();
+  }
+}
+
+function cdcRangeWaitIdentity(events, sourceRange) {
+  return digest({sourceRange, eventDigest: cdcCommitWaitIdentity(events)});
 }
 
 // The typed gap answer: nothing proposed, the table is listed again here;
@@ -124,37 +128,13 @@ function armCdcWait(service, key, entry, budget) {
   }, getRemainingBudgetMs(budget, {now: entry.now}));
 }
 
-function normalizeOrdinaryCdcEvent(service, event, options) {
-  const normalized = service.normalizeCDCBatchEvents([event], options);
-  if (!isDenseDataArray(normalized) || normalized.length !== 1 || !isRecord(normalized[0])) {
-    throw objectAssign(new Error(CDC_COMPLETION.INVALID), {code: CDC_COMPLETION.INVALID});
-  }
-  const member = normalized[0];
-  if (member.tableName !== event.tableName || member.operation !== event.operation ||
-      member.data !== event.data || !objectHasOwn(member, CDC_EVENT_METADATA_FIELD.TIMESTAMP) ||
-      typeof member.timestamp !== 'string' ||
-      member.timestamp.length === 0) {
-    throw objectAssign(new Error(CDC_COMPLETION.INVALID), {code: CDC_COMPLETION.INVALID});
-  }
-  if (objectHasOwn(event, CDC_EVENT_METADATA_FIELD.TIMESTAMP) &&
-      member.timestamp !== event.timestamp) {
-    throw objectAssign(new Error(CDC_COMPLETION.INVALID), {code: CDC_COMPLETION.INVALID});
-  }
-  // The existing normalizer owns stamp assignment. Every other captured
-  // envelope field and the detached data remain those of the original member.
-  return {...event, timestamp: member.timestamp};
+function captureCdcCommandVector(command) {
+  const events = captureCdcEvents(command.events);
+  if (!isSourceVector(command.sourceRange, events)) throw invalidCdcInput();
+  return events;
 }
 
-function captureCdcCommandVector(service, events, options) {
-  const input = captureCdcEvents(events);
-  const inputVectorDigest = cdcCommitWaitIdentity(input);
-  const normalized = copyArrayByIndex(input, (event) =>
-    objectHasOwn(event, CDC_EVENT_METADATA_FIELD.EVENT_KEY) ? event :
-      normalizeOrdinaryCdcEvent(service, event, options));
-  return {events: captureCdcEvents(normalized), inputVectorDigest};
-}
-
-function reserveCdcWait(service, command, timeoutMs, parent, options) {
+function reserveCdcWait(service, command, timeoutMs, parent) {
   const queue = service.cdcCommitWaiters;
   const reservation = reservationToken();
   // The queue owner reserves capacity BEFORE immutable capture or digesting.
@@ -167,8 +147,7 @@ function reserveCdcWait(service, command, timeoutMs, parent, options) {
     const clock = queue.timeSource;
     const now = () => clock.now();
     const budget = createTimeoutBudget({configuredBudgetMs: timeoutMs, now});
-    const {events, inputVectorDigest} = captureCdcCommandVector(service,
-      command.events, options);
+    const events = captureCdcCommandVector(command);
     // The range decision of the replica that will propose (CDC Stage 3), on
     // the captured vector: a gap or an already-committed range proposes
     // nothing.
@@ -181,14 +160,14 @@ function reserveCdcWait(service, command, timeoutMs, parent, options) {
       return {answer: buildAlreadyAppliedCdcOutcome(events, service.groupId,
         classified.committed.through, classified.committed.incarnation)};
     }
-    const key = cdcCommitWaitIdentity(events);
+    const key = cdcRangeWaitIdentity(events, command.sourceRange);
     if (queue.has(key)) {
       const first = joinableWait(service, key);
       return first === null ? {answer: duplicateInFlightAcceptance(service, key)} :
-        {join: {first, events, inputVectorDigest, timeoutMs}};
+        {join: {first, events, timeoutMs}};
     }
     const completion = promiseWithResolvers();
-    const entry = {events, inputVectorDigest, budget, originalBudget: budget,
+    const entry = {events, budget, originalBudget: budget,
       settled: completion.promise,
       clock, now, parent, port: service.raft,
       lifetime: service.cdcCommitLifetime, groupId: service.groupId,
@@ -266,8 +245,21 @@ function provisionalCdcIngress(service, wait, options) {
       arraySome(wait.entry.events, (event) => !service.cdcHandler.isSubscribed(event.tableName))) {
     return unknownCdcAcceptance();
   }
-  for (let index = 0; index < wait.entry.events.length; index += 1) {
-    service.cdcHandler.applyImmediate(wait.entry.events[index], options);
+  const range = wait.command.sourceRange;
+  const order = service.cdcHandler.cache.sourceOrder;
+  const context = order.captureEffectContext(range.sourcePartition,
+    wait.entry.events[0].tableName, range.incarnation);
+  try {
+    for (let index = 0; index < wait.entry.events.length; index += 1) {
+      const outcome = service.cdcHandler.applySourceEvent(wait.entry.events[index], range);
+      if (!order.effectCoversContext(outcome, context)) {
+        order.recordGap(range, wait.entry.events[0].tableName);
+        return positionGapAcceptance();
+      }
+    }
+  } catch (error) {
+    order.recordGap(range, wait.entry.events[0].tableName);
+    throw error;
   }
   return buildProvisionalCdcOutcome(wait.entry.events,
     service.resolveStrictCdcForwardRetryAfterMs(), service.groupId);
@@ -281,6 +273,12 @@ function capturedCdcIngress(service, wait, options) {
     relayDepth: options.relayDepth, cdcForwardMode: options.cdcForwardMode,
     targetGroupId: options.targetGroupId,
   });
+}
+
+function isCapturedCdcAcceptance(answer, wait, service) {
+  return isCommittedCdcOutcome(answer, wait.entry.events, service.groupId) ||
+    isAlreadyAppliedCdcOutcome(answer, wait.entry.events, service.groupId) ||
+    isProvisionalCdcOutcome(answer, wait.entry.events, service.groupId);
 }
 
 async function deliverCapturedCdc(service, wait, options, context) {
@@ -308,9 +306,7 @@ async function deliverCapturedCdc(service, wait, options, context) {
     forwardCommand: (forward) => forwardCdcWithinWait(service, wait, forward),
   });
   assertCurrent();
-  return isCommittedCdcOutcome(answer, wait.entry.events, service.groupId) ||
-    isAlreadyAppliedCdcOutcome(answer, wait.entry.events, service.groupId) ||
-    isProvisionalCdcOutcome(answer, wait.entry.events, service.groupId) ?
+  return isCapturedCdcAcceptance(answer, wait, service) ?
     answer : {...unconfirmedCdcAcceptance(answer), cause: answer};
 }
 
@@ -328,12 +324,7 @@ function captureCdcParentGrant(service, options) {
 
 function inputCdcOutcome(service, wait, answer, context) {
   assertCdcRequestCurrent(service, wait, context);
-  if (!isCommittedCdcOutcome(answer, wait.entry.events, wait.entry.groupId) &&
-      !isAlreadyAppliedCdcOutcome(answer, wait.entry.events, wait.entry.groupId) &&
-      !isProvisionalCdcOutcome(answer, wait.entry.events, wait.entry.groupId)) return answer;
-  // Only this live admission owns I -> N. Native/remote/provisional acceptance
-  // must first bind the actual normalized command; no receipt field is changed.
-  return {...answer, cdcVectorDigest: wait.entry.inputVectorDigest};
+  return answer;
 }
 
 async function retiredCdcOutcome(service, wait, context) {
@@ -355,7 +346,7 @@ async function retiredCdcOutcome(service, wait, context) {
 // digest, as inputCdcOutcome binds the first one's. It holds no queue slot and
 // starts no raw work: what it costs is bounded by its caller's invocation.
 async function joinCdcWait(service, join, context) {
-  const {first, events, inputVectorDigest, timeoutMs} = join;
+  const {first, events, timeoutMs} = join;
   const deadline = promiseWithResolvers();
   const timer = first.clock.setTimeout(() => deadline.resolve(unknownCdcAcceptance()), timeoutMs);
   try {
@@ -363,30 +354,29 @@ async function joinCdcWait(service, join, context) {
     if (context !== null) assertCdcDeliveryInvocation(context);
     if (!isCommittedCdcOutcome(answer, events, first.groupId) &&
         !isProvisionalCdcOutcome(answer, events, first.groupId)) return unknownCdcAcceptance();
-    return {...answer, cdcVectorDigest: inputVectorDigest};
+    return answer;
   } finally {
     first.clock.clearTimeout(timer);
   }
 }
 
 async function applyDurableCdcBatch(service, events, options = {}) {
-  const sourceRange = captureSourceRange(options);
+  const sourceRange = captureCdcRequestRange(options);
   const {context, timeoutMs, parent} = captureCdcParentGrant(service, options);
   if (!numberIsFinite(timeoutMs) || timeoutMs <= 0) return unknownCdcAcceptance();
   let wait;
   try {
     wait = reserveCdcWait(service,
       {type: MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH, events, sourceRange},
-      timeoutMs, parent, options);
+      timeoutMs, parent);
   } catch (error) {
     if (error.code === PROPOSAL_QUEUE_BACKPRESSURE_CODE) return backpressuredCdcAcceptance();
     throw error;
   }
   if (wait.answer) return wait.answer;
   if (wait.join) return joinCdcWait(service, wait.join, context);
-  // The first admission's own answer, unbound to its input digest: what a
-  // joiner receives when this response settles it (a committed receipt
-  // settles it earlier, from the apply).
+  // Joiners share the exact range and canonical event digest captured by
+  // this admission. Native afterCommit may settle their receipt earlier.
   let settled = unknownCdcAcceptance();
   try {
     settled = await deliverCapturedCdc(service, wait, options, context);
@@ -405,7 +395,7 @@ function registerCdcCommittedAcceptance(service, committed, lifetime) {
   if (committed.command.type !== MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH) return;
   const {events} = committed.command;
   if (!hasDurableCdcEvents(events) || lifetime === null) return;
-  const key = cdcCommitWaitIdentity(events);
+  const key = cdcRangeWaitIdentity(events, committed.command.sourceRange);
   const entry = service.cdcCommitWaiters.get(key);
   if (!entry || entry.lifetime !== lifetime) return;
   const settle = (answer) => {
@@ -424,5 +414,5 @@ function retireCdcCommitWaiters(service) {
   service.cdcCommitWaiters.release(() => unknownCdcAcceptance());
 }
 
-export {applyDurableCdcBatch, registerCdcCommittedAcceptance,
+export {applyDurableCdcBatch, cdcRangeWaitIdentity, registerCdcCommittedAcceptance,
   retireCdcCommitWaiters};

@@ -9,7 +9,7 @@ import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
 import {CDC_OPERATION} from '../constants/index.js';
-import {CDC_PIPELINE_METRIC} from '../constants/cdc-lifecycle-constants.js';
+import {CDC_EVENT_IDENTITY, CDC_PIPELINE_METRIC} from '../constants/cdc-lifecycle-constants.js';
 import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
 import {
   getSystemCachePrimaryKeyFieldOrFallback,
@@ -17,6 +17,9 @@ import {
 import {canonicalizeSystemTableRow} from '../control-plane/system-row-normalizers.js';
 import {resolveTimeSource} from '../time/time-source.js';
 import {reportCdcEventAppliedToCache} from './cdc-handler-apply-diagnostics.js';
+import {captureCdcEvents, copyCdcEventMetadata} from '../cdc/cdc-event-envelope.js';
+import {SOURCE_EFFECT_STATE, captureSourceRange, isSourceMember} from
+  '../cache/system-table-cache-source-order.js';
 
 const LOCAL_STR_CDCHANDLER_REQUIRES_A_SYSTEMTABLECACHE = 'CDCHandler requires a SystemTableCache';
 const LOCAL_NUM_ONE_HUNDRED = 100;
@@ -41,24 +44,6 @@ const LOCAL_STR_EVENTERROR = 'eventError';
 const LOCAL_STR_CDC_HANDLER_SHUTDOWN = 'CDC handler shutdown';
 const LOCAL_STR_SHUTDOWN = 'shutdown';
 
-function normalizeOptionalCdcString(value) {
-  return typeof value === 'string' ? value : null;
-}
-
-function normalizeOptionalCdcSafeInteger(value) {
-  return Number.isSafeInteger(value) ? value : null;
-}
-
-function normalizeCdcEventMetadata(metadata) {
-  return {
-    sourceReplica: normalizeOptionalCdcString(metadata?.sourceReplica),
-    sourceLogIndex: normalizeOptionalCdcSafeInteger(metadata?.sourceLogIndex),
-    sourceOrdinal: normalizeOptionalCdcSafeInteger(metadata?.sourceOrdinal),
-    eventKey: normalizeOptionalCdcString(metadata?.eventKey),
-    entryId: normalizeOptionalCdcString(metadata?.entryId),
-  };
-}
-
 /**
  * CDC event structure.
  */
@@ -81,6 +66,7 @@ class CDCEvent {
     causeId = null,
     receivedAtMs = undefined,
     metadata = undefined,
+    sourceRange = undefined,
   ) {
     this.tableName = tableName;
     this.operation = operation;
@@ -90,7 +76,17 @@ class CDCEvent {
     this.causeId = causeId;
     this.receivedAt =
       Number.isFinite(receivedAtMs) ? receivedAtMs : Date.now();
-    Object.assign(this, normalizeCdcEventMetadata(metadata));
+    Object.assign(this, copyCdcEventMetadata({tableName, operation, data, timestamp,
+      sourcePartition, ...metadata}));
+    if (Object.hasOwn(this, 'eventKey')) {
+      Object.assign(this, captureCdcEvents([{...this}])[0]);
+      this.sourceRange = captureSourceRange(sourceRange);
+      if (!isSourceMember(this.sourceRange, this)) {
+        throw Object.assign(new Error(CDC_EVENT_IDENTITY.INVALID_MESSAGE),
+          {code: CDC_EVENT_IDENTITY.INVALID_CODE});
+      }
+      Object.freeze(this);
+    }
   }
 
   /**
@@ -99,19 +95,20 @@ class CDCEvent {
    * @param {number} [receivedAtMs]
    * @return {CDCEvent}
    */
-  static fromMessage(event, receivedAtMs = undefined) {
-    if (event instanceof CDCEvent) {
+  static fromMessage(event, receivedAtMs = undefined, sourceRange = undefined) {
+    if (event instanceof CDCEvent && sourceRange === undefined) {
       return event;
     }
     return new CDCEvent(
       event?.tableName,
       event?.operation,
-      normalizeCDCEventData(event),
+      Object.hasOwn(event, 'eventKey') ? event.data : normalizeCDCEventData(event),
       event?.timestamp,
       event?.sourcePartition ?? null,
       event?.causeId ?? null,
       receivedAtMs,
-      normalizeCdcEventMetadata(event),
+      copyCdcEventMetadata({...event}),
+      sourceRange,
     );
   }
 
@@ -289,9 +286,9 @@ class CDCHandler extends EventEmitter {
    * @param {CDCEvent|Object} event - CDC event or event-like object.
    * @return {boolean} True if event was accepted.
    */
-  handleEvent(event) {
+  handleEvent(event, options = {}) {
     // Convert to CDCEvent if needed
-    const cdcEvent = CDCEvent.fromMessage(event, this.timeSource.now());
+    const cdcEvent = CDCEvent.fromMessage(event, this.timeSource.now(), options.sourceRange);
 
     const {tableName} = cdcEvent;
 
@@ -303,7 +300,7 @@ class CDCHandler extends EventEmitter {
 
     // Generate event ID for deduplication
     const eventId = this.generateEventId(cdcEvent);
-    if (this.processedEventIds.has(eventId)) {
+    if (!Object.hasOwn(cdcEvent, 'eventKey') && this.processedEventIds.has(eventId)) {
       this.logger.debug(LOCAL_STR_DUPLICATE_CDC_EVENT_IGNORED, {
         tableName,
         eventId,
@@ -341,7 +338,7 @@ class CDCHandler extends EventEmitter {
    * @return {boolean} True when event was applied.
    */
   applyImmediate(event, options = {}) {
-    const cdcEvent = CDCEvent.fromMessage(event, this.timeSource.now());
+    const cdcEvent = CDCEvent.fromMessage(event, this.timeSource.now(), options.sourceRange);
 
     const skipSubscriptionCheck = options.skipSubscriptionCheck === true;
     if (!skipSubscriptionCheck && !this.subscriptions.has(cdcEvent.tableName)) {
@@ -352,7 +349,7 @@ class CDCHandler extends EventEmitter {
     }
 
     const eventId = this.generateEventId(cdcEvent);
-    if (this.processedEventIds.has(eventId)) {
+    if (!Object.hasOwn(cdcEvent, 'eventKey') && this.processedEventIds.has(eventId)) {
       this.logger.debug(LOCAL_STR_DUPLICATE_CDC_EVENT_IGNORED, {
         tableName: cdcEvent.tableName,
         eventId,
@@ -361,8 +358,12 @@ class CDCHandler extends EventEmitter {
       return false;
     }
 
-    this.applyEvent(cdcEvent);
-    return true;
+    const outcome = this.applyEvent(cdcEvent);
+    return outcome === undefined || outcome.state === SOURCE_EFFECT_STATE.APPLIED;
+  }
+
+  applySourceEvent(event, sourceRange) {
+    return this.applyEvent(CDCEvent.fromMessage(event, this.timeSource.now(), sourceRange));
   }
 
   /**
@@ -501,7 +502,12 @@ class CDCHandler extends EventEmitter {
     try {
       // Canonical CDC apply path: all steady-state cache mutations flow here.
       // See architecture.md: Sanctioned direct applySystemTableChange call sites.
-      this.cache.applySystemTableChange(tableName, operation, data, {
+      const sourceOutcome = Object.hasOwn(event, 'eventKey') ?
+        this.cache.applySourceCdcEvent({...event}, event.sourceRange, receivedAt) : undefined;
+      if (sourceOutcome !== undefined && sourceOutcome.state !== SOURCE_EFFECT_STATE.APPLIED) {
+        return sourceOutcome;
+      }
+      if (sourceOutcome === undefined) this.cache.applySystemTableChange(tableName, operation, data, {
         causeId,
         cdcObservedAtMs: receivedAt,
         timestamp,
@@ -547,7 +553,11 @@ class CDCHandler extends EventEmitter {
         timestamp,
         causeId,
       });
+      return sourceOutcome;
     } catch (error) {
+      if (Object.hasOwn(event, 'eventKey')) {
+        this.cache.sourceOrder.retainEffectRecovery(event, event.sourceRange);
+      }
       this.logger.error(LOCAL_STR_FAILED_TO_APPLY_CDC_EVENT, {
         tableName,
         operation,

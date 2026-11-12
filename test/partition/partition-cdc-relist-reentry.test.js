@@ -11,7 +11,7 @@ import {RECIPIENT_MODE, attachRecipient, cellOf, detachRecipient, laneOf, lanePr
   writeRows} from '../test-helpers/cdc-relist-reentry-fixture.js';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {SOURCE_POSITION_STATE} from '../../src/cache/system-table-cache-cdc-observation.js';
+import {SOURCE_POSITION_STATE} from '../../src/cache/system-table-cache-source-order.js';
 import {PARTITION_CDC_OBLIGATION_BOUND as BOUND,
   PARTITION_CDC_RECIPIENT_RELEASE as RELEASE,
   PARTITION_CDC_RECIPIENT_STATE as RECIPIENT_STATE} from

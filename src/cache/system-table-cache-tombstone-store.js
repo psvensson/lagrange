@@ -301,6 +301,10 @@ class SystemTableCacheTombstoneStore {
     return false;
   }
 
+  clearTable(tableName) {
+    this.tables.get(tableName).clear();
+  }
+
   clear() {
     for (const tombstoneTable of this.tables.values()) {
       tombstoneTable.clear();

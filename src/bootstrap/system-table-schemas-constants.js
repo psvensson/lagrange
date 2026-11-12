@@ -126,7 +126,7 @@ const SYSTEM_TABLE_SCHEMAS = [
  * Pre-assigned IDs for initial system table partitions.
  * These avoid circular dependencies during bootstrap.
  */
-const INITIAL_PARTITION_IDS = {
+const INITIAL_PARTITION_IDS = Object.freeze({
   [SYSTEM_TABLE_NAME.TABLES]: 'tables-p1',
   [SYSTEM_TABLE_NAME.PARTITIONS]: 'partitions-p1',
   [SYSTEM_TABLE_NAME.INDICES]: 'indices-p1',
@@ -181,7 +181,7 @@ const INITIAL_PARTITION_IDS = {
   [SYSTEM_TABLE_NAME.CALL_ACTIVATION_LEASES]: 'call_activation_leases-p1',
   [SYSTEM_TABLE_NAME.ARTIFACT_PAYLOADS]: 'artifact_payloads-p1',
   [SYSTEM_TABLE_NAME.ARTIFACT_PAYLOAD_CHUNKS]: 'artifact_payload_chunks-p1',
-};
+});
 
 /**
  * Pre-assigned replica IDs for initial system table partitions.

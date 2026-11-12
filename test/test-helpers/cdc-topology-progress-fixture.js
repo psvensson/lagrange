@@ -4,6 +4,7 @@ import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outc
 // deliberately not evidence of a native recipient commit or a system-row write.
 import assert from 'node:assert/strict';
 import {COLUMN, SERVICE_STATUS, TABLES} from '../../src/constants/index.js';
+import {INITIAL_PARTITION_IDS} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
 import {isIssuedBootIncarnation} from '../../src/bootstrap/boot-incarnation-contract.js';
@@ -161,7 +162,8 @@ function buildSubscriber(f, index) {
 // role-less subscriber some older witnesses use.
 async function topologyProgressFixture(t, {otherSubscriber = true} = {}) {
   const clock = delayedClock();
-  const {leader, proposed} = await startLeader({tableName: TABLE, timeSource: clock});
+  const {leader, proposed} = await startLeader({tableName: TABLE,
+    partitionId: INITIAL_PARTITION_IDS[TABLE], timeSource: clock});
   const f = {clock, leader, proposed, ready: false, projection: controlledProjection(),
     sourceCalls: [], sourceDigests: [], targetCalls: [], subscriberCalls: [], hooks: [],
     sourceMode: RESPONSE.NATIVE, targetMode: RESPONSE.WEAK, otherMode: RESPONSE.NATIVE,

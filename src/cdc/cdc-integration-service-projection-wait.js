@@ -19,7 +19,7 @@
 import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
 import {CDC_LOG_MSG} from './cdc-constants.js';
 import {SOURCE_POSITION_STATE, SystemTableCacheSourceOrder} from
-  '../cache/system-table-cache-cdc-observation.js';
+  '../cache/system-table-cache-source-order.js';
 import {CDC_PROPAGATED_TABLES} from '../cache/cdc-table-policy.js';
 import {INITIAL_PARTITION_IDS} from '../bootstrap/system-table-schemas-constants.js';
 

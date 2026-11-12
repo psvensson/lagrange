@@ -434,7 +434,7 @@ async function startReplica(replicaId, extra) {
     recordResidentAppliedProgressListeners(replica);
     if (extra?.generationOrigin !== false && originOf(replica) === null) {
       replica.controllablePort.committedIndex = GENERATION_ORIGIN_INDEX - 1;
-      applyCommitted(replica, originCommandOf());
+      applyCommitted(replica, originCommandOf(replica.partitionId));
     }
     return replica;
   } catch (error) {

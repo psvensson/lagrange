@@ -50,10 +50,9 @@ import {
   getSharedRowReadStats,
   resetSharedRowReadStats,
 } from './system-table-cache-observation-methods.js';
-import {
-  SystemTableCacheSourceOrder,
-  updateSystemTableCacheCdcObservation,
-} from './system-table-cache-cdc-observation.js';
+import {updateSystemTableCacheCdcObservation} from './system-table-cache-cdc-observation.js';
+import {SystemTableCacheSourceOrder} from './system-table-cache-source-order.js';
+import {applySourceCdcEvent} from './system-table-cache-source-effect-application.js';
 
 /**
  * System table names that are cached.
@@ -126,22 +125,15 @@ const AUTHORITATIVE_REPLACEMENT_UPSERT_MODES = new Set([
   SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_RECONCILIATION,
   SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_OBSERVATION_RECONCILIATION]);
 
-// The row one change leaves: the CDC-merge fold, except where an image or an
-// authoritative mode replaces a held row (an UPSERT) or an image deletes one.
+// The row one change leaves: the CDC-merge fold, except where an
+// authoritative mode replaces a held row (an UPSERT).
 function resolveAppliedRow({tableName, existing, operation, data, mutationMode,
-  imageReplacement, sameEntryOrder}) {
+  sameEntryOrder}) {
   const upsertOverHeldRow = operation === CDC_OPERATIONS.UPSERT && existing !== null;
-  if (upsertOverHeldRow && imageReplacement) {
-    return cdcRowFoldOutcome(CDC_ROW_FOLD_STATE.REPLACED,
-      buildAuthoritativeSystemTableCacheReplacement(existing, data));
-  }
   if (upsertOverHeldRow && mutationMode ===
       SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_SERVICE_LIFECYCLE_RECONCILIATION) {
     return cdcRowFoldOutcome(CDC_ROW_FOLD_STATE.REPLACED,
       buildAuthoritativeServiceLifecycleCacheReplacement(existing, data));
-  }
-  if (operation === CDC_OPERATIONS.DELETE && existing !== null && imageReplacement) {
-    return cdcRowFoldOutcome(CDC_ROW_FOLD_STATE.DELETED, null);
   }
   const folded = foldCdcEventOntoRow(tableName, existing, operation, data, sameEntryOrder);
   return upsertOverHeldRow && folded.state === CDC_ROW_FOLD_STATE.MERGED &&
@@ -312,6 +304,14 @@ class SystemTableCache {
     const mutationMode = options?.mutationMode ||
       SYSTEM_TABLE_CACHE_MUTATION_MODE.CDC_MERGE;
     this.validateMutationMode(mutationMode, operation, tableName, options);
+    const sourceGeneration = this.sourceOrder.tableGeneration(tableName);
+    const sourceGenerationSupplied = Object.hasOwn(options, 'sourceGeneration');
+    if ((sourceGenerationSupplied || mutationMode ===
+        SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_OBSERVATION_RECONCILIATION) &&
+        options.sourceGeneration !== sourceGeneration) return false;
+    const sourceEffectSupplied = Object.hasOwn(options, 'sourceEffectContext');
+    if (sourceEffectSupplied && !this.sourceOrder.applicationContextIsCurrent(
+      options.sourceEffectContext, tableName, options)) return false;
 
     // Get the primary key field for this table
     const pkField = getSystemCachePrimaryKeyField(tableName);
@@ -330,17 +330,18 @@ class SystemTableCache {
         .AUTHORITATIVE_OBSERVATION_RECONCILIATION;
     let recordForNotification = null;
     let incomingVersionAccepted = false;
-    const imageReplacement = mutationMode ===
-      SYSTEM_TABLE_CACHE_MUTATION_MODE.SOURCE_IMAGE_REPLACEMENT;
     const sameEntryOrder = this.sourceOrder.compareInSameEntry(tableName, key, data, options);
     if (sameEntryOrder < 0) return false;
-    if (sameEntryOrder > 0 || imageReplacement) this.tombstoneStore.clearKey(tableName, key);
+    // Generic authority cannot preserve source currency. Invalidate before
+    // either row writes or tombstone mutation, and before every notification.
+    // An invalid supplied source context is refused above, never reclassified.
+    if (!sourceEffectSupplied) this.sourceOrder.invalidateTable(tableName);
+    if (sameEntryOrder > 0) this.tombstoneStore.clearKey(tableName, key);
 
     // A write (INSERT/UPDATE/UPSERT) for a key under an active DELETE tombstone is
     // a reordered, causally-older resurrection — reject it. A causally-newer write
     // clears the tombstone inside the check and proceeds (legitimate re-create).
-    // A leader image is the table at its position: it is never fenced.
-    if (!imageReplacement && cacheWriteIsFenced({
+    if (cacheWriteIsFenced({
       cache: this,
       table,
       tableName,
@@ -357,11 +358,11 @@ class SystemTableCache {
       return false;
     }
 
-    // Every CDC-merge row is the one fold's (system-table-cache-cdc-fold.js);
-    // an image or an authoritative mode overrides only its own branch.
+    // Every CDC-merge row is the one fold's; authoritative modes own their
+    // row replacement, while complete images publish through the image owner.
     const existing = table.has(key) ? table.get(key) : null;
     const folded = resolveAppliedRow({tableName, existing, operation, data,
-      mutationMode, imageReplacement, sameEntryOrder});
+      mutationMode, sameEntryOrder});
     incomingVersionAccepted = folded.accepted;
     switch (folded.state) {
     case CDC_ROW_FOLD_STATE.STALE_BACKFILLED:
@@ -386,20 +387,17 @@ class SystemTableCache {
     case CDC_ROW_FOLD_STATE.DELETED:
       recordForNotification = existing;
       table.delete(key);
-      // An image's absence leaves no tombstone: what follows the image is
-      // ordered by the source-order cell, not fenced by the deleted row.
-      if (!imageReplacement) {
-        this.tombstoneStore.record(tableName, key,
-          buildDeletedRowTombstoneSource(existing, data), {authoritativeAbsence,
-            authoritativeObservedAtMs: options?.authoritativeObservedAtMs});
-      }
+      this.tombstoneStore.record(tableName, key,
+        buildDeletedRowTombstoneSource(existing, data), {authoritativeAbsence,
+          authoritativeObservedAtMs: options?.authoritativeObservedAtMs});
       break;
     default:
       table.set(key, folded.row);
       recordForNotification = folded.row;
     }
 
-    if (incomingVersionAccepted || folded.state === CDC_ROW_FOLD_STATE.DELETE_ABSENT) {
+    if (sourceEffectSupplied &&
+        (incomingVersionAccepted || folded.state === CDC_ROW_FOLD_STATE.DELETE_ABSENT)) {
       this.sourceOrder.record(tableName, key, data, options);
     }
     this.logger.debug(CACHE_LOG_MSG.APPLIED_CDC_EVENT, {tableName, operation, key, causeId});
@@ -452,6 +450,10 @@ class SystemTableCache {
       );
     }
     return incomingVersionAccepted;
+  }
+
+  applySourceCdcEvent(event, sourceRange, observedAtMs) {
+    return applySourceCdcEvent(this, event, sourceRange, observedAtMs);
   }
 
   /**

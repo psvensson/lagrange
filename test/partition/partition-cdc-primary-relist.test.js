@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import {COLUMN} from '../../src/constants/index.js';
 import {afterEach, beforeEach, test} from 'node:test';
 import {SOURCE_RANGE_DECISION, SOURCE_RELIST_OUTCOME, SystemTableCacheSourceOrder} from
-  '../../src/cache/system-table-cache-cdc-observation.js';
+  '../../src/cache/system-table-cache-source-order.js';
 import {CDC_COMPLETION, buildCommittedCdcOutcome, unknownCdcAcceptance} from
   '../../src/cdc/cdc-delivery-outcome.js';
 import {PARTITION_CDC_COMMAND, PARTITION_CDC_OBLIGATION_BOUND as BOUND,
@@ -25,7 +25,8 @@ import {LATENCY_PROPAGATION_MODE} from '../../src/topology/latency-topology-cons
 import {CDC_TABLE, clearFixtureSingletons, resetFixtureSingletons, settleTicks} from
   '../test-helpers/participant-transaction-fixture.js';
 import {commitAcknowledgements} from '../test-helpers/cdc-delivery-progress-fixture.js';
-import {assertShippedSourceRange} from '../test-helpers/cdc-source-range-fixture.js';
+import {assertShippedSourceVector, registerModeledRelister} from
+  '../test-helpers/cdc-source-range-fixture.js';
 import {RESPONSE, SOURCE_GROUP, TARGET_GROUP, addTopologySourceRow, targetService,
   topologyProgressFixture} from
   '../test-helpers/cdc-topology-progress-fixture.js';
@@ -62,20 +63,20 @@ async function leaderImage(f, tableName) {
 // The source group as a Stage 3 recipient: it applies a range only after its
 // predecessor, answers a gap otherwise and lists the leader's image; every
 // position it applied is recorded (a second apply is a duplicate).
-function primaryModel(f) {
+function primaryModel(t, f) {
   const cell = new SystemTableCacheSourceOrder();
   const model = {cell, rows: new Map(), lists: 0, refusing: false, applied: new Set(),
     duplicates: 0};
-  cell.registerRelister(async ({sourcePartition, tableName}) => {
+  registerModeledRelister(t, cell, f.clock, async ({sourcePartition, tableName}) => {
     const answer = await leaderImage(f, tableName);
     model.lists += 1;
     model.rows = new Map(answer.rows.map((row) => [row.id, row.value]));
     cell.recordListedPosition({sourcePartition, tableName,
       incarnation: answer.sourceImage.incarnation, appliedIndex: answer.sourceImage.appliedIndex});
-    return SOURCE_RELIST_OUTCOME.STOPPED;
+    return SOURCE_RELIST_OUTCOME.RETRY;
   });
   model.answer = (events, range) => {
-    assertShippedSourceRange(range);
+    assertShippedSourceVector(range, events);
     if (model.refusing) {
       return {...unknownCdcAcceptance(CDC_COMPLETION.BACKPRESSURE),
         retryAfterMs: REFUSAL_RETRY_AFTER_MS};
@@ -85,6 +86,8 @@ function primaryModel(f) {
       return {...unknownCdcAcceptance(CDC_COMPLETION.POSITION_GAP),
         retryAfterMs: GAP_RETRY_AFTER_MS};
     }
+    const context = cell.captureEffectContext(range.sourcePartition,
+      events[0].tableName, range.incarnation);
     for (const event of events) {
       const position = {logIndex: event.sourceLogIndex, ordinal: event.sourceOrdinal};
       if (cell.memberApplied(range, position)) continue;
@@ -93,7 +96,8 @@ function primaryModel(f) {
       model.applied.add(key);
       model.rows.set(event.data.id, event.data.value);
     }
-    cell.advance(range, events[0].tableName);
+    assert.equal(cell.advance(range, events[0].tableName, context), true,
+      'the synchronous model row effects remain bound to their source generation');
     return buildCommittedCdcOutcome(events, SOURCE_GROUP, {index: 30 + model.applied.size,
       term: 2});
   };
@@ -117,7 +121,7 @@ test('F3 a dead primary recipient (the source group) past RELIST_LAG_ROWS leaves
   'reclaimed; on return the primary re-lists once and equals the source with no row lost ' +
   'or applied twice', async (t) => {
   const f = await stageFixture(t);
-  const primary = primaryModel(f);
+  const primary = primaryModel(t, f);
   f.source.applyCDCBatch = (events, options) => primary.answer(events, options.sourceRange);
   await retryHeld(f);
   assert.equal(primaryOf(f).state, RECIPIENT_STATE.CONFIRMED, 'the primary streams');

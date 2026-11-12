@@ -22,10 +22,11 @@ import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {afterEach, beforeEach, test} from 'node:test';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
-import {SOURCE_POSITION_STATE} from '../../src/cache/system-table-cache-cdc-observation.js';
+import {SOURCE_POSITION_STATE} from '../../src/cache/system-table-cache-source-order.js';
 import {captureCdcEvents} from '../../src/cdc/cdc-event-envelope.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {INITIAL_PARTITION_IDS} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {CDC_OPERATION, COLUMN, TABLES} from '../../src/constants/index.js';
 import {HLCClockService} from '../../src/hlc/hlc-clock-service.js';
 import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
@@ -38,7 +39,7 @@ import {assignRaftTiming} from '../../src/message-group/message-group-service-ra
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
 
-const SOURCE_PARTITION = 'nodes-p1';
+const SOURCE_PARTITION = INITIAL_PARTITION_IDS[TABLES.NODES];
 const INCARNATION = '1:4:nodes-ledger-birth';
 const OTHER_INCARNATION = '1:4:nodes-ledger-rebuilt';
 const SILENT_LOGGER = Object.freeze({debug() {}, info() {}, warn() {}, error() {}});
@@ -397,19 +398,20 @@ test('S3-5 property: any schedule of ranges, replays, late older ranges, gaps an
   }
 });
 
-// The within-entry rule of the same source-order owner, on a path no range
-// gates (provisional ingress applies through the handler directly): two
+// The within-entry rule at provisional ingress carries the original range
+// without claiming its contiguous position (the handler applies directly): two
 // updates of one key in one entry tie on origin HLC; the later ordinal wins
 // and a late earlier sibling never replaces it.
-test('S3-6 unranged ingress keeps same-entry source order: a late earlier sibling never ' +
+test('S3-6 provisional ingress keeps same-entry source order: a late earlier sibling never ' +
   'replaces the later one', () => {
   const recipient = composeRecipient({current: null});
   const [syncing, ready] = captureCdcEvents([
     event(15, 0, CDC_OPERATION.UPDATE, 'node-a', 0, 'syncing'),
     event(15, 1, CDC_OPERATION.UPDATE, 'node-a', 0, 'ready')]);
-  recipient.host.cdcHandler.applyImmediate(ready, {skipSubscriptionCheck: true});
-  recipient.host.cdcHandler.applyImmediate(syncing, {skipSubscriptionCheck: true});
+  const {sourceRange} = sourceOf([syncing, ready]).range(0, 2);
+  recipient.host.cdcHandler.applyImmediate(ready, {skipSubscriptionCheck: true, sourceRange});
+  recipient.host.cdcHandler.applyImmediate(syncing, {skipSubscriptionCheck: true, sourceRange});
   assert.deepEqual(recipient.statuses(), [['node-a', 'ready']]);
   assert.equal(recipient.cell().state, SOURCE_POSITION_STATE.UNKNOWN,
-    'unranged ingress never moves the position cell');
+    'provisional ingress never publishes a contiguous position');
 });

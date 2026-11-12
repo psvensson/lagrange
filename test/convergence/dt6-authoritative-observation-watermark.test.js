@@ -20,6 +20,8 @@ import {
   '../../src/control-plane/control-plane-system-table-gateway.js';
 import {registerGatewayCausalTimeWitness} from
   './dt6-authoritative-observation-causal-time-test-cases.js';
+import {registerGatewayObservationStorageWitnesses} from
+  './dt6-authoritative-observation-storage-test-cases.js';
 
 // Quest movielens-authoritative-observation-watermark — deterministic
 // reproduction of the Wave-4 schema-admission failure. A successful complete
@@ -59,6 +61,7 @@ function createFixture(options = {}) {
     systemTableCache: writableCache,
     now: () => AUTHORITATIVE_OBSERVED_AT_MS,
     cdcIntegrationService: {
+      cacheMutationTarget: writableCache,
       async executeAuthoritativeSystemTableRead(tableName) {
         return withLeaderWitness(options.authoritativeResult || {
           success: true,
@@ -99,9 +102,10 @@ async function reconcileFreshEvidence(fixture) {
   );
 }
 
-function buildCompleteObservationContract(causeId = REPAIR_CAUSE_ID) {
+function buildCompleteObservationContract(sourceGeneration, causeId = REPAIR_CAUSE_ID) {
   return {
     scope: CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE.COMPLETE_TABLE,
+    sourceGeneration,
     tableName: TABLES.SERVICE_ENDPOINTS,
     observedAtMs: AUTHORITATIVE_OBSERVED_AT_MS,
     readStartedAtMs: AUTHORITATIVE_OBSERVED_AT_MS,
@@ -229,6 +233,7 @@ t.test(
       TABLES.SERVICE_ENDPOINTS,
       {
         observedAtMs: priorObservedAtMs,
+        sourceGeneration: fixture.writableCache.sourceOrder.tableGeneration(TABLES.SERVICE_ENDPOINTS),
         causeId: 'prior-complete-empty-observation',
       },
     );
@@ -273,6 +278,7 @@ t.test(
       TABLES.SERVICE_ENDPOINTS,
       {
         observedAtMs: newerObservedAtMs,
+        sourceGeneration: fixture.writableCache.sourceOrder.tableGeneration(TABLES.SERVICE_ENDPOINTS),
         causeId: 'newer-complete-observation',
       },
     );
@@ -361,6 +367,7 @@ t.test(
       systemTableCache: cache,
       now: () => nowMs,
       cdcIntegrationService: {
+        cacheMutationTarget: cache,
         async executeAuthoritativeSystemTableRead() {
           cache.applySystemTableChange(
             TABLES.SERVICE_ENDPOINTS,
@@ -451,6 +458,7 @@ t.test(
       systemTableCache: cache,
       now: () => completeReadStartedAtMs,
       cdcIntegrationService: {
+        cacheMutationTarget: cache,
         async executeAuthoritativeSystemTableRead(
           _tableName,
           _sql,
@@ -517,6 +525,7 @@ t.test(
         cachedRows: [],
         cachedRowFilter: () => true,
         authoritativeObservation: buildCompleteObservationContract(
+          fixture.writableCache.sourceOrder.tableGeneration(TABLES.SERVICE_ENDPOINTS),
           'scoped-read-must-not-publish',
         ),
       },
@@ -554,6 +563,7 @@ t.test(
         systemTableCache: fixture.writableCache,
         cachedRows: [],
         authoritativeObservation: buildCompleteObservationContract(
+          fixture.writableCache.sourceOrder.tableGeneration(TABLES.SERVICE_ENDPOINTS),
           'caller-forged-receipt',
         ),
       },
@@ -781,124 +791,8 @@ t.test(
   },
 );
 
-t.test(
-  'observation publication fails closed when storage support is unavailable',
-  async (t) => {
-    const cacheWithoutObservationStorage = {
-      applySystemTableChange() {},
-      getAll() {
-        return [];
-      },
-    };
-    const gateway = new ControlPlaneSystemTableGateway({
-      nodeId: 'node-no-observation-storage',
-      systemTableCache: cacheWithoutObservationStorage,
-      cdcIntegrationService: {
-        async executeAuthoritativeSystemTableRead() {
-          return withLeaderWitness({success: true, rows: []});
-        },
-      },
-    });
-    const authoritativeRead = await gateway.executeRead(
-      {
-        tableName: TABLES.SERVICE_ENDPOINTS,
-        sql: `SELECT * FROM ${TABLES.SERVICE_ENDPOINTS}`,
-        params: [],
-        strategy: CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED,
-      },
-      {
-        sessionId: 'no-observation-storage',
-        authoritativeObservationScope:
-          CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE.COMPLETE_TABLE,
-      },
-    );
-    const result = await gateway.reconcileAuthoritativeCacheRows(
-      TABLES.SERVICE_ENDPOINTS,
-      authoritativeRead.rows,
-      {
-        cacheMutationTarget: cacheWithoutObservationStorage,
-        systemTableCache: cacheWithoutObservationStorage,
-        cachedRows: [],
-        authoritativeObservation:
-          authoritativeRead.authoritativeObservation,
-      },
-    );
-
-    t.equal(result.success, false, 'requested evidence cannot silently no-op');
-    t.equal(
-      result.error,
-      CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.STORAGE_UNAVAILABLE,
-      'the result identifies missing observation storage',
-    );
-  },
-);
-
-t.test(
-  'a finite recorder return cannot replace getter-visible storage evidence',
-  async (t) => {
-    const noOpObservationStorage = {
-      applySystemTableChange() {},
-      getAll() {
-        return [];
-      },
-      recordAuthoritativeObservation(_tableName, options) {
-        return Number(options.observedAtMs);
-      },
-      getLastAuthoritativeObservedAtMs() {
-        return null;
-      },
-      getLastAuthoritativeObservedCauseId() {
-        return null;
-      },
-    };
-    const gateway = new ControlPlaneSystemTableGateway({
-      nodeId: 'node-no-op-observation-storage',
-      systemTableCache: noOpObservationStorage,
-      now: () => AUTHORITATIVE_OBSERVED_AT_MS,
-      cdcIntegrationService: {
-        async executeAuthoritativeSystemTableRead() {
-          return withLeaderWitness({success: true, rows: []});
-        },
-      },
-    });
-    const authoritativeRead = await gateway.executeRead(
-      {
-        tableName: TABLES.SERVICE_ENDPOINTS,
-        sql: `SELECT * FROM ${TABLES.SERVICE_ENDPOINTS}`,
-        params: [],
-        strategy: CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED,
-      },
-      {
-        sessionId: 'no-op-observation-storage',
-        authoritativeObservationScope:
-          CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE.COMPLETE_TABLE,
-      },
-    );
-    const result = await gateway.reconcileAuthoritativeCacheRows(
-      TABLES.SERVICE_ENDPOINTS,
-      authoritativeRead.rows,
-      {
-        cacheMutationTarget: noOpObservationStorage,
-        systemTableCache: noOpObservationStorage,
-        cachedRows: [],
-        authoritativeObservation:
-          authoritativeRead.authoritativeObservation,
-      },
-    );
-
-    t.equal(result.success, false, 'finite no-op recorder fails closed');
-    t.equal(
-      result.error,
-      CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.STORAGE_UNAVAILABLE,
-      'publication requires getter-visible observation evidence',
-    );
-    t.equal(
-      result.authoritativeObservedAtMs,
-      null,
-      'unverified storage cannot return a published observation time',
-    );
-  },
-);
+registerGatewayObservationStorageWitnesses({t, withLeaderWitness,
+  authoritativeObservedAtMs: AUTHORITATIVE_OBSERVED_AT_MS});
 
 t.test(
   'confirmed-empty evidence cannot bless preserved cached rows as fresh',
@@ -954,6 +848,7 @@ t.test(
       TABLES.SERVICE_ENDPOINTS,
       {
         observedAtMs: AUTHORITATIVE_OBSERVED_AT_MS - 1,
+        sourceGeneration: fixture.writableCache.sourceOrder.tableGeneration(TABLES.SERVICE_ENDPOINTS),
         causeId: 'older-observation',
       },
     );
@@ -1001,6 +896,7 @@ t.test(
       nodeId: 'node-incomplete-read',
       systemTableCache: cache,
       cdcIntegrationService: {
+        cacheMutationTarget: cache,
         async executeAuthoritativeSystemTableRead() {
           return {success: true};
         },
@@ -1443,6 +1339,7 @@ t.test(
     // mutation target silently drops the write. Success here would report a
     // reconciled cache that was never actually repaired.
     const droppingMutationTarget = {
+      sourceOrder: fixture.writableCache.sourceOrder,
       applySystemTableChange() {},
       recordAuthoritativeObservation(tableName, evidence) {
         return fixture.writableCache.recordAuthoritativeObservation(

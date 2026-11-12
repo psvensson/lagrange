@@ -245,3 +245,20 @@ Complete physical original streams, selected candidate roots, affected callers,
 generated metadata, scoped static gates and integration remain required. Native
 local producer fallback removal and the direct RPC helper boundary are still
 separate open source obligations.
+
+## Reviewed authority and CDC composition checkpoint
+
+This isolated composition joins authority source checkpoint 0d45a8d1 with CDC
+checkpoint 655894eb2. Independent review compared the shared files against both
+parents. The two textual conflicts retain the CDC producer's explicit bootstrap
+LOCAL/ANY choice, steady-state RPC/REQUIRED choice, and required-leader cache
+repair. The shared strategy file retains the authority classifier and local-only
+execution, plus the CDC pre-read source generation and exact-token scope/phase.
+The reviewed terminal relister fixture now has its matching registration owner.
+
+Historical component receipts remain evidence for their sealed sources. They do
+not certify this merge. The catchup malformed-token and incomplete-sweep defect
+is explicitly open pending tests-only seal 6396e877 and its shared-classifier
+correction. The later CDC cache ownership/metric slice b39aa4a7/2c4f213b is not in
+this checkpoint. No generated metadata, scoped static or integration acceptance
+is inferred from either parent's selected passes.

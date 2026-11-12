@@ -2201,6 +2201,57 @@
         "test/scripts/evidence-relocation-acceptance.test.js",
         "test/scripts/evidence-relocation.test.js"
       ]
+    },
+    "cdc-source-image-effect-currentness": {
+      "description": "A complete source image atomically replaces table effects and their source-order basis before notifications. Durable local, buffered, provisional and committed applications carry one immutable ledger range, and only typed retained effects bound to the exact source cell/generation authorize contiguous position advance. Generic authoritative changes invalidate currency and retain the existing relist; complete observations and sweeps also bind their pre-read image generation. Group receipt is distinct from member-cache recovery debt. Canonical INITIAL_PARTITION_IDS binds each whole table to its only source. Relister owner identity and original cell retain paced recovery across failure and replacement; a failed sole retry clock retains FAULTED debt. Registration is a proof obligation, not passing evidence.",
+      "owners": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/cache/system-table-cache-source-order.js",
+        "src/cache/system-table-cache-source-effect-application.js",
+        "src/cache/system-table-cache-source-image.js",
+        "src/cache/system-table-cache.js",
+        "src/cache/system-table-cache-cdc-fold.js",
+        "src/cache/system-table-cache-cdc-observation.js",
+        "src/cache/system-table-cache-observation-methods.js",
+        "src/cache/system-table-cache-authoritative-absence-sweep.js",
+        "src/cache/system-table-cache-tombstone-store.js",
+        "src/cdc/cdc-integration-service.js",
+        "src/cdc/cdc-integration-service-source-relist.js",
+        "src/cdc/cdc-integration-service-lifecycle.js",
+        "src/cdc/cdc-integration-service-authoritative-catchup.js",
+        "src/cdc/cdc-integration-service-cache-visibility-authority.js",
+        "src/control-plane/control-plane-system-table-gateway-cache-reconciliation.js",
+        "src/control-plane/control-plane-system-table-gateway-read-strategies.js",
+        "src/message-group/cdc-handler.js",
+        "src/message-group/message-group-cdc-committed-acceptance.js",
+        "src/message-group/message-group-cdc-source-range.js",
+        "src/message-group/message-group-committed-command-admission.js",
+        "src/message-group/message-group-service-raft-timing.js",
+        "src/partition/partition-cdc-obligation.js",
+        "src/partition/partition-cdc-obligation-vector.js"
+      ],
+      "tests": [
+        "test/cdc/cdc-image-effect-currentness.test.js",
+        "test/cdc/cdc-image-effect-design-r2-controls.test.js",
+        "test/cdc/cdc-paged-relist.test.js",
+        "test/cdc/cdc-shutdown-terminal-owner-write.test.js",
+        "test/bootstrap/cdc-source-occurrence-delivery.integration.test.js",
+        "test/message-group/cdc-vector-application-equivalence.test.js",
+        "test/message-group/message-group-cdc-member-relist.test.js",
+        "test/message-group/message-group-native-mixed-vector.test.js",
+        "test/message-group/message-group-native-application-membership.test.js",
+        "test/message-group/message-group-cdc-input-guard.test.js",
+        "test/message-group/message-group-cdc-receiver-admission.test.js",
+        "test/message-group/message-group-native-custody-handoff.test.js",
+        "test/message-group/message-group-cdc-public-defer-repair.test.js",
+        "test/partition/partition-cdc-obligation-reclamation.test.js",
+        "test/partition/partition-cdc-source-relist.test.js",
+        "test/partition/partition-cdc-primary-relist.test.js",
+        "test/partition/partition-cdc-relist-reentry.test.js",
+        "test/control-plane/system-cache-reconciliation-ingress.test.js",
+        "test/config/system-cache-write-callsite-guardrails.test.js",
+        "test/convergence/dt6-authoritative-observation-watermark.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -4707,6 +4758,70 @@
         "test/scripts/check-documentation-current-state.test.js",
         "test/scripts/evidence-relocation-acceptance.test.js",
         "test/scripts/evidence-relocation.test.js"
+      ]
+    },
+    "cdc-source-image-effect-currentness": {
+      "description": "The cache image/source-order owner and every occurrence or authoritative-repair ingress agree on effect applicability, generation invalidation, and owned recovery. A processed ID or HLC/boolean return cannot certify effects replaced by an image.",
+      "endpoints": [
+        {
+          "id": "cache-image-and-effect-basis",
+          "owners": [
+            "src/bootstrap/system-table-schemas-constants.js",
+            "src/cache/system-table-cache-source-order.js",
+            "src/cache/system-table-cache-source-effect-application.js",
+            "src/cache/system-table-cache-source-image.js",
+            "src/cache/system-table-cache.js",
+            "src/cache/system-table-cache-cdc-fold.js",
+            "src/cache/system-table-cache-cdc-observation.js",
+            "src/cache/system-table-cache-observation-methods.js",
+            "src/cache/system-table-cache-authoritative-absence-sweep.js",
+            "src/cache/system-table-cache-tombstone-store.js"
+          ]
+        },
+        {
+          "id": "source-and-repair-ingress",
+          "owners": [
+            "src/cdc/cdc-integration-service.js",
+            "src/cdc/cdc-integration-service-source-relist.js",
+            "src/cdc/cdc-integration-service-lifecycle.js",
+            "src/cdc/cdc-recipient-lifecycle.js",
+            "src/partition/partition-cdc-recipient-lifecycle.js",
+            "src/cdc/cdc-integration-service-authoritative-catchup.js",
+            "src/cdc/cdc-integration-service-cache-visibility-authority.js",
+            "src/control-plane/control-plane-system-table-gateway-cache-reconciliation.js",
+            "src/control-plane/control-plane-system-table-gateway-read-strategies.js",
+            "src/message-group/cdc-handler.js",
+            "src/message-group/message-group-cdc-committed-acceptance.js",
+            "src/message-group/message-group-cdc-source-range.js",
+            "src/message-group/message-group-committed-command-admission.js",
+            "src/message-group/message-group-service-raft-timing.js",
+            "src/partition/partition-cdc-obligation.js",
+            "src/partition/partition-cdc-obligation-vector.js"
+          ]
+        }
+      ],
+      "contract": "cdc-source-image-effect-currentness",
+      "witnessTests": [
+        "test/cdc/cdc-image-effect-currentness.test.js",
+        "test/cdc/cdc-image-effect-design-r2-controls.test.js",
+        "test/cdc/cdc-paged-relist.test.js",
+        "test/cdc/cdc-shutdown-terminal-owner-write.test.js",
+        "test/bootstrap/cdc-source-occurrence-delivery.integration.test.js",
+        "test/message-group/cdc-vector-application-equivalence.test.js",
+        "test/message-group/message-group-cdc-member-relist.test.js",
+        "test/message-group/message-group-native-mixed-vector.test.js",
+        "test/message-group/message-group-native-application-membership.test.js",
+        "test/message-group/message-group-cdc-input-guard.test.js",
+        "test/message-group/message-group-cdc-receiver-admission.test.js",
+        "test/message-group/message-group-native-custody-handoff.test.js",
+        "test/message-group/message-group-cdc-public-defer-repair.test.js",
+        "test/partition/partition-cdc-obligation-reclamation.test.js",
+        "test/partition/partition-cdc-source-relist.test.js",
+        "test/partition/partition-cdc-primary-relist.test.js",
+        "test/partition/partition-cdc-relist-reentry.test.js",
+        "test/control-plane/system-cache-reconciliation-ingress.test.js",
+        "test/config/system-cache-write-callsite-guardrails.test.js",
+        "test/convergence/dt6-authoritative-observation-watermark.test.js"
       ]
     }
   }

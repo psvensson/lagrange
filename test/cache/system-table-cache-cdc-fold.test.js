@@ -40,7 +40,8 @@ const version = (operation, nodeId, wallMs, fields = {}) => ({operation,
 const sameEntry = (nodeId, ordinal, fields) => ({
   ...version(CDC_OPERATION.UPDATE, nodeId, 5000, fields),
   source: {sourcePartition: 'nodes-p1', sourceLogIndex: 50,
-    sourceOrdinal: ordinal}});
+    sourceOrdinal: ordinal, sourceIncarnation: 'fold-source-ledger',
+    eventKey: `fold-entry-50-${ordinal}`}});
 
 function applyMethodSource() {
   const source = fs.readFileSync(CACHE_SOURCE, 'utf8');
@@ -103,8 +104,16 @@ test('the fold and the real cache agree event by event', () => {
   for (const event of events) {
     const before = cache.get(TABLES.NODES, event.key);
     applied.push(before === undefined || before === null ? null : {...before});
-    cache.applySystemTableChange(TABLES.NODES, event.operation, event.data,
-      event.source);
+    if (event.source.sourcePartition) {
+      cache.applySourceCdcEvent({tableName: TABLES.NODES, operation: event.operation,
+        data: event.data, timestamp: event.data.updated_at_hlc, ...event.source}, {
+        sourcePartition: event.source.sourcePartition, incarnation: event.source.sourceIncarnation,
+        after: {logIndex: 49, ordinal: Number.MAX_SAFE_INTEGER},
+        through: {logIndex: 50, ordinal: event.source.sourceOrdinal},
+      }, 5000);
+    } else {
+      cache.applySystemTableChange(TABLES.NODES, event.operation, event.data);
+    }
   }
   assert.deepEqual(folded, applied,
     'every event is handed the row the cache held before applying it');

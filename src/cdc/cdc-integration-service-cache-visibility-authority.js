@@ -20,8 +20,8 @@ import {
 
 const CACHE_REPAIR_READ_AUTHORITY = buildControlPlaneReadAuthority({
   authoritativeReadMode:
-    CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-      .OWNER_RPC_REQUIRED,
+    CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+  leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
 });
 const CACHE_ABSENCE_REPAIR_READ_AUTHORITY = buildControlPlaneReadAuthority({
   authoritativeReadMode:
@@ -159,6 +159,7 @@ function applyAuthoritativeCacheRepairRow(
     authoritativeObservedAtMs: options.authoritativeObservedAtMs,
     authoritativeReadStartedAtMs:
       options.authoritativeReadStartedAtMs,
+    ...(Object.hasOwn(options, 'sourceGeneration') ? {sourceGeneration: options.sourceGeneration} : {}),
   };
   const repairRow = Object.assign(
     {},
