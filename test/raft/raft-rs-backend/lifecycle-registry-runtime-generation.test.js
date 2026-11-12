@@ -4,7 +4,9 @@
 // logical (group, replica) name opens a new runtime; delayed work that belongs
 // to the old runtime can never retire, close or unregister the new one.
 import assert from 'node:assert/strict';
-import {test} from 'node:test';
+import {test, afterEach} from 'node:test';
+import Database from 'better-sqlite3';
+import {allocateLifecycleFixture} from '../../helpers/replica-lifecycle-fixture.js';
 
 import {raftRsLifecycleAdministration} from
   '../../../src/raft/raft-rs-lifecycle-administration.js';
@@ -27,32 +29,21 @@ const GROUP_ID = 'registry-generation-group';
 const REPLICA_ID = 'registry-generation-replica';
 
 // One runtime generation: its own lifecycle record store and its own handle.
+const databases = [];
+afterEach(() => {
+  for (const db of databases.splice(0)) db.close();
+});
 function openGeneration(label) {
-  const retired = [];
-  const owner = new RaftRsReplicaLifecycleOwner({
-    groupId: GROUP_ID,
-    peerId: `peer-${label}`,
-    replicaIdentity: REPLICA_ID,
-    db: {
-      // The members the lifecycle row's durable commit uses.
-      inTransaction: false,
-      pragma: () => 1,
-      transaction: (work) => work,
-      exec() {},
-      prepare(sql) {
-        return {
-          all: () => [],
-          get: () => undefined,
-          run: () => {
-            if (sql.includes('SET state = \'retired\'')) retired.push(label);
-          },
-        };
-      },
-    },
-  });
+  const db = new Database(':memory:');
+  databases.push(db);
+  const request = {db, groupId: GROUP_ID, peerId: `peer-${label}`, replicaIdentity: REPLICA_ID};
+  allocateLifecycleFixture(request);
+  const owner = new RaftRsReplicaLifecycleOwner(request);
   const runtime = Object.freeze({label});
   registerRuntimeLifecycle(runtime, owner);
-  return {owner, runtime, retired};
+  return {owner, runtime, get retired() {
+    return owner.active ? [] : [label];
+  }};
 }
 
 function retire(generation, reason = 'delayed-g1-work') {

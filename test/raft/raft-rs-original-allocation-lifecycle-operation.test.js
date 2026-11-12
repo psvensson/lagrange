@@ -76,15 +76,17 @@ test('the class takes no caller mint: a passed mintIncarnation never stamps a ro
   const f = fixture(t);
   const owner = new RaftRsReplicaLifecycleOwner({db: f.db, ...IDENTITY,
     mintIncarnation: () => 'caller-chosen'});
-  assert.equal(typeof owner.incarnation, 'string');
-  assert.notEqual(owner.incarnation, 'caller-chosen');
-  assert.equal(f.rows()[0].incarnation, owner.incarnation);
+  assert.equal(owner.incarnation, null);
+  assert.equal(owner.admission().outcome, OUTCOME.CORE_REFUSED);
+  assert.equal(f.db.prepare('SELECT 1 FROM sqlite_master').get(), undefined,
+    'ordinary construction cannot create a lifecycle table or stamp');
 });
 
 test('birth is once: an existing row in any state is refused unchanged', async (t) => {
   for (const [name, setup, request] of [
     ['exact active row', (db) => bear(db), {}],
     ['retired row', async (db) => {
+      bear(db);
       await new RaftRsReplicaLifecycleOwner({db, ...IDENTITY}).retire('removed');
     }, {}],
     ['row holding the peer under another replica', (db) => bear(db),

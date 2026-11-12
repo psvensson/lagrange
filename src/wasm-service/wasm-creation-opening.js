@@ -1,3 +1,4 @@
+import {REPLICA_DATABASE_CREATION} from '../raft/raft-rs-replica-lifecycle-constants.js';
 // The existing WASM opening owns the common root and the receiver-local
 // creation record. Writer apply reads ONLY the common root, never local
 // permission. The local record is a named phase machine (design
@@ -245,9 +246,6 @@ function boundWasmInitialization(binding) {
     serviceId: binding.serviceDefinitionId, incarnation: binding.incarnation,
     nonce: binding.requestId.nonce});
 }
-function isCreationOnlyDatabase(tables) {
-  return tables.length === 2 && tables.includes(ROOT) && tables.includes(LOCAL);
-}
 function readWasmCreationBinding(db) {
   if (!db.prepare(SQL.ROOT_EXISTS).get(ROOT)) return null;
   const row = db.prepare(SQL.ROOT).get();
@@ -265,9 +263,10 @@ function readWasmCreationBinding(db) {
  * A retained record must match the identity projection exactly and be
  * ADMITTED or PUBLISHED; RETIRED refuses typed before any native handle opens.
  * @param {Object} replica - The bound WasmServiceReplica with replica.db open.
+ * @param {string} databaseCreation - The construction owner's allocation result.
  * @return {string|undefined} The local phase, for the open-time serving decision.
  */
-function openWasmCreationRecords(replica) {
+function openWasmCreationRecords(replica, databaseCreation = REPLICA_DATABASE_CREATION.EXISTING) {
   const creation = replica.consensusCreation;
   if (creation === null) return undefined;
   const db = replica.db;
@@ -275,13 +274,14 @@ function openWasmCreationRecords(replica) {
   const identity = wasmCreationLocalIdentity(replica);
   const tables = db.prepare(SQL.TABLES).all().map((row) => row.name);
   if (replica.creationOpening.outcome === OPENING.FRESH) {
-    requireInstance(tables.length === 0, OUTCOME.CONTENT_CONFLICT);
+    requireInstance(databaseCreation === REPLICA_DATABASE_CREATION.NEW, OUTCOME.CONTENT_CONFLICT);
     db.exec(SQL.CREATE);
     db.prepare(SQL.INSERT_ROOT).run(encodeInstanceJson(binding, LIMIT.BINDING_BYTES));
     db.prepare(SQL.INSERT_LOCAL).run(encodeLocal({...identity, phase: LOCAL_PHASE.ADMITTED,
       grant: null, retirement: null}));
   } else {
-    requireInstance(tables.length > 0, OPENING.STORAGE_MISSING);
+    requireInstance(databaseCreation === REPLICA_DATABASE_CREATION.EXISTING,
+      OPENING.STORAGE_MISSING);
     requireInstance(tables.includes(ROOT) && tables.includes(LOCAL), OUTCOME.CORRUPT_STATE);
   }
   requireInstance(instanceDigest(readWasmCreationBinding(db)) === instanceDigest(binding),
@@ -384,4 +384,4 @@ export {initializeWasmCreationContext, captureWasmCreation, resolveWasmCreationA
   tombstoneWasmCreationLocal, wasmCreationLocalIdentity,
   WASM_CREATION_LOCAL_PHASE, WASM_CREATION_LOCAL_RECORD, WASM_CREATION_RETIREMENT,
   WASM_CREATION_LOCAL_INSPECTION, inspectWasmCreationLocal, inspectRetainedWasmCreation,
-  isCreationOnlyDatabase, readWasmCreationBinding, boundWasmInitialization};
+  readWasmCreationBinding, boundWasmInitialization};

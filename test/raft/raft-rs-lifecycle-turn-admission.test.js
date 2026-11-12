@@ -1,3 +1,4 @@
+import {allocateLifecycleFixture} from '../helpers/replica-lifecycle-fixture.js';
 // The replica lifecycle owner admits one runtime turn at a time against its
 // retirement: the work answers a named turn, and the owner holds the
 // replica active for exactly as long as that turn - released at once when
@@ -13,6 +14,8 @@ import {
 import {pendingTurn, settledTurn} from '../../src/raft/raft-rs-turn-answer.js';
 
 function ownerOver(db) {
+  allocateLifecycleFixture({db, groupId: 'lifecycle-turn-group',
+    peerId: '1', replicaIdentity: 'lifecycle-turn-replica'});
   return new RaftRsReplicaLifecycleOwner({db, groupId: 'lifecycle-turn-group',
     peerId: '1', replicaIdentity: 'lifecycle-turn-replica'});
 }

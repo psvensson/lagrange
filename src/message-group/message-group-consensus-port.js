@@ -15,7 +15,7 @@ import {
 import {ENTITY_TYPE} from '../constants/addresses.js';
 import fs from 'node:fs';
 import path from 'node:path';
-import Database from 'better-sqlite3';
+import {openRaftRsReplicaDatabase} from '../raft/raft-rs-operation-port.js';
 import {resolveRaftTransportDeliveryOptions} from '../raft/constants.js';
 import {
   COMMITTED_MEMBERSHIP_READ_PURPOSE,
@@ -35,7 +35,6 @@ import {
 import {committedMembershipRefusal} from
   '../raft/raft-rs-committed-membership-read.js';
 import {committedPeerAddress} from '../raft/raft-rs-committed-peer-address.js';
-import {REPLICA_DB_PRAGMA} from '../storage/storage-constants.js';
 import {retireCdcCommitWaiters} from './message-group-cdc-committed-acceptance.js';
 import {turnChainValue} from '../raft/raft-rs-turn-answer.js';
 
@@ -153,9 +152,11 @@ function messageGroupConsensusRequest(service, cdcCommitLifetime) {
 function openMessageGroupConsensusPort(service) {
   retireCdcCommitWaiters(service);
   fs.mkdirSync(path.dirname(service.dbPath), {recursive: true});
-  service.db = new Database(service.dbPath);
-  service.db.pragma(REPLICA_DB_PRAGMA.JOURNAL_MODE);
-  service.db.pragma(REPLICA_DB_PRAGMA.SYNCHRONOUS);
+  service.db = openRaftRsReplicaDatabase({dbPath: service.dbPath,
+    groupId: service.groupId, replicaIdentity: service.replicaId,
+    takeDatabaseCustody: (db) => {
+      service.db = db;
+    }}).db;
   service.cdcCommitLifetime = Object.freeze({});
   try {
     service.raft = service.createOperationPort(

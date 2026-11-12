@@ -1,3 +1,4 @@
+import {openReplicaDatabaseFixture} from '../helpers/replica-database-fixture.js';
 // A staged raft-rs cohort over the virtual network: one replica group whose
 // seed founds it alone, and whose joiners are admitted at their scheduled
 // join time (join times are data). Every replica is a real raft-rs
@@ -18,7 +19,6 @@
 // Every delivered envelope and every timer the port arms is one
 // raft_protocol segment charged to its node under the deterministic guard.
 
-import Database from 'better-sqlite3';
 
 import {FORMATION_OWNER} from '../../src/diagnostics/formation-diagnostics-contract.js';
 import {runOnExecutionNode} from '../../src/diagnostics/formation-turn-attribution.js';
@@ -146,7 +146,8 @@ function createStagedCohort({network, groupId, seedId, linkDelayMs, timing, char
   // Each port is opened inside its node, and every envelope it sends is a
   // network message from that node.
   function open(nodeId, {bootstrapMembership, bootstrapPeerIds}) {
-    const database = new Database(IN_MEMORY_DATABASE);
+    const database = openReplicaDatabaseFixture({dbPath: IN_MEMORY_DATABASE,
+      groupId, replicaIdentity: nodeId}).db;
     databases.set(nodeId, database);
     const port = runOnExecutionNode(nodeId, () => createRaftRsOperationPort({
       [RAFT_OPERATION_PORT_REQUEST.GROUP_ID]: groupId,

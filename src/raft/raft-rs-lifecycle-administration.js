@@ -1,5 +1,7 @@
 import {
+  DURABLE_LIFECYCLE_OPENING,
   DURABLE_LIFECYCLE_READ,
+  birthReplicaLifecycle,
   readDurableReplicaLifecycle,
   readDurableReplicaLifecycleBeside,
   retireReplicaLifecycle,
@@ -25,9 +27,11 @@ function retireReplica(replicaIdentity, reason, {groupId, runtime,
 function readReplicaOwnGroupRecord(dbPath, groupId, replicaIdentity) {
   const {lifecycle, beside} = readDurableReplicaLifecycleBeside(dbPath,
     groupId, replicaIdentity, (db) => readOwnGroupRecordIn(db, groupId));
-  return durableOwnGroupRecordOf({
-    readable: lifecycle.state !== DURABLE_LIFECYCLE_READ.UNREADABLE.state,
-    peerId: lifecycle.peerId, record: beside});
+  const readable = lifecycle.state !== DURABLE_LIFECYCLE_READ.UNREADABLE.state;
+  return durableOwnGroupRecordOf({readable, peerId: lifecycle.peerId,
+    record: beside, cause: readable ? null : {reason: lifecycle.reason,
+      code: lifecycle.cause?.code ?? null,
+      subject: lifecycle.cause?.subject ?? null}});
 }
 
 // Whether a durable lifecycle read is a retirement for exactly this reason
@@ -43,10 +47,18 @@ function isRetired(lifecycle) {
   return lifecycle?.state === LIFECYCLE_STATE.RETIRED;
 }
 
-// Whether a durable lifecycle read found no row for the identity (its
-// database, or its row, is gone) - never an unreadable database.
+// Whether a durable lifecycle read found the replica's database positively
+// absent (never a lookup that failed, an unreadable database, or a database
+// without the table or the row).
 function isAbsent(lifecycle) {
   return lifecycle?.state === DURABLE_LIFECYCLE_READ.ABSENT.state;
+}
+
+// Whether a durable lifecycle read found the replica's own active row in a
+// database that never opened its consensus record: born, never established,
+// no row in any consensus table.
+function isNeverOpened(lifecycle) {
+  return lifecycle?.opening === DURABLE_LIFECYCLE_OPENING.NEVER_OPENED;
 }
 
 // Whether a durable lifecycle read found a row (active or retired) for the
@@ -57,6 +69,9 @@ function holdsRow(lifecycle) {
 }
 
 const raftRsLifecycleAdministration = Object.freeze({
+  // The birth of a replica database: its creator's first write (the
+  // lifecycle table and this replica's never-opened row).
+  birthReplica: Object.freeze(birthReplicaLifecycle),
   retireReplica: Object.freeze(retireReplica),
   // The same native participation owner holds this scope through settlement.
   // This does not replace the node lifecycle lane or activation-effect section.
@@ -71,6 +86,7 @@ const raftRsLifecycleAdministration = Object.freeze({
   isRetiredFor: Object.freeze(isRetiredFor),
   isRetired: Object.freeze(isRetired),
   isAbsent: Object.freeze(isAbsent),
+  isNeverOpened: Object.freeze(isNeverOpened),
   holdsRow: Object.freeze(holdsRow),
 });
 

@@ -21,12 +21,10 @@ import {
 } from '../../../src/raft/raft-rs-durable-own-group-record.js';
 import {raftRsLifecycleAdministration} from
   '../../../src/raft/raft-rs-lifecycle-administration.js';
-
-// The one public read of a replica's own group record.
-const readDurableOwnGroupRecord =
-  raftRsLifecycleAdministration.readReplicaOwnGroupRecord;
-import {prepareReplicaLifecycleForOriginalAllocation} from
-  '../../../src/raft/raft-rs-replica-lifecycle-owner.js';
+import {
+  LIFECYCLE_READ_SUBJECT,
+  prepareReplicaLifecycleForOriginalAllocation,
+} from '../../../src/raft/raft-rs-replica-lifecycle-owner.js';
 import {RaftRsDurableStore} from
   '../../../src/raft/raft-rs-durable-store.js';
 import {RaftRsPeerIdentityRegistry} from
@@ -40,19 +38,28 @@ import {RAFT_COMPACTION_OUTCOME} from
 import {RAFT_RS_TABLE} from
   '../../../src/raft/raft-rs-durable-store-constants.js';
 
+// The one public read of a replica's own group record.
+const readDurableOwnGroupRecord =
+  raftRsLifecycleAdministration.readReplicaOwnGroupRecord;
+
 const PARTITION_ID = 'own-record-partition';
 const LONE = 'own-a';
 const SECOND = 'own-b';
 const COMMAND = 'own-record-command';
 const ROUNDS = 400;
 const SOLE_EMPTY = Object.freeze({membership: MEMBERSHIP.SOLE_MEMBER,
-  history: HISTORY.EMPTY});
+  history: HISTORY.EMPTY, cause: null});
 const SOLE_HELD = Object.freeze({membership: MEMBERSHIP.SOLE_MEMBER,
-  history: HISTORY.HELD});
+  history: HISTORY.HELD, cause: null});
 const NO_ROW = Object.freeze({membership: MEMBERSHIP.NO_LIFECYCLE_ROW,
-  history: HISTORY.UNKNOWN});
-const UNREADABLE = Object.freeze({membership: MEMBERSHIP.UNREADABLE,
-  history: HISTORY.UNKNOWN});
+  history: HISTORY.UNKNOWN, cause: null});
+
+// The unreadable record and why: the lifecycle read's reason and, when a
+// read failed, the store's error code and what was being read.
+function unreadable(reason, code = null, subject = null) {
+  return {membership: MEMBERSHIP.UNREADABLE, history: HISTORY.UNKNOWN,
+    cause: {reason, code, subject}};
+}
 
 function electedCluster(t, replicaIds) {
   const cluster = new PartitionNodeCluster({partitionId: PARTITION_ID,
@@ -229,19 +236,24 @@ test('a founder born but never opened, its record tables empty, reads ' +
   assert.equal(born.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
     'setup: the lifecycle owner bore the row');
   assert.deepEqual(readDurableOwnGroupRecord(file, PARTITION_ID, LONE),
-    UNREADABLE, 'without its record tables the record cannot be read');
+    unreadable('lifecycle-database-unreadable', 'SQLITE_ERROR',
+      LIFECYCLE_READ_SUBJECT.BESIDE),
+    'without its record tables the record cannot be read, and the cause ' +
+      'names the record read');
   new RaftRsDurableStore(db).readDurableProgress(PARTITION_ID);
   db.close();
   assert.deepEqual(readDurableOwnGroupRecord(file, PARTITION_ID, LONE),
-    {membership: MEMBERSHIP.NO_CONFIGURATION, history: HISTORY.EMPTY});
+    {membership: MEMBERSHIP.NO_CONFIGURATION, history: HISTORY.EMPTY,
+      cause: null});
 });
 
-test('no lifecycle row for the identity, or no file, is NO_LIFECYCLE_ROW; a ' +
-  'file that cannot be read, or holds no lifecycle table, is UNREADABLE',
-(t) => {
+test('no file is NO_LIFECYCLE_ROW; a file that cannot be read, holds no ' +
+  'lifecycle table, or holds no row for the identity is UNREADABLE with ' +
+  'its cause', (t) => {
   const cluster = electedCluster(t, [LONE]);
-  assert.deepEqual(read(cluster, LONE, 'own-stranger'), NO_ROW,
-    'another identity');
+  assert.deepEqual(read(cluster, LONE, 'own-stranger'),
+    unreadable('lifecycle-row-absent'),
+    'another identity: the database is not this replica\'s');
   const absent = `${cluster.dbFileOf(LONE)}.absent`;
   assert.deepEqual(readDurableOwnGroupRecord(absent, PARTITION_ID, LONE),
     NO_ROW, 'no file');
@@ -254,9 +266,16 @@ test('no lifecycle row for the identity, or no file, is NO_LIFECYCLE_ROW; a ' +
     ['', '-wal', '-shm'].forEach((suffix) =>
       fs.rmSync(`${file}${suffix}`, {force: true}))));
   assert.deepEqual(readDurableOwnGroupRecord(garbage, PARTITION_ID, LONE),
-    UNREADABLE, 'not a database');
+    unreadable('lifecycle-database-unreadable', 'SQLITE_NOTADB',
+      LIFECYCLE_READ_SUBJECT.SCHEMA), 'not a database');
   assert.deepEqual(readDurableOwnGroupRecord(empty, PARTITION_ID, LONE),
-    UNREADABLE, 'a readable database without the lifecycle table');
+    unreadable('lifecycle-table-absent'),
+    'a readable database without the lifecycle table');
+  assert.deepEqual(readDurableOwnGroupRecord(
+    `${cluster.dbFileOf(LONE)}/below-a-file.sqlite`, PARTITION_ID, LONE),
+  unreadable('lifecycle-database-unreadable', 'ENOTDIR',
+    LIFECYCLE_READ_SUBJECT.FILE),
+  'a path through a regular file is not an absent file');
 });
 
 test('the read changes no byte of the database and reads what an unclean ' +

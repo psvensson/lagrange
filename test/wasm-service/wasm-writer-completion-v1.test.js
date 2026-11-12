@@ -1,3 +1,4 @@
+import {openReplicaDatabaseFixture} from '../helpers/replica-database-fixture.js';
 // COMPONENT boundary: real replica/application/SQLite owners; consensus entry
 // delivery is controlled here and is NOT a native RF3 or quorum witness.
 import assert from 'node:assert/strict';
@@ -5,7 +6,7 @@ import {test} from 'node:test';
 import {mkdtempSync, rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import Database from 'better-sqlite3';
+
 import {WasmServiceReplica} from '../../src/wasm-service/wasm-service-replica.js';
 import {WasmWriterState} from '../../src/wasm-service/wasm-writer-state.js';
 import {SessionKVStore} from '../../src/wasm-service/session-kv-store.js';
@@ -45,9 +46,10 @@ function openComponent(path) {
   const replica = new WasmServiceReplica({replicaId: 'writer-1', nodeId: 'writer-node',
     replicaIds: ['writer-1'], serviceDefinitionId: SERVICE, dbPath: path,
     systemTableCache: {}, timeSource: clock});
-  const db = new Database(path);
+  const {db, creation} = openReplicaDatabaseFixture({dbPath: path,
+    groupId: SERVICE, replicaIdentity: replica.replicaId});
   replica.db = db;
-  replica.writerState = new WasmWriterState(db, SERVICE);
+  replica.writerState = new WasmWriterState(db, SERVICE, creation);
   replica.kvStore = new SessionKVStore(db);
   const store = new RaftRsDurableStore(db);
   replica.lifecycleState = STATE.READY;

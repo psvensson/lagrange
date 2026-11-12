@@ -3,23 +3,21 @@
 // partition-service-raft-init-base.js (S4 file-size relief). The service owns
 // the open database handle and schema; this module owns only the DDL.
 
-import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {
   generateCreateIndexSQL,
 } from '../bootstrap/system-table-schema-sql.js';
 import {
-  getSchemaByTableName,
+  getSchemaByTableName, SYSTEM_TABLE_NAME,
 } from '../bootstrap/system-table-schemas-constants.js';
 import {ensureSqlTransactionParticipantsTableColumns} from
   './partition-coordinator-table-columns.js';
 
-const {
+import {
   PARTITION_SERVICE_COLUMN,
   PARTITION_SERVICE_COLUMN_SQL,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_SQL_FRAGMENT,
-  SYSTEM_TABLE_NAME,
-} = PARTITION_SERVICE_SHARED;
+} from './partition-service-constants.js';
 
 const PARTITION_TABLE_OBSERVATION = Object.freeze({
   COMPLETE: 'complete', UNAVAILABLE: 'unavailable', CONTRARY: 'contrary',

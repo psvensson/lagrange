@@ -110,11 +110,12 @@ async function releaseWasmServiceReplicaConsensus(replica) {
  * @param {string|undefined} metadataPhase - The bound open's metadata phase.
  */
 function openReplicaResources(replica, metadataPhase) {
-  openWasmServiceDatabase(replica);
+  const databaseOpening = openWasmServiceDatabase(replica);
   let localPhase;
   replica.db.transaction(() => {
-    localPhase = openWasmCreationRecords(replica);
-    replica.writerState = new WasmWriterState(replica.db, replica.serviceDefinitionId);
+    localPhase = openWasmCreationRecords(replica, databaseOpening.creation);
+    replica.writerState = new WasmWriterState(replica.db, replica.serviceDefinitionId,
+      databaseOpening.creation);
     replica.kvStore = new SessionKVStore(replica.db);
   })();
   openWasmServiceConsensusPort(replica);

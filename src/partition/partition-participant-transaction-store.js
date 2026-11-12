@@ -9,8 +9,9 @@
 // created with the partition, outside any command, identically on every
 // replica, by the open hook the lifecycle owner runs on each connection.
 
-import fs from 'node:fs';
 import Database from 'better-sqlite3';
+import {DURABLE_FILE_PRESENCE, readDurableFilePresence} from
+  '../storage/durable-file-presence.js';
 import {PARTICIPANT_COMMIT_OUTCOME} from '../constants/transactions.js';
 import {stampParticipantConnection} from './partition-participant-transaction-connection.js';
 import {RaftRsDurableStore} from '../raft/raft-rs-durable-store.js';
@@ -288,16 +289,22 @@ function isPartitionReserved(db) {
  * The durable participant custody of a partition database file, read on an
  * independent read-only connection (the removal owner's read once the
  * partition's own connection is released): ACTIVE while a PREPARED row
- * reserves it, IDLE when none does (no file, or no participant table:
- * nothing was ever PREPARED there), UNAVAILABLE when the file cannot be
- * read - never IDLE on a read that failed.
+ * reserves it, IDLE when none does (a positively absent file, or no
+ * participant table: nothing was ever PREPARED there), UNAVAILABLE when the
+ * file cannot be read or its presence cannot be established - never IDLE on
+ * a read or a lookup that failed.
  * @param {string} dbPath - The partition database file.
  * @return {string} A PARTICIPANT_TRANSACTION_CUSTODY.
  */
 function readDurableParticipantCustodyAt(dbPath) {
   try {
-    if (!fs.existsSync(dbPath)) {
-      return CUSTODY.IDLE;
+    // Only a positively absent file is IDLE: a lookup that failed (a
+    // directory that cannot be searched, a path through a non-directory)
+    // is UNAVAILABLE, as an unreadable file is.
+    const file = readDurableFilePresence(dbPath).presence;
+    if (file !== DURABLE_FILE_PRESENCE.PRESENT) {
+      return file === DURABLE_FILE_PRESENCE.ABSENT ? CUSTODY.IDLE :
+        CUSTODY.UNAVAILABLE;
     }
     const db = new Database(dbPath, {readonly: true, fileMustExist: true});
     try {

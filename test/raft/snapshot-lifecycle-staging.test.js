@@ -61,6 +61,7 @@ test('staging refuses conflicting receiver identity without changing the existin
 
 test('staging cannot reactivate a retired receiver or erase its evidence', async (t) => {
   const f = fixture(t);
+  prepareReplicaLifecycleForSnapshot(f.request);
   const owner = new RaftRsReplicaLifecycleOwner(f.request);
   await owner.retire('source-removed', {marker: 'retained-retirement'});
   const before = rows(f.db);

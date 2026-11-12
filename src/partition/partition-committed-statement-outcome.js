@@ -46,6 +46,8 @@
 // identity", never as a row id. committedStatementResult applies it.
 
 import {
+  PARTITION_SERVICE_ERROR_MSG, PARTITION_SERVICE_EVENT,
+  PARTITION_SERVICE_LOG_MSG, PARTITION_SERVICE_VALUE,
   PARTITION_COMMITTED_COMMAND_ERROR_CODE,
   PARTITION_COMMITTED_COMMAND_OUTCOME,
 } from './partition-service-constants.js';
@@ -58,7 +60,7 @@ import {
   PARTITION_SETTLED_REPLAY,
   PARTITION_SQLITE_RESULT_CODE,
 } from './partition-committed-statement-outcome-constants.js';
-import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {buildDurableCommitWitness} from './partition-write-kernel.js';
 import {preparedStatementOf} from '../storage/sqlite-prepared-statement-owner.js';
 import {RETAINED_STORE_ERROR, retainedStoreError, readRetainedStoreRowsIn,
   isStoredInteger, isStoredNullableText, isStoredNullableInteger} from
@@ -67,14 +69,6 @@ import {
   PARTITION_STATEMENT_REFUSAL_CODE,
   refusalLayerFieldOf,
 } from './partition-statement-admission-constants.js';
-
-const {
-  PARTITION_SERVICE_ERROR_MSG,
-  PARTITION_SERVICE_EVENT,
-  PARTITION_SERVICE_LOG_MSG,
-  PARTITION_SERVICE_VALUE,
-  buildDurableCommitWitness,
-} = PARTITION_SERVICE_SHARED;
 
 const NO_COMMITTED_STATEMENT_KEY = null;
 

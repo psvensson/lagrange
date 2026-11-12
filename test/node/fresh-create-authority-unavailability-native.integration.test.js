@@ -10,11 +10,14 @@
 // readiness-routing refusal of run b26d2c090), N times then the row, or forever.
 // Nothing else is faked: no release answer, membership, origin or token.
 
+import {REPLICA_DATABASE_CREATION, LIFECYCLE_BIRTH} from '../../src/raft/raft-rs-replica-lifecycle-constants.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
+
+import Database from 'better-sqlite3';
 
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -38,8 +41,10 @@ import {
 } from '../../src/rebalancer/replica-create-admission-token.js';
 import {buildPresentOperationVisibility} from
   '../../src/rebalancer/replica-operation-repository-operation-visibility.js';
-import {buildFailedCreateCleanupToken} from
-  '../../src/rebalancer/failed-create-cleanup-token.js';
+import {
+  buildFailedCreateCleanupToken,
+  buildFailedCreateRemoveToken,
+} from '../../src/rebalancer/failed-create-cleanup-token.js';
 import {admitCreateTerminalFailure, decideFailedCreateTargetCleanup} from
   '../../src/rebalancer/operation-workflow-replace-terminal-admission.js';
 import {createLifecycleControlPlaneGatewayForCache} from
@@ -61,6 +66,16 @@ import {
   DURABLE_OWN_HISTORY,
   DURABLE_OWN_MEMBERSHIP,
 } from '../../src/raft/raft-rs-durable-own-group-record.js';
+import {
+  DURABLE_LIFECYCLE_OPENING,
+  LIFECYCLE_READ_SUBJECT,
+  readDurableReplicaLifecycle,
+} from '../../src/raft/raft-rs-replica-lifecycle-owner.js';
+import {raftRsLifecycleAdministration} from
+  '../../src/raft/raft-rs-lifecycle-administration.js';
+
+import {createTimeoutTestCoordinator} from '../rebalancer/timeout-test-coordinator.js';
+import {MOVE_REASON} from '../../src/rebalancer/rebalancer-constants.js';
 
 const NODE_ID = 'fresh-authority-native-node';
 const PARTITION_ID = 'sql_transactions-p1';
@@ -181,8 +196,13 @@ async function proposeOnceLeading(service, command) {
 // `foundingProposal`: a command the lone leader proposes on its own port
 // before the release fails (the port's entry point; the partition's write
 // path refuses a write before the fresh-create release).
+// `stampless`: the partition service is built without its bootstrap
+// membership stamp, so the port refuses the opening (membership-stamp-invalid)
+// after the database and the partition's tables exist and before the
+// lifecycle owner or any consensus state does: a create refused before its
+// consensus port opened.
 async function runCreate(t, {label, refusals, coFounders = [],
-  foundingProposal = null}) {
+  foundingProposal = null, stampless = false, beforeInitialize = null}) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), `fresh-authority-${label}-`));
   const operationId = `op-fresh-authority-${label}`;
   const replicaId = `${PARTITION_ID}-r-${label}`;
@@ -195,14 +215,19 @@ async function runCreate(t, {label, refusals, coFounders = [],
   const {gateway, fault, lifecycle} = faultingGateway(cache, operationRow, refusals);
   const transport = createLoopbackTransport();
   const proposal = {settled: Promise.resolve(null)};
+  let serviceOptions;
   const handler = new ReplicaHandler({
     nodeId: NODE_ID, ownerIncarnation: 101,
     cdcIntegrationService: {}, controlPlaneSystemTableGateway: gateway,
     systemTableCache: cache, messageRouter: transport, dataDir: directory,
     // As production's partition factory: construct and initialize.
     createPartitionService: async (options) => {
-      const service = new PartitionService(withFoundingStamp({
-        ...options, transport, systemTableCache: cache}));
+      serviceOptions = stampless ?
+        {...options, bootstrapMembership: null, transport,
+          systemTableCache: cache} :
+        withFoundingStamp({...options, transport, systemTableCache: cache});
+      const service = new PartitionService(serviceOptions);
+      beforeInitialize?.(service);
       await service.initialize();
       // The lone founder of this fixture group leads (as a founded group's
       // first election would); the subject is the release, not the election.
@@ -249,7 +274,7 @@ async function runCreate(t, {label, refusals, coFounders = [],
   const keepAlive = setInterval(() => {}, 250);
   const outcome = await settled.finally(() => clearInterval(keepAlive));
   return {outcome, elapsedMs: Date.now() - startedAt, fault, handler, operationId,
-    replicaId, operationRow, store: lifecycle.store, proposal,
+    replicaId, operationRow, store: lifecycle.store, proposal, serviceOptions,
     dbPath: handler.getPartitionDbPath(PARTITION_ID, replicaId)};
 }
 
@@ -370,16 +395,175 @@ const UNANSWERED = Object.freeze([
   REPLICA_CONSENSUS_EXIT_REASON.NO_CONSENSUS_PORT,
   GROUP_REMOVAL_VERDICT.UNANSWERED]);
 
-function assertHeld(run, driven, soleFounderStates, label) {
+// `lifecycleCause`: the reasons an unreadable lifecycle read adds, between
+// the exit and the group's answer (none for a held, active row).
+function assertHeld(run, driven, soleFounderStates, label,
+  lifecycleCause = []) {
   assert.equal(driven.completed, null, `${label}: the REMOVE does not complete`);
   assert.ok(driven.failures.length >= 1, `${label}: the removal deferred`);
   assert.deepEqual(driven.failures.at(-1), {
     errorCode: REPLICA_REMOVAL_CONSENSUS_EXIT_DEFERRED,
-    deferralReasons: [...UNANSWERED, ...soleFounderStates]},
+    deferralReasons: [UNANSWERED[0], ...lifecycleCause, UNANSWERED[1],
+      ...soleFounderStates]},
   `${label}: the typed deferral and its named states`);
   assert.equal(fs.existsSync(run.dbPath), true,
     `${label}: nothing retired - the replica database is kept`);
 }
+
+// A create refused BEFORE its consensus port opened (2026-11-12): the
+// database file and the partition's tables exist, no consensus state does.
+// The file's first transaction was its birth (the replica's own never-opened
+// lifecycle row), so the cleanup reads a positive fact and completes.
+async function refusedBeforePort(t, label) {
+  const run = await runCreate(t, {label, refusals: 0, stampless: true});
+  assert.equal(run.outcome.created, false, 'setup: the create failed');
+  assert.match(String(run.outcome.event?.error), /membership-stamp-invalid/u,
+    'setup: the port refused the opening for its missing stamp');
+  const row = run.store.durableRow(TABLES.SERVICES, run.replicaId);
+  assert.equal(row?.status, ReplicaStatus.FAILED, 'setup: the replica is FAILED');
+  assert.equal(row?.cleanup_token, buildFailedCreateCleanupToken(run.operationId),
+    'setup: the FAILED row carries the cleanup claim');
+  assert.equal(fs.existsSync(run.dbPath), true,
+    'setup: the refused create left its replica database');
+  return {run, row};
+}
+
+function lifecycleOf(run) {
+  return readDurableReplicaLifecycle(run.dbPath, PARTITION_ID, run.replicaId);
+}
+
+test('a create refused before its consensus port opened leaves a born, ' +
+  'never-opened database, and its claimed REMOVE completes: the file is gone',
+{timeout: TEST_TIMEOUT_MS}, async (t) => {
+  environment(t);
+  const {run, row} = await refusedBeforePort(t, 'before-port');
+  const lifecycle = lifecycleOf(run);
+  assert.deepEqual({state: lifecycle.state, opening: lifecycle.opening},
+    {state: 'active', opening: DURABLE_LIFECYCLE_OPENING.NEVER_OPENED},
+    'the file says whose it is and that it never opened its consensus record');
+  const partitionTables = new Database(run.dbPath, {readonly: true});
+  t.after(() => partitionTables.open && partitionTables.close());
+  assert.ok(partitionTables.prepare('SELECT COUNT(*) AS n FROM sqlite_master ' +
+    'WHERE type = \'table\' AND name NOT LIKE \'\\_raft%\' ESCAPE \'\\\'')
+    .get().n >= 1, 'setup: the partition\'s own tables were created');
+  partitionTables.close();
+  const {completed, failures} = await driveRemove(run,
+    claimedRemoveRequest(run, row), 50);
+  assert.ok(completed,
+    `the claimed REMOVE completes (${JSON.stringify(failures)})`);
+  assert.deepEqual(failures, [], 'it never deferred');
+  assert.deepEqual(DATABASE_FILE_SUFFIXES.filter((suffix) =>
+    fs.existsSync(`${run.dbPath}${suffix}`)), [],
+  'the never-opened database and its sidecars are gone');
+});
+
+// The controls of the never-opened teardown: each replaces the refused
+// create's file with one that does NOT carry this replica's birth, and the
+// same claimed REMOVE holds with the lifecycle's own reason in its deferral.
+function replaceDatabase(run, write) {
+  for (const suffix of DATABASE_FILE_SUFFIXES) {
+    fs.rmSync(`${run.dbPath}${suffix}`, {force: true});
+  }
+  write(run.dbPath);
+}
+
+const HELD_WITHOUT_BIRTH = Object.freeze({
+  'an empty database (truncated: no lifecycle table)': {
+    write: (file) => fs.writeFileSync(file, ''),
+    reasons: ['lifecycle-table-absent'],
+  },
+  'a database that lost the write-ahead log holding its birth': {
+    // The production birth, durable only in the log; the main file alone.
+    write: (file) => {
+      const whole = `${file}.whole`;
+      const db = new Database(whole);
+      db.pragma('journal_mode = WAL');
+      raftRsLifecycleAdministration.birthReplica({db, creation: REPLICA_DATABASE_CREATION.NEW,
+        groupId: PARTITION_ID,
+        replicaIdentity: path.basename(file, '.db')});
+      fs.copyFileSync(whole, file);
+      db.close();
+      DATABASE_FILE_SUFFIXES.forEach((suffix) =>
+        fs.rmSync(`${whole}${suffix}`, {force: true}));
+    },
+    reasons: ['lifecycle-table-absent'],
+  },
+  'a database born for another replica identity': {
+    write: (file) => {
+      const db = new Database(file);
+      raftRsLifecycleAdministration.birthReplica({db, creation: REPLICA_DATABASE_CREATION.NEW,
+        groupId: PARTITION_ID,
+        replicaIdentity: `${PARTITION_ID}-r-somebody-else`});
+      db.close();
+    },
+    reasons: ['lifecycle-row-absent'],
+  },
+  'a file that is not a database': {
+    write: (file) => fs.writeFileSync(file, Buffer.alloc(8192, 0x5a)),
+    reasons: ['lifecycle-database-unreadable',
+      `${LIFECYCLE_READ_SUBJECT.SCHEMA}:SQLITE_NOTADB`],
+  },
+});
+
+for (const [label, {write, reasons}] of Object.entries(HELD_WITHOUT_BIRTH)) {
+  test(`a claimed REMOVE over ${label} holds, and names why`,
+    {timeout: TEST_TIMEOUT_MS}, async (t) => {
+      environment(t);
+      const {run, row} = await refusedBeforePort(t, 'held');
+      replaceDatabase(run, write);
+      const driven = await driveRemove(run, claimedRemoveRequest(run, row),
+        HOLD_POLLS);
+      assert.equal(driven.completed, null, 'the REMOVE does not complete');
+      assert.deepEqual(driven.failures.at(-1), {
+        errorCode: REPLICA_REMOVAL_CONSENSUS_EXIT_DEFERRED,
+        deferralReasons: [REPLICA_CONSENSUS_EXIT_REASON.NO_CONSENSUS_PORT,
+          ...reasons, GROUP_REMOVAL_VERDICT.UNANSWERED,
+          SOLE_FOUNDER_RETIREMENT.RECORD_UNREADABLE,
+          DURABLE_OWN_MEMBERSHIP.UNREADABLE, DURABLE_OWN_HISTORY.UNKNOWN,
+          ...reasons]},
+      'the typed deferral names the lifecycle\'s reason and cause');
+      assert.equal(fs.existsSync(run.dbPath), true,
+        'nothing retired - the database is kept');
+    });
+}
+
+test('a claimed REMOVE whose replica database path runs through a regular ' +
+  'file holds: a lookup that failed is not an absent database',
+{timeout: TEST_TIMEOUT_MS}, async (t) => {
+  environment(t);
+  const {run, row} = await refusedBeforePort(t, 'not-a-directory');
+  // The replica's directory is replaced by a regular file: every lookup of
+  // the database below it fails ENOTDIR, where existsSync answers "missing".
+  const replicaDirectory = path.dirname(run.dbPath);
+  fs.rmSync(replicaDirectory, {recursive: true, force: true});
+  fs.writeFileSync(replicaDirectory, 'not a directory');
+  assert.equal(fs.existsSync(run.dbPath), false,
+    'premise: existsSync reads the unresolvable path as a missing file');
+  const driven = await driveRemove(run, claimedRemoveRequest(run, row),
+    HOLD_POLLS);
+  assert.equal(driven.completed, null, 'the REMOVE does not complete');
+  const cause = ['lifecycle-database-unreadable',
+    `${LIFECYCLE_READ_SUBJECT.FILE}:ENOTDIR`];
+  assert.deepEqual(driven.failures.at(-1), {
+    errorCode: REPLICA_REMOVAL_CONSENSUS_EXIT_DEFERRED,
+    deferralReasons: [REPLICA_CONSENSUS_EXIT_REASON.NO_CONSENSUS_PORT,
+      ...cause, GROUP_REMOVAL_VERDICT.UNANSWERED,
+      SOLE_FOUNDER_RETIREMENT.RECORD_UNREADABLE,
+      DURABLE_OWN_MEMBERSHIP.UNREADABLE, DURABLE_OWN_HISTORY.UNKNOWN,
+      ...cause]});
+});
+
+test('an ordinary REMOVE (no failed-create claim) of a never-opened ' +
+  'replica completes too: the fact is the file\'s, not the claim\'s',
+{timeout: TEST_TIMEOUT_MS}, async (t) => {
+  environment(t);
+  const {run} = await refusedBeforePort(t, 'unclaimed-never-opened');
+  const {completed, failures} = await driveRemove(run, {
+    operationId: 'remove-unclaimed-never-opened', partitionId: PARTITION_ID,
+    replicaId: run.replicaId}, 50);
+  assert.ok(completed, `the REMOVE completes (${JSON.stringify(failures)})`);
+  assert.equal(fs.existsSync(run.dbPath), false, 'the database is gone');
+});
 
 function dropSidecars(run) {
   for (const suffix of ['-wal', '-shm']) {
@@ -430,9 +614,11 @@ test('a failed sole founder whose database cannot be read holds: unreadable ' +
   fs.writeFileSync(run.dbPath, Buffer.alloc(8192, 0x5a));
   const driven = await driveRemove(run, claimedRemoveRequest(run, row),
     HOLD_POLLS);
+  const cause = ['lifecycle-database-unreadable',
+    `${LIFECYCLE_READ_SUBJECT.SCHEMA}:SQLITE_NOTADB`];
   assertHeld(run, driven, [SOLE_FOUNDER_RETIREMENT.RECORD_UNREADABLE,
-    DURABLE_OWN_MEMBERSHIP.UNREADABLE, DURABLE_OWN_HISTORY.UNKNOWN],
-  'unreadable');
+    DURABLE_OWN_MEMBERSHIP.UNREADABLE, DURABLE_OWN_HISTORY.UNKNOWN, ...cause],
+  'unreadable', cause);
 });
 
 test('a failed sole founder whose database lost its lifecycle table (the ' +
@@ -446,9 +632,10 @@ test('a failed sole founder whose database lost its lifecycle table (the ' +
   fs.truncateSync(run.dbPath, 0);
   const driven = await driveRemove(run, claimedRemoveRequest(run, row),
     HOLD_POLLS);
+  const cause = ['lifecycle-table-absent'];
   assertHeld(run, driven, [SOLE_FOUNDER_RETIREMENT.RECORD_UNREADABLE,
-    DURABLE_OWN_MEMBERSHIP.UNREADABLE, DURABLE_OWN_HISTORY.UNKNOWN],
-  'tableless');
+    DURABLE_OWN_MEMBERSHIP.UNREADABLE, DURABLE_OWN_HISTORY.UNKNOWN, ...cause],
+  'tableless', cause);
 });
 
 test('an ordinary REMOVE (no failed-create claim) of a sole member without ' +
@@ -460,3 +647,172 @@ async (t) => {
     partitionId: PARTITION_ID, replicaId: run.replicaId}, HOLD_POLLS);
   assertHeld(run, driven, [SOLE_FOUNDER_RETIREMENT.NOT_CLAIMED], 'unclaimed');
 });
+
+// The claimed cleanup's operation can end while the node still holds (the
+// coordinator fails a REMOVE that stays in STOPPING past its bound, and
+// never mints another for a row that is no longer FAILED). The node's own
+// REMOVING re-drive then carries the removal, with no operation: it reads
+// the failed-create claim the durable row still holds.
+const REDRIVE_POLLS = 80;
+
+// No removal of the replica runs on the node (operation or re-drive).
+async function removalQuiescent(run) {
+  for (let attempt = 0; attempt < REDRIVE_POLLS; attempt += 1) {
+    if (!run.handler.hasInProgressReplicaRemoval(run.replicaId) &&
+        run.handler.removingRedrives.size === 0 &&
+        run.handler.removalExecutions.size === 0) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, REMOVE_POLL_MS));
+  }
+  assert.fail('setup: the removal never became quiescent');
+}
+
+async function redriveUntilSettled(run) {
+  const failures = [];
+  const onFailure = (event) => failures.push({errorCode: event.errorCode,
+    deferralReasons: event.deferralReasons});
+  run.handler.on('replicaRemovalFailed', onFailure);
+  try {
+    // The lifecycle owner's REMOVING timeout, due now: its own checker
+    // emits the re-drive signal.
+    run.handler.replicaStateMachine.timeouts[ReplicaStatus.REMOVING] = -1;
+    for (let attempt = 0; attempt < REDRIVE_POLLS; attempt += 1) {
+      run.handler.replicaStateMachine.checkTimeoutsNow();
+      await new Promise((resolve) => setTimeout(resolve, REMOVE_POLL_MS));
+      if (!fs.existsSync(run.dbPath) || failures.length >= 3) {
+        break;
+      }
+    }
+    return failures;
+  } finally {
+    run.handler.off('replicaRemovalFailed', onFailure);
+  }
+}
+
+test('a claimed REMOVE that held until its operation ended is finished by ' +
+  'the node\'s REMOVING re-drive under the claim its row still holds',
+{timeout: TEST_TIMEOUT_MS}, async (t) => {
+  environment(t);
+  const {run, row} = await failedCreate(t, {label: 'redrive'});
+  const serviceRows = new Map([[run.replicaId, row]]);
+  const {coordinator, getTrackedOperation} = createTimeoutTestCoordinator({
+    nodeId: NODE_ID, serviceRowsByKey: serviceRows});
+  t.after(() => coordinator.shutdown());
+  // Bounded setup control: missing the canonical failed-replica reason hits
+  // the priority-surplus fence before the cleanup mechanism. This is not a
+  // reconstruction of the unretained first-run input.
+  await assert.rejects(coordinator.createOperation({type: OperationType.REMOVE,
+    partitionId: PARTITION_ID, nodeId: NODE_ID, replicaId: run.replicaId,
+    [ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION]: row}),
+  /authority_unavailable/u);
+  const removeOperation = await coordinator.createOperation({type: OperationType.REMOVE,
+    partitionId: PARTITION_ID, nodeId: NODE_ID, replicaId: run.replicaId,
+    reason: MOVE_REASON.REPLICA_FAILED,
+    [ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION]: row});
+  await coordinator.updateStep(removeOperation, 'STOPPING');
+  const removeRequest = {...claimedRemoveRequest(run, row),
+    operationId: removeOperation.operationId};
+  // A hold that clears: the database is unreadable while the operation
+  // drives the removal, and readable again after the operation ended.
+  dropSidecars(run);
+  const kept = fs.readFileSync(run.dbPath);
+  fs.writeFileSync(run.dbPath, Buffer.alloc(8192, 0x5a));
+  const driven = await driveRemove(run, removeRequest, 4);
+  assert.equal(driven.completed, null, 'setup: the claimed REMOVE holds');
+  const claimed = run.store.durableRow(TABLES.SERVICES, run.replicaId);
+  assert.deepEqual({status: claimed?.status, previous: claimed?.previous_state,
+    token: claimed?.cleanup_token},
+  {status: ReplicaStatus.REMOVING, previous: ReplicaStatus.FAILED,
+    token: buildFailedCreateRemoveToken(removeOperation.operationId)},
+  'setup: the row is REMOVING out of FAILED under the cleanup\'s remove token');
+  // The real coordinator terminal transition persists FAILED in the existing
+  // fixture ledger. Its transport/SQL are substituted; terminal admission,
+  // transition persistence and readback are production owners.
+  serviceRows.set(run.replicaId, claimed);
+  await coordinator.failOperation(removeOperation, 'ended while cleanup held');
+  const terminal = getTrackedOperation(removeOperation.operationId);
+  assert.equal(terminal.workflow_step, 'FAILED');
+  assert.equal(terminal.status, ReplicaStatus.FAILED);
+  assert.ok(terminal.completed_at > 0, 'terminal result persisted');
+  assert.deepEqual(run.store.durableRow(TABLES.SERVICES, run.replicaId), claimed,
+    'terminal operation did not discharge the claimed replica cleanup');
+  await removalQuiescent(run);
+  dropSidecars(run);
+  fs.writeFileSync(run.dbPath, kept);
+  await new Promise((resolve) => setTimeout(resolve, 5 * REMOVE_POLL_MS));
+  assert.equal(fs.existsSync(run.dbPath), true,
+    'nothing finishes the cleanup on its own once its operation ended');
+  // A REMOVE under a
+  // new operation id cannot take the claim over (its token is not the
+  // row's, and the row is no longer FAILED).
+  const successor = await run.handler.handleRemoveReplica({
+    ...claimedRemoveRequest(run, row),
+    operationId: `cleanup-successor-${run.operationId}`});
+  assert.equal(successor.status, ReplicaOperationResponseStatus.ERROR,
+    `a successor claimed REMOVE is refused (${JSON.stringify(successor)})`);
+  const failures = await redriveUntilSettled(run);
+  assert.deepEqual(DATABASE_FILE_SUFFIXES.filter((suffix) =>
+    fs.existsSync(`${run.dbPath}${suffix}`)), [],
+  `the re-drive retired the sole founder's group (${JSON.stringify(failures)})`);
+  assert.equal(getTrackedOperation(removeOperation.operationId).workflow_step,
+    'FAILED', 'cleanup does not rewrite the terminal operation');
+});
+
+test('the REMOVING re-drive of an ordinary removal reads no failed-create ' +
+  'claim: a sole member without a port stays', {timeout: TEST_TIMEOUT_MS},
+async (t) => {
+  environment(t);
+  const {run} = await failedCreate(t, {label: 'redrive-unclaimed'});
+  const driven = await driveRemove(run, {operationId: 'remove-unclaimed',
+    partitionId: PARTITION_ID, replicaId: run.replicaId}, 4);
+  assert.equal(driven.completed, null, 'setup: the ordinary REMOVE holds');
+  await removalQuiescent(run);
+  const failures = await redriveUntilSettled(run);
+  assert.ok(failures.length >= 1, 'the re-drive ran and deferred');
+  assert.deepEqual(failures.at(-1), {
+    errorCode: REPLICA_REMOVAL_CONSENSUS_EXIT_DEFERRED,
+    deferralReasons: [...UNANSWERED, SOLE_FOUNDER_RETIREMENT.NOT_CLAIMED]});
+  assert.equal(fs.existsSync(run.dbPath), true, 'the database is kept');
+});
+
+
+for (const kind of ['zero-length', 'empty-schema']) {
+  test(`CREATE refuses an existing ${kind} file before lifecycle birth or DDL`,
+    {timeout: TEST_TIMEOUT_MS}, async (t) => {
+      environment(t);
+      const run = await runCreate(t, {label: `existing-${kind}`, refusals: 0,
+        stampless: true, beforeInitialize: (service) => {
+          fs.mkdirSync(path.dirname(service.dbPath), {recursive: true});
+          if (kind === 'zero-length') fs.writeFileSync(service.dbPath, '');
+          else {
+            const db = new Database(service.dbPath);
+            db.exec('VACUUM');
+            db.close();
+          }
+        }});
+      assert.equal(run.outcome.created, false);
+      assert.match(String(run.outcome.event?.error), new RegExp(LIFECYCLE_BIRTH.UNPROVEN));
+      const read = readDurableReplicaLifecycle(run.dbPath, PARTITION_ID, run.replicaId);
+      assert.equal(read.reason, 'lifecycle-table-absent');
+      assert.equal(raftRsLifecycleAdministration.isNeverOpened(read), false);
+    });
+}
+
+test('restart of an established replica whose file was truncated refuses rebirth',
+  {timeout: TEST_TIMEOUT_MS}, async (t) => {
+    environment(t);
+    const run = await runCreate(t, {label: 'truncated-restart', refusals: 0});
+    assert.equal(run.outcome.created, true, 'the first production CREATE served');
+    await run.handler.shutdown();
+    assert.equal(readDurableReplicaLifecycle(run.dbPath, PARTITION_ID,
+      run.replicaId).opening, DURABLE_LIFECYCLE_OPENING.OPENED);
+    dropSidecars(run);
+    fs.truncateSync(run.dbPath, 0);
+    const restarted = new PartitionService(run.serviceOptions);
+    t.after(() => restarted.shutdown());
+    await assert.rejects(restarted.initialize(), {code: LIFECYCLE_BIRTH.UNPROVEN});
+    const read = readDurableReplicaLifecycle(run.dbPath, PARTITION_ID, run.replicaId);
+    assert.equal(read.reason, 'lifecycle-table-absent');
+    assert.equal(raftRsLifecycleAdministration.isNeverOpened(read), false);
+  });
