@@ -53,8 +53,8 @@ function ingressFixture(ingress) {
       return Reflect.apply(buildKey, this, args);
     };
     return {calls, inFlight: gateway.inFlightReadRequestsByKey,
-      read: (readAuthority) => gateway.readAuthoritativeRows(TABLES.NODES, SQL, [NODE_ID],
-        {readAuthority})};
+      read: (readAuthority, requestOptions = {}) => gateway.readAuthoritativeRows(
+        TABLES.NODES, SQL, [NODE_ID], {...requestOptions, readAuthority})};
   }
   const view = new AuthoritativeControlPlaneView(options);
   const hasKey = view.inFlightReadsByKey.has;
@@ -194,5 +194,93 @@ test('authority construction defaults only absent leader intent', (t) => {
   t.equal(complete.leaderMode, LEADER.REQUIRED);
   t.equal(Object.isFrozen(ordinary), true);
   t.equal(Object.isFrozen(complete), true);
+  t.end();
+});
+
+const originalArrayIterator = Array.prototype[Symbol.iterator];
+const originalArrayEvery = Array.prototype.every;
+const originalArraySome = Array.prototype.some;
+
+function isAuthorityFieldList(value) {
+  return value[0] === 'purpose' && value[1] === 'strategy' &&
+    value[3] === 'authoritativeReadMode';
+}
+
+function hideAuthorityFields() {
+  if (isAuthorityFieldList(this)) return {next: () => ({done: true})};
+  return Reflect.apply(originalArrayIterator, this, []);
+}
+
+for (const ingress of ['gateway', 'view']) {
+  test(`${ingress} validates selected leader intent under an altered Array iterator`, async (t) => {
+    const f = ingressFixture(ingress);
+    const authority = Object.freeze({...selectedAuthority(), leaderMode: 'unknown-leader-mode'});
+    let pending;
+    try {
+      Array.prototype[Symbol.iterator] = hideAuthorityFields;
+      pending = f.read(authority);
+    } finally {
+      Array.prototype[Symbol.iterator] = originalArrayIterator;
+    }
+    await t.rejects(pending, {message: UNSUPPORTED_LEADER});
+    t.equal(f.calls.identities, 0);
+    t.equal(f.calls.admissions, 0);
+    t.equal(f.calls.owner.length, 0);
+    t.equal(f.inFlight.size, 0);
+  });
+
+  test(`${ingress} requires every own field under an altered Array.every`, async (t) => {
+    const f = ingressFixture(ingress);
+    const authority = frozenMissingLeaderToken(selectedAuthority());
+    let pending;
+    try {
+      Array.prototype.every = function(callback, receiver) {
+        return isAuthorityFieldList(this) ? true :
+          Reflect.apply(originalArrayEvery, this, [callback, receiver]);
+      };
+      pending = f.read(authority);
+    } finally {
+      Array.prototype.every = originalArrayEvery;
+    }
+    await t.rejects(pending, {message: TOKEN_REQUIRED});
+    t.equal(f.calls.identities, 0);
+    t.equal(f.calls.admissions, 0);
+    t.equal(f.calls.owner.length, 0);
+    t.equal(f.inFlight.size, 0);
+  });
+}
+
+test('gateway compares explicit intent under an altered Array.some', async (t) => {
+  const f = ingressFixture('gateway');
+  const authority = selectedAuthority();
+  let pending;
+  try {
+    Array.prototype.some = function(callback, receiver) {
+      if (this[0] === 'purpose' && this[1] === 'readProfile') return false;
+      return Reflect.apply(originalArraySome, this, [callback, receiver]);
+    };
+    pending = f.read(authority, {leaderMode: LEADER.ANY});
+  } finally {
+    Array.prototype.some = originalArraySome;
+  }
+  await t.rejects(pending, {code: CONTRADICTION});
+  t.equal(f.calls.identities, 0);
+  t.equal(f.calls.admissions, 0);
+  t.equal(f.calls.owner.length, 0);
+  t.equal(f.inFlight.size, 0);
+});
+
+test('authority construction validates explicit fields under an altered Array iterator', (t) => {
+  let error;
+  try {
+    Array.prototype[Symbol.iterator] = hideAuthorityFields;
+    buildControlPlaneReadAuthority({authoritativeReadMode: MODE.OWNER_RPC_REQUIRED,
+      readProfile: 'unknown-read-profile'});
+  } catch (caught) {
+    error = caught;
+  } finally {
+    Array.prototype[Symbol.iterator] = originalArrayIterator;
+  }
+  t.equal(error?.code, CONTRADICTION);
   t.end();
 });
