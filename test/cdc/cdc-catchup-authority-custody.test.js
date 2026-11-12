@@ -379,3 +379,88 @@ for (const dependency of ['tables', 'maxAttemptsPerTable', 'now', 'timeSource'])
       await assertCompleteOwnerHealing(f, selectedAuthority());
     });
 }
+
+
+for (const mutationStage of ['row repair', 'absence sweep']) {
+  test(`catchup retains the original witness through a reentrant ${mutationStage} callback`,
+    async (t) => {
+      const f = fixture(t);
+      const authority = selectedAuthority();
+      const first = {...ROW, address: 'witness-owned-row'};
+      const second = {node_id: 'catchup-witness-second-row', status: 'active', updated_at: 10};
+      const answer = ownerAnswer({rows: [first, second]});
+      const originalWitness = {...answer.readAuthorityWitness};
+      const sourceGeneration = f.cache.sourceOrder.tableGeneration(TABLE);
+      const repairTimes = [];
+      const sweepTimes = [];
+      const receipts = [];
+      let callbackCount = 0;
+      f.setAnswer(answer);
+
+      const repair = f.service.applyAuthoritativeCacheRepair;
+      f.service.applyAuthoritativeCacheRepair = function(...args) {
+        repairTimes.push(args[4]?.authoritativeObservedAtMs);
+        return Reflect.apply(repair, this, args);
+      };
+      const sweep = f.service.applyAuthoritativeCacheSweep;
+      f.service.applyAuthoritativeCacheSweep = function(...args) {
+        sweepTimes.push(args[2]?.authoritativeObservedAtMs);
+        return Reflect.apply(sweep, this, args);
+      };
+      const record = f.cache.recordAuthoritativeObservation;
+      f.cache.recordAuthoritativeObservation = function(tableName, receipt) {
+        if (receipt.causeId === 'cdc-authoritative-catchup') receipts.push({...receipt});
+        return Reflect.apply(record, this, [tableName, receipt]);
+      };
+      const mutationKey = mutationStage === 'row repair' ? ROW.node_id : UNSEEN_ROW.node_id;
+      const listener = (tableName, _operation, row) => {
+        if (tableName !== TABLE || row.node_id !== mutationKey || callbackCount !== 0) return;
+        callbackCount += 1;
+        Object.assign(answer.readAuthorityWitness, {
+          observedAtMs: NOW + 100000,
+          term: 99,
+          appliedIndex: 999,
+          commitIndex: 999,
+          partitionId: 'foreign-witness-partition',
+          servingNodeId: 'foreign-witness-node',
+          servingReplicaId: 'foreign-witness-replica',
+          role: 'follower',
+        });
+      };
+      f.cache.onCacheApplyChange(listener);
+      t.after(() => f.cache.offCacheApplyChange(listener));
+
+      const summary = await f.run({readAuthority: authority});
+      assert.equal(callbackCount, 1, 'an actual cache apply callback changes the borrowed witness');
+      assert.equal(f.calls.rpc.length, 1, 'the original selected owner actually answered');
+      assert.deepEqual(repairTimes, [NOW, NOW], 'every row uses the admitted observation time');
+      assert.deepEqual(sweepTimes, [NOW], 'absence uses that same original observation');
+      assert.deepEqual(receipts, [{sourceGeneration, observedAtMs: NOW,
+        term: originalWitness.term, appliedIndex: originalWitness.appliedIndex,
+        commitIndex: originalWitness.commitIndex, servingNodeId: originalWitness.servingNodeId,
+        partitionId: originalWitness.partitionId, causeId: 'cdc-authoritative-catchup'}],
+      'the published receipt retains the original serving evidence');
+      assert.equal(summary.tablesHydrated, 1);
+      assert.equal(summary.rowsApplied, 2);
+      assert.equal(summary.rowsSwept, 1);
+      assert.deepEqual(f.cache.get(TABLE, first.node_id), first);
+      assert.deepEqual(f.cache.get(TABLE, second.node_id), second);
+      assert.equal(f.cache.get(TABLE, UNSEEN_ROW.node_id), undefined);
+      assert.equal(f.cache.getLastAuthoritativeObservedAtMs(TABLE), NOW);
+      assert.equal(f.calls.rpc[0][6].readAuthority, authority);
+      assert.equal(f.calls.local, 0);
+      assert.equal(f.calls.sql, 0);
+      assert.equal(f.clock.pendingTimerCount(), 0);
+
+      f.cache.offCacheApplyChange(listener);
+      f.setAnswer(ownerAnswer({rows: [first, second],
+        readAuthorityWitness: {...originalWitness, observedAtMs: NOW + 1}}));
+      const progressed = await f.run({readAuthority: authority});
+      assert.equal(progressed.tablesHydrated, 1,
+        'a later genuine owner observation is not fenced by the mutated future stamp');
+      assert.deepEqual(progressed.tablesFailed, []);
+      assert.equal(f.cache.getLastAuthoritativeObservedAtMs(TABLE), NOW + 1);
+      assert.equal(f.calls.rpc.length, 2);
+      assert.equal(f.calls.rpc[1][6].readAuthority, authority);
+    });
+}

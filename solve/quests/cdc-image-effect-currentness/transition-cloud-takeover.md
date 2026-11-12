@@ -970,3 +970,29 @@ this lane will consume its reviewed frozen {rows, keys} through indexed repair a
 sweep paths. Capturing data supplies no authority or completeness on its own.
 
 Root independently read and bounded-APPROVED blob`f0ff069fc0a3abb90a96b1d088782760203d3f7c` for its first lab original. This approves the19 new control obligations and unchanged8a source seal, not any result or candidate correction. Later assertions remain unmeasured until the full original stream establishes their engagement.
+
+
+## Retained witness across cache callbacks: tests-only extension
+
+Source inspection found a coupled retained-evidence boundary: RPC normalization
+keeps the answer's original readAuthorityWitness object, the native partition
+producer returns a mutable plain witness, and catchup rereads it after row and
+absence callbacks. A retained row vector alone cannot protect that observation
+from a callback changing its time or serving identity between admission and
+publication. Root approved two discriminators before the consumer correction.
+
+The actual cache onCacheApplyChange callback mutates the borrowed witness during
+one real row repair or one real absence deletion. Each control first requires the
+callback and original owner read to engage, then checks original repair and sweep
+times, original published receipt fields, actual cache state, and later useful
+progress from the same owner at a timestamp below the injected future stamp. The
+controlled owner ports are explicit; this is not native consensus-serving proof.
+Upstream zero-accessor/proxy witness admission remains a separate boundary, since
+these controls supply a plain mutable witness and measure retention after admission.
+
+The extension preserves all32 prior catchup controls on the unchanged8a source.
+Coordinator confirms the e260 packet was not submitted and holds the prepared
+normal-output request for this reviewed extension; original e260,8a and3076 remain
+immutable history. No execution or candidate result is claimed.
+
+Root independently read both controls and the real cache apply/sweep listener owners, and bounded-APPROVED test blob`57334d12348c2352d1ac9a8ac330f484be823057` for first-original lab measurement. This approves engagement and intended obligations only, not runtime success or source correction.
