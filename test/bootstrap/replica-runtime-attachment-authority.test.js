@@ -57,6 +57,155 @@ function restoreFixture(t, beforeAuthoritativeRead) {
   return {service, row, store, owner, handler, options};
 }
 
+async function publishedRestore(t, f) {
+  const admission = await assertDurableRejoinStorageAdmission(f.owner, f.options);
+  const partition = new PartitionService({...f.options,
+    runtimePublication: createReplicaRuntimePublication(f.handler, admission.row,
+      admission.admission), resolveHandlerRetirementLane: () => f.owner});
+  bindRegisteredReplicaHandler(partition, {nodeId: f.row.node_id,
+    resolveHandlerRetirementLane: () => f.owner});
+  const shutdown = partition.shutdown.bind(partition);
+  t.teardown(() => shutdown());
+  f.service.trackJoinPartitionReplica(f.row.replica_id, f.row.partition_id, partition,
+    {...admission, handler: f.handler, hostServices: f.service.partitionServices});
+  return {partition, shutdown};
+}
+
+test('held join shutdown preserves a canonically published successor in every map', async (t) => {
+  const f = restoreFixture(t);
+  const {partition, shutdown} = await publishedRestore(t, f);
+  const expected = captureReplicaRuntimeObservation(f.handler, f.row.replica_id);
+  const successor = new PartitionService({...f.options,
+    runtimePublication: createReplicaRuntimePublication(f.handler, expected.sourceEvidence,
+      expected.admission, partition), resolveHandlerRetirementLane: () => f.owner});
+  bindRegisteredReplicaHandler(successor, {nodeId: f.row.node_id,
+    resolveHandlerRetirementLane: () => f.owner});
+  t.teardown(() => successor.shutdown());
+  const entered = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  partition.shutdown = async () => {
+    entered.resolve();
+    await release.promise;
+    return shutdown();
+  };
+  const stopping = f.service.stopJoinPartitionReplica({}, {replicaOptions: f.options});
+  await entered.promise;
+  let successorRecord;
+  try {
+    successorRecord = f.handler.replaceLocalReplicaService(f.row.replica_id, successor,
+      expected, f.service.partitionServices);
+  } finally {
+    release.resolve();
+  }
+  await stopping;
+  t.equal(partition.isShutdown, true, 'the original exact runtime completed shutdown');
+  t.equal(f.service.partitionServices.get(f.row.replica_id), successor);
+  t.equal(f.handler.localServices.get(f.row.replica_id), successor);
+  t.equal(f.handler.localReplicas.get(f.row.replica_id), successorRecord,
+    'old completion cannot remove the replacement publication record');
+  t.equal(f.handler.pendingRuntimeShutdowns.has(partition), false);
+});
+
+test('unchanged join shutdown releases its exact publication and all owned map entries', async (t) => {
+  const f = restoreFixture(t);
+  const {partition} = await publishedRestore(t, f);
+  await f.service.stopJoinPartitionReplica({}, {replicaOptions: f.options});
+  t.equal(partition.isShutdown, true);
+  t.equal(f.service.partitionServices.has(f.row.replica_id), false);
+  t.equal(f.handler.localServices.has(f.row.replica_id), false);
+  t.equal(f.handler.localReplicas.has(f.row.replica_id), false);
+  t.equal(f.handler.pendingRuntimeShutdowns.has(partition), false);
+});
+
+test('failed join shutdown retains exact custody and retries after serving has stopped', async (t) => {
+  const f = restoreFixture(t);
+  const {partition, shutdown} = await publishedRestore(t, f);
+  const failure = new Error('controlled release fails after transport retirement');
+  let attempts = 0;
+  partition.shutdown = async () => {
+    attempts += 1;
+    await shutdown();
+    if (attempts === 1) throw failure;
+  };
+  await t.rejects(f.service.stopJoinPartitionReplica({}, {replicaOptions: f.options}), failure);
+  t.equal(partition.isShutdown, true, 'serving liveness is distinct from unfinished release');
+  t.equal(f.handler.pendingRuntimeShutdowns.has(partition), true,
+    'the existing exact-object owner retains the failed join release');
+  t.equal(f.service.partitionServices.get(f.row.replica_id), partition);
+  await f.service.stopJoinPartitionReplica({}, {replicaOptions: f.options});
+  t.equal(attempts, 2, 'one explicit retry continues the retained release');
+  t.equal(f.handler.pendingRuntimeShutdowns.has(partition), false);
+  t.equal(f.service.partitionServices.has(f.row.replica_id), false);
+  t.equal(f.handler.localServices.has(f.row.replica_id), false);
+  t.equal(f.handler.localReplicas.has(f.row.replica_id), false);
+});
+
+test('same-runtime concurrent cleanup shares its original pending custody cell', async (t) => {
+  const f = restoreFixture(t);
+  const {partition, shutdown} = await publishedRestore(t, f);
+  const entered = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  let attempts = 0;
+  partition.shutdown = async () => {
+    attempts += 1;
+    entered.resolve();
+    await release.promise;
+    return shutdown();
+  };
+  const first = f.handler.fenceFailedReplicaCreateRuntime(f.row.replica_id,
+    f.row.partition_id, partition);
+  await entered.promise;
+  const retained = f.handler.pendingRuntimeShutdowns.get(partition);
+  const second = f.handler.fenceFailedReplicaCreateRuntime(f.row.replica_id,
+    f.row.partition_id, partition);
+  t.equal(f.handler.pendingRuntimeShutdowns.get(partition), retained,
+    'concurrent entry cannot replace the cell owned by the first release');
+  t.equal(attempts, 1, 'one exact runtime has one in-flight shutdown attempt');
+  release.resolve();
+  t.same(await Promise.all([first, second]), [true, true]);
+  t.equal(f.handler.pendingRuntimeShutdowns.has(partition), false);
+});
+
+test('old exact-runtime cleanup cannot clear a replaced pending cell', async (t) => {
+  const f = restoreFixture(t);
+  const {partition, shutdown} = await publishedRestore(t, f);
+  const entered = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  partition.shutdown = async () => {
+    entered.resolve();
+    await release.promise;
+    return shutdown();
+  };
+  const pending = f.handler.fenceFailedReplicaCreateRuntime(f.row.replica_id,
+    f.row.partition_id, partition);
+  await entered.promise;
+  const retained = f.handler.pendingRuntimeShutdowns.get(partition);
+  const replacement = Object.freeze({...retained});
+  f.handler.pendingRuntimeShutdowns.set(partition, replacement);
+  release.resolve();
+  await t.rejects(pending, {code: 'REPLICA_RUNTIME_CLEANUP_CUSTODY_CHANGED'});
+  t.equal(f.handler.pendingRuntimeShutdowns.get(partition), replacement,
+    'the earlier completion never deletes a later cell for the same object');
+  t.equal(f.handler.localServices.get(f.row.replica_id), partition,
+    'changed cleanup custody grants no map deletion');
+  t.equal(await f.handler.fenceFailedReplicaCreateRuntime(f.row.replica_id,
+    f.row.partition_id, partition), true, 'explicit re-entry settles the retained replacement cell');
+});
+
+test('missing shutdown method is a retained release failure', async (t) => {
+  const f = restoreFixture(t);
+  const {partition, shutdown} = await publishedRestore(t, f);
+  partition.shutdown = undefined;
+  await t.rejects(f.handler.fenceFailedReplicaCreateRuntime(f.row.replica_id,
+    f.row.partition_id, partition), {code: 'REPLICA_RUNTIME_SHUTDOWN_REQUIRED'});
+  t.equal(f.handler.pendingRuntimeShutdowns.has(partition), true);
+  t.equal(f.handler.localServices.get(f.row.replica_id), partition);
+  partition.shutdown = shutdown;
+  t.equal(await f.handler.fenceFailedReplicaCreateRuntime(f.row.replica_id,
+    f.row.partition_id, partition), true);
+  t.equal(f.handler.pendingRuntimeShutdowns.has(partition), false);
+});
+
 test('join attachment retains the exact restored ACTIVE source without another activation',
   async (t) => {
     const f = restoreFixture(t);

@@ -13,10 +13,19 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {ReplicaStateMachine} from
   '../../src/node/replica-state-machine.js';
+import {ReplicaHandler} from '../../src/node/replica-handler.js';
+import {EventEmitter} from 'node:events';
+import {assertDurableRejoinStorageAdmission} from
+  '../../src/bootstrap/durable-rejoin-storage-admission.js';
+import {createReplicaRuntimePublication} from
+  '../../src/node/replica-runtime-publication.js';
+import {attachPartitionRuntimePublication} from
+  '../../src/partition/partition-runtime-publication.js';
+import {bindRegisteredReplicaHandler} from '../test-helpers/replica-handler-identity-fixture.js';
 import {TABLES} from '../../src/constants/index.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
-import {createCanonicalLifecycleServiceRow} from
+import {createLifecycleStateStore} from
   '../test-helpers/lifecycle-state-store.js';
 
 // Initialize configuration and logging for tests
@@ -39,47 +48,66 @@ export function initializeTestEnvironment() {
 }
 
 /**
- * Install the minimum real lifecycle owner used by node-joining fixtures.
- * The fixture writer exposes the same authoritative point-read boundary that
- * production activation consumes; tests may observe successful activation,
- * but cannot replace the owner's decision with a direct status-write stub.
+ * Install the real restore/lifecycle owners used by join-workflow fixtures.
+ * Full declared ACTIVE rows are authoritative input. Controlled runtimes
+ * acquire production restore admission before construction; this is workflow
+ * evidence, not proof of native durable opening.
  * @param {Object} service NodeJoiningService fixture.
  * @param {Object} systemTableCache Canonical row fixture.
- * @param {Function} onActivated Successful activation observer.
- * @return {ReplicaStateMachine} Installed lifecycle owner.
+ * @param {Function} onConfirmed Successful exact-runtime confirmation observer.
+ * @return {Object} Installed lifecycle owner and authoritative store.
  */
-export function installNodeJoiningReplicaStateMachine(
+export function installNodeJoiningRestoreOwner(
   service,
   systemTableCache,
-  onActivated = () => {},
+  onConfirmed = () => {},
 ) {
-  const writer = service.cdcIntegrationService;
-  if (!writer || typeof systemTableCache?.get !== 'function') {
-    throw new Error(
-      'Node joining lifecycle fixture requires writer and canonical cache',
-    );
-  }
-  writer.readAuthoritativeRows = async (_tableName, _sql, parameters) => {
-    const replicaId = parameters?.[0];
-    const row = systemTableCache.get(TABLES.SERVICES, replicaId);
-    return {
-      success: true,
-      rows: row ? [createCanonicalLifecycleServiceRow(row)] : [],
-    };
-  };
+  const store = createLifecycleStateStore({
+    services: systemTableCache.getAll(TABLES.SERVICES),
+    partitions: systemTableCache.getAll(TABLES.PARTITIONS),
+    preserveRowsExactly: true,
+  });
+  const timeSource = new VirtualTimeSource();
   const replicaStateMachine = new ReplicaStateMachine({
     nodeId: service.nodeId,
-    controlPlaneSystemTableGateway: {},
+    ownerIncarnation: service.bootIncarnation,
+    systemTableCache,
+    controlPlaneSystemTableGateway: store.gateway,
+    timeSource,
   });
-  const activateRegisteredReplica =
-    replicaStateMachine.activateRegisteredReplica.bind(replicaStateMachine);
-  replicaStateMachine.activateRegisteredReplica = async (options) => {
-    const row = await activateRegisteredReplica(options);
-    onActivated(options, row);
-    return row;
-  };
   service.replicaStateMachine = replicaStateMachine;
-  return replicaStateMachine;
+  service.replicaHandler = new ReplicaHandler({nodeId: service.nodeId,
+    ownerIncarnation: service.bootIncarnation, replicaStateMachine,
+    systemTableCache, controlPlaneSystemTableGateway: store.gateway,
+    cdcIntegrationService: {},
+    createPartitionService: () => {
+      throw new Error('restore workflow fixture constructs through its admitted factory');
+    }, timeSource});
+  const confirm = service.confirmDurableRejoinPartitionRuntimes.bind(service);
+  service.confirmDurableRejoinPartitionRuntimes = async (replicaIds) => {
+    const result = await confirm(replicaIds);
+    for (const replicaId of replicaIds) onConfirmed({replicaId});
+    return result;
+  };
+  return Object.freeze({replicaStateMachine, store});
+}
+
+export async function publishNodeJoiningRestoredRuntime(service, options, runtimeProperties = {}) {
+  const handler = service.replicaHandler;
+  const owner = service.replicaStateMachine;
+  const admission = await assertDurableRejoinStorageAdmission(owner, options);
+  const publication = createReplicaRuntimePublication(handler, admission.row, admission.admission);
+  const runtime = Object.assign(new EventEmitter(), runtimeProperties, {
+    replicaId: options.replicaId, partitionId: options.partitionId, nodeId: service.nodeId,
+    tableName: options.tableName, initialized: true, isShutdown: false, raft: {},
+  });
+  attachPartitionRuntimePublication(runtime, publication);
+  publication.assertCurrent(runtime);
+  bindRegisteredReplicaHandler(runtime, {nodeId: service.nodeId,
+    resolveHandlerRetirementLane: () => owner});
+  service.trackJoinPartitionReplica(options.replicaId, options.partitionId, runtime,
+    {...admission, handler, hostServices: service.partitionServices});
+  return runtime;
 }
 
 /**

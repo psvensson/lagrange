@@ -17,11 +17,11 @@ import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {
   establishJoinReplicaLifecycleOwner,
   initializeTestEnvironment,
-  installNodeJoiningReplicaStateMachine,
+  installNodeJoiningRestoreOwner,
+  publishNodeJoiningRestoredRuntime,
 } from './node-joining-service-test-support.js';
-import {
-  PARTITION_SERVICE_ACTIVATION_ERROR,
-} from '../../src/bootstrap/shared/partition-service-activation.js';
+import {REPLICA_RUNTIME_OBSERVATION_CHANGED} from
+  '../../src/node/replica-state-machine-serialization.js';
 import {
 } from '../../src/control-plane/control-plane-kernel-ingress.js';
 import {
@@ -120,7 +120,11 @@ function createDurableRejoinSystemTableCache() {
       status: SERVICE_STATUS.ACTIVE,
       address: 'durable-join-node/partition/nodes-p1-r1',
       created_at: 100,
+      state_entered_at: 100,
       updated_at: 100,
+      group_id: null,
+      cleanup_token: null,
+      create_attempt_token: null,
     }, {
       service_id: 'nodes-p1-r2',
       replica_id: 'nodes-p1-r2',
@@ -130,7 +134,11 @@ function createDurableRejoinSystemTableCache() {
       status: SERVICE_STATUS.ACTIVE,
       address: 'peer-node-2/partition/nodes-p1-r2',
       created_at: 100,
+      state_entered_at: 100,
       updated_at: 100,
+      group_id: null,
+      cleanup_token: null,
+      create_attempt_token: null,
     }, {
       service_id: 'nodes-p1-r3',
       replica_id: 'nodes-p1-r3',
@@ -140,7 +148,11 @@ function createDurableRejoinSystemTableCache() {
       status: SERVICE_STATUS.ACTIVE,
       address: 'peer-node-3/partition/nodes-p1-r3',
       created_at: 100,
+      state_entered_at: 100,
       updated_at: 100,
+      group_id: null,
+      cleanup_token: null,
+      create_attempt_token: null,
     }]],
   ]);
   return {
@@ -906,27 +918,14 @@ test('NodeJoiningService - durable rejoin restore queues local partition replica
           address.split('/').pop())?.transportHandler || null : null;
       },
     };
-    service.cdcIntegrationService = {
-      updateSystemTableRow: async (_tableName, predicate) => {
-        calls.push(`activate:${predicate.service_id}`);
-      },
-      insertSystemTableRow(...args) {
-        return insertViaUpsert(this, args);
-      },
-      upsertSystemTableRow: async (_tableName, row) => {
-        calls.push(`activate:${row.service_id}`);
-      },
-    };
+    service.cdcIntegrationService = {};
     service.initializeJoiningLifecycleOwners = async () => {
       calls.push('init');
     };
     service.triggerJoinReconciler = async () => {
       calls.push('reconcile');
-      for (const replicaId of service.joinReplicaOptionsByServiceId.keys()) {
-        service.partitionServices.set(replicaId, {
-          initialized: true,
-          transportHandler: () => (null),
-          partitionId: 'nodes-p1',
+      for (const [replicaId, options] of service.joinReplicaOptionsByServiceId) {
+        await publishNodeJoiningRestoredRuntime(service, options, {
           startElection() {
             calls.push(`start:${replicaId}`);
           },
@@ -935,10 +934,10 @@ test('NodeJoiningService - durable rejoin restore queues local partition replica
     };
 
     const systemTableCache = createDurableRejoinSystemTableCache();
-    installNodeJoiningReplicaStateMachine(
+    const restoreFixture = installNodeJoiningRestoreOwner(
       service,
       systemTableCache,
-      ({replicaId}) => calls.push(`activate:${replicaId}`),
+      ({replicaId}) => calls.push(`confirm:${replicaId}`),
     );
 
     const restored =
@@ -948,9 +947,14 @@ test('NodeJoiningService - durable rejoin restore queues local partition replica
 
     t.same(
       calls,
-      ['init', 'reconcile', 'activate:nodes-p1-r1', 'start:nodes-p1-r1'],
-      'durable rejoin should activate restored partition services before starting their elections',
+      ['init', 'reconcile', 'confirm:nodes-p1-r1', 'start:nodes-p1-r1'],
+      'durable rejoin confirms the exact restored ACTIVE runtime before starting elections',
     );
+    t.equal(restoreFixture.store.mutations.length, 0,
+      'restoration confirms original ACTIVE authority without a fabricated INSERT activation');
+    t.equal(service.replicaHandler.getTrackedService('nodes-p1-r1'),
+      service.partitionServices.get('nodes-p1-r1'),
+      'the host and lifecycle handler retain the same canonically published runtime');
     t.same(
       restored.map((plan) => plan.replicaId),
       ['nodes-p1-r1'],
@@ -980,7 +984,7 @@ test('NodeJoiningService - durable rejoin restore queues local partition replica
     );
   });
 
-test('NodeJoiningService - durable rejoin activation debt blocks elections ' +
+test('NodeJoiningService - durable rejoin runtime confirmation debt blocks elections ' +
   'and resumes through workflow re-entry', async (t) => {
   initializeTestEnvironment();
 
@@ -993,55 +997,56 @@ test('NodeJoiningService - durable rejoin activation debt blocks elections ' +
     dataDir: '/tmp/durable-join-data',
   });
   const calls = [];
-  let activationAttempt = 0;
+  let confirmationAttempt = 0;
   service.initializeJoiningLifecycleOwners = async () => {
     calls.push('init');
   };
   service.triggerJoinReconciler = async () => {
     calls.push('reconcile');
-    service.partitionServices.set('nodes-p1-r1', {
-      initialized: true,
-      partitionId: 'nodes-p1',
-      startElection() {
-        calls.push('start:nodes-p1-r1');
-      },
-    });
+    if (!service.partitionServices.has('nodes-p1-r1')) {
+      await publishNodeJoiningRestoredRuntime(service,
+        service.joinReplicaOptionsByServiceId.get('nodes-p1-r1'), {
+          startElection() { calls.push('start:nodes-p1-r1'); },
+        });
+    }
   };
+  const systemTableCache = createDurableRejoinSystemTableCache();
+  installNodeJoiningRestoreOwner(service, systemTableCache);
+  const confirm = service.confirmDurableRejoinPartitionRuntimes.bind(service);
   service.confirmDurableRejoinPartitionRuntimes = async () => {
-    activationAttempt += 1;
-    calls.push(`activate:${activationAttempt}`);
-    if (activationAttempt === 1) {
-      const error = new Error('activation owner deferred');
-      error.code = 'REPLICA_ACTIVATION_DURABILITY_DEFERRED';
+    confirmationAttempt += 1;
+    calls.push(`confirm:${confirmationAttempt}`);
+    if (confirmationAttempt === 1) {
+      // Workflow interruption seam; source admission and publication remain real.
+      const error = new Error('runtime confirmation deferred');
+      error.code = 'REPLICA_RUNTIME_CONFIRMATION_DEFERRED';
       error.deferRetry = true;
       throw error;
     }
-    return 1;
+    return confirm(['nodes-p1-r1']);
   };
-
-  const systemTableCache = createDurableRejoinSystemTableCache();
 
   await t.rejects(
     service.restoreDurableRejoinLocalPartitionServices(systemTableCache),
-    {code: 'REPLICA_ACTIVATION_DURABILITY_DEFERRED'},
-    'rejoin restore must remain incomplete while activation ownership is deferred',
+    {code: 'REPLICA_RUNTIME_CONFIRMATION_DEFERRED'},
+    'rejoin restore remains incomplete while runtime confirmation is deferred',
   );
   t.equal(calls.includes('start:nodes-p1-r1'), false,
-    'partition election must not start before durable activation succeeds');
+    'partition election must not start before runtime confirmation succeeds');
 
   const restored = await service.restoreDurableRejoinLocalPartitionServices(
     systemTableCache,
   );
 
-  t.equal(activationAttempt, 2,
-    'the existing restore workflow should re-enter the same activation debt');
+  t.equal(confirmationAttempt, 2,
+    'the existing restore workflow re-enters the same confirmation debt');
   t.same(restored.map(({replicaId}) => replicaId), ['nodes-p1-r1']);
   t.equal(calls.filter((call) => call === 'start:nodes-p1-r1').length, 1,
     'successful re-entry should start the election exactly once');
 });
 
 test('NodeJoiningService - durable rejoin restore recreates stale local ' +
-  'partition runtime before activation', async (t) => {
+  'partition runtime before confirmation', async (t) => {
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
@@ -1064,30 +1069,10 @@ test('NodeJoiningService - durable rejoin restore recreates stale local ' +
         address.split('/').pop())?.transportHandler || null : null;
     },
   };
-  service.cdcIntegrationService = {
-    updateSystemTableRow: async (_tableName, predicate) => {
-      calls.push(`activate:${predicate.service_id}`);
-    },
-    insertSystemTableRow(...args) {
-      return insertViaUpsert(this, args);
-    },
-    upsertSystemTableRow: async (_tableName, row) => {
-      calls.push(`activate:${row.service_id}`);
-    },
-  };
-  service.partitionServices.set('nodes-p1-r1', {
-    initialized: false,
-    partitionId: 'nodes-p1',
-    async shutdown() {
-      calls.push('shutdown:nodes-p1-r1');
-    },
-  });
+  service.cdcIntegrationService = {};
   service.createJoinLocalPartitionService = async (options) => {
     calls.push(`create:${options.replicaId}`);
-    service.partitionServices.set(options.replicaId, {
-      initialized: true,
-      transportHandler: () => (null),
-      partitionId: options.partitionId,
+    await publishNodeJoiningRestoredRuntime(service, options, {
       startElection() {
         calls.push(`start:${options.replicaId}`);
       },
@@ -1132,7 +1117,11 @@ test('NodeJoiningService - durable rejoin restore recreates stale local ' +
       status: 'active',
       address: 'durable-join-node/partition/nodes-p1-r1',
       created_at: 100,
+      state_entered_at: 100,
       updated_at: 100,
+      group_id: null,
+      cleanup_token: null,
+      create_attempt_token: null,
     }, {
       service_id: 'nodes-p1-r2',
       replica_id: 'nodes-p1-r2',
@@ -1142,7 +1131,11 @@ test('NodeJoiningService - durable rejoin restore recreates stale local ' +
       status: 'active',
       address: 'peer-node-2/partition/nodes-p1-r2',
       created_at: 100,
+      state_entered_at: 100,
       updated_at: 100,
+      group_id: null,
+      cleanup_token: null,
+      create_attempt_token: null,
     }, {
       service_id: 'nodes-p1-r3',
       replica_id: 'nodes-p1-r3',
@@ -1152,7 +1145,11 @@ test('NodeJoiningService - durable rejoin restore recreates stale local ' +
       status: 'active',
       address: 'peer-node-3/partition/nodes-p1-r3',
       created_at: 100,
+      state_entered_at: 100,
       updated_at: 100,
+      group_id: null,
+      cleanup_token: null,
+      create_attempt_token: null,
     }]],
   ]);
   const systemTableCache = {
@@ -1168,11 +1165,23 @@ test('NodeJoiningService - durable rejoin restore recreates stale local ' +
       ) || null;
     },
   };
-  installNodeJoiningReplicaStateMachine(
+  installNodeJoiningRestoreOwner(
     service,
     systemTableCache,
-    ({replicaId}) => calls.push(`activate:${replicaId}`),
+    ({replicaId}) => calls.push(`confirm:${replicaId}`),
   );
+  const staleRuntime = await publishNodeJoiningRestoredRuntime(service, {
+    replicaId: 'nodes-p1-r1', partitionId: 'nodes-p1', tableName: 'nodes',
+    restoringExistingReplica: true,
+    lifecycleAuthority: systemTableCache.get(TABLES.SERVICES, 'nodes-p1-r1'),
+  }, {
+    async shutdown() {
+      calls.push('shutdown:nodes-p1-r1');
+      this.transport.unregisterExact(this.unifiedAddress, this.transportHandler);
+      this.isShutdown = true;
+    },
+  });
+  staleRuntime.initialized = false;
 
   let restored = null;
   try {
@@ -1190,10 +1199,10 @@ test('NodeJoiningService - durable rejoin restore recreates stale local ' +
       'reconcile',
       'shutdown:nodes-p1-r1',
       'create:nodes-p1-r1',
-      'activate:nodes-p1-r1',
+      'confirm:nodes-p1-r1',
       'start:nodes-p1-r1',
     ],
-    'durable rejoin should rebuild stale runtime before service-row activation',
+    'durable rejoin rebuilds stale runtime before exact restored-runtime confirmation',
   );
   t.same(
     restored.map((plan) => plan.replicaId),
@@ -1228,24 +1237,7 @@ test('NodeJoiningService - durable rejoin restore repairs stale runtime when ' +
         address.split('/').pop())?.transportHandler || null : null;
     },
   };
-  service.cdcIntegrationService = {
-    updateSystemTableRow: async (_tableName, predicate) => {
-      calls.push(`activate:${predicate.service_id}`);
-    },
-    insertSystemTableRow(...args) {
-      return insertViaUpsert(this, args);
-    },
-    upsertSystemTableRow: async (_tableName, row) => {
-      calls.push(`activate:${row.service_id}`);
-    },
-  };
-  service.partitionServices.set(replicaId, {
-    initialized: false,
-    partitionId,
-    async shutdown() {
-      calls.push(`shutdown:${replicaId}`);
-    },
-  });
+  service.cdcIntegrationService = {};
   service.initializeJoiningLifecycleOwners = async () => {
     calls.push('init');
   };
@@ -1254,10 +1246,7 @@ test('NodeJoiningService - durable rejoin restore repairs stale runtime when ' +
   };
   service.createJoinLocalPartitionService = async (options) => {
     calls.push(`create:${options.replicaId}`);
-    service.partitionServices.set(options.replicaId, {
-      initialized: true,
-      transportHandler: () => (null),
-      partitionId: options.partitionId,
+    await publishNodeJoiningRestoredRuntime(service, options, {
       startElection() {
         calls.push(`start:${options.replicaId}`);
       },
@@ -1278,7 +1267,11 @@ test('NodeJoiningService - durable rejoin restore repairs stale runtime when ' +
       status: 'active',
       address: 'peer-node-1/partition/sql_transaction_participants-p1-r1',
       created_at: 100,
+      state_entered_at: 100,
       updated_at: 100,
+      group_id: null,
+      cleanup_token: null,
+      create_attempt_token: null,
     },
     {
       service_id: 'sql_transaction_participants-p1-r2',
@@ -1289,7 +1282,11 @@ test('NodeJoiningService - durable rejoin restore repairs stale runtime when ' +
       status: 'active',
       address: 'peer-node-2/partition/sql_transaction_participants-p1-r2',
       created_at: 100,
+      state_entered_at: 100,
       updated_at: 100,
+      group_id: null,
+      cleanup_token: null,
+      create_attempt_token: null,
     },
     {
       service_id: 'sql_transaction_participants-p1-r3',
@@ -1300,7 +1297,11 @@ test('NodeJoiningService - durable rejoin restore repairs stale runtime when ' +
       status: 'active',
       address: 'peer-node-3/partition/sql_transaction_participants-p1-r3',
       created_at: 100,
+      state_entered_at: 100,
       updated_at: 100,
+      group_id: null,
+      cleanup_token: null,
+      create_attempt_token: null,
     },
     {
       service_id: 'sql_transaction_participants-p1-r4',
@@ -1311,7 +1312,11 @@ test('NodeJoiningService - durable rejoin restore repairs stale runtime when ' +
       status: 'active',
       address: 'peer-node-4/partition/sql_transaction_participants-p1-r4',
       created_at: 100,
+      state_entered_at: 100,
       updated_at: 100,
+      group_id: null,
+      cleanup_token: null,
+      create_attempt_token: null,
     },
     {
       service_id: replicaId,
@@ -1322,7 +1327,11 @@ test('NodeJoiningService - durable rejoin restore repairs stale runtime when ' +
       status: 'active',
       address: `durable-join-node/partition/${replicaId}`,
       created_at: 100,
+      state_entered_at: 100,
       updated_at: 100,
+      group_id: null,
+      cleanup_token: null,
+      create_attempt_token: null,
     },
   ];
   const rowsByTable = new Map([
@@ -1355,12 +1364,24 @@ test('NodeJoiningService - durable rejoin restore repairs stale runtime when ' +
       ) || null;
     },
   };
-  installNodeJoiningReplicaStateMachine(
+  installNodeJoiningRestoreOwner(
     service,
     systemTableCache,
-    ({replicaId: activatedReplicaId}) =>
-      calls.push(`activate:${activatedReplicaId}`),
+    ({replicaId: confirmedReplicaId}) =>
+      calls.push(`confirm:${confirmedReplicaId}`),
   );
+  const staleRuntime = await publishNodeJoiningRestoredRuntime(service, {
+    replicaId, partitionId, tableName: 'sql_transaction_participants',
+    restoringExistingReplica: true,
+    lifecycleAuthority: systemTableCache.get(TABLES.SERVICES, replicaId),
+  }, {
+    async shutdown() {
+      calls.push(`shutdown:${replicaId}`);
+      this.transport.unregisterExact(this.unifiedAddress, this.transportHandler);
+      this.isShutdown = true;
+    },
+  });
+  staleRuntime.initialized = false;
 
   const restored = await service.restoreDurableRejoinLocalPartitionServices(
     systemTableCache,
@@ -1373,7 +1394,7 @@ test('NodeJoiningService - durable rejoin restore repairs stale runtime when ' +
       'reconcile',
       `shutdown:${replicaId}`,
       `create:${replicaId}`,
-      `activate:${replicaId}`,
+      `confirm:${replicaId}`,
       `start:${replicaId}`,
     ],
     'restore should repair stale runtime even when reconciliation is silent',
@@ -1403,21 +1424,14 @@ test('NodeJoiningService - durable rejoin restore fails closed until restored pa
         return false;
       },
     };
-    service.cdcIntegrationService = {
-      updateSystemTableRow: async () => ({success: true}),
-      insertSystemTableRow(...args) {
-        return insertViaUpsert(this, args);
-      },
-      upsertSystemTableRow: async () => ({success: true}),
-    };
+    service.cdcIntegrationService = {};
     service.initializeJoiningLifecycleOwners = async () => {};
     service.triggerJoinReconciler = async () => {
-      for (const replicaId of service.joinReplicaOptionsByServiceId.keys()) {
-        service.partitionServices.set(replicaId, {
-          initialized: true,
-          partitionId: 'nodes-p1',
+      for (const options of service.joinReplicaOptionsByServiceId.values()) {
+        const runtime = await publishNodeJoiningRestoredRuntime(service, options, {
           startElection() {},
         });
+        runtime.transport.unregisterExact(runtime.unifiedAddress, runtime.transportHandler);
       }
     };
 
@@ -1447,6 +1461,12 @@ test('NodeJoiningService - durable rejoin restore fails closed until restored pa
         partition_id: 'nodes-p1',
         status: 'active',
         address: 'durable-join-node/partition/nodes-p1-r1',
+        created_at: 100,
+        state_entered_at: 100,
+        updated_at: 100,
+        group_id: null,
+        cleanup_token: null,
+        create_attempt_token: null,
       }]],
     ]);
     const systemTableCache = {
@@ -1463,13 +1483,11 @@ test('NodeJoiningService - durable rejoin restore fails closed until restored pa
       },
     };
 
+    installNodeJoiningRestoreOwner(service, systemTableCache);
     await t.rejects(
       service.restoreDurableRejoinLocalPartitionServices(systemTableCache),
-      new Error(
-        PARTITION_SERVICE_ACTIVATION_ERROR
-          .replicaHandlerRequired('nodes-p1-r1'),
-      ),
-      'durable rejoin should fail closed until restored partition handlers are routable through the shared activation owner',
+      {code: REPLICA_RUNTIME_OBSERVATION_CHANGED},
+      'durable rejoin refuses when its exact restored transport handler has retired',
     );
   });
 

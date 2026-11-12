@@ -170,9 +170,13 @@ test('failed map publication retains a refused exact runtime for cleanup', async
 test('reentrant owner replacement cannot finish publication under the new lifetime', async (t) => {
   const f = await publicationFixture(t);
   const service = f.construct();
+  const replacementOwner = new ReplicaStateMachine({nodeId: f.row.node_id,
+    ownerIncarnation: 2, systemTableCache: f.store.cache,
+    controlPlaneSystemTableGateway: f.store.gateway});
+  t.teardown(() => replacementOwner.clear());
   const hostServices = new Map();
   hostServices.set = (key, value) => {
-    f.handler.ownerIncarnation += 1;
+    f.handler.replicaStateMachine = replacementOwner;
     return Map.prototype.set.call(hostServices, key, value);
   };
   t.throws(() => f.publish(service, f.row, null, hostServices), REFUSED);
