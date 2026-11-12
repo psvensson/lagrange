@@ -63,24 +63,15 @@ function attachLocalMutationReadinessWake(rebalancer, fire) {
       rebalancer.resolveLocalMutationReadinessWake(fire);
     });
   };
-  // Kept as before this repair: compositions without a cache change seam or
-  // a planning stream (many test fakes) arm no listener for it, and the
-  // wait then ends at its bound, the cadence check.
-  const cache = rebalancer.systemTableCache;
-  const detachCache = typeof cache?.onCacheChange === 'function' ?
-    attachCacheTables(rebalancer, LOCAL_MUTATION_READINESS_WAKE_TABLES,
-      evaluate) :
-    null;
-  const readiness = rebalancer.controlPlaneReadinessService;
-  const unsubscribe =
-    typeof readiness?.subscribeReadinessPlanningSnapshots === 'function' ?
-      readiness.subscribeReadinessPlanningSnapshots((event) => {
-        if (event.ownerKey === rebalancer.nodeId) evaluate();
-      }) :
-      null;
+  const detachCache = attachCacheTables(rebalancer,
+    LOCAL_MUTATION_READINESS_WAKE_TABLES, evaluate);
+  const unsubscribe = rebalancer.controlPlaneReadinessService
+    .subscribeReadinessPlanningSnapshots((event) => {
+      if (event.ownerKey === rebalancer.nodeId) evaluate();
+    });
   return () => {
-    detachCache?.();
-    unsubscribe?.();
+    detachCache();
+    unsubscribe();
   };
 }
 
