@@ -7,11 +7,16 @@ import {EventEmitter} from 'node:events';
 import {test} from 'node:test';
 import {INITIAL_PARTITION_IDS} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {CACHE_LOG_MSG} from '../../src/cache/cache-constants.js';
 import {installSourceImage} from '../../src/cache/system-table-cache-source-image.js';
 import {SOURCE_EFFECT_STATE} from '../../src/cache/system-table-cache-source-order.js';
 import {captureCdcEvents} from '../../src/cdc/cdc-event-envelope.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
 import {CDC_OPERATION, TABLES} from '../../src/constants/index.js';
+import {CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR,
+  CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE, CONTROL_PLANE_READ_STRATEGY,
+  ControlPlaneSystemTableGateway} from
+  '../../src/control-plane/control-plane-system-table-gateway.js';
 import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
 import {CDCHandler} from '../../src/message-group/cdc-handler.js';
 import {MESSAGE_GROUP_COMMAND_TYPE} from '../../src/message-group/constants.js';
@@ -235,6 +240,51 @@ test('late complete-table snapshot cannot sweep a replacement image, including e
   assertImagePrefix(f);
 });
 
+for (const transition of ['unchanged', 'clear', 'foreign-cache']) {
+  test(`complete observation before a source cell binds its exact cache generation: ${transition}`,
+    async () => {
+      const cache = new SystemTableCache();
+      const heldRead = Promise.withResolvers();
+      const readStarted = Promise.withResolvers();
+      const gateway = new ControlPlaneSystemTableGateway({
+        nodeId: 'pre-cell-reader', systemTableCache: cache, now: () => 2000,
+        cdcIntegrationService: {cacheMutationTarget: cache,
+          executeAuthoritativeSystemTableRead() {
+            readStarted.resolve();
+            return heldRead.promise;
+          }},
+      });
+      const before = cache.sourceOrder.tableGeneration(TABLE);
+      assert.equal(cache.sourceOrder.cells.size, 0, 'the observation truly starts before any cell');
+      const read = gateway.executeRead({tableName: TABLE, sql: `SELECT * FROM ${TABLE}`,
+        params: [], strategy: CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED},
+      {sessionId: 'pre-cell-complete-read', authoritativeObservationScope:
+        CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE.COMPLETE_TABLE});
+      await readStarted.promise;
+      if (transition === 'clear') cache.clear();
+      const target = transition === 'foreign-cache' ? new SystemTableCache() : cache;
+      if (transition === 'unchanged') assert.equal(target.sourceOrder.tableGeneration(TABLE), before);
+      else assert.notEqual(target.sourceOrder.tableGeneration(TABLE), before,
+        'the changed owner or lifetime actually changes the generation');
+      heldRead.resolve({success: true, rows: [], rowSetComplete: true,
+        readAuthorityWitness: {state: 'observed', partitionId: SOURCE, role: 'leader',
+          servingNodeId: 'pre-cell-source', servingReplicaId: 'pre-cell-source-r1',
+          observedAtMs: 2000, term: 1, appliedIndex: 0, commitIndex: 0}});
+      const result = await read;
+      assert.equal(result.success, true, 'the actual gateway minted complete source evidence');
+      const reconciled = await gateway.reconcileAuthoritativeCacheRows(TABLE, result.rows, {
+        cacheMutationTarget: target, systemTableCache: target, cachedRows: [],
+        authoritativeObservation: result.authoritativeObservation,
+      });
+      assert.equal(reconciled.success, transition === 'unchanged');
+      assert.equal(target.getLastAuthoritativeObservedAtMs(TABLE),
+        transition === 'unchanged' ? 2000 : null);
+      if (transition !== 'unchanged') assert.equal(reconciled.error,
+        CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.CONTRACT_INVALID);
+      assert.equal(target.sourceOrder.cells.size, 0, 'observation does not invent source currency');
+    });
+}
+
 test('malformed complete vectors refuse before any member effect or group receipt', (t) => {
   const f = fixture(t);
   f.install();
@@ -319,6 +369,42 @@ test('null, stale, wrong-table and foreign source contexts cannot bypass invalid
   }
 });
 
+for (const reentry of ['image', 'authority']) {
+  test(`a ${reentry} installed by a diagnostic callback cannot retain displaced key evidence`, (t) => {
+    const f = fixture(t);
+    f.install([], 9);
+    const event = eventOf(CDC_OPERATION.DELETE, 11);
+    const range = rangeOf([event], imagePosition(9));
+    const row = eventOf(CDC_OPERATION.INSERT, 8).data;
+    let reentered = 0;
+    f.cache.logger = {...silent, debug(message) {
+      if (message !== CACHE_LOG_MSG.DELETE_ON_MISSING_KEY_IGNORED || reentered !== 0) return;
+      reentered += 1;
+      if (reentry === 'image') {
+        f.cache.sourceOrder.recordGap(range, TABLE);
+        f.install([row], 10);
+      } else {
+        f.cache.applySystemTableChange(TABLE, CDC_OPERATION.UPSERT,
+          eventOf(CDC_OPERATION.UPSERT, 20).data);
+      }
+    }};
+    assert.equal(f.cache.applySourceCdcEvent(event, range, f.clock.now()).state,
+      SOURCE_EFFECT_STATE.UNAVAILABLE);
+    assert.equal(reentered, 1, 'the real delete-absent diagnostic reentered before evidence retention');
+    assert.equal(f.cache.sourceOrder.tables.get(TABLE)?.has(KEY) ?? false, false,
+      'displaced context cannot certify effects in a later generation');
+    assert.equal(f.cache.sourceOrder.positionOf(SOURCE).state, 'gap');
+    if (reentry === 'image') {
+      assert.equal(f.cache.has(TABLE, KEY), true, 'the replacement image contains the pre-delete row');
+      f.cache.logger = silent;
+      f.commit([event], rangeOf([event], imagePosition(10)));
+      assert.equal(f.cache.has(TABLE, KEY), false, 'the committed replay performs its missing deletion');
+      assert.deepEqual(f.cache.sourceOrder.positionOf(SOURCE).position, position(11));
+      assert.equal(f.cache.sourceOrder.positionOf(SOURCE).state, 'current');
+    }
+  });
+}
+
 function integrationWithImage(t, f, row, index, beforeRead = null) {
   const installed = Promise.withResolvers();
   const failures = Promise.withResolvers();
@@ -351,8 +437,13 @@ test('paused keyed repair crossing image and newer durable event leaves real re-
   const latest = eventOf(CDC_OPERATION.UPSERT, 21, KEY, 0, {status: 'ready'});
   const recovery = integrationWithImage(t, f, latest.data, 21);
   const heldRead = Promise.withResolvers();
-  recovery.service.executeAuthoritativeSystemTableRead = () => heldRead.promise;
+  const readStarted = Promise.withResolvers();
+  recovery.service.executeAuthoritativeSystemTableRead = () => {
+    readStarted.resolve();
+    return heldRead.promise;
+  };
   const repair = recovery.service.refreshAuthoritativeCacheRow(TABLE, KEY);
+  await readStarted.promise;
   f.cache.sourceOrder.recordGap({sourcePartition: SOURCE, incarnation: INCARNATION,
     through: position(20)}, TABLE);
   f.install([eventOf(CDC_OPERATION.UPSERT, 20).data], 20);

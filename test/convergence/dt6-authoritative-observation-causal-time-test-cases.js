@@ -20,6 +20,7 @@ function registerGatewayCausalTimeWitness({
         systemTableCache: cache,
         now: () => gatewayReadStartedAtMs,
         cdcIntegrationService: {
+          cacheMutationTarget: cache,
           async executeAuthoritativeSystemTableRead() {
             return withLeaderWitness(
               {success: true, rows: []},

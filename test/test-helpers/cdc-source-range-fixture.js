@@ -5,7 +5,7 @@
 // ledger, and give a recipient node the position a leader image at applied
 // index 0 installs (an empty source at its start), through the cache owner's
 // own install (SystemTableCacheSourceOrder.recordListedPosition).
-import {SOURCE_RELIST_OUTCOME, isSourceRange} from
+import {SOURCE_RELIST_OUTCOME, isSourceVector} from
   '../../src/cache/system-table-cache-source-order.js';
 import {CDC_COMPLETION} from '../../src/cdc/cdc-delivery-outcome.js';
 import {installSourceImage} from '../../src/cache/system-table-cache-source-image.js';
@@ -86,18 +86,17 @@ function registerLeaderRelister(services, sourceLeader) {
 }
 
 /**
- * A recipient model's first act on a shipped range, as the real receiver's
- * (captureSourceRange, message-group-cdc-committed-acceptance.js): a range the
- * range contract owner does not accept is refused as invalid input before
- * anything is classified. A model that skips this accepts ranges production
- * refuses.
+ * A recipient model consumes the same complete range/member consistency
+ * predicate as the real receiver before classification. Its map is only a
+ * test row store; it must not admit a vector the production owner refuses.
  * @param {*} range - The shipped source range.
+ * @param {Array<Object>} events - The exact shipped members.
  * @return {void}
  */
-function assertShippedSourceRange(range) {
-  if (isSourceRange(range)) return;
+function assertShippedSourceVector(range, events) {
+  if (isSourceVector(range, events)) return;
   throw Object.assign(new Error(CDC_COMPLETION.INVALID), {code: CDC_COMPLETION.INVALID});
 }
 
-export {assertShippedSourceRange, positionRecipients,
+export {assertShippedSourceVector, positionRecipients,
   registerLeaderRelister, sourceRangeOfEvents, withSourceRange};

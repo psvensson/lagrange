@@ -36,7 +36,7 @@ import {LATENCY_PROPAGATION_MODE} from '../../src/topology/latency-topology-cons
 import {CDC_TABLE, clearFixtureSingletons, resetFixtureSingletons, settleTicks} from
   '../test-helpers/participant-transaction-fixture.js';
 import {commitAcknowledgements} from '../test-helpers/cdc-delivery-progress-fixture.js';
-import {assertShippedSourceRange} from '../test-helpers/cdc-source-range-fixture.js';
+import {assertShippedSourceVector} from '../test-helpers/cdc-source-range-fixture.js';
 import {RESPONSE, TARGET_GROUP, TARGET_NODE, addRequiredGroup, addTopologySourceRow,
   omitTarget, targetService, topologyProgressFixture, updateTargetService} from '../test-helpers/cdc-topology-progress-fixture.js';
 
@@ -102,8 +102,8 @@ function stage3Recipient(f, groupId = TARGET_GROUP) {
     return SOURCE_RELIST_OUTCOME.STOPPED;
   });
   model.answer = (payload) => {
-    assertShippedSourceRange(payload.sourceRange);
     const events = deliveredEventsOf(payload);
+    assertShippedSourceVector(payload.sourceRange, events);
     if (model.refusing) {
       return {...unknownCdcAcceptance(CDC_COMPLETION.BACKPRESSURE), retryAfterMs: 40};
     }
@@ -113,13 +113,16 @@ function stage3Recipient(f, groupId = TARGET_GROUP) {
       return {...unknownCdcAcceptance(CDC_COMPLETION.POSITION_GAP),
         retryAfterMs: GAP_RETRY_AFTER_MS};
     }
+    const context = cell.captureEffectContext(range.sourcePartition,
+      events[0].tableName, range.incarnation);
     for (const event of events) {
       if (cell.memberApplied(range, {logIndex: event.sourceLogIndex,
         ordinal: event.sourceOrdinal})) continue;
       model.rows.set(event.data.id, event.data.value);
       model.applied += 1;
     }
-    cell.advance(range, events[0].tableName);
+    assert.equal(cell.advance(range, events[0].tableName, context), true,
+      'the synchronous model row effects remain bound to their source generation');
     return buildCommittedCdcOutcome(events, groupId, {index: 30 + model.applied, term: 2});
   };
   return model;

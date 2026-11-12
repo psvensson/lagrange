@@ -240,3 +240,52 @@ Root additionally owns only executeOwnerLocalRead in gateway-read-strategies
 for its remaining local SQL fallback deletion. Generation capture and complete
 receipt minting remain in the CDC lane. The prior frozen candidate and its lab
 requests remain unchanged; these controls require a new exact source transport.
+
+## Generation and retained-evidence boundary closure
+
+Root approved two source-review corrections after `a305c7b5`: a complete read
+begun before any source cell must still bind the exact cache lifetime, and the
+per-key evidence write itself must validate the original effect context. The
+source-order owner now has one unique construction generation, advanced by
+clear; tableGeneration uses it only while no source cell binds that table.
+There is no new registry or independent token owner. The pre-cell observation
+controls wait until the real gateway has issued its controlled read, then keep
+the cache unchanged, clear it, or direct reconciliation to a foreign cache.
+Only unchanged same-owner empty evidence can publish.
+
+The cache's delete-absent diagnostic occurs between tombstone mutation and
+per-key evidence retention. A synchronous diagnostic observer can install an
+image or apply generic authority during that span. sourceOrder.record now
+refuses to write evidence if the original sourceEffectContext no longer names
+the exact current cell and basis. The image control replaces a provisional
+E11 deletion with P10's present row; retained committed E11 must delete it
+again, rather than skip because an old context wrote proof into the new basis.
+The authority control independently demonstrates that invalidation drops that
+proof and retains the existing gap.
+
+Source ranges are captured through the existing canonical JSON data predicates
+and captured intrinsics. The range owns exactly sourcePartition, incarnation,
+after and through; each position owns exactly logIndex and ordinal. Accessors,
+proxies, inherited fields and coerced numeric positions refuse before callback
+engagement. Actual direct and forward recipient controls preserve malformed
+objects and restore a valid ranged native application afterward. This changes
+no source event bytes, incarnation representation, ledger completeness authority
+or legitimate unpositioned domain.
+
+Caller fixture closure preserves each test's intended boundary. The two
+source-side relister map models now consume full vector consistency and capture
+the real source cell context before their synchronous model effects/advance;
+they remain source-producer models, not real recipient-cache proof. The native
+input guard observes applySourceEvent, the current durable application entry.
+Complete-observation fixtures provide the actual writable cache source-order
+owner at their controlled CDC read port, and direct observation seeds name its
+current generation. Missing/lying observation-storage controls still reach
+that deliberately failed storage boundary after genuine gateway receipt minting;
+they were extracted into a responsibility-named test helper to keep the main
+watermark root within its existing size limit. Forged receipts now include the
+correct generation so provenance refusal remains discriminating.
+
+All new controls and the later candidate remain unverified until exact-source
+lab receipts arrive. The coordinator reported that no immutable 194f42 requests
+existed; a305 transports were prepared for the pending lanes. No pending or
+transported request is described as an executed test.

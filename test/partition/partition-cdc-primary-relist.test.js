@@ -25,7 +25,7 @@ import {LATENCY_PROPAGATION_MODE} from '../../src/topology/latency-topology-cons
 import {CDC_TABLE, clearFixtureSingletons, resetFixtureSingletons, settleTicks} from
   '../test-helpers/participant-transaction-fixture.js';
 import {commitAcknowledgements} from '../test-helpers/cdc-delivery-progress-fixture.js';
-import {assertShippedSourceRange} from '../test-helpers/cdc-source-range-fixture.js';
+import {assertShippedSourceVector} from '../test-helpers/cdc-source-range-fixture.js';
 import {RESPONSE, SOURCE_GROUP, TARGET_GROUP, addTopologySourceRow, targetService,
   topologyProgressFixture} from
   '../test-helpers/cdc-topology-progress-fixture.js';
@@ -75,7 +75,7 @@ function primaryModel(f) {
     return SOURCE_RELIST_OUTCOME.STOPPED;
   });
   model.answer = (events, range) => {
-    assertShippedSourceRange(range);
+    assertShippedSourceVector(range, events);
     if (model.refusing) {
       return {...unknownCdcAcceptance(CDC_COMPLETION.BACKPRESSURE),
         retryAfterMs: REFUSAL_RETRY_AFTER_MS};
@@ -85,6 +85,8 @@ function primaryModel(f) {
       return {...unknownCdcAcceptance(CDC_COMPLETION.POSITION_GAP),
         retryAfterMs: GAP_RETRY_AFTER_MS};
     }
+    const context = cell.captureEffectContext(range.sourcePartition,
+      events[0].tableName, range.incarnation);
     for (const event of events) {
       const position = {logIndex: event.sourceLogIndex, ordinal: event.sourceOrdinal};
       if (cell.memberApplied(range, position)) continue;
@@ -93,7 +95,8 @@ function primaryModel(f) {
       model.applied.add(key);
       model.rows.set(event.data.id, event.data.value);
     }
-    cell.advance(range, events[0].tableName);
+    assert.equal(cell.advance(range, events[0].tableName, context), true,
+      'the synchronous model row effects remain bound to their source generation');
     return buildCommittedCdcOutcome(events, SOURCE_GROUP, {index: 30 + model.applied.size,
       term: 2});
   };

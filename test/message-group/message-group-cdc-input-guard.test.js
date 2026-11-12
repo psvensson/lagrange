@@ -98,21 +98,21 @@ function observeEffects(t, service) {
     });
   };
   wrap(service, 'proposeCDCCommand', 'proposals');
-  wrap(service.cdcHandler, 'applyImmediate', 'applications');
+  wrap(service.cdcHandler, 'applySourceEvent', 'applications');
   wrap(service, 'applyCDCBatch', 'direct');
   wrap(service, 'handleLatencyCdcPropagationBatchMessage', 'forward-handler');
   return calls;
 }
 
-function startEntry(service, entry, events, install = () => []) {
+function startEntry(service, entry, events, install = () => [],
+  sourceRange = withSourceRange([sourceEvent()]).sourceRange) {
   // Restore all global mutations before yielding to native/runtime work. The
   // actual async method's synchronous admission prefix runs inside this cut.
   // The source range is named from a plain source event, never from the
   // (possibly hostile) input under test: it travels beside the events.
-  const rangeOf = () => withSourceRange([sourceEvent()]).sourceRange;
-  const payload = {events, targetGroupId: GROUP_ID, sourceRange: rangeOf(),
+  const payload = {events, targetGroupId: GROUP_ID, sourceRange,
     [CDC_DELIVERY_REMAINING_MS]: service.deliveryTimeoutMs};
-  const direct = {sourceRange: rangeOf()};
+  const direct = {sourceRange};
   return withHostileIntrinsics(install(), () => entry === 'direct' ?
     service.applyCDCBatch(events, direct) :
     service.handleLatencyCdcPropagationBatchMessage('guard-entry', payload));
@@ -133,13 +133,14 @@ async function settleEntry(f, operation) {
   return observed;
 }
 
-async function refuse(f, calls, entry, events, install = () => [], callerView = () => events) {
+async function refuse(f, calls, entry, events, install = () => [], callerView = () => events,
+  sourceRange = withSourceRange([sourceEvent()]).sourceRange) {
   const service = f.services[0];
   const expected = structuredClone(callerView());
   const before = nativeState(service);
   const pendingBefore = service.cdcCommitWaiters.size;
   const counters = {...calls};
-  const result = await settleEntry(f, startEntry(service, entry, events, install));
+  const result = await settleEntry(f, startEntry(service, entry, events, install, sourceRange));
   assert.ok(result.error?.code === CDC_EVENT_IDENTITY.INVALID_CODE ||
     result.error?.code === CDC_COMPLETION.INVALID, result.error?.stack ?? 'typed refusal required');
   assert.equal(result.answer, undefined);
@@ -168,6 +169,44 @@ async function accept(f, calls, entry, events, install = () => []) {
 }
 
 for (const entry of ENTRIES) {
+  test(`canonical source range refuses callbacks and inherited positions through ${entry}`,
+    async (t) => {
+      const f = await recipientFixture(t, KEY, {replicaCount: 1});
+      const calls = observeEffects(t, f.services[0]);
+      const events = [sourceEvent()];
+      const range = () => withSourceRange(events).sourceRange;
+      let callbacks = 0;
+      const accessor = range();
+      Object.defineProperty(accessor, 'incarnation', {enumerable: true,
+        get() { callbacks += 1; return 'test-source-incarnation'; }});
+      const nestedAccessor = range();
+      Object.defineProperty(nestedAccessor.after, 'logIndex', {enumerable: true,
+        get() { callbacks += 1; return 0; }});
+      const pair = Proxy.revocable(range(), {
+        get(target, property) { callbacks += 1; return Reflect.get(target, property); },
+        ownKeys(target) { callbacks += 1; return Reflect.ownKeys(target); },
+      });
+      for (const malformed of [accessor, nestedAccessor, pair.proxy]) {
+        await refuse(f, calls, entry, events, () => [], () => events, malformed);
+      }
+      pair.revoke();
+      await refuse(f, calls, entry, events, () => [], () => events, pair.proxy);
+      assert.equal(callbacks, 0, 'range refusal happens before any caller callback or proxy trap');
+      const inherited = range();
+      const incarnation = inherited.incarnation;
+      delete inherited.incarnation;
+      await refuse(f, calls, entry, events, () => [
+        pollutePrototypeProperty(Object.prototype, 'incarnation', incarnation),
+        replacePrototypeProperty(Object, 'hasOwn', () => true),
+      ], () => events, inherited);
+      const coerced = range();
+      coerced.after.ordinal = '-1';
+      await refuse(f, calls, entry, events, () => [
+        replacePrototypeProperty(Number, 'isSafeInteger', () => true),
+      ], () => events, coerced);
+      await accept(f, calls, entry, events);
+    });
+
   test(`durable identity guards refuse before effects through ${entry}`, async (t) => {
     const f = await recipientFixture(t, KEY, {replicaCount: 1});
     const calls = observeEffects(t, f.services[0]);

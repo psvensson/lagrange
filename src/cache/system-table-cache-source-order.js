@@ -1,6 +1,23 @@
 import {compareSameEntryPositions, entryPositionOf} from
   './system-table-cache-cdc-fold.js';
 import {CDC_EVENT_IDENTITY} from '../constants/cdc-lifecycle-constants.js';
+import {isDenseDataArray, isRecord} from '../utils/canonical-json-data.js';
+
+const objectAssign = Object.assign;
+const objectFreeze = Object.freeze;
+const objectHasOwn = Object.hasOwn;
+const objectKeys = Object.keys;
+const numberIsSafeInteger = Number.isSafeInteger;
+const SOURCE_RANGE_FIELDS = objectFreeze(['sourcePartition', 'incarnation', 'after', 'through']);
+const SOURCE_POSITION_FIELDS = objectFreeze(['logIndex', 'ordinal']);
+
+function hasSourceDataFields(value, fields) {
+  if (!isRecord(value) || objectKeys(value).length !== fields.length) return false;
+  for (let index = 0; index < fields.length; index += 1) {
+    if (!objectHasOwn(value, fields[index])) return false;
+  }
+  return true;
+}
 
 // --- source order (CDC Stage 3): the one owner of the order of source events
 // in this cache ---
@@ -108,8 +125,8 @@ function comparePositions(left, right) {
 }
 
 function isSourcePosition(value) {
-  return value !== null && typeof value === 'object' &&
-    Number.isSafeInteger(value.logIndex) && Number.isSafeInteger(value.ordinal);
+  return hasSourceDataFields(value, SOURCE_POSITION_FIELDS) &&
+    numberIsSafeInteger(value.logIndex) && numberIsSafeInteger(value.ordinal);
 }
 
 /**
@@ -119,7 +136,7 @@ function isSourcePosition(value) {
  * @return {boolean} Whether it is one.
  */
 function isSourceRange(range) {
-  return range !== null && typeof range === 'object' &&
+  return hasSourceDataFields(range, SOURCE_RANGE_FIELDS) &&
     typeof range.sourcePartition === 'string' && range.sourcePartition.length > 0 &&
     (range.incarnation === null || (typeof range.incarnation === 'string' &&
       range.incarnation.length > 0)) &&
@@ -129,19 +146,19 @@ function isSourceRange(range) {
 
 function captureSourceRange(range) {
   if (!isSourceRange(range)) {
-    throw Object.assign(new Error(CDC_EVENT_IDENTITY.INVALID_MESSAGE),
+    throw objectAssign(new Error(CDC_EVENT_IDENTITY.INVALID_MESSAGE),
       {code: CDC_EVENT_IDENTITY.INVALID_CODE});
   }
-  return Object.freeze({sourcePartition: range.sourcePartition, incarnation: range.incarnation,
-    after: Object.freeze({logIndex: range.after.logIndex, ordinal: range.after.ordinal}),
-    through: Object.freeze({logIndex: range.through.logIndex, ordinal: range.through.ordinal})});
+  return objectFreeze({sourcePartition: range.sourcePartition, incarnation: range.incarnation,
+    after: objectFreeze({logIndex: range.after.logIndex, ordinal: range.after.ordinal}),
+    through: objectFreeze({logIndex: range.through.logIndex, ordinal: range.through.ordinal})});
 }
 
 // This checks internal consistency, not ledger completeness. The source
 // transaction owns which obligations exist between predecessor and tail.
 function isSourceVector(range, events) {
   if (!isSourceRange(range) || typeof range.incarnation !== 'string' ||
-      !Array.isArray(events) || events.length === 0) return false;
+      !isDenseDataArray(events) || events.length === 0) return false;
   const tableName = events[0]?.tableName;
   let previous = range.after;
   for (let index = 0; index < events.length; index += 1) {
@@ -150,8 +167,8 @@ function isSourceVector(range, events) {
         event.tableName !== tableName ||
         event.sourcePartition !== range.sourcePartition ||
         typeof event.eventKey !== 'string' || event.eventKey.length === 0 ||
-        !Number.isSafeInteger(event.sourceLogIndex) || event.sourceLogIndex < 1 ||
-        !Number.isSafeInteger(event.sourceOrdinal) || event.sourceOrdinal < 0) return false;
+        !numberIsSafeInteger(event.sourceLogIndex) || event.sourceLogIndex < 1 ||
+        !numberIsSafeInteger(event.sourceOrdinal) || event.sourceOrdinal < 0) return false;
     const position = {logIndex: event.sourceLogIndex, ordinal: event.sourceOrdinal};
     if (comparePositions(previous, position) >= 0) return false;
     previous = position;
@@ -162,8 +179,8 @@ function isSourceVector(range, events) {
 function isSourceMember(range, event) {
   if (!isSourceRange(range) || typeof range.incarnation !== 'string' ||
       event.sourcePartition !== range.sourcePartition ||
-      !Number.isSafeInteger(event.sourceLogIndex) || event.sourceLogIndex < 1 ||
-      !Number.isSafeInteger(event.sourceOrdinal) || event.sourceOrdinal < 0) {
+      !numberIsSafeInteger(event.sourceLogIndex) || event.sourceLogIndex < 1 ||
+      !numberIsSafeInteger(event.sourceOrdinal) || event.sourceOrdinal < 0) {
     return false;
   }
   const position = {logIndex: event.sourceLogIndex, ordinal: event.sourceOrdinal};
@@ -182,6 +199,7 @@ class SystemTableCacheSourceOrder {
   constructor() {
     this.tables = new Map();
     this.cells = new Map();
+    this.ownerGeneration = Symbol();
     this.relister = null;
     this.logger = null;
     this.currentListeners = new Set();
@@ -249,7 +267,9 @@ class SystemTableCacheSourceOrder {
     for (const cell of this.cells.values()) {
       if (cell.tableName === tableName) return cell.generation;
     }
-    return null;
+    // Before the first source cell, complete reads still belong to this
+    // exact cache lifetime. A shared null would survive clear or another cache.
+    return this.ownerGeneration;
   }
 
   // A non-source authority replaced effects this prefix described. The same
@@ -532,6 +552,9 @@ class SystemTableCacheSourceOrder {
    * @param {Object} options
    */
   record(tableName, key, data, options) {
+    // The row fold can notify diagnostic observers before this point. A
+    // displaced context must never retain evidence in its replacement basis.
+    if (!this.applicationContextIsCurrent(options.sourceEffectContext, tableName, options)) return;
     const position = entryPositionOf(data, options);
     if (position === null) return;
     let table = this.tables.get(tableName);
@@ -548,6 +571,7 @@ class SystemTableCacheSourceOrder {
   clear() {
     this.tables.clear();
     this.cells.clear();
+    this.ownerGeneration = Symbol();
   }
 }
 
