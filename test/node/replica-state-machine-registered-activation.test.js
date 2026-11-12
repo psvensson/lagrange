@@ -120,7 +120,8 @@ function activationOptions(writer, registration) {
 async function registerRuntime(t, owner, row) {
   const service = createPartitionServiceFixture({partitionId: row.partition_id,
     tableId: 'registration-fixture', replicaId: row.replica_id, nodeId: row.node_id,
-    resolveHandlerRetirementLane: () => owner.replicaStateMachine}, {birth: row});
+    resolveHandlerRetirementLane: () => owner.replicaStateMachine},
+  {birth: row, lifecycleOwner: owner.replicaStateMachine});
   bindRegisteredReplicaHandler(service, {nodeId: row.node_id,
     resolveHandlerRetirementLane: () => owner.replicaStateMachine});
   t.teardown(() => service.shutdown());

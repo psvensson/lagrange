@@ -14,6 +14,7 @@ const FIXTURE_ADMISSION = Object.freeze({ADMITTED: 'admitted', REVOKED: 'revoked
 
 function createPartitionServiceFixture(options, {
   construct = (owned) => new PartitionService(owned), birth = FIXTURE_BIRTH,
+  lifecycleOwner = null, publicationHandler = null,
 } = {}) {
   if (options.runtimePublication !== undefined) {
     throw new TypeError('Production admission must use the real constructor directly');
@@ -24,10 +25,30 @@ function createPartitionServiceFixture(options, {
     node_id: declared.nodeId, group_id: null,
     created_at: birth.created_at, create_attempt_token: birth.create_attempt_token});
   let admission = FIXTURE_ADMISSION.ADMITTED;
+  const ownerIncarnation = lifecycleOwner?.ownerIncarnation;
+  const handlerIncarnation = publicationHandler?.ownerIncarnation;
+  const localServices = publicationHandler?.localServices;
+  const localReplicas = publicationHandler?.localReplicas;
   const revoke = () => { admission = FIXTURE_ADMISSION.REVOKED; };
   const runtimePublication = createPartitionRuntimePublication({incarnation,
     assertSourceCurrent() {
       if (admission !== FIXTURE_ADMISSION.ADMITTED) {
+        throw runtimePublicationRefused(incarnation.service_id);
+      }
+    },
+    assertLifecycleOwner(_service, suppliedOwner) {
+      if (lifecycleOwner === null || suppliedOwner !== lifecycleOwner ||
+          lifecycleOwner.ownerIncarnation !== ownerIncarnation) {
+        throw runtimePublicationRefused(incarnation.service_id);
+      }
+    },
+    assertDestination(_service, destination) {
+      if (publicationHandler === null || destination.handler !== publicationHandler ||
+          publicationHandler.ownerIncarnation !== handlerIncarnation ||
+          publicationHandler.replicaStateMachine !== lifecycleOwner ||
+          publicationHandler.localServices !== localServices ||
+          publicationHandler.localReplicas !== localReplicas ||
+          destination.localServices !== localServices || destination.localReplicas !== localReplicas) {
         throw runtimePublicationRefused(incarnation.service_id);
       }
     },

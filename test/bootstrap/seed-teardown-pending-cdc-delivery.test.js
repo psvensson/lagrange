@@ -153,7 +153,7 @@ test('the seed teardown completes when the latency topology stops inside a ' +
     systemTableCache: lifecycle.cache,
     transport: createLoopbackTransport(),
     resolveHandlerRetirementLane: () => owner,
-  }), {birth});
+  }), {birth, lifecycleOwner: owner, publicationHandler: handler});
   t.after(async () => {
     await LatencyTopologySetup.stop(topology);
     await handler.shutdown();

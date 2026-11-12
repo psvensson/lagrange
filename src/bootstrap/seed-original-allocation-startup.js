@@ -100,6 +100,7 @@ async function initializeOriginalSeedAttempt(service) {
   const options = {
     directoryOwner: service.dataDirectoryProcessOwner,
     dataDir, nodeId: service.nodeId, buildDigest: build.digest,
+    runtimeHost: service,
   };
   const preparation = new RaftRsOriginalAllocationPreparation(options);
   // Publish custody before the first inspection/preparation acquisition.

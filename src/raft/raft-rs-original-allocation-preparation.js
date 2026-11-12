@@ -5,7 +5,7 @@ import path from 'node:path';
 import {isDeepStrictEqual} from 'node:util';
 import {deepFreeze} from './raft-operation-port.js';
 import {SERVICE_TYPE} from '../constants/service.js';
-import {createPartitionRuntimePublication} from
+import {createOriginalPartitionRuntimePublication, runtimePublicationRefused} from
   '../partition/partition-runtime-publication.js';
 import {validateOriginalSeedDeclaration, validateOriginalSeedDraft,
   completeSeedOriginalAllocation, originalSeedPeerAddresses} from
@@ -203,12 +203,19 @@ class RaftRsOriginalAllocationPreparation {
   #openingValidationActive = false;
   #publications = new Map();
   #handoffComplete = false;
+  #runtimeHost = null;
 
-  constructor({directoryOwner, dataDir, nodeId, buildDigest}) {
+  constructor({directoryOwner, dataDir, nodeId, buildDigest, runtimeHost}) {
     this.#directoryOwner = directoryOwner;
     this.#dataDir = path.resolve(dataDir);
     // Bind expectations from startup, never from the declaration being checked.
     this.#declarationIdentity = Object.freeze({dataDir: this.#dataDir, nodeId, buildDigest});
+    if (runtimeHost !== undefined) {
+      this.#runtimeHost = Object.freeze({service: runtimeHost,
+        partitionServices: runtimeHost.partitionServices,
+        lifecycleHolder: runtimeHost.replicaLifecycleOwner,
+        bootIncarnation: runtimeHost.bootIncarnation});
+    }
     this.assertCurrent();
   }
 
@@ -598,20 +605,28 @@ class RaftRsOriginalAllocationPreparation {
     if (owned.deferElection !== true) {
       throw originalAllocationError(REASON.CONTINUATION_UNAVAILABLE, member.replicaId);
     }
-    const admitted = Object.freeze({...owned,
-      ...(member.serviceType === SERVICE_TYPE.PARTITION ? {
-        runtimePublication: createPartitionRuntimePublication({incarnation: {
+    const record = originalOpenings.get(opening);
+    if (member.serviceType === SERVICE_TYPE.PARTITION && record.runtimePublication === undefined) {
+      record.runtimePublication = createOriginalPartitionRuntimePublication({incarnation: {
           service_id: member.replicaId, replica_id: member.replicaId,
           partition_id: member.groupId, node_id: this.#declaration.nodeId,
           group_id: null, created_at: member.createdAt,
           create_attempt_token: member.createAttemptToken,
         }, assertSourceCurrent: () => {
-          this.#assertCurrent();
+          this.#assertRuntimeHostCurrent(member.replicaId);
           if (this.#openings.get(member.replicaId) !== opening ||
-              originalOpenings.get(opening)?.admitted !== true) {
+              originalOpenings.get(opening) !== record || record.admitted !== true) {
             throw originalAllocationError(REASON.IDENTITY, member.replicaId);
           }
-        }}),
+        }});
+    }
+    if (owned.runtimePublication !== undefined &&
+        owned.runtimePublication !== record.runtimePublication?.publication) {
+      throw runtimePublicationRefused(member.replicaId);
+    }
+    const admitted = Object.freeze({...owned,
+      ...(member.serviceType === SERVICE_TYPE.PARTITION ? {
+        runtimePublication: record.runtimePublication.publication,
       } : {}),
       dbPath: member.dbPath,
       replicaIds: member.replicaIds,
@@ -623,6 +638,68 @@ class RaftRsOriginalAllocationPreparation {
     this.#assertCurrent();
     originalOpenings.get(opening).admitted = true;
     return admitted;
+  }
+
+  #assertRuntimeHostCurrent(replicaId) {
+    this.#assertCurrent();
+    const host = this.#runtimeHost;
+    if (host === null || host.service.isShuttingDown === true ||
+        host.service.startupAbortSignal?.aborted === true ||
+        host.service.originalAllocationPreparation !== this ||
+        host.service.bootIncarnation !== host.bootIncarnation ||
+        host.service.partitionServices !== host.partitionServices ||
+        host.service.replicaLifecycleOwner !== host.lifecycleHolder) {
+      throw runtimePublicationRefused(replicaId);
+    }
+    return host;
+  }
+
+  // This is the preparation's retained physical custody handoff. The host
+  // supplies no birth evidence: every service must be the exact runtime
+  // already bound to this opening, with the same consumed native handle.
+  hostPartitionRuntimes(bootstrap, handler) {
+    const host = this.#assertRuntimeHostCurrent();
+    if (host.service !== bootstrap) throw runtimePublicationRefused();
+    for (const [replicaId, service] of host.partitionServices) {
+      const record = this.#continuedMember(replicaId);
+      if (record.member.serviceType !== SERVICE_TYPE.PARTITION ||
+          record.runtimePublication?.publication !== service?.runtimePublication ||
+          record.db !== service.db) throw runtimePublicationRefused(replicaId);
+      const owner = handler.replicaStateMachine;
+      const destination = Object.freeze({handler, owner,
+        localServices: handler.localServices, localReplicas: handler.localReplicas,
+        hostServices: host.partitionServices});
+      const handlerIncarnation = handler.ownerIncarnation;
+      const ownerIncarnation = owner.ownerIncarnation;
+      const assertHosted = () => {
+        this.#assertRuntimeHostCurrent(replicaId);
+        const held = host.lifecycleHolder.record;
+        if (bootstrap.replicaHandler !== handler || bootstrap.replicaStateMachine !== owner ||
+            held?.replicaHandler !== handler || held.replicaStateMachine !== owner ||
+            held.ownerIncarnation !== host.bootIncarnation || handler.shuttingDown ||
+            handler.ownerIncarnation !== handlerIncarnation ||
+            handler.replicaStateMachine !== owner || owner.ownerIncarnation !== ownerIncarnation ||
+            owner.replicaMutationAdmissionClosed === true ||
+            handler.localServices !== destination.localServices ||
+            handler.localReplicas !== destination.localReplicas ||
+            host.partitionServices.get(replicaId) !== service) {
+          throw runtimePublicationRefused(replicaId);
+        }
+      };
+      assertHosted();
+      record.runtimePublication.host(service, destination, () => {
+        assertHosted();
+        if (destination.localServices.has(replicaId) || destination.localReplicas.has(replicaId)) {
+          throw runtimePublicationRefused(replicaId);
+        }
+        destination.localServices.set(replicaId, service);
+        return service;
+      }, () => {
+        assertHosted();
+        if (destination.localServices.get(replicaId) !== service ||
+            destination.localReplicas.has(replicaId)) throw runtimePublicationRefused(replicaId);
+      });
+    }
   }
 
   #assertCurrent() {

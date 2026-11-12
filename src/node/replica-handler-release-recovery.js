@@ -15,12 +15,15 @@ import {PARTICIPANT_CUTOVER_BOUND as BOUND, PARTICIPANT_CUTOVER_OUTCOME as OUTCO
 import {runParticipantCutover} from './replica-handler-participant-cutover.js';
 import {completeParticipantRelease, requestParticipantRelease} from './participant-release-client.js';
 import {isHeldByHostFailure} from '../raft/raft-operation-port.js';
+import {capturePartitionRuntimeHosting, isPartitionRuntimeHostingCurrent} from
+  '../partition/partition-runtime-publication.js';
 
 const RELEASE_RECOVERY_FACT = Object.freeze({
   BUILD: 'measured_boot_content',
   ORIGIN: 'explicit_pre_origin_release_request',
   STATUS: 'semantic_raft_status',
   TIMER: 'release_recovery_timer',
+  HOSTING: 'current_lifecycle_registry',
 });
 const RELEASE_RECOVERY_REASON = Object.freeze({
   STATUS_UNAVAILABLE: 'semantic raft status unavailable',
@@ -103,6 +106,8 @@ function createParticipantReleaseRecovery(handler) {
   }
 
   function hosted(partitionId) {
+    // Registry changes are candidate wakes even while publication is in its
+    // synchronous commit. Reconciliation below requires the committed claim.
     return [...handler.localServices.values()].filter((service) =>
       service.partitionId === partitionId && !service.isShutdown);
   }
@@ -181,20 +186,26 @@ function createParticipantReleaseRecovery(handler) {
     }
   }
 
-  function isActiveHostedLeader(leader) {
-    if (stopped || handler.shuttingDown) return false;
-    if (leader.isShutdown === true) return false;
-    return handler.localServices.get(leader.replicaId) === leader;
+  function isActiveHostedLeader(hosting) {
+    return !stopped && isPartitionRuntimeHostingCurrent(hosting);
   }
 
   async function reconcile(partitionId) {
     const services = hosted(partitionId);
-    const observed = observeHostedServices(services);
+    const claims = services.map((service) => capturePartitionRuntimeHosting(handler, service))
+      .filter((claim) => claim !== null);
+    if (services.length > 0 && claims.length === 0) {
+      report(partitionId, {outcome: OUTCOME.UNAVAILABLE, missingFact: RELEASE_RECOVERY_FACT.HOSTING});
+      return;
+    }
+    const observed = observeHostedServices(claims.map((claim) => claim.service));
     const {leader} = observed;
     if (!leader) {
       settleNoLeader(partitionId, services, observed);
       return;
     }
+    const hosting = claims.find((claim) => claim.service === leader);
+    if (!isActiveHostedLeader(hosting)) return;
     invalidateParticipantReleaseAdmission(leader);
     if (participantCutoverPauseOf(leader) === null) return;
     if (readPartitionWriteOrigin(leader.db) === null) {
@@ -203,21 +214,21 @@ function createParticipantReleaseRecovery(handler) {
       return;
     }
     const build = await runtimeBuildProvenance();
+    if (!isActiveHostedLeader(hosting)) return;
     if (build.state !== RUNTIME_BUILD_STATE.MEASURED) {
       report(partitionId, {outcome: OUTCOME.OPERATOR_REQUIRED,
         missingFact: RELEASE_RECOVERY_FACT.BUILD, reason: build.reason});
       return;
     }
-    if (!isActiveHostedLeader(leader)) return;
     const answer = await runParticipantCutover(handler, {partitionId,
       targetBuildDigest: build.digest, trigger: TRIGGER.EXISTING_ORIGIN,
       deadlineAtMs: now() + BOUND.DRAIN_DEADLINE_MS});
+    if (!isActiveHostedLeader(hosting)) return;
     if (answer.outcome !== OUTCOME.CUT_OVER) {
       report(partitionId, answer);
       enqueue(partitionId, BOUND.RECOVERY_RETRY_MS);
       return;
     }
-    if (!isActiveHostedLeader(leader)) return;
     if (participantCutoverPauseOf(leader) !== null) {
       enqueue(partitionId);
       return;
@@ -257,7 +268,11 @@ function createParticipantReleaseRecovery(handler) {
       if (service) enqueue(service.partitionId);
     });
   const stopConsensus = handler.consensusEvents.subscribe(({partitionId}) => {
-    for (const service of hosted(partitionId)) invalidateParticipantReleaseAdmission(service);
+    for (const service of hosted(partitionId)) {
+      if (capturePartitionRuntimeHosting(handler, service) !== null) {
+        invalidateParticipantReleaseAdmission(service);
+      }
+    }
     enqueue(partitionId);
   });
 

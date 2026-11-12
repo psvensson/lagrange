@@ -21,6 +21,8 @@ import {readPreparedParticipantIds, readPartitionWriteOrigin} from
 import {readTableShape} from './partition-statement-admission-rowid-rules.js';
 import {PARTITION_ROWID_LIMIT} from './partition-statement-admission-constants.js';
 import {topologyTransitionOf} from './partition-participant-transaction-topology-fence.js';
+import {capturePartitionRuntimeHosting, isPartitionRuntimeHostingCurrent} from
+  './partition-runtime-publication.js';
 import {PARTICIPANT_CUTOVER_BOUND, PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
   PARTICIPANT_RELEASE_ADMISSION as ADMISSION} from
   './partition-participant-transaction-cutover-constants.js';
@@ -79,11 +81,6 @@ function participantReleaseFactsAssessment(answer, context = null,
   return deepFreeze({answer, context, refreshEligible});
 }
 
-function hostedReleaseService(handler, service) {
-  return service?.initialized === true && service.isShutdown !== true &&
-    handler.localServices.get(service.replicaId) === service;
-}
-
 function committedMembershipAvailable(membership, status) {
   return membership.kind === COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED &&
     status.outcome === RAFT_OPERATION_OUTCOME.CORE_OK;
@@ -131,16 +128,26 @@ function observedReleaseFacts(service, build, membership, status, generation, pa
 async function readParticipantReleaseFactsAssessment(handler, service,
   purpose = COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS,
   requireMembershipGeneration = false) {
-  if (!hostedReleaseService(handler, service)) {
+  const hosting = capturePartitionRuntimeHosting(handler, service);
+  if (hosting === null) {
     return participantReleaseFactsAssessment(unavailable(FACT.HOSTED));
   }
   const build = await runtimeBuildProvenance();
+  if (!isPartitionRuntimeHostingCurrent(hosting)) {
+    return participantReleaseFactsAssessment(unavailable(FACT.HOSTED));
+  }
   if (build.state !== RUNTIME_BUILD_STATE.MEASURED) {
     return participantReleaseFactsAssessment(unavailable(FACT.BUILD, build.reason));
   }
   try {
-    const membership = await service.raft.readCommittedMembership({purpose});
-    const status = service.raft.readStatus();
+    const membership = await hosting.port.readCommittedMembership({purpose});
+    if (!isPartitionRuntimeHostingCurrent(hosting)) {
+      return participantReleaseFactsAssessment(unavailable(FACT.HOSTED));
+    }
+    const status = hosting.port.readStatus();
+    if (!isPartitionRuntimeHostingCurrent(hosting)) {
+      return participantReleaseFactsAssessment(unavailable(FACT.HOSTED));
+    }
     if (!committedMembershipAvailable(membership, status)) {
       const refusal = unavailable(FACT.MEMBERSHIP,
         membership.reason ?? status.reason);
@@ -155,9 +162,11 @@ async function readParticipantReleaseFactsAssessment(handler, service,
       if (!participantReleaseGenerationValid(refusalGeneration)) {
         return participantReleaseFactsAssessment(refusal);
       }
-      return participantReleaseFactsAssessment(refusal,
+      const assessment = participantReleaseFactsAssessment(refusal,
         releaseFactsContext(build, refusalGeneration,
           participantCutoverPauseOf(service) !== null, status));
+      return isPartitionRuntimeHostingCurrent(hosting) ? assessment :
+        participantReleaseFactsAssessment(unavailable(FACT.HOSTED));
     }
     const generation = replicaGenerationOf(handler, service, status);
     if (!participantReleaseGenerationValid(generation)) {
@@ -167,10 +176,15 @@ async function readParticipantReleaseFactsAssessment(handler, service,
     const context = releaseFactsContext(build, generation, paused, status);
     const refused = membershipAssessment(membership, status, context,
       requireMembershipGeneration);
-    return refused ?? participantReleaseFactsAssessment(
+    const assessment = refused ?? participantReleaseFactsAssessment(
       observedReleaseFacts(service, build, membership, status, generation, paused),
       context);
+    return isPartitionRuntimeHostingCurrent(hosting) ? assessment :
+      participantReleaseFactsAssessment(unavailable(FACT.HOSTED));
   } catch (error) {
+    if (!isPartitionRuntimeHostingCurrent(hosting)) {
+      return participantReleaseFactsAssessment(unavailable(FACT.HOSTED));
+    }
     return participantReleaseFactsAssessment(
       unavailable(FACT.MEMBERSHIP, String(error?.message ?? error)));
   }
@@ -232,15 +246,10 @@ function invalidateParticipantReleaseAdmission(service) {
   }
 }
 
-function resumeLifecycleIsCurrent(handler, service) {
-  return handler.shuttingDown !== true && service.isShutdown !== true &&
-    handler.localServices.get(service.replicaId) === service;
-}
-
-function refuseStaleResume(handler, service) {
-  if (resumeLifecycleIsCurrent(handler, service)) return null;
-  raiseParticipantCutoverPause(service);
-  return OUTCOME.STALE;
+function refuseStaleResume(hosting) {
+  // A revoked claim cannot mutate even a same-object successor's admission.
+  // The admission owner independently revalidates its proof on every write.
+  return isPartitionRuntimeHostingCurrent(hosting) ? null : OUTCOME.STALE;
 }
 
 function finalResumeFactsMatch(handler, service, facts, request, status) {
@@ -251,27 +260,28 @@ function finalResumeFactsMatch(handler, service, facts, request, status) {
 }
 
 async function resumeParticipantCutoverAdmission(handler, service, request) {
-  const lifecycleRefusal = refuseStaleResume(handler, service);
+  const hosting = capturePartitionRuntimeHosting(handler, service);
+  const lifecycleRefusal = refuseStaleResume(hosting);
   if (lifecycleRefusal !== null) return lifecycleRefusal;
   const current = participantReleaseAdmissionOf(service);
   if (current.state === ADMISSION.OPEN) {
     invalidateParticipantReleaseAdmission(service);
-    const postStatusLifecycleRefusal = refuseStaleResume(handler, service);
+    const postStatusLifecycleRefusal = refuseStaleResume(hosting);
     if (postStatusLifecycleRefusal !== null) return postStatusLifecycleRefusal;
     if (participantReleaseAdmissionOf(service) === current &&
         current.releaseId === request.release?.releaseId) return OUTCOME.RESUMED;
     return OUTCOME.STALE;
   }
   const facts = await readParticipantReleaseFacts(handler, service);
-  const postFactsLifecycleRefusal = refuseStaleResume(handler, service);
+  const postFactsLifecycleRefusal = refuseStaleResume(hosting);
   if (postFactsLifecycleRefusal !== null) return postFactsLifecycleRefusal;
   if (facts.outcome !== OUTCOME.OBSERVED) return facts.outcome;
   const defect = releaseCensusDefect(request.release, request.census, facts,
     {attempt: request.attempt, queryDrainProof: request.queryDrainProof});
   if (defect !== null) return defect;
   // No await separates the final generation/leadership check from resume.
-  const status = service.raft.readStatus();
-  if (refuseStaleResume(handler, service) !== null ||
+  const status = hosting.port.readStatus();
+  if (refuseStaleResume(hosting) !== null ||
       !finalResumeFactsMatch(handler, service, facts, request, status)) return OUTCOME.STALE;
   ADMISSIONS.set(service, Object.freeze({...current, state: ADMISSION.OPEN,
     releaseId: request.release.releaseId, proof: Object.freeze({term: status.term,

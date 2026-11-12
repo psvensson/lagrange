@@ -23,6 +23,8 @@ import {participantReleaseSafeClockInteger} from
 import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
 import {REPLICA_HANDLER_PARTICIPANT_RELEASE_DISPATCH_KIND as DISPATCH_KIND} from
   './replica-handler-constants.js';
+import {capturePartitionRuntimeHosting, isPartitionRuntimeHostingCurrent} from
+  '../partition/partition-runtime-publication.js';
 
 const objectFreeze = Object.freeze;
 const objectHasOwn = Object.hasOwn;
@@ -167,7 +169,8 @@ function attemptMatches(request, facts) {
     request.release.membershipGenerationIndex === facts.membership.membershipGenerationIndex;
 }
 
-async function executeReleaseAction(handler, service, request, facts) {
+async function executeReleaseAction(handler, service, request, facts, hosting) {
+  if (!isPartitionRuntimeHostingCurrent(hosting)) return releaseAnswer(OUTCOME.STALE, request);
   switch (request.action) {
   case ACTION.PAUSE: {
     const pause = raiseParticipantCutoverPause(service);
@@ -184,12 +187,16 @@ async function executeReleaseAction(handler, service, request, facts) {
         queryDrainProof: request.queryDrainProof});
     if (defect !== null) return releaseAnswer(defect, request);
     const answer = await enableParticipantTransactionAdmission(service);
-    return answer.success === true ? readParticipantReleaseFacts(handler, service) :
-      releaseAnswer(OUTCOME.ENABLE_REFUSED, request, {answer});
+    if (!isPartitionRuntimeHostingCurrent(hosting)) return releaseAnswer(OUTCOME.STALE, request);
+    if (answer.success !== true) return releaseAnswer(OUTCOME.ENABLE_REFUSED, request, {answer});
+    const currentFacts = await readParticipantReleaseFacts(handler, service);
+    return isPartitionRuntimeHostingCurrent(hosting) ? currentFacts :
+      releaseAnswer(OUTCOME.STALE, request);
   }
-  case ACTION.RESUME:
-    return releaseAnswer(
-      await resumeParticipantCutoverAdmission(handler, service, request), request);
+  case ACTION.RESUME: {
+    const outcome = await resumeParticipantCutoverAdmission(handler, service, request);
+    return releaseAnswer(isPartitionRuntimeHostingCurrent(hosting) ? outcome : OUTCOME.STALE, request);
+  }
   default:
     return releaseAnswer(OUTCOME.INVALID, request);
   }
@@ -237,10 +244,10 @@ function observationAnswer(request, answer) {
   return releaseAnswer(outcome, request, fields);
 }
 
-function observationLifecycleCurrent(handler, service, request, expectedPort) {
-  return handler.shuttingDown !== true && service.initialized === true &&
-    service.isShutdown !== true && service.raft === expectedPort &&
-    handler.localServices.get(request.replicaId) === service;
+function observationLifecycleCurrent(handler, service, request, expectedPort, hosting) {
+  return isPartitionRuntimeHostingCurrent(hosting) && hosting.handler === handler &&
+    hosting.service === service && service.replicaId === request.replicaId &&
+    hosting.port === expectedPort;
 }
 
 // The post-await recipient fence must distinguish a KNOWN changed identity
@@ -279,8 +286,8 @@ function observationStatusDisposition(handler, service, request, context, status
     status.appliedIndex >= context.appliedIndex ? null : OUTCOME.STALE;
 }
 
-function observationContextDisposition(handler, service, request, context, expectedPort) {
-  if (!observationLifecycleCurrent(handler, service, request, expectedPort)) {
+function observationContextDisposition(handler, service, request, context, expectedPort, hosting) {
+  if (!observationLifecycleCurrent(handler, service, request, expectedPort, hosting)) {
     return OUTCOME.STALE;
   }
   if (context.buildDigest !== request.release.targetBuildDigest ||
@@ -293,22 +300,22 @@ function observationContextDisposition(handler, service, request, context, expec
   }
   const disposition = observationStatusDisposition(handler, service, request,
     context, status);
-  if (!observationLifecycleCurrent(handler, service, request, expectedPort)) {
+  if (!observationLifecycleCurrent(handler, service, request, expectedPort, hosting)) {
     return OUTCOME.STALE;
   }
   return disposition;
 }
 
 function adjudicateParticipantReleaseObservation(handler, service, request,
-  expectedPort, assessment) {
-  if (!observationLifecycleCurrent(handler, service, request, expectedPort)) {
+  expectedPort, assessment, hosting) {
+  if (!observationLifecycleCurrent(handler, service, request, expectedPort, hosting)) {
     return {answer: releaseAnswer(OUTCOME.STALE, request), refreshEligible: false};
   }
   if (assessment.context === null) {
     return {answer: observationAnswer(request, assessment.answer), refreshEligible: false};
   }
   const disposition = observationContextDisposition(handler, service, request,
-    assessment.context, expectedPort);
+    assessment.context, expectedPort, hosting);
   if (disposition === OUTCOME.STALE) {
     return {answer: releaseAnswer(OUTCOME.STALE, request), refreshEligible: false};
   }
@@ -354,21 +361,24 @@ function canFastPathPausedResume(handler, service, request) {
   }
 }
 
-async function receiveCurrentParticipantRelease(handler, service, request) {
+async function receiveCurrentParticipantRelease(handler, service, request, hosting) {
   const purpose = request.action === ACTION.INSPECT && request.leaderCohort === true ?
     COMMITTED_MEMBERSHIP_READ_PURPOSE.RETIREMENT :
     COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS;
   if (canFastPathPausedResume(handler, service, request)) {
+    if (!isPartitionRuntimeHostingCurrent(hosting)) return releaseAnswer(OUTCOME.STALE, request);
     const outcome = await resumeParticipantCutoverAdmission(
       handler, service, request);
+    if (!isPartitionRuntimeHostingCurrent(hosting)) return releaseAnswer(OUTCOME.STALE, request);
     if (outcome !== OUTCOME.UNAVAILABLE) {
       return releaseAnswer(outcome, request);
     }
   }
   const facts = await readParticipantReleaseFacts(handler, service, purpose);
+  if (!isPartitionRuntimeHostingCurrent(hosting)) return releaseAnswer(OUTCOME.STALE, request);
   if (request.action === ACTION.INSPECT) return facts;
   const refusal = releaseRequestRefusal(handler, service, request, facts);
-  return refusal ?? executeReleaseAction(handler, service, request, facts);
+  return refusal ?? executeReleaseAction(handler, service, request, facts, hosting);
 }
 
 async function receiveParticipantRelease(handler, request,
@@ -379,7 +389,8 @@ async function receiveParticipantRelease(handler, request,
         {missingFact: MISSING_FACT.RELEASE_DEADLINE});
     }
     const service = handler.localServices.get(request.replicaId);
-    if (!service || service.partitionId !== request.partitionId) {
+    const hosting = service ? capturePartitionRuntimeHosting(handler, service) : null;
+    if (hosting === null || service.partitionId !== request.partitionId) {
       return releaseAnswer(OUTCOME.UNAVAILABLE, request,
         {missingFact: MISSING_FACT.HOSTED_REPLICA});
     }
@@ -389,7 +400,7 @@ async function receiveParticipantRelease(handler, request,
         readParticipantReleaseObservationAssessment,
         adjudicateParticipantReleaseObservation);
     }
-    return receiveCurrentParticipantRelease(handler, service, request);
+    return receiveCurrentParticipantRelease(handler, service, request, hosting);
   } catch (error) {
     return releaseAnswer(OUTCOME.INVALID, request, {reason: String(error?.message ?? error)});
   }

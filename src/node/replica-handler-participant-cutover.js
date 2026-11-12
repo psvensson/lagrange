@@ -28,6 +28,8 @@ import {PARTICIPANT_RELEASE_ACTION as ACTION, PARTICIPANT_CUTOVER_OUTCOME as OUT
   PARTICIPANT_CUTOVER_BOUND as BOUND, PARTICIPANT_RELEASE_TRIGGER as TRIGGER,
   PARTICIPANT_RELEASE_MISSING_FACT as MISSING_FACT} from
   '../partition/partition-participant-transaction-cutover-constants.js';
+import {capturePartitionRuntimeHosting, isPartitionRuntimeHostingCurrent} from
+  '../partition/partition-runtime-publication.js';
 
 const RUNS = new WeakMap();
 const RETRYABLE_MEMBER_OUTCOMES = new Set([
@@ -39,7 +41,8 @@ const RETRYABLE_MEMBER_OUTCOMES = new Set([
 
 function localLeader(handler, request) {
   const hosted = [...handler.localServices.values()].filter((service) =>
-    service.partitionId === request.partitionId && service.initialized && !service.isShutdown);
+    service.partitionId === request.partitionId &&
+    capturePartitionRuntimeHosting(handler, service) !== null);
   return hosted.find((service) => service.raft?.readStatus().role === RAFT_ROLE.LEADER) ??
     hosted[0] ?? null;
 }
@@ -73,10 +76,13 @@ function unavailableCensus(census) {
 }
 
 async function enableAndObserveCohort(handler, release, attempt, census, local,
-  queryDrainProof) {
+  queryDrainProof, hosting) {
   const enabled = await askParticipantRelease(handler, handler.nodeId,
     requestFor(release, attempt, ACTION.ENABLE, local,
       {census, queryDrainProof}));
+  if (!isPartitionRuntimeHostingCurrent(hosting)) {
+    return releaseAnswer(OUTCOME.STALE, {partitionId: release.partitionId, release, attempt});
+  }
   if (enabled.outcome !== OUTCOME.OBSERVED) return enabled;
   const applied = await actOnCohort(handler, release, attempt,
     ACTION.OBSERVE_APPLIED_POSITION, census, {origin: enabled.origin});
@@ -110,12 +116,14 @@ function normalizeMemberRefusal(request, answer) {
 }
 
 async function resumeCohort(handler, service, request, release, attempt, census,
-  fields = {}) {
+  hosting, fields = {}) {
+  if (!isPartitionRuntimeHostingCurrent(hosting)) return attemptRefusal(request, OUTCOME.STALE);
   const followers = census.filter((facts) =>
     facts.generation.replicaId !== service.replicaId);
   if (followers.length > 0) {
     const followerAnswers = await actOnCohort(handler, release, attempt,
       ACTION.RESUME, followers, fields);
+    if (!isPartitionRuntimeHostingCurrent(hosting)) return attemptRefusal(request, OUTCOME.STALE);
     const followerRefusal = followerAnswers.find((answer) =>
       answer.outcome !== OUTCOME.RESUMED);
     if (followerRefusal !== undefined) {
@@ -127,6 +135,7 @@ async function resumeCohort(handler, service, request, release, attempt, census,
     facts.generation.replicaId === service.replicaId);
   const leaderAnswers = await actOnCohort(handler, release, attempt,
     ACTION.RESUME, leaderMembers, fields);
+  if (!isPartitionRuntimeHostingCurrent(hosting)) return attemptRefusal(request, OUTCOME.STALE);
   const leaderRefusal = leaderAnswers.find((answer) =>
     answer.outcome !== OUTCOME.RESUMED);
   if (leaderRefusal !== undefined) {
@@ -158,7 +167,7 @@ function releaseQueryEngine(handler, service) {
     null : serviceEngine ?? bridgeEngine;
 }
 
-async function settleQueryRelease(handler, service, release, attempt, cohort, census) {
+async function settleQueryRelease(handler, service, release, attempt, cohort, census, hosting) {
   if (service.tableName !== TABLES.SQL_TRANSACTIONS) {
     return {census, transactions: null, queryDrainProof: null};
   }
@@ -173,9 +182,11 @@ async function settleQueryRelease(handler, service, release, attempt, cohort, ce
     census: local.queryCensus,
     now: service.timeSource.now(),
   });
+  if (!isPartitionRuntimeHostingCurrent(hosting)) return null;
   if (transactions === null) return null;
   const refreshed = await readCohort(handler, service.partitionId, cohort,
     attempt.deadlineAtMs);
+  if (!isPartitionRuntimeHostingCurrent(hosting)) return null;
   if (unavailableCensus(refreshed) !== null) return null;
   const current = refreshed.find((facts) =>
     facts.generation.replicaId === service.replicaId);
@@ -201,7 +212,7 @@ function controlReleaseAnswerValid(answer, targetBuildDigest) {
 
 function currentControlNodeId(handler, service, partitionId) {
   const localControlLeader = [...handler.localServices.values()].find((candidate) =>
-    candidate.initialized && !candidate.isShutdown &&
+    capturePartitionRuntimeHosting(handler, candidate) !== null &&
     candidate.partitionId === partitionId &&
     candidate.raft?.readStatus().role === RAFT_ROLE.LEADER);
   const topologyOwner = releaseQueryEngine(handler, service)?.queryExecutor
@@ -262,7 +273,7 @@ function cleanCurrentControlCohort(service, release, attempt, census) {
 }
 
 async function proveCurrentControlCohort(handler, service, request,
-  release, attempt, pausedCensus) {
+  release, attempt, pausedCensus, hosting) {
   if (!cleanCurrentControlCohort(service, release, attempt, pausedCensus)) return null;
   // Each PAUSE recipient has already closed admission and supplied its fresh
   // membership, generation, origin, work and schema facts. RESUME itself
@@ -270,7 +281,7 @@ async function proveCurrentControlCohort(handler, service, request,
   // second caller-side INSPECT cannot authorize anything RESUME would refuse.
   // Any intervening change keeps the affected recipient closed.
   return resumeCohort(handler, service, request, release, attempt, pausedCensus,
-    {census: pausedCensus});
+    hosting, {census: pausedCensus});
 }
 
 // The founding facts include the committed configuration, read through the
@@ -312,33 +323,32 @@ async function localReleaseRefusal(handler, service, request) {
 // A fresh CREATE is decided per request, before any join: a run shares only the
 // cutover work, so a request never inherits another identity's answer and a
 // refusal reaches only the request it belongs to.
-async function freshCreateRequestRefusal(handler, request) {
+async function freshCreateRequestRefusal(handler, request, hosting) {
   if (request.trigger !== TRIGGER.FRESH_CREATE) return null;
-  const service = localLeader(handler, request);
-  return service === null ? null : localReleaseRefusal(handler, service, request);
+  return localReleaseRefusal(handler, hosting.service, request);
 }
 
-async function runCutoverAttempt(handler, request) {
+async function runCutoverAttempt(handler, request, hosting) {
   if (Number.isSafeInteger(request.deadlineAtMs) &&
       handler.timeSource.now() >= request.deadlineAtMs) {
     return attemptRefusal(request, OUTCOME.UNAVAILABLE,
       {missingFact: MISSING_FACT.RELEASE_DEADLINE});
   }
-  const service = localLeader(handler, request);
-  if (service === null) {
-    return attemptRefusal(request, OUTCOME.UNAVAILABLE,
-      {missingFact: MISSING_FACT.HOSTED_PARTITION});
-  }
+  if (!isPartitionRuntimeHostingCurrent(hosting)) return attemptRefusal(request, OUTCOME.STALE);
+  const service = hosting.service;
   const localRefusal = request.trigger === TRIGGER.FRESH_CREATE ? null :
     await localReleaseRefusal(handler, service, request);
+  if (!isPartitionRuntimeHostingCurrent(hosting)) return attemptRefusal(request, OUTCOME.STALE);
   if (localRefusal !== null) return localRefusal;
   const controlOwner = await releaseControlOwnerFirst(handler, service, request);
+  if (!isPartitionRuntimeHostingCurrent(hosting)) return attemptRefusal(request, OUTCOME.STALE);
   if (controlOwner !== null) return controlOwner;
   // Close the current leader before any awaited remote observation. A
   // missing member cannot leave reachable members open on a failed release.
   raiseParticipantCutoverPause(service);
   const own = await readParticipantReleaseFacts(handler, service,
     COMMITTED_MEMBERSHIP_READ_PURPOSE.RETIREMENT);
+  if (!isPartitionRuntimeHostingCurrent(hosting)) return attemptRefusal(request, OUTCOME.STALE);
   if (own.outcome !== OUTCOME.OBSERVED) return normalizeMemberRefusal(request, own);
   const release = releaseIdentityOf({partitionId: service.partitionId,
     targetBuildDigest: request.targetBuildDigest,
@@ -355,6 +365,7 @@ async function runCutoverAttempt(handler, request) {
   }
   let census = await readCohort(handler, service.partitionId, cohort,
     request.deadlineAtMs);
+  if (!isPartitionRuntimeHostingCurrent(hosting)) return attemptRefusal(request, OUTCOME.STALE);
   let unavailable = unavailableCensus(census);
   if (unavailable !== null) {
     await actOnCohort(handler, release, attempt, ACTION.PAUSE,
@@ -362,24 +373,27 @@ async function runCutoverAttempt(handler, request) {
     return normalizeMemberRefusal({...request, release}, unavailable);
   }
   census = await actOnCohort(handler, release, attempt, ACTION.PAUSE, census);
+  if (!isPartitionRuntimeHostingCurrent(hosting)) return attemptRefusal(request, OUTCOME.STALE);
   unavailable = unavailableCensus(census);
   if (unavailable !== null) {
     return normalizeMemberRefusal({...request, release}, unavailable);
   }
-  return runPausedCutover(handler, service, request, release, attempt, cohort, census);
+  return runPausedCutover(handler, service, request, release, attempt, cohort, census, hosting);
 }
 
-async function runPausedCutover(handler, service, request, release, attempt, cohort, census) {
+async function runPausedCutover(handler, service, request, release, attempt, cohort, census, hosting) {
   const blockedDrain = census.find((facts) => !isReleaseDrained(facts.work));
   if (blockedDrain !== undefined) {
     return attemptRefusal({...request, release}, OUTCOME.DRAIN_PENDING,
       {blockedDrain: {generation: blockedDrain.generation, work: blockedDrain.work}});
   }
   const currentControl = await proveCurrentControlCohort(handler, service,
-    request, release, attempt, census);
+    request, release, attempt, census, hosting);
+  if (!isPartitionRuntimeHostingCurrent(hosting)) return attemptRefusal(request, OUTCOME.STALE);
   if (currentControl !== null) return currentControl;
   const queryRelease = await settleQueryRelease(handler, service, release, attempt,
-    cohort, census);
+    cohort, census, hosting);
+  if (!isPartitionRuntimeHostingCurrent(hosting)) return attemptRefusal(request, OUTCOME.STALE);
   if (queryRelease === null) {
     const queryCensus = census.find((facts) =>
       facts.generation.replicaId === service.replicaId)?.queryCensus ?? null;
@@ -392,17 +406,19 @@ async function runPausedCutover(handler, service, request, release, attempt, coh
     attempt, queryDrainProof: queryRelease.queryDrainProof});
   if (defect !== null) return attemptRefusal({...request, release}, defect);
   const application = await enableAndObserveCohort(handler, release, attempt,
-    census, local, queryRelease.queryDrainProof);
+    census, local, queryRelease.queryDrainProof, hosting);
+  if (!isPartitionRuntimeHostingCurrent(hosting)) return attemptRefusal(request, OUTCOME.STALE);
   if (application !== null) {
     return normalizeMemberRefusal({...request, release}, application);
   }
-  return finishEnabledCutover(handler, service, request, release, attempt, cohort, queryRelease);
+  return finishEnabledCutover(handler, service, request, release, attempt, cohort, queryRelease, hosting);
 }
 
 async function finishEnabledCutover(handler, service, request, release, attempt, cohort,
-  queryRelease) {
+  queryRelease, hosting) {
   const census = await readCohort(handler, service.partitionId, cohort,
     request.deadlineAtMs);
+  if (!isPartitionRuntimeHostingCurrent(hosting)) return attemptRefusal(request, OUTCOME.STALE);
   const unavailable = unavailableCensus(census);
   if (unavailable !== null) {
     return normalizeMemberRefusal({...request, release}, unavailable);
@@ -419,14 +435,18 @@ async function finishEnabledCutover(handler, service, request, release, attempt,
     {attempt, queryDrainProof: finalQueryDrainProof});
   if (finalDefect !== null) return attemptRefusal({...request, release}, finalDefect);
   const currentControlOwner = await releaseControlOwnerFirst(handler, service, request);
+  if (!isPartitionRuntimeHostingCurrent(hosting)) return attemptRefusal(request, OUTCOME.STALE);
   if (currentControlOwner !== null) return currentControlOwner;
   return resumeCohort(handler, service, request, release, attempt, census,
-    {census, queryDrainProof: finalQueryDrainProof});
+    hosting, {census, queryDrainProof: finalQueryDrainProof});
 }
 
 async function joinParticipantCutover(handler, current) {
   const joinObservation = readParticipantReleaseClock(handler.timeSource);
   const answer = await current.promise;
+  if (!isPartitionRuntimeHostingCurrent(current.hosting)) {
+    return releaseAnswer(OUTCOME.STALE, answer);
+  }
   const terminalObservation = readParticipantReleaseClock(handler.timeSource);
   if (answer.outcome === OUTCOME.CUT_OVER) return answer;
   const joinedAttempt = participantReleaseAttemptAgeObservation(
@@ -439,8 +459,13 @@ async function joinParticipantCutover(handler, current) {
 }
 
 async function runParticipantCutover(handler, request) {
-  const refusal = await freshCreateRequestRefusal(handler, request).catch((error) =>
+  const service = localLeader(handler, request);
+  const hosting = service === null ? null : capturePartitionRuntimeHosting(handler, service);
+  if (hosting === null) return attemptRefusal(request, OUTCOME.UNAVAILABLE,
+    {missingFact: MISSING_FACT.HOSTED_PARTITION});
+  const refusal = await freshCreateRequestRefusal(handler, request, hosting).catch((error) =>
     attemptRefusal(request, OUTCOME.UNAVAILABLE, {reason: String(error?.message ?? error)}));
+  if (!isPartitionRuntimeHostingCurrent(hosting)) return attemptRefusal(request, OUTCOME.STALE);
   if (refusal !== null) return refusal;
   let runs = RUNS.get(handler);
   if (runs === undefined) {
@@ -449,18 +474,22 @@ async function runParticipantCutover(handler, request) {
   }
   const current = runs.get(request.partitionId);
   if (current) {
+    if (current.hosting.claim !== hosting.claim || current.hosting.port !== hosting.port) {
+      return attemptRefusal(request, OUTCOME.STALE);
+    }
     return current.targetBuildDigest === request.targetBuildDigest ?
       joinParticipantCutover(handler, current) : releaseAnswer(OUTCOME.INVALID, request);
   }
   const originalTrigger = captureParticipantReleaseDiagnosticTrigger(request);
   const startObservation = readParticipantReleaseClock(handler.timeSource);
-  const running = runCutoverAttempt(handler, request).catch((error) =>
+  const running = runCutoverAttempt(handler, request, hosting).catch((error) =>
     attemptRefusal(request, OUTCOME.UNAVAILABLE, {reason: String(error?.message ?? error)}));
-  const record = {targetBuildDigest: request.targetBuildDigest, originalTrigger,
+  const record = {targetBuildDigest: request.targetBuildDigest, originalTrigger, hosting,
     startObservation, promise: running};
   runs.set(request.partitionId, record);
   try {
-    return await running;
+    const answer = await running;
+    return isPartitionRuntimeHostingCurrent(hosting) ? answer : attemptRefusal(request, OUTCOME.STALE);
   } finally {
     if (runs.get(request.partitionId) === record) runs.delete(request.partitionId);
   }

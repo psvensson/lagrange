@@ -362,3 +362,50 @@ Production scope is the existing preparation/startup publication interaction,
 its handler publisher, and release consumers listed above. Shared factory
 capture and generic STOP completion remain separately held pending their own
 controls/source review. There is no new registry, lock, poller or timeout.
+
+### Hosting implementation freeze and evidence ceiling (2026-11-12)
+
+The first hosting candidate implements the ten-file boundary above after the
+coordinator verified original job 2938: 131150 bytes, SHA256
+`2d1e182380ebbfec754e3b14b8cd48cc1a2f4debf6b415d870dc9f919b7cb028`.
+Its first divergences include duplicate preparation capabilities, missing
+physical custody before registration, changed original host provenance, raw
+map authority, held-read adoption, partial hosting, and canonical transfer.
+The listener controls first returned UNAVAILABLE instead of STALE; their later
+resource-release assertions were not measured on that original source.
+
+The original opening record now retains one private publication/hosting
+bundle. Native opening receives `PartitionService.db` as `DURABLE_STORAGE`,
+and hosting requires the very handle consumed by that original opening.
+`bindPartitionRuntimeLifecycle` requires the publication's exact lifecycle
+owner before defining the immutable binding. `publishReplicaRuntime` requires
+the exact destination before either map changes. The additional first-binding
+control is frozen separately at `03643a6c02554709d42fe689c874e2d4fd041355`;
+its original physical result remains owed. Generic construction fixtures have
+no binding or publication authority unless they declare their exact owner and
+handler before constructing the real service. This declaration is used only
+by the already approved row-owner and teardown composition fixtures.
+
+The candidate is not complete producer acceptance. These distinct findings
+remain open and require their own controls and owner review:
+
+- Existing applied-position promise reuse can return a previously OBSERVED
+  answer retained by failed listener cleanup without checking the new caller's
+  runtime and hosting phase. Fresh acquisition fencing does not prove reuse.
+- During HOSTED-to-PUBLISHED map callbacks, the final canonical assertion
+  checks exact handler, lifecycle owner, maps and stable row identity. A
+  reentrant change to the original preparation or Bootstrap holder needs a
+  transfer-specific retained-source control; the old HOSTED assertion also
+  requires absent metadata and cannot be called unchanged after our own write.
+- `distributed-transaction-release-settlement.js` performs awaited authority
+  reads, native settlement and participant delivery below the outer cutover.
+  The outer claim checks do not establish the lower effect's permission. Its
+  retained transaction CAS/native authority and participant identity are being
+  traced before proposing a required retained-claim interaction.
+- Factory capture/partial-publication continuation, generic STOP/restart
+  completion, seed STOP successor survival, full constructor caller closure,
+  generated impact/static gates and the unchanged useful native seed journey
+  remain distinct obligations. No timeout or retry policy was increased.
+
+All execution remains on qualified lab machines. No local tests, checkers or
+validators were run, and this WIP freeze grants no landing or solved claim.

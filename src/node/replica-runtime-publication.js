@@ -18,9 +18,12 @@ function createReplicaRuntimePublication(handler, row, admission,
     throw runtimePublicationRefused(row?.service_id);
   }
   const replicaId = predicate.service_id;
-  const local = handler.localReplicas.get(replicaId) || null;
+  const localReplicas = handler.localReplicas;
+  const localServices = handler.localServices;
+  const local = localReplicas.get(replicaId) || null;
   const predecessor = handler.getTrackedService(replicaId);
   const ownerIncarnation = handler.ownerIncarnation;
+  const lifecycleIncarnation = owner.ownerIncarnation;
   const originalAdmission = Object.freeze({revision: admission.revision,
     sourceState: admission.sourceState});
   if (predecessor !== expectedPredecessor) throw runtimePublicationRefused(replicaId);
@@ -28,12 +31,23 @@ function createReplicaRuntimePublication(handler, row, admission,
     assertSourceCurrent() {
       if (handler.shuttingDown || handler.ownerIncarnation !== ownerIncarnation ||
           handler.replicaStateMachine !== owner ||
+          owner.ownerIncarnation !== lifecycleIncarnation ||
+          handler.localReplicas !== localReplicas || handler.localServices !== localServices ||
           owner.replicaMutationAdmissionClosed === true ||
           owner.serviceRowPersistInFlightByServiceId.has(replicaId) ||
           owner.activationEffectByReplicaId?.has(replicaId) ||
           !isReplicaAdmissionCurrent(owner, replicaId, originalAdmission) ||
           (handler.localReplicas.get(replicaId) || null) !== local ||
           handler.getTrackedService(replicaId) !== predecessor) {
+        throw runtimePublicationRefused(replicaId);
+      }
+    },
+    assertLifecycleOwner(_service, suppliedOwner) {
+      if (suppliedOwner !== owner) throw runtimePublicationRefused(replicaId);
+    },
+    assertDestination(_service, destination) {
+      if (destination.handler !== handler || destination.owner !== owner ||
+          destination.localReplicas !== localReplicas || destination.localServices !== localServices) {
         throw runtimePublicationRefused(replicaId);
       }
     },
@@ -50,13 +64,20 @@ function publishReplicaRuntime(handler, replicaInfo, expectedPredecessor = null)
       !matchesRuntimeIncarnation(service.runtimePublication?.incarnation, sourceEvidence)) {
     throw runtimePublicationRefused(replicaId);
   }
+  const destination = Object.freeze({handler, owner: lifecycleOwner,
+    localReplicas: handler.localReplicas, localServices: handler.localServices,
+    hostServices: replicaInfo.hostServices});
+  service.runtimePublication.assertDestination(service, destination);
   if (existing?.service === service && existing.runtimeBinding === service.runtimeBinding &&
       existing.runtimeBinding?.owner === lifecycleOwner &&
-      handler.getTrackedService(replicaId) === service) {
+      handler.getTrackedService(replicaId) === service &&
+      service.runtimePublication.isPublished(service, existing.runtimeBinding)) {
     service.runtimePublication.assertCurrent(service);
     return existing;
   }
-  if (handler.getTrackedService(replicaId) !== expectedPredecessor ||
+  const predecessor = service.runtimePublication.publicationPredecessor(service,
+    destination, expectedPredecessor);
+  if (handler.getTrackedService(replicaId) !== predecessor ||
       lifecycleOwner.serviceRowPersistInFlightByServiceId.has(replicaId) ||
       lifecycleOwner.activationEffectByReplicaId?.has(replicaId)) {
     throw runtimePublicationRefused(replicaId);
@@ -64,7 +85,22 @@ function publishReplicaRuntime(handler, replicaInfo, expectedPredecessor = null)
   const binding = bindPartitionRuntimeLifecycle(service, lifecycleOwner, sourceEvidence);
   const ownerIncarnation = handler.ownerIncarnation;
   const hostServices = replicaInfo.hostServices;
-  return service.runtimePublication.publish(service, binding, () => {
+  const hostPredecessor = hostServices?.get(replicaId);
+  const assertDestinationCurrent = () => {
+    const tracked = buildReplicaLifecycleMutationPredicateFromState(
+      lifecycleOwner.getState(replicaId));
+    if (handler.shuttingDown || handler.ownerIncarnation !== ownerIncarnation ||
+        handler.replicaStateMachine !== lifecycleOwner ||
+        handler.localReplicas !== destination.localReplicas ||
+        handler.localServices !== destination.localServices ||
+        binding.ownerIncarnation !== lifecycleOwner.ownerIncarnation ||
+        lifecycleOwner.replicaMutationAdmissionClosed === true ||
+        !matchesRuntimeIncarnation(binding.incarnation, tracked)) {
+      throw runtimePublicationRefused(replicaId);
+    }
+  };
+  return service.runtimePublication.publish(service, binding, destination, () => {
+    assertDestinationCurrent();
     const published = handler.setLocalReplica(replicaId, {
       replicaId, partitionId: sourceEvidence.partition_id,
       tableName: replicaInfo.tableName,
@@ -74,22 +110,20 @@ function publishReplicaRuntime(handler, replicaInfo, expectedPredecessor = null)
       createAdmissionToken: replicaInfo.createAdmissionToken,
       createAttemptToken: sourceEvidence.create_attempt_token,
     });
+    assertDestinationCurrent();
     handler.localServices.set(replicaId, service);
-    if (hostServices) hostServices.set(replicaId, service);
+    assertDestinationCurrent();
+    if (hostServices) {
+      if (hostServices.get(replicaId) !== hostPredecessor) throw runtimePublicationRefused(replicaId);
+      hostServices.set(replicaId, service);
+    }
     return published;
   }, () => {
     const local = handler.localReplicas.get(replicaId);
-    const tracked = buildReplicaLifecycleMutationPredicateFromState(
-      lifecycleOwner.getState(replicaId),
-    );
-    if (handler.shuttingDown || handler.ownerIncarnation !== ownerIncarnation ||
-        handler.replicaStateMachine !== lifecycleOwner ||
-        binding.ownerIncarnation !== lifecycleOwner.ownerIncarnation ||
-        lifecycleOwner.replicaMutationAdmissionClosed === true ||
-        local?.runtimeBinding !== binding || local.service !== service ||
+    assertDestinationCurrent();
+    if (local?.runtimeBinding !== binding || local.service !== service ||
         handler.getTrackedService(replicaId) !== service ||
-        hostServices && hostServices.get(replicaId) !== service ||
-        !matchesRuntimeIncarnation(binding.incarnation, tracked)) {
+        hostServices && hostServices.get(replicaId) !== service) {
       throw runtimePublicationRefused(replicaId);
     }
   });

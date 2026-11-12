@@ -17,6 +17,8 @@ import {participantReleaseAbsoluteClockValid, participantReleaseRequestBudget} f
 import {participantReleaseClockMeasured, readParticipantReleaseClock} from
   './participant-release-diagnostic-observation.js';
 import {copyMapValuesToArray} from '../utils/map-values-array.js';
+import {capturePartitionRuntimeHosting, isPartitionRuntimeHostingCurrent} from
+  '../partition/partition-runtime-publication.js';
 
 const OBSERVATIONS = new WeakMap();
 const arrayFlatMap = Function.call.bind(Array.prototype.flatMap);
@@ -150,10 +152,7 @@ function terminal(record, answer) {
 }
 
 function lifecycleCurrent(record) {
-  return record.active && record.handler.shuttingDown !== true &&
-    record.service.isShutdown !== true && record.service.initialized === true &&
-    record.service.raft === record.port &&
-    record.handler.localServices.get(record.request.replicaId) === record.service;
+  return record.active && isPartitionRuntimeHostingCurrent(record.hosting);
 }
 
 function clockAnswer(record) {
@@ -176,7 +175,8 @@ function observationResult(record, assessment) {
   const expired = clockAnswer(record);
   if (expired !== null) return expired;
   const {answer, refreshEligible} = record.adjudicate(record.handler,
-    record.service, record.request, record.port, assessment);
+    record.service, record.request, record.port, assessment, record.hosting);
+  if (!lifecycleCurrent(record)) return releaseAnswer(OUTCOME.STALE, record.request);
   if (answer.outcome !== OUTCOME.OBSERVED) {
     return refreshEligible && record.dirty ? REFRESH_AGAIN : answer;
   }
@@ -220,6 +220,10 @@ function wake(record) {
 }
 
 function acquireSlot(record, slot, acquire) {
+  if (!lifecycleCurrent(record)) {
+    terminal(record, releaseAnswer(OUTCOME.STALE, record.request));
+    return false;
+  }
   slot.state = SLOT_STATE.PENDING;
   try {
     const release = acquire();
@@ -248,7 +252,7 @@ function raftSubscription(record, slot, eventName) {
 
 function registrySubscription(record, slot) {
   return acquireSlot(record, slot, () =>
-    record.handler.localServices.subscribeServiceChanges((change) => {
+    record.registry.subscribeServiceChanges((change) => {
       if (change.replicaId !== record.request.replicaId) return;
       if (change.service !== record.service) {
         terminal(record, releaseAnswer(OUTCOME.STALE, record.request));
@@ -273,6 +277,10 @@ function serviceShutdownSubscription(record, slot) {
 }
 
 function timerSubscription(record, slot) {
+  if (!lifecycleCurrent(record)) {
+    terminal(record, releaseAnswer(OUTCOME.STALE, record.request));
+    return;
+  }
   slot.state = SLOT_STATE.PENDING;
   let fired = false;
   try {
@@ -321,6 +329,8 @@ function installObservation(record) {
 }
 
 function newObservation(handler, service, request, read, adjudicate, records) {
+  const hosting = capturePartitionRuntimeHosting(handler, service);
+  if (hosting === null) return unavailable(request);
   const scheduler = handler.timeSource;
   const budget = participantReleaseRequestBudget({timeSource: scheduler},
     request.deadlineAtMs, request.observationDeadlineAtMs);
@@ -336,7 +346,8 @@ function newObservation(handler, service, request, read, adjudicate, records) {
     OBSERVATIONS.set(handler, records);
   }
   const settlement = Promise.withResolvers();
-  const record = {handler, service, port: service.raft, scheduler, request,
+  const record = {handler, service, hosting, registry: hosting.registry,
+    port: hosting.port, scheduler, request,
     read, adjudicate,
     resolve: settlement.resolve, promise: settlement.promise,
     deadlineAtMs: budget.observationDeadlineAtMs, timeoutMs: budget.timeoutMs,

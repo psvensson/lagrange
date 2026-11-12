@@ -5,8 +5,8 @@ const RUNTIME_INCARNATION_FIELDS = Object.freeze([
   'created_at', 'create_attempt_token',
 ]);
 const PARTITION_RUNTIME_PUBLICATION_REFUSED = 'PARTITION_RUNTIME_PUBLICATION_REFUSED';
-const PUBLICATION_STATE = Object.freeze({ADMITTED: 'admitted', PUBLISHING: 'publishing',
-  PUBLISHED: 'published', REFUSED: 'refused'});
+const PUBLICATION_STATE = Object.freeze({ADMITTED: 'admitted', HOSTING: 'hosting',
+  HOSTED: 'hosted', PUBLISHING: 'publishing', PUBLISHED: 'published', REFUSED: 'refused'});
 
 function runtimeIncarnation(row) {
   return Object.freeze(Object.fromEntries(RUNTIME_INCARNATION_FIELDS.map(
@@ -28,8 +28,16 @@ function runtimePublicationRefused(replicaId) {
   });
 }
 
-function createPartitionRuntimePublication({incarnation, assertSourceCurrent}) {
+function samePublicationDestination(left, right) {
+  return left.handler === right.handler && left.owner === right.owner &&
+    left.localServices === right.localServices && left.localReplicas === right.localReplicas;
+}
+
+function createRuntimePublication({incarnation, assertSourceCurrent,
+  assertLifecycleOwner, assertDestination}, original) {
   if (!incarnation || typeof assertSourceCurrent !== 'function' ||
+      !original && (typeof assertLifecycleOwner !== 'function' ||
+        typeof assertDestination !== 'function') ||
       !Number.isSafeInteger(incarnation.created_at) ||
       incarnation.service_id !== incarnation.replica_id || incarnation.group_id !== null ||
       !(incarnation.create_attempt_token === null ||
@@ -42,7 +50,7 @@ function createPartitionRuntimePublication({incarnation, assertSourceCurrent}) {
   const source = runtimeIncarnation(incarnation);
   let runtime = null;
   let publication = Object.freeze({state: PUBLICATION_STATE.ADMITTED});
-  return Object.freeze({incarnation: source,
+  const capability = Object.freeze({incarnation: source,
     bind(service) {
       if (runtime !== null && runtime !== service ||
           service?.replicaId !== source.replica_id ||
@@ -58,12 +66,66 @@ function createPartitionRuntimePublication({incarnation, assertSourceCurrent}) {
       }
       if (publication.state === PUBLICATION_STATE.ADMITTED) {
         assertSourceCurrent(service);
+      } else if (publication.state === PUBLICATION_STATE.HOSTED) {
+        assertSourceCurrent(service);
+        publication.assertCurrent(service, publication.destination);
       } else if (publication.state === PUBLICATION_STATE.PUBLISHED) {
         publication.assertCurrent(service, publication.binding);
       } else {
         throw runtimePublicationRefused(source.service_id);
       }
       return true;
+    },
+    assertLifecycleOwner(service, owner) {
+      this.assertCurrent(service);
+      if (publication.state === PUBLICATION_STATE.PUBLISHED) {
+        if (publication.binding.owner !== owner) throw runtimePublicationRefused(source.service_id);
+      } else if (publication.state === PUBLICATION_STATE.HOSTED) {
+        if (publication.destination.owner !== owner) throw runtimePublicationRefused(source.service_id);
+      } else if (original) {
+        throw runtimePublicationRefused(source.service_id);
+      } else {
+        assertLifecycleOwner(service, owner);
+      }
+    },
+    assertDestination(service, destination) {
+      this.assertLifecycleOwner(service, destination.owner);
+      if (publication.state === PUBLICATION_STATE.PUBLISHED ||
+          publication.state === PUBLICATION_STATE.HOSTED) {
+        if (!samePublicationDestination(publication.destination, destination) ||
+            publication.state === PUBLICATION_STATE.HOSTED &&
+              publication.destination.hostServices !== destination.hostServices) {
+          throw runtimePublicationRefused(source.service_id);
+        }
+      } else {
+        assertDestination(service, destination);
+      }
+    },
+    publicationPredecessor(service, destination, expectedPredecessor) {
+      this.assertDestination(service, destination);
+      if (publication.state !== PUBLICATION_STATE.HOSTED) return expectedPredecessor;
+      if (expectedPredecessor !== null && expectedPredecessor !== service) {
+        throw runtimePublicationRefused(source.service_id);
+      }
+      return runtime;
+    },
+    captureHosting(service, handler, registry) {
+      this.assertCurrent(service);
+      if ((publication.state !== PUBLICATION_STATE.HOSTED &&
+           publication.state !== PUBLICATION_STATE.PUBLISHED) ||
+          publication.destination.handler !== handler ||
+          publication.destination.localServices !== registry) {
+        throw runtimePublicationRefused(source.service_id);
+      }
+      return publication;
+    },
+    isHostingCurrent(service, handler, registry, claim) {
+      if (claim !== publication || handler.localServices !== registry) return false;
+      try {
+        return this.captureHosting(service, handler, registry) === claim;
+      } catch {
+        return false;
+      }
     },
     isPublished(service, binding) {
       return publication.state === PUBLICATION_STATE.PUBLISHED &&
@@ -78,8 +140,8 @@ function createPartitionRuntimePublication({incarnation, assertSourceCurrent}) {
       }
       return publication.binding;
     },
-    publish(service, binding, commit, assertCurrent) {
-      this.assertCurrent(service);
+    publish(service, binding, destination, commit, assertCurrent) {
+      this.assertDestination(service, destination);
       if (binding?.service !== runtime || runtime.runtimeBinding !== binding ||
           !matchesRuntimeIncarnation(binding.incarnation, source) ||
           typeof commit !== 'function' || typeof assertCurrent !== 'function') {
@@ -97,7 +159,7 @@ function createPartitionRuntimePublication({incarnation, assertSourceCurrent}) {
         const record = commit();
         assertCurrent(service, binding);
         publication = Object.freeze({state: PUBLICATION_STATE.PUBLISHED,
-          binding, record, assertCurrent});
+          binding, record, destination, assertCurrent});
         return record;
       } catch (error) {
         // A partially completed publication owns cleanup, never renewed
@@ -107,6 +169,41 @@ function createPartitionRuntimePublication({incarnation, assertSourceCurrent}) {
       }
     },
   });
+  // Only the original preparation receives this closure. The service's
+  // public capability cannot adopt an arbitrary map as original hosting.
+  const host = (service, destination, commit, assertCurrent) => {
+    if (!original) throw runtimePublicationRefused(source.service_id);
+    capability.assertCurrent(service);
+    if (publication.state === PUBLICATION_STATE.HOSTED) {
+      capability.assertDestination(service, destination);
+      return publication.record;
+    }
+    if (publication.state !== PUBLICATION_STATE.ADMITTED ||
+        typeof commit !== 'function' || typeof assertCurrent !== 'function') {
+      throw runtimePublicationRefused(source.service_id);
+    }
+    publication = Object.freeze({state: PUBLICATION_STATE.HOSTING});
+    try {
+      const record = commit();
+      assertSourceCurrent(service);
+      assertCurrent(service, destination);
+      publication = Object.freeze({state: PUBLICATION_STATE.HOSTED,
+        destination, record, assertCurrent});
+      return record;
+    } catch (error) {
+      publication = Object.freeze({state: PUBLICATION_STATE.REFUSED});
+      throw error;
+    }
+  };
+  return Object.freeze({publication: capability, host});
+}
+
+function createPartitionRuntimePublication(options) {
+  return createRuntimePublication(options, false).publication;
+}
+
+function createOriginalPartitionRuntimePublication(options) {
+  return createRuntimePublication(options, true);
 }
 
 function bindPartitionRuntimeLifecycle(service, owner, source) {
@@ -114,7 +211,7 @@ function bindPartitionRuntimeLifecycle(service, owner, source) {
       !matchesRuntimeIncarnation(service.runtimePublication.incarnation, source)) {
     throw runtimePublicationRefused(service?.replicaId);
   }
-  service.runtimePublication.assertCurrent(service);
+  service.runtimePublication.assertLifecycleOwner(service, owner);
   const existing = service.runtimeBinding;
   if (existing) {
     if (existing.service !== service || existing.owner !== owner ||
@@ -139,7 +236,34 @@ function attachPartitionRuntimePublication(service, publication) {
   publication.bind(service);
 }
 
+// A release read retains this exact phase, registry and port across its
+// awaits. Neither a current-looking map entry nor a later phase can renew it.
+function capturePartitionRuntimeHosting(handler, service) {
+  if (handler.shuttingDown === true || service?.initialized !== true ||
+      service.isShutdown === true || !service.runtimePublication) return null;
+  const registry = handler.localServices;
+  if (registry.get(service.replicaId) !== service) return null;
+  try {
+    const publication = service.runtimePublication;
+    const claim = publication.captureHosting(service, handler, registry);
+    return Object.freeze({handler, service, registry, publication, claim, port: service.raft});
+  } catch {
+    return null;
+  }
+}
+
+function isPartitionRuntimeHostingCurrent(hosting) {
+  return hosting !== null && hosting.handler.shuttingDown !== true &&
+    hosting.service.initialized === true && hosting.service.isShutdown !== true &&
+    hosting.service.runtimePublication === hosting.publication &&
+    hosting.service.raft === hosting.port &&
+    hosting.publication.isHostingCurrent(hosting.service, hosting.handler,
+      hosting.registry, hosting.claim);
+}
+
 export {PARTITION_RUNTIME_PUBLICATION_REFUSED, attachPartitionRuntimePublication,
   bindPartitionRuntimeLifecycle,
-  createPartitionRuntimePublication, matchesRuntimeIncarnation, runtimeIncarnation,
+  capturePartitionRuntimeHosting, isPartitionRuntimeHostingCurrent,
+  createOriginalPartitionRuntimePublication, createPartitionRuntimePublication,
+  matchesRuntimeIncarnation, runtimeIncarnation,
   runtimePublicationRefused};

@@ -245,9 +245,12 @@ function createBootstrapServiceReplicaHandlerRuntimeMethods() {
 
       this.replicaHandler = acquired.replicaHandler;
       this.replicaStateMachine = acquired.replicaStateMachine;
-      // Original runtimes remain under preparation-owned startup custody.
-      // Their exact registered lifecycle binding publishes handler records
-      // after row registration and activation, without hydrating from an ID.
+      // Original preparation transfers only its exact already-open runtimes
+      // into physical handler custody before the release/registration phase.
+      // Canonical lifecycle records are published later from the sealed INSERT.
+      if (this.originalAllocationPreparation) {
+        this.originalAllocationPreparation.hostPartitionRuntimes(this, this.replicaHandler);
+      }
       return this.replicaHandler;
     },
 
@@ -435,6 +438,7 @@ function createBootstrapServiceReplicaHandlerRuntimeMethods() {
             sourceEvidence: buildReplicaLifecycleMutationPredicateFromState(sourceState),
             lifecycleOwner,
             service: partition,
+            hostServices: partitions,
           });
           registeredCount++;
           writeRegistrationTrace(
