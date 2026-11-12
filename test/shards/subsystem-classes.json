@@ -19,16 +19,16 @@
     "services-runtime": 161,
     "solver-tooling": 7,
     "storage-partition": 237,
-    "storage-raft": 158,
-    "test-infrastructure": 175,
+    "storage-raft": 160,
+    "test-infrastructure": 176,
     "transactions": 18,
     "transport-messaging": 127,
     "wasm-toolchain": 74
   },
-  "censusSize": 2772,
-  "digest": "fnv1a32-538dc1bb",
+  "censusSize": 2775,
+  "digest": "fnv1a32-8e10ad80",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-6c7a55ef",
+  "observationDigest": "fnv1a32-f435b9e0",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1868,7 +1868,9 @@
     "test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js": "storage-raft",
     "test/raft/raft-rs-backend/removed-leader-binding-step-down.test.js": "storage-raft",
     "test/raft/raft-rs-backend/removed-leader-step-down.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/replica-freshness-closure.test.js": "storage-raft",
     "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/replica-lifecycle-birth.test.js": "storage-raft",
     "test/raft/raft-rs-backend/replica-membership-witness.test.js": "storage-raft",
     "test/raft/raft-rs-backend/reseed-hold-durability.test.js": "storage-raft",
     "test/raft/raft-rs-backend/restart-from-durable-record.test.js": "storage-raft",
@@ -2440,6 +2442,7 @@
     "test/scripts/generate-source-owner-index.test.js": "test-infrastructure",
     "test/scripts/git-invocation-owner.test.js": "test-infrastructure",
     "test/scripts/helper-import-closure.test.js": "test-infrastructure",
+    "test/scripts/historical-evidence-reference-resolution.test.js": "test-infrastructure",
     "test/scripts/historical-record-exemptions.test.js": "test-infrastructure",
     "test/scripts/home-lab-cli-guidelines.test.js": "test-infrastructure",
     "test/scripts/impact-contract-registry.test.js": "test-infrastructure",
@@ -11964,6 +11967,8 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/bootstrap/system-table-workflow-schema-definitions.js",
+        "src/control-plane/control-plane-runtime-bundle.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/node/replica-removal-consensus-exit.js",
         "src/node/replica-removal-debt-errors.js",
         "src/node/replica-removal-group-verdict.js",
@@ -11971,6 +11976,7 @@
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
@@ -11978,6 +11984,8 @@
         "src/rebalancer/replica-operation-constants.js",
         "src/rebalancer/replica-operation-repository-operation-visibility.js",
         "src/rebalancer/replica-status.js",
+        "test/cdc/cdc-integration-service-test-support.js",
+        "test/rebalancer/committed-membership-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/lifecycle-state-store.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
@@ -12805,6 +12813,7 @@
     },
     "test/node/replica-removal-sole-founder-decision.test.js": {
       "files": [
+        "src/node/replica-handler-remove-execution-methods.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
@@ -16855,7 +16864,6 @@
         "src/raft/raft-rs-durable-store.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
-        "src/raft/raft-rs-replica-lifecycle-owner.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/transport/transport-semantic-outcome.js"
       ],
@@ -17447,6 +17455,11 @@
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
+    "test/raft/raft-rs-backend/partition-snapshot-compaction-catchup.test.js": {
+      "files": [
+        "src/raft/raft-rs-replica-lifecycle-owner.js"
+      ]
+    },
     "test/raft/raft-rs-backend/peer-identity.test.js": {
       "files": [
         "src/raft/raft-rs-host-contract.js",
@@ -17524,6 +17537,12 @@
         "test/raft/raft-rs-backend/transfer-leadership-driver.js"
       ]
     },
+    "test/raft/raft-rs-backend/replica-freshness-closure.test.js": {
+      "files": [
+        "src/raft/raft-rs-operation-port.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js"
+      ]
+    },
     "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js": {
       "files": [
         "src/node/replica-create-admission-owner.js",
@@ -17534,6 +17553,16 @@
         "src/raft/snapshot-install-constants.js",
         "src/raft/snapshot-install.js",
         "src/runtime/oci-host-agent-durable-files.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/replica-lifecycle-birth.test.js": {
+      "files": [
+        "src/partition/partition-participant-transaction-constants.js",
+        "src/partition/partition-participant-transaction-store.js",
+        "src/raft/raft-rs-durable-store.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/storage/storage-constants.js"
       ]
     },
     "test/raft/raft-rs-backend/replica-membership-witness.test.js": {
@@ -18012,6 +18041,11 @@
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/transport/transport-semantic-outcome.js"
+      ]
+    },
+    "test/raft/raft-rs-lifecycle-turn-admission.test.js": {
+      "files": [
+        "src/raft/raft-rs-replica-lifecycle-owner.js"
       ]
     },
     "test/raft/raft-rs-original-allocation-cold-inspection.test.js": {
@@ -21647,8 +21681,20 @@
         "AGENTS.md",
         "CHANGELOG.md",
         "CLAUDE.md",
+        "Dockerfile",
+        "README.md",
         "architecture/overview.md",
-        "docs/development/product-roadmap.md"
+        "docs/development/product-roadmap.md",
+        "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
+        "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/convergence-sealed-bars.json",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
+        "test/distributed/harness/container-memory-working-set.js"
       ],
       "directories": [
         "architecture",
@@ -21658,9 +21704,13 @@
         "docs/steering",
         "docs/steering/generated",
         "examples",
+        "scripts/checks",
         "solve",
         "solve/changes",
+        "solve/changes/evidence-relocation",
         "solve/epics",
+        "solve/epics/raft-rs-full-cutover",
+        "solve/quests",
         "solve/report",
         "solve/specs",
         "solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger",
@@ -22479,6 +22529,59 @@
         "solve/quests",
         "src/test-helpers",
         "test"
+      ]
+    },
+    "test/scripts/historical-evidence-reference-resolution.test.js": {
+      "files": [
+        "AGENTS.md",
+        "CHANGELOG.md",
+        "CLAUDE.md",
+        "Dockerfile",
+        "README.md",
+        "docs/steering/rule-set.json",
+        "docs/steering/rules.md",
+        "scripts/solve.js",
+        "scripts/solve/store.js",
+        "solve/epics/solve-v2/migration-report.md",
+        "solve/quests/rolling-restart-core-stability/log.ndjson",
+        "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
+        "src/admin/static/playback-viewer.html",
+        "src/diagnostics/node-health-collection.js",
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/convergence-sealed-bars.json",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
+        "test/distributed/harness/container-memory-working-set.js"
+      ],
+      "directories": [
+        "architecture",
+        "docs",
+        "docs/case-studies",
+        "docs/evidence",
+        "docs/steering",
+        "docs/steering/generated",
+        "examples",
+        "scripts/checks",
+        "scripts/solve",
+        "solve",
+        "solve/changes",
+        "solve/changes/evidence-relocation",
+        "solve/epics",
+        "solve/epics/raft-rs-full-cutover",
+        "solve/epics/solve-v2",
+        "solve/oracle",
+        "solve/quests",
+        "solve/report",
+        "solve/specs",
+        "solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger",
+        "solve/specs/raft-logic-migration/reports",
+        "src",
+        "test",
+        "test/distributed",
+        "test/guidelines",
+        "test/solve"
       ]
     },
     "test/scripts/historical-record-exemptions.test.js": {

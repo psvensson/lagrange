@@ -1,0 +1,27 @@
+{
+  "schema": "solve-quest/2",
+  "id": "historical-evidence-reference-resolution",
+  "class": "fix",
+  "statement": "Resolve historical solve evidence citations through one strict local verified relocation catalog; preserve live contract requirements. Source implementation only; relocation, upload, removal, landing and publication excluded.",
+  "constraints": [
+    {
+      "id": "scope",
+      "statement": "Only relocation-records extraction, acceptance/doc checker consumers, owned constants/docs/tests and historical-evidence-custody-reference-resolution impact contract; own Quest only. Preserve original evidence and unrelated gate reds."
+    }
+  ],
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/historical-evidence-reference-resolution/evidence/receipt.json",
+      "requiredReceipts": [
+        "old-reference",
+        "custody-controls",
+        "catalog-compatibility",
+        "focused-regressions",
+        "static-checks",
+        "independent-review"
+      ]
+    }
+  },
+  "sealedAt": "3a1fcd4ee34f98caf3b364d0264cd6b218a8b2e2"
+}

@@ -5,6 +5,8 @@ import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
 
+import {readVerifiedRelocationCatalog, requiredArtifacts} from './solve/relocation-records.js';
+
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const EXIT_SUCCESS = 0;
 const EXIT_FAILURE = 1;
@@ -23,6 +25,11 @@ const HISTORY_CLASS = 'history';
 const STEERING_CLASS = 'steering';
 const COMPATIBILITY_CLASS = 'compatibility';
 const CURRENT_CLASS = 'current';
+const TARGET = Object.freeze({
+  LIVE: 'live', RETAINED: 'retained-evidence', MISSING: 'missing',
+  INVALID: 'invalid-custody', AMBIGUOUS: 'ambiguous-custody', ESCAPED: 'escaped',
+});
+const RETAINED_CLASSES = new Set([PLANNING_CLASS, HISTORY_CLASS, EVIDENCE_CLASS]);
 const CHANGELOG_FILE = 'CHANGELOG.md';
 const HISTORY_FILES = Object.freeze([
   CHANGELOG_FILE,
@@ -253,7 +260,23 @@ function localLinkTarget(sourceFile, href) {
   return toPosix(path.normalize(path.join(path.dirname(sourceFile), decodedHref)));
 }
 
-function validateLinks(relativePath, content, rootDir) {
+function resolveDocumentationTarget(rootDir, target, classification, catalog) {
+  const resolved = resolveContainedTarget(rootDir, target);
+  if (!resolved.contained) return {state: TARGET.ESCAPED};
+  if (fs.existsSync(resolved.absoluteTarget)) return {state: TARGET.LIVE};
+  if (!RETAINED_CLASSES.has(classification)) return {state: TARGET.MISSING};
+  if (catalog.ambiguous) return {state: TARGET.AMBIGUOUS};
+  if (catalog.problems.length > 0) return {state: TARGET.INVALID};
+  const member = catalog.members.get(target);
+  return member ? {state: TARGET.RETAINED, member} : {state: TARGET.MISSING};
+}
+
+function recordRetained(retained, relativePath, line, target, decision) {
+  if (decision.state !== TARGET.RETAINED) return;
+  retained.push({source: relativePath, line, target, ...decision.member});
+}
+
+function validateLinks(relativePath, content, rootDir, classification, catalog, retained) {
   const errors = [];
   for (const match of content.matchAll(MARKDOWN_LINK_PATTERN)) {
     const href = match[FIRST_CAPTURE];
@@ -262,11 +285,12 @@ function validateLinks(relativePath, content, rootDir) {
       continue;
     }
     const line = lineNumberAt(content, match.index);
-    const resolved = resolveContainedTarget(rootDir, target);
-    if (!resolved.contained) {
+    const decision = resolveDocumentationTarget(rootDir, target, classification, catalog);
+    recordRetained(retained, relativePath, line, target, decision);
+    if (decision.state === TARGET.ESCAPED) {
       errors.push(`${relativePath}:${line}: local link escapes repository: ${href}`);
-    } else if (!fs.existsSync(resolved.absoluteTarget)) {
-      errors.push(`${relativePath}:${line}: broken local link ${href}`);
+    } else if (decision.state !== TARGET.LIVE && decision.state !== TARGET.RETAINED) {
+      errors.push(`${relativePath}:${line}: broken local link ${href} (${decision.state})`);
     }
   }
   return errors;
@@ -281,7 +305,9 @@ function normalizeReferencedPath(rawPath) {
   return toPosix(path.normalize(literalPath));
 }
 
-function validateRepositoryPaths(relativePath, content, rootDir) {
+function validateRepositoryPaths(
+  relativePath, content, rootDir, classification, catalog, retained,
+) {
   const errors = [];
   for (const match of content.matchAll(REPOSITORY_PATH_PATTERN)) {
     const referencedPath = normalizeReferencedPath(match[FIRST_CAPTURE]);
@@ -290,14 +316,16 @@ function validateRepositoryPaths(relativePath, content, rootDir) {
       continue;
     }
     const line = lineNumberAt(content, match.index);
-    const resolved = resolveContainedTarget(rootDir, referencedPath);
-    if (!resolved.contained) {
+    const decision = resolveDocumentationTarget(rootDir, referencedPath, classification, catalog);
+    recordRetained(retained, relativePath, line, referencedPath, decision);
+    if (decision.state === TARGET.ESCAPED) {
       errors.push(
         `${relativePath}:${line}: referenced repository path escapes repository: ` +
         referencedPath,
       );
-    } else if (!fs.existsSync(resolved.absoluteTarget)) {
-      errors.push(`${relativePath}:${line}: referenced repository path is missing: ${referencedPath}`);
+    } else if (decision.state !== TARGET.LIVE && decision.state !== TARGET.RETAINED) {
+      errors.push(`${relativePath}:${line}: referenced repository path is missing: ` +
+        `${referencedPath} (${decision.state})`);
     }
   }
   return errors;
@@ -329,6 +357,8 @@ function validateDocumentationCurrentState(rootDir = REPO_ROOT) {
   const files = listDocumentationFiles(rootDir);
   const errors = [];
   const classes = {};
+  const retained = [];
+  const catalog = readVerifiedRelocationCatalog(rootDir, requiredArtifacts(rootDir));
   for (const relativePath of files) {
     const content = fs.readFileSync(
       path.join(rootDir, relativePath),
@@ -341,17 +371,19 @@ function validateDocumentationCurrentState(rootDir = REPO_ROOT) {
     const immutableEvidence =
       classification === EVIDENCE_CLASS && isImmutableEvidence(relativePath);
     if (classification !== GENERATED_CLASS && !immutableEvidence) {
-      errors.push(...validateLinks(relativePath, content, rootDir));
+      errors.push(...validateLinks(
+        relativePath, content, rootDir, classification, catalog, retained));
     }
     if (classification !== GENERATED_CLASS &&
         !immutableEvidence &&
         classification !== PLANNING_CLASS &&
         classification !== HISTORY_CLASS) {
-      errors.push(...validateRepositoryPaths(relativePath, content, rootDir));
+      errors.push(...validateRepositoryPaths(
+        relativePath, content, rootDir, classification, catalog, retained));
     }
     errors.push(...validateCurrentSectionRoles(relativePath, content));
   }
-  return {ok: errors.length === 0, errors, files, classes};
+  return {ok: errors.length === 0, errors, files, classes, retained};
 }
 
 function isDirectRun() {
@@ -360,6 +392,9 @@ function isDirectRun() {
 
 if (isDirectRun()) {
   const result = validateDocumentationCurrentState();
+  for (const citation of result.retained) {
+    process.stdout.write(`Retained evidence: ${JSON.stringify(citation)}${NEWLINE}`);
+  }
   if (result.ok) {
     process.stdout.write(
       `Documentation current-state check passed: ${result.files.length} files; ` +
@@ -378,6 +413,8 @@ if (isDirectRun()) {
 
 export {
   CURRENT_DOC_SECTION_HEADINGS,
+  TARGET,
+  resolveDocumentationTarget,
   documentClass,
   listDocumentationFiles,
   localLinkTarget,

@@ -2186,6 +2186,21 @@
         "test/bootstrap/pgwire-startup-safety-gate.test.js",
         "test/bootstrap/cleanup-ownership-order-characterization.test.js"
       ]
+    },
+    "historical-evidence-custody-reference-resolution": {
+      "description": "Historical solve citations resolve one unique locally verified evidence member with exact custody provenance; current contracts remain live. Documentation and relocation acceptance consume the same record owner.",
+      "owners": [
+        "scripts/solve/evidence-store.js",
+        "scripts/solve/relocation-records.js",
+        "scripts/check-documentation-current-state.js",
+        "scripts/checks/evidence-relocation-acceptance.js"
+      ],
+      "tests": [
+        "test/scripts/historical-evidence-reference-resolution.test.js",
+        "test/scripts/check-documentation-current-state.test.js",
+        "test/scripts/evidence-relocation-acceptance.test.js",
+        "test/scripts/evidence-relocation.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -4666,6 +4681,32 @@
         "test/bootstrap/guarded-runtime-service-handler.test.js",
         "test/bootstrap/pgwire-startup-safety-gate.test.js",
         "test/bootstrap/cleanup-ownership-order-characterization.test.js"
+      ]
+    },
+    "historical-evidence-custody-reference-resolution": {
+      "description": "Historical solve citations resolve one unique locally verified evidence member with exact custody provenance; current contracts remain live. Documentation and relocation acceptance consume the same record owner.",
+      "endpoints": [
+        {
+          "id": "catalog-storage",
+          "owners": [
+            "scripts/solve/evidence-store.js",
+            "scripts/solve/relocation-records.js"
+          ]
+        },
+        {
+          "id": "validation-consumers",
+          "owners": [
+            "scripts/check-documentation-current-state.js",
+            "scripts/checks/evidence-relocation-acceptance.js"
+          ]
+        }
+      ],
+      "contract": "historical-evidence-custody-reference-resolution",
+      "witnessTests": [
+        "test/scripts/historical-evidence-reference-resolution.test.js",
+        "test/scripts/check-documentation-current-state.test.js",
+        "test/scripts/evidence-relocation-acceptance.test.js",
+        "test/scripts/evidence-relocation.test.js"
       ]
     }
   }

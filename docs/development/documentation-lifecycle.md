@@ -113,6 +113,13 @@ zone, checks maintained Markdown links and repository-path references, rejects
 planning/history section roles in current documents, and rejects obsolete
 narrative directories. Generated files and immutable Solver evidence are exempt
 from reference validation; mutable formal-model evidence is not.
+Planning, history and mutable evidence citations may resolve missing `solve/`
+targets through the evidence owner's locally verified relocation catalog. Each
+accepted retained citation reports its source and line, old target, source
+commit, bundle URL and member digest. Markdown and repository-path references
+use the same decision. Invalid or ambiguous custody is an explicit error;
+current, steering and compatibility guidance still requires live local targets.
+Retained evidence is not a live contract or supersession authority.
 History keeps Markdown-link validation but may cite repository paths that
 existed only at the recorded point in time.
 References to declared ignored projections such as `solve/state/` are checked
