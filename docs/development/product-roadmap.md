@@ -110,6 +110,15 @@ stabilization Q17 or the full distributed service milestone.
 | Operation integrity and reliable formation | Community | Preserve distinct read/decision/effect outcomes across ownership boundaries, causally read-only observation, revision-fresh role publication, exact continuation/cleanup custody, CDC contender fairness and bounded delivery cost, and three consecutive fresh three-node formation and user-table routability runs |
 | Selected bounded repairs | Community | Independently verified corrections may ship without claiming that their wider feature or service acceptance passed |
 
+The 12 November correction plan extends the existing operation-integrity owner
+with exact candidate/proof binding, CDC source-image occurrence completion,
+replica generation fencing, physical retained-read custody and truthful PG
+descriptions. Current locking-read promises require authoritative reservations
+or explicit unsupported behavior. Canonical census/checkpoint recovery retains
+its existing owners. Preserve completed seals; new bounded successors and WIP
+composition require their own applicable proof before the unchanged formation
+journey can establish integrated acceptance.
+
 Missing feature journeys retain their existing owner and assigned version.
 Completion claims still require the existing proof and release authorities.
 Full URL/raw-byte preservation, awaited application handlers and the new Hono
@@ -205,6 +214,20 @@ arbitrary WASI HTTP component or Node middleware support.
 | Upgrade and operating envelope | Community | Supported topology/capacity bounds and executable upgrade/downgrade rehearsals for named release pairs |
 | Operator view | Community | Correlated request, shard, partial, placement, retry and failure diagnostics; inspect index and live-query dependency/frontier state |
 | Working pilot latency groups | Community | Automatic group formation and membership changes, group-aware routing/placement, representative traffic propagation and explainable locality diagnostics under the declared pilot topology and failures; geographically qualified cross-region profiles remain AGPL 1.2 |
+
+The pilot's execution/cancellation work reuses worker-hosted guests and proves
+the actual synchronous SQL/control-loop boundary, native hook feasibility and
+generation-safe cleanup. Execution stop, resource release and durable outcome
+remain distinct. Replay and retention extend the existing atomic statement
+outcomes and TX1 owners, with safe retirement horizons and explicit refusal of
+expired identities; the WIP retention plan must first be reconciled with main.
+
+0.5 owns the decision and proof for stronger consistency or conditional writes
+only when the admitted journey needs them. Independent WAL pins do not create a
+global read cut, and a partition epoch cannot substitute for a read version.
+Unrequired modes remain unsupported. PG cancellation and any table-valued call
+alias use canonical authorization and a stable result contract, with actual
+driver/pooler qualification; current description repairs remain in 0.4.1.
 
 Security is required on the supported transport in 0.5. It does not wait for
 NATS or Veilid. Standard telemetry exporters are AGPL work in 0.9;

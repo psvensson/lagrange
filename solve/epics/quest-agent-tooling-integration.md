@@ -53,10 +53,10 @@ this epic owns coordination and its current summary.
 
 ## Current integration summary
 
-- Governing rules: revision 5, initially inspected at source
-  `103f132c13268321445369d3b4c1183ca2c39c66`. Implementation remains isolated in
-  `/mnt/data/peter/projects/.worktrees/quest-agent-tooling-20261110`, branch
-  `work/quest-agent-tooling-20261110`. Unrelated primary-worktree changes are preserved.
+- Planning reconciliation checked 2026-11-12 under rule-set revision 5 at main
+  `ef93af85dcd6add82ff5b5fee21ca12d205c61cd`. The separately inspected WIP
+  `dc29d85bedbbe4310bfcd4cf7e46e8b65a654b2d` does not contain the newer main
+  tooling integration; that branch difference is not a recorded removal.
 - Q1-Q7 canonically landed through
   `c7c7acd89351dda62ef527df53ad1b18556d95bc`. Those closures record their actual
   reviewed source bytes. The later
@@ -134,6 +134,11 @@ this epic owns coordination and its current summary.
   Source fixes cannot relabel the earlier pilot or its evidence. Product formation,
   durability, release and comparative measurements retain their existing owners;
   this integration has run no comparative system campaign.
+- Next owner/action: the tooling integration owner selects the exact composed
+  candidate and continues Q8 using the [existing pilot contract](../specs/quest-agent-tooling-integration/implementation-plan.md#q8-real-quest-pilot-and-composed-acceptance).
+  Derive the task view from current source and records, census actual binding
+  APIs and related consumers, and use a counterexample for each material claim.
+  This planning reconciliation adds no runtime or productivity measurement.
 
 ## Work packages and dependency order
 

@@ -17,6 +17,7 @@ quests:
   - postgres-compatibility-certification-matrix
   - public-path-multinode-baseline
   - public-path-scale-and-failure-certification
+  - readonly-execution-cancellation
   - resumable-bulk-data-load
   - service-cell-v2-default-multi-operation
   - supported-upgrade-and-recovery-envelope
@@ -67,6 +68,43 @@ doneWhen:
 
 # Pilot readiness and public-path proof
 
+## Current convergence decision (2026-11-12)
+
+Planning baseline: main `ef93af85dcd6add82ff5b5fee21ca12d205c61cd`,
+rule-set revision 5. The independent source review also inspected WIP
+`dc29d85bedbbe4310bfcd4cf7e46e8b65a654b2d`; its
+[hydration-image owner](https://github.com/psvensson/lagrange/blob/dc29d85bedbbe4310bfcd4cf7e46e8b65a654b2d/src/partition/partition-hydration-image-pages.js)
+is absent from this main baseline. This is branch divergence, not evidence
+that main deleted that owner. No runtime witness, lab run or receipt was
+executed or generated for this planning reconciliation.
+
+Q2–Q5, Q10 and Q11 have historical sealed records and terminal logs on main.
+Their exact predicates and receipts stay unchanged. The broader production
+composition required below remains evidence-dependent; a script guard's
+historical verdict does not prove a newly identified race, current resource
+bound or the entire public journey. New drafts require a real red measurement
+before sealing, then exact-candidate evidence and independent review.
+
+| Order | Existing owner and bounded next work | Completion boundary |
+| --- | --- | --- |
+| 0.4.1 prerequisite | [Operation integrity and formation](operation-integrity-and-reliable-formation.md) owns formation/CDC/generation/checkpoint repairs and the new `retained-read-view-generation-custody` and `postgres-wire-description-contract` continuations. | Current admitted readers retire before storage replacement; actual retained-resource pressure is measured; admitted pgwire behavior describes its parameters/results truthfully or refuses. Neither continuation grants a new API or global snapshot. |
+| 0.5 execution continuation | Draft [readonly-execution-cancellation](../quests/readonly-execution-cancellation/quest.json) extends the existing query/read-view and runtime owners after custody is sound. | Prove the exact SQLite binding's interruption capability, isolate admitted read work with generation-safe cleanup, and measure SQL/control progress and cancellation on the supported runtime. Preserve Raft/apply ownership. |
+| 0.5 capability decisions and public proof | Existing Q3/Q10/Q11 and [HTTP service requirements](../specs/standard-http-service-api/requirements.md) consume those repairs. | Decide separately whether to admit a coherent cross-shard cut, a mutating operation descriptor, a SELECT call alias or cluster cancellation. Unsupported choices stay explicit; the existing public-path gate and compatibility evidence still apply. |
+
+The normative boundaries live in [paging](../specs/pilot-readiness-and-public-proof/paged-execution.md),
+[execution isolation and certification](../specs/pilot-readiness-and-public-proof/scale-failure-certification.md)
+and [pilot requirements](../specs/pilot-readiness-and-public-proof/requirements.md).
+Use one physical SQLite-handle custody boundary, while query snapshots and CDC
+images retain their distinct logical contracts. Resource cancellation, durable
+operation outcome and read consistency are separate facts. This sequence adds
+no catalog, queue, scheduler, transaction coordinator or parallel roadmap.
+
+Next owner: each named draft's implementation owner must pin its candidate,
+trace its existing seam and preregister its witnesses before runtime edits.
+Independent lab work can proceed concurrently after those contracts are fixed;
+shared owner changes land in the dependency order above. Missing native API
+support or live evidence is a blocker, never a success synthesized from a spec.
+
 ## Edition-ownership supersession (2026-11-01)
 
 The [edition matrix](../../edition-matrix.md) now supersedes earlier statements
@@ -91,8 +129,8 @@ audits, sealed Quest records and the existing front-matter gate are unchanged.
 
 | Release | Outcome owned or consumed by this epic |
 | --- | --- |
-| 0.4.1 bounded correctness | Consume the immediate generic-reduction count/byte overflow and no-truncation repair, plus enforcement of the SQL byte budget before local batch materialization. These are prerequisites to the larger service work. |
-| 0.5 service and pilot milestone | Retain Q2 typed selectors, Q3 explicit page accumulation, Q4 bounded structured contributions and Q5 one canonical multi-operation target, including a true zero-operation HTTP service. Integrate the Hono/Fetch/SDK contract owned by [standard-http-service-api](../specs/standard-http-service-api/requirements.md). |
+| 0.4.1 bounded correctness | Consume the generic-reduction count/byte overflow and no-truncation repair, early SQL byte enforcement, and current admitted-reader custody and pgwire truthfulness corrections coordinated by operation integrity. These are prerequisites to the larger service work. |
+| 0.5 service and pilot milestone | Retain Q2 typed selectors, Q3 explicit page accumulation, Q4 bounded structured contributions and Q5 one canonical multi-operation target, including a true zero-operation HTTP service. Integrate the Hono/Fetch/SDK contract owned by [standard-http-service-api](../specs/standard-http-service-api/requirements.md) and the bounded read-worker/cancellation continuation after its native API feasibility gate. |
 | 0.5 operational pilot obligations | Retain Q7–Q12's transport trust, load/cutover, compatibility, public-path scale/failure and supported recovery work with their existing dependencies. Service-envelope evidence alone cannot satisfy the full pilot boundary. |
 
 Existing accepted prerequisites, including Q6's progress-proven learner

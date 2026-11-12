@@ -1,0 +1,54 @@
+{
+  "schema": "solve-quest/2",
+  "id": "locking-read-authoritative-reservations",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "An admitted SELECT FOR UPDATE acquires the promised reservation through the authoritative replicated participant/transaction path and every conflicting write honors it across nodes and recovery. If that guarantee is unavailable, the public SQL path explicitly refuses the unsupported mode before implying a lock; process-local bookkeeping cannot establish success.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/locking-read-authoritative-reservations/evidence/receipt.json",
+      "requiredReceipts": [
+        "public-cross-node-conflict-enforced-or-refused",
+        "reservation-admission-failure-visible",
+        "participant-restart-and-owner-change",
+        "terminal-resolution-and-resource-release",
+        "all-write-consumers-censused",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "version-and-proof",
+      "statement": "Initial completion: 0.4.1 bounded correction under operation-integrity-and-reliable-formation. This is an unsealed proposal, not executed acceptance. Reconcile main ef93af85dcd6add82ff5b5fee21ca12d205c61cd with preserved WIP dc29d85bedbbe4310bfcd4cf7e46e8b65a654b2d before implementation; preserve historical seals and failed evidence. Use existing proof owners to obtain a genuine discriminating red before start, independently reviewed source and lab-executed proof on the actual interaction, including useful progress and resource release. A refuted source hypothesis must have a recorded counterexample disposition, not an invented fix or passing boolean."
+    },
+    {
+      "id": "owner-and-lineage",
+      "statement": "This is a bounded 0.4.1 repair of currently claimed locking behavior, linked to the existing release-0-3-queryable-core locking-read specification and completed queryable-core-0-3-2-journeys-completion history. Full composed Queryable Core acceptance remains 0.5. Do not reopen terminal records, add broader waiting modes or substitute future optimistic write intents for FOR UPDATE."
+    },
+    {
+      "id": "actual-reservation-path",
+      "statement": "Trace src/query/sql-locking-read-execution.js and src/partition/partition-locking-read-reservation.js through real transaction enlistment, Raft participant apply and all conflicting write paths. The process-global reservation map and optional SQLite mirroring are observations to falsify, not proof of distributed exclusion. A failed persistence/admission result cannot be ignored or represented as a held reservation."
+    },
+    {
+      "id": "identity-and-atomicity",
+      "statement": "Use canonical base-row identity beneath projection and identical identity for index and scan discovery. Reservation ownership, term/generation and durable release belong to existing transaction/participant owners. Preserve atomic committed apply and TX1 recovery; no local timeout may unilaterally erase an unresolved durable obligation."
+    },
+    {
+      "id": "public-journey",
+      "statement": "Use separate public PostgreSQL sessions on different nodes for acquire/conflicting write, reentrant access, commit/rollback, cancellation/disconnect, participant restart and leader change. Verify actual data and conflicting transaction outcomes, not a test process sharing the global Map. A supported fail-fast contention result and an unsupported-feature refusal remain distinguishable. Include a conflicting write between candidate selection and reservation, validate the admitted read version, and prove disjoint work still progresses. Row reservations alone do not establish predicate locking or a global consistent snapshot."
+    },
+    {
+      "id": "truthful-fallback-policy",
+      "statement": "If authoritative reservation cannot be completed within the correction scope, make unsupported behavior explicit in the canonical SQL admission and current capability contract before claiming safety. Do not silently execute an ordinary unlocked read, call that serializable, or leave an alternate local reservation authority. The broader feature owner retains the missing 0.5 journey."
+    },
+    {
+      "id": "shared-transaction-owners",
+      "statement": "Coordinate existing open replicated-transaction-decision-and-apply, tx1-single-path-alpha and participant-release-permanent-refusal owners before changing participant admission, apply or release. One writer owns that interaction. This follow-up supplies the missing current locking witness and claim correction; it does not silently broaden those sealed owners or claim their entire transaction/recovery acceptance."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "schema": "solve-quest/2",
+  "id": "readonly-execution-cancellation",
+  "epic": "pilot-readiness-and-public-proof",
+  "statement": "Extend the existing readonly query execution and retained-read-view seam with worker-owned SQLite connections and generation-safe cancellation, only after proving a supported interruption mechanism for the pinned native binding. Preserve current SQL admission, partition locality, resource budgets, guest runtime and Raft/apply ownership; prove bounded cleanup and continued control progress under the production workload using the normative continuation in solve/specs/pilot-readiness-and-public-proof/scale-failure-certification.md.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/readonly-execution-cancellation/evidence/receipt.json",
+      "requiredReceipts": [
+        "supported-native-api-feasibility-and-red-witness",
+        "production-worker-owned-read-connection",
+        "no-first-row-native-cancellation",
+        "generation-safe-cancel-close-and-slot-reuse",
+        "durable-outcome-and-raft-apply-preservation",
+        "live-control-progress-and-resource-plateau",
+        "red-on-removal-and-independent-review"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "milestone-and-prerequisites",
+      "statement": "Initial completion is 0.5 after retained-read-view-generation-custody and the stabilization owner's admitted formation/CDC/checkpoint prerequisites. Consume existing Q3/Q11/H4 contracts and preserve their sealed records. This bounded continuation does not add cluster CancelRequest, global snapshots or worker migration of committed apply."
+    },
+    {
+      "id": "native-feasibility-is-a-gate",
+      "statement": "First pin the actual SQLite binding API/version, callback thread/context, connection-scoped effects and lifetime rules. Demonstrate a supported native path that can observe cancellation during a long query before its first row. A shared atomic flag or queued worker message alone is not interruption; unsupported native hooks, microsecond latency and unmeasured hard bounds are not assumed. Name any necessary binding extension and its owner before sealing, or record the blocker and bounded refusal."
+    },
+    {
+      "id": "existing-engines-and-owner-seams",
+      "statement": "The reviewed guest runtime already runs JCO-derived modules in a V8 Worker; Wasmtime fuel/epoch is not its API. Extend existing query/read-view and admission ownership without a second guest engine, catalog, scheduler or queue. Every connection, request, cancel and reply is bound to its exact storage and worker incarnation."
+    },
+    {
+      "id": "cancel-is-not-commit-outcome",
+      "statement": "Keep resource quiescence, durable operation outcome and consistency scope separate. User cancellation cannot interrupt a committed Raft apply transaction or shared Raft storage; preserve Ready/persist/apply ordering and the existing atomic data/applied-state transaction. Lost durable evidence may remain unknown rather than trigger automatic re-execution."
+    },
+    {
+      "id": "draft-proof-before-seal",
+      "statement": "This registration is unsealed and creates no execution evidence. Preregister named-hardware queue, cancellation-to-quiescence, event-loop/control-progress and retained-resource bounds with adverse schedules, then obtain an actual production-owner red measurement before sealing. Collect exact-candidate supported-worker lab receipts, red-on-removal witnesses and independent verification before closure; source inspection or a missing receipt alone cannot satisfy the gate."
+    }
+  ]
+}

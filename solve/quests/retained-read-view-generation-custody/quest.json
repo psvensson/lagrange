@@ -1,0 +1,43 @@
+{
+  "schema": "solve-quest/2",
+  "id": "retained-read-view-generation-custody",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "Repair physical custody of currently admitted retained SQLite readers through the existing partition storage lifetime and query read-view owners: a reader stays owned by its exact storage incarnation until acknowledged closure, replacement and sidecar retirement cannot race it, snapshot metadata is read from the same pinned SQLite view, and actual reader-held storage pressure is bounded and observed. Consume the normative custody continuation in solve/specs/pilot-readiness-and-public-proof/paged-execution.md without merging query-attempt semantics with CDC-image semantics.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/retained-read-view-generation-custody/evidence/receipt.json",
+      "requiredReceipts": [
+        "production-owner-red-witness",
+        "snapshot-replacement-reader-closure",
+        "close-failure-and-same-path-incarnation",
+        "snapshot-local-position-and-row-agreement",
+        "idle-reader-wal-byte-age-count-bounds",
+        "query-attempt-and-cdc-policy-separation",
+        "red-on-removal-and-independent-review"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "milestone-and-lineage",
+      "statement": "Initial completion is 0.4.1 because this repairs an admitted reader/storage boundary. The sealed terminal call-shard-paged-execution record and receipts remain unchanged. Broader read-worker migration and coherent global snapshots are separate 0.5 decisions."
+    },
+    {
+      "id": "one-physical-lifetime-boundary",
+      "statement": "Extend existing partition/query custody and consume the checkpoint-generation owner; do not create a second catalog, scheduler, queue or snapshot coordinator. Query attempts and CDC images retain their separate logical lifetimes and recovery outcomes."
+    },
+    {
+      "id": "branch-and-dependency-reconciliation",
+      "statement": "The reviewed main is ef93af85dcd6add82ff5b5fee21ca12d205c61cd. The hydration-image owner observed at dc29d85bedbbe4310bfcd4cf7e46e8b65a654b2d is absent main; reconcile its integration and current formation/CDC/checkpoint dependencies before runtime work, without claiming WIP behavior is present or removed on main."
+    },
+    {
+      "id": "observed-resource-bounds",
+      "statement": "Seal actual WAL/native-byte accounting, shared-file attribution, count and age limits, and the action preventing or refusing further growth. Fixed per-view bytes or entry distance are not observed pinned WAL bytes; forgotten handles and failed closure remain owned."
+    },
+    {
+      "id": "draft-proof-before-seal",
+      "statement": "This registration is unsealed and carries no executed witness or receipt. Before sealing, pin the implementation candidate and preregister deterministic adverse schedules plus quantitative lab bounds, then measure a real production-owner red failure. Missing evidence files or source-symbol checks are not that red witness. Exact-candidate lab evidence and independent verification are required before closure."
+    }
+  ]
+}

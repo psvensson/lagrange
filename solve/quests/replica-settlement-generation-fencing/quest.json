@@ -1,0 +1,49 @@
+{
+  "schema": "solve-quest/2",
+  "id": "replica-settlement-generation-fencing",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "Every asynchronous replica completion, rollback and cleanup continuation acts only on the exact operation, entity incarnation and owner generation whose authority it retained. A successor generation cannot be settled or undone by an older continuation; current canonical completion still makes useful progress and releases only its own resources.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/replica-settlement-generation-fencing/evidence/receipt.json",
+      "requiredReceipts": [
+        "late-completion-successor-fenced",
+        "late-rollback-successor-preserved",
+        "generation-revalidated-at-mutation",
+        "current-owner-recovery-and-release",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "version-and-proof",
+      "statement": "Initial completion: 0.4.1 bounded correction under operation-integrity-and-reliable-formation. This is an unsealed proposal, not executed acceptance. Reconcile main ef93af85dcd6add82ff5b5fee21ca12d205c61cd with preserved WIP dc29d85bedbbe4310bfcd4cf7e46e8b65a654b2d before implementation; preserve historical seals and failed evidence. Use existing proof owners to obtain a genuine discriminating red before start, independently reviewed source and lab-executed proof on the actual interaction, including useful progress and resource release. A refuted source hypothesis must have a recorded counterexample disposition, not an invented fix or passing boolean."
+    },
+    {
+      "id": "owner-and-lineage",
+      "statement": "Continue the asynchronous settlement gap beyond solved canonical-replica-completion-observation and cache-replica-incarnation-coherence. Use the replica operation repository, canonical completion owner and actual lifecycle mutation/cleanup consumers. Do not add a competing completion predicate or replace current owner state with cached observations."
+    },
+    {
+      "id": "suspended-continuations",
+      "statement": "Suspend at each await between authoritative observation and durable mutation, replace or retire the operation/replica generation, then resume old success, error, rollback and finally paths. Refence at the actual write or compare-and-set boundary against the canonical owner, not only at initial dispatch. Include leader/owner change and lost completion reply. Include same-status ABA and legitimate retry of the unchanged generation. A membership relay is only a wake: it may trigger a fresh owner read without being promoted to an authoritative observation certificate."
+    },
+    {
+      "id": "exact-custody",
+      "statement": "Capture identities needed to retire the original operation and its resources; delayed cleanup must not look up a successor by an unversioned key and delete or close it. Record distinct decision, visible publication and physical release outcomes. A failed release retains its obligation and canonical recovery wake."
+    },
+    {
+      "id": "progress-proof",
+      "statement": "Pair stale-generation refusal with a finite current-generation completion and recovery witness through production owners. Preserve existing readiness, committed CREATE cohort and formation timing predicates. If current source already fences a proposed schedule, retain the refutation and test the remaining actual consumer closure rather than changing working semantics."
+    },
+    {
+      "id": "pinned-source-and-shared-owner",
+      "statement": "The WIP-only src/node/replica-removal-settlement.js settleRemovedOutsideRemoval captures runtime/service identity before awaiting membership, while subscribeRemovalSettlement queues by replicaId. Main and WIP src/node/replica-handler-status-methods.js updateReplicaStatus and its retry/rollback paths also require exact-generation review. Reconcile these sources at composition; do not claim the WIP-only module is already on main. The open message-group-fresh-identity-membership Quest retains the SERVICES generation/CAS and cleanup implementation authority. Preserve its separation of terminal decision, membership effect and physical release."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ]
+}

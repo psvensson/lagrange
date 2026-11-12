@@ -1,0 +1,58 @@
+{
+  "schema": "solve-quest/2",
+  "id": "quest-evidence-and-candidate-binding",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "The existing Solver, proof authority and lab selector admit acceptance only for one immutable candidate and the actual executed proof scope. Review covers changed product, acceptance and proof machinery; evidence binds the exact acceptance contract and execution plan; missing or contradictory identity, execution or outcome evidence refuses admission while harmless append-only notes preserve valid review applicability.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/quest-evidence-and-candidate-binding/evidence/receipt.json",
+      "requiredReceipts": [
+        "executed-receipt-forgery-refused",
+        "acceptance-and-review-content-bound",
+        "proof-machinery-review-required",
+        "immutable-target-selector-agreement",
+        "valid-evidence-and-notes-preserved",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "version-and-proof",
+      "statement": "Initial completion: 0.4.1 bounded correction under operation-integrity-and-reliable-formation. This is an unsealed proposal, not executed acceptance. Reconcile main ef93af85dcd6add82ff5b5fee21ca12d205c61cd with preserved WIP dc29d85bedbbe4310bfcd4cf7e46e8b65a654b2d before implementation; preserve historical seals and failed evidence. Use existing proof owners to obtain a genuine discriminating red before start, independently reviewed source and lab-executed proof on the actual interaction, including useful progress and resource release. A refuted source hypothesis must have a recorded counterexample disposition, not an invented fix or passing boolean."
+    },
+    {
+      "id": "existing-owners-and-lineage",
+      "statement": "Continue the new gaps beyond solved contract-first-authoring-and-producer-fidelity, content-bound-review-and-interaction-proof and proof-authority-integrity. Keep their terminal records unchanged. Extend scripts/solve, scripts/test-execution-report.js, scripts/proof-authority.js and scripts/lab/lagrange-lab.js through their existing authorities; do not add a second receipt ledger, independent selector or review-status system. Coordinate with the tooling Q8 pilot without making that sealed pilot implement these guards."
+    },
+    {
+      "id": "executed-evidence",
+      "statement": "Falsify hand-authored passed flags, stale or missing witness hashes, empty selections, skipped required phases, wrong backend, wrong source, missing terminal collection and marker-only success. Consume the existing executed-run identity, complete selection and final status from the execution owner. Runner failure or unsupported evidence is unavailable/failure, never a zero-work pass. Preserve a valid actual report and explicit evidence applicability reuse."
+    },
+    {
+      "id": "content-and-review",
+      "statement": "Bind statement, doneWhen, acceptance-bearing constraints, reviewed source/proof inputs and relevant dependencies to the candidate. Review-changing edits must invalidate approval even outside src/. Refuse an absent candidate digest where binding is required; a verifier label alone cannot establish independent review. Use existing review and tool-authority boundaries, preserving ordinary docs-only work and WIP preservation without granting merge or release approval. Append-only notes that change no acceptance or proof input must not spuriously invalidate content."
+    },
+    {
+      "id": "one-selection-plan",
+      "statement": "Trace labTestCommit, selector imports and planClassifiedTestFiles: selector execution currently uses FLEET_REPO_ROOT while target metadata can use commit.gitRoot. Derive code, import graph, selected tests, proof dependencies, backend and final manifest from one immutable target plan. An explicit controller/target mismatch must refuse or select against the intended target through the canonical owner, never silently test the controller tree. Include proof-script and observation-only edits in the falsifier cases."
+    },
+    {
+      "id": "proof-order",
+      "statement": "First demonstrate the actual admission loopholes through existing commands, then demonstrate corrected refusals plus a valid executed proof path. Integrate this proof-authority interaction before using its revised receipts to close the aggregate. This changes neither historical failed results nor existing release authorization, and it must not make a model self-report the sole witness of its own execution."
+    },
+    {
+      "id": "preserved-proof-lineage",
+      "statement": "Also consume the terminal proof-receipt-bound-to-validated-execution and lab-census-benchmark-evidence-custody evidence without reopening their records. The new scope is the still-unproven composition of Quest receipt admission, acceptance sealing, content review and the lab target selector, not reimplementation of their validated execution owner."
+    },
+    {
+      "id": "selector-input-closure",
+      "statement": "labTestCommit in scripts/lab/probe.js currently materializes a sparse planning checkout containing test and package.json. Merely changing selector cwd to commit.gitRoot cannot supply the absent selector/import-graph/source/registry inputs. Materialize their required immutable target closure through the existing checkout owner and bind it to the plan. Controller-owned historical timing observations may guide cost distribution but cannot narrow correctness coverage."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ]
+}

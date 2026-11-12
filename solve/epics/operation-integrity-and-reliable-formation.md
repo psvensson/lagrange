@@ -28,8 +28,22 @@ doneWhen:
       - cdc-recipient-domain-and-retained-debt-verified
       - cache-replica-incarnation-coherence-verified
       - load-admission-ingress-identity-verified
+      - quest-evidence-and-candidate-binding-verified
+      - cdc-source-image-occurrence-completion-verified
+      - replica-settlement-generation-fencing-verified
+      - locking-read-authoritative-reservations-verified
+      - retained-read-view-generation-custody-verified
+      - postgres-wire-description-contract-verified
+      - retained-priority-census-owner-redrive-verified
+      - partition-checkpoint-epoch-generation-verified
       - independent-verification
 quests:
+  - quest-evidence-and-candidate-binding
+  - cdc-source-image-occurrence-completion
+  - replica-settlement-generation-fencing
+  - locking-read-authoritative-reservations
+  - retained-read-view-generation-custody
+  - postgres-wire-description-contract
   - catalog-authority-and-visible-reconciliation
   - cdc-recipient-domain-and-retained-debt
   - cache-replica-incarnation-coherence
@@ -94,39 +108,40 @@ Recovery retains obligations and progresses; startup and shutdown own their
 resources. The authoring and proof workflow must catch invented contracts and
 invalid evidence before integration.
 
-## Current integration summary (10 November 2026)
+## Current integration summary (12 November 2026)
 
 - **Governing rules and source:** rule-set revision 5, inspected at
-  `947fbe658ebb2efe993900b672ded51d5610dbcb`. This is the retained implementation
-  candidate, not an accepted service baseline. The planning change is isolated
-  on `work/canonical-authority-epic-20261110`; the candidate worktree is preserved.
-- **Integration responsibility:** the current Codex session owns this planning
-  installation and its validation. Runtime writer assignments and outstanding
-  external jobs have not been reconfirmed. No runtime work, reviewer or lab job
-  is dispatched by this plan; the execution integration owner must claim the
-  role here and reconcile active writers before admitting work.
-- **Observed blockers:** the retained candidate's local five-process formation
-  failed with `node_ready_lease_incomplete`; four joining nodes did not complete
-  the required spread, shutdown needed forced stops, and coverage lost witnesses.
-  Q8 owns causal isolation, Q9 resource diagnosis and Q10 evidence custody.
-  Their exact causes remain unresolved. Q7's mixed-age routing counterexample
-  is a source hypothesis, not an executed failure.
+  main `ef93af85dcd6add82ff5b5fee21ca12d205c61cd` and preserved WIP
+  `dc29d85bedbbe4310bfcd4cf7e46e8b65a654b2d`. They are divergent evidence inputs,
+  not an accepted integrated candidate. Main retains the agent-tooling Q1-Q7
+  implementation; its absence in the older WIP lineage is not a deletion.
+- **Integration responsibility:** this change owns planning reconciliation only.
+  The execution integration owner must reconcile active writers, preserved
+  branches and current evidence before admitting a runtime composition. No lab
+  job or runtime writer is assigned here. One writer owns each changing
+  interaction; proof/selector work can proceed alongside independent diagnosis.
+- **Observed blockers:** historical formation failures remain unresolved at the
+  service boundary. Current source review adds evidence-admission gaps, CDC
+  source-image/occurrence mismatch, delayed generation-unsafe settlement,
+  retained-read physical custody, locking-reservation and PG-description gaps.
+  Some paths exist only in the WIP and require composition review. These source
+  findings and counterexamples are not claimed as newly executed failures.
 - **Service status:** the existing
   [formation receipt](../quests/fresh-formation-user-table-routability/evidence/receipt.json)
   still fails. It is unchanged. The broader aggregate probe has no receipt and
   is explicitly unmeasured. Neither the plan nor earlier focused successes
   establish service, release or comparative acceptance.
-- **Current unit:** P0 planning structure installed and validated. Q1-Q16 below
-  are open, unsealed proposals with append-only registration findings. No source attempt, seal,
-  pass receipt or implementation approval is created here.
-- **Next action:** the execution integration owner maps shared interactions and
-  active writers, then each admitted owner prepares its actual red measurement
-  and complete transition record before `start`. Apply Q1 discipline immediately;
-  Q3 can provide a small early repair while Q8/Q9 diagnosis and Q11 inventory
-  proceed. Preserve valid repairs and acquire missing proof instead of rewriting
-  correct code. Record refuted hypotheses as refuted. Prioritize the newly
-  identified Q13-Q15 authority/identity repairs; Q16 owns ingress admission.
-  Preserve Q6 policy currency when reconciling the divergent WIP.
+- **Current unit:** the earlier blanket description of Q1-Q16 as unsealed is
+  obsolete. Q1, Q2, Q5 and Q14 have terminal solved records; other states come
+  from their actual logs. Historical acceptance is preserved. The six bounded
+  successors below and amended Q12 aggregate are unsealed, with no new runtime
+  receipt. Tooling Q8 remains a separate open pilot, not a product repair owner.
+- **Next action:** compose canonical census/checkpoint recovery and close the
+  source-bound evidence path; pair generation/CDC repairs with their real
+  callers and recovery, then read-view and client corrections. Use actual red
+  measurements before sealing and discharge material findings before the frozen
+  three-node formation journey. Preserve Q6 policy currency and valid prior
+  repairs. A refuted hypothesis is recorded as refuted, not implemented anyway.
 
 The dated E0-E9 material below is retained context, not another current summary.
 Original observations and accepted bounded repairs keep their original scope.
@@ -145,7 +160,8 @@ It is explicitly replaced at the epic level by the broader
 [Q12 aggregate](../quests/canonical-authority-formation-acceptance/quest.json).
 This is an additional completion obligation, not a change to the sealed service
 criterion. Q12 consumes the original service receipt and adds Q1-Q11 and Q13-Q16,
-natural exit, evidence custody and frozen-composition proof. It may not duplicate the
+the 12 November continuations below, natural exit, evidence custody and
+frozen-composition proof. It may not duplicate the
 service predicate or infer a pass from Quest status, a review note or a plan.
 No aggregate receipt is fabricated; before sealing Q12, its existing proof owner
 must produce reproducible input validation and a genuine red measurement.
@@ -175,11 +191,46 @@ The semantic owner is named even when no execution agent has been assigned.
 | Q9 | [Make failed and successful startup terminate naturally](../quests/node-startup-natural-shutdown/quest.json) | Node lifecycle and retained resource owners | medium to high | Q1 |
 | Q10 | [Unify lab, census and benchmark evidence custody](../quests/lab-census-benchmark-evidence-custody/quest.json) | Canonical lab runner, census and benchmark proof producers | medium | Q3 |
 | Q11 | [Close legacy and fallback removal by semantic owner](../quests/repository-legacy-fallback-closure/quest.json) | Existing per-owner retirement Quests; integration owns global reconciliation | scope dependent; potentially large | P0 |
-| Q12 | [Prove the frozen composition and hand off to comparisons](../quests/canonical-authority-formation-acceptance/quest.json) | Integration and existing service/acceptance owners | integration | Q1-Q11, Q13-Q16 and original formation proof |
+| Q12 | [Prove the frozen composition and hand off to comparisons](../quests/canonical-authority-formation-acceptance/quest.json) | Integration and existing service/acceptance owners | integration | Q1-Q11, Q13-Q16, the 12 November continuations and original formation proof |
 | Q13 | [Catalog authority and visible reconciliation](../quests/catalog-authority-and-visible-reconciliation/quest.json) | Catalog read consumer, canonical read-authority gateway and cache reconciliation owner | high | P0/Q1; Q2 review; shared-owner coordination |
 | Q14 | [CDC recipient domain and retained debt](../quests/cdc-recipient-domain-and-retained-debt/quest.json) | Latency topology, message-group recipient mapping and CDC propagation progress interaction | high | P0/Q1; Q2 review; shared-owner coordination |
 | Q15 | [Cache replica incarnation coherence](../quests/cache-replica-incarnation-coherence/quest.json) | Shared system-table cache ingress/merge and replica lifecycle publication interaction | high | P0/Q1; Q2 review; shared-owner coordination |
 | Q16 | [Load admission ingress identity](../quests/load-admission-ingress-identity/quest.json) | Actual load ingress, discovery selection, table admission cache and query dispatch interaction | medium | P0/Q1; Q2 review; shared-owner coordination |
+
+### 12 November continuations (initial completion: 0.4.1)
+
+These refine the current correction scope; they do not reopen completed Quests
+or copy their passed evidence. Each proposal owns its actual falsifiers and
+acceptance. Existing source and execution owners retain implementation authority.
+
+| Continuation | Existing interaction and admission boundary |
+| --- | --- |
+| [Evidence and candidate binding](../quests/quest-evidence-and-candidate-binding/quest.json) | Continue solved Q1/Q2 and proof-authority work through Solver, executed-report/provenance and one immutable lab selection plan. Include proof/harness edits and acceptance-bearing constraints; preserve docs-only and WIP-preservation boundaries. |
+| [CDC source-image occurrence completion](../quests/cdc-source-image-occurrence-completion/quest.json) | Continue Q14 through cache image replacement, occurrence deduplication and delivery frontier. A refused effect retains its obligation; generation/census composition shares the canonical cache owners. |
+| [Replica settlement generation fencing](../quests/replica-settlement-generation-fencing/quest.json) | Continue Q5 through suspended completion, status mutation, retry and rollback. Refence at the actual effect and preserve a successor's state/resources. |
+| [Authoritative locking reservations](../quests/locking-read-authoritative-reservations/quest.json) | Correct currently admitted SQL through existing participant/TX1 owners or explicitly refuse unsupported behavior. The broader Queryable Core journey remains 0.5. |
+| [Retained-read generation custody](../quests/retained-read-view-generation-custody/quest.json) | Continue completed paged-call work through the database/partition lifetime owner, real WAL retention and exact-generation close acknowledgement. Coordinate snapshot replacement and all reader classes. |
+| [PG wire description contract](../quests/postgres-wire-description-contract/quest.json) | Correct descriptions for admitted statements through the existing adapter and canonical SQL core. Broader cancellation, call alias and driver qualification remain 0.5. |
+| [Canonical census owner redrive](https://github.com/psvensson/lagrange/blob/dc29d85bedbbe4310bfcd4cf7e46e8b65a654b2d/solve/quests/retained-priority-census-owner-redrive/quest.json) | Existing sealed, unmerged WIP record. Preserve its scope/authority constraints and distinguish absent, not-derived and unavailable evidence before composition; do not recreate the Quest. |
+| [Checkpoint epoch and generation](https://github.com/psvensson/lagrange/blob/df2ead4f6bc069b1d6def9bb2a236ed868fb999b/solve/quests/partition-checkpoint-epoch-generation/quest.json) | Existing sealed, unmerged owner. Preserve full cadence, dispatch/install, failure and bounded re-ask acceptance; narrow custody approval is not whole-Quest acceptance. |
+
+The last two links are immutable preserved records, not files or passed gates on
+main. Integration must reconcile their existing seals, scope constraints, full
+logs and candidate applicability before admitting them. Q12 requires the six
+new bounded receipts and both existing owner outcomes explicitly; its amended
+unsealed `doneWhen` matches this epic. No replacement service predicate is added.
+
+Execution isolation is a measured follow-through under the
+[pilot epic](pilot-readiness-and-public-proof.md), initial completion 0.5. Guests
+already use workers; first prove the actual synchronous native SQL boundary and
+interrupt capability. Extend existing atomic statement outcomes and TX1 rather
+than creating another ledger. Per-shard WAL pins do not prove a global cut,
+and cancellation does not undo committed apply. The
+[preserved retention epic](https://github.com/psvensson/lagrange/blob/dc29d85bedbbe4310bfcd4cf7e46e8b65a654b2d/solve/epics/system-table-retention.md)
+and its
+[statement-outcome proposal](https://github.com/psvensson/lagrange/blob/dc29d85bedbbe4310bfcd4cf7e46e8b65a654b2d/solve/quests/partition-statement-outcome-retention/quest.json)
+remain stabilization-owned 0.5 planning inputs. Their checker and source census
+are not installed or newly measured on main by this change.
 
 ```mermaid
 flowchart TD

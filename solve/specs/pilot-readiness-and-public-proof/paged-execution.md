@@ -1,16 +1,19 @@
 # Detailed design: Call-shard paged execution
 
-Quest slot: `call-shard-paged-execution` (Q3, gate). Requirements contract:
+Historical Quest: `call-shard-paged-execution` (Q3). Requirements contract:
 [requirements.md](requirements.md#paged-execution). Epic:
 [pilot-readiness-and-public-proof](../../epics/pilot-readiness-and-public-proof.md).
 
-## Status and supersession — 2026-10-31
+## Status and supersession — 2026-11-12
 
-This is the proposed implementation contract for the 0.5 service milestone,
-following the bounded 0.4.1 correctness repairs. It is not an implementation
-receipt or a sealed Quest verdict. The Q3 Quest record and meaningful red
-witness must be created and sealed before runtime work; this document does not
-assert that the proposed acceptance scenario already exists.
+The [Q3 record](../../quests/call-shard-paged-execution/quest.json) is sealed
+and its [log](../../quests/call-shard-paged-execution/log.ndjson) is terminal
+on main `ef93af85dcd6add82ff5b5fee21ca12d205c61cd`. Its script predicate
+and historical evidence remain unchanged. This contract also records broader
+public-path obligations and the new unsealed 0.4.1
+[retained-read-view-generation-custody](../../quests/retained-read-view-generation-custody/quest.json)
+continuation. A new defect belongs to that continuation, not an edit to Q3's
+seal. No execution evidence is produced by this revision.
 
 This revision explicitly supersedes the earlier planning clauses that treated
 read-committed keyset reads as stable continuity, ran an arbitrary whole-batch
@@ -30,7 +33,7 @@ view together define a computation; none alone proves resumability.
 | Guest execution and marshalling | The existing service entry generator, WASI runtime and call-context owners carry the explicit accumulator lifecycle and its bounded values. |
 | Resource and concurrency admission | Existing invocation setup, dispatch pool and SQL result-budget owners supply row, byte, state, queue and deadline limits. |
 
-The implementation must name the actual durable rows, transition owner and
+Each continuation must name the actual durable rows, transition owner and
 commit operation in its Quest before code. A process-local map, cached cursor,
 lease timestamp or replica address cannot become authoritative progress.
 Page reads and guest execution remain on the partition host; raw shard rows
@@ -115,6 +118,73 @@ View retention is bounded by the attempt deadline and explicit resource
 limits. Cancellation, terminal refusal and successful completion release the
 owned read resources. The current owner must account for pinned storage and
 native memory; a bounded JavaScript accumulator alone is insufficient.
+
+### Current physical custody correction (0.4.1)
+
+Source observation at main `ef93af85dcd6add82ff5b5fee21ca12d205c61cd`:
+[`call-shard-read-view-manager.js`](../../../src/service/call-shard-read-view-manager.js)
+opens a separate readonly connection, pins a deferred WAL snapshot, assigns a
+fixed 4096-byte charge, and removes or invalidates the view even when its close
+helper returns false. Those facts do not establish a bound on the WAL pinned
+by concurrent writes, or prove that a forgotten native reader has closed. The
+reviewed WIP's
+[hydration-image implementation](https://github.com/psvensson/lagrange/blob/dc29d85bedbbe4310bfcd4cf7e46e8b65a654b2d/src/partition/partition-hydration-image-pages.js)
+is a second consumer to reconcile, not an implementation already on main.
+The following races are preregistered counterexamples, not reproduced failures.
+
+The existing partition storage lifetime boundary SHALL register every retained
+reader against its exact storage-handle incarnation before publication. Close,
+shutdown, checkpoint and snapshot installation SHALL consume that same custody
+record. Query and CDC owners keep their separate identities, page rules,
+invalidation policies and retry outcomes; sharing physical custody does not
+give CDC query semantics or impose CDC image expiry on a query attempt.
+
+Retirement SHALL stop new admissions, fence queued/late replies, and obtain
+acknowledged reader closure before replacing the database or unlinking its WAL
+sidecars. A failed close leaves an owned resource and a typed blocked/refused
+transition; deleting a map entry is not proof of closure. Reopening the same
+pathname is a new incarnation. Any applied index or image watermark attached
+to a view SHALL be read after pinning, through the same SQLite snapshot as its
+rows. A main-thread position sampled before opening another connection is not
+that snapshot's witness and does not establish a leader read barrier.
+
+The owner SHALL separately bound active views, age/deadline, native/result
+buffers and actual storage growth held by readers. A count, a fixed per-view
+estimate or an applied-entry distance SHALL NOT be reported as observed WAL
+bytes. Seal how shared-file bytes are measured without double counting, how
+over-budget work is refused, and which admission/retirement action prevents
+further growth before claiming a hard bound. Long-lived idle cursors must be
+retired through the existing lifecycle even if no next-page request arrives.
+
+Binary acceptance for the named custody successor requires all of:
+
+- A deterministic production-owner witness pauses a reader across replacement,
+  shutdown and same-path reopen; old reads/replies cannot attach to the new
+  incarnation, and no sidecar is removed while its reader is live.
+- Injected close failure retains custody and accounting until actual closure;
+  a dropped acknowledgement cannot release a generation or reuse its slot.
+- Concurrent commits between snapshot acquisition steps cannot produce a
+  row/watermark mismatch; lost custody discards the whole query attempt while
+  CDC follows its own resnapshot contract.
+- Sustained writes with an idle pinned reader exercise predeclared WAL-byte,
+  age and reader-count limits. Repeated cancel/expiry/reopen reaches a measured
+  resource plateau and permits subsequent reads/checkpoints.
+- The relevant witness turns red when the generation/closure fence or actual
+  resource enforcement is removed. Exact-candidate lab receipts and independent
+  review record the observations; no constant or source-symbol check suffices.
+
+### Coherent cut is a separate 0.5 decision
+
+The admitted scope remains `per_shard_retained_read_view`. Reading a shard's
+watermark in its snapshot proves what that view contains; a vector of such
+views does not prove a single transactionally coherent cut, latest data, or
+linearizability. A future coherent-cut capability must specify a common barrier,
+cross-partition TX1 visibility, schema/topology membership and all-or-refuse
+acquisition before implementation. A missing quorum may require refusal or an
+unknown outcome. Neither an unexposed ReadIndex primitive nor a coordinator's
+wall clock may be assumed to provide the barrier. This decision is a 0.5
+continuation under the existing query/transaction owners, not part of the
+0.4.1 custody repair or a new snapshot coordinator.
 
 ### Keyset position within that view
 
@@ -206,11 +276,13 @@ only bounded terminal/fencing evidence needed to reject late deliveries.
 
 ## Planned acceptance and red witnesses
 
-The proposed Q3 gate is the existing scenario-harness mechanism with scenario
+The broader public-path requirement remains the scenario-harness mechanism with scenario
 `call-shard-paged-execution`, three consecutive accepted runs and metric
-`priority`. The Quest must seal its concrete workload and failure schedule
-against a meaningful red measurement before implementation. This document
-does not record such a run.
+`priority`. Q3's historical script `doneWhen` remains authoritative for its
+sealed verdict; this requirement does not rewrite it. The existing pilot gate
+consumes the broader journey, while the custody successor owns its new failure
+witnesses. Each new implementation must seal its workload and failure schedule
+against an actual red measurement. This document records no such run.
 
 The real public journey must build a generated service, publish its compiled
 component, deploy through the canonical payload store and invoke it over HTTP

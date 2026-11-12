@@ -33,7 +33,7 @@ test, model, or immutable run artifact).
 
 3. **Paired-invariant / ping-pong attack**
    - Name the invariants on both sides that historically pull in opposite
-     directions.
+     directions and a reachable counterexample to each material claim.
    - Prove they are green **in the same deterministic witness**, not only in
      separate tests.
    - For a known historical fix class, show that restoring the old local
