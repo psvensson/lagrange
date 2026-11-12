@@ -86,6 +86,8 @@ const REFUSALS = [
       authoritativeReadMode: MODE.OWNER_RPC_REQUIRED}), expected: {code: CONTRADICTION}},
   {name: 'unspecified strategy owner token at projection ingress', projection: true,
     authority: TOKEN, expected: {code: CONTRADICTION}},
+  {name: 'flat RPC request at projection ingress', projection: true,
+    options: {authoritativeReadMode: MODE.OWNER_RPC_REQUIRED}, expected: {code: CONTRADICTION}},
 ];
 
 for (const refusal of REFUSALS) {
@@ -103,5 +105,17 @@ for (const refusal of REFUSALS) {
     t.equal(f.calls.owner.length, 0, 'no owner executes a substituted contract');
     t.equal(f.calls.cache, 0, 'projection access cannot discharge the rejected intent');
     t.equal(f.gateway.inFlightReadRequestsByKey.size, 0);
+  });
+}
+
+for (const strategy of [STRATEGY.CACHE, STRATEGY.BOOTSTRAP_SNAPSHOT,
+  STRATEGY.OWNER_LOCAL_NON_PROPAGATED]) {
+  test(`the canonical ${strategy} contract cannot promise a required RPC owner`, async (t) => {
+    t.throws(() => buildControlPlaneReadAuthority({strategy,
+      authoritativeReadMode: MODE.OWNER_RPC_REQUIRED}), {code: CONTRADICTION});
+    const declared = buildControlPlaneReadAuthority({strategy});
+    t.equal(declared.strategy, strategy);
+    t.equal(declared.authoritativeReadMode, MODE.OWNER_LOCAL_ONLY,
+      'an ordinary explicit projection or local interaction remains valid');
   });
 }

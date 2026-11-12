@@ -113,3 +113,23 @@ it does not prove native serving, transport, or whole recipient reclamation. Its
 first lab result is still owed. The recipient controller's separately sealed
 controls own the actual detach/reclaim consequence. One canonical classifier must
 inspect the original answer before a normalizer drops any failure evidence.
+
+Job 2935 independently measured the expanded gateway/view controls at ac8e2389:
+two failed roots, 148 classified assertions, full 68,517-byte stream SHA256
+a409ee7137b53cff8beac22ed70a163f1f57334c28ca8325bbcbb84303f16425.
+Both valid supplied tokens were replaced and their required-leader intent was
+lost. Invalid and contradictory supplied tokens reached identity and admission;
+crossing the declared strategy could invoke the owner or projection cache. The
+view dropped errorCode, deferRetry and retryAfterMs; its same-owner healing
+positive passed. This is separate from job 2894's original controls.
+
+Further tests-only controls now retain the exact repository witness cell across
+held reads and post-read observers, require that cell for deletion, and expose
+the inner read retry under the existing outer confirmation cadence. A previous
+answered mismatch cannot turn later owner unavailability into absence. The
+public witness snapshot remains a clone. Gateway strategy controls also reject
+flat RPC-required requests at projection ingress and exercise the same canonical
+relation for cache, bootstrap-snapshot and owner-local strategies; their normal
+declared local defaults remain valid. These controls still require first lab
+measurement before candidate acceptance. No production source is staged in this
+tests-only seal.
