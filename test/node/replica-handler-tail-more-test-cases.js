@@ -137,6 +137,7 @@ export async function registerReplicaHandlerTailMoreTests({
 
       handler.initialize();
       handler.localServices.set('replica-a', {
+        async shutdown() {},
         getStats() {
           return {
             pendingRequestTracker: {
@@ -155,6 +156,7 @@ export async function registerReplicaHandlerTailMoreTests({
         },
       });
       handler.localServices.set('replica-b', {
+        async shutdown() {},
         getStats() {
           return {
             pendingRequestTracker: {
@@ -188,7 +190,7 @@ export async function registerReplicaHandlerTailMoreTests({
       t.equal(pending.maxPendingObserved, 4, 'retains highest observed pending');
       t.equal(pending.saturationPercent, 20, 'computes aggregate saturation');
 
-      handler.shutdown();
+      await handler.shutdown();
     });
 
   t.test('emits events during lifecycle operations', async (t) => {
@@ -1279,6 +1281,7 @@ export async function registerReplicaHandlerTailMoreTests({
   // replica-handler-leadership-transfer.test.js.
   const buildTransferTrackedService = (role, answer) => {
     const trackedService = {
+      async shutdown() {},
       role,
       transfers: [],
       getRole() {

@@ -20,6 +20,7 @@ import {
 
 // Fat-row payload shaping for the S6 scaled fixture: deterministic filler
 // (no RNG) so re-runs digest identically.
+const INSTALL_RECEIVER_ID = 'snapshot-fixture-target';
 const FIXTURE_PAYLOAD_FILL = 'x';
 const FIXTURE_DEFAULT_LARGE_ROW_PAYLOAD_BYTES = 64 * 1024;
 
@@ -112,6 +113,7 @@ async function installSealedGeneration(options) {
     checkpointsRoot,
     generationIndex,
     expectedIdentity: identity,
+    expectedReplicaIdentity: INSTALL_RECEIVER_ID,
   });
   if (installed.outcome !== RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED) {
     throw new Error(`install fixture failed: ${installed.outcome}`);

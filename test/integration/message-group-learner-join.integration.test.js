@@ -25,7 +25,7 @@ import {RAFT_MEMBERSHIP_OPERATION, RAFT_OPERATION} from
   '../../src/raft/raft-operation-port-constants.js';
 import {resolveReplicaCheckpointsRoot} from '../../src/raft/snapshot-install.js';
 import {RAFT_SNAPSHOT_INSTALL_DIRNAME, RAFT_SNAPSHOT_INSTALL_MARKER_FILE,
-  RAFT_SNAPSHOT_INSTALL_STAGING_FILE} from '../../src/raft/snapshot-install-constants.js';
+  RAFT_SNAPSHOT_INSTALL_SIDECAR_SUFFIXES, RAFT_SNAPSHOT_INSTALL_STAGING_FILE} from '../../src/raft/snapshot-install-constants.js';
 import {RAFT_CHECKPOINT_PAYLOAD_SIDECAR_SUFFIXES} from
   '../../src/raft/snapshot-checkpoint-constants.js';
 import {MEMBERSHIP_OBLIGATION} from
@@ -853,6 +853,9 @@ test('a pending install marker, staging or replica sidecar of the target is a pr
     'install marker': (dbPath) => path.join(installDir(dbPath), RAFT_SNAPSHOT_INSTALL_MARKER_FILE),
     'install staging': (dbPath) => path.join(installDir(dbPath), RAFT_SNAPSHOT_INSTALL_STAGING_FILE),
     'replica sidecar': (dbPath) => `${dbPath}${RAFT_CHECKPOINT_PAYLOAD_SIDECAR_SUFFIXES[0]}`,
+    ...Object.fromEntries(RAFT_SNAPSHOT_INSTALL_SIDECAR_SUFFIXES.map((suffix) =>
+      [`staging ${suffix}`, (dbPath) =>
+        `${path.join(installDir(dbPath), RAFT_SNAPSHOT_INSTALL_STAGING_FILE)}${suffix}`])),
   };
   for (const [name, fileOf] of Object.entries(parts)) {
     await t.test(name, async (t) => {

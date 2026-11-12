@@ -15,7 +15,8 @@ import {
 } from '../../src/raft/snapshot-checkpoint-store.js';
 import {
   RAFT_SNAPSHOT_INSTALL_DIRNAME,
-  RAFT_SNAPSHOT_INSTALL_MARKER_FILE,
+  RAFT_SNAPSHOT_INSTALL_MARKER_KIND,
+  RAFT_SNAPSHOT_INSTALL_REJECTION,
   RAFT_SNAPSHOT_INSTALL_NO_REJECTION,
   RAFT_SNAPSHOT_INSTALL_STATE,
 } from '../../src/raft/snapshot-install-constants.js';
@@ -29,6 +30,7 @@ import {
   RAFT_SNAPSHOT_TRANSFER_PROGRESS_MARKER_FILE,
 } from '../../src/raft/snapshot-transfer-constants.js';
 import {createSealedSourceGeneration} from './snapshot-catchup-fixture.js';
+import {markerValue, writeMarker} from '../../src/raft/snapshot-install-marker.js';
 
 // S5 retention sweep guards (quest raft-snapshot-retention-compaction):
 // bounded generation count; pinned generations (install marker in an active
@@ -49,6 +51,7 @@ const IDENTITY = Object.freeze({
   entity: Object.freeze({kind: 'partition', id: STATE_TABLE}),
   membershipEpoch: 2,
 });
+const INSTALL_TARGET = Object.freeze({replicaId: 'sweep-target', partitionId: PARTITION_ID});
 const GENERATION_COUNT = 4;
 const NO_PINS = Object.freeze([]);
 
@@ -82,15 +85,12 @@ function makeWorkDir() {
 }
 
 function writeInstallMarker(checkpointsRoot, state, generationIndex) {
-  const installDir = path.join(checkpointsRoot, RAFT_SNAPSHOT_INSTALL_DIRNAME);
-  fs.mkdirSync(installDir, {recursive: true});
-  fs.writeFileSync(
-    path.join(installDir, RAFT_SNAPSHOT_INSTALL_MARKER_FILE),
-    JSON.stringify({
-      state,
-      installId: 'sweep-install-id',
-      generationIndex,
-      rejectionReason: RAFT_SNAPSHOT_INSTALL_NO_REJECTION,
+  writeMarker(checkpointsRoot, markerValue(state, 'sweep-install-id', generationIndex,
+    state === RAFT_SNAPSHOT_INSTALL_STATE.REJECTED ?
+      RAFT_SNAPSHOT_INSTALL_REJECTION.STAGING_LOST : RAFT_SNAPSHOT_INSTALL_NO_REJECTION, {
+      kind: RAFT_SNAPSHOT_INSTALL_MARKER_KIND.PARTITION_STATE_MACHINE,
+      createAuthority: {...INSTALL_TARGET, entityId: STATE_TABLE, entityType: 'partition'},
+      preInstallDigest: 'absent',
     }));
 }
 
@@ -125,6 +125,7 @@ test('bounded count: the sweep keeps the newest N complete generations',
       t.same(listCheckpointGenerations(checkpointsRoot), [1, 2, 3, 4],
         'anti-vacuous: all four are listed under the root');
       const report = sweepCheckpointGenerations({
+        installTarget: INSTALL_TARGET,
         checkpointsRoot,
         retainedGenerationCount: RAFT_SNAPSHOT_RETAINED_GENERATION_COUNT,
         pinnedGenerationIndexes: NO_PINS,
@@ -161,9 +162,10 @@ test('an active install marker pins its generation through the sweep',
         await buildGenerationRoot(workDir, GENERATION_COUNT);
       writeInstallMarker(
         checkpointsRoot, RAFT_SNAPSHOT_INSTALL_STATE.STAGED, 1);
-      const pins = gatherRetentionPins({checkpointsRoot});
+      const pins = gatherRetentionPins({checkpointsRoot, installTarget: INSTALL_TARGET});
       t.same(pins, [1], 'the staged install marker yields the pin');
       const report = sweepCheckpointGenerations({
+        installTarget: INSTALL_TARGET,
         checkpointsRoot,
         pinnedGenerationIndexes: pins,
       });
@@ -187,10 +189,11 @@ test('a REJECTED install marker does not pin; the newest rule still holds',
         await buildGenerationRoot(workDir, GENERATION_COUNT);
       writeInstallMarker(
         checkpointsRoot, RAFT_SNAPSHOT_INSTALL_STATE.REJECTED, 1);
-      const pins = gatherRetentionPins({checkpointsRoot});
+      const pins = gatherRetentionPins({checkpointsRoot, installTarget: INSTALL_TARGET});
       t.same(pins, [], 'a rejected marker yields NO pin (recorded lifetime rule)');
       // Retained count zero: only the sole-source floor protects anything.
       const report = sweepCheckpointGenerations({
+        installTarget: INSTALL_TARGET,
         checkpointsRoot,
         retainedGenerationCount: 0,
         pinnedGenerationIndexes: pins,
@@ -216,10 +219,11 @@ test('transfer markers and in-process pins protect their generations',
         await buildGenerationRoot(workDir, GENERATION_COUNT);
       writeTransferMarker(checkpointsRoot, 2);
       const pins = gatherRetentionPins(
-        {checkpointsRoot, inProcessPins: [1]});
+        {checkpointsRoot, installTarget: INSTALL_TARGET, inProcessPins: [1]});
       t.same(pins, [1, 2],
         'the pin set unions the transfer marker and the in-process pin');
       const report = sweepCheckpointGenerations({
+        installTarget: INSTALL_TARGET,
         checkpointsRoot,
         retainedGenerationCount: 1,
         pinnedGenerationIndexes: pins,
@@ -258,8 +262,10 @@ test('descriptor-first interruption: a partial dir reads partial, then GCs',
       // instant), the descriptor-less dir is NOT garbage-collected.
       writeTransferMarker(checkpointsRoot, 1);
       const protectedReport = sweepCheckpointGenerations({
+        installTarget: INSTALL_TARGET,
         checkpointsRoot,
-        pinnedGenerationIndexes: gatherRetentionPins({checkpointsRoot}),
+        pinnedGenerationIndexes: gatherRetentionPins({
+          checkpointsRoot, installTarget: INSTALL_TARGET}),
       });
       t.same(protectedReport.garbageCollected, [],
         'a transfer marker shields the descriptor-less dir from GC');
@@ -271,6 +277,7 @@ test('descriptor-first interruption: a partial dir reads partial, then GCs',
         path.join(checkpointsRoot, RAFT_SNAPSHOT_TRANSFER_DIRNAME),
         {recursive: true, force: true});
       const report = sweepCheckpointGenerations({
+        installTarget: INSTALL_TARGET,
         checkpointsRoot,
         pinnedGenerationIndexes: NO_PINS,
       });
@@ -302,6 +309,7 @@ test('non-generation directories are never sweep candidates', async (t) => {
       fs.mkdirSync(dir, {recursive: true});
     }
     const report = sweepCheckpointGenerations({
+      installTarget: INSTALL_TARGET,
       checkpointsRoot,
       retainedGenerationCount: 1,
       pinnedGenerationIndexes: NO_PINS,

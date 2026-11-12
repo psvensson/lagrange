@@ -76,25 +76,99 @@ async function fenceFailedReplicaCreateRuntime(handler, replicaId, partitionId,
   fenced = null, primary = null) {
   const service = await handler.snapshotInstallOwner.claimForCreateFailure(
     replicaId, fenced);
-  if (!service) {
-    const pending = [...handler.pendingRuntimeShutdowns].filter(([, identity]) =>
-      identity.replicaId === replicaId && identity.partitionId === partitionId);
-    for (const [retained] of pending) {
-      await fenceFailedReplicaCreateRuntime(handler, replicaId, partitionId, retained, primary);
+  const services = new Set(service ? [service] : []);
+  for (const [retained, identity] of handler.pendingRuntimeShutdowns) {
+    if (identity.replicaId === replicaId && identity.partitionId === partitionId) {
+      services.add(retained);
     }
-    return pending.length > 0;
   }
-  const retainedPrimary = primary ?? handler.pendingRuntimeShutdowns.get(service)?.primary ?? null;
-  handler.pendingRuntimeShutdowns.set(service, {replicaId, partitionId, primary: retainedPrimary});
-  try {
-    if (typeof service.shutdown === 'function') {
+  const errors = [];
+  await Promise.all([...services].map(async (retained) => {
+    try {
+      await releaseReplicaRuntime(handler, retained, replicaId, partitionId, primary);
+      detachReleasedRuntime(handler, retained, replicaId);
+    } catch (error) {
+      appendFailure(errors, error);
+    }
+  }));
+  if (errors.length === 1) throw errors[0];
+  if (errors.length > 1) {
+    throw new AggregateErrorConstructor(exactFailureIterable(errors), RUNTIME_SHUTDOWN_FAILED);
+  }
+  return services.size > 0;
+}
+
+/** Consume physical release debt without claiming an episode or granting deletion.
+ * The caller first quiesces the episode; recreation calls from its own episode.
+ * @param {Object} handler - Host custody owner.
+ * @param {string} replicaId - Exact replica.
+ * @param {string} partitionId - Exact partition.
+ * @param {Object|null} service - Captured predecessor, never a replacement lookup.
+ * @return {Promise<void>} All captured and retained objects released.
+ */
+async function releaseReplicaCleanupDebt(handler, replicaId, partitionId, service = null) {
+  const services = new Set(service ? [service] : []);
+  for (const [runtime, identity] of handler.pendingRuntimeShutdowns) {
+    if (identity.replicaId === replicaId && identity.partitionId === partitionId) {
+      services.add(runtime);
+    }
+  }
+  const errors = [];
+  await Promise.all([...services].map(async (runtime) => {
+    try {
+      await releaseReplicaRuntime(handler, runtime, replicaId, partitionId);
+    } catch (error) {
+      appendFailure(errors, error);
+    }
+  }));
+  if (errors.length === 0) return;
+  const cause = errors.length === 1 ? errors[0] :
+    new AggregateErrorConstructor(exactFailureIterable(errors), RUNTIME_SHUTDOWN_FAILED);
+  throw Object.assign(new Error(RUNTIME_CLEANUP_PENDING, {cause}), {
+    code: REPLICA_CLEANUP_ERROR_CODE.RUNTIME_RELEASE_DEFERRED,
+    errorCode: REPLICA_CLEANUP_ERROR_CODE.RUNTIME_RELEASE_DEFERRED,
+    replicaId, partitionId, deferRetry: true,
+  });
+}
+
+// Never claims an episode: an episode's own factory continuation must be able
+// to release its product without waiting on itself. Register before invoking
+// shutdown; concurrent callers join the exact same physical release.
+/** Release one exact runtime, retaining failures and joining concurrent callers.
+ * @param {Object} handler - Host custody owner.
+ * @param {Object} service - Exact physical resource owner.
+ * @param {string} replicaId - Replica identity.
+ * @param {string} partitionId - Partition identity.
+ * @param {Error|null} primary - Original opening failure.
+ * @return {Promise<void>} Physical shutdown completion, never episode settlement.
+ */
+function releaseReplicaRuntime(handler, service, replicaId, partitionId, primary = null) {
+  let retained = handler.pendingRuntimeShutdowns.get(service);
+  if (retained === undefined) {
+    retained = {replicaId, partitionId, primary, releaseInFlight: null, lastFailure: null};
+    handler.pendingRuntimeShutdowns.set(service, retained);
+  }
+  if (retained.releaseInFlight) return retained.releaseInFlight;
+  const {promise, resolve, reject} = Promise.withResolvers();
+  retained.releaseInFlight = promise;
+  const release = async () => {
+    try {
       await service.shutdown();
+    } catch (cleanup) {
+      retained.lastFailure = cleanup;
+      throw retained.primary === null ? cleanup :
+        withRaftOpeningCleanupFailure(retained.primary, cleanup);
     }
-  } catch (cleanup) {
-    throw retainedPrimary === null ? cleanup :
-      withRaftOpeningCleanupFailure(retainedPrimary, cleanup);
-  }
-  handler.pendingRuntimeShutdowns.delete(service);
+    handler.pendingRuntimeShutdowns.delete(service);
+  };
+  release().then(resolve, (error) => {
+    retained.releaseInFlight = null;
+    reject(error);
+  });
+  return promise;
+}
+
+function detachReleasedRuntime(handler, service, replicaId) {
   if (handler.localServices.get(replicaId) === service) {
     handler.localServices.delete(replicaId);
   }
@@ -106,7 +180,6 @@ async function fenceFailedReplicaCreateRuntime(handler, replicaId, partitionId,
       createAttemptToken: null,
     });
   }
-  return true;
 }
 
 /** Shut down through the existing host owner; failed releases remain reachable.
@@ -145,15 +218,9 @@ function shutdownReplicaHandler(handler, options) {
     const errors = [];
     for (const service of services) {
       try {
-        if (typeof service.shutdown === 'function') await service.shutdown();
-        handler.pendingRuntimeShutdowns.delete(service);
+        await releaseReplicaRuntime(handler, service, service.replicaId, service.partitionId);
       } catch (error) {
         appendFailure(errors, error);
-        // Even a later routing change cannot discard the failed instance.
-        if (!handler.pendingRuntimeShutdowns.has(service)) {
-          handler.pendingRuntimeShutdowns.set(service,
-            {replicaId: service.replicaId, partitionId: service.partitionId});
-        }
       }
     }
     const observationFailures = cancelParticipantAppliedPositionObservations(handler);
@@ -180,4 +247,4 @@ function shutdownReplicaHandler(handler, options) {
 }
 
 export {settlePendingReplicaRuntimeCleanup, fenceFailedReplicaCreateRuntime,
-  shutdownReplicaHandler};
+  shutdownReplicaHandler, releaseReplicaRuntime, releaseReplicaCleanupDebt};

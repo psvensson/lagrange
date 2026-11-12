@@ -34,13 +34,14 @@ import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
 import {LEARNER_CATCH_UP_ACKNOWLEDGEMENT as ACK} from '../raft/learner-promotion-progress.js';
 import {learnerCatchUpAcknowledgement, namesExactLearner as namesLearner} from
   '../raft/learner-catch-up-acknowledgement.js';
-import {RAFT_CHECKPOINT_CREATION_OUTCOME, RAFT_CHECKPOINT_PAYLOAD_SIDECAR_SUFFIXES,
+import {RAFT_CHECKPOINT_CREATION_OUTCOME,
   RAFT_CHECKPOINT_VALIDATION_OUTCOME} from '../raft/snapshot-checkpoint-constants.js';
 import {createSqliteStateMachineCheckpoint, readCheckpoint} from
   '../raft/snapshot-checkpoint-store.js';
 import {requestSnapshotInstall, resolveReplicaCheckpointsRoot as checkpointsRootOf} from
   '../raft/snapshot-install.js';
 import {RAFT_SNAPSHOT_INSTALL_DIRNAME, RAFT_SNAPSHOT_INSTALL_MARKER_FILE,
+  RAFT_SNAPSHOT_INSTALL_SIDECAR_SUFFIXES,
   RAFT_SNAPSHOT_INSTALL_OUTCOME, RAFT_SNAPSHOT_INSTALL_STAGING_FILE} from
   '../raft/snapshot-install-constants.js';
 import {resolveTimeSource} from '../time/time-source.js';
@@ -80,7 +81,8 @@ async function sealLeaderImage(leader, options, stamp) {
   const identity = learnerCheckpointIdentity(leader.groupId, options.clusterId,
     stamp.membershipGenerationIndex);
   const created = await createSqliteStateMachineCheckpoint({db: leader.db, identity,
-    checkpointsRoot: options.checkpointsRoot, raftRsGroupId: leader.groupId});
+    checkpointsRoot: options.checkpointsRoot, raftRsGroupId: leader.groupId,
+    installTarget: {replicaId: leader.replicaId, partitionId: leader.groupId}});
   // The stamp and the image are two reads of the leader. The image's epoch
   // is the stamp's configuration generation, and the checkpoint owner holds a
   // message-group image's own generation to its epoch
@@ -160,10 +162,11 @@ function learnerJoinInput(host, options) {
 // cleanup are other owners').
 function targetGenerationPresent(dbPath, checkpointsRoot) {
   const installDir = path.join(checkpointsRoot, RAFT_SNAPSHOT_INSTALL_DIRNAME);
-  return [dbPath,
-    ...RAFT_CHECKPOINT_PAYLOAD_SIDECAR_SUFFIXES.map((suffix) => `${dbPath}${suffix}`),
-    path.join(installDir, RAFT_SNAPSHOT_INSTALL_MARKER_FILE),
-    path.join(installDir, RAFT_SNAPSHOT_INSTALL_STAGING_FILE)]
+  const staged = path.join(installDir, RAFT_SNAPSHOT_INSTALL_STAGING_FILE);
+  return [dbPath, staged,
+    ...RAFT_SNAPSHOT_INSTALL_SIDECAR_SUFFIXES.flatMap((suffix) =>
+      [`${dbPath}${suffix}`, `${staged}${suffix}`]),
+    path.join(installDir, RAFT_SNAPSHOT_INSTALL_MARKER_FILE)]
     .some((file) => fs.existsSync(file));
 }
 

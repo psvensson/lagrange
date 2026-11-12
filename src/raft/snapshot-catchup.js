@@ -234,11 +234,11 @@ function selectNewestEligibleGeneration(checkpointsRoot, leaderBoundary,
  * @return {Function} async ({identity, checkpointsRoot, inProcessPins}) ->
  *   typed creation result
  */
-function createCheckpointSealer(db) {
+function createCheckpointSealer(db, installTarget) {
   return ({identity, checkpointsRoot, inProcessPins}) => {
     const hasRaftRsRecord = Boolean(db && identity?.raftGroupId &&
       RaftRsDurableStore.hasDurableRecordIn(db, identity.raftGroupId));
-    return createSqliteStateMachineCheckpoint({db, identity, checkpointsRoot,
+    return createSqliteStateMachineCheckpoint({db, identity, checkpointsRoot, installTarget,
       ...(hasRaftRsRecord ? {raftRsGroupId: identity.raftGroupId} : {}),
       inProcessPins});
   };

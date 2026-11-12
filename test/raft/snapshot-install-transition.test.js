@@ -31,6 +31,7 @@ import {
 // identity and stale epoch rejected at install, worker-path typed refusal,
 // and no commit watermark observable ahead of installed state.
 
+const INSTALL_RECEIVER_ID = 'snapshot-fixture-target';
 const PARTITION_ID = 'sql_transactions-p1';
 const STATE_TABLE = 'sql_transactions';
 const SOURCE_TERM = 4;
@@ -117,6 +118,7 @@ test('a fresh install reconstructs every follower-local row at the boundary',
         checkpointsRoot: fixture.checkpointsRoot,
         generationIndex: fixture.lastIndex,
         expectedIdentity: IDENTITY,
+        expectedReplicaIdentity: INSTALL_RECEIVER_ID,
       });
       t.equal(installed.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED,
         'install completes');
@@ -168,6 +170,7 @@ test('the durable term/votedFor rule holds under attack', async (t) => {
         checkpointsRoot: fixture.checkpointsRoot,
         generationIndex: fixture.lastIndex,
         expectedIdentity: IDENTITY,
+        expectedReplicaIdentity: INSTALL_RECEIVER_ID,
       });
       t.equal(installed.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED,
         'install completes over a higher-term local db');
@@ -195,6 +198,7 @@ test('the durable term/votedFor rule holds under attack', async (t) => {
         checkpointsRoot: fixture.checkpointsRoot,
         generationIndex: fixture.lastIndex,
         expectedIdentity: IDENTITY,
+        expectedReplicaIdentity: INSTALL_RECEIVER_ID,
       });
       t.equal(installed.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED,
         'install completes over a lower-term local db');
@@ -258,6 +262,7 @@ test('foreign identity and stale epoch are rejected at install time',
           checkpointsRoot: fixture.checkpointsRoot,
           generationIndex: fixture.lastIndex,
           expectedIdentity: identity,
+          expectedReplicaIdentity: INSTALL_RECEIVER_ID,
         });
         t.equal(refused.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.REJECTED,
           `${label} is rejected`);
@@ -281,6 +286,7 @@ test('worker-path (memory-backed) install requests are a typed refusal',
         checkpointsRoot: fixture.checkpointsRoot,
         generationIndex: fixture.lastIndex,
         expectedIdentity: IDENTITY,
+        expectedReplicaIdentity: INSTALL_RECEIVER_ID,
       });
       t.equal(refused.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.REJECTED,
         'a memory-backed replica path cannot install');

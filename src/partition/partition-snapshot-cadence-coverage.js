@@ -95,6 +95,7 @@ function inspectCheckpointCoverage(
   const generations = listCheckpointGenerations(checkpointsRoot);
   const pinned = new Set(gatherRetentionPins({
     checkpointsRoot,
+    installTarget: {replicaId: service.replicaId, partitionId: service.partitionId},
     inProcessPins: listInFlightGenerationIndexes(),
   }));
   let uncompactedCheckpoint = null;
