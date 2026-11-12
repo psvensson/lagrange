@@ -1,0 +1,300 @@
+{
+  "schema": "npm-staging-feasibility/1",
+  "source": "5e58474b13870c95ea6bd6175942c33984cd6ac9",
+  "limits": {
+    "entries": 2100,
+    "packed": 8388608,
+    "unpacked": 26214400
+  },
+  "ceiling": {
+    "runtimeIdentity": "NOT_MEASURED",
+    "importOrder": "NOT_MEASURED",
+    "runtimeProvenance": "NOT_MEASURED",
+    "sourceDigest": "NOT_MEASURED",
+    "delivery": "NOT_MEASURED",
+    "release": "NOT_MEASURED"
+  },
+  "outcome": "graph_refused",
+  "graph": {
+    "modules": 2109,
+    "raw": 742,
+    "compiled": 1367,
+    "edges": 9352,
+    "unclassified": 145,
+    "rawToCompiled": 0,
+    "digest": "93b5f34559b84d615df26871cf7dbb82b53c5e257923045dd1c162c6dccb81fa"
+  },
+  "violations": {
+    "count": 3461,
+    "digest": "f64547ff86d2ca428ae8598f5f5cf3456ffa368998c0a6a85201f584c5718746",
+    "examples": [
+      "missing-target:src/cli/bin/lagrange-admin.js:src/cli/bin/src/constants/index.js",
+      "missing-target:src/cli/bin/lagrange-admin.js:src/cli/bin/src/config/listener-port-model.js",
+      "missing-target:src/cli/bin/lagrange-admin.js:src/cli/bin/src/admin/admin-constants.js",
+      "missing-target:src/cli/bin/lagrange-admin.js:src/cli/bin/src/admin/admin-owner-operations.js",
+      "missing-target:src/cli/bin/lagrange-admin.js:src/cli/bin/src/rebalancer/runtime-service-policy.js"
+    ]
+  },
+  "runs": [
+    {
+      "entries": 797,
+      "packed": 4581689,
+      "unpacked": 22439609,
+      "tarSha256": "bb1fb479df95df714d3eadfb0d9c30306a2f5dc8e43491e99064c2c892a98e79",
+      "inventoryDigest": "7c0f029b4d39d519bd0d84058e3ec8e18228efbe95bd9948e46d730a4ddd9381"
+    },
+    {
+      "entries": 797,
+      "packed": 4581689,
+      "unpacked": 22439609,
+      "tarSha256": "bb1fb479df95df714d3eadfb0d9c30306a2f5dc8e43491e99064c2c892a98e79",
+      "inventoryDigest": "7c0f029b4d39d519bd0d84058e3ec8e18228efbe95bd9948e46d730a4ddd9381"
+    }
+  ],
+  "candidateDigest": "7a425acb82c479b6054f21967281664475efc9b2816dd6a5fdb2089276fbd6c2",
+  "controls": [
+    {
+      "name": "missing-worker",
+      "rejected": true,
+      "reason": "missing-entry:src/threading/service-worker.js"
+    },
+    {
+      "name": "missing-computed",
+      "rejected": true,
+      "reason": "missing-entry:src/lagrange-runtime-startup.js"
+    },
+    {
+      "name": "changed-asset",
+      "rejected": true,
+      "reason": "preserved-bytes:src/admin/static/playback-viewer.html"
+    },
+    {
+      "name": "input-root-external",
+      "rejected": true,
+      "reason": "root-leak:src/public-api.js"
+    },
+    {
+      "name": "raw-compiled-overlap",
+      "rejected": true,
+      "reason": "raw-compiled-overlap:src/storage/sqlite-prepared-statement-owner.js"
+    },
+    {
+      "name": "forged-count",
+      "rejected": true,
+      "reason": "packed-count"
+    },
+    {
+      "name": "forged-hash",
+      "rejected": true,
+      "reason": "packed-hash"
+    }
+  ],
+  "review": {
+    "verdict": "approve",
+    "verifier": "subagent:01a1cecc-2a65-7662-8906-3ed915cca71a",
+    "candidateDigest": "7a425acb82c479b6054f21967281664475efc9b2816dd6a5fdb2089276fbd6c2",
+    "measurementDigest": "19afb9fae94fcb45842d5d881124c16739d658a56f17502b0292979828d80a5e",
+    "sha256": "7d9598dc63d2fd8128db34b3138fefd4baf67ee8c584bef4420a8a09116bd95e",
+    "report": "/tmp/lagrange-npm-staging-independent-final-20261112/followup-r2/REVIEW.txt"
+  },
+  "artifactsRoot": "/tmp/lagrange-npm-staging-attempt8-20261112",
+  "measurementCandidateDigest": "0a6d5e9316127010ee7ae4377a06e69722866fd4a2c2f6e23e7130cfd48ecfa8",
+  "measurementApplicability": "Only post-measurement change is removal of one empty line in the test for padded-blocks lint. Producer/checker/Quest bytes exactly match measured candidate; focused tests and scoped statics rerun on final bytes.",
+  "baseline": {
+    "entries": 2142,
+    "packed": 5273175,
+    "unpacked": 23979206,
+    "tarSha256": "ebade0dda67e09304687efc4652023e21257a93e6f9ca91eb746b211193213cb",
+    "inventoryDigest": "3c59d66722d059b8f59f4589978bca5f79fcd4801a3ee98d2530c03afe83ad07"
+  },
+  "artifactsDigest": "69128e4a76c0f1324335daebcc4daddc18a4b361b7c886ab0346898f6f19b04d",
+  "artifacts": [
+    {
+      "path": "/tmp/lagrange-npm-staging-attempt8-20261112/a/classification.json",
+      "sha256": "2998515ffba4555086095496965511987bfee2f7d3a1f33584925f51d2a45ea9",
+      "size": 1507278
+    },
+    {
+      "path": "/tmp/lagrange-npm-staging-attempt8-20261112/a/crossings.json",
+      "sha256": "37e9996f8be1997ea2a1177575ec51f69a6dd43e4ccfd1d352b4dc8ce339108f",
+      "size": 434618
+    },
+    {
+      "path": "/tmp/lagrange-npm-staging-attempt8-20261112/a/metafile.json",
+      "sha256": "721bec6b485da334bcfae28a50d454fc96cc9c1a59d3ff93d23c87ae6b01eaf4",
+      "size": 2260129
+    },
+    {
+      "path": "/tmp/lagrange-npm-staging-attempt8-20261112/a/npm-pack.json",
+      "sha256": "143751094aa78c5833a552cbe32e16d3bb2dc764583f5530b0bfb88a7f563f06",
+      "size": 90285
+    },
+    {
+      "path": "/tmp/lagrange-npm-staging-attempt8-20261112/a/original-metafile.json",
+      "sha256": "9d590dfbd9f9ba03e7cbb0d5c7642620ba067a8f537a79cd037bd6131f35901d",
+      "size": 2260570
+    },
+    {
+      "path": "/tmp/lagrange-npm-staging-attempt8-20261112/a/packed/lagrange-server-0.4.0.tgz",
+      "sha256": "bb1fb479df95df714d3eadfb0d9c30306a2f5dc8e43491e99064c2c892a98e79",
+      "size": 4581689
+    },
+    {
+      "path": "/tmp/lagrange-npm-staging-attempt8-20261112/a/tar-list.txt",
+      "sha256": "121edd8aa7f0c5b7be443e14aaa237a5be9ac371c66c97154d1d3a727fb595f1",
+      "size": 80051
+    },
+    {
+      "path": "/tmp/lagrange-npm-staging-attempt8-20261112/a/tar-members.json",
+      "sha256": "a981332df0f65e66534dc09c723869ffca8c92ca44df37bcfc0094a8a9e461a7",
+      "size": 133721
+    },
+    {
+      "path": "/tmp/lagrange-npm-staging-attempt8-20261112/a/verified-stage.json",
+      "sha256": "0072766968ab5fa23d3b4e04ec84e7a36562c4a2f875905a3d6195600218443c",
+      "size": 1774526
+    },
+    {
+      "path": "/tmp/lagrange-npm-staging-attempt8-20261112/b/classification.json",
+      "sha256": "2998515ffba4555086095496965511987bfee2f7d3a1f33584925f51d2a45ea9",
+      "size": 1507278
+    },
+    {
+      "path": "/tmp/lagrange-npm-staging-attempt8-20261112/b/crossings.json",
+      "sha256": "34c303b444cc0c0e6e37cb608b79f20141bddc78d07e10dc78a3dee726cd94ee",
+      "size": 434618
+    },
+    {
+      "path": "/tmp/lagrange-npm-staging-attempt8-20261112/b/metafile.json",
+      "sha256": "721bec6b485da334bcfae28a50d454fc96cc9c1a59d3ff93d23c87ae6b01eaf4",
+      "size": 2260129
+    },
+    {
+      "path": "/tmp/lagrange-npm-staging-attempt8-20261112/b/npm-pack.json",
+      "sha256": "143751094aa78c5833a552cbe32e16d3bb2dc764583f5530b0bfb88a7f563f06",
+      "size": 90285
+    },
+    {
+      "path": "/tmp/lagrange-npm-staging-attempt8-20261112/b/original-metafile.json",
+      "sha256": "9d590dfbd9f9ba03e7cbb0d5c7642620ba067a8f537a79cd037bd6131f35901d",
+      "size": 2260570
+    },
+    {
+      "path": "/tmp/lagrange-npm-staging-attempt8-20261112/b/packed/lagrange-server-0.4.0.tgz",
+      "sha256": "bb1fb479df95df714d3eadfb0d9c30306a2f5dc8e43491e99064c2c892a98e79",
+      "size": 4581689
+    },
+    {
+      "path": "/tmp/lagrange-npm-staging-attempt8-20261112/b/tar-list.txt",
+      "sha256": "121edd8aa7f0c5b7be443e14aaa237a5be9ac371c66c97154d1d3a727fb595f1",
+      "size": 80051
+    },
+    {
+      "path": "/tmp/lagrange-npm-staging-attempt8-20261112/b/tar-members.json",
+      "sha256": "a981332df0f65e66534dc09c723869ffca8c92ca44df37bcfc0094a8a9e461a7",
+      "size": 133721
+    },
+    {
+      "path": "/tmp/lagrange-npm-staging-attempt8-20261112/b/verified-stage.json",
+      "sha256": "0072766968ab5fa23d3b4e04ec84e7a36562c4a2f875905a3d6195600218443c",
+      "size": 1774526
+    },
+    {
+      "path": "/tmp/lagrange-npm-staging-attempt8-20261112/baseline.json",
+      "sha256": "a9d2a78e471dd03b4c5f5fca7c2a6dd6a8eb3b56040cdc439de3f7d33ab73aec",
+      "size": 250070
+    },
+    {
+      "path": "/tmp/lagrange-npm-staging-attempt8-20261112/baseline/lagrange-server-0.4.0.tgz",
+      "sha256": "ebade0dda67e09304687efc4652023e21257a93e6f9ca91eb746b211193213cb",
+      "size": 5273175
+    },
+    {
+      "path": "/tmp/lagrange-npm-staging-attempt8-20261112/candidate.json",
+      "sha256": "8a441e4222853f68403ee450956010fcd311b076496ff7ed2a62953f85f03b43",
+      "size": 616
+    },
+    {
+      "path": "/tmp/lagrange-npm-staging-attempt8-20261112/config.json",
+      "sha256": "e65822b2a57bab3743f31eddd05d211c287c0c139c07bf80f3f669e162e3b0d9",
+      "size": 393
+    },
+    {
+      "path": "/tmp/lagrange-npm-staging-attempt8-20261112/controls.json",
+      "sha256": "22f794b42e7d87e3e60ae4bf5edf5438f95dfa65a8c884b61406922397cbbcbb",
+      "size": 816
+    },
+    {
+      "path": "/tmp/lagrange-npm-staging-attempt8-20261112/run.json",
+      "sha256": "5e3b8ab52343cf4e34f1bc98694c2e636b6253a4d4e3a3477b6a59628cbb6948",
+      "size": 4127411
+    },
+    {
+      "path": "/tmp/lagrange-npm-staging-attempt8-20261112/source.tar",
+      "sha256": "b0e7a6f9aa4e06a18e51181aea5d9a7bf69f3a8f15caa1c645d35435c7f06bac",
+      "size": 41031680
+    },
+    {
+      "path": "/tmp/lagrange-npm-staging-attempt8-20261112/toolchain.json",
+      "sha256": "9e068e15b8757269d08701c130183f894c5f497a7ab967dfcd0c703837404492",
+      "size": 21948
+    },
+    {
+      "path": "/tmp/lagrange-npm-staging-attempt8-20261112.log",
+      "sha256": "71e8a0b20d710e85c41dd4ad0c0306978e30924fcf63905bab60e18f8f08d685",
+      "size": 2477
+    },
+    {
+      "path": "/tmp/lagrange-npm-staging-controls-r4-20261112.log",
+      "sha256": "7ee1929820736535a186e4354caba6dd79554d00d6a44a49faddc0d28666cbfb",
+      "size": 568
+    },
+    {
+      "path": "/tmp/lagrange-npm-staging-static-r6-20261112/run.log",
+      "sha256": "5688ec1d3ee6f8524abe52c99e531524f98f3410f11ff2b32daa0d8a131ef498",
+      "size": 101
+    },
+    {
+      "path": "/tmp/lagrange-npm-staging-static-r6-20261112/cyclomatic.log",
+      "sha256": "bb5445b6e1062efe06695d191f8a67894aa250bd135d7c0836d01705bfe571ea",
+      "size": 42
+    },
+    {
+      "path": "/tmp/lagrange-npm-staging-static-r6-20261112/cognitive.log",
+      "sha256": "a543e43553a46dc97e309997c5afb8e566747bd2e8c887379ba0238e149b1a1b",
+      "size": 52
+    },
+    {
+      "path": "/tmp/lagrange-npm-staging-static-r6-20261112/lint.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    }
+  ],
+  "candidate": [
+    {
+      "path": "scripts/npm-package-stage-diagnostic.js",
+      "sha256": "6b1202fbb644ab0b4e7d2f0e0f54f14ff5b565bfb5a933cb76ab19ef5b59c8ff"
+    },
+    {
+      "path": "scripts/checks/npm-staging-feasibility-evidence.js",
+      "sha256": "3ab57af38574db1b30c894905fa2c19406f2225c8d1b0cb7931ad50f67f3e15c"
+    },
+    {
+      "path": "test/scripts/npm-staging-feasibility-evidence.test.js",
+      "sha256": "a82d78d3fa7e42477bd5f15036e06aded6a82ab52d3d77940bcbb529afb2285e"
+    },
+    {
+      "path": "solve/quests/npm-staging-feasibility/quest.json",
+      "sha256": "0b0939cde9808cf524ab61983c0931fdb19ac7218cd54b60fc9ff211e33953e4"
+    }
+  ],
+  "probeCeiling": "Compact receipt consistency only; remeasurement needs retained /tmp bytes and independent review.",
+  "remainingBlockers": [
+    "Emitted raw-external imports resolve relative to outdir, not nested entries/chunks.",
+    "Shipped debug-runtime import @vscode/dwarf-debugging is dev-only."
+  ],
+  "setupNotes": [
+    "Original missing tap-parser was absent worktree node_modules, repaired by existing shared link; no installation.",
+    "npm10.9.8 prepare ignored ignore-scripts and rewrote shared Git config; final unchanged baseline producer executed in /tmp Git-object snapshot, with no further shared config rewrite."
+  ]
+}
