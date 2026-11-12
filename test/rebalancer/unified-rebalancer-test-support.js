@@ -1,3 +1,4 @@
+import {createSystemTableCacheFixture} from './system-table-cache-fixture.js';
 import {createMockPolicyService, createMockControlPlaneReadinessService} from './test-helpers.js';
 /**
  * Shared world, transport and coordinator fixtures for UnifiedRebalancer.
@@ -63,32 +64,15 @@ export function createMockCache(
     ({boot_incarnation: FIXTURE_ENDPOINT_INCARNATION, ...row}));
   serviceEndpoints = serviceEndpoints.map((row) =>
     ({boot_incarnation: FIXTURE_ENDPOINT_INCARNATION, ...row}));
-  const cache = {
-    nodes: new Map(normalizedNodes.map((node) => [node.node_id, node])),
-    services: new Map(services.map((s) => [s.service_id, s])),
-    partitions: new Map(partitions.map((p) => [p.partition_id, p])),
-    tables: new Map(tables.map((t) => [t.table_id, t])),
-    message_groups: new Map(),
-    replica_operations: new Map(replicaOperations.map((op) => [op.operation_id, op])),
-    node_endpoints: new Map(nodeEndpoints.map((row, index) => [index, row])),
-    service_endpoints:
-      new Map(serviceEndpoints.map((row, index) => [index, row])),
-  };
-
-  const mockCache = {
-    get: (tableName, key) => cache[tableName]?.get(key),
-    filter: (tableName, predicate) => {
-      const table = cache[tableName];
-      if (!table) return [];
-      return Array.from(table.values()).filter(predicate);
-    },
-    getAll: (tableName) => {
-      const table = cache[tableName];
-      if (!table) return [];
-      return Array.from(table.values());
-    },
-  };
-  return mockCache;
+  return createSystemTableCacheFixture({
+    nodes: normalizedNodes,
+    services,
+    partitions,
+    tables,
+    replica_operations: replicaOperations,
+    node_endpoints: nodeEndpoints,
+    service_endpoints: serviceEndpoints,
+  });
 }
 
 // Create mock CDC integration service
@@ -119,6 +103,7 @@ export function createMockMessageRouter(
 // Endpoints published by a registered node at its boot incarnation.
 export function createNodeEndpoint(nodeId) {
   return {
+    endpoint_id: `${nodeId}-ws`,
     node_id: nodeId,
     transport_type: TRANSPORT_TYPE.WEBSOCKET,
     status: ENDPOINT_STATUS.ACTIVE,
@@ -128,6 +113,7 @@ export function createNodeEndpoint(nodeId) {
 
 export function createPostgresWireEndpoint(nodeId) {
   return {
+    endpoint_id: `${nodeId}-postgres-wire`,
     node_id: nodeId,
     service_id: META_SERVICE_ID.POSTGRES_WIRE,
     health_status: ENDPOINT_SYNC_HEALTH.HEALTHY,

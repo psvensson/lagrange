@@ -236,6 +236,12 @@ test('malformed retained work cannot disappear into a bounded zero-row observati
     return true;
   };
   delete f.rows[0].operation_id;
+  // Inject corrupt retained-read bytes at the cache observation seam. Real
+  // cache reads clone rows; mutating the seed object is not a cache update.
+  const filter = f.cache.filter.bind(f.cache);
+  f.cache.filter = (table, predicate) =>
+    table === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS ?
+      f.rows.filter(predicate) : filter(table, predicate);
   await t.rejects(f.coordinator.getEntityRecoveryOperationObservation(
     ENTITY.entityType, ENTITY.entityId), {...REFUSAL,
     reasonCode: REPLICA_OPERATION_REPOSITORY_ERROR_CODE.ENTITY_OPERATION_OBSERVATION_MALFORMED});

@@ -1,3 +1,4 @@
+import {createSystemTableCacheFixture} from './system-table-cache-fixture.js';
 import {createMockCoordinator, createMockPolicyService} from './test-helpers.js';
 import {DEFAULT_TABLE_POLICY} from '../../src/policy/policy-constants.js';
 /**
@@ -217,31 +218,15 @@ function createMockCache(
       node.ready_lease_expires_at : now + 10000,
     ...node,
   }));
-  const cache = {
-    nodes: new Map(normalizedNodes.map((node) => [node.node_id, node])),
-    services: new Map(services.map((s) => [s.service_id, s])),
-    partitions: new Map(partitions.map((p) => [p.partition_id, p])),
-    tables: new Map(tables.map((t) => [t.table_id, t])),
-    message_groups: new Map(),
-    replica_operations: new Map(replicaOperations.map((op) => [op.operation_id, op])),
-    node_endpoints: new Map(nodeEndpoints.map((row, index) => [index, row])),
-    service_endpoints:
-      new Map(serviceEndpoints.map((row, index) => [index, row])),
-  };
-
-  return {
-    get: (tableName, key) => cache[tableName]?.get(key),
-    filter: (tableName, predicate) => {
-      const table = cache[tableName];
-      if (!table) return [];
-      return Array.from(table.values()).filter(predicate);
-    },
-    getAll: (tableName) => {
-      const table = cache[tableName];
-      if (!table) return [];
-      return Array.from(table.values());
-    },
-  };
+  return createSystemTableCacheFixture({
+    nodes: normalizedNodes,
+    services,
+    partitions,
+    tables,
+    replica_operations: replicaOperations,
+    node_endpoints: nodeEndpoints,
+    service_endpoints: serviceEndpoints,
+  });
 }
 
 // Create mock CDC integration service

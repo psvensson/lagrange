@@ -1,3 +1,4 @@
+import {createSystemTableCacheFixture} from './system-table-cache-fixture.js';
 import {createMockCoordinator} from './test-helpers.js';
 /**
  * Unit tests for UnifiedRebalancer.
@@ -119,31 +120,15 @@ function createMockCache(
       node.ready_lease_expires_at : now + TEST_NUMBER.READY_LEASE_DURATION_MS,
     ...node,
   }));
-  const cache = {
-    nodes: new Map(normalizedNodes.map((node) => [node.node_id, node])),
-    services: new Map(services.map((s) => [s.service_id, s])),
-    partitions: new Map(partitions.map((p) => [p.partition_id, p])),
-    tables: new Map(tables.map((t) => [t.table_id, t])),
-    message_groups: new Map(),
-    replica_operations: new Map(replicaOperations.map((op) => [op.operation_id, op])),
-    node_endpoints: new Map(nodeEndpoints.map((row, index) => [index, row])),
-    service_endpoints:
-      new Map(serviceEndpoints.map((row, index) => [index, row])),
-  };
-
-  return {
-    get: (tableName, key) => cache[tableName]?.get(key),
-    filter: (tableName, predicate) => {
-      const table = cache[tableName];
-      if (!table) return [];
-      return Array.from(table.values()).filter(predicate);
-    },
-    getAll: (tableName) => {
-      const table = cache[tableName];
-      if (!table) return [];
-      return Array.from(table.values());
-    },
-  };
+  return createSystemTableCacheFixture({
+    nodes: normalizedNodes,
+    services,
+    partitions,
+    tables,
+    replica_operations: replicaOperations,
+    node_endpoints: nodeEndpoints,
+    service_endpoints: serviceEndpoints,
+  });
 }
 
 // Create mock CDC integration service
@@ -484,6 +469,7 @@ test(TEST_NAME.SUITE, async (t) => {
         nodeId: 'node-1',
       });
 
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.isLeader = true;
       rebalancer.clusterReadinessConfirmed = true;
@@ -525,6 +511,7 @@ test(TEST_NAME.SUITE, async (t) => {
         nodeId: 'node-1',
       });
 
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.isLeader = true;
       rebalancer.clusterReadinessConfirmed = true;
@@ -561,6 +548,7 @@ test(TEST_NAME.SUITE, async (t) => {
         nodeId: 'node-1',
       });
 
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.isLeader = true;
       rebalancer.clusterReadinessConfirmed = true;
@@ -594,6 +582,7 @@ test(TEST_NAME.SUITE, async (t) => {
       ],
     });
 
+    t.teardown(() => rebalancer.shutdown());
     rebalancer.initialize();
     rebalancer.isLeader = true;
     rebalancer.clusterReadinessConfirmed = true;
@@ -640,6 +629,7 @@ test(TEST_NAME.SUITE, async (t) => {
         messageRouter: router,
       });
 
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.isLeader = true;
       rebalancer.clusterReadinessConfirmed = true;
@@ -693,6 +683,7 @@ test(TEST_NAME.SUITE, async (t) => {
         messageRouter: router,
       });
 
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.isLeader = true;
       rebalancer.clusterReadinessConfirmed = true;
@@ -748,6 +739,7 @@ test(TEST_NAME.SUITE, async (t) => {
         messageRouter: router,
       });
 
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.isLeader = true;
       rebalancer.clusterReadinessConfirmed = true;
@@ -857,6 +849,7 @@ test(TEST_NAME.SUITE, async (t) => {
         controlPlaneReadinessService: readinessService,
       });
 
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.isLeader = true;
       rebalancer.clusterReadinessConfirmed = true;
@@ -1003,6 +996,7 @@ test(TEST_NAME.SUITE, async (t) => {
         controlPlaneReadinessService: readinessService,
       });
 
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.isLeader = true;
       rebalancer.clusterReadinessConfirmed = false;
@@ -1142,6 +1136,7 @@ test(TEST_NAME.SUITE, async (t) => {
         controlPlaneReadinessService: readinessService,
       });
 
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.isLeader = true;
       rebalancer.clusterReadinessConfirmed = true;

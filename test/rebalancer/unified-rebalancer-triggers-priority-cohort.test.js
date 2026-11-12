@@ -210,6 +210,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
         },
       });
 
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.isLeader = true;
       rebalancer.clusterReadinessConfirmed = true;
@@ -293,6 +294,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
         controlPlaneReadinessService: readinessService,
       });
 
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.isLeader = true;
       rebalancer.clusterReadinessConfirmed = true;
@@ -402,6 +404,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
         controlPlaneReadinessService: readinessService,
       });
 
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.isLeader = true;
       rebalancer.clusterReadinessConfirmed = true;
@@ -501,6 +504,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
         controlPlaneReadinessService: readinessService,
       });
 
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.isLeader = true;
       rebalancer.clusterReadinessConfirmed = true;
@@ -606,6 +610,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
         controlPlaneReadinessService: readinessService,
       });
 
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.isLeader = true;
       rebalancer.clusterReadinessConfirmed = true;

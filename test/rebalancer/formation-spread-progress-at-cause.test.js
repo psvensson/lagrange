@@ -1,3 +1,4 @@
+import {CDC_OPERATION} from '../../src/constants/cdc.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -393,7 +394,9 @@ test('composed-safety-and-finite-failure-progress: preserves safety and progress
   assert.ok(seedReplicas.length >= 2, 'quorum threshold met');
 
   // Phase 2: Finite failure clears: JOINER_1 reconnects
-  mockCache.get('nodes', JOINER_1).connection_state = 'connected';
+  mockCache.applySystemTableChange('nodes', CDC_OPERATION.UPDATE, {
+    node_id: JOINER_1, connection_state: 'connected',
+  });
   mockMessageRouter.hasRoute = (_id) => true;
   mockMessageRouter.hasLiveTransport = (_id) => true;
 

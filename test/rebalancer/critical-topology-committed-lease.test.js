@@ -15,6 +15,7 @@ import {
 import {withRegisteredIncarnations} from
   '../test-helpers/endpoint-incarnation-fixture.js';
 import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
+import {createSystemTableCacheFixture} from './system-table-cache-fixture.js';
 
 const SEED_NODE_ID = 'seed-node';
 const NODE_B = 'node-b';
@@ -53,6 +54,7 @@ function createNodeRow(nodeId, leaseOffsetMs = 60000) {
 
 function createNodeEndpoint(nodeId) {
   return {
+    endpoint_id: `${nodeId}-ws`,
     node_id: nodeId,
     transport_type: 'ws',
     status: 'active',
@@ -82,20 +84,7 @@ function createCache(options = {}) {
     tables: [],
     replica_operations: replicaOperations,
   });
-  return {
-    get(tableName, key) {
-      const values = rows[tableName] || [];
-      return values.find((row) =>
-        row.partition_id === key || row.node_id === key,
-      ) || null;
-    },
-    getAll(tableName) {
-      return rows[tableName] || [];
-    },
-    filter(tableName, predicate) {
-      return (rows[tableName] || []).filter(predicate);
-    },
-  };
+  return createSystemTableCacheFixture(rows);
 }
 
 function createRebalancer(overrides = {}) {
@@ -312,7 +301,7 @@ test('critical topology requires a nonempty committed answer and never consults 
           },
         },
       });
-      const getAll = cache.getAll;
+      const getAll = cache.getAll.bind(cache);
       cache.getAll = (table) => {
         if (table === 'nodes') fallbackReads += 1;
         return getAll(table);
@@ -394,6 +383,7 @@ test(
       cache,
       getAuthoritativeOperationsByEntity: async () => [authoritativeOp],
     });
+    t.teardown(() => rebalancer.shutdown());
 
     const decision = await rebalancer.resolveTopologySettlingPlanningGateDecision();
     t.ok(decision, 'planning gate should produce a decision');
@@ -435,6 +425,7 @@ test(
         throw new Error('rpc leader read unavailable');
       },
     });
+    t.teardown(() => rebalancer.shutdown());
 
     const decision = await rebalancer.resolveTopologySettlingPlanningGateDecision();
     t.ok(decision, 'planning gate should produce a decision on owner read failure');

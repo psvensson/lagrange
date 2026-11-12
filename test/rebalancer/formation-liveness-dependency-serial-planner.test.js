@@ -257,6 +257,7 @@ function createHarness(options = {}) {
 test('real checkRebalance emits one serial nodes-p1 formation move', async (t) => {
   initializeTestEnvironment();
   const {createdMoves, rebalancer} = createHarness();
+  t.teardown(() => rebalancer.shutdown());
 
   await rebalancer.checkRebalance();
 
@@ -344,6 +345,7 @@ test('real checkRebalance fails closed on target and owner evidence gaps',
 
     for (const entry of cases) {
       const {createdMoves, rebalancer} = createHarness(entry.options);
+      t.teardown(() => rebalancer.shutdown());
       await rebalancer.checkRebalance();
       t.equal(createdMoves.length, 0, `${entry.name} emits no new move`);
     }
