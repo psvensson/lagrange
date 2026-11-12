@@ -81,3 +81,35 @@ multi-machine service proof. The old source must fail these assertions before
 implementation is accepted. Adjacent profile, query projection, readiness,
 transaction, owner-RPC and terminal-gate tests plus the canonical affected cone
 and scoped/static checks remain mandatory on physical lab.
+
+## Additional verified boundaries, 2026-11-12
+
+The complete-table original at job 2882 is a valid red after the separate job 2853
+ESM-import fixture failure. Job 2882 executed the corrected original source and
+reported 119 assertions: explicit LOCAL, weak-leader and preferLeader:false
+requests were silently rewritten; absent defaults did not require the RPC owner
+and an unwitnessed result could succeed. The final witness-positive identity
+assertion was not reached on that original. The full worker SHA256 is
+64079e6ef50deae0efea62b5ec77f3cf0c11b51204633f6a33caf5b3ea4cf14a,
+56,407 bytes. Source remains 68d6941a23079defeaac3099c1df3687eb0233a1.
+
+Job 2894 on the same source produced a verified 63,932-byte stream,
+SHA256 1d1a0e9770c09bf2078f863476148b9b3bae6347dad64e55b3d847c16fe3a30a,
+with two failed roots and 108 classified assertions. The view admitted all four
+invalid tokens before rejecting none; frozen invalid tokens were also serialized.
+A failed SERVICES read became successful empty PARTITIONS evidence, lost its
+error, and reached actual gateway partition reconciliation. Exact valid-token,
+answered-empty and later real cache-repair positives passed. Repository controls
+showed local confirmation replacing owner unavailability, terminal mutation or
+adoption from local evidence, and premature clearing of a retained repair. The
+later retained-healing continuation is not established by this red.
+
+The added completeness-custody root enters actual CDC LOCAL and RPC reads with
+controlled owner evidence and a serving-leader witness. It checks absent/false
+completeness, partial answers, and both arrays and counts for failedPartitions,
+partitionErrors and participantFailures. Each control subsequently supplies a
+complete answer through the same owner. This isolates duplicate leaf classifiers;
+it does not prove native serving, transport, or whole recipient reclamation. Its
+first lab result is still owed. The recipient controller's separately sealed
+controls own the actual detach/reclaim consequence. One canonical classifier must
+inspect the original answer before a normalizer drops any failure evidence.
