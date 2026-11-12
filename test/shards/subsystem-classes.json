@@ -28,7 +28,7 @@
   "censusSize": 2772,
   "digest": "fnv1a32-538dc1bb",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-7a3b45e3",
+  "observationDigest": "fnv1a32-6c7a55ef",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -24146,6 +24146,7 @@
         "test/bootstrap/fresh-seed-activation.integration.test.js",
         "test/bootstrap/seed-startup-listener-failure.integration.test.js",
         "test/distributed/harness/__tests__/comparative-efficiency-claim-projection.test.js",
+        "test/packaging/sea-bundle-smoke.test.js",
         "test/service/h1-pinned-hono-component-proof.test.js",
         "test/service/h2-hono-source-ir-deployment-cutover.test.js",
         "test/service/h3-fetch-ingress-and-scoped-client.test.js",
