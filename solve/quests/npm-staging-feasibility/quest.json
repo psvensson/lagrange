@@ -1,0 +1,28 @@
+{
+  "schema": "solve-quest/2",
+  "id": "npm-staging-feasibility",
+  "class": "fix",
+  "statement": "On immutable source 5e58474b13870c95ea6bd6175942c33984cd6ac9, determine whether the declared single-graph/raw-closure staging layout can satisfy unchanged 2,100-entry / 8-MiB packed / 25-MiB unpacked limits while preserving the checked static graph. Retain a reproducible, independently checked feasibility decision; make no installed-runtime, sourceDigest, package-delivery or release claim.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/npm-staging-feasibility-evidence.js",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "unchanged-package-budgets",
+      "statement": "The diagnostic uses the existing 2,100-entry, 8-MiB packed and 25-MiB unpacked limits; it never raises or bypasses them."
+    },
+    {
+      "id": "compact-packet-only-probe",
+      "statement": "The doneWhen probe reads only the retained compact packet and never builds, packs, installs, starts a runtime or calls the network."
+    },
+    {
+      "id": "diagnostic-evidence-ceiling",
+      "statement": "Every outcome records public installed identity, import order, runtime provenance, delivery and release as NOT_MEASURED."
+    }
+  ],
+  "sealedAt": "5e58474b13870c95ea6bd6175942c33984cd6ac9"
+}
