@@ -527,6 +527,7 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
       'confirmed terminal ADD through an unexpected weaker read mode',
     async (t) => {
       const authoritativeReads = [];
+      let ownerAvailable = true;
       const creatingRow = makeRow({
         operation_id: 'op-confirmed-terminal-add',
         status: TEST_CREATING_STATUS,
@@ -551,14 +552,9 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
             authoritativeReads.push(options);
             if (
               options.authoritativeReadMode ===
-              CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY
-            ) {
-              return {success: true, rows: [terminalRow]};
-            }
-            if (
-              options.authoritativeReadMode ===
               CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED
             ) {
+              if (ownerAvailable) return {success: true, rows: [terminalRow]};
               return {
                 success: false,
                 error: 'authoritative_row_source_unavailable',
@@ -567,7 +563,7 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
               };
             }
             // A weaker, unexpected authority mode would expose an older row.
-            // The required owner mode above remains explicitly unavailable.
+            // The selected owner is unavailable during the later entity read.
             return {success: true, rows: [creatingRow]};
           },
         },
@@ -592,12 +588,18 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
       const persisted = await repo.persistOperationUpdate(
         repo.rowToOperation(terminalRow),
       );
+      t.equal(repo.ownerPersistedTransitionVisibilityWitnesses.has(terminalRow.operation_id), false,
+        'the actual owner confirmation settles the retained terminal witness');
+      t.same(authoritativeReads.map((options) => options.authoritativeReadMode),
+        [CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED],
+        'terminal persistence is confirmed by one declared ledger-owner read');
+      ownerAvailable = false;
       const observation = await repo.getOperationsByEntityAuthoritativeObservation(
         TEST_ENTITY_TYPE,
         TEST_PARTITION_ID,
       );
 
-      t.equal(persisted, true, 'the terminal ADD transition should first confirm locally');
+      t.equal(persisted, true, 'the terminal ADD transition first confirms through the ledger owner');
       t.equal(
         observation?.state,
         INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED,

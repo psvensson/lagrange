@@ -111,14 +111,12 @@ const PARTITION_STATEMENT_KIND = Object.freeze({
 // Where a statement arrives: the sessionless query path (executeQuery: reads
 // answered here, writes proposed), the unreplicated local path
 // (executeLocalQuery: reads and writes run here), the committed apply of the
-// SQL command types, the committed MIGRATION_ALTER_TABLE apply, and the local
-// system-table read.
+// SQL command types, and the committed MIGRATION_ALTER_TABLE apply.
 const PARTITION_STATEMENT_PATH = Object.freeze({
   SESSIONLESS: 'sessionless',
   LOCAL: 'local',
   COMMITTED: 'committed',
   MIGRATION: 'migration',
-  READ_ONLY: 'read_only',
 });
 
 // The kind each admitted head keyword is. A WITH statement's kind is decided
@@ -140,7 +138,7 @@ const PARTITION_STATEMENT_HEAD_KIND = Object.freeze({
 // The kinds each path admits (design 3.3, "The admitted heads per path"):
 // the sessionless paths admit reads, writes and the two index-DDL shapes; the
 // committed SQL apply only the writes and the index DDL; the committed
-// MIGRATION_ALTER_TABLE apply only ALTER TABLE; the local read only reads.
+// MIGRATION_ALTER_TABLE apply only ALTER TABLE.
 const PARTITION_STATEMENT_PATH_KINDS = Object.freeze({
   [PARTITION_STATEMENT_PATH.SESSIONLESS]: Object.freeze(new Set([
     PARTITION_STATEMENT_KIND.READ, PARTITION_STATEMENT_KIND.WRITE,
@@ -152,8 +150,6 @@ const PARTITION_STATEMENT_PATH_KINDS = Object.freeze({
     PARTITION_STATEMENT_KIND.WRITE, PARTITION_STATEMENT_KIND.INDEX_DDL])),
   [PARTITION_STATEMENT_PATH.MIGRATION]: Object.freeze(new Set([
     PARTITION_STATEMENT_KIND.ALTER_TABLE])),
-  [PARTITION_STATEMENT_PATH.READ_ONLY]: Object.freeze(new Set([
-    PARTITION_STATEMENT_KIND.READ])),
 });
 
 // The SQLite keywords the owner reads (compared ASCII upper-case).

@@ -38,7 +38,6 @@ import {
 } from '../../src/partition/partition-service-constants.js';
 import {
   admitPartitionStatement,
-  readAdmittedPartitionRows,
   runAdmittedPartitionStatement,
 } from '../../src/partition/partition-statement-admission.js';
 import {PARTITION_STATEMENT_PATH} from
@@ -440,8 +439,7 @@ test('TX1 admission A5: a table-valued pragma function and a connection-state fu
       const answers = [];
       for (const [sql, params] of which === 0 ? reads : []) {
         answers.push(await answerOf(() => replica.executeQuery(sql, params)),
-          await answerOf(() => replica.executeLocalQuery(sql, params)),
-          await answerOf(() => readAdmittedPartitionRows(replica, sql, params)));
+          await answerOf(() => replica.executeLocalQuery(sql, params)));
       }
       later.forEach(([entryId, sql]) => applyCommitted(replica, committedQueryOf(entryId, sql)));
       perReplica.push({refusals: answers.map((answer) => pick(answer, ['failureCode',
@@ -454,7 +452,7 @@ test('TX1 admission A5: a table-valued pragma function and a connection-state fu
   }
   assert.deepEqual({refusals: perReplica[0].refusals, stats: perReplica.map((r) => r.stats),
     identicalRows: JSON.stringify(perReplica[0].rows) === JSON.stringify(perReplica[1].rows)},
-  {refusals: Array(reads.length * 3).fill(refusedAs(RULE.FUNCTION)), stats: [0, 0],
+  {refusals: Array(reads.length * 2).fill(refusedAs(RULE.FUNCTION)), stats: [0, 0],
     identicalRows: true}, 'no read changes what a later committed write computes');
 });
 
@@ -582,7 +580,7 @@ test('TX1 admission A9: every ordinary-path R1/R2 branch refuses on the request 
 });
 
 test('TX1 admission A10: every routed path holds its rule: the committed apply refuses a ' +
-  'read; the migration apply admits ALTER TABLE only; the read-only path admits reads only; ' +
+  'read; the migration apply admits ALTER TABLE only; the local port admits reads; ' +
   'the sessionless pre-check refuses at a committed ceiling; the local path refuses before ' +
   'it runs; a temporary index is never dropped; a WITH-headed insert retains its rowid',
 async () => {
@@ -592,8 +590,7 @@ async () => {
       alterCommandOf('a10-pragma', 'PRAGMA reverse_unordered_selects = 1'),
       alterCommandOf('a10-alter', `ALTER TABLE ${TABLE} ADD COLUMN a10_extra TEXT`)];
     commands.forEach((command) => applyCommitted(replica, command));
-    const readOnly = [readAdmittedPartitionRows(replica, `DELETE FROM ${TABLE}`),
-      readAdmittedPartitionRows(replica, `SELECT COUNT(*) AS c FROM ${TABLE}`)];
+    const localRead = await replica.executeLocalQuery(`SELECT COUNT(*) AS c FROM ${TABLE}`);
     // A committed ceiling row, then a local write that would fail its key if it ran.
     replica.db.prepare(`INSERT INTO ${TABLE} (rowid, id, value) VALUES (?, ?, ?)`)
       .run(CEILING, 'ceiling', 'c');
@@ -601,7 +598,7 @@ async () => {
       'VALUES (\'a\', \'dup\')', []);
     return {outcomes: commands.slice(1).map((command) =>
       statementOutcomeOf(replica, command.entryId)), flag: connectionFlag(replica),
-    readOnly: [pick(readOnly[0], ['failureCode', 'refusalLayer']), readOnly[1].rows],
+    localRead: localRead.rows,
     local: pick(local, ['failureCode', 'refusalLayer'])};
   });
   const {leader, proposed} = await startLeader();
@@ -630,7 +627,7 @@ async () => {
     await shutdownAll(ipk);
   }
   const replicaFacts = {outcomes: [REFUSED_AT_APPLY, REFUSED_AT_APPLY, APPLIED], flag: 0,
-    readOnly: [refusedAs(LAYER.STATEMENT_KIND), [{c: 1}]],
+    localRead: [{c: 1}],
     local: refusedAs(LAYER.ROWID_CEILING)};
   assert.deepEqual({atApply, onLeader, withRowid}, {atApply: [replicaFacts, replicaFacts],
     onLeader: {ceiling: refusedAs(LAYER.ROWID_CEILING),

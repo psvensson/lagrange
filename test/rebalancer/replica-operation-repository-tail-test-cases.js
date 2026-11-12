@@ -694,7 +694,7 @@ export function registerReplicaOperationRepositoryTailTests({
     },
   );
 
-  test('persistNewOperation confirmation stays on the local owner path', async (t) => {
+  test('persistNewOperation confirmation stays on the declared ledger owner path', async (t) => {
     const readRowsCalls = [];
     const repo = createTestRepository({
       controlPlaneSystemTableGateway: {
@@ -712,12 +712,12 @@ export function registerReplicaOperationRepositoryTailTests({
     const op = repo.rowToOperation(makeRow({updated_at: 200}));
     const result = await repo.persistNewOperation(op);
 
-    t.equal(result, true, 'authoritative confirmation should succeed from the local owner path');
+    t.equal(result, true, 'authoritative confirmation should succeed from the ledger owner path');
     t.equal(readRowsCalls.length, 1, 'confirmation should issue one authoritative read');
     t.equal(
       readRowsCalls[0]?.authoritativeReadMode,
-      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
-      'confirmation should report the canonical local-only read mode',
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+      'confirmation should report the canonical required owner-RPC mode',
     );
   });
 

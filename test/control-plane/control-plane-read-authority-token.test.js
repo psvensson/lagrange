@@ -47,6 +47,8 @@ import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {MEMBERSHIP_PUBLICATION_READ_SOURCE} from
   '../../src/control-plane/membership-publication-row-contract.js';
+import {GATEWAY_ERROR_MSG} from
+  '../../src/control-plane/control-plane-system-table-gateway-constants.js';
 
 const TABLE = SYSTEM_TABLE_NAME.REPLICA_OPERATIONS;
 const SQL_TEXT = 'SELECT * FROM replica_operations WHERE operation_id = ?';
@@ -301,6 +303,7 @@ test('CDC owner-RPC execution pins the partition leader from the token alone',
 
     const tokenOnlyOptions = {
       readAuthority: buildControlPlaneReadAuthority({
+        authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
         leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
       }),
     };
@@ -316,7 +319,9 @@ test('CDC owner-RPC execution pins the partition leader from the token alone',
 
     await executeAuthoritativeOwnerRpcRead(
       service, TABLE, SQL_TEXT, ['op-1'],
-      {readAuthority: buildControlPlaneReadAuthority({})}, {},
+      {readAuthority: buildControlPlaneReadAuthority({
+        authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+      })}, {},
     );
     t.equal(
       executeCalls[1].preferLeader,
@@ -327,7 +332,7 @@ test('CDC owner-RPC execution pins the partition leader from the token alone',
 
 test('CDC owner-RPC execution rejects a field-level authority bag', async (t) => {
   let deliveryCount = 0;
-  const result = await executeAuthoritativeOwnerRpcRead(
+  await t.rejects(executeAuthoritativeOwnerRpcRead(
     {
       sqlQueryEngine: {
         queryExecutor: {
@@ -343,9 +348,8 @@ test('CDC owner-RPC execution rejects a field-level authority bag', async (t) =>
     [],
     {preferOwnerRpcReadLeader: true},
     {},
-  );
-
-  t.equal(result, null, 'non-canonical authority fails closed');
+  ), {message: GATEWAY_ERROR_MSG.AUTHORITATIVE_READ_AUTHORITY_TOKEN_REQUIRED},
+  'non-canonical authority fails closed');
   t.equal(deliveryCount, 0, 'no owner delivery occurs without a token');
 });
 
@@ -466,6 +470,7 @@ test('readiness-internal owner RPC routes without re-entering readiness',
       {
         readAuthority: buildControlPlaneReadAuthority({
           purpose: CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL,
+          authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
           routingReadinessDimension:
           CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
         }),

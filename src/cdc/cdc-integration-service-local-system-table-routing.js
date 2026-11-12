@@ -3,8 +3,6 @@ import {CDC_TERMINAL_STAGE} from './cdc-constants.js';
 import {issueAuthoritativeReadStage} from './cdc-terminal-gate.js';
 import {isValidLeaderReadAuthorityWitness} from
   '../control-plane/control-plane-authoritative-read-witness.js';
-import {readAdmittedPartitionRows} from
-  '../partition/partition-statement-admission.js';
 
 const {
   CDC_INTEGRATION_SERVICE_LITERAL,
@@ -44,19 +42,13 @@ function isUsableLocalLeaderWitness(witness, partitionId) {
 }
 
 export function selectLocalPartitionWitness(
-  _service,
   partitionService,
   result,
 ) {
   const partitionId = partitionService?.partitionId || null;
-  if (isUsableLocalLeaderWitness(result?.readAuthorityWitness, partitionId)) {
-    return Object.freeze({...result.readAuthorityWitness});
-  }
-  if (typeof partitionService?.buildRemoteReadAuthorityWitness === 'function') {
-    const builtWitness = partitionService.buildRemoteReadAuthorityWitness(false);
-    if (isUsableLocalLeaderWitness(builtWitness, partitionId)) {
-      return Object.freeze({...builtWitness});
-    }
+  const witness = result?.readAuthorityWitness;
+  if (isUsableLocalLeaderWitness(witness, partitionId)) {
+    return Object.freeze({...witness});
   }
   return ABSENT_WITNESS_VALUE;
 }
@@ -479,17 +471,11 @@ function executeSystemTableRead(partitionService, sql, params = []) {
   if (typeof partitionService?.executeLocalQuery === 'function') {
     return partitionService.executeLocalQuery(sql, params);
   }
-  if (typeof partitionService?.db?.prepare === 'function') {
-    // Only a read the statement-admission owner admits is prepared here.
-    return readAdmittedPartitionRows(partitionService, sql, params);
-  }
-  if (typeof partitionService?.executeQuery === 'function') {
-    return partitionService.executeQuery(sql, params);
-  }
   return {
     success: false,
     error: CDC_INTEGRATION_SERVICE_LITERAL.LOCAL_PARTITION_QUERY_UNAVAILABLE,
     rows: [],
+    rowSetComplete: false,
   };
 }
 

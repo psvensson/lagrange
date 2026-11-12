@@ -245,3 +245,93 @@ Complete physical original streams, selected candidate roots, affected callers,
 generated metadata, scoped static gates and integration remain required. Native
 local producer fallback removal and the direct RPC helper boundary are still
 separate open source obligations.
+
+## Verified consumer original and selected authority candidate
+
+Original job 3009 is fully verified at tests-only 4641db16/source68d: four roots,
+625 classified assertions, 277,224 bytes, SHA256
+9564725b24df4842001feac390b390a6d6f67fac8a6b79da9967774c412d66e5.
+Projection tokens enter direct owner reads, nine incomplete empty SERVICES
+answers fabricate dependent PARTITIONS absence, and explicit SQL authority can
+enter unclaimed ordinary routes. Malformed gateway carriers are accepted or
+replaced, while the view invokes accessor/proxy/serialization behavior. The
+ordinary and null-prototype valid view tokens preserve their identity. This is
+the original source receipt, not a certification of the later correction.
+
+Candidate 3088 at 0d45a8d1/source d0b05dca is fully verified PASS: three CDC roots,
+379 assertions (local leader 46, completeness 198, selected path 135), 1,530 bytes,
+SHA256 e5a8781df9a3cf37286d6d5b179371fb9e2fb591f24b34fdeacf575fd435109c.
+Candidate 3089 on that same source has three passing roots (gateway 155,
+owned-data 281, SQL 56) and two failing assertions within the 187-assertion view
+root. Its 16,315-byte stream has SHA256
+689cdc9aa834e361a4b417efb42516be1a0dd56c3be8b401226424738c7d453f.
+The remaining view failures are typed refusal: CACHE and BOOTSTRAP carriers
+with an own serialization hook refuse before every identity/admission/read
+effect, but report TOKEN_REQUIRED before the owner-strategy contradiction. The
+next source keeps one owned-data validator and checks owner semantics before
+the final serialization shape. It neither executes the hook nor admits the
+carrier. Repository/caller/composed results remain separate pending full review.
+
+## Producer custody and removal of the local read alternatives
+
+Tests-only seal dc3e938c705df3835c4721f5e93caf93fd49f3a7 retains source d0b05dca;
+its owner-read-producer-contract root has independent review and its first
+physical original is job 3120. It exercises actual CDC dispatch, unavailable
+declared local ports, no post-read witness reconstruction, direct RPC token
+admission before dependency access, and same-owner recovery. The final case
+uses the actual PartitionService and SQLite with the existing controllable
+consensus seam; it does not claim native Raft leadership proof.
+
+History locates the reconstructed witness in c1c57b1d92137ee184d1c6bcc813793364e47f1f
+(2026-11-08 complete-leader provenance change). The raw-database admitted read
+helper is present in 54dd2d7ce (2026-10-27 deterministic admission release).
+The correction gives CDC one local execution port, executeLocalQuery. The
+actual producer returns its witness synchronously with its SELECT rows, and
+CDC can consume only that result's witness. Missing ports remain unavailable.
+The direct RPC kernel validates canonical owner authority and RPC mode before
+reading its query engine, then carries the exact token and its selected routing
+dimension. The unused service RPC delegate and flow re-export are removed.
+
+A full source/test reference census found readAdmittedPartitionRows and the
+READ_ONLY admission path served only the deleted database fallback and their
+own tests. Both API and path are removed. Statement-admission controls retain
+the two production query ports and all their malformed-SQL refusal checks;
+the local SELECT positive now reaches the real local port. The new CDC missing
+port controls separately require zero calls to the forbidden database and
+executeQuery alternatives. Declared read fixtures migrate their explicit port;
+the deliberate alternate-port negatives remain unchanged.
+
+Frozen source review patch is authority-read-producer-review.patch, SHA256
+5ecfb692e9cb2490852b56fb3bb6df220d6f3d88c72be3842470ea9d5d218a09.
+Independent review, first-original evidence, candidate lab results and static
+closure remain required. The touched write-metrics file's pre-existing size
+debt remains explicit; no threshold is changed. No local execution occurred.
+
+The producer source and caller closure received independent bounded approval.
+A second reviewed delta, patch SHA256
+67592ee407d3f0b0c1dfe00d9c11d69f08a24f26179803a9f2e692a70e462deb,
+deduplicates insert/upsert row-operation construction privately within the same
+write-metrics owner. It preserves the initialized check, keys then values then
+SQL construction, and resolves proposeWrite only after the operation is built.
+This removes the touched file's size excess without another module/owner,
+comment trimming, a threshold change or a widened fallback.
+
+Verified job 3090 on 0d45/source d0b05dca is 57,420 bytes, SHA256
+37a6adac805f9ae2312bcddddd9b7b318f5aa11e22224517710ba81cf8a31b38.
+The single-authority confirmation root passes 96 assertions; existing
+confirmation-authority and remove-retry roots pass 41 and 20. The 452-assertion
+repository root has two older fixture mismatches. Case 80 expects the removed
+local-only confirmation. Case 16 answers terminal only to LOCAL and makes RPC
+unavailable, so the corrected RPC-only confirmation retains its pending
+terminal witness. The observed count of one is that retained terminal witness;
+the no-CREATING and deferred assertions pass. It is not proof of a stale SQL row
+being returned, nor proof that confirmation occurred.
+
+The independently reviewed fixture migration first lets the selected RPC owner
+confirm terminal state, proves one RPC read and exact witness settlement, then
+makes the same owner unavailable for entity observation. All prior monotonicity
+and refusal assertions remain. The tail case expects the declared RPC mode.
+The broader entity observer's existing projected/persisted-row alternatives
+remain an explicit separate audit; this migration does not authorize them.
+No source repository fallback was restored. Physical candidate and complete
+static/composition evidence are still outstanding.

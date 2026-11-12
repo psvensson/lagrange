@@ -163,7 +163,7 @@ test('CDCIntegrationService - authoritative cache confirmation uses the requeste
       partitionServicesProvider: () => createLocalSystemTablePartitionServices(
         SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
         {
-          async executeQuery(sql, params) {
+          async executeLocalQuery(sql, params) {
             localReads += 1;
             t.equal(
               params[0],
@@ -245,7 +245,7 @@ test('CDCIntegrationService - explicit owner-RPC reads preserve their lane with 
         SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
         {
           isLeader: false,
-          async executeQuery() {
+          async executeLocalQuery() {
             localReads += 1;
             return {
               success: true,
@@ -353,7 +353,7 @@ test('CDCIntegrationService - local leader reads refuse follower substitution an
     let sqlReads = 0;
     const operationId = 'op-local-leader-only';
     const localServices = createLocalSystemTablePartitionServices(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-      {isLeader: false, async executeQuery(sql, params) {
+      {isLeader: false, async executeLocalQuery(sql, params) {
         localReads += 1;
         t.same(params, [operationId], 'same local owner preserves query parameters');
         return {success: true, rows: [{operation_id: operationId, workflow_step: 'PENDING'}]};
@@ -539,7 +539,7 @@ async (t) => {
       SYSTEM_TABLE_NAME.LOGS,
       {
         isLeader: false,
-        async executeQuery(sql, params) {
+        async executeLocalQuery(sql, params) {
           localReadCount += 1;
           t.match(sql, /SELECT log_id AS ack_id FROM logs/i,
             'local probe should preserve the original SQL');
@@ -739,7 +739,7 @@ async (t) => {
       SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       {
         isLeader: true,
-        async executeQuery() {
+        async executeLocalQuery() {
           localReadCount += 1;
           return {
             success: true,
@@ -816,7 +816,7 @@ async (t) => {
       SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       {
         isLeader: true,
-        async executeQuery() {
+        async executeLocalQuery() {
           localReadCount += 1;
           return {
             success: true,

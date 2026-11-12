@@ -6,13 +6,12 @@ import {CONTROL_PLANE_READ_LEADER_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
 import {CDC_TERMINAL_STAGE} from './cdc-constants.js';
 import {issueAuthoritativeReadStage} from './cdc-terminal-gate.js';
-import {isCompleteAuthoritativeReadResult} from
+import {assertControlPlaneOwnerRpcReadAuthority, isCompleteAuthoritativeReadResult} from
   '../control-plane/control-plane-system-table-gateway-read-contracts.js';
 
 const {
   AUTHORITATIVE_READ_SOURCE,
   CDC_INTEGRATION_SERVICE_LITERAL,
-  CONTROL_PLANE_READINESS_DIMENSION,
   INITIAL_PARTITION_IDS,
   QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
   normalizeLocalQueryTransportReadiness,
@@ -126,6 +125,7 @@ async function executeAuthoritativeOwnerRpcRead(
   baseDiagnostics,
   localQueryTransportReadiness = null,
 ) {
+  const readAuthority = assertControlPlaneOwnerRpcReadAuthority(options?.readAuthority);
   const queryExecutor = service.sqlQueryEngine?.queryExecutor || null;
   if (
     !queryExecutor ||
@@ -139,14 +139,7 @@ async function executeAuthoritativeOwnerRpcRead(
     return null;
   }
 
-  const readAuthority = options?.readAuthority;
-  if (!readAuthority || typeof readAuthority !== 'object') {
-    return null;
-  }
-  const routingReadinessDimension =
-    readAuthority?.routingReadinessDimension ||
-    options?.queryOptions?.routingReadinessDimension ||
-    CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
+  const routingReadinessDimension = readAuthority.routingReadinessDimension;
 
   const deliverySource = resolveControlPlaneSystemTableDeliverySource({
     deliverySource: options?.queryOptions?.deliverySource || null,

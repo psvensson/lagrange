@@ -10,7 +10,6 @@ import {
 } from './cdc-integration-service-local-system-table-routing.js';
 import {
   buildSystemTableOperationDiagnostics,
-  executeAuthoritativeOwnerRpcRead as executeAuthoritativeOwnerRpcReadFromHelpers,
   executeAuthoritativeSystemTableRead as executeAuthoritativeSystemTableReadFromHelpers,
   getLocalQueryTransportReadiness,
   isAuthoritativeRepairRowNewer as isAuthoritativeRepairRowNewerFromHelpers,
@@ -218,37 +217,6 @@ class CDCIntegrationServiceAuthoritativeReadDelegates {
       sql,
       params,
       options,
-    );
-  }
-
-  /**
-   * Execute the recovery read over the owner-partition RPC lane instead of
-   * the generic SQL query engine route.
-   * @param {string} tableName
-   * @param {string} statement
-   * @param {Array<*>} params
-   * @param {Object} options
-   * @param {Object} baseDiagnostics
-   * @param {Object|null} localQueryTransportReadiness
-   * @return {Promise<Object|null>}
-   * @private
-   */
-  async executeAuthoritativeOwnerRpcRead(
-    tableName,
-    statement,
-    params,
-    options,
-    baseDiagnostics,
-    localQueryTransportReadiness = null,
-  ) {
-    return executeAuthoritativeOwnerRpcReadFromHelpers(
-      this,
-      tableName,
-      statement,
-      params,
-      options,
-      baseDiagnostics,
-      localQueryTransportReadiness,
     );
   }
 

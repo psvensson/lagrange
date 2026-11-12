@@ -78,6 +78,18 @@ function buildQueryOperation(sql, params, options) {
   };
 }
 
+function buildInsertedRowOperation(type, tableName, data, sqlHead) {
+  const columns = Object.keys(data);
+  const values = Object.values(data);
+  const joinedColumns = columns.join(PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE);
+  const placeholders = columns
+    .map(() => PARTITION_SERVICE_SQL_FRAGMENT.QUESTION_MARK)
+    .join(PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE);
+  const sql = `${sqlHead} ${tableName} (${joinedColumns}) ` +
+    `${SQL.VALUES} (${placeholders})`;
+  return {type, tableName, data, sql, params: values};
+}
+
 function resolveNonReadQueryRefusal(service, sql, options) {
   const statementKind = classifyPartitionStatementHead(sql).kind;
   if (statementKind === PARTITION_STATEMENT_KIND.READ) {
@@ -245,11 +257,13 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceEntryApplyBase {
       }
       if (admission.kind === PARTITION_STATEMENT_KIND.READ) {
         const rows = admission.statement.all(...params);
+        const readAuthorityWitness = this.buildRemoteReadAuthorityWitness(false);
         return {
           success: true,
           rows,
           count: rows.length,
           rowSetComplete: true,
+          readAuthorityWitness,
           partitionId: this.partitionId,
         };
       }
@@ -287,27 +301,9 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceEntryApplyBase {
     if (!this.initialized) {
       throw new Error(PARTITION_SERVICE_ERROR_MSG.NOT_INITIALIZED);
     }
-    const columns = Object.keys(data);
-    const values = Object.values(data);
-    const joinedColumns = columns.join(
-      PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE,
-    );
-    const placeholders = columns
-      .map(() => PARTITION_SERVICE_SQL_FRAGMENT.QUESTION_MARK)
-      .join(PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE);
-    const sql =
-      `${SQL.INSERT_INTO} ${tableName} (${joinedColumns}) ` +
-      `${SQL.VALUES} (${placeholders})`;
-    return this.proposeWrite(
-      {
-        type: PARTITION_SERVICE_OPERATION.INSERT,
-        tableName,
-        data,
-        sql,
-        params: values,
-      },
-      options,
-    );
+    const operation = buildInsertedRowOperation(PARTITION_SERVICE_OPERATION.INSERT,
+      tableName, data, SQL.INSERT_INTO);
+    return this.proposeWrite(operation, options);
   }
   /**
    * Update data in the partition.
@@ -376,27 +372,9 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceEntryApplyBase {
     if (!this.initialized) {
       throw new Error(PARTITION_SERVICE_ERROR_MSG.NOT_INITIALIZED);
     }
-    const columns = Object.keys(data);
-    const values = Object.values(data);
-    const joinedColumns = columns.join(
-      PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE,
-    );
-    const placeholders = columns
-      .map(() => PARTITION_SERVICE_SQL_FRAGMENT.QUESTION_MARK)
-      .join(PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE);
-    const sql =
-      `${SQL.INSERT_OR_REPLACE_INTO} ${tableName} (${joinedColumns}) ` +
-      `${SQL.VALUES} (${placeholders})`;
-    return this.proposeWrite(
-      {
-        type: PARTITION_SERVICE_OPERATION.UPSERT,
-        tableName,
-        data,
-        sql,
-        params: values,
-      },
-      options,
-    );
+    const operation = buildInsertedRowOperation(PARTITION_SERVICE_OPERATION.UPSERT,
+      tableName, data, SQL.INSERT_OR_REPLACE_INTO);
+    return this.proposeWrite(operation, options);
   }
   /**
    * Resolve write-correlation identifiers for metrics payloads.

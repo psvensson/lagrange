@@ -310,7 +310,6 @@ async function queryLocalAuthoritativeSystemTableRows(
       }
 
       const witness = selectLocalPartitionWitness(
-        service,
         partitionService,
         result,
       );
@@ -598,7 +597,6 @@ async function executeAuthoritativeSystemTableRead(
 
 export {
   buildSystemTableOperationDiagnostics,
-  executeAuthoritativeOwnerRpcRead,
   executeAuthoritativeSystemTableRead,
   getLocalQueryTransportReadiness,
   mergeAuthoritativeSystemTableRowSets,
