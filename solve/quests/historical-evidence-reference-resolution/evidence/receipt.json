@@ -1,6 +1,6 @@
 {
   "schema": "test-receipt/1",
-  "status": "complete",
+  "status": "pass",
   "receipts": [
     {
       "id": "old-reference",
@@ -33,18 +33,56 @@
     "Map/Set/iterator replacement is not exhaustively tested; static snapshot filesystem assumed."
   ],
   "evidence": {
-    "packet": "/tmp/lagrange-retained-reference-r3-20261112",
-    "sourceManifestSha256": "b83714e492ceb07e2d25351784e9763ac64873a7a0032188f0aa09d64b44516e",
+    "packet": "/tmp/lagrange-retained-reference-integration-repair-20261112",
+    "sourceManifestSha256": "9b6ddbbf3259d34e38695ae09afa1cede78dffc820e9f601a3f7e5d1d74464ed",
     "commands": "command-receipts.json",
     "focused": "focused.log",
-    "sourceDerived": "source-derived-controls.json",
-    "priorRejectedPacket": "/tmp/lagrange-retained-reference-stronger-20261112/r2-final-candidate-manifest.json"
+    "strictDuplication": "strict-duplication-verdict.json",
+    "receiptStatusContract": "receipt-status-control.json",
+    "priorRejectedReceipt": "rejected-candidate/solve/quests/historical-evidence-reference-resolution/evidence/receipt.json",
+    "affectedSourceFiles": [
+      {
+        "path": "test/scripts/evidence-relocation-acceptance.test.js",
+        "sha256": "30f75053069e5144c275eecec4dbc88a243e36b37b7dfcc054f53d4f7ae5a542"
+      },
+      {
+        "path": "test/scripts/historical-evidence-custody-fixture.js",
+        "sha256": "857c179b09b8690c3682c429c2e9a1f9ebd14d33368e98cc8fe5dd3c888a7f0c"
+      },
+      {
+        "path": "test/shards/impact-graph-seal.json",
+        "sha256": "ede5d6d41285f5f439a63e6ebfa431f9a9f4274e5ffa652f67f54d821bc5a4d7"
+      },
+      {
+        "path": "test/shards/subsystem-classes.json",
+        "sha256": "0032816c0b30c63e1e2d6759c3de91e30f7c3429983791f289427012aba36922"
+      }
+    ]
   },
   "review": {
     "verifier": "subagent:01a1ce51-fcb6-7880-bad1-a4aa6324e162",
     "verdict": "approve",
-    "packetSha256": "58cb6aac2622e7de28a3fe0e8965346967c26a0d2f1d8777df4093722a10f56d",
-    "sourceManifestSha256": "b83714e492ceb07e2d25351784e9763ac64873a7a0032188f0aa09d64b44516e",
-    "scope": "bounded source implementation only; no landing or relocation"
+    "packetSha256": "bdc918cc0237de867b910455da99b4ed1a058914e55d03e4249b2df9ab9bb396",
+    "sourceManifestSha256": "9b6ddbbf3259d34e38695ae09afa1cede78dffc820e9f601a3f7e5d1d74464ed",
+    "reviewSealSha256": "b19394fe65effe9b5383c977316d05dfac811743d2e274ccb8852657f340cdac",
+    "scope": "bounded shared-fixture repair and canonical receipt-status applicability only"
+  },
+  "reusedEvidence": {
+    "evidence": {
+      "packet": "/tmp/lagrange-retained-reference-r3-20261112",
+      "sourceManifestSha256": "b83714e492ceb07e2d25351784e9763ac64873a7a0032188f0aa09d64b44516e",
+      "commands": "command-receipts.json",
+      "focused": "focused.log",
+      "sourceDerived": "source-derived-controls.json",
+      "priorRejectedPacket": "/tmp/lagrange-retained-reference-stronger-20261112/r2-final-candidate-manifest.json"
+    },
+    "review": {
+      "verifier": "subagent:01a1ce51-fcb6-7880-bad1-a4aa6324e162",
+      "verdict": "approve",
+      "packetSha256": "58cb6aac2622e7de28a3fe0e8965346967c26a0d2f1d8777df4093722a10f56d",
+      "sourceManifestSha256": "b83714e492ceb07e2d25351784e9763ac64873a7a0032188f0aa09d64b44516e",
+      "scope": "bounded source implementation only; no landing or relocation"
+    },
+    "applicability": "Independent affected review confirms production parser, docs resolver, acceptance owner, owner docs, impact contract, historical witness and baseline identical to approved r3; old negatives remain reused evidence."
   }
 }

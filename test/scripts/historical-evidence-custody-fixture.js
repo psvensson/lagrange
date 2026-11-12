@@ -72,7 +72,7 @@ function greenRepository(t, {files = [['a.log', 'alpha'], ['b/c.tap', 'beta']]} 
 }
 
 
-export {greenRepository, write, editJson, evidence, sha, SHARD, OLD_ROOT, BUNDLE};
+export {greenRepository, write, editJson, evidence, sha, SHARD, OLD_ROOT, BUNDLE, RECEIPT};
 function editJson(root, relative, edit) {
   const file = path.join(root, relative);
   const value = JSON.parse(fs.readFileSync(file, 'utf8'));
