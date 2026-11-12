@@ -34,10 +34,10 @@ function samePublicationDestination(left, right) {
 }
 
 function createRuntimePublication({incarnation, assertSourceCurrent,
-  assertLifecycleOwner, assertDestination}, original) {
+  assertLifecycleOwner, assertDestination, assertTransitionCurrent}, original) {
   if (!incarnation || typeof assertSourceCurrent !== 'function' ||
       !original && (typeof assertLifecycleOwner !== 'function' ||
-        typeof assertDestination !== 'function') ||
+        typeof assertDestination !== 'function' || typeof assertTransitionCurrent !== 'function') ||
       !Number.isSafeInteger(incarnation.created_at) ||
       incarnation.service_id !== incarnation.replica_id || incarnation.group_id !== null ||
       !(incarnation.create_attempt_token === null ||
@@ -154,10 +154,26 @@ function createRuntimePublication({incarnation, assertSourceCurrent,
       // The admitted producer and its canonical map publication share this
       // synchronous turn. Subsequent status revisions retain this exact binding;
       // they never recapture the construction admission or mint a replacement.
-      publication = Object.freeze({state: PUBLICATION_STATE.PUBLISHING});
+      const admitted = publication;
+      const publishing = Object.freeze({state: PUBLICATION_STATE.PUBLISHING});
+      publication = publishing;
+      const assertTransition = () => {
+        if (publication !== publishing || service !== runtime || service.isShutdown === true) {
+          throw runtimePublicationRefused(source.service_id);
+        }
+        if (admitted.state === PUBLICATION_STATE.HOSTED) {
+          assertSourceCurrent(service);
+          admitted.assertTransferCurrent(service, admitted.destination);
+        } else {
+          assertTransitionCurrent(service, destination);
+        }
+      };
       try {
-        const record = commit();
+        assertTransition();
+        const record = commit(assertTransition);
+        assertTransition();
         assertCurrent(service, binding);
+        assertTransition();
         publication = Object.freeze({state: PUBLICATION_STATE.PUBLISHED,
           binding, record, destination, assertCurrent});
         return record;
@@ -171,7 +187,7 @@ function createRuntimePublication({incarnation, assertSourceCurrent,
   });
   // Only the original preparation receives this closure. The service's
   // public capability cannot adopt an arbitrary map as original hosting.
-  const host = (service, destination, commit, assertCurrent) => {
+  const host = (service, destination, commit, assertCurrent, assertTransferCurrent) => {
     if (!original) throw runtimePublicationRefused(source.service_id);
     capability.assertCurrent(service);
     if (publication.state === PUBLICATION_STATE.HOSTED) {
@@ -179,7 +195,8 @@ function createRuntimePublication({incarnation, assertSourceCurrent,
       return publication.record;
     }
     if (publication.state !== PUBLICATION_STATE.ADMITTED ||
-        typeof commit !== 'function' || typeof assertCurrent !== 'function') {
+        typeof commit !== 'function' || typeof assertCurrent !== 'function' ||
+        typeof assertTransferCurrent !== 'function') {
       throw runtimePublicationRefused(source.service_id);
     }
     publication = Object.freeze({state: PUBLICATION_STATE.HOSTING});
@@ -188,7 +205,7 @@ function createRuntimePublication({incarnation, assertSourceCurrent,
       assertSourceCurrent(service);
       assertCurrent(service, destination);
       publication = Object.freeze({state: PUBLICATION_STATE.HOSTED,
-        destination, record, assertCurrent});
+        destination, record, assertCurrent, assertTransferCurrent});
       return record;
     } catch (error) {
       publication = Object.freeze({state: PUBLICATION_STATE.REFUSED});

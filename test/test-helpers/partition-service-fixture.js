@@ -30,12 +30,14 @@ function createPartitionServiceFixture(options, {
   const localServices = publicationHandler?.localServices;
   const localReplicas = publicationHandler?.localReplicas;
   const revoke = () => { admission = FIXTURE_ADMISSION.REVOKED; };
+  const assertFixtureAdmissionCurrent = () => {
+    if (admission !== FIXTURE_ADMISSION.ADMITTED) {
+      throw runtimePublicationRefused(incarnation.service_id);
+    }
+  };
   const runtimePublication = createPartitionRuntimePublication({incarnation,
-    assertSourceCurrent() {
-      if (admission !== FIXTURE_ADMISSION.ADMITTED) {
-        throw runtimePublicationRefused(incarnation.service_id);
-      }
-    },
+    assertSourceCurrent: assertFixtureAdmissionCurrent,
+    assertTransitionCurrent: assertFixtureAdmissionCurrent,
     assertLifecycleOwner(_service, suppliedOwner) {
       if (lifecycleOwner === null || suppliedOwner !== lifecycleOwner ||
           lifecycleOwner.ownerIncarnation !== ownerIncarnation) {

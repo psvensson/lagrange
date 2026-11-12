@@ -155,6 +155,18 @@ async function fenceFailedReplicaCreateRuntime(handler, replicaId, partitionId,
   return true;
 }
 
+// A failed factory retains its original host Map even after the host has
+// moved on. Successful release permits only removal of that exact object;
+// it grants no right over the current host Map or a successor at this key.
+async function releaseFailedReplicaRuntimeHost(host, replicaId, partitionId, service, primary) {
+  await fenceFailedReplicaCreateRuntime(host.handler, replicaId, partitionId, service, primary);
+  try {
+    if (host.hostServices.get(replicaId) === service) host.hostServices.delete(replicaId);
+  } catch (cleanup) {
+    throw withRaftOpeningCleanupFailure(primary, cleanup);
+  }
+}
+
 /** Shut down through the existing host owner; failed releases remain reachable.
  * @param {Object} handler - ReplicaHandler.
  * @param {Object} options - Existing injected owner dependencies.
@@ -220,4 +232,4 @@ function shutdownReplicaHandler(handler, options) {
 }
 
 export {shutdownExactReplicaRuntime, settlePendingReplicaRuntimeCleanup, fenceFailedReplicaCreateRuntime,
-  shutdownReplicaHandler};
+  releaseFailedReplicaRuntimeHost, shutdownReplicaHandler};

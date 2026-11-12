@@ -9,6 +9,44 @@ import {buildReplicaLifecycleMutationPredicateFromRow,
   buildReplicaLifecycleMutationPredicateFromState,
   isReplicaLifecycleMutationPredicate} from './replica-state-machine-lifecycle-observation.js';
 
+// The construction caller supplies its already acquired handler and owner.
+// This retains the original host lifetime before construction or any await;
+// a later current-looking host cannot become the factory's caller.
+function captureReplicaRuntimeHost(host, replicaId, handler, owner) {
+  const lifecycleHolder = host.replicaLifecycleOwner;
+  if (!handler || !owner || !lifecycleHolder) throw runtimePublicationRefused(replicaId);
+  const holderRecord = lifecycleHolder.record;
+  const hostServices = host.partitionServices;
+  const localServices = handler.localServices;
+  const localReplicas = handler.localReplicas;
+  const bootIncarnation = host.bootIncarnation;
+  const handlerIncarnation = handler.ownerIncarnation;
+  const ownerIncarnation = owner.ownerIncarnation;
+  const transport = host.transport;
+  const messageRouter = host.messageRouter;
+  const assertHostCurrent = () => {
+    if (host.isShuttingDown === true || host.startupAbortSignal?.aborted === true ||
+        host.replicaHandler !== handler || host.replicaStateMachine !== owner ||
+        host.replicaLifecycleOwner !== lifecycleHolder || lifecycleHolder.record !== holderRecord ||
+        host.partitionServices !== hostServices || host.bootIncarnation !== bootIncarnation ||
+        host.transport !== transport || host.messageRouter !== messageRouter) {
+      throw runtimePublicationRefused(replicaId);
+    }
+  };
+  const assertHandlerCurrent = () => {
+    if (handler.replicaStateMachine !== owner || handler.ownerIncarnation !== handlerIncarnation ||
+        owner.ownerIncarnation !== ownerIncarnation || handler.shuttingDown ||
+        handler.localServices !== localServices || handler.localReplicas !== localReplicas ||
+        owner.replicaMutationAdmissionClosed === true) throw runtimePublicationRefused(replicaId);
+  };
+  const assertCurrent = () => {
+    assertHostCurrent();
+    assertHandlerCurrent();
+  };
+  assertCurrent();
+  return Object.freeze({handler, owner, hostServices, transport, messageRouter, assertCurrent});
+}
+
 function createReplicaRuntimePublication(handler, row, admission,
   expectedPredecessor = null) {
   const owner = handler.replicaStateMachine;
@@ -27,21 +65,27 @@ function createReplicaRuntimePublication(handler, row, admission,
   const originalAdmission = Object.freeze({revision: admission.revision,
     sourceState: admission.sourceState});
   if (predecessor !== expectedPredecessor) throw runtimePublicationRefused(replicaId);
+  const assertAdmissionCurrent = () => {
+    if (handler.shuttingDown || handler.ownerIncarnation !== ownerIncarnation ||
+        handler.replicaStateMachine !== owner ||
+        owner.ownerIncarnation !== lifecycleIncarnation ||
+        handler.localReplicas !== localReplicas || handler.localServices !== localServices ||
+        owner.replicaMutationAdmissionClosed === true ||
+        owner.serviceRowPersistInFlightByServiceId.has(replicaId) ||
+        owner.activationEffectByReplicaId?.has(replicaId) ||
+        !isReplicaAdmissionCurrent(owner, replicaId, originalAdmission)) {
+      throw runtimePublicationRefused(replicaId);
+    }
+  };
   return createPartitionRuntimePublication({incarnation: predicate,
     assertSourceCurrent() {
-      if (handler.shuttingDown || handler.ownerIncarnation !== ownerIncarnation ||
-          handler.replicaStateMachine !== owner ||
-          owner.ownerIncarnation !== lifecycleIncarnation ||
-          handler.localReplicas !== localReplicas || handler.localServices !== localServices ||
-          owner.replicaMutationAdmissionClosed === true ||
-          owner.serviceRowPersistInFlightByServiceId.has(replicaId) ||
-          owner.activationEffectByReplicaId?.has(replicaId) ||
-          !isReplicaAdmissionCurrent(owner, replicaId, originalAdmission) ||
-          (handler.localReplicas.get(replicaId) || null) !== local ||
+      assertAdmissionCurrent();
+      if ((handler.localReplicas.get(replicaId) || null) !== local ||
           handler.getTrackedService(replicaId) !== predecessor) {
         throw runtimePublicationRefused(replicaId);
       }
     },
+    assertTransitionCurrent: assertAdmissionCurrent,
     assertLifecycleOwner(_service, suppliedOwner) {
       if (suppliedOwner !== owner) throw runtimePublicationRefused(replicaId);
     },
@@ -99,9 +143,23 @@ function publishReplicaRuntime(handler, replicaInfo, expectedPredecessor = null)
       throw runtimePublicationRefused(replicaId);
     }
   };
-  return service.runtimePublication.publish(service, binding, destination, () => {
-    assertDestinationCurrent();
-    const published = handler.setLocalReplica(replicaId, {
+  return service.runtimePublication.publish(service, binding, destination, (assertTransition) => {
+    let expectedLocal = existing;
+    let expectedService = predecessor;
+    let expectedHost = hostPredecessor;
+    let published = null;
+    const assertProgressCurrent = () => {
+      assertTransition();
+      assertDestinationCurrent();
+      if (destination.localReplicas.get(replicaId) !== expectedLocal ||
+          handler.getTrackedService(replicaId) !== expectedService ||
+          hostServices && hostServices.get(replicaId) !== expectedHost ||
+          published !== null && (published.runtimeBinding !== binding || published.service !== service)) {
+        throw runtimePublicationRefused(replicaId);
+      }
+    };
+    assertProgressCurrent();
+    published = handler.setLocalReplica(replicaId, {
       replicaId, partitionId: sourceEvidence.partition_id,
       tableName: replicaInfo.tableName,
       status: sourceEvidence.status,
@@ -110,13 +168,16 @@ function publishReplicaRuntime(handler, replicaInfo, expectedPredecessor = null)
       createAdmissionToken: replicaInfo.createAdmissionToken,
       createAttemptToken: sourceEvidence.create_attempt_token,
     });
-    assertDestinationCurrent();
-    handler.localServices.set(replicaId, service);
-    assertDestinationCurrent();
+    expectedLocal = published;
+    assertProgressCurrent();
+    destination.localServices.set(replicaId, service);
+    expectedService = service;
+    assertProgressCurrent();
     if (hostServices) {
-      if (hostServices.get(replicaId) !== hostPredecessor) throw runtimePublicationRefused(replicaId);
       hostServices.set(replicaId, service);
+      expectedHost = service;
     }
+    assertProgressCurrent();
     return published;
   }, () => {
     const local = handler.localReplicas.get(replicaId);
@@ -129,4 +190,4 @@ function publishReplicaRuntime(handler, replicaInfo, expectedPredecessor = null)
   });
 }
 
-export {createReplicaRuntimePublication, publishReplicaRuntime};
+export {captureReplicaRuntimeHost, createReplicaRuntimePublication, publishReplicaRuntime};

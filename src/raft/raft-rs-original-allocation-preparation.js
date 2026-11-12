@@ -698,7 +698,7 @@ class RaftRsOriginalAllocationPreparation {
         assertHosted();
         if (destination.localServices.get(replicaId) !== service ||
             destination.localReplicas.has(replicaId)) throw runtimePublicationRefused(replicaId);
-      });
+      }, assertHosted);
     }
   }
 

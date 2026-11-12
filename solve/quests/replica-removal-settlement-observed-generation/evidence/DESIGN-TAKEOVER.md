@@ -409,3 +409,92 @@ remain open and require their own controls and owner review:
 
 All execution remains on qualified lab machines. No local tests, checkers or
 validators were run, and this WIP freeze grants no landing or solved claim.
+
+### Reentrant publication continuation (2026-11-12)
+
+The approved continuation preserves the publication record that admitted the
+transition. PUBLISHING owns one synchronous assertion over that record; a
+caller cannot acquire authority from partially written maps. Original HOSTED
+publication retains its preparation, Bootstrap holder and map, boot, handler,
+lifecycle owner and lifetimes. Its transfer assertion excludes only the
+metadata-absent precondition that the canonical commit itself consumes.
+Ordinary CREATE/replacement publication retains its original lifecycle
+admission and stable owner/map lifetimes through the same phase.
+
+The map commit tracks only its own exact expected local metadata, physical
+predecessor and Bootstrap map value. It advances an expected value solely
+after that synchronous owner write returns, then checks identity before the
+next effect. It never normalizes a foreign current map entry into the expected
+predecessor. An unexpected metadata record, predecessor, host entry, admission
+revision or original source aborts the transition and leaves REFUSED cleanup
+custody. The source assertion also runs before terminal PUBLISHED. Once a
+complete canonical publication succeeds, normal lifecycle status revisions
+continue under its retained binding rather than its spent construction
+admission.
+
+Tests-only `0b10e084658f3d98146688ac50a0edf40806a978` retains the first control
+draft against exact source 406. The independently reviewed correction at
+`8bb29eec64e63807ef36bbd66e490c959221d97d` expects the preparation owner's
+original HOLD/CLOSED error only for revoke; map/holder replacements still
+require the shared publication refusal. Every negative requires a permanently
+refused capability, and the unchanged original and generic publication
+positives remain. Physical execution and independent implementation review
+are pending. This does not close the lower transaction-effect or factory
+continuation obligations.
+
+The earlier promise-reuse concern has a narrower source-proven ceiling:
+failed listener cleanup returns UNAVAILABLE/CLEANUP_INCOMPLETE even when the
+terminal read was OBSERVED, and successful cleanup removes the record before
+positive exposure. No stale-positive reuse is established and no production
+change was made for that hypothesis.
+
+### Factory host continuation and exact released residue (2026-11-12)
+
+The measured factory repair captures the original acquired handler and
+lifecycle owner in the producer closure. At invocation, one shared assertion
+captures the Bootstrap/join host object, physical host Map, lifecycle holder
+and its exact record, boot incarnation, handler registries, handler/owner
+lifetimes, transport and router before construction or the first await.
+Constructor options are copied before any suspension, and the retirement
+lane resolves only that original owner. Both factories check the retained
+host before initialization, after initialization, before publication after
+CDC attachment, and after publication. The original onRuntimeCreated callback
+now executes inside factory cleanup custody.
+
+Failed construction releases the exact original service through the existing
+handler pending-runtime shutdown cell. After successful physical shutdown,
+the factory removes only that same service from the original captured host
+Map. A changed current host Map is not consulted to grant deletion; a successor
+in either map survives. Failed shutdown retains the original pending cell and
+reachable host residue. No second cleanup registry, timer, retry policy or
+ID-derived deletion authority is introduced.
+
+Original e92/job 2990 is the causal baseline for this bounded repair: held
+handler/owner/host/holder/boot replacement was accepted, and successful release
+left the original failed host entry behind when the host Map was replaced.
+Unchanged construction and same-map successor controls already passed. Its
+234-assertion original stream is preserved; the source correction requires a
+distinct candidate run of the unchanged attachment root and sidecar.
+
+This does not establish a fence inside every reentrant initialization or
+publication observer. The native transport registration occurs synchronously
+before initializeUnserialized's first successful await and consumes the
+runtime publication's original handler/lifecycle assertion. The outer factory
+host assertion is not yet part of that inner assertion. A synchronous observer
+that changes only the Bootstrap host pointer therefore needs its own
+discriminating control and retained-host handoff before any broader claim.
+Generic lifecycle STOP/restart completion and lower transaction release effects
+also remain separate open interactions.
+
+The unchanged native useful-service root at job 3042 now proves production
+seed bootstrap, CREATE, INSERT and SELECT in case 1. Cases 3 and 5 stop before
+their writes: their construction-only fixture later synthesizes an unrelated
+handler Map in resumeFixtureParticipantAdmission, which the hosting contract
+correctly refuses. A faithful migration must acquire the original handler,
+lifecycle evidence and publication before construction; attaching authority
+to the existing fixture service would be false provenance. The original log
+and all durable-log/restart assertions remain preserved pending that migration.
+
+No local tests, static checks or validators were run. Independent source
+review, exact candidate lab proof and the remaining caller/static gates are
+pending; this is WIP evidence, not producer acceptance or a landing claim.

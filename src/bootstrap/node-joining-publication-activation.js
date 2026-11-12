@@ -1,5 +1,6 @@
-import {createReplicaRuntimePublication, publishReplicaRuntime} from
+import {captureReplicaRuntimeHost, createReplicaRuntimePublication, publishReplicaRuntime} from
   '../node/replica-runtime-publication.js';
+import {releaseFailedReplicaRuntimeHost} from '../node/replica-runtime-cleanup-custody.js';
 import {runtimePublicationRefused} from '../partition/partition-runtime-publication.js';
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
 import {replicaConsensusEventsOf} from '../node/replica-handler-membership-relay.js';
@@ -206,8 +207,11 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
       });
       this.tablePolicyService.initialize();
     }
-    const createPartitionService = async (options) =>
-      this.createJoinLocalPartitionService({...options, messageGroupService});
+    const createPartitionService = async (options) => {
+      captureReplicaRuntimeHost(this, options.replicaId,
+        acquired.replicaHandler, acquired.replicaStateMachine);
+      return this.createJoinLocalPartitionService({...options, messageGroupService});
+    };
     // Reacquire this incarnation's one lifecycle owner; mint only when none
     // is recorded (a preserved join resume re-enters this segment).
     const acquired = this.replicaLifecycleOwner.acquire({
@@ -239,25 +243,10 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
    */
   async createJoinLocalPartitionService(options) {
     const request = Object.freeze({...options});
-    const replicaHandler = this.replicaHandler;
-    const lifecycleOwner = this.replicaStateMachine;
-    const lifecycleHolder = this.replicaLifecycleOwner;
-    const hostServices = this.partitionServices;
-    const bootIncarnation = this.bootIncarnation;
-    const ownerIncarnation = lifecycleOwner?.ownerIncarnation;
-    const handlerIncarnation = replicaHandler?.ownerIncarnation;
-    const assertOriginalCaller = () => {
-      if (!replicaHandler || !lifecycleOwner || this.replicaHandler !== replicaHandler ||
-          this.replicaStateMachine !== lifecycleOwner ||
-          replicaHandler.replicaStateMachine !== lifecycleOwner ||
-          this.replicaLifecycleOwner !== lifecycleHolder || this.partitionServices !== hostServices ||
-          this.bootIncarnation !== bootIncarnation ||
-          lifecycleOwner.ownerIncarnation !== ownerIncarnation ||
-          replicaHandler.ownerIncarnation !== handlerIncarnation || replicaHandler.shuttingDown ||
-          lifecycleOwner.replicaMutationAdmissionClosed === true) {
-        throw runtimePublicationRefused(request.replicaId);
-      }
-    };
+    const host = captureReplicaRuntimeHost(this, request.replicaId,
+      this.replicaHandler, this.replicaStateMachine);
+    const {handler: replicaHandler, owner: lifecycleOwner, hostServices,
+      assertCurrent: assertOriginalCaller} = host;
     assertOriginalCaller();
     const restoreAdmission = await assertDurableRejoinStorageAdmission(
       lifecycleOwner, request,
@@ -286,9 +275,9 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
     const partition = new PartitionService({
       ...request,
       runtimePublication,
-      transport: this.transport,
+      transport: host.transport,
       messageGroupService,
-      messageRouter: this.messageRouter,
+      messageRouter: host.messageRouter,
       rebalanceCoordinator: this.rebalanceCoordinator,
       replicaStateMachine: lifecycleOwner,
       resolveHandlerRetirementLane: () => lifecycleOwner,
@@ -298,14 +287,15 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
       tablePolicyService: this.tablePolicyService,
       bootstrapReadinessState: this.bootstrapReadinessState,
     });
-    request.onRuntimeCreated?.(partition);
     try {
+      request.onRuntimeCreated?.(partition);
       assertOriginalCaller();
       await partition.initialize();
+      assertOriginalCaller();
       // S6: durable-rejoin restores bypass the ReplicaHandler factory wrapper,
       // so the dispatcher seam attaches here for every join-built service.
       attachSnapshotCatchupDispatcher({service: partition,
-        systemTableCache, messageRouter: this.messageRouter});
+        systemTableCache, messageRouter: host.messageRouter});
       const tableName = request.tableName;
       if (tableName && shouldAttachPartitionCdcPropagation(tableName)) {
         await attachPartitionCdcPropagation(partition, {
@@ -353,10 +343,10 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
       } else {
         request.publishRuntime(partition, hostServices);
       }
+      assertOriginalCaller();
     } catch (error) {
-      await replicaHandler.fenceFailedReplicaCreateRuntime(
-        request.replicaId, request.partitionId, partition, error,
-      );
+      await releaseFailedReplicaRuntimeHost(host,
+        request.replicaId, request.partitionId, partition, error);
       throw error;
     }
     return partition;

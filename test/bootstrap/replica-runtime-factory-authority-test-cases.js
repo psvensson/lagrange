@@ -3,6 +3,7 @@ import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {ReplicaLifecycleOwner} from '../../src/bootstrap/shared/replica-handler-setup.js';
 import {ReplicaHandler} from '../../src/node/replica-handler.js';
 import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
+import {TABLES} from '../../src/constants/tables.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {createReplicaRuntimePublication, publishReplicaRuntime} from
   '../../src/node/replica-runtime-publication.js';
@@ -93,6 +94,120 @@ function prepareControlledRuntime(t, f, partition) {
 }
 
 function registerReplicaRuntimeFactoryAuthorityTests(restoreFixture) {
+  for (const changed of ['host', 'holder', 'unchanged']) {
+    test(`CREATE retains its factory producer across the first cleanup await: ${changed}`, async (t) => {
+      const f = bootstrapFactoryFixture(t);
+      const admission = await assertDurableRejoinStorageAdmission(f.owner, f.options);
+      const entered = Promise.withResolvers();
+      const release = Promise.withResolvers();
+      const settleCleanup = f.handler.settlePendingReplicaRuntimeCleanup.bind(f.handler);
+      f.handler.settlePendingReplicaRuntimeCleanup = async (...args) => {
+        await settleCleanup(...args);
+        entered.resolve();
+        await release.promise;
+      };
+      let contextCalls = 0;
+      let localWrites = 0;
+      let failedProjectionAttempts = 0;
+      const persistFailed = f.handler.persistOrConfirmReplicaCreateFailed.bind(f.handler);
+      f.handler.persistOrConfirmReplicaCreateFailed = (...args) => {
+        failedProjectionAttempts += 1;
+        return persistFailed(...args);
+      };
+      const setLocalReplica = f.handler.setLocalReplica.bind(f.handler);
+      f.handler.setLocalReplica = (...args) => {
+        localWrites += 1;
+        return setLocalReplica(...args);
+      };
+      // The actual CREATE continuation reaches its context producer only
+      // after the first cleanup and authoritative identity read. Stop there,
+      // before opening a native record: this is a caller-authority witness.
+      const reachedContext = Object.assign(new Error('fixture context reached'),
+        {code: 'FIXTURE_CONTEXT_REACHED'});
+      f.handler.resolveReplicaContextWithRetry = async () => {
+        contextCalls += 1;
+        throw reachedContext;
+      };
+      const before = f.store.durableRow(TABLES.SERVICES, f.row.replica_id);
+      const pending = f.handler.createReplicaAsync({operationId: 'factory-first-await',
+        partitionId: f.row.partition_id, replicaId: f.row.replica_id,
+        skipLifecycleStatusPersistence: true, runtimeStorageAdmission: admission,
+        resumedLifecycleStatus: f.row.status}).then(
+        () => null, (error) => error);
+      await entered.promise;
+      if (changed === 'host') f.service.partitionServices = new Map();
+      if (changed === 'holder') f.service.replicaLifecycleOwner = new ReplicaLifecycleOwner();
+      release.resolve();
+      const failure = await pending;
+      if (changed === 'unchanged') {
+        t.equal(contextCalls, 1, 'the original factory reaches the next real CREATE stage');
+        t.ok(localWrites > 0, 'the unchanged continuation exercises metadata publication');
+        t.ok(failure, 'the declared context stop settles through the real failure path');
+      } else {
+        t.equal(failure?.code, PARTITION_RUNTIME_PUBLICATION_REFUSED);
+        t.equal(contextCalls, 0, 'a later factory host cannot become the original caller');
+        t.equal(localWrites, 0, 'obsolete success or failure may not publish metadata');
+        t.equal(failedProjectionAttempts, 0, 'refusal cannot enter FAILED projection for a new caller');
+        t.same(f.store.durableRow(TABLES.SERVICES, f.row.replica_id), before,
+          'obsolete CREATE completion may not project failure into the retained row');
+      }
+    });
+  }
+
+  for (const factory of ['bootstrap', 'join']) {
+    for (const changed of ['host', 'holder', 'boot']) {
+      test(`${factory} publication consumes its original host inside map observers: ${changed}`, async (t) => {
+        const f = factory === 'bootstrap' ? bootstrapFactoryFixture(t) : restoreFixture(t);
+        if (factory === 'join') {
+          f.service.createCdcIntegrationService = () => createLifecycleCdcService({store: f.store});
+          f.service.getLeaderMessageGroupService = () => null;
+          f.service.messageRouter = {nodeId: f.row.node_id, register() {}, unregister() {}};
+          f.service.tablePolicyService = {};
+        }
+        const hostServices = f.service.partitionServices;
+        let partition;
+        let metadataEffects = 0;
+        let physicalEffects = 0;
+        let hostEffects = 0;
+        const setLocalReplica = f.handler.setLocalReplica.bind(f.handler);
+        f.handler.setLocalReplica = (id, value) => {
+          const result = setLocalReplica(id, value);
+          if (value.service === partition && partition !== undefined) {
+            metadataEffects += 1;
+            if (changed === 'host') f.service.partitionServices = new Map();
+            if (changed === 'holder') f.service.replicaLifecycleOwner = new ReplicaLifecycleOwner();
+            if (changed === 'boot') f.service.bootIncarnation += 1;
+          }
+          return result;
+        };
+        const physicalSet = f.handler.localServices.set.bind(f.handler.localServices);
+        f.handler.localServices.set = (id, value) => {
+          if (value === partition) physicalEffects += 1;
+          return physicalSet(id, value);
+        };
+        hostServices.set = (id, value) => {
+          if (value === partition) hostEffects += 1;
+          return Map.prototype.set.call(hostServices, id, value);
+        };
+        const onRuntimeCreated = (created) => {
+          partition = created;
+          prepareControlledRuntime(t, f, partition);
+        };
+        const options = factory === 'bootstrap' ? await bootstrapFactoryOptions(f, onRuntimeCreated) :
+          {...f.options, onRuntimeCreated};
+        const pending = factory === 'bootstrap' ? f.handler.createPartitionService(options) :
+          f.service.createJoinLocalPartitionService(options);
+        await t.rejects(pending, {code: PARTITION_RUNTIME_PUBLICATION_REFUSED});
+        t.equal(metadataEffects, 1, 'the reentrant host change follows a real metadata effect');
+        t.equal(physicalEffects, 0, 'the original source is checked before the next physical effect');
+        t.equal(hostEffects, 0, 'the original source is checked before host map publication');
+        t.equal(partition.isShutdown, true, 'the original factory retains and releases its exact object');
+        t.equal(hostServices.has(f.row.replica_id), false);
+        t.equal(f.handler.pendingRuntimeShutdowns.has(partition), false);
+      });
+    }
+  }
+
   for (const changed of ['handler', 'owner', 'host', 'holder', 'boot', 'unchanged']) {
     test(`bootstrap factory retains its original host through held construction: ${changed}`, async (t) => {
       const f = bootstrapFactoryFixture(t);
