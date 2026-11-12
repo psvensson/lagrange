@@ -1,0 +1,143 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "sourceHead": "5e58474b13870c95ea6bd6175942c33984cd6ac9",
+  "receipts": [
+    {
+      "id": "configuration-policy",
+      "passed": true,
+      "evidence": [
+        "runs/configuration-frozen-4.log",
+        "runs/tap-frozen-4/test/config/test-configuration-compliance.property.test.js.tap"
+      ]
+    },
+    {
+      "id": "permission-family",
+      "passed": true,
+      "evidence": [
+        "runs/birth-frozen-2.log",
+        "runs/prune-frozen-1.log",
+        "runs/tap-frozen-2/test/raft/raft-rs-backend/replica-lifecycle-birth.test.js.tap",
+        "runs/tap-frozen-1/test/scripts/prune-test-output.test.js.tap"
+      ]
+    },
+    {
+      "id": "principal-refusal",
+      "passed": true,
+      "evidence": [
+        "runs/configuration-frozen-4.log"
+      ]
+    },
+    {
+      "id": "checker-binding-negatives",
+      "passed": true,
+      "evidence": [
+        "runs/checker-regression-red.log",
+        "runs/review-regression-red.log",
+        "runs/checker-hook-regressions-red.log",
+        "runs/review-2-regression-red.log",
+        "runs/configuration-frozen-4.log",
+        "runs/review-3-regression-red.log"
+      ]
+    },
+    {
+      "id": "independent-review",
+      "passed": true,
+      "evidence": [
+        "quest/evidence/implementation-review-4.md",
+        "quest/evidence/review-packet-4.md"
+      ]
+    }
+  ],
+  "testFileDigests": {
+    "scripts/checks/test-skip-policy.js": "15c877c1250c3510399b19e342b103cd519d7892dc99bd18b7d65dee77bf5a01",
+    "test/config/test-configuration-compliance.property.test.js": "23a9fa83e8693db3c7a0db3824ba6eee4d0e88e1d17f3f5f5bb941c260b3c060",
+    "test/guidelines/fixtures.md": "60dcc677c0af2128140029e3bdcdbefba65636bd7a617f27244f247540973f80",
+    "test/raft/raft-rs-backend/replica-lifecycle-birth.test.js": "ce5d5bcd4c6cd5b03e19cd11c9cb6f70cd097980431c3aa9ac449fcff56fefcd",
+    "test/scripts/prune-test-output.test.js": "3b85b977950a9781c4ebfeb5386ea0f7ca3cf5d2dea20f6c0c5cd83f8869f45d",
+    "test/test-helpers/permission-witness.js": "b1865241c7366a793fda6bce1bed578ec1b33ac67ac3265fcc913c8c060947d2",
+    "AGENTS.md": "640008279732be15c50b42bdfef1b5ec1893c6a31eaa851580c711de22ccc0bb",
+    "docs/steering/router.md": "b8e7f4cfc71d941a39a2e282af3e515c8391812e3345c9fafd2ab8cb082705d2",
+    "docs/steering/rule-set.json": "0ed0e1ad8d129bbdbfc565df42c437a7bb43f7344ce9d05d045a02c0440e29f5",
+    "docs/steering/rules.md": "ff82e2e1318f964871a3655e39755f0410f11c8bdd5edc89e7ed1f0a16fdd08b",
+    "package-lock.json": "8ac4b4fb882a5a93a67f192b37167fe8d5884c9a6778ca5b4b2dff7b28b76b04",
+    "package.json": "7c56bd6952c10baab826be0504498e97f3f0a8c13dd953dd164a5baffe093b0b",
+    "scripts/lab/probe.js": "b66bb4fff71eb87b164ffd1b198499091397ccf928463c15d9eee7c3002f7164",
+    "scripts/prune-test-output.js": "d26eec3a9c9828f687a19d86dd6d656e962f9d600245cac22706c9c85ad3b52a",
+    "scripts/run-test-files.js": "0ea4485feeea7ba4a0b443a5850f431b9ccb77be03a07efc830d8ac7c3754a38",
+    "src/partition/partition-participant-transaction-store.js": "9c1190c44d8ffcaca87e16bb1c64be5299e2b5544fdcdf04c4c2bc2a01ec1ff1",
+    "src/raft/raft-rs-lifecycle-administration.js": "36421ba2b6554d10e9fd599b8957a8029a94d5a3dd0f9404ec1a53f3dde559b6",
+    "src/raft/raft-rs-replica-lifecycle-constants.js": "460e9954715c57bd1ac49fc88c1b1ff4290574a35ad310122953e778b80265df",
+    "src/raft/raft-rs-replica-lifecycle-observation.js": "c0183488b12cd27a43dfe4299db755f74afc067d09b4111f297ce4dcb285d12e",
+    "src/raft/raft-rs-replica-lifecycle-owner.js": "94e6ce761025eccaf9b02d44e0eb294e64216c2b92045da7fda0228efeac5b60",
+    "src/storage/durable-file-presence.js": "d18c26729ce005fd9cf515fead444b744fd50a840d33d02a52a4f6d8d669ee2a",
+    "src/test-helpers/tap.js": "6b281b8937f772d077323ffa871853698ef8c67d78a90bc9cfc39504267843ab",
+    "test/guidelines/harness.md": "4ddec9cf2d6bd51b69b81c99828f652f1069092c61d14a98b5616289279f3792",
+    "node_modules/tap/package.json": "ca779a8fd60436b70147b7ee7d358f628f53930be26e5bfb329287cd8895508d",
+    "node_modules/@tapjs/before-each/dist/esm/index.d.ts": "cf5f589719c9145acd85058589df94cee1af1c69108fb7f60780e2964543a647",
+    "node_modules/@tapjs/after-each/dist/esm/index.d.ts": "5870dd96d226d36f4e364e9d0320d4040a0117c3b726d7b596759c013d3e159a",
+    "node_modules/@tapjs/before/dist/esm/index.d.ts": "8abca1faeca945207b0cab27be137f8908337db3f765ae2c4cc1df1d344e4e56",
+    "node_modules/@tapjs/after/dist/esm/index.d.ts": "4015a252cbf631218dd8201d77dab69510a0366606de14a910975d02a428879e"
+  },
+  "sourceFiles": [
+    "scripts/checks/test-skip-policy.js",
+    "test/config/test-configuration-compliance.property.test.js",
+    "test/guidelines/fixtures.md",
+    "test/raft/raft-rs-backend/replica-lifecycle-birth.test.js",
+    "test/scripts/prune-test-output.test.js",
+    "test/test-helpers/permission-witness.js"
+  ],
+  "dependencyHashCount": 22,
+  "evidenceArchive": {
+    "sha256": "fab585282da6562790fcfa66e7b79e964b4fee53abe761942765c77b0f1b1c56",
+    "bytes": 961234,
+    "asset": "no-skipped-permission-witness-20261112--permission-witness-complete-20261112T084639Z.tar.gz",
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/no-skipped-permission-witness-20261112--permission-witness-complete-20261112T084639Z.tar.gz",
+    "manifest": {
+      "member": "ARTIFACT-MANIFEST.json",
+      "sha256": "147d69b883883dc0eb293cb54dbb3aa59f5995de1c37270c171677d08a45bcd3"
+    },
+    "verifiedMembers": 179,
+    "missingOrMismatchedMembers": 0,
+    "verification": "Canonical evidence add re-downloaded and hashed; a second download was reopened and every member hashed against the artifact manifest and preserved external originals. Receipt evidence strings identify archive members."
+  },
+  "candidateManifest": {
+    "member": "quest/evidence/candidate-manifest-4.json",
+    "sha256": "d31e09b96ce891e8c4e7f6babf06dc5cde06da682f239a1dbdc0e68b24abed6a"
+  },
+  "independentReview": {
+    "member": "quest/evidence/implementation-review-4.md",
+    "sha256": "611d00120530fde4da686bed2f9901de48aed9567fd6a8540ad9be6bc0f2c022",
+    "verifier": "subagent:01a1ceac-26a9-73a1-8a7a-dbab1c7ac4d8",
+    "model": "gpt-6-astra",
+    "effort": "max",
+    "verdict": "approve",
+    "reviewedManifestSha256": "d31e09b96ce891e8c4e7f6babf06dc5cde06da682f239a1dbdc0e68b24abed6a"
+  },
+  "reviewPacket": {
+    "member": "quest/evidence/review-packet-4.md",
+    "sha256": "639e2789ae981af492ac558ec2156478adcd0ee5bf58ba3720461b08498c775c"
+  },
+  "sourcePatch": {
+    "member": "runs/permission-witness-candidate-4.patch",
+    "sha256": "58a528761fd33941ab902840e6b1e6dbe8e83ed8c52819c37b0ce0a762a491a3"
+  },
+  "archivedOriginalReceipt": {
+    "member": "quest/evidence/receipt.json",
+    "sha256": "a0a149376f8d7087390101f72759f8da35fe133cbc49e26f7565e7e836544b33"
+  },
+  "originalLogPrefix": {
+    "member": "quest/log.ndjson",
+    "bytes": 18537,
+    "sha256": "4186f4c574f9cd1349b0bae4c157c049ce516ee5497b607151210dde26ffefd1"
+  },
+  "applicabilityEvidence": "All six source files and 22 input hashes equal the archived approved manifest. All 33 reviewed artifact hashes and both review/packet hashes match downloaded members; original five passing receipt IDs and their evidence are preserved. Sealed doneWhen and Quest record unchanged; no applicability waiver or test rerun.",
+  "evidenceCeiling": "Independently approved exact uncommitted candidate. Local unprivileged real filesystem and native SQLite; isolated UID-getter refusal controls; declared finite static-binding/literal forms. No actual-root execution, arbitrary interprocedural proof, inherited cleanup double-failure, parent CDC/SQLite composition, full-lab/service/release or integration acceptance.",
+  "handoffState": "Repair receipts complete; Quest remains open/unlanded. Parent owns preservation, integration, SQLite import composition and full-lab acceptance under existing user authority. CDC diagnosis remains separate. This worker makes no commits, pushes or integration writes.",
+  "custodyVerification": {
+    "sha256": "75f4640c45b7e6fd1de92fdade51f697dcc0a5182fcfc572875ec66e4717c0da",
+    "bytes": 2186,
+    "asset": "no-skipped-permission-witness-20261112--permission-witness-custody-verification-20261112T084639Z.json",
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/no-skipped-permission-witness-20261112--permission-witness-custody-verification-20261112T084639Z.json"
+  }
+}

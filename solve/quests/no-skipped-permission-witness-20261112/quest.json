@@ -1,0 +1,38 @@
+{
+  "schema": "solve-quest/2",
+  "id": "no-skipped-permission-witness-20261112",
+  "class": "fix",
+  "statement": "Repair the systematic successful-skip escape in the real filesystem permission witness family (replica lifecycle birth and artifact retention), and its verifier blind spot for imported node:test it/aliases. Permission denial must be measured under a supported unprivileged POSIX principal; invalid execution prerequisites must fail typed and loudly. Preserve canonical F birth/read semantics and actual EACCES. Enforce no skipped tests through framework bindings without unrelated-call false positives. This is a bounded repair, not full-lab or formation acceptance.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/no-skipped-permission-witness-20261112/evidence/receipt.json",
+      "requiredReceipts": [
+        "configuration-policy",
+        "permission-family",
+        "principal-refusal",
+        "checker-binding-negatives",
+        "independent-review"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "scope",
+      "statement": "Only permission test family, shared test-only premise helper, configuration skip checker with engaged regression witnesses, fixture documentation, and own Quest evidence. No SQLite migration/production changes; retain birth constructor import for later composition."
+    },
+    {
+      "id": "no-skip-or-fake",
+      "statement": "No removed tests, policy exemptions, successful skips, fabricated EACCES, privileged helper or fallback/native substitution. Permission changes confined to private fixtures and restored."
+    },
+    {
+      "id": "custody",
+      "statement": "Base 5e58474b13870c95ea6bd6175942c33984cd6ac9; frozen lagrange-wip-lab and primary formation log never edited. No commits, pushes or integration writes."
+    },
+    {
+      "id": "proof",
+      "statement": "Thermal gate followed by flock /tmp/lagrange-local-test.lock nice -n15 node scripts/run-test-files.js --jobs 1 FILE for focused execution. Preserve first unexpected failures; broad proof only through lab. Freeze manifest and independent Astra max review before handoff."
+    }
+  ],
+  "sealedAt": "5e58474b13870c95ea6bd6175942c33984cd6ac9"
+}

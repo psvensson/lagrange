@@ -14,53 +14,10 @@ import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import fs from 'fs';
 import path from 'path';
-import {parse} from 'espree';
-
-function isTestRegistrationCall(node) {
-  if (node?.type !== 'CallExpression') {
-    return false;
-  }
-  if (node.callee?.type === 'Identifier') {
-    return node.callee.name === 'test';
-  }
-  return node.callee?.type === 'MemberExpression' &&
-    node.callee.computed !== true &&
-    node.callee.object?.type === 'Identifier' &&
-    node.callee.object.name === 't' &&
-    node.callee.property?.type === 'Identifier' &&
-    node.callee.property.name === 'test';
-}
-
-function hasSkippedTestOption(content) {
-  const syntaxTree = parse(content, {
-    ecmaVersion: 'latest',
-    sourceType: 'module',
-  });
-  const pending = [syntaxTree];
-  while (pending.length > 0) {
-    const node = pending.pop();
-    if (isTestRegistrationCall(node)) {
-      const hasSkipOption = node.arguments.some((argument) =>
-        argument?.type === 'ObjectExpression' &&
-        argument.properties.some((property) =>
-          property?.type === 'Property' &&
-          property.computed !== true &&
-          (property.key?.name === 'skip' || property.key?.value === 'skip'),
-        ));
-      if (hasSkipOption) {
-        return true;
-      }
-    }
-    for (const value of Object.values(node || {})) {
-      if (Array.isArray(value)) {
-        pending.push(...value.filter((entry) => entry && typeof entry === 'object'));
-      } else if (value && typeof value === 'object') {
-        pending.push(value);
-      }
-    }
-  }
-  return false;
-}
+import {fileURLToPath} from 'node:url';
+import {spawnSync} from 'node:child_process';
+import {findSkippedTests} from '../../scripts/checks/test-skip-policy.js';
+import {PERMISSION_WITNESS_UNAVAILABLE} from '../test-helpers/permission-witness.js';
 
 /**
  * Get all property test files in the test directory.
@@ -205,8 +162,7 @@ test('Property 9: Test Configuration Compliance', async (t) => {
   /**
    * Property: No skipped tests in test files.
    *
-   * For any test file, there SHALL be no skipped test option, .skip(), xit(),
-   * xdescribe(), or xtest().
+   * For any test file, there SHALL be no skipped test option or framework-bound skip call.
    *
    * **Validates: Requirements 11.4**
    */
@@ -228,40 +184,14 @@ test('Property 9: Test Configuration Compliance', async (t) => {
 
     walkDir(testDir);
 
-    const skipPatterns = [
-      /\bt\.skip\s*\(/,
-      /\btest\.skip\s*\(/,
-      /\bxit\s*\(/,
-      /\bxdescribe\s*\(/,
-      /\bxtest\s*\(/,
-    ];
-
     const filesWithSkips = [];
-
     for (const filePath of testFiles) {
-      // Skip this test file itself to avoid false positive from regex patterns
-      if (filePath.includes('test-configuration-compliance')) {
-        continue;
-      }
-
       const content = fs.readFileSync(filePath, 'utf-8');
-
-      if (hasSkippedTestOption(content)) {
+      for (const violation of findSkippedTests(content, filePath)) {
         filesWithSkips.push({
           file: path.relative(process.cwd(), filePath),
-          pattern: 'test options object with skip property',
+          pattern: `${violation.line}:${violation.column} ${violation.message}`,
         });
-        continue;
-      }
-
-      for (const pattern of skipPatterns) {
-        if (pattern.test(content)) {
-          filesWithSkips.push({
-            file: path.relative(process.cwd(), filePath),
-            pattern: pattern.toString(),
-          });
-          break;
-        }
       }
     }
 
@@ -278,4 +208,223 @@ test('Property 9: Test Configuration Compliance', async (t) => {
       `no test files should have skipped tests (found ${filesWithSkips.length})`,
     );
   });
+});
+
+// Executable source snippets are data for the checker, never registered tests.
+test('skip policy follows framework bindings and excludes unrelated calls', async (t) => {
+  const rejected = [
+    'import {it} from \'node:test\'; it(\'permission\', {skip: false}, () => {});',
+    'import {test as check} from \'node:test\'; check(\'permission\', {skip: true}, () => {});',
+    'import * as checks from \'node:test\'; checks.it(\'permission\', {skip: true}, () => {});',
+    'import tap from \'tap\'; tap.test(\'permission\', {skip: true}, () => {});',
+    'import {test} from \'../../src/test-helpers/tap.js\'; ' +
+      'test(\'parent\', (context) => context.test(\'permission\', {skip: true}, () => {}));',
+    'import check from \'node:test\'; check(\'permission\', {\'skip\': false}, () => {});',
+    'import {it as check} from \'node:test\'; check.skip(\'permission\', () => {});',
+    'import {describe as group} from \'node:test\'; group.skip(\'permission\', () => {});',
+    'import {suite as group} from \'node:test\'; group(\'permission\', {skip: true}, () => {});',
+    'import {test} from \'node:test\'; const check = test; ' +
+      'check(\'permission\', {[\'skip\']: false}, () => {});',
+    'import * as checks from \'node:test\'; const {it: check} = checks; ' +
+      'check[\'skip\'](\'permission\', () => {});',
+    'import {test} from \'node:test\'; const options = {skip: false}; ' +
+      'test(\'permission\', {...options}, () => {});',
+    'import {test} from \'node:test\'; test(\'permission\', (context) => context.skip());',
+    'import {test} from \'node:test\'; test(\'parent\', (context) => ' +
+      'context.test(\'child\', (child) => child.skip()));',
+    'import tap from \'../../src/test-helpers/tap.js\'; ' +
+      'tap.test(\'parent\', (context) => context.skip(\'child\'));',
+    'import * as tap from \'tap\'; tap.test(\'permission\', {skip: true}, () => {});',
+    'import {skip as omit} from \'tap\'; omit(\'permission\', () => {});',
+    'import {test} from \'node:test\'; test(\'parent\', (context) => { ' +
+      'const {skip: omit} = context; omit(); });',
+    '/* eslint-disable */ import {it} from \'node:test\'; ' +
+      'it(\'permission\', {skip: true}, () => {});',
+    'import {test} from \'node:test\'; test(\'permission\', {"sk\\u0069p": false}, () => {});',
+    'import {t} from \'tap\'; t.skip(\'permission\');',
+    'import {t as root} from \'tap\'; root.test(\'permission\', {skip: false}, () => {});',
+    'import * as tap from \'tap\'; tap.t.skip(\'permission\');',
+    'import {it} from \'node:test\'; const key = \'skip\'; ' +
+      'it(\'permission\', {[key]: false}, () => {});',
+    'import {test} from \'node:test\'; const key = \'skip\'; test[key](\'permission\');',
+    'import {test} from \'node:test\'; test[`skip`](\'permission\');',
+    'import {test} from \'node:test\'; const {options} = {options: {skip: false}}; ' +
+      'test(\'permission\', options, () => {});',
+    'import {test} from \'node:test\'; const {outer: {options}} = ' +
+      '{outer: {options: {skip: false}}}; test(\'permission\', options, () => {});',
+    'import tap from \'tap\'; tap.test(\'parent\', async ({test}) => ' +
+      'test(\'permission\', {skip: false}, () => {}));',
+    'import tap from \'tap\'; tap.test(\'parent\', ({skip: omit}) => omit(\'permission\'));',
+    'import {test} from \'node:test\'; test(\'parent\', ({test: child}) => ' +
+      'child(\'permission\', {skip: false}, () => {}));',
+  ];
+  for (const source of rejected) {
+    t.equal(findSkippedTests(source, fileURLToPath(import.meta.url)).length > 0, true, source);
+  }
+  const accepted = [
+    'const test = () => {}; test(\'data\', {skip: true});',
+    'const t = {test() {}}; t.test(\'data\', {skip: true});',
+    'import {test} from \'some-other-library\'; test(\'data\', {skip: true});',
+    'import {test} from \'node:test\'; ' +
+      'function ordinary(test) { test(\'data\', {skip: true}); }',
+    'import {it} from \'node:test\'; function ordinary(it) { it.skip(\'data\'); }',
+    'import {test} from \'node:test\'; test(\'parent\', (context) => { ' +
+      'function ordinary(context) { context.skip(\'data\'); } });',
+    'import {test} from \'node:test\'; test(\'parent\', () => { ' +
+      'const context = {test() {}}; context.test(\'data\', {skip: true}); });',
+    'import {test} from \'node:test\'; const fixture = {skip: true}; ' +
+      'test(\'data\', () => fixture);',
+    '// test.skip(\'comment\')\nconst snippet = `it(\'data\', {skip: true})`;',
+    'const xit = () => {}; xit(\'ordinary function\');',
+    '/* eslint-disable no-extend-native */ const fixture = {skip: true};',
+    'import {describe} from \'node:test\'; describe(\'suite\', (context) => ' +
+      'context.test(\'not a Node TestContext\', {skip: true}));',
+    'import {test} from \'node:test\'; { const test = () => {}; ' +
+      'test(\'data\', {skip: true}); }',
+    'import {test} from \'node:test\'; try {} catch (test) { ' +
+      'test(\'data\', {skip: true}); }',
+    'import tap from \'../unrelated/tap.js\'; tap.test(\'data\', {skip: true});',
+    'import {test} from \'node:test\'; const {options} = {skip: true, options: {}}; ' +
+      'test(\'runs\', options, () => {});',
+    'import {test} from \'node:test\'; const {outer: {options}} = ' +
+      '{outer: {skip: true, options: {}}}; test(\'runs\', options, () => {});',
+    'import {test} from \'node:test\'; const key = \'other\'; ' +
+      'test(\'runs\', {[key]: \'skip\'}, () => {});',
+    'import {t} from \'tap\'; function ordinary(t) { t.skip(\'data\'); }',
+    'import {describe} from \'node:test\'; describe(\'suite\', ({test}) => ' +
+      'test(\'not a TestContext\', {skip: true}));',
+  ];
+  for (const source of accepted) {
+    t.equal(findSkippedTests(source, fileURLToPath(import.meta.url)).length > 0, false, source);
+  }
+  t.throws(() => findSkippedTests('import {', fileURLToPath(import.meta.url)),
+    /Unexpected token/, 'unparseable source cannot certify no skipped tests');
+  const unresolved = findSkippedTests('import {test} from \'node:test\'; ' +
+    'test(\'parent\', (context) => { context = other; context.skip(); });',
+  fileURLToPath(import.meta.url));
+  t.equal(unresolved.length, 1, 'mutable context cannot silently certify no skips');
+  t.equal(unresolved[0].messageId, 'unresolved', 'unresolved is distinct from a proven skip');
+  const mixed = findSkippedTests('import {it} from \'node:test\'; ' +
+    '{ const it = () => {}; it(\'data\', {skip: true}); } ' +
+    'it(\'permission\', {skip: true}, () => {});', fileURLToPath(import.meta.url));
+  t.equal(mixed.length, 1, 'an inner shadow cannot hide the real outer violation');
+});
+
+test('skip policy preserves hook authority and object projection semantics', async (t) => {
+  const filename = fileURLToPath(import.meta.url);
+  const rejected = [
+    'import tap from \'tap\'; tap.beforeEach(t => t.skip(\'permission\'));',
+    'import {beforeEach as hook} from \'tap\'; hook(t => t.skip(\'permission\'));',
+    'import * as tap from \'tap\'; tap.afterEach(t => t.skip(\'permission\'));',
+    `import {t} from 'tap'; const {beforeEach: hook} = t;
+      hook(({skip: omit}) => omit('permission'));`,
+    `import {afterEach} from '../../src/test-helpers/tap.js';
+      afterEach(t => t.skip('permission'));`,
+    `import {test} from 'node:test'; test('parent', t => {
+      t.before(child => child.skip(), {timeout: 100});
+    });`,
+    `import {test} from 'node:test'; test('parent', t => {
+      const {afterEach: hook} = t; hook(({skip: omit}) => omit());
+    });`,
+    `import {test} from 'node:test'; const bag = {0: {skip: false}};
+      const {['0']: options} = bag; test('permission', options, () => {});`,
+    `import {test} from 'node:test'; const bag = {'0': {skip: false}};
+      test('permission', bag[0], () => {});`,
+    `import {test} from 'node:test'; const bag = {[null]: {skip: false}};
+      test('permission', bag.null, () => {});`,
+    `import {test} from 'node:test'; const {options} = {
+      options: {skip: false}, ...{other: undefined}};
+      test('permission', options, () => {});`,
+    `import {test} from 'node:test'; const {options} = {
+      options: {skip: false}, ...undefined, ...null};
+      test('permission', options, () => {});`,
+  ];
+  for (const source of rejected) {
+    t.equal(findSkippedTests(source, filename)[0]?.messageId, 'skip', source);
+  }
+  // Node's exported hooks can receive TestContext or SuiteContext. Preserve
+  // that uncertainty instead of claiming a proven skip or certifying none.
+  for (const hook of ['before', 'after', 'beforeEach', 'afterEach']) {
+    const source = `import {${hook} as hook} from 'node:test';
+      hook(context => context.skip(), {timeout: 100});`;
+    t.equal(findSkippedTests(source, filename)[0]?.messageId, 'unresolved', source);
+  }
+  const accepted = [
+    'import tap from \'tap\'; tap.before(t => t.skip(\'not a supplied context\'));',
+    'import tap from \'tap\'; tap.after(t => t.skip(\'not a supplied context\'));',
+    `import {beforeEach} from 'tap';
+      function ordinary(beforeEach) { beforeEach(t => t.skip('data')); }`,
+    'import {beforeEach} from \'some-other-library\'; beforeEach(t => t.skip(\'data\'));',
+    'import {beforeEach} from \'node:test\'; beforeEach((context, done) => done.skip());',
+    'import {beforeEach} from \'node:test\'; beforeEach(() => {}, {skip: false});',
+    `import {test} from 'node:test'; const {options} = {
+      options: {skip: true}, ...{options: undefined}};
+      test('runs', {...options}, () => {});`,
+    `import {test} from 'node:test'; const absent = undefined;
+      const {options} = {options: {skip: true}, ...{options: absent}};
+      test('runs', {...options}, () => {});`,
+    `import {test} from 'node:test'; const {options} = {
+      options: {skip: true}, ...{...{options: null}}};
+      test('runs', {...options}, () => {});`,
+    `import {test} from 'node:test'; const {options} = {
+      options: {skip: true}, ...unknown}; test('runs', options, () => {});`,
+  ];
+  for (const source of accepted) {
+    t.same(findSkippedTests(source, filename), [], source);
+  }
+});
+
+test('skip policy projects literal spread properties with JavaScript enumerability', async (t) => {
+  const filename = fileURLToPath(import.meta.url);
+  for (const literal of ['false', 'true', '0', '1', '0n', '/literal/',
+    '""', '"indices"', '`indices`', 'undefined', 'null']) {
+    const source = `import {test} from 'node:test';
+      const {options} = {options: {skip: false}, ...${literal}};
+      test('permission', options, () => {});`;
+    t.equal(findSkippedTests(source, filename)[0]?.messageId, 'skip', source);
+  }
+  const rejected = [
+    `import {test} from 'node:test'; const empty = false;
+      const {options} = {options: {skip: false}, ...empty};
+      test('permission', options, () => {});`,
+    `import {test} from 'node:test';
+      const {length: options} = {length: {skip: false}, ...'indices'};
+      test('permission', options, () => {});`,
+    `import {test} from 'node:test'; const key = 'x'.length;
+      const {[key]: options} = {1: {skip: false}};
+      test('permission', options, () => {});`,
+  ];
+  for (const source of rejected) {
+    t.equal(findSkippedTests(source, filename)[0]?.messageId, 'skip', source);
+  }
+  const source = `import {test} from 'node:test';
+    const {0: options} = {0: {skip: false}, ...'x'};
+    test('runs', {...options}, () => {});`;
+  t.same(findSkippedTests(source, filename), [], 'string indices really overwrite earlier values');
+});
+
+test('permission prerequisite refuses unavailable identity with a typed failure', async (t) => {
+  // Only identity is simulated here. The birth and prune tests separately
+  // engage real filesystem EACCES under the actual runner principal.
+  const helper = new URL('../test-helpers/permission-witness.js', import.meta.url).href;
+  for (const [real, effective] of [
+    ['() => 0', '() => 1000'], ['() => 1000', '() => 0'],
+    ['undefined', '() => 1000'], ['() => 1000', 'undefined'],
+  ]) {
+    const child = spawnSync(process.execPath, ['--input-type=module', '--eval', `
+      process.getuid = ${real};
+      process.geteuid = ${effective};
+      const {requirePermissionWitness} = await import(${JSON.stringify(helper)});
+      try {
+        requirePermissionWitness();
+      } catch (error) {
+        process.stderr.write(error.code + ': ' + error.message);
+        process.exitCode = 1;
+      }
+    `], {encoding: 'utf8'});
+    t.equal(child.error, undefined, 'the identity control executed');
+    t.equal(child.status, 1, 'unsupported identity fails, never skips or succeeds');
+    t.match(child.stderr, PERMISSION_WITNESS_UNAVAILABLE, 'typed infrastructure outcome');
+    t.match(child.stderr, 'unprivileged POSIX', 'actionable execution prerequisite');
+  }
 });

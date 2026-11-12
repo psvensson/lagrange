@@ -37,6 +37,13 @@ the targeted/full-suite schedule in `harness.md` "Test Execution Strategy" and
 - **Do not use** `.skip()`, `skip:`, `xit()`, `xdescribe()`, or any skip mechanism
 - **Do not comment out** tests to avoid running them
 - If a test is failing, fix the code or the test - do not skip it
+- Filesystem permission witnesses run as the unprivileged POSIX user required
+  by lab worker provisioning (`scripts/lab/probe.js`). Use
+  `test/test-helpers/permission-witness.js` to refuse root or unavailable
+  real/effective identity with `ERR_PERMISSION_WITNESS_UNAVAILABLE`; this is an
+  infrastructure failure. Still assert real filesystem denial in a private
+  fixture and restore its permissions in `finally`. Never substitute a
+  successful skip, fabricated error, or privileged alternate execution path.
 - If a test is no longer relevant, remove it entirely rather than skipping. "No
   longer relevant" means the behavior it covered was *intentionally removed* — a
   test that fails because behavior regressed MUST be fixed, never deleted to make
