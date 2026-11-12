@@ -54,6 +54,36 @@ const PRIORITY_REFRESH_STILL_BLOCKED_PARTITION_ID =
 const PRIORITY_REFRESH_STALE_READ_SOURCE = 'authoritative';
 const PRIORITY_REFRESH_FRESH_READ_SOURCE = 'cache';
 
+function settledPriorityPlanningView() {
+  const rowsByTable = new Map([
+    [SYSTEM_TABLE_NAME.NODES, PRIORITY_REFRESH_NODE_IDS.map((nodeId) => ({
+      node_id: nodeId, status: PRIORITY_REFRESH_STATUS_ACTIVE,
+      connection_state: PRIORITY_REFRESH_CONNECTION_READY,
+      ready_lease_expires_at: PRIORITY_REFRESH_READY_LEASE_EXPIRES_AT_MS,
+    }))],
+    [SYSTEM_TABLE_NAME.NODE_ENDPOINTS, PRIORITY_REFRESH_NODE_IDS.map((nodeId) => ({
+      endpoint_id: `${nodeId}-ws`, node_id: nodeId,
+      transport_type: PRIORITY_REFRESH_ENDPOINT_TRANSPORT_WS,
+      status: PRIORITY_REFRESH_STATUS_ACTIVE, address: `ws://${nodeId}:8082`,
+    }))],
+    [SYSTEM_TABLE_NAME.PARTITIONS, PRIORITY_REFRESH_PARTITION_IDS.map((partitionId) => ({
+      partition_id: partitionId, replica_count: PRIORITY_REFRESH_REPLICA_COUNT,
+    }))],
+    [SYSTEM_TABLE_NAME.SERVICES, PRIORITY_REFRESH_PARTITION_IDS.flatMap((partitionId) =>
+      PRIORITY_REFRESH_NODE_IDS.map((nodeId) => ({
+        service_id: `${partitionId}-${nodeId}`, node_id: nodeId, partition_id: partitionId,
+        service_type: PRIORITY_REFRESH_SERVICE_TYPE_PARTITION,
+        status: PRIORITY_REFRESH_STATUS_ACTIVE, raft_role: PRIORITY_REFRESH_RAFT_ROLE_FOLLOWER,
+        address: `${nodeId}/partition/${partitionId}`,
+      })))],
+    [SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, []],
+  ]);
+  return authoritativePlanningViewOverRows((tableName) => {
+    if (!rowsByTable.has(tableName)) throw new Error(`Unexpected planning table: ${tableName}`);
+    return rowsByTable.get(tableName);
+  });
+}
+
 export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
   test,
   MembershipPublicationCoordinator,
@@ -550,29 +580,15 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
         status: REFRESH_STATUS_OPEN,
         updated_at: REFRESH_OLD_TIMESTAMP_MS,
       };
-      const planningSnapshot = {
-        latestPublicationRow,
-        publishedActiveNodeIds: [...PRIORITY_REFRESH_NODE_IDS],
-        requiredAckNodeIds: [...PRIORITY_REFRESH_NODE_IDS],
-        priorityPartitionSummary: {
-          satisfied: true,
-          requiredDistinctNodeCount: REFRESH_REQUIRED_DISTINCT_NODE_COUNT,
-          readyEligibleNodeCount: REFRESH_READY_ELIGIBLE_NODE_COUNT,
-          missingPartitionIds: [],
-          blockedPartitions: [],
-        },
-        nodeRows: [],
-        nodeEndpointRows: [],
-        serviceRows: [],
-        partitionRows: [],
-        replicaOperationRows: [],
-        readinessEntries: [],
-      };
       const persistedRows = [];
       const coordinator = new MembershipPublicationCoordinator({
         nodeId: PRIORITY_REFRESH_NODE_IDS[PRIORITY_REFRESH_LOCAL_NODE_INDEX],
         resolveIsControlPlanePublicationsWriteLeader: () => true,
+        authoritativeControlPlaneView: settledPriorityPlanningView(),
         controlPlanePublicationsOwner: publicationsOwnerOverRows({
+          async listPublications() {
+            return {success: true, rows: [persistedRows.at(-1) ?? latestPublicationRow]};
+          },
           // The durable read the owner's guarded write is computed from.
           async getPublication(publicationId) {
             return [latestPublicationRow, ...persistedRows].filter((row) =>
@@ -585,10 +601,7 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
         now: () => REFRESH_NOW_MS,
       });
 
-      const result = await coordinator.reconcileClusterMembership({
-        publicationRows: [latestPublicationRow],
-        planningSnapshot,
-      });
+      const result = await coordinator.reconcileClusterMembership();
 
       t.equal(
         persistedRows.length,
@@ -654,24 +667,15 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
         status: REFRESH_STATUS_ACK_PENDING,
         updated_at: REFRESH_OLD_TIMESTAMP_MS,
       };
-      const planningSnapshot = {
-        latestPublicationRow,
-        publishedActiveNodeIds: [...PRIORITY_REFRESH_NODE_IDS],
-        requiredAckNodeIds: [...PRIORITY_REFRESH_NODE_IDS],
-        acknowledgedNodeIds: [...PRIORITY_REFRESH_NODE_IDS],
-        priorityPartitionSummary: latestPublicationRow.priority_partition_summary,
-        nodeRows: [],
-        nodeEndpointRows: [],
-        serviceRows: [],
-        partitionRows: [],
-        replicaOperationRows: [],
-        readinessEntries: [],
-      };
       const persistedRows = [];
       const coordinator = new MembershipPublicationCoordinator({
         nodeId: PRIORITY_REFRESH_NODE_IDS[PRIORITY_REFRESH_LOCAL_NODE_INDEX],
         resolveIsControlPlanePublicationsWriteLeader: () => true,
+        authoritativeControlPlaneView: settledPriorityPlanningView(),
         controlPlanePublicationsOwner: publicationsOwnerOverRows({
+          async listPublications() {
+            return {success: true, rows: [persistedRows.at(-1) ?? latestPublicationRow]};
+          },
           // The durable read the owner's guarded write is computed from.
           async getPublication(publicationId) {
             return [latestPublicationRow, ...persistedRows].filter((row) =>
@@ -685,8 +689,7 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
       });
 
       const result = await coordinator.reconcileClusterMembership({
-        publicationRows: [latestPublicationRow],
-        planningSnapshot,
+        acknowledgedNodeIds: [...PRIORITY_REFRESH_NODE_IDS],
       });
 
       t.equal(

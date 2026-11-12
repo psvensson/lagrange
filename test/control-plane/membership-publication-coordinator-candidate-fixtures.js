@@ -8,6 +8,8 @@ import {
   isValidMembershipLifecycleTransition,
 } from '../../src/control-plane/membership-lifecycle-constants.js';
 import {CONTROL_PLANE_PRIORITY_RECOVERY_REASON} from '../../src/control-plane/control-plane-readiness-constants.js';
+import {INITIAL_PARTITION_IDS, SYSTEM_TABLE_NAME} from
+  '../../src/bootstrap/system-table-schemas-constants.js';
 import {FIXTURE_ENDPOINT_INCARNATION} from
   '../test-helpers/endpoint-incarnation-fixture.js';
 const MEMBERSHIP_PUBLICATION_ADMISSION_STATE_BLOCKED = 'blocked';
@@ -85,6 +87,14 @@ const MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_NOW_MS = 1000;
 const MEMBERSHIP_PUBLICATION_TRIM_READY_DISTINCT_NODE_COUNT = 3;
 
 const MEMBERSHIP_PUBLICATION_TRIM_TOTAL_PRIORITY_PARTITION_COUNT = 5;
+const MEMBERSHIP_PUBLICATION_TRIM_PRIORITY_PARTITION_IDS = Object.freeze([
+  SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
+  SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+  SYSTEM_TABLE_NAME.SCHEMA_OPERATIONS,
+  SYSTEM_TABLE_NAME.SQL_TRANSACTIONS,
+  SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS,
+  SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS,
+].map((tableName) => INITIAL_PARTITION_IDS[tableName]));
 
 const MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLISHER_NODE_ID = 'seed-node';
 
@@ -446,9 +456,15 @@ test('deriveMembershipPublicationCandidate trims stale published members after r
       nodeEndpointRows: MEMBERSHIP_PUBLICATION_TRIM_CANDIDATE_NODE_IDS.map(
         buildMembershipPublicationTrimEndpointRow,
       ),
-      serviceRows: MEMBERSHIP_PUBLICATION_TRIM_CANDIDATE_NODE_IDS.map(
-        buildMembershipPublicationTrimServiceRow,
-      ),
+      // A retained summary is not this candidate's census. Supply the
+      // current partition and replica rows that establish the settled spread.
+      partitionRows: MEMBERSHIP_PUBLICATION_TRIM_PRIORITY_PARTITION_IDS.map(
+        (partitionId) => ({partition_id: partitionId, replica_count: 3})),
+      serviceRows: MEMBERSHIP_PUBLICATION_TRIM_PRIORITY_PARTITION_IDS.flatMap(
+        (partitionId) => MEMBERSHIP_PUBLICATION_TRIM_CANDIDATE_NODE_IDS.map(
+          (nodeId) => ({service_id: `${partitionId}-${nodeId}`, node_id: nodeId,
+            partition_id: partitionId, service_type: 'partition', status: 'active',
+            raft_role: 'follower', address: `${nodeId}/partition/${partitionId}`}))),
       nowMs: MEMBERSHIP_PUBLICATION_TRIM_NOW_MS,
     });
 

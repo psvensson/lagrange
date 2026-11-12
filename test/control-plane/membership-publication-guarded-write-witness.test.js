@@ -220,22 +220,38 @@ async () => {
   });
 });
 
-test('(c) an ABANDONED row is never rewritten: a refresh and an ' +
-  'acknowledgement are both refused by the row', {timeout: TEST_TIMEOUT_MS},
+test('(c) a row abandoned after the owner read refuses the pending ' +
+  'acknowledgement and a stale refresh', {timeout: TEST_TIMEOUT_MS},
 async () => {
   await withPublicationSurface(async ({gateway, surface}) => {
-    const abandoned = publicationRow({status: 'ABANDONED', closed_at: 2000});
-    await seedPublication(gateway, abandoned);
     const live = publicationRow();
+    await seedPublication(gateway, live);
     const owner = ownerCoordinatorOver(gateway, 'node-1', () =>
       refreshCandidate(live, {priorityPartitionSummary: PRIORITY_SUMMARY,
         acknowledgedNodeIds: [...MEMBER_NODE_IDS]}));
-    // Both callers hold a live (stale) view of the row.
+    const abandoning = coordinatorOver(gateway, 'node-2', {coordinatorOptions: {
+      resolveIsControlPlanePublicationsWriteLeader: () => true,
+      now: () => 3000,
+    }});
+    // Hold an actual owner-read ACK before its guarded write. The separate
+    // coordinator abandons the same durable row while that attempt is held.
+    const held = holdFirstWrite(owner.control);
+    const acknowledgement = owner.coordinator
+      .acknowledgeMembershipPublicationForNode('node-1');
+    let abandoned;
+    try {
+      await held.reached;
+      abandoned = await abandoning.coordinator.abandonTimedOutPublication(
+        PUBLICATION_ID, {timeoutMs: 1, reasonCode: 'witness-timeout'});
+    } finally {
+      held.release();
+    }
+    const acknowledged = await acknowledgement;
+    assert.equal(abandoned.outcome, COMMITTED,
+      'the actual guarded timeout change abandoned the live row');
+    assert.equal(durableRow(surface).status, 'ABANDONED');
     const refreshed = await owner.coordinator.reconcileClusterMembership(
       {latestPublicationRow: live});
-    const acknowledged = await owner.coordinator
-      .acknowledgeMembershipPublicationForNode('node-1',
-        {publicationRows: [live]});
     for (const outcome of [refreshed.publicationWrite, acknowledged]) {
       assert.equal(outcome.outcome, REFUSED);
       assert.equal(outcome.reason,
@@ -246,9 +262,17 @@ async () => {
     assert.equal('publicationRow' in refreshed, false,
       'a refused write reports no row');
     assert.deepEqual(owner.requeues, [], 'a row\'s refusal is not retried');
+    const writesBeforeTerminalRead = owner.control.writes.length;
+    const terminalAck = await owner.coordinator
+      .acknowledgeMembershipPublicationForNode('node-1', {publicationRows: [live]});
+    assert.equal(terminalAck.outcome, UNCHANGED,
+      'a later actual terminal-row read observes that no ACK is owed');
+    assert.equal(owner.control.writes.length, writesBeforeTerminalRead,
+      'a stale wake hint cannot make the terminal observation write');
     const row = durableRow(surface);
     assert.equal(row.status, 'ABANDONED');
-    assert.equal(row.publication_revision, 1, 'nothing was written');
+    assert.equal(row.publication_revision, 2,
+      'only the actual abandonment advanced the revision');
     assert.deepEqual(row.acknowledged_node_ids, []);
   });
 });

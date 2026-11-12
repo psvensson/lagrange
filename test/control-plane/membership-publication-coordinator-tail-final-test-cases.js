@@ -974,9 +974,40 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
         TABLES.REPLICA_OPERATIONS,
       ];
       const tableReadRequests = [];
+      const publicationReadRequests = [];
       const readinessOptions = [];
+      const publicationRows = [{
+        publication_id: 'publication-12',
+        publication_kind: 'cluster_membership',
+        publication_epoch: 12,
+        status: 'ACK_PENDING',
+        published_active_node_ids: ['node-1', 'node-2'],
+        required_ack_node_ids: ['node-1', 'node-2'],
+        acknowledged_node_ids: ['node-1'],
+      }, {
+        publication_id: 'publication-11',
+        publication_kind: 'cluster_membership',
+        publication_epoch: 11,
+        status: 'PUBLISHED',
+        published_active_node_ids: ['node-1'],
+        required_ack_node_ids: ['node-1'],
+        acknowledged_node_ids: ['node-1'],
+      }];
       const coordinator = new MembershipPublicationCoordinator({
         nodeId: 'node-1',
+        controlPlanePublicationsOwner: {
+          async listPublications(options) {
+            publicationReadRequests.push(options);
+            return {success: true, rows: publicationRows};
+          },
+        },
+        authoritativeControlPlaneView: authoritativePlanningViewOverRows((tableName, options) => {
+          if (!expectedAuthoritativeReadTableNames.includes(tableName)) {
+            throw new Error(`Unexpected planning table: ${tableName}`);
+          }
+          tableReadRequests.push({tableName, options});
+          return [];
+        }),
         controlPlaneReadinessService: {
           async getAllNodeReadiness(options = {}) {
             readinessOptions.push(options);
@@ -989,28 +1020,13 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
           },
         },
       });
-      coordinator.readTableRows = async (tableName, options = {}) => {
-        tableReadRequests.push({tableName, options});
-        return [];
-      };
+      await coordinator.deriveClusterMembershipCandidate();
 
-      await coordinator.deriveClusterMembershipCandidate({
-        latestPublicationRow: {
-          publication_epoch: 12,
-          status: 'ACK_PENDING',
-          published_active_node_ids: ['node-1', 'node-2'],
-          required_ack_node_ids: ['node-1', 'node-2'],
-          acknowledged_node_ids: ['node-1'],
-        },
-        latestPublishedPublicationRow: {
-          publication_epoch: 11,
-          status: 'PUBLISHED',
-          published_active_node_ids: ['node-1'],
-          required_ack_node_ids: ['node-1'],
-          acknowledged_node_ids: ['node-1'],
-        },
-      });
-
+      t.equal(publicationReadRequests.length, 2,
+        'the latest and published baselines are observed from the publication owner');
+      t.equal(publicationReadRequests.every((options) =>
+        options.authoritativeReadMode === CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY),
+      true, 'publication planning keeps its explicit local-owner contract');
       t.same(
         tableReadRequests.map((request) => request.tableName),
         expectedAuthoritativeReadTableNames,
@@ -1018,8 +1034,8 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
       );
       t.equal(
         tableReadRequests.every((request) =>
-          request.options.readSource ===
-            MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED),
+          request.options.readAuthority.authoritativeReadMode ===
+            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED),
         true,
         'in-flight membership publications should force authoritative table reads',
       );
