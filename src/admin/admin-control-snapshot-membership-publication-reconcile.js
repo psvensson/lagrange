@@ -44,9 +44,7 @@ const MEMBERSHIP_PUBLICATION_RECONCILE_OPTIONS = Object.freeze({
 });
 const MEMBERSHIP_PUBLICATION_RECONCILE_REASON =
   'admin_control_snapshot_publication_handoff';
-const MEMBERSHIP_PUBLICATION_HANDOFF_ALLOW_EMPTY_PRELOADED_ROWS = true;
 const MEMBERSHIP_PUBLICATION_HANDOFF_DEFER_NESTED_PRIORITY_RECOVERY = true;
-const MEMBERSHIP_PUBLICATION_HANDOFF_EMPTY_ROWS = Object.freeze([]);
 const MEMBERSHIP_PUBLICATION_HANDOFF_ABSENT_OUTCOME = null;
 const MEMBERSHIP_PUBLICATION_HANDOFF_ABSENT_ROW = null;
 const MEMBERSHIP_PUBLICATION_HANDOFF_ABSENT_SERVICE = null;
@@ -57,24 +55,14 @@ const CONTROL_PLANE_READINESS_SERVICE_FIELD = 'controlPlaneReadinessService';
 const REBALANCE_COORDINATOR_FIELD = 'rebalanceCoordinator';
 const STORAGE_ADMISSION_SERVICE_FIELD = 'storageAdmissionService';
 const MEMBERSHIP_PUBLICATION_RECONCILE_FIELD = Object.freeze({
-  ACKNOWLEDGED_NODE_IDS: 'acknowledgedNodeIds',
-  ALLOW_EMPTY_PRELOADED_ROWS: 'allowEmptyPreloadedRows',
   DEFER_INLINE_OWNER_COMMAND: 'deferInlineOwnerCommand',
   DEFER_NESTED_PRIORITY_RECOVERY_PLANNING:
     'deferNestedPriorityRecoveryPlanning',
   LATEST_PUBLICATION_ROW: 'latestPublicationRow',
-  NODE_ENDPOINT_ROWS: 'nodeEndpointRows',
-  NODE_ROWS: 'nodeRows',
-  PARTITION_ROWS: 'partitionRows',
   PUBLICATION_ACTIVE_GATE_HANDOFF: 'publicationActiveGateHandoff',
   PUBLICATION_CONVERGENCE: 'publicationConvergence',
   PUBLISHED_MEMBERSHIP_OBSERVATION: 'publishedMembershipObservation',
-  PUBLISHED_ACTIVE_NODE_IDS: 'publishedActiveNodeIds',
   READ_PROFILE: 'readProfile',
-  READINESS_ENTRIES: 'readinessEntries',
-  REPLICA_OPERATION_ROWS: 'replicaOperationRows',
-  REQUIRED_ACK_NODE_IDS: 'requiredAckNodeIds',
-  SERVICE_ROWS: 'serviceRows',
 });
 /**
  * Normalize one arbitrary value to a non-negative integer.
@@ -107,60 +95,6 @@ function resolveMembershipPublicationHandoffLatestPublicationRow(value = null) {
         .PUBLISHED_MEMBERSHIP_OBSERVATION
     ],
   ]);
-}
-function buildMembershipPublicationReconcileOptions(options = {}) {
-  const publicationActiveGateHandoff =
-    options[
-      MEMBERSHIP_PUBLICATION_RECONCILE_FIELD
-        .PUBLICATION_ACTIVE_GATE_HANDOFF
-    ];
-  const membershipPublicationTarget =
-    resolvePublicationActiveGateMembershipPublicationTarget(
-      publicationActiveGateHandoff,
-    );
-  if (
-    membershipPublicationTarget.reconcileRequired !== true
-  ) {
-    return MEMBERSHIP_PUBLICATION_RECONCILE_OPTIONS;
-  }
-  const latestPublicationRow =
-    resolveMembershipPublicationHandoffLatestPublicationRow(
-      publicationActiveGateHandoff,
-    );
-  return {
-    ...MEMBERSHIP_PUBLICATION_RECONCILE_OPTIONS,
-    ...(latestPublicationRow ?
-      {
-        [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.LATEST_PUBLICATION_ROW]:
-          latestPublicationRow,
-      } :
-      {}),
-    [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.PUBLISHED_ACTIVE_NODE_IDS]:
-      membershipPublicationTarget.publishedActiveNodeIds,
-    [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.REQUIRED_ACK_NODE_IDS]:
-      membershipPublicationTarget.requiredAckNodeIds,
-    [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.ACKNOWLEDGED_NODE_IDS]:
-      membershipPublicationTarget.acknowledgedNodeIds,
-    [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.READ_PROFILE]:
-      MEMBERSHIP_PUBLICATION_READ_PROFILE_DIAGNOSTICS,
-    [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.ALLOW_EMPTY_PRELOADED_ROWS]:
-      MEMBERSHIP_PUBLICATION_HANDOFF_ALLOW_EMPTY_PRELOADED_ROWS,
-    [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD
-      .DEFER_NESTED_PRIORITY_RECOVERY_PLANNING]:
-      MEMBERSHIP_PUBLICATION_HANDOFF_DEFER_NESTED_PRIORITY_RECOVERY,
-    [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.NODE_ROWS]:
-      MEMBERSHIP_PUBLICATION_HANDOFF_EMPTY_ROWS,
-    [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.NODE_ENDPOINT_ROWS]:
-      MEMBERSHIP_PUBLICATION_HANDOFF_EMPTY_ROWS,
-    [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.SERVICE_ROWS]:
-      MEMBERSHIP_PUBLICATION_HANDOFF_EMPTY_ROWS,
-    [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.PARTITION_ROWS]:
-      MEMBERSHIP_PUBLICATION_HANDOFF_EMPTY_ROWS,
-    [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.REPLICA_OPERATION_ROWS]:
-      MEMBERSHIP_PUBLICATION_HANDOFF_EMPTY_ROWS,
-    [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.READINESS_ENTRIES]:
-      MEMBERSHIP_PUBLICATION_HANDOFF_EMPTY_ROWS,
-  };
 }
 function buildDeferredMembershipPublicationReconcileOptions(options = {}) {
   const publicationActiveGateHandoff =
@@ -198,17 +132,10 @@ function buildDeferredMembershipPublicationReconcileOptions(options = {}) {
       MEMBERSHIP_PUBLICATION_HANDOFF_DEFER_NESTED_PRIORITY_RECOVERY,
   };
 }
-function enqueueMembershipPublicationReconcileFallback(
+function enqueueDeferredMembershipPublicationReconcile(
   membershipPublicationService,
   reconcileOptions,
 ) {
-  if (
-    !membershipPublicationService ||
-    typeof membershipPublicationService.enqueueClusterMembershipReconcile !==
-      'function'
-  ) {
-    return buildMembershipPublicationHandoffEnqueueOutcome();
-  }
   const rawEnqueueResult =
     membershipPublicationService.enqueueClusterMembershipReconcile(
       MEMBERSHIP_PUBLICATION_RECONCILE_REASON,
@@ -346,7 +273,7 @@ async function maybeReconcileAuthoritativeMembershipPublication(
       buildDeferredMembershipPublicationReconcileOptions(options);
     const enqueueOutcome =
       reconcileOptions !== MEMBERSHIP_PUBLICATION_RECONCILE_OPTIONS ?
-        enqueueMembershipPublicationReconcileFallback(
+        enqueueDeferredMembershipPublicationReconcile(
           membershipPublicationService,
           reconcileOptions,
         ) :
@@ -365,39 +292,10 @@ async function maybeReconcileAuthoritativeMembershipPublication(
       },
     );
   }
-  if (
-    typeof membershipPublicationService.reconcileActiveGateMembershipPublication ===
-      'function'
-  ) {
-    return await membershipPublicationService.reconcileActiveGateMembershipPublication(
-      publicationActiveGateHandoff,
-      options,
-    );
-  }
-  const reconcileOptions = buildMembershipPublicationReconcileOptions(options);
-  if (reconcileOptions === MEMBERSHIP_PUBLICATION_RECONCILE_OPTIONS) {
-    return MEMBERSHIP_PUBLICATION_HANDOFF_ABSENT_OUTCOME;
-  }
-  const enqueueOutcome = enqueueMembershipPublicationReconcileFallback(
-    membershipPublicationService,
-    reconcileOptions,
+  return await membershipPublicationService.reconcileActiveGateMembershipPublication(
+    publicationActiveGateHandoff,
+    options,
   );
-  if (enqueueOutcome.accepted === true) {
-    return buildMembershipPublicationHandoffOutcome(
-      MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_STATE.WRITE_DEFERRED,
-      {
-        target: membershipPublicationTarget,
-        enqueued: true,
-        reasonCode: enqueueOutcome.reasonCode,
-        retryAfterMs: resolveMembershipPublicationHandoffRetryAfterMs(
-          enqueueOutcome.controlPlaneConvergence?.retryAfterMs,
-        ),
-        controlPlaneConvergence:
-          enqueueOutcome.controlPlaneConvergence,
-      },
-    );
-  }
-  return MEMBERSHIP_PUBLICATION_HANDOFF_ABSENT_OUTCOME;
 }
 function buildMembershipPublicationHandoffCommandFailureOutcome(
   error,
