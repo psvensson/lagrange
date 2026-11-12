@@ -1,3 +1,4 @@
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 // A replay of an already committed write never tells its caller the write
 // did not happen (owner ruling on the raft-rs cutover: the raft-rs
 // reset/replay case in which an applied write came back "success, zero rows
@@ -130,7 +131,7 @@ async function waitFor(predicate, budgetMs = SETTLE_BUDGET_MS) {
 }
 
 function readOnly(dbPath, read) {
-  const independent = new Database(dbPath, {readonly: true});
+  const independent = new SQLiteConnection(dbPath, {readonly: true});
   try {
     return read(independent);
   } finally {

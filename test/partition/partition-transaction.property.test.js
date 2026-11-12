@@ -1,9 +1,9 @@
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import Database from 'better-sqlite3';
 import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
@@ -69,7 +69,7 @@ const fixtureOptions = (dbPath = ':memory:') => ({dbPath,
 // Validates: Requirements 1.3, 8.1
 // ---------------------------------------------------------------------------
 function readIndependently(dbPath, read) {
-  const independent = new Database(dbPath, {readonly: true});
+  const independent = new SQLiteConnection(dbPath, {readonly: true});
   try {
     return read(independent);
   } finally {

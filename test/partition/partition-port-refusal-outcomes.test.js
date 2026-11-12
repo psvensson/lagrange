@@ -23,7 +23,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 
-import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 
 import {
   ControllableConsensusPort,
@@ -166,7 +166,7 @@ test('F-f: production construction over an inert rs-raft record (no ' +
     const partitionId = 'ff-inert-port';
     // An rs-raft record whose lifecycle row is missing: the store owner's
     // own writer puts only the applied state.
-    const seeded = new Database(dbPath);
+    const seeded = new SQLiteConnection(dbPath);
     try {
       new RaftRsDurableStore(seeded).putAppliedState(partitionId, '0', {
         voters: ['1'], learners: [], votersOutgoing: [], learnersNext: [],

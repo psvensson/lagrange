@@ -4,6 +4,7 @@
 // compacted `_raft_rs_log` rows in a single SYNCED SQLite transaction.
 
 import {
+  assertSQLiteConnection,
   preparedExactStatementOf,
   preparedStatementOf,
 } from '../storage/sqlite-prepared-statement-owner.js';
@@ -85,6 +86,7 @@ function decodeSnapshotWitnessMaxHlc(rawData) {
  * @return {string|null} Max committed HLC string, or null when none exists.
  */
 function readCompactedMaxHlcIn(db, groupId) {
+  if (db !== null && db !== undefined) assertSQLiteConnection(db);
   if (!db || !db.open) {
     return null;
   }
@@ -104,6 +106,7 @@ function readCompactedMaxHlcIn(db, groupId) {
  * @return {bigint} Snapshot index (`0n` when absent).
  */
 function readSnapshotIndexIn(db, groupId) {
+  if (db !== null && db !== undefined) assertSQLiteConnection(db);
   if (!db || !db.open) {
     return 0n;
   }

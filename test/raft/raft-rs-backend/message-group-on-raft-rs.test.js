@@ -14,7 +14,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {test} from 'node:test';
 
-import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../../src/storage/sqlite-prepared-statement-owner.js';
 
 import {MessageGroupService} from
   '../../../src/message-group/message-group-service.js';
@@ -127,7 +127,7 @@ function servicesRow(replicaId) {
 
 // The durable record of one replica file, read on the test's own connection.
 function durableRecordOf(dbFile) {
-  const independent = new Database(dbFile, {readonly: true});
+  const independent = new SQLiteConnection(dbFile, {readonly: true});
   try {
     const tables = independent.prepare(
       'SELECT name FROM sqlite_master WHERE type = \'table\'').all()

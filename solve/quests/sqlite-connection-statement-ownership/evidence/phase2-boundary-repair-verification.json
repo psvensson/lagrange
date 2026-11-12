@@ -1,0 +1,643 @@
+{
+  "schema": "sqlite-boundary-repair-verification/1",
+  "status": "FOCUSED_REPAIR_PROOF_ONLY_PENDING_INDEPENDENT_REVIEW",
+  "sourceTree": "e005dfa408f0b84c6e81cc0cb2ff869e4a182c5d",
+  "nodeVersion": "v22.23.2",
+  "focusedFiles": 5,
+  "focusedCasesReported": 162,
+  "focused": [
+    {
+      "file": "test/storage/sqlite-connection-production-boundaries.test.js",
+      "assertions": 64,
+      "durationMs": 640,
+      "command": [
+        "flock",
+        "/tmp/lagrange-local-test.lock",
+        "nice",
+        "-n",
+        "15",
+        "node",
+        "scripts/run-test-files.js",
+        "--jobs",
+        "1",
+        "test/storage/sqlite-connection-production-boundaries.test.js"
+      ],
+      "thermalCommand": [
+        "node",
+        "scripts/checks/wait-for-thermal-headroom.js"
+      ],
+      "result": {
+        "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/green-boundaries-final/result.json",
+        "sha256": "2e0cf59ec778bac9544a96d28729579f4444088c26b997cf1b4274fde3b6bae1",
+        "bytes": 1854
+      },
+      "stdout": {
+        "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/green-boundaries-final/run.log",
+        "sha256": "d0ac0297e3cba365533451b5f096d9a00ac8ed66aa0bf2136d398082c999a214",
+        "bytes": 136
+      },
+      "tap": {
+        "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/green-boundaries-final/retained.tap",
+        "sha256": "404c09f17b31c85469b786fa09655136de414bca952f6088afb08203590b59b9",
+        "bytes": 13739
+      },
+      "stderr": {
+        "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/green-boundaries-final/retained.tap.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      },
+      "thermal": {
+        "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/green-boundaries-final/thermal.log",
+        "sha256": "0c8749c793db54ce68b263359e5709a85dad2586a03d77064c21181d846dc881",
+        "bytes": 69
+      },
+      "inputManifest": {
+        "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/green-boundaries-final/input-hashes.json",
+        "sha256": "5cdfdc6e377306a206228afdc1aff7ddf56a0c206bf8842cc4be04cb9d4a9554",
+        "bytes": 19089
+      },
+      "workspaceInputDifferences": [],
+      "applicability": "Exact captured workspace inputs match final."
+    },
+    {
+      "file": "test/partition/participant-origin-retained-history.test.js",
+      "assertions": 35,
+      "durationMs": 583,
+      "command": [
+        "flock",
+        "/tmp/lagrange-local-test.lock",
+        "nice",
+        "-n",
+        "15",
+        "node",
+        "scripts/run-test-files.js",
+        "--jobs",
+        "1",
+        "test/partition/participant-origin-retained-history.test.js"
+      ],
+      "thermalCommand": [
+        "node",
+        "scripts/checks/wait-for-thermal-headroom.js"
+      ],
+      "result": {
+        "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/green-origin-history/result.json",
+        "sha256": "c5335507934d59911f1697f0825c9b020a55c542436acbef9c8a39713b7959de",
+        "bytes": 1850
+      },
+      "stdout": {
+        "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/green-origin-history/run.log",
+        "sha256": "8930d8c3ed6078d0a2cfc10ba802bb0cc2f2056263fc070c1c7ec911bcc5b69d",
+        "bytes": 134
+      },
+      "tap": {
+        "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/green-origin-history/retained.tap",
+        "sha256": "07cd92bacca1bee64949120b19da3c289e53f3e3ee3c93d6acb7feee0baee94f",
+        "bytes": 6055
+      },
+      "stderr": {
+        "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/green-origin-history/retained.tap.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      },
+      "thermal": {
+        "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/green-origin-history/thermal.log",
+        "sha256": "dedd747bf80c5fed6fa03b86b2bf858d1a399bc95b6620cc749c148aea2c1d10",
+        "bytes": 69
+      },
+      "inputManifest": {
+        "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/green-origin-history/input-hashes.json",
+        "sha256": "9bab1b9ae2916392c9095c0502bd0785ea45a594aea685150b28c8425f0fc52e",
+        "bytes": 19089
+      },
+      "workspaceInputDifferences": [
+        {
+          "path": "src/raft/raft-rs-replica-lifecycle-owner.js",
+          "measuredSha256": "9717c1112c4d54b98a414ec3511bffd904f612527a256a0637d87bf02dd9d590",
+          "finalSha256": "67bd24190da2eb0c0227bf2ce40d79a8ee27edf491282f8eee6d2ac023325a15"
+        },
+        {
+          "path": "test/shards/impact-graph-seal.json",
+          "measuredSha256": "ce64d1edfbe37116c1d2447d1c33a7ce2c48f8dd4b25830d1a9fe5c5b407bb06",
+          "finalSha256": "2947ec108cbeec8a9944ab527a440267232314186e63368fbbf1361861804371"
+        },
+        {
+          "path": "test/shards/subsystem-classes.json",
+          "measuredSha256": "8b13df8098911808a910e66e0d9a8e13835b6500585b9b3f4eb9b2890d0bfef5",
+          "finalSha256": "66bf66570244c842973eab0902632803c8611abd2105c6222b6d2be2a78ab3c2"
+        },
+        {
+          "path": "test/storage/sqlite-connection-production-boundaries.test.js",
+          "measuredSha256": "ce10bfeff419e44d8132565ee6967e9f866645d8b77e7a9f912d077394a18562",
+          "finalSha256": "5d5567f7dfc85c622eed59c98d51c1d1bdc0c5997d1ce27501adc3b8acfc34f0"
+        }
+      ],
+      "applicability": "Only lifecycle comment compression, unrelated boundary-test import wrapping, and regenerated non-runtime metadata differ. format-only-ast.json proves identical executable ASTs. No further runtime semantic delta after this green run."
+    },
+    {
+      "file": "test/raft/raft-rs-original-allocation-store.test.js",
+      "assertions": 34,
+      "durationMs": 161,
+      "command": [
+        "flock",
+        "/tmp/lagrange-local-test.lock",
+        "nice",
+        "-n",
+        "15",
+        "node",
+        "scripts/run-test-files.js",
+        "--jobs",
+        "1",
+        "test/raft/raft-rs-original-allocation-store.test.js"
+      ],
+      "thermalCommand": [
+        "node",
+        "scripts/checks/wait-for-thermal-headroom.js"
+      ],
+      "result": {
+        "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/green-original-allocation-final/result.json",
+        "sha256": "13317b9c98d7df382043fb91e2c4d64d1604d28818be779fd4a8a0b3e35bcaae",
+        "bytes": 1836
+      },
+      "stdout": {
+        "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/green-original-allocation-final/run.log",
+        "sha256": "52a2808d08c7c7e47c074cf5a2b284757103d4671da8ccb3e8c917d8ebed8d27",
+        "bytes": 127
+      },
+      "tap": {
+        "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/green-original-allocation-final/retained.tap",
+        "sha256": "8e467dfa116ec9064d5d35c70b8d4d0e260e166a9f782b1305857bc5bdcacced",
+        "bytes": 7052
+      },
+      "stderr": {
+        "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/green-original-allocation-final/retained.tap.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      },
+      "thermal": {
+        "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/green-original-allocation-final/thermal.log",
+        "sha256": "6a4a62359f0cd0c56078e47594af5fd1bbbdf150094677c02d7fc30434068eef",
+        "bytes": 69
+      },
+      "inputManifest": {
+        "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/green-original-allocation-final/input-hashes.json",
+        "sha256": "5cdfdc6e377306a206228afdc1aff7ddf56a0c206bf8842cc4be04cb9d4a9554",
+        "bytes": 19089
+      },
+      "workspaceInputDifferences": [],
+      "applicability": "Exact captured workspace inputs match final."
+    },
+    {
+      "file": "test/bootstrap/seed-retained-effects-preparation.test.js",
+      "assertions": 9,
+      "durationMs": 46934,
+      "command": [
+        "flock",
+        "/tmp/lagrange-local-test.lock",
+        "nice",
+        "-n",
+        "15",
+        "node",
+        "scripts/run-test-files.js",
+        "--jobs",
+        "1",
+        "test/bootstrap/seed-retained-effects-preparation.test.js"
+      ],
+      "thermalCommand": [
+        "node",
+        "scripts/checks/wait-for-thermal-headroom.js"
+      ],
+      "result": {
+        "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/green-retained-effects/result.json",
+        "sha256": "cd09881cffe6342b7476a64bcf7e0e37b2be81c453c72533c8ac8af230df2a20",
+        "bytes": 1846
+      },
+      "stdout": {
+        "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/green-retained-effects/run.log",
+        "sha256": "9e8cb6f10d3c1834af5eb5b6451e12c913d753c888c280e13b50b0d60f0c27c3",
+        "bytes": 132
+      },
+      "tap": {
+        "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/green-retained-effects/retained.tap",
+        "sha256": "4ede3e181577efbf480d96bb279c17baf0ffd0a4a141da6e4867fa0aec3b59a4",
+        "bytes": 2363
+      },
+      "stderr": {
+        "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/green-retained-effects/retained.tap.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      },
+      "thermal": {
+        "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/green-retained-effects/thermal.log",
+        "sha256": "43ddc029ee1cf7a0aae50a6ad6e897e1d90d45a16a7106d62a923679225ae788",
+        "bytes": 69
+      },
+      "inputManifest": {
+        "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/green-retained-effects/input-hashes.json",
+        "sha256": "9bab1b9ae2916392c9095c0502bd0785ea45a594aea685150b28c8425f0fc52e",
+        "bytes": 19089
+      },
+      "workspaceInputDifferences": [
+        {
+          "path": "src/raft/raft-rs-replica-lifecycle-owner.js",
+          "measuredSha256": "9717c1112c4d54b98a414ec3511bffd904f612527a256a0637d87bf02dd9d590",
+          "finalSha256": "67bd24190da2eb0c0227bf2ce40d79a8ee27edf491282f8eee6d2ac023325a15"
+        },
+        {
+          "path": "test/shards/impact-graph-seal.json",
+          "measuredSha256": "ce64d1edfbe37116c1d2447d1c33a7ce2c48f8dd4b25830d1a9fe5c5b407bb06",
+          "finalSha256": "2947ec108cbeec8a9944ab527a440267232314186e63368fbbf1361861804371"
+        },
+        {
+          "path": "test/shards/subsystem-classes.json",
+          "measuredSha256": "8b13df8098911808a910e66e0d9a8e13835b6500585b9b3f4eb9b2890d0bfef5",
+          "finalSha256": "66bf66570244c842973eab0902632803c8611abd2105c6222b6d2be2a78ab3c2"
+        },
+        {
+          "path": "test/storage/sqlite-connection-production-boundaries.test.js",
+          "measuredSha256": "ce10bfeff419e44d8132565ee6967e9f866645d8b77e7a9f912d077394a18562",
+          "finalSha256": "5d5567f7dfc85c622eed59c98d51c1d1bdc0c5997d1ce27501adc3b8acfc34f0"
+        }
+      ],
+      "applicability": "Only lifecycle comment compression, unrelated boundary-test import wrapping, and regenerated non-runtime metadata differ. format-only-ast.json proves identical executable ASTs. No further runtime semantic delta after this green run."
+    },
+    {
+      "file": "test/partition/committed-statement-outcome.test.js",
+      "assertions": 20,
+      "durationMs": 4771,
+      "command": [
+        "flock",
+        "/tmp/lagrange-local-test.lock",
+        "nice",
+        "-n",
+        "15",
+        "node",
+        "scripts/run-test-files.js",
+        "--jobs",
+        "1",
+        "test/partition/committed-statement-outcome.test.js"
+      ],
+      "thermalCommand": [
+        "node",
+        "scripts/checks/wait-for-thermal-headroom.js"
+      ],
+      "result": {
+        "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/green-statement-outcome/result.json",
+        "sha256": "b4d06a1d392842e2491d43b7c035c1d237eb995428929213aeba2b0b4380e052",
+        "bytes": 1834
+      },
+      "stdout": {
+        "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/green-statement-outcome/run.log",
+        "sha256": "9633c3898877220ab106200fe2bb4b22c3a4ce74d864311d1260122425e383fb",
+        "bytes": 127
+      },
+      "tap": {
+        "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/green-statement-outcome/retained.tap",
+        "sha256": "3efd6b8f0edbcb62795f3ae6fc1cc52cba154f506e299c3c9c99622ff168285c",
+        "bytes": 9972
+      },
+      "stderr": {
+        "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/green-statement-outcome/retained.tap.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      },
+      "thermal": {
+        "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/green-statement-outcome/thermal.log",
+        "sha256": "dedd747bf80c5fed6fa03b86b2bf858d1a399bc95b6620cc749c148aea2c1d10",
+        "bytes": 69
+      },
+      "inputManifest": {
+        "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/green-statement-outcome/input-hashes.json",
+        "sha256": "9bab1b9ae2916392c9095c0502bd0785ea45a594aea685150b28c8425f0fc52e",
+        "bytes": 19089
+      },
+      "workspaceInputDifferences": [
+        {
+          "path": "src/raft/raft-rs-replica-lifecycle-owner.js",
+          "measuredSha256": "9717c1112c4d54b98a414ec3511bffd904f612527a256a0637d87bf02dd9d590",
+          "finalSha256": "67bd24190da2eb0c0227bf2ce40d79a8ee27edf491282f8eee6d2ac023325a15"
+        },
+        {
+          "path": "test/shards/impact-graph-seal.json",
+          "measuredSha256": "ce64d1edfbe37116c1d2447d1c33a7ce2c48f8dd4b25830d1a9fe5c5b407bb06",
+          "finalSha256": "2947ec108cbeec8a9944ab527a440267232314186e63368fbbf1361861804371"
+        },
+        {
+          "path": "test/shards/subsystem-classes.json",
+          "measuredSha256": "8b13df8098911808a910e66e0d9a8e13835b6500585b9b3f4eb9b2890d0bfef5",
+          "finalSha256": "66bf66570244c842973eab0902632803c8611abd2105c6222b6d2be2a78ab3c2"
+        },
+        {
+          "path": "test/storage/sqlite-connection-production-boundaries.test.js",
+          "measuredSha256": "ce10bfeff419e44d8132565ee6967e9f866645d8b77e7a9f912d077394a18562",
+          "finalSha256": "5d5567f7dfc85c622eed59c98d51c1d1bdc0c5997d1ce27501adc3b8acfc34f0"
+        }
+      ],
+      "applicability": "Only lifecycle comment compression, unrelated boundary-test import wrapping, and regenerated non-runtime metadata differ. format-only-ast.json proves identical executable ASTs. No further runtime semantic delta after this green run."
+    }
+  ],
+  "redControl": {
+    "result": {
+      "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/red-boundaries/result.json",
+      "sha256": "885a83754d1e335f64a512189a05dd25799de0a28128ca04ea8e268e3c59c7e3",
+      "bytes": 1854
+    },
+    "stdout": {
+      "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/red-boundaries/run.log",
+      "sha256": "0cbb087f0907a9f7fe63ec3ba42f9249320d2b374008315892b4aca62ca38682",
+      "bytes": 36564
+    },
+    "inputManifest": {
+      "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/red-boundaries/input-hashes.json",
+      "sha256": "eefa80ee4431f71f8ecb1c5c097b316de96f494fc9db1f7ff765fb99065097c1",
+      "bytes": 19089
+    },
+    "cases": 64,
+    "passed": 46,
+    "failed": 18,
+    "scope": "Seven real entry gaps; each failed by observable SQL/property/callback effect or wrong ownership outcome. No setup/import failure. Raw generic commit positive passed even on rejected source.",
+    "source": "rejected candidate production bytes plus new witnesses, before production repair"
+  },
+  "firstUnexpectedFailures": [
+    {
+      "classification": "static lint",
+      "cause": "test import line103 >100",
+      "preservation": {
+        "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/first-unexpected-static/manifest.json",
+        "sha256": "87fde6d7117896fcd25c27fef54d2a3264c54a135997885c06c2d8f995d1c995",
+        "bytes": 737
+      },
+      "resolution": "wrap import; final eslint PASS; AST identical"
+    },
+    {
+      "classification": "static size",
+      "cause": "lifecycle owner801 >800 counted lines",
+      "preservation": {
+        "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/first-unexpected-static/manifest.json",
+        "sha256": "87fde6d7117896fcd25c27fef54d2a3264c54a135997885c06c2d8f995d1c995",
+        "bytes": 737
+      },
+      "resolution": "compress one comment line; strict size PASS; AST identical"
+    },
+    {
+      "classification": "evidence helper",
+      "cause": "read-only inventory helper treated file records as strings",
+      "preservation": {
+        "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/evidence-helper-first-failure.json",
+        "sha256": "82b0a23e0fd206013063e7c6b4a5d25349149faf467380dfac801f58aa69018f",
+        "bytes": 319
+      },
+      "resolution": "read path field; corrected closure applicability computed; no source/test change"
+    }
+  ],
+  "staticChecks": [
+    {
+      "command": [
+        "node",
+        "node_modules/eslint/bin/eslint.js",
+        "src/partition/partition-participant-transaction-store.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/partition/partition-cdc-obligation-ledger.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "test/storage/sqlite-connection-production-boundaries.test.js"
+      ],
+      "exitCode": 0,
+      "log": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/final-static-01.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": [
+        "npm",
+        "run",
+        "test:metrics:scoped",
+        "--",
+        "src/partition/partition-participant-transaction-store.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/partition/partition-cdc-obligation-ledger.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "test/storage/sqlite-connection-production-boundaries.test.js"
+      ],
+      "exitCode": 0,
+      "log": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/final-static-02.log",
+      "sha256": "fbaa944409d5392c33274b4e94d4490bbc5f1a2dabc6b196741991a0a355d123"
+    },
+    {
+      "command": [
+        "npm",
+        "run",
+        "audit:guideline:literals",
+        "--",
+        "src/partition/partition-participant-transaction-store.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/partition/partition-cdc-obligation-ledger.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "test/storage/sqlite-connection-production-boundaries.test.js"
+      ],
+      "exitCode": 0,
+      "log": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/final-static-03.log",
+      "sha256": "c40434c22794adc370aa09a94d813ffb7667dcf0912f835e9432b2edcf4cc6f3"
+    },
+    {
+      "command": [
+        "npm",
+        "run",
+        "audit:guideline:decision-boundaries",
+        "--",
+        "src/partition/partition-participant-transaction-store.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/partition/partition-cdc-obligation-ledger.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "test/storage/sqlite-connection-production-boundaries.test.js"
+      ],
+      "exitCode": 0,
+      "log": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/final-static-04.log",
+      "sha256": "a3801ba8c7e195cc3404cf4d3845585d16c1c2241bb08fc045f64ccd901917a2"
+    },
+    {
+      "command": [
+        "npm",
+        "run",
+        "audit:runtime-grammar:file",
+        "--",
+        "src/partition/partition-participant-transaction-store.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/partition/partition-cdc-obligation-ledger.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "test/storage/sqlite-connection-production-boundaries.test.js"
+      ],
+      "exitCode": 0,
+      "log": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/final-static-05.log",
+      "sha256": "e03a3e13979f27c8b9e3f7f37f6c0409a5c40fb2072b59bfa03d1ff920750a36"
+    },
+    {
+      "command": [
+        "node",
+        "scripts/check-file-size-thresholds.js",
+        "--strict",
+        "src/partition/partition-participant-transaction-store.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/partition/partition-cdc-obligation-ledger.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "test/storage/sqlite-connection-production-boundaries.test.js"
+      ],
+      "exitCode": 0,
+      "log": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/final-static-06.log",
+      "sha256": "7112b1602044d1f8bb25f19cd788e0f0b279033837adbc77966d59e98f5beae2"
+    },
+    {
+      "command": [
+        "npm",
+        "run",
+        "test:complexity:scoped:strict",
+        "--",
+        "test/storage/sqlite-connection-production-boundaries.test.js"
+      ],
+      "exitCode": 0,
+      "log": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/final-static-07.log",
+      "sha256": "326edb0c4ee13b3a20c90ed29949f4558fc931acdc4794bedd9d85b55b9413d2"
+    },
+    {
+      "command": [
+        "npm",
+        "run",
+        "test:complexity:cognitive:scoped:strict",
+        "--",
+        "test/storage/sqlite-connection-production-boundaries.test.js"
+      ],
+      "exitCode": 0,
+      "log": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/final-static-08.log",
+      "sha256": "2ef41d37e205c978f8ad21f8181a426c8dbfc05fcf3ce03e429b10e595f0ad9b"
+    },
+    {
+      "command": [
+        "npm",
+        "run",
+        "audit:impact-contracts"
+      ],
+      "exitCode": 0,
+      "log": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/final-static-09.log",
+      "sha256": "2d2bf202250e6baceee228777b496142adc711bfeeb3eb2dcd86340a715f761f"
+    }
+  ],
+  "metadataRefresh": {
+    "command": [
+      "npm",
+      "run",
+      "test:metadata:refresh"
+    ],
+    "exitCode": 0,
+    "stdout": {
+      "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/metadata-refresh.log",
+      "sha256": "2ce8ccfd9c2fe6288ea411bdd9562f246ace45bf2bd4cb4772149c94b178098d",
+      "bytes": 788
+    },
+    "note": "generator also verifies canonical import graph. Parent must regenerate after composition."
+  },
+  "structuralProofs": {
+    "exactProductionDelta": {
+      "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/production-ast-delta.json",
+      "sha256": "bbb1b662cc5198973b547bad521099c5141b3a708b3b754a39a8de9b2ce09ce1",
+      "bytes": 1558
+    },
+    "formatOnly": {
+      "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/format-only-ast.json",
+      "sha256": "154217348c0329b5449f24695000fad093093ca376357dec3e0d134647d41201",
+      "bytes": 556
+    },
+    "patchReconstruction": {
+      "path": "/tmp/lagrange-sqlite-phase2-boundary-repair-20261112/patch-reconstruction.json",
+      "sha256": "1ee6338cfc688a05beef934a4ab25c416409de725d7166b10b4396d8bb6ae6be",
+      "bytes": 719
+    }
+  },
+  "earlierEvidenceApplicability": {
+    "phase1": "Approved four files and native dependency hashes unchanged; no weakening or reopening of that mechanism.",
+    "phase2": "All15-file/187-case logs and724-member preservation remain historical evidence for rejected tree6c4cc931f37e859e3fd70a429229a569027b5f09, not reused as final repair execution.",
+    "nativeChildren": [
+      {
+        "kind": "load-recovery",
+        "child": "test/raft/raft-rs-backend/runtime-load-recovery-child.js",
+        "moduleCount": 235,
+        "changedMembers": [
+          {
+            "path": "src/raft/raft-rs-replica-lifecycle-owner.js",
+            "rejectedSha256": "6d0100170af497c92a5aeab2dbf15fbdf6154d71ca8ebb7ffc0d1cb768449c05",
+            "repairSha256": "67bd24190da2eb0c0227bf2ce40d79a8ee27edf491282f8eee6d2ac023325a15"
+          },
+          {
+            "path": "src/partition/partition-participant-transaction-store.js",
+            "rejectedSha256": "7877c97fdedd611c32c6d398b8f4f94ad4b0a0cdff373fab7fdf3d30991e7c11",
+            "repairSha256": "60f0db96b2ea58ca40645c4e13128e8ebc340f9d27d6fc38cace70ac3111fae9"
+          },
+          {
+            "path": "src/partition/partition-committed-statement-outcome.js",
+            "rejectedSha256": "d8bb7f6cbea925607458e48d3c053a6587bf0081b3067023263666c9e92bab60",
+            "repairSha256": "d6ab1b2e59c8dcb2ee67131c3a931a47245271961ee2e729dfb0845b34973081"
+          },
+          {
+            "path": "src/partition/partition-cdc-obligation-ledger.js",
+            "rejectedSha256": "d0def43cbfc230c984d2dd09c34a0c74ac1bc6bb47d6314b0da83235784c9f1d",
+            "repairSha256": "c1d703dda4674f0392a79f429b309cf7b067d32fd4ae4560eb093e4b9532ed12"
+          }
+        ],
+        "finalCandidateNativeExecution": "UNRUN; prior receipts retained for rejected candidate only"
+      },
+      {
+        "kind": "replacement-review",
+        "child": "test/raft/raft-rs-backend/runtime-replacement-review-child.js",
+        "moduleCount": 235,
+        "changedMembers": [
+          {
+            "path": "src/raft/raft-rs-replica-lifecycle-owner.js",
+            "rejectedSha256": "6d0100170af497c92a5aeab2dbf15fbdf6154d71ca8ebb7ffc0d1cb768449c05",
+            "repairSha256": "67bd24190da2eb0c0227bf2ce40d79a8ee27edf491282f8eee6d2ac023325a15"
+          },
+          {
+            "path": "src/partition/partition-participant-transaction-store.js",
+            "rejectedSha256": "7877c97fdedd611c32c6d398b8f4f94ad4b0a0cdff373fab7fdf3d30991e7c11",
+            "repairSha256": "60f0db96b2ea58ca40645c4e13128e8ebc340f9d27d6fc38cace70ac3111fae9"
+          },
+          {
+            "path": "src/partition/partition-committed-statement-outcome.js",
+            "rejectedSha256": "d8bb7f6cbea925607458e48d3c053a6587bf0081b3067023263666c9e92bab60",
+            "repairSha256": "d6ab1b2e59c8dcb2ee67131c3a931a47245271961ee2e729dfb0845b34973081"
+          },
+          {
+            "path": "src/partition/partition-cdc-obligation-ledger.js",
+            "rejectedSha256": "d0def43cbfc230c984d2dd09c34a0c74ac1bc6bb47d6314b0da83235784c9f1d",
+            "repairSha256": "c1d703dda4674f0392a79f429b309cf7b067d32fd4ae4560eb093e4b9532ed12"
+          }
+        ],
+        "finalCandidateNativeExecution": "UNRUN; prior receipts retained for rejected candidate only"
+      }
+    ],
+    "archive724": "Original archive/inventory hashes reverified and included in rejected804-member preservation. No deletion, replacement or upload claimed."
+  },
+  "holds": {
+    "independentReview": "PENDING fresh parent-assigned review; existing REJECT preserved; no self-approval",
+    "receiver72": "UNRUN on repair candidate, parent lab",
+    "affectedConeAndProductionComposition": "UNRUN, parent lab",
+    "nativeChildClosures": "235 modules each, four changed modules each; rerun on composed candidate required",
+    "permissionNoSkip": "Separate owner/root-skip composition pending; original condition and test unchanged",
+    "inheritedGuidelines": "HOLD6 sites in hydration/lifecycle observation, source hashes unchanged",
+    "quest": "Required production-composition, independent-review and static-guards receipts remain false; no landing"
+  },
+  "unchangedPhase1": {
+    "src/storage/sqlite-prepared-statement-owner.js": "4a5db10f9a9f3f3f65c108aa7e41aca10a741fd209b1a038bc18eabff54ee202",
+    "test/storage/sqlite-connection-statement-ownership-refusal.test.js": "ceac4d8ef5f8c5c526e817c6306ae7e4282c4e83f28087a74b62dc8ba3fcdc0d",
+    "test/storage/sqlite-connection-statement-ownership-brand.test.js": "11c1abb8b6d073a6177eb6573ecd31c018b6adf51414cff50c3c42d7fdc7ede1",
+    "test/storage/sqlite-connection-statement-ownership.test.js": "868e44067c509389256df96e9a448db374b1d01409b46b3f90de055a9acae9bd"
+  },
+  "runtimeDependencies": {
+    "package.json": "7c56bd6952c10baab826be0504498e97f3f0a8c13dd953dd164a5baffe093b0b",
+    "package-lock.json": "8ac4b4fb882a5a93a67f192b37167fe8d5884c9a6778ca5b4b2dff7b28b76b04",
+    "node_modules/better-sqlite3/package.json": "58e81504576abccfacbfd08dc9432dc3a00d0fc0454685cb7a76aaf976cf25a9",
+    "node_modules/better-sqlite3/lib/database.js": "50fe0b490f29174d961c4d1ae54f22973447ff1255fd710e785d201c0ebfb4d0",
+    "node_modules/better-sqlite3/build/Release/better_sqlite3.node": "d7d9272b12d11c1dc2bb787741b1b7c4037d336155f316ace3420410c28fda37",
+    "vendor/raft-rs-wasm/artifact-digest.json": "9e9ae48c07e290c3f1d077806242c26516e3f06c03e2b9195306a5c69364702d",
+    "vendor/raft-rs-wasm/pkg/raft_wasm.d.ts": "0be438c967162bb8165114aa1abfb28212e427201e6500893b6067bfdd8f600c",
+    "vendor/raft-rs-wasm/pkg/package.json": "fbae1db17ab8b0822d9f18654e23a4c15eabe11bb6ec60fcab3eeff55a16ea20",
+    "vendor/raft-rs-wasm/pkg/raft_wasm_bg.wasm": "03b80b4e4b5049d5ea32dfa48ca2e2cb0efe261b47f73bf91499e2d510cadbc8",
+    "vendor/raft-rs-wasm/pkg/raft_wasm.js": "766ec8b1e9dab187ec22bdbf059c4e717a312792f8b6f03536d3c444e76d0f6e",
+    "vendor/raft-rs-wasm/pkg/raft_wasm_bg.wasm.d.ts": "ba11e988a990b4c77bcf6ffebdda14a42a97aa24c374569b8a9bcd5022350017"
+  }
+}

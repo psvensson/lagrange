@@ -20,7 +20,7 @@ import {buildDeliveryEnvelope} from '../../../src/transport/transport-semantic-o
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
-import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../../src/storage/sqlite-prepared-statement-owner.js';
 
 import {RaftRsDurableStore} from '../../../src/raft/raft-rs-durable-store.js';
 import {RAFT_RS_GROUP_TUNING} from
@@ -58,7 +58,7 @@ const SETTLE_ROUNDS = 400;
 const QUIET_ROUNDS = 64;
 
 function durableProgressOf(dbFile, groupId) {
-  const independent = new Database(dbFile, {readonly: true});
+  const independent = new SQLiteConnection(dbFile, {readonly: true});
   try {
     const hard = independent.prepare(
       'SELECT term, commit_index FROM _raft_rs_hard_state ' +

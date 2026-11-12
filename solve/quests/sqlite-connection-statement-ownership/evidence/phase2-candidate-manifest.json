@@ -1,0 +1,1001 @@
+{
+  "schema": "sqlite-phase2-exact-candidate/1",
+  "status": "FROZEN_PENDING_FRESH_INDEPENDENT_REVIEW_AND_LAB_COMPOSITION",
+  "worktree": "/mnt/data/peter/projects/lagrange-codex-statement-owner-20261112",
+  "branch": "wip/codex-statement-owner-20261112",
+  "baseHead": "1b51362e0f7af24a5e373b8a57619d4cf13ec706",
+  "ruleRevision": 5,
+  "rulesSource": "2fca51dc9a2f0344e23f0535dfa50fe0e000b674",
+  "phase1CarryIn": {
+    "approval": "subagent:01a1ce40-d9e6-7b72-a890-ede72685fdca, Phase1 only",
+    "manifestSha256": "533f6a01a3eaeb4eac97fe2b68a41197d4c0f5b66951bc8fd50b615a4e333de4",
+    "unchangedFiles": {
+      "src/storage/sqlite-prepared-statement-owner.js": "4a5db10f9a9f3f3f65c108aa7e41aca10a741fd209b1a038bc18eabff54ee202",
+      "test/storage/sqlite-connection-statement-ownership-refusal.test.js": "ceac4d8ef5f8c5c526e817c6306ae7e4282c4e83f28087a74b62dc8ba3fcdc0d",
+      "test/storage/sqlite-connection-statement-ownership-brand.test.js": "11c1abb8b6d073a6177eb6573ecd31c018b6adf51414cff50c3c42d7fdc7ede1",
+      "test/storage/sqlite-connection-statement-ownership.test.js": "868e44067c509389256df96e9a448db374b1d01409b46b3f90de055a9acae9bd"
+    }
+  },
+  "fCarryIn": {
+    "frozenTree": "b8f0f6474fa013c8393460fa54e40a5be4793ea5",
+    "appliedToOwnHeadTree": "d37078c8120e028fe91ef01bf50a051fe88104c0",
+    "files": {
+      "architecture/contracts/authority-and-recovery.md": "c7504c19c85a7f934489c6dc732a858536ec7104e21b7a40e83e0f6deb968a92",
+      "src/message-group/message-group-consensus-port.js": "6cd481eac917f893267599171f1450fd5317cc244064933c3369cbd008682162",
+      "src/node/replica-failed-create-removal-claim.js": "0bf610b69d4758112dea30242cde63added8c01dda9135f3e597fb6c4f011f37",
+      "src/node/replica-handler-remove-execution-methods.js": "f01b6bfd162fd366340eb29284ac9c2d1f3eacba844eb449a63519da6757353a",
+      "src/node/replica-removal-participation.js": "0476404472b717a207308a8edf72818cfd84b36db2ce31cf6d2bf16090925da0",
+      "src/node/replica-removal-sole-founder.js": "84ee1cfd49267a6277a35e860e02848a8acb3c1c011f8abe5d56b851b7009206",
+      "src/partition/partition-committed-statement-outcome.js": "02f7f524927a231fff959600f1f7f7f721641214323018f29642af1b7429d29d",
+      "src/partition/partition-consensus-port-opening.js": "1c10e57efac6e0173a1322a026a42e39a2c08af6ffcb257d0cc28d4fc5f11512",
+      "src/partition/partition-coordinator-table-columns.js": "d4f6a4c4b2683fd06ae9f5ae5a09990e44c660a6bc9263dd33b116f41d6177f8",
+      "src/partition/partition-participant-transaction-store.js": "9c1190c44d8ffcaca87e16bb1c64be5299e2b5544fdcdf04c4c2bc2a01ec1ff1",
+      "src/partition/partition-service-raft-init-base.js": "85692da02a3c99be700c911f17e8b42d9b9d3e162320181656bfbb65b05b7629",
+      "src/partition/partition-service-table-bootstrap.js": "7f5337d1f0f5a787ba61819ab507a9b1d8679701fdc149be86d5a7ca0ca62a94",
+      "src/raft/raft-rs-durable-own-group-record.js": "92a155cbe565cd739ecec696ae33a8b8790a1c8db7b4954d7862b8cd995e9a80",
+      "src/raft/raft-rs-lifecycle-administration.js": "36421ba2b6554d10e9fd599b8957a8029a94d5a3dd0f9404ec1a53f3dde559b6",
+      "src/raft/raft-rs-operation-port.js": "6b9f2b4372f0cdcf6b83aefc0d28790730c16169cf06a1c4f82c674c5a36b920",
+      "src/raft/raft-rs-replica-lifecycle-constants.js": "460e9954715c57bd1ac49fc88c1b1ff4290574a35ad310122953e778b80265df",
+      "src/raft/raft-rs-replica-lifecycle-observation.js": "c0183488b12cd27a43dfe4299db755f74afc067d09b4111f297ce4dcb285d12e",
+      "src/raft/raft-rs-replica-lifecycle-owner.js": "94e6ce761025eccaf9b02d44e0eb294e64216c2b92045da7fda0228efeac5b60",
+      "src/storage/durable-file-presence.js": "d18c26729ce005fd9cf515fead444b744fd50a840d33d02a52a4f6d8d669ee2a",
+      "src/wasm-service/wasm-creation-opening.js": "431cd1a23ef3b45aa284d31f47eb8d3d64eacdc19aaa4c81ad88b2438567a72f",
+      "src/wasm-service/wasm-service-consensus-port.js": "2f1302bde0df67a2324100e91929050000a14fd3319f79396da0d4063a896ecf",
+      "src/wasm-service/wasm-service-replica-lifecycle.js": "f96547389a82e4d3333587035d7c5f9edc57811f8835a0c85dafdbabee888b7b",
+      "src/wasm-service/wasm-writer-state.js": "9baa14a669f92721532d2ba0df50a87dd6d7065d9a64cd192e87db71a016b471",
+      "test/bootstrap/management-action-authority.test.js": "6ccc160761f2f13e73555bb04ffce940f62857f6a6642ac8f28b8ee3e86d7168",
+      "test/helpers/replica-database-fixture.js": "95dea8eafb2d6f52ee89e8f4029b5d0f32ca9e834f02216bec614546fac15e42",
+      "test/helpers/replica-lifecycle-fixture.js": "2443b3197243e214076f9422f19f441ebe0f1dc8a94e86c554951f463ac8ee2a",
+      "test/node/fresh-create-authority-unavailability-native.integration.test.js": "68190c7acc54574b3510254cc874ba57c39b615a7e513858beeffa12b41c344c",
+      "test/node/replica-handler-identity-entry-test-cases.js": "24d8df923a788fe58556017220b99eae2b1560aad7f850ffae17ea2ac77fe400",
+      "test/node/replica-handler-identity-record-test-cases.js": "f51d31408bf6be8a6694ccac385b892e786aff2dba583b4ee5b3679d39bde0d5",
+      "test/node/replica-lifecycle-durable-generation.test.js": "be9b22d6267b5cc9ff395a7db1b7778dab0de199c196d434437f085d78978630",
+      "test/node/replica-removal-sole-founder-decision.test.js": "2b7e3cb31ab912c9916e7457f9bcce235d885e50381f58868c8ab8de0f215c3e",
+      "test/raft/raft-rs-backend/durable-commit-sync.test.js": "52b904fe9b5503b1f4c449c59893e4d35b4a4b2c312e0a619fb3f7dfad9a110d",
+      "test/raft/raft-rs-backend/durable-own-group-record.test.js": "59ad58d7b95e4b25db04959e7eac1ddef8696bc30530ced9e5b750c4bed6400d",
+      "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js": "1f581fa8db79e1affc031cb438bc4f977ea03fe2ea2242d7f0917efbf53bac17",
+      "test/raft/raft-rs-backend/opening-history-native-fixture.js": "9bcb44ad0193e005b7e8f9e91cefacb234d6101e96672209f851536dcd0f8524",
+      "test/raft/raft-rs-backend/operation-port-throw-containment.test.js": "dd71c1cf9a4049d24ca522ea71dd370048175f3c5520830185295bc03d4f28b6",
+      "test/raft/raft-rs-backend/original-handoff-lifecycle-claim.test.js": "bea13a798cd43b1274492365300a9aa8e1f60be63a2931b3049a29ae8975fb08",
+      "test/raft/raft-rs-backend/partition-construction-seam.test.js": "ef1d7563670c9dce9df54fea4e7a07bd8c5dbf07c42b17cf9cd64bcfc8d98526",
+      "test/raft/raft-rs-backend/partition-node-cluster.js": "4d4767165e7a792d6058bfc662a6f9277c8083ddab3a1b641acb203ab1d53cb6",
+      "test/raft/raft-rs-backend/partition-snapshot-compaction-catchup.test.js": "f2346807bb3c1db49a3d76adfc25ed4b88643991228be92294a48a7f43c47364",
+      "test/raft/raft-rs-backend/replica-freshness-closure.test.js": "d12773f398bd4505d21423586ed12ec96c9f24c63fa8d522c6638338140f5e00",
+      "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js": "065840c655a18d5f69f6083cd9d260eba8b1c1ab82ee1706fafbb2978d89d1d3",
+      "test/raft/raft-rs-backend/replica-lifecycle-birth.test.js": "3ef7250fe762f53a153969cb8615ade2874ff48e3373b0d8cae78ef56d7a83cb",
+      "test/raft/raft-rs-backend/reseed-hold-durability.test.js": "94e94c49ec7fdc370cf871fab0a0c780d88a388d5fd953786d0461cd9f89f27e",
+      "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js": "cb72af8d4f3fa1ff3d4709f94b2bc9cb22e405ad036c86b916998472dc386e44",
+      "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js": "308d62ac00e646b6fdf0a089136519002524024d3e219169c4732b5a0f98d6b6",
+      "test/raft/raft-rs-lifecycle-turn-admission.test.js": "ff45504dadadf5ae7979bedd9f4c9831afe4739f70f85fd5dc138c4915b759c9",
+      "test/raft/raft-rs-original-allocation-lifecycle-operation.test.js": "f489cb8235290bda3c89ccb980bc78e3139826d5d5df5e047c4c681e0aa93a37",
+      "test/raft/snapshot-lifecycle-staging.test.js": "11cc18096603e99e199db98ee4bb351f706c05d36e53ef0024cc157255c36c51",
+      "test/shards/impact-contracts.json": "6234e10447ea37648a137fe53cda580fec43d734e0b74c124a38ce6cc07f2bd7",
+      "test/simulation/formation-sim-consensus-cohort.js": "23b31082efa6c2e006d05dbb1926a2a89ad076196c060bb1800935fe432be68d",
+      "test/wasm-service/wasm-creation-local-record.test.js": "246685fcb0667434c06cdacf3c936931ee3dea68e4b5a6208e5819fa6db35d0c",
+      "test/wasm-service/wasm-writer-completion-v1.test.js": "7ab0ff348b81d19db02b14dc1b0ead7221f47952ab2567b358fed268ee8fd341",
+      "test/wasm-service/wasm-writer-recreation-origin-v1.test.js": "b93202b2fb7e92bb302cfb76659a067a9e3aa0bcbdc9c8cc4169e60056a86965",
+      "test/wasm-service/wasm-writer-state-v1.test.js": "2c22aa06cf55e06008c9d00d66d7c081537bb357d65f710bb7b93b500b52b054"
+    },
+    "phase2Overlaps": [
+      "src/partition/partition-committed-statement-outcome.js",
+      "src/partition/partition-participant-transaction-store.js",
+      "src/raft/raft-rs-operation-port.js",
+      "src/raft/raft-rs-replica-lifecycle-observation.js",
+      "src/raft/raft-rs-replica-lifecycle-owner.js",
+      "test/node/fresh-create-authority-unavailability-native.integration.test.js",
+      "test/node/replica-lifecycle-durable-generation.test.js",
+      "test/raft/raft-rs-backend/durable-commit-sync.test.js",
+      "test/raft/raft-rs-backend/durable-own-group-record.test.js",
+      "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js",
+      "test/raft/raft-rs-backend/partition-snapshot-compaction-catchup.test.js",
+      "test/raft/raft-rs-backend/replica-freshness-closure.test.js",
+      "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js",
+      "test/raft/raft-rs-backend/replica-lifecycle-birth.test.js",
+      "test/raft/raft-rs-backend/reseed-hold-durability.test.js",
+      "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
+      "test/raft/raft-rs-lifecycle-turn-admission.test.js",
+      "test/raft/raft-rs-original-allocation-lifecycle-operation.test.js",
+      "test/raft/snapshot-lifecycle-staging.test.js",
+      "test/shards/impact-contracts.json"
+    ],
+    "semantics": "Exclusive birth/new-file authority and historyless-existing-file refusal preserved; explicit snapshot/original writers unchanged. Fixture expectations adjusted only as recorded."
+  },
+  "phase2Delta": {
+    "baselineTree": "671776ed958372170c1bbcd643f5d55c32cb9e45",
+    "sourceTree": "6c4cc931f37e859e3fd70a429229a569027b5f09",
+    "pathCount": 95,
+    "productionFiles": 14,
+    "testAndHelperFiles": 80,
+    "impactRegistryFiles": 1,
+    "files": [
+      {
+        "path": "src/partition/partition-cdc-obligation-ledger.js",
+        "baselineSha256": "6d44671dad8dc1ee237f321ab6bb86e4378b09068cf2e0ba26baab1f2fd2caab",
+        "candidateSha256": "d0def43cbfc230c984d2dd09c34a0c74ac1bc6bb47d6314b0da83235784c9f1d",
+        "bytes": 25300,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "src/partition/partition-committed-statement-outcome.js",
+        "baselineSha256": "02f7f524927a231fff959600f1f7f7f721641214323018f29642af1b7429d29d",
+        "candidateSha256": "d8bb7f6cbea925607458e48d3c053a6587bf0081b3067023263666c9e92bab60",
+        "bytes": 17543,
+        "overlapsFCarryIn": true
+      },
+      {
+        "path": "src/partition/partition-hydration-image-pages.js",
+        "baselineSha256": "69e7598397b775ab33bd5935bed7113f33247c0b28c36842dbd83adc349ae4cd",
+        "candidateSha256": "7f1ff2443427b040156e881323c387904ff9b9c8c11a2d409af9fc84fafe4c4b",
+        "bytes": 11369,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "src/partition/partition-locking-read-reservation.js",
+        "baselineSha256": "4d56760a526c24a45c772b7ef4f9d72307ff87aea84fbd504addd996452ef43f",
+        "candidateSha256": "c7872a4431f42e5a4492c23cef25b384848cf57552f81e93d01f5dc8600d262b",
+        "bytes": 21505,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "src/partition/partition-participant-transaction-store.js",
+        "baselineSha256": "9c1190c44d8ffcaca87e16bb1c64be5299e2b5544fdcdf04c4c2bc2a01ec1ff1",
+        "candidateSha256": "7877c97fdedd611c32c6d398b8f4f94ad4b0a0cdff373fab7fdf3d30991e7c11",
+        "bytes": 20730,
+        "overlapsFCarryIn": true
+      },
+      {
+        "path": "src/raft/raft-rs-durable-store.js",
+        "baselineSha256": "6535b05684aba95da59a8048191e4c5197434499b5dca1611155e7d23a465b53",
+        "candidateSha256": "0b54363e2d4a539e631945c520cec345ce666f8248aad2a9ba2c81cb1e5289c3",
+        "bytes": 30261,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "src/raft/raft-rs-operation-port.js",
+        "baselineSha256": "6b9f2b4372f0cdcf6b83aefc0d28790730c16169cf06a1c4f82c674c5a36b920",
+        "candidateSha256": "9554d28d1c9e54d2dfef95efc4fe3f653a1f94444a4f75ee07d022b754416d65",
+        "bytes": 27930,
+        "overlapsFCarryIn": true
+      },
+      {
+        "path": "src/raft/raft-rs-peer-identity.js",
+        "baselineSha256": "f31fca9cee8af8972fe6be3ca000d6ae76ad9e72f816a298a658f4d18988cc27",
+        "candidateSha256": "feeee05e4e24c2e3db8e4c3f2b7f83297bdf8eb7e8617434fad8ce4b39ee4751",
+        "bytes": 15318,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "src/raft/raft-rs-preparation-custody.js",
+        "baselineSha256": "a6b4795a3ffc7a0c3d3755bcb360ca06ba1a1a29acaed2887b7b3501b5b204a8",
+        "candidateSha256": "862aec20a0ada089fec1f675be38088b5e8ef3b82c798fb8c4725391242a6b97",
+        "bytes": 2229,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "src/raft/raft-rs-replica-lifecycle-observation.js",
+        "baselineSha256": "c0183488b12cd27a43dfe4299db755f74afc067d09b4111f297ce4dcb285d12e",
+        "candidateSha256": "bc2856899bbed866779f3dce28b953e2de3ef559f2e5cdcc65446b37ae6e9b4c",
+        "bytes": 16386,
+        "overlapsFCarryIn": true
+      },
+      {
+        "path": "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "baselineSha256": "94e6ce761025eccaf9b02d44e0eb294e64216c2b92045da7fda0228efeac5b60",
+        "candidateSha256": "6d0100170af497c92a5aeab2dbf15fbdf6154d71ca8ebb7ffc0d1cb768449c05",
+        "bytes": 35034,
+        "overlapsFCarryIn": true
+      },
+      {
+        "path": "src/raft/raft-rs-snapshot-witness.js",
+        "baselineSha256": "ad4477ee568781374c1f75b72bcb4b1bfa92aa26ec50422caa7236a34214c5b9",
+        "candidateSha256": "bd7938cdf2a595c764b665e6088eb760431b88c5b2cdc5747da231d25c259283",
+        "bytes": 10144,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "src/raft/snapshot-checkpoint-store.js",
+        "baselineSha256": "fb609e2c2428d42801bd5b39aa366f5c67df4dff815bc6bc7207733a4a207515",
+        "candidateSha256": "169ff3f012a62e67049ed00dd935759779006a17215c4dcee31343c186c6bd02",
+        "bytes": 20146,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "src/raft/snapshot-install.js",
+        "baselineSha256": "dcf79ad1f060e6a4a172541e73ee82ff13afb04086ca259f2e4aa20ea0064c5f",
+        "candidateSha256": "015c841c64c5579dc2aa0d9e5c400b6cd24bb8bcbc454dca78853ad06b7522bb",
+        "bytes": 32544,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/bootstrap/retained-seed-original-handoff.integration.test.js",
+        "baselineSha256": "014f1bb2b49b3d5442fcaaab6e2ae3032a941dbddc8f09c2de821419aab160eb",
+        "candidateSha256": "94244cbcd4df29c218f091c2f793a396b6b822a0ac788fef3357bdcf5096ea05",
+        "bytes": 24651,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/bootstrap/seed-original-attempt-lifetime.test.js",
+        "baselineSha256": "332f53aaed267ade9857d5a55f068ba170b2e255b54318f6eae79401a1ef6405",
+        "candidateSha256": "33664321c49847476d16df3bf3785e61d721a5ecb1110423672ecf944daaac57",
+        "bytes": 38610,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/bootstrap/seed-release-failure-custody.test.js",
+        "baselineSha256": "b85242e02166d6f5bb7768306cc17cf8c776c27ae058d7633a2356613ec4ce6b",
+        "candidateSha256": "b6682787b33a4a2443ca791c0189168097499721f353708535d107d2052ed04c",
+        "bytes": 12300,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/bootstrap/seed-retained-effects-fixture.js",
+        "baselineSha256": "6ebd996618389b7f7bf7d22478b3aef2cf0f75878e0b09f9dc15e669fb819b7f",
+        "candidateSha256": "4698607711a8e536f79c4229c773c7113f4afbea37e2b162c041bb0103d4ce10",
+        "bytes": 8696,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/bootstrap/seed-retained-effects-preparation.test.js",
+        "baselineSha256": "953e819bbaff0a53134adeb323d43d6c25cbc24e3228dd9e0cefd614490ae2e7",
+        "candidateSha256": "89006e2527c054ab115bb7e8498e7196f24ed4f316c3d2e256565e96369c5a1e",
+        "bytes": 16928,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/bootstrap/seed-retained-effects.integration.test.js",
+        "baselineSha256": "8513cd51a00871cfbebe62f8cd2324269dd520e3de1cf2319da3cb99edf42015",
+        "candidateSha256": "640c197f6da052a43699fc452900b38b75958e42d8013acc2dacc114a928aff2",
+        "bytes": 13710,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/diagnostics/raft-churn-sync-section-attribution.test.js",
+        "baselineSha256": "8046e859741141f7ef1aac69406ba54aafe5d2a45854b58b7c844327a8c62b42",
+        "candidateSha256": "603426313927f83786b965c5d82006c8550f3b8a82b5e748eaf603ccfab1f6e6",
+        "bytes": 11784,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/integration/message-group-fresh-identity-replacement.integration.test.js",
+        "baselineSha256": "a7746b7d0f97cc23a5767bad4780ca5ad457b68e44dff8009ee1810c73df5508",
+        "candidateSha256": "2999b09b6635d5008a00817b1cbd4b6127df4b130f0df9dc686c9edd07e81fa5",
+        "bytes": 38931,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/integration/message-group-learner-join.integration.test.js",
+        "baselineSha256": "d4ae4eea306c8137897bbe15caaf24d7f4957569e3ced15fc820ac167dce3c34",
+        "candidateSha256": "7725ebf78a2c516f2b897f10fac53d24785ecd8bf00eca3648e5798232630a41",
+        "bytes": 47608,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/integration/message-group-learner-runtime-authorization.integration.test.js",
+        "baselineSha256": "44aa22745f45f328cfcff8e2a5ec822266966280e78f81b0adcd5c7588477b1d",
+        "candidateSha256": "a1fe0c7127896cad80a1a5ef45e4d84ca335d71d997d7ca9280c960ecd0c9ea0",
+        "bytes": 78338,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/message-group/message-group-fresh-learner-snapshot.test.js",
+        "baselineSha256": "24a9f98e826ff6332f8d6a40a7701776c1cc6331e7d0eee5440c6880c19015d9",
+        "candidateSha256": "1a230c9e662b686e3b75adad1d2778826ef9eb4cf5c2c16d86bd0242b7982234",
+        "bytes": 11290,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/migration/migration-partition-alter-routing.test.js",
+        "baselineSha256": "9c064da90577cc8646a4301b81a1a4d42492913186c348f3e7b293cd6b27d4ba",
+        "candidateSha256": "ceaa822c070098514e72f5eb6e4adc9aa181ed7dc1a572daf94bcf6ba0a7885d",
+        "bytes": 3420,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/node/fresh-create-authority-unavailability-native.integration.test.js",
+        "baselineSha256": "68190c7acc54574b3510254cc874ba57c39b615a7e513858beeffa12b41c344c",
+        "candidateSha256": "fe666bac5ce9e9c5819854ac8b3397ae5213fb09ef26858f29c6453b4f27648d",
+        "bytes": 40939,
+        "overlapsFCarryIn": true
+      },
+      {
+        "path": "test/node/replica-handler-owner-path-bypass-removal.test.js",
+        "baselineSha256": "e0421861d8726a399557668a57a55c3fe9c014dfadd96299db84bece9775bc21",
+        "candidateSha256": "bfb70b484eda511a0162cbca7a8450a71c6d196898b68d8ab432d861b7cd2759",
+        "bytes": 17786,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/node/replica-handler-remove-closed-service.test.js",
+        "baselineSha256": "fcebaabf854b31b549e03d67c773937452e0ba4b0b1f6d8ecaf54cc5a1863164",
+        "candidateSha256": "4fefcc6299f3a97054817ab691524475267cda8966f3086bd7e89699fcac951b",
+        "bytes": 23912,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/node/replica-lifecycle-durable-generation.test.js",
+        "baselineSha256": "be9b22d6267b5cc9ff395a7db1b7778dab0de199c196d434437f085d78978630",
+        "candidateSha256": "2ccef2a408cf318adc7414c4769dd0ec378e043a41fd51eeb8107ddeffa81cba",
+        "bytes": 55564,
+        "overlapsFCarryIn": true
+      },
+      {
+        "path": "test/node/replica-removal-required-ports.test.js",
+        "baselineSha256": "91340ca06cd63bc4d4215105c70959abfba2c1eecad7849502dae3d6015b389c",
+        "candidateSha256": "5922167e5ec0f52bbfaf88f179b11494ffebf9422b630fdb24b6aa921fed31d3",
+        "bytes": 5031,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/partition/committed-statement-outcome.test.js",
+        "baselineSha256": "0b257bf0e8c53804fa728c23d258aef4071a18d7f37cd6d16115ca02ac120117",
+        "candidateSha256": "fdff48e6ed584c680793b32d822ccf62dde43c27b64bc47a864db9e645780081",
+        "bytes": 45965,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/partition/learner-promotion-proof-committed-admission.test.js",
+        "baselineSha256": "d82eb25c74c05de348d5be4c036a115e91df4f2ae90c6147a63e1541b0e1f1ce",
+        "candidateSha256": "3ac1dfcec85e29e58980dbcf09edceab59dc01ee9042d36af871e5efc2a07e19",
+        "bytes": 15980,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/partition/participant-origin-retained-history.integration.test.js",
+        "baselineSha256": "fd6b6c4266b06ce50b89c6e87d8464d05686790ef792e416cf4148007af0109e",
+        "candidateSha256": "05fb33406c6fea0858361e27987ed539db332aba50859ecef6b1a168f9eacee4",
+        "bytes": 16497,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/partition/participant-origin-retained-history.test.js",
+        "baselineSha256": "b0888f487ee0fb69dcb5e002d234c76f29bf8515cab0b6a0ea0af780c59e4cae",
+        "candidateSha256": "d53454c55354653f8e2abc757989b90d068abff6d37694b83c8e99904a1a7b07",
+        "bytes": 10315,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/partition/participant-release-native-application-order.test.js",
+        "baselineSha256": "9c9436c46088277833fac447be825a47b647dc4cae466831f54a678d47d0bc07",
+        "candidateSha256": "917006997974f627cb79282aa4090c3cb4cead7fe62001be8d9ef8f19608432f",
+        "bytes": 63124,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/partition/partition-cdc-acknowledgement-refusal.test.js",
+        "baselineSha256": "b7a752d855da07fd01345c82f11029345d1f76c1963df19a28584d384946e9c4",
+        "candidateSha256": "6aecf2ba84ed2e6d90b4e062aee63c69de31ab10f23f41a0a50b850eed14a9c6",
+        "bytes": 3744,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/partition/partition-legacy-consensus-state.test.js",
+        "baselineSha256": "fbbfb6ee295acc7da0ec90a2ec65524925f871a758acb7607bc7b263ee7fc8c5",
+        "candidateSha256": "8fd85a547c22a43608343db599347caf55c407484f338c564ad0c737decff3da",
+        "bytes": 7645,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/partition/partition-participant-transaction-apply.test.js",
+        "baselineSha256": "25c61a8b7215f8dd43ab478ed19180b9c1f901811f1a6ac7ca58f1e956593c2b",
+        "candidateSha256": "07444a26b70b621b1a4dfc1dad1311d759e74376f62e251c1e12d9efbe25cae6",
+        "bytes": 45186,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/partition/partition-port-refusal-outcomes.test.js",
+        "baselineSha256": "ebec597e45253adc4809f249d346a07b9ce33ca498a37034f19844a902b2e343",
+        "candidateSha256": "613b41913a85842403b941f7f8f7947a96016a7694268a86fd27196276ac02d8",
+        "bytes": 12732,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/partition/partition-runtime-reconstruction-leadership.test.js",
+        "baselineSha256": "6020dd5e8493ec7ae0a378c6b18f18e287cee7991a41621adfe8d84b4f0a900d",
+        "candidateSha256": "e57960014f07ee29f9b5ff0d2e5737a03b6f618bb3c4f01eda0d238c0065d628",
+        "bytes": 57551,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/partition/partition-service-hlc-monotonicity.test.js",
+        "baselineSha256": "cfc93e6d93633b267c248ef09092014733377168afe1dd457da2e41ec56f59e6",
+        "candidateSha256": "cdfcc8168ddb1abd860477b8c532564dfd732b5c0dc15f55198312fcc2b25110",
+        "bytes": 7841,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/partition/partition-statement-admission.test.js",
+        "baselineSha256": "0b91ce8d76ca51807a9b5028d2ae6543616cd06822eb49be64dfa2da847549db",
+        "candidateSha256": "976ec97ec9523a85fd883ede0e98190b755ae05b52604b097a9959e5a656d7dc",
+        "bytes": 40377,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/partition/partition-transaction.property.test.js",
+        "baselineSha256": "8db8da7ccd803746b1272006521e012c7a8bd34881ef66b36e1574e3a4a0d8bb",
+        "candidateSha256": "315ca4e3aa5c37ac57df193d6e20d452aed6c3f6e7bf34077f17f8c00ce4ead7",
+        "bytes": 13539,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/partition/partition-unreadable-durable-record.test.js",
+        "baselineSha256": "8534a55fa7f8ed10209ceecfe2482951d5e17f534024c3947221ee67f70301e6",
+        "candidateSha256": "f5ac166b10d064d9ccc63b9e057697ad2b63bcf7245b49271002bd369d7f0481",
+        "bytes": 32194,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/partition/replica-admission-from-committed-operation.test.js",
+        "baselineSha256": "2befce57a01c84c164769e84c7c7ac0c664f2671e692ab0b549cce2bdfdc5afd",
+        "candidateSha256": "172a50a395e2f9fc3e6b30825853f00bd8e86d91c26126fdce2bc8b08eeff413",
+        "bytes": 33882,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/partition/replicated-sql-determinism-three-replica.test.js",
+        "baselineSha256": "aab623df97d34dc49c1922d94600736f8cd49c7be761827539af6bfdc730ff2c",
+        "candidateSha256": "814ddf8f1395de9e695eecbe18d67f547783ed7881ebd8aa3268ac305e746ac9",
+        "bytes": 10988,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/partition/settled-replay-preserves-result.test.js",
+        "baselineSha256": "62542df9c0041224b2f7987794b4e157a964c2c9538f116752b2446e62f8f8ed",
+        "candidateSha256": "716dd7689cbbedd3a58c1d1388f644b27950a1d63ab8e02948c29cae25fd097d",
+        "bytes": 23927,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/query/scenario-a-deep-stack-throughput-and-latency.test.js",
+        "baselineSha256": "556e9b4c250ed3fa6e7c10819e45dc6d92b0c4565e01a8892a26d33efe702772",
+        "candidateSha256": "892ed6d58aed7890432a426ec8f4247b3adeb43da69c03e0cf57446b2c975861",
+        "bytes": 15185,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/query/scenario-a-transaction-coordination-fast-path.test.js",
+        "baselineSha256": "25e96955a1834434dedfb2d0e4655ae645976db20834d92bfc8aabea794d8b24",
+        "candidateSha256": "cf8d64351f489ea0936ffb1822023992e0e563386b46c80aec731b679a1e240d",
+        "bytes": 10616,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/query/sql-query-engine-system-table-write-admission.test.js",
+        "baselineSha256": "0e0ae55434e0fd1428fd407751149ccd76276b4d48eececace990fa0bec18c88",
+        "candidateSha256": "aff5195522bbc6e049330fb0aa078c866c9d09c6598266d55ffc04ecf9f42e0d",
+        "bytes": 15177,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/raft/raft-rs-backend/deterministic-raft-rs-cluster.js",
+        "baselineSha256": "ef77b1e124a530327a4d613aea8ad712ca4e9880ea8f22795d75e3146b09f768",
+        "candidateSha256": "6681efd7d4d461389c120feb570278cc168a1580b06ddf443aa12bf9b1152deb",
+        "bytes": 11874,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/raft/raft-rs-backend/durable-commit-sync.test.js",
+        "baselineSha256": "52b904fe9b5503b1f4c449c59893e4d35b4a4b2c312e0a619fb3f7dfad9a110d",
+        "candidateSha256": "ccd73cf8cba055fc6acd876cb8f925a1b9fea815a5af847cd0f42670f89b8a66",
+        "bytes": 18212,
+        "overlapsFCarryIn": true
+      },
+      {
+        "path": "test/raft/raft-rs-backend/durable-own-group-record.test.js",
+        "baselineSha256": "59ad58d7b95e4b25db04959e7eac1ddef8696bc30530ced9e5b750c4bed6400d",
+        "candidateSha256": "2a8d9cd80d34ea06f0f88ce95a4bd073fc6adc295588f494c4514ae2b561b537",
+        "bytes": 13432,
+        "overlapsFCarryIn": true
+      },
+      {
+        "path": "test/raft/raft-rs-backend/durable-store-committed-entries.test.js",
+        "baselineSha256": "21337c4c724f0798cb1c7b4f62c619780ad43bcc724a94bf811cd18a1cd53c3a",
+        "candidateSha256": "5ac865a70bb3f150fa3b87a5f2b120f81a9aa4cabb2d6602f8f83a328dd3c695",
+        "bytes": 14705,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js",
+        "baselineSha256": "1f581fa8db79e1affc031cb438bc4f977ea03fe2ea2242d7f0917efbf53bac17",
+        "candidateSha256": "20cc3afaf39106c0fa961fb538766ed73a0104a781a7c260eebf2340c42b3ad3",
+        "bytes": 8490,
+        "overlapsFCarryIn": true
+      },
+      {
+        "path": "test/raft/raft-rs-backend/membership-generation-persistence.test.js",
+        "baselineSha256": "a2c41d6eb9aeb84a06c38f0210a4667ef4574c88c007d93bba69a32a54ab260d",
+        "candidateSha256": "547950440ebfe4c790964317717fdf2360478c9aa59804eee9e45164b720e92b",
+        "bytes": 9695,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/raft/raft-rs-backend/message-group-on-raft-rs.test.js",
+        "baselineSha256": "f4db5b1bca0feab9f881e224787e0767be95bc32662f6f97b7a068e6b3121536",
+        "candidateSha256": "6f4923a2eaf1d1e689367d80a37dfb612076242e8c0331982f07b234e49d70bb",
+        "bytes": 20962,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/raft/raft-rs-backend/multi-replica-runtime-prerequisites.test.js",
+        "baselineSha256": "ac04d24901eecb077bc98541be7d22a8d52ee6176a0fc28ff4a8f9917c272483",
+        "candidateSha256": "3dc428ea8dc9696c567957bb0f893e9cb0b101a2816f73eb22cd1e894362f92d",
+        "bytes": 18202,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+        "baselineSha256": "c4d02b25f07e09748c50a6dc496791c411a2c48538d09943c1bb9cbcaffa9ed2",
+        "candidateSha256": "141cca277fc4f2b3c2773ab30aa84c5fb77f70ee7ffa135ddec0b1c95258840b",
+        "bytes": 18474,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/raft/raft-rs-backend/partition-peer-admission.test.js",
+        "baselineSha256": "748744263e255adab5b17a4ac6990b1d566f9cc7398d5d4a6aa55fadf361f88e",
+        "candidateSha256": "5367b2d31aa926f9b69efc4bd10487121b478547c0b33fbd578c172300c1581d",
+        "bytes": 11676,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/raft/raft-rs-backend/partition-snapshot-compaction-catchup.test.js",
+        "baselineSha256": "f2346807bb3c1db49a3d76adfc25ed4b88643991228be92294a48a7f43c47364",
+        "candidateSha256": "7e09b35afb4dba8bbd51263d5dc4ec6f5922515a96f738f4e39625fff3b2767a",
+        "bytes": 33403,
+        "overlapsFCarryIn": true
+      },
+      {
+        "path": "test/raft/raft-rs-backend/peer-identity.test.js",
+        "baselineSha256": "4b1a21045c0fc2451279609e26aa7debc6c9429571fa1a6e721407781e36551d",
+        "candidateSha256": "103c617852d52914383bb08a3d23957d74653843cc087fdbda2d63f5032834e7",
+        "bytes": 9059,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/raft/raft-rs-backend/persistence-admission.test.js",
+        "baselineSha256": "20b830aeb72011703dbeae2211fdf112ad374a12d820f22be5c8184a0ddbcba3",
+        "candidateSha256": "0eb0aef8f538c2a5d152e00459f683777383dfe2b5020210a4cd41669294fe12",
+        "bytes": 17438,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/raft/raft-rs-backend/replica-freshness-closure.test.js",
+        "baselineSha256": "d12773f398bd4505d21423586ed12ec96c9f24c63fa8d522c6638338140f5e00",
+        "candidateSha256": "d6b9e4d54baa7813b2c4ca464d51db77fe1e8ea173b101280822d03be269f592",
+        "bytes": 8342,
+        "overlapsFCarryIn": true
+      },
+      {
+        "path": "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js",
+        "baselineSha256": "065840c655a18d5f69f6083cd9d260eba8b1c1ab82ee1706fafbb2978d89d1d3",
+        "candidateSha256": "0dc21d1ecb8a702d33475a2c42bf3d2837a4cacdb2804fddc32b88db76668f4d",
+        "bytes": 32268,
+        "overlapsFCarryIn": true
+      },
+      {
+        "path": "test/raft/raft-rs-backend/replica-lifecycle-birth.test.js",
+        "baselineSha256": "3ef7250fe762f53a153969cb8615ade2874ff48e3373b0d8cae78ef56d7a83cb",
+        "candidateSha256": "86bd726383a19635a3414213142343fd5288966f77195b63af86e937117abcbe",
+        "bytes": 13482,
+        "overlapsFCarryIn": true
+      },
+      {
+        "path": "test/raft/raft-rs-backend/reseed-hold-durability.test.js",
+        "baselineSha256": "94e94c49ec7fdc370cf871fab0a0c780d88a388d5fd953786d0461cd9f89f27e",
+        "candidateSha256": "514e2d2a69f13dbd9486231375e079151cadc257291e5b7054997b767e916791",
+        "bytes": 7286,
+        "overlapsFCarryIn": true
+      },
+      {
+        "path": "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js",
+        "baselineSha256": "f5d39f0cc01ae49ff2c8d12771763bda913441878b6d578bc7bed4c245f7917f",
+        "candidateSha256": "2157a910442179eb97d36b7b74708a82c3369c9c08188d0c2234de1f4a32dfc6",
+        "bytes": 4199,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
+        "baselineSha256": "cb72af8d4f3fa1ff3d4709f94b2bc9cb22e405ad036c86b916998472dc386e44",
+        "candidateSha256": "01c805c65fbe6af90378d596e2c12de07adb93e2b33e2274ac912913b4ea9f63",
+        "bytes": 13730,
+        "overlapsFCarryIn": true
+      },
+      {
+        "path": "test/raft/raft-rs-backend/runtime-replacement-review-child.js",
+        "baselineSha256": "1b65d37c9358abcceac6d17125c9ab65205ad49f12e7786cf165909a0e44e942",
+        "candidateSha256": "dc420231e326e00772ab3f4062657858019aa1eb89c73f785aa790c6a04cf915",
+        "bytes": 12869,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js",
+        "baselineSha256": "eb601fde18560741a1854928e4cbf63a2e0a7e585a0e04c9f2a3d153eb116662",
+        "candidateSha256": "31a5786d970a3e99ccc1c341e3b86b68195c47b653bd38b8f1948622e6eca221",
+        "bytes": 3678,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/raft/raft-rs-lifecycle-turn-admission.test.js",
+        "baselineSha256": "ff45504dadadf5ae7979bedd9f4c9831afe4739f70f85fd5dc138c4915b759c9",
+        "candidateSha256": "e95779b191786c50d393915bd1c45a7d7356942a4f4a2d97c71fb3026ec33f8a",
+        "bytes": 2698,
+        "overlapsFCarryIn": true
+      },
+      {
+        "path": "test/raft/raft-rs-original-allocation-cold-inspection.test.js",
+        "baselineSha256": "d86c58510a346a4fc4037d35675846a7b220eff060c136a0cef19543a07f79f1",
+        "candidateSha256": "915a990f1d5587408515093d64436b8fcc31c42c24631b0df83ca6304793571d",
+        "bytes": 14162,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/raft/raft-rs-original-allocation-custody.test.js",
+        "baselineSha256": "7e17fdb84ca13e0a9a7e720e681e857cff4cf7e6ef44acb1157970a07e1d2e5b",
+        "candidateSha256": "37678ed1698661639fc9f3bddf6a068cbcfde381b6da7265751a22a8bec923dc",
+        "bytes": 8123,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/raft/raft-rs-original-allocation-lifecycle-operation.test.js",
+        "baselineSha256": "f489cb8235290bda3c89ccb980bc78e3139826d5d5df5e047c4c681e0aa93a37",
+        "candidateSha256": "140339fb2afd848355e405525cc24f773deaaa63092f949f480006f9d694c664",
+        "bytes": 10259,
+        "overlapsFCarryIn": true
+      },
+      {
+        "path": "test/raft/raft-rs-original-allocation-preparation.test.js",
+        "baselineSha256": "f3ee02273be0cbd49ef58985a15c76f6658702f5b5a10128580994281cac1c00",
+        "candidateSha256": "6c14b7b4cc2181764fb6693ff37b6af6cb6563c054268da09526ea4b632f9f1c",
+        "bytes": 11263,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/raft/raft-rs-original-allocation-store.test.js",
+        "baselineSha256": "b6fd8d310ac7077fabb5021ac17d2343a07d07ca0581558720739161abb578a3",
+        "candidateSha256": "11907609d7d95c9db881003adafc773ebd1c8feafbe5af1ebad1b920be03eb92",
+        "bytes": 9644,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/raft/raft-rs-original-opening-authority.test.js",
+        "baselineSha256": "7c02ae96e4eaa08554dc779c44d42b3538104bd4792bc6127b0bbad27881a56d",
+        "candidateSha256": "dcd2ce5ce04745b84017cc823edc3b3ac7f7da3a34c883913ee8b82e262e45df",
+        "bytes": 16872,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/raft/raft-rs-original-opening-effect-cut.test.js",
+        "baselineSha256": "6bbc344720f2ee7378edbaa5982887671ab48e648fc87dbb0489407506115da7",
+        "candidateSha256": "80d0d2260cc4134eba6d3401f0de571d2df2620a346a6a920dbc3788cca35546",
+        "bytes": 4895,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/raft/raft-rs-original-opening.test.js",
+        "baselineSha256": "24fd44b1f82e1fc424fc853fb75cc5a03b77cbfea2f3dc878e13a06bc915c174",
+        "candidateSha256": "eae74137dce576916295dd0cb62cd983c85d5154d6a4008b94574da3a145292d",
+        "bytes": 5107,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/raft/raft-rs-status-peer-resolution.test.js",
+        "baselineSha256": "f08cded6fa483970d3f2fcca8f2dd79f63f0ba4110e535718574c7709e66d58d",
+        "candidateSha256": "30356d3a2694bb31284a383a8fd54b997283da10f404d5b702da103f25ec4d16",
+        "bytes": 7291,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/raft/snapshot-lifecycle-staging.test.js",
+        "baselineSha256": "11cc18096603e99e199db98ee4bb351f706c05d36e53ef0024cc157255c36c51",
+        "candidateSha256": "b04b2de7760b86aa8f2797494290f91dd6284be8432719705dcb0413a5096670",
+        "bytes": 7165,
+        "overlapsFCarryIn": true
+      },
+      {
+        "path": "test/shards/impact-contracts.json",
+        "baselineSha256": "6234e10447ea37648a137fe53cda580fec43d734e0b74c124a38ce6cc07f2bd7",
+        "candidateSha256": "cf9a9fafeb39868f1fed5f594bb1d9ae97953446eca6b60397733720f554402f",
+        "bytes": 303743,
+        "overlapsFCarryIn": true
+      },
+      {
+        "path": "test/storage/sqlite-connection-hydration.test.js",
+        "baselineSha256": null,
+        "candidateSha256": "17e53e2401ab331ab5372628f0efa353a62403479ebf651fd02acbd0f2f7b3ac",
+        "bytes": 2730,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/storage/sqlite-connection-production-boundaries.test.js",
+        "baselineSha256": null,
+        "candidateSha256": "12d25585956454bea482efe24857880ee889fc6eb5243c63efd247a76949e1bb",
+        "bytes": 6173,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/storage/sqlite-prepared-statement-owner.test.js",
+        "baselineSha256": "da920c0b2abb68deff6134c37e06562a5548773c37098d597efa4a024d5112d3",
+        "candidateSha256": "585324471a4bf151393bb04dba07d312fba5ad0ca31c6714cd057b2f608d98bf",
+        "bytes": 8927,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/test-helpers/learner-process-loss-worker.js",
+        "baselineSha256": "997b384766e5f2192faab7a31705c8913b347718c2089fca2aa72782a72b0cb0",
+        "candidateSha256": "9bcd18d7ea710d8f14783fa3514133296c26c16f64cbe3ea7a140fc098102223",
+        "bytes": 13369,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/test-helpers/original-allocation-declaration-fixture.js",
+        "baselineSha256": "9a938de0773c28c529188e9419e6542dc93a5c3c31d51430c0f81459d22cd957",
+        "candidateSha256": "aeef9b758abef0c757a9d99b250856ad5728eb563b121ecf1f09a17420de1f8e",
+        "bytes": 1445,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/test-helpers/original-allocation-durable-reader.js",
+        "baselineSha256": "3d5a36cf1cf39d9ff9af2c0d553e17fc38359205daac0b292ed421c828c9d5db",
+        "candidateSha256": "37cca3f2bb40dcc17dfe78858cc24d77426156286e95c5ada7a1e48df11c6ed0",
+        "bytes": 4935,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/test-helpers/partition-removal-serving-surface.js",
+        "baselineSha256": "5033a0a529f7339de1c0b224d9f69f7b4e8c1babd133ef5c4cd5665dd8ac309d",
+        "candidateSha256": "380a16f0f64c2b4445e527251f69ba6dd1a8c23e00d0b62a880122b12f10e08b",
+        "bytes": 1723,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/test-helpers/transaction-coordinator-group-fixture.js",
+        "baselineSha256": "36b4cdd65eba20bc8dce5c17827dcb8bde0fc2e85c11af319687799f22a74d44",
+        "candidateSha256": "ad791ecb941704f2dd77b76c0ea6f68c7087745e6f091aed5de57a0eb98567f6",
+        "bytes": 13868,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/test-helpers/transaction-persistence-gateway.js",
+        "baselineSha256": "024ce886e60a51a55296649055af0bac9bb5298324befeb63aadd146f0f3022b",
+        "candidateSha256": "101f45a3e154ae7bda301e6b4934f5db754b0fc825e53f6a8cef0634fe5ac77c",
+        "bytes": 5108,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/transaction/queryable-core-j4-locking-read-journey.test.js",
+        "baselineSha256": "18c4002e4eeaccf1b13abd6107a41db75bd9534aeaa56f14828794a88b920e34",
+        "candidateSha256": "e5fea234cc025ac92483514da1840c3d1036a4053ef0106ab6f1596e216841ed",
+        "bytes": 21476,
+        "overlapsFCarryIn": false
+      },
+      {
+        "path": "test/transaction/session-transaction-isolation.test.js",
+        "baselineSha256": "309cbc947e0a647e5fc98f6ed0d5270c87d95b9d5bb93c24d523eb24230a282e",
+        "candidateSha256": "e5c895556e381763649095ffb5760f5da50e8897303cd5b19e7e065b6261145f",
+        "bytes": 15899,
+        "overlapsFCarryIn": false
+      }
+    ],
+    "patch": {
+      "path": "/tmp/lagrange-sqlite-phase2-max-20261112/phase2-only.patch",
+      "sha256": "877be0a2136bcd2997a423507c8ca44042514e221b03f59ad4f11d9714318e22"
+    }
+  },
+  "localGeneratedMetadata": {
+    "treeWithGenerated": "d5a04ef63685e9e61cad804772f2f7c31943a12d",
+    "files": {
+      "test/shards/primary-classes.json": "dc55c1d4708b13e7b241e3653d7bc671c1d783891ab4a4b84d41a0eda7f200ce",
+      "test/shards/resource-classes.json": "72d8371bdf1ec945062248853c986294fa7b7724a316ed8130b3bb07fc9daf1e",
+      "test/shards/subsystem-classes.json": "8b13df8098911808a910e66e0d9a8e13835b6500585b9b3f4eb9b2890d0bfef5",
+      "test/shards/impact-graph-seal.json": "ce64d1edfbe37116c1d2447d1c33a7ce2c48f8dd4b25830d1a9fe5c5b407bb06"
+    },
+    "claim": "Local composition only; regenerate after parent composition. Excluded from Phase2-only patch."
+  },
+  "allChangedSourceAndGeneratedFiles": {
+    "architecture/contracts/authority-and-recovery.md": "c7504c19c85a7f934489c6dc732a858536ec7104e21b7a40e83e0f6deb968a92",
+    "src/message-group/message-group-consensus-port.js": "6cd481eac917f893267599171f1450fd5317cc244064933c3369cbd008682162",
+    "src/node/replica-failed-create-removal-claim.js": "0bf610b69d4758112dea30242cde63added8c01dda9135f3e597fb6c4f011f37",
+    "src/node/replica-handler-remove-execution-methods.js": "f01b6bfd162fd366340eb29284ac9c2d1f3eacba844eb449a63519da6757353a",
+    "src/node/replica-removal-participation.js": "0476404472b717a207308a8edf72818cfd84b36db2ce31cf6d2bf16090925da0",
+    "src/node/replica-removal-sole-founder.js": "84ee1cfd49267a6277a35e860e02848a8acb3c1c011f8abe5d56b851b7009206",
+    "src/partition/partition-cdc-obligation-ledger.js": "d0def43cbfc230c984d2dd09c34a0c74ac1bc6bb47d6314b0da83235784c9f1d",
+    "src/partition/partition-committed-statement-outcome.js": "d8bb7f6cbea925607458e48d3c053a6587bf0081b3067023263666c9e92bab60",
+    "src/partition/partition-consensus-port-opening.js": "1c10e57efac6e0173a1322a026a42e39a2c08af6ffcb257d0cc28d4fc5f11512",
+    "src/partition/partition-coordinator-table-columns.js": "d4f6a4c4b2683fd06ae9f5ae5a09990e44c660a6bc9263dd33b116f41d6177f8",
+    "src/partition/partition-hydration-image-pages.js": "7f1ff2443427b040156e881323c387904ff9b9c8c11a2d409af9fc84fafe4c4b",
+    "src/partition/partition-locking-read-reservation.js": "c7872a4431f42e5a4492c23cef25b384848cf57552f81e93d01f5dc8600d262b",
+    "src/partition/partition-participant-transaction-store.js": "7877c97fdedd611c32c6d398b8f4f94ad4b0a0cdff373fab7fdf3d30991e7c11",
+    "src/partition/partition-service-raft-init-base.js": "85692da02a3c99be700c911f17e8b42d9b9d3e162320181656bfbb65b05b7629",
+    "src/partition/partition-service-table-bootstrap.js": "7f5337d1f0f5a787ba61819ab507a9b1d8679701fdc149be86d5a7ca0ca62a94",
+    "src/raft/raft-rs-durable-own-group-record.js": "92a155cbe565cd739ecec696ae33a8b8790a1c8db7b4954d7862b8cd995e9a80",
+    "src/raft/raft-rs-durable-store.js": "0b54363e2d4a539e631945c520cec345ce666f8248aad2a9ba2c81cb1e5289c3",
+    "src/raft/raft-rs-lifecycle-administration.js": "36421ba2b6554d10e9fd599b8957a8029a94d5a3dd0f9404ec1a53f3dde559b6",
+    "src/raft/raft-rs-operation-port.js": "9554d28d1c9e54d2dfef95efc4fe3f653a1f94444a4f75ee07d022b754416d65",
+    "src/raft/raft-rs-peer-identity.js": "feeee05e4e24c2e3db8e4c3f2b7f83297bdf8eb7e8617434fad8ce4b39ee4751",
+    "src/raft/raft-rs-preparation-custody.js": "862aec20a0ada089fec1f675be38088b5e8ef3b82c798fb8c4725391242a6b97",
+    "src/raft/raft-rs-replica-lifecycle-constants.js": "460e9954715c57bd1ac49fc88c1b1ff4290574a35ad310122953e778b80265df",
+    "src/raft/raft-rs-replica-lifecycle-observation.js": "bc2856899bbed866779f3dce28b953e2de3ef559f2e5cdcc65446b37ae6e9b4c",
+    "src/raft/raft-rs-replica-lifecycle-owner.js": "6d0100170af497c92a5aeab2dbf15fbdf6154d71ca8ebb7ffc0d1cb768449c05",
+    "src/raft/raft-rs-snapshot-witness.js": "bd7938cdf2a595c764b665e6088eb760431b88c5b2cdc5747da231d25c259283",
+    "src/raft/snapshot-checkpoint-store.js": "169ff3f012a62e67049ed00dd935759779006a17215c4dcee31343c186c6bd02",
+    "src/raft/snapshot-install.js": "015c841c64c5579dc2aa0d9e5c400b6cd24bb8bcbc454dca78853ad06b7522bb",
+    "src/storage/durable-file-presence.js": "d18c26729ce005fd9cf515fead444b744fd50a840d33d02a52a4f6d8d669ee2a",
+    "src/storage/sqlite-prepared-statement-owner.js": "4a5db10f9a9f3f3f65c108aa7e41aca10a741fd209b1a038bc18eabff54ee202",
+    "src/wasm-service/wasm-creation-opening.js": "431cd1a23ef3b45aa284d31f47eb8d3d64eacdc19aaa4c81ad88b2438567a72f",
+    "src/wasm-service/wasm-service-consensus-port.js": "2f1302bde0df67a2324100e91929050000a14fd3319f79396da0d4063a896ecf",
+    "src/wasm-service/wasm-service-replica-lifecycle.js": "f96547389a82e4d3333587035d7c5f9edc57811f8835a0c85dafdbabee888b7b",
+    "src/wasm-service/wasm-writer-state.js": "9baa14a669f92721532d2ba0df50a87dd6d7065d9a64cd192e87db71a016b471",
+    "test/bootstrap/management-action-authority.test.js": "6ccc160761f2f13e73555bb04ffce940f62857f6a6642ac8f28b8ee3e86d7168",
+    "test/bootstrap/retained-seed-original-handoff.integration.test.js": "94244cbcd4df29c218f091c2f793a396b6b822a0ac788fef3357bdcf5096ea05",
+    "test/bootstrap/seed-original-attempt-lifetime.test.js": "33664321c49847476d16df3bf3785e61d721a5ecb1110423672ecf944daaac57",
+    "test/bootstrap/seed-release-failure-custody.test.js": "b6682787b33a4a2443ca791c0189168097499721f353708535d107d2052ed04c",
+    "test/bootstrap/seed-retained-effects-fixture.js": "4698607711a8e536f79c4229c773c7113f4afbea37e2b162c041bb0103d4ce10",
+    "test/bootstrap/seed-retained-effects-preparation.test.js": "89006e2527c054ab115bb7e8498e7196f24ed4f316c3d2e256565e96369c5a1e",
+    "test/bootstrap/seed-retained-effects.integration.test.js": "640c197f6da052a43699fc452900b38b75958e42d8013acc2dacc114a928aff2",
+    "test/diagnostics/raft-churn-sync-section-attribution.test.js": "603426313927f83786b965c5d82006c8550f3b8a82b5e748eaf603ccfab1f6e6",
+    "test/helpers/replica-database-fixture.js": "95dea8eafb2d6f52ee89e8f4029b5d0f32ca9e834f02216bec614546fac15e42",
+    "test/helpers/replica-lifecycle-fixture.js": "2443b3197243e214076f9422f19f441ebe0f1dc8a94e86c554951f463ac8ee2a",
+    "test/integration/message-group-fresh-identity-replacement.integration.test.js": "2999b09b6635d5008a00817b1cbd4b6127df4b130f0df9dc686c9edd07e81fa5",
+    "test/integration/message-group-learner-join.integration.test.js": "7725ebf78a2c516f2b897f10fac53d24785ecd8bf00eca3648e5798232630a41",
+    "test/integration/message-group-learner-runtime-authorization.integration.test.js": "a1fe0c7127896cad80a1a5ef45e4d84ca335d71d997d7ca9280c960ecd0c9ea0",
+    "test/message-group/message-group-fresh-learner-snapshot.test.js": "1a230c9e662b686e3b75adad1d2778826ef9eb4cf5c2c16d86bd0242b7982234",
+    "test/migration/migration-partition-alter-routing.test.js": "ceaa822c070098514e72f5eb6e4adc9aa181ed7dc1a572daf94bcf6ba0a7885d",
+    "test/node/fresh-create-authority-unavailability-native.integration.test.js": "fe666bac5ce9e9c5819854ac8b3397ae5213fb09ef26858f29c6453b4f27648d",
+    "test/node/replica-handler-identity-entry-test-cases.js": "24d8df923a788fe58556017220b99eae2b1560aad7f850ffae17ea2ac77fe400",
+    "test/node/replica-handler-identity-record-test-cases.js": "f51d31408bf6be8a6694ccac385b892e786aff2dba583b4ee5b3679d39bde0d5",
+    "test/node/replica-handler-owner-path-bypass-removal.test.js": "bfb70b484eda511a0162cbca7a8450a71c6d196898b68d8ab432d861b7cd2759",
+    "test/node/replica-handler-remove-closed-service.test.js": "4fefcc6299f3a97054817ab691524475267cda8966f3086bd7e89699fcac951b",
+    "test/node/replica-lifecycle-durable-generation.test.js": "2ccef2a408cf318adc7414c4769dd0ec378e043a41fd51eeb8107ddeffa81cba",
+    "test/node/replica-removal-required-ports.test.js": "5922167e5ec0f52bbfaf88f179b11494ffebf9422b630fdb24b6aa921fed31d3",
+    "test/node/replica-removal-sole-founder-decision.test.js": "2b7e3cb31ab912c9916e7457f9bcce235d885e50381f58868c8ab8de0f215c3e",
+    "test/partition/committed-statement-outcome.test.js": "fdff48e6ed584c680793b32d822ccf62dde43c27b64bc47a864db9e645780081",
+    "test/partition/learner-promotion-proof-committed-admission.test.js": "3ac1dfcec85e29e58980dbcf09edceab59dc01ee9042d36af871e5efc2a07e19",
+    "test/partition/participant-origin-retained-history.integration.test.js": "05fb33406c6fea0858361e27987ed539db332aba50859ecef6b1a168f9eacee4",
+    "test/partition/participant-origin-retained-history.test.js": "d53454c55354653f8e2abc757989b90d068abff6d37694b83c8e99904a1a7b07",
+    "test/partition/participant-release-native-application-order.test.js": "917006997974f627cb79282aa4090c3cb4cead7fe62001be8d9ef8f19608432f",
+    "test/partition/partition-cdc-acknowledgement-refusal.test.js": "6aecf2ba84ed2e6d90b4e062aee63c69de31ab10f23f41a0a50b850eed14a9c6",
+    "test/partition/partition-legacy-consensus-state.test.js": "8fd85a547c22a43608343db599347caf55c407484f338c564ad0c737decff3da",
+    "test/partition/partition-participant-transaction-apply.test.js": "07444a26b70b621b1a4dfc1dad1311d759e74376f62e251c1e12d9efbe25cae6",
+    "test/partition/partition-port-refusal-outcomes.test.js": "613b41913a85842403b941f7f8f7947a96016a7694268a86fd27196276ac02d8",
+    "test/partition/partition-runtime-reconstruction-leadership.test.js": "e57960014f07ee29f9b5ff0d2e5737a03b6f618bb3c4f01eda0d238c0065d628",
+    "test/partition/partition-service-hlc-monotonicity.test.js": "cdfcc8168ddb1abd860477b8c532564dfd732b5c0dc15f55198312fcc2b25110",
+    "test/partition/partition-statement-admission.test.js": "976ec97ec9523a85fd883ede0e98190b755ae05b52604b097a9959e5a656d7dc",
+    "test/partition/partition-transaction.property.test.js": "315ca4e3aa5c37ac57df193d6e20d452aed6c3f6e7bf34077f17f8c00ce4ead7",
+    "test/partition/partition-unreadable-durable-record.test.js": "f5ac166b10d064d9ccc63b9e057697ad2b63bcf7245b49271002bd369d7f0481",
+    "test/partition/replica-admission-from-committed-operation.test.js": "172a50a395e2f9fc3e6b30825853f00bd8e86d91c26126fdce2bc8b08eeff413",
+    "test/partition/replicated-sql-determinism-three-replica.test.js": "814ddf8f1395de9e695eecbe18d67f547783ed7881ebd8aa3268ac305e746ac9",
+    "test/partition/settled-replay-preserves-result.test.js": "716dd7689cbbedd3a58c1d1388f644b27950a1d63ab8e02948c29cae25fd097d",
+    "test/query/scenario-a-deep-stack-throughput-and-latency.test.js": "892ed6d58aed7890432a426ec8f4247b3adeb43da69c03e0cf57446b2c975861",
+    "test/query/scenario-a-transaction-coordination-fast-path.test.js": "cf8d64351f489ea0936ffb1822023992e0e563386b46c80aec731b679a1e240d",
+    "test/query/sql-query-engine-system-table-write-admission.test.js": "aff5195522bbc6e049330fb0aa078c866c9d09c6598266d55ffc04ecf9f42e0d",
+    "test/raft/raft-rs-backend/deterministic-raft-rs-cluster.js": "6681efd7d4d461389c120feb570278cc168a1580b06ddf443aa12bf9b1152deb",
+    "test/raft/raft-rs-backend/durable-commit-sync.test.js": "ccd73cf8cba055fc6acd876cb8f925a1b9fea815a5af847cd0f42670f89b8a66",
+    "test/raft/raft-rs-backend/durable-own-group-record.test.js": "2a8d9cd80d34ea06f0f88ce95a4bd073fc6adc295588f494c4514ae2b561b537",
+    "test/raft/raft-rs-backend/durable-store-committed-entries.test.js": "5ac865a70bb3f150fa3b87a5f2b120f81a9aa4cabb2d6602f8f83a328dd3c695",
+    "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js": "20cc3afaf39106c0fa961fb538766ed73a0104a781a7c260eebf2340c42b3ad3",
+    "test/raft/raft-rs-backend/membership-generation-persistence.test.js": "547950440ebfe4c790964317717fdf2360478c9aa59804eee9e45164b720e92b",
+    "test/raft/raft-rs-backend/message-group-on-raft-rs.test.js": "6f4923a2eaf1d1e689367d80a37dfb612076242e8c0331982f07b234e49d70bb",
+    "test/raft/raft-rs-backend/multi-replica-runtime-prerequisites.test.js": "3dc428ea8dc9696c567957bb0f893e9cb0b101a2816f73eb22cd1e894362f92d",
+    "test/raft/raft-rs-backend/opening-history-native-fixture.js": "9bcb44ad0193e005b7e8f9e91cefacb234d6101e96672209f851536dcd0f8524",
+    "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js": "141cca277fc4f2b3c2773ab30aa84c5fb77f70ee7ffa135ddec0b1c95258840b",
+    "test/raft/raft-rs-backend/operation-port-throw-containment.test.js": "dd71c1cf9a4049d24ca522ea71dd370048175f3c5520830185295bc03d4f28b6",
+    "test/raft/raft-rs-backend/original-handoff-lifecycle-claim.test.js": "bea13a798cd43b1274492365300a9aa8e1f60be63a2931b3049a29ae8975fb08",
+    "test/raft/raft-rs-backend/partition-construction-seam.test.js": "ef1d7563670c9dce9df54fea4e7a07bd8c5dbf07c42b17cf9cd64bcfc8d98526",
+    "test/raft/raft-rs-backend/partition-node-cluster.js": "4d4767165e7a792d6058bfc662a6f9277c8083ddab3a1b641acb203ab1d53cb6",
+    "test/raft/raft-rs-backend/partition-peer-admission.test.js": "5367b2d31aa926f9b69efc4bd10487121b478547c0b33fbd578c172300c1581d",
+    "test/raft/raft-rs-backend/partition-snapshot-compaction-catchup.test.js": "7e09b35afb4dba8bbd51263d5dc4ec6f5922515a96f738f4e39625fff3b2767a",
+    "test/raft/raft-rs-backend/peer-identity.test.js": "103c617852d52914383bb08a3d23957d74653843cc087fdbda2d63f5032834e7",
+    "test/raft/raft-rs-backend/persistence-admission.test.js": "0eb0aef8f538c2a5d152e00459f683777383dfe2b5020210a4cd41669294fe12",
+    "test/raft/raft-rs-backend/replica-freshness-closure.test.js": "d6b9e4d54baa7813b2c4ca464d51db77fe1e8ea173b101280822d03be269f592",
+    "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js": "0dc21d1ecb8a702d33475a2c42bf3d2837a4cacdb2804fddc32b88db76668f4d",
+    "test/raft/raft-rs-backend/replica-lifecycle-birth.test.js": "86bd726383a19635a3414213142343fd5288966f77195b63af86e937117abcbe",
+    "test/raft/raft-rs-backend/reseed-hold-durability.test.js": "514e2d2a69f13dbd9486231375e079151cadc257291e5b7054997b767e916791",
+    "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js": "2157a910442179eb97d36b7b74708a82c3369c9c08188d0c2234de1f4a32dfc6",
+    "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js": "01c805c65fbe6af90378d596e2c12de07adb93e2b33e2274ac912913b4ea9f63",
+    "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js": "308d62ac00e646b6fdf0a089136519002524024d3e219169c4732b5a0f98d6b6",
+    "test/raft/raft-rs-backend/runtime-replacement-review-child.js": "dc420231e326e00772ab3f4062657858019aa1eb89c73f785aa790c6a04cf915",
+    "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js": "31a5786d970a3e99ccc1c341e3b86b68195c47b653bd38b8f1948622e6eca221",
+    "test/raft/raft-rs-lifecycle-turn-admission.test.js": "e95779b191786c50d393915bd1c45a7d7356942a4f4a2d97c71fb3026ec33f8a",
+    "test/raft/raft-rs-original-allocation-cold-inspection.test.js": "915a990f1d5587408515093d64436b8fcc31c42c24631b0df83ca6304793571d",
+    "test/raft/raft-rs-original-allocation-custody.test.js": "37678ed1698661639fc9f3bddf6a068cbcfde381b6da7265751a22a8bec923dc",
+    "test/raft/raft-rs-original-allocation-lifecycle-operation.test.js": "140339fb2afd848355e405525cc24f773deaaa63092f949f480006f9d694c664",
+    "test/raft/raft-rs-original-allocation-preparation.test.js": "6c14b7b4cc2181764fb6693ff37b6af6cb6563c054268da09526ea4b632f9f1c",
+    "test/raft/raft-rs-original-allocation-store.test.js": "11907609d7d95c9db881003adafc773ebd1c8feafbe5af1ebad1b920be03eb92",
+    "test/raft/raft-rs-original-opening-authority.test.js": "dcd2ce5ce04745b84017cc823edc3b3ac7f7da3a34c883913ee8b82e262e45df",
+    "test/raft/raft-rs-original-opening-effect-cut.test.js": "80d0d2260cc4134eba6d3401f0de571d2df2620a346a6a920dbc3788cca35546",
+    "test/raft/raft-rs-original-opening.test.js": "eae74137dce576916295dd0cb62cd983c85d5154d6a4008b94574da3a145292d",
+    "test/raft/raft-rs-status-peer-resolution.test.js": "30356d3a2694bb31284a383a8fd54b997283da10f404d5b702da103f25ec4d16",
+    "test/raft/snapshot-lifecycle-staging.test.js": "b04b2de7760b86aa8f2797494290f91dd6284be8432719705dcb0413a5096670",
+    "test/shards/impact-contracts.json": "cf9a9fafeb39868f1fed5f594bb1d9ae97953446eca6b60397733720f554402f",
+    "test/shards/impact-graph-seal.json": "ce64d1edfbe37116c1d2447d1c33a7ce2c48f8dd4b25830d1a9fe5c5b407bb06",
+    "test/shards/primary-classes.json": "dc55c1d4708b13e7b241e3653d7bc671c1d783891ab4a4b84d41a0eda7f200ce",
+    "test/shards/resource-classes.json": "72d8371bdf1ec945062248853c986294fa7b7724a316ed8130b3bb07fc9daf1e",
+    "test/shards/subsystem-classes.json": "8b13df8098911808a910e66e0d9a8e13835b6500585b9b3f4eb9b2890d0bfef5",
+    "test/simulation/formation-sim-consensus-cohort.js": "23b31082efa6c2e006d05dbb1926a2a89ad076196c060bb1800935fe432be68d",
+    "test/storage/sqlite-connection-hydration.test.js": "17e53e2401ab331ab5372628f0efa353a62403479ebf651fd02acbd0f2f7b3ac",
+    "test/storage/sqlite-connection-production-boundaries.test.js": "12d25585956454bea482efe24857880ee889fc6eb5243c63efd247a76949e1bb",
+    "test/storage/sqlite-connection-statement-ownership-brand.test.js": "11c1abb8b6d073a6177eb6573ecd31c018b6adf51414cff50c3c42d7fdc7ede1",
+    "test/storage/sqlite-connection-statement-ownership-refusal.test.js": "ceac4d8ef5f8c5c526e817c6306ae7e4282c4e83f28087a74b62dc8ba3fcdc0d",
+    "test/storage/sqlite-connection-statement-ownership.test.js": "868e44067c509389256df96e9a448db374b1d01409b46b3f90de055a9acae9bd",
+    "test/storage/sqlite-prepared-statement-owner.test.js": "585324471a4bf151393bb04dba07d312fba5ad0ca31c6714cd057b2f608d98bf",
+    "test/test-helpers/learner-process-loss-worker.js": "9bcd18d7ea710d8f14783fa3514133296c26c16f64cbe3ea7a140fc098102223",
+    "test/test-helpers/original-allocation-declaration-fixture.js": "aeef9b758abef0c757a9d99b250856ad5728eb563b121ecf1f09a17420de1f8e",
+    "test/test-helpers/original-allocation-durable-reader.js": "37cca3f2bb40dcc17dfe78858cc24d77426156286e95c5ada7a1e48df11c6ed0",
+    "test/test-helpers/partition-removal-serving-surface.js": "380a16f0f64c2b4445e527251f69ba6dd1a8c23e00d0b62a880122b12f10e08b",
+    "test/test-helpers/transaction-coordinator-group-fixture.js": "ad791ecb941704f2dd77b76c0ea6f68c7087745e6f091aed5de57a0eb98567f6",
+    "test/test-helpers/transaction-persistence-gateway.js": "101f45a3e154ae7bda301e6b4934f5db754b0fc825e53f6a8cef0634fe5ac77c",
+    "test/transaction/queryable-core-j4-locking-read-journey.test.js": "e5fea234cc025ac92483514da1840c3d1036a4053ef0106ab6f1596e216841ed",
+    "test/transaction/session-transaction-isolation.test.js": "e5c895556e381763649095ffb5760f5da50e8897303cd5b19e7e065b6261145f",
+    "test/wasm-service/wasm-creation-local-record.test.js": "246685fcb0667434c06cdacf3c936931ee3dea68e4b5a6208e5819fa6db35d0c",
+    "test/wasm-service/wasm-writer-completion-v1.test.js": "7ab0ff348b81d19db02b14dc1b0ead7221f47952ab2567b358fed268ee8fd341",
+    "test/wasm-service/wasm-writer-recreation-origin-v1.test.js": "b93202b2fb7e92bb302cfb76659a067a9e3aa0bcbdc9c8cc4169e60056a86965",
+    "test/wasm-service/wasm-writer-state-v1.test.js": "2c22aa06cf55e06008c9d00d66d7c081537bb357d65f710bb7b93b500b52b054"
+  },
+  "runtimeDependencyDigests": {
+    "package.json": "7c56bd6952c10baab826be0504498e97f3f0a8c13dd953dd164a5baffe093b0b",
+    "package-lock.json": "8ac4b4fb882a5a93a67f192b37167fe8d5884c9a6778ca5b4b2dff7b28b76b04",
+    "node_modules/better-sqlite3/package.json": "58e81504576abccfacbfd08dc9432dc3a00d0fc0454685cb7a76aaf976cf25a9",
+    "node_modules/better-sqlite3/lib/database.js": "50fe0b490f29174d961c4d1ae54f22973447ff1255fd710e785d201c0ebfb4d0",
+    "node_modules/better-sqlite3/build/Release/better_sqlite3.node": "d7d9272b12d11c1dc2bb787741b1b7c4037d336155f316ace3420410c28fda37",
+    "vendor/raft-rs-wasm/artifact-digest.json": "9e9ae48c07e290c3f1d077806242c26516e3f06c03e2b9195306a5c69364702d",
+    "vendor/raft-rs-wasm/pkg/raft_wasm.d.ts": "0be438c967162bb8165114aa1abfb28212e427201e6500893b6067bfdd8f600c",
+    "vendor/raft-rs-wasm/pkg/package.json": "fbae1db17ab8b0822d9f18654e23a4c15eabe11bb6ec60fcab3eeff55a16ea20",
+    "vendor/raft-rs-wasm/pkg/raft_wasm_bg.wasm": "03b80b4e4b5049d5ea32dfa48ca2e2cb0efe261b47f73bf91499e2d510cadbc8",
+    "vendor/raft-rs-wasm/pkg/raft_wasm.js": "766ec8b1e9dab187ec22bdbf059c4e717a312792f8b6f03536d3c444e76d0f6e",
+    "vendor/raft-rs-wasm/pkg/raft_wasm_bg.wasm.d.ts": "ba11e988a990b4c77bcf6ffebdda14a42a97aa24c374569b8a9bcd5022350017"
+  },
+  "proofFiles": {
+    "solve/quests/sqlite-connection-statement-ownership/quest.json": "41171c97176873cada5d6b68bc5b6c42d365ea977754821d26986256f0773d0c",
+    "solve/quests/sqlite-connection-statement-ownership/log.ndjson": "6a3c373db3242f2a63f027d59759ebdf16b149fa6734bb852239c25cc629c0be",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/receipt.json": "0930202d410f6b130c2470565631c465ab29b6b2673685f139f358bed171ea60",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/PHASE2-REVIEW.md": "328e9789559737f05f84ffbb3b199def671c765187752efa4f758131bef22937",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-required-proof.json": "701e84440f0f942285714430ebeff156780405608700377fbf7c37ee82f1ece0",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-caller-provenance.json": "662bedc49b7d3548a6e412ca01ef5f1b3a0707fe58782585a99baf9e76ded480",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-verification.json": "962f6cf6e2c4ed0a5273bd1e0c7aa13971053cd5d30ede83a6c0cd28d092f8b5",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failure-ledger.json": "f1f69c647677509c46c2b7775158102bd136fd2188ee35b9f0a962930aca9150",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase1-manifest.json": "e9db60969d90bcb1b14d486b8c635668066464031ab91e74eed2a7dc0e28a9bc",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase1-stronger-manifest.json": "533f6a01a3eaeb4eac97fe2b68a41197d4c0f5b66951bc8fd50b615a4e333de4",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-f-composition.json": "5ac6b773ed9ec7306542d7077245e83abf50c51bd34d5f7374845772e6d6fba2",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/PHASE2-STOP.md": "a5a3001452254895124841ce725ad116e49eacd2ce4749fc11ed7cc957342907",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/PHASE2-STRONGER-STOP.md": "ef12dfad36ebe4bc6d477efcc03bcf25b5ac878299c6886213d4d6cc2bf3d40c",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-manifest.json": "b8fa7ebafdea297b52a801a4f950a07cd4fe86651c6ea8e344cb71cd8d36dbd4",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-stronger-failed-manifest.json": "d42c51c447767fb84ffaadeb3240ae620fa568adf6ca977acbf4c615b911b187",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-fixture-producers.json": "ba6dec2677a77d7be483822785bce88f1b726f3d0ad593e5509cb4e849eccd82",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-stronger-fixture-selection.json": "be5f01e9a85173975afe5761af69b943771655e41486004398091e2dd5b1a9bd"
+  },
+  "externalEvidence": {
+    "/tmp/lagrange-sqlite-phase2-max-20261112/phase2-only.patch": "877be0a2136bcd2997a423507c8ca44042514e221b03f59ad4f11d9714318e22",
+    "/tmp/lagrange-sqlite-phase2-max-20261112/source-allowlist.json": "0da0fc213dda31f4ff4253799668c5bf2d9636ad1589399d040de016e7060e74",
+    "/tmp/lagrange-sqlite-phase2-max-20261112/final-source-manifest.json": "d149d585e3e39ae8a52fd2574c53fabbb46190ca5d175e9e6117ba41c2cbbacb",
+    "/tmp/lagrange-sqlite-phase2-max-20261112/caller-census.json": "cd684499e0a7bedc45332bb4ac942144e0c2de1670afa08b9b00c614d006fa83",
+    "/tmp/lagrange-sqlite-phase2-max-20261112/raw-use-census.json": "2e490091ac40f8709e7a03f3c24ef86930611f6e3be04ba8159e2e3cfb8c039d",
+    "/tmp/lagrange-sqlite-phase2-max-20261112/child-copy-closure.json": "ea5141373bb8db0c926810a77f0ff1c1154a528cc6412185606968ef1b54265e",
+    "/tmp/lagrange-sqlite-phase2-max-20261112/child-final-receipts.json": "b750f544a8f2074d540cea105f3ffc9476504fab4668ba5e44a73adebca743bf",
+    "/tmp/lagrange-sqlite-phase2-max-20261112/permission-skip-preservation.json": "0cf0c7c243b2c64d425bea3b8f75dd090e62485228f609f63ae77e9c67bfa8fa",
+    "/tmp/lagrange-sqlite-phase2-max-20261112/static-baseline-comparison.json": "c124ac236cab08dc62359e95505fba1a276d29bd32665834e95573e90ee7c4d7",
+    "/tmp/lagrange-sqlite-phase2-max-20261112/final-applicability.json": "157ce4eea3bef9d2fe2933d6787f6c436b7aa323682bc59b2bb3db748cb4e2ce",
+    "/tmp/lagrange-sqlite-phase2-max-20261112/final-quest-probe.log": "52e4d6e429e4cef994d9efdb16f335ce2afa95227c989225f000805decbbc5e0",
+    "/tmp/lagrange-sqlite-phase2-final-attempt-20261112.log": "5504ada7555f73bfd50882082eedf662a1fa5541ce24c22e0dd9017cdef0d57d"
+  },
+  "preservation": {
+    "path": "/tmp/lagrange-sqlite-phase2-max-20261112-raw-preservation.tar.gz",
+    "sha256": "b9867ee5d631c3970000547829ab13338e8e62d0dc89cac0efbd86cca2191486",
+    "bytes": 2870116,
+    "members": 724,
+    "reopenedAndEveryMemberVerified": true,
+    "inventory": {
+      "path": "/tmp/lagrange-sqlite-phase2-max-20261112-raw-inventory.json",
+      "sha256": "829e2cd72132915a594eeb0be92903cb7516ca80cd2d27ac8ca23751df2c37c1"
+    },
+    "originals": "All preserved in place. Additional archive only; no canonical-store upload or deletion claimed."
+  },
+  "gates": {
+    "focusedFiles": 15,
+    "focusedCasesReported": 187,
+    "receiver72": "UNRUN on repaired bytes until lab",
+    "fullAffectedCone": "UNRUN on final Phase2 composition",
+    "phase2IndependentReview": "PENDING parent assignment",
+    "permissionSkip": "UNCHANGED; separate Newton no-skip composition pending",
+    "staticGuards": "HOLD:6 inherited F sites still reported; new size violation repaired; no baseline increase",
+    "questProbe": "metric3 target0 measuring=true done=false"
+  },
+  "permissions": "No commits, pushes, primary checkout or integration writes. Final patch uses an external temporary index; actual worktree index untouched."
+}

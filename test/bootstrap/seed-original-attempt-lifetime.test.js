@@ -1,3 +1,4 @@
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 // BootstrapService -> allocation preparation -> creation catalog/phase ->
 // actual SQLite/native opening. Directory custody, membership, boot identity,
 // build measurement, transport and replica services are their real owners.
@@ -133,7 +134,7 @@ function queueReplica(f, options) {
 }
 
 function readRow(member) {
-  const db = new Database(member.dbPath, {readonly: true, fileMustExist: true});
+  const db = new SQLiteConnection(member.dbPath, {readonly: true, fileMustExist: true});
   try {
     return readOriginalAllocationRow({db, member});
   } finally {

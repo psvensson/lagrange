@@ -1,0 +1,389 @@
+{
+  "status": "STOP first unexpected verification failure; stronger model required",
+  "base": "1b51362e0f7af24a5e373b8a57619d4cf13ec706",
+  "phase1Preserved": {
+    "src/storage/sqlite-prepared-statement-owner.js": "4a5db10f9a9f3f3f65c108aa7e41aca10a741fd209b1a038bc18eabff54ee202",
+    "test/storage/sqlite-connection-statement-ownership-brand.test.js": "11c1abb8b6d073a6177eb6573ecd31c018b6adf51414cff50c3c42d7fdc7ede1",
+    "test/storage/sqlite-connection-statement-ownership-refusal.test.js": "ceac4d8ef5f8c5c526e817c6306ae7e4282c4e83f28087a74b62dc8ba3fcdc0d",
+    "test/storage/sqlite-connection-statement-ownership.test.js": "868e44067c509389256df96e9a448db374b1d01409b46b3f90de055a9acae9bd"
+  },
+  "phase2Paths": [
+    {
+      "path": "src/partition/partition-hydration-image-pages.js",
+      "sha256": "7f1ff2443427b040156e881323c387904ff9b9c8c11a2d409af9fc84fafe4c4b",
+      "baselineRef": "HEAD",
+      "baselineSha256": "69e7598397b775ab33bd5935bed7113f33247c0b28c36842dbd83adc349ae4cd"
+    },
+    {
+      "path": "src/partition/partition-cdc-obligation-ledger.js",
+      "sha256": "d0def43cbfc230c984d2dd09c34a0c74ac1bc6bb47d6314b0da83235784c9f1d",
+      "baselineRef": "HEAD",
+      "baselineSha256": "6d44671dad8dc1ee237f321ab6bb86e4378b09068cf2e0ba26baab1f2fd2caab"
+    },
+    {
+      "path": "src/partition/partition-participant-transaction-store.js",
+      "sha256": "7877c97fdedd611c32c6d398b8f4f94ad4b0a0cdff373fab7fdf3d30991e7c11",
+      "baselineRef": "aed5cba28",
+      "baselineSha256": "9c1190c44d8ffcaca87e16bb1c64be5299e2b5544fdcdf04c4c2bc2a01ec1ff1"
+    },
+    {
+      "path": "src/partition/partition-committed-statement-outcome.js",
+      "sha256": "d8bb7f6cbea925607458e48d3c053a6587bf0081b3067023263666c9e92bab60",
+      "baselineRef": "aed5cba28",
+      "baselineSha256": "02f7f524927a231fff959600f1f7f7f721641214323018f29642af1b7429d29d"
+    },
+    {
+      "path": "src/partition/partition-locking-read-reservation.js",
+      "sha256": "c7872a4431f42e5a4492c23cef25b384848cf57552f81e93d01f5dc8600d262b",
+      "baselineRef": "HEAD",
+      "baselineSha256": "4d56760a526c24a45c772b7ef4f9d72307ff87aea84fbd504addd996452ef43f"
+    },
+    {
+      "path": "src/raft/raft-rs-snapshot-witness.js",
+      "sha256": "bd7938cdf2a595c764b665e6088eb760431b88c5b2cdc5747da231d25c259283",
+      "baselineRef": "HEAD",
+      "baselineSha256": "ad4477ee568781374c1f75b72bcb4b1bfa92aa26ec50422caa7236a34214c5b9"
+    },
+    {
+      "path": "src/raft/raft-rs-replica-lifecycle-observation.js",
+      "sha256": "bc2856899bbed866779f3dce28b953e2de3ef559f2e5cdcc65446b37ae6e9b4c",
+      "baselineRef": "aed5cba28",
+      "baselineSha256": "c0183488b12cd27a43dfe4299db755f74afc067d09b4111f297ce4dcb285d12e"
+    },
+    {
+      "path": "src/raft/raft-rs-preparation-custody.js",
+      "sha256": "862aec20a0ada089fec1f675be38088b5e8ef3b82c798fb8c4725391242a6b97",
+      "baselineRef": "HEAD",
+      "baselineSha256": "a6b4795a3ffc7a0c3d3755bcb360ca06ba1a1a29acaed2887b7b3501b5b204a8"
+    },
+    {
+      "path": "src/raft/raft-rs-durable-store.js",
+      "sha256": "36d91fd52866a45b5566fa4608a32274d68bf75bdbf38259d6b34aaa7e8e7806",
+      "baselineRef": "HEAD",
+      "baselineSha256": "6535b05684aba95da59a8048191e4c5197434499b5dca1611155e7d23a465b53"
+    },
+    {
+      "path": "src/raft/snapshot-checkpoint-store.js",
+      "sha256": "169ff3f012a62e67049ed00dd935759779006a17215c4dcee31343c186c6bd02",
+      "baselineRef": "HEAD",
+      "baselineSha256": "fb609e2c2428d42801bd5b39aa366f5c67df4dff815bc6bc7207733a4a207515"
+    },
+    {
+      "path": "src/raft/raft-rs-peer-identity.js",
+      "sha256": "feeee05e4e24c2e3db8e4c3f2b7f83297bdf8eb7e8617434fad8ce4b39ee4751",
+      "baselineRef": "HEAD",
+      "baselineSha256": "f31fca9cee8af8972fe6be3ca000d6ae76ad9e72f816a298a658f4d18988cc27"
+    },
+    {
+      "path": "src/raft/raft-rs-replica-lifecycle-owner.js",
+      "sha256": "6d0100170af497c92a5aeab2dbf15fbdf6154d71ca8ebb7ffc0d1cb768449c05",
+      "baselineRef": "aed5cba28",
+      "baselineSha256": "94e6ce761025eccaf9b02d44e0eb294e64216c2b92045da7fda0228efeac5b60"
+    },
+    {
+      "path": "src/raft/raft-rs-operation-port.js",
+      "sha256": "9554d28d1c9e54d2dfef95efc4fe3f653a1f94444a4f75ee07d022b754416d65",
+      "baselineRef": "aed5cba28",
+      "baselineSha256": "6b9f2b4372f0cdcf6b83aefc0d28790730c16169cf06a1c4f82c674c5a36b920"
+    },
+    {
+      "path": "src/raft/snapshot-install.js",
+      "sha256": "015c841c64c5579dc2aa0d9e5c400b6cd24bb8bcbc454dca78853ad06b7522bb",
+      "baselineRef": "HEAD",
+      "baselineSha256": "dcf79ad1f060e6a4a172541e73ee82ff13afb04086ca259f2e4aa20ea0064c5f"
+    },
+    {
+      "path": "test/node/replica-handler-remove-closed-service.test.js",
+      "sha256": "a567500c0d0fa82ed624721c08434c86e9cfb7579cf23835713932ab24c980b7",
+      "baselineRef": "HEAD",
+      "baselineSha256": "fcebaabf854b31b549e03d67c773937452e0ba4b0b1f6d8ecaf54cc5a1863164"
+    },
+    {
+      "path": "test/node/replica-removal-required-ports.test.js",
+      "sha256": "5922167e5ec0f52bbfaf88f179b11494ffebf9422b630fdb24b6aa921fed31d3",
+      "baselineRef": "HEAD",
+      "baselineSha256": "91340ca06cd63bc4d4215105c70959abfba2c1eecad7849502dae3d6015b389c"
+    },
+    {
+      "path": "test/node/replica-handler-owner-path-bypass-removal.test.js",
+      "sha256": "bfb70b484eda511a0162cbca7a8450a71c6d196898b68d8ab432d861b7cd2759",
+      "baselineRef": "HEAD",
+      "baselineSha256": "e0421861d8726a399557668a57a55c3fe9c014dfadd96299db84bece9775bc21"
+    },
+    {
+      "path": "test/query/scenario-a-transaction-coordination-fast-path.test.js",
+      "sha256": "cf8d64351f489ea0936ffb1822023992e0e563386b46c80aec731b679a1e240d",
+      "baselineRef": "HEAD",
+      "baselineSha256": "25e96955a1834434dedfb2d0e4655ae645976db20834d92bfc8aabea794d8b24"
+    },
+    {
+      "path": "test/query/scenario-a-deep-stack-throughput-and-latency.test.js",
+      "sha256": "892ed6d58aed7890432a426ec8f4247b3adeb43da69c03e0cf57446b2c975861",
+      "baselineRef": "HEAD",
+      "baselineSha256": "556e9b4c250ed3fa6e7c10819e45dc6d92b0c4565e01a8892a26d33efe702772"
+    },
+    {
+      "path": "test/query/sql-query-engine-system-table-write-admission.test.js",
+      "sha256": "aff5195522bbc6e049330fb0aa078c866c9d09c6598266d55ffc04ecf9f42e0d",
+      "baselineRef": "HEAD",
+      "baselineSha256": "0e0ae55434e0fd1428fd407751149ccd76276b4d48eececace990fa0bec18c88"
+    },
+    {
+      "path": "test/storage/sqlite-prepared-statement-owner.test.js",
+      "sha256": "585324471a4bf151393bb04dba07d312fba5ad0ca31c6714cd057b2f608d98bf",
+      "baselineRef": "HEAD",
+      "baselineSha256": "da920c0b2abb68deff6134c37e06562a5548773c37098d597efa4a024d5112d3"
+    },
+    {
+      "path": "test/partition/partition-legacy-consensus-state.test.js",
+      "sha256": "8fd85a547c22a43608343db599347caf55c407484f338c564ad0c737decff3da",
+      "baselineRef": "HEAD",
+      "baselineSha256": "fbbfb6ee295acc7da0ec90a2ec65524925f871a758acb7607bc7b263ee7fc8c5"
+    },
+    {
+      "path": "test/partition/partition-port-refusal-outcomes.test.js",
+      "sha256": "613b41913a85842403b941f7f8f7947a96016a7694268a86fd27196276ac02d8",
+      "baselineRef": "HEAD",
+      "baselineSha256": "ebec597e45253adc4809f249d346a07b9ce33ca498a37034f19844a902b2e343"
+    },
+    {
+      "path": "test/partition/participant-origin-retained-history.test.js",
+      "sha256": "d53454c55354653f8e2abc757989b90d068abff6d37694b83c8e99904a1a7b07",
+      "baselineRef": "HEAD",
+      "baselineSha256": "b0888f487ee0fb69dcb5e002d234c76f29bf8515cab0b6a0ea0af780c59e4cae"
+    },
+    {
+      "path": "test/partition/partition-unreadable-durable-record.test.js",
+      "sha256": "9f7a44b9f57e2e50d1ec815557e5d347dccc5c124b4262b0e30bbf3ddccb5e49",
+      "baselineRef": "HEAD",
+      "baselineSha256": "8534a55fa7f8ed10209ceecfe2482951d5e17f534024c3947221ee67f70301e6"
+    },
+    {
+      "path": "test/partition/partition-participant-transaction-apply.test.js",
+      "sha256": "07444a26b70b621b1a4dfc1dad1311d759e74376f62e251c1e12d9efbe25cae6",
+      "baselineRef": "HEAD",
+      "baselineSha256": "25c61a8b7215f8dd43ab478ed19180b9c1f901811f1a6ac7ca58f1e956593c2b"
+    },
+    {
+      "path": "test/partition/learner-promotion-proof-committed-admission.test.js",
+      "sha256": "3ac1dfcec85e29e58980dbcf09edceab59dc01ee9042d36af871e5efc2a07e19",
+      "baselineRef": "HEAD",
+      "baselineSha256": "d82eb25c74c05de348d5be4c036a115e91df4f2ae90c6147a63e1541b0e1f1ce"
+    },
+    {
+      "path": "test/partition/replica-admission-from-committed-operation.test.js",
+      "sha256": "172a50a395e2f9fc3e6b30825853f00bd8e86d91c26126fdce2bc8b08eeff413",
+      "baselineRef": "HEAD",
+      "baselineSha256": "2befce57a01c84c164769e84c7c7ac0c664f2671e692ab0b549cce2bdfdc5afd"
+    },
+    {
+      "path": "test/diagnostics/raft-churn-sync-section-attribution.test.js",
+      "sha256": "f510e0e9440ca75014a67a7ce4f53f06a275cb013897bd7ecb41458686c1da66",
+      "baselineRef": "HEAD",
+      "baselineSha256": "8046e859741141f7ef1aac69406ba54aafe5d2a45854b58b7c844327a8c62b42"
+    },
+    {
+      "path": "test/raft/raft-rs-status-peer-resolution.test.js",
+      "sha256": "1e0b2711dcd2cdd82daa33d4358201d5833afed9bc286564791e6971664c4d71",
+      "baselineRef": "HEAD",
+      "baselineSha256": "f08cded6fa483970d3f2fcca8f2dd79f63f0ba4110e535718574c7709e66d58d"
+    },
+    {
+      "path": "test/raft/raft-rs-original-allocation-store.test.js",
+      "sha256": "11907609d7d95c9db881003adafc773ebd1c8feafbe5af1ebad1b920be03eb92",
+      "baselineRef": "HEAD",
+      "baselineSha256": "b6fd8d310ac7077fabb5021ac17d2343a07d07ca0581558720739161abb578a3"
+    },
+    {
+      "path": "test/raft/raft-rs-original-allocation-lifecycle-operation.test.js",
+      "sha256": "140339fb2afd848355e405525cc24f773deaaa63092f949f480006f9d694c664",
+      "baselineRef": "aed5cba28",
+      "baselineSha256": "f489cb8235290bda3c89ccb980bc78e3139826d5d5df5e047c4c681e0aa93a37"
+    },
+    {
+      "path": "test/raft/raft-rs-original-allocation-cold-inspection.test.js",
+      "sha256": "bc77102f683fea0172d2455c971b11f6f5c800c1b049be6603c2a7d65e1a1198",
+      "baselineRef": "HEAD",
+      "baselineSha256": "d86c58510a346a4fc4037d35675846a7b220eff060c136a0cef19543a07f79f1"
+    },
+    {
+      "path": "test/raft/snapshot-lifecycle-staging.test.js",
+      "sha256": "b04b2de7760b86aa8f2797494290f91dd6284be8432719705dcb0413a5096670",
+      "baselineRef": "aed5cba28",
+      "baselineSha256": "11cc18096603e99e199db98ee4bb351f706c05d36e53ef0024cc157255c36c51"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js",
+      "sha256": "f51d64c3a60f9a880a402aad5c1ce16a4825c8cefd7d65cbbd145ef442b02332",
+      "baselineRef": "aed5cba28",
+      "baselineSha256": "065840c655a18d5f69f6083cd9d260eba8b1c1ab82ee1706fafbb2978d89d1d3"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/durable-store-committed-entries.test.js",
+      "sha256": "5ac865a70bb3f150fa3b87a5f2b120f81a9aa4cabb2d6602f8f83a328dd3c695",
+      "baselineRef": "HEAD",
+      "baselineSha256": "21337c4c724f0798cb1c7b4f62c619780ad43bcc724a94bf811cd18a1cd53c3a"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/deterministic-raft-rs-cluster.js",
+      "sha256": "6681efd7d4d461389c120feb570278cc168a1580b06ddf443aa12bf9b1152deb",
+      "baselineRef": "HEAD",
+      "baselineSha256": "ef77b1e124a530327a4d613aea8ad712ca4e9880ea8f22795d75e3146b09f768"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/peer-identity.test.js",
+      "sha256": "103c617852d52914383bb08a3d23957d74653843cc087fdbda2d63f5032834e7",
+      "baselineRef": "HEAD",
+      "baselineSha256": "4b1a21045c0fc2451279609e26aa7debc6c9429571fa1a6e721407781e36551d"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/replica-freshness-closure.test.js",
+      "sha256": "d79850157901cdea938f5b034d5957f03a80478f69c2f0f85825eb9969176716",
+      "baselineRef": "aed5cba28",
+      "baselineSha256": "d12773f398bd4505d21423586ed12ec96c9f24c63fa8d522c6638338140f5e00"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/durable-commit-sync.test.js",
+      "sha256": "ccd73cf8cba055fc6acd876cb8f925a1b9fea815a5af847cd0f42670f89b8a66",
+      "baselineRef": "aed5cba28",
+      "baselineSha256": "52b904fe9b5503b1f4c449c59893e4d35b4a4b2c312e0a619fb3f7dfad9a110d"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/durable-own-group-record.test.js",
+      "sha256": "2a8d9cd80d34ea06f0f88ce95a4bd073fc6adc295588f494c4514ae2b561b537",
+      "baselineRef": "aed5cba28",
+      "baselineSha256": "59ad58d7b95e4b25db04959e7eac1ddef8696bc30530ced9e5b750c4bed6400d"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/membership-generation-persistence.test.js",
+      "sha256": "547950440ebfe4c790964317717fdf2360478c9aa59804eee9e45164b720e92b",
+      "baselineRef": "HEAD",
+      "baselineSha256": "a2c41d6eb9aeb84a06c38f0210a4667ef4574c88c007d93bba69a32a54ab260d"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+      "sha256": "fc70a0b4ce91298c29e8fec51701c6c4986343e180a58f23fb5e2851a9ff7703",
+      "baselineRef": "HEAD",
+      "baselineSha256": "c4d02b25f07e09748c50a6dc496791c411a2c48538d09943c1bb9cbcaffa9ed2"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/persistence-admission.test.js",
+      "sha256": "0eb0aef8f538c2a5d152e00459f683777383dfe2b5020210a4cd41669294fe12",
+      "baselineRef": "HEAD",
+      "baselineSha256": "20b830aeb72011703dbeae2211fdf112ad374a12d820f22be5c8184a0ddbcba3"
+    },
+    {
+      "path": "test/test-helpers/transaction-coordinator-group-fixture.js",
+      "sha256": "ad791ecb941704f2dd77b76c0ea6f68c7087745e6f091aed5de57a0eb98567f6",
+      "baselineRef": "HEAD",
+      "baselineSha256": "36b4cdd65eba20bc8dce5c17827dcb8bde0fc2e85c11af319687799f22a74d44"
+    },
+    {
+      "path": "test/test-helpers/original-allocation-durable-reader.js",
+      "sha256": "37cca3f2bb40dcc17dfe78858cc24d77426156286e95c5ada7a1e48df11c6ed0",
+      "baselineRef": "HEAD",
+      "baselineSha256": "3d5a36cf1cf39d9ff9af2c0d553e17fc38359205daac0b292ed421c828c9d5db"
+    },
+    {
+      "path": "test/test-helpers/original-allocation-declaration-fixture.js",
+      "sha256": "aeef9b758abef0c757a9d99b250856ad5728eb563b121ecf1f09a17420de1f8e",
+      "baselineRef": "HEAD",
+      "baselineSha256": "9a938de0773c28c529188e9419e6542dc93a5c3c31d51430c0f81459d22cd957"
+    },
+    {
+      "path": "test/test-helpers/partition-removal-serving-surface.js",
+      "sha256": "380a16f0f64c2b4445e527251f69ba6dd1a8c23e00d0b62a880122b12f10e08b",
+      "baselineRef": "HEAD",
+      "baselineSha256": "5033a0a529f7339de1c0b224d9f69f7b4e8c1babd133ef5c4cd5665dd8ac309d"
+    },
+    {
+      "path": "test/integration/message-group-learner-runtime-authorization.integration.test.js",
+      "sha256": "fae3e2c573a6b21e082de704af645da099e550fbc2d715cc8850b198f028b8d9",
+      "baselineRef": "HEAD",
+      "baselineSha256": "44aa22745f45f328cfcff8e2a5ec822266966280e78f81b0adcd5c7588477b1d"
+    },
+    {
+      "path": "test/bootstrap/seed-retained-effects-fixture.js",
+      "sha256": "4698607711a8e536f79c4229c773c7113f4afbea37e2b162c041bb0103d4ce10",
+      "baselineRef": "HEAD",
+      "baselineSha256": "6ebd996618389b7f7bf7d22478b3aef2cf0f75878e0b09f9dc15e669fb819b7f"
+    },
+    {
+      "path": "test/bootstrap/seed-retained-effects-preparation.test.js",
+      "sha256": "89006e2527c054ab115bb7e8498e7196f24ed4f316c3d2e256565e96369c5a1e",
+      "baselineRef": "HEAD",
+      "baselineSha256": "953e819bbaff0a53134adeb323d43d6c25cbc24e3228dd9e0cefd614490ae2e7"
+    },
+    {
+      "path": "test/storage/sqlite-connection-production-boundaries.test.js",
+      "sha256": "8f62faea2e514a4169aad6b25ed07d9422820c8442c1d456cfc06072ccc2bfa1",
+      "baselineRef": "HEAD",
+      "baselineSha256": null
+    }
+  ],
+  "artifacts": {
+    "solve/quests/sqlite-connection-statement-ownership/evidence/PHASE2-STOP.md": "a5a3001452254895124841ce725ad116e49eacd2ce4749fc11ed7cc957342907",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-boundaries.log": "15c1978bb870ccc251155c5eee86f6b59669d189d421f9ab312ce29ddee9bcbc",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-changed-paths.json": "ddd9cae00c6f542b72580e376139e654b97f56e99065f9df3eabf8b66b0d3a72",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-f-composition.json": "5ac6b773ed9ec7306542d7077245e83abf50c51bd34d5f7374845772e6d6fba2",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/src/partition/partition-cdc-obligation-ledger.js": "d0def43cbfc230c984d2dd09c34a0c74ac1bc6bb47d6314b0da83235784c9f1d",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/src/partition/partition-committed-statement-outcome.js": "d8bb7f6cbea925607458e48d3c053a6587bf0081b3067023263666c9e92bab60",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/src/partition/partition-hydration-image-pages.js": "7f1ff2443427b040156e881323c387904ff9b9c8c11a2d409af9fc84fafe4c4b",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/src/partition/partition-locking-read-reservation.js": "c7872a4431f42e5a4492c23cef25b384848cf57552f81e93d01f5dc8600d262b",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/src/partition/partition-participant-transaction-store.js": "7877c97fdedd611c32c6d398b8f4f94ad4b0a0cdff373fab7fdf3d30991e7c11",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/src/raft/raft-rs-durable-store.js": "36d91fd52866a45b5566fa4608a32274d68bf75bdbf38259d6b34aaa7e8e7806",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/src/raft/raft-rs-operation-port.js": "9554d28d1c9e54d2dfef95efc4fe3f653a1f94444a4f75ee07d022b754416d65",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/src/raft/raft-rs-peer-identity.js": "feeee05e4e24c2e3db8e4c3f2b7f83297bdf8eb7e8617434fad8ce4b39ee4751",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/src/raft/raft-rs-preparation-custody.js": "862aec20a0ada089fec1f675be38088b5e8ef3b82c798fb8c4725391242a6b97",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/src/raft/raft-rs-replica-lifecycle-observation.js": "bc2856899bbed866779f3dce28b953e2de3ef559f2e5cdcc65446b37ae6e9b4c",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/src/raft/raft-rs-replica-lifecycle-owner.js": "6d0100170af497c92a5aeab2dbf15fbdf6154d71ca8ebb7ffc0d1cb768449c05",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/src/raft/raft-rs-snapshot-witness.js": "bd7938cdf2a595c764b665e6088eb760431b88c5b2cdc5747da231d25c259283",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/src/raft/snapshot-checkpoint-store.js": "169ff3f012a62e67049ed00dd935759779006a17215c4dcee31343c186c6bd02",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/src/raft/snapshot-install.js": "015c841c64c5579dc2aa0d9e5c400b6cd24bb8bcbc454dca78853ad06b7522bb",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/test/bootstrap/seed-retained-effects-fixture.js": "4698607711a8e536f79c4229c773c7113f4afbea37e2b162c041bb0103d4ce10",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/test/bootstrap/seed-retained-effects-preparation.test.js": "89006e2527c054ab115bb7e8498e7196f24ed4f316c3d2e256565e96369c5a1e",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/test/diagnostics/raft-churn-sync-section-attribution.test.js": "f510e0e9440ca75014a67a7ce4f53f06a275cb013897bd7ecb41458686c1da66",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/test/integration/message-group-learner-runtime-authorization.integration.test.js": "fae3e2c573a6b21e082de704af645da099e550fbc2d715cc8850b198f028b8d9",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/test/node/replica-handler-owner-path-bypass-removal.test.js": "bfb70b484eda511a0162cbca7a8450a71c6d196898b68d8ab432d861b7cd2759",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/test/node/replica-handler-remove-closed-service.test.js": "a567500c0d0fa82ed624721c08434c86e9cfb7579cf23835713932ab24c980b7",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/test/node/replica-removal-required-ports.test.js": "5922167e5ec0f52bbfaf88f179b11494ffebf9422b630fdb24b6aa921fed31d3",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/test/partition/learner-promotion-proof-committed-admission.test.js": "3ac1dfcec85e29e58980dbcf09edceab59dc01ee9042d36af871e5efc2a07e19",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/test/partition/participant-origin-retained-history.test.js": "d53454c55354653f8e2abc757989b90d068abff6d37694b83c8e99904a1a7b07",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/test/partition/partition-legacy-consensus-state.test.js": "8fd85a547c22a43608343db599347caf55c407484f338c564ad0c737decff3da",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/test/partition/partition-participant-transaction-apply.test.js": "07444a26b70b621b1a4dfc1dad1311d759e74376f62e251c1e12d9efbe25cae6",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/test/partition/partition-port-refusal-outcomes.test.js": "613b41913a85842403b941f7f8f7947a96016a7694268a86fd27196276ac02d8",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/test/partition/partition-unreadable-durable-record.test.js": "9f7a44b9f57e2e50d1ec815557e5d347dccc5c124b4262b0e30bbf3ddccb5e49",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/test/partition/replica-admission-from-committed-operation.test.js": "172a50a395e2f9fc3e6b30825853f00bd8e86d91c26126fdce2bc8b08eeff413",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/test/query/scenario-a-deep-stack-throughput-and-latency.test.js": "892ed6d58aed7890432a426ec8f4247b3adeb43da69c03e0cf57446b2c975861",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/test/query/scenario-a-transaction-coordination-fast-path.test.js": "cf8d64351f489ea0936ffb1822023992e0e563386b46c80aec731b679a1e240d",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/test/query/sql-query-engine-system-table-write-admission.test.js": "aff5195522bbc6e049330fb0aa078c866c9d09c6598266d55ffc04ecf9f42e0d",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/test/raft/raft-rs-backend/deterministic-raft-rs-cluster.js": "6681efd7d4d461389c120feb570278cc168a1580b06ddf443aa12bf9b1152deb",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/test/raft/raft-rs-backend/durable-commit-sync.test.js": "ccd73cf8cba055fc6acd876cb8f925a1b9fea815a5af847cd0f42670f89b8a66",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/test/raft/raft-rs-backend/durable-own-group-record.test.js": "2a8d9cd80d34ea06f0f88ce95a4bd073fc6adc295588f494c4514ae2b561b537",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/test/raft/raft-rs-backend/durable-store-committed-entries.test.js": "5ac865a70bb3f150fa3b87a5f2b120f81a9aa4cabb2d6602f8f83a328dd3c695",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/test/raft/raft-rs-backend/membership-generation-persistence.test.js": "547950440ebfe4c790964317717fdf2360478c9aa59804eee9e45164b720e92b",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/test/raft/raft-rs-backend/operation-port-ready-recovery.test.js": "fc70a0b4ce91298c29e8fec51701c6c4986343e180a58f23fb5e2851a9ff7703",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/test/raft/raft-rs-backend/peer-identity.test.js": "103c617852d52914383bb08a3d23957d74653843cc087fdbda2d63f5032834e7",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/test/raft/raft-rs-backend/persistence-admission.test.js": "0eb0aef8f538c2a5d152e00459f683777383dfe2b5020210a4cd41669294fe12",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/test/raft/raft-rs-backend/replica-freshness-closure.test.js": "d79850157901cdea938f5b034d5957f03a80478f69c2f0f85825eb9969176716",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js": "f51d64c3a60f9a880a402aad5c1ce16a4825c8cefd7d65cbbd145ef442b02332",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/test/raft/raft-rs-original-allocation-cold-inspection.test.js": "bc77102f683fea0172d2455c971b11f6f5c800c1b049be6603c2a7d65e1a1198",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/test/raft/raft-rs-original-allocation-lifecycle-operation.test.js": "140339fb2afd848355e405525cc24f773deaaa63092f949f480006f9d694c664",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/test/raft/raft-rs-original-allocation-store.test.js": "11907609d7d95c9db881003adafc773ebd1c8feafbe5af1ebad1b920be03eb92",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/test/raft/raft-rs-status-peer-resolution.test.js": "1e0b2711dcd2cdd82daa33d4358201d5833afed9bc286564791e6971664c4d71",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/test/raft/snapshot-lifecycle-staging.test.js": "b04b2de7760b86aa8f2797494290f91dd6284be8432719705dcb0413a5096670",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/test/storage/sqlite-connection-production-boundaries.test.js": "8f62faea2e514a4169aad6b25ed07d9422820c8442c1d456cfc06072ccc2bfa1",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/test/storage/sqlite-prepared-statement-owner.test.js": "585324471a4bf151393bb04dba07d312fba5ad0ca31c6714cd057b2f608d98bf",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/test/test-helpers/original-allocation-declaration-fixture.js": "aeef9b758abef0c757a9d99b250856ad5728eb563b121ecf1f09a17420de1f8e",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/test/test-helpers/original-allocation-durable-reader.js": "37cca3f2bb40dcc17dfe78858cc24d77426156286e95c5ada7a1e48df11c6ed0",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/test/test-helpers/partition-removal-serving-surface.js": "380a16f0f64c2b4445e527251f69ba6dd1a8c23e00d0b62a880122b12f10e08b",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-candidate/test/test-helpers/transaction-coordinator-group-fixture.js": "ad791ecb941704f2dd77b76c0ea6f68c7087745e6f091aed5de57a0eb98567f6",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-production-boundaries.test.js.txt": "8f62faea2e514a4169aad6b25ed07d9422820c8442c1d456cfc06072ccc2bfa1",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-failed-status.z": "6fa474f2dc1224e9f8930aa90ac30f1645da0f06a242d1bf4bea3b8471765480",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-fixture-producers.json": "ba6dec2677a77d7be483822785bce88f1b726f3d0ad593e5509cb4e849eccd82",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-red-first.log": "50456982dd41dd4918ca0d9034af2360a494efb504b0cf390c03af69603d7e05",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-retained-raw-acquisitions.json": "d05187fb83832954bda04e4cfd31c32bd8822d4af0203feaa6944af871d4af24",
+    "solve/quests/sqlite-connection-statement-ownership/evidence/phase2-source-migration.patch": "112123fa31e768750c762a46784b8a43bbdfceb7adfa9a473b59f7856d42fce1",
+    "solve/quests/sqlite-connection-statement-ownership/log.ndjson": "c6f0a1a240cc5f7b6231635452539c18070bca2530a06874837145a3989520bf"
+  }
+}

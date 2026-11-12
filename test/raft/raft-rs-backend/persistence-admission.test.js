@@ -18,6 +18,7 @@ import path from 'node:path';
 import {test} from 'node:test';
 
 import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../../src/storage/sqlite-prepared-statement-owner.js';
 
 import {PartitionNodeCluster} from './partition-node-cluster.js';
 import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
@@ -125,7 +126,7 @@ test('W3 the rs-raft store refuses every durable write inside a transaction ' +
   'it did not open (RaftRsDurableStore persistence admission)', () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), TEMP_PREFIX));
   const dbFile = path.join(directory, DB_FILE);
-  const db = new Database(dbFile);
+  const db = new SQLiteConnection(dbFile);
   try {
     const store = new RaftRsDurableStore(db);
     const before = durableRecordOf(dbFile, STORE_GROUP);

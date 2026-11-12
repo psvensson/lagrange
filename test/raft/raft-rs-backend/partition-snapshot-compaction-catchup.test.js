@@ -1,3 +1,5 @@
+import {SQLiteConnection} from '../../../src/storage/sqlite-prepared-statement-owner.js';
+import {allocateLifecycleFixture} from '../../helpers/replica-lifecycle-fixture.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -839,7 +841,9 @@ test('SN1/F5: lagging established follower catches up via snapshot install, ' +
       'wiped target refusal reason is create_admission_required');
 
     const retiredDbPath = path.join(workDir, 'partition', 'retired.db');
-    const retiredDb = new Database(retiredDbPath);
+    const retiredDb = new SQLiteConnection(retiredDbPath);
+    allocateLifecycleFixture({db: retiredDb, groupId: PARTITION_ID,
+      peerId: '3', replicaIdentity: r3Id});
     const retiredOwner = new RaftRsReplicaLifecycleOwner({
       db: retiredDb,
       groupId: PARTITION_ID,

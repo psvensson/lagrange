@@ -10,6 +10,7 @@ import {fileURLToPath} from 'node:url';
 import {test} from 'node:test';
 const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 const DIR = 'test/raft/raft-rs-backend';
+const DATABASE_FIXTURE = 'test/helpers/replica-database-fixture.js';
 const CHILD = `${DIR}/runtime-replacement-review-child.js`;
 const OUTPUT = path.join(ROOT, 'test-output/runtime-review-native');
 const digest = (file) => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
@@ -20,12 +21,14 @@ for (const scenario of ['control', 'partial-restore', 'reentrant-restore', 'relo
       fs.cpSync(path.join(ROOT, 'src'), path.join(directory, 'src'), {recursive: true});
       fs.mkdirSync(path.join(directory, DIR), {recursive: true});
       fs.cpSync(path.join(ROOT, 'vendor/raft-rs-wasm/pkg'), path.join(directory, 'vendor/raft-rs-wasm/pkg'), {recursive: true});
-      for (const file of ['package.json', CHILD, `${DIR}/partition-node-cluster.js`, 'vendor/raft-rs-wasm/artifact-digest.json']) {
+      for (const file of ['package.json', DATABASE_FIXTURE, CHILD, `${DIR}/partition-node-cluster.js`, 'vendor/raft-rs-wasm/artifact-digest.json']) {
+        fs.mkdirSync(path.dirname(path.join(directory, file)), {recursive: true});
         fs.copyFileSync(path.join(ROOT, file), path.join(directory, file));
       }
       fs.symlinkSync(path.join(ROOT, 'node_modules'), path.join(directory, 'node_modules'), 'dir');
       const sourceDigests = {};
-      for (const file of ['src/raft/raft-rs-runtime-owner.js', 'src/raft/raft-rs-binding-owner.js',
+      for (const file of [DATABASE_FIXTURE, 'src/storage/sqlite-prepared-statement-owner.js',
+        'src/raft/raft-rs-runtime-owner.js', 'src/raft/raft-rs-binding-owner.js',
         'src/raft/raft-rs-operation-port.js', 'src/raft/raft-rs-durable-store.js',
         'src/raft/raft-rs-application-transaction-owner.js', 'src/time/time-source.js', CHILD, `${DIR}/partition-node-cluster.js`]) {
         sourceDigests[file] = digest(path.join(ROOT, file));

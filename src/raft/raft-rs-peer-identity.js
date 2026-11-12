@@ -37,7 +37,7 @@
 
 import {createHash} from 'node:crypto';
 
-import {preparedStatementOf} from '../storage/sqlite-prepared-statement-owner.js';
+import {assertSQLiteConnection, preparedStatementOf} from '../storage/sqlite-prepared-statement-owner.js';
 import {
   RAFT_RS_LEARNER_ADMISSION_COLUMN,
   RAFT_RS_NODE_ID_COLUMN,
@@ -146,6 +146,7 @@ class RaftRsPeerIdentityRegistry {
    * @param {Object} db - A better-sqlite3 database this replica owns.
    */
   constructor(db) {
+    assertSQLiteConnection(db);
     this.db = db;
     this.db.exec(RAFT_RS_PEER_IDENTITY_SQL.CREATE_TABLE);
     const columns = this.db.prepare(RAFT_RS_PEER_IDENTITY_SQL.SELECT_COLUMNS).all();

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {
@@ -270,7 +270,7 @@ test('Scenario A deep-stack: Workstream 2 coordinator participant-set deduplicat
 });
 
 test('Scenario A deep-stack: Workstreams 3, 4, and 5 Raft batch telemetry, canonical UPDATE row-key concurrency, and O(1) disjoint staging', async () => {
-  const db = new Database(':memory:');
+  const db = new SQLiteConnection(':memory:');
   const store = new RaftRsDurableStore(db);
   try {
     store.persistReady('g-1', {

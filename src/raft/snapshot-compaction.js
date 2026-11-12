@@ -19,6 +19,7 @@
 // the adapter file stays inside the source size ratchet.
 
 import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
+import {assertSQLiteConnection} from '../storage/sqlite-prepared-statement-owner.js';
 import {
   RAFT_COMPACTION_OUTCOME,
   unsupportedRaftCompactionResult,
@@ -308,6 +309,7 @@ function buildRaftRsCompactionSpec(descriptor, toIndex, retentionFloorIndex) {
  * @return {Object} Frozen typed compaction outcome.
  */
 function compactRaftRsCommittedEntries(db, groupId, request) {
+  assertSQLiteConnection(db);
   if (!isCompactionProtocolRequest(request) ||
       !db?.open || db.memory ||
       !RaftRsDurableStore.hasDurableRecordIn(db, groupId)) {

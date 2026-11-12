@@ -7,6 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
 import {createSeedOriginalAllocation} from
   '../../src/bootstrap/seed-original-allocation-declaration.js';
@@ -91,7 +92,7 @@ async function retainedFixture(t) {
 }
 
 function withMember(member, use) {
-  const db = new Database(member.dbPath, {fileMustExist: true});
+  const db = new SQLiteConnection(member.dbPath, {fileMustExist: true});
   try {
     return use(db);
   } finally {

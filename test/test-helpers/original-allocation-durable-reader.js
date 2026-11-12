@@ -4,7 +4,7 @@
 // (readOriginalAllocationDeclaration, readOriginalAllocationRow); the
 // per-macrotask sampler is a cached hint that never decides a receipt.
 import fs from 'node:fs';
-import Database from 'better-sqlite3';
+import {SQLiteConnection} from '../../src/storage/sqlite-prepared-statement-owner.js';
 import {readOriginalAllocationDeclaration, readOriginalAllocationRow} from
   '../../src/raft/raft-rs-replica-lifecycle-owner.js';
 import {originalSeedAnchor} from
@@ -17,7 +17,7 @@ const RIGHT_COLUMNS = Object.freeze([COLUMN.SERVICE_RIGHT, COLUMN.IDENTITY_RIGHT
 const NATIVE_KEY = 'native';
 
 function readOnly(dbPath) {
-  return new Database(dbPath, {readonly: true, fileMustExist: true});
+  return new SQLiteConnection(dbPath, {readonly: true, fileMustExist: true});
 }
 
 /**

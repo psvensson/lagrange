@@ -15,7 +15,6 @@ import {ENTITY_TYPE} from '../constants/addresses.js';
 import {CONSENSUS_CREATION_OPENING as OPENING} from '../service/service-consensus-creation-intent.js';
 import fs from 'node:fs';
 import path from 'node:path';
-import Database from 'better-sqlite3';
 import {COLUMN, TABLES} from '../constants/index.js';
 import {SERVICE_TYPE, isPartitionCleanupServiceRow} from
   '../constants/service.js';
@@ -26,9 +25,8 @@ import {
   RAFT_OPERATION_PORT_REQUEST,
   hostedConsensusSubstrate,
 } from '../raft/raft-operation-port-request.js';
-import {createRaftRsOperationPort} from '../raft/raft-rs-operation-port.js';
+import {createRaftRsOperationPort, openRaftRsReplicaDatabase} from '../raft/raft-rs-operation-port.js';
 import {resolveReplicaRaftTiming} from '../raft/replica-raft-timing.js';
-import {REPLICA_DB_PRAGMA} from '../storage/storage-constants.js';
 import {
   WASM_SERVICE_ERROR_MSG,
   WASM_SERVICE_FOUNDING_REFUSAL,
@@ -188,7 +186,7 @@ function wasmServiceConsensusRequest(replica) {
 /**
  * Open the replica's durable database, creating its service directory.
  * @param {Object} replica - The WASM service replica.
- * @return {Object} The open connection, also held as replica.db.
+ * @return {Object} Construction's {db, creation}; db is also held as replica.db.
  */
 function openWasmServiceDatabase(replica) {
   if (replica.creationOpening?.outcome === OPENING.RETAINED) {
@@ -201,12 +199,14 @@ function openWasmServiceDatabase(replica) {
   } else {
     fs.mkdirSync(path.dirname(replica.dbPath), {recursive: true});
   }
-  replica.db = new Database(replica.dbPath, {
+  const opened = openRaftRsReplicaDatabase({dbPath: replica.dbPath,
+    groupId: wasmServiceConsensusGroupId(replica), replicaIdentity: replica.replicaId,
     fileMustExist: replica.creationOpening?.outcome === OPENING.RETAINED,
-  });
-  replica.db.pragma(REPLICA_DB_PRAGMA.JOURNAL_MODE);
-  replica.db.pragma(REPLICA_DB_PRAGMA.SYNCHRONOUS);
-  return replica.db;
+    takeDatabaseCustody: (db) => {
+      replica.db = db;
+    }});
+  replica.db = opened.db;
+  return opened;
 }
 
 /**
