@@ -593,7 +593,7 @@
       ]
     },
     "raft-rs-runtime-lifecycle-entry": {
-      "description": "The replica lifecycle owner admits each semantic operation before the runtime owner can enter the raft-rs core, and durable retirement waits for admitted operations before becoming terminal. A constructor refused before runtime admission publishes no membership reservation owner or native handle; each service initialization retains the exact named consensus failure and releases its own opening resources before reporting refusal. Exact-incarnation native opening history is NEVER_OPENED or ESTABLISHED in the existing lifecycle row; legacy NULL is unknown. Bootstrap and establishment commit atomically at FULL before participation; intact history restores, while absent native state cannot reopen an established or unknown incarnation. Host prior-existence remains independent for complete storage loss. If startup cleanup also fails, the original typed refusal and immutable owner retry answer remain primary; the actual secondary failure is retained, exact unclosed resources remain with the service lifecycle, initialize stays held, and existing shutdown retries that same cleanup without a new scheduler. Failed WASM teardown is CLEANUP_REQUIRED, not STOPPED. Each runtime turn captures its finite inbound extent after successful execution admission, checks current execution before dequeue, and leaves later accepted envelopes with the existing queue and owned wake; no later arrival enlarges that captured extent. Ordinary opening consumes an existing lifecycle row and incarnation without birth or migration. Only explicit database allocation, original preparation and private snapshot staging may create lifecycle records. Snapshot admission and swap consume the canonical NEVER_OPENED observation; existing rowless files are unavailable, while positive absent-target facts require separate exact CREATE authority. Construction returns NEW or EXISTING to the WASM local-record and writer owners; schema emptiness or a creation-only table list never grants formatting. Database construction requires synchronous service custody immediately after native acquisition, before pragmas or birth; failed boot cleanup retains both errors and the exact handle through the existing shutdown owner.",
+      "description": "The replica lifecycle owner admits each semantic operation before the runtime owner can enter the raft-rs core, and durable retirement waits for admitted operations before becoming terminal. A constructor refused before runtime admission publishes no membership reservation owner or native handle; each service initialization retains the exact named consensus failure and releases its own opening resources before reporting refusal. Exact-incarnation native opening history is NEVER_OPENED or ESTABLISHED in the existing lifecycle row; legacy NULL is unknown. Bootstrap and establishment commit atomically at FULL before participation; intact history restores, while absent native state cannot reopen an established or unknown incarnation. Host prior-existence remains independent for complete storage loss. If startup cleanup also fails, the original typed refusal and immutable owner retry answer remain primary; the actual secondary failure is retained, exact unclosed resources remain with the service lifecycle, initialize stays held, and existing shutdown retries that same cleanup without a new scheduler. Failed WASM teardown is CLEANUP_REQUIRED, not STOPPED. Each runtime turn captures its finite inbound extent after successful execution admission, checks current execution before dequeue, and leaves later accepted envelopes with the existing queue and owned wake; no later arrival enlarges that captured extent. Ordinary opening consumes an existing lifecycle row and incarnation without birth or migration. Only explicit database allocation, original preparation and private snapshot staging may create lifecycle records. Snapshot admission and swap consume the canonical NEVER_OPENED observation; existing rowless files are unavailable, while positive absent-target facts require separate exact CREATE authority. Construction returns NEW or EXISTING to the WASM local-record and writer owners; schema emptiness or a creation-only table list never grants formatting. Database construction requires synchronous service custody immediately after native acquisition, before pragmas or birth; failed boot cleanup retains both errors and the exact handle through the existing shutdown owner. Runtime, snapshot, removal and original-allocation reads share the lifecycle row codec: malformed state, reason or evidence is a typed refusal, never nullable absent evidence. The terminal state spelling remains owned by LIFECYCLE_STATE. Retirement rejects malformed intent before closing admission, captures evidence before awaiting turns, and original issuance validates before its commit.",
       "owners": [
         "src/raft/raft-rs-replica-lifecycle-owner.js",
         "src/raft/raft-rs-replica-lifecycle-observation.js",
@@ -621,7 +621,9 @@
         "src/wasm-service/wasm-service-constants.js",
         "src/node/replica-transport-handler-identity.js",
         "src/wasm-service/wasm-creation-opening.js",
-        "src/wasm-service/wasm-writer-state.js"
+        "src/wasm-service/wasm-writer-state.js",
+        "src/raft/raft-rs-replica-lifecycle-constants.js",
+        "src/raft/raft-rs-replica-lifecycle-record.js"
       ],
       "tests": [
         "test/raft/raft-rs-backend/operation-port-lifecycle.test.js",
@@ -639,7 +641,8 @@
         "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js",
         "test/wasm-service/wasm-creation-bound-native.test.js",
         "test/wasm-service/wasm-creation-local-record.test.js",
-        "test/wasm-service/wasm-writer-state-v1.test.js"
+        "test/wasm-service/wasm-writer-state-v1.test.js",
+        "test/raft/raft-rs-backend/lifecycle-record-validation.test.js"
       ]
     },
     "raft-rs-runtime-application-transaction": {
@@ -2664,7 +2667,7 @@
       }
     },
     "raft-rs-runtime-lifecycle-entry": {
-      "description": "Lifecycle admission and core entry must remain one boundary: retirement cannot race an admitted operation, and queued ingress must recheck lifecycle before worker-side core entry. Refused construction leaves earlier exact owners intact and service initialization consumes the canonical failure without bypassing its cleanup. The lifecycle history fact and the runtime bootstrap transaction share one durable opening boundary, including process-crash recovery and genuine never-opened retries. If startup cleanup also fails, the original typed refusal and immutable owner retry answer remain primary; the actual secondary failure is retained, exact unclosed resources remain with the service lifecycle, initialize stays held, and existing shutdown retries that same cleanup without a new scheduler. Failed WASM teardown is CLEANUP_REQUIRED, not STOPPED. The existing backend construction seam exclusively acquires a new database name and births its lifecycle before application DDL. An existing empty or truncated file is unproven and cannot be reborn. Read-only lifecycle and snapshot observations remain one implementation under the lifecycle owner; they cannot mint or retire a generation. Ordinary opening consumes an existing lifecycle row and incarnation without birth or migration. Only explicit database allocation, original preparation and private snapshot staging may create lifecycle records. Snapshot admission and swap consume the canonical NEVER_OPENED observation; existing rowless files are unavailable, while positive absent-target facts require separate exact CREATE authority. Construction returns NEW or EXISTING to the WASM local-record and writer owners; schema emptiness or a creation-only table list never grants formatting. Database construction requires synchronous service custody immediately after native acquisition, before pragmas or birth; failed boot cleanup retains both errors and the exact handle through the existing shutdown owner.",
+      "description": "Lifecycle admission and core entry must remain one boundary: retirement cannot race an admitted operation, and queued ingress must recheck lifecycle before worker-side core entry. Refused construction leaves earlier exact owners intact and service initialization consumes the canonical failure without bypassing its cleanup. The lifecycle history fact and the runtime bootstrap transaction share one durable opening boundary, including process-crash recovery and genuine never-opened retries. If startup cleanup also fails, the original typed refusal and immutable owner retry answer remain primary; the actual secondary failure is retained, exact unclosed resources remain with the service lifecycle, initialize stays held, and existing shutdown retries that same cleanup without a new scheduler. Failed WASM teardown is CLEANUP_REQUIRED, not STOPPED. The existing backend construction seam exclusively acquires a new database name and births its lifecycle before application DDL. An existing empty or truncated file is unproven and cannot be reborn. Read-only lifecycle and snapshot observations remain one implementation under the lifecycle owner; they cannot mint or retire a generation. Ordinary opening consumes an existing lifecycle row and incarnation without birth or migration. Only explicit database allocation, original preparation and private snapshot staging may create lifecycle records. Snapshot admission and swap consume the canonical NEVER_OPENED observation; existing rowless files are unavailable, while positive absent-target facts require separate exact CREATE authority. Construction returns NEW or EXISTING to the WASM local-record and writer owners; schema emptiness or a creation-only table list never grants formatting. Database construction requires synchronous service custody immediately after native acquisition, before pragmas or birth; failed boot cleanup retains both errors and the exact handle through the existing shutdown owner. Runtime, snapshot, removal and original-allocation reads share the lifecycle row codec: malformed state, reason or evidence is a typed refusal, never nullable absent evidence. The terminal state spelling remains owned by LIFECYCLE_STATE. Retirement rejects malformed intent before closing admission, captures evidence before awaiting turns, and original issuance validates before its commit.",
       "endpoints": [
         {
           "id": "durable-lifecycle-admission",
@@ -2688,7 +2691,9 @@
             "src/node/replica-transport-handler-identity.js",
             "src/raft/raft-rs-replica-lifecycle-observation.js",
             "src/wasm-service/wasm-creation-opening.js",
-            "src/wasm-service/wasm-writer-state.js"
+            "src/wasm-service/wasm-writer-state.js",
+            "src/raft/raft-rs-replica-lifecycle-constants.js",
+            "src/raft/raft-rs-replica-lifecycle-record.js"
           ]
         },
         {
@@ -2718,7 +2723,8 @@
         "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js",
         "test/wasm-service/wasm-creation-bound-native.test.js",
         "test/wasm-service/wasm-creation-local-record.test.js",
-        "test/wasm-service/wasm-writer-state-v1.test.js"
+        "test/wasm-service/wasm-writer-state-v1.test.js",
+        "test/raft/raft-rs-backend/lifecycle-record-validation.test.js"
       ]
     },
     "raft-rs-runtime-application-transaction": {

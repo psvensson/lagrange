@@ -73,6 +73,7 @@ documentClass: generated
 - [raft-rs-replica-lifecycle-constants.js](raft-rs-replica-lifecycle-constants.js) - No leading comment; first export: LIFECYCLE_ERROR. (importers: many)
 - [raft-rs-replica-lifecycle-observation.js](raft-rs-replica-lifecycle-observation.js) - Read-only implementation of the replica lifecycle owner's observations. (importers: one)
 - [raft-rs-replica-lifecycle-owner.js](raft-rs-replica-lifecycle-owner.js) - Read the monotonic opening fact of exactly the admitted incarnation. (importers: hub)
+- [raft-rs-replica-lifecycle-record.js](raft-rs-replica-lifecycle-record.js) - The lifecycle owner's row representation, shared by runtime and observations. (importers: few)
 - [raft-rs-retained-history.js](raft-rs-retained-history.js) - Pure validation and observation within RaftRsDurableStore's read boundary. (importers: one)
 - [raft-rs-runtime-fault-log.js](raft-rs-runtime-fault-log.js) - The structured log line of a fault the raft-rs runtime observed, written at ERROR: a delivered envelope the... (importers: few)
 - [raft-rs-runtime-faults.js](raft-rs-runtime-faults.js) - What the runtime owner does with a fault it observes: a delivered envelope the local-log guard refused (recorded... (importers: one)

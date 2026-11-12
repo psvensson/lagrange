@@ -150,12 +150,16 @@ function receiverFile(file, shape) {
     openReplicaDatabaseFixture({dbPath: file, groupId: GROUP, replicaIdentity: TARGET}).db;
   db.exec('CREATE TABLE application_rows (k TEXT PRIMARY KEY)');
   if (shape === 'lost-row') db.exec(`DELETE FROM ${REPLICA_LIFECYCLE_TABLE}`);
+  if (shape === 'malformed-evidence') {
+    db.prepare(`UPDATE ${REPLICA_LIFECYCLE_TABLE} SET retirement_evidence = ?`).run('{');
+  }
   db.close();
   if (shape === 'truncated') fs.truncateSync(file, 0);
 }
 
 async function checkExistingReceiverInstall(t, root, targetPeer) {
-  for (const shape of ['application-only', 'lost-row', 'empty', 'truncated', 'born']) {
+  for (const shape of ['application-only', 'lost-row', 'empty', 'truncated',
+    'malformed-evidence', 'born']) {
     const target = path.join(root, `${shape}.db`);
     const checkpointsRoot = path.join(root, `receiver-${shape}`);
     fs.cpSync(path.join(root, 'checkpoints', APPLIED_INDEX),
@@ -449,6 +453,7 @@ test('the canonical checkpoint owner seals a group-neutral raft-rs image',
         RAFT_SNAPSHOT_INSTALL_STAGING_FILE);
       const staleMarkerPath = path.join(staleInstallDir,
         RAFT_SNAPSHOT_INSTALL_MARKER_FILE);
+      receiverFile(successorDbPath, 'born');
       await t.rejects(withRenameFault({source: staleStaging,
         destination: successorDbPath, afterRename: false,
         code: 'EACCES', message: 'snapshot rename refused'}, () =>
@@ -464,6 +469,24 @@ test('the canonical checkpoint owner seals a group-neutral raft-rs image',
       const staleMarker = JSON.parse(fs.readFileSync(staleMarkerPath, 'utf8'));
       t.equal(staleMarker.state, 'staged',
         'failed real install retains its durable STAGED boundary');
+      t.equal(snapshotReceiverStillAdmitted(staleRoot, successorDbPath, staleMarker), true,
+        'real STAGED marker admits the same born receiver incarnation');
+      const corruptReceiver = new Database(successorDbPath);
+      corruptReceiver.prepare(`UPDATE ${REPLICA_LIFECYCLE_TABLE}
+        SET retirement_evidence = ?`).run('{');
+      corruptReceiver.close();
+      const corruptBytes = fs.readFileSync(successorDbPath);
+      t.equal(snapshotReceiverStillAdmitted(staleRoot, successorDbPath, staleMarker), false,
+        'malformed evidence alone refuses final swap of the same receiver incarnation');
+      t.same(fs.readFileSync(successorDbPath), corruptBytes, 'final refusal is read-only');
+      // Fixture-only repair: the production observer never restores this value.
+      const restoreReceiver = new Database(successorDbPath);
+      restoreReceiver.prepare(`UPDATE ${REPLICA_LIFECYCLE_TABLE}
+        SET retirement_evidence = NULL`).run();
+      restoreReceiver.close();
+      t.equal(snapshotReceiverStillAdmitted(staleRoot, successorDbPath, staleMarker), true,
+        'fresh valid observation releases the refusal for the same incarnation');
+      fs.unlinkSync(successorDbPath);
       t.equal(snapshotReceiverStillAdmitted(staleRoot, successorDbPath, staleMarker), true,
         'real STAGED marker permits its positively absent target');
       for (const shape of ['application-only', 'lost-row', 'empty', 'truncated']) {

@@ -1,0 +1,37 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "lifecycle-navigability",
+      "passed": true,
+      "status": "measured-pass",
+      "evidence": "test-output/lifecycle-observation-20261112/r3-final-check-guideline-navigability.json"
+    },
+    {
+      "id": "malformed-owner-parity",
+      "passed": true,
+      "status": "measured-pass",
+      "evidence": "test-output/lifecycle-observation-20261112/r3-final-focused.json"
+    },
+    {
+      "id": "valid-empty-and-terminal-controls",
+      "passed": true,
+      "status": "measured-pass",
+      "evidence": "test-output/lifecycle-observation-20261112/r3-final-focused.json"
+    },
+    {
+      "id": "scoped-owner-checks",
+      "passed": true,
+      "status": "measured-pass",
+      "evidence": "test-output/lifecycle-observation-20261112/candidate-manifest-r3.json"
+    },
+    {
+      "id": "independent-review",
+      "passed": false,
+      "status": "not-run",
+      "evidence": null
+    }
+  ],
+  "remaining": "R3 independent exact-candidate review pending"
+}
