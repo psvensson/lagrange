@@ -21,7 +21,7 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   HTTP_STATUS,
 } from '../../src/constants/index.js';
-import {BootstrapReadinessState} from '../../src/bootstrap/bootstrap-readiness-state.js';
+import {LifecycleController} from '../../src/bootstrap/lifecycle-controller.js';
 import {
   LIFECYCLE_LEGACY_STATE,
   LIFECYCLE_PHASE,
@@ -578,7 +578,7 @@ export function registerBootstrapApiReadinessTests() {
     async (t) => {
       initializeTestEnvironment();
 
-      const readinessState = new BootstrapReadinessState({
+      const readinessState = new LifecycleController({
         readyStableWindowMs: TEST_READY_STABLE_WINDOW_MS,
       });
       const api = new BootstrapAPI({
@@ -912,7 +912,7 @@ export function registerBootstrapApiReadinessTests() {
   test('BootstrapAPI - readyz allows isolated message-group leader lag', async (t) => {
     initializeTestEnvironment();
 
-    const readinessState = new BootstrapReadinessState({
+    const readinessState = new LifecycleController({
       readyStableWindowMs: 0,
     });
     const api = new BootstrapAPI({

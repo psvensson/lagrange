@@ -354,25 +354,15 @@ async function waitForLifecycleReadiness(options = {}) {
   throw buildError(lastSnapshot);
 }
 
+// A service with no readiness state bound listens to nothing; a bound state
+// is the lifecycle owner (LifecycleController, an EventEmitter).
 function attachTrafficReadinessListener(readinessState, listener) {
-  if (!readinessState || typeof listener !== LOCAL_STR_FUNCTION) {
-    return () => {};
-  }
-  if (typeof readinessState.on !== LOCAL_STR_FUNCTION) {
-    return () => {};
-  }
-  const removeListener =
-    typeof readinessState.off === 'function' ?
-      readinessState.off.bind(readinessState) :
-      (typeof readinessState.removeListener === 'function' ?
-        readinessState.removeListener.bind(readinessState) :
-        null);
-  if (!removeListener) {
+  if (readinessState === null) {
     return () => {};
   }
   readinessState.on(LIFECYCLE_EVENT.TRANSITION, listener);
   return () => {
-    removeListener(LIFECYCLE_EVENT.TRANSITION, listener);
+    readinessState.off(LIFECYCLE_EVENT.TRANSITION, listener);
   };
 }
 

@@ -86,7 +86,7 @@ function createStepTracker() {
 }
 
 /**
- * Build a mock BootstrapReadinessState that records event listener wiring.
+ * Build a mock LifecycleController that records event listener wiring.
  * @param {Object} tracker - Step tracker.
  * @return {Object} Mock readiness state.
  */

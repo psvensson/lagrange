@@ -3,7 +3,7 @@ import {AdminWebSocketAPI} from './admin/admin-websocket-api.js';
 import {ADMIN_DEFAULT} from './admin/admin-constants.js';
 import {ConfigurationManager} from './config/configuration-manager.js';
 import {CONFIG_KEY} from './config/config-key-constants.js';
-import {BootstrapReadinessState} from './bootstrap/bootstrap-readiness-state.js';
+import {LifecycleController} from './bootstrap/lifecycle-controller.js';
 import {READINESS_EVENT} from
   './bootstrap/bootstrap-readiness-state-constants.js';
 import {ResourceDiagnosticsSampler} from
@@ -225,10 +225,10 @@ function wireReadinessStateDiagnostics(readinessState, logger, nodeId) {
  * Create a readiness owner with shared entrypoint diagnostics wiring.
  * @param {Object} logger
  * @param {string} nodeId
- * @return {BootstrapReadinessState}
+ * @return {LifecycleController}
  */
 function createReadinessStateWithDiagnostics(logger, nodeId) {
-  const readinessState = new BootstrapReadinessState();
+  const readinessState = new LifecycleController();
   wireReadinessStateDiagnostics(readinessState, logger, nodeId);
   return readinessState;
 }

@@ -4,7 +4,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
-import {BootstrapReadinessState} from '../../src/bootstrap/bootstrap-readiness-state.js';
+import {LifecycleController} from '../../src/bootstrap/lifecycle-controller.js';
 import {BOOTSTRAP_PHASE} from '../../src/bootstrap/bootstrap-constants.js';
 import {
   LIFECYCLE_DEPENDENCY_CLASS,
@@ -319,7 +319,7 @@ test('BootstrapAPI keeps readiness available while surfacing contained observabi
       phase: BOOTSTRAP_PHASE.COMPLETE,
       messageRouter: owner.messageRouter,
     },
-    readinessState: new BootstrapReadinessState({readyStableWindowMs: 0}),
+    readinessState: new LifecycleController({readyStableWindowMs: 0}),
     controlPlaneWriteHealthProvider: createControlPlaneWriteHealthProvider(owner, {
       failureThreshold: 3,
     }),

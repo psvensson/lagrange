@@ -21,7 +21,7 @@ import {
   TABLES,
 } from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
-import {BootstrapReadinessState} from '../../src/bootstrap/bootstrap-readiness-state.js';
+import {LifecycleController} from '../../src/bootstrap/lifecycle-controller.js';
 import {LIFECYCLE_REASON} from '../../src/bootstrap/lifecycle-controller-constants.js';
 import {
   registerBootstrapRequestAdmissionTests,
@@ -161,7 +161,7 @@ test('BootstrapAPI - readiness stays gated until startup dependencies and stable
     };
 
     let nowMs = 1000;
-    const readinessState = new BootstrapReadinessState({
+    const readinessState = new LifecycleController({
       readyStableWindowMs: 50,
       demotionFailureThreshold: 2,
       now: () => nowMs,
@@ -281,7 +281,7 @@ test('BootstrapAPI - readyz demotes immediately when priority recovery regresses
       },
     };
 
-    const readinessState = new BootstrapReadinessState({
+    const readinessState = new LifecycleController({
       readyStableWindowMs: 0,
       demotionFailureThreshold: 2,
       now: () => Date.now(),
@@ -404,7 +404,7 @@ test('BootstrapAPI - readyz blocks on local query transport readiness before pro
 
     let nowMs = 1000;
     let localTransportReady = false;
-    const readinessState = new BootstrapReadinessState({
+    const readinessState = new LifecycleController({
       readyStableWindowMs: 50,
       demotionFailureThreshold: 2,
       now: () => nowMs,
@@ -523,7 +523,7 @@ test('BootstrapAPI - readyz treats unknown local query transport state as not re
 
     let nowMs = 1000;
     let localTransportState = 'unknown';
-    const readinessState = new BootstrapReadinessState({
+    const readinessState = new LifecycleController({
       readyStableWindowMs: 50,
       demotionFailureThreshold: 2,
       now: () => nowMs,
@@ -740,7 +740,7 @@ test('BootstrapAPI - liveness remains true while readiness degrades on repeated 
         phase: BOOTSTRAP_PHASE.COMPLETE,
         messageRouter: {},
       },
-      readinessState: new BootstrapReadinessState(),
+      readinessState: new LifecycleController(),
       controlPlaneWriteHealthProvider: () => ({
         healthy: false,
         reasonCode: LIFECYCLE_REASON.OBSERVABILITY_BACKLOG,

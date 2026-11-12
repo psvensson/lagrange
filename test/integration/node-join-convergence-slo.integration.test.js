@@ -11,7 +11,7 @@ import tap, {test} from '../../src/test-helpers/tap.js';
 import {request as httpRequest} from 'node:http';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
-import {BootstrapReadinessState} from '../../src/bootstrap/bootstrap-readiness-state.js';
+import {LifecycleController} from '../../src/bootstrap/lifecycle-controller.js';
 import {
   LIFECYCLE_PHASE,
 } from '../../src/bootstrap/lifecycle-controller-constants.js';
@@ -708,7 +708,7 @@ test('Node join convergence SLO real-network readiness path',
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,
       });
-      const readinessState = new BootstrapReadinessState({
+      const readinessState = new LifecycleController({
         readyStableWindowMs: 120,
         demotionFailureThreshold: 2,
         retryAfterMs: 100,
@@ -858,7 +858,7 @@ test('Readiness endpoint remains reachable during background log buffer flush',
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,
       });
-      const readinessState = new BootstrapReadinessState({
+      const readinessState = new LifecycleController({
         readyStableWindowMs: 120,
         demotionFailureThreshold: 2,
         retryAfterMs: 100,
@@ -1046,7 +1046,7 @@ test('Real-listener join retries through transient SQL/metadata blockers under c
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,
       });
-      const readinessState = new BootstrapReadinessState({
+      const readinessState = new LifecycleController({
         readyStableWindowMs: 100,
         demotionFailureThreshold: 2,
         retryAfterMs: 100,

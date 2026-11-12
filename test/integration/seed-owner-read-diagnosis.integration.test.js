@@ -4,7 +4,7 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
-import {BootstrapReadinessState} from '../../src/bootstrap/bootstrap-readiness-state.js';
+import {LifecycleController} from '../../src/bootstrap/lifecycle-controller.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
   CONTROL_PLANE_PARTICIPATION_KIND,
@@ -66,7 +66,7 @@ function installLocalQueryTransportOverride(messageRouter) {
 async function createSeedFixture() {
   const seedNodeId = '550e8400-e29b-41d4-a716-446655440281';
   const seedWsPort = getUniquePort();
-  const readinessState = new BootstrapReadinessState({
+  const readinessState = new LifecycleController({
     readyStableWindowMs: 0,
     demotionFailureThreshold: 1,
     retryAfterMs: 100,
