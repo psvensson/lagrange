@@ -86,9 +86,7 @@ function observeConsumerDeliveries(transport, predicate) {
 }
 
 function durableConsumerView(service) {
-  const store = Object.create(RaftRsDurableStore.prototype);
-  store.db = service.db;
-  const record = store.readDurableRecord(service.partitionId);
+  const record = RaftRsDurableStore.readDurableRecordIn(service.db, service.partitionId);
   return {replicaId: service.replicaId, appliedIndex: record.appliedIndex,
     commitIndex: record.hardState.commit, term: record.hardState.term,
     entries: record.entries};

@@ -312,7 +312,12 @@ class RaftRsDurableStore {
    */
   constructor(db, options = {}) {
     assertSQLiteConnection(db);
-    this.db = db;
+    Object.defineProperty(this, 'db', {
+      value: db,
+      writable: false,
+      configurable: false,
+      enumerable: true,
+    });
     this.maxJournalEntries =
       Number.isInteger(options?.maxJournalEntries) && options.maxJournalEntries >= 0 ?
         options.maxJournalEntries :
@@ -744,9 +749,10 @@ class RaftRsDurableStore {
     return readSnapshotIndexIn(db, groupId);
   }
   readSnapshotIndex(groupId) {
-    assertSQLiteConnection(this.db);
-    return this.snapshotTablePresent && this.db.open ?
-      readPresentSnapshotIndexIn(this.db, groupId) : 0n;
+    const db = this.db;
+    assertSQLiteConnection(db);
+    return this.snapshotTablePresent && db.open ?
+      readPresentSnapshotIndexIn(db, groupId) : 0n;
   }
   compactCommittedPrefix(groupId, options) {
     return compactRaftRsCommittedPrefix(this, groupId, options);

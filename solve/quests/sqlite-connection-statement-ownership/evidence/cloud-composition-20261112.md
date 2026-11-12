@@ -133,3 +133,26 @@ red, then the same unchanged controls on the source correction; both native
 roots renew their recorded source closure. No local test, checker, generator,
 dependency install or acceptance gate was executed. Existing 17-root/519-assertion
 lab success remains bounded to `a400`; the full migration remains on HOLD.
+
+## Mutable-store red and source correction
+
+Lab job `2806` ran the tests-only `84c13bef4a8a8126255a9a9a3e41f4f6c5f94ce0`
+tree with source `a8ed06163f7940535e4a8d281067dbf36a347c2d`. The complete
+36,756-byte worker stream is preserved as `sqlite-store-custody-red-worker.log`,
+SHA256 `9077c3048a21eef462ff04570d01164e686aef12f3300ab4b638bfc5224557e1`.
+All worker scopes closed. Four intended negative cases failed: assignment and
+accessor replacement admitted B's snapshot/progress and writes, closed raw
+replacement manufactured absence despite A's snapshot, and reentrant replacement
+escaped A's transaction before a later write reached B. Raw-handle refusal,
+unchanged-owner controls and the 25 pre-existing cases passed. Both native child
+manifest roots passed their four and eight cases. These results prove the mutable
+carrier defect; they do not prove the correction or a native service journey.
+
+The candidate now defines `db` as one enumerable, nonwritable, nonconfigurable own
+value immediately after the constructor's ownership assertion. Snapshot reads
+capture that value once for validation, open-state inspection and SQL. This same
+constructor invariant protects progress, snapshot generation, transaction and
+compaction consumers without introducing a second handle registry or rebinding
+path. The prototype-only completion fixture uses the existing explicit-handle
+`readDurableRecordIn` API. The causal controls are unchanged. Independent source
+review and exact-source lab renewal are required; no local execution occurred.
