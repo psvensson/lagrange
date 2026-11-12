@@ -406,7 +406,7 @@ const SOURCE_IMAGE_ADMISSION = Object.freeze({
   // The cell already holds a position at or after the image's applied
   // index (ranges applied while the image was fetched): the image is older
   // than the cache and is discarded; rows are untouched.
-  OBSOLETE: 'obsolete',
+  SUPERSEDED: 'superseded',
   // The cell was reset (the cache was cleared) or moved to an incarnation
   // that is neither the one the image was begun against nor the image's own:
   // the stage is discarded and the list restarts.
@@ -642,7 +642,7 @@ class SystemTableCacheSourceOrder {
     const listed = {logIndex: appliedIndex, ordinal: LISTED_ORDINAL};
     return cell.incarnation === incarnation && cell.position !== null &&
       comparePositions(listed, cell.position) <= 0 ?
-      SOURCE_IMAGE_ADMISSION.OBSOLETE : SOURCE_IMAGE_ADMISSION.INSTALL;
+      SOURCE_IMAGE_ADMISSION.SUPERSEDED : SOURCE_IMAGE_ADMISSION.INSTALL;
   }
 
   // One list in flight per source partition on this cache. A list that ends

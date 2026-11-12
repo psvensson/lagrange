@@ -11,7 +11,7 @@
 //
 // A swap, not a merge: the image is the table after every source entry at or
 // below its applied index P, and the cell is below P (else the image is
-// OBSOLETE), so every ranged state the cache holds is older than the image. A
+// SUPERSEDED), so every ranged state the cache holds is older than the image. A
 // row deleted at or before P is therefore removed even if the cache touched it
 // while the image was fetched; nothing at or before P can resurrect. Rows an
 // unranged path wrote that are newer than P are replaced too: their entries
