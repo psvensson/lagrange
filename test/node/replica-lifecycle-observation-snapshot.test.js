@@ -90,8 +90,7 @@ function assertOwnerCalls(t, owner, expected) {
     'all accepted gateway reads have completed');
 }
 
-test('coalesced lifecycle observations retain their captured facts across a later read',
-async (t) => {
+test('coalesced lifecycle observations retain their captured facts across a later read', async (t) => {
   const serviceRow = {...ORIGINAL_SERVICE};
   const partitionRow = {...ORIGINAL_PARTITION};
   const serviceEntered = Promise.withResolvers();
@@ -144,8 +143,7 @@ async (t) => {
   ]);
 });
 
-test('consumer writes cannot alter a captured lifecycle observation or its owner',
-async (t) => {
+test('consumer writes cannot alter a captured lifecycle observation or its owner', async (t) => {
   const row = {...ORIGINAL_SERVICE};
   const owner = createObservationOwner(async () => ({success: true, rows: [row]}));
   const observation = await observeAuthoritativeReplicaLifecycle(
@@ -165,8 +163,7 @@ async (t) => {
   assertOwnerCalls(t, owner, [[TABLES.SERVICES, ORIGINAL_SERVICE.service_id]]);
 });
 
-test('later accessor replacement on a borrowed row cannot redirect a lifecycle read',
-async (t) => {
+test('later accessor replacement on a borrowed row cannot redirect a lifecycle read', async (t) => {
   const row = {...ORIGINAL_SERVICE};
   const owner = createObservationOwner(async () => ({success: true, rows: [row]}));
   const captured = await readAuthoritativeReplicaLifecycle(
@@ -192,8 +189,7 @@ async (t) => {
   assertOwnerCalls(t, owner, [[TABLES.SERVICES, ORIGINAL_SERVICE.service_id]]);
 });
 
-test('partition observations keep original facts while a fresh read sees owner changes',
-async (t) => {
+test('partition observations keep original facts while a fresh read sees owner changes', async (t) => {
   const row = {...ORIGINAL_PARTITION};
   const owner = createObservationOwner(async () => ({success: true, rows: [row]}));
   const original = await readAuthoritativePartitionLeader(
@@ -216,8 +212,7 @@ async (t) => {
   ]);
 });
 
-test('lifecycle observations preserve absent, unavailable and ambiguous read outcomes',
-async (t) => {
+test('lifecycle observations preserve absent, unavailable and ambiguous read outcomes', async (t) => {
   const results = [
     {success: true, rows: []},
     {success: false, rows: [{...ORIGINAL_SERVICE}], error: 'owner-unavailable'},

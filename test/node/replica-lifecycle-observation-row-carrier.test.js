@@ -42,8 +42,7 @@ const INVALID_SINGLETONS = [
   ['array', []],
 ];
 
-test('malformed singleton carriers stay unavailable and a later owner read remains useful',
-async (t) => {
+test('malformed singleton carriers stay unavailable and a later owner read remains useful', async (t) => {
   const calls = [];
   const alternateReads = {cache: 0, sql: 0};
   const readCache = () => {
