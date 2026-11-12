@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2416,
+    "unit": 2417,
     "integration": 124,
     "bootstrap": 228,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2775,
-  "digest": "fnv1a32-880fa00d",
+  "censusSize": 2776,
+  "digest": "fnv1a32-8bc53704",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -613,6 +613,7 @@
     "test/control-plane/membership-lifecycle-controller.test.js": "unit",
     "test/control-plane/membership-owner-shadow.test.js": "unit",
     "test/control-plane/membership-publication-active-gate-reconcile-owner-recovery.test.js": "unit",
+    "test/control-plane/membership-publication-authority-read.test.js": "unit",
     "test/control-plane/membership-publication-candidate-planning-surface.test.js": "unit",
     "test/control-plane/membership-publication-coordinator-diagnostics-read-mode.test.js": "unit",
     "test/control-plane/membership-publication-coordinator.test.js": "unit",

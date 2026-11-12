@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2749,
+    "ordinary": 2750,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2775,
-  "digest": "fnv1a32-a2030162",
+  "censusSize": 2776,
+  "digest": "fnv1a32-b2726bdf",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -612,6 +612,7 @@
     "test/control-plane/membership-lifecycle-controller.test.js": "ordinary",
     "test/control-plane/membership-owner-shadow.test.js": "ordinary",
     "test/control-plane/membership-publication-active-gate-reconcile-owner-recovery.test.js": "ordinary",
+    "test/control-plane/membership-publication-authority-read.test.js": "ordinary",
     "test/control-plane/membership-publication-candidate-planning-surface.test.js": "ordinary",
     "test/control-plane/membership-publication-coordinator-diagnostics-read-mode.test.js": "ordinary",
     "test/control-plane/membership-publication-coordinator.test.js": "ordinary",

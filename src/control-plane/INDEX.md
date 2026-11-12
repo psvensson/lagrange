@@ -123,7 +123,7 @@ documentClass: generated
 - [membership-publication-coordinator-planning.js](membership-publication-coordinator-planning.js) - No leading comment; first export: MembershipPublicationCoordinatorPlanning. (importers: one)
 - [membership-publication-coordinator-queue.js](membership-publication-coordinator-queue.js) - No leading comment; first export: ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME. (importers: few)
 - [membership-publication-coordinator-reads.js](membership-publication-coordinator-reads.js) - The dispatch-retry rows of a ready node: the cache rows, and - while priority recovery evidence calls for it - the... (importers: many)
-- [membership-publication-coordinator-reconcile-helpers.js](membership-publication-coordinator-reconcile-helpers.js) - Ask the owner's queue for the full reconcile that derives the priority census of a row that states NOT_DERIVED. (importers: few)
+- [membership-publication-coordinator-reconcile-helpers.js](membership-publication-coordinator-reconcile-helpers.js) - Ask the owner's queue for the full reconcile that derives the priority census of a present row whose census is... (importers: few)
 - [membership-publication-coordinator-reconcile.js](membership-publication-coordinator-reconcile.js) - Owner-driven membership reconcile (Workstream A). (importers: many)
 - [membership-publication-coordinator.js](membership-publication-coordinator.js) - Owner contract: Owner: MembershipPublicationCoordinator owns membership publication transitions. (importers: hub)
 - [membership-publication-lifecycle-summary.js](membership-publication-lifecycle-summary.js) - No leading comment; first export: areMembershipLifecycleSummariesEqual. (importers: one)

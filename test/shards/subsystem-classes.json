@@ -7,7 +7,7 @@
     "bootstrap-membership": 354,
     "cdc-metadata": 74,
     "cli-tooling": 100,
-    "control-plane": 251,
+    "control-plane": 252,
     "convergence-topology": 84,
     "distributed-harness": 220,
     "examples-e2e": 8,
@@ -25,10 +25,10 @@
     "transport-messaging": 127,
     "wasm-toolchain": 74
   },
-  "censusSize": 2775,
-  "digest": "fnv1a32-8e10ad80",
+  "censusSize": 2776,
+  "digest": "fnv1a32-4a8dc29f",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-489c357c",
+  "observationDigest": "fnv1a32-0021b46d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -632,6 +632,7 @@
     "test/control-plane/membership-lifecycle-controller.test.js": "control-plane",
     "test/control-plane/membership-owner-shadow.test.js": "control-plane",
     "test/control-plane/membership-publication-active-gate-reconcile-owner-recovery.test.js": "control-plane",
+    "test/control-plane/membership-publication-authority-read.test.js": "control-plane",
     "test/control-plane/membership-publication-candidate-planning-surface.test.js": "control-plane",
     "test/control-plane/membership-publication-coordinator-diagnostics-read-mode.test.js": "control-plane",
     "test/control-plane/membership-publication-coordinator.test.js": "control-plane",
@@ -5449,6 +5450,24 @@
         "src/control-plane/membership-lifecycle-controller.js"
       ]
     },
+    "test/control-plane/membership-publication-authority-read.test.js": {
+      "files": [
+        "src/config/configuration-manager.js",
+        "src/control-plane/authoritative-control-plane-view.js",
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-read-contracts.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/membership-publication-coordinator.js",
+        "src/control-plane/membership-publication-row-contract.js",
+        "src/control-plane/node-lifecycle-publication.js",
+        "src/control-plane/node-ready-lease-authority.js",
+        "src/control-plane/owners/control-plane-publications-owner.js",
+        "src/control-plane/replica-dispatch-service.js",
+        "src/control-plane/system-row-normalizers.js",
+        "src/workflow/owner-key-reconcile-queue.js"
+      ]
+    },
     "test/control-plane/membership-publication-candidate-planning-surface.test.js": {
       "files": [
         "src/control-plane/membership-publication-coordinator.js"
@@ -5773,8 +5792,13 @@
     },
     "test/control-plane/priority-partition-census-state.test.js": {
       "files": [
+        "src/bootstrap/system-partition-classification.js",
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/membership-publication-coordinator-reconcile-helpers.js",
         "src/control-plane/membership-publication-coordinator.js",
         "src/control-plane/owners/control-plane-publications-owner.js",
+        "src/control-plane/publication-active-gate-handoff-contract.js",
+        "src/control-plane/serve-eligibility-owner.js",
         "src/control-plane/system-row-normalizers.js",
         "src/workflow/owner-key-reconcile-queue.js"
       ]

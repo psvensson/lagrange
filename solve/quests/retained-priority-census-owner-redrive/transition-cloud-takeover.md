@@ -254,3 +254,29 @@ production delta or changed timeout:
 
 These are reachability corrections on unchanged source, pending exact lab
 renewal. Static gates, generated metadata and whole-epic acceptance remain open.
+
+### Verified renewal and remaining static gates
+
+Lab `2852` renewed the exact fixture seal `de756c3933573603457d63972c1142f5d3b2453b`
+transported as `21483b2d2aecfe785dd8f85ddfbc0cbd8be57151`. Both roots passed:
+the coordinator's 495 assertions and the guarded-write root's nine. The full
+1,458-byte stream has SHA256
+`f44a6fca4d52daf422c65b14dd801f9211fb469e5f7dbbae2e5db416115fc78d`.
+Together with the four passing core roots from `2800` and seven caller roots
+from `2801`, the 13 selected roots account for 1,334 passing assertions on the
+same production source `68d6941a23079defeaac3099c1df3687eb0233a1`.
+The original failed attempts are retained; this is selected-root evidence only.
+
+Lab `2881` then ran metadata generation, fast static checks, source-owner audit,
+strict scoped metrics and affected-test selection. Its full 27,233-byte stream
+has SHA256 `f008bfa773b92b99e591498919dbb3022fe1ee2bcdc5a5d5046f411c872b6ea0`.
+Generation, source-owner audit and selection passed. Fast static failed five
+lint errors (four emitted at the held-write fixture's one-line callback) and
+two shared CDC gateway-boundary findings. Strict metrics reported 17 cyclomatic
+and four cognitive violations across the changed source scope. The generated
+five-file patch is retained with SHA256
+`810361e3aff0bcb17c1b61a74eae5695de9525101931bde1c3aa0ee483e5156b`.
+No metric baseline or timeout was raised. The callback formatting is corrected
+without changing its behavior; the clipped fifth lint error requires full
+diagnostic observation. Shared CDC boundary ownership and source complexity
+remain open. Acceptance is not granted by the passing runtime roots.

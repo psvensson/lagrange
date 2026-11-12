@@ -112,7 +112,9 @@ function heldWriteOwner() {
     }
   };
   return {clock, store, coordinator, reconcileQueue, runs, loseAnswers,
-    answerAgain, advance, setCandidate: (next) => { candidate = next; }};
+    answerAgain, advance, setCandidate: (next) => {
+      candidate = next;
+    }};
 }
 
 function gaps(runs) {
