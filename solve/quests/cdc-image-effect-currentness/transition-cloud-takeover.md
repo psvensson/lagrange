@@ -834,3 +834,21 @@ The original generated patch could not be recovered after its staged worktree
 closed; generator success/digests remain stdout evidence only. No reconstruction
 or generator rerun is claimed. The next metadata producer must capture its patch
 with Node before its worktree closes.
+
+
+## Paged fixture import failure and bounded correction
+
+Original3087 on exact655894 executed zero assertions. Its complete2078-byte
+stream SHA256`09ebd054f4f82c3576597d38ff91c18d87856b8cfd0217b280628f40af6bd605`
+stopped at module instantiation: the new fixture imported private
+SOURCE_RELIST_STATE, which the source-order module does not export. No stopped,
+reset or recovery outcome was measured in this attempt. The original is retained.
+
+Source inspection confirms positionOf exposes its diagnostic relist value and
+existing R2 controls already assert literal`no_relister` and`idle`. Root
+independently reviewed and approved blob`7e36f125e84bb62750c254f1505b9c3316fb2fbb`:
+remove only the invalid named import and use those same public diagnostic values.
+All semantic assertions, exact image-page checks, waits and clocks are unchanged;
+no production export or behavior is added. This tests-only correction stays on
+655894/source355a0121ec928d076ae2dc14cb44d7ddd0b90b54 for one affected-root lab
+renewal, independent of active maintenance source. No local execution.
