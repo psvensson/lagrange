@@ -36,6 +36,14 @@ const TEMP_PREFIX = 'write-exactly-once-schedules-';
 const MSG_APPEND = 3;
 const MSG_HEARTBEAT = 8;
 
+// A failed answer as its participants gave it: the wrapper's text names no
+// cause, its first failed participant does.
+function answerDiagnosis(answered) {
+  return JSON.stringify({error: answered.error ?? null,
+    errorCode: answered.errorCode ?? null,
+    firstFailedParticipant: answered.firstFailedParticipant ?? null});
+}
+
 async function everyReplicaHoldsOnce(rowsEverywhere) {
   return waitFor(() => rowsEverywhere(`SELECT node_id FROM ${USER_TABLE} ` +
     'ORDER BY node_id').every((rows) =>
@@ -92,7 +100,7 @@ test('(c1) two log entries for one entryId, both committed: applied once, ' +
     assert.ok(copies[0].term < copies[1].term,
       'the first copy in term t, the redelivery in term t+1');
     assert.equal(answered.success, true, 'answered applied ' +
-      `(${JSON.stringify(answered.error ?? null)})`);
+      `(${answerDiagnosis(answered)})`);
     assert.equal(answered.affectedRows, 1,
       'with the first application\'s count');
     assert.ok(await everyReplicaHoldsOnce(rowsEverywhere),
@@ -137,7 +145,7 @@ test('(c2/d) the first copy on the deposed leader only, the redelivery on ' +
         undefined), true, 'setup: the first copy is on r1\'s log');
     const answered = await write;
     assert.equal(answered.success, true, 'answered applied ' +
-      `(${JSON.stringify(answered.error ?? null)})`);
+      `(${answerDiagnosis(answered)})`);
     assert.equal(answered.affectedRows, 1, 'with its one application\'s count');
     blocked.clear();
     assert.ok(await everyReplicaHoldsOnce(rowsEverywhere),
