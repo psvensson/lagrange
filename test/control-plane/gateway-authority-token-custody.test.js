@@ -119,3 +119,39 @@ for (const strategy of [STRATEGY.CACHE, STRATEGY.BOOTSTRAP_SNAPSHOT,
       'an ordinary explicit projection or local interaction remains valid');
   });
 }
+
+for (const method of ['readRows', 'readAuthoritativeRows']) {
+  for (const malformed of [
+    {name: 'unknown strategy', options: {strategy: 'unknown-read-strategy'}},
+    {name: 'empty consistency', options: {localReadConsistency: ''}},
+  ]) {
+    test(`${method} refuses explicit ${malformed.name} before applying defaults`, async (t) => {
+      const f = fixture();
+      await t.rejects(f.gateway[method](TABLES.NODES, SQL, [NODE_ID], malformed.options),
+        {code: CONTRADICTION});
+      t.equal(f.calls.identities, 0);
+      t.equal(f.calls.admissions, 0);
+      t.equal(f.calls.owner.length, 0);
+      t.equal(f.calls.cache, 0);
+      t.equal(f.gateway.inFlightReadRequestsByKey.size, 0);
+      const healed = await f.gateway[method](TABLES.NODES, SQL, [NODE_ID], {});
+      t.equal(healed.success, true, 'the same gateway still accepts an ordinary omitted draft');
+      t.equal(f.calls.owner.length, 1);
+      t.equal(f.calls.owner[0].options.readAuthority.authoritativeReadMode, MODE.OWNER_RPC_REQUIRED);
+      t.equal(f.calls.identities, 1);
+      t.equal(f.calls.admissions, 1);
+    });
+  }
+}
+
+test('direct gateway execution refuses an unknown original intent strategy before normalization',
+  async (t) => {
+    const f = fixture();
+    await t.rejects(f.gateway.executeRead({tableName: TABLES.NODES, sql: SQL,
+      params: [NODE_ID], strategy: 'unknown-read-strategy'}), {code: CONTRADICTION});
+    t.equal(f.calls.identities, 0);
+    t.equal(f.calls.admissions, 0);
+    t.equal(f.calls.owner.length, 0);
+    t.equal(f.calls.cache, 0);
+    t.equal(f.gateway.inFlightReadRequestsByKey.size, 0);
+  });
