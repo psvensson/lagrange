@@ -138,6 +138,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         ],
       });
 
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.isLeader = true;
       rebalancer.isStabilized = () => true;
@@ -191,6 +192,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         ],
       });
 
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.isLeader = true;
       rebalancer.isStabilized = () => true;
@@ -272,6 +274,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         readinessCallbacks,
       });
 
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.isLeader = true;
       rebalancer.isStabilized = () => true;
@@ -353,6 +356,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         readinessCallbacks,
       });
 
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.isLeader = true;
       rebalancer.isStabilized = () => true;
@@ -443,6 +447,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         readinessCallbacks,
       });
 
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.isLeader = true;
       rebalancer.isStabilized = () => true;
@@ -542,6 +547,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         readinessCallbacks,
       });
 
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.isLeader = true;
       rebalancer.isStabilized = () => true;
@@ -629,6 +635,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         readinessCallbacks,
       });
 
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.isLeader = true;
       rebalancer.isStabilized = () => true;
@@ -680,6 +687,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         ],
       });
 
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.isLeader = true;
       rebalancer.isStabilized = () => true;
@@ -718,6 +726,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         ]),
       });
 
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.isLeader = true;
       rebalancer.isStabilized = () => true;
@@ -809,6 +818,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         readinessCallbacks,
       });
 
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.isLeader = true;
       rebalancer.isStabilized = () => true;
@@ -909,6 +919,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         readinessCallbacks,
       });
 
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.isLeader = true;
       rebalancer.isStabilized = () => true;
@@ -962,6 +973,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         ],
       });
 
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.isLeader = true;
       rebalancer.isStabilized = () => true;
@@ -1022,6 +1034,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         ],
       });
 
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.isLeader = true;
       rebalancer.isStabilized = () => true;
@@ -1099,6 +1112,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         readinessCallbacks,
       });
 
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.isLeader = true;
       rebalancer.isStabilized = () => true;
@@ -1179,6 +1193,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         readinessCallbacks,
       });
 
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.isLeader = true;
       rebalancer.isStabilized = () => true;
@@ -1257,6 +1272,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         readinessCallbacks,
       });
 
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.isLeader = true;
       rebalancer.isStabilized = () => true;
@@ -1337,6 +1353,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         readinessCallbacks,
       });
 
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.isLeader = true;
       rebalancer.isStabilized = () => true;

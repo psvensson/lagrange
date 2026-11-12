@@ -976,7 +976,7 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
       statePrioritySpreadReleaseReadiness(sharedReadinessOwner);
       const visibleReplicaOperations = [];
       const systemTableCache = createMockCache();
-      const filterCachedRows = systemTableCache.filter;
+      const filterCachedRows = systemTableCache.filter.bind(systemTableCache);
       systemTableCache.filter = (tableName, predicate) => {
         if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
           return visibleReplicaOperations.filter(predicate);

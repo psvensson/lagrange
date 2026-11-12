@@ -12,21 +12,20 @@ import {createMockCoordinator, createMockControlPlaneReadinessService} from './t
  * replica on the joiner reaches voter-ready and its operation completes, the
  * joiner's ready-lease (NODES row) and its endpoint rows
  * (node_endpoints / service_endpoints) become true in the shared store, so
- * the gate predicate itself is CLEAR. But the priority rebalancer's only
- * cache listener (`handlePriorityRecoveryVisibilityEvent` ->
- * `buildPriorityRecoveryVisibilityRebalanceDecision`) matches only SERVICES
- * and REPLICA_OPERATIONS rows. The NODES / endpoint publication produces no
- * level-trigger, so the deferred K+1 rebalancer still waits out the full
- * getPriorityRetryDelayMs (= CRITICAL_CHECK_DELAY_MS = 5000) poll.
+ * the gate predicate itself is CLEAR. The priority rebalancer's cache
+ * subscription must deliver those publications to its visibility decision
+ * so K+1 need not wait for getPriorityRetryDelayMs
+ * (= CRITICAL_CHECK_DELAY_MS = 5000).
  *
  * These tests reproduce the CAUSAL SEQUENCE, not 60s of wall-clock:
  *  - the gate predicate is proven to defer (a ~5000ms timer) while the
  *    readiness/endpoint facts are false, and to clear the moment they are
  *    true;
  *  - the defer is proven to be a scheduling delay, not absence of work.
- * GREEN completes the existing level-trigger: the same readiness/endpoint
- * publication reaches K+1's rebalancer in the same logical step, while the
- * 5s poll remains armed as the fallback.
+ * A disconnected-subscription control proves that changing the rows alone
+ * cannot wake K+1. The connected case uses real cache notifications to prove
+ * that each publication wakes K+1 on the next notification turn, while the
+ * 5s cadence check remains armed as the wait's bound.
  */
 
 import {test} from '../../src/test-helpers/tap.js';
@@ -41,11 +40,15 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {FIXTURE_ENDPOINT_INCARNATION} from
   '../test-helpers/endpoint-incarnation-fixture.js';
+import {CDC_OPERATION} from '../../src/constants/cdc.js';
+import {createSystemTableCacheFixture} from './system-table-cache-fixture.js';
+import {createNodeEndpoint} from './unified-rebalancer-test-support.js';
 
 const SEED_NODE_ID = 'node-seed';
 const JOINER_NODE_ID = 'node-joiner';
 const PARTITION_K = 'control_plane_publications-p1';
 const PARTITION_K1 = 'replica_operations-p1';
+const OBSERVATION_NOW_MS = 1_800_000_000_000;
 const LIVE_LEASE_EXPIRES_AT_MS = 1_900_000_000_000;
 const NODE_ROW_ACTIVE_NOT_READY = Object.freeze({
   node_id: JOINER_NODE_ID,
@@ -53,6 +56,8 @@ const NODE_ROW_ACTIVE_NOT_READY = Object.freeze({
   status: 'active',
   connection_state: 'connected',
   ready_lease_expires_at: 0,
+  last_heartbeat: OBSERVATION_NOW_MS - 1,
+  updated_at: OBSERVATION_NOW_MS - 1,
 });
 const NODE_ROW_ACTIVE_READY = Object.freeze({
   node_id: JOINER_NODE_ID,
@@ -60,13 +65,12 @@ const NODE_ROW_ACTIVE_READY = Object.freeze({
   status: 'active',
   connection_state: 'ready',
   ready_lease_expires_at: LIVE_LEASE_EXPIRES_AT_MS,
+  last_heartbeat: OBSERVATION_NOW_MS,
+  updated_at: OBSERVATION_NOW_MS,
 });
-const JOINER_NODE_ENDPOINT_ROW = Object.freeze({
-  node_id: JOINER_NODE_ID,
-  boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
-  transport_type: 'ws',
-  status: 'active',
-});
+const JOINER_NODE_ENDPOINT_ROW = Object.freeze(
+  createNodeEndpoint(JOINER_NODE_ID),
+);
 const REASON_NODE_BECAME_READY = 'node_became_ready';
 const READY_LEASE_BLOCKER_REASON = 'node_ready_lease_incomplete';
 const ENDPOINT_BLOCKER_REASON = 'endpoint_visibility_incomplete';
@@ -87,56 +91,41 @@ function initializeTestEnvironment() {
 }
 
 function createSharedCache() {
-  const tables = {
-    nodes: new Map([
-      [SEED_NODE_ID, {
+  const cache = createSystemTableCacheFixture({
+    nodes: [
+      {
         node_id: SEED_NODE_ID,
         boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
         status: 'active',
         connection_state: 'ready',
         ready_lease_expires_at: LIVE_LEASE_EXPIRES_AT_MS,
-      }],
-      [JOINER_NODE_ID, {...NODE_ROW_ACTIVE_NOT_READY}],
-    ]),
-    partitions: new Map([
-      [PARTITION_K, {
+      },
+      {...NODE_ROW_ACTIVE_NOT_READY},
+    ],
+    partitions: [
+      {
         partition_id: PARTITION_K,
         table_id: 'control_plane_publications',
         replica_count: 5,
-      }],
-      [PARTITION_K1, {
+      },
+      {
         partition_id: PARTITION_K1,
         table_id: 'replica_operations',
         replica_count: 5,
-      }],
-    ]),
-    node_endpoints: new Map([
-      [SEED_NODE_ID, {
-        node_id: SEED_NODE_ID,
-        boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
-        transport_type: 'ws',
-        status: 'active',
-      }],
-    ]),
-    service_endpoints: new Map(),
-    replica_operations: new Map(),
-    services: new Map(),
-    tables: new Map(),
-  };
-  const cache = {
-    get: (tableName, key) => tables[tableName]?.get(key) || null,
-    getAll: (tableName) =>
-      tables[tableName] ? [...tables[tableName].values()] : [],
-    filter: (tableName, predicate) =>
-      (tables[tableName] ? [...tables[tableName].values()] : [])
-        .filter(predicate),
-  };
-  return {cache, tables};
+      },
+    ],
+    node_endpoints: [createNodeEndpoint(SEED_NODE_ID)],
+    service_endpoints: [],
+    replica_operations: [],
+    services: [],
+    tables: [],
+  });
+  return cache;
 }
 
 function createRebalancer(cache, partitionId) {
   const controlPlaneReadinessService = createMockControlPlaneReadinessService({
-    systemTableCache: cache, now: () => 1_800_000_000_000,
+    systemTableCache: cache, now: () => OBSERVATION_NOW_MS,
   });
   const rebalancer = new UnifiedRebalancer({
     entityId: partitionId,
@@ -158,7 +147,7 @@ function createRebalancer(cache, partitionId) {
     rebalanceCoordinator: createMockCoordinator({controlPlaneReadinessService}),
     sqlQueryEngine: {executeQuery: async () => ({success: true, rows: []})},
     controlPlaneReadinessService,
-    nowFn: () => 1_800_000_000_000,
+    nowFn: () => OBSERVATION_NOW_MS,
     randomSource: {random: () => 0},
   });
   rebalancer.initialize();
@@ -188,57 +177,25 @@ function completePartitionKReplicaOnJoiner(rebalancerK) {
   );
 }
 
-// Drive the NODES ready-lease cache event through the visibility decision.
-// In 'red' mode the node-readiness/endpoint branches are neutralized to the
-// pre-fix behavior (only SERVICES / REPLICA_OPERATIONS are visibility
-// progress); in 'green' mode the real decision — including the completed
-// node-readiness edge — is exercised.
-function driveNodeReadyLeaseEvent(rebalancerK1, mode) {
-  if (mode === 'green') {
-    return rebalancerK1.handlePriorityRecoveryVisibilityEvent(
-      buildNodeReadyLeaseCacheEvent(),
-    );
-  }
-  const decision = rebalancerK1.buildPriorityRecoveryVisibilityRebalanceDecision(
-    buildNodeReadyLeaseCacheEvent(),
-  );
-  const preFixVisibilityProgress = decision.evidence.priorityPartition ===
-    true &&
-    (
-      (
-        decision.evidence.tableMatches === true &&
-        decision.evidence.partitionMatches === true &&
-        decision.evidence.progressPartitionService === true
-      ) ||
-      (
-        decision.evidence.operationTableMatches === true &&
-        decision.evidence.terminalReplicaOperation === true
-      )
-    );
-  if (preFixVisibilityProgress !== true) {
-    return false;
-  }
-  rebalancerK1.enqueueRebalanceCheck(decision.reconcileReason);
-  return true;
-}
-
 // The joiner's readiness + endpoint facts become true in the shared store:
 // the NODES row gains a live ready-lease and the canonical WebSocket
 // node_endpoints row appears. This is the same publication the real
 // heartbeat / endpoint writers produce once the joiner's first critical
 // replica reaches voter-ready and it begins heartbeating. sys-postgres-wire
 // is an optional runtime service and publishes nothing at formation time.
-function publishJoinerReadinessAndEndpoints(tables) {
-  tables.nodes.set(JOINER_NODE_ID, {...NODE_ROW_ACTIVE_READY});
-  tables.node_endpoints.set(JOINER_NODE_ID, {...JOINER_NODE_ENDPOINT_ROW});
+function publishJoinerReadinessAndEndpoints(cache) {
+  cache.applySystemTableChange(
+    'nodes', CDC_OPERATION.UPDATE, {...NODE_ROW_ACTIVE_READY},
+  );
+  cache.applySystemTableChange(
+    'node_endpoints', CDC_OPERATION.INSERT, {...JOINER_NODE_ENDPOINT_ROW},
+  );
 }
 
-function buildNodeReadyLeaseCacheEvent() {
-  return {
-    tableName: 'nodes',
-    operation: 'update',
-    data: {...NODE_ROW_ACTIVE_READY},
-  };
+// SystemTableCache defers notifications with setImmediate. Observe the next
+// turn after mutations without replacing that delivery or waiting on a poll.
+async function awaitCacheNotifications() {
+  await new Promise((resolve) => setImmediate(resolve));
 }
 
 function createDeferRecorder(rebalancer) {
@@ -263,13 +220,13 @@ function createDeferRecorder(rebalancer) {
 // honest NODE_READY_LEASE_INCOMPLETE blocker.
 function createStaggeredJoinerHarness() {
   initializeTestEnvironment();
-  const {cache, tables} = createSharedCache();
+  const cache = createSharedCache();
   const rebalancerK = createRebalancer(cache, PARTITION_K);
   const rebalancerK1 = createRebalancer(cache, PARTITION_K1);
   rebalancerK.enqueueRebalanceCheck = () => true;
   rebalancerK.enqueueMembershipPublicationReconcile = () => true;
   const k1 = createDeferRecorder(rebalancerK1);
-  return {tables, rebalancerK, rebalancerK1, k1};
+  return {cache, rebalancerK, rebalancerK1, k1};
 }
 
 async function assertJoinerBlocksK1BehindFiveSecondPoll(t, harness) {
@@ -300,12 +257,15 @@ async function assertJoinerBlocksK1BehindFiveSecondPoll(t, harness) {
 }
 
 test(
-  'RED: the readiness/endpoint publication produces no level-trigger, so ' +
+  'disconnected cache subscription: readiness/endpoint publication produces no level-trigger, so ' +
     'partition K+1 waits out the 5s poll even though its gate is clear',
   async (t) => {
     const harness = createStaggeredJoinerHarness();
-    const {tables, rebalancerK, rebalancerK1, k1} = harness;
+    const {cache, rebalancerK, rebalancerK1, k1} = harness;
+    t.teardown(() => rebalancerK.shutdown());
+    t.teardown(() => rebalancerK1.shutdown());
     await assertJoinerBlocksK1BehindFiveSecondPoll(t, harness);
+    rebalancerK1.unbindPriorityRecoveryVisibilityCacheListener();
 
     // Partition K's learner replica on the joiner reaches voter-ready and its
     // operation completes: the existing executor->coordinator level-trigger
@@ -322,7 +282,7 @@ test(
     // reaches K+1's rebalancer for the NODES/endpoint publication: it still
     // waits out the 5s poll. The defer was a scheduling delay, not absence of
     // work.
-    publishJoinerReadinessAndEndpoints(tables);
+    publishJoinerReadinessAndEndpoints(cache);
     t.equal(
       rebalancerK1.getCriticalSystemTopologySettlingBlocker(),
       null,
@@ -333,70 +293,93 @@ test(
       null,
       'the clearing predicate is satisfied by the published facts',
     );
-    const handled = driveNodeReadyLeaseEvent(rebalancerK1, 'red');
+    await awaitCacheNotifications();
     t.equal(
-      handled,
-      false,
-      'RED: the NODES ready-lease update is not visibility progress for the priority lane',
+      rebalancerK1.priorityRecoveryVisibilityCacheListener,
+      null,
+      'the negative control has disconnected only the visibility subscription',
     );
     t.equal(
       k1.enqueuedReasons.length,
       0,
-      'RED: no level-trigger reaches partition K+1 for the readiness publication',
+      'no level-trigger reaches partition K+1 without the visibility subscription',
     );
   },
 );
 
 test(
-  'GREEN: the same readiness/endpoint publication level-triggers partition ' +
-    'K+1 in the same logical step, without waiting for the 5s poll',
+  'connected cache subscription: readiness/endpoint publication level-triggers partition ' +
+    'K+1 on the notification turn, without waiting for the 5s poll',
   async (t) => {
     const harness = createStaggeredJoinerHarness();
-    const {tables, rebalancerK, rebalancerK1, k1} = harness;
+    const {cache, rebalancerK, rebalancerK1, k1} = harness;
+    t.teardown(() => rebalancerK.shutdown());
+    t.teardown(() => rebalancerK1.shutdown());
     await assertJoinerBlocksK1BehindFiveSecondPoll(t, harness);
     t.equal(
       completePartitionKReplicaOnJoiner(rebalancerK),
       true,
       'partition K operation completion reaches the existing rebalancer lane',
     );
-    publishJoinerReadinessAndEndpoints(tables);
+    cache.applySystemTableChange(
+      'nodes', CDC_OPERATION.UPDATE, {...NODE_ROW_ACTIVE_READY},
+    );
+    await awaitCacheNotifications();
+    t.same(
+      k1.enqueuedReasons,
+      [REASON_NODE_BECAME_READY],
+      'the NODES ready-lease mutation reaches K+1 through its cache subscription',
+    );
+    cache.applySystemTableChange(
+      'node_endpoints', CDC_OPERATION.INSERT, {...JOINER_NODE_ENDPOINT_ROW},
+    );
     t.equal(
       await rebalancerK1.resolveTopologySettlingPlanningGateDecision(),
       null,
       'the clearing predicate is satisfied by the published facts',
     );
 
-    const handled = driveNodeReadyLeaseEvent(rebalancerK1, 'green');
-    t.equal(
-      handled,
-      true,
-      'GREEN: the NODES ready-lease transition now reaches the priority lane',
-    );
+    await awaitCacheNotifications();
     t.same(
       k1.enqueuedReasons,
-      [REASON_NODE_BECAME_READY],
-      'GREEN: K+1 re-evaluates the topology-settling gate in the same logical step',
+      [REASON_NODE_BECAME_READY, REASON_NODE_BECAME_READY],
+      'the endpoint mutation independently reaches the same priority consumer',
     );
     t.equal(
       rebalancerK1.getCriticalSystemTopologySettlingBlocker(),
       null,
       'the level-trigger drives the consumer whose gate predicate is now clear',
     );
+    rebalancerK1.shutdown();
+    cache.applySystemTableChange('nodes', CDC_OPERATION.UPDATE, {
+      ...NODE_ROW_ACTIVE_READY,
+      ready_lease_expires_at: LIVE_LEASE_EXPIRES_AT_MS + 1,
+    });
+    await awaitCacheNotifications();
+    t.same(k1.enqueuedReasons,
+      [REASON_NODE_BECAME_READY, REASON_NODE_BECAME_READY],
+      'shutdown detaches the consumer before a later cache mutation');
+    t.equal(cache.get('nodes', JOINER_NODE_ID).ready_lease_expires_at,
+      LIVE_LEASE_EXPIRES_AT_MS + 1,
+      'the later mutation still reaches the cache');
   },
 );
 
 test(
   'the endpoint publication also clears the gate, and the 5s poll remains ' +
-    'the fallback with the predicate unchanged',
+    'its bound with the predicate unchanged',
   async (t) => {
     initializeTestEnvironment();
-    const {cache, tables} = createSharedCache();
+    const cache = createSharedCache();
     const rebalancerK1 = createRebalancer(cache, PARTITION_K1);
+    t.teardown(() => rebalancerK1.shutdown());
     const k1 = createDeferRecorder(rebalancerK1);
 
     // Lease published but endpoints not yet: the gate blocks on
     // ENDPOINT_VISIBILITY_INCOMPLETE, still deferring to the 5s poll.
-    tables.nodes.set(JOINER_NODE_ID, {...NODE_ROW_ACTIVE_READY});
+    cache.applySystemTableChange(
+      'nodes', CDC_OPERATION.UPDATE, {...NODE_ROW_ACTIVE_READY},
+    );
     t.equal(
       rebalancerK1.getCriticalSystemTopologySettlingBlocker()?.reason,
       ENDPOINT_BLOCKER_REASON,
@@ -408,11 +391,13 @@ test(
     t.equal(
       k1.scheduledDelays[k1.scheduledDelays.length - 1],
       rebalancerK1.getPriorityRetryDelayMs(),
-      'the 5s poll remains armed as the fallback while endpoints settle',
+      'the 5s cadence check remains armed while endpoints settle',
     );
 
     // Publishing the joiner's endpoint rows clears the gate predicate.
-    publishJoinerReadinessAndEndpoints(tables);
+    cache.applySystemTableChange(
+      'node_endpoints', CDC_OPERATION.INSERT, {...JOINER_NODE_ENDPOINT_ROW},
+    );
     t.equal(
       rebalancerK1.getCriticalSystemTopologySettlingBlocker(),
       null,
@@ -421,17 +406,22 @@ test(
 
     // A false ready-lease must not level-trigger progress: only the
     // transition to ready is a wake.
+    await awaitCacheNotifications();
+    t.same(k1.enqueuedReasons,
+      [REASON_NODE_BECAME_READY, REASON_NODE_BECAME_READY],
+      'ready-lease and endpoint publications each reach the subscription');
     k1.enqueuedReasons.length = 0;
-    const falseTrigger = rebalancerK1.handlePriorityRecoveryVisibilityEvent({
-      tableName: 'nodes',
-      operation: 'update',
-      data: {...NODE_ROW_ACTIVE_NOT_READY},
-    });
-    t.equal(
-      falseTrigger,
-      false,
-      'a not-ready NODES row does not produce a false level-trigger',
+    cache.applySystemTableChange(
+      'nodes', CDC_OPERATION.UPDATE, {
+        ...NODE_ROW_ACTIVE_NOT_READY,
+        last_heartbeat: OBSERVATION_NOW_MS + 1,
+        updated_at: OBSERVATION_NOW_MS + 1,
+      },
     );
+    await awaitCacheNotifications();
+    t.equal(cache.get('nodes', JOINER_NODE_ID).connection_state,
+      NODE_ROW_ACTIVE_NOT_READY.connection_state,
+      'the negative publication is applied to the real cache');
     t.equal(
       k1.enqueuedReasons.length,
       0,
@@ -449,23 +439,28 @@ test(
 const NODES_PARTITION = 'nodes-p1';
 
 function createFormedThreeNodeCache() {
-  const {cache, tables} = createSharedCache();
-  tables.partitions.set(NODES_PARTITION, {
+  const cache = createSharedCache();
+  cache.applySystemTableChange('partitions', CDC_OPERATION.INSERT, {
     partition_id: NODES_PARTITION,
     table_id: 'nodes',
     replica_count: 3,
   });
-  tables.nodes.set(JOINER_NODE_ID, {...NODE_ROW_ACTIVE_READY});
-  tables.node_endpoints.set(JOINER_NODE_ID, {...JOINER_NODE_ENDPOINT_ROW});
-  return {cache, tables};
+  cache.applySystemTableChange(
+    'nodes', CDC_OPERATION.UPDATE, {...NODE_ROW_ACTIVE_READY},
+  );
+  cache.applySystemTableChange(
+    'node_endpoints', CDC_OPERATION.INSERT, {...JOINER_NODE_ENDPOINT_ROW},
+  );
+  return cache;
 }
 
 test(
   'critical topology settling ignores postgres-wire endpoints for a non-priority system partition',
   async (t) => {
     initializeTestEnvironment();
-    const {cache} = createFormedThreeNodeCache();
+    const cache = createFormedThreeNodeCache();
     const rebalancer = createRebalancer(cache, NODES_PARTITION);
+    t.teardown(() => rebalancer.shutdown());
     rebalancer.messageRouter.getConnectedNodes =
       () => [SEED_NODE_ID, JOINER_NODE_ID];
 
@@ -482,9 +477,12 @@ test(
   'critical topology settling still fails closed without websocket endpoints',
   async (t) => {
     initializeTestEnvironment();
-    const {cache, tables} = createFormedThreeNodeCache();
-    tables.node_endpoints.delete(JOINER_NODE_ID);
+    const cache = createFormedThreeNodeCache();
+    cache.applySystemTableChange(
+      'node_endpoints', CDC_OPERATION.DELETE, {...JOINER_NODE_ENDPOINT_ROW},
+    );
     const rebalancer = createRebalancer(cache, NODES_PARTITION);
+    t.teardown(() => rebalancer.shutdown());
     rebalancer.messageRouter.getConnectedNodes =
       () => [SEED_NODE_ID, JOINER_NODE_ID];
 

@@ -1,3 +1,5 @@
+import {createSystemTableCacheFixture} from './system-table-cache-fixture.js';
+import {CDC_OPERATION} from '../../src/constants/cdc.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   createMockCache,
@@ -212,4 +214,24 @@ test('constructed coordinator forwards the declared operation reader without ada
     'the mock exposes no partition projection read');
   t.same(await createMockCoordinator().getAuthoritativeOperationsByEntity('partition', 'p1'), [],
     'the default explicitly models an empty ledger');
+});
+
+test('real cache fixture delivers and detaches the mandatory cache subscription', async (t) => {
+  initializeTestEnvironment();
+  const cache = createSystemTableCacheFixture({});
+  const changes = [];
+  const listener = (table) => changes.push(table);
+  cache.onCacheChange(listener);
+  t.teardown(() => cache.offCacheChange(listener));
+  cache.applySystemTableChange('nodes', CDC_OPERATION.INSERT, readyNode('node-1'));
+  await new Promise((resolve) => setImmediate(resolve));
+  t.same(changes, ['nodes'], 'real mutation reaches the subscribed wake port');
+  cache.offCacheChange(listener);
+  cache.applySystemTableChange('nodes', CDC_OPERATION.UPDATE, {
+    node_id: 'node-1', status: 'joining',
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  t.same(changes, ['nodes'], 'detached subscription receives no later mutation');
+  t.equal(cache.get('nodes', 'node-1').status, 'joining',
+    'unsubscribe does not suppress the underlying cache update');
 });

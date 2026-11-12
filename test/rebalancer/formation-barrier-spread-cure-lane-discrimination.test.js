@@ -34,6 +34,11 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {withRegisteredIncarnations} from
   '../test-helpers/endpoint-incarnation-fixture.js';
 import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
+import {createSystemTableCacheFixture} from './system-table-cache-fixture.js';
+import {
+  createNodeEndpoint,
+  createPostgresWireEndpoint,
+} from './unified-rebalancer-test-support.js';
 
 const FAKE_NOW_MS = 1_800_000_000_000;
 const READY_LEASE_EXPIRES_AT_MS = FAKE_NOW_MS + 600_000;
@@ -100,31 +105,11 @@ function createCache() {
     tables: [],
     services: [],
     replica_operations: [],
-    node_endpoints: READY_NODE_IDS.map((nodeId) => ({
-      node_id: nodeId,
-      transport_type: 'ws',
-      status: 'active',
-    })),
-    service_endpoints: READY_NODE_IDS.map((nodeId) => ({
-      node_id: nodeId,
-      service_id: 'sys-postgres-wire',
-      health_status: 'healthy',
-    })),
+    node_endpoints: READY_NODE_IDS.map(createNodeEndpoint),
+    service_endpoints: READY_NODE_IDS.map(createPostgresWireEndpoint),
     control_plane_publications: [],
   });
-  return {
-    get(tableName, key) {
-      return (rows[tableName] || []).find((row) =>
-        row.node_id === key || row.partition_id === key,
-      ) || null;
-    },
-    getAll(tableName) {
-      return rows[tableName] || [];
-    },
-    filter(tableName, predicate) {
-      return (rows[tableName] || []).filter(predicate);
-    },
-  };
+  return createSystemTableCacheFixture(rows);
 }
 
 function buildReadiness(nodeId) {
@@ -254,6 +239,7 @@ test('CL-044 cohort-not-a-blocker: valid barrier-held recovery targets do ' +
   'not defer priority cure planning', async (t) => {
   initializeTestEnvironment();
   const rebalancer = createRebalancer();
+  t.teardown(() => rebalancer.shutdown());
 
   assertRecoveryCohortTargets(t, rebalancer);
   const blocker = rebalancer.getCriticalSystemTopologySettlingBlocker();
@@ -275,6 +261,7 @@ test('CL-044 target-in-flight: a cure ADD aimed at a barrier-held cohort ' +
   'member does not win the defer row', (t) => {
   initializeTestEnvironment();
   const rebalancer = createRebalancer();
+  t.teardown(() => rebalancer.shutdown());
   assertRecoveryCohortTargets(t, rebalancer);
   const targetNodeId = COHORT_NODE_IDS[0];
   const blocker = {
@@ -332,6 +319,7 @@ test('CL-044 operation-terminal edge resets an escalated settle interval ' +
   'to the priority base cadence', (t) => {
   initializeTestEnvironment();
   const rebalancer = createRebalancer();
+  t.teardown(() => rebalancer.shutdown());
   rebalancer.isLeader = true;
   const enqueuedReasons = [];
   rebalancer.enqueueRebalanceCheck = (reason) => {
@@ -393,6 +381,9 @@ test('CL-044 lane pin: settle-gate escalation binds while the blocked-spread ' +
     PRIORITY_PARTITION_ID,
     {disconnectCohort: true},
   );
+  t.teardown(() => settlingRebalancer.shutdown());
+  const priorityRebalancer = createRebalancer();
+  t.teardown(() => priorityRebalancer.shutdown());
   const baseSettleIntervalMs = settlingRebalancer.currentInterval;
   const settleDecision =
     await settlingRebalancer.resolveTopologySettlingPlanningGateDecision();
@@ -407,7 +398,6 @@ test('CL-044 lane pin: settle-gate escalation binds while the blocked-spread ' +
     'topology settling consumes the escalating 75-120s interval lane',
   );
 
-  const priorityRebalancer = createRebalancer();
   const prioritySpreadDecision =
     priorityRebalancer.resolvePrioritySpreadPlanningGateDecision();
   t.equal(

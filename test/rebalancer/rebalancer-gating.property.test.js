@@ -24,6 +24,7 @@ import {
   CLUSTER_READINESS_TIMEOUT_MS,
 } from '../../src/constants/cdc-lifecycle-constants.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
+import {createSystemTableCacheFixture} from './system-table-cache-fixture.js';
 
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
@@ -48,28 +49,7 @@ function createMockCache(nodes = [], services = []) {
     ready_lease_expires_at: now + 10000,
     ...node,
   }));
-  const cache = {
-    nodes: new Map(normalizedNodes.map((n) => [n.node_id, n])),
-    services: new Map(services.map((s) => [s.service_id, s])),
-    partitions: new Map(),
-    tables: new Map(),
-    message_groups: new Map(),
-    replica_operations: new Map(),
-  };
-
-  return {
-    get: (tableName, key) => cache[tableName]?.get(key),
-    filter: (tableName, predicate) => {
-      const table = cache[tableName];
-      if (!table) return [];
-      return Array.from(table.values()).filter(predicate);
-    },
-    getAll: (tableName) => {
-      const table = cache[tableName];
-      if (!table) return [];
-      return Array.from(table.values());
-    },
-  };
+  return createSystemTableCacheFixture({nodes: normalizedNodes, services});
 }
 
 function createMockCdcService() {

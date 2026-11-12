@@ -147,6 +147,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         bootstrapReadinessState,
       });
 
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.isLeader = true;
       rebalancer.isStabilized = () => true;
@@ -201,6 +202,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         bootstrapReadinessState,
       });
 
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.isLeader = true;
       rebalancer.isStabilized = () => true;
@@ -277,6 +279,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         controlPlaneReadinessService: readinessService,
       });
 
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.isLeader = true;
       rebalancer.isStabilized = () => true;
@@ -359,6 +362,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         controlPlaneReadinessService: readinessService,
       });
 
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.isLeader = true;
       rebalancer.clusterReadinessConfirmed = true;
@@ -430,6 +434,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         controlPlaneReadinessService: readinessService,
       });
 
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.isLeader = true;
       rebalancer.clusterReadinessConfirmed = true;

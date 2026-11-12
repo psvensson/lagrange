@@ -1,3 +1,4 @@
+import {createSystemTableCacheFixture} from './system-table-cache-fixture.js';
 /**
  * Unit tests for cluster readiness gate integration in UnifiedRebalancer.
  * Validates that the rebalancer defers planning until the cluster is ready,
@@ -41,28 +42,7 @@ function createMockCache(nodes = [], services = []) {
     ready_lease_expires_at: now + 10000,
     ...node,
   }));
-  const cache = {
-    nodes: new Map(normalizedNodes.map((n) => [n.node_id, n])),
-    services: new Map(services.map((s) => [s.service_id, s])),
-    partitions: new Map(),
-    tables: new Map(),
-    message_groups: new Map(),
-    replica_operations: new Map(),
-  };
-
-  return {
-    get: (tableName, key) => cache[tableName]?.get(key),
-    filter: (tableName, predicate) => {
-      const table = cache[tableName];
-      if (!table) return [];
-      return Array.from(table.values()).filter(predicate);
-    },
-    getAll: (tableName) => {
-      const table = cache[tableName];
-      if (!table) return [];
-      return Array.from(table.values());
-    },
-  };
+  return createSystemTableCacheFixture({nodes: normalizedNodes, services});
 }
 
 function createMockCdcService() {
@@ -137,6 +117,7 @@ test('UnifiedRebalancer - Cluster Readiness Gate', async (t) => {
   await t.test('no signal provided — skips readiness check entirely',
     async (t) => {
       const rebalancer = createRebalancerWithSignal(null);
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.setLeader(true);
       rebalancer.cancelScheduledCheck();
@@ -155,6 +136,7 @@ test('UnifiedRebalancer - Cluster Readiness Gate', async (t) => {
         evaluate: () => ({ready: true, unmetConditions: []}),
       };
       const rebalancer = createRebalancerWithSignal(signal);
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.setLeader(true);
       rebalancer.cancelScheduledCheck();
@@ -182,6 +164,7 @@ test('UnifiedRebalancer - Cluster Readiness Gate', async (t) => {
         },
       };
       const rebalancer = createRebalancerWithSignal(signal);
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.setLeader(true);
       rebalancer.cancelScheduledCheck();
@@ -207,6 +190,7 @@ test('UnifiedRebalancer - Cluster Readiness Gate', async (t) => {
         },
       };
       const rebalancer = createRebalancerWithSignal(signal);
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.setLeader(true);
       rebalancer.cancelScheduledCheck();
@@ -233,6 +217,7 @@ test('UnifiedRebalancer - Cluster Readiness Gate', async (t) => {
         }),
       };
       const rebalancer = createRebalancerWithSignal(signal);
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.setLeader(true);
       rebalancer.cancelScheduledCheck();
@@ -263,6 +248,7 @@ test('UnifiedRebalancer - Cluster Readiness Gate', async (t) => {
         },
       };
       const rebalancer = createRebalancerWithSignal(signal);
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.setLeader(true);
       rebalancer.cancelScheduledCheck();
@@ -304,6 +290,7 @@ test('UnifiedRebalancer - Cluster Readiness Gate', async (t) => {
         },
       };
       const rebalancer = createRebalancerWithSignal(signal);
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       // Do not set leader
 
@@ -318,6 +305,7 @@ test('UnifiedRebalancer - Cluster Readiness Gate', async (t) => {
     async (t) => {
       // 1. Intentionally relaxed readiness
       const relaxedRebalancer = createRebalancerWithSignal(null);
+      t.teardown(() => relaxedRebalancer.shutdown());
       relaxedRebalancer.initialize();
       t.equal(relaxedRebalancer.clusterReadinessState, 'intentionally_relaxed');
       relaxedRebalancer.shutdown();
@@ -327,6 +315,7 @@ test('UnifiedRebalancer - Cluster Readiness Gate', async (t) => {
         evaluate: () => ({ready: true, unmetConditions: []}),
       };
       const confirmedRebalancer = createRebalancerWithSignal(readySignal);
+      t.teardown(() => confirmedRebalancer.shutdown());
       confirmedRebalancer.initialize();
       confirmedRebalancer.setLeader(true);
       confirmedRebalancer.cancelScheduledCheck();
@@ -340,6 +329,7 @@ test('UnifiedRebalancer - Cluster Readiness Gate', async (t) => {
         evaluate: () => ({ready: false, unmetConditions: ['nodesRegistered']}),
       };
       const degradedRebalancer = createRebalancerWithSignal(unreadySignal);
+      t.teardown(() => degradedRebalancer.shutdown());
       degradedRebalancer.initialize();
       degradedRebalancer.setLeader(true);
       degradedRebalancer.cancelScheduledCheck();
@@ -378,6 +368,7 @@ test('UnifiedRebalancer - Cluster Readiness Gate', async (t) => {
         requirePropagationLeader: false,
       }));
 
+      t.teardown(() => rebalancer.shutdown());
       rebalancer.initialize();
       rebalancer.setLeader(true);
       rebalancer.cancelScheduledCheck();

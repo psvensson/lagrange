@@ -71,6 +71,7 @@ test('a planning-gate pass reads only the injected clock', async (t) => {
   initializeTestEnvironment();
   const clock = {nowMs: VIRTUAL_NOW_MS};
   const rebalancer = buildRebalancer(clock);
+  t.teardown(() => rebalancer.shutdown());
   const blocker = await withThrowingAmbientClock(() => rebalancer.getCheckRebalanceBlocker());
   t.ok(blocker && blocker.decision, 'the gate produced a decision without the ambient clock');
   t.ok(rebalancer.getTimeUntilRebalanceStartEligible() >= 0,
