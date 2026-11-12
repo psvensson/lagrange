@@ -20,7 +20,6 @@ import {
 
 const SERVICE_LIFECYCLE_COLUMN = Object.freeze({
   STATE_ENTERED_AT: 'state_entered_at',
-  UPDATED_AT: 'updated_at',
 });
 const CLEANUP_OWNED_STATUS = 'cleanup_owned';
 const SERVICE_INCARNATION_TOKEN_FIELD_NAMES = Object.freeze([
@@ -72,16 +71,6 @@ function resolveServiceDurableVersion(row) {
     return {
       column: SERVICE_LIFECYCLE_COLUMN.STATE_ENTERED_AT,
       value: Number(row.state_entered_at),
-    };
-  }
-  if (!Object.prototype.hasOwnProperty.call(
-    row || {},
-    SERVICE_LIFECYCLE_COLUMN.STATE_ENTERED_AT,
-  ) &&
-      isFiniteSystemTableCacheNumber(row?.updated_at)) {
-    return {
-      column: SERVICE_LIFECYCLE_COLUMN.UPDATED_AT,
-      value: Number(row.updated_at),
     };
   }
   return null;

@@ -378,37 +378,16 @@ async function recoverService(stateMachine, cachedService, nodeId) {
   return status;
 }
 
-function resolveFiniteSnapshotVersion(contextValue, cachedValue) {
-  if (Number.isFinite(contextValue)) return contextValue;
-  return Number.isFinite(cachedValue) ? cachedValue : null;
-}
-
-function resolveSnapshotDurableVersion(stateMachine, replicaId, context) {
-  if (typeof context.durableVersionColumn === 'string' &&
+function resolveSnapshotDurableVersion(context) {
+  if (context.durableVersionColumn ===
+        DURABLE_VERSION_COLUMN.STATE_ENTERED_AT &&
       Number.isFinite(context.durableVersion)) {
     return {
       column: context.durableVersionColumn,
       value: context.durableVersion,
     };
   }
-  const cachedService = typeof stateMachine.systemTableCache?.get ===
-      'function' ?
-    stateMachine.systemTableCache.get(TABLES.SERVICES, replicaId) : null;
-  const stateEnteredAt = resolveFiniteSnapshotVersion(
-    context.stateEnteredAt,
-    cachedService?.state_entered_at,
-  );
-  const updatedAt = resolveFiniteSnapshotVersion(
-    context.durableUpdatedAt,
-    cachedService?.updated_at,
-  );
-  if (stateEnteredAt === null && updatedAt === null) return null;
-  return {
-    column: stateEnteredAt !== null ?
-      DURABLE_VERSION_COLUMN.STATE_ENTERED_AT :
-      DURABLE_VERSION_COLUMN.UPDATED_AT,
-    value: stateEnteredAt ?? updatedAt,
-  };
+  return null;
 }
 
 /**
@@ -539,11 +518,7 @@ function registerSnapshotInLane(
       context.reason,
     );
   }
-  const durableVersion = resolveSnapshotDurableVersion(
-    stateMachine,
-    replicaId,
-    context,
-  );
+  const durableVersion = resolveSnapshotDurableVersion(context);
   if (!durableVersion || !Number.isFinite(durableVersion.value)) {
     return refuseRecoverySnapshot(
       stateMachine,
@@ -733,10 +708,8 @@ function registerReplicaSnapshot(stateMachine, replicaId, context = {}) {
 }
 
 function registerReplicaForRecovery(stateMachine, replicaId, context) {
-  const now = stateMachine.now();
   const state = context.state;
-  const stateEnteredAt = Number.isFinite(context.stateEnteredAt) ?
-    context.stateEnteredAt : now;
+  const stateEnteredAt = context.stateEnteredAt;
 
   stateMachine.stateCounts[state]++;
 
@@ -766,10 +739,8 @@ function registerReplicaForRecovery(stateMachine, replicaId, context) {
     createdAt: context.createdAt,
     lifecycleIdentityAuthoritative:
       context.authoritativeSnapshot === true,
-    durableVersionColumn: context.durableVersionColumn ??
-      'state_entered_at',
-    durableVersion: Number.isFinite(context.durableVersion) ?
-      context.durableVersion : stateEnteredAt,
+    durableVersionColumn: context.durableVersionColumn,
+    durableVersion: context.durableVersion,
   };
 
   stateMachine.replicas.set(replicaId, replicaState);

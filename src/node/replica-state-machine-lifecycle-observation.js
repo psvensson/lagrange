@@ -35,7 +35,6 @@ FROM partitions
 WHERE partition_id = ?`;
 const DURABLE_VERSION_COLUMN = Object.freeze({
   STATE_ENTERED_AT: 'state_entered_at',
-  UPDATED_AT: 'updated_at',
 });
 const NO_REPLICA_LIFECYCLE_MUTATION_PREDICATE = Object.freeze({});
 
@@ -44,12 +43,6 @@ function durableRowVersion(service) {
     return {
       column: DURABLE_VERSION_COLUMN.STATE_ENTERED_AT,
       value: service.state_entered_at,
-    };
-  }
-  if (Number.isFinite(service?.updated_at)) {
-    return {
-      column: DURABLE_VERSION_COLUMN.UPDATED_AT,
-      value: service.updated_at,
     };
   }
   return null;
@@ -107,7 +100,8 @@ function buildReplicaLifecycleMutationPredicateFromRow(row) {
 
 function buildReplicaLifecyclePredicateFromState(replicaState) {
   const version = Number.isFinite(replicaState.durableVersion) &&
-      typeof replicaState.durableVersionColumn === 'string' ?
+      replicaState.durableVersionColumn ===
+        DURABLE_VERSION_COLUMN.STATE_ENTERED_AT ?
     {
       column: replicaState.durableVersionColumn,
       value: replicaState.durableVersion,

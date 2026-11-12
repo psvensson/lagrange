@@ -146,8 +146,11 @@ Required patterns:
 5. CDC-replicated row mutations are addressed by canonical primary key.
 6. Multi-row transitions either transition rows one by one by primary key or
    use an explicit transaction wrapper that preserves row identity.
-7. A partition-replica lifecycle update names the source status and the exact
-   durable version column/value (`state_entered_at`, or legacy `updated_at`).
+7. A partition-replica lifecycle update names the source status and its exact
+   canonical `state_entered_at` generation. `updated_at` is row metadata and
+   cannot substitute for a missing lifecycle generation. Recovery snapshots
+   carry the explicit canonical column and value from their observation;
+   neither the cache nor the current clock supplies a missing generation.
    A zero-row or unavailable outcome retains retry debt and never advances
    local state.
 8. Physical partition storage cleanup requires a current durable cleanup owner

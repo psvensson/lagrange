@@ -34,7 +34,10 @@ const RESTORABLE_DURABLE_REJOIN_PARTITION_STATUSES = new Set([
 ]);
 const DURABLE_VERSION_COLUMN = Object.freeze({
   STATE_ENTERED_AT: 'state_entered_at',
-  UPDATED_AT: 'updated_at',
+});
+const DURABLE_REJOIN_RESTORE_ERROR_CODE = Object.freeze({
+  LIFECYCLE_GENERATION_UNAVAILABLE:
+    'DURABLE_REJOIN_LIFECYCLE_GENERATION_UNAVAILABLE',
 });
 
 function normalizeJoinMetadataString(value) {
@@ -244,6 +247,15 @@ function buildDurableRejoinPartitionRestoreOptions({
     ) :
     null;
 
+  if (!Number.isFinite(serviceRow.state_entered_at)) {
+    const error = new Error(
+      `Missing canonical lifecycle generation for durable rejoin replica ${replicaId}`,
+    );
+    error.code = DURABLE_REJOIN_RESTORE_ERROR_CODE.LIFECYCLE_GENERATION_UNAVAILABLE;
+    error.deferRetry = true;
+    throw error;
+  }
+
   return {
     serviceType: UNIFIED_SERVICE_TYPE.PARTITION,
     partitionId,
@@ -278,11 +290,8 @@ function buildDurableRejoinPartitionRestoreOptions({
       replicaId: serviceRow.service_id,
       serviceType: serviceRow.service_type,
       status: serviceRow.status,
-      durableVersionColumn: Number.isFinite(serviceRow.state_entered_at) ?
-        DURABLE_VERSION_COLUMN.STATE_ENTERED_AT :
-        DURABLE_VERSION_COLUMN.UPDATED_AT,
-      durableVersion: Number.isFinite(serviceRow.state_entered_at) ?
-        serviceRow.state_entered_at : serviceRow.updated_at,
+      durableVersionColumn: DURABLE_VERSION_COLUMN.STATE_ENTERED_AT,
+      durableVersion: serviceRow.state_entered_at,
     },
   };
 }
@@ -383,6 +392,8 @@ function buildDurableRejoinPartitionRestorePlans(options = {}) {
         nodeId,
         partitionId,
         replicaId,
+        errorCode: error?.code || null,
+        deferRetry: error?.deferRetry === true,
         error: error?.message || String(error),
       });
     }
