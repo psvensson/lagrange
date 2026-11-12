@@ -669,3 +669,34 @@ keeps a collection's version constant across pages and requires consuming the
 continuation until completion. That is design inspiration for distinguishing a
 complete collection from a successful subset, not proof of this implementation:
 https://kubernetes.io/docs/reference/using-api/api-concepts/#retrieving-large-results-sets-in-chunks
+
+
+## Exact selected-token receipt and bootstrap controls
+
+Independent reviewer subagent:/root/takeover_inventory read the four production
+files in a8d7e271 to 21da553a and their owning continuations/controls. Its verdict
+is APPROVE for bounded source review and lab measurement only: exact registration
+release, retained RUNNING custody and replacement wake, idempotent slot release,
+queued shutdown ownership, captured cell/cache checks and private fault retention
+were accepted. Physical candidate results, impact gates, recipient completeness
+and whole CDC closure remain open. Root owns final composition.
+
+Root's supplied-token audit found two downstream consumers still read duplicated
+flat request fields: attachAuthoritativeObservationReceipt reads flat observation
+scope, and executeBootstrapSnapshotRead reads intent/flat phase. Even preserving
+an already-built token at ingress would lose these two intents. Root owns ingress
+selection/conflict checks and the canonical shared completeness classifier; this
+lane owns those two downstream consumers. No second field authority or fallback
+will be retained.
+
+Two new tests-only controls are frozen on unchanged 21da production. The complete
+read builds an explicit RPC_REQUIRED, REQUIRED-leader, COMPLETE_TABLE token and
+passes only that token plus a session ID through the actual gateway. It requires
+a real receipt bound to the original source generation, the exact token at the
+owner, and successful canonical reconciliation. The bootstrap control supplies an
+explicit LOCAL_ONLY bootstrap-strategy token with its phase only inside that
+token, and requires the snapshot provider to receive that exact token while no
+owner RPC, SQL read or cache mutation occurs. The existing source/generation
+fixture is used; no token constructor default can hide the requested read mode.
+Original controls remain unchanged. Root will review these controls before their
+first physical red; production scope/phase consumers are not changed yet.
