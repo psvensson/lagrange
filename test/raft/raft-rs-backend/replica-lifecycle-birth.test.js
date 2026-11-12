@@ -15,6 +15,7 @@ import path from 'node:path';
 import {test} from 'node:test';
 
 import Database from 'better-sqlite3';
+import {requirePermissionWitness} from '../../test-helpers/permission-witness.js';
 
 import {raftRsLifecycleAdministration as administration} from
   '../../../src/raft/raft-rs-lifecycle-administration.js';
@@ -49,7 +50,6 @@ import {REPLICA_DB_PRAGMA} from
 const GROUP = 'birth-partition';
 const REPLICA = 'birth-partition-r-a';
 const OTHER = 'birth-partition-r-b';
-const RUNS_AS_ROOT = process.getuid?.() === 0;
 const SELECT_TABLE_SQL = 'SELECT sql FROM sqlite_master WHERE name = ?';
 
 function directory(t) {
@@ -256,7 +256,8 @@ test('a lookup that failed is never an absent file: a path through a ' +
 // A process running as root searches every directory: the permission
 // witness needs an unprivileged process.
 test('a file under a directory this process may not search, or may not ' +
-  'read, is never absent', {skip: RUNS_AS_ROOT}, (t) => {
+  'read, is never absent', (t) => {
+  requirePermissionWitness();
   const dir = directory(t);
   const closed = path.join(dir, 'closed');
   fs.mkdirSync(closed);
@@ -264,6 +265,8 @@ test('a file under a directory this process may not search, or may not ' +
   born(file).db.close();
   try {
     fs.chmodSync(closed, 0o000);
+    assert.throws(() => fs.lstatSync(file), {code: 'EACCES'},
+      'premise: the real lookup is denied by the filesystem');
     assert.equal(fs.existsSync(file), false,
       'premise: existsSync reads the unreachable file as missing');
     assert.deepEqual(read(file), unreadable('lifecycle-database-unreadable',
@@ -276,10 +279,14 @@ test('a file under a directory this process may not search, or may not ' +
     // Searchable but not readable: the name is missing, and the directory
     // that says so cannot be listed - not a positive absence.
     fs.chmodSync(closed, 0o300);
+    assert.throws(() => fs.accessSync(closed, fs.constants.R_OK | fs.constants.X_OK),
+      {code: 'EACCES'}, 'premise: the searchable directory still cannot be read');
     assert.deepEqual(
       readDurableFilePresence(path.join(closed, 'other.sqlite')),
       {presence: PRESENCE.UNKNOWN, cause: {code: 'EACCES', path: closed}});
   } finally {
     fs.chmodSync(closed, 0o700);
   }
+  assert.equal(read(file).opening, OPENING.NEVER_OPENED,
+    'restored access reads the same born replica through its lifecycle owner');
 });

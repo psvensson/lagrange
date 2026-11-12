@@ -1,7 +1,7 @@
 import {describe, it, beforeEach, afterEach} from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  chmod, lstat, mkdir, mkdtemp, rm, stat, symlink, utimes, writeFile,
+  chmod, lstat, mkdir, mkdtemp, readdir, rm, stat, symlink, unlink, utimes, writeFile,
 } from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path, {join} from 'node:path';
@@ -39,8 +39,7 @@ import {
 } from '../../src/constants/test-output-prune-values.js';
 import {main as pruneTestOutputMain} from '../../scripts/prune-test-output.js';
 
-// Permission tests mean nothing to root, which reads and removes anything.
-const RUNS_AS_ROOT = process.getuid?.() === 0;
+import {requirePermissionWitness} from '../test-helpers/permission-witness.js';
 
 const TEST_OUTPUT_PRUNE_DEFAULT_SCOPE_TEST_NAME =
   'default policy prunes sibling artifact roots to the latest four runs';
@@ -624,17 +623,16 @@ describe('routine retention safety', () => {
   });
 
   it('keeps and names what it cannot read, and prunes the rest',
-    {skip: RUNS_AS_ROOT}, async () => {
+    async () => {
+      requirePermissionWitness();
       const locked = join(root, 'locked-tree', 'private');
       await writeArtifact(join(locked, 'old.json'));
       await setArtifactTime(join(locked, 'old.json'), OLD);
       await setArtifactTime(locked, OLD);
       await setArtifactTime(path.dirname(locked), OLD);
-      await chmod(locked, 0o000);
       const results = join(workspace, '.tap', 'test-results');
       const unreadable = join(results, 'sealed');
       await mkdir(unreadable, {recursive: true});
-      await chmod(unreadable, 0o000);
       const gone = join(results, 'test', 'gone.test.js.tap');
       await writeArtifact(gone);
       await setArtifactTime(gone, OLD);
@@ -645,6 +643,10 @@ describe('routine retention safety', () => {
 
       let result;
       try {
+        await chmod(locked, 0o000);
+        await chmod(unreadable, 0o000);
+        await assert.rejects(readdir(locked), {code: 'EACCES'});
+        await assert.rejects(readdir(unreadable), {code: 'EACCES'});
         result = await applyPolicy();
       } finally {
         await chmod(locked, 0o700);
@@ -662,12 +664,12 @@ describe('routine retention safety', () => {
     });
 
   it('a delete that fails is reported and the others still happen',
-    {skip: RUNS_AS_ROOT}, async () => {
+    async () => {
+      requirePermissionWitness();
       const locked = join(root, 'undeletable', 'old.json');
       await writeArtifact(locked);
       await setArtifactTime(locked, OLD);
       await setArtifactTime(path.dirname(locked), OLD);
-      await chmod(path.dirname(locked), 0o500);
       // A later category: every category after the failure still runs.
       const gone = join(workspace, '.tap', 'test-results', 'test', 'gone.test.js.tap');
       await writeArtifact(gone);
@@ -675,6 +677,8 @@ describe('routine retention safety', () => {
 
       let result;
       try {
+        await chmod(path.dirname(locked), 0o500);
+        await assert.rejects(unlink(locked), {code: 'EACCES'});
         result = await applyPolicy();
       } finally {
         await chmod(path.dirname(locked), 0o700);
@@ -824,7 +828,8 @@ describe('a test file that cannot be checked is kept, and never stops retention'
   });
 
   it('drops a result whose path runs through a file and keeps one it may not check',
-    {skip: RUNS_AS_ROOT}, async () => {
+    async () => {
+      requirePermissionWitness();
       const results = join(workspace, '.tap', 'test-results');
       // test/helpers.js is a FILE, so test/helpers.js/x.test.js cannot exist.
       await mkdir(join(workspace, 'test'), {recursive: true});
@@ -837,8 +842,9 @@ describe('a test file that cannot be checked is kept, and never stops retention'
         await writeArtifact(file);
         await setArtifactTime(file, '2026-01-01T00:00:00Z');
       }
-      await chmod(join(workspace, 'private'), 0o000);
       try {
+        await chmod(join(workspace, 'private'), 0o000);
+        await assert.rejects(stat(join(workspace, 'private', 'y.test.js')), {code: 'EACCES'});
         await runPruneScript([
           TEST_OUTPUT_PRUNE_FLAG.ROOT, join(workspace, 'test-output'),
           TEST_OUTPUT_PRUNE_FLAG.KEEP_DAYS, '7',
