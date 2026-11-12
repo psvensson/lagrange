@@ -2,12 +2,14 @@ import {compareSameEntryPositions, entryPositionOf} from
   './system-table-cache-cdc-fold.js';
 import {CDC_EVENT_IDENTITY} from '../constants/cdc-lifecycle-constants.js';
 import {isDenseDataArray, isRecord} from '../utils/canonical-json-data.js';
+import {INITIAL_PARTITION_IDS} from '../bootstrap/system-table-schemas-constants.js';
 
 const objectAssign = Object.assign;
 const objectFreeze = Object.freeze;
 const objectHasOwn = Object.hasOwn;
 const objectKeys = Object.keys;
 const numberIsSafeInteger = Number.isSafeInteger;
+const mathSign = Math.sign;
 const SOURCE_RANGE_FIELDS = objectFreeze(['sourcePartition', 'incarnation', 'after', 'through']);
 const SOURCE_POSITION_FIELDS = objectFreeze(['logIndex', 'ordinal']);
 
@@ -82,6 +84,9 @@ const SOURCE_RELIST_STATE = Object.freeze({
   // A gap is owed a list but no relister is registered on this cache: the
   // cell stays GAP (typed), nothing is merged.
   NO_RELISTER: 'no_relister',
+  // The sole retry clock failed. Debt remains until registration or a new gap
+  // wakes that owner; no alternate clock or immediate retry loop is created.
+  FAULTED: 'faulted',
 });
 
 // What one relister call ended as: RETRY - the cell may still be stale and
@@ -90,6 +95,8 @@ const SOURCE_RELIST_STATE = Object.freeze({
 const SOURCE_RELIST_OUTCOME = Object.freeze({
   RETRY: 'retry',
   STOPPED: 'stopped',
+  // Cache-side outcome only; a registered list returns RETRY or STOPPED.
+  FAULTED: SOURCE_RELIST_STATE.FAULTED,
 });
 
 // Whether a complete image may be installed into the cell it was begun
@@ -110,6 +117,11 @@ const SOURCE_ORDER_LOG_MSG = Object.freeze({
   NO_RELISTER: 'CDC source gap owes a list but no relister is registered on this cache',
   RELIST_FAILED: 'CDC source re-list failed; another is owed while the gap stands',
   CURRENT_LISTENER_FAILED: 'CDC source-current observer failed after publication',
+  RELIST_PACING_FAILED: 'CDC source re-list retry clock failed; gap remains faulted',
+});
+const SOURCE_RELIST_ERROR = Object.freeze({
+  OWNER_REQUIRED: 'CDC source relister requires list, isStopped and paceAfterFailure',
+  INVALID_OUTCOME: 'CDC source relister returned an invalid or nonterminal stopped outcome',
 });
 
 // A list at applied index P holds every event of every entry at or below P.
@@ -119,9 +131,9 @@ const LISTED_ORDINAL = Number.MAX_SAFE_INTEGER;
 // applied keys suffice.
 const SOURCE_ORDER_MAX_KEYS_PER_TABLE = 4096;
 
-function comparePositions(left, right) {
-  return left.logIndex === right.logIndex ? Math.sign(left.ordinal - right.ordinal) :
-    Math.sign(left.logIndex - right.logIndex);
+function compareSourcePositions(left, right) {
+  return left.logIndex === right.logIndex ? mathSign(left.ordinal - right.ordinal) :
+    mathSign(left.logIndex - right.logIndex);
 }
 
 function isSourcePosition(value) {
@@ -141,7 +153,7 @@ function isSourceRange(range) {
     (range.incarnation === null || (typeof range.incarnation === 'string' &&
       range.incarnation.length > 0)) &&
     isSourcePosition(range.after) && isSourcePosition(range.through) &&
-    comparePositions(range.after, range.through) < 0;
+    compareSourcePositions(range.after, range.through) < 0;
 }
 
 function captureSourceRange(range) {
@@ -170,10 +182,10 @@ function isSourceVector(range, events) {
         !numberIsSafeInteger(event.sourceLogIndex) || event.sourceLogIndex < 1 ||
         !numberIsSafeInteger(event.sourceOrdinal) || event.sourceOrdinal < 0) return false;
     const position = {logIndex: event.sourceLogIndex, ordinal: event.sourceOrdinal};
-    if (comparePositions(previous, position) >= 0) return false;
+    if (compareSourcePositions(previous, position) >= 0) return false;
     previous = position;
   }
-  return comparePositions(previous, range.through) === 0;
+  return compareSourcePositions(previous, range.through) === 0;
 }
 
 function isSourceMember(range, event) {
@@ -184,15 +196,17 @@ function isSourceMember(range, event) {
     return false;
   }
   const position = {logIndex: event.sourceLogIndex, ordinal: event.sourceOrdinal};
-  return comparePositions(range.after, position) < 0 &&
-    comparePositions(position, range.through) <= 0;
+  return compareSourcePositions(range.after, position) < 0 &&
+    compareSourcePositions(position, range.through) <= 0;
 }
 
 // The within-entry rule's position of one event.
 function cellSnapshot(cell) {
   return Object.freeze({sourcePartition: cell.sourcePartition, tableName: cell.tableName,
     incarnation: cell.incarnation, state: cell.state, position: cell.position,
-    need: cell.need, relist: cell.relist, lists: cell.lists});
+    need: cell.need, relist: cell.relist, lists: cell.lists,
+    relistFailures: cell.relistFailures, lastRelistFailure: cell.lastRelistFailure,
+    diagnosticFailures: cell.diagnosticFailures, lastDiagnosticFailure: cell.lastDiagnosticFailure});
 }
 
 class SystemTableCacheSourceOrder {
@@ -217,30 +231,40 @@ class SystemTableCacheSourceOrder {
     return () => this.currentListeners.delete(listener);
   }
 
-  cellOf(sourcePartition, tableName = null) {
+  assertSourceTable(sourcePartition, tableName) {
+    if (!this.sourceTableMatches(sourcePartition, tableName)) {
+      throw objectAssign(new Error(CDC_EVENT_IDENTITY.INVALID_MESSAGE),
+        {code: CDC_EVENT_IDENTITY.INVALID_CODE});
+    }
+  }
+
+  cellOf(sourcePartition, tableName) {
+    this.assertSourceTable(sourcePartition, tableName);
     let cell = this.cells.get(sourcePartition);
     if (!cell) {
       cell = {sourcePartition, tableName, incarnation: null, state: SOURCE_POSITION_STATE.UNKNOWN,
         position: null, need: null, relist: SOURCE_RELIST_STATE.IDLE, lists: 0,
-        generation: Symbol(), effectGeneration: Symbol()};
+        generation: Symbol(), effectGeneration: Symbol(), relistFailures: 0,
+        lastRelistFailure: null, diagnosticFailures: 0, lastDiagnosticFailure: null};
       this.cells.set(sourcePartition, cell);
     }
-    cell.tableName ??= tableName;
     return cell;
   }
 
   captureEffectContext(sourcePartition, tableName, incarnation) {
-    const cell = this.cellOf(sourcePartition, tableName);
-    if (cell.tableName !== tableName || typeof incarnation !== 'string' || incarnation.length === 0) {
+    if (typeof incarnation !== 'string' || incarnation.length === 0) {
       throw Object.assign(new Error(CDC_EVENT_IDENTITY.INVALID_MESSAGE),
         {code: CDC_EVENT_IDENTITY.INVALID_CODE});
     }
+    const cell = this.cellOf(sourcePartition, tableName);
     return Object.freeze({cell, incarnation, generation: cell.effectGeneration});
   }
 
   sourceTableMatches(sourcePartition, tableName) {
+    if (typeof tableName !== 'string' || !objectHasOwn(INITIAL_PARTITION_IDS, tableName) ||
+        INITIAL_PARTITION_IDS[tableName] !== sourcePartition) return false;
     const cell = this.cells.get(sourcePartition);
-    return cell === undefined || cell.tableName === null || cell.tableName === tableName;
+    return cell === undefined || cell.tableName === tableName;
   }
 
   effectContextIsCurrent(context) {
@@ -264,8 +288,9 @@ class SystemTableCacheSourceOrder {
   }
 
   tableGeneration(tableName) {
-    for (const cell of this.cells.values()) {
-      if (cell.tableName === tableName) return cell.generation;
+    if (objectHasOwn(INITIAL_PARTITION_IDS, tableName)) {
+      const cell = this.cells.get(INITIAL_PARTITION_IDS[tableName]);
+      if (cell !== undefined) return cell.generation;
     }
     // Before the first source cell, complete reads still belong to this
     // exact cache lifetime. A shared null would survive clear or another cache.
@@ -295,30 +320,41 @@ class SystemTableCacheSourceOrder {
     }
     if (cell.position !== null) {
       if (cell.incarnation !== incoming.incarnation) return SOURCE_EFFECT_STATE.UNAVAILABLE;
-      if (comparePositions(incoming, cell.position) <= 0) return SOURCE_EFFECT_STATE.COVERED;
+      if (compareSourcePositions(incoming, cell.position) <= 0) return SOURCE_EFFECT_STATE.COVERED;
     }
     const applied = this.tables.get(tableName)?.get(key);
     return applied?.partition === incoming.partition &&
       applied.incarnation === incoming.incarnation &&
-      comparePositions(incoming, applied) <= 0 ?
+      compareSourcePositions(incoming, applied) <= 0 ?
       SOURCE_EFFECT_STATE.COVERED : SOURCE_EFFECT_STATE.APPLY;
   }
 
   retainEffectRecovery(event, range) {
+    // A noncanonical producer still owns its durable ledger debt. It cannot
+    // acquire a cache cell or turn an invalid table/source pair into a relist.
+    if (!this.sourceTableMatches(event.sourcePartition, event.tableName)) return false;
     this.recordGap({sourcePartition: event.sourcePartition,
       incarnation: range.incarnation,
       through: {logIndex: event.sourceLogIndex, ordinal: event.sourceOrdinal}}, event.tableName);
+    return true;
   }
 
   /**
    * Register the one owner that lists a source table again (the CDC
    * integration service of this node).
-   * @param {Function} relister - async ({sourcePartition, tableName}) =>
-   *   void; it installs the image through recordListedPosition.
+   * @param {Object} relister - The one required owner record: list(request),
+   *   isStopped(), and paceAfterFailure(request, cause). The list installs
+   *   its image through recordListedPosition; only actual shutdown is STOPPED.
    * @param {Object} [logger] - Where an owed list without a relister is said.
    */
   registerRelister(relister, logger = null) {
-    this.relister = relister;
+    const {list, isStopped, paceAfterFailure} = relister;
+    if (typeof list !== 'function' || typeof isStopped !== 'function' ||
+        typeof paceAfterFailure !== 'function') throw new Error(SOURCE_RELIST_ERROR.OWNER_REQUIRED);
+    // A registration is itself the wake, including re-registration of the
+    // same service after its sole clock has recovered. Capture its methods.
+    this.relister = objectFreeze({list: list.bind(relister), isStopped: isStopped.bind(relister),
+      paceAfterFailure: paceAfterFailure.bind(relister)});
     this.logger = logger;
     for (const cell of this.cells.values()) {
       if (cell.state === SOURCE_POSITION_STATE.GAP) this.requestRelist(cell);
@@ -338,7 +374,7 @@ class SystemTableCacheSourceOrder {
     const cell = this.cells.get(range.sourcePartition);
     const known = cell !== undefined && cell.position !== null &&
       cell.incarnation === range.incarnation;
-    const decision = known && comparePositions(range.after, cell.position) <= 0 ?
+    const decision = known && compareSourcePositions(range.after, cell.position) <= 0 ?
       SOURCE_RANGE_DECISION.APPLY : SOURCE_RANGE_DECISION.GAP;
     return Object.freeze({decision, have: known ? cell.position : null, need: range.after});
   }
@@ -360,11 +396,11 @@ class SystemTableCacheSourceOrder {
       cell.effectGeneration = Symbol();
       this.tables.delete(tableName);
     }
-    if (cell.position !== null && comparePositions(range.through, cell.position) <= 0) {
+    if (cell.position !== null && compareSourcePositions(range.through, cell.position) <= 0) {
       this.settleNeed(cell);
       return;
     }
-    cell.need = cell.need === null || comparePositions(range.through, cell.need) > 0 ?
+    cell.need = cell.need === null || compareSourcePositions(range.through, cell.need) > 0 ?
       range.through : cell.need;
     cell.state = SOURCE_POSITION_STATE.GAP;
     this.requestRelist(cell);
@@ -394,7 +430,7 @@ class SystemTableCacheSourceOrder {
   memberApplied(range, position) {
     const cell = this.cells.get(range.sourcePartition);
     return cell !== undefined && cell.position !== null &&
-      cell.incarnation === range.incarnation && comparePositions(position, cell.position) <= 0;
+      cell.incarnation === range.incarnation && compareSourcePositions(position, cell.position) <= 0;
   }
 
   /**
@@ -406,14 +442,14 @@ class SystemTableCacheSourceOrder {
     if (!this.effectContextIsCurrent(context)) return false;
     const cell = this.cellOf(range.sourcePartition, tableName);
     if (cell.incarnation !== range.incarnation || cell.position === null) return false;
-    if (comparePositions(range.through, cell.position) > 0) cell.position = range.through;
+    if (compareSourcePositions(range.through, cell.position) > 0) cell.position = range.through;
     this.settleNeed(cell);
     return this.effectContextIsCurrent(context);
   }
 
   settleNeed(cell) {
     const before = cell.state;
-    if (cell.need !== null && comparePositions(cell.need, cell.position) <= 0) cell.need = null;
+    if (cell.need !== null && compareSourcePositions(cell.need, cell.position) <= 0) cell.need = null;
     cell.state = cell.need === null ? SOURCE_POSITION_STATE.CURRENT : SOURCE_POSITION_STATE.GAP;
     if (cell.state === SOURCE_POSITION_STATE.GAP) this.requestRelist(cell);
     else if (before !== SOURCE_POSITION_STATE.CURRENT) {
@@ -421,8 +457,9 @@ class SystemTableCacheSourceOrder {
         try {
           listener(cell.sourcePartition);
         } catch (error) {
-          this.logger?.warn?.(SOURCE_ORDER_LOG_MSG.CURRENT_LISTENER_FAILED,
-            {sourcePartition: cell.sourcePartition, error: error.message});
+          this.emitDiagnostic(cell, () => this.logger?.warn?.(
+            SOURCE_ORDER_LOG_MSG.CURRENT_LISTENER_FAILED,
+            {sourcePartition: cell.sourcePartition, error}));
         }
       }
     }
@@ -447,7 +484,7 @@ class SystemTableCacheSourceOrder {
       cell.incarnation = incarnation;
       cell.position = listed;
       cell.need = null;
-    } else if (cell.position === null || comparePositions(listed, cell.position) > 0) {
+    } else if (cell.position === null || compareSourcePositions(listed, cell.position) > 0) {
       cell.position = listed;
     }
     this.settleNeed(cell);
@@ -474,6 +511,7 @@ class SystemTableCacheSourceOrder {
    * @return {string} A SOURCE_IMAGE_ADMISSION.
    */
   admitImage(token, {sourcePartition, tableName, incarnation, appliedIndex}) {
+    this.assertSourceTable(sourcePartition, tableName);
     const cell = this.cells.get(sourcePartition);
     if (cell !== token.cell || cell.tableName !== tableName ||
         cell.effectGeneration !== token.generation ||
@@ -482,7 +520,7 @@ class SystemTableCacheSourceOrder {
     }
     const listed = {logIndex: appliedIndex, ordinal: LISTED_ORDINAL};
     return cell.incarnation === incarnation && cell.position !== null &&
-      comparePositions(listed, cell.position) <= 0 ?
+      compareSourcePositions(listed, cell.position) <= 0 ?
       SOURCE_IMAGE_ADMISSION.SUPERSEDED : SOURCE_IMAGE_ADMISSION.INSTALL;
   }
 
@@ -490,33 +528,83 @@ class SystemTableCacheSourceOrder {
   // with the cell still stale (the image predates what was missed) owes
   // another; the relister paces its own retries.
   requestRelist(cell) {
-    if (cell.relist === SOURCE_RELIST_STATE.RUNNING) return;
+    if (!this.cellOwesRelist(cell) || cell.relist === SOURCE_RELIST_STATE.RUNNING) return;
     if (this.relister === null) {
-      if (cell.relist !== SOURCE_RELIST_STATE.NO_RELISTER) {
-        this.logger?.warn?.(SOURCE_ORDER_LOG_MSG.NO_RELISTER, cellSnapshot(cell));
-      }
+      const newlyUnbound = cell.relist !== SOURCE_RELIST_STATE.NO_RELISTER;
       cell.relist = SOURCE_RELIST_STATE.NO_RELISTER;
+      if (newlyUnbound) this.emitDiagnostic(cell, () => this.logger?.warn?.(
+        SOURCE_ORDER_LOG_MSG.NO_RELISTER, cellSnapshot(cell)));
       return;
     }
     cell.relist = SOURCE_RELIST_STATE.RUNNING;
-    const relister = this.relister;
-    let outcome = SOURCE_RELIST_OUTCOME.STOPPED;
-    Promise.resolve()
-      .then(() => relister({sourcePartition: cell.sourcePartition, tableName: cell.tableName}))
-      .then((answer) => {
-        outcome = answer;
-      }, (error) => this.logger?.warn?.(SOURCE_ORDER_LOG_MSG.RELIST_FAILED,
-        {...cellSnapshot(cell), error: error?.message ?? String(error)}))
-      .finally(() => {
-        cell.relist = SOURCE_RELIST_STATE.IDLE;
-        // The relister paces its own attempts (it returns RETRY only after
-        // its backoff); STOPPED (its owner is terminal) owes nothing more.
-        if (outcome === SOURCE_RELIST_OUTCOME.RETRY &&
-            cell.state === SOURCE_POSITION_STATE.GAP &&
-            this.cells.get(cell.sourcePartition) === cell) {
-          this.requestRelist(cell);
+    void this.runRelist(cell, this.relister);
+  }
+
+  cellOwesRelist(cell) {
+    return this.cells.get(cell.sourcePartition) === cell && cell.state === SOURCE_POSITION_STATE.GAP;
+  }
+
+  emitDiagnostic(cell, emit) {
+    try {
+      emit();
+    } catch (cause) {
+      // Even reading a thrown value's message or converting it can execute
+      // observer code. Retain the exact latest cause without formatting it.
+      cell.diagnosticFailures += 1;
+      cell.lastDiagnosticFailure = cause;
+    }
+  }
+
+  async paceFailedRelist(cell, owner, request, cause) {
+    cell.relistFailures += 1;
+    cell.lastRelistFailure = objectFreeze({cause, pacingCause: null});
+    this.emitDiagnostic(cell, () => this.logger?.warn?.(SOURCE_ORDER_LOG_MSG.RELIST_FAILED,
+      {...cellSnapshot(cell), error: cause}));
+    if (!this.cellOwesRelist(cell) || this.relister !== owner) return SOURCE_RELIST_OUTCOME.RETRY;
+    try {
+      await owner.paceAfterFailure(request, cause);
+      return owner.isStopped() === true ? SOURCE_RELIST_OUTCOME.STOPPED : SOURCE_RELIST_OUTCOME.RETRY;
+    } catch (pacingCause) {
+      cell.lastRelistFailure = objectFreeze({cause, pacingCause});
+      return SOURCE_RELIST_OUTCOME.FAULTED;
+    }
+  }
+
+  finishRelist(cell, owner, outcome) {
+    cell.relist = outcome === SOURCE_RELIST_OUTCOME.FAULTED ?
+      SOURCE_RELIST_STATE.FAULTED : SOURCE_RELIST_STATE.IDLE;
+    if (outcome === SOURCE_RELIST_OUTCOME.FAULTED) {
+      // Publish FAULTED before this observer. A real registration or gap it
+      // triggers may wake the healed owner, and is never overwritten here.
+      this.emitDiagnostic(cell, () => this.logger?.warn?.(SOURCE_ORDER_LOG_MSG.RELIST_PACING_FAILED,
+        cellSnapshot(cell)));
+    }
+    if (!this.cellOwesRelist(cell)) return;
+    // Registration while RUNNING is retained by the captured owner identity.
+    // A terminal or faulted old owner must not consume the new owner's wake.
+    if (this.relister !== owner || outcome === SOURCE_RELIST_OUTCOME.RETRY) this.requestRelist(cell);
+  }
+
+  async runRelist(cell, owner) {
+    const request = objectFreeze({sourcePartition: cell.sourcePartition, tableName: cell.tableName});
+    let outcome;
+    try {
+      // Relist work starts after the synchronous gap publication completes.
+      await Promise.resolve();
+      if (!this.cellOwesRelist(cell) || this.relister !== owner) {
+        outcome = SOURCE_RELIST_OUTCOME.RETRY;
+      } else {
+        outcome = await owner.list(request);
+        if (outcome !== SOURCE_RELIST_OUTCOME.RETRY &&
+            !(outcome === SOURCE_RELIST_OUTCOME.STOPPED && owner.isStopped() === true)) {
+          throw new Error(SOURCE_RELIST_ERROR.INVALID_OUTCOME);
         }
-      });
+      }
+    } catch (cause) {
+      outcome = await this.paceFailedRelist(cell, owner, request, cause);
+    } finally {
+      this.finishRelist(cell, owner, outcome);
+    }
   }
 
   /**
@@ -526,7 +614,12 @@ class SystemTableCacheSourceOrder {
    * @return {Object} Frozen cell snapshot (UNKNOWN when none).
    */
   positionOf(sourcePartition) {
-    return cellSnapshot(this.cells.get(sourcePartition) ?? this.cellOf(sourcePartition));
+    const cell = this.cells.get(sourcePartition);
+    if (cell !== undefined) return cellSnapshot(cell);
+    return objectFreeze({sourcePartition, tableName: null, incarnation: null,
+      state: SOURCE_POSITION_STATE.UNKNOWN, position: null, need: null,
+      relist: SOURCE_RELIST_STATE.IDLE, lists: 0, relistFailures: 0,
+      lastRelistFailure: null, diagnosticFailures: 0, lastDiagnosticFailure: null});
   }
 
   /**
@@ -577,4 +670,4 @@ class SystemTableCacheSourceOrder {
 
 export {SOURCE_EFFECT_STATE, SOURCE_IMAGE_ADMISSION, SOURCE_POSITION_STATE, SOURCE_RANGE_DECISION,
   SOURCE_RELIST_OUTCOME, SystemTableCacheSourceOrder, captureSourceRange,
-  isSourceMember, isSourceRange, isSourceVector};
+  compareSourcePositions, isSourceMember, isSourceRange, isSourceVector};

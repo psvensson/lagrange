@@ -17,6 +17,9 @@ import {versionStampsOf, writeSupersedesTombstone} from
   './system-table-cache-tombstone-store.js';
 import {fastJsonClone} from '../utils/fast-json-clone.js';
 
+const numberIsSafeInteger = Number.isSafeInteger;
+const mathSign = Math.sign;
+
 const CDC_ROW_FOLD_STATE = Object.freeze({
   // No row was held: the event's row (an UPDATE/UPSERT on a missing key too).
   INSERTED: 'inserted',
@@ -92,8 +95,8 @@ function entryPositionOf(data, options) {
   const hlc = data?.[COLUMN.UPDATED_AT_HLC];
   if (typeof hlc !== 'string' || hlc.length === 0 ||
       typeof options?.sourcePartition !== 'string' ||
-      !Number.isSafeInteger(options?.sourceLogIndex) ||
-      !Number.isSafeInteger(options?.sourceOrdinal)) return null;
+      !numberIsSafeInteger(options?.sourceLogIndex) ||
+      !numberIsSafeInteger(options?.sourceOrdinal)) return null;
   return Object.freeze({hlc, partition: options.sourcePartition,
     logIndex: options.sourceLogIndex, ordinal: options.sourceOrdinal,
     incarnation: options.sourceIncarnation, eventKey: options.eventKey});
@@ -113,7 +116,7 @@ function compareSameEntryPositions(applied, incoming) {
       applied.logIndex !== incoming.logIndex) {
     return 0;
   }
-  return Math.sign(incoming.ordinal - applied.ordinal);
+  return mathSign(incoming.ordinal - applied.ordinal);
 }
 
 // The CDC tombstone a delete leaves on one key's image, by the tombstone

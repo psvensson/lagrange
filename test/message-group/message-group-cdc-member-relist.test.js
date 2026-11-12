@@ -11,6 +11,7 @@ import {SOURCE_POSITION_STATE, SOURCE_RELIST_OUTCOME} from
 import {CDC_PROPAGATED_TABLES} from '../../src/cache/cdc-table-policy.js';
 import {INITIAL_PARTITION_IDS} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {pump, recipientFixture} from './message-group-native-custody-fixture.js';
+import {registerModeledRelister} from '../test-helpers/cdc-source-range-fixture.js';
 
 test('a joining member lists every propagated source it holds no position of, with no ' +
   'traffic, and a positioned source is not listed again', async (t) => {
@@ -23,11 +24,11 @@ test('a joining member lists every propagated source it holds no position of, wi
       `${source}: the joined member knows its cache is stale before any range`);
   }
   const listed = [];
-  sourceOrder.registerRelister(async ({sourcePartition, tableName}) => {
+  registerModeledRelister(t, sourceOrder, service.timeSource, async ({sourcePartition, tableName}) => {
     listed.push(sourcePartition);
     sourceOrder.recordListedPosition({sourcePartition, tableName, incarnation: 'quiet',
       appliedIndex: 3});
-    return SOURCE_RELIST_OUTCOME.STOPPED;
+    return SOURCE_RELIST_OUTCOME.RETRY;
   });
   await pump(f);
   assert.deepEqual([...listed].sort(), [...sources].sort(), 'each source listed once');

@@ -25,7 +25,8 @@ import {LATENCY_PROPAGATION_MODE} from '../../src/topology/latency-topology-cons
 import {CDC_TABLE, clearFixtureSingletons, resetFixtureSingletons, settleTicks} from
   '../test-helpers/participant-transaction-fixture.js';
 import {commitAcknowledgements} from '../test-helpers/cdc-delivery-progress-fixture.js';
-import {assertShippedSourceVector} from '../test-helpers/cdc-source-range-fixture.js';
+import {assertShippedSourceVector, registerModeledRelister} from
+  '../test-helpers/cdc-source-range-fixture.js';
 import {RESPONSE, SOURCE_GROUP, TARGET_GROUP, addTopologySourceRow, targetService,
   topologyProgressFixture} from
   '../test-helpers/cdc-topology-progress-fixture.js';
@@ -62,17 +63,17 @@ async function leaderImage(f, tableName) {
 // The source group as a Stage 3 recipient: it applies a range only after its
 // predecessor, answers a gap otherwise and lists the leader's image; every
 // position it applied is recorded (a second apply is a duplicate).
-function primaryModel(f) {
+function primaryModel(t, f) {
   const cell = new SystemTableCacheSourceOrder();
   const model = {cell, rows: new Map(), lists: 0, refusing: false, applied: new Set(),
     duplicates: 0};
-  cell.registerRelister(async ({sourcePartition, tableName}) => {
+  registerModeledRelister(t, cell, f.clock, async ({sourcePartition, tableName}) => {
     const answer = await leaderImage(f, tableName);
     model.lists += 1;
     model.rows = new Map(answer.rows.map((row) => [row.id, row.value]));
     cell.recordListedPosition({sourcePartition, tableName,
       incarnation: answer.sourceImage.incarnation, appliedIndex: answer.sourceImage.appliedIndex});
-    return SOURCE_RELIST_OUTCOME.STOPPED;
+    return SOURCE_RELIST_OUTCOME.RETRY;
   });
   model.answer = (events, range) => {
     assertShippedSourceVector(range, events);
@@ -120,7 +121,7 @@ test('F3 a dead primary recipient (the source group) past RELIST_LAG_ROWS leaves
   'reclaimed; on return the primary re-lists once and equals the source with no row lost ' +
   'or applied twice', async (t) => {
   const f = await stageFixture(t);
-  const primary = primaryModel(f);
+  const primary = primaryModel(t, f);
   f.source.applyCDCBatch = (events, options) => primary.answer(events, options.sourceRange);
   await retryHeld(f);
   assert.equal(primaryOf(f).state, RECIPIENT_STATE.CONFIRMED, 'the primary streams');

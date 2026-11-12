@@ -13,7 +13,8 @@ import {installSourceImage} from '../../src/cache/system-table-cache-source-imag
 import {SOURCE_EFFECT_STATE} from '../../src/cache/system-table-cache-source-order.js';
 import {captureCdcEvents} from '../../src/cdc/cdc-event-envelope.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
-import {registerSourceRelister} from '../../src/cdc/cdc-integration-service-source-relist.js';
+import {SOURCE_RELIST_BOUND, registerSourceRelister, relistSourceTable} from
+  '../../src/cdc/cdc-integration-service-source-relist.js';
 import {CDC_OPERATION, TABLES} from '../../src/constants/index.js';
 import {CDC_EVENT_IDENTITY} from '../../src/constants/cdc-lifecycle-constants.js';
 import {CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR,
@@ -328,16 +329,10 @@ test('a boolean callback cannot certify an effect; a later bound relister repair
   for (const effect of committed.effects.afterCommit) effect();
   assert.equal(classifyDurableRangeAtLeader(f.hosts[0], range, TABLE).decision, 'already_applied',
     'group receipt is distinct from this member cache debt');
-  let relists = 0;
-  const repaired = Promise.withResolvers();
-  f.cache.sourceOrder.registerRelister(() => {
-    relists += 1;
-    f.install([event.data], 11);
-    repaired.resolve();
-    return 'stopped';
-  }, silent);
-  await repaired.promise;
-  assert.equal(relists, 1);
+  const recovery = integrationWithImage(t, f, event.data, 11);
+  registerSourceRelister(recovery.service);
+  await recovery.installed;
+  assert.equal(recovery.reads(), 1);
   assert.equal(f.cache.has(TABLE, KEY), true);
   assertImagePrefix(f, 11);
 });
@@ -474,8 +469,10 @@ for (const diagnosticFailure of ['none', 'error', 'info']) {
     async (t) => {
       const f = fixture(t);
       const row = eventOf(CDC_OPERATION.INSERT, 11).data;
+      const cause = new Error('controlled first image read failure');
+      const diagnosticCause = new Error('controlled relist error diagnostic');
       const recovery = integrationWithImage(t, f, row, 11, (reads) => {
-        if (reads === 1) throw new Error('controlled first image read failure');
+        if (reads === 1) throw cause;
       });
       const logger = recovery.service.logger;
       const observed = [];
@@ -485,7 +482,7 @@ for (const diagnosticFailure of ['none', 'error', 'info']) {
           logger.error(message, fields);
           if (diagnosticFailure === 'error') {
             diagnosticThrows += 1;
-            throw new Error('controlled relist error diagnostic');
+            throw diagnosticCause;
           }
         },
         info(message, fields) {
@@ -499,16 +496,16 @@ for (const diagnosticFailure of ['none', 'error', 'info']) {
       };
       recovery.service.initialize();
       const failure = await recovery.failures;
-      assert.equal(failure.error, 'controlled first image read failure');
+      assert.equal(failure.error, cause);
       assert.equal(f.cache.sourceOrder.positionOf(SOURCE).state, 'gap');
       assert.equal(recovery.reads(), 1, 'a failure does not spin another immediate read');
       assert.equal(recovery.service.relistImageSlots.held, 0, 'the failed attempt releases its slot');
       if (diagnosticFailure !== 'none') assert.equal(diagnosticThrows, 1);
       if (diagnosticFailure === 'error') {
         const retry = observed.find((fields) => fields.outcome === 'retry');
-        assert.equal(retry.lastFailure.error, 'controlled first image read failure');
+        assert.equal(retry.lastFailure.error, cause);
         assert.equal(retry.diagnosticFailures, 1);
-        assert.equal(retry.lastDiagnosticError, 'controlled relist error diagnostic');
+        assert.equal(retry.lastDiagnosticError, diagnosticCause);
       }
       f.clock.advance(500);
       await recovery.installed;
@@ -516,6 +513,46 @@ for (const diagnosticFailure of ['none', 'error', 'info']) {
       assert.equal(f.cache.has(TABLE, KEY), true);
       assertImagePrefix(f, 11);
     });
+}
+
+for (const shape of ['message-getter', 'conversion']) {
+  test(`image failure records preserve hostile ${shape} causes without engaging them`, async (t) => {
+    const f = fixture(t);
+    let engagements = 0;
+    const hostileCause = () => shape === 'message-getter' ? Object.defineProperty({}, 'message', {
+      get() { engagements += 1; throw new Error('message must not be read'); },
+    }) : {toString() { engagements += 1; throw new Error('cause must not be converted'); }};
+    const cause = hostileCause();
+    const diagnosticCause = hostileCause();
+    const recovery = integrationWithImage(t, f, eventOf(CDC_OPERATION.INSERT, 11).data, 11,
+      (reads) => { if (reads === 1) throw cause; });
+    const observed = [];
+    const errors = [];
+    const logger = recovery.service.logger;
+    recovery.service.logger = {...logger,
+      error(_message, fields) { errors.push(fields); throw diagnosticCause; },
+      info(message, fields) { observed.push(fields); logger.info(message, fields); },
+    };
+    registerSourceRelister(recovery.service);
+    await nextTurn();
+    assert.equal(engagements, 0, 'recording original causes invokes no user conversion or getter');
+    assert.equal(errors.length, 1);
+    assert.equal(errors[0].error, cause);
+    const retry = observed.find((fields) => fields.outcome === 'retry');
+    assert.equal(retry.lastFailure.error, cause);
+    assert.equal(retry.restarts, 1);
+    assert.equal(retry.diagnosticFailures, 1);
+    assert.equal(retry.lastDiagnosticError, diagnosticCause);
+    assert.equal(recovery.reads(), 1, 'the error does not start an unpaced attempt');
+    assert.equal(f.cache.sourceOrder.positionOf(SOURCE).state, 'gap');
+    assert.equal(recovery.service.relistImageSlots.held, 0);
+    f.clock.advance(500);
+    await recovery.installed;
+    assert.equal(engagements, 0);
+    assert.equal(recovery.reads(), 2);
+    assertImagePrefix(f, 11);
+    assert.equal(recovery.service.shutdownReleases.size, 0);
+  });
 }
 
 test('throwing handler listener cannot turn a refused vector into current source currency', async (t) => {
@@ -606,6 +643,16 @@ for (const wake of ['registration', 'new-gap']) {
   });
 }
 
+// Source-order's independent STOPPED validation consumes the required owner
+// record directly. Production registration lifecycle is tested separately.
+function registerDirectRelisterOwner(service) {
+  return service.cacheMutationTarget.sourceOrder.registerRelister({
+    list: (request) => relistSourceTable(service, request),
+    isStopped: () => service.isShuttingDown === true,
+    paceAfterFailure: () => service.delayUntilShutdown(SOURCE_RELIST_BOUND.RELIST_RETRY_DELAY_MS),
+  }, service.logger);
+}
+
 for (const terminal of [false, true]) {
   test(`STOPPED is accepted only from an actually terminal relister: ${terminal}`, async (t) => {
     const f = fixture(t);
@@ -617,7 +664,7 @@ for (const terminal of [false, true]) {
       if (first) { first = false; return new Error('false terminal answer'); }
       return refuse(...args);
     };
-    registerSourceRelister(recovery.service);
+    registerDirectRelisterOwner(recovery.service);
     await nextTurn();
     const cell = f.cache.sourceOrder.positionOf(SOURCE);
     assert.equal(cell.state, 'gap', 'neither terminal answer fabricates current currency');
@@ -1003,3 +1050,205 @@ test('a noncanonical image source refuses before staging or changing any cell or
   assert.equal(f.install(image.rows).admission, 'install');
   assertImagePrefix(f);
 });
+
+test('canonical source identity cannot be retargeted after cache construction', (t) => {
+  const f = fixture(t);
+  const original = INITIAL_PARTITION_IDS[TABLE];
+  const wrongSource = 'nodes-p2';
+  const count = f.cache.sourceOrder.cells.size;
+  const basis = f.cache.sourceOrder.tableGeneration(TABLE);
+  try {
+    assert.throws(() => { INITIAL_PARTITION_IDS[TABLE] = wrongSource; }, TypeError);
+    assert.equal(INITIAL_PARTITION_IDS[TABLE], original);
+    const event = {...eventOf(CDC_OPERATION.INSERT, 11), sourcePartition: wrongSource};
+    const range = {...rangeOf([event]), sourcePartition: wrongSource};
+    assert.throws(() => f.cache.applySourceCdcEvent(event, range, f.clock.now()),
+      {code: CDC_EVENT_IDENTITY.INVALID_CODE});
+    assert.equal(f.cache.sourceOrder.cells.size, count);
+    assert.equal(f.cache.sourceOrder.tableGeneration(TABLE), basis);
+    assert.equal(f.cache.has(TABLE, KEY), false);
+    f.install();
+    f.commit([eventOf(CDC_OPERATION.INSERT, 11)]);
+    assert.equal(f.cache.has(TABLE, KEY), true);
+    assert.equal(f.cache.sourceOrder.positionOf(SOURCE).state, 'current');
+    assert.deepEqual(f.cache.sourceOrder.positionOf(SOURCE).position, position(11));
+  } finally {
+    // The discriminator also runs against the historical mutable map. Restore
+    // its exact original bytes after that assertion fails, for other controls.
+    if (INITIAL_PARTITION_IDS[TABLE] !== original) INITIAL_PARTITION_IDS[TABLE] = original;
+  }
+});
+
+function heldTargetRelister(t, f) {
+  const queries = [];
+  const service = new CDCIntegrationService({nodeId: 'target-replacement-recipient',
+    cacheMutationTarget: f.cache, timeSource: f.clock,
+    sqlQueryEngine: {queryExecutor: {async executeOnPartition(sourcePartition, _sql, _params,
+      _forRead, _preferLeader, _sameGroup, options) {
+      const index = 11 + queries.length;
+      const release = Promise.withResolvers();
+      queries.push({release, index});
+      await release.promise;
+      return options.buildSuccessResult(pageFor(sourcePartition,
+        [eventOf(CDC_OPERATION.INSERT, index, KEY, 0, {status: 'ready'}).data], index));
+    }}}});
+  service.logger = silent;
+  t.after(() => {
+    service.markShuttingDown();
+    for (const query of queries) query.release.resolve();
+  });
+  return {service, queries};
+}
+
+for (const change of ['replacement', 'removal']) {
+  test(`a held source read loses its exact registration on cache target ${change}`, async (t) => {
+    const f = fixture(t);
+    const recovery = heldTargetRelister(t, f);
+    const nextCache = new SystemTableCache({timeSource: f.clock});
+    nextCache.logger = silent;
+    nextCache.sourceOrder.logger = silent;
+    nextCache.sourceOrder.requireListed(SOURCE, TABLE);
+    recovery.service.initialize();
+    await nextTurn();
+    assert.equal(recovery.queries.length, 1);
+    recovery.service.setCacheMutationTarget(change === 'replacement' ? nextCache : null);
+    await nextTurn();
+    assert.equal(recovery.queries.length, change === 'replacement' ? 2 : 1);
+    assert.equal(f.cache.sourceOrder.positionOf(SOURCE).state, 'gap');
+    assert.equal(f.cache.sourceOrder.positionOf(SOURCE).relist, 'running',
+      'the held attempt retains custody until its awaited page unwinds');
+    recovery.queries[0].release.resolve();
+    await nextTurn();
+    assert.equal(f.cache.has(TABLE, KEY), false, 'the detached source image cannot publish');
+    assert.equal(nextCache.has(TABLE, KEY), false, 'the old image cannot publish into the new cache');
+    assert.equal(f.cache.sourceOrder.positionOf(SOURCE).relist, 'no_relister');
+    const before = recovery.queries.length;
+    f.clock.advance(1000);
+    await nextTurn();
+    assert.equal(recovery.queries.length, before, 'the detached attempt never starts another fetch');
+    if (change === 'removal') {
+      recovery.service.setCacheMutationTarget(nextCache);
+      await nextTurn();
+      assert.equal(recovery.queries.length, 2);
+    }
+    recovery.queries[1].release.resolve();
+    await nextTurn();
+    assert.equal(nextCache.get(TABLE, KEY).status, 'ready');
+    assert.equal(nextCache.sourceOrder.positionOf(SOURCE).state, 'current');
+    assert.deepEqual(nextCache.sourceOrder.positionOf(SOURCE).position, imagePosition(12));
+    assert.equal(recovery.service.relistImageSlots.held, 0);
+    const oldRecovery = integrationWithImage(t, f, eventOf(CDC_OPERATION.INSERT, 13).data, 13);
+    registerSourceRelister(oldRecovery.service);
+    await oldRecovery.installed;
+    assertImagePrefix(f, 13);
+    assert.equal(oldRecovery.reads(), 1, 'a later valid owner can recover the detached cache debt');
+    assert.deepEqual(nextCache.sourceOrder.positionOf(SOURCE).position, imagePosition(12));
+  });
+}
+
+test('an idempotent stale registration release cannot erase its replacement owner', async (t) => {
+  const f = fixture(t);
+  const old = integrationWithImage(t, f, eventOf(CDC_OPERATION.INSERT, 11).data, 11);
+  const replacement = integrationWithImage(t, f, eventOf(CDC_OPERATION.INSERT, 12).data, 12);
+  const releaseOld = registerDirectRelisterOwner(old.service);
+  const releaseReplacement = registerDirectRelisterOwner(replacement.service);
+  releaseOld();
+  releaseOld();
+  await replacement.installed;
+  assert.equal(old.reads(), 0);
+  assert.equal(replacement.reads(), 1);
+  assertImagePrefix(f, 12);
+  releaseReplacement();
+  releaseReplacement();
+  f.cache.sourceOrder.recordGap(rangeOf([eventOf(CDC_OPERATION.INSERT, 13)]), TABLE);
+  await nextTurn();
+  assert.equal(f.cache.sourceOrder.positionOf(SOURCE).relist, 'no_relister');
+  const healed = integrationWithImage(t, f, eventOf(CDC_OPERATION.INSERT, 13).data, 13);
+  registerSourceRelister(healed.service);
+  await healed.installed;
+  assertImagePrefix(f, 13);
+});
+
+test('shutdown detaches a source relister and refuses a new registration after the mark', async (t) => {
+  const f = fixture(t);
+  const recovery = heldTargetRelister(t, f);
+  recovery.service.initialize();
+  await nextTurn();
+  assert.equal(recovery.queries.length, 1);
+  recovery.service.markShuttingDown();
+  assert.equal(registerSourceRelister(recovery.service), false,
+    'a terminal lifecycle cannot acquire a new source registration');
+  recovery.queries[0].release.resolve();
+  await nextTurn();
+  assert.equal(f.cache.has(TABLE, KEY), false);
+  assert.equal(f.cache.sourceOrder.positionOf(SOURCE).state, 'gap');
+  assert.equal(f.cache.sourceOrder.positionOf(SOURCE).relist, 'no_relister');
+  assert.equal(recovery.service.relistImageSlots.held, 0);
+  assert.equal(recovery.service.shutdownReleases.size, 0);
+  f.clock.advance(1000);
+  await nextTurn();
+  assert.equal(recovery.queries.length, 1);
+});
+
+for (const failure of ['acquisition', 'shutdown-cancellation']) {
+  test(`an internal image retry pacing ${failure} failure retains its original attempt and clock debt`,
+    async (t) => {
+      const f = fixture(t);
+      const cause = new Error('the source owner is temporarily unavailable');
+      const pacingCause = new Error('the sole image retry clock failed');
+      const reason = 'controlled_source_owner_unavailable';
+      let reads = 0;
+      let pacingCalls = 0;
+      const service = new CDCIntegrationService({nodeId: 'internal-pace-recipient',
+        cacheMutationTarget: f.cache, timeSource: f.clock,
+        sqlQueryEngine: {queryExecutor: {executeOnPartition() {
+          reads += 1;
+          return {success: false, errorCode: reason, error: cause};
+        }}}});
+      service.logger = silent;
+      const setTimeout = f.clock.setTimeout.bind(f.clock);
+      const clearTimeout = f.clock.clearTimeout.bind(f.clock);
+      t.after(() => {
+        f.clock.setTimeout = setTimeout;
+        f.clock.clearTimeout = clearTimeout;
+        service.markShuttingDown();
+      });
+      f.clock.setTimeout = (callback, delay) => {
+        pacingCalls += 1;
+        if (failure === 'acquisition') throw pacingCause;
+        return setTimeout(callback, delay);
+      };
+      service.initialize();
+      await nextTurn();
+      if (failure === 'shutdown-cancellation') {
+        assert.equal(service.shutdownReleases.size, 1, 'the ordinary internal image pace is held');
+        f.clock.clearTimeout = () => { throw pacingCause; };
+        assert.doesNotThrow(() => service.markShuttingDown());
+        await nextTurn();
+      }
+      assert.equal(pacingCalls, 1, 'a failed pace never arms another delay');
+      const faulted = f.cache.sourceOrder.positionOf(SOURCE);
+      assert.equal(faulted.state, 'gap');
+      assert.equal(faulted.relist, 'faulted', 'shutdown release cannot overwrite a pacing fault');
+      assert.equal(faulted.relistFailures, 1);
+      assert.equal(faulted.lastRelistFailure.cause.reason, reason);
+      assert.equal(faulted.lastRelistFailure.cause.error, cause);
+      assert.equal(faulted.lastRelistFailure.pacingCause, pacingCause);
+      assert.equal(reads, 1);
+      assert.equal(service.shutdownReleases.size, 0);
+      assert.equal(service.relistImageSlots.held, 0);
+      assert.equal(f.clock.pendingTimerCount(), failure === 'acquisition' ? 0 : 1,
+        'a rejected cancellation promise does not prove the original timer was cleared');
+      f.clock.setTimeout = setTimeout;
+      f.clock.clearTimeout = clearTimeout;
+      f.clock.advance(500);
+      await nextTurn();
+      assert.equal(f.clock.pendingTimerCount(), 0, 'the original timer itself eventually fires');
+      assert.equal(reads, 1, 'the faulted owner never resumes its query loop');
+      assert.equal(f.cache.sourceOrder.positionOf(SOURCE).relist, 'faulted');
+      const healed = integrationWithImage(t, f, eventOf(CDC_OPERATION.INSERT, 12).data, 12);
+      registerSourceRelister(healed.service);
+      await healed.installed;
+      assertImagePrefix(f, 12);
+    });
+}

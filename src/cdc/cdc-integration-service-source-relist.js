@@ -233,7 +233,7 @@ function emitImageDiagnostic(record, emit) {
     emit();
   } catch (error) {
     record.diagnosticFailures += 1;
-    record.lastDiagnosticError = error?.message ?? String(error);
+    record.lastDiagnosticError = error;
   }
 }
 
@@ -305,7 +305,7 @@ async function relistSourceTable(service, request) {
   try {
     listed = await listOneImage(service, request, record, terminal);
   } catch (error) {
-    countRestart(record, SOURCE_RELIST_FAILURE.READ_FAILED, error?.message ?? String(error));
+    countRestart(record, SOURCE_RELIST_FAILURE.READ_FAILED, error);
     emitImageDiagnostic(record, () => service.logger.error(SOURCE_RELIST_LOG_MSG.PAGE_FAILED,
       {...request, failure: SOURCE_RELIST_FAILURE.READ_FAILED, error: record.lastFailure.error}));
     listed = {outcome: SOURCE_RELIST_OUTCOME.RETRY};
@@ -338,9 +338,13 @@ async function relistSourceTable(service, request) {
 function registerSourceRelister(service) {
   const sourceOrder = service.cacheMutationTarget?.sourceOrder;
   if (!(sourceOrder instanceof SystemTableCacheSourceOrder)) return false;
-  sourceOrder.registerRelister((request) => relistSourceTable(service, request), service.logger);
+  sourceOrder.registerRelister({
+    list: (request) => relistSourceTable(service, request),
+    isStopped: () => service.isShuttingDown === true,
+    paceAfterFailure: () => service.delayUntilShutdown(SOURCE_RELIST_BOUND.RELIST_RETRY_DELAY_MS),
+  }, service.logger);
   return true;
 }
 
-export {SOURCE_RELIST_FAILURE, fetchSourceImage, registerSourceRelister,
+export {SOURCE_RELIST_BOUND, SOURCE_RELIST_FAILURE, fetchSourceImage, registerSourceRelister,
   relistSourceTable};

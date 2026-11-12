@@ -197,10 +197,15 @@ class CDCIntegrationServiceLifecycleMethods {
       if (this.isShuttingDown === true) {
         return;
       }
-      timer = this.timeSource.setTimeout(() => {
+      try {
+        timer = this.timeSource.setTimeout(() => {
+          stopHolding();
+          resolve();
+        }, delayMs);
+      } catch (error) {
         stopHolding();
-        resolve();
-      }, delayMs);
+        throw error;
+      }
     });
   }
 

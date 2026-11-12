@@ -15,7 +15,8 @@
 // This is not member-cache currency. Volatile and
 // bounded by the number of source partitions; a restarted replica proposes
 // again (members skip by position).
-import {SOURCE_EFFECT_STATE, SOURCE_RANGE_DECISION, SystemTableCacheSourceOrder, isSourceVector} from
+import {SOURCE_EFFECT_STATE, SOURCE_RANGE_DECISION, SystemTableCacheSourceOrder,
+  compareSourcePositions, isSourceVector} from
   '../cache/system-table-cache-source-order.js';
 import {CDC_EVENT_IDENTITY} from '../constants/cdc-lifecycle-constants.js';
 import {CDC_PROPAGATED_TABLES} from '../cache/cdc-table-policy.js';
@@ -35,11 +36,6 @@ const DURABLE_RANGE_DECISION = Object.freeze({
   ALREADY_APPLIED: 'already_applied',
 });
 
-function comparePositions(left, right) {
-  return left.logIndex === right.logIndex ? Math.sign(left.ordinal - right.ordinal) :
-    Math.sign(left.logIndex - right.logIndex);
-}
-
 function committedRangesOf(service) {
   service.cdcCommittedRanges ??= new Map();
   return service.cdcCommittedRanges;
@@ -55,7 +51,7 @@ function committedRangesOf(service) {
 function groupCommittedThroughOf(service, range) {
   const committed = committedRangesOf(service).get(range.sourcePartition);
   return committed !== undefined && committed.incarnation === range.incarnation &&
-    comparePositions(range.through, committed.through) <= 0 ? committed : null;
+    compareSourcePositions(range.through, committed.through) <= 0 ? committed : null;
 }
 
 /**
@@ -93,7 +89,7 @@ function recordGroupCommittedRange(service, range) {
   const ranges = committedRangesOf(service);
   const committed = ranges.get(range.sourcePartition);
   if (committed === undefined || committed.incarnation !== range.incarnation ||
-      comparePositions(range.through, committed.through) > 0) {
+      compareSourcePositions(range.through, committed.through) > 0) {
     ranges.set(range.sourcePartition,
       Object.freeze({incarnation: range.incarnation, through: range.through}));
   }

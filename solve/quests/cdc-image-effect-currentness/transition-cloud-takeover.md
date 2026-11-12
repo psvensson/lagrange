@@ -480,3 +480,88 @@ introduced in 2a373dd859. dd3dd8b04 extracted that existing behavior; it did not
 introduce it. The timer acquisition/cancellation ordering dates to 1aea11baf6.
 This corrects any implication in the earlier bounded search that the source
 extraction was the cause of the inherited relist hole.
+
+## 2802 causal correction checkpoint (unverified)
+
+After the original tests-only 2802 red was retained, the source-order owner now
+requires one relister record with list, isStopped and paceAfterFailure. Each
+registration captures its methods and creates an identity, so an old RUNNING
+attempt cannot consume the new registration wake in finally. An escaping failure
+retains its exact original cause and count on the existing cell and invokes the
+same service's existing shutdown-aware 500 ms pace. Invalid/live STOPPED is a
+failure. A pacing failure retains GAP plus FAULTED and both raw causes; no second
+clock or immediate retry is introduced. Only a new registration or genuine gap
+wakes that faulted debt. Observer errors are retained without reading message or
+performing conversion. The image attempt record now follows the same rule; its
+existing diagnostics controls retain exact cause identity, counts, pace and
+recovery, with additional hostile message/toString witnesses.
+
+Canonical source admission now precedes source cell creation, effect capture and
+image staging. INITIAL_PARTITION_IDS is frozen at its existing owner definition,
+after the caller census found no writes. A retarget-attempt control preserves the
+original mapping and refuses foreign effects before canonical progress. Unknown
+position reads remain observational and allocate no cell. The source-order
+comparison is shared by ranged group acceptance and uses captured comparison
+intrinsics; same-entry fold helpers capture their intrinsics too. Singleton
+capture uses indexed access, preserving the native iterator-count assertion.
+A failed delay timer acquisition removes its exact shutdown registration and
+rejects with the original acquisition error.
+
+All function-only relister registrations have been removed. Native leader and
+re-entry fixtures use the actual CDCIntegrationService relister over their real
+source leader query, preserving held-image schedules and image-count assertions.
+Unhosted tables remain explicitly unavailable until shutdown. The two map-row
+recipient models and quiet-member recorder supply explicit model effects with
+the real service lifecycle/clock for failure pacing; their model proof ceiling
+is unchanged. Root approved these exact caller seams.
+
+This checkpoint is an unverified partial implementation, not a green candidate.
+Tests-only 95c8 remains source-identical to fb369 and is the pending physical red
+for cancellation, slot fairness, queued shutdown and exact request binding. Root
+has approved those designs, but their source changes are deliberately not in this
+checkpoint until that original measurement is retained. The newly migrated native
+fixtures depend on the upcoming slot fairness correction. No tests, syntax
+checks, generators or metrics have run locally. Named interaction scope includes
+the canonical mapping and lifecycle owners; generated metadata and all exact-head
+gates remain owed on the lab machines.
+
+## Target-registration and internal-pace discriminators
+
+Root independently source-reviewed and approved only the eight production files
+of a8d7e271 as the bounded 2802 core correction. This is not candidate acceptance.
+The original 2834 resource red is now preserved, including the corrected CONFIG
+local producer: g/h passed, and i reached a real wrong-source cache effect.
+Its case33 stopped at the missing outer pace registration; it does not establish
+any later cancellation assertion.
+
+Two further concrete lifecycle interactions require their own controls before
+source correction. setCacheMutationTarget previously left the old cache's
+registration attached to a service whose mutable target had changed or vanished.
+A held old read could then consult that replacement, and repeated retries could
+run for a cache that no longer had this owner. The approved design returns an
+exact-record, idempotent release from registerRelister and stores the one release
+with the CDC service lifecycle. Replacement/removal detaches that exact record
+before wiring a new target. RUNNING custody remains until the held attempt
+unwinds; then retained GAP becomes NO_RELISTER, or a replacement registration
+wakes. A stale release cannot delete a newer record. Shutdown detaches the record
+and prohibits new production registrations. Independent STOPPED/isStopped
+validation remains a direct required-record control.
+
+The internal image retry also awaits delayUntilShutdown, inside the old generic
+read-attempt catch. A failed clock there could be retried again, or a failed
+shutdown cancellation could be converted to terminal STOPPED while its original
+timer remained live. The approved correction is one pacing-fault representation
+owned by source-order, carrying the exact original attempt failure record and
+pacing cause. Its receiver retains FAULTED without arming another delay. A
+shutdown registration release must not overwrite that fault or its retained
+original timer debt. No new clock, scheduler, journal, or compatibility shape is
+introduced.
+
+New tests-only controls are frozen on the a8d7e271 production prefix for target
+replacement and removal across held reads, stale release after replacement,
+later valid registration progress, terminal registration refusal, and normal
+internal pacing acquisition/cancellation failures. Both internal controls retain
+the typed original attempt reason and raw cause, demand one clock attempt, and
+distinguish promise rejection from actual timer cleanup. No local tests or
+checkers were run. Resource edits awaiting this new red remain uncommitted and
+are not part of that tests-only source identity.

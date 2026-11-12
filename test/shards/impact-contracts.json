@@ -2203,8 +2203,9 @@
       ]
     },
     "cdc-source-image-effect-currentness": {
-      "description": "A complete source image atomically replaces table effects and their source-order basis before notifications. Durable local, buffered, provisional and committed applications carry one immutable ledger range, and only typed retained effects bound to the exact source cell/generation authorize contiguous position advance. Generic authoritative changes invalidate currency and retain the existing relist; complete observations and sweeps also bind their pre-read image generation. Group receipt is distinct from member-cache recovery debt. Registration is a proof obligation, not passing evidence.",
+      "description": "A complete source image atomically replaces table effects and their source-order basis before notifications. Durable local, buffered, provisional and committed applications carry one immutable ledger range, and only typed retained effects bound to the exact source cell/generation authorize contiguous position advance. Generic authoritative changes invalidate currency and retain the existing relist; complete observations and sweeps also bind their pre-read image generation. Group receipt is distinct from member-cache recovery debt. Canonical INITIAL_PARTITION_IDS binds each whole table to its only source. Relister owner identity and original cell retain paced recovery across failure and replacement; a failed sole retry clock retains FAULTED debt. Registration is a proof obligation, not passing evidence.",
       "owners": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/cache/system-table-cache-source-order.js",
         "src/cache/system-table-cache-source-effect-application.js",
         "src/cache/system-table-cache-source-image.js",
@@ -2215,6 +2216,7 @@
         "src/cache/system-table-cache-authoritative-absence-sweep.js",
         "src/cache/system-table-cache-tombstone-store.js",
         "src/cdc/cdc-integration-service-source-relist.js",
+        "src/cdc/cdc-integration-service-lifecycle.js",
         "src/cdc/cdc-integration-service-authoritative-catchup.js",
         "src/cdc/cdc-integration-service-cache-visibility-authority.js",
         "src/control-plane/control-plane-system-table-gateway-cache-reconciliation.js",
@@ -2231,6 +2233,8 @@
         "test/cdc/cdc-image-effect-currentness.test.js",
         "test/cdc/cdc-image-effect-design-r2-controls.test.js",
         "test/cdc/cdc-paged-relist.test.js",
+        "test/cdc/cdc-shutdown-terminal-owner-write.test.js",
+        "test/bootstrap/cdc-source-occurrence-delivery.integration.test.js",
         "test/message-group/cdc-vector-application-equivalence.test.js",
         "test/message-group/message-group-cdc-member-relist.test.js",
         "test/message-group/message-group-native-mixed-vector.test.js",
@@ -4761,6 +4765,7 @@
         {
           "id": "cache-image-and-effect-basis",
           "owners": [
+            "src/bootstrap/system-table-schemas-constants.js",
             "src/cache/system-table-cache-source-order.js",
             "src/cache/system-table-cache-source-effect-application.js",
             "src/cache/system-table-cache-source-image.js",
@@ -4776,6 +4781,7 @@
           "id": "source-and-repair-ingress",
           "owners": [
             "src/cdc/cdc-integration-service-source-relist.js",
+            "src/cdc/cdc-integration-service-lifecycle.js",
             "src/cdc/cdc-integration-service-authoritative-catchup.js",
             "src/cdc/cdc-integration-service-cache-visibility-authority.js",
             "src/control-plane/control-plane-system-table-gateway-cache-reconciliation.js",
@@ -4795,6 +4801,8 @@
         "test/cdc/cdc-image-effect-currentness.test.js",
         "test/cdc/cdc-image-effect-design-r2-controls.test.js",
         "test/cdc/cdc-paged-relist.test.js",
+        "test/cdc/cdc-shutdown-terminal-owner-write.test.js",
+        "test/bootstrap/cdc-source-occurrence-delivery.integration.test.js",
         "test/message-group/cdc-vector-application-equivalence.test.js",
         "test/message-group/message-group-cdc-member-relist.test.js",
         "test/message-group/message-group-native-mixed-vector.test.js",

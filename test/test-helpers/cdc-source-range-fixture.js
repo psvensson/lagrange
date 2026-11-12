@@ -8,17 +8,35 @@
 import {SOURCE_RELIST_OUTCOME, isSourceVector} from
   '../../src/cache/system-table-cache-source-order.js';
 import {CDC_COMPLETION} from '../../src/cdc/cdc-delivery-outcome.js';
-import {installSourceImage} from '../../src/cache/system-table-cache-source-image.js';
-import {fetchSourceImage} from '../../src/cdc/cdc-integration-service-source-relist.js';
-import {PARTITION_HYDRATION_IMAGE_PAGE_FIELD, PARTITION_HYDRATION_IMAGE_QUERY_FIELD} from
-  '../../src/partition/partition-service-hydration-image-methods.js';
-import {QUERY_MESSAGE_TYPE} from '../../src/query/query-constants.js';
+import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
+import {SOURCE_RELIST_BOUND, registerSourceRelister} from
+  '../../src/cdc/cdc-integration-service-source-relist.js';
 
 const TEST_SOURCE_INCARNATION = 'test-source-incarnation';
+const TEST_SOURCE_OWNER_UNAVAILABLE = 'test_source_owner_unavailable';
 const LEDGER_START = Object.freeze({logIndex: 0, ordinal: -1});
 
 function positionOf(event) {
   return {logIndex: event.sourceLogIndex, ordinal: event.sourceOrdinal};
+}
+
+/**
+ * A test-owned row model supplies its list effect, while the real service
+ * lifecycle and clock own failure pacing and terminal release. This remains
+ * a model of delivery, not a native cache/occurrence witness.
+ * @param {Object} t - Test context.
+ * @param {Object} sourceOrder - The model's real position owner.
+ * @param {Object} timeSource - Its existing injected clock.
+ * @param {Function} list - The explicit model effect.
+ */
+function registerModeledRelister(t, sourceOrder, timeSource, list) {
+  const service = new CDCIntegrationService({nodeId: 'source-relist-model', timeSource});
+  t.after(() => service.markShuttingDown());
+  sourceOrder.registerRelister({
+    list: (request) => service.isShuttingDown === true ? SOURCE_RELIST_OUTCOME.STOPPED : list(request),
+    isStopped: () => service.isShuttingDown === true,
+    paceAfterFailure: () => service.delayUntilShutdown(SOURCE_RELIST_BOUND.RELIST_RETRY_DELAY_MS),
+  });
 }
 
 /**
@@ -62,26 +80,30 @@ function positionRecipients(services, sourcePartition, tableName,
 /**
  * Register, on each message-group service's node cache, a relister that lists
  * the source table from the real source leader's paged hydration image and
- * installs rows and position together through the production fetch and
- * install (fetchSourceImage, installSourceImage), as the node's CDC
- * integration service does (relistSourceTable). For compositions that do
- * not build that service: only the owner-RPC hop is direct.
+ * installs rows and position through the real CDC integration service. Only
+ * its owner-RPC query hop is direct. A table this fixture does not host stays
+ * explicitly unavailable until this relister is shut down.
+ * @param {Object} t - Test context.
  * @param {Array<Object>} services - Message-group services.
  * @param {Function} sourceLeader - () => the source partition leader.
  */
-function registerLeaderRelister(services, sourceLeader) {
+function registerLeaderRelister(t, services, sourceLeader) {
   for (const service of services) {
     const cache = service.cdcHandler.cache;
-    cache.sourceOrder.registerRelister(async (request) => {
-      const token = cache.sourceOrder.beginImage(request.sourcePartition);
-      if (token === null) return SOURCE_RELIST_OUTCOME.STOPPED;
-      const fetched = await fetchSourceImage((cursor) => sourceLeader().handleRemoteQuery({
-        type: QUERY_MESSAGE_TYPE.QUERY, sql: `SELECT * FROM ${request.tableName}`, params: [],
-        [PARTITION_HYDRATION_IMAGE_QUERY_FIELD]: true,
-        [PARTITION_HYDRATION_IMAGE_PAGE_FIELD]: cursor}), request);
-      if (fetched.image) installSourceImage(cache, token, fetched.image);
-      return SOURCE_RELIST_OUTCOME.STOPPED;
-    });
+    const relister = new CDCIntegrationService({nodeId: service.nodeId,
+      cacheMutationTarget: cache, timeSource: service.timeSource,
+      sqlQueryEngine: {queryExecutor: {async executeOnPartition(partitionId, _sql, _params,
+        _forRead, _preferLeader, _sameGroup, options) {
+        const leader = sourceLeader();
+        if (partitionId !== leader.partitionId) {
+          return {success: false, errorCode: TEST_SOURCE_OWNER_UNAVAILABLE};
+        }
+        const answer = await leader.handleRemoteQuery(options.buildRequest());
+        return answer.success === true ? options.buildSuccessResult(answer) : answer;
+      }}}});
+    relister.logger = service.logger;
+    t.after(() => relister.markShuttingDown());
+    registerSourceRelister(relister);
   }
 }
 
@@ -99,4 +121,4 @@ function assertShippedSourceVector(range, events) {
 }
 
 export {assertShippedSourceVector, positionRecipients,
-  registerLeaderRelister, sourceRangeOfEvents, withSourceRange};
+  registerLeaderRelister, registerModeledRelister, sourceRangeOfEvents, withSourceRange};

@@ -18,7 +18,7 @@ function unavailableEffect(cache, event, range, context) {
 }
 
 function applySourceCdcEvent(cache, input, range, observedAtMs) {
-  const [event] = captureCdcEvents([input]);
+  const event = captureCdcEvents([input])[0];
   if (!isSourceMember(range, event) || typeof event.eventKey !== 'string') {
     throw Object.assign(new Error(CDC_EVENT_IDENTITY.INVALID_MESSAGE),
       {code: CDC_EVENT_IDENTITY.INVALID_CODE});

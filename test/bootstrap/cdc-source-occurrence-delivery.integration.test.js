@@ -389,7 +389,7 @@ test(
 
     // Recovery of the target's earlier position gap must be available during
     // this control: only the transport refusal may hold the 2-MiB delivery.
-    registerLeaderRelister([...f.services.values()], () => f.producerLeader);
+    registerLeaderRelister(t, [...f.services.values()], () => f.producerLeader);
     // Keep refusal across two owned attempts, so an earlier wave cannot
     // consume the negative control before the assertion's drive starts.
     const refusals = [];

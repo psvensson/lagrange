@@ -88,6 +88,7 @@ function announceImage(cache, tableName, staged) {
  */
 function installSourceImage(cache, token, image) {
   const {sourcePartition, tableName, incarnation, appliedIndex, rows} = image;
+  cache.sourceOrder.assertSourceTable(sourcePartition, tableName);
   const staged = stageImage(cache, tableName, rows);
   const admission = cache.sourceOrder.admitImage(token, image);
   if (admission !== SOURCE_IMAGE_ADMISSION.INSTALL) {

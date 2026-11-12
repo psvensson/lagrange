@@ -36,7 +36,8 @@ import {LATENCY_PROPAGATION_MODE} from '../../src/topology/latency-topology-cons
 import {CDC_TABLE, clearFixtureSingletons, resetFixtureSingletons, settleTicks} from
   '../test-helpers/participant-transaction-fixture.js';
 import {commitAcknowledgements} from '../test-helpers/cdc-delivery-progress-fixture.js';
-import {assertShippedSourceVector} from '../test-helpers/cdc-source-range-fixture.js';
+import {assertShippedSourceVector, registerModeledRelister} from
+  '../test-helpers/cdc-source-range-fixture.js';
 import {RESPONSE, TARGET_GROUP, TARGET_NODE, addRequiredGroup, addTopologySourceRow,
   omitTarget, targetService, topologyProgressFixture, updateTargetService} from '../test-helpers/cdc-topology-progress-fixture.js';
 
@@ -90,16 +91,16 @@ async function leaderImage(f, tableName) {
 
 // A Stage 3 recipient model of one target group: the real position cell, and
 // a re-list that is the source leader's real paged hydration-image answer.
-function stage3Recipient(f, groupId = TARGET_GROUP) {
+function stage3Recipient(t, f, groupId = TARGET_GROUP) {
   const cell = new SystemTableCacheSourceOrder();
   const model = {cell, rows: new Map(), lists: [], refusing: false, applied: 0, groupId};
-  cell.registerRelister(async ({sourcePartition, tableName}) => {
+  registerModeledRelister(t, cell, f.clock, async ({sourcePartition, tableName}) => {
     const answer = await leaderImage(f, tableName);
     model.lists.push(answer.sourceImage);
     model.rows = new Map(answer.rows.map((row) => [row.id, row.value]));
     cell.recordListedPosition({sourcePartition, tableName,
       incarnation: answer.sourceImage.incarnation, appliedIndex: answer.sourceImage.appliedIndex});
-    return SOURCE_RELIST_OUTCOME.STOPPED;
+    return SOURCE_RELIST_OUTCOME.RETRY;
   });
   model.answer = (payload) => {
     const events = deliveredEventsOf(payload);
@@ -167,7 +168,7 @@ async (t) => {
 test('S3-L2 every shipped vector names its source range: partition, ledger incarnation, the ' +
   'predecessor from the ledger and its last row', async (t) => {
   const f = await stage3Fixture(t);
-  const recipient = stage3Recipient(f);
+  const recipient = stage3Recipient(t, f);
   f.target = recipient.answer;
   await f.drive();
   await settleTicks();
@@ -186,7 +187,7 @@ test('S3-L3 a recipient with no position answers a gap, re-lists once from the l
   'newest position as of the gapped range (design note S3.11)',
 async (t) => {
   const f = await stage3Fixture(t);
-  const recipient = stage3Recipient(f);
+  const recipient = stage3Recipient(t, f);
   f.target = recipient.answer;
   // The recipient's first contact: the row A range against an unknown cell.
   recipient.cell.recordGap({sourcePartition: f.leader.partitionId, incarnation: 'stale',
@@ -252,7 +253,7 @@ test('S3-L5 a group that becomes a recipient after the last write is contacted w
     'the newest event is kept beside the ledger (the position probe)');
 
   const joiner = 'progress-group-c';
-  const recipient = stage3Recipient(f, joiner);
+  const recipient = stage3Recipient(t, f, joiner);
   f.target = (payload) => payload.targetGroupId === joiner ? recipient.answer(payload) :
     buildCommittedCdcOutcome(deliveredEventsOf(payload), payload.targetGroupId,
       {index: 9, term: 2});
@@ -278,7 +279,7 @@ test('S3-D measure 3: a refusing recipient past RELIST_LAG_ROWS leaves the front
   'MUST_RELIST, writes are never refused for capacity, and on return it re-lists once, ' +
   'streams, and equals the source', async (t) => {
   const f = await stage3Fixture(t);
-  const recipient = stage3Recipient(f);
+  const recipient = stage3Recipient(t, f);
   f.target = recipient.answer;
   // Its first contact gaps (no position) and lists; then it streams.
   await retryHeld(f);
