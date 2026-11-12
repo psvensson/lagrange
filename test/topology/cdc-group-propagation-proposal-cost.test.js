@@ -55,7 +55,8 @@ async function healthyWaves(t, duplicateProposals) {
   }
   const services = fixtures.map((f) => f.services[0]);
   // CDC Stage 3: every recipient node starts from the synthetic source's start.
-  positionRecipients(services, createDurableCdcEvent().sourcePartition, TABLES.CONFIG);
+  positionRecipients(services,
+    createDurableCdcEvent({tableName: TABLES.CONFIG}).sourcePartition, TABLES.CONFIG);
   const [source] = services;
   let deliveries = 0;
   const topology = new CDCGroupPropagationService({nodeId: NODE_ID,

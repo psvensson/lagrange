@@ -1,4 +1,5 @@
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {INITIAL_PARTITION_IDS} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {sourceRangeOfEvents} from '../test-helpers/cdc-source-range-fixture.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
@@ -20,7 +21,6 @@ import {VirtualTimeSource} from '../../src/time/time-source.js';
 
 const DURABLE_SOURCE_FORWARD_RETRY_MS = 20;
 const DURABLE_SOURCE_TERM = 1;
-const DURABLE_SOURCE_PARTITION = 'durable-source-p1';
 
 export function setupConfig(propagationMode) {
   ConfigurationManager.resetInstance();
@@ -118,8 +118,8 @@ export function createDurableCdcEvent({
   const timestamp = new HLCTimestamp(1000, 0, 'durable-source').toString();
   return {
     tableName, operation, data: {...data, [COLUMN.UPDATED_AT_HLC]: timestamp}, timestamp,
-    sourcePartition: DURABLE_SOURCE_PARTITION,
-    sourceReplica: `${DURABLE_SOURCE_PARTITION}-r1`,
+    sourcePartition: INITIAL_PARTITION_IDS[tableName],
+    sourceReplica: `${INITIAL_PARTITION_IDS[tableName]}-r1`,
     eventKey, entryId: eventKey, sourceLogIndex, sourceOrdinal: 0,
   };
 }

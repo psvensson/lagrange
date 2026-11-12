@@ -31,6 +31,7 @@ const READ_AUTHORITY_WITNESS_STATE = Object.freeze({
 
 const TABLE_NAME = 'tables';
 const TABLE_PARTITION_ID = INITIAL_PARTITION_IDS[TABLE_NAME];
+const SOURCE_INCARNATION = 'table-observation-producer';
 
 function buildTableRow(schemaVersion, originHlc, updatedAtMs = 1_000) {
   return {
@@ -102,7 +103,10 @@ test('CDCHandler preserves and forwards owner revision metadata to SystemTableCa
       entryId: 'entry-12-0',
       causeId: 'cause-pub-1',
     },
-    {skipSubscriptionCheck: true},
+    {skipSubscriptionCheck: true, sourceRange: {
+      sourcePartition: TABLE_PARTITION_ID, incarnation: SOURCE_INCARNATION,
+      after: {logIndex: 0, ordinal: -1}, through: {logIndex: 12, ordinal: 0},
+    }},
   );
 
   const watermark = cache.getTableRevisionWatermark(TABLE_NAME);
@@ -148,6 +152,8 @@ test('CDCHandler preserves and forwards owner revision metadata to SystemTableCa
       causeId: 'cause-pub-2',
     },
     5_250,
+    {sourcePartition: TABLE_PARTITION_ID, incarnation: SOURCE_INCARNATION,
+      after: {logIndex: 12, ordinal: 0}, through: {logIndex: 15, ordinal: 2}},
   );
   handler.applyImmediate(secondEvent, {skipSubscriptionCheck: true});
 

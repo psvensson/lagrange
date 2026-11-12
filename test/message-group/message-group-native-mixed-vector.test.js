@@ -6,6 +6,7 @@
 import assert from 'node:assert/strict';
 import {afterEach, beforeEach, test} from 'node:test';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {INITIAL_PARTITION_IDS} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {CDC_OPERATION, TABLES} from '../../src/constants/index.js';
 import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
@@ -21,12 +22,14 @@ import {GROUP_ID, NODE_ID, pump, recipientFixture as nativeRecipientFixture} fro
 import {positionRecipients, withSourceRange} from '../test-helpers/cdc-source-range-fixture.js';
 
 
+const SOURCE_PARTITION = INITIAL_PARTITION_IDS[TABLES.CONFIG];
+
 // CDC Stage 3: every recipient node starts from a known position of the
 // synthetic source (a list of it at its start), and every durable vector
 // travels with its source range.
 async function recipientFixture(...args) {
   const f = await nativeRecipientFixture(...args);
-  positionRecipients(f.services, 'mixed-config-source');
+  positionRecipients(f.services, SOURCE_PARTITION, TABLES.CONFIG);
   return f;
 }
 
@@ -47,7 +50,7 @@ function mixedInput(assigned) {
   const durable = {tableName: TABLES.CONFIG, operation: CDC_OPERATION.INSERT,
     data: {config_key: 'mixed-durable', config_value: 'durable-body', updated_at_hlc: stamp},
     timestamp: stamp,
-    sourcePartition: 'mixed-config-source', sourceReplica: 'mixed-config-source-r1',
+    sourcePartition: SOURCE_PARTITION, sourceReplica: `${SOURCE_PARTITION}-r1`,
     eventKey: 'mixed-native-write-1', entryId: 'mixed-native-write-1',
     sourceLogIndex: 19, sourceOrdinal: 0};
   const ordinary = {tableName: TABLES.CONFIG, operation: CDC_OPERATION.INSERT,

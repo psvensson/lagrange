@@ -10,6 +10,7 @@ import path from 'node:path';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {CDC_OPERATION, TABLES} from '../../src/constants/index.js';
+import {INITIAL_PARTITION_IDS} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {CONFIG_SCHEMA} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {PARTITION_SERVICE_OPERATION, PARTITION_COMMITTED_COMMAND_OUTCOME} from
@@ -47,7 +48,7 @@ import {emit, pump, recipientFixture, view, NODE_ID, GROUP_ID} from
   './message-group-native-custody-fixture.js';
 
 const KEY = 'native_cdc_custody_witness';
-const PARTITION_ID = 'config-custody-native';
+const PARTITION_ID = INITIAL_PARTITION_IDS[TABLES.CONFIG];
 const BUDGET_MS = 10000;
 const LOSS_ROUNDS = 200;
 // Explicit fixture timing, including the native tick unit. The real replica
@@ -429,7 +430,7 @@ test('released executeQuery debt requires actual RF1 native receipt through the 
     const debt = await writeSource(t, producer, 'native-cdc-rf1-write');
     const f = await recipientFixture(t, KEY, {replicaCount: 1});
     // The recipient listed the source at its start (CDC Stage 3 position).
-    positionRecipients(f.services, producer.leader.partitionId, null,
+    positionRecipients(f.services, producer.leader.partitionId, TABLES.CONFIG,
       readCdcLedgerIncarnation(producer.leader.db));
     const {subscriber} = subscribe(t, f, producer);
     await producer.leader.subscribeToCDCWithHandshake(subscriber,
@@ -450,7 +451,7 @@ test('native CDC producer retains custody until message-group committed applicat
     const producer = await producerFixture(t);
     const debt = await writeSource(t, producer, 'native-cdc-custody-write');
     const f = await recipientFixture(t, KEY);
-    positionRecipients(f.services, producer.leader.partitionId, null,
+    positionRecipients(f.services, producer.leader.partitionId, TABLES.CONFIG,
       readCdcLedgerIncarnation(producer.leader.db));
     const {subscriber} = subscribe(t, f, producer);
     f.holdEntries = true;

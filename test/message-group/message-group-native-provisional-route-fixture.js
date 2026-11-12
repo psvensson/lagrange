@@ -26,7 +26,7 @@ import {registerMessageGroupTransportHandler, retireMessageGroupTransportHandler
 import {REPLICA_HANDLER_RETIREMENT_OUTCOME} from
   '../../src/node/replica-transport-handler-identity.js';
 import {CDC_OPERATION, TABLES, SERVICE_STATUS} from '../../src/constants/index.js';
-import {SERVICES_SCHEMA} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {INITIAL_PARTITION_IDS, SERVICES_SCHEMA} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {cdcSqlBuilder} from '../../src/cdc/cdc-sql-builder.js';
 import {PARTITION_CDC_OBLIGATION_BOUND} from
   '../../src/partition/partition-cdc-obligation-constants.js';
@@ -45,7 +45,7 @@ const TARGET_GROUP = 'mg-provisional-target';
 const SOURCE_REPLICA = `${SOURCE_GROUP}-r1`;
 const TARGET_REPLICAS = ['l', 'h1', 'h2', 'f1', 'f2'].map((id) => `${TARGET_GROUP}-${id}`);
 const [LEADER, , , FIRST_HOP, FOLLOWER] = TARGET_REPLICAS;
-const PARTITION_ID = 'services-provisional-route';
+const PARTITION_ID = INITIAL_PARTITION_IDS[TABLES.SERVICES];
 const SOURCE_MEMBERS = [1, 2, 3].map((id) => [`${PARTITION_ID}-r${id}`, NODE_ID]);
 const BUDGET_MS = 10000;
 const SETUP_ROUNDS = 200;

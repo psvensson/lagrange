@@ -649,6 +649,70 @@ for (const completion of ['clock', 'shutdown']) {
   });
 }
 
+test('a failed retry cancellation rejects its delay and still releases the next shutdown wait',
+  async (t) => {
+    const f = fixture(t);
+    const recovery = integrationWithImage(t, f, eventOf(CDC_OPERATION.INSERT, 11).data, 11);
+    const cancellationCause = new Error('retry timer cancellation failed');
+    const clearTimeout = f.clock.clearTimeout.bind(f.clock);
+    let clears = 0;
+    f.clock.clearTimeout = (timer) => {
+      clears += 1;
+      if (clears === 1) throw cancellationCause;
+      return clearTimeout(timer);
+    };
+    const first = recovery.service.delayUntilShutdown(500).then(
+      () => ({state: 'released'}), (cause) => ({state: 'failed', cause}));
+    const second = recovery.service.delayUntilShutdown(500).then(
+      () => ({state: 'released'}), (cause) => ({state: 'failed', cause}));
+    assert.equal(f.clock.pendingTimerCount(), 2);
+    assert.doesNotThrow(() => recovery.service.markShuttingDown());
+    assert.deepEqual(await first, {state: 'failed', cause: cancellationCause});
+    assert.deepEqual(await second, {state: 'released'});
+    assert.equal(recovery.service.shutdownReleases.size, 0);
+    assert.equal(f.clock.pendingTimerCount(), 1,
+      'the failed cancellation retains the actual original timer, not a clean-release claim');
+    f.clock.clearTimeout = clearTimeout;
+    f.clock.advance(500);
+    await nextTurn();
+    assert.equal(f.clock.pendingTimerCount(), 0, 'the original clock eventually fires that timer');
+    assert.equal(recovery.reads(), 0);
+  });
+
+test('a failed cancellation of the relist pace retains FAULTED and both original causes',
+  async (t) => {
+    const f = fixture(t);
+    const recovery = integrationWithImage(t, f, eventOf(CDC_OPERATION.INSERT, 11).data, 11);
+    const cause = new Error('image attempt clock failed before acquisition');
+    const pacingCause = new Error('image retry timer cancellation failed');
+    const now = f.clock.now.bind(f.clock);
+    const clearTimeout = f.clock.clearTimeout.bind(f.clock);
+    let failed = false;
+    f.clock.now = () => {
+      if (!failed) { failed = true; throw cause; }
+      return now();
+    };
+    registerSourceRelister(recovery.service);
+    await nextTurn();
+    assert.equal(f.clock.pendingTimerCount(), 1);
+    f.clock.clearTimeout = () => { throw pacingCause; };
+    assert.doesNotThrow(() => recovery.service.markShuttingDown());
+    await nextTurn();
+    const cell = f.cache.sourceOrder.positionOf(SOURCE);
+    assert.equal(cell.state, 'gap');
+    assert.equal(cell.relist, 'faulted');
+    assert.equal(cell.lastRelistFailure.cause, cause);
+    assert.equal(cell.lastRelistFailure.pacingCause, pacingCause);
+    assert.equal(recovery.service.shutdownReleases.size, 0);
+    assert.equal(f.clock.pendingTimerCount(), 1);
+    f.clock.clearTimeout = clearTimeout;
+    f.clock.advance(500);
+    await nextTurn();
+    assert.equal(f.clock.pendingTimerCount(), 0);
+    assert.equal(recovery.reads(), 0, 'firing the original timer cannot restart a terminal owner');
+    assert.equal(f.cache.sourceOrder.positionOf(SOURCE).relist, 'faulted');
+  });
+
 test('registration while the old relister runs is delivered after its exact slot releases',
   async (t) => {
     const f = fixture(t);
@@ -678,6 +742,163 @@ test('registration while the old relister runs is delivered after its exact slot
     assert.equal(newOwner.service.relistImageSlots.held, 0);
     assertImagePrefix(f, 11);
   });
+
+test('a live old relister cannot keep its retry loop after a newer owner registers', async (t) => {
+  const f = fixture(t);
+  const row = eventOf(CDC_OPERATION.INSERT, 11).data;
+  const oldOwner = integrationWithImage(t, f, row, 11);
+  const newOwner = integrationWithImage(t, f, row, 11);
+  let refused = 0;
+  oldOwner.service.sqlQueryEngine.queryExecutor.executeOnPartition = () => {
+    refused += 1;
+    return {success: false, errorCode: 'old_owner_source_unavailable'};
+  };
+  registerSourceRelister(oldOwner.service);
+  await nextTurn();
+  assert.equal(refused, 1);
+  assert.equal(oldOwner.service.isShuttingDown, false);
+  registerSourceRelister(newOwner.service);
+  assert.equal(newOwner.reads(), 0, 'the existing running attempt still owns its pace');
+  f.clock.advance(500);
+  await nextTurn();
+  assert.equal(refused, 1, 'the displaced owner cannot begin another fetch');
+  assert.equal(newOwner.reads(), 1);
+  assertImagePrefix(f, 11);
+});
+
+function pageFor(sourcePartition, rows, index = 11) {
+  return {rows, sourceImage: {sourcePartition, incarnation: `owner-${sourcePartition}`,
+    appliedIndex: index}, imagePage: {imageId: `image-${sourcePartition}-${index}`,
+    page: 0, last: true, byteCount: 256},
+  readAuthorityWitness: {state: 'observed', partitionId: sourcePartition, role: 'leader',
+    servingNodeId: 'slot-source', servingReplicaId: `${sourcePartition}-r1`,
+    observedAtMs: 2000, term: 1, appliedIndex: index, commitIndex: index}};
+}
+
+test('two unavailable sources release image slots before pacing so a third source progresses',
+  async (t) => {
+    const f = fixture(t);
+    const second = INITIAL_PARTITION_IDS[TABLES.SERVICES];
+    const third = INITIAL_PARTITION_IDS[TABLES.CONFIG];
+    f.cache.sourceOrder.requireListed(second, TABLES.SERVICES);
+    f.cache.sourceOrder.requireListed(third, TABLES.CONFIG);
+    let healed = false;
+    let peak = 0;
+    const queries = [];
+    const service = new CDCIntegrationService({nodeId: 'slot-recipient',
+      systemTableCache: f.cache, timeSource: f.clock,
+      sqlQueryEngine: {queryExecutor: {executeOnPartition(sourcePartition, _sql, _params,
+        _forRead, _preferLeader, _sameGroup, options) {
+        queries.push(sourcePartition);
+        peak = Math.max(peak, service.relistImageSlots.held);
+        if (!healed && sourcePartition !== third) {
+          return {success: false, errorCode: 'source_owner_temporarily_unavailable'};
+        }
+        const rows = sourcePartition === third ?
+          [{config_key: 'available-source', config_value: 'published'}] : [];
+        return options.buildSuccessResult(pageFor(sourcePartition, rows));
+      }}}});
+    service.logger = silent;
+    t.after(() => service.markShuttingDown());
+    registerSourceRelister(service);
+    await nextTurn();
+    assert.equal(f.cache.get(TABLES.CONFIG, 'available-source')?.config_value, 'published',
+      'the available owner can publish while the other two remain unavailable');
+    assert.equal(f.cache.sourceOrder.positionOf(third).state, 'current');
+    assert.equal(f.cache.sourceOrder.positionOf(SOURCE).state, 'gap');
+    assert.equal(f.cache.sourceOrder.positionOf(second).state, 'gap');
+    assert.equal(peak, 2, 'the actual two-slot bound is reached but never exceeded');
+    assert.equal(service.relistImageSlots.held, 0, 'pacing retains no physical image slot');
+    assert.equal(service.relistImageSlots.waiting.length, 0);
+    assert.equal(queries.length, 3, 'unavailable owners do not spin during their pace');
+    healed = true;
+    f.clock.advance(500);
+    await nextTurn();
+    for (const sourcePartition of [SOURCE, second, third]) {
+      assert.equal(f.cache.sourceOrder.positionOf(sourcePartition).state, 'current');
+    }
+    assert.equal(queries.length, 5, 'the same two owners resume on the original retry clock');
+    assert.equal(service.relistImageSlots.held, 0);
+    assert.equal(service.shutdownReleases.size, 0);
+  });
+
+test('shutdown removes a queued image acquisition before granting it any query custody', async (t) => {
+  const f = fixture(t);
+  f.cache.sourceOrder.requireListed(INITIAL_PARTITION_IDS[TABLES.SERVICES], TABLES.SERVICES);
+  f.cache.sourceOrder.requireListed(INITIAL_PARTITION_IDS[TABLES.CONFIG], TABLES.CONFIG);
+  const release = Promise.withResolvers();
+  const queries = [];
+  const service = new CDCIntegrationService({nodeId: 'queued-slot-recipient',
+    systemTableCache: f.cache, timeSource: f.clock,
+    sqlQueryEngine: {queryExecutor: {async executeOnPartition(sourcePartition, _sql, _params,
+      _forRead, _preferLeader, _sameGroup, options) {
+      queries.push(sourcePartition);
+      await release.promise;
+      return options.buildSuccessResult(pageFor(sourcePartition, []));
+    }}}});
+  service.logger = silent;
+  t.after(() => service.markShuttingDown());
+  try {
+    registerSourceRelister(service);
+    await nextTurn();
+    assert.equal(queries.length, 2);
+    assert.equal(service.relistImageSlots.held, 2);
+    assert.equal(service.relistImageSlots.waiting.length, 1);
+    service.markShuttingDown();
+    await nextTurn();
+    assert.equal(service.relistImageSlots.waiting.length, 0,
+      'terminal queued work releases its existing acquisition registration');
+    assert.equal(queries.length, 2);
+    release.resolve();
+    await nextTurn();
+    assert.equal(service.relistImageSlots.held, 0);
+    assert.equal(service.shutdownReleases.size, 0);
+    assert.equal(queries.length, 2, 'a late grant cannot issue the queued terminal query');
+    assert.equal(f.cache.sourceOrder.positionOf(SOURCE).state, 'gap');
+  } finally {
+    release.resolve();
+    await nextTurn();
+  }
+});
+
+test('a displaced source-cell attempt cannot fetch on behalf of a replacement relist', async (t) => {
+  const f = fixture(t);
+  const releases = [Promise.withResolvers(), Promise.withResolvers()];
+  let queries = 0;
+  const service = new CDCIntegrationService({nodeId: 'replaced-cell-recipient',
+    systemTableCache: f.cache, timeSource: f.clock,
+    sqlQueryEngine: {queryExecutor: {async executeOnPartition(sourcePartition, _sql, _params,
+      _forRead, _preferLeader, _sameGroup, options) {
+      const index = queries++;
+      if (index < releases.length) await releases[index].promise;
+      return options.buildSuccessResult(pageFor(sourcePartition, [], 10 + index));
+    }}}});
+  service.logger = silent;
+  t.after(() => service.markShuttingDown());
+  try {
+    registerSourceRelister(service);
+    await nextTurn();
+    const oldCell = f.cache.sourceOrder.cells.get(SOURCE);
+    f.cache.clear();
+    f.cache.sourceOrder.requireListed(SOURCE, TABLE);
+    await nextTurn();
+    assert.notEqual(f.cache.sourceOrder.cells.get(SOURCE), oldCell);
+    assert.equal(queries, 2, 'the replacement cell owns its distinct scheduled attempt');
+    releases[0].resolve();
+    await nextTurn();
+    f.clock.advance(500);
+    await nextTurn();
+    assert.equal(queries, 2, 'the displaced attempt cannot borrow the replacement cell');
+    assert.equal(f.cache.sourceOrder.positionOf(SOURCE).state, 'gap');
+    releases[1].resolve();
+    await nextTurn();
+    assertImagePrefix(f, 11);
+    assert.equal(service.relistImageSlots.held, 0);
+  } finally {
+    for (const release of releases) release.resolve();
+    await nextTurn();
+  }
+});
 
 for (const fault of ['warn-call', 'warn-property', 'message-property', 'conversion']) {
   test(`current listeners cannot strand publication when diagnostic observation fails: ${fault}`,
@@ -733,16 +954,20 @@ test('range comparison never consults a replaced Math.sign intrinsic', (t) => {
   const f = fixture(t);
   f.install();
   const event = eventOf(CDC_OPERATION.INSERT, 11);
-  const range = rangeOf([event], imagePosition(10));
+  const sibling = eventOf(CDC_OPERATION.UPDATE, 11, KEY, 1, {status: 'ready'});
+  const range = rangeOf([event, sibling], imagePosition(10));
   let consulted = 0;
   const result = withHostileIntrinsics([
     replacePrototypeProperty(Math, 'sign', () => {
       consulted += 1;
       throw new Error('source range consulted mutable comparison intrinsic');
     }),
-  ], () => f.cache.applySourceCdcEvent(event, range, f.clock.now()));
+  ], () => [f.cache.applySourceCdcEvent(event, range, f.clock.now()),
+    f.cache.applySourceCdcEvent(sibling, range, f.clock.now())]);
   assert.equal(consulted, 0);
-  assert.equal(result.state, SOURCE_EFFECT_STATE.APPLIED);
+  assert.deepEqual(result.map((effect) => effect.state),
+    [SOURCE_EFFECT_STATE.APPLIED, SOURCE_EFFECT_STATE.APPLIED]);
+  assert.equal(f.cache.get(TABLE, KEY).status, 'ready');
   assertImagePrefix(f, 10);
 });
 

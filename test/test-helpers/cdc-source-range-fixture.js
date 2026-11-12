@@ -47,11 +47,11 @@ function withSourceRange(events, options = {}) {
  * synthetic source (as a list of it at applied index 0 would).
  * @param {Array<Object>} services - Message-group services.
  * @param {string} sourcePartition - The synthetic source partition.
- * @param {string|null} tableName - Its table.
+ * @param {string} tableName - Its canonical system table.
  * @param {string|null} [incarnation] - A real source ledger's incarnation
  *   (readCdcLedgerIncarnation), when the source is a real partition.
  */
-function positionRecipients(services, sourcePartition, tableName = null,
+function positionRecipients(services, sourcePartition, tableName,
   incarnation = TEST_SOURCE_INCARNATION) {
   for (const service of services) {
     service.cdcHandler.cache.sourceOrder.recordListedPosition({sourcePartition, tableName,

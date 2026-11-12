@@ -104,7 +104,11 @@ async function sourceOf(t, {replicas: count = 1, file = true} = {}) {
     changes.forEach(([operation, data], ordinal) => {
       if (operation === CDC_OPERATION.DELETE) source.rows.delete(data.group_id);
       else source.rows.set(data.group_id, data);
-      source.events.push({tableName: TABLE, operation, data, timestamp: command.timestamp,
+      // The shipping lane is modelled, but its payload uses the real producer's
+      // original command stamp. A wall time is not a substitute source identity.
+      const stamped = replicas[0].syncCDCGeneratorDependencies().stampOriginHlc(
+        data, command.timestamp);
+      source.events.push({tableName: TABLE, operation, data: stamped, timestamp: command.timestamp,
         sourcePartition: SOURCE, sourceReplica: replicas[0].replicaId,
         eventKey: `paged-${logIndex}-${ordinal}`, entryId: command.entryId,
         sourceLogIndex: logIndex, sourceOrdinal: ordinal});

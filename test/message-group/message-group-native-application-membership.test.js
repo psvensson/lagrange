@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import {afterEach, beforeEach, test} from 'node:test';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {INITIAL_PARTITION_IDS} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {CDC_OPERATION, TABLES} from '../../src/constants/index.js';
 import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
@@ -18,12 +19,14 @@ const KEY = 'membership-durable';
 const SIBLING_KEY = 'membership-sibling';
 
 
+const SOURCE_PARTITION = INITIAL_PARTITION_IDS[TABLES.CONFIG];
+
 // CDC Stage 3: every recipient node starts from a known position of the
 // synthetic source (a list of it at its start), and every durable vector
 // travels with its source range.
 async function recipientFixture(...args) {
   const f = await nativeRecipientFixture(...args);
-  positionRecipients(f.services, 'membership-config');
+  positionRecipients(f.services, SOURCE_PARTITION, TABLES.CONFIG);
   return f;
 }
 
@@ -43,11 +46,11 @@ function ledgerInput() {
   const timestamp = new HLCTimestamp(1000, 0, 'membership-source').toString();
   return [{tableName: TABLES.CONFIG, operation: CDC_OPERATION.INSERT,
     data: {config_key: KEY, config_value: 'durable-value', updated_at_hlc: timestamp}, timestamp,
-    sourcePartition: 'membership-config', sourceReplica: 'membership-config-r1',
+    sourcePartition: SOURCE_PARTITION, sourceReplica: `${SOURCE_PARTITION}-r1`,
     eventKey: 'membership-write', entryId: 'membership-write', sourceLogIndex: 5, sourceOrdinal: 0},
   {tableName: TABLES.CONFIG, operation: CDC_OPERATION.INSERT,
     data: {config_key: SIBLING_KEY, config_value: 'sibling-value', updated_at_hlc: timestamp}, timestamp,
-    sourcePartition: 'membership-config', sourceReplica: 'membership-config-r1',
+    sourcePartition: SOURCE_PARTITION, sourceReplica: `${SOURCE_PARTITION}-r1`,
     eventKey: 'membership-sibling', entryId: 'membership-write', sourceLogIndex: 5, sourceOrdinal: 1}];
 }
 

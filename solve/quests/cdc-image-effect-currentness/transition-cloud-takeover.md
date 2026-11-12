@@ -379,3 +379,104 @@ deleted. fb369 modifies that tracked file (blob
 while extracting source order. The coordinator confirmed the same blob in the
 remote exact tree. No 21-path static request ran. All 22 changed extant paths
 belong in the original freeze's scoped metrics selection.
+
+## Remaining fb369 first failures and fixture closure
+
+Lab 2768 on exact fb369 ran five cache roots / 97 assertions: fold (2) and
+anti-entropy (67) passed; owner-revision observation, local application g/h and
+paged-image d/g failed. Its complete 124,448-byte original log has SHA256
+fce74fe9f9198900ac1fc4473b9feb8aa7968fbc4f76afcc967b1a07e9f732e6.
+Lab 2769 ran six recovery roots / 144 assertions: DT6 (121), member (1), primary
+(1), source (7), reentry (8) passed. Vector-equivalence had five passes and one
+failure before the S3-6 same-entry assertion. Its complete 5,840-byte log has
+SHA256 844c8de98302ac833cc688c8006bcbef671d547ea5547cebc8943ed1e4550f8b.
+
+The observation and S3-6 fixtures omit sourceRange while supplying durable event
+keys/source positions. captureSourceRange refuses them before their intended
+assertions. They now carry the original controlled producer range explicitly;
+provisional same-entry ordering still must preserve the later sibling and cannot
+publish a contiguous position. Watermark metadata expectations remain exact.
+
+The local g/h controls used the participant fixture's documented two-column
+id/value model under the latency_groups name. The actual cache correctly rejects
+it for missing group_id (the original log says so), before any notification.
+Root approved moving only real-cache g/h/new i controls to the production CONFIG
+schema, config_key/config_value and actual committed SQL. Ledger-only model
+fixtures remain unchanged. The corrected i negative can now discriminate a
+valid payload from a noncanonical local source; its first tests-only version at
+44708 still has the known schema obstacle and cannot establish that boundary.
+
+The paged-image fixture manually builds its shipping events from committed SQL
+changes, but omitted the row's origin HLC. entryPositionOf therefore returns null
+and the typed effect refuses before merge; subsequent ranges correctly retain
+GAP. The actual partition CDC producer always stamps the command's original HLC.
+This fixture now calls its existing stampOriginHlc method with that exact command
+stamp. No current-time stamp, invented position, loosened convergence assertion
+or change to production admission is introduced. Native images/SQL remain real;
+the shipping lane remains a model and is not source-ledger delivery proof.
+
+Canonical table/source caller closure changes synthetic source identities and
+actual producer partition identities at their construction sites, consistently
+with INITIAL_PARTITION_IDS. Helper positionRecipients now requires an explicit
+table. Generic participant defaults and ordinary unpositioned CDC remain intact.
+The old W9 vector65 fixture put two independently positioned CONFIG sources into
+one recipient table. Root approved moving vector65/truncated64/mutated65 controls
+into a separate test world with canonical config-p1. It retains the original
+remote-router/native membership assertions. The independent W1/W2/W9 world keeps
+its own actual SQL/ledger/incarnation chain; no image reset masks its application.
+The synthetic vector's scope is still boundary membership, not delivery of its
+invented occurrences from the source ledger.
+
+These are separate fixture changes after tests-only 44708. Production remains
+identical to fb369 pending the first outer-owner discriminator receipt. All
+assertion changes above have a named original failure and root source approval;
+no changed fixture has been executed locally.
+
+## First continuation discriminator evidence and acquisition closure
+
+Lab 2802 measured tests-only 44708 (source identical to fb369), three roots /
+59 reported assertions, all three roots failed. The complete 37,333-byte log has
+SHA256 523a38e47d1350dd81480c1c966cfd90ed2890b6da82c011c8fefd64e0a8e5ad.
+Observed causal failures include escaped attempt IDLE instead of RUNNING,
+clock failure IDLE instead of FAULTED, live STOPPED accepted, a replaced-owner
+registration wake lost, current-listener diagnostic throws escaping, singleton
+iterator and live Math.sign engagement, unknown position query minting a cell,
+and noncanonical image/direct/forward source not refusing. The old local tests
+still fail at their already recorded schema obstacle; they do not establish
+valid local-effect admission. Corrected CONFIG producer proof remains requested.
+No new behavior had been written before this original red was preserved.
+
+Further same-owner resource inspection found two coupled boundaries. First,
+delayUntilShutdown cancellation called clearTimeout before resolving its delay;
+a thrown cancellation escaped markShuttingDown and could prevent the next held
+wait from being released. Root approved rejecting that one delay with its exact
+cause, no clearTimeout(null), and keeping the real uncleared timer visible until
+its original clock fires. Controls distinguish promise rejection from actual
+timer release and verify both remaining-wait progress and outer FAULTED custody.
+
+Second, the image slot was acquired outside an internal page-retry loop. Two
+unavailable sources could hold both slots during every 500 ms delay and starve
+a third available source. Root approved moving slot acquisition/release to each
+complete fetch attempt inside that same logical relist, releasing before its
+existing retry/hint pace and preserving its record/restart counters. Added real
+CDCIntegrationService controls measure two unavailable owners plus one useful
+available image, maximum two held slots, and eventual recovery after healing on
+the same clock. A queued-acquisition shutdown control requires exact waiter
+removal and no terminal query grant. A displaced-cell control releases an old
+held image while the replacement's query is held; the old attempt may not fetch
+on behalf of the replacement. A live old-owner retry control preserves a newer
+registration even when the old service is not terminal.
+
+The minimal request refinement under source review is an internal isCurrent()
+closure capturing the existing registered-owner record and original cell. The
+production relister checks it before/after acquiring and after awaited pages;
+a displaced logical attempt returns RETRY, while only actual terminal state can
+return STOPPED. Source-order finally routes the existing registration wake after
+releasing the old slot. This introduces no new token owner, registry or timer.
+
+History precision: git blame of fa70987b shows the outer STOPPED default and
+log-only catch already existed at system-table-cache-cdc-observation.js:662–678,
+introduced in 2a373dd859. dd3dd8b04 extracted that existing behavior; it did not
+introduce it. The timer acquisition/cancellation ordering dates to 1aea11baf6.
+This corrects any implication in the earlier bounded search that the source
+extraction was the cause of the inherited relist hole.
