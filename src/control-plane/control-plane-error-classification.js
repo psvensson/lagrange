@@ -17,6 +17,10 @@ import {SCHEMA_PROVISIONING_ERROR_CODE} from
 import {
   OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE,
   ROUTER_CONNECTION_CLOSED_ERROR_CODE,
+  ROUTER_DELIVERY_ENCODING_INVALID_ERROR_CODE,
+  ROUTER_DELIVERY_LIFETIME_INVALID_ERROR_CODE,
+  ROUTER_DUPLICATE_PENDING_ACK_ERROR_CODE,
+  ROUTER_DUPLICATE_PENDING_RESPONSE_ERROR_CODE,
   ROUTER_HANDLER_FAILED_ERROR_CODE,
   ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
   ROUTER_NO_CONNECTION_ERROR_CODE,
@@ -154,6 +158,16 @@ const CONTROL_PLANE_ERROR_CODE_DECISION = Object.freeze({
     'no frame left: the query transport is not ready yet'),
   [ROUTER_HANDLER_FAILED_ERROR_CODE]: codeDecision(UNCLASSIFIED,
     'the target handler threw: why is not known here'),
+  // The router's refusals of a delivery its caller built wrongly, raised
+  // before any frame leaves: the same write builds the same delivery again.
+  [ROUTER_DELIVERY_LIFETIME_INVALID_ERROR_CODE]: codeDecision(PERMANENT,
+    'the caller passed no valid delivery lifetime'),
+  [ROUTER_DELIVERY_ENCODING_INVALID_ERROR_CODE]: codeDecision(PERMANENT,
+    'the payload cannot be encoded for the wire'),
+  [ROUTER_DUPLICATE_PENDING_ACK_ERROR_CODE]: codeDecision(PERMANENT,
+    'the caller reused a messageId that already waits for its ACK'),
+  [ROUTER_DUPLICATE_PENDING_RESPONSE_ERROR_CODE]: codeDecision(PERMANENT,
+    'the caller reused a messageId that already waits for its answer'),
   // Pressure and the fan-out coordinator.
   [PRESSURE_GOVERNOR_ERROR_CODE.CONTROL_PLANE_PRESSURE_DEGRADED]:
     codeDecision(TRANSIENT, 'pressure defers the write (R12)'),
