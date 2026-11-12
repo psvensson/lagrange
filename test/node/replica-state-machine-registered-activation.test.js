@@ -8,6 +8,15 @@ import {REPLICA_REGISTERED_ACTIVATION_ERROR_CODE} from
   '../../src/node/replica-state-machine-registered-activation.js';
 import {PartitionServiceRowOwner} from
   '../../src/partition/partition-service-row-owner.js';
+import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
+import {bindRegisteredReplicaHandler} from '../test-helpers/replica-handler-identity-fixture.js';
+import {PARTITION_RUNTIME_PUBLICATION_REFUSED} from
+  '../../src/partition/partition-runtime-publication.js';
+
+// Row-owner evidence proof: explicit controlled construction admission precedes
+// the actual INSERT; real PartitionServiceRowOwner seals exact service/owner
+// association and real ReplicaStateMachine performs activation. This suite does
+// not certify original-seed native opening or startup composition.
 
 function initializeEnvironment() {
   ConfigurationManager.resetInstance();
@@ -43,12 +52,18 @@ function matches(row, whereClause) {
 }
 
 function createWriter(initialRow, options = {}) {
-  let row = {...initialRow};
+  let row = null;
   const updates = [];
   return {
+    declaredRow: Object.freeze({...initialRow}),
     updates,
     get row() {
       return {...row};
+    },
+    async insertSystemTableRow(_tableName, inserted) {
+      if (row) return {success: true, partitionResult: {affectedRows: 0}};
+      row = {...inserted};
+      return {success: true, partitionResult: {affectedRows: 1}};
     },
     async readAuthoritativeRows() {
       return {success: true, rows: row ? [{...row}] : []};
@@ -88,12 +103,13 @@ function createStateMachine(now) {
   });
 }
 
-function activationOptions(writer) {
+function activationOptions(writer, registration) {
   return {
     partitionId: 'p1',
     replicaId: 'p1-r1',
     nodeId: 'node-a',
     systemTableWriter: writer,
+    ...registration,
     writeOptions: {coalescingKey: 'services:p1-r1'},
     // The replica's exact handler is registered (the production caller,
     // PartitionServiceRowOwner, always supplies this in-lane check).
@@ -101,7 +117,29 @@ function activationOptions(writer) {
   };
 }
 
-async function createRegistrationEvidenceFixture(options = {}) {
+async function registerRuntime(t, owner, row) {
+  const service = createPartitionServiceFixture({partitionId: row.partition_id,
+    tableId: 'registration-fixture', replicaId: row.replica_id, nodeId: row.node_id,
+    resolveHandlerRetirementLane: () => owner.replicaStateMachine}, {birth: row});
+  bindRegisteredReplicaHandler(service, {nodeId: row.node_id,
+    resolveHandlerRetirementLane: () => owner.replicaStateMachine});
+  t.teardown(() => service.shutdown());
+  const registrationEvidence = await owner.registerReplica({
+    partitionId: row.partition_id, replicaId: row.replica_id, nodeId: row.node_id,
+    service, status: row.status, timestamp: row.updated_at,
+    extraFields: {created_at: row.created_at, state_entered_at: row.state_entered_at,
+      updated_at: row.updated_at, create_attempt_token: row.create_attempt_token},
+  });
+  return {service, registrationEvidence};
+}
+
+async function brandedActivationOptions(t, writer, stateMachine, row = writer.declaredRow) {
+  const owner = new PartitionServiceRowOwner({systemTableWriter: writer,
+    replicaStateMachine: stateMachine});
+  return activationOptions(writer, await registerRuntime(t, owner, row));
+}
+
+async function createRegistrationEvidenceFixture(t, options = {}) {
   let durableRow = null;
   let insertCount = 0;
   let readCount = 0;
@@ -141,15 +179,11 @@ async function createRegistrationEvidenceFixture(options = {}) {
     replicaStateMachine: stateMachine,
     now: () => ownerNow,
   });
-  const registrationEvidence = await owner.registerReplica({
-    partitionId: 'p1',
-    replicaId: 'p1-r1',
-    nodeId: 'node-a',
-    service: {getRole: () => 'follower'},
-    status: 'stopped',
-  });
+  const {service, registrationEvidence} = await registerRuntime(t, owner,
+    registeredRow({created_at: 100}));
   return {
     owner,
+    service,
     registrationEvidence,
     stateMachine,
     updates,
@@ -193,7 +227,7 @@ test('ReplicaStateMachine registered activation refuses a newer REMOVING generat
     const stateMachine = createStateMachine(150);
 
     await t.rejects(
-      stateMachine.activateRegisteredReplica(activationOptions(writer)),
+      stateMachine.activateRegisteredReplica(await brandedActivationOptions(t, writer, stateMachine)),
       {code: REPLICA_REGISTERED_ACTIVATION_ERROR_CODE.SOURCE_CHANGED},
       'delayed activation must classify a newer lifecycle generation as changed',
     );
@@ -217,10 +251,10 @@ test('ReplicaStateMachine registered activation refuses a newer REMOVING generat
 
 test('ReplicaStateMachine replays exact INSERT evidence after clock advance',
   async (t) => {
-    const fixture = await createRegistrationEvidenceFixture({
+    const fixture = await createRegistrationEvidenceFixture(t, {
       readsAvailable: false,
     });
-    const {owner, registrationEvidence, stateMachine} = fixture;
+    const {owner, service, registrationEvidence, stateMachine} = fixture;
     t.equal(Object.isFrozen(registrationEvidence), true,
       'INSERT-bound evidence must be immutable');
     await t.rejects(
@@ -229,7 +263,7 @@ test('ReplicaStateMachine replays exact INSERT evidence after clock advance',
         partitionId: 'p1',
         replicaId: 'p1-r2',
         nodeId: 'node-a',
-        registrationEvidence,
+        registrationEvidence, service,
       }),
       {code: REPLICA_REGISTERED_ACTIVATION_ERROR_CODE.SOURCE_CHANGED},
       'registration evidence cannot transfer across replica identity',
@@ -242,7 +276,7 @@ test('ReplicaStateMachine replays exact INSERT evidence after clock advance',
       partitionId: 'p1',
       replicaId: 'p1-r1',
       nodeId: 'node-a',
-      registrationEvidence,
+      registrationEvidence, service,
     });
 
     t.equal(fixture.readCount, 0,
@@ -258,7 +292,7 @@ test('ReplicaStateMachine replays exact INSERT evidence after clock advance',
       partitionId: 'p1',
       replicaId: 'p1-r1',
       nodeId: 'node-a',
-      registrationEvidence,
+      registrationEvidence, service,
     });
     t.equal(replayed.state_entered_at, 101,
       'clock advance cannot mint a second destination for the same evidence');
@@ -268,10 +302,10 @@ test('ReplicaStateMachine replays exact INSERT evidence after clock advance',
 
 test('PartitionServiceRowOwner redrives deferred branded evidence through ' +
   'ReplicaStateMachine without another INSERT', async (t) => {
-  const fixture = await createRegistrationEvidenceFixture({
+  const fixture = await createRegistrationEvidenceFixture(t, {
     returnWithoutApply: true,
   });
-  const {owner, registrationEvidence, stateMachine} = fixture;
+  const {owner, service, registrationEvidence, stateMachine} = fixture;
   const originalRow = {...fixture.durableRow};
   let handlerChecks = 0;
   const options = {
@@ -282,7 +316,7 @@ test('PartitionServiceRowOwner redrives deferred branded evidence through ' +
     partitionId: 'p1',
     replicaId: 'p1-r1',
     nodeId: 'node-a',
-    registrationEvidence,
+    registrationEvidence, service,
   };
 
   // The caller retains the actual creation owner's object. This owner-level
@@ -345,7 +379,7 @@ test('PartitionServiceRowOwner redrives deferred branded evidence through ' +
   t.equal(fixture.updateCount, 3, 'defer, apply and replay each use the lifecycle CAS');
   t.same(fixture.updates[1], fixture.updates[0], 'redrive preserves source and destination');
   t.same(fixture.updates[2], fixture.updates[0], 'replay preserves source and destination');
-  t.equal(handlerChecks, 3, 'each genuine attempt consults the in-lane handler boundary');
+  t.equal(handlerChecks, 5, 'successful attempts recheck the handler before local publication');
   t.equal(fixture.insertCount, 1, 'activation debt never becomes another registration INSERT');
   t.same(registrationEvidence, originalRow, 'retained branded evidence remains the original source');
 });
@@ -367,10 +401,52 @@ test('ReplicaStateMachine refuses fabricated registration evidence',
       'forged evidence must be refused before mutation execution');
   });
 
+test('branded registration cannot activate a missing or different exact service', async (t) => {
+  const fixture = await createRegistrationEvidenceFixture(t);
+  const {owner, service, registrationEvidence} = fixture;
+  const other = createPartitionServiceFixture({partitionId: 'p1', tableId: 'registration-fixture',
+    replicaId: 'p1-r1', nodeId: 'node-a'}, {birth: registrationEvidence});
+  t.teardown(() => other.shutdown());
+  const options = {partitionId: 'p1', replicaId: 'p1-r1', nodeId: 'node-a',
+    registrationEvidence, isEffectHandlerCurrent: () => true};
+  for (const supplied of [undefined, other]) {
+    await t.rejects(owner.activateReplica({...options, service: supplied}),
+      {code: REPLICA_REGISTERED_ACTIVATION_ERROR_CODE.SOURCE_CHANGED});
+  }
+  t.equal(fixture.updateCount, 0, 'no different runtime can borrow the INSERT evidence');
+  await owner.activateReplica({...options, service});
+  t.equal(fixture.durableRow.status, 'active', 'the exact registered runtime still progresses');
+});
+
+test('replaced handler refuses registered activation and exact restoration recovers', async (t) => {
+  const fixture = await createRegistrationEvidenceFixture(t);
+  const {owner, service, registrationEvidence} = fixture;
+  const options = {partitionId: 'p1', replicaId: 'p1-r1', nodeId: 'node-a',
+    registrationEvidence, service, isEffectHandlerCurrent: () => true};
+  service.transport.register(service.unifiedAddress, () => null);
+  await t.rejects(owner.activateReplica(options),
+    {code: REPLICA_REGISTERED_ACTIVATION_ERROR_CODE.HANDLER_NOT_REGISTERED});
+  t.equal(fixture.updateCount, 0, 'presence of another handler cannot authorize ACTIVE');
+  service.transport.register(service.unifiedAddress, service.transportHandler);
+  await owner.activateReplica(options);
+  t.equal(fixture.durableRow.status, 'active', 'restored exact registration progresses');
+});
+
+test('revoked construction authority cannot activate retained INSERT evidence', async (t) => {
+  const fixture = await createRegistrationEvidenceFixture(t);
+  const {owner, service, registrationEvidence} = fixture;
+  service.fixtureRuntimeAdmission.revoke();
+  await t.rejects(owner.activateReplica({partitionId: 'p1', replicaId: 'p1-r1',
+    nodeId: 'node-a', service, registrationEvidence, isEffectHandlerCurrent: () => true}),
+  {code: PARTITION_RUNTIME_PUBLICATION_REFUSED});
+  t.equal(fixture.updateCount, 0, 'retained evidence cannot renew a revoked producer');
+  t.equal(fixture.durableRow.status, 'stopped');
+});
+
 test('ReplicaStateMachine refuses branded evidence after durable generation changes',
   async (t) => {
-    const fixture = await createRegistrationEvidenceFixture();
-    const {owner, registrationEvidence} = fixture;
+    const fixture = await createRegistrationEvidenceFixture(t);
+    const {owner, service, registrationEvidence} = fixture;
     fixture.setDurableRow({
       ...fixture.durableRow,
       status: 'removing',
@@ -384,7 +460,7 @@ test('ReplicaStateMachine refuses branded evidence after durable generation chan
         partitionId: 'p1',
         replicaId: 'p1-r1',
         nodeId: 'node-a',
-        registrationEvidence,
+        registrationEvidence, service,
       }),
       {code: REPLICA_REGISTERED_ACTIVATION_ERROR_CODE.SOURCE_CHANGED},
       'branding cannot transfer authority to a newer durable generation',
@@ -396,17 +472,15 @@ test('ReplicaStateMachine refuses branded evidence after durable generation chan
 
 test('ReplicaStateMachine refuses old registration evidence after same-ID ' +
   'recreate', async (t) => {
-  const fixture = await createRegistrationEvidenceFixture();
-  const {owner, registrationEvidence} = fixture;
+  const fixture = await createRegistrationEvidenceFixture(t);
+  const {owner, service, registrationEvidence} = fixture;
   fixture.setDurableRow(null);
   fixture.setOwnerNow(registrationEvidence.updated_at);
-  await owner.registerReplica({
-    partitionId: 'p1',
-    replicaId: 'p1-r1',
-    nodeId: 'node-a',
-    service: {getRole: () => 'follower'},
-    status: 'stopped',
+  const replacementSource = PartitionServiceRowOwner.buildServiceRow({
+    partitionId: 'p1', replicaId: 'p1-r1', nodeId: 'node-a',
+    timestamp: registrationEvidence.updated_at, status: 'stopped',
   });
+  await registerRuntime(t, owner, replacementSource);
   const recreatedRow = fixture.durableRow;
   t.equal(fixture.insertCount, 2,
     'the fixture explicitly removes then recreates through the creation owner');
@@ -417,7 +491,7 @@ test('ReplicaStateMachine refuses old registration evidence after same-ID ' +
       partitionId: 'p1',
       replicaId: 'p1-r1',
       nodeId: 'node-a',
-      registrationEvidence,
+      registrationEvidence, service,
     }),
     {code: REPLICA_REGISTERED_ACTIVATION_ERROR_CODE.SOURCE_CHANGED},
     'old branded evidence cannot activate a recreated same-ID generation',
@@ -442,7 +516,7 @@ test('ReplicaStateMachine registered activation classifies an exact zero-row non
     const stateMachine = createStateMachine(150);
 
     await t.rejects(
-      stateMachine.activateRegisteredReplica(activationOptions(writer)),
+      stateMachine.activateRegisteredReplica(await brandedActivationOptions(t, writer, stateMachine)),
       {code: REPLICA_REGISTERED_ACTIVATION_ERROR_CODE.DURABILITY_DEFERRED},
       'zero-row with the source generation still present retains retry debt',
     );
@@ -459,7 +533,7 @@ test('ReplicaStateMachine registered activation recognizes only its exact lost-A
     const stateMachine = createStateMachine(150);
 
     const activated = await stateMachine.activateRegisteredReplica(
-      activationOptions(writer),
+      await brandedActivationOptions(t, writer, stateMachine),
     );
 
     t.equal(activated.status, 'active');
@@ -493,8 +567,8 @@ test('ReplicaStateMachine registered activation recognizes only its exact lost-A
 
 test('exact registered activation replaces tracked CREATING while an ' +
   'unversioned ACTIVE snapshot remains unauthorized', async (t) => {
-  const fixture = await createRegistrationEvidenceFixture();
-  const {owner, registrationEvidence, stateMachine} = fixture;
+  const fixture = await createRegistrationEvidenceFixture(t);
+  const {owner, service, registrationEvidence, stateMachine} = fixture;
   const invalidTransitions = [];
   stateMachine.logger.error = (message, details) => {
     invalidTransitions.push({message, details});
@@ -523,7 +597,7 @@ test('exact registered activation replaces tracked CREATING while an ' +
     partitionId: 'p1',
     replicaId: 'p1-r1',
     nodeId: 'node-a',
-    registrationEvidence,
+    registrationEvidence, service,
   });
 
   t.equal(activated.status, 'active');
@@ -538,8 +612,8 @@ test('exact registered activation replaces tracked CREATING while an ' +
 test('partition registered activation survives unrelated role writes at ' +
   'generation G and fails closed after a real transition to G+1',
 async (t) => {
-  const fixture = await createRegistrationEvidenceFixture();
-  const {owner, registrationEvidence} = fixture;
+  const fixture = await createRegistrationEvidenceFixture(t);
+  const {owner, service, registrationEvidence} = fixture;
   t.equal(registrationEvidence.state_entered_at,
     registrationEvidence.created_at,
     'registration stamps the canonical lifecycle generation G');
@@ -553,7 +627,7 @@ async (t) => {
   const activated = await owner.activateReplica({
     isEffectHandlerCurrent: () => true,
     partitionId: 'p1', replicaId: 'p1-r1', nodeId: 'node-a',
-    registrationEvidence,
+    registrationEvidence, service,
   });
   t.equal(activated.status, 'active',
     'activation carrying G still succeeds after the unrelated role write');
@@ -561,7 +635,7 @@ async (t) => {
     'the independent role column is left to its own owner');
 
   // Real lifecycle transition away from G (STOPPED -> REMOVING at G+1).
-  const second = await createRegistrationEvidenceFixture();
+  const second = await createRegistrationEvidenceFixture(t);
   second.setDurableRow({
     ...second.durableRow,
     status: 'removing',
@@ -572,7 +646,7 @@ async (t) => {
     second.owner.activateReplica({
       isEffectHandlerCurrent: () => true,
       partitionId: 'p1', replicaId: 'p1-r1', nodeId: 'node-a',
-      registrationEvidence: second.registrationEvidence,
+      registrationEvidence: second.registrationEvidence, service: second.service,
     }),
     {code: REPLICA_REGISTERED_ACTIVATION_ERROR_CODE.SOURCE_CHANGED},
     'delayed activation carrying G fails closed',
@@ -603,12 +677,11 @@ test('partition activation lost acknowledgement resolves by generation even ' +
   };
   const owner = new PartitionServiceRowOwner({systemTableWriter: writer,
     replicaStateMachine: createStateMachine(150), now: () => 100});
-  const registrationEvidence = await owner.registerReplica({
-    partitionId: 'p1', replicaId: 'p1-r1', nodeId: 'node-a',
-    service: {getRole: () => 'follower'}, status: 'stopped'});
+  const {service, registrationEvidence} = await registerRuntime(t, owner,
+    registeredRow({created_at: 100}));
   const activated = await owner.activateReplica({isEffectHandlerCurrent: () => true,
     partitionId: 'p1',
-    replicaId: 'p1-r1', nodeId: 'node-a', registrationEvidence});
+    replicaId: 'p1-r1', nodeId: 'node-a', registrationEvidence, service});
   t.equal(activated.status, 'active',
     'the exact destination generation is recognized despite updated_at');
   t.equal(durableRow.state_entered_at, activated.state_entered_at);

@@ -33,6 +33,7 @@ import {isPartitionRegistrationEvidence} from
   '../partition/partition-service-row-owner.js';
 import {REPLICA_ACTIVATION_HANDLER_NOT_REGISTERED} from
   './replica-state-machine-constants.js';
+import {isReplicaServiceHandlerBound} from './replica-transport-handler-identity.js';
 
 const REGISTERED_REPLICA_POINT_READ_SQL =
   'SELECT * FROM services WHERE service_id = ?';
@@ -217,14 +218,17 @@ function resolveRegistrationEvidence(stateMachine, options) {
 // issued. It is checked here, inside the replica's lifecycle lane, with no
 // await between the check and the CAS; the effect section opened right after
 // makes handler retirement (retireReplicaHandler) wait for the CAS.
-function requireEffectHandler(options) {
-  if (typeof options.isEffectHandlerCurrent !== 'function' ||
+function requireEffectHandler(stateMachine, options) {
+  if (options.service?.runtimeBinding?.owner !== stateMachine ||
+      !isReplicaServiceHandlerBound(options.service, stateMachine) ||
+      typeof options.isEffectHandlerCurrent !== 'function' ||
       options.isEffectHandlerCurrent() !== true) {
     throw activationError(
       REPLICA_REGISTERED_ACTIVATION_ERROR_CODE.HANDLER_NOT_REGISTERED,
       options.replicaId,
     );
   }
+  options.service.runtimePublication.assertCurrent(options.service);
 }
 
 async function activateRegisteredReplicaInLane(stateMachine, options, admission) {
@@ -237,7 +241,7 @@ async function activateRegisteredReplicaInLane(stateMachine, options, admission)
   return runActivationEffectSection(
     stateMachine,
     options.replicaId,
-    () => requireEffectHandler(options),
+    () => requireEffectHandler(stateMachine, options),
     async () => {
       const activatedRow = await persistRegisteredReplicaActivation(
         stateMachine,
@@ -245,7 +249,7 @@ async function activateRegisteredReplicaInLane(stateMachine, options, admission)
         sourceRow,
         durableRowVersion(sourceRow),
       );
-      requireEffectHandler(options);
+      requireEffectHandler(stateMachine, options);
       if (!installAuthoritativeReplicaLifecycleInLane(
         stateMachine,
         options.replicaId,
@@ -263,11 +267,13 @@ async function activateRegisteredReplicaInLane(stateMachine, options, admission)
 }
 
 function activateRegisteredReplica(stateMachine, options = {}) {
-  const admission = captureReplicaAdmission(stateMachine, options.replicaId);
+  const request = Object.freeze({...options,
+    writeOptions: Object.freeze({...options.writeOptions})});
+  const admission = captureReplicaAdmission(stateMachine, request.replicaId);
   return turnChainValue(runSerializedReplicaMutation(
     stateMachine,
-    options.replicaId,
-    () => pendingTurn(activateRegisteredReplicaInLane(stateMachine, options, admission)),
+    request.replicaId,
+    () => pendingTurn(activateRegisteredReplicaInLane(stateMachine, request, admission)),
   ));
 }
 

@@ -281,6 +281,8 @@ class PartitionServiceRowOwner {
   }
 
   async registerReplica(options = {}) {
+    const service = options.service;
+    const lifecycleOwner = this.replicaStateMachine;
     if (
       !this.systemTableWriter ||
       typeof this.systemTableWriter.insertSystemTableRow !== 'function'
@@ -296,8 +298,7 @@ class PartitionServiceRowOwner {
       extraFields: {...options.extraFields, ...options.originalRegistration?.birth},
     }));
 
-    const association = Object.freeze({service: options.service,
-      lifecycleOwner: this.replicaStateMachine});
+    const association = Object.freeze({service, lifecycleOwner});
     bindPartitionRuntimeLifecycle(association.service, association.lifecycleOwner, row);
     if (options.originalRegistration) {
       const registered = await options.originalRegistration.publish(row, (value) =>
@@ -331,7 +332,7 @@ class PartitionServiceRowOwner {
       );
     }
     const registrationEvidence = sealPartitionRegistrationEvidence(row, association);
-    await this.publishCanonicalLeaderNodeId(row, options.service);
+    await this.publishCanonicalLeaderNodeId(row, service);
 
     return registrationEvidence;
   }
@@ -344,6 +345,8 @@ class PartitionServiceRowOwner {
   }
 
   async updateReplicaStatus(options = {}) {
+    const service = options.service;
+    const lifecycleOwner = this.replicaStateMachine;
     if (
       !this.systemTableWriter ||
       typeof this.systemTableWriter.updateSystemTableRow !== 'function'
@@ -353,8 +356,8 @@ class PartitionServiceRowOwner {
       );
     }
 
-    if (!this.replicaStateMachine ||
-        typeof this.replicaStateMachine.activateRegisteredReplica !==
+    if (!lifecycleOwner ||
+        typeof lifecycleOwner.activateRegisteredReplica !==
           'function') {
       throw new Error(
         PARTITION_SERVICE_ROW_OWNER_ERROR.LIFECYCLE_OWNER_REQUIRED,
@@ -365,21 +368,21 @@ class PartitionServiceRowOwner {
         PARTITION_SERVICE_ROW_OWNER_ERROR.LIFECYCLE_OWNER_REQUIRED,
       );
     }
-    const row = await this.replicaStateMachine.activateRegisteredReplica({
+    const row = await lifecycleOwner.activateRegisteredReplica({
       partitionId: options.partitionId,
       replicaId: options.replicaId,
       nodeId: options.nodeId,
       systemTableWriter: this.systemTableWriter,
       timestamp: options.timestamp ?? this.now(),
       registrationEvidence: options.registrationEvidence,
-      service: options.service,
+      service,
       isEffectHandlerCurrent: options.isEffectHandlerCurrent,
       writeOptions: this.buildDeferredUpdateOptions(
         options.replicaId,
         options.partitionId,
       ),
     });
-    await this.publishCanonicalLeaderNodeId(row, options.service);
+    await this.publishCanonicalLeaderNodeId(row, service);
     return row;
   }
 }

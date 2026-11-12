@@ -207,6 +207,7 @@ class SeedRegistrationPhase {
     const logger = d.getLogger();
     const systemTableWriter = this.ensureSystemTableWriter();
     const nodeId = d.getNodeId();
+    const replicaStateMachine = d.getReplicaStateMachine();
     const messageGroupServiceRowOwner =
       new MessageGroupServiceRowOwner({
         systemTableWriter,
@@ -215,6 +216,7 @@ class SeedRegistrationPhase {
     const partitionServiceRowOwner =
       new PartitionServiceRowOwner({
         systemTableWriter,
+        replicaStateMachine,
         now: () => now,
       });
     const partitionRegistrationEvidenceByReplicaId = new Map();
@@ -296,7 +298,7 @@ class SeedRegistrationPhase {
     await activatePartitionServiceRows({
       nodeId,
       systemTableWriter,
-      replicaStateMachine: d.getReplicaStateMachine(),
+      replicaStateMachine,
       messageRouter: typeof d.getMessageRouter === LOCAL_STR_FUNCTION ?
         d.getMessageRouter() :
         null,

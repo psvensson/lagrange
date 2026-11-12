@@ -1007,7 +1007,7 @@ test('NodeJoiningService - durable rejoin activation debt blocks elections ' +
       },
     });
   };
-  service.activateJoinPartitionServiceRows = async () => {
+  service.confirmDurableRejoinPartitionRuntimes = async () => {
     activationAttempt += 1;
     calls.push(`activate:${activationAttempt}`);
     if (activationAttempt === 1) {

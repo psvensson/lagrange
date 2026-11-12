@@ -245,11 +245,9 @@ function createBootstrapServiceReplicaHandlerRuntimeMethods() {
 
       this.replicaHandler = acquired.replicaHandler;
       this.replicaStateMachine = acquired.replicaStateMachine;
-      // Attach actual live services before seed writes without publishing
-      // lifecycle metadata or claiming ACTIVE authority from an empty cache.
-      for (const [replicaId, partition] of this.partitionServices) {
-        this.replicaHandler.localServices.set(replicaId, partition);
-      }
+      // Original runtimes remain under preparation-owned startup custody.
+      // Their exact registered lifecycle binding publishes handler records
+      // after row registration and activation, without hydrating from an ID.
       return this.replicaHandler;
     },
 

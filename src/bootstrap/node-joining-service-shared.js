@@ -188,7 +188,6 @@ import {PgWireStartupSafetyGate} from './pgwire-startup-safety-gate.js';
 import {RuntimeServiceHandlerSetup} from './shared/runtime-service-handler-setup.js';
 import {MessageGroupServiceHandlerSetup} from './shared/message-group-service-handler-setup.js';
 import {activateMessageGroupServiceRows} from './shared/message-group-service-activation.js';
-import {activatePartitionServiceRows} from './shared/partition-service-activation.js';
 import {activateSteadyStateRuntimeHandoff} from './shared/startup-sql-runtime-handoff.js';
 import {StartupServiceLifecycleOwner} from './shared/startup-service-lifecycle-owner.js';
 import {StartupRuntimeSurfaceOwner} from './shared/startup-runtime-surface-owner.js';
@@ -393,7 +392,6 @@ const NODE_JOINING_SERVICE_STARTUP_RUNTIME_SHARED = Object.freeze({
 });
 const NODE_JOINING_SERVICE_JOIN_HELPER_SHARED = Object.freeze({
   activateMessageGroupServiceRows,
-  activatePartitionServiceRows,
   activateSteadyStateRuntimeHandoff,
   assertCritical,
   assertJoinPlanSegments,

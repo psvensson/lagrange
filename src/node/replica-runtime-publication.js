@@ -12,25 +12,29 @@ import {buildReplicaLifecycleMutationPredicateFromRow,
 function createReplicaRuntimePublication(handler, row, admission,
   expectedPredecessor = null) {
   const owner = handler.replicaStateMachine;
-  const local = handler.localReplicas.get(row?.service_id) || null;
-  const predecessor = handler.getTrackedService(row?.service_id);
-  const ownerIncarnation = handler.ownerIncarnation;
   const predicate = buildReplicaLifecycleMutationPredicateFromRow(row);
   if (!owner || !isReplicaLifecycleMutationPredicate(predicate) ||
-      row.node_id !== handler.nodeId || predecessor !== expectedPredecessor) {
+      predicate.node_id !== handler.nodeId || !admission) {
     throw runtimePublicationRefused(row?.service_id);
   }
+  const replicaId = predicate.service_id;
+  const local = handler.localReplicas.get(replicaId) || null;
+  const predecessor = handler.getTrackedService(replicaId);
+  const ownerIncarnation = handler.ownerIncarnation;
+  const originalAdmission = Object.freeze({revision: admission.revision,
+    sourceState: admission.sourceState});
+  if (predecessor !== expectedPredecessor) throw runtimePublicationRefused(replicaId);
   return createPartitionRuntimePublication({incarnation: predicate,
     assertSourceCurrent() {
       if (handler.shuttingDown || handler.ownerIncarnation !== ownerIncarnation ||
           handler.replicaStateMachine !== owner ||
           owner.replicaMutationAdmissionClosed === true ||
-          owner.serviceRowPersistInFlightByServiceId.has(row.service_id) ||
-          owner.activationEffectByReplicaId?.has(row.service_id) ||
-          !isReplicaAdmissionCurrent(owner, row.service_id, admission) ||
-          (handler.localReplicas.get(row.service_id) || null) !== local ||
-          handler.getTrackedService(row.service_id) !== predecessor) {
-        throw runtimePublicationRefused(row.service_id);
+          owner.serviceRowPersistInFlightByServiceId.has(replicaId) ||
+          owner.activationEffectByReplicaId?.has(replicaId) ||
+          !isReplicaAdmissionCurrent(owner, replicaId, originalAdmission) ||
+          (handler.localReplicas.get(replicaId) || null) !== local ||
+          handler.getTrackedService(replicaId) !== predecessor) {
+        throw runtimePublicationRefused(replicaId);
       }
     },
   });

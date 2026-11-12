@@ -29,6 +29,7 @@ function captureReplicaRuntimeObservation(handler, replicaId) {
   const binding = local.runtimeBinding;
   const sourceAvailable = binding?.service === service && binding.owner === owner &&
     binding.ownerIncarnation === owner.ownerIncarnation &&
+    service.runtimePublication.isPublished(service, binding) &&
     isReplicaLifecycleMutationPredicate(predicate) &&
     matchesRuntimeIncarnation(binding.incarnation, predicate);
   return Object.freeze({handler, replicaId, local, service, port: service.raft,
@@ -49,6 +50,7 @@ function isReplicaRuntimeObservationCurrent(observation, requireAdmission = true
       handler.getTrackedService(replicaId) !== service || service.raft !== port ||
       local.runtimeBinding !== binding || binding?.service !== service ||
       binding.owner !== owner || binding.ownerIncarnation !== owner.ownerIncarnation ||
+      !service.runtimePublication.isPublished(service, binding) ||
       !isReplicaServiceHandlerBound(service, owner)) return false;
   if (requireAdmission && !isReplicaAdmissionCurrent(owner, replicaId, observation.admission)) {
     return false;

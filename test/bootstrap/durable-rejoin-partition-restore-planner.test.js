@@ -33,6 +33,10 @@ test('durable restore refuses a row timestamp as lifecycle authority and ' +
     partition_id: 'canonical-p1',
     status: 'active',
     address: 'durable-node/partition/canonical-p1-r1',
+    created_at: 90,
+    group_id: null,
+    cleanup_token: null,
+    create_attempt_token: 'original-attempt',
     updated_at: 3000,
   };
   const rows = new Map([
@@ -60,9 +64,10 @@ test('durable restore refuses a row timestamp as lifecycle authority and ' +
   service.state_entered_at = 100;
   const plans = buildDurableRejoinPartitionRestorePlans(options);
   t.equal(plans.length, 1, 'restored canonical observation resumes the same planner');
-  t.match(plans[0]?.lifecycleAuthority,
-    {durableVersionColumn: 'state_entered_at', durableVersion: 100},
-    'the planner carries the lifecycle generation unchanged');
+  t.same(plans[0]?.lifecycleAuthority, service,
+    'the planner carries the full original lifecycle source unchanged');
+  t.equal(Object.isFrozen(plans[0]?.lifecycleAuthority), true,
+    'later cache-row edits cannot redirect the restored source');
   t.end();
 });
 

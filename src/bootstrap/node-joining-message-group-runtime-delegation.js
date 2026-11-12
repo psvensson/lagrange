@@ -2,6 +2,9 @@ import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
 import {NodeJoiningReplicaDescriptorCoordination} from './node-joining-replica-descriptor-coordination.js';
 import {isEndpointCurrentForNode} from
   '../control-plane/owners/endpoint-incarnation-currentness.js';
+import {captureReplicaRuntimeObservation, isReplicaRuntimeObservationCurrent,
+  runtimeObservationChangedError} from '../node/replica-runtime-observation.js';
+import {settlePartitionServiceActiveAdmission} from './shared/partition-service-activation.js';
 
 const {
   COLUMN,
@@ -15,7 +18,6 @@ const {
   TABLES,
   UNIFIED_SERVICE_TYPE,
   activateMessageGroupServiceRows,
-  activatePartitionServiceRows,
   assertCritical,
   getControlPlaneMessageRequiredTables,
 } = NODE_JOINING_SERVICE_SHARED;
@@ -411,36 +413,24 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
     }
     return activatedCount;
   }
-  async activateJoinPartitionServiceRows(replicaIds = null) {
-    const partitionServices =
-      replicaIds == null ?
-        this.partitionServices :
-        new Map(
-          replicaIds
-            .map((replicaId) => [
-              replicaId,
-              this.partitionServices.get(replicaId),
-            ])
-            .filter(([, service]) => service != null),
-        );
-    return activatePartitionServiceRows({
-      nodeId: this.nodeId,
-      systemTableWriter: this.createCdcIntegrationService(),
-      replicaStateMachine: this.replicaStateMachine,
-      messageRouter: this.messageRouter,
-      onDeferredActivation: ({partitionId, replicaId, error}) => {
-        this.logger.warn(
-          NODE_JOINING_SERVICE_LITERAL.DEFERRING_JOIN_PARTITION_SERVICE_ROW_ACTIVATION,
-          {
-            nodeId: this.nodeId,
-            partitionId,
-            replicaId,
-            error: error?.message || String(error),
-          },
-        );
-      },
-      partitionServices,
-    });
+  async confirmDurableRejoinPartitionRuntimes(replicaIds) {
+    for (const replicaId of replicaIds) {
+      const observation = captureReplicaRuntimeObservation(this.replicaHandler, replicaId);
+      if (!isReplicaRuntimeObservationCurrent(observation) ||
+          observation.sourceEvidence?.status !== SERVICE_STATUS.ACTIVE ||
+          this.partitionServices.get(replicaId) !== observation.service) {
+        throw runtimeObservationChangedError(replicaId);
+      }
+      // Restore admits an already durable ACTIVE row. It confirms the exact
+      // original runtime binding and readiness; it never fabricates INSERT
+      // evidence or runs another lifecycle activation algorithm.
+      await settlePartitionServiceActiveAdmission({replicaId,
+        partitionId: observation.sourceEvidence.partition_id, service: observation.service});
+      if (!isReplicaRuntimeObservationCurrent(observation)) {
+        throw runtimeObservationChangedError(replicaId);
+      }
+    }
+    return replicaIds.length;
   }
   startJoinOpportunisticBackfill() {
     return this.querySystemStatePhase.startJoinOpportunisticBackfill();

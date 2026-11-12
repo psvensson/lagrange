@@ -1,5 +1,6 @@
 import {createReplicaRuntimePublication, publishReplicaRuntime} from
   '../node/replica-runtime-publication.js';
+import {runtimePublicationRefused} from '../partition/partition-runtime-publication.js';
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
 import {replicaConsensusEventsOf} from '../node/replica-handler-membership-relay.js';
 import {NodeJoiningCdcSubscriptionAndBackfill} from './node-joining-cdc-subscription-and-backfill.js';
@@ -103,7 +104,7 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
     );
     const restoredPlans =
       await this.ensureDurableRejoinPartitionRuntimes(restorePlans);
-    await this.activateJoinPartitionServiceRows(
+    await this.confirmDurableRejoinPartitionRuntimes(
       restoredPlans.map(({replicaId}) => replicaId),
     );
     this.startDurableRejoinLocalPartitionElections(restoredPlans);
@@ -237,12 +238,37 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
    * @private
    */
   async createJoinLocalPartitionService(options) {
+    const request = Object.freeze({...options});
+    const replicaHandler = this.replicaHandler;
+    const lifecycleOwner = this.replicaStateMachine;
+    const lifecycleHolder = this.replicaLifecycleOwner;
+    const hostServices = this.partitionServices;
+    const bootIncarnation = this.bootIncarnation;
+    const ownerIncarnation = lifecycleOwner?.ownerIncarnation;
+    const handlerIncarnation = replicaHandler?.ownerIncarnation;
+    const assertOriginalCaller = () => {
+      if (!replicaHandler || !lifecycleOwner || this.replicaHandler !== replicaHandler ||
+          this.replicaStateMachine !== lifecycleOwner ||
+          replicaHandler.replicaStateMachine !== lifecycleOwner ||
+          this.replicaLifecycleOwner !== lifecycleHolder || this.partitionServices !== hostServices ||
+          this.bootIncarnation !== bootIncarnation ||
+          lifecycleOwner.ownerIncarnation !== ownerIncarnation ||
+          replicaHandler.ownerIncarnation !== handlerIncarnation || replicaHandler.shuttingDown ||
+          lifecycleOwner.replicaMutationAdmissionClosed === true) {
+        throw runtimePublicationRefused(request.replicaId);
+      }
+    };
+    assertOriginalCaller();
     const restoreAdmission = await assertDurableRejoinStorageAdmission(
-      this.replicaStateMachine, options,
+      lifecycleOwner, request,
     );
+    assertOriginalCaller();
+    if (restoreAdmission && restoreAdmission.owner !== lifecycleOwner) {
+      throw runtimePublicationRefused(request.replicaId);
+    }
     const runtimePublication = restoreAdmission ? createReplicaRuntimePublication(
-      this.replicaHandler, restoreAdmission.row, restoreAdmission.admission,
-    ) : options.runtimePublication;
+      replicaHandler, restoreAdmission.row, restoreAdmission.admission,
+    ) : request.runtimePublication;
     const cdcIntegrationService = this.createCdcIntegrationService();
     const systemTableCache = NodeService.getInstance().getSystemTableCache();
     if (!this.tablePolicyService) {
@@ -256,37 +282,39 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
       systemTableCache :
       null;
     const messageGroupService =
-      options.messageGroupService || this.getLeaderMessageGroupService();
+      request.messageGroupService || this.getLeaderMessageGroupService();
     const partition = new PartitionService({
-      ...options,
+      ...request,
       runtimePublication,
       transport: this.transport,
       messageGroupService,
       messageRouter: this.messageRouter,
       rebalanceCoordinator: this.rebalanceCoordinator,
-      replicaStateMachine: this.replicaStateMachine,
+      replicaStateMachine: lifecycleOwner,
+      resolveHandlerRetirementLane: () => lifecycleOwner,
       systemTableCache: cacheForPartition,
       cdcIntegrationService,
       sqlQueryEngine: cdcIntegrationService?.sqlQueryEngine || null,
       tablePolicyService: this.tablePolicyService,
       bootstrapReadinessState: this.bootstrapReadinessState,
     });
-    options.onRuntimeCreated?.(partition);
+    request.onRuntimeCreated?.(partition);
     try {
+      assertOriginalCaller();
       await partition.initialize();
       // S6: durable-rejoin restores bypass the ReplicaHandler factory wrapper,
       // so the dispatcher seam attaches here for every join-built service.
       attachSnapshotCatchupDispatcher({service: partition,
         systemTableCache, messageRouter: this.messageRouter});
-      const tableName = options.tableName;
+      const tableName = request.tableName;
       if (tableName && shouldAttachPartitionCdcPropagation(tableName)) {
         await attachPartitionCdcPropagation(partition, {
           tableName,
           preferredService: messageGroupService,
-          defer: options.deferCdcPropagationHandshake === true,
+          defer: request.deferCdcPropagationHandshake === true,
           messageGroupServices: this.messageGroupServices,
           logger: this.logger,
-          logContext: {tableName, partitionId: options.partitionId, replicaId: options.replicaId},
+          logContext: {tableName, partitionId: request.partitionId, replicaId: request.replicaId},
           notReadyMessage: NODE_JOINING_SERVICE_LITERAL.OPERATIONAL_MESSAGE_GROUP_CDC_INGRESS_NOT_READY +
             `for ${tableName} CDC subscription`,
           resolveOperationalMessageGroupSelectionAsync: (selectionOptions = {}) =>
@@ -296,8 +324,8 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
           registration: {
             role: JOINING_CDC_SUBSCRIBER_ROLE,
             nodeId: this.nodeId,
-            partitionId: options.partitionId,
-            replicaId: options.replicaId,
+            partitionId: request.partitionId,
+            replicaId: request.replicaId,
             logger: this.logger,
             eventLogMessage: JOINING_LOG_MSG.CDC_EVENT_RECEIVED,
             resolveOperationalMessageGroupSelection: (selectionOptions = {}) =>
@@ -313,20 +341,21 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
           },
           onRegistered: (handshake) => this.logger.debug(
             JOINING_LOG_MSG.CDC_SUBSCRIPTION_REGISTERED, {
-              tableName, partitionId: options.partitionId, replicaId: options.replicaId,
+              tableName, partitionId: request.partitionId, replicaId: request.replicaId,
               subscriberId: handshake.subscriberId, subscriptionEpoch: handshake.subscriptionEpoch}),
         });
       }
+      assertOriginalCaller();
       partition.runtimePublication.assertCurrent(partition);
       if (restoreAdmission) {
-        this.trackJoinPartitionReplica(options.replicaId, options.partitionId,
-          partition, restoreAdmission);
+        this.trackJoinPartitionReplica(request.replicaId, request.partitionId,
+          partition, {...restoreAdmission, handler: replicaHandler, hostServices});
       } else {
-        options.publishRuntime(partition, this.partitionServices);
+        request.publishRuntime(partition, hostServices);
       }
     } catch (error) {
-      await this.replicaHandler.fenceFailedReplicaCreateRuntime(
-        options.replicaId, options.partitionId, partition, error,
+      await replicaHandler.fenceFailedReplicaCreateRuntime(
+        request.replicaId, request.partitionId, partition, error,
       );
       throw error;
     }
@@ -341,9 +370,12 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
    * @private
    */
   trackJoinPartitionReplica(replicaId, partitionId, partition, admission) {
-    return publishReplicaRuntime(this.replicaHandler, {replicaId,
+    if (this.replicaHandler !== admission.handler ||
+        this.replicaStateMachine !== admission.owner ||
+        this.partitionServices !== admission.hostServices) throw runtimePublicationRefused(replicaId);
+    return publishReplicaRuntime(admission.handler, {replicaId,
       tableName: partition.tableName, service: partition,
-      hostServices: this.partitionServices,
+      hostServices: admission.hostServices,
       sourceEvidence: admission.row, lifecycleOwner: admission.owner});
   }
 
