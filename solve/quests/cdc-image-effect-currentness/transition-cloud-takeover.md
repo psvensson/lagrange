@@ -669,3 +669,28 @@ keeps a collection's version constant across pages and requires consuming the
 continuation until completion. That is design inspiration for distinguishing a
 complete collection from a successful subset, not proof of this implementation:
 https://kubernetes.io/docs/reference/using-api/api-concepts/#retrieving-large-results-sets-in-chunks
+
+
+## Catchup completeness and selected-token controls (tests-only)
+
+Root independently reviewed and approved test blob
+`dbb64749d68b455e90db5e2b43b7eaf2e6bb89f8` on the unchanged resource source
+`21da553a06fd5580c3abd0f7b183559e0a957185` / source tree
+`4d6bee138b142836e7f246bef9fc650801324f5c`. The controls execute actual
+CDC catchup, authoritative read flow and SystemTableCache through controlled RPC
+and local partition ports. They are not native membership or snapshot proof.
+
+The nine incomplete original owner forms must preserve an unseen cached row,
+complete observation debt and the same selected token before same-owner complete
+healing. Explicit null/mutable authority must refuse before any owner/effect and
+then accept a later valid token. Explicit bootstrap local positive repair remains
+provisional: no remote prerequisite, absence sweep or complete watermark.
+
+Root approved the corresponding design boundary: only an omitted token may be
+constructed; a supplied token must pass the canonical owner assertion unchanged.
+Remote full-collection catchup requires the existing canonical complete-result
+classifier before absence, freshness or hydrated claims. The controlled bootstrap
+positive may repair keys without claiming collection completeness. The production
+correction will consume the composed canonical classifier rather than introduce a
+second decoder. These tests are frozen before that correction for a first lab
+original. No local execution or acceptance claim.
