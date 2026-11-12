@@ -375,7 +375,7 @@ test(
       const result =
         await coordinator.workflowOwner.dispatchOperation(operation.operationId);
       const durableOperation =
-        await coordinator.repository.queryOperationById(operation.operationId);
+        await coordinator.repository.queryOperationProjectionById(operation.operationId);
 
       t.ok(result?.success, 'the completed response should succeed');
       t.equal(durableOperation?.workflowStep, WORKFLOW_STEP.ACTIVE);

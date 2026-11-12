@@ -76,8 +76,9 @@ const TEST_MG_RETRYABLE_CREATE_FAILURE_MESSAGE =
   'CDC subscription';
 const TEST_MG_RETRYABLE_CREATE_FAILURE_RETRY_AFTER_MS = 5000;
 const TEST_DEFERRED_OUTCOME_RETRY_AFTER_MS = 1;
-const TEST_DEFERRED_OUTCOME_STATE = 'deferred';
-const TEST_EMPTY_OUTCOME_STATE = 'empty';
+// The by-id visibility states (replica-operation-repository-operation-visibility.js).
+const TEST_DEFERRED_OUTCOME_STATE = 'unavailable';
+const TEST_EMPTY_OUTCOME_STATE = 'absent';
 const TEST_PRESENT_OUTCOME_STATE = 'present';
 const TEST_DEFERRED_OUTCOME_COMPLETION_STATE =
   'authoritative_operation_read_deferred';
@@ -296,7 +297,7 @@ function createTestCoordinator(options = {}) {
 
 /**
  * Convert an in-memory operation object to a row shape that
- * queryOperationById expects from SQL.
+ * queryOperationProjectionById expects from SQL.
  */
 function operationToRow(op) {
   return {

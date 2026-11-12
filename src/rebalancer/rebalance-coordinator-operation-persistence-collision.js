@@ -6,6 +6,8 @@ import {
 import {
   isTerminalSuccessfulCreateOperation,
 } from './replica-operation-progress.js';
+import {OPERATION_INTENT_TERMINAL_COLLISION_CODE} from
+  '../constants/errors.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const TERMINAL_INTENT_COLLISION_ERROR_PREFIX =
@@ -59,11 +61,11 @@ class RebalanceCoordinatorOperationPersistenceCollision {
       if (isTerminalSuccessfulCreateOperation(existing)) {
         return existing;
       }
-      throw new Error(
+      throw Object.assign(new Error(
         `${TERMINAL_INTENT_COLLISION_ERROR_PREFIX} ` +
           `${context.move.operationIntentId}: ` +
           `${existing.status}`,
-      );
+      ), {code: OPERATION_INTENT_TERMINAL_COLLISION_CODE});
     }
     if (context.replaceIntentIdentity) {
       await this.ensureReservationForOperation(existing);
@@ -133,4 +135,6 @@ function applyRebalanceCoordinatorOperationPersistenceCollisionMethods(
   }
 }
 
-export {applyRebalanceCoordinatorOperationPersistenceCollisionMethods};
+export {
+  applyRebalanceCoordinatorOperationPersistenceCollisionMethods,
+};

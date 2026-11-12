@@ -77,7 +77,7 @@ function createTestRebalancer(options = {}) {
   const mockCoordinator = rebalanceCoordinator || {
     ...createMockCoordinator(),
     // Controlled owner-read boundary over this scenario's operation rows.
-    getOperationsByEntity: async () => replicaOperations,
+    getAuthoritativeOperationsByEntity: async () => replicaOperations,
   };
   const mockSqlQueryEngine = sqlQueryEngine || {
     async executeQuery() {
@@ -189,7 +189,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
         controlPlaneReadinessService: readinessService,
         rebalanceCoordinator: {
           ...createMockCoordinator(),
-          async getOperationsByEntity() {
+          async getAuthoritativeOperationsByEntity() {
             authoritativeEntityReadCalls += 1;
             return [{
               operation_id: 'op-authoritative-priority-mismatch',

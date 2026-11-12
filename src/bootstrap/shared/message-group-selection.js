@@ -10,6 +10,12 @@ const MESSAGE_GROUP_SELECTION_ROUTE = Object.freeze({
 });
 
 const MESSAGE_GROUP_SELECTION_STATE = Object.freeze({
+  // The caller's bound service (options.boundService) is still registered,
+  // live and ready: it stays selected (both resolvers, one rule).
+  BOUND_READY: 'bound_ready',
+  // The bound service is registered and live but not ready now: the sync
+  // resolver names it (its identity is the binding), with ready false.
+  BOUND_NOT_READY: 'bound_not_ready',
   DEFER_OWNER_NOT_READY: 'defer_owner_not_ready',
   LEADER_READY: 'leader_ready',
   PREFERRED_CAPTURED: 'preferred_captured',
@@ -305,12 +311,37 @@ function selectOperationalLeader(services, requiredTables) {
   return {selection: null, summary};
 }
 
+// The one binding rule of both resolvers: a caller's bound service
+// (options.boundService, the service its previous selection returned) stays
+// selected while it is registered among the node's message-group services
+// and live. Readiness decides only whether it may be used now: a bound service
+// that is not ready is selected again by the ordinary rule (and the caller
+// rebinds), never because the two resolvers' rules differ.
+function boundServiceOf(services, options) {
+  const bound = options.boundService ?? null;
+  return bound !== null && services.includes(bound) && bound.isShutdown !== true &&
+    bound.initialized !== false ? bound : null;
+}
+
+function boundSelection(service, readiness) {
+  return buildOperationalMessageGroupSelection(service, readiness.ready === true,
+    readiness.retryAfterMs, readiness.ready === true ? null : readiness.reason,
+    service.isLeaderReplica?.() === true ? MESSAGE_GROUP_SELECTION_ROUTE.LEADER :
+      MESSAGE_GROUP_SELECTION_ROUTE.RELAY,
+    readiness.ready === true ? MESSAGE_GROUP_SELECTION_STATE.BOUND_READY :
+      MESSAGE_GROUP_SELECTION_STATE.BOUND_NOT_READY);
+}
+
 function resolveOperationalMessageGroupSelection(
   messageGroupServices,
   options = {},
 ) {
   const services = listMessageGroupServices(messageGroupServices);
   const requiredTables = normalizeRequiredTables(options.requiredTables);
+  const bound = boundServiceOf(services, options);
+  // The sync answer names a registered, live bound service even while it is
+  // not ready: its identity is what a binding compares.
+  if (bound !== null) return boundSelection(bound, preferredReadiness(bound, requiredTables));
   const leader = selectOperationalLeader(services, requiredTables);
   if (leader.selection) return leader.selection;
   let deferredSummary = leader.summary;
@@ -362,6 +393,15 @@ async function resolveOperationalMessageGroupSelectionAsync(
     reason: MESSAGE_GROUP_SELECTION_REASON.OWNER_NOT_READY,
     retryAfterMs: 0,
   };
+  const bound = boundServiceOf(services, options);
+  if (bound !== null) {
+    const readiness = requiredTables.length > 0 ?
+      await resolveMetadataIngressReadinessAsync(bound, requiredTables,
+        MESSAGE_GROUP_SELECTION_REASON.OWNER_NOT_READY) :
+      preferredReadiness(bound, requiredTables);
+    if (readiness.ready === true) return boundSelection(bound, readiness);
+    deferredSummary = recordNotReadyCandidate(deferredSummary, readiness);
+  }
 
   for (const service of services) {
     if (service?.isLeaderReplica?.() !== true) {

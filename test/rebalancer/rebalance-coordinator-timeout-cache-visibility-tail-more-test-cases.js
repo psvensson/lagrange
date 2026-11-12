@@ -458,7 +458,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
 
       coordinator.initialize();
       try {
-        const operations = await coordinator.queryIncompleteOperations();
+        const {operations} = await coordinator.queryIncompleteOperations();
         t.equal(
           operations.length,
           1,

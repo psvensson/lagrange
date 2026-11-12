@@ -8,8 +8,7 @@ import {readUpperStateField} from '../utils/state-field-read.js';
  * cover" used to be enumerated ad hoc at every call site (24 hand-rolled
  * sets + 28 branch piles across 33 files), so coverage GAPS were invisible:
  * the dispatch-wake preempt set stopped one step short of target_sync
- * (CL-029), and the deferred-local-progress rows (CREATING, ACTIVE,
- * STOPPING) were each a separate production incident. This module declares
+ * (CL-029). This module declares
  * every coverage row ONCE, side by side, named after its mechanism.
  * Consumers import a row; they never enumerate steps inline. The census
  * analyzer (scripts/check-step-coverage-owner.js, npm run
@@ -142,6 +141,17 @@ function isPartitionReplaceOwnerPhase(operation) {
       readUpperStateField(operation?.workflowStep));
 }
 
+/**
+ * S9 (ACTIVE: no time bound) and D2 (after durable intent: no timer-driven
+ * FAILED): no elapsed-time budget may end a partition REPLACE at ACTIVE or
+ * STOPPING; the REPLACE owner turns the budget into its diagnostic.
+ * @param {Object} operation
+ * @return {boolean}
+ */
+function isReplaceExemptFromTimeBudget(operation) {
+  return isPartitionReplaceOwnerPhase(operation);
+}
+
 // Type-agnostic terminal markers used by remove-like in-flight gate checks
 // (REMOVE/REPLACE rows only — an ADD terminates at ACTIVE and must not use
 // this row; see OPERATION_TERMINAL_WORKFLOW_STEPS_BY_TYPE for typed truth).
@@ -258,6 +268,19 @@ const PRIORITY_RECOVERY_INCOMPLETE_OPERATION_VISIBILITY_STEPS = Object.freeze(
     WORKFLOW_STEP.STOPPING,
   ]),
 );
+
+// The workflow's forward order, as a rank per step (terminal steps share the
+// last rank): a copy of an operation whose step ranks below another copy's
+// is behind it. The one owner of step progress order.
+const WORKFLOW_STEP_PROGRESS_RANK = Object.freeze(new Map([
+  [WORKFLOW_STEP.PENDING],
+  [WORKFLOW_STEP.SENDING],
+  [WORKFLOW_STEP.CREATING],
+  [WORKFLOW_STEP.SYNCING],
+  [WORKFLOW_STEP.ACTIVE],
+  [WORKFLOW_STEP.STOPPING],
+  [WORKFLOW_STEP.REMOVED, WORKFLOW_STEP.FAILED],
+].flatMap((steps, index) => steps.map((step) => [step, index + 1]))));
 
 // Canonical ordered non-terminal step list for incomplete-read SQL/display
 // lanes (same membership as the visibility set, order significant).
@@ -447,17 +470,6 @@ const RECONCILE_REPLICA_STATUS_WORKFLOW_STEPS = Object.freeze(
   ]),
 );
 
-// Node-recovery classification: rows at these steps are marked failed on
-// recovery (pre-sync steps plus STOPPING); SYNCING rows reconcile instead.
-const NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS = Object.freeze(
-  new Set([
-    WORKFLOW_STEP.PENDING,
-    WORKFLOW_STEP.SENDING,
-    WORKFLOW_STEP.CREATING,
-    WORKFLOW_STEP.STOPPING,
-  ]),
-);
-
 // ---------------------------------------------------------------------------
 // Transition-reason projection
 // ---------------------------------------------------------------------------
@@ -484,39 +496,6 @@ function resolveOperationTransitionReason(previousStep, nextStep) {
     OPERATION_TRANSITION_REASON.DISPATCH_SENDING;
 }
 
-// ---------------------------------------------------------------------------
-// Deferred owner-local progress (lever-(a) supersession) coverage
-// ---------------------------------------------------------------------------
-
-// Which operation types may take the owner-local deferred-progress escape at
-// which executor-outcome step (priority control-plane partitions only; the
-// caller owns the partition-class and retryable-error checks). Each row was
-// a separate production incident before this table existed: CREATING
-// (64a18b76, via the mutation-steps row above), ACTIVE (9ef19615),
-// STOPPING (c6c35d7e). Terminal steps are deliberately absent: REMOVED flows
-// exclusively through completeOperation, which owns its own durable
-// convergence.
-const PRIORITY_OUTCOME_DEFERRED_LOCAL_PROGRESS_TYPES_BY_STEP = Object.freeze(
-  new Map([
-    [
-      WORKFLOW_STEP.ACTIVE,
-      Object.freeze(new Set([OperationType.REPLACE])),
-    ],
-    [
-      WORKFLOW_STEP.STOPPING,
-      Object.freeze(
-        new Set([OperationType.REPLACE, OperationType.REMOVE]),
-      ),
-    ],
-  ]),
-);
-
-function isPriorityOutcomeDeferredLocalProgressCovered(operationType, step) {
-  const coveredTypes =
-    PRIORITY_OUTCOME_DEFERRED_LOCAL_PROGRESS_TYPES_BY_STEP.get(step);
-  return coveredTypes ? coveredTypes.has(operationType) : false;
-}
-
 // Local projections consume these named predicates rather than rebuilding a
 // multi-step branch pile beside the durable transition owner. Although each
 // action covers one step today, naming the rows keeps later extensions in the
@@ -525,16 +504,11 @@ function shouldRetainPriorityActiveReplaceRetry(step) {
   return step === WORKFLOW_STEP.ACTIVE;
 }
 
-function shouldClearPriorityDeferredClaim(step) {
-  return step === WORKFLOW_STEP.CREATING;
-}
-
 export {
   REPLACE_OWNER_PHASE_WORKFLOW_STEPS,
   CREATE_REARM_DISPATCH_OPERATION_TYPES,
   DISPATCH_PENDING_WORKFLOW_STEPS,
   DISPATCH_WAKE_PROGRESS_PREEMPT_WORKFLOW_STEPS,
-  NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS,
   PROTECTED_PRIORITY_BUDGET_WORKFLOW_STEPS,
   RECONCILE_REPLICA_STATUS_WORKFLOW_STEPS,
   REMOVE_INITIAL_DISPATCH_WORKFLOW_STEPS,
@@ -552,7 +526,6 @@ export {
   PRE_SYNC_WORKFLOW_STEPS,
   PRIORITY_CONTROL_PLANE_REMOVE_LANE_WORKFLOW_STEPS_BY_TYPE,
   PRIORITY_DISPATCH_TRANSITION_MUTATION_STEPS,
-  PRIORITY_OUTCOME_DEFERRED_LOCAL_PROGRESS_TYPES_BY_STEP,
   PRIORITY_RECENT_INTENT_MISS_REUSE_EXTENDED_WORKFLOW_STEPS,
   PRIORITY_RECOVERY_COORDINATOR_STEP_PROGRESS_SET,
   PRIORITY_RECOVERY_DISPATCHED_WORKFLOW_STEPS,
@@ -565,10 +538,10 @@ export {
   PRIORITY_RECOVERY_WORKFLOW_TIMEOUT_STEPS,
   REMOVE_LIKE_TERMINAL_WORKFLOW_STEPS,
   TARGET_CREATING_CREATE_ADMISSION_WORKFLOW_STEPS,
+  WORKFLOW_STEP_PROGRESS_RANK,
   isActiveReplaceSourceRemovalPhase,
   isPartitionReplaceOwnerPhase,
+  isReplaceExemptFromTimeBudget,
   isIncompleteOperationRowStep,
-  isPriorityOutcomeDeferredLocalProgressCovered,
-  shouldClearPriorityDeferredClaim,
   shouldRetainPriorityActiveReplaceRetry,
 };

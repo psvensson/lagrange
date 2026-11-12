@@ -27,10 +27,13 @@ import {
   registerBootstrapRequestAdmissionTests,
 } from './bootstrap-api-request-admission-test-cases.js';
 import {
+  answerKnownClusterIdentity,
   BOOTSTRAP_LEADER_NOT_READY_STARTUP_AUTHORITY,
   createEmptySystemTableCache,
   initializeTestEnvironment,
 } from './bootstrap-api-test-fixtures.js';
+
+answerKnownClusterIdentity();
 
 function createSatisfiedControlPlaneReadinessService() {
   const diagnostics = Object.freeze({

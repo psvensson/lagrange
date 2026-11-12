@@ -6,6 +6,8 @@ import {setTimeout as sleep} from 'node:timers/promises';
 import {AdminWsClient} from '../../scripts/examples/admin-ws-client.js';
 import {DEFAULT_TARGET} from './lagrange-loader.js';
 import {refuseUnderProbe} from '../../src/test-helpers/probe-guard.js';
+import {FORMATION_TARGET_NODE_COUNT_ENV} from
+  '../../src/config/formation-target-node-count.js';
 
 const DEFAULT_NODE_COUNT = 5;
 const BASE_REST_PORT = 8080;
@@ -28,7 +30,7 @@ function nodePorts(index) {
   };
 }
 
-async function startLocalNode(index, dataRoot) {
+async function startLocalNode(index, dataRoot, nodeCount) {
   refuseUnderProbe('a cluster node');
   const {restPort, adminPort} = nodePorts(index);
   const dataDir = resolve(dataRoot, `node-${index}`);
@@ -44,9 +46,13 @@ async function startLocalNode(index, dataRoot) {
     LOG_LEVEL: 'info',
   };
   const args = ['src/index.js', '--data-dir', dataDir];
+  delete env[FORMATION_TARGET_NODE_COUNT_ENV];
   if (index > 0) {
     env.SEED_NODE_ADDRESS = `localhost:${BASE_REST_PORT}`;
     args.push('--seed', `localhost:${BASE_REST_PORT}`);
+  } else {
+    // The seed declares the cluster's intended total node count.
+    env[FORMATION_TARGET_NODE_COUNT_ENV] = String(nodeCount);
   }
 
   const child = spawn('node', args, {env, stdio: ['ignore', 'pipe', 'pipe']});
@@ -147,12 +153,12 @@ async function startLocalCluster(
 
   const nodes = [];
   try {
-    nodes.push(await startNode(0, dataRoot));
+    nodes.push(await startNode(0, dataRoot, nodeCount));
     console.log('Waiting for seed admin endpoint...');
     await awaitAdmin(target);
 
     for (let i = 1; i < nodeCount; i += 1) {
-      nodes.push(await startNode(i, dataRoot));
+      nodes.push(await startNode(i, dataRoot, nodeCount));
     }
     console.log('Waiting for cluster formation...');
     const clusterFormationMs = await awaitClusterSize(target, nodeCount);

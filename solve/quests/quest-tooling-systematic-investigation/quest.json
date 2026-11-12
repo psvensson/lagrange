@@ -1,0 +1,50 @@
+{
+  "schema": "solve-quest/2",
+  "id": "quest-tooling-systematic-investigation",
+  "epic": "quest-agent-tooling-integration",
+  "statement": "Adapt the selected Superpowers debugging procedure so a Quest author records the actual failing observation, earlier project occurrences, the first causal divergence, real producer/consumer contracts and a discriminating hypothesis before behavior changes. The workflow treats a problem as systematic until bounded by evidence and routes unresolved architecture questions through existing roles without adding retries, fallback semantics or fixed approval rounds.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/quest-tooling-systematic-investigation/evidence/receipt.json",
+      "requiredReceipts": [
+        "actual-failure-and-history-research",
+        "producer-contract-and-first-divergence",
+        "discriminating-reproduction-and-negative-control",
+        "architecture-reassessment-with-owned-next-action",
+        "canonical-quest-recording",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "planning-only",
+      "statement": "Unsealed draft created for implementation planning. Required receipt IDs are obligations, not results. No receipt or seal may be fabricated. Prepare a genuinely measuring negative witness through the existing proof owners before start; missing evidence remains non-measuring. Refine an unsealed draft or explicitly supersede a changed seal."
+    },
+    {
+      "id": "existing-authority-and-no-fallback",
+      "statement": "Current AGENTS, routed owners and the user remain authoritative. Use the existing Quest workflow, append-only records, independent review and publication path. No parallel task or memory authority, legacy adapter, silent fallback, invented producer shape, weakened gate or increased ratchet baseline."
+    },
+    {
+      "id": "real-evidence-and-claim-boundaries",
+      "statement": "Retain actual source, worktree, host, tool/configuration versions and execution provenance. Do not use, create or generate mock, fake or emulated information in comparative system measurements. Isolated validator controls are never measured system results. Tooling acceptance cannot establish formation, native durability, product release or benchmark acceptance."
+    },
+    {
+      "id": "scope-and-independent-review",
+      "statement": "Use one writer per changing interaction, preserve unrelated work and route out-of-scope findings. Review the affected owner contract before dependent implementation and bind independent verification to the actual candidate and evidence. A plugin's own success report or agreeing reviewers cannot substitute for proof."
+    },
+    {
+      "id": "owned-scope",
+      "statement": "Project skill instructions and existing design/review templates. The application witness uses a real defect or retained actual failure at an explicitly named historical checkout; a transcript replay is not a fresh product run."
+    },
+    {
+      "id": "plan-and-dependencies",
+      "statement": "Q3: Systematic investigation and contract-first authoring. Implementation contract: solve/specs/quest-agent-tooling-integration/implementation-plan.md#q3-systematic-investigation-and-contract-first-authoring. Prerequisites: Q1, Q2. Dependencies are coordination instructions, not an implemented scheduler. No implementation agent or run is assigned by this draft."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ]
+}

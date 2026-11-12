@@ -120,9 +120,7 @@ class RebalanceCoordinatorReplicaIdentityMethods {
       observation, entityType, entityId,
     );
     const cacheVisibleOperations =
-      typeof this.repository?.getOperationsByEntity === LOCAL_STR_FUNCTION ?
-        await this.repository.getOperationsByEntity(entityType, entityId) :
-        [];
+      await this.readAdditiveEntityOperationProjection(entityType, entityId);
     for (const operations of [
       authoritativeOperations,
       cacheVisibleOperations,
@@ -135,6 +133,13 @@ class RebalanceCoordinatorReplicaIdentityMethods {
       }
     }
     return replicaIds;
+  }
+
+  // An ADDITIVE supplement to the authoritative rows: more ids are only more
+  // conservative, so a projection that cannot be read is not "no ids" - its
+  // typed unavailability propagates and the identity decision waits.
+  async readAdditiveEntityOperationProjection(entityType, entityId) {
+    return this.repository.getOperationsByEntityProjection(entityType, entityId);
   }
 
   addAllocatedOperationReplicaIds(replicaIds, operation) {
@@ -172,9 +177,7 @@ class RebalanceCoordinatorReplicaIdentityMethods {
       observation, entityType, entityId,
     );
     const cacheVisibleOperations =
-      typeof this.repository?.getOperationsByEntity === LOCAL_STR_FUNCTION ?
-        await this.repository.getOperationsByEntity(entityType, entityId) :
-        [];
+      await this.readAdditiveEntityOperationProjection(entityType, entityId);
     for (const operations of [
       authoritativeOperations,
       cacheVisibleOperations,

@@ -201,7 +201,6 @@ function beginCdcDeliveryInvocation(delivery, isCurrent, onClosed = () => {}) {
   let closed = false;
   let refusal = null;
   let timeoutId = null;
-  let contended = false;
 
   const closeIfSettled = () => {
     if (closed || !dispatchClosed || childCount !== 0) return;
@@ -283,16 +282,13 @@ function beginCdcDeliveryInvocation(delivery, isCurrent, onClosed = () => {}) {
     ownChild,
     run,
     retire,
-    markContended: () => {
-      contended = true;
-    },
-    isContended: () => contended,
-    registerContentionOwner: (propagationOwner, tableName) => {
-      if (!propagationOwner || typeof tableName !== 'string' || tableName.length === 0) {
-        return null;
-      }
-      return () => !owner.isShutdown && isCurrent();
-    },
+    // The recipient this invocation addresses: null is the source group of
+    // the propagation; the source lane names a target group on its scoped
+    // invocation. bindTopology is where the topology owner reports the
+    // recipient set it observed and is answered the addressed recipient's
+    // route (null: the source group has none); only a source lane keeps it.
+    recipientGroupId: null,
+    bindTopology: () => null,
     signal: controller.signal,
     cleanup: cleanup.promise,
     remainingMs: () => {
@@ -310,5 +306,10 @@ function beginCdcDeliveryInvocation(delivery, isCurrent, onClosed = () => {}) {
   return context;
 }
 
-export {assertCdcDeliveryInvocation, beginCdcDeliveryInvocation, isCdcDeliveryInvocation,
-  openCdcDeliveryChildScope, scopeCdcDeliveryInvocation};
+export {
+  assertCdcDeliveryInvocation,
+  beginCdcDeliveryInvocation,
+  isCdcDeliveryInvocation,
+  openCdcDeliveryChildScope,
+  scopeCdcDeliveryInvocation,
+};

@@ -553,7 +553,7 @@ t.test(
     // Bound the visibility-confirmation poll so the deadline elapses in-test.
     owner.repository.replicaOperationAuthoritativeVisibilityTimeoutMs = 5;
     try {
-      const durable = await coordinator.queryOperationById('op-terminal-1');
+      const durable = await coordinator.queryOperationProjectionById('op-terminal-1');
       // Quest replace-source-removal-owner (R11/A11.1): the repair re-runs
       // R-1a before it re-asserts a REPLACE's REMOVED, so this REMOVED is one
       // R-1a admitted: its intent (C0) is recorded and the witness (the
@@ -671,7 +671,7 @@ t.test(
     };
     owner.repository.replicaOperationAuthoritativeVisibilityTimeoutMs = 5;
     try {
-      const durable = await coordinator.queryOperationById('op-active-1');
+      const durable = await coordinator.queryOperationProjectionById('op-active-1');
       const projectedActive = {
         ...durable,
         status: ReplicaStatus.ACTIVE,
@@ -753,7 +753,7 @@ t.test(
       return originalExecuteQuery(sql, params, queryOptions);
     };
     try {
-      const durable = await coordinator.queryOperationById(
+      const durable = await coordinator.queryOperationProjectionById(
         'op-terminal-refused-1',
       );
 
@@ -850,7 +850,7 @@ t.test(
       coordinator.queryAuthoritativeOperationVisibilityObservation = async (
         operationId,
       ) => ({
-        operation: await coordinator.queryOperationById(operationId),
+        operation: await coordinator.queryOperationProjectionById(operationId),
         deferredOutcome: null,
       });
 

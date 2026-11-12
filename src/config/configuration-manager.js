@@ -14,8 +14,10 @@ import {
   CONFIG_SEPARATOR,
   DEFAULT_CONFIG,
   ENV_MAPPINGS,
+  ENV_VALUE_PARSERS,
   LEGACY_ENV_ALIASES,
 } from './config-constants.js';
+import {declareFormationTarget} from './formation-target-node-count.js';
 import {
   LISTENER_PORT_ENV,
   resolveListenerPorts,
@@ -164,6 +166,10 @@ class ConfigurationManager {
       this.config.node.id = uuidv4();
     }
 
+    // The declared formation size has no default: refuse a present but
+    // invalid value with its typed error before schema validation.
+    declareFormationTarget(this.get(CONFIG_KEY.FORMATION_TARGET_NODE_COUNT));
+
     // Validate configuration
     const valid = this.validate(this.config);
     if (!valid) {
@@ -227,6 +233,8 @@ class ConfigurationManager {
    * @private
    */
   parseEnvValue(value, path) {
+    const parser = ENV_VALUE_PARSERS[path];
+    if (parser !== undefined) return parser(value);
     // Determine expected type from default config
     const defaultValue = this.getByPath(path, DEFAULT_CONFIG);
 

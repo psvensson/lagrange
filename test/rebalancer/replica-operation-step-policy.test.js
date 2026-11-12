@@ -5,12 +5,10 @@ import {OPERATION_TRANSITION_REASON} from '../../src/rebalancer/rebalancer-const
 import {
   DISPATCH_PENDING_WORKFLOW_STEPS,
   DISPATCH_WAKE_PROGRESS_PREEMPT_WORKFLOW_STEPS,
-  NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS,
   OPERATION_EXECUTOR_COMPLETION_WORKFLOW_STEPS,
   PRE_SYNC_WORKFLOW_STEPS,
   PRIORITY_CONTROL_PLANE_REMOVE_LANE_WORKFLOW_STEPS_BY_TYPE,
   PRIORITY_DISPATCH_TRANSITION_MUTATION_STEPS,
-  PRIORITY_OUTCOME_DEFERRED_LOCAL_PROGRESS_TYPES_BY_STEP,
   PRIORITY_RECOVERY_INCOMPLETE_OPERATION_STEP_ORDER,
   PRIORITY_RECOVERY_INCOMPLETE_OPERATION_VISIBILITY_STEPS,
   PRIORITY_RECOVERY_OPERATION_DRAIN_WORKFLOW_STEPS,
@@ -18,7 +16,6 @@ import {
   REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS,
   isActiveReplaceSourceRemovalPhase,
   isIncompleteOperationRowStep,
-  isPriorityOutcomeDeferredLocalProgressCovered,
   resolveOperationTransitionReason,
 } from '../../src/rebalancer/replica-operation-step-policy.js';
 
@@ -35,28 +32,17 @@ test('CL-029 lineage rows keep their sealed memberships', (t) => {
   t.strictSame(
     [...PRIORITY_DISPATCH_TRANSITION_MUTATION_STEPS].sort(),
     [WORKFLOW_STEP.CREATING, WORKFLOW_STEP.SENDING].sort());
-  t.ok(PRIORITY_OUTCOME_DEFERRED_LOCAL_PROGRESS_TYPES_BY_STEP
-    .get(WORKFLOW_STEP.ACTIVE).has(OperationType.REPLACE));
-  t.ok(PRIORITY_OUTCOME_DEFERRED_LOCAL_PROGRESS_TYPES_BY_STEP
-    .get(WORKFLOW_STEP.STOPPING).has(OperationType.REMOVE));
-  t.notOk(PRIORITY_OUTCOME_DEFERRED_LOCAL_PROGRESS_TYPES_BY_STEP
-    .get(WORKFLOW_STEP.STOPPING).has(OperationType.ADD));
-  t.notOk(PRIORITY_OUTCOME_DEFERRED_LOCAL_PROGRESS_TYPES_BY_STEP
-    .has(WORKFLOW_STEP.REMOVED),
-  'terminal steps deliberately absent: REMOVED converges via completeOperation');
   t.end();
 });
 
-test('deferred-local-progress predicate mirrors the table', (t) => {
-  t.ok(isPriorityOutcomeDeferredLocalProgressCovered(
-    OperationType.REPLACE, WORKFLOW_STEP.ACTIVE));
-  t.ok(isPriorityOutcomeDeferredLocalProgressCovered(
-    OperationType.REMOVE, WORKFLOW_STEP.STOPPING));
-  t.notOk(isPriorityOutcomeDeferredLocalProgressCovered(
-    OperationType.ADD, WORKFLOW_STEP.ACTIVE));
-  t.notOk(isPriorityOutcomeDeferredLocalProgressCovered(
-    OperationType.REPLACE, WORKFLOW_STEP.CREATING),
-  'CREATING takes the mutation-budget lane, not this table');
+// SUPERSEDED (R09): the deferred-local-progress table and its predicate
+// (quest formation-ledger-self-move-blocks-cluster-ops) are deleted. No step
+// may be shown before its row commits, so there is no coverage row to pin.
+test('no step-coverage row grants owner-local progress', async (t) => {
+  const policy = await import(
+    '../../src/rebalancer/replica-operation-step-policy.js');
+  t.notOk('PRIORITY_OUTCOME_DEFERRED_LOCAL_PROGRESS_TYPES_BY_STEP' in policy);
+  t.notOk('isPriorityOutcomeDeferredLocalProgressCovered' in policy);
   t.end();
 });
 
@@ -91,13 +77,19 @@ test('incompleteness: ACTIVE counts only for remove-phase types', (t) => {
 test('budget and recovery coverage rows', (t) => {
   t.notOk(PROTECTED_PRIORITY_BUDGET_WORKFLOW_STEPS.has(WORKFLOW_STEP.CREATING),
     'CREATING deliberately excluded: it uses the bounded mutation lane');
-  t.strictSame([...NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS].sort(),
-    [...PRE_SYNC_WORKFLOW_STEPS, WORKFLOW_STEP.STOPPING].sort(),
-    'recovery marks failed = pre-sync plus STOPPING');
   for (const step of PRE_SYNC_WORKFLOW_STEPS) {
     t.ok(PRIORITY_RECOVERY_OPERATION_DRAIN_WORKFLOW_STEPS.has(step),
       `pre-sync ${step} participates in the drain`);
   }
+  t.end();
+});
+
+// The restart routine that failed every pre-sync/STOPPING row is deleted, and
+// with it the step row that named which steps it failed. No such row may return.
+test('no step row lets a restart fail an incomplete row', async (t) => {
+  const policy = await import(
+    '../../src/rebalancer/replica-operation-step-policy.js');
+  t.notOk('NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS' in policy);
   t.end();
 });
 
@@ -132,7 +124,6 @@ test('every exported row is frozen', (t) => {
   for (const row of [
     DISPATCH_PENDING_WORKFLOW_STEPS,
     DISPATCH_WAKE_PROGRESS_PREEMPT_WORKFLOW_STEPS,
-    NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS,
     OPERATION_EXECUTOR_COMPLETION_WORKFLOW_STEPS,
     PRE_SYNC_WORKFLOW_STEPS,
     PRIORITY_DISPATCH_TRANSITION_MUTATION_STEPS,

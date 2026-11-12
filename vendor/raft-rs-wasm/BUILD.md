@@ -11,9 +11,10 @@ consensus backend loaded by `src/raft/raft-rs-binding-owner.js`.
 
 Its immediate history is the fork initially created during the quest
 `raft-backend-evaluation` (tag `raft-backend-evaluation/round-3-rejected-tree`
-for the three-fix intermediate build) and then extended with the fourth fork fix
-(tagged recoverable binding refusals `{kind: "raft-rs-refusal", message}`).
-`pkg/raft_wasm_bg.wasm` and `pkg/raft_wasm.js` here are the checked-in fourth
+for the three-fix intermediate build), then extended with the fourth fork fix
+(tagged recoverable binding refusals `{kind: "raft-rs-refusal", message}`) and,
+on 2026-11-11, with the fifth (`step_down_removed_leader`, owner-approved).
+`pkg/raft_wasm_bg.wasm` and `pkg/raft_wasm.js` here are the checked-in fifth
 build attempt recorded in `artifact-digest.json`, and a test re-computes their
 digests and verifies agreement with `reproducibility.checkedInArtifactIsAttempt`.
 
@@ -99,6 +100,20 @@ Whether the recipe reproduces byte for byte is a separate, measured question,
 recorded in `artifact-digest.json` under `reproducibility`. It is reported as
 found and is not required to be identical.
 
+What was found: the generated JavaScript glue is byte-identical across builds
+of one source; the `.wasm` is not. For the fifth fork fix the recorded command
+was run twice with `cargo clean` between (attempts 5 and 6): the two `.wasm`
+files have the same size and differ in 85 bytes, and their WebAssembly text
+(`wasm-tools print`) differs only in the order of three wasm-bindgen cast
+imports (`__wbindgen_cast_*`) and the function indices that follow from that
+order. Attempt 5 is the one checked in.
+
+A rebuild is built into a scratch directory
+(`wasm-pack build --release --target nodejs --out-dir <scratch>`), verified
+there, and then moved into `pkg/` together with the updated
+`artifact-digest.json`: the loader refuses any moment in which the two
+disagree. `cargo clean` afterwards removes `target/`.
+
 ## What this binding exposes, and what it deliberately does not
 
 Added over upstream, all raw raft-rs operations:
@@ -113,11 +128,17 @@ Added over upstream, all raw raft-rs operations:
 - `create_node` now honours `bootstrap.confState` (upstream decoded and
   discarded it), a `learners` list, and `applied`
 - `wasm_memory_bytes` and `handle_count`, measurement primitives
+- `step_down_removed_leader`: raft-rs's own `become_follower` at the current
+  term, for a leader its own applied configuration removed and for no other
+  state (fork fix 5 below)
 
 Not added, on purpose: `addNode`, `removeNode`, `addLearner`, `promote` or any
 other membership convenience. Adding a learner, waiting for it to catch up,
 promoting it and removing the old voter is Lagrange policy, not binding
 policy, and a test asserts that no such name exists in the built glue.
+`step_down_removed_leader` is not one of these: it proposes nothing and
+changes no configuration; it ends a leadership raft-rs itself says should
+have ended.
 
 ## Fixes this fork makes to the upstream binding
 
@@ -141,3 +162,32 @@ Each was found by driving the binding and is measured before and after:
    The runtime owner can therefore distinguish a returned raft-rs refusal
    from a WASM trap at the invocation boundary without classifying a generic
    JavaScript exception by type or message.
+5. **`step_down_removed_leader` ends the leadership of a leader its own
+   applied configuration removed.** raft-rs keeps such a leader leading and
+   says so itself (`raft.rs` `post_conf_change`: "This node is leader and was
+   removed or demoted ... TODO(tbg): step down (for sanity) and ask follower
+   with largest Match to TimeoutNow ... TODO(tbg): test this branch. It is
+   untested at the time of writing."). It has no `Progress` for itself, so it
+   drops every proposal (`step_leader`, `MsgPropose`), its heartbeats keep
+   the voters that remain from electing, and the two places that advance its
+   commit index unwrap the `Progress` it no longer has - `maybe_commit`
+   (reached from `handle_append_response` when an acknowledgement commits an
+   entry it still held uncommitted) and `on_persist_entries` (reached from
+   `advance_append` when the Ready that carried its removal also carried
+   entries to persist) - which on `wasm32-unknown-unknown` aborts the module.
+   `RawNode` gives a host no way to end that leadership: `MsgCheckQuorum` is
+   refused as a local message and a node that is not promotable cannot
+   campaign. The function calls the crate's public
+   `become_follower(term, INVALID_ID)` at the current term - the transition
+   raft-rs's own check-quorum makes (`step_leader`, `MsgCheckQuorum`) - and
+   answers `{steppedDown: true, term}`. It cannot depose a legitimate leader:
+   in every other state it changes nothing and answers a tagged refusal
+   naming the state - `not leader`; `still promotable` (a voter of its own
+   configuration, the crate's `promotable()`); `still holds its own progress`
+   (demoted to a learner: it still replicates and commits); and
+   `ready outstanding with queued messages` (between `take_ready` and
+   `advance_append`, where raft-rs's `advance_append` refuses new messages
+   from a node that does not lead: "not leader but has new msg after
+   advance"). The step-down produces a Ready (the soft state changed); the
+   host's ordinary drain takes it. Policy stays with the host
+   (`src/raft/raft-rs-leadership-transfer.js`, `removedLeaderAction`).

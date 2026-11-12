@@ -1,3 +1,7 @@
+import {
+  drainTurn,
+  settleReconcileQueue,
+} from '../helpers/reconcile-queue-turns.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {OwnerKeyReconcileQueue} from
   '../../src/workflow/owner-key-reconcile-queue.js';
@@ -60,9 +64,7 @@ test('OwnerKeyReconcileQueue - enqueues and drains items',
     queue.enqueue('op-2', RECONCILE_REASON.COORDINATOR_OPERATION_CREATED);
 
     // Allow microtask drain to complete
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
+    await settleReconcileQueue(queue);
 
     t.equal(reconciled.length, 2, 'should drain both items');
     t.equal(reconciled[0].ownerKey, 'op-1');
@@ -100,7 +102,7 @@ test('OwnerKeyReconcileQueue - de-duplicates by owner key',
     queue.enqueue('node-1', RECONCILE_REASON.NODES_CDC_READY);
 
     // Allow microtask to start drain
-    await Promise.resolve();
+    await drainTurn();
 
     // Second and third enqueue for same key while first is draining
     queue.enqueue(
@@ -114,9 +116,7 @@ test('OwnerKeyReconcileQueue - de-duplicates by owner key',
     resolveGate();
 
     // Allow drain to complete
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
+    await settleReconcileQueue(queue);
 
     t.equal(reconciled.length, 2, 'should process two batches');
     t.same(
@@ -185,9 +185,7 @@ test('OwnerKeyReconcileQueue - shutdown stops processing',
     );
     t.equal(created, false, 'enqueue after shutdown returns false');
 
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
+    await settleReconcileQueue(queue);
 
     t.equal(reconciled.length, 0, 'nothing processed after shutdown');
   });
@@ -207,9 +205,7 @@ test('OwnerKeyReconcileQueue - reconcile errors do not stop drain',
     queue.enqueue('bad', RECONCILE_REASON.PERIODIC_CHECK);
     queue.enqueue('good', RECONCILE_REASON.PERIODIC_CHECK);
 
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
+    await settleReconcileQueue(queue);
 
     t.same(reconciled, ['good'], 'good item processed despite error');
     queue.shutdown();
@@ -277,8 +273,7 @@ test('OwnerKeyReconcileQueue - no parallel execution on same owner key',
     queue.enqueue('key-A', RECONCILE_REASON.PERIODIC_CHECK);
 
     // Let the microtask start the drain and begin reconciling key-A.
-    await Promise.resolve();
-    await Promise.resolve();
+    await drainTurn();
 
     // key-A is now in-flight. Enqueue it again.
     queue.enqueue('key-A', RECONCILE_REASON.NODE_FAILED);
@@ -298,9 +293,7 @@ test('OwnerKeyReconcileQueue - no parallel execution on same owner key',
     resolveFirst();
 
     // Allow all drain iterations to complete.
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
+    await settleReconcileQueue(queue);
 
     t.equal(
       maxConcurrency.get('key-A'), 1,
@@ -392,8 +385,7 @@ test('OwnerKeyReconcileQueue - isInFlight tracks active execution',
     queue.enqueue('key-1', RECONCILE_REASON.PERIODIC_CHECK);
 
     // Let drain start.
-    await Promise.resolve();
-    await Promise.resolve();
+    await drainTurn();
 
     t.equal(
       queue.isInFlight('key-1'), true,
@@ -401,9 +393,7 @@ test('OwnerKeyReconcileQueue - isInFlight tracks active execution',
     );
 
     resolveGate();
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
+    await settleReconcileQueue(queue);
 
     t.equal(
       queue.isInFlight('key-1'), false,
@@ -433,8 +423,7 @@ test('OwnerKeyReconcileQueue - stale-claim diagnostic on in-flight defer',
 
     // Enqueue key-X — drain starts and begins reconciling it.
     queue.enqueue('key-X', RECONCILE_REASON.PERIODIC_CHECK);
-    await Promise.resolve();
-    await Promise.resolve();
+    await drainTurn();
 
     // key-X is now in-flight. Enqueue it again so it lands in
     // pending while the first reconcile is still running.
@@ -448,16 +437,13 @@ test('OwnerKeyReconcileQueue - stale-claim diagnostic on in-flight defer',
 
     // Allow the second drain to run its microtask and hit the
     // in-flight check.
-    await Promise.resolve();
-    await Promise.resolve();
+    await drainTurn();
 
     // Release the first reconcile so everything can complete.
     resolveFirst();
     await secondDrain;
 
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
+    await settleReconcileQueue(queue);
 
     const diag = queue.getDiagnostics();
     t.ok(
@@ -514,8 +500,7 @@ test('OwnerKeyReconcileQueue - getDiagnostics exposes queue state',
     queue.enqueue('k1', RECONCILE_REASON.PERIODIC_CHECK);
 
     // Let drain start so k1 becomes in-flight.
-    await Promise.resolve();
-    await Promise.resolve();
+    await drainTurn();
 
     const activeDiag = queue.getDiagnostics();
     t.same(
@@ -542,8 +527,7 @@ test('OwnerKeyReconcileQueue - shutdown clears in-flight set',
       RECONCILE_REASON.PERIODIC_CHECK,
     );
     const stoppedOutcome = completion.catch((error) => error);
-    await Promise.resolve();
-    await Promise.resolve();
+    await drainTurn();
 
     t.equal(
       queue.isInFlight('key-1'), true,
@@ -637,8 +621,7 @@ test('OwnerKeyReconcileQueue - emits typed event on stale fence ' +
   );
 
   // Let drain start and block on gate.
-  await Promise.resolve();
-  await Promise.resolve();
+  await drainTurn();
 
   // While key-B is in-flight, enqueue key-B again with token 5.
   // This merges into pending (deferred because in-flight).
@@ -654,9 +637,7 @@ test('OwnerKeyReconcileQueue - emits typed event on stale fence ' +
   // Release the first reconcile so drain picks up the deferred
   // item and hits the stale-fence check.
   resolveGate();
-  await new Promise((resolve) => {
-    setTimeout(resolve, 0);
-  });
+  await settleReconcileQueue(queue);
 
   t.ok(emitted.length >= 1, 'drain-time stale event emitted');
   const evt = emitted[0];
@@ -695,22 +676,18 @@ test('OwnerKeyReconcileQueue - emits typed event on in-flight ' +
 
   // Enqueue key-C — drain starts.
   queue.enqueue('key-C', RECONCILE_REASON.PERIODIC_CHECK);
-  await Promise.resolve();
-  await Promise.resolve();
+  await drainTurn();
 
   // key-C is in-flight. Enqueue again.
   queue.enqueue('key-C', RECONCILE_REASON.NODE_FAILED);
 
   // Force a second drain pass to hit the in-flight guard.
   const secondDrain = queue.drain();
-  await Promise.resolve();
-  await Promise.resolve();
+  await drainTurn();
 
   resolveFirst();
   await secondDrain;
-  await new Promise((resolve) => {
-    setTimeout(resolve, 0);
-  });
+  await settleReconcileQueue(queue);
 
   t.ok(emitted.length >= 1, 'deferral event emitted');
   t.equal(
@@ -746,9 +723,7 @@ test('OwnerKeyReconcileQueue - getDiagnostics exposes aggregate ' +
     {fenceToken: 3},
   );
 
-  await new Promise((resolve) => {
-    setTimeout(resolve, 0);
-  });
+  await settleReconcileQueue(queue);
 
   const d1 = queue.getDiagnostics();
   t.equal(
@@ -786,9 +761,7 @@ test('OwnerKeyReconcileQueue - ring buffer wraps at capacity',
       {fenceToken: highToken},
     );
 
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
+    await settleReconcileQueue(queue);
 
     // Generate more rejections than the buffer capacity.
     const totalRejections = STALE_FENCE_SAMPLE_CAPACITY + 5;
@@ -853,9 +826,7 @@ test('REGRESSION: stale claim in reconcile queue is rejected and ' +
   );
 
   // Let the first item drain.
-  await new Promise((resolve) => {
-    setTimeout(resolve, 0);
-  });
+  await settleReconcileQueue(queue);
 
   t.equal(reconciled.length, 1,
     'first enqueue must be reconciled');
@@ -869,9 +840,7 @@ test('REGRESSION: stale claim in reconcile queue is rejected and ' +
     'stale enqueue must return false');
 
   // Let any potential drain complete.
-  await new Promise((resolve) => {
-    setTimeout(resolve, 0);
-  });
+  await settleReconcileQueue(queue);
 
   // The reconcile callback must NOT have been called again.
   t.equal(reconciled.length, 1,
@@ -923,8 +892,7 @@ test('REGRESSION: concurrent fence advancement during in-flight ' +
   );
 
   // Let drain start and block on gate.
-  await Promise.resolve();
-  await Promise.resolve();
+  await drainTurn();
 
   // While key-B is in-flight, enqueue again with token 5.
   // This defers into pending because key-B is in-flight.
@@ -940,9 +908,7 @@ test('REGRESSION: concurrent fence advancement during in-flight ' +
   // Release the first reconcile. The deferred item (token 5)
   // should be rejected at drain time because 5 < 20.
   resolveFirst();
-  await new Promise((resolve) => {
-    setTimeout(resolve, 0);
-  });
+  await settleReconcileQueue(queue);
 
   // The deferred item must NOT have been reconciled.
   const keyBCalls = reconciled.filter(
@@ -1008,9 +974,7 @@ test('OwnerKeyReconcileQueue - retryable drain failure preserves ' +
     retryContext,
   );
 
-  await new Promise((resolve) => {
-    setTimeout(resolve, 0);
-  });
+  await settleReconcileQueue(queue);
 
   const retryingDiagnostics = queue.getDiagnostics();
   t.same(
@@ -1093,8 +1057,7 @@ test('OwnerKeyReconcileQueue - injectable scheduler bounds each drain turn',
       const runTurn = scheduled.shift();
       const before = reconciled.length;
       runTurn();
-      await Promise.resolve();
-      await Promise.resolve();
+      await drainTurn();
       t.ok(
         reconciled.length - before <= 1,
         'each scheduled turn starts at most one heavy item',
@@ -1130,10 +1093,7 @@ test('OwnerKeyReconcileQueue - pending promotion preserves coalesced work',
     while (scheduled.length > 0) {
       for (let turn = 0; turn < 6; turn++) {
         if (scheduled.length > 0) scheduled.shift()();
-        await Promise.resolve();
-        await Promise.resolve();
-        await Promise.resolve();
-        await Promise.resolve();
+        await drainTurn();
       }
     }
     t.same(
@@ -1240,8 +1200,7 @@ test('OwnerKeyReconcileQueue - retry clock is injected and unsafe timer ' +
   });
   queue.enqueue('owner-a', 'source_changed');
   scheduled.shift()();
-  await Promise.resolve();
-  await Promise.resolve();
+  await drainTurn();
   t.equal(timers[0].delayMs, 1_000,
     'an unsafe platform timer delay uses the bounded fallback');
   t.match(queue.getDiagnostics().retryStates['owner-a'], {
@@ -1251,8 +1210,7 @@ test('OwnerKeyReconcileQueue - retry clock is injected and unsafe timer ' +
   now = 5_242;
   timers[0].callback();
   scheduled.shift()();
-  await Promise.resolve();
-  await Promise.resolve();
+  await drainTurn();
   t.equal(callCount, 2, 'the injected timer drives the bounded second attempt');
   queue.shutdown();
   t.ok(cleared.length <= 1,
@@ -1289,8 +1247,7 @@ test('OwnerKeyReconcileQueue - same-owner in-flight enqueue cannot evade ' +
   queue.enqueue('owner-a', 'source_changed', {generation: 1});
   for (let turn = 0; turn < 8; turn++) {
     if (scheduled.length > 0) scheduled.shift()();
-    await Promise.resolve();
-    await Promise.resolve();
+    await drainTurn();
     if (timers.length > 0) timers.shift().callback();
   }
   const diagnostics = queue.getDiagnostics();
@@ -1333,8 +1290,7 @@ test('OwnerKeyReconcileQueue - retry normalization uses captured numeric ' +
     Number.isFinite = () => false;
     queue.enqueue('owner-a', 'source_changed');
     scheduled.shift()();
-    await Promise.resolve();
-    await Promise.resolve();
+    await drainTurn();
     observedDelay = timers[0]?.delayMs;
   } finally {
     Number.isSafeInteger = originalIsSafeInteger;
@@ -1375,8 +1331,7 @@ test('OwnerKeyReconcileQueue - collection iterator prototypes cannot stop ' +
         writable: true,
       });
       scheduled.shift()();
-      await Promise.resolve();
-      await Promise.resolve();
+      await drainTurn();
     } catch (error) {
       escaped = error;
     } finally {
@@ -1473,10 +1428,7 @@ test('OwnerKeyReconcileQueue - inherited Array setters cannot swallow ' +
       set: () => {},
     });
     scheduled.shift()();
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
+    await drainTurn();
   } catch (error) {
     escaped = error;
   } finally {

@@ -25,6 +25,8 @@ import {
 } from './checks/test-resource-classification.js';
 import {
   LANE_JOBS_CAP_ENV,
+  PLACED_ORDINARY_LANE_JOBS_ENV,
+  PLACED_ORDINARY_LANE_JOBS_MAX,
   RESOURCE_CLASSES,
   RESOURCE_CLASS_CPU_HEAVY,
   RESOURCE_CLASS_EXCLUSIVE,
@@ -131,6 +133,9 @@ const INCOMPLETE_PLAN_PROBLEM =
 const INVALID_LANE_JOBS_CAP_PROBLEM =
   `${LANE_JOBS_CAP_ENV} must be a positive integer, not: `;
 const LANE_JOBS_CAP_PATTERN = /^[1-9]\d*$/u;
+const INVALID_PLACED_ORDINARY_JOBS_PROBLEM =
+  `${PLACED_ORDINARY_LANE_JOBS_ENV} must be an integer from 1 to ` +
+  `${PLACED_ORDINARY_LANE_JOBS_MAX}, not: `;
 const DECIMAL_RADIX = 10;
 // No cap: every lane runs at its own worker count.
 const NO_LANE_JOBS_CAP = Number.POSITIVE_INFINITY;
@@ -448,6 +453,21 @@ function laneJobsCap(env) {
   return numberParseInt(value, DECIMAL_RADIX);
 }
 
+// The ordinary lane's workers a placed host computed for itself, or none:
+// only the placement shell sets it (placedOrdinaryLaneJobsShell), and
+// garbage, or a count past the rule's own maximum, is refused rather than
+// read as no raise.
+function placedOrdinaryJobs(env) {
+  const value = env[PLACED_ORDINARY_LANE_JOBS_ENV];
+  if (value === undefined) return null;
+  const jobs = typeof value === 'string' && regExpExec(LANE_JOBS_CAP_PATTERN, value) ?
+    numberParseInt(value, DECIMAL_RADIX) : 0;
+  if (jobs < 1 || jobs > PLACED_ORDINARY_LANE_JOBS_MAX) {
+    throw new Error(`${INVALID_PLACED_ORDINARY_JOBS_PROBLEM}${value}`);
+  }
+  return jobs;
+}
+
 // The thermal gate before a batch: the one thermal owner is asked, never
 // spawned. A hold waits with the owner's poll (its lines in this stream), an
 // unmeasurable or skipped host is said once and proceeds, and exhausted
@@ -466,9 +486,12 @@ function createThermalGate({env, write, sources, sleep}) {
   };
 }
 
-// A lane's workers on this host: its own count, lowered to the host's cap.
-function laneJobs(lane, cap) {
-  return lane.jobs < cap ? lane.jobs : cap;
+// A lane's workers on this host: its own count - for the ordinary lane on a
+// placed host, the count that host computed - lowered to the host's cap.
+function laneJobs(lane, cap, placedOrdinary) {
+  const own = lane.resourceClass === RESOURCE_CLASS_ORDINARY && placedOrdinary !== null ?
+    placedOrdinary : lane.jobs;
+  return own < cap ? own : cap;
 }
 
 // The refusal's summary line: every file from the refused batch on, by name.
@@ -486,14 +509,16 @@ function reportNotRun(plan, laneIndex, firstFile, write) {
     `${arrayJoin(notRun, WORD_SEPARATOR)}${NEWLINE}`);
 }
 
-// Every batch carries the skip: it is gated already. The lane cap is this
-// runner's own input, consumed here: a batch's tests never inherit the host's
-// ceiling. A floor, not a cap: the runner owns the final TAP_TIMEOUT and lifts
-// it to the file's declared budget when that is larger. An explicit caller
-// TAP_TIMEOUT flows through process.env and wins.
+// Every batch carries the skip: it is gated already. The lane cap and the
+// placed ordinary count are this runner's own inputs, consumed here: a
+// batch's tests never inherit the host's ceiling or its raise. A floor, not
+// a cap: the runner owns the final TAP_TIMEOUT and lifts it to the file's
+// declared budget when that is larger. An explicit caller TAP_TIMEOUT flows
+// through process.env and wins.
 function batchEnv(env, resourceClass) {
   const gated = {...env, [THERMAL_SKIP_ENV]: THERMAL_SKIP_VALUE};
   delete gated[LANE_JOBS_CAP_ENV];
+  delete gated[PLACED_ORDINARY_LANE_JOBS_ENV];
   if (stringCollectionHas(TIMEOUT_FLOOR_LANES, resourceClass)) {
     gated.TAP_TIMEOUT_FLOOR = EXCLUSIVE_TAP_TIMEOUT_FLOOR_SECONDS;
   }
@@ -534,6 +559,7 @@ export function runClassifiedTestFiles(inputFiles, options = {}) {
   const run = runnerOptions(options);
   const plan = planClassifiedTestFiles(run.root, inputFiles);
   const cap = laneJobsCap(run.env);
+  const placedOrdinary = placedOrdinaryJobs(run.env);
   const gate = createThermalGate(run);
   // Every file planned, before any runs: the reader of this stream calls the
   // run complete only when summaries cover it.
@@ -541,7 +567,7 @@ export function runClassifiedTestFiles(inputFiles, options = {}) {
   let firstFailure = 0;
   for (let laneIndex = 0; laneIndex < plan.length; laneIndex += 1) {
     const lane = plan[laneIndex];
-    const jobs = laneJobs(lane, cap);
+    const jobs = laneJobs(lane, cap, placedOrdinary);
     run.write(
       `classified lane ${lane.resourceClass}: ${lane.files.length} file(s), ` +
       `jobs=${jobs}${NEWLINE}`,

@@ -1,5 +1,6 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {
+  forgetDeferredRetirement,
   proposePeerRetirement,
   takeAdmissionsInFlight,
   takeDeferredRetirements,
@@ -11,6 +12,10 @@ import {isFailedCreateCleanupToken} from
   '../rebalancer/failed-create-cleanup-token.js';
 import {redriveAcceptedAdmissionRequests} from
   './partition-replica-admission.js';
+import {
+  observeRemovalSubjectRetained,
+  observeRemovalSubjectRetiring,
+} from './partition-service-removal-subject-handoff.js';
 
 // Services rows are discovery (A8): a retiring row may trigger a REMOVE of
 // the configured peer it names, but no row ever admits a peer. Admission is
@@ -145,29 +150,44 @@ function resolveServiceReplicaId(serviceRow) {
   return serviceRow?.service_id || serviceRow?.replica_id || null;
 }
 
+// Its own row: a retiring row makes the replica a removal subject, which
+// never proposes its own RemoveNode - a leader that applies its own removal
+// keeps leading in raft-rs while it refuses every proposal (B2, 2026-11-11).
+// It hands any leadership it holds or gains to a surviving voter, and the
+// survivor that leads removes it from the row it holds
+// (partition-service-removal-subject-handoff.js). A row that serves again
+// ends the subject's state; a group retired as a unit changes no leadership.
+function observeOwnServiceRow(partitionService, operation, serviceRow) {
+  if (isExplicitPeerRetirement(operation, serviceRow)) {
+    observeRemovalSubjectRetiring(partitionService);
+    return true;
+  }
+  if (serviceRow?.trigger_reason !== GROUP_RETIREMENT_REASON) {
+    observeRemovalSubjectRetained(partitionService);
+  }
+  return false;
+}
+
 function retireRaftPeerFromAuthoritativeServiceChange(
   partitionService,
   operation,
   serviceRow,
 ) {
   const replicaId = resolveServiceReplicaId(serviceRow);
-  if (
-    !isExplicitPeerRetirement(operation, serviceRow) ||
-    !partitionService.raft ||
-    !replicaId
-  ) {
+  if (!partitionService.raft || !replicaId) {
     return false;
   }
-  // Its own retiring row: the replica proposes its own RemoveNode through
-  // its own port (round 2 F-1). Conf changes are taken only at the leader's
-  // port, so a leader source removes itself here - nobody else can - and a
-  // follower's copy is refused NOT_LEADER and made again should it lead.
   if (replicaId === partitionService.replicaId) {
-    proposePeerRetirement(partitionService, {
-      type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER,
-      replicaIdentity: replicaId,
-    });
-    return true;
+    return observeOwnServiceRow(partitionService, operation, serviceRow);
+  }
+  if (!isExplicitPeerRetirement(operation, serviceRow)) {
+    // A peer whose row serves again is no longer being removed: a
+    // retirement deferred from its earlier retiring row is dropped, never
+    // re-proposed by a later settlement.
+    if (serviceRow?.trigger_reason !== GROUP_RETIREMENT_REASON) {
+      forgetDeferredRetirement(partitionService, replicaId);
+    }
+    return false;
   }
 
   // The row is evidence about the configured peer only where it names the
@@ -202,8 +222,9 @@ function retireRaftPeerFromAuthoritativeServiceChange(
 }
 
 /**
- * Re-drive, whenever a configuration change settles (CONF_CHANGE_APPLIED)
- * or this replica gains leadership (LEADER): the deferred retirements, and
+ * Re-drive, whenever a configuration change settles (CONF_CHANGE_APPLIED),
+ * this replica gains leadership (LEADER) or its live voter set changes
+ * (VOTER_LIVENESS_CHANGED): the deferred retirements, and
  * the admission requests this leader accepted from targets and has not seen
  * settle (the admission owner's in-flight set is handed over first, so a
  * settled proposal is evaluated again from its committed operation). Rows
@@ -223,6 +244,9 @@ function redriveAdmissionsOnMembershipChange(partitionService) {
   };
   partitionService.raft.subscribe(RAFT_EVENT.CONF_CHANGE_APPLIED, redrive);
   partitionService.raft.subscribe(RAFT_EVENT.LEADER, redrive);
+  // A removal deferred on a live quorum (REMOVES_LIVE_QUORUM) waits for the
+  // leader's live voter set to change.
+  partitionService.raft.subscribe(RAFT_EVENT.VOTER_LIVENESS_CHANGED, redrive);
 }
 
 export {

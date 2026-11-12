@@ -8,6 +8,9 @@ import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {UNIFIED_SERVICE_TYPE} from '../../src/constants/unified-service-lifecycle.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
 import {createTestCoordinator} from './test-helpers.js';
+import {OPERATION_WORKFLOW_OWNER_SHARED} from '../../src/rebalancer/operation-workflow-owner-shared.js';
+
+const {OPERATION_WORKFLOW_OWNER_LITERAL} = OPERATION_WORKFLOW_OWNER_SHARED;
 
 const TEST_REPLICA_ID = 'replica-1';
 const TEST_PARTITION_ID = 'partition-1';
@@ -357,10 +360,11 @@ test('restart-and-lost-answer-obligations', async () => {
     createdAt: Date.now(),
   };
 
-  // Reconciling lifecycle under unavailable observation must retain obligation
+  // The restart path's re-drive (orphan sweep) reconciles with the PROGRESS
+  // cause; under an unavailable observation it must retain the obligation.
   await coordinator.workflowOwner.reconcileOperationLifecycle(
     inFlightOperation,
-    {cause: 'recovery'},
+    {cause: OPERATION_WORKFLOW_OWNER_LITERAL.PROGRESS},
   );
 
   assert.notEqual(

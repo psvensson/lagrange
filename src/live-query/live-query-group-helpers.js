@@ -5,6 +5,7 @@
 import {v4 as uuidv4} from 'uuid';
 import {
   LIVE_QUERY_AST_TYPE,
+  LIVE_QUERY_ERROR_CODE,
   LIVE_QUERY_EVENT,
   LIVE_QUERY_LOG_MSG,
   LIVE_QUERY_OPERATION,
@@ -19,7 +20,6 @@ import {
   isComplexQuery as baseIsComplexQuery,
 } from './live-query-sql-renderer.js';
 
-const LOCAL_NUM_ZERO_POINT_SEVEN = 0.7;
 const WILDCARD_COLUMN = '*';
 
 /**
@@ -155,30 +155,52 @@ function recordInitialFrontiers(group, options, appliedIndex) {
 }
 
 /**
- * Ingest full rows into group result set store.
+ * A result row that does not carry its table's declared primary key: the row
+ * has no identity, and no other column stands in for one.
  */
-function storeSnapshotRows(resultSet, getPkFn, rawRows) {
-  for (const row of rawRows) {
-    const pk = getPkFn(row);
-    if (pk != null) resultSet.set(pk, row);
+class LiveQueryRowKeyError extends Error {
+  constructor(table, column) {
+    super(column === null ?
+      `Live query table '${table}' has no declared primary key` :
+      `Live query row of table '${table}' lacks primary key column '${column}'`);
+    this.name = 'LiveQueryRowKeyError';
+    this.code = LIVE_QUERY_ERROR_CODE.ROW_KEY_MISSING;
+    this.table = table;
+    this.column = column;
   }
 }
 
 /**
- * Merge partial CDC rows with stored full row state.
+ * The identity of a row: the values of every declared primary key column.
+ * @param {Object} row
+ * @param {string} table
+ * @param {Array<string>} keyColumns - The table's declared key columns.
+ * @return {*} The key value, or the JSON of the values of a composite key.
+ * @throws {LiveQueryRowKeyError} When the key is undeclared or absent.
  */
-function resolveEffectiveRows(storedRow, oldRow, newRow) {
-  return {
-    effectiveOld: storedRow ? {...storedRow, ...(oldRow || {})} : oldRow,
-    effectiveNew: storedRow ? {...storedRow, ...(newRow || {})} : newRow,
-  };
+function resolveRowIdentity(row, table, keyColumns) {
+  if (keyColumns.length === 0) throw new LiveQueryRowKeyError(table, null);
+  const values = keyColumns.map((column) => {
+    const value = row?.[column];
+    if (value === undefined || value === null) throw new LiveQueryRowKeyError(table, column);
+    return value;
+  });
+  return values.length === 1 ? values[0] : JSON.stringify(values);
+}
+
+/**
+ * Ingest full rows into group result set store.
+ */
+function storeSnapshotRows(resultSet, getPkFn, rawRows) {
+  for (const row of rawRows) {
+    resultSet.set(getPkFn(row), row);
+  }
 }
 
 /**
  * Update row presence in result set store based on predicate match.
  */
 function updateStoredRowState(resultSet, pk, newMatched, effectiveNew) {
-  if (pk == null) return;
   if (newMatched) {
     resultSet.set(pk, effectiveNew);
   } else {
@@ -205,7 +227,9 @@ function resolveExecutionSQL(sql, sqlQueryEngine, parsedQuery) {
 }
 
 /**
- * Build insert/added CDC event payload.
+ * Build insert/added CDC event payload. A change event names each fact once:
+ * `data` is the row the event is about (inserted, updated-to or deleted row)
+ * and `oldData`, on an update only, is the row before it.
  */
 function buildInsertEvent(config) {
   const {queryId, row, hlc, useDeltaFormat} = config;
@@ -214,7 +238,6 @@ function buildInsertEvent(config) {
     deltaType: LIVE_QUERY_EVENT.ADDED,
     operation: LIVE_QUERY_OPERATION.INSERT,
     queryId,
-    row,
     data: row,
     hlc,
   };
@@ -230,10 +253,7 @@ function buildDeleteEvent(config) {
     deltaType: LIVE_QUERY_EVENT.REMOVED,
     operation: LIVE_QUERY_OPERATION.DELETE,
     queryId,
-    row,
     data: row,
-    old: row,
-    oldData: row,
     hlc,
   };
 }
@@ -248,11 +268,8 @@ function buildUpdateEvent(config) {
     deltaType: LIVE_QUERY_EVENT.MODIFIED,
     operation: LIVE_QUERY_OPERATION.UPDATE,
     queryId,
-    old: oldRow,
-    oldData: oldRow,
-    new: newRow,
     data: newRow,
-    row: newRow,
+    oldData: oldRow,
     hlc,
   };
 }
@@ -266,7 +283,6 @@ function buildResetNotification(config) {
     type: LIVE_QUERY_EVENT.RESET,
     queryId,
     rows: newRows,
-    results: newRows,
     count,
     generation,
   };
@@ -280,24 +296,7 @@ function createClientSubscription(client, ttlMs) {
     client,
     clientId: client?.id || uuidv4(),
     lastRenewal: Date.now(),
-    lastSeenHLC: null,
     ttlMs,
-  };
-}
-
-/**
- * Renew client subscription metadata.
- */
-function renewClientSubscription(subscription, cursor) {
-  subscription.lastRenewal = Date.now();
-  if (cursor) {
-    subscription.lastSeenHLC = cursor;
-  }
-  return {
-    clientId: subscription.clientId,
-    expiresAt: subscription.lastRenewal + subscription.ttlMs,
-    renewBefore: subscription.lastRenewal +
-      Math.floor(subscription.ttlMs * LOCAL_NUM_ZERO_POINT_SEVEN),
   };
 }
 
@@ -319,14 +318,11 @@ function collectExpiredClientIds(clients) {
  * Send payload to all subscribed clients.
  */
 function fanOutToClients(clients, payload, options = {}) {
-  const {hlcTimestamp, logger, queryId} = options;
+  const {logger, queryId} = options;
   for (const [, subscription] of clients) {
     try {
       if (subscription.client && typeof subscription.client.send === 'function') {
         subscription.client.send(JSON.stringify(payload));
-      }
-      if (hlcTimestamp) {
-        subscription.lastSeenHLC = hlcTimestamp;
       }
     } catch (error) {
       if (logger?.warn) {
@@ -404,10 +400,9 @@ export {
   isComplexQuery,
   projectSingleColumn,
   recordInitialFrontiers,
-  renewClientSubscription,
-  resolveEffectiveRows,
   resolveExecutionSQL,
   resolveGroupSql,
+  resolveRowIdentity,
   resolveTableInfo,
   resolveWhereInfo,
   shouldSkipBufferedEvent,

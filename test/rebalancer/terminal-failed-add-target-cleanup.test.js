@@ -46,6 +46,8 @@ import {
   createTestCoordinator,
   createTestRebalancer,
 } from './test-helpers.js';
+import {buildPresentOperationVisibility} from
+  '../../src/rebalancer/replica-operation-repository-operation-visibility.js';
 
 const PARTITION_ID = 'orders-p1';
 const TARGET_ID = 'orders-p1-r4';
@@ -88,8 +90,8 @@ function terminalCleanupRepairOwner(
     terminalTransitionRepairStateByOperationId: new Map(),
     terminalTransitionRepairTimerByOperationId: new Map(),
     repository: {
-      queryReplicaOperationPersistenceAuthorityOperation: async () =>
-        operation,
+      queryReplicaOperationPersistenceAuthorityObservation: async () =>
+        buildPresentOperationVisibility(operation),
       queryTerminalFailedCreateCleanupOperations: async () => [operation],
     },
     logger: {

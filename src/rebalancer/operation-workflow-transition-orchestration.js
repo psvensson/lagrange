@@ -1,8 +1,8 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
-import {
-  isDisruptiveOperationLedgerSelfMove,
-} from './replica-status.js';
 import {OperationWorkflowOwnerExecutionLane} from './operation-workflow-owner-execution-lane.js';
+import {logOperationReadinessEvidence} from './operation-readiness-evidence-log.js';
+import {isTerminalTypedDistributedFailure} from
+  '../control-plane/control-plane-error-classification.js';
 import {
   clearTerminalTransitionRepair,
 } from './operation-workflow-terminal-transition-repair.js';
@@ -10,9 +10,11 @@ import {
   REPLICA_OPERATION_UPDATE_DISPOSITION,
 } from './replica-operation-update-disposition.js';
 import {
+  deferStepWrite,
+  persistOwedStepBefore,
+} from './operation-workflow-transition-retry.js';
+import {
   PRIORITY_DISPATCH_TRANSITION_MUTATION_STEPS,
-  isPriorityOutcomeDeferredLocalProgressCovered,
-  shouldClearPriorityDeferredClaim,
   shouldRetainPriorityActiveReplaceRetry,
 } from './replica-operation-step-policy.js';
 
@@ -20,7 +22,6 @@ const {
   ControlPlaneReadinessService,
   DISPATCH_RETRY_DELAY_MS,
   INITIAL_PARTITION_IDS,
-  OPERATION_METADATA_KEY,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   REBALANCE_COORDINATOR_EVENT,
   REBALANCE_COORDINATOR_LOG_MSG,
@@ -37,8 +38,6 @@ const {
 
 const PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS =
   TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS;
-const PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD =
-  'priorityDeferredClaimExpectedStep';
 
 function normalizeOperationWorkflowTransitionStepsHistory(operation) {
   if (Array.isArray(operation?.stepsHistory)) {
@@ -64,6 +63,33 @@ function normalizeOperationWorkflowTransitionStepsHistory(operation) {
 
 class OperationWorkflowTransitionOrchestration
   extends OperationWorkflowOwnerExecutionLane {
+  constructor(options) {
+    super(options);
+    // operationId -> the step write still owed to the durable row
+    // (operation-workflow-transition-retry.js, deferred step write).
+    this.deferredStepWriteByOperationId = new Map();
+  }
+
+  /**
+   * Capture the workflow record as its last committed row left it.
+   * @param {string} operationId
+   * @return {Function} Restores the record to the captured state.
+   * @private
+   */
+  captureCommittedWorkflowRecord(operationId) {
+    const workflowRecord =
+      this.operationWorkflowCoordinator.getWorkflowById(operationId);
+    const committedRecord = {...workflowRecord};
+    return () => {
+      for (const field of Object.keys(workflowRecord)) {
+        if (!(field in committedRecord)) {
+          delete workflowRecord[field];
+        }
+      }
+      Object.assign(workflowRecord, committedRecord);
+    };
+  }
+
   /**
    * Execute one guarded durable step mutation under the operation owner lane.
    * SQL owns any post-mirror promotion to a distributed transaction.
@@ -133,17 +159,29 @@ class OperationWorkflowTransitionOrchestration
       return Object.freeze({committed: false, disposition: null});
     }
 
+    // The workflow record shows a step only once its row committed: the
+    // record validates the transition first and is restored when the write
+    // fails or is refused.
+    const restoreCommittedWorkflowRecord =
+      this.captureCommittedWorkflowRecord(operation.operationId);
     await this.operationWorkflowCoordinator.transitionStep(
       operation.operationId,
       {nextStep: step, reason},
       {},
       TRANSITION_STEP_OPTIONS.DEFER_COMMITTED_MARK,
     );
-    const persistResult = await persistFn();
+    let persistResult;
+    try {
+      persistResult = await persistFn();
+    } catch (error) {
+      restoreCommittedWorkflowRecord();
+      throw error;
+    }
     if (
       persistResult === false ||
       persistResult?.persisted === false
     ) {
+      restoreCommittedWorkflowRecord();
       return this.resolveRejectedTransitionPersistOutcome(
         operation,
         persistResult,
@@ -153,6 +191,8 @@ class OperationWorkflowTransitionOrchestration
       operation.operationId,
       step,
     );
+    // A committed row owes no earlier step write.
+    this.deferredStepWriteByOperationId.delete(operation.operationId);
     if (typeof options.afterCommit === 'function') {
       await options.afterCommit();
     }
@@ -208,8 +248,9 @@ class OperationWorkflowTransitionOrchestration
   }
 
   /**
-   * Build the steps-history entry for one transition, stamping the target
-   * readiness snapshot when available.
+   * Build the steps-history entry for one transition. The entry carries the
+   * transition only; the target's readiness is an observation and is logged
+   * when the step commits (logOperationStepReadinessEvidence), never stored.
    * @param {Object} operation
    * @param {string} step
    * @param {string} transitionReason
@@ -225,36 +266,45 @@ class OperationWorkflowTransitionOrchestration
     previousStep,
     now,
   ) {
-    const readinessDecisionDimension =
-      this.resolveOperationReadinessDecisionDimension(operation);
-    const targetNodeId = operation.targetNodeId;
-    const targetReadiness = targetNodeId ?
-      this.controlPlaneReadinessService.getNodeReadinessSync(targetNodeId, {
-        decisionDimension: readinessDecisionDimension,
-      }) :
-      null;
-    const readinessSnapshot =
-      ControlPlaneReadinessService.compactSnapshotSummary(
-        targetReadiness,
-        readinessDecisionDimension,
-      );
-    const stepEntry = {
+    return {
       step,
       timestamp: now,
       previousStep,
       reason: transitionReason,
       ownerKey: operation.operationId,
     };
-    if (readinessSnapshot) {
-      stepEntry[OPERATION_METADATA_KEY.READINESS_SNAPSHOT] = readinessSnapshot;
-    }
-    return stepEntry;
+  }
+
+  /**
+   * Log the target node's readiness at one committed step, console-only.
+   * @param {Object} operation - The operation at its committed step.
+   * @return {void}
+   * @private
+   */
+  logOperationStepReadinessEvidence(operation) {
+    const decisionDimension =
+      this.resolveOperationReadinessDecisionDimension(operation);
+    const targetNodeId = operation.targetNodeId;
+    logOperationReadinessEvidence({
+      operationId: operation.operationId,
+      workflowStep: operation.workflowStep,
+      partitionId: operation.partitionId,
+      targetNodeId,
+      readinessSnapshot: targetNodeId ?
+        ControlPlaneReadinessService.compactSnapshotSummary(
+          this.controlPlaneReadinessService.getNodeReadinessSync(
+            targetNodeId,
+            {decisionDimension},
+          ),
+          decisionDimension,
+        ) :
+        null,
+    });
   }
 
   /**
    * Persist one projected step transition, applying the priority dispatch
-   * mutation budget when the partition qualifies and resolving the
-   * expected-step CAS anchor.
+   * mutation budget when the partition qualifies.
    * @param {Object} operation
    * @param {Object} projectedOperation
    * @param {string} previousStep
@@ -285,15 +335,11 @@ class OperationWorkflowTransitionOrchestration
             ),
         } :
         persistOptions;
-    const expectedWorkflowStep =
-      this.resolveOperationTransitionExpectedWorkflowStep(
-        operation,
-        previousStep,
-        step,
-      );
+    // Every durable step transition compares-and-sets against the step the
+    // owner read.
     return this.repository.persistOperationUpdate(
       projectedOperation,
-      {...budgetedPersistOptions, expectedWorkflowStep},
+      {...budgetedPersistOptions, expectedWorkflowStep: previousStep},
     );
   }
 
@@ -321,9 +367,6 @@ class OperationWorkflowTransitionOrchestration
       Math.max(previousUpdatedAt, now) :
       now;
     operation.stepsHistory = currentStepsHistory;
-    if (step === WORKFLOW_STEP.CREATING) {
-      delete operation[PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD];
-    }
   }
 
   /**
@@ -376,10 +419,17 @@ class OperationWorkflowTransitionOrchestration
     return {projectedOperation, currentStepsHistory};
   }
 
-  // options (optional): {stepMetadata} recorded on the new step entry;
-  // {requireDurable}: counts only a committed durable write - the REPLACE
-  // removal-intent boundary (quest replace-source-removal-owner).
+  // An operation's step advances only by its committed row: the operation
+  // object, the workflow record and the cache show `step` after this write
+  // commits and never before. options (optional): {stepMetadata} recorded
+  // on the new step entry.
   async updateStep(operation, step, reason, options) {
+    if (operation.workflowStep === step) {
+      return false;
+    }
+    // An earlier step whose write is still owed is persisted first, so the
+    // durable history advances in order.
+    await persistOwedStepBefore(this, operation, step);
     const previousStep = operation.workflowStep;
     if (previousStep === step) {
       return false;
@@ -398,14 +448,24 @@ class OperationWorkflowTransitionOrchestration
         persistedStatus,
         options?.stepMetadata,
       );
-    const persistFn = async () =>
-      this.persistProjectedStepTransition(
-        operation,
-        projectedOperation,
-        previousStep,
-        step,
-        now,
-      );
+    // What the persist step itself threw, told apart from any other refusal
+    // of the atomic transition.
+    const persistAttempt = {threw: false, error: undefined};
+    const persistFn = async () => {
+      try {
+        return await this.persistProjectedStepTransition(
+          operation,
+          projectedOperation,
+          previousStep,
+          step,
+          now,
+        );
+      } catch (error) {
+        persistAttempt.threw = true;
+        persistAttempt.error = error;
+        throw error;
+      }
+    };
 
     let transitionOutcome;
     try {
@@ -429,23 +489,14 @@ class OperationWorkflowTransitionOrchestration
         },
       );
     } catch (error) {
-      if (
-        !this.shouldUsePriorityDispatchDeferredLocalProgress(
-          operation,
+      if (persistAttempt.threw && error === persistAttempt.error) {
+        await this.resolveStepPersistFailure(operation, error, {
           step,
-          error,
-          options,
-        ) ||
-        !this.recordPriorityDispatchDeferredLocalProgress(
-          operation,
-          projectedOperation,
-          step,
-          error,
-        )
-      ) {
-        throw error;
+          reason: transitionReason,
+          stepMetadata: options?.stepMetadata,
+        });
       }
-      return true;
+      throw error;
     }
 
     if (!transitionOutcome?.committed) {
@@ -498,9 +549,6 @@ class OperationWorkflowTransitionOrchestration
     operation.updatedAt = now;
     operation.status = persistedStatus;
     operation.stepsHistory = projectedOperation.stepsHistory;
-    if (shouldClearPriorityDeferredClaim(step)) {
-      delete operation[PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD];
-    }
 
     this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.STEP_CHANGED, {
       operationId: operation.operationId,
@@ -510,6 +558,7 @@ class OperationWorkflowTransitionOrchestration
       status: operation.status,
       partitionId: operation.partitionId,
     });
+    this.logOperationStepReadinessEvidence(operation);
 
     this.emitter.emit(REBALANCE_COORDINATOR_EVENT.STEP_CHANGED, {
       operation,
@@ -556,168 +605,25 @@ class OperationWorkflowTransitionOrchestration
   }
 
   /**
-   * Priority dispatch may locally skip the SENDING durable intermediate under
-   * retryable replica_operations owner pressure. The next durable transition
-   * must still compare-and-set against the last known authoritative step.
-   *
-   * @param {Object|null} operation
-   * @param {string} previousStep
-   * @param {string} step
-   * @return {string}
-   * @private
-   */
-  resolveOperationTransitionExpectedWorkflowStep(
-    operation,
-    previousStep,
-    step,
-  ) {
-    if (
-      step === WORKFLOW_STEP.CREATING &&
-      this.shouldUsePriorityDispatchTransitionMutationBudget(operation, step) &&
-      typeof operation?.[PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD] ===
-        'string' &&
-      operation[PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD].length > 0
-    ) {
-      return operation[PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD];
-    }
-    return previousStep;
-  }
-
-  /**
-   * @param {Object|null} operation
-   * @param {Error|Object} errorLike
-   * @return {boolean}
-   * @private
-   */
-  shouldUsePriorityDispatchDeferredLocalClaim(operation, errorLike) {
-    // A disruptive ledger self-move's SENDING claim is the cluster-visible
-    // engagement of the run-20 hold: it must commit durably before
-    // CREATE_REPLICA is sent, never be skipped locally under pressure.
-    return (
-      this.shouldUsePriorityDispatchClaimNarrowPath(operation) &&
-      !isDisruptiveOperationLedgerSelfMove(
-        operation?.type,
-        operation?.partitionId,
-      ) &&
-      isRetryableControlPlaneError(errorLike)
-    );
-  }
-
-  /**
-   * Priority dispatch progress has already reached the target executor before
-   * CREATING is persisted. Under retryable priority-partition pressure, keep
-   * the owner progress visible locally and re-arm the durable transition.
-   *
-   * @param {Object|null} operation
-   * @param {string} step
-   * @param {Error|Object} errorLike
-   * @param {Object} [options] - updateStep options; requireDurable refuses.
-   * @return {boolean}
-   * @private
-   */
-  shouldUsePriorityDispatchDeferredLocalProgress(
-    operation, step, errorLike, options) {
-    if (options?.requireDurable === true ||
-        !isRetryableControlPlaneError(errorLike)) {
-      return false;
-    }
-    if (
-      step === WORKFLOW_STEP.CREATING &&
-      this.shouldUsePriorityDispatchTransitionMutationBudget(operation, step)
-    ) {
-      return true;
-    }
-    return this.isPriorityOutcomeDeferredLocalProgressStep(operation, step);
-  }
-
-  /**
-   * The executor-outcome-backed transitions of priority control-plane
-   * operations: the physical work has already landed (the REPLACE
-   * replacement is promoted voter-ready at ACTIVE; the source/subject
-   * replica's removal has been dispatched and acknowledged at STOPPING) and
-   * only the bookkeeping write into the operation ledger is stuck behind
-   * retryable ledger pressure. During cold formation that pressure is the
-   * operation's OWN doing — a ledger self-move degrades the very partition
-   * its progress writes need, so a hard persist-then-act gate stalls each
-   * transition for full sql-routed retry cycles while the self-move
-   * interlock freezes all other admission cluster-wide. Advancing the
-   * owner-local row and re-arming the durable write (the established
-   * lever-(a) supersession contract) keeps the workflow moving at executor
-   * speed; the durable row converges at the terminal, whose write
-   * intentionally carries no expected-step CAS.
-   *
-   * STOPPING mirrors its producing branch (dispatch-response reconcile:
-   * REMOVE, or REPLACE in its remove phase). Terminal steps are
-   * deliberately NOT covered: REMOVED flows exclusively through
-   * completeOperation, which owns its own durable convergence
-   * (executor-outcome retry + terminal-transition repair) — a deferred-local
-   * terminal here would clear the transition retry without re-driving the
-   * durable persist.
-   *
-   * @param {Object|null} operation
-   * @param {string} step
-   * @return {boolean}
-   * @private
-   */
-  isPriorityOutcomeDeferredLocalProgressStep(operation, step) {
-    const partitionId = String(operation?.partitionId || '').trim();
-    if (
-      partitionId.length === 0 ||
-      !classifySystemPartition({partitionId}).priorityControlPlane
-    ) {
-      return false;
-    }
-    return isPriorityOutcomeDeferredLocalProgressCovered(
-      operation?.type,
-      step,
-    );
-  }
-
-  /**
+   * A step write failed; nothing advanced. A retryable failure defers the
+   * TRANSITION (the write stays owed and its retry never repeats the
+   * effect); a failure typed permanent by the control-plane classifier
+   * fails the operation with its cause; an unclassified failure is left to
+   * the caller. The caller's error propagates in every case.
    * @param {Object} operation
-   * @param {Object} projectedOperation
-   * @param {string} step
-   * @param {Error|Object} errorLike
-   * @return {boolean}
+   * @param {Error|Object} error
+   * @param {Object} write - {step, reason, stepMetadata}.
+   * @return {Promise<void>}
    * @private
    */
-  recordPriorityDispatchDeferredLocalProgress(
-    operation,
-    projectedOperation,
-    step,
-    errorLike,
-  ) {
-    if (
-      !this.deferTransitionRetry(operation.operationId, errorLike, {
-        boundary: OPERATION_WORKFLOW_OWNER_LITERAL.DISPATCH,
-        workflowStep: step,
-        partitionId: operation.partitionId,
-        updatedAt: projectedOperation.updatedAt,
-        createdAt: projectedOperation.createdAt,
-        operationSnapshot: projectedOperation,
-        ingress:
-          OPERATION_WORKFLOW_OWNER_LITERAL.PRIORITY_PROGRESS_DEFERRED_LOCAL,
-      })
-    ) {
-      return false;
+  async resolveStepPersistFailure(operation, error, write) {
+    if (isRetryableControlPlaneError(error)) {
+      deferStepWrite(this, operation, write, error);
+      return;
     }
-
-    this.repository.applyLocalPriorityOperationProgressRow(projectedOperation);
-    this.repository.recordOwnerPersistedTransitionVisibilityWitness(
-      projectedOperation,
-    );
-    this.repository.syncIncompleteOperationObservation(projectedOperation);
-    operation.workflowStep = projectedOperation.workflowStep;
-    operation.updatedAt = projectedOperation.updatedAt;
-    operation.status = projectedOperation.status;
-    operation.stepsHistory = projectedOperation.stepsHistory;
-    if (step === WORKFLOW_STEP.CREATING) {
-      delete operation[PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD];
+    if (isTerminalTypedDistributedFailure(error)) {
+      await this.failOperation(operation, error);
     }
-    if (step !== WORKFLOW_STEP.ACTIVE) {
-      this.clearPriorityActiveReplaceRetry(operation.operationId);
-    }
-    return true;
   }
 
   /**

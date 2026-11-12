@@ -3,6 +3,20 @@ import {ROUTER_IDENTIFY_CHANNEL} from '../constants/transport.js';
 import {
   runTransportInboundActivity,
 } from '../diagnostics/formation-owner-attribution.js';
+import {
+  recordOutboundSocketAcknowledgement,
+} from './message-router-peer-liveness.js';
+import {
+  enterSyncSection,
+  exitSyncSection,
+} from '../diagnostics/event-loop-gap-watchdog.js';
+import {
+  FRAME_CLASS,
+  ROUTER_SYNC_SECTION,
+  classifyRouterFrame,
+  countAnswerRows,
+  describeServedQuery,
+} from './message-router-peer-traffic-diagnostics.js';
 
 const {
   ConnectionState,
@@ -45,14 +59,72 @@ class MessageRouterInboundDispatch {
   getNodeInboundActivityAt(nodeId) {
     return this.nodeInboundActivityAt.get(nodeId) ?? null;
   }
+  /**
+   * Credit an acknowledged ACK frame, in time or late, to the outbound socket
+   * it arrived on. Only the node's current outbound record whose socket is
+   * exactly `ws` is credited: an ACK on a retired or inbound socket, or on
+   * the self-connection, is no evidence about the current outbound socket.
+   * @param {string} connectionId - Listener key (node id once identified).
+   * @param {WebSocket} ws - The socket the frame arrived on.
+   * @param {Object} message - The ACK frame.
+   * @return {void}
+   */
+  recordInboundSocketAcknowledgement(connectionId, ws, message) {
+    if (!message.acknowledged) {
+      return;
+    }
+    const connection = this.nodeConnections.get(connectionId);
+    if (
+      !connection ||
+      connection.ws !== ws ||
+      connection.isIncoming === true ||
+      connection.isSelfConnection === true
+    ) {
+      return;
+    }
+    recordOutboundSocketAcknowledgement(connection, this.timeSource.now());
+  }
+  decodeInboundFrame(data) {
+    const decodeToken = enterSyncSection(ROUTER_SYNC_SECTION.FRAME_DECODE);
+    try {
+      return JSON.parse(data.toString());
+    } finally {
+      exitSyncSection(ROUTER_SYNC_SECTION.FRAME_DECODE, decodeToken);
+    }
+  }
+  /**
+   * Diagnostics only: count the frame for its peer and, for ACK and PONG
+   * frames, sample the one-way latency from the sender's stamp (it includes
+   * the clock skew between the two hosts).
+   * @param {string} connectionId - Listener key (node id once identified).
+   * @param {WebSocket} ws - The socket the frame arrived on.
+   * @param {Buffer|string} data - The raw frame.
+   * @param {Object} message - The parsed frame.
+   * @return {void}
+   */
+  observeInboundFrame(connectionId, ws, data, message) {
+    try {
+      const frameClass = classifyRouterFrame(message);
+      this.peerTrafficDiagnostics.recordReceived(
+        connectionId, ws, data.length, frameClass);
+      if (frameClass === FRAME_CLASS.ACK || frameClass === FRAME_CLASS.PONG) {
+        this.peerTrafficDiagnostics.recordOneWayLatency(
+          connectionId, this.timeSource.now() - message.timestamp);
+      }
+    } catch (error) {
+      // An observation must never change what happens to the frame.
+      this.peerTrafficDiagnostics.recordObservationFailure(error);
+    }
+  }
   handleMessage(connectionId, ws, data) {
     return runTransportInboundActivity(() =>
       this.dispatchInboundMessage(connectionId, ws, data));
   }
   dispatchInboundMessage(connectionId, ws, data) {
     try {
-      const message = JSON.parse(data.toString());
+      const message = this.decodeInboundFrame(data);
       this.recordNodeInboundActivity(connectionId);
+      this.observeInboundFrame(connectionId, ws, data, message);
       this.logger.debug(ROUTER_LOG_MSG.MESSAGE_RECEIVED, {
         connectionId,
         type: message.type,
@@ -104,6 +176,7 @@ class MessageRouterInboundDispatch {
       return;
     }
     if (message.type === RouterMessageType.ACK) {
+      this.recordInboundSocketAcknowledgement(connectionId, ws, message);
       this.handleAcknowledgment(message);
       return;
     }
@@ -113,7 +186,10 @@ class MessageRouterInboundDispatch {
     }
     if (message.type === RouterMessageType.SERVICE_MESSAGE) {
       const delivery = this.connectionAuthorityOwner.captureIncomingDelivery(connectionId, ws);
-      this.handleServiceMessage(ws, message, delivery);
+      // The sender's identity is the receiving connection's, read while it is
+      // current; a frame's own sourceNodeId is never routing authority.
+      const senderNodeId = this.nodeConnections.get(connectionId)?.nodeId ?? null;
+      this.handleServiceMessage(ws, message, delivery, senderNodeId);
       return;
     }
     this.logger.warn(ROUTER_LOG_MSG.MESSAGE_UNKNOWN, {
@@ -281,6 +357,8 @@ class MessageRouterInboundDispatch {
       const normalizedAddress =
         normalizeToWebSocketAddress(nodeAddress) || nodeAddress;
       connection.nodeId = nodeId;
+      connection.dialerIdentifiedAt = this.connectionAuthorityOwner
+        .readDialerIdentifiedAt(message);
       connection.nodeAddress = normalizedAddress;
       connection.configuredAddress = normalizedAddress;
       this.rememberReconnectAddress(connection, ws, normalizedAddress);
@@ -288,6 +366,7 @@ class MessageRouterInboundDispatch {
         this.connectionAuthorityOwner.resolveIncomingConnectionAdoption(
           nodeId,
           bootIncarnation,
+          connection,
         );
       const existing = adoptionDecision.existing;
       if (
@@ -499,22 +578,29 @@ class MessageRouterInboundDispatch {
    * @param {WebSocket} ws - WebSocket connection.
    * @param {Object} message - Service message.
    * @param {Object|null} delivery - Owner-bound local delivery lifetime.
+   * @param {string|null} senderNodeId - The identified node the receiving
+   *   connection belongs to, or null before identification.
    * @private
    */
-  handleServiceMessage(ws, message, delivery = null) {
+  handleServiceMessage(ws, message, delivery = null, senderNodeId = null) {
     const {targetAddress, messageId, payload} = message;
+    const isOneWay = message.oneWay === true;
     this.logger.debug(ROUTER_LOG_MSG.SERVICE_MESSAGE_HANDLING, {
       messageId,
       targetAddress,
       sourceNodeId: message.sourceNodeId,
-      registeredHandlers: Array.from(this.handlers.keys()),
+      registeredHandlerCount: this.handlers.size,
       hasHandler: this.handlers.has(targetAddress),
     });
-    this.sendRaw(ws, {
-      type: RouterMessageType.ACK,
-      messageId,
-      acknowledged: true,
-    });
+    if (!isOneWay) {
+      this.sendRaw(ws, {
+        type: RouterMessageType.ACK,
+        messageId,
+        acknowledged: true,
+        // Sender stamp for the receiver's one-way latency sample.
+        timestamp: this.timeSource.now(),
+      });
+    }
     const handler = this.handlers.get(targetAddress);
     if (!handler) {
       this.emit(TRANSPORT_EVENT.MESSAGE, {
@@ -524,14 +610,16 @@ class MessageRouterInboundDispatch {
         sourceAddress: message.sourceAddress,
         sourceNodeId: message.sourceNodeId,
       });
-      // The router's own fact travels at frame level; no answer slot exists.
-      this.sendRaw(ws, {
-        type: RouterMessageType.SERVICE_RESPONSE,
-        messageId,
-        sourceAddress: message.sourceAddress,
-        noHandler: true,
-        error: ROUTER_ERROR_MSG.noHandlerForAddress(targetAddress),
-      });
+      if (!isOneWay) {
+        // The router's own fact travels at frame level; no answer slot exists.
+        this.sendRaw(ws, {
+          type: RouterMessageType.SERVICE_RESPONSE,
+          messageId,
+          sourceAddress: message.sourceAddress,
+          noHandler: true,
+          error: ROUTER_ERROR_MSG.noHandlerForAddress(targetAddress),
+        });
+      }
       return;
     }
     const envelope = {
@@ -542,20 +630,25 @@ class MessageRouterInboundDispatch {
       payload,
       timestamp: message.timestamp,
     };
+    const handlingStartedAtMs = this.timeSource.now();
     Promise.resolve()
       // The local-only second argument is not part of the wire envelope.
       .then(() => handler(envelope, delivery))
       .then((result) => {
+        if (isOneWay) {
+          return;
+        }
         this.logger.debug(ROUTER_LOG_MSG.SERVICE_RESPONSE_SENT, {
           messageId,
           targetAddress,
         });
-        this.sendRaw(ws, {
+        const responseBytes = this.sendRaw(this.resolveAnswerSocket(ws, senderNodeId), {
           type: RouterMessageType.SERVICE_RESPONSE,
           messageId,
           sourceAddress: message.sourceAddress,
           result,
         });
+        this.observeServedQuery(message, result, responseBytes, handlingStartedAtMs);
       })
       .catch((error) => {
         this.logger.debug(ROUTER_LOG_MSG.SERVICE_RESPONSE_ERROR, {
@@ -563,13 +656,60 @@ class MessageRouterInboundDispatch {
           targetAddress,
           error: error.message,
         });
-        this.sendRaw(ws, {
+        if (isOneWay) {
+          return;
+        }
+        this.sendRaw(this.resolveAnswerSocket(ws, senderNodeId), {
           type: RouterMessageType.SERVICE_RESPONSE,
           messageId,
           sourceAddress: message.sourceAddress,
           error: error.message,
         });
       });
+  }
+  /**
+   * The socket a handler's answer travels on. The answer is settled by
+   * messageId on any socket from this node, so it goes on the sender node's
+   * current primary connection: a socket superseded while the handler ran is
+   * retired and would swallow the answer. A sender with no current primary
+   * (not yet identified, or reconnecting) is answered on the receiving socket.
+   * @param {WebSocket} receivedOn - The socket the request arrived on.
+   * @param {string|null} senderNodeId - The receiving connection's node.
+   * @return {WebSocket} The socket to answer on.
+   */
+  resolveAnswerSocket(receivedOn, senderNodeId) {
+    const primary = senderNodeId === null ? undefined :
+      this.nodeConnections.get(senderNodeId);
+    return primary?.state === ConnectionState.CONNECTED && primary.ws ?
+      primary.ws : receivedOn;
+  }
+  /**
+   * Diagnostics only: account one answered remote query (table, operation,
+   * caller node, rows, encoded response bytes, handling time) for the
+   * per-second served-query line.
+   * @param {Object} message - The served service message.
+   * @param {*} result - The handler's answer.
+   * @param {number} responseBytes - Encoded SERVICE_RESPONSE size.
+   * @param {number} handlingStartedAtMs - Router clock at handler dispatch.
+   * @return {void}
+   */
+  observeServedQuery(message, result, responseBytes, handlingStartedAtMs) {
+    try {
+      const served = describeServedQuery(message.targetAddress, message.payload);
+      if (served !== null) {
+        this.peerTrafficDiagnostics.recordServedQuery({
+          ...served,
+          sourceNodeId: message.sourceNodeId,
+          rowCount: countAnswerRows(result),
+          responseBytes,
+          executionMs: this.timeSource.now() - handlingStartedAtMs,
+        });
+      }
+    } catch (error) {
+      // The answer was already sent; an observation failure must not reach
+      // the handler-failure path and send a second response.
+      this.peerTrafficDiagnostics.recordObservationFailure(error);
+    }
   }
   /**
    * Handle SERVICE_RESPONSE message and settle pending response waiters.

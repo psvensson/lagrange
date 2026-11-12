@@ -1124,6 +1124,7 @@ async function main() {
     let runConfig = {
       ...config,
       outputDir,
+      ...(args.profileNode === null ? {} : {cpuProfileNode: args.profileNode}),
     };
     if (isLocalDockerConfig(runConfig)) {
       runConfig = await applyScenarioArtifactBind(runConfig);

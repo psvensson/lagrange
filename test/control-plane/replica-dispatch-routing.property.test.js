@@ -29,6 +29,8 @@ import {SYSTEM_TABLE_NAME} from
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
+import {buildAbsentOperationVisibility} from
+  '../../src/rebalancer/replica-operation-repository-operation-visibility.js';
 
 /**
  * Initialize test singletons.
@@ -124,6 +126,11 @@ test('Property 16: Replica dispatch forwards to correct leader',
           };
 
           const mockCoordinator = {
+            // The owner holds no row for this generated operation.
+            repository: {
+              getOperationByIdVisibilityObservation: async () =>
+                buildAbsentOperationVisibility(),
+            },
             isOperationLocallyOwned: () => true,
             claimDispatchTransition: async () => ({
               operationId: opRow.operation_id,

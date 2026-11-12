@@ -11,6 +11,9 @@ import {BOOTSTRAP_API_PROBE_REASON} from
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {HTTP_STATUS} from '../../src/constants/index.js';
+import {answerKnownClusterIdentity} from './bootstrap-api-test-fixtures.js';
+
+answerKnownClusterIdentity();
 
 const TEST_NAME =
   'BootstrapAPI claims admission before reservation precheck pressure';

@@ -90,7 +90,15 @@ const QUERY_ERROR_CODE = Object.freeze({
   TABLE_PARTITION_PROVISIONING_RETRYABLE:
     'TABLE_PARTITION_PROVISIONING_RETRYABLE',
   PROVISIONING_UNAVAILABLE: 'PROVISIONING_UNAVAILABLE',
+  BOOTSTRAP_COHORT_CONFLICT: 'BOOTSTRAP_COHORT_CONFLICT',
   DISTRIBUTED_PARTICIPANT_FAILURE: 'DISTRIBUTED_PARTICIPANT_FAILURE',
+  // The fan-out coordinator's chunk deadline passed before every partition
+  // answered: nothing is known of the partitions' own outcomes, and a later
+  // attempt may be answered in time (load slows the fan-out, R12).
+  COORDINATOR_QUERY_TIMEOUT: 'COORDINATOR_QUERY_TIMEOUT',
+  // The query executor's engine is shutting down: the statement was not
+  // attempted here.
+  QUERY_EXECUTOR_SHUTTING_DOWN: 'QUERY_EXECUTOR_SHUTTING_DOWN',
   RUNTIME_ACCESS_DENIED: 'RUNTIME_ACCESS_DENIED',
   // A client-originated INSERT/UPDATE/DELETE on a system table (or a client
   // write whose target cannot be resolved): system tables are written only
@@ -134,6 +142,8 @@ const QUERY_ERROR_MSG = Object.freeze({
   TABLE_NOT_FOUND_PREFIX: 'Table not found: ',
   QUERY_TIMEOUT: 'Query timeout',
   QUERY_TIMED_OUT: 'Query timed out',
+  QUERY_EXECUTION_FAILED: 'Query execution failed',
+  NO_PARTITIONS_FOR_TABLE: 'No partitions available for table',
   MESSAGE_ROUTER_UNAVAILABLE: 'Message router not available',
   PARTITION_SERVICE_NOT_FOUND: 'Partition service not found',
   QUERY_ROUTING_FAILED: 'Query routing failed',
@@ -196,6 +206,9 @@ const QUERY_ERROR_MSG = Object.freeze({
   SERVICE_EXECUTE_UNSUPPORTED: 'Service does not support executeQuery',
   MAX_CONNECTIONS_PREFIX: 'Query would exceed max concurrent connections: ',
   RESULT_BUFFER_LIMIT_PREFIX: 'Result buffer exceeds limit: ',
+  COLUMN_DATA_TYPE_REQUIRED: 'Column data type is required',
+  PRIMARY_KEY_REQUIRED:
+    'A PRIMARY KEY value is required to route the row to a partition',
   PRIMARY_KEY_REQUIRED_PREFIX: 'Table \'',
   PRIMARY_KEY_REQUIRED_SUFFIX: '\' must have a PRIMARY KEY defined',
   PRIMARY_KEY_REQUIRED_DETAIL:

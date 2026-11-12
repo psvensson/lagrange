@@ -165,6 +165,8 @@ class MessageRouterStatsShutdown {
       routerId: this.routerId,
     });
     this.isShuttingDown = true;
+    this.detachPeerTrafficReporter?.();
+    this.detachPeerTrafficReporter = null;
     this.connectionAuthorityOwner.invalidateDeliveries();
     // Close the bulk transfer channel lane with the router (S6): adopted and
     // dialed bulk sockets plus the token-bucket drain timer.
@@ -174,6 +176,7 @@ class MessageRouterStatsShutdown {
       pending.resolve({
         messageId: pending.messageId,
         acknowledged: false,
+        acknowledgement: pending.acknowledgement,
         error: ROUTER_ERROR_MSG.SHUTDOWN,
       });
     }

@@ -1,4 +1,5 @@
 import {readUpperStateField} from '../utils/state-field-read.js';
+import {CDC_CATCHUP_TRIGGER} from '../cdc/cdc-integration-service-authoritative-catchup.js';
 import {
   TABLES,
 } from '../constants/index.js';
@@ -18,8 +19,13 @@ import {
 } from './membership-publication-row-helpers.js';
 import {
   buildMembershipPublicationRow,
-  buildPublicationMetadataRefreshRow,
 } from './membership-publication-planning-evidence.js';
+import {isPublicationWriteLanded} from
+  './owners/control-plane-publication-change.js';
+import {
+  buildReconcilePublicationWriteAnswer,
+  requeueHeldPublicationWrite,
+} from './membership-publication-reconcile-write.js';
 import {MembershipPublicationCoordinatorPersist} from './membership-publication-coordinator-persist.js';
 import {
   ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD,
@@ -53,6 +59,7 @@ import {
   DEFERRED_PROPAGATED_CATCHUP_MAX_ATTEMPTS_PER_TABLE,
   DEFERRED_PROPAGATED_CATCHUP_OUTCOME,
   DEFERRED_PROPAGATED_CATCHUP_TABLES,
+  DEFERRED_PROPAGATED_CATCHUP_COOLDOWN_MS,
   DEFERRED_PUBLICATIONS_CATCHUP_COOLDOWN_MS,
   EMPTY_PUBLICATION_CANDIDATE_REASON,
   MEMBERSHIP_DEFERRED_PROPAGATED_CATCHUP_FAILED_MSG,
@@ -68,13 +75,12 @@ import {
   OWNER_MEMBERSHIP_RECONCILE_TIMEOUT_MS,
   PRIORITY_SUMMARY_REFRESHED_REASON,
   buildPublicationReadinessTraceFields,
-  hasCandidateAcknowledgementRefresh,
-  hasCandidateStatusRefresh,
   hasPrioritySummaryRefreshClearedGap,
   reportOwnerMembershipReconcileSpent,
   resolveDeferredPropagatedCatchupCooldownMs,
   resolveOwnerAckCompletionPendingNodeIds,
   shouldDeferMembershipReconcileToWriteLeader,
+  shouldRefreshPublicationRow,
 } from './membership-publication-coordinator-reconcile-helpers.js';
 
 class MembershipPublicationCoordinatorReconcile extends
@@ -110,6 +116,7 @@ class MembershipPublicationCoordinatorReconcile extends
       try {
         return await service.hydrateCdcPropagatedTablesFromAuthority({
           tables: [TABLES.CONTROL_PLANE_PUBLICATIONS],
+          trigger: CDC_CATCHUP_TRIGGER.PUBLICATIONS_SWEEP,
           readAuthority: buildControlPlaneReadAuthority({
             authoritativeReadMode:
               CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
@@ -171,6 +178,8 @@ class MembershipPublicationCoordinatorReconcile extends
       try {
         return await service.hydrateCdcPropagatedTablesFromAuthority({
           tables: DEFERRED_PROPAGATED_CATCHUP_TABLES,
+          trigger: cooldownMs === DEFERRED_PROPAGATED_CATCHUP_COOLDOWN_MS ?
+            CDC_CATCHUP_TRIGGER.PROPAGATED_SWEEP : CDC_CATCHUP_TRIGGER.PROPAGATED_SWEEP_FAST,
           maxAttemptsPerTable:
             DEFERRED_PROPAGATED_CATCHUP_MAX_ATTEMPTS_PER_TABLE,
           readAuthority: buildControlPlaneReadAuthority({
@@ -272,56 +281,37 @@ class MembershipPublicationCoordinatorReconcile extends
           }
           const workflow = await this.ensureWorkflow(ownerKey, candidate);
           if (latestPublicationRow && candidate.changed !== true) {
-            const shouldRefreshPriorityMetadata =
-              candidate.priorityPartitionSummaryChanged === true &&
-              ((candidate.priorityPartitionSummary &&
-                typeof candidate.priorityPartitionSummary === 'object') ||
-              (candidate.membershipLifecycleSummary &&
-                typeof candidate.membershipLifecycleSummary === 'object'));
-            const shouldRefreshMembershipLifecycleMetadata =
-              candidate.membershipLifecycleSummaryChanged === true &&
-              candidate.membershipLifecycleSummary &&
-              typeof candidate.membershipLifecycleSummary === 'object';
-            const shouldRefreshAcknowledgements =
-              hasCandidateAcknowledgementRefresh(latestPublicationRow, candidate);
-            const shouldRefreshStatus =
-              hasCandidateStatusRefresh(latestPublicationRow, candidate);
-            if (
-              shouldRefreshPriorityMetadata ||
-              shouldRefreshMembershipLifecycleMetadata ||
-              shouldRefreshAcknowledgements ||
-              shouldRefreshStatus
-            ) {
-              const refreshedRow = buildPublicationMetadataRefreshRow({
-                publicationRow: latestPublicationRow,
-                priorityPartitionSummary: candidate.priorityPartitionSummary,
-                membershipLifecycleSummary: candidate.membershipLifecycleSummary,
-                acknowledgedNodeIds: candidate.acknowledgedNodeIds,
-                nowMs: this.now(),
+            if (shouldRefreshPublicationRow(latestPublicationRow, candidate)) {
+              const answer = buildReconcilePublicationWriteAnswer({
+                publicationWrite: await this.refreshPublicationRow(
+                  normalizeControlPlanePublicationRow(latestPublicationRow)
+                    .publicationId,
+                  {
+                    priorityPartitionSummary:
+                      candidate.priorityPartitionSummary,
+                    membershipLifecycleSummary:
+                      candidate.membershipLifecycleSummary,
+                    acknowledgedNodeIds: candidate.acknowledgedNodeIds,
+                  },
+                  convergenceOptions,
+                ),
+                candidate,
+                workflow,
               });
-              const persistedRow = await this.persistPublicationRow(
-                refreshedRow,
-                convergenceOptions,
-              );
-              const publicationRow =
-                normalizeControlPlanePublicationRow(persistedRow);
               if (
+                answer.publicationRow &&
                 hasPrioritySummaryRefreshClearedGap(
                   latestPublicationRow,
                   candidate,
-                ) &&
-                typeof this.enqueueClusterMembershipReconcile === 'function'
+                )
               ) {
                 this.enqueueClusterMembershipReconcile(
                   PRIORITY_SUMMARY_REFRESHED_REASON,
-                  {latestPublicationRow: publicationRow},
+                  {latestPublicationRow: answer.publicationRow},
+                  {selfRequeue: {changed: PRIORITY_SUMMARY_REFRESHED_REASON}},
                 );
               }
-              return {
-                candidate,
-                publicationRow,
-                workflow,
-              };
+              return requeueHeldPublicationWrite(this, answer);
             }
             return {
               candidate,
@@ -346,10 +336,19 @@ class MembershipPublicationCoordinatorReconcile extends
             candidate,
             nowMs: this.now(),
           });
-          const persistedRow = await this.persistPublicationRow(
-            row,
-            convergenceOptions,
-          );
+          const answer = buildReconcilePublicationWriteAnswer({
+            publicationWrite: await this.admitPublicationRow(
+              row,
+              convergenceOptions,
+            ),
+            candidate,
+            workflow,
+          });
+          if (!isPublicationWriteLanded(answer.publicationWrite)) {
+            // No landed admission, no OPEN: the workflow stays DERIVING and
+            // a write still owed is re-asked after the declared delay.
+            return requeueHeldPublicationWrite(this, answer);
+          }
           await this.workflowCoordinator.transitionStep(
             workflow.workflowId,
             {
@@ -367,11 +366,7 @@ class MembershipPublicationCoordinatorReconcile extends
               },
             },
           );
-          return {
-            candidate,
-            publicationRow: normalizeControlPlanePublicationRow(persistedRow),
-            workflow,
-          };
+          return answer;
         }),
     );
   }

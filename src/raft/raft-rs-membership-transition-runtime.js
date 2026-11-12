@@ -1,4 +1,6 @@
 import {confChangeProposalRefusal} from './raft-rs-conf-change-admission.js';
+import {liveVotersOf} from './raft-rs-voter-liveness.js';
+import {tuningOf} from './raft-rs-runtime-tuning.js';
 import {
   LEARNER_PROMOTION_PROOF_DECISION,
   evaluateLearnerPromotionProof,
@@ -236,7 +238,9 @@ function transitionState(context) {
   const refusal = promotionRefusal(command, status.value, currentTerm);
   const nativeRefusal = confChangeProposalRefusal({status: status.value,
     confState: conf.value, change: command.change,
-    leaderReplicaIdOf: (lead) => leaderReplicaIdOf(group, lead)});
+    leaderReplicaIdOf: (lead) => leaderReplicaIdOf(group, lead),
+    liveVoters: liveVotersOf(group.voterLiveness, status.value,
+      tuningOf(group.timing).electionTick)});
   return {status: status.value, roleOutcome, nativeRefusal,
     refusal};
 }

@@ -40,6 +40,8 @@ import {durableAppliedState} from
 import {createMockCache} from '../rebalancer/test-helpers.js';
 import {
   createRemovalSourceHandler,
+  retireThroughSurvivorLeader,
+  wireRowDrivenPartition,
   durableLifecycleState,
 } from './replica-removal-consensus-exit-fixture.js';
 
@@ -137,14 +139,16 @@ async (t) => {
   const retiringRow = cache.get('services', SOURCE);
   t.equal(retiringRow?.status, ReplicaStatus.REMOVING,
     'the re-dispatched REMOVE made the REMOVING row durable');
-  for (const replicaId of [SOURCE, PEER]) {
-    retireRaftPeerFromAuthoritativeServiceChange({
-      raft: cluster.node(replicaId), replicaId, partitionId: PARTITION_ID,
-      replicaIds: [SOURCE, PEER], peerAddresses: [], logger: QUIET_LOGGER,
-    }, CDC_OPERATION.UPDATE, retiringRow);
+  const partitions = [SOURCE, PEER].map((replicaId) => wireRowDrivenPartition(
+    cluster, replicaId, {partitionId: PARTITION_ID, members: [SOURCE, PEER],
+      logger: QUIET_LOGGER}));
+  for (const partition of partitions) {
+    retireRaftPeerFromAuthoritativeServiceChange(partition,
+      CDC_OPERATION.UPDATE, retiringRow);
   }
   for (let round = 0; round < 40 && source.exits.length === 0; round += 1) {
     cluster.settle(() => false, {rounds: 10});
+    await retireThroughSurvivorLeader(partitions, SOURCE);
     await nextTurns();
   }
   t.notOk(survivorVoters().includes(sourcePeerId),

@@ -7,13 +7,20 @@ import {
 } from '../../src/constants/index.js';
 import {MEMBERSHIP_PUBLICATION_READ_SOURCE} from
   '../../src/control-plane/membership-publication-row-contract.js';
+import {
+  PUBLICATION_WRITE_OUTCOME,
+  PUBLICATION_WRITE_REFUSAL,
+} from '../../src/control-plane/owners/control-plane-publication-change.js';
+import {
+  createPublicationStore,
+  publicationsOwnerOverRows,
+} from './publication-owner-test-support.js';
 
 export function registerMembershipPublicationCoordinatorTailFinalTests({
   test,
   MembershipPublicationCoordinator,
   MEMBERSHIP_LIFECYCLE_STATE,
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
-  ControlPlanePublicationsOwner,
 }) {
   const AUTHORITATIVE_FALLBACK_METADATA_REFRESH_COUNT = 1;
   const AUTHORITATIVE_FALLBACK_METADATA_REFRESH_ASSERTION =
@@ -50,14 +57,14 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
       const coordinator = new MembershipPublicationCoordinator({
         resolveIsControlPlanePublicationsWriteLeader: () => true,
         nodeId: 'node-1',
-        controlPlanePublicationsOwner: {
+        controlPlanePublicationsOwner: publicationsOwnerOverRows({
           async listPublications() {
             return {rows: [latestPublicationRow]};
           },
-          async upsertPublication(row) {
+          async storeRow(row) {
             persistedRows.push(row);
           },
-        },
+        }),
         controlPlaneReadinessService: {
           async getAllNodeReadiness(options = {}) {
             if (options.allowAuthoritativeRefresh === true) {
@@ -204,14 +211,14 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
       const coordinator = new MembershipPublicationCoordinator({
         resolveIsControlPlanePublicationsWriteLeader: () => true,
         nodeId: 'node-1',
-        controlPlanePublicationsOwner: {
+        controlPlanePublicationsOwner: publicationsOwnerOverRows({
           async listPublications() {
             return {rows: [latestPublicationRow]};
           },
-          async upsertPublication(row) {
+          async storeRow(row) {
             persistedRows.push(row);
           },
-        },
+        }),
         controlPlaneReadinessService: {
           async getAllNodeReadiness(options = {}) {
             if (options.allowAuthoritativeRefresh === true) {
@@ -347,7 +354,7 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
       const coordinator = new MembershipPublicationCoordinator({
         resolveIsControlPlanePublicationsWriteLeader: () => true,
         nodeId: 'node-1',
-        controlPlanePublicationsOwner: {
+        controlPlanePublicationsOwner: publicationsOwnerOverRows({
           async listPublications() {
             return {rows: [durableRow]};
           },
@@ -363,7 +370,7 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
             }, 'metadata refresh retries should use owner-rpc preferred reads');
             return durableRow;
           },
-          async upsertPublication(row) {
+          async storeRow(row) {
             upsertCallCount += 1;
             if (upsertCallCount === 1) {
               const error = new Error('Distributed operation failed due to participant failures');
@@ -372,7 +379,7 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
             }
             durableRow = row;
           },
-        },
+        }),
         systemTableCache: {
           getAll(tableName) {
             if (tableName === 'nodes') {
@@ -529,7 +536,7 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
       const coordinator = new MembershipPublicationCoordinator({
         resolveIsControlPlanePublicationsWriteLeader: () => true,
         nodeId: 'node-1',
-        controlPlanePublicationsOwner: {
+        controlPlanePublicationsOwner: publicationsOwnerOverRows({
           async listPublicationsFromCache() {
             cacheReadCount += 1;
             return {rows: []};
@@ -538,10 +545,10 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
             authoritativeReadCount += 1;
             return {rows: [latestPublicationRow]};
           },
-          async upsertPublication() {
+          async storeRow() {
             upsertCallCount += 1;
           },
-        },
+        }),
         systemTableCache: {
           getAll(tableName) {
             if (tableName === 'nodes') {
@@ -710,23 +717,21 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
       }, 'authoritative publication repair should stay on local authoritative publication reads');
     });
 
-  test('acknowledgePublication persists canonical snake_case fields when the latest publication was read from cache',
+  test('acknowledgePublication never writes from a projected row: without a durable row it is refused',
     async (t) => {
-      const persistedRows = [];
+      const store = createPublicationStore();
       const coordinator = new MembershipPublicationCoordinator({
         resolveIsControlPlanePublicationsWriteLeader: () => true,
-        nodeId: 'node-1',
-        controlPlanePublicationsOwner: {
-          async upsertPublication(row) {
-            persistedRows.push(row);
-          },
-        },
+        nodeId: 'node-2',
+        controlPlanePublicationsOwner: store.owner,
       });
 
-      await coordinator.acknowledgePublication(
+      const outcome = await coordinator.acknowledgePublication(
         'publication-13',
         'node-2',
         {
+          // The projection's row: it names the publication, it is never the
+          // base of the write.
           publicationRow: {
             publicationId: 'publication-13',
             publicationKind: 'cluster_membership',
@@ -735,310 +740,169 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
             publishedActiveNodeIds: ['node-1', 'node-2'],
             requiredAckNodeIds: ['node-1', 'node-2'],
             acknowledgedNodeIds: ['node-1'],
-            membershipLifecycleSummary: {
-              lifecycleState: MEMBERSHIP_LIFECYCLE_STATE.PUBLISH_PENDING,
-              epochBoundary: 'publication_pending',
-            },
-            updatedAt: 1200,
-            createdAt: 1100,
           },
-          nowMs: 1300,
         },
       );
 
-      t.equal(persistedRows.length, 1);
-      t.match(
-        persistedRows[0],
+      t.equal(outcome.outcome, PUBLICATION_WRITE_OUTCOME.REFUSED);
+      t.equal(outcome.reason, PUBLICATION_WRITE_REFUSAL.PUBLICATION_ABSENT);
+      t.equal(store.writes.length, 0,
+        'owner fields are not rebuilt from a projected row for a write');
+    });
+
+  test('acknowledgePublication changes the durable row, read with the strict owner read, and sets only what the acknowledgement moved',
+    async (t) => {
+      const store = createPublicationStore({rows: [{
+        publication_id: 'publication-14',
+        publication_kind: 'cluster_membership',
+        publication_epoch: 14,
+        publisher_node_id: 'node-1',
+        status: 'ACK_PENDING',
+        published_active_node_ids: ['node-1', 'node-2'],
+        required_ack_node_ids: ['node-1', 'node-2'],
+        acknowledged_node_ids: ['node-1'],
+        created_at: 1100,
+        updated_at: 1200,
+        transition_history: [],
+      }]});
+      const coordinator = new MembershipPublicationCoordinator({
+        nodeId: 'node-2',
+        now: () => 1300,
+        controlPlanePublicationsOwner: store.owner,
+      });
+
+      const outcome = await coordinator.acknowledgePublication(
+        'publication-14',
+        'node-2',
         {
-          publication_id: 'publication-13',
+          // A stale projection (no acknowledgement yet) changes nothing.
+          publicationRow: {
+            publicationId: 'publication-14',
+            status: 'OPEN',
+            acknowledgedNodeIds: [],
+          },
+        },
+      );
+
+      t.equal(outcome.outcome, PUBLICATION_WRITE_OUTCOME.COMMITTED);
+      t.match(store.reads[0].options, {
+        authoritativeReadMode:
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+      }, 'the base of the write is the durable owner\'s strict read');
+      t.same(store.writes[0].whereClause,
+        {publication_id: 'publication-14', publication_revision: 1});
+      t.same(Object.keys(store.writes[0].data).sort(), [
+        'acknowledged_node_ids',
+        'closed_at',
+        'membership_lifecycle_summary',
+        'publication_revision',
+        'published_at',
+        'status',
+        'transition_history',
+        'updated_at',
+      ], 'only the columns the acknowledgement moved are set');
+      t.match(
+        store.row('publication-14'),
+        {
+          publication_id: 'publication-14',
           publication_kind: 'cluster_membership',
-          publication_epoch: 13,
+          publication_epoch: 14,
           status: 'PUBLISHED',
           published_active_node_ids: ['node-1', 'node-2'],
           required_ack_node_ids: ['node-1', 'node-2'],
           acknowledged_node_ids: ['node-1', 'node-2'],
+          publication_revision: 2,
+          updated_at: 1300,
         },
-        'acknowledgement writes should preserve canonical system-table field names',
+        'the durable row holds both acknowledgements and is closed',
       );
+      t.same(outcome.row.acknowledged_node_ids, ['node-1', 'node-2'],
+        'the caller is answered the durable row');
     });
 
-  test('acknowledgePublication refreshes the authoritative publication row before persisting acknowledgements',
+  test('acknowledgePublication does not write an acknowledgement that is already durable',
     async (t) => {
-      const persistedRows = [];
-      let getPublicationOptions = null;
-      let durableRow = {
-        publication_id: 'publication-14',
+      const store = createPublicationStore({rows: [{
+        publication_id: 'publication-16',
         publication_kind: 'cluster_membership',
-        publication_epoch: 14,
+        publication_epoch: 16,
+        publisher_node_id: 'node-1',
         status: 'ACK_PENDING',
         published_active_node_ids: ['node-1', 'node-2', 'node-3'],
         required_ack_node_ids: ['node-1', 'node-2', 'node-3'],
-        acknowledged_node_ids: ['node-1', 'node-2'],
-      };
+        acknowledged_node_ids: ['node-2'],
+        created_at: 1600,
+        updated_at: 1600,
+        transition_history: [],
+      }]});
       const coordinator = new MembershipPublicationCoordinator({
-        nodeId: 'node-3',
-        controlPlanePublicationsOwner: {
-          async getPublication(publicationId, options = {}) {
-            getPublicationOptions = options;
-            t.equal(
-              publicationId,
-              'publication-14',
-              'acknowledgements should re-read the latest authoritative publication row',
-            );
-            return durableRow;
-          },
-          async upsertPublication(row) {
-            persistedRows.push(row);
-            durableRow = row;
-          },
-        },
+        nodeId: 'node-2',
+        controlPlanePublicationsOwner: store.owner,
       });
 
-      await coordinator.acknowledgePublication(
-        'publication-14',
-        'node-3',
-        {
-          publicationRow: {
-            publicationId: 'publication-14',
-            publicationKind: 'cluster_membership',
-            publicationEpoch: 14,
-            status: 'OPEN',
-            publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
-            requiredAckNodeIds: ['node-1', 'node-2', 'node-3'],
-            acknowledgedNodeIds: [],
-          },
-          nowMs: 1400,
-        },
-      );
+      const outcome = await coordinator.acknowledgePublication(
+        'publication-16', 'node-2');
 
-      t.equal(persistedRows.length, 1);
-      t.match(
-        persistedRows[0],
-        {
-          publication_id: 'publication-14',
-          publication_epoch: 14,
-          status: 'PUBLISHED',
-          acknowledged_node_ids: ['node-1', 'node-2', 'node-3'],
-        },
-        'stale cache acknowledgements should merge from the authoritative publication row before persisting',
-      );
-      t.match(getPublicationOptions, {
-        authoritativeReadMode:
-        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
-      }, 'acknowledgement refresh should request owner-rpc preferred publication reads');
+      t.equal(outcome.outcome, PUBLICATION_WRITE_OUTCOME.UNCHANGED);
+      t.equal(store.writes.length, 0,
+        'a durable acknowledgement is not written again');
+      t.same(outcome.row.acknowledged_node_ids, ['node-2']);
     });
 
-  test('acknowledgePublication unwraps owner read envelopes before persisting acknowledgements',
+  test('acknowledgePublication keeps a concurrent writer\'s acknowledgement: its stale write affects no row and is re-applied',
     async (t) => {
-      const persistedRows = [];
-      let durableRow = {
-        publication_id: 'publication-15',
-        publication_kind: 'cluster_membership',
-        publication_epoch: 15,
-        status: 'ACK_PENDING',
-        published_active_node_ids: ['node-1', 'node-2', 'node-3'],
-        required_ack_node_ids: ['node-1', 'node-2', 'node-3'],
-        acknowledged_node_ids: ['node-1', 'node-2'],
-      };
-      const publicationsOwner = new ControlPlanePublicationsOwner({
-        controlPlaneSystemTableGateway: {
-          async readAuthoritativeRows(_tableName, _sql, params) {
-            t.same(
-              params,
-              ['publication-15'],
-              'owner reads should look up the authoritative publication by id',
-            );
-            return {
-              success: true,
-              rows: [durableRow],
-            };
-          },
-          async upsertSystemTableRow(_tableName, row) {
-            persistedRows.push(row);
-            durableRow = row;
-          },
-        },
-      });
-      const coordinator = new MembershipPublicationCoordinator({
-        nodeId: 'node-3',
-        controlPlanePublicationsOwner: publicationsOwner,
-      });
-
-      await coordinator.acknowledgePublication(
-        'publication-15',
-        'node-3',
-        {
-          publicationRow: {
-            publicationId: 'publication-15',
-            publicationKind: 'cluster_membership',
-            publicationEpoch: 15,
-            status: 'OPEN',
-            publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
-            requiredAckNodeIds: ['node-1', 'node-2', 'node-3'],
-            acknowledgedNodeIds: [],
-          },
-          nowMs: 1500,
-        },
-      );
-
-      t.equal(persistedRows.length, 1);
-      t.match(
-        persistedRows[0],
-        {
-          publication_id: 'publication-15',
-          publication_epoch: 15,
-          status: 'PUBLISHED',
-          acknowledged_node_ids: ['node-1', 'node-2', 'node-3'],
-        },
-        'gateway read envelopes should be unwrapped to their row before acknowledgement persistence',
-      );
-    });
-
-  test('acknowledgePublication does not persist duplicate acknowledgements that are already durable',
-    async (t) => {
-      let upsertCallCount = 0;
-      const coordinator = new MembershipPublicationCoordinator({
-        resolveIsControlPlanePublicationsWriteLeader: () => true,
-        nodeId: 'node-1',
-        controlPlanePublicationsOwner: {
-          async getPublication(publicationId) {
-            t.equal(
-              publicationId,
-              'publication-16',
-              'duplicate acknowledgements should still read the latest publication row',
-            );
-            return {
-              publication_id: 'publication-16',
-              publication_kind: 'cluster_membership',
-              publication_epoch: 16,
-              status: 'ACK_PENDING',
-              published_active_node_ids: ['node-1', 'node-2'],
-              required_ack_node_ids: ['node-1', 'node-2'],
-              acknowledged_node_ids: ['node-1'],
-            };
-          },
-          async upsertPublication() {
-            upsertCallCount += 1;
-          },
-        },
-      });
-
-      const publicationRow = await coordinator.acknowledgePublication(
-        'publication-16',
-        'node-1',
-        {
-          publicationRow: {
-            publicationId: 'publication-16',
-            publicationKind: 'cluster_membership',
-            publicationEpoch: 16,
-            status: 'OPEN',
-            publishedActiveNodeIds: ['node-1', 'node-2'],
-            requiredAckNodeIds: ['node-1', 'node-2'],
-            acknowledgedNodeIds: [],
-          },
-          nowMs: 1600,
-        },
-      );
-
-      t.equal(
-        upsertCallCount,
-        0,
-        'duplicate acknowledgements should not rewrite the durable publication row',
-      );
-      t.match(
-        publicationRow,
-        {
-          publication_id: 'publication-16',
-          acknowledged_node_ids: ['node-1'],
-          status: 'ACK_PENDING',
-        },
-        'the durable acknowledgement state should be returned without a redundant write',
-      );
-    });
-
-  test('acknowledgePublication retries when a concurrent durable rewrite drops merged acknowledgements',
-    async (t) => {
-      let upsertCallCount = 0;
-      let durableRow = {
+      const store = createPublicationStore({rows: [{
         publication_id: 'publication-17',
         publication_kind: 'cluster_membership',
         publication_epoch: 17,
+        publisher_node_id: 'node-1',
         status: 'ACK_PENDING',
         published_active_node_ids: ['node-1', 'node-2', 'node-3'],
         required_ack_node_ids: ['node-1', 'node-2', 'node-3'],
         acknowledged_node_ids: ['node-1'],
+        created_at: 1700,
         updated_at: 1700,
+        transition_history: [],
+      }]});
+      // Another writer records node-3 between this call's read and write.
+      store.control.beforeWrite = () => {
+        store.control.beforeWrite = null;
+        store.changeDurably('publication-17', {
+          acknowledged_node_ids: ['node-1', 'node-3'],
+          updated_at: 1701,
+        });
       };
       const coordinator = new MembershipPublicationCoordinator({
         nodeId: 'node-2',
-        controlPlanePublicationsOwner: {
-          async getPublication(publicationId, options) {
-            t.equal(
-              publicationId,
-              'publication-17',
-              'durable merge retries should read the authoritative publication by id',
-            );
-            t.match(options, {
-              authoritativeReadMode:
-              CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
-            }, 'durable merge retries should use owner-rpc preferred reads');
-            return durableRow;
-          },
-          async upsertPublication(row) {
-            upsertCallCount += 1;
-            if (upsertCallCount === 1) {
-              durableRow = {
-                ...row,
-                status: 'ACK_PENDING',
-                acknowledged_node_ids: ['node-1', 'node-3'],
-                updated_at: 1701,
-              };
-              return;
-            }
-            durableRow = row;
-          },
-        },
+        now: () => 1702,
+        controlPlanePublicationsOwner: store.owner,
       });
 
-      const publicationRow = await coordinator.acknowledgePublication(
-        'publication-17',
-        'node-2',
-        {
-          publicationRow: {
-            publicationId: 'publication-17',
-            publicationKind: 'cluster_membership',
-            publicationEpoch: 17,
-            status: 'OPEN',
-            publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
-            requiredAckNodeIds: ['node-1', 'node-2', 'node-3'],
-            acknowledgedNodeIds: [],
-          },
-          nowMs: 1702,
-        },
-      );
+      const outcome = await coordinator.acknowledgePublication(
+        'publication-17', 'node-2');
 
-      t.equal(
-        upsertCallCount,
-        2,
-        'a dropped durable acknowledgement should trigger one retry with the merged set',
+      t.equal(outcome.outcome, PUBLICATION_WRITE_OUTCOME.COMMITTED);
+      t.equal(store.writes.length, 2);
+      t.equal(store.writes[0].affectedRows, 0,
+        'the write computed from the stale row affected no row');
+      t.match(
+        store.row('publication-17'),
+        {
+          publication_id: 'publication-17',
+          status: 'PUBLISHED',
+          acknowledged_node_ids: ['node-1', 'node-2', 'node-3'],
+          publication_revision: 3,
+        },
+        'the durable row keeps every acknowledgement',
       );
       t.match(
-        durableRow,
+        outcome.row,
         {
           publication_id: 'publication-17',
           status: 'PUBLISHED',
           acknowledged_node_ids: ['node-1', 'node-2', 'node-3'],
         },
-        'the retried durable publication row should retain the full acknowledgement union',
-      );
-      t.match(
-        publicationRow,
-        {
-          publication_id: 'publication-17',
-          status: 'PUBLISHED',
-          acknowledged_node_ids: ['node-1', 'node-2', 'node-3'],
-        },
-        'the caller should receive the merged durable publication row after retry',
+        'the caller receives the durable row',
       );
     });
 

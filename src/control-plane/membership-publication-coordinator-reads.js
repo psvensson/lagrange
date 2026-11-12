@@ -47,12 +47,11 @@ import {
   buildPublicationListReadOptions,
   deriveMembershipPublicationCandidate,
   mergePlanningEvidenceRows,
-  normalizeReplicaOperationView,
   normalizeTableRowsResult,
   resolveControlPlanePublicationsOwner,
-  serializeMembershipPublicationRow,
   shouldMergePlanningEvidenceRows,
 } from './membership-publication-planning-evidence.js';
+import {consumeReplicaOperationView} from './membership-publication-replica-operation-view.js';
 import {
   runMembershipPublicationActivity,
 } from '../diagnostics/formation-owner-attribution.js';
@@ -461,7 +460,7 @@ class MembershipPublicationCoordinatorReads {
   }
 
   isLocallyOwnedReplicaOperationRow(operation) {
-    const normalizedOperation = normalizeReplicaOperationView(operation);
+    const normalizedOperation = consumeReplicaOperationView(this, operation);
     if (!normalizedOperation) {
       return false;
     }
@@ -484,7 +483,7 @@ class MembershipPublicationCoordinatorReads {
       TABLES.REPLICA_OPERATIONS,
     );
     const dispatchRows = cacheRows.filter((row) => {
-      const operation = normalizeReplicaOperationView(row);
+      const operation = consumeReplicaOperationView(this, row);
       return (
         operation &&
         isCoordinatorOwnedOperationType(operation.type) &&
@@ -520,15 +519,17 @@ class MembershipPublicationCoordinatorReads {
       return dispatchRows;
     }
     try {
-      const operations = await repository.queryIncompleteOperations({
+      // The owner's list supplements the dispatch rows only when it answered
+      // (a DEFERRED observation carries no list and adds nothing).
+      const {operations} = await repository.queryIncompleteOperations({
         visibilityReadMode: REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED,
       });
-      if (!Array.isArray(operations) || operations.length === 0) {
+      if (operations.length === 0) {
         return dispatchRows;
       }
       const authoritativeRows = operations
         .filter((operation) => {
-          const normalizedOperation = normalizeReplicaOperationView(operation);
+          const normalizedOperation = consumeReplicaOperationView(this, operation);
           return (
             normalizedOperation &&
             isCoordinatorOwnedOperationType(normalizedOperation.type) &&
@@ -551,7 +552,7 @@ class MembershipPublicationCoordinatorReads {
   }
 
   buildDispatchRetryRowFromOperation(operation) {
-    const normalizedOperation = normalizeReplicaOperationView(operation);
+    const normalizedOperation = consumeReplicaOperationView(this, operation);
     if (!normalizedOperation) {
       return null;
     }
@@ -581,44 +582,6 @@ class MembershipPublicationCoordinatorReads {
       normalizedPublicationStatus === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED ||
       normalizedPublicationStatus === MEMBERSHIP_PUBLICATION_STATUS.ABANDONED ||
       normalizedPublicationStatus === MEMBERSHIP_PUBLICATION_STATUS.SUPERSEDED
-    );
-  }
-
-  async acknowledgeMembershipPublicationForNode(nodeId, options = {}) {
-    const normalizedNodeId = String(nodeId || '').trim();
-    if (!normalizedNodeId) {
-      return null;
-    }
-    const acknowledgementCandidate = await this.getAcknowledgementCandidateForNode(
-      normalizedNodeId,
-      options,
-    );
-    if (!acknowledgementCandidate || typeof acknowledgementCandidate !== 'object') {
-      return null;
-    }
-    const candidatePublicationRow = acknowledgementCandidate.publicationRow;
-    if (!candidatePublicationRow || typeof candidatePublicationRow !== 'object') {
-      return null;
-    }
-    if (
-      acknowledgementCandidate.terminal === true ||
-      acknowledgementCandidate.requiresAcknowledgement !== true ||
-      (
-        acknowledgementCandidate.alreadyAcknowledged === true &&
-        acknowledgementCandidate.allRequiredAcknowledged !== true
-      )
-    ) {
-      return serializeMembershipPublicationRow(candidatePublicationRow);
-    }
-    return this.acknowledgePublication(
-      candidatePublicationRow.publication_id || candidatePublicationRow.publicationId,
-      normalizedNodeId,
-      {
-        ...options,
-        publicationRow: candidatePublicationRow,
-        skipPublicationWriteReadback:
-          options.skipPublicationWriteReadback === true,
-      },
     );
   }
 

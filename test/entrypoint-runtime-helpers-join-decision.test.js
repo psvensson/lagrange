@@ -12,6 +12,7 @@ import {
   STARTUP_JOIN_MODE,
   TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT,
 } from '../src/bootstrap/rejoin-hints-constants.js';
+import {BOOTSTRAP_API_ROUTE} from '../src/bootstrap/bootstrap-api-constants.js';
 import {CONFIG_KEY} from '../src/config/config-constants.js';
 import {
   ENTRYPOINT_DEFAULT,
@@ -42,6 +43,8 @@ const TEST_PROBE_HIT = async () => true;
 const TEST_SERVER_HOST = '127.0.0.1';
 const TEST_RESPONSE_BODY_OK = 'ok';
 const TEST_RESPONSE_BODY_EMPTY = '';
+const TEST_RESPONSE_BODY_HEALTH_INITIALIZING =
+  JSON.stringify({status: 'initializing', nodeId: 'peer', ready: false});
 
 function createConfig() {
   const values = new Map([
@@ -233,7 +236,7 @@ test(
         statusCode: HTTP_STATUS.SERVICE_UNAVAILABLE,
         body: TEST_RESPONSE_BODY_OK,
       },
-      [ENTRYPOINT_DEFAULT.AUTO_REJOIN_HEALTH_PATH]: {
+      [BOOTSTRAP_API_ROUTE.HEALTH]: {
         statusCode: HTTP_STATUS.OK,
         body: TEST_RESPONSE_BODY_OK,
       },
@@ -243,7 +246,7 @@ test(
         statusCode: HTTP_STATUS.OK,
         body: TEST_RESPONSE_BODY_OK,
       },
-      [ENTRYPOINT_DEFAULT.AUTO_REJOIN_HEALTH_PATH]: {
+      [BOOTSTRAP_API_ROUTE.HEALTH]: {
         statusCode: HTTP_STATUS.OK,
         body: TEST_RESPONSE_BODY_OK,
       },
@@ -284,6 +287,74 @@ test(
         evidenceSource: TEST_DECISION_SOURCE_REJOIN_HINTS,
       },
     });
+  },
+);
+
+// /bootstrap/ready is the one peer probe every node serves. A peer that
+// answers 404 there does not serve it: that is a typed "probe not served"
+// outcome, never reachable, even though its /health answers 200 while the
+// peer is still initializing (ready:false with status OK).
+test(
+  'resolveStartupJoinDecision never counts an initializing peer whose probe ' +
+  'is not served as reachable',
+  async (t) => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'entrypoint-join-decision-'));
+    t.after(() => rm(dataDir, {recursive: true, force: true}));
+
+    const initializingPeer = createProbeServer({
+      [BOOTSTRAP_API_ROUTE.HEALTH]: {
+        statusCode: HTTP_STATUS.OK,
+        body: TEST_RESPONSE_BODY_HEALTH_INITIALIZING,
+      },
+    });
+    const bootstrapReadyPeer = createProbeServer({
+      [ENTRYPOINT_DEFAULT.AUTO_REJOIN_BOOTSTRAP_READY_PATH]: {
+        statusCode: HTTP_STATUS.OK,
+        body: TEST_RESPONSE_BODY_OK,
+      },
+    });
+    const initializingPeerAddress = await listenProbeServer(initializingPeer);
+    const bootstrapReadyPeerAddress =
+      await listenProbeServer(bootstrapReadyPeer);
+    t.after(() => closeProbeServer(initializingPeer));
+    t.after(() => closeProbeServer(bootstrapReadyPeer));
+
+    const resolveWithPeers = async (peerAddresses) => {
+      await persistBootstrapRejoinHints({
+        bootIncarnation: TEST_BOOT_INCARNATION,
+        dataDir,
+        nodeId: TEST_NODE_ID,
+        nodeAddress: TEST_NODE_ADDRESS,
+        nodeRole: TEST_NODE_ROLE_JOINER,
+        peerAddresses,
+        clusterNodeCount: TEST_CLUSTER_NODE_COUNT,
+        now: () => TEST_UPDATED_AT,
+      });
+      return resolveStartupJoinDecision(
+        createDecisionOptions(dataDir, {
+          [ENTRYPOINT_ENV.SEED_NODE_ADDRESS]: TEST_EXPLICIT_SEED_NODE_ADDRESS,
+        }),
+      );
+    };
+
+    const onlyInitializing = await resolveWithPeers([initializingPeerAddress]);
+    t.match(onlyInitializing, {
+      seedNodeAddress: TEST_EXPLICIT_SEED_NODE_ADDRESS,
+      source: TEST_DECISION_SOURCE_EXPLICIT,
+      membershipOwnerOutcome: {
+        reasonCode: TEST_MEMBERSHIP_REASON_EXPLICIT_SEED,
+      },
+    }, 'a peer that does not serve the probe is not reachable');
+
+    const initializingFirst = await resolveWithPeers(
+      [initializingPeerAddress, bootstrapReadyPeerAddress]);
+    t.match(initializingFirst, {
+      seedNodeAddress: bootstrapReadyPeerAddress,
+      source: TEST_DECISION_SOURCE_REJOIN_HINTS,
+      membershipOwnerOutcome: {
+        reasonCode: TEST_MEMBERSHIP_REASON_JOIN_PROBED_PEER,
+      },
+    }, 'the ready peer is chosen over an earlier not-served one');
   },
 );
 

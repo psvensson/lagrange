@@ -1,4 +1,11 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {TRANSPORT_ERROR_MSG} from '../../src/constants/transport.js';
+import {
+  buildPresentOperationVisibility,
+  buildUnavailableOperationVisibility,
+} from '../../src/rebalancer/replica-operation-repository-operation-visibility.js';
+import {ROUTER_MESSAGE_TIMEOUT_ERROR_CODE} from
+  '../../src/transport/transport-error-codes.js';
 const TEST_PENDING_RESPONSE_REPLACE_TEST_NAME =
   'critical REPLACE source-removal pending response timeout stays retryable';
 const TEST_PENDING_RESPONSE_PARTITION_ID =
@@ -28,11 +35,9 @@ export async function registerReplaceReplicaWorkflowSourceRemovalRetryTests({
   ReplicaStatus,
   ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
-  ROUTER_ERROR_MSG,
   createTestCoordinator,
   TEST_REPLACE_REMOVE_SAFETY_BLOCKED,
   TEST_PRIORITY_SPREAD_PENDING,
-  TEST_VISIBILITY_OBSERVATION_STATE_PRESENT,
   TEST_AUTHORITATIVE_OPERATION_READ_DEFERRED,
 }) {
   await t.test(TEST_PENDING_RESPONSE_REPLACE_TEST_NAME, async (t) => {
@@ -71,7 +76,9 @@ export async function registerReplaceReplicaWorkflowSourceRemovalRetryTests({
         }
         if (sourceRemovalTimeoutPending) {
           sourceRemovalTimeoutPending = false;
-          throw new Error(ROUTER_ERROR_MSG.PENDING_RESPONSE_TIMEOUT);
+          // The router's spent-lifetime refusal, by its typed code alone.
+          throw Object.assign(new Error(TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT),
+            {code: ROUTER_MESSAGE_TIMEOUT_ERROR_CODE});
         }
         return buildDeliveryEnvelope({acknowledged: true}, {
           status: ReplicaOperationResponseStatus.INITIATED,
@@ -186,7 +193,7 @@ export async function registerReplaceReplicaWorkflowSourceRemovalRetryTests({
       );
 
       const persistedBeforeRetry =
-        await coordinator.queryOperationById(operation.operationId);
+        await coordinator.queryOperationProjectionById(operation.operationId);
       t.equal(
         persistedBeforeRetry?.workflowStep,
         WORKFLOW_STEP.STOPPING,
@@ -210,7 +217,7 @@ export async function registerReplaceReplicaWorkflowSourceRemovalRetryTests({
       }
 
       const persistedAfterRetry =
-        await coordinator.queryOperationById(operation.operationId);
+        await coordinator.queryOperationProjectionById(operation.operationId);
       t.equal(
         deliveries.length,
         3,
@@ -301,7 +308,9 @@ export async function registerReplaceReplicaWorkflowSourceRemovalRetryTests({
               partition_id: 'control_plane_publications-p1',
               node_id: 'node-a',
               status: ReplicaStatus.ACTIVE,
-              raft_role: 'leader',
+              // Not the group's leader (2026-11-11 removal leadership gate: a
+              // leading source is handed off first; this cell stubs that gate).
+              raft_role: 'follower',
               address: 'node-a/partition/control_plane_publications-p1-r1',
             },
             {
@@ -378,12 +387,9 @@ export async function registerReplaceReplicaWorkflowSourceRemovalRetryTests({
             if (deferredSafetyRetryRead &&
                 operationId === operation.operationId) {
               deferredSafetyRetryRead = false;
-              return {
-                operation: null,
-                deferredOutcome: {
-                  completionState: TEST_AUTHORITATIVE_OPERATION_READ_DEFERRED,
-                },
-              };
+              return buildUnavailableOperationVisibility({
+                completionState: TEST_AUTHORITATIVE_OPERATION_READ_DEFERRED,
+              });
             }
             return baseGetOperationByIdVisibilityObservation(
               operationId,
@@ -442,7 +448,7 @@ export async function registerReplaceReplicaWorkflowSourceRemovalRetryTests({
         }
 
         const persistedAfterRetry =
-          await coordinator.queryOperationById(operation.operationId);
+          await coordinator.queryOperationProjectionById(operation.operationId);
         t.equal(
           deliveries.length,
           2,
@@ -530,7 +536,9 @@ export async function registerReplaceReplicaWorkflowSourceRemovalRetryTests({
               partition_id: 'control_plane_publications-p1',
               node_id: 'node-a',
               status: ReplicaStatus.ACTIVE,
-              raft_role: 'leader',
+              // Not the group's leader (2026-11-11 removal leadership gate: a
+              // leading source is handed off first; this cell stubs that gate).
+              raft_role: 'follower',
               address: 'node-a/partition/control_plane_publications-p1-r1',
             },
             {
@@ -621,23 +629,13 @@ export async function registerReplaceReplicaWorkflowSourceRemovalRetryTests({
               operationId,
               options: {...options},
             });
-            return {
-              state: TEST_VISIBILITY_OBSERVATION_STATE_PRESENT,
-              operation: {
-                ...operation,
-              },
-              deferredOutcome: {
-                completionState: TEST_AUTHORITATIVE_OPERATION_READ_DEFERRED,
-                retryAfterMs: 25,
-              },
-              retryAfterMs: 25,
-            };
+            return buildPresentOperationVisibility({...operation});
           };
 
         await coordinator.workflowOwner
           .resumeDeferredTransitionOperation(operation.operationId);
         const persistedAfterRetry =
-          await coordinator.queryOperationById(operation.operationId);
+          await coordinator.queryOperationProjectionById(operation.operationId);
 
         t.equal(
           deliveries.length,
@@ -660,6 +658,7 @@ export async function registerReplaceReplicaWorkflowSourceRemovalRetryTests({
           [{
             operationId: operation.operationId,
             options: {
+              authoritativeReadMode: 'owner_rpc_required',
               allowPriorityRecoveryDeferredVisibility: true,
             },
           }, {

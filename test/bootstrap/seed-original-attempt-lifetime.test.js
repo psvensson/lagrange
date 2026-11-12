@@ -94,7 +94,7 @@ async function fixture(t, overrides = {}, {withRouter = true} = {}) {
       bootIncarnation, nodeService, dataDirectoryManager,
       dataDirectoryProcessOwner: directoryOwner, startupAbortSignal: controller.signal,
       membershipOwnerOutcome: decision.membershipOwnerOutcome,
-      startupServicesAdmission, ...extra});
+      formationTargetNodeCount: 1, startupServicesAdmission, ...extra});
     services.push(service);
     if (withRouter) {
       service.messageRouter = new MessageRouter({nodeId: NODE_ID,

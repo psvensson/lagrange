@@ -4,6 +4,9 @@
  */
 
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
+import {TRANSPORT_ERROR_MSG} from '../../src/constants/transport.js';
+import {ROUTER_MESSAGE_TIMEOUT_ERROR_CODE} from
+  '../../src/transport/transport-error-codes.js';
 import {
   CDCIntegrationService,
 } from '../../src/cdc/cdc-integration-service.js';
@@ -208,10 +211,19 @@ test('CDCIntegrationService - transient detection includes leader-transition que
       true,
       'leader-forwarding failures should be retried',
     );
+    // A spent delivery lifetime is classified by its transport code, as the
+    // router raises it (message-router-delivery-lifetime.js), never by text.
     t.equal(
-      service.isTransientCdcError('Message timeout'),
+      service.isTransientCdcError(Object.assign(
+        new Error(TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT),
+        {code: ROUTER_MESSAGE_TIMEOUT_ERROR_CODE})),
       true,
       'transport timeout during leader handoff should be retried',
+    );
+    t.equal(
+      service.isTransientCdcError(TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT),
+      false,
+      'the timeout text alone, with no transport code, classifies nothing',
     );
     t.equal(
       service.isTransientCdcError(

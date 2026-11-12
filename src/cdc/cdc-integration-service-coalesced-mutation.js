@@ -1,3 +1,5 @@
+import {CDC_ADMISSION_INTENT_FIELD, cdcAdmissionClassOfIntent} from
+  '../partition/partition-cdc-admission-class.js';
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
 
 const {
@@ -47,6 +49,10 @@ export function buildMutationSingleFlightKey(
         null,
     payload,
     ignoreExisting: options?.ignoreExisting === true,
+    // A retirement write never joins an ordinary one's flight (it would lose
+    // its class); an ordinary key is unchanged.
+    ...(options?.[CDC_ADMISSION_INTENT_FIELD] === undefined ? {} :
+      {admissionIntent: cdcAdmissionClassOfIntent(options).admissionClass}),
   });
 }
 

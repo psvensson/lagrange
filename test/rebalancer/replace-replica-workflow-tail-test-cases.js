@@ -162,7 +162,7 @@ export async function registerReplaceReplicaWorkflowTailTests({
         }
 
         const persistedAfterRetry =
-          await coordinator.queryOperationById(operation.operationId);
+          await coordinator.queryOperationProjectionById(operation.operationId);
         t.equal(
           deliveries.length,
           1,
@@ -306,7 +306,7 @@ export async function registerReplaceReplicaWorkflowTailTests({
         }
 
         const persistedAfterRetry =
-          await coordinator.queryOperationById(operation.operationId);
+          await coordinator.queryOperationProjectionById(operation.operationId);
         t.equal(
           deliveries.length,
           1,
@@ -764,7 +764,7 @@ export async function registerReplaceReplicaWorkflowTailTests({
   );
 
   await t.test(
-    'RebalanceCoordinator reconcileSyncingOperation advances REPLACE into source removal',
+    'RebalanceCoordinator PROGRESS reconcile advances a SYNCING REPLACE into source removal',
     async (t) => {
       const deliveries = [];
       const messageRouter = {
@@ -822,7 +822,7 @@ export async function registerReplaceReplicaWorkflowTailTests({
           address: `node-2/partition/${operation.replicaId}`,
         });
 
-        await coordinator.reconcileSyncingOperation(operation);
+        await coordinator.reconcileOperationProgress(operation);
 
         t.equal(deliveries.length, 1,
           'syncing reconciliation should dispatch the source removal phase');
@@ -988,7 +988,7 @@ export async function registerReplaceReplicaWorkflowTailTests({
         }
 
         const persistedOperation =
-          await coordinator.queryOperationById(TEST_OPERATION_ID);
+          await coordinator.queryOperationProjectionById(TEST_OPERATION_ID);
         t.equal(
           deliveries.length,
           0,
@@ -1139,7 +1139,7 @@ export async function registerReplaceReplicaWorkflowTailTests({
         await settle();
 
         const waiting =
-          await coordinator.queryOperationById(TEST_OPERATION_ID);
+          await coordinator.queryOperationProjectionById(TEST_OPERATION_ID);
         t.equal(
           deliveries.length,
           0,
@@ -1163,7 +1163,7 @@ export async function registerReplaceReplicaWorkflowTailTests({
           ),
         );
         const persistedOperation =
-          await coordinator.queryOperationById(TEST_OPERATION_ID);
+          await coordinator.queryOperationProjectionById(TEST_OPERATION_ID);
         t.equal(
           persistedOperation.workflowStep,
           WORKFLOW_STEP.REMOVED,
@@ -1289,7 +1289,7 @@ export async function registerReplaceReplicaWorkflowTailTests({
         await new Promise((resolve) => setImmediate(resolve));
 
         const persistedOperation =
-          await coordinator.queryOperationById(TEST_OPERATION_ID);
+          await coordinator.queryOperationProjectionById(TEST_OPERATION_ID);
         t.equal(
           deliveries.length,
           0,
@@ -1416,7 +1416,7 @@ export async function registerReplaceReplicaWorkflowTailTests({
         await new Promise((resolve) => setImmediate(resolve));
 
         const persistedOperation =
-          await coordinator.queryOperationById(TEST_OPERATION_ID);
+          await coordinator.queryOperationProjectionById(TEST_OPERATION_ID);
         t.equal(
           deliveries.length,
           0,

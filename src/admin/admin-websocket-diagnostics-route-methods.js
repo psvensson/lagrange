@@ -10,6 +10,9 @@ import {
 import {resolveControlSnapshotQueryResult} from './admin-control-snapshot-query-result-helper.js';
 import {ADMIN_WEBSOCKET_API_SHARED} from './admin-websocket-api-shared.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+import {collectNodeHealth} from '../diagnostics/node-health-collection.js';
+
+const NODE_HEALTH_QUERY_SINCE_KEY = 'sinceMs';
 
 const SNAPSHOT_RETRY_LOG_MSG =
   'Snapshot query encountered pressure or timeout. Retrying after stale socket cleanup...';
@@ -186,6 +189,16 @@ const ADMIN_WEBSOCKET_DIAGNOSTICS_ROUTE_METHODS = {
       nodeId: this.nodeId,
       timestamp: Date.now(),
       diagnostics: report,
+    });
+  },
+
+  // This node's health buffer slice. A hint for operators and reports: the
+  // answer is built on request from process memory and is never stored.
+  async handleNodeHealth(request, reply) {
+    const sinceMs = Number(request?.query?.[NODE_HEALTH_QUERY_SINCE_KEY]);
+    reply.code(HTTP_STATUS.OK).send({
+      nodeId: this.nodeId,
+      health: collectNodeHealth({sinceMs: Number.isFinite(sinceMs) ? sinceMs : 0}),
     });
   },
 

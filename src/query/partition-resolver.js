@@ -143,7 +143,7 @@ class PartitionResolver {
     if (keyConditions.contradiction) {
       return {
         partitionIds: [],
-        predicateShape: PREDICATE_SHAPE.POINT,
+        predicateShape: PREDICATE_SHAPE.CONTRADICTION,
       };
     }
 

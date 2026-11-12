@@ -90,6 +90,8 @@ const PHASE_HORIZON_MS = 1000;
 const SIM_SEED_DATA_DIR_PREFIX = 'formation-sim-seed-';
 const PARTITION_PHASE_HORIZON_MS = 120000;
 
+const SIM_SEED_FORMATION_TARGET_NODE_COUNT = 1;
+
 function refusePrecomposedInfrastructure(options) {
   for (const key of PRECOMPOSED_INFRASTRUCTURE_KEYS) {
     if (options[key] === undefined || options[key] === null) continue;
@@ -358,6 +360,10 @@ function createProductionSeedSimHostSync(environment, options = {}) {
       // (reserveSimulatedBootIncarnation), exactly as production startup does.
       bootIncarnation: options.bootIncarnation,
       nodeService: environment.nodeService, routerFactory, randomSource,
+      // The declared formation size has no production default: a composition
+      // of N nodes declares N; a seed mounted alone declares itself (1).
+      formationTargetNodeCount:
+        options.formationTargetNodeCount ?? SIM_SEED_FORMATION_TARGET_NODE_COUNT,
     });
   } catch (error) {
     dataDirectoryProcessOwner.release();

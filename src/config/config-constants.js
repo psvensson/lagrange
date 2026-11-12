@@ -8,6 +8,8 @@ import {
   DEFAULT_CONFIG,
 } from './config-definitions.js';
 import {LISTENER_PORT_ENV} from './listener-port-model.js';
+import {FORMATION_TARGET_NODE_COUNT_ENV, parseFormationTargetNodeCountEnv} from
+  './formation-target-node-count.js';
 
 const CONFIG_CATEGORY = Object.freeze({
   RAFT: 'raft',
@@ -182,7 +184,18 @@ const ENV_MAPPINGS = {
   WORKER_MIN_THREADS: CONFIG_KEY.WORKER_MIN_THREADS,
   WORKER_MAX_THREADS: CONFIG_KEY.WORKER_MAX_THREADS,
   DATA_DIR: CONFIG_KEY.STORAGE_DATA_DIR,
+  // The declared formation size; LAGRANGE_-prefixed like the other runtime
+  // controls the distributed harness passes into node containers.
+  [FORMATION_TARGET_NODE_COUNT_ENV]: CONFIG_KEY.FORMATION_TARGET_NODE_COUNT,
 };
+
+/**
+ * Environment parsers for configuration paths that have no default to infer
+ * a type from. A parser returns the typed value or throws its typed refusal.
+ */
+const ENV_VALUE_PARSERS = Object.freeze({
+  [CONFIG_KEY.FORMATION_TARGET_NODE_COUNT]: parseFormationTargetNodeCountEnv,
+});
 
 /**
  * Deprecated environment variable names, mapped to their canonical
@@ -228,6 +241,7 @@ export {
   CONFIG_VALUE_TYPE,
   DEFAULT_CONFIG,
   ENV_MAPPINGS,
+  ENV_VALUE_PARSERS,
   LEGACY_ENV_ALIASES,
   STRING,
 };

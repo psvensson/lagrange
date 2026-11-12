@@ -14,6 +14,8 @@ import {
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
 } from './test-helpers.js';
+import {buildPresentOperationVisibility} from
+  '../../src/rebalancer/replica-operation-repository-operation-visibility.js';
 
 function createAdmissionCoordinator() {
   const coordinator = new RebalanceCoordinator({
@@ -210,10 +212,8 @@ test('CREATE redispatch adopts the durable admission tuple instead of mutable ' 
   owner.repository.isOperationLocallyOwned = () => true;
   owner.repository.isReplaceRemoveDispatchPhase = () => false;
   owner.repository.getReplaceSourceReplicaId = () => null;
-  owner.repository.getOperationByIdVisibilityObservation = async () => ({
-    operation: durable,
-    deferredOutcome: null,
-  });
+  owner.repository.getOperationByIdVisibilityObservation = async () =>
+    buildPresentOperationVisibility(durable);
   owner.isCreateRearmDispatchPhase = () => false;
   owner.isPriorityRecoverySupersededTargetFailureApplicable = () => false;
   owner.evaluateRemoveSafety = async () => null;
@@ -242,34 +242,30 @@ test('CREATE redispatch adopts the durable admission tuple instead of mutable ' 
       'redispatch carries the exact durable attempt token');
     t.equal(delivered[0].request.createAdmissionWorkflowUpdatedAt, 101,
       'mutable CREATING updated_at cannot rotate the SENDING anchor');
-    t.equal(delivered[0].operation, durable,
+    t.same(delivered[0].operation, durable,
       'the workflow owner dispatches the authoritative row snapshot');
 
     delivered.length = 0;
-    owner.repository.getOperationByIdVisibilityObservation = async () => ({
-      operation: {
+    owner.repository.getOperationByIdVisibilityObservation = async () =>
+      buildPresentOperationVisibility({
         ...stale,
         status: 'failed',
         workflowStep: WORKFLOW_STEP.FAILED,
         completedAt: 404,
-      },
-      deferredOutcome: null,
-    });
+      });
     const terminalFirst = await owner.executeOperationInternal(stale, {});
     t.equal(terminalFirst.skipped, true,
       'a terminal row observed by the owner refuses late CREATE');
     t.equal(delivered.length, 0,
       'terminal-first ordering reaches no physical delivery');
 
-    owner.repository.getOperationByIdVisibilityObservation = async () => ({
-      operation: {
+    owner.repository.getOperationByIdVisibilityObservation = async () =>
+      buildPresentOperationVisibility({
         ...durable,
         status: 'failed',
         workflowStep: WORKFLOW_STEP.FAILED,
         completedAt: 404,
-      },
-      deferredOutcome: null,
-    });
+      });
     const admissionFirst = await owner.executeOperationInternal(stale, {});
     t.equal(admissionFirst.success, true,
       'admission-first terminal work remains recoverable');
@@ -287,10 +283,8 @@ test('CREATE redispatch adopts the durable admission tuple instead of mutable ' 
       createAdmissionPreviousAttemptToken: durable.createAdmissionAttemptToken,
       createAdmissionAttemptSeq: 2,
     };
-    owner.repository.getOperationByIdVisibilityObservation = async () => ({
-      operation: rotated,
-      deferredOutcome: null,
-    });
+    owner.repository.getOperationByIdVisibilityObservation = async () =>
+      buildPresentOperationVisibility(rotated);
     const rotatedResult = await owner.executeOperationInternal({...durable}, {});
     t.equal(rotatedResult.success, true,
       'redispatch when caller already holds attempt 1 refreshes from authority');
@@ -362,10 +356,8 @@ test('lost CREATE response adopts durable admission and cannot terminalize ' +
   };
 
   try {
-    owner.repository.getOperationByIdVisibilityObservation = async () => ({
-      operation: admitted,
-      deferredOutcome: null,
-    });
+    owner.repository.getOperationByIdVisibilityObservation = async () =>
+      buildPresentOperationVisibility(admitted);
     const admittedResult = await owner.executeOperationInternal(
       {...operation},
       {},
@@ -381,10 +373,8 @@ test('lost CREATE response adopts durable admission and cannot terminalize ' +
       'retention binds the exact durable attempt token');
 
     retained.length = 0;
-    owner.repository.getOperationByIdVisibilityObservation = async () => ({
-      operation,
-      deferredOutcome: null,
-    });
+    owner.repository.getOperationByIdVisibilityObservation = async () =>
+      buildPresentOperationVisibility(operation);
     owner.failOperation = async (_candidate, _message, options) => {
       failCalls += 1;
       t.equal(options.requireCreateAdmissionAbsent, true,

@@ -3,7 +3,8 @@ import {
   PRESSURE_WORK_CLASS,
   PressureGovernor,
 } from '../control-plane/pressure-governor.js';
-import {PARTITION_SERVICE_EVENT} from '../partition/partition-service-constants.js';
+import {PartitionServiceRegistry} from
+  '../bootstrap/shared/partition-service-registry.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 
@@ -18,6 +19,22 @@ const MIGRATION_RECOVERY_LOG_MSG = Object.freeze({
   COMPLETE: 'Schema migration recovery completed',
   FAILED: 'Schema migration recovery failed',
 });
+
+const MIGRATION_RECOVERY_ERROR = Object.freeze({
+  REGISTRY_REQUIRED: Object.freeze({
+    code: 'MIGRATION_RECOVERY_PARTITION_REGISTRY_REQUIRED',
+    message: 'Migration recovery requires the node partition-service registry ' +
+      '(PartitionServiceRegistry) to observe leader elections',
+  }),
+  ENGINE_REQUIRED: Object.freeze({
+    code: 'MIGRATION_RECOVERY_SQL_ENGINE_REQUIRED',
+    message: 'Migration recovery requires the SQL query engine',
+  }),
+});
+
+function migrationRecoveryError(entry) {
+  return Object.assign(new Error(entry.message), {code: entry.code});
+}
 
 const MIGRATION_RECOVERY_DEFAULT = Object.freeze({
   LEADER_ELECTION_COOLDOWN_MS: 1000,
@@ -66,10 +83,13 @@ function wireMigrationRecoveryOnLeaderElection(options = {}) {
     options.leaderElectionCooldownMs >= 0 ?
       Math.floor(options.leaderElectionCooldownMs) :
       MIGRATION_RECOVERY_DEFAULT.LEADER_ELECTION_COOLDOWN_MS;
-  if (!sqlQueryEngine ||
-      !partitionServices ||
-      typeof partitionServices.values !== LOCAL_STR_FUNCTION) {
-    return () => {};
+  if (!sqlQueryEngine) {
+    throw migrationRecoveryError(MIGRATION_RECOVERY_ERROR.ENGINE_REQUIRED);
+  }
+  // Leader elections are observed through the registry, never over the
+  // partitions that exist now: a partition created later must trigger too.
+  if (!(partitionServices instanceof PartitionServiceRegistry)) {
+    throw migrationRecoveryError(MIGRATION_RECOVERY_ERROR.REGISTRY_REQUIRED);
   }
 
   let pressureGovernor = options.pressureGovernor || null;
@@ -176,44 +196,22 @@ function wireMigrationRecoveryOnLeaderElection(options = {}) {
     return startRecovery(reason);
   };
 
-  const handlers = [];
-  for (const partitionService of partitionServices.values()) {
-    if (!partitionService || typeof partitionService.on !== LOCAL_STR_FUNCTION) {
-      continue;
-    }
-    const handler = () => {
-      void triggerRecovery(MIGRATION_RECOVERY_REASON.LEADER_ELECTED);
-    };
-    partitionService.on(PARTITION_SERVICE_EVENT.LEADER_ELECTED, handler);
-    handlers.push({
-      partitionService,
-      handler,
-    });
-  }
+  const unsubscribeLeaderElected = partitionServices.subscribeLeaderElected(() => {
+    void triggerRecovery(MIGRATION_RECOVERY_REASON.LEADER_ELECTED);
+  });
 
   void triggerRecovery(MIGRATION_RECOVERY_REASON.NODE_RESTART);
 
   return () => {
     clearScheduledRecovery();
     pendingLeaderElectionRecovery = false;
-    for (const entry of handlers) {
-      if (typeof entry.partitionService?.off === LOCAL_STR_FUNCTION) {
-        entry.partitionService.off(
-          PARTITION_SERVICE_EVENT.LEADER_ELECTED,
-          entry.handler,
-        );
-      } else if (typeof entry.partitionService?.removeListener === LOCAL_STR_FUNCTION) {
-        entry.partitionService.removeListener(
-          PARTITION_SERVICE_EVENT.LEADER_ELECTED,
-          entry.handler,
-        );
-      }
-    }
+    unsubscribeLeaderElected();
   };
 }
 
 export {
   MIGRATION_RECOVERY_DEFAULT,
+  MIGRATION_RECOVERY_ERROR,
   MIGRATION_RECOVERY_LOG_MSG,
   MIGRATION_RECOVERY_REASON,
   recoverMigrationsForReason,

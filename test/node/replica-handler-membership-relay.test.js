@@ -62,6 +62,9 @@ test('consensus relay: a committed RemoveNode reaches the registry\'s ' +
       'the first applied configuration is relayed');
     const retiring = FOUNDING.find((id) => id !== leader && id !== watched);
     const retiringPeerId = String(cluster.raftPeerIdOf(retiring));
+    // The leader hears its voters answer before it is asked a removal: its
+    // admission counts only voters it heard from (REMOVES_LIVE_QUORUM).
+    cluster.settle(() => false, {rounds: 3});
     cluster.node(leader).proposeConfChange({
       type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER,
       replicaIdentity: retiring,

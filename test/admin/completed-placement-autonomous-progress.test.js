@@ -170,6 +170,17 @@ test('ordinary observations remain mutation-free during degradation through prod
       .publicationActiveGateHandoff.reasonCode,
     'owner_reconcile_pending',
   );
+  // The handoff contract's decision for this fixture, stated explicitly: the
+  // missing node is the publication owner's to reconcile. The readiness
+  // owner's cluster-wide recovery reason is one gate fact; it lists no node
+  // as waiting and never turns the action into a wait.
+  const observedHandoff =
+    resolvedWithReadiness.controlPlaneDiagnostics.publicationActiveGateHandoff;
+  assert.equal(observedHandoff.nextAction,
+    'reconcile_owner_membership_publication');
+  assert.deepEqual(observedHandoff.pendingReconcileNodeIds, ['node-3']);
+  assert.deepEqual(observedHandoff.pendingRecoveryNodeIds, []);
+  assert.equal(observedHandoff.recoveryGate.state, 'active');
 
   // 2. Ordinary AdminWebSocketAPI snapshot query & service discovery entrypoints
   await api.buildLocalControlSnapshot();

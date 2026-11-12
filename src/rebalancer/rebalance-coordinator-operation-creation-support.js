@@ -1,4 +1,3 @@
-import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_FAILED_TO_PRIME_COORDINATOR_CREATED_OPER =
@@ -8,10 +7,6 @@ const OWNER_PROGRESS_STEP_METHOD = Object.freeze({
   DISPATCH_AFTER_CREATE_BUDGET_TURN:
     'dispatchCoordinatorCreatedOperationAfterCreateBudgetTurn',
 });
-
-const {
-  STRICT_CREATE_DEDUPE_REPOSITORY_QUERY_OPTIONS,
-} = REBALANCE_COORDINATOR_SHARED;
 
 const operationCreationSupportMethods = {
   async queryExistingOperationAfterInsertConflict(context) {
@@ -35,7 +30,6 @@ const operationCreationSupportMethods = {
       entityType,
       entityId,
       normalizedMove,
-      STRICT_CREATE_DEDUPE_REPOSITORY_QUERY_OPTIONS,
     );
   },
 

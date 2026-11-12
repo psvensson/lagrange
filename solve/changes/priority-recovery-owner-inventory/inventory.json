@@ -2,7 +2,7 @@
   "schemaVersion": "priority-recovery-owner-inventory-v1",
   "generatedFrom": {
     "root": "src",
-    "sourceSha256": "41fe50cf9cfba40b4682e387ba0760df69761ebd5573fa62ce0e99755821ae53"
+    "sourceSha256": "7bdc4ead85c3a384982bf1da7a40d0d317157e41099c09ad21935f6683661565"
   },
   "layerDirection": [
     "raw_observation",
@@ -19,7 +19,7 @@
   "metrics": {
     "moduleCount": 67,
     "publicExportCount": 773,
-    "importEdgeCount": 320,
+    "importEdgeCount": 322,
     "crossLayerEdgeCount": 96,
     "layerDirectionViolationCount": 48,
     "largestStronglyConnectedComponent": 1,
@@ -5155,8 +5155,28 @@
     },
     {
       "from": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
+      "specifier": "./background-priority-spread-release-condition.js",
+      "to": "src/rebalancer/background-priority-spread-release-condition.js",
+      "targetModule": false,
+      "sourceLayer": "owner_decision",
+      "targetLayer": null,
+      "crossLayer": false,
+      "conformsToLayerDirection": null
+    },
+    {
+      "from": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
       "specifier": "./background-priority-spread-release-tracker.js",
       "to": "src/rebalancer/background-priority-spread-release-tracker.js",
+      "targetModule": false,
+      "sourceLayer": "owner_decision",
+      "targetLayer": null,
+      "crossLayer": false,
+      "conformsToLayerDirection": null
+    },
+    {
+      "from": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
+      "specifier": "./background-spread-fence-exemption.js",
+      "to": "src/rebalancer/background-spread-fence-exemption.js",
       "targetModule": false,
       "sourceLayer": "owner_decision",
       "targetLayer": null,

@@ -40,6 +40,8 @@ import {
   shouldReleaseReservationForTerminalOutcome,
 } from '../../src/rebalancer/operation-workflow-terminal-reservation-release.js';
 import {createTestCoordinator} from './test-helpers.js';
+import {presentOperationOf} from
+  '../../src/rebalancer/replica-operation-repository-operation-visibility.js';
 
 const TEST_NODE_ID = 'node-a';
 const TEST_TARGET_NODE_ID = 'node-b';
@@ -636,8 +638,10 @@ test(
       );
 
       // The durable row still carries exactly the winner's terminal state.
-      const durable = await repository.queryReplicaOperationPersistenceAuthorityOperation(
-        {operationId: DUEL_OPERATION_ID},
+      const durable = presentOperationOf(
+        await repository.queryReplicaOperationPersistenceAuthorityObservation(
+          {operationId: DUEL_OPERATION_ID},
+        ),
       );
       t.equal(
         durable?.workflowStep,

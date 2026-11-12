@@ -1,6 +1,11 @@
 // Invocation/source-lifetime component witnesses. The existing controllable
 // consensus fixture supplies role events to real PartitionService owners.
 // There is no native election, admitted SQL debt or fabricated native receipt.
+// A durable delivery is one vector: the subscriber contract is
+// (events, invocation), answered over that exact vector. The one caller is
+// the obligation lane: each delivery runs under one recipient's custody slot
+// (custodyOf) and invocation, with the vector captured as the lane captures
+// it (deliver, below).
 import assert from 'node:assert/strict';
 import {afterEach, beforeEach, test} from 'node:test';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
@@ -10,6 +15,8 @@ import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
 import {CDC_COMPLETION, buildProvisionalCdcOutcome} from '../../src/cdc/cdc-delivery-outcome.js';
 import {assertCdcDeliveryInvocation, beginCdcDeliveryInvocation, isCdcDeliveryInvocation} from
   '../../src/cdc/cdc-delivery-invocation.js';
+import {captureCdcEvents} from '../../src/cdc/cdc-event-envelope.js';
+import {custodyOf} from '../../src/partition/partition-cdc-recipient-drive.js';
 import {PARTITION_CDC_OBLIGATION_DRIVE_STATE} from
   '../../src/partition/partition-cdc-obligation-constants.js';
 import {PARTITION_ID, REPLICAS, TABLE, resetFixtureSingletons, clearFixtureSingletons,
@@ -72,9 +79,28 @@ function sourceEvent(key = 'invocation-component-write') {
     eventKey: key, entryId: key, sourceLogIndex: 7, sourceOrdinal: 0};
 }
 
-function provisional(event) {
-  // A canonical component return, not evidence that a real recipient applied.
-  return buildProvisionalCdcOutcome([event], 1, 'component-recipient');
+const RECIPIENT_KEY = 'component-recipient';
+
+// One recipient's delivery as the lane composes it: its custody slot, its
+// invocation for this tenure, the captured immutable vector.
+async function deliverAsRecipient(leader, subscriber, events) {
+  const tenure = leader.leadershipTenure;
+  const context = beginCdcDeliveryInvocation(custodyOf(leader.cdcDelivery, RECIPIENT_KEY),
+    () => leader.isLeader && leader.leadershipTenure === tenure);
+  try {
+    const envelopes = captureCdcEvents(events);
+    const captured = Object.freeze(events.map((event, index) =>
+      Object.freeze({...event, ...envelopes[index]})));
+    return await leader.cdcDelivery.deliverCdcVectorToSubscriber(subscriber, captured, context);
+  } finally {
+    context.finish();
+  }
+}
+
+function provisional(events) {
+  // A canonical component return over the delivered vector, not evidence
+  // that a real recipient applied.
+  return buildProvisionalCdcOutcome(events, 1, 'component-recipient');
 }
 
 async function fixture(t) {
@@ -111,9 +137,10 @@ async function fixture(t) {
       return observed;
     },
     trackContext,
+    deliver: (subscriber, events) => deliverAsRecipient(leader, subscriber, events),
     begin(onClosed = () => {}) {
       const tenure = leader.leadershipTenure;
-      return trackContext(beginCdcDeliveryInvocation(leader.cdcDelivery,
+      return trackContext(beginCdcDeliveryInvocation(custodyOf(leader.cdcDelivery, RECIPIENT_KEY),
         () => leader.isLeader && leader.leadershipTenure === tenure, onClosed));
     },
   };
@@ -128,10 +155,10 @@ function assertUnknown(answer) {
 
 async function assertBackpressure(f) {
   let entered = 0;
-  const response = f.observe(f.delivery.deliverCDCEventToSubscriber((event) => {
+  const response = f.observe(f.deliver((events) => {
     entered += 1;
-    return provisional(event);
-  }, sourceEvent('must-not-dispatch')));
+    return provisional(events);
+  }, [sourceEvent('must-not-dispatch')]));
   await response.promise;
   assert.equal(response.error?.code, CDC_COMPLETION.BACKPRESSURE);
   assert.equal(entered, 0, 'occupied cleanup custody prevents new callback/payload work');
@@ -139,11 +166,11 @@ async function assertBackpressure(f) {
 
 async function assertFreshAdmission(f) {
   let entered = 0;
-  const result = await f.delivery.deliverCDCEventToSubscriber((event, context) => {
+  const result = await f.deliver((events, context) => {
     f.trackContext(context);
     entered += 1;
-    return provisional(event);
-  }, sourceEvent('fresh-admission'));
+    return provisional(events);
+  }, [sourceEvent('fresh-admission')]);
   assert.equal(result.error, CDC_COMPLETION.PROVISIONAL);
   assert.equal(entered, 1, 'actual settlement makes capacity available again');
 }
@@ -153,13 +180,15 @@ test('PartitionCDCDelivery captures immutable events and carries its context', a
   const input = sourceEvent();
   const expected = structuredClone(input);
   let seen;
+  let vector;
   let context;
-  const response = f.observe(f.delivery.deliverCDCEventToSubscriber((event, invocation) => {
+  const response = f.observe(f.deliver((events, invocation) => {
     context = f.trackContext(invocation);
-    seen = event;
+    vector = events;
+    [seen] = events;
     assertCdcDeliveryInvocation(invocation);
-    return provisional(event);
-  }, input));
+    return provisional(events);
+  }, [input]));
   input.data.value = 'caller-mutated';
   input.data.nested.values.push('caller-mutated');
   input.timestamp = 'later-caller-value';
@@ -167,11 +196,31 @@ test('PartitionCDCDelivery captures immutable events and carries its context', a
   assert.equal(response.error, undefined);
   assert.equal(response.value.error, CDC_COMPLETION.PROVISIONAL);
   assert.deepEqual(seen, expected);
+  assert.equal(vector.length, 1);
+  assert.equal(Object.isFrozen(vector), true, 'the delivered vector is immutable');
   assert.equal(Object.isFrozen(seen), true);
   assert.equal(Object.isFrozen(seen.data.nested.values), true);
   assert.equal(Object.hasOwn(seen, 'deliveryContext'), false);
   await context.cleanup;
   assert.throws(() => assertCdcDeliveryInvocation(context), {code: CDC_COMPLETION.UNKNOWN});
+});
+
+test('durable events have one delivery shape: the ordinary single-event entry refuses a ' +
+  'durable event and the vector entry refuses an ordinary one', async (t) => {
+  const f = await fixture(t);
+  let entered = 0;
+  const subscriber = () => {
+    entered += 1;
+  };
+  await assert.rejects(f.delivery.deliverCDCEventToSubscriber(subscriber, sourceEvent()),
+    {code: CDC_COMPLETION.INVALID});
+  const ordinary = {tableName: TABLE, operation: CDC_OPERATION.INSERT, data: {id: 'ordinary'}};
+  await assert.rejects(f.delivery.deliverCdcVectorToSubscriber(subscriber, [ordinary]),
+    {code: CDC_COMPLETION.INVALID});
+  await assert.rejects(f.delivery.deliverCdcVectorToSubscriber(subscriber, []),
+    {code: CDC_COMPLETION.INVALID});
+  assert.equal(entered, 0, 'no subscriber work for a shape that has no contract');
+  await assertFreshAdmission(f);
 });
 
 test('invocation refuses a late fulfillment at the deadline before its timer callback runs',
@@ -215,12 +264,12 @@ test('spent delivery retains capacity until every actual local child settles', a
   const child = f.gate();
   let context;
   let captured;
-  const response = f.observe(f.delivery.deliverCDCEventToSubscriber((event, invocation) => {
-    captured = event;
+  const response = f.observe(f.deliver((events, invocation) => {
+    captured = events;
     context = f.trackContext(invocation);
     invocation.ownChild(child.promise);
     return handler.promise;
-  }, sourceEvent()));
+  }, [sourceEvent()]));
   await settleTicks();
   const cleanup = f.observe(context.cleanup);
   f.clock.elapse(context.remainingMs());
@@ -247,13 +296,13 @@ test('tenure changes retain cleanup custody and fence old answers', async (t) =>
   let context;
   let captured;
   let entered = 0;
-  const response = f.observe(f.delivery.deliverCDCEventToSubscriber((event, invocation) => {
+  const response = f.observe(f.deliver((events, invocation) => {
     entered += 1;
-    captured = event;
+    captured = events;
     context = f.trackContext(invocation);
     invocation.ownChild(child.promise);
     return handler.promise;
-  }, sourceEvent()));
+  }, [sourceEvent()]));
   await settleTicks();
   const cleanup = f.observe(context.cleanup);
   for (let turn = 0; turn < 3; turn += 1) {
@@ -263,7 +312,7 @@ test('tenure changes retain cleanup custody and fence old answers', async (t) =>
     f.leader.controllablePort.setRole(RAFT_ROLE.LEADER);
     assert.notEqual(f.leader.leadershipTenure, previous);
     const drive = await f.delivery.driveCdcObligations('component-tenure-change');
-    assert.equal(drive.state, PARTITION_CDC_OBLIGATION_DRIVE_STATE.JOINED_IN_FLIGHT);
+    assert.equal(drive.state, PARTITION_CDC_OBLIGATION_DRIVE_STATE.NO_SUBSCRIBERS);
     await settleTicks();
     assertUnknown(response);
     assert.equal(cleanup.settled, false);
@@ -287,12 +336,12 @@ test('real source shutdown fences the response and retains SQLite custody until 
     const child = f.gate();
     const db = f.leader.db;
     let captured;
-    const response = f.observe(f.delivery.deliverCDCEventToSubscriber((event, invocation) => {
+    const response = f.observe(f.deliver((events, invocation) => {
       f.trackContext(invocation);
-      captured = event;
+      captured = events;
       invocation.ownChild(child.promise);
       return handler.promise;
-    }, sourceEvent()));
+    }, [sourceEvent()]));
     await settleTicks();
     const shutdown = f.observe(f.leader.shutdown());
     await settleTicks();
@@ -310,9 +359,9 @@ test('real source shutdown fences the response and retains SQLite custody until 
     assert.equal(shutdown.error, undefined);
     assert.equal(db.open, false);
     let entered = 0;
-    const after = f.observe(f.delivery.deliverCDCEventToSubscriber(() => {
+    const after = f.observe(f.deliver(() => {
       entered += 1;
-    }, sourceEvent('after-shutdown')));
+    }, [sourceEvent('after-shutdown')]));
     await after.promise;
     assertUnknown(after);
     assert.equal(entered, 0);
@@ -362,9 +411,9 @@ test('copied or counterfeit invocation contexts are refused before subscriber wo
   for (const candidate of [{}, counterfeit, {...context}, Object.create(context)]) {
     assert.equal(isCdcDeliveryInvocation(candidate), false);
     assert.throws(() => assertCdcDeliveryInvocation(candidate), {code: CDC_COMPLETION.INVALID});
-    const response = f.observe(f.delivery.deliverCDCEventToSubscriber(() => {
+    const response = f.observe(f.delivery.deliverCdcVectorToSubscriber(() => {
       invoked += 1;
-    }, sourceEvent(), candidate));
+    }, [sourceEvent()], candidate));
     await response.promise;
     assert.equal(response.error?.code, CDC_COMPLETION.INVALID);
   }

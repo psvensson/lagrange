@@ -3,6 +3,8 @@ import {
   readinessCollaboratorFake,
   withNodeReadinessService,
 } from '../helpers/readiness-service-fixture.js';
+import {stubAnsweredIncompleteOperationsRead} from
+  './incomplete-operations-read-stub.js';
 export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionTests({
   test,
   RebalanceCoordinator,
@@ -320,7 +322,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
             };
           },
         });
-      coordinator.queryIncompleteOperations = async () => ([{
+      stubAnsweredIncompleteOperationsRead(coordinator, () => ([{
         operationId: 'op-non-priority-inflight',
         type: OperationType.ADD,
         partitionId: 'users-p1',
@@ -334,7 +336,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
         completedAt: null,
         errorMessage: null,
         stepsHistory: [],
-      }]);
+      }]));
 
       try {
         let nonPriorityError = null;
@@ -412,7 +414,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
       coordinator.initialize();
       coordinator.config.maxConcurrentAdds = 2;
       coordinator.getLatestMembershipPublicationRow = () => publicationRow;
-      coordinator.queryIncompleteOperations = async () => ([{
+      stubAnsweredIncompleteOperationsRead(coordinator, () => ([{
         operationId: 'op-non-priority-inflight',
         type: OperationType.ADD,
         partitionId: 'users-p1',
@@ -426,7 +428,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
         completedAt: null,
         errorMessage: null,
         stepsHistory: [],
-      }]);
+      }]));
 
       try {
         let activeRecoveryError = null;
@@ -631,7 +633,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
             };
           },
         });
-      coordinator.queryIncompleteOperations = async () => ([{
+      stubAnsweredIncompleteOperationsRead(coordinator, () => ([{
         operationId: 'op-priority-sql-write',
         type: OperationType.ADD,
         partitionId: 'sql_write_operations-p1',
@@ -645,7 +647,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
         completedAt: null,
         errorMessage: null,
         stepsHistory: [],
-      }]);
+      }]));
 
       try {
         let ordinaryPriorityError = null;
@@ -860,7 +862,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
       }));
       coordinator.initialize();
       coordinator.config.maxConcurrentAdds = 1;
-      coordinator.queryIncompleteOperations = async () => ([{
+      stubAnsweredIncompleteOperationsRead(coordinator, () => ([{
         operationId: 'op-priority-remove-phase',
         type: 'REPLACE',
         partitionId: 'sql_write_operations-p1',
@@ -874,7 +876,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
         completedAt: null,
         errorMessage: null,
         stepsHistory: [],
-      }]);
+      }]));
 
       try {
         await coordinator.ensureConcurrentOperationBudgetAllowed(

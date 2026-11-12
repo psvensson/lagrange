@@ -16,9 +16,8 @@ const OWNER_RECOVERY_CONVERGENCE_CLASS = 'critical_convergence';
 const OWNER_RECOVERY_CRITICAL_DEFERRED = 'critical_deferred';
 const OWNER_RECOVERY_RETRY_AFTER_MS = 1000;
 const OWNER_RECOVERY_DRAINED_QUEUE_COUNT = 1;
-const OWNER_RECOVERY_ENQUEUED_COUNT = 1;
-const OWNER_RECOVERY_RECONCILE_REASON =
-  'active_gate_handoff_owner_reconcile';
+const OWNER_RECOVERY_SELF_ENQUEUE_COUNT = 0;
+const OWNER_RECOVERY_AWAITING_PROGRESS = 'awaiting_recovery_progress';
 const OWNER_RECOVERY_RUNTIME_PROMOTION_ALLOWED = false;
 const OWNER_RECOVERY_RECONCILE_REQUIRED = false;
 const OWNER_RECOVERY_PUBLISHED_NODE_IDS = Object.freeze(['node-1']);
@@ -93,7 +92,7 @@ test('active-gate owner recovery wait reports drained snapshot reentry',
     }
   });
 
-test('active-gate owner recovery wait enqueues owner wake reentry',
+test('active-gate owner recovery wait never re-enqueues its captured handoff',
   async (t) => {
     const enqueueCalls = [];
     const originalDrainQueueForSnapshot = SnapshotService.drainQueueForSnapshot;
@@ -112,29 +111,18 @@ test('active-gate owner recovery wait enqueues owner wake reentry',
         publicationOutcome,
         {
           state: OWNER_RECOVERY_TARGET_BLOCKED,
-          enqueued: true,
+          enqueued: false,
+          ownerRecoveryWait: OWNER_RECOVERY_AWAITING_PROGRESS,
           target: {
             pendingRecoveryNodeIds: [...OWNER_RECOVERY_PENDING_NODE_IDS],
           },
         },
-        'owner-recovery wait should expose accepted owner wake as bounded reentry',
+        'owner-recovery wait answers the named wait without a queued self re-run',
       );
       t.equal(
         enqueueCalls.length,
-        OWNER_RECOVERY_ENQUEUED_COUNT,
-        'owner-recovery wait should enqueue one owner wake',
-      );
-      t.match(
-        enqueueCalls[0],
-        {
-          reason: OWNER_RECOVERY_RECONCILE_REASON,
-          context: {
-            publicationActiveGateHandoff: {
-              nextAction: OWNER_RECOVERY_WAIT_ACTION,
-            },
-          },
-        },
-        'owner wake should carry the active-gate handoff context',
+        OWNER_RECOVERY_SELF_ENQUEUE_COUNT,
+        'the recovery owner progress ends the wait; the wait never re-enqueues the same handoff',
       );
     } finally {
       SnapshotService.drainQueueForSnapshot = originalDrainQueueForSnapshot;
@@ -143,7 +131,7 @@ test('active-gate owner recovery wait enqueues owner wake reentry',
     }
   });
 
-test('active-gate owner recovery wait enqueues owner wake after snapshot drain',
+test('active-gate owner recovery wait drains snapshot pressure without a self re-enqueue',
   async (t) => {
     const enqueueCalls = [];
     const originalDrainQueueForSnapshot = SnapshotService.drainQueueForSnapshot;
@@ -171,20 +159,8 @@ test('active-gate owner recovery wait enqueues owner wake after snapshot drain',
       );
       t.equal(
         enqueueCalls.length,
-        OWNER_RECOVERY_ENQUEUED_COUNT,
-        'draining snapshot pressure must not replace the owner wake',
-      );
-      t.match(
-        enqueueCalls[0],
-        {
-          reason: OWNER_RECOVERY_RECONCILE_REASON,
-          context: {
-            publicationActiveGateHandoff: {
-              nextAction: OWNER_RECOVERY_WAIT_ACTION,
-            },
-          },
-        },
-        'owner wake should still carry the active-gate handoff context',
+        OWNER_RECOVERY_SELF_ENQUEUE_COUNT,
+        'draining snapshot pressure is the only re-entry; the handoff is not re-enqueued',
       );
     } finally {
       SnapshotService.drainQueueForSnapshot = originalDrainQueueForSnapshot;

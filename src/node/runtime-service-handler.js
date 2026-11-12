@@ -36,7 +36,7 @@ import {createRestartLatch, notReadyReply, recoverRetainedCreations, resumeResta
   './runtime-service-restart-inventory.js';
 import {captureCreationRequest, replicaExecution, currentExecution,
   executionRefusal, installExecution, executionRequestConflict} from './runtime-service-creation-execution.js';
-import {SERVICE_INSTANCE_OUTCOME as CREATION_OUTCOME} from '../constants/service-instance.js';
+import {SERVICE_INSTANCE_OUTCOME} from '../constants/service-instance.js';
 import {createGenericReplica, removeGenericReplica, admitGenericRemoval} from './runtime-service-generic-replica.js';
 import {
   RUNTIME_SERVICE_CREATION_MEMO,
@@ -86,9 +86,6 @@ class RuntimeServiceHandler extends EventEmitter {
     options.serviceLifecycleManager || null;
     this.serviceRuntimeLifecycle =
       options.serviceRuntimeLifecycle || null;
-    this.legacyRemovalAuthority =
-      typeof options.legacyRemovalAuthority === 'function' ?
-        options.legacyRemovalAuthority : null;
     this.rpcClient = null;
     this.requestBindingRouteResolver =
       options.requestBindingRouteResolver ||
@@ -243,12 +240,12 @@ class RuntimeServiceHandler extends EventEmitter {
     try {
       params = captureCreationRequest(request, {operationId, entityId, replicaId});
     } catch (_error) {
-      return executionRefusal(this, CREATION_OUTCOME.CONTENT_CONFLICT, false);
+      return executionRefusal(this, SERVICE_INSTANCE_OUTCOME.CONTENT_CONFLICT, false);
     }
     const retainedReply = replyToRestartPlan(this, params);
     if (retainedReply !== undefined) return retainedReply;
     if (executionRequestConflict(this, params, ReplicaOperationMessageType.CREATE_REPLICA)) {
-      return executionRefusal(this, CREATION_OUTCOME.CONTENT_CONFLICT, false);
+      return executionRefusal(this, SERVICE_INSTANCE_OUTCOME.CONTENT_CONFLICT, false);
     }
     const inFlight = this.inProgressOperations.get(operationId);
     const existing = this.localReplicas.get(replicaId);
@@ -487,14 +484,14 @@ class RuntimeServiceHandler extends EventEmitter {
     try {
       params = captureCreationRequest(request, {operationId, entityId, replicaId, reason});
     } catch (_error) {
-      return executionRefusal(this, CREATION_OUTCOME.CONTENT_CONFLICT, false);
+      return executionRefusal(this, SERVICE_INSTANCE_OUTCOME.CONTENT_CONFLICT, false);
     }
     if (executionRequestConflict(this, params, ReplicaOperationMessageType.REMOVE_REPLICA)) {
-      return executionRefusal(this, CREATION_OUTCOME.CONTENT_CONFLICT, false);
+      return executionRefusal(this, SERVICE_INSTANCE_OUTCOME.CONTENT_CONFLICT, false);
     }
 
     // Observe a candidate without installing caller-supplied entity identity.
-    // A refused opaque request must not poison a later legitimate cleanup.
+    // A refused request must not poison a later legitimate cleanup.
     const originalMemo = this.localReplicas.get(replicaId);
     const replica = originalMemo ||
       this.recoverLocalReplicaForRemoval(replicaId, entityId, {publish: false});
@@ -512,32 +509,15 @@ class RuntimeServiceHandler extends EventEmitter {
       );
     }
 
-    if (replica.entityId !== entityId ||
-        (namesCreation(replica) &&
-          buildRuntimeServiceTargetClaimKey(replicaId, entityId) === null)) {
-      return executionRefusal(this, CREATION_OUTCOME.CONTENT_CONFLICT, false);
-    }
-    // An opaque historical target's services row is only custody evidence.
-    // Before any generic STOP consume the *original* operation owner's exact
-    // durable identity, not the incoming request's unverified entity claim.
-    if (!namesCreation(replica) &&
-        !runtimeServiceReplicaBelongsToEntity(replicaId, entityId)) {
-      let authorization;
-      try {
-        authorization = await this.legacyRemovalAuthority?.({
-          operationId, entityId, replicaId, nodeId: this.nodeId,
-        });
-      } catch {
-        authorization = {outcome: CREATION_OUTCOME.UNAVAILABLE};
-      }
-      if (authorization?.outcome !== CREATION_OUTCOME.ADMITTED) {
-        const conflict = authorization?.outcome === CREATION_OUTCOME.CONTENT_CONFLICT;
-        return executionRefusal(this, conflict ?
-          CREATION_OUTCOME.CONTENT_CONFLICT : CREATION_OUTCOME.UNAVAILABLE, !conflict);
-      }
-      if (this.stopped || this.localReplicas.get(replicaId) !== originalMemo) {
-        return notReadyReply(this);
-      }
+    // One identity contract: a bound creation names `${entityId}-rN`; any
+    // other replica is the bare entity id or `${entityId}-rN`. Every other id
+    // is a malformed identity (upgrade from pre-canonical state is
+    // unsupported), refused permanently before any STOP.
+    const canonical = namesCreation(replica) ?
+      buildRuntimeServiceTargetClaimKey(replicaId, entityId) !== null :
+      runtimeServiceReplicaBelongsToEntity(replicaId, entityId);
+    if (replica.entityId !== entityId || !canonical) {
+      return executionRefusal(this, SERVICE_INSTANCE_OUTCOME.CONTENT_CONFLICT, false);
     }
     if (originalMemo === undefined) {
       this.localReplicas.set(replicaId, replica);
@@ -741,16 +721,6 @@ class RuntimeServiceHandler extends EventEmitter {
    */
   getLocalReplica(replicaId) {
     return this.localReplicas.get(replicaId);
-  }
-
-  /**
-   * Register an existing replica (e.g. from recovery).
-   * @param {Object} replicaInfo
-   */
-  registerExistingReplica(replicaInfo) {
-    if (!this.stopped && replicaInfo?.replicaId) {
-      this.localReplicas.set(replicaInfo.replicaId, replicaInfo);
-    }
   }
 
   /**

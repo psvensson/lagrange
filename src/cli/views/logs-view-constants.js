@@ -35,10 +35,10 @@ export const LOGS_SORT_FALLBACK_ID_FIELD = 'log_id';
 export const LOGS_EMPTY_STRING = '';
 export const LOGS_VALUE_NA = 'N/A';
 
-export const LOGS_EVENT_LIVEQUERY_INITIALIZED = 'livequery:initialized';
+export const LOGS_EVENT_LIVEQUERY_RESULT = 'livequery:result';
+export const LOGS_EVENT_LIVEQUERY_ERROR = 'livequery:error';
 export const LOGS_EVENT_VIEW_REFRESH = 'view:refresh';
 export const LOGS_EVENT_LIVEQUERY_EVENT = 'livequery:event';
-export const LOGS_EVENT_TYPE_SNAPSHOT = 'SNAPSHOT';
 export const LOGS_EVENT_TYPE_INSERT = 'INSERT';
 export const LOGS_EVENT_TYPE_UPDATE = 'UPDATE';
 export const LOGS_EVENT_TYPE_DELETE = 'DELETE';

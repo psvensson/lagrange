@@ -10,7 +10,7 @@
  * as module-private functions. Shared helpers are imported from
  * admin-helpers.js.
  */
-import {COLUMN, NUM, TABLES, TIME_MS, TYPEOF} from '../constants/index.js';
+import {NUM, TABLES, TIME_MS, TYPEOF} from '../constants/index.js';
 import {PARTITION_TRANSITION_METADATA_FIELD} from '../partition/partition-constants.js';
 import {CONTROL_PLANE_READINESS_DIMENSION} from '../control-plane/control-plane-readiness-constants.js';
 import {CONTROL_PLANE_DELIVERY_PRIORITY} from '../control-plane/control-plane-constants.js';
@@ -143,7 +143,6 @@ assignAdminControlSnapshotReadinessDiagnosticsMethods(AdminControlSnapshot, {
   ADMIN_ERROR_MESSAGE,
   ADMIN_OPERATIONAL_DIAGNOSTICS,
   AUTHORITATIVE_REPAIR_TRIGGER,
-  COLUMN,
   CONSISTENCY_MISMATCH_KIND,
   CONTROL_PLANE_DIAGNOSTICS_LEDGER_LIMIT,
   CONTROL_PLANE_PUBLICATION_STORY_NODE_STATE_FIELD,
@@ -185,7 +184,6 @@ assignAdminControlSnapshotLocalDiagnosticsMethods(AdminControlSnapshot, {
   ADMIN_ERROR_MESSAGE,
   ADMIN_OPERATIONAL_DIAGNOSTICS,
   CDC_TELEMETRY_MODE,
-  COLUMN,
   NUM,
   PARTITION_STATE_UNKNOWN,
   SERVICE_TYPE_PARTITION,

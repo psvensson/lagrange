@@ -3,6 +3,8 @@
 import {founderNodeIdsOfPlacement} from
   '../../src/raft/raft-rs-committed-peer-address.js';
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+import {awaitRecipientBackoff} from '../test-helpers/cdc-delivery-progress-fixture.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -26,6 +28,8 @@ import {REPLICA_HANDLER_RETIREMENT_OUTCOME} from
 import {CDC_OPERATION, TABLES, SERVICE_STATUS} from '../../src/constants/index.js';
 import {SERVICES_SCHEMA} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {cdcSqlBuilder} from '../../src/cdc/cdc-sql-builder.js';
+import {PARTITION_CDC_OBLIGATION_BOUND} from
+  '../../src/partition/partition-cdc-obligation-constants.js';
 import {readCdcObligation, readCdcObligationProgress, readCdcObligationStanding} from
   '../../src/partition/partition-cdc-obligation-ledger.js';
 import {PARTICIPANT_CUTOVER_OUTCOME} from
@@ -50,6 +54,36 @@ const MICROTASKS = 16;
 
 function json(value) {
   return JSON.stringify(value, (_key, item) => typeof item === 'bigint' ? String(item) : item);
+}
+
+// A test diagnostic is a bounded projection of an observation: positions,
+// counts and states stay; a long string (a raft log, a payload) becomes its
+// length and digest, a long array its first members and a count, and the
+// line itself is capped, naming what it withheld. The runner's output bound
+// is never the place a witness's evidence ends.
+const DIAGNOSTIC_STRING_MAX = 96;
+const DIAGNOSTIC_ARRAY_MAX = 8;
+const DIAGNOSTIC_LINE_MAX = 4096;
+
+function digestOf(text) {
+  return createHash('sha256').update(text).digest('hex').slice(0, 16);
+}
+
+function diagnostic(value) {
+  const line = JSON.stringify(value, (_key, item) => {
+    if (typeof item === 'bigint') return String(item);
+    if (typeof item === 'string' && item.length > DIAGNOSTIC_STRING_MAX) {
+      return {length: item.length, sha256: digestOf(item)};
+    }
+    if (Array.isArray(item) && item.length > DIAGNOSTIC_ARRAY_MAX) {
+      return [...item.slice(0, DIAGNOSTIC_ARRAY_MAX), {omittedMembers: item.length -
+        DIAGNOSTIC_ARRAY_MAX}];
+    }
+    return item;
+  });
+  return line.length <= DIAGNOSTIC_LINE_MAX ? line :
+    `${line.slice(0, DIAGNOSTIC_LINE_MAX)}...{"withheldBytes":${line.length -
+      DIAGNOSTIC_LINE_MAX},"sha256":"${digestOf(line)}"}`;
 }
 
 function addressOf(replicaId) {
@@ -192,6 +226,16 @@ function disarmProducerRetryTimer(f) {
     f.producerLeader.timeSource.clearTimeout(lane.retryTimer.handle);
     lane.retryTimer = {state: 'idle', handle: null};
   }
+}
+
+// The producer lane's retry timer is disarmed so that a witness drives the
+// lane itself; an explicit drive then stands for that timer firing: the
+// producer's (wall) clock reaches every recipient's backoff due time first (a
+// recipient inside its backoff is never shipped to by a wake).
+async function elapseProducerBackoff(f) {
+  disarmProducerRetryTimer(f);
+  await awaitRecipientBackoff(f.producerLeader);
+  disarmProducerRetryTimer(f);
 }
 
 async function driveWithPump(f, startPromiseFn, maxRounds = 400, pumpStep = () => pump(f, 2)) {
@@ -416,7 +460,7 @@ async function provisionalRouteFixture(t) {
     cutPeer: null, unheardPeer: null, unheardNative: [], holdB: true, heldApplications: [],
     applicationSettlements: new Set(),
     directory: fs.mkdtempSync(path.join(os.tmpdir(), 'mg-provisional-rf5-')),
-    report: (observation) => t.diagnostic(json(observation))};
+    report: (observation) => t.diagnostic(diagnostic(observation))};
   f.router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: NODE_ID, wsPort: 0});
   t.after(() => closeFixture(f));
@@ -440,18 +484,28 @@ async function provisionalRouteFixture(t) {
   return f;
 }
 
-function registrationInsert(service, entryId) {
+// Range shipping ships the owed rows of one drive as one vector. A witness
+// that stages two source rows as two waves (A released before the later row
+// B is visited) gives A these fields: its event body is then above the
+// shipping byte bound and A ships as a vector of its own.
+const SHIPS_ALONE_FIELDS = Object.freeze({
+  create_attempt_token: `ships-alone:${'a'.repeat(PARTITION_CDC_OBLIGATION_BOUND.SHIP_MAX_BYTES)}`,
+});
+
+function registrationInsert(service, entryId, extraFields = null) {
   // Canonical owner bytes plus released SQL prove a mutation/debt, not the
   // separate lifecycle gateway's registration or activation authorization.
   const row = MessageGroupServiceRowOwner.buildRegistrationRow({groupId: service.groupId,
     replicaId: service.replicaId, nodeId: NODE_ID, service,
-    timestamp: 2, status: SERVICE_STATUS.STOPPED});
+    timestamp: 2, status: SERVICE_STATUS.STOPPED, extraFields});
   const parts = cdcSqlBuilder.buildInsertParts(row);
   return {entryId, row, sql: `INSERT INTO services (${parts.columns}) VALUES (${parts.placeholders})`,
     params: parts.values};
 }
 
-export {provisionalRouteFixture, registrationInsert, sourceView, targetView, recordOf,
-  json, note, pump, tick, releaseB, releaseFollower, disarmProducerRetryTimer, driveWithPump,
+export {SHIPS_ALONE_FIELDS, provisionalRouteFixture, registrationInsert, sourceView, targetView,
+  recordOf,
+  diagnostic, elapseProducerBackoff, json, note, pump,
+  tick, releaseB, releaseFollower, disarmProducerRetryTimer, driveWithPump,
   addressOf, payloadOf, cdcEvents, NODE_ID, SOURCE_GROUP, TARGET_GROUP, SOURCE_REPLICA,
   TARGET_REPLICAS, LEADER, FIRST_HOP, FOLLOWER, PARTITION_ID};

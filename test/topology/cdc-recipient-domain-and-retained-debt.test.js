@@ -12,7 +12,6 @@ import {COLUMN, SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../../src/constants/
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {
   CDC_COMPLETION,
-  CDC_COVERAGE_STATE,
 } from '../../src/cdc/cdc-delivery-outcome.js';
 import {
   createCdcPropagationProgress,
@@ -31,8 +30,10 @@ import {CDCGroupPropagationService} from '../../src/topology/cdc-group-propagati
 import {
   committedTargetAnswer,
   createDurableCdcEvent,
-  createDurablePropagationRequest,
+  propagateToEveryRecipient,
   createDurableSourceMessageGroupService,
+  createTopologyCache,
+  putTopologyRow,
   setupConfig,
   teardownConfig,
 } from './cdc-group-propagation-service-harness.js';
@@ -47,6 +48,8 @@ const SOURCE_MG = 'mg-source';
 const NEAR_MG = 'mg-near';
 const FAR_MG = 'mg-far';
 
+// The node's real system-table cache over both domains (latency groups and
+// message groups); each inter-group latency row carries its declared key.
 function createDualDomainTopologyCache({
   nodes = [],
   latencyGroups = [],
@@ -54,76 +57,9 @@ function createDualDomainTopologyCache({
   services = [],
   latencies = [],
 } = {}) {
-  const nodeRows = new Map(nodes.map((row) => [row[COLUMN.NODE_ID], {...row}]));
-  const latencyGroupRows = new Map(latencyGroups.map((row) => [row[COLUMN.GROUP_ID], {...row}]));
-  const messageGroupRows = new Map(messageGroups.map((row) => [row[COLUMN.GROUP_ID], {...row}]));
-  const serviceRows = services.map((row) => ({...row}));
-  const latencyRows = latencies.map((row) => ({...row}));
-  const listeners = new Set();
-
-  return {
-    get(tableName, key) {
-      if (tableName === TABLES.NODES) {
-        return nodeRows.get(key) || null;
-      }
-      if (tableName === TABLES.LATENCY_GROUPS) {
-        return latencyGroupRows.get(key) || null;
-      }
-      if (tableName === TABLES.MESSAGE_GROUPS) {
-        return messageGroupRows.get(key) || null;
-      }
-      return null;
-    },
-    getAll(tableName) {
-      if (tableName === TABLES.NODES) {
-        return [...nodeRows.values()].map((row) => ({...row}));
-      }
-      if (tableName === TABLES.LATENCY_GROUPS) {
-        return [...latencyGroupRows.values()].map((row) => ({...row}));
-      }
-      if (tableName === TABLES.MESSAGE_GROUPS) {
-        return [...messageGroupRows.values()].map((row) => ({...row}));
-      }
-      if (tableName === TABLES.INTER_GROUP_LATENCIES) {
-        return latencyRows.map((row) => ({...row}));
-      }
-      return [];
-    },
-    filter(tableName, predicate) {
-      if (tableName === TABLES.SERVICES) {
-        return serviceRows.filter((row) => predicate(row));
-      }
-      if (tableName === TABLES.NODES) {
-        return [...nodeRows.values()].filter((row) => predicate(row));
-      }
-      if (tableName === TABLES.LATENCY_GROUPS) {
-        return [...latencyGroupRows.values()].filter((row) => predicate(row));
-      }
-      if (tableName === TABLES.MESSAGE_GROUPS) {
-        return [...messageGroupRows.values()].filter((row) => predicate(row));
-      }
-      return [];
-    },
-    onCacheChange(listener) {
-      listeners.add(listener);
-    },
-    offCacheChange(listener) {
-      listeners.delete(listener);
-    },
-    emitCacheChange(tableName) {
-      for (const listener of listeners.values()) {
-        listener(tableName);
-      }
-    },
-    addServiceRow(row) {
-      serviceRows.push({...row});
-      this.emitCacheChange(TABLES.SERVICES);
-    },
-    addMessageGroupRow(row) {
-      messageGroupRows.set(row[COLUMN.GROUP_ID], {...row});
-      this.emitCacheChange(TABLES.MESSAGE_GROUPS);
-    },
-  };
+  return createTopologyCache({nodes, groups: latencyGroups, messageGroups, services,
+    latencies: latencies.map((row) => ({...row, [COLUMN.LATENCY_EDGE_ID]:
+      `${row[COLUMN.SOURCE_GROUP_ID]}->${row[COLUMN.TARGET_GROUP_ID]}`}))});
 }
 
 function buildStandardDualDomainFixture(t, mode = LATENCY_PROPAGATION_MODE.SAFE, options = {}) {
@@ -232,8 +168,10 @@ function buildStandardDualDomainFixture(t, mode = LATENCY_PROPAGATION_MODE.SAFE,
   });
 
   const source = createDurableSourceMessageGroupService(SOURCE_MG);
+  // The harness addresses every recipient, as the source lane does: the
+  // service itself delivers one vector to one recipient group.
   const propagate = (event = createDurableCdcEvent()) =>
-    service.propagateCDCEvent(createDurablePropagationRequest(source, event));
+    propagateToEveryRecipient(service, source, [event]);
 
   return {service, treeService, cache, messageRouter, calls, source, propagate};
 }
@@ -364,16 +302,14 @@ test('missing-mapping-refusal-and-recovery: unmapped latency group returns typed
   const event = createDurableCdcEvent();
 
   // Attempt 1: UNMAPPED_LG has missing mapping -> typed unavailable deferRetry
-  const firstAttempt = await service.propagateCDCEvent(
-    createDurablePropagationRequest(source, event),
-  );
+  const firstAttempt = await propagateToEveryRecipient(service, source, [event]);
   assert.equal(firstAttempt.success, false);
   assert.equal(firstAttempt.deferRetry, true);
   assert.equal(firstAttempt.error, CDC_COMPLETION.UNKNOWN);
 
   // Now register mapping for UNMAPPED_LG:
-  cache.addMessageGroupRow({[COLUMN.GROUP_ID]: RESOLVED_MG, leader_node_id: 'node-u'});
-  cache.addServiceRow({
+  putTopologyRow(cache, TABLES.MESSAGE_GROUPS, {[COLUMN.GROUP_ID]: RESOLVED_MG, leader_node_id: 'node-u'});
+  putTopologyRow(cache, TABLES.SERVICES, {
     [COLUMN.SERVICE_ID]: `${RESOLVED_MG}-r1`,
     [COLUMN.GROUP_ID]: RESOLVED_MG,
     [COLUMN.NODE_ID]: 'node-u',
@@ -385,9 +321,7 @@ test('missing-mapping-refusal-and-recovery: unmapped latency group returns typed
   treeService.recompute();
 
   // Attempt 2: with mapping registered, retry succeeds and delivers to newly mapped group
-  const secondAttempt = await service.propagateCDCEvent(
-    createDurablePropagationRequest(source, event),
-  );
+  const secondAttempt = await propagateToEveryRecipient(service, source, [event]);
   assert.equal(secondAttempt.success, true);
   const delivered = calls.map((c) => c.payload.targetGroupId);
   assert.ok(delivered.includes(RESOLVED_MG), 'delivered to newly resolved message group');
@@ -403,7 +337,7 @@ test('captured-invalid-binding-recovery: invalid latency-domain binding transfer
 
   assert.equal(progress.targets.length, 1);
   assert.equal(progress.targets[0].groupId, NEAR_LG);
-  assert.equal(progress.targets[0].coverage.state, CDC_COVERAGE_STATE.UNCOVERED);
+  assert.equal(progress.targets[0].cursor, null);
 
   // Re-evaluating routing plan where NEAR_LG maps to NEAR_MG:
   const newTargets = [
@@ -420,8 +354,31 @@ test('captured-invalid-binding-recovery: invalid latency-domain binding transfer
   assert.ok(!progress.targets.some((entry) => entry.groupId === NEAR_LG), 'old latency ID leaf replaced');
   const transferredLeaf = progress.targets.find((entry) => entry.groupId === NEAR_MG);
   assert.ok(transferredLeaf, 'transferred to actual message group recipient');
-  assert.equal(transferredLeaf.coverage.state, CDC_COVERAGE_STATE.UNCOVERED, 'starts uncovered, not fabricated');
+  assert.equal(transferredLeaf.cursor, null,
+    'the recipient starts with an unknown cursor: no receipt is fabricated');
   assert.equal(transferredLeaf.route.address, 'node-b/mg-near');
+});
+
+test('captured-invalid-binding-recovery never transfers a binding to the source group: ' +
+  'a coordinator node that also hosts the source yields only its other groups', async (t) => {
+  const f = buildStandardDualDomainFixture(t, LATENCY_PROPAGATION_MODE.SAFE);
+  putTopologyRow(f.cache, TABLES.SERVICES, {
+    [COLUMN.SERVICE_ID]: `${SOURCE_MG}-r2`,
+    [COLUMN.GROUP_ID]: SOURCE_MG,
+    [COLUMN.NODE_ID]: 'node-b',
+    [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
+    [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+    [COLUMN.ADDRESS]: 'node-b/mg-source',
+    [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER,
+  });
+  const progress = createCdcPropagationProgress(f.service, f.source, [
+    {groupId: NEAR_LG, coordinatorNodeId: 'node-b', address: null},
+  ]);
+
+  refreshCdcPropagationRoutes(progress, []);
+
+  assert.deepEqual(progress.targets.map((leaf) => leaf.groupId), [NEAR_MG],
+    'the source group is the primary recipient, never a target leaf');
 });
 
 test('exact-native-receipt-coverage: completion requires exact native committed receipts from all mapped recipients', async (t) => {
@@ -469,7 +426,9 @@ test('retained-source-obligation-progress: source delivery debt remains owned un
   assert.equal(attempt1.deferRetry, true);
   assert.equal(f.source.batches.length, 1, 'source applied batch once');
 
-  // Attempt 2: FAR_MG now succeeds -> propagation completes
+  // Attempt 2: FAR_MG now succeeds -> propagation completes. (The source
+  // lane keeps each recipient's cursor, so it would re-address only FAR_MG;
+  // this harness addresses every recipient again.)
   shouldFailFar = false;
   const attempt2 = await f.propagate(event);
   assert.equal(attempt2.success, true);

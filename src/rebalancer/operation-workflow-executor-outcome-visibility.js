@@ -1,10 +1,14 @@
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from
   './operation-workflow-recovery-reconcile-shared.js';
+import {
+  OPERATION_VISIBILITY_STATE,
+  buildUnavailableOperationVisibility,
+  readOperationVisibilityState,
+} from './replica-operation-repository-operation-visibility.js';
 
 const {
   EXECUTOR_OUTCOME_FIELD,
   EXECUTOR_OUTCOME_TYPE,
-  INCOMPLETE_OPERATION_OBSERVATION_STATE,
   OBSERVED_PROGRESS_RETRY_DELAY_MS,
   OPERATION_WORKFLOW_OWNER_LITERAL,
 } = SHARED;
@@ -111,8 +115,8 @@ class OperationWorkflowExecutorOutcomeVisibility {
     const replicaId = outcome?.[EXECUTOR_OUTCOME_FIELD.REPLICA_ID];
     return Object.freeze({
       emptyVisibility:
-        visibilityObservation?.state ===
-        INCOMPLETE_OPERATION_OBSERVATION_STATE.EMPTY,
+        readOperationVisibilityState(visibilityObservation) ===
+        OPERATION_VISIBILITY_STATE.ABSENT,
       emptyVisibilityReplicaOutcome:
         typeof replicaId === 'string' && replicaId.length > 0,
       emptyVisibilityRetryableOutcome:
@@ -121,11 +125,12 @@ class OperationWorkflowExecutorOutcomeVisibility {
         ),
       freshEmptyVisibilityOutcome:
         this.isFreshExecutorOutcomeForEmptyVisibility(outcome),
-      operationAvailable: Boolean(visibilityObservation?.operation),
+      operationAvailable:
+        readOperationVisibilityState(visibilityObservation) ===
+        OPERATION_VISIBILITY_STATE.PRESENT,
       visibilityDeferred:
-        visibilityObservation?.state ===
-          INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED ||
-        Boolean(visibilityObservation?.deferredOutcome),
+        readOperationVisibilityState(visibilityObservation) ===
+        OPERATION_VISIBILITY_STATE.UNAVAILABLE,
     });
   }
 
@@ -140,7 +145,7 @@ class OperationWorkflowExecutorOutcomeVisibility {
     const operation = visibilityObservation?.operation &&
       typeof visibilityObservation.operation === 'object' ?
       visibilityObservation.operation :
-      null;
+      visibilityObservation?.operationSnapshot || null;
     const deferredOutcome =
       visibilityObservation?.deferredOutcome &&
       typeof visibilityObservation.deferredOutcome === 'object' ?
@@ -208,15 +213,15 @@ class OperationWorkflowExecutorOutcomeVisibility {
     ) {
       deferredOutcome.reasonCode = error.reasonCode;
     }
+    // The retry's own context: the read did not answer (UNAVAILABLE); the
+    // prior PRESENT row, if any, travels only as the retry's snapshot.
     return Object.freeze({
-      state: INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED,
-      operation:
+      ...buildUnavailableOperationVisibility({...deferredOutcome, retryAfterMs}),
+      operationSnapshot:
         priorVisibilityObservation?.operation &&
         typeof priorVisibilityObservation.operation === 'object' ?
           priorVisibilityObservation.operation :
-          null,
-      deferredOutcome,
-      retryAfterMs,
+          priorVisibilityObservation?.operationSnapshot || null,
     });
   }
 

@@ -11,7 +11,7 @@ import {CDC_GROUP_FOREGROUND_RETRY_STATE as RETRY,
   CDC_GROUP_PROPAGATION_STATE as STATE} from
   '../../src/topology/cdc-group-propagation-constants.js';
 import {LATENCY_PROPAGATION_MODE} from '../../src/topology/latency-topology-constants.js';
-import {RESPONSE, assertDebtWithoutAck, topologyProgressFixture} from
+import {RESPONSE, TARGET_GROUP, assertDebtWithoutAck, topologyProgressFixture} from
   '../test-helpers/cdc-topology-progress-fixture.js';
 import {settleTicks} from '../test-helpers/participant-transaction-fixture.js';
 import {setupConfig, teardownConfig} from './cdc-group-propagation-service-harness.js';
@@ -76,7 +76,7 @@ async function durableFixture(t, maxAttempts) {
 
 function assertNoHeldWork(topology) {
   assert.equal(topology.retrySleepReleases.size, 0, 'no retry delay is held');
-  assert.equal(topology.activeDurablePropagation, null, 'no durable wave is in flight');
+  assert.equal(topology.activeDurableDeliveries.size, 0, 'no durable delivery is in flight');
 }
 
 function assertDurableDebt(f) {
@@ -140,25 +140,32 @@ test('foreground consumer rechecks stop after actual sleep returns ADVANCE',
   });
 
 // stop() retires the wave's invocation, so the held sleep ends by refusal:
-// no decision is consumed, and a restart before the drive settles resumes
-// nothing (was: an observed STOPPED survives a restart).
-test('stop during the held retry delay ends the wave at once; a restart resumes nothing',
-  {timeout: scaleByMachineFactor(TEST_TIMEOUT_MS)}, async (t) => {
-    const f = await durableFixture(t, 2);
-    t.mock.timers.enable({apis: ['setTimeout']});
-    const drive = f.drive();
-    await settleTicks();
-    assert.equal(f.topology.retrySleepReleases.size, 1);
-    f.topology.stop();
-    f.topology.start();
-    assert.equal(f.topology.state, STATE.RUNNING);
-    await drive;
-    assert.deepEqual(f.observed.decisions, [], 'the retired wave consumes no decision');
-    assert.equal(f.targetCalls.length, 1, 'no further recipient effect follows stop');
-    assert.equal(spentReports(f.logs).length, 0, 'stop does not spend a retry budget');
-    await settleTicks();
-    assertDurableDebt(f);
-  });
+// no decision is consumed and the retired wave makes no further effect. The
+// restarted propagation is a new one: the owed row is shipped again as its
+// own wave (superseded 2026-11-11: "a restart resumes nothing" also held the
+// owed row with nothing armed to deliver it - the lane's lost wake).
+test('stop during the held retry delay ends the wave at once; the restarted propagation ' +
+  'ships the owed row as a new wave', {timeout: scaleByMachineFactor(TEST_TIMEOUT_MS)},
+async (t) => {
+  const f = await durableFixture(t, 2);
+  t.mock.timers.enable({apis: ['setTimeout']});
+  const drive = f.drive();
+  await settleTicks();
+  assert.equal(f.topology.retrySleepReleases.size, 1);
+  f.topology.stop();
+  f.topology.start();
+  assert.equal(f.topology.state, STATE.RUNNING);
+  await settleTicks();
+  assert.deepEqual(f.observed.decisions, [], 'the retired wave consumes no decision');
+  assert.equal(spentReports(f.logs).length, 0, 'stop does not spend a retry budget');
+  assert.equal(f.targetCalls.length, 2,
+    'the restarted propagation shipped the owed row again, as its own wave');
+  assert.equal(f.topology.retrySleepReleases.size, 1, 'the new wave holds its own delay');
+  f.topology.stop();
+  await drive;
+  await settleTicks();
+  assertDurableDebt(f);
+});
 
 // Deleted: 'ordinary foreground attempt exhaustion truthfully hands work to
 // background retry' - the background retry is gone with the volatile branch.
@@ -178,7 +185,11 @@ test('durable foreground attempt exhaustion retains source debt and source conti
 function leaveRemainingDuration(f, remainingMs) {
   f.duringTarget = () => {
     f.duringTarget = null;
-    const context = f.leader.cdcDelivery.activeCdcInvocation.context;
+    // The target group is its own recipient: its delivery runs under its
+    // own invocation, held in that recipient's custody slot.
+    const [, custody] = [...f.leader.cdcDelivery.recipientCustody]
+      .find(([recipient]) => recipient.endsWith(`>${TARGET_GROUP}`));
+    const context = custody.activeCdcInvocation.context;
     const advanceMs = context.remainingMs() - remainingMs;
     assert.ok(advanceMs > 0, 'fixture reduces the actual source grant, never renews it');
     f.clock.advance(advanceMs);

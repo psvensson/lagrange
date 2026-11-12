@@ -59,6 +59,11 @@ const LEASE_VERDICT_NODE = Object.freeze({
 const LEASE_VERDICT_REPLICA = Object.freeze({
   SOURCE: `${LEASE_VERDICT_PARTITION_ID}-r1`,
   TARGET: `${LEASE_VERDICT_PARTITION_ID}-r4`,
+  // The partition's other two voters. The source removal's voter floor
+  // counts the voters that remain, never a planning projection, so the
+  // fixture names them (2026-11-11, committed-voter floor).
+  SEED_PEER: `${LEASE_VERDICT_PARTITION_ID}-r2`,
+  OTHER_PEER: `${LEASE_VERDICT_PARTITION_ID}-r3`,
 });
 // A virtual owner clock far from the host clock: a decision that reads the
 // ambient clock instead of the owner's sees every lease here as expired.
@@ -199,8 +204,9 @@ function buildServiceRow(replicaId, nodeId, status) {
 }
 
 /**
- * Service rows: the target replica in `targetStatus` and the source replica
- * in `sourceStatus` (null: absent).
+ * Service rows: the partition's two other voters (always ACTIVE), the target
+ * replica in `targetStatus` and the source replica in `sourceStatus` (null:
+ * absent).
  * @param {string|null} sourceStatus
  * @param {string|null} [targetStatus]
  * @return {Array<Object>}
@@ -209,7 +215,18 @@ function buildLeaseVerdictServiceRows(
   sourceStatus,
   targetStatus = ReplicaStatus.ACTIVE,
 ) {
-  const rows = [];
+  const rows = [
+    buildServiceRow(
+      LEASE_VERDICT_REPLICA.SEED_PEER,
+      LEASE_VERDICT_NODE.SEED,
+      ReplicaStatus.ACTIVE,
+    ),
+    buildServiceRow(
+      LEASE_VERDICT_REPLICA.OTHER_PEER,
+      LEASE_VERDICT_NODE.OTHER,
+      ReplicaStatus.ACTIVE,
+    ),
+  ];
   if (targetStatus !== null) {
     rows.push(buildServiceRow(
       LEASE_VERDICT_REPLICA.TARGET,

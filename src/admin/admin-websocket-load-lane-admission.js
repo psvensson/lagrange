@@ -9,6 +9,7 @@ import {
 import {
   normalizeKnownNodeBootIncarnation,
 } from '../control-plane/control-plane-error-classification.js';
+import {hasWriteOutcomeUnknown} from '../partition/partition-write-kernel.js';
 import {ADMIN_WEBSOCKET_API_SHARED} from './admin-websocket-api-shared.js';
 import {AdminWebSocketAPIBase} from './admin-websocket-api-base.js';
 import {
@@ -744,6 +745,10 @@ class AdminWebSocketLoadLaneAdmission extends AdminWebSocketAPIBase {
    */
   isRetryableLoadLaneExecutionFailure(value = null) {
     if (!value || typeof value !== 'object') {
+      return false;
+    }
+    // deferRetry means "later", never "not applied" (transport owner).
+    if (hasWriteOutcomeUnknown(value)) {
       return false;
     }
     if (value.deferRetry === true) {

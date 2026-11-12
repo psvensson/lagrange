@@ -10,25 +10,35 @@
  * Inputs: the replica's tracked partition service (its operation port: the
  * MEMBERSHIP_CHANGED and GATE_OPENED events and the committed-membership
  * witness read) and its replica identity.
- * Canonical output: a frozen {reason} (REPLICA_CONSENSUS_EXIT_REASON) once
- * the port may retire:
+ * Canonical output: a frozen {reason} (REPLICA_CONSENSUS_EXIT_REASON). Only
+ * REMOVAL_APPLIED (and GROUP_RETIRED, which this wait never produces) is
+ * evidence that the port may retire; every other answer ends one round of
+ * the wait and leaves the decision to the removal owner, which never
+ * retires a voter on it (2026-11-11, supersedes "the removal proceeds on the
+ * backstop"):
  *   REMOVAL_APPLIED    the replica's own applied configuration no longer
- *                      names it, read after its participation gate opened
- *                      (below the gate its absence is a lag, not a removal);
- *   GROUP_UNAVAILABLE  the port answers typed that the group is not
- *                      available to it (held, closed, retired);
- *   NO_CONSENSUS_PORT  the service has no port (no events) to participate
- *                      through;
- *   BACKSTOP           the bounded wait elapsed (a removal nobody proposed,
- *                      or an applied removal this replica never learned):
- *                      an ALARM, never a normal exit (owner decision
- *                      2026-10-04); the answer carries the last witness read
- *                      (lastObservation) and the caller logs it at ERROR;
+ *                      names it (ABSENT: every voter resolved, none is it),
+ *                      read after its participation gate opened (below the
+ *                      gate its absence is a lag, not a removal);
+ *   NO_CONSENSUS_PORT  the service has no port (no events) to read through:
+ *                      the removal owner decides from the durable lifecycle;
+ *   BACKSTOP           the bounded round elapsed (a removal nobody proposed,
+ *                      an unreadable or unresolved configuration, or an
+ *                      applied removal this replica never learned): a spent
+ *                      wait and an ALARM (owner decision 2026-10-04), never
+ *                      an exit; the answer carries the last witness read
+ *                      (lastObservation) and the caller reports it once and
+ *                      waits again, its port kept;
  *   RELEASED           the caller released the wait (node shutdown);
+ *   CANCELLED          the removal owner released this removal's wait
+ *                      because its removal is being cancelled;
  *   GROUP_RETIRED      never produced by this wait: the exit of a replica
  *                      whose whole group retired as a unit at a verified
  *                      durable workflow transition (amendment of ruling F2,
  *                      owner decision 2026-10-04; the caller never waits).
+ * A read the port refuses (held, closed, retired), a read that throws, and
+ * a configuration naming a voter this replica cannot resolve are no
+ * evidence: the wait goes on (2026-11-11).
  * Prohibited: no services row is read as membership, and no removal kind is
  * told apart from another (a group retired as a unit never enters the wait).
  */
@@ -42,12 +52,15 @@ import {GROUP_RETIREMENT_REASON} from
 
 const REPLICA_CONSENSUS_EXIT_REASON = Object.freeze({
   REMOVAL_APPLIED: 'own-removal-applied',
-  GROUP_UNAVAILABLE: 'consensus-group-unavailable',
   NO_CONSENSUS_PORT: 'no-consensus-port',
   BACKSTOP: 'removal-commit-backstop-elapsed',
   RELEASED: 'consensus-exit-wait-released',
+  CANCELLED: 'removal-cancelled',
   GROUP_RETIRED: GROUP_RETIREMENT_REASON,
 });
+// The last witness read of a read that threw: the port could not answer.
+const UNREADABLE_OBSERVATION = Object.freeze({
+  state: PARTITION_REPLICA_MEMBERSHIP_STATE.UNAVAILABLE, gateOpen: null});
 // The events after which the replica's own configuration may no longer name
 // it: an applied configuration change, and its gate opening (the read below
 // the gate never counts an absence).
@@ -55,24 +68,30 @@ const EXIT_WAKE_EVENTS = Object.freeze([
   RAFT_EVENT.MEMBERSHIP_CHANGED,
   RAFT_EVENT.GATE_OPENED,
 ]);
-const FUNCTION_TYPE = 'function';
 const ABORT_EVENT = 'abort';
 
 /**
  * The exit one witness read of the replica's own configuration allows, or
- * null while the replica must keep participating.
+ * null while the replica must keep participating: only an exact absence
+ * past the participation gate is its applied removal.
  * @param {Object} observation - readPartitionReplicaMembership's answer.
- * @return {string|null} A REPLICA_CONSENSUS_EXIT_REASON, or null.
+ * @return {string|null} REMOVAL_APPLIED, or null.
  */
 function consensusExitOf(observation) {
-  if (observation.state === PARTITION_REPLICA_MEMBERSHIP_STATE.UNAVAILABLE) {
-    return REPLICA_CONSENSUS_EXIT_REASON.GROUP_UNAVAILABLE;
-  }
-  if (observation.state === PARTITION_REPLICA_MEMBERSHIP_STATE.VOTER ||
-      observation.gateOpen !== true) {
-    return null;
-  }
-  return REPLICA_CONSENSUS_EXIT_REASON.REMOVAL_APPLIED;
+  return observation?.state === PARTITION_REPLICA_MEMBERSHIP_STATE.ABSENT &&
+    observation.gateOpen === true ?
+    REPLICA_CONSENSUS_EXIT_REASON.REMOVAL_APPLIED : null;
+}
+
+/**
+ * Whether a released wait was released for its removal's cancellation.
+ * @param {AbortSignal|undefined} signal
+ * @return {string} CANCELLED or RELEASED.
+ */
+function releaseReasonOf(signal) {
+  return signal?.reason === REPLICA_CONSENSUS_EXIT_REASON.CANCELLED ?
+    REPLICA_CONSENSUS_EXIT_REASON.CANCELLED :
+    REPLICA_CONSENSUS_EXIT_REASON.RELEASED;
 }
 
 /**
@@ -87,8 +106,9 @@ function consensusExitOf(observation) {
 function awaitReplicaConsensusExit(service, {replicaId, backstopMs, signal}) {
   // The read itself goes through the partition's one witness read (which
   // answers UNAVAILABLE for a port without the committed read).
+  // A port's subscribe always answers its unsubscribe (raft-operation-port).
   const port = service?.raft;
-  if (typeof port?.subscribe !== FUNCTION_TYPE) {
+  if (!port) {
     return Promise.resolve(Object.freeze({
       reason: REPLICA_CONSENSUS_EXIT_REASON.NO_CONSENSUS_PORT}));
   }
@@ -98,7 +118,7 @@ function awaitReplicaConsensusExit(service, {replicaId, backstopMs, signal}) {
     let timer = null;
     // The last witness read: on BACKSTOP it says why no exit event came.
     let lastObservation = null;
-    const onAbort = () => finish(REPLICA_CONSENSUS_EXIT_REASON.RELEASED);
+    const onAbort = () => finish(releaseReasonOf(signal));
     function finish(reason) {
       if (settled) {
         return;
@@ -108,12 +128,13 @@ function awaitReplicaConsensusExit(service, {replicaId, backstopMs, signal}) {
         unsubscribe();
       }
       clearTimeout(timer);
-      signal?.removeEventListener?.(ABORT_EVENT, onAbort);
+      signal?.removeEventListener(ABORT_EVENT, onAbort);
       resolve(Object.freeze(reason === REPLICA_CONSENSUS_EXIT_REASON.BACKSTOP ?
         {reason, lastObservation} : {reason}));
     }
     // A read outside the port's own drain (never re-entered from inside the
-    // event that woke it); a read that throws means the port cannot answer.
+    // event that woke it); a read that throws means the port cannot answer
+    // now, which proves nothing: the next event or the bound reads again.
     const check = () => queueMicrotask(() => {
       if (settled) {
         return;
@@ -127,18 +148,17 @@ function awaitReplicaConsensusExit(service, {replicaId, backstopMs, signal}) {
             finish(reason);
           }
         },
-        () => finish(REPLICA_CONSENSUS_EXIT_REASON.GROUP_UNAVAILABLE));
+        () => {
+          lastObservation = UNREADABLE_OBSERVATION;
+        });
     });
     if (signal?.aborted) {
-      finish(REPLICA_CONSENSUS_EXIT_REASON.RELEASED);
+      finish(releaseReasonOf(signal));
       return;
     }
-    signal?.addEventListener?.(ABORT_EVENT, onAbort, {once: true});
+    signal?.addEventListener(ABORT_EVENT, onAbort, {once: true});
     for (const eventName of EXIT_WAKE_EVENTS) {
-      const unsubscribe = port.subscribe(eventName, check);
-      if (typeof unsubscribe === FUNCTION_TYPE) {
-        unsubscribers.push(unsubscribe);
-      }
+      unsubscribers.push(port.subscribe(eventName, check));
     }
     timer = setTimeout(
       () => finish(REPLICA_CONSENSUS_EXIT_REASON.BACKSTOP), backstopMs);

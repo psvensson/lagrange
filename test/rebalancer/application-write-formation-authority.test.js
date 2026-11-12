@@ -6,6 +6,9 @@ import {RebalanceCoordinator} from
 import {ReplicaOperationRepository} from
   '../../src/rebalancer/replica-operation-repository.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
+import {settleProvisioningTargetAdmission} from
+  '../../src/query/provisioning-target-admission-settle.js';
+import {createTimeoutBudget} from '../../src/control-plane/timeout-budget.js';
 import {
   QUERY_PARTITION_DELIVERY_PRE_SUBMISSION_ROUTE_UNAVAILABLE,
 } from '../../src/query/query-execution-budget.js';
@@ -65,6 +68,8 @@ function createAdmissionOwner() {
   owner.isShuttingDown = false;
   owner.operationsInCreation = new Map();
   owner.recentOperationIntents = new Map();
+  // The cache the admission owner captures route-source versions from.
+  owner.systemTableCache = {getTableMutationVersion: () => 0};
   owner.controlPlaneReadinessService = {
     readCurrentPlanningProjectionIdentity() {
       return state.identity;
@@ -166,6 +171,7 @@ function createReplicaOperationRouteHarness(options = {}) {
     controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     nodeId,
     systemCache,
+    noHandlerAddressQuarantineMs: options.noHandlerAddressQuarantineMs,
     messageRouter: {
       async deliver() {
         routerDeliveries += 1;
@@ -820,3 +826,39 @@ test('replica-operation creation caller census enters one coordinator owner',
     );
     t.end();
   });
+
+test('a temporary route exclusion that expires with no metadata change wakes ' +
+  'the clearance wait, and admission is re-run and settles', async (t) => {
+  const QUARANTINE_MS = 60;
+  const canonicalRoute = createReplicaOperationRouteHarness({
+    noHandlerAddressQuarantineMs: QUARANTINE_MS,
+  });
+  const {owner} = createAdmissionOwner();
+  delete owner.observeReplicaOperationMutationRoute;
+  owner.sqlQueryEngine = {queryExecutor: canonicalRoute.queryExecutor};
+  // The wake channels exist, but nothing changes on them.
+  owner.systemTableCache = {
+    getTableMutationVersion: () => 0,
+    onCacheChange() {},
+    offCacheChange() {},
+  };
+  owner.controlPlaneReadinessService.subscribeReadinessPlanningSnapshots =
+    () => () => {};
+  canonicalRoute.queryExecutor.markTemporarilyUnroutableAddress(
+    canonicalRoute.partitionId,
+    canonicalRoute.address,
+    canonicalRoute.service,
+  );
+  const startedAt = Date.now();
+  const settled = await settleProvisioningTargetAdmission(
+    {rebalanceCoordinator: owner, nowFn: Date.now, logger: null},
+    {partitionId: TEST_MOVE.partitionId, targetNodeId: TEST_MOVE.nodeId,
+      childIntent: {operationIntentId: TEST_MOVE.operationIntentId,
+        replicaIntentId: TEST_MOVE.replicaIntentId}},
+    {timeoutBudget: createTimeoutBudget({configuredBudgetMs: 5000})},
+  );
+  t.equal(settled.state, 'admitted',
+    'admission settles once the exclusion expires');
+  t.equal(settled.reentries, 1, 'after exactly one re-entry, at the retry point');
+  t.ok(Date.now() - startedAt < 2000, 'well before the budget');
+});

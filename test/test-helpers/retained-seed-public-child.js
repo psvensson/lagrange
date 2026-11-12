@@ -20,6 +20,7 @@ try {
       storage: {dataDir: directory},
     },
     environment: {NODE_ID: nodeId,
+      LAGRANGE_FORMATION_TARGET_NODE_COUNT: '1',
       REST_API_PORT: String(ports.restApiPort),
       ADMIN_WS_PORT: String(ports.adminWebSocketPort),
       TRANSPORT_WS_PORT: String(ports.transportWebSocketPort)},

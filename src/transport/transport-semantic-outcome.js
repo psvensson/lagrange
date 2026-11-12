@@ -7,6 +7,11 @@ import {
   ROUTER_QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
   WEBSOCKET_CONNECT_TIMEOUT_ERROR_CODE,
 } from './transport-error-codes.js';
+import {
+  TRANSPORT_ACKNOWLEDGEMENT,
+  acknowledgementOfTransportFacts,
+  isTransportAcknowledgement,
+} from './transport-acknowledgement.js';
 
 const TRANSPORT_DELIVERY_OUTCOME_STATE = Object.freeze({
   DELIVERED: 'delivered',
@@ -19,6 +24,7 @@ const transportOutcomes = new WeakSet();
 const deliveryEnvelopes = new WeakSet();
 
 const TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELD = Object.freeze({
+  ACKNOWLEDGEMENT: 'acknowledgement',
   DELIVERY_STATE: 'deliveryState',
   DEFER_RETRY: 'deferRetry',
   ERROR_CODE: 'errorCode',
@@ -28,6 +34,7 @@ const TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELD = Object.freeze({
 });
 
 const TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELDS = Object.freeze([
+  TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELD.ACKNOWLEDGEMENT,
   TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELD.DELIVERY_STATE,
   TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELD.DEFER_RETRY,
   TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELD.ERROR_CODE,
@@ -36,9 +43,19 @@ const TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELDS = Object.freeze([
   TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELD.RETRY_AFTER_MS,
 ]);
 
+// `deferRetry` (and the DEFERRED state it yields) means only "retry later";
+// it never says the request was not delivered. Whether the target may hold
+// or have executed it is the `acknowledgement` (and the reason it names): a
+// spent lifetime is deferred in every wait, including answer_timeout, where
+// the target router accepted the request. A consumer that re-sends a
+// non-idempotent request decides on the acknowledgement or on its own
+// idempotency identity, never on deferRetry alone.
+//
 // Transport decides the delivery state; every other metadata field is a value
 // a router producer may supply. A supplied value is emitted exactly as supplied
-// and only an absent one is computed, so building is a fixed point. Every input
+// and only an absent one is computed, so building is a fixed point (an
+// acknowledgement outside the named states is no acknowledgement fact and is
+// computed like an absent one). Every input
 // is router-internal: a handler answer never reaches this builder (it travels
 // beside the outcome as the envelope's `answer`).
 const TRANSPORT_DELIVERY_OUTCOME_VALUE_FIELDS = Object.freeze(
@@ -46,12 +63,23 @@ const TRANSPORT_DELIVERY_OUTCOME_VALUE_FIELDS = Object.freeze(
     field !== TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELD.DELIVERY_STATE),
 );
 
+// A spent delivery lifetime is one of three named reasons, decided by the
+// outcome's acknowledgement fact alone. ACK_TIMEOUT: the wait for the
+// transport ACK ended with no ACK (acknowledgement `unacknowledged`, or
+// `not_sent` when the bound was spent before a frame left). ANSWER_TIMEOUT:
+// the target router accepted the message (`acknowledged`) and no answer came.
+// UNESTABLISHED_TIMEOUT: the lifetime was spent and nothing this router holds
+// says whether the target router ever received the message (`unestablished`:
+// a carried delivery whose carrier reported no frame, or a producer that
+// recorded no ACK fact). It accuses neither the node nor the handler.
 const TRANSPORT_DELIVERY_OUTCOME_REASON_CODE = Object.freeze({
   ACK_REJECTED: 'ack_rejected',
+  ACK_TIMEOUT: 'ack_timeout',
+  ANSWER_TIMEOUT: 'answer_timeout',
+  UNESTABLISHED_TIMEOUT: 'unestablished_timeout',
   CONNECTION_CLOSED: 'connection_closed',
   CONTRADICTORY_DELIVERY_STATE: 'contradictory_delivery_state',
   HANDLER_FAILED: 'handler_failed',
-  MESSAGE_TIMEOUT: 'message_timeout',
   NO_HANDLER: 'no_handler',
   NO_CONNECTION: 'no_connection',
   SUPERSEDED: 'superseded',
@@ -139,11 +167,26 @@ function classifyTransportDeliveryState(options) {
   };
 }
 
+const ACK_TIMEOUT_ACKNOWLEDGEMENTS = Object.freeze([
+  TRANSPORT_ACKNOWLEDGEMENT.UNACKNOWLEDGED,
+  TRANSPORT_ACKNOWLEDGEMENT.NOT_SENT,
+]);
+
+function resolveDeliveryTimeoutReasonCode(acknowledgement) {
+  if (ACK_TIMEOUT_ACKNOWLEDGEMENTS.includes(acknowledgement)) {
+    return TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.ACK_TIMEOUT;
+  }
+  return acknowledgement === TRANSPORT_ACKNOWLEDGEMENT.ACKNOWLEDGED ?
+    TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.ANSWER_TIMEOUT :
+    TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.UNESTABLISHED_TIMEOUT;
+}
+
 function resolveTransportDeliveryReasonCode(
   errorCode,
   deferred,
   noHandler,
   delivered,
+  acknowledgement,
 ) {
   if (noHandler === true) {
     return TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_HANDLER;
@@ -155,7 +198,7 @@ function resolveTransportDeliveryReasonCode(
     return TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.HANDLER_FAILED;
   }
   if (errorCode === ROUTER_MESSAGE_TIMEOUT_ERROR_CODE) {
-    return TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT;
+    return resolveDeliveryTimeoutReasonCode(acknowledgement);
   }
   if (errorCode === ROUTER_NO_CONNECTION_ERROR_CODE) {
     return TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_CONNECTION;
@@ -179,7 +222,7 @@ function resolveTransportDeliveryReasonCode(
 }
 
 // The closed key set of a transport outcome: the router's identity of this
-// delivery, its acknowledgement and error text, and the owner metadata. The
+// delivery, its acknowledgement state and error text, and the owner metadata. The
 // builder emits exactly these keys and copies nothing else from its input.
 function buildTransportDeliveryOutcome(options = {}) {
   if (transportOutcomes.has(options)) return options;
@@ -200,16 +243,22 @@ function buildTransportDeliveryOutcome(options = {}) {
       noHandler,
       retryAfterMs,
     });
+  const acknowledgement = isTransportAcknowledgement(options.acknowledgement) ?
+    options.acknowledgement :
+    acknowledgementOfTransportFacts({acknowledged, errorCode, noHandler,
+      recoverableBeforeSend: options.recoverableBeforeSend});
   // An absent deferRetry reports the deferral evidence, as before; a failed
   // contradiction does not withdraw a retry request it carried.
   const computed = {
+    acknowledgement,
     deferRetry: deferralRequested,
     errorCode,
     retryAfterMs,
     noHandler,
     reasonCode: contradicted ?
       TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.CONTRADICTORY_DELIVERY_STATE :
-      resolveTransportDeliveryReasonCode(errorCode, deferred, noHandler, delivered),
+      resolveTransportDeliveryReasonCode(
+        errorCode, deferred, noHandler, delivered, acknowledgement),
   };
   const outcome = {
     messageId: normalizeOptionalString(options.messageId),
@@ -219,7 +268,8 @@ function buildTransportDeliveryOutcome(options = {}) {
     error: options.error ?? null,
   };
   for (const field of TRANSPORT_DELIVERY_OUTCOME_VALUE_FIELDS) {
-    outcome[field] = objectHasOwn(options, field) ?
+    outcome[field] = objectHasOwn(options, field) &&
+        field !== TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELD.ACKNOWLEDGEMENT ?
       options[field] :
       computed[field];
   }
@@ -288,7 +338,9 @@ function forwardedDeliveryAnswer(delivery) {
 // its message is the error text, its code the error code (the JavaScript error
 // convention), and its own metadata is validated by the same builder. A
 // carried FAILED state is not erased by retry hints; no Error supplies an ACK.
-function thrownErrorOutcome(error) {
+// `routerFacts` is what the converting router itself established about this
+// hop (the acknowledgement it recorded); it outranks the Error's own stamp.
+function thrownErrorOutcome(error, routerFacts) {
   const outcome = {errorCode: error.code ?? null, error: error.message,
     recoverableBeforeSend: error.recoverableBeforeSend === true};
   for (const field of TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELDS) {
@@ -296,6 +348,9 @@ function thrownErrorOutcome(error) {
         objectHasOwn(error, field)) {
       outcome[field] = error[field];
     }
+  }
+  if (isTransportAcknowledgement(routerFacts?.acknowledgement)) {
+    outcome.acknowledgement = routerFacts.acknowledgement;
   }
   return outcome;
 }
@@ -309,9 +364,10 @@ function buildHandlerFailedError(text) {
 
 // A queued delivery replaced by a newer one under the same replace key before
 // it was sent (decision D3): DELIVERED, with no answer, named superseded. The
-// one named state is the reason code (finding F-V4).
+// one named state is the reason code (finding F-V4); no frame left for it.
 function buildSupersededDeliveryOutcome() {
   return buildTransportDeliveryOutcome({acknowledged: true,
+    acknowledgement: TRANSPORT_ACKNOWLEDGEMENT.NOT_SENT,
     reasonCode: TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.SUPERSEDED});
 }
 
@@ -322,9 +378,9 @@ function isSupersededTransportDeliveryOutcome(outcome = null) {
 
 // The transport outcome a thrown delivery error carries. A value that is not
 // an Error carries no transport fact and reads as a failed delivery.
-function classifyThrownDeliveryError(error = null) {
+function classifyThrownDeliveryError(error = null, routerFacts = {}) {
   return buildTransportDeliveryOutcome(error instanceof Error ?
-    thrownErrorOutcome(error) : {});
+    thrownErrorOutcome(error, routerFacts) : {});
 }
 
 function isDeliveredTransportDeliveryOutcome(outcome = null) {
@@ -335,7 +391,41 @@ function isDeferredTransportDeliveryOutcome(outcome = null) {
   return outcome?.deliveryState === TRANSPORT_DELIVERY_OUTCOME_STATE.DEFERRED;
 }
 
+const DELIVERY_TIMEOUT_REASON_CODES = Object.freeze([
+  TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.ACK_TIMEOUT,
+  TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.ANSWER_TIMEOUT,
+  TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.UNESTABLISHED_TIMEOUT,
+]);
+
+// The delivery lifetime was spent, in any wait. For a consumer that decides
+// only on "no answer within the lifetime" (the request may have been
+// executed); a consumer that needs to know which wait ended reads reasonCode.
+function isDeliveryTimeoutTransportOutcome(outcome = null) {
+  return DELIVERY_TIMEOUT_REASON_CODES.includes(outcome?.reasonCode);
+}
+
+// Whether a value is an outcome this owner built (never a look-alike answer).
+function isTransportDeliveryOutcome(value) {
+  return transportOutcomes.has(value);
+}
+
+// The transport reason of one delivery reading (deliveryReadingOf, or a
+// thrown error's classifyThrownDeliveryError): the reason of this hop's
+// transport outcome, or the reason a forwarding hop's answer states for ITS
+// onward hop (forwardedDeliveryAnswer), else null. A handler answer's own
+// fields and any error text are never read.
+function deliveryReasonOfReading(reading = null) {
+  return isTransportDeliveryOutcome(reading) ?
+    reading.reasonCode :
+    reading?.forwardedReasonCode ?? null;
+}
+
+function isDeliveryTimeoutReading(reading = null) {
+  return DELIVERY_TIMEOUT_REASON_CODES.includes(deliveryReasonOfReading(reading));
+}
+
 export {
+  TRANSPORT_ACKNOWLEDGEMENT,
   TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELDS,
   TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
   TRANSPORT_DELIVERY_OUTCOME_STATE,
@@ -346,11 +436,15 @@ export {
   classifyThrownDeliveryError,
   deliveryAnswerOf,
   deliveryReadingOf,
+  deliveryReasonOfReading,
   deliveryTransportOf,
   forwardedDeliveryAnswer,
   isDeferredTransportDeliveryOutcome,
   isDeliveredTransportDeliveryOutcome,
+  isDeliveryTimeoutReading,
+  isDeliveryTimeoutTransportOutcome,
   isSupersededTransportDeliveryOutcome,
+  isTransportDeliveryOutcome,
   normalizeOptionalString,
   normalizePositiveRetryAfterMs,
 };

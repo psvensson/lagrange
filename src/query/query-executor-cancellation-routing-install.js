@@ -11,6 +11,7 @@ import {
 } from './query-executor-temporary-unroutable-addresses.js';
 
 const {
+  QUERY_ERROR_CODE,
   QUERY_EXECUTOR_LITERAL,
 } = QUERY_EXECUTOR_SHARED;
 
@@ -56,7 +57,7 @@ class QueryExecutorCancellationRouting extends QueryExecutorWriteRetryRouting {
   throwIfCancelled(cancellationToken) {
     if (this._shuttingDown === true) {
       const error = new Error(QUERY_EXECUTOR_SHUTDOWN_ABORT_MESSAGE);
-      error.code = 'QUERY_EXECUTOR_SHUTTING_DOWN';
+      error.code = QUERY_ERROR_CODE.QUERY_EXECUTOR_SHUTTING_DOWN;
       throw error;
     }
     if (

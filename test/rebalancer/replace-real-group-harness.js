@@ -98,6 +98,8 @@ import {
   createPublishedPlanningReadinessService,
 } from './quorum-conditioned-remove-safety-tail-fixture-builders.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
+import {presentOperationOf} from
+  '../../src/rebalancer/replica-operation-repository-operation-visibility.js';
 
 // A priority control-plane partition: the named-target handoff (BR11) is
 // part of the owner's path there. An ordinary partition has no handoff.
@@ -613,6 +615,8 @@ function createReplaceWorld(options = {}) {
     removeEffects: [],
     retirements: [],
     retirementRoutes: [],
+    // CANCEL_REPLICA_REMOVAL requests the owner sent (D2 target death).
+    cancels: [],
     witnessReads: [],
     terminalWrites: [],
     eventsSuppressed: false,
@@ -858,7 +862,22 @@ async function answerHeldStepDown(world, payload) {
   return answerStepDown(world, payload);
 }
 
+// CANCEL_REPLICA_REMOVAL reaches the source node: the PRODUCTION replica
+// handler's message entry point when the world hosts the source by it; a
+// source that stopped at its effect (or died) cannot answer.
+async function answerCancelRemoval(world, payload) {
+  world.cancels.push(payload);
+  if (world.sourceHandler === null ||
+      world.group.dead.has(world.sourceReplicaId)) {
+    return UNREACHABLE_ANSWER;
+  }
+  const {correlationId: _correlationId, ...answer} = await world.sourceHandler
+    .handler.handleMessage({payload, correlationId: 'cancel'});
+  return answer;
+}
+
 const MESSAGE_ANSWERS = Object.freeze({
+  [ReplicaOperationMessageType.CANCEL_REPLICA_REMOVAL]: answerCancelRemoval,
   [ReplicaOperationMessageType.READ_COMMITTED_MEMBERSHIP]:
     answerCommittedMembershipRead,
   [ReplicaOperationMessageType.READ_REPLICA_MEMBERSHIP]: answerWitnessRead,
@@ -890,8 +909,8 @@ function isCapturedTerminalWrite(operation, persistOptions, result) {
 // fallback answers a terminal statement without its affected-row count, so
 // the disposition alone is not the durable outcome.
 async function captureTerminalWrite(world, repository, operation, result) {
-  const durable = await repository
-    .queryReplicaOperationPersistenceAuthorityOperation(operation);
+  const durable = presentOperationOf(await repository
+    .queryReplicaOperationPersistenceAuthorityObservation(operation));
   world.terminalWrites.push(Object.freeze({
     operationId: operation.operationId,
     step: operation.workflowStep,

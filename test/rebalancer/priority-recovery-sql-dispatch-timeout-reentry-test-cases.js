@@ -590,6 +590,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
 
   registerCase(TEST_SQL_PRIORITY_DEFERRED_CLAIM_DISPATCH_TEST_NAME, async (t) => {
     const deliveries = [];
+    const deferredTimers = [];
     const updateParams = [];
     let updateCount = 0;
     const nowMs = Date.now();
@@ -704,6 +705,12 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
           return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
         },
       },
+      setTimeoutFn(callback, delayMs) {
+        const handle = {callback, delayMs};
+        deferredTimers.push(handle);
+        return handle;
+      },
+      clearTimeoutFn() {},
       enableTimeouts: false,
     });
 
@@ -725,9 +732,18 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
 
     t.equal(
       deliveries.length,
-      1,
+      0,
       TEST_ASSERT_SQL_PRIORITY_DEFERRED_CLAIM_DISPATCH,
     );
+    t.equal(operationRow.workflow_step, TEST_STEP_PENDING,
+      'operation row remains PENDING until SENDING commits durably');
+    t.equal(deferredTimers.length, 1,
+      'retryable SENDING claim pressure arms one deferred transition retry');
+
+    await deferredTimers[0].callback();
+
+    t.equal(deliveries.length, 1,
+      'target dispatch proceeds once the retried SENDING claim commits durably');
     t.equal(
       operationRow.workflow_step,
       TEST_STEP_CREATING,
@@ -742,6 +758,10 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
     await coordinator.shutdown();
   });
 
+  // SUPERSEDED (R09): this case pinned the owner-local deferred CREATING
+  // progress of quest formation-ledger-self-move-blocks-cluster-ops (the
+  // priority snapshot showed CREATING while the row was SENDING). Superseding
+  // rule: an operation's step advances only by its committed row.
   registerCase(TEST_SQL_PRIORITY_DEFERRED_PROGRESS_DISPATCH_TEST_NAME, async (t) => {
     const deliveries = [];
     const deferredTimers = [];
@@ -937,7 +957,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
       );
       t.equal(
         snapshot?.coordinator?.operation?.workflowStep,
-        TEST_STEP_CREATING,
+        TEST_STEP_SENDING,
         TEST_ASSERT_SQL_PRIORITY_SNAPSHOT_STEP,
       );
       t.equal(
@@ -963,6 +983,8 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
         TEST_STATUS_CREATING,
         TEST_ASSERT_SQL_PRIORITY_DEFERRED_PROGRESS_RETRY_STATUS,
       );
+      t.equal(deliveries.length, 1,
+        'retrying the deferred CREATING write repeats no target delivery');
     } finally {
       Date.now = originalDateNow;
       await coordinator.shutdown();

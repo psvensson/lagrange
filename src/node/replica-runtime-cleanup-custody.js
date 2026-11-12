@@ -123,7 +123,7 @@ function shutdownReplicaHandler(handler, options) {
       handler.replicaCreateAdmissionRecoveryTask,
       handler.participantReleaseRecovery.shutdown(),
     ].filter(Boolean));
-    handler.removalConsensusExitRelease?.abort();
+    handler.removalConsensusExitRelease.abort();
     for (const progress of handler.creationProgressByReplica.values()) {
       handler.creationProgressReporter.fail(progress,
         REPLICA_HANDLER_LOG_MSG.SHUTTING_DOWN, {stage: ReplicaStatus.FAILED});

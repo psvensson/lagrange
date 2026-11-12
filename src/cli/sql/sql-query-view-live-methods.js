@@ -1,18 +1,22 @@
 const LOCAL_STR_ACTIVE = 'active';
 const LOCAL_STR_PAUSED = 'paused';
-const LOCAL_STR_EXPIRED = 'expired';
 const LOCAL_STR_CANCELLED = 'cancelled';
-const LOCAL_STR_LIVEQUERY_INITIALIZED = 'livequery:initialized';
-const LOCAL_STR_LIVEQUERY_EXPIRED = 'livequery:expired';
+const LOCAL_STR_FAILED = 'failed';
+const LOCAL_STR_LIVEQUERY_RESULT = 'livequery:result';
+const LOCAL_STR_LIVEQUERY_ERROR = 'livequery:error';
+const LOCAL_STR_LIVEQUERY_EVENT = 'livequery:event';
 const LOCAL_STR_LIVEQUERY_PAUSED = 'livequery:paused';
 const LOCAL_STR_LIVEQUERY_RESUMED = 'livequery:resumed';
 
-const LOCAL_LIVE_QUERY_STATUS = {
+/**
+ * Live query subscription status
+ */
+export const LIVE_QUERY_STATUS = Object.freeze({
   ACTIVE: LOCAL_STR_ACTIVE,
   PAUSED: LOCAL_STR_PAUSED,
-  EXPIRED: LOCAL_STR_EXPIRED,
   CANCELLED: LOCAL_STR_CANCELLED,
-};
+  FAILED: LOCAL_STR_FAILED,
+});
 
 export const SQL_QUERY_VIEW_LIVE_METHODS = {
   /**
@@ -26,34 +30,51 @@ export const SQL_QUERY_VIEW_LIVE_METHODS = {
   },
 
   /**
-   * Handle live query initialized event
-   * Requirements: 32.2, 32.14
-   * @param {Object} data - Event data
+   * Listen to the live query manager's bus events for this view.
    */
-  handleLiveQueryInitialized(data) {
-    if (data.subscriptionId !== this.activeLiveQueryId) {
-      return;
+  wireLiveQueryListeners() {
+    const listeners = [
+      [LOCAL_STR_LIVEQUERY_RESULT, (data) => this.handleLiveQueryResult(data)],
+      [LOCAL_STR_LIVEQUERY_ERROR, (data) => this.handleLiveQueryError(data)],
+      [LOCAL_STR_LIVEQUERY_EVENT, (data) => this.handleLiveQueryStreamEvent(data)],
+      [LOCAL_STR_LIVEQUERY_PAUSED, (data) => this.handleLiveQueryPaused(data)],
+      [LOCAL_STR_LIVEQUERY_RESUMED, (data) => this.handleLiveQueryResumed(data)],
+    ];
+    for (const [eventName, listener] of listeners) {
+      this.eventBus.on(eventName, listener);
     }
-
-    // Display initial results
-    if (data.data && data.data.length > 0) {
-      this.resultsPanel.displaySelectResult({
-        results: data.data,
-        count: data.data.length,
-      }, 0);
-    }
-
-    // Update status
-    // Requirements: 32.6
-    this.liveQueryStatus = LOCAL_LIVE_QUERY_STATUS.ACTIVE;
-    this.emitEvent(LOCAL_STR_LIVEQUERY_INITIALIZED, {
-      subscriptionId: data.subscriptionId,
-      partitions: data.partitions,
-    });
   },
 
   /**
-   * Handle live query stream event
+   * Show a live query's whole result: a snapshot or a reset replaces the
+   * shown result with its rows.
+   * Requirements: 32.2, 32.14
+   * @param {Object} data - {subscriptionId, eventType, rows}
+   */
+  handleLiveQueryResult(data) {
+    if (data.subscriptionId !== this.activeLiveQueryId) {
+      return;
+    }
+    this.resultsPanel.displaySelectResult({
+      results: data.rows,
+      count: data.rows.length,
+    }, 0);
+  },
+
+  /**
+   * Show what failed in the live query; the subscription has ended.
+   * @param {Object} data - {subscriptionId, error, errorCode}
+   */
+  handleLiveQueryError(data) {
+    if (data.subscriptionId !== this.activeLiveQueryId) {
+      return;
+    }
+    this.liveQueryStatus = LIVE_QUERY_STATUS.FAILED;
+    this.resultsPanel.displayError({message: data.error, code: data.errorCode});
+  },
+
+  /**
+   * Handle live query stream event (a change)
    * Requirements: 32.2, 32.3
    * @param {Object} data - Event data
    */
@@ -62,22 +83,7 @@ export const SQL_QUERY_VIEW_LIVE_METHODS = {
       return;
     }
 
-    // Add event to live stream panel
     this.liveStreamPanel.addEvent(data.eventType, data.data, data.timestamp);
-  },
-
-  /**
-   * Handle live query expired event
-   * Requirements: 32.8
-   * @param {Object} data - Event data
-   */
-  handleLiveQueryExpired(data) {
-    if (data.subscriptionId !== this.activeLiveQueryId) {
-      return;
-    }
-
-    this.liveQueryStatus = LOCAL_LIVE_QUERY_STATUS.EXPIRED;
-    this.emitEvent(LOCAL_STR_LIVEQUERY_EXPIRED, {subscriptionId: data.subscriptionId});
   },
 
   /**
@@ -90,7 +96,7 @@ export const SQL_QUERY_VIEW_LIVE_METHODS = {
       return;
     }
 
-    this.liveQueryStatus = LOCAL_LIVE_QUERY_STATUS.PAUSED;
+    this.liveQueryStatus = LIVE_QUERY_STATUS.PAUSED;
     this.emitEvent(LOCAL_STR_LIVEQUERY_PAUSED, {subscriptionId: data.subscriptionId});
   },
 
@@ -104,7 +110,7 @@ export const SQL_QUERY_VIEW_LIVE_METHODS = {
       return;
     }
 
-    this.liveQueryStatus = LOCAL_LIVE_QUERY_STATUS.ACTIVE;
+    this.liveQueryStatus = LIVE_QUERY_STATUS.ACTIVE;
     this.emitEvent(LOCAL_STR_LIVEQUERY_RESUMED, {subscriptionId: data.subscriptionId});
   },
 
@@ -147,22 +153,9 @@ export const SQL_QUERY_VIEW_LIVE_METHODS = {
     const result = this.liveQueryManager.cancel(this.activeLiveQueryId);
     if (result) {
       this.activeLiveQueryId = null;
-      this.liveQueryStatus = LOCAL_LIVE_QUERY_STATUS.CANCELLED;
+      this.liveQueryStatus = LIVE_QUERY_STATUS.CANCELLED;
     }
     return result;
-  },
-
-  /**
-   * Renew an expired live query
-   * Requirements: 32.8
-   * @return {boolean} True if renewal initiated
-   */
-  renewLiveQuery() {
-    if (!this.activeLiveQueryId || !this.liveQueryManager) {
-      return false;
-    }
-
-    return this.liveQueryManager.renew(this.activeLiveQueryId);
   },
 
   /**
@@ -171,7 +164,7 @@ export const SQL_QUERY_VIEW_LIVE_METHODS = {
    */
   hasActiveLiveQuery() {
     return this.activeLiveQueryId !== null &&
-           this.liveQueryStatus === LOCAL_LIVE_QUERY_STATUS.ACTIVE;
+           this.liveQueryStatus === LIVE_QUERY_STATUS.ACTIVE;
   },
 
   /**

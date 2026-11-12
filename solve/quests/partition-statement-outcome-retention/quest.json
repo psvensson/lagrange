@@ -1,0 +1,52 @@
+{
+  "schema": "solve-quest/2",
+  "id": "partition-statement-outcome-retention",
+  "epic": "system-table-retention",
+  "statement": "A position-based bound for the partition-internal tables _partition_statement_outcomes and _participant_transactions, tied to the snapshot boundary and applied inside apply, on the model of reclaimDeliveredCdcObligations for _cdc_obligations. Today _partition_statement_outcomes gains one row per committed statement in every partition, is carried in snapshots and has no DELETE; its own comment defers the bound to \"the snapshot/log-bound quest\". The bound must be the same on every replica at the same log position, and a retry arriving after the bound gets an explicit, ruled answer. Size L. Not sealable before the owner rules the retry-dedupe horizon.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/partition-statement-outcome-retention/evidence/receipt.json",
+      "requiredReceipts": [
+        "retry-dedupe-horizon-ruling-recorded",
+        "position-based-reclaim-inside-apply",
+        "replica-and-snapshot-determinism-test",
+        "retry-past-horizon-named-outcome-test",
+        "participant-transaction-retirement-test",
+        "locking-read-reservation-sweep-wired-or-deleted",
+        "snapshot-size-bound-measured",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "position-based-inside-apply",
+      "statement": "Reclamation is a deterministic function of the applied log position, executed inside apply, so every replica and every snapshot installer holds the same rows at the same position. No wall-clock expiry and no out-of-band delete."
+    },
+    {
+      "id": "retry-dedupe-horizon-needs-a-ruling",
+      "statement": "A statement outcome is what makes a retried committed statement answer once. How long that guarantee holds is an owner ruling recorded in this log before the quest is sealed; past the horizon a retry gets a named outcome (R07), never a silent second execution."
+    },
+    {
+      "id": "unresolved-participants-are-never-retired",
+      "statement": "A _participant_transactions row is retired only after its transaction is terminal on this participant and no recovery, settlement or coordinator query can still need it; coordinate that predicate with transaction-table-retention, one writer per interaction."
+    },
+    {
+      "id": "snapshot-boundary-is-the-owner-contract",
+      "statement": "The bound is tied to the snapshot boundary through the snapshot owner's contract (src/raft snapshot checkpoint and application content); the quest does not invent a second definition of the boundary. Whether follower Raft logs are compacted was not established by the census and is established here before the bound is designed."
+    },
+    {
+      "id": "unwired-sweep-is-wired-or-deleted",
+      "statement": "sweepExpiredReservations (src/partition/partition-locking-read-reservation.js) deletes expired rows of the partition-internal _lagrange_locking_read_reservations table by wall clock and has no production caller. It is wired by the owner of that table or deleted (no-legacy rule); if it is wired, the quest first establishes whether that table is replicated state, because a wall-clock delete on replicated state is refused by position-based-inside-apply."
+    },
+    {
+      "id": "lifetime-declaration-follows-the-code",
+      "statement": "A table moves out of class unbounded in solve/epics/system-table-retention/table-lifetimes.json only in the change that lands its retention owner, and the retained entry names that owner as file:symbol. The declaration is never edited to lower the epic metric ahead of the code."
+    },
+    {
+      "id": "independent-verification",
+      "statement": "The src/ changes land only behind an approving verification newer than the last attempt."
+    }
+  ]
+}

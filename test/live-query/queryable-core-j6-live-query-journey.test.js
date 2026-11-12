@@ -94,13 +94,14 @@ describe('Unit J6: Live query results committed CDC delivery and lifecycle', () 
     });
     leader = leaderResult.leader;
 
+    // The production provider: the node's hosted replicas, keyed by replica.
     partitionMap = new Map([
-      ['p1', leader],
+      [leader.replicaId, leader],
     ]);
 
     currentPartitions = [
       {
-        partition_id: 'p1',
+        partition_id: leader.partitionId,
         table_name: 'live_orders',
         partition_key_start: null,
         partition_key_end: null,
@@ -330,7 +331,7 @@ describe('Unit J6: Live query results committed CDC delivery and lifecycle', () 
       from: {name: 'live_orders'},
     }, client);
 
-    assert.ok(subscribed.has('p1'), 'subscribed to initial partition p1');
+    assert.ok(subscribed.has(leader.partitionId), 'subscribed to the initial partition');
 
     const splitPartitions = [
       {
@@ -352,11 +353,10 @@ describe('Unit J6: Live query results committed CDC delivery and lifecycle', () 
 
     await customWiring.liveQueryManager.handlePartitionTopologyChange({
       operation: 'UPDATE',
-      old: {table_name: 'live_orders'},
-      new: {table_name: 'live_orders'},
+      data: {table_name: 'live_orders'},
     });
 
-    assert.ok(unsubscribed.has('p1'), 'unsubscribed from retired p1');
+    assert.ok(unsubscribed.has(leader.partitionId), 'unsubscribed from the retired partition');
     assert.ok(subscribed.has('p1a'), 'subscribed to child p1a');
     assert.ok(subscribed.has('p1b'), 'subscribed to child p1b');
 

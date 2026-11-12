@@ -292,8 +292,11 @@ async function createDeferredReplaceHarness(profile) {
         createReadyNode(TARGET_NODE_ID),
       ],
       services: [
+        // The source is not its group's leader (the removal leadership gate,
+        // 2026-11-11, hands a leading source off first; these cells are
+        // about the readiness wake).
         createReplicaRow(partitionId, sourceReplicaId, SOURCE_NODE_ID,
-          'leader'),
+          'follower'),
         createReplicaRow(partitionId, `${partitionId}-r2`, PEER_NODE_ID,
           'follower'),
         createReplicaRow(partitionId, `${partitionId}-r3`, THIRD_NODE_ID,
@@ -336,7 +339,7 @@ async function createDeferredReplaceHarness(profile) {
   const removeDeliveries = () => deliveries.filter((delivery) =>
     delivery.payload?.type === ReplicaOperationMessageType.REMOVE_REPLICA);
   const readStep = async () =>
-    (await coordinator.queryOperationById(operation.operationId))
+    (await coordinator.queryOperationProjectionById(operation.operationId))
       ?.workflowStep;
   const shutdown = async () => {
     await coordinator.shutdown();

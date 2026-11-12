@@ -557,6 +557,9 @@ class UnifiedRebalancerLifecycleBase extends EventEmitter {
       });
       this.cancelScheduledCheck();
       this.cancelStabilizationTimer();
+      // The named waits and the planning publication cursor live for the
+      // leadership (R13).
+      this.disarmRebalancerWakes();
     }
   }
 }

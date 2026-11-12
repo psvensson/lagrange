@@ -11,7 +11,9 @@ image:
   tag: ""            # defaults to .Chart.appVersion
   pullPolicy: IfNotPresent
 
-# Number of non-seed nodes. 2 joiners + 1 seed = 3-node cluster.
+# Number of non-seed nodes. 2 joiners + 1 seed = 3-node cluster. The seed
+# declares this total (1 + joiners.replicas) to the runtime as its formation
+# size (LAGRANGE_FORMATION_TARGET_NODE_COUNT); there is no runtime default.
 joiners:
   replicas: 2
 

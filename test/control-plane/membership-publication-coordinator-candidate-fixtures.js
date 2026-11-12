@@ -387,7 +387,7 @@ test('deriveMembershipPublicationCandidate increments publication epochs monoton
 test('MembershipPublicationCoordinator resolves control-plane publications owner from membership publication runtime owner',
   async (t) => {
     const publicationsOwner = {
-      upsertPublication: async () => ({success: true}),
+      admitPublication: async () => ({success: true}),
     };
     const coordinator = new MembershipPublicationCoordinator({
       nodeId: 'node-1',

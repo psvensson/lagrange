@@ -19,6 +19,16 @@
  * log (committed-membership-oracles).
  */
 
+import {redriveAdmissionsOnMembershipChange} from
+  '../../src/partition/partition-service-raft-peer-cache-reconciliation.js';
+import {retirePartitionRaftPeer} from
+  '../../src/partition/partition-service-raft-membership-administration.js';
+import {subscribeRemovalSubjectHandoff} from
+  '../../src/partition/partition-service-removal-subject-handoff.js';
+import {REMOVAL_SERVING_STATE} from
+  '../../src/partition/partition-service-removal-serving-methods.js';
+import {RAFT_OPERATION_PORT_REQUEST} from
+  '../../src/raft/raft-operation-port-request.js';
 import {EventEmitter} from 'node:events';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -27,6 +37,17 @@ import path from 'node:path';
 import Database from 'better-sqlite3';
 
 import {ReplicaHandler} from '../../src/node/replica-handler.js';
+import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {LoggingService} from '../../src/logging/logging-service.js';
+import {PartitionNodeCluster} from
+  '../raft/raft-rs-backend/partition-node-cluster.js';
+import {
+  durableAppliedState,
+  durableHardState,
+  foldAt,
+  logFold,
+} from '../raft/raft-rs-backend/committed-membership-oracles.js';
+import {createMockCache} from '../rebalancer/test-helpers.js';
 import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
 import {REPLICA_HANDLER_LOG_MSG} from
   '../../src/node/replica-handler-constants.js';
@@ -171,17 +192,39 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
     authoritativeSnapshot: true,
   });
   const service = new EventEmitter();
+  // The runtime's transport identity as production binds it: its exact
+  // handler registered at its address while its port is open, retired
+  // through this lifecycle owner (a durable ACTIVE - a cancelled removal's
+  // row - is written only while it is bound).
+  const transportHandler = () => undefined;
+  let portClosed = false;
   Object.assign(service, {
     partitionId,
     replicaId,
     raft: cluster.node(replicaId),
     admissionFenced: false,
+    unifiedAddress: initialRow.address,
+    transportHandler,
+    transport: {getRegisteredHandler: (address) =>
+      !portClosed && address === initialRow.address ? transportHandler : null},
+    resolveHandlerRetirementLane: () => replicaStateMachine,
+    timeSource: {now: () => Date.now()},
     fenceServingAdmissionForRemoval() {
       service.admissionFenced = true;
     },
-    async waitForRemovalServingDrain() {},
+    liftServingAdmissionFenceForCancelledRemoval() {
+      const fenced = service.admissionFenced;
+      service.admissionFenced = false;
+      return fenced;
+    },
+    // Nothing serves in this world: the drain answers the serving
+    // contract's named DRAINED state.
+    async waitForRemovalServingDrain() {
+      return {state: REMOVAL_SERVING_STATE.DRAINED};
+    },
     async shutdown() {
-      service.raft.close();
+      portClosed = true;
+      service.raft?.close();
     },
   });
   const handler = new ReplicaHandler({
@@ -240,8 +283,126 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
   };
 }
 
+const TWO_VOTER_ELECTION_ROUNDS = 400;
+
+/**
+ * A two-voter group {source, leader} whose other voter leads, with the
+ * source hosted by the production replica handler (createRemovalSourceHandler)
+ * and the durable oracles of the source and the leader. Torn down with t.
+ * @param {Object} t - The tap test.
+ * @param {Object} shape - {partitionId, source, leader, nodeOf}.
+ * @return {Object} {cluster, cache, source, peerIds, elected, sourceDb,
+ *   leaderDb, lifecycleAtSetup, committedVoters(), sourceAppliedVoters(),
+ *   sourceLifecycle()}.
+ */
+function openTwoVoterRemovalWorld(t, {partitionId, source: sourceId,
+  leader: leaderId, nodeOf}) {
+  ConfigurationManager.resetInstance();
+  LoggingService.resetInstance();
+  ConfigurationManager.getInstance().initialize({});
+  LoggingService.getInstance().initialize({level: 'error'});
+  const rowOf = (replicaId, status) => ({
+    service_id: replicaId, replica_id: replicaId, partition_id: partitionId,
+    node_id: nodeOf[replicaId], service_type: 'partition', status,
+    raft_role: 'follower',
+    address: `${nodeOf[replicaId]}/partition/${replicaId}`,
+  });
+  const cluster = new PartitionNodeCluster({partitionId,
+    replicaIds: [sourceId, leaderId]});
+  cluster.tickers = [leaderId];
+  const elected = cluster.settle(() => cluster.leaderReplicaId() === leaderId,
+    {rounds: TWO_VOTER_ELECTION_ROUNDS});
+  const peerIds = Object.freeze({
+    [sourceId]: String(cluster.raftPeerIdOf(sourceId)),
+    [leaderId]: String(cluster.raftPeerIdOf(leaderId)),
+  });
+  const cache = createMockCache({services: [
+    rowOf(sourceId, ReplicaStatus.ACTIVE), rowOf(leaderId, ReplicaStatus.ACTIVE)]});
+  const source = createRemovalSourceHandler({cluster, replicaId: sourceId,
+    partitionId, nodeId: nodeOf[sourceId], cache,
+    rowOf: (status) => rowOf(sourceId, status)});
+  const world = {cluster, cache, source, peerIds, elected,
+    sourceDb: cluster.replica(sourceId).dbFile,
+    leaderDb: cluster.replica(leaderId).dbFile};
+  world.lifecycleAtSetup = durableLifecycleState(world.sourceDb, partitionId);
+  // The committed configuration: the fold of the leader's durable log over
+  // the founders, at the leader's durable commit index.
+  world.committedVoters = () => foldAt(logFold(world.leaderDb, partitionId,
+    [peerIds[sourceId], peerIds[leaderId]]),
+  Number(durableHardState(world.leaderDb, partitionId).commit)).voters;
+  world.sourceAppliedVoters = () =>
+    durableAppliedState(world.sourceDb, partitionId).voters;
+  world.sourceLifecycle = () =>
+    durableLifecycleState(world.sourceDb, partitionId);
+  t.teardown(async () => {
+    await source.dispose();
+    cluster.dispose();
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+  });
+  return world;
+}
+
+/**
+ * A replica's partition as its row-driven retirement sees it, wired to its
+ * port's events as production wires it: the deferred-retirement re-drive
+ * and the removal subject's hand-off (B2: a replica never proposes its own
+ * RemoveNode; leading, it hands leadership to a survivor, which removes it).
+ * Every REMOVE_PEER this replica's port is asked naming the replica itself
+ * is recorded in `selfRemovals`.
+ * @param {Object} cluster - The PartitionNodeCluster.
+ * @param {string} replicaId - The replica.
+ * @param {Object} options - {partitionId, members, logger}.
+ * @return {Object} The partition (with selfRemovals).
+ */
+function wireRowDrivenPartition(cluster, replicaId, {partitionId, members,
+  logger}) {
+  const port = cluster.node(replicaId);
+  const selfRemovals = [];
+  const partition = {
+    raft: new Proxy({}, {get: (_target, key) => {
+      if (key === 'proposeConfChange') {
+        return (change) => {
+          if (change?.replicaIdentity === replicaId) selfRemovals.push(change);
+          return port.proposeConfChange(change);
+        };
+      }
+      const value = port[key];
+      return typeof value === 'function' ? value.bind(port) : value;
+    }}),
+    replicaId, partitionId, replicaIds: [...members], peerAddresses: [],
+    logger, selfRemovals,
+    raftTimingConfig: cluster.replica(replicaId)
+      .request[RAFT_OPERATION_PORT_REQUEST.TIMING],
+    requestLeadershipTransfer: (request) => port.transferLeadership(request),
+  };
+  redriveAdmissionsOnMembershipChange(partition);
+  subscribeRemovalSubjectHandoff(partition);
+  return partition;
+}
+
+/**
+ * The survivors' removal of a source in this fixture: the cluster addresses
+ * peers as raft-rs://replica-<id>, which no services row can name, so the
+ * row-driven discovery never matches a peer here; the survivor that leads
+ * removes the source the coordinator's way (RETIRE_REPLICA_PEER's seam,
+ * retirePartitionRaftPeer) - never the source itself.
+ * @param {Array<Object>} partitions - wireRowDrivenPartition results.
+ * @param {string} sourceId - The source replica.
+ * @return {Promise<Object|null>} The survivor leader's answer, or null.
+ */
+async function retireThroughSurvivorLeader(partitions, sourceId) {
+  const leader = partitions.find((partition) =>
+    partition.replicaId !== sourceId &&
+    partition.raft.readStatus().role === 'leader');
+  return leader ? retirePartitionRaftPeer(leader, sourceId) : null;
+}
+
 export {
+  retireThroughSurvivorLeader,
+  wireRowDrivenPartition,
   createRemovalSourceHandler,
+  openTwoVoterRemovalWorld,
   durableLifecycleState,
   nextTurns,
   partitionServiceRow,

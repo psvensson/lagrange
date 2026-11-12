@@ -559,3 +559,98 @@ test('RebalanceCoordinator keeps REPLACE STOPPING in progress when replayed ' +
     await coordinator.shutdown();
   }
 });
+
+// R14 (multi-process formation run, 1-4 REMOVEs per run recorded FAILED with
+// the replica removed): a REMOVE's STOPPING re-drive whose delivery fails or
+// is refused never fails an operation whose removal the durable rows already
+// show complete; a refusal while the replica is still present fails with the
+// answer's own text, never the 'Unknown error' fallback.
+const REDRIVE_PARTITION_ID = 'tbl-redrive-p1';
+// Four voter-ready replicas: removing one keeps the universal floor of 3.
+const REDRIVE_NODE_IDS = Object.freeze(
+  ['seed-node', 'node-2', 'node-3', 'node-4']);
+const REDRIVE_READY_LEASE_MS = 60_000;
+
+function buildRedriveCacheData() {
+  return {
+    nodes: REDRIVE_NODE_IDS.map((nodeId) => ({
+      node_id: nodeId,
+      status: 'active',
+      connection_state: 'ready',
+      ready_lease_expires_at: Date.now() + REDRIVE_READY_LEASE_MS,
+    })),
+    services: REDRIVE_NODE_IDS.map((nodeId, index) => {
+      const replicaId = `${REDRIVE_PARTITION_ID}-r${index + 1}`;
+      return {
+        service_id: replicaId,
+        replica_id: replicaId,
+        partition_id: REDRIVE_PARTITION_ID,
+        node_id: nodeId,
+        service_type: 'partition',
+        status: 'active',
+        raft_role: index === 0 ? 'leader' : 'follower',
+        address: `${nodeId}/partition/${replicaId}`,
+      };
+    }),
+  };
+}
+
+async function runRemoveRedriveRefusal(t, removalObservation) {
+  const deliveries = [];
+  const coordinator = createTestCoordinator({
+    nodeId: 'seed-node',
+    enableTimeouts: false,
+    cacheData: buildRedriveCacheData(),
+    messageRouter: {
+      async deliver(target, payload) {
+        deliveries.push({target, payload});
+        return buildDeliveryEnvelope({acknowledged: true}, deliveries.length === 1 ?
+          {status: ReplicaOperationResponseStatus.INITIATED} :
+          {status: ReplicaOperationResponseStatus.ERROR,
+            error: 'duplicate refused by the target'});
+      },
+    },
+  });
+  try {
+    const operation = await coordinator.createOperation({
+      type: OperationType.REMOVE,
+      partitionId: REDRIVE_PARTITION_ID,
+      nodeId: 'node-2',
+      replicaId: `${REDRIVE_PARTITION_ID}-r2`,
+    });
+    await coordinator.executeOperation(operation);
+    t.equal(operation.workflowStep, WORKFLOW_STEP.STOPPING,
+      'the accepted REMOVE is at STOPPING');
+    coordinator.repository.getActualReplicaObservation = async () =>
+      removalObservation;
+    await coordinator.executeOperation(operation);
+    t.equal(deliveries.length, 2, 'the STOPPING re-drive was delivered');
+    return await coordinator.getOperation(operation.operationId);
+  } finally {
+    await coordinator.shutdown();
+  }
+}
+
+test('RebalanceCoordinator completes, never fails, a REMOVE whose STOPPING ' +
+  're-drive is refused after the replica is durably removed', async (t) => {
+  const persisted = await runRemoveRedriveRefusal(t, {
+    state: STOPPING_REPLICA_OBSERVATION_STATE.ABSENT,
+    source: 'authoritative',
+  });
+  t.equal(persisted?.workflowStep, WORKFLOW_STEP.REMOVED,
+    'the completed removal completes the operation');
+});
+
+test('RebalanceCoordinator fails a REMOVE whose STOPPING re-drive is refused ' +
+  'while the replica is present, with the answer\'s own error text',
+async (t) => {
+  const persisted = await runRemoveRedriveRefusal(t, {
+    state: STOPPING_REPLICA_OBSERVATION_STATE.OBSERVED,
+    source: 'authoritative',
+    lifecycleStatus: ReplicaStatus.ACTIVE,
+  });
+  t.equal(persisted?.workflowStep, WORKFLOW_STEP.FAILED,
+    'a refusal with the replica present still fails');
+  t.equal(persisted?.errorMessage, 'duplicate refused by the target',
+    'the failure carries the answer\'s text');
+});

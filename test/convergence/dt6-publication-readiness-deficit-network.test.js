@@ -7,8 +7,9 @@ import {hasFreshReadyLeaseOrHeartbeat} from
   '../../src/control-plane/active-node-projection.js';
 import {buildPublicationActiveGateHandoffContract} from
   '../../src/control-plane/publication-active-gate-handoff-contract.js';
-import {CONTROL_PLANE_READINESS_REASON} from
-  '../../src/control-plane/control-plane-readiness-constants.js';
+import {
+  SELECTED_SNAPSHOT_SOURCE_TIMEOUT_OBSERVATION_REASON,
+} from '../../src/control-plane/publication-active-gate-handoff-contract-constants.js';
 import {
   EDGE_STATE,
   buildTopologyConvergenceGraphFromArtifacts,
@@ -23,8 +24,10 @@ import {
 //    heartbeat within the 60s grace, evaluated against the OWNER's clock.
 //  - buildPublicationActiveGateHandoffContract(...) (publication-active-gate-handoff-contract.js) —
 //    the real owner deficit decision; resolvePublicationActiveGateHandoffPendingRecoveryNodeIds
-//    filters the expected set to nodes whose readiness entry carries a real pending-owner reason
-//    code (CONTROL_PLANE_READINESS_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING).
+//    lists the expected nodes whose OWN readiness entry carries a per-node wait reason (the
+//    observation overlay's deferred snapshot source). The cluster-level reason
+//    PRIORITY_CONTROL_PLANE_RECOVERY_PENDING is not such a reason: it is the handoff's one
+//    recoveryGate fact and lists no node.
 //
 // An owner driver tick runs on the network TimeSource: each tick it recomputes per-node liveness
 // against the owner's VIRTUAL now and feeds the real deficit contract. A node whose ready-lease
@@ -33,9 +36,9 @@ import {
 //
 // HONEST SCOPE: the liveness determination (lease/heartbeat vs the virtual clock) and the deficit
 // decision (pending-recovery filtering by reason code) are both real production code. The glue —
-// mapping a not-live verdict to the PRIORITY_CONTROL_PLANE_RECOVERY_PENDING reason code — is the
-// test's, a simplification of the full buildEvaluatedNodeReadinessSnapshot reason builder (which
-// pulls in dimensions/runtime-authority context out of scope here). What this proves: real readiness
+// mapping a not-live verdict to a per-node wait reason on that node's own entry — is the test's,
+// standing in for the control snapshot's observation overlay (a not-live node's snapshot source
+// is the one that is deferred). What this proves: real readiness
 // liveness drives the real deficit decision on the virtual clock.
 
 const IDS = Object.freeze(['N1', 'N2', 'N3']);
@@ -43,7 +46,7 @@ const START_MS = 1_000_000;
 const INTERVAL_MS = 20;
 const N3_LEASE_EXPIRES_AT = START_MS + 150; // N3's ready-lease lapses mid-run
 const LONG_LEASE_AT = START_MS + 10_000; // N1/N2 stay live for the whole window
-const PENDING_REASON = CONTROL_PLANE_READINESS_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING;
+const PENDING_REASON = SELECTED_SNAPSHOT_SOURCE_TIMEOUT_OBSERVATION_REASON;
 const READINESS_EDGE_ID = 'readiness_startup_support';
 const PROJECTION_EVIDENCE_PATH =
   'failureBundle.publicationConvergence.projectionDiagnostics';
@@ -76,13 +79,13 @@ function nodeRows() {
   ];
 }
 
-// Build readinessByNodeId from the REAL liveness check: a not-live node carries the real
-// pending-owner reason code the deficit decision filters on.
+// Build readinessByNodeId from the REAL liveness check: a not-live node's own entry carries a
+// per-node wait reason the deficit decision lists.
 function deriveReadinessByNodeId(rows, nowMs) {
   const readinessByNodeId = {};
   for (const row of rows) {
     const live = hasFreshReadyLeaseOrHeartbeat(row, {nowMs});
-    // not-live -> carry the real pending-owner reason code the deficit decision filters on
+    // not-live -> its own entry carries the per-node wait reason the deficit decision lists
     // (normalizePublicationActiveGateHandoffReasonCodes reads the flat `reasonCodes` field).
     readinessByNodeId[row.node_id] = {
       node_id: row.node_id,

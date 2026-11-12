@@ -1,3 +1,4 @@
+import {COLUMN} from '../constants/index.js';
 const LOCAL_STR_AGEMS = 'ageMs=';
 const LOCAL_STR_TIMEOUTMS = 'timeoutMs=';
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
@@ -13,7 +14,6 @@ function assignAdminServiceDiscoveryReplicaReadinessMethods(
     BENCHMARK_DEGRADATION_PRIORITY,
     BENCHMARK_DEGRADATION_STATE,
     CANONICAL_LEADER_ROUTING_GAP_STATE,
-    COLUMN,
     DEFAULT_STEP_TIMEOUT_MS_BY_WORKFLOW_STEP,
     DISCOVERY_ROUTING_SNAPSHOT_FIELD,
     EMPTY_STRING,
