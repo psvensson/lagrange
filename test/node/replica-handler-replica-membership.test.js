@@ -1,3 +1,5 @@
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 // READ_REPLICA_MEMBERSHIP through a real ReplicaHandler on real partition
 // services (quest replace-source-removal-owner, amendment-1 step 3, the
 // witness seam's node end):
@@ -85,7 +87,7 @@ async () => {
     budgetMs: GROUP_BUDGET_MS});
   try {
     const [target, source] = group.services;
-    const handler = new ReplicaHandler({
+    const handler = createReplicaHandlerFixture(ReplicaHandler, {
       nodeId: 'node-1',
       dataDir,
       systemTableCache: new SystemTableCache(),

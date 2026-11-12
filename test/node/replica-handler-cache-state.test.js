@@ -1,3 +1,5 @@
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 /**
  * Unit tests for ReplicaHandler cache-based state access.
  * Tests that ReplicaHandler reads replica state from System_Table_Cache.
@@ -187,7 +189,7 @@ test('ReplicaHandler cache-based state access', async (t) => {
       updated_at: Date.now(),
     });
 
-    const handler = new ReplicaHandler({
+    const handler = createReplicaHandlerFixture(ReplicaHandler, {
       nodeId: nodeId,
       dataDir: tempDir,
       systemTableCache: cache,
@@ -211,7 +213,7 @@ test('ReplicaHandler cache-based state access', async (t) => {
     const cache = createSeededCache();
     const mockCDC = createMockCDCService(cache);
 
-    const handler = new ReplicaHandler({
+    const handler = createReplicaHandlerFixture(ReplicaHandler, {
       nodeId: 'test-node',
       dataDir: tempDir,
       systemTableCache: cache,
@@ -245,7 +247,7 @@ test('ReplicaHandler cache-based state access', async (t) => {
       updated_at: Date.now(),
     });
 
-    const handler = new ReplicaHandler({
+    const handler = createReplicaHandlerFixture(ReplicaHandler, {
       nodeId: 'test-node',
       dataDir: tempDir,
       systemTableCache: cache,
@@ -270,7 +272,7 @@ test('ReplicaHandler cache-based state access', async (t) => {
     cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', source);
     const mockCDC = createMockCDCService(cache);
 
-    const handler = new ReplicaHandler({
+    const handler = createReplicaHandlerFixture(ReplicaHandler, {
       nodeId: 'test-node',
       dataDir: tempDir,
       systemTableCache: cache,
@@ -312,7 +314,7 @@ test('ReplicaHandler cache-based state access', async (t) => {
     });
     const mockCDC = createMockCDCService(cache);
 
-    const handler = new ReplicaHandler({
+    const handler = createReplicaHandlerFixture(ReplicaHandler, {
       nodeId: nodeId,
       dataDir: tempDir,
       systemTableCache: cache,
@@ -368,7 +370,7 @@ test('ReplicaHandler cache-based state access', async (t) => {
       updated_at: Date.now(),
     });
 
-    const handler = new ReplicaHandler({
+    const handler = createReplicaHandlerFixture(ReplicaHandler, {
       nodeId: nodeId,
       dataDir: tempDir,
       systemTableCache: cache,
@@ -410,7 +412,7 @@ test('ReplicaHandler cache-based state access', async (t) => {
       updated_at: Date.now(),
     });
 
-    const handler = new ReplicaHandler({
+    const handler = createReplicaHandlerFixture(ReplicaHandler, {
       nodeId: nodeId,
       dataDir: tempDir,
       systemTableCache: cache,
@@ -481,7 +483,7 @@ test('ReplicaHandler cache-based state access', async (t) => {
       updated_at: Date.now(),
     });
 
-    const handler = new ReplicaHandler({
+    const handler = createReplicaHandlerFixture(ReplicaHandler, {
       nodeId: nodeId,
       dataDir: tempDir,
       systemTableCache: cache,

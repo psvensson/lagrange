@@ -1,3 +1,5 @@
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 import {handlerIdentityApi} from '../test-helpers/replica-handler-identity-fixture.js';
 import {
   buildReplicaCreateAdmissionToken,
@@ -96,7 +98,7 @@ async function registerReplicaHandlerRouterAdmissionTests({
     );
     const mockCDC = createMockCDCService(cache);
 
-    const handler = new ReplicaHandler({
+    const handler = createReplicaHandlerFixture(ReplicaHandler, {
       nodeId: 'test-node',
       ownerIncarnation,
       dataDir: tempDir,
@@ -149,7 +151,7 @@ async function registerReplicaHandlerRouterAdmissionTests({
     const cache = createSeededCache();
     const mockCDC = createMockCDCService(cache);
 
-    const handler = new ReplicaHandler({
+    const handler = createReplicaHandlerFixture(ReplicaHandler, {
       nodeId: 'test-node',
       dataDir: tempDir,
       systemTableCache: cache,
@@ -185,7 +187,7 @@ async function registerReplicaHandlerRouterAdmissionTests({
     );
     const mockCDC = createMockCDCService(cache);
 
-    const handler = new ReplicaHandler({
+    const handler = createReplicaHandlerFixture(ReplicaHandler, {
       nodeId: 'test-node',
       ownerIncarnation,
       dataDir: tempDir,

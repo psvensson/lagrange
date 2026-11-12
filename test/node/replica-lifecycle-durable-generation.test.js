@@ -1,3 +1,7 @@
+import {captureReplicaRuntimeProducer} from
+  '../../src/node/replica-runtime-producer.js';
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 import {allocateLifecycleFixture} from '../helpers/replica-lifecycle-fixture.js';
 /**
  * Durable lifecycle generation probe.
@@ -171,7 +175,7 @@ function registerRow(stateMachine, row) {
 }
 
 function createHandler(store, stateMachine, outcomes = []) {
-  return new ReplicaHandler({
+  return createReplicaHandlerFixture(ReplicaHandler, {
     nodeId: NODE_ID,
     dataDir: '/tmp/replica-lifecycle-durable-generation',
     systemTableCache: store.cache,
@@ -568,7 +572,8 @@ test('handler binds leader settlement before retire and durable deletion',
     // removal holds (its service's operation port), never a logical name.
     const runtime = Object.freeze({});
     t.equal(registerRow(stateMachine, row), true, 'the original full REMOVING source is installed');
-    const publication = createReplicaRuntimePublication(handler, row,
+    const producer = captureReplicaRuntimeProducer(handler, stateMachine, row.service_id);
+    const publication = createReplicaRuntimePublication(producer, row,
       captureReplicaAdmission(stateMachine, row.service_id));
     const service = {replicaId: row.replica_id, partitionId: row.partition_id,
       nodeId: row.node_id, raft: runtime, isShutdown: false};

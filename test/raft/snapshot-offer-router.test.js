@@ -1,3 +1,7 @@
+import {captureReplicaRuntimeProducer} from
+  '../../src/node/replica-runtime-producer.js';
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -229,7 +233,7 @@ test('replaceLocalReplicaService consumes the retained predecessor that registra
   const store = createLifecycleStateStore({services: [source]});
   const owner = new ReplicaStateMachine({nodeId: source.node_id,
     systemTableCache: store.cache, controlPlaneSystemTableGateway: store.gateway});
-  const handler = new ReplicaHandler({
+  const handler = createReplicaHandlerFixture(ReplicaHandler, {
     nodeId: source.node_id,
     systemTableCache: store.cache,
     controlPlaneSystemTableGateway: store.gateway,
@@ -242,9 +246,10 @@ test('replaceLocalReplicaService consumes the retained predecessor that registra
   const original = registration.service;
   handler.registerExistingReplica(registration);
   const expected = captureReplicaRuntimeObservation(handler, REPLICA_ID);
+  const producer = captureReplicaRuntimeProducer(handler, owner, REPLICA_ID);
   const replacement = new PartitionService({partitionId: PARTITION_ID, replicaId: REPLICA_ID,
     tableId: STATE_TABLE, tableName: STATE_TABLE, nodeId: source.node_id,
-    runtimePublication: createReplicaRuntimePublication(handler, expected.sourceEvidence,
+    runtimePublication: createReplicaRuntimePublication(producer, expected.sourceEvidence,
       expected.admission, original), resolveHandlerRetirementLane: () => owner});
   t.teardown(async () => {
     await Promise.all([original.shutdown(), replacement.shutdown()]);

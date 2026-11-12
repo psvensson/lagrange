@@ -498,3 +498,60 @@ and all durable-log/restart assertions remain preserved pending that migration.
 No local tests, static checks or validators were run. Independent source
 review, exact candidate lab proof and the remaining caller/static gates are
 pending; this is WIP evidence, not producer acceptance or a landing claim.
+
+
+## Mandatory factory producer descriptor — unverified continuation
+
+The existing runtime publisher now accepts one retained producer value. Its
+private value captures the exact handler, original lifecycle owner, their
+lifetimes and original registries before construction. Bootstrap and Join
+compose that same value with their original host Map, acquisition holder and
+record, boot incarnation, transport and router. The value is neither a registry
+nor a new authority source: the original lifecycle admission still supplies the
+row and version, and the publication record still owns binding and map effects.
+
+A frozen factory descriptor binds captureProducer and create. The handler
+retains that descriptor as an immutable own property. Missing, callable,
+mutable or accessor-based descriptors are refused. CREATE workers capture it
+before their first cleanup await, snapshot wiring captures before receive and
+install, and direct Join restore captures before its authoritative read. The
+higher Join create hook retains the same producer before its earlier stop and
+pacing awaits. The publisher consumes this original value at existing transport,
+source, destination and reentrant handoff checks. A supplied host-map effect
+must target its retained exact host; omitting a host map performs no host-map
+effect and does not relax original-host currentness.
+
+The test construction seam requires each fixture's explicit existing callback
+and actual ReplicaHandler class or existing subclass. It captures the original
+owner once synchronously after construction. Forty-six fixture files keep their
+existing scenario subclasses, callbacks, admissions and assertions. Fifteen
+publication calls across ten files now explicitly capture their producer before
+source awaits. Tests that own a physical destination declare that host before
+construction; generic handler-only producers cannot acquire arbitrary maps.
+Malformed descriptor and required-port negatives still call the real constructor.
+
+The new foreign-host original is sealed separately at
+1eca47c1e6622184480a469c1e978e1e56bede54, unchanged production tree
+62863e110b243356455096cf7ef612cb3b34e331. Its first physical execution is pending.
+Existing b129 original job3122 and f778 seed diagnostic job3129 remain separate;
+no candidate result or whole producer acceptance is claimed here.
+
+This is deliberately an unverified WIP checkpoint. Further source review found
+an earlier CREATE boundary: the public admission method awaits ledger claim,
+cleanup barrier and reconciliation, and queued start awaits scheduling and
+physical-worker revalidation before createReplicaAsync. Those callers still
+need the same original producer/request carried from request entry, with
+successor-safe exact cleanup cells. Capturing only at the worker is insufficient.
+Held-queue and held-claim original controls precede that additional correction.
+The new descriptor is not accepted as complete while this remains open.
+
+The snapshot dispatcher fixture and V1a construction-site census still require
+explicit API/provenance migration. Snapshot physical installation before factory
+construction remains a separate checkpoint custody/source-effect obligation.
+The native durable-log/restart and release fixtures still require original
+before-construction admissions; their old raw-map adoption is not accepted.
+The seed registration diagnostic remains frozen before replacing undefined
+SERVICE_STATUS.CREATING with its actual ReplicaState/ReplicaStatus owner.
+Generic lifecycle STOP/restart completion, lower transaction release effects,
+and the priority CREATE status fallback remain explicit open owner interactions.
+No local test, syntax check, static gate, validator or generator was executed.

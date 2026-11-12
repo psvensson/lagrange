@@ -152,7 +152,6 @@ const REPLICA_HANDLER_LOG_MSG = Object.freeze({
 
 const REPLICA_HANDLER_ERROR_MSG = Object.freeze({
   UNKNOWN_MESSAGE_TYPE: (type) => `Unknown message type: ${type}`,
-  CREATE_PARTITION_SERVICE_REQUIRED: 'ReplicaHandler requires createPartitionService',
   CREATE_REQUIRED_FIELDS:
     'CREATE_REPLICA requires operationId, partitionId, and replicaId',
   CREATE_OPERATION_TYPE_REQUIRED:

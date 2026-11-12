@@ -1,3 +1,5 @@
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 // The applied-position observer's registered release boundary, clocks and lifetime.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -81,7 +83,7 @@ async function withRegisteredObservationOwner(measure, options = {}) {
   try {
     const started = await startLeader({timeSource: clock, ...(options.leader ?? {})});
     leader = started.leader;
-    handler = new ReplicaHandler({nodeId: leader.nodeId, ownerIncarnation: 1,
+    handler = createReplicaHandlerFixture(ReplicaHandler, {nodeId: leader.nodeId, ownerIncarnation: 1,
       systemTableCache: leader.systemTableCache, cdcIntegrationService: {},
       createPartitionService: () => leader, messageRouter: transport,
       dataDir: directory, timeSource: clock});

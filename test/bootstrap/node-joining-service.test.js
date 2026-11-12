@@ -16,6 +16,7 @@ import {NodeService} from '../../src/node/node-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {
   establishJoinReplicaLifecycleOwner,
+  captureNodeJoiningRestoreProducer,
   initializeTestEnvironment,
   installNodeJoiningRestoreOwner,
   publishNodeJoiningRestoredRuntime,
@@ -927,7 +928,8 @@ test('NodeJoiningService - durable rejoin restore queues local partition replica
     service.triggerJoinReconciler = async () => {
       calls.push('reconcile');
       for (const [replicaId, options] of service.joinReplicaOptionsByServiceId) {
-        await publishNodeJoiningRestoredRuntime(service, options, {
+        await publishNodeJoiningRestoredRuntime(service, options,
+          captureNodeJoiningRestoreProducer(service, replicaId), {
           startElection() {
             calls.push(`start:${replicaId}`);
           },
@@ -1007,7 +1009,8 @@ test('NodeJoiningService - durable rejoin runtime confirmation debt blocks elect
     calls.push('reconcile');
     if (!service.partitionServices.has('nodes-p1-r1')) {
       await publishNodeJoiningRestoredRuntime(service,
-        service.joinReplicaOptionsByServiceId.get('nodes-p1-r1'), {
+        service.joinReplicaOptionsByServiceId.get('nodes-p1-r1'),
+        captureNodeJoiningRestoreProducer(service, 'nodes-p1-r1'), {
           startElection() { calls.push('start:nodes-p1-r1'); },
         });
     }
@@ -1072,9 +1075,9 @@ test('NodeJoiningService - durable rejoin restore recreates stale local ' +
     },
   };
   service.cdcIntegrationService = {};
-  service.createJoinLocalPartitionService = async (options) => {
+  service.createJoinPartitionServiceFromProducer = async (options, producer) => {
     calls.push(`create:${options.replicaId}`);
-    await publishNodeJoiningRestoredRuntime(service, options, {
+    await publishNodeJoiningRestoredRuntime(service, options, producer, {
       startElection() {
         calls.push(`start:${options.replicaId}`);
       },
@@ -1164,7 +1167,7 @@ test('NodeJoiningService - durable rejoin restore recreates stale local ' +
     replicaId: 'nodes-p1-r1', partitionId: 'nodes-p1', tableName: 'nodes',
     restoringExistingReplica: true,
     lifecycleAuthority: systemTableCache.get(TABLES.SERVICES, 'nodes-p1-r1'),
-  }, {
+  }, captureNodeJoiningRestoreProducer(service, 'nodes-p1-r1'), {
     async shutdown() {
       calls.push('shutdown:nodes-p1-r1');
       this.transport.unregisterExact(this.unifiedAddress, this.transportHandler);
@@ -1234,9 +1237,9 @@ test('NodeJoiningService - durable rejoin restore repairs stale runtime when ' +
   service.triggerJoinReconciler = async () => {
     calls.push('reconcile');
   };
-  service.createJoinLocalPartitionService = async (options) => {
+  service.createJoinPartitionServiceFromProducer = async (options, producer) => {
     calls.push(`create:${options.replicaId}`);
-    await publishNodeJoiningRestoredRuntime(service, options, {
+    await publishNodeJoiningRestoredRuntime(service, options, producer, {
       startElection() {
         calls.push(`start:${options.replicaId}`);
       },
@@ -1352,7 +1355,7 @@ test('NodeJoiningService - durable rejoin restore repairs stale runtime when ' +
     replicaId, partitionId, tableName: 'sql_transaction_participants',
     restoringExistingReplica: true,
     lifecycleAuthority: systemTableCache.get(TABLES.SERVICES, replicaId),
-  }, {
+  }, captureNodeJoiningRestoreProducer(service, replicaId), {
     async shutdown() {
       calls.push(`shutdown:${replicaId}`);
       this.transport.unregisterExact(this.unifiedAddress, this.transportHandler);
@@ -1406,7 +1409,8 @@ test('NodeJoiningService - durable rejoin restore fails closed until restored pa
     service.initializeJoiningLifecycleOwners = async () => {};
     service.triggerJoinReconciler = async () => {
       for (const options of service.joinReplicaOptionsByServiceId.values()) {
-        const runtime = await publishNodeJoiningRestoredRuntime(service, options, {
+        const runtime = await publishNodeJoiningRestoredRuntime(service, options,
+          captureNodeJoiningRestoreProducer(service, options.replicaId), {
           startElection() {},
         });
         runtime.transport.unregisterExact(runtime.unifiedAddress, runtime.transportHandler);

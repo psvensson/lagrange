@@ -18,6 +18,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import Database from 'better-sqlite3';
 import {ReplicaHandler} from '../../src/node/replica-handler.js';
+import {createReplicaRuntimeFactory} from '../../src/node/replica-runtime-producer.js';
 import {EXECUTOR_OUTCOME_TYPE} from
   '../../src/rebalancer/executor-outcome-constants.js';
 import {ReplicaOperationResponseStatus} from
@@ -53,9 +54,10 @@ async (t) => {
     nodeId: 'required-ports-node',
     systemTableCache: createMockCache({services: []}),
     cdcIntegrationService: {},
-    createPartitionService: () => {
-      throw new Error('this world creates no partition service');
-    },
+    partitionServiceFactory: createReplicaRuntimeFactory({
+      captureProducer() { throw new Error('construction must refuse before producer capture'); },
+      create() { throw new Error('this world creates no partition service'); },
+    }),
     replicaStateMachine: {getState: () => null},
   }), TypeError, 'construction fails');
 });

@@ -34,6 +34,7 @@ import {
 import {JoinSessionStore} from '../../src/bootstrap/join-session-store.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
+import {createReplicaRuntimeFactory} from '../../src/node/replica-runtime-producer.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {
@@ -645,7 +646,10 @@ test('F3 outer reattempt: incarnation G+1 mints exactly one new owner, R1 ' +
     messageRouter: buildRouter(),
     cdcIntegrationService: new EventEmitter(),
     systemTableCache: NodeService.getInstance().getSystemTableCache(),
-    createPartitionService: async () => null,
+    partitionServiceFactory: createReplicaRuntimeFactory({
+      captureProducer() { throw new Error('the foreign incarnation must refuse before capture'); },
+      create() { throw new Error('the foreign incarnation constructs no runtime'); },
+    }),
     replicaStateMachine: r1,
     ownerIncarnation: incarnationG1,
   });
@@ -723,7 +727,10 @@ function acquisitionOptions(runtime, ownerIncarnation) {
     messageRouter: buildRouter(),
     cdcIntegrationService: new EventEmitter(),
     systemTableCache: NodeService.getInstance().getSystemTableCache(),
-    createPartitionService: async () => null,
+    partitionServiceFactory: createReplicaRuntimeFactory({
+      captureProducer() { throw new Error('this acquisition witness captures no runtime producer'); },
+      create() { throw new Error('this acquisition witness constructs no runtime'); },
+    }),
     timeSource: runtime.nodeTimeSource,
     ownerIncarnation,
   };

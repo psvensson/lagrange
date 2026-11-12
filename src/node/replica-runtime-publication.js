@@ -8,70 +8,26 @@ import {isReplicaAdmissionCurrent} from './replica-state-machine-serialization.j
 import {buildReplicaLifecycleMutationPredicateFromRow,
   buildReplicaLifecycleMutationPredicateFromState,
   isReplicaLifecycleMutationPredicate} from './replica-state-machine-lifecycle-observation.js';
+import {requireReplicaRuntimeProducer} from './replica-runtime-producer.js';
 
-// The construction caller supplies its already acquired handler and owner.
-// This retains the original host lifetime before construction or any await;
-// a later current-looking host cannot become the factory's caller.
-function captureReplicaRuntimeHost(host, replicaId, handler, owner) {
-  const lifecycleHolder = host.replicaLifecycleOwner;
-  if (!handler || !owner || !lifecycleHolder) throw runtimePublicationRefused(replicaId);
-  const holderRecord = lifecycleHolder.record;
-  const hostServices = host.partitionServices;
-  const localServices = handler.localServices;
-  const localReplicas = handler.localReplicas;
-  const bootIncarnation = host.bootIncarnation;
-  const handlerIncarnation = handler.ownerIncarnation;
-  const ownerIncarnation = owner.ownerIncarnation;
-  const transport = host.transport;
-  const messageRouter = host.messageRouter;
-  const assertHostCurrent = () => {
-    if (host.isShuttingDown === true || host.startupAbortSignal?.aborted === true ||
-        host.replicaHandler !== handler || host.replicaStateMachine !== owner ||
-        host.replicaLifecycleOwner !== lifecycleHolder || lifecycleHolder.record !== holderRecord ||
-        host.partitionServices !== hostServices || host.bootIncarnation !== bootIncarnation ||
-        host.transport !== transport || host.messageRouter !== messageRouter) {
-      throw runtimePublicationRefused(replicaId);
-    }
-  };
-  const assertHandlerCurrent = () => {
-    if (handler.replicaStateMachine !== owner || handler.ownerIncarnation !== handlerIncarnation ||
-        owner.ownerIncarnation !== ownerIncarnation || handler.shuttingDown ||
-        handler.localServices !== localServices || handler.localReplicas !== localReplicas ||
-        owner.replicaMutationAdmissionClosed === true) throw runtimePublicationRefused(replicaId);
-  };
-  const assertCurrent = () => {
-    assertHostCurrent();
-    assertHandlerCurrent();
-  };
-  assertCurrent();
-  return Object.freeze({handler, owner, hostServices, transport, messageRouter, assertCurrent});
-}
-
-function createReplicaRuntimePublication(handler, row, admission,
+function createReplicaRuntimePublication(producer, row, admission,
   expectedPredecessor = null) {
-  const owner = handler.replicaStateMachine;
   const predicate = buildReplicaLifecycleMutationPredicateFromRow(row);
-  if (!owner || !isReplicaLifecycleMutationPredicate(predicate) ||
-      predicate.node_id !== handler.nodeId || !admission) {
+  if (!isReplicaLifecycleMutationPredicate(predicate) || !admission) {
     throw runtimePublicationRefused(row?.service_id);
   }
   const replicaId = predicate.service_id;
-  const localReplicas = handler.localReplicas;
-  const localServices = handler.localServices;
+  requireReplicaRuntimeProducer(producer, replicaId);
+  const {handler, owner, localReplicas, localServices, nodeId} = producer;
+  if (predicate.node_id !== nodeId) throw runtimePublicationRefused(replicaId);
   const local = localReplicas.get(replicaId) || null;
   const predecessor = handler.getTrackedService(replicaId);
-  const ownerIncarnation = handler.ownerIncarnation;
-  const lifecycleIncarnation = owner.ownerIncarnation;
   const originalAdmission = Object.freeze({revision: admission.revision,
     sourceState: admission.sourceState});
   if (predecessor !== expectedPredecessor) throw runtimePublicationRefused(replicaId);
   const assertAdmissionCurrent = () => {
-    if (handler.shuttingDown || handler.ownerIncarnation !== ownerIncarnation ||
-        handler.replicaStateMachine !== owner ||
-        owner.ownerIncarnation !== lifecycleIncarnation ||
-        handler.localReplicas !== localReplicas || handler.localServices !== localServices ||
-        owner.replicaMutationAdmissionClosed === true ||
-        owner.serviceRowPersistInFlightByServiceId.has(replicaId) ||
+    producer.assertCurrent();
+    if (owner.serviceRowPersistInFlightByServiceId.has(replicaId) ||
         owner.activationEffectByReplicaId?.has(replicaId) ||
         !isReplicaAdmissionCurrent(owner, replicaId, originalAdmission)) {
       throw runtimePublicationRefused(replicaId);
@@ -91,7 +47,8 @@ function createReplicaRuntimePublication(handler, row, admission,
     },
     assertDestination(_service, destination) {
       if (destination.handler !== handler || destination.owner !== owner ||
-          destination.localReplicas !== localReplicas || destination.localServices !== localServices) {
+          destination.localReplicas !== localReplicas || destination.localServices !== localServices ||
+          destination.hostServices !== undefined && destination.hostServices !== producer.hostServices) {
         throw runtimePublicationRefused(replicaId);
       }
     },
@@ -190,4 +147,4 @@ function publishReplicaRuntime(handler, replicaInfo, expectedPredecessor = null)
   });
 }
 
-export {captureReplicaRuntimeHost, createReplicaRuntimePublication, publishReplicaRuntime};
+export {createReplicaRuntimePublication, publishReplicaRuntime};

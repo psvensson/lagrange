@@ -1,3 +1,5 @@
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 import {withRemovalServingSurface} from
   '../test-helpers/partition-removal-serving-surface.js';
 import {registerReplicaHandlerTailMoreTests} from './replica-handler-tail-more-test-cases.js';
@@ -61,7 +63,7 @@ export async function registerReplicaHandlerTailTests({
     const cache = createSeededCache();
     const mockCDC = createMockCDCService(cache);
 
-    const handler = new ReplicaHandler({
+    const handler = createReplicaHandlerFixture(ReplicaHandler, {
       nodeId: 'test-node',
       dataDir: tempDir,
       systemTableCache: cache,
@@ -105,7 +107,7 @@ export async function registerReplicaHandlerTailTests({
       seedReplicaOperation(cache, operationId, {partitionId, replicaId});
       const mockCDC = createMockCDCService(cache);
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         cdcIntegrationService: mockCDC,
         systemTableCache: cache,
@@ -221,7 +223,7 @@ export async function registerReplicaHandlerTailTests({
         },
       });
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         cdcIntegrationService: mockCDC,
         systemTableCache: cache,
@@ -285,7 +287,7 @@ export async function registerReplicaHandlerTailTests({
       });
       const mockCDC = createMockCDCService(cache);
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         cdcIntegrationService: mockCDC,
         systemTableCache: cache,
@@ -368,7 +370,7 @@ export async function registerReplicaHandlerTailTests({
       const cache = createSeededCache();
       const mockCDC = createMockCDCService(cache);
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         dataDir: tempDir,
         systemTableCache: cache,
@@ -437,7 +439,7 @@ export async function registerReplicaHandlerTailTests({
         return originalCacheGet(tableName, key);
       };
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: TEST_MISSING_CLEANUP_NODE_ID,
         dataDir: tempDir,
         systemTableCache: cache,
@@ -497,7 +499,7 @@ export async function registerReplicaHandlerTailTests({
       seedReplicaOperation(cache, 'op-mismatch', {type: 'REMOVE'});
       const mockCDC = createMockCDCService(cache);
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         cdcIntegrationService: mockCDC,
         systemTableCache: cache,
@@ -576,7 +578,7 @@ export async function registerReplicaHandlerTailTests({
       seedReplicaOperation(cache, 'op-1', {type: 'REMOVE'});
       const mockCDC = createMockCDCService(cache);
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         cdcIntegrationService: mockCDC,
         systemTableCache: cache,
@@ -672,7 +674,7 @@ export async function registerReplicaHandlerTailTests({
         now: () => nowValue,
       });
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         cdcIntegrationService: mockCDC,
         systemTableCache: cache,
@@ -763,7 +765,7 @@ export async function registerReplicaHandlerTailTests({
         throw new Error(TEST_REMOVE_DELETE_FAILURE_MESSAGE);
       };
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: TEST_ACTIVE_REPAIR_NODE_ID,
         dataDir: tempDir,
         systemTableCache: cache,
@@ -863,7 +865,7 @@ export async function registerReplicaHandlerTailTests({
       const cache = createSeededCache();
       const mockCDC = createMockCDCService(cache);
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         dataDir: tempDir,
         systemTableCache: cache,
@@ -946,7 +948,7 @@ export async function registerReplicaHandlerTailTests({
       });
       const mockCDC = createMockCDCService(cache);
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: TEST_STALLED_REMOVE_NODE_ID,
         dataDir: tempDir,
         systemTableCache: cache,
@@ -1030,7 +1032,7 @@ export async function registerReplicaHandlerTailTests({
       const cache = createSeededCache();
       const mockCDC = createMockCDCService(cache);
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         dataDir: tempDir,
         systemTableCache: cache,
@@ -1076,7 +1078,7 @@ export async function registerReplicaHandlerTailTests({
       const cache = createSeededCache();
       const mockCDC = createMockCDCService(cache);
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: TEST_CACHE_MISS_REMOVED_NODE_ID,
         dataDir: tempDir,
         systemTableCache: cache,
@@ -1140,7 +1142,7 @@ export async function registerReplicaHandlerTailTests({
       });
       const mockCDC = createMockCDCService(cache);
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         dataDir: tempDir,
         systemTableCache: cache,
@@ -1218,7 +1220,7 @@ export async function registerReplicaHandlerTailTests({
         updated_at: replicaCreatedAt,
       });
       const mockCDC = createMockCDCService(cache);
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: TEST_ACTIVE_REPAIR_NODE_ID,
         dataDir: tempDir,
         systemTableCache: cache,

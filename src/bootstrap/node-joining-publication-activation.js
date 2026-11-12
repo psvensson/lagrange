@@ -1,5 +1,7 @@
-import {captureReplicaRuntimeHost, createReplicaRuntimePublication, publishReplicaRuntime} from
+import {createReplicaRuntimePublication, publishReplicaRuntime} from
   '../node/replica-runtime-publication.js';
+import {captureReplicaRuntimeHost, captureReplicaRuntimeProducer, createReplicaRuntimeFactory,
+  requireReplicaRuntimeProducer} from '../node/replica-runtime-producer.js';
 import {releaseFailedReplicaRuntimeHost} from '../node/replica-runtime-cleanup-custody.js';
 import {runtimePublicationRefused} from '../partition/partition-runtime-publication.js';
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
@@ -207,11 +209,12 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
       });
       this.tablePolicyService.initialize();
     }
-    const createPartitionService = async (options) => {
-      captureReplicaRuntimeHost(this, options.replicaId,
-        acquired.replicaHandler, acquired.replicaStateMachine);
-      return this.createJoinLocalPartitionService({...options, messageGroupService});
-    };
+    const partitionServiceFactory = createReplicaRuntimeFactory({
+      captureProducer: (_handler, replicaId) => captureReplicaRuntimeHost(this, replicaId,
+        captureReplicaRuntimeProducer(acquired.replicaHandler, acquired.replicaStateMachine, replicaId)),
+      create: (options, producer) => this.createJoinPartitionServiceFromProducer(
+        {...options, messageGroupService}, producer),
+    });
     // Reacquire this incarnation's one lifecycle owner; mint only when none
     // is recorded (a preserved join resume re-enters this segment).
     const acquired = this.replicaLifecycleOwner.acquire({
@@ -219,7 +222,7 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
       messageRouter: this.messageRouter,
       cdcIntegrationService: cdcIntegrationService,
       systemTableCache: systemTableCache,
-      createPartitionService: createPartitionService,
+      partitionServiceFactory,
       dataDir: this.dataDir,
       rpcClient: this.rpcClient,
       executorOutcomeEmitter:
@@ -244,7 +247,13 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
   async createJoinLocalPartitionService(options) {
     const request = Object.freeze({...options});
     const host = captureReplicaRuntimeHost(this, request.replicaId,
-      this.replicaHandler, this.replicaStateMachine);
+      captureReplicaRuntimeProducer(this.replicaHandler, this.replicaStateMachine, request.replicaId));
+    return this.createJoinPartitionServiceFromProducer(request, host);
+  }
+
+  async createJoinPartitionServiceFromProducer(options, producer) {
+    const request = Object.freeze({...options});
+    const host = requireReplicaRuntimeProducer(producer, request.replicaId);
     const {handler: replicaHandler, owner: lifecycleOwner, hostServices,
       assertCurrent: assertOriginalCaller} = host;
     assertOriginalCaller();
@@ -256,7 +265,7 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
       throw runtimePublicationRefused(request.replicaId);
     }
     const runtimePublication = restoreAdmission ? createReplicaRuntimePublication(
-      replicaHandler, restoreAdmission.row, restoreAdmission.admission,
+      host, restoreAdmission.row, restoreAdmission.admission,
     ) : request.runtimePublication;
     const cdcIntegrationService = this.createCdcIntegrationService();
     const systemTableCache = NodeService.getInstance().getSystemTableCache();

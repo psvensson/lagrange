@@ -1,3 +1,5 @@
+import {createReplicaHandlerFixture} from
+  './replica-handler-construction-fixture.js';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -253,7 +255,7 @@ async function createHandlerFixture({row, targetRow, additionalTargetRows = [],
     timeSource,
   }) : undefined;
   const factoryEvidence = [];
-  const handler = new ReplicaHandler({
+  const handler = createReplicaHandlerFixture(ReplicaHandler, {
     nodeId: row.target_node_id,
     ownerIncarnation: gatewayOptions?.bootIncarnation ?? 102,
     cdcIntegrationService: {},

@@ -1,3 +1,7 @@
+import {captureReplicaRuntimeHost, captureReplicaRuntimeProducer} from
+  '../../src/node/replica-runtime-producer.js';
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {ReplicaLifecycleOwner} from '../../src/bootstrap/shared/replica-handler-setup.js';
@@ -47,9 +51,10 @@ function bootstrapFactoryFixture(t) {
 }
 
 async function bootstrapFactoryOptions(f, onRuntimeCreated) {
+  const producer = f.handler.partitionServiceFactory.captureProducer(f.handler, f.row.replica_id);
   const admission = await assertDurableRejoinStorageAdmission(f.owner, f.options);
-  return {...f.options,
-    runtimePublication: createReplicaRuntimePublication(f.handler, admission.row,
+  return {...f.options, runtimeProducer: producer,
+    runtimePublication: createReplicaRuntimePublication(producer, admission.row,
       admission.admission), resolveHandlerRetirementLane: () => f.owner,
     onRuntimeCreated,
     publishRuntime: (partition, hostServices) => publishReplicaRuntime(f.handler, {
@@ -59,7 +64,7 @@ async function bootstrapFactoryOptions(f, onRuntimeCreated) {
 }
 
 function replacementHandler(t, f) {
-  const handler = new ReplicaHandler({nodeId: f.row.node_id, ownerIncarnation: 1,
+  const handler = createReplicaHandlerFixture(ReplicaHandler, {nodeId: f.row.node_id, ownerIncarnation: 1,
     replicaStateMachine: f.owner, controlPlaneSystemTableGateway: f.store.gateway,
     systemTableCache: f.store.cache, cdcIntegrationService: {},
     createPartitionService: async () => { throw new Error('replacement is admitted before construction'); }});
@@ -68,9 +73,16 @@ function replacementHandler(t, f) {
 }
 
 async function publishSuccessor(t, f, handler, hostServices) {
+  // The independent successor owns this declared map before construction;
+  // moving the old host's projection later cannot mint its publication.
+  const successorHost = {replicaHandler: handler, replicaStateMachine: f.owner,
+    replicaLifecycleOwner: new ReplicaLifecycleOwner(), bootIncarnation: handler.ownerIncarnation,
+    partitionServices: hostServices, transport: null, messageRouter: null};
+  const producer = captureReplicaRuntimeHost(successorHost, f.row.replica_id,
+    captureReplicaRuntimeProducer(handler, f.owner, f.row.replica_id));
   const admission = await assertDurableRejoinStorageAdmission(f.owner, f.options);
   const partition = new PartitionService({...f.options,
-    runtimePublication: createReplicaRuntimePublication(handler, admission.row, admission.admission),
+    runtimePublication: createReplicaRuntimePublication(producer, admission.row, admission.admission),
     replicaStateMachine: f.owner, resolveHandlerRetirementLane: () => f.owner});
   bindRegisteredReplicaHandler(partition, {nodeId: f.row.node_id,
     resolveHandlerRetirementLane: () => f.owner});
@@ -94,6 +106,42 @@ function prepareControlledRuntime(t, f, partition) {
 }
 
 function registerReplicaRuntimeFactoryAuthorityTests(restoreFixture) {
+  test('bootstrap publication refuses a foreign host map before binding and retains its original destination',
+    async (t) => {
+      const f = bootstrapFactoryFixture(t);
+      const originalHost = f.service.partitionServices;
+      const foreignHost = new Map();
+      let partition;
+      const options = await bootstrapFactoryOptions(f, (created) => {
+        partition = created;
+        prepareControlledRuntime(t, f, partition);
+      });
+      const publishOriginal = options.publishRuntime;
+      options.publishRuntime = (runtime, hostServices) => {
+        t.equal(hostServices, originalHost, 'the real factory retained its original host');
+        let refused;
+        try {
+          publishOriginal(runtime, foreignHost);
+        } catch (error) {
+          refused = error;
+        }
+        t.equal(refused?.code, PARTITION_RUNTIME_PUBLICATION_REFUSED);
+        t.equal(runtime.runtimeBinding, undefined,
+          'a foreign destination cannot install an immutable lifecycle binding');
+        t.equal(foreignHost.size, 0, 'no foreign host effect');
+        t.equal(originalHost.size, 0, 'no original host effect before its own publication');
+        t.equal(f.handler.localServices.size, 0, 'no physical registry effect');
+        t.equal(f.handler.localReplicas.size, 0, 'no local metadata effect');
+        return publishOriginal(runtime, hostServices);
+      };
+      const created = await f.handler.partitionServiceFactory.create(options);
+      t.equal(created, partition);
+      t.equal(originalHost.get(f.row.replica_id), partition,
+        'the unchanged original destination still publishes the exact runtime');
+      t.equal(f.handler.localServices.get(f.row.replica_id), partition);
+      t.equal(partition.runtimePublication.assertCurrent(partition), true);
+    });
+
   for (const changed of ['host', 'holder', 'unchanged']) {
     test(`CREATE retains its factory producer across the first cleanup await: ${changed}`, async (t) => {
       const f = bootstrapFactoryFixture(t);
@@ -195,7 +243,7 @@ function registerReplicaRuntimeFactoryAuthorityTests(restoreFixture) {
         };
         const options = factory === 'bootstrap' ? await bootstrapFactoryOptions(f, onRuntimeCreated) :
           {...f.options, onRuntimeCreated};
-        const pending = factory === 'bootstrap' ? f.handler.createPartitionService(options) :
+        const pending = factory === 'bootstrap' ? f.handler.partitionServiceFactory.create(options) :
           f.service.createJoinLocalPartitionService(options);
         await t.rejects(pending, {code: PARTITION_RUNTIME_PUBLICATION_REFUSED});
         t.equal(metadataEffects, 1, 'the reentrant host change follows a real metadata effect');
@@ -226,7 +274,7 @@ function registerReplicaRuntimeFactoryAuthorityTests(restoreFixture) {
           return partition;
         };
       });
-      const pending = f.handler.createPartitionService(options);
+      const pending = f.handler.partitionServiceFactory.create(options);
       await entered.promise;
       if (changed === 'handler') f.service.replicaHandler = replacementHandler(t, f);
       if (changed === 'owner') {
@@ -286,7 +334,7 @@ function registerReplicaRuntimeFactoryAuthorityTests(restoreFixture) {
         };
         const options = factory === 'bootstrap' ? await bootstrapFactoryOptions(f, onRuntimeCreated) :
           {...f.options, onRuntimeCreated};
-        const pending = factory === 'bootstrap' ? f.handler.createPartitionService(options) :
+        const pending = factory === 'bootstrap' ? f.handler.partitionServiceFactory.create(options) :
           f.service.createJoinLocalPartitionService(options);
         await shutdownEntered.promise;
         t.equal(hostServices.get(f.row.replica_id), partition,

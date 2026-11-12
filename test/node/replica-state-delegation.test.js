@@ -1,3 +1,5 @@
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 /**
  * Unit tests verifying replica state delegation.
  *
@@ -93,7 +95,7 @@ test('Replica state delegation', async (t) => {
       const cache = createMockCache();
       const mockCDC = createMockCDCService();
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         dataDir: '/tmp/test',
         systemTableCache: cache,
@@ -139,7 +141,7 @@ test('Replica state delegation', async (t) => {
       const cache = createMockCache();
       const mockCDC = createMockCDCService();
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         dataDir: '/tmp/test',
         systemTableCache: cache,
@@ -184,7 +186,7 @@ test('Replica state delegation', async (t) => {
       const cache = createMockCache();
       const mockCDC = createMockCDCService();
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         dataDir: '/tmp/test',
         systemTableCache: cache,

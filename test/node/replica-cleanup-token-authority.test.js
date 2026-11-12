@@ -1,3 +1,5 @@
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 /**
  * cleanup_token is the canonical durable generation of cleanup ownership.
  *
@@ -68,7 +70,7 @@ function storageFixture(t, replicaId, contents) {
 }
 
 function storageHandler(store, dataDir) {
-  return new ReplicaHandler({
+  return createReplicaHandlerFixture(ReplicaHandler, {
     nodeId: NODE_ID,
     dataDir,
     systemTableCache: store.cache,

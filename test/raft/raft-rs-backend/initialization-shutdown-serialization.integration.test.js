@@ -1,3 +1,5 @@
+import {createReplicaHandlerFixture} from
+  '../../test-helpers/replica-handler-construction-fixture.js';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {setImmediate as nextTurn} from 'node:timers/promises';
@@ -7,7 +9,7 @@ import {createFixture, buildService} from './startup-cleanup-native-fixture.js';
 import {pendingTurn, turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
 function handlerFor(fixture, createPartitionService) {
-  return new ReplicaHandler({
+  return createReplicaHandlerFixture(ReplicaHandler, {
     nodeId: 'claim-race-node',
     dataDir: fixture.directory,
     systemTableCache: new SystemTableCache(),

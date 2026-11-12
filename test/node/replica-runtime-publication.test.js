@@ -1,3 +1,8 @@
+import {captureReplicaRuntimeHost, captureReplicaRuntimeProducer, createReplicaRuntimeFactory} from
+  '../../src/node/replica-runtime-producer.js';
+import {ReplicaLifecycleOwner} from '../../src/bootstrap/shared/replica-handler-setup.js';
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 // The real handler/lifecycle publication owners consume exact authoritative
 // row admission. Only the already constructed runtime and transport hop are
 // controlled here; CREATE/seed/restore/snapshot composition has its own roots.
@@ -33,6 +38,18 @@ function initializeEnvironment() {
   LoggingService.getInstance().initialize({level: 'error'});
 }
 
+test('handler construction requires an immutable factory pair with fixed methods', (t) => {
+  initializeEnvironment();
+  const unused = () => { throw new Error('a refused constructor cannot invoke its factory'); };
+  const malformed = [undefined, unused, {captureProducer: unused, create: unused},
+    Object.freeze({get captureProducer() { return unused; }, create: unused})];
+  for (const partitionServiceFactory of malformed) {
+    t.throws(() => new ReplicaHandler({partitionServiceFactory}),
+      {name: 'TypeError', message: /frozen capture\/construction pair/},
+      'missing, callable, mutable or accessor-based factory is not a retained pair');
+  }
+});
+
 function installDeclaredSource(owner, row) {
   const replicaId = row.service_id;
   const admission = captureReplicaAdmission(owner, replicaId);
@@ -42,7 +59,7 @@ function installDeclaredSource(owner, row) {
     ))));
 }
 
-async function publicationFixture(t) {
+async function publicationFixture(t, hostServices) {
   initializeEnvironment();
   const row = createLifecycleServiceRow({replicaId: 'publication-r1',
     partitionId: 'publication-p1', nodeId: 'publication-node', status: 'active',
@@ -52,18 +69,27 @@ async function publicationFixture(t) {
   const owner = new ReplicaStateMachine({nodeId: row.node_id,
     systemTableCache: store.cache, controlPlaneSystemTableGateway: store.gateway});
   await installDeclaredSource(owner, row);
-  const handler = new ReplicaHandler({nodeId: row.node_id, ownerIncarnation: 1,
+  const handler = createReplicaHandlerFixture(ReplicaHandler, {nodeId: row.node_id, ownerIncarnation: 1,
     dataDir: '/tmp/replica-publication-unit', systemTableCache: store.cache,
     controlPlaneSystemTableGateway: store.gateway, cdcIntegrationService: {},
     replicaStateMachine: owner, createPartitionService: () => {
       throw new Error('this owner-level fixture constructs no native runtime');
     }});
+  // This owner-level host is declared before any runtime is constructed.
+  // It supplies an exact physical destination, not bootstrap/preparation or
+  // lifecycle-row authority. Those retain the actual installed row below.
+  const host = {replicaHandler: handler, replicaStateMachine: owner,
+    replicaLifecycleOwner: new ReplicaLifecycleOwner(), bootIncarnation: 1,
+    partitionServices: hostServices, transport: null, messageRouter: null};
   t.teardown(async () => {
     handler.shuttingDown = true;
     await owner.clear();
   });
   const construct = (source = row, predecessor = null) => {
-    const publication = createReplicaRuntimePublication(handler, source,
+    const handlerProducer = captureReplicaRuntimeProducer(handler, owner, source.service_id);
+    const producer = hostServices === undefined ? handlerProducer :
+      captureReplicaRuntimeHost(host, source.service_id, handlerProducer);
+    const publication = createReplicaRuntimePublication(producer, source,
       captureReplicaAdmission(owner, source.service_id), predecessor);
     const service = bindRegisteredReplicaHandler(Object.assign(new EventEmitter(), {
       replicaId: source.replica_id, partitionId: source.partition_id, nodeId: source.node_id,
@@ -121,7 +147,7 @@ test('an admitted producer cannot publish into another handler sharing its lifec
   async (t) => {
     const f = await publicationFixture(t);
     const service = f.construct();
-    const foreign = new ReplicaHandler({nodeId: f.row.node_id, ownerIncarnation: 1,
+    const foreign = createReplicaHandlerFixture(ReplicaHandler, {nodeId: f.row.node_id, ownerIncarnation: 1,
       replicaStateMachine: f.owner, systemTableCache: f.store.cache,
       controlPlaneSystemTableGateway: f.store.gateway, cdcIntegrationService: {},
       createPartitionService: () => { throw new Error('no construction in destination control'); }});
@@ -178,9 +204,9 @@ test('replacement consumes its original predecessor and revokes the old publicat
 });
 
 test('reentrant map publication cannot expose a partially published runtime binding', async (t) => {
-  const f = await publicationFixture(t);
-  const service = f.construct();
   const hostServices = new Map();
+  const f = await publicationFixture(t, hostServices);
+  const service = f.construct();
   const setLocal = f.handler.setLocalReplica.bind(f.handler);
   f.handler.setLocalReplica = (...args) => {
     t.throws(() => service.runtimePublication.assertCurrent(service), REFUSED,
@@ -202,9 +228,9 @@ test('reentrant map publication cannot expose a partially published runtime bind
 });
 
 test('failed map publication retains a refused exact runtime for cleanup', async (t) => {
-  const f = await publicationFixture(t);
-  const service = f.construct();
   const hostServices = new Map();
+  const f = await publicationFixture(t, hostServices);
+  const service = f.construct();
   hostServices.set = () => { throw new Error('host publication failed'); };
   t.throws(() => f.publish(service, f.row, null, hostServices), /host publication failed/);
   t.throws(() => service.runtimePublication.assertCurrent(service), REFUSED);
@@ -214,11 +240,11 @@ test('failed map publication retains a refused exact runtime for cleanup', async
 });
 
 test('reentrant lifecycle advancement cannot renew a queued runtime publication', async (t) => {
-  const f = await publicationFixture(t);
+  const hostServices = new Map();
+  const f = await publicationFixture(t, hostServices);
   const first = f.construct();
-  f.publish(first);
+  f.publish(first, f.row, null, hostServices);
   const second = f.construct(f.row, first);
-  const hostServices = new Map([[f.row.service_id, first]]);
   const setLocal = f.handler.setLocalReplica.bind(f.handler);
   let advanced = false;
   let advanceTurn;
@@ -245,12 +271,12 @@ test('reentrant lifecycle advancement cannot renew a queued runtime publication'
 
 test('reentrant predecessor replacement cannot be normalized into the publishing runtime',
   async (t) => {
-    const f = await publicationFixture(t);
+    const hostServices = new Map();
+    const f = await publicationFixture(t, hostServices);
     const first = f.construct();
-    f.publish(first);
+    f.publish(first, f.row, null, hostServices);
     const second = f.construct(f.row, first);
     const hostile = {replicaId: f.row.replica_id, partitionId: f.row.partition_id};
-    const hostServices = new Map([[f.row.service_id, first]]);
     const setLocal = f.handler.setLocalReplica.bind(f.handler);
     f.handler.setLocalReplica = (...args) => {
       const record = setLocal(...args);
@@ -267,13 +293,13 @@ test('reentrant predecessor replacement cannot be normalized into the publishing
   });
 
 test('reentrant owner replacement cannot finish publication under the new lifetime', async (t) => {
-  const f = await publicationFixture(t);
+  const hostServices = new Map();
+  const f = await publicationFixture(t, hostServices);
   const service = f.construct();
   const replacementOwner = new ReplicaStateMachine({nodeId: f.row.node_id,
     ownerIncarnation: 2, systemTableCache: f.store.cache,
     controlPlaneSystemTableGateway: f.store.gateway});
   t.teardown(() => replacementOwner.clear());
-  const hostServices = new Map();
   hostServices.set = (key, value) => {
     f.handler.replicaStateMachine = replacementOwner;
     return Map.prototype.set.call(hostServices, key, value);
@@ -282,6 +308,62 @@ test('reentrant owner replacement cannot finish publication under the new lifeti
   t.throws(() => service.runtimePublication.assertCurrent(service), REFUSED,
     'a callback cannot convert the original producer into a newer published owner');
   t.equal(captureReplicaRuntimeObservation(f.handler, f.row.service_id).sourceEvidence, null);
+});
+
+test('a handler-only producer cannot grant a host-map effect', async (t) => {
+  const f = await publicationFixture(t);
+  const service = f.construct();
+  const foreignHost = new Map();
+  let refused;
+  try {
+    f.publish(service, f.row, null, foreignHost);
+  } catch (error) {
+    refused = error;
+  }
+  t.equal(refused?.code, PARTITION_RUNTIME_PUBLICATION_REFUSED);
+  t.equal(service.runtimeBinding, undefined, 'refusal precedes immutable binding');
+  t.equal(foreignHost.size, 0);
+  t.equal(f.handler.localServices.size, 0);
+  t.equal(f.handler.localReplicas.size, 0);
+  f.publish(service);
+  t.equal(f.handler.localServices.get(f.row.service_id), service,
+    'the same original admission still permits its declared handler-only effect');
+  t.equal(service.runtimePublication.assertCurrent(service), true);
+});
+
+test('factory capture keeps the originally constructed handler owner', async (t) => {
+  const f = await publicationFixture(t);
+  const factory = f.handler.partitionServiceFactory;
+  const producer = factory.captureProducer(f.handler, f.row.replica_id);
+  t.equal(producer.owner, f.owner);
+  const foreign = new ReplicaStateMachine({nodeId: f.row.node_id,
+    systemTableCache: f.store.cache, controlPlaneSystemTableGateway: f.store.gateway});
+  t.teardown(() => foreign.clear());
+  f.handler.replicaStateMachine = foreign;
+  t.throws(() => producer.assertCurrent(), REFUSED);
+  t.throws(() => factory.captureProducer(f.handler, f.row.replica_id), REFUSED,
+    'the same factory cannot recapture a substituted lifecycle owner');
+});
+
+test('a producer captured by one factory cannot invoke a different construction pair', async (t) => {
+  const f = await publicationFixture(t);
+  const constructed = [];
+  const makeFactory = (name) => createReplicaRuntimeFactory({
+    captureProducer: (handler, replicaId) => captureReplicaRuntimeProducer(handler, f.owner, replicaId),
+    create(request) { constructed.push(name); return request.replicaId; },
+  });
+  const first = makeFactory('first');
+  const second = makeFactory('second');
+  const producer = first.captureProducer(f.handler, f.row.replica_id);
+  const request = {replicaId: f.row.replica_id, runtimeProducer: producer};
+  t.throws(() => second.create(request), REFUSED);
+  t.same(constructed, [], 'foreign pairing is refused before construction');
+  t.equal(first.create(request), f.row.replica_id);
+  t.same(constructed, ['first'], 'the exact unchanged pair remains usable');
+  const installedFactory = f.handler.partitionServiceFactory;
+  t.throws(() => { f.handler.partitionServiceFactory = second; }, TypeError);
+  t.equal(f.handler.partitionServiceFactory, installedFactory,
+    'the handler retains its original immutable factory property');
 });
 
 test('real PartitionService requires publication authority and fixture cleanup revokes it',

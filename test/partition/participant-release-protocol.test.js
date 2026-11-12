@@ -1,3 +1,5 @@
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 // The real PartitionService/Raft application and lifecycle recipient, with
 // only the transport hop in process. No injected eligibility booleans.
@@ -127,7 +129,7 @@ async function cleanupBlockedDrainWitness({handler, leader, directory, pendingWr
 async function withEmptyRegisteredHandler(timeSource, measure) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'tx1-release-observation-'));
   const transport = createInProcessMockTransport();
-  const handler = new ReplicaHandler({nodeId: NODE, ownerIncarnation: 1,
+  const handler = createReplicaHandlerFixture(ReplicaHandler, {nodeId: NODE, ownerIncarnation: 1,
     systemTableCache: cache, cdcIntegrationService: {},
     createPartitionService: () => null, messageRouter: transport,
     dataDir: directory, timeSource});
@@ -420,7 +422,7 @@ test('registered participant release projects one real blocked drain and older j
       schema: SQL_TRANSACTIONS_SCHEMA,
       timeSource: clock,
     });
-    const handler = new ReplicaHandler({nodeId: leader.nodeId, ownerIncarnation: 1,
+    const handler = createReplicaHandlerFixture(ReplicaHandler, {nodeId: leader.nodeId, ownerIncarnation: 1,
       systemTableCache: leader.systemTableCache, cdcIntegrationService: {},
       createPartitionService: () => leader, messageRouter: transport,
       dataDir: directory, timeSource: clock});
@@ -964,7 +966,7 @@ async function seedDurableServicesAndControlOrigin(directory) {
     schema: SERVICES_SCHEMA, dbPath: servicesDbPath,
     systemTableCache: cache, deferElection: true,
   }));
-  const seedHandler = new ReplicaHandler({
+  const seedHandler = createReplicaHandlerFixture(ReplicaHandler, {
     nodeId: NODE, ownerIncarnation: 1, systemTableCache: cache,
     cdcIntegrationService: {}, createPartitionService: () => null,
     messageRouter: seedTransport, dataDir: directory,
@@ -1026,7 +1028,7 @@ async function runIdempotentConfChangeAutonomousRecoveryCase({
     const {controlDbPath, servicesDbPath} =
       await seedDurableServicesAndControlOrigin(directory);
     const transport = createInProcessMockTransport();
-    handler = new ReplicaHandler({
+    handler = createReplicaHandlerFixture(ReplicaHandler, {
       nodeId: NODE, ownerIncarnation: 2, systemTableCache: cache,
       cdcIntegrationService: {}, createPartitionService: () => null,
       messageRouter: transport, dataDir: directory,

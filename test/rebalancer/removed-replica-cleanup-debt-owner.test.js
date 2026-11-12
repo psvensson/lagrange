@@ -1,3 +1,5 @@
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 /**
  * Removed-replica cleanup debt owner (rebalancer safety-audit finding 12,
  * confirmed worse than the audit claimed).
@@ -87,7 +89,7 @@ function createMockPartitionServiceFactory() {
 
 function createHandler(options) {
   const cache = options.cache || createHandlerCache();
-  return new ReplicaHandler({
+  return createReplicaHandlerFixture(ReplicaHandler, {
     nodeId: options.nodeId || TEST_NODE_ID,
     systemTableCache: cache,
     cdcIntegrationService: createMockCDCService(cache),

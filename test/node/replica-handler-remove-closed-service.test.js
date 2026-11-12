@@ -1,3 +1,5 @@
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 /**
  * Every REMOVE_REPLICA entry point of the production replica handler, driven
  * against a partition service whose removal-serving surface is the
@@ -109,7 +111,7 @@ function partitionServingSurface(open) {
 }
 
 function createHandler(service, status, extra = {}, stateMachine = {}) {
-  const handler = new ReplicaHandler({
+  const handler = createReplicaHandlerFixture(ReplicaHandler, {
     nodeId: 'remove-closed-node', dataDir,
     systemTableCache: {get: () => null, getAll: () => [], filter: () => [],
       on() {}, off() {}},
@@ -398,7 +400,7 @@ function openResumedRemovalWorld() {
     durableUpdatedAt: removingRow.updated_at, authoritativeSnapshot: true});
   const outcomes = [];
   let reopened = 0;
-  const handler = new ReplicaHandler({nodeId: NODE_ID, dataDir,
+  const handler = createReplicaHandlerFixture(ReplicaHandler, {nodeId: NODE_ID, dataDir,
     systemTableCache: store.cache, cdcIntegrationService: {},
     controlPlaneSystemTableGateway: store.gateway,
     createPartitionService: () => {

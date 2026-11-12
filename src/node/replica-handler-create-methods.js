@@ -1,4 +1,5 @@
 import {createReplicaRuntimePublication, publishReplicaRuntime} from './replica-runtime-publication.js';
+import {isReplicaRuntimeProducerCurrent} from './replica-runtime-producer.js';
 import {captureReplicaAdmission, isReplicaAdmissionCurrent} from './replica-state-machine-serialization.js';
 import {buildReplicaLifecycleMutationPredicateFromState} from './replica-state-machine-lifecycle-observation.js';
 import {isReplicaCreateAdmissionEvidence} from './replica-create-admission-evidence.js';
@@ -306,7 +307,8 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
      * @return {Promise<void>}
      * @private
      */
-    async createReplicaAsync(request) {
+    async createReplicaAsync(input) {
+      const request = Object.freeze({...input});
       const {
         operationId,
         explicitOperationType,
@@ -322,6 +324,18 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         createAdmissionEvidence: requestAdmissionEvidence = null,
         createAttemptToken: requestAttemptToken = null,
       } = request;
+      const factory = this.partitionServiceFactory;
+      const producer = factory.captureProducer(this, replicaId);
+      const operationMap = this.inProgressOperations;
+      const operationRecord = operationMap.get(operationId);
+      const admissionOwner = operationId ? this.getReplicaCreateAdmissionOwner() : null;
+      let operationReleased = false;
+      const releaseOperation = () => {
+        if (!operationId || operationReleased) return;
+        operationReleased = true;
+        if (operationMap.get(operationId) === operationRecord) operationMap.delete(operationId);
+        admissionOwner.releasePhysicalWorker(request.createPhysicalWorkerClaim);
+      };
       let createAdmissionEvidence = requestAdmissionEvidence;
       let createAttemptToken = requestAttemptToken;
       const progress = this.startReplicaCreationProgress({
@@ -330,17 +344,20 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         peerTotal: 0,
       });
       let partitionService = null;
-      const lifecycleOwner = this.replicaStateMachine;
+      const lifecycleOwner = producer.owner;
       // A restart of this identity's own admissible durable row (B1) already
       // carries published admission input before any step of this attempt.
       let createPhase = replicaCreatePhaseAfterResume(
         REPLICA_CREATE_PHASE.BEFORE_RUNTIME, request.resumedLifecycleStatus);
       try {
+        producer.assertCurrent();
         this.throwIfShuttingDown();
         await this.settlePendingReplicaRuntimeCleanup(replicaId, partitionId);
+        producer.assertCurrent();
         this.throwIfShuttingDown();
         const {existed, record: identityRecord} = await priorExistence
           .observeReplicaIdentity(this, replicaId, skipLifecycleStatusPersistence);
+        producer.assertCurrent();
         // A refused or unreadable identity observation must not consume the
         // prior incarnation's retirement proof. Drop it only once this birth
         // has passed the authoritative observation.
@@ -357,6 +374,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           };
           const initialStatusPersisted =
             await this.persistReplicaCreateInitialStatus(initialStatusOptions);
+          producer.assertCurrent();
           if (initialStatusPersisted !== true) {
             this.clearReplicaCreationProgress(progress);
             return;
@@ -388,7 +406,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         const runtimeAdmission = skipLifecycleStatusPersistence ? request.runtimeStorageAdmission.admission :
           captureReplicaAdmission(lifecycleOwner, replicaId);
         const runtimePublication = createReplicaRuntimePublication(
-          this, runtimeSource, runtimeAdmission,
+          producer, runtimeSource, runtimeAdmission,
         );
         this.applyBootstrapMetadataPayload({
           partitionId,
@@ -409,6 +427,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             explicitOperationType,
           },
         );
+        producer.assertCurrent();
         this.throwIfShuttingDown();
         const {
           tableName,
@@ -436,11 +455,13 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             `Current boot lost before physical CREATE ${operationId}`,
           );
         }
-        partitionService = await this.createPartitionService({
+        producer.assertCurrent();
+        partitionService = await factory.create({
           partitionId, tableId, tableName, schema, keyRange,
           replicaId,
           replicaIds,
           runtimePublication,
+          runtimeProducer: producer,
           publishRuntime: (service, hostServices) => publishReplicaRuntime(this, {
             replicaId, tableName, service, hostServices,
             sourceEvidence: runtimeSource, lifecycleOwner,
@@ -466,6 +487,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             this.updateReplicaCreationProgress(progress, stageEvent),
           resolveHandlerRetirementLane: () => lifecycleOwner,
         });
+        producer.assertCurrent();
         createPhase = REPLICA_CREATE_PHASE.RUNTIME_OPENED;
         if (
           this.shuttingDown &&
@@ -495,6 +517,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         });
         if (!skipLifecycleStatusPersistence) {
           await priorExistence.recordReplicaIdentity(this, replicaId, partitionId, identityRecord);
+          producer.assertCurrent();
         } else {
           this.setLocalReplica(replicaId, {
             replicaId,
@@ -512,6 +535,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         if (isJoiningExistingGroup && !skipLifecycleStatusPersistence &&
             typeof operationId === 'string' && operationId.length > 0) {
           await partitionService.requestReplicaAdmission(operationId);
+          producer.assertCurrent();
         }
         this.throwIfShuttingDown();
         if (
@@ -526,6 +550,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             stage: REPLICA_HANDLER_PROGRESS.STAGE_WAITING_VOTER_READY,
           });
           await this.waitForVoterReadyActivation(replicaId, partitionId);
+          producer.assertCurrent();
         }
         // CREATE cannot publish an ACTIVE service whose participant runtime
         // is still default closed. The lifecycle owner performs the same
@@ -546,6 +571,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             deadlineAtMs: Number.isSafeInteger(createStartedAt) ?
               createStartedAt + this.syncTimeoutMs : null,
           });
+          producer.assertCurrent();
         }
         // Voter readiness is executor evidence, not permission to complete
         // the operation. Publish it before the SERVICES write so formation
@@ -570,19 +596,17 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
               createAttemptToken,
             },
           );
+          producer.assertCurrent();
           const settled = await settleCreateAdmissionProgress(
             this,
             createAdmissionEvidence,
             CREATE_ADMISSION_STATE.ACTIVE,
             {replicaId, partitionId, partitionService},
           );
+          producer.assertCurrent();
           if (settled === false) {
             this.failReplicaCreationProgress(progress, null);
-            if (operationId) {
-              this.inProgressOperations.delete(operationId);
-              this.getReplicaCreateAdmissionOwner()
-                .releasePhysicalWorker(request.createPhysicalWorkerClaim);
-            }
+            releaseOperation();
             return;
           }
         } else {
@@ -596,11 +620,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         }
         this.finishReplicaCreationProgress(progress, ReplicaStatus.ACTIVE);
         // Clean up in-progress tracking
-        if (operationId) {
-          this.inProgressOperations.delete(operationId);
-          this.getReplicaCreateAdmissionOwner()
-            .releasePhysicalWorker(request.createPhysicalWorkerClaim);
-        }
+        releaseOperation();
         this.logger.info(REPLICA_HANDLER_LOG_MSG.CREATE_COMPLETED, {
           operationId,
           replicaId,
@@ -614,27 +634,16 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           nodeId: this.nodeId,
         });
       } catch (error) {
-        if (this.shuttingDown) {
-          this.clearReplicaCreationProgress(progress);
+        if (!isReplicaRuntimeProducerCurrent(producer)) {
           await this.fenceFailedReplicaCreateRuntime(
             replicaId, partitionId, partitionService, error);
-          if (operationId) {
-            this.inProgressOperations.delete(operationId);
-            this.getReplicaCreateAdmissionOwner()
-              .releasePhysicalWorker(request.createPhysicalWorkerClaim);
-          }
-          this.localServices.delete(replicaId);
-          this.localReplicas.delete(replicaId);
-          return;
+          this.clearReplicaCreationProgress(progress);
+          throw error;
         }
         if (error?.code ===
             REPLICA_CLEANUP_ERROR_CODE.CLEANUP_IN_PROGRESS) {
           this.clearReplicaCreationProgress(progress);
-          if (operationId) {
-            this.inProgressOperations.delete(operationId);
-            this.getReplicaCreateAdmissionOwner()
-              .releasePhysicalWorker(request.createPhysicalWorkerClaim);
-          }
+          releaseOperation();
           this.localServices.delete(replicaId);
           this.localReplicas.delete(replicaId);
           this.emitExecutorOutcome(
@@ -659,11 +668,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             error,
           );
           this.clearReplicaCreationProgress(progress);
-          if (operationId) {
-            this.inProgressOperations.delete(operationId);
-            this.getReplicaCreateAdmissionOwner()
-              .releasePhysicalWorker(request.createPhysicalWorkerClaim);
-          }
+          releaseOperation();
           this.localServices.delete(replicaId);
           this.localReplicas.delete(replicaId);
           if (error?.bootIncarnationSuperseded !== true) {
@@ -677,6 +682,10 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           partitionService,
           error,
         );
+        if (!isReplicaRuntimeProducerCurrent(producer)) {
+          this.clearReplicaCreationProgress(progress);
+          throw error;
+        }
         this.failReplicaCreationProgress(progress, error);
         this.logger.error(REPLICA_HANDLER_LOG_MSG.CREATE_FAILED, {
           operationId,
@@ -723,12 +732,14 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
               createAdmissionEvidence,
               createAttemptToken,
             });
+          if (!isReplicaRuntimeProducerCurrent(producer)) throw error;
           if (failedLifecyclePublished) {
             await settleCreateAdmissionProgress(
               this,
               createAdmissionEvidence,
               CREATE_ADMISSION_STATE.FAILED,
             );
+            if (!isReplicaRuntimeProducerCurrent(producer)) throw error;
           }
           if (failedLifecyclePublished) {
             this.setLocalReplica(replicaId, {
@@ -755,11 +766,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           );
         } finally {
           // Clean up in-progress tracking even when FAILED status persistence is deferred.
-          if (operationId) {
-            this.inProgressOperations.delete(operationId);
-            this.getReplicaCreateAdmissionOwner()
-              .releasePhysicalWorker(request.createPhysicalWorkerClaim);
-          }
+          releaseOperation();
         }
         this.emit(REPLICA_HANDLER_EVENT.CREATION_FAILED, {
           operationId,
@@ -774,11 +781,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         // fails, but its physical CREATE worker claim must never remain held.
         // Existing success/error paths delete tracking first; this is the
         // fail-safe for a cleanup rejection that exits before those paths.
-        if (operationId && this.inProgressOperations.has(operationId)) {
-          this.inProgressOperations.delete(operationId);
-          this.getReplicaCreateAdmissionOwner()
-            .releasePhysicalWorker(request.createPhysicalWorkerClaim);
-        }
+        releaseOperation();
       }
     }
   }

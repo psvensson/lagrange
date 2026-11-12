@@ -105,7 +105,7 @@ function countingPort(port, replicaId, proposals) {
  * @param {boolean} [options.reconcile=true] - Run the row-driven reconcile.
  * @return {Object} The world.
  */
-function openGroupWorld(t, {partitionId, voters, reconcile = true}) {
+function openGroupWorld(t, {partitionId, voters, reconcile = true, createPartitionService}) {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
   ConfigurationManager.getInstance().initialize({});
@@ -190,7 +190,7 @@ function openGroupWorld(t, {partitionId, voters, reconcile = true}) {
   };
   for (const replicaId of members) {
     const source = createRemovalSourceHandler({cluster, replicaId,
-      partitionId, nodeId: `${replicaId}-node`, cache,
+      partitionId, nodeId: `${replicaId}-node`, cache, createPartitionService,
       rowOf: (status) => serviceRow(partitionId, replicaId, status)});
     const {handler} = source;
     // The replica's database is the cluster's own file (the member's durable

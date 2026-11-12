@@ -1,3 +1,5 @@
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 /**
  * Unit tests for ReplicaHandler.
  * Tests CREATE_REPLICA and REMOVE_REPLICA request handling.
@@ -429,7 +431,7 @@ test('ReplicaHandler', async (t) => {
     const cache = createSeededCache();
     const mockCDC = createMockCDCService(cache);
 
-    const handler = new ReplicaHandler({
+    const handler = createReplicaHandlerFixture(ReplicaHandler, {
       nodeId: 'test-node',
       dataDir: tempDir,
       systemTableCache: cache,
@@ -452,7 +454,7 @@ test('ReplicaHandler', async (t) => {
     'querySystemTableRows throws typed gateway error when ingress is missing',
     async (t) => {
       const cache = createSeededCache();
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         dataDir: tempDir,
         systemTableCache: cache,
@@ -489,7 +491,7 @@ test('ReplicaHandler', async (t) => {
         },
       };
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         dataDir: tempDir,
         systemTableCache: cache,
@@ -530,7 +532,7 @@ test('ReplicaHandler', async (t) => {
     async (t) => {
       const cache = createSeededCache();
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         dataDir: tempDir,
         systemTableCache: cache,
@@ -579,7 +581,7 @@ test('ReplicaHandler', async (t) => {
     });
     const mockCDC = createMockCDCService(cache);
 
-    const handler = new ReplicaHandler({
+    const handler = createReplicaHandlerFixture(ReplicaHandler, {
       nodeId: 'test-node',
       ownerIncarnation,
       dataDir: tempDir,
@@ -665,7 +667,7 @@ test('ReplicaHandler', async (t) => {
     seedReplicaOperation(cache, 'op-1');
     const mockCDC = createMockCDCService(cache);
 
-    const handler = new ReplicaHandler({
+    const handler = createReplicaHandlerFixture(ReplicaHandler, {
       nodeId: 'test-node',
       cdcIntegrationService: mockCDC,
       systemTableCache: cache,
@@ -745,7 +747,7 @@ test('ReplicaHandler', async (t) => {
       const cache = createSeededCache();
       const mockCDC = createMockCDCService(cache);
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         dataDir: tempDir,
         systemTableCache: cache,
@@ -831,7 +833,7 @@ test('ReplicaHandler', async (t) => {
       });
       const mockCDC = createMockCDCService(cache);
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: TEST_ACTIVE_REPAIR_NODE_ID,
         dataDir: tempDir,
         systemTableCache: cache,
@@ -895,7 +897,7 @@ test('ReplicaHandler', async (t) => {
       const mockCDC = createMockCDCService(cache);
       const emittedOutcomes = [];
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         dataDir: tempDir,
         systemTableCache: cache,
@@ -959,7 +961,7 @@ test('ReplicaHandler', async (t) => {
       const mockCDC = createMockCDCService(cache);
       const emittedOutcomes = [];
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         dataDir: tempDir,
         systemTableCache: cache,
@@ -1050,7 +1052,7 @@ test('ReplicaHandler', async (t) => {
       const mockCDC = createMockCDCService(cache);
       const createCalls = [];
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         dataDir: tempDir,
         systemTableCache: cache,
@@ -1134,7 +1136,7 @@ test('ReplicaHandler', async (t) => {
       let creatingTransitionFailures = 0;
       let createCallCount = 0;
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         dataDir: tempDir,
         systemTableCache: cache,
@@ -1219,7 +1221,7 @@ test('ReplicaHandler', async (t) => {
       const mockCDC = createMockCDCService(cache);
       const emittedOutcomes = [];
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         dataDir: tempDir,
         systemTableCache: cache,

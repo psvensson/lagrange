@@ -1,3 +1,5 @@
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 import {
   createLifecycleControlPlaneGatewayForCache,
   createReplicaLifecycleStateMachineFixture,
@@ -138,7 +140,7 @@ export async function registerReplicaHandlerCreateAdmissionTests({
           async syncFromLeader() {},
         }, options);
       };
-      const makeHandler = () => new ReplicaHandler({
+      const makeHandler = () => createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         ownerIncarnation: 101,
         cdcIntegrationService: mockCDC,
@@ -222,7 +224,7 @@ export async function registerReplicaHandlerCreateAdmissionTests({
       let pendingStatusStarted = false;
       const createdReplicaIds = [];
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         cdcIntegrationService: mockCDC,
         systemTableCache: cache,
@@ -323,7 +325,7 @@ export async function registerReplicaHandlerCreateAdmissionTests({
       const transitions = [];
       let pendingAttempts = 0;
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         cdcIntegrationService: mockCDC,
         systemTableCache: cache,
@@ -473,7 +475,7 @@ export async function registerReplicaHandlerCreateAdmissionTests({
       let localStatusAtFactory = null;
       let stateMachineStatusAtFactory = null;
       let deferCdcPropagationHandshakeAtFactory = null;
-      handler = new ReplicaHandler({
+      handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         cdcIntegrationService: mockCDC,
         systemTableCache: cache,
@@ -581,7 +583,7 @@ export async function registerReplicaHandlerCreateAdmissionTests({
     const mockCDC = createMockCDCService(cache);
     let createCalls = 0;
 
-    const handler = new ReplicaHandler({
+    const handler = createReplicaHandlerFixture(ReplicaHandler, {
       nodeId: 'test-node',
       cdcIntegrationService: mockCDC,
       systemTableCache: cache,
@@ -626,7 +628,7 @@ export async function registerReplicaHandlerCreateAdmissionTests({
       const mockCDC = createMockCDCService(cache);
       let capturedOptions = null;
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         cdcIntegrationService: mockCDC,
         systemTableCache: cache,
@@ -685,7 +687,7 @@ export async function registerReplicaHandlerCreateAdmissionTests({
       let capturedOptions = null;
       const admissionRequests = [];
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         cdcIntegrationService: mockCDC,
         systemTableCache: cache,
@@ -785,7 +787,7 @@ export async function registerReplicaHandlerCreateAdmissionTests({
       });
       let rowAtFactory = null;
       let localOnlyAtFactory = null;
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         cdcIntegrationService: mockCDC,
         systemTableCache: cache,
@@ -901,7 +903,7 @@ export async function registerReplicaHandlerCreateAdmissionTests({
             errorCode: 'REPLICA_CREATE_ADMISSION_DEFERRED',
             deferRetry: true,
           });
-        const handler = new ReplicaHandler({
+        const handler = createReplicaHandlerFixture(ReplicaHandler, {
           nodeId: 'test-node',
           cdcIntegrationService: mockCDC,
           systemTableCache: cache,

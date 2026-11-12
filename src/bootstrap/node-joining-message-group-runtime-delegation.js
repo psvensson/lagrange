@@ -6,6 +6,8 @@ import {captureReplicaRuntimeObservation, isReplicaRuntimeObservationCurrent,
   runtimeObservationChangedError} from '../node/replica-runtime-observation.js';
 import {settlePartitionServiceActiveAdmission} from './shared/partition-service-activation.js';
 import {shutdownExactReplicaRuntime} from '../node/replica-runtime-cleanup-custody.js';
+import {captureReplicaRuntimeHost, captureReplicaRuntimeProducer} from
+  '../node/replica-runtime-producer.js';
 
 const {
   COLUMN,
@@ -30,9 +32,11 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
     const serviceId =
       directOptions?.replicaId ||
       definition[SERVICE_DESCRIPTOR_FIELD.SERVICE_ID];
-    const options =
+    const options = Object.freeze({...(
       directOptions ||
-      this.resolveJoinReplicaOptions(serviceId, UNIFIED_SERVICE_TYPE.PARTITION);
+      this.resolveJoinReplicaOptions(serviceId, UNIFIED_SERVICE_TYPE.PARTITION))});
+    const producer = captureReplicaRuntimeHost(this, options.replicaId,
+      captureReplicaRuntimeProducer(this.replicaHandler, this.replicaStateMachine, options.replicaId));
     const existingPartition = this.partitionServices.get(options.replicaId);
     if (existingPartition && existingPartition.initialized !== false) {
       return {status: SERVICE_LIFECYCLE_STATE.CREATED};
@@ -45,11 +49,14 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
         },
         {replicaOptions: options},
       );
+      producer.assertCurrent();
     }
     if (options.createDelayMs > 0) {
       await this.sleep(options.createDelayMs);
+      producer.assertCurrent();
     }
-    await this.createJoinLocalPartitionService(options);
+    await this.createJoinPartitionServiceFromProducer(options, producer);
+    producer.assertCurrent();
     return {status: SERVICE_LIFECYCLE_STATE.CREATED};
   }
   /**

@@ -1,3 +1,5 @@
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 // STEP_DOWN_REPLICA on real partitions on rs-raft (quest F1, raft-rs full
 // cutover, witness W4).
 //
@@ -82,7 +84,7 @@ function sleep(ms) {
 // The handler every replica of the group is tracked on: STEP_DOWN_REPLICA
 // finds a replica by its id, as a node's handler finds its own.
 function trackingHandler(services, dataDir) {
-  const handler = new ReplicaHandler({
+  const handler = createReplicaHandlerFixture(ReplicaHandler, {
     nodeId: 'leadership-transfer-node',
     dataDir,
     systemTableCache: new SystemTableCache(),

@@ -13,6 +13,7 @@
  * Requirements: 10.2, 3.1
  */
 import {EventEmitter} from 'events';
+import {requireReplicaRuntimeFactory} from './replica-runtime-producer.js';
 import {assignReplicaHandlerGroupRetiredTombstoneMethods} from
   './replica-handler-group-retired-tombstone-methods.js';
 import fs from 'fs';
@@ -131,7 +132,7 @@ class ReplicaHandler extends EventEmitter {
    * @param {Object} options.systemTableCache - Read-only system table cache.
    * @param {Object} options.cdcIntegrationService - CDC integration service.
    * @param {Object} options.rpcClient - RPC client for responses.
-   * @param {Function} options.createPartitionService - Factory for creating partitions.
+   * @param {Object} options.partitionServiceFactory - Frozen producer/construction pair.
    * @param {string} options.dataDir - Base data directory for partition storage.
    * @param {Object} [options.replicaStateMachine] - Replica lifecycle state machine.
    * @param {number} [options.ownerIncarnation] - Owning node boot incarnation.
@@ -149,7 +150,9 @@ class ReplicaHandler extends EventEmitter {
     this.replicaCreateAdmissionOwner = null;
     this.messageRouter = options.messageRouter || null;
     this.rpcClient = options.rpcClient || null;
-    this.createPartitionService = options.createPartitionService || null;
+    Object.defineProperty(this, 'partitionServiceFactory', {
+      value: requireReplicaRuntimeFactory(options.partitionServiceFactory), enumerable: true,
+    });
     this.dataDir = options.dataDir || REPLICA_HANDLER_DEFAULT.DATA_DIR;
     assertCritical(
       this.systemTableCache,
@@ -162,10 +165,6 @@ class ReplicaHandler extends EventEmitter {
     assertCritical(
       this.cdcIntegrationService,
       REPLICA_HANDLER_ERROR_MSG.CDC_REQUIRED,
-    );
-    assertCritical(
-      this.createPartitionService,
-      REPLICA_HANDLER_ERROR_MSG.CREATE_PARTITION_SERVICE_REQUIRED,
     );
     const resolveLiveReplicaRole = createLiveReplicaRoleResolver(this);
     this.replicaStateMachine =
@@ -193,7 +192,7 @@ class ReplicaHandler extends EventEmitter {
       subscribe: (listener) =>
         this.localServices.subscribeConsensusObservations(listener),
     });
-    // Backward-compatible replica metadata map used by lifecycle tests.
+    // Canonical local metadata and exact published runtime bindings.
     this.localReplicas = new Map();
     // Track in-progress operations by operationId
     this.inProgressOperations = new Map();

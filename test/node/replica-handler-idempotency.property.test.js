@@ -1,3 +1,5 @@
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 /**
  * Property-based tests for ReplicaHandler idempotency using cache state.
  * Feature: guideline-violations-cleanup
@@ -186,7 +188,7 @@ test('ReplicaHandler idempotency property tests', async (t) => {
         });
         const mockCDC = createMockCDCService(cache);
 
-        const handler = new ReplicaHandler({
+        const handler = createReplicaHandlerFixture(ReplicaHandler, {
           nodeId: nodeId,
           dataDir: tempDir,
           systemTableCache: cache,
@@ -276,7 +278,7 @@ test('ReplicaHandler idempotency property tests', async (t) => {
 
         // Do NOT seed the replica in the cache - it doesn't exist
 
-        const handler = new ReplicaHandler({
+        const handler = createReplicaHandlerFixture(ReplicaHandler, {
           nodeId: nodeId,
           dataDir: tempDir,
           systemTableCache: cache,
@@ -342,7 +344,7 @@ test('ReplicaHandler idempotency property tests', async (t) => {
           updated_at: Date.now(),
         });
 
-        const handler = new ReplicaHandler({
+        const handler = createReplicaHandlerFixture(ReplicaHandler, {
           nodeId: nodeId,
           dataDir: tempDir,
           systemTableCache: cache,

@@ -1,3 +1,5 @@
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 /**
  * Failed-create cleanup lifecycle-generation probes.
  *
@@ -91,7 +93,7 @@ function registerRow(stateMachine, row) {
 }
 
 function createHandler(store, stateMachine) {
-  return new ReplicaHandler({
+  return createReplicaHandlerFixture(ReplicaHandler, {
     nodeId: NODE_ID,
     dataDir: '/tmp/replica-failed-create-cleanup-generation',
     systemTableCache: store.cache,

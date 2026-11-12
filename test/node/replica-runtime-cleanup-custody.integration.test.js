@@ -1,3 +1,5 @@
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 // Actual host owners and real native services/SQLite; injected DB close failures.
 // Registry succession is explicit boundary control, not remote CREATE certification.
 import assert from 'node:assert/strict';
@@ -14,7 +16,7 @@ import {PortAllocator} from '../../src/wasm-service/port-allocator.js';
 import {createFixture, buildService} from '../raft/raft-rs-backend/startup-cleanup-native-fixture.js';
 
 function handlerFor(fixture) {
-  return new ReplicaHandler({nodeId: 'opening-refusal-node', dataDir: fixture.directory,
+  return createReplicaHandlerFixture(ReplicaHandler, {nodeId: 'opening-refusal-node', dataDir: fixture.directory,
     systemTableCache: new SystemTableCache(), cdcIntegrationService: {},
     createPartitionService: () => {
       throw new Error('unexpected physical factory call');

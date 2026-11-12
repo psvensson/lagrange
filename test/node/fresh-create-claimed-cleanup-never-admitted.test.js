@@ -1,3 +1,5 @@
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 /**
  * Quest fresh-create-failure-after-committed-admission, L3 condition: the
  * REMOVE that a failed-create cleanup claim drives is a no-op for a replica
@@ -54,7 +56,7 @@ test('a claimed failed create that was never admitted is removed as a typed no-o
       createAttemptToken: failed.create_attempt_token, createdAt: failed.created_at,
       durableVersionColumn: 'state_entered_at', durableVersion: failed.state_entered_at,
       durableUpdatedAt: failed.updated_at, authoritativeSnapshot: true});
-    const handler = new ReplicaHandler({nodeId: NODE_ID,
+    const handler = createReplicaHandlerFixture(ReplicaHandler, {nodeId: NODE_ID,
       dataDir: '/tmp/fresh-create-claimed-cleanup-never-admitted',
       systemTableCache: store.cache, cdcIntegrationService: {},
       controlPlaneSystemTableGateway: store.gateway, replicaStateMachine: stateMachine,

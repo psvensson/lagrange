@@ -1,3 +1,5 @@
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 /**
  * S-F2 (owner ruling 2026-09-30, N2 class): an executor-created replica's
  * durable ACTIVE for generation G is written only while the exact transport
@@ -53,7 +55,7 @@ async function createWorld() {
     cdcIntegrationService: cdc});
   const router = new MessageRouter({nodeId: NODE_ID,
     bootIncarnation: TEST_BOOT_INCARNATION});
-  const handler = new ReplicaHandler({nodeId: NODE_ID,
+  const handler = createReplicaHandlerFixture(ReplicaHandler, {nodeId: NODE_ID,
     systemTableCache: new SystemTableCache(), cdcIntegrationService: cdc,
     replicaStateMachine: stateMachine,
     createPartitionService: async () => null});

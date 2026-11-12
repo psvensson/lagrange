@@ -1,3 +1,5 @@
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 // Real admitted three-member SQL_TRANSACTIONS control group. Every release
 // action reaches the original ReplicaHandler and PartitionService owners over
@@ -60,7 +62,7 @@ test('three actual current SQL control voters share one PAUSE census and each re
       const leader = group.services.find((service) =>
         service.raft.readStatus().role === RAFT_ROLE.LEADER);
       assert.ok(leader, 'native group has an actual elected leader');
-      handler = new ReplicaHandler({
+      handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: NODE_ID, ownerIncarnation: 1,
         systemTableCache: leader.systemTableCache,
         cdcIntegrationService: {},

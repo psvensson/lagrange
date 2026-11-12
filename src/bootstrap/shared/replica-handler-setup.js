@@ -46,7 +46,7 @@ const ERROR_MSG = Object.freeze({
   MESSAGE_ROUTER_REQUIRED: 'messageRouter',
   CDC_INTEGRATION_SERVICE_REQUIRED: 'cdcIntegrationService',
   SYSTEM_TABLE_CACHE_REQUIRED: 'systemTableCache',
-  CREATE_PARTITION_SERVICE_REQUIRED: 'createPartitionService',
+  PARTITION_SERVICE_FACTORY_REQUIRED: 'partitionServiceFactory',
 });
 
 /**
@@ -156,7 +156,7 @@ class ReplicaHandlerSetup {
    * @param {Object} options.messageRouter - Message router for registration (required).
    * @param {Object} options.cdcIntegrationService - CDC integration service (required).
    * @param {Object} options.systemTableCache - System table cache (required).
-   * @param {Function} options.createPartitionService - Factory for creating partitions (required).
+   * @param {Object} options.partitionServiceFactory - Frozen producer/construction pair (required).
    * @param {string} options.dataDir - Base data directory for partition storage.
    * @param {Object} options.rpcClient - Optional RPC client for responses.
    * @param {Object} options.executorOutcomeEmitter - Optional executor
@@ -174,7 +174,7 @@ class ReplicaHandlerSetup {
       messageRouter,
       cdcIntegrationService,
       systemTableCache,
-      createPartitionService,
+      partitionServiceFactory,
       dataDir,
       rpcClient,
       executorOutcomeEmitter,
@@ -209,10 +209,10 @@ class ReplicaHandlerSetup {
         ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
       );
     }
-    if (!createPartitionService) {
+    if (!partitionServiceFactory) {
       throw new DependencyError(
         REPLICA_HANDLER_SETUP_NAME,
-        ERROR_MSG.CREATE_PARTITION_SERVICE_REQUIRED,
+        ERROR_MSG.PARTITION_SERVICE_FACTORY_REQUIRED,
       );
     }
 
@@ -244,9 +244,9 @@ class ReplicaHandlerSetup {
     // sets the onSnapshotCatchupNeeded dispatcher seam on every
     // factory-built service — including install replacements, which are
     // recreated through this same wrapped factory.
-    const snapshotWiredCreatePartitionService =
+    const snapshotWiredPartitionServiceFactory =
       wrapPartitionServiceFactoryWithSnapshotCatchup({
-        createPartitionService,
+        partitionServiceFactory,
         systemTableCache,
         messageRouter,
       });
@@ -258,7 +258,7 @@ class ReplicaHandlerSetup {
       cdcIntegrationService,
       replicaStateMachine,
       messageRouter,
-      createPartitionService: snapshotWiredCreatePartitionService,
+      partitionServiceFactory: snapshotWiredPartitionServiceFactory,
       dataDir,
       executorOutcomeEmitter,
       ownerIncarnation,

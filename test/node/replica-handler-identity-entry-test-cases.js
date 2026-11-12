@@ -1,3 +1,5 @@
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 import {openReplicaDatabaseFixture} from '../helpers/replica-database-fixture.js';
 // The CREATE_REPLICA production entry (handleCreateReplica) over the durable
 // row an earlier life of the replica left, with the REAL rs-raft port (the
@@ -160,7 +162,7 @@ export async function registerReplicaHandlerIdentityEntryTests({
     };
     const createPartitionService =
       realPortFactory(directory, opened, overridesFor);
-    const handler = new ReplicaHandler({
+    const handler = createReplicaHandlerFixture(ReplicaHandler, {
       nodeId: NODE_ID,
       dataDir: directory,
       systemTableCache: cache,

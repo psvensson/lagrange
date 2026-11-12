@@ -1,3 +1,5 @@
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 // Actual original preparation, catalog, native opening and handler acquisition.
 // The held-facts membrane delays the native owner's unchanged answer. The
 // listener tests isolate the existing passive observation/custody kernel; the
@@ -212,7 +214,7 @@ function registerOriginalSeedRuntimeHostingTests(owners) {
     const owner = new ReplicaStateMachine({nodeId: f.service.nodeId, ownerIncarnation: 2,
       cdcIntegrationService: f.service.cdcIntegrationService,
       systemTableCache: f.service.systemTableCache, timeSource: originalHandler.timeSource});
-    const foreign = new ReplicaHandler({nodeId: f.service.nodeId, ownerIncarnation: 2,
+    const foreign = createReplicaHandlerFixture(ReplicaHandler, {nodeId: f.service.nodeId, ownerIncarnation: 2,
       replicaStateMachine: owner, cdcIntegrationService: f.service.cdcIntegrationService,
       systemTableCache: f.service.systemTableCache, timeSource: originalHandler.timeSource,
       createPartitionService: () => { throw new Error('this control creates no runtime'); }});

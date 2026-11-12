@@ -1,3 +1,5 @@
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 import {createPartitionServiceFixture} from '../test-helpers/partition-service-fixture.js';
 // The seed teardown completes when the latency topology stops while a
 // partition's CDC delivery is held inside the propagation service.
@@ -133,7 +135,7 @@ test('the seed teardown completes when the latency topology stops inside a ' +
   const lifecycle = createLifecycleStateStore({partitions: [createPartitionRow({
     partitionId: 'replica_operations-p1', nodeId: NODE_ID,
   })]});
-  const handler = new ReplicaHandler({nodeId: NODE_ID,
+  const handler = createReplicaHandlerFixture(ReplicaHandler, {nodeId: NODE_ID,
     systemTableCache: lifecycle.cache, cdcIntegrationService: {},
     controlPlaneSystemTableGateway: lifecycle.gateway,
     createPartitionService: async () => { throw new Error('the teardown witness performs no CREATE'); },

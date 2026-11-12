@@ -188,20 +188,22 @@ async (t) => {
 
 test('I3 CREATE of the same replica drops its tombstone durably before ' +
   'the new replica is born; a restart does not resurrect it', async (t) => {
-  const world = openGroupWorld(t, {partitionId: 'inc-i3', voters: 3});
+  const births = [];
+  const world = openGroupWorld(t, {partitionId: 'inc-i3', voters: 3,
+    createPartitionService: async (options) => {
+      const originalHandler = world.sources.get(options.replicaId).handler;
+      births.push({tombstone: readGroupRetiredTombstone(originalHandler.dataDir,
+        options.partitionId, options.replicaId)});
+      // This constructor callback is declared before the handler exists;
+      // the sealed factory is never replaced after retirement.
+      world.cluster.buildReplica(options.replicaId, world.members);
+      throw new Error('this world births the row and opens no service');
+    }});
   const [first] = world.members;
   await retireAllButLast(world);
   deleteDatabase(world, first);
   const handler = restart(world, first);
   t.ok(tombstoneOf(world, first), 'setup: the retired member\'s tombstone');
-  const births = [];
-  handler.createPartitionService = async (options) => {
-    births.push({tombstone: readGroupRetiredTombstone(handler.dataDir,
-      options.partitionId, options.replicaId)});
-    // The new replica's lifecycle row is born on its database.
-    world.cluster.buildReplica(first, world.members);
-    throw new Error('this world births the row and opens no service');
-  };
   const created = await handler.handleCreateReplica({
     [ReplicaOperationField.OPERATION_ID]: 'create-again',
     [ReplicaOperationField.PARTITION_ID]: world.partitionId,

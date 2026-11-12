@@ -1,3 +1,7 @@
+import {captureReplicaRuntimeProducer} from
+  '../../src/node/replica-runtime-producer.js';
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 /**
  * The source side of a replica removal, run by the PRODUCTION replica
  * handler (handleRemoveReplica -> removeReplicaAsync) against a real rs-raft
@@ -143,8 +147,12 @@ function durableLifecycleState(dbFile, groupId) {
  * @return {Object} {handler, service, outcomes, exits, removeRequest,
  *   dispose}.
  */
+function refuseRemovalFixtureConstruction() {
+  throw new Error('this world creates no partition service');
+}
+
 function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
-  cache, rowOf, stateStore = null}) {
+  cache, rowOf, stateStore = null, createPartitionService = refuseRemovalFixtureConstruction}) {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(),
     'replica-removal-exit-'));
   const outcomes = [];
@@ -237,15 +245,13 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
       service.raft?.close();
     },
   });
-  const handler = new ReplicaHandler({
+  const handler = createReplicaHandlerFixture(ReplicaHandler, {
     nodeId,
     dataDir,
     systemTableCache: cache,
     cdcIntegrationService: {},
     controlPlaneSystemTableGateway: lifecycleStore.gateway,
-    createPartitionService: () => {
-      throw new Error('this world creates no partition service');
-    },
+    createPartitionService,
     replicaStateMachine,
     executorOutcomeEmitter: {
       emitOutcome: (...args) => outcomes.push(args),
@@ -262,7 +268,8 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
       return logger.info(message, fields);
     },
   });
-  const publication = createReplicaRuntimePublication(handler, initialRow,
+  const producer = captureReplicaRuntimeProducer(handler, replicaStateMachine, replicaId);
+  const publication = createReplicaRuntimePublication(producer, initialRow,
     captureReplicaAdmission(replicaStateMachine, replicaId));
   attachPartitionRuntimePublication(service, publication);
   const registration = Object.freeze({replicaId, partitionId, service,

@@ -1,3 +1,5 @@
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 import {EventEmitter} from 'node:events';
 import {withRemovalServingSurface} from
   '../test-helpers/partition-removal-serving-surface.js';
@@ -63,7 +65,7 @@ export async function registerReplicaHandlerTailMoreTests({
     cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', source);
     const mockCDC = createMockCDCService(cache);
 
-    const handler = new ReplicaHandler({
+    const handler = createReplicaHandlerFixture(ReplicaHandler, {
       nodeId: 'test-node',
       dataDir: tempDir,
       systemTableCache: cache,
@@ -98,7 +100,7 @@ export async function registerReplicaHandlerTailMoreTests({
     const cache = createSeededCache();
     const mockCDC = createMockCDCService(cache);
 
-    const handler = new ReplicaHandler({
+    const handler = createReplicaHandlerFixture(ReplicaHandler, {
       nodeId: 'test-node',
       dataDir: tempDir,
       systemTableCache: cache,
@@ -131,7 +133,7 @@ export async function registerReplicaHandlerTailMoreTests({
       const cache = createSeededCache();
       const mockCDC = createMockCDCService(cache);
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         dataDir: tempDir,
         systemTableCache: cache,
@@ -201,7 +203,7 @@ export async function registerReplicaHandlerTailMoreTests({
     const mockCDC = createMockCDCService(cache);
     const events = [];
 
-    const handler = new ReplicaHandler({
+    const handler = createReplicaHandlerFixture(ReplicaHandler, {
       nodeId: 'test-node',
       cdcIntegrationService: mockCDC,
       systemTableCache: cache,
@@ -243,7 +245,7 @@ export async function registerReplicaHandlerTailMoreTests({
     seedReplicaOperation(cache, 'op-1');
     const mockCDC = createMockCDCService(cache);
 
-    const handler = new ReplicaHandler({
+    const handler = createReplicaHandlerFixture(ReplicaHandler, {
       nodeId: 'test-node',
       cdcIntegrationService: mockCDC,
       systemTableCache: cache,
@@ -304,7 +306,7 @@ export async function registerReplicaHandlerTailMoreTests({
       });
       const mockCDC = createMockCDCService(cache);
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         cdcIntegrationService: mockCDC,
         systemTableCache: cache,
@@ -395,7 +397,7 @@ export async function registerReplicaHandlerTailMoreTests({
         },
       },
     };
-    const handler = new ReplicaHandler({
+    const handler = createReplicaHandlerFixture(ReplicaHandler, {
       nodeId: 'test-node',
       cdcIntegrationService: mockCDC,
       systemTableCache: cache,
@@ -436,7 +438,7 @@ export async function registerReplicaHandlerTailMoreTests({
         },
       });
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         cdcIntegrationService: mockCDC,
         systemTableCache: cache,
@@ -477,7 +479,7 @@ export async function registerReplicaHandlerTailMoreTests({
       const cache = createSeededCache();
       const mockCDC = createMockCDCService(cache);
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         cdcIntegrationService: mockCDC,
         systemTableCache: cache,
@@ -524,7 +526,7 @@ export async function registerReplicaHandlerTailMoreTests({
     });
     const mockCDC = createMockCDCService(cache);
 
-    const handler = new ReplicaHandler({
+    const handler = createReplicaHandlerFixture(ReplicaHandler, {
       nodeId: 'test-node',
       cdcIntegrationService: mockCDC,
       systemTableCache: cache,
@@ -635,7 +637,7 @@ export async function registerReplicaHandlerTailMoreTests({
       });
       const mockCDC = createMockCDCService(cache);
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         cdcIntegrationService: mockCDC,
         systemTableCache: cache,
@@ -798,7 +800,7 @@ export async function registerReplicaHandlerTailMoreTests({
         return result;
       };
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         cdcIntegrationService: mockCDC,
         systemTableCache: cache,
@@ -932,7 +934,7 @@ export async function registerReplicaHandlerTailMoreTests({
       });
       const mockCDC = createMockCDCService(cache);
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         cdcIntegrationService: mockCDC,
         systemTableCache: cache,
@@ -1040,7 +1042,7 @@ export async function registerReplicaHandlerTailMoreTests({
       const cache = createSeededCache();
       const mockCDC = createMockCDCService(cache);
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         dataDir: tempDir,
         systemTableCache: cache,
@@ -1113,7 +1115,7 @@ export async function registerReplicaHandlerTailMoreTests({
         partitionId: 'nodes-p1',
       });
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         dataDir: tempDir,
         systemTableCache: cache,
@@ -1161,7 +1163,7 @@ export async function registerReplicaHandlerTailMoreTests({
         leaderReplicaId: 'nodes-p1-r1',
       });
       const mockCDC = createMockCDCService(cache);
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         dataDir: tempDir,
         systemTableCache: cache,
@@ -1224,7 +1226,7 @@ export async function registerReplicaHandlerTailMoreTests({
             },
           }),
       });
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         dataDir: tempDir,
         systemTableCache: cache,
@@ -1300,7 +1302,7 @@ export async function registerReplicaHandlerTailMoreTests({
       partitionId: TEST_STEP_DOWN_PARTITION_ID,
       leaderReplicaId: TEST_STEP_DOWN_REPLICA_ID,
     });
-    const handler = new ReplicaHandler({
+    const handler = createReplicaHandlerFixture(ReplicaHandler, {
       nodeId: 'test-node',
       dataDir: tempDir,
       systemTableCache: cache,

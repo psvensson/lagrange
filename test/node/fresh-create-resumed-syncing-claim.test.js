@@ -1,3 +1,5 @@
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 // Quest fresh-create-failure-after-committed-admission, verifier finding B1
 // (2026-11-02). A create re-driven onto its own durable SYNCING row
 // (RESTARTABLE_CREATE_STATUSES -> RESTART_CREATE -> resumeSyncingReplicaCreateStatus)
@@ -117,7 +119,7 @@ async function runResumedCreate({label, resumedSyncing, failure}) {
   const stateMachine = new ReplicaStateMachine({nodeId: NODE_ID, systemTableCache: cache,
     controlPlaneSystemTableGateway: gateway});
   const outcomes = [];
-  const handler = new ReplicaHandler({nodeId: NODE_ID,
+  const handler = createReplicaHandlerFixture(ReplicaHandler, {nodeId: NODE_ID,
     dataDir: `/tmp/fresh-create-resumed-syncing-${label}`,
     systemTableCache: cache, cdcIntegrationService: createLifecycleCdcServiceForCache(cache),
     controlPlaneSystemTableGateway: gateway, replicaStateMachine: stateMachine,

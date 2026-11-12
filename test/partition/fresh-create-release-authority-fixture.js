@@ -1,3 +1,5 @@
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 // Fixture of quest fresh-create-release-authority-from-committed-operation:
 // a fresh founding group (no write origin) of the control partition with its
 // GENESIS founders on separate nodes, real PartitionServices on the real
@@ -179,7 +181,7 @@ async function formFoundingGroup(t, {founderCount = 2, leaderIndex = 0,
   'setup: the chosen founder leads');
   for (const [index, service] of services.entries()) {
     if (index !== leaderIndex) service.startElection?.();
-    const handler = new ReplicaHandler({nodeId: nodes[index], ownerIncarnation,
+    const handler = createReplicaHandlerFixture(ReplicaHandler, {nodeId: nodes[index], ownerIncarnation,
       systemTableCache: service.systemTableCache, cdcIntegrationService: {},
       controlPlaneSystemTableGateway: gatewayOver(rows, nodes[index], faults),
       createPartitionService: (options) => new PartitionService(options),

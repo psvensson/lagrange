@@ -1,3 +1,7 @@
+import {captureReplicaRuntimeHost, captureReplicaRuntimeProducer} from
+  '../../src/node/replica-runtime-producer.js';
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {NodeJoiningService} from
@@ -43,7 +47,7 @@ function restoreFixture(t, beforeAuthoritativeRead) {
   store.setBeforeAuthoritativeRead(beforeAuthoritativeRead);
   const owner = new ReplicaStateMachine({nodeId: service.nodeId, ownerIncarnation: 1,
     controlPlaneSystemTableGateway: store.gateway, systemTableCache: store.cache});
-  const handler = new ReplicaHandler({nodeId: service.nodeId, ownerIncarnation: 1,
+  const handler = createReplicaHandlerFixture(ReplicaHandler, {nodeId: service.nodeId, ownerIncarnation: 1,
     replicaStateMachine: owner, controlPlaneSystemTableGateway: store.gateway,
     systemTableCache: store.cache, cdcIntegrationService: {},
     createPartitionService: async () => { throw new Error('restore bypasses CREATE'); }});
@@ -62,9 +66,11 @@ function restoreFixture(t, beforeAuthoritativeRead) {
 registerReplicaRuntimeFactoryAuthorityTests(restoreFixture);
 
 async function publishedRestore(t, f) {
+  const producer = captureReplicaRuntimeHost(f.service, f.row.replica_id,
+    captureReplicaRuntimeProducer(f.handler, f.owner, f.row.replica_id));
   const admission = await assertDurableRejoinStorageAdmission(f.owner, f.options);
   const partition = new PartitionService({...f.options,
-    runtimePublication: createReplicaRuntimePublication(f.handler, admission.row,
+    runtimePublication: createReplicaRuntimePublication(producer, admission.row,
       admission.admission), resolveHandlerRetirementLane: () => f.owner});
   bindRegisteredReplicaHandler(partition, {nodeId: f.row.node_id,
     resolveHandlerRetirementLane: () => f.owner});
@@ -79,8 +85,10 @@ test('held join shutdown preserves a canonically published successor in every ma
   const f = restoreFixture(t);
   const {partition, shutdown} = await publishedRestore(t, f);
   const expected = captureReplicaRuntimeObservation(f.handler, f.row.replica_id);
+  const producer = captureReplicaRuntimeHost(f.service, f.row.replica_id,
+    captureReplicaRuntimeProducer(f.handler, f.owner, f.row.replica_id));
   const successor = new PartitionService({...f.options,
-    runtimePublication: createReplicaRuntimePublication(f.handler, expected.sourceEvidence,
+    runtimePublication: createReplicaRuntimePublication(producer, expected.sourceEvidence,
       expected.admission, partition), resolveHandlerRetirementLane: () => f.owner});
   bindRegisteredReplicaHandler(successor, {nodeId: f.row.node_id,
     resolveHandlerRetirementLane: () => f.owner});
@@ -316,13 +324,15 @@ test('a wrong-subject cleanup cannot acquire the original runtime primary failur
 test('join attachment retains the exact restored ACTIVE source without another activation',
   async (t) => {
     const f = restoreFixture(t);
+    const producer = captureReplicaRuntimeHost(f.service, f.row.replica_id,
+      captureReplicaRuntimeProducer(f.handler, f.owner, f.row.replica_id));
     const admission = await assertDurableRejoinStorageAdmission(f.owner, f.options);
     t.equal(admission.owner, f.owner);
     t.same(admission.row, f.row, 'restore carries the full original authoritative identity');
     t.equal(f.owner.getState(f.row.replica_id)?.state, 'active');
     const stateBeforePublication = f.owner.getState(f.row.replica_id);
     const partition = new PartitionService({...f.options,
-      runtimePublication: createReplicaRuntimePublication(f.handler, admission.row,
+      runtimePublication: createReplicaRuntimePublication(producer, admission.row,
         admission.admission), resolveHandlerRetirementLane: () => f.owner});
     bindRegisteredReplicaHandler(partition, {nodeId: f.row.node_id,
       resolveHandlerRetirementLane: () => f.owner});

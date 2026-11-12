@@ -1,3 +1,7 @@
+import {captureReplicaRuntimeHost, captureReplicaRuntimeProducer, requireReplicaRuntimeProducer} from
+  '../../src/node/replica-runtime-producer.js';
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 /**
  * Shared test support for Node Joining Service suites.
  *
@@ -76,7 +80,7 @@ export function installNodeJoiningRestoreOwner(
     timeSource,
   });
   service.replicaStateMachine = replicaStateMachine;
-  service.replicaHandler = new ReplicaHandler({nodeId: service.nodeId,
+  service.replicaHandler = createReplicaHandlerFixture(ReplicaHandler, {nodeId: service.nodeId,
     ownerIncarnation: service.bootIncarnation, replicaStateMachine,
     systemTableCache, controlPlaneSystemTableGateway: store.gateway,
     cdcIntegrationService: {},
@@ -92,21 +96,25 @@ export function installNodeJoiningRestoreOwner(
   return Object.freeze({replicaStateMachine, store});
 }
 
-export async function publishNodeJoiningRestoredRuntime(service, options, runtimeProperties = {}) {
-  const handler = service.replicaHandler;
-  const owner = service.replicaStateMachine;
+export function captureNodeJoiningRestoreProducer(service, replicaId) {
+  return captureReplicaRuntimeHost(service, replicaId,
+    captureReplicaRuntimeProducer(service.replicaHandler, service.replicaStateMachine, replicaId));
+}
+
+export async function publishNodeJoiningRestoredRuntime(service, options, producer, runtimeProperties = {}) {
+  const {handler, owner, nodeId, hostServices} = requireReplicaRuntimeProducer(producer, options.replicaId);
   const admission = await assertDurableRejoinStorageAdmission(owner, options);
-  const publication = createReplicaRuntimePublication(handler, admission.row, admission.admission);
+  const publication = createReplicaRuntimePublication(producer, admission.row, admission.admission);
   const runtime = Object.assign(new EventEmitter(), runtimeProperties, {
-    replicaId: options.replicaId, partitionId: options.partitionId, nodeId: service.nodeId,
+    replicaId: options.replicaId, partitionId: options.partitionId, nodeId,
     tableName: options.tableName, initialized: true, isShutdown: false, raft: {},
   });
   attachPartitionRuntimePublication(runtime, publication);
   publication.assertCurrent(runtime);
-  bindRegisteredReplicaHandler(runtime, {nodeId: service.nodeId,
+  bindRegisteredReplicaHandler(runtime, {nodeId,
     resolveHandlerRetirementLane: () => owner});
   service.trackJoinPartitionReplica(options.replicaId, options.partitionId, runtime,
-    {...admission, handler, hostServices: service.partitionServices});
+    {...admission, handler, hostServices});
   return runtime;
 }
 

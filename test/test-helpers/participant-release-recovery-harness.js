@@ -1,3 +1,7 @@
+import {captureReplicaRuntimeProducer} from
+  '../../src/node/replica-runtime-producer.js';
+import {createReplicaHandlerFixture} from
+  './replica-handler-construction-fixture.js';
 // Exact recovery-owner test doubles and exception custody reused by the R suite.
 // The methods are moved byte-for-byte from replica-handler-release-recovery.test.js.
 import assert from 'node:assert/strict';
@@ -96,7 +100,7 @@ function ownerLogger(reports) {
 async function withRecoveryHandler(measure, suppliedTimeSource = null) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'release-recovery-cadence-'));
   const timeSource = suppliedTimeSource ?? new VirtualTimeSource();
-  const handler = new ReplicaHandler({nodeId: 'release-recovery-node', ownerIncarnation: 1,
+  const handler = createReplicaHandlerFixture(ReplicaHandler, {nodeId: 'release-recovery-node', ownerIncarnation: 1,
     systemTableCache: {getAll: () => [], get: () => null, filter: () => []},
     cdcIntegrationService: {}, createPartitionService: () => null,
     messageRouter: createInProcessMockTransport(), dataDir: directory, timeSource});
@@ -193,7 +197,7 @@ async function withActualHandler(measure, options = {}) {
     const systemTableCache = options.leader?.systemTableCache ?? store.cache;
     const handlerTimeSource = options.timeSource ??
       new VirtualTimeSource({startMs: Date.now()});
-    const handler = new ReplicaHandler({
+    const handler = createReplicaHandlerFixture(ReplicaHandler, {
       nodeId: source.node_id,
       ownerIncarnation: 1,
       systemTableCache,
@@ -207,6 +211,7 @@ async function withActualHandler(measure, options = {}) {
     acquired.handler = handler;
     handler.registerWithRouter(transport);
     const owner = handler.replicaStateMachine;
+    const producer = captureReplicaRuntimeProducer(handler, owner, source.replica_id);
     const admitRestore = () => assertDurableRejoinStorageAdmission(owner, {
       restoringExistingReplica: true, replicaId: source.replica_id, lifecycleAuthority: source,
     });
@@ -214,23 +219,25 @@ async function withActualHandler(measure, options = {}) {
     const construction = {...options.leader, systemTableCache, transport,
       resolveHandlerRetirementLane: () => owner};
     const {leader} = await startAdmittedLeader({...construction,
-      runtimePublication: createReplicaRuntimePublication(handler, restored.row,
+      runtimePublication: createReplicaRuntimePublication(producer, restored.row,
         restored.admission)});
     acquired.leader = leader;
     publishReplicaRuntime(handler, {replicaId: source.replica_id, service: leader,
       sourceEvidence: restored.row, lifecycleOwner: owner});
     acquired.timerCapture = captureParticipantReleaseObservationTimer(leader, handlerTimeSource);
     const createReplacement = async () => {
+      const replacementProducer = captureReplicaRuntimeProducer(handler, owner, source.replica_id);
       const expected = captureReplicaRuntimeObservation(handler, source.replica_id);
       const replacement = await startAdmittedLeader({...construction,
-        runtimePublication: createReplicaRuntimePublication(handler, expected.sourceEvidence,
+        runtimePublication: createReplicaRuntimePublication(replacementProducer, expected.sourceEvidence,
           expected.admission, expected.service)});
       return {...replacement, expected};
     };
     const restoreAfterDeletion = async () => {
+      const replacementProducer = captureReplicaRuntimeProducer(handler, owner, source.replica_id);
       const admission = await admitRestore();
       const replacement = await startAdmittedLeader({...construction,
-        runtimePublication: createReplicaRuntimePublication(handler, admission.row,
+        runtimePublication: createReplicaRuntimePublication(replacementProducer, admission.row,
           admission.admission)});
       try {
         publishReplicaRuntime(handler, {replicaId: source.replica_id, service: replacement.leader,

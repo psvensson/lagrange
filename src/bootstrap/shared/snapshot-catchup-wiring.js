@@ -1,6 +1,9 @@
 import {captureReplicaRuntimeObservation, isReplicaRuntimeObservationCurrent,
   runtimeObservationChangedError} from '../../node/replica-runtime-observation.js';
 import {createReplicaRuntimePublication} from '../../node/replica-runtime-publication.js';
+import {requireReplicaRuntimeFactory, requireReplicaRuntimeProducer} from
+  '../../node/replica-runtime-producer.js';
+import {releaseFailedReplicaRuntimeHost} from '../../node/replica-runtime-cleanup-custody.js';
 // Production wiring for the S1-S5 snapshot catch-up chain (quest
 // raft-snapshot-live-rebuild, spec solve/specs/raft-snapshot-transfer-
 // install/live-rebuild-design.md, S6 Phase A links 2/4/6). This module owns
@@ -145,21 +148,30 @@ function attachSnapshotCatchupDispatcher(context) {
  * ReplicaHandlerSetup). Replacement services recreated after an install
  * flow through the same wrapped factory, so the seam re-attaches itself.
  * @param {Object} context wiring context
- * @param {Function} context.createPartitionService inner factory
+ * @param {Object} context.partitionServiceFactory frozen inner factory
  * @param {Object} context.systemTableCache cached system tables
  * @param {Object} context.messageRouter node message router
- * @return {Function} wrapped async factory
+ * @return {Object} Frozen wrapped producer/construction pair.
  */
 function wrapPartitionServiceFactoryWithSnapshotCatchup(context) {
-  const {createPartitionService, systemTableCache, messageRouter} = context;
-  return async (serviceOptions) => {
-    const service = await createPartitionService(serviceOptions);
-    if (service) {
-      attachSnapshotCatchupDispatcher(
-        {service, systemTableCache, messageRouter});
-    }
-    return service;
-  };
+  const {systemTableCache, messageRouter} = context;
+  const factory = requireReplicaRuntimeFactory(context.partitionServiceFactory);
+  return Object.freeze({captureProducer: factory.captureProducer,
+    async create(serviceOptions) {
+      const request = Object.freeze({...serviceOptions});
+      const producer = requireReplicaRuntimeProducer(request.runtimeProducer, request.replicaId);
+      const service = await factory.create(request);
+      try {
+        producer.assertCurrent();
+        attachSnapshotCatchupDispatcher({service, systemTableCache, messageRouter});
+        producer.assertCurrent();
+        return service;
+      } catch (error) {
+        await releaseFailedReplicaRuntimeHost(producer,
+          request.replicaId, request.partitionId, service, error);
+        throw error;
+      }
+    }});
 }
 
 // raftGroupId === partitionId: the live (non-shutdown) local service for
@@ -199,12 +211,14 @@ function armSnapshotOfferRouting(context) {
       resolveLocalReplica: (raftGroupId) =>
         resolveLocalReplicaService(replicaHandler, raftGroupId),
       orchestrate: ({service, socket}) => {
+        const factory = replicaHandler.partitionServiceFactory;
+        const producer = factory.captureProducer(replicaHandler, service.replicaId);
         const observed = captureReplicaRuntimeObservation(replicaHandler, service.replicaId);
         if (observed?.service !== service || !observed.sourceEvidence ||
             !isReplicaRuntimeObservationCurrent(observed)) {
           throw runtimeObservationChangedError(service.replicaId);
         }
-        const runtimePublication = createReplicaRuntimePublication(replicaHandler,
+        const runtimePublication = createReplicaRuntimePublication(producer,
           observed.sourceEvidence, observed.admission, service);
         return orchestrateSnapshotCatchupInstall({
           service,
@@ -220,13 +234,14 @@ function armSnapshotOfferRouting(context) {
             }),
           },
           createPartitionService: (serviceOptions) =>
-            replicaHandler.createPartitionService({...serviceOptions, runtimePublication,
+            factory.create({...serviceOptions, runtimePublication, runtimeProducer: producer,
               publishRuntime: (replacement, hostServices) =>
                 replicaHandler.replaceLocalReplicaService(
                   service.replicaId, replacement, observed, hostServices),
               resolveHandlerRetirementLane: () => observed.owner}),
           registerReplacementService: async (replacement) => {
             try {
+              producer.assertCurrent();
               return replicaHandler.replaceLocalReplicaService(
                 service.replicaId, replacement, observed);
             } catch (error) {

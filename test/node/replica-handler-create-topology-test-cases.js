@@ -1,3 +1,5 @@
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 // Superseded under R09 by owner decision O1 (2026-09-26): a new partition
 // replica's membership and join mode come from its committed-membership stamp
 // (GENESIS for a founder, COMMITTED for a join), never from the services rows
@@ -80,7 +82,7 @@ export async function registerReplicaHandlerCreateTopologyTests({
       const mockCDC = createMockCDCService(cache);
       let capturedOptions = null;
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         cdcIntegrationService: mockCDC,
         systemTableCache: cache,
@@ -152,7 +154,7 @@ export async function registerReplicaHandlerCreateTopologyTests({
       const mockCDC = createMockCDCService(cache);
       let capturedOptions = null;
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         cdcIntegrationService: mockCDC,
         systemTableCache: cache,
@@ -219,7 +221,7 @@ export async function registerReplicaHandlerCreateTopologyTests({
         });
       }
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         cdcIntegrationService: createMockCDCService(cache),
         systemTableCache: cache,
@@ -295,7 +297,7 @@ export async function registerReplicaHandlerCreateTopologyTests({
         updated_at: now,
       });
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'node-1',
         cdcIntegrationService: createMockCDCService(cache),
         systemTableCache: cache,
@@ -370,7 +372,7 @@ export async function registerReplicaHandlerCreateTopologyTests({
       const mockCDC = createMockCDCService(cache);
       let capturedOptions = null;
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         cdcIntegrationService: mockCDC,
         systemTableCache: cache,
@@ -496,7 +498,7 @@ export async function registerReplicaHandlerCreateTopologyTests({
         resolveFactoryCalled = resolve;
       });
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         ownerIncarnation,
         cdcIntegrationService: mockCDC,
@@ -591,7 +593,7 @@ export async function registerReplicaHandlerCreateTopologyTests({
       const mockCDC = createMockCDCService(cache);
       let capturedOptions = null;
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'test-node',
         cdcIntegrationService: mockCDC,
         systemTableCache: cache,
@@ -668,7 +670,7 @@ export async function registerReplicaHandlerCreateTopologyTests({
       ];
       let capturedOptions = null;
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'node-1',
         cdcIntegrationService: createMockCDCService(cache),
         systemTableCache: cache,
@@ -773,7 +775,7 @@ export async function registerReplicaHandlerCreateTopologyTests({
       });
       let capturedOptions = null;
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'node-learner',
         ownerIncarnation,
         cdcIntegrationService: createMockCDCService(cache),
@@ -880,7 +882,7 @@ export async function registerReplicaHandlerCreateTopologyTests({
       // target; the REPLACE source (r3 here) is in it while it is a member.
       const targetReplicaId = 'replica_operations-p1-r5';
       const bootstrapReplicaIds = [...stampedReplicaIds, targetReplicaId];
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'node-target',
         cdcIntegrationService: createMockCDCService(cache),
         systemTableCache: cache,
@@ -954,7 +956,7 @@ export async function registerReplicaHandlerCreateTopologyTests({
       });
       let capturedOptions = null;
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'node-learner',
         ownerIncarnation,
         cdcIntegrationService: createMockCDCService(cache),
@@ -1027,7 +1029,7 @@ export async function registerReplicaHandlerCreateTopologyTests({
       });
       let capturedOptions = null;
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: 'node-learner',
         cdcIntegrationService: createMockCDCService(cache),
         systemTableCache: cache,

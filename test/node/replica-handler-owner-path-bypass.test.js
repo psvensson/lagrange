@@ -1,3 +1,5 @@
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 /**
  * Owner-path regressions proving ReplicaHandler cannot bypass the
  * RebalanceCoordinator for replica_operations workflow mutations.
@@ -68,7 +70,7 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
 
       const cache = createSeededCache();
       const cdcService = createMockCDCService(cache);
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: TEST_NODE_ID,
         systemTableCache: cache,
         cdcIntegrationService: cdcService,
@@ -153,7 +155,7 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
         leaderReplicaId,
       });
       const cdcService = createMockCDCService(cache);
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: TEST_NODE_ID,
         systemTableCache: cache,
         cdcIntegrationService: cdcService,
@@ -274,7 +276,7 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
 
       const cache = createSeededCache();
       const cdcService = createMockCDCService(cache);
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: TEST_NODE_ID,
         systemTableCache: cache,
         cdcIntegrationService: cdcService,
@@ -386,7 +388,7 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
         const cache = createSeededCache({partitionId});
         const cdcService = createMockCDCService(cache);
         let failShutdown = Boolean(failureCase.shutdownThrows);
-        const handler = new ReplicaHandler({
+        const handler = createReplicaHandlerFixture(ReplicaHandler, {
           nodeId: TEST_NODE_ID,
           systemTableCache: cache,
           cdcIntegrationService: cdcService,
@@ -599,7 +601,7 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
         throw new Error('simulated partition service failure');
       };
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: TEST_NODE_ID,
         systemTableCache: cache,
         cdcIntegrationService: cdcService,
@@ -664,7 +666,7 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
       const cdcService = createMockCDCService(cache);
       const emitter = new ExecutorOutcomeEmitter({logger: console});
       let factoryCount = 0;
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: TEST_NODE_ID,
         systemTableCache: cache,
         cdcIntegrationService: cdcService,
@@ -772,7 +774,7 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
       const cdcService = createMockCDCService(cache);
 
       // Construct handler without an emitter — the null path.
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: TEST_NODE_ID,
         systemTableCache: cache,
         cdcIntegrationService: cdcService,
@@ -826,7 +828,7 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
 
       const cache = createSeededCache();
       const cdcService = createMockCDCService(cache);
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: TEST_NODE_ID,
         systemTableCache: cache,
         cdcIntegrationService: cdcService,
@@ -881,7 +883,7 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
       const emitter = new ExecutorOutcomeEmitter({logger: console});
       const cache = createSeededCache();
       const cdcService = createMockCDCService(cache);
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: TEST_NODE_ID,
         systemTableCache: cache,
         cdcIntegrationService: cdcService,

@@ -1,3 +1,5 @@
+import {createReplicaHandlerFixture} from
+  '../../test-helpers/replica-handler-construction-fixture.js';
 import {createPartitionServiceFixture} from '../../test-helpers/partition-service-fixture.js';
 // A partition on real PartitionService replicas (rs-raft backend, one
 // database file each) whose new replicas are created through the production
@@ -227,7 +229,7 @@ function createCommittedMembershipHarness(partitionId) {
   };
   const handlerOf = (nodeId) => {
     if (!handlers.has(nodeId)) {
-      handlers.set(nodeId, new ReplicaHandler({
+      handlers.set(nodeId, createReplicaHandlerFixture(ReplicaHandler, {
         nodeId,
         dataDir: directory,
         systemTableCache: metadataCache(partitionId, []),

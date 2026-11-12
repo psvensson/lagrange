@@ -1,3 +1,7 @@
+import {captureReplicaRuntimeProducer} from
+  '../../src/node/replica-runtime-producer.js';
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 // Production-bound witness, quest fresh-create-failure-after-committed-admission
 // (receipt superseded under R09 on 2026-11-02: an INDUCED authority-read
 // unavailability replaces the live lottery). A real ReplicaHandler runs the real
@@ -219,7 +223,7 @@ async function runCreate(t, {label, refusals, coFounders = [],
   const transport = createLoopbackTransport();
   const proposal = {settled: Promise.resolve(null)};
   let serviceOptions;
-  const handler = new ReplicaHandler({
+  const handler = createReplicaHandlerFixture(ReplicaHandler, {
     nodeId: NODE_ID, ownerIncarnation: 101,
     cdcIntegrationService: {}, controlPlaneSystemTableGateway: gateway,
     systemTableCache: cache, messageRouter: transport, dataDir: directory,
@@ -814,16 +818,17 @@ test('restart of an established replica whose file was truncated refuses rebirth
     dropSidecars(run);
     fs.truncateSync(run.dbPath, 0);
     const source = run.store.durableRow(SYSTEM_TABLE_NAME.SERVICES, run.replicaId);
-    const restoredHandler = new ReplicaHandler({nodeId: NODE_ID, ownerIncarnation: 102,
+    const restoredHandler = createReplicaHandlerFixture(ReplicaHandler, {nodeId: NODE_ID, ownerIncarnation: 102,
       systemTableCache: run.store.cache, controlPlaneSystemTableGateway: run.store.gateway,
       cdcIntegrationService: {}, dataDir: run.handler.dataDir,
       createPartitionService: () => { throw new Error('this witness restores an existing birth'); }});
     const owner = restoredHandler.replicaStateMachine;
+    const producer = captureReplicaRuntimeProducer(restoredHandler, owner, run.replicaId);
     const admission = await assertDurableRejoinStorageAdmission(owner, {
       restoringExistingReplica: true, replicaId: run.replicaId, lifecycleAuthority: source,
     });
     const restarted = new PartitionService({...run.serviceOptions,
-      runtimePublication: createReplicaRuntimePublication(restoredHandler, admission.row,
+      runtimePublication: createReplicaRuntimePublication(producer, admission.row,
         admission.admission), resolveHandlerRetirementLane: () => owner});
     t.after(async () => { await restarted.shutdown(); await restoredHandler.shutdown(); });
     await assert.rejects(restarted.initialize(), {code: LIFECYCLE_BIRTH.UNPROVEN});

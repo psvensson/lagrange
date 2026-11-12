@@ -1,7 +1,8 @@
 import {buildReplicaLifecycleMutationPredicateFromState} from
   '../node/replica-state-machine-lifecycle-observation.js';
 import {PartitionService} from '../partition/partition-service.js';
-import {captureReplicaRuntimeHost} from '../node/replica-runtime-publication.js';
+import {captureReplicaRuntimeHost, captureReplicaRuntimeProducer, createReplicaRuntimeFactory} from
+  '../node/replica-runtime-producer.js';
 import {releaseFailedReplicaRuntimeHost} from '../node/replica-runtime-cleanup-custody.js';
 import {ReplicaState} from '../node/replica-state-machine.js';
 import {
@@ -143,10 +144,9 @@ function createBootstrapServiceReplicaHandlerRuntimeMethods() {
         throw new Error(bootstrapError.CDC_REPLICA_HANDLER_MISSING);
       }
 
-      const createPartitionService = async (options) => {
+      const createPartitionService = async (options, host) => {
         const request = Object.freeze({...options});
-        const host = captureReplicaRuntimeHost(this, request.replicaId,
-          acquired.replicaHandler, acquired.replicaStateMachine);
+        host.assertCurrent();
         let dbPath = DEFAULT_BOOTSTRAP_CONFIG.partitionDbPath;
         if (this.dataDirectoryManager && this.dataDirectoryManager.isInitialized()) {
           dbPath = this.dataDirectoryManager.getPartitionDbPath(
@@ -237,12 +237,18 @@ function createBootstrapServiceReplicaHandlerRuntimeMethods() {
         return partition;
       };
 
+      const partitionServiceFactory = createReplicaRuntimeFactory({
+        captureProducer: (_handler, replicaId) => captureReplicaRuntimeHost(this, replicaId,
+          captureReplicaRuntimeProducer(acquired.replicaHandler, acquired.replicaStateMachine, replicaId)),
+        create: createPartitionService,
+      });
+
       const acquired = this.replicaLifecycleOwner.acquire({
         nodeId: this.nodeId,
         messageRouter: this.messageRouter,
         cdcIntegrationService: cdcIntegrationService,
         systemTableCache: systemTableCache,
-        createPartitionService: createPartitionService,
+        partitionServiceFactory,
         dataDir: dataDir,
         rpcClient: this.rpcClient,
         executorOutcomeEmitter:

@@ -1,3 +1,5 @@
+import {createReplicaHandlerFixture} from
+  './replica-handler-construction-fixture.js';
 // Native release owners with an in-process transport, empty system-cache double,
 // optional remote-route hint double and optional injected handler clock.
 // PartitionService, Raft, SQLite, release facts and lifecycle owners are real;
@@ -64,7 +66,7 @@ async function withParticipantReleaseProtocol(measure, table = {tableId: TABLE, 
   let controlHandler = null;
   let failure = null;
   try {
-    handler = new ReplicaHandler({nodeId: NODE, ownerIncarnation: 1,
+    handler = createReplicaHandlerFixture(ReplicaHandler, {nodeId: NODE, ownerIncarnation: 1,
       systemTableCache: cache, cdcIntegrationService, createPartitionService: create,
       messageRouter: transport, dataDir: directory,
       timeSource: fixtureOptions.timeSource});
@@ -75,7 +77,7 @@ async function withParticipantReleaseProtocol(measure, table = {tableId: TABLE, 
       controlService = createControl();
       await controlService.initialize();
       if (fixtureOptions.remoteControl === true) {
-        controlHandler = new ReplicaHandler({nodeId: CONTROL_NODE,
+        controlHandler = createReplicaHandlerFixture(ReplicaHandler, {nodeId: CONTROL_NODE,
           ownerIncarnation: 2, systemTableCache: cache,
           cdcIntegrationService: {}, createPartitionService: create,
           messageRouter: transport, dataDir: directory});

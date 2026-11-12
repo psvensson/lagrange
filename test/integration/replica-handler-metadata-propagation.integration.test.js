@@ -1,3 +1,5 @@
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 /**
  * Integration test: ReplicaHandler metadata propagation handling.
@@ -117,7 +119,7 @@ test('ReplicaHandler metadata propagation integration', {timeout: 30000}, async 
 
     seedReplicaOperation(cache, operationId, partitionId, replicaId, nodeId);
 
-    const handler = new ReplicaHandler({
+    const handler = createReplicaHandlerFixture(ReplicaHandler, {
       nodeId,
       systemTableCache: cache,
       cdcIntegrationService,
@@ -212,7 +214,7 @@ test('ReplicaHandler metadata propagation integration', {timeout: 30000}, async 
         cache, operationId, partitionId, replicaId, nodeId,
       );
 
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId,
         systemTableCache: cache,
         cdcIntegrationService,

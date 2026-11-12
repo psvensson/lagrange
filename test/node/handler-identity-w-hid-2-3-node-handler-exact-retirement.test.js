@@ -1,3 +1,5 @@
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 // W-HID-2 / W-HID-3 (handler-identity cluster findings F2, F4): one policy
 // retires a handler, by its exact registered identity, and fails closed.
 //
@@ -35,7 +37,7 @@ const SINGLETONS = Object.freeze({
     address: `${NODE_ID}/service/runtime-service-handler`,
   },
   ReplicaHandler: {
-    create: () => new ReplicaHandler({nodeId: NODE_ID, dataDir: '/tmp/whid-unused',
+    create: () => createReplicaHandlerFixture(ReplicaHandler, {nodeId: NODE_ID, dataDir: '/tmp/whid-unused',
       systemTableCache: EMPTY_CACHE, cdcIntegrationService: {},
       createPartitionService: () => {
         throw new Error('W-HID never creates a partition');

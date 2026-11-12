@@ -1,3 +1,5 @@
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 /**
  * Owner-path regressions for the REMOVE flow: ReplicaHandler reports removal
  * outcomes through ExecutorOutcomeEmitter only, completes a removal after its
@@ -67,7 +69,7 @@ test('ReplicaHandler owner-path bypass regressions: removal', async (t) => {
       const tempDir = fs.mkdtempSync(
         path.join(os.tmpdir(), 'rh-bypass-'),
       );
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: TEST_NODE_ID,
         dataDir: tempDir,
         systemTableCache: cache,
@@ -180,7 +182,7 @@ test('ReplicaHandler owner-path bypass regressions: removal', async (t) => {
       const tempDir = fs.mkdtempSync(
         path.join(os.tmpdir(), 'rh-bypass-delete-fail-'),
       );
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: TEST_NODE_ID,
         dataDir: tempDir,
         systemTableCache: cache,
@@ -312,7 +314,7 @@ test('ReplicaHandler owner-path bypass regressions: removal', async (t) => {
           return {operationId, state: 'admitted', lastOutcome: 'proposed'};
         },
       };
-      const handler = new ReplicaHandler({
+      const handler = createReplicaHandlerFixture(ReplicaHandler, {
         nodeId: TEST_NODE_ID,
         dataDir: tempDir,
         systemTableCache: cache,

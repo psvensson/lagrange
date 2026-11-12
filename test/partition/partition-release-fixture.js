@@ -1,3 +1,5 @@
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 // Real release-owner composition for directly constructed PartitionServices.
 // This fixture supplies transport/cache inputs, never a generation, OPEN flag,
 // membership answer, pause override or fabricated release census.
@@ -37,7 +39,7 @@ async function attachPartitionReleaseOwners(services, {directory, budgetMs}) {
   const host = (service) => {
     let handler = handlers.get(service.nodeId);
     if (!handler) {
-      handler = new ReplicaHandler({nodeId: service.nodeId, ownerIncarnation: 1,
+      handler = createReplicaHandlerFixture(ReplicaHandler, {nodeId: service.nodeId, ownerIncarnation: 1,
         systemTableCache: service.systemTableCache, cdcIntegrationService: {},
         createPartitionService: (options) => new PartitionService(options),
         messageRouter: transport, dataDir: directory});

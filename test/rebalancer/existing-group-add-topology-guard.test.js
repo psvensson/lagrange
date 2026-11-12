@@ -1,3 +1,5 @@
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 /**
  * Existing-group ADD topology-guard regression tests (rebalancer safety-audit
  * finding 8, quest existing-group-add-topology-guard).
@@ -224,7 +226,7 @@ function createJoinHandler({cache, captured}) {
     },
     submitMutation: lifecycleGateway.submitMutation,
   };
-  const handler = new ReplicaHandler({
+  const handler = createReplicaHandlerFixture(ReplicaHandler, {
     nodeId: JOIN_NODE_ID,
     ownerIncarnation: 1,
     cdcIntegrationService: createLifecycleCdcServiceForCache(cache),

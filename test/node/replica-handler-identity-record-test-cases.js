@@ -1,3 +1,5 @@
+import {createReplicaHandlerFixture} from
+  '../test-helpers/replica-handler-construction-fixture.js';
 import {openReplicaDatabaseFixture} from '../helpers/replica-database-fixture.js';
 // The CREATE_REPLICA target's identity record (verifier N3): createReplicaAsync
 // hands its port a pending record whenever the prior-existence fact is not
@@ -209,7 +211,7 @@ export async function registerReplicaHandlerIdentityRecordTests({
       nodeId: NODE_ID,
       controlPlaneSystemTableGateway: gateway,
     });
-    const handler = new ReplicaHandler({
+    const handler = createReplicaHandlerFixture(ReplicaHandler, {
       nodeId: NODE_ID,
       dataDir: directory,
       systemTableCache: cache,
