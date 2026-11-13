@@ -1182,3 +1182,93 @@ for (const phase of ['busy admission', 'machine observation']) {
         `the secondary cleanup failure is visible: ${diagnostics.join('')}`);
     });
 }
+
+async function directChildEnded(pid) {
+  const deadline = Date.now() + GROUP_CONTROL_BOUND_MS;
+  while (Date.now() < deadline) {
+    try {
+      process.kill(pid, 0);
+    } catch (error) {
+      if (error.code === 'ESRCH') return;
+      throw error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, GROUP_CONTROL_POLL_MS));
+  }
+  assert.fail(`the finite direct child ${pid} did not exit`);
+}
+
+for (const status of [0, 42]) {
+  test(`capture retains closed stdout/stderr after the direct child exits ${status}`,
+    {timeout: 15000}, async (t) => {
+      const root = tempDir(t, 'fleet-capture-closure-');
+      const pidFile = path.join(root, 'pid');
+      const release = path.join(root, 'release-tail');
+      const complete = path.join(root, 'tail-complete');
+      const script = [
+        'printf \'%s\\n\' "$$" > "$1.tmp"; mv "$1.tmp" "$1"',
+        '(',
+        '  n=0; while [ ! -f "$2" ] && [ "$n" -lt 50 ]; do sleep 0.1; n=$((n + 1)); done',
+        '  [ -f "$2" ] || exit 79',
+        '  printf \'late\\n\'; printf \'late failure detail\\n\' >&2',
+        '  printf complete > "$3.tmp"; mv "$3.tmp" "$3"',
+        ') &',
+        'printf \'early\\n\'',
+        'exit "$4"',
+      ].join('\n');
+      let outcome = null;
+      const captured = capture('sh', ['-c', script, 'finite-capture',
+        pidFile, release, complete, String(status)], {timeoutMs: GROUP_CONTROL_BOUND_MS})
+        .then((output) => { outcome = {output}; }, (error) => { outcome = {error}; });
+      let settledBeforeTail;
+      try {
+        await groupControlMarker(pidFile, () => null);
+        const pid = Number(fs.readFileSync(pidFile, 'utf8').trim());
+        assert.ok(Number.isInteger(pid) && pid > 0, 'the actual direct child named its PID');
+        await directChildEnded(pid);
+        await new Promise(setImmediate);
+        settledBeforeTail = outcome !== null;
+      } finally {
+        // This is an output-completion witness, not cancellation proof. The
+        // fixture releases its finite writer even when the original owner
+        // incorrectly settles before the inherited pipes have closed.
+        fs.writeFileSync(release, 'go');
+        await boundedGroupControl(captured, 'complete capture settlement');
+        await groupControlMarker(complete, () => null);
+      }
+      assert.equal(settledBeforeTail, false,
+        'direct exit cannot settle capture while its owned output pipes remain open');
+      if (status === 0) assert.equal(outcome.output, 'early\nlate');
+      else {
+        assert.match(outcome.error.message, /failed \(42\)/u,
+          'the original nonzero exit remains the primary outcome');
+        assert.match(outcome.error.message, /late failure detail/u,
+          'the failure includes the final original stderr bytes');
+      }
+    });
+}
+
+test('a failed capture spawn retains ENOENT and releases its deadline without later signalling',
+  {timeout: 10000}, async (t) => {
+    const root = tempDir(t, 'fleet-capture-unavailable-');
+    const attempts = [];
+    const diagnostics = [];
+    const signal = process.kill;
+    const observedSignal = t.mock.method(process, 'kill', (pid, name) => {
+      attempts.push({pid, name});
+      return signal.call(process, pid, name);
+    });
+    const diagnostic = t.mock.method(process.stderr, 'write', (text) => {
+      diagnostics.push(String(text));
+      return true;
+    });
+    try {
+      await assert.rejects(capture(path.join(root, 'missing-command'), [], {timeoutMs: 30}),
+        {code: 'ENOENT'}, 'the actual spawn error is the original capture failure');
+      await new Promise((resolve) => setTimeout(resolve, 120));
+    } finally {
+      diagnostic.mock.restore();
+      observedSignal.mock.restore();
+    }
+    assert.deepEqual(attempts, [], 'no cancelled deadline may later target an absent identity');
+    assert.deepEqual(diagnostics, [], 'no later cleanup callback replaces the failed acquisition');
+  });
