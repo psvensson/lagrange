@@ -11,7 +11,7 @@ import {
   isNonEmptyText,
   isRecord,
   isSha256Digest,
-} from './comparative-efficiency-opportunity-input-integrity.js';
+} from '../utils/canonical-json-data.js';
 
 const numberIsFinite = Number.isFinite;
 const numberIsInteger = Number.isInteger;
