@@ -58,6 +58,7 @@ test('the executor runs classified lanes serially with their owned budgets', () 
   const status = runClassifiedTestFiles(
     [INTEGRATION, TOOLCHAIN, ORDINARY], {
       root,
+      env: {...process.env, LAGRANGE_LANE_JOBS_CAP: undefined},
       spawn(command, args, options) {
         calls.push({args, command, tapTimeout: options.env.TAP_TIMEOUT,
           tapTimeoutFloor: options.env.TAP_TIMEOUT_FLOOR});
@@ -497,6 +498,7 @@ test('the bootstrap lane advises the cluster timeout floor, as the serial lane d
   const calls = [];
   const status = runClassifiedTestFiles([BOOTSTRAP, INTEGRATION, ORDINARY], {
     root,
+    env: {...process.env, LAGRANGE_LANE_JOBS_CAP: undefined},
     spawn(command, args, options) {
       calls.push({jobs: args[1], lane: args.at(-1),
         floor: options.env.TAP_TIMEOUT_FLOOR});
