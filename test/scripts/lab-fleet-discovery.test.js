@@ -1050,7 +1050,9 @@ async function signalGroupFixture(t, {detached, missingExecutable = false}) {
     {env, detached, stdio: 'ignore'});
   let spawnError = null;
   closed = new Promise((resolve) => {
-    child.once('error', (error) => { spawnError = error; });
+    child.once('error', (error) => {
+      spawnError = error;
+    });
     child.once('close', (code, signal) => {
       terminal = {code, signal, error: spawnError?.message || null};
       resolve(terminal);
@@ -1218,7 +1220,11 @@ for (const status of [0, 42]) {
       let outcome = null;
       const captured = capture('sh', ['-c', script, 'finite-capture',
         pidFile, release, complete, String(status)], {timeoutMs: GROUP_CONTROL_BOUND_MS})
-        .then((output) => { outcome = {output}; }, (error) => { outcome = {error}; });
+        .then((output) => {
+          outcome = {output};
+        }, (error) => {
+          outcome = {error};
+        });
       let settledBeforeTail;
       try {
         await groupControlMarker(pidFile, () => null);

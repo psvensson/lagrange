@@ -245,8 +245,12 @@ function finishShardOutput({tails, logFile, errorFile}) {
   let stderr;
   for (const finish of [
     ...tails,
-    () => { log = fs.readFileSync(logFile, TEXT_UTF8); },
-    () => { stderr = fs.readFileSync(errorFile, TEXT_UTF8); },
+    () => {
+      log = fs.readFileSync(logFile, TEXT_UTF8);
+    },
+    () => {
+      stderr = fs.readFileSync(errorFile, TEXT_UTF8);
+    },
   ]) {
     try {
       finish();
@@ -386,6 +390,7 @@ export function startRemoteShard(shard, {sha, deadlineMs, root, holder,
   let interrupted = false;
   let cutRequested = false;
   let refuseUnconfirmed;
+  let deadline;
   const recordFailure = (error) => {
     if (!failure.observed) Object.assign(failure, {observed: true, error});
     else if (failure.error !== error) {
@@ -447,7 +452,7 @@ export function startRemoteShard(shard, {sha, deadlineMs, root, holder,
   // A deadline that expired while this process was blocked is looked at
   // again after its pending events: a shard that finished meanwhile is not
   // stopped, and its gone shell's pid is never signalled (verifier round 1).
-  const deadline = setTimeout(() => setImmediate(() => stop(PLACEMENT_TEXT.DEADLINE)),
+  deadline = setTimeout(() => setImmediate(() => stop(PLACEMENT_TEXT.DEADLINE)),
     deadlineMs);
   const finished = exited.then((status) => {
     clearTimeout(deadline);
@@ -519,7 +524,7 @@ function abortTogether(runs) {
   }
   if (errors.length > 0) {
     throw new AggregateError(errors,
-      `placement cleanup incomplete: ` +
+      'placement cleanup incomplete: ' +
       `${errors.map((error) => error.message).join(PLACEMENT_DIAGNOSTIC_SEPARATOR)}`);
   }
 }
@@ -571,8 +576,10 @@ function runClassifiedChild(root, files, env, {onLine = null, checkBase = EMPTY}
   let closedObserved = false;
   const firstExit = {observed: false};
   child.once(PLACEMENT_CHILD_EVENT.EXIT, (status) => {
-    if (status !== 0) Object.assign(firstExit,
-      {observed: true, status: placementExitStatus(status)});
+    if (status !== 0) {
+      Object.assign(firstExit,
+        {observed: true, status: placementExitStatus(status)});
+    }
   });
   if (onLine) {
     streamLines(child.stdout, PLACEMENT_STREAM.OUT, onLine);

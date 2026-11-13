@@ -46,7 +46,9 @@ test('a failed remote acquisition closes acquired siblings and preserves the ori
         }
         acquired.push(shard.machine.name);
         let finish;
-        const done = new Promise((resolve) => { finish = resolve; });
+        const done = new Promise((resolve) => {
+          finish = resolve;
+        });
         return {done, abort: () => {
           closed.push(shard.machine.name);
           finish({status: null, reason: 'interrupted', log: ''});
@@ -88,7 +90,9 @@ for (const cleanupThrows of [false, true]) {
         runLocalChild: (files) => {
           assigned.push(...files);
           let finish;
-          const done = new Promise((resolve) => { finish = resolve; });
+          const done = new Promise((resolve) => {
+            finish = resolve;
+          });
           rejectFirst(primary);
           return {done, abort: () => {
             closed.push('controller');

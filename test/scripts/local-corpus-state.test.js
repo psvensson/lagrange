@@ -23,7 +23,9 @@ test('initial directory fsync failure retains cause before any state link or chi
   let links = 0;
   let spawns = 0;
   const sync = t.mock.method(fs, 'fsyncSync', (fd) => {
-    if (fs.fstatSync(fd).isDirectory()) { syncs += 1; throw fault; }
+    if (fs.fstatSync(fd).isDirectory()) {
+      syncs += 1; throw fault;
+    }
     return nativeSync(fd);
   });
   const link = t.mock.method(fs, 'linkSync', (...args) => {
@@ -33,8 +35,12 @@ test('initial directory fsync failure retains cause before any state link or chi
   let error;
   try {
     error = captureError(() => startLocalCorpus({root, stateDir, head: HEAD,
-      files: ['controlled.test.js'], spawnProcess: () => { spawns += 1; }}));
-  } finally { sync.mock.restore(); link.mock.restore(); }
+      files: ['controlled.test.js'], spawnProcess: () => {
+        spawns += 1;
+      }}));
+  } finally {
+    sync.mock.restore(); link.mock.restore();
+  }
   assert.equal(error.code, TRANSITION.STORAGE_UNAVAILABLE);
   assert.equal(error.cause, fault);
   assert.equal(error.destination, path.join(stateDir, `${HEAD}.json`));
@@ -65,7 +71,11 @@ function finish(fixed, fields = {}) {
 
 function captureError(action) {
   let caught;
-  try { action(); } catch (error) { caught = error; }
+  try {
+    action();
+  } catch (error) {
+    caught = error;
+  }
   assert.ok(caught, 'the injected unavailable operation is explicit');
   return caught;
 }
@@ -142,14 +152,17 @@ for (const mode of ['file-fsync', 'directory-fsync', 'link-before-effect',
       return nativeUnlink(file);
     });
     let error;
-    try { error = captureError(() => finish(fixed)); }
-    finally { sync.mock.restore(); link.mock.restore(); unlink.mock.restore(); }
+    try {
+      error = captureError(() => finish(fixed));
+    } finally {
+      sync.mock.restore(); link.mock.restore(); unlink.mock.restore();
+    }
     const expected = {
       'file-fsync': TRANSITION.STORAGE_UNAVAILABLE,
       'directory-fsync': TRANSITION.LINKED_DURABILITY_UNAVAILABLE,
       'link-before-effect': TRANSITION.LINK_EFFECT_UNAVAILABLE,
       'link-after-effect': TRANSITION.LINK_EFFECT_UNAVAILABLE,
-      cleanup: TRANSITION.APPLIED_CLEANUP_UNAVAILABLE,
+      'cleanup': TRANSITION.APPLIED_CLEANUP_UNAVAILABLE,
     };
     assert.equal(engaged, 1, 'one fault, no retry or alternate persistence attempt');
     assert.equal(error.code, expected[mode]);
@@ -235,11 +248,15 @@ test('a terminal cannot be extended by another well-formed retained envelope', (
   // its refusal must happen before any filesystem publication.
   let links = 0;
   const nativeLink = fs.linkSync;
-  const mock = t.mock.method(fs, 'linkSync', (...args) => { links += 1; return nativeLink(...args); });
+  const mock = t.mock.method(fs, 'linkSync', (...args) => {
+    links += 1; return nativeLink(...args);
+  });
   try {
     assert.throws(() => transitionLocalCorpusState(fixed.directory, terminal.record,
       {...terminal.record, state: STATE.LOST}), {code: TRANSITION.RECORD_UNAVAILABLE});
-  } finally { mock.mock.restore(); }
+  } finally {
+    mock.mock.restore();
+  }
   assert.equal(links, 0);
   assert.deepEqual(fixed.current(), terminal.record);
 });
@@ -250,8 +267,9 @@ test('a newly linked terminal during a read is consumed without false orphan cor
   let published;
   let engaged = 0;
   const mock = t.mock.method(fs, 'readFileSync', (file, ...args) => {
-    try { return nativeRead(file, ...args); }
-    catch (error) {
+    try {
+      return nativeRead(file, ...args);
+    } catch (error) {
       if (error.code !== 'ENOENT' || engaged || !String(file).includes('.from-')) throw error;
       engaged += 1;
       published = finish(fixed);
@@ -261,7 +279,11 @@ test('a newly linked terminal during a read is consumed without false orphan cor
     }
   });
   let observed;
-  try { observed = fixed.current(); } finally { mock.mock.restore(); }
+  try {
+    observed = fixed.current();
+  } finally {
+    mock.mock.restore();
+  }
   assert.equal(engaged, 1);
   assert.ok([STATE.RUNNING, STATE.RED].includes(observed.state));
   assert.deepEqual(fixed.current(), published.record);

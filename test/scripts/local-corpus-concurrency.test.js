@@ -27,7 +27,9 @@ async function until(predicate, label, bound = BOUND_MS) {
 
 function tracked(child) {
   const record = {child, closed: false};
-  child.on('error', (error) => { record.error = error; });
+  child.on('error', (error) => {
+    record.error = error;
+  });
   child.once('close', (code, signal) => {
     Object.assign(record, {closed: true, code, signal});
   });
@@ -37,8 +39,11 @@ function tracked(child) {
 async function stop(record) {
   if (!record.closed && record.child.pid) {
     flushCoverageBeforeKill(record.child.pid, 'SIGKILL');
-    try { process.kill(-record.child.pid, 'SIGKILL'); }
-    catch (error) { if (error.code !== 'ESRCH') throw error; }
+    try {
+      process.kill(-record.child.pid, 'SIGKILL');
+    } catch (error) {
+      if (error.code !== 'ESRCH') throw error;
+    }
   }
   await until(() => record.closed, 'owned child close', 5000);
 }
@@ -74,7 +79,9 @@ function setup(t, initial = STATE.RUNNING) {
         {detached: true, stdio: ['ignore', fd, fd]}));
       children.push(child);
       return child;
-    } finally { fs.closeSync(fd); }
+    } finally {
+      fs.closeSync(fd);
+    }
   };
   const ready = async (child, token) => {
     await until(() => fs.existsSync(path.join(directory, `${token}-ready.json`)) || child.closed,
@@ -127,7 +134,8 @@ test('duplicate real runLocalCorpus claimants admit exactly one actual gate subp
     fixed.release();
     const results = await Promise.all([fixed.result(first, 'first'), fixed.result(second, 'second')]);
     assert.equal(results.filter((entry) => entry.status === 23).length, 1);
-    assert.equal(results.filter((entry) => entry.error?.outcome === TRANSITION.CURRENT_CHANGED).length, 1);
+    assert.equal(results.filter((entry) =>
+      entry.error?.outcome === TRANSITION.CURRENT_CHANGED).length, 1);
     const gates = fs.readFileSync(path.join(fixed.directory, 'gates.log'), 'utf8').trim().split('\n');
     assert.equal(gates.length, 1, 'the loser never enters the gate collaborator');
     assert.equal(fixed.current().state, STATE.RED);
@@ -179,9 +187,14 @@ test('late parent spawn error cannot erase its real child terminal', {timeout: 3
   const nodes = fs.readdirSync(fixed.stateDir).filter((name) => name.endsWith('.json'))
     .map((name) => [name, fs.readFileSync(path.join(fixed.stateDir, name), 'utf8')]);
   const diagnostic = [];
-  const write = t.mock.method(process.stderr, 'write', (line) => { diagnostic.push(String(line)); return true; });
-  try { producer.child.emit('error', new Error('controlled delayed parent failure')); }
-  finally { write.mock.restore(); }
+  const write = t.mock.method(process.stderr, 'write', (line) => {
+    diagnostic.push(String(line)); return true;
+  });
+  try {
+    producer.child.emit('error', new Error('controlled delayed parent failure'));
+  } finally {
+    write.mock.restore();
+  }
   assert.deepEqual(fixed.current(), before);
   for (const [name, bytes] of nodes) assert.equal(fs.readFileSync(path.join(fixed.stateDir, name), 'utf8'), bytes);
   assert.ok(diagnostic.some((line) => line.includes('controlled delayed parent failure')));

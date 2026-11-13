@@ -29,7 +29,7 @@ function wait(name) {
 }
 
 function gate() {
-  const script = "require('fs').appendFileSync(process.argv[1], process.pid + '\\n');" +
+  const script = 'require(\'fs\').appendFileSync(process.argv[1], process.pid + \'\\n\');' +
     'process.exitCode = 23;';
   return spawnSync(process.execPath, ['-e', script, path.join(directory, 'gates.log')],
     {encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL'});
@@ -47,8 +47,11 @@ function claimant() {
     }
     return link(source, destination);
   };
-  try { return {status: runLocalCorpus(directory, head, {stateDir, run: gate})}; }
-  finally { fs.linkSync = link; }
+  try {
+    return {status: runLocalCorpus(directory, head, {stateDir, run: gate})};
+  } finally {
+    fs.linkSync = link;
+  }
 }
 
 function terminalWriter() {
@@ -83,7 +86,9 @@ function crashWriter() {
   try {
     return transitionLocalCorpusState(stateDir, before,
       {...before, state: STATE.RED, status, finishedAt: 2});
-  } finally { fs.linkSync = link; fs.fsyncSync = sync; }
+  } finally {
+    fs.linkSync = link; fs.fsyncSync = sync;
+  }
 }
 
 let result;
@@ -93,8 +98,7 @@ try {
     wait('release');
     result = createLocalCorpusState(stateDir, {sha: head, state: STATE.STARTING,
       pid: null, startedAt: status, files: 1, admission: token});
-  }
-  else if (mode === 'claimant') result = claimant();
+  } else if (mode === 'claimant') result = claimant();
   else if (mode === 'terminal') result = terminalWriter();
   else if (mode.startsWith('crash-')) result = crashWriter();
   else if (mode === 'producer') result = {status: runLocalCorpus(directory, head, {stateDir, run: gate})};

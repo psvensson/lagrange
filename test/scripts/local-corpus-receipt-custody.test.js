@@ -62,12 +62,16 @@ for (const mode of ['link-before-effect', 'directory-fsync']) {
     const link = t.mock.method(fs, 'linkSync', (source, destination) => {
       const proposed = JSON.parse(fs.readFileSync(source, 'utf8'));
       if (proposed.record?.state !== STATE.GREEN) return nativeLink(source, destination);
-      if (mode === 'link-before-effect') { faults += 1; throw fault; }
+      if (mode === 'link-before-effect') {
+        faults += 1; throw fault;
+      }
       nativeLink(source, destination);
       greenLinked = true;
     });
     const sync = t.mock.method(fs, 'fsyncSync', (fd) => {
-      if (greenLinked && fs.fstatSync(fd).isDirectory()) { faults += 1; throw fault; }
+      if (greenLinked && fs.fstatSync(fd).isDirectory()) {
+        faults += 1; throw fault;
+      }
       return nativeSync(fd);
     });
     let error;
@@ -96,8 +100,11 @@ for (const mode of ['link-before-effect', 'directory-fsync']) {
           return {status: 0};
         },
       });
-    } catch (caught) { error = caught; }
-    finally { link.mock.restore(); sync.mock.restore(); }
+    } catch (caught) {
+      error = caught;
+    } finally {
+      link.mock.restore(); sync.mock.restore();
+    }
     assert.ok(error, 'bookkeeping does not report success after its storage failure');
     assert.equal(error.code, greenLinked ? TRANSITION.LINKED_DURABILITY_UNAVAILABLE :
       TRANSITION.LINK_EFFECT_UNAVAILABLE);
@@ -114,7 +121,9 @@ for (const mode of ['link-before-effect', 'directory-fsync']) {
     assert.equal(resolved.outcome, OUTCOME.PROVEN);
     assert.equal(resolved.objectSha, recordedObject, 'the real remote proof is not undone');
     assert.throws(() => runLocalCorpus(fixed.root, fixed.head, {stateDir: fixed.stateDir,
-      run: () => { receiptCalls += 1; throw new Error('forbidden second invocation'); }}),
+      run: () => {
+        receiptCalls += 1; throw new Error('forbidden second invocation');
+      }}),
     /no starting obligation/u);
     assert.equal(gateCalls, 1);
     assert.equal(receiptCalls, 1);

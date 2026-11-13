@@ -178,10 +178,14 @@ for (const state of ['red', 'lost', 'superseded']) {
       ['.sections.ndjson', '{"kind":"start","runId":"original"}\n'],
       ['.report.json', '{"original":"retained"}\n'],
     ]);
-    for (const [suffix, bytes] of originals) fs.writeFileSync(path.join(stateDir, head + suffix), bytes);
+    for (const [suffix, bytes] of originals) {
+      fs.writeFileSync(path.join(stateDir, head + suffix), bytes);
+    }
     let spawned = 0;
     assert.throws(() => startLocalCorpus({root: stateDir, stateDir, head, files: FILES,
-      spawnProcess: () => { spawned += 1; return {pid: 4242}; }}), /already recorded/u);
+      spawnProcess: () => {
+        spawned += 1; return {pid: 4242};
+      }}), /already recorded/u);
     assert.equal(spawned, 0, 'no replacement process starts');
     for (const [suffix, bytes] of originals) {
       assert.equal(fs.readFileSync(path.join(stateDir, head + suffix), 'utf8'), bytes,
@@ -213,9 +217,13 @@ test('reportLocalCorpus retains old evidence when a later head is green', (t) =>
 
 for (const [name, overrides] of [
   ['source commit unavailable', {commitAt: () => null}],
-  ['fleet unavailable', {discover: async () => { throw new Error('inventory unavailable'); }}],
+  ['fleet unavailable', {discover: async () => {
+    throw new Error('inventory unavailable');
+  }}],
   ['empty fleet', {discover: async () => ({machines: []})}],
-  ['proof base unavailable', {checkBase: () => { throw new Error('base unavailable'); }}],
+  ['proof base unavailable', {checkBase: () => {
+    throw new Error('base unavailable');
+  }}],
 ]) {
   test(`runPlacedTestFiles refuses ${name} without local execution`, async () => {
     const observed = await observePlacement(() => assert.fail('no remote run'), overrides);

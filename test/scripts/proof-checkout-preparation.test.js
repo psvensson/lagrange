@@ -331,14 +331,20 @@ function startFiniteGate(t, options = {}) {
     {cwd: run.root, env, detached: true, stdio: ['ignore', 'pipe', 'pipe']});
   let error = null;
   run.closed = new Promise((resolve) => {
-    run.child.once('error', (cause) => { error = cause; });
+    run.child.once('error', (cause) => {
+      error = cause;
+    });
     run.child.once('close', (code, signal) => {
       run.terminal = {code, signal, error};
       resolve(run.terminal);
     });
   });
-  run.child.stdout.on('data', (chunk) => { run.stdout += chunk.toString(); });
-  run.child.stderr.on('data', (chunk) => { run.stderr += chunk.toString(); });
+  run.child.stdout.on('data', (chunk) => {
+    run.stdout += chunk.toString();
+  });
+  run.child.stderr.on('data', (chunk) => {
+    run.stderr += chunk.toString();
+  });
   return run;
 }
 
