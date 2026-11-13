@@ -24,5 +24,6 @@
       "id": "bounded-feature",
       "statement": "New flag is lab-only; GCP --client-node remains executable path. No campaign performance/formation/release acceptance from selector proof."
     }
-  ]
+  ],
+  "sealedAt": "91f147b98bd71b2a41dfadf651f544a4eef6f98b"
 }
