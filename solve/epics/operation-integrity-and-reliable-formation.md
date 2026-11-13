@@ -108,44 +108,78 @@ Recovery retains obligations and progresses; startup and shutdown own their
 resources. The authoring and proof workflow must catch invented contracts and
 invalid evidence before integration.
 
-## Current integration summary (12 November 2026)
+## Current integration summary (13 November 2026, stopped for handover)
 
-- **Governing rules and source:** rule-set revision 5, inspected at
-  main `ef93af85dcd6add82ff5b5fee21ca12d205c61cd` and preserved WIP
-  `dc29d85bedbbe4310bfcd4cf7e46e8b65a654b2d`. They are divergent evidence inputs,
-  not an accepted integrated candidate. Main retains the agent-tooling Q1-Q7
-  implementation; its absence in the older WIP lineage is not a deletion.
-- **Integration responsibility:** this change owns planning reconciliation only.
-  The execution integration owner must reconcile active writers, preserved
-  branches and current evidence before admitting a runtime composition. No lab
-  job or runtime writer is assigned here. One writer owns each changing
-  interaction; proof/selector work can proceed alongside independent diagnosis.
-- **Observed blockers:** historical formation failures remain unresolved at the
-  service boundary. Current source review adds evidence-admission gaps, CDC
-  source-image/occurrence mismatch, delayed generation-unsafe settlement,
-  retained-read physical custody, locking-reservation and PG-description gaps.
-  Some paths exist only in the WIP and require composition review. These source
-  findings and counterexamples are not claimed as newly executed failures.
+- **Governing rules and source:** rule-set revision 5, with fresh main
+  `348796bca4b896b123def681b18941490de4d393` reconciled into the reviewed
+  foundation checkpoint `43e217c014017831cd3485b2e3c117451560a29e`. Frozen local
+  implementation `f99088dcc589b8c3fc74c4f53815ab8443a6d5c5` includes the reviewed
+  receipt-envelope correction. The reviewed process-observation correction is
+  separately frozen at `07d915e3d040ae21936366dd28508f5bec15ca64`. Neither repair
+  has physical candidate proof; the combined repair tree has not been composed.
+- **Integration responsibility:** the owner requested a careful stop. All
+  writers are frozen. No new source-executing workload was admitted during this
+  takeover, and no evidence request is pending. One coordinator owns only the
+  final WIP preservation. The exact source mappings, review limits and next
+  owner actions are in the [dated takeover handover](../../docs/development/handover-2026-11-13-foundation-takeover.md).
+- **Active foundation blockers:** original jobs 3686/3687 are closed failures;
+  only 48,000/40,000 bytes of their 306,993/264,616-byte streams are retained.
+  Newly authored original controls at remote `56d12341a67d8680b16f8f06847a2499f73b24f6`
+  have not been submitted. A separate pre-existing stale-RUNNING snapshot can
+  potentially overwrite a concurrent terminal result with LOST; it remains an
+  unmeasured, unfixed publication/state-custody finding. Canonical generation,
+  static/focused/full physical proof, Solver land and final-HEAD publication
+  remain owed by the existing foundation/publication Quests.
 - **Service status:** the existing
   [formation receipt](../quests/fresh-formation-user-table-routability/evidence/receipt.json)
   still fails. It is unchanged. The broader aggregate probe has no receipt and
   is explicitly unmeasured. Neither the plan nor earlier focused successes
   establish service, release or comparative acceptance.
-- **Current unit:** the earlier blanket description of Q1-Q16 as unsealed is
-  obsolete. Q1, Q2, Q5 and Q14 have terminal solved records; other states come
-  from their actual logs. Historical acceptance is preserved. The six bounded
-  successors below and amended Q12 aggregate are unsealed, with no new runtime
-  receipt. Tooling Q8 remains a separate open pilot, not a product repair owner.
-- **Next action:** compose canonical census/checkpoint recovery and close the
-  source-bound evidence path; pair generation/CDC repairs with their real
-  callers and recovery, then read-view and client corrections. Use actual red
-  measurements before sealing and discharge material findings before the frozen
-  three-node formation journey. Preserve Q6 policy currency and valid prior
-  repairs. A refuted hypothesis is recorded as refuted, not implemented anyway.
+- **Wider work retained:** broad WIP `9b870241b43f7dec9e7428f10c63156bb131b39a`
+  remains excluded pending accepted foundation delivery. Main's agent-tooling
+  Q1-Q7 implementation stays intact. Historical source-image/occurrence,
+  generation settlement, read custody, locking and PG-description findings
+  remain at their recorded scope. Q1, Q2, Q5 and Q14 retain solved records;
+  the six successors below and amended Q12 aggregate have no new runtime
+  receipt. Tooling Q8 remains a separate open pilot. Historical acceptance,
+  Q6 policy currency and rejected hypotheses are not rewritten.
+- **Next action after requested resumption:** assign one coordinator, finish
+  the existing original streams from the retained offsets, measure the frozen
+  new original controls, resolve the concurrency finding's custody claim,
+  compose/review the repairs and obtain canonical physical proof and actual
+  delivery. Only then reconcile broad formation/authority/CDC work and the
+  separate simplified CURRENT edit. No continuation is scheduled by this note.
 
 The dated E0-E9 material below is retained context, not another current summary.
 Original observations and accepted bounded repairs keep their original scope.
 Use the linked Quest logs and applicable evidence to determine current state.
+
+### Steering enforcement follow-ups (13 November 2026)
+
+The steering reconciliation was inspected against main
+`f402575b0667bc02110849867cabacf013e61be6`, under rule-set revision 5. It changes
+required working practice, not runtime behavior, sealed acceptance or the
+service verdict above. The following bounded executable follow-ups remain
+unimplemented by that documentation change, within the existing 0.4.1 correction
+allocation. The integration owner assigns their actual candidate and writer
+before execution; this list is not a claim that a worker or lab run has started.
+
+| Follow-up | Existing owner and bounded acceptance |
+| --- | --- |
+| Per-package scope | Solver scope owner, coordinated with [evidence and candidate binding](../quests/quest-evidence-and-candidate-binding/quest.json). Check the declared package assignment, including standalone fixes, against actual changed paths. An explicit authorized amendment changes that assignment without changing a seal. Prove rejection of unintended expansion and acceptance of a valid amendment. |
+| Proof-machinery review | The same [evidence and candidate binding](../quests/quest-evidence-and-candidate-binding/quest.json) continuation owns review eligibility. Preserve current `src/` coverage and content binding while including proof selection, execution, interpretation, admission, publication and operative acceptance inputs. Prove rejection without applicable independent approval and preservation of harmless notes. |
+| One real owner-boundary trial | The next bounded causal product repair owns its actual runtime/composition seam and invalidated callers. Extend the existing contract-authoring checker through that owner; reject an invalid actual producer and consumer through unchanged production binding, and preserve the valid path. A typedef-only check or repository-wide modularization campaign does not discharge this trial. |
+| Ratchet update integrity | The existing [code navigability owner](code-navigability-and-mistake-resistance.md), coordinated here for the correction. Reject deletion-funded new violations, accept evidence-backed identity-preserving moves, and compare a measurement correction on one pinned tree with history and newly exposed debt retained. Do not raise thresholds or create another debt ledger. |
+
+Use the existing Quest threshold to seal a bounded implementation only after its
+real falsifier measures red; do not reopen terminal Q1/Q2 records or copy their
+receipts. Source/proof work already in progress, including publication and
+evidence custody, keeps its current owner and must be reconciled before another
+writer is assigned. The steering PR needs independent document review and the
+applicable documentation, routing and generated checks; it does not require a
+new product certification campaign. Its first product trial must show a bounded
+causal repair integrated against the accepted base with its new witnesses and
+the remaining unaccepted work explicitly reconciled.
 
 ## P0 reconciliation and explicit completion amendment
 

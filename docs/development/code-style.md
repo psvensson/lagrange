@@ -3,7 +3,7 @@ scope: style
 status: canonical
 always_load: false
 source_of_truth: self
-last_reviewed: 2026-07-25
+last_reviewed: 2026-11-13
 ---
 
 > **Canonical source.** Lint, formatting, naming. Reached from the
@@ -79,6 +79,13 @@ When writing or modifying code:
   already restructures it (no standalone mass-rewrite). Preserve the existing
   entrypoint while moving each responsibility into a semantically named owner,
   contract, decision, state, or consumer module.
+- An explicit-context helper is an internal organization technique. Passing
+  the entire owner to another module does not establish a separate owner
+  boundary or limit access to mutable state. For a real boundary, use the
+  declared runtime and composition surfaces in
+  [`architecture/overview.md`](../../architecture/overview.md#core-principles).
+  Preserve unchanged contracts and limit consumer migration to invalidated
+  contracts; keep unrelated restructuring outside the causal change.
 
 ## Constants And Naming
 
@@ -121,9 +128,13 @@ When writing or modifying code:
 
 ## Navigability and fallback patterns
 
-Each shape below makes the next reader re-derive what an owner is or what a
-value means before they can change anything, and each fallback shape keeps a
-second path alive beside the real one. Write the replacement form instead.
+The patterns below identify shapes that obscure ownership or may retain a
+second semantic path. Establish the site's meaning and use the replacement
+form for a real violation. A legitimate default or representation conversion
+needs evidence from its owner contract; renaming an alternate authority does
+not remove it. A syntax scan or inventory classifies its inspected surface,
+not repository-wide behavioral correctness. Correct a false positive through
+the reviewed measurement change below, without adding a caller escape hatch.
 
 - `owner_port_feature_detection`: `typeof this.x.y === 'function'` (or on a
   parameter member) to discover what an owner can do. Replace it with a named
@@ -161,11 +172,26 @@ second path alive beside the real one. Write the replacement form instead.
   shim, interim and similar vocabulary. Retire the legacy path and its
   vocabulary instead of carrying them forward.
 
-`npm run audit:guideline:navigability` enforces these with one-way baselines,
-one file per pattern (`scripts/check-guideline-navigability-baseline-<row>.json`):
-a new site fails the audit, and a count below its baseline prints the tighten
-hint. Lower a baseline with `--update-baseline --pattern <row>`; never raise
-one. A pattern that reaches zero is promoted to an ESLint
+`npm run audit:guideline:navigability` checks site identities by file, pattern
+and enclosing function against one baseline file per pattern
+(`scripts/check-guideline-navigability-baseline-<row>.json`). An unrecorded
+identity or excess count fails the ordinary audit, and a count below its
+baseline prints the tighten hint.
+Lower a baseline with `--update-baseline --pattern <row>`; never raise one.
+Inherited entries record debt, not approved patterns. Deleting a violation
+elsewhere cannot pay for a new one. A move may preserve an existing debt item's
+identity only with source evidence that its behavior and count are unchanged;
+review the before/after sites in the existing change record. The updater
+currently checks only the total before rewriting recorded identities, so its
+success alone does not establish this requirement.
+
+Checker corrections require an independently reviewed comparison of old and
+new measurement on the same pinned source; keep prior records and account for
+newly exposed debt. The [release-gate policy](../../test/guidelines/release-gate.md)
+owns measurement changes. A changed count is not evidence of improved product
+behavior, and a checker version change does not reset the obligation.
+
+A pattern that reaches zero is promoted to an ESLint
 `no-restricted-syntax` selector, at error severity, whose message carries
 `navigability-rule:<row>` in `eslint.config.js`. The audit reads promotion
 from ESLint's resolved configuration (the same reader as the budget script,

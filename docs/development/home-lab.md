@@ -57,6 +57,14 @@ reapprove each of those steps. Seek a decision only when scope, spending, or
 authority actually exceeds what is already authorized. Machine locks, thermal
 admission, trusted-runner boundaries, and required proof remain in force.
 
+Use the execution substrate authorized for the current work. The active epic's
+current summary records any lab-only decision and its scope, including generators
+or static checks where required; the presence of local, hosted or GCP commands
+here does not override that decision. Inspect the installed entrypoint before
+submission, including where preparation and fallback execution occur. If it
+cannot honor the authorized placement, record the missing capability and route
+its repair through the existing service.
+
 Record the request-to-result facts in existing Quest evidence and the epic's
 current summary, using the stages the runner actually exposes:
 
@@ -80,6 +88,36 @@ queue, runtime, review, or result collection. Improve one demonstrated delay at
 a time without creating another tracking service. A target duration is an
 operating expectation; it does not override a correctness, release, or thermal
 requirement.
+
+## Proof coordination and custody
+
+One logical coordinator owns the proof of each candidate through the existing
+Quest, selector and runner. It may delegate independent invocations across
+authorized machines under their locks. Retain the selected plan, exact source
+and comparison base, dependency/runtime identity, configuration and required
+invocations, including seeds, repetitions and negative controls. Account for
+every planned invocation as executed, refused, interrupted or not run; a file
+count alone cannot establish completion. A changed selection input requires
+reselection or established applicability through the existing proof owner.
+
+Retain every observed result. For an invocation required to succeed, its first
+unexpected failure or interruption remains the primary result of that attempt;
+a later green execution cannot replace it. A justified later attempt gets its
+own identity, reason and evidence. Expected negative controls retain their
+separate purpose and observed rejection. A successful result is provisional
+until its required execution, artifact collection and custody postconditions
+are satisfied.
+
+Distinguish product, fixture/harness, verifier, infrastructure, and evidence or
+cleanup outcomes. Passing product assertions followed by an upload failure
+remain passing product assertions with incomplete proof delivery, not a new
+product failure or completed acceptance. Preserve uncertain evidence custody
+and assign its next action before removing a checkout or releasing the only
+remaining artifact copy. Release machine locks once execution and physical
+resource obligations settle; an upload failure alone does not justify holding
+a healthy host. Dispose of temporary workspaces once their evidence custody
+also settles; do not retain every checkout indefinitely. These are acceptance
+requirements, not a claim that every installed runner already enforces them automatically.
 
 ## Recommended topology
 
@@ -437,32 +475,21 @@ walk measured from it (closed-quest shape, quest-log append-only) would cover
 a range nobody named; with no base on the controller the lab exports none.
 The `placement-env=` line shows the base each host was handed.
 
-### Split a run over the lab: the controller is a reserve
+### Split a run over authorized lab hosts
 
 Test work is parallelized on the lab machines as much as possible (owner,
 2026-10-05). `lab test PROFILE --split` spreads the files by measured cost over
 the ready lab hosts. All five remote hosts are usable - `tv-dator`,
 `carinas-windows`, `adam-laptop`, `adams-gamla` and `lenovo-laptop` - and none
-is excluded; discovery decides each run which of them are ready. The
-controller is the machine every agent works on, and it runs hot, so it is a
-reserve, not a peer:
+is excluded; discovery decides each run which of them are ready. Current
+placement in `scripts/lab/lab-test.js` may reserve or use the controller according
+to host readiness, expected lock waits, per-file bounds and thermal headroom.
+That capability is not authority to execute locally when the current work is
+lab-only. Inspect placement before submission and use a supported route that
+honors the active restriction; absent that route, record the capability gap.
+Do not let a busy or hot host silently change the authorized substrate.
 
-- With at least two free lab hosts (`CONTROLLER_RESERVE_MIN_HOSTS` in
-  `scripts/lab/lab-test.js`) it takes only what no lab host can run: a file over
-  every host's per-file bound. A host another run holds is not free; it takes
-  only what no free host fits.
-- With fewer than two free hosts but at least two held ones, the held hosts
-  are peers whose shares queue on their locks, charged their holders'
-  expected wait from the holder record, and the controller stays a reserve -
-  so several agents splitting at once do not all fall back to it. When a
-  holder is expected past a share's own bounded lock wait (its estimate, at
-  most 30 minutes; a record that cannot say counts as the full 30), the
-  controller is the way to finish and takes part as a peer.
-- Otherwise, and whenever it has thermal and load headroom, it takes part as
-  one more machine. A controller without headroom, or whose tree is not the
-  commit, takes only what no lab host fits.
-
-The plan says which rule applied and what the controller kept, for example
+The plan states its placement rule and what the controller kept, for example
 `lab test: controller: reserve - 5 free lab hosts; takes 0 file(s), only what
 no lab host fits`, before any share starts.
 
@@ -772,8 +799,9 @@ Keep the boundaries explicit:
 A failure should be repaired at the owner that produced it rather than by
 teaching a neighboring layer to compensate for it.
 
-Preserve the first failure and distinguish product failures from
-fixture/harness errors, verifier errors, and execution unavailable because of
+Apply [proof coordination and custody](#proof-coordination-and-custody) to
+each admitted attempt. Preserve the first failure and distinguish product
+failures from fixture/harness errors, verifier errors, and execution unavailable because of
 capacity, connectivity, locks, or thermal admission. A correctly measured
 product failure remains a failure. Unavailable execution is inconclusive and
 does not satisfy the requested proof. Route a different causal blocker to the

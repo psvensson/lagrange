@@ -30,6 +30,9 @@ strategy-rung, `run`/`step` and generic executor instructions are retired.
 `--blocked`, `--exhausted` or `--superseded`. A verification also takes
 `--verifier subagent:<id>` and `--verdict approve|reject`. Changes under `src/`
 cannot land without an approving verification newer than the last attempt.
+The workflow's review requirement also covers changes to proof and acceptance
+semantics; see [Workflow Validators](quest-validators.md#evidence-applicability-and-review)
+for the distinction between that policy and the current automatic trigger.
 
 ## After A Rejection
 
@@ -201,16 +204,23 @@ If the exact push repairs the current red main, attribute that exception:
 npm run publish -- --fixes-red <origin-main-sha> --reason "<why this fixes red>"
 ```
 
-The default runner is GitHub-hosted. Self-hosted routing requires
-`[ci:self-hosted]` in the already-reviewed HEAD commit message and
-`--runner self-hosted`; publish validates the marker and never amends; when
-origin/main advanced only by inert data commits (the nightly formation trend)
-it rebases the local commits over them, refusing on a dirty tracked tree or a
-conflict. Direct branch pushes are preservation actions. A normal `git push` to one or
-more non-`main` branch refs skips the local proof gate so a committed WIP can
-always be preserved remotely; that remote branch is not Quest-land, merge,
-release or publication approval. Set `LAGRANGE_PUSH_PROVE_BRANCH=1` when you
-deliberately want the full local push gate on a feature branch.
+Select the authorized execution route before publication under
+[home-lab workload policy](home-lab.md#workload-capability-and-continuation).
+The publisher's current default CI route is GitHub-hosted; selecting self-hosted
+CI requires `[ci:self-hosted]` in the already-reviewed HEAD commit message and
+`--runner self-hosted`. The publisher validates the marker and never amends it.
+This CI switch alone does not place every preparation or local gate stage on the
+lab. Do not invoke a default or fallback that violates the current work's runner
+restriction; inspect the installed route and record any capability gap with its
+existing owner.
+
+When origin/main advances only by inert data commits (the nightly formation
+trend), the publisher rebases local commits over them, refusing a dirty tracked
+tree or conflict. Direct non-`main` branch pushes are preservation actions: the
+hook skips the local proof gate so committed WIP can be retained remotely. That
+branch is not Quest-land, merge, release or publication approval.
+`LAGRANGE_PUSH_PROVE_BRANCH=1` requests the full branch push gate only where its
+execution route is authorized.
 
 A routing marker does not establish an installed trusted executor, write
 credentials or native proof custody. Work authorized for physical lab execution
@@ -221,9 +231,11 @@ an exact commit already present in the checkout. An absent, zero or unreachable
 base refuses the gate.
 
 Pushes that update `main` still take the full gate. If that exact tree already
-passed `test:gate:postpush`, `LAGRANGE_PUSH_SKIP_TESTS=1 git push` skips only
-the repeated test stage; static checks still run. `--no-verify` skips every
-gate and is emergencies-only.
+passed `test:gate:postpush`, the existing proof owner must establish receipt
+applicability before the supported repeated-test-stage reuse is used; required
+static and exact-candidate publication checks still run. A skip flag is not
+evidence. `--no-verify` bypasses every gate and is not an acceptance or emergency
+publication route under R23.
 
 Whichever path runs the hook, it proves the pushed sha and nothing else: outside
 an exact checkout it materialises the first pushed local sha once into a
@@ -251,9 +263,9 @@ cleanup keeps the original checkout. A Git removal refusal stops cleanup; it
 never invokes prune, repeated force or recursive session-parent deletion.
 The failure names the attempted path and leaves remaining evidence for inspection.
 
-`LAGRANGE_SKIP_PRECOMMIT=1` skips the pre-commit guard. It is for a work-in-
-progress branch only, never for a commit that lands source on the shared
-branch: skipping a gate to obtain a green state is exactly what R23 forbids.
+WIP preservation never supplies missing pre-commit, review or publication
+evidence. Before accepted integration, satisfy the applicable guards on the
+actual candidate; skipping a gate to obtain a green state is what R23 forbids.
 
 The pre-push hook is fast-fail ordered: unused files, tracked-file lint,
 duplication/file-size ratchets, cycles, unused exports, then the test stage
@@ -265,11 +277,15 @@ the focused contracts and audits, and last the change proof - the same
 whole corpus when that proof cannot stand for it (a refused selection, a change
 to the selection machinery, runner, hook or package manifests, a cone above
 half the corpus, no committed range, or `LAGRANGE_PUSH_FULL_CORPUS=1`). The
-stage prints which it chose and why. When the gate proved a cone, the
-publisher then proves the rest of the corpus for that commit locally, detached
-and placed across the lab machines, and records the whole-corpus receipt when it
-is green; the next publish reports a red one first (`publish: !!! the local
-corpus was RED`). Every exact-head corpus attempt has one retained record,
+stage prints which it chose and why. The current publisher can then start a
+detached remainder-corpus run placed across local/lab machines; the next publish
+reports a recorded red result first (`publish: !!! the local corpus was RED`).
+This behavior is subject to the authorized substrate and
+[proof coordination and custody](home-lab.md#proof-coordination-and-custody)
+requirements. A process exit or receipt file alone does not establish every
+required invocation and its retained evidence.
+
+Every exact-head corpus attempt has one retained record,
 claimed before its files or log are opened. A repeated publish cannot restart a
 red, lost or otherwise recorded attempt at the same SHA. A newer source keeps
 its own obligation and does not cancel an older run. Reporting preserves all
@@ -277,7 +293,8 @@ records and first failures. Failed gate diagnostics remain under
 `test-output/push-gate/`; repeated diagnostics use distinct directories and
 routine output pruning does not remove them. If diagnostic retention fails,
 the original checkout remains and the failure is explicit.
-The hosted `full-corpus-canary` runs only by hand. Fix one-way
+The hosted `full-corpus-canary` is a manual capability, not authority to use
+hosted execution. Fix one-way
 ratchets rather than raising their baselines.
 
 Thermal headroom is the classified runner's to gate
@@ -296,9 +313,9 @@ such a host as `placement: host-thermal-unfit NAME`; its assigned files remain
 unmeasured and the run cannot pass. No other host or controller reruns them.
 The local corpus records the refusal as lost, not red. A lab shard also caps every
 lane at the host's own processor count less one (`LAGRANGE_LANE_JOBS_CAP`,
-shown in its `placement-env` line). `LAGRANGE_SKIP_THERMAL_GATE=1` is the one
-skip, and every gated batch carries it so a runner nested in a test does not
-gate twice.
+shown in its `placement-env` line). `LAGRANGE_SKIP_THERMAL_GATE=1` is carried
+by an already-gated batch to avoid gating a nested runner twice; it is not
+permission for an operator to bypass thermal admission.
 
 Lab hosts are shared by agents across projects through one machine-wide lock
 per host and a holder record beside it (`docs/development/home-lab.md`,
@@ -312,6 +329,7 @@ remains unavailable. Initial placement uses current ready hosts; a failed or
 refused assignment never moves elsewhere within that proof. `lab fleet` shows who holds each
 machine; set `LAGRANGE_LAB_AGENT` (for example `claude:SESSION`) to name
 yourself in the record.
+Waiting or refused work does not become a completed sample.
 
 A failed, unavailable or interrupted placed attempt retains its original
 checkout, TAP and acquired source inputs. A new attempt never purges an older
@@ -356,14 +374,14 @@ configures: a merge keeps ours instead of conflicting, and the merged tree owes
 inputs are absent), then `npm run generate:source-owner-index`, before it is
 pushed.
 
-`solve land` proves the quest delta, not the branch: its `npm test` runs with
-the change-proof base pinned to `HEAD` (the index it is about to commit
-differs from HEAD by exactly the staged quest scope), and it announces that
-base in its log. The branch-vs-remote range is the push gate's proof above,
-which is where two landed quests' interaction is proved. Before this
-(2026-09-17) a land on a branch carrying earlier quests proved them all
-again every time - 1927 tests for a one-file repair. Land, CI, the push gate
-and detached corpus now execute each scheduled file once. A failed command,
+`solve land` measures the Quest delta with the change-proof base pinned to
+`HEAD`: the index it is about to commit differs from HEAD by the staged Quest
+scope, and the log announces that base. The branch-vs-remote range remains the
+push gate's separate composition proof. Retain applicable earlier evidence
+through the existing proof owner without replacing exact-candidate requirements.
+
+Land, CI, the push gate and detached corpus now execute each scheduled file
+once. A failed command,
 failed file, zero-assertion file or missing result blocks acceptance; later
 green output cannot erase it. A release-proof obligation remains a refusal of
 the change proof until its canonical owner satisfies it.

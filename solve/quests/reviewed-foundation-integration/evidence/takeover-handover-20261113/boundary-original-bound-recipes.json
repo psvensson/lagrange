@@ -1,0 +1,34 @@
+{
+  "sourceTree": "07668b03cac68d967717ff2b61910fe10702b078",
+  "srcTree": "ec5f4204f8031d859808495365fda27e831a5a72",
+  "templateSha256": "df6057191e62c27d799f0c5bb491679014370053b50f1981af093add066b0b6c",
+  "sourceAndRecipeReview": "subagent:/root/integration_review approved source and template; only three reviewed substitutions bound",
+  "entries": [
+    {
+      "host": "adams-gamla",
+      "root": "test/scripts/proof-receipt-execution-report.test.js",
+      "sourceSha": "56d12341a67d8680b16f8f06847a2499f73b24f6",
+      "sourceRef": "refs/heads/wip/foundation-boundary-original-controls-20261113",
+      "script": "/workspace/scratch/93cc85be551a/lab-coordination/boundary-original-adams-gamla.sh",
+      "bytes": 4593,
+      "sha256": "802fa58f3232aca5f17e1e5dc4c53df3ea05288f5f9aba80b722224f92f10013",
+      "timeoutSeconds": 1200,
+      "jobs": 2,
+      "hostsCount": 1,
+      "shell": "/bin/bash"
+    },
+    {
+      "host": "tv-dator",
+      "root": "test/scripts/local-corpus.test.js",
+      "sourceSha": "56d12341a67d8680b16f8f06847a2499f73b24f6",
+      "sourceRef": "refs/heads/wip/foundation-boundary-original-controls-20261113",
+      "script": "/workspace/scratch/93cc85be551a/lab-coordination/boundary-original-tv-dator.sh",
+      "bytes": 4572,
+      "sha256": "f798053c3e1d9e934cc70780917dbfdf75c1e182b20563fbca2975a4ee0ded9c",
+      "timeoutSeconds": 1200,
+      "jobs": 2,
+      "hostsCount": 1,
+      "shell": "/bin/bash"
+    }
+  ]
+}

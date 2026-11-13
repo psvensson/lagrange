@@ -1,0 +1,34 @@
+{
+  "recordedAt": "2026-11-13T11:07:02.454Z",
+  "kind": "preservation-only-normal-squash",
+  "branch": "wip/process-observation-unavailable-20261113",
+  "localSourceCommit": "07d915e3d040ae21936366dd28508f5bec15ca64",
+  "remoteCommit": "e85f4520389853cff58bed7169279133ef4960ef",
+  "actualRemoteParent": "43e217c014017831cd3485b2e3c117451560a29e",
+  "tree": "d4ec3c601672f975a81cac9aa400e30ae9b3eed1",
+  "src": "ec5f4204f8031d859808495365fda27e831a5a72",
+  "nativeFetch": {
+    "chunk_id": "dc8f63",
+    "wall_time_seconds": 3.523473572,
+    "exit_code": 0,
+    "original_token_count": 63,
+    "output": "From https://github.com/psvensson/lagrange\n * branch                wip/process-observation-unavailable-20261113 -> FETCH_HEAD\n * [new branch]          wip/process-observation-unavailable-20261113 -> origin/wip/process-observation-unavailable-20261113\n"
+  },
+  "nativeRefRead": {
+    "chunk_id": "54b226",
+    "wall_time_seconds": 3.407745908,
+    "exit_code": 0,
+    "original_token_count": 25,
+    "output": "e85f4520389853cff58bed7169279133ef4960ef\trefs/heads/wip/process-observation-unavailable-20261113\n"
+  },
+  "nativeWholeTreeDiff": {
+    "chunk_id": "a54343",
+    "wall_time_seconds": 0.212736626,
+    "exit_code": 0,
+    "original_token_count": 0,
+    "output": ""
+  },
+  "sourceExecution": false,
+  "acceptanceClaim": false,
+  "lastGithubWriteAt": "2026-11-13T11:06:38.142Z"
+}

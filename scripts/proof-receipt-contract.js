@@ -30,6 +30,11 @@ const RECEIPT_SUBJECT_SHA_MISMATCH = 'receipt subject SHA mismatch';
 const RECEIPT_NOT_A_PASS = 'receipt does not record a pass';
 const RECEIPT_NOT_IMMUTABLE = 'receipt is not immutable-SHA reusable';
 const RECEIPT_TIME_INVALID = 'receipt completion time is invalid';
+const RECEIPT_EXECUTION_INVALID = 'receipt execution envelope is missing or malformed';
+const EXECUTION_REPORT_DIGEST = /^[0-9a-f]{64}$/u;
+const EXECUTION_SUMMARY_COUNTS = Object.freeze([
+  'planned', 'executed', 'assertions', 'runs', 'passedOnRetry',
+]);
 const REUSE = Object.freeze({
   IMMUTABLE_SHA: 'immutable-sha',
 });
@@ -178,6 +183,31 @@ function passOutcome(outcome) {
   return outcome === RECEIPT_OUTCOME_PASSED;
 }
 
+function receiptRecord(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+// The receipt carries the validated report's audit envelope, not the report
+// itself. Check its current shape and visible contract outcomes without
+// reconstructing the execution or demanding direct work from a cited release.
+function validReceiptExecution(execution, proofId) {
+  if (!receiptRecord(execution) || typeof execution.reportDigest !== 'string' ||
+      !EXECUTION_REPORT_DIGEST.test(execution.reportDigest)) return false;
+  const {producer, summary} = execution;
+  if (!receiptRecord(producer) || !producer.kind || !producer.id) return false;
+  if (!receiptRecord(summary) || EXECUTION_SUMMARY_COUNTS.some((field) =>
+    !Number.isFinite(summary[field]) || summary[field] < 0)) return false;
+  if (summary.passedOnRetry !== 0 || !Array.isArray(summary.commands) ||
+      summary.commands.length === 0 ||
+      summary.commands.some((command) => command?.exitStatus !== 0)) return false;
+  if (!Array.isArray(summary.reusedProofs) ||
+      (summary.planned === 0 && summary.reusedProofs.length === 0)) return false;
+  const contract = contractFor(proofId);
+  return contract !== null && summary.reusedProofs.every((cited) =>
+    contract.citableProofs.includes(cited?.proofId) &&
+    typeof cited?.objectSha === 'string' && FULL_SHA.test(cited.objectSha));
+}
+
 function receiptProblems({proofId, sha, objectType, parsed, identity = null}) {
   if (objectType !== OBJECT_TYPE_TAG) return [PROOF_REF_NOT_TAG];
   if (!parsed.ok) return [parsed.because];
@@ -198,6 +228,9 @@ function receiptProblems({proofId, sha, objectType, parsed, identity = null}) {
   if (receipt?.reuse !== REUSE.IMMUTABLE_SHA) problems.push(RECEIPT_NOT_IMMUTABLE);
   if (!receipt?.completedAt || Number.isNaN(Date.parse(receipt.completedAt))) {
     problems.push(RECEIPT_TIME_INVALID);
+  }
+  if (!validReceiptExecution(receipt?.execution, proofId)) {
+    problems.push(RECEIPT_EXECUTION_INVALID);
   }
   // Identity-reusable contracts carry their own current identity even at an
   // exact ref. A historical object remains stored, but neither its ref nor

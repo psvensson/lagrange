@@ -34,9 +34,11 @@ A Quest has `solve/quests/<id>/quest.json` (statement, epic or `class: fix`, `do
 and an append-only `log.ndjson` of findings, attempts, verifications and a terminal
 entry. Assigned agents own judgment, independent verification, audit repair and
 landing within existing authority. Ask the user only for a missing decision or
-authority; the workflow owner defines continuation responsibilities. Source changes
-require independent verification (`note --verification ... --verifier subagent:<id>
---verdict approve`). Solver commits only reviewed Quest scope and never pushes.
+authority; the workflow owner defines continuation responsibilities. Source and
+proof/acceptance changes require independent verification under
+[`solver-quests.md`](docs/steering/workflow-guidelines/solver-quests.md)
+(`note --verification ... --verifier subagent:<id> --verdict approve`). Solver
+commits only reviewed Quest scope and never pushes.
 
 A bounded repair, a representative service milestone and full release acceptance
 are separate claims. Record the remaining service blocker after a repair closes;
