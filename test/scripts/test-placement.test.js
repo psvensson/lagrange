@@ -24,6 +24,7 @@ import {
   placementRunFixture as fakeDeps, sealPlacedCommit, waitForNonEmptyFile, worktreeTap,
 } from './test-placement-fixtures.js';
 import {spawnGit} from '../../scripts/checks/git-invocation.js';
+import {managedSleep, managedTimeout} from '../../src/test-helpers/managed-timers.js';
 
 const MINUTE = 60000;
 // A pure unit file of about 50 ms: the witnesses below wait on events, not on
@@ -1538,3 +1539,356 @@ test('a new remote assignment cannot purge a retained sibling checkout or its in
     assert.deepEqual(fs.readFileSync(`${checkout}.bundle`), bundle,
       'the earlier real Git bundle remains byte-identical');
   });
+
+test('a colliding controller attempt refuses before overwriting its original inputs or logs',
+  {timeout: 2 * MINUTE}, async (t) => {
+    const fixture = custodyShardFixture(t, {status: 0, lock: false});
+    const runId = 'existing-controller-attempt';
+    const local = path.join(fixture.controller, 'test-output', 'placement', `${runId}-lab`);
+    fs.mkdirSync(path.dirname(local), {recursive: true});
+    for (const suffix of ['.log', '.err', '.sh']) {
+      fs.writeFileSync(local + suffix, `original ${suffix} bytes\n`);
+    }
+    git(fixture.controller, 'bundle', 'create', `${local}.bundle`, 'HEAD^..HEAD');
+    const originals = new Map(['.log', '.err', '.sh', '.bundle']
+      .map((suffix) => [local + suffix, fs.readFileSync(local + suffix)]));
+    const started = fixture.start(runId);
+    t.after(() => started.abort());
+    const outcome = await started.done;
+    const detail = `${outcome.reason || ''}\n${outcome.log}\n${outcome.errors}`;
+    assert.equal(outcome.status, PLACEMENT_EXIT.SETUP, detail);
+    assert.match(detail, /placement: unavailable - attempt already exists:/u);
+    assert.ok([...originals.keys()].some((file) => detail.includes(file)),
+      'the refusal names an actual colliding path');
+    assert.doesNotMatch(outcome.log || '', /placement-shell=|custody-child-exit=/u,
+      'the collision refuses before any remote shell or runner is started');
+    for (const [file, bytes] of originals) {
+      assert.ok(fs.existsSync(file), `unacquired original remains at ${file}`);
+      assert.deepEqual(fs.readFileSync(file), bytes, `original bytes unchanged at ${file}`);
+    }
+  });
+
+test('a colliding remote attempt preserves its unacquired checkout, source and inputs',
+  {timeout: 2 * MINUTE}, async (t) => {
+    const fixture = custodyShardFixture(t, {status: 0, lock: false});
+    const runId = 'existing-remote-attempt';
+    const checkout = path.join(fixture.parent, runId);
+    const ref = `refs/lagrange-placement/${runId}`;
+    git(fixture.node, 'worktree', 'add', '--detach', '--quiet', checkout, fixture.basis);
+    fs.mkdirSync(path.dirname(path.join(checkout, CUSTODY_TAP)), {recursive: true});
+    fs.writeFileSync(path.join(checkout, CUSTODY_TAP), CUSTODY_TAP_BYTES);
+    fs.writeFileSync(path.join(checkout, CUSTODY_STDERR), CUSTODY_STDERR_BYTES);
+    git(fixture.node, 'worktree', 'lock', '--reason', 'original colliding attempt', checkout);
+    git(fixture.node, 'update-ref', ref, fixture.basis);
+    fs.writeFileSync(`${checkout}.files`, `${OTHER_FAST_TEST}\n`);
+    git(fixture.node, 'bundle', 'create', `${checkout}.bundle`, 'HEAD^..HEAD');
+    const bundle = fs.readFileSync(`${checkout}.bundle`);
+    const started = fixture.start(runId);
+    t.after(() => started.abort());
+    const outcome = await started.done;
+    const detail = `${outcome.reason || ''}\n${outcome.log}\n${outcome.errors}`;
+    assert.equal(outcome.status, PLACEMENT_EXIT.SETUP, detail);
+    assert.match(detail, /placement: unavailable - attempt already exists:/u);
+    assert.ok(detail.includes(checkout), 'the refusal identifies the colliding remote scope');
+    assert.doesNotMatch(outcome.log || '', /custody-child-exit=/u,
+      'no runner executes against an unacquired checkout');
+    assertOriginalPlacementBytes(fixture, checkout);
+    assert.equal(git(fixture.node, 'rev-parse', ref), fixture.basis,
+      'the old source ref is not advanced to the incoming candidate');
+    assert.equal(fs.readFileSync(`${checkout}.files`, 'utf8'), `${OTHER_FAST_TEST}\n`);
+    assert.deepEqual(fs.readFileSync(`${checkout}.bundle`), bundle,
+      'upload admission cannot overwrite the earlier real bundle');
+  });
+
+const REMOTE_CLOSE_MS = 5000;
+const REMOTE_MARKER_MS = 10000;
+const REMOTE_POLL_MS = 25;
+const REMOTE_NATURAL_MS = 20000;
+const REMOTE_DESCENDANT_MS = 25000;
+const NATIVE_IDENTITY_FIELDS = 'pid=,ppid=,pgid=,sid=,stat=';
+const NATIVE_IDENTITY_SOURCE = [
+  'function identity(pid) {',
+  `  const result = spawnSync('ps', ['-o', ${JSON.stringify(NATIVE_IDENTITY_FIELDS)},`,
+  '    \'-p\', String(pid)], {encoding: \'utf8\'});',
+  '  if (result.status !== 0) throw new Error(`identity unavailable: ${result.stderr}`);',
+  '  const [actual, parent, group, session, state] = result.stdout.trim().split(/\\s+/u);',
+  '  return {pid: Number(actual), parent: Number(parent), group: Number(group),',
+  '    session: Number(session), state};',
+  '}',
+].join('\n');
+
+function nativeIdentity(pid) {
+  assert.ok(Number.isInteger(pid) && pid > 1, `an acquired positive PID is required: ${pid}`);
+  const observed = spawnSync('ps', ['-o', NATIVE_IDENTITY_FIELDS, '-p', String(pid)],
+    {encoding: 'utf8'});
+  if (observed.status === 1 && observed.stdout.trim() === '') return null;
+  assert.equal(observed.status, 0, observed.stderr);
+  const [actual, parent, group, session, state] = observed.stdout.trim().split(/\s+/u);
+  assert.equal(Number(actual), pid);
+  return {pid, parent: Number(parent), group: Number(group), session: Number(session), state};
+}
+
+function liveGroupMembers(owned) {
+  assert.ok(Number.isInteger(owned.group) && owned.group > 1);
+  assert.ok(Number.isInteger(owned.session) && owned.session > 1);
+  const observed = spawnSync('ps', ['-eo', NATIVE_IDENTITY_FIELDS], {encoding: 'utf8'});
+  assert.equal(observed.status, 0, observed.stderr);
+  return observed.stdout.trim().split('\n').map((line) => {
+    const [pid, parent, group, session, state] = line.trim().split(/\s+/u);
+    return {pid: Number(pid), parent: Number(parent), group: Number(group),
+      session: Number(session), state};
+  }).filter((entry) => entry.group === owned.group && entry.session === owned.session &&
+    !entry.state.startsWith('Z'));
+}
+
+function ownedPhaseMarker(run, file) {
+  const identity = JSON.parse(fs.readFileSync(file, 'utf8'));
+  for (const field of ['pid', 'parent', 'group', 'session']) {
+    assert.ok(Number.isInteger(identity[field]) && identity[field] > 1,
+      `${field} is an actual acquired process identity`);
+  }
+  assert.equal(identity.checkout, run.checkout,
+    'the marker belongs to this exact fixture checkout');
+  return identity;
+}
+
+async function waitForRemoteMarker(run, file) {
+  const deadline = Date.now() + REMOTE_MARKER_MS;
+  while (!fs.existsSync(file) && !run.terminal && Date.now() < deadline) {
+    await managedSleep(run.timers, REMOTE_POLL_MS);
+  }
+  assert.ok(fs.existsSync(file),
+    `finite remote phase did not acquire ${file}: ${JSON.stringify(run.terminal)}`);
+}
+
+async function joinRemoteFixture(run) {
+  const expired = Symbol('remote fixture did not close');
+  let timer;
+  const deadline = new Promise((resolve) => {
+    timer = managedTimeout(run.timers, () => resolve(expired), REMOTE_CLOSE_MS);
+  });
+  try {
+    const outcome = await Promise.race([run.closed, deadline]);
+    assert.notEqual(outcome, expired, 'the finite remote wrapper must settle');
+    if (outcome.error) throw outcome.error;
+    return outcome.value;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function cleanupRemoteFixture(run) {
+  const errors = [];
+  const attempt = async (close) => {
+    try {
+      await close();
+    } catch (error) {
+      errors.push(error);
+    }
+  };
+  await attempt(() => run.started?.abort());
+  const groups = new Map();
+  for (const file of [run.ready, run.descendantReady].filter(Boolean)) {
+    if (!fs.existsSync(file)) continue;
+    await attempt(() => {
+      const owned = ownedPhaseMarker(run, file);
+      groups.set(`${owned.group}:${owned.session}`, owned);
+    });
+  }
+  if (run.transport && fs.existsSync(run.transport)) {
+    await attempt(() => {
+      const transport = JSON.parse(fs.readFileSync(run.transport, 'utf8'));
+      assert.equal(transport.marker, run.transport, 'the adapter marker belongs to this fixture');
+      const owned = nativeIdentity(transport.remotePid);
+      if (!owned) return;
+      assert.equal(owned.group, transport.remotePid, 'setsid acquired the transport group');
+      assert.equal(owned.session, transport.remotePid, 'setsid acquired the transport session');
+      groups.set(`${owned.group}:${owned.session}`, owned);
+    });
+  }
+  for (const owned of groups.values()) {
+    await attempt(() => {
+      if (liveGroupMembers(owned).length === 0) return;
+      try {
+        process.kill(-owned.group, 'SIGKILL');
+      } catch (error) {
+        if (error.code !== 'ESRCH') throw error;
+      }
+    });
+  }
+  for (const owned of groups.values()) {
+    await attempt(async () => {
+      const deadline = Date.now() + REMOTE_CLOSE_MS;
+      while (liveGroupMembers(owned).length > 0 && Date.now() < deadline) {
+        await managedSleep(run.timers, REMOTE_POLL_MS);
+      }
+      assert.deepEqual(liveGroupMembers(owned), [], 'fixture cleanup closed its acquired group');
+    });
+  }
+  if (run.closed) await attempt(() => joinRemoteFixture(run));
+  for (const close of [...run.timerCleanups, ...run.fileCleanups]) await attempt(close);
+  if (errors.length > 0) throw new AggregateError(errors, 'finite remote fixture cleanup failed');
+}
+
+function remotePhaseSource(run, {preparation}) {
+  const marker = (file, extra = '') => [
+    `fs.writeFileSync(${JSON.stringify(file + '.tmp')}, JSON.stringify({`,
+    `  ...identity(process.pid), checkout: fs.realpathSync(process.cwd())${extra}}));`,
+    `fs.renameSync(${JSON.stringify(file + '.tmp')}, ${JSON.stringify(file)});`,
+  ].join('\n');
+  const common = [
+    'import fs from \'node:fs\';',
+    'import {spawn, spawnSync} from \'node:child_process\';',
+    NATIVE_IDENTITY_SOURCE,
+  ];
+  const descendant = [...common,
+    'process.on(\'SIGTERM\', () => ' +
+      `fs.writeFileSync(${JSON.stringify(run.descendantAck)}, 'SIGTERM'));`,
+    marker(run.descendantReady),
+    `setTimeout(() => {fs.writeFileSync(${JSON.stringify(run.descendantNormal)}, ` +
+      `'natural descendant completion'); process.exit(0);}, ${REMOTE_DESCENDANT_MS});`,
+  ].join('\n');
+  return [...common,
+    `fs.mkdirSync(${JSON.stringify(path.posix.dirname(CUSTODY_TAP))}, {recursive: true});`,
+    `fs.writeFileSync(${JSON.stringify(CUSTODY_TAP)}, ${JSON.stringify(CUSTODY_TAP_BYTES)});`,
+    `fs.writeFileSync(${JSON.stringify(CUSTODY_STDERR)}, ${JSON.stringify(CUSTODY_STDERR_BYTES)});`,
+    'process.on(\'SIGTERM\', () => {' +
+      `fs.writeFileSync(${JSON.stringify(run.ack)}, 'SIGTERM');` +
+      `${preparation ? 'process.exit(0);' : ''}});`,
+    `setTimeout(() => {fs.writeFileSync(${JSON.stringify(run.normal)}, ` +
+      `'natural phase completion'); process.exit(0);}, ${REMOTE_NATURAL_MS});`,
+    ...(preparation ? [marker(run.ready)] : [
+      'fs.readFileSync(0, \'utf8\');',
+      `const descendant = spawn(process.execPath, ['--input-type=module', '-e', ` +
+        `${JSON.stringify(descendant)}], {stdio: 'ignore'});`,
+      'descendant.on(\'error\', (error) => {process.stderr.write(String(error)); process.exit(1);});',
+      marker(run.ready, ', descendant: descendant.pid'),
+    ]),
+    '',
+  ].join('\n');
+}
+
+// The only substitute is transport: the existing remoteCommand text reaches
+// real `setsid sh`, with unchanged stdin/stdio, in another session. This
+// prevents killing the controller wrapper from masquerading as remote phase
+// cancellation. Real Git, worktree, lock, shell and process groups remain.
+function startRemoteCancellationFixture(t, {preparation}) {
+  const run = {timerCleanups: [], fileCleanups: [], terminal: null, started: null};
+  run.timers = {teardown: (close) => run.timerCleanups.push(close)};
+  t.after(() => cleanupRemoteFixture(run));
+  const fixture = labFixture({after: (close) => run.fileCleanups.push(close)});
+  run.fixture = fixture;
+  const controls = path.join(path.dirname(fixture.node), 'finite-remote-cancellation');
+  fs.mkdirSync(controls, {mode: 0o700});
+  for (const name of ['ready', 'ack', 'normal', 'descendantReady', 'descendantAck',
+    'descendantNormal', 'admitted', 'transport']) run[name] = path.join(controls, name);
+  const runId = preparation ? 'cancel-producer' : 'cancel-ignoring-runner';
+  run.checkout = path.join(fs.realpathSync(fixture.node), 'test-output/placement-worktrees', runId);
+  const phase = preparation ? IMPORT_GRAPH_PRODUCER : 'scripts/run-classified-test-files.js';
+  fs.writeFileSync(path.join(fixture.controller, phase), remotePhaseSource(run, {preparation}));
+  if (preparation) {
+    fs.writeFileSync(path.join(fixture.controller, 'scripts/run-classified-test-files.js'),
+      `import fs from 'node:fs'; fs.writeFileSync(${JSON.stringify(run.admitted)}, ` +
+      `'later runner started');\n`);
+  }
+  git(fixture.controller, '-c', 'commit.gpgsign=false', 'commit', '-qam',
+    'finite isolated remote cancellation witness');
+  const sha = git(fixture.controller, 'rev-parse', 'HEAD');
+  const adapter = [
+    '#!/usr/bin/env node',
+    'const fs = require(\'node:fs\');',
+    'const {spawn, spawnSync} = require(\'node:child_process\');',
+    NATIVE_IDENTITY_SOURCE,
+    'if (!process.argv.includes(\'finite-session@fixture\')) process.exit(99);',
+    'const command = process.argv.at(-1);',
+    'const child = spawn(\'setsid\', [\'sh\', \'-c\', command], {stdio: \'inherit\'});',
+    'child.on(\'error\', (error) => {process.stderr.write(String(error)); process.exitCode = 1;});',
+    'child.on(\'close\', (code, signal) => {',
+    '  if (signal) process.kill(process.pid, signal);',
+    '  else process.exitCode = code === null ? 1 : code;',
+    '});',
+    'if (command.startsWith(\'sh -s -- \')) {',
+    `  fs.writeFileSync(${JSON.stringify(run.transport + '.tmp')}, JSON.stringify({`,
+    `    marker: ${JSON.stringify(run.transport)}, client: identity(process.pid),`,
+    '    remotePid: child.pid}));',
+    `  fs.renameSync(${JSON.stringify(run.transport + '.tmp')}, ` +
+      `${JSON.stringify(run.transport)});`,
+    '}',
+    '',
+  ].join('\n');
+  fs.writeFileSync(path.join(path.dirname(fixture.node), 'stub-bin', 'ssh'), adapter, {mode: 0o755});
+  // signalLabShell deliberately uses the caller's environment, so the same
+  // finite transport must own both start and stop. Restore it only after all
+  // acquired groups and the wrapper have been joined.
+  const originalPath = process.env.PATH;
+  run.fileCleanups.unshift(() => {
+    if (originalPath === undefined) delete process.env.PATH;
+    else process.env.PATH = originalPath;
+  });
+  process.env.PATH = fixture.env.PATH;
+  fixture.machine.sshTarget = 'finite-session@fixture';
+  run.started = fixture.start([FAST_TEST], {sha, runId, deadlineMs: MINUTE});
+  run.closed = run.started.done.then((value) => {
+    run.terminal = {value};
+    return run.terminal;
+  }, (error) => {
+    run.terminal = {error};
+    return run.terminal;
+  });
+  run.logFile = path.join(fixture.controller, 'test-output', 'placement', `${runId}-lab.log`);
+  return run;
+}
+
+for (const preparation of [true, false]) {
+  test(preparation ? 'remote cancellation owns the live producer group and forbids later runner' :
+    'remote cancellation closes a TERM-ignoring runner and descendant before done',
+  {timeout: 2 * MINUTE}, async (t) => {
+    const run = startRemoteCancellationFixture(t, {preparation});
+    await waitForRemoteMarker(run, run.ready);
+    if (!preparation) await waitForRemoteMarker(run, run.descendantReady);
+    const phase = ownedPhaseMarker(run, run.ready);
+    const descendant = preparation ? null : ownedPhaseMarker(run, run.descendantReady);
+    const transport = JSON.parse(fs.readFileSync(run.transport, 'utf8'));
+    assert.equal(transport.marker, run.transport);
+    const shellPid = Number(/^placement-shell=(\d+)$/mu
+      .exec(fs.readFileSync(run.logFile, 'utf8'))?.[1]);
+    const shell = nativeIdentity(shellPid);
+    assert.ok(shell, 'the actual remote shell remains live at interruption');
+    assert.equal(shell.group, transport.remotePid, 'the real shell is in the acquired SSH session');
+    assert.equal(shell.session, transport.remotePid);
+    assert.equal(phase.parent, shell.pid, 'the remote shell acquired the active phase');
+    const live = nativeIdentity(phase.pid);
+    assert.ok(live && !live.state.startsWith('Z'), 'cancellation targets a live phase');
+    assert.equal(live.group, phase.group);
+    assert.equal(live.session, phase.session);
+    const startedAt = Date.now();
+    run.started.abort();
+    const outcome = await joinRemoteFixture(run);
+    const elapsed = Date.now() - startedAt;
+    assert.equal(outcome.status, PLACEMENT_EXIT.TERMINATED,
+      `the actual interruption survives cleanup: ${JSON.stringify(outcome)}`);
+    assert.equal(outcome.reason, 'interrupted');
+    assert.ok(elapsed < REMOTE_CLOSE_MS, `the existing shell-close envelope is kept: ${elapsed}ms`);
+    assert.equal(phase.group, phase.pid, 'the phase owns its acquired process group');
+    assert.notEqual(phase.group, shell.group, 'the phase group is independent of the remote shell');
+    assert.notEqual(phase.group, transport.client.group,
+      'a controller wrapper cut cannot masquerade as phase cancellation');
+    assert.equal(fs.readFileSync(run.ack, 'utf8'), 'SIGTERM',
+      'the active phase actually received cancellation');
+    assert.equal(fs.existsSync(run.normal), false, 'natural completion did not close the phase');
+    assert.deepEqual(liveGroupMembers(phase), [], 'no live phase-group member remains at done');
+    assertOriginalPlacementBytes(run.fixture, run.checkout);
+    if (preparation) {
+      assert.equal(fs.existsSync(run.admitted), false, 'the runner was never admitted');
+      assert.doesNotMatch(outcome.log, /placement-pid=/u, 'no later runner group was acquired');
+    } else {
+      assert.equal(descendant.pid, phase.descendant, 'the marker identifies the acquired descendant');
+      assert.equal(descendant.parent, phase.pid);
+      assert.equal(descendant.group, phase.group);
+      assert.equal(descendant.session, phase.session);
+      assert.equal(fs.readFileSync(run.descendantAck, 'utf8'), 'SIGTERM');
+      assert.equal(fs.existsSync(run.descendantNormal), false,
+        'the descendant did not disappear by reaching its own natural ceiling');
+    }
+  });
+}
