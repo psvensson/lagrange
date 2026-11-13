@@ -241,7 +241,7 @@ for (const fixedStatus of [GREEN, 23]) {
       assertOriginalRetained(observed);
       assert.equal(fs.realpathSync(result.cleanup.worktreePath),
         fs.realpathSync(observed.checkout));
-      assert.match(result.cleanup.problem, /locked/u);
+      t.match(result.cleanup.problem, /locked/u, 'Git cleanup refusal remains explicit');
       t.end();
     });
 }
@@ -262,7 +262,7 @@ test('prove keeps the actual EISDIR primary when locked snapshot cleanup also re
   assert.match(observed.stderr, /cleanup/u);
   assert.match(observed.stderr, /locked/u);
   const ownerCheckoutPath = path.dirname(path.dirname(observed.observation.failedPath));
-  assert.ok(observed.stderr.includes(ownerCheckoutPath),
+  t.ok(observed.stderr.includes(ownerCheckoutPath),
     'the secondary cleanup diagnostic identifies the retained snapshot');
   t.end();
 });
