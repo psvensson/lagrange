@@ -21,6 +21,9 @@ const DOCKER_PING_TIMEOUT_TEXT = 'timeout';
 const EMPTY = '';
 const KILL_SIGNAL = 'SIGKILL';
 const TIMED_OUT_TEXT = 'timed out after';
+const CAPTURE_CLOSURE_UNCONFIRMED = 'unconfirmed';
+const CAPTURE_DEADLINE_INCOMPLETE =
+  '\nlab capture: deadline expired; output incomplete; process group closure unconfirmed';
 const MISSING_PROCESS = 'ESRCH';
 const UNACQUIRED_GROUP = 'cannot signal an unacquired process group';
 const PLACEMENT_CHILD_EVENT = Object.freeze({ERROR: 'error', EXIT: 'exit', CLOSE: 'close',
@@ -105,9 +108,8 @@ export function capture(command, args, options = {}) {
       }
       if (timedOut) {
         failure.error.outputComplete = false;
-        failure.error.groupClosure = 'unconfirmed';
-        failure.error.message += '\nlab capture: deadline expired; output incomplete; ' +
-          'process group closure unconfirmed';
+        failure.error.groupClosure = CAPTURE_CLOSURE_UNCONFIRMED;
+        failure.error.message += CAPTURE_DEADLINE_INCOMPLETE;
       }
       if (failure.observed) rejectPromise(failure.error);
       else resolvePromise(stdout.trim());
