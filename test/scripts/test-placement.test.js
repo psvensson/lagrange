@@ -1423,3 +1423,118 @@ test('a hand lab run on a host too hot reports it and keeps the ledger of what r
     assert.ok(lines.includes('lab test: alpha: # test-files total=2 pass=1 fail=1 ' +
       'assertions=1'), lines.join('\n'));
   });
+
+const CUSTODY_TAP = '.tap/test-results/test/placement-custody.test.js.tap';
+const CUSTODY_STDERR = '.tap/test-results/test/placement-custody.test.js.stderr';
+const CUSTODY_TAP_BYTES = 'original finite child stdout before cleanup\n';
+const CUSTODY_STDERR_BYTES = 'original finite child stderr before cleanup\n';
+
+// The real placement shell, bundle, worktree and Git removal own these
+// witnesses. Only the classified runner is a finite child: it writes its
+// original artifacts, optionally locks its actual checkout, and exits with
+// the requested status. It does not claim to have run a behavioral corpus.
+function custodyShardFixture(t, {status, lock}) {
+  const fixture = labFixture(t);
+  const runner = [
+    'import fs from \'node:fs\';',
+    'import path from \'node:path\';',
+    'import {execGit} from \'./checks/git-invocation.js\';',
+    'import {gitProcessEnvironment} from \'./checks/git-process-environment.js\';',
+    'const checkout = fs.realpathSync(process.cwd());',
+    'const options = {cwd: checkout, env: gitProcessEnvironment(), encoding: \'utf8\'};',
+    'const input = fs.readFileSync(0, \'utf8\');',
+    `fs.mkdirSync(path.dirname(${JSON.stringify(CUSTODY_TAP)}), {recursive: true});`,
+    `fs.writeFileSync(${JSON.stringify(CUSTODY_TAP)}, ${JSON.stringify(CUSTODY_TAP_BYTES)});`,
+    `fs.writeFileSync(${JSON.stringify(CUSTODY_STDERR)}, ${JSON.stringify(CUSTODY_STDERR_BYTES)});`,
+    'process.stdout.write(`custody-child-head=${execGit([\'rev-parse\', \'HEAD\'], options).trim()}\\n`);',
+    'process.stdout.write(`custody-child-input=${JSON.stringify(input)}\\n`);',
+    ...(lock ? [
+      'execGit([\'worktree\', \'lock\', \'--reason\', \'finite cleanup witness\', checkout], options);',
+      'process.stdout.write(`custody-child-locked=${checkout}\\n`);',
+    ] : []),
+    `process.stdout.write('custody-child-exit=${status}\\n');`,
+    `process.exitCode = ${status};`,
+    '',
+  ].join('\n');
+  fs.writeFileSync(path.join(fixture.controller, 'scripts/run-classified-test-files.js'), runner);
+  git(fixture.controller, '-c', 'commit.gpgsign=false', 'commit', '-qam',
+    'finite placement cleanup witness');
+  const sha = git(fixture.controller, 'rev-parse', 'HEAD');
+  return {...fixture, sha, start: (runId) => fixture.start([FAST_TEST],
+    {sha, runId, deadlineMs: MINUTE})};
+}
+
+function assertOriginalPlacementBytes(fixture, checkout) {
+  assert.ok(fs.existsSync(checkout), `original checkout retained at ${checkout}`);
+  assert.equal(fs.readFileSync(path.join(checkout, CUSTODY_TAP), 'utf8'), CUSTODY_TAP_BYTES,
+    'the exact original stdout artifact survives');
+  assert.equal(fs.readFileSync(path.join(checkout, CUSTODY_STDERR), 'utf8'), CUSTODY_STDERR_BYTES,
+    'the exact original stderr artifact survives');
+  const registered = git(fixture.node, 'worktree', 'list', '--porcelain');
+  assert.ok(registered.includes(`worktree ${fs.realpathSync(checkout)}\n`),
+    `the retained checkout remains registered: ${registered}`);
+}
+
+for (const status of [0, 42]) {
+  test(`remote cleanup retains a real locked checkout after child exit ${status}`,
+    {timeout: 2 * MINUTE}, async (t) => {
+      const fixture = custodyShardFixture(t, {status, lock: true});
+      const runId = `locked-custody-${status}`;
+      const checkout = path.join(fixture.parent, runId);
+      const started = fixture.start(runId);
+      t.after(() => started.abort());
+      const outcome = await started.done;
+      const detail = `${outcome.log}\n${outcome.errors}`;
+      assert.match(outcome.log, new RegExp(`^placement-head=${fixture.sha}$`, 'mu'), detail);
+      assert.match(outcome.log, new RegExp(`^custody-child-head=${fixture.sha}$`, 'mu'), detail);
+      assert.ok(outcome.log.includes(`custody-child-input=${JSON.stringify(`${FAST_TEST}\n`)}`),
+        'the finite child consumed the actual assigned input');
+      assert.match(outcome.log, /^custody-child-locked=.+$/mu, detail);
+      assert.match(outcome.log, new RegExp(`^custody-child-exit=${status}$`, 'mu'), detail);
+      assert.equal(outcome.status, status === 0 ? PLACEMENT_EXIT.SETUP : status,
+        `cleanup cannot turn a refusal into green or replace an earlier exit: ${detail}`);
+      assertOriginalPlacementBytes(fixture, checkout);
+      assert.ok(detail.includes(checkout), 'the owner names the actual retained checkout');
+      if (status === 0) {
+        assert.match(detail, /placement: cleanup unavailable/u,
+          'ordinary success becomes unavailable when canonical Git removal refuses');
+        assert.match(detail, /locked/u, 'the original Git refusal remains visible');
+      } else {
+        assert.match(detail, /placement: retained original checkout/u,
+          'a failed execution retains evidence without another removal attempt');
+      }
+    });
+}
+
+test('a new remote assignment cannot purge a retained sibling checkout or its inputs',
+  {timeout: 2 * MINUTE}, async (t) => {
+    const fixture = custodyShardFixture(t, {status: 0, lock: false});
+    const retainedId = 'retained-original-failure';
+    const checkout = path.join(fixture.parent, retainedId);
+    const retainedRef = `refs/lagrange-placement/${retainedId}`;
+    git(fixture.node, 'worktree', 'add', '--detach', '--quiet', checkout, fixture.basis);
+    fs.mkdirSync(path.dirname(path.join(checkout, CUSTODY_TAP)), {recursive: true});
+    fs.writeFileSync(path.join(checkout, CUSTODY_TAP), CUSTODY_TAP_BYTES);
+    fs.writeFileSync(path.join(checkout, CUSTODY_STDERR), CUSTODY_STDERR_BYTES);
+    git(fixture.node, 'worktree', 'lock', '--reason', 'retained original failure', checkout);
+    git(fixture.node, 'update-ref', retainedRef, fixture.basis);
+    const input = `${FAST_TEST}\n`;
+    fs.writeFileSync(`${checkout}.files`, input);
+    git(fixture.node, 'bundle', 'create', `${checkout}.bundle`, 'HEAD^..HEAD');
+    const bundle = fs.readFileSync(`${checkout}.bundle`);
+    const started = fixture.start('later-clean-assignment');
+    t.after(() => started.abort());
+    const outcome = await started.done;
+    assert.equal(outcome.status, 0, `${outcome.log}\n${outcome.errors}`);
+    assert.match(outcome.log, /^custody-child-exit=0$/mu,
+      'the later real assignment completed its finite child');
+    assert.equal(fs.existsSync(path.join(fixture.parent, 'later-clean-assignment')), false,
+      'successful cleanup still removes its own checkout');
+    assertOriginalPlacementBytes(fixture, checkout);
+    assert.equal(git(fixture.node, 'rev-parse', retainedRef), fixture.basis,
+      'the earlier source reference is outside this run\'s cleanup ownership');
+    assert.equal(fs.readFileSync(`${checkout}.files`, 'utf8'), input,
+      'the earlier exact assigned input remains');
+    assert.deepEqual(fs.readFileSync(`${checkout}.bundle`), bundle,
+      'the earlier real Git bundle remains byte-identical');
+  });
