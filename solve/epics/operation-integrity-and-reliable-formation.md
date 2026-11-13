@@ -144,8 +144,15 @@ invalid evidence before integration.
   56 failed. All 28 intended reader controls reached their boundaries; 28 other
   failures exposed an omitted typed-refusal dependency from the owner extraction.
   The minimal export/import correction is independently source-reviewed and
-  composed. Canonical evidence upload and the receipt Quest seal remain pending. Canonical generation, static/focused/full physical proof, Solver land
+  composed. The receipt Quest was natively sealed against the actual original
+  failure at `594e9dbc` in request 3751; its acceptance remains red. Canonical
+  evidence upload remains pending. Preparation 3748 completed failed and closed;
+  full output recovery and first-cause review are in progress. Canonical generation, static/focused/full physical proof, Solver land
   and final-HEAD publication remain owed by the foundation/publication Quests.
+- **Current owner objective:** Linux executables and a stable, reproducible
+  server baseline for comparative systems measurements. Native macOS artifacts
+  are not required; the takeover-added prerequisite is superseded in the
+  foundation/publication Quest logs.
 - **Service status:** the existing
   [formation receipt](../quests/fresh-formation-user-table-routability/evidence/receipt.json)
   still fails. It is unchanged. The broader aggregate probe has no receipt and

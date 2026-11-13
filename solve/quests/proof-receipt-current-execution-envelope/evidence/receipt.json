@@ -1,0 +1,140 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "proof-receipt-current-execution-envelope",
+  "status": "fail",
+  "interpretation": "Draft index of actual original3720 observations, not a new execution or a Solver seal. Only the measured current-envelope reader failure is a receipt. Other required acceptance receipts remain absent. Original real Git control execution and positive outcomes are contextual evidence; no candidate acceptance is asserted.",
+  "testFileDigests": {
+    "test/scripts/proof-receipt-execution-report.test.js": "4c06b7c9dac7391b5c8634764423550e9ed7898c8bd46620d9f7893fc71b3990"
+  },
+  "receipts": [
+    {
+      "id": "current-envelope-at-every-reader",
+      "measured": true,
+      "passed": false,
+      "measuredScope": "Original production56d12341 real tag/ref receipt-reader boundaries",
+      "detail": "All28 intended original controls reached their consumer assertion and failed:26 actual proven outcomes instead of unavailable (exact2, identity1, malformed corpus21, malformed release citations2); indexProof and same-head recordProof did not throw their expected refusal. For26 reader cases immutable ref/object checks preceded failure and passed; index no-new-ref and same-head reuse unchanged-ref checks after missing-exception failures were not reached."
+    }
+  ],
+  "unmeasuredObligations": [
+    "original-real-tag-ref-controls",
+    "valid-corpus-and-cited-release",
+    "historical-objects-and-refs-retained",
+    "independent-verification"
+  ],
+  "unmeasuredExplanation": "These required IDs remain absent as complete acceptance receipts. This does not deny the measured original controls or8 positive tests; their finite observations are retained below. In particular complete historical preservation across all consumers and candidate behavior have not been proved.",
+  "source": {
+    "repository": "psvensson/lagrange",
+    "ref": "refs/heads/wip/foundation-boundary-original-controls-20261113",
+    "sha": "56d12341a67d8680b16f8f06847a2499f73b24f6",
+    "tree": "07668b03cac68d967717ff2b61910fe10702b078",
+    "srcTree": "ec5f4204f8031d859808495365fda27e831a5a72",
+    "guardedBlobs": {
+      "scripts/proof-receipt-contract.js": "559e1b230d2cba0a052195f49e64d94580873195",
+      "scripts/proof-authority.js": "d099a998c3be9b8f69b32d9988d9109ede4a9635",
+      "test/scripts/proof-receipt-execution-report.test.js": "db1e0c3e11c04d1ce4bac1770e7d08c10a01d4c4"
+    }
+  },
+  "measurement": {
+    "issue": 3720,
+    "url": "https://github.com/psvensson/lagrange-lab/issues/3720",
+    "logicalRequestId": "dc2174a5-c971-4d25-99e5-cc2ca79a9890",
+    "host": "adams-gamla",
+    "command": "node scripts/run-test-files.js --jobs=2 test/scripts/proof-receipt-execution-report.test.js",
+    "actualExitCode": 1,
+    "actualOutcome": "FAIL",
+    "nativeTopLevelTests": 64,
+    "nativePassed": 8,
+    "nativeFailed": 56,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0,
+    "intendedReaderNegativesReached": 28,
+    "intendedReaderNegativesFailed": 28,
+    "otherTypedRefusalFailures": 28,
+    "setupExit": 0,
+    "nativeProvenanceExit": 0,
+    "finalSourceGuardExit": 0,
+    "testStartedAt": "2026-11-13T12:04:01Z",
+    "testEndedAt": "2026-11-13T12:04:09Z"
+  },
+  "otherFailure": {
+    "description": "The other28 failures (#1-19,#52-57,#59-61) concern typed producer refusal. CLI stacks physically show ReferenceError RECEIPT_PROBLEM_SEPARATOR is not defined in ProofRecordRefused; original source correlates API errors with the same constructor. This is not evidence invalid reports minted. Shared extraction43e217c removed the constant without wiring its remaining use.",
+    "unreached": "Remote-absence assertions following failed typed-problem assertions; #57 second variant; #59-61 reversed ordering."
+  },
+  "positiveObservations": [
+    {
+      "case": 20,
+      "scope": "Historical qualified retry evidence refused; retry summary retained"
+    },
+    {
+      "case": 21,
+      "scope": "Complete exact release report mints execution-bound receipt"
+    },
+    {
+      "case": 50,
+      "scope": "Identity-free exact corpus receipt resolves and reuses same object"
+    },
+    {
+      "case": 51,
+      "scope": "Fractional assertions and unnamed successful commands retained"
+    },
+    {
+      "case": 58,
+      "scope": "Release citing exact corpus resolves with zero direct counts"
+    },
+    {
+      "case": 62,
+      "scope": "Clean results in both runs mint receipt"
+    },
+    {
+      "case": 63,
+      "scope": "Runner sections retain checkout/assertion counts and single failed attempt"
+    },
+    {
+      "case": 64,
+      "scope": "Nested fixture runner does not inherit outer sections"
+    }
+  ],
+  "evidence": {
+    "completionProvider": "https://github.com/psvensson/lagrange-lab/issues/3720#issuecomment-6852320839",
+    "fullStream": {
+      "bytes": 88359,
+      "sha256": "fb119db77c8310efcf2daedb8fb9e8bfa64cc476b3b2a0a47cc41435b5a31798",
+      "coordinatorFile": "original-3720.log",
+      "recoveryIssues": [
+        3731,
+        3732,
+        3733,
+        3734,
+        3735,
+        3736,
+        3737,
+        3738,
+        3739,
+        3740,
+        3741,
+        3742
+      ]
+    },
+    "review": {
+      "coordinatorFile": "original-3720-review.md",
+      "sha256": "2b92e176897644647e2db1e1e0642d919072bedd10743370cc415aa1fe3c9c90",
+      "reviewer": "subagent:/root/composition_review"
+    },
+    "closure": {
+      "providerFinishedAt": "2026-11-13T12:04:12.329Z",
+      "providerRecordedAt": "2026-11-13T12:04:12.543Z",
+      "executionScopeClosed": true,
+      "containersClosed": true,
+      "thermalScopeClosed": true
+    },
+    "canonicalUploadReceipt": null
+  },
+  "claimLimits": [
+    "No candidate execution, passed acceptance receipt, native Solver seal, whole-corpus proof, land or publication is asserted.",
+    "Source digest applicability is not production semantic equality; this measured failure belongs to original56d12341.",
+    "Full-stream byte/hash verification is complete; canonical upload/re-download custody remains owed.",
+    "Expected receipt-probe metric5 means5 outstanding required IDs, not5 measured failures.",
+    "Recording should preserve original production; only reviewed Quest index/append-only note additions precede native start."
+  ]
+}
