@@ -28,7 +28,7 @@
   "censusSize": 2661,
   "digest": "fnv1a32-ef73c2ef",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-15180673",
+  "observationDigest": "fnv1a32-8f2ad14a",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -20854,8 +20854,13 @@
         "scripts/lab/test-capability.js",
         "scripts/lab/test-placement.js",
         "scripts/run-classified-test-files.js",
+        "scripts/run-test-files.js",
         "scripts/select-change-tests.js",
-        "scripts/test-machine-factor.js"
+        "scripts/test-machine-factor.js",
+        "test/shards/primary-classes.json"
+      ],
+      "directories": [
+        "test"
       ],
       "env": [
         "APPDATA",
@@ -21151,6 +21156,7 @@
         "scripts/solve.js",
         "scripts/solve/commands.js",
         "scripts/solve/quest-record-commands.js",
+        "scripts/test-file-admission.js",
         "scripts/test-machine-factor.js",
         "scripts/test-output-reader.js",
         "src/cli/cli-constants.js",
@@ -21879,8 +21885,10 @@
         "scripts/lab/test-capability.js",
         "scripts/lab/test-placement.js",
         "scripts/run-classified-test-files.js",
+        "scripts/run-test-files.js",
         "scripts/select-change-tests.js",
-        "scripts/test-machine-factor.js"
+        "scripts/test-machine-factor.js",
+        "test/shards/primary-classes.json"
       ],
       "directories": [
         "test"

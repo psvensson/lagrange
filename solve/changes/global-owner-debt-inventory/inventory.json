@@ -13,7 +13,7 @@
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "ff09171cb22613064a90f65f9d5395c3271ff9b9fdbd34c30e376e76b45c68af"
+        "sha256": "c2bc1673dd833ce6cf035aeff065083a37c12f7edaaef075d36e4cee07b083be"
       },
       {
         "path": "test-output/analysis/madge-circular-src-scripts-test.json",
@@ -23,8 +23,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3570860,
-        "sha256": "0618fd61216e43253b8289693c4a0e66bb7fb0a485448b6b23d6ba3df482a5f0"
+        "bytes": 3571365,
+        "sha256": "ea798a4c30ea95a471404461e2e88778b04c2213de8996ae3c9a0ed5d06ed6c6"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -33,7 +33,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "d609f2dda7188119a098dcda0a3f00b76078cec3157c350f4052b6da1b14f619"
+        "sha256": "9ee7fabd12870c955b6274c66af6f3c6cca70e76f2d4bb8b3ab9a03528e6f9fd"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -42,7 +42,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "cef87ad5e5c89e2a7119a2c388c57d8f275183972a1c054e51da09e136e3ef93"
+        "sha256": "97df85d779c82f723ae5ee5a98d21bc6afc497788584997718b8b1dbc4c75d92"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -65,7 +65,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "f26a848ee47e3ca3e54447f4097ec1322eeec8655b26f859a699c178d9b57312"
+    "inputDigest": "9401e645ad7b9d7db5602a3af65e69b7954cbe772c7c25cd2858ae692f6e850b"
   },
   "reconciliation": {
     "complexity": {
@@ -84,11 +84,11 @@
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "ff09171cb22613064a90f65f9d5395c3271ff9b9fdbd34c30e376e76b45c68af"
+        "sha256": "c2bc1673dd833ce6cf035aeff065083a37c12f7edaaef075d36e4cee07b083be"
       },
-      "declaredCount": 146,
-      "observedCount": 146,
-      "assignedCount": 146
+      "declaredCount": 145,
+      "observedCount": 145,
+      "assignedCount": 145
     },
     "fileSize": {
       "authority": {
@@ -104,8 +104,8 @@
         "source": 21,
         "test": 21
       },
-      "observedCount": 43,
-      "assignedCount": 43
+      "observedCount": 42,
+      "assignedCount": 42
     },
     "duplication": [
       {
@@ -117,7 +117,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "d609f2dda7188119a098dcda0a3f00b76078cec3157c350f4052b6da1b14f619"
+          "sha256": "9ee7fabd12870c955b6274c66af6f3c6cca70e76f2d4bb8b3ab9a03528e6f9fd"
         },
         "cloneGroups": 35,
         "duplicatedLines": 1109,
@@ -135,7 +135,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "cef87ad5e5c89e2a7119a2c388c57d8f275183972a1c054e51da09e136e3ef93"
+          "sha256": "97df85d779c82f723ae5ee5a98d21bc6afc497788584997718b8b1dbc4c75d92"
         },
         "cloneGroups": 620,
         "duplicatedLines": 22292,
@@ -173,38 +173,38 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3570860,
-        "sha256": "0618fd61216e43253b8289693c4a0e66bb7fb0a485448b6b23d6ba3df482a5f0"
+        "bytes": 3571365,
+        "sha256": "ea798a4c30ea95a471404461e2e88778b04c2213de8996ae3c9a0ed5d06ed6c6"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2841,
         "sha256": "3c7e7e10bd1ffa9a6744ed22c038928d52bdb7913e6b239aa5ef9a9448e3638f"
       },
-      "sourceDigest": "0ee7ce0703480b7f657c530e35a3409b4a4dcb7e78eca1c2451c23e3b2d2b515",
+      "sourceDigest": "773be95cca0b24d9d38bad99b8a673a814bbd305cc44f048d90c8f2b3d043d82",
       "moduleCount": 6233,
-      "edgeCount": 35400,
+      "edgeCount": 35407,
       "unresolvedCount": 47
     }
   },
   "assignment": {
-    "sourceSignalCount": 2379,
-    "assignedSignalCount": 2379,
-    "uniqueAssignmentCount": 2379,
-    "digest": "3489543a25fe6eb0ecd51ecdebb14fc7a9c527d6b0b16a4f7f5538b7f6ab7631"
+    "sourceSignalCount": 2377,
+    "assignedSignalCount": 2377,
+    "uniqueAssignmentCount": 2377,
+    "digest": "21ee40ac7ac4c43943a40f380407927ca4ac771c05fcdce8faa4747f336b11f7"
   },
   "signalCounts": {
-    "cognitive": 146,
+    "cognitive": 145,
     "complexity": 1698,
     "duplication": 453,
-    "fileSize": 43,
+    "fileSize": 42,
     "lintExclusion": 39
   },
   "summary": {
-    "filesWithDebt": 1237,
-    "rankedBoundaryCount": 111,
+    "filesWithDebt": 1235,
+    "rankedBoundaryCount": 110,
     "semanticBoundaryCount": 20,
-    "fallbackBoundaryCount": 91,
+    "fallbackBoundaryCount": 90,
     "childQuestCount": 16
   },
   "rankedBoundaries": [
@@ -1892,31 +1892,6 @@
       ]
     },
     {
-      "key": "area:test/scripts",
-      "owner": null,
-      "boundary": "test/scripts",
-      "classification": "test-owner-area",
-      "ownerAreas": [
-        "test/scripts"
-      ],
-      "fileCount": 2,
-      "signalCount": 2,
-      "complexity": 0,
-      "cognitive": 0,
-      "oversizedFiles": 1,
-      "duplicatedLines": 44,
-      "cloneTouches": 2,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 0,
-      "importOut": 26,
-      "score": 16.4,
-      "topPaths": [
-        "test/scripts/test-placement.test.js",
-        "test/scripts/lab-census-benchmark-evidence-custody.test.js"
-      ]
-    },
-    {
       "key": "area:scripts/partition-class-owner-parameter-flow.js",
       "owner": null,
       "boundary": "scripts/partition-class-owner-parameter-flow.js",
@@ -2307,30 +2282,6 @@
       ]
     },
     {
-      "key": "area:scripts/test-file-admission.js",
-      "owner": null,
-      "boundary": "scripts/test-file-admission.js",
-      "classification": "tool-owner-area",
-      "ownerAreas": [
-        "scripts/test-file-admission.js"
-      ],
-      "fileCount": 1,
-      "signalCount": 1,
-      "complexity": 0,
-      "cognitive": 1,
-      "oversizedFiles": 0,
-      "duplicatedLines": 0,
-      "cloneTouches": 0,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 3,
-      "importOut": 2,
-      "score": 8,
-      "topPaths": [
-        "scripts/test-file-admission.js"
-      ]
-    },
-    {
       "key": "area:src/config",
       "owner": null,
       "boundary": "src/config",
@@ -2671,6 +2622,30 @@
       "score": 4.4,
       "topPaths": [
         "test/live-query/partition-aware-subscription.property.test.js"
+      ]
+    },
+    {
+      "key": "area:test/scripts",
+      "owner": null,
+      "boundary": "test/scripts",
+      "classification": "test-owner-area",
+      "ownerAreas": [
+        "test/scripts"
+      ],
+      "fileCount": 1,
+      "signalCount": 1,
+      "complexity": 0,
+      "cognitive": 0,
+      "oversizedFiles": 0,
+      "duplicatedLines": 44,
+      "cloneTouches": 2,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 0,
+      "importOut": 12,
+      "score": 4.4,
+      "topPaths": [
+        "test/scripts/lab-census-benchmark-evidence-custody.test.js"
       ]
     },
     {
