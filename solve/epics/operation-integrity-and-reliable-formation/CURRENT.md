@@ -12,16 +12,19 @@ remaining WIP against the accepted foundation, and simplifying this handoff.
 **The source-only four-cut foundation is committed and independently reviewed;
 combined acceptance and main delivery remain pending.** Independent review
 passes for the exact 20 intended paths and preservation of main's formation
-trend. The first integration blocker is the missing generated inputs and
-complete combined execution, alongside a publication path that still admits
-hosted execution and retries. Individual-head results do not discharge it.
+trend. The publication correction and its materializer cleanup have passed
+source review. Review of the parallel runner found the same destructive cleanup
+pattern in remote placement and its planning checkout; that coupled correction
+is now being authored against frozen original controls. Fresh generated inputs,
+canonical static gates, complete combined execution and final native delivery
+remain required. Individual-head results do not discharge them.
 
 | Responsibility | Owner and next action |
 | --- | --- |
-| Composition and acceptance | `/root`: retain the reviewed foundation, independently review the publication correction, and reconcile residual owner interactions after combined acceptance. |
+| Composition and acceptance | `/root`: compose the reviewed source and actual evidence, independently review the coupled cleanup correction, and reconcile residual owner interactions after combined acceptance and delivery. |
 | Lab and remote custody | `/root/next_work_state`: sole lab coordinator and remote transport/PR owner; bind metadata, disjoint physical test shares and closure to the exact candidate; resolve the main-publication gate. |
-| Publication policy correction | `/root/next_work_challenge`: design and author the complete canonical retry/placement correction; `/root` independently reviews its source and controls. The foundation's exact source review has passed. |
-| Residual inventory and handoff | `/root/consolidation_inventory`: classify divergent paths and maintain this index; product import remains pending integration review. |
+| Publication and placement correction | `/root/next_work_challenge`: author the bounded cancellation, attempt-admission and evidence-custody correction at the existing owners; `/root` independently reviews source and controls. |
+| Independent review and original controls | `/root/consolidation_inventory`: verify compositions and freeze real process/Git cleanup controls. The residual inventory below remains a routing plan; product import is pending the accepted foundation. |
 
 ## Exact inputs
 
@@ -31,7 +34,8 @@ hosted execution and retries. Individual-head results do not discharge it.
 | Existing review target | `review/lagrange-split-base-20261112` at `10f3e795981b45b68bdfbee93fa6d1674d2a1a7f`; PR203 and PR204 were observed merged here. This is not main acceptance. |
 | Preserved broad WIP | `wip/cloud-authority-cdc-composition-20261112` at `9b870241b43f7dec9e7428f10c63156bb131b39a`; tree `e67396a147db64dacb392b09830cca2daf6bc993`, source tree `62f344b7fdbff370380cf3870fb50da182d1f14b`. |
 | Continuation worktree | `work/formation-continuation-20261113` starts at that preserved WIP. Its current documentation edit does not reconcile its product source. |
-| New combined foundation | Commit `566d87b3be615344bbc5548d818e3b01578cc698`; tree `b5e8454e0dba5555779f9076e4c9831644b80694`; source tree `bc9e83a24cee235aa7fd33ff9777dc97d229903c`. Exact source-only review passes; generated inputs, selected scope, combined execution and delivery remain pending. |
+| Initial combined foundation | Commit `566d87b3be615344bbc5548d818e3b01578cc698`; tree `b5e8454e0dba5555779f9076e4c9831644b80694`; source tree `bc9e83a24cee235aa7fd33ff9777dc97d229903c`. Exact four-cut source review passes; this is not integrated acceptance. |
+| Reviewed working checkpoint | Local `69a5b2bec6c0d0c2994435e532be747656f7ca7b`, tree `427ea4596b586e7867f2c8b10e0cfd023790d131`, on reviewed materializer `70c13232a9a8910b34b209126f1a282db7499128`. It includes actual foundation/policy seals, original evidence and fixture guidance; source tree remains `bc9e83a24cee235aa7fd33ff9777dc97d229903c`. Coupled split cleanup and final proof are pending. |
 
 The [prior complete handoff at preserved WIP][prior-current] retains all original
 sources, rejected attempts, log hashes, individual run counts and earlier owner
@@ -115,11 +119,22 @@ All execution, including metadata generation and static checks, remains on
 qualified physical lab machines through the sole coordinator. Parallel shares
 must conserve the one canonical selection and retain their exact source,
 dependencies, first failures and closed child/container/resource scopes.
-The existing canonical publication path can execute on hosted runners and retry
-failed checks, conflicting with the user's physical-lab/no-retry instructions.
-Its source correction is authorized work, with independent review and real
-controls required before delivery. Preserve every required gate: no skip marker,
-fabricated passing check or hosted fallback.
+Original policy job 3410 measured 33 causal failures and four clean positives.
+Candidate job 3491 passed 20 of 23 focused roots and exposed the materializer
+cancellation defect; its failures remain retained. Preparation job 3392's full
+output is reviewed, but its old generated patch is not applied to the later
+tooling source. Actual Solver jobs 3488 and 3529 sealed the original policy and
+foundation negatives, respectively; neither is repaired-candidate acceptance.
+
+Diagnostic job 3580 recovered from UNCERTAIN to FAIL with all three scopes
+closed. Its TV and Adams portions were interrupted without complete test
+results. The installed controller intentionally cancels sibling workers after a
+nonzero result, so independent expected-red diagnostics now use separate job
+scopes and may run concurrently. Preserve the original interruption and every
+reached result; never turn an expected red into a zero exit to defeat that owner.
+Fresh canonical proof and the final committed HEAD's native publication remain
+open. No skip marker, fabricated passing check, alternate receipt or hosted
+execution substitutes for them.
 
 Lab issue 2696 on unreachable lenovo remains uncertain, with no closed scopes.
 Do not resubmit or clear it. No failure retry, increased deadline/baseline,
