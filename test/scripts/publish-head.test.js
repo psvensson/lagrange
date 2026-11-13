@@ -17,13 +17,14 @@ import {
 } from '../../scripts/publish-head.js';
 import {recordProof} from '../../scripts/proof-authority.js';
 import {execGit} from '../../scripts/checks/git-invocation.js';
+import {gitProcessEnvironment} from '../../scripts/checks/git-process-environment.js';
 import {
   SECTION_KIND, appendExecutionSection, fileResultRecord,
 } from '../../scripts/test-execution-report.js';
 import {validExecutionReport} from './execution-report-fixture.js';
 
 function git(cwd, args) {
-  return execGit(args, {cwd, encoding: 'utf8'}).trim();
+  return execGit(args, {cwd, encoding: 'utf8', env: gitProcessEnvironment()}).trim();
 }
 
 const PROOF_AUTHORITY = path.join(path.dirname(fileURLToPath(import.meta.url)),
@@ -775,5 +776,164 @@ tap.test('the post-merge arm preserves every recorded same-head terminal verdict
 tap.test('the post-merge arm is a publisher option that takes one sha', (t) => {
   t.same(parsePublishArgs(['--post-merge', 'a'.repeat(40)]), {postMerge: 'a'.repeat(40)});
   t.throws(() => parsePublishArgs(['--post-merge']), /requires a value/u);
+  t.end();
+});
+
+function caughtPublicationFailure(action) {
+  try {
+    action();
+  } catch (error) {
+    return error;
+  }
+  return null;
+}
+
+function assertOriginalPublisherCheckout(t, root, checkout, head) {
+  t.ok(fs.existsSync(checkout), 'the original checkout remains on disk');
+  t.equal(fs.readFileSync(path.join(checkout, 'tracked.txt'), 'utf8'), 'two\n',
+    'the actual candidate bytes remain available');
+  t.equal(git(checkout, ['rev-parse', 'HEAD']), head, 'the retained checkout names its source');
+  const physical = fs.realpathSync(checkout);
+  t.ok(git(root, ['worktree', 'list', '--porcelain']).includes(`worktree ${physical}\n`),
+    'Git still registers the original checkout');
+}
+
+tap.test('verified publication stays explicit when locked checkout cleanup refuses', (t) => {
+  const {parent, root, remote} = fixture();
+  t.teardown(() => fs.rmSync(parent, {recursive: true, force: true}));
+  const head = git(root, ['rev-parse', 'HEAD']);
+  let checkout;
+  const failure = caughtPublicationFailure(() => publishExactHead(root, {}, {
+    queryCi: false,
+    run: (command, args, options) => {
+      if (command === 'bash' && args[0] === '.githooks/pre-push') {
+        checkout = options.cwd;
+        git(root, ['worktree', 'lock', checkout]);
+      }
+      return spawnSync(command, args, options);
+    },
+  }));
+  t.ok(failure instanceof Error, 'a real Git cleanup refusal is adverse');
+  t.match(failure?.message, /checkout cleanup unavailable/u);
+  t.match(failure?.message, new RegExp(head, 'u'), 'the failure still names the published head');
+  t.equal(git(remote, ['rev-parse', 'refs/heads/main']), head,
+    'the already verified publication is not described as undone');
+  t.equal(failure?.published?.head, head);
+  t.equal(failure?.published?.remoteAfter, head);
+  const receipt = path.join(root, '.git', 'publish-receipts', `${head}.json`);
+  t.equal(failure?.published?.receipt, receipt, 'the cleanup error names the actual receipt');
+  const recorded = JSON.parse(fs.readFileSync(receipt, 'utf8'));
+  t.equal(recorded.head, head);
+  t.equal(recorded.remoteAfter, head, 'the persisted receipt retains verified publication');
+  assertOriginalPublisherCheckout(t, root, checkout, head);
+  t.end();
+});
+
+tap.test('a gate acquisition error survives locked checkout cleanup', (t) => {
+  const {parent, root, remote} = fixture();
+  t.teardown(() => fs.rmSync(parent, {recursive: true, force: true}));
+  const head = git(root, ['rev-parse', 'HEAD']);
+  const remoteBefore = git(remote, ['rev-parse', 'refs/heads/main']);
+  let checkout;
+  let primary;
+  const failure = caughtPublicationFailure(() => publishExactHead(root, {}, {
+    queryCi: false,
+    run: (command, args, options) => {
+      if (command !== 'bash' || args[0] !== '.githooks/pre-push') {
+        return spawnSync(command, args, options);
+      }
+      checkout = options.cwd;
+      git(root, ['worktree', 'lock', checkout]);
+      try {
+        fs.readFileSync(checkout);
+      } catch (error) {
+        primary = error;
+        throw error;
+      }
+      throw new Error('the real directory read did not refuse');
+    },
+  }));
+  t.equal(primary?.code, 'EISDIR', 'the fixture reached a real acquisition refusal');
+  t.equal(failure, primary, 'cleanup cannot replace the exact earlier exception');
+  t.equal(git(remote, ['rev-parse', 'refs/heads/main']), remoteBefore, 'no push followed refusal');
+  assertOriginalPublisherCheckout(t, root, checkout, head);
+  t.end();
+});
+
+for (const corpusFails of [false, true]) {
+  tap.test(`post-merge planning retains locked checkout and first cause (${corpusFails})`, (t) => {
+    const merged = mergedFixture();
+    t.teardown(() => fs.rmSync(merged.parent, {recursive: true, force: true}));
+    const starts = [];
+    let checkout;
+    let primary;
+    const failure = caughtPublicationFailure(() => proveMergedHead(merged.root, merged.merged, {
+      localCorpusDir: merged.stateDir,
+      write: () => {},
+      wholeCorpus: (worktree) => {
+        checkout = worktree;
+        git(merged.root, ['worktree', 'lock', checkout]);
+        if (corpusFails) {
+          try {
+            fs.readFileSync(checkout);
+          } catch (error) {
+            primary = error;
+            throw error;
+          }
+          throw new Error('the real directory read did not refuse');
+        }
+        return ['a.test.js'];
+      },
+      spawnProcess: (command, args) => {
+        starts.push({command, args});
+        return {pid: 777, unref: () => {}};
+      },
+    }));
+    if (corpusFails) {
+      t.equal(primary?.code, 'EISDIR', 'planning encountered the native directory-read refusal');
+      t.equal(failure, primary, 'the first planning error remains the exact primary');
+    } else {
+      t.ok(failure instanceof Error, 'successful planning cannot hide cleanup refusal');
+      t.match(failure?.message, /checkout cleanup unavailable/u);
+    }
+    t.same(starts, [], 'no corpus child starts after uncertain planning cleanup');
+    t.notOk(fs.existsSync(path.join(merged.stateDir, `${merged.merged}.json`)),
+      'no execution obligation is fabricated after refused planning');
+    assertOriginalPublisherCheckout(t, merged.root, checkout, merged.merged);
+    t.end();
+  });
+}
+
+tap.test('failed worktree acquisition retains its original and skips the gate', (t) => {
+  const {parent, root, remote} = fixture();
+  t.teardown(() => fs.rmSync(parent, {recursive: true, force: true}));
+  const hook = path.join(root, '.githooks', 'post-checkout');
+  fs.writeFileSync(hook, '#!/bin/sh\n' +
+    'printf "partial acquisition evidence\\n" > acquisition.txt\nexit 42\n');
+  fs.chmodSync(hook, 0o755);
+  git(root, ['add', '.githooks/post-checkout']);
+  git(root, ['commit', '-m', 'finite refusing checkout hook']);
+  const head = git(root, ['rev-parse', 'HEAD']);
+  const before = git(remote, ['rev-parse', 'refs/heads/main']);
+  const invocations = [];
+  const failure = caughtPublicationFailure(() => publishExactHead(root, {}, {
+    queryCi: false,
+    run: (command, args, options) => {
+      invocations.push({command, args});
+      return spawnSync(command, args, options);
+    },
+  }));
+  t.match(failure?.message, /git worktree add/u, 'the original Git acquisition error escapes');
+  t.same(invocations, [], 'the gate never starts after acquisition refused');
+  t.equal(git(remote, ['rev-parse', 'refs/heads/main']), before, 'no head was published');
+  const worktreeParent = path.join(root, 'test-output', 'publish-worktrees');
+  const entries = fs.readdirSync(worktreeParent);
+  t.equal(entries.length, 1, 'the attempted path is retained instead of recursively deleted');
+  if (entries.length === 1) {
+    const checkout = path.join(worktreeParent, entries[0]);
+    assertOriginalPublisherCheckout(t, root, checkout, head);
+    t.equal(fs.readFileSync(path.join(checkout, 'acquisition.txt'), 'utf8'),
+      'partial acquisition evidence\n', 'bytes from the actual refusing hook survive');
+  }
   t.end();
 });

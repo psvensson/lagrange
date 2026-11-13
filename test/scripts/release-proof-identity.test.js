@@ -11,12 +11,13 @@ import {test} from 'node:test';
 
 import {
   OUTCOME, PROOF, RESOLUTION, buildReceipt, buildTagBody, identityRef, indexProof,
-  proofRef, recordProof, resolveProof,
+  evaluateReceipt, proofRef, recordProof, resolveProof,
 } from '../../scripts/proof-authority.js';
 import {
-  VERSION_AUTHORITIES, computeReleaseProofIdentity,
+  RELEASE_PROOF_IDENTITY_ALGORITHM, VERSION_AUTHORITIES, computeReleaseProofIdentity,
 } from '../../scripts/release-proof-identity.js';
 import {execGit} from '../../scripts/checks/git-invocation.js';
+import {gitProcessEnvironment} from '../../scripts/checks/git-process-environment.js';
 import {checkoutExecutionReport} from './execution-report-fixture.js';
 
 const RC_VERSION = '0.9.0-rc.2';
@@ -24,7 +25,7 @@ const RELEASE_VERSION = '0.9.0';
 const LOGIC_FILE = 'src/logic.js';
 
 function git(cwd, ...args) {
-  return execGit(args, {cwd, encoding: 'utf8'}).trim();
+  return execGit(args, {cwd, encoding: 'utf8', env: gitProcessEnvironment()}).trim();
 }
 
 function write(root, relativePath, content) {
@@ -64,6 +65,7 @@ function fixture() {
   git(source, 'init', '--quiet');
   git(source, 'config', 'user.name', 'Identity Fixture');
   git(source, 'config', 'user.email', 'identity@example.invalid');
+  git(source, 'config', 'commit.gpgsign', 'false');
   writeCandidate(source, RC_VERSION);
   const rcSha = commitAll(source, 'rc');
   git(root, 'init', '--bare', '--quiet', remote);
@@ -168,7 +170,7 @@ function recordLegacyReceipt(source, sha) {
   });
   assert.equal(receipt.identity, undefined, 'a legacy receipt carries no identity');
   const objectSha = execGit(['mktag'], {
-    cwd: source, encoding: 'utf8',
+    cwd: source, encoding: 'utf8', env: gitProcessEnvironment(),
     input: buildTagBody({proofId: PROOF.RELEASE_FULL, sha, receipt,
       now: Date.parse('2026-09-11T18:00:00.000Z')}),
   }).trim();
@@ -214,3 +216,82 @@ test('a dirty checkout answers nothing: the identity is of the commit, not the t
   const solverDirty = resolveProof({proofId: PROOF.RELEASE_FULL, sha: releaseSha, cwd: source});
   assert.equal(solverDirty.outcome, OUTCOME.PROVEN, solverDirty.because);
 });
+
+function historicalReceiptBody(source, objectSha) {
+  return execGit(['cat-file', '-p', objectSha],
+    {cwd: source, encoding: 'utf8', env: gitProcessEnvironment()});
+}
+
+function assertHistoricalReceiptUnchanged(source, sha, objectSha, body) {
+  const exactRef = proofRef(PROOF.RELEASE_FULL, sha);
+  assert.equal(git(source, 'ls-remote', '--refs', 'origin', exactRef),
+    `${objectSha}\t${exactRef}`, 'the historical exact ref is not replaced');
+  assert.equal(historicalReceiptBody(source, objectSha), body,
+    'the historical receipt object remains byte-identical');
+}
+
+test('an exact release receipt without carried identity refuses current applicability', (t) => {
+  const {root, source, rcSha} = fixture();
+  t.after(() => fs.rmSync(root, {recursive: true, force: true}));
+  const objectSha = recordLegacyReceipt(source, rcSha);
+  const body = historicalReceiptBody(source, objectSha);
+  const resolved = resolveProof({proofId: PROOF.RELEASE_FULL, sha: rcSha, cwd: source});
+  assert.equal(resolved.outcome, OUTCOME.UNAVAILABLE,
+    'current release applicability requires the receipt to carry its own identity');
+  assert.match(resolved.because, /receipt identity/u);
+  assertHistoricalReceiptUnchanged(source, rcSha, objectSha, body);
+});
+
+test('index cannot infer an absent receipt identity from its checkout or create a ref', (t) => {
+  const {root, source, rcSha} = fixture();
+  t.after(() => fs.rmSync(root, {recursive: true, force: true}));
+  const objectSha = recordLegacyReceipt(source, rcSha);
+  const body = historicalReceiptBody(source, objectSha);
+  const expected = computeReleaseProofIdentity(source);
+  const ref = identityRef(PROOF.RELEASE_FULL, expected.digest);
+  assert.throws(() => indexProof({proofId: PROOF.RELEASE_FULL, sha: rcSha, cwd: source}),
+    /receipt identity/u, 'the current tree cannot supply missing historical receipt data');
+  assert.equal(git(source, 'ls-remote', '--refs', 'origin', ref), '',
+    'refusal publishes no identity index');
+  assertHistoricalReceiptUnchanged(source, rcSha, objectSha, body);
+});
+
+test('a matching identity ref cannot authorize a receipt carrying no identity', (t) => {
+  const {root, source, rcSha} = fixture();
+  t.after(() => fs.rmSync(root, {recursive: true, force: true}));
+  const objectSha = recordLegacyReceipt(source, rcSha);
+  const body = historicalReceiptBody(source, objectSha);
+  const expected = computeReleaseProofIdentity(source);
+  const ref = identityRef(PROOF.RELEASE_FULL, expected.digest);
+  const staged = 'refs/tmp/unsupported-identity';
+  git(source, 'update-ref', staged, objectSha);
+  git(source, 'push', '--quiet', 'origin', `${staged}:${ref}`);
+  git(source, 'update-ref', '-d', staged);
+  writeCandidate(source, RELEASE_VERSION);
+  const releaseSha = commitAll(source, 'same logic under release version');
+  assert.equal(computeReleaseProofIdentity(source).digest, expected.digest,
+    'the lookup reaches exactly the identity ref the fixture published');
+  const resolved = resolveProof({proofId: PROOF.RELEASE_FULL, sha: releaseSha, cwd: source});
+  assert.equal(resolved.outcome, OUTCOME.UNAVAILABLE,
+    'the ref alone never substitutes for missing receipt identity');
+  assert.match(resolved.because, /receipt identity/u);
+  assert.equal(git(source, 'ls-remote', '--refs', 'origin', ref), `${objectSha}\t${ref}`,
+    'the rejected historical identity ref is retained, not rewritten');
+  assertHistoricalReceiptUnchanged(source, rcSha, objectSha, body);
+});
+
+for (const identity of [
+  {algorithm: 'unsupported-identity', digest: 'a'.repeat(64)},
+  {algorithm: RELEASE_PROOF_IDENTITY_ALGORITHM, digest: 'not-a-content-digest'},
+]) {
+  test(`exact release refuses malformed identity (${identity.digest})`, () => {
+    const sha = 'a'.repeat(40);
+    const receipt = buildReceipt({proofId: PROOF.RELEASE_FULL, sha, identity});
+    const resolved = evaluateReceipt({proofId: PROOF.RELEASE_FULL, sha,
+      objectSha: 'b'.repeat(40), objectType: 'tag',
+      objectBody: buildTagBody({proofId: PROOF.RELEASE_FULL, sha, receipt})});
+    assert.equal(resolved.outcome, OUTCOME.UNAVAILABLE,
+      'the real receipt reader rejects an unsupported algorithm or malformed digest');
+    assert.match(resolved.because, /receipt identity/u);
+  });
+}
