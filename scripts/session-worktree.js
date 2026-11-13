@@ -17,11 +17,13 @@ const DEFAULT_ENCODING = 'utf8';
 const BUFFER_ENCODING = 'buffer';
 const WORKTREE_PREFIX = 'session-worktree-';
 const DEPENDENCY_DIRECTORY = 'node_modules';
-const CLEANUP_WARNING_PREFIX = '[session-worktree] cleanup warning: ';
+const CLEANUP_WARNING_PREFIX = '[session-worktree] checkout cleanup unavailable at ';
+const ACQUISITION_WARNING_PREFIX = '[session-worktree] checkout acquisition unavailable at ';
 
-function reportCleanupWarning(error) {
+function reportCleanupWarning(error, worktreePath) {
   process.stderr.write(
-    `${CLEANUP_WARNING_PREFIX}${error instanceof Error ? error.message : error}\n`);
+    `${CLEANUP_WARNING_PREFIX}${worktreePath}: ` +
+    `${error instanceof Error ? error.message : error}\n`);
 }
 
 function git(root, args, options = {}) {
@@ -70,8 +72,10 @@ function applyTrackedDiff(root, worktreePath) {
 // inside it (tracked modifications via patch, untracked files via copy). The live
 // tree is never touched. Returns the absolute worktree path.
 function createSnapshotWorktree(root, worktreePath = uniqueWorktreePath()) {
-  git(root, ['worktree', 'add', '--detach', '--quiet', worktreePath, 'HEAD']);
+  let acquired = false;
   try {
+    git(root, ['worktree', 'add', '--detach', '--quiet', worktreePath, 'HEAD']);
+    acquired = true;
     applyTrackedDiff(root, worktreePath);
     copyUntrackedInto(root, worktreePath, listUntrackedFiles(root));
     // Share the host node_modules so test runners resolve their binaries and deps;
@@ -81,37 +85,32 @@ function createSnapshotWorktree(root, worktreePath = uniqueWorktreePath()) {
       fs.symlinkSync(path.join(root, DEPENDENCY_DIRECTORY), dependencyLink);
     }
   } catch (error) {
-    removeWorktree(root, worktreePath);
+    if (acquired) {
+      try {
+        removeWorktree(root, worktreePath);
+      } catch (cleanupError) {
+        reportCleanupWarning(cleanupError, worktreePath);
+      }
+    } else {
+      process.stderr.write(`${ACQUISITION_WARNING_PREFIX}${worktreePath}: ${error.message}\n`);
+    }
     throw error;
   }
   return worktreePath;
 }
 
-// Remove ONLY the mkdtemp parent we created (guarded by prefix so a caller-supplied
-// arbitrary worktree path can never cause its parent dir to be deleted).
+// Remove an empty session parent only after Git removed its registered
+// checkout. A matching prefix never authorizes recursive deletion of other
+// material a caller or an interrupted acquisition left in the parent.
 function cleanupTempParent(worktreePath) {
   if (!path.basename(path.dirname(worktreePath)).startsWith(WORKTREE_PREFIX)) {
     return;
   }
-  try {
-    fs.rmSync(path.dirname(worktreePath), {recursive: true, force: true});
-  } catch (error) {
-    reportCleanupWarning(error);
-  }
+  fs.rmdirSync(path.dirname(worktreePath));
 }
 
 function removeWorktree(root, worktreePath) {
-  try {
-    git(root, ['worktree', 'remove', '--force', worktreePath]);
-  } catch (error) {
-    reportCleanupWarning(error);
-    // Fall back to pruning so a partial add never strands worktree metadata.
-    try {
-      git(root, ['worktree', 'prune']);
-    } catch (pruneError) {
-      reportCleanupWarning(pruneError);
-    }
-  }
+  git(root, ['worktree', 'remove', '--force', worktreePath]);
   cleanupTempParent(worktreePath);
 }
 

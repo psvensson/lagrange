@@ -35,6 +35,7 @@ const VERDICT_REVERT_NOOP = 'revert-noop';
 const VERDICT_NOT_BOUND = 'not-bound';
 const VERDICT_RESTORE_FAILED = 'restore-failed';
 const VERDICT_PROVEN = 'red-on-revert-proven';
+const VERDICT_CLEANUP_UNAVAILABLE = 'cleanup-unavailable';
 
 // Pure decision: given the three run exit codes and whether the revert actually changed
 // the --src bytes, classify the proof. Separated from all git/fs IO so it is unit-tested.
@@ -187,6 +188,8 @@ function directorySrcPaths(srcPaths) {
 
 function prove(root, args) {
   const worktreePath = createSnapshotWorktree(root);
+  let payload;
+  let primaryError = null;
   try {
     const fixRun = runTap(worktreePath, args.test);
     const saved = revertSrcInWorktree(root, worktreePath, args.src, args.base);
@@ -197,7 +200,7 @@ function prove(root, args) {
       {status: 1, outputTail: ''};
     const classification = classifyProof({fixRunExit: fixRun.status, srcChanged,
       revertRunExit: revertRun.status, restoreRunExit: restoreRun.status});
-    return {
+    payload = {
       test: args.test, src: args.src, base: args.base,
       runs: {fixRunExit: fixRun.status, revertRunExit: revertRun.status,
         restoreRunExit: restoreRun.status},
@@ -206,9 +209,24 @@ function prove(root, args) {
       revertRunFailureLines: revertRun.failureLines,
       ...classification, timestamp: new Date().toISOString(),
     };
-  } finally {
-    removeWorktree(root, worktreePath);
+  } catch (error) {
+    primaryError = error;
   }
+  try {
+    removeWorktree(root, worktreePath);
+  } catch (error) {
+    process.stderr.write(`[dt-prove] checkout cleanup unavailable at ${worktreePath}: ` +
+      `${error.message}\n`);
+    if (primaryError) throw primaryError;
+    const proof = {ok: payload.ok, verdict: payload.verdict, detail: payload.detail};
+    return {...payload, ok: false, proof,
+      verdict: proof.ok ? VERDICT_CLEANUP_UNAVAILABLE : proof.verdict,
+      detail: proof.ok ? `proof measured; checkout cleanup unavailable at ${worktreePath}` :
+        proof.detail,
+      cleanup: {ok: false, worktreePath, problem: error.message}};
+  }
+  if (primaryError) throw primaryError;
+  return payload;
 }
 
 function main(argv = process.argv, root = process.cwd()) {

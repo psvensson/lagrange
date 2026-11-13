@@ -1,9 +1,14 @@
 # Single-pass publication evidence
 
-Proposal on rule-set revision 5 and source
+Initial proposal on rule-set revision 5 and source
 `566d87b3be615344bbc5548d818e3b01578cc698`. The independent four-cut composition
-review applies to that source only. This Quest is unsealed; no receipt is
-invented to make its absent evidence measure red.
+review applies to that source only. At proposal time the Quest was unsealed
+and no receipt was invented to make absent evidence measure red. Actual
+original controls from lab job 3410 subsequently measured the policy failure;
+job 3488 sealed that original evidence at
+`52160e58a09b01f8d4871b7408bd244280a4d442`. Its complete record is retained.
+The materializer observations from job 3491 and the directly coupled repair
+below follow that seal. Candidate acceptance and final delivery remain pending.
 
 ## Existing interaction and correction
 
@@ -105,7 +110,8 @@ distinguish process exit from closed stdio and specify that `spawnSync` blocks
 JavaScript execution. The finite `materializer-signal-observation.mjs` records
 what a signal delivered during that synchronous gate actually reaches. It is
 an investigation, not an acceptance check or a native proof receipt; the outer
-signal-handler disposition remains pending its lab measurement.
+signal-handler disposition was pending at proposal time. The actual job 3491
+measurement and resulting ownership correction are recorded below.
 
 [Bazel's test-run policy](https://bazel.build/docs/user-manual#flaky_test_attempts)
 distinguishes eventual flaky success from a clean pass; that distinction
@@ -194,3 +200,38 @@ or runner admission. Original-compatible controls remove the producer from a
 real local fixture and a real placed commit; ordinary finite gate fixtures
 deliberately provide it. The historical observer remains immutable evidence
 of the earlier source, rather than a current acceptance control.
+
+Ordinary execution becomes terminal after the owned child and its acquired
+process group have closed and integrity postconditions have completed.
+Cancellation callbacks during acquisition, admission and awaited execution
+stop that owned work; the first observed nonzero exit or interruption remains
+primary. The following retention/removal work is synchronous and can make an
+otherwise successful overall run fail. This does not claim that synchronous
+filesystem copying or Git cleanup becomes interruptible, or that a signal not
+dispatched before the execution boundary was observed. Both real child call
+sites use inherited or ignored output descriptors, with a complete owned file
+for gate stdin; an outer collector's inherited pipe does not keep the inner
+direct-child close event open. Residual members of the acquired group still
+block successful closure and receive bounded cleanup.
+
+The actual finalizer calls `session-worktree.js`. Its original remover warned
+after Git refusal, pruned metadata, then recursively deleted the session parent.
+That behavior existed at introduction `12cd4e844` and survived the warning
+change `50f2a17e6`; `54dd2d7` only changed the Git invocation adapter. It is the
+same evidence-custody class as the earlier lost-diagnostic incidents, without
+claiming this exact remover caused those incidents. The canonical remover now
+uses Git removal once, then removes only an empty owned session parent. A
+locked or uncertain checkout is preserved, without prune, repeated force or
+recursive deletion. [Git's worktree contract](https://git-scm.com/docs/git-worktree)
+supplies the real refusal witness: one `--force` does not remove a locked tree.
+Finite zero/42 gates lock their actual checkout and retain bytes/registration
+when removal refuses.
+
+Every existing caller preserves its first error or measured result when this
+cleanup refuses. `dt-prove` retains its measured tuple and original classifier
+in the returned failure record; an earlier failed classification remains
+primary, a previously successful classification becomes `cleanup-unavailable`,
+and a thrown primary error remains the same error. Its finite locked-snapshot
+controls exercise the actual snapshot/revert/restore path. These controls and
+the complete/empty synchronous-stdin positives are frozen on original source;
+their physical outcomes and the candidate's canonical gates remain pending.

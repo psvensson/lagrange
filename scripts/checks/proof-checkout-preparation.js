@@ -16,7 +16,6 @@
  * material or on bytes that are not the commit's.
  */
 
-import {spawnSync} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -39,9 +38,8 @@ const STATUS_PATH_COLUMN = 3;
 const GIT_TRACKED_CHANGES = Object.freeze(
   ['status', '--porcelain', '-z', '--untracked-files=no']);
 
-// The generated material, one producer each, in the order they run. The
-// producer's own path and flag: a commit older than its producer has nothing
-// of it to read.
+// Required generated material, one producer each, in execution order. The
+// exact commit must contain every declared producer before it can be proved.
 const PROOF_CHECKOUT_GENERATORS = Object.freeze([
   Object.freeze({
     name: 'import-graph',
@@ -53,10 +51,11 @@ const PROOF_CHECKOUT_GENERATORS = Object.freeze([
 const TEXT = Object.freeze({
   PREFIX: '[proof-checkout] ',
   PREPARED: 'prepared ',
-  ABSENT: ' not generated: this commit has no ',
+  ABSENT: ' required producer unavailable: ',
   FAILED: ' could not be generated: ',
   EXIT: 'exit ',
   SIGNAL: 'killed by ',
+  INTERRUPTED: 'interrupted by ',
   STALE: ': the commit\'s generated metadata is stale; regenerate and commit ',
   REFRESH: ' (npm run -s test:metadata:refresh)',
 });
@@ -70,6 +69,7 @@ function trackedChanges(checkout) {
 }
 
 function failureOf(result) {
+  if (result.interruption) return `${TEXT.INTERRUPTED}${result.interruption}`;
   if (result.error) return result.error.message;
   if (result.signal) return `${TEXT.SIGNAL}${result.signal}`;
   return `${TEXT.EXIT}${result.status}`;
@@ -83,20 +83,19 @@ function refusal(generator, detail) {
  * Generate every artifact in PROOF_CHECKOUT_GENERATORS inside a clean exact
  * checkout, with the node running this process.
  * @param {string} checkout
- * @param {{run?: Function, env?: Object, write?: Function}} [options]
- * @return {{ok: boolean, prepared: string[], problem: string|null}}
+ * @param {{run: Function, env?: Object, write?: Function}} options
+ * @return {Promise<{ok: boolean, prepared: string[], problem: string|null}>}
  */
-function prepareProofCheckout(checkout, {run = spawnSync, env = process.env,
-  write = (line) => process.stdout.write(`${line}${NEWLINE}`)} = {}) {
+async function prepareProofCheckout(checkout, {run, env = process.env,
+  write = (line) => process.stdout.write(`${line}${NEWLINE}`)}) {
   const prepared = [];
   for (const generator of PROOF_CHECKOUT_GENERATORS) {
     if (!fs.existsSync(path.join(checkout, generator.producer))) {
-      write(`${TEXT.PREFIX}${generator.name}${TEXT.ABSENT}${generator.producer}`);
-      continue;
+      return {...refusal(generator, `${TEXT.ABSENT}${generator.producer}`), prepared};
     }
-    const result = run(process.execPath, [generator.producer, ...generator.args],
+    const result = await run(process.execPath, [generator.producer, ...generator.args],
       {cwd: checkout, env, encoding: UTF8, stdio: ['ignore', 'ignore', 'inherit']});
-    if (result.status !== 0) {
+    if (result.error || result.interruption || result.status !== 0) {
       return {...refusal(generator, `${TEXT.FAILED}${failureOf(result)}`), prepared};
     }
     const stale = trackedChanges(checkout);

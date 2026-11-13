@@ -238,6 +238,19 @@ a listed directory, a spawned script), from the observation census in
 `test/shards/subsystem-classes.json`, and refuses when that census has drifted
 (`node scripts/generate-test-subsystem-classes.js` regenerates it).
 
+Every declared preparation producer is required in both local and placed exact
+checkouts. A missing producer refuses before the gate or runner starts. This
+supersedes the older-commit absence applicability recorded by
+`clean-worktree-generated-import-graph`; its sealed history remains intact.
+The exact gate owns preparation and command cancellation together: it preserves
+the first observed exit or interruption, closes the acquired child and process
+group, then checks integrity and finalizes diagnostic custody. Synchronous
+retention and removal can still fail the overall run; they are not claimed to
+be interruptible filesystem operations. Failed retention or uncertain child
+cleanup keeps the original checkout. A Git removal refusal stops cleanup; it
+never invokes prune, repeated force or recursive session-parent deletion.
+The failure names the attempted path and leaves remaining evidence for inspection.
+
 `LAGRANGE_SKIP_PRECOMMIT=1` skips the pre-commit guard. It is for a work-in-
 progress branch only, never for a commit that lands source on the shared
 branch: skipping a gate to obtain a green state is exactly what R23 forbids.
