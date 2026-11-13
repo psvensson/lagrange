@@ -1,3 +1,4 @@
+import {formationCdcRead, observeFormationCdc} from './formation-cdc-observation.js';
 /**
  * Authoritative catch-up hydration for CDC-propagated system tables
  * (closure record CL-014).
@@ -260,6 +261,10 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options = {}) {
         break;
       }
 
+      const diagnosticRead = formationCdcRead(readResult);
+      observeFormationCdc(service.logger, 'catchup-read', tableName, {
+        readStartedAtMs, ...diagnosticRead,
+      });
       const observationAdvances = completeObservationAdvances(
         service,
         tableName,
@@ -288,6 +293,8 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options = {}) {
             authoritativeReadStartedAtMs: readStartedAtMs,
           } :
           undefined;
+        const diagnosticAppliedBefore = summary.rowsApplied;
+        const diagnosticSweptBefore = summary.rowsSwept;
         const primaryKeyField = service.getPrimaryKeyField(tableName);
         for (const row of rows) {
           const key = row?.[primaryKeyField];
@@ -324,6 +331,11 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options = {}) {
             },
           );
         }
+        observeFormationCdc(service.logger, 'catchup-applied', tableName, {
+          readStartedAtMs, rowsApplied: summary.rowsApplied - diagnosticAppliedBefore,
+          rowsSwept: summary.rowsSwept - diagnosticSweptBefore,
+          authorityAppliedIndex: diagnosticRead.authorityAppliedIndex,
+        });
         if (readFromLeader && !isTerminal()) {
           const observationReceipt = {
             observedAtMs: readResult.readAuthorityWitness.observedAtMs,

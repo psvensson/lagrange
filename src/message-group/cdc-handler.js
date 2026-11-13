@@ -1,3 +1,6 @@
+import {
+  formationCdcEvent, observeFormationCdc,
+} from '../cdc/formation-cdc-observation.js';
 /**
  * CDC Handler - Manages CDC subscriptions and cache updates for message groups.
  * Ensures cache consistency across replicas via CDC event processing.
@@ -342,6 +345,11 @@ class CDCHandler extends EventEmitter {
   applyImmediate(event, options = {}) {
     const cdcEvent = CDCEvent.fromMessage(event, this.timeSource.now());
 
+    observeFormationCdc(this.logger, 'receiver-entry', cdcEvent.tableName, {
+      ...formationCdcEvent(cdcEvent), key: cdcEvent.getKey(),
+      subscribed: this.subscriptions.has(cdcEvent.tableName),
+      duplicate: this.processedEventIds.has(this.generateEventId(cdcEvent)),
+    });
     const skipSubscriptionCheck = options.skipSubscriptionCheck === true;
     if (!skipSubscriptionCheck && !this.subscriptions.has(cdcEvent.tableName)) {
       this.logger.debug(LOCAL_STR_IGNORING_EVENT_FOR_UNSUBSCRIBED_TABLE, {
@@ -500,7 +508,7 @@ class CDCHandler extends EventEmitter {
     try {
       // Canonical CDC apply path: all steady-state cache mutations flow here.
       // See architecture.md: Sanctioned direct applySystemTableChange call sites.
-      this.cache.applySystemTableChange(tableName, operation, data, {
+      const cacheApplyResult = this.cache.applySystemTableChange(tableName, operation, data, {
         causeId,
         cdcObservedAtMs: receivedAt,
         timestamp,
@@ -510,6 +518,10 @@ class CDCHandler extends EventEmitter {
         sourceOrdinal: event.sourceOrdinal,
         eventKey: event.eventKey,
         entryId: event.entryId,
+      });
+
+      observeFormationCdc(this.logger, 'receiver-cache-return', tableName, {
+        ...formationCdcEvent(event), key, cacheApplyResult,
       });
 
       // Track successful delivery to cache

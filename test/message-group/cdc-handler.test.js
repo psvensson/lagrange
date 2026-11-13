@@ -634,3 +634,69 @@ test('CDCEvent - compareTimestamp orders events', async (t) => {
   t.ok(event2.compareTimestamp(event1) > 0, 'event2 should be after event1');
   t.equal(event1.compareTimestamp(event1), 0, 'Same event should be equal');
 });
+
+test('diagnostic sink failure preserves handler return and original error', (t) => {
+  const event = {
+    tableName: 'services', operation: 'UPSERT', timestamp: '1000-0-source',
+    sourcePartition: 'services-p1', sourceReplica: 'services-p1-r1',
+    sourceLogIndex: 42, sourceOrdinal: 2, eventKey: 'occurrence-42-2',
+    entryId: 'source-entry', data: {service_id: 'service-a', status: 'active'},
+  };
+  const original = new Error('actual cache refusal');
+  let fail = false;
+  const cache = {applySystemTableChange() {
+    if (fail) {
+      throw original;
+    }
+    return false;
+  }};
+  const handler = new CDCHandler(cache);
+  handler.logger = {
+    debug() {}, error() {}, warn() {},
+    logConsoleOnly() { throw new Error('diagnostic sink unavailable'); },
+  };
+  handler.subscribe('services');
+  t.equal(handler.applyImmediate(event), true);
+  t.equal(handler.applyImmediate(event), false);
+  fail = true;
+  const next = {...event, timestamp: '1001-0-source', eventKey: 'next'};
+  t.throws(() => handler.applyImmediate(next), (error) => error === original);
+  t.equal(handler.processedEventIds.size, 1);
+});
+
+test('formation diagnostics retain actual receiver occurrence and absent identity', (t) => {
+  const records = [];
+  const handler = new CDCHandler({applySystemTableChange: () => false});
+  handler.logger = {
+    debug() {}, error() {}, warn() {},
+    logConsoleOnly: (level, message, fields) => records.push({level, message, fields}),
+  };
+  handler.subscribe('services');
+  handler.subscribe('nodes');
+  const event = {
+    tableName: 'services', operation: 'UPSERT', timestamp: '2000-0-source',
+    sourcePartition: 'services-p1', sourceLogIndex: 42, sourceOrdinal: 2,
+    eventKey: 'occurrence-42-2', entryId: 'distinct-entry-id',
+    data: {service_id: 'service-a', status: 'active'},
+  };
+  t.equal(handler.applyImmediate(event), true);
+  t.same(records.map((row) => row.fields.stage),
+    ['receiver-entry', 'receiver-cache-return']);
+  for (const row of records) {
+    t.equal(row.level, 'info');
+    t.equal(row.fields.sourcePartition, 'services-p1');
+    t.equal(row.fields.sourceLogIndex, 42);
+    t.equal(row.fields.sourceOrdinal, 2);
+    t.equal(row.fields.eventKey, 'occurrence-42-2');
+    t.equal(row.fields.entryId, 'distinct-entry-id');
+  }
+  t.equal(records[1].fields.cacheApplyResult, false);
+  handler.applyImmediate({tableName: 'nodes', operation: 'UPSERT',
+    timestamp: '2001-0-source', data: {node_id: 'node-a'}});
+  t.equal(records.length, 2);
+  handler.applyImmediate({tableName: 'services', operation: 'UPSERT',
+    timestamp: '2002-0-source', data: {service_id: 'service-b'}});
+  t.equal(records[2].fields.sourcePartition, null);
+  t.equal(records[2].fields.sourceLogIndex, null);
+  t.equal(records[2].fields.eventKey, null);
+});
