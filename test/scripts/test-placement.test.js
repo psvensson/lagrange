@@ -751,18 +751,35 @@ test('a lab machine proves the exact commit and cleans only its successful attem
       'its own worktree and inputs are removed; the earlier attempt stays untouched');
     assertEarlierPlacement(fixture);
 
-    // A shard that finished while this process was blocked past its deadline
-    // is green, not stopped (verifier round 1).
-    const blocked = start([FAST_TEST], {runId: 'blocked', deadlineMs: 1000});
+    // Deliver the controller expiry after real shell closure but before its
+    // pending close event; remote admission keeps the normal fixture budget.
+    const expiries = [];
+    const realSetTimeout = globalThis.setTimeout;
+    const timerObserver = t.mock.method(globalThis, 'setTimeout', (callback, ms, ...args) => {
+      if (ms === 10 * MINUTE) expiries.push(callback);
+      return realSetTimeout(callback, ms, ...args);
+    });
+    let blocked;
+    try {
+      blocked = start([FAST_TEST], {runId: 'blocked'});
+    } finally {
+      timerObserver.mock.restore();
+    }
+    assert.equal(expiries.length, 1, 'exactly the controller deadline was observed');
     // Block until the shard has finished - its file reported and its lab
     // shell gone - however long that takes on this machine.
     const blockedLog = path.join(controller, 'test-output', 'placement', 'blocked-lab.log');
-    spawnSync('sh', ['-c', `until grep -q '^placement-shell=' '${blockedLog}'; do sleep 0.1; done; ` +
+    const shellGone = spawnSync('sh', ['-c',
+      `until grep -q '^placement-shell=' '${blockedLog}'; do sleep 0.1; done; ` +
       `shell=$(sed -n 's/^placement-shell=//p' '${blockedLog}'); ` +
       'while kill -0 "$shell" 2>/dev/null; do sleep 0.1; done; sleep 1'], {timeout: 10 * MINUTE});
+    assert.equal(shellGone.status, 0, String(shellGone.stderr || shellGone.error || ''));
+    expiries[0]();
     const finished = await blocked.done;
-    assert.equal(finished.reason, undefined, finished.log);
-    assert.equal(finished.status, 0);
+    assert.equal(finished.reason, undefined, finished.log + finished.errors);
+    assert.equal(finished.status, 0, finished.log + finished.errors);
+    assert.ok(finished.log.split('\n').some((line) => line.startsWith(`ok ${FAST_TEST} `)),
+      'the real file completed before the queued controller expiry');
 
     // This preexisting FIFO formerly acted as a stalled upload. Exclusive
     // attempt admission now refuses it before upload. It is collision proof,
