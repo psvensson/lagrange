@@ -17,20 +17,24 @@ RUN apt-get update && \
   mkdir -p /data && \
   chown 10001:10001 /data
 
-# ---- runtime: distroless (no shell/apt/npm), node is the entrypoint ----
-FROM gcr.io/distroless/nodejs22-debian12 AS runtime
-
-WORKDIR /app
-
-COPY --from=builder --chown=10001:10001 /data /data
-COPY --from=builder /app/node_modules ./node_modules
-COPY package.json package-lock.json ./
 COPY src/ ./src/
 COPY wit/ ./wit/
 # The vendored raft-rs binding at its layout root beside src/, where the
 # runtime owner resolves it (RAFT_RS_BINDING_LAYOUT in
 # src/raft/raft-rs-core-constants.js).
 COPY vendor/raft-rs-wasm/ ./vendor/raft-rs-wasm/
+
+# Checkout permissions are private input, not the runtime access policy.
+# Keep root-owned code read-only to the runtime user and preserve executables.
+RUN chmod -R a+rX,go-w /app
+
+# ---- runtime: distroless (no shell/apt/npm), node is the entrypoint ----
+FROM gcr.io/distroless/nodejs22-debian12 AS runtime
+
+WORKDIR /app
+
+COPY --from=builder --chown=10001:10001 /data /data
+COPY --from=builder /app /app
 
 USER 10001:10001
 

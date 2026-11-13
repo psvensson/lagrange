@@ -1,0 +1,45 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "docker-runtime-private-context-permissions",
+  "status": "fail",
+  "interpretation": "Actual original runtime failure index; not a Solver seal or candidate proof. Exact artifact permission root cause remains pending retained-image stat/access observation.",
+  "receipts": [
+    {
+      "id": "original-private-context-runtime-refusal",
+      "measured": true,
+      "passed": false,
+      "detail": "Original ordinary fresh3node journey fa4888 failed at seed boot: nonroot Node EACCES opening /app/src/index.js; no formation. Setup/native/source/cache guards0; scenario bound unchanged."
+    }
+  ],
+  "unmeasuredObligations": [
+    "candidate-nonroot-runtime-access",
+    "private-context-and-data-ownership",
+    "independent-verification"
+  ],
+  "source": {
+    "sha": "efc2f720fbb9acf952c28f74f35becb9276a5c63",
+    "tree": "9786b056014bf72f90f50b93bc86de8773e763c3",
+    "srcTree": "cfce790e7610321bfb2979ac590dbfb858388c24"
+  },
+  "measurement": {
+    "docker_create_attempted": false,
+    "elapsed_s": 80.498,
+    "execution_scope_closed": true,
+    "exit_code": 1,
+    "generation": "6ecd7c0f-22c6-4248-b978-1a64764e1518",
+    "host": "tv-dator",
+    "intentDigest": "3cdbaaeecc60000adeb702212ae8fdc8048d63daba91f4d855ad4af228fe6aa7",
+    "job_id": "fa4888f4-35c4-4c00-afb9-55abae389e96",
+    "reason": null,
+    "source_execution_started": false,
+    "state": "FAILED",
+    "unit": "lagrange-lab3-6ecd7c0f22c64248b9781a64764e1518-fa4888f435c44c00afb955abae389e96.service",
+    "workload_started": true
+  },
+  "evidence": {
+    "provider": "public-journey-efc2f720-ordinary/log-provider-0.json",
+    "retainedLogBytes": 10265,
+    "retainedLogSha256": "4c36d8406fe752c2c50bacfbb0e6422e632534b9523b4da237241f8e6fea9c8d"
+  },
+  "evidenceCeiling": "Native generic source:null wrapper reports source_execution_started:false; exact embedded checkout/body log establishes project execution separately. No inferred image-mode measurement or certified journey."
+}

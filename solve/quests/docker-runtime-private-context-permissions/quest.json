@@ -1,0 +1,28 @@
+{
+  "schema": "solve-quest/2",
+  "id": "docker-runtime-private-context-permissions",
+  "class": "fix",
+  "statement": "The existing Linux Docker image built from a private source checkout grants its declared UID10001 read and traversal access to every runtime asset while retaining nonowner read-only code and writable owned /data, independent of host checkout umask.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/docker-runtime-private-context-permissions/evidence/receipt.json",
+      "requiredReceipts": [
+        "original-private-context-runtime-refusal",
+        "candidate-nonroot-runtime-access",
+        "private-context-and-data-ownership",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "image-owned-normalization",
+      "statement": "Normalize only image-local assembled runtime assets in the existing Docker builder. Preserve exact runtime input scope, USER10001, /data owner, base image references, immutable source and scenario bounds. No host chmod, root runtime, runtime code chown to app user, retries or fallback."
+    },
+    {
+      "id": "bounded-claim",
+      "statement": "Actual failed original fa4888 remains failed. Candidate permission control does not establish formation, host certification, release or whole-corpus acceptance. Observed Docker Node22.22.0 satisfies package engines >=22.12.0; host Node22.23.2 is a separate runtime identity, not a demonstrated container version violation."
+    }
+  ]
+}
