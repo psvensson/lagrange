@@ -11,6 +11,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
+import {pathToFileURL} from 'node:url';
 
 import {execGit} from '../../scripts/checks/git-invocation.js';
 import {gitProcessEnvironment} from '../../scripts/checks/git-process-environment.js';
@@ -436,3 +437,38 @@ test('interrupted materializer retention failure keeps the original checkout', a
     .includes(`worktree ${fs.realpathSync(run.owned.checkout)}\n`),
   'the uncertain original remains registered');
 });
+
+for (const childExit of [0, 42]) {
+  test(`a locked gate checkout preserves child exit ${childExit} and cleanup uncertainty`, (t) => {
+    const root = fixture(t, WRITES_GRAPH);
+    const seen = path.join(root, 'test-output', 'locked-checkout');
+    const gitOwner = pathToFileURL(path.resolve('scripts/checks/git-invocation.js')).href;
+    const command = [
+      'import fs from "node:fs";',
+      `import {execGit} from ${JSON.stringify(gitOwner)};`,
+      'execGit(["worktree", "lock", "--reason", "finite cleanup refusal", process.cwd()], ' +
+        '{cwd: process.cwd()});',
+      'fs.mkdirSync("test-output/acceptance", {recursive: true});',
+      `fs.writeFileSync(${JSON.stringify(CANCELLATION_ARTIFACT)}, ` +
+        `${JSON.stringify(CANCELLATION_DIAGNOSTIC)});`,
+      `fs.mkdirSync(${JSON.stringify(path.dirname(seen))}, {recursive: true});`,
+      `fs.writeFileSync(${JSON.stringify(seen)}, process.cwd());`,
+      `process.exit(${childExit});`,
+    ].join('\n');
+    const env = gitProcessEnvironment();
+    delete env.NODE_TEST_CONTEXT;
+    const result = spawnSync(process.execPath, [MATERIALIZER, '--gate', 'HEAD', '--run',
+      process.execPath, '--input-type=module', '-e', command], {cwd: root, encoding: 'utf8', env});
+    assert.equal(result.status, childExit === 0 ? 1 : childExit,
+      'cleanup refusal cannot be green or replace an earlier gate failure');
+    assert.ok(fs.existsSync(seen), 'the actual command locked its exact checkout before exit');
+    const checkout = fs.readFileSync(seen, 'utf8');
+    assert.ok(fs.existsSync(checkout), 'failed Git removal must preserve the original checkout');
+    assert.equal(fs.readFileSync(path.join(checkout, CANCELLATION_ARTIFACT), 'utf8'),
+      CANCELLATION_DIAGNOSTIC);
+    const registered = git(root, 'worktree', 'list', '--porcelain');
+    assert.ok(registered.includes(`worktree ${fs.realpathSync(checkout)}\n`));
+    assert.match(registered, /locked finite cleanup refusal/u);
+    assert.match(result.stderr, /checkout cleanup unavailable/u);
+  });
+}
