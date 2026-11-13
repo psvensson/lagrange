@@ -1,0 +1,22 @@
+{
+  "schema": "solve-relocation-verification/1",
+  "bundles": [
+    {
+      "bundle": "publication-single-pass-evidence--publication-single-pass-evidence-evidence-19e25ec72-2026-11-13.tar.gz",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/publication-single-pass-evidence--publication-single-pass-evidence-evidence-19e25ec72-2026-11-13.tar.gz",
+      "bundleSha256": "b7bf7d50b0fe33623c7f1a72065c9b2f12da155a20107a4a0d58505889bf08b5",
+      "sourceCommit": "19e25ec720ecc60412d3449be6cb1ab2b50144c6",
+      "shard": "relocation-inventory/publication-single-pass-evidence--publication-single-pass-evidence-evidence-19e25ec72-2026-11-13.json",
+      "shardSha256": "d0c6100041611678fd76d928d423279f5ec013930fb81609b62fecc26efd9287",
+      "verifiedAt": "2026-11-13T14:03:23.604Z",
+      "downloadedSha256": "b7bf7d50b0fe33623c7f1a72065c9b2f12da155a20107a4a0d58505889bf08b5",
+      "extracted": true,
+      "manifestMatches": true,
+      "unexpectedMembers": [],
+      "members": 1,
+      "results": "1",
+      "mismatches": [],
+      "verified": true
+    }
+  ]
+}

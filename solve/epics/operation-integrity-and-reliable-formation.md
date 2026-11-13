@@ -140,7 +140,8 @@ invalid evidence before integration.
   original3723 now physically demonstrates stale LOST overwriting committed RED
   after actual child closure and native ESRCH. Original3721 demonstrates all six
   observation defects (24 native cases,18 pass/6 fail). Complete streams and
-  compact interpretations are retained; canonical upload remains pending. A
+  compact interpretations are retained; native request 3796 uploaded and
+  re-downloaded the original-output archive through the canonical evidence owner. A
   reviewed immutable-transition candidate is composed as WIP, with no runtime
   proof. Original receipt 3720 is fully recovered: 64 native cases, 8 passed and
   56 failed. All 28 intended reader controls reached their boundaries; 28 other
@@ -148,12 +149,16 @@ invalid evidence before integration.
   The minimal export/import correction is independently source-reviewed and
   composed. The receipt Quest was natively sealed against the actual original
   failure at `594e9dbc` in request 3751; its acceptance remains red. Canonical
-  evidence upload remains pending. Preparation 3748 completed failed and closed;
+  evidence custody for these originals is now recorded by request 3796. Preparation
+  3748 completed failed and closed;
   its full hash and first-cause review are complete. ESLint is the first failed
   stage (266 changed-file errors); required generation and final source guards
   passed. Its generated patch is retained as evidence, not applied to later
-  source. Scoped formatter correction and canonical raw-evidence retention
-  are the next bounded actions. Fresh canonical generation, static/focused/full
+  source. Native formatter 3795 yielded a verified patch and seven remaining diagnostics;
+  their bounded corrections and full composition are independently source-reviewed.
+  Request 3796 also relocated the historical observer through verified canonical
+  storage, retaining its exact bytes and original path mapping. Fresh canonical
+  generation and a frozen candidate for parallel static/focused/full
   physical proof, Solver land
   and final-HEAD publication remain owed by the foundation/publication Quests.
 - **Current owner objective:** Linux executables and a stable, reproducible
