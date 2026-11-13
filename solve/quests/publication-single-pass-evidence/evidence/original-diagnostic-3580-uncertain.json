@@ -1,0 +1,85 @@
+{
+  "schema": "lagrange-lab-result/v1",
+  "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+  "request_id": "74c28a9a26ad42ee93ea32136015583b",
+  "request_sha256": "2083bea5db4787f523283d3708e61eae2ef27c600670b6d997d39771a8f42dc8",
+  "status": "UNCERTAIN",
+  "recorded_at": "2026-11-13T07:38:41.486Z",
+  "result": {
+    "execution_scope_closed": false,
+    "exit_code": null,
+    "finished_at": "2026-11-13T07:38:40.128Z",
+    "hosts": [
+      "local-workstation",
+      "tv-dator",
+      "adams-gamla"
+    ],
+    "log_bytes": 9499,
+    "log_sha256": "8c17b1c430a8fef01527bba2b8f9282e68ed328ca35d749b9f875200ca69e724",
+    "logical_request_id": "74c28a9a-26ad-42ee-93ea-32136015583b",
+    "logs_are_worker_tails": true,
+    "operation": "lab-work",
+    "outcome": "UNCONFIRMED",
+    "payload_sha256": "e70b6ff8cf5ab551ee0aef0c65ac4d965ad1793a494ca30d71abae0344a1c4b8",
+    "reason": "WORKER_SCOPE_UNCONFIRMED",
+    "scope_closed": false,
+    "source_execution_started": true,
+    "source_sha": "aabc29b487375b76dc0f3b7519ce2c8502d0020b",
+    "worker_receipt_count": 2,
+    "worker_receipts_sha256": "881059b9935b1ab9bccf112e449d16f807bad5d537a75b02eb3a4ab7d588a151",
+    "workers": {
+      "adams-gamla": {
+        "containers_closed": true,
+        "driver_result": {},
+        "execution_scope_closed": true,
+        "exit_code": -15,
+        "last_thermals": {
+          "cpu": 60,
+          "missing": [],
+          "ssd": 25,
+          "ssd_aux": null
+        },
+        "log_bytes": 1240,
+        "log_sha256": "5a0c03accb07b7f074b7a80076deb098a937c93377d34c93bbe71b6e9f3963a4",
+        "log_truncated": false,
+        "output_bytes": 1240,
+        "output_sha256": "5a0c03accb07b7f074b7a80076deb098a937c93377d34c93bbe71b6e9f3963a4",
+        "reason": "CANCELLED",
+        "source_execution_started": true,
+        "state": "COMPLETE",
+        "thermal_scope_closed": true
+      },
+      "local-workstation": {
+        "containers_closed": true,
+        "driver_result": {
+          "counters": {
+            "cancelled": 0,
+            "fail": 1,
+            "pass": 26,
+            "skipped": 0,
+            "tests": 27,
+            "todo": 0
+          },
+          "exit_code": 1
+        },
+        "execution_scope_closed": true,
+        "exit_code": 1,
+        "last_thermals": {
+          "cpu": 46,
+          "missing": [],
+          "ssd": 33.85,
+          "ssd_aux": 67.85
+        },
+        "log_bytes": 8481,
+        "log_sha256": "a615063e25725ad1e96a6b0ef21384083e3f507740a608f6add0f6fddaaf6e91",
+        "log_truncated": false,
+        "output_bytes": 8481,
+        "output_sha256": "a615063e25725ad1e96a6b0ef21384083e3f507740a608f6add0f6fddaaf6e91",
+        "reason": null,
+        "source_execution_started": true,
+        "state": "COMPLETE",
+        "thermal_scope_closed": true
+      }
+    }
+  }
+}

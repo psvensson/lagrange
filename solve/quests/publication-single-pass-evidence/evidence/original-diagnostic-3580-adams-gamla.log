@@ -1,0 +1,22 @@
+LAB_HOST=adams-gamla
+v22.23.2
+aabc29b487375b76dc0f3b7519ce2c8502d0020b
+9ae3ed4e00355d4d8acc645dd378e9a08d2e6bc4
+bc9e83a24cee235aa7fd33ff9777dc97d229903c
+ORIGINAL_DIAGNOSTIC_SCOPE=unchanged measured production with five disjoint original-compatible control roots; actual failures retained; no canonical corpus or repair acceptance
+npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+
+> lagrange-server@0.4.0 prepare
+> node -e "import('node:fs').then(({existsSync}) => existsSync('scripts/install-git-hooks.js') && import('./scripts/install-git-hooks.js'))"
+
+[hooks] Installed repo hooks at .githooks
+
+added 964 packages in 1m
+npm notice
+npm notice New major version of npm available! 10.9.8 -> 12.2.2
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.2
+npm notice To update run: npm install -g npm@12.2.2
+npm notice
+SQLITE_NATIVE_PROVENANCE={"version":"3.49.2","source_id":"2025-05-07 10:39:52 17144570b0d96ae63cd6f3edca39e27ebd74925252bbaf6723bcb2f6b4861fb1","addon_sha256":"d7d9272b12d11c1dc2bb787741b1b7c4037d336155f316ace3420410c28fda37"}
+ORIGINAL_DIAGNOSTIC_GROUP=strict proof falsifier path diagnostics
+ORIGINAL_DIAGNOSTIC_ROOT=test/scripts/proof-authority-falsifiers.test.js

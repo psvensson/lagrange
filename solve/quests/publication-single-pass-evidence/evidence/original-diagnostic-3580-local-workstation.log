@@ -1,0 +1,222 @@
+LAB_HOST=local-workstation
+v22.23.2
+aabc29b487375b76dc0f3b7519ce2c8502d0020b
+9ae3ed4e00355d4d8acc645dd378e9a08d2e6bc4
+bc9e83a24cee235aa7fd33ff9777dc97d229903c
+ORIGINAL_DIAGNOSTIC_SCOPE=unchanged measured production with five disjoint original-compatible control roots; actual failures retained; no canonical corpus or repair acceptance
+npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+
+> lagrange-server@0.4.0 prepare
+> node -e "import('node:fs').then(({existsSync}) => existsSync('scripts/install-git-hooks.js') && import('./scripts/install-git-hooks.js'))"
+
+[hooks] Installed repo hooks at .githooks
+
+added 964 packages in 7s
+npm notice
+npm notice New major version of npm available! 10.9.8 -> 12.2.2
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.2
+npm notice To update run: npm install -g npm@12.2.2
+npm notice
+SQLITE_NATIVE_PROVENANCE={"version":"3.49.2","source_id":"2025-05-07 10:39:52 17144570b0d96ae63cd6f3edca39e27ebd74925252bbaf6723bcb2f6b4861fb1","addon_sha256":"d7d9272b12d11c1dc2bb787741b1b7c4037d336155f316ace3420410c28fda37"}
+ORIGINAL_DIAGNOSTIC_GROUP=acceptance summary and remote producer absence
+ORIGINAL_DIAGNOSTIC_ROOT=test/scripts/acceptance-proof-manifest-runner.test.js
+ORIGINAL_DIAGNOSTIC_ROOT=test/scripts/test-placement.test.js
+ok test/scripts/acceptance-proof-manifest-runner.test.js (26 assertions, 277ms)
+not ok test/scripts/test-placement.test.js (27 assertions, 62112ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: placement spreads files by measured duration and machine speed
+ok 1 - placement spreads files by measured duration and machine speed
+  ---
+  duration_ms: 2.072208
+  type: 'test'
+  ...
+# Subtest: only a ready, distinct, reachable machine receives files
+ok 2 - only a ready, distinct, reachable machine receives files
+  ---
+  duration_ms: 0.384932
+  type: 'test'
+  ...
+# Subtest: only an explicit fail-fast reaches the runner, and it is never placed
+ok 3 - only an explicit fail-fast reaches the runner, and it is never placed
+  ---
+  duration_ms: 0.969335
+  type: 'test'
+  ...
+# Subtest: local execution is planned explicitly; missing placement facts refuse execution
+ok 4 - local execution is planned explicitly; missing placement facts refuse execution
+  ---
+  duration_ms: 19.721255
+  type: 'test'
+  ...
+# Subtest: a red lab file remains red and every assigned file executes once
+ok 5 - a red lab file remains red and every assigned file executes once
+  ---
+  duration_ms: 1.516232
+  type: 'test'
+  ...
+# Subtest: an unavailable or incomplete lab shard blocks acceptance without reassignment
+ok 6 - an unavailable or incomplete lab shard blocks acceptance without reassignment
+  ---
+  duration_ms: 1.553319
+  type: 'test'
+  ...
+# Subtest: a lab runner's thermal lines are relayed unchanged and are never verdicts
+ok 7 - a lab runner's thermal lines are relayed unchanged and are never verdicts
+  ---
+  duration_ms: 55.763104
+  type: 'test'
+  ...
+# Subtest: a lab host too hot to run is reported thermal-unfit without moving its files
+ok 8 - a lab host too hot to run is reported thermal-unfit without moving its files
+  ---
+  duration_ms: 43.941291
+  type: 'test'
+  ...
+# Subtest: an interrupted placed run stops every machine at once
+ok 9 - an interrupted placed run stops every machine at once
+  ---
+  duration_ms: 961.183852
+  type: 'test'
+  ...
+# Subtest: a hang-up stops a placed run like an interrupt
+ok 10 - a hang-up stops a placed run like an interrupt
+  ---
+  duration_ms: 0.543637
+  type: 'test'
+  ...
+# Subtest: a second hang-up during the abort neither kills it nor repeats it
+ok 11 - a second hang-up during the abort neither kills it nor repeats it
+  ---
+  duration_ms: 0.488699
+  type: 'test'
+  ...
+# Subtest: an aborted lab shard cleans up before it is cut
+ok 12 - an aborted lab shard cleans up before it is cut
+  ---
+  duration_ms: 3092.664469
+  type: 'test'
+  ...
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: ok cpu 66C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+# Subtest: the controller child runs with placement switched off
+ok 13 - the controller child runs with placement switched off
+  ---
+  duration_ms: 971.030322
+  type: 'test'
+  ...
+# Subtest: the controller child gets its file list even while this process is busy
+ok 14 - the controller child gets its file list even while this process is busy
+  ---
+  duration_ms: 943.497542
+  type: 'test'
+  ...
+# Subtest: a lab machine proves the exact commit in a throwaway worktree and leaves nothing behind
+ok 15 - a lab machine proves the exact commit in a throwaway worktree and leaves nothing behind
+  ---
+  duration_ms: 9465.568043
+  type: 'test'
+  ...
+# Subtest: a lab shard takes the machine-wide lock for its budget and records who holds it
+ok 16 - a lab shard takes the machine-wide lock for its budget and records who holds it
+  ---
+  duration_ms: 5149.249999
+  type: 'test'
+  ...
+# Subtest: a lab shard finding the machine held waits its budget, then refuses naming the holder
+ok 17 - a lab shard finding the machine held waits its budget, then refuses naming the holder
+  ---
+  duration_ms: 4039.067588
+  type: 'test'
+  ...
+# Subtest: discovery keeps a machine another agent holds out of placement before it is tried
+ok 18 - discovery keeps a machine another agent holds out of placement before it is tried
+  ---
+  duration_ms: 0.221636
+  type: 'test'
+  ...
+# Subtest: a held lab host is reported and its assigned shard remains unavailable
+ok 19 - a held lab host is reported and its assigned shard remains unavailable
+  ---
+  duration_ms: 0.324929
+  type: 'test'
+  ...
+# Subtest: a hand lab run on a held host reports it and never counts its files as passed
+ok 20 - a hand lab run on a held host reports it and never counts its files as passed
+  ---
+  duration_ms: 0.836677
+  type: 'test'
+  ...
+# Subtest: a lab shard streams its lines while it runs and relays its results ledger
+ok 21 - a lab shard streams its lines while it runs and relays its results ledger
+  ---
+  duration_ms: 3882.961003
+  type: 'test'
+  ...
+# Subtest: a lab machine generates the placed commit's import graph before its files run
+ok 22 - a lab machine generates the placed commit's import graph before its files run
+  ---
+  duration_ms: 5530.801342
+  type: 'test'
+  ...
+# Subtest: the change proof's sealed-graph precondition holds in a lab machine's checkout
+ok 23 - the change proof's sealed-graph precondition holds in a lab machine's checkout
+  ---
+  duration_ms: 20229.806182
+  type: 'test'
+  ...
+# Subtest: a lab checkout without its required producer refuses before starting the runner
+not ok 24 - a lab checkout without its required producer refuses before starting the runner
+  ---
+  duration_ms: 3687.440893
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/74c28a9a-26ad-42ee-93ea-32136015583b/work/source/test/scripts/test-placement.test.js:1260:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the declared producer is required for remote exact-checkout preparation
+    
+    0 !== 97
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 97
+  actual: 0
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/74c28a9a-26ad-42ee-93ea-32136015583b/work/source/test/scripts/test-placement.test.js:1269:12)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: a split lab run spreads its files by cost and merges what each ran
+ok 25 - a split lab run spreads its files by cost and merges what each ran
+  ---
+  duration_ms: 3762.54487
+  type: 'test'
+  ...
+# Subtest: a hand lab run sends only a commit, and a named one from any tree
+ok 26 - a hand lab run sends only a commit, and a named one from any tree
+  ---
+  duration_ms: 32.842106
+  type: 'test'
+  ...
+# Subtest: a hand lab run on a host too hot reports it and keeps the ledger of what ran
+ok 27 - a hand lab run on a host too hot reports it and keeps the ledger of what ran
+  ---
+  duration_ms: 50.363852
+  type: 'test'
+  ...
+1..27
+# tests 27
+# suites 0
+# pass 26
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 61931.573072
+# time=62112ms
+# test-files total=2 pass=1 fail=1 assertions=53
+ORIGINAL_DIAGNOSTIC_TEST_EXIT=1
+ORIGINAL_DIAGNOSTIC_FINAL_GUARD_EXIT=0
