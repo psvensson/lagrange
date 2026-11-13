@@ -243,7 +243,7 @@ checkouts. A missing producer refuses before the gate or runner starts. This
 supersedes the older-commit absence applicability recorded by
 `clean-worktree-generated-import-graph`; its sealed history remains intact.
 The exact gate owns preparation and command cancellation together: it preserves
-the first observed exit or interruption, closes the acquired child and process
+the first observed nonzero exit or interruption, closes the acquired child and process
 group, then checks integrity and finalizes diagnostic custody. Synchronous
 retention and removal can still fail the overall run; they are not claimed to
 be interruptible filesystem operations. Failed retention or uncertain child
