@@ -29,5 +29,6 @@
       "id": "single-owner",
       "statement": "Native configured observation owns thresholds and sensor identities; project consumer never substitutes sensors, sysfs, guessed endpoints or unavailable-success. Read-only endpoint must not create state. Trusted nested execution phase is not a security credential or independent admission."
     }
-  ]
+  ],
+  "sealedAt": "986c2240995157743ee612c55b3066c0fafdce08"
 }
