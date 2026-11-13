@@ -751,12 +751,16 @@ test('a lab machine proves the exact commit and cleans only its successful attem
       'its own worktree and inputs are removed; the earlier attempt stays untouched');
     assertEarlierPlacement(fixture);
 
-    // Deliver the controller expiry after real shell closure but before its
-    // pending close event; remote admission keeps the normal fixture budget.
+    // Age a real controller timer while JS waits for actual shell closure.
+    // Remote admission keeps its normal budget; native events deliver or
+    // clear the pending expiry, never a manual callback in an arbitrary phase.
     const expiries = [];
     const realSetTimeout = globalThis.setTimeout;
     const timerObserver = t.mock.method(globalThis, 'setTimeout', (callback, ms, ...args) => {
-      if (ms === 10 * MINUTE) expiries.push(callback);
+      if (ms === 10 * MINUTE) {
+        expiries.push(callback);
+        return realSetTimeout(callback, 1, ...args);
+      }
       return realSetTimeout(callback, ms, ...args);
     });
     let blocked;
@@ -767,7 +771,6 @@ test('a lab machine proves the exact commit and cleans only its successful attem
     }
     assert.equal(expiries.length, 1, 'exactly the controller deadline was observed');
     waitForPlacedShellExit(controller, 'blocked');
-    expiries[0]();
     const finished = await blocked.done;
     assert.equal(finished.reason, undefined, finished.log + finished.errors);
     assert.equal(finished.status, 0, finished.log + finished.errors);
