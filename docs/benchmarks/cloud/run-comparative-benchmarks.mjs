@@ -403,7 +403,8 @@ async function runLabCampaign({opts, manifest, dataHostCount}) {
 async function discoverLabFleet(state) {
   const requirement = fleetRequirement(REPO_ROOT);
   return {requirement, fleet: await discoverFleet({nodes: selectNodesByRole(state, HARNESS_ROLE),
-    controllerRepoPath: REPO_ROOT, lockGraphSha256: requirement.lockGraphSha256,
+    controllerRepoPath: REPO_ROOT, controllerThermalEndpoint: state.controller?.thermalEndpoint,
+    lockGraphSha256: requirement.lockGraphSha256,
     nodeMinimum: requirement.nodeMinimum})};
 }
 

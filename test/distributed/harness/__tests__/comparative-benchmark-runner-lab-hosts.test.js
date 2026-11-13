@@ -4,6 +4,11 @@
 // from its own checkout and a refusal stops the campaign before deployment.
 // Substituted: the hold session (scripts/lab/probe.js holdLabMachine) and ssh.
 import assert from 'node:assert/strict';
+import {execFile} from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+import {promisify} from 'node:util';
+import {nativeThermalFixture} from '../../../scripts/native-thermal-fixture.js';
 import {test} from 'node:test';
 
 import {
@@ -25,6 +30,24 @@ import {createScriptedSsh} from './real-product-deployer-scripted-ssh-fixture.js
 // test below); selection compares a host's free checkout space with it.
 const REQUIREMENT = Object.freeze({checkoutBytes: 150 * 2 ** 20,
   evidenceMarginBytes: 64 * 2 ** 20, requiredBytes: 214 * 2 ** 20});
+
+const SENSOR_POLICY = Object.freeze({mode: 'sensor-required', cadence_ms: 0, max_concurrency: 4});
+const PACED_POLICY = Object.freeze({mode: 'operator-paced', cadence_ms: 5000, max_concurrency: 1});
+
+function thermalFacts(name, outcome = 'READY', policy = SENSOR_POLICY) {
+  const thermalEndpoint = {schema: 'native-thermal-endpoint/v1', python: '/usr/bin/python3',
+    entry: '/fixture/observer.py', config: '/fixture/config.json',
+    sourceSha256: 'a'.repeat(64), configSha256: 'b'.repeat(64), bootId: `boot-${name}`};
+  return {thermalEndpoint, thermalStatus: outcome === 'UNAVAILABLE' ? 2 : 0,
+    thermalObservation: {schema: 'lab3-thermal-observation/v1', outcome,
+      source_sha256: thermalEndpoint.sourceSha256, config_sha256: thermalEndpoint.configSha256,
+      boot_id: thermalEndpoint.bootId, observed_at: 1, execution_policy: policy,
+      observations: outcome === 'UNAVAILABLE' ? null : {
+        cpu: {path: '/fixture/cpu', millidegrees: 40000},
+        ssd: {path: '/fixture/ssd', millidegrees: 40000}},
+      cooling_reason: outcome === 'HOLD' ? 'COOLING:cpu' : null,
+      abort_reason: null, reason: outcome === 'UNAVAILABLE' ? 'no configured sensors' : null}};
+}
 
 const HOSTS = arrayMap(['delta', 'alpha', 'charlie'], (name, index) => ({name,
   ip: `10.0.0.${index + 1}`, sshTarget: `bench@${name}`, repoPath: '/srv/lagrange',
@@ -66,19 +89,37 @@ test('a busy host releases the holds taken and names its holder', async () => {
   assert.deepEqual(log.slice(2), [['release', 'alpha'], ['release', 'charlie']]);
 });
 
-test('the thermal gate runs on every host from its checkout; a refusal is typed',
-  async () => {
-    const ok = createScriptedSsh([[/wait-for-thermal-headroom/u, 'thermal: ok cpu 51C']]);
-    const results = await checkLabThermalHeadroom({hosts: HOSTS, sshRun: ok.sshRun,
-      opts: {}});
-    assert.equal(ok.calls.length, 3);
-    assert.match(ok.calls[0].command,
-      /^cd '\/srv\/lagrange' && '\/usr\/bin\/node' scripts\/checks\/wait-for-thermal/u);
-    assert.equal(results.alpha.outcome, 'ok');
-    const hot = createScriptedSsh([[/wait-for-thermal-headroom/u,
-      new Error('thermal: headroom exhausted')]]);
-    await assert.rejects(checkLabThermalHeadroom({hosts: HOSTS, sshRun: hot.sshRun,
-      opts: {}}), (error) => error.code === 'thermal_exhausted');
+test('the thermal gate carries the endpoint and a fixed remote deadline through a real shell',
+  async (t) => {
+    const native = nativeThermalFixture(t);
+    const hosts = HOSTS.map((host) => ({...host, repoPath: process.cwd(),
+      nodePath: process.execPath, thermalEndpoint: native.endpoint, executionPolicy: SENSOR_POLICY}));
+    const calls = [];
+    const sshRun = async (_ip, _opts, command, timeoutMs) => {
+      calls.push({command, timeoutMs});
+      const child = await promisify(execFile)('/bin/sh', ['-c', command], {timeout: timeoutMs});
+      assert.equal(child.stderr, '', 'the imported owner must not invoke its CLI');
+      return child.stdout;
+    };
+    const results = await checkLabThermalHeadroom({hosts, sshRun, opts: {}});
+    assert.equal(calls.length, 3);
+    assert.ok(calls.every((call) => call.timeoutMs === 11 * 60 * 1000));
+    assert.match(calls[0].command, /600000/u, 'one remote-clock ten-minute budget plus transport slack');
+    assert.ok(calls[0].command.includes(native.endpoint.sourceSha256));
+    assert.equal(results.alpha.outcome, 'READY');
+    assert.equal(results.alpha.config_sha256, native.endpoint.configSha256);
+    assert.equal(fs.readFileSync(native.counter, 'utf8'), '3');
+    const wrong = {...hosts[0], thermalEndpoint: {...native.endpoint, configSha256: '0'.repeat(64)}};
+    await assert.rejects(checkLabThermalHeadroom({hosts: [wrong], sshRun, opts: {}}),
+      (error) => error.code === 'thermal_exhausted');
+    assert.equal(fs.readFileSync(native.counter, 'utf8'), '3', 'mismatched bytes never invoke observer');
+    const staleRepo = path.join(native.root, 'stale-repo');
+    const staleGate = path.join(staleRepo, 'scripts/checks/wait-for-thermal-headroom.js');
+    fs.mkdirSync(path.dirname(staleGate), {recursive: true});
+    fs.writeFileSync(staleGate, 'throw new Error("stale source must not execute");');
+    await assert.rejects(checkLabThermalHeadroom({hosts: [{...hosts[0], repoPath: staleRepo}],
+      sshRun, opts: {}}), (error) => error.code === 'thermal_exhausted' &&
+      /thermal client source differs/u.test(error.message));
   });
 
 function inventory(entries) {
@@ -86,7 +127,7 @@ function inventory(entries) {
     [name, {name, ip: `192.168.9.${name.length}${name.charCodeAt(0)}`, ssh: `b@${name}`,
       os: 'linux', roles: ['harness'], testCapability: {bootId: `boot-${name}`,
         dockerReachable: true, repoPath: '/srv/lagrange', nodePath: '/usr/bin/node',
-        nodeVersion: 'v22.23.2', thermal: 'measured', dockerRootFreeBytes: 100 * 2 ** 30,
+        nodeVersion: 'v22.23.2', ...thermalFacts(name), dockerRootFreeBytes: 100 * 2 ** 30,
         repoFreeBytes: 100 * 2 ** 30, machineLock: {state: lock, holder: null}}, ...extra}]))};
 }
 
@@ -95,7 +136,7 @@ test('selection prefers free hosts, then held ones the hold will wait for; unrea
   const state = inventory([['a', 'busy'], ['b', 'free'], ['c', 'free'],
     ['d', 'free', {lastProbeFailure: {error: 'ssh timeout'}, testCapability: null}],
     ['e', 'stale-record'], ['f', 'busy'], ['g', 'free',
-      {testCapability: {bootId: 'boot-b', dockerReachable: true,
+      {testCapability: {bootId: 'boot-b', dockerReachable: true, ...thermalFacts('b'),
         machineLock: {state: 'free'}}}]]);
   const hosts = selectLabBenchmarkHosts({state, dataHostCount: 3, nodeMinimum: '22.12.0', loadGeneratorRequirement: REQUIREMENT});
   assert.deepEqual(arrayMap(hosts, (host) => [host.name, host.role, host.lock.state]),
@@ -106,7 +147,7 @@ test('selection prefers free hosts, then held ones the hold will wait for; unrea
 test('a host whose checkout runs an old Node is never the load generator', () => {
   const old = {testCapability: {bootId: 'boot-old', dockerReachable: true,
     repoPath: '/srv/lagrange', nodePath: '/usr/bin/node', nodeVersion: 'v14.21.3',
-    thermal: 'measured', dockerRootFreeBytes: 100 * 2 ** 30,
+    ...thermalFacts('old'), dockerRootFreeBytes: 100 * 2 ** 30,
     machineLock: {state: 'free'}}};
   const state = inventory([['a', 'free', old], ['b', 'free', {testCapability: {...old.testCapability,
     bootId: 'boot-b'}}], ['c', 'free', {testCapability: {...old.testCapability,
@@ -122,27 +163,53 @@ test('a host whose checkout runs an old Node is never the load generator', () =>
   assert.equal(hosts[0].name, 'a', 'an old-Node host can still be a data host');
 });
 
-test('a host without thermal sensors is a typed refusal', async () => {
-  const {sshRun} = createScriptedSsh([[/wait-for-thermal-headroom/u,
-    'thermal: unmeasurable (no sensors)']]);
-  await assert.rejects(checkLabThermalHeadroom({hosts: HOSTS, sshRun, opts: {}}),
-    (error) => error.code === 'thermal_unmeasurable');
-});
+test('sensor unavailability refuses while explicit operator pacing preserves unmeasured facts',
+  async (t) => {
+    for (const policy of [SENSOR_POLICY, PACED_POLICY]) {
+      const native = nativeThermalFixture(t, {policy, outcomes: ['UNAVAILABLE']});
+      const host = {...HOSTS[0], repoPath: process.cwd(), nodePath: process.execPath,
+        thermalEndpoint: native.endpoint, executionPolicy: policy};
+      const sshRun = async (_ip, _opts, command, timeoutMs) =>
+        (await promisify(execFile)('/bin/sh', ['-c', command], {timeout: timeoutMs})).stdout;
+      if (policy === SENSOR_POLICY) {
+        await assert.rejects(checkLabThermalHeadroom({hosts: [host], sshRun, opts: {}}),
+          (error) => error.code === 'thermal_exhausted');
+      } else {
+        const result = (await checkLabThermalHeadroom({hosts: [host], sshRun, opts: {}})).delta;
+        assert.equal(result.outcome, 'OPERATOR_PACED');
+        assert.equal(result.observation_outcome, 'UNAVAILABLE');
+        assert.equal(result.observations, null);
+      }
+    }
+    const old = createScriptedSsh([[/wait-for-thermal-headroom/u, 'thermal: ok cpu 51C']]);
+    const facts = thermalFacts('delta');
+    await assert.rejects(checkLabThermalHeadroom({hosts: [{...HOSTS[0],
+      thermalEndpoint: facts.thermalEndpoint, executionPolicy: SENSOR_POLICY}], sshRun: old.sshRun,
+    opts: {}}), (error) => error.code === 'thermal_exhausted');
+  });
 
-test('a host whose thermal sources are unmeasurable (WSL2) is never selected; an unprobed ' +
-  'host is not either', () => {
-  const state = inventory([['a', 'free'], ['b', 'free'], ['c', 'free'], ['d', 'free'],
-    ['w', 'free']]);
-  state.nodes.b.testCapability.thermal = 'unmeasurable';
-  delete state.nodes.c.testCapability.thermal;
-  assert.throws(() => selectLabBenchmarkHosts({state, dataHostCount: 3,
-    nodeMinimum: '22.12.0', loadGeneratorRequirement: REQUIREMENT}), (error) => {
+test('selection requires native identity and policy; fresh missing members never use cached facts', () => {
+  const state = inventory([['a', 'free'], ['b', 'free'], ['c', 'free'], ['d', 'free']]);
+  Object.assign(state.nodes.b.testCapability, thermalFacts('b', 'UNAVAILABLE'));
+  delete state.nodes.c.testCapability.thermalEndpoint;
+  const select = (fleet = null) => selectLabBenchmarkHosts({state, fleet, dataHostCount: 3,
+    nodeMinimum: '22.12.0', loadGeneratorRequirement: REQUIREMENT});
+  assert.throws(() => select(), (error) => {
     const reasons = Object.fromEntries(arrayMap(error.diagnostic.excluded,
       (entry) => [entry.name, entry.reason]));
-    assert.equal(reasons.b, 'host-ineligible: thermal_unmeasurable');
-    assert.equal(reasons.c, 'host-ineligible: thermal_unknown');
+    assert.equal(reasons.b, 'host-ineligible: native thermal decision unavailable');
+    assert.equal(reasons.c, reasons.b);
     return error.code === 'refused_insufficient_host_topology';
   });
+  Object.assign(state.nodes.b.testCapability, thermalFacts('b', 'UNAVAILABLE', PACED_POLICY));
+  Object.assign(state.nodes.c.testCapability, thermalFacts('c', 'HOLD'));
+  const hosts = select();
+  assert.deepEqual(hosts.find((host) => host.name === 'b').executionPolicy, PACED_POLICY);
+  assert.deepEqual(hosts.find((host) => host.name === 'b').thermalEndpoint,
+    state.nodes.b.testCapability.thermalEndpoint);
+  assert.throws(() => select([]), (error) => /not present in fresh discovery/u.test(error.message));
+  state.nodes.b.testCapability.thermalObservation.config_sha256 = '0'.repeat(64);
+  assert.throws(() => select(), (error) => error.code === 'refused_insufficient_host_topology');
 });
 
 test('the pinned image resolves per host by content identity across image stores; absent ' +
@@ -179,7 +246,8 @@ test('docker disk is a fleet fact: a host below the data-host requirement is not
   const state = inventory([['adam-laptop', 'free'], ['adams-gamla', 'free'],
     ['carinas-windows', 'free'], ['lenovo-laptop', 'free'], ['tv-dator', 'free']]);
   state.nodes['adam-laptop'].testCapability.dockerRootFreeBytes = 433 * 1024 * 1024;
-  state.nodes['carinas-windows'].testCapability.thermal = 'unmeasurable';
+  Object.assign(state.nodes['carinas-windows'].testCapability,
+    thermalFacts('carinas-windows', 'UNAVAILABLE'));
   const hosts = selectLabBenchmarkHosts({state, dataHostCount: 3, nodeMinimum: '22.12.0', loadGeneratorRequirement: REQUIREMENT});
   assert.deepEqual(arrayMap(hosts, (host) => [host.name, host.role]), [
     ['adams-gamla', 'data'], ['lenovo-laptop', 'data'], ['tv-dator', 'data'],
@@ -221,7 +289,8 @@ test('the load generator needs room for the harness worktree on its checkout fil
     const state = inventory([['adam-laptop', 'free'], ['adams-gamla', 'free'],
       ['carinas-windows', 'free'], ['lenovo-laptop', 'free'], ['tv-dator', 'free']]);
     state.nodes['adam-laptop'].testCapability.dockerRootFreeBytes = 390 * 1024 * 1024;
-    state.nodes['carinas-windows'].testCapability.thermal = 'unmeasurable';
+    Object.assign(state.nodes['carinas-windows'].testCapability,
+    thermalFacts('carinas-windows', 'UNAVAILABLE'));
     state.nodes['adam-laptop'].testCapability.repoFreeBytes = REQUIREMENT.requiredBytes;
     const select = () => selectLabBenchmarkHosts({state, dataHostCount: 3,
       nodeMinimum: '22.12.0', loadGeneratorRequirement: REQUIREMENT});
