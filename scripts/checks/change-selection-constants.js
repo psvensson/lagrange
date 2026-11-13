@@ -262,13 +262,19 @@ export const FULL_CORPUS_TRIGGER_RULES = Object.freeze([
   // The runner's thermal gate decides whether and when each batch starts.
   // The execution report's schema owner is written by the runner and read by
   // the gate (proof-receipt-bound-to-validated-execution).
-  {id: 'test-runner', pattern: /^scripts\/(run-test-files|run-classified-test-files|test-machine-factor|plan-test-lane|select-change-tests|check-subsystem|test-execution-report|checks\/(wait-for-thermal-headroom|census-pre-kill-flush|fallback-branch-census-constants))\.js$/u},
+  {id: 'test-runner', pattern: /^scripts\/(run-test-files|test-output-reader|run-classified-test-files|test-machine-factor|plan-test-lane|select-change-tests|check-subsystem|test-execution-report|checks\/(wait-for-thermal-headroom|census-pre-kill-flush|fallback-branch-census-constants))\.js$/u},
   {id: 'selection-machinery', pattern: /^scripts\/checks\/(change-selection[a-z-]*|changed-paths|git-invocation|git-process-environment|change-proof-string-collections|helper-import-closure|push-gate-change-proof|proof-checkout-preparation|impact-proof-cone-constants|test-timeout-declarations|test-(?:primary|resource|subsystem)-classification[a-z-]*)\.js$/u},
   {id: 'classification-generator', pattern: /^scripts\/generate-test-(?:primary|resource|subsystem)-classes\.js$/u},
   // Placement hands the runner's files to lab machines, so the modules that
   // choose, send and run them execute the proof (test-placement). The load
   // headroom module's threshold decides which hosts the probe calls ready.
-  {id: 'test-placement', pattern: /^scripts\/(lab\/(probe|process|state)|checks\/wait-for-load-headroom)\.js$/u},
+  {id: 'test-placement', pattern: /^scripts\/(lab\/(probe|process|state|placement-shell|test-capability|worker-provisioning|machine-lock-constants|machine-hold|remote-command|placement-source|fleet-discovery|placement-constants|test-placement|placement-execution|lab-test)|checks\/wait-for-load-headroom)\.js$/u},
+  // Retention can erase original proof artifacts even after execution settled.
+  {id: 'proof-evidence-retention', pattern: /^scripts\/(prune-test-output|checks\/test-output-retention-constants)\.js$/u},
+  // Publication and receipt interpretation decide which execution can be accepted.
+  {id: 'proof-publication', pattern: /^scripts\/(publish-head|publish-local-corpus|publish-command-runner|publish-execution-constants|proof-authority|proof-receipt-contract)\.js$/u},
+  // Quest recording and landing own the measured obligations publication consumes.
+  {id: 'quest-proof-commands', pattern: /^scripts\/solve\/(commands|quest-record-commands)\.js$/u},
   // The scheduler that launches the proof and hands it its environment.
   {id: 'gate-scheduler', pattern: /^scripts\/(run-project-hardening-acceptance|checks\/acceptance-proof-manifest-(?:runner|constants))\.js$/u},
   {id: 'push-gate', pattern: /^\.githooks\//u,

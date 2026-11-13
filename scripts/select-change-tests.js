@@ -317,7 +317,7 @@ function jsonStateComparisons(relativePath, base, head, gitRoot) {
 
 // The dependency graph a lockfile describes: everything but the package's own
 // release identity. The authority on which fields that identity is; lab
-// readiness (scripts/lab/probe.js lockfileGraphDigest) digests the same
+// readiness (scripts/lab/test-capability.js lockfileGraphDigest) digests the same
 // graph, and test/scripts/lab-fleet-discovery.test.js binds the two.
 export function lockfileDependencyGraph(lockfile) {
   const graph = copyOwnDataRecord(lockfile);

@@ -29,6 +29,12 @@ export function placementRunFixture(overrides = {}) {
       calls.local.push([...files]);
       return 0;
     },
+    // The finite executor is already settled; its owned-child interface
+    // preserves the same recorded call and verdict as the local substitute.
+    runLocalChild: (files) => ({
+      done: Promise.resolve(deps.runLocal(files, {})),
+      abort: () => {},
+    }),
     lastGreen: () => true,
     checkBase: () => 'b'.repeat(40),
     commitAt: () => {

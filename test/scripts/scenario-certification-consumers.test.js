@@ -315,6 +315,99 @@ test('lab certification (B3): the run directory and its started.json ' +
     hold: NEVER_HOLD}), /ENOTDIR/u);
 });
 
+// The public certification entry reaches its actual outer finalizer after a
+// native hold-acquisition failure. No tunnel or formation is admitted, and
+// the real started.json remains an interrupted record, never a certificate.
+for (const fault of ['none', 'record publication', 'signal-handler removal']) {
+  test(`certification retains its primary failure when finalization has ${fault}`,
+    {timeout: 10000}, async (t) => {
+      const directory = scratch(t, 'cert-finalizer-custody-');
+      const evidenceRoot = join(directory, 'evidence');
+      const signals = ['SIGINT', 'SIGTERM'];
+      const before = new Map(signals.map((signal) => [signal, process.listeners(signal)]));
+      const acquired = [];
+      const events = [];
+      const diagnostics = [];
+      let primary = null;
+      let secondary = null;
+      const remove = process.off;
+      const removal = t.mock.method(process, 'off', function(signal, listener) {
+        const owned = acquired.some((entry) =>
+          entry.signal === signal && entry.listener === listener);
+        const result = remove.call(this, signal, listener);
+        if (owned) events.push(`removed ${signal}`);
+        if (owned && fault === 'signal-handler removal' && secondary === null) {
+          secondary = new Error('finite signal-handler removal refused after its first effect');
+          throw secondary;
+        }
+        return result;
+      });
+      const diagnostic = t.mock.method(process.stderr, 'write', (text) => {
+        diagnostics.push(String(text));
+        return true;
+      });
+      try {
+        await assert.rejects(labRun({dryRun: false, evidenceRoot,
+          hold: () => {
+            events.push('hold');
+            for (const signal of signals) {
+              for (const listener of process.listeners(signal)) {
+                if (!before.get(signal).includes(listener)) acquired.push({signal, listener});
+              }
+            }
+            try {
+              readFileSync(directory);
+            } catch (error) {
+              primary = error;
+              throw error;
+            }
+            assert.fail('reading the fixture directory must refuse before a hold is returned');
+          }}, (text) => {
+          if (!text.startsWith('certification run record')) return;
+          events.push('record');
+          if (fault === 'record publication') {
+            try {
+              writeFileSync(directory, text);
+            } catch (error) {
+              secondary = error;
+              throw error;
+            }
+            assert.fail('writing the actual fixture directory must refuse record publication');
+          }
+          assert.match(text, /outcome=interrupted manifest=none/u);
+        }), (error) => {
+          assert.equal(primary?.code, 'EISDIR', 'the actual acquisition refusal was reached');
+          assert.equal(error, primary, 'later finalization preserves the exact original Error');
+          return true;
+        });
+        assert.equal(events.filter((event) => event === 'hold').length, 1,
+          'no later hold or formation was admitted');
+        assert.equal(acquired.length, 2, 'the actual certification signal handlers were acquired');
+        assert.equal(events.filter((event) => event === 'record').length, 1,
+          'record publication is attempted once even if handler removal refuses');
+        for (const signal of signals) {
+          assert.ok(events.filter((event) => event === `removed ${signal}`).length <= 1,
+            'finalization never repeats an attempted signal-handler removal');
+          if (fault !== 'signal-handler removal') {
+            assert.deepEqual(process.listeners(signal), before.get(signal));
+          }
+        }
+        if (fault !== 'none') {
+          assert.ok(diagnostics.some((line) => line.includes(secondary.message)),
+            `the secondary finalizer refusal stays visible: ${diagnostics.join('')}`);
+        }
+        const [runName] = readdirSync(join(evidenceRoot, SHA));
+        assert.deepEqual(readdirSync(join(evidenceRoot, SHA, runName)), ['started.json']);
+        assert.equal(describeCertificationRun(join(evidenceRoot, SHA, runName)).outcome,
+          'interrupted');
+      } finally {
+        removal.mock.restore();
+        diagnostic.mock.restore();
+        for (const {signal, listener} of acquired) remove.call(process, signal, listener);
+      }
+    });
+}
+
 test('lab certification pre-flight parses a host answer, a clock read as ' +
   'seconds with any fraction width (uutils date on carinas-windows)', () => {
   const answer = parseHostAnswer('BOOT be32\nCLOCK 1791195512.3914937\n' +

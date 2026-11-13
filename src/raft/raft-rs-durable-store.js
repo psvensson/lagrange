@@ -45,6 +45,11 @@ import {RAFT_RS_HOST_WRITE} from './raft-rs-host-contract.js';
 import {decodeCommittedProposal} from './raft-rs-proposal-codec.js';
 import {RAFT_RS_ENTRY_TYPE} from './raft-rs-ready-loop-constants.js';
 import {raftRsConfStateKey} from './raft-rs-conf-state-key.js';
+import {
+  fromExactInteger,
+  nullableExactInteger,
+  toExactInteger,
+} from './raft-rs-record-integer.js';
 import {retainedHistoryError, retainedHistoryOf, validateRetainedRows} from
   './raft-rs-retained-history.js';
 import {
@@ -54,7 +59,6 @@ import {
   readSnapshotIndexIn,
 } from './raft-rs-snapshot-witness.js';
 
-const DECIMAL_DIGITS = /^\d+$/u;
 const DEFAULT_MAX_JOURNAL_ENTRIES = 256;
 const PAYLOAD_ENCODING = 'base64';
 // The log table and the applied-state table.
@@ -63,37 +67,6 @@ const MAX_SAFE_RAFT_POSITION = BigInt(Number.MAX_SAFE_INTEGER);
 const SNAPSHOT_MEMBERSHIP_GENERATION_BOUNDARY_ERROR =
   'raft-rs snapshot membership generation exceeds or ' +
   'contradicts its applied boundary';
-
-/**
- * Convert a raft-rs decimal string into the BigInt SQLite binds exactly.
- * @param {string} value - A 64-bit value as a decimal string.
- * @return {bigint} The same value.
- */
-function toExactInteger(value) {
-  if (typeof value !== 'string' || !DECIMAL_DIGITS.test(value)) {
-    throw new Error(RAFT_RS_STORE_ERROR_MSG.notAnIndex(value));
-  }
-  return BigInt(value);
-}
-
-/**
- * Convert what SQLite returned back into a raft-rs decimal string.
- * @param {bigint|number} value - A column value read with safe integers.
- * @return {string} The decimal string.
- */
-function fromExactInteger(value) {
-  return String(value);
-}
-
-/**
- * A nullable column read with safe integers, as a decimal string or null.
- * @param {bigint|number|null|undefined} value - The column value.
- * @return {string|null} The decimal string, or null.
- */
-function nullableExactInteger(value) {
-  return value === null || value === undefined ? null :
-    fromExactInteger(value);
-}
 
 function exactSnapshotMembershipGeneration({generation, snapshotIndex,
   confState, appliedRow}) {

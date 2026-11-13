@@ -49,12 +49,37 @@ export const CORE_METADATA_PREFIXES = Object.freeze([
 // full suite.
 export const SELECTOR_SELF_PATHS = Object.freeze([
   'scripts/run-test-files.js',
+  'scripts/test-output-reader.js',
   'scripts/run-classified-test-files.js',
   // Placement: the runner can hand files to lab machines, so the modules that
   // choose, send and run them execute the proof too (test-placement).
   'scripts/lab/probe.js',
+  'scripts/lab/placement-shell.js',
+  'scripts/lab/test-capability.js',
+  'scripts/lab/worker-provisioning.js',
+  'scripts/lab/machine-lock-constants.js',
+  'scripts/lab/machine-hold.js',
+  'scripts/lab/remote-command.js',
+  'scripts/lab/placement-source.js',
+  'scripts/lab/fleet-discovery.js',
+  'scripts/lab/placement-constants.js',
+  'scripts/lab/test-placement.js',
+  'scripts/lab/placement-execution.js',
+  'scripts/lab/lab-test.js',
   'scripts/lab/process.js',
   'scripts/lab/state.js',
+  // Retention owns whether original execution evidence remains available.
+  'scripts/prune-test-output.js',
+  'scripts/checks/test-output-retention-constants.js',
+  // Publication and Quest commands own execution acceptance and its obligations.
+  'scripts/publish-head.js',
+  'scripts/publish-local-corpus.js',
+  'scripts/publish-command-runner.js',
+  'scripts/publish-execution-constants.js',
+  'scripts/proof-authority.js',
+  'scripts/proof-receipt-contract.js',
+  'scripts/solve/commands.js',
+  'scripts/solve/quest-record-commands.js',
   'scripts/check-curated-test-shards.js',
   'scripts/generate-test-primary-classes.js',
   'scripts/select-proof-cone.js',

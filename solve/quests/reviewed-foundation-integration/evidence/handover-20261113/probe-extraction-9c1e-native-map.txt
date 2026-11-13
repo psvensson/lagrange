@@ -1,0 +1,35 @@
+Native source byte map for 9c1e743c558b60edf1c78c54cebdd49285fb3780
+Parent: 1345d420b82d555f0a8f3fe1b10591006a46d5b9
+Read-only text comparison, not a parser/static/runtime acceptance claim.
+Unless named otherwise, OLD = 6acafe27b1f8c0581c3c51f068ea67b3da6b7bec:scripts/lab/probe.js
+NEW = 9c1e743c558b60edf1c78c54cebdd49285fb3780:<path>
+For OLD span lists, concatenate in ascending source order except comparison 19.
+All nineteen native cmp checks returned 0; root independent repetition pending.
+
+1. OLD 108-212 -> scripts/lab/machine-lock-constants.js 2-106
+2. OLD 30-32,338-348,366-367,1225,1259-1264,1266-1268 -> scripts/lab/remote-command.js 2-27
+3. OLD 587-591,1793-1812 -> scripts/lab/remote-command.js 29-53
+4. OLD 213-305,2297-2412 -> scripts/lab/machine-hold.js 17-225
+5. OLD 306-322,326-337,349-365,368-586,592-716 -> scripts/lab/test-capability.js 11-400
+6. OLD 718-1005 -> scripts/lab/worker-provisioning.js 10-297
+7. OLD 1007-1162,1285-1303,2414-2449 -> scripts/lab/fleet-discovery.js 13-223
+8. OLD 1269-1276,1282 -> scripts/lab/placement-source.js 9-17
+9. OLD 1844-1890,2451-2494 -> scripts/lab/placement-source.js 19-109
+10. OLD 1164-1174,1177-1179,1182-1190,1199-1202,1212-1214,1244-1245,1281 -> scripts/lab/test-placement.js 24-56
+11. OLD 1350-1694,1700-1716,1732-1772,2496-2519,2619-2637,2951-2968 -> scripts/lab/test-placement.js 58-521
+12. OLD 1195-1198,1203-1204,1215-1224,1226-1227,1229-1242,1247-1249,1251,1253,1255-1258,1279,1284,1304-1321 -> scripts/lab/placement-execution.js 25-85
+13. OLD 1695-1698,1718-1731,1774-1776,1779-1791,1891-2295,2521-2617 -> scripts/lab/placement-execution.js 87-622
+14. OLD 22-29,33-107 -> scripts/lab/probe.js 6-88
+15. OLD 1175-1176,1180-1181,1191-1194,1205-1211,1228,1243,1250,1252,1254,1280,1283,1322-1349,1777,2668-2684 -> scripts/lab/placement-constants.js 5-72
+16. 1345d420b82d555f0a8f3fe1b10591006a46d5b9:scripts/lab/probe.js 2640-2668,2687-2952,2972-3176 -> scripts/lab/lab-test.js 24-523
+17. OLD 1814-1842 -> scripts/lab/process.js 200-228
+18. 1345d420b82d555f0a8f3fe1b10591006a46d5b9:scripts/lab/process.js ALL -> scripts/lab/process.js after deleting new lines 26-29 and 199-END
+19. OLD 1277-1278 then1246 then1265 (this order) -> scripts/lab/process.js 26-29
+
+Remaining changes are imports/exports, semantic file comments, file-local EMPTY language constants, actual source-location witnesses/comments and the explicit selection retention protection authorized by root. Public re-exports retain original names and direct live bindings; no wrappers. A native top-level-declaration name census found zero old names absent from the new owner set.
+
+Original publication root e297ba2489c876a81df84af0ebf46ee0305c6725
+Original CI range root 2834163c2fde9d710034e63ae21bd447c77e59f2
+Historical observer 4f84ce6b1f78467a2c5c7afee2269a2580b8b788
+Sole remote shell 9aaf010cf15bf4ef8cb2641281fad5ccaf3f32cd
+Candidate adapted shared fixture 51c845f1595c4e3970fdd8b0dd1c24eda64e1a09 (deliberately differs from original db489)

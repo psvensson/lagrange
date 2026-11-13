@@ -1,0 +1,30 @@
+{
+  "branch": "wip/formation-continuation-20261113",
+  "head": "bb0a896dca77d5bae69598999ca1e7678f5008ea",
+  "localEquivalent": "fc4b15193835d9d566b6fb5f711cdd96d78e9a6e",
+  "tree": "fd16122dd9065f582941e47d909935bbfbac845e",
+  "src": "62f344b7fdbff370380cf3870fb50da182d1f14b",
+  "originalWip": "9b870241b43f7dec9e7428f10c63156bb131b39a",
+  "onlyCurrentChanged": true,
+  "nativeVerified": true,
+  "stages": [
+    {
+      "local": "91e37694c9246e9e726d5e192489b269695dbde6",
+      "remote": "006e7efd947a127cff362c8e80d9c8af35ea0c14",
+      "tree": "42b3fe70b835399e76fe48c7fef24a023ecb40d9",
+      "parentLocal": "9b870241b43f7dec9e7428f10c63156bb131b39a",
+      "remoteParent": "9b870241b43f7dec9e7428f10c63156bb131b39a",
+      "nativeWholeTreeEqual": true,
+      "nativeParentExact": true
+    },
+    {
+      "local": "fc4b15193835d9d566b6fb5f711cdd96d78e9a6e",
+      "remote": "bb0a896dca77d5bae69598999ca1e7678f5008ea",
+      "tree": "fd16122dd9065f582941e47d909935bbfbac845e",
+      "parentLocal": "91e37694c9246e9e726d5e192489b269695dbde6",
+      "remoteParent": "006e7efd947a127cff362c8e80d9c8af35ea0c14",
+      "nativeWholeTreeEqual": true,
+      "nativeParentExact": true
+    }
+  ]
+}

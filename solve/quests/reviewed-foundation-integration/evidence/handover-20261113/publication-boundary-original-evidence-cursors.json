@@ -1,0 +1,44 @@
+{
+  "schema": "handover-evidence-cursors/v1",
+  "recordedAt": "2026-11-13T09:57:05.978Z",
+  "scope": "Existing original jobs only; no new source execution or retry is authorized by this record",
+  "jobs": [
+    {
+      "issue": 3686,
+      "jobId": "c158bfe86fe64b0981526ce52945a7cf",
+      "host": "adams-gamla",
+      "sourceSha": "24060f4b393a3f392dd55a7bf0a8f2071c1af04d",
+      "state": "COMPLETE",
+      "workerExit": 1,
+      "allScopesClosed": true,
+      "originalWorkerLogBytes": 306993,
+      "originalWorkerLogSha256": "a9a28e7e39f69078bf3408620c39b2b1a515ab8fda24ca3a3313938cc374cdb2",
+      "streamId": null,
+      "nextOffset": 0,
+      "maximumWindowBytes": 8000,
+      "retainedWindows": 0,
+      "pendingEvidenceRequest": null,
+      "fullStreamRetained": false,
+      "interpretation": "Full original bytes and causal/root-total review remain pending; provider tail and last-root counters are insufficient"
+    },
+    {
+      "issue": 3687,
+      "jobId": "28e62bb2bc9a4802b00257cae2e0aa60",
+      "host": "local-workstation",
+      "sourceSha": "24060f4b393a3f392dd55a7bf0a8f2071c1af04d",
+      "state": "COMPLETE",
+      "workerExit": 1,
+      "allScopesClosed": true,
+      "originalWorkerLogBytes": 264616,
+      "originalWorkerLogSha256": "f5992c970282c1f23b489ac00d476a93fa5523badd32b2974a30984a272855e7",
+      "streamId": null,
+      "nextOffset": 0,
+      "maximumWindowBytes": 8000,
+      "retainedWindows": 0,
+      "pendingEvidenceRequest": null,
+      "fullStreamRetained": false,
+      "interpretation": "Full original bytes and causal/root-total review remain pending; provider tail and last-root counters are insufficient"
+    }
+  ],
+  "historicalUncertainJob2696": "Untouched; no closure inferred"
+}

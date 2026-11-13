@@ -1,0 +1,58 @@
+{
+  "observedAt": "2026-11-13T09:53:21.203Z",
+  "refs": {
+    "main": "f402575b0667bc02110849867cabacf013e61be6",
+    "review": "10f3e795981b45b68bdfbee93fa6d1674d2a1a7f",
+    "originalWip": "9b870241b43f7dec9e7428f10c63156bb131b39a"
+  },
+  "prs": [
+    {
+      "number": 203,
+      "url": "https://github.com/psvensson/lagrange/pull/203",
+      "state": "closed",
+      "merged": true,
+      "draft": false,
+      "head": "work/pr-canonical-json-data-20261112",
+      "headSha": "fb03e86177e003ab21779cd0f932d2d0bafe6826",
+      "base": "review/lagrange-split-base-20261112",
+      "baseSha": "49fba99e1ad27acf83a75fdcee1f89a061377de4",
+      "mergedAt": "2026-11-12T19:03:06Z"
+    },
+    {
+      "number": 204,
+      "url": "https://github.com/psvensson/lagrange/pull/204",
+      "state": "closed",
+      "merged": true,
+      "draft": false,
+      "head": "work/pr-durable-store-connection-20261112",
+      "headSha": "3e1d1fa4dc61107f25927e480485323bc7417bcc",
+      "base": "review/lagrange-split-base-20261112",
+      "baseSha": "49fba99e1ad27acf83a75fdcee1f89a061377de4",
+      "mergedAt": "2026-11-12T19:03:23Z"
+    },
+    {
+      "number": 205,
+      "url": "https://github.com/psvensson/lagrange/pull/205",
+      "state": "open",
+      "merged": false,
+      "draft": true,
+      "head": "work/pr-cdc-timer-cleanup-20261112",
+      "headSha": "346d214ab8a39a4f86960a8b761df92412264724",
+      "base": "review/lagrange-split-base-20261112",
+      "baseSha": "10f3e795981b45b68bdfbee93fa6d1674d2a1a7f",
+      "mergedAt": null
+    },
+    {
+      "number": 206,
+      "url": "https://github.com/psvensson/lagrange/pull/206",
+      "state": "open",
+      "merged": false,
+      "draft": true,
+      "head": "work/pr-lifecycle-observation-final-20261112",
+      "headSha": "751a1076ab9ff9fa8a3a98766ad150b2a5338cfa",
+      "base": "review/lagrange-split-base-20261112",
+      "baseSha": "10f3e795981b45b68bdfbee93fa6d1674d2a1a7f",
+      "mergedAt": null
+    }
+  ]
+}

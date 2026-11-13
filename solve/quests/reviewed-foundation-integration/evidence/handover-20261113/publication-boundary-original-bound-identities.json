@@ -1,0 +1,56 @@
+[
+  {
+    "requestId": "28e62bb2-bc9a-4802-b002-57cae2e0aa60",
+    "wireRequestId": "28e62bb2bc9a4802b00257cae2e0aa60",
+    "host": "local-workstation",
+    "source": {
+      "repo": "psvensson/lagrange",
+      "ref": "refs/heads/wip/publication-boundary-original-controls-20261113",
+      "sha": "24060f4b393a3f392dd55a7bf0a8f2071c1af04d"
+    },
+    "tree": "74b6b10516573b7e8020ba41c7fd423e0e293bdc",
+    "src": "bc9e83a24cee235aa7fd33ff9777dc97d229903c",
+    "roots": [
+      "test/scripts/test-placement.test.js",
+      "test/scripts/placement-failure-custody.test.js"
+    ],
+    "jobs": 2,
+    "timeoutSeconds": 1200,
+    "createdAt": "2026-11-13T09:44:47.337Z",
+    "expiresAt": "2026-11-13T10:44:47.337Z",
+    "scriptBytes": 6226,
+    "scriptSha256": "5249084879f72a0e4a4aa2c4b1ed5426a26d7da0ffae0c7406d0054b371c0c65",
+    "reviewTemplateSha256": "765a5df0c39ebe641dc51f1aee14767fd0f3f82cde5d6c9ad8b2312e3bdeb4dd",
+    "payloadBytes": 6974,
+    "payloadSha256": "d0d3910217fe2b4313e5896667157a8bb9facfd50c633687ebae9ff2bbea545d",
+    "shell": "/bin/bash",
+    "onlyTemplateSubstitution": "__FINAL_REMOTE_SHA__"
+  },
+  {
+    "requestId": "c158bfe8-6fe6-4b09-8152-6ce52945a7cf",
+    "wireRequestId": "c158bfe86fe64b0981526ce52945a7cf",
+    "host": "adams-gamla",
+    "source": {
+      "repo": "psvensson/lagrange",
+      "ref": "refs/heads/wip/publication-boundary-original-controls-20261113",
+      "sha": "24060f4b393a3f392dd55a7bf0a8f2071c1af04d"
+    },
+    "tree": "74b6b10516573b7e8020ba41c7fd423e0e293bdc",
+    "src": "bc9e83a24cee235aa7fd33ff9777dc97d229903c",
+    "roots": [
+      "test/scripts/publish-head.test.js",
+      "test/scripts/release-proof-identity.test.js"
+    ],
+    "jobs": 2,
+    "timeoutSeconds": 1200,
+    "createdAt": "2026-11-13T09:44:47.340Z",
+    "expiresAt": "2026-11-13T10:44:47.340Z",
+    "scriptBytes": 6209,
+    "scriptSha256": "6aba694950b8086482da8b40525bbf32aeb9aad845e0afa681a435d4302e74cd",
+    "reviewTemplateSha256": "923d1174b021ccd78d37894032a8d9e8dae4729528a49395e7a99bf597cb36c3",
+    "payloadBytes": 6951,
+    "payloadSha256": "cd1df269941cc8f4d7596c754222bafe72676728e012cb9b56617074222364bf",
+    "shell": "/bin/bash",
+    "onlyTemplateSubstitution": "__FINAL_REMOTE_SHA__"
+  }
+]

@@ -98,15 +98,16 @@ async function remoteRunnerInvocations() {
 describe('project hardening contracts', () => {
   it('runs heavy lab work only under the machine-wide lock', async () => {
     assert.deepEqual(await remoteRunnerInvocations(),
-      ['scripts/lab/probe.js: node scripts/run-classified-test-files.js'],
+      ['scripts/lab/placement-shell.js: node scripts/run-classified-test-files.js'],
       'the placement wrapper is the one remote invocation of the runner or the harness');
-    const [probe, harness, homeLab, runbook] = await Promise.all([
-      readFile('scripts/lab/probe.js', UTF8), readFile('scripts/lab/harness.js', UTF8),
+    const [lock, harness, homeLab, runbook] = await Promise.all([
+      readFile('scripts/lab/machine-lock-constants.js', UTF8),
+      readFile('scripts/lab/harness.js', UTF8),
       readFile('docs/development/home-lab.md', UTF8),
       readFile('docs/development/solver-runbook.md', UTF8)]);
-    assert.ok(/\$\{LAB_LOCK_DIR:-\$HOME\/\.lab\}/u.test(probe),
+    assert.ok(/\$\{LAB_LOCK_DIR:-\$HOME\/\.lab\}/u.test(lock),
       'and it takes the convention\'s machine-wide lock');
-    assert.ok(!/flock -n 9 \|\|/u.test(probe), 'never a per-checkout lock alone, unwaited');
+    assert.ok(!/flock -n 9 \|\|/u.test(lock), 'never a per-checkout lock alone, unwaited');
     assert.ok(/^import \{[^}]*\bholdLabMachine\b[^}]*\} from '\.\/probe\.js';$/mu.test(harness),
       'a formation holds its nodes through the same owner');
     const section = LAB_SHARING_SECTION.exec(homeLab)?.[1] ?? '';

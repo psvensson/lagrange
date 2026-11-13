@@ -139,9 +139,12 @@ original controls.
 The separate split-lab controls exercise the same acquisition and settlement
 failure policy through `runLabTest`, including exactly-once planning-checkout
 release. Real wrapper controls refuse a missing bounded timeout owner before
-any transport starts. A separate existing group-to-child fallback in
-`scripts/lab/process.js` is recorded for that lifetime owner; it is not silently
-expanded into this change across unrelated consumers.
+any transport starts. The subsequent direct-caller census established that
+`scripts/lab/process.js`, the acquired formation holds and their harness
+finalizers, capture, and the streaming controller are coupled lifetime owners.
+Their group-to-child substitution and first-cause cleanup defects are now in
+this bounded correction, with separately frozen original controls. Unrelated
+formation policy and tunnel implementation remain outside the change.
 
 After independent candidate review, the sole coordinator runs those same
 controls and the existing runner, placement/split/discovery, local-corpus,
@@ -234,4 +237,153 @@ primary, a previously successful classification becomes `cleanup-unavailable`,
 and a thrown primary error remains the same error. Its finite locked-snapshot
 controls exercise the actual snapshot/revert/restore path. These controls and
 the complete/empty synchronous-stdin positives are frozen on original source;
-their physical outcomes and the candidate's canonical gates remain pending.
+their original outcomes were subsequently measured in job 3656 as recorded
+below. The candidate's canonical gates remain pending.
+
+## Placement and shared process custody
+
+Root and author independently read all 22,191 bytes from the original TV
+continuation 3656, SHA256
+`81563c07f90483599edd60b5d153213b616bfb7ffca133fc6ef91a37d8308648`, at
+source `aabc29b487375b76dc0f3b7519ce2c8502d0020b`, tree
+`9ae3ed4e00355d4d8acc645dd378e9a08d2e6bc4`.
+Preparation reached 20 cases: 11 pass and 9 causal failures. Actual missing
+producer, interruption and cleanup refusal were promoted or lost on that
+original. The cancellation cases fail first at their returned status; their
+later closure assertions were not reached and supply no closure proof.
+The actual-prove root reached 9 top-level cases: 6 pass and 3 failures. The
+successful tuple stayed green after locked cleanup, and the EISDIR case kept
+its original exception but lost its original snapshot. The fixed-23 case kept
+its flattened failed classification and failed on the missing explicit
+`proof`/cleanup envelope; that assertion does not establish classification
+erasure. Actual test/final-guard exits were 1/0; this is original calibration,
+not candidate or canonical acceptance.
+
+The remaining same-family removal paths are the placed shell and its planning
+checkout release. Their destructive removal and next-attempt purge date to
+`b9f156c80fb68b0013883a33f9242d8d56ccade9`; the machine-lock extension and
+planning owner appear in `1aea11baf6ba35a397547be54fa2621e674c1977`.
+`947fbe658ebb2efe993900b672ded51d5610dbcb` standardized kill syntax; it did
+not introduce the group-to-child substitution. The current user direction
+supersedes those active deletion/purge policies, preserving the original
+`test-placement` and `placement-fixture-followups` seals and evidence.
+The latter's one bounded abort grace remains required.
+
+The generated shell is extracted to `scripts/lab/placement-shell.js` behind
+the existing `placementScript(files)` entry. It receives the canonical lock,
+exit and execution policy. The full-corpus trigger and source-reading
+ownership witness follow this file boundary. Preparation and runner groups
+are distinct from the shell PID and flock waiter PID. Both phases use complete
+file-backed stdin and the same group cleanup. One 2-second TERM stage and
+one 2-second forced-closure stage fit within the existing 5-second controller
+abort grace; repeated signals cannot renew it. Only confirmed absence ends
+scope ownership; permission or other probe errors stay uncertain.
+[Linux signal semantics](https://man7.org/linux/man-pages/man2/kill.2.html)
+and [systemd's group stop policy](https://www.freedesktop.org/software/systemd/man/latest/systemd.kill.html)
+support this distinction between requesting a signal and observing closure.
+No systemd dependency or broader orchestration layer is introduced.
+
+A controller attempt claims its script and output files exclusively. Upload
+uses [GNU dd exclusive creation](https://www.gnu.org/software/coreutils/manual/html_node/dd-invocation.html)
+before consuming bytes; an unavailable tool or collision refuses instead of
+overwriting a prior bundle. A placed failure, unavailable setup or interruption
+retains its acquired checkout, TAP, ref, list and bundle. An unacquired prior
+path remains untouched. A clean closed run removes its own checkout through
+Git once; refusal retains the uncertain remainder and makes that run
+unavailable. No new attempt sweeps older siblings. Planning release uses the
+same strict remover once and caches its actual result. Its CLI and split
+caller retain an earlier error or measured nonzero outcome when release fails.
+The existing pruner reserves placement, placement-worktrees and
+lab-test-worktrees so age pruning cannot undo this custody.
+
+After wrapper acquisition, adverse or uncertain execution and failed output
+readout retain the controller's exact script and bundle too. Only observed
+zero, complete output and successful local finalization discard those inputs.
+An earlier observed error stays primary; a later readout error carries the
+already observed adverse wrapper status and its original I/O cause, without
+inventing missing output. Before wrapper acquisition, a failed setup closes
+every acquired descriptor and releases only its own transient input files;
+unknown or preexisting paths remain untouched. That boundary preserves the
+earlier real descriptor-failure controls while preventing post-execution
+evidence deletion.
+
+The shared signal helper only signals a successfully acquired group greater
+than 1; ESRCH is absence, and other OS errors remain errors. A formation hold
+now actually acquires that group. Lost HELD-session status is adverse and
+cached release preserves it through cleanup. The original-compatible witness
+does not assume its foreground reader stays live after shell exit: Node may
+close stdin at that exit, so an unbounded hold-pipe hang is not claimed as a
+measured cause. The existing 5-second release bound remains. The controller's
+actual streaming topology does own stdout/stderr pipes; its finite witness
+keeps a same-group descendant alive after direct exit 42 and requires explicit
+abort to close it before natural completion. Capture likewise waits for closed
+pipes on ordinary completion; at its unchanged timeout it reports incomplete
+output and unconfirmed group closure, even after a successful signal.
+Every affected harness finalizer attempts its acquired releases, signal
+disposal and record publication without replacing the original cause.
+
+Original controls are preserved on the 415d lineage and its additive 90bc
+successor, separately from reviewed candidate-only policy/fixture adaptations.
+The finite controls use actual Git locks, native stream/process identities and
+original artifact bytes; public pre-formation harness controls do not claim a
+formation ran. The remote cancellation fixture isolates the actual SSH command
+in a separate session, so cutting the controller wrapper cannot impersonate
+remote group cleanup. The original FIFO scenario is now an explicit collision
+witness; the unchanged 300-second transport timeout is not remeasured by it.
+Candidate review, physical execution, fresh generated metadata, canonical
+static/full-corpus proof and final delivery remain separate outstanding gates.
+
+Parallel placement requires its controller child collaborator before admitting
+any assigned child. The production wiring already supplies that collaborator;
+an absent or invalid collaborator now returns the existing unavailable outcome
+instead of invoking synchronous controller execution beside live remotes. The
+candidate finite shared fixture supplies the declared owned-child shape while
+preserving its recorded execution calls. Its bytes deliberately differ from
+the original `db4890cfe882427aad11017a4e5e6ab3436bde55` fixture retained with
+the original measurements. All original 37 control assertion bodies remain
+unchanged; a separate finite control requires refusal before any child starts.
+
+## Responsibility boundaries before closure
+
+The code-style owner requires touched source files to finish within 800 lines;
+the earlier observed probe line count was not an exception or a governed
+ratchet. The source is divided by its existing responsibilities, without a
+new execution layer or changes to measured bodies. The public `probe.js`
+retains platform probing and direct named exports of the original bindings.
+Internal consumers import their canonical modules directly:
+
+| Module under `scripts/lab/` | Existing responsibility |
+| --- | --- |
+| `machine-lock-constants.js` | Shared lock convention, status and holder vocabulary |
+| `machine-hold.js` | Holder records and formation hold acquisition/release |
+| `remote-command.js` | Local/SSH command serialization and transport arguments |
+| `test-capability.js` | Measured capability, dependency digest and readiness |
+| `worker-provisioning.js` | Worker setup generated from the canary's install steps |
+| `fleet-discovery.js` | Live fleet observations and exact source requirements |
+| `placement-constants.js` | Shared placement policy and outcome vocabulary |
+| `placement-source.js` | Exact Git identity and owned bundle inputs |
+| `test-placement.js` | Cost placement, admission and assigned verdicts |
+| `placement-execution.js` | Assigned child acquisition, output and bounded cleanup |
+| `lab-test.js` | Hand-lab planning checkout, assignments and observed results |
+
+The existing `process.js` remains a dependency leaf and owns the exact shared
+child exit/close/line utilities and their primitive declarations. The existing
+`placement-shell.js` remains the sole remote shell. The test runner's exact
+bounded byte reader moves to `scripts/test-output-reader.js`; its public
+binding remains available from `run-test-files.js`.
+
+Native byte comparisons preserve the moved declarations, function bodies,
+serialized scripts and retained entrypoint bodies. Source review separately
+identified an omitted hand-lab import-graph binding: the existing caller now
+consumes `PROOF_CHECKOUT_GENERATORS` directly, as its unchanged producer/seal
+witness requires. That correction is isolated in commit `1345d420b`, after
+the independently reviewed no-child refusal and reader extraction; it is not
+represented as a mechanical move or measured success.
+
+Both `FULL_CORPUS_TRIGGER_RULES` and `SELECTOR_SELF_PATHS` follow every moved
+proof-bearing module. Their existing witnesses require full-corpus selection.
+The original pruner control demonstrated evidence deletion, so the existing
+pruner and its retention constants now have an explicit evidence-retention
+rule in both mechanisms. The durable-record integer helper remains ordinary
+product source. Native line counts and comparisons are source bookkeeping;
+physical static checks, generated metadata and runtime proof remain pending.

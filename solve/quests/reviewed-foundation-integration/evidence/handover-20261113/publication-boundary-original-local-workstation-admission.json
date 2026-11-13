@@ -1,0 +1,17 @@
+{
+  "phase": "delivered",
+  "host": "local-workstation",
+  "stem": "publication-boundary-original-local-workstation",
+  "requestId": "28e62bb2-bc9a-4802-b002-57cae2e0aa60",
+  "wireRequestId": "28e62bb2bc9a4802b00257cae2e0aa60",
+  "sourceSha": "24060f4b393a3f392dd55a7bf0a8f2071c1af04d",
+  "payloadSha256": "d0d3910217fe2b4313e5896667157a8bb9facfd50c633687ebae9ff2bbea545d",
+  "scriptSha256": "5249084879f72a0e4a4aa2c4b1ed5426a26d7da0ffae0c7406d0054b371c0c65",
+  "expiresAtMs": 1794566687337,
+  "roots": [
+    "test/scripts/test-placement.test.js",
+    "test/scripts/placement-failure-custody.test.js"
+  ],
+  "issue": 3687,
+  "lastGithubWriteMs": 1794563451214
+}

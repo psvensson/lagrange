@@ -448,7 +448,7 @@ controller is the machine every agent works on, and it runs hot, so it is a
 reserve, not a peer:
 
 - With at least two free lab hosts (`CONTROLLER_RESERVE_MIN_HOSTS` in
-  `scripts/lab/probe.js`) it takes only what no lab host can run: a file over
+  `scripts/lab/lab-test.js`) it takes only what no lab host can run: a file over
   every host's per-file bound. A host another run holds is not free; it takes
   only what no free host fits.
 - With fewer than two free hosts but at least two held ones, the held hosts

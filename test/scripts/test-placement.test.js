@@ -20,16 +20,20 @@ import {
 } from '../../scripts/lab/probe.js';
 import {runClassifiedTestFiles} from '../../scripts/run-classified-test-files.js';
 import {
-  CONTROLLER, IMPORT_GRAPH_PRODUCER, LANE, PRODUCER_STUB, fakeInventory, gateTestSource, lab,
-  placementRunFixture as fakeDeps, sealPlacedCommit, waitForNonEmptyFile, worktreeTap,
+  CONTROLLER, IMPORT_GRAPH_PRODUCER, LANE, fakeInventory, lab,
+  placementRunFixture as fakeDeps, waitForNonEmptyFile, worktreeTap,
 } from './test-placement-fixtures.js';
 import {spawnGit} from '../../scripts/checks/git-invocation.js';
+import {
+  CUSTODY_STDERR, CUSTODY_STDERR_BYTES, CUSTODY_TAP, CUSTODY_TAP_BYTES,
+  FAST_TEST, FIXTURE_HOLDER, GATE_TEST, LINK_UNIVERSE_TEST, MINUTE,
+  REMOTE_CLOSE_MS, RESULTS_FILE, RESULTS_TEXT, RUNNER_FAST_FIXTURE,
+  RUNNER_SLOW_FIXTURE, SEALED_GRAPH_TEST, custodyShardFixture, exitOf, git,
+  holdLock, joinRemoteFixture, labFixture, leftovers, liveGroupMembers,
+  lockIsFree, nativeIdentity, ownedPhaseMarker, processesUnder, runnerFixture,
+  runnerPidFrom, startRemoteCancellationFixture, waitForRemoteMarker,
+} from './test-placement-execution-fixture.js';
 
-const MINUTE = 60000;
-// A pure unit file of about 50 ms: the witnesses below wait on events, not on
-// wall-clock budgets, because the hosted runner is several times slower
-// (2026-09-18: a repository-scanning file took over a minute there).
-const FAST_TEST = 'test/query/distributed-merge-engine.test.js';
 const SLOW_TEST = 'test/scripts/check-operation-dispatch-completion-owner.test.js';
 const OTHER_FAST_TEST = 'test/query/budget-limit-error.test.js';
 
@@ -41,30 +45,6 @@ function worktreeResults(files) {
     const tap = path.join(process.cwd(), '.tap', 'test-results', `${file}.tap`);
     return fs.existsSync(tap) ? `${file} ${fs.statSync(tap).mtimeMs}` : `${file} absent`;
   });
-}
-
-// Fixture test files only a runner fixture has: one that runs until it is
-// stopped (bounded at a minute) and one that passes at once.
-const RUNNER_SLOW_FIXTURE = 'test/scripts/placement-runner-slow.test.js';
-const RUNNER_FAST_FIXTURE = 'test/scripts/placement-runner-fast.test.js';
-const RUNNER_FIXTURE_HEAD = 'import assert from \'node:assert/strict\';\n' +
-  'import {test} from \'node:test\';\n';
-
-// A throwaway checkout of this commit whose own root the real runner runs in
-// and records its results under - never this worktree, never a corpus file.
-function runnerFixture(t) {
-  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'placement-runner-'));
-  t.after(() => fs.rmSync(scratch, {recursive: true, force: true}));
-  const root = path.join(scratch, 'checkout');
-  git(scratch, 'clone', '-q', '--shared', process.cwd(), root);
-  fs.symlinkSync(path.join(process.cwd(), 'node_modules'), path.join(root, 'node_modules'));
-  fs.writeFileSync(path.join(root, RUNNER_SLOW_FIXTURE), `${RUNNER_FIXTURE_HEAD}` +
-    'process.stdout.write(\'# started\\n\');\n' +
-    'test(\'runs until stopped\', async () => {\n' +
-    '  await new Promise((resolve) => setTimeout(resolve, 60000));\n  assert.ok(true);\n});\n');
-  fs.writeFileSync(path.join(root, RUNNER_FAST_FIXTURE),
-    `${RUNNER_FIXTURE_HEAD}test('passes', () => assert.ok(true));\n`);
-  return {root, tap: (file) => path.join(root, '.tap', 'test-results', `${file}.tap`)};
 }
 
 function machineOf(shards, file) {
@@ -615,29 +595,22 @@ test('a second hang-up during the abort neither kills it nor repeats it', async 
   assert.deepEqual(exits, [130]);
 });
 
-// The runner's pid once the lab shard's log names it.
-async function runnerPidFrom(logFile) {
-  for (let poll = 0; poll < 1200; poll += 1) {
-    const pid = /^placement-pid=(\d+)$/mu.exec(fs.readFileSync(logFile, 'utf8'))?.[1];
-    if (pid) return Number(pid);
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-  return assert.fail('the runner never started');
-}
-
-const GATE_TEST = 'test/scripts/lab-stream-gate.test.js';
-
-test('an aborted lab shard cleans up before it is cut', async (t) => {
-  const {node, parent, controller, start} = labFixture(t);
+test('an aborted lab shard closes its group and retains the original attempt', async (t) => {
+  const fixture = labFixture(t);
+  const {parent, controller, start} = fixture;
   const running = start([GATE_TEST], {runId: 'aborted'});
   const runner = await runnerPidFrom(
     path.join(controller, 'test-output', 'placement', 'aborted-lab.log'));
-  await waitForNonEmptyFile(worktreeTap(parent, 'aborted', GATE_TEST));
+  const tap = worktreeTap(parent, 'aborted', GATE_TEST);
+  await waitForNonEmptyFile(tap);
+  const original = fs.readFileSync(tap);
   running.abort();
   const outcome = await running.done;
   assert.equal(outcome.reason, 'interrupted');
-  assert.deepEqual(leftovers(node), {worktrees: 1, refs: '', files: []},
-    'the lab shell removed its worktree, ref, bundle and file list before being cut');
+  assertRetainedRemoteAttempt(fixture, 'aborted', fixture.sha, [GATE_TEST]);
+  assert.deepEqual(fs.readFileSync(tap).subarray(0, original.length), original,
+    'the original pre-interruption transcript remains intact');
+  assertEarlierPlacement(fixture);
   let alive = true;
   for (let poll = 0; poll < 100 && alive; poll += 1) {
     try {
@@ -671,36 +644,6 @@ test('the controller child runs with placement switched off', async (t) => {
     'the worktree\'s results root is untouched');
 });
 
-// push-gate-change-proof's precondition, as a file a fixture commit carries:
-// the sealed import graph loads in the checkout the file runs in.
-const SEALED_GRAPH_TEST = 'test/scripts/lab-sealed-graph.test.js';
-const SEALED_GRAPH_TEST_SOURCE = [
-  'import assert from \'node:assert/strict\';',
-  'import {test} from \'node:test\';',
-  'import {loadSealedImporters} from \'../../scripts/checks/helper-import-closure.js\';',
-  'test(\'the sealed import graph loads here\', () => {',
-  '  const sealed = loadSealedImporters(process.cwd());',
-  '  assert.ok(sealed.ok, `the sealed import graph: ${sealed.problem}`);',
-  '});',
-  '',
-].join('\n');
-// What the change taxonomy enumerates in a lab machine's checkout: none of
-// the placement's workspace links (a linked tools/alloy-* directory was).
-const LINK_UNIVERSE_TEST = 'test/scripts/lab-link-universe.test.js';
-const LINK_UNIVERSE_TEST_SOURCE = [
-  'import assert from \'node:assert/strict\';',
-  'import fs from \'node:fs\';',
-  'import {test} from \'node:test\';',
-  'import {candidatePaths} from \'../../scripts/checks/change-selection.js\';',
-  'test(\'no workspace link is a candidate\', () => {',
-  '  assert.deepEqual(candidatePaths(process.cwd()).untracked',
-  '    .filter((file) => fs.lstatSync(file).isSymbolicLink()), []);',
-  '});',
-  '',
-].join('\n');
-const RESULTS_FILE = 'test-output/reports/test-results.ndjson';
-const RESULTS_TEXT = '{"file":"a","ok":true}\n{"file":"b","ok":false}\n';
-
 test('the controller child gets its file list even while this process is busy', async (t) => {
   // Its list used to go down a socket written from this event loop; a child
   // that read it first - this process blocked after the spawn, as a placed
@@ -729,32 +672,6 @@ test('the controller child gets its file list even while this process is busy', 
     'the worktree\'s results root is untouched');
 });
 
-function git(cwd, ...args) {
-  const result = spawnGit(['-c', 'user.name=t', '-c', 'user.email=t@t', ...args],
-    {cwd, encoding: 'utf8', env: gitProcessEnvironment()});
-  assert.equal(result.status, 0, `git ${args.join(' ')}: ${result.stderr}`);
-  return result.stdout.trim();
-}
-
-// Processes whose working directory lies under dir (Linux; elsewhere none).
-function processesUnder(dir) {
-  if (!fs.existsSync('/proc/self/cwd')) return [];
-  return fs.readdirSync('/proc').filter((entry) => /^\d+$/u.test(entry)).filter((pid) => {
-    try {
-      return fs.readlinkSync(`/proc/${pid}/cwd`).startsWith(dir);
-    } catch {
-      return false;
-    }
-  });
-}
-
-function exitOf(child) {
-  return new Promise((resolve) => {
-    if (child.exitCode !== null || child.signalCode !== null) resolve();
-    else child.once('exit', resolve);
-  });
-}
-
 // The descriptors a started runner holds, read from /proc once its pid is in
 // the log: neither the machine-wide lock nor the checkout lock may be one of
 // them. Returns the runner's pid.
@@ -778,100 +695,34 @@ async function assertRunnerFreeOfLock(logFile) {
   return runnerPid;
 }
 
-function leftovers(repo) {
-  const parent = path.join(repo, 'test-output', 'placement-worktrees');
-  return {
-    worktrees: git(repo, 'worktree', 'list', '--porcelain').split('\n')
-      .filter((line) => line.startsWith('worktree ')).length,
-    refs: git(repo, 'for-each-ref', 'refs/lagrange-placement'),
-    files: fs.existsSync(parent) ? fs.readdirSync(parent) : [],
-  };
+// Current custody policy supersedes the old deletion/purge expectations.
+// These helpers inspect only the actual scope each scenario acquired; a
+// refused upload never claims a checkout or source ref it did not acquire.
+function assertEarlierPlacement({node, parent, basis}) {
+  assert.equal(fs.statSync(path.join(parent, 'old-run')).isDirectory(), true);
+  assert.equal(fs.readFileSync(path.join(parent, 'old-run.files'), 'utf8'), 'x');
+  assert.equal(fs.readFileSync(path.join(parent, 'old-run.bundle'), 'utf8'), 'x');
+  assert.equal(git(node, 'rev-parse', 'refs/lagrange-placement/old-run'), basis,
+    'an earlier attempt remains outside the current owner\'s cleanup scope');
 }
 
-// What a fixture shard tells other agents it is doing, unless a witness says.
-const FIXTURE_HOLDER = Object.freeze({purpose: 'test:ordinary', expectedMs: MINUTE});
-
-// The machine-wide lock in a scratch directory the shard's shell is pointed
-// at, and a `flock` first on its PATH that records how it was called.
-function labLockFixture(scratch, env) {
-  const dir = path.join(scratch, 'lab-lock');
-  const calls = path.join(scratch, 'flock-calls');
-  const real = spawnSync('sh', ['-c', 'command -v flock'], {encoding: 'utf8'}).stdout.trim();
-  const stubs = path.join(scratch, 'stub-bin');
-  fs.mkdirSync(stubs);
-  fs.writeFileSync(path.join(stubs, 'flock'),
-    `#!/bin/sh\nprintf '%s\\n' "$*" >> '${calls}'\nexec '${real}' "$@"\n`, {mode: 0o755});
-  env.PATH = `${stubs}${path.delimiter}${env.PATH}`;
-  env.LAB_LOCK_DIR = dir;
-  env.LAGRANGE_LAB_AGENT = 'claude:placement-witness';
-  return {dir, lock: path.join(dir, 'machine.lock'),
-    holder: path.join(dir, 'machine.holder.json'),
-    calls: () => (fs.existsSync(calls) ? fs.readFileSync(calls, 'utf8').trim().split('\n') : [])};
+function assertRetainedRemoteAttempt({node, parent}, runId, sha, files) {
+  const checkout = fs.realpathSync(path.join(parent, runId));
+  assert.ok(git(node, 'worktree', 'list', '--porcelain').includes(`worktree ${checkout}\n`),
+    `the original failed checkout stays registered at ${checkout}`);
+  assert.equal(git(checkout, 'rev-parse', 'HEAD'), sha, 'its exact source remains available');
+  assert.equal(git(node, 'rev-parse', `refs/lagrange-placement/${runId}`), sha);
+  assert.equal(fs.readFileSync(path.join(parent, `${runId}.files`), 'utf8'),
+    `${files.join('\n')}\n`, 'the original selection remains available');
+  assert.match(git(node, 'bundle', 'list-heads', path.join(parent, `${runId}.bundle`)),
+    new RegExp(`^${sha} `, 'mu'), 'the original uploaded bundle still names this source');
 }
 
-// A lab machine's checkout at this commit, and a controller one commit on,
-// in scratch repositories; `start` places files there in local-sh mode.
-function labFixture(t, {realProducer = false} = {}) {
-  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'placement-remote-'));
-  t.after(() => fs.rmSync(scratch, {recursive: true, force: true}));
-  const node = path.join(scratch, 'node');
-  const controller = path.join(scratch, 'controller');
-  git(scratch, 'clone', '-q', '--shared', process.cwd(), node);
-  git(scratch, 'clone', '-q', '--shared', process.cwd(), controller);
-  fs.symlinkSync(path.join(process.cwd(), 'node_modules'), path.join(node, 'node_modules'));
-  // An ignored workspace entry the worktree should get, and a tracked one
-  // the placed commit deletes, which it must not get back from the lab's
-  // older checkout.
-  fs.mkdirSync(path.join(node, 'data', 'examples'), {recursive: true});
-  fs.writeFileSync(path.join(node, 'data', 'examples', 'witness.txt'), 'x');
-  // A fetched model checker: tools/ is untracked, its entries ignored one by one.
-  fs.mkdirSync(path.join(node, 'tools'), {recursive: true});
-  fs.writeFileSync(path.join(node, 'tools', 'tla2tools.jar'), 'x');
-  fs.mkdirSync(path.join(node, 'tools', 'alloy-6.2.0'));
-  // What an earlier, interrupted run left behind.
-  const parent = path.join(node, 'test-output', 'placement-worktrees');
-  fs.mkdirSync(path.join(parent, 'old-run'), {recursive: true});
-  fs.writeFileSync(path.join(parent, 'old-run.bundle'), 'x');
-  fs.writeFileSync(path.join(parent, 'old-run.files'), 'x');
-  const basis = git(node, 'rev-parse', 'HEAD');
-  git(node, 'update-ref', 'refs/lagrange-placement/old-run', basis);
-  fs.appendFileSync(path.join(controller, 'README.md'), '\nplacement witness\n');
-  git(controller, 'rm', '-q', '-r', 'data/storage-load');
-  // A file that finishes only when the witness releases it, so a line can be
-  // shown to arrive while its shard still runs; and a results ledger at the
-  // path a runner leaves one, which a hand run copies back.
-  const gate = path.join(scratch, 'release-gate');
-  fs.writeFileSync(path.join(controller, GATE_TEST), gateTestSource(gate));
-  fs.mkdirSync(path.join(controller, 'test-output', 'reports'), {recursive: true});
-  fs.writeFileSync(path.join(controller, RESULTS_FILE), RESULTS_TEXT);
-  if (!realProducer) fs.writeFileSync(path.join(controller, IMPORT_GRAPH_PRODUCER), PRODUCER_STUB);
-  fs.writeFileSync(path.join(controller, SEALED_GRAPH_TEST), SEALED_GRAPH_TEST_SOURCE);
-  fs.writeFileSync(path.join(controller, LINK_UNIVERSE_TEST), LINK_UNIVERSE_TEST_SOURCE);
-  git(controller, 'add', '-f', GATE_TEST, RESULTS_FILE, SEALED_GRAPH_TEST, LINK_UNIVERSE_TEST);
-  if (realProducer) sealPlacedCommit(controller);
-  git(controller, 'commit', '-qam', 'placement witness');
-  const sha = git(controller, 'rev-parse', 'HEAD');
-  const machine = {name: 'lab', sshTarget: null, repoPath: node, repoHead: basis,
-    nodeMajor: '', factor: 1.5};
-  // Run from inside node:test, the shell here would hand its runner
-  // NODE_TEST_CONTEXT and switch tap to the serialized stream, and inside a
-  // push hook a GIT_DIR naming the pusher's repository; a lab machine's ssh
-  // session carries neither.
-  const env = gitProcessEnvironment();
-  delete env.NODE_TEST_CONTEXT;
-  // The lab's machine-wide lock lives in the fixture, never in this
-  // machine's own $HOME/.lab, and every flock call is recorded on its way to
-  // the real one.
-  const labLock = labLockFixture(scratch, env);
-  const start = (files, options = {}) => startRemoteShard({machine, files},
-    {sha, deadlineMs: 10 * MINUTE, root: controller, env, holder: FIXTURE_HOLDER, ...options});
-  return {node, controller, parent, machine, sha, basis, env, start, labLock,
-    releaseGate: () => fs.writeFileSync(gate, 'go')};
-}
-
-test('a lab machine proves the exact commit in a throwaway worktree and leaves nothing behind',
+test('a lab machine proves the exact commit and cleans only its successful attempt',
   async (t) => {
-    const {node, controller, parent, machine, sha, basis, env, start} = labFixture(t);
+    const fixture = labFixture(t);
+    const {node, controller, parent, machine, sha, basis, env, start} = fixture;
+    const earlier = leftovers(node);
     const started = start([FAST_TEST], {runId: 'capped',
       forward: {tapTimeout: '900', checkBase: basis}});
     assert.equal(typeof started.then, 'undefined', 'a shard is started, not awaited');
@@ -882,8 +733,11 @@ test('a lab machine proves the exact commit in a throwaway worktree and leaves n
     const green = await started.done;
     // The lane cap comes from the host's own processor count at run time,
     // never from a host name.
-    assert.match(sent, /^cores="\$\(getconf _NPROCESSORS_ONLN 2>\/dev\/null \|\| nproc 2>\/dev\/null\)"$/mu,
-      'the remote host counts its own processors');
+    assert.match(sent, /^cores="\$\(getconf _NPROCESSORS_ONLN 2>\/dev\/null\)"; cores_status=\$\?$/mu,
+      'the remote host counts its processors through its declared producer');
+    assert.match(sent, /case "\$cores" in ""\|0\|\*\[!0-9\]\*\)/u,
+      'missing, zero or malformed processor counts refuse admission');
+    assert.doesNotMatch(sent, /\bnproc\b/u, 'no alternate census can promote an unavailable count');
     // The lab convention's default lock directory is `$HOME/.lab` on every
     // host; the fixture's machine is also called lab.
     assert.doesNotMatch(sent.replaceAll('$HOME/.lab', ''), /\blab\b/u,
@@ -905,8 +759,9 @@ test('a lab machine proves the exact commit in a throwaway worktree and leaves n
       'a fetched model checker is linked');
     assert.doesNotMatch(green.log, /^placement-link=data\/storage-load$/mu,
       'a tracked entry the commit deleted stays deleted');
-    assert.deepEqual(leftovers(node), {worktrees: 1, refs: '', files: []},
-      'no worktree, ref, bundle or file list is left behind, nor an earlier run\'s');
+    assert.deepEqual(leftovers(node), earlier,
+      'its own worktree and inputs are removed; the earlier attempt stays untouched');
+    assertEarlierPlacement(fixture);
 
     // A shard that finished while this process was blocked past its deadline
     // is green, not stopped (verifier round 1).
@@ -921,44 +776,60 @@ test('a lab machine proves the exact commit in a throwaway worktree and leaves n
     assert.equal(finished.reason, undefined, finished.log);
     assert.equal(finished.status, 0);
 
-    // A machine that takes the upload and then stalls holds nothing: the
-    // shard is already started, and its deadline stops it.
+    // This preexisting FIFO formerly acted as a stalled upload. Exclusive
+    // attempt admission now refuses it before upload. It is collision proof,
+    // not a measurement of the unchanged transport timeout.
     fs.mkdirSync(parent, {recursive: true});
-    spawnSync('mkfifo', [path.join(parent, 'stalled.bundle')]);
-    const stalledAt = Date.now();
-    const stalled = await start([FAST_TEST], {runId: 'stalled', deadlineMs: 1500}).done;
-    assert.equal(stalled.reason, 'deadline');
-    assert.ok(Date.now() - stalledAt < 15000, 'stopped at its deadline');
-    // And the stalled upload itself is gone, not left to its own 300 s bound
-    // (a plain `timeout` would take it out of the wrapper's group).
     const fifo = path.join(parent, 'stalled.bundle');
+    assert.equal(spawnSync('mkfifo', [fifo]).status, 0);
+    const originalFifo = fs.lstatSync(fifo);
+    const stalledAt = Date.now();
+    const stalledRun = start([FAST_TEST], {runId: 'stalled', deadlineMs: 1500});
+    const stalledInputs = ['.sh', '.bundle'].map((suffix) => {
+      const file = path.join(controller, 'test-output', 'placement', `stalled-lab${suffix}`);
+      return [file, fs.readFileSync(file)];
+    });
+    const stalled = await stalledRun.done;
+    assert.equal(stalled.status, PLACEMENT_EXIT.SETUP, stalled.log + stalled.errors);
+    assert.match(stalled.errors, /placement: unavailable - attempt already exists:/u);
+    assert.ok(stalled.errors.includes(fifo), 'the refusal identifies the actual collision');
+    assert.ok(Date.now() - stalledAt < 15000, 'collision admission is bounded');
+    const retainedFifo = fs.lstatSync(fifo);
+    assert.equal(retainedFifo.isFIFO(), true, 'the unacquired original FIFO remains');
+    assert.deepEqual([retainedFifo.dev, retainedFifo.ino], [originalFifo.dev, originalFifo.ino],
+      'the original FIFO was never removed or replaced');
+    assert.doesNotMatch(stalled.log, /placement-shell=|placement-pid=/u,
+      'neither remote checkout nor runner was admitted');
     let uploading = true;
     for (let poll = 0; poll < 40 && uploading; poll += 1) {
       uploading = spawnSync('pgrep', ['-f', fifo]).status === 0;
       if (uploading) await new Promise((resolve) => setTimeout(resolve, 50));
     }
-    assert.equal(uploading, false, 'the upload was stopped with its shard');
-    assert.deepEqual(fs.readdirSync(path.join(controller, 'test-output', 'placement'))
-      .filter((file) => file.startsWith('stalled') && !/\.(log|err)$/u.test(file)), [],
-    'and its local script and bundle are gone');
+    assert.equal(uploading, false, 'no upload process remains for the refused collision');
+    for (const [file, original] of stalledInputs) {
+      assert.deepEqual(fs.readFileSync(file), original,
+        'the refused attempt retains each exact controller input');
+    }
 
-    // Stopped mid-run by the deadline: the runner's group dies and the shell
-    // still cleans up.
-    // Stopped once its runner is running - the same stop a deadline makes,
-    // which the stalled upload above already exercised on its timer.
+    // Stopped mid-run: the runner's group closes and its original checkout,
+    // inputs and transcript remain available.
+    // Stop only after the actual runner has started. This exercises the
+    // public stop owner, not expiry of the upload timeout.
     const running = start([GATE_TEST], {runId: 'deadline-run'});
     // While it runs, the machine lock is held by the shell alone: the runner
     // and its tests do not carry it (Linux, where /proc shows descriptors).
     await assertRunnerFreeOfLock(
       path.join(controller, 'test-output', 'placement', 'deadline-run-lab.log'));
-    await waitForNonEmptyFile(worktreeTap(parent, 'deadline-run', GATE_TEST));
+    const stoppedTap = worktreeTap(parent, 'deadline-run', GATE_TEST);
+    await waitForNonEmptyFile(stoppedTap);
+    const originalTap = fs.readFileSync(stoppedTap);
     running.stop();
     const stopped = await running.done;
     assert.equal(stopped.reason, 'interrupted');
     const runner = /^placement-pid=(\d+)$/mu.exec(stopped.log)?.[1];
     assert.ok(runner, 'the stop fell while the runner ran');
     assert.throws(() => process.kill(Number(runner), 0),
-      'the shell waited for its runner before cleaning up');
+      'the shell waited for its runner before completing');
     assert.doesNotMatch(stopped.log, new RegExp(`^ok ${GATE_TEST} `, 'mu'),
       'and stopped it before its file finished');
     let groupAlive = true;
@@ -972,7 +843,10 @@ test('a lab machine proves the exact commit in a throwaway worktree and leaves n
     }
     assert.equal(groupAlive, false, 'the runner\'s whole group is gone');
     assert.deepEqual(processesUnder(node), [], 'and nothing it started still runs there');
-    assert.deepEqual(leftovers(node), {worktrees: 1, refs: '', files: []});
+    assertRetainedRemoteAttempt(fixture, 'deadline-run', sha, [GATE_TEST]);
+    assert.deepEqual(fs.readFileSync(stoppedTap).subarray(0, originalTap.length), originalTap,
+      'stopping never erases the original transcript');
+    assertEarlierPlacement(fixture);
 
     // One placed run per machine: a busy machine is refused at once.
     if (spawnSync('sh', ['-c', 'command -v flock']).status === 0) {
@@ -993,23 +867,33 @@ test('a lab machine proves the exact commit in a throwaway worktree and leaves n
         poll += 1) {
         await new Promise((resolve) => setTimeout(resolve, 50));
       }
-      const busy = await (await start([FAST_TEST])).done;
+      const beforeBusy = leftovers(node);
+      const busy = await start([FAST_TEST], {runId: 'checkout-busy'}).done;
       assert.equal(busy.status, PLACEMENT_EXIT.BUSY);
       release();
       await exitOf(holder);
-      assert.deepEqual(leftovers(node), {worktrees: 1, refs: '', files: []});
+      assert.deepEqual(leftovers(node), {...beforeBusy,
+        files: [...beforeBusy.files, 'checkout-busy.bundle'].sort()},
+      'only its successfully uploaded bundle was acquired; earlier custody remains');
+      assert.match(git(node, 'bundle', 'list-heads', path.join(parent, 'checkout-busy.bundle')),
+        new RegExp(`^${sha} `, 'mu'));
     }
 
     // A commit the machine does not hold although its checkout claims it:
-    // nothing is set up, and the shard falls back.
+    // its setup refuses and earlier retained attempts remain intact.
     fs.appendFileSync(path.join(controller, 'README.md'), 'a second witness line\n');
     git(controller, 'commit', '-qam', 'placement witness two');
     const unsent = git(controller, 'rev-parse', 'HEAD');
     const unreachable = await (await startRemoteShard({machine: {...machine, repoHead: unsent},
       files: [FAST_TEST]}, {sha: unsent, deadlineMs: MINUTE, root: controller, env,
-      holder: FIXTURE_HOLDER})).done;
+      holder: FIXTURE_HOLDER, runId: 'unreachable'})).done;
     assert.equal(unreachable.status, PLACEMENT_EXIT.SETUP);
-    assert.deepEqual(leftovers(node), {worktrees: 1, refs: '', files: []});
+    assertEarlierPlacement(fixture);
+    assertRetainedRemoteAttempt(fixture, 'deadline-run', sha, [GATE_TEST]);
+    assert.deepEqual(fs.readFileSync(stoppedTap).subarray(0, originalTap.length), originalTap,
+      'later unavailable setup cannot erase the earlier failure transcript');
+    const untouchedFifo = fs.lstatSync(fifo);
+    assert.deepEqual([untouchedFifo.dev, untouchedFifo.ino], [originalFifo.dev, originalFifo.ino]);
   });
 
 // ---------------------------------------------------------------------------
@@ -1029,29 +913,6 @@ const OTHER_HOLDER = Object.freeze({project: 'other-project', agent: 'codex:task
   controller: 'laptop', purpose: 'formation:rolling-restart', sha: 'e'.repeat(40),
   startedAt: '2026-09-23T10:00:00Z', expectedMinutes: 25, pid: 4242});
 const HOST_BUSY_LINE = 'placement: host-busy b held-by codex:task-7 since 2026-09-23T10:00:00Z';
-
-// Holds a lock file from a process group of its own until released.
-async function holdLock(t, lock) {
-  const holder = spawn('flock', [lock, 'sleep', '60'], {stdio: 'ignore', detached: true});
-  const release = async () => {
-    try {
-      process.kill(-holder.pid, 'SIGKILL');
-    } catch {
-      // already gone
-    }
-    await exitOf(holder);
-  };
-  t.after(release);
-  for (let poll = 0; poll < 600 && spawnSync('flock', ['-n', lock, 'true']).status === 0;
-    poll += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-  return {pid: holder.pid, release};
-}
-
-function lockIsFree(lock) {
-  return spawnSync('flock', ['-n', lock, 'true']).status === 0;
-}
 
 test('a lab shard takes the machine-wide lock for its budget and records who holds it',
   async (t) => {
@@ -1105,8 +966,11 @@ test('a lab shard finding the machine held waits its budget, then refuses naming
       'the holder\'s own record is left exactly as it was');
     assert.deepEqual(leftovers(node), {worktrees: 1,
       refs: `${machine.repoHead} commit\trefs/lagrange-placement/old-run`,
-      files: ['old-run', 'old-run.bundle', 'old-run.files']},
-    'it left nothing of its own, and touched nothing of a run it never held the machine for');
+      files: ['busy.bundle', 'old-run', 'old-run.bundle', 'old-run.files']},
+    'its upload is retained without claiming a checkout or touching the other attempt');
+    assert.match(git(node, 'bundle', 'list-heads',
+      path.join(node, 'test-output', 'placement-worktrees', 'busy.bundle')),
+    / HEAD$/mu, 'the actual uploaded Git bundle remains available');
   });
 
 test('discovery keeps a machine another agent holds out of placement before it is tried', () => {
@@ -1225,7 +1089,8 @@ test('a lab shard streams its lines while it runs and relays its results ledger'
 
 test('a lab machine generates the placed commit\'s import graph before its files run',
   async (t) => {
-    const {start, sha, env} = labFixture(t);
+    const fixture = labFixture(t);
+    const {start, sha, env} = fixture;
     const ran = await start([FAST_TEST], {runId: 'graph'}).done;
     assert.equal(ran.status, 0, ran.log + ran.errors);
     assert.match(ran.errors, new RegExp(`^producer --refresh-import-graph-only at ${sha}$`, 'mu'),
@@ -1237,6 +1102,7 @@ test('a lab machine generates the placed commit\'s import graph before its files
     const failed = await start([FAST_TEST], {runId: 'graph-failed'}).done;
     assert.equal(failed.status, PLACEMENT_EXIT.SETUP, 'a graph it cannot make is a setup failure');
     assert.match(failed.errors, /placement: the import graph could not be generated/u);
+    assertRetainedRemoteAttempt(fixture, 'graph-failed', sha, [FAST_TEST]);
     delete env.PRODUCER_FAILS;
     env.PRODUCER_REWRITES = 'README.md';
     const stale = await start([FAST_TEST], {runId: 'graph-stale'}).done;
@@ -1245,6 +1111,9 @@ test('a lab machine generates the placed commit\'s import graph before its files
     assert.match(stale.errors,
       /placement: the commit's generated metadata is stale; regenerate and commit README\.md/u);
     assert.doesNotMatch(stale.log, /placement-pid=/u, 'no runner started');
+    assertRetainedRemoteAttempt(fixture, 'graph-stale', sha, [FAST_TEST]);
+    assertRetainedRemoteAttempt(fixture, 'graph-failed', sha, [FAST_TEST]);
+    assertEarlierPlacement(fixture);
   });
 
 test('the change proof\'s sealed-graph precondition holds in a lab machine\'s checkout',
@@ -1259,7 +1128,8 @@ test('the change proof\'s sealed-graph precondition holds in a lab machine\'s ch
 
 test('a lab checkout without its required producer refuses before starting the runner',
   async (t) => {
-    const {node, controller, start} = labFixture(t);
+    const fixture = labFixture(t);
+    const {controller, start} = fixture;
     git(controller, 'rm', '-q', IMPORT_GRAPH_PRODUCER);
     git(controller, '-c', 'commit.gpgsign=false', 'commit', '-qm', 'missing required producer');
     const sha = git(controller, 'rev-parse', 'HEAD');
@@ -1272,8 +1142,8 @@ test('a lab checkout without its required producer refuses before starting the r
       IMPORT_GRAPH_PRODUCER, 'u'));
     assert.doesNotMatch(ran.log, /placement-pid=/u, 'no classified runner started');
     assert.doesNotMatch(ran.log, /^(?:not )?ok test\//mu, 'no file verdict was produced');
-    assert.deepEqual(leftovers(node), {worktrees: 1, refs: '', files: []},
-      'refusal closed the acquired checkout, ref, bundle and file list');
+    assertRetainedRemoteAttempt(fixture, 'missing-producer', sha, [FAST_TEST]);
+    assertEarlierPlacement(fixture);
   });
 
 // The ledger in the throwaway worktree came back whole before it was
@@ -1423,3 +1293,192 @@ test('a hand lab run on a host too hot reports it and keeps the ledger of what r
     assert.ok(lines.includes('lab test: alpha: # test-files total=2 pass=1 fail=1 ' +
       'assertions=1'), lines.join('\n'));
   });
+
+function assertOriginalPlacementBytes(fixture, checkout) {
+  assert.ok(fs.existsSync(checkout), `original checkout retained at ${checkout}`);
+  assert.equal(fs.readFileSync(path.join(checkout, CUSTODY_TAP), 'utf8'), CUSTODY_TAP_BYTES,
+    'the exact original stdout artifact survives');
+  assert.equal(fs.readFileSync(path.join(checkout, CUSTODY_STDERR), 'utf8'), CUSTODY_STDERR_BYTES,
+    'the exact original stderr artifact survives');
+  const registered = git(fixture.node, 'worktree', 'list', '--porcelain');
+  assert.ok(registered.includes(`worktree ${fs.realpathSync(checkout)}\n`),
+    `the retained checkout remains registered: ${registered}`);
+}
+
+for (const status of [0, 42]) {
+  test(`remote cleanup retains a real locked checkout after child exit ${status}`,
+    {timeout: 2 * MINUTE}, async (t) => {
+      const fixture = custodyShardFixture(t, {status, lock: true});
+      const runId = `locked-custody-${status}`;
+      const checkout = path.join(fixture.parent, runId);
+      const started = fixture.start(runId);
+      t.after(() => started.abort());
+      const outcome = await started.done;
+      const detail = `${outcome.log}\n${outcome.errors}`;
+      assert.match(outcome.log, new RegExp(`^placement-head=${fixture.sha}$`, 'mu'), detail);
+      assert.match(outcome.log, new RegExp(`^custody-child-head=${fixture.sha}$`, 'mu'), detail);
+      assert.ok(outcome.log.includes(`custody-child-input=${JSON.stringify(`${FAST_TEST}\n`)}`),
+        'the finite child consumed the actual assigned input');
+      assert.match(outcome.log, /^custody-child-locked=.+$/mu, detail);
+      assert.match(outcome.log, new RegExp(`^custody-child-exit=${status}$`, 'mu'), detail);
+      assert.equal(outcome.status, status === 0 ? PLACEMENT_EXIT.SETUP : status,
+        `cleanup cannot turn a refusal into green or replace an earlier exit: ${detail}`);
+      assertOriginalPlacementBytes(fixture, checkout);
+      assert.ok(detail.includes(checkout), 'the owner names the actual retained checkout');
+      if (status === 0) {
+        assert.match(detail, /placement: cleanup unavailable/u,
+          'ordinary success becomes unavailable when canonical Git removal refuses');
+        assert.match(detail, /locked/u, 'the original Git refusal remains visible');
+      } else {
+        assert.match(detail, /placement: retained original checkout/u,
+          'a failed execution retains evidence without another removal attempt');
+      }
+    });
+}
+
+test('a new remote assignment cannot purge a retained sibling checkout or its inputs',
+  {timeout: 2 * MINUTE}, async (t) => {
+    const fixture = custodyShardFixture(t, {status: 0, lock: false});
+    const retainedId = 'retained-original-failure';
+    const checkout = path.join(fixture.parent, retainedId);
+    const retainedRef = `refs/lagrange-placement/${retainedId}`;
+    git(fixture.node, 'worktree', 'add', '--detach', '--quiet', checkout, fixture.basis);
+    fs.mkdirSync(path.dirname(path.join(checkout, CUSTODY_TAP)), {recursive: true});
+    fs.writeFileSync(path.join(checkout, CUSTODY_TAP), CUSTODY_TAP_BYTES);
+    fs.writeFileSync(path.join(checkout, CUSTODY_STDERR), CUSTODY_STDERR_BYTES);
+    git(fixture.node, 'worktree', 'lock', '--reason', 'retained original failure', checkout);
+    git(fixture.node, 'update-ref', retainedRef, fixture.basis);
+    const input = `${FAST_TEST}\n`;
+    fs.writeFileSync(`${checkout}.files`, input);
+    git(fixture.node, 'bundle', 'create', `${checkout}.bundle`, 'HEAD^..HEAD');
+    const bundle = fs.readFileSync(`${checkout}.bundle`);
+    const started = fixture.start('later-clean-assignment');
+    t.after(() => started.abort());
+    const outcome = await started.done;
+    assert.equal(outcome.status, 0, `${outcome.log}\n${outcome.errors}`);
+    assert.match(outcome.log, /^custody-child-exit=0$/mu,
+      'the later real assignment completed its finite child');
+    assert.equal(fs.existsSync(path.join(fixture.parent, 'later-clean-assignment')), false,
+      'successful cleanup still removes its own checkout');
+    assertOriginalPlacementBytes(fixture, checkout);
+    assert.equal(git(fixture.node, 'rev-parse', retainedRef), fixture.basis,
+      'the earlier source reference is outside this run\'s cleanup ownership');
+    assert.equal(fs.readFileSync(`${checkout}.files`, 'utf8'), input,
+      'the earlier exact assigned input remains');
+    assert.deepEqual(fs.readFileSync(`${checkout}.bundle`), bundle,
+      'the earlier real Git bundle remains byte-identical');
+  });
+
+test('a colliding controller attempt refuses before overwriting its original inputs or logs',
+  {timeout: 2 * MINUTE}, async (t) => {
+    const fixture = custodyShardFixture(t, {status: 0, lock: false});
+    const runId = 'existing-controller-attempt';
+    const local = path.join(fixture.controller, 'test-output', 'placement', `${runId}-lab`);
+    fs.mkdirSync(path.dirname(local), {recursive: true});
+    for (const suffix of ['.log', '.err', '.sh']) {
+      fs.writeFileSync(local + suffix, `original ${suffix} bytes\n`);
+    }
+    git(fixture.controller, 'bundle', 'create', `${local}.bundle`, 'HEAD^..HEAD');
+    const originals = new Map(['.log', '.err', '.sh', '.bundle']
+      .map((suffix) => [local + suffix, fs.readFileSync(local + suffix)]));
+    const started = fixture.start(runId);
+    t.after(() => started.abort());
+    const outcome = await started.done;
+    const detail = `${outcome.reason || ''}\n${outcome.log}\n${outcome.errors}`;
+    assert.equal(outcome.status, PLACEMENT_EXIT.SETUP, detail);
+    assert.match(detail, /placement: unavailable - attempt already exists:/u);
+    assert.ok([...originals.keys()].some((file) => detail.includes(file)),
+      'the refusal names an actual colliding path');
+    assert.doesNotMatch(outcome.log || '', /placement-shell=|custody-child-exit=/u,
+      'the collision refuses before any remote shell or runner is started');
+    for (const [file, bytes] of originals) {
+      assert.ok(fs.existsSync(file), `unacquired original remains at ${file}`);
+      assert.deepEqual(fs.readFileSync(file), bytes, `original bytes unchanged at ${file}`);
+    }
+  });
+
+test('a colliding remote attempt preserves its unacquired checkout, source and inputs',
+  {timeout: 2 * MINUTE}, async (t) => {
+    const fixture = custodyShardFixture(t, {status: 0, lock: false});
+    const runId = 'existing-remote-attempt';
+    const checkout = path.join(fixture.parent, runId);
+    const ref = `refs/lagrange-placement/${runId}`;
+    git(fixture.node, 'worktree', 'add', '--detach', '--quiet', checkout, fixture.basis);
+    fs.mkdirSync(path.dirname(path.join(checkout, CUSTODY_TAP)), {recursive: true});
+    fs.writeFileSync(path.join(checkout, CUSTODY_TAP), CUSTODY_TAP_BYTES);
+    fs.writeFileSync(path.join(checkout, CUSTODY_STDERR), CUSTODY_STDERR_BYTES);
+    git(fixture.node, 'worktree', 'lock', '--reason', 'original colliding attempt', checkout);
+    git(fixture.node, 'update-ref', ref, fixture.basis);
+    fs.writeFileSync(`${checkout}.files`, `${OTHER_FAST_TEST}\n`);
+    git(fixture.node, 'bundle', 'create', `${checkout}.bundle`, 'HEAD^..HEAD');
+    const bundle = fs.readFileSync(`${checkout}.bundle`);
+    const started = fixture.start(runId);
+    t.after(() => started.abort());
+    const outcome = await started.done;
+    const detail = `${outcome.reason || ''}\n${outcome.log}\n${outcome.errors}`;
+    assert.equal(outcome.status, PLACEMENT_EXIT.SETUP, detail);
+    assert.match(detail, /placement: unavailable - attempt already exists:/u);
+    assert.ok(detail.includes(checkout), 'the refusal identifies the colliding remote scope');
+    assert.doesNotMatch(outcome.log || '', /custody-child-exit=/u,
+      'no runner executes against an unacquired checkout');
+    assertOriginalPlacementBytes(fixture, checkout);
+    assert.equal(git(fixture.node, 'rev-parse', ref), fixture.basis,
+      'the old source ref is not advanced to the incoming candidate');
+    assert.equal(fs.readFileSync(`${checkout}.files`, 'utf8'), `${OTHER_FAST_TEST}\n`);
+    assert.deepEqual(fs.readFileSync(`${checkout}.bundle`), bundle,
+      'upload admission cannot overwrite the earlier real bundle');
+  });
+
+for (const preparation of [true, false]) {
+  test(preparation ? 'remote cancellation owns the live producer group and forbids later runner' :
+    'remote cancellation closes a TERM-ignoring runner and descendant before done',
+  {timeout: 2 * MINUTE}, async (t) => {
+    const run = startRemoteCancellationFixture(t, {preparation});
+    await waitForRemoteMarker(run, run.ready);
+    if (!preparation) await waitForRemoteMarker(run, run.descendantReady);
+    const phase = ownedPhaseMarker(run, run.ready);
+    const descendant = preparation ? null : ownedPhaseMarker(run, run.descendantReady);
+    const transport = JSON.parse(fs.readFileSync(run.transport, 'utf8'));
+    assert.equal(transport.marker, run.transport);
+    const shellPid = Number(/^placement-shell=(\d+)$/mu
+      .exec(fs.readFileSync(run.logFile, 'utf8'))?.[1]);
+    const shell = nativeIdentity(shellPid);
+    assert.ok(shell, 'the actual remote shell remains live at interruption');
+    assert.equal(shell.group, transport.remotePid, 'the real shell is in the acquired SSH session');
+    assert.equal(shell.session, transport.remotePid);
+    assert.equal(phase.parent, shell.pid, 'the remote shell acquired the active phase');
+    const live = nativeIdentity(phase.pid);
+    assert.ok(live && !live.state.startsWith('Z'), 'cancellation targets a live phase');
+    assert.equal(live.group, phase.group);
+    assert.equal(live.session, phase.session);
+    const startedAt = Date.now();
+    run.started.abort();
+    const outcome = await joinRemoteFixture(run);
+    const elapsed = Date.now() - startedAt;
+    assert.equal(outcome.status, PLACEMENT_EXIT.TERMINATED,
+      `the actual interruption survives cleanup: ${JSON.stringify(outcome)}`);
+    assert.equal(outcome.reason, 'interrupted');
+    assert.ok(elapsed < REMOTE_CLOSE_MS, `the existing shell-close envelope is kept: ${elapsed}ms`);
+    assert.equal(phase.group, phase.pid, 'the phase owns its acquired process group');
+    assert.notEqual(phase.group, shell.group, 'the phase group is independent of the remote shell');
+    assert.notEqual(phase.group, transport.client.group,
+      'a controller wrapper cut cannot masquerade as phase cancellation');
+    assert.equal(fs.readFileSync(run.ack, 'utf8'), 'SIGTERM',
+      'the active phase actually received cancellation');
+    assert.equal(fs.existsSync(run.normal), false, 'natural completion did not close the phase');
+    assert.deepEqual(liveGroupMembers(phase), [], 'no live phase-group member remains at done');
+    assertOriginalPlacementBytes(run.fixture, run.checkout);
+    if (preparation) {
+      assert.equal(fs.existsSync(run.admitted), false, 'the runner was never admitted');
+      assert.doesNotMatch(outcome.log, /placement-pid=/u, 'no later runner group was acquired');
+    } else {
+      assert.equal(descendant.pid, phase.descendant, 'the marker identifies the acquired descendant');
+      assert.equal(descendant.parent, phase.pid);
+      assert.equal(descendant.group, phase.group);
+      assert.equal(descendant.session, phase.session);
+      assert.equal(fs.readFileSync(run.descendantAck, 'utf8'), 'SIGTERM');
+      assert.equal(fs.existsSync(run.descendantNormal), false,
+        'the descendant did not disappear by reaching its own natural ceiling');
+    }
+  });
+}

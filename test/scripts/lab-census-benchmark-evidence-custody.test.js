@@ -47,12 +47,17 @@ function makeTempRoot() {
   return root;
 }
 
-test('R1 canonical runner placement and cleanup binds machine lock holder and terminates runner process group',
+test('R1 placement binds the lock holder and distinguishes shell PID from the owned child group',
   () => {
     assert.match(
       placementKillScript(),
-      /kill\s+-s\s+TERM\s+--\s+"-\$1"/u,
-      'placement kill script must signal runner process group with kill -s TERM -- "-$1"',
+      /kill\s+-s\s+TERM\s+--\s+"\$1"/u,
+      'the signal adapter addresses the actual placement shell PID it was given',
+    );
+    assert.doesNotMatch(
+      placementKillScript(),
+      /"-\$1"|\|\|\s*kill/u,
+      'the shell PID is never guessed to be a process group or replaced after a failed signal',
     );
 
     const script = placementScript(['test/example.test.js']);
@@ -68,8 +73,8 @@ test('R1 canonical runner placement and cleanup binds machine lock holder and te
     );
     assert.match(
       script,
-      /kill\s+-s\s+TERM\s+--\s+"-\$pid"/u,
-      'placement script stop function must terminate runner process group',
+      /kill\s+-s\s+TERM\s+--\s+"-\$group_pid"/u,
+      'the shell stop owner targets the explicitly acquired preparation or runner process group',
     );
   });
 

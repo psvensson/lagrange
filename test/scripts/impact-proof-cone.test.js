@@ -28,6 +28,7 @@ import {
 import {
   REASON_SEMANTIC_CONTRACT,
   MODE_FATAL,
+  TIER_SELECTOR_SELF,
 } from '../../scripts/checks/impact-proof-cone-constants.js';
 import {
   buildManifest as buildPrimaryManifest,
@@ -304,6 +305,44 @@ test('exact, directory, and legacy stem owners select their claimant tests', () 
       assert.equal(selection.fullSuite, false);
       assert.ok(selection.changedContracts.includes(contract));
       assert.ok(selection.selectedTests.includes(claimant));
+    }
+  });
+});
+
+test('extracted proof execution owners retain the selector full-corpus obligation', () => {
+  const paths = [
+    'scripts/run-test-files.js',
+    'scripts/test-output-reader.js',
+    'scripts/lab/placement-shell.js',
+    'scripts/lab/test-capability.js',
+    'scripts/lab/worker-provisioning.js',
+    'scripts/lab/machine-lock-constants.js',
+    'scripts/lab/machine-hold.js',
+    'scripts/lab/remote-command.js',
+    'scripts/lab/placement-source.js',
+    'scripts/lab/fleet-discovery.js',
+    'scripts/lab/placement-constants.js',
+    'scripts/lab/test-placement.js',
+    'scripts/lab/placement-execution.js',
+    'scripts/lab/lab-test.js',
+    'scripts/prune-test-output.js',
+    'scripts/checks/test-output-retention-constants.js',
+    'scripts/publish-head.js',
+    'scripts/publish-local-corpus.js',
+    'scripts/publish-command-runner.js',
+    'scripts/publish-execution-constants.js',
+    'scripts/proof-authority.js',
+    'scripts/proof-receipt-contract.js',
+    'scripts/solve/commands.js',
+    'scripts/solve/quest-record-commands.js',
+  ];
+  withSelectorFixture(({rootDirectory}) => {
+    for (const changedPath of paths) {
+      const {selection, problems} = selectProofCone(rootDirectory, [changedPath]);
+      assert.deepEqual(problems, [], changedPath);
+      assert.equal(selection.escalation, TIER_SELECTOR_SELF, changedPath);
+      assert.equal(selection.fullSuite, true, changedPath);
+      assert.equal(selection.selectedTests.length, selection.counts.totalTests, changedPath);
     }
   });
 });

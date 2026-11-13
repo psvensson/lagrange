@@ -79,6 +79,8 @@ const HARNESS_REFUSAL = Object.freeze({
   BUSY: ' busy, ',
   FAILED: ' could not be held: ',
 });
+const HARNESS_CLEANUP_UNAVAILABLE = 'harness: cleanup unavailable: ';
+const HARNESS_CLEANUP_STATE = Object.freeze({COMPLETE: 'complete', FAILED: 'failed'});
 // The machine identity the lab fleet itself uses to say "same machine as"
 // (probe.js CAPABILITY_SCRIPT boot_id): the kernel's per-boot id, which no
 // two running machines share - unlike /etc/machine-id, which cloned lab
@@ -379,26 +381,83 @@ async function holdHarnessNodes(nodes, scenarioPart, hold) {
   const sessions = [];
   const deadline = Date.now() + HARNESS_BUDGET_MS;
   const ordered = [...nodes].sort((left, right) => (left.name < right.name ? -1 : 1));
-  for (const node of ordered) {
-    const session = hold({name: node.name, sshTarget: node.ssh}, {
-      waitMs: deadline - Date.now(), purpose: `${HARNESS_PURPOSE}${scenarioPart}`,
-      expectedMs: HARNESS_BUDGET_MS,
-    });
-    sessions.push(session);
-    const outcome = await session.outcome;
-    if (outcome.state !== LAB_HOLD.HELD) {
-      await releaseHolds(sessions);
-      throw new Error(`${HARNESS_REFUSAL.PREFIX}${node.name}` +
-        (outcome.state === LAB_HOLD.BUSY ?
-          `${HARNESS_REFUSAL.BUSY}${labHolderText(outcome.holder)}` :
-          `${HARNESS_REFUSAL.FAILED}${outcome.reason}`));
+  try {
+    for (const node of ordered) {
+      const session = hold({name: node.name, sshTarget: node.ssh}, {
+        waitMs: deadline - Date.now(), purpose: `${HARNESS_PURPOSE}${scenarioPart}`,
+        expectedMs: HARNESS_BUDGET_MS,
+      });
+      sessions.push(session);
+      const outcome = await session.outcome;
+      if (outcome.state !== LAB_HOLD.HELD) {
+        throw new Error(`${HARNESS_REFUSAL.PREFIX}${node.name}` +
+          (outcome.state === LAB_HOLD.BUSY ?
+            `${HARNESS_REFUSAL.BUSY}${labHolderText(outcome.holder)}` :
+            `${HARNESS_REFUSAL.FAILED}${outcome.reason}`));
+      }
     }
+  } catch (error) {
+    const cleanup = await releaseHolds(sessions);
+    throwWithCleanupFailures(error, cleanup.errors);
   }
   return sessions;
 }
 
 function releaseHolds(sessions) {
-  return Promise.all(sessions.map((session) => session.release()));
+  return settleHarnessCleanup(sessions.map((session) => () => session.release()));
+}
+
+async function settleHarnessCleanup(actions) {
+  const outcome = {state: HARNESS_CLEANUP_STATE.COMPLETE, errors: []};
+  // Observe every action and retain failures in arrival order, so a later
+  // rejection from an earlier array entry cannot replace the first failure.
+  await Promise.all(actions.map(async (close) => {
+    try {
+      await close();
+    } catch (error) {
+      outcome.state = HARNESS_CLEANUP_STATE.FAILED;
+      outcome.errors.push(error);
+    }
+  }));
+  return outcome;
+}
+
+// A synchronous refusal is settled just like an asynchronous one: it cannot
+// prevent a later acquired hold from being released. Diagnostics cannot
+// replace the primary Error or its already classified runner exit.
+function throwWithCleanupFailures(primary, failures) {
+  try {
+    for (const error of failures) {
+      process.stderr.write(`${HARNESS_CLEANUP_UNAVAILABLE}${String(error)}\n`);
+    }
+  } catch {
+    throw primary;
+  }
+  throw primary;
+}
+
+function finishHarnessCleanup(failed, ...outcomes) {
+  const errors = outcomes.flatMap((outcome) => outcome.errors);
+  if (failed !== null) throwWithCleanupFailures(failed.error, errors);
+  if (outcomes.some((outcome) => outcome.state === HARNESS_CLEANUP_STATE.FAILED)) {
+    throwWithCleanupFailures(errors[0], errors.slice(1));
+  }
+}
+
+async function runHeldHarness(holds, execute) {
+  const tunnels = [];
+  let failed = null;
+  try {
+    await execute(tunnels);
+  } catch (error) {
+    failed = {error};
+  }
+  // Keep the existing order: every tunnel stop settles before the holds are
+  // released, even if an earlier stop failed. Every release is attempted once.
+  const tunnelCleanup = await settleHarnessCleanup(
+    tunnels.map((tunnel) => () => stopTunnel(tunnel)));
+  const holdCleanup = await releaseHolds(holds);
+  finishHarnessCleanup(failed, tunnelCleanup, holdCleanup);
 }
 
 export async function runHarness({
@@ -456,8 +515,7 @@ export async function runHarness({
   }
 
   const holds = await holdHarnessNodes(nodes, scenarioPart, hold);
-  const tunnels = [];
-  try {
+  await runHeldHarness(holds, async (tunnels) => {
     const machineIds = await observeMachineIdentities(nodes, observeMachine);
     await openTunnels(nodes, ports, tunnels);
     await buildRemoteConfig(absoluteBase, nodes, ports, configPath, nodesPerHost,
@@ -469,10 +527,7 @@ export async function runHarness({
       extraArgs,
     });
     await runFormation(args, nodes, environment);
-  } finally {
-    await Promise.all(tunnels.map(stopTunnel));
-    await releaseHolds(holds);
-  }
+  });
 }
 
 async function openTunnels(nodes, ports, tunnels) {
@@ -564,18 +619,21 @@ async function runCertificationHarness(options) {
   // `lab harness keep-evidence` prints it for any run directory).
   const stopSignalRecord = printCertificationRecordOnSignal(run.dir,
     {questId: options.quest, write});
+  let failed = null;
   try {
     const holds = await holdHarnessNodes(nodes, sanitizeName(scenario), hold);
-    const tunnels = [];
-    try {
+    await runHeldHarness(holds, async (tunnels) => {
       await openTunnels(nodes, ports, tunnels);
       await runFormation(args, nodes, environment);
-    } finally {
-      await Promise.all(tunnels.map(stopTunnel));
-      await releaseHolds(holds);
-    }
-  } finally {
-    stopSignalRecord();
-    printCertificationRecord(run.dir, {questId: options.quest, write});
+    });
+  } catch (error) {
+    failed = {error};
   }
+  // Both outer obligations are attempted even if removing a handler or
+  // publishing the record throws. Neither can replace an earlier run verdict.
+  const cleanup = await settleHarnessCleanup([
+    stopSignalRecord,
+    () => printCertificationRecord(run.dir, {questId: options.quest, write}),
+  ]);
+  finishHarnessCleanup(failed, cleanup);
 }

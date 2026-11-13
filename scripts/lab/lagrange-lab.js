@@ -502,9 +502,11 @@ async function commandTest(profile, args) {
   }
   const request = labTestRequest(profile, args.flags);
   const commit = labTestCommit({root: FLEET_REPO_ROOT, sha: request.sha});
+  const primary = {observed: false};
+  const execution = {observed: false};
   try {
     const plan = await labTestPlan(profile, request, commit);
-    process.exitCode = await runLabTest({
+    const status = await runLabTest({
       plan,
       costs: estimateFileCosts(plan, lastResultsRoots(FLEET_REPO_ROOT)),
       commit,
@@ -514,8 +516,21 @@ async function commandTest(profile, args) {
       split: request.split,
       root: FLEET_REPO_ROOT,
     }, labTestDeps({root: FLEET_REPO_ROOT}));
+    Object.assign(execution, {observed: true, status});
+    process.exitCode = status;
+  } catch (error) {
+    Object.assign(primary, {observed: true, error});
+    throw error;
   } finally {
-    commit.release();
+    try {
+      commit.release();
+    } catch (cleanupError) {
+      if (!primary.observed && (!execution.observed || execution.status === 0)) throw cleanupError;
+      if (!primary.observed || cleanupError !== primary.error) {
+        process.stderr.write(`lab test: planning cleanup unavailable at ${commit.gitRoot}: ` +
+          `${cleanupError.message}\n`);
+      }
+    }
   }
 }
 

@@ -1,0 +1,55 @@
+{
+  "description": "Minimal plain request, delivery, provider, source-identity and pending-cursor handover records; no credentials",
+  "files": [
+    {
+      "filename": "publication-boundary-original-native-verification.json",
+      "bytes": 2837,
+      "sha256": "07813b8125cc69ec2b9584ea700ee8d34244052bb674097c1da09a397dcaa063"
+    },
+    {
+      "filename": "publication-boundary-original-evidence-cursors.json",
+      "bytes": 1736,
+      "sha256": "73b21af33bfdc04a77b4b0d9970bd19711302b2042e3377b7dc22c8a213c3288"
+    },
+    {
+      "filename": "publication-boundary-original-adams-gamla-payload.json",
+      "bytes": 6951,
+      "sha256": "cd1df269941cc8f4d7596c754222bafe72676728e012cb9b56617074222364bf"
+    },
+    {
+      "filename": "publication-boundary-original-adams-gamla-envelope.json",
+      "bytes": 512,
+      "sha256": "3eed1ba455506fe597ca3b6a2cc2a0750d4c31abf77ad3c65993cae65911a7ee"
+    },
+    {
+      "filename": "publication-boundary-original-adams-gamla-admission.json",
+      "bytes": 645,
+      "sha256": "01df10ae2fe5978f1cdeb15f8e71661241601b2a828bc708c1d0d2118a0e3813"
+    },
+    {
+      "filename": "publication-boundary-original-adams-gamla-completion.json",
+      "bytes": 2035,
+      "sha256": "8adcd1f7c5a359479abc837367f8f9c938a2f97a8f84712fd6c17dd77aef4343"
+    },
+    {
+      "filename": "publication-boundary-original-local-workstation-payload.json",
+      "bytes": 6974,
+      "sha256": "d0d3910217fe2b4313e5896667157a8bb9facfd50c633687ebae9ff2bbea545d"
+    },
+    {
+      "filename": "publication-boundary-original-local-workstation-envelope.json",
+      "bytes": 512,
+      "sha256": "0e6e8a081d4931eed313f73f8ef5fd8c2a8694d0fb48e767a34e72d844a2de06"
+    },
+    {
+      "filename": "publication-boundary-original-local-workstation-admission.json",
+      "bytes": 662,
+      "sha256": "6d3f40dea09ceede6aaf9cdaadedb3db4855f62a2f06e59c40f8c1a6f3e2fccf"
+    },
+    {
+      "filename": "publication-boundary-original-local-workstation-completion.json",
+      "bytes": 2052,
+      "sha256": "1bfaaeb6e1cfc7f32562b2302fecf8fe9d4e579b57de701fc8dae61e1423d207"
+    }
+  ]
+}

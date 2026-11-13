@@ -9,9 +9,11 @@ import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 
+import {execGit} from '../../scripts/checks/git-invocation.js';
+import {gitProcessEnvironment} from '../../scripts/checks/git-process-environment.js';
 import {
-  controllerHeadroom, formatLabController, formatLabDecision, formatLabSkipped, placeLabLanes,
-  placementMachines, planLabSplit, runLabTest,
+  controllerHeadroom, formatLabController, formatLabDecision, formatLabSkipped, labTestCommit,
+  placeLabLanes, placementMachines, planLabSplit, runLabTest,
 } from '../../scripts/lab/probe.js';
 import {CONTROLLER, LANE, fakeInventory, lab} from './test-placement-fixtures.js';
 
@@ -355,3 +357,93 @@ for (const fault of [
       }
     });
 }
+
+const PLANNING_ORIGINAL = 'test/retained-planning.test.js';
+const PLANNING_ORIGINAL_BYTES = 'original exact-source planning bytes\n';
+
+function planningGit(root, ...args) {
+  return execGit(['-c', 'user.name=finite-planning-witness',
+    '-c', 'user.email=finite-planning-witness@example.invalid', '-c', 'commit.gpgsign=false',
+    ...args], {cwd: root, env: gitProcessEnvironment(), encoding: 'utf8'}).trim();
+}
+
+// A real canonical Git worktree lock makes one-force removal refuse. The
+// fixture owns the entire temporary repository; no repository pointer or
+// Git command is replaced, and no physical-lab execution is inferred.
+function lockedPlanningFixture(t) {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'lab-planning-custody-')));
+  t.after(() => fs.rmSync(root, {recursive: true, force: true}));
+  planningGit(root, 'init', '--quiet');
+  fs.mkdirSync(path.join(root, 'test'));
+  fs.writeFileSync(path.join(root, PLANNING_ORIGINAL), PLANNING_ORIGINAL_BYTES);
+  fs.writeFileSync(path.join(root, 'package.json'), '{}\n');
+  fs.writeFileSync(path.join(root, '.gitignore'), 'test-output/\n');
+  planningGit(root, 'add', '.');
+  planningGit(root, 'commit', '--quiet', '-m', 'finite planning snapshot');
+  const commit = labTestCommit({root});
+  planningGit(root, 'worktree', 'lock', '--reason', 'finite planning cleanup witness',
+    commit.gitRoot);
+  return {root, commit};
+}
+
+function assertPlanningBytes(root, commit) {
+  assert.ok(fs.existsSync(commit.gitRoot), `original planning checkout retained: ${commit.gitRoot}`);
+  assert.equal(fs.readFileSync(path.join(commit.gitRoot, PLANNING_ORIGINAL), 'utf8'),
+    PLANNING_ORIGINAL_BYTES, 'the original planning bytes survive cleanup refusal');
+  const registered = planningGit(root, 'worktree', 'list', '--porcelain');
+  assert.ok(registered.includes(`worktree ${fs.realpathSync(commit.gitRoot)}\n`),
+    `the original planning checkout is still registered: ${registered}`);
+}
+
+test('planning release retains and remembers a real Git removal refusal', (t) => {
+  const {root, commit} = lockedPlanningFixture(t);
+  let first;
+  assert.throws(() => commit.release(), (error) => {
+    first = error;
+    return /locked/u.test(`${error.message}\n${error.stderr || ''}`);
+  }, 'canonical Git refusal is reported instead of recursively erasing the checkout');
+  assertPlanningBytes(root, commit);
+  // Make a second removal capable of succeeding: rethrowing the identical
+  // refusal with the checkout intact proves this is not a hidden retry.
+  planningGit(root, 'worktree', 'unlock', commit.gitRoot);
+  assert.throws(() => commit.release(), (error) => error === first,
+    'another release reports the same first failure without retrying deletion');
+  assertPlanningBytes(root, commit);
+});
+
+test('a real acquisition error stays primary when the planning checkout cannot be removed',
+  {timeout: 10 * SECOND}, async (t) => {
+    const {root, commit} = lockedPlanningFixture(t);
+    const lines = [];
+    const signals = new EventEmitter();
+    let primary;
+    let acquisitions = 0;
+    const result = runLabTest({root, commit, on: 'finite-peer',
+      plan: [{resourceClass: LANE.ORDINARY, files: [PLANNING_ORIGINAL], jobs: 1}],
+      write: (line) => lines.push(line)}, {
+      signals,
+      discover: async () => ({machines: [lab('finite-peer', 1)]}),
+      commitAt: () => commit.sha,
+      runLocalChild: () => assert.fail('the unavailable assignment never moves to the controller'),
+      runRemote: () => {
+        acquisitions += 1;
+        try {
+          fs.readFileSync(commit.gitRoot);
+        } catch (error) {
+          primary = error;
+          throw error;
+        }
+        assert.fail('reading a real directory must fail before a child is acquired');
+      },
+    });
+    await assert.rejects(result, (error) => error === primary && error.code === 'EISDIR',
+      'the actual earlier acquisition exception survives the later real Git refusal');
+    assert.equal(acquisitions, 1, 'the failed assignment was attempted only once');
+    assertPlanningBytes(root, commit);
+    assert.ok(lines.some((line) => /cleanup/u.test(line) && /locked/u.test(line)),
+      `the secondary cleanup problem remains visible: ${lines.join('\n')}`);
+    assert.ok(lines.some((line) => line.includes(commit.gitRoot)),
+      'the cleanup diagnostic identifies the exact retained planning checkout');
+    assert.ok(['SIGINT', 'SIGTERM', 'SIGHUP'].every((signal) =>
+      signals.listenerCount(signal) === 0), 'all operation signal handlers are released');
+  });

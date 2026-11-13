@@ -1,0 +1,15 @@
+{
+  "schema": "lagrange-lab-job/v1",
+  "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+  "created_at": "2026-11-13T09:44:47.340Z",
+  "expires_at": "2026-11-13T10:44:47.340Z",
+  "operation": "lab-work",
+  "request_id": "c158bfe86fe64b0981526ce52945a7cf",
+  "delivery": {
+    "partCount": 1,
+    "protocol": "harnessd-lab-work-delivery-v1",
+    "requestId": "c158bfe8-6fe6-4b09-8152-6ce52945a7cf",
+    "sha256": "cd1df269941cc8f4d7596c754222bafe72676728e012cb9b56617074222364bf",
+    "totalBytes": 6951
+  }
+}

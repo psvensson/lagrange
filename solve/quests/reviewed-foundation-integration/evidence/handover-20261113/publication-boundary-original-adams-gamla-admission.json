@@ -1,0 +1,17 @@
+{
+  "phase": "delivered",
+  "host": "adams-gamla",
+  "stem": "publication-boundary-original-adams-gamla",
+  "requestId": "c158bfe8-6fe6-4b09-8152-6ce52945a7cf",
+  "wireRequestId": "c158bfe86fe64b0981526ce52945a7cf",
+  "sourceSha": "24060f4b393a3f392dd55a7bf0a8f2071c1af04d",
+  "payloadSha256": "cd1df269941cc8f4d7596c754222bafe72676728e012cb9b56617074222364bf",
+  "scriptSha256": "6aba694950b8086482da8b40525bbf32aeb9aad845e0afa681a435d4302e74cd",
+  "expiresAtMs": 1794566687340,
+  "roots": [
+    "test/scripts/publish-head.test.js",
+    "test/scripts/release-proof-identity.test.js"
+  ],
+  "issue": 3686,
+  "lastGithubWriteMs": 1794563323595
+}

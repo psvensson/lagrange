@@ -313,6 +313,27 @@ refused assignment never moves elsewhere within that proof. `lab fleet` shows wh
 machine; set `LAGRANGE_LAB_AGENT` (for example `claude:SESSION`) to name
 yourself in the record.
 
+A failed, unavailable or interrupted placed attempt retains its original
+checkout, TAP and acquired source inputs. A new attempt never purges an older
+scope, and a colliding attempt identity refuses before overwriting it. Only a
+known closed, successful attempt removes its own checkout through Git; removal
+refusal makes that attempt unavailable and preserves its remaining evidence.
+Placement logs and retained placement/planning worktrees are reserved from
+generic age pruning. Planning release is attempted once; a later request gets
+the same result, and cleanup cannot replace an earlier error or nonzero exit.
+
+Cancellation distinguishes the placement shell PID, lock waiter PID and
+acquired preparation/runner group. The shell has one 2-second TERM stage and
+one 2-second forced-closure stage within the existing 5-second abort grace;
+repeated signals do not extend it. Signal delivery alone does not prove
+closure. Lost acquired formation holds are adverse. The streaming controller
+and capture wait for their owned pipes on ordinary completion; capture expiry
+explicitly reports incomplete output and unconfirmed group closure within its
+existing bound. Harness cleanup attempts every acquired release and preserves
+the primary outcome through later disposal or reporting failures.
+This supersedes the active all-exits deletion and next-attempt purge policies
+from the older placement work while preserving its sealed history and bounds.
+
 Documentation-only planning, roadmap and policy changes use the
 [documentation-only proof scope](../../test/guidelines/release-gate.md#documentation-only-changes).
 Their approval requires the applicable documentation checks and review, not a

@@ -724,9 +724,11 @@ test('staged landing index synthesizes a candidate commit for lab placement with
   assert.equal(git(root, ['rev-parse', `${candidateSha}^{tree}`]).trim(),
     git(root, ['write-tree']).trim());
   const bundleLocal = path.join(os.tmpdir(), `cand-bundle-${process.pid}`);
+  const ownedInputs = new Set();
   const bundleFile = bundleFor({repoHead: head, name: 'lab-test'},
-    {root, sha: candidateSha, local: bundleLocal});
+    {root, sha: candidateSha, local: bundleLocal, ownedInputs});
   assert.equal(fs.existsSync(bundleFile), true);
+  assert.deepEqual([...ownedInputs], [bundleFile], 'the caller owns its one acquired bundle');
   const listHeads = git(root, ['bundle', 'list-heads', bundleFile]).trim();
   assert.ok(listHeads.includes(candidateSha));
   assert.ok(listHeads.includes(`${PLACEMENT_CANDIDATE_REF_PREFIX}${candidateSha.slice(0, 12)}`));
