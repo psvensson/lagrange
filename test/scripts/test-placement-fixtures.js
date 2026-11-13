@@ -7,6 +7,32 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {gitProcessEnvironment} from '../../scripts/checks/git-process-environment.js';
+import {runClassifiedTestFiles} from '../../scripts/run-classified-test-files.js';
+
+// A finite child collaborator emits the new owner's typed lines. This tests
+// stream custody/placement, not sensor observation or file admission itself.
+export const READY_LINE = 'thermal: READY {"outcome":"READY"}';
+const REFUSED_LINE = 'thermal: thermal-headroom-exhausted {"outcome":"EXHAUSTED"}';
+export function labRunnerLog(files, refused) {
+  const lines = [];
+  const spawned = [];
+  const status = runClassifiedTestFiles(files, {
+    root: process.cwd(), env: {},
+    write: (text) => lines.push(text),
+    spawn(command, args) {
+      lines.push(`${refused ? REFUSED_LINE : READY_LINE}\n`);
+      const batch = args.slice(2);
+      if (!refused) {
+        spawned.push(...batch);
+        for (const file of batch) lines.push(`ok ${file} (1 assertions, 5ms)\n`);
+      }
+      const exitStatus = refused ? 75 : 0;
+      return {status: exitStatus, output: [null, null, null,
+        JSON.stringify({refused, exitStatus})]};
+    },
+  });
+  return {status, spawned, log: lines.join('').trimEnd()};
+}
 
 export const SENSOR_POLICY = Object.freeze({
   mode: 'sensor-required', cadence_ms: 0, max_concurrency: 4,

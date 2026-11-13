@@ -19,9 +19,8 @@ import {
   placeTestFiles, placementDeps, placementMachines, runLabTest,
   runPlacedTestFiles, startRemoteShard,
 } from '../../scripts/lab/probe.js';
-import {runClassifiedTestFiles} from '../../scripts/run-classified-test-files.js';
 import {
-  CONTROLLER, IMPORT_GRAPH_PRODUCER, LANE, fakeInventory, lab,
+  CONTROLLER, IMPORT_GRAPH_PRODUCER, LANE, READY_LINE, fakeInventory, lab, labRunnerLog,
   placementRunFixture as fakeDeps, waitForNonEmptyFile, worktreeTap,
 } from './test-placement-fixtures.js';
 import {spawnGit} from '../../scripts/checks/git-invocation.js';
@@ -346,31 +345,6 @@ test('an unavailable or incomplete lab shard blocks acceptance without reassignm
 // back unchanged and are never verdicts, and a host whose runner refused as
 // too hot is a typed unavailable outcome of this scheduled run.
 const REAL_FILES = Object.freeze([FAST_TEST, SLOW_TEST, OTHER_FAST_TEST]);
-// A finite child collaborator emits the new owner's typed lines. This tests
-// stream custody/placement, not sensor observation or file admission itself.
-const READY_LINE = 'thermal: READY {"outcome":"READY"}';
-const REFUSED_LINE = 'thermal: thermal-headroom-exhausted {"outcome":"EXHAUSTED"}';
-function labRunnerLog(files, refused) {
-  const lines = [];
-  const spawned = [];
-  const status = runClassifiedTestFiles(files, {
-    root: process.cwd(), env: {},
-    write: (text) => lines.push(text),
-    spawn(command, args) {
-      lines.push(`${refused ? REFUSED_LINE : READY_LINE}\n`);
-      const batch = args.slice(2);
-      if (!refused) {
-        spawned.push(...batch);
-        for (const file of batch) lines.push(`ok ${file} (1 assertions, 5ms)\n`);
-      }
-      const exitStatus = refused ? 75 : 0;
-      return {status: exitStatus, output: [null, null, null,
-        JSON.stringify({refused, exitStatus})]};
-    },
-  });
-  return {status, spawned, log: lines.join('').trimEnd()};
-}
-
 test('a lab runner\'s thermal lines are relayed unchanged and are never verdicts', async () => {
   let given = null;
   const run = fakeDeps({
