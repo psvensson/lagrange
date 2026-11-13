@@ -1,8 +1,8 @@
 // Placement runs one classified plan across the lab machines discovery finds
 // ready, chosen at test time from measured facts (owner direction,
 // 2026-09-18: an ordinary push proves itself locally and in parallel, and no
-// host belongs in any setup). A lab machine can only make a green faster:
-// what is red there is decided on the controller.
+// host belongs in any setup). Every assigned file executes once; a failed or
+// unmeasured share remains a failed or unavailable result of that run.
 
 import assert from 'node:assert/strict';
 import {spawn, spawnSync} from 'node:child_process';
@@ -15,13 +15,13 @@ import {test} from 'node:test';
 import {gitProcessEnvironment} from '../../scripts/checks/git-process-environment.js';
 import {
   DISCOVERY_FAILURE, PLACEMENT_EXIT, labTestCommit, labTestDeps,
-  placeTestFiles, placementDeps, placementMachines, recordPlacementMisses, runLabTest,
+  placeTestFiles, placementDeps, placementMachines, runLabTest,
   runPlacedTestFiles, startRemoteShard,
 } from '../../scripts/lab/probe.js';
 import {runClassifiedTestFiles} from '../../scripts/run-classified-test-files.js';
 import {
   CONTROLLER, IMPORT_GRAPH_PRODUCER, LANE, PRODUCER_STUB, fakeInventory, gateTestSource, lab,
-  sealPlacedCommit, waitForNonEmptyFile, worktreeTap,
+  placementRunFixture as fakeDeps, sealPlacedCommit, waitForNonEmptyFile, worktreeTap,
 } from './test-placement-fixtures.js';
 import {spawnGit} from '../../scripts/checks/git-invocation.js';
 
@@ -101,12 +101,6 @@ test('placement spreads files by measured duration and machine speed', () => {
   'a slower machine is given less of the work');
   assert.deepEqual(placeTestFiles(costs, machines), shards, 'the same facts, the same split');
 
-  // A file a machine is known to fail is never sent there.
-  const avoiding = placeTestFiles(costs,
-    [CONTROLLER, lab('fast', 1.3, {avoid: ['serial-a', 'serial-b']})]);
-  assert.equal(machineOf(avoiding, 'serial-a'), '(controller)');
-  assert.equal(machineOf(avoiding, 'serial-b'), '(controller)');
-
   // A file that would take a lab machine near its per-file timeout stays
   // here. Without the rule the second of two four-minute serial files would
   // go to the lab machine, which finishes it first (30 s + 5.2 min against
@@ -160,51 +154,9 @@ test('only a ready, distinct, reachable machine receives files', () => {
   assert.equal(good.sshTarget, 'peer@good');
   assert.equal(good.repoPath, '/srv/lagrange');
 
-  // Misses are remembered against the machine's gaps and node, and forgotten
-  // when those change.
-  recordPlacementMisses(state, 'good', good.gapsKey, ['b.test.js', 'a.test.js']);
-  recordPlacementMisses(state, 'good', good.gapsKey, ['a.test.js']);
-  assert.deepEqual(state.nodes.good.placement.avoid, ['a.test.js', 'b.test.js']);
-  assert.deepEqual(placementMachines(fleet, state)[0].avoid, ['a.test.js', 'b.test.js']);
-  const installed = fleet.map((entry) => entry.name === 'good' ?
-    {...entry, readiness: {...ready, gaps: []}} : entry);
-  assert.deepEqual(placementMachines(installed, state)[0].avoid, [],
-    'a machine whose gaps changed starts clean');
+  assert.equal(Object.hasOwn(good, 'avoid'), false,
+    'placement describes current capability without excluding earlier failures');
 });
-
-function fakeDeps(overrides = {}) {
-  const calls = {local: [], discover: 0, commit: 0, remote: [], record: [], lines: [],
-    order: [], options: []};
-  const deps = {
-    env: {},
-    write: (line) => calls.lines.push(line),
-    planCosts: (files) => files.map((file) => ({file, ms: 2 * MINUTE, jobs: 1, lane: 'ordinary'})),
-    runLocal: (files) => {
-      calls.order.push('local');
-      calls.local.push([...files]);
-      return 0;
-    },
-    lastGreen: () => true,
-    checkBase: () => null,
-    commitAt: () => {
-      calls.commit += 1;
-      return 'a'.repeat(40);
-    },
-    discover: async () => {
-      calls.discover += 1;
-      return {machines: [lab('lab', 1)], record: async (...args) => calls.record.push(args)};
-    },
-    runRemote: (shard, options) => {
-      calls.order.push('remote');
-      calls.remote.push(shard.files);
-      calls.options.push({shard, options});
-      return {done: Promise.resolve({status: 0,
-        log: shard.files.map((file) => `ok ${file} (1 assertions, 5ms)`).join('\n')})};
-    },
-    ...overrides,
-  };
-  return {deps, calls};
-}
 
 const MANY = Array.from({length: 8}, (_, index) => `test/f${index}.test.js`);
 
@@ -232,7 +184,7 @@ test('only an explicit fail-fast reaches the runner, and it is never placed', as
   assert.match(run.calls.lines[0], /^placement: local - fail-fast asks for the first red/u);
 });
 
-test('a small plan, a tree that is not a commit or an empty fleet runs locally', async () => {
+test('local execution is planned explicitly; missing placement facts refuse execution', async () => {
   let run = fakeDeps({env: {LAGRANGE_PLACEMENT: 'local'}});
   assert.equal(await runPlacedTestFiles(MANY, run.deps), 0);
   assert.deepEqual(run.calls.local, [MANY]);
@@ -246,33 +198,33 @@ test('a small plan, a tree that is not a commit or an empty fleet runs locally',
   assert.deepEqual(run.calls.lines, [], 'and says nothing');
 
   run = fakeDeps({commitAt: () => null});
-  await runPlacedTestFiles(MANY, run.deps);
-  assert.deepEqual(run.calls.local, [MANY]);
+  assert.equal(await runPlacedTestFiles(MANY, run.deps), PLACEMENT_EXIT.SETUP);
+  assert.deepEqual(run.calls.local, []);
   assert.equal(run.calls.discover, 0, 'a working tree is never sent anywhere');
-  assert.match(run.calls.lines[0], /^placement: local - the tree is not exactly a commit/u);
+  assert.match(run.calls.lines[0], /^placement: unavailable - the tree is not exactly a commit/u);
 
-  run = fakeDeps({discover: async () => ({machines: [], record: async () => {}})});
-  await runPlacedTestFiles(MANY, run.deps);
-  assert.deepEqual(run.calls.local, [MANY]);
+  run = fakeDeps({discover: async () => ({machines: []})});
+  assert.equal(await runPlacedTestFiles(MANY, run.deps), PLACEMENT_EXIT.SETUP);
+  assert.deepEqual(run.calls.local, []);
   assert.match(run.calls.lines[0], /no lab machine is ready/u);
 
-  // Discovery that fails is no fleet, not a red run, and the line names which
+  // Discovery that fails is unavailable, and the line names which
   // part failed (the real discovery's codes are witnessed against a real
   // repository in lab-fleet-discovery.test.js).
   for (const [code, message, line] of [
     [DISCOVERY_FAILURE.INVENTORY_UNREADABLE, 'Unsupported lab inventory at /x/inventory.json',
-      /^placement: local - the lab inventory could not be read: Unsupported/u],
+      /^placement: unavailable - the lab inventory could not be read: Unsupported/u],
     [DISCOVERY_FAILURE.REQUIREMENT_UNREADABLE, 'no requirement: cannot read package.json at f',
-      /^placement: local - the placed commit's requirement could not be read: no requirement/u],
+      /^placement: unavailable - the placed commit's requirement could not be read: no requirement/u],
     [DISCOVERY_FAILURE.REQUIREMENT_TOO_LARGE, 'package-lock.json at f is larger than the bound',
-      /^placement: local - the placed commit's requirement could not be read: package-lock/u],
-    [undefined, 'something else', /^placement: local - lab discovery failed: something else$/u],
+      /^placement: unavailable - the placed commit's requirement could not be read: package-lock/u],
+    [undefined, 'something else', /^placement: unavailable - lab discovery failed: something else$/u],
   ]) {
     run = fakeDeps({discover: async () => {
       throw Object.assign(new Error(message), {code});
     }});
-    assert.equal(await runPlacedTestFiles(MANY, run.deps), 0);
-    assert.deepEqual(run.calls.local, [MANY], `${code}: no fleet, not a red run`);
+    assert.equal(await runPlacedTestFiles(MANY, run.deps), PLACEMENT_EXIT.SETUP);
+    assert.deepEqual(run.calls.local, [], `${code}: no measurement was started`);
     assert.match(run.calls.lines[0], line, `${code}: named`);
   }
 
@@ -308,7 +260,7 @@ test('a small plan, a tree that is not a commit or an empty fleet runs locally',
   }
 });
 
-test('a file red on a lab machine is decided on the controller and routed away after', async () => {
+test('a red lab file remains red and every assigned file executes once', async () => {
   const redLog = (files) => files.map((file, index) => index === 0 ?
     `not ok ${file} (1 assertions, 5ms)\n# failed\nnot ok 1 - a subtest` :
     `ok ${file} (1 assertions, 5ms)`).join('\n');
@@ -319,33 +271,23 @@ test('a file red on a lab machine is decided on the controller and routed away a
       return {done: Promise.resolve({status: 1, log: redLog(shard.files)})};
     },
   });
-  assert.equal(await runPlacedTestFiles(MANY, run.deps), 0,
-    'red there, green here: green');
-  const [controllerShard, rerun] = run.calls.local;
+  assert.equal(await runPlacedTestFiles(MANY, run.deps), 1,
+    'the first failed lab execution remains the result');
+  const [controllerShard] = run.calls.local;
   assert.ok(controllerShard.length > 0 && remoteFiles.length > 0, 'both machines ran files');
-  assert.deepEqual(rerun, [remoteFiles[0]], 'only the red file is run again, here');
-  assert.deepEqual(run.calls.record, [['lab', 'k', [remoteFiles[0]]]],
-    'and it is routed away from that machine next time');
+  assert.equal(run.calls.local.length, 1, 'the controller executes only its assigned shard');
+  assert.deepEqual([...controllerShard, ...remoteFiles].sort(), [...MANY].sort(),
+    'every planned file was assigned once');
+  assert.deepEqual(run.calls.record, [], 'a failure never changes future placement eligibility');
   assert.ok(run.calls.lines.some((line) => line.startsWith(`[lab] not ok ${remoteFiles[0]}`)),
     'the lab machine\'s own lines are shown');
-  assert.ok(run.calls.lines.some((line) => /1 passed on the controller: routed away from lab/u
-    .test(line)), 'the miss is reported, never hidden');
 
-  // Red on the controller too: red, and nothing is remembered.
-  run = fakeDeps({
-    runRemote: async (shard) => ({done: Promise.resolve({status: 1, log: redLog(shard.files)})}),
-    runLocal: (files) => (files.length === 1 ? 1 : 0),
-    lastGreen: () => false,
-  });
-  assert.equal(await runPlacedTestFiles(MANY, run.deps), 1);
-  assert.deepEqual(run.calls.record, []);
-
-  // The lab machine is handed the controller's retry and timeout policy and check
+  // The lab machine is handed the controller's timeout policy and check
   // base, gets its deadline from its estimate, and starts before the controller's lanes.
-  run = fakeDeps({env: {LAGRANGE_RETRY_FAILED_ONCE: '1', TAP_TIMEOUT: '900'}, checkBase: () => 'c0'});
+  run = fakeDeps({env: {TAP_TIMEOUT: '900'}, checkBase: () => 'c0'});
   await runPlacedTestFiles(MANY, run.deps);
   assert.deepEqual(run.calls.options[0].options.forward,
-    {retry: '1', tapTimeout: '900', checkBase: 'c0'});
+    {tapTimeout: '900', checkBase: 'c0'});
   assert.equal(run.calls.options[0].options.deadlineMs, 30 * MINUTE,
     'never under half an hour');
   assert.deepEqual(run.calls.order, ['remote', 'local'], 'lab shards first, then this one');
@@ -356,11 +298,11 @@ test('a file red on a lab machine is decided on the controller and routed away a
   assert.equal(options.deadlineMs, 3 * shard.loadMs, 'three times its estimate');
 
   run = fakeDeps({checkBase: () => assert.fail('no commit: nope')});
-  assert.equal(await runPlacedTestFiles(MANY, run.deps), 0);
-  assert.deepEqual([run.calls.remote, run.calls.local], [[], [MANY]]);
+  assert.equal(await runPlacedTestFiles(MANY, run.deps), PLACEMENT_EXIT.SETUP);
+  assert.deepEqual([run.calls.remote, run.calls.local], [[], []]);
   assert.ok(run.calls.lines.some((line) => /is unresolved: no commit: nope$/u.test(line)));
 
-  // Past the cap it is breakage: red, and nothing runs twice.
+  // The number of failed files does not change the single-execution policy.
   const many = Array.from({length: 60}, (_, index) => `test/g${index}.test.js`);
   run = fakeDeps({
     runRemote: async (shard) => ({done: Promise.resolve({status: 1,
@@ -370,7 +312,7 @@ test('a file red on a lab machine is decided on the controller and routed away a
   assert.equal(run.calls.local.length, 1, 'only the controller\'s own shard ran here');
 });
 
-test('a shard its machine could not run is run on the controller', async () => {
+test('an unavailable or incomplete lab shard blocks acceptance without reassignment', async () => {
   const ok = (file) => `ok ${file} (1 assertions, 5ms)`;
   const notOk = (file) => `not ok ${file} (1 assertions, 5ms)`;
   for (const [why, outcome] of [
@@ -393,40 +335,35 @@ test('a shard its machine could not run is run on the controller', async () => {
       errors: files.map(ok).join('\n')})],
   ]) {
     let remoteFiles = [];
-    let given = null;
     const run = fakeDeps({
       runRemote: (shard) => {
         remoteFiles = shard.files;
-        given = outcome(shard.files);
-        return {done: Promise.resolve(given)};
+        return {done: Promise.resolve(outcome(shard.files))};
       },
     });
-    assert.equal(await runPlacedTestFiles(MANY, run.deps), 0, why);
-    const proved = new Set(String(given.log).split('\n').filter((line) => line.startsWith('ok '))
-      .map((line) => line.split(' ')[1]));
-    const [, ...afterwards] = run.calls.local;
-    assert.deepEqual(afterwards.flat().sort(),
-      remoteFiles.filter((file) => !proved.has(file)).sort(),
-      `${why}: every file not proved there runs here, and only those`);
+    assert.notEqual(await runPlacedTestFiles(MANY, run.deps), 0, why);
+    assert.equal(run.calls.local.length, 1, `${why}: only the original controller shard runs`);
+    assert.deepEqual([...run.calls.local[0], ...remoteFiles].sort(), [...MANY].sort(),
+      `${why}: each file was assigned once`);
     assert.ok(run.calls.lines.some((line) =>
-      /^placement: lab: \d+ file\(s\) with no result from there run on the controller/u
-        .test(line)), `${why}: and says so`);
+      /^placement: lab: \d+ file\(s\) without a completed result/u
+        .test(line)), `${why}: unavailable measurements stay visible`);
   }
 
-  // A retried-once pass there is the controller's own policy: proved.
+  // A historical retry marker does not erase the original failed verdict.
   const retried = fakeDeps({
     runRemote: (shard) => ({done: Promise.resolve({status: 0, log: [
       notOk(shard.files[0]), `# retried-once pass ${shard.files[0]}`,
       ...shard.files.slice(1).map(ok)].join('\n')})}),
   });
-  await runPlacedTestFiles(MANY, retried.deps);
+  assert.equal(await runPlacedTestFiles(MANY, retried.deps), 1);
   assert.equal(retried.calls.local.length, 1, 'nothing runs twice');
 });
 
 // The thermal gate is the runner's, on whichever host it runs (process change
 // 2026-09-23). A lab shard's log is its runner's stream: the gate's lines come
 // back unchanged and are never verdicts, and a host whose runner refused as
-// too hot is a typed placement outcome whose files run once elsewhere.
+// too hot is a typed unavailable outcome of this scheduled run.
 const REAL_FILES = Object.freeze([FAST_TEST, SLOW_TEST, OTHER_FAST_TEST]);
 const thermalJson = (cpuCelsius) => ({'coretemp-isa-0000':
   {'Package id 0': {temp1_input: cpuCelsius}}, 'nvme-pci-0200': {'Sensor 2': {temp3_input: 50}}});
@@ -467,22 +404,19 @@ test('a lab runner\'s thermal lines are relayed unchanged and are never verdicts
     'relayed with the machine\'s name and nothing else changed');
   assert.equal(run.calls.local.length, 1, 'every lab file was proved by its own verdict line');
 
-  // Its thermal lines alone prove nothing: every file falls back.
-  let remoteFiles = [];
+  // Thermal lines contain no per-file verdicts and cannot prove the shard.
   const gateOnly = fakeDeps({
     runRemote: (shard) => {
-      remoteFiles = shard.files;
       return {done: Promise.resolve({status: 0,
         log: labRunnerLog(shard.files, 61).log.split('\n')
           .filter((line) => line.startsWith('thermal: ')).join('\n')})};
     },
   });
-  assert.equal(await runPlacedTestFiles([...REAL_FILES], gateOnly.deps), 0);
-  assert.deepEqual(gateOnly.calls.local.slice(1).flat().sort(), [...remoteFiles].sort(),
-    'a thermal line never matches a verdict');
+  assert.equal(await runPlacedTestFiles([...REAL_FILES], gateOnly.deps), PLACEMENT_EXIT.SETUP);
+  assert.equal(gateOnly.calls.local.length, 1, 'unmeasured files are never rerun');
 });
 
-test('a lab host too hot to run is reported thermal-unfit and its files run once elsewhere',
+test('a lab host too hot to run is reported thermal-unfit without moving its files',
   async () => {
     let remoteCalls = 0;
     let given = null;
@@ -494,8 +428,8 @@ test('a lab host too hot to run is reported thermal-unfit and its files run once
           log: `placement-head=${'a'.repeat(40)}\n${given.log}`})};
       },
     });
-    assert.equal(await runPlacedTestFiles([...REAL_FILES], run.deps), 0,
-      'green: every file ran, and passed, somewhere cool');
+    assert.notEqual(await runPlacedTestFiles([...REAL_FILES], run.deps), 0,
+      'the thermal refusal blocks acceptance');
     assert.deepEqual(given.spawned, [], 'the hot host started no test process');
     assert.ok(run.calls.lines.includes('placement: host-thermal-unfit lab'),
       `a typed placement outcome: ${run.calls.lines.join('\n')}`);
@@ -503,12 +437,9 @@ test('a lab host too hot to run is reported thermal-unfit and its files run once
       line.startsWith('[lab] thermal: thermal-headroom-exhausted - ')),
     'the refusal itself is relayed');
     assert.equal(remoteCalls, 1, 'never retried on the same host in this invocation');
-    assert.deepEqual(run.calls.local.slice(1).flat().sort(), [...given.files].sort(),
-      'with no other ready host, its files are placed once more, here');
-    assert.equal(run.calls.local.length, 2, 'once');
+    assert.equal(run.calls.local.length, 1, 'only the assigned controller files execute');
 
-    // One re-placement policy for a host that refused, hot or held: a ready
-    // host this run has not tried, that fits the files, takes them first.
+    // A ready spare does not turn an unavailable original assignment green.
     const tried = [];
     const moved = fakeDeps({
       discover: async () => ({machines: [lab('lab', 1), lab('spare', 2)],
@@ -519,10 +450,9 @@ test('a lab host too hot to run is reported thermal-unfit and its files run once
         return {done: Promise.resolve({status: ran.status, log: ran.log})};
       },
     });
-    assert.equal(await runPlacedTestFiles([...REAL_FILES], moved.deps), 0);
-    assert.deepEqual(tried.map((one) => one.name), ['lab', 'spare'],
-      'the unfit host once, then the next ready host');
-    assert.deepEqual(tried[1].files, tried[0].files, 'which takes the files it never ran');
+    assert.notEqual(await runPlacedTestFiles([...REAL_FILES], moved.deps), 0);
+    assert.deepEqual(tried.map((one) => one.name), ['lab'],
+      'the unfit host is the only assigned remote host');
     assert.equal(moved.calls.local.length, 1, 'the controller runs only its own shard');
   });
 
@@ -572,9 +502,8 @@ test('an interrupted placed run stops every machine at once', async (t) => {
     await runPlacedTestFiles(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'], {
       env: {}, write: () => {},
       planCosts: (files) => files.map((file) => ({file, ms: 120000, jobs: 1})), runLocal: () => 1,
-      commitAt: () => 'a'.repeat(40), checkBase: () => null, lastGreen: () => true,
-      discover: async () => ({machines: [{name: 'lab', controller: false, speed: 1,
-        avoid: []}], record: async () => {}}),
+      commitAt: () => 'a'.repeat(40), checkBase: () => 'b'.repeat(40),
+      discover: async () => ({machines: [{name: 'lab', controller: false, speed: 1}]}),
       runRemote: () => {
         const lab = group();
         return {done: new Promise(() => {}), abort: () => process.kill(-lab.pid, 'SIGKILL')};
@@ -944,7 +873,7 @@ test('a lab machine proves the exact commit in a throwaway worktree and leaves n
   async (t) => {
     const {node, controller, parent, machine, sha, basis, env, start} = labFixture(t);
     const started = start([FAST_TEST], {runId: 'capped',
-      forward: {retry: '1', tapTimeout: '900', checkBase: basis}});
+      forward: {tapTimeout: '900', checkBase: basis}});
     assert.equal(typeof started.then, 'undefined', 'a shard is started, not awaited');
     // The lab-side script as sent, read before its shard removes it and
     // asserted once the shard has settled, so a red leaves nothing running.
@@ -965,9 +894,9 @@ test('a lab machine proves the exact commit in a throwaway worktree and leaves n
     assert.match(green.log, new RegExp(`^ok ${FAST_TEST} `, 'mu'));
     const cores = Number(spawnSync('getconf', ['_NPROCESSORS_ONLN'], {encoding: 'utf8'})
       .stdout.trim());
-    assert.match(green.log, new RegExp('^placement-env=factor:1\\.5 mode:local retry:1 ' +
+    assert.match(green.log, new RegExp('^placement-env=factor:1\\.5 mode:local ' +
       `timeout:900 lanecap:${Math.max(1, cores - 1)} base:${basis}$`, 'mu'),
-    'its own budgets scaled, the controller\'s retry and timeout policy and check base, ' +
+    'its own budgets scaled, the controller\'s timeout policy and check base, ' +
       'never placed again, and its lanes capped at its cores less one');
     assert.match(sent, /else unset LAGRANGE_CHECK_BASE; fi$/mu, 'none forwarded, none kept');
     assert.match(green.log, /^placement-link=node_modules$/mu);
@@ -1198,7 +1127,7 @@ test('discovery keeps a machine another agent holds out of placement before it i
 });
 
 // Six one-minute files over the controller, `b` and a slow `c` that the
-// split leaves idle: `c` is the next ready host when `b` is found held.
+// split leaves idle. A refusal on `b` never reassigns its files to `c`.
 function busyFleetDeps(busyHosts) {
   const tried = [];
   const run = fakeDeps({
@@ -1216,28 +1145,21 @@ function busyFleetDeps(busyHosts) {
   return {...run, tried};
 }
 
-test('a held lab host is reported, and its shard goes to the next ready host, then here',
+test('a held lab host is reported and its assigned shard remains unavailable',
   async () => {
     const six = MANY.slice(0, 6);
-    let run = busyFleetDeps({b: OTHER_HOLDER});
-    assert.equal(await runPlacedTestFiles(six, run.deps), 0);
+    const run = busyFleetDeps({b: OTHER_HOLDER});
+    assert.equal(await runPlacedTestFiles(six, run.deps), PLACEMENT_EXIT.BUSY);
     assert.ok(run.calls.lines.includes(HOST_BUSY_LINE),
       `a typed placement outcome naming the holder: ${run.calls.lines.join('\n')}`);
-    assert.deepEqual(run.tried.map((one) => one.name), ['b', 'c'],
-      'the held host once, then the next ready host');
-    assert.deepEqual(run.tried[1].files, run.tried[0].files, 'which takes its whole shard');
+    assert.deepEqual(run.tried.map((one) => one.name), ['b'],
+      'the held host receives its one assignment');
     assert.deepEqual(run.tried[0].options.holder, {purpose: 'test:ordinary',
       expectedMs: 3.5 * MINUTE}, 'each shard tells others its lanes and its own estimate');
     assert.equal(run.calls.local.length, 1, 'the controller runs only its own shard');
 
-    run = busyFleetDeps({b: OTHER_HOLDER, c: null});
-    assert.equal(await runPlacedTestFiles(six, run.deps), 0);
-    assert.ok(run.calls.lines.includes('placement: host-busy c held-by (no holder record)'),
-      run.calls.lines.join('\n'));
-    assert.deepEqual(run.tried.map((one) => one.name), ['b', 'c'],
-      'no held host is tried again in the same invocation');
-    assert.deepEqual(run.calls.local.slice(1).flat().sort(), [...run.tried[0].files].sort(),
-      'with no ready host left, the controller runs the shard');
+    assert.deepEqual([...run.calls.local[0], ...run.tried[0].files].sort(), [...six].sort(),
+      'every planned file was assigned exactly once');
   });
 
 test('a hand lab run on a held host reports it and never counts its files as passed',

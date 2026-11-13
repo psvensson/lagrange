@@ -247,8 +247,9 @@ printf '{"project":"%s","agent":"%s","controller":"%s","purpose":"%s","sha":"%s"
 trap 'rm -f "$LAB_LOCK_DIR/machine.holder.json"' EXIT
 ```
 
-Exit 98 means another run held the machine for your whole wait: go to another
-machine or come back later. Everything the shell starts afterwards inherits
+Exit 98 means another run held the machine for your whole wait: retain that
+unavailable assignment. A separate later diagnostic run has its own record.
+Everything the shell starts afterwards inherits
 the lock, so a benchmark or corpus started from it is covered. A shell killed
 by a signal it does not trap leaves its record behind; that is harmless,
 because the lock is released anyway and `lab fleet` shows the record as stale.
@@ -261,10 +262,10 @@ In this repository the lab CLI follows the same convention:
    project `lagrange`, the agent from `LAGRANGE_LAB_AGENT` (else
    `lagrange:CONTROLLER:PID`), purpose `test:LANES` and the shard's estimate.
    A host still held after the wait is reported as
-   `placement: host-busy NAME held-by AGENT since STARTED`; its shard goes to
-   the next ready host, then to the controller, and a held host is not tried
-   again in the same run. A host too hot to run (`host-thermal-unfit`) is
-   re-placed the same way.
+   `placement: host-busy NAME held-by AGENT since STARTED`; its assigned shard
+   remains unavailable and blocks acceptance. A host too hot to run
+   (`host-thermal-unfit`) has the same effect. Every file is assigned once;
+   neither a refusal nor a failed result moves it to another host or controller.
 2. `lab harness run` holds every node of a formation before any node starts,
    one at a time in name order within one 30-minute budget, with purpose
    `formation:SCENARIO`. A held node refuses the whole formation, releasing
@@ -771,9 +772,18 @@ Keep the boundaries explicit:
 A failure should be repaired at the owner that produced it rather than by
 teaching a neighboring layer to compensate for it.
 
-Preserve the first failure before retrying and distinguish product failures from
+Preserve the first failure and distinguish product failures from
 fixture/harness errors, verifier errors, and execution unavailable because of
 capacity, connectivity, locks, or thermal admission. A correctly measured
 product failure remains a failure. Unavailable execution is inconclusive and
 does not satisfy the requested proof. Route a different causal blocker to the
 integration owner while retaining any independently complete repair evidence.
+Automatic retry, reassignment and same-head corpus restart are removed by
+`publication-single-pass-evidence`. New repaired source receives its own
+measurement; an explicit diagnostic run is separate evidence. Setup or output
+failure closes every child acquired by that run, keeps the original failure
+primary and reports any cleanup failure separately. Missing source identity,
+base or discovery is explicit unavailability before execution.
+The placement wrapper also requires its bounded `timeout` command before
+transport starts; an absent command refuses setup instead of running an
+unbounded upload.

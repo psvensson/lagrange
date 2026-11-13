@@ -114,3 +114,62 @@ test('a commit without the producer has nothing to generate, and says so', (t) =
   assert.match(output, new RegExp(`import-graph not generated: this commit has no ${PRODUCER}`,
     'u'));
 });
+
+for (const signalled of [false, true]) {
+  test(`the real corpus command boundary retains signalled=${signalled} execution`, (t) => {
+    const root = fixture(t, null);
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({
+      scripts: {'test:duplication': 'node -e "process.exit(0)"'},
+    }));
+    fs.mkdirSync(path.join(root, 'scripts'), {recursive: true});
+    fs.writeFileSync(path.join(root, 'scripts', 'check-file-size-thresholds.js'),
+      'process.stdout.write("finite corpus command started\\n");\n' +
+      (signalled ? 'process.kill(process.pid, "SIGTERM");\n' : 'process.exit(0);\n'));
+    const env = gitProcessEnvironment();
+    delete env.NODE_TEST_CONTEXT;
+    const result = spawnSync(process.execPath, [MATERIALIZER, '--in-place'],
+      {cwd: root, encoding: 'utf8', env});
+    const output = result.stdout + result.stderr;
+    assert.equal(result.status, signalled ? 1 : 0, output);
+    assert.match(output, /finite corpus command started/u,
+      'the real child ran before the materializer normalized its terminal status');
+    if (signalled) {
+      assert.doesNotMatch(output, /corpus gates passed/u);
+      assert.match(output, /stopped by SIGTERM/u, 'the original signal remains explicit');
+    } else {
+      assert.match(output, /corpus gates passed/u);
+    }
+  });
+}
+
+test('a materialized gate keeps its original failure and checkout when retention fails', (t) => {
+  const root = fixture(t, WRITES_GRAPH);
+  const report = JSON.stringify({commands: [{status: 'FAIL',
+    artifactIdentity: {path: 'test-output/acceptance/missing.json'}}]});
+  const command = [
+    'const fs = require("node:fs");',
+    'fs.mkdirSync("test-output/acceptance", {recursive: true});',
+    `fs.writeFileSync("test-output/acceptance/gate.report.json", ${JSON.stringify(report)});`,
+    'fs.writeFileSync("test-output/acceptance/original.txt", "first failure transcript\\n");',
+    'process.exit(42);',
+  ].join('\n');
+  const env = gitProcessEnvironment();
+  delete env.NODE_TEST_CONTEXT;
+  const result = spawnSync(process.execPath,
+    [MATERIALIZER, '--gate', 'HEAD', '--run', process.execPath, '-e', command],
+    {cwd: root, encoding: 'utf8', env});
+  assert.equal(result.status, 42, 'the gate exit remains primary over the later copy failure');
+  assert.match(result.stderr, /diagnostic retention unavailable; original checkout kept at/u);
+  assert.doesNotMatch(result.stderr, /gate diagnostics retained in/u);
+  const parent = path.join(root, 'test-output', 'push-gate-worktrees');
+  const entries = fs.readdirSync(parent);
+  assert.equal(entries.length, 1, 'the failed exact checkout remains available');
+  const checkout = path.join(parent, entries[0], 'tree');
+  assert.equal(fs.readFileSync(path.join(checkout, 'test-output/acceptance/gate.report.json'),
+    'utf8'), report);
+  assert.equal(fs.readFileSync(path.join(checkout, 'test-output/acceptance/original.txt'), 'utf8'),
+    'first failure transcript\n');
+  assert.ok(git(root, 'worktree', 'list', '--porcelain')
+    .includes(`worktree ${fs.realpathSync(checkout)}\n`),
+  'the retained original remains registered as a worktree');
+});

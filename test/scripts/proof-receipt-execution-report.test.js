@@ -283,8 +283,8 @@ test('reused-proof: a cited proof the store does not hold mints no receipt', () 
   }), 'execution-report-reused-proof-unproven', PROOF.RELEASE_FULL);
 });
 
-test('qualified: an admitted retry is carried as a qualification, never a clean pass', async () => {
-  const {RETRY_POLICY, executionReportProblems} =
+test('historical qualified retry evidence cannot satisfy the strict proof contract', async () => {
+  const {executionReportProblems} =
     await import('../../scripts/test-execution-report.js');
   const context = fixture();
   const report = mutated(context, (draft) => {
@@ -292,17 +292,15 @@ test('qualified: an admitted retry is carried as a qualification, never a clean 
       {attempt: 1, ok: false, assertions: 3, reasons: ['TAP assertions failed']},
       {attempt: 2, ok: true, assertions: 3, reasons: []}]};
   });
-  const admitted = executionReportProblems(report, {sha: context.sha, tree: context.tree,
-    retryPolicy: RETRY_POLICY.ADMIT_QUALIFIED});
-  assert.deepEqual(admitted.problems, []);
-  assert.equal(admitted.qualification.length, 1);
-  assert.equal(admitted.qualification[0].attempts[0].ok, false,
-    'the qualification keeps the first failure');
-  const receipt = buildReceipt({proofId: PROOF.CORPUS_FULL, sha: context.sha,
-    completedAt: RECORDED_AT, execution: {summary: admitted.summary,
-      qualification: admitted.qualification}});
-  assert.notEqual(receipt.outcome, 'passed', 'a qualified receipt is never a clean pass');
-  assert.equal(receipt.execution.qualification.length, 1);
+  const checked = executionReportProblems(report, {sha: context.sha, tree: context.tree,
+    retryPolicy: 'admit-qualified'});
+  assert.ok(checked.problems.some((problem) => problem.code === 'execution-report-passed-on-retry'),
+    'an obsolete caller policy cannot admit the first failed attempt');
+  assert.equal(checked.summary.passedOnRetry, 1, 'historical attempts remain observable');
+  const receipt = {...buildReceipt({proofId: PROOF.CORPUS_FULL, sha: context.sha,
+    completedAt: RECORDED_AT}), outcome: 'passed-qualified', execution: {
+    summary: checked.summary, qualification: [{file: REPORT_FILE_A,
+      attempts: report.runs[0].results[0].attempts}]}};
   // Planted on the store, a qualified receipt does not resolve as proven
   // under a contract whose sealed policy refuses qualified results.
   const objectSha = execGit(['mktag'], {cwd: context.source, encoding: 'utf8',
@@ -465,8 +463,8 @@ test('two-runs: a file clean in both runs still mints its receipt', () => {
 });
 
 // The runner side: a run whose environment names a sections file writes the
-// start and end sections the report is assembled from, the retry included.
-test('runner: sections carry the checkout, assertion counts and the retry record', () => {
+// start and end sections the report is assembled from, with the first failure.
+test('runner: sections carry the checkout, assertion counts and single failed attempt', () => {
   const context = fixture();
   const marker = path.join(context.root, 'first-attempt-done');
   fs.mkdirSync(path.join(context.source, 'test'), {recursive: true});
@@ -483,12 +481,11 @@ test('runner: sections carry the checkout, assertion counts and the retry record
   git(context.source, 'commit', '--quiet', '-m', 'tests');
   const head = git(context.source, 'rev-parse', 'HEAD');
   const sections = path.join(context.root, 'sections.ndjson');
-  const env = {...gitProcessEnvironment(), LAGRANGE_EXECUTION_REPORT: sections,
-    LAGRANGE_RETRY_FAILED_ONCE: '1'};
+  const env = {...gitProcessEnvironment(), LAGRANGE_EXECUTION_REPORT: sections};
   delete env.NODE_TEST_CONTEXT;
   const result = spawnSync(process.execPath, [RUNNER, REPORT_FILE_A, REPORT_FILE_B],
     {cwd: context.source, encoding: 'utf8', env});
-  assert.equal(result.status, 0, 'the retry passed, so the runner exits green');
+  assert.equal(result.status, 1, 'the first failed attempt remains red');
   const lines = fs.readFileSync(sections, 'utf8').trim().split('\n').map((line) =>
     JSON.parse(line));
   assert.deepEqual(lines.map((line) => line.kind), ['start', 'end']);
@@ -498,10 +495,10 @@ test('runner: sections carry the checkout, assertion counts and the retry record
   const byFile = new Map(lines[1].results.map((entry) => [entry.file, entry]));
   assert.equal(byFile.get(REPORT_FILE_A).attempts.length, 1);
   assert.ok(byFile.get(REPORT_FILE_A).assertions > 0);
-  const retried = byFile.get(REPORT_FILE_B);
-  assert.deepEqual(retried.attempts.map((attempt) => attempt.ok), [false, true],
-    'the first failure is kept beside the retry pass');
-  assert.equal(lines[1].exitStatus, 0);
+  const failed = byFile.get(REPORT_FILE_B);
+  assert.deepEqual(failed.attempts.map((attempt) => attempt.ok), [false],
+    'the first failure is retained without another execution');
+  assert.equal(lines[1].exitStatus, 1);
 });
 
 // A runner a test spawns is that test's fixture, never part of the proof run

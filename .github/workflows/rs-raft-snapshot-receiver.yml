@@ -18,7 +18,6 @@ jobs:
       BASE: 4981aad1ed8eef5784f531a5cccc0b76b477ae01
       LOCAL_CANDIDATE: 7d91de9ff1cf8d4a8c24558603b97d75e75db0e3
       BRANCH: resume/rs-raft-runtime-recovery-20261012
-      LAGRANGE_RETRY_FAILED_ONCE: '0'
       LAGRANGE_SKIP_PRECOMMIT: '1'
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd

@@ -1168,9 +1168,8 @@ function fleetGaps(entry) {
 // decides the split. A machine receives a FILE SET and runs its own serial
 // lanes: overlapping the exclusive and ordinary lanes on one host reds five
 // contention-sensitive SLOs (measured 2026-09-17), sharding across hosts adds
-// no contention. A lab machine can only make a green faster: a file red there
-// is decided again on the controller, and one that then passes is recorded
-// against that machine and routed elsewhere next time.
+// no contention. Every initial assignment retains its own outcome; a failed
+// or unavailable shard is never decided again on another host.
 
 const PLACEMENT_ENV = 'LAGRANGE_PLACEMENT';
 const PLACEMENT_LOCAL = 'local';
@@ -1185,9 +1184,6 @@ const PLACEMENT_REMOTE_SETUP_MS = 30 * MS_PER_SECOND;
 // x2.13 a 4-minute simulation file, which timed out at 600 s there and then
 // ran again here (measured 2026-09-18).
 const PLACEMENT_FILE_FIT_MS = 5 * MS_PER_MINUTE;
-// More remote reds than this is breakage, not a routing miss: they are
-// reported red rather than run a second time on the controller.
-const PLACEMENT_RERUN_CAP = 20;
 // A shard gets three times its estimate, never under half an hour.
 const PLACEMENT_DEADLINE_FACTOR = 3;
 const PLACEMENT_DEADLINE_FLOOR_MS = 30 * MS_PER_MINUTE;
@@ -1212,7 +1208,6 @@ const PLACEMENT_UPLOAD_DEADLINE_SECONDS = 300;
 // base its history walks measure from: the controller's, resolved to a
 // commit, since a lab checkout's own origin/main is whatever it last fetched.
 const PLACEMENT_FORWARDED_ENV = Object.freeze({
-  RETRY: 'LAGRANGE_RETRY_FAILED_ONCE',
   TAP_TIMEOUT: 'TAP_TIMEOUT',
   CHECK_BASE: CHECK_BASE_ENV,
 });
@@ -1239,7 +1234,9 @@ const PLACEMENT_WRAPPER_HEAD = Object.freeze([
   'status=0',
   'if command -v timeout >/dev/null 2>&1; then ' +
     // --foreground keeps timeout, and so the upload, in the wrapper's group.
-    `bound="timeout --foreground ${PLACEMENT_UPLOAD_DEADLINE_SECONDS}"; else bound=; fi`,
+    `bound="timeout --foreground ${PLACEMENT_UPLOAD_DEADLINE_SECONDS}"; ` +
+    'else echo "placement: bounded timeout command unavailable" >&2; ' +
+    `exit ${PLACEMENT_EXIT.SETUP}; fi`,
 ]);
 const PLACEMENT_WRAPPER_UPLOAD_FAILED = 'echo "placement: the bundle upload failed" >&2;';
 const PLACEMENT_WRAPPER_EXIT = 'exit "$status";';
@@ -1311,29 +1308,25 @@ export function placementKillScript() {
 const PLACEMENT_TEXT = Object.freeze({
   PREFIX: 'placement: ',
   LOCAL: 'placement: local - ',
+  UNAVAILABLE: 'placement: unavailable - ',
   NOT_A_COMMIT: 'the tree is not exactly a commit, and only a commit is sent',
   NO_MACHINE: 'no lab machine is ready',
   NO_GAIN: 'no lab machine would shorten this run',
   NO_HISTORY: 'shares no history with this commit',
-  UNREPORTED: ' file(s) with no result from there run on the controller: ',
+  UNREPORTED: ' file(s) without a completed result: ',
   NO_INVENTORY: 'the lab inventory could not be read: ',
   NO_REQUIREMENT: 'the placed commit\'s requirement could not be read: ',
   NO_DISCOVERY: 'lab discovery failed: ',
   NO_CHECK_BASE: 'the check base a lab machine would be handed is unresolved: ',
-  RED_THERE: ' file(s) red there are decided on the controller',
-  OVER_CAP: 'remote reds exceed the rerun cap: breakage, reported red without a rerun',
-  MISS: ' passed on the controller: routed away from ',
+  RED_THERE: ' file(s) failed on their assigned host',
   FAIL_FAST: 'fail-fast asks for the first red, which a placed run cannot give',
   THERMAL_UNFIT: 'host-thermal-unfit ',
   HOST_BUSY: 'host-busy ',
   HELD_BY: ' held-by ',
   SINCE: ' since ',
   NO_HOLDER: ' held-by (no holder record)',
-  MOVED_FROM: ' (from ',
-  MOVED_CLOSE: ')',
   REFUSED_BUSY: 'held by another agent',
   REFUSED_HOT: 'too hot to run',
-  NO_NEXT_HOST: ', and no ready lab host is left',
   DEADLINE: 'deadline',
   INTERRUPTED: 'interrupted',
 });
@@ -1352,7 +1345,7 @@ const PLACEMENT_TEXT = Object.freeze({
  * shortens the run.
  * @param {Array<{file: string, ms: number, jobs: number}>} costs
  * @param {Array<{name: string, controller: boolean, speed: number,
- *   cores?: number, tier?: number, avoid?: string[]}>} machines
+ *   cores?: number, tier?: number}>} machines
  * @param {{setupMs?: number}} [options]
  * @return {Array<{machine: Object, files: string[], loadMs: number}>}
  */
@@ -1405,20 +1398,10 @@ function jobsOn(machine, cost) {
 }
 
 // Whether a file may go to a machine: the controller takes anything; a lab
-// machine not a file it is known to fail, nor one it could not finish well
-// inside the per-file timeout.
+// machine only work it could finish well inside the per-file timeout.
 function fits(machine, cost) {
   if (machine.controller) return true;
-  return !machine.avoid?.includes(cost.file) &&
-    cost.ms * machine.speed <= PLACEMENT_FILE_FIT_MS;
-}
-
-// What a routing miss is remembered against: the machine's gaps and node.
-// Install a tool or change node and its misses are forgotten, since they may
-// have been exactly that.
-function placementGapsKey(entry) {
-  return [...(entry.readiness?.gaps || []), entry.capability?.nodeVersion || EMPTY]
-    .join(FLEET_TEXT.LIST);
+  return cost.ms * machine.speed <= PLACEMENT_FILE_FIT_MS;
 }
 
 /**
@@ -1443,7 +1426,6 @@ export function placementMachines(fleet, state, {controllerFactor = 1, held = fa
     const node = state.nodes?.[entry.name];
     if (!(reference > 0) || !isPlaceable(entry, node, held)) continue;
     const speed = cap.cpuSampleMs / reference;
-    const gapsKey = placementGapsKey(entry);
     machines.push({
       name: entry.name,
       controller: false,
@@ -1458,8 +1440,6 @@ export function placementMachines(fleet, state, {controllerFactor = 1, held = fa
       repoHead: cap.repo.head,
       nodeMajor: String(cap.nodeVersion || EMPTY).replace(/^v/u, EMPTY)
         .split(PLACEMENT_VERSION_SEPARATOR)[0],
-      gapsKey,
-      avoid: node.placement?.gapsKey === gapsKey ? [...node.placement.avoid] : [],
       ...(held ? {waitMs: holdWaitMs(cap.machineLock?.holder, now)} : {}),
     });
   }
@@ -1488,23 +1468,6 @@ function isPlaceable(entry, node, held) {
     cap.cpuSampleMs > 0;
 }
 
-/**
- * Remember files that were red on a machine and green on the controller, so
- * the next placed run sends them elsewhere.
- * @param {Object} state
- * @param {string} name
- * @param {string} gapsKey
- * @param {string[]} files
- * @return {Object} the same state
- */
-export function recordPlacementMisses(state, name, gapsKey, files) {
-  const node = state.nodes?.[name];
-  if (!node || files.length === 0) return state;
-  const kept = node.placement?.gapsKey === gapsKey ? node.placement.avoid : [];
-  node.placement = {gapsKey, avoid: [...new Set([...kept, ...files])].sort()};
-  return state;
-}
-
 // Who may take a file, in order: a free machine, a lab host another run
 // holds, a controller without headroom.
 const TIER = Object.freeze({HELD: 1, HOT: 2});
@@ -1522,14 +1485,9 @@ function deadlineFor(shard) {
   return Math.max(PLACEMENT_DEADLINE_FLOOR_MS, PLACEMENT_DEADLINE_FACTOR * shard.loadMs);
 }
 
-// The files a finished shard reports red, among the files it was given.
-// What a lab machine proved, file by file, from its runner's own verdict
-// lines on stdout - never from its exit status. A file with an `ok` line (or
-// a retried-once pass, the controller's own policy) and no unretried `not ok`
-// line is proved there; one with a `not ok` line is decided again on the
-// controller; one with neither never reported, and the controller runs it. A
-// runner killed mid-batch, a truncated script or a lost connection can leave
-// any number of files unreported whatever the exit status (verifier round 1).
+// Each assigned file's worst observed verdict. A clean line cannot erase an
+// earlier failure or zero-assertion result. An absent verdict is unavailable;
+// the caller also requires a successful terminal process outcome.
 function logVerdicts(files, log) {
   const given = new Set(files);
   const green = new Set();
@@ -1540,26 +1498,16 @@ function logVerdicts(files, log) {
     const verdict = TEST_FILE_LINE.VERDICT.exec(line);
     const file = verdict?.[PLACEMENT_VERDICT_PART.FILE];
     if (verdict && given.has(file)) {
-      (verdict[PLACEMENT_VERDICT_PART.VERDICT] === PLACEMENT_VERDICT_GREEN ? green : red)
-        .add(file);
-      assertions.set(file, Number(verdict[PLACEMENT_VERDICT_PART.ASSERTIONS]));
+      const count = Number(verdict[PLACEMENT_VERDICT_PART.ASSERTIONS]);
+      (verdict[PLACEMENT_VERDICT_PART.VERDICT] === PLACEMENT_VERDICT_GREEN && count > 0 ?
+        green : red).add(file);
+      assertions.set(file, Math.min(assertions.get(file) ?? count, count));
     }
-    const retried = TEST_FILE_LINE.RETRIED_PASS.exec(line);
-    if (retried && given.has(retried[1])) green.add(retried[1]);
-  }
-  for (const line of lines) {
-    const retried = TEST_FILE_LINE.RETRIED_PASS.exec(line);
-    if (retried) red.delete(retried[1]);
   }
   return {
     green, red, assertions,
     unreported: files.filter((file) => !green.has(file) && !red.has(file)),
   };
-}
-
-function shardVerdicts(shard, outcome) {
-  const {red, unreported} = logVerdicts(shard.files, outcome.log);
-  return {red: [...red], fallback: unreported};
 }
 
 // A host whose runner refused as too hot is a typed placement outcome: its
@@ -1587,17 +1535,6 @@ function startShard(shard, {deps, sha, forward, costs}) {
     holder: {purpose: labTestPurpose(lanes), expectedMs: shard.loadMs}});
 }
 
-// The next ready host for files whose host refused them: the fastest this
-// run has not tried that takes every one, charged its setup and its speed.
-function nextHostFor(files, {machines, tried, costs}) {
-  const priced = costs.filter((cost) => files.includes(cost.file));
-  const machine = machines.filter((one) => !tried.has(one.name)).sort(bySpeed)
-    .find((one) => priced.every((cost) => fits(one, cost)));
-  if (!machine) return null;
-  return {machine, files, loadMs: PLACEMENT_REMOTE_SETUP_MS +
-    priced.reduce((sum, cost) => sum + cost.ms / cost.jobs, 0) * machine.speed};
-}
-
 // Whether a lab host refused its shard, as a typed placement outcome: held
 // by another agent for the whole wait (the lab shell's busy exit), or too
 // hot to run (its runner's thermal refusal). Reported once; null if it ran.
@@ -1610,34 +1547,6 @@ function hostRefusal(shard, outcome, write) {
   if (!lines.some((line) => THERMAL_REFUSAL_LINE.test(line))) return null;
   reportThermalUnfit(shard.machine.name, lines, write);
   return PLACEMENT_TEXT.REFUSED_HOT;
-}
-
-// A started shard's settled outcomes: the one re-placement policy. The files
-// a host that refused never ran go on to the next ready host this run has
-// not tried - a host that refused is never tried again in it - and, with none
-// left, to the controller. What it did run is settled as it ran.
-async function followShard(shard, run, context) {
-  const outcome = await run.done;
-  const refusal = hostRefusal(shard, outcome, context.write);
-  if (!refusal) return [{shard, outcome}];
-  const {unreported} = logVerdicts(shard.files, outcome.log);
-  const ran = {shard: {...shard, files: shard.files.filter((file) => !unreported.includes(file))},
-    outcome};
-  if (unreported.length === 0) return [ran];
-  const next = nextHostFor(unreported, context);
-  if (!next) {
-    context.write(`${PLACEMENT_TEXT.PREFIX}${shard.machine.name}: ${unreported.length}` +
-      `${PLACEMENT_TEXT.UNREPORTED}${refusal}${PLACEMENT_TEXT.NO_NEXT_HOST}`);
-    context.leftover.push(...unreported);
-    return [ran];
-  }
-  context.tried.add(next.machine.name);
-  context.write(`${PLACEMENT_TEXT.PREFIX}${next.machine.name}: ${next.files.length} files, ` +
-    `~${minutes(next.loadMs)} min${PLACEMENT_TEXT.MOVED_FROM}${shard.machine.name}` +
-    `${PLACEMENT_TEXT.MOVED_CLOSE}`);
-  const moved = await startShard(next, context);
-  context.runs.push(moved);
-  return [ran, ...await followShard(next, moved, context)];
 }
 
 // A lab machine's own lines, shown under its name.
@@ -1656,9 +1565,8 @@ function relayShardLines(shard, outcome, write) {
  * @param {Object} deps
  * @param {Function} deps.planCosts files -> [{file, ms, jobs}]
  * @param {Function} deps.runLocal (files, {failFast}) -> exit status
- * @param {Function} deps.lastGreen file -> whether its controller result is green
  * @param {Function} deps.commitAt () -> the sha the tree exactly is, or null
- * @param {Function} deps.discover async (sha) -> {machines, record(name, key, files)},
+ * @param {Function} deps.discover async (sha) -> {machines},
  *   measured against that commit's requirement
  * @param {Function} deps.runRemote (shard, {sha, deadlineMs, forward}) ->
  *   {done, stop, interrupt, abort}
@@ -1677,7 +1585,11 @@ export async function runPlacedTestFiles(files, deps) {
     write = (line) => process.stdout.write(`${line}\n`)} = deps;
   const local = (reason) => {
     if (reason) write(`${PLACEMENT_TEXT.LOCAL}${reason}`);
-    return deps.runLocal(files, {failFast});
+    return Promise.resolve(deps.runLocal(files, {failFast})).then(placementExitStatus);
+  };
+  const unavailable = (reason) => {
+    write(`${PLACEMENT_TEXT.UNAVAILABLE}${reason}`);
+    return PLACEMENT_EXIT.SETUP;
   };
   if (env[PLACEMENT_ENV] === PLACEMENT_LOCAL) return local(null);
   if (failFast) return local(PLACEMENT_TEXT.FAIL_FAST);
@@ -1685,16 +1597,14 @@ export async function runPlacedTestFiles(files, deps) {
   const aloneMs = costs.reduce((sum, cost) => sum + cost.ms / cost.jobs, 0);
   if (aloneMs < PLACEMENT_MIN_PLAN_MS) return local(null);
   const sha = deps.commitAt();
-  if (!sha) return local(PLACEMENT_TEXT.NOT_A_COMMIT);
+  if (!sha) return unavailable(PLACEMENT_TEXT.NOT_A_COMMIT);
   let fleet;
   try {
     fleet = await deps.discover(sha);
   } catch (error) {
-    // Placement can only shorten a run: discovery that fails is no fleet,
-    // and the line names which part failed.
-    return local(`${discoveryFailureText(error)}${error.message}`);
+    return unavailable(`${discoveryFailureText(error)}${error.message}`);
   }
-  if (fleet.machines.length === 0) return local(PLACEMENT_TEXT.NO_MACHINE);
+  if (fleet.machines.length === 0) return unavailable(PLACEMENT_TEXT.NO_MACHINE);
   // A controller without headroom takes only what no lab machine can.
   const headroom = deps.controllerHeadroom ? deps.controllerHeadroom() : CONTROLLER_FIT;
   const shards = placeTestFiles(costs, [{...CONTROLLER_MACHINE, tier: headroom.fit ? 0 : TIER.HOT},
@@ -1705,17 +1615,13 @@ export async function runPlacedTestFiles(files, deps) {
   try {
     checkBase = deps.checkBase();
   } catch (error) {
-    return local(`${PLACEMENT_TEXT.NO_CHECK_BASE}${error.message}`);
+    return unavailable(`${PLACEMENT_TEXT.NO_CHECK_BASE}${error.message}`);
   }
+  if (!checkBase) return unavailable(PLACEMENT_TEXT.NO_CHECK_BASE);
   reportPlacement({files, shards, headroom, aloneMs, write});
   // Every lab shard is on its way before the controller's own files start.
-  const context = {deps, sha, forward: forwardedPolicy(env, checkBase), costs, write,
-    machines: fleet.machines, tried: new Set(remote.map((shard) => shard.machine.name)),
-    runs: [], leftover: []};
-  const started = await Promise.all(remote.map((shard) => startShard(shard, context)));
-  context.runs.push(...started);
-  const followed = Promise.all(remote.map((shard, index) =>
-    followShard(shard, started[index], context)));
+  const context = {deps, sha, forward: forwardedPolicy(env, checkBase), costs};
+  const started = [];
   // While lab shards run, the controller's own files run in a child process
   // of their own group, never in this process's blocking lanes: a signal
   // handler here could not run until those lanes finished, so a Ctrl-C or a
@@ -1723,23 +1629,54 @@ export async function runPlacedTestFiles(files, deps) {
   // the local child is cut first and every lab shard is aborted together,
   // synchronously.
   let here = null;
-  const runHere = (planned) => {
-    here = deps.runLocalChild ? deps.runLocalChild(planned) :
-      {done: Promise.resolve(deps.runLocal(planned, {}))};
-    return here.done;
+  const stop = () => {
+    for (const close of [() => here?.abort?.(),
+      () => abortTogether(started.map((entry) => entry.run))]) {
+      try {
+        close();
+      } catch (error) {
+        write(`${PLACEMENT_TEXT.UNAVAILABLE}cleanup: ${error.message}`);
+      }
+    }
   };
-  const release = abortOnSignals(deps, () => {
-    here?.abort?.();
-    abortTogether(context.runs);
-  });
+  const release = abortOnSignals(deps, stop);
   try {
+    const acquired = await Promise.allSettled(remote.map(async (shard) => {
+      const run = await startShard(shard, context);
+      // Observe rejection immediately, including while another host starts.
+      // Its original rejection is rethrown below; it is never a verdict.
+      const settled = Promise.allSettled([run.done]).then(([outcome]) => outcome);
+      const entry = {shard, run, settled};
+      started.push(entry);
+      return entry;
+    }));
+    const failedStart = acquired.find((entry) => entry.status === 'rejected');
+    if (failedStart) throw failedStart.reason;
     const controllerShard = shards.find((shard) => shard.machine.controller);
-    const statuses = controllerShard ? [await runHere(controllerShard.files)] : [];
-    return await settleRemoteShards((await followed).flat(),
-      {deps, fleet, statuses, write, runHere, leftover: context.leftover});
+    if (controllerShard) {
+      here = deps.runLocalChild ? deps.runLocalChild(controllerShard.files) :
+        {done: Promise.resolve(deps.runLocal(controllerShard.files, {}))};
+    }
+    const settled = Promise.all(acquired.map(async ({value: entry}) => {
+      const outcome = await entry.settled;
+      if (outcome.status === 'rejected') throw outcome.reason;
+      return {shard: entry.shard, outcome: outcome.value};
+    }));
+    const [controllerStatus, outcomes] = await Promise.all([here?.done, settled]);
+    const statuses = controllerShard ? [placementExitStatus(controllerStatus)] : [];
+    return settleRemoteShards(outcomes, {statuses, write});
+  } catch (error) {
+    stop();
+    await Promise.allSettled([...started.map((entry) => entry.settled), here?.done]);
+    throw error;
   } finally {
     release();
   }
+}
+
+// Only an observed integer terminal status is an execution outcome.
+function placementExitStatus(status) {
+  return Number.isInteger(status) ? status : PLACEMENT_EXIT.SETUP;
 }
 
 // The placement decision, as the lines a placed run starts with.
@@ -1760,19 +1697,18 @@ function discoveryFailureText(error) {
   return PLACEMENT_TEXT.NO_DISCOVERY;
 }
 
-// The controller's own retry and timeout policy, and its resolved check base
+// The controller's timeout policy, and its resolved check base
 // (a commit, or none), handed to a lab machine.
 function forwardedPolicy(env, checkBase) {
   return {
-    retry: env[PLACEMENT_FORWARDED_ENV.RETRY] || EMPTY,
     tapTimeout: env[PLACEMENT_FORWARDED_ENV.TAP_TIMEOUT] || EMPTY,
     checkBase: checkBase || EMPTY,
   };
 }
 
 // The forwarded policy as the lab shell's positional arguments, none omitted.
-function forwardedArgs({retry, tapTimeout, checkBase}) {
-  return [retry || EMPTY, tapTimeout || EMPTY, checkBase || EMPTY];
+function forwardedArgs({tapTimeout, checkBase}) {
+  return [tapTimeout || EMPTY, checkBase || EMPTY];
 }
 
 // Interrupted, hung up or terminated: cut everything a run started and exit.
@@ -1797,40 +1733,24 @@ function abortOnSignals(deps, cutAll) {
   };
 }
 
-async function settleRemoteShards(settled, {deps, fleet, statuses, write, runHere, leftover}) {
-  const reruns = [];
-  // Files no ready lab host was left to take after theirs was held.
-  const fallback = [...leftover];
+function settleRemoteShards(settled, {statuses, write}) {
   settled.forEach(({shard, outcome}) => {
     relayShardLines(shard, outcome, write);
-    // Its files not proved there are placed once more, on the controller:
-    // never retried on the machine within this run.
-    const {red, fallback: back} = shardVerdicts(shard, outcome);
-    if (back.length > 0) {
-      write(`${PLACEMENT_TEXT.PREFIX}${shard.machine.name}: ${back.length}` +
+    const refusal = hostRefusal(shard, outcome, write);
+    const {red, unreported} = logVerdicts(shard.files, outcome.log);
+    if (unreported.length > 0) {
+      write(`${PLACEMENT_TEXT.PREFIX}${shard.machine.name}: ${unreported.length}` +
         `${PLACEMENT_TEXT.UNREPORTED}${outcome.reason || `exit ${outcome.status}`}`);
-      fallback.push(...back);
     }
-    if (red.length > 0) {
-      write(`${PLACEMENT_TEXT.PREFIX}${shard.machine.name}: ${red.length}${PLACEMENT_TEXT.RED_THERE}`);
-      reruns.push({shard, red});
+    if (red.size > 0) {
+      write(`${PLACEMENT_TEXT.PREFIX}${shard.machine.name}: ${red.size}${PLACEMENT_TEXT.RED_THERE}`);
     }
+    if (outcome.status !== 0) statuses.push(placementExitStatus(outcome.status));
+    if (refusal || outcome.reason || unreported.length > 0) statuses.push(PLACEMENT_EXIT.SETUP);
+    if (red.size > 0) statuses.push(1);
   });
-  const redCount = reruns.reduce((sum, rerun) => sum + rerun.red.length, 0);
-  if (redCount > PLACEMENT_RERUN_CAP) {
-    write(`${PLACEMENT_TEXT.PREFIX}${PLACEMENT_TEXT.OVER_CAP}`);
-    statuses.push(1);
-  } else if (redCount > 0) {
-    statuses.push(await runHere(reruns.flatMap((rerun) => rerun.red)));
-    for (const {shard, red} of reruns) {
-      const misses = red.filter((file) => deps.lastGreen(file));
-      if (misses.length === 0) continue;
-      write(`${PLACEMENT_TEXT.PREFIX}${misses.length}${PLACEMENT_TEXT.MISS}${shard.machine.name}`);
-      await fleet.record(shard.machine.name, shard.machine.gapsKey, misses);
-    }
-  }
-  if (fallback.length > 0) statuses.push(await runHere(fallback));
-  return statuses.find((status) => status !== 0) ?? 0;
+  for (const status of statuses) if (status !== 0) return placementExitStatus(status);
+  return 0;
 }
 
 // The lab machine's half: take the commit from the bundle (when one was
@@ -1842,8 +1762,8 @@ async function settleRemoteShards(settled, {deps, fleet, statuses, write, runHer
 // budget, with the holder record beside it for as long as it is held; and
 // inside it this checkout's own lock, which a run placed from another clone
 // by an older wrapper takes alone. Exit 97 is a setup failure and 98 a
-// machine held by another run: the controller then places the shard on the
-// next ready host, or runs it itself. The runner leads its own process group,
+// machine held by another run: both remain unavailable for this assignment.
+// The runner leads its own process group,
 // so the controller's deadline can stop everything it started.
 const PLACEMENT_RESULTS_PREFIX = 'placement-results=';
 // The generated material every proof checkout needs, from its one owner
@@ -1856,8 +1776,8 @@ const [PLACEMENT_IMPORT_GRAPH] = PROOF_CHECKOUT_GENERATORS.map((generator) =>
 const PLACEMENT_SCRIPT_HEAD = [
   'set -u',
   'repo="$1"; sha="$2"; node_major="$3"; factor="$4"; run="$5"; bundle="$6"',
-  'retry="$7"; tap_timeout="$8"; check_base="$9"; results="${10}"; lock_wait="${11}"',
-  'holder_head="${12}"; expected_minutes="${13}"',
+  'tap_timeout="$7"; check_base="$8"; results="$9"; lock_wait="${10}"',
+  'holder_head="${11}"; expected_minutes="${12}"',
   // Before nvm, which reads its arguments (see the capability script).
   'set --',
   'pid=""; holding=""',
@@ -1967,11 +1887,10 @@ const PLACEMENT_SCRIPT_TAIL = [
   '  fi',
   `  echo "placement-prepared=${PLACEMENT_IMPORT_GRAPH.NAME}"`,
   'fi',
-  // Its own budgets scaled by its measured speed, the controller's retry and
-  // timeout policy, and never placed again.
+  // Its own budgets scaled by its measured speed, the controller's timeout
+  // policy, and never placed again.
   `export ${PLACEMENT_MACHINE_FACTOR_ENV}="$factor" ${PLACEMENT_ENV}=${PLACEMENT_LOCAL} ` +
     `${WORKSPACE_INJECTION_ENV}="$injected"`,
-  `if [ -n "$retry" ]; then export ${PLACEMENT_FORWARDED_ENV.RETRY}="$retry"; fi`,
   `if [ -n "$tap_timeout" ]; then export ${PLACEMENT_FORWARDED_ENV.TAP_TIMEOUT}="$tap_timeout"; fi`,
   // The controller's check base, or none: never this checkout's own.
   `if [ -n "$check_base" ]; then export ${PLACEMENT_FORWARDED_ENV.CHECK_BASE}="$check_base"; ` +
@@ -1983,7 +1902,7 @@ const PLACEMENT_SCRIPT_TAIL = [
   `case "$cores" in ""|*[!0-9]*) ;; 0|1) export ${LANE_JOBS_CAP_ENV}=1;; ` +
     `*) export ${LANE_JOBS_CAP_ENV}=$((cores - 1));; esac`,
   `echo "placement-env=factor:$${PLACEMENT_MACHINE_FACTOR_ENV} mode:$${PLACEMENT_ENV} ` +
-    `retry:\${${PLACEMENT_FORWARDED_ENV.RETRY}:-} timeout:\${${PLACEMENT_FORWARDED_ENV.TAP_TIMEOUT}:-} ` +
+    `timeout:\${${PLACEMENT_FORWARDED_ENV.TAP_TIMEOUT}:-} ` +
     `lanecap:\${${LANE_JOBS_CAP_ENV}:-} base:\${${PLACEMENT_FORWARDED_ENV.CHECK_BASE}:-}"`,
   // Both locks (fds 8 and 9) stay with this shell: a test process that
   // outlived its run must not hold the machine busy after it.
@@ -2128,7 +2047,13 @@ function signalLabShell(machine, logFile) {
 }
 
 function stopShard(machine, child, logFile) {
-  const shell = signalLabShell(machine, logFile);
+  let shell;
+  try {
+    shell = signalLabShell(machine, logFile);
+  } catch (error) {
+    killGroup(child);
+    throw error;
+  }
   const cut = setTimeout(() => killGroup(child), shell ? PLACEMENT_STOP_GRACE_MS : 0);
   child.once(PLACEMENT_CHILD_EVENT.EXIT, () => clearTimeout(cut));
 }
@@ -2163,14 +2088,79 @@ function tailLines(file, stream, onLine) {
     offset += read;
     emit(decoder.write(buffer.subarray(0, read)));
   };
-  const timer = setInterval(drain, PLACEMENT_TAIL_POLL_MS);
+  let failure = null;
+  const timer = setInterval(() => {
+    try {
+      drain();
+    } catch (error) {
+      failure = error;
+      clearInterval(timer);
+    }
+  }, PLACEMENT_TAIL_POLL_MS);
   return () => {
     clearInterval(timer);
+    if (failure) throw failure;
     drain();
     emit(decoder.end());
     if (partial) onLine(partial, stream);
     partial = EMPTY;
   };
+}
+
+// Acquire both output descriptors before the wrapper. A partial acquisition
+// closes every descriptor; an error after spawn belongs to the returned child
+// and is reported by its settled execution, after that child is stopped.
+function spawnShardWrapper(wrapper, {env, logFile, errorFile}) {
+  const descriptors = [];
+  let child = null;
+  let failure = null;
+  try {
+    descriptors.push(fs.openSync(logFile, 'w'));
+    descriptors.push(fs.openSync(errorFile, 'w'));
+    child = spawn(PLACEMENT_SHELL, [PLACEMENT_SHELL_COMMAND, wrapper],
+      {env, stdio: [PLACEMENT_STDIO_IGNORE, ...descriptors], detached: true});
+  } catch (error) {
+    failure = error;
+  } finally {
+    for (const descriptor of descriptors) {
+      try {
+        fs.closeSync(descriptor);
+      } catch (error) {
+        if (!failure) failure = error;
+        else process.stderr.write(`${PLACEMENT_TEXT.UNAVAILABLE}cleanup: ${error.message}\n`);
+      }
+    }
+  }
+  if (failure && !child) throw failure;
+  return {child, failure};
+}
+
+// Finish every relay even if an earlier one failed, then retain the original
+// output. The first IO failure stays primary; it never becomes a green shard.
+function finishShardOutput({tails, scriptFile, bundleFile, logFile, errorFile}) {
+  const errors = [];
+  let log;
+  let stderr;
+  for (const finish of [
+    ...tails,
+    () => fs.rmSync(scriptFile, {force: true}),
+    () => bundleFile && fs.rmSync(bundleFile, {force: true}),
+    () => { log = fs.readFileSync(logFile, TEXT_UTF8); },
+    () => { stderr = fs.readFileSync(errorFile, TEXT_UTF8); },
+  ]) {
+    try {
+      finish();
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+  if (errors.length > 0) {
+    for (const error of errors.slice(1)) {
+      process.stderr.write(`${PLACEMENT_TEXT.UNAVAILABLE}cleanup: ${error.message}\n`);
+    }
+    throw errors[0];
+  }
+  return {log, errors: stderr};
 }
 
 /**
@@ -2191,7 +2181,7 @@ function tailLines(file, stream, onLine) {
  * @param {{sha: string, deadlineMs: number, root: string,
  *   holder: {purpose: string, expectedMs: number},
  *   runId?: string, env?: Object,
- *   forward?: {retry?: string, tapTimeout?: string, checkBase?: string},
+ *   forward?: {tapTimeout?: string, checkBase?: string},
  *   onLine?: Function, results?: string, gitRoot?: string}} options
  * @return {{done: Promise<Object>, stop: Function}}
  */
@@ -2215,48 +2205,63 @@ export function startRemoteShard(shard, {sha, deadlineMs, root, holder,
   }
   const remoteBundle = bundleFile ?
     `${machine.repoPath}/${PLACEMENT_PARENT}/${runId}.bundle` : EMPTY;
-  fs.writeFileSync(scriptFile, placementScript(shard.files));
-  const wrapper = shardWrapper({
-    upload: bundleFile ?
-      commandLine(remoteCommand(machine, PLACEMENT_UPLOAD_SCRIPT, [remoteBundle])) : null,
-    bundleFile,
-    run: commandLine(remoteCommand(machine, null, [machine.repoPath, sha,
-      machine.nodeMajor || EMPTY, String(machine.factor || 1), runId, remoteBundle,
-      ...forwardedArgs(forward), results,
-      ...labLockArgs({waitMs: holder.expectedMs, purpose: holder.purpose,
-        expectedMs: holder.expectedMs, sha, env})], {fromStdin: true})),
-    scriptFile,
-  });
-  const output = fs.openSync(logFile, 'w');
-  const errors = fs.openSync(errorFile, 'w');
-  const child = spawn(PLACEMENT_SHELL, [PLACEMENT_SHELL_COMMAND, wrapper],
-    {env, stdio: [PLACEMENT_STDIO_IGNORE, output, errors], detached: true});
-  fs.closeSync(output);
-  fs.closeSync(errors);
+  let acquisition;
+  try {
+    fs.writeFileSync(scriptFile, placementScript(shard.files));
+    const wrapper = shardWrapper({
+      upload: bundleFile ?
+        commandLine(remoteCommand(machine, PLACEMENT_UPLOAD_SCRIPT, [remoteBundle])) : null,
+      bundleFile,
+      run: commandLine(remoteCommand(machine, null, [machine.repoPath, sha,
+        machine.nodeMajor || EMPTY, String(machine.factor || 1), runId, remoteBundle,
+        ...forwardedArgs(forward), results,
+        ...labLockArgs({waitMs: holder.expectedMs, purpose: holder.purpose,
+          expectedMs: holder.expectedMs, sha, env})], {fromStdin: true})),
+      scriptFile,
+    });
+    acquisition = spawnShardWrapper(wrapper, {env, logFile, errorFile});
+  } catch (error) {
+    for (const input of [scriptFile, bundleFile].filter(Boolean)) {
+      try {
+        fs.rmSync(input, {force: true});
+      } catch (cleanupError) {
+        process.stderr.write(`${PLACEMENT_TEXT.UNAVAILABLE}cleanup: ${cleanupError.message}\n`);
+      }
+    }
+    throw error;
+  }
+  const {child, failure: acquisitionFailure} = acquisition;
+  const exited = exitOf(child);
   const tails = onLine ? [tailLines(logFile, PLACEMENT_STREAM.OUT, onLine),
     tailLines(errorFile, PLACEMENT_STREAM.ERR, onLine)] : [];
+  let failure = acquisitionFailure;
   let stopped = null;
   const stop = (reason) => {
     if (stopped || hasExited(child)) return;
     stopped = reason;
-    stopShard(machine, child, logFile);
+    try {
+      stopShard(machine, child, logFile);
+    } catch (error) {
+      failure = failure || error;
+    }
   };
   // A deadline that expired while this process was blocked is looked at
   // again after its pending events: a shard that finished meanwhile is not
   // stopped, and its gone shell's pid is never signalled (verifier round 1).
   const deadline = setTimeout(() => setImmediate(() => stop(PLACEMENT_TEXT.DEADLINE)),
     deadlineMs);
-  const done = exitOf(child).then((status) => {
+  const done = exited.then((status) => {
     clearTimeout(deadline);
-    for (const finish of tails) finish();
     // A wrapper stopped mid-upload never reached its own removals.
-    fs.rmSync(scriptFile, {force: true});
-    if (bundleFile) fs.rmSync(bundleFile, {force: true});
-    const outcome = {
-      status: stopped ? null : status,
-      log: fs.readFileSync(logFile, TEXT_UTF8),
-      errors: fs.readFileSync(errorFile, TEXT_UTF8),
-    };
+    let output;
+    try {
+      output = finishShardOutput({tails, scriptFile, bundleFile, logFile, errorFile});
+    } catch (error) {
+      if (!failure) failure = error;
+      else process.stderr.write(`${PLACEMENT_TEXT.UNAVAILABLE}cleanup: ${error.message}\n`);
+    }
+    if (failure) throw failure;
+    const outcome = {status: stopped ? null : status, ...output};
     return stopped ? {...outcome, reason: stopped} : outcome;
   });
   // Interrupted: ask the lab shell to stop, and hand back what to wait for
@@ -2264,9 +2269,16 @@ export function startRemoteShard(shard, {sha, deadlineMs, root, holder,
   const interrupt = () => {
     if (hasExited(child)) return null;
     stopped = PLACEMENT_TEXT.INTERRUPTED;
-    return {pid: signalLabShell(machine, logFile) ? child.pid : null,
-      cut: () => killGroup(child)};
+    try {
+      return {pid: signalLabShell(machine, logFile) ? child.pid : null,
+        cut: () => killGroup(child)};
+    } catch (error) {
+      failure = failure || error;
+      killGroup(child);
+      throw error;
+    }
   };
+  if (acquisitionFailure) stop(PLACEMENT_TEXT.INTERRUPTED);
   return {done, stop: () => stop(PLACEMENT_TEXT.INTERRUPTED), interrupt,
     abort: () => abortTogether([{interrupt}])};
 }
@@ -2277,15 +2289,37 @@ export function startRemoteShard(shard, {sha, deadlineMs, root, holder,
 // ran (verifier, test-placement round 3) - then whatever is left is cut. Any
 // number of shards costs one grace, not one each.
 function abortTogether(runs) {
-  const pending = runs.map((run) => (run.interrupt ? run.interrupt() : run.abort?.()))
-    .filter((one) => one?.cut);
+  const pending = [];
+  const errors = [];
+  for (const run of runs) {
+    try {
+      const one = run.interrupt ? run.interrupt() : run.abort?.();
+      if (one?.cut) pending.push(one);
+    } catch (error) {
+      errors.push(error);
+    }
+  }
   const waiting = pending.map((one) => one.pid).filter(Boolean).map(String);
   if (waiting.length > 0) {
-    spawnSync(PLACEMENT_SHELL, [PLACEMENT_SHELL_COMMAND, PLACEMENT_WAIT_SCRIPT,
-      PLACEMENT_SHELL, String(PLACEMENT_ABORT_GRACE_MS / PLACEMENT_ABORT_POLL_MS), ...waiting],
-    {stdio: PLACEMENT_STDIO_IGNORE, timeout: 2 * PLACEMENT_ABORT_GRACE_MS});
+    try {
+      spawnSync(PLACEMENT_SHELL, [PLACEMENT_SHELL_COMMAND, PLACEMENT_WAIT_SCRIPT,
+        PLACEMENT_SHELL, String(PLACEMENT_ABORT_GRACE_MS / PLACEMENT_ABORT_POLL_MS), ...waiting],
+      {stdio: PLACEMENT_STDIO_IGNORE, timeout: 2 * PLACEMENT_ABORT_GRACE_MS});
+    } catch (error) {
+      errors.push(error);
+    }
   }
-  for (const one of pending) one.cut();
+  for (const one of pending) {
+    try {
+      one.cut();
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+  if (errors.length > 0) {
+    throw new AggregateError(errors,
+      `placement cleanup incomplete: ${errors.map((error) => error.message).join('; ')}`);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -2444,9 +2478,6 @@ async function discoverPlacement(root, env, sha) {
     fleet,
     machines: placementMachines(fleet, state, {controllerFactor}),
     held: placementMachines(fleet, state, {controllerFactor, held: true}),
-    record: async (name, gapsKey, files) => {
-      await saveState(recordPlacementMisses(await loadState(), name, gapsKey, files));
-    },
   };
 }
 
@@ -2468,10 +2499,12 @@ function runClassifiedChild(root, files, env, {onLine = null, checkBase = EMPTY}
   const list = path.join(listDir, `${PLACEMENT_CHILD_LIST_PREFIX}${process.pid}-` +
     `${Date.now().toString(PLACEMENT_RUN_RADIX)}-${childListCount += 1}` +
     `${PLACEMENT_CHILD_LIST_SUFFIX}`);
-  fs.writeFileSync(list, files.join(PLACEMENT_NEWLINE) + PLACEMENT_NEWLINE);
-  const input = fs.openSync(list, PLACEMENT_READ_FLAG);
-  let child;
+  let input = null;
+  let child = null;
+  let failure = null;
   try {
+    fs.writeFileSync(list, files.join(PLACEMENT_NEWLINE) + PLACEMENT_NEWLINE);
+    input = fs.openSync(list, PLACEMENT_READ_FLAG);
     child = spawn(process.execPath, [PLACEMENT_RUNNER, PLACEMENT_RUNNER_STDIN], {
       cwd: root,
       env: {...env, [PLACEMENT_ENV]: PLACEMENT_LOCAL,
@@ -2479,19 +2512,34 @@ function runClassifiedChild(root, files, env, {onLine = null, checkBase = EMPTY}
       stdio: [input, output, output],
       detached: true,
     });
-  } finally {
-    fs.closeSync(input);
-    fs.rmSync(list, {force: true});
+  } catch (error) {
+    failure = error;
   }
+  for (const close of [() => input !== null && fs.closeSync(input),
+    () => fs.rmSync(list, {force: true})]) {
+    try {
+      close();
+    } catch (error) {
+      if (!failure) failure = error;
+      else process.stderr.write(`${PLACEMENT_TEXT.UNAVAILABLE}cleanup: ${error.message}\n`);
+    }
+  }
+  if (!child) throw failure;
+  const closed = closeOf(child);
   if (onLine) {
     streamLines(child.stdout, PLACEMENT_STREAM.OUT, onLine);
     streamLines(child.stderr, PLACEMENT_STREAM.ERR, onLine);
   }
+  const abort = () => {
+    if (!hasExited(child)) killGroup(child);
+  };
+  const done = closed.then((status) => {
+    if (failure) throw failure;
+    return placementExitStatus(status);
+  });
+  if (failure) abort();
   return {
-    done: (onLine ? closeOf(child) : exitOf(child)).then((status) => status ?? 1),
-    abort: () => {
-      if (!hasExited(child)) killGroup(child);
-    },
+    done, abort,
     // Its process group, for a caller that must know exactly what it started.
     group: child.pid,
   };
@@ -2501,13 +2549,13 @@ function runClassifiedChild(root, files, env, {onLine = null, checkBase = EMPTY}
  * The real collaborators of runPlacedTestFiles, given the classified runner's
  * own planning and execution.
  * @param {{root: string, failFast?: boolean, env?: Object, planCosts: Function,
- *   runLocal: Function, lastGreen: Function}} input
+ *   runLocal: Function}} input
  * @return {Object}
  */
 export function placementDeps({root, failFast = false, env = process.env,
-  planCosts, runLocal, lastGreen}) {
+  planCosts, runLocal}) {
   return {
-    failFast, env, planCosts, runLocal, lastGreen,
+    failFast, env, planCosts, runLocal,
     runLocalChild: (files) => runClassifiedChild(root, files, env),
     commitAt: () => commitAt(root, env),
     checkBase: () => resolvedCheckBaseCommit(null, env, root),
@@ -2924,7 +2972,7 @@ async function settleLabShares(shares, {root, write}) {
   let status = 0;
   for (const share of shares) {
     const outcome = await share.run.done;
-    const exit = typeof outcome === 'object' ? outcome.status : outcome;
+    const exit = placementExitStatus(typeof outcome === 'number' ? outcome : outcome?.status);
     const {green, red, assertions, unreported} = logVerdicts(share.files,
       share.lines.join(PLACEMENT_NEWLINE));
     const summary = {
@@ -2942,7 +2990,7 @@ async function settleLabShares(shares, {root, write}) {
     }
     copyLabResults(share, root, write);
     for (const key of Object.keys(totals)) totals[key] += summary[key];
-    if (exit !== 0 || summary.failed > 0) status = LAB_TEST_FAILED;
+    if (exit !== 0 || outcome?.reason || summary.failed > 0) status = LAB_TEST_FAILED;
   }
   write(formatTestFilesSummary(totals));
   return status;
@@ -2965,7 +3013,23 @@ async function settleLabShares(shares, {root, write}) {
 export async function runLabTest({plan, costs = [], commit, checkBase, on = null,
   split = false, root, results = LAB_TEST_RESULTS_FILE, env = process.env,
   write = (line) => process.stdout.write(`${line}${PLACEMENT_NEWLINE}`)}, deps) {
-  let shares = [];
+  const shares = [];
+  let commitReleased = false;
+  const releaseCommit = () => {
+    if (commitReleased) return;
+    commitReleased = true;
+    commit.release();
+  };
+  const stop = () => {
+    for (const close of [() => abortTogether(shares.map((share) => share.run)), releaseCommit]) {
+      try {
+        close();
+      } catch (error) {
+        write(`${PLACEMENT_TEXT.UNAVAILABLE}cleanup: ${error.message}`);
+      }
+    }
+  };
+  const releaseSignals = abortOnSignals(deps, stop);
   try {
     const {fleet = [], machines, held = []} = await deps.discover(commit.sha);
     const placed = split ? planLabSplit(plan, machines, {held, costs,
@@ -2980,17 +3044,26 @@ export async function runLabTest({plan, costs = [], commit, checkBase, on = null
     const costOf = new Map(costs.map((cost) => [cost.file, cost.ms / cost.jobs]));
     const context = {commit, deps, forward: forwardedPolicy(env, checkBase), results, costOf,
       write};
-    shares = assignments.map((assignment) => startLabShare(assignment, context));
+    for (const assignment of assignments) {
+      const share = startLabShare(assignment, context);
+      // Observe failure before the next acquisition; the child is owned from
+      // this point even if a later start or planning-checkout cleanup throws.
+      share.settled = Promise.allSettled([share.run.done]).then(([outcome]) => outcome);
+      shares.push(share);
+    }
+    releaseCommit();
+    await Promise.all(shares.map(async (share) => {
+      const outcome = await share.settled;
+      if (outcome.status === 'rejected') throw outcome.reason;
+    }));
+    return await settleLabShares(shares, {root, write});
+  } catch (error) {
+    stop();
+    await Promise.allSettled(shares.map((share) => share.settled));
+    throw error;
   } finally {
-    commit.release();
+    releaseSignals();
   }
-  const release = abortOnSignals(deps, () => abortTogether(shares.map((share) => share.run)));
-  try {
-    await Promise.all(shares.map((share) => share.run.done));
-  } finally {
-    release();
-  }
-  return settleLabShares(shares, {root, write});
 }
 
 /**

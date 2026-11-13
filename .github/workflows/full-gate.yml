@@ -122,7 +122,6 @@ jobs:
       contents: read
     env:
       TAP_TIMEOUT_FLOOR: '120'
-      LAGRANGE_RETRY_FAILED_ONCE: '1'
       LAGRANGE_TEST_MACHINE_FACTOR: '3'
     steps:
       - name: Checkout

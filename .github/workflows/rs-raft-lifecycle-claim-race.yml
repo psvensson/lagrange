@@ -22,7 +22,6 @@ jobs:
     env:
       OUT: test-output/lifecycle-claim-race
       TEST: test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js
-      LAGRANGE_RETRY_FAILED_ONCE: '0'
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:

@@ -364,7 +364,7 @@ describe('acceptance proof manifest runner', () => {
 // failed-gate-keeps-evidence: a failed command's captured output is the only
 // place its per-file verdicts exist, so the run summary names the failing
 // test files from it - the runner's file-level verdict lines only, decided by
-// the last verdict and a retried-once pass, bounded with a withheld count, and
+// the worst verdict, bounded with a withheld count, and
 // never a count when the runner's summary line is absent.
 const FILE_LINE = /^ {4}(test\/\S+\.test\.js)$/u;
 
@@ -406,12 +406,13 @@ describe('failing-file run summary', () => {
       '# test-files total=1 pass=1 fail=0 assertions=2',
       '',
     ].join('\n'));
-    assert.deepEqual(named, ['test/a/red.test.js', 'test/b/relayed-red.test.js'],
+    assert.deepEqual(named, ['test/a/red.test.js', 'test/b/decided-green.test.js',
+      'test/b/relayed-red.test.js'],
       summary);
-    assert.match(summary, /^ {2}failing test files: 2$/mu);
+    assert.match(summary, /^ {2}failing test files: 3$/mu);
   });
 
-  it('does not name a file that passed its retried-once rerun', () => {
+  it('keeps a first failure despite later green output and historical retry markers', () => {
     const {summary, named} = summaryOfFailedOutput([
       verdict('not ok', 'test/a/flaky.test.js'),
       verdict('not ok', 'test/a/broken.test.js'),
@@ -423,8 +424,22 @@ describe('failing-file run summary', () => {
       '# retried-once fail test/a/broken.test.js',
       '',
     ].join('\n'));
-    assert.deepEqual(named, ['test/a/broken.test.js'], summary);
-    assert.match(summary, /^ {2}failing test files: 1$/mu);
+    assert.deepEqual(named, ['test/a/broken.test.js', 'test/a/flaky.test.js'], summary);
+    assert.match(summary, /^ {2}failing test files: 2$/mu);
+  });
+
+  it('retains red and zero-assertion verdicts independently of later line order', () => {
+    for (const first of ['not ok test/a/red.test.js (2 assertions, 15ms)',
+      'ok test/a/red.test.js (0 assertions, 15ms)']) {
+      for (const lines of [[first, verdict('ok', 'test/a/red.test.js')],
+        [verdict('ok', 'test/a/red.test.js'), first]]) {
+        const {summary, named} = summaryOfFailedOutput([
+          ...lines, '# test-files total=1 pass=1 fail=0 assertions=2', '',
+        ].join('\n'));
+        assert.deepEqual(named, ['test/a/red.test.js'], summary);
+        assert.match(summary, /^ {2}failing test files: 1$/mu);
+      }
+    }
   });
 
   it('reports an absent runner summary line as incomplete, never as a count', () => {

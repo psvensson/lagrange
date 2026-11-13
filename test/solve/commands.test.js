@@ -28,9 +28,6 @@ import {
   CHECK_BASE_ENV, RANGE_SOURCE,
 } from '../../scripts/checks/change-selection-constants.js';
 import {resolvedCheckRange} from '../../scripts/checks/changed-paths.js';
-import {
-  RETRY_FAILED_ONCE_ENABLED, RETRY_FAILED_ONCE_ENV,
-} from '../../scripts/run-test-files.js';
 import {execGit} from '../../scripts/checks/git-invocation.js';
 
 const QUEST_ID = 'demo';
@@ -409,11 +406,7 @@ test('the change proof is spawned against the quest delta, HEAD, and says so', (
   assert.equal(caller[CHECK_BASE_ENV], undefined, 'the caller environment is not mutated');
 });
 
-test('the change proof runs under the recorded retry policy, as CI does', () => {
-  // ci.yml, full-gate.yml and the canary export LAGRANGE_RETRY_FAILED_ONCE=1;
-  // land ran without it, so a flake cost a whole re-land where CI would have
-  // rerun the file once standalone, reported and capped (never hidden).
-  // Local is now equal to CI, not weaker.
+test('the change proof uses the canonical single-pass runner and quest delta', () => {
   const spawned = [];
   const lines = [];
   const spawn = (command, args, options) => {
@@ -421,18 +414,16 @@ test('the change proof runs under the recorded retry policy, as CI does', () => 
     return {status: 0, stdout: '', stderr: ''};
   };
   runChangeProof('/repo', (line) => lines.push(line), spawn);
-  assert.equal(spawned[0].env[RETRY_FAILED_ONCE_ENV], RETRY_FAILED_ONCE_ENABLED,
-    'the proof process carries the retry-once policy');
   assert.equal(spawned[0].env[CHECK_BASE_ENV], 'HEAD', 'and still the quest-delta base');
-  assert.match(lines[0], /rerun once/u, 'the policy is announced with the base');
+  assert.match(lines[0], /each file executes once/u, 'the policy is announced with the base');
   const caller = {};
   const landing = landChangeProofEnvironment(caller);
-  assert.equal(landing[RETRY_FAILED_ONCE_ENV], RETRY_FAILED_ONCE_ENABLED);
+  assert.equal(landing.LAGRANGE_RETRY_FAILED_ONCE, undefined);
   assert.equal(landing[LANDING_MARKER_ENV], LANDING_MARKER_VALUE);
-  assert.equal(caller[RETRY_FAILED_ONCE_ENV], undefined, 'the caller environment is not mutated');
+  assert.deepEqual(caller, {}, 'the caller environment is not mutated');
 });
 
-test('the change proof escalates to test:safety-pregate when modular proof requires release proof', () => {
+test('the change proof retains release-proof refusal without an alternate command', () => {
   const spawned = [];
   const spawn = (command, args) => {
     spawned.push({command, args});
@@ -445,10 +436,12 @@ test('the change proof escalates to test:safety-pregate when modular proof requi
     }
     return {status: 0, stdout: 'all ok', stderr: ''};
   };
-  runChangeProof('/repo', () => {}, spawn);
-  assert.equal(spawned.length, 2);
+  const lines = [];
+  assert.throws(() => runChangeProof('/repo', (line) => lines.push(line), spawn), /npm test failed/u);
+  assert.equal(spawned.length, 1);
   assert.deepEqual(spawned[0], {command: 'npm', args: ['test']});
-  assert.deepEqual(spawned[1], {command: 'npm', args: ['run', 'test:safety-pregate']});
+  assert.ok(lines.some((line) => line.includes('RELEASE_PROOF_REQUIRED')),
+    'the selector\'s original refusal is retained');
 });
 
 test('requiresInventoryRefresh skips docs and architecture while including code', () => {

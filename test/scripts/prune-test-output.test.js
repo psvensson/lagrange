@@ -1,7 +1,7 @@
 import {describe, it, beforeEach, afterEach} from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  chmod, lstat, mkdir, mkdtemp, rm, stat, symlink, utimes, writeFile,
+  chmod, lstat, mkdir, mkdtemp, readFile, rm, stat, symlink, utimes, writeFile,
 } from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path, {join} from 'node:path';
@@ -717,6 +717,39 @@ describe('routine retention safety', () => {
       await stat(join(root, parent, 'head-abc123', 'README.md'));
     }
   });
+
+  it('keeps original push-gate evidence and later attempts while pruning an ordinary stale sibling',
+    async () => {
+      const head = 'a'.repeat(40);
+      const artifacts = [];
+      for (const attempt of [head, `${head}-later`]) {
+        const directory = join(root, 'push-gate', attempt);
+        await mkdir(directory, {recursive: true});
+        for (const name of ['gate.report.json', 'proof.json', 'proof.json.stdout.txt']) {
+          const file = join(directory, name);
+          const bytes = `${attempt}: ${name}: original failure\n`;
+          await writeFile(file, bytes);
+          await setArtifactTime(file, OLD);
+          artifacts.push({file, bytes});
+        }
+        await setArtifactTime(directory, OLD);
+      }
+      await setArtifactTime(join(root, 'push-gate'), OLD);
+      const stale = join(root, 'push-gate-unreserved', 'old.json');
+      await writeArtifact(stale);
+      await setArtifactTime(stale, OLD);
+      await setArtifactTime(path.dirname(stale), OLD);
+
+      const result = await applyPolicy();
+
+      assert.equal(result.stderr, '', 'the real prune operation completed');
+      for (const {file, bytes} of artifacts) {
+        assert.equal(await readFile(file, 'utf8'), bytes,
+          'neither first-attempt evidence nor a later diagnostic is changed');
+      }
+      await assert.rejects(stat(path.dirname(stale)), {code: 'ENOENT'},
+        'the reservation is exactly push-gate; ordinary stale output is still pruned');
+    });
 });
 
 // The report floor exists to keep the harness's history window: the 20 newest

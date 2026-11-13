@@ -7,9 +7,10 @@
  * A report is assembled from runner SECTIONS. Every scripts/run-test-files.js
  * process whose environment names a sections file (EXECUTION_SECTIONS_ENV)
  * appends one `start` line before it runs anything - the checkout it runs in
- * and the files it was given - and one `end` line after its last attempt:
- * every file's result with its assertion count, every attempt of a retried
- * file, and the exit status. A start without its end is a truncated run.
+ * and the files it was given - and one `end` line after its scheduled run:
+ * every file's single result with its assertion count and the exit status.
+ * The reader retains every historical attempt and refuses a later pass that
+ * erased an earlier failure. A start without its end is a truncated run.
  *
  * The producer (the release proof, the push gate, the local corpus) wraps the
  * sections with the candidate it set out to prove, the commands it ran with
@@ -57,12 +58,10 @@ const DETAIL = Object.freeze({
   UNKNOWN_HEAD: 'unknown',
 });
 
-// How a proof contract treats a file that failed and then passed on its one
-// standalone retry. REFUSE: no receipt. ADMIT_QUALIFIED: a receipt that
-// carries the qualification and is never a clean pass.
+// Registered proof seals refuse any result that needed another attempt.
+// Historical reports retain their attempts so the refusal remains observable.
 const RETRY_POLICY = Object.freeze({
   REFUSE: 'refuse',
-  ADMIT_QUALIFIED: 'admit-qualified',
 });
 
 // Typed refusals. Each is a reason a passing receipt may not be minted.
@@ -141,17 +140,13 @@ function attemptRecord(result, attempt) {
 }
 
 /**
- * One file's result as a section carries it: the decisive verdict and every
- * attempt, first attempt first. A retried file keeps its first failure.
- * @param {Object} first the first attempt's runner result
- * @param {Object|null} retry the standalone retry's result, if any
+ * One file's result as a section carries it: its single scheduled attempt.
+ * @param {Object} result the runner result
  * @return {Object}
  */
-function fileResultRecord(first, retry = null) {
-  const attempts = [attemptRecord(first, 1)];
-  if (retry) attempts.push(attemptRecord(retry, 2));
-  const decisive = attempts[attempts.length - 1];
-  return {file: first.file, ok: decisive.ok, assertions: decisive.assertions, attempts};
+function fileResultRecord(result) {
+  const attempt = attemptRecord(result, 1);
+  return {file: result.file, ok: attempt.ok, assertions: attempt.assertions, attempts: [attempt]};
 }
 
 function readSectionLines(file) {
@@ -388,39 +383,30 @@ function retriedPass(result) {
   return result.ok === true && result.attempts.some((attempt) => attempt?.ok !== true);
 }
 
-function qualificationOf(result) {
-  return {file: result.file, attempts: result.attempts.map((attempt) => ({...attempt}))};
-}
-
-function fileProblems(result, file, policy, qualification) {
+function fileProblems(result, file) {
   if (!result) return [problem(EXECUTION_PROBLEM.PLANNED_FILE_NOT_EXECUTED, file)];
   if (result.ok !== true) return [problem(EXECUTION_PROBLEM.PLANNED_FILE_FAILED, file)];
   if (!(Number(result.assertions) > 0)) {
     return [problem(EXECUTION_PROBLEM.ZERO_ASSERTION_PASS, file)];
   }
   if (!retriedPass(result)) return [];
-  if (policy === RETRY_POLICY.ADMIT_QUALIFIED) {
-    qualification.push(qualificationOf(result));
-    return [];
-  }
   return [problem(EXECUTION_PROBLEM.PASSED_ON_RETRY, file)];
 }
 
-function corpusProblems(report, policy, requiredFiles = []) {
+function corpusProblems(report, requiredFiles = []) {
   const byFile = resultsByFile(report.runs);
   const planned = new Set(report.planned);
   const required = new Set(requiredFiles ?? []);
   const files = new Set([...planned, ...startedFiles(report.runs), ...required]);
   const problems = [];
-  const qualification = [];
   for (const file of [...files].sort()) {
     const result = required.has(file) && !planned.has(file) ? undefined : byFile.get(file);
-    problems.push(...fileProblems(result, file, policy, qualification));
+    problems.push(...fileProblems(result, file));
   }
-  return {problems, qualification};
+  return problems;
 }
 
-function summaryOf(report, qualification) {
+function summaryOf(report) {
   const byFile = resultsByFile(report.runs);
   let assertions = 0;
   for (const result of byFile.values()) assertions += Number(result?.assertions) || 0;
@@ -432,7 +418,7 @@ function summaryOf(report, qualification) {
     commands: report.commands.map((command) => ({label: command.label,
       exitStatus: command.exitStatus})),
     reusedProofs: report.reusedProofs.map((proof) => ({...proof})),
-    passedOnRetry: qualification.length,
+    passedOnRetry: [...byFile.values()].filter(retriedPass).length,
   };
 }
 
@@ -441,24 +427,20 @@ function summaryOf(report, qualification) {
  * Reused proofs are listed, not resolved: the authority resolves them.
  * @param {Object|null} report
  * @param {{sha: string, tree: string|null, identity?: Object|null,
- *   retryPolicy?: string, requiredFiles?: Iterable<string>}} [expectation]
- * @return {{problems: {code: string, detail: string}[],
- *   qualification: Object[], summary: Object|null}}
+ *   requiredFiles?: Iterable<string>}} [expectation]
+ * @return {{problems: {code: string, detail: string}[], summary: Object|null}}
  */
-function executionReportProblems(report, {sha, tree, identity = null,
-  retryPolicy = RETRY_POLICY.REFUSE, requiredFiles = []} = {}) {
+function executionReportProblems(report, {sha, tree, identity = null, requiredFiles = []} = {}) {
   const shape = shapeProblems(report);
-  if (shape.length > 0) return {problems: shape, qualification: [], summary: null};
-  const corpus = corpusProblems(report, retryPolicy, requiredFiles);
+  if (shape.length > 0) return {problems: shape, summary: null};
   return {
     problems: [
       ...candidateProblems(report.candidate, {sha, tree, identity}),
       ...commandProblems(report.commands),
       ...runProblems(report.runs, sha),
-      ...corpus.problems,
+      ...corpusProblems(report, requiredFiles),
     ],
-    qualification: corpus.qualification,
-    summary: summaryOf(report, corpus.qualification),
+    summary: summaryOf(report),
   };
 }
 

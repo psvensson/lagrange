@@ -3,6 +3,7 @@
 // test-placement.test.js, which holds the placed runner's own witnesses).
 
 import assert from 'node:assert/strict';
+import {EventEmitter} from 'node:events';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -267,3 +268,90 @@ test('a split prints its plan and every skipped machine before any share starts'
   assert.ok(reserved.includes('lab test: skipped (controller): reserve - 4 free lab hosts'),
     reserved.join('\n'));
 });
+
+// The real hand-lab planner and lifecycle own these finite collaborators.
+// Only execution/discovery are supplied: no cleanup, assignment or verdict
+// decision is replaced, and this is no claim of physical lab execution.
+for (const fault of [
+  {name: 'second acquisition', stage: 'start'},
+  {name: 'second acquisition and planning-checkout release', stage: 'start', releaseFails: true},
+  {name: 'settlement', stage: 'settle'},
+  {name: 'settlement and first cleanup', stage: 'settle', cleanupFails: true},
+]) {
+  test(`runLabTest retains custody after ${fault.name} fails`,
+    {timeout: 10 * SECOND}, async (t) => {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'lab-split-custody-'));
+      t.after(() => fs.rmSync(root, {recursive: true, force: true}));
+      const signals = new EventEmitter();
+      const files = Array.from({length: 8}, (_, index) => `test/custody-${index}.test.js`);
+      const plan = [{resourceClass: LANE.ORDINARY, files, jobs: 1}];
+      const costs = files.map((file) => ({file, ms: 2 * MINUTE, jobs: 1,
+        lane: LANE.ORDINARY}));
+      const primary = new Error(`${fault.stage} failed at its original owner`);
+      const cleanupError = new Error('the first share cleanup failed');
+      const releaseError = new Error('the planning checkout release failed');
+      const starts = [];
+      const acquired = [];
+      const closed = [];
+      const lines = [];
+      const finishers = [];
+      let released = 0;
+      let rejectFirst;
+      // Even an assertion about the old broken owner must leave no pending
+      // fixture completion behind after the test's finite deadline.
+      t.after(() => {
+        for (const finish of finishers) finish();
+      });
+      const result = runLabTest({root, plan, costs, split: true,
+        checkBase: 'b'.repeat(40),
+        commit: {sha: 'a'.repeat(40), gitRoot: root, release: () => {
+          released += 1;
+          if (fault.releaseFails) throw releaseError;
+        }},
+        write: (line) => lines.push(line)}, {
+        signals,
+        discover: async () => ({machines: [lab('first', 1), lab('second', 1)]}),
+        commitAt: () => 'a'.repeat(40),
+        controllerHeadroom: () => HOT,
+        runLocalChild: () => assert.fail('a failed share never moves to the controller'),
+        runRemote: (shard) => {
+          const name = shard.machine.name;
+          starts.push({name, files: [...shard.files]});
+          if (name === 'second' && fault.stage === 'start') throw primary;
+          acquired.push(name);
+          let finish;
+          const done = new Promise((resolve, reject) => {
+            finish = () => resolve({status: null, reason: 'interrupted', log: ''});
+            if (name === 'first') rejectFirst = reject;
+          });
+          finishers.push(finish);
+          if (name === 'second') rejectFirst(primary);
+          return {done, abort: () => {
+            closed.push(name);
+            if (name === 'first' && fault.cleanupFails) throw cleanupError;
+            finish();
+          }};
+        },
+      });
+      await assert.rejects(result, (error) => error === primary,
+        'the first owner failure survives all later cleanup failures');
+      assert.deepEqual(starts.map(({name}) => name), ['first', 'second'],
+        'the initial assignments are attempted once with no rerun or reassignment');
+      assert.deepEqual(starts.flatMap((entry) => entry.files).sort(), [...files].sort(),
+        'the real planner assigned every file exactly once');
+      assert.deepEqual(acquired, fault.stage === 'start' ? ['first'] : ['first', 'second']);
+      assert.deepEqual(closed, acquired,
+        'every acquired share is closed, including after an earlier cleanup throws');
+      assert.equal(released, 1, 'the planning checkout release is attempted exactly once');
+      assert.ok(['SIGINT', 'SIGTERM', 'SIGHUP'].every((signal) =>
+        signals.listenerCount(signal) === 0), 'the operation releases every signal handler');
+      if (fault.cleanupFails) {
+        assert.ok(lines.some((line) => line.includes(cleanupError.message)),
+          'the secondary share cleanup failure remains visible');
+      }
+      if (fault.releaseFails) {
+        assert.ok(lines.some((line) => line.includes(releaseError.message)),
+          'the secondary planning-checkout failure remains visible');
+      }
+    });
+}

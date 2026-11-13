@@ -2,8 +2,8 @@
 // runner while a local alternative exists, releases included (owner rule,
 // 2026-09-18). After a publish whose gate proved a cone, the publisher proves
 // exactly the rest of the corpus for that commit, detached, and records the
-// whole-corpus receipt when it is green; the next publish reports a red or
-// lost one first, and only a newer head on main supersedes a running one.
+// whole-corpus receipt when it is green. Every source keeps its first attempt
+// and its obligation; a later publish reports earlier red or lost evidence.
 
 import assert from 'node:assert/strict';
 import {spawn, spawnSync} from 'node:child_process';
@@ -16,7 +16,7 @@ import {flushCoverageBeforeKill} from '../../scripts/checks/census-pre-kill-flus
 
 import {
   LOCAL_CORPUS_OWED, localCorpusPlan, publishExactHead, reconcileLocalCorpus,
-  reportLocalCorpus, runLocalCorpus, startLocalCorpus, supersedeLocalCorpus,
+  reportLocalCorpus, runLocalCorpus, startLocalCorpus,
 } from '../../scripts/publish-head.js';
 import {runDecision} from '../../scripts/checks/push-gate-change-proof.js';
 import {wholeCorpusFiles} from '../../scripts/plan-test-lane.js';
@@ -27,6 +27,7 @@ import {spawnGit} from '../../scripts/checks/git-invocation.js';
 import {
   SECTION_KIND, appendExecutionSection, executionReportProblems, fileResultRecord,
 } from '../../scripts/test-execution-report.js';
+import {validExecutionReport} from './execution-report-fixture.js';
 
 const HEAD = 'a'.repeat(40);
 
@@ -60,7 +61,7 @@ function fakeRunning(t) {
       // already gone
     }
   });
-  return {child, exited: new Promise((resolve) => child.once('exit', resolve))};
+  return {child};
 }
 
 function deadPid() {
@@ -97,12 +98,14 @@ test('a cone publish starts exactly the rest of the corpus for the pushed commit
   assert.equal(files.length, corpus.length - 3);
   assert.ok(ranCone.every((file) => !files.includes(file)), 'the cone is not run twice');
 
-  // Started detached, in a group of its own, under the gate's retry policy.
+  // Admission is retained before a detached child can begin executing.
   const stateDir = path.join(dir, 'state');
   const spawned = [];
   const pid = startLocalCorpus({root: '/main', stateDir, head: HEAD, files,
     now: 1234, env: {PATH: '/bin'},
     spawnProcess: (command, args, options) => {
+      assert.deepEqual({state: stateOf(stateDir, HEAD).state, pid: stateOf(stateDir, HEAD).pid},
+        {state: 'starting', pid: null}, 'the first obligation exists before the child starts');
       spawned.push({command, args, options});
       return {pid: 4242, unref: () => {}};
     }});
@@ -113,10 +116,10 @@ test('a cone publish starts exactly the rest of the corpus for the pushed commit
   assert.deepEqual(args.slice(1), ['--local-corpus', HEAD]);
   assert.equal(options.cwd, '/main');
   assert.equal(options.detached, true);
-  assert.equal(options.env.LAGRANGE_RETRY_FAILED_ONCE, '1');
+  assert.deepEqual(options.env, {PATH: '/bin'}, 'the publisher introduces no retry policy');
   assert.equal(fs.readFileSync(path.join(stateDir, `${HEAD}.files`), 'utf8'),
     `${files.join('\n')}\n`);
-  assert.deepEqual(stateOf(stateDir, HEAD), {sha: HEAD, state: 'running', pid: 4242,
+  assert.deepEqual(stateOf(stateDir, HEAD), {sha: HEAD, state: 'starting', pid: null,
     files: files.length, startedAt: 1234, log: path.join(stateDir, `${HEAD}.log`)});
 
   // A child that cannot start is recorded lost, never thrown after a publish.
@@ -128,6 +131,66 @@ test('a cone publish starts exactly the rest of the corpus for the pushed commit
   onError(new Error('spawn EAGAIN'));
   assert.deepEqual({state: stateOf(stateDir, 'c'.repeat(40)).state,
     reason: stateOf(stateDir, 'c'.repeat(40)).reason}, {state: 'lost', reason: 'spawn EAGAIN'});
+});
+
+test('same-head admission is retained before a reentrant start can replace its evidence', (t) => {
+  const dir = scratch(t, 'local-corpus-acquire-');
+  const stateDir = path.join(dir, 'state');
+  const coneReport = path.join(dir, 'cone.json');
+  fs.writeFileSync(coneReport, JSON.stringify(validExecutionReport({sha: HEAD,
+    tree: 'b'.repeat(40)})));
+  let starts = 0;
+  let logDescriptor;
+  const pid = startLocalCorpus({root: dir, stateDir, head: HEAD,
+    files: ['original.test.js'], coneReport, now: 1, env: {},
+    spawnProcess: (_command, _args, options) => {
+      starts += 1;
+      logDescriptor = options.stdio[1];
+      fs.writeSync(logDescriptor, 'first attempt transcript\n');
+      const names = fs.readdirSync(stateDir).sort();
+      const before = names.map((name) => fs.readFileSync(path.join(stateDir, name), 'utf8'));
+      assert.equal(stateOf(stateDir, HEAD).state, 'starting');
+      assert.throws(() => startLocalCorpus({root: dir, stateDir, head: HEAD,
+        files: ['replacement.test.js'], now: 2, env: {},
+        spawnProcess: () => {
+          starts += 1;
+          return {pid: 4343, unref: () => {}};
+        }}), /already recorded/u, 'a second caller cannot enter the first obligation');
+      assert.deepEqual(fs.readdirSync(stateDir).sort(), names);
+      assert.deepEqual(names.map((name) => fs.readFileSync(path.join(stateDir, name), 'utf8')),
+        before, 'refusal leaves the first state, file list, cone report and log byte-for-byte');
+      return {pid: 4242, unref: () => {}};
+    }});
+  assert.equal(pid, 4242);
+  assert.equal(starts, 1, 'only the first caller reaches the spawn boundary');
+  assert.throws(() => fs.fstatSync(logDescriptor), {code: 'EBADF'},
+    'the parent closes its log descriptor after passing it to the child');
+});
+
+test('partial same-head acquisition stays recorded and cannot be started again', (t) => {
+  const dir = scratch(t, 'local-corpus-partial-');
+  const stateDir = path.join(dir, 'state');
+  const coneReport = path.join(dir, 'cone-is-a-directory');
+  fs.mkdirSync(coneReport);
+  let starts = 0;
+  const start = () => startLocalCorpus({root: dir, stateDir, head: HEAD,
+    files: ['original.test.js'], coneReport, env: {},
+    spawnProcess: () => {
+      starts += 1;
+      return {pid: 4242, unref: () => {}};
+    }});
+  assert.throws(start, 'copying a directory as the required cone report really fails');
+  const record = stateOf(stateDir, HEAD);
+  assert.equal(record.state, 'lost', 'acquisition failure is retained as unavailable evidence');
+  assert.equal(record.pid, null);
+  assert.ok(record.reason.includes(coneReport), 'the original copy error is retained');
+  const before = fs.readFileSync(path.join(stateDir, `${HEAD}.json`), 'utf8');
+  assert.throws(start, /already recorded/u);
+  assert.equal(fs.readFileSync(path.join(stateDir, `${HEAD}.json`), 'utf8'), before,
+    'the second caller cannot replace the first acquisition failure');
+  assert.equal(fs.readFileSync(path.join(stateDir, `${HEAD}.files`), 'utf8'),
+    'original.test.js\n');
+  assert.equal(starts, 0, 'neither the failed acquisition nor its replay starts a child');
 });
 
 test('a publish that proved the whole corpus, or whose scope is unknown, starts nothing', (t) => {
@@ -155,11 +218,12 @@ test('a publish that proved the whole corpus, or whose scope is unknown, starts 
   }
 });
 
-test('a newer publish supersedes a running local corpus', async (t) => {
-  const stateDir = path.join(scratch(t, 'local-corpus-supersede-'), 'state');
+test('reconciliation preserves live obligations and names only missing processes lost', (t) => {
+  const stateDir = path.join(scratch(t, 'local-corpus-reconcile-'), 'state');
   const running = fakeRunning(t);
   writeState(stateDir, {sha: '1'.repeat(40), state: 'running', pid: running.child.pid,
     startedAt: 3});
+  const firstRecord = fs.readFileSync(path.join(stateDir, `${'1'.repeat(40)}.json`), 'utf8');
   // One whose process is gone, and one whose pid now belongs to a process that
   // is not a local corpus: neither is signalled, both are lost.
   writeState(stateDir, {sha: '2'.repeat(40), state: 'running', pid: deadPid(), startedAt: 2});
@@ -167,35 +231,19 @@ test('a newer publish supersedes a running local corpus', async (t) => {
   writeState(stateDir, {sha: '4'.repeat(40), state: 'green', pid: 1, startedAt: 0,
     receipt: 'corpus-full-v1'});
 
-  // At the start of a publish nothing is signalled: it may never reach main.
   reconcileLocalCorpus(stateDir);
   assert.equal(stateOf(stateDir, '1'.repeat(40)).state, 'running');
   assert.doesNotThrow(() => process.kill(running.child.pid, 0), 'and nothing is stopped');
+  assert.equal(fs.readFileSync(path.join(stateDir, `${'1'.repeat(40)}.json`), 'utf8'),
+    firstRecord, 'a live obligation remains byte-for-byte');
   assert.equal(stateOf(stateDir, '2'.repeat(40)).state, 'lost');
   assert.equal(stateOf(stateDir, '3'.repeat(40)).state, 'lost',
     'a pid reused by another process is never signalled');
 
-  // The proof of the very commit being published again is not its own
-  // successor: it keeps running.
-  const same = fakeRunning(t);
-  writeState(stateDir, {sha: HEAD, state: 'running', pid: same.child.pid, startedAt: 4});
-
-  // After the new head's push is verified, the running one is stopped and said.
-  const lines = [];
-  // The census flushes the child the supersede is about to SIGTERM.
-  flushCoverageBeforeKill(running.child.pid, 'SIGTERM');
-  supersedeLocalCorpus(stateDir, HEAD, (line) => lines.push(line));
-  assert.equal(stateOf(stateDir, HEAD).state, 'running');
-  assert.doesNotThrow(() => process.kill(same.child.pid, 0));
-  await running.exited;
-  assert.deepEqual({state: stateOf(stateDir, '1'.repeat(40)).state,
-    by: stateOf(stateDir, '1'.repeat(40)).supersededBy}, {state: 'superseded', by: HEAD});
-  assert.deepEqual(lines, [`publish: local corpus ${'1'.repeat(40)}: superseded ` +
-    `(superseded by ${HEAD}), a newer head on main`]);
   assert.equal(stateOf(stateDir, '4'.repeat(40)).state, 'green', 'a verdict stays');
 });
 
-test('the next publish reports the last local corpus result first', (t) => {
+test('reporting retains every earlier red or lost result after a later green', (t) => {
   const stateDir = path.join(scratch(t, 'local-corpus-report-'), 'state');
   const say = () => {
     const lines = [];
@@ -213,15 +261,15 @@ test('the next publish reports the last local corpus result first', (t) => {
   writeState(stateDir, {sha: '5'.repeat(40), state: 'lost', reason: 'the machine stayed too ' +
     'hot to start it', startedAt: 4});
   writeState(stateDir, {sha: '6'.repeat(40), state: 'superseded', supersededBy: HEAD,
-    startedAt: 5});
+    files: 9, log: '/l/6.log', startedAt: 5});
   assert.deepEqual(say(), [
     `publish: !!! the local corpus was LOST for ${'5'.repeat(40)}: the machine stayed too ` +
       'hot to start it',
     `publish: !!! the local corpus was LOST for ${'3'.repeat(40)}: its process ended ` +
       'without a verdict',
     `publish: !!! the local corpus was RED for ${'2'.repeat(40)}: /l/2.log`,
-    `publish: local corpus ${'6'.repeat(40)}: superseded (superseded by ${HEAD})`,
-  ], 'every red or lost run since the last green is said first');
+    `publish: local corpus ${'6'.repeat(40)}: superseded (9 file(s), log /l/6.log)`,
+  ], 'all red or lost runs are said first, including before a historical superseded record');
   writeState(stateDir, {sha: '7'.repeat(40), state: 'red', files: 1, startedAt: 7,
     log: 'x', reason: 'proof-receipt-not-recorded', receipt: 'push refused'});
   assert.deepEqual(say(), [
@@ -235,19 +283,68 @@ test('the next publish reports the last local corpus result first', (t) => {
   ], 'an unrecorded receipt is red, names why, and never silences prior red or lost runs');
   writeState(stateDir, {sha: '8'.repeat(40), state: 'green', files: 1, startedAt: 8,
     log: 'x', receipt: 'corpus-full-v1'});
-  assert.deepEqual(say(), [`publish: local corpus ${'8'.repeat(40)}: green ` +
-    '(1 file(s), log x)'], 'only a recorded green receipt answers what came before');
+  assert.deepEqual(say(), [
+    `publish: !!! the local corpus was RED for ${'7'.repeat(40)}: receipt not recorded: push refused`,
+    `publish: !!! the local corpus was LOST for ${'5'.repeat(40)}: the machine stayed too ` +
+      'hot to start it',
+    `publish: !!! the local corpus was LOST for ${'3'.repeat(40)}: its process ended ` +
+      'without a verdict',
+    `publish: !!! the local corpus was RED for ${'2'.repeat(40)}: /l/2.log`,
+    `publish: local corpus ${'8'.repeat(40)}: green (1 file(s), log x)`,
+  ], 'a newer source receipt does not answer or hide earlier failures');
 
-  // Only the newest twenty records are kept.
+  // Reporting beyond the former retention bound cannot delete any evidence.
   for (let index = 0; index < 25; index += 1) {
     const sha = String(index).padStart(40, 'f');
     writeState(stateDir, {sha, state: 'green', files: 1, startedAt: 100 + index, log: 'x',
       receipt: 'corpus-full-v1'});
     fs.writeFileSync(path.join(stateDir, `${sha}.log`), 'x');
   }
-  say();
-  assert.equal(fs.readdirSync(stateDir).filter((name) => name.endsWith('.json')).length, 20);
-  assert.equal(fs.existsSync(path.join(stateDir, `${String(0).padStart(40, 'f')}.log`)), false);
+  const names = fs.readdirSync(stateDir).sort();
+  const before = names.map((name) => fs.readFileSync(path.join(stateDir, name), 'utf8'));
+  assert.equal(names.filter((name) => name.endsWith('.json')).length, 32);
+  const reported = say();
+  assert.ok(reported.includes(`publish: !!! the local corpus was RED for ${'2'.repeat(40)}: /l/2.log`));
+  assert.deepEqual(fs.readdirSync(stateDir).sort(), names, 'every record and log remains');
+  assert.deepEqual(names.map((name) => fs.readFileSync(path.join(stateDir, name), 'utf8')),
+    before, 'reporting changes no retained bytes');
+});
+
+test('native report companions coexist with the exact same-head state record', (t) => {
+  const stateDir = path.join(scratch(t, 'local-corpus-companions-'), 'state');
+  writeState(stateDir, {sha: HEAD, state: 'red', files: 2, startedAt: 1, log: '/first.log'});
+  const report = JSON.stringify(validExecutionReport({sha: HEAD, tree: 'b'.repeat(40)}));
+  for (const suffix of ['.report.json', '.cone-report.json']) {
+    fs.writeFileSync(path.join(stateDir, HEAD + suffix), report);
+  }
+  fs.writeFileSync(path.join(stateDir, 'unrelated.json'), '{not a state record');
+  const names = fs.readdirSync(stateDir).sort();
+  const before = names.map((name) => fs.readFileSync(path.join(stateDir, name), 'utf8'));
+  const lines = [];
+  reconcileLocalCorpus(stateDir);
+  reportLocalCorpus(stateDir, (line) => lines.push(line));
+  assert.deepEqual(lines, [
+    `publish: !!! the local corpus was RED for ${HEAD}: /first.log`,
+    `publish: local corpus ${HEAD}: red (2 file(s), log /first.log)`,
+  ], 'native report JSON is not misread as a second state or discarded as malformed state');
+  assert.deepEqual(fs.readdirSync(stateDir).sort(), names);
+  assert.deepEqual(names.map((name) => fs.readFileSync(path.join(stateDir, name), 'utf8')),
+    before, 'state and native reports all remain intact');
+});
+
+test('malformed actual state refuses before reporting or replacing evidence', (t) => {
+  const stateDir = path.join(scratch(t, 'local-corpus-malformed-'), 'state');
+  fs.mkdirSync(stateDir);
+  const file = path.join(stateDir, `${HEAD}.json`);
+  for (const bytes of ['{invalid', 'null', '[]', JSON.stringify({sha: 'b'.repeat(40), state: 'red'})]) {
+    fs.writeFileSync(file, bytes);
+    const lines = [];
+    assert.throws(() => reconcileLocalCorpus(stateDir), 'reconciliation refuses malformed state');
+    assert.throws(() => reportLocalCorpus(stateDir, (line) => lines.push(line)),
+      'reporting refuses malformed state');
+    assert.deepEqual(lines, [], 'no result is fabricated for unreadable state');
+    assert.equal(fs.readFileSync(file, 'utf8'), bytes, 'the failed read cannot erase its input');
+  }
 });
 
 // The runner is the one thermal owner of a runner run (process change
@@ -259,21 +356,25 @@ const CORPUS_GATE = 'scripts/checks/push-gate-corpus-worktree.js';
 const THERMAL_REFUSAL_STATUS = 75;
 
 test('the local corpus records the whole-corpus receipt only when green', (t) => {
-  const stateDir = path.join(scratch(t, 'local-corpus-run-'), 'state');
-  const run = ({gate = 0, record = 0, change = null} = {}) => {
-    writeState(stateDir, {sha: HEAD, state: 'running', pid: 1, files: 5, startedAt: 1});
+  const dir = scratch(t, 'local-corpus-run-');
+  const run = ({gate = {status: 0}, record = 0} = {}) => {
+    const stateDir = fs.mkdtempSync(path.join(dir, 'state-'));
+    writeState(stateDir, {sha: HEAD, state: 'starting', pid: null, files: 5, startedAt: 1});
     const calls = [];
     const status = runLocalCorpus('/main', HEAD, {stateDir, now: () => 99,
       run: (command, args, options) => {
         calls.push({command, args, options});
         if (args[0] === THERMAL_SCRIPT) return {status: 0};
         if (args[0] === CORPUS_GATE) {
-          if (change) writeState(stateDir, {...stateOf(stateDir, HEAD), ...change});
-          return {status: gate};
+          const running = stateOf(stateDir, HEAD);
+          assert.deepEqual({state: running.state, pid: running.pid},
+            {state: 'running', pid: process.pid},
+            'the child owns the running record before execution');
+          return gate;
         }
         return {status: record, stderr: 'refused\n'};
       }});
-    return {status, calls, state: stateOf(stateDir, HEAD)};
+    return {status, calls, state: stateOf(stateDir, HEAD), stateDir};
   };
   const green = run();
   assert.equal(green.status, 0);
@@ -289,22 +390,22 @@ test('the local corpus records the whole-corpus receipt only when green', (t) =>
   assert.equal(gate.args[6], corpusScript, 'the rest of the corpus, in a fresh exact ' +
     'checkout, with this very node; the convergence probes observed after, never the verdict');
   assert.deepEqual(gate.args.slice(-2),
-    [path.join(stateDir, `${HEAD}.files`), process.execPath]);
+    [path.join(green.stateDir, `${HEAD}.files`), process.execPath]);
   assert.equal(gate.options.cwd, '/main');
   assert.deepEqual(record.args, ['scripts/proof-authority.js', 'record', 'corpus-full-v1', HEAD,
-    '--report', path.join(stateDir, `${HEAD}.report.json`)],
+    '--report', path.join(green.stateDir, `${HEAD}.report.json`)],
   'recorded only from the execution report this run wrote');
   assert.equal(gate.options.env.LAGRANGE_EXECUTION_REPORT,
-    path.join(stateDir, `${HEAD}.sections.ndjson`), 'the runner writes its sections');
+    path.join(green.stateDir, `${HEAD}.sections.ndjson`), 'the runner writes its sections');
   assert.deepEqual({state: green.state.state, receipt: green.state.receipt},
     {state: 'green', receipt: 'corpus-full-v1'});
 
-  const red = run({gate: 1});
+  const red = run({gate: {status: 1}});
   assert.equal(red.status, 1);
   assert.equal(red.calls.length, 1, 'a red run records nothing');
   assert.equal(red.state.state, 'red');
 
-  const hot = run({gate: THERMAL_REFUSAL_STATUS});
+  const hot = run({gate: {status: THERMAL_REFUSAL_STATUS}});
   assert.equal(hot.calls.length, 1, 'a machine that stays hot records nothing');
   assert.deepEqual({state: hot.state.state, reason: hot.state.reason},
     {state: 'lost', reason: 'the machine stayed too hot to run it (thermal-headroom-exhausted)'},
@@ -321,10 +422,75 @@ test('the local corpus records the whole-corpus receipt only when green', (t) =>
     reason: 'proof-receipt-not-recorded',
     receipt: 'refused',
   }, 'a refused receipt is red, never green, and names the failed recording');
+});
 
-  const superseded = run({change: {state: 'superseded', supersededBy: 'b'.repeat(40)}});
-  assert.equal(superseded.calls.length, 1, 'a superseded run records nothing');
-  assert.equal(superseded.state.state, 'superseded', 'and keeps the newer head\'s word');
+test('execution without a gate verdict is lost and cannot record a proof receipt', (t) => {
+  const dir = scratch(t, 'local-corpus-unavailable-');
+  const thrown = new Error('executor disappeared before returning a verdict');
+  for (const [gate, detail] of [
+    [{status: null, signal: 'SIGTERM'}, 'SIGTERM'],
+    [{status: null, error: new Error('spawn EAGAIN')}, 'spawn EAGAIN'],
+    [{status: null}, 'its process ended without a verdict'],
+    [thrown, thrown.message],
+  ]) {
+    const stateDir = fs.mkdtempSync(path.join(dir, 'state-'));
+    writeState(stateDir, {sha: HEAD, state: 'starting', pid: null, files: 1, startedAt: 1});
+    const calls = [];
+    const execute = () => runLocalCorpus(dir, HEAD, {stateDir, now: () => 99,
+      run: (_command, args) => {
+        calls.push(args[0]);
+        if (gate instanceof Error) throw gate;
+        return gate;
+      }});
+    if (gate instanceof Error) {
+      assert.throws(execute, (error) => error === thrown,
+        'the original execution exception remains primary');
+    } else {
+      assert.equal(execute(), 1, 'unavailable execution returns nonzero');
+    }
+    const state = stateOf(stateDir, HEAD);
+    assert.deepEqual({state: state.state, reason: state.reason, finishedAt: state.finishedAt},
+      {state: 'lost', reason: `gate execution unavailable: ${detail}`, finishedAt: 99});
+    assert.deepEqual(calls, [CORPUS_GATE], 'no receipt command follows an unavailable gate');
+    assert.equal(state.receipt, undefined, 'unavailability creates no recorded proof');
+    assert.equal(fs.existsSync(path.join(stateDir, `${HEAD}.report.json`)), false,
+      'a missing verdict is not replaced by a synthetic execution report');
+  }
+});
+
+test('a detached corpus consumes only its starting obligation and refuses changed state', (t) => {
+  const dir = scratch(t, 'local-corpus-obligation-');
+  for (const state of ['running', 'red', 'lost', 'green', 'superseded']) {
+    const stateDir = path.join(dir, state);
+    writeState(stateDir, {sha: HEAD, state, pid: process.pid, files: 1, startedAt: 1});
+    const file = path.join(stateDir, `${HEAD}.json`);
+    const before = fs.readFileSync(file, 'utf8');
+    let calls = 0;
+    assert.throws(() => runLocalCorpus(dir, HEAD, {stateDir,
+      run: () => {
+        calls += 1;
+        return {status: 0};
+      }}), /no starting obligation/u, `${state} cannot be reopened by the detached entrypoint`);
+    assert.equal(calls, 0, 'refusal starts neither a gate nor a receipt command');
+    assert.equal(fs.readFileSync(file, 'utf8'), before);
+  }
+  for (const changed of [
+    {sha: HEAD, state: 'red', reason: 'another writer retained a failure'},
+    {sha: HEAD, state: 'running', pid: process.pid + 1, reason: 'another execution owner'},
+  ]) {
+    const stateDir = path.join(dir, `changed-${changed.state}`);
+    writeState(stateDir, {sha: HEAD, state: 'starting', pid: null, files: 1, startedAt: 1});
+    let calls = 0;
+    assert.throws(() => runLocalCorpus(dir, HEAD, {stateDir,
+      run: () => {
+        calls += 1;
+        writeState(stateDir, changed);
+        return {status: 0};
+      }}), /state changed during execution/u);
+    assert.equal(calls, 1, 'a changed record cannot authorize receipt recording');
+    assert.deepEqual(stateOf(stateDir, HEAD), changed,
+      'neither an earlier failure nor another running owner is turned green');
+  }
 });
 
 // The rest of a cone is only half the corpus: its report is whole only with
@@ -391,7 +557,7 @@ test('a rest run without the gate\'s cone report is no whole-corpus evidence', (
 // its own.
 test('the local corpus script is gated by its runner', (t) => {
   const stateDir = path.join(scratch(t, 'local-corpus-gated-'), 'state');
-  writeState(stateDir, {sha: HEAD, state: 'running', pid: 1, files: 1, startedAt: 1});
+  writeState(stateDir, {sha: HEAD, state: 'starting', pid: null, files: 1, startedAt: 1});
   const calls = [];
   runLocalCorpus('/main', HEAD, {stateDir, now: () => 99,
     run: (command, args) => {
@@ -470,7 +636,7 @@ function publishFixture(t, {gateFails = false, startChild = null} = {}) {
     cwds, publish, git};
 }
 
-test('a publish says what the local corpus found, and supersedes only once on main', async (t) => {
+test('a publish reports earlier failures and leaves other source obligations running', (t) => {
   // A publish that fails leaves the proof of what is on main running.
   const failing = publishFixture(t, {gateFails: true});
   const onMain = fakeRunning(t);
@@ -486,27 +652,28 @@ test('a publish says what the local corpus found, and supersedes only once on ma
     'a run whose process is gone is said lost, first, not running');
   assert.deepEqual(failing.spawned, [], 'and nothing new starts');
 
-  // A publish that reaches main supersedes it, says so, and starts the rest.
+  // A verified newer publish leaves the old obligation alive and starts its own rest.
   const passing = publishFixture(t);
-  const replaced = fakeRunning(t);
-  writeState(passing.stateDir, {sha: 'd'.repeat(40), state: 'running', pid: replaced.child.pid,
+  const earlier = fakeRunning(t);
+  writeState(passing.stateDir, {sha: 'd'.repeat(40), state: 'running', pid: earlier.child.pid,
     files: 9, startedAt: 2, log: '/l'});
   writeState(passing.stateDir, {sha: 'e'.repeat(40), state: 'red', files: 3, startedAt: 1,
     log: '/l/e.log'});
-  flushCoverageBeforeKill(replaced.child.pid, 'SIGTERM');
+  const firstRecord = fs.readFileSync(path.join(passing.stateDir, `${'d'.repeat(40)}.json`), 'utf8');
   passing.publish();
-  await replaced.exited;
   assert.match(passing.lines[0], /^publish: !!! the local corpus was RED for e{40}/u,
     'a red local corpus is the first thing a publish says');
-  assert.ok(passing.lines.includes(`publish: local corpus ${'d'.repeat(40)}: superseded ` +
-    `(superseded by ${passing.head}), a newer head on main`));
+  assert.equal(fs.readFileSync(path.join(passing.stateDir, `${'d'.repeat(40)}.json`), 'utf8'),
+    firstRecord, 'the earlier source record remains byte-for-byte');
+  assert.doesNotThrow(() => process.kill(earlier.child.pid, 0),
+    'a newer source never cancels an earlier source obligation');
   assert.deepEqual(passing.spawned.map((args) => args.slice(1)),
     [['--local-corpus', passing.head]], 'the rest of the corpus starts for the pushed commit');
   assert.equal(fs.readFileSync(path.join(passing.stateDir, `${passing.head}.files`), 'utf8'),
     'b.test.js\n', 'without the file the cone proved');
 });
 
-test('publishing the same head again starts no second run beside the first', (t) => {
+test('publishing the same head again preserves every first-attempt state without relaunch', (t) => {
   // A publish that died after its push, run once more: the head is already on
   // main, the push does nothing, and the run the first publish started goes on.
   const again = publishFixture(t, {startChild: () => fakeRunning(t).child});
@@ -515,21 +682,22 @@ test('publishing the same head again starts no second run beside the first', (t)
   again.publish();
   assert.equal(again.spawned.length, 1, 'one run for one commit');
   assert.ok(again.lines.includes(
-    'publish: local corpus not started: already running for this commit'), again.lines.join('\n'));
-  assert.equal(stateOf(again.stateDir, again.head).state, 'running');
+    'publish: local corpus not started: already starting for this commit'), again.lines.join('\n'));
+  assert.equal(stateOf(again.stateDir, again.head).state, 'starting');
 
-  // A green one covers it as well; an unrecorded or lost one is owed again.
-  writeState(again.stateDir, {...stateOf(again.stateDir, again.head), state: 'green',
-    receipt: 'corpus-full-v1'});
-  again.publish();
-  assert.equal(again.spawned.length, 1, 'a proved commit is not proved twice');
-  writeState(again.stateDir, {...stateOf(again.stateDir, again.head), state: 'red',
-    reason: 'proof-receipt-not-recorded', receipt: 'refused'});
-  again.publish();
-  assert.equal(again.spawned.length, 2, 'an unrecorded run does not cover the commit');
-  writeState(again.stateDir, {...stateOf(again.stateDir, again.head), state: 'lost'});
-  again.publish();
-  assert.equal(again.spawned.length, 3, 'a lost run is started again');
+  for (const state of ['green', 'red', 'lost', 'superseded']) {
+    writeState(again.stateDir, {sha: again.head, state, startedAt: 1, files: 1,
+      log: path.join(again.stateDir, `${again.head}.log`),
+      ...(state === 'green' ? {receipt: 'corpus-full-v1'} : {reason: 'first-attempt evidence'})});
+    fs.writeFileSync(path.join(again.stateDir, `${again.head}.log`), `${state}: first attempt\n`);
+    const names = fs.readdirSync(again.stateDir).sort();
+    const before = names.map((name) => fs.readFileSync(path.join(again.stateDir, name), 'utf8'));
+    again.publish();
+    assert.equal(again.spawned.length, 1, `${state} does not authorize a second attempt`);
+    assert.deepEqual(fs.readdirSync(again.stateDir).sort(), names);
+    assert.deepEqual(names.map((name) => fs.readFileSync(path.join(again.stateDir, name), 'utf8')),
+      before, `${state} evidence remains byte-for-byte`);
+  }
 });
 
 test('the local corpus runs from the main checkout, not the worktree that published', (t) => {

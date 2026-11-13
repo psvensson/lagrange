@@ -160,7 +160,6 @@ test('two red files in different batches are both reported', (t) => {
   let output = '';
   const env = {...process.env};
   delete env.NODE_TEST_CONTEXT;
-  delete env.LAGRANGE_RETRY_FAILED_ONCE;
   const status = runClassifiedTestFiles([redOrdinary, redExclusive], {
     ...COOL,
     root: fixtureRoot,

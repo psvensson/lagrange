@@ -108,6 +108,8 @@ const LOCAL_TEXT = Object.freeze({
   GATE_LINKS_BROKEN: '[push-gate] a workspace injection link was replaced during the gate\n',
   GATE_RETAINED: '[push-gate] gate diagnostics retained in ',
   GATE_NOTHING_RETAINED: '[push-gate] no acceptance receipt to retain from the gate checkout\n',
+  GATE_RETENTION_UNAVAILABLE:
+    '[push-gate] diagnostic retention unavailable; original checkout kept at ',
 });
 const stringTrim = Function.call.bind(String.prototype.trim);
 const arrayMap = Function.call.bind(Array.prototype.map);
@@ -125,6 +127,8 @@ const ERROR_COLON = ': ';
 const FAILED_PREFIX = '[push-gate-corpus] ';
 const FAILED_MID = ' failed (exit ';
 const FAILED_SUFFIX = ') on the pushed tree\n';
+const STOPPED_MID = ' stopped by ';
+const STOPPED_SUFFIX = ' on the pushed tree\n';
 const NEWLINE = '\n';
 
 // The corpus gates whose verdicts are only meaningful over the WHOLE tree at
@@ -207,12 +211,13 @@ function executeCorpusCommand(command, args, worktreePath) {
         stderr: Buffer.concat(stderrChunks),
       });
     });
-    child.on(EVENT_CLOSE, (status) => {
+    child.on(EVENT_CLOSE, (status, signal) => {
       resolve({
         command,
         args,
         error: null,
-        status: status ?? 0,
+        status,
+        signal,
         stdout: Buffer.concat(stdoutChunks),
         stderr: Buffer.concat(stderrChunks),
       });
@@ -237,6 +242,12 @@ function reportCorpusGateResult(result, worktreePath) {
       `${ERROR_PREFIX}${result.command}${ERROR_COLON}` +
       `${result.error.message}${NEWLINE}`,
     );
+    return EXIT_GATE_FAILURE;
+  }
+  if (result.signal) {
+    process.stderr.write(`${FAILED_PREFIX}${result.command} ` +
+      `${result.args.join(LOCAL_TEXT.ARGUMENT_SEPARATOR)}${STOPPED_MID}` +
+      `${result.signal}${STOPPED_SUFFIX}`);
     return EXIT_GATE_FAILURE;
   }
   if (result.status !== 0) {
@@ -376,12 +387,19 @@ function gateExactSha(root, {sha: requestedSha, refLinesFile, command}) {
     return result.status ?? EXIT_GATE_FAILURE;
   } finally {
     releaseSignals();
+    let keepWorktree = false;
     if (!passed) {
-      const retained = retainGateDiagnostics(root, worktreePath, sha);
-      process.stderr.write(retained ? `${LOCAL_TEXT.GATE_RETAINED}${retained}\n` :
-        LOCAL_TEXT.GATE_NOTHING_RETAINED);
+      try {
+        const retained = retainGateDiagnostics(root, worktreePath, sha);
+        process.stderr.write(retained ? `${LOCAL_TEXT.GATE_RETAINED}${retained}\n` :
+          LOCAL_TEXT.GATE_NOTHING_RETAINED);
+      } catch (error) {
+        keepWorktree = true;
+        process.stderr.write(`${LOCAL_TEXT.GATE_RETENTION_UNAVAILABLE}${worktreePath}: ` +
+          `${error.message}\n`);
+      }
     }
-    removeWorktree(root, worktreePath);
+    if (!keepWorktree) removeWorktree(root, worktreePath);
   }
 }
 

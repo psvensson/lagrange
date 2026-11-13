@@ -541,25 +541,26 @@ test('a placed commit is measured against its own lockfile and engines floor', a
     planCosts: HOUR_COSTS, runLocal: () => 0, commitAt: () => placed, discover: stop});
   assert.deepEqual(discovered, [placed, placed]);
 
-  // A placed run whose requirement cannot be read says so, and still runs
-  // here; an unreadable inventory is named as that, not as the requirement.
+  // A placed run whose requirement cannot be read stays unavailable;
+  // an unreadable inventory is named as that, not as the requirement.
   const placedRun = async (sha) => {
     const lines = [];
     const status = await runPlacedTestFiles(['a.test.js'], {...labProbe.placementDeps({
-      root: repo, planCosts: HOUR_COSTS, runLocal: () => 7, lastGreen: () => false}),
+      root: repo, planCosts: HOUR_COSTS,
+      runLocal: () => assert.fail('discovery failure cannot start another execution')}),
     env: {}, write: (line) => lines.push(line), commitAt: () => sha});
     return {status, lines};
   };
   const noRequirement = await placedRun(UNREADABLE_SHA);
-  assert.equal(noRequirement.status, 7, 'the files run on the controller');
-  assert.match(noRequirement.lines[0], new RegExp('^placement: local - the placed commit\'s ' +
+  assert.notEqual(noRequirement.status, 0, 'the files remain unavailable');
+  assert.match(noRequirement.lines[0], new RegExp('^placement: unavailable - the placed commit\'s ' +
     `requirement could not be read: no requirement: cannot read package\\.json at ${
       UNREADABLE_SHA}$`, 'u'));
   fs.writeFileSync(path.join(home, 'inventory.json'), '{"version":');
   const noInventory = await placedRun(placed);
-  assert.equal(noInventory.status, 7);
+  assert.notEqual(noInventory.status, 0);
   assert.match(noInventory.lines[0],
-    /^placement: local - the lab inventory could not be read: /u);
+    /^placement: unavailable - the lab inventory could not be read: /u);
 });
 
 test('the placed-commit witness leaves the lab home as it found it', () => {

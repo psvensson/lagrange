@@ -177,9 +177,11 @@ const INJECTION_SEPARATOR = ',';
 // one artifact naming the failing command - three ~17-minute runs on
 // 2026-08-19 were spent rediscovering what a retained receipt would have said.
 const GATE_DIAGNOSTIC_DIR = path.join('test-output', 'push-gate');
-// Each kept failure holds a capture of up to 64 MB: keep the newest few.
-const GATE_DIAGNOSTIC_KEEP = 5;
-const GATE_DIAGNOSTIC_REPLACED = ' (replacing an earlier failed run of this sha)';
+const GATE_DIAGNOSTIC_ATTEMPT_SEPARATOR = '-';
+const FILE_ALREADY_EXISTS = 'EEXIST';
+const FILE_NOT_FOUND = 'ENOENT';
+const GATE_DIAGNOSTIC_UNAVAILABLE =
+  'publish: gate diagnostic retention unavailable; original checkout kept at ';
 const ACCEPTANCE_OUTPUT_DIR = path.join('test-output', 'acceptance');
 const REPORT_SUFFIX = '.report.json';
 const UTF8 = 'utf8';
@@ -436,45 +438,39 @@ function assertWorkspaceDependencyLinks(dependencyLinks) {
 }
 
 // Copy the failing gate's receipt, and the artifact (and raw stdout) of its
-// FIRST failing command, out of the worktree before cleanup removes them: one
-// run per sha (a later one replaces it, aloud), the newest GATE_DIAGNOSTIC_KEEP
-// shas. Best-effort by design: a diagnostic that throws would replace the real
-// gate error with its own, which is exactly the failure this function exists
-// to prevent; a kept receipt is reported whatever fails after it.
+// FIRST failing command, out of the worktree before cleanup removes them.
+// The first destination is immutable; a later attempt gets its own directory.
+// Read/copy failure throws: each caller retains the original checkout and
+// preserves its primary gate failure instead of claiming complete retention.
 function retainGateDiagnostics(root, worktree, head) {
-  let kept = null;
+  const source = path.join(worktree, ACCEPTANCE_OUTPUT_DIR);
+  if (!fs.existsSync(source)) return null;
+  const reports = arrayFilter(fs.readdirSync(source),
+    (name) => stringEndsWith(name, REPORT_SUFFIX));
+  if (reports.length === 0) return null;
+  const newest = arraySort(reports)[reports.length - 1];
+  const parent = path.join(root, GATE_DIAGNOSTIC_DIR);
+  fs.mkdirSync(parent, {recursive: true});
+  let destination = path.join(parent, head);
   try {
-    const source = path.join(worktree, ACCEPTANCE_OUTPUT_DIR);
-    const reports = arrayFilter(fs.readdirSync(source),
-      (name) => stringEndsWith(name, REPORT_SUFFIX));
-    if (reports.length === 0) return null;
-    const newest = arraySort(reports)[reports.length - 1];
-    const parent = path.join(root, GATE_DIAGNOSTIC_DIR);
-    const destination = path.join(parent, head);
-    const replaced = fs.existsSync(destination);
-    fs.rmSync(destination, {recursive: true, force: true});
-    fs.mkdirSync(destination, {recursive: true});
-    fs.copyFileSync(
-      path.join(source, newest), path.join(destination, newest));
-    kept = replaced ? `${destination}${GATE_DIAGNOSTIC_REPLACED}` : destination;
-    const age = (name) => -fs.statSync(path.join(parent, name)).mtimeMs;
-    const older = arraySort(fs.readdirSync(parent), (left, right) => age(left) - age(right))
-      .slice(GATE_DIAGNOSTIC_KEEP);
-    for (const name of older) fs.rmSync(path.join(parent, name), {recursive: true, force: true});
-    const report = JSON.parse(
-      fs.readFileSync(path.join(source, newest), UTF8));
-    const failing = arrayFind(report.commands || [],
-      (command) => command.status === ACCEPTANCE_PROOF.STATUS_FAIL);
-    const artifact = failing &&
-      (failing.artifactIdentity || failing.requiredArtifact || {}).path;
-    for (const file of artifact ?
-      [artifact, `${artifact}${ACCEPTANCE_PROOF.CAPTURED_STDOUT_SUFFIX}`] : []) {
-      fs.copyFileSync(path.join(worktree, file), path.join(destination, path.basename(file)));
-    }
-  } catch {
-    // kept as far as it got
+    fs.mkdirSync(destination);
+  } catch (error) {
+    if (error.code !== FILE_ALREADY_EXISTS) throw error;
+    destination = fs.mkdtempSync(destination + GATE_DIAGNOSTIC_ATTEMPT_SEPARATOR);
   }
-  return kept;
+  fs.copyFileSync(path.join(source, newest), path.join(destination, newest));
+  const report = JSON.parse(fs.readFileSync(path.join(source, newest), UTF8));
+  const failing = arrayFind(report.commands || [],
+    (command) => command.status === ACCEPTANCE_PROOF.STATUS_FAIL);
+  const artifact = failing?.artifactIdentity?.path;
+  if (artifact) {
+    fs.copyFileSync(path.join(worktree, artifact), path.join(destination, path.basename(artifact)));
+    const stdout = artifact + ACCEPTANCE_PROOF.CAPTURED_STDOUT_SUFFIX;
+    if (fs.existsSync(path.join(worktree, stdout))) {
+      fs.copyFileSync(path.join(worktree, stdout), path.join(destination, path.basename(stdout)));
+    }
+  }
+  return destination;
 }
 
 function gateExactHead(run, root, worktree, head, remoteBefore, args) {
@@ -644,20 +640,18 @@ function buildPublishReceipt(observed, args) {
 // the pushed commit - what the cone did not prove at that commit - in a fresh
 // exact checkout, where placement spreads it over the lab machines. Green, it
 // records the whole-corpus receipt; red or lost, the next publish says so
-// first. Only a newer head that reached main supersedes a running one, after
-// its push is verified - as the hosted canary's cancel-in-progress did - so a
-// publish that fails leaves the proof of what is on main running. It runs
+// first. Every admitted source retains its own execution obligation; a newer
+// publication neither cancels it nor overwrites its evidence. It runs
 // from the main checkout, never from a quest worktree that may be removed
 // while it runs. Thermal headroom is its runner's to gate, before every batch
 // on every host; a machine that stays too hot is the runner's typed refusal,
 // recorded lost. None of this can fail a publish.
 const LOCAL_CORPUS_ARGUMENT = '--local-corpus';
 const LOCAL_CORPUS_DIRECTORY = 'lagrange-local-corpus';
-const LOCAL_CORPUS_KEEP = 20;
 const LOCAL_CORPUS_COMMON_DIR = Object.freeze(['rev-parse', '--git-common-dir']);
 const LOCAL_CORPUS_GIT_DIR_NAME = '.git';
 const LOCAL_CORPUS_STATE = Object.freeze({
-  RUNNING: 'running', GREEN: 'green', RED: 'red', SUPERSEDED: 'superseded', LOST: 'lost',
+  STARTING: 'starting', RUNNING: 'running', GREEN: 'green', RED: 'red', LOST: 'lost',
 });
 const LOCAL_CORPUS_RUNNER = 'scripts/run-classified-test-files.js';
 const LOCAL_CORPUS_GATE = 'scripts/checks/push-gate-corpus-worktree.js';
@@ -674,11 +668,10 @@ const LOCAL_CORPUS_RUN_SCRIPT =
   `${EXECUTION_SECTIONS_ENV}= npm run -s test:convergence-probes || ` +
   'echo "local corpus: convergence probes red (observed, never the verdict)"; ' +
   'exit "$status"';
-const LOCAL_CORPUS_RETRY_ENV = 'LAGRANGE_RETRY_FAILED_ONCE';
 const LOCAL_CORPUS_FIELD_TESTS = 'testPaths';
-const LOCAL_CORPUS_SIGNAL = 'SIGTERM';
 const LOCAL_CORPUS_SUFFIX = Object.freeze({STATE: '.json', LOG: '.log', FILES: '.files',
   CONE_REPORT: '.cone-report.json', SECTIONS: '.sections.ndjson', REPORT: '.report.json'});
+const LOCAL_CORPUS_STATE_NAME = /^[0-9a-f]{40}\.json$/u;
 const LOCAL_CORPUS_REPORT = Object.freeze({
   PRODUCER_KIND: 'local-corpus', PRODUCER_ID_PREFIX: 'pid-', LABEL: 'local-corpus',
   TREE_SUFFIX: '^{tree}',
@@ -700,23 +693,20 @@ const LOCAL_CORPUS_TEXT = Object.freeze({
   FILES: ' file(s), log ',
   RED_BANNER: 'publish: !!! the local corpus was RED for ',
   LOST_BANNER: 'publish: !!! the local corpus was LOST for ',
-  SUPERSEDED_BY: 'superseded by ',
-  NEWER_HEAD: ', a newer head on main',
   LOST: 'its process ended without a verdict',
   HOT: 'the machine stayed too hot to run it (thermal-headroom-exhausted)',
+  EXECUTION_LOST: 'gate execution unavailable: ',
+  STORAGE_UNAVAILABLE: 'publish: local corpus evidence storage unavailable for ',
   PROOF_NOT_RECORDED: 'proof-receipt-not-recorded',
   UNRECORDED: 'receipt not recorded: ',
   BOOKKEEPING: 'bookkeeping failed: ',
   ALREADY: 'already ',
   FOR_THIS_COMMIT: ' for this commit',
+  RECORDED: 'publish: local corpus already recorded for ',
+  NOT_STARTING: 'publish: local corpus has no starting obligation for ',
+  STATE_CHANGED: 'publish: local corpus state changed during execution for ',
+  INVALID_RECORD: 'publish: invalid local corpus record ',
 });
-// A run of the very head being published that still counts: one that is
-// alive, or one that already proved it and recorded its receipt.
-function isCoveringLocalCorpusRecord(record) {
-  if (!record || typeof record !== 'object') return false;
-  if (record.state === LOCAL_CORPUS_STATE.RUNNING) return true;
-  return record.state === LOCAL_CORPUS_STATE.GREEN && record.receipt === CORPUS_PROOF_ID;
-}
 
 // Where the local corpus keeps its records (the git common dir, shared by
 // every worktree) and where it runs from (the main checkout that holds it).
@@ -729,23 +719,25 @@ function localCorpusPlaces(root) {
   };
 }
 
-// Every record in the directory, newest first; a directory that cannot be read
-// holds none.
+// Every record in the directory, newest first. An absent directory holds no
+// records; unreadable or malformed evidence is not permission to replace it.
 function readLocalCorpusRecords(recordDir) {
   let names = [];
   try {
     names = fs.readdirSync(recordDir);
-  } catch {
-    names = [];
+  } catch (error) {
+    if (error.code !== FILE_NOT_FOUND) throw error;
   }
   const records = [];
   for (const name of names) {
-    if (!name.endsWith(LOCAL_CORPUS_SUFFIX.STATE)) continue;
-    try {
-      records.push(JSON.parse(fs.readFileSync(path.join(recordDir, name), UTF8)));
-    } catch {
-      // A record half written or damaged is not a result.
+    if (!LOCAL_CORPUS_STATE_NAME.test(name)) continue;
+    const file = path.join(recordDir, name);
+    const record = JSON.parse(fs.readFileSync(file, UTF8));
+    if (!record || typeof record !== 'object' || Array.isArray(record) ||
+        record.sha + LOCAL_CORPUS_SUFFIX.STATE !== name || typeof record.state !== 'string') {
+      throw new Error(LOCAL_CORPUS_TEXT.INVALID_RECORD + file);
     }
+    records.push(record);
   }
   return records.sort((left, right) => (right.startedAt || 0) - (left.startedAt || 0));
 }
@@ -755,6 +747,17 @@ function writeLocalCorpusState(stateDir, state) {
   const file = path.join(stateDir, `${state.sha}${LOCAL_CORPUS_SUFFIX.STATE}`);
   fs.writeFileSync(`${file}.tmp`, `${JSON.stringify(state)}\n`);
   fs.renameSync(`${file}.tmp`, file);
+}
+
+// A failure to store the loss is a second failure. Keep the original
+// exception primary and leave the existing uncertain obligation in place.
+function retainLocalCorpusLoss(stateDir, state, error) {
+  try {
+    writeLocalCorpusState(stateDir, {...state, state: LOCAL_CORPUS_STATE.LOST});
+  } catch (storageError) {
+    process.stderr.write(`${LOCAL_CORPUS_TEXT.STORAGE_UNAVAILABLE}${state.sha}: ` +
+      `${storageError.message}; original failure: ${error.message}${NEWLINE}`);
+  }
 }
 
 // What a pushed commit is owed after its gate: the rest of the corpus,
@@ -801,33 +804,48 @@ export function startLocalCorpus({root, stateDir, head, files, spawnProcess = sp
   env = process.env, now = Date.now(), coneReport = null}) {
   fs.mkdirSync(stateDir, {recursive: true});
   const base = path.join(stateDir, head);
-  fs.writeFileSync(`${base}${LOCAL_CORPUS_SUFFIX.FILES}`, files.join(NEWLINE) + NEWLINE);
-  // The gate's report of the cone it proved: the rest completes it. A stale
-  // one from an earlier publish of this head never stands in for it.
-  fs.rmSync(`${base}${LOCAL_CORPUS_SUFFIX.CONE_REPORT}`, {force: true});
-  if (coneReport && fs.existsSync(coneReport)) {
-    fs.copyFileSync(coneReport, `${base}${LOCAL_CORPUS_SUFFIX.CONE_REPORT}`);
+  if (Object.values(LOCAL_CORPUS_SUFFIX).some((suffix) => fs.existsSync(base + suffix))) {
+    throw new Error(LOCAL_CORPUS_TEXT.RECORDED + head);
   }
-  const log = fs.openSync(`${base}${LOCAL_CORPUS_SUFFIX.LOG}`, 'w');
   // A run handed the rest of a cone owes the cone's report: without it the
   // rest is no whole corpus, whatever the run finds.
-  const record = {sha: head, state: LOCAL_CORPUS_STATE.RUNNING, pid: null,
+  const record = {sha: head, state: LOCAL_CORPUS_STATE.STARTING, pid: null,
     files: files.length, startedAt: now, log: `${base}${LOCAL_CORPUS_SUFFIX.LOG}`,
     ...(coneReport ? {coneOwed: true} : {})};
-  const child = spawnProcess(process.execPath,
-    [fileURLToPath(import.meta.url), LOCAL_CORPUS_ARGUMENT, head], {
-      cwd: root,
-      // The gate's own retry policy, and a group of its own to supersede.
-      env: {...env, [LOCAL_CORPUS_RETRY_ENV]: ENABLED_ENV_VALUE},
-      detached: true,
-      stdio: ['ignore', log, log],
-    });
-  fs.closeSync(log);
+  // Exclusive creation is the same-head acquisition point. No companion may
+  // be written until this process owns the original starting obligation.
+  try {
+    fs.writeFileSync(`${base}${LOCAL_CORPUS_SUFFIX.STATE}`, JSON.stringify(record) + NEWLINE,
+      {flag: 'wx'});
+  } catch (error) {
+    if (error.code === FILE_ALREADY_EXISTS) throw new Error(LOCAL_CORPUS_TEXT.RECORDED + head);
+    throw error;
+  }
+  let log = null;
+  let child;
+  try {
+    fs.writeFileSync(`${base}${LOCAL_CORPUS_SUFFIX.FILES}`, files.join(NEWLINE) + NEWLINE,
+      {flag: 'wx'});
+    // The gate's original report of the cone it proved: the rest completes it.
+    if (coneReport && fs.existsSync(coneReport)) {
+      fs.copyFileSync(coneReport, `${base}${LOCAL_CORPUS_SUFFIX.CONE_REPORT}`,
+        fs.constants.COPYFILE_EXCL);
+    }
+    log = fs.openSync(`${base}${LOCAL_CORPUS_SUFFIX.LOG}`, 'wx');
+    child = spawnProcess(process.execPath,
+      [fileURLToPath(import.meta.url), LOCAL_CORPUS_ARGUMENT, head], {
+        cwd: root, env, detached: true, stdio: ['ignore', log, log],
+      });
+  } catch (error) {
+    retainLocalCorpusLoss(stateDir, {...record, reason: error.message}, error);
+    throw error;
+  } finally {
+    if (log !== null) fs.closeSync(log);
+  }
   // A child that could not start is lost, not an exception after the publish.
-  child.on?.(LOCAL_CORPUS_ERROR_EVENT, (error) => writeLocalCorpusState(stateDir,
-    {...record, state: LOCAL_CORPUS_STATE.LOST, reason: error.message}));
+  child.on?.(LOCAL_CORPUS_ERROR_EVENT, (error) =>
+    retainLocalCorpusLoss(stateDir, {...record, reason: error.message}, error));
   child.unref?.();
-  writeLocalCorpusState(stateDir, {...record, pid: child.pid});
   return child.pid;
 }
 
@@ -843,17 +861,50 @@ export function startLocalCorpus({root, stateDir, head, files, spawnProcess = sp
  */
 export function runLocalCorpus(root, head, {stateDir, run = spawnSync, now = Date.now}) {
   const current = () => readLocalCorpusRecords(stateDir).find((entry) => entry.sha === head);
+  const initial = current();
+  if (initial?.state !== LOCAL_CORPUS_STATE.STARTING) {
+    throw new Error(LOCAL_CORPUS_TEXT.NOT_STARTING + head);
+  }
+  const running = {...initial, state: LOCAL_CORPUS_STATE.RUNNING, pid: process.pid};
+  writeLocalCorpusState(stateDir, running);
+  try {
+    return completeLocalCorpus(root, head, {stateDir, run, now, current});
+  } catch (error) {
+    let state;
+    try {
+      state = current();
+    } catch (storageError) {
+      process.stderr.write(`${LOCAL_CORPUS_TEXT.STORAGE_UNAVAILABLE}${head}: ` +
+        `${storageError.message}; original failure: ${error.message}${NEWLINE}`);
+      throw error;
+    }
+    if (state?.state === LOCAL_CORPUS_STATE.RUNNING && state.pid === process.pid) {
+      retainLocalCorpusLoss(stateDir, {...state,
+        reason: LOCAL_CORPUS_TEXT.EXECUTION_LOST + error.message, finishedAt: now()}, error);
+    }
+    throw error;
+  }
+}
+
+function completeLocalCorpus(root, head, {stateDir, run, now, current}) {
   const base = path.join(stateDir, head);
   const files = `${base}${LOCAL_CORPUS_SUFFIX.FILES}`;
-  const sections = openExecutionSections(`${base}${LOCAL_CORPUS_SUFFIX.SECTIONS}`);
   const gateArgs = [LOCAL_CORPUS_GATE, LOCAL_CORPUS_GATE_FLAG, head,
     LOCAL_CORPUS_RUN_FLAG, LOCAL_CORPUS_SHELL, LOCAL_CORPUS_SHELL_COMMAND,
     LOCAL_CORPUS_RUN_SCRIPT, LOCAL_CORPUS_SHELL, files, process.execPath];
+  const sections = openExecutionSections(`${base}${LOCAL_CORPUS_SUFFIX.SECTIONS}`);
   const gated = run(process.execPath, gateArgs,
     {cwd: root, stdio: INHERIT_STDIO, env: {...process.env, [EXECUTION_SECTIONS_ENV]: sections}});
   const state = current();
-  // Superseded meanwhile: a newer head on main owns the verdict now.
-  if (state?.state !== LOCAL_CORPUS_STATE.RUNNING) return gated.status ?? 1;
+  if (state?.state !== LOCAL_CORPUS_STATE.RUNNING || state.pid !== process.pid) {
+    throw new Error(LOCAL_CORPUS_TEXT.STATE_CHANGED + head);
+  }
+  if (gated?.error || !Number.isInteger(gated?.status)) {
+    const reason = gated?.error?.message || gated?.signal || LOCAL_CORPUS_TEXT.LOST;
+    writeLocalCorpusState(stateDir, {...state, state: LOCAL_CORPUS_STATE.LOST,
+      reason: LOCAL_CORPUS_TEXT.EXECUTION_LOST + reason, finishedAt: now()});
+    return 1;
+  }
   if (gated.status === THERMAL_REFUSAL_EXIT) {
     writeLocalCorpusState(stateDir, {...state, state: LOCAL_CORPUS_STATE.LOST,
       reason: LOCAL_CORPUS_TEXT.HOT, finishedAt: now()});
@@ -972,32 +1023,7 @@ export function reconcileLocalCorpus(stateDir) {
   }
 }
 
-/**
- * Stop every running local corpus for another commit - a newer head reached
- * main - and say so. Called only after this publish's push is verified.
- * @param {string} stateDir
- * @param {string} head the commit now on main
- * @param {Function} write
- */
-export function supersedeLocalCorpus(stateDir, head, write) {
-  reconcileLocalCorpus(stateDir);
-  for (const state of readLocalCorpusRecords(stateDir)) {
-    if (state.state !== LOCAL_CORPUS_STATE.RUNNING || state.sha === head) continue;
-    const superseded = {...state, state: LOCAL_CORPUS_STATE.SUPERSEDED, supersededBy: head};
-    writeLocalCorpusState(stateDir, superseded);
-    try {
-      process.kill(-state.pid, LOCAL_CORPUS_SIGNAL);
-    } catch {
-      // Ended between the check and the signal.
-    }
-    write(`${localCorpusLine(superseded)}${LOCAL_CORPUS_TEXT.NEWER_HEAD}`);
-  }
-}
-
 function localCorpusDetail(state) {
-  if (state.state === LOCAL_CORPUS_STATE.SUPERSEDED) {
-    return `${LOCAL_CORPUS_TEXT.SUPERSEDED_BY}${state.supersededBy}`;
-  }
   if (state.state === LOCAL_CORPUS_STATE.LOST) return state.reason || LOCAL_CORPUS_TEXT.LOST;
   if (state.receipt && state.receipt !== CORPUS_PROOF_ID) {
     return `${LOCAL_CORPUS_TEXT.UNRECORDED}${state.receipt}`;
@@ -1011,16 +1037,13 @@ function localCorpusLine(state) {
 
 /**
  * What the local corpus last said, before anything else a publish does: every
- * red or lost run since the last green, loudest, then the newest record.
+ * red or lost run, then the newest record. Reporting never deletes evidence.
  * @param {string} stateDir
  * @param {Function} write
  */
 export function reportLocalCorpus(stateDir, write) {
   const states = readLocalCorpusRecords(stateDir);
-  const lastGreen = states.findIndex((state) =>
-    state.state === LOCAL_CORPUS_STATE.GREEN && state.receipt === CORPUS_PROOF_ID);
-  const unanswered = lastGreen < 0 ? states : states.slice(0, lastGreen);
-  for (const state of unanswered) {
+  for (const state of states) {
     if (state.state === LOCAL_CORPUS_STATE.RED) {
       const detail = state.receipt && state.receipt !== CORPUS_PROOF_ID ?
         `${LOCAL_CORPUS_TEXT.UNRECORDED}${state.receipt}` : state.log;
@@ -1030,24 +1053,15 @@ export function reportLocalCorpus(stateDir, write) {
     }
   }
   if (states.length > 0) write(localCorpusLine(states[0]));
-  for (const state of states.slice(LOCAL_CORPUS_KEEP)) {
-    for (const suffix of Object.values(LOCAL_CORPUS_SUFFIX)) {
-      fs.rmSync(path.join(stateDir, `${state.sha}${suffix}`), {force: true});
-    }
-  }
 }
 
-// After the verified push: supersede what the new head replaces, then start
-// the rest of the corpus when the gate proved a cone.
+// After the verified push, start the rest when the gate proved a cone and
+// this source has no earlier record. Other sources retain their obligations.
 function localCorpusAfterPush(worktree, head, localCorpus) {
   const {stateDir, mainRoot, write, spawnProcess, wholeCorpus} = localCorpus;
-  supersedeLocalCorpus(stateDir, head, write);
-  // The same head published again - a publish that died after its push, run
-  // once more - owes nothing a live or green run of it covers: a second run
-  // would share the first's record and log, and leave the first running
-  // untracked (verifier, round 2). A lost, red or superseded one is run again.
+  // Repeating a publication cannot overwrite a failed or uncertain attempt.
   const covering = readLocalCorpusRecords(stateDir).find((record) =>
-    record.sha === head && isCoveringLocalCorpusRecord(record));
+    record.sha === head);
   if (covering) {
     write(`${LOCAL_CORPUS_TEXT.PREFIX}${LOCAL_CORPUS_TEXT.NOT_STARTED}` +
       `${LOCAL_CORPUS_TEXT.ALREADY}${covering.state}${LOCAL_CORPUS_TEXT.FOR_THIS_COMMIT}`);
@@ -1110,8 +1124,7 @@ const POST_MERGE_REFUSAL = Object.freeze({
   ALREADY_PROVEN: 'already-proven',
   PROOF_STORE_UNAVAILABLE: 'proof-store-unavailable',
   RECORD_REFUSED: 'receipt-not-authorized',
-  ALREADY_RUNNING: 'already-running',
-  CORPUS_BUSY: 'another-local-corpus-running',
+  ALREADY_RECORDED: 'already-recorded',
 });
 const POST_MERGE_TEXT = Object.freeze({
   REFUSED: 'publish --post-merge: refused (',
@@ -1121,9 +1134,7 @@ const POST_MERGE_TEXT = Object.freeze({
   ALREADY_PROVEN: ` already holds a ${CORPUS_PROOF_ID} receipt; nothing is owed`,
   UNAVAILABLE: 'the proof store could not answer: ',
   RECORD_REFUSED: 'recording the receipt is not authorized: ',
-  ALREADY_RUNNING: 'a local corpus is already running for ',
-  BUSY: 'a local corpus is running for ',
-  BUSY_SUFFIX: '; only the newest head on main supersedes it',
+  ALREADY_RECORDED: 'a local corpus attempt is already recorded for ',
   OWED_PREFIX: 'publish: post-merge corpus owed for ',
   OWED: ': the whole corpus (no local gate proved a cone for a GitHub-merged head), ',
   ONLY_OPTION: `publish: ${POST_MERGE_ARGUMENT} takes no other option`,
@@ -1219,18 +1230,12 @@ function assertMergedHeadOwed(run, root, sha) {
   }
 }
 
-// One local corpus at a time: a run for this sha already covers it, and a run
-// for another head yields only to the newest head on main, as after a publish.
-function assertLocalCorpusFree(stateDir, sha, isTip) {
-  const running = readLocalCorpusRecords(stateDir)
-    .filter((record) => record.state === LOCAL_CORPUS_STATE.RUNNING);
-  if (running.some((record) => record.sha === sha)) {
-    throw postMergeRefusal(POST_MERGE_REFUSAL.ALREADY_RUNNING,
-      `${POST_MERGE_TEXT.ALREADY_RUNNING}${sha}`);
-  }
-  if (!isTip && running.length > 0) {
-    throw postMergeRefusal(POST_MERGE_REFUSAL.CORPUS_BUSY,
-      `${POST_MERGE_TEXT.BUSY}${running[0].sha}${POST_MERGE_TEXT.BUSY_SUFFIX}`);
+// A recorded attempt is never implicitly replayed. Other source identities
+// retain their own attempts; physical execution remains bounded by host locks.
+function assertLocalCorpusFree(stateDir, sha) {
+  if (readLocalCorpusRecords(stateDir).some((record) => record.sha === sha)) {
+    throw postMergeRefusal(POST_MERGE_REFUSAL.ALREADY_RECORDED,
+      `${POST_MERGE_TEXT.ALREADY_RECORDED}${sha}`);
   }
 }
 
@@ -1251,10 +1256,8 @@ export function proveMergedHead(root, sha, options = {}) {
   const stateDir = options.localCorpusDir || places.stateDir;
   reconcileLocalCorpus(stateDir);
   reportLocalCorpus(stateDir, write);
-  const isTip = git(root, [REV_PARSE_COMMAND, `${ORIGIN_REMOTE}/${MAIN_BRANCH}`]) === sha;
-  assertLocalCorpusFree(stateDir, sha, isTip);
+  assertLocalCorpusFree(stateDir, sha);
   const files = mergedHeadCorpus(root, sha, options.wholeCorpus || wholeCorpusFiles);
-  if (isTip) supersedeLocalCorpus(stateDir, sha, write);
   const pid = startLocalCorpus({root: places.mainRoot, stateDir, head: sha, files,
     spawnProcess: options.spawnProcess || spawn});
   const log = `${path.join(stateDir, sha)}${LOCAL_CORPUS_SUFFIX.LOG}`;
@@ -1302,6 +1305,7 @@ export function publishExactHead(root, args = {}, options = {}) {
   const worktree = fs.mkdtempSync(path.join(parent, PUBLISH_WORKTREE_PREFIX));
   let added = false;
   let retained = null;
+  let keepWorktree = false;
   try {
     checkedGit([
       WORKTREE_COMMAND, WORKTREE_ADD, QUIET_ARGUMENT, DETACH_ARGUMENT, worktree, head,
@@ -1327,14 +1331,21 @@ export function publishExactHead(root, args = {}, options = {}) {
     fs.writeFileSync(file, `${JSON.stringify(receipt, null, 2)}\n`);
     return {...receipt, receipt: file};
   } catch (error) {
-    retained = retainGateDiagnostics(root, worktree, head);
+    try {
+      retained = retainGateDiagnostics(root, worktree, head);
+    } catch (retentionError) {
+      keepWorktree = true;
+      process.stderr.write(`${GATE_DIAGNOSTIC_UNAVAILABLE}${worktree}: ` +
+        `${retentionError.message}\n`);
+    }
     throw error;
   } finally {
     if (retained) process.stderr.write(`${RETAINED_PREFIX}${retained}\n`);
-    if (added) {
+    // A retention failure leaves the only complete original evidence here.
+    if (!keepWorktree && added) {
       checkedGit([WORKTREE_COMMAND, WORKTREE_REMOVE, FORCE_ARGUMENT, worktree],
         {cwd: root, allowFailure: true});
-    } else {
+    } else if (!keepWorktree) {
       fs.rmSync(worktree, {recursive: true, force: true});
     }
   }

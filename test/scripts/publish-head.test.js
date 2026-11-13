@@ -309,10 +309,8 @@ tap.test('a failed gate retains its receipt outside the worktree', (t) => {
   t.end();
 });
 
-// failed-gate-keeps-evidence: every failed direct push gate retains now, so
-// the one retention owner bounds what it keeps (R13), says when a second
-// failure of the same sha replaces the first, and still reports the receipt
-// it kept when the named artifact is missing.
+// The first failure remains at its original path. A later failed attempt
+// gets a distinct directory; failure to copy required evidence is explicit.
 function failedGateCheckout(parent, name, artifact = 'test-output/acceptance/p/proof.json') {
   const worktree = path.join(parent, name);
   fs.mkdirSync(path.join(worktree, 'test-output', 'acceptance', 'p'), {recursive: true});
@@ -323,29 +321,111 @@ function failedGateCheckout(parent, name, artifact = 'test-output/acceptance/p/p
   return worktree;
 }
 
-tap.test('retained gate diagnostics are bounded, replaced aloud, and honest', (t) => {
-  const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'retain-bound-'));
+tap.test('retained gate diagnostics preserve every source and same-head attempt', (t) => {
+  const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'retain-attempts-'));
+  t.teardown(() => fs.rmSync(parent, {recursive: true, force: true}));
   const root = path.join(parent, 'root');
   const kept = path.join(root, 'test-output', 'push-gate');
-  const shas = Array.from({length: 7}, (_unused, index) => `sha${index}`);
+  const shas = Array.from({length: 7}, (_unused, index) => String(index).repeat(40));
   shas.forEach((sha, index) => {
     t.equal(retainGateDiagnostics(root, failedGateCheckout(parent, sha), sha),
       path.join(kept, sha), 'a first failure of a sha is kept where it says');
     fs.utimesSync(path.join(kept, sha), index + 1, index + 1);
   });
-  t.same(fs.readdirSync(kept).sort(), shas.slice(2),
-    'only the newest five shas are kept; older ones are pruned');
-  t.equal(fs.readFileSync(path.join(kept, 'sha6', 'proof.json.stdout.txt'), 'utf8'), 'sha6',
+  t.same(fs.readdirSync(kept).sort(), shas, 'earlier source failures are never age-pruned');
+  const head = shas[6];
+  const original = path.join(kept, head);
+  const names = fs.readdirSync(original).sort();
+  const before = names.map((name) => fs.readFileSync(path.join(original, name), 'utf8'));
+  t.equal(fs.readFileSync(path.join(original, 'proof.json.stdout.txt'), 'utf8'), head,
     'the raw stdout beside the artifact is kept too');
-  t.equal(retainGateDiagnostics(root, failedGateCheckout(parent, 'again'), 'sha6'),
-    `${path.join(kept, 'sha6')} (replacing an earlier failed run of this sha)`,
-    'a second failure of one sha says it replaced the first');
-  t.equal(fs.readFileSync(path.join(kept, 'sha6', 'proof.json'), 'utf8'), 'again');
-  t.equal(retainGateDiagnostics(root,
-    failedGateCheckout(parent, 'missing', 'test-output/acceptance/p/gone.json'), 'shaM'),
-  path.join(kept, 'shaM'), 'a kept receipt is reported even when its artifact is missing');
-  t.ok(fs.existsSync(path.join(kept, 'shaM', 'g.report.json')));
-  fs.rmSync(parent, {recursive: true, force: true});
+  const second = retainGateDiagnostics(root, failedGateCheckout(parent, 'again'), head);
+  const third = retainGateDiagnostics(root, failedGateCheckout(parent, 'third'), head);
+  t.not(second, original, 'the second attempt gets a different destination');
+  t.not(third, second, 'each later attempt also remains distinct');
+  t.equal(path.dirname(second), kept);
+  t.equal(path.dirname(third), kept);
+  t.ok(path.basename(second).startsWith(`${head}-`), 'the source is still named');
+  t.equal(fs.readFileSync(path.join(second, 'proof.json'), 'utf8'), 'again');
+  t.equal(fs.readFileSync(path.join(third, 'proof.json.stdout.txt'), 'utf8'), 'third');
+  t.same(fs.readdirSync(original).sort(), names);
+  t.same(names.map((name) => fs.readFileSync(path.join(original, name), 'utf8')), before,
+    'first receipt, artifact and stdout are unchanged');
+  t.equal(fs.readdirSync(kept).length, 9, 'no source or repeated attempt was pruned');
+  t.end();
+});
+
+tap.test('diagnostic copy errors refuse complete retention while optional stdout may be absent', (t) => {
+  const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'retain-copy-'));
+  t.teardown(() => fs.rmSync(parent, {recursive: true, force: true}));
+  const root = path.join(parent, 'root');
+  const missing = failedGateCheckout(parent, 'missing', 'test-output/acceptance/p/gone.json');
+  const report = path.join(missing, 'test-output/acceptance/g.report.json');
+  const original = fs.readFileSync(report, 'utf8');
+  t.throws(() => retainGateDiagnostics(root, missing, 'a'.repeat(40)), {code: 'ENOENT'},
+    'a declared artifact that cannot be copied is a retention failure');
+  t.equal(fs.readFileSync(report, 'utf8'), original, 'the source report is still available');
+
+  const badReport = failedGateCheckout(parent, 'bad-report');
+  const required = path.join(badReport, 'test-output/acceptance/g.report.json');
+  fs.rmSync(required);
+  fs.mkdirSync(required);
+  t.throws(() => retainGateDiagnostics(root, badReport, 'b'.repeat(40)),
+    'the required report must really copy');
+
+  const badStdout = failedGateCheckout(parent, 'bad-stdout');
+  const stdout = path.join(badStdout, 'test-output/acceptance/p/proof.json.stdout.txt');
+  fs.rmSync(stdout);
+  fs.mkdirSync(stdout);
+  t.throws(() => retainGateDiagnostics(root, badStdout, 'c'.repeat(40)),
+    'a present stdout companion that cannot copy also refuses complete retention');
+
+  const optional = failedGateCheckout(parent, 'optional-stdout');
+  fs.rmSync(path.join(optional, 'test-output/acceptance/p/proof.json.stdout.txt'));
+  const retained = retainGateDiagnostics(root, optional, 'd'.repeat(40));
+  t.same(fs.readdirSync(retained).sort(), ['g.report.json', 'proof.json'],
+    'an absent optional stdout companion needs no invented replacement');
+  t.equal(fs.readFileSync(path.join(retained, 'g.report.json'), 'utf8'),
+    fs.readFileSync(path.join(optional, 'test-output/acceptance/g.report.json'), 'utf8'),
+    'the original report is retained without fabricated missing-mode fields');
+  t.end();
+});
+
+tap.test('a retention error preserves the primary gate failure and its original checkout', (t) => {
+  const report = JSON.stringify({commands: [{id: 'proof', status: 'FAIL',
+    artifactIdentity: {path: 'test-output/acceptance/missing.json'}}]});
+  const hook = [
+    'cat >/dev/null',
+    'grep -q two tracked.txt || exit 0',
+    'mkdir -p test-output/acceptance',
+    `printf '%s' '${report}' > test-output/acceptance/gate.report.json`,
+    'printf "first failure transcript\\n" > test-output/acceptance/observed.txt',
+    'exit 42',
+  ].join('\n');
+  const {parent, root, remote} = fixture(hook);
+  t.teardown(() => fs.rmSync(parent, {recursive: true, force: true}));
+  const remoteBefore = git(remote, ['rev-parse', 'refs/heads/main']);
+  let failure;
+  try {
+    publishExactHead(root, {}, {queryCi: false});
+  } catch (error) {
+    failure = error;
+  }
+  t.equal(failure?.message, 'bash .githooks/pre-push failed',
+    'the original gate failure escapes, not the later missing-artifact copy error');
+  t.equal(git(remote, ['rev-parse', 'refs/heads/main']), remoteBefore,
+    'retention failure never publishes the rejected head');
+  const worktreeParent = path.join(root, 'test-output', 'publish-worktrees');
+  const originals = fs.readdirSync(worktreeParent);
+  t.equal(originals.length, 1, 'the complete failed checkout remains registered and on disk');
+  const checkout = path.join(worktreeParent, originals[0]);
+  t.equal(fs.readFileSync(path.join(checkout, 'test-output/acceptance/gate.report.json'), 'utf8'),
+    report, 'the required source report survives');
+  t.equal(fs.readFileSync(path.join(checkout, 'test-output/acceptance/observed.txt'), 'utf8'),
+    'first failure transcript\n', 'source evidence outside the failed copy survives too');
+  const registered = fs.realpathSync(checkout);
+  t.ok(git(root, ['worktree', 'list', '--porcelain']).includes(`worktree ${registered}\n`),
+    'retention did not leave a removed or unregistered original checkout');
   t.end();
 });
 
@@ -485,8 +565,9 @@ function refusalOf(action) {
   return 'not refused';
 }
 
-tap.test('a GitHub-merged head with no receipt gets one from the post-merge arm', (t) => {
+tap.test('a GitHub-merged head cannot mint a receipt from silent successful execution', (t) => {
   const merged = mergedFixture();
+  t.teardown(() => fs.rmSync(merged.parent, {recursive: true, force: true}));
   const remoteBefore = git(merged.remote, ['rev-parse', 'refs/heads/main']);
   const statusBefore = git(merged.root, ['status', '--porcelain']);
   merged.prove(merged.merged);
@@ -516,15 +597,35 @@ tap.test('a GitHub-merged head with no receipt gets one from the post-merge arm'
   t.equal(silentRecord.reason, 'proof-receipt-not-recorded');
   t.match(silentRecord.receipt, /execution-report-planned-file-not-executed/u,
     'and the refusal is named in the local corpus record');
+  const recorded = fs.readFileSync(path.join(merged.stateDir, `${merged.merged}.json`), 'utf8');
+  t.equal(refusalOf(() => merged.prove(merged.merged)), POST_MERGE_REFUSAL.ALREADY_RECORDED,
+    'an unrecorded receipt does not authorize a second same-head attempt');
+  t.equal(fs.readFileSync(path.join(merged.stateDir, `${merged.merged}.json`), 'utf8'), recorded);
+  t.equal(merged.spawned.length, 1, 'the first attempt is the only admitted run');
+  t.equal(git(merged.remote, ['rev-parse', 'refs/heads/main']), remoteBefore,
+    'nothing was pushed to main');
+  t.equal(git(merged.root, ['status', '--porcelain']), statusBefore,
+    'nothing was staged or changed in the caller\'s checkout');
+  t.end();
+});
+
+tap.test('a fresh GitHub-merged head gets a receipt only from its native execution report', (t) => {
+  // This is a separate source/repository from the refused silent run: the
+  // positive control never reopens that failed same-head obligation.
+  const merged = mergedFixture();
+  t.teardown(() => fs.rmSync(merged.parent, {recursive: true, force: true}));
+  const remoteBefore = git(merged.remote, ['rev-parse', 'refs/heads/main']);
+  const statusBefore = git(merged.root, ['status', '--porcelain']);
+  merged.prove(merged.merged);
   // A run that writes the sections the real runner writes - this commit's
   // clean checkout, every planned file green with assertions - is evidence.
   const tree = git(merged.root, ['rev-parse', `${merged.merged}^{tree}`]);
-  fs.writeFileSync(path.join(merged.stateDir, `${merged.merged}.json`), JSON.stringify(
-    {sha: merged.merged, state: 'running', pid: 1, files: 2, startedAt: 1}));
   const status = runLocalCorpus(merged.root, merged.merged, {
     stateDir: merged.stateDir,
     run: (command, args, options) => {
-      if (args[0] === 'scripts/proof-authority.js') return authority(command, args, options);
+      if (args[0] === 'scripts/proof-authority.js') {
+        return spawnSync(command, [PROOF_AUTHORITY, ...args.slice(1)], options);
+      }
       const sections = options.env.LAGRANGE_EXECUTION_REPORT;
       const files = ['a.test.js', 'b.test.js'];
       appendExecutionSection(sections, {kind: SECTION_KIND.START, runId: 'stub',
@@ -535,13 +636,17 @@ tap.test('a GitHub-merged head with no receipt gets one from the post-merge arm'
     },
   });
   t.equal(status, 0);
+  const record = JSON.parse(fs.readFileSync(
+    path.join(merged.stateDir, `${merged.merged}.json`), 'utf8'));
+  t.same({state: record.state, pid: record.pid, receipt: record.receipt},
+    {state: 'green', pid: process.pid, receipt: 'corpus-full-v1'},
+    'the admitted child records its own successful execution');
   t.match(merged.receiptRef(merged.merged), /^[0-9a-f]{40}$/u,
     'the fake origin now holds the corpus-full-v1 receipt for the merged sha');
   t.equal(git(merged.remote, ['rev-parse', 'refs/heads/main']), remoteBefore,
     'nothing was pushed to main');
   t.equal(git(merged.root, ['status', '--porcelain']), statusBefore,
     'nothing was staged or changed in the caller\'s checkout');
-  fs.rmSync(merged.parent, {recursive: true, force: true});
   t.end();
 });
 
@@ -598,7 +703,7 @@ tap.test('the post-merge arm never re-mints an existing receipt', (t) => {
   t.end();
 });
 
-tap.test('the post-merge arm runs one local corpus at a time', (t) => {
+tap.test('the post-merge arm preserves other source obligations while refusing same-head replay', (t) => {
   // A live process that looks like a local corpus: its own group, named so.
   const merged = mergedFixture();
   const children = [];
@@ -613,6 +718,7 @@ tap.test('the post-merge arm runs one local corpus at a time', (t) => {
         // already gone
       }
     }
+    fs.rmSync(merged.parent, {recursive: true, force: true});
   });
   const liveProve = (sha) => proveMergedHead(merged.root, sha, {
     localCorpusDir: merged.stateDir,
@@ -631,12 +737,38 @@ tap.test('the post-merge arm runs one local corpus at a time', (t) => {
   git(merged.root, ['push', '--quiet', 'origin', 'HEAD:refs/heads/main']);
   const tip = git(merged.root, ['rev-parse', 'HEAD']);
   liveProve(tip);
-  t.equal(refusalOf(() => liveProve(tip)), POST_MERGE_REFUSAL.ALREADY_RUNNING,
-    'a head whose local corpus is running is not started twice');
-  t.equal(refusalOf(() => liveProve(merged.merged)), POST_MERGE_REFUSAL.CORPUS_BUSY,
-    'an older head does not start beside the newest head\'s run');
-  t.equal(children.length, 1, 'one run was started');
-  fs.rmSync(merged.parent, {recursive: true, force: true});
+  t.equal(refusalOf(() => liveProve(tip)), POST_MERGE_REFUSAL.ALREADY_RECORDED,
+    'an admitted head is not started twice even before its child is running');
+  const tipFile = path.join(merged.stateDir, `${tip}.json`);
+  const tipState = JSON.parse(fs.readFileSync(tipFile, 'utf8'));
+  fs.writeFileSync(tipFile, JSON.stringify({...tipState, state: 'running', pid: children[0].pid}));
+  const before = fs.readFileSync(tipFile, 'utf8');
+  liveProve(merged.merged);
+  t.equal(children.length, 2, 'both source identities retain a physical execution obligation');
+  t.equal(fs.readFileSync(tipFile, 'utf8'), before, 'starting the older source changes no live record');
+  t.doesNotThrow(() => process.kill(children[0].pid, 0), 'the existing child remains alive');
+  t.doesNotThrow(() => process.kill(children[1].pid, 0), 'the other source child starts');
+  t.equal(refusalOf(() => liveProve(tip)), POST_MERGE_REFUSAL.ALREADY_RECORDED,
+    'the running same-head obligation also refuses a second attempt');
+  t.equal(children.length, 2, 'the refusal launches no extra process');
+  t.end();
+});
+
+tap.test('the post-merge arm preserves every recorded same-head terminal verdict', (t) => {
+  const merged = mergedFixture();
+  t.teardown(() => fs.rmSync(merged.parent, {recursive: true, force: true}));
+  fs.mkdirSync(merged.stateDir);
+  const file = path.join(merged.stateDir, `${merged.merged}.json`);
+  for (const state of ['red', 'lost', 'superseded', 'green']) {
+    const bytes = JSON.stringify({sha: merged.merged, state, startedAt: 1,
+      files: 2, log: '/first-attempt.log'});
+    fs.writeFileSync(file, bytes);
+    t.equal(refusalOf(() => merged.prove(merged.merged)), POST_MERGE_REFUSAL.ALREADY_RECORDED,
+      `${state} remains recorded even when no receipt exists`);
+    t.equal(fs.readFileSync(file, 'utf8'), bytes, `${state} evidence remains unchanged`);
+  }
+  t.same(merged.spawned, [], 'no recorded verdict is replayed');
+  t.equal(merged.receiptRef(merged.merged), '', 'none is promoted into a new proof receipt');
   t.end();
 });
 

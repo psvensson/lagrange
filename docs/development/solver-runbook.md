@@ -212,6 +212,14 @@ always be preserved remotely; that remote branch is not Quest-land, merge,
 release or publication approval. Set `LAGRANGE_PUSH_PROVE_BRANCH=1` when you
 deliberately want the full local push gate on a feature branch.
 
+A routing marker does not establish an installed trusted executor, write
+credentials or native proof custody. Work authorized for physical lab execution
+must establish that delivery path before publishing; a lab command's completion
+alone is not a GitHub check or a native proof receipt. CI's proof range is the
+event's actual push or pull-request base. Manual dispatch requires `base_sha`,
+an exact commit already present in the checkout. An absent, zero or unreachable
+base refuses the gate.
+
 Pushes that update `main` still take the full gate. If that exact tree already
 passed `test:gate:postpush`, `LAGRANGE_PUSH_SKIP_TESTS=1 git push` skips only
 the repeated test stage; static checks still run. `--no-verify` skips every
@@ -248,7 +256,15 @@ stage prints which it chose and why. When the gate proved a cone, the
 publisher then proves the rest of the corpus for that commit locally, detached
 and placed across the lab machines, and records the whole-corpus receipt when it
 is green; the next publish reports a red one first (`publish: !!! the local
-corpus was RED`). The hosted `full-corpus-canary` runs only by hand. Fix one-way
+corpus was RED`). Every exact-head corpus attempt has one retained record,
+claimed before its files or log are opened. A repeated publish cannot restart a
+red, lost or otherwise recorded attempt at the same SHA. A newer source keeps
+its own obligation and does not cancel an older run. Reporting preserves all
+records and first failures. Failed gate diagnostics remain under
+`test-output/push-gate/`; repeated diagnostics use distinct directories and
+routine output pruning does not remove them. If diagnostic retention fails,
+the original checkout remains and the failure is explicit.
+The hosted `full-corpus-canary` runs only by hand. Fix one-way
 ratchets rather than raising their baselines.
 
 Thermal headroom is the classified runner's to gate
@@ -263,10 +279,9 @@ a placed run relays: `thermal: ok cpu 61C (k10temp/Tctl) nvme 66C
 that measures only one of the two gates on that one. A host still hot after the owner's twenty polls ends
 the run with the typed refusal `thermal-headroom-exhausted`: exit 75, no batch
 started hot, and a summary line naming every file not run. Placement reports
-such a host as `placement: host-thermal-unfit NAME` and sends its unproved
-files on as it does a held host's: to the next ready host the run has not
-tried, else the controller, never again to that host in the same run; the
-local corpus records the refusal as lost, not red. A lab shard also caps every
+such a host as `placement: host-thermal-unfit NAME`; its assigned files remain
+unmeasured and the run cannot pass. No other host or controller reruns them.
+The local corpus records the refusal as lost, not red. A lab shard also caps every
 lane at the host's own processor count less one (`LAGRANGE_LANE_JOBS_CAP`,
 shown in its `placement-env` line). `LAGRANGE_SKIP_THERMAL_GATE=1` is the one
 skip, and every gated batch carries it so a runner nested in a test does not
@@ -279,9 +294,9 @@ only through `lab test`, placement or `lab harness run` - never a raw ssh
 runner invocation, which takes no lock and which no other agent can see. A
 placed shard waits for a held host no longer than its own estimate (at most
 30 minutes); still held, the host is reported as
-`placement: host-busy NAME held-by AGENT since STARTED`, and the shard goes to
-the next ready host, then to the controller - the one re-placement a hot host
-gets too. `lab fleet` shows who holds each
+`placement: host-busy NAME held-by AGENT since STARTED`, and the assigned shard
+remains unavailable. Initial placement uses current ready hosts; a failed or
+refused assignment never moves elsewhere within that proof. `lab fleet` shows who holds each
 machine; set `LAGRANGE_LAB_AGENT` (for example `claude:SESSION`) to name
 yourself in the record.
 
@@ -293,8 +308,9 @@ new runtime or whole-corpus run. It does not create or transfer a runtime receip
 For changes that require corpus proof, a head merged through GitHub met neither
 this hook nor the publisher, so it has NO corpus proof until
 `npm run publish -- --post-merge <sha>` has run for it.
-That arm refuses a sha that is not on the first-parent history of origin/main
-or that already holds the whole-corpus receipt, then starts the same detached
+That arm refuses a sha that is not on the first-parent history of origin/main,
+already holds the whole-corpus receipt, or already has any corpus attempt
+record, then starts the same detached
 local corpus - the whole corpus, since no local gate proved a cone - which
 records the receipt when green; it pushes, stages and amends nothing. Prefer
 landing source changes through the publisher. The generated test metadata,
@@ -312,11 +328,21 @@ differs from HEAD by exactly the staged quest scope), and it announces that
 base in its log. The branch-vs-remote range is the push gate's proof above,
 which is where two landed quests' interaction is proved. Before this
 (2026-09-17) a land on a branch carrying earlier quests proved them all
-again every time - 1927 tests for a one-file repair. The same proof runs
-under the retry policy CI records (`LAGRANGE_RETRY_FAILED_ONCE=1`): a failed
-file is rerun once standalone, the rerun is reported and capped at five
-files, a standalone failure stays red. A flake no longer costs a re-land,
-and a persisting red still refuses.
+again every time - 1927 tests for a one-file repair. Land, CI, the push gate
+and detached corpus now execute each scheduled file once. A failed command,
+failed file, zero-assertion file or missing result blocks acceptance; later
+green output cannot erase it. A release-proof obligation remains a refusal of
+the change proof until its canonical owner satisfies it.
+
+The user-authorized `publication-single-pass-evidence` Quest supersedes the
+active retry and corpus supersession policies formerly proved by
+`land-retry-parity` and `local-corpus-canary`, plus the last-verdict-wins and
+retry-green omission policies in `failed-gate-keeps-evidence`. The latter's
+single retention owner and synchronous runner constraints remain applicable.
+Their sealed historical records remain unchanged. A repaired source SHA
+receives a fresh measurement; separate
+diagnostic measurements retain their own evidence and cannot replace the
+original failed or uncertain attempt.
 
 ## Partial clones (solve-v2 phase 1)
 

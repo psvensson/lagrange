@@ -97,6 +97,8 @@ const TEST_OUTPUT_PRUNE_WORKTREE_PARENTS = Object.freeze([
 const TEST_OUTPUT_PRUNE_ROOT_RESERVED_TOP_LEVEL = Object.freeze([
   ...TEST_OUTPUT_PRUNE_RESERVED_TOP_LEVEL,
   ...TEST_OUTPUT_PRUNE_WORKTREE_PARENTS,
+  // The publication owner retains original failure evidence across attempts.
+  'push-gate',
 ]);
 const TEST_OUTPUT_PRUNE_PARTITION_LOG_SUFFIXES = Object.freeze([
   '.db-wal',

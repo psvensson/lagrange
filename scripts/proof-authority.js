@@ -59,10 +59,6 @@ const OBJECT_TYPE_TAG = 'tag';
 const OBJECT_TYPE_COMMIT = 'commit';
 const TAG_HEADER_TYPE_LINE = 'type commit';
 const RECEIPT_OUTCOME_PASSED = 'passed';
-// A pass a contract's sealed retry policy admitted with a qualification: the
-// receipt names it and is never a clean pass (proof-receipt-bound-to-
-// validated-execution).
-const RECEIPT_OUTCOME_QUALIFIED = 'passed-qualified';
 const RECORD_REFUSED = 'proof-record-refused';
 const RECORD_REFUSED_NAME = 'ProofRecordRefused';
 const REPORT_DIGEST = Object.freeze({ALGORITHM: 'sha256', ENCODING: 'hex'});
@@ -296,12 +292,9 @@ function parseAnnotatedTag(body) {
   return {ok: true, headers, receipt};
 }
 
-// A clean pass always; a qualified pass only under a contract whose sealed
-// retry policy admits qualified results.
-function passOutcome(proofId, outcome) {
-  if (outcome === RECEIPT_OUTCOME_PASSED) return true;
-  return outcome === RECEIPT_OUTCOME_QUALIFIED &&
-    contractFor(proofId)?.retryPolicy === RETRY_POLICY.ADMIT_QUALIFIED;
+// Only an unqualified pass can satisfy the registered strict proof contracts.
+function passOutcome(outcome) {
+  return outcome === RECEIPT_OUTCOME_PASSED;
 }
 
 function receiptProblems({proofId, sha, objectType, parsed, identity = null}) {
@@ -320,7 +313,7 @@ function receiptProblems({proofId, sha, objectType, parsed, identity = null}) {
   if (receipt?.schema !== RECEIPT_SCHEMA) problems.push(RECEIPT_SCHEMA_MISMATCH);
   if (receipt?.proofId !== proofId) problems.push(RECEIPT_PROOF_ID_MISMATCH);
   if (receipt?.subjectSha !== subject) problems.push(RECEIPT_SUBJECT_SHA_MISMATCH);
-  if (!passOutcome(proofId, receipt?.outcome)) problems.push(RECEIPT_NOT_A_PASS);
+  if (!passOutcome(receipt?.outcome)) problems.push(RECEIPT_NOT_A_PASS);
   if (receipt?.reuse !== REUSE.IMMUTABLE_SHA) problems.push(RECEIPT_NOT_IMMUTABLE);
   if (!receipt?.completedAt || Number.isNaN(Date.parse(receipt.completedAt))) {
     problems.push(RECEIPT_TIME_INVALID);
@@ -544,12 +537,11 @@ function buildReceipt({
   env = process.env,
 }) {
   const attributableProducer = defaultProducer(producer, env);
-  const qualified = execution?.qualification?.length > 0;
   return Object.freeze({
     schema: RECEIPT_SCHEMA,
     proofId,
     subjectSha: sha,
-    outcome: qualified ? RECEIPT_OUTCOME_QUALIFIED : RECEIPT_OUTCOME_PASSED,
+    outcome: RECEIPT_OUTCOME_PASSED,
     reuse: REUSE.IMMUTABLE_SHA,
     completedAt,
     producer: Object.freeze({...attributableProducer}),
@@ -666,7 +658,7 @@ function validatedExecution({proofId, sha, contract, report, remote, cwd, git}) 
   const corpusProblems = corpus.ok ? [] :
     [{code: EXECUTION_PROBLEM.PLANNED_FILE_NOT_EXECUTED, detail: corpus.reason}];
   const checked = executionReportProblems(report, {sha, tree: subjectTree({sha, cwd, git}),
-    identity, retryPolicy: contract.retryPolicy, requiredFiles: corpus.files});
+    identity, requiredFiles: corpus.files});
   const problems = checked.summary ?
     [...unverifiable, ...corpusProblems, ...checked.problems,
       ...reusedProofProblems({report, sha, contract, remote, cwd, git})] :
@@ -677,7 +669,6 @@ function validatedExecution({proofId, sha, contract, report, remote, cwd, git}) 
       .digest(REPORT_DIGEST.ENCODING),
     producer: {...report.producer},
     summary: checked.summary,
-    ...(checked.qualification.length > 0 ? {qualification: checked.qualification} : {}),
   };
 }
 

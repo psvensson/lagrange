@@ -19,7 +19,6 @@ jobs:
       PROOF_BASE: 64b85decf37d58d9c52cabbd95b207ae027bd050
       LOCAL_CANDIDATE: bcb299c777258ac680b2fa686d06b503a6647387
       EVIDENCE: test-output/partition-tx1-admission
-      LAGRANGE_RETRY_FAILED_ONCE: '0'
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:

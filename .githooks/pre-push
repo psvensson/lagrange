@@ -413,5 +413,5 @@ else
   # command's failing test files, and a failed gate keeps its receipt and that
   # capture under test-output/push-gate/<sha>/.
   stage "test-stage" "contracts, audits, then the change proof or the whole corpus (output captured per command; a failure names its failing test files)"
-  LAGRANGE_RETRY_FAILED_ONCE=1 npm run -s test:gate:postpush
+  npm run -s test:gate:postpush
 fi

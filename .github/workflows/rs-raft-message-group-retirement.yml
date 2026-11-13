@@ -16,7 +16,6 @@ jobs:
     timeout-minutes: 12
     env:
       OUT: test-output/message-group-retirement-proof
-      LAGRANGE_RETRY_FAILED_ONCE: '0'
       TEST: test/bootstrap/message-group-activation-handler-boundary.test.js
       ORIGINAL: 4fa5d82ed6aec481c0f9f857157ebd5f5dbe9a5b
     steps:

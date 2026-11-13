@@ -36,6 +36,22 @@ reporting never prunes old evidence. A repaired source SHA owns a fresh attempt.
 Separate explicit diagnostic measurements remain separate evidence. Repeated
 gate failures retain distinct diagnostic directories at the same existing
 owner, preserving the original bytes.
+The first state is an exclusive `starting` record, acquired before companion
+files. State readers select only the declared `<sha>.json` family; native
+execution reports remain companions, and malformed state still refuses.
+Generic output pruning reserves this existing diagnostic directory. A copy
+failure retains the original checkout and names unavailable storage while the
+original gate error remains primary. A thrown or signalled corpus execution is
+lost; a measured nonzero test exit is red.
+
+The placement owner installs cancellation before starting shares, observes
+each acquired completion immediately, and closes all acquired siblings on a
+setup or settlement exception. One cleanup exception does not prevent later
+siblings receiving cancellation. Existing bounded grace and deadlines remain;
+cleanup uncertainty stays explicit. The wrapper closes partial descriptor
+acquisition and every relay even if an earlier output operation failed.
+Solver land also stops substituting `test:safety-pregate` for a canonical
+`RELEASE_PROOF_REQUIRED` refusal.
 
 ## Complete transition
 
@@ -73,6 +89,23 @@ evidence. Reuse its worst-verdict policy throughout this interaction. The
 sealed `land-retry-parity` and `local-corpus-canary` Quests proved older active
 semantics. The user's current no-fallback direction supersedes those semantics;
 their records remain unchanged and do not claim this new behavior.
+`failed-gate-keeps-evidence` at
+`6929b84de5626e1672f1f362d6152f9a51f6ce40` also sealed last-verdict-wins and
+retry-green omission. Those two active verdict policies are superseded; its
+single retention owner and synchronous runner constraints remain applicable.
+`fc6db88ee4d9a5d0d9ac120cd85d0a04b7a805fc` records three approximately
+17-minute August19 attempts losing diagnostics; the direct gate repeated that
+failure in October. `placement-fixture-followups` at
+`b5f975d0d0c97e2d6e2a10e48bdac743c20e9b46` records orphaned children after
+SIGHUP and the bounded remote-shell cleanup before local cut. Preserve that
+same bounded abort owner across placed and manual split-lab execution.
+
+[Node22 child-process semantics](https://nodejs.org/download/release/v22.23.2/docs/api/child_process.html)
+distinguish process exit from closed stdio and specify that `spawnSync` blocks
+JavaScript execution. The finite `materializer-signal-observation.mjs` records
+what a signal delivered during that synchronous gate actually reaches. It is
+an investigation, not an acceptance check or a native proof receipt; the outer
+signal-handler disposition remains pending its lab measurement.
 
 [Bazel's test-run policy](https://bazel.build/docs/user-manual#flaky_test_attempts)
 distinguishes eventual flaky success from a clean pass; that distinction
@@ -91,6 +124,18 @@ fixture and production assignment/settlement methods plus a real CLI child.
 Freeze its exact bytes and the fixture with unchanged source first. Its
 fail-once child, failed/partial host streams, unavailability and evidence-custody
 controls must fail through the named causal assertions on the original.
+The separately frozen `test/config/ci-proof-range.test.js` runs the actual CI
+YAML step in finite Git repositories, including its explicit dispatch input.
+Candidate lifecycle controls in `placement-failure-custody.test.js` cover setup
+and settlement exceptions, cleanup failures, missing controller exit status
+and actual descriptor acquisition faults. They do not change the frozen
+original controls.
+The separate split-lab controls exercise the same acquisition and settlement
+failure policy through `runLabTest`, including exactly-once planning-checkout
+release. Real wrapper controls refuse a missing bounded timeout owner before
+any transport starts. A separate existing group-to-child fallback in
+`scripts/lab/process.js` is recorded for that lifetime owner; it is not silently
+expanded into this change across unrelated consumers.
 
 After independent candidate review, the sole coordinator runs those same
 controls and the existing runner, placement/split/discovery, local-corpus,

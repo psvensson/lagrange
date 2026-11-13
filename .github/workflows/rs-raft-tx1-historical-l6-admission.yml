@@ -15,7 +15,6 @@ jobs:
       OUT: test-output/tx1-historical-admission
       SOURCE: '2a21e39cec4bbba941dafc2034b1bc038d9e31db'
       WITNESS: scripts/quest-evidence/tx1-historical-before-l6-witness.mjs
-      LAGRANGE_RETRY_FAILED_ONCE: '0'
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:

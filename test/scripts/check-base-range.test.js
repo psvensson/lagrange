@@ -181,9 +181,8 @@ test('the environment base selects the same range as the flag', () => {
 });
 
 test('an unreachable base is reported, never silently narrowed', () => {
-  // CI falls back to HEAD^ when `before` is the zero SHA or has been garbage
-  // collected. That fallback belongs to the workflow; the library must refuse
-  // rather than quietly proving the working tree only.
+  // The workflow and the library both refuse an unavailable event base;
+  // neither may quietly narrow the proof to HEAD^ or the working tree.
   const missing = '0'.repeat(40);
   assert.equal(changedRecords({root: repo, base: missing, head: shas.d}), null,
     'an undiffable range returns null so the caller fails closed');

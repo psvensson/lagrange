@@ -27,8 +27,7 @@ test('TX1 M1: a real COMMIT decision and held prepared participants survive seed
     const markerPath = path.join(tmp, 'checkpoint.json');
     let childOutput = '';
     const child = spawn(process.execPath, [SOURCE], {
-      env: {...process.env, LAGRANGE_TX1_M1_DECISION_KILL_MARKER_PATH: markerPath,
-        LAGRANGE_RETRY_FAILED_ONCE: '0'},
+      env: {...process.env, LAGRANGE_TX1_M1_DECISION_KILL_MARKER_PATH: markerPath},
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     child.stdout.on('data', (bytes) => {

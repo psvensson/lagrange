@@ -32,29 +32,9 @@ const DEFAULT_JOBS = 4;
 const DEFAULT_TIMEOUT_MS = 600000;
 const FAILURE_EXIT_CODE = 1;
 const SUCCESS_EXIT_CODE = 0;
-// Lane-scoped retry-failed-once policy (owner decision 2026-08-23, recorded
-// with the release-certificate policy): a CI lane may export
-// LAGRANGE_RETRY_FAILED_ONCE=1 so each failed file is rerun standalone
-// exactly once - a standalone pass classifies the failure as an intrinsic
-// intermittent (census-quest scope) and is REPORTED, never hidden; a
-// standalone failure is a regression and stays red. The cap keeps the
-// policy honest: a run with many failed files is breakage, not a flake
-// profile, and is never retried.
-const RETRY_FAILED_ONCE_ENV = 'LAGRANGE_RETRY_FAILED_ONCE';
-const RETRY_FAILED_ONCE_ENABLED = '1';
-const RETRY_FAILED_ONCE_MAX_FILES = 5;
-const RETRY_FAILED_ONCE_BANNER_SUFFIX =
-  ' failed file(s) standalone (census-classified, never hidden)\n';
-const RETRY_FAILED_ONCE_OUTCOME = Object.freeze({
-  FAIL: 'fail',
-  PASS: 'pass',
-});
+// One scheduled execution supplies one outcome. A later diagnostic run
+// cannot replace this attempt's failure or turn it into successful proof.
 const FIRST_ATTEMPT = 1;
-const RETRY_ATTEMPT = 2;
-// A retry keeps the first attempt's output beside its own, never over it.
-const FIRST_ATTEMPT_RESULT_SUFFIX = `.attempt-${FIRST_ATTEMPT}`;
-const PASSED_ON_RETRY_FINDING_PREFIX = '# finding passed-on-retry ';
-const FINDING_SEPARATOR = ': ';
 const PROCESS_KILL_SIGNAL = 'SIGKILL';
 const TAP_RESULT_SUFFIX = '.tap';
 const STDERR_RESULT_SUFFIX = '.stderr';
@@ -96,7 +76,7 @@ const TEST_PROCESS_NOT_STARTED = 'not_started';
 const FAILED_ASSERTION_PREFIX = 'not ok ';
 // One per-file result ledger: every attempt of every file the CLI runs
 // appends one JSON line here, the durable record of which files are slow,
-// which are red and which pass only on retry. It is git-ignored with the rest
+// and which are red. It is git-ignored with the rest
 // of test-output. A library caller names its own ledger or writes none.
 // The runner owns this path whole: the gate executes the runner, so nothing
 // it imports may live outside the modules that trip the full corpus.
@@ -670,14 +650,12 @@ function rotateLedger(ledgerFile) {
 
 function recordAttempt(result, options) {
   if (!options.ledgerFile) return;
-  const attempt = options.attempt ?? FIRST_ATTEMPT;
   const line = {
     file: result.file,
-    attempt,
+    attempt: FIRST_ATTEMPT,
     ok: result.ok,
     assertions: result.assertions,
     durationMs: result.elapsedMs,
-    retriedOnce: attempt === RETRY_ATTEMPT,
     firstFailureLine: result.firstFailureLine,
   };
   if (result.timeout) line.timeout = result.timeout;
@@ -849,22 +827,16 @@ async function main() {
     process.stderr.write(`${summary.reasons.join(REASON_SEPARATOR)}\n`);
   }
   process.stdout.write(`${formatTestFilesSummary(summary)}\n`);
-  const retried = new Map();
-  const status = summary.ok ? SUCCESS_EXIT_CODE : await retryFailedOnce(summary, runOptions,
-    {runFile: async (file, fileOptions) => {
-      const result = await runTestFile(file, fileOptions);
-      retried.set(file, result);
-      return result;
-    }});
-  report.end(summary, retried, status);
+  const status = summary.ok ? SUCCESS_EXIT_CODE : FAILURE_EXIT_CODE;
+  report.end(summary, status);
   return status;
 }
 
 // The execution report's runner sections (scripts/test-execution-report.js):
 // when the environment names a sections file, this run appends where it ran
 // and what it was given before running anything, and every file's result -
-// each attempt of a retried file, the first failure kept - with its exit
-// status after the last attempt. A run killed in between leaves its start
+// the one attempt of every file - with its terminal exit status.
+// A run killed in between leaves its start
 // alone: a truncated run the proof authority refuses.
 function executionSections(files, env = process.env) {
   const file = env[EXECUTION_SECTIONS_ENV];
@@ -874,22 +846,11 @@ function executionSections(files, env = process.env) {
     argv: process.argv.slice(2), checkout: describeCheckout(process.cwd()),
     planned: [...files]});
   return {
-    end(summary, retried, exitStatus) {
+    end(summary, exitStatus) {
       appendExecutionSection(file, {kind: SECTION_KIND.END, runId, exitStatus,
-        results: summary.results.map((result) =>
-          fileResultRecord(result, retried.get(result.file) || null))});
+        results: summary.results.map((result) => fileResultRecord(result))});
     },
   };
-}
-
-// The first attempt's output moves aside before the retry reopens its path,
-// so both attempts stay on disk. A file that never started left none.
-function retainFirstAttempt(result) {
-  if (!result.outputFile) return;
-  const retained = `${result.outputFile.slice(0, -TAP_RESULT_SUFFIX.length)}` +
-    `${FIRST_ATTEMPT_RESULT_SUFFIX}${TAP_RESULT_SUFFIX}`;
-  renameSync(result.outputFile, retained);
-  renameSync(result.stderrFile, `${retained}${STDERR_RESULT_SUFFIX}`);
 }
 
 /**
@@ -904,13 +865,12 @@ function formatTestFilesSummary(summary) {
 }
 
 // The runner's own stdout lines, as a reader of a finished run matches them -
-// verdict (printTestResult), retried-once outcome (retryFailedOnce), summary
+// verdict (printTestResult), summary
 // (formatTestFilesSummary) - and the classified runner's plan and signalled
 // batch lines and a placed run's relay prefix, formatted below.
 const TEST_FILE_LINE = Object.freeze({
   VERDICT: /^(ok|not ok) (\S+) \((\d+) assertions, \d+ms\)$/u,
   VERDICT_HEAD: /^(?:ok|not ok) [^\s\d]/u,
-  RETRIED_PASS: /^# retried-once pass (\S+)$/u,
   SUMMARY: /^# test-files total=(\d+) pass=\d+ fail=\d+ assertions=\d+$/u,
   PLANNED: /^# test-files planned=(\d+)$/u,
   BATCH_SIGNAL: /^# test-files batch ended by (\S+):/u,
@@ -925,9 +885,8 @@ const relayedLine = (name, line) => `[${name}] ${line}`;
 
 /**
  * What a run's stdout says about its files, fed one line at a time, relayed
- * lines read as the controller's own. A file's last verdict line decides it
- * (a placed run's controller decides a lab red again later in the stream; a
- * retry prints its own verdict). Memory is one entry per file, never output.
+ * lines read as the controller's own. A failure or zero-assertion outcome
+ * cannot be erased by a later line. Memory is one entry per file, never output.
  * @return {{read: Function, result: Function}}
  */
 function testFileVerdictReader() {
@@ -941,7 +900,8 @@ function testFileVerdictReader() {
       if (!whole) {
         seen.unread += TEST_FILE_LINE.VERDICT_HEAD.test(line) ? 1 : 0;
       } else if (verdict) {
-        red.set(verdict[2], verdict[1] === RED_VERDICT);
+        red.set(verdict[2], red.get(verdict[2]) === true ||
+          verdict[1] === RED_VERDICT || Number(verdict[3]) === 0);
       } else if (summary) {
         seen.summaries += 1;
         seen.summarised += Number(summary[1]);
@@ -957,54 +917,10 @@ function testFileVerdictReader() {
   };
 }
 
-// The policy above, as one exported unit so a witness can hold it: the
-// rerun happens only under the declared environment and the cap, every
-// rerun is written to `write`, and a standalone failure stays red.
-async function retryFailedOnce(summary, options = {}, {
-  env = process.env,
-  runFile = runTestFile,
-  write = (line) => process.stdout.write(line),
-} = {}) {
-  const retryOnce =
-    env[RETRY_FAILED_ONCE_ENV] === RETRY_FAILED_ONCE_ENABLED &&
-    summary.failed > 0 &&
-    summary.failed <= RETRY_FAILED_ONCE_MAX_FILES &&
-    summary.results.length > 0;
-  if (!retryOnce) return FAILURE_EXIT_CODE;
-  const failedResults = summary.results.filter((result) => !result.ok);
-  write(
-    `# retry-failed-once: rerunning ${failedResults.length}` +
-    RETRY_FAILED_ONCE_BANNER_SUFFIX,
-  );
-  let retriedAllGreen = true;
-  const findings = [];
-  for (const failed of failedResults) {
-    const {file} = failed;
-    retainFirstAttempt(failed);
-    const retried = await runFile(file, {...options, attempt: RETRY_ATTEMPT});
-    const retriedOutcome = retried.ok ?
-      RETRY_FAILED_ONCE_OUTCOME.PASS :
-      RETRY_FAILED_ONCE_OUTCOME.FAIL;
-    // This line's shape is read by the placement controller (lab/probe.js).
-    write(`# retried-once ${retriedOutcome} ${file}\n`);
-    if (!retried.ok) retriedAllGreen = false;
-    if (retried.ok) {
-      findings.push(`${PASSED_ON_RETRY_FINDING_PREFIX}${file}` +
-        `${FINDING_SEPARATOR}${failed.firstFailureLine}\n`);
-    }
-  }
-  // A pass on retry is green and still a finding: the run ends by naming
-  // each one with the line its first attempt failed on.
-  for (const finding of findings) write(finding);
-  return retriedAllGreen ? SUCCESS_EXIT_CODE : FAILURE_EXIT_CODE;
-}
-
 const IS_MAIN = path.resolve(process.argv[1] || '') === fileURLToPath(import.meta.url);
 if (IS_MAIN) process.exitCode = await main();
 
 export {
-  RETRY_FAILED_ONCE_ENABLED,
-  RETRY_FAILED_ONCE_ENV,
   TEST_FILE_LINE,
   TEST_HEAP_ENV,
   TEST_NODE_ARGS,
@@ -1016,7 +932,6 @@ export {
   formatTestFilesSummary,
   parseOptions,
   relayedLine,
-  retryFailedOnce,
   runTestFile,
   runTestFileSync,
   runTestFiles,

@@ -55,8 +55,7 @@ test('TX1 M1: SIGKILL with RF3 SQLite handles open, then read and reconstruct ' 
   let marker = null;
   const exited = {value: null};
   const child = spawn(process.execPath, [M1], {
-    env: {...process.env, LAGRANGE_TX1_M1_KILL_MARKER_PATH: markerPath,
-      LAGRANGE_RETRY_FAILED_ONCE: '0'},
+    env: {...process.env, LAGRANGE_TX1_M1_KILL_MARKER_PATH: markerPath},
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   child.stdout.on('data', (buffer) => {

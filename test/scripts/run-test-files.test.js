@@ -5,8 +5,6 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {afterEach, describe, it} from 'node:test';
 import {
-  RETRY_FAILED_ONCE_ENABLED,
-  RETRY_FAILED_ONCE_ENV,
   TEST_HEAP_ENV,
   TEST_NODE_ARGS,
   TEST_RESULTS_LEDGER_ROTATE_BYTES,
@@ -14,7 +12,6 @@ import {
   readBoundedOutput,
   filterTestFiles,
   parseOptions,
-  retryFailedOnce,
   runTestFileSync,
   runTestFiles,
   testNodeArgs,
@@ -216,68 +213,6 @@ describe('run-test-files', () => {
     assert.equal(analysis.parserOk, true);
     assert.equal(analysis.assertions, 0);
     assert.match(analysis.reasons.join(' '), /no assertions executed/);
-  });
-});
-
-// The lane-scoped retry-failed-once policy (owner decision 2026-08-23), held
-// as a witness now that `solve land` runs under it as CI does: a rerun
-// happens only under the declared environment and under the cap, every
-// rerun is REPORTED, a standalone pass classifies an intermittent, a
-// standalone failure stays red.
-describe('retry-failed-once policy', () => {
-  const FAILED = 'test/a-red.test.js';
-  const GREEN = 'test/b-green.test.js';
-  const RETRY_ENV = {[RETRY_FAILED_ONCE_ENV]: RETRY_FAILED_ONCE_ENABLED};
-  const summaryWith = (failedFiles) => ({
-    failed: failedFiles.length,
-    ok: false,
-    results: [
-      {file: GREEN, ok: true},
-      ...failedFiles.map((file) => ({file, ok: false})),
-    ],
-  });
-  const harness = (rerunOk) => {
-    const lines = [];
-    const reruns = [];
-    const runFile = (file) => {
-      reruns.push(file);
-      return Promise.resolve({file, ok: rerunOk});
-    };
-    return {lines, reruns, seams: {env: RETRY_ENV, runFile, write: (l) => lines.push(l)}};
-  };
-
-  it('does not rerun without the declared environment: a red stays red', async () => {
-    const {reruns, seams} = harness(true);
-    const exitCode = await retryFailedOnce(summaryWith([FAILED]), {},
-      {...seams, env: {}});
-    assert.equal(exitCode, 1);
-    assert.deepEqual(reruns, [], 'nothing reran');
-  });
-
-  it('reruns each failed file once, reports it, and a standalone pass is green', async () => {
-    const {lines, reruns, seams} = harness(true);
-    const exitCode = await retryFailedOnce(summaryWith([FAILED]), {}, seams);
-    assert.equal(exitCode, 0);
-    assert.deepEqual(reruns, [FAILED], 'only the failed file reran, once');
-    assert.match(lines[0], /^# retry-failed-once: rerunning 1 failed file/u,
-      'the rerun is announced');
-    assert.equal(lines[1], `# retried-once pass ${FAILED}\n`,
-      'the outcome is reported, never hidden');
-  });
-
-  it('a standalone failure stays red and is reported as such', async () => {
-    const {lines, seams} = harness(false);
-    const exitCode = await retryFailedOnce(summaryWith([FAILED]), {}, seams);
-    assert.equal(exitCode, 1);
-    assert.equal(lines[1], `# retried-once fail ${FAILED}\n`);
-  });
-
-  it('is capped: a run with many failed files is breakage and never reruns', async () => {
-    const {reruns, seams} = harness(true);
-    const many = Array.from({length: 6}, (_, index) => `test/red-${index}.test.js`);
-    const exitCode = await retryFailedOnce(summaryWith(many), {}, seams);
-    assert.equal(exitCode, 1);
-    assert.deepEqual(reruns, [], 'six failed files is over the cap of five');
   });
 });
 
@@ -576,13 +511,10 @@ describe('an unanalysable output fails the file', () => {
 });
 
 // One per-file result ledger (process change 2026-09-23): every attempt of
-// every file appends one line, a retry keeps the first attempt's output beside
-// the second instead of overwriting it, a pass on retry is a finding printed
-// with its first failure line, and a timeout carries the host's load, sampled
-// at the kill.
+// every file appends one line with its original outcome and failure line.
+// A timeout carries the host's load, sampled at the kill.
 describe('per-file result ledger', () => {
   const temporaryDirectories = [];
-  const RETRY_ENV = {[RETRY_FAILED_ONCE_ENV]: RETRY_FAILED_ONCE_ENABLED};
 
   afterEach(async () => {
     await Promise.all(temporaryDirectories.splice(0).map((directory) =>
@@ -602,7 +534,7 @@ describe('per-file result ledger', () => {
   const ledgerLines = (ledgerFile) => fs.readFileSync(ledgerFile, 'utf8')
     .split('\n').filter((line) => line.length > 0).map((line) => JSON.parse(line));
 
-  it('records both attempts of a file that passes on retry, and keeps the first', async () => {
+  it('records the single failed attempt without replacing its output', async () => {
     const {ledgerFile, marker, resultsDirectory} = await scratch();
     const options = {
       env: {RUN_TEST_FILES_FAILS_ONCE_MARKER: marker},
@@ -614,43 +546,20 @@ describe('per-file result ledger', () => {
     const summary = await runTestFiles([FAILS_ONCE_FIXTURE], options);
     assert.equal(summary.failed, 1, 'the first attempt is red');
 
-    const lines = [];
-    const exitCode = await retryFailedOnce(summary, options,
-      {env: RETRY_ENV, write: (line) => lines.push(line)});
-    assert.equal(exitCode, 0, 'a pass on retry is green');
-    assert.ok(lines.includes(`# retried-once pass ${FAILS_ONCE_FIXTURE}\n`),
-      'the line the placement controller reads is unchanged');
-    assert.equal(lines.at(-1),
-      `# finding passed-on-retry ${FAILS_ONCE_FIXTURE}: ` +
-      'not ok 1 - fails once, then passes\n',
-      'the pass on retry is a finding, with its first failure line');
-
-    const [first, second, ...rest] = ledgerLines(ledgerFile);
+    const [first, ...rest] = ledgerLines(ledgerFile);
     assert.deepEqual(rest, [], 'one line per attempt');
     assert.deepEqual(Object.keys(first).sort(), ['assertions', 'attempt',
-      'durationMs', 'file', 'firstFailureLine', 'ok', 'retriedOnce']);
+      'durationMs', 'file', 'firstFailureLine', 'ok']);
     assert.equal(first.file, FAILS_ONCE_FIXTURE);
     assert.equal(first.attempt, 1);
     assert.equal(first.ok, false);
-    assert.equal(first.retriedOnce, false);
     assert.equal(first.firstFailureLine, 'not ok 1 - fails once, then passes');
     assert.ok(first.assertions >= 1);
     assert.ok(Number.isInteger(first.durationMs) && first.durationMs >= 0);
-    assert.equal(second.file, FAILS_ONCE_FIXTURE);
-    assert.equal(second.attempt, 2);
-    assert.equal(second.ok, true);
-    assert.equal(second.retriedOnce, true);
-    assert.equal(second.firstFailureLine, null);
-
     const tap = path.join(resultsDirectory, `${FAILS_ONCE_FIXTURE}.tap`);
-    const retained = path.join(resultsDirectory,
-      `${FAILS_ONCE_FIXTURE}.attempt-1.tap`);
-    assert.match(fs.readFileSync(retained, 'utf8'),
+    assert.match(fs.readFileSync(tap, 'utf8'),
       /^not ok 1 - fails once, then passes$/mu,
       'the first attempt\'s output is retained, not overwritten');
-    const latest = fs.readFileSync(tap, 'utf8');
-    assert.match(latest, /^ok 1 - fails once, then passes$/mu);
-    assert.doesNotMatch(latest, /^not ok /mu, 'the second attempt is the .tap');
   });
 
   it('a file that times out carries the budget and the host load', async () => {

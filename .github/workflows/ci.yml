@@ -30,7 +30,12 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      base_sha:
+        description: Exact immutable base commit for this change proof
+        required: true
+        type: string
 
 # Lane-scoped tap budget: the hosted 2-vCPU VM is ~3x slower than the dev
 # corpus was tuned on, and single tests near tap's 30s default cross it
@@ -51,11 +56,6 @@ concurrency:
 
 env:
   TAP_TIMEOUT_FLOOR: '120'
-  # Retry-failed-once (owner policy 2026-08-23): a failed file is rerun
-  # standalone once by run-test-files.js; a standalone pass is a reported,
-  # census-classified intermittent, a standalone fail stays red. Capped at
-  # 5 files so breakage never masquerades as flakes.
-  LAGRANGE_RETRY_FAILED_ONCE: '1'
   # Hardware-relative work-bound budget scaling for SLO-style tests
   # (doctrine: hardware-relative-convergence-budget). CI VMs are ~2-3x
   # slower than the reference dev box for single-threaded election paths.
@@ -99,6 +99,7 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           PUSH_BEFORE_SHA: ${{ github.event.before }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          DISPATCH_BASE_SHA: ${{ inputs.base_sha }}
         run: |
           set -euo pipefail
 
@@ -107,18 +108,18 @@ jobs:
           # remote did not have, which is `before`..HEAD.
           if [ "$EVENT_NAME" = "pull_request" ]; then
             base="$PR_BASE_SHA"
+          elif [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            base="$DISPATCH_BASE_SHA"
           else
             base="$PUSH_BEFORE_SHA"
           fi
 
-          # A new branch reports the zero SHA, and a force-push or an expired
-          # object can leave `before` unreachable. Fall back to the single
-          # preceding commit and SAY SO, rather than resolving to an empty base
-          # that would quietly prove the working tree alone.
-          if [ -z "$base" ] || [[ "$base" =~ ^0+$ ]] ||
+          # The event's exact base owns the range. An unavailable base cannot
+          # silently reduce the obligation to one preceding commit.
+          if ! [[ "$base" =~ ^[0-9a-f]{40}$ ]] || [[ "$base" =~ ^0+$ ]] ||
             ! git cat-file -e "$base^{commit}" 2>/dev/null; then
-            echo "proof range: base '$base' unavailable, falling back to HEAD^"
-            base="$(git rev-parse HEAD^)"
+            echo "proof range: unavailable base '$base'" >&2
+            exit 1
           fi
 
           echo "proof range: $base..$(git rev-parse HEAD)"

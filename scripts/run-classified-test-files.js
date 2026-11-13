@@ -603,7 +603,6 @@ export function runPlacedClassifiedTestFiles(files, options = {}) {
       planClassifiedTestFiles(root, planned), lastResultsRoots(root)),
     runLocal: (planned, localOptions) =>
       runClassifiedTestFiles(planned, {...options, ...localOptions}),
-    lastGreen: (file) => readLastResult(lastResultsRoots(root), file) !== null,
   }));
 }
 
@@ -619,8 +618,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     process.stderr.write(NO_FILES_PROBLEM + NEWLINE);
     process.exitCode = 1;
   } else {
-    // Placement decides whether lab machines can shorten this run; when they
-    // cannot, or may not, it is exactly the local run it always was.
+    // Placement chooses the initial assignments. Unavailable execution keeps
+    // its own outcome rather than silently starting a local replacement.
     process.exitCode = await runPlacedClassifiedTestFiles(files, {
       root: ROOT,
       failFast,

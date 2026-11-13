@@ -19,7 +19,6 @@ jobs:
       EVIDENCE: test-output/tx1-envelope-m1-hosted
       PROOF_BASE: 4c8f02e8e6d9da3520fa909885b9391ba6a442a0
       LOCAL_CANDIDATE: f50a66a5e9a0f4937722aa1f39a6ee8c1986f092
-      LAGRANGE_RETRY_FAILED_ONCE: '0'
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd

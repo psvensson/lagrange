@@ -20,7 +20,6 @@ jobs:
       BRANCH: resume/rs-raft-runtime-recovery-20261012
       QUEST: replicated-transaction-decision-and-apply
       EVIDENCE: test-output/shared-runtime-round2
-      LAGRANGE_RETRY_FAILED_ONCE: '0'
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:

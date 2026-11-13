@@ -23,7 +23,6 @@ jobs:
       EVIDENCE: test-output/runtime-review-followup
       NEW_TEST: test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js
       TIMING_TEST: test/raft/raft-rs-backend/operation-port-throw-containment.test.js
-      LAGRANGE_RETRY_FAILED_ONCE: '0'
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:

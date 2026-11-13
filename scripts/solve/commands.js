@@ -10,11 +10,8 @@ import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 
 import {
-  CHECK_BASE_ENV, REFUSAL_RELEASE_PROOF_REQUIRED,
+  CHECK_BASE_ENV,
 } from '../checks/change-selection-constants.js';
-import {
-  RETRY_FAILED_ONCE_ENABLED, RETRY_FAILED_ONCE_ENV,
-} from '../run-test-files.js';
 
 import {
   CERTIFICATION_ONLY_PROBES, CLASS_FIX, ENTRY_TYPE, EPIC_PROOF, EPIC_STATUS,
@@ -47,7 +44,6 @@ const LANDING_MARKER_ENV = 'LAGRANGE_SOLVER_LANDING';
 const LANDING_MARKER_VALUE = '1';
 const NPM = 'npm';
 const NPM_TEST_ARGUMENTS = Object.freeze(['test']);
-const NPM_TEST_FALLBACK_ARGUMENTS = Object.freeze(['run', 'test:safety-pregate']);
 const TEST_METADATA_REFRESH_ARGUMENTS =
   Object.freeze(['run', '-s', 'test:metadata:refresh']);
 // The change proof's base. Landing proves the tree that will be committed,
@@ -59,8 +55,7 @@ const TEST_METADATA_REFRESH_ARGUMENTS =
 const LAND_PROOF_BASE = 'HEAD';
 const LAND_PROOF_BASE_ANNOUNCEMENT =
   'land: change proof base HEAD (the quest delta the index holds); ' +
-  'the branch range is the push gate\'s proof; failed files rerun once ' +
-  'standalone, reported and capped, as CI does\n';
+  'the branch range is the push gate\'s proof; each file executes once\n';
 const INVENTORY_PRODUCER = 'scripts/generate-global-owner-debt-inventory.js';
 const INVENTORY_REFRESH_ARGUMENT = '--refresh';
 const PRIORITY_INVENTORY_PRODUCER = 'scripts/generate-priority-recovery-owner-inventory.js';
@@ -510,16 +505,12 @@ function refreshInventories(root) {
 }
 
 // The environment the landing proof runs under: the caller's, with the
-// change-proof base pinned to the quest delta and the recorded retry policy
-// CI lanes run under (owner decision 2026-08-23: a failed file reruns once
-// standalone, the rerun is REPORTED and capped, never hidden). Without it a
-// land was weaker than CI in exactly the wrong direction: an intrinsic
-// intermittent cost a whole re-land while CI would have classified it.
+// change-proof base pinned to the quest delta. The canonical runner owns
+// single-pass execution for land, publication and CI alike.
 function landChangeProofEnvironment(env = process.env) {
   return {
     ...env,
     [CHECK_BASE_ENV]: LAND_PROOF_BASE,
-    [RETRY_FAILED_ONCE_ENV]: RETRY_FAILED_ONCE_ENABLED,
     [LANDING_MARKER_ENV]: LANDING_MARKER_VALUE,
   };
 }
@@ -535,14 +526,6 @@ function runChangeProof(root, log, spawn = spawnSync) {
   const output = `${result.stdout || ''}${result.stderr || ''}`;
   log(output);
   if (result.status === 0) return;
-  if (output.includes(REFUSAL_RELEASE_PROOF_REQUIRED)) {
-    const full = spawn(NPM, [...NPM_TEST_FALLBACK_ARGUMENTS], {cwd: root,
-      encoding: TEXT_ENCODING, maxBuffer: SPAWN_MAX_BUFFER, timeout: TEST_TIMEOUT_MS,
-      env, stdio: ['ignore', 'pipe', 'pipe']});
-    log(`${full.stdout || ''}${full.stderr || ''}`);
-    if (full.status === 0) return;
-    refuse(`npm run test:safety-pregate failed (exit ${full.status})`);
-  }
   refuse(`npm test failed (exit ${result.status})`);
 }
 

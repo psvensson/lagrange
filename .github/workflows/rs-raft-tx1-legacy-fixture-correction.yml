@@ -18,7 +18,6 @@ jobs:
       INPUT: f7ea865db5d67284d0ccdb170c12130d936cf74b
       LEGACY: test/partition/partition-legacy-session-statement-admission.test.js
       STAGING: test/partition/partition-participant-transaction-staging.test.js
-      LAGRANGE_RETRY_FAILED_ONCE: '0'
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
