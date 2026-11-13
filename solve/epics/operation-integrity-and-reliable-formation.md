@@ -132,15 +132,19 @@ invalid evidence before integration.
   retained in `/mnt/data/peter/projects/lagrange-foundation-coordination-20261113`.
   Full-stream hashes and causal interpretation remain pending. No workload replay
   is authorized. New original controls at `56d12341a67d8680b16f8f06847a2499f73b24f6`
-  were submitted once as3720/3721; both closed failed with physical scopes closed. Source investigation identifies a systematic conditional
+  were submitted once as 3720/3721; both closed failed with physical scopes
+  closed. Source investigation identifies a systematic conditional
   state-transition gap across reconciliation, startup and terminal writers;
   original3723 now physically demonstrates stale LOST overwriting committed RED
   after actual child closure and native ESRCH. Original3721 demonstrates all six
   observation defects (24 native cases,18 pass/6 fail). Complete streams and
   compact interpretations are retained; canonical upload remains pending. A
-  reviewed immutable-transition design is in implementation/source review, with
-  no candidate proof. Original receipt3720 closed failed; full retrieval remains
-  pending. Canonical generation, static/focused/full physical proof, Solver land
+  reviewed immutable-transition candidate is composed as WIP, with no runtime
+  proof. Original receipt 3720 is fully recovered: 64 native cases, 8 passed and
+  56 failed. All 28 intended reader controls reached their boundaries; 28 other
+  failures exposed an omitted typed-refusal dependency from the owner extraction.
+  The minimal export/import correction is independently source-reviewed and
+  composed. Canonical evidence upload and the receipt Quest seal remain pending. Canonical generation, static/focused/full physical proof, Solver land
   and final-HEAD publication remain owed by the foundation/publication Quests.
 - **Service status:** the existing
   [formation receipt](../quests/fresh-formation-user-table-routability/evidence/receipt.json)
