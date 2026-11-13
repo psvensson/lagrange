@@ -1,0 +1,33 @@
+{
+  "schema": "solve-quest/2",
+  "id": "canonical-native-thermal-pacing",
+  "class": "fix",
+  "statement": "Canonical classified and placed test execution consumes one configured native thermal decision before each file admission, preserves requested bounded concurrency, and pauses only between active file scopes. Unavailable observation refuses new work; nested fixture execution stays inside its admitted file. No alternate sensor or permissive fallback is retained in this interaction.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/canonical-native-thermal-pacing/evidence/receipt.json",
+      "requiredReceipts": [
+        "original-admission-and-peer-policy-controls",
+        "native-read-only-thermal-owner",
+        "per-file-admission-and-nested-phase",
+        "placed-policy-budget-and-first-failure",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "bounded-tooling-repair",
+      "statement": "Existing classified runner, file runner, placement and native thermal owner interaction only. This is a bounded tooling repair; whole service/runtime acceptance stays in existing Quests. Preserve selection, resource classes, ledgers, first failures, fixed deadlines and physical reservation ownership."
+    },
+    {
+      "id": "original-before-repair",
+      "statement": "Measure unchanged original controls physically before production repair and sealing. Source approval and controlled seam observations do not claim native sensor or whole-corpus proof. Preserve all failed and unavailable attempts."
+    },
+    {
+      "id": "single-owner",
+      "statement": "Native configured observation owns thresholds and sensor identities; project consumer never substitutes sensors, sysfs, guessed endpoints or unavailable-success. Read-only endpoint must not create state. Trusted nested execution phase is not a security credential or independent admission."
+    }
+  ]
+}
