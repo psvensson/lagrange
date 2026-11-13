@@ -64,6 +64,23 @@ separate responsibilities within an existing owner. Removing duplicate decisions
 state or handoffs is useful when their equivalence is demonstrated; moving code
 or adding a component does not by itself improve ownership.
 
+For a boundary change, name the owner's decisions, mutable state and resource
+lifetimes, its supported runtime contract, and the composition point that wires
+its collaborators. Record these in the existing owner contract and interaction
+record. Declare the public and private surfaces before adding an import rule;
+a directory boundary alone does not establish either. Composition code may use
+the owner's declared construction surface without becoming a runtime consumer
+of private state. Do not invent a forwarding facade merely to satisfy a checker.
+
+Change the affected interaction as one bounded unit. Migrate every consumer
+whose contract is invalidated and remove the old semantic path; a registry's
+full dependency list is not a requirement to edit every listed file. Unchanged
+contracts retain still-applicable proof through the existing proof owner.
+Extracting an internal helper may improve navigation while preserving the
+owner, but passing the whole owner across a claimed boundary does not establish
+encapsulation. Apply these distinctions to the causal change, without absorbing
+unrelated restructuring into it.
+
 Protocol adapters and encodings may normalize requests and project owner
 outcomes. They preserve meaning, identity and generation domains, original
 deadlines, typed unavailability and retained durable obligations. They cannot

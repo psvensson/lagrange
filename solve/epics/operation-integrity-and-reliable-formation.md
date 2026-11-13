@@ -147,6 +147,33 @@ The dated E0-E9 material below is retained context, not another current summary.
 Original observations and accepted bounded repairs keep their original scope.
 Use the linked Quest logs and applicable evidence to determine current state.
 
+### Steering enforcement follow-ups (13 November 2026)
+
+The steering reconciliation was inspected against main
+`f402575b0667bc02110849867cabacf013e61be6`, under rule-set revision 5. It changes
+required working practice, not runtime behavior, sealed acceptance or the
+service verdict above. The following bounded executable follow-ups remain
+unimplemented by that documentation change, within the existing 0.4.1 correction
+allocation. The integration owner assigns their actual candidate and writer
+before execution; this list is not a claim that a worker or lab run has started.
+
+| Follow-up | Existing owner and bounded acceptance |
+| --- | --- |
+| Per-package scope | Solver scope owner, coordinated with [evidence and candidate binding](../quests/quest-evidence-and-candidate-binding/quest.json). Check the declared package assignment, including standalone fixes, against actual changed paths. An explicit authorized amendment changes that assignment without changing a seal. Prove rejection of unintended expansion and acceptance of a valid amendment. |
+| Proof-machinery review | The same [evidence and candidate binding](../quests/quest-evidence-and-candidate-binding/quest.json) continuation owns review eligibility. Preserve current `src/` coverage and content binding while including proof selection, execution, interpretation, admission, publication and operative acceptance inputs. Prove rejection without applicable independent approval and preservation of harmless notes. |
+| One real owner-boundary trial | The next bounded causal product repair owns its actual runtime/composition seam and invalidated callers. Extend the existing contract-authoring checker through that owner; reject an invalid actual producer and consumer through unchanged production binding, and preserve the valid path. A typedef-only check or repository-wide modularization campaign does not discharge this trial. |
+| Ratchet update integrity | The existing [code navigability owner](code-navigability-and-mistake-resistance.md), coordinated here for the correction. Reject deletion-funded new violations, accept evidence-backed identity-preserving moves, and compare a measurement correction on one pinned tree with history and newly exposed debt retained. Do not raise thresholds or create another debt ledger. |
+
+Use the existing Quest threshold to seal a bounded implementation only after its
+real falsifier measures red; do not reopen terminal Q1/Q2 records or copy their
+receipts. Source/proof work already in progress, including publication and
+evidence custody, keeps its current owner and must be reconciled before another
+writer is assigned. The steering PR needs independent document review and the
+applicable documentation, routing and generated checks; it does not require a
+new product certification campaign. Its first product trial must show a bounded
+causal repair integrated against the accepted base with its new witnesses and
+the remaining unaccepted work explicitly reconciled.
+
 ## P0 reconciliation and explicit completion amendment
 
 The user approved installation of the verified plan on 10 November. The sealed

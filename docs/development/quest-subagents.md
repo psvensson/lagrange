@@ -3,7 +3,7 @@ scope: governance
 status: canonical
 always_load: false
 source_of_truth: self
-last_reviewed: 2026-10-22
+last_reviewed: 2026-11-13
 ---
 
 > **Canonical source.** Delegated worker policy for Quest attempts. Reached
@@ -18,7 +18,7 @@ independent reviewer owns verification. One integration owner decides when
 accepted work joins the baseline, coordinates proof, and maintains the current
 summary in the owning epic. These are responsibilities, not a fixed agent
 count or mandatory separate sessions. The author cannot verify their own
-source change. A standalone `class: fix` uses its existing quest record and
+source or proof/acceptance change. A standalone `class: fix` uses its existing quest record and
 log; it does not need an epic solely for a summary.
 
 Assign one writer to a changing interaction: the owner boundary, its coupled
@@ -26,8 +26,10 @@ counterpart and shared contract. Separate files or worktrees do not make
 concurrent changes to that interaction independent. Other agents can investigate,
 review or prepare evidence in parallel, and independent interactions can have
 their own writers. Include work awaiting review, tests or integration when
-assessing WIP; finish or unblock accepted work before creating more competing
-work on the same interaction. Use the current summary, not another queue.
+assessing WIP, including solved work not yet integrated. Finish or unblock
+accepted work before creating more work competing for the same interaction or
+constrained proof resource. Independent work can continue. Use the current
+summary, not another queue.
 
 ## Worker Dossier And Result
 
@@ -45,6 +47,21 @@ The response identifies changed paths and content, evidence produced or reused
 with its applicability, unresolved findings, and next actions. Record durable
 conclusions in the quest log before later attempts rely on them. A worker's
 claim of completion is not terminal proof; only `land` can record `solved`.
+
+## Integration And Residual Work
+
+The integration owner checks both implementation and new regression witnesses
+against the accepted base before admitting a package. Reconcile overlapping
+unaccepted work: identify what is integrated, still needed, superseded or
+conflicting, and its next owner. A small extracted patch must not restore old
+behavior or silently omit tests introduced with the repair. Textual merge
+success alone does not establish contract or proof compatibility.
+
+Record the accepted base, dependency order and remaining work in the active
+integration Quest, epic summary or PR. Terminal Quest logs accept no new entries;
+their existing `solved` claim does not mean main integration or release acceptance.
+Preserved snapshot references remain evidence and need not be rebased or
+rewritten. A standalone fix needs no new epic merely to report its delivery.
 
 ## Bounded Independent Review
 
@@ -70,10 +87,13 @@ an earlier review does not waive it. Repeated rejection triggers judgment about
 the evidence, design, owner and review scope, not a fixed round count or an
 automatic user escalation.
 
-For source landing, record independent approval with `note --verification`,
+For Quest landing covered by the [review requirement](../steering/workflow-guidelines/solver-quests.md#recording-and-review),
+record independent approval with `note --verification`,
 `--verifier subagent:<id>` and `--verdict approve` after the last attempt. Bind
 the note to the reviewed content and evidence. A rejection remains blocking
-until answered by a later attempt and, for source work, a current approval.
+until answered by a later attempt and a current approval where required.
+Direct changes retain the same independence and content binding in their PR or
+review record; they do not need a Quest solely to store that review.
 
 ## Continuation And Limits
 
@@ -85,5 +105,5 @@ status and observer/resumption mechanism; if none exists, report the pending
 action honestly. Do not imply that an idle or unavailable agent is working.
 
 If independent verification is unavailable, continue other authorized work
-that does not depend on its approval, and leave source landing blocked with
+that does not depend on its approval, and leave the affected landing blocked with
 the missing capability named. Self-review cannot substitute for independence.

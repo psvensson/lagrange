@@ -36,8 +36,11 @@ test, model, or immutable run artifact).
      directions and a reachable counterexample to each material claim.
    - Prove they are green **in the same deterministic witness**, not only in
      separate tests.
-   - For a known historical fix class, show that restoring the old local
-     shortcut makes the paired witness red.
+   - For a known historical fix class, use a still-applicable control or
+     faithfully restore the causal shortcut to show that the paired witness
+     rejects it. If that restoration is unavailable, use a meaningful known-bad
+     control under the [release-gate policy](../../../test/guidelines/release-gate.md);
+     an import or fixture-setup failure is not rejection of the claimed cause.
 
 4. **Stale-then-fresh temporal replay**
    - Replay an older stale/degraded witness followed by newer authoritative
@@ -101,6 +104,28 @@ test, model, or immutable run artifact).
     - The registry entry rides in the same product Quest as the owner change
       (`test/shards/impact-contracts.json` classifies as `test`); it needs no
       separate Quest.
+
+11. **Declared runtime and composition surfaces**
+    - Name the public runtime contract, the construction/wiring surface and
+      private implementation of the affected owner. Identify who owns mutable
+      state, decisions and resource lifetime.
+    - Check imports and reachable accesses against those declarations, including
+      composition code. A different directory or a thin forwarding module does
+      not by itself prove encapsulation.
+    - Account for every consumer invalidated by the contract change and removal
+      of the old semantic path; leave unchanged contracts and applicable proof
+      intact.
+
+12. **Actual producer, consumer and binding conformance**
+    - Identify the actual producer implementation, consumer and production
+      binding covered by a conformance claim. A typedef, annotated return,
+      cast or permissive collaborator type alone does not prove that chain.
+    - Show separately that an invalid actual producer and an invalid consumer
+      are rejected through the unchanged production binding. Include relevant
+      implementation diagnostics; filtering them out cannot establish conformance.
+    - Where dynamic input crosses the boundary, check the owned runtime
+      validation as well. Keep the check scoped to the affected contract; this
+      does not require a repository-wide type migration.
 
 ## Verdict bar
 

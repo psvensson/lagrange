@@ -13,16 +13,17 @@ including public setup, actual artifact/dependency identity and observed fault
 engagement. Keep a bounded repair's narrower predicate and evidence ceiling;
 the feature journey does not become every repair's acceptance.
 
-1. **Red for the RIGHT reason.** Show the head-red assertion failing via
-   the claimed mechanism (not via a missing method / fixture gap). A
-   compressed-geometry fixture can let the WRONG existing machinery absorb
-   the scenario (run-25: fast stubbed polls let the short first wait absorb
-   a hold the live system fails on). Red-on-revert is valid only when the
-   reverted run reaches the named behavioral assertion through the intended
-   precondition/mechanism and that assertion fails. Import, setup, fixture,
-   timeout-before-engagement, and missing-method failures are non-proofs.
-   Preserve output naming the assertion and failure mechanism; exit status
-   alone is insufficient.
+1. **A control that detects the claimed defect.** When a control can discriminate
+   the defect, use or reuse it at the real seam for the first focused attempt under
+   [Proof Must Reach The Binding Observable](../../../test/guidelines/release-gate.md#proof-must-reach-the-binding-observable).
+   Name the behavioral assertion and show the control reaches and fails it;
+   preserve the output, not just an exit status. An outer control test can pass
+   by correctly observing rejection. Keep that bad execution distinct from
+   positive certification. Import, setup, fixture, timeout-before-engagement,
+   and missing-method failures do not discriminate the mechanism. State an
+   unavailable historical-runtime limitation and use a discriminating control
+   where possible; its absence alone does not require a new simulator. The
+   sealed proof requirement still governs acceptance.
 2. **Stub honesty at the binding seam.** Substitutes consume owner-defined
    shapes and undergo producer conformance; they do not reproduce decision
    logic. Build owner-shaped values through the owner's exported builder,

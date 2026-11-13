@@ -17,7 +17,7 @@ The repository derives a document class from its location. Frontmatter may state
 
 | Class | Home | Content contract |
 | --- | --- | --- |
-| `current` | Root guides plus maintained Markdown under `architecture/`, `charts/`, `ci/`, `docs/`, `examples/`, `src/`, and `test/` | Behavior, operations, architecture, integration, and development process implemented by the current tree |
+| `current` | Root guides plus maintained Markdown under `architecture/`, `charts/`, `ci/`, `docs/`, `examples/`, `src/`, and `test/` | Current behavior, operations and architecture; required development conduct distinguished from its implemented enforcement |
 | `planning` | Human root roadmaps, `solve/epics/`, and `solve/specs/` | Intent linked to active or draft work, including the current epic coordination summary |
 | `steering` | Canonical sources under `docs/steering/` | Current rules and stable scope/sequence maps that bind repository work |
 | `generated` | Generated steering packs and indexes | Rebuilt from canonical sources; never hand-edited |
@@ -54,8 +54,12 @@ record. Publish an identifiable rule-set revision and source commit. At resume
 or handoff, agents reconcile their local instructions and pending work with that
 revision; do not overwrite another worktree or silently retarget sealed claims.
 Retain standing rules separately from dated operating heuristics and hypotheses
-that still need measurement. A policy update never establishes a new product
-capability; generated capability facts change only with their own evidence.
+that still need measurement. Distinguish required conduct from executable
+enforcement, including any narrower automatic scope. Route an implementation
+gap to its existing active owner rather than creating a permanent gap matrix in
+steering. A policy update never establishes a new product capability; generated
+capability facts change only with their own evidence. Revise the rule-set
+manifest only when an invariant changes, not for detail within its existing owner.
 
 ## Evidence-bound capability and convergence claims
 
@@ -80,9 +84,10 @@ capability ledger. The [current-capabilities checker](../../scripts/check-curren
 is a source consistency guard, **not** end-to-end certification.
 
 An active milestone's existing current summary may also include a small
-**convergence snapshot**: exact integration candidate, first demonstrated
-representative-service blocker, distinct unresolved causal families and ages
-when established, reviewed-but-unintegrated work, and elapsed diagnosis,
+**convergence snapshot**: accepted base and exact integration candidate, first
+demonstrated representative-service blocker, distinct unresolved causal families
+and ages or recurrence when established, reviewed-but-unintegrated work and its
+remaining integration actions, and elapsed diagnosis,
 review, queue, test and integration phases where original timestamps exist.
 Derive every entry from the existing Quest/PR/runner records. Say
 `unmeasured` for unavailable counts or phase times, never manufacture a
@@ -90,6 +95,13 @@ trend, sum incompatible test cones or create another tracker. Update on
 material integration/blocker change, not each agent heartbeat. Bounded
 repair completion, public-service readiness and full release remain
 different claims.
+
+Expected negative-control rejection and useful defect detection show the
+process working; do not penalize their detection as avoidable failure. Classify
+the underlying defect honestly, including a real product regression found in
+review. Use original timestamps and causal classifications to identify waiting
+and repeated rework, rather than rewarding a green count.
+
 ## Graduation Rules
 
 When a change finishes an operation, the same Quest must:
