@@ -304,7 +304,12 @@ class RaftRsDurableStore {
    * @param {Object} [options] - Options for the durable store.
    */
   constructor(db, options = {}) {
-    this.db = db;
+    Object.defineProperty(this, 'db', {
+      value: db,
+      writable: false,
+      configurable: false,
+      enumerable: true,
+    });
     this.maxJournalEntries =
       Number.isInteger(options?.maxJournalEntries) && options.maxJournalEntries >= 0 ?
         options.maxJournalEntries :

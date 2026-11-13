@@ -4,7 +4,7 @@ import {
   digest,
   joinArrayByIndex,
   replaceExactSuffixByIndex,
-} from './comparative-efficiency-opportunity-input-integrity.js';
+} from '../utils/canonical-json-data.js';
 import {
   OPPORTUNITY_CALCULATOR_EVIDENCE_CLASS,
   OPPORTUNITY_CALCULATOR_FORMULA_VERSION,
