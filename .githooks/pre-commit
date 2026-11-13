@@ -2,9 +2,9 @@
 # Staged-file pre-commit gate: the cheap per-file checks the push gate
 # would otherwise discover one 15-minute cycle at a time (2026-08-04
 # retrospective: nine push-gate failures, six of them commit-time
-# catchable). Scoped to STAGED files only, so it stays in single-digit
-# seconds; whole-corpus ratchets (duplication, file-size, cycles,
-# unused-exports) remain push-time concerns.
+# catchable). Selects STAGED paths for per-file checks; generated inventories
+# may need a longer refresh. Whole-corpus ratchets (duplication, aggregate
+# file-size, cycles, unused-exports) remain push-time concerns.
 #
 # Also regenerates the checked-in deterministic inventories AND test
 # classification metadata whenever staged work touches their source surface.
@@ -15,8 +15,8 @@
 # hot-path-diagnostics, staged constant names, cached staged eslint)
 # with the staged guideline checks and inventory freshness.
 #
-# Skip (emergencies / WIP commits): LAGRANGE_SKIP_PRECOMMIT=1 git commit
-# (git commit --no-verify also bypasses, as before)
+# Unverified non-main WIP preservation only: LAGRANGE_SKIP_PRECOMMIT=1 git commit.
+# This records no acceptance; required checks still precede accepted integration.
 set -euo pipefail
 
 # A Solver landing (`node scripts/solve.js land`) sets LAGRANGE_SOLVER_LANDING=1:
@@ -35,8 +35,8 @@ fi
 # Staged paths used by content scanners exclude deletions because there is no
 # file left to scan. Derived test metadata MUST include deletions: removing a
 # test/helper changes the complete census and observation closure.
-mapfile -t STAGED < <(git diff --cached --name-only --diff-filter=ACMR)
-mapfile -t STAGED_METADATA < <(git diff --cached --name-only --diff-filter=ACMRD)
+mapfile -d '' -t STAGED < <(git diff --cached --name-only -z --diff-filter=ACMR)
+mapfile -d '' -t STAGED_METADATA < <(git diff --cached --name-only -z --diff-filter=ACMRD)
 if [ "${#STAGED_METADATA[@]}" -eq 0 ]; then
   exit 0
 fi
@@ -90,7 +90,10 @@ run_check() {
 # Solver evidence rule (solve-v2 phase 1): no archive and nothing over 1 MB
 # under solve/ enters git; binaries go to the evidence store.
 run_check "solve binary guard" node scripts/checks/check-solve-binary-guard.js
-run_check "file-size ratchet" npm run -s audit:file-size
+if [ "${#JS_FILES[@]}" -gt 0 ]; then
+  run_check "file-size no-regression (staged files)" \
+    node scripts/check-file-size-thresholds.js --base HEAD "${JS_FILES[@]}"
+fi
 run_check "hot-path diagnostics guideline" \
   npm run -s audit:guideline:hot-path-diagnostics
 run_check "staged constant names" \

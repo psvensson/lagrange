@@ -115,7 +115,15 @@ const PROBLEM = Object.freeze({
   TYPE_PREFIX: 'type must be one of ',
   STATUS_PREFIX: 'status must be one of ',
   PROOF_PREFIX: 'proof must be one of ',
+  ASSIGNMENT: 'assignment must be {paths: [repository-relative paths], authority: existing authorization reference}',
+  ASSIGNMENT_PATHS: 'assignment paths must be nonempty, unique, normalized repository-relative paths; use a trailing slash for a directory',
+  ASSIGNMENT_AUTHORITY: 'assignment authority must name the existing task or scope authorization',
+  ASSIGNMENT_OBSERVATION: 'assignment must be an untyped finding; recording scope does not resolve a hold',
 });
+const CONTROL_CHARACTER = /\p{Cc}/u;
+const UNSAFE_ASSIGNMENT_PATH = /[\\*?[\]]|^[a-z]:/iu;
+const PATH_SEPARATOR = '/';
+const RESERVED_PATH_SEGMENTS = Object.freeze(['', '.', '..', '.git']);
 
 function text(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -170,8 +178,32 @@ function questProblems(quest, options = {}) {
   return QUEST_RULES.map((rule) => rule(quest, options)).filter(Boolean);
 }
 
+function validAssignmentPath(value) {
+  if (typeof value !== 'string' || !value || value !== value.trim() ||
+      CONTROL_CHARACTER.test(value) || UNSAFE_ASSIGNMENT_PATH.test(value)) return false;
+  const relative = value.endsWith(PATH_SEPARATOR) ? value.slice(0, -1) : value;
+  return relative.split(PATH_SEPARATOR).every((segment) =>
+    !RESERVED_PATH_SEGMENTS.includes(segment.toLowerCase()));
+}
+
+function assignmentProblems(assignment) {
+  if (!isPlainObject(assignment)) return [PROBLEM.ASSIGNMENT];
+  const problems = [];
+  if (!Array.isArray(assignment.paths) || assignment.paths.length === 0 ||
+      !assignment.paths.every(validAssignmentPath) ||
+      new Set(assignment.paths).size !== assignment.paths.length) {
+    problems.push(PROBLEM.ASSIGNMENT_PATHS);
+  }
+  if (!text(assignment.authority)) problems.push(PROBLEM.ASSIGNMENT_AUTHORITY);
+  return problems;
+}
+
 function problemsForFinding(entry) {
   const problems = [];
+  if (entry.assignment !== undefined) {
+    problems.push(...assignmentProblems(entry.assignment));
+    if (entry.kind !== undefined) problems.push(PROBLEM.ASSIGNMENT_OBSERVATION);
+  }
   if (entry.kind !== undefined && !FINDING_KINDS.includes(entry.kind)) {
     problems.push(`${PROBLEM.KIND_PREFIX}${FINDING_KINDS.join(LIST_SEPARATOR)}`);
   }
@@ -260,6 +292,6 @@ export {
   EVIDENCE_DIR, FINDING_KIND, FINDING_KINDS, ID_PATTERN, LOG_FILE,
   NEXT_OWNER, NEXT_OWNERS, PROBE, PROBES, QUESTS_DIR, QUEST_FILE,
   QUEST_SCHEMA, QUEST_STATUS, SHA_PATTERN, TERMINAL_STATUSES, THEORY_STATUS,
-  THEORY_STATUSES, VERDICT, VERDICTS, VERIFIER_PREFIX, entryProblems,
-  epicProblems, isPlainObject, questProblems, text,
+  THEORY_STATUSES, VERDICT, VERDICTS, VERIFIER_PREFIX, assignmentProblems, entryProblems,
+  epicProblems, isPlainObject, questProblems, text, validAssignmentPath,
 };

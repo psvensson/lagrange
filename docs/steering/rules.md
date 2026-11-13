@@ -1,6 +1,6 @@
 ---
 audience: agent
-last_reviewed: 2026-10-30
+last_reviewed: 2026-11-13
 ---
 
 # Rules
@@ -15,15 +15,16 @@ invariant. Rule count follows those invariants, never an arbitrary total.
 
 **Invariant.** Every semantic concern has exactly one authoritative owner.
 **Owner.** `architecture`
-**On conflict.** Change the owner. Never satisfy a caller by re-deriving the
-owner's decision locally.
+**On conflict.** Repair the authoritative owner's implementation or contract;
+reassign ownership only when the cause requires it. Never re-derive its decision locally.
 
 ## R02. An interaction between owners is itself owned
 
 **Invariant.** Where two owners meet, the interaction is a named contract, and
 that contract is the change boundary.
 **Owner.** `owner-interactions`
-**On conflict.** Change the interaction as one unit; never tune one side.
+**On conflict.** Prove the interaction; change the participants whose contract
+or implementation is invalidated, without requiring unrelated edits to either side.
 
 ## R03. Authority is consumed, not copied
 
@@ -51,10 +52,10 @@ producer it came from.
 
 ## R06. Scalars, states and names have owners
 
-**Invariant.** A domain value lives in its owner module and is imported, never
-written inline at a use site.
+**Invariant.** A domain value has one named owner; shared values are imported,
+not duplicated. Private named constants and language primitives remain permitted.
 **Owner.** `guideline-audits`
-**On conflict.** Move the value to its owner and import it.
+**On conflict.** Define the value at its owning scope and consume that definition.
 
 ## R07. A semantic outcome is a named state
 
@@ -84,15 +85,16 @@ sealed record; they are never weakened, widened or reread to fit an outcome.
 **Invariant.** Cached, in-flight or projected state never becomes the durable
 authority for a decision.
 **Owner.** `contracts`
-**On conflict.** Read the durable owner and treat the projection as a hint.
+**On conflict.** Read the durable owner for facts requiring durable authority;
+recompute disposable scheduling, indexes and presentation without inventing authority.
 
 ## R11. One execution path, and unavailability is explicit
 
-**Invariant.** A semantic decision has one path. When a dependency is
-unavailable that is an explicit, typed outcome, not a quieter alternative
-path.
+**Invariant.** A semantic decision has one authoritative algorithm; legitimate
+triggers, retries and adapters preserve it. Dependency unavailability is an
+explicit, typed outcome, never a competing decision path.
 **Owner.** `contracts`
-**On conflict.** Delete the alternate path and surface the unavailability.
+**On conflict.** Remove competing algorithms and surface the unavailability.
 
 ## R12. Load slows the system, never breaks it
 
@@ -103,20 +105,22 @@ correctness or drop an acknowledged obligation.
 
 ## R13. Resource lifetime is owned and bounded
 
-**Invariant.** Anything acquired has a named owner and a bounded lifetime.
+**Invariant.** Acquired resources have a named owner, bounded occupancy and
+release conditions; durable obligations remain owned until properly settled.
 **Owner.** `contracts`
 **On conflict.** Give the resource an owner and a bound before extending its use.
 
 ## R14. Mutations are idempotent
 
-**Invariant.** A mutation may be retried without changing the result.
+**Invariant.** Repeating the same logical mutation cannot duplicate its effect;
+retries preserve the owner's outcome and reconciliation semantics.
 **Owner.** `contracts`
 **On conflict.** Make the operation idempotent rather than guarding the caller.
 
 ## R15. Work starts from one bounded, sealed unit
 
-**Invariant.** Work likely to need more than one measured attempt, or that
-changes an owner boundary, starts from a sealed statement with a binary probe.
+**Invariant.** Work likely to need more than one measured attempt, or to change
+an owner-boundary contract, starts from a sealed statement with a binary probe.
 **Owner.** `quest-lifecycle`
 **On conflict.** Seal the unit before continuing.
 
@@ -143,7 +147,7 @@ change touches are known.
 
 ## R19. Implementation success is not proof
 
-**Invariant.** A claim holds only when its declared proof measures it; local success or source inspection is insufficient.
+**Invariant.** A claim holds only when its declared proof establishes the property; source inspection or local success cannot substitute for required execution evidence.
 A verifier must reject known-bad inputs; timeouts, missing final answers, health-only responses and synthetic substitutes cannot become successful observations.
 For a major feature, proof includes a useful user journey through its supported public entrypoint and real production composition.
 **Owner.** `sealed-acceptance`
@@ -163,7 +167,8 @@ and nothing else.
 appended to; they are never rewritten, truncated, relocated or deleted. A current
 summary is a mutable index to those records, not a replacement for them.
 **Owner.** `record-history`
-**On conflict.** Append a correcting entry; never edit a recorded one.
+**On conflict.** Append a correction in the current open owning or successor
+record, linked to the original; never edit or reopen a terminal record.
 
 ## R22. A claim names the exact head it is true of
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-// Generates docs/steering/generated/solve-commands.md: a COMPLETE, always-current
-// reference for every `scripts/solve.js` subcommand. Ground truth is the COMMANDS
+// Generates docs/steering/generated/solve-commands.md: a reference for registered
+// top-level `scripts/solve.js` commands. Ground truth is the COMMANDS
 // dispatch map parsed straight out of scripts/solve.js, so a newly registered
 // subcommand can never silently go undocumented. Descriptions/usage come from the
 // curated sidecar docs/steering/solve-commands.json.
@@ -32,6 +32,8 @@ const SIDECAR_PATH = join(REPO_ROOT, 'docs/steering/solve-commands.json');
 const OUTPUT_PATH = join(REPO_ROOT, 'docs/steering/generated/solve-commands.md');
 
 const NEWLINE = '\n';
+const TABLE_SEPARATOR = '|';
+const ESCAPED_TABLE_SEPARATOR = '\\|';
 const UNDOCUMENTED = '(undocumented — add an entry to `docs/steering/solve-commands.json`)';
 const SOURCE_FILE_EXTENSION = '.js';
 const TEXT_ENCODING = 'utf8';
@@ -157,8 +159,9 @@ export function flagKnownToSource(source, flag) {
 
 // Verify every `--flag` in every sidecar usage row against the actual solve
 // source tree. Command-name coverage is already checked both directions by the
-// render step; this closes the remaining gap (rows documenting flags no handler
-// reads). A sidecar entry may declare `flagCheckExempt: ["flag", ...]` for
+// render step; this detects rows documenting flags no handler reads. It does not
+// prove exhaustive nested-operation or supported-flag coverage. A sidecar entry
+// may declare `flagCheckExempt: ["flag", ...]` for
 // passthrough flags that are intentionally not read by solve.js itself.
 function validateSidecarUsageFlags(commands, sidecar, solveSource) {
   const staleFlags = [];
@@ -199,8 +202,9 @@ function render(commands, sidecar) {
     '',
     '# Solver CLI — Command Reference',
     '',
-    'Complete, always-current reference for every `node scripts/solve.js`',
-    'subcommand. Ground truth is the dispatch map in',
+    'Reference for registered top-level `node scripts/solve.js` commands.',
+    'The coverage count checks top-level entries, not every nested operation or flag.',
+    'Ground truth is the dispatch map and handlers in',
     '[`scripts/solve.js`](../../../scripts/solve.js); descriptions live in the',
     'curated sidecar [`../solve-commands.json`](../solve-commands.json). See',
     'the [`owner router`](../router.md) for the authority behind each ' +
@@ -213,8 +217,10 @@ function render(commands, sidecar) {
     const doc = sidecar[name];
     if (doc && typeof doc.summary === 'string') {
       documented += 1;
-      const usage = doc.usage ? `\`${doc.usage}\`` : '';
-      lines.push(`| \`${name}\` | ${doc.summary} | ${usage} |`);
+      const usage = doc.usage ?
+        `\`${doc.usage.replaceAll(TABLE_SEPARATOR, ESCAPED_TABLE_SEPARATOR)}\`` : '';
+      const summary = doc.summary.replaceAll(TABLE_SEPARATOR, ESCAPED_TABLE_SEPARATOR);
+      lines.push(`| \`${name}\` | ${summary} | ${usage} |`);
     } else {
       lines.push(`| \`${name}\` | ${UNDOCUMENTED} | \`node scripts/solve.js ${name} ...\` |`);
     }
@@ -238,7 +244,7 @@ function render(commands, sidecar) {
     '',
     '---',
     '',
-    `${commands.length} subcommands registered; ${documented} documented, ` +
+    `${commands.length} top-level commands registered; ${documented} documented, ` +
       `${commands.length - documented} undocumented. ` +
       'Improve coverage in `docs/steering/solve-commands.json`.',
     '',

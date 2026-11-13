@@ -3,7 +3,7 @@ scope: testing
 status: canonical
 always_load: false
 source_of_truth: self
-last_reviewed: 2026-10-22
+last_reviewed: 2026-11-13
 ---
 
 > **Canonical source.** Quest-driven validation, static guardrail preflight, file-size ratchet. Index: [`INDEX.md`](INDEX.md).
@@ -108,20 +108,39 @@ repo-wide count is not a reason to allow new local debt.
 ## File-Size Ratchet Policy
 
 Large owner files and large catch-all test files materially slow review,
-debugging, and LLM-assisted implementation. Runtime Quests that touch already
-oversized files should record whether they are adding local size debt or
-extracting a smaller owner/helper boundary.
+debugging, and LLM-assisted implementation. Bound a repair's structural work by
+its actual change and proof base; touching inherited oversize does not require
+complete repayment of that file's existing debt.
 
 Required workflow:
 
-1. Run `npm run audit:file-size` for broad runtime, control-plane, transport,
-   harness, and test-infrastructure Quests.
-2. New or newly edited source-code files must finish within the per-scope thresholds owned by `scripts/check-file-size-thresholds.js` (currently src ≤ 800, test ≤ 1500 lines).
-3. If a Quest touches an inherited oversized source-code file, it must
-   extract or refactor the touched file until it is within its scope threshold
-   before closure.
-4. New source-code files over their scope threshold fail closure; a follow-on extraction
-   Quest is not sufficient for newly created oversize.
-5. Use `npm run audit:file-size:strict` only for Quests that explicitly own
-   repo-wide inherited file-size cleanup, because the repository still has
-   inherited oversize files.
+1. Run `npm run audit:file-size` over the candidate. Its aggregate `src/` and
+   `test/` JavaScript inventory keeps the existing one-way count baselines.
+   Its per-file check covers changed `.js`, `.mjs`, and `.cjs` files under
+   `src/`, `test/`, and `scripts/`.
+2. New files and previously compliant touched files must remain within their
+   per-scope thresholds. `scripts/check-file-size-thresholds.js` owns the limits:
+   source and script files at most 800 lines, test files at most 1500 lines.
+3. An inherited oversized file may remain oversized only when its own line
+   count does not increase relative to the actual proof base. A reduction or
+   deletion elsewhere cannot fund a new violation. Extract a coherent
+   responsibility when needed for the repair or to prevent growth; a necessary
+   addition may therefore require a small extraction without requiring the
+   entire file to fit the threshold.
+4. Use the same base as the enclosing proof. The checker consumes the existing
+   [change-range owner](../../scripts/checks/changed-paths.js): explicit
+   `--base <commit>`, then `LAGRANGE_CHECK_BASE`, then the publication merge base.
+   With no publication range, it measures the worktree against `HEAD` and prints
+   that base. A declared base that cannot be resolved refuses the check. An
+   explicit file list narrows the checked surface, not its comparison base.
+5. Automatic move recognition requires identical bytes, the same size scope,
+   and disappearance of the original path. Each original identity can transfer
+   once. A copy or an edited rename has no automatically established inherited
+   allowance and must meet the new-file threshold. Review the actual move;
+   similarity alone does not prove identity.
+6. Do not satisfy the rule by minifying code, obscuring its responsibility,
+   moving it outside scan scope, or creating a competing semantic owner.
+   Behavioral proof, independent review and other required gates still apply.
+7. Use `npm run audit:file-size:strict` only for work that explicitly owns
+   inherited file-size cleanup; it continues to reject every oversized file
+   in the selected surface.

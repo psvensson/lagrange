@@ -120,9 +120,9 @@ Route work through the smallest sufficient planning surface:
    A Quest names its owning epic unless it is a standalone `class: fix`; a fix
    needs no new epic merely for status. Approved contracts live in their spec or
    architecture owner rather than being duplicated in the epic summary.
-3. Apply the Quest threshold in `AGENTS.md`: work likely to need more than one
-   measured attempt or to change an owner boundary creates or selects a Quest.
-   Only a single-sitting change with an obvious proof may remain direct.
+3. Apply the [Quest threshold](../steering/workflow-guidelines/solver-quests.md#choosing-the-unit).
+   One measured attempt may contain failing and passing tests. Session duration
+   or a need for independent review alone does not require a Quest.
 4. A Quest must cite or encode enough scope context to prevent local invention.
 5. Quest implementation begins after the bounded statement, binary `doneWhen`,
    authorized scope, constraints and required evidence are clear and the Quest
@@ -230,9 +230,13 @@ window; do not build a new metrics platform or force a redesign on a date.
 
 ## Feature Flag Lifecycle
 
-A feature flag (e.g. a `LAGRANGE_*` lever) is a within-session validation
-scaffold only — NO flag survives the session that lands it (user directive
-2026-06-26, re-affirmed 2026-07-02). Before the landing session ends, the flag
+A feature flag here selects a temporary alternative implementation or preserves
+an old mechanism during validation. Supported product/operator configuration
+and declared test inputs are not feature flags merely because their names use
+`LAGRANGE_*`; their owning contracts govern their supported values. A feature
+flag is a within-session validation scaffold only - NO flag survives the session
+that lands it (user directive 2026-06-26, re-affirmed 2026-07-02).
+Before the landing session ends, the flag
 MUST be resolved: validate the change (deterministic red-on-revert proof plus
 necessary native or physical evidence under the testing owner; a statistical
 gate only for an irreducibly statistical claim) and bake the behavior in
@@ -244,9 +248,11 @@ flag (see [`test/guidelines/fixtures.md`](../../test/guidelines/fixtures.md)
 A flag that preserves old behavior as the live default while a new mechanism sits
 dormant is an unfinished cutover (see [`rules.md`](../steering/rules.md) R01),
 not a building block. Flags inherited from before this rule are recorded debt,
-not license: retire or promote each one on contact (when other work touches its
-area) or in a dedicated cleanup Quest. There is no automated flag-audit script,
-so this cleanup must be performed deliberately, not assumed.
+not license: retire or promote each one on contact, meaning work changes the
+flag's selected implementation or affected contract, or in a dedicated cleanup
+Quest. Reading the file or editing an unrelated concern does not constitute
+contact. There is no automated flag-audit script, so perform this cleanup
+deliberately rather than assuming enforcement.
 
 ## Audit Procedure
 

@@ -14,17 +14,12 @@ contributor-only file-level owner ledger.
 
 Internal topology consumers (`ReplicaDispatchService`, `RebalanceCoordinator`,
 `ManagedSplitWorkflow`, admission planning) use the shared `repairEligible`
-dimension from `ControlPlaneReadinessService`. Routing and benchmark admission
-use `serveEligible`.
+dimension from `ControlPlaneReadinessService`. Serving and benchmark admission
+consume the readiness owner's committed `serveEligible` answer. System-table
+routing uses raft leadership and live transport, not `serveEligible`; its
+recovery path cannot depend on the readiness it restores.
 
-Self-readiness may preserve `serveEligible` through one timed-out
-`node_state_reporter` attempt when the last canonically visible local heartbeat
-is still fresh; this prevents transient self-denial while the bounded
-authoritative repair path is timing out under load.
-
-Superseded 2026-11-02 (R09, quest `serve-eligibility-committed-epoch-read`,
-epic `raft-rs-full-cutover`): `serveEligible` is the readiness owner's
-committed-epoch answer, derived from the committed `nodes` lease, status and
+The committed answer derives from the committed `nodes` lease, status and
 boot incarnation and the latest published membership (published active nodes,
 acknowledgements, priority-partition spread) at its publication epoch; the
 readiness snapshot carries that answer and a new epoch re-keys every readiness
@@ -33,24 +28,18 @@ reporter attempt or any other local grace. raft-rs exports no ReadIndex, so the
 committed read is a leader-local read with a role witness; a positive answer
 never outlives the node's committed ready lease (`CONTROL_PLANE_READY_LEASE`,
 15 s), which is the stated bound on how long a deposed leader's answer can
-grant. System-table routing does not consume `serveEligible`.
+grant.
 
-Superseded 2026-11-06 (R09, quest `readiness-self-grace-service-evidence-contract`,
-epic `operation-integrity-and-reliable-formation`): missing-node self runtime
-grace (`MISSING_NODE_READINESS_STATE.SELF_RUNTIME_GRACE` in
+Missing-node self runtime grace (`MISSING_NODE_READINESS_STATE.SELF_RUNTIME_GRACE` in
 `resolveMissingNodeReadinessState`) requires live local control-plane service
 evidence (at least one active addressed `message_group` row in `serviceRows`,
 either already present in cache or reconciled by authoritative `TABLES.SERVICES`
-refresh) and never grants `serveEligible`. The earlier fixture expectation in
-`test/control-plane/control-plane-readiness-service-sync-and-priority-recovery.test.js`
-(introduced in `e2797b6c8756cc0d596e24b16465b41c820cbd56`, re-enabled and
-renamed in `40ab2eccd7e9d3c98cedbecff6dc21a897cfe44a`, decomposed in
-`0177e9d1df290492bc3f03be4835eb22b747b414`, and partially updated in
-`835ea25c46d1bb60f9010e195f759212a6883301` before `e4d0f3294f4d51c6be637543dc2051a0a579f37b`
-deleted the empty-`services` default under `serve-eligibility-committed-epoch-read`)
-assumed `serviceRows.length === 0` defaulted to satisfied service ownership.
+refresh) and never grants `serveEligible`.
 When both the local `NODES` row and `SERVICES` rows remain absent after bounded
 authoritative refresh, self-node readiness fails closed with `node_row_missing`.
+
+Each consumer's implementation and verification establish its conformance to
+this contract; the description alone does not certify that conformance.
 
 ## Cluster Membership Health
 

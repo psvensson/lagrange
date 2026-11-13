@@ -43,21 +43,26 @@ Then open `http://127.0.0.1:8181/` in your browser.
 
 ## Failure Triage
 
-After a distributed harness failure, artifact-first triage is mandatory. Start
-from the auto-generated triage summary before sampling logs by hand. These
+After a distributed harness failure, start with the available trustworthy
+artifacts. Read the auto-generated triage summary when available. These
 files are written under the run artifact directory (typically
 `test-output/reports/.playback/<report-basename>/<scenario>/`):
 
 1. `triage-summary.md`
 2. `triage-summary.json`
 
-Required order after a failure:
+Normal order after a failure:
 
 1. Read `triage-summary.md`.
 2. Read `triage-summary.json`.
 3. Run the consolidated diagnostics script if you need deeper cross-scenario
    analysis.
-4. Only then sample raw node logs.
+4. Inspect the relevant original node logs.
+
+If a summary is absent, failed to generate or conflicts with the original
+evidence, inspect the original report and logs immediately and record that
+derived-artifact defect. A summary never overrides its source evidence or
+becomes a prerequisite for investigating the failure.
 
 For deeper cross-scenario analysis, use the consolidated diagnostics script:
 
@@ -568,9 +573,12 @@ Message-group join assignment and `FreshMG` replication:
 
 ## Postgres Baseline Workflow
 
-Treat any timeout, long stall, or discovery delay as a correctness bug. Do not
-start a `3node` or `7node` strict baseline until the targeted checks below are
-green.
+Investigate unexpected timeouts, long stalls, and discovery delays before a
+`3node` or `7node` strict baseline. Classify each against the operation's
+deadline, readiness contract, and measured progress: an expected caller
+deadline is a bounded outcome, while loss of required progress or incorrect
+readiness is a correctness failure. Start the baseline only when the targeted
+checks below are green and any unresolved blocker is recorded.
 
 ### Required Before Any Strict Baseline
 

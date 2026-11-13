@@ -86,3 +86,18 @@ test('epic front-matter: open needs doneWhen unless legacy', () => {
   assert.equal(epicProblems({...front, quests: null, authorizes: null, legacy: true}).length, 2);
   assert.equal(epicProblems(null).length, 1);
 });
+
+test('assignment findings have bounded paths and an existing authority reference', () => {
+  const finding = {type: ENTRY_TYPE.FINDING, text: STATEMENT,
+    assignment: {paths: ['src/owner/', 'test/owner.test.js'], authority: 'authorized task'}};
+  assert.deepEqual(entryProblems(finding), []);
+  for (const assignment of [null, {}, {paths: [], authority: 'task'},
+    {paths: ['../escape'], authority: 'task'}, {paths: ['src/']},
+    {paths: ['src/control\u0000path'], authority: 'task'},
+    {paths: ['src/control\u007fpath'], authority: 'task'},
+    {paths: ['src/', 'src/'], authority: 'task'}]) {
+    assert.ok(entryProblems({...finding, assignment}).length > 0);
+  }
+  assert.ok(entryProblems({...finding, kind: FINDING_KIND.DECISION}).length > 0,
+    'an assignment is an observation, not implicit hold resolution');
+});

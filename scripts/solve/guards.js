@@ -16,15 +16,17 @@ import {
 import {
   IMPORT_GRAPH_PATH, IMPORT_GRAPH_SEAL_PATH, PROOF_CONE_CONTRACTS_PATH,
 } from '../checks/impact-proof-cone-constants.js';
+import {INERT_PATH_RULES} from '../checks/change-selection-constants.js';
 import {waitForLoadHeadroomSync} from '../checks/wait-for-load-headroom.js';
 import {
   importGraphResolverStateDigest, javascriptSourceDigest,
   listImportGraphInputFiles, listJavaScriptFiles,
 } from '../global-owner-debt-inventory/helpers.js';
-import {EPICS_DIR, QUESTS_DIR} from './schema.js';
+import {ENTRY_TYPE, EPICS_DIR, QUESTS_DIR, assignmentProblems, validAssignmentPath} from './schema.js';
 
 const TEXT_ENCODING = 'utf8';
 const LINE_SEPARATOR = '\n';
+const PATH_LIST_SEPARATOR = '\0';
 const SPAWN_MAX_BUFFER = 64 * 1024 * 1024;
 const SOURCE_PREFIX = 'src/';
 const SOLVE_PREFIX = 'solve/';
@@ -58,15 +60,33 @@ const ARGUMENT_SEPARATOR = ' ';
 const GIT_ARGUMENTS = Object.freeze({
   HEAD: Object.freeze(['rev-parse', '--verify', 'HEAD^{commit}']),
   COMMON_DIR: Object.freeze(['rev-parse', '--git-common-dir']),
-  DIFF_NAMES: Object.freeze(['diff', '--name-only', 'HEAD']),
-  STAGED_NAMES: Object.freeze(['diff', '--cached', '--name-only', 'HEAD']),
-  UNTRACKED: Object.freeze(['ls-files', '--others', '--exclude-standard']),
-  INDEXED: Object.freeze(['ls-files', '--']),
+  DIFF_NAMES: Object.freeze(['diff', '--no-renames', '--name-only', '-z', 'HEAD']),
+  STAGED_NAMES: Object.freeze(['diff', '--cached', '--no-renames', '--name-only', '-z', 'HEAD']),
+  UNTRACKED: Object.freeze(['ls-files', '--others', '--exclude-standard', '-z']),
+  INDEXED: Object.freeze(['--literal-pathspecs', 'ls-files', '-z', '--']),
 });
 const GIT_FALLBACK_DIR = '.git';
 const REGISTRY_UNAVAILABLE = 'coupled-pair registry could not be loaded';
 const OUTSIDE_SCOPE_PREFIX = 'paths outside epic ';
 const OUTSIDE_SCOPE_INFIX = ' authorizes: ';
+const ASSIGNMENT_MISSING = 'package assignment is missing; record note --assignment before landing';
+const ASSIGNMENT_UNTYPED = 'package assignment must be an untyped finding';
+const PATH_SEPARATOR = '/';
+const OPERATIVE_REVIEW_PATHS = Object.freeze([
+  /^AGENTS\.md$/u,
+  /^(?:docs\/steering|test\/guidelines|\.agents\/skills|architecture\/contracts)\//u,
+  /^architecture\/runtime-contracts\.md$/u,
+  /^docs\/development\/(?:quest-[^/]+|solver-runbook|code-style|roadmap-policy|documentation-lifecycle|agent-tooling|durable-proof-receipts|solver-content-addressed-fast-path)\.md$/u,
+  /^docs\/development\/verification-templates\//u,
+  /^solve\/(?:specs|epics)\//u,
+  /^solve\/quests\/[^/]+\/quest\.json$/u,
+]);
+const EXPLANATORY_REVIEW_PATHS = Object.freeze([
+  /\.md$/u,
+  /^solve\/quests\/[^/]+\/log\.ndjson$/u,
+  /^LICENSE$/u,
+  /^\.vscode\//u,
+]);
 
 // --- git ----------------------------------------------------------------------
 
@@ -92,8 +112,8 @@ function gitCommonDir(root) {
   return path.join(root, GIT_FALLBACK_DIR);
 }
 
-function lines(output) {
-  return output.split(LINE_SEPARATOR).map((line) => line.trim()).filter(Boolean);
+function pathList(output) {
+  return output.split(PATH_LIST_SEPARATOR).filter(Boolean);
 }
 
 /**
@@ -103,9 +123,9 @@ function lines(output) {
  * @return {string[]}
  */
 function changedPaths(root) {
-  const tracked = lines(git(root, [...GIT_ARGUMENTS.DIFF_NAMES]));
-  const staged = lines(git(root, [...GIT_ARGUMENTS.STAGED_NAMES]));
-  const untracked = lines(git(root, [...GIT_ARGUMENTS.UNTRACKED]));
+  const tracked = pathList(git(root, [...GIT_ARGUMENTS.DIFF_NAMES]));
+  const staged = pathList(git(root, [...GIT_ARGUMENTS.STAGED_NAMES]));
+  const untracked = pathList(git(root, [...GIT_ARGUMENTS.UNTRACKED]));
   return [...new Set([...tracked, ...staged, ...untracked])].sort();
 }
 
@@ -120,7 +140,7 @@ function changedPaths(root) {
  */
 function stageablePaths(root, paths) {
   if (paths.length === 0) return [];
-  const indexed = new Set(lines(git(root, [...GIT_ARGUMENTS.INDEXED, ...paths])));
+  const indexed = new Set(pathList(git(root, [...GIT_ARGUMENTS.INDEXED, ...paths])));
   return paths.filter((filePath) => indexed.has(filePath) ||
     fs.existsSync(path.join(root, filePath)));
 }
@@ -130,7 +150,29 @@ function isSourcePath(filePath) {
 }
 
 function requiresVerification(paths) {
-  return paths.some(isSourcePath);
+  return paths.some((filePath) => isSourcePath(filePath) ||
+    OPERATIVE_REVIEW_PATHS.some((pattern) => pattern.test(filePath)) ||
+    !INERT_PATH_RULES.some((pattern) => pattern.test(filePath)) ||
+    !EXPLANATORY_REVIEW_PATHS.some((pattern) => pattern.test(filePath)));
+}
+
+function latestAssignment(log) {
+  return log.findLast((entry) => entry.type === ENTRY_TYPE.FINDING &&
+    entry.assignment !== undefined) || null;
+}
+
+function packageScopeProblems(quest, log, paths) {
+  const entry = latestAssignment(log);
+  if (!entry) return [ASSIGNMENT_MISSING];
+  const problems = assignmentProblems(entry.assignment);
+  if (entry.kind !== undefined) problems.push(ASSIGNMENT_UNTYPED);
+  if (problems.length > 0) return problems;
+  const ownDirectory = `${QUESTS_DIR}/${quest.id}/`;
+  const outside = paths.filter((filePath) => !validAssignmentPath(filePath) ||
+    (!filePath.startsWith(ownDirectory) && !entry.assignment.paths.some((allowed) =>
+      allowed.endsWith(PATH_SEPARATOR) ? filePath.startsWith(allowed) : filePath === allowed)));
+  return outside.length > 0 ? [`paths outside package assignment: ${
+    outside.map((filePath) => JSON.stringify(filePath)).join(LIST_SEPARATOR)}`] : [];
 }
 
 // --- static quality ------------------------------------------------------------
@@ -361,6 +403,7 @@ function canonicalImportGraphProblem(root, timeout = importGraphVerifyTimeout(),
 
 export {
   SOLVE_PREFIX, canonicalImportGraphProblem, changedPaths, coupledPairProblems,
-  epicScopeProblems, git, gitCommonDir, headSha, isSourcePath, requiresVerification,
+  epicScopeProblems, git, gitCommonDir, headSha, isSourcePath, latestAssignment,
+  packageScopeProblems, requiresVerification,
   stageablePaths, staticQualityProblems,
 };

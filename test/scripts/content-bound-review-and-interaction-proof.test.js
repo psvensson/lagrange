@@ -116,6 +116,9 @@ function setupTestRepo(t, {withCoupledPairs = false} = {}) {
   git(root, ['add', '-A']);
   git(root, ['commit', '-q', '-m', 'initial commit']);
 
+  solveCommands.note(root, {id: QUEST_ID, type: 'finding', text: 'Assign the test package.',
+    assignment: {paths: ['src/', 'test/', 'scripts/'], authority: 'test task authorization'}});
+
   return root;
 }
 
