@@ -177,25 +177,48 @@ class CDCIntegrationServiceLifecycleMethods {
   }
 
   /**
-   * A write's retry delay on this service's clock, held until shutdown:
-   * shutdown ends it at once, so no timer outlives the terminal state.
+   * A retry delay on this call's original clock, held until shutdown. If
+   * acquisition reenters shutdown, its returned handle is cancelled before
+   * the delay resolves. Acquisition or cancellation failure rejects with its
+   * original cause; an uncleared timer remains the clock's obligation.
    * @param {number} delayMs
    * @return {Promise<void>} Settles at the delay or at shutdown.
    */
   delayUntilShutdown(delayMs) {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
+      const clock = this.timeSource;
       let timer = null;
-      const stopHolding = this.holdUntilShutdown(() => {
-        this.timeSource.clearTimeout(timer);
+      let acquiringTimer = false;
+      const releaseForShutdown = () => {
+        if (acquiringTimer) return;
+        if (timer !== null) {
+          try {
+            clock.clearTimeout(timer);
+          } catch (error) {
+            reject(error);
+            return;
+          }
+        }
         resolve();
-      });
+      };
+      const stopHolding = this.holdUntilShutdown(releaseForShutdown);
       if (this.isShuttingDown === true) {
         return;
       }
-      timer = this.timeSource.setTimeout(() => {
+      acquiringTimer = true;
+      try {
+        timer = clock.setTimeout(() => {
+          stopHolding();
+          resolve();
+        }, delayMs);
+      } catch (error) {
         stopHolding();
-        resolve();
-      }, delayMs);
+        reject(error);
+        return;
+      } finally {
+        acquiringTimer = false;
+      }
+      if (this.isShuttingDown === true) releaseForShutdown();
     });
   }
 
