@@ -1117,3 +1117,68 @@ test('killGroup refuses a failed spawn with no acquired positive process identit
     assert.throws(() => killGroup(fixture.child), /unacquired process group/u,
       'an unavailable identity cannot be negated or converted into a direct-child attempt');
   });
+
+// The existing public harness entry owns acquisition and finalization here.
+// Only the held-session dependency is finite; neither case admits a tunnel
+// or formation. These controls make no physical-host or Docker proof claim.
+for (const phase of ['busy admission', 'machine observation']) {
+  test(`harness preserves ${phase} failure and attempts every acquired hold release`,
+    {timeout: 10000}, async (t) => {
+      const directory = tempDir(t, 'fleet-harness-release-');
+      const events = [];
+      const diagnostics = [];
+      const cleanupFailure = new Error('finite first hold release unavailable');
+      let observationFailure = null;
+      const diagnostic = t.mock.method(process.stderr, 'write', (text) => {
+        diagnostics.push(String(text));
+        return true;
+      });
+      const hold = (machine) => {
+        events.push(`hold ${machine.name}`);
+        return {
+          outcome: Promise.resolve(phase === 'busy admission' && machine.name === 'b' ?
+            {state: 'busy', holder: HOLDER} : {state: 'held'}),
+          release: () => {
+            events.push(`release ${machine.name}`);
+            if (machine.name === 'a') throw cleanupFailure;
+          },
+        };
+      };
+      const observeMachine = () => {
+        events.push('observe');
+        try {
+          fs.readFileSync(directory);
+        } catch (error) {
+          observationFailure = error;
+          throw error;
+        }
+        assert.fail('reading the real fixture directory must refuse before any tunnel starts');
+      };
+      try {
+        await assert.rejects(runHarness({
+          nodes: [{name: 'b', ssh: 'lab@b.invalid', ip: '192.0.2.2'},
+            {name: 'a', ssh: 'lab@a.invalid', ip: '192.0.2.1'}],
+          scenario: 'rolling-restart', verbose: false, hold, observeMachine,
+        }), (error) => {
+          assert.notEqual(error, cleanupFailure,
+            'the secondary release error never replaces the earlier harness failure');
+          if (phase === 'busy admission') {
+            assert.equal(error.message, `harness: node b busy, ${HELD_BY}`);
+          } else {
+            assert.equal(observationFailure?.code, 'EISDIR');
+            assert.equal(error.message,
+              `harness: no machine identity for node b: ${observationFailure.message}`,
+              'the machine observer owner retains its canonical classification and actual detail');
+          }
+          return true;
+        });
+      } finally {
+        diagnostic.mock.restore();
+      }
+      assert.deepEqual(events, ['hold a', 'hold b',
+        ...(phase === 'machine observation' ? ['observe'] : []), 'release a', 'release b'],
+      'each acquired release is attempted once even when the first release throws synchronously');
+      assert.ok(diagnostics.some((line) => line.includes(cleanupFailure.message)),
+        `the secondary cleanup failure is visible: ${diagnostics.join('')}`);
+    });
+}
