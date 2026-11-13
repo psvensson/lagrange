@@ -3,7 +3,8 @@ import {spawn} from 'node:child_process';
 import os from 'node:os';
 import {
   LAB_AGENT_ENV, LAB_AGENT_SEPARATOR, LAB_HOLD, LAB_HOLD_CLOSURE_UNCONFIRMED,
-  LAB_HOLD_REASON_SEPARATOR, LAB_HOLD_RELEASE_GRACE_MS, LAB_HOLDER_UNKNOWN,
+  LAB_HOLD_REASON_SEPARATOR, LAB_HOLD_RELEASE_GRACE_MS, LAB_HOLD_SESSION_UNAVAILABLE,
+  LAB_HOLDER_UNKNOWN,
   LAB_LOCK_EXIT, LAB_LOCK_LINE, LAB_LOCK_PATHS, LAB_LOCK_RECORD, LAB_LOCK_STATE,
   LAB_LOCK_TAKE, LAB_LOCK_TEXT, LAB_LOCK_WAIT_MAX_MS, LAB_LOCK_WAIT_MIN_SECONDS,
   LAB_PROJECT, LAB_PURPOSE_SEPARATOR, LAB_TEST_PURPOSE, MS_PER_MINUTE, MS_PER_SECOND,
@@ -158,7 +159,7 @@ export function holdLabMachine(machine, {waitMs, purpose, expectedMs, env = proc
 }
 
 function holdSessionFailure(child, code, signal) {
-  return Object.assign(new Error('lab hold session closed unavailable: ' +
+  return Object.assign(new Error(LAB_HOLD_SESSION_UNAVAILABLE +
     `exit=${code} signal=${signal} group=${child.pid}`),
   {exitCode: code, signal, group: child.pid});
 }

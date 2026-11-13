@@ -390,7 +390,6 @@ export function startRemoteShard(shard, {sha, deadlineMs, root, holder,
   let interrupted = false;
   let cutRequested = false;
   let refuseUnconfirmed;
-  let deadline;
   const recordFailure = (error) => {
     if (!failure.observed) Object.assign(failure, {observed: true, error});
     else if (failure.error !== error) {
@@ -399,28 +398,7 @@ export function startRemoteShard(shard, {sha, deadlineMs, root, holder,
   };
   const tails = onLine ? [tailLines(logFile, PLACEMENT_STREAM.OUT, onLine, recordFailure),
     tailLines(errorFile, PLACEMENT_STREAM.ERR, onLine, recordFailure)] : [];
-  const cut = () => {
-    if (cutRequested) return;
-    cutRequested = true;
-    try {
-      killGroup(child);
-    } catch (error) {
-      recordFailure(error);
-      clearTimeout(deadline);
-      for (const finish of tails) {
-        try {
-          finish();
-        } catch (cleanupError) {
-          recordFailure(cleanupError);
-        }
-      }
-      process.stderr.write(`${PLACEMENT_TEXT.UNAVAILABLE}wrapper group ${child.pid} ` +
-        `closure unconfirmed; original inputs and logs retained at ${local}\n`);
-      child.unref();
-      refuseUnconfirmed(failure.error);
-      throw error;
-    }
-  };
+
   // The shell gets one signal and one shared grace. A repeated stop never
   // starts another timer or guesses another resource identity.
   const interrupt = () => {
@@ -452,8 +430,30 @@ export function startRemoteShard(shard, {sha, deadlineMs, root, holder,
   // A deadline that expired while this process was blocked is looked at
   // again after its pending events: a shard that finished meanwhile is not
   // stopped, and its gone shell's pid is never signalled (verifier round 1).
-  deadline = setTimeout(() => setImmediate(() => stop(PLACEMENT_TEXT.DEADLINE)),
+  const deadline = setTimeout(() => setImmediate(() => stop(PLACEMENT_TEXT.DEADLINE)),
     deadlineMs);
+  function cut() {
+    if (cutRequested) return;
+    cutRequested = true;
+    try {
+      killGroup(child);
+    } catch (error) {
+      recordFailure(error);
+      clearTimeout(deadline);
+      for (const finish of tails) {
+        try {
+          finish();
+        } catch (cleanupError) {
+          recordFailure(cleanupError);
+        }
+      }
+      process.stderr.write(`${PLACEMENT_TEXT.UNAVAILABLE}wrapper group ${child.pid} ` +
+        `closure unconfirmed; original inputs and logs retained at ${local}\n`);
+      child.unref();
+      refuseUnconfirmed(failure.error);
+      throw error;
+    }
+  }
   const finished = exited.then((status) => {
     clearTimeout(deadline);
     // Output must be read successfully before a clean attempt can discard
@@ -524,7 +524,7 @@ function abortTogether(runs) {
   }
   if (errors.length > 0) {
     throw new AggregateError(errors,
-      'placement cleanup incomplete: ' +
+      PLACEMENT_TEXT.CLEANUP_INCOMPLETE +
       `${errors.map((error) => error.message).join(PLACEMENT_DIAGNOSTIC_SEPARATOR)}`);
   }
 }

@@ -70,29 +70,12 @@ export function capture(command, args, options = {}) {
     const exitFailure = {observed: false};
     let completed = false;
     let timedOut = false;
-    let deadline;
-    const complete = () => {
-      if (completed) return;
-      completed = true;
-      if (deadline) clearTimeout(deadline);
-      if (exitFailure.observed && failure.error === exitFailure.error) {
-        exitFailure.error.message =
-          `${command} failed (${exitFailure.error.exitCode}): ${stderr.trim()}`;
-      }
-      if (timedOut) {
-        failure.error.outputComplete = false;
-        failure.error.groupClosure = 'unconfirmed';
-        failure.error.message += '\nlab capture: deadline expired; output incomplete; ' +
-          'process group closure unconfirmed';
-      }
-      if (failure.observed) rejectPromise(failure.error);
-      else resolvePromise(stdout.trim());
-    };
+
     // An optional deadline: past it the child's whole process group is killed
     // - a shell's hung grandchild would otherwise outlive it and hold the
     // pipes open (verifier round 3) - and the capture fails. A nonzero exit
     // already observed stays primary even when output closure later times out.
-    deadline = bounded ? setTimeout(() => {
+    const deadline = bounded ? setTimeout(() => {
       timedOut = true;
       const error = new Error(`${command} ${TIMED_OUT_TEXT} ${options.timeoutMs} ms`);
       if (!failure.observed) Object.assign(failure, {observed: true, error});
@@ -112,6 +95,23 @@ export function capture(command, args, options = {}) {
       child.unref();
       complete();
     }, options.timeoutMs) : null;
+    function complete() {
+      if (completed) return;
+      completed = true;
+      if (deadline) clearTimeout(deadline);
+      if (exitFailure.observed && failure.error === exitFailure.error) {
+        exitFailure.error.message =
+          `${command} failed (${exitFailure.error.exitCode}): ${stderr.trim()}`;
+      }
+      if (timedOut) {
+        failure.error.outputComplete = false;
+        failure.error.groupClosure = 'unconfirmed';
+        failure.error.message += '\nlab capture: deadline expired; output incomplete; ' +
+          'process group closure unconfirmed';
+      }
+      if (failure.observed) rejectPromise(failure.error);
+      else resolvePromise(stdout.trim());
+    }
     child.stdout.on(CHILD_EVENT.DATA, (chunk) => {
       stdout += chunk;
     });

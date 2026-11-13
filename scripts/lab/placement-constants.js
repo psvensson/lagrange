@@ -48,6 +48,7 @@ const PLACEMENT_TEXT = Object.freeze({
   NO_HOLDER: ' held-by (no holder record)',
   REFUSED_BUSY: 'held by another agent',
   REFUSED_HOT: 'too hot to run',
+  CLEANUP_INCOMPLETE: 'placement cleanup incomplete: ',
   DEADLINE: 'deadline',
   INTERRUPTED: 'interrupted',
 });

@@ -1108,8 +1108,9 @@ test('a lab machine generates the placed commit\'s import graph before its files
     const stale = await start([FAST_TEST], {runId: 'graph-stale'}).done;
     assert.equal(stale.status, PLACEMENT_EXIT.SETUP,
       'a producer that rewrites tracked metadata is a setup failure, as in the gate');
+    // Git porcelain retains both index/worktree status columns in the diagnostic.
     assert.match(stale.errors,
-      /placement: the commit's generated metadata is stale; regenerate and commit README\.md/u);
+      /^placement: the commit's generated metadata is stale; regenerate and commit  M README\.md$/mu);
     assert.doesNotMatch(stale.log, /placement-pid=/u, 'no runner started');
     assertRetainedRemoteAttempt(fixture, 'graph-stale', sha, [FAST_TEST]);
     assertRetainedRemoteAttempt(fixture, 'graph-failed', sha, [FAST_TEST]);

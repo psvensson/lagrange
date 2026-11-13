@@ -213,8 +213,12 @@ function assertOriginalRetained(observed) {
   assert.equal(fs.readFileSync(path.join(observed.checkout, ORIGINAL_ARTIFACT), 'utf8'),
     ORIGINAL_BYTES);
   const registered = observed.git('worktree', 'list', '--porcelain');
-  assert.ok(registered.includes(`worktree ${fs.realpathSync(observed.checkout)}\n`));
-  assert.ok(registered.includes(`locked ${LOCK_REASON}\n`), 'the real Git lock remains registered');
+  const checkoutLine = `worktree ${fs.realpathSync(observed.checkout)}`;
+  const records = registered.split('\n\n').map((record) => record.split('\n'));
+  const matching = records.filter((record) => record[0] === checkoutLine);
+  assert.equal(matching.length, 1, 'exactly the original checkout remains registered');
+  assert.deepEqual(matching[0].filter((line) => line === 'locked' || line.startsWith('locked ')),
+    [`locked ${LOCK_REASON}`], 'the original checkout retains its exact Git lock reason');
 }
 
 for (const fixedStatus of [GREEN, 23]) {

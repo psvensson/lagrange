@@ -420,8 +420,45 @@ test('inert paths select only their observers beyond the spine', () => {
     assert.ok(entry.reasons.every((reason) => reason.startsWith('observer:')),
       `${entry.path} is here for a non-observer reason: ${entry.reasons}`);
   }
-  assert.ok(extra.length < spine.length,
-    'observers of a document are a handful, never a corpus');
+  // Independent contract examples from the committed observation declarations,
+  // not the selector's output or the safety spine's unrelated cardinality.
+  // A legitimate observer-set change must update this explicit witness too.
+  const expectedObservers = [
+    'test/distributed/harness/__tests__/comparative-benchmark-chain-acceptance.test.js',
+    'test/integration/lagrange-server-npm-package.integration.test.js',
+    'test/scripts/action-authority.test.js',
+    'test/scripts/agent-tooling-configuration.test.js',
+    'test/scripts/agent-tooling-evidence.test.js',
+    'test/scripts/canary-corpus-needed.test.js',
+    'test/scripts/check-doc-audience.test.js',
+    'test/scripts/check-documentation-current-state.test.js',
+    'test/scripts/check-solve-binary-guard.test.js',
+    'test/scripts/content-bound-review-and-interaction-proof.test.js',
+    'test/scripts/evidence-relocation-acceptance.test.js',
+    'test/scripts/evidence-relocation.test.js',
+    'test/scripts/historical-record-exemptions.test.js',
+    'test/scripts/impact-proof-cone.test.js',
+    'test/scripts/local-corpus-receipt-custody.test.js',
+    'test/scripts/local-corpus.test.js',
+    'test/scripts/no-legacy-consensus-reference-audit.test.js',
+    'test/scripts/no-legacy-consensus-reference-ratchet.test.js',
+    'test/scripts/observation-census.test.js',
+    'test/scripts/proof-authority.test.js',
+    'test/scripts/proof-receipt-execution-report.test.js',
+    'test/scripts/release-content-digest.test.js',
+    'test/scripts/release-preflight.test.js',
+    'test/scripts/release-proof-identity.test.js',
+    'test/scripts/rule-set-revision.test.js',
+    'test/scripts/solve-footprint-accounting.test.js',
+    'test/scripts/steering-diet.test.js',
+    'test/solve/commands.test.js',
+    'test/solve/evidence-store.test.js',
+    'test/solve/guards.test.js',
+    'test/solve/migrate-v1.test.js',
+    'test/solve/store.test.js',
+  ];
+  assert.deepEqual(extra.map((entry) => entry.path).sort(), expectedObservers,
+    'every declared observer is selected exactly once, with no unrelated subsystem tests');
 });
 
 test('a test selected twice executes once, carrying both reasons', () => {
