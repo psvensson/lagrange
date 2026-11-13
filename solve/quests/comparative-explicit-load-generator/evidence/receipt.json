@@ -2,6 +2,41 @@
   "schema": "test-receipt/1",
   "quest": "comparative-explicit-load-generator",
   "status": "fail",
-  "receipts": [],
-  "interpretation": "Unmeasured original control proposal. Native original execution/index and Solver start are owed; no seal or candidate credit."
+  "receipts": [
+    {
+      "id": "original-explicit-selection-gap",
+      "measured": true,
+      "passed": false,
+      "detail": "Actual unchanged owner ignores explicit Adam selection (case14 role array differs) and does not refuse unknown registered name (case15 missing expected exception). Existing13cases pass. This is one required obligation measured false, not four executed failures."
+    }
+  ],
+  "source": {
+    "sha": "91fb4e9bca760b5f1733099344e46c9c39d54aa6",
+    "tree": "ba67fd9ddc85bc1fc9fe4e55dbd06a8ed239869d"
+  },
+  "measurement": {
+    "docker_create_attempted": false,
+    "elapsed_s": 4.376,
+    "execution_scope_closed": true,
+    "exit_code": 1,
+    "generation": "dc36de51-8de3-4d99-8717-2321d65173fd",
+    "host": "local-workstation",
+    "intentDigest": "a4b9518b44c475865e2f3273c8355e585941281246f1b74ff50d5680618b0ac1",
+    "job_id": "7f7d6c7c-0c59-42f6-b2ac-ad95c5e6d05e",
+    "reason": null,
+    "source_execution_started": false,
+    "state": "FAILED",
+    "unit": "lagrange-lab3-dc36de518de34d9987172321d65173fd-7f7d6c7c0c5942f6b2acad95c5e6d05e.service",
+    "workload_started": true
+  },
+  "testFileDigests": {
+    "test/distributed/harness/__tests__/comparative-benchmark-runner-lab-hosts.test.js": "a4eab83890e8f44ce1447d26e876b30d6ae63bd8e419c7a02b1e12e9fd4214a1"
+  },
+  "evidence": {
+    "fullLogBytes": 12314,
+    "fullLogSha256": "1702b2e30f6edacd055c8dc9883a16cde63c64a546a3c0b526a6c2f48365af2d",
+    "provider": "load-generator-original-91fb4e9b/logs-0.json",
+    "eofProvider": "load-generator-original-91fb4e9b/logs-12314.json"
+  },
+  "evidenceCeiling": "Native source:null reports source_execution_started:false; embedded exact checkout and actual runner output separately establish execution. Native failed status remains failed. No candidate behavior or Solver seal/probe/land yet."
 }
