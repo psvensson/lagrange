@@ -1,0 +1,32 @@
+{
+  "schema": "solve-quest/2",
+  "id": "cdc-delay-timer-cleanup",
+  "class": "fix",
+  "statement": "The existing CDC delayUntilShutdown owner retains exact timer and shutdown-registration custody through normal firing, shutdown, failed acquisition, failed cancellation and shutdown during acquisition. One delay cancels only through its acquiring clock. Normal completion resolves; acquisition and cancellation faults reject with their original cause without blocking another registered delay. Rejection does not certify that a failed cancellation released its timer.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/cdc-delay-timer-cleanup/evidence/receipt.json",
+      "requiredReceipts": [
+        "normal-delay-and-terminal-entry",
+        "acquisition-failure-and-same-owner-progress",
+        "cancellation-failure-and-independent-release",
+        "acquisition-reentry",
+        "original-clock-custody",
+        "existing-caller-regressions",
+        "independent-review",
+        "lab-selected-cone-and-static"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "existing-owner",
+      "statement": "Change only delayUntilShutdown and its adjacent contract comment in cdc-integration-service-lifecycle.js. Preserve the existing TimeSource and Promise APIs, delay durations and callers. Add no timer, retry, compatibility branch, exported API, relister registration or alternate lifecycle owner."
+    },
+    {
+      "id": "honest-resource-proof",
+      "statement": "Preserve original causes and the difference between promise settlement, deregistration and actual timer release. Label injected acquisition reentry and clock replacement as admitted-seam controls, not ordinary platform-clock incidents. Retain exact historical and newly measured original/candidate identities. Run all tests, generators and static gates only on physical lab machines through the sole coordinator."
+    }
+  ]
+}
