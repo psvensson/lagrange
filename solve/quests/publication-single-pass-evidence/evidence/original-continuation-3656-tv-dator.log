@@ -1,0 +1,505 @@
+ORIGINAL_DIAGNOSTIC_CONTINUATION=complete the interrupted original #3580 measurement on this host through an independent request; preserve every original outcome
+LAB_HOST=tv-dator
+v22.23.2
+aabc29b487375b76dc0f3b7519ce2c8502d0020b
+9ae3ed4e00355d4d8acc645dd378e9a08d2e6bc4
+bc9e83a24cee235aa7fd33ff9777dc97d229903c
+ORIGINAL_DIAGNOSTIC_SCOPE=unchanged measured production with five disjoint original-compatible control roots; actual failures retained; no canonical corpus or repair acceptance
+npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+
+> lagrange-server@0.4.0 prepare
+> node -e "import('node:fs').then(({existsSync}) => existsSync('scripts/install-git-hooks.js') && import('./scripts/install-git-hooks.js'))"
+
+[hooks] Installed repo hooks at .githooks
+
+added 964 packages in 48s
+npm notice
+npm notice New major version of npm available! 10.9.8 -> 12.2.2
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.2
+npm notice To update run: npm install -g npm@12.2.2
+npm notice
+SQLITE_NATIVE_PROVENANCE={"version":"3.49.2","source_id":"2025-05-07 10:39:52 17144570b0d96ae63cd6f3edca39e27ebd74925252bbaf6723bcb2f6b4861fb1","addon_sha256":"d7d9272b12d11c1dc2bb787741b1b7c4037d336155f316ace3420410c28fda37"}
+ORIGINAL_DIAGNOSTIC_GROUP=original materializer and strict remover controls
+ORIGINAL_DIAGNOSTIC_ROOT=test/scripts/proof-checkout-preparation.test.js
+ORIGINAL_DIAGNOSTIC_ROOT=test/scripts/dt-prove.test.js
+not ok test/scripts/dt-prove.test.js (23 assertions, 867ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: classifyProof: green-with-fix, red-on-revert, green-on-restore is PROVEN
+    ok 1 - should be equal
+    ok 2 - should be equal
+    1..2
+ok 1 - classifyProof: green-with-fix, red-on-revert, green-on-restore is PROVEN # time=2.262ms
+
+# Subtest: classifyProof: test that fails WITH the fix is fix-not-passing
+    ok 1 - should be equal
+    ok 2 - should be equal
+    1..2
+ok 2 - classifyProof: test that fails WITH the fix is fix-not-passing # time=0.645ms
+
+# Subtest: classifyProof: revert that changes no bytes is revert-noop (test does not exercise --src)
+    ok 1 - should be equal
+    ok 2 - should be equal
+    1..2
+ok 3 - classifyProof: revert that changes no bytes is revert-noop (test does not exercise --src) # time=0.394ms
+
+# Subtest: classifyProof: test still green after revert is not-bound (does not bind the mechanism)
+    ok 1 - should be equal
+    ok 2 - should be equal
+    1..2
+ok 4 - classifyProof: test still green after revert is not-bound (does not bind the mechanism) # time=0.374ms
+
+# Subtest: classifyProof: test that does not return to green after restore is restore-failed
+    ok 1 - should be equal
+    ok 2 - should be equal
+    1..2
+ok 5 - classifyProof: test that does not return to green after restore is restore-failed # time=0.331ms
+
+# Subtest: classifyProof: gate order — fix-not-passing wins even when other signals look proven
+    ok 1 - fix must pass before any other check is meaningful
+    1..1
+ok 6 - classifyProof: gate order — fix-not-passing wins even when other signals look proven # time=0.311ms
+
+# Subtest: prove retains classification and refuses locked cleanup after fix exit 0
+    not ok 1 - cleanup uncertainty cannot be a successful proof  true !== false
+      ---
+      stack: |
+        Test.<anonymous> (test/scripts/dt-prove.test.js:234:14)
+      at:
+        fileName: test/scripts/dt-prove.test.js
+        lineNumber: 234
+        columnNumber: 14
+        typeName: Test
+        methodName: <anonymous>
+        functionName: Test.<anonymous>
+      type: AssertionError
+      generatedMessage: false
+      code: ERR_ASSERTION
+      actual: true
+      expected: false
+      operator: strictEqual
+      diff: simple
+      tapCaught: testFunctionThrow
+      source: >2
+              ], 'the three real executions observe fixed, reverted and restored source bytes');
+              assert.deepEqual(result.revertRunFailureLines, ['not ok finite source is broken']);
+              assert.equal(result.ok, false, 'cleanup uncertainty cannot be a successful proof');
+        -------------^
+              const classification = classifyProof({...runs, srcChanged: true});
+              assert.deepEqual(result.proof, classification, 'the original classification remains visible');
+      ...
+    
+    1..1
+not ok 7 - prove retains classification and refuses locked cleanup after fix exit 0 # time=211.55ms
+  ---
+  at:
+    fileName: test/scripts/dt-prove.test.js
+    lineNumber: 221
+    columnNumber: 3
+    isToplevel: true
+  source: >
+  
+    for (const fixedStatus of [GREEN, 23]) {
+      test(`prove retains classification and refuses locked cleanup after fix exit ${fixedStatus}`,
+    --^
+        (t) => {
+          const observed = observedProof(t, {fixedStatus});
+  ...
+
+# Subtest: prove retains classification and refuses locked cleanup after fix exit 23
+    not ok 1 - the original classification remains visible + actual - expected  + undefined - { -   detail: 'test does not pass WITH the fix; nothing to prove', -   ok: false, -   verdict: 'fix-not-passing' - }
+      ---
+      stack: |
+        Test.<anonymous> (test/scripts/dt-prove.test.js:236:14)
+      at:
+        fileName: test/scripts/dt-prove.test.js
+        lineNumber: 236
+        columnNumber: 14
+        typeName: Test
+        methodName: <anonymous>
+        functionName: Test.<anonymous>
+      type: AssertionError
+      generatedMessage: false
+      code: ERR_ASSERTION
+      expected:
+        verdict: fix-not-passing
+        ok: false
+        detail: test does not pass WITH the fix; nothing to prove
+      operator: deepStrictEqual
+      diff: simple
+      tapCaught: testFunctionThrow
+      source: >2
+              assert.equal(result.ok, false, 'cleanup uncertainty cannot be a successful proof');
+              const classification = classifyProof({...runs, srcChanged: true});
+              assert.deepEqual(result.proof, classification, 'the original classification remains visible');
+        -------------^
+              assert.equal(result.verdict, fixedStatus === GREEN ? 'cleanup-unavailable' :
+                classification.verdict);
+      ...
+    
+    1..1
+not ok 8 - prove retains classification and refuses locked cleanup after fix exit 23 # time=202.654ms
+  ---
+  at:
+    fileName: test/scripts/dt-prove.test.js
+    lineNumber: 221
+    columnNumber: 3
+    isToplevel: true
+  source: >
+  
+    for (const fixedStatus of [GREEN, 23]) {
+      test(`prove retains classification and refuses locked cleanup after fix exit ${fixedStatus}`,
+    --^
+        (t) => {
+          const observed = observedProof(t, {fixedStatus});
+  ...
+
+# Subtest: prove keeps the actual EISDIR primary when locked snapshot cleanup also refuses
+    not ok 1 - cleanup refusal preserves the original snapshot
+      ---
+      stack: |
+        assertOriginalRetained (test/scripts/dt-prove.test.js:212:10)
+        Test.<anonymous> (test/scripts/dt-prove.test.js:257:3)
+      at:
+        fileName: test/scripts/dt-prove.test.js
+        lineNumber: 212
+        columnNumber: 10
+        functionName: assertOriginalRetained
+      type: AssertionError
+      generatedMessage: false
+      code: ERR_ASSERTION
+      actual: false
+      expected: true
+      operator: ==
+      diff: simple
+      tapCaught: testFunctionThrow
+      source: >
+      
+        function assertOriginalRetained(observed) {
+          assert.ok(fs.existsSync(observed.checkout), 'cleanup refusal preserves the original snapshot');
+        ---------^
+          assert.equal(fs.readFileSync(path.join(observed.checkout, ORIGINAL_ARTIFACT), 'utf8'),
+            ORIGINAL_BYTES);
+      ...
+    
+    1..1
+not ok 9 - prove keeps the actual EISDIR primary when locked snapshot cleanup also refuses # time=121.612ms
+  ---
+  at:
+    fileName: test/scripts/dt-prove.test.js
+    lineNumber: 249
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    }
+  
+  
+    test('prove keeps the actual EISDIR primary when locked snapshot cleanup also
+    refuses', (t) => {
+  
+    ^
+      const observed = observedProof(t, {makeDirectory: true});
+      assert.deepEqual(observed.runs.map(({status}) => status), [GREEN],
+  ...
+
+1..9
+# { total: 14, pass: 11, fail: 3 }
+# time=561.703ms
+not ok test/scripts/proof-checkout-preparation.test.js (20 assertions, 19194ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: the gated command starts in a checkout that already has the import graph
+ok 1 - the gated command starts in a checkout that already has the import graph
+  ---
+  duration_ms: 147.500012
+  type: 'test'
+  ...
+# Subtest: a producer that fails refuses the gate before the command runs
+ok 2 - a producer that fails refuses the gate before the command runs
+  ---
+  duration_ms: 103.852241
+  type: 'test'
+  ...
+# Subtest: a producer that rewrites tracked metadata refuses the gate before the command runs
+ok 3 - a producer that rewrites tracked metadata refuses the gate before the command runs
+  ---
+  duration_ms: 122.226951
+  type: 'test'
+  ...
+# Subtest: a producer killed by a signal is named as killed
+ok 4 - a producer killed by a signal is named as killed
+  ---
+  duration_ms: 101.50982
+  type: 'test'
+  ...
+# Subtest: a commit without the required producer refuses before admitting the gate
+not ok 5 - a commit without the required producer refuses before admitting the gate
+  ---
+  duration_ms: 108.829864
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/8ada5c95-c453-473f-ae9a-237a1e41f44d/work/source/test/scripts/proof-checkout-preparation.test.js:111:1'
+  failureType: 'testCodeFailure'
+  error: 'a declared producer is required for exact-checkout preparation'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 0
+  operator: 'notStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/8ada5c95-c453-473f-ae9a-237a1e41f44d/work/source/test/scripts/proof-checkout-preparation.test.js:114:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: the real corpus command boundary retains signalled=false execution
+ok 6 - the real corpus command boundary retains signalled=false execution
+  ---
+  duration_ms: 162.803652
+  type: 'test'
+  ...
+# Subtest: the real corpus command boundary retains signalled=true execution
+ok 7 - the real corpus command boundary retains signalled=true execution
+  ---
+  duration_ms: 173.910776
+  type: 'test'
+  ...
+# Subtest: a materialized gate keeps its original failure and checkout when retention fails
+ok 8 - a materialized gate keeps its original failure and checkout when retention fails
+  ---
+  duration_ms: 156.425536
+  type: 'test'
+  ...
+# Subtest: the exact materializer preserves ordinary child exit 0
+ok 9 - the exact materializer preserves ordinary child exit 0
+  ---
+  duration_ms: 156.321315
+  type: 'test'
+  ...
+# Subtest: the exact materializer preserves ordinary child exit 42
+ok 10 - the exact materializer preserves ordinary child exit 42
+  ---
+  duration_ms: 167.216174
+  type: 'test'
+  ...
+# Subtest: the exact materializer owns live gate cancellation by SIGINT
+not ok 11 - the exact materializer owns live gate cancellation by SIGINT
+  ---
+  duration_ms: 1566.233418
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/8ada5c95-c453-473f-ae9a-237a1e41f44d/work/source/test/scripts/proof-checkout-preparation.test.js:398:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    interruption remains primary when the finite child would otherwise exit zero
+    
+    0 !== 130
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 130
+  actual: 0
+  operator: 'strictEqual'
+  stack: |-
+    interruptFiniteGate (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/8ada5c95-c453-473f-ae9a-237a1e41f44d/work/source/test/scripts/proof-checkout-preparation.test.js:376:10)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/8ada5c95-c453-473f-ae9a-237a1e41f44d/work/source/test/scripts/proof-checkout-preparation.test.js:400:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: the exact materializer owns live gate cancellation by SIGTERM
+not ok 12 - the exact materializer owns live gate cancellation by SIGTERM
+  ---
+  duration_ms: 1553.062401
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/8ada5c95-c453-473f-ae9a-237a1e41f44d/work/source/test/scripts/proof-checkout-preparation.test.js:398:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    interruption remains primary when the finite child would otherwise exit zero
+    
+    0 !== 143
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 143
+  actual: 0
+  operator: 'strictEqual'
+  stack: |-
+    interruptFiniteGate (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/8ada5c95-c453-473f-ae9a-237a1e41f44d/work/source/test/scripts/proof-checkout-preparation.test.js:376:10)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/8ada5c95-c453-473f-ae9a-237a1e41f44d/work/source/test/scripts/proof-checkout-preparation.test.js:400:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: the exact materializer owns live gate cancellation by SIGHUP
+not ok 13 - the exact materializer owns live gate cancellation by SIGHUP
+  ---
+  duration_ms: 1559.859745
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/8ada5c95-c453-473f-ae9a-237a1e41f44d/work/source/test/scripts/proof-checkout-preparation.test.js:398:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    interruption remains primary when the finite child would otherwise exit zero
+    
+    0 !== 129
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 129
+  actual: 0
+  operator: 'strictEqual'
+  stack: |-
+    interruptFiniteGate (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/8ada5c95-c453-473f-ae9a-237a1e41f44d/work/source/test/scripts/proof-checkout-preparation.test.js:376:10)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/8ada5c95-c453-473f-ae9a-237a1e41f44d/work/source/test/scripts/proof-checkout-preparation.test.js:400:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: materializer cancellation during preparation never admits the later gate
+not ok 14 - materializer cancellation during preparation never admits the later gate
+  ---
+  duration_ms: 1572.010741
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/8ada5c95-c453-473f-ae9a-237a1e41f44d/work/source/test/scripts/proof-checkout-preparation.test.js:407:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    interruption remains primary when the finite child would otherwise exit zero
+    
+    0 !== 143
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 143
+  actual: 0
+  operator: 'strictEqual'
+  stack: |-
+    interruptFiniteGate (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/8ada5c95-c453-473f-ae9a-237a1e41f44d/work/source/test/scripts/proof-checkout-preparation.test.js:376:10)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/8ada5c95-c453-473f-ae9a-237a1e41f44d/work/source/test/scripts/proof-checkout-preparation.test.js:409:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: the materializer bounds a child scope that acknowledges but ignores SIGTERM
+not ok 15 - the materializer bounds a child scope that acknowledges but ignores SIGTERM
+  ---
+  duration_ms: 9176.760943
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/8ada5c95-c453-473f-ae9a-237a1e41f44d/work/source/test/scripts/proof-checkout-preparation.test.js:414:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    interruption remains primary when the finite child would otherwise exit zero
+    
+    0 !== 143
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 143
+  actual: 0
+  operator: 'strictEqual'
+  stack: |-
+    interruptFiniteGate (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/8ada5c95-c453-473f-ae9a-237a1e41f44d/work/source/test/scripts/proof-checkout-preparation.test.js:376:10)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/8ada5c95-c453-473f-ae9a-237a1e41f44d/work/source/test/scripts/proof-checkout-preparation.test.js:416:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: interrupted materializer retention failure keeps the original checkout
+not ok 16 - interrupted materializer retention failure keeps the original checkout
+  ---
+  duration_ms: 1574.730766
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/8ada5c95-c453-473f-ae9a-237a1e41f44d/work/source/test/scripts/proof-checkout-preparation.test.js:427:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    interruption remains primary when the finite child would otherwise exit zero
+    
+    0 !== 143
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 143
+  actual: 0
+  operator: 'strictEqual'
+  stack: |-
+    interruptFiniteGate (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/8ada5c95-c453-473f-ae9a-237a1e41f44d/work/source/test/scripts/proof-checkout-preparation.test.js:376:10)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/8ada5c95-c453-473f-ae9a-237a1e41f44d/work/source/test/scripts/proof-checkout-preparation.test.js:429:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: a locked gate checkout preserves child exit 0 and cleanup uncertainty
+not ok 17 - a locked gate checkout preserves child exit 0 and cleanup uncertainty
+  ---
+  duration_ms: 166.409907
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/8ada5c95-c453-473f-ae9a-237a1e41f44d/work/source/test/scripts/proof-checkout-preparation.test.js:442:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    cleanup refusal cannot be green or replace an earlier gate failure
+    
+    0 !== 1
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 1
+  actual: 0
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/8ada5c95-c453-473f-ae9a-237a1e41f44d/work/source/test/scripts/proof-checkout-preparation.test.js:462:12)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: a locked gate checkout preserves child exit 42 and cleanup uncertainty
+not ok 18 - a locked gate checkout preserves child exit 42 and cleanup uncertainty
+  ---
+  duration_ms: 158.00246
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/8ada5c95-c453-473f-ae9a-237a1e41f44d/work/source/test/scripts/proof-checkout-preparation.test.js:442:3'
+  failureType: 'testCodeFailure'
+  error: 'failed Git removal must preserve the original checkout'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/8ada5c95-c453-473f-ae9a-237a1e41f44d/work/source/test/scripts/proof-checkout-preparation.test.js:466:12)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: the exact gate provides complete synchronous stdin with supplied=false
+ok 19 - the exact gate provides complete synchronous stdin with supplied=false
+  ---
+  duration_ms: 137.806947
+  type: 'test'
+  ...
+# Subtest: the exact gate provides complete synchronous stdin with supplied=true
+ok 20 - the exact gate provides complete synchronous stdin with supplied=true
+  ---
+  duration_ms: 145.07186
+  type: 'test'
+  ...
+1..20
+# tests 20
+# suites 0
+# pass 11
+# fail 9
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 19019.828204
+# time=19194ms
+# test-files total=2 pass=0 fail=2 assertions=43
+ORIGINAL_DIAGNOSTIC_TEST_EXIT=1
+ORIGINAL_DIAGNOSTIC_FINAL_GUARD_EXIT=0

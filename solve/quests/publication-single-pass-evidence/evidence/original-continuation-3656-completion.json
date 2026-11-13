@@ -1,0 +1,62 @@
+{
+  "schema": "lagrange-lab-result/v1",
+  "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+  "request_id": "8ada5c95c453473fae9a237a1e41f44d",
+  "request_sha256": "ad680f07e95cc75aa7aabb20b88f005907e371ffe373adc7ea856b815caea0b7",
+  "status": "COMPLETE",
+  "recorded_at": "2026-11-13T08:02:37.017Z",
+  "result": {
+    "execution_scope_closed": true,
+    "exit_code": 1,
+    "finished_at": "2026-11-13T08:02:36.509Z",
+    "hosts": [
+      "tv-dator"
+    ],
+    "log_bytes": 8204,
+    "log_sha256": "bc8db8fcb332261a16bcc69b9991b56cc03ab3b1871959036d2874c729fe364f",
+    "logical_request_id": "8ada5c95-c453-473f-ae9a-237a1e41f44d",
+    "logs_are_worker_tails": true,
+    "operation": "lab-work",
+    "outcome": "FAIL",
+    "payload_sha256": "119fe867e2bb66ded86f2850c631b2a6b2c2ade656dc6269825f5a3297358782",
+    "reason": null,
+    "scope_closed": true,
+    "source_execution_started": true,
+    "source_sha": "aabc29b487375b76dc0f3b7519ce2c8502d0020b",
+    "worker_receipt_count": 1,
+    "worker_receipts_sha256": "0cb53e064661e9ec5debb7ca20ca4367ec37142036a80973ce5cdb8e79efa3ee",
+    "workers": {
+      "tv-dator": {
+        "containers_closed": true,
+        "driver_result": {
+          "counters": {
+            "cancelled": 0,
+            "fail": 9,
+            "pass": 11,
+            "skipped": 0,
+            "tests": 20,
+            "todo": 0
+          },
+          "exit_code": 1
+        },
+        "execution_scope_closed": true,
+        "exit_code": 1,
+        "last_thermals": {
+          "cpu": 49,
+          "missing": [],
+          "ssd": 32.85,
+          "ssd_aux": 50.85
+        },
+        "log_bytes": 22191,
+        "log_sha256": "81563c07f90483599edd60b5d153213b616bfb7ffca133fc6ef91a37d8308648",
+        "log_truncated": false,
+        "output_bytes": 22191,
+        "output_sha256": "81563c07f90483599edd60b5d153213b616bfb7ffca133fc6ef91a37d8308648",
+        "reason": null,
+        "source_execution_started": true,
+        "state": "COMPLETE",
+        "thermal_scope_closed": true
+      }
+    }
+  }
+}

@@ -1,0 +1,9 @@
+LAB_HOST=local-workstation
+v22.23.2
+aabc29b487375b76dc0f3b7519ce2c8502d0020b
+9ae3ed4e00355d4d8acc645dd378e9a08d2e6bc4
+bc9e83a24cee235aa7fd33ff9777dc97d229903c
+NATIVE_ROUTE_SCOPE=one ordinary fleet observation from the existing normal inventory, restricted to its exact tv-dator and adams-gamla records plus this physical controller; no tests, provisioning, credential search or proof claim
+NATIVE_ROUTE_UNAVAILABLE={"stage":"normal-inventory","name":"tv-dator","reason":"exact existing named record, SSH target or explicit repository path is unavailable"}
+NATIVE_ROUTE_INVENTORY_EXIT=95
+NATIVE_ROUTE_FINAL_GUARD_EXIT=0
