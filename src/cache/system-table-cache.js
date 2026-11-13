@@ -1,6 +1,4 @@
-import {
-  formationCdcEvent, formationCdcRow, observeFormationCdc,
-} from '../cdc/formation-cdc-observation.js';
+import {formationCdcRow, observeFormationCache} from '../cdc/formation-cdc-observation.js';
 /**
  * System Table Cache - In-memory cache for system tables.
  * Maintains cached copies of system tables (nodes, partitions, tables,
@@ -296,10 +294,8 @@ class SystemTableCache {
 
     const table = this.tables.get(tableName);
     const diagnosticBefore = formationCdcRow(table.get(key));
-    observeFormationCdc(this.logger, 'cache-entry', tableName, {
-      ...formationCdcEvent({...options, data, operation}), key, mutationMode,
-      before: diagnosticBefore,
-    });
+    observeFormationCache(this, 'cache-entry', tableName, key, {...options, data, operation},
+      {mutationMode, before: diagnosticBefore});
     const authoritativeAbsence = mutationMode ===
       SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_ABSENCE_RECONCILIATION;
     const completeAuthoritativePresence = mutationMode ===
@@ -324,9 +320,7 @@ class SystemTableCache {
         options?.authoritativeReadStartedAtMs,
       readAuthorityWitness: options?.readAuthorityWitness,
     })) {
-      observeFormationCdc(this.logger, 'cache-fenced', tableName, {
-        key, mutationMode, before: diagnosticBefore,
-      });
+      observeFormationCache(this, 'cache-fenced', tableName, key, null, {mutationMode});
       this.logger.debug(CACHE_LOG_MSG.WRITE_FENCED_BY_TOMBSTONE, {
         tableName,
         key,
@@ -567,11 +561,9 @@ class SystemTableCache {
         appliedChangeMetadata,
       );
     }
-    observeFormationCdc(this.logger, 'cache-return', tableName, {
-      ...formationCdcEvent({...options, data, operation}), key, mutationMode,
-      before: diagnosticBefore, after: formationCdcRow(table.get(key)),
-      incomingVersionAccepted, changed: Boolean(recordForNotification),
-      tableMutationRevision,
+    observeFormationCache(this, 'cache-return', tableName, key, {...options, data, operation}, {
+      mutationMode, before: diagnosticBefore, after: formationCdcRow(table.get(key)),
+      incomingVersionAccepted, changed: Boolean(recordForNotification), tableMutationRevision,
     });
     return incomingVersionAccepted;
   }

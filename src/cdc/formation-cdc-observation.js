@@ -61,6 +61,41 @@ function formationCdcRead(readResult) {
   };
 }
 
+function observeFormationCdcDrive(owner, event, obligation, subscriberCount) {
+  return observeFormationCdc(owner.logger, 'source-drive', event.tableName, {
+    ...formationCdcEvent(event), obligationLogIndex: obligation.logIndex,
+    obligationOrdinal: obligation.ordinal, subscriberCount,
+    ownerPartition: owner.partitionId, ownerReplica: owner.replicaId,
+  });
+}
+
+function observeFormationCdcAnswer(owner, event, branch, subscriberOrdinal) {
+  return observeFormationCdc(owner.logger, 'subscriber-answer', event.tableName, {
+    ...formationCdcEvent(event), coverageState: branch.coverage.state,
+    subscriberOrdinal, subscriptionEpoch: branch.epoch ?? null,
+  });
+}
+
+function observeFormationCdcHeld(owner, obligation, error) {
+  try {
+    const event = JSON.parse(obligation.eventJson);
+    return observeFormationCdc(owner.logger, 'source-held', event.tableName, {
+      ...formationCdcEvent(event), obligationLogIndex: obligation.logIndex,
+      obligationOrdinal: obligation.ordinal, errorCode: error?.code ?? null,
+    });
+  } catch {
+    return 'sink-unavailable';
+  }
+}
+
+function observeFormationCache(cache, stage, tableName, key, event, details) {
+  return observeFormationCdc(cache.logger, stage, tableName, {
+    ...(event === null ? {} : formationCdcEvent(event)), key, ...details,
+  });
+}
+
 export {
   formationCdcEvent, formationCdcRead, formationCdcRow, observeFormationCdc,
+  observeFormationCdcDrive, observeFormationCdcAnswer, observeFormationCdcHeld,
+  observeFormationCache,
 };

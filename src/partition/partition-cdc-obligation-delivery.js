@@ -1,5 +1,5 @@
 import {
-  formationCdcEvent, observeFormationCdc,
+  observeFormationCdcDrive, observeFormationCdcAnswer, observeFormationCdcHeld,
 } from '../cdc/formation-cdc-observation.js';
 import {driveOutcome, flushOutcome, createCdcObligationLane, laneOf, laneIsCurrent, clearTimer, resetCdcObligationLane,
   takeBatch, groupsOfMembers, keysOf, restoreBatch, addToBatch, batchExceedsBoundsForEvent,
@@ -369,11 +369,7 @@ function wakeContendedLaneForSliceTurn(delivery, lane) {
 async function deliverObligation(delivery, lane, obligation, subscribers, context) {
   const {owner} = delivery;
   const event = eventOf(obligation, delivery.nextCDCEventSequenceNumber());
-  observeFormationCdc(owner.logger, 'source-drive', event.tableName, {
-    ...formationCdcEvent(event), obligationLogIndex: obligation.logIndex,
-    obligationOrdinal: obligation.ordinal, subscriberCount: subscribers.length,
-    ownerPartition: owner.partitionId, ownerReplica: owner.replicaId,
-  });
+  observeFormationCdcDrive(owner, event, obligation, subscribers.length);
   const cell = prepareCdcObligationProgress(delivery, lane, event, subscribers);
   const hintState = {retryAfterMs: null, backpressured: false};
   for (let visited = 0; visited < subscribers.length; visited += 1) {
@@ -382,22 +378,10 @@ async function deliverObligation(delivery, lane, obligation, subscribers, contex
       () => wakeContendedLaneForSliceTurn(delivery, lane));
     scoped.assertCurrent();
     if (branch.coverage.state !== CDC_COVERAGE_STATE.UNCOVERED) continue;
-    let answer;
-    try {
-      answer = await delivery.deliverCDCEventToSubscriber(branch.wrapper, event, scoped);
-    } catch (error) {
-      observeFormationCdc(owner.logger, 'subscriber-error', event.tableName, {
-        ...formationCdcEvent(event), subscriberOrdinal: visited,
-        errorCode: error?.code ?? null,
-      });
-      throw error;
-    }
+    const answer = await delivery.deliverCDCEventToSubscriber(branch.wrapper, event, scoped);
     scoped.assertCurrent();
     observeCdcSubscriber(branch, answer, event);
-    observeFormationCdc(owner.logger, 'subscriber-answer', event.tableName, {
-      ...formationCdcEvent(event), coverageState: branch.coverage.state,
-      subscriberOrdinal: visited, subscriptionEpoch: branch.epoch ?? null,
-    });
+    observeFormationCdcAnswer(owner, event, branch, visited);
     if (branch.coverage.state === CDC_COVERAGE_STATE.UNCOVERED) {
       recordUncoveredSubscriberHint(hintState, answer);
     }
@@ -463,6 +447,7 @@ function handleDeliveryFailure(delivery, lane, obligation, reason, delivered, er
     return driveOutcome(lane, DRIVE.NOT_LEADER, {reason, delivered});
   }
   const {owner} = delivery;
+  observeFormationCdcHeld(owner, obligation, error);
   owner.cdcPipelineMetrics.increment(CDC_PIPELINE_METRIC.DELIVERY_FAILURES);
   const retryDelayMs = scheduleDeliveryRetry(delivery, error);
   const logDetails = {

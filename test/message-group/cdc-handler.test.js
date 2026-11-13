@@ -653,7 +653,9 @@ test('diagnostic sink failure preserves handler return and original error', (t) 
   const handler = new CDCHandler(cache);
   handler.logger = {
     debug() {}, error() {}, warn() {},
-    logConsoleOnly() { throw new Error('diagnostic sink unavailable'); },
+    logConsoleOnly() {
+      throw new Error('diagnostic sink unavailable');
+    },
   };
   handler.subscribe('services');
   t.equal(handler.applyImmediate(event), true);
