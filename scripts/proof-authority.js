@@ -37,7 +37,8 @@ import {ACTION, authorizeAction, isAuthorized} from './action-authority.js';
 import {
   CONTRACTS, EMPTY_TEXT, IDENTITY_REF_SEGMENT, OBJECT_TYPE_COMMIT, OUTCOME,
   PARSE_KIND_ABSENT, PARSE_KIND_PRESENT, PROOF, RECEIPT_IDENTITY_MISMATCH,
-  RECEIPT_OUTCOME_PASSED, RECEIPT_REF_ROOT, RECEIPT_SCHEMA, RESOLUTION, REUSE,
+  RECEIPT_OUTCOME_PASSED, RECEIPT_PROBLEM_SEPARATOR, RECEIPT_REF_ROOT, RECEIPT_SCHEMA,
+  RESOLUTION, REUSE,
   contractFor, evaluateReceipt, identityRef, parseLsRemote, proofRef, receiptTagName,
   registeredProofs, text, validSha,
 } from './proof-receipt-contract.js';

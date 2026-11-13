@@ -16,8 +16,12 @@ import {
 } from './test-execution-report.js';
 import {checkedGit, git, removePublishCheckout} from './publish-command-runner.js';
 import {
+  LOCAL_CORPUS_STATE, LOCAL_CORPUS_TRANSITION, createLocalCorpusState,
+  readLocalCorpusRecords, transitionLocalCorpusState,
+} from './publish-local-corpus-state.js';
+import {
   CORPUS_PROOF_ID, DETACH_ARGUMENT, FETCH_COMMAND, FIELD_FULL_CORPUS, FIELD_SHA,
-  FILE_ALREADY_EXISTS, FILE_NOT_FOUND, INHERIT_STDIO, MAIN_BRANCH, NEWLINE, ORIGIN_REMOTE,
+  INHERIT_STDIO, MAIN_BRANCH, NEWLINE, ORIGIN_REMOTE,
   PROOF_AUTHORITY_SCRIPT, PROOF_RECORD_COMMAND, PROOF_REPORT_FLAG,
   PUBLISH_ACQUISITION_UNAVAILABLE, PUBLISH_WORKTREE_PARENT, PUBLISH_WORKTREE_PREFIX,
   QUIET_ARGUMENT, RECEIPT_NO_REASON, RECORD_TIMEOUT_MS, REV_PARSE_COMMAND, UTF8,
@@ -43,9 +47,6 @@ const LOCAL_CORPUS_ARGUMENT = '--local-corpus';
 const LOCAL_CORPUS_DIRECTORY = 'lagrange-local-corpus';
 const LOCAL_CORPUS_COMMON_DIR = Object.freeze(['rev-parse', '--git-common-dir']);
 const LOCAL_CORPUS_GIT_DIR_NAME = '.git';
-const LOCAL_CORPUS_STATE = Object.freeze({
-  STARTING: 'starting', RUNNING: 'running', GREEN: 'green', RED: 'red', LOST: 'lost',
-});
 const LOCAL_CORPUS_RUNNER = 'scripts/run-classified-test-files.js';
 const LOCAL_CORPUS_GATE = 'scripts/checks/push-gate-corpus-worktree.js';
 const LOCAL_CORPUS_GATE_FLAG = '--gate';
@@ -64,13 +65,20 @@ const LOCAL_CORPUS_RUN_SCRIPT =
 const LOCAL_CORPUS_FIELD_TESTS = 'testPaths';
 const LOCAL_CORPUS_SUFFIX = Object.freeze({STATE: '.json', LOG: '.log', FILES: '.files',
   CONE_REPORT: '.cone-report.json', SECTIONS: '.sections.ndjson', REPORT: '.report.json'});
-const LOCAL_CORPUS_STATE_NAME = /^[0-9a-f]{40}\.json$/u;
 const LOCAL_CORPUS_REPORT = Object.freeze({
   PRODUCER_KIND: 'local-corpus', PRODUCER_ID_PREFIX: 'pid-', LABEL: 'local-corpus',
   TREE_SUFFIX: '^{tree}',
 });
 const LOCAL_CORPUS_PROC = Object.freeze({DIRECTORY: '/proc', COMMAND: 'cmdline'});
-const LOCAL_CORPUS_PS = Object.freeze(['ps', '-o', 'command=', '-p']);
+const LOCAL_CORPUS_PLATFORM = Object.freeze({LINUX: 'linux', DARWIN: 'darwin'});
+const LOCAL_CORPUS_OBSERVATION = Object.freeze({
+  PRESENT: 'PRESENT', ABSENT: 'ABSENT', UNAVAILABLE: 'UNAVAILABLE',
+});
+const LOCAL_CORPUS_PROCESS_MISSING = 'ESRCH';
+const LOCAL_CORPUS_PS = Object.freeze(['/bin/ps', '-ww', '-o', 'command=', '-p']);
+const LOCAL_CORPUS_PS_TIMEOUT_MS = 5000;
+const LOCAL_CORPUS_PS_MAX_BYTES = 1048576;
+const LOCAL_CORPUS_PS_KILL_SIGNAL = 'SIGKILL';
 const LOCAL_CORPUS_OWED = Object.freeze({
   REST: 'the rest of the corpus',
   NOTHING: 'nothing: the gate proved the whole corpus',
@@ -86,7 +94,7 @@ const LOCAL_CORPUS_TEXT = Object.freeze({
   FILES: ' file(s), log ',
   RED_BANNER: 'publish: !!! the local corpus was RED for ',
   LOST_BANNER: 'publish: !!! the local corpus was LOST for ',
-  LOST: 'its process ended without a verdict',
+  LOST: 'its process ended without a committed terminal state',
   HOT: 'the machine stayed too hot to run it (thermal-headroom-exhausted)',
   EXECUTION_LOST: 'gate execution unavailable: ',
   STORAGE_UNAVAILABLE: 'publish: local corpus evidence storage unavailable for ',
@@ -98,7 +106,12 @@ const LOCAL_CORPUS_TEXT = Object.freeze({
   RECORDED: 'publish: local corpus already recorded for ',
   NOT_STARTING: 'publish: local corpus has no starting obligation for ',
   STATE_CHANGED: 'publish: local corpus state changed during execution for ',
-  INVALID_RECORD: 'publish: invalid local corpus record ',
+  OBSERVATION_UNAVAILABLE: 'publish: local corpus observation UNAVAILABLE for ',
+  INVALID_PID: 'invalid recorded process id',
+  UNSUPPORTED_OBSERVER: 'unsupported process observer: ',
+  COMMAND_UNAVAILABLE: 'process command observation unavailable: ',
+  COMMAND_INCOMPLETE: 'process command observation is empty or incomplete',
+  NOT_LOCAL_PROCESS: 'its recorded pid no longer identifies a local corpus',
 });
 
 // Where the local corpus keeps its records (the git common dir, shared by
@@ -112,41 +125,29 @@ function localCorpusPlaces(root) {
   };
 }
 
-// Every record in the directory, newest first. An absent directory holds no
-// records; unreadable or malformed evidence is not permission to replace it.
-function readLocalCorpusRecords(recordDir) {
-  let names = [];
+function advanceLocalCorpusState(stateDir, before, after) {
+  let result;
   try {
-    names = fs.readdirSync(recordDir);
+    result = transitionLocalCorpusState(stateDir, before, after);
   } catch (error) {
-    if (error.code !== FILE_NOT_FOUND) throw error;
+    error.proposedState = after;
+    throw error;
   }
-  const records = [];
-  for (const name of names) {
-    if (!LOCAL_CORPUS_STATE_NAME.test(name)) continue;
-    const file = path.join(recordDir, name);
-    const record = JSON.parse(fs.readFileSync(file, UTF8));
-    if (!record || typeof record !== 'object' || Array.isArray(record) ||
-        record.sha + LOCAL_CORPUS_SUFFIX.STATE !== name || typeof record.state !== 'string') {
-      throw new Error(LOCAL_CORPUS_TEXT.INVALID_RECORD + file);
-    }
-    records.push(record);
+  if (result.outcome !== LOCAL_CORPUS_TRANSITION.APPLIED) {
+    const error = new Error(LOCAL_CORPUS_TEXT.STATE_CHANGED + before.sha +
+      `; retained proposal ${result.proposalPath}`);
+    Object.assign(error, result);
+    throw error;
   }
-  return records.sort((left, right) => (right.startedAt || 0) - (left.startedAt || 0));
-}
-
-function writeLocalCorpusState(stateDir, state) {
-  fs.mkdirSync(stateDir, {recursive: true});
-  const file = path.join(stateDir, `${state.sha}${LOCAL_CORPUS_SUFFIX.STATE}`);
-  fs.writeFileSync(`${file}.tmp`, `${JSON.stringify(state)}\n`);
-  fs.renameSync(`${file}.tmp`, file);
+  return result.record;
 }
 
 // A failure to store the loss is a second failure. Keep the original
 // exception primary and leave the existing uncertain obligation in place.
-function retainLocalCorpusLoss(stateDir, state, error) {
+function retainLocalCorpusLoss(stateDir, state, error, fields) {
   try {
-    writeLocalCorpusState(stateDir, {...state, state: LOCAL_CORPUS_STATE.LOST});
+    advanceLocalCorpusState(stateDir, state,
+      {...state, ...fields, state: LOCAL_CORPUS_STATE.LOST});
   } catch (storageError) {
     process.stderr.write(`${LOCAL_CORPUS_TEXT.STORAGE_UNAVAILABLE}${state.sha}: ` +
       `${storageError.message}; original failure: ${error.message}${NEWLINE}`);
@@ -195,7 +196,6 @@ export function localCorpusPlan(checkout, head,
  */
 export function startLocalCorpus({root, stateDir, head, files, spawnProcess = spawn,
   env = process.env, now = Date.now(), coneReport = null}) {
-  fs.mkdirSync(stateDir, {recursive: true});
   const base = path.join(stateDir, head);
   if (Object.values(LOCAL_CORPUS_SUFFIX).some((suffix) => fs.existsSync(base + suffix))) {
     throw new Error(LOCAL_CORPUS_TEXT.RECORDED + head);
@@ -205,15 +205,13 @@ export function startLocalCorpus({root, stateDir, head, files, spawnProcess = sp
   const record = {sha: head, state: LOCAL_CORPUS_STATE.STARTING, pid: null,
     files: files.length, startedAt: now, log: `${base}${LOCAL_CORPUS_SUFFIX.LOG}`,
     ...(coneReport ? {coneOwed: true} : {})};
-  // Exclusive creation is the same-head acquisition point. No companion may
-  // be written until this process owns the original starting obligation.
-  try {
-    fs.writeFileSync(`${base}${LOCAL_CORPUS_SUFFIX.STATE}`, JSON.stringify(record) + NEWLINE,
-      {flag: 'wx'});
-  } catch (error) {
-    if (error.code === FILE_ALREADY_EXISTS) throw new Error(LOCAL_CORPUS_TEXT.RECORDED + head);
-    throw error;
+  // Publish the complete initial record without replacing any other claim.
+  const acquired = createLocalCorpusState(stateDir, record);
+  if (acquired.outcome !== LOCAL_CORPUS_TRANSITION.APPLIED) {
+    throw new Error(LOCAL_CORPUS_TEXT.RECORDED + head +
+      `; retained proposal ${acquired.proposalPath}`);
   }
+  const initial = acquired.record;
   let log = null;
   let child;
   try {
@@ -230,14 +228,14 @@ export function startLocalCorpus({root, stateDir, head, files, spawnProcess = sp
         cwd: root, env, detached: true, stdio: ['ignore', log, log],
       });
   } catch (error) {
-    retainLocalCorpusLoss(stateDir, {...record, reason: error.message}, error);
+    retainLocalCorpusLoss(stateDir, initial, error, {reason: error.message});
     throw error;
   } finally {
     if (log !== null) fs.closeSync(log);
   }
   // A child that could not start is lost, not an exception after the publish.
   child.on?.(LOCAL_CORPUS_ERROR_EVENT, (error) =>
-    retainLocalCorpusLoss(stateDir, {...record, reason: error.message}, error));
+    retainLocalCorpusLoss(stateDir, initial, error, {reason: error.message}));
   child.unref?.();
   return child.pid;
 }
@@ -259,10 +257,13 @@ export function runLocalCorpus(root, head, {stateDir, run = spawnSync, now = Dat
     throw new Error(LOCAL_CORPUS_TEXT.NOT_STARTING + head);
   }
   const running = {...initial, state: LOCAL_CORPUS_STATE.RUNNING, pid: process.pid};
-  writeLocalCorpusState(stateDir, running);
+  advanceLocalCorpusState(stateDir, initial, running);
   try {
     return completeLocalCorpus(root, head, {stateDir, run, now, current});
   } catch (error) {
+    // A measured result whose state publication failed is not a new execution
+    // loss. Its exact command/receipt outcome and proposal remain retained.
+    if (error.localCorpusCompletion) throw error;
     let state;
     try {
       state = current();
@@ -272,8 +273,8 @@ export function runLocalCorpus(root, head, {stateDir, run = spawnSync, now = Dat
       throw error;
     }
     if (state?.state === LOCAL_CORPUS_STATE.RUNNING && state.pid === process.pid) {
-      retainLocalCorpusLoss(stateDir, {...state,
-        reason: LOCAL_CORPUS_TEXT.EXECUTION_LOST + error.message, finishedAt: now()}, error);
+      retainLocalCorpusLoss(stateDir, state, error,
+        {reason: LOCAL_CORPUS_TEXT.EXECUTION_LOST + error.message, finishedAt: now()});
     }
     throw error;
   }
@@ -288,23 +289,41 @@ function completeLocalCorpus(root, head, {stateDir, run, now, current}) {
   const sections = openExecutionSections(`${base}${LOCAL_CORPUS_SUFFIX.SECTIONS}`);
   const gated = run(process.execPath, gateArgs,
     {cwd: root, stdio: INHERIT_STDIO, env: {...process.env, [EXECUTION_SECTIONS_ENV]: sections}});
+  const completion = {gate: commandOutcome(gated), receipt: null};
+  try {
+    return settleLocalCorpus(root, head,
+      {stateDir, run, now, current, base, sections, gated, gateArgs, completion});
+  } catch (error) {
+    error.localCorpusCompletion = completion;
+    error.message += `; retained execution outcome ${JSON.stringify(completion)}`;
+    throw error;
+  }
+}
+
+function commandOutcome(result) {
+  return {status: result?.status, signal: result?.signal, error: result?.error?.message,
+    stdout: result?.stdout, stderr: result?.stderr};
+}
+
+function settleLocalCorpus(root, head,
+  {stateDir, run, now, current, base, sections, gated, gateArgs, completion}) {
   const state = current();
   if (state?.state !== LOCAL_CORPUS_STATE.RUNNING || state.pid !== process.pid) {
     throw new Error(LOCAL_CORPUS_TEXT.STATE_CHANGED + head);
   }
   if (gated?.error || !Number.isInteger(gated?.status)) {
     const reason = gated?.error?.message || gated?.signal || LOCAL_CORPUS_TEXT.LOST;
-    writeLocalCorpusState(stateDir, {...state, state: LOCAL_CORPUS_STATE.LOST,
+    advanceLocalCorpusState(stateDir, state, {...state, state: LOCAL_CORPUS_STATE.LOST,
       reason: LOCAL_CORPUS_TEXT.EXECUTION_LOST + reason, finishedAt: now()});
     return 1;
   }
   if (gated.status === THERMAL_REFUSAL_EXIT) {
-    writeLocalCorpusState(stateDir, {...state, state: LOCAL_CORPUS_STATE.LOST,
+    advanceLocalCorpusState(stateDir, state, {...state, state: LOCAL_CORPUS_STATE.LOST,
       reason: LOCAL_CORPUS_TEXT.HOT, finishedAt: now()});
     return gated.status;
   }
   if (gated.status !== 0) {
-    writeLocalCorpusState(stateDir, {...state, state: LOCAL_CORPUS_STATE.RED,
+    advanceLocalCorpusState(stateDir, state, {...state, state: LOCAL_CORPUS_STATE.RED,
       status: gated.status, finishedAt: now()});
     return gated.status ?? 1;
   }
@@ -316,8 +335,9 @@ function completeLocalCorpus(root, head, {stateDir, run, now, current}) {
     [PROOF_AUTHORITY_SCRIPT, PROOF_RECORD_COMMAND, CORPUS_PROOF_ID, head,
       PROOF_REPORT_FLAG, report],
     {cwd: root, encoding: UTF8, timeout: RECORD_TIMEOUT_MS});
+  completion.receipt = commandOutcome(recorded);
   if (recorded?.status !== 0) {
-    writeLocalCorpusState(stateDir, {
+    advanceLocalCorpusState(stateDir, state, {
       ...state,
       state: LOCAL_CORPUS_STATE.RED,
       status: recorded?.status ?? 1,
@@ -327,7 +347,7 @@ function completeLocalCorpus(root, head, {stateDir, run, now, current}) {
     });
     return recorded?.status || 1;
   }
-  writeLocalCorpusState(stateDir, {...state, state: LOCAL_CORPUS_STATE.GREEN,
+  advanceLocalCorpusState(stateDir, state, {...state, state: LOCAL_CORPUS_STATE.GREEN,
     finishedAt: now(), receipt: CORPUS_PROOF_ID});
   return 0;
 }
@@ -382,36 +402,100 @@ function localCorpusCandidate(root, head, runs) {
     identity: null};
 }
 
-// Whether a pid is a live local corpus of ours. Fails closed: a pid it cannot
-// identify is not signalled - a reused pid leading some other group would be.
-function isLocalCorpusProcess(pid) {
+function unavailableCorpusObservation(reason) {
+  return {state: LOCAL_CORPUS_OBSERVATION.UNAVAILABLE, reason};
+}
+
+function corpusCommandObservation(command) {
+  return command.includes(LOCAL_CORPUS_ARGUMENT) ?
+    {state: LOCAL_CORPUS_OBSERVATION.PRESENT, reason: ''} :
+    {state: LOCAL_CORPUS_OBSERVATION.ABSENT, reason: LOCAL_CORPUS_TEXT.NOT_LOCAL_PROCESS};
+}
+
+// Darwin has one command observer. A failed or truncated command is not
+// evidence about the inspected process. The direct system utility has no
+// descendant workload; timeout termination does not rely on TERM handling.
+function darwinCorpusObservation(pid) {
+  let listed;
+  try {
+    listed = spawnSync(LOCAL_CORPUS_PS[0], [...LOCAL_CORPUS_PS.slice(1), String(pid)],
+      {encoding: UTF8, timeout: LOCAL_CORPUS_PS_TIMEOUT_MS,
+        maxBuffer: LOCAL_CORPUS_PS_MAX_BYTES, killSignal: LOCAL_CORPUS_PS_KILL_SIGNAL});
+  } catch (error) {
+    return unavailableCorpusObservation(LOCAL_CORPUS_TEXT.COMMAND_UNAVAILABLE + String(error));
+  }
+  if (listed.error) {
+    return unavailableCorpusObservation(LOCAL_CORPUS_TEXT.COMMAND_UNAVAILABLE +
+      String(listed.error));
+  }
+  if (listed.signal || listed.status !== 0) {
+    return unavailableCorpusObservation(LOCAL_CORPUS_TEXT.COMMAND_UNAVAILABLE +
+      JSON.stringify({status: listed.status, signal: listed.signal}));
+  }
+  if (typeof listed.stdout !== 'string' || listed.stdout.trim() === '' ||
+      !listed.stdout.endsWith(NEWLINE)) {
+    return unavailableCorpusObservation(LOCAL_CORPUS_TEXT.COMMAND_INCOMPLETE);
+  }
+  return corpusCommandObservation(listed.stdout);
+}
+
+// Select the platform's observer before touching the PID. Signal zero can
+// confirm ESRCH, but inability to inspect an existing process cannot prove it
+// died. Linux read failures never switch to Darwin's command observer.
+function observeLocalCorpusProcess(pid) {
+  const platform = process.platform;
+  if (platform !== LOCAL_CORPUS_PLATFORM.LINUX && platform !== LOCAL_CORPUS_PLATFORM.DARWIN) {
+    return unavailableCorpusObservation(LOCAL_CORPUS_TEXT.UNSUPPORTED_OBSERVER + platform);
+  }
+  if (!Number.isSafeInteger(pid) || pid <= 0) {
+    return unavailableCorpusObservation(LOCAL_CORPUS_TEXT.INVALID_PID);
+  }
   try {
     process.kill(pid, 0);
-  } catch {
-    return false;
+  } catch (error) {
+    return error.code === LOCAL_CORPUS_PROCESS_MISSING ?
+      {state: LOCAL_CORPUS_OBSERVATION.ABSENT, reason: LOCAL_CORPUS_TEXT.LOST} :
+      unavailableCorpusObservation(String(error));
   }
-  let command = '';
+  if (platform === LOCAL_CORPUS_PLATFORM.DARWIN) {
+    return darwinCorpusObservation(pid);
+  }
   try {
-    command = fs.readFileSync(path.join(LOCAL_CORPUS_PROC.DIRECTORY, String(pid),
+    const command = fs.readFileSync(path.join(LOCAL_CORPUS_PROC.DIRECTORY, String(pid),
       LOCAL_CORPUS_PROC.COMMAND), UTF8);
-  } catch {
-    const listed = spawnSync(LOCAL_CORPUS_PS[0], [...LOCAL_CORPUS_PS.slice(1), String(pid)],
-      {encoding: UTF8});
-    command = listed.status === 0 ? String(listed.stdout) : '';
+    return corpusCommandObservation(command);
+  } catch (error) {
+    return unavailableCorpusObservation(LOCAL_CORPUS_TEXT.COMMAND_UNAVAILABLE + String(error));
   }
-  return command.includes(LOCAL_CORPUS_ARGUMENT);
 }
 
 /**
- * Name every running local corpus whose process is gone lost. Signals
- * nothing: done at the start of every publish, before anything is known about
- * whether this publish will reach main.
+ * Mark confirmed absent running processes lost, and report unavailable
+ * inspection while preserving the original running record. Every invocation
+ * observes afresh; unavailability cannot permanently veto later evidence.
+ * Sends no terminating signal and never starts another attempt.
  * @param {string} stateDir
+ * @param {Function} [write]
  */
-export function reconcileLocalCorpus(stateDir) {
-  for (const state of readLocalCorpusRecords(stateDir)) {
-    if (state.state === LOCAL_CORPUS_STATE.RUNNING && !isLocalCorpusProcess(state.pid)) {
-      writeLocalCorpusState(stateDir, {...state, state: LOCAL_CORPUS_STATE.LOST});
+export function reconcileLocalCorpus(stateDir,
+  write = (line) => process.stdout.write(`${line}${NEWLINE}`)) {
+  for (const state of readLocalCorpusRecords(stateDir, {write})) {
+    if (state.state !== LOCAL_CORPUS_STATE.RUNNING) continue;
+    const observation = observeLocalCorpusProcess(state.pid);
+    if (observation.state === LOCAL_CORPUS_OBSERVATION.ABSENT) {
+      try {
+        const result = transitionLocalCorpusState(stateDir, state,
+          {...state, state: LOCAL_CORPUS_STATE.LOST, reason: observation.reason});
+        if (result.outcome === LOCAL_CORPUS_TRANSITION.CURRENT_CHANGED) {
+          write(`${LOCAL_CORPUS_TEXT.STATE_CHANGED}${state.sha}; retained proposal ` +
+            `${result.proposalPath}; winner ${result.record.state}`);
+        }
+      } catch (error) {
+        write(`${LOCAL_CORPUS_TEXT.STORAGE_UNAVAILABLE}${state.sha}: ${error.message}`);
+      }
+    } else if (observation.state === LOCAL_CORPUS_OBSERVATION.UNAVAILABLE) {
+      write(`${LOCAL_CORPUS_TEXT.OBSERVATION_UNAVAILABLE}${state.sha} ` +
+        `(pid ${state.pid}): ${observation.reason}`);
     }
   }
 }
@@ -435,7 +519,7 @@ function localCorpusLine(state) {
  * @param {Function} write
  */
 export function reportLocalCorpus(stateDir, write) {
-  const states = readLocalCorpusRecords(stateDir);
+  const states = readLocalCorpusRecords(stateDir, {write});
   for (const state of states) {
     if (state.state === LOCAL_CORPUS_STATE.RED) {
       const detail = state.receipt && state.receipt !== CORPUS_PROOF_ID ?
@@ -453,7 +537,7 @@ export function reportLocalCorpus(stateDir, write) {
 function localCorpusAfterPush(worktree, head, localCorpus) {
   const {stateDir, mainRoot, write, spawnProcess, wholeCorpus} = localCorpus;
   // Repeating a publication cannot overwrite a failed or uncertain attempt.
-  const covering = readLocalCorpusRecords(stateDir).find((record) =>
+  const covering = readLocalCorpusRecords(stateDir, {write}).find((record) =>
     record.sha === head);
   if (covering) {
     write(`${LOCAL_CORPUS_TEXT.PREFIX}${LOCAL_CORPUS_TEXT.NOT_STARTED}` +
@@ -632,8 +716,8 @@ function assertMergedHeadOwed(run, root, sha) {
 
 // A recorded attempt is never implicitly replayed. Other source identities
 // retain their own attempts; physical execution remains bounded by host locks.
-function assertLocalCorpusFree(stateDir, sha) {
-  if (readLocalCorpusRecords(stateDir).some((record) => record.sha === sha)) {
+function assertLocalCorpusFree(stateDir, sha, write) {
+  if (readLocalCorpusRecords(stateDir, {write}).some((record) => record.sha === sha)) {
     throw postMergeRefusal(POST_MERGE_REFUSAL.ALREADY_RECORDED,
       `${POST_MERGE_TEXT.ALREADY_RECORDED}${sha}`);
   }
@@ -654,9 +738,9 @@ export function proveMergedHead(root, sha, options = {}) {
   assertMergedHeadOwed(run, root, sha);
   const places = localCorpusPlaces(root);
   const stateDir = options.localCorpusDir || places.stateDir;
-  reconcileLocalCorpus(stateDir);
+  reconcileLocalCorpus(stateDir, write);
   reportLocalCorpus(stateDir, write);
-  assertLocalCorpusFree(stateDir, sha);
+  assertLocalCorpusFree(stateDir, sha, write);
   const files = mergedHeadCorpus(root, sha, options.wholeCorpus || wholeCorpusFiles);
   const pid = startLocalCorpus({root: places.mainRoot, stateDir, head: sha, files,
     spawnProcess: options.spawnProcess || spawn});

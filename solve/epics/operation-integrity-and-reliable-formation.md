@@ -108,28 +108,44 @@ Recovery retains obligations and progresses; startup and shutdown own their
 resources. The authoring and proof workflow must catch invented contracts and
 invalid evidence before integration.
 
-## Current integration summary (13 November 2026, stopped for handover)
+## Current integration summary (13 November 2026, resumed takeover)
 
-- **Governing rules and source:** rule-set revision 5, with fresh main
-  `348796bca4b896b123def681b18941490de4d393` reconciled into the reviewed
-  foundation checkpoint `43e217c014017831cd3485b2e3c117451560a29e`. Frozen local
-  implementation `f99088dcc589b8c3fc74c4f53815ab8443a6d5c5` includes the reviewed
-  receipt-envelope correction. The reviewed process-observation correction is
-  separately frozen at `07d915e3d040ae21936366dd28508f5bec15ca64`. Neither repair
-  has physical candidate proof; the combined repair tree has not been composed.
-- **Integration responsibility:** the owner requested a careful stop. All
-  writers are frozen. No new source-executing workload was admitted during this
-  takeover, and no evidence request is pending. One coordinator owns only the
-  final WIP preservation. The exact source mappings, review limits and next
-  owner actions are in the [dated takeover handover](../../docs/development/handover-2026-11-13-foundation-takeover.md).
-- **Active foundation blockers:** original jobs 3686/3687 are closed failures;
-  only 48,000/40,000 bytes of their 306,993/264,616-byte streams are retained.
-  Newly authored original controls at remote `56d12341a67d8680b16f8f06847a2499f73b24f6`
-  have not been submitted. A separate pre-existing stale-RUNNING snapshot can
-  potentially overwrite a concurrent terminal result with LOST; it remains an
-  unmeasured, unfixed publication/state-custody finding. Canonical generation,
-  static/focused/full physical proof, Solver land and final-HEAD publication
-  remain owed by the existing foundation/publication Quests.
+- **Governing rules and source:** rule-set revision 5. Native fetch confirmed
+  main `348796bca4b896b123def681b18941490de4d393` and preserved foundation
+  `2848e2fc5aa6b8d7fbbcad0210f27fbcfb35a7f1`, tree
+  `66e2d1775c6d093477a23cd9702d9c8b5c718240`. The isolated continuation composes
+  the receipt correction with the three exact process blobs from
+  `e85f4520389853cff58bed7169279133ef4960ef`, retaining newer runbook guidance.
+  Independent source review approves that composition for WIP preservation;
+  no repaired candidate has physical proof or acceptance.
+- **Integration responsibility:** the owner resumed work. Agent `/root` is
+  the sole external coordinator; independent agents investigate state custody,
+  review composition and plan physical proof. All project execution remains on
+  qualified physical labs. External writes remain at least 45 seconds apart.
+  The original dirty local checkout is untouched; work is isolated in
+  `/mnt/data/peter/projects/lagrange-foundation-takeover-20261113`.
+- **Active foundation blockers:** original jobs 3686/3687 remain closed failures.
+  Their eleven previous windows were recovered from immutable mailbox providers
+  and individually hash-verified. Sequential 8,000-byte retrieval has resumed
+  under the same job/host/stream identities, starting with issue 3707. The live
+  continuation owner is `/root`; request/provider files and verified chunks are
+  retained in `/mnt/data/peter/projects/lagrange-foundation-coordination-20261113`.
+  Full-stream hashes and causal interpretation remain pending. No workload replay
+  is authorized. New original controls at `56d12341a67d8680b16f8f06847a2499f73b24f6`
+  were submitted once as 3720/3721; both closed failed with physical scopes
+  closed. Source investigation identifies a systematic conditional
+  state-transition gap across reconciliation, startup and terminal writers;
+  original3723 now physically demonstrates stale LOST overwriting committed RED
+  after actual child closure and native ESRCH. Original3721 demonstrates all six
+  observation defects (24 native cases,18 pass/6 fail). Complete streams and
+  compact interpretations are retained; canonical upload remains pending. A
+  reviewed immutable-transition candidate is composed as WIP, with no runtime
+  proof. Original receipt 3720 is fully recovered: 64 native cases, 8 passed and
+  56 failed. All 28 intended reader controls reached their boundaries; 28 other
+  failures exposed an omitted typed-refusal dependency from the owner extraction.
+  The minimal export/import correction is independently source-reviewed and
+  composed. Canonical evidence upload and the receipt Quest seal remain pending. Canonical generation, static/focused/full physical proof, Solver land
+  and final-HEAD publication remain owed by the foundation/publication Quests.
 - **Service status:** the existing
   [formation receipt](../quests/fresh-formation-user-table-routability/evidence/receipt.json)
   still fails. It is unchanged. The broader aggregate probe has no receipt and
@@ -143,12 +159,12 @@ invalid evidence before integration.
   the six successors below and amended Q12 aggregate have no new runtime
   receipt. Tooling Q8 remains a separate open pilot. Historical acceptance,
   Q6 policy currency and rejected hypotheses are not rewritten.
-- **Next action after requested resumption:** assign one coordinator, finish
-  the existing original streams from the retained offsets, measure the frozen
-  new original controls, resolve the concurrency finding's custody claim,
-  compose/review the repairs and obtain canonical physical proof and actual
-  delivery. Only then reconcile broad formation/authority/CDC work and the
-  separate simplified CURRENT edit. No continuation is scheduled by this note.
+- **Next action:** finish and interpret the original streams; measure the
+  frozen original controls on independently qualified machines in parallel;
+  seal the receipt Quest from actual measuring-red evidence; resolve concurrent
+  publication custody; then generate, review and prove the exact composition.
+  Only accepted final-HEAD delivery permits broad formation/authority/CDC
+  reconciliation and the separately preserved simplified CURRENT edit.
 
 The dated E0-E9 material below is retained context, not another current summary.
 Original observations and accepted bounded repairs keep their original scope.

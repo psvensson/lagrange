@@ -293,6 +293,34 @@ records and first failures. Failed gate diagnostics remain under
 `test-output/push-gate/`; repeated diagnostics use distinct directories and
 routine output pruning does not remove them. If diagnostic retention fails,
 the original checkout remains and the failure is explicit.
+The local-corpus record owner reads an immutable admitted `<sha>.json` base and
+at most two complete predecessor-bound successor files. The base is not a
+mutable current-state mirror. All reporting, execution and reconciliation use
+the same current-state reader. A stale writer loses the no-replace successor
+claim and cannot replace a terminal outcome or start another execution.
+Private `.corpus-transition-*` directories retain unsuccessful or uncertain
+transition proposals; they are evidence, never an alternate state or receipt
+reader. Each completed proposal has exclusive metadata naming its destination,
+writer PID and exact byte digest. Discovery reports partial or unavailable private
+evidence without adopting it or vetoing unrelated transitions. Committed records
+are decoded as strict UTF-8 and predecessor identity hashes their original bytes.
+A committed successor survives its writer's death without a persistent
+lock to reclaim. Link, directory-flush and cleanup outcomes remain distinct;
+an uncertain write never authorizes rollback, replay or receipt fabrication.
+Only the creating invocation removes its successful staging. Retain other
+staging and every committed node. Before using the new owner in an existing
+shared state directory, establish closure of old mutable-record writers;
+historical terminal records remain inert and reportable. This supplies no new
+authority to restart an abandoned STARTING obligation or to equate a receipt
+effect with an atomic terminal-state commit.
+Reconciliation distinguishes a missing process from unavailable inspection.
+Linux uses its proc command record and macOS uses a bounded system `ps` query;
+failure of either observer never selects the other. A denied signal-zero probe,
+failed command read, invalid recorded PID or unsupported observer is reported as
+`observation UNAVAILABLE` while the running record remains unchanged. Other
+records are still reconciled, and the next invocation observes the process
+afresh. Only confirmed absence or a successfully observed non-corpus command
+can mark the recorded process lost; observation never stops or replays it.
 The hosted `full-corpus-canary` is a manual capability, not authority to use
 hosted execution. Fix one-way
 ratchets rather than raising their baselines.
