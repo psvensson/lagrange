@@ -24,5 +24,6 @@
       "id": "bounded-claim",
       "statement": "Actual failed original fa4888 remains failed. Candidate permission control does not establish formation, host certification, release or whole-corpus acceptance. Observed Docker Node22.22.0 satisfies package engines >=22.12.0; host Node22.23.2 is a separate runtime identity, not a demonstrated container version violation."
     }
-  ]
+  ],
+  "sealedAt": "1efa85aa4e9409df6b1625ae1d932cd01c8a6d10"
 }
