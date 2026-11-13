@@ -1257,6 +1257,25 @@ test('the change proof\'s sealed-graph precondition holds in a lab machine\'s ch
     assert.match(ran.log, new RegExp(`^ok ${LINK_UNIVERSE_TEST} `, 'mu'), 'and no candidate');
   });
 
+test('a lab checkout without its required producer refuses before starting the runner',
+  async (t) => {
+    const {node, controller, start} = labFixture(t);
+    git(controller, 'rm', '-q', IMPORT_GRAPH_PRODUCER);
+    git(controller, '-c', 'commit.gpgsign=false', 'commit', '-qm', 'missing required producer');
+    const sha = git(controller, 'rev-parse', 'HEAD');
+    const ran = await start([FAST_TEST], {sha, runId: 'missing-producer'}).done;
+    assert.match(ran.log, new RegExp(`^placement-head=${sha}$`, 'mu'),
+      'the actual shell prepared the deliberately missing-producer commit');
+    assert.equal(ran.status, PLACEMENT_EXIT.SETUP,
+      'the declared producer is required for remote exact-checkout preparation');
+    assert.match(ran.errors, new RegExp('placement: required import-graph producer unavailable: ' +
+      IMPORT_GRAPH_PRODUCER, 'u'));
+    assert.doesNotMatch(ran.log, /placement-pid=/u, 'no classified runner started');
+    assert.doesNotMatch(ran.log, /^(?:not )?ok test\//mu, 'no file verdict was produced');
+    assert.deepEqual(leftovers(node), {worktrees: 1, refs: '', files: []},
+      'refusal closed the acquired checkout, ref, bundle and file list');
+  });
+
 // The ledger in the throwaway worktree came back whole before it was
 // removed: the commit's own records first, then the runner's record of every
 // file the shard ran (the runner appends one per attempt).

@@ -182,3 +182,15 @@ admission, bounded forced stop, and original checkout custody when copying
 fails. The original observer and earlier 37 control cases stay unchanged.
 The synchronous acceptance-manifest runner, remote section relay and native
 proof contracts retain their existing scope and requirements.
+
+The required preparation list is an admission contract for current source.
+The missing-producer success paths in the local owner and remote placement
+shell apply only to older commits; current CI and Solver require the declared
+producer. This change supersedes that applicability policy from the sealed
+`clean-worktree-generated-import-graph` work (49132b8 and 88663e2), preserving
+its historical records and all preparation, stale-metadata and signal refusal
+requirements. Both owners must refuse a missing declared producer before gate
+or runner admission. Original-compatible controls remove the producer from a
+real local fixture and a real placed commit; ordinary finite gate fixtures
+deliberately provide it. The historical observer remains immutable evidence
+of the earlier source, rather than a current acceptance control.

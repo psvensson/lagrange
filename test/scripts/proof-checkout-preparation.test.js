@@ -107,13 +107,12 @@ test('a producer killed by a signal is named as killed', (t) => {
   assert.match(output, /import-graph could not be generated: killed by SIGTERM/u);
 });
 
-test('a commit without the producer has nothing to generate, and says so', (t) => {
+test('a commit without the required producer refuses before admitting the gate', (t) => {
   const root = fixture(t, null);
   const {status, output, saw} = gate(root);
-  assert.equal(status, 0, output);
-  assert.deepEqual(saw, {graph: false, seal: SEAL_COMMITTED});
-  assert.match(output, new RegExp(`import-graph not generated: this commit has no ${PRODUCER}`,
-    'u'));
+  assert.notEqual(status, 0, 'a declared producer is required for exact-checkout preparation');
+  assert.equal(saw, null, 'the command never ran without the required producer');
+  assert.match(output, new RegExp(`import-graph required producer unavailable: ${PRODUCER}`, 'u'));
 });
 
 for (const signalled of [false, true]) {
@@ -236,7 +235,8 @@ function finiteCommand(run, {interrupt, ignoreSignal = false, descendant = false
     'process.on("SIGTERM", () => ' +
       `fs.writeFileSync(${JSON.stringify(run.descendantAck)}, "SIGTERM"));`,
     'process.send("ready");',
-    `setTimeout(() => process.exit(0), ${DESCENDANT_CEILING_MS});`,
+    `setTimeout(() => {fs.writeFileSync(${JSON.stringify(run.descendantNormal)}, ` +
+      `"ordinary descendant completion"); process.exit(0);}, ${DESCENDANT_CEILING_MS});`,
   ].join('\n');
   const ready = [
     `fs.writeFileSync(${JSON.stringify(run.marker + '.tmp')}, JSON.stringify({`,
@@ -307,10 +307,11 @@ function startFiniteGate(t, options = {}) {
     stdout: '', stderr: '', timerCleanups: [], fileCleanups: []};
   run.timers = {teardown: (close) => run.timerCleanups.push(close)};
   t.after(() => cleanupFiniteGate(run));
-  run.root = fixture({after: (close) => run.fileCleanups.push(close)}, null);
+  run.root = fixture({after: (close) => run.fileCleanups.push(close)}, WRITES_GRAPH);
   const control = path.join(run.root, 'test-output', 'cancellation-control');
   fs.mkdirSync(control, {recursive: true});
-  for (const name of ['marker', 'acquired', 'ack', 'descendantAck', 'normal', 'admitted']) {
+  for (const name of ['marker', 'acquired', 'ack', 'descendantAck', 'descendantNormal',
+    'normal', 'admitted']) {
     run[name] = path.join(control, name);
   }
   let command = finiteCommand(run, options);
@@ -415,11 +416,10 @@ test('the materializer bounds a child scope that acknowledges but ignores SIGTER
   assert.ok(fs.existsSync(run.descendantAck), 'cancellation reached the acquired descendant');
   assert.equal(fs.readFileSync(run.descendantAck, 'utf8'), 'SIGTERM',
     'cancellation reached the descendant in the acquired scope');
-  const deadline = Date.now() + CANCELLATION_WAIT_MS;
-  while (processAlive(run.owned.descendant) && Date.now() < deadline) {
-    await managedSleep(run.timers, CANCELLATION_POLL_MS);
-  }
-  assert.equal(processAlive(run.owned.descendant), false, 'forced stop closed the descendant');
+  assert.equal(processAlive(run.owned.descendant), false,
+    'forced stop closed the descendant before materializer finalization completed');
+  assert.equal(fs.existsSync(run.descendantNormal), false,
+    'the descendant did not reach its ordinary completion deadline');
   assert.equal(retainedDiagnostic(run).length, 1);
 });
 
