@@ -31,7 +31,8 @@ import {
   staticQualityProblems,
 } from './guards.js';
 import {
-  candidateReviewPaths, computeCandidateDigest, pathsOutsideQuest, proofInputProblems,
+  candidateReviewPaths, computeCandidateDigest, landingLogProblems, landingLogSnapshot,
+  pathsOutsideQuest, proofInputProblems,
   stagedCandidateProblems, verificationProblems,
 } from './candidate-review.js';
 import {
@@ -497,7 +498,7 @@ function runStagedPreCommitCheck(root, quest, paths, options) {
 // must see the tree that will be committed. A refused proof gives the index
 // back. `options.runProof` replaces the environment-bound default, which is
 // how the staged-tree guarantee is observed under test.
-function proveLanding(root, quest, paths, options, candidateDigest) {
+function proveLanding(root, quest, paths, options, candidate) {
   const injected = options.runProof || null;
   const shouldRefresh = requiresInventoryRefresh(paths);
   if (!injected && !options.skipProof && shouldRefresh) {
@@ -505,15 +506,15 @@ function proveLanding(root, quest, paths, options, candidateDigest) {
     const graphProblem = canonicalImportGraphProblem(root);
     if (graphProblem) refuse(graphProblem);
   }
-  recheckLandingCandidate(root, quest.id, candidateDigest);
+  recheckLandingCandidate(root, quest.id, candidate);
   stageLanding(root, quest, paths);
   try {
     const hookRan = runStagedPreCommitCheck(root, quest, paths, options);
-    recheckLandingCandidate(root, quest.id, candidateDigest, true);
+    recheckLandingCandidate(root, quest.id, candidate, true);
     const tree = git(root, ['write-tree']).trim();
     const proof = injected || (options.skipProof ? null : runChangeProof);
     if (proof) proof(root, options.log || (() => {}));
-    const current = recheckLandingCandidate(root, quest.id, candidateDigest, true, tree);
+    const current = recheckLandingCandidate(root, quest.id, candidate, true, tree);
     return {hookRan, quest: current.quest};
   } catch (error) {
     unstageLanding(root, quest, paths);
@@ -791,7 +792,9 @@ function landingState(root, id) {
   return current;
 }
 
-function recheckLandingCandidate(root, id, expectedDigest, checkIndex = false, expectedTree) {
+function recheckLandingCandidate(root, id, expected, checkIndex = false, expectedTree) {
+  const logProblems = landingLogProblems(root, id, expected.log);
+  if (logProblems.length > 0) refuse(`${MESSAGE.LAND_REFUSED} ${logProblems.join(PROBLEM_SEPARATOR)}`);
   const current = landingState(root, id);
   const {quest, state, log} = current;
   const paths = pathsOutsideQuest(root, id);
@@ -803,7 +806,7 @@ function recheckLandingCandidate(root, id, expectedDigest, checkIndex = false, e
     ...altitudeProblems(state),
     ...(checkIndex ? stagedCandidateProblems(root, id, expectedTree) : []),
   ];
-  if (digest !== expectedDigest) problems.push(MESSAGE.CANDIDATE_CHANGED);
+  if (digest !== expected.digest) problems.push(MESSAGE.CANDIDATE_CHANGED);
   if (problems.length > 0) refuse(`${MESSAGE.LAND_REFUSED} ${problems.join(PROBLEM_SEPARATOR)}`);
   return current;
 }
@@ -819,6 +822,8 @@ function recheckLandingCandidate(root, id, expectedDigest, checkIndex = false, e
  */
 function land(root, options) {
   const {quest, state, log} = landingState(root, options.id);
+  const initialLog = landingLogSnapshot(root, quest.id);
+  if (initialLog.problem) refuse(`${MESSAGE.LAND_REFUSED} ${initialLog.problem}`);
   const epic = loadEpic(root, quest);
   const measured = measure(root, quest.doneWhen);
   const problems = [];
@@ -842,7 +847,8 @@ function land(root, options) {
   let proven;
   try {
     const baseBeforeLand = headSha(root);
-    proven = proveLanding(root, quest, paths, options, currentCandidateDigest);
+    proven = proveLanding(root, quest, paths, options,
+      {digest: currentCandidateDigest, log: initialLog});
     // The terminal entry rides in the landing commit; a refused commit takes
     // the entry back out so the quest stays open and land can be retried.
     const logPath = logFile(root, quest.id);

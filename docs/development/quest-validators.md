@@ -108,8 +108,10 @@ checks scope, holds, acceptance, proof inputs and review binding after generatio
 after commit-time checks and after proof. A generated input that changes after
 review requires renewed affected review; generated outputs have no blanket
 exception. The staged tree must agree with the measured files and remain unchanged
-across proof. The final commit stages only the terminal log entry. Unintended paths
-refuse landing rather than being silently selected or included. The owning Quest
+across proof. The final commit stages only the terminal log entry. The owning log
+must remain a regular file with its exact original bytes as a prefix; appended
+observations are allowed, rewriting history is not. Unintended paths refuse
+landing rather than being silently selected or included. The owning Quest
 directory remains available for its record and evidence. Standalone fixes and
 historical open Quests must record an assignment before landing; terminal records
 are unchanged. The non-legacy epic's `authorizes` remains an additional outer

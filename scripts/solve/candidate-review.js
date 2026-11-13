@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {LOG_FILE, QUEST_FILE, QUESTS_DIR, VERDICT, validAssignmentPath} from './schema.js';
-import {readLog, verdictOf} from './store.js';
+import {logFile, readLog, verdictOf} from './store.js';
 import {requiredProofArtifacts} from './probes.js';
 import {changedPaths, git, headSha, latestAssignment, requiresVerification} from './guards.js';
 
@@ -41,6 +41,8 @@ const MESSAGE = Object.freeze({
   NOT_APPROVED: 'source or proof changes need an approving verification',
   DIGEST_MISSING: 'reviewed changes need a valid candidate digest on the approval and current candidate',
   CONTENT_MISMATCH: 'verification candidate digest does not match the reviewed candidate (reviewed content or proof input was mutated after verification)',
+  LOG_NOT_REGULAR: 'quest log must remain a regular file during landing',
+  LOG_REWRITTEN: 'quest log is append-only; existing bytes and file mode must remain unchanged during landing',
 });
 
 function pathsOutsideQuest(root, id) {
@@ -187,6 +189,27 @@ function stagedCandidateProblems(root, id, expectedTree) {
     [...new Set(paths)].map((filePath) => JSON.stringify(filePath)).join(LIST_SEPARATOR)}`] : [];
 }
 
+function landingLogSnapshot(root, id) {
+  try {
+    const file = logFile(root, id);
+    const stat = fs.lstatSync(file);
+    if (!stat.isFile()) return {problem: MESSAGE.LOG_NOT_REGULAR};
+    return {bytes: fs.readFileSync(file), mode: stat.mode & EXECUTABLE_BITS};
+  } catch (error) {
+    return {problem: `quest log could not be read: ${error.message}`};
+  }
+}
+
+function landingLogProblems(root, id, expected) {
+  const current = landingLogSnapshot(root, id);
+  if (current.problem) return [current.problem];
+  if (current.mode !== expected.mode ||
+      !current.bytes.subarray(0, expected.bytes.length).equals(expected.bytes)) {
+    return [MESSAGE.LOG_REWRITTEN];
+  }
+  return [];
+}
+
 function verificationProblems(state, paths, currentCandidateDigest) {
   const last = state.lastVerification;
   const current = state.verificationIsCurrent;
@@ -208,6 +231,7 @@ function verificationProblems(state, paths, currentCandidateDigest) {
 }
 
 export {
-  candidateReviewPaths, computeCandidateDigest, pathsOutsideQuest, proofInputProblems,
+  candidateReviewPaths, computeCandidateDigest, landingLogProblems, landingLogSnapshot,
+  pathsOutsideQuest, proofInputProblems,
   stagedCandidateProblems, verificationProblems,
 };

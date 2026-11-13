@@ -321,6 +321,31 @@ test('land reloads holds after proof and permits an ordinary observation', (t) =
   }
 });
 
+test('land refuses historical log rewrites and symlink substitution during proof', (t) => {
+  for (const linked of [false, true]) {
+    const root = repo(t, {legacy: true});
+    start(root, {id: QUEST_ID});
+    goGreen(root);
+    note(root, {id: QUEST_ID, type: ENTRY_TYPE.FINDING, text: 'Retain this historical note.'});
+    approve(root);
+    const head = git(root, ['rev-parse', 'HEAD']);
+    refuses(() => land(root, {id: QUEST_ID, runProof: () => {
+      const file = path.join(root, `solve/quests/${QUEST_ID}/log.ndjson`);
+      const before = fs.readFileSync(file, 'utf8');
+      if (linked) {
+        const target = 'retained-log.ndjson';
+        fs.writeFileSync(path.join(path.dirname(file), target), before);
+        fs.unlinkSync(file);
+        fs.symlinkSync(target, file);
+      } else {
+        fs.writeFileSync(file, before.replace('Retain this historical note.', 'Rewrite the historical note.'));
+      }
+    }}), /quest log.*append-only|quest log.*regular file/u);
+    assert.equal(git(root, ['rev-parse', 'HEAD']), head);
+    assert.equal(readLog(root, QUEST_ID).some((entry) => entry.status === QUEST_STATUS.SOLVED), false);
+  }
+});
+
 test('standalone fixes retain package scope and directory boundaries', (t) => {
   const root = repo(t, {assigned: false});
   const quest = readQuest(root, QUEST_ID);
