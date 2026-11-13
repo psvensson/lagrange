@@ -70,6 +70,7 @@ export function capture(command, args, options = {}) {
     const exitFailure = {observed: false};
     let completed = false;
     let timedOut = false;
+    let deadline;
     const complete = () => {
       if (completed) return;
       completed = true;
@@ -91,7 +92,7 @@ export function capture(command, args, options = {}) {
     // - a shell's hung grandchild would otherwise outlive it and hold the
     // pipes open (verifier round 3) - and the capture fails. A nonzero exit
     // already observed stays primary even when output closure later times out.
-    const deadline = bounded ? setTimeout(() => {
+    deadline = bounded ? setTimeout(() => {
       timedOut = true;
       const error = new Error(`${command} ${TIMED_OUT_TEXT} ${options.timeoutMs} ms`);
       if (!failure.observed) Object.assign(failure, {observed: true, error});
@@ -208,7 +209,9 @@ function exitOf(child) {
 function closeOf(child) {
   return new Promise((resolve) => {
     let unavailable = false;
-    child.on(PLACEMENT_CHILD_EVENT.ERROR, () => { unavailable = true; });
+    child.on(PLACEMENT_CHILD_EVENT.ERROR, () => {
+      unavailable = true;
+    });
     child.once(PLACEMENT_CHILD_EVENT.CLOSE, (code) => resolve(unavailable ? null : code));
   });
 }

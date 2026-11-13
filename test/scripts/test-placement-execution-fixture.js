@@ -426,7 +426,7 @@ function remotePhaseSource(run, {preparation}) {
       `'natural phase completion'); process.exit(0);}, ${REMOTE_NATURAL_MS});`,
     ...(preparation ? [marker(run.ready)] : [
       'fs.readFileSync(0, \'utf8\');',
-      `const descendant = spawn(process.execPath, ['--input-type=module', '-e', ` +
+      'const descendant = spawn(process.execPath, [\'--input-type=module\', \'-e\', ' +
         `${JSON.stringify(descendant)}], {stdio: 'ignore'});`,
       'descendant.on(\'error\', (error) => {process.stderr.write(String(error)); process.exit(1);});',
       marker(run.ready, ', descendant: descendant.pid'),
@@ -456,7 +456,7 @@ function startRemoteCancellationFixture(t, {preparation}) {
   if (preparation) {
     fs.writeFileSync(path.join(fixture.controller, 'scripts/run-classified-test-files.js'),
       `import fs from 'node:fs'; fs.writeFileSync(${JSON.stringify(run.admitted)}, ` +
-      `'later runner started');\n`);
+      '\'later runner started\');\n');
   }
   git(fixture.controller, '-c', 'commit.gpgsign=false', 'commit', '-qam',
     'finite isolated remote cancellation witness');

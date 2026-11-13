@@ -408,7 +408,7 @@ describe('failing-file run summary', () => {
     ].join('\n'));
     assert.deepEqual(named, ['test/a/red.test.js', 'test/b/relayed-red.test.js',
       'test/b/decided-green.test.js'],
-      summary);
+    summary);
     assert.match(summary, /^ {2}failing test files: 3$/mu);
   });
 

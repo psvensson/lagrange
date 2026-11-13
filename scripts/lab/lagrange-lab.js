@@ -504,6 +504,7 @@ async function commandTest(profile, args) {
   const commit = labTestCommit({root: FLEET_REPO_ROOT, sha: request.sha});
   const primary = {observed: false};
   const execution = {observed: false};
+  const cleanup = {observed: false};
   try {
     const plan = await labTestPlan(profile, request, commit);
     const status = await runLabTest({
@@ -525,13 +526,15 @@ async function commandTest(profile, args) {
     try {
       commit.release();
     } catch (cleanupError) {
-      if (!primary.observed && (!execution.observed || execution.status === 0)) throw cleanupError;
-      if (!primary.observed || cleanupError !== primary.error) {
+      if (!primary.observed && (!execution.observed || execution.status === 0)) {
+        Object.assign(cleanup, {observed: true, error: cleanupError});
+      } else if (!primary.observed || cleanupError !== primary.error) {
         process.stderr.write(`lab test: planning cleanup unavailable at ${commit.gitRoot}: ` +
           `${cleanupError.message}\n`);
       }
     }
   }
+  if (cleanup.observed) throw cleanup.error;
 }
 
 // Everything a hand lab run can refuse, refused before the inventory, the

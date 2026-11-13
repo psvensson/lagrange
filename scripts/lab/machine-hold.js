@@ -158,7 +158,7 @@ export function holdLabMachine(machine, {waitMs, purpose, expectedMs, env = proc
 }
 
 function holdSessionFailure(child, code, signal) {
-  return Object.assign(new Error(`lab hold session closed unavailable: ` +
+  return Object.assign(new Error('lab hold session closed unavailable: ' +
     `exit=${code} signal=${signal} group=${child.pid}`),
   {exitCode: code, signal, group: child.pid});
 }

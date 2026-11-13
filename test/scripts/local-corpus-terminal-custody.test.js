@@ -34,7 +34,9 @@ function track(child) {
   const record = {child, closed: false, result: null};
   // Capture close immediately, including a failed spawn. All awaited work has
   // its own deadline; no unref'ed timer can make the test disappear early.
-  child.on('error', (error) => { record.error = error; });
+  child.on('error', (error) => {
+    record.error = error;
+  });
   child.once('close', (code, signal) => {
     record.closed = true;
     record.result = {code, signal};

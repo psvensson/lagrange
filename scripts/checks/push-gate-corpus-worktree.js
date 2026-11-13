@@ -410,7 +410,9 @@ function requestGateChildStop(scope, run, signal) {
 function observeGateChild(scope, child, command) {
   const run = {child, pid: child.pid, terminal: null, error: null, inputError: null,
     quiet: false, stop: null};
-  run.stopComplete = new Promise((resolve) => { run.stopped = resolve; });
+  run.stopComplete = new Promise((resolve) => {
+    run.stopped = resolve;
+  });
   run.closed = new Promise((resolve) => {
     child.on(EVENT_ERROR, (error) => {
       if (!run.error) run.error = error;
@@ -437,7 +439,9 @@ function releaseGateInput(scope, input) {
   input.released = true;
   let firstError = null;
   const cleanup = [
-    () => { if (input.fd !== null) fs.closeSync(input.fd); },
+    () => {
+      if (input.fd !== null) fs.closeSync(input.fd);
+    },
     () => fs.rmSync(input.file, {force: true}),
     () => fs.rmdirSync(input.directory),
   ];

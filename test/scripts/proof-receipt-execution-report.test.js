@@ -433,28 +433,58 @@ test('recordProof cannot reuse or replace an existing receipt without execution'
 });
 
 const ENVELOPE_MUTATIONS = [
-  ['non-object execution', (receipt) => { receipt.execution = []; }],
-  ['absent report digest', (receipt) => { delete receipt.execution.reportDigest; }],
-  ['malformed report digest', (receipt) => { receipt.execution.reportDigest = 'not-a-digest'; }],
-  ['absent producer', (receipt) => { delete receipt.execution.producer; }],
-  ['absent producer kind', (receipt) => { delete receipt.execution.producer.kind; }],
-  ['absent producer id', (receipt) => { delete receipt.execution.producer.id; }],
-  ['absent summary', (receipt) => { delete receipt.execution.summary; }],
-  ['absent command summary', (receipt) => { delete receipt.execution.summary.commands; }],
-  ['empty command summary', (receipt) => { receipt.execution.summary.commands = []; }],
+  ['non-object execution', (receipt) => {
+    receipt.execution = [];
+  }],
+  ['absent report digest', (receipt) => {
+    delete receipt.execution.reportDigest;
+  }],
+  ['malformed report digest', (receipt) => {
+    receipt.execution.reportDigest = 'not-a-digest';
+  }],
+  ['absent producer', (receipt) => {
+    delete receipt.execution.producer;
+  }],
+  ['absent producer kind', (receipt) => {
+    delete receipt.execution.producer.kind;
+  }],
+  ['absent producer id', (receipt) => {
+    delete receipt.execution.producer.id;
+  }],
+  ['absent summary', (receipt) => {
+    delete receipt.execution.summary;
+  }],
+  ['absent command summary', (receipt) => {
+    delete receipt.execution.summary.commands;
+  }],
+  ['empty command summary', (receipt) => {
+    receipt.execution.summary.commands = [];
+  }],
   ['failed command summary', (receipt) => {
     receipt.execution.summary.commands[0].exitStatus = 1;
   }],
-  ['absent reused-proof summary', (receipt) => { delete receipt.execution.summary.reusedProofs; }],
-  ['non-list reused-proof summary', (receipt) => { receipt.execution.summary.reusedProofs = {}; }],
+  ['absent reused-proof summary', (receipt) => {
+    delete receipt.execution.summary.reusedProofs;
+  }],
+  ['non-list reused-proof summary', (receipt) => {
+    receipt.execution.summary.reusedProofs = {};
+  }],
   ['malformed reused-proof entry', (receipt) => {
     receipt.execution.summary.reusedProofs = [null];
   }],
-  ['negative assertion summary', (receipt) => { receipt.execution.summary.assertions = -1; }],
-  ['empty plan without a cited proof', (receipt) => { receipt.execution.summary.planned = 0; }],
-  ['passed-on-retry summary', (receipt) => { receipt.execution.summary.passedOnRetry = 1; }],
+  ['negative assertion summary', (receipt) => {
+    receipt.execution.summary.assertions = -1;
+  }],
+  ['empty plan without a cited proof', (receipt) => {
+    receipt.execution.summary.planned = 0;
+  }],
+  ['passed-on-retry summary', (receipt) => {
+    receipt.execution.summary.passedOnRetry = 1;
+  }],
   ...['planned', 'executed', 'assertions', 'runs', 'passedOnRetry'].map((field) =>
-    [`absent ${field} summary`, (receipt) => { delete receipt.execution.summary[field]; }]),
+    [`absent ${field} summary`, (receipt) => {
+      delete receipt.execution.summary[field];
+    }]),
 ];
 
 for (const [description, mutate] of ENVELOPE_MUTATIONS) {
