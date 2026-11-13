@@ -56,6 +56,7 @@ const TRIGGERING_FILES = Object.freeze([
   'test/shards/impact-contracts.json',
   'test/manifests/project-hardening-proof-postpush-manifest.json',
   'scripts/run-test-files.js',
+  'scripts/test-file-admission.js',
   'scripts/test-output-reader.js',
   'scripts/run-classified-test-files.js',
   'scripts/lab/probe.js',
