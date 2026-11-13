@@ -272,16 +272,12 @@ export const FULL_CORPUS_TRIGGER_RULES = Object.freeze([
   // Retention can erase original proof artifacts even after execution settled.
   {id: 'proof-evidence-retention', pattern: /^scripts\/(prune-test-output|checks\/test-output-retention-constants)\.js$/u},
   // Publication and receipt interpretation decide which execution can be accepted.
-  {id: 'proof-publication', pattern: /^scripts\/(publish-head|publish-local-corpus(?:-state)?|publish-command-runner|publish-execution-constants|proof-authority|proof-receipt-contract)\.js$/u},
+  {id: 'proof-publication', pattern: /^scripts\/(publish-head|publish-local-corpus(?:-state)?|publish-command-runner|publish-execution-constants|proof-authority|proof-receipt-contract|session-worktree)\.js$/u},
   // Quest recording and landing own the measured obligations publication consumes.
   {id: 'quest-proof-commands', pattern: /^scripts\/solve\/(commands|quest-record-commands)\.js$/u},
   // The scheduler that launches the proof and hands it its environment.
   {id: 'gate-scheduler', pattern: /^scripts\/(run-project-hardening-acceptance|checks\/acceptance-proof-manifest-(?:runner|constants))\.js$/u},
-  {id: 'push-gate', pattern: /^\.githooks\//u,
-    exempt: Object.freeze({
-      '.githooks/pre-commit':
-        'named only by solve land, scripts/solve/commands.js, and the epic budget, scripts/checks/apparatus-release-consolidation-budget.js; run by git at commit, never at push',
-    })},
+  {id: 'push-gate', pattern: /^\.githooks\//u},
   {id: 'test-config', pattern: /^\.taprc$/u},
 ]);
 

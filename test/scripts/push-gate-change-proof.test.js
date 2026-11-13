@@ -82,6 +82,7 @@ const TRIGGERING_FILES = Object.freeze([
   'scripts/publish-execution-constants.js',
   'scripts/proof-authority.js',
   'scripts/proof-receipt-contract.js',
+  'scripts/session-worktree.js',
   'scripts/solve/commands.js',
   'scripts/solve/quest-record-commands.js',
   'scripts/plan-test-lane.js',
@@ -100,6 +101,7 @@ const TRIGGERING_FILES = Object.freeze([
   'scripts/run-project-hardening-acceptance.js',
   'scripts/checks/acceptance-proof-manifest-runner.js',
   '.githooks/pre-push',
+  '.githooks/pre-commit',
   '.taprc',
 ]);
 // Generated state travels with ordinary changes: the seal with every JS edit,
