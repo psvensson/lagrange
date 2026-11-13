@@ -34,5 +34,6 @@
       "id": "bounded-commissioning",
       "statement": "Commission only the authorized exact host through existing native owners, retain source/config/boot/policy identities and actual user-systemd/linger outcome. Carina sensor absence remains unmeasured; readiness is admission capacity under explicit policy, not measured thermal safety. Other hosts retain explicit current policy."
     }
-  ]
+  ],
+  "sealedAt": "4505780603d98ab31d23a6483e76e0eb72f74896"
 }
