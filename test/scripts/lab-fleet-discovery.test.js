@@ -15,8 +15,9 @@ import {isDeepStrictEqual} from 'node:util';
 import {parse} from 'yaml';
 
 import {GIT_OUTPUT_BOUND, spawnGit} from '../../scripts/checks/git-invocation.js';
+import {gitProcessEnvironment} from '../../scripts/checks/git-process-environment.js';
 import {runHarness} from '../../scripts/lab/harness.js';
-import {capture} from '../../scripts/lab/process.js';
+import {capture, killGroup} from '../../scripts/lab/process.js';
 import * as labProbe from '../../scripts/lab/probe.js';
 import {
   CAPABILITY_SCRIPT, MOVIELENS_FILE, MOVIELENS_SHA256, READINESS, corpusReadiness,
@@ -949,7 +950,7 @@ test('a formation refuses, typed, when a node is held, before any node starts', 
     'releases every hold it took');
 });
 
-test('a formation holds a node under the lab convention and releases it', async (t) => {
+test('a formation acquires its own process group, holds a node and releases it', async (t) => {
   const {holdLabMachine} = labProbe;
   assert.equal(typeof holdLabMachine, 'function',
     'the one owner of the lab convention holds a node for a formation');
@@ -960,6 +961,10 @@ test('a formation holds a node under the lab convention and releases it', async 
   t.after(() => first.release());
   assert.deepEqual(await first.outcome, {state: 'held'});
   const record = JSON.parse(fs.readFileSync(lab.holder, 'utf8'));
+  const group = spawnSync('ps', ['-o', 'pgid=', '-p', String(record.pid)], {encoding: 'utf8'});
+  assert.equal(group.status, 0, group.stderr);
+  assert.equal(Number(group.stdout.trim()), record.pid,
+    'the acquired hold session owns the exact group its bounded release may signal');
   assert.deepEqual([record.project, record.agent, record.purpose, record.expectedMinutes],
     ['lagrange', 'claude:formation-witness', 'formation:rolling-restart', 30]);
   assert.equal(lockFree(lab.lock), false, 'the node is held for as long as the session is open');
@@ -972,3 +977,143 @@ test('a formation holds a node under the lab convention and releases it', async 
   assert.equal(fs.existsSync(lab.holder), false, 'released: the record is gone');
   assert.equal(lockFree(lab.lock), true, 'and the machine is free');
 });
+
+const GROUP_CONTROL_BOUND_MS = 5000;
+const GROUP_CONTROL_POLL_MS = 20;
+
+function boundedGroupControl(promise, label) {
+  let timer;
+  const timeout = new Promise((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label}: finite control bound expired`)),
+      GROUP_CONTROL_BOUND_MS);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+async function groupControlMarker(file, terminal) {
+  const deadline = Date.now() + GROUP_CONTROL_BOUND_MS;
+  while (!fs.existsSync(file)) {
+    assert.equal(terminal(), null,
+      `the owner stopped the child before ${file}: ${JSON.stringify(terminal())}`);
+    if (Date.now() >= deadline) assert.fail(`the live child never acknowledged ${file}`);
+    await new Promise((resolve) => setTimeout(resolve, GROUP_CONTROL_POLL_MS));
+  }
+}
+
+// Real finite children make group absence and continued execution observable.
+// Cleanup uses the acquisition's declared detached state, never a failed
+// group signal as permission to target a different process. No lab service
+// or production execution decision is replaced by this fixture.
+async function signalGroupFixture(t, {detached, missingExecutable = false}) {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'fleet-group-custody-')));
+  let child = null;
+  let terminal = null;
+  let closed = Promise.resolve();
+  t.after(async () => {
+    const errors = [];
+    if (Number.isInteger(child?.pid) && child.pid > 0 && !terminal) {
+      try {
+        process.kill(detached ? -child.pid : child.pid, 'SIGKILL');
+      } catch (error) {
+        if (error.code !== 'ESRCH') errors.push(error);
+      }
+    }
+    try {
+      await boundedGroupControl(closed, 'owned fixture child closure');
+    } catch (error) {
+      errors.push(error);
+      child?.unref();
+    }
+    try {
+      fs.rmSync(root, {recursive: true, force: true});
+    } catch (error) {
+      errors.push(error);
+    }
+    if (errors.length) throw new AggregateError(errors, 'finite process fixture cleanup failed');
+  });
+  const source = [
+    'import fs from \'node:fs\';',
+    'import path from \'node:path\';',
+    'const root = process.argv[1];',
+    'process.on(\'SIGUSR1\', () => fs.writeFileSync(path.join(root, \'ack\'), \'still running\'));',
+    'setTimeout(() => {',
+    '  fs.writeFileSync(path.join(root, \'natural-completion\'), \'not cancellation\');',
+    '  process.exit(0);',
+    '}, 10000);',
+    'fs.writeFileSync(path.join(root, \'ready.tmp\'), JSON.stringify({pid: process.pid}));',
+    'fs.renameSync(path.join(root, \'ready.tmp\'), path.join(root, \'ready\'));',
+  ].join('\n');
+  const env = gitProcessEnvironment();
+  delete env.NODE_TEST_CONTEXT;
+  child = spawn(missingExecutable ? path.join(root, 'unavailable-executable') : process.execPath,
+    missingExecutable ? [] : ['--input-type=module', '-e', source, root],
+    {env, detached, stdio: 'ignore'});
+  let spawnError = null;
+  closed = new Promise((resolve) => {
+    child.once('error', (error) => { spawnError = error; });
+    child.once('close', (code, signal) => {
+      terminal = {code, signal, error: spawnError?.message || null};
+      resolve(terminal);
+    });
+  });
+  if (missingExecutable) await boundedGroupControl(closed, 'failed spawn closure');
+  else {
+    await groupControlMarker(path.join(root, 'ready'), () => terminal);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(root, 'ready'), 'utf8')).pid, child.pid);
+  }
+  return {child, root, terminal: () => terminal,
+    acknowledge: async () => {
+      assert.doesNotThrow(() => process.kill(child.pid, 'SIGUSR1'),
+        'the direct child remains available for its actual post-signal acknowledgement');
+      await groupControlMarker(path.join(root, 'ack'), () => terminal);
+      assert.equal(fs.readFileSync(path.join(root, 'ack'), 'utf8'), 'still running');
+      assert.equal(fs.existsSync(path.join(root, 'natural-completion')), false);
+    }};
+}
+
+test('killGroup never substitutes a live direct child for an absent owned group',
+  {timeout: 15000}, async (t) => {
+    const fixture = await signalGroupFixture(t, {detached: false});
+    const group = spawnSync('ps', ['-o', 'pgid=', '-p', String(fixture.child.pid)],
+      {encoding: 'utf8'});
+    assert.equal(group.status, 0, group.stderr);
+    assert.notEqual(Number(group.stdout.trim()), fixture.child.pid,
+      'this acquired direct child is deliberately not a group leader');
+    assert.throws(() => process.kill(-fixture.child.pid, 0), {code: 'ESRCH'},
+      'the negative group address is genuinely absent before the owner is called');
+    killGroup(fixture.child);
+    await fixture.acknowledge();
+  });
+
+test('killGroup preserves a group signalling refusal without killing the direct child',
+  {timeout: 15000}, async (t) => {
+    const fixture = await signalGroupFixture(t, {detached: true});
+    assert.doesNotThrow(() => process.kill(-fixture.child.pid, 0),
+      'the real detached group is present before the injected signal refusal');
+    const refusal = Object.assign(new Error('finite group signal permission refusal'),
+      {code: 'EPERM'});
+    const signal = process.kill;
+    // Only the OS signal response for this exact acquired group is replaced.
+    // The actual live child, its acknowledgement and all cleanup remain real.
+    process.kill = function(pid, name) {
+      if (pid === -fixture.child.pid && name === 'SIGKILL') throw refusal;
+      return signal.call(process, pid, name);
+    };
+    try {
+      assert.throws(() => killGroup(fixture.child), (error) => error === refusal,
+        'the first signal refusal remains explicit instead of selecting another target');
+    } finally {
+      process.kill = signal;
+    }
+    await fixture.acknowledge();
+  });
+
+test('killGroup refuses a failed spawn with no acquired positive process identity',
+  {timeout: 10000}, async (t) => {
+    const fixture = await signalGroupFixture(t, {detached: true, missingExecutable: true});
+    assert.equal(fixture.child.pid, undefined);
+    assert.match(fixture.terminal().error, /ENOENT/u,
+      'the actual executable acquisition failed before any process group existed');
+    assert.throws(() => killGroup(fixture.child), /unacquired process group/u,
+      'an unavailable identity cannot be negated or converted into a direct-child attempt');
+  });
