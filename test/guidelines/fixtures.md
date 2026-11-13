@@ -3,7 +3,7 @@ scope: testing
 status: canonical
 always_load: false
 source_of_truth: self
-last_reviewed: 2026-10-22
+last_reviewed: 2026-11-13
 ---
 
 > **Canonical source.** System-table mutation requirements and test-only code path rules. Index: [`INDEX.md`](INDEX.md).
@@ -130,6 +130,35 @@ review; they still need the checks selected for their real effects.
 7. Keep safety assertions distinct from recovery progress and resource bounds.
    A fixture must demonstrate progress after the injected finite failure clears
    when the contract promises it; refusal alone is insufficient.
+
+### Process, Path and Generated-Input Fixtures
+
+Apply the same contract review to a fixture's acquisition and completion. A
+passing assertion can still describe the wrong cause:
+
+- For cancellation, acquire an actual live child and observe cancellation
+  reaching its owned scope. Require closure before claiming that finalization
+  completed. A child's ordinary completion deadline or the test's later cleanup
+  cannot supply that proof. Keep finite fixture deadlines and independent
+  teardown so the original defective implementation also leaves no owned work.
+- State whether a path assertion concerns a logical pathname or the canonical
+  identity returned by the owner. Git and the filesystem can resolve a temporary
+  directory alias differently from `os.tmpdir()`. Retain both identities and the
+  original diagnostic before classifying a mismatch; still assert the retained
+  artifact's actual existence and exact bytes.
+- A fresh exact checkout must receive generated inputs through the existing
+  preparation owner before the measured command. A fixture that substitutes a
+  producer supplies it at the declared path and states its evidence ceiling.
+  Required-producer absence and tracked metadata drift must exercise refusal
+  before command admission, rather than a fixture-specific preparation route.
+- Ordered expectations follow the owner's ordering contract. Correct an
+  expectation only after confirming that contract, while retaining assertions
+  for every required item, adverse outcome and count.
+
+The retained controls and findings in
+[`publication-single-pass-evidence`](../../solve/quests/publication-single-pass-evidence/evidence/design.md)
+show these distinctions. This review belongs to the existing behavior-test
+review above; it adds no separate runner or acceptance gate.
 
 ## Test Doubles Consume the Owner (One Version of Every Shape)
 

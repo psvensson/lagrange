@@ -1,0 +1,35 @@
+{
+  "schema": "solve-quest/2",
+  "id": "reviewed-foundation-integration",
+  "class": "fix",
+  "statement": "The reviewed canonical JSON, durable-store connection, CDC timer and lifecycle-observation cuts form one source-preserving foundation on current main. Canonical generated inputs, the complete required physical-lab execution, independent composition review and canonical publication policy establish pre-land acceptance for that exact combined candidate. After the intended Solver lands, the final committed HEAD must pass the existing publication and native delivery gates before this integration is reported delivered or used as the accepted main base. The remaining formation WIP and public-service readiness retain their separate obligations.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/reviewed-foundation-integration/evidence/receipt.json",
+      "requiredReceipts": [
+        "reviewed-source-composition",
+        "canonical-generated-inputs-and-selection",
+        "complete-required-physical-lab-execution",
+        "static-and-ratchet-gates",
+        "independent-composition-review",
+        "canonical-publication-policy"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "one-foundation",
+      "statement": "Compose the reviewed PR203-206 source and controls without importing the broad WIP. Retain current main-only work and all original failure evidence. Regenerate shared metadata for the actual combined tree; never combine seals from different source revisions."
+    },
+    {
+      "id": "physical-proof",
+      "statement": "All tests, parsers, generators, static checks and proof commands execute only on qualified physical lab machines through the sole coordinator. Each required run conserves the canonical root selection and resource lanes across disjoint host assignments. Preserve first failures; no retry-once, enlarged timeout, raised baseline, skip, synthetic receipt or acceptance inferred from mailbox completion."
+    },
+    {
+      "id": "publication-owner",
+      "statement": "Any demonstrated CI, pre-push or publication policy mismatch is repaired as its named producer-consumer interaction with original negative controls and independent review. Preserve full-corpus triggers and exact-candidate gates. Solver measures this pre-land predicate before creating its landing commit; publication of that final committed HEAD is a retained post-land obligation, not a fabricated precondition or a waived gate. Missing lab-to-publication capability remains explicit; do not invent a hosted fallback, status, credential or proof import."
+    }
+  ],
+  "sealedAt": "2136438fe481822ffec62c68e1389639386c6b33"
+}

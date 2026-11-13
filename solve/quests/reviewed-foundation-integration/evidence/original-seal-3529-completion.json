@@ -1,0 +1,55 @@
+{
+  "schema": "lagrange-lab-result/v1",
+  "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+  "request_id": "edbe104eceab44bdbcda7a97755fa63f",
+  "request_sha256": "c136276f2886373cbcef7f6433053fc5f00dbd147b2d3f97690281b974d168b4",
+  "status": "COMPLETE",
+  "recorded_at": "2026-11-13T07:19:29.949Z",
+  "result": {
+    "execution_scope_closed": true,
+    "exit_code": 0,
+    "finished_at": "2026-11-13T07:19:29.370Z",
+    "hosts": [
+      "tv-dator"
+    ],
+    "log_bytes": 8204,
+    "log_sha256": "f91eced3777c6ca824620876f940e851f90a72d7a7cbb09f3f7583329e988c5c",
+    "logical_request_id": "edbe104e-ceab-44bd-bcda-7a97755fa63f",
+    "logs_are_worker_tails": true,
+    "operation": "lab-work",
+    "outcome": "PASS",
+    "payload_sha256": "10103486aa04dc4705915228577216e035ca29f9c7be9be1caa23dd43dbe4b9f",
+    "reason": null,
+    "scope_closed": true,
+    "source_execution_started": true,
+    "source_sha": "2136438fe481822ffec62c68e1389639386c6b33",
+    "worker_receipt_count": 1,
+    "worker_receipts_sha256": "8c52b6e2ff8ffe97e66bfae620c2e141995251a719445f9559410270bc446c40",
+    "workers": {
+      "tv-dator": {
+        "containers_closed": true,
+        "driver_result": {
+          "counters": {},
+          "exit_code": 0
+        },
+        "execution_scope_closed": true,
+        "exit_code": 0,
+        "last_thermals": {
+          "cpu": 57,
+          "missing": [],
+          "ssd": 31.85,
+          "ssd_aux": 48.85
+        },
+        "log_bytes": 22675,
+        "log_sha256": "ab1a24dddf22c2ec480f3ae660f6cd2f7662c8100651bbcb5ff6b8b07c107efc",
+        "log_truncated": false,
+        "output_bytes": 22675,
+        "output_sha256": "ab1a24dddf22c2ec480f3ae660f6cd2f7662c8100651bbcb5ff6b8b07c107efc",
+        "reason": null,
+        "source_execution_started": true,
+        "state": "COMPLETE",
+        "thermal_scope_closed": true
+      }
+    }
+  }
+}

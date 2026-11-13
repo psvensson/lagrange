@@ -1,0 +1,2076 @@
+LAB_HOST=local-workstation
+v22.23.2
+32d79b38c1835a3ffab3032042c9605261d59cc7
+ab163d6bba796bf681673aa4e7c87053a27b6e7a
+bc9e83a24cee235aa7fd33ff9777dc97d229903c
+QUEST_SEAL_PENDING=probe not measuring; actual receipt absent
+PREPARATION_SCOPE=canonical generation and static observations only; final publication-policy candidate requires fresh canonical scope
+npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+
+> lagrange-server@0.4.0 prepare
+> node -e "import('node:fs').then(({existsSync}) => existsSync('scripts/install-git-hooks.js') && import('./scripts/install-git-hooks.js'))"
+
+[hooks] Installed repo hooks at .githooks
+
+added 964 packages in 7s
+npm notice
+npm notice New major version of npm available! 10.9.8 -> 12.2.2
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.2
+npm notice To update run: npm install -g npm@12.2.2
+npm notice
+SQLITE_NATIVE_PROVENANCE={"version":"3.49.2","source_id":"2025-05-07 10:39:52 17144570b0d96ae63cd6f3edca39e27ebd74925252bbaf6723bcb2f6b4861fb1","addon_sha256":"d7d9272b12d11c1dc2bb787741b1b7c4037d336155f316ace3420410c28fda37"}
+PREPARATION_STAGE_BEGIN=test-metadata-refresh
+
+> lagrange-server@0.4.0 test:metadata:refresh
+> node scripts/generate-test-primary-classes.js && node scripts/generate-test-resource-classes.js && node scripts/generate-test-subsystem-classes.js && node scripts/generate-global-owner-debt-inventory.js --refresh-import-graph-only
+
+wrote test/shards/primary-classes.json: 2651 tests, digest fnv1a32-3cc764f0
+wrote test/shards/resource-classes.json — 2651 tests, digest fnv1a32-fabac277
+wrote test/shards/subsystem-classes.json — 2651 tests, 22 subsystems, digest fnv1a32-c262c703
+{"snapshotDigest":"5482535a880652d12e71e3b931463c786c824ee447a4fa1de3f59c90170e36d8","graphByteDigest":"08331b01fd1779b73bff154af21fdc25f2e06ea434bad41dcb9a069ccc4015f3","sealByteDigest":"e67450f1e72c8b7ec0d269c4f126d8a2b4b012d9ed7a968fd8a4eb712f3b2d09"}
+PREPARATION_STAGE_END=test-metadata-refresh EXIT=0
+PREPARATION_STAGE_BEGIN=global-owner-debt-inventory
+Complexity ratchet OK: 1698/1698 violations (threshold: 12).
+Saved complexity report to test-output/analysis/complexity-src-test.json.
+Cognitive complexity ratchet OK: 145/145 violations (threshold: 20).
+Saved cognitive complexity report to test-output/analysis/cognitive-complexity-src-scripts.json.
+Circular dependency ratchet OK: 0/0 cycle group(s).
+Saved cycle report to test-output/analysis/madge-circular-src-scripts-test.json.
+JSON report saved to test-output/analysis/jscpd-src-scripts/jscpd-report.json
+[src+scripts] Duplication ratchet OK: 35/35 clone group(s), 1109/1109 duplicated line(s).
+Saved duplication report to test-output/analysis/jscpd-src-scripts/jscpd-report.json.
+JSON report saved to test-output/analysis/jscpd-test/jscpd-report.json
+[test] Duplication ratchet OK: 620/620 clone group(s), 22292/22292 duplicated line(s).
+Saved duplication report to test-output/analysis/jscpd-test/jscpd-report.json.
+/home/peter/.local/state/lagrange-lab-worker/generic/runs/576b7de2-246f-41de-a33a-e81984f8d83c/work/source/solve/changes/global-owner-debt-inventory/inventory.json
+{"filesWithDebt":1236,"rankedBoundaryCount":110,"semanticBoundaryCount":20,"fallbackBoundaryCount":90,"childQuestCount":16}
+PREPARATION_STAGE_END=global-owner-debt-inventory EXIT=0
+GLOBAL_OWNER_INVENTORY_STATUS=generation completed; fresh analyzer reports are retained observations, not global ratchet acceptance
+PREPARATION_STAGE_BEGIN=source-owner-index-generation
+
+> lagrange-server@0.4.0 generate:source-owner-index
+> node scripts/generate-source-owner-index.js
+
+wrote 57 source owner indexes
+PREPARATION_STAGE_END=source-owner-index-generation EXIT=0
+PREPARATION_STAGE_BEGIN=affected-cone-explanation
+changed:
+  solve/changes/global-owner-debt-inventory/inventory.json
+  solve/quests/canonical-json-nested-data/evidence/independent-review-cdc.md
+  solve/quests/canonical-json-nested-data/evidence/review-scope.md
+  solve/quests/canonical-json-nested-data/log.ndjson
+  solve/quests/canonical-json-nested-data/quest.json
+  solve/quests/cdc-delay-timer-cleanup/evidence/design.md
+  solve/quests/cdc-delay-timer-cleanup/log.ndjson
+  solve/quests/cdc-delay-timer-cleanup/quest.json
+  solve/quests/reviewed-foundation-integration/evidence/design.md
+  solve/quests/reviewed-foundation-integration/log.ndjson
+  solve/quests/reviewed-foundation-integration/quest.json
+  src/cdc/cdc-integration-service-lifecycle.js
+  src/diagnostics/INDEX.md
+  src/diagnostics/comparative-efficiency-opportunity-calculator.js
+  src/diagnostics/comparative-efficiency-opportunity-input-integrity.js
+  src/diagnostics/comparative-efficiency-opportunity-input-validation.js
+  src/node/replica-state-machine-lifecycle-observation.js
+  src/raft/raft-rs-durable-store.js
+  src/utils/canonical-json-data.js
+  test/cdc/cdc-delay-until-shutdown-resource.test.js
+  test/diagnostics/comparative-efficiency-opportunity-calculator.test.js
+  test/node/replica-lifecycle-observation-row-carrier.test.js
+  test/node/replica-lifecycle-observation-snapshot.test.js
+  test/raft/raft-rs-backend/durable-store-connection-custody.test.js
+  test/shards/impact-graph-seal.json
+  test/shards/primary-classes.json
+  test/shards/resource-classes.json
+  test/shards/subsystem-classes.json
+  test/utils/canonical-json-data.test.js
+
+subsystems:
+  admin-diagnostics
+  bootstrap-membership
+  cdc-metadata
+  runtime-primitives
+  storage-partition
+  storage-raft
+  test-infrastructure
+  transport-messaging
+  wasm-toolchain
+
+selected by:
+  changed-test: 6 test(s)
+  coupled-pair-witness: cdc-source-native-delivery:recipient-and-response: 332 test(s)
+  coupled-pair-witness: original-preparation-native-history:original-preparation: 152 test(s)
+  coupled-pair-witness: participant-origin-native-history:participant-origin: 218 test(s)
+  coupled-pair-witness: partition-session-transaction-store-persistence-admission:session-transaction: 218 test(s)
+  coupled-pair-witness: raft-rs-runtime-application-transaction:application-and-progress-transaction: 830 test(s)
+  coupled-pair-witness: raft-rs-runtime-lifecycle-entry:durable-lifecycle-admission: 904 test(s)
+  coupled-pair-witness: replica-create-failure-claim-and-retry-type:create-replay: 346 test(s)
+  coupled-pair-witness: replica-durable-generation-cleanup:cleanup-creation-storage-owner: 416 test(s)
+  impact-witness: cdc-source-native-delivery: 45 test(s)
+  impact-witness: original-retained-history-observation: 6 test(s)
+  impact-witness: partition-session-transaction-persistence-admission: 7 test(s)
+  impact-witness: raft-rs-runtime-application-transaction: 38 test(s)
+  impact-witness: raft-rs-runtime-lifecycle-entry: 9 test(s)
+  impact-witness: replica-create-failure-claim-and-retry-type: 8 test(s)
+  impact-witness: replica-durable-generation-cleanup: 4 test(s)
+  observer: directories: solve/changes/global-owner-debt-inventory/inventory.json: 20 test(s)
+  observer: directories: solve/quests/canonical-json-nested-data/evidence/independent-review-cdc.md: 66 test(s)
+  observer: directories: solve/quests/canonical-json-nested-data/evidence/review-scope.md: 66 test(s)
+  observer: directories: solve/quests/canonical-json-nested-data/log.ndjson: 66 test(s)
+  observer: directories: solve/quests/canonical-json-nested-data/quest.json: 66 test(s)
+  observer: directories: solve/quests/cdc-delay-timer-cleanup/evidence/design.md: 66 test(s)
+  observer: directories: solve/quests/cdc-delay-timer-cleanup/log.ndjson: 66 test(s)
+  observer: directories: solve/quests/cdc-delay-timer-cleanup/quest.json: 66 test(s)
+  observer: directories: solve/quests/reviewed-foundation-integration/evidence/design.md: 66 test(s)
+  observer: directories: solve/quests/reviewed-foundation-integration/log.ndjson: 66 test(s)
+  observer: directories: solve/quests/reviewed-foundation-integration/quest.json: 66 test(s)
+  observer: directories: src/cdc/cdc-integration-service-lifecycle.js: 135 test(s)
+  observer: directories: src/diagnostics/INDEX.md: 135 test(s)
+  observer: directories: src/diagnostics/comparative-efficiency-opportunity-calculator.js: 135 test(s)
+  observer: directories: src/diagnostics/comparative-efficiency-opportunity-input-integrity.js: 135 test(s)
+  observer: directories: src/diagnostics/comparative-efficiency-opportunity-input-validation.js: 135 test(s)
+  observer: directories: src/node/replica-state-machine-lifecycle-observation.js: 135 test(s)
+  observer: directories: src/raft/raft-rs-durable-store.js: 135 test(s)
+  observer: directories: src/utils/canonical-json-data.js: 123 test(s)
+  observer: directories: test/cdc/cdc-delay-until-shutdown-resource.test.js: 95 test(s)
+  observer: directories: test/diagnostics/comparative-efficiency-opportunity-calculator.test.js: 95 test(s)
+  observer: directories: test/node/replica-lifecycle-observation-row-carrier.test.js: 95 test(s)
+  observer: directories: test/node/replica-lifecycle-observation-snapshot.test.js: 95 test(s)
+  observer: directories: test/raft/raft-rs-backend/durable-store-connection-custody.test.js: 99 test(s)
+  observer: directories: test/shards/impact-graph-seal.json: 87 test(s)
+  observer: directories: test/shards/primary-classes.json: 52 test(s)
+  observer: directories: test/shards/resource-classes.json: 88 test(s)
+  observer: directories: test/shards/subsystem-classes.json: 88 test(s)
+  observer: directories: test/utils/canonical-json-data.test.js: 95 test(s)
+  observer: files: solve/changes/global-owner-debt-inventory/inventory.json: 19 test(s)
+  observer: files: src/node/replica-state-machine-lifecycle-observation.js: 1 test(s)
+  observer: files: src/raft/raft-rs-durable-store.js: 8 test(s)
+  observer: files: src/utils/canonical-json-data.js: 70 test(s)
+  observer: files: test/shards/impact-graph-seal.json: 10 test(s)
+  observer: files: test/shards/primary-classes.json: 44 test(s)
+  observer: files: test/shards/resource-classes.json: 8 test(s)
+  observer: files: test/shards/subsystem-classes.json: 9 test(s)
+  safety-spine: 32 test(s)
+  subsystem-widening: admin-diagnostics: 121 test(s)
+  subsystem-widening: bootstrap-membership: 346 test(s)
+  subsystem-widening: cdc-metadata: 70 test(s)
+  subsystem-widening: runtime-primitives: 23 test(s)
+  subsystem-widening: storage-partition: 218 test(s)
+  subsystem-widening: storage-raft: 152 test(s)
+  subsystem-widening: test-infrastructure: 172 test(s)
+  subsystem-widening: transport-messaging: 114 test(s)
+  subsystem-widening: wasm-toolchain: 74 test(s)
+
+observed elsewhere (convergence-probe, the canary's non-gating step):
+  test/integration/message-group-multi-join-formation.integration.test.js
+  test/integration/node-join-convergence-slo.integration.test.js
+  test/integration/user-table-metadata-fanout.integration.test.js
+
+selection:
+  WIDENED
+
+total:
+  1426 unique test(s)
+PREPARATION_STAGE_END=affected-cone-explanation EXIT=0
+PREPARATION_STAGE_BEGIN=affected-cone-full-list-and-lanes
+CANONICAL_SELECTED_LIST_BEGIN
+test/active-gate/active-gate-authoritative-repair-convergence.test.js
+test/address/address-malformed-rejection.property.test.js
+test/address/address-manager-peer-location-authority.test.js
+test/address/address-manager.test.js
+test/address/address-round-trip.property.test.js
+test/address/address-uniqueness.property.test.js
+test/admin/admin-adapter-contract.test.js
+test/admin/admin-api-adapter.test.js
+test/admin/admin-audit-context.test.js
+test/admin/admin-audit-queries.test.js
+test/admin/admin-auth-middleware.test.js
+test/admin/admin-authoritative-repair-policy.test.js
+test/admin/admin-cli-compat.test.js
+test/admin/admin-command-metrics.test.js
+test/admin/admin-control-snapshot-active-gate-handoff-target-blocked.test.js
+test/admin/admin-control-snapshot-bounded-probe-deadline.test.js
+test/admin/admin-control-snapshot-completed-placement-handoff-repair.test.js
+test/admin/admin-control-snapshot-current-priority-placement.test.js
+test/admin/admin-control-snapshot-heartbeat-lease-freshness.test.js
+test/admin/admin-control-snapshot-local-published-membership-recovery.test.js
+test/admin/admin-control-snapshot-owner-recovery-retry-options.test.js
+test/admin/admin-control-snapshot-priority-recovery-authority.test.js
+test/admin/admin-control-snapshot-priority-recovery-dormant-context-retirement.test.js
+test/admin/admin-control-snapshot-readiness-sync-first.test.js
+test/admin/admin-control-snapshot-response-contract.test.js
+test/admin/admin-control-snapshot-retry-decision.test.js
+test/admin/admin-control-snapshot-served-handoff-coverage.test.js
+test/admin/admin-control-snapshot-served-handoff-writer-coupling.test.js
+test/admin/admin-control-snapshot.test.js
+test/admin/admin-deprecation.test.js
+test/admin/admin-meta-command-handlers.test.js
+test/admin/admin-meta-delegator.test.js
+test/admin/admin-meta-endpoint-builder.test.js
+test/admin/admin-mutation-guard.pbt.test.js
+test/admin/admin-mutation-guard.test.js
+test/admin/admin-owner-mutation-outcomes.test.js
+test/admin/admin-owner-operations.test.js
+test/admin/admin-preflight-repair-wait-bound-spent.test.js
+test/admin/admin-preflight-snapshot.test.js
+test/admin/admin-query-result-envelope-participant-failures.test.js
+test/admin/admin-query-result-message-envelope.test.js
+test/admin/admin-quota-enforcer.test.js
+test/admin/admin-runtime-service-views.test.js
+test/admin/admin-service-diagnostics.test.js
+test/admin/admin-service-discovery.test.js
+test/admin/admin-service-message-adapter.test.js
+test/admin/admin-shared-metadata-consistency.test.js
+test/admin/admin-test-run-service.test.js
+test/admin/admin-trace-context.test.js
+test/admin/admin-websocket-api-control-snapshot-query.test.js
+test/admin/admin-websocket-api-diagnostics-and-control-snapshot.test.js
+test/admin/admin-websocket-api-http-and-debug-routes.test.js
+test/admin/admin-websocket-api-live-query-and-observation.test.js
+test/admin/admin-websocket-api-messaging-and-errors.test.js
+test/admin/admin-websocket-api-service-discovery-query.test.js
+test/admin/admin-websocket-api-shutdown-state.test.js
+test/admin/admin-websocket-api-table-discovery-readiness.test.js
+test/admin/admin-websocket-api-timeout.test.js
+test/admin/admin-websocket-api.test.js
+test/admin/admin-websocket-external-bind-policy.test.js
+test/admin/admin-websocket-load-lane-priority-recovery-emission.test.js
+test/admin/admin-websocket-payload-size-attribution.test.js
+test/admin/admin-websocket-service-dispatcher.test.js
+test/admin/cache-dump-completeness.property.test.js
+test/admin/completed-placement-autonomous-progress.test.js
+test/admin/control-snapshot-stale-watermark-transitions.test.js
+test/admin/load-admission-ingress-identity.test.js
+test/admin/standalone-test-run-server.test.js
+test/admin/test-run-dashboard-trace-panel.test.js
+test/admin/wasm-meta-serviceized-routing.test.js
+test/boot/load-env.test.js
+test/bootstrap/_min-test.test.js
+test/bootstrap/address-takeover-live-ab.test.js
+test/bootstrap/address-takeover-workflow.test.js
+test/bootstrap/artifact-payload-table-schemas.test.js
+test/bootstrap/behaviour-changing-consumer-convergence.test.js
+test/bootstrap/boot-incarnation-owner-concurrency.test.js
+test/bootstrap/boot-incarnation-owner.test.js
+test/bootstrap/boot-incarnation-reservation-census.test.js
+test/bootstrap/boot-incarnation-superseded-floor.test.js
+test/bootstrap/bootstrap-api-admission-snapshots.test.js
+test/bootstrap/bootstrap-api-readiness-gating.test.js
+test/bootstrap/bootstrap-api-readiness-publication.test.js
+test/bootstrap/bootstrap-api-ready-nodes.test.js
+test/bootstrap/bootstrap-api-rejoin.test.js
+test/bootstrap/bootstrap-api-replica-owner-conflict.test.js
+test/bootstrap/bootstrap-api-seed-join-gate-authoritative-refresh.test.js
+test/bootstrap/bootstrap-api.test.js
+test/bootstrap/bootstrap-cdc-readiness-gate.test.js
+test/bootstrap/bootstrap-cleanup.property.test.js
+test/bootstrap/bootstrap-control-plane-query-error-contract.test.js
+test/bootstrap/bootstrap-endpoint-table.property.test.js
+test/bootstrap/bootstrap-epoch-manager-lifecycle.test.js
+test/bootstrap/bootstrap-errors.property.test.js
+test/bootstrap/bootstrap-failure-cleanup.test.js
+test/bootstrap/bootstrap-membership-owner-outcome-consumers.test.js
+test/bootstrap/bootstrap-mode.test.js
+test/bootstrap/bootstrap-phase-state-machine-integration.test.js
+test/bootstrap/bootstrap-readiness-ladder.test.js
+test/bootstrap/bootstrap-readiness-state.test.js
+test/bootstrap/bootstrap-replica-registration-trace.test.js
+test/bootstrap/bootstrap-request-admission-precheck.test.js
+test/bootstrap/bootstrap-request-deferral-wait-bound-spent.test.js
+test/bootstrap/bootstrap-request-execution-timeout.test.js
+test/bootstrap/bootstrap-request-shut-down-writer-not-ready.test.js
+test/bootstrap/bootstrap-response-completeness.property.test.js
+test/bootstrap/bootstrap-response-performance.test.js
+test/bootstrap/bootstrap-sequence.test.js
+test/bootstrap/bootstrap-service-ready-signal.test.js
+test/bootstrap/bootstrap-shutdown-quiesce.test.js
+test/bootstrap/bootstrap-state-tracker.test.js
+test/bootstrap/bootstrap-system-table-invariant.property.test.js
+test/bootstrap/bootstrap-topology-snapshot-owner.test.js
+test/bootstrap/bootstrap-topology-snapshot.test.js
+test/bootstrap/bootstrap-websocket-server-reentry.test.js
+test/bootstrap/cache-hydration-correctness.property.test.js
+test/bootstrap/cache-hydration-gate.property.test.js
+test/bootstrap/cache-hydration-gate.test.js
+test/bootstrap/cache-hydration-performance.test.js
+test/bootstrap/cache-hydration-strictness.test.js
+test/bootstrap/call-cell-invocation-setup.test.js
+test/bootstrap/cdc-initial-subscription-leader-fallback.test.js
+test/bootstrap/cdc-leader-only-replication.test.js
+test/bootstrap/cdc-propagation-message-group-selection.test.js
+test/bootstrap/cdc-propagation-source-owner-currentness.test.js
+test/bootstrap/cdc-source-occurrence-delivery.integration.test.js
+test/bootstrap/cdc-subscription-consistency.property.test.js
+test/bootstrap/cleanup-ownership-order-characterization.test.js
+test/bootstrap/cluster-identity-join-gate.test.js
+test/bootstrap/cluster-identity-mint.test.js
+test/bootstrap/cluster-identity.test.js
+test/bootstrap/cluster-mesh-connectivity.property.test.js
+test/bootstrap/cold-node-authority-reacquisition-pressure.test.js
+test/bootstrap/connect-websocket-phase.test.js
+test/bootstrap/contract-first-authoring-fidelity.test.js
+test/bootstrap/control-plane-rollout-controls.test.js
+test/bootstrap/control-plane-write-health-owner.test.js
+test/bootstrap/create-message-group-phase.test.js
+test/bootstrap/create-self-hosted-registration.test.js
+test/bootstrap/critical-placement-authoritative-evidence.test.js
+test/bootstrap/critical-placement-classification-control.test.js
+test/bootstrap/critical-placement-convergence.test.js
+test/bootstrap/critical-placement-trace-classifier.test.js
+test/bootstrap/debug-meta-table-schemas.test.js
+test/bootstrap/duplicate-replica-assignment.test.js
+test/bootstrap/durable-rejoin-incarnation-advance.test.js
+test/bootstrap/durable-rejoin-partition-restore-planner.test.js
+test/bootstrap/dynamic-partition-cdc-subscription.test.js
+test/bootstrap/formation-readiness-owner-single-form.test.js
+test/bootstrap/fresh-join-multi-peer-contact.test.js
+test/bootstrap/fresh-join-registration-runtime-replacement.integration.test.js
+test/bootstrap/fresh-join-via-non-seed-node.integration.test.js
+test/bootstrap/fresh-seed-activation.integration.test.js
+test/bootstrap/guarded-runtime-service-handler.test.js
+test/bootstrap/hydrate-system-cache-from-bootstrap.test.js
+test/bootstrap/join-checkpoint-progression-characterization.test.js
+test/bootstrap/join-cleanup.property.test.js
+test/bootstrap/join-coordinator.test.js
+test/bootstrap/join-delegate-bundles.test.js
+test/bootstrap/join-formation-discovery-window-budget.test.js
+test/bootstrap/join-lifecycle-sub-phase-parity-characterization.test.js
+test/bootstrap/join-message-group-identity-record.test.js
+test/bootstrap/join-message-group-phase.test.js
+test/bootstrap/join-readiness-evaluator.test.js
+test/bootstrap/join-readiness-non-participating-exclusion.repro.test.js
+test/bootstrap/join-readiness-non-self-targeted-preservation.property.test.js
+test/bootstrap/join-readiness-self-targeted-exclusion.property.test.js
+test/bootstrap/join-readiness-startup-authority.test.js
+test/bootstrap/join-readiness-warming-node-exclusion.property.test.js
+test/bootstrap/join-readiness-warming-node-preservation.property.test.js
+test/bootstrap/join-resume-replica-lifecycle-owner.test.js
+test/bootstrap/join-retry-patience-selectable.test.js
+test/bootstrap/join-session-store.test.js
+test/bootstrap/join-startup-owner-routing.test.js
+test/bootstrap/joining-cdc-gate.test.js
+test/bootstrap/latency-topology-owner-delegation.test.js
+test/bootstrap/latency-topology-table-schemas.test.js
+test/bootstrap/lifecycle-controller.test.js
+test/bootstrap/lifecycle-owner-replica-routing.test.js
+test/bootstrap/lifecycle-unification.test.js
+test/bootstrap/management-action-authority.test.js
+test/bootstrap/management-v1-l4-l3.test.js
+test/bootstrap/management-v1-route-authority.test.js
+test/bootstrap/mesh-reconcile-terminal-revive.test.js
+test/bootstrap/message-group-activation-handler-boundary.test.js
+test/bootstrap/message-group-assignment-centralization.test.js
+test/bootstrap/message-group-assignment.test.js
+test/bootstrap/message-group-service-activation.test.js
+test/bootstrap/message-group-single-owner-invariant.test.js
+test/bootstrap/message-groups-first-bootstrap-order.property.test.js
+test/bootstrap/meta-service-endpoint-registration.test.js
+test/bootstrap/move-replica-assignment-token.test.js
+test/bootstrap/no-eslint-disable.test.js
+test/bootstrap/node-bootstrap-consistency.property.test.js
+test/bootstrap/node-incarnation.test.js
+test/bootstrap/node-joining-cdc-catchup-wiring.test.js
+test/bootstrap/node-joining-cdc-readiness-gate-signal.test.js
+test/bootstrap/node-joining-cdc-readiness-gate.test.js
+test/bootstrap/node-joining-cdc-subscription.test.js
+test/bootstrap/node-joining-control-plane-heartbeat.test.js
+test/bootstrap/node-joining-formation-barrier-waiting-liveness-log.test.js
+test/bootstrap/node-joining-http-post-timeout.test.js
+test/bootstrap/node-joining-infrastructure-join-progress-witness.test.js
+test/bootstrap/node-joining-lease-registration.test.js
+test/bootstrap/node-joining-ready-signal-retry.test.js
+test/bootstrap/node-joining-retryable-resume-preserves-state.test.js
+test/bootstrap/node-joining-service-bootstrap-resume-budget.test.js
+test/bootstrap/node-joining-service-canonical-readiness.test.js
+test/bootstrap/node-joining-service-final-sql-runtime-handoff.test.js
+test/bootstrap/node-joining-service-join-lifecycle-resume.test.js
+test/bootstrap/node-joining-service-lifecycle-owner-handoff.test.js
+test/bootstrap/node-joining-service-mesh-reconciliation.test.js
+test/bootstrap/node-joining-service-message-group-activation.test.js
+test/bootstrap/node-joining-service-node-state-update-ingress.test.js
+test/bootstrap/node-joining-service-register-service-retries.test.js
+test/bootstrap/node-joining-service.test.js
+test/bootstrap/node-ready-rebalance-trigger.test.js
+test/bootstrap/node-registration-idempotency.test.js
+test/bootstrap/node-registration-owner.test.js
+test/bootstrap/node-state-gating.property.test.js
+test/bootstrap/odd-replica-count-invariant.property.test.js
+test/bootstrap/owners/bootstrap-readiness-owner.test.js
+test/bootstrap/owners/bootstrap-readiness-probe-async-fallback.test.js
+test/bootstrap/partition-activation-handler-boundary.test.js
+test/bootstrap/partition-cdc-propagation-subscriber.test.js
+test/bootstrap/partition-service-activation.test.js
+test/bootstrap/phase-adapter-removal.test.js
+test/bootstrap/phase-event-ordering-characterization.test.js
+test/bootstrap/phase-failure-handling.property.test.js
+test/bootstrap/phases/join-resume-iteration-not-spent-wait.test.js
+test/bootstrap/phases/wait-for-leadership-phase-retryable-timeout.test.js
+test/bootstrap/pipeline/join-startup-plan-segment-contract.test.js
+test/bootstrap/pipeline/seed-registration-phase-custody.test.js
+test/bootstrap/pipeline/startup-pipeline-runner.test.js
+test/bootstrap/production-scheduling-defaults.test.js
+test/bootstrap/query-state-single-owner.test.js
+test/bootstrap/readiness-handoff-liveness-witness.test.js
+test/bootstrap/readiness-service-sync-reads.test.js
+test/bootstrap/register-node-in-cluster.test.js
+test/bootstrap/register-service-move-handoff-refused.test.js
+test/bootstrap/registered-service-row-raft-role.test.js
+test/bootstrap/rejoin-hints.test.js
+test/bootstrap/replica-evidence-conflict.test.js
+test/bootstrap/replica-runtime-attachment-authority.test.js
+test/bootstrap/replication-target-authority.test.js
+test/bootstrap/required-dependency-validation.property.test.js
+test/bootstrap/restart-cdc-recovery-diagnostics.test.js
+test/bootstrap/restart-cdc-subscription-hardening.test.js
+test/bootstrap/retained-seed-original-handoff.integration.test.js
+test/bootstrap/return-value-completeness.property.test.js
+test/bootstrap/runtime-service-rebalancer-owner.test.js
+test/bootstrap/schema-operations-table-schema.test.js
+test/bootstrap/seed-cache-hydration-handoff.test.js
+test/bootstrap/seed-delegate-bundles.test.js
+test/bootstrap/seed-infrastructure-phase.test.js
+test/bootstrap/seed-infrastructure-runtime-identity.test.js
+test/bootstrap/seed-message-group-cleanup-custody.test.js
+test/bootstrap/seed-message-group-founder-open-refusal.test.js
+test/bootstrap/seed-original-attempt-lifetime.test.js
+test/bootstrap/seed-participant-release-failure-projection.test.js
+test/bootstrap/seed-registration-election-scheduling.test.js
+test/bootstrap/seed-registration-phase.test.js
+test/bootstrap/seed-release-failure-custody.test.js
+test/bootstrap/seed-release-once-per-cohort.test.js
+test/bootstrap/seed-restart-recovery-gate.test.js
+test/bootstrap/seed-retained-effects-preparation.test.js
+test/bootstrap/seed-retained-effects.integration.test.js
+test/bootstrap/seed-retained-effects.test.js
+test/bootstrap/seed-startup-listener-failure.integration.test.js
+test/bootstrap/seed-startup-session-store.test.js
+test/bootstrap/seed-teardown-pending-cdc-delivery.test.js
+test/bootstrap/service-instance-table-schema.test.js
+test/bootstrap/shared/cdc-integration-setup.test.js
+test/bootstrap/shared/control-plane-setup.test.js
+test/bootstrap/shared/message-router-setup.test.js
+test/bootstrap/shared/meta-service-definition-registration.test.js
+test/bootstrap/shared/replica-handler-setup.test.js
+test/bootstrap/shared/service-installation-reconciler-setup.test.js
+test/bootstrap/shared/startup-sql-runtime-handoff.test.js
+test/bootstrap/startup-authority-consumption.test.js
+test/bootstrap/startup-convergence-gate.test.js
+test/bootstrap/startup-convergence-wait-bound-spent.test.js
+test/bootstrap/startup-recovery-coordinator.test.js
+test/bootstrap/startup-runtime-handoff-owner.test.js
+test/bootstrap/startup-runtime-surface-owner.test.js
+test/bootstrap/storage-budget-bootstrap.test.js
+test/bootstrap/support-envelope-owner.test.js
+test/bootstrap/system-leader-readiness-address-gate.test.js
+test/bootstrap/system-partition-classification-owner.test.js
+test/bootstrap/traffic-readiness-utils.test.js
+test/bootstrap/transaction-recovery-handoff-outcome.test.js
+test/bootstrap/unified-service-lifecycle-cutover-guards.test.js
+test/bootstrap/universal-partition-implementation.property.test.js
+test/bootstrap/wasm-meta-table-schemas.test.js
+test/cache/cache-epoch-rejection.property.test.js
+test/cache/cache-hydration-completeness.property.test.js
+test/cache/cache-hydration-metrics.test.js
+test/cache/cache-replica-incarnation-coherence.test.js
+test/cache/cache-state-filtering.property.test.js
+test/cache/cdc-cache-delete-resurrection.test.js
+test/cache/cdc-event-broadcast-completeness.property.test.js
+test/cache/concurrent-services-table-writes.property.test.js
+test/cache/default-cache-sync-table-selection.test.js
+test/cache/hydration-no-cdc-generation.property.test.js
+test/cache/leader-readiness-gate.property.test.js
+test/cache/leader-readiness-gate.test.js
+test/cache/partial-hydration-resilience.property.test.js
+test/cache/read-only-system-table-cache.test.js
+test/cache/shared-row-read.test.js
+test/cache/system-cache-client.test.js
+test/cache/system-cache-endpoint-query.property.test.js
+test/cache/system-table-cache-anti-entropy-sweep.test.js
+test/cache/system-table-cache-cdc-provenance.test.js
+test/cache/system-table-cache-consistency.property.test.js
+test/cache/system-table-cache-lifecycle-delete-ordering.test.js
+test/cache/system-table-cache-observation.test.js
+test/cache/system-table-cache-services-lifecycle-merge.test.js
+test/cache/system-table-cache-time-authority.test.js
+test/cache/system-table-cache-tombstone-time-authority.test.js
+test/cache/system-table-cache.test.js
+test/cdc/authoritative-owner-rpc-sql-fallback.test.js
+test/cdc/bootstrap-direct-write-raft-routing.test.js
+test/cdc/bootstrap-mode-routing.property.test.js
+test/cdc/cdc-authoritative-catchup-hydration.test.js
+test/cdc/cdc-authoritative-catchup-terminal.test.js
+test/cdc/cdc-cache-visibility-wait-bound-spent.test.js
+test/cdc/cdc-confirmation-tracker.property.test.js
+test/cdc/cdc-confirmation-tracker.test.js
+test/cdc/cdc-confirmation-wiring.test.js
+test/cdc/cdc-delay-until-shutdown-resource.test.js
+test/cdc/cdc-delete-cache-absence-convergence.test.js
+test/cdc/cdc-delivery-complete-vector.test.js
+test/cdc/cdc-delivery-outcome.test.js
+test/cdc/cdc-emitter.property.test.js
+test/cdc/cdc-emitter.test.js
+test/cdc/cdc-event-delivery.property.test.js
+test/cdc/cdc-event-envelope.test.js
+test/cdc/cdc-event-handler.test.js
+test/cdc/cdc-integration-service-authoritative-reads.test.js
+test/cdc/cdc-integration-service-execute-sql-and-delivery.test.js
+test/cdc/cdc-integration-service-mutations-and-epoch.test.js
+test/cdc/cdc-integration-service-node-state-and-bootstrap.test.js
+test/cdc/cdc-integration-service-sql-route-metrics.test.js
+test/cdc/cdc-integration-service-time-seam.test.js
+test/cdc/cdc-integration-service-write-metrics.test.js
+test/cdc/cdc-integration-service.test.js
+test/cdc/cdc-observability.test.js
+test/cdc/cdc-pipeline-metrics.property.test.js
+test/cdc/cdc-pipeline-metrics.test.js
+test/cdc/cdc-pipeline-readiness-gate.property.test.js
+test/cdc/cdc-pipeline-readiness-gate.test.js
+test/cdc/cdc-pipeline-readiness-wait-bound-spent.test.js
+test/cdc/cdc-projection-wait-observable.test.js
+test/cdc/cdc-propagation-metrics.test.js
+test/cdc/cdc-refresh-authoritative-cache-row.test.js
+test/cdc/cdc-routed-mutation-wait-bound-spent.test.js
+test/cdc/cdc-shutdown-terminal-owner-write.test.js
+test/cdc/cdc-sql-builder.test.js
+test/cdc/cdc-system-table-write-failure-participant-detail.test.js
+test/cdc/cdc-terminal-gate-inflight.test.js
+test/cdc/current-epoch-propagation.integration.test.js
+test/cdc/endpoint-cdc-propagation.property.test.js
+test/cdc/node-address-default-bug.test.js
+test/cdc/node-endpoints-cdc.test.js
+test/cdc/node-state-tracking.property.test.js
+test/cdc/retry-delay-backoff.property.test.js
+test/cdc/routed-system-table-write-answers-at-commit.test.js
+test/cdc/runtime-cdc-wiring.test.js
+test/cdc/schema-default-application.property.test.js
+test/cdc/unique-constraint-handling.property.test.js
+test/cdc/websocket-address-derivation.property.test.js
+test/cdc/write-then-read-projection-census.test.js
+test/cli/core/base-view-model.test.js
+test/cli/service-init-scaffold.test.js
+test/cli/sql/query-input.test.js
+test/cli/views/config-view.test.js
+test/config/architecture-ownership-guardrails.test.js
+test/config/code-path-uniqueness.property.test.js
+test/config/control-plane-gateway-mutation-guardrails.test.js
+test/config/control-plane-gateway-registry-guardrails.test.js
+test/config/dynamic-config-service.test.js
+test/config/latency-topology-ownership-guardrails.test.js
+test/config/system-cache-write-callsite-guardrails.test.js
+test/config/test-configuration-compliance.property.test.js
+test/constants/constants-separation.test.js
+test/constants/node-state-cache-membership.property.test.js
+test/constants/runtime.test.js
+test/constants/service-profile.test.js
+test/constants/states.property.test.js
+test/constants/unified-service-lifecycle-constants.test.js
+test/constants/wasm-meta.test.js
+test/contract/callback-axis-accretion.test.js
+test/contract/message-router-contract.test.js
+test/control-plane/current-membership-epoch-null-unreadable.test.js
+test/control-plane/endpoint-reader-currentness.test.js
+test/control-plane/endpoint-writer-census.test.js
+test/control-plane/failure-class-registry.test.js
+test/control-plane/formation-release-handoff-interaction-registry.test.js
+test/control-plane/membership-layer-boundary.guard.test.js
+test/control-plane/membership-publication-first-epoch-members.test.js
+test/control-plane/readiness-single-contract-build.test.js
+test/convergence/membership-publication-owner-driver-host.test.js
+test/debug-runtime/breakpoint-manager.integration.test.js
+test/debug-runtime/breakpoint-manager.test.js
+test/debug-runtime/dap-server-callback.integration.test.js
+test/debug-runtime/dap-server-service.integration.test.js
+test/debug-runtime/dap-server.test.js
+test/debug-runtime/debug-coordinator.integration.test.js
+test/debug-runtime/debug-coordinator.test.js
+test/debug-runtime/debug-metadata-service.test.js
+test/debug-runtime/debug-overhead-regression.test.js
+test/debug-runtime/distributed-debug-e2e.integration.test.js
+test/debug-runtime/dwarf-index-builder.test.js
+test/debug-runtime/dwarf-index-cache.test.js
+test/debug-runtime/dwarf-index-pipeline.test.js
+test/debug-runtime/host-import-registry.test.js
+test/debug-runtime/replay-runtime.test.js
+test/debug-runtime/runtime-introspector.test.js
+test/debug-runtime/snapshot-recorder.test.js
+test/debug-runtime/vscode-dwarf-parser-backend.test.js
+test/debug-runtime/wasm-runtime-adapter.test.js
+test/debug/debug-constants.test.js
+test/debug/debug-emitter.test.js
+test/debug/debug-session-resolver.test.js
+test/debug/debug-trace-overhead-regression.test.js
+test/debug/trace-collector-multi-node.integration.test.js
+test/debug/trace-collector.property.test.js
+test/debug/trace-collector.test.js
+test/diagnostics/admission-observer-ready-lease-witness.test.js
+test/diagnostics/budget-timeout-accounting.test.js
+test/diagnostics/causal-analysis-schema.test.js
+test/diagnostics/causal-graph-builder.test.js
+test/diagnostics/comparative-efficiency-opportunity-calculator.test.js
+test/diagnostics/event-loop-gap-watchdog.test.js
+test/diagnostics/failure-class-taxonomy.test.js
+test/diagnostics/formation-attribution-semantics.test.js
+test/diagnostics/formation-attribution-window.test.js
+test/diagnostics/formation-turn-attribution.test.js
+test/diagnostics/invariant-review.test.js
+test/diagnostics/lease-liveness-decision-neutrality.test.js
+test/diagnostics/raft-churn-sync-section-attribution.test.js
+test/diagnostics/resource-diagnostics-sampler.test.js
+test/diagnostics/source-fingerprint.test.js
+test/diagnostics/stop-condition-decision.test.js
+test/diagnostics/sync-section-clock-seam.test.js
+test/diagnostics/topology-convergence-active-gate-handoff-route.test.js
+test/diagnostics/topology-convergence-graph.test.js
+test/diagnostics/topology-convergence-readiness-support-evidence.test.js
+test/distributed/harness/__tests__/benchmark-claim-admission.test.js
+test/distributed/harness/__tests__/benchmark-cohort-preserving-dataset-reset.test.js
+test/distributed/harness/__tests__/benchmark-history-selection.test.js
+test/distributed/harness/__tests__/benchmark-oltp-state-reconciliation.test.js
+test/distributed/harness/__tests__/capture-completeness-handoff.test.js
+test/distributed/harness/__tests__/certification-evidence-archive.test.js
+test/distributed/harness/__tests__/certification-image-identity.test.js
+test/distributed/harness/__tests__/cluster-active-gate-admin-probe-timeout-projection.test.js
+test/distributed/harness/__tests__/cluster-active-gate-load-selected-timeout-owner-recovery.test.js
+test/distributed/harness/__tests__/cluster-active-gate-selected-transport-closed-owner-recovery-projection.test.js
+test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js
+test/distributed/harness/__tests__/cluster-active-probe-resample-after-snapshot-lane.test.js
+test/distributed/harness/__tests__/cluster-active-wait-readiness-failure.test.js
+test/distributed/harness/__tests__/cluster-active-wait-snapshot-retention.test.js
+test/distributed/harness/__tests__/cluster-bootstrap-api-wait.test.js
+test/distributed/harness/__tests__/cluster-control-snapshot-owner-recovery-late-floor.test.js
+test/distributed/harness/__tests__/cluster-control-snapshot-repair-pressure.test.js
+test/distributed/harness/__tests__/cluster-lifecycle-active-wait-suite.test.js
+test/distributed/harness/__tests__/cluster-load-readiness-no-progress-elapsed-budget.test.js
+test/distributed/harness/__tests__/cluster-load-readiness-stable-window-forward-dating.test.js
+test/distributed/harness/__tests__/cluster-log-incarnation-restart-order.test.js
+test/distributed/harness/__tests__/cluster-node-handle-query.test.js
+test/distributed/harness/__tests__/cluster-partition-env.test.js
+test/distributed/harness/__tests__/cluster-probe-active-state-readiness.test.js
+test/distributed/harness/__tests__/cluster-probe-control-snapshot-coverage.test.js
+test/distributed/harness/__tests__/cluster-probe-load-publication-gate.test.js
+test/distributed/harness/__tests__/cluster-probe-startup-snapshot-projection.test.js
+test/distributed/harness/__tests__/cluster-publication-membership-count.test.js
+test/distributed/harness/__tests__/cluster-quiescence-observer-cohort.test.js
+test/distributed/harness/__tests__/cluster-restart-recovery-held.test.js
+test/distributed/harness/__tests__/cluster-runtime-environment-allowlist.test.js
+test/distributed/harness/__tests__/cluster-start-node-lifecycle.test.js
+test/distributed/harness/__tests__/cluster-stop-load-config-readiness.test.js
+test/distributed/harness/__tests__/cluster.test.js
+test/distributed/harness/__tests__/comparative-benchmark-chain-acceptance.test.js
+test/distributed/harness/__tests__/comparative-benchmark-defect-regressions.test.js
+test/distributed/harness/__tests__/comparative-benchmark-runner-campaign.test.js
+test/distributed/harness/__tests__/comparative-benchmark-runner-harness-identity.test.js
+test/distributed/harness/__tests__/comparative-benchmark-runner-lab-hosts.test.js
+test/distributed/harness/__tests__/comparative-benchmark-runner-semantic-gate.test.js
+test/distributed/harness/__tests__/comparative-benchmark-runner-workload-call-site.test.js
+test/distributed/harness/__tests__/failure-bundle-log-window-coverage.test.js
+test/distributed/harness/__tests__/failure-bundle.test.js
+test/distributed/harness/__tests__/fresh-formation-routability-predicate.test.js
+test/distributed/harness/__tests__/logging-publication-queue-source-identity.test.js
+test/distributed/harness/__tests__/memory-soak-enforcement-oracle.test.js
+test/distributed/harness/__tests__/node-handle-control-snapshot-fallback.test.js
+test/distributed/harness/__tests__/owner-interaction-model.test.js
+test/distributed/harness/__tests__/public-path-multinode-baseline-scenario.test.js
+test/distributed/harness/__tests__/public-path-scale-and-failure-certification.test.js
+test/distributed/harness/__tests__/real-product-cluster-deployer-identity.test.js
+test/distributed/harness/__tests__/real-product-workload-driver-dispatch.test.js
+test/distributed/harness/__tests__/real-product-workload-driver-lagrange-wire-facts.test.js
+test/distributed/harness/__tests__/real-product-workload-driver-outcomes.test.js
+test/distributed/harness/__tests__/report-writer-serialization-degrade.test.js
+test/distributed/harness/__tests__/report-writer.property.test.js
+test/distributed/harness/__tests__/report-writer.test.js
+test/distributed/harness/__tests__/restart-recovery-handoff-failure-barrier.test.js
+test/distributed/harness/__tests__/run.test.js
+test/distributed/harness/__tests__/scenario-a-prestart-admission.test.js
+test/distributed/harness/__tests__/scenario-a-semantic-proof-journey.test.js
+test/distributed/harness/__tests__/scenario-certification.test.js
+test/distributed/harness/__tests__/scenario-ground-truth.test.js
+test/distributed/harness/__tests__/scenario-host-topology.test.js
+test/distributed/harness/__tests__/scenario-run-artifact-hygiene.test.js
+test/distributed/harness/__tests__/startup-runtime-handoff-readiness-projection.test.js
+test/distributed/harness/__tests__/tidb-canonical-semantic-case-completion.test.js
+test/distributed/harness/__tests__/unexpected-node-exit-sweep.test.js
+test/distributed/harness/__tests__/user-table-leader-placement-spread-scenario.test.js
+test/distributed/harness/transaction-recovery-poison-row-live-contract.test.js
+test/distributed/reference-client/lagrange-scenario-a-slices.test.js
+test/distributed/reference-client/lagrange-visibility-probe.test.js
+test/entrypoint-runtime-helpers-join-decision.test.js
+test/entrypoint/application-database-runtime-composition.test.js
+test/entrypoint/creation-recovery-process-custody.test.js
+test/entrypoint/early-admin-sql-engine.test.js
+test/entrypoint/embedded-lagrange-input.test.js
+test/entrypoint/entrypoint-admin-runtime-cleanup.test.js
+test/entrypoint/entrypoint-startup-shutdown-parity-characterization.test.js
+test/entrypoint/join-reattempt-wait-bound-spent.test.js
+test/entrypoint/process-custody-review.integration.test.js
+test/entrypoint/shutdown-best-effort-step-timebox.test.js
+test/entrypoint/startup-failed-cleanup-process-custody.test.js
+test/examples/lab-cluster-smoke.test.js
+test/hlc/hlc.test.js
+test/integration/admin-cdc-propagation.integration.test.js
+test/integration/authoritative-discovery-repair-pressure.integration.test.js
+test/integration/bidirectional-websocket.integration.test.js
+test/integration/call-cell-public-outcome-adversarial.integration.test.js
+test/integration/cdc-bootstrap-control-plane-pressure.integration.test.js
+test/integration/cdc-group-boundary-handoff.integration.test.js
+test/integration/cdc-propagation.integration.test.js
+test/integration/cdc-subscription-catchup.integration.test.js
+test/integration/concurrent-join-message-group-assignment.integration.test.js
+test/integration/control-plane-pgwire-scale-callers.integration.test.js
+test/integration/create-table-partition-provisioning.integration.test.js
+test/integration/critical-partition-learner-safety.integration.test.js
+test/integration/debug-join-flow.test.js
+test/integration/fresh-formation-without-admin-polling.integration.test.js
+test/integration/insert-or-ignore-raft-replay.integration.test.js
+test/integration/lagrange-server-npm-package.integration.test.js
+test/integration/load-channel-resilience.integration.test.js
+test/integration/managed-split-admission-reliability.integration.test.js
+test/integration/managed-split-writes-after-cutover.integration.test.js
+test/integration/membership-consistency.integration.test.js
+test/integration/message-group-fresh-identity-replacement.integration.test.js
+test/integration/message-group-learner-discovery.integration.test.js
+test/integration/message-group-learner-join.integration.test.js
+test/integration/message-group-learner-process-loss.integration.test.js
+test/integration/message-group-learner-promotion-recording-guards.integration.test.js
+test/integration/message-group-learner-promotion-selection-guards.integration.test.js
+test/integration/message-group-learner-promotion.integration.test.js
+test/integration/message-group-learner-recipient.integration.test.js
+test/integration/message-group-learner-runtime-authorization.integration.test.js
+test/integration/message-group-membership-claim-cache.integration.test.js
+test/integration/multi-node-raft-replication.integration.test.js
+test/integration/node-join-replica-activation.integration.test.js
+test/integration/pgwire-command-tag-real-engine.integration.test.js
+test/integration/public-binding-cell-invocation-seam.integration.test.js
+test/integration/raft-leader-election.integration.test.js
+test/integration/replica-handler-metadata-propagation.integration.test.js
+test/integration/replica-operations-owner-read-transport-readiness.integration.test.js
+test/integration/seed-migration-cutover-persisted.integration.test.js
+test/integration/seed-migration-interrupted-decision.integration.test.js
+test/integration/seed-migration-process-loss.integration.test.js
+test/integration/seed-node-bootstrap.integration.test.js
+test/integration/seed-owner-read-diagnosis.integration.test.js
+test/integration/user-table-local-cdc-readiness.integration.test.js
+test/integration/versioned-cdc-readiness-convergence.integration.test.js
+test/integration/websocket-create-replica-ack.integration.test.js
+test/invariants/invariant-catalog.test.js
+test/logging/log-query-service.test.js
+test/logging/log-retention-service.test.js
+test/logging/log-throttle.test.js
+test/logging/logging-consistency.property.test.js
+test/logging/logging-service.test.js
+test/logging/logs-persistence-startup.test.js
+test/logging/logs-table-service.test.js
+test/logging/wait-bound-spent-logs-path.test.js
+test/logging/wait-bound-spent.test.js
+test/message-group/cdc-handler.test.js
+test/message-group/cdc-non-leader-propagation.test.js
+test/message-group/error-message-consistency.property.test.js
+test/message-group/maximum-retry-limiting.property.test.js
+test/message-group/message-delivery-reliability.property.test.js
+test/message-group/message-group-cdc-input-guard.test.js
+test/message-group/message-group-cdc-public-defer-repair.test.js
+test/message-group/message-group-cdc-receiver-admission.test.js
+test/message-group/message-group-failover-cdc-continuity.test.js
+test/message-group/message-group-forward-backpressure-code.test.js
+test/message-group/message-group-fresh-learner-promotion.test.js
+test/message-group/message-group-fresh-learner-snapshot.test.js
+test/message-group/message-group-native-application-membership.test.js
+test/message-group/message-group-native-custody-handoff.test.js
+test/message-group/message-group-native-mixed-vector.test.js
+test/message-group/message-group-native-provisional-route.test.js
+test/message-group/message-group-native-w7-multi-target-route.integration.test.js
+test/message-group/message-group-peer-address-committed-configuration.test.js
+test/message-group/message-group-proposal-deadline-wait-bound-spent.test.js
+test/message-group/message-group-rebalancer-leadership-readiness-hysteresis.test.js
+test/message-group/message-group-registration-exact-birth.test.js
+test/message-group/message-group-replace-removal-fence.test.js
+test/message-group/message-group-replica-distribution.property.test.js
+test/message-group/message-group-service-leader-cdc.test.js
+test/message-group/message-group-service-lifecycle-and-ledger.test.js
+test/message-group/message-group-service-raft-replication-and-cdc.test.js
+test/message-group/message-group-service-role-publication-and-delivery.test.js
+test/message-group/message-group-service-row-absence-heal.test.js
+test/message-group/message-group-service-row-owner.test.js
+test/message-group/message-group-service-strict-cdc-forward-routing.test.js
+test/message-group/message-group-service-strict-cdc-join-convergence.test.js
+test/message-group/message-group-service.test.js
+test/message-group/message-group-target-resolver.test.js
+test/message-group/message-group-unparsable-peer-address.test.js
+test/message-group/message-retry-handler-wait-bound-spent.test.js
+test/message-group/metadata-cache-removal.test.js
+test/message-group/no-silent-delivery-failures.property.test.js
+test/message-group/raft-response-address-validation.test.js
+test/message-group/retry-exponential-backoff.property.test.js
+test/message-group/system-cache-query-service.test.js
+test/message-group/transport-type-validation.property.test.js
+test/migration/migration-constants-and-registration.test.js
+test/migration/migration-coordinator-core.test.js
+test/migration/migration-observability.test.js
+test/migration/migration-partition-alter-routing.test.js
+test/migration/migration-pipeline.test.js
+test/migration/migration-recovery-trigger.test.js
+test/migration/migration-retry-wait-bound-spent.test.js
+test/migration/migration-workflow.integration.test.js
+test/migration/sql-query-engine-dual-write-mode.test.js
+test/node/call-cell-partition-fence.test.js
+test/node/concurrent-operation-limits.property.test.js
+test/node/entry-time-tracking.property.test.js
+test/node/event-emission-completeness.property.test.js
+test/node/failed-replica-removal-transition-tolerance.test.js
+test/node/failure-detection-delegation.property.test.js
+test/node/failure-detector-adaptive-threshold.property.test.js
+test/node/failure-detector-cdc-writes.property.test.js
+test/node/failure-detector-recovery.property.test.js
+test/node/failure-detector-sql-upgrade.property.test.js
+test/node/failure-detector-sql-upgrade.test.js
+test/node/failure-detector.test.js
+test/node/failure-repair-intent-contract.test.js
+test/node/fault-recovery-behavior.property.test.js
+test/node/fresh-create-admission-authority-deferral.test.js
+test/node/fresh-create-authority-unavailability-native.integration.test.js
+test/node/fresh-create-claimed-cleanup-never-admitted.test.js
+test/node/fresh-create-release-authority-no-token.test.js
+test/node/fresh-create-release-decision.test.js
+test/node/fresh-create-resumed-syncing-claim.test.js
+test/node/group-retired-tombstone-incarnation.test.js
+test/node/group-retired-tombstone.test.js
+test/node/group-retirement-as-a-unit.test.js
+test/node/group-retirement-fail-closed.test.js
+test/node/group-retirement-fences.test.js
+test/node/group-retirement-liveness.test.js
+test/node/group-retirement-redrive.test.js
+test/node/group-retirement-reseed-held.test.js
+test/node/handler-identity-w-hid-2-3-node-handler-exact-retirement.test.js
+test/node/lifecycle-readiness.test.js
+test/node/local-only-reconcile-activation-boundary.test.js
+test/node/message-group-create-admission-recovery.test.js
+test/node/message-group-executor-activation-handler-boundary.test.js
+test/node/message-group-registration-redrive-owner.test.js
+test/node/message-group-service-handler-membership.test.js
+test/node/message-group-service-handler.test.js
+test/node/metrics-accuracy.property.test.js
+test/node/node-lifecycle-state-machine.test.js
+test/node/node-reintegration-service.test.js
+test/node/node-service-cache-delegation.property.test.js
+test/node/node-service-presence.property.test.js
+test/node/node-service-runtime-isolation.test.js
+test/node/node-service.test.js
+test/node/node-startup-natural-shutdown.test.js
+test/node/participant-release-control-refusal-observation.test.js
+test/node/participant-release-fresh-create-completion.test.js
+test/node/replica-cleanup-token-authority.test.js
+test/node/replica-create-admission-owner.test.js
+test/node/replica-create-admission-recovery.test.js
+test/node/replica-create-timeout-replay-custody.test.js
+test/node/replica-executor-activation-handler-boundary.test.js
+test/node/replica-failed-create-cleanup-generation.test.js
+test/node/replica-handler-cache-state.test.js
+test/node/replica-handler-idempotency.property.test.js
+test/node/replica-handler-leadership-transfer.test.js
+test/node/replica-handler-membership-relay.test.js
+test/node/replica-handler-owner-path-bypass.test.js
+test/node/replica-handler-release-recovery.test.js
+test/node/replica-handler-replacement-election-already-leader.test.js
+test/node/replica-handler-replica-membership.test.js
+test/node/replica-handler-voter-ready-wait-bound-spent.test.js
+test/node/replica-handler.test.js
+test/node/replica-lifecycle-durable-generation.test.js
+test/node/replica-lifecycle-observation-row-carrier.test.js
+test/node/replica-lifecycle-observation-snapshot.test.js
+test/node/replica-local-only-row-convergence.test.js
+test/node/replica-recovery-service.test.js
+test/node/replica-removal-consensus-exit-decisions.test.js
+test/node/replica-removal-consensus-exit-reported-once.test.js
+test/node/replica-removal-consensus-exit.test.js
+test/node/replica-removal-deferred-row-write.test.js
+test/node/replica-removal-leader-source.test.js
+test/node/replica-runtime-cleanup-custody.integration.test.js
+test/node/replica-state-delegation.test.js
+test/node/replica-state-machine-authoritative-transition.test.js
+test/node/replica-state-machine-registered-activation.test.js
+test/node/replica-state-machine-time-source.test.js
+test/node/replica-state-machine-transitions.property.test.js
+test/node/replica-state-machine.test.js
+test/node/replica-status-write-retry-spent-owner.test.js
+test/node/replica-transport-handler-identity.test.js
+test/node/runtime-service-bound-route.test.js
+test/node/runtime-service-call-cell-handler.test.js
+test/node/runtime-service-definition-authority.test.js
+test/node/runtime-service-handler.test.js
+test/node/runtime-service-remove-execution-custody.test.js
+test/node/runtime-service-restart-inventory-custody.test.js
+test/node/services-p1-diagnostic-logger.test.js
+test/node/single-cdc-write-path.property.test.js
+test/node/state-change-event-emission.property.test.js
+test/node/state-count-accuracy.property.test.js
+test/node/state-machine-cdc-consistency.property.test.js
+test/node/state-persistence-cdc.property.test.js
+test/node/state-transition-validity.property.test.js
+test/node/sub-phase-event-context.property.test.js
+test/node/sub-phase-tracking.property.test.js
+test/node/sub-phase-transition-completeness.property.test.js
+test/node/terminal-sub-phase-auto-advance.property.test.js
+test/node/timeout-triggered-failures.property.test.js
+test/partition/ack-extraction-from-response.property.test.js
+test/partition/adjacent-partition-merging.property.test.js
+test/partition/cdc-buffer-replay-robustness.test.js
+test/partition/cdc-event-buffer.property.test.js
+test/partition/cdc-event-buffer.test.js
+test/partition/cdc-generation.property.test.js
+test/partition/cdc-hydration-live-handoff.test.js
+test/partition/cdc-hydration-old-order.test.js
+test/partition/cdc-sliding-window-catchup.preservation.test.js
+test/partition/child-partition-leader-propagation.test.js
+test/partition/committed-statement-outcome.test.js
+test/partition/complete-peer-list.property.test.js
+test/partition/contiguous-non-overlapping-ranges.property.test.js
+test/partition/coordinator-table-exact-identity.test.js
+test/partition/default-replica-count.property.test.js
+test/partition/durable-replay-cursor.test.js
+test/partition/durable-voter-visibility-role-write.test.js
+test/partition/extracted-module-api-equivalence.property.test.js
+test/partition/fresh-create-release-authority-cross-node.integration.test.js
+test/partition/group-retirement-epoch-decode.test.js
+test/partition/group-retirement-provisioning-mark.test.js
+test/partition/group-retirement-resume-claim.test.js
+test/partition/handler-identity-w-hid-1-retiring-partition-refuses-raft.test.js
+test/partition/key-range-manager.test.js
+test/partition/learner-host-committed-admission-production.integration.test.js
+test/partition/learner-promotion-count-check-budget-walk.test.js
+test/partition/learner-promotion-count-check-inputs.test.js
+test/partition/learner-promotion-proof-committed-admission.test.js
+test/partition/learner-promotion-proof-delivery-outcome.test.js
+test/partition/learner-promotion-proof-epoch-guard.test.js
+test/partition/managed-merge-epoch-persistence-effects.test.js
+test/partition/managed-merge-workflow.test.js
+test/partition/managed-split-epoch-persistence-effects.test.js
+test/partition/managed-split-metrics-provider.test.js
+test/partition/managed-split-resume-under-write-load.test.js
+test/partition/managed-split-workflow-terminal-lifecycle.test.js
+test/partition/managed-split-workflow-transition-persistence.test.js
+test/partition/managed-split-workflow.test.js
+test/partition/median-split-point.property.test.js
+test/partition/merge-auto-execution.test.js
+test/partition/merge-backfill-batching.test.js
+test/partition/merge-cutover-coordination.test.js
+test/partition/merge-source-replication.test.js
+test/partition/message-handler-registry-routing.property.test.js
+test/partition/message-handler-registry.test.js
+test/partition/participant-decision-canonical-record.test.js
+test/partition/participant-envelope-admission.test.js
+test/partition/participant-origin-retained-history.integration.test.js
+test/partition/participant-origin-retained-history.test.js
+test/partition/participant-release-applied-position.test.js
+test/partition/participant-release-build-provenance.test.js
+test/partition/participant-release-control-three-member.test.js
+test/partition/participant-release-deadline-recovery.test.js
+test/partition/participant-release-delivery-recorder.test.js
+test/partition/participant-release-first-prepare-native.test.js
+test/partition/participant-release-native-application-order.test.js
+test/partition/participant-release-prepare-identity-native.test.js
+test/partition/participant-release-prepared-settlement-native.test.js
+test/partition/participant-release-protocol.test.js
+test/partition/participant-release-retention-native.test.js
+test/partition/partition-admission-redrive-wakes.test.js
+test/partition/partition-boundary-representation.test.js
+test/partition/partition-cdc-delivery-progress.test.js
+test/partition/partition-cdc-drain-admission.test.js
+test/partition/partition-cdc-generator.test.js
+test/partition/partition-cdc-invocation-custody.test.js
+test/partition/partition-cdc-obligation-reclamation.test.js
+test/partition/partition-cdc-obligation.test.js
+test/partition/partition-cdc-owed-admission-native.test.js
+test/partition/partition-cdc-owed-admission.test.js
+test/partition/partition-cdc-parameterized-insert-or-ignore.test.js
+test/partition/partition-cdc-prepared-capacity.test.js
+test/partition/partition-cdc-topology-progress-currentness.test.js
+test/partition/partition-commit-deadline-wait-bound-spent.test.js
+test/partition/partition-consensus-hold-log.test.js
+test/partition/partition-coordinator-settlement.test.js
+test/partition/partition-deferred-evaluation-obligation-scheduler.test.js
+test/partition/partition-descriptor-epoch-contract.test.js
+test/partition/partition-leader-address-from-raft-status.test.js
+test/partition/partition-leader-row-publication-integrity.test.js
+test/partition/partition-legacy-consensus-state.test.js
+test/partition/partition-participant-release-admission.test.js
+test/partition/partition-participant-transaction-apply.test.js
+test/partition/partition-participant-transaction-staging.test.js
+test/partition/partition-participant-transaction-topology.test.js
+test/partition/partition-port-refusal-outcomes.test.js
+test/partition/partition-raft-storage.test.js
+test/partition/partition-rebalancer-dependency-wiring-characterization.test.js
+test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js
+test/partition/partition-rebalancer-readiness-edge-gate.test.js
+test/partition/partition-registration-exact-birth.test.js
+test/partition/partition-registration-readback-controls.test.js
+test/partition/partition-replication-restart-attempt-handoff.test.js
+test/partition/partition-retiring-row-peer-retirement.test.js
+test/partition/partition-runtime-reconstruction-leadership.test.js
+test/partition/partition-service-cdc-log-suppression.test.js
+test/partition/partition-service-cleanup-token-schema.test.js
+test/partition/partition-service-hlc-monotonicity.test.js
+test/partition/partition-service-learner-promotion-wake.test.js
+test/partition/partition-service-learner-promotion.test.js
+test/partition/partition-service-qualified-table-name.test.js
+test/partition/partition-service-raft-noop-cdc-placement.test.js
+test/partition/partition-service-raft-propose-metrics.test.js
+test/partition/partition-service-raft-transition-evidence.test.js
+test/partition/partition-service-replay-dedupe.test.js
+test/partition/partition-service-role-metadata-publication.test.js
+test/partition/partition-service-row-absence-heal.test.js
+test/partition/partition-service-row-owner.test.js
+test/partition/partition-service-shutdown-timers.test.js
+test/partition/partition-service-size-split-transport.test.js
+test/partition/partition-service-sqlite-metrics.test.js
+test/partition/partition-service-stale-topology-write-guard.test.js
+test/partition/partition-service-transactions-query-routing.test.js
+test/partition/partition-service-write-commit.test.js
+test/partition/partition-service.test.js
+test/partition/partition-size-persist-own-column-keep.test.js
+test/partition/partition-size-write-retry-spent-owner.test.js
+test/partition/partition-snapshot-cadence.test.js
+test/partition/partition-split-merge-manager.test.js
+test/partition/partition-split-policy-precedence.test.js
+test/partition/partition-split-routing.test.js
+test/partition/partition-splitting-trigger.property.test.js
+test/partition/partition-sql-parser.test.js
+test/partition/partition-statement-admission.test.js
+test/partition/partition-transaction-determinism.test.js
+test/partition/partition-transaction-replay-cursor-v4.test.js
+test/partition/partition-transaction-replicated-apply-v3.test.js
+test/partition/partition-transaction.property.test.js
+test/partition/partition-transition-projection.test.js
+test/partition/partition-tx1-single-path-alpha.test.js
+test/partition/partition-unreadable-durable-record.test.js
+test/partition/partition-write-kernel.test.js
+test/partition/partition-write-leadership-transfer-committed.test.js
+test/partition/partition-write-leadership-transfer.test.js
+test/partition/partition-write-typed-releases.test.js
+test/partition/peer-admission-unparsable-address.test.js
+test/partition/pending-request-round-trip.property.test.js
+test/partition/pending-request-tracker-wait-bound-spent.test.js
+test/partition/pending-request-tracker.test.js
+test/partition/proposal-queue-capacity.property.test.js
+test/partition/proposal-queue-size-invariant.property.test.js
+test/partition/proposal-queue.test.js
+test/partition/raft-leadership-stability.property.test.js
+test/partition/raft-rs-transport-demux.test.js
+test/partition/range-integrity-validation.property.test.js
+test/partition/replica-admission-committed-operation-production.integration.test.js
+test/partition/replica-admission-from-committed-operation.test.js
+test/partition/replica-operations-schema-migration.test.js
+test/partition/replicated-sql-determinism-three-replica.test.js
+test/partition/retiring-source-resume-refusal.test.js
+test/partition/routing-key-comparator.test.js
+test/partition/settled-replay-preserves-result.test.js
+test/partition/split-abort-fence-parity.test.js
+test/partition/split-ack-constants.test.js
+test/partition/split-backfill-internal-pacing.test.js
+test/partition/split-cutover-owner-delegation.test.js
+test/partition/split-dissolution-durable-proof.test.js
+test/partition/split-execution-state-reconstruction.test.js
+test/partition/split-key-comparator.test.js
+test/partition/split-merge-capacity-preflight.test.js
+test/partition/split-merge-hysteresis.test.js
+test/partition/split-merge-overlap-guard.test.js
+test/partition/split-mirror-flush-ordering.test.js
+test/partition/split-mirror-write-identity.test.js
+test/partition/split-progress-depends-on-process-local-state.test.js
+test/partition/split-rebalance-trigger.test.js
+test/partition/split-recovery-after-restart.test.js
+test/partition/split-source-participant-ack.test.js
+test/partition/sql-statement-parser-coverage-matrix.test.js
+test/partition/table-partition-structure.property.test.js
+test/partition/timeout-cleanup.property.test.js
+test/partition/workflow-fencing-wiring.test.js
+test/partition/workflow-record-change-preconditions.test.js
+test/partition/workflow-record-incarnation.test.js
+test/partition/workflow-record-interleaving.property.test.js
+test/partition/workflow-record-lagging-view.test.js
+test/partition/workflow-record-projection-drop.test.js
+test/partition/workflow-record-reconcile.test.js
+test/partition/workflow-record-same-owner-race.test.js
+test/partition/workflow-record-stale-owner.test.js
+test/partition/workflow-record-two-owners.test.js
+test/partition/write-path-epoch-fencing.test.js
+test/query/parallel-query-coordinator.test.js
+test/query/pg-translate.test.js
+test/query/query-constants-vocabulary.test.js
+test/query/sql-query-engine-create-table-quorum.test.js
+test/raft/authoritative-row-mutation-helper.test.js
+test/raft/authoritative-row-mutation-outcome-classifier.test.js
+test/raft/bulk-transfer-socket-adapter.test.js
+test/raft/leader-activation-gate.test.js
+test/raft/leader-activation-scheduler.test.js
+test/raft/leadership-transfer-single-path.test.js
+test/raft/learner-promotion-progress-proof-contract.test.js
+test/raft/message-group-readiness-delivery-priority.test.js
+test/raft/raft-cleanup-verification.test.js
+test/raft/raft-id-mapper.test.js
+test/raft/raft-log-write-owner.test.js
+test/raft/raft-opening-cleanup-error.test.js
+test/raft/raft-rs-backend/admission-redrive-chain.test.js
+test/raft/raft-rs-backend/admission-redrive.test.js
+test/raft/raft-rs-backend/admission-stamp-reread-real-port.test.js
+test/raft/raft-rs-backend/backend-seam.test.js
+test/raft/raft-rs-backend/bootstrap-committed-membership.test.js
+test/raft/raft-rs-backend/committed-membership-adversarial-boundary.test.js
+test/raft/raft-rs-backend/committed-membership-census.test.js
+test/raft/raft-rs-backend/committed-membership-read.test.js
+test/raft/raft-rs-backend/committed-membership-stamp.test.js
+test/raft/raft-rs-backend/committed-membership-target-validation.test.js
+test/raft/raft-rs-backend/conf-change-leader-only.test.js
+test/raft/raft-rs-backend/conf-change-pending-deferral.test.js
+test/raft/raft-rs-backend/conf-state-authority.test.js
+test/raft/raft-rs-backend/durable-commit-power-loss.test.js
+test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js
+test/raft/raft-rs-backend/durable-commit-sync.test.js
+test/raft/raft-rs-backend/durable-ready-loop.test.js
+test/raft/raft-rs-backend/durable-rejoin-record-refusal.test.js
+test/raft/raft-rs-backend/durable-store-committed-entries.test.js
+test/raft/raft-rs-backend/durable-store-connection-custody.test.js
+test/raft/raft-rs-backend/election-safety.test.js
+test/raft/raft-rs-backend/evidence-o1-admission-liveness.test.js
+test/raft/raft-rs-backend/evidence-o1-anchors.test.js
+test/raft/raft-rs-backend/evidence-o1-gate-histories.test.js
+test/raft/raft-rs-backend/evidence-o1-proposal-ingress.test.js
+test/raft/raft-rs-backend/evidence-o1-real-chain.test.js
+test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js
+test/raft/raft-rs-backend/evidence-o1-static.test.js
+test/raft/raft-rs-backend/host-contract-citations.test.js
+test/raft/raft-rs-backend/identity-record-window.test.js
+test/raft/raft-rs-backend/identity-reuse-reseed-hold.test.js
+test/raft/raft-rs-backend/inbound-drain-owned-timer.test.js
+test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js
+test/raft/raft-rs-backend/joining-genesis-tripwire.test.js
+test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js
+test/raft/raft-rs-backend/lifecycle-retirement-census.test.js
+test/raft/raft-rs-backend/lifecycle-table-writer-census.test.js
+test/raft/raft-rs-backend/local-log-guard-correct-followers.test.js
+test/raft/raft-rs-backend/local-log-guard-refusals.test.js
+test/raft/raft-rs-backend/local-log-guard-sender-admissibility.test.js
+test/raft/raft-rs-backend/log-marker-partition.test.js
+test/raft/raft-rs-backend/membership-changed-event.test.js
+test/raft/raft-rs-backend/membership-generation-persistence.test.js
+test/raft/raft-rs-backend/message-group-membership-semantic-port.test.js
+test/raft/raft-rs-backend/message-group-on-raft-rs.test.js
+test/raft/raft-rs-backend/multi-replica-runtime-prerequisites.test.js
+test/raft/raft-rs-backend/native-election-liveness.test.js
+test/raft/raft-rs-backend/native-election-randomized.test.js
+test/raft/raft-rs-backend/open-time-identity-refusal.test.js
+test/raft/raft-rs-backend/operation-port-boundary.test.js
+test/raft/raft-rs-backend/operation-port-lifecycle.test.js
+test/raft/raft-rs-backend/operation-port-provenance.test.js
+test/raft/raft-rs-backend/operation-port-ready-recovery.test.js
+test/raft/raft-rs-backend/operation-port-regression.test.js
+test/raft/raft-rs-backend/operation-port-status-observation.test.js
+test/raft/raft-rs-backend/operation-port-throw-containment.test.js
+test/raft/raft-rs-backend/operation-port-turn-answers.test.js
+test/raft/raft-rs-backend/original-handoff-lifecycle-claim.test.js
+test/raft/raft-rs-backend/participation-gate.test.js
+test/raft/raft-rs-backend/partition-construction-seam.test.js
+test/raft/raft-rs-backend/partition-peer-admission.test.js
+test/raft/raft-rs-backend/partition-snapshot-compaction-catchup.test.js
+test/raft/raft-rs-backend/peer-identity.test.js
+test/raft/raft-rs-backend/persistence-admission.test.js
+test/raft/raft-rs-backend/raft-rs-ingress-fuzz.test.js
+test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js
+test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js
+test/raft/raft-rs-backend/replica-membership-witness.test.js
+test/raft/raft-rs-backend/reseed-hold-durability.test.js
+test/raft/raft-rs-backend/restart-from-durable-record.test.js
+test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js
+test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js
+test/raft/raft-rs-backend/runtime-completion-consumers-partition.test.js
+test/raft/raft-rs-backend/runtime-completion-consumers-transfers.test.js
+test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js
+test/raft/raft-rs-backend/runtime-opening-history.integration.test.js
+test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js
+test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js
+test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js
+test/raft/raft-rs-backend/runtime-trap-and-restore.test.js
+test/raft/raft-rs-backend/runtime-turn-integrity.test.js
+test/raft/raft-rs-backend/runtime-wait-bound-spent.test.js
+test/raft/raft-rs-backend/single-path-partition-cutover.test.js
+test/raft/raft-rs-backend/stampless-opening-refusal.test.js
+test/raft/raft-rs-backend/startup-cleanup.integration.test.js
+test/raft/raft-rs-backend/status-read-never-waits.test.js
+test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js
+test/raft/raft-rs-backend/transfer-leadership-attack-matrix.test.js
+test/raft/raft-rs-backend/transfer-leadership-decision-inputs.test.js
+test/raft/raft-rs-backend/transfer-leadership-drain-anchors.test.js
+test/raft/raft-rs-backend/transfer-leadership-drain-oracle.test.js
+test/raft/raft-rs-backend/transfer-leadership-drain-order.test.js
+test/raft/raft-rs-backend/transfer-leadership-drop-classification.test.js
+test/raft/raft-rs-backend/transfer-leadership-property.test.js
+test/raft/raft-rs-backend/transfer-leadership-write-path.test.js
+test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js
+test/raft/raft-rs-backend/zero-legacy-consensus-runtime.test.js
+test/raft/raft-rs-lifecycle-turn-admission.test.js
+test/raft/raft-rs-original-allocation-cold-inspection.test.js
+test/raft/raft-rs-original-allocation-custody.test.js
+test/raft/raft-rs-original-allocation-lifecycle-operation.test.js
+test/raft/raft-rs-original-allocation-preparation.test.js
+test/raft/raft-rs-original-allocation-store.test.js
+test/raft/raft-rs-original-opening-authority.test.js
+test/raft/raft-rs-original-opening-effect-cut.test.js
+test/raft/raft-rs-original-opening.test.js
+test/raft/raft-rs-peer-delivery-transport-outcome.test.js
+test/raft/raft-rs-turn-answer.test.js
+test/raft/replica-voter-readiness.test.js
+test/raft/snapshot-boundary-observability.test.js
+test/raft/snapshot-cadence.test.js
+test/raft/snapshot-catchup-cluster-identity.test.js
+test/raft/snapshot-catchup-dispatch.test.js
+test/raft/snapshot-catchup-end-to-end.test.js
+test/raft/snapshot-checkpoint-format-contract.test.js
+test/raft/snapshot-checkpoint-restart-read.test.js
+test/raft/snapshot-checkpoint-sqlite-payload.test.js
+test/raft/snapshot-compaction-catchup-integration.test.js
+test/raft/snapshot-dispatcher-wiring.test.js
+test/raft/snapshot-gated-compaction-contract.test.js
+test/raft/snapshot-install-restart-states.test.js
+test/raft/snapshot-install-transition.test.js
+test/raft/snapshot-lifecycle-staging.test.js
+test/raft/snapshot-multichunk-transfer.test.js
+test/raft/snapshot-offer-router.test.js
+test/raft/snapshot-proof-gated-compaction.test.js
+test/raft/snapshot-recorded-gaps.test.js
+test/raft/snapshot-retention-sweep.test.js
+test/raft/snapshot-transfer-protocol.test.js
+test/raft/sqlite-log-adapter-committed-truncation-guard.test.js
+test/raft/sqlite-log-adapter-committed-watermark.test.js
+test/raft/sqlite-log-adapter-committed-write-paths.test.js
+test/raft/sqlite-log-adapter-contract.test.js
+test/raft/sqlite-log-adapter-round-trip.property.test.js
+test/raft/sqlite-schema-migration.test.js
+test/random/dt5-jitter-seam.test.js
+test/random/random-source.test.js
+test/rebalancer/application-write-formation-authority.test.js
+test/rebalancer/formation-runtime-service-create-lane-budget-starvation.test.js
+test/rebalancer/priority-publication-per-leg-evidence-census.test.js
+test/rebalancer/replica-operation-membership-epoch-binding.test.js
+test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js
+test/rebalancer/spread-cure-transition-authorization.test.js
+test/rebalancer/stabilization-timer-reset.property.test.js
+test/rebalancer/terminal-failed-add-target-cleanup.test.js
+test/release/project-hardening-contracts.test.js
+test/release/public-api-side-effect-boundary.test.js
+test/release/runtime-entry-link.test.js
+test/runtime/minimal-deployment-request-cell-runtime-readiness.test.js
+test/runtime/movielens-live-report-host-scheduling.test.js
+test/runtime/pgwire-protocol-handler.test.js
+test/runtime/pgwire-session.test.js
+test/scripts/acceptance-proof-manifest-runner.test.js
+test/scripts/action-authority.test.js
+test/scripts/agent-tooling-command-cleanup.test.js
+test/scripts/agent-tooling-configuration.test.js
+test/scripts/agent-tooling-evidence.test.js
+test/scripts/agent-tooling-process.test.js
+test/scripts/analyze-cl039-link-rate.test.js
+test/scripts/analyze-fix-engagement.test.js
+test/scripts/analyze-formation-release-phases.test.js
+test/scripts/analyze-latent-blockers.test.js
+test/scripts/analyze-monotone-drain.test.js
+test/scripts/analyze-precondition-recurrence.test.js
+test/scripts/analyze-priority-recovery-residuals.test.js
+test/scripts/analyze-redecision-storm.test.js
+test/scripts/analyze-replace-safety-blocks.test.js
+test/scripts/analyze-rolling-restart-liveness.test.js
+test/scripts/analyze-soft-warning-strikes.test.js
+test/scripts/analyze-topology-convergence.test.js
+test/scripts/apparatus-release-consolidation-budget.test.js
+test/scripts/canary-corpus-needed.test.js
+test/scripts/certification-verdict.test.js
+test/scripts/change-proof-boundary.test.js
+test/scripts/change-proof-collection-safety.test.js
+test/scripts/change-proof-lockfile-safety.test.js
+test/scripts/change-proof-own-authority.test.js
+test/scripts/change-proof-package-range.test.js
+test/scripts/change-proof-subsystem-participant-safety.test.js
+test/scripts/change-proof-transitive-lockfile-shape.test.js
+test/scripts/change-selection-taxonomy.test.js
+test/scripts/changed-paths.test.js
+test/scripts/check-architecture-slices.test.js
+test/scripts/check-base-range.test.js
+test/scripts/check-benchmark-history-append-only.test.js
+test/scripts/check-cli-docs.test.js
+test/scripts/check-current-capabilities.test.js
+test/scripts/check-doc-audience.test.js
+test/scripts/check-documentation-current-state.test.js
+test/scripts/check-fast-static.test.js
+test/scripts/check-file-size-thresholds.test.js
+test/scripts/check-guideline-ambient-intrinsics.test.js
+test/scripts/check-guideline-boundary-mode-contracts.test.js
+test/scripts/check-guideline-constant-names.test.js
+test/scripts/check-guideline-decision-boundaries.test.js
+test/scripts/check-guideline-deferred-outcomes.test.js
+test/scripts/check-guideline-literals.test.js
+test/scripts/check-guideline-navigability.test.js
+test/scripts/check-no-ordinal-files.test.js
+test/scripts/check-operation-dispatch-completion-owner.test.js
+test/scripts/check-operation-progress-authority.test.js
+test/scripts/check-owner-traces.test.js
+test/scripts/check-partition-class-owner.test.js
+test/scripts/check-quest-log-append-only.test.js
+test/scripts/check-roadmap-authority.test.js
+test/scripts/check-runtime-grammar-contracts.test.js
+test/scripts/check-solve-binary-guard.test.js
+test/scripts/check-staged-constant-names.test.js
+test/scripts/check-subsystem.test.js
+test/scripts/check-unified-system-metadata-gateway.test.js
+test/scripts/closed-quest-shape.test.js
+test/scripts/closure-ledger-state.test.js
+test/scripts/code-navigability-budget.test.js
+test/scripts/code-navigability-detectors.test.js
+test/scripts/complexity-ratchet-closure.test.js
+test/scripts/content-bound-review-and-interaction-proof.test.js
+test/scripts/dependency-policy-authority.test.js
+test/scripts/dependency-policy-classification.test.js
+test/scripts/dependency-policy-producer-binding.test.js
+test/scripts/distributed-matrix-cli.test.js
+test/scripts/dt-prove.test.js
+test/scripts/effective-placement-serial-priority-planner-scenario.test.js
+test/scripts/eslint-value-or-promise-selector.test.js
+test/scripts/evidence-relocation-acceptance.test.js
+test/scripts/evidence-relocation.test.js
+test/scripts/exact-election-evidence-same-turn-model-contract.test.js
+test/scripts/fallback-branch-census-launch-coordinators.test.js
+test/scripts/fallback-branch-census.test.js
+test/scripts/formation-health.test.js
+test/scripts/formation-release-handoff-gcp-analysis-retained-uncompleted-teardown.test.js
+test/scripts/gen-solve-commands-index.test.js
+test/scripts/generate-source-owner-index.test.js
+test/scripts/git-invocation-owner.test.js
+test/scripts/helper-import-closure.test.js
+test/scripts/historical-record-exemptions.test.js
+test/scripts/home-lab-cli-guidelines.test.js
+test/scripts/impact-contract-registry.test.js
+test/scripts/impact-proof-cone-consumers.test.js
+test/scripts/impact-proof-cone-followed-file-races.test.js
+test/scripts/impact-proof-cone-producer.test.js
+test/scripts/impact-proof-cone.test.js
+test/scripts/import-graph-repository-boundary.test.js
+test/scripts/install-git-hooks-stdout-purity.test.js
+test/scripts/inventory-ordinal-segments.test.js
+test/scripts/lab-census-benchmark-evidence-custody.test.js
+test/scripts/lab-fleet-discovery.test.js
+test/scripts/lab-test-base.test.js
+test/scripts/lab-worker-provisioning.test.js
+test/scripts/list-commands.test.js
+test/scripts/local-corpus.test.js
+test/scripts/local-leader-row-visibility-model-contract.test.js
+test/scripts/metric-cycle-custody.test.js
+test/scripts/metric-cycle-resolution.test.js
+test/scripts/metric-duplication-inputs.test.js
+test/scripts/metric-report-inputs.test.js
+test/scripts/metric-report-provenance.test.js
+test/scripts/model-contract-tools.test.js
+test/scripts/model-invariants.test.js
+test/scripts/model-tlc-mode-selection.test.js
+test/scripts/model-tlc-output-tail.test.js
+test/scripts/no-external-llm-guards.test.js
+test/scripts/no-legacy-consensus-reference-audit.test.js
+test/scripts/no-legacy-consensus-reference-ratchet.test.js
+test/scripts/observation-census.test.js
+test/scripts/participant-release-completion-owner.test.js
+test/scripts/pre-push-hook-control-flow.test.js
+test/scripts/pre-push-stage-manifest.test.js
+test/scripts/priority-recovery-current-artifact-fixture.test.js
+test/scripts/proof-authority-falsifiers.test.js
+test/scripts/proof-authority.test.js
+test/scripts/proof-checkout-preparation.test.js
+test/scripts/proof-cone-cli-output-completeness.test.js
+test/scripts/proof-receipt-execution-report.test.js
+test/scripts/prune-test-output.test.js
+test/scripts/publish-head-workspace-links.test.js
+test/scripts/publish-head.test.js
+test/scripts/push-gate-change-proof.test.js
+test/scripts/push-gate-unused-files-reachability.test.js
+test/scripts/quest-evidence-harness-expected-tests.test.js
+test/scripts/release-content-digest.test.js
+test/scripts/release-notes.test.js
+test/scripts/release-npm-package.test.js
+test/scripts/release-preflight.test.js
+test/scripts/release-proof-identity.test.js
+test/scripts/release-publication-receipt.test.js
+test/scripts/repository-legacy-fallback-closure.test.js
+test/scripts/rerun-failed-distributed-scenarios.test.js
+test/scripts/rolling-restart-stat-gate-summary.test.js
+test/scripts/rule-set-revision.test.js
+test/scripts/run-classified-test-files.test.js
+test/scripts/run-formation-release-handoff-gcp-negative-control.test.js
+test/scripts/run-formation-release-handoff-gcp-reverted-control.test.js
+test/scripts/run-formation-release-handoff-gcp-streak.test.js
+test/scripts/run-formation-release-handoff-gcp.test.js
+test/scripts/run-formation-seed-budget.test.js
+test/scripts/run-live-repetitions.test.js
+test/scripts/run-test-ci.test.js
+test/scripts/run-test-files.test.js
+test/scripts/scenario-certification-consumers.test.js
+test/scripts/scenario-refused-outcome-consumers.test.js
+test/scripts/select-change-tests.test.js
+test/scripts/selection-golden-corpus.test.js
+test/scripts/service-portability-claims-contract.test.js
+test/scripts/service-portability-static-gate.test.js
+test/scripts/solve-footprint-accounting.test.js
+test/scripts/spec-led-runtime-legacy-deletion-guard.test.js
+test/scripts/state-read-named-defaults.test.js
+test/scripts/static-audit-input-triggers.test.js
+test/scripts/steering-diet.test.js
+test/scripts/stop-distributed-harness-containers.test.js
+test/scripts/summarize-distributed-failure-report.test.js
+test/scripts/summarize-representative-evidence.test.js
+test/scripts/test-placement-lab-split.test.js
+test/scripts/test-placement.test.js
+test/scripts/test-primary-classification.test.js
+test/scripts/test-resource-classification.test.js
+test/scripts/test-subsystem-classification.test.js
+test/scripts/test-subsystem-repository-index.test.js
+test/scripts/test-timeout-declarations.test.js
+test/scripts/wait-for-load-headroom.test.js
+test/scripts/workspace-injection-candidates.test.js
+test/service/minimal-deployment-binding-owner-guard.test.js
+test/service/request-cell-call-bridge.test.js
+test/simulation/formation-sim-production-transcript-determinism.test.js
+test/solve/commands.test.js
+test/solve/evidence-store.test.js
+test/solve/guards.test.js
+test/solve/migrate-v1.test.js
+test/solve/probes.test.js
+test/solve/schema.test.js
+test/solve/store.test.js
+test/storage-load/storage-load-report.test.js
+test/storage/data-directory-manager.test.js
+test/storage/data-directory-validation.property.test.js
+test/storage/persistent-storage-paths.property.test.js
+test/storage/sqlite-store.property.test.js
+test/storage/sqlite-store.test.js
+test/test-helpers/managed-timers.test.js
+test/test-helpers/port-allocator.test.js
+test/test-helpers/topology-leak-check.test.js
+test/time/dt4-seam-collapse.test.js
+test/time/pct-scheduler.test.js
+test/time/time-source.test.js
+test/topology/cdc-group-propagation-service.test.js
+test/topology/cdc-group-propagation-stop-arms-nothing.test.js
+test/topology/cdc-group-propagation-transport-outcome-failed-set.test.js
+test/transaction/session-transaction-isolation.test.js
+test/transport/address-format-validation.property.test.js
+test/transport/bulk-channel-identify-incarnation.test.js
+test/transport/bulk-registry-bootstrap.test.js
+test/transport/bulk-transfer-lane-isolation.test.js
+test/transport/delivery-semantics.property.test.js
+test/transport/error-response-correlation-id.property.test.js
+test/transport/exact-handler-identity-api.test.js
+test/transport/handler-registration.property.test.js
+test/transport/immediate-ack-ordering.property.test.js
+test/transport/local-delivery.property.test.js
+test/transport/location-transparent-communication.property.test.js
+test/transport/loopback-connection.property.test.js
+test/transport/message-router-api.property.test.js
+test/transport/message-router-cdc-custody.test.js
+test/transport/message-router-cdc-encoding.test.js
+test/transport/message-router-cdc-outcome-roundtrip.test.js
+test/transport/message-router-cdc-response-boundary.test.js
+test/transport/message-router-cold-reconnect-delivery-grant.test.js
+test/transport/message-router-critical-source-reserve.test.js
+test/transport/message-router-deliver-metrics.test.js
+test/transport/message-router-delivery-deadline-liveness.test.js
+test/transport/message-router-endpoint-address-change-redial.test.js
+test/transport/message-router-join-request.test.js
+test/transport/message-router-late-response-classification.test.js
+test/transport/message-router-ping-wait-bound-spent.test.js
+test/transport/message-router-quarantine-liveness-guard.test.js
+test/transport/message-router-query-transport-failure-shape.test.js
+test/transport/message-router-readiness-inflight-reserve.test.js
+test/transport/message-router-readiness-reserve.test.js
+test/transport/message-router-superseded-delivery-completion.test.js
+test/transport/message-router-transport-cleanup.test.js
+test/transport/message-router.test.js
+test/transport/name-first-advertising-publication.test.js
+test/transport/node-address-resolution-contract.test.js
+test/transport/node-address-resolution.test.js
+test/transport/node-identity-separation.property.test.js
+test/transport/node-incarnation-websocket-fence.test.js
+test/transport/node-registration-creates-endpoint.property.test.js
+test/transport/outbound-saturation-warn-rate-limit.test.js
+test/transport/owner-retry-budget.test.js
+test/transport/q7-node-transport-authenticated-encryption.test.js
+test/transport/router-envelope-pre-send-failure.test.js
+test/transport/router-envelope-w-env-1-answer-cannot-rewrite-acknowledgement.test.js
+test/transport/router-envelope-w-env-2-lost-answer-after-ack.test.js
+test/transport/router-envelope-w-env-3-handler-throw-symmetry.test.js
+test/transport/router-envelope-w-env-4-no-handler-frame.test.js
+test/transport/router-envelope-w-env-6-full-field-rewrite-matrix.test.js
+test/transport/router-envelope-w-env-7-two-hop-transport-is-per-hop.test.js
+test/transport/router-envelope-w-env-8-verbatim-answer-and-wire-failure.test.js
+test/transport/router-server-manager.test.js
+test/transport/routing-correctness.property.test.js
+test/transport/rpc-client.test.js
+test/transport/rpc-correlation-correctness.property.test.js
+test/transport/rpc-timeout-behavior.property.test.js
+test/transport/service-delivery-lifetime.test.js
+test/transport/service-response-correlation.property.test.js
+test/transport/transport-outcome-forwarding-hop.test.js
+test/transport/transport-semantic-outcome.test.js
+test/transport/uniform-message-routing.property.test.js
+test/transport/uniform-websocket-delivery.property.test.js
+test/utils/assert.property.test.js
+test/utils/canonical-json-data.test.js
+test/utils/correlation-id-presence.property.test.js
+test/utils/correlation.test.js
+test/utils/fast-json-clone.test.js
+test/utils/phase-base.test.js
+test/utils/phase-lifecycle-events.property.test.js
+test/utils/phase-state-machine-transitions.property.test.js
+test/utils/phase-state-machine.test.js
+test/utils/state-field-read.test.js
+test/wasm-service/backward-compat-serialization.test.js
+test/wasm-service/bound-creation-handler-embedding.integration.test.js
+test/wasm-service/bound-creation-physical-custody.integration.test.js
+test/wasm-service/bound-creation-restart.integration.test.js
+test/wasm-service/bound-remove-physical-operation.integration.test.js
+test/wasm-service/call-cell-world-abi.test.js
+test/wasm-service/capability-policy.test.js
+test/wasm-service/dependency-lock-determinism.property.test.js
+test/wasm-service/dependency-lock-service.test.js
+test/wasm-service/dependency-resolver.test.js
+test/wasm-service/manifest-runtime-validator.test.js
+test/wasm-service/meta-command-handlers-operations.test.js
+test/wasm-service/meta-command-handlers.test.js
+test/wasm-service/meta-service-factory.test.js
+test/wasm-service/meta-service-lifecycle.test.js
+test/wasm-service/meta-service-router.test.js
+test/wasm-service/meta-validation-pipeline.test.js
+test/wasm-service/meta-write-executor.test.js
+test/wasm-service/module-audit-logger.test.js
+test/wasm-service/module-manifest-models.property.test.js
+test/wasm-service/module-manifest-models.test.js
+test/wasm-service/module-mirror.test.js
+test/wasm-service/oci-reference.test.js
+test/wasm-service/once-binding-compilation.test.js
+test/wasm-service/operation-lifecycle.test.js
+test/wasm-service/operation-stream.test.js
+test/wasm-service/package-reference.test.js
+test/wasm-service/port-allocator.test.js
+test/wasm-service/query-budget-constants.test.js
+test/wasm-service/read-router.property.test.js
+test/wasm-service/read-router.test.js
+test/wasm-service/registry-resolver.test.js
+test/wasm-service/resolver-precedence.test.js
+test/wasm-service/runtime-descriptor-validator.test.js
+test/wasm-service/runtime-legacy-mapping.test.js
+test/wasm-service/safety-interval.test.js
+test/wasm-service/service-cell-v2-world-abi.test.js
+test/wasm-service/service-cell-world-abi.test.js
+test/wasm-service/service-compiler-module-shape-spike.test.js
+test/wasm-service/service-definition-validator.property.test.js
+test/wasm-service/service-definition-validator.test.js
+test/wasm-service/service-endpoint-builder.property.test.js
+test/wasm-service/service-endpoint-builder.test.js
+test/wasm-service/session-kv-store.property.test.js
+test/wasm-service/session-kv-store.test.js
+test/wasm-service/sql-profile-endpoint.test.js
+test/wasm-service/sql-profile-factory.test.js
+test/wasm-service/sql-profile-validation.test.js
+test/wasm-service/time-binding-compilation.test.js
+test/wasm-service/timer-manager.property.test.js
+test/wasm-service/timer-manager.test.js
+test/wasm-service/wasm-creation-bound-native.test.js
+test/wasm-service/wasm-creation-genesis.integration.test.js
+test/wasm-service/wasm-creation-local-record.test.js
+test/wasm-service/wasm-creation-publication.integration.test.js
+test/wasm-service/wasm-creation-reconciliation.integration.test.js
+test/wasm-service/wasm-creation-reconciliation.test.js
+test/wasm-service/wasm-executor-run-export.test.js
+test/wasm-service/wasm-executor-runtime-adapter-parity.test.js
+test/wasm-service/wasm-executor.test.js
+test/wasm-service/wasm-meta-models.property.test.js
+test/wasm-service/wasm-meta-models.test.js
+test/wasm-service/wasm-retained-bootstrap.integration.test.js
+test/wasm-service/wasm-service-constants.test.js
+test/wasm-service/wasm-service-lifecycle.test.js
+test/wasm-service/wasm-service-models.property.test.js
+test/wasm-service/wasm-service-models.test.js
+test/wasm-service/wasm-service-replica.test.js
+test/wasm-service/wasm-strong-write-native-completion.test.js
+test/wasm-service/wasm-strong-write-v1-native-completion.test.js
+test/wasm-service/wasm-writer-client-v1.test.js
+test/wasm-service/wasm-writer-completion-v1.test.js
+test/wasm-service/wasm-writer-recreation-origin-v1.test.js
+test/wasm-service/wasm-writer-state-v1.test.js
+
+CANONICAL_SELECTED_LIST_END
+CANONICAL_SELECTED_LIST_IDENTITY={"head":"32d79b38c1835a3ffab3032042c9605261d59cc7","tree":"ab163d6bba796bf681673aa4e7c87053a27b6e7a","base":"f402575b0667bc02110849867cabacf013e61be6","bytes":79763,"sha256":"0733de9e6c3b60adb2cccdece64fd69c73be4498fee81b5327dac2677d0d24b3","root_count":1426,"manifests":{"primary":{"path":"test/shards/primary-classes.json","sha256":"885e9b7c400396dd57a03f10a8797b65464d165835a50613fe75166e071f6d51","git_blob":"c13d2a43098430fa178de4b10ca022e1209f9b3f","counts":{"unit":2296,"integration":124,"bootstrap":224,"convergence-probe":3,"packaging":4}},"resource":{"path":"test/shards/resource-classes.json","sha256":"61395a186affe80c079f9afbb5004aa5926ed97a4d8a92d59a180d2520682a19","git_blob":"8ec4ca1ac4ba30b5135b48a24e8308a4290deba2","counts":{"ordinary":2625,"cpu-heavy":0,"external-toolchain":23,"exclusive":3}},"subsystem":{"path":"test/shards/subsystem-classes.json","sha256":"e500b9ca17e7a3e7f5dde6f89b495eb5b2cf8cd609867a8cc7e23d71ae92cb65","git_blob":"72164660a38d10bad37cf5c4c9d8e15b4fe878d8","counts":{"admin-diagnostics":121,"architecture-governance":21,"bootstrap-membership":347,"cdc-metadata":71,"cli-tooling":99,"control-plane":237,"convergence-topology":80,"distributed-harness":216,"examples-e2e":8,"pgwire-compat":23,"placement-rebalance":281,"query-sql":194,"release-packaging":15,"runtime-primitives":23,"services-runtime":160,"solver-tooling":7,"storage-partition":218,"storage-raft":152,"test-infrastructure":172,"transactions":17,"transport-messaging":115,"wasm-toolchain":74}}},"lanes":[{"resourceClass":"ordinary","jobs":4,"count":1121},{"resourceClass":"external-toolchain","jobs":1,"count":5},{"resourceClass":"bootstrap","jobs":2,"count":223},{"resourceClass":"exclusive","jobs":1,"count":77}]}
+CANONICAL_SELECTED_LANES_BEGIN
+[{"resourceClass":"ordinary","jobs":4,"files":["test/active-gate/active-gate-authoritative-repair-convergence.test.js","test/address/address-malformed-rejection.property.test.js","test/address/address-manager-peer-location-authority.test.js","test/address/address-manager.test.js","test/address/address-round-trip.property.test.js","test/address/address-uniqueness.property.test.js","test/admin/admin-adapter-contract.test.js","test/admin/admin-api-adapter.test.js","test/admin/admin-audit-context.test.js","test/admin/admin-audit-queries.test.js","test/admin/admin-auth-middleware.test.js","test/admin/admin-authoritative-repair-policy.test.js","test/admin/admin-cli-compat.test.js","test/admin/admin-command-metrics.test.js","test/admin/admin-control-snapshot-active-gate-handoff-target-blocked.test.js","test/admin/admin-control-snapshot-bounded-probe-deadline.test.js","test/admin/admin-control-snapshot-completed-placement-handoff-repair.test.js","test/admin/admin-control-snapshot-current-priority-placement.test.js","test/admin/admin-control-snapshot-heartbeat-lease-freshness.test.js","test/admin/admin-control-snapshot-local-published-membership-recovery.test.js","test/admin/admin-control-snapshot-owner-recovery-retry-options.test.js","test/admin/admin-control-snapshot-priority-recovery-authority.test.js","test/admin/admin-control-snapshot-priority-recovery-dormant-context-retirement.test.js","test/admin/admin-control-snapshot-readiness-sync-first.test.js","test/admin/admin-control-snapshot-response-contract.test.js","test/admin/admin-control-snapshot-retry-decision.test.js","test/admin/admin-control-snapshot-served-handoff-coverage.test.js","test/admin/admin-control-snapshot-served-handoff-writer-coupling.test.js","test/admin/admin-control-snapshot.test.js","test/admin/admin-deprecation.test.js","test/admin/admin-meta-command-handlers.test.js","test/admin/admin-meta-delegator.test.js","test/admin/admin-meta-endpoint-builder.test.js","test/admin/admin-mutation-guard.pbt.test.js","test/admin/admin-mutation-guard.test.js","test/admin/admin-owner-mutation-outcomes.test.js","test/admin/admin-owner-operations.test.js","test/admin/admin-preflight-repair-wait-bound-spent.test.js","test/admin/admin-preflight-snapshot.test.js","test/admin/admin-query-result-envelope-participant-failures.test.js","test/admin/admin-query-result-message-envelope.test.js","test/admin/admin-quota-enforcer.test.js","test/admin/admin-runtime-service-views.test.js","test/admin/admin-service-diagnostics.test.js","test/admin/admin-service-discovery.test.js","test/admin/admin-service-message-adapter.test.js","test/admin/admin-shared-metadata-consistency.test.js","test/admin/admin-test-run-service.test.js","test/admin/admin-trace-context.test.js","test/admin/admin-websocket-api-control-snapshot-query.test.js","test/admin/admin-websocket-api-diagnostics-and-control-snapshot.test.js","test/admin/admin-websocket-api-http-and-debug-routes.test.js","test/admin/admin-websocket-api-live-query-and-observation.test.js","test/admin/admin-websocket-api-messaging-and-errors.test.js","test/admin/admin-websocket-api-service-discovery-query.test.js","test/admin/admin-websocket-api-shutdown-state.test.js","test/admin/admin-websocket-api-table-discovery-readiness.test.js","test/admin/admin-websocket-api-timeout.test.js","test/admin/admin-websocket-api.test.js","test/admin/admin-websocket-external-bind-policy.test.js","test/admin/admin-websocket-load-lane-priority-recovery-emission.test.js","test/admin/admin-websocket-payload-size-attribution.test.js","test/admin/admin-websocket-service-dispatcher.test.js","test/admin/cache-dump-completeness.property.test.js","test/admin/completed-placement-autonomous-progress.test.js","test/admin/control-snapshot-stale-watermark-transitions.test.js","test/admin/load-admission-ingress-identity.test.js","test/admin/standalone-test-run-server.test.js","test/admin/test-run-dashboard-trace-panel.test.js","test/admin/wasm-meta-serviceized-routing.test.js","test/boot/load-env.test.js","test/cache/cache-epoch-rejection.property.test.js","test/cache/cache-hydration-completeness.property.test.js","test/cache/cache-hydration-metrics.test.js","test/cache/cache-replica-incarnation-coherence.test.js","test/cache/cache-state-filtering.property.test.js","test/cache/cdc-cache-delete-resurrection.test.js","test/cache/cdc-event-broadcast-completeness.property.test.js","test/cache/concurrent-services-table-writes.property.test.js","test/cache/default-cache-sync-table-selection.test.js","test/cache/hydration-no-cdc-generation.property.test.js","test/cache/leader-readiness-gate.property.test.js","test/cache/leader-readiness-gate.test.js","test/cache/partial-hydration-resilience.property.test.js","test/cache/read-only-system-table-cache.test.js","test/cache/shared-row-read.test.js","test/cache/system-cache-client.test.js","test/cache/system-cache-endpoint-query.property.test.js","test/cache/system-table-cache-anti-entropy-sweep.test.js","test/cache/system-table-cache-cdc-provenance.test.js","test/cache/system-table-cache-consistency.property.test.js","test/cache/system-table-cache-lifecycle-delete-ordering.test.js","test/cache/system-table-cache-observation.test.js","test/cache/system-table-cache-services-lifecycle-merge.test.js","test/cache/system-table-cache-time-authority.test.js","test/cache/system-table-cache-tombstone-time-authority.test.js","test/cache/system-table-cache.test.js","test/cdc/authoritative-owner-rpc-sql-fallback.test.js","test/cdc/bootstrap-direct-write-raft-routing.test.js","test/cdc/bootstrap-mode-routing.property.test.js","test/cdc/cdc-authoritative-catchup-hydration.test.js","test/cdc/cdc-authoritative-catchup-terminal.test.js","test/cdc/cdc-cache-visibility-wait-bound-spent.test.js","test/cdc/cdc-confirmation-tracker.property.test.js","test/cdc/cdc-confirmation-tracker.test.js","test/cdc/cdc-confirmation-wiring.test.js","test/cdc/cdc-delay-until-shutdown-resource.test.js","test/cdc/cdc-delete-cache-absence-convergence.test.js","test/cdc/cdc-delivery-complete-vector.test.js","test/cdc/cdc-delivery-outcome.test.js","test/cdc/cdc-emitter.property.test.js","test/cdc/cdc-emitter.test.js","test/cdc/cdc-event-delivery.property.test.js","test/cdc/cdc-event-envelope.test.js","test/cdc/cdc-event-handler.test.js","test/cdc/cdc-integration-service-authoritative-reads.test.js","test/cdc/cdc-integration-service-execute-sql-and-delivery.test.js","test/cdc/cdc-integration-service-mutations-and-epoch.test.js","test/cdc/cdc-integration-service-node-state-and-bootstrap.test.js","test/cdc/cdc-integration-service-sql-route-metrics.test.js","test/cdc/cdc-integration-service-time-seam.test.js","test/cdc/cdc-integration-service-write-metrics.test.js","test/cdc/cdc-integration-service.test.js","test/cdc/cdc-observability.test.js","test/cdc/cdc-pipeline-metrics.property.test.js","test/cdc/cdc-pipeline-metrics.test.js","test/cdc/cdc-pipeline-readiness-gate.property.test.js","test/cdc/cdc-pipeline-readiness-gate.test.js","test/cdc/cdc-pipeline-readiness-wait-bound-spent.test.js","test/cdc/cdc-projection-wait-observable.test.js","test/cdc/cdc-propagation-metrics.test.js","test/cdc/cdc-refresh-authoritative-cache-row.test.js","test/cdc/cdc-routed-mutation-wait-bound-spent.test.js","test/cdc/cdc-shutdown-terminal-owner-write.test.js","test/cdc/cdc-sql-builder.test.js","test/cdc/cdc-system-table-write-failure-participant-detail.test.js","test/cdc/cdc-terminal-gate-inflight.test.js","test/cdc/endpoint-cdc-propagation.property.test.js","test/cdc/node-address-default-bug.test.js","test/cdc/node-endpoints-cdc.test.js","test/cdc/node-state-tracking.property.test.js","test/cdc/retry-delay-backoff.property.test.js","test/cdc/routed-system-table-write-answers-at-commit.test.js","test/cdc/runtime-cdc-wiring.test.js","test/cdc/schema-default-application.property.test.js","test/cdc/unique-constraint-handling.property.test.js","test/cdc/websocket-address-derivation.property.test.js","test/cdc/write-then-read-projection-census.test.js","test/cli/core/base-view-model.test.js","test/cli/service-init-scaffold.test.js","test/cli/sql/query-input.test.js","test/cli/views/config-view.test.js","test/config/architecture-ownership-guardrails.test.js","test/config/code-path-uniqueness.property.test.js","test/config/control-plane-gateway-mutation-guardrails.test.js","test/config/control-plane-gateway-registry-guardrails.test.js","test/config/dynamic-config-service.test.js","test/config/latency-topology-ownership-guardrails.test.js","test/config/system-cache-write-callsite-guardrails.test.js","test/config/test-configuration-compliance.property.test.js","test/constants/constants-separation.test.js","test/constants/node-state-cache-membership.property.test.js","test/constants/runtime.test.js","test/constants/service-profile.test.js","test/constants/states.property.test.js","test/constants/unified-service-lifecycle-constants.test.js","test/constants/wasm-meta.test.js","test/contract/callback-axis-accretion.test.js","test/contract/message-router-contract.test.js","test/control-plane/current-membership-epoch-null-unreadable.test.js","test/control-plane/endpoint-reader-currentness.test.js","test/control-plane/endpoint-writer-census.test.js","test/control-plane/failure-class-registry.test.js","test/control-plane/formation-release-handoff-interaction-registry.test.js","test/control-plane/membership-layer-boundary.guard.test.js","test/control-plane/membership-publication-first-epoch-members.test.js","test/control-plane/readiness-single-contract-build.test.js","test/convergence/membership-publication-owner-driver-host.test.js","test/debug-runtime/breakpoint-manager.test.js","test/debug-runtime/dap-server.test.js","test/debug-runtime/debug-coordinator.test.js","test/debug-runtime/debug-metadata-service.test.js","test/debug-runtime/debug-overhead-regression.test.js","test/debug-runtime/dwarf-index-builder.test.js","test/debug-runtime/dwarf-index-cache.test.js","test/debug-runtime/dwarf-index-pipeline.test.js","test/debug-runtime/host-import-registry.test.js","test/debug-runtime/replay-runtime.test.js","test/debug-runtime/runtime-introspector.test.js","test/debug-runtime/snapshot-recorder.test.js","test/debug-runtime/vscode-dwarf-parser-backend.test.js","test/debug-runtime/wasm-runtime-adapter.test.js","test/debug/debug-constants.test.js","test/debug/debug-emitter.test.js","test/debug/debug-session-resolver.test.js","test/debug/debug-trace-overhead-regression.test.js","test/debug/trace-collector.property.test.js","test/debug/trace-collector.test.js","test/diagnostics/admission-observer-ready-lease-witness.test.js","test/diagnostics/budget-timeout-accounting.test.js","test/diagnostics/causal-analysis-schema.test.js","test/diagnostics/causal-graph-builder.test.js","test/diagnostics/comparative-efficiency-opportunity-calculator.test.js","test/diagnostics/event-loop-gap-watchdog.test.js","test/diagnostics/failure-class-taxonomy.test.js","test/diagnostics/formation-attribution-semantics.test.js","test/diagnostics/formation-attribution-window.test.js","test/diagnostics/formation-turn-attribution.test.js","test/diagnostics/invariant-review.test.js","test/diagnostics/lease-liveness-decision-neutrality.test.js","test/diagnostics/raft-churn-sync-section-attribution.test.js","test/diagnostics/resource-diagnostics-sampler.test.js","test/diagnostics/source-fingerprint.test.js","test/diagnostics/stop-condition-decision.test.js","test/diagnostics/sync-section-clock-seam.test.js","test/diagnostics/topology-convergence-active-gate-handoff-route.test.js","test/diagnostics/topology-convergence-graph.test.js","test/diagnostics/topology-convergence-readiness-support-evidence.test.js","test/distributed/harness/__tests__/benchmark-claim-admission.test.js","test/distributed/harness/__tests__/benchmark-cohort-preserving-dataset-reset.test.js","test/distributed/harness/__tests__/benchmark-history-selection.test.js","test/distributed/harness/__tests__/benchmark-oltp-state-reconciliation.test.js","test/distributed/harness/__tests__/capture-completeness-handoff.test.js","test/distributed/harness/__tests__/certification-evidence-archive.test.js","test/distributed/harness/__tests__/certification-image-identity.test.js","test/distributed/harness/__tests__/cluster-active-gate-admin-probe-timeout-projection.test.js","test/distributed/harness/__tests__/cluster-active-gate-load-selected-timeout-owner-recovery.test.js","test/distributed/harness/__tests__/cluster-active-gate-selected-transport-closed-owner-recovery-projection.test.js","test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js","test/distributed/harness/__tests__/cluster-active-probe-resample-after-snapshot-lane.test.js","test/distributed/harness/__tests__/cluster-active-wait-readiness-failure.test.js","test/distributed/harness/__tests__/cluster-active-wait-snapshot-retention.test.js","test/distributed/harness/__tests__/cluster-bootstrap-api-wait.test.js","test/distributed/harness/__tests__/cluster-control-snapshot-owner-recovery-late-floor.test.js","test/distributed/harness/__tests__/cluster-control-snapshot-repair-pressure.test.js","test/distributed/harness/__tests__/cluster-lifecycle-active-wait-suite.test.js","test/distributed/harness/__tests__/cluster-load-readiness-no-progress-elapsed-budget.test.js","test/distributed/harness/__tests__/cluster-load-readiness-stable-window-forward-dating.test.js","test/distributed/harness/__tests__/cluster-log-incarnation-restart-order.test.js","test/distributed/harness/__tests__/cluster-node-handle-query.test.js","test/distributed/harness/__tests__/cluster-partition-env.test.js","test/distributed/harness/__tests__/cluster-probe-active-state-readiness.test.js","test/distributed/harness/__tests__/cluster-probe-control-snapshot-coverage.test.js","test/distributed/harness/__tests__/cluster-probe-load-publication-gate.test.js","test/distributed/harness/__tests__/cluster-probe-startup-snapshot-projection.test.js","test/distributed/harness/__tests__/cluster-publication-membership-count.test.js","test/distributed/harness/__tests__/cluster-quiescence-observer-cohort.test.js","test/distributed/harness/__tests__/cluster-restart-recovery-held.test.js","test/distributed/harness/__tests__/cluster-runtime-environment-allowlist.test.js","test/distributed/harness/__tests__/cluster-start-node-lifecycle.test.js","test/distributed/harness/__tests__/cluster-stop-load-config-readiness.test.js","test/distributed/harness/__tests__/cluster.test.js","test/distributed/harness/__tests__/comparative-benchmark-chain-acceptance.test.js","test/distributed/harness/__tests__/comparative-benchmark-defect-regressions.test.js","test/distributed/harness/__tests__/comparative-benchmark-runner-campaign.test.js","test/distributed/harness/__tests__/comparative-benchmark-runner-harness-identity.test.js","test/distributed/harness/__tests__/comparative-benchmark-runner-lab-hosts.test.js","test/distributed/harness/__tests__/comparative-benchmark-runner-semantic-gate.test.js","test/distributed/harness/__tests__/comparative-benchmark-runner-workload-call-site.test.js","test/distributed/harness/__tests__/failure-bundle-log-window-coverage.test.js","test/distributed/harness/__tests__/failure-bundle.test.js","test/distributed/harness/__tests__/fresh-formation-routability-predicate.test.js","test/distributed/harness/__tests__/logging-publication-queue-source-identity.test.js","test/distributed/harness/__tests__/memory-soak-enforcement-oracle.test.js","test/distributed/harness/__tests__/node-handle-control-snapshot-fallback.test.js","test/distributed/harness/__tests__/owner-interaction-model.test.js","test/distributed/harness/__tests__/public-path-multinode-baseline-scenario.test.js","test/distributed/harness/__tests__/public-path-scale-and-failure-certification.test.js","test/distributed/harness/__tests__/real-product-cluster-deployer-identity.test.js","test/distributed/harness/__tests__/real-product-workload-driver-dispatch.test.js","test/distributed/harness/__tests__/real-product-workload-driver-lagrange-wire-facts.test.js","test/distributed/harness/__tests__/real-product-workload-driver-outcomes.test.js","test/distributed/harness/__tests__/report-writer-serialization-degrade.test.js","test/distributed/harness/__tests__/report-writer.property.test.js","test/distributed/harness/__tests__/report-writer.test.js","test/distributed/harness/__tests__/restart-recovery-handoff-failure-barrier.test.js","test/distributed/harness/__tests__/run.test.js","test/distributed/harness/__tests__/scenario-a-prestart-admission.test.js","test/distributed/harness/__tests__/scenario-a-semantic-proof-journey.test.js","test/distributed/harness/__tests__/scenario-certification.test.js","test/distributed/harness/__tests__/scenario-ground-truth.test.js","test/distributed/harness/__tests__/scenario-host-topology.test.js","test/distributed/harness/__tests__/scenario-run-artifact-hygiene.test.js","test/distributed/harness/__tests__/startup-runtime-handoff-readiness-projection.test.js","test/distributed/harness/__tests__/tidb-canonical-semantic-case-completion.test.js","test/distributed/harness/__tests__/unexpected-node-exit-sweep.test.js","test/distributed/harness/__tests__/user-table-leader-placement-spread-scenario.test.js","test/distributed/harness/transaction-recovery-poison-row-live-contract.test.js","test/distributed/reference-client/lagrange-scenario-a-slices.test.js","test/distributed/reference-client/lagrange-visibility-probe.test.js","test/entrypoint-runtime-helpers-join-decision.test.js","test/entrypoint/application-database-runtime-composition.test.js","test/entrypoint/creation-recovery-process-custody.test.js","test/entrypoint/early-admin-sql-engine.test.js","test/entrypoint/embedded-lagrange-input.test.js","test/entrypoint/entrypoint-admin-runtime-cleanup.test.js","test/entrypoint/entrypoint-startup-shutdown-parity-characterization.test.js","test/entrypoint/join-reattempt-wait-bound-spent.test.js","test/entrypoint/shutdown-best-effort-step-timebox.test.js","test/entrypoint/startup-failed-cleanup-process-custody.test.js","test/examples/lab-cluster-smoke.test.js","test/hlc/hlc.test.js","test/invariants/invariant-catalog.test.js","test/logging/log-query-service.test.js","test/logging/log-retention-service.test.js","test/logging/log-throttle.test.js","test/logging/logging-consistency.property.test.js","test/logging/logging-service.test.js","test/logging/logs-persistence-startup.test.js","test/logging/logs-table-service.test.js","test/logging/wait-bound-spent-logs-path.test.js","test/logging/wait-bound-spent.test.js","test/message-group/cdc-handler.test.js","test/message-group/cdc-non-leader-propagation.test.js","test/message-group/error-message-consistency.property.test.js","test/message-group/maximum-retry-limiting.property.test.js","test/message-group/message-delivery-reliability.property.test.js","test/message-group/message-group-cdc-input-guard.test.js","test/message-group/message-group-cdc-public-defer-repair.test.js","test/message-group/message-group-cdc-receiver-admission.test.js","test/message-group/message-group-failover-cdc-continuity.test.js","test/message-group/message-group-forward-backpressure-code.test.js","test/message-group/message-group-fresh-learner-promotion.test.js","test/message-group/message-group-fresh-learner-snapshot.test.js","test/message-group/message-group-native-application-membership.test.js","test/message-group/message-group-native-custody-handoff.test.js","test/message-group/message-group-native-mixed-vector.test.js","test/message-group/message-group-native-provisional-route.test.js","test/message-group/message-group-peer-address-committed-configuration.test.js","test/message-group/message-group-proposal-deadline-wait-bound-spent.test.js","test/message-group/message-group-rebalancer-leadership-readiness-hysteresis.test.js","test/message-group/message-group-registration-exact-birth.test.js","test/message-group/message-group-replace-removal-fence.test.js","test/message-group/message-group-replica-distribution.property.test.js","test/message-group/message-group-service-leader-cdc.test.js","test/message-group/message-group-service-lifecycle-and-ledger.test.js","test/message-group/message-group-service-raft-replication-and-cdc.test.js","test/message-group/message-group-service-role-publication-and-delivery.test.js","test/message-group/message-group-service-row-absence-heal.test.js","test/message-group/message-group-service-row-owner.test.js","test/message-group/message-group-service-strict-cdc-forward-routing.test.js","test/message-group/message-group-service-strict-cdc-join-convergence.test.js","test/message-group/message-group-service.test.js","test/message-group/message-group-target-resolver.test.js","test/message-group/message-group-unparsable-peer-address.test.js","test/message-group/message-retry-handler-wait-bound-spent.test.js","test/message-group/metadata-cache-removal.test.js","test/message-group/no-silent-delivery-failures.property.test.js","test/message-group/raft-response-address-validation.test.js","test/message-group/retry-exponential-backoff.property.test.js","test/message-group/system-cache-query-service.test.js","test/message-group/transport-type-validation.property.test.js","test/migration/migration-constants-and-registration.test.js","test/migration/migration-coordinator-core.test.js","test/migration/migration-observability.test.js","test/migration/migration-partition-alter-routing.test.js","test/migration/migration-pipeline.test.js","test/migration/migration-recovery-trigger.test.js","test/migration/migration-retry-wait-bound-spent.test.js","test/migration/sql-query-engine-dual-write-mode.test.js","test/node/call-cell-partition-fence.test.js","test/node/concurrent-operation-limits.property.test.js","test/node/entry-time-tracking.property.test.js","test/node/event-emission-completeness.property.test.js","test/node/failed-replica-removal-transition-tolerance.test.js","test/node/failure-detection-delegation.property.test.js","test/node/failure-detector-adaptive-threshold.property.test.js","test/node/failure-detector-cdc-writes.property.test.js","test/node/failure-detector-recovery.property.test.js","test/node/failure-detector-sql-upgrade.property.test.js","test/node/failure-detector-sql-upgrade.test.js","test/node/failure-detector.test.js","test/node/failure-repair-intent-contract.test.js","test/node/fault-recovery-behavior.property.test.js","test/node/fresh-create-admission-authority-deferral.test.js","test/node/fresh-create-claimed-cleanup-never-admitted.test.js","test/node/fresh-create-release-authority-no-token.test.js","test/node/fresh-create-release-decision.test.js","test/node/fresh-create-resumed-syncing-claim.test.js","test/node/group-retired-tombstone-incarnation.test.js","test/node/group-retired-tombstone.test.js","test/node/group-retirement-as-a-unit.test.js","test/node/group-retirement-fail-closed.test.js","test/node/group-retirement-fences.test.js","test/node/group-retirement-liveness.test.js","test/node/group-retirement-redrive.test.js","test/node/group-retirement-reseed-held.test.js","test/node/handler-identity-w-hid-2-3-node-handler-exact-retirement.test.js","test/node/lifecycle-readiness.test.js","test/node/local-only-reconcile-activation-boundary.test.js","test/node/message-group-create-admission-recovery.test.js","test/node/message-group-executor-activation-handler-boundary.test.js","test/node/message-group-registration-redrive-owner.test.js","test/node/message-group-service-handler-membership.test.js","test/node/message-group-service-handler.test.js","test/node/metrics-accuracy.property.test.js","test/node/node-lifecycle-state-machine.test.js","test/node/node-reintegration-service.test.js","test/node/node-service-cache-delegation.property.test.js","test/node/node-service-presence.property.test.js","test/node/node-service-runtime-isolation.test.js","test/node/node-service.test.js","test/node/node-startup-natural-shutdown.test.js","test/node/participant-release-control-refusal-observation.test.js","test/node/participant-release-fresh-create-completion.test.js","test/node/replica-cleanup-token-authority.test.js","test/node/replica-create-admission-owner.test.js","test/node/replica-create-admission-recovery.test.js","test/node/replica-create-timeout-replay-custody.test.js","test/node/replica-executor-activation-handler-boundary.test.js","test/node/replica-failed-create-cleanup-generation.test.js","test/node/replica-handler-cache-state.test.js","test/node/replica-handler-idempotency.property.test.js","test/node/replica-handler-leadership-transfer.test.js","test/node/replica-handler-membership-relay.test.js","test/node/replica-handler-owner-path-bypass.test.js","test/node/replica-handler-release-recovery.test.js","test/node/replica-handler-replacement-election-already-leader.test.js","test/node/replica-handler-replica-membership.test.js","test/node/replica-handler-voter-ready-wait-bound-spent.test.js","test/node/replica-handler.test.js","test/node/replica-lifecycle-durable-generation.test.js","test/node/replica-lifecycle-observation-row-carrier.test.js","test/node/replica-lifecycle-observation-snapshot.test.js","test/node/replica-local-only-row-convergence.test.js","test/node/replica-recovery-service.test.js","test/node/replica-removal-consensus-exit-decisions.test.js","test/node/replica-removal-consensus-exit-reported-once.test.js","test/node/replica-removal-consensus-exit.test.js","test/node/replica-removal-deferred-row-write.test.js","test/node/replica-removal-leader-source.test.js","test/node/replica-state-delegation.test.js","test/node/replica-state-machine-authoritative-transition.test.js","test/node/replica-state-machine-registered-activation.test.js","test/node/replica-state-machine-time-source.test.js","test/node/replica-state-machine-transitions.property.test.js","test/node/replica-state-machine.test.js","test/node/replica-status-write-retry-spent-owner.test.js","test/node/replica-transport-handler-identity.test.js","test/node/runtime-service-bound-route.test.js","test/node/runtime-service-call-cell-handler.test.js","test/node/runtime-service-definition-authority.test.js","test/node/runtime-service-handler.test.js","test/node/runtime-service-remove-execution-custody.test.js","test/node/runtime-service-restart-inventory-custody.test.js","test/node/services-p1-diagnostic-logger.test.js","test/node/single-cdc-write-path.property.test.js","test/node/state-change-event-emission.property.test.js","test/node/state-count-accuracy.property.test.js","test/node/state-machine-cdc-consistency.property.test.js","test/node/state-persistence-cdc.property.test.js","test/node/state-transition-validity.property.test.js","test/node/sub-phase-event-context.property.test.js","test/node/sub-phase-tracking.property.test.js","test/node/sub-phase-transition-completeness.property.test.js","test/node/terminal-sub-phase-auto-advance.property.test.js","test/node/timeout-triggered-failures.property.test.js","test/partition/ack-extraction-from-response.property.test.js","test/partition/adjacent-partition-merging.property.test.js","test/partition/cdc-buffer-replay-robustness.test.js","test/partition/cdc-event-buffer.property.test.js","test/partition/cdc-event-buffer.test.js","test/partition/cdc-generation.property.test.js","test/partition/cdc-hydration-live-handoff.test.js","test/partition/cdc-hydration-old-order.test.js","test/partition/cdc-sliding-window-catchup.preservation.test.js","test/partition/child-partition-leader-propagation.test.js","test/partition/committed-statement-outcome.test.js","test/partition/complete-peer-list.property.test.js","test/partition/contiguous-non-overlapping-ranges.property.test.js","test/partition/coordinator-table-exact-identity.test.js","test/partition/default-replica-count.property.test.js","test/partition/durable-replay-cursor.test.js","test/partition/durable-voter-visibility-role-write.test.js","test/partition/extracted-module-api-equivalence.property.test.js","test/partition/group-retirement-epoch-decode.test.js","test/partition/group-retirement-provisioning-mark.test.js","test/partition/group-retirement-resume-claim.test.js","test/partition/handler-identity-w-hid-1-retiring-partition-refuses-raft.test.js","test/partition/key-range-manager.test.js","test/partition/learner-promotion-count-check-budget-walk.test.js","test/partition/learner-promotion-count-check-inputs.test.js","test/partition/learner-promotion-proof-committed-admission.test.js","test/partition/learner-promotion-proof-delivery-outcome.test.js","test/partition/learner-promotion-proof-epoch-guard.test.js","test/partition/managed-merge-epoch-persistence-effects.test.js","test/partition/managed-merge-workflow.test.js","test/partition/managed-split-epoch-persistence-effects.test.js","test/partition/managed-split-metrics-provider.test.js","test/partition/managed-split-resume-under-write-load.test.js","test/partition/managed-split-workflow-terminal-lifecycle.test.js","test/partition/managed-split-workflow-transition-persistence.test.js","test/partition/managed-split-workflow.test.js","test/partition/median-split-point.property.test.js","test/partition/merge-auto-execution.test.js","test/partition/merge-backfill-batching.test.js","test/partition/merge-cutover-coordination.test.js","test/partition/merge-source-replication.test.js","test/partition/message-handler-registry-routing.property.test.js","test/partition/message-handler-registry.test.js","test/partition/participant-decision-canonical-record.test.js","test/partition/participant-envelope-admission.test.js","test/partition/participant-origin-retained-history.test.js","test/partition/participant-release-applied-position.test.js","test/partition/participant-release-build-provenance.test.js","test/partition/participant-release-control-three-member.test.js","test/partition/participant-release-deadline-recovery.test.js","test/partition/participant-release-delivery-recorder.test.js","test/partition/participant-release-first-prepare-native.test.js","test/partition/participant-release-native-application-order.test.js","test/partition/participant-release-prepare-identity-native.test.js","test/partition/participant-release-prepared-settlement-native.test.js","test/partition/participant-release-protocol.test.js","test/partition/participant-release-retention-native.test.js","test/partition/partition-admission-redrive-wakes.test.js","test/partition/partition-boundary-representation.test.js","test/partition/partition-cdc-delivery-progress.test.js","test/partition/partition-cdc-drain-admission.test.js","test/partition/partition-cdc-generator.test.js","test/partition/partition-cdc-invocation-custody.test.js","test/partition/partition-cdc-obligation-reclamation.test.js","test/partition/partition-cdc-obligation.test.js","test/partition/partition-cdc-owed-admission-native.test.js","test/partition/partition-cdc-owed-admission.test.js","test/partition/partition-cdc-parameterized-insert-or-ignore.test.js","test/partition/partition-cdc-prepared-capacity.test.js","test/partition/partition-cdc-topology-progress-currentness.test.js","test/partition/partition-commit-deadline-wait-bound-spent.test.js","test/partition/partition-consensus-hold-log.test.js","test/partition/partition-coordinator-settlement.test.js","test/partition/partition-deferred-evaluation-obligation-scheduler.test.js","test/partition/partition-descriptor-epoch-contract.test.js","test/partition/partition-leader-address-from-raft-status.test.js","test/partition/partition-leader-row-publication-integrity.test.js","test/partition/partition-legacy-consensus-state.test.js","test/partition/partition-participant-release-admission.test.js","test/partition/partition-participant-transaction-apply.test.js","test/partition/partition-participant-transaction-staging.test.js","test/partition/partition-participant-transaction-topology.test.js","test/partition/partition-port-refusal-outcomes.test.js","test/partition/partition-raft-storage.test.js","test/partition/partition-rebalancer-dependency-wiring-characterization.test.js","test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js","test/partition/partition-rebalancer-readiness-edge-gate.test.js","test/partition/partition-registration-exact-birth.test.js","test/partition/partition-registration-readback-controls.test.js","test/partition/partition-replication-restart-attempt-handoff.test.js","test/partition/partition-retiring-row-peer-retirement.test.js","test/partition/partition-runtime-reconstruction-leadership.test.js","test/partition/partition-service-cdc-log-suppression.test.js","test/partition/partition-service-cleanup-token-schema.test.js","test/partition/partition-service-hlc-monotonicity.test.js","test/partition/partition-service-learner-promotion-wake.test.js","test/partition/partition-service-learner-promotion.test.js","test/partition/partition-service-qualified-table-name.test.js","test/partition/partition-service-raft-noop-cdc-placement.test.js","test/partition/partition-service-raft-propose-metrics.test.js","test/partition/partition-service-raft-transition-evidence.test.js","test/partition/partition-service-replay-dedupe.test.js","test/partition/partition-service-role-metadata-publication.test.js","test/partition/partition-service-row-absence-heal.test.js","test/partition/partition-service-row-owner.test.js","test/partition/partition-service-shutdown-timers.test.js","test/partition/partition-service-size-split-transport.test.js","test/partition/partition-service-sqlite-metrics.test.js","test/partition/partition-service-stale-topology-write-guard.test.js","test/partition/partition-service-transactions-query-routing.test.js","test/partition/partition-service-write-commit.test.js","test/partition/partition-service.test.js","test/partition/partition-size-persist-own-column-keep.test.js","test/partition/partition-size-write-retry-spent-owner.test.js","test/partition/partition-snapshot-cadence.test.js","test/partition/partition-split-merge-manager.test.js","test/partition/partition-split-policy-precedence.test.js","test/partition/partition-split-routing.test.js","test/partition/partition-splitting-trigger.property.test.js","test/partition/partition-sql-parser.test.js","test/partition/partition-statement-admission.test.js","test/partition/partition-transaction-determinism.test.js","test/partition/partition-transaction-replay-cursor-v4.test.js","test/partition/partition-transaction-replicated-apply-v3.test.js","test/partition/partition-transaction.property.test.js","test/partition/partition-transition-projection.test.js","test/partition/partition-tx1-single-path-alpha.test.js","test/partition/partition-unreadable-durable-record.test.js","test/partition/partition-write-kernel.test.js","test/partition/partition-write-leadership-transfer-committed.test.js","test/partition/partition-write-leadership-transfer.test.js","test/partition/partition-write-typed-releases.test.js","test/partition/peer-admission-unparsable-address.test.js","test/partition/pending-request-round-trip.property.test.js","test/partition/pending-request-tracker-wait-bound-spent.test.js","test/partition/pending-request-tracker.test.js","test/partition/proposal-queue-capacity.property.test.js","test/partition/proposal-queue-size-invariant.property.test.js","test/partition/proposal-queue.test.js","test/partition/raft-leadership-stability.property.test.js","test/partition/raft-rs-transport-demux.test.js","test/partition/range-integrity-validation.property.test.js","test/partition/replica-admission-from-committed-operation.test.js","test/partition/replica-operations-schema-migration.test.js","test/partition/replicated-sql-determinism-three-replica.test.js","test/partition/retiring-source-resume-refusal.test.js","test/partition/routing-key-comparator.test.js","test/partition/settled-replay-preserves-result.test.js","test/partition/split-abort-fence-parity.test.js","test/partition/split-ack-constants.test.js","test/partition/split-backfill-internal-pacing.test.js","test/partition/split-cutover-owner-delegation.test.js","test/partition/split-dissolution-durable-proof.test.js","test/partition/split-execution-state-reconstruction.test.js","test/partition/split-key-comparator.test.js","test/partition/split-merge-capacity-preflight.test.js","test/partition/split-merge-hysteresis.test.js","test/partition/split-merge-overlap-guard.test.js","test/partition/split-mirror-flush-ordering.test.js","test/partition/split-mirror-write-identity.test.js","test/partition/split-progress-depends-on-process-local-state.test.js","test/partition/split-rebalance-trigger.test.js","test/partition/split-recovery-after-restart.test.js","test/partition/split-source-participant-ack.test.js","test/partition/sql-statement-parser-coverage-matrix.test.js","test/partition/table-partition-structure.property.test.js","test/partition/timeout-cleanup.property.test.js","test/partition/workflow-fencing-wiring.test.js","test/partition/workflow-record-change-preconditions.test.js","test/partition/workflow-record-incarnation.test.js","test/partition/workflow-record-interleaving.property.test.js","test/partition/workflow-record-lagging-view.test.js","test/partition/workflow-record-projection-drop.test.js","test/partition/workflow-record-reconcile.test.js","test/partition/workflow-record-same-owner-race.test.js","test/partition/workflow-record-stale-owner.test.js","test/partition/workflow-record-two-owners.test.js","test/partition/write-path-epoch-fencing.test.js","test/query/parallel-query-coordinator.test.js","test/query/pg-translate.test.js","test/query/query-constants-vocabulary.test.js","test/query/sql-query-engine-create-table-quorum.test.js","test/raft/authoritative-row-mutation-helper.test.js","test/raft/authoritative-row-mutation-outcome-classifier.test.js","test/raft/bulk-transfer-socket-adapter.test.js","test/raft/leader-activation-gate.test.js","test/raft/leader-activation-scheduler.test.js","test/raft/leadership-transfer-single-path.test.js","test/raft/learner-promotion-progress-proof-contract.test.js","test/raft/message-group-readiness-delivery-priority.test.js","test/raft/raft-cleanup-verification.test.js","test/raft/raft-id-mapper.test.js","test/raft/raft-log-write-owner.test.js","test/raft/raft-opening-cleanup-error.test.js","test/raft/raft-rs-backend/admission-redrive-chain.test.js","test/raft/raft-rs-backend/admission-redrive.test.js","test/raft/raft-rs-backend/admission-stamp-reread-real-port.test.js","test/raft/raft-rs-backend/backend-seam.test.js","test/raft/raft-rs-backend/bootstrap-committed-membership.test.js","test/raft/raft-rs-backend/committed-membership-adversarial-boundary.test.js","test/raft/raft-rs-backend/committed-membership-census.test.js","test/raft/raft-rs-backend/committed-membership-read.test.js","test/raft/raft-rs-backend/committed-membership-stamp.test.js","test/raft/raft-rs-backend/committed-membership-target-validation.test.js","test/raft/raft-rs-backend/conf-change-leader-only.test.js","test/raft/raft-rs-backend/conf-change-pending-deferral.test.js","test/raft/raft-rs-backend/conf-state-authority.test.js","test/raft/raft-rs-backend/durable-commit-power-loss.test.js","test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js","test/raft/raft-rs-backend/durable-commit-sync.test.js","test/raft/raft-rs-backend/durable-ready-loop.test.js","test/raft/raft-rs-backend/durable-rejoin-record-refusal.test.js","test/raft/raft-rs-backend/durable-store-committed-entries.test.js","test/raft/raft-rs-backend/durable-store-connection-custody.test.js","test/raft/raft-rs-backend/election-safety.test.js","test/raft/raft-rs-backend/evidence-o1-admission-liveness.test.js","test/raft/raft-rs-backend/evidence-o1-anchors.test.js","test/raft/raft-rs-backend/evidence-o1-gate-histories.test.js","test/raft/raft-rs-backend/evidence-o1-proposal-ingress.test.js","test/raft/raft-rs-backend/evidence-o1-real-chain.test.js","test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js","test/raft/raft-rs-backend/evidence-o1-static.test.js","test/raft/raft-rs-backend/host-contract-citations.test.js","test/raft/raft-rs-backend/identity-record-window.test.js","test/raft/raft-rs-backend/identity-reuse-reseed-hold.test.js","test/raft/raft-rs-backend/inbound-drain-owned-timer.test.js","test/raft/raft-rs-backend/joining-genesis-tripwire.test.js","test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js","test/raft/raft-rs-backend/lifecycle-retirement-census.test.js","test/raft/raft-rs-backend/lifecycle-table-writer-census.test.js","test/raft/raft-rs-backend/local-log-guard-correct-followers.test.js","test/raft/raft-rs-backend/local-log-guard-refusals.test.js","test/raft/raft-rs-backend/local-log-guard-sender-admissibility.test.js","test/raft/raft-rs-backend/log-marker-partition.test.js","test/raft/raft-rs-backend/membership-changed-event.test.js","test/raft/raft-rs-backend/membership-generation-persistence.test.js","test/raft/raft-rs-backend/message-group-membership-semantic-port.test.js","test/raft/raft-rs-backend/message-group-on-raft-rs.test.js","test/raft/raft-rs-backend/multi-replica-runtime-prerequisites.test.js","test/raft/raft-rs-backend/native-election-liveness.test.js","test/raft/raft-rs-backend/native-election-randomized.test.js","test/raft/raft-rs-backend/open-time-identity-refusal.test.js","test/raft/raft-rs-backend/operation-port-boundary.test.js","test/raft/raft-rs-backend/operation-port-lifecycle.test.js","test/raft/raft-rs-backend/operation-port-provenance.test.js","test/raft/raft-rs-backend/operation-port-ready-recovery.test.js","test/raft/raft-rs-backend/operation-port-regression.test.js","test/raft/raft-rs-backend/operation-port-status-observation.test.js","test/raft/raft-rs-backend/operation-port-throw-containment.test.js","test/raft/raft-rs-backend/operation-port-turn-answers.test.js","test/raft/raft-rs-backend/original-handoff-lifecycle-claim.test.js","test/raft/raft-rs-backend/participation-gate.test.js","test/raft/raft-rs-backend/partition-construction-seam.test.js","test/raft/raft-rs-backend/partition-peer-admission.test.js","test/raft/raft-rs-backend/partition-snapshot-compaction-catchup.test.js","test/raft/raft-rs-backend/peer-identity.test.js","test/raft/raft-rs-backend/persistence-admission.test.js","test/raft/raft-rs-backend/raft-rs-ingress-fuzz.test.js","test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js","test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js","test/raft/raft-rs-backend/replica-membership-witness.test.js","test/raft/raft-rs-backend/reseed-hold-durability.test.js","test/raft/raft-rs-backend/restart-from-durable-record.test.js","test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js","test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js","test/raft/raft-rs-backend/runtime-completion-consumers-partition.test.js","test/raft/raft-rs-backend/runtime-completion-consumers-transfers.test.js","test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js","test/raft/raft-rs-backend/runtime-trap-and-restore.test.js","test/raft/raft-rs-backend/runtime-turn-integrity.test.js","test/raft/raft-rs-backend/runtime-wait-bound-spent.test.js","test/raft/raft-rs-backend/single-path-partition-cutover.test.js","test/raft/raft-rs-backend/stampless-opening-refusal.test.js","test/raft/raft-rs-backend/status-read-never-waits.test.js","test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js","test/raft/raft-rs-backend/transfer-leadership-attack-matrix.test.js","test/raft/raft-rs-backend/transfer-leadership-decision-inputs.test.js","test/raft/raft-rs-backend/transfer-leadership-drain-anchors.test.js","test/raft/raft-rs-backend/transfer-leadership-drain-oracle.test.js","test/raft/raft-rs-backend/transfer-leadership-drain-order.test.js","test/raft/raft-rs-backend/transfer-leadership-drop-classification.test.js","test/raft/raft-rs-backend/transfer-leadership-property.test.js","test/raft/raft-rs-backend/transfer-leadership-write-path.test.js","test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js","test/raft/raft-rs-backend/zero-legacy-consensus-runtime.test.js","test/raft/raft-rs-lifecycle-turn-admission.test.js","test/raft/raft-rs-original-allocation-cold-inspection.test.js","test/raft/raft-rs-original-allocation-custody.test.js","test/raft/raft-rs-original-allocation-lifecycle-operation.test.js","test/raft/raft-rs-original-allocation-preparation.test.js","test/raft/raft-rs-original-allocation-store.test.js","test/raft/raft-rs-original-opening-authority.test.js","test/raft/raft-rs-original-opening-effect-cut.test.js","test/raft/raft-rs-original-opening.test.js","test/raft/raft-rs-peer-delivery-transport-outcome.test.js","test/raft/raft-rs-turn-answer.test.js","test/raft/replica-voter-readiness.test.js","test/raft/snapshot-boundary-observability.test.js","test/raft/snapshot-cadence.test.js","test/raft/snapshot-catchup-cluster-identity.test.js","test/raft/snapshot-catchup-dispatch.test.js","test/raft/snapshot-catchup-end-to-end.test.js","test/raft/snapshot-checkpoint-format-contract.test.js","test/raft/snapshot-checkpoint-restart-read.test.js","test/raft/snapshot-checkpoint-sqlite-payload.test.js","test/raft/snapshot-compaction-catchup-integration.test.js","test/raft/snapshot-dispatcher-wiring.test.js","test/raft/snapshot-gated-compaction-contract.test.js","test/raft/snapshot-install-restart-states.test.js","test/raft/snapshot-install-transition.test.js","test/raft/snapshot-lifecycle-staging.test.js","test/raft/snapshot-multichunk-transfer.test.js","test/raft/snapshot-offer-router.test.js","test/raft/snapshot-proof-gated-compaction.test.js","test/raft/snapshot-recorded-gaps.test.js","test/raft/snapshot-retention-sweep.test.js","test/raft/snapshot-transfer-protocol.test.js","test/raft/sqlite-log-adapter-committed-truncation-guard.test.js","test/raft/sqlite-log-adapter-committed-watermark.test.js","test/raft/sqlite-log-adapter-committed-write-paths.test.js","test/raft/sqlite-log-adapter-contract.test.js","test/raft/sqlite-log-adapter-round-trip.property.test.js","test/raft/sqlite-schema-migration.test.js","test/random/dt5-jitter-seam.test.js","test/random/random-source.test.js","test/rebalancer/application-write-formation-authority.test.js","test/rebalancer/formation-runtime-service-create-lane-budget-starvation.test.js","test/rebalancer/priority-publication-per-leg-evidence-census.test.js","test/rebalancer/replica-operation-membership-epoch-binding.test.js","test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js","test/rebalancer/spread-cure-transition-authorization.test.js","test/rebalancer/stabilization-timer-reset.property.test.js","test/rebalancer/terminal-failed-add-target-cleanup.test.js","test/release/project-hardening-contracts.test.js","test/release/public-api-side-effect-boundary.test.js","test/release/runtime-entry-link.test.js","test/runtime/movielens-live-report-host-scheduling.test.js","test/runtime/pgwire-protocol-handler.test.js","test/runtime/pgwire-session.test.js","test/scripts/acceptance-proof-manifest-runner.test.js","test/scripts/action-authority.test.js","test/scripts/agent-tooling-command-cleanup.test.js","test/scripts/agent-tooling-configuration.test.js","test/scripts/agent-tooling-evidence.test.js","test/scripts/agent-tooling-process.test.js","test/scripts/analyze-cl039-link-rate.test.js","test/scripts/analyze-fix-engagement.test.js","test/scripts/analyze-formation-release-phases.test.js","test/scripts/analyze-latent-blockers.test.js","test/scripts/analyze-monotone-drain.test.js","test/scripts/analyze-precondition-recurrence.test.js","test/scripts/analyze-priority-recovery-residuals.test.js","test/scripts/analyze-redecision-storm.test.js","test/scripts/analyze-replace-safety-blocks.test.js","test/scripts/analyze-rolling-restart-liveness.test.js","test/scripts/analyze-soft-warning-strikes.test.js","test/scripts/analyze-topology-convergence.test.js","test/scripts/apparatus-release-consolidation-budget.test.js","test/scripts/canary-corpus-needed.test.js","test/scripts/certification-verdict.test.js","test/scripts/change-proof-boundary.test.js","test/scripts/change-proof-collection-safety.test.js","test/scripts/change-proof-lockfile-safety.test.js","test/scripts/change-proof-own-authority.test.js","test/scripts/change-proof-package-range.test.js","test/scripts/change-proof-subsystem-participant-safety.test.js","test/scripts/change-proof-transitive-lockfile-shape.test.js","test/scripts/change-selection-taxonomy.test.js","test/scripts/changed-paths.test.js","test/scripts/check-architecture-slices.test.js","test/scripts/check-base-range.test.js","test/scripts/check-benchmark-history-append-only.test.js","test/scripts/check-cli-docs.test.js","test/scripts/check-current-capabilities.test.js","test/scripts/check-doc-audience.test.js","test/scripts/check-documentation-current-state.test.js","test/scripts/check-fast-static.test.js","test/scripts/check-file-size-thresholds.test.js","test/scripts/check-guideline-ambient-intrinsics.test.js","test/scripts/check-guideline-boundary-mode-contracts.test.js","test/scripts/check-guideline-constant-names.test.js","test/scripts/check-guideline-decision-boundaries.test.js","test/scripts/check-guideline-deferred-outcomes.test.js","test/scripts/check-guideline-literals.test.js","test/scripts/check-guideline-navigability.test.js","test/scripts/check-no-ordinal-files.test.js","test/scripts/check-operation-dispatch-completion-owner.test.js","test/scripts/check-operation-progress-authority.test.js","test/scripts/check-owner-traces.test.js","test/scripts/check-partition-class-owner.test.js","test/scripts/check-quest-log-append-only.test.js","test/scripts/check-roadmap-authority.test.js","test/scripts/check-runtime-grammar-contracts.test.js","test/scripts/check-solve-binary-guard.test.js","test/scripts/check-staged-constant-names.test.js","test/scripts/check-subsystem.test.js","test/scripts/check-unified-system-metadata-gateway.test.js","test/scripts/closed-quest-shape.test.js","test/scripts/closure-ledger-state.test.js","test/scripts/code-navigability-budget.test.js","test/scripts/code-navigability-detectors.test.js","test/scripts/complexity-ratchet-closure.test.js","test/scripts/content-bound-review-and-interaction-proof.test.js","test/scripts/dependency-policy-authority.test.js","test/scripts/dependency-policy-classification.test.js","test/scripts/dependency-policy-producer-binding.test.js","test/scripts/distributed-matrix-cli.test.js","test/scripts/dt-prove.test.js","test/scripts/effective-placement-serial-priority-planner-scenario.test.js","test/scripts/eslint-value-or-promise-selector.test.js","test/scripts/evidence-relocation-acceptance.test.js","test/scripts/evidence-relocation.test.js","test/scripts/fallback-branch-census-launch-coordinators.test.js","test/scripts/fallback-branch-census.test.js","test/scripts/formation-health.test.js","test/scripts/formation-release-handoff-gcp-analysis-retained-uncompleted-teardown.test.js","test/scripts/gen-solve-commands-index.test.js","test/scripts/generate-source-owner-index.test.js","test/scripts/git-invocation-owner.test.js","test/scripts/helper-import-closure.test.js","test/scripts/historical-record-exemptions.test.js","test/scripts/home-lab-cli-guidelines.test.js","test/scripts/impact-contract-registry.test.js","test/scripts/impact-proof-cone-consumers.test.js","test/scripts/impact-proof-cone-followed-file-races.test.js","test/scripts/impact-proof-cone-producer.test.js","test/scripts/impact-proof-cone.test.js","test/scripts/import-graph-repository-boundary.test.js","test/scripts/install-git-hooks-stdout-purity.test.js","test/scripts/inventory-ordinal-segments.test.js","test/scripts/lab-census-benchmark-evidence-custody.test.js","test/scripts/lab-fleet-discovery.test.js","test/scripts/lab-test-base.test.js","test/scripts/lab-worker-provisioning.test.js","test/scripts/list-commands.test.js","test/scripts/local-corpus.test.js","test/scripts/metric-cycle-custody.test.js","test/scripts/metric-cycle-resolution.test.js","test/scripts/metric-duplication-inputs.test.js","test/scripts/metric-report-inputs.test.js","test/scripts/metric-report-provenance.test.js","test/scripts/model-contract-tools.test.js","test/scripts/model-invariants.test.js","test/scripts/model-tlc-mode-selection.test.js","test/scripts/model-tlc-output-tail.test.js","test/scripts/no-external-llm-guards.test.js","test/scripts/no-legacy-consensus-reference-audit.test.js","test/scripts/no-legacy-consensus-reference-ratchet.test.js","test/scripts/observation-census.test.js","test/scripts/participant-release-completion-owner.test.js","test/scripts/pre-push-hook-control-flow.test.js","test/scripts/pre-push-stage-manifest.test.js","test/scripts/priority-recovery-current-artifact-fixture.test.js","test/scripts/proof-authority-falsifiers.test.js","test/scripts/proof-authority.test.js","test/scripts/proof-checkout-preparation.test.js","test/scripts/proof-cone-cli-output-completeness.test.js","test/scripts/proof-receipt-execution-report.test.js","test/scripts/prune-test-output.test.js","test/scripts/publish-head-workspace-links.test.js","test/scripts/publish-head.test.js","test/scripts/push-gate-change-proof.test.js","test/scripts/push-gate-unused-files-reachability.test.js","test/scripts/quest-evidence-harness-expected-tests.test.js","test/scripts/release-content-digest.test.js","test/scripts/release-notes.test.js","test/scripts/release-npm-package.test.js","test/scripts/release-preflight.test.js","test/scripts/release-proof-identity.test.js","test/scripts/release-publication-receipt.test.js","test/scripts/repository-legacy-fallback-closure.test.js","test/scripts/rerun-failed-distributed-scenarios.test.js","test/scripts/rolling-restart-stat-gate-summary.test.js","test/scripts/rule-set-revision.test.js","test/scripts/run-classified-test-files.test.js","test/scripts/run-formation-release-handoff-gcp-negative-control.test.js","test/scripts/run-formation-release-handoff-gcp-reverted-control.test.js","test/scripts/run-formation-release-handoff-gcp-streak.test.js","test/scripts/run-formation-release-handoff-gcp.test.js","test/scripts/run-formation-seed-budget.test.js","test/scripts/run-live-repetitions.test.js","test/scripts/run-test-ci.test.js","test/scripts/run-test-files.test.js","test/scripts/scenario-certification-consumers.test.js","test/scripts/scenario-refused-outcome-consumers.test.js","test/scripts/select-change-tests.test.js","test/scripts/selection-golden-corpus.test.js","test/scripts/service-portability-claims-contract.test.js","test/scripts/service-portability-static-gate.test.js","test/scripts/solve-footprint-accounting.test.js","test/scripts/spec-led-runtime-legacy-deletion-guard.test.js","test/scripts/state-read-named-defaults.test.js","test/scripts/static-audit-input-triggers.test.js","test/scripts/steering-diet.test.js","test/scripts/stop-distributed-harness-containers.test.js","test/scripts/summarize-distributed-failure-report.test.js","test/scripts/summarize-representative-evidence.test.js","test/scripts/test-placement-lab-split.test.js","test/scripts/test-placement.test.js","test/scripts/test-primary-classification.test.js","test/scripts/test-resource-classification.test.js","test/scripts/test-subsystem-classification.test.js","test/scripts/test-subsystem-repository-index.test.js","test/scripts/test-timeout-declarations.test.js","test/scripts/wait-for-load-headroom.test.js","test/scripts/workspace-injection-candidates.test.js","test/service/minimal-deployment-binding-owner-guard.test.js","test/service/request-cell-call-bridge.test.js","test/simulation/formation-sim-production-transcript-determinism.test.js","test/solve/commands.test.js","test/solve/evidence-store.test.js","test/solve/guards.test.js","test/solve/migrate-v1.test.js","test/solve/probes.test.js","test/solve/schema.test.js","test/solve/store.test.js","test/storage-load/storage-load-report.test.js","test/storage/data-directory-manager.test.js","test/storage/data-directory-validation.property.test.js","test/storage/persistent-storage-paths.property.test.js","test/storage/sqlite-store.property.test.js","test/storage/sqlite-store.test.js","test/test-helpers/managed-timers.test.js","test/test-helpers/port-allocator.test.js","test/test-helpers/topology-leak-check.test.js","test/time/dt4-seam-collapse.test.js","test/time/pct-scheduler.test.js","test/time/time-source.test.js","test/topology/cdc-group-propagation-service.test.js","test/topology/cdc-group-propagation-stop-arms-nothing.test.js","test/topology/cdc-group-propagation-transport-outcome-failed-set.test.js","test/transaction/session-transaction-isolation.test.js","test/transport/address-format-validation.property.test.js","test/transport/bulk-channel-identify-incarnation.test.js","test/transport/bulk-registry-bootstrap.test.js","test/transport/bulk-transfer-lane-isolation.test.js","test/transport/delivery-semantics.property.test.js","test/transport/error-response-correlation-id.property.test.js","test/transport/exact-handler-identity-api.test.js","test/transport/handler-registration.property.test.js","test/transport/immediate-ack-ordering.property.test.js","test/transport/local-delivery.property.test.js","test/transport/location-transparent-communication.property.test.js","test/transport/loopback-connection.property.test.js","test/transport/message-router-api.property.test.js","test/transport/message-router-cdc-custody.test.js","test/transport/message-router-cdc-encoding.test.js","test/transport/message-router-cdc-outcome-roundtrip.test.js","test/transport/message-router-cdc-response-boundary.test.js","test/transport/message-router-cold-reconnect-delivery-grant.test.js","test/transport/message-router-critical-source-reserve.test.js","test/transport/message-router-deliver-metrics.test.js","test/transport/message-router-delivery-deadline-liveness.test.js","test/transport/message-router-endpoint-address-change-redial.test.js","test/transport/message-router-join-request.test.js","test/transport/message-router-late-response-classification.test.js","test/transport/message-router-ping-wait-bound-spent.test.js","test/transport/message-router-quarantine-liveness-guard.test.js","test/transport/message-router-query-transport-failure-shape.test.js","test/transport/message-router-readiness-inflight-reserve.test.js","test/transport/message-router-readiness-reserve.test.js","test/transport/message-router-superseded-delivery-completion.test.js","test/transport/message-router-transport-cleanup.test.js","test/transport/message-router.test.js","test/transport/name-first-advertising-publication.test.js","test/transport/node-address-resolution-contract.test.js","test/transport/node-address-resolution.test.js","test/transport/node-identity-separation.property.test.js","test/transport/node-incarnation-websocket-fence.test.js","test/transport/node-registration-creates-endpoint.property.test.js","test/transport/outbound-saturation-warn-rate-limit.test.js","test/transport/owner-retry-budget.test.js","test/transport/q7-node-transport-authenticated-encryption.test.js","test/transport/router-envelope-pre-send-failure.test.js","test/transport/router-envelope-w-env-1-answer-cannot-rewrite-acknowledgement.test.js","test/transport/router-envelope-w-env-2-lost-answer-after-ack.test.js","test/transport/router-envelope-w-env-3-handler-throw-symmetry.test.js","test/transport/router-envelope-w-env-4-no-handler-frame.test.js","test/transport/router-envelope-w-env-6-full-field-rewrite-matrix.test.js","test/transport/router-envelope-w-env-7-two-hop-transport-is-per-hop.test.js","test/transport/router-envelope-w-env-8-verbatim-answer-and-wire-failure.test.js","test/transport/router-server-manager.test.js","test/transport/routing-correctness.property.test.js","test/transport/rpc-client.test.js","test/transport/rpc-correlation-correctness.property.test.js","test/transport/rpc-timeout-behavior.property.test.js","test/transport/service-delivery-lifetime.test.js","test/transport/service-response-correlation.property.test.js","test/transport/transport-outcome-forwarding-hop.test.js","test/transport/transport-semantic-outcome.test.js","test/transport/uniform-message-routing.property.test.js","test/transport/uniform-websocket-delivery.property.test.js","test/utils/assert.property.test.js","test/utils/canonical-json-data.test.js","test/utils/correlation-id-presence.property.test.js","test/utils/correlation.test.js","test/utils/fast-json-clone.test.js","test/utils/phase-base.test.js","test/utils/phase-lifecycle-events.property.test.js","test/utils/phase-state-machine-transitions.property.test.js","test/utils/phase-state-machine.test.js","test/utils/state-field-read.test.js","test/wasm-service/backward-compat-serialization.test.js","test/wasm-service/capability-policy.test.js","test/wasm-service/dependency-lock-determinism.property.test.js","test/wasm-service/dependency-lock-service.test.js","test/wasm-service/dependency-resolver.test.js","test/wasm-service/manifest-runtime-validator.test.js","test/wasm-service/meta-command-handlers-operations.test.js","test/wasm-service/meta-command-handlers.test.js","test/wasm-service/meta-service-factory.test.js","test/wasm-service/meta-service-lifecycle.test.js","test/wasm-service/meta-service-router.test.js","test/wasm-service/meta-validation-pipeline.test.js","test/wasm-service/meta-write-executor.test.js","test/wasm-service/module-audit-logger.test.js","test/wasm-service/module-manifest-models.property.test.js","test/wasm-service/module-manifest-models.test.js","test/wasm-service/module-mirror.test.js","test/wasm-service/oci-reference.test.js","test/wasm-service/once-binding-compilation.test.js","test/wasm-service/operation-lifecycle.test.js","test/wasm-service/operation-stream.test.js","test/wasm-service/package-reference.test.js","test/wasm-service/port-allocator.test.js","test/wasm-service/query-budget-constants.test.js","test/wasm-service/read-router.property.test.js","test/wasm-service/read-router.test.js","test/wasm-service/registry-resolver.test.js","test/wasm-service/resolver-precedence.test.js","test/wasm-service/runtime-descriptor-validator.test.js","test/wasm-service/runtime-legacy-mapping.test.js","test/wasm-service/safety-interval.test.js","test/wasm-service/service-definition-validator.property.test.js","test/wasm-service/service-definition-validator.test.js","test/wasm-service/service-endpoint-builder.property.test.js","test/wasm-service/service-endpoint-builder.test.js","test/wasm-service/session-kv-store.property.test.js","test/wasm-service/session-kv-store.test.js","test/wasm-service/sql-profile-endpoint.test.js","test/wasm-service/sql-profile-factory.test.js","test/wasm-service/sql-profile-validation.test.js","test/wasm-service/time-binding-compilation.test.js","test/wasm-service/timer-manager.property.test.js","test/wasm-service/timer-manager.test.js","test/wasm-service/wasm-creation-bound-native.test.js","test/wasm-service/wasm-creation-local-record.test.js","test/wasm-service/wasm-creation-reconciliation.test.js","test/wasm-service/wasm-executor-run-export.test.js","test/wasm-service/wasm-executor-runtime-adapter-parity.test.js","test/wasm-service/wasm-executor.test.js","test/wasm-service/wasm-meta-models.property.test.js","test/wasm-service/wasm-meta-models.test.js","test/wasm-service/wasm-service-constants.test.js","test/wasm-service/wasm-service-lifecycle.test.js","test/wasm-service/wasm-service-models.property.test.js","test/wasm-service/wasm-service-models.test.js","test/wasm-service/wasm-service-replica.test.js","test/wasm-service/wasm-strong-write-native-completion.test.js","test/wasm-service/wasm-strong-write-v1-native-completion.test.js","test/wasm-service/wasm-writer-client-v1.test.js","test/wasm-service/wasm-writer-completion-v1.test.js","test/wasm-service/wasm-writer-recreation-origin-v1.test.js","test/wasm-service/wasm-writer-state-v1.test.js"]},{"resourceClass":"external-toolchain","jobs":1,"files":["test/runtime/minimal-deployment-request-cell-runtime-readiness.test.js","test/wasm-service/call-cell-world-abi.test.js","test/wasm-service/service-cell-v2-world-abi.test.js","test/wasm-service/service-cell-world-abi.test.js","test/wasm-service/service-compiler-module-shape-spike.test.js"]},{"resourceClass":"bootstrap","jobs":2,"files":["test/bootstrap/_min-test.test.js","test/bootstrap/address-takeover-live-ab.test.js","test/bootstrap/address-takeover-workflow.test.js","test/bootstrap/artifact-payload-table-schemas.test.js","test/bootstrap/behaviour-changing-consumer-convergence.test.js","test/bootstrap/boot-incarnation-owner-concurrency.test.js","test/bootstrap/boot-incarnation-owner.test.js","test/bootstrap/boot-incarnation-reservation-census.test.js","test/bootstrap/boot-incarnation-superseded-floor.test.js","test/bootstrap/bootstrap-api-admission-snapshots.test.js","test/bootstrap/bootstrap-api-readiness-gating.test.js","test/bootstrap/bootstrap-api-readiness-publication.test.js","test/bootstrap/bootstrap-api-ready-nodes.test.js","test/bootstrap/bootstrap-api-rejoin.test.js","test/bootstrap/bootstrap-api-replica-owner-conflict.test.js","test/bootstrap/bootstrap-api-seed-join-gate-authoritative-refresh.test.js","test/bootstrap/bootstrap-api.test.js","test/bootstrap/bootstrap-cdc-readiness-gate.test.js","test/bootstrap/bootstrap-cleanup.property.test.js","test/bootstrap/bootstrap-control-plane-query-error-contract.test.js","test/bootstrap/bootstrap-endpoint-table.property.test.js","test/bootstrap/bootstrap-epoch-manager-lifecycle.test.js","test/bootstrap/bootstrap-errors.property.test.js","test/bootstrap/bootstrap-failure-cleanup.test.js","test/bootstrap/bootstrap-membership-owner-outcome-consumers.test.js","test/bootstrap/bootstrap-mode.test.js","test/bootstrap/bootstrap-phase-state-machine-integration.test.js","test/bootstrap/bootstrap-readiness-ladder.test.js","test/bootstrap/bootstrap-readiness-state.test.js","test/bootstrap/bootstrap-replica-registration-trace.test.js","test/bootstrap/bootstrap-request-admission-precheck.test.js","test/bootstrap/bootstrap-request-deferral-wait-bound-spent.test.js","test/bootstrap/bootstrap-request-execution-timeout.test.js","test/bootstrap/bootstrap-request-shut-down-writer-not-ready.test.js","test/bootstrap/bootstrap-response-completeness.property.test.js","test/bootstrap/bootstrap-response-performance.test.js","test/bootstrap/bootstrap-sequence.test.js","test/bootstrap/bootstrap-service-ready-signal.test.js","test/bootstrap/bootstrap-shutdown-quiesce.test.js","test/bootstrap/bootstrap-state-tracker.test.js","test/bootstrap/bootstrap-system-table-invariant.property.test.js","test/bootstrap/bootstrap-topology-snapshot-owner.test.js","test/bootstrap/bootstrap-topology-snapshot.test.js","test/bootstrap/bootstrap-websocket-server-reentry.test.js","test/bootstrap/cache-hydration-correctness.property.test.js","test/bootstrap/cache-hydration-gate.property.test.js","test/bootstrap/cache-hydration-gate.test.js","test/bootstrap/cache-hydration-performance.test.js","test/bootstrap/cache-hydration-strictness.test.js","test/bootstrap/call-cell-invocation-setup.test.js","test/bootstrap/cdc-initial-subscription-leader-fallback.test.js","test/bootstrap/cdc-leader-only-replication.test.js","test/bootstrap/cdc-propagation-message-group-selection.test.js","test/bootstrap/cdc-propagation-source-owner-currentness.test.js","test/bootstrap/cdc-source-occurrence-delivery.integration.test.js","test/bootstrap/cdc-subscription-consistency.property.test.js","test/bootstrap/cleanup-ownership-order-characterization.test.js","test/bootstrap/cluster-identity-join-gate.test.js","test/bootstrap/cluster-identity-mint.test.js","test/bootstrap/cluster-identity.test.js","test/bootstrap/cluster-mesh-connectivity.property.test.js","test/bootstrap/cold-node-authority-reacquisition-pressure.test.js","test/bootstrap/connect-websocket-phase.test.js","test/bootstrap/contract-first-authoring-fidelity.test.js","test/bootstrap/control-plane-rollout-controls.test.js","test/bootstrap/control-plane-write-health-owner.test.js","test/bootstrap/create-message-group-phase.test.js","test/bootstrap/create-self-hosted-registration.test.js","test/bootstrap/critical-placement-authoritative-evidence.test.js","test/bootstrap/critical-placement-classification-control.test.js","test/bootstrap/critical-placement-convergence.test.js","test/bootstrap/critical-placement-trace-classifier.test.js","test/bootstrap/debug-meta-table-schemas.test.js","test/bootstrap/duplicate-replica-assignment.test.js","test/bootstrap/durable-rejoin-incarnation-advance.test.js","test/bootstrap/durable-rejoin-partition-restore-planner.test.js","test/bootstrap/dynamic-partition-cdc-subscription.test.js","test/bootstrap/formation-readiness-owner-single-form.test.js","test/bootstrap/fresh-join-multi-peer-contact.test.js","test/bootstrap/fresh-join-registration-runtime-replacement.integration.test.js","test/bootstrap/fresh-join-via-non-seed-node.integration.test.js","test/bootstrap/fresh-seed-activation.integration.test.js","test/bootstrap/guarded-runtime-service-handler.test.js","test/bootstrap/hydrate-system-cache-from-bootstrap.test.js","test/bootstrap/join-checkpoint-progression-characterization.test.js","test/bootstrap/join-cleanup.property.test.js","test/bootstrap/join-coordinator.test.js","test/bootstrap/join-delegate-bundles.test.js","test/bootstrap/join-formation-discovery-window-budget.test.js","test/bootstrap/join-lifecycle-sub-phase-parity-characterization.test.js","test/bootstrap/join-message-group-identity-record.test.js","test/bootstrap/join-message-group-phase.test.js","test/bootstrap/join-readiness-evaluator.test.js","test/bootstrap/join-readiness-non-participating-exclusion.repro.test.js","test/bootstrap/join-readiness-non-self-targeted-preservation.property.test.js","test/bootstrap/join-readiness-self-targeted-exclusion.property.test.js","test/bootstrap/join-readiness-startup-authority.test.js","test/bootstrap/join-readiness-warming-node-exclusion.property.test.js","test/bootstrap/join-readiness-warming-node-preservation.property.test.js","test/bootstrap/join-resume-replica-lifecycle-owner.test.js","test/bootstrap/join-retry-patience-selectable.test.js","test/bootstrap/join-session-store.test.js","test/bootstrap/join-startup-owner-routing.test.js","test/bootstrap/joining-cdc-gate.test.js","test/bootstrap/latency-topology-owner-delegation.test.js","test/bootstrap/latency-topology-table-schemas.test.js","test/bootstrap/lifecycle-controller.test.js","test/bootstrap/lifecycle-owner-replica-routing.test.js","test/bootstrap/lifecycle-unification.test.js","test/bootstrap/management-action-authority.test.js","test/bootstrap/management-v1-l4-l3.test.js","test/bootstrap/management-v1-route-authority.test.js","test/bootstrap/mesh-reconcile-terminal-revive.test.js","test/bootstrap/message-group-activation-handler-boundary.test.js","test/bootstrap/message-group-assignment-centralization.test.js","test/bootstrap/message-group-assignment.test.js","test/bootstrap/message-group-service-activation.test.js","test/bootstrap/message-group-single-owner-invariant.test.js","test/bootstrap/message-groups-first-bootstrap-order.property.test.js","test/bootstrap/meta-service-endpoint-registration.test.js","test/bootstrap/move-replica-assignment-token.test.js","test/bootstrap/no-eslint-disable.test.js","test/bootstrap/node-bootstrap-consistency.property.test.js","test/bootstrap/node-incarnation.test.js","test/bootstrap/node-joining-cdc-catchup-wiring.test.js","test/bootstrap/node-joining-cdc-readiness-gate-signal.test.js","test/bootstrap/node-joining-cdc-readiness-gate.test.js","test/bootstrap/node-joining-cdc-subscription.test.js","test/bootstrap/node-joining-control-plane-heartbeat.test.js","test/bootstrap/node-joining-formation-barrier-waiting-liveness-log.test.js","test/bootstrap/node-joining-http-post-timeout.test.js","test/bootstrap/node-joining-infrastructure-join-progress-witness.test.js","test/bootstrap/node-joining-lease-registration.test.js","test/bootstrap/node-joining-ready-signal-retry.test.js","test/bootstrap/node-joining-retryable-resume-preserves-state.test.js","test/bootstrap/node-joining-service-bootstrap-resume-budget.test.js","test/bootstrap/node-joining-service-canonical-readiness.test.js","test/bootstrap/node-joining-service-final-sql-runtime-handoff.test.js","test/bootstrap/node-joining-service-join-lifecycle-resume.test.js","test/bootstrap/node-joining-service-lifecycle-owner-handoff.test.js","test/bootstrap/node-joining-service-mesh-reconciliation.test.js","test/bootstrap/node-joining-service-message-group-activation.test.js","test/bootstrap/node-joining-service-node-state-update-ingress.test.js","test/bootstrap/node-joining-service-register-service-retries.test.js","test/bootstrap/node-joining-service.test.js","test/bootstrap/node-ready-rebalance-trigger.test.js","test/bootstrap/node-registration-idempotency.test.js","test/bootstrap/node-registration-owner.test.js","test/bootstrap/node-state-gating.property.test.js","test/bootstrap/odd-replica-count-invariant.property.test.js","test/bootstrap/owners/bootstrap-readiness-owner.test.js","test/bootstrap/owners/bootstrap-readiness-probe-async-fallback.test.js","test/bootstrap/partition-activation-handler-boundary.test.js","test/bootstrap/partition-cdc-propagation-subscriber.test.js","test/bootstrap/partition-service-activation.test.js","test/bootstrap/phase-adapter-removal.test.js","test/bootstrap/phase-event-ordering-characterization.test.js","test/bootstrap/phase-failure-handling.property.test.js","test/bootstrap/phases/join-resume-iteration-not-spent-wait.test.js","test/bootstrap/phases/wait-for-leadership-phase-retryable-timeout.test.js","test/bootstrap/pipeline/join-startup-plan-segment-contract.test.js","test/bootstrap/pipeline/seed-registration-phase-custody.test.js","test/bootstrap/pipeline/startup-pipeline-runner.test.js","test/bootstrap/production-scheduling-defaults.test.js","test/bootstrap/query-state-single-owner.test.js","test/bootstrap/readiness-handoff-liveness-witness.test.js","test/bootstrap/readiness-service-sync-reads.test.js","test/bootstrap/register-node-in-cluster.test.js","test/bootstrap/register-service-move-handoff-refused.test.js","test/bootstrap/registered-service-row-raft-role.test.js","test/bootstrap/rejoin-hints.test.js","test/bootstrap/replica-evidence-conflict.test.js","test/bootstrap/replica-runtime-attachment-authority.test.js","test/bootstrap/replication-target-authority.test.js","test/bootstrap/required-dependency-validation.property.test.js","test/bootstrap/restart-cdc-recovery-diagnostics.test.js","test/bootstrap/restart-cdc-subscription-hardening.test.js","test/bootstrap/retained-seed-original-handoff.integration.test.js","test/bootstrap/return-value-completeness.property.test.js","test/bootstrap/runtime-service-rebalancer-owner.test.js","test/bootstrap/schema-operations-table-schema.test.js","test/bootstrap/seed-cache-hydration-handoff.test.js","test/bootstrap/seed-delegate-bundles.test.js","test/bootstrap/seed-infrastructure-phase.test.js","test/bootstrap/seed-infrastructure-runtime-identity.test.js","test/bootstrap/seed-message-group-cleanup-custody.test.js","test/bootstrap/seed-message-group-founder-open-refusal.test.js","test/bootstrap/seed-original-attempt-lifetime.test.js","test/bootstrap/seed-participant-release-failure-projection.test.js","test/bootstrap/seed-registration-election-scheduling.test.js","test/bootstrap/seed-registration-phase.test.js","test/bootstrap/seed-release-failure-custody.test.js","test/bootstrap/seed-release-once-per-cohort.test.js","test/bootstrap/seed-restart-recovery-gate.test.js","test/bootstrap/seed-retained-effects-preparation.test.js","test/bootstrap/seed-retained-effects.integration.test.js","test/bootstrap/seed-retained-effects.test.js","test/bootstrap/seed-startup-listener-failure.integration.test.js","test/bootstrap/seed-startup-session-store.test.js","test/bootstrap/seed-teardown-pending-cdc-delivery.test.js","test/bootstrap/service-instance-table-schema.test.js","test/bootstrap/shared/cdc-integration-setup.test.js","test/bootstrap/shared/control-plane-setup.test.js","test/bootstrap/shared/message-router-setup.test.js","test/bootstrap/shared/meta-service-definition-registration.test.js","test/bootstrap/shared/replica-handler-setup.test.js","test/bootstrap/shared/service-installation-reconciler-setup.test.js","test/bootstrap/shared/startup-sql-runtime-handoff.test.js","test/bootstrap/startup-authority-consumption.test.js","test/bootstrap/startup-convergence-gate.test.js","test/bootstrap/startup-convergence-wait-bound-spent.test.js","test/bootstrap/startup-recovery-coordinator.test.js","test/bootstrap/startup-runtime-handoff-owner.test.js","test/bootstrap/startup-runtime-surface-owner.test.js","test/bootstrap/storage-budget-bootstrap.test.js","test/bootstrap/support-envelope-owner.test.js","test/bootstrap/system-leader-readiness-address-gate.test.js","test/bootstrap/system-partition-classification-owner.test.js","test/bootstrap/traffic-readiness-utils.test.js","test/bootstrap/transaction-recovery-handoff-outcome.test.js","test/bootstrap/unified-service-lifecycle-cutover-guards.test.js","test/bootstrap/universal-partition-implementation.property.test.js","test/bootstrap/wasm-meta-table-schemas.test.js"]},{"resourceClass":"exclusive","jobs":1,"files":["test/cdc/current-epoch-propagation.integration.test.js","test/debug-runtime/breakpoint-manager.integration.test.js","test/debug-runtime/dap-server-callback.integration.test.js","test/debug-runtime/dap-server-service.integration.test.js","test/debug-runtime/debug-coordinator.integration.test.js","test/debug-runtime/distributed-debug-e2e.integration.test.js","test/debug/trace-collector-multi-node.integration.test.js","test/entrypoint/process-custody-review.integration.test.js","test/integration/admin-cdc-propagation.integration.test.js","test/integration/authoritative-discovery-repair-pressure.integration.test.js","test/integration/bidirectional-websocket.integration.test.js","test/integration/call-cell-public-outcome-adversarial.integration.test.js","test/integration/cdc-bootstrap-control-plane-pressure.integration.test.js","test/integration/cdc-group-boundary-handoff.integration.test.js","test/integration/cdc-propagation.integration.test.js","test/integration/cdc-subscription-catchup.integration.test.js","test/integration/concurrent-join-message-group-assignment.integration.test.js","test/integration/control-plane-pgwire-scale-callers.integration.test.js","test/integration/create-table-partition-provisioning.integration.test.js","test/integration/critical-partition-learner-safety.integration.test.js","test/integration/debug-join-flow.test.js","test/integration/fresh-formation-without-admin-polling.integration.test.js","test/integration/insert-or-ignore-raft-replay.integration.test.js","test/integration/lagrange-server-npm-package.integration.test.js","test/integration/load-channel-resilience.integration.test.js","test/integration/managed-split-admission-reliability.integration.test.js","test/integration/managed-split-writes-after-cutover.integration.test.js","test/integration/membership-consistency.integration.test.js","test/integration/message-group-fresh-identity-replacement.integration.test.js","test/integration/message-group-learner-discovery.integration.test.js","test/integration/message-group-learner-join.integration.test.js","test/integration/message-group-learner-process-loss.integration.test.js","test/integration/message-group-learner-promotion-recording-guards.integration.test.js","test/integration/message-group-learner-promotion-selection-guards.integration.test.js","test/integration/message-group-learner-promotion.integration.test.js","test/integration/message-group-learner-recipient.integration.test.js","test/integration/message-group-learner-runtime-authorization.integration.test.js","test/integration/message-group-membership-claim-cache.integration.test.js","test/integration/multi-node-raft-replication.integration.test.js","test/integration/node-join-replica-activation.integration.test.js","test/integration/pgwire-command-tag-real-engine.integration.test.js","test/integration/public-binding-cell-invocation-seam.integration.test.js","test/integration/raft-leader-election.integration.test.js","test/integration/replica-handler-metadata-propagation.integration.test.js","test/integration/replica-operations-owner-read-transport-readiness.integration.test.js","test/integration/seed-migration-cutover-persisted.integration.test.js","test/integration/seed-migration-interrupted-decision.integration.test.js","test/integration/seed-migration-process-loss.integration.test.js","test/integration/seed-node-bootstrap.integration.test.js","test/integration/seed-owner-read-diagnosis.integration.test.js","test/integration/user-table-local-cdc-readiness.integration.test.js","test/integration/versioned-cdc-readiness-convergence.integration.test.js","test/integration/websocket-create-replica-ack.integration.test.js","test/message-group/message-group-native-w7-multi-target-route.integration.test.js","test/migration/migration-workflow.integration.test.js","test/node/fresh-create-authority-unavailability-native.integration.test.js","test/node/replica-runtime-cleanup-custody.integration.test.js","test/partition/fresh-create-release-authority-cross-node.integration.test.js","test/partition/learner-host-committed-admission-production.integration.test.js","test/partition/participant-origin-retained-history.integration.test.js","test/partition/replica-admission-committed-operation-production.integration.test.js","test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js","test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js","test/raft/raft-rs-backend/runtime-opening-history.integration.test.js","test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js","test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js","test/raft/raft-rs-backend/startup-cleanup.integration.test.js","test/scripts/exact-election-evidence-same-turn-model-contract.test.js","test/scripts/local-leader-row-visibility-model-contract.test.js","test/wasm-service/bound-creation-handler-embedding.integration.test.js","test/wasm-service/bound-creation-physical-custody.integration.test.js","test/wasm-service/bound-creation-restart.integration.test.js","test/wasm-service/bound-remove-physical-operation.integration.test.js","test/wasm-service/wasm-creation-genesis.integration.test.js","test/wasm-service/wasm-creation-publication.integration.test.js","test/wasm-service/wasm-creation-reconciliation.integration.test.js","test/wasm-service/wasm-retained-bootstrap.integration.test.js"]}]
+CANONICAL_SELECTED_LANES_END
+PREPARATION_STAGE_END=affected-cone-full-list-and-lanes EXIT=0
+PREPARATION_STAGE_BEGIN=fast-static
+proof range: f402575b0667bc02110849867cabacf013e61be6..HEAD (flag)
+changed paths: 28 (12 JavaScript)
+  ok   7836ms  test:deps
+  ok   2143ms  audit:shards
+  ok   1196ms  test:metrics:scoped
+  ok    717ms  audit:runtime-grammar
+  ok    580ms  eslint(12 changed)
+  ok    482ms  audit:current-capabilities
+  ok    164ms  audit:doc-ascii
+  ok    132ms  audit:impact-contracts
+  ok    132ms  test:metadata-gateway:audit
+  ok     97ms  audit:roadmap-authority
+  ok     91ms  audit:doc-audience
+  ok     77ms  audit:cli-docs
+  ok     72ms  audit:closure-ledger
+  ok     71ms  audit:service-portability-claims
+fast-static: ok in 13790ms
+PREPARATION_STAGE_END=fast-static EXIT=0
+PREPARATION_STAGE_BEGIN=source-owner-index-audit
+
+> lagrange-server@0.4.0 audit:source-owner-index
+> node scripts/generate-source-owner-index.js --check
+
+0
+PREPARATION_STAGE_END=source-owner-index-audit EXIT=0
+PREPARATION_STAGE_BEGIN=changed-javascript-eslint
+UNCAPPED_CHANGED_ESLINT_PATHS=["src/cdc/cdc-integration-service-lifecycle.js","src/diagnostics/comparative-efficiency-opportunity-calculator.js","src/diagnostics/comparative-efficiency-opportunity-input-validation.js","src/node/replica-state-machine-lifecycle-observation.js","src/raft/raft-rs-durable-store.js","src/utils/canonical-json-data.js","test/cdc/cdc-delay-until-shutdown-resource.test.js","test/diagnostics/comparative-efficiency-opportunity-calculator.test.js","test/node/replica-lifecycle-observation-row-carrier.test.js","test/node/replica-lifecycle-observation-snapshot.test.js","test/raft/raft-rs-backend/durable-store-connection-custody.test.js","test/utils/canonical-json-data.test.js"]
+PREPARATION_STAGE_END=changed-javascript-eslint EXIT=0
+PREPARATION_STAGE_BEGIN=scoped-strict-metrics
+SCOPED_STRICT_METRICS_PATHS=["src/cdc/cdc-integration-service-lifecycle.js","src/diagnostics/comparative-efficiency-opportunity-calculator.js","src/diagnostics/comparative-efficiency-opportunity-input-validation.js","src/node/replica-state-machine-lifecycle-observation.js","src/raft/raft-rs-durable-store.js","src/utils/canonical-json-data.js"]
+
+> lagrange-server@0.4.0 test:metrics:scoped:strict
+> node scripts/check-scoped-ratchets.js --strict src/cdc/cdc-integration-service-lifecycle.js src/diagnostics/comparative-efficiency-opportunity-calculator.js src/diagnostics/comparative-efficiency-opportunity-input-validation.js src/node/replica-state-machine-lifecycle-observation.js src/raft/raft-rs-durable-store.js src/utils/canonical-json-data.js
+
+
+Cyclomatic complexity
+No complexity violations (threshold: 12).
+
+Cognitive complexity
+No cognitive complexity violations (threshold: 20).
+PREPARATION_STAGE_END=scoped-strict-metrics EXIT=0
+PREPARATION_STAGE_BEGIN=production-source-unchanged
+PREPARATION_STAGE_END=production-source-unchanged EXIT=0
+PREPARATION_STAGE_BEGIN=generated-artifact-capture
+GENERATED_METADATA_IDENTITY={"source_sha":"32d79b38c1835a3ffab3032042c9605261d59cc7","source_tree":"ab163d6bba796bf681673aa4e7c87053a27b6e7a","src_tree":"bc9e83a24cee235aa7fd33ff9777dc97d229903c","base":"f402575b0667bc02110849867cabacf013e61be6","bytes":17581,"sha256":"e951b78ce13ed44f134347f12aba4c9ddf651269603f287236cf7dad61a53131","changed_paths":"M\tsolve/changes/global-owner-debt-inventory/inventory.json\nM\tsrc/diagnostics/INDEX.md\nM\ttest/shards/impact-graph-seal.json\nM\ttest/shards/primary-classes.json\nM\ttest/shards/resource-classes.json\nM\ttest/shards/subsystem-classes.json\n","status":"1 .M N... 100644 100644 100644 401f8bd15f020e1926e5bda3e447e86c0d2bba6e 401f8bd15f020e1926e5bda3e447e86c0d2bba6e solve/changes/global-owner-debt-inventory/inventory.json\n1 .M N... 100644 100644 100644 6580763bb3fc972da2004ce38be37aa3c1e42711 6580763bb3fc972da2004ce38be37aa3c1e42711 src/diagnostics/INDEX.md\n1 .M N... 100644 100644 100644 1c248fdecafbb61dfe7ed0899c87994cb43e4ae1 1c248fdecafbb61dfe7ed0899c87994cb43e4ae1 test/shards/impact-graph-seal.json\n1 .M N... 100644 100644 100644 11d345cc1a332ec07a97d33ec3f3820e78f4eb5d 11d345cc1a332ec07a97d33ec3f3820e78f4eb5d test/shards/primary-classes.json\n1 .M N... 100644 100644 100644 7fd731e4447820ecb33af6b9990e89727d2c66ee 7fd731e4447820ecb33af6b9990e89727d2c66ee test/shards/resource-classes.json\n1 .M N... 100644 100644 100644 d661ccfd42732d4bec3f57d1d82b09e1ef3727f4 d661ccfd42732d4bec3f57d1d82b09e1ef3727f4 test/shards/subsystem-classes.json\n"}
+GENERATED_METADATA_PATCH_BEGIN
+diff --git a/solve/changes/global-owner-debt-inventory/inventory.json b/solve/changes/global-owner-debt-inventory/inventory.json
+index 401f8bd15..a870f7dff 100644
+--- a/solve/changes/global-owner-debt-inventory/inventory.json
++++ b/solve/changes/global-owner-debt-inventory/inventory.json
+@@ -23,8 +23,8 @@
+       },
+       {
+         "path": "test-output/analysis/global-owner-debt-import-graph.json",
+-        "bytes": 3550777,
+-        "sha256": "36deeb84b53d5097d38203f257ad5501f04ac2995bd12f62eb6656d7da90ed64"
++        "bytes": 3552455,
++        "sha256": "08331b01fd1779b73bff154af21fdc25f2e06ea434bad41dcb9a069ccc4015f3"
+       },
+       {
+         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
+@@ -33,7 +33,7 @@
+           "duplicates",
+           "statistics.detectionDate"
+         ],
+-        "sha256": "07c2e0e97a69abda0332339787efa912856228089e7090fe584ea496f8427fb0"
++        "sha256": "2421260c650a7e3ef4b6f7684d77000c63b643c820e63871999d3891b2609104"
+       },
+       {
+         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
+@@ -42,7 +42,7 @@
+           "duplicates",
+           "statistics.detectionDate"
+         ],
+-        "sha256": "22850a27e3702ff73698b3db28133f039b2fd58103fca2a3a83dbd0c676d6915"
++        "sha256": "7bc56b79e275bdb7489c6fefaa4e24f61a57eaed5dcf2c84250824cbbbad0566"
+       },
+       {
+         "path": "scripts/check-file-size-thresholds.js",
+@@ -65,7 +65,7 @@
+         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
+       }
+     ],
+-    "inputDigest": "c2199b10b95c96e61ab6f8f71dc211c3fb58f80bbcbdb4c9372a0e5c0d0f50ed"
++    "inputDigest": "0a8739b86e8ee497d882d0d184e8b36ee76dc77f817a0f28b05e92a7848f2e7e"
+   },
+   "reconciliation": {
+     "complexity": {
+@@ -104,8 +104,8 @@
+         "source": 21,
+         "test": 21
+       },
+-      "observedCount": 42,
+-      "assignedCount": 42
++      "observedCount": 43,
++      "assignedCount": 43
+     },
+     "duplication": [
+       {
+@@ -117,7 +117,7 @@
+             "duplicates",
+             "statistics.detectionDate"
+           ],
+-          "sha256": "07c2e0e97a69abda0332339787efa912856228089e7090fe584ea496f8427fb0"
++          "sha256": "2421260c650a7e3ef4b6f7684d77000c63b643c820e63871999d3891b2609104"
+         },
+         "cloneGroups": 35,
+         "duplicatedLines": 1109,
+@@ -135,7 +135,7 @@
+             "duplicates",
+             "statistics.detectionDate"
+           ],
+-          "sha256": "22850a27e3702ff73698b3db28133f039b2fd58103fca2a3a83dbd0c676d6915"
++          "sha256": "7bc56b79e275bdb7489c6fefaa4e24f61a57eaed5dcf2c84250824cbbbad0566"
+         },
+         "cloneGroups": 620,
+         "duplicatedLines": 22292,
+@@ -173,35 +173,35 @@
+     "importGraph": {
+       "identity": {
+         "path": "test-output/analysis/global-owner-debt-import-graph.json",
+-        "bytes": 3550777,
+-        "sha256": "36deeb84b53d5097d38203f257ad5501f04ac2995bd12f62eb6656d7da90ed64"
++        "bytes": 3552455,
++        "sha256": "08331b01fd1779b73bff154af21fdc25f2e06ea434bad41dcb9a069ccc4015f3"
+       },
+       "authority": {
+         "path": "dependency-cruiser.config.cjs",
+         "bytes": 2841,
+         "sha256": "3c7e7e10bd1ffa9a6744ed22c038928d52bdb7913e6b239aa5ef9a9448e3638f"
+       },
+-      "sourceDigest": "58a24cb9e86342f23b7528a37699cab8f57e90bc65ebcac24b5c73fbcf81e00c",
+-      "moduleCount": 6194,
+-      "edgeCount": 35109,
++      "sourceDigest": "ac42855125995a48738dafbe89503355715e98d97aa1213d82f257f2fb487b15",
++      "moduleCount": 6197,
++      "edgeCount": 35125,
+       "unresolvedCount": 47
+     }
+   },
+   "assignment": {
+-    "sourceSignalCount": 2377,
+-    "assignedSignalCount": 2377,
+-    "uniqueAssignmentCount": 2377,
+-    "digest": "c87ac6fade03cf56fd66568493ebe1db0005ffeda4b1a76c0354b0f2c27a4b7f"
++    "sourceSignalCount": 2378,
++    "assignedSignalCount": 2378,
++    "uniqueAssignmentCount": 2378,
++    "digest": "1eeafd25437bc427338a887bd46737c738e05c02fd62ab1a78783b298d5219b6"
+   },
+   "signalCounts": {
+     "cognitive": 145,
+     "complexity": 1698,
+     "duplication": 453,
+-    "fileSize": 42,
++    "fileSize": 43,
+     "lintExclusion": 39
+   },
+   "summary": {
+-    "filesWithDebt": 1235,
++    "filesWithDebt": 1236,
+     "rankedBoundaryCount": 110,
+     "semanticBoundaryCount": 20,
+     "fallbackBoundaryCount": 90,
+@@ -757,7 +757,7 @@
+       "cloneTouches": 2,
+       "cycleGroups": 0,
+       "lintExclusions": 0,
+-      "importIn": 204,
++      "importIn": 206,
+       "importOut": 43,
+       "score": 125.8,
+       "topPaths": [
+@@ -897,7 +897,7 @@
+       "cloneTouches": 3,
+       "cycleGroups": 0,
+       "lintExclusions": 0,
+-      "importIn": 119,
++      "importIn": 120,
+       "importOut": 85,
+       "score": 107.9,
+       "topPaths": [
+@@ -1354,6 +1354,33 @@
+         "test/cdc/bootstrap-mode-routing.property.test.js"
+       ]
+     },
++    {
++      "key": "area:src/raft",
++      "owner": null,
++      "boundary": "src/raft",
++      "classification": "owner-area-fallback",
++      "ownerAreas": [
++        "src/raft"
++      ],
++      "fileCount": 4,
++      "signalCount": 6,
++      "complexity": 2,
++      "cognitive": 1,
++      "oversizedFiles": 3,
++      "duplicatedLines": 0,
++      "cloneTouches": 0,
++      "cycleGroups": 0,
++      "lintExclusions": 0,
++      "importIn": 360,
++      "importOut": 54,
++      "score": 52,
++      "topPaths": [
++        "src/raft/raft-rs-runtime-owner.js",
++        "src/raft/constants.js",
++        "src/raft/raft-rs-durable-store.js",
++        "src/raft/raft-rs-replica-lifecycle-owner.js"
++      ]
++    },
+     {
+       "key": "area:src/cache",
+       "owner": null,
+@@ -1463,32 +1490,6 @@
+         "test/runtime/service-runtime-lifecycle-idempotency.test.js"
+       ]
+     },
+-    {
+-      "key": "area:src/raft",
+-      "owner": null,
+-      "boundary": "src/raft",
+-      "classification": "owner-area-fallback",
+-      "ownerAreas": [
+-        "src/raft"
+-      ],
+-      "fileCount": 3,
+-      "signalCount": 5,
+-      "complexity": 2,
+-      "cognitive": 1,
+-      "oversizedFiles": 2,
+-      "duplicatedLines": 0,
+-      "cloneTouches": 0,
+-      "cycleGroups": 0,
+-      "lintExclusions": 0,
+-      "importIn": 271,
+-      "importOut": 47,
+-      "score": 40,
+-      "topPaths": [
+-        "src/raft/raft-rs-runtime-owner.js",
+-        "src/raft/constants.js",
+-        "src/raft/raft-rs-replica-lifecycle-owner.js"
+-      ]
+-    },
+     {
+       "key": "area:src/migration",
+       "owner": null,
+diff --git a/src/diagnostics/INDEX.md b/src/diagnostics/INDEX.md
+index 6580763bb..766fe5981 100644
+--- a/src/diagnostics/INDEX.md
++++ b/src/diagnostics/INDEX.md
+@@ -13,7 +13,6 @@ documentClass: generated
+ - [causal-graph-builder.js](causal-graph-builder.js) - No leading comment; first export: buildCausalGraph. (importers: few)
+ - [comparative-efficiency-opportunity-calculator.js](comparative-efficiency-opportunity-calculator.js) - No leading comment; first export: OPPORTUNITY_CALCULATOR_EVIDENCE_CLASS. (importers: few)
+ - [comparative-efficiency-opportunity-constants.js](comparative-efficiency-opportunity-constants.js) - No leading comment; first export: OPPORTUNITY_CALCULATOR_SCHEMA_VERSION. (importers: few)
+-- [comparative-efficiency-opportunity-input-integrity.js](comparative-efficiency-opportunity-input-integrity.js) - The calculator's input-integrity surface. (importers: few)
+ - [comparative-efficiency-opportunity-input-validation.js](comparative-efficiency-opportunity-input-validation.js) - No leading comment; first export: validateOpportunityCalculatorInput. (importers: one)
+ - [control-plane-quiescence-snapshot.js](control-plane-quiescence-snapshot.js) - No leading comment; first export: CONTROL_PLANE_QUIESCENCE_CANDIDATE_WINDOW_RESET_REASON. (importers: many)
+ - [event-loop-gap-heartbeat-rule.js](event-loop-gap-heartbeat-rule.js) - The pure heartbeat rule, alone in its own module so that the deterministic simulator can hold the live watchdog's... (importers: one)
+diff --git a/test/shards/impact-graph-seal.json b/test/shards/impact-graph-seal.json
+index 1c248fdec..ededc5967 100644
+--- a/test/shards/impact-graph-seal.json
++++ b/test/shards/impact-graph-seal.json
+@@ -1,8 +1,8 @@
+ {
+   "schemaVersion": 1,
+   "importGraphSchemaVersion": "global-owner-debt-import-graph-v2",
+-  "sourceDigest": "58a24cb9e86342f23b7528a37699cab8f57e90bc65ebcac24b5c73fbcf81e00c",
+-  "producerInputDigest": "3ef82dffba5156df843054460fd5c4c14af9c85c758e6c2f40849e700b86a661",
+-  "resolverStateDigest": "35cecfe471bed4a898c227f63ec34f55473e71be935fcf784e04993a4dd00cdf",
+-  "snapshotDigest": "2dce76131c6991367be01b7eced8f77dec882c76d616c5beabdb9c331b7ec9e5"
++  "sourceDigest": "ac42855125995a48738dafbe89503355715e98d97aa1213d82f257f2fb487b15",
++  "producerInputDigest": "32a4953a552339eec7146f8168fce2ca01c551fe4ff737cd73e9b37b1a7d57d0",
++  "resolverStateDigest": "234593e073fd8b68b2bd0e830df2b870323815434b52e79cd268c34f403ededc",
++  "snapshotDigest": "5482535a880652d12e71e3b931463c786c824ee447a4fa1de3f59c90170e36d8"
+ }
+diff --git a/test/shards/primary-classes.json b/test/shards/primary-classes.json
+index 11d345cc1..c13d2a430 100644
+--- a/test/shards/primary-classes.json
++++ b/test/shards/primary-classes.json
+@@ -2,14 +2,14 @@
+   "schemaVersion": 1,
+   "id": "test-primary-classification",
+   "counts": {
+-    "unit": 2292,
++    "unit": 2296,
+     "integration": 124,
+     "bootstrap": 224,
+     "convergence-probe": 3,
+     "packaging": 4
+   },
+-  "censusSize": 2647,
+-  "digest": "fnv1a32-d725c99e",
++  "censusSize": 2651,
++  "digest": "fnv1a32-3cc764f0",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
+     "test/address/address-malformed-rejection.property.test.js": "unit",
+@@ -342,6 +342,7 @@
+     "test/cdc/cdc-confirmation-tracker.property.test.js": "unit",
+     "test/cdc/cdc-confirmation-tracker.test.js": "unit",
+     "test/cdc/cdc-confirmation-wiring.test.js": "unit",
++    "test/cdc/cdc-delay-until-shutdown-resource.test.js": "unit",
+     "test/cdc/cdc-delete-cache-absence-convergence.test.js": "unit",
+     "test/cdc/cdc-delivery-complete-vector.test.js": "unit",
+     "test/cdc/cdc-delivery-outcome.test.js": "unit",
+@@ -1300,6 +1301,8 @@
+     "test/node/replica-handler-voter-ready-wait-bound-spent.test.js": "unit",
+     "test/node/replica-handler.test.js": "unit",
+     "test/node/replica-lifecycle-durable-generation.test.js": "unit",
++    "test/node/replica-lifecycle-observation-row-carrier.test.js": "unit",
++    "test/node/replica-lifecycle-observation-snapshot.test.js": "unit",
+     "test/node/replica-local-only-row-convergence.test.js": "unit",
+     "test/node/replica-recovery-service.test.js": "unit",
+     "test/node/replica-removal-consensus-exit-decisions.test.js": "unit",
+@@ -1728,6 +1731,7 @@
+     "test/raft/raft-rs-backend/durable-ready-loop.test.js": "unit",
+     "test/raft/raft-rs-backend/durable-rejoin-record-refusal.test.js": "unit",
+     "test/raft/raft-rs-backend/durable-store-committed-entries.test.js": "unit",
++    "test/raft/raft-rs-backend/durable-store-connection-custody.test.js": "unit",
+     "test/raft/raft-rs-backend/election-safety.test.js": "unit",
+     "test/raft/raft-rs-backend/evidence-o1-admission-liveness.test.js": "unit",
+     "test/raft/raft-rs-backend/evidence-o1-anchors.test.js": "unit",
+diff --git a/test/shards/resource-classes.json b/test/shards/resource-classes.json
+index 7fd731e44..8ec4ca1ac 100644
+--- a/test/shards/resource-classes.json
++++ b/test/shards/resource-classes.json
+@@ -2,13 +2,13 @@
+   "schemaVersion": 1,
+   "id": "test-resource-classification",
+   "counts": {
+-    "ordinary": 2621,
++    "ordinary": 2625,
+     "cpu-heavy": 0,
+     "external-toolchain": 23,
+     "exclusive": 3
+   },
+-  "censusSize": 2647,
+-  "digest": "fnv1a32-afd30149",
++  "censusSize": 2651,
++  "digest": "fnv1a32-fabac277",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
+     "test/address/address-malformed-rejection.property.test.js": "ordinary",
+@@ -341,6 +341,7 @@
+     "test/cdc/cdc-confirmation-tracker.property.test.js": "ordinary",
+     "test/cdc/cdc-confirmation-tracker.test.js": "ordinary",
+     "test/cdc/cdc-confirmation-wiring.test.js": "ordinary",
++    "test/cdc/cdc-delay-until-shutdown-resource.test.js": "ordinary",
+     "test/cdc/cdc-delete-cache-absence-convergence.test.js": "ordinary",
+     "test/cdc/cdc-delivery-complete-vector.test.js": "ordinary",
+     "test/cdc/cdc-delivery-outcome.test.js": "ordinary",
+@@ -1299,6 +1300,8 @@
+     "test/node/replica-handler-voter-ready-wait-bound-spent.test.js": "ordinary",
+     "test/node/replica-handler.test.js": "ordinary",
+     "test/node/replica-lifecycle-durable-generation.test.js": "ordinary",
++    "test/node/replica-lifecycle-observation-row-carrier.test.js": "ordinary",
++    "test/node/replica-lifecycle-observation-snapshot.test.js": "ordinary",
+     "test/node/replica-local-only-row-convergence.test.js": "ordinary",
+     "test/node/replica-recovery-service.test.js": "ordinary",
+     "test/node/replica-removal-consensus-exit-decisions.test.js": "ordinary",
+@@ -1727,6 +1730,7 @@
+     "test/raft/raft-rs-backend/durable-ready-loop.test.js": "ordinary",
+     "test/raft/raft-rs-backend/durable-rejoin-record-refusal.test.js": "ordinary",
+     "test/raft/raft-rs-backend/durable-store-committed-entries.test.js": "ordinary",
++    "test/raft/raft-rs-backend/durable-store-connection-custody.test.js": "ordinary",
+     "test/raft/raft-rs-backend/election-safety.test.js": "ordinary",
+     "test/raft/raft-rs-backend/evidence-o1-admission-liveness.test.js": "ordinary",
+     "test/raft/raft-rs-backend/evidence-o1-anchors.test.js": "ordinary",
+diff --git a/test/shards/subsystem-classes.json b/test/shards/subsystem-classes.json
+index d661ccfd4..72164660a 100644
+--- a/test/shards/subsystem-classes.json
++++ b/test/shards/subsystem-classes.json
+@@ -4,8 +4,8 @@
+   "counts": {
+     "admin-diagnostics": 121,
+     "architecture-governance": 21,
+-    "bootstrap-membership": 345,
+-    "cdc-metadata": 70,
++    "bootstrap-membership": 347,
++    "cdc-metadata": 71,
+     "cli-tooling": 99,
+     "control-plane": 237,
+     "convergence-topology": 80,
+@@ -19,16 +19,16 @@
+     "services-runtime": 160,
+     "solver-tooling": 7,
+     "storage-partition": 218,
+-    "storage-raft": 151,
++    "storage-raft": 152,
+     "test-infrastructure": 172,
+     "transactions": 17,
+     "transport-messaging": 115,
+     "wasm-toolchain": 74
+   },
+-  "censusSize": 2647,
+-  "digest": "fnv1a32-a7e1ea76",
++  "censusSize": 2651,
++  "digest": "fnv1a32-c262c703",
+   "observationSchemaVersion": 2,
+-  "observationDigest": "fnv1a32-ed8e85da",
++  "observationDigest": "fnv1a32-1e27fc09",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
+     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
+@@ -361,6 +361,7 @@
+     "test/cdc/cdc-confirmation-tracker.property.test.js": "cdc-metadata",
+     "test/cdc/cdc-confirmation-tracker.test.js": "cdc-metadata",
+     "test/cdc/cdc-confirmation-wiring.test.js": "cdc-metadata",
++    "test/cdc/cdc-delay-until-shutdown-resource.test.js": "cdc-metadata",
+     "test/cdc/cdc-delete-cache-absence-convergence.test.js": "cdc-metadata",
+     "test/cdc/cdc-delivery-complete-vector.test.js": "cdc-metadata",
+     "test/cdc/cdc-delivery-outcome.test.js": "cdc-metadata",
+@@ -1319,6 +1320,8 @@
+     "test/node/replica-handler-voter-ready-wait-bound-spent.test.js": "bootstrap-membership",
+     "test/node/replica-handler.test.js": "bootstrap-membership",
+     "test/node/replica-lifecycle-durable-generation.test.js": "bootstrap-membership",
++    "test/node/replica-lifecycle-observation-row-carrier.test.js": "bootstrap-membership",
++    "test/node/replica-lifecycle-observation-snapshot.test.js": "bootstrap-membership",
+     "test/node/replica-local-only-row-convergence.test.js": "bootstrap-membership",
+     "test/node/replica-recovery-service.test.js": "bootstrap-membership",
+     "test/node/replica-removal-consensus-exit-decisions.test.js": "bootstrap-membership",
+@@ -1747,6 +1750,7 @@
+     "test/raft/raft-rs-backend/durable-ready-loop.test.js": "storage-raft",
+     "test/raft/raft-rs-backend/durable-rejoin-record-refusal.test.js": "storage-raft",
+     "test/raft/raft-rs-backend/durable-store-committed-entries.test.js": "storage-raft",
++    "test/raft/raft-rs-backend/durable-store-connection-custody.test.js": "storage-raft",
+     "test/raft/raft-rs-backend/election-safety.test.js": "storage-raft",
+     "test/raft/raft-rs-backend/evidence-o1-admission-liveness.test.js": "storage-raft",
+     "test/raft/raft-rs-backend/evidence-o1-anchors.test.js": "storage-raft",
+@@ -11413,6 +11417,11 @@
+         "src/storage/data-directory-process-owner.js"
+       ]
+     },
++    "test/node/replica-lifecycle-observation-row-carrier.test.js": {
++      "files": [
++        "src/node/replica-state-machine-lifecycle-observation.js"
++      ]
++    },
+     "test/node/replica-local-only-row-convergence.test.js": {
+       "files": [
+         "src/cache/system-table-cache-authoritative-reconciliation.js"
+@@ -22429,11 +22438,6 @@
+         "src/rebalancer/replica-operation-constants.js"
+       ]
+     },
+-    "test/utils/canonical-json-data.test.js": {
+-      "files": [
+-        "src/diagnostics/comparative-efficiency-opportunity-input-integrity.js"
+-      ]
+-    },
+     "test/wasm-service/bound-creation-handler-embedding.integration.test.js": {
+       "files": [
+         "src/bootstrap/system-table-schemas-constants.js",
+
+GENERATED_METADATA_PATCH_END
+PREPARATION_STAGE_END=generated-artifact-capture EXIT=0
+ M solve/changes/global-owner-debt-inventory/inventory.json
+ M src/diagnostics/INDEX.md
+ M test/shards/impact-graph-seal.json
+ M test/shards/primary-classes.json
+ M test/shards/resource-classes.json
+ M test/shards/subsystem-classes.json
+PREPARATION_ALL_STATIC_EXIT=0

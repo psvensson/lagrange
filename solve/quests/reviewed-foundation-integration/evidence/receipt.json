@@ -1,0 +1,99 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "reviewed-foundation-integration",
+  "status": "fail",
+  "generatedAt": "2026-11-13T06:39:33Z",
+  "interpretation": "This index records the actual failed canonical publication policy under the refined, still-unsealed foundation proposal. It references the preserved original-source lab measurement; it does not describe a new execution. The proposal now measures policy before Solver land and retains final-HEAD publication and delivery afterward, matching the existing owners' order. Delivery remains required and unmeasured. The other five required pre-land receipt IDs are intentionally absent. No repaired-candidate result or Solver seal is claimed.",
+  "testFileDigests": {
+    "test/scripts/publication-single-pass.test.js": "4ab09ef921e9716dd7285c4f162d2353cfb8c66d92f3487acd7a212bb17d9206",
+    "test/config/ci-proof-range.test.js": "cf7ddbde1180030eaeda1874ecf71de0bcb678060d4e162168f3c6caa46d52f4",
+    "test/scripts/test-placement-fixtures.js": "695295b55f49830b02284667ccd7d30209a7badb2436bdcccfcc14d29e03b4a5"
+  },
+  "receipts": [
+    {
+      "id": "canonical-publication-policy",
+      "measured": true,
+      "passed": false,
+      "measuredScope": "canonical publication policy on the original production source",
+      "detail": "Physical lab job 3410 reached the original runner, placement, corpus-record and CI-range behavior: 33 causal failures and 4 clean positive controls across 37 cases, with actual exit 1. The first-failure retry-to-green, reassignment, unavailable-result substitution, evidence replacement and declared-base fallback violate the required pre-land publication policy. No delivery command was executed by this measurement or this recording; final-HEAD publication remains a separate required post-land obligation."
+    }
+  ],
+  "unmeasuredObligations": [
+    "reviewed-source-composition",
+    "canonical-generated-inputs-and-selection",
+    "complete-required-physical-lab-execution",
+    "static-and-ratchet-gates",
+    "independent-composition-review"
+  ],
+  "unmeasuredExplanation": "This index establishes only the reached original policy failure. Historical source reviews and other lab jobs are not promoted into passing receipts here. The separate final-HEAD delivery obligation was not executed. Missing pre-land obligations remain absent from receipts rather than being marked as measured failures or passes.",
+  "source": {
+    "repository": "psvensson/lagrange",
+    "ref": "refs/heads/wip/publication-single-pass-original-20261113",
+    "sha": "3e77abda6a858f8ca09da157429234219487a114",
+    "tree": "24ba0c2433b104c7f4a09034476392cafd3a7d93",
+    "srcTree": "bc9e83a24cee235aa7fd33ff9777dc97d229903c",
+    "sourceUrl": "https://github.com/psvensson/lagrange/tree/3e77abda6a858f8ca09da157429234219487a114",
+    "originalCiBlob": "3528e2adbfd2fcc4cd5badb35f05d7ac8e22b29c",
+    "guardedBlobs": {
+      "test/scripts/publication-single-pass.test.js": "e297ba2489c876a81df84af0ebf46ee0305c6725",
+      "test/config/ci-proof-range.test.js": "2834163c2fde9d710034e63ae21bd447c77e59f2",
+      "test/scripts/test-placement-fixtures.js": "db4890cfe882427aad11017a4e5e6ab3436bde55"
+    }
+  },
+  "foundationApplicability": {
+    "originalUnsealedDefinitionSource": "324a835d2fc4ee0fd6ba0d94f2b526650a32ce39",
+    "originalUnsealedDefinitionTree": "9525774c9bf1544a5f88b9d10fa2ffe22e81d7ac",
+    "originalUnsealedReceiptSource": "7ca38b074759be7b8d886c97b1e8f75e8ea9e334",
+    "refinement": "Before sealing, the proposal separates pre-land canonical publication policy from the retained final-HEAD delivery obligation. Solver measures before its commit and publication follows that commit. The original unsealed definition, conjunction receipt and log remain preserved at the cited original receipt source; the measured failure, original production, controls and evidence have not changed.",
+    "recordingBase": "52160e58a09b01f8d4871b7408bd244280a4d442",
+    "recordingBaseTree": "fbca30eef63847ad8758c161cf6d927164baec45",
+    "productionSrcTree": "bc9e83a24cee235aa7fd33ff9777dc97d229903c",
+    "comparison": "Independent native Git comparison of measured source 3e77abda6a858f8ca09da157429234219487a114 and foundation definition source 324a835d2fc4ee0fd6ba0d94f2b526650a32ce39 found differences only under the two Quest directories and the three control/fixture paths listed below. The complete diff excluding those paths was empty with exit 0. All remaining tracked bytes and modes, including production scripts, workflows, hooks, packages and src, are identical. Recording base 52160e58 preserves that original production and the measured controls, adding only the existing publication evidence and log updates.",
+    "onlyDifferingScopes": [
+      "solve/quests/publication-single-pass-evidence/",
+      "solve/quests/reviewed-foundation-integration/",
+      "test/config/ci-proof-range.test.js",
+      "test/scripts/publication-single-pass.test.js",
+      "test/scripts/test-placement-fixtures.js"
+    ],
+    "limit": "This equality establishes applicability of the measured original policy failure to the original-production foundation. It does not establish acceptance of a repaired source, generated inputs, whole-corpus execution, delivery or either Quest's Solver seal."
+  },
+  "measurement": {
+    "issue": 3410,
+    "url": "https://github.com/psvensson/lagrange-lab/issues/3410",
+    "logicalRequestId": "1aba9818-ac8b-401e-aa89-83010973ffa7",
+    "host": "tv-dator",
+    "command": "node scripts/run-test-files.js --jobs=2 test/scripts/publication-single-pass.test.js test/config/ci-proof-range.test.js",
+    "actualExitCode": 1,
+    "actualOutcome": "FAIL",
+    "leafTests": 37,
+    "leafPassed": 4,
+    "leafFailed": 33,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0,
+    "fixtureImportOrSetupExceptions": 0,
+    "deliveryExecuted": false
+  },
+  "originalEvidence": {
+    "preservedAt": "52160e58a09b01f8d4871b7408bd244280a4d442",
+    "receipt": {
+      "file": "solve/quests/publication-single-pass-evidence/evidence/receipt.json",
+      "gitBlob": "da1b8e62f78136375cf05c6b4ca4d2efe01ecec6",
+      "bytes": 22755,
+      "sha256": "a8c89388284fc65953542b2d31b5d6f99bc24da87be8258375a6c2a49b65a5a0"
+    },
+    "fullLog": {
+      "file": "solve/quests/publication-single-pass-evidence/evidence/original-control-3410.log",
+      "gitBlob": "852ef090ab42c784ae99baccdfb6de00c97360de",
+      "bytes": 42705,
+      "sha256": "382877364f58d155e6b7165e7e255e3bad15d39770a53fa5116105b024827843"
+    }
+  },
+  "claimLimits": [
+    "The original publication receipt, complete log, controls and seven-line publication Quest log prefix are preserved byte for byte; their historical claims are not rewritten.",
+    "The five other required pre-land foundation obligations are absent and unmeasured in this index; final-HEAD publication and delivery are required post-land obligations and remain unmeasured.",
+    "No repaired-source passing behavior, full-corpus proof, native authority receipt, CI check or main delivery is established.",
+    "No project command was executed to prepare this index. Solver has not measured or sealed this foundation input; policy job 3488 and any later seal are separate evidence."
+  ]
+}

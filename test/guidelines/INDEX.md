@@ -3,7 +3,7 @@ scope: testing
 status: canonical
 always_load: false
 source_of_truth: self
-last_reviewed: 2026-10-22
+last_reviewed: 2026-11-13
 ---
 
 > **Canonical source - index.** Navigation index for testing policy. Rule
@@ -35,7 +35,7 @@ Do not use this tree for:
 | File | Topics covered |
 | --- | --- |
 | [`harness.md`](harness.md) | Runner stability/parallelism, test duration, timeout budget, execution strategy, output management, distributed harness, external resources. |
-| [`fixtures.md`](fixtures.md) | System-table mutation requirements, no skipped tests, no test-only production paths, system-guideline conformance gate. |
+| [`fixtures.md`](fixtures.md) | System-table mutation requirements, no skipped tests, no test-only production paths, owner contract review, process and generated-input fixtures. |
 | [`regression-policy.md`](regression-policy.md) | Test-first/reuse-first repair, repeated-cause reassessment, owner-path/gateway/control-loop/temporal/continuity/memory/deferred-outcome/read-side-repair regression policies, pressure, and failure disposition. |
 | [`release-gate.md`](release-gate.md) | Independent repair, representative service scenario, and release acceptance; evidence ceilings; distributed validation order and handoff. |
 | [`proof-ladders.md`](proof-ladders.md) | Bounded validation and review, static guardrail preflight and closure, file-size ratchet. |
