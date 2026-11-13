@@ -16,9 +16,11 @@ import {readLog, readQuest} from '../../scripts/solve/store.js';
 import {
   ALTITUDE_BUDGET, LAND_LOCK_FILENAME, LAND_LOCK_TIMEOUT_REFUSAL,
   LANDING_MARKER_ENV, LANDING_MARKER_VALUE,
-  SolveError, acquireLandingLock, board, isKernelThreadPid, isLockStale, isPidAlive, land,
+  SolveError, acquireLandingLock, board, computeCandidateDigest, isKernelThreadPid,
+  isLockStale, isPidAlive, land,
   landChangeProofEnvironment, note, probe, requiresInventoryRefresh,
   runChangeProof, stageGeneratedArtifacts, start, tryCreateLandingLock,
+  verificationProblems,
 } from '../../scripts/solve/commands.js';
 import {gitCommonDir} from '../../scripts/solve/guards.js';
 import {
@@ -54,7 +56,7 @@ function write(root, relative, content) {
   fs.writeFileSync(file, content);
 }
 
-function repo(t, {metric = 1, legacy = false} = {}) {
+function repo(t, {metric = 1, legacy = false, assigned = true} = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'solve-v2-cmd-'));
   t.after(() => fs.rmSync(root, {recursive: true, force: true}));
   git(root, ['init', '-q']);
@@ -75,7 +77,19 @@ function repo(t, {metric = 1, legacy = false} = {}) {
   write(root, '.gitkeep', '');
   git(root, ['add', '-A']);
   git(root, ['commit', '-q', '-m', 'seed']);
+  if (assigned) assign(root, ['src/', 'docs/', 'other/', 'scripts/', 'test/',
+    'test-output/', '.githooks/', 'package.json', 'solve/epics/demo-epic.md']);
   return root;
+}
+
+function assign(root, paths, authority = 'test task authorization') {
+  return note(root, {id: QUEST_ID, type: ENTRY_TYPE.FINDING,
+    text: 'Assign the bounded test package.', assignment: {paths, authority}});
+}
+
+function approve(root) {
+  return note(root, {id: QUEST_ID, type: ENTRY_TYPE.VERIFICATION, text: TEXT,
+    verifier: VERIFIER, verdict: VERDICT.APPROVE});
 }
 
 function refuses(fn, pattern) {
@@ -118,7 +132,7 @@ test('start refuses a green or non-measuring probe; a red one seals', (t) => {
   assert.match(sealed.sealedAt, /^[0-9a-f]{40}$/u);
   assert.equal(readQuest(root, QUEST_ID).sealedAt, sealed.sealedAt);
   const log = readLog(root, QUEST_ID);
-  assert.equal(log[0].seal.metric, 1);
+  assert.equal(log.find((entry) => entry.seal).seal.metric, 1);
   refuses(() => start(root, {id: QUEST_ID}), /already sealed/u);
   refuses(() => start(root, {id: 'missing'}), /no quest/u);
 });
@@ -156,7 +170,7 @@ test('land: red probe, standing rejection, src without verification, altitude, s
   write(root, SRC_FILE, TEXT);
   note(root, {id: QUEST_ID, type: ENTRY_TYPE.ATTEMPT, text: TEXT});
   refuses(() => land(root, {id: QUEST_ID, skipProof: true}),
-    /src\/ changes need a verification/u);
+    /changes need a verification/u);
   note(root, {id: QUEST_ID, type: ENTRY_TYPE.VERIFICATION, text: TEXT, verifier: VERIFIER,
     verdict: VERDICT.REJECT});
   refuses(() => land(root, {id: QUEST_ID, skipProof: true}), /rejection/u);
@@ -194,6 +208,108 @@ test('a legacy epic carries no scope; docs-only landings need no verifier', (t) 
   assert.equal(shown.quests.length, 0);
   assert.equal(shown.counts.quests, 1);
   assert.equal(shown.epics[0].legacy, true);
+});
+
+test('package assignment refuses missing and unintended scope before staging', (t) => {
+  const root = repo(t, {legacy: true, assigned: false});
+  start(root, {id: QUEST_ID});
+  goGreen(root);
+  write(root, DOC_FILE, TEXT);
+  refuses(() => land(root, {id: QUEST_ID, skipProof: true}), /package assignment/u);
+  assign(root, [DOC_FILE]);
+  write(root, OUTSIDE_FILE, TEXT);
+  git(root, ['add', OUTSIDE_FILE]);
+  const staged = git(root, ['diff', '--cached', '--name-only']);
+  refuses(() => land(root, {id: QUEST_ID, skipProof: true}), /outside package assignment.*other\/thing/u);
+  assert.equal(git(root, ['diff', '--cached', '--name-only']), staged,
+    'refusal leaves the pre-existing index intact');
+  git(root, ['reset', '--quiet', '--', OUTSIDE_FILE]);
+  refuses(() => land(root, {id: QUEST_ID, skipProof: true}), /outside package assignment/u);
+  assign(root, [DOC_FILE, OUTSIDE_FILE], 'authorized scope amendment for the same task');
+  assert.match(land(root, {id: QUEST_ID, skipProof: true}).commit, /^[0-9a-f]{40}$/u);
+});
+
+test('standalone fixes retain package scope and directory boundaries', (t) => {
+  const root = repo(t, {assigned: false});
+  const quest = readQuest(root, QUEST_ID);
+  delete quest.epic;
+  quest.class = 'fix';
+  write(root, `solve/quests/${QUEST_ID}/quest.json`, JSON.stringify(quest));
+  git(root, ['add', '-A']);
+  git(root, ['commit', '-q', '-m', 'standalone fixture']);
+  start(root, {id: QUEST_ID});
+  goGreen(root);
+  assign(root, ['docs/']);
+  write(root, 'docs-extra/foreign.md', TEXT);
+  refuses(() => land(root, {id: QUEST_ID, skipProof: true}), /outside package assignment/u);
+  fs.unlinkSync(path.join(root, 'docs-extra/foreign.md'));
+  write(root, DOC_FILE, TEXT);
+  assert.match(land(root, {id: QUEST_ID, skipProof: true}).commit, /^[0-9a-f]{40}$/u);
+});
+
+test('assignment validates paths and authorization references without clearing holds', (t) => {
+  const root = repo(t);
+  for (const invalid of ['/tmp/escape', '../escape', 'src/../escape', '.git/config',
+    'src/.git/config', 'C:/escape', 'src\\escape', 'src//escape', '*', '.']) {
+    refuses(() => assign(root, [invalid]), /assignment/u);
+  }
+  refuses(() => assign(root, [DOC_FILE], ''), /authority/u);
+  refuses(() => assign(root, []), /paths/u);
+  start(root, {id: QUEST_ID});
+  note(root, {id: QUEST_ID, type: ENTRY_TYPE.TERMINAL, text: 'awaiting a decision',
+    status: QUEST_STATUS.BLOCKED, nextOwner: NEXT_OWNER.JUDGMENT});
+  assign(root, [DOC_FILE]);
+  assert.equal(probe(root, {id: QUEST_ID}).status, QUEST_STATUS.BLOCKED,
+    'an assignment observation does not settle the missing input');
+});
+
+test('a scope amendment invalidates previous review without changing the seal', (t) => {
+  const root = repo(t, {legacy: true});
+  const sealed = start(root, {id: QUEST_ID});
+  goGreen(root);
+  write(root, SRC_FILE, TEXT);
+  note(root, {id: QUEST_ID, type: ENTRY_TYPE.ATTEMPT, text: TEXT});
+  approve(root);
+  assign(root, [SRC_FILE]);
+  refuses(() => land(root, {id: QUEST_ID, skipProof: true}), /candidate digest/u);
+  assert.equal(readQuest(root, QUEST_ID).sealedAt, sealed.sealedAt);
+  approve(root);
+  assert.match(land(root, {id: QUEST_ID, skipProof: true}).commit, /^[0-9a-f]{40}$/u);
+});
+
+test('proof-only changes require current content-bound independent approval', (t) => {
+  const root = repo(t, {legacy: true});
+  start(root, {id: QUEST_ID});
+  goGreen(root);
+  write(root, 'test/fixtures/expected.json', '{"expected":true}\n');
+  note(root, {id: QUEST_ID, type: ENTRY_TYPE.ATTEMPT, text: TEXT});
+  refuses(() => land(root, {id: QUEST_ID, skipProof: true}), /changes need a verification/u);
+  approve(root);
+  note(root, {id: QUEST_ID, type: ENTRY_TYPE.FINDING, text: 'An unchanged observation.'});
+  assert.match(land(root, {id: QUEST_ID, skipProof: true}).commit, /^[0-9a-f]{40}$/u);
+});
+
+test('missing candidate digest cannot authorize a reviewed input', () => {
+  const state = {verificationIsCurrent: true,
+    lastVerification: {type: ENTRY_TYPE.VERIFICATION, verdict: VERDICT.APPROVE}};
+  assert.ok(verificationProblems(state, [SRC_FILE], 'a'.repeat(64))
+    .some((problem) => /candidate digest/u.test(problem)));
+});
+
+test('review binds acceptance terms and referenced proof bytes but not ordinary notes', (t) => {
+  const root = repo(t);
+  const quest = readQuest(root, QUEST_ID);
+  const initial = computeCandidateDigest(root, quest);
+  note(root, {id: QUEST_ID, type: ENTRY_TYPE.FINDING, text: 'Additional observation.'});
+  assert.equal(computeCandidateDigest(root, quest), initial);
+  assert.notEqual(computeCandidateDigest(root, {...quest, statement: 'A wider claim.'}), initial);
+  assert.notEqual(computeCandidateDigest(root, {...quest,
+    constraints: [{id: 'weakening', statement: 'A different acceptance condition.'}]}), initial);
+  assert.notEqual(computeCandidateDigest(root, {...quest,
+    verificationTemplates: ['owner-interaction']}), initial);
+  goGreen(root);
+  assert.notEqual(computeCandidateDigest(root, quest), initial,
+    'the actual probe input is part of the reviewed candidate');
 });
 
 test('land refuses a blocked quest and a probe changed after the seal', (t) => {

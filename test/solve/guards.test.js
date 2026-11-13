@@ -62,6 +62,24 @@ test('src/ paths require verification', () => {
   assert.equal(requiresVerification([DOC, SRC]), true);
 });
 
+test('proof machinery and operative acceptance inputs require independent review', () => {
+  for (const filePath of [
+    'scripts/select-change-tests.js', 'scripts/solve/commands.js',
+    'test/fixtures/query.json', 'test/shards/impact-contracts.json',
+    '.githooks/pre-push', '.github/workflows/release.yml', '.taprc',
+    'package.json', 'package-lock.json', 'docs/steering/rules.md',
+    'test/guidelines/release-gate.md', 'docs/development/quest-validators.md',
+    'solve/quests/another/quest.json', 'solve/specs/feature/requirements.md',
+    'unknown-proof-config.toml',
+  ]) {
+    assert.equal(requiresVerification([filePath]), true, filePath);
+  }
+  for (const filePath of [DOC, 'docs/tutorial.md', 'architecture/overview.md',
+    'solve/quests/another/log.ndjson']) {
+    assert.equal(requiresVerification([filePath]), false, filePath);
+  }
+});
+
 test('epic scope: authorizes globs, quest and epic files, legacy unscoped', () => {
   const quest = {id: QUEST_ID};
   assert.deepEqual(epicScopeProblems(quest, epic(['src/**']), [SRC,
