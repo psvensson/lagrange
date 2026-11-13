@@ -32,7 +32,7 @@ import {
   RUNNER_SLOW_FIXTURE, SEALED_GRAPH_TEST, custodyShardFixture, exitOf, git,
   holdLock, joinRemoteFixture, labFixture, leftovers, liveGroupMembers,
   lockIsFree, nativeIdentity, ownedPhaseMarker, processesUnder, runnerFixture,
-  runnerPidFrom, startRemoteCancellationFixture, waitForRemoteMarker,
+  runnerPidFrom, startRemoteCancellationFixture, waitForPlacedShellExit, waitForRemoteMarker,
 } from './test-placement-execution-fixture.js';
 
 const SLOW_TEST = 'test/scripts/check-operation-dispatch-completion-owner.test.js';
@@ -766,14 +766,7 @@ test('a lab machine proves the exact commit and cleans only its successful attem
       timerObserver.mock.restore();
     }
     assert.equal(expiries.length, 1, 'exactly the controller deadline was observed');
-    // Block until the shard has finished - its file reported and its lab
-    // shell gone - however long that takes on this machine.
-    const blockedLog = path.join(controller, 'test-output', 'placement', 'blocked-lab.log');
-    const shellGone = spawnSync('sh', ['-c',
-      `until grep -q '^placement-shell=' '${blockedLog}'; do sleep 0.1; done; ` +
-      `shell=$(sed -n 's/^placement-shell=//p' '${blockedLog}'); ` +
-      'while kill -0 "$shell" 2>/dev/null; do sleep 0.1; done; sleep 1'], {timeout: 10 * MINUTE});
-    assert.equal(shellGone.status, 0, String(shellGone.stderr || shellGone.error || ''));
+    waitForPlacedShellExit(controller, 'blocked');
     expiries[0]();
     const finished = await blocked.done;
     assert.equal(finished.reason, undefined, finished.log + finished.errors);

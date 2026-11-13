@@ -510,6 +510,17 @@ function startRemoteCancellationFixture(t, {preparation}) {
   return run;
 }
 
+function waitForPlacedShellExit(controller, runId) {
+  // Block until the shard has finished - its file reported and its lab
+  // shell gone - however long that takes on this machine.
+  const blockedLog = path.join(controller, 'test-output', 'placement', `${runId}-lab.log`);
+  const shellGone = spawnSync('sh', ['-c',
+    `until grep -q '^placement-shell=' '${blockedLog}'; do sleep 0.1; done; ` +
+    `shell=$(sed -n 's/^placement-shell=//p' '${blockedLog}'); ` +
+    'while kill -0 "$shell" 2>/dev/null; do sleep 0.1; done; sleep 1'], {timeout: 10 * MINUTE});
+  assert.equal(shellGone.status, 0, String(shellGone.stderr || shellGone.error || ''));
+}
+
 export {
   CUSTODY_STDERR, CUSTODY_STDERR_BYTES, CUSTODY_TAP, CUSTODY_TAP_BYTES,
   FAST_TEST, FIXTURE_HOLDER, GATE_TEST, LINK_UNIVERSE_TEST, MINUTE,
@@ -517,5 +528,5 @@ export {
   RUNNER_SLOW_FIXTURE, SEALED_GRAPH_TEST, custodyShardFixture, exitOf, git,
   holdLock, joinRemoteFixture, labFixture, leftovers, liveGroupMembers,
   lockIsFree, nativeIdentity, ownedPhaseMarker, processesUnder, runnerFixture,
-  runnerPidFrom, startRemoteCancellationFixture, waitForRemoteMarker,
+  runnerPidFrom, startRemoteCancellationFixture, waitForPlacedShellExit, waitForRemoteMarker,
 };
