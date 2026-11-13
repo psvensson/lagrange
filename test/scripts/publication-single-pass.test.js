@@ -206,6 +206,7 @@ test('reportLocalCorpus retains old evidence when a later head is green', (t) =>
   for (const [file, bytes] of originals) fs.writeFileSync(file, bytes);
   reportLocalCorpus(stateDir, () => {});
   for (const [file, bytes] of originals) {
+    assert.ok(fs.existsSync(file), `reporting retained original evidence ${path.basename(file)}`);
     assert.equal(fs.readFileSync(file, 'utf8'), bytes, 'reporting never deletes evidence');
   }
 });
