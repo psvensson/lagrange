@@ -70,7 +70,15 @@ const LOCAL_CORPUS_REPORT = Object.freeze({
   TREE_SUFFIX: '^{tree}',
 });
 const LOCAL_CORPUS_PROC = Object.freeze({DIRECTORY: '/proc', COMMAND: 'cmdline'});
-const LOCAL_CORPUS_PS = Object.freeze(['ps', '-o', 'command=', '-p']);
+const LOCAL_CORPUS_PLATFORM = Object.freeze({LINUX: 'linux', DARWIN: 'darwin'});
+const LOCAL_CORPUS_OBSERVATION = Object.freeze({
+  PRESENT: 'PRESENT', ABSENT: 'ABSENT', UNAVAILABLE: 'UNAVAILABLE',
+});
+const LOCAL_CORPUS_PROCESS_MISSING = 'ESRCH';
+const LOCAL_CORPUS_PS = Object.freeze(['/bin/ps', '-ww', '-o', 'command=', '-p']);
+const LOCAL_CORPUS_PS_TIMEOUT_MS = 5000;
+const LOCAL_CORPUS_PS_MAX_BYTES = 1048576;
+const LOCAL_CORPUS_PS_KILL_SIGNAL = 'SIGKILL';
 const LOCAL_CORPUS_OWED = Object.freeze({
   REST: 'the rest of the corpus',
   NOTHING: 'nothing: the gate proved the whole corpus',
@@ -99,6 +107,12 @@ const LOCAL_CORPUS_TEXT = Object.freeze({
   NOT_STARTING: 'publish: local corpus has no starting obligation for ',
   STATE_CHANGED: 'publish: local corpus state changed during execution for ',
   INVALID_RECORD: 'publish: invalid local corpus record ',
+  OBSERVATION_UNAVAILABLE: 'publish: local corpus observation UNAVAILABLE for ',
+  INVALID_PID: 'invalid recorded process id',
+  UNSUPPORTED_OBSERVER: 'unsupported process observer: ',
+  COMMAND_UNAVAILABLE: 'process command observation unavailable: ',
+  COMMAND_INCOMPLETE: 'process command observation is empty or incomplete',
+  NOT_LOCAL_PROCESS: 'its recorded pid no longer identifies a local corpus',
 });
 
 // Where the local corpus keeps its records (the git common dir, shared by
@@ -382,36 +396,92 @@ function localCorpusCandidate(root, head, runs) {
     identity: null};
 }
 
-// Whether a pid is a live local corpus of ours. Fails closed: a pid it cannot
-// identify is not signalled - a reused pid leading some other group would be.
-function isLocalCorpusProcess(pid) {
+function unavailableCorpusObservation(reason) {
+  return {state: LOCAL_CORPUS_OBSERVATION.UNAVAILABLE, reason};
+}
+
+function corpusCommandObservation(command) {
+  return command.includes(LOCAL_CORPUS_ARGUMENT) ?
+    {state: LOCAL_CORPUS_OBSERVATION.PRESENT, reason: ''} :
+    {state: LOCAL_CORPUS_OBSERVATION.ABSENT, reason: LOCAL_CORPUS_TEXT.NOT_LOCAL_PROCESS};
+}
+
+// Darwin has one command observer. A failed or truncated command is not
+// evidence about the inspected process. The direct system utility has no
+// descendant workload; timeout termination does not rely on TERM handling.
+function darwinCorpusObservation(pid) {
+  let listed;
+  try {
+    listed = spawnSync(LOCAL_CORPUS_PS[0], [...LOCAL_CORPUS_PS.slice(1), String(pid)],
+      {encoding: UTF8, timeout: LOCAL_CORPUS_PS_TIMEOUT_MS,
+        maxBuffer: LOCAL_CORPUS_PS_MAX_BYTES, killSignal: LOCAL_CORPUS_PS_KILL_SIGNAL});
+  } catch (error) {
+    return unavailableCorpusObservation(LOCAL_CORPUS_TEXT.COMMAND_UNAVAILABLE + String(error));
+  }
+  if (listed.error) {
+    return unavailableCorpusObservation(LOCAL_CORPUS_TEXT.COMMAND_UNAVAILABLE +
+      String(listed.error));
+  }
+  if (listed.signal || listed.status !== 0) {
+    return unavailableCorpusObservation(LOCAL_CORPUS_TEXT.COMMAND_UNAVAILABLE +
+      JSON.stringify({status: listed.status, signal: listed.signal}));
+  }
+  if (typeof listed.stdout !== 'string' || listed.stdout.trim() === '' ||
+      !listed.stdout.endsWith(NEWLINE)) {
+    return unavailableCorpusObservation(LOCAL_CORPUS_TEXT.COMMAND_INCOMPLETE);
+  }
+  return corpusCommandObservation(listed.stdout);
+}
+
+// Select the platform's observer before touching the PID. Signal zero can
+// confirm ESRCH, but inability to inspect an existing process cannot prove it
+// died. Linux read failures never switch to Darwin's command observer.
+function observeLocalCorpusProcess(pid) {
+  const platform = process.platform;
+  if (platform !== LOCAL_CORPUS_PLATFORM.LINUX && platform !== LOCAL_CORPUS_PLATFORM.DARWIN) {
+    return unavailableCorpusObservation(LOCAL_CORPUS_TEXT.UNSUPPORTED_OBSERVER + platform);
+  }
+  if (!Number.isSafeInteger(pid) || pid <= 0) {
+    return unavailableCorpusObservation(LOCAL_CORPUS_TEXT.INVALID_PID);
+  }
   try {
     process.kill(pid, 0);
-  } catch {
-    return false;
+  } catch (error) {
+    return error.code === LOCAL_CORPUS_PROCESS_MISSING ?
+      {state: LOCAL_CORPUS_OBSERVATION.ABSENT, reason: LOCAL_CORPUS_TEXT.LOST} :
+      unavailableCorpusObservation(String(error));
   }
-  let command = '';
+  if (platform === LOCAL_CORPUS_PLATFORM.DARWIN) {
+    return darwinCorpusObservation(pid);
+  }
   try {
-    command = fs.readFileSync(path.join(LOCAL_CORPUS_PROC.DIRECTORY, String(pid),
+    const command = fs.readFileSync(path.join(LOCAL_CORPUS_PROC.DIRECTORY, String(pid),
       LOCAL_CORPUS_PROC.COMMAND), UTF8);
-  } catch {
-    const listed = spawnSync(LOCAL_CORPUS_PS[0], [...LOCAL_CORPUS_PS.slice(1), String(pid)],
-      {encoding: UTF8});
-    command = listed.status === 0 ? String(listed.stdout) : '';
+    return corpusCommandObservation(command);
+  } catch (error) {
+    return unavailableCorpusObservation(LOCAL_CORPUS_TEXT.COMMAND_UNAVAILABLE + String(error));
   }
-  return command.includes(LOCAL_CORPUS_ARGUMENT);
 }
 
 /**
- * Name every running local corpus whose process is gone lost. Signals
- * nothing: done at the start of every publish, before anything is known about
- * whether this publish will reach main.
+ * Mark confirmed absent running processes lost, and report unavailable
+ * inspection while preserving the original running record. Every invocation
+ * observes afresh; unavailability cannot permanently veto later evidence.
+ * Sends no terminating signal and never starts another attempt.
  * @param {string} stateDir
+ * @param {Function} [write]
  */
-export function reconcileLocalCorpus(stateDir) {
+export function reconcileLocalCorpus(stateDir,
+  write = (line) => process.stdout.write(`${line}${NEWLINE}`)) {
   for (const state of readLocalCorpusRecords(stateDir)) {
-    if (state.state === LOCAL_CORPUS_STATE.RUNNING && !isLocalCorpusProcess(state.pid)) {
-      writeLocalCorpusState(stateDir, {...state, state: LOCAL_CORPUS_STATE.LOST});
+    if (state.state !== LOCAL_CORPUS_STATE.RUNNING) continue;
+    const observation = observeLocalCorpusProcess(state.pid);
+    if (observation.state === LOCAL_CORPUS_OBSERVATION.ABSENT) {
+      writeLocalCorpusState(stateDir, {...state, state: LOCAL_CORPUS_STATE.LOST,
+        reason: observation.reason});
+    } else if (observation.state === LOCAL_CORPUS_OBSERVATION.UNAVAILABLE) {
+      write(`${LOCAL_CORPUS_TEXT.OBSERVATION_UNAVAILABLE}${state.sha} ` +
+        `(pid ${state.pid}): ${observation.reason}`);
     }
   }
 }
@@ -654,7 +724,7 @@ export function proveMergedHead(root, sha, options = {}) {
   assertMergedHeadOwed(run, root, sha);
   const places = localCorpusPlaces(root);
   const stateDir = options.localCorpusDir || places.stateDir;
-  reconcileLocalCorpus(stateDir);
+  reconcileLocalCorpus(stateDir, write);
   reportLocalCorpus(stateDir, write);
   assertLocalCorpusFree(stateDir, sha);
   const files = mergedHeadCorpus(root, sha, options.wholeCorpus || wholeCorpusFiles);

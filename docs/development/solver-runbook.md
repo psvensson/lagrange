@@ -293,6 +293,14 @@ records and first failures. Failed gate diagnostics remain under
 `test-output/push-gate/`; repeated diagnostics use distinct directories and
 routine output pruning does not remove them. If diagnostic retention fails,
 the original checkout remains and the failure is explicit.
+Reconciliation distinguishes a missing process from unavailable inspection.
+Linux uses its proc command record and macOS uses a bounded system `ps` query;
+failure of either observer never selects the other. A denied signal-zero probe,
+failed command read, invalid recorded PID or unsupported observer is reported as
+`observation UNAVAILABLE` while the running record remains unchanged. Other
+records are still reconciled, and the next invocation observes the process
+afresh. Only confirmed absence or a successfully observed non-corpus command
+can mark the recorded process lost; observation never stops or replays it.
 The hosted `full-corpus-canary` is a manual capability, not authority to use
 hosted execution. Fix one-way
 ratchets rather than raising their baselines.
