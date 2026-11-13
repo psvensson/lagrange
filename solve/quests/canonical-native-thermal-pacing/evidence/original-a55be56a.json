@@ -1,0 +1,68 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "canonical-native-thermal-pacing",
+  "status": "fail",
+  "interpretation": "Index of actual original a55be56a failed policy controls. Not a new execution, Solver seal or candidate proof. The four remaining acceptance receipts are absent, not fabricated failures. Preserve this original index when later candidate evidence updates the current receipt.",
+  "testFileDigests": {
+    "test/scripts/thermal-file-admission.test.js": "4ef1f613b51fcf7487b05ac5eb7ef104431f61d4b1e95ede41be1796f8dde369"
+  },
+  "receipts": [
+    {
+      "id": "original-admission-and-peer-policy-controls",
+      "measured": true,
+      "passed": false,
+      "detail": "All three original policy assertions reached and failed: actual101 file executions shared2 observations with99 starts lacking fresh observation; unavailable observation delegated2 files/status0; actual placed shell and finite test completed but replaced explicit cap1 with7 under controlled8-core producer."
+    }
+  ],
+  "unmeasuredObligations": [
+    "native-read-only-thermal-owner",
+    "per-file-admission-and-nested-phase",
+    "placed-policy-budget-and-first-failure",
+    "independent-verification"
+  ],
+  "source": {
+    "repository": "psvensson/lagrange",
+    "ref": "refs/heads/source/5f951340cdb0a1c9134f1be940057e4573392520",
+    "sha": "5f951340cdb0a1c9134f1be940057e4573392520",
+    "tree": "70512c22d4478f96c8398052cada2d94de0abf67",
+    "srcTree": "fe848490246a7abddae7e72010663459b3c4d80f",
+    "testBlob": "7a0e2a2cc234c1ef912a3025b40ecef9cf663274"
+  },
+  "measurement": {
+    "host": "local-workstation",
+    "generation": "43cb7ede-6fae-4edd-bdf9-7b1a5f4714f5",
+    "jobId": "a55be56a-89c9-487a-b7b9-6e51cacfd5a0",
+    "intentDigest": "d63a7ca4641c90b9a8db0fa6321c68be15aae0aa498ba01dfd2da5d3410962db",
+    "nativeState": "FAILED",
+    "exitCode": 1,
+    "executionScopeClosed": true,
+    "elapsedSeconds": 30.335,
+    "command": "node scripts/run-test-files.js --jobs=1 test/scripts/thermal-file-admission.test.js",
+    "nativeTopLevelCases": 3,
+    "passed": 0,
+    "failed": 3,
+    "setupExit": 0,
+    "nativeRuntimeExit": 0,
+    "finalSourceGuardExit": 0,
+    "finalPreparedCacheGuardExit": 0
+  },
+  "observedPrerequisites": [
+    "Case1 actual child start/end membership101/101, aggregate runner summaries total101/pass100/fail1/assertions101; real intentional first child failure and later final child success; runner returned without spawn error or signal before negative assertion.",
+    "Case2 sensor reader called with isolated empty sysroot; controlled launch seam recorded admitted2/status0 before negative assertion. No claim those2 files physically executed.",
+    "Case3 real Git bundle/worktree, physical fixture locks, placed shell and FAST_TEST completed status0 before exact cap7-vs1 assertion. getconf8 is a controlled processor-count dependency, not a measured host core count."
+  ],
+  "evidence": {
+    "fullLog": {
+      "localPath": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261113/thermal-original-a55be56a-full.log",
+      "bytes": 20271,
+      "sha256": "2b124e3de9b03f1f16f71854aad72a142d00e9607792cbc809dd160817c45523"
+    },
+    "independentReview": {
+      "verifier": "subagent:/root/custody_design",
+      "localPath": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261113/thermal-original-a55be56a-independent-review.md",
+      "sha256": "7d05cbdca0b09335d9395f1d6403e81fbfb741ad039325fcabef2bbed267995e"
+    },
+    "custodyCeiling": "Retained local native provider/output custody; no canonical evidence upload reference is claimed."
+  },
+  "evidenceCeiling": "Controlled original thermal documents measure admission interaction, not native sensor readiness. No candidate, native thermal endpoint, nested phase, parallel HOLD/drain, full corpus or final publication proof.53db earlier draft remained unexecuted; this actual original is corrected5f951."
+}
