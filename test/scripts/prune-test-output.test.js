@@ -1,7 +1,7 @@
 import {describe, it, beforeEach, afterEach} from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  chmod, lstat, mkdir, mkdtemp, readFile, rm, stat, symlink, utimes, writeFile,
+  chmod, lstat, mkdir, mkdtemp, readFile, realpath, rm, stat, symlink, utimes, writeFile,
 } from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path, {join} from 'node:path';
@@ -38,6 +38,8 @@ import {
   TEST_OUTPUT_PRUNE_FLAG,
 } from '../../src/constants/test-output-prune-values.js';
 import {main as pruneTestOutputMain} from '../../scripts/prune-test-output.js';
+import {execGit} from '../../scripts/checks/git-invocation.js';
+import {gitProcessEnvironment} from '../../scripts/checks/git-process-environment.js';
 
 // Permission tests mean nothing to root, which reads and removes anything.
 const RUNS_AS_ROOT = process.getuid?.() === 0;
@@ -749,6 +751,74 @@ describe('routine retention safety', () => {
       }
       await assert.rejects(stat(path.dirname(stale)), {code: 'ENOENT'},
         'the reservation is exactly push-gate; ordinary stale output is still pruned');
+    });
+
+  it('retains registered split checkouts and original relay files during real aged pruning',
+    async () => {
+      const git = (...args) => execGit(['-c', 'user.name=finite-retention-witness',
+        '-c', 'user.email=finite-retention-witness@example.invalid',
+        '-c', 'commit.gpgsign=false', '-C', workspace, ...args],
+      {env: gitProcessEnvironment(), encoding: 'utf8'}).trim();
+      git('init', '--quiet');
+      await writeFile(join(workspace, 'README.md'), 'original registered source\n');
+      await writeFile(join(workspace, '.gitignore'), 'test-output/\n');
+      git('add', 'README.md', '.gitignore');
+      git('commit', '--quiet', '-m', 'finite retained source');
+      const originals = [];
+      const checkouts = [];
+      for (const parent of ['placement-worktrees', 'lab-test-worktrees']) {
+        const directory = join(root, parent);
+        await mkdir(directory, {recursive: true});
+        const checkout = join(directory, 'retained-first-attempt');
+        git('worktree', 'add', '--detach', '--quiet', checkout, 'HEAD');
+        git('worktree', 'lock', '--reason', 'retained original cleanup refusal', checkout);
+        checkouts.push(await realpath(checkout));
+        const tap = join(checkout, '.tap', 'test-results', 'original.tap');
+        await mkdir(path.dirname(tap), {recursive: true});
+        await writeFile(tap, `${parent}: original failing transcript\n`);
+        await writeFile(`${checkout}.files`, 'test/original.test.js\n');
+        git('bundle', 'create', `${checkout}.bundle`, 'HEAD');
+        const files = [tap, join(checkout, 'README.md'), join(checkout, '.gitignore'),
+          join(checkout, '.git'), `${checkout}.files`, `${checkout}.bundle`];
+        for (const file of files) {
+          originals.push({file, bytes: await readFile(file)});
+          await setArtifactTime(file, OLD);
+        }
+        for (const owned of [path.dirname(tap), join(checkout, '.tap'), checkout, directory]) {
+          await setArtifactTime(owned, OLD);
+        }
+      }
+      const relay = join(root, 'placement');
+      await mkdir(relay);
+      for (const attempt of ['first', 'later']) {
+        for (const suffix of ['log', 'err']) {
+          const file = join(relay, `${attempt}-peer.${suffix}`);
+          const bytes = Buffer.from(`${attempt}: original ${suffix} relay\n`);
+          await writeFile(file, bytes);
+          await setArtifactTime(file, OLD);
+          originals.push({file, bytes});
+        }
+      }
+      await setArtifactTime(relay, OLD);
+      const stale = join(root, 'placement-unreserved', 'old.json');
+      await writeArtifact(stale);
+      await setArtifactTime(stale, OLD);
+      await setArtifactTime(path.dirname(stale), OLD);
+
+      const result = await applyPolicy();
+
+      assert.equal(result.stderr, '', 'the actual retention apply completed');
+      for (const {file, bytes} of originals) {
+        await assert.doesNotReject(stat(file), `original split evidence remains at ${file}`);
+        assert.deepEqual(await readFile(file), bytes, `the original bytes remain at ${file}`);
+      }
+      const registered = git('worktree', 'list', '--porcelain');
+      for (const checkout of checkouts) {
+        assert.ok(registered.includes(`worktree ${checkout}\n`),
+          `retention preserves the actual registered checkout ${checkout}`);
+      }
+      await assert.rejects(stat(path.dirname(stale)), {code: 'ENOENT'},
+        'an old unreserved sibling is still deleted by the same apply');
     });
 });
 
