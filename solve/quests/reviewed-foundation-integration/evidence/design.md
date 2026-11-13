@@ -24,9 +24,10 @@ trend update and composes these unchanged reviewed inputs:
 
 The original branch and failure records remain immutable. Historical component
 passes do not certify the combined candidate. This proposal has no green receipt.
-It remains unsealed: the existing test-receipt probe correctly treats the absent
-execution receipt as non-measuring. Preparation can proceed under the proposal;
-sealing requires actual recorded measurements, never a placeholder red receipt.
+The initial absent receipt was non-measuring. Actual original negative evidence
+is now indexed, and the proposal remains unsealed pending Solver start on that
+reviewed input. Sealing requires actual recorded measurements, never a
+placeholder red receipt.
 
 ## Pre-land acceptance and final publication
 
