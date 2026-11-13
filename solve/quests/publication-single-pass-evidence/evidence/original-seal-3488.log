@@ -1,0 +1,150 @@
+LAB_HOST=tv-dator
+v22.23.2
+52160e58a09b01f8d4871b7408bd244280a4d442
+fbca30eef63847ad8758c161cf6d927164baec45
+bc9e83a24cee235aa7fd33ff9777dc97d229903c
+ORIGINAL_SEAL_SCOPE=existing Solver start against actual original-source evidence; no test rerun or repair acceptance
+a8c89388284fc65953542b2d31b5d6f99bc24da87be8258375a6c2a49b65a5a0  solve/quests/publication-single-pass-evidence/evidence/receipt.json
+382877364f58d155e6b7165e7e255e3bad15d39770a53fa5116105b024827843  solve/quests/publication-single-pass-evidence/evidence/original-control-3410.log
+solve/quests/publication-single-pass-evidence/evidence/receipt.json: OK
+solve/quests/publication-single-pass-evidence/evidence/original-control-3410.log: OK
+npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+
+> lagrange-server@0.4.0 prepare
+> node -e "import('node:fs').then(({existsSync}) => existsSync('scripts/install-git-hooks.js') && import('./scripts/install-git-hooks.js'))"
+
+[hooks] Installed repo hooks at .githooks
+
+added 964 packages in 1m
+npm notice
+npm notice New major version of npm available! 10.9.8 -> 12.2.2
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.2
+npm notice To update run: npm install -g npm@12.2.2
+npm notice
+SQLITE_NATIVE_PROVENANCE={"version":"3.49.2","source_id":"2025-05-07 10:39:52 17144570b0d96ae63cd6f3edca39e27ebd74925252bbaf6723bcb2f6b4861fb1","addon_sha256":"d7d9272b12d11c1dc2bb787741b1b7c4037d336155f316ace3420410c28fda37"}
+{
+  "id": "publication-single-pass-evidence",
+  "sealedAt": "52160e58a09b01f8d4871b7408bd244280a4d442",
+  "probe": {
+    "metric": 5,
+    "target": 0,
+    "done": false,
+    "measuring": true,
+    "evidence": "solve/quests/publication-single-pass-evidence/evidence/receipt.json",
+    "reason": "measured",
+    "outstanding": [
+      "single-pass-runner-and-placement",
+      "publication-evidence-custody",
+      "strict-native-proof-and-caller-regressions",
+      "independent-review",
+      "lab-canonical-static-and-whole-corpus"
+    ]
+  },
+  "entry": {
+    "ts": "2026-11-13T06:16:22.195Z",
+    "type": "finding",
+    "kind": "decision",
+    "text": "sealed at 52160e58a09b01f8d4871b7408bd244280a4d442; seal-time probe test-receipt metric=5 target=0 measuring=true",
+    "seal": {
+      "sealedAt": "52160e58a09b01f8d4871b7408bd244280a4d442",
+      "statement": "The existing test runner, placement and publication owners preserve one scheduled execution's first outcome. A failed, incomplete, unavailable or zero-assertion execution cannot be promoted by an automatic retry, reassignment, later green verdict or guessed proof base. Publication retains original exact-source failure evidence and does not cancel an older corpus obligation or overwrite a recorded same-head attempt. Native proof contracts continue to refuse failed and retried evidence.",
+      "doneWhen": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/quests/publication-single-pass-evidence/evidence/receipt.json",
+          "requiredReceipts": [
+            "original-causal-controls",
+            "single-pass-runner-and-placement",
+            "publication-evidence-custody",
+            "strict-native-proof-and-caller-regressions",
+            "independent-review",
+            "lab-canonical-static-and-whole-corpus"
+          ]
+        }
+      },
+      "metric": 5,
+      "target": 0,
+      "measuring": true,
+      "reason": "measured"
+    }
+  }
+}
+ORIGINAL_SOLVER_START_EXIT=0
+ORIGINAL_SOLVER_DELTA_IDENTITY={"source_sha":"52160e58a09b01f8d4871b7408bd244280a4d442","source_tree":"fbca30eef63847ad8758c161cf6d927164baec45","src_tree":"bc9e83a24cee235aa7fd33ff9777dc97d229903c","original_measurement_sha":"3e77abda6a858f8ca09da157429234219487a114","original_measurement_log_sha256":"382877364f58d155e6b7165e7e255e3bad15d39770a53fa5116105b024827843","solve_start_exit":0,"bytes":4811,"sha256":"afeebd943ca62b5021451f98f3bde75eb41fc40849aaf765c919f58bf5f76b38","changed_paths":["solve/quests/publication-single-pass-evidence/log.ndjson","solve/quests/publication-single-pass-evidence/quest.json"],"untracked_paths":[]}
+ORIGINAL_SOLVER_DELTA_BEGIN
+diff --git a/solve/quests/publication-single-pass-evidence/log.ndjson b/solve/quests/publication-single-pass-evidence/log.ndjson
+index 81f27acf0..592b695ac 100644
+--- a/solve/quests/publication-single-pass-evidence/log.ndjson
++++ b/solve/quests/publication-single-pass-evidence/log.ndjson
+@@ -5,3 +5,4 @@
+ {"ts":"2026-11-13","type":"finding","kind":"decision","text":"Complete the same publication owner boundary: atomically acquire starting before any same-head companion write; distinguish declared state records from native report companions; preserve original diagnostics and reserve them from routine pruning; keep the exact checkout when retention fails. Placement must close every acquired child on start or output failure, preserve the primary cause, and report cleanup uncertainty. Null/signalled corpus execution is LOST, measured nonzero execution is RED, and neither mints a receipt. Land must preserve the canonical release-proof refusal instead of substituting another suite. Existing full-corpus triggers, bounds and strict native proof refusal remain unchanged."}
+ {"ts":"2026-11-13","type":"finding","kind":"decision","text":"Root historical review additionally identifies failed-gate-keeps-evidence at 6929b84de5626e1672f1f362d6152f9a51f6ce40: its last-verdict-wins and retry-green omission semantics are superseded by current user direction, while its single retention owner and synchronous-runner constraints remain. Preserve its sealed bytes. fc6db88ee4d9a5d0d9ac120cd85d0a04b7a805fc and the October direct-gate recurrence motivate retaining original diagnostics; b5f975d0d0c97e2d6e2a10e48bdac743c20e9b46 requires bounded remote-shell cleanup before local cut. The same changed producer's runLabTest sibling must own every acquired child, and both controller and remote descriptor acquisition must keep the child owned after cleanup failure. Missing timeout refuses setup before upload. The existing killGroup group-to-child fallback is a distinct lifetime-owner finding, not a silent expansion into all process consumers."}
+ {"ts":"2026-11-13","type":"finding","kind":"evidence","text":"Root independently reviewed the complete original lab stream: physical tv-dator job3410, source3e77abda6a858f8ca09da157429234219487a114, actual exit1. All37 controls reached: publication22 (2 clean positives,20 causal failures) and CI-range15 (2 clean positives,13 causal failures),0 cancelled/skipped/todo and no fixture defect. Full stream42705 bytes, SHA256382877364f58d155e6b7165e7e255e3bad15d39770a53fa5116105b024827843, coordinator path lab-coordination-20261113/publication-original-full.log. This is measured original negative evidence; candidate acceptance, sealing and delivery remain pending. Original control and fixture blobs remain unchanged."}
++{"ts":"2026-11-13T06:16:22.195Z","type":"finding","kind":"decision","text":"sealed at 52160e58a09b01f8d4871b7408bd244280a4d442; seal-time probe test-receipt metric=5 target=0 measuring=true","seal":{"sealedAt":"52160e58a09b01f8d4871b7408bd244280a4d442","statement":"The existing test runner, placement and publication owners preserve one scheduled execution's first outcome. A failed, incomplete, unavailable or zero-assertion execution cannot be promoted by an automatic retry, reassignment, later green verdict or guessed proof base. Publication retains original exact-source failure evidence and does not cancel an older corpus obligation or overwrite a recorded same-head attempt. Native proof contracts continue to refuse failed and retried evidence.","doneWhen":{"probe":"test-receipt","args":{"file":"solve/quests/publication-single-pass-evidence/evidence/receipt.json","requiredReceipts":["original-causal-controls","single-pass-runner-and-placement","publication-evidence-custody","strict-native-proof-and-caller-regressions","independent-review","lab-canonical-static-and-whole-corpus"]}},"metric":5,"target":0,"measuring":true,"reason":"measured"}}
+diff --git a/solve/quests/publication-single-pass-evidence/quest.json b/solve/quests/publication-single-pass-evidence/quest.json
+index effeb8529..e4f2d2820 100644
+--- a/solve/quests/publication-single-pass-evidence/quest.json
++++ b/solve/quests/publication-single-pass-evidence/quest.json
+@@ -30,5 +30,6 @@
+       "id": "physical-proof-and-separate-delivery",
+       "statement": "All execution, generators and acceptance checks run on physical lab machines through the sole coordinator after independent review of immutable source and payload. This unsealed proposal contains no synthetic red receipt. Missing trusted GitHub delivery credentials, native evidence custody and check linkage remain a separate explicit capability gap; source review and lab-work completion grant no publication approval."
+     }
+-  ]
++  ],
++  "sealedAt": "52160e58a09b01f8d4871b7408bd244280a4d442"
+ }
+
+ORIGINAL_SOLVER_DELTA_END
+ORIGINAL_SOLVER_FILE_BEGIN={"path":"solve/quests/publication-single-pass-evidence/quest.json","bytes":2587,"sha256":"b26bd54cb5b4711071c96dbc98f9507ddae94d3c92e4a2f5deae8704e3cd40dd"}
+{
+  "schema": "solve-quest/2",
+  "id": "publication-single-pass-evidence",
+  "class": "fix",
+  "statement": "The existing test runner, placement and publication owners preserve one scheduled execution's first outcome. A failed, incomplete, unavailable or zero-assertion execution cannot be promoted by an automatic retry, reassignment, later green verdict or guessed proof base. Publication retains original exact-source failure evidence and does not cancel an older corpus obligation or overwrite a recorded same-head attempt. Native proof contracts continue to refuse failed and retried evidence.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/publication-single-pass-evidence/evidence/receipt.json",
+      "requiredReceipts": [
+        "original-causal-controls",
+        "single-pass-runner-and-placement",
+        "publication-evidence-custody",
+        "strict-native-proof-and-caller-regressions",
+        "independent-review",
+        "lab-canonical-static-and-whole-corpus"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "one-execution-and-evidence-owner",
+      "statement": "Correct existing run-test-files, lab placement, publisher, Solver land and CI producers/consumers together. Remove automatic retry and fallback branches and obsolete active knobs. Preserve native REFUSE contracts, worst-verdict aggregation, source identity, complete-corpus triggers, declared budgets, locks and bounded cleanup. Add no replacement publisher, receipt-import framework, synthetic status or guessed physical runner route."
+    },
+    {
+      "id": "preserved-history-and-explicit-supersession",
+      "statement": "The user's single-pass/no-fallback direction supersedes the active retry-once and newer-head cancellation semantics previously proven by land-retry-parity and local-corpus-canary. Preserve all sealed Quest statements, receipts, findings and prior evidence bytes; record new behavior and proof here without reinterpreting those earlier claims."
+    },
+    {
+      "id": "physical-proof-and-separate-delivery",
+      "statement": "All execution, generators and acceptance checks run on physical lab machines through the sole coordinator after independent review of immutable source and payload. This unsealed proposal contains no synthetic red receipt. Missing trusted GitHub delivery credentials, native evidence custody and check linkage remain a separate explicit capability gap; source review and lab-work completion grant no publication approval."
+    }
+  ],
+  "sealedAt": "52160e58a09b01f8d4871b7408bd244280a4d442"
+}
+
+ORIGINAL_SOLVER_FILE_END
+ORIGINAL_SOLVER_FILE_BEGIN={"path":"solve/quests/publication-single-pass-evidence/log.ndjson","bytes":5773,"sha256":"3c30329f2be34a81e8527dda5a6a63dd37ad2b8222b562b183c733d74071eeb6"}
+{"ts":"2026-11-13","type":"finding","kind":"scope","text":"User-authorized consolidation uncovered a systematic mismatch between runner/placement retry-to-green behavior, canonical publisher/land/CI retry producers and native proof REFUSE contracts. Root assigned this bounded correction to subagent:/root/next_work_challenge in isolated work/publication-single-pass-20261113 at source566d87b3be615344bbc5548d818e3b01578cc698. Rule-set5 and current owners were read. See evidence/design.md for the complete transition, controls and delivery ceiling. This is an unsealed proposal; no receipt or measured red is fabricated."}
+{"ts":"2026-11-13","type":"finding","kind":"history-and-supersession","text":"Commit3827c9d3f5d34313663f09a9763eabc833bff804 retained verifier rejection and repaired worst-verdict aggregation when later clean runs erased earlier retry/zero-assertion evidence. The sealed land-retry-parity and local-corpus-canary Quests own earlier retry and newer-head-supersession behavior. Current user direction supersedes those active semantics through this new bounded Quest; all their statements, logs and evidence remain unchanged. First failures, partial records and uncertain older corpus obligations must survive new publication attempts."}
+{"ts":"2026-11-13","type":"finding","kind":"decision","text":"Append-only classification correction: the earlier finding kinds scope and history-and-supersession are proposal decisions, not canonical finding kinds. This decision records their intended classification without rewriting those original entries. Both remain unsealed design decisions and make no measured-evidence claim. All following findings use the canonical kind vocabulary."}
+{"ts":"2026-11-13","type":"finding","kind":"decision","text":"Root and independent inventory review accepted original-compatible controls at fecff83d5e060befc70e5d4e50913ba55d2e67d4 and the disjoint CI range controls at 8c24519c189651ed869ddc109e0337024ae5c5c2 for lab negative measurement. Their test and fixture bytes are frozen. This entry records source review only; the sole coordinator owns transport, measured outcomes and evidence custody."}
+{"ts":"2026-11-13","type":"finding","kind":"decision","text":"Complete the same publication owner boundary: atomically acquire starting before any same-head companion write; distinguish declared state records from native report companions; preserve original diagnostics and reserve them from routine pruning; keep the exact checkout when retention fails. Placement must close every acquired child on start or output failure, preserve the primary cause, and report cleanup uncertainty. Null/signalled corpus execution is LOST, measured nonzero execution is RED, and neither mints a receipt. Land must preserve the canonical release-proof refusal instead of substituting another suite. Existing full-corpus triggers, bounds and strict native proof refusal remain unchanged."}
+{"ts":"2026-11-13","type":"finding","kind":"decision","text":"Root historical review additionally identifies failed-gate-keeps-evidence at 6929b84de5626e1672f1f362d6152f9a51f6ce40: its last-verdict-wins and retry-green omission semantics are superseded by current user direction, while its single retention owner and synchronous-runner constraints remain. Preserve its sealed bytes. fc6db88ee4d9a5d0d9ac120cd85d0a04b7a805fc and the October direct-gate recurrence motivate retaining original diagnostics; b5f975d0d0c97e2d6e2a10e48bdac743c20e9b46 requires bounded remote-shell cleanup before local cut. The same changed producer's runLabTest sibling must own every acquired child, and both controller and remote descriptor acquisition must keep the child owned after cleanup failure. Missing timeout refuses setup before upload. The existing killGroup group-to-child fallback is a distinct lifetime-owner finding, not a silent expansion into all process consumers."}
+{"ts":"2026-11-13","type":"finding","kind":"evidence","text":"Root independently reviewed the complete original lab stream: physical tv-dator job3410, source3e77abda6a858f8ca09da157429234219487a114, actual exit1. All37 controls reached: publication22 (2 clean positives,20 causal failures) and CI-range15 (2 clean positives,13 causal failures),0 cancelled/skipped/todo and no fixture defect. Full stream42705 bytes, SHA256382877364f58d155e6b7165e7e255e3bad15d39770a53fa5116105b024827843, coordinator path lab-coordination-20261113/publication-original-full.log. This is measured original negative evidence; candidate acceptance, sealing and delivery remain pending. Original control and fixture blobs remain unchanged."}
+{"ts":"2026-11-13T06:16:22.195Z","type":"finding","kind":"decision","text":"sealed at 52160e58a09b01f8d4871b7408bd244280a4d442; seal-time probe test-receipt metric=5 target=0 measuring=true","seal":{"sealedAt":"52160e58a09b01f8d4871b7408bd244280a4d442","statement":"The existing test runner, placement and publication owners preserve one scheduled execution's first outcome. A failed, incomplete, unavailable or zero-assertion execution cannot be promoted by an automatic retry, reassignment, later green verdict or guessed proof base. Publication retains original exact-source failure evidence and does not cancel an older corpus obligation or overwrite a recorded same-head attempt. Native proof contracts continue to refuse failed and retried evidence.","doneWhen":{"probe":"test-receipt","args":{"file":"solve/quests/publication-single-pass-evidence/evidence/receipt.json","requiredReceipts":["original-causal-controls","single-pass-runner-and-placement","publication-evidence-custody","strict-native-proof-and-caller-regressions","independent-review","lab-canonical-static-and-whole-corpus"]}},"metric":5,"target":0,"measuring":true,"reason":"measured"}}
+
+ORIGINAL_SOLVER_FILE_END
+ORIGINAL_SOLVER_EXPORT_EXIT=0
+ M solve/quests/publication-single-pass-evidence/log.ndjson
+ M solve/quests/publication-single-pass-evidence/quest.json
+ORIGINAL_SOLVER_FINAL_GUARD_EXIT=0

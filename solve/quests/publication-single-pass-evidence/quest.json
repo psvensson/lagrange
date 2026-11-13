@@ -30,5 +30,6 @@
       "id": "physical-proof-and-separate-delivery",
       "statement": "All execution, generators and acceptance checks run on physical lab machines through the sole coordinator after independent review of immutable source and payload. This unsealed proposal contains no synthetic red receipt. Missing trusted GitHub delivery credentials, native evidence custody and check linkage remain a separate explicit capability gap; source review and lab-work completion grant no publication approval."
     }
-  ]
+  ],
+  "sealedAt": "52160e58a09b01f8d4871b7408bd244280a4d442"
 }

@@ -1,0 +1,531 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "publication-single-pass-evidence",
+  "status": "fail",
+  "generatedAt": "2026-11-13T05:56:48.665Z",
+  "interpretation": "This is an evidence index transcribed from one completed original-source lab measurement and independently reviewed in full. A passed original-causal-controls receipt means the controls reached their expected original behavior; it does not turn the original job, failed assertions, repaired behavior, or publication gate green. No source test was rerun to create this index.",
+  "testFileDigests": {
+    "test/scripts/publication-single-pass.test.js": "4ab09ef921e9716dd7285c4f162d2353cfb8c66d92f3487acd7a212bb17d9206",
+    "test/config/ci-proof-range.test.js": "cf7ddbde1180030eaeda1874ecf71de0bcb678060d4e162168f3c6caa46d52f4",
+    "test/scripts/test-placement-fixtures.js": "695295b55f49830b02284667ccd7d30209a7badb2436bdcccfcc14d29e03b4a5"
+  },
+  "receipts": [
+    {
+      "id": "original-causal-controls",
+      "measured": true,
+      "passed": true,
+      "detail": "All 37 reviewed controls reached the expected original outcomes: publication root 2 pass / 20 causal failures; CI root 2 pass / 13 causal failures. There were no cancelled, skipped, or todo cases and no fixture, import, or setup exception. The actual job exit remains 1. This receipt calibrates the original measurement only."
+    },
+    {
+      "id": "single-pass-runner-and-placement",
+      "measured": true,
+      "passed": false,
+      "detail": "The original runner reran a finite first failure and returned success. Original placement accepted failed, incomplete, unavailable, zero-assertion, missing-verdict, missing-exit, busy, and thermal-refused executions, including local substitution paths. These reached violations leave the promised single-pass behavior false."
+    }
+  ],
+  "unmeasuredObligations": [
+    "publication-evidence-custody",
+    "strict-native-proof-and-caller-regressions",
+    "independent-review",
+    "lab-canonical-static-and-whole-corpus"
+  ],
+  "unmeasuredExplanation": "The original publication root also exposes custody violations, but no positive repair acceptance for these additional obligations is claimed. Their receipt IDs are intentionally absent. Independent review here classifies original evidence; it is not independent acceptance of the repair.",
+  "source": {
+    "repository": "psvensson/lagrange",
+    "ref": "refs/heads/wip/publication-single-pass-original-20261113",
+    "sha": "3e77abda6a858f8ca09da157429234219487a114",
+    "tree": "24ba0c2433b104c7f4a09034476392cafd3a7d93",
+    "srcTree": "bc9e83a24cee235aa7fd33ff9777dc97d229903c",
+    "localAuthoredSha": "8c24519c189651ed869ddc109e0337024ae5c5c2",
+    "sourceUrl": "https://github.com/psvensson/lagrange/tree/3e77abda6a858f8ca09da157429234219487a114",
+    "originalCiBlob": "3528e2adbfd2fcc4cd5badb35f05d7ac8e22b29c",
+    "guardedBlobs": {
+      "test/scripts/publication-single-pass.test.js": "e297ba2489c876a81df84af0ebf46ee0305c6725",
+      "test/config/ci-proof-range.test.js": "2834163c2fde9d710034e63ae21bd447c77e59f2",
+      "test/scripts/test-placement-fixtures.js": "db4890cfe882427aad11017a4e5e6ab3436bde55"
+    }
+  },
+  "measurement": {
+    "issue": 3410,
+    "url": "https://github.com/psvensson/lagrange-lab/issues/3410",
+    "requestId": "1aba9818ac8b401eaa8983010973ffa7",
+    "logicalRequestId": "1aba9818-ac8b-401e-aa89-83010973ffa7",
+    "controllerId": "b4a2e06c193c44b09f1b67d02e8d80f4",
+    "requestSha256": "a39a2658c3a0547e9495c7f61434d858a69508a2924af336a2639414fa75a49a",
+    "payloadSha256": "455e0f810f63d7ef499485a4c18814ef5d88830b4c7361cec02f410a770a1db2",
+    "payloadBytes": 3336,
+    "scriptSha256": "25c1e2e3f0d0df7d90619657d4770ad21c867e5c1c8efa7e33a3ad8e86cbe74a",
+    "command": "node scripts/run-test-files.js --jobs=2 test/scripts/publication-single-pass.test.js test/config/ci-proof-range.test.js",
+    "host": "tv-dator",
+    "placement": "local",
+    "outerRetryFailedOnce": 0,
+    "boundSeconds": 1200,
+    "finishedAt": "2026-11-13T05:30:47.651Z",
+    "recordedAt": "2026-11-13T05:30:47.770Z",
+    "actualExitCode": 1,
+    "actualOutcome": "FAIL",
+    "sourceExecutionStarted": true,
+    "executionScopeClosed": true,
+    "scopeClosed": true,
+    "containersClosed": true,
+    "thermalScopeClosed": true,
+    "workerReceiptsSha256": "1f24d0c1a247fc6bace0bd72235fec6f404bbd6091dbdc18461487d3659057f8",
+    "nodeVersion": "v22.23.2",
+    "sqlite": {
+      "version": "3.49.2",
+      "source_id": "2025-05-07 10:39:52 17144570b0d96ae63cd6f3edca39e27ebd74925252bbaf6723bcb2f6b4861fb1",
+      "addon_sha256": "d7d9272b12d11c1dc2bb787741b1b7c4037d336155f316ace3420410c28fda37"
+    }
+  },
+  "originalLog": {
+    "file": "solve/quests/publication-single-pass-evidence/evidence/original-control-3410.log",
+    "bytes": 42705,
+    "sha256": "382877364f58d155e6b7165e7e255e3bad15d39770a53fa5116105b024827843",
+    "streamId": "c0532da6e650a96f03fb7c58f6b90baa0059c3d00de80f0b0c38154171405a6e",
+    "source": "original-worker-log",
+    "untruncated": true,
+    "completeContiguousCoverage": true,
+    "redactedWindowBytesEqualOriginalBytes": true,
+    "evidenceWindows": [
+      {
+        "issue": 3421,
+        "url": "https://github.com/psvensson/lagrange-lab/issues/3421",
+        "requestId": "65d7322859ff5f677c8e7c60ccdce3aa",
+        "requestSha256": "0d45683217c4097ed23e684a38242e508b6e68c3a9b92b953af7dbf41a58b705",
+        "recordedAt": "2026-11-13T05:36:39.230Z",
+        "offset": 0,
+        "requestedBytes": 8000,
+        "returnedBytes": 8000,
+        "nextOffset": 8000,
+        "chunkSha256": "a1d6911afa703d7b11d40e4a9e3ecbe5b3417db4420f3ed55da545cbb5b1f66a",
+        "rawChunkSha256": "a1d6911afa703d7b11d40e4a9e3ecbe5b3417db4420f3ed55da545cbb5b1f66a",
+        "streamId": "c0532da6e650a96f03fb7c58f6b90baa0059c3d00de80f0b0c38154171405a6e",
+        "originalLogBytes": 42705,
+        "originalLogSha256": "382877364f58d155e6b7165e7e255e3bad15d39770a53fa5116105b024827843",
+        "source": "original-worker-log",
+        "readOnly": true,
+        "executedSource": false,
+        "jobTerminal": true,
+        "logTruncated": false,
+        "eof": false,
+        "complete": false
+      },
+      {
+        "issue": 3436,
+        "url": "https://github.com/psvensson/lagrange-lab/issues/3436",
+        "requestId": "4e4bb93228bb6e6b10ca1678b25a0157",
+        "requestSha256": "0d7f3f5e05f071e67627ea0d392ec4b875b24fa09a424cbca5e12551d9436a04",
+        "recordedAt": "2026-11-13T05:38:57.302Z",
+        "offset": 8000,
+        "requestedBytes": 8000,
+        "returnedBytes": 8000,
+        "nextOffset": 16000,
+        "chunkSha256": "36dcf3da61df507e9967b60962874ceb036084f9cc023b16008080742649b4bc",
+        "rawChunkSha256": "36dcf3da61df507e9967b60962874ceb036084f9cc023b16008080742649b4bc",
+        "streamId": "c0532da6e650a96f03fb7c58f6b90baa0059c3d00de80f0b0c38154171405a6e",
+        "originalLogBytes": 42705,
+        "originalLogSha256": "382877364f58d155e6b7165e7e255e3bad15d39770a53fa5116105b024827843",
+        "source": "original-worker-log",
+        "readOnly": true,
+        "executedSource": false,
+        "jobTerminal": true,
+        "logTruncated": false,
+        "eof": false,
+        "complete": false
+      },
+      {
+        "issue": 3437,
+        "url": "https://github.com/psvensson/lagrange-lab/issues/3437",
+        "requestId": "95ed657029356e0d9e25a7b025325861",
+        "requestSha256": "f743c28a2a71686bd2d539489e927bcd59262da77556c0c8ca7b0e44b3962796",
+        "recordedAt": "2026-11-13T05:40:01.860Z",
+        "offset": 16000,
+        "requestedBytes": 8000,
+        "returnedBytes": 8000,
+        "nextOffset": 24000,
+        "chunkSha256": "a3d0546d33e3db4d1b94f66789105cd143923f3d2edfc0e6339edfae4c0ae984",
+        "rawChunkSha256": "a3d0546d33e3db4d1b94f66789105cd143923f3d2edfc0e6339edfae4c0ae984",
+        "streamId": "c0532da6e650a96f03fb7c58f6b90baa0059c3d00de80f0b0c38154171405a6e",
+        "originalLogBytes": 42705,
+        "originalLogSha256": "382877364f58d155e6b7165e7e255e3bad15d39770a53fa5116105b024827843",
+        "source": "original-worker-log",
+        "readOnly": true,
+        "executedSource": false,
+        "jobTerminal": true,
+        "logTruncated": false,
+        "eof": false,
+        "complete": false
+      },
+      {
+        "issue": 3438,
+        "url": "https://github.com/psvensson/lagrange-lab/issues/3438",
+        "requestId": "5c3886c013f3ef32df948378c7fc6922",
+        "requestSha256": "0e3b47a9af0e155b182e188e62aabf4ccf174c37d09f2ec0673001fd86da21c6",
+        "recordedAt": "2026-11-13T05:41:41.247Z",
+        "offset": 24000,
+        "requestedBytes": 8000,
+        "returnedBytes": 8000,
+        "nextOffset": 32000,
+        "chunkSha256": "f875d4dfc701cabbc56783f2ce29a1b6cf08f9f5063f10cf8592e6160fc33b3a",
+        "rawChunkSha256": "f875d4dfc701cabbc56783f2ce29a1b6cf08f9f5063f10cf8592e6160fc33b3a",
+        "streamId": "c0532da6e650a96f03fb7c58f6b90baa0059c3d00de80f0b0c38154171405a6e",
+        "originalLogBytes": 42705,
+        "originalLogSha256": "382877364f58d155e6b7165e7e255e3bad15d39770a53fa5116105b024827843",
+        "source": "original-worker-log",
+        "readOnly": true,
+        "executedSource": false,
+        "jobTerminal": true,
+        "logTruncated": false,
+        "eof": false,
+        "complete": false
+      },
+      {
+        "issue": 3439,
+        "url": "https://github.com/psvensson/lagrange-lab/issues/3439",
+        "requestId": "01601c481e340027f13f99f46f403f86",
+        "requestSha256": "196ea1e4f7e8b989a0e94a759e7a353f95a95777dfb87165f61957223df92832",
+        "recordedAt": "2026-11-13T05:43:07.090Z",
+        "offset": 32000,
+        "requestedBytes": 8000,
+        "returnedBytes": 8000,
+        "nextOffset": 40000,
+        "chunkSha256": "9269689afea76e774900e72098a34452aa31f9c3b4231b83ef65a3316ac2d8c4",
+        "rawChunkSha256": "9269689afea76e774900e72098a34452aa31f9c3b4231b83ef65a3316ac2d8c4",
+        "streamId": "c0532da6e650a96f03fb7c58f6b90baa0059c3d00de80f0b0c38154171405a6e",
+        "originalLogBytes": 42705,
+        "originalLogSha256": "382877364f58d155e6b7165e7e255e3bad15d39770a53fa5116105b024827843",
+        "source": "original-worker-log",
+        "readOnly": true,
+        "executedSource": false,
+        "jobTerminal": true,
+        "logTruncated": false,
+        "eof": false,
+        "complete": false
+      },
+      {
+        "issue": 3440,
+        "url": "https://github.com/psvensson/lagrange-lab/issues/3440",
+        "requestId": "373cea6613f92a6f1fd031715f068137",
+        "requestSha256": "552bd7ce11e753f8971a960eec4692bcc8686dcbdce12273b5503e154d73a90b",
+        "recordedAt": "2026-11-13T05:47:05.460Z",
+        "offset": 40000,
+        "requestedBytes": 8000,
+        "returnedBytes": 2705,
+        "nextOffset": 42705,
+        "chunkSha256": "53e6edfdddeff0c7aaf7a05b635281dc1e7f9af5bcac36f4b7833b1c20736a33",
+        "rawChunkSha256": "53e6edfdddeff0c7aaf7a05b635281dc1e7f9af5bcac36f4b7833b1c20736a33",
+        "streamId": "c0532da6e650a96f03fb7c58f6b90baa0059c3d00de80f0b0c38154171405a6e",
+        "originalLogBytes": 42705,
+        "originalLogSha256": "382877364f58d155e6b7165e7e255e3bad15d39770a53fa5116105b024827843",
+        "source": "original-worker-log",
+        "readOnly": true,
+        "executedSource": false,
+        "jobTerminal": true,
+        "logTruncated": false,
+        "eof": true,
+        "complete": true
+      }
+    ]
+  },
+  "outcomes": {
+    "files": 2,
+    "filesPassed": 0,
+    "filesFailed": 2,
+    "leafTests": 37,
+    "leafPassed": 4,
+    "leafFailed": 33,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0,
+    "fixtureImportOrSetupExceptions": 0,
+    "roots": [
+      {
+        "testFile": "test/scripts/publication-single-pass.test.js",
+        "tests": 22,
+        "passed": 2,
+        "failed": 20,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0,
+        "cases": [
+          {
+            "number": 1,
+            "name": "run-test-files retains the first failure without executing the file again",
+            "actualStatus": "fail",
+            "expectedOriginalStatus": "fail",
+            "causalExpectationConfirmed": true
+          },
+          {
+            "number": 2,
+            "name": "run-test-files still accepts a clean single execution",
+            "actualStatus": "pass",
+            "expectedOriginalStatus": "pass",
+            "causalExpectationConfirmed": true
+          },
+          {
+            "number": 3,
+            "name": "runPlacedTestFiles accepts complete clean assignments once",
+            "actualStatus": "pass",
+            "expectedOriginalStatus": "pass",
+            "causalExpectationConfirmed": true
+          },
+          {
+            "number": 4,
+            "name": "runPlacedTestFiles retains remote red with a green controller without reassignment",
+            "actualStatus": "fail",
+            "expectedOriginalStatus": "fail",
+            "causalExpectationConfirmed": true
+          },
+          {
+            "number": 5,
+            "name": "runPlacedTestFiles retains red followed by an obsolete retry-pass marker without reassignment",
+            "actualStatus": "fail",
+            "expectedOriginalStatus": "fail",
+            "causalExpectationConfirmed": true
+          },
+          {
+            "number": 6,
+            "name": "runPlacedTestFiles retains red followed by an ordinary green verdict without reassignment",
+            "actualStatus": "fail",
+            "expectedOriginalStatus": "fail",
+            "causalExpectationConfirmed": true
+          },
+          {
+            "number": 7,
+            "name": "runPlacedTestFiles retains zero assertions followed by positive assertions without reassignment",
+            "actualStatus": "fail",
+            "expectedOriginalStatus": "fail",
+            "causalExpectationConfirmed": true
+          },
+          {
+            "number": 8,
+            "name": "runPlacedTestFiles retains nonzero exit after all green verdicts without reassignment",
+            "actualStatus": "fail",
+            "expectedOriginalStatus": "fail",
+            "causalExpectationConfirmed": true
+          },
+          {
+            "number": 9,
+            "name": "runPlacedTestFiles retains missing exit after all green verdicts without reassignment",
+            "actualStatus": "fail",
+            "expectedOriginalStatus": "fail",
+            "causalExpectationConfirmed": true
+          },
+          {
+            "number": 10,
+            "name": "runPlacedTestFiles retains one missing verdict without reassignment",
+            "actualStatus": "fail",
+            "expectedOriginalStatus": "fail",
+            "causalExpectationConfirmed": true
+          },
+          {
+            "number": 11,
+            "name": "runPlacedTestFiles retains no planned verdicts without reassignment",
+            "actualStatus": "fail",
+            "expectedOriginalStatus": "fail",
+            "causalExpectationConfirmed": true
+          },
+          {
+            "number": 12,
+            "name": "runPlacedTestFiles retains verdicts only on stderr without reassignment",
+            "actualStatus": "fail",
+            "expectedOriginalStatus": "fail",
+            "causalExpectationConfirmed": true
+          },
+          {
+            "number": 13,
+            "name": "runPlacedTestFiles retains busy even with a spare host",
+            "actualStatus": "fail",
+            "expectedOriginalStatus": "fail",
+            "causalExpectationConfirmed": true
+          },
+          {
+            "number": 14,
+            "name": "runPlacedTestFiles retains thermal refusal even with a spare host",
+            "actualStatus": "fail",
+            "expectedOriginalStatus": "fail",
+            "causalExpectationConfirmed": true
+          },
+          {
+            "number": 15,
+            "name": "startLocalCorpus preserves an existing red attempt instead of replacing it",
+            "actualStatus": "fail",
+            "expectedOriginalStatus": "fail",
+            "causalExpectationConfirmed": true
+          },
+          {
+            "number": 16,
+            "name": "startLocalCorpus preserves an existing lost attempt instead of replacing it",
+            "actualStatus": "fail",
+            "expectedOriginalStatus": "fail",
+            "causalExpectationConfirmed": true
+          },
+          {
+            "number": 17,
+            "name": "startLocalCorpus preserves an existing superseded attempt instead of replacing it",
+            "actualStatus": "fail",
+            "expectedOriginalStatus": "fail",
+            "causalExpectationConfirmed": true
+          },
+          {
+            "number": 18,
+            "name": "reportLocalCorpus retains old evidence when a later head is green",
+            "actualStatus": "fail",
+            "expectedOriginalStatus": "fail",
+            "causalExpectationConfirmed": true
+          },
+          {
+            "number": 19,
+            "name": "runPlacedTestFiles refuses source commit unavailable without local execution",
+            "actualStatus": "fail",
+            "expectedOriginalStatus": "fail",
+            "causalExpectationConfirmed": true
+          },
+          {
+            "number": 20,
+            "name": "runPlacedTestFiles refuses fleet unavailable without local execution",
+            "actualStatus": "fail",
+            "expectedOriginalStatus": "fail",
+            "causalExpectationConfirmed": true
+          },
+          {
+            "number": 21,
+            "name": "runPlacedTestFiles refuses empty fleet without local execution",
+            "actualStatus": "fail",
+            "expectedOriginalStatus": "fail",
+            "causalExpectationConfirmed": true
+          },
+          {
+            "number": 22,
+            "name": "runPlacedTestFiles refuses proof base unavailable without local execution",
+            "actualStatus": "fail",
+            "expectedOriginalStatus": "fail",
+            "causalExpectationConfirmed": true
+          }
+        ]
+      },
+      {
+        "testFile": "test/config/ci-proof-range.test.js",
+        "tests": 15,
+        "passed": 2,
+        "failed": 13,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0,
+        "cases": [
+          {
+            "number": 1,
+            "name": "CI push uses the exact declared multi-commit range",
+            "actualStatus": "pass",
+            "expectedOriginalStatus": "pass",
+            "causalExpectationConfirmed": true
+          },
+          {
+            "number": 2,
+            "name": "CI push refuses the absent declared base without publishing a range",
+            "actualStatus": "fail",
+            "expectedOriginalStatus": "fail",
+            "causalExpectationConfirmed": true
+          },
+          {
+            "number": 3,
+            "name": "CI push refuses the zero declared base without publishing a range",
+            "actualStatus": "fail",
+            "expectedOriginalStatus": "fail",
+            "causalExpectationConfirmed": true
+          },
+          {
+            "number": 4,
+            "name": "CI push refuses the unreachable declared base without publishing a range",
+            "actualStatus": "fail",
+            "expectedOriginalStatus": "fail",
+            "causalExpectationConfirmed": true
+          },
+          {
+            "number": 5,
+            "name": "CI pull_request uses the exact declared multi-commit range",
+            "actualStatus": "pass",
+            "expectedOriginalStatus": "pass",
+            "causalExpectationConfirmed": true
+          },
+          {
+            "number": 6,
+            "name": "CI pull_request refuses the absent declared base without publishing a range",
+            "actualStatus": "fail",
+            "expectedOriginalStatus": "fail",
+            "causalExpectationConfirmed": true
+          },
+          {
+            "number": 7,
+            "name": "CI pull_request refuses the zero declared base without publishing a range",
+            "actualStatus": "fail",
+            "expectedOriginalStatus": "fail",
+            "causalExpectationConfirmed": true
+          },
+          {
+            "number": 8,
+            "name": "CI pull_request refuses the unreachable declared base without publishing a range",
+            "actualStatus": "fail",
+            "expectedOriginalStatus": "fail",
+            "causalExpectationConfirmed": true
+          },
+          {
+            "number": 9,
+            "name": "CI manual dispatch uses its explicit immutable multi-commit base",
+            "actualStatus": "fail",
+            "expectedOriginalStatus": "fail",
+            "causalExpectationConfirmed": true
+          },
+          {
+            "number": 10,
+            "name": "CI manual dispatch refuses a missing base without publishing a range",
+            "actualStatus": "fail",
+            "expectedOriginalStatus": "fail",
+            "causalExpectationConfirmed": true
+          },
+          {
+            "number": 11,
+            "name": "CI manual dispatch refuses a zero base without publishing a range",
+            "actualStatus": "fail",
+            "expectedOriginalStatus": "fail",
+            "causalExpectationConfirmed": true
+          },
+          {
+            "number": 12,
+            "name": "CI manual dispatch refuses a unreachable base without publishing a range",
+            "actualStatus": "fail",
+            "expectedOriginalStatus": "fail",
+            "causalExpectationConfirmed": true
+          },
+          {
+            "number": 13,
+            "name": "CI manual dispatch refuses a symbolic base without publishing a range",
+            "actualStatus": "fail",
+            "expectedOriginalStatus": "fail",
+            "causalExpectationConfirmed": true
+          },
+          {
+            "number": 14,
+            "name": "CI manual dispatch refuses a abbreviated base without publishing a range",
+            "actualStatus": "fail",
+            "expectedOriginalStatus": "fail",
+            "causalExpectationConfirmed": true
+          },
+          {
+            "number": 15,
+            "name": "CI manual dispatch refuses a non-commit object base without publishing a range",
+            "actualStatus": "fail",
+            "expectedOriginalStatus": "fail",
+            "causalExpectationConfirmed": true
+          }
+        ]
+      }
+    ]
+  },
+  "claimLimits": [
+    "Original-source measurement only; no repaired-source passing behavior is recorded.",
+    "No whole-corpus, native proof-authority, CI check, main delivery, or Foundation Quest red claim is made.",
+    "The recording lineage must preserve original 3e77abda production plus only inert evidence/log additions before Solver sealing.",
+    "Solver has not yet executed against this evidence index; no seal is claimed."
+  ]
+}

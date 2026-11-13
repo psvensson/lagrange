@@ -1,0 +1,837 @@
+LAB_HOST=tv-dator
+v22.23.2
+3e77abda6a858f8ca09da157429234219487a114
+24ba0c2433b104c7f4a09034476392cafd3a7d93
+bc9e83a24cee235aa7fd33ff9777dc97d229903c
+ORIGINAL_CONTROL_SCOPE=publication single-pass original negatives; retain actual first outcome; no acceptance inferred from expected failure
+npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+
+> lagrange-server@0.4.0 prepare
+> node -e "import('node:fs').then(({existsSync}) => existsSync('scripts/install-git-hooks.js') && import('./scripts/install-git-hooks.js'))"
+
+[hooks] Installed repo hooks at .githooks
+
+added 964 packages in 51s
+npm notice
+npm notice New major version of npm available! 10.9.8 -> 12.2.2
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.2
+npm notice To update run: npm install -g npm@12.2.2
+npm notice
+SQLITE_NATIVE_PROVENANCE={"version":"3.49.2","source_id":"2025-05-07 10:39:52 17144570b0d96ae63cd6f3edca39e27ebd74925252bbaf6723bcb2f6b4861fb1","addon_sha256":"d7d9272b12d11c1dc2bb787741b1b7c4037d336155f316ace3420410c28fda37"}
+not ok test/scripts/publication-single-pass.test.js (22 assertions, 1138ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: run-test-files retains the first failure without executing the file again
+not ok 1 - run-test-files retains the first failure without executing the file again
+  ---
+  duration_ms: 553.691162
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:63:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    not ok test/finite-failure.test.mjs (1 assertions, 249ms)
+    # TAP assertions failed; test process exited 1
+    TAP version 13
+    # Subtest: finite first failure
+    not ok 1 - finite first failure
+      ---
+      duration_ms: 0.951519
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/tmp/publication-single-pass-mNqdSS/source/test/finite-failure.test.mjs:5:1'
+      failureType: 'testCodeFailure'
+      error: 'the first execution fails'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: true
+      actual: false
+      operator: '=='
+      stack: |-
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/tmp/publication-single-pass-mNqdSS/source/test/finite-failure.test.mjs:8:10)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+      ...
+    1..1
+    # tests 1
+    # suites 0
+    # pass 0
+    # fail 1
+    # cancelled 0
+    # skipped 0
+    # todo 0
+    # duration_ms 6.690334
+    # time=249ms
+    # test-files total=1 pass=0 fail=1 assertions=1
+    # retry-failed-once: rerunning 1 failed file(s) standalone (census-classified, never hidden)
+    ok test/finite-failure.test.mjs (1 assertions, 183ms)
+    # retried-once pass test/finite-failure.test.mjs
+    # finding passed-on-retry test/finite-failure.test.mjs: not ok 1 - finite first failure
+    
+    
+    0 !== 1
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 1
+  actual: 0
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:65:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.start (node:internal/test_runner/test:944:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+  ...
+# Subtest: run-test-files still accepts a clean single execution
+ok 2 - run-test-files still accepts a clean single execution
+  ---
+  duration_ms: 303.026529
+  type: 'test'
+  ...
+# Subtest: runPlacedTestFiles accepts complete clean assignments once
+ok 3 - runPlacedTestFiles accepts complete clean assignments once
+  ---
+  duration_ms: 3.142019
+  type: 'test'
+  ...
+# Subtest: runPlacedTestFiles retains remote red with a green controller without reassignment
+not ok 4 - runPlacedTestFiles retains remote red with a green controller without reassignment
+  ---
+  duration_ms: 0.983851
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:141:3'
+  failureType: 'testCodeFailure'
+  error: 'remote red with a green controller'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 0
+  operator: 'notStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:143:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: runPlacedTestFiles retains red followed by an obsolete retry-pass marker without reassignment
+not ok 5 - runPlacedTestFiles retains red followed by an obsolete retry-pass marker without reassignment
+  ---
+  duration_ms: 0.769773
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:141:3'
+  failureType: 'testCodeFailure'
+  error: 'red followed by an obsolete retry-pass marker'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 0
+  operator: 'notStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:143:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: runPlacedTestFiles retains red followed by an ordinary green verdict without reassignment
+not ok 6 - runPlacedTestFiles retains red followed by an ordinary green verdict without reassignment
+  ---
+  duration_ms: 0.520636
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:141:3'
+  failureType: 'testCodeFailure'
+  error: 'red followed by an ordinary green verdict'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 0
+  operator: 'notStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:143:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: runPlacedTestFiles retains zero assertions followed by positive assertions without reassignment
+not ok 7 - runPlacedTestFiles retains zero assertions followed by positive assertions without reassignment
+  ---
+  duration_ms: 0.683431
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:141:3'
+  failureType: 'testCodeFailure'
+  error: 'zero assertions followed by positive assertions'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 0
+  operator: 'notStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:143:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: runPlacedTestFiles retains nonzero exit after all green verdicts without reassignment
+not ok 8 - runPlacedTestFiles retains nonzero exit after all green verdicts without reassignment
+  ---
+  duration_ms: 0.634287
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:141:3'
+  failureType: 'testCodeFailure'
+  error: 'nonzero exit after all green verdicts'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 0
+  operator: 'notStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:143:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: runPlacedTestFiles retains missing exit after all green verdicts without reassignment
+not ok 9 - runPlacedTestFiles retains missing exit after all green verdicts without reassignment
+  ---
+  duration_ms: 0.448877
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:141:3'
+  failureType: 'testCodeFailure'
+  error: 'missing exit after all green verdicts'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 0
+  operator: 'notStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:143:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: runPlacedTestFiles retains one missing verdict without reassignment
+not ok 10 - runPlacedTestFiles retains one missing verdict without reassignment
+  ---
+  duration_ms: 0.626217
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:141:3'
+  failureType: 'testCodeFailure'
+  error: 'one missing verdict'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 0
+  operator: 'notStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:143:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: runPlacedTestFiles retains no planned verdicts without reassignment
+not ok 11 - runPlacedTestFiles retains no planned verdicts without reassignment
+  ---
+  duration_ms: 0.500273
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:141:3'
+  failureType: 'testCodeFailure'
+  error: 'no planned verdicts'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 0
+  operator: 'notStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:143:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: runPlacedTestFiles retains verdicts only on stderr without reassignment
+not ok 12 - runPlacedTestFiles retains verdicts only on stderr without reassignment
+  ---
+  duration_ms: 0.505757
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:141:3'
+  failureType: 'testCodeFailure'
+  error: 'verdicts only on stderr'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 0
+  operator: 'notStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:143:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: runPlacedTestFiles retains busy even with a spare host
+not ok 13 - runPlacedTestFiles retains busy even with a spare host
+  ---
+  duration_ms: 0.678539
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:154:3'
+  failureType: 'testCodeFailure'
+  error: 'Expected "actual" to be strictly unequal to: 0'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 0
+  operator: 'notStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:163:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: runPlacedTestFiles retains thermal refusal even with a spare host
+not ok 14 - runPlacedTestFiles retains thermal refusal even with a spare host
+  ---
+  duration_ms: 0.42282
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:154:3'
+  failureType: 'testCodeFailure'
+  error: 'Expected "actual" to be strictly unequal to: 0'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 0
+  operator: 'notStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:163:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: startLocalCorpus preserves an existing red attempt instead of replacing it
+not ok 15 - startLocalCorpus preserves an existing red attempt instead of replacing it
+  ---
+  duration_ms: 1.25604
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:171:3'
+  failureType: 'testCodeFailure'
+  error: 'Missing expected exception.'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  operator: 'throws'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:183:12)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: startLocalCorpus preserves an existing lost attempt instead of replacing it
+not ok 16 - startLocalCorpus preserves an existing lost attempt instead of replacing it
+  ---
+  duration_ms: 0.657096
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:171:3'
+  failureType: 'testCodeFailure'
+  error: 'Missing expected exception.'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  operator: 'throws'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:183:12)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: startLocalCorpus preserves an existing superseded attempt instead of replacing it
+not ok 17 - startLocalCorpus preserves an existing superseded attempt instead of replacing it
+  ---
+  duration_ms: 0.66702
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:171:3'
+  failureType: 'testCodeFailure'
+  error: 'Missing expected exception.'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  operator: 'throws'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:183:12)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: reportLocalCorpus retains old evidence when a later head is green
+not ok 18 - reportLocalCorpus retains old evidence when a later head is green
+  ---
+  duration_ms: 2.231493
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:193:1'
+  failureType: 'testCodeFailure'
+  error: 'reporting retained original evidence 0000000000000000000000000000000000000001.json'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:209:12)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: runPlacedTestFiles refuses source commit unavailable without local execution
+not ok 19 - runPlacedTestFiles refuses source commit unavailable without local execution
+  ---
+  duration_ms: 0.277385
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:220:3'
+  failureType: 'testCodeFailure'
+  error: 'Expected "actual" to be strictly unequal to: 0'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 0
+  operator: 'notStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:222:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: runPlacedTestFiles refuses fleet unavailable without local execution
+not ok 20 - runPlacedTestFiles refuses fleet unavailable without local execution
+  ---
+  duration_ms: 0.21123
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:220:3'
+  failureType: 'testCodeFailure'
+  error: 'Expected "actual" to be strictly unequal to: 0'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 0
+  operator: 'notStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:222:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: runPlacedTestFiles refuses empty fleet without local execution
+not ok 21 - runPlacedTestFiles refuses empty fleet without local execution
+  ---
+  duration_ms: 0.142379
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:220:3'
+  failureType: 'testCodeFailure'
+  error: 'Expected "actual" to be strictly unequal to: 0'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 0
+  operator: 'notStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:222:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: runPlacedTestFiles refuses proof base unavailable without local execution
+not ok 22 - runPlacedTestFiles refuses proof base unavailable without local execution
+  ---
+  duration_ms: 0.158663
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:220:3'
+  failureType: 'testCodeFailure'
+  error: 'Expected "actual" to be strictly unequal to: 0'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 0
+  operator: 'notStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/scripts/publication-single-pass.test.js:222:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..22
+# tests 22
+# suites 0
+# pass 2
+# fail 20
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 892.219099
+# time=1138ms
+not ok test/config/ci-proof-range.test.js (15 assertions, 1152ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: CI push uses the exact declared multi-commit range
+ok 1 - CI push uses the exact declared multi-commit range
+  ---
+  duration_ms: 72.371067
+  type: 'test'
+  ...
+# Subtest: CI push refuses the absent declared base without publishing a range
+not ok 2 - CI push refuses the absent declared base without publishing a range
+  ---
+  duration_ms: 55.995913
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/config/ci-proof-range.test.js:114:5'
+  failureType: 'testCodeFailure'
+  error: |-
+    proof range: base '' unavailable, falling back to HEAD^
+    proof range: ea986ace69f26763ed9fab89992982a3a350914c..43b6d3645aceed8652e27a176bdd074d99413e0a
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 0
+  operator: 'notStrictEqual'
+  stack: |-
+    assertRefusedRange (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/config/ci-proof-range.test.js:90:10)
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/config/ci-proof-range.test.js:116:7)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: CI push refuses the zero declared base without publishing a range
+not ok 3 - CI push refuses the zero declared base without publishing a range
+  ---
+  duration_ms: 60.091984
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/config/ci-proof-range.test.js:114:5'
+  failureType: 'testCodeFailure'
+  error: |-
+    proof range: base '0000000000000000000000000000000000000000' unavailable, falling back to HEAD^
+    proof range: ea986ace69f26763ed9fab89992982a3a350914c..43b6d3645aceed8652e27a176bdd074d99413e0a
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 0
+  operator: 'notStrictEqual'
+  stack: |-
+    assertRefusedRange (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/config/ci-proof-range.test.js:90:10)
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/config/ci-proof-range.test.js:116:7)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: CI push refuses the unreachable declared base without publishing a range
+not ok 4 - CI push refuses the unreachable declared base without publishing a range
+  ---
+  duration_ms: 56.023784
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/config/ci-proof-range.test.js:114:5'
+  failureType: 'testCodeFailure'
+  error: |-
+    proof range: base 'ffffffffffffffffffffffffffffffffffffffff' unavailable, falling back to HEAD^
+    proof range: ea986ace69f26763ed9fab89992982a3a350914c..43b6d3645aceed8652e27a176bdd074d99413e0a
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 0
+  operator: 'notStrictEqual'
+  stack: |-
+    assertRefusedRange (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/config/ci-proof-range.test.js:90:10)
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/config/ci-proof-range.test.js:116:7)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: CI pull_request uses the exact declared multi-commit range
+ok 5 - CI pull_request uses the exact declared multi-commit range
+  ---
+  duration_ms: 58.332221
+  type: 'test'
+  ...
+# Subtest: CI pull_request refuses the absent declared base without publishing a range
+not ok 6 - CI pull_request refuses the absent declared base without publishing a range
+  ---
+  duration_ms: 61.803601
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/config/ci-proof-range.test.js:114:5'
+  failureType: 'testCodeFailure'
+  error: |-
+    proof range: base '' unavailable, falling back to HEAD^
+    proof range: ea986ace69f26763ed9fab89992982a3a350914c..43b6d3645aceed8652e27a176bdd074d99413e0a
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 0
+  operator: 'notStrictEqual'
+  stack: |-
+    assertRefusedRange (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/config/ci-proof-range.test.js:90:10)
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/config/ci-proof-range.test.js:116:7)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: CI pull_request refuses the zero declared base without publishing a range
+not ok 7 - CI pull_request refuses the zero declared base without publishing a range
+  ---
+  duration_ms: 60.327494
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/config/ci-proof-range.test.js:114:5'
+  failureType: 'testCodeFailure'
+  error: |-
+    proof range: base '0000000000000000000000000000000000000000' unavailable, falling back to HEAD^
+    proof range: ea986ace69f26763ed9fab89992982a3a350914c..43b6d3645aceed8652e27a176bdd074d99413e0a
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 0
+  operator: 'notStrictEqual'
+  stack: |-
+    assertRefusedRange (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/config/ci-proof-range.test.js:90:10)
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/config/ci-proof-range.test.js:116:7)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: CI pull_request refuses the unreachable declared base without publishing a range
+not ok 8 - CI pull_request refuses the unreachable declared base without publishing a range
+  ---
+  duration_ms: 63.431744
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/config/ci-proof-range.test.js:114:5'
+  failureType: 'testCodeFailure'
+  error: |-
+    proof range: base 'ffffffffffffffffffffffffffffffffffffffff' unavailable, falling back to HEAD^
+    proof range: ea986ace69f26763ed9fab89992982a3a350914c..43b6d3645aceed8652e27a176bdd074d99413e0a
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 0
+  operator: 'notStrictEqual'
+  stack: |-
+    assertRefusedRange (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/config/ci-proof-range.test.js:90:10)
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/config/ci-proof-range.test.js:116:7)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: CI manual dispatch uses its explicit immutable multi-commit base
+not ok 9 - CI manual dispatch uses its explicit immutable multi-commit base
+  ---
+  duration_ms: 57.613091
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/config/ci-proof-range.test.js:121:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    only the declared immutable base reaches subsequent workflow steps
+    + actual - expected
+    
+      'EXISTING_ENTRY=retained\n' +
+    +   'LAGRANGE_CHECK_BASE=ea986ace69f26763ed9fab89992982a3a350914c\n'
+    -   'LAGRANGE_CHECK_BASE=20f2db656fea9dc8a473b84ea6efdc025300f072\n'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: |-
+    EXISTING_ENTRY=retained
+    LAGRANGE_CHECK_BASE=20f2db656fea9dc8a473b84ea6efdc025300f072
+    
+  actual: |-
+    EXISTING_ENTRY=retained
+    LAGRANGE_CHECK_BASE=ea986ace69f26763ed9fab89992982a3a350914c
+    
+  operator: 'strictEqual'
+  stack: |-
+    assertExactRange (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/config/ci-proof-range.test.js:80:10)
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/config/ci-proof-range.test.js:125:3)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: CI manual dispatch refuses a missing base without publishing a range
+not ok 10 - CI manual dispatch refuses a missing base without publishing a range
+  ---
+  duration_ms: 58.888637
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/config/ci-proof-range.test.js:140:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    proof range: base '' unavailable, falling back to HEAD^
+    proof range: ea986ace69f26763ed9fab89992982a3a350914c..43b6d3645aceed8652e27a176bdd074d99413e0a
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 0
+  operator: 'notStrictEqual'
+  stack: |-
+    assertRefusedRange (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/config/ci-proof-range.test.js:90:10)
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/config/ci-proof-range.test.js:142:5)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: CI manual dispatch refuses a zero base without publishing a range
+not ok 11 - CI manual dispatch refuses a zero base without publishing a range
+  ---
+  duration_ms: 70.671451
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/config/ci-proof-range.test.js:140:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    proof range: base '' unavailable, falling back to HEAD^
+    proof range: ea986ace69f26763ed9fab89992982a3a350914c..43b6d3645aceed8652e27a176bdd074d99413e0a
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 0
+  operator: 'notStrictEqual'
+  stack: |-
+    assertRefusedRange (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/config/ci-proof-range.test.js:90:10)
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/config/ci-proof-range.test.js:142:5)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: CI manual dispatch refuses a unreachable base without publishing a range
+not ok 12 - CI manual dispatch refuses a unreachable base without publishing a range
+  ---
+  duration_ms: 61.687384
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/config/ci-proof-range.test.js:140:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    proof range: base '' unavailable, falling back to HEAD^
+    proof range: ea986ace69f26763ed9fab89992982a3a350914c..43b6d3645aceed8652e27a176bdd074d99413e0a
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 0
+  operator: 'notStrictEqual'
+  stack: |-
+    assertRefusedRange (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/config/ci-proof-range.test.js:90:10)
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/config/ci-proof-range.test.js:142:5)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: CI manual dispatch refuses a symbolic base without publishing a range
+not ok 13 - CI manual dispatch refuses a symbolic base without publishing a range
+  ---
+  duration_ms: 61.449663
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/config/ci-proof-range.test.js:140:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    proof range: base '' unavailable, falling back to HEAD^
+    proof range: ea986ace69f26763ed9fab89992982a3a350914c..43b6d3645aceed8652e27a176bdd074d99413e0a
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 0
+  operator: 'notStrictEqual'
+  stack: |-
+    assertRefusedRange (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/config/ci-proof-range.test.js:90:10)
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/config/ci-proof-range.test.js:142:5)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: CI manual dispatch refuses a abbreviated base without publishing a range
+not ok 14 - CI manual dispatch refuses a abbreviated base without publishing a range
+  ---
+  duration_ms: 58.413918
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/config/ci-proof-range.test.js:140:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    proof range: base '' unavailable, falling back to HEAD^
+    proof range: ea986ace69f26763ed9fab89992982a3a350914c..43b6d3645aceed8652e27a176bdd074d99413e0a
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 0
+  operator: 'notStrictEqual'
+  stack: |-
+    assertRefusedRange (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/config/ci-proof-range.test.js:90:10)
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/config/ci-proof-range.test.js:142:5)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: CI manual dispatch refuses a non-commit object base without publishing a range
+not ok 15 - CI manual dispatch refuses a non-commit object base without publishing a range
+  ---
+  duration_ms: 63.579834
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/config/ci-proof-range.test.js:140:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    proof range: base '' unavailable, falling back to HEAD^
+    proof range: ea986ace69f26763ed9fab89992982a3a350914c..43b6d3645aceed8652e27a176bdd074d99413e0a
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 0
+  operator: 'notStrictEqual'
+  stack: |-
+    assertRefusedRange (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/config/ci-proof-range.test.js:90:10)
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/1aba9818-ac8b-401e-aa89-83010973ffa7/work/source/test/config/ci-proof-range.test.js:142:5)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..15
+# tests 15
+# suites 0
+# pass 2
+# fail 13
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 944.377582
+# time=1152ms
+# test-files total=2 pass=0 fail=2 assertions=37
+ORIGINAL_CONTROL_TEST_EXIT=1
