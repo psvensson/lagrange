@@ -29,6 +29,8 @@ import {
   SECTION_KIND, appendExecutionSection, executionReportProblems, fileResultRecord,
 } from '../../scripts/test-execution-report.js';
 import {validExecutionReport} from './execution-report-fixture.js';
+import {readLocalCorpusRecords, transitionLocalCorpusState}
+  from '../../scripts/publish-local-corpus-state.js';
 
 const HEAD = 'a'.repeat(40);
 
@@ -39,7 +41,7 @@ function scratch(t, prefix) {
 }
 
 function stateOf(stateDir, sha) {
-  return JSON.parse(fs.readFileSync(path.join(stateDir, `${sha}.json`), 'utf8'));
+  return readLocalCorpusRecords(stateDir).find((record) => record.sha === sha);
 }
 
 function writeState(stateDir, state) {
@@ -339,11 +341,14 @@ for (const code of ['EACCES', 'ENOENT']) {
     try {
       reconcileLocalCorpus(stateDir, (line) => unavailable.push(line));
       during = fs.readFileSync(file, 'utf8');
+      assert.deepEqual(stateOf(stateDir, HEAD), JSON.parse(before),
+        'unavailable observation preserves the logical current record');
     } finally {
       fault.restore();
     }
     const fresh = [];
     reconcileLocalCorpus(stateDir, (line) => fresh.push(line));
+    assert.deepEqual(stateOf(stateDir, HEAD), JSON.parse(before));
     assert.doesNotThrow(() => process.kill(child.pid, 0), 'the actual child remains live');
     const observed = {
       originalRecordPreserved: during === before,
@@ -387,11 +392,14 @@ test('reconcileLocalCorpus preserves a live PID when signal-zero inspection is d
   try {
     reconcileLocalCorpus(stateDir, (line) => unavailable.push(line));
     during = fs.readFileSync(file, 'utf8');
+    assert.deepEqual(stateOf(stateDir, HEAD), JSON.parse(before),
+      'denied signal cannot append a loss behind an unchanged base');
   } finally {
     denied.mock.restore();
   }
   const fresh = [];
   reconcileLocalCorpus(stateDir, (line) => fresh.push(line));
+  assert.deepEqual(stateOf(stateDir, HEAD), JSON.parse(before));
   assert.doesNotThrow(() => process.kill(child.pid, 0), 'the acknowledged child remains alive');
   const observed = {
     originalRecordPreserved: during === before,
@@ -446,6 +454,7 @@ test('reconcileLocalCorpus selects the Darwin command observer before reading pr
     preserved: fs.readFileSync(file, 'utf8') === before, lines},
   {procReads: 0, psCalls: 1, preserved: true, lines: []},
   'the supported platform owns one observer, selected before a failed Linux lookup');
+  assert.deepEqual(stateOf(stateDir, HEAD), JSON.parse(before));
   const [{args, options}] = psCalls;
   assert.ok(args.includes('-ww'), 'the invocation requests an untruncated command');
   assert.ok(Number.isFinite(options.timeout) && options.timeout > 0,
@@ -498,6 +507,8 @@ test('reconcileLocalCorpus treats failed or incomplete Darwin command answers as
         original = fs.readFileSync(file, 'utf8');
         const lines = [];
         reconcileLocalCorpus(stateDir, (line) => lines.push(line));
+        assert.deepEqual(stateOf(stateDir, HEAD), JSON.parse(original),
+          'an unavailable Darwin result preserves logical state');
         observations.push({cause, calls, preserved: fs.readFileSync(file, 'utf8') === original,
           unavailable: lines.some((line) => /observation UNAVAILABLE/u.test(line))});
       }
@@ -512,6 +523,7 @@ test('reconcileLocalCorpus treats failed or incomplete Darwin command answers as
     assert.deepEqual(observations, failures.map(([cause]) =>
       ({cause, calls: 1, preserved: true, unavailable: true})));
     assert.equal(fs.readFileSync(file, 'utf8'), original, 'fresh observation retains the live owner');
+    assert.deepEqual(stateOf(stateDir, HEAD), JSON.parse(original));
     assert.deepEqual(fresh, [], 'the finite failed response creates no permanent unavailable veto');
   });
 
@@ -540,6 +552,8 @@ test('reconcileLocalCorpus refuses invalid recorded PIDs before observing any pr
       const before = fs.readFileSync(file, 'utf8');
       const lines = [];
       reconcileLocalCorpus(stateDir, (line) => lines.push(line));
+      assert.deepEqual(stateOf(stateDir, HEAD), JSON.parse(before),
+        'invalid PID cannot append a terminal successor');
       observations.push({pid, preserved: fs.readFileSync(file, 'utf8') === before,
         unavailable: lines.some((line) => /observation UNAVAILABLE/u.test(line))});
     }
@@ -593,6 +607,7 @@ test('reconcileLocalCorpus reports an unsupported observer without fabricating p
   const observed = {preserved: fs.readFileSync(file, 'utf8') === before,
     unavailable: lines.some((line) => /observation UNAVAILABLE/u.test(line)),
     signals, reads, commands};
+  assert.deepEqual(stateOf(stateDir, HEAD), JSON.parse(before));
   t.diagnostic(JSON.stringify({observed, lines}));
   assert.deepEqual(observed,
     {preserved: true, unavailable: true, signals: [], reads: [], commands: []});
@@ -621,7 +636,7 @@ test('reporting retains every earlier red or lost result after a later green', (
     `publish: !!! the local corpus was LOST for ${'5'.repeat(40)}: the machine stayed too ` +
       'hot to start it',
     `publish: !!! the local corpus was LOST for ${'3'.repeat(40)}: its process ended ` +
-      'without a verdict',
+      'without a committed terminal state',
     `publish: !!! the local corpus was RED for ${'2'.repeat(40)}: /l/2.log`,
     `publish: local corpus ${'6'.repeat(40)}: superseded (9 file(s), log /l/6.log)`,
   ], 'all red or lost runs are said first, including before a historical superseded record');
@@ -632,7 +647,7 @@ test('reporting retains every earlier red or lost result after a later green', (
     `publish: !!! the local corpus was LOST for ${'5'.repeat(40)}: the machine stayed too ` +
       'hot to start it',
     `publish: !!! the local corpus was LOST for ${'3'.repeat(40)}: its process ended ` +
-      'without a verdict',
+      'without a committed terminal state',
     `publish: !!! the local corpus was RED for ${'2'.repeat(40)}: /l/2.log`,
     `publish: local corpus ${'7'.repeat(40)}: red (receipt not recorded: push refused)`,
   ], 'an unrecorded receipt is red, names why, and never silences prior red or lost runs');
@@ -643,7 +658,7 @@ test('reporting retains every earlier red or lost result after a later green', (
     `publish: !!! the local corpus was LOST for ${'5'.repeat(40)}: the machine stayed too ` +
       'hot to start it',
     `publish: !!! the local corpus was LOST for ${'3'.repeat(40)}: its process ended ` +
-      'without a verdict',
+      'without a committed terminal state',
     `publish: !!! the local corpus was RED for ${'2'.repeat(40)}: /l/2.log`,
     `publish: local corpus ${'8'.repeat(40)}: green (1 file(s), log x)`,
   ], 'a newer source receipt does not answer or hide earlier failures');
@@ -785,7 +800,7 @@ test('execution without a gate verdict is lost and cannot record a proof receipt
   for (const [gate, detail] of [
     [{status: null, signal: 'SIGTERM'}, 'SIGTERM'],
     [{status: null, error: new Error('spawn EAGAIN')}, 'spawn EAGAIN'],
-    [{status: null}, 'its process ended without a verdict'],
+    [{status: null}, 'its process ended without a committed terminal state'],
     [thrown, thrown.message],
   ]) {
     const stateDir = fs.mkdtempSync(path.join(dir, 'state-'));
@@ -829,23 +844,37 @@ test('a detached corpus consumes only its starting obligation and refuses change
     assert.equal(calls, 0, 'refusal starts neither a gate nor a receipt command');
     assert.equal(fs.readFileSync(file, 'utf8'), before);
   }
-  for (const changed of [
-    {sha: HEAD, state: 'red', reason: 'another writer retained a failure'},
-    {sha: HEAD, state: 'running', pid: process.pid + 1, reason: 'another execution owner'},
-  ]) {
-    const stateDir = path.join(dir, `changed-${changed.state}`);
+  for (const terminal of ['red', 'lost']) {
+    const stateDir = path.join(dir, `changed-${terminal}`);
     writeState(stateDir, {sha: HEAD, state: 'starting', pid: null, files: 1, startedAt: 1});
     let calls = 0;
+    let changed;
     assert.throws(() => runLocalCorpus(dir, HEAD, {stateDir,
       run: () => {
         calls += 1;
-        writeState(stateDir, changed);
+        const before = stateOf(stateDir, HEAD);
+        changed = {...before, state: terminal, reason: 'another writer retained a failure'};
+        transitionLocalCorpusState(stateDir, before, changed);
         return {status: 0};
       }}), /state changed during execution/u);
     assert.equal(calls, 1, 'a changed record cannot authorize receipt recording');
     assert.deepEqual(stateOf(stateDir, HEAD), changed,
-      'neither an earlier failure nor another running owner is turned green');
+      'an earlier terminal outcome cannot be turned green');
   }
+  const alteredDir = path.join(dir, 'altered-base');
+  writeState(alteredDir, {sha: HEAD, state: 'starting', pid: null, files: 1, startedAt: 1});
+  let calls = 0;
+  const altered = {sha: HEAD, state: 'running', pid: process.pid + 1,
+    reason: 'another execution owner'};
+  assert.throws(() => runLocalCorpus(dir, HEAD, {stateDir: alteredDir,
+    run: () => {
+      calls += 1;
+      writeState(alteredDir, altered);
+      return {status: 0};
+    }}), /RECORD_UNAVAILABLE/u, 'an altered base cannot reset the immutable chain');
+  assert.equal(calls, 1, 'mixed-writer corruption cannot authorize receipt recording');
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(alteredDir, `${HEAD}.json`), 'utf8')),
+    altered, 'refusal does not overwrite the conflicting evidence');
 });
 
 // The rest of a cone is only half the corpus: its report is whole only with
@@ -1007,6 +1036,7 @@ test('publishExactHead reports unavailable process observation through its write
   assert.ok(fixed.lines.some((line) => /observation UNAVAILABLE/u.test(line)),
     'the native publisher forwards the owned observation outcome to its consumer');
   assert.equal(fs.readFileSync(file, 'utf8'), before, 'the earlier obligation is retained');
+  assert.deepEqual(stateOf(fixed.stateDir, HEAD), JSON.parse(before));
   assert.equal(fixed.spawned.length, 1, 'only the newly published source gets its own attempt');
 });
 
@@ -1037,6 +1067,7 @@ test('proveMergedHead reports unavailable process observation through its writer
   assert.ok(lines.some((line) => /observation UNAVAILABLE/u.test(line)),
     'the post-merge publisher forwards the owned observation outcome to its consumer');
   assert.equal(fs.readFileSync(file, 'utf8'), before, 'the earlier obligation is retained');
+  assert.deepEqual(stateOf(fixed.stateDir, HEAD), JSON.parse(before));
   assert.equal(admitted.length, 1, 'only the newly merged source gets its own attempt');
 });
 
