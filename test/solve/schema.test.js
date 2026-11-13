@@ -93,6 +93,8 @@ test('assignment findings have bounded paths and an existing authority reference
   assert.deepEqual(entryProblems(finding), []);
   for (const assignment of [null, {}, {paths: [], authority: 'task'},
     {paths: ['../escape'], authority: 'task'}, {paths: ['src/']},
+    {paths: ['src/control\u0000path'], authority: 'task'},
+    {paths: ['src/control\u007fpath'], authority: 'task'},
     {paths: ['src/', 'src/'], authority: 'task'}]) {
     assert.ok(entryProblems({...finding, assignment}).length > 0);
   }

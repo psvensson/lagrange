@@ -834,7 +834,8 @@ function land(root, options) {
   const paths = pathsOutsideQuest(root, quest.id);
   const currentCandidateDigest = computeCandidateDigest(root, quest);
   problems.push(...packageScopeProblems(quest, log, changedPaths(root)));
-  problems.push(...verificationProblems(state, candidateReviewPaths(root, quest, paths), currentCandidateDigest));
+  problems.push(...verificationProblems(state,
+    candidateReviewPaths(root, quest, paths), currentCandidateDigest));
   problems.push(...altitudeProblems(state));
   problems.push(...epicScopeProblems(quest, epic, paths));
   problems.push(...coupledPairProblems(root, paths));

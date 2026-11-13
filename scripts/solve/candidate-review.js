@@ -130,7 +130,9 @@ function receiptWitnesses(input) {
   if (input.problem) return {witnesses: [], problem: input.problem};
   try {
     const receipt = JSON.parse(input.bytes.toString(TEXT_ENCODING));
-    if (receipt.schema !== RECEIPT_SCHEMA) return {witnesses: [], problem: INPUT_PROBLEM.NOT_RECEIPT};
+    if (receipt.schema !== RECEIPT_SCHEMA) {
+      return {witnesses: [], problem: INPUT_PROBLEM.NOT_RECEIPT};
+    }
     const witnesses = Object.keys(receipt.testFileDigests || {});
     for (const item of Array.isArray(receipt.receipts) ? receipt.receipts : []) {
       if (typeof item.testFile === 'string') witnesses.push(item.testFile);
@@ -210,6 +212,17 @@ function landingLogProblems(root, id, expected) {
   return [];
 }
 
+function requiredApprovalProblems(state, currentCandidateDigest) {
+  const last = state.lastVerification;
+  if (!last) return [MESSAGE.MISSING];
+  const problems = [];
+  if (!state.verificationIsCurrent) problems.push(MESSAGE.STALE);
+  else if (verdictOf(last) !== VERDICT.APPROVE) problems.push(MESSAGE.NOT_APPROVED);
+  if (!DIGEST_PATTERN.test(last.candidateDigest || '') ||
+      !DIGEST_PATTERN.test(currentCandidateDigest || '')) problems.push(MESSAGE.DIGEST_MISSING);
+  return problems;
+}
+
 function verificationProblems(state, paths, currentCandidateDigest) {
   const last = state.lastVerification;
   const current = state.verificationIsCurrent;
@@ -217,11 +230,7 @@ function verificationProblems(state, paths, currentCandidateDigest) {
   const problems = [];
   if (current && verdict === VERDICT.REJECT) problems.push(MESSAGE.REJECTION);
   if (requiresVerification(paths)) {
-    if (!last) problems.push(MESSAGE.MISSING);
-    else if (!current) problems.push(MESSAGE.STALE);
-    else if (verdict !== VERDICT.APPROVE) problems.push(MESSAGE.NOT_APPROVED);
-    if (last && (!DIGEST_PATTERN.test(last.candidateDigest || '') ||
-        !DIGEST_PATTERN.test(currentCandidateDigest || ''))) problems.push(MESSAGE.DIGEST_MISSING);
+    problems.push(...requiredApprovalProblems(state, currentCandidateDigest));
   }
   if (last?.candidateDigest && currentCandidateDigest &&
       last.candidateDigest !== currentCandidateDigest) {

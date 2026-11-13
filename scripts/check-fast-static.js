@@ -109,6 +109,10 @@ function runNpm(script, extraArgs = []) {
   };
 }
 
+function runFileSizeCheck(range, paths) {
+  return runNpm(FILE_SIZE_CHECK, [BASE_FLAG, range.base || HEAD_LABEL, ...paths]);
+}
+
 function runEslint(paths) {
   if (paths.length === 0) {
     return {script: ESLINT_NO_CHANGES_LABEL, ok: true, ms: 0};
@@ -162,8 +166,7 @@ export function runFastStatic({base = null, explain = false,
   results.push(runNpm(GLOBAL_DEPENDENCY_CHECK));
   results.push(runEslint(changedJs));
   if (changedJs.length > 0) {
-    results.push(runNpm(FILE_SIZE_CHECK,
-      [BASE_FLAG, range.base || HEAD_LABEL, ...changedJs]));
+    results.push(runFileSizeCheck(range, changedJs));
     results.push(runNpm(SCOPED_RATCHET_CHECK, changedJs));
   }
 

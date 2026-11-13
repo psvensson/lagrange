@@ -45,6 +45,7 @@ const SRC_FILE = 'src/thing.js';
 const DOC_FILE = 'docs/thing.md';
 const OUTSIDE_FILE = 'other/thing.txt';
 const TEXT = 'note';
+const PATHS_FILE_FLAG = 'paths-file';
 const GIT_USER = ['-c', 'user.name=t', '-c', 'user.email=t@example.com'];
 
 function git(root, args) {
@@ -78,8 +79,10 @@ function repo(t, {metric = 1, legacy = false, assigned = true} = {}) {
   write(root, '.gitkeep', '');
   git(root, ['add', '-A']);
   git(root, ['commit', '-q', '-m', 'seed']);
-  if (assigned) assign(root, ['src/', 'docs/', 'other/', 'scripts/', 'test/',
-    'test-output/', '.githooks/', 'package.json', 'solve/epics/demo-epic.md']);
+  if (assigned) {
+    assign(root, ['src/', 'docs/', 'other/', 'scripts/', 'test/',
+      'test-output/', '.githooks/', 'package.json', 'solve/epics/demo-epic.md']);
+  }
   return root;
 }
 
@@ -338,11 +341,13 @@ test('land refuses historical log rewrites and symlink substitution during proof
         fs.unlinkSync(file);
         fs.symlinkSync(target, file);
       } else {
-        fs.writeFileSync(file, before.replace('Retain this historical note.', 'Rewrite the historical note.'));
+        fs.writeFileSync(file, before.replace(
+          'Retain this historical note.', 'Rewrite the historical note.'));
       }
     }}), /quest log.*append-only|quest log.*regular file/u);
     assert.equal(git(root, ['rev-parse', 'HEAD']), head);
-    assert.equal(readLog(root, QUEST_ID).some((entry) => entry.status === QUEST_STATUS.SOLVED), false);
+    assert.equal(readLog(root, QUEST_ID)
+      .some((entry) => entry.status === QUEST_STATUS.SOLVED), false);
   }
 });
 
@@ -386,15 +391,15 @@ test('the note CLI records the exact assignment list and existing authority refe
   const list = path.join(root, 'assignment-paths.txt');
   fs.writeFileSync(list, `${DOC_FILE}\nsrc/\n`);
   const result = COMMANDS.note(root, {flags: {id: QUEST_ID, assignment: 'bounded fix',
-    'paths-file': list, authority: 'current authorized task'}});
+    [PATHS_FILE_FLAG]: list, authority: 'current authorized task'}});
   assert.deepEqual(result.entry.assignment,
     {paths: [DOC_FILE, 'src/'], authority: 'current authorized task'});
   assert.equal(result.entry.kind, undefined);
   refuses(() => COMMANDS.note(root, {flags: {id: QUEST_ID, assignment: 'missing authority',
-    'paths-file': list}}), /authorization reference/u);
+    [PATHS_FILE_FLAG]: list}}), /authorization reference/u);
   fs.writeFileSync(list, `${DOC_FILE} \n`);
   refuses(() => COMMANDS.note(root, {flags: {id: QUEST_ID, assignment: 'unsafe exact path',
-    'paths-file': list, authority: 'current authorized task'}}), /assignment paths/u);
+    [PATHS_FILE_FLAG]: list, authority: 'current authorized task'}}), /assignment paths/u);
 });
 
 test('a scope amendment invalidates previous review without changing the seal', (t) => {

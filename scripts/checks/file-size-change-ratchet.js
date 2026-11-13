@@ -89,8 +89,8 @@ function scopedMoves(records, selected, policyForPath) {
         policyForPath(record.oldPath) && !policyForPath(record.path) &&
         (!selected || orderedStringSetHas(selected, record.oldPath) ||
           orderedStringSetHas(selected, record.path))) {
-      appendArrayValue(errors, `Moved source file outside the file-size scan scope: ` +
-        `${record.oldPath} -> ${record.path}`);
+      appendArrayValue(errors,
+        `Moved source file outside the file-size scan scope: ${record.oldPath} -> ${record.path}`);
     }
   }
   return errors;
@@ -210,6 +210,7 @@ export function fileSizeChangeErrors({root, base = null, paths = null, env = pro
   const context = {root, files, origins: vanishedOrigins(root, records, files, policyForPath),
     claimedOrigins: createOrderedStringSet(), blobs: createOrderedStringMap()};
   const errors = scopedMoves(records, selected, policyForPath);
-  appendArrayValues(errors, candidateErrors(context, candidates, selected, policyForPath, countLines));
+  appendArrayValues(errors,
+    candidateErrors(context, candidates, selected, policyForPath, countLines));
   return {base: comparisonBase, errors};
 }

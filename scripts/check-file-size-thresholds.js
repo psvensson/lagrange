@@ -263,7 +263,9 @@ async function main() {
   const compared = fileSizeChangeErrors({root: process.cwd(), base,
     paths: explicitFilePaths.length > 0 ? explicitFilePaths : null, policyForPath, countLines});
   console.log(`Per-file size comparison base: ${compared.base}`);
-  const errors = [...buildRatchetErrors(sourceEntries, testEntries, strictMode), ...compared.errors];
+  const errors = [
+    ...buildRatchetErrors(sourceEntries, testEntries, strictMode), ...compared.errors,
+  ];
   if (errors.length > NUM_ZERO) {
     console.error(EMPTY_TEXT);
     console.error(errors.join(NEWLINE));

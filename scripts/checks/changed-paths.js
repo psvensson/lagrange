@@ -289,7 +289,8 @@ export function changedRecords({root, base = null, head = DEFAULT_HEAD}) {
     git(root, [DIFF, NAME_STATUS, NULL_TERMINATED, RENAME_DETECTION, DEFAULT_HEAD], NUL)));
   appendArrayValues(records, parseNameStatus(
     git(root, [DIFF, NAME_STATUS, NULL_TERMINATED, RENAME_DETECTION, CACHED], NUL)));
-  const untrackedPaths = git(root, [LS_FILES, OTHERS, EXCLUDE_STANDARD, NULL_TERMINATED], NUL) || [];
+  const untrackedPaths = git(root,
+    [LS_FILES, OTHERS, EXCLUDE_STANDARD, NULL_TERMINATED], NUL) || [];
   for (let index = 0; index < untrackedPaths.length; index += 1) {
     appendArrayValue(records, {
       status: CHANGE_ADDED,

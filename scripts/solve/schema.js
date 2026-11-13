@@ -120,7 +120,8 @@ const PROBLEM = Object.freeze({
   ASSIGNMENT_AUTHORITY: 'assignment authority must name the existing task or scope authorization',
   ASSIGNMENT_OBSERVATION: 'assignment must be an untyped finding; recording scope does not resolve a hold',
 });
-const UNSAFE_ASSIGNMENT_PATH = /[\x00-\x1f\\*?\[\]]|^[a-z]:/iu;
+const CONTROL_CHARACTER = /\p{Cc}/u;
+const UNSAFE_ASSIGNMENT_PATH = /[\\*?[\]]|^[a-z]:/iu;
 const PATH_SEPARATOR = '/';
 const RESERVED_PATH_SEGMENTS = Object.freeze(['', '.', '..', '.git']);
 
@@ -179,7 +180,7 @@ function questProblems(quest, options = {}) {
 
 function validAssignmentPath(value) {
   if (typeof value !== 'string' || !value || value !== value.trim() ||
-      UNSAFE_ASSIGNMENT_PATH.test(value)) return false;
+      CONTROL_CHARACTER.test(value) || UNSAFE_ASSIGNMENT_PATH.test(value)) return false;
   const relative = value.endsWith(PATH_SEPARATOR) ? value.slice(0, -1) : value;
   return relative.split(PATH_SEPARATOR).every((segment) =>
     !RESERVED_PATH_SEGMENTS.includes(segment.toLowerCase()));
