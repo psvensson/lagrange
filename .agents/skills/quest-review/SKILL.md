@@ -1,13 +1,15 @@
 ---
 name: quest-review
-description: Independently verify a Lagrange Quest candidate and its evidence, tracing changed contracts through real callers and recovery paths. Use before landing or when validating another agent's implementation or completion claims.
+description: Independently verify a Lagrange candidate and its evidence, tracing changed contracts through real callers and recovery paths. Use before landing or when validating another agent's implementation or completion claims, for either a Quest or an eligible direct change.
 ---
 
 # Review the actual candidate
 
 Read AGENTS and the routed verification owners. Use the existing verification
-templates appropriate to the changed interaction. This is a report-only review;
-the author owns repairs and the existing Solver owns landing and publication.
+templates appropriate to the changed interaction. The reviewer inspects and
+measures the candidate; the author owns implementation repairs. Existing workflow
+owners retain landing and publication. A direct change needs no Quest solely to
+record review.
 Selected upstream provenance is in scripts/agent-tooling/NOTICE.md.
 
 Record author and verifier identities, base/HEAD, worktree, changed-file digests,
@@ -25,14 +27,17 @@ canonical gates. Retain applicable output through the existing evidence owner.
 Another message does not invalidate unchanged evidence; changed content requires
 an explicit applicability decision. Counts and agreeing reviewers are not proof.
 
-For tooling acceptance, inspect the retained raw observations consumed by
+When the claim is acceptance of the tooling capability itself, inspect the
+retained raw observations consumed by
 scripts/checks/quest-agent-tooling-acceptance.js. Missing output, wrong versions,
 wrong worktree, changed digests, self-review and unresolved material findings
 cannot pass. A plugin's prose or manually asserted success flag is insufficient.
 
 Report findings with owner, severity, evidence and consequence. Route unrelated
-findings without widening the repair. Append the actual bounded verdict through
-`solve.js note --verification ... --verifier subagent:<id> --verdict approve|reject`.
+findings without widening the repair. For a Quest, append the actual bounded
+verdict through `solve.js note --verification ... --verifier subagent:<id> --verdict approve|reject`.
+For a direct change, retain the same independence and content-bound verdict in its
+existing PR or review record.
 Keep implementation, independent review, landing, publication, formation and
 comparative acceptance distinct. Never generate or admit mock, fake or emulated
 information during comparative systems measurements; an unrun arm stays unrun.

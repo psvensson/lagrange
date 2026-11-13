@@ -275,7 +275,9 @@ test('revised proof owners retain behavioral evidence and closure obligations', 
     /Review is complete when the scoped surface is covered/u,
     /Introduced regressions and required gate failures cannot be disposed of as unrelated debt/u,
     /a relevant guardrail count increased/u,
-    /newly edited source-code files must finish within the per-scope thresholds/u,
+    /New files and previously compliant touched files must remain within their per-scope thresholds/u,
+    /its own line count does not increase relative to the actual proof base/u,
+    /deletion elsewhere cannot fund a new violation/u,
   ]) {
     assert.match(proof, requirement, `proof owner lost ${requirement}`);
   }

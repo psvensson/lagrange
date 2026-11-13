@@ -209,12 +209,15 @@ Required read order:
 
 Each control-plane decision path declares exactly one read-model source.
 Mixed cache/SQL fallback within a single semantic decision is forbidden.
-The canonical registry lives in `src/control-plane/read-model-contract.js`.
+The implementation registry lives in `src/control-plane/read-model-contract.js`;
+required decision authority is defined by
+[Runtime Contracts](runtime-contracts.md#cache-and-read-models). A stale registry
+entry does not authorize cache-based gating or establish completed conformance.
 
 | Source | Usage |
 | --- | --- |
-| `SYSTEM_TABLE_CACHE` | CDC-propagated metadata, steady-state decisions |
-| `AUTHORITATIVE_SQL` | Partition-leader writes and deduplication queries |
+| `SYSTEM_TABLE_CACHE` | CDC-propagated presentation, diagnostics, discovery and reconciliation triggers; no grants |
+| `AUTHORITATIVE_SQL` | Committed owner facts for admission, promotion, serving eligibility, writes and deduplication |
 | `RECOVERY_SQL` | Explicit recovery sweeps with typed reason codes |
 | `DIAGNOSTICS_SQL` | Reconciliation and diagnostics with typed reason codes |
 

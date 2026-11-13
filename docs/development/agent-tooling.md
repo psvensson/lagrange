@@ -69,7 +69,21 @@ stale lock; PID existence alone cannot authorize killing another process.
 Recovery refuses while any lifecycle or service lock remains. There is no automatic
 stale-lock reclamation: two recoverers must never delete a newly acquired lock.
 
-## Evidence and independent review
+## Ordinary use and capability acceptance
+
+Ordinary navigation or documentation lookup follows the task's existing Quest
+or direct-change review record. Verify source identity and report the actual
+tool result and its limits; using an accepted tool does not require accepting
+the tooling capability again. Independent source reads retain their own source
+claims when a tool is unavailable.
+
+The capture and receipt procedure below applies when accepting or changing the
+tooling integration or claiming a supported tooling capability. Select affected
+live proof through its existing applicability owner. Retain the freshness and
+restart requirements above; this distinction does not establish that a stale
+service refreshes itself.
+
+## Tooling capability evidence and independent review
 
 Capture an actual command or Codex JSON session through the existing Quest evidence
 surface. Use a unique attempt id; the producer refuses to overwrite observations.

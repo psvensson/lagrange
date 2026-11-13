@@ -17,10 +17,11 @@ The current Solver implementation owns executable validation:
 
 | Owner | Validates |
 | --- | --- |
-| `scripts/solve/schema.js` | Quest and epic shapes, allowed probes, log entry types, verifier identity/verdict, and status vocabulary. |
+| `scripts/solve/schema.js` | Quest and epic shapes, assignment paths and authority references, allowed probes, log entry types, verifier identity/verdict, and status vocabulary. |
 | `scripts/solve/probes.js` | Measurements for `test-receipt`, `scenario-harness`, `oracle` and `script`, including an explicit non-measuring result. |
 | `scripts/solve/commands.js` | Red sealing measurement, immutable sealed `doneWhen`, current verification, holds, altitude budget, and the landing sequence. |
-| `scripts/solve/guards.js` | Changed paths, epic scope, interaction guards, static checks, and canonical import-graph checks. |
+| `scripts/solve/guards.js` | Changed paths, package assignments and epic scope, review eligibility, interaction guards, static checks, and canonical import-graph checks. |
+| `scripts/solve/candidate-review.js` | The candidate digest, acceptance and declared proof-input binding, and applicability of recorded review. |
 | `scripts/solve/store.js` | Append-only log reads/writes and derived quest state. |
 
 Consult the generated [`command reference`](../steering/generated/solve-commands.md)
@@ -53,27 +54,71 @@ dependencies, callers, configuration and environment. If applicability cannot
 be established, run the necessary proof; a prose assurance is no substitute.
 
 The [review policy](../steering/workflow-guidelines/solver-quests.md#recording-and-review)
-covers source and proof/acceptance changes. The current automatic trigger in
-`requiresVerification` is narrower: paths under `src/` require an independent
-`subagent:<id>` approval newer than the last attempt. A current rejection
-refuses landing. `note --verification` records a `candidateDigest`, and landing
-rejects a mismatch when the recorded and current digests are present. This is
-content checking as well as identity and log-order checking; it does not prove
-complete acceptance-input coverage or make an absent digest a required-field
-failure. The author and reviewer must bind the review to the actual content and
-evidence, record a new attempt after a material repair, and renew review for what
-that repair invalidates. Preserve applicable unaffected findings.
+covers source and proof/acceptance changes. `requiresVerification` preserves
+`src/` coverage and requires review for operative steering, test policy,
+specifications and Quest acceptance records. Other changed paths require review
+unless the existing change taxonomy identifies them as inert and they are
+explanatory Markdown, Quest log observations, license text or editor metadata.
+An unfamiliar data/configuration surface therefore requires review. Changes to
+the owning Quest's acceptance fields or declared proof inputs are checked against
+HEAD even when no outside path changed; a missing approval cannot escape through
+the Quest-directory exclusion. This includes
+executable proof selection, runners, fixtures, thresholds, configuration and
+publication machinery. Ordinary explanatory documents retain the direct route.
+Review eligibility is conservative path classification, not a claim that code
+can establish a reviewer's independence or interpret arbitrary prose.
+
+A required independent `subagent:<id>` approval must be newer than the last
+attempt and contain a valid `candidateDigest`. A current rejection refuses
+landing. The digest binds HEAD, changed content, the statement, probe,
+constraints, verification templates, current assignment, declared retained proof
+artifacts and receipt-named witnesses. A changed acceptance input or assignment
+invalidates approval. Ordinary notes in the owning Quest log and unreferenced
+evidence do not change this digest. A former digest that does not bind the current
+candidate requires renewed review; historical entries remain readable and intact.
+Declared proof inputs must resolve to readable regular files inside the repository;
+absolute paths, traversal and external symlink targets refuse approval and landing.
+For a contained symlink, the digest binds the resolved target and the bytes the
+probe consumes. Linked proof inputs require review because the link blob alone
+does not establish the consumed bytes at HEAD. Ordinary candidate symlinks retain
+their Git link identity.
+
+Content binding is not executed-proof admission or complete dependency
+selection. Those properties remain with the existing probe, receipt and selector
+owners. Record a new attempt after a material repair and renew review for what
+it invalidates, preserving applicable unaffected findings.
 
 ## Required Conduct And Executable Coverage
 
-Policy applies even where an automatic check is narrower. `epicScopeProblems`
-checks a non-legacy epic's `authorizes`, also allowing the Quest directory, epic
-record and epic directory; it does not enforce a per-package assignment. Legacy
-epics and standalone fixes do not acquire that scope guard. Record and review the
-causal assignment under the [workflow owner](../steering/workflow-guidelines/solver-quests.md#causal-scope)
-rather than inventing a schema field or claiming a guard exists. Conversely, an
-implemented check establishes only the property it measures: artifact presence
-or a structural inventory is not execution evidence.
+Record the causal assignment under the
+[workflow owner](../steering/workflow-guidelines/solver-quests.md#causal-scope)
+with `note --assignment "<reason>" --paths-file <list> --authority "<reference>"`.
+The newline-delimited list contains exact repository-relative paths or directory
+prefixes ending in `/`; globs, traversal, absolute paths and `.git` components
+are refused. The authority reference identifies the existing authorized task or
+scope amendment. Recording that reference does not grant authority.
+
+The assignment is an untyped append-only finding. Its latest entry defines the
+package scope; a new assignment explicitly amends it without changing the Quest
+seal or clearing a blocked hold. Include required generated outputs in the
+assignment and refresh them before requesting content-bound approval. `land`
+checks all staged, unstaged and untracked nonignored changes before staging,
+preserving exact filenames and both sides of renames. It reloads the Quest and
+checks scope, holds, acceptance, proof inputs and review binding after generation,
+after commit-time checks and after proof. A generated input that changes after
+review requires renewed affected review; generated outputs have no blanket
+exception. The staged tree must agree with the measured files and remain unchanged
+across proof. The final commit stages only the terminal log entry. Unintended paths
+refuse landing rather than being silently selected or included. The owning Quest
+directory remains available for its record and evidence. Standalone fixes and
+historical open Quests must record an assignment before landing; terminal records
+are unchanged. The non-legacy epic's `authorizes` remains an additional outer
+boundary, not a substitute for the assignment.
+
+An implemented check establishes only the property it measures: artifact presence
+or a structural inventory is not execution evidence. The broader immutable
+target-selection and executed-receipt continuation retains its own acceptance;
+these guards do not close that entire proposal.
 
 Keep executable gaps and their next owners in the existing active work record,
 not a second permanent policy ledger. Update this implementation description

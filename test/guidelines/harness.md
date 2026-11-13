@@ -139,13 +139,12 @@ When running tests during task execution:
 1. **Run targeted tests only** - Don't run the full test suite except at checkpoints
 2. **Focus on relevant tests** - Only run tests related to the feature/file being modified
 3. **Run failing tests first** - When fixing issues, run only the specific failing test(s)
-4. **Invoke targeted tests via the committed runner or tap directly** -
-   `npm run test:file -- <test-file...>` (the committed
-   `scripts/run-test-files.js` fail-closed runner: empty TAP streams, skips,
-   and todos all fail; `--filter <substring>` narrows the provided file list
-   by path substring and fails closed when nothing matches). `npx tap
-   <test-file...>` is the equivalent direct invocation (tap is the suite
-   runner; the sharded `test:*` scripts shell out to it). Do NOT use
+4. **Invoke targeted tests through the classified runner** -
+   `npm run test:file -- <explicit-test-file-paths>` enters
+   `scripts/run-classified-test-files.js`, which owns placement and resource
+   policy and delegates TAP validation to `scripts/run-test-files.js`.
+   Empty TAP streams, skips and todos fail. Raw `npx tap` does not establish
+   the same guarantees. Do NOT use
    `npm test -- <file>` or `npm test -- --grep "pattern"`: the `test` script is
    the change-proof orchestrator and silently ignores extra arguments, so those
    forms prove the change rather than the file you named.
@@ -180,18 +179,32 @@ Only run the complete suite (`npm run check:release`) at:
 
 ## Before Any Commit
 
-A git pre-commit hook exists at `.githooks/pre-commit` (activated via
-`core.hooksPath=.githooks`) and runs automatically on every commit. It covers
-the fast structural guards (<2s): `npm run audit:file-size`,
-`npm run audit:guideline:hot-path-diagnostics`,
-`node scripts/check-staged-constant-names.js`, and eslint (with cache) on the
-staged JS files under `src/`, `test/`, and `scripts/`. `git commit --no-verify`
-bypasses it — emergencies only.
+The normal `.githooks/pre-commit` hook selects staged paths, checks their working
+tree bytes and refreshes affected generated inventories. Its ordinary derived
+input guard requires source, script and test inputs to match the index; WIP
+exceptions do not establish proof of staged content. Exact publication checks
+remain required. The hook's report-only complexity output is not a passing
+no-regression receipt.
 
-The hook is a floor, not the bar. The manual minimum before every commit —
-Quest or not — is `npm run lint`, `npm run test:complexity`, plus targeted
-tests (`npx tap <test-file...>`) for the code touched. The whole-repo static
-gate lives in `test:static` and runs in CI.
+Apply checks at the stage whose claim they support:
+
+| Stage | Required proof |
+| --- | --- |
+| Iteration | The discriminating witness and applicable checks over the affected change. |
+| Reviewed completion and landing | Current independent review where required, the actual candidate's applicable static checks, affected-interaction witnesses and change proof. |
+| Publication | The existing exact-candidate publication and whole-repository static gates. |
+| Release or full-system acceptance | The complete proof required by the declared acceptance contract. |
+
+This schedule replaces the manual whole-repository lint/complexity minimum
+before every commit. It preserves the normal hook, applicable landing checks,
+publication/release gates and the ban on dismissing introduced regressions or
+required gate failures as unrelated debt. Documentation-only changes use the
+[documentation proof policy](release-gate.md#documentation-only-changes).
+
+For an explicitly unverified non-main preservation snapshot, use the existing
+[WIP preservation route](../../docs/development/solver-runbook.md#publish-and-git-exceptions).
+Preservation does not establish acceptance or authorize publication; an undefined
+"emergency" is not a gate exception.
 
 ## Full Test Suite Execution
 Full-suite local execution procedure lives in `test/README.local.md`.

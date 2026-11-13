@@ -16,9 +16,11 @@ import {readLog, readQuest} from '../../scripts/solve/store.js';
 import {
   ALTITUDE_BUDGET, LAND_LOCK_FILENAME, LAND_LOCK_TIMEOUT_REFUSAL,
   LANDING_MARKER_ENV, LANDING_MARKER_VALUE,
-  SolveError, acquireLandingLock, board, isKernelThreadPid, isLockStale, isPidAlive, land,
+  SolveError, acquireLandingLock, board, computeCandidateDigest, isKernelThreadPid,
+  isLockStale, isPidAlive, land,
   landChangeProofEnvironment, note, probe, requiresInventoryRefresh,
   runChangeProof, stageGeneratedArtifacts, start, tryCreateLandingLock,
+  verificationProblems,
 } from '../../scripts/solve/commands.js';
 import {gitCommonDir} from '../../scripts/solve/guards.js';
 import {
@@ -32,6 +34,7 @@ import {
   RETRY_FAILED_ONCE_ENABLED, RETRY_FAILED_ONCE_ENV,
 } from '../../scripts/run-test-files.js';
 import {execGit} from '../../scripts/checks/git-invocation.js';
+import {COMMANDS} from '../../scripts/solve.js';
 
 const QUEST_ID = 'demo';
 const EPIC_ID = 'demo-epic';
@@ -54,7 +57,7 @@ function write(root, relative, content) {
   fs.writeFileSync(file, content);
 }
 
-function repo(t, {metric = 1, legacy = false} = {}) {
+function repo(t, {metric = 1, legacy = false, assigned = true} = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'solve-v2-cmd-'));
   t.after(() => fs.rmSync(root, {recursive: true, force: true}));
   git(root, ['init', '-q']);
@@ -75,7 +78,19 @@ function repo(t, {metric = 1, legacy = false} = {}) {
   write(root, '.gitkeep', '');
   git(root, ['add', '-A']);
   git(root, ['commit', '-q', '-m', 'seed']);
+  if (assigned) assign(root, ['src/', 'docs/', 'other/', 'scripts/', 'test/',
+    'test-output/', '.githooks/', 'package.json', 'solve/epics/demo-epic.md']);
   return root;
+}
+
+function assign(root, paths, authority = 'test task authorization') {
+  return note(root, {id: QUEST_ID, type: ENTRY_TYPE.FINDING,
+    text: 'Assign the bounded test package.', assignment: {paths, authority}});
+}
+
+function approve(root) {
+  return note(root, {id: QUEST_ID, type: ENTRY_TYPE.VERIFICATION, text: TEXT,
+    verifier: VERIFIER, verdict: VERDICT.APPROVE});
 }
 
 function refuses(fn, pattern) {
@@ -118,7 +133,7 @@ test('start refuses a green or non-measuring probe; a red one seals', (t) => {
   assert.match(sealed.sealedAt, /^[0-9a-f]{40}$/u);
   assert.equal(readQuest(root, QUEST_ID).sealedAt, sealed.sealedAt);
   const log = readLog(root, QUEST_ID);
-  assert.equal(log[0].seal.metric, 1);
+  assert.equal(log.find((entry) => entry.seal).seal.metric, 1);
   refuses(() => start(root, {id: QUEST_ID}), /already sealed/u);
   refuses(() => start(root, {id: 'missing'}), /no quest/u);
 });
@@ -156,7 +171,7 @@ test('land: red probe, standing rejection, src without verification, altitude, s
   write(root, SRC_FILE, TEXT);
   note(root, {id: QUEST_ID, type: ENTRY_TYPE.ATTEMPT, text: TEXT});
   refuses(() => land(root, {id: QUEST_ID, skipProof: true}),
-    /src\/ changes need a verification/u);
+    /changes need a verification/u);
   note(root, {id: QUEST_ID, type: ENTRY_TYPE.VERIFICATION, text: TEXT, verifier: VERIFIER,
     verdict: VERDICT.REJECT});
   refuses(() => land(root, {id: QUEST_ID, skipProof: true}), /rejection/u);
@@ -182,18 +197,291 @@ test('land: red probe, standing rejection, src without verification, altitude, s
   refuses(() => land(root, {id: QUEST_ID, skipProof: true}), /solved/u);
 });
 
-test('a legacy epic carries no scope; docs-only landings need no verifier', (t) => {
+test('a legacy epic retains package scope; explanatory docs need no verifier', (t) => {
   const root = repo(t, {legacy: true});
   start(root, {id: QUEST_ID});
   goGreen(root);
-  write(root, OUTSIDE_FILE, TEXT);
+  git(root, ['add', ORACLE]);
+  git(root, ['commit', '-q', '-m', 'retain the unchanged proof input']);
+  write(root, DOC_FILE, TEXT);
   note(root, {id: QUEST_ID, type: ENTRY_TYPE.ATTEMPT, text: TEXT});
   const landed = land(root, {id: QUEST_ID, skipProof: true});
-  assert.ok(landed.paths.includes(OUTSIDE_FILE));
+  assert.ok(landed.paths.includes(DOC_FILE));
   const shown = board(root);
   assert.equal(shown.quests.length, 0);
   assert.equal(shown.counts.quests, 1);
   assert.equal(shown.epics[0].legacy, true);
+});
+
+test('package assignment refuses missing and unintended scope before staging', (t) => {
+  const root = repo(t, {legacy: true, assigned: false});
+  start(root, {id: QUEST_ID});
+  goGreen(root);
+  write(root, DOC_FILE, TEXT);
+  refuses(() => land(root, {id: QUEST_ID, skipProof: true}), /package assignment/u);
+  assign(root, [DOC_FILE]);
+  write(root, OUTSIDE_FILE, TEXT);
+  git(root, ['add', OUTSIDE_FILE]);
+  const staged = git(root, ['diff', '--cached', '--name-only']);
+  refuses(() => land(root, {id: QUEST_ID, skipProof: true}), /outside package assignment.*other\/thing/u);
+  assert.equal(git(root, ['diff', '--cached', '--name-only']), staged,
+    'refusal leaves the pre-existing index intact');
+  git(root, ['reset', '--quiet', '--', OUTSIDE_FILE]);
+  refuses(() => land(root, {id: QUEST_ID, skipProof: true}), /outside package assignment/u);
+  assign(root, [DOC_FILE, OUTSIDE_FILE], 'authorized scope amendment for the same task');
+  approve(root);
+  assert.match(land(root, {id: QUEST_ID, skipProof: true}).commit, /^[0-9a-f]{40}$/u);
+});
+
+test('scope is rechecked when proof stages a foreign path', (t) => {
+  const root = repo(t, {legacy: true});
+  start(root, {id: QUEST_ID});
+  goGreen(root);
+  assign(root, [DOC_FILE]);
+  write(root, DOC_FILE, TEXT);
+  approve(root);
+  const head = git(root, ['rev-parse', 'HEAD']).trim();
+  refuses(() => land(root, {id: QUEST_ID, runProof: () => {
+    write(root, OUTSIDE_FILE, TEXT);
+    git(root, ['add', OUTSIDE_FILE]);
+  }}), /outside package assignment/u);
+  assert.equal(git(root, ['rev-parse', 'HEAD']).trim(), head);
+  assert.equal(fs.readFileSync(path.join(root, OUTSIDE_FILE), 'utf8'), TEXT);
+});
+
+test('scope refuses whitespace aliases and the unassigned source of a staged rename', (t) => {
+  for (const rename of [false, true]) {
+    const root = repo(t, {legacy: true});
+    if (rename) {
+      write(root, OUTSIDE_FILE, TEXT);
+      git(root, ['add', OUTSIDE_FILE]);
+      git(root, ['commit', '-q', '-m', 'retain the unrelated source']);
+    }
+    start(root, {id: QUEST_ID});
+    goGreen(root);
+    assign(root, [DOC_FILE]);
+    if (rename) {
+      fs.mkdirSync(path.join(root, 'docs'), {recursive: true});
+      git(root, ['mv', OUTSIDE_FILE, DOC_FILE]);
+    } else {
+      write(root, `${DOC_FILE} `, TEXT);
+      git(root, ['add', '--', `${DOC_FILE} `]);
+    }
+    approve(root);
+    const index = git(root, ['write-tree']);
+    const log = readLog(root, QUEST_ID);
+    refuses(() => land(root, {id: QUEST_ID, skipProof: true}), /outside package assignment/u);
+    assert.equal(git(root, ['write-tree']), index, 'the original index is preserved');
+    assert.deepEqual(readLog(root, QUEST_ID), log, 'a refusal adds no terminal record');
+  }
+});
+
+test('land rejects reviewed content, acceptance or assignment mutated by proof', (t) => {
+  const mutations = [
+    (root) => write(root, SRC_FILE, 'changed after review\n'),
+    (root) => {
+      const quest = readQuest(root, QUEST_ID);
+      write(root, `solve/quests/${QUEST_ID}/quest.json`,
+        JSON.stringify({...quest, statement: 'A replacement acceptance claim.'}));
+    },
+    (root) => assign(root, [SRC_FILE], 'amendment during the proof'),
+    (root) => {
+      write(root, SRC_FILE, 'staged after review\n');
+      git(root, ['add', SRC_FILE]);
+      write(root, SRC_FILE, TEXT);
+    },
+  ];
+  for (const mutate of mutations) {
+    const root = repo(t, {legacy: true});
+    start(root, {id: QUEST_ID});
+    goGreen(root);
+    write(root, SRC_FILE, TEXT);
+    approve(root);
+    const head = git(root, ['rev-parse', 'HEAD']);
+    refuses(() => land(root, {id: QUEST_ID, runProof: () => mutate(root)}),
+      /candidate digest|staged candidate/u);
+    assert.equal(git(root, ['rev-parse', 'HEAD']), head);
+    assert.equal(probe(root, {id: QUEST_ID}).status, QUEST_STATUS.OPEN);
+  }
+});
+
+test('land reloads holds after proof and permits an ordinary observation', (t) => {
+  for (const blocked of [true, false]) {
+    const root = repo(t, {legacy: true});
+    start(root, {id: QUEST_ID});
+    goGreen(root);
+    approve(root);
+    const finish = () => land(root, {id: QUEST_ID, runProof: () => {
+      note(root, {id: QUEST_ID, text: 'A new observation.',
+        type: blocked ? ENTRY_TYPE.TERMINAL : ENTRY_TYPE.FINDING,
+        ...(blocked ? {status: QUEST_STATUS.BLOCKED, nextOwner: NEXT_OWNER.JUDGMENT} : {})});
+    }});
+    if (blocked) refuses(finish, /blocked/u);
+    else assert.match(finish().commit, /^[0-9a-f]{40}$/u);
+  }
+});
+
+test('standalone fixes retain package scope and directory boundaries', (t) => {
+  const root = repo(t, {assigned: false});
+  const quest = readQuest(root, QUEST_ID);
+  delete quest.epic;
+  quest.class = 'fix';
+  write(root, `solve/quests/${QUEST_ID}/quest.json`, JSON.stringify(quest));
+  git(root, ['add', '-A']);
+  git(root, ['commit', '-q', '-m', 'standalone fixture']);
+  start(root, {id: QUEST_ID});
+  goGreen(root);
+  assign(root, ['docs/']);
+  write(root, 'docs-extra/foreign.md', TEXT);
+  refuses(() => land(root, {id: QUEST_ID, skipProof: true}), /outside package assignment/u);
+  fs.unlinkSync(path.join(root, 'docs-extra/foreign.md'));
+  write(root, DOC_FILE, TEXT);
+  approve(root);
+  assert.match(land(root, {id: QUEST_ID, skipProof: true}).commit, /^[0-9a-f]{40}$/u);
+});
+
+test('assignment validates paths and authorization references without clearing holds', (t) => {
+  const root = repo(t);
+  for (const invalid of ['/tmp/escape', '../escape', 'src/../escape', '.git/config',
+    'src/.git/config', 'C:/escape', 'src\\escape', 'src//escape', '*', '.']) {
+    refuses(() => assign(root, [invalid]), /assignment/u);
+  }
+  refuses(() => assign(root, [DOC_FILE], ''), /authority/u);
+  refuses(() => assign(root, []), /paths/u);
+  start(root, {id: QUEST_ID});
+  note(root, {id: QUEST_ID, type: ENTRY_TYPE.TERMINAL, text: 'awaiting a decision',
+    status: QUEST_STATUS.BLOCKED, nextOwner: NEXT_OWNER.JUDGMENT});
+  assign(root, [DOC_FILE]);
+  assert.equal(probe(root, {id: QUEST_ID}).status, QUEST_STATUS.BLOCKED,
+    'an assignment observation does not settle the missing input');
+});
+
+test('the note CLI records the exact assignment list and existing authority reference', (t) => {
+  const root = repo(t, {assigned: false});
+  const list = path.join(root, 'assignment-paths.txt');
+  fs.writeFileSync(list, `${DOC_FILE}\nsrc/\n`);
+  const result = COMMANDS.note(root, {flags: {id: QUEST_ID, assignment: 'bounded fix',
+    'paths-file': list, authority: 'current authorized task'}});
+  assert.deepEqual(result.entry.assignment,
+    {paths: [DOC_FILE, 'src/'], authority: 'current authorized task'});
+  assert.equal(result.entry.kind, undefined);
+  refuses(() => COMMANDS.note(root, {flags: {id: QUEST_ID, assignment: 'missing authority',
+    'paths-file': list}}), /authorization reference/u);
+  fs.writeFileSync(list, `${DOC_FILE} \n`);
+  refuses(() => COMMANDS.note(root, {flags: {id: QUEST_ID, assignment: 'unsafe exact path',
+    'paths-file': list, authority: 'current authorized task'}}), /assignment paths/u);
+});
+
+test('a scope amendment invalidates previous review without changing the seal', (t) => {
+  const root = repo(t, {legacy: true});
+  const sealed = start(root, {id: QUEST_ID});
+  goGreen(root);
+  write(root, SRC_FILE, TEXT);
+  note(root, {id: QUEST_ID, type: ENTRY_TYPE.ATTEMPT, text: TEXT});
+  approve(root);
+  assign(root, [SRC_FILE]);
+  refuses(() => land(root, {id: QUEST_ID, skipProof: true}), /candidate digest/u);
+  assert.equal(readQuest(root, QUEST_ID).sealedAt, sealed.sealedAt);
+  approve(root);
+  assign(root, [SRC_FILE]);
+  refuses(() => land(root, {id: QUEST_ID, skipProof: true}), /candidate digest/u);
+  approve(root);
+  assert.match(land(root, {id: QUEST_ID, skipProof: true}).commit, /^[0-9a-f]{40}$/u);
+});
+
+test('proof-only changes require current content-bound independent approval', (t) => {
+  const root = repo(t, {legacy: true});
+  start(root, {id: QUEST_ID});
+  goGreen(root);
+  write(root, 'test/fixtures/expected.json', '{"expected":true}\n');
+  note(root, {id: QUEST_ID, type: ENTRY_TYPE.ATTEMPT, text: TEXT});
+  refuses(() => land(root, {id: QUEST_ID, skipProof: true}), /changes need a verification/u);
+  approve(root);
+  note(root, {id: QUEST_ID, type: ENTRY_TYPE.FINDING, text: 'An unchanged observation.'});
+  assert.match(land(root, {id: QUEST_ID, skipProof: true}).commit, /^[0-9a-f]{40}$/u);
+});
+
+test('own acceptance terms and declared proof inputs require review without outside changes', (t) => {
+  const proofRoot = repo(t);
+  start(proofRoot, {id: QUEST_ID});
+  goGreen(proofRoot);
+  refuses(() => land(proofRoot, {id: QUEST_ID, skipProof: true}), /changes need a verification/u);
+  approve(proofRoot);
+  assert.match(land(proofRoot, {id: QUEST_ID, skipProof: true}).commit, /^[0-9a-f]{40}$/u);
+
+  const contractRoot = repo(t);
+  start(contractRoot, {id: QUEST_ID});
+  goGreen(contractRoot);
+  git(contractRoot, ['add', ORACLE]);
+  git(contractRoot, ['commit', '-q', '-m', 'retain the proof input']);
+  const quest = readQuest(contractRoot, QUEST_ID);
+  write(contractRoot, `solve/quests/${QUEST_ID}/quest.json`, JSON.stringify({...quest,
+    constraints: [{id: 'changed', statement: 'An acceptance-bearing constraint changed.'}]}));
+  refuses(() => land(contractRoot, {id: QUEST_ID, skipProof: true}), /changes need a verification/u);
+});
+
+test('missing candidate digest cannot authorize a reviewed input', () => {
+  const state = {verificationIsCurrent: true,
+    lastVerification: {type: ENTRY_TYPE.VERIFICATION, verdict: VERDICT.APPROVE}};
+  assert.ok(verificationProblems(state, [SRC_FILE], 'a'.repeat(64))
+    .some((problem) => /candidate digest/u.test(problem)));
+});
+
+test('review binds acceptance terms and referenced proof bytes but not ordinary notes', (t) => {
+  const root = repo(t);
+  const quest = readQuest(root, QUEST_ID);
+  const initial = computeCandidateDigest(root, quest);
+  note(root, {id: QUEST_ID, type: ENTRY_TYPE.FINDING, text: 'Additional observation.'});
+  assert.equal(computeCandidateDigest(root, quest), initial);
+  assert.notEqual(computeCandidateDigest(root, {...quest, statement: 'A wider claim.'}), initial);
+  assert.notEqual(computeCandidateDigest(root, {...quest,
+    constraints: [{id: 'weakening', statement: 'A different acceptance condition.'}]}), initial);
+  assert.notEqual(computeCandidateDigest(root, {...quest,
+    verificationTemplates: ['owner-interaction']}), initial);
+  goGreen(root);
+  assert.notEqual(computeCandidateDigest(root, quest), initial,
+    'the actual probe input is part of the reviewed candidate');
+});
+
+test('review binds the bytes consumed through an internal proof symlink', (t) => {
+  const root = repo(t);
+  const target = `solve/quests/${QUEST_ID}/evidence/target.json`;
+  fs.renameSync(path.join(root, ORACLE), path.join(root, target));
+  fs.symlinkSync('target.json', path.join(root, ORACLE));
+  git(root, ['add', '-A']);
+  git(root, ['commit', '-q', '-m', 'retain the linked proof input']);
+  start(root, {id: QUEST_ID});
+  goGreen(root);
+  refuses(() => land(root, {id: QUEST_ID, skipProof: true}), /changes need a verification/u);
+  approve(root);
+  const digest = computeCandidateDigest(root, readQuest(root, QUEST_ID));
+  write(root, target, JSON.stringify({metric: 0, target: 1}));
+  assert.notEqual(computeCandidateDigest(root, readQuest(root, QUEST_ID)), digest);
+  refuses(() => land(root, {id: QUEST_ID, skipProof: true}), /candidate digest/u);
+});
+
+test('approval and land refuse external declared proof inputs', (t) => {
+  for (const linked of [true, false]) {
+    const root = repo(t);
+    start(root, {id: QUEST_ID});
+    goGreen(root);
+    approve(root);
+    const external = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'external-proof-')), 'oracle.json');
+    t.after(() => fs.rmSync(path.dirname(external), {recursive: true, force: true}));
+    fs.writeFileSync(external, JSON.stringify({metric: 0, target: 0}));
+    if (linked) {
+      fs.unlinkSync(path.join(root, ORACLE));
+      fs.symlinkSync(external, path.join(root, ORACLE));
+    } else {
+      const quest = readQuest(root, QUEST_ID);
+      write(root, `solve/quests/${QUEST_ID}/quest.json`, JSON.stringify({...quest,
+        doneWhen: {...quest.doneWhen, args: {file: external}}}));
+    }
+    refuses(() => approve(root), /proof input/u);
+    refuses(() => land(root, {id: QUEST_ID, skipProof: true}), /proof input|immutable after start/u);
+    note(root, {id: QUEST_ID, type: ENTRY_TYPE.VERIFICATION, text: 'Reject invalid proof.',
+      verifier: VERIFIER, verdict: VERDICT.REJECT});
+  }
 });
 
 test('land refuses a blocked quest and a probe changed after the seal', (t) => {
@@ -215,6 +503,7 @@ test('a refused commit takes the terminal entry back out', (t) => {
   start(root, {id: QUEST_ID});
   goGreen(root);
   note(root, {id: QUEST_ID, type: ENTRY_TYPE.ATTEMPT, text: TEXT});
+  approve(root);
   const hooks = path.join(root, '.git', 'hooks');
   fs.mkdirSync(hooks, {recursive: true});
   fs.writeFileSync(path.join(hooks, 'pre-commit'), '#!/bin/sh\nexit 1\n', {mode: 0o755});
@@ -233,6 +522,7 @@ test('the change proof runs against the tree that will be committed', (t) => {
   goGreen(root);
   write(root, DOC_FILE, TEXT);
   note(root, {id: QUEST_ID, type: ENTRY_TYPE.ATTEMPT, text: TEXT});
+  approve(root);
   // A checker that reads the repository through `git ls-files` (the test
   // taxonomy liveness rules, the classification shards) must see the new
   // file while the proof runs, not after the commit.
@@ -271,6 +561,7 @@ test('a failing change proof leaves nothing staged and the quest open', (t) => {
   goGreen(root);
   write(root, DOC_FILE, TEXT);
   note(root, {id: QUEST_ID, type: ENTRY_TYPE.ATTEMPT, text: TEXT});
+  approve(root);
   refuses(() => land(root, {id: QUEST_ID, runProof: () => {
     throw new SolveError('npm test failed (exit 1)');
   }}), /npm test failed/u);
@@ -288,6 +579,7 @@ test('the commit-time checks run before the proof and a miss costs no test run',
   // A hook that refuses the staged tree the way the file-size ratchet does.
   write(root, '.githooks/pre-commit',
     'echo "Source oversized-file ratchet: 28/27 over 800 lines."; exit 1\n');
+  approve(root);
   let proofRan = false;
   refuses(() => land(root, {id: QUEST_ID, runProof: () => {
     proofRan = true;
@@ -300,6 +592,7 @@ test('the commit-time checks run before the proof and a miss costs no test run',
   write(root, '.githooks/pre-commit',
     '[ "$LAGRANGE_SOLVER_LANDING" = 1 ] && git diff --cached --name-only | grep -q docs/ ' +
     '&& exit 0; exit 1\n');
+  approve(root);
   const landed = land(root, {id: QUEST_ID, runProof: () => {
     proofRan = true;
   }});
@@ -319,6 +612,7 @@ test('a path already staged as a deletion still lands', (t) => {
   // bare `git add -- <path>` would refuse the pathspec outright.
   git(root, ['rm', '--quiet', doomed]);
   note(root, {id: QUEST_ID, type: ENTRY_TYPE.ATTEMPT, text: TEXT});
+  approve(root);
   const landed = land(root, {id: QUEST_ID, skipProof: true});
   assert.ok(landed.paths.includes(doomed));
   assert.equal(git(root, ['status', '--porcelain']).trim(), '');
@@ -338,6 +632,7 @@ test('land records a verified land proof receipt when real change proof runs', (
     tests: 1,
     testPaths: ['test/demo.test.js'],
   }));
+  approve(root);
   const baseBefore = git(root, ['rev-parse', 'HEAD']).trim();
   const landed = land(root, {id: QUEST_ID});
   const receiptPath = path.join(gitCommonDir(root), 'lagrange-land-proof.json');
@@ -368,6 +663,7 @@ test('a large change set is recorded by size and a bounded sample', (t) => {
   assert.equal(attempt.entry.paths.length, 50);
   assert.equal(attempt.entry.truncated, true);
   goGreen(root);
+  approve(root);
   const landed = land(root, {id: QUEST_ID, skipProof: true});
   const terminal = readLog(root, QUEST_ID).at(-1);
   assert.equal(terminal.pathCount, landed.paths.length);
@@ -470,6 +766,7 @@ test('cross-worktree landing lock is acquired and released on success', (t) => {
   goGreen(root);
   write(root, DOC_FILE, TEXT);
   note(root, {id: QUEST_ID, type: ENTRY_TYPE.ATTEMPT, text: TEXT});
+  approve(root);
   let lockObserved = false;
   const landed = land(root, {id: QUEST_ID, runProof: () => {
     const lockPath = path.join(gitCommonDir(root), LAND_LOCK_FILENAME);
@@ -487,6 +784,7 @@ test('cross-worktree landing lock is released on refusal', (t) => {
   goGreen(root);
   write(root, DOC_FILE, TEXT);
   note(root, {id: QUEST_ID, type: ENTRY_TYPE.ATTEMPT, text: TEXT});
+  approve(root);
   let lockObserved = false;
   refuses(() => land(root, {id: QUEST_ID, runProof: () => {
     const lockPath = path.join(gitCommonDir(root), LAND_LOCK_FILENAME);

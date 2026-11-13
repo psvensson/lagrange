@@ -3,7 +3,6 @@
 // the CLI prints it. Nothing here writes outside solve/quests/<id>/ except
 // `land`, which commits.
 
-import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -18,19 +17,23 @@ import {
 
 import {
   CERTIFICATION_ONLY_PROBES, CLASS_FIX, ENTRY_TYPE, EPIC_PROOF, EPIC_STATUS,
-  FINDING_KIND, NEXT_OWNER, QUEST_SCHEMA, QUEST_STATUS, TERMINAL_STATUSES,
-  VERDICT, entryProblems, epicProblems, questProblems, text,
+  FINDING_KIND, NEXT_OWNER, QUEST_SCHEMA, QUEST_STATUS, TERMINAL_STATUSES, VERDICT,
+  entryProblems, epicProblems, questProblems, text,
 } from './schema.js';
 import {
   appendEntry, evidenceDir, isOpenEpic, listEpics, listQuestIds, logFile, questDir,
-  questExists, questState, readEpic, readLog, readQuest, verdictOf, writeQuest,
+  questExists, questState, readEpic, readLog, readQuest, writeQuest,
 } from './store.js';
 import {measure, requiredProofArtifacts} from './probes.js';
 import {
-  SOLVE_PREFIX, canonicalImportGraphProblem, changedPaths, coupledPairProblems,
-  epicScopeProblems, git, gitCommonDir, headSha, requiresVerification, stageablePaths,
+  canonicalImportGraphProblem, changedPaths, coupledPairProblems,
+  epicScopeProblems, git, gitCommonDir, headSha, packageScopeProblems, stageablePaths,
   staticQualityProblems,
 } from './guards.js';
+import {
+  candidateReviewPaths, computeCandidateDigest, pathsOutsideQuest, proofInputProblems,
+  stagedCandidateProblems, verificationProblems,
+} from './candidate-review.js';
 import {
   EVIDENCE_REF_PREFIX, addingCommits, bundleBasename, deleteSharedEvidenceAsset,
   parsePathsList, recordRelocation, relocationManifest, relocationRecordsDir,
@@ -143,7 +146,6 @@ const SHELL = 'bash';
 const PRE_COMMIT_TIMEOUT_MS = 10 * 60 * 1000;
 const COMMIT_SUBJECT_LIMIT = 72;
 const NO_VERIFY_FLAG = '--no-verify';
-const QUESTS_SUBDIR = 'quests';
 // The commit is the change record; the log records what happened. A change
 // set is named by its size and a bounded sample, never carried whole: a
 // cutover-sized attempt would otherwise write half a megabyte per entry into
@@ -156,33 +158,17 @@ const GIT_ADD = Object.freeze(['add', '--all', '--']);
 const GIT_ADD_ONE = Object.freeze(['add', '--']);
 const GIT_COMMIT = Object.freeze(['commit', '--quiet', '-m']);
 const GIT_UNSTAGE = Object.freeze(['reset', '--quiet', '--']);
+const GIT_LITERAL_PATHS = '--literal-pathspecs';
 const MESSAGE = Object.freeze({
   ID_REQUIRED: '--id <quest> is required',
   SOLVED_BY_LAND: 'solved is recorded by land, never by note',
-  REJECTION_STANDS: 'the newest verification is a rejection and no attempt is newer than it',
-  VERIFICATION_MISSING: 'src/ changes need a verification entry (verifier subagent:<id>)',
-  VERIFICATION_STALE: 'src/ changes need a verification entry newer than the last attempt',
-  VERIFICATION_NOT_APPROVED: 'src/ changes need an approving verification',
-  VERIFICATION_CONTENT_MISMATCH:
-    'verification candidate digest does not match the reviewed candidate (reviewed content or proof input was mutated after verification)',
   LAND_REFUSED: 'land refused:',
   PRE_COMMIT_REFUSED:
     'land: the commit-time checks refused the staged tree before any test ran:',
   PROBE_IMMUTABLE: 'the probe is immutable after start (supersede the quest to change it)',
+  CANDIDATE_CHANGED: 'candidate digest changed during landing; renew review',
   PROBLEM_BULLET: '- ',
 });
-// Whether the newest verification stands as a verdict on the current tree.
-const VERDICT_STATE = Object.freeze({
-  NONE: 'none', STALE: 'stale', APPROVED: 'approved', REJECTED: 'rejected',
-});
-const VERIFICATION_PROBLEMS = Object.freeze({
-  [VERDICT_STATE.NONE]: MESSAGE.VERIFICATION_MISSING,
-  [VERDICT_STATE.STALE]: MESSAGE.VERIFICATION_STALE,
-  [VERDICT_STATE.REJECTED]: MESSAGE.VERIFICATION_NOT_APPROVED,
-  [VERDICT_STATE.APPROVED]: null,
-});
-const CANDIDATE_HASH_ALGORITHM = 'sha256';
-const CANDIDATE_HASH_ENCODING = 'hex';
 
 class SolveError extends Error {}
 
@@ -269,76 +255,6 @@ function changeSetRecord(paths) {
   return paths.length > CHANGE_SET_SAMPLE ? {...record, truncated: true} : record;
 }
 
-// The change set a quest is judged on: everything but its own directory.
-function pathsOutsideQuest(root, id) {
-  return changedPaths(root).filter((filePath) =>
-    !filePath.startsWith(`${SOLVE_PREFIX}${QUESTS_SUBDIR}/${id}/`));
-}
-
-function computeCandidateDigest(root, quest) {
-  const hash = crypto.createHash(CANDIDATE_HASH_ALGORITHM);
-  const head = headSha(root);
-  hash.update(`head:${head}\n`);
-
-  const changed = pathsOutsideQuest(root, quest.id);
-  for (const filePath of changed) {
-    const fullPath = path.resolve(root, filePath);
-    try {
-      if (fs.existsSync(fullPath) && fs.lstatSync(fullPath).isFile()) {
-        const fileBytes = fs.readFileSync(fullPath);
-        const fileHash = crypto.createHash(CANDIDATE_HASH_ALGORITHM)
-          .update(fileBytes).digest(CANDIDATE_HASH_ENCODING);
-        hash.update(`file:${filePath}:${fileHash}\n`);
-      } else {
-        hash.update(`deleted:${filePath}\n`);
-      }
-    } catch {
-      hash.update(`unreadable:${filePath}\n`);
-    }
-  }
-
-  const receiptRelative = quest?.doneWhen?.args?.file;
-  if (receiptRelative) {
-    const receiptPath = path.resolve(root, receiptRelative);
-    try {
-      if (fs.existsSync(receiptPath)) {
-        const data = JSON.parse(fs.readFileSync(receiptPath, 'utf8'));
-        const witnessFiles = new Set();
-        if (data.testFileDigests && typeof data.testFileDigests === 'object') {
-          for (const testFile of Object.keys(data.testFileDigests)) {
-            witnessFiles.add(testFile);
-          }
-        }
-        if (Array.isArray(data.receipts)) {
-          for (const r of data.receipts) {
-            if (r.testFile) witnessFiles.add(r.testFile);
-          }
-        }
-        for (const witnessFile of [...witnessFiles].sort()) {
-          const fullWitnessPath = path.resolve(root, witnessFile);
-          try {
-            if (fs.existsSync(fullWitnessPath) && fs.lstatSync(fullWitnessPath).isFile()) {
-              const fileBytes = fs.readFileSync(fullWitnessPath);
-              const fileHash = crypto.createHash(CANDIDATE_HASH_ALGORITHM)
-                .update(fileBytes).digest(CANDIDATE_HASH_ENCODING);
-              hash.update(`witness:${witnessFile}:${fileHash}\n`);
-            } else {
-              hash.update(`witness-missing:${witnessFile}\n`);
-            }
-          } catch {
-            hash.update(`witness-unreadable:${witnessFile}\n`);
-          }
-        }
-      }
-    } catch {
-      // receipt not readable yet
-    }
-  }
-
-  hash.update(`doneWhen:${JSON.stringify(quest?.doneWhen || {})}\n`);
-  return hash.digest(CANDIDATE_HASH_ENCODING);
-}
-
 function defined(fields) {
   return Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined));
 }
@@ -346,7 +262,7 @@ function defined(fields) {
 // The fields each entry type takes from the note options.
 const ENTRY_FIELDS = Object.freeze({
   [ENTRY_TYPE.FINDING]: (options) => defined({kind: options.kind, status: options.status,
-    evidence: options.evidence}),
+    evidence: options.evidence, assignment: options.assignment}),
   [ENTRY_TYPE.ATTEMPT]: () => ({}),
   [ENTRY_TYPE.VERIFICATION]: (options) => ({verifier: options.verifier, verdict: options.verdict}),
   [ENTRY_TYPE.TERMINAL]: (options) => defined({status: options.status,
@@ -380,7 +296,12 @@ function note(root, options) {
     entry.at = headSha(root);
     Object.assign(entry, changeSetRecord(pathsOutsideQuest(root, quest.id)));
   }
+  if (entry.assignment) entry.at = headSha(root);
   if (entry.type === ENTRY_TYPE.VERIFICATION) {
+    const inputProblems = proofInputProblems(root, quest);
+    if (entry.verdict === VERDICT.APPROVE && inputProblems.length > 0) {
+      refuse(`note: ${inputProblems.join(PROBLEM_SEPARATOR)}`);
+    }
     entry.at = headSha(root);
     entry.candidateDigest = computeCandidateDigest(root, quest);
   }
@@ -432,29 +353,6 @@ function probe(root, options) {
 }
 
 // --- land ----------------------------------------------------------------------
-
-function verdictState(state) {
-  const last = state.lastVerification;
-  if (!last) return VERDICT_STATE.NONE;
-  if (!state.verificationIsCurrent) return VERDICT_STATE.STALE;
-  return verdictOf(last) === VERDICT.APPROVE ? VERDICT_STATE.APPROVED : VERDICT_STATE.REJECTED;
-}
-
-function verificationProblems(state, paths, currentCandidateDigest) {
-  const last = state.lastVerification;
-  const verdict = verdictState(state);
-  const problems = [];
-  if (verdict === VERDICT_STATE.REJECTED) problems.push(MESSAGE.REJECTION_STANDS);
-  const required = requiresVerification(paths) ? VERIFICATION_PROBLEMS[verdict] : null;
-  if (required) problems.push(required);
-  if (last?.candidateDigest && currentCandidateDigest &&
-      last.candidateDigest !== currentCandidateDigest) {
-    problems.push(
-      `${MESSAGE.VERIFICATION_CONTENT_MISMATCH}: expected ${last.candidateDigest}, got ${currentCandidateDigest}`,
-    );
-  }
-  return problems;
-}
 
 function altitudeProblems(state) {
   return state.attemptsSinceAltitudeCheck.length > ALTITUDE_BUDGET ? [
@@ -556,10 +454,13 @@ function commitSubject(quest) {
 // The index IS the change set being proven and committed: a checker that
 // reads the repository through `git ls-files` (test taxonomy liveness, the
 // classification shards) must see the post-landing tree, not the pre-landing
-// one. Staging happens before the proof and again before the commit, because
-// the terminal log entry is appended in between.
+// one. Only the terminal log entry is staged after proof: restaging reviewed
+// files then would replace the tree that was actually proven.
 function stageLanding(root, quest, paths) {
-  git(root, [...GIT_ADD, ...stageablePaths(root, paths), questDir(root, quest.id)]);
+  const scopeProblems = packageScopeProblems(quest, readLog(root, quest.id), changedPaths(root));
+  if (scopeProblems.length > 0) refuse(`${MESSAGE.LAND_REFUSED} ${scopeProblems.join(PROBLEM_SEPARATOR)}`);
+  git(root, [GIT_LITERAL_PATHS, ...GIT_ADD,
+    ...stageablePaths(root, paths), questDir(root, quest.id)]);
   stageGeneratedArtifacts(root);
 }
 
@@ -574,9 +475,10 @@ function stageGeneratedArtifacts(root) {
   }
 }
 
-// Give the index back to the caller exactly as a refusal found it.
+// Remove the attempted landing's staged paths after proof or commit refusal.
 function unstageLanding(root, quest, paths) {
-  git(root, [...GIT_UNSTAGE, ...paths, questDir(root, quest.id)], {allowFailure: true});
+  git(root, [GIT_LITERAL_PATHS, ...GIT_UNSTAGE,
+    ...paths, questDir(root, quest.id)], {allowFailure: true});
 }
 
 function runStagedPreCommitCheck(root, quest, paths, options) {
@@ -595,7 +497,7 @@ function runStagedPreCommitCheck(root, quest, paths, options) {
 // must see the tree that will be committed. A refused proof gives the index
 // back. `options.runProof` replaces the environment-bound default, which is
 // how the staged-tree guarantee is observed under test.
-function proveLanding(root, quest, paths, options) {
+function proveLanding(root, quest, paths, options, candidateDigest) {
   const injected = options.runProof || null;
   const shouldRefresh = requiresInventoryRefresh(paths);
   if (!injected && !options.skipProof && shouldRefresh) {
@@ -603,17 +505,20 @@ function proveLanding(root, quest, paths, options) {
     const graphProblem = canonicalImportGraphProblem(root);
     if (graphProblem) refuse(graphProblem);
   }
+  recheckLandingCandidate(root, quest.id, candidateDigest);
   stageLanding(root, quest, paths);
-  const hookRan = runStagedPreCommitCheck(root, quest, paths, options);
-  const proof = injected || (options.skipProof ? null : runChangeProof);
-  if (!proof) return {hookRan};
   try {
-    proof(root, options.log || (() => {}));
+    const hookRan = runStagedPreCommitCheck(root, quest, paths, options);
+    recheckLandingCandidate(root, quest.id, candidateDigest, true);
+    const tree = git(root, ['write-tree']).trim();
+    const proof = injected || (options.skipProof ? null : runChangeProof);
+    if (proof) proof(root, options.log || (() => {}));
+    const current = recheckLandingCandidate(root, quest.id, candidateDigest, true, tree);
+    return {hookRan, quest: current.quest};
   } catch (error) {
     unstageLanding(root, quest, paths);
     throw error;
   }
-  return {hookRan};
 }
 
 // The pre-commit hook against the staged index, with the landing marker the
@@ -827,9 +732,9 @@ function acquireLandingLock(root, options = {}) {
   }
 }
 
-function commitLanding(root, quest, paths, options) {
+function commitLanding(root, quest, options) {
   const env = {...process.env, [LANDING_MARKER_ENV]: LANDING_MARKER_VALUE};
-  stageLanding(root, quest, paths);
+  git(root, [GIT_LITERAL_PATHS, ...GIT_ADD_ONE, logFile(root, quest.id)]);
   const message = [commitSubject(quest), '', `Quest: ${quest.id}`,
     quest.epic ? `Epic: ${quest.epic}` : null, `Sealed-At: ${quest.sealedAt}`,
     ...(options.trailers || [])].filter((line) => line !== null).join(LINE_SEPARATOR);
@@ -870,6 +775,39 @@ function recordLandProofReceipt(root, commit, baseBeforeLand, questId, options) 
   }
 }
 
+function landingState(root, id) {
+  const current = openState(root, id);
+  const {quest, state} = current;
+  if (!state.seal) refuse(`quest ${quest.id} is not sealed; run start first`);
+  if (state.status === QUEST_STATUS.BLOCKED) {
+    refuse(`quest ${quest.id} is blocked (next owner ${state.blocked.nextOwner}): ` +
+      `${state.blocked.text}; record the attempt or typed finding that clears it`);
+  }
+  if (JSON.stringify(quest.doneWhen) !== JSON.stringify(state.seal.seal.doneWhen)) {
+    refuse(`quest ${quest.id}: doneWhen differs from the sealed probe; ${MESSAGE.PROBE_IMMUTABLE}`);
+  }
+  const problems = proofInputProblems(root, quest);
+  if (problems.length > 0) refuse(`${MESSAGE.LAND_REFUSED} ${problems.join(PROBLEM_SEPARATOR)}`);
+  return current;
+}
+
+function recheckLandingCandidate(root, id, expectedDigest, checkIndex = false, expectedTree) {
+  const current = landingState(root, id);
+  const {quest, state, log} = current;
+  const paths = pathsOutsideQuest(root, id);
+  const digest = computeCandidateDigest(root, quest);
+  const problems = [
+    ...packageScopeProblems(quest, log, changedPaths(root)),
+    ...epicScopeProblems(quest, loadEpic(root, quest), paths),
+    ...verificationProblems(state, candidateReviewPaths(root, quest, paths), digest),
+    ...altitudeProblems(state),
+    ...(checkIndex ? stagedCandidateProblems(root, id, expectedTree) : []),
+  ];
+  if (digest !== expectedDigest) problems.push(MESSAGE.CANDIDATE_CHANGED);
+  if (problems.length > 0) refuse(`${MESSAGE.LAND_REFUSED} ${problems.join(PROBLEM_SEPARATOR)}`);
+  return current;
+}
+
 /**
  * Land: every guard, the change proof, the commit, then the terminal entry.
  * Never pushes. `options.log` receives the proof output; `options.runProof`
@@ -880,15 +818,7 @@ function recordLandProofReceipt(root, commit, baseBeforeLand, questId, options) 
  * @return {Object}
  */
 function land(root, options) {
-  const {quest, state} = openState(root, options.id);
-  if (!state.seal) refuse(`quest ${quest.id} is not sealed; run start first`);
-  if (state.status === QUEST_STATUS.BLOCKED) {
-    refuse(`quest ${quest.id} is blocked (next owner ${state.blocked.nextOwner}): ` +
-      `${state.blocked.text}; record the attempt or typed finding that clears it`);
-  }
-  if (JSON.stringify(quest.doneWhen) !== JSON.stringify(state.seal.seal.doneWhen)) {
-    refuse(`quest ${quest.id}: doneWhen differs from the sealed probe; ${MESSAGE.PROBE_IMMUTABLE}`);
-  }
+  const {quest, state, log} = landingState(root, options.id);
   const epic = loadEpic(root, quest);
   const measured = measure(root, quest.doneWhen);
   const problems = [];
@@ -898,7 +828,8 @@ function land(root, options) {
   }
   const paths = pathsOutsideQuest(root, quest.id);
   const currentCandidateDigest = computeCandidateDigest(root, quest);
-  problems.push(...verificationProblems(state, paths, currentCandidateDigest));
+  problems.push(...packageScopeProblems(quest, log, changedPaths(root)));
+  problems.push(...verificationProblems(state, candidateReviewPaths(root, quest, paths), currentCandidateDigest));
   problems.push(...altitudeProblems(state));
   problems.push(...epicScopeProblems(quest, epic, paths));
   problems.push(...coupledPairProblems(root, paths));
@@ -911,7 +842,7 @@ function land(root, options) {
   let proven;
   try {
     const baseBeforeLand = headSha(root);
-    proven = proveLanding(root, quest, paths, options);
+    proven = proveLanding(root, quest, paths, options, currentCandidateDigest);
     // The terminal entry rides in the landing commit; a refused commit takes
     // the entry back out so the quest stays open and land can be retried.
     const logPath = logFile(root, quest.id);
@@ -928,7 +859,7 @@ function land(root, options) {
     try {
       const commitOptions = {...options,
         noVerify: options.noVerify || Boolean(proven?.hookRan)};
-      commit = commitLanding(root, quest, paths, commitOptions);
+      commit = commitLanding(root, proven.quest, commitOptions);
     } catch (error) {
       fs.writeFileSync(logPath, logBefore);
       unstageLanding(root, quest, paths);

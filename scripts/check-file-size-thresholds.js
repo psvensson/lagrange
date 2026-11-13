@@ -15,6 +15,7 @@ const DIRECTORY_TEST = 'test';
 const JAVASCRIPT_EXTENSION = '.js';
 const CLI_FLAG_STRICT = '--strict';
 const CLI_FLAG_TOP = '--top';
+const CLI_FLAG_BASE = '--base';
 const CLI_FLAG_OWNER_BOUNDARY_GUIDANCE = '--owner-boundary-guidance';
 const CLI_FLAG_PREFIX = '--';
 const NEWLINE = '\n';
@@ -44,6 +45,18 @@ const FILE_SIZE_BASELINES = Object.freeze({
   [FILE_SIZE_SCOPE.SOURCE]: SOURCE_BASELINE_COUNT,
   [FILE_SIZE_SCOPE.TEST]: TEST_BASELINE_COUNT,
 });
+const CHECKED_JAVASCRIPT_PATH = /^(?:src|test|scripts)\/[\s\S]+\.(?:js|mjs|cjs)$/u;
+const CHANGE_RATCHET_MODULE = './checks/file-size-change-ratchet.js';
+
+function parseComparisonBase(args) {
+  const index = args.indexOf(CLI_FLAG_BASE);
+  if (index < 0) return null;
+  const base = args[index + 1];
+  if (!base || base.startsWith(CLI_FLAG_PREFIX)) {
+    throw new Error(`${CLI_FLAG_BASE} requires a comparison commit`);
+  }
+  return base;
+}
 
 function parseTopCount(args) {
   const optionIndex = args.indexOf(CLI_FLAG_TOP);
@@ -58,7 +71,7 @@ function parseExplicitFilePaths(args) {
   const filePaths = [];
   for (let index = NUM_ZERO; index < args.length; index += NUM_ONE) {
     const arg = args[index];
-    if (arg === CLI_FLAG_TOP) {
+    if (arg === CLI_FLAG_TOP || arg === CLI_FLAG_BASE) {
       index += NUM_ONE;
       continue;
     }
@@ -68,6 +81,13 @@ function parseExplicitFilePaths(args) {
     filePaths.push(arg);
   }
   return filePaths;
+}
+
+function policyForPath(filePath) {
+  if (!CHECKED_JAVASCRIPT_PATH.test(filePath)) return null;
+  const scope = filePath.startsWith(`${DIRECTORY_TEST}/`) ?
+    FILE_SIZE_SCOPE.TEST : FILE_SIZE_SCOPE.SOURCE;
+  return {scope, threshold: FILE_SIZE_THRESHOLDS[scope]};
 }
 
 function normalizeRelativePath(filePath) {
@@ -222,6 +242,7 @@ async function main() {
   const strictMode = args.includes(CLI_FLAG_STRICT);
   const ownerBoundaryGuidance = args.includes(CLI_FLAG_OWNER_BOUNDARY_GUIDANCE);
   const topCount = parseTopCount(args);
+  const base = parseComparisonBase(args);
   const explicitFilePaths = parseExplicitFilePaths(args);
   const explicitEntries = explicitFilePaths.length > NUM_ZERO ?
     await buildExplicitFileSizeEntries(explicitFilePaths) :
@@ -236,7 +257,13 @@ async function main() {
   if (ownerBoundaryGuidance) {
     printOwnerBoundaryGuidance([...sourceEntries, ...testEntries]);
   }
-  const errors = buildRatchetErrors(sourceEntries, testEntries, strictMode);
+  // Inventory consumers import this module without invoking the CLI. The
+  // comparison dependency belongs to the command that claims change proof.
+  const {fileSizeChangeErrors} = await import(CHANGE_RATCHET_MODULE);
+  const compared = fileSizeChangeErrors({root: process.cwd(), base,
+    paths: explicitFilePaths.length > 0 ? explicitFilePaths : null, policyForPath, countLines});
+  console.log(`Per-file size comparison base: ${compared.base}`);
+  const errors = [...buildRatchetErrors(sourceEntries, testEntries, strictMode), ...compared.errors];
   if (errors.length > NUM_ZERO) {
     console.error(EMPTY_TEXT);
     console.error(errors.join(NEWLINE));
@@ -251,7 +278,12 @@ function isDirectRun() {
 }
 
 if (isDirectRun()) {
-  await main();
+  try {
+    await main();
+  } catch (error) {
+    console.error(`File-size check unavailable: ${error.message}`);
+    process.exitCode = EXIT_FAILURE;
+  }
 }
 
 export {
