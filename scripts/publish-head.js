@@ -587,7 +587,7 @@ export function publishExactHead(root, args = {}, options = {}) {
     const places = localCorpusPlaces(root);
     localCorpus.stateDir = options.localCorpusDir || places.stateDir;
     localCorpus.mainRoot = places.mainRoot;
-    reconcileLocalCorpus(localCorpus.stateDir);
+    reconcileLocalCorpus(localCorpus.stateDir, writeLine);
     reportLocalCorpus(localCorpus.stateDir, writeLine);
   });
   publishStage(PUBLISH_STAGE_LABEL.CREATE_WORKTREE);
