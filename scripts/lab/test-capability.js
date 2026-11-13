@@ -1,3 +1,5 @@
+import {checkedThermalObservation, parseThermalEndpoint}
+  from '../checks/wait-for-thermal-headroom.js';
 // Measured worker prerequisites and their canonical capability decoding.
 import {createHash} from 'node:crypto';
 import {LAB_LOCK_PROBE, LAB_LOCK_PROBED, LAB_LOCK_STATE} from './machine-lock-constants.js';
@@ -136,7 +138,7 @@ const sha256Of = (file) =>
 const CAPABILITY_SCRIPT = [
   'set +e',
   'repo="$1"',
-  'node_major="$2"',
+  'node_major="$2"; thermal_python="$3"; thermal_entry="$4"; thermal_config="$5"',
   // Clear the positional parameters BEFORE sourcing nvm: nvm.sh processes
   // its arguments, so a repo path of `--install` would otherwise make the
   // probe run `nvm install` on the machine it is only meant to observe
@@ -154,12 +156,10 @@ const CAPABILITY_SCRIPT = [
     '{ hostname; sysctl -n kern.boottime; } 2>/dev/null | tr -d \'\\n\')"',
   'say cores "$(getconf _NPROCESSORS_ONLN 2>/dev/null || nproc 2>/dev/null)"',
   'say mem_kib "$(awk \'/^MemTotal:/{print $2}\' /proc/meminfo 2>/dev/null)"',
-  // Whether the thermal gate (scripts/checks/wait-for-thermal-headroom.js) has
-  // a source here: lm-sensors, a sysfs thermal zone or an hwmon input. A host
-  // with none (a WSL2 VM) is `unmeasurable`, a fact placement can decide on.
-  'if { command -v sensors >/dev/null 2>&1 && sensors -j >/dev/null 2>&1; } || ' +
-    'ls /sys/class/thermal/thermal_zone*/temp /sys/class/hwmon/hwmon*/temp*_input ' +
-    '>/dev/null 2>&1; then say thermal measured; else say thermal unmeasurable; fi',
+  'thermal_json="$("$thermal_python" -E -s -B "$thermal_entry" ' +
+    'thermal-observe --config "$thermal_config")"; thermal_status=$?',
+  'say thermal_status "$thermal_status"',
+  'say thermal_json "$thermal_json"',
   'NVM_DIR="${NVM_DIR:-$HOME/.nvm}"',
   '[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" >/dev/null 2>&1 && ' +
     '[ -n "$node_major" ] && nvm use "$node_major" >/dev/null 2>&1',
@@ -266,7 +266,8 @@ export function parseCapability(text, probedAt = Date.now()) {
     },
     movielensSha256: repoPresent ? capabilityText(values.movielens_sha256) : null,
     cpuSampleMs: capabilityNumber(values.cpu_sample_ms),
-    thermal: capabilityText(values.thermal),
+    thermalObservation: values.thermal_json ? JSON.parse(values.thermal_json) : null,
+    thermalStatus: capabilityNumber(values.thermal_status),
     dockerRootFreeBytes: capabilityNumber(values.docker_root_free_bytes),
     repoFreeBytes: repoPresent ? capabilityNumber(values.repo_free_bytes) : null,
     machineLock: parseMachineLock(values),
@@ -281,18 +282,23 @@ export function parseCapability(text, probedAt = Date.now()) {
  * @return {Promise<Object>}
  */
 export async function probeTestCapability({sshTarget = null, repoPath,
-  nodeMajor = EMPTY, captureCommand = capture}) {
+  nodeMajor = EMPTY, thermalEndpoint, captureCommand = capture}) {
+  const endpoint = parseThermalEndpoint(JSON.stringify(thermalEndpoint));
   // A target beginning with `-` would be read by ssh as an option.
   if (sshTarget && String(sshTarget).startsWith(SSH_OPTION_PREFIX)) {
     throw new Error(`${ERROR_TEXT_CAPABILITY.BAD_TARGET}${sshTarget}`);
   }
   const args = sshTarget ?
     [SSH_OPTION, SSH_BATCH_MODE, ...SSH_BOUNDED_OPTIONS, sshTarget,
-      `sh -s -- ${shellQuote(repoPath)} ${shellQuote(nodeMajor)}`] :
-    ['-s', '--', repoPath, nodeMajor];
+      `sh -s -- ${[repoPath, nodeMajor, endpoint.python, endpoint.entry, endpoint.config]
+        .map(shellQuote).join(' ')}`] :
+    ['-s', '--', repoPath, nodeMajor, endpoint.python, endpoint.entry, endpoint.config];
   const text = await captureCommand(sshTarget ? SSH : 'sh', args,
     {stdin: `${CAPABILITY_SCRIPT}\n`, timeoutMs: PROBE_DEADLINE_MS});
-  return parseCapability(text);
+  const capability = parseCapability(text);
+  return {...capability, thermalEndpoint: endpoint,
+    thermalDecision: checkedThermalObservation(capability.thermalObservation,
+      endpoint, capability.thermalStatus)};
 }
 
 

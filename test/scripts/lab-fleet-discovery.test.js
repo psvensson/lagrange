@@ -26,6 +26,7 @@ import {
 } from '../../scripts/lab/probe.js';
 import * as selector from '../../scripts/select-change-tests.js';
 import {createEmptyState, loadState, saveState} from '../../scripts/lab/state.js';
+import {nativeThermalFixture} from './native-thermal-fixture.js';
 
 // What this process was started with; every scratch lab home restores it.
 const ORIGINAL_LAB_HOME = process.env.LAGRANGE_LAB_HOME;
@@ -241,13 +242,14 @@ function installedCheckout(dir, text) {
 
 // The whole capability script against a local checkout, with docker's bound
 // stubbed out so nothing waits on a daemon.
-async function probeCheckout(root, repo) {
+async function probeCheckout(t, root, repo) {
+  const {endpoint} = nativeThermalFixture(t);
   const stubBin = path.join(root, 'bin');
   fs.mkdirSync(stubBin, {recursive: true});
   fs.writeFileSync(path.join(stubBin, 'timeout'), '#!/bin/sh\nexit 124\n', {mode: 0o755});
   const env = {...process.env, NVM_DIR: path.join(root, 'no-nvm'), PATH: [stubBin,
     path.dirname(process.execPath), process.env.PATH].join(path.delimiter)};
-  return probeTestCapability({repoPath: repo, nodeMajor: '',
+  return probeTestCapability({repoPath: repo, nodeMajor: '', thermalEndpoint: endpoint,
     captureCommand: (command, args, options) =>
       capture(command, args, {...options, env, cwd: root})});
 }
@@ -268,7 +270,7 @@ test('a lockfile that differs only in its release version is the same dependency
       lock.version = '0.2.6';
       lock.packages[''].version = '0.2.6';
     }));
-    const capability = await probeCheckout(root, host);
+    const capability = await probeCheckout(t, root, host);
     assert.equal(capability.repo.dependenciesCurrent, true, 'the host install is current');
     assert.deepEqual(corpusReadiness(capability, fleetRequirement(controller)).missing, [],
       'the release identity is not a dependency');
@@ -509,6 +511,8 @@ test('a placed commit is measured against its own lockfile and engines floor', a
   // the controller (this checkout, whose working tree holds the moved graph
   // and floor) is measured against the placed commit's requirement.
   const home = scratchLabHome(t);
+  const {endpoint} = nativeThermalFixture(t);
+  await saveState({...createEmptyState(), controller: {thermalEndpoint: endpoint}});
   const paths = [
     ['lab test', labProbe.labTestDeps({root: repo})],
     ['placement', labProbe.placementDeps({root: repo, planCosts: HOUR_COSTS,
@@ -622,7 +626,7 @@ test('a version-only release bump of this repository leaves the fleet ready', as
   fs.copyFileSync(path.join(process.cwd(), 'package.json'),
     path.join(controller, 'package.json'));
   const host = installedCheckout(path.join(root, 'host'), before);
-  const capability = await probeCheckout(root, host);
+  const capability = await probeCheckout(t, root, host);
   const verdict = corpusReadiness(capability, fleetRequirement(controller));
   assert.equal(capability.repo.dependenciesCurrent, true);
   assert.equal(verdict.missing.length, 0,
@@ -640,7 +644,8 @@ test('the pinned dataset is the one the canary checks before its corpus', () => 
   assert.ok(fetch.run.includes(MOVIELENS_FILE), 'for the same file');
 });
 
-test('discovery probes every machine and recognises one reached twice', async () => {
+test('discovery probes every machine and recognises one reached twice', async (t) => {
+  const {endpoint} = nativeThermalFixture(t);
   const seen = [];
   // Two machines installed from one image share /etc/machine-id; the boot id
   // tells them apart, and it is what discovery keys on.
@@ -648,8 +653,8 @@ test('discovery probes every machine and recognises one reached twice', async ()
     'ctl': 'boot-A', 'peer@one': 'boot-B', 'peer@self': 'boot-A', 'peer@two': 'boot-B',
     'peer@clone': 'boot-C',
   };
-  const probe = async ({sshTarget, repoPath, nodeMajor}) => {
-    seen.push({sshTarget, repoPath, nodeMajor});
+  const probe = async ({sshTarget, repoPath, nodeMajor, thermalEndpoint}) => {
+    seen.push({sshTarget, repoPath, nodeMajor, thermalEndpoint});
     if (sshTarget === 'peer@down') throw new Error('ssh: connect refused');
     return parseCapability(FULL.replace('boot_id=boot-1',
       `boot_id=${identities[sshTarget ?? 'ctl']}\nmachine_id=cloned-image`));
@@ -662,7 +667,8 @@ test('discovery probes every machine and recognises one reached twice', async ()
       {name: 'clone', ssh: 'peer@clone'},
       {name: 'down', ssh: 'peer@down'},
       {name: 'no-ssh'},
-    ],
+    ].map((node) => ({...node, thermalEndpoint: endpoint})),
+    controllerThermalEndpoint: endpoint,
     controllerRepoPath: '/here',
     ...REQUIREMENT,
     probe,
@@ -673,6 +679,8 @@ test('discovery probes every machine and recognises one reached twice', async ()
   assert.equal(fleet[0].controller, true);
   assert.equal(seen[0].sshTarget, null, 'the controller is probed locally');
   assert.equal(seen[0].repoPath, '/here');
+  assert.ok(seen.every((call) => call.thermalEndpoint === endpoint),
+    'controller and peer probes receive the explicitly configured native endpoint');
   assert.ok(seen.every((call) => call.nodeMajor === '22'),
     'every machine activates the engines-floor major, written down once');
   assert.equal(seen.find((call) => call.sshTarget === 'peer@one').repoPath,
@@ -713,8 +721,14 @@ test('discovery probes every machine and recognises one reached twice', async ()
   assert.equal(state.nodes.self, undefined, 'discovery never invents inventory entries');
 });
 
-test('the controller is probed by the same script it sends to a lab node', async () => {
-  const capability = await probeTestCapability({repoPath: process.cwd()});
+test('the controller is probed by the same script it sends to a lab node', async (t) => {
+  const {endpoint} = nativeThermalFixture(t);
+  const capability = await probeTestCapability({repoPath: process.cwd(),
+    thermalEndpoint: endpoint});
+  assert.deepEqual(capability.thermalEndpoint, endpoint);
+  assert.equal(capability.thermalStatus, 0);
+  assert.equal(capability.thermalObservation.outcome, 'READY');
+  assert.equal(capability.thermalDecision.outcome, 'READY');
   assert.ok(capability.bootId, 'a machine identity');
   if (fs.existsSync(BOOT_ID_FILE)) {
     assert.equal(capability.bootId, fs.readFileSync(BOOT_ID_FILE, 'utf8').trim(),
@@ -733,24 +747,29 @@ test('the controller is probed by the same script it sends to a lab node', async
     sshTarget: 'peer@lab',
     repoPath: QUOTED_PATH,
     nodeMajor: '22',
+    thermalEndpoint: endpoint,
     captureCommand: async (command, args, options) => {
       calls.push({command, args, stdin: options.stdin, timeoutMs: options.timeoutMs});
-      return 'cores=1';
+      return `cores=1\nthermal_status=0\nthermal_json=${
+        JSON.stringify(capability.thermalObservation)}`;
     },
   });
   assert.equal(calls[0].command, 'ssh');
-  assert.equal(calls[0].args.at(-1), QUOTED_PATH_REMOTE,
+  assert.equal(calls[0].args.at(-1), `${QUOTED_PATH_REMOTE} '${endpoint.python}' ` +
+    `'${endpoint.entry}' '${endpoint.config}'`,
     'the remote path is quoted for the remote shell, whatever it contains');
   assert.ok(calls[0].args.includes('ConnectTimeout=5'),
     'an address that answers nothing cannot hold discovery');
   assert.ok(calls[0].timeoutMs > 0, 'nor can a machine that answers and then hangs');
   assert.match(calls[0].stdin, /repo_present yes/u, 'the same script travels to the node');
   await assert.rejects(probeTestCapability({sshTarget: '-oProxyCommand=x', repoPath: '/r',
+    thermalEndpoint: endpoint,
     captureCommand: async () => assert.fail('never run')}), /begins with "-"/u,
   'a target ssh would read as an option is refused');
 });
 
 test('the probe observes a checkout and never acts on it', async (t) => {
+  const {endpoint} = nativeThermalFixture(t);
   // A repository path with a backslash (dash's echo rewrote those) and a
   // stub nvm that records what it was handed: sourced with the caller's
   // arguments, nvm.sh would act on a path such as `--install`.
@@ -782,7 +801,7 @@ test('the probe observes a checkout and never acts on it', async (t) => {
     if (installed) fs.writeFileSync(hidden, JSON.stringify({packages: installed}));
     else fs.rmSync(hidden, {force: true});
     // A major no machine has: the stub only records what it was asked.
-    return probeTestCapability({repoPath, nodeMajor: '99',
+    return probeTestCapability({repoPath, nodeMajor: '99', thermalEndpoint: endpoint,
       captureCommand: (command, args, options) =>
         capture(command, args, {...options, env, cwd: root})});
   };
@@ -912,7 +931,9 @@ function scratchLabLock(t, extraEnv = {}) {
 test('the probe reads the machine lock and its holder record and never takes the lock',
   async (t) => {
     const lab = scratchLabLock(t);
+    const {endpoint} = nativeThermalFixture(t);
     const probeHere = () => probeTestCapability({repoPath: process.cwd(),
+      thermalEndpoint: endpoint,
       captureCommand: (command, args, options) => capture(command, args, {...options,
         env: lab.env})});
     assert.equal((await probeHere()).machineLock?.state, 'free', 'no lock file: free');

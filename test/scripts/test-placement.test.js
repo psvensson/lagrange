@@ -11,6 +11,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
+import {nativeThermalFixture} from './native-thermal-fixture.js';
 
 import {gitProcessEnvironment} from '../../scripts/checks/git-process-environment.js';
 import {
@@ -183,7 +184,7 @@ test('local execution is planned explicitly; missing placement facts refuse exec
   assert.equal(run.calls.discover, 0, 'a working tree is never sent anywhere');
   assert.match(run.calls.lines[0], /^placement: unavailable - the tree is not exactly a commit/u);
 
-  run = fakeDeps({discover: async () => ({machines: []})});
+  run = fakeDeps({discover: async () => ({fleet: fakeInventory().fleet, machines: []})});
   assert.equal(await runPlacedTestFiles(MANY, run.deps), PLACEMENT_EXIT.SETUP);
   assert.deepEqual(run.calls.local, []);
   assert.match(run.calls.lines[0], /no lab machine is ready/u);
@@ -345,24 +346,26 @@ test('an unavailable or incomplete lab shard blocks acceptance without reassignm
 // back unchanged and are never verdicts, and a host whose runner refused as
 // too hot is a typed unavailable outcome of this scheduled run.
 const REAL_FILES = Object.freeze([FAST_TEST, SLOW_TEST, OTHER_FAST_TEST]);
-const thermalJson = (cpuCelsius) => ({'coretemp-isa-0000':
-  {'Package id 0': {temp1_input: cpuCelsius}}, 'nvme-pci-0200': {'Sensor 2': {temp3_input: 50}}});
-
-// What a lab machine's runner prints for its shard at a given temperature:
-// the real runner, its batches standing in for tests that pass.
-function labRunnerLog(files, cpuCelsius) {
+// A finite child collaborator emits the new owner's typed lines. This tests
+// stream custody/placement, not sensor observation or file admission itself.
+const READY_LINE = 'thermal: READY {"outcome":"READY"}';
+const REFUSED_LINE = 'thermal: thermal-headroom-exhausted {"outcome":"EXHAUSTED"}';
+function labRunnerLog(files, refused) {
   const lines = [];
   const spawned = [];
   const status = runClassifiedTestFiles(files, {
     root: process.cwd(), env: {},
     write: (text) => lines.push(text),
-    thermalSources: {sensors: () => thermalJson(cpuCelsius)},
-    thermalSleep: () => {},
     spawn(command, args) {
+      lines.push(`${refused ? REFUSED_LINE : READY_LINE}\n`);
       const batch = args.slice(2);
-      spawned.push(...batch);
-      for (const file of batch) lines.push(`ok ${file} (1 assertions, 5ms)\n`);
-      return {status: 0};
+      if (!refused) {
+        spawned.push(...batch);
+        for (const file of batch) lines.push(`ok ${file} (1 assertions, 5ms)\n`);
+      }
+      const exitStatus = refused ? 75 : 0;
+      return {status: exitStatus, output: [null, null, null,
+        JSON.stringify({refused, exitStatus})]};
     },
   });
   return {status, spawned, log: lines.join('').trimEnd()};
@@ -372,15 +375,15 @@ test('a lab runner\'s thermal lines are relayed unchanged and are never verdicts
   let given = null;
   const run = fakeDeps({
     runRemote: (shard) => {
-      given = labRunnerLog(shard.files, 61);
+      given = labRunnerLog(shard.files, false);
       return {done: Promise.resolve({status: given.status, log: given.log})};
     },
   });
   assert.equal(await runPlacedTestFiles([...REAL_FILES], run.deps), 0);
   const thermal = given.log.split('\n').filter((line) => line.startsWith('thermal: '));
-  assert.deepEqual(thermal, ['thermal: ok cpu 61C (coretemp/Package id 0) nvme 50C (nvme/Sensor 2)'],
-    'the lab runner gated its one batch');
-  assert.ok(run.calls.lines.includes('[lab] thermal: ok cpu 61C (coretemp/Package id 0) nvme 50C (nvme/Sensor 2)'),
+  assert.deepEqual(thermal, [READY_LINE],
+    'the child thermal line remains intact');
+  assert.ok(run.calls.lines.includes(`[lab] ${READY_LINE}`),
     'relayed with the machine\'s name and nothing else changed');
   assert.equal(run.calls.local.length, 1, 'every lab file was proved by its own verdict line');
 
@@ -388,7 +391,7 @@ test('a lab runner\'s thermal lines are relayed unchanged and are never verdicts
   const gateOnly = fakeDeps({
     runRemote: (shard) => {
       return {done: Promise.resolve({status: 0,
-        log: labRunnerLog(shard.files, 61).log.split('\n')
+        log: labRunnerLog(shard.files, false).log.split('\n')
           .filter((line) => line.startsWith('thermal: ')).join('\n')})};
     },
   });
@@ -403,7 +406,7 @@ test('a lab host too hot to run is reported thermal-unfit without moving its fil
     const run = fakeDeps({
       runRemote: (shard) => {
         remoteCalls += 1;
-        given = {files: shard.files, ...labRunnerLog(shard.files, 90)};
+        given = {files: shard.files, ...labRunnerLog(shard.files, true)};
         return {done: Promise.resolve({status: given.status,
           log: `placement-head=${'a'.repeat(40)}\n${given.log}`})};
       },
@@ -414,7 +417,7 @@ test('a lab host too hot to run is reported thermal-unfit without moving its fil
     assert.ok(run.calls.lines.includes('placement: host-thermal-unfit lab'),
       `a typed placement outcome: ${run.calls.lines.join('\n')}`);
     assert.ok(run.calls.lines.some((line) =>
-      line.startsWith('[lab] thermal: thermal-headroom-exhausted - ')),
+      line.startsWith('[lab] thermal: thermal-headroom-exhausted ')),
     'the refusal itself is relayed');
     assert.equal(remoteCalls, 1, 'never retried on the same host in this invocation');
     assert.equal(run.calls.local.length, 1, 'only the assigned controller files execute');
@@ -422,11 +425,12 @@ test('a lab host too hot to run is reported thermal-unfit without moving its fil
     // A ready spare does not turn an unavailable original assignment green.
     const tried = [];
     const moved = fakeDeps({
-      discover: async () => ({machines: [lab('lab', 1), lab('spare', 2)],
+      discover: async () => ({fleet: fakeInventory().fleet,
+        machines: [lab('lab', 1), lab('spare', 2)],
         record: async () => {}}),
       runRemote: (shard) => {
         tried.push({name: shard.machine.name, files: [...shard.files]});
-        const ran = labRunnerLog(shard.files, shard.machine.name === 'lab' ? 90 : 50);
+        const ran = labRunnerLog(shard.files, shard.machine.name === 'lab');
         return {done: Promise.resolve({status: ran.status, log: ran.log})};
       },
     });
@@ -468,34 +472,39 @@ test('an interrupted placed run stops every machine at once', async (t) => {
   // For real: a SIGTERM to a placed run whose controller files are running
   // ends it at once, and nothing either side started survives.
   const probe = path.join(process.cwd(), 'scripts', 'lab', 'probe.js');
+  const thermal = nativeThermalFixture(t);
   const fixture = runnerFixture(t);
   const before = worktreeResults([RUNNER_SLOW_FIXTURE]);
   const child = spawn(process.execPath, ['--input-type=module', '-e', `
     import {spawn} from 'node:child_process';
     import {placementDeps, runPlacedTestFiles} from ${JSON.stringify(probe)};
+    import {fakeInventory, lab} from ${JSON.stringify(path.join(process.cwd(), 'test/scripts/test-placement-fixtures.js'))};
+    const fleet = fakeInventory().fleet;
+    fleet[0].capability.thermalEndpoint = JSON.parse(process.env.LAGRANGE_NATIVE_THERMAL_ENDPOINT);
     const group = () => {
       const sleeper = spawn('sleep', ['60'], {detached: true, stdio: 'ignore'});
       console.log('group=' + sleeper.pid);
       return sleeper;
     };
-    const real = placementDeps({root: ${JSON.stringify(fixture.root)}});
+    const real = placementDeps({root: ${JSON.stringify(fixture.root)}, env: process.env});
     await runPlacedTestFiles(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'], {
       env: {}, write: () => {},
       planCosts: (files) => files.map((file) => ({file, ms: 120000, jobs: 1})), runLocal: () => 1,
       commitAt: () => 'a'.repeat(40), checkBase: () => 'b'.repeat(40),
-      discover: async () => ({machines: [{name: 'lab', controller: false, speed: 1}]}),
+      discover: async () => ({fleet, machines: [lab('lab', 1)]}),
+      controllerHeadroom: async () => ({fit: true, reason: null}),
       runRemote: () => {
         const lab = group();
         return {done: new Promise(() => {}), abort: () => process.kill(-lab.pid, 'SIGKILL')};
       },
-      runLocalChild: (files) => {
-        const local = real.runLocalChild(['${RUNNER_SLOW_FIXTURE}']);
+      runLocalChild: (files, options) => {
+        const local = real.runLocalChild(['${RUNNER_SLOW_FIXTURE}'], options);
         console.log('local-group=' + local.group);
         console.log('local-started');
         return local;
       },
     });
-  `], {cwd: process.cwd(), stdio: ['ignore', 'pipe', 'ignore'], env: gitProcessEnvironment()});
+  `], {cwd: process.cwd(), stdio: ['ignore', 'pipe', 'ignore'], env: gitProcessEnvironment(thermal.env)});
   t.after(() => child.kill('SIGKILL'));
   let out = '';
   child.stdout.on('data', (chunk) => {
@@ -572,7 +581,8 @@ test('a second hang-up during the abort neither kills it nor repeats it', async 
   const run = fakeDeps({
     signals,
     exit: (code) => exits.push(code),
-    discover: async () => ({machines: [lab('lab1', 1), lab('lab2', 1)],
+    discover: async () => ({fleet: fakeInventory().fleet,
+      machines: [lab('lab1', 1), lab('lab2', 1)],
       record: async () => {}}),
     runLocalChild: () => {
       started = true;
@@ -628,8 +638,10 @@ test('the controller child runs with placement switched off', async (t) => {
   // rediscover a fleet that is busy with this very run.
   const fixture = runnerFixture(t);
   const before = worktreeResults([RUNNER_SLOW_FIXTURE]);
-  const local = placementDeps({root: fixture.root, env: gitProcessEnvironment()})
-    .runLocalChild([RUNNER_SLOW_FIXTURE]);
+  const thermal = nativeThermalFixture(t);
+  const local = placementDeps({root: fixture.root, env: gitProcessEnvironment(thermal.env)})
+    .runLocalChild([RUNNER_SLOW_FIXTURE],
+      {thermalEndpoint: thermal.endpoint, deadlineMs: MINUTE});
   t.after(() => local.abort());
   await waitForNonEmptyFile(fixture.tap(RUNNER_SLOW_FIXTURE));
   assert.ok(fs.existsSync(fixture.tap(RUNNER_SLOW_FIXTURE)), 'the fixture root holds the result');
@@ -651,7 +663,8 @@ test('the controller child gets its file list even while this process is busy', 
   // socket empty and died with EAGAIN before running anything (found
   // 2026-09-23, eight of eight children under a 300 ms block).
   // Not inside node:test's own stream protocol, as a real controller is not.
-  const env = gitProcessEnvironment();
+  const thermal = nativeThermalFixture(t);
+  const env = gitProcessEnvironment(thermal.env);
   delete env.NODE_TEST_CONTEXT;
   // Streamed, so its output does not land in this file's own TAP; the list
   // reaches an inherited-output child the same way.
@@ -659,7 +672,8 @@ test('the controller child gets its file list even while this process is busy', 
   const fixture = runnerFixture(t);
   const before = worktreeResults([RUNNER_FAST_FIXTURE]);
   const streamed = labTestDeps({root: fixture.root, env}).runLocalChild([RUNNER_FAST_FIXTURE],
-    {onLine: (line) => lines.push(line)});
+    {onLine: (line) => lines.push(line), thermalEndpoint: thermal.endpoint,
+      deadlineMs: MINUTE});
   const until = Date.now() + 300;
   while (Date.now() < until) {
     // Busy, as the controller is between starting its child and returning.
@@ -996,7 +1010,8 @@ function busyFleetDeps(busyHosts) {
   const tried = [];
   const run = fakeDeps({
     planCosts: (files) => files.map((file) => ({file, ms: MINUTE, jobs: 1, lane: 'ordinary'})),
-    discover: async () => ({machines: [lab('b', 1), lab('c', 4)], record: async () => {}}),
+    discover: async () => ({fleet: fakeInventory().fleet,
+      machines: [lab('b', 1), lab('c', 4)], record: async () => {}}),
     runRemote: (shard, options) => {
       tried.push({name: shard.machine.name, files: [...shard.files], options});
       const holder = busyHosts[shard.machine.name];
@@ -1035,6 +1050,7 @@ test('a hand lab run on a held host reports it and never counts its files as pas
     let given = null;
     const status = await runLabTest({
       plan: [{resourceClass: 'ordinary', files: [FAST_TEST], jobs: 4}],
+      costs: [{file: FAST_TEST, ms: MINUTE, jobs: 4, lane: LANE.ORDINARY}],
       commit: {sha: 'a'.repeat(40), gitRoot: root, release: () => {}},
       on: 'alpha', root, write: (line) => lines.push(line),
     }, {
@@ -1166,6 +1182,7 @@ test('a split lab run spreads its files by cost and merges what each ran', async
   fs.symlinkSync(path.join(process.cwd(), 'node_modules'),
     path.join(controller, 'node_modules'));
   const {fleet} = fakeInventory();
+  fleet[0].capability.thermalEndpoint = machine.thermalEndpoint;
   const lab = {...machine, controller: false, speed: 0.5, cores: 12, memKiB: 1024 * 1024,
     avoid: []};
   const lines = [];
@@ -1271,14 +1288,16 @@ test('a hand lab run on a host too hot reports it and keeps the ledger of what r
     const lines = [];
     const status = await runLabTest({
       plan: [{resourceClass: LANE.ORDINARY, files: [FAST_TEST, OTHER_FAST_TEST], jobs: 4}],
+      costs: [FAST_TEST, OTHER_FAST_TEST].map((file) =>
+        ({file, ms: MINUTE, jobs: 4, lane: LANE.ORDINARY})),
       commit: {sha: 'a'.repeat(40), gitRoot: root, release: () => {}},
       on: 'alpha', root, write: (line) => lines.push(line),
     }, {
       discover: async () => ({fleet, machines: [labMachine]}),
       commitAt: () => 'a'.repeat(40),
       runRemote: (shard, options) => {
-        const ran = labRunnerLog([shard.files[0]], 50).log.split('\n');
-        const refused = labRunnerLog([shard.files[1]], 90).log.split('\n');
+        const ran = labRunnerLog([shard.files[0]], false).log.split('\n');
+        const refused = labRunnerLog([shard.files[1]], true).log.split('\n');
         for (const line of [...ran, ...refused,
           `placement-results={"file":"${shard.files[0]}","ok":true}`]) {
           options.onLine(line, 'out');

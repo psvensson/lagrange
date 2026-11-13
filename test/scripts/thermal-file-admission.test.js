@@ -4,6 +4,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
+import {nativeThermalFixture} from './native-thermal-fixture.js';
+import {runTestFiles} from '../../scripts/run-test-files.js';
 
 import {
   planClassifiedTestFiles,
@@ -13,10 +15,9 @@ import {LANE_JOBS_CAP_ENV}
   from '../../scripts/checks/test-resource-classification-constants.js';
 import {FAST_TEST, MINUTE, labFixture} from './test-placement-execution-fixture.js';
 
-// Original-compatible controls through the real classification and file runner.
-// Sensor documents are controlled observations, not native readiness proof.
-// Actual finite child files write the event ledger; parent batch shape is not
-// the assertion. Candidate native observer wiring needs explicit adaptation.
+// Candidate adaptation of the measured original controls at 5f951340.
+// Real file membership, closure and fresh-observation assertions are unchanged;
+// the collaborator now supplies the current pinned native endpoint contract.
 function fixture(t, count) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'thermal-admission-'));
   t.after(() => fs.rmSync(root, {recursive: true, force: true}));
@@ -30,16 +31,9 @@ function fixture(t, count) {
   return {root, files, sysRoot};
 }
 
-function coolSensors() {
-  return {
-    'coretemp-isa-0000': {'Package id 0': {temp1_input: 40}},
-    'nvme-pci-0200': {'Sensor 2': {temp3_input: 40}},
-  };
-}
-
 test('each of 101 actual file executions has its own thermal admission',
   {timeout: 6 * MINUTE}, (t) => {
-    const {root, files, sysRoot} = fixture(t, 101);
+    const {root, files} = fixture(t, 101);
     const ledger = path.join(root, 'admission.ndjson');
     const runnerRoot = process.cwd();
     for (const [index, file] of files.entries()) {
@@ -60,24 +54,20 @@ test('each of 101 actual file executions has its own thermal admission',
       ].join('\n');
       fs.writeFileSync(path.join(root, file), source);
     }
-    const env = {...process.env, [LANE_JOBS_CAP_ENV]: '1'};
-    delete env.NODE_TEST_CONTEXT;
-    delete env.LAGRANGE_SKIP_THERMAL_GATE;
+    const native = nativeThermalFixture(t, {ledger,
+      policy: {mode: 'sensor-required', cadence_ms: 0, max_concurrency: 1}});
+    const env = {...native.env, [LANE_JOBS_CAP_ENV]: '1'};
     let output = '';
     const status = runClassifiedTestFiles(files, {
       root,
       env,
-      thermalSources: {sysRoot, sensors() {
-        fs.appendFileSync(ledger, JSON.stringify({kind: 'observe'}) + '\n');
-        return coolSensors();
-      }},
-      thermalSleep() { assert.fail('a cool observation needs no sleep'); },
       write() {},
       spawn(command, args, options) {
         assert.equal(args[1], '--jobs=1');
         const result = spawnSync(command,
           [path.join(runnerRoot, args[0]), ...args.slice(1)],
-          {...options, stdio: 'pipe', encoding: 'utf8', timeout: 4 * MINUTE});
+          {...options, stdio: ['ignore', 'pipe', 'pipe', 'pipe'], encoding: 'utf8',
+            maxBuffer: 1024 * 1024, timeout: 4 * MINUTE});
         assert.ifError(result.error);
         assert.equal(result.signal, null, result.stderr);
         output += result.stdout;
@@ -115,31 +105,21 @@ test('each of 101 actual file executions has its own thermal admission',
       'each actual file start needs an observation; parent transport batching is irrelevant');
   });
 
-test('unavailable thermal observation admits no file', (t) => {
-  const {root, files, sysRoot} = fixture(t, 2);
-  const admitted = [];
-  const lines = [];
-  let reads = 0;
-  const status = runClassifiedTestFiles(files, {
-    root,
-    env: {},
-    thermalSources: {sysRoot, sensors() { reads += 1; return null; }},
-    thermalSleep() { assert.fail('unavailable is not a cooling wait'); },
-    write(line) { lines.push(line); },
-    spawn(_command, args) {
-      admitted.push(...args.slice(2));
-      return {status: 0};
-    },
-  });
-  assert.ok(reads > 0, 'the actual observation owner was reached');
-  t.diagnostic(JSON.stringify({status, admitted, output: lines.join('')}));
-  assert.deepEqual(admitted, [], 'missing observation cannot grant admission');
-  assert.notEqual(status, 0, 'unavailable is never successful execution');
+test('unavailable native sensor-required observation admits no file', async (t) => {
+  const {root, files} = fixture(t, 2);
+  const native = nativeThermalFixture(t, {outcomes: ['UNAVAILABLE']});
+  const result = await runTestFiles(files, {cwd: root, env: native.env, write() {}});
+  assert.equal(result.total, 0);
+  assert.deepEqual(result.notRun, files);
+  assert.notEqual(result.exitStatus, 0);
+  assert.equal(fs.readFileSync(native.counter, 'utf8'), '1');
 });
 
 test('the actual placed shell preserves an explicit one-worker cap',
   {timeout: 12 * MINUTE}, async (t) => {
   const placed = labFixture(t);
+  const native = nativeThermalFixture(t);
+  placed.machine.thermalEndpoint = native.endpoint;
   placed.env[LANE_JOBS_CAP_ENV] = '1';
   // Substitute only the declared processor-count producer, not the shell,
   // lock, bundle, checkout, runner or output. Eight CPUs discriminate 1 vs7
@@ -150,7 +130,7 @@ test('the actual placed shell preserves an explicit one-worker cap',
     'printf "8\\n"\n', {mode: 0o755});
   const result = await placed.start([FAST_TEST], {
     runId: 'thermal-explicit-cap',
-    forward: {tapTimeout: '900', checkBase: placed.basis},
+    forward: {tapTimeout: '900', checkBase: placed.basis, laneJobsCap: '1'},
   }).done;
   assert.equal(result.status, 0, result.log + result.errors);
   assert.match(result.log, new RegExp(`^placement-head=${placed.sha}$`, 'mu'));
@@ -160,4 +140,60 @@ test('the actual placed shell preserves an explicit one-worker cap',
   t.diagnostic(policy);
   assert.match(policy, / lanecap:1 /u,
     'peer processor count cannot overwrite the explicit requested cap');
+});
+
+test('HOLD drains the actual admitted file before waiting or admitting another', async (t) => {
+  const {root, files} = fixture(t, 2);
+  const ledger = path.join(root, 'close-ledger');
+  for (const file of files) {
+    fs.writeFileSync(path.join(root, file), [
+      "import {test} from 'node:test';",
+      "import {appendFileSync} from 'node:fs';",
+      `test('finite body', () => appendFileSync(${JSON.stringify(ledger)}, ` +
+        "String(process.pid) + '\\n'));",
+    ].join('\n'));
+  }
+  const native = nativeThermalFixture(t);
+  const policy = {mode: 'sensor-required', cadence_ms: 0, max_concurrency: 2};
+  let reads = 0;
+  const result = await runTestFiles(files, {cwd: root, env: native.env, jobs: 2,
+    write() {}, async thermalRead() {
+      reads += 1;
+      if (reads === 2) return {outcome: 'HOLD', execution_policy: policy};
+      if (reads === 3) {
+        const pid = Number(fs.readFileSync(ledger, 'utf8').trim());
+        assert.ok(Number.isSafeInteger(pid) && pid > 1);
+        assert.throws(() => process.kill(pid, 0), {code: 'ESRCH'},
+          'the actual admitted child is reaped before the fresh observation');
+      }
+      return {outcome: 'READY', execution_policy: policy};
+    }});
+  assert.equal(result.ok, true);
+  assert.equal(result.total, 2);
+  assert.ok(reads >= 3);
+});
+
+test('a true first child failure survives refusal and later batches stay undelegated', (t) => {
+  const {root, files} = fixture(t, 101);
+  for (const file of files) fs.writeFileSync(path.join(root, file),
+    "import {test} from 'node:test';\ntest('red', () => { throw new Error('first red'); });\n");
+  const native = nativeThermalFixture(t, {outcomes: ['READY', 'UNAVAILABLE'],
+    policy: {mode: 'sensor-required', cadence_ms: 0, max_concurrency: 1}});
+  const batches = [];
+  const status = runClassifiedTestFiles(files, {root, env: native.env, write() {},
+    spawn(command, args, options) {
+      batches.push(args.slice(2));
+      const result = spawnSync(command, [path.join(process.cwd(), args[0]), ...args.slice(1)],
+        {...options, stdio: ['ignore', 'pipe', 'pipe', 'pipe'], encoding: 'utf8',
+          maxBuffer: 1024 * 1024, timeout: MINUTE});
+      assert.ifError(result.error);
+      assert.equal(result.signal, null);
+      const terminal = JSON.parse(result.output[3]);
+      assert.equal(terminal.refused, true);
+      assert.equal(terminal.exitStatus, 1);
+      return result;
+    }});
+  assert.equal(status, 1);
+  assert.equal(batches.length, 1);
+  assert.equal(batches[0].length, 100);
 });

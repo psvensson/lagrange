@@ -3,6 +3,7 @@
 // Scenario assertions and registrations remain in test-placement.test.js.
 
 import assert from 'node:assert/strict';
+import {nativeThermalFixture} from './native-thermal-fixture.js';
 import {spawn, spawnSync} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -186,7 +187,10 @@ function labFixture(t, {realProducer = false} = {}) {
   if (realProducer) sealPlacedCommit(controller);
   git(controller, 'commit', '-qam', 'placement witness');
   const sha = git(controller, 'rev-parse', 'HEAD');
+  const thermal = nativeThermalFixture(t);
   const machine = {name: 'lab', sshTarget: null, repoPath: node, repoHead: basis,
+    thermalEndpoint: thermal.endpoint,
+    executionPolicy: {mode: 'sensor-required', cadence_ms: 0, max_concurrency: 4},
     nodeMajor: '', factor: 1.5};
   // Run from inside node:test, the shell here would hand its runner
   // NODE_TEST_CONTEXT and switch tap to the serialized stream, and inside a

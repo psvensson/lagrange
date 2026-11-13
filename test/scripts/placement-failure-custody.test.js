@@ -12,7 +12,7 @@ import {execGit} from '../../scripts/checks/git-invocation.js';
 import {gitProcessEnvironment} from '../../scripts/checks/git-process-environment.js';
 import {PLACEMENT_EXIT, labTestDeps, placementDeps, runPlacedTestFiles, startRemoteShard}
   from '../../scripts/lab/probe.js';
-import {lab, placementRunFixture} from './test-placement-fixtures.js';
+import {fakeInventory, lab, placementRunFixture} from './test-placement-fixtures.js';
 
 const FILES = Array.from({length: 8}, (_, index) => `test/lifecycle-${index}.test.js`);
 const SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'];
@@ -38,7 +38,7 @@ test('a failed remote acquisition closes acquired siblings and preserves the ori
     const closed = [];
     const fixture = placementRunFixture({
       signals,
-      discover: async () => ({machines: [lab('first', 1), lab('second', 1)]}),
+      discover: async () => ({fleet: fakeInventory().fleet, machines: [lab('first', 1), lab('second', 1)]}),
       runRemote: async (shard) => {
         if (shard.machine.name === 'second') {
           await new Promise(setImmediate);
@@ -73,7 +73,7 @@ for (const cleanupThrows of [false, true]) {
       let rejectFirst;
       const fixture = placementRunFixture({
         signals,
-        discover: async () => ({machines: [lab('first', 1), lab('second', 1)]}),
+        discover: async () => ({fleet: fakeInventory().fleet, machines: [lab('first', 1), lab('second', 1)]}),
         runRemote: (shard) => {
           assigned.push(...shard.files);
           let finish;

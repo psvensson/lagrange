@@ -4,13 +4,16 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
+import {nativeThermalFixture} from './native-thermal-fixture.js';
 
 import {
+  estimateFileCosts,
   lastResultsRoots,
   orderLaneFiles,
   planClassifiedTestFiles,
   runClassifiedTestFiles,
 } from '../../scripts/run-classified-test-files.js';
+import {filePlacementCost} from '../../scripts/lab/test-placement.js';
 import {
   RESOURCE_CLASS_EXCLUSIVE,
   RESOURCE_CLASS_EXTERNAL_TOOLCHAIN,
@@ -27,18 +30,11 @@ const BOOTSTRAP_LANE = 'bootstrap';
 const SHARED_OUTPUT =
   'test/scripts/exact-election-evidence-same-turn-model-contract.test.js';
 const UTF8 = 'utf8';
-// Readings go in through the thermal owner's own reader: an lm-sensors
-// document (`sensors -j`) and a sysfs root. A cool machine lets every batch
-// run, so these witnesses never wait on this machine's real temperature.
-function sensorsJson(cpuCelsius, nvmeCelsius) {
-  return {
-    'coretemp-isa-0000': {'Package id 0': {temp1_input: cpuCelsius}},
-    'nvme-pci-0200': {'Composite': {temp1_input: 20}, 'Sensor 2': {temp3_input: nvmeCelsius}},
-  };
+// A completed child reports its actual terminal disposition on the owned pipe.
+function completedBatch(status = 0, refused = false) {
+  return {status, output: [null, null, null,
+    JSON.stringify({refused, exitStatus: status})]};
 }
-const COOL = Object.freeze({
-  thermalSources: Object.freeze({sensors: () => sensorsJson(40, 50)}),
-});
 
 test('one classified plan owns concurrency for every test source', () => {
   const plan = planClassifiedTestFiles(root,
@@ -61,12 +57,11 @@ test('the executor runs classified lanes serially with their owned budgets', () 
   const calls = [];
   const status = runClassifiedTestFiles(
     [INTEGRATION, TOOLCHAIN, ORDINARY], {
-      ...COOL,
       root,
       spawn(command, args, options) {
         calls.push({args, command, tapTimeout: options.env.TAP_TIMEOUT,
           tapTimeoutFloor: options.env.TAP_TIMEOUT_FLOOR});
-        return {status: 0};
+        return completedBatch();
       },
     });
 
@@ -97,46 +92,77 @@ test('every batch runs by default; fail-fast is the explicit opt-in', () => {
   const failing = ORDINARY;
   const spawnFailingOrdinary = (calls) => (command, args) => {
     calls.push(args.at(-1));
-    return {status: args.at(-1) === failing ? 3 : 0};
+    return completedBatch(args.at(-1) === failing ? 3 : 0);
   };
 
   const defaultCalls = [];
   const defaultStatus = runClassifiedTestFiles([INTEGRATION, ORDINARY],
-    {...COOL, root, spawn: spawnFailingOrdinary(defaultCalls)});
+    {root, spawn: spawnFailingOrdinary(defaultCalls)});
   assert.equal(defaultStatus, 3, 'the first failure is still the exit status');
   assert.deepEqual(defaultCalls, [ORDINARY, INTEGRATION],
     'a red ordinary batch never hides the exclusive lane');
 
   const failFastCalls = [];
   const failFastStatus = runClassifiedTestFiles([INTEGRATION, ORDINARY],
-    {...COOL, root, failFast: true, spawn: spawnFailingOrdinary(failFastCalls)});
+    {root, failFast: true, spawn: spawnFailingOrdinary(failFastCalls)});
   assert.equal(failFastStatus, 3);
   assert.deepEqual(failFastCalls, [ORDINARY],
     'fail-fast, asked for, stops at the first red batch');
 
   assert.throws(() => runClassifiedTestFiles([ORDINARY],
-    {root, failFast: 'yes', spawn: () => ({status: 0})}),
+    {root, failFast: 'yes', spawn: () => completedBatch()}),
   /own-data options record/u);
 });
 
 // failed-gate-keeps-evidence: a reader of this stream calls a run complete
 // only when summaries cover every planned file, so the plan is written before
 // any batch, and a batch ended by a signal (an OOM kill) says so - its files
-// may have no verdict, and the run keeps going.
+// may have no verdict. Missing terminal custody stops later batch admissions.
 test('the run states its plan and a batch ended by a signal', () => {
   const lines = [];
   const calls = [];
-  const status = runClassifiedTestFiles([INTEGRATION, ORDINARY], {...COOL, root,
+  const status = runClassifiedTestFiles([INTEGRATION, ORDINARY], {root,
     write: (text) => lines.push(text),
     spawn(command, args) {
       calls.push(args.at(-1));
-      return args.at(-1) === ORDINARY ? {status: null, signal: 'SIGKILL'} : {status: 0};
+      return args.at(-1) === ORDINARY ? {status: null, signal: 'SIGKILL'} : completedBatch();
     }});
   assert.equal(status, 1, 'a signalled batch is a failed batch');
-  assert.deepEqual(calls, [ORDINARY, INTEGRATION], 'and the run keeps going');
+  assert.deepEqual(calls, [ORDINARY], 'missing terminal custody stops later batches');
   assert.equal(lines[0], '# test-files planned=2\n', 'the plan comes first');
   assert.ok(lines.includes(
     '# test-files batch ended by SIGKILL: 1 file(s) may have no verdict\n'), lines.join(''));
+});
+
+test('a later refused batch stops admission without replacing the first failure', () => {
+  const calls = [];
+  const status = runClassifiedTestFiles([ORDINARY, TOOLCHAIN, INTEGRATION], {
+    root,
+    write: () => {},
+    spawn(command, args) {
+      const file = args.at(-1);
+      calls.push(file);
+      return file === ORDINARY ? completedBatch(3) : completedBatch(75, true);
+    },
+  });
+  assert.equal(status, 3);
+  assert.deepEqual(calls, [ORDINARY, TOOLCHAIN]);
+});
+
+test('missing, malformed and inconsistent child terminal records stop later batches', () => {
+  for (const terminal of [undefined, '{', JSON.stringify({refused: false, exitStatus: 2})]) {
+    const calls = [];
+    const status = runClassifiedTestFiles([ORDINARY, INTEGRATION], {
+      root,
+      write: () => {},
+      spawn(command, args) {
+        calls.push(args.at(-1));
+        return {status: 0, output: [null, null, null, terminal]};
+      },
+    });
+    assert.notEqual(status, 0);
+    assert.deepEqual(calls, [ORDINARY]);
+  }
 });
 
 // The same policy through the real runner: two red files in two batches (the
@@ -158,16 +184,15 @@ test('two red files in different batches are both reported', (t) => {
     [[redOrdinary], [redExclusive]], 'the two files run in different batches');
 
   let output = '';
-  const env = {...process.env};
-  delete env.NODE_TEST_CONTEXT;
+  const {env} = nativeThermalFixture(t);
   const status = runClassifiedTestFiles([redOrdinary, redExclusive], {
-    ...COOL,
     root: fixtureRoot,
     env,
     spawn(command, args, options) {
       const result = spawnSync(command,
         [path.join(root, args[0]), ...args.slice(1)],
-        {...options, stdio: 'pipe', encoding: UTF8, timeout: 60000});
+        {...options, stdio: ['pipe', 'pipe', 'pipe', 'pipe'],
+          maxBuffer: 1024 * 1024, encoding: UTF8, timeout: 60000});
       output += result.stdout;
       return result;
     },
@@ -208,10 +233,9 @@ test('inherited runner options cannot replace the root or child launcher', () =>
       value: '/not-the-repository',
     });
     const status = runClassifiedTestFiles([ORDINARY], {
-      ...COOL,
       spawn() {
         calls += 1;
-        return {status: 0};
+        return completedBatch();
       },
     });
     assert.equal(status, 0);
@@ -229,15 +253,16 @@ test('inherited runner options cannot replace the root or child launcher', () =>
     fs.mkdirSync(path.join(fixtureRoot, 'test'), {recursive: true});
     fs.mkdirSync(path.join(fixtureRoot, 'scripts'), {recursive: true});
     fs.writeFileSync(path.join(fixtureRoot, fixture), '');
-    fs.writeFileSync(path.join(fixtureRoot, 'scripts', 'run-test-files.js'), '');
+    fs.writeFileSync(path.join(fixtureRoot, 'scripts', 'run-test-files.js'),
+      "require('node:fs').writeFileSync(3, JSON.stringify({refused: false, exitStatus: 0}));\n");
     Reflect.defineProperty(Object.prototype, 'spawn', {
       configurable: true,
       value() {
         inheritedCalls += 1;
-        return {status: 0};
+        return completedBatch();
       },
     });
-    assert.equal(runClassifiedTestFiles([fixture], {...COOL, root: fixtureRoot}), 0);
+    assert.equal(runClassifiedTestFiles([fixture], {root: fixtureRoot}), 0);
     assert.equal(inheritedCalls, 0,
       'an inherited launcher must not replace the real child process');
   } finally {
@@ -254,7 +279,7 @@ test('runner option accessors are rejected without execution', () => {
     enumerable: true,
     get() {
       getterReads += 1;
-      return () => ({status: 0});
+      return () => completedBatch();
     },
   });
   assert.throws(() => runClassifiedTestFiles([ORDINARY], options),
@@ -266,6 +291,10 @@ test('post-import collection replacement cannot erase executable delivery', () =
   const source = `
     import {runClassifiedTestFiles} from './scripts/run-classified-test-files.js';
     const input = '${ORDINARY}';
+    function completedBatch() {
+      return {status: 0, output: [null, null, null,
+        JSON.stringify({refused: false, exitStatus: 0})]};
+    }
     const replacements = [
       ['array-filter', Array.prototype, 'filter', function filter() { return []; }],
       ['array-map', Array.prototype, 'map', function map() { return []; }],
@@ -291,12 +320,10 @@ test('post-import collection replacement cannot erase executable delivery', () =
       try {
         Reflect.set(owner, key, replacement);
         const status = runClassifiedTestFiles([input], {
-          thermalSources: {sensors: () => ({'coretemp-isa-0000':
-            {'Package id 0': {temp1_input: 40}}})},
           root: process.cwd(),
           spawn(command, args) {
             calls[calls.length] = {command, args};
-            return {status: 0};
+            return completedBatch();
           },
         });
         outcomes[outcomes.length] = {calls, name, status};
@@ -353,6 +380,19 @@ function withResultsRoot(run) {
     fs.rmSync(resultsRoot, {recursive: true, force: true});
   }
 }
+
+test('requested serial concurrency is priced serially despite a wider native policy', () => {
+  withResultsRoot((resultsRoot) => {
+    const file = 'test/a.test.js';
+    writeLastResult(resultsRoot, file, 'ok 1 - a\n# time=100ms\n');
+    const plan = [{resourceClass: RESOURCE_CLASS_ORDINARY, jobs: 4, files: [file]}];
+    const [cost] = estimateFileCosts(plan, [resultsRoot], 1);
+    assert.equal(cost.jobs, 1);
+    assert.equal(filePlacementCost({speed: 1, executionPolicy: {
+      mode: 'sensor-required', cadence_ms: 0, max_concurrency: 4,
+    }}, cost), 100);
+  });
+});
 
 function writeMixedResults(resultsRoot) {
   writeLastResult(resultsRoot, 'test/a.test.js', 'ok 1 - a\n# time=100ms\n');
@@ -456,12 +496,11 @@ test('the bootstrap class owns a two-worker lane, and the serial classes keep th
 test('the bootstrap lane advises the cluster timeout floor, as the serial lane does', () => {
   const calls = [];
   const status = runClassifiedTestFiles([BOOTSTRAP, INTEGRATION, ORDINARY], {
-    ...COOL,
     root,
     spawn(command, args, options) {
       calls.push({jobs: args[1], lane: args.at(-1),
         floor: options.env.TAP_TIMEOUT_FLOOR});
-      return {status: 0};
+      return completedBatch();
     },
   });
 
@@ -485,11 +524,10 @@ test('no ordinary lane is given the cluster floor, ambient value or not', () => 
   delete ambient.TAP_TIMEOUT_FLOOR;
   const floors = new Map();
   runClassifiedTestFiles([BOOTSTRAP, ORDINARY, TOOLCHAIN], {
-    ...COOL,
     root,
     spawn(command, args, options) {
       floors.set(args.at(-1), options.env.TAP_TIMEOUT_FLOOR);
-      return {status: 0};
+      return completedBatch();
     },
     env: ambient,
   });
@@ -519,254 +557,23 @@ test('a bootstrap test may not also carry a curated resource class', () => {
   }
 });
 
-// ---------------------------------------------------------------------------
-// Thermal headroom is the runner's to gate, on every host it runs on (owner
-// directive 2026-09-23: a lab node rebooted under test load). Before EVERY
-// lane batch the runner asks the one thermal owner; a hold waits with the
-// owner's poll, an unmeasurable host says so once and proceeds, and a host
-// still hot when the owner's attempt budget is spent ends the run with the
-// typed refusal, never a batch started hot.
+// Per-file thermal admission, unavailable observations and explicit operator
+// pacing are exercised through the native endpoint client and real file pool in
+// thermal-file-admission.test.js and operator-paced-file-admission.test.js. The removed parent sensor parser/skip
+// policy has no compatibility fixture here.
 
-function thermalRun(files, {readings, env = {}, sysRoot, sleep} = {}) {
-  const events = [];
-  const lines = [];
-  let reads = 0;
-  const status = runClassifiedTestFiles(files, {
-    root,
-    env,
-    write: (text) => {
-      lines.push(text);
-      events.push(`line ${text.trimEnd()}`);
-    },
-    thermalSources: {
-      sensors: () => {
-        reads += 1;
-        events.push('read');
-        return readings(reads);
-      },
-      ...(sysRoot ? {sysRoot} : {}),
-    },
-    thermalSleep: sleep || ((ms) => events.push(`sleep ${ms}`)),
-    spawn(command, args, options) {
-      events.push(`spawn ${args.at(-1)}`);
-      events.push({env: options.env});
-      return {status: 0};
-    },
-  });
-  const spawned = events.filter((event) => typeof event === 'string' &&
-    event.startsWith('spawn ')).map((event) => event.slice('spawn '.length));
-  return {status, events, text: lines.join(''), reads: () => reads, spawned};
-}
-
-function emptySysRoot(t) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lagrange-thermal-sys-'));
-  t.after(() => fs.rmSync(dir, {recursive: true, force: true}));
-  return dir;
-}
-
-test('a hot machine holds the batch with the owner poll, then the batch runs', (t) => {
-  const run = thermalRun([ORDINARY], {sysRoot: emptySysRoot(t),
-    readings: (read) => (read === 1 ? sensorsJson(80, 50) : sensorsJson(60, 50))});
-  assert.match(run.text,
-    /^thermal: hold cpu 80C \(coretemp\/Package id 0\) nvme 50C \(nvme\/Sensor 2\) - CPU package 80C >= 75C, waiting 30s \(poll 1\/20\)$/mu,
-    'the hot reading holds the batch, observably in the stream');
-  assert.match(run.text, /^thermal: ok cpu 60C \(coretemp\/Package id 0\) nvme 50C \(nvme\/Sensor 2\)$/mu, 'then headroom is reported');
-  const order = run.events.filter((event) => typeof event === 'string')
-    .map((event) => event.replace(/ .*$/u, ''));
-  assert.deepEqual(order.filter((event) => event !== 'line'),
-    ['read', 'sleep', 'read', 'spawn'], 'it waited before the batch started, never during it');
-  assert.ok(run.events.includes('sleep 30000'), 'with the owner\'s own poll');
-  assert.equal(run.status, 0);
-  assert.deepEqual(run.spawned, [ORDINARY]);
-});
-
-test('the gate runs before every lane batch, and a gated batch never gates again', (t) => {
-  const run = thermalRun([INTEGRATION, ORDINARY], {sysRoot: emptySysRoot(t),
-    readings: () => sensorsJson(61, 66)});
-  assert.equal(run.reads(), 2, 'one gate per batch, two lanes');
-  const order = run.events.filter((event) => event === 'read' ||
-    (typeof event === 'string' && event.startsWith('spawn ')));
-  assert.deepEqual(order, ['read', `spawn ${ORDINARY}`, 'read', `spawn ${INTEGRATION}`]);
-  assert.equal(run.text.match(/^thermal: ok cpu 61C \(coretemp\/Package id 0\) nvme 66C \(nvme\/Sensor 2\)$/gmu).length, 2,
-    'one line per gate decision');
-  const batchEnvs = run.events.filter((event) => typeof event === 'object');
-  assert.ok(batchEnvs.every(({env}) => env.LAGRANGE_SKIP_THERMAL_GATE === '1'),
-    'a runner nested inside a gated batch inherits the skip, so it does not gate twice');
-});
-
-test('an unmeasurable host says so once and every batch runs', (t) => {
-  const run = thermalRun([INTEGRATION, ORDINARY], {sysRoot: emptySysRoot(t),
-    readings: () => null});
-  assert.equal(run.text.match(/^thermal: unmeasurable \(no sensors\)$/gmu)?.length, 1,
-    'the typed line, once, never silent');
-  assert.equal(run.reads(), 2, 'it still asks before every batch');
-  assert.deepEqual(run.spawned, [ORDINARY, INTEGRATION]);
-  assert.equal(run.status, 0);
-
-  const skipped = thermalRun([INTEGRATION, ORDINARY], {sysRoot: emptySysRoot(t),
-    env: {LAGRANGE_SKIP_THERMAL_GATE: '1'}, readings: () => sensorsJson(99, 99)});
-  assert.equal(skipped.text.match(/^thermal: skipped \(LAGRANGE_SKIP_THERMAL_GATE set\)$/gmu)
-    ?.length, 1, 'the one skip, said once');
-  assert.equal(skipped.reads(), 0, 'and nothing is read');
-  assert.deepEqual(skipped.spawned, [ORDINARY, INTEGRATION]);
-});
-
-test('a host still hot after the owner budget refuses the run, typed, and starts nothing hot',
-  (t) => {
-    const hot = thermalRun([INTEGRATION, ORDINARY], {sysRoot: emptySysRoot(t),
-      readings: () => sensorsJson(50, 81)});
-    assert.match(hot.text, /^thermal: thermal-headroom-exhausted - still over the hold threshold after 20 polls of 30s: NVMe 81C >= 78C$/mu,
-      'the typed refusal');
-    assert.deepEqual(hot.spawned, [], 'no test process started for the refused batch');
-    assert.notEqual(hot.status, 0, 'a refused run is never green');
-    assert.match(hot.text, new RegExp('^# thermal-headroom-exhausted: 2 file\\(s\\) not run: ' +
-      `${ORDINARY} ${INTEGRATION}$`, 'mu'), 'the summary names every file not run');
-    assert.equal(hot.reads(), 20, 'the owner\'s attempt budget, spent once');
-
-    const later = thermalRun([INTEGRATION, ORDINARY], {sysRoot: emptySysRoot(t),
-      readings: (read) => (read === 1 ? sensorsJson(50, 50) : sensorsJson(90, 50))});
-    assert.deepEqual(later.spawned, [ORDINARY], 'what ran before the machine heated ran');
-    assert.match(later.text, new RegExp('^# thermal-headroom-exhausted: 1 file\\(s\\) not run: ' +
-      `${INTEGRATION}$`, 'mu'), 'and only the rest is reported not run');
-    assert.notEqual(later.status, 0);
-  });
-
-// The owner reads lm-sensors first and the Linux sysfs where it is absent, so
-// a lab host without lm-sensors installed is still measured.
-test('a host without lm-sensors is measured through sysfs', (t) => {
-  const sysRoot = emptySysRoot(t);
-  const put = (relative, text) => {
-    fs.mkdirSync(path.dirname(path.join(sysRoot, relative)), {recursive: true});
-    fs.writeFileSync(path.join(sysRoot, relative), `${text}\n`);
-  };
-  put('class/thermal/thermal_zone0/type', 'acpitz');
-  put('class/thermal/thermal_zone0/temp', '97000');
-  put('class/thermal/thermal_zone1/type', 'x86_pkg_temp');
-  put('class/thermal/thermal_zone1/temp', '46000');
-  put('class/hwmon/hwmon1/name', 'nvme');
-  put('class/hwmon/hwmon1/temp1_label', 'Composite');
-  put('class/hwmon/hwmon1/temp1_input', '28850');
-  put('class/hwmon/hwmon1/temp3_label', 'Sensor 2');
-  put('class/hwmon/hwmon1/temp3_input', '67850');
-  put('class/hwmon/hwmon2/name', 'coretemp');
-  put('class/hwmon/hwmon2/temp1_input', '99000');
-  const sysfs = thermalRun([ORDINARY], {sysRoot, readings: () => null});
-  assert.match(sysfs.text, /^thermal: ok cpu 46C \(thermal_zone\/x86_pkg_temp\) nvme 68C \(nvme\/Sensor 2\)$/mu,
-    'the package zone and the NVMe Sensor 2, nothing else');
-
-  const partial = thermalRun([ORDINARY], {sysRoot,
-    readings: () => ({'coretemp-isa-0000': {'Package id 0': {temp1_input: 77}}})});
-  assert.match(partial.text, /^thermal: hold cpu 77C \(coretemp\/Package id 0\) nvme 68C \(nvme\/Sensor 2\) - CPU package 77C >= 75C/mu,
-    'a sensor lm-sensors lacks is taken from sysfs');
-
-  put('class/thermal/thermal_zone1/type', 'cpu-thermal');
-  put('class/thermal/thermal_zone1/temp', '79000');
-  const arm = thermalRun([ORDINARY], {sysRoot, readings: () => null});
-  assert.match(arm.text, /^thermal: hold cpu 79C \(thermal_zone\/cpu-thermal\) nvme 68C \(nvme\/Sensor 2\)/mu, 'an ARM cpu-thermal zone counts');
-});
-
-// The CPU package is read whatever the vendor (coordinator, 2026-09-23: the
-// host that rebooted has an unknown CPU). Each reading names the source that
-// answered, from one ordered table in the owner.
-function sysTree(t, files) {
-  const sysRoot = emptySysRoot(t);
-  for (const [relative, text] of Object.entries(files)) {
-    fs.mkdirSync(path.dirname(path.join(sysRoot, relative)), {recursive: true});
-    fs.writeFileSync(path.join(sysRoot, relative), `${text}\n`);
-  }
-  return sysRoot;
-}
-
-const NVME_SENSOR_2 = Object.freeze({'nvme-pci-0100': {'Composite': {temp1_input: 30},
-  'Sensor 2': {temp3_input: 50}}});
-
-test('an AMD package is read from lm-sensors k10temp Tctl', (t) => {
-  const run = thermalRun([ORDINARY], {sysRoot: emptySysRoot(t),
-    readings: () => ({'k10temp-pci-00c3': {'Tctl': {temp1_input: 77},
-      'Tccd1': {temp3_input: 90}}, ...NVME_SENSOR_2})});
-  assert.match(run.text, /^thermal: hold /mu, 'a hot Tctl holds the batch');
-  assert.match(run.text, /^thermal: hold cpu 77C \(k10temp\/Tctl\) nvme 50C \(nvme\/Sensor 2\) - CPU package 77C >= 75C/mu,
-    'the package reading, named by its source; a core die is not the package');
-});
-
-test('an AMD package is read from the sysfs k10temp hwmon, labelled or not', (t) => {
-  const labelled = thermalRun([ORDINARY], {readings: () => null, sysRoot: sysTree(t, {
-    'class/hwmon/hwmon0/name': 'k10temp',
-    'class/hwmon/hwmon0/temp1_label': 'Tctl',
-    'class/hwmon/hwmon0/temp1_input': '76000',
-    'class/hwmon/hwmon0/temp3_label': 'Tccd1',
-    'class/hwmon/hwmon0/temp3_input': '88000',
-  })});
-  assert.match(labelled.text, /^thermal: hold /mu, 'a hot Tctl in sysfs holds the batch');
-  assert.match(labelled.text, /^thermal: hold cpu 76C \(k10temp\/Tctl\) nvme unmeasured - /mu);
-
-  const unlabelled = thermalRun([ORDINARY], {readings: () => null, sysRoot: sysTree(t, {
-    'class/hwmon/hwmon3/name': 'k10temp',
-    'class/hwmon/hwmon3/temp1_input': '52000',
-    'class/hwmon/hwmon3/temp2_input': '81000',
-  })});
-  assert.match(unlabelled.text, /^thermal: hold cpu 81C \(k10temp\/temp2\) /mu,
-    'without a Tctl label, the hottest of its inputs');
-});
-
-test('an Intel package is read from the sysfs coretemp hwmon by its label', (t) => {
-  const run = thermalRun([ORDINARY], {readings: () => null, sysRoot: sysTree(t, {
-    'class/hwmon/hwmon4/name': 'coretemp',
-    'class/hwmon/hwmon4/temp1_label': 'Package id 0',
-    'class/hwmon/hwmon4/temp1_input': '78000',
-    'class/hwmon/hwmon4/temp2_label': 'Core 0',
-    'class/hwmon/hwmon4/temp2_input': '90000',
-  })});
-  assert.match(run.text, /^thermal: hold /mu, 'a hot package in the coretemp hwmon holds');
-  assert.match(run.text, /^thermal: hold cpu 78C \(coretemp\/Package id 0\) nvme unmeasured - /mu,
-    'the package label, not the hottest core');
-});
-
-test('an NVMe drive with only a Composite sensor is measured', (t) => {
-  const cpu = {'coretemp-isa-0000': {'Package id 0': {temp1_input: 50}}};
-  const sensors = thermalRun([ORDINARY], {sysRoot: emptySysRoot(t),
-    readings: () => ({...cpu, 'nvme-pci-0200': {'Composite': {temp1_input: 79}}})});
-  assert.match(sensors.text, /^thermal: hold /mu, 'a hot Composite-only drive holds');
-  assert.match(sensors.text, /^thermal: hold cpu 50C \(coretemp\/Package id 0\) nvme 79C \(nvme\/Composite\) - NVMe 79C >= 78C/mu);
-
-  const sysfs = thermalRun([ORDINARY], {readings: () => cpu, sysRoot: sysTree(t, {
-    'class/hwmon/hwmon1/name': 'nvme',
-    'class/hwmon/hwmon1/temp1_label': 'Composite',
-    'class/hwmon/hwmon1/temp1_input': '80000',
-  })});
-  assert.match(sysfs.text, /^thermal: hold cpu 50C \(coretemp\/Package id 0\) nvme 80C \(nvme\/Composite\) - NVMe 80C >= 78C/mu,
-    'in sysfs too');
-
-  const preferred = thermalRun([ORDINARY], {sysRoot: emptySysRoot(t),
-    readings: () => ({...cpu, 'nvme-pci-0200': {'Composite': {temp1_input: 85},
-      'Sensor 2': {temp3_input: 60}}})});
-  assert.match(preferred.text, /^thermal: ok cpu 50C \(coretemp\/Package id 0\) nvme 60C \(nvme\/Sensor 2\)$/mu,
-    'Sensor 2, where a drive has one, is what the thresholds were set against');
-});
-
-test('a host with a CPU sensor and no NVMe sensor gates on the CPU alone', (t) => {
-  const cpuOnly = (celsius) => () => ({'coretemp-isa-0000': {'Package id 0': {temp1_input: celsius}}});
-  const hot = thermalRun([ORDINARY], {sysRoot: emptySysRoot(t),
-    readings: (read) => (read === 1 ? cpuOnly(80)() : cpuOnly(60)())});
-  assert.match(hot.text, /^thermal: hold cpu 80C \(coretemp\/Package id 0\) nvme unmeasured - CPU package 80C >= 75C/mu,
-    'the CPU alone holds, and the NVMe prints as unmeasured');
-  assert.match(hot.text, /^thermal: ok cpu 60C \(coretemp\/Package id 0\) nvme unmeasured$/mu);
-  assert.doesNotMatch(hot.text, /^thermal: unmeasurable/mu, 'partial measurement is measurement');
-  assert.deepEqual(hot.spawned, [ORDINARY]);
-});
-
-// A lab host's ordinary lane is capped by its own processor count, which the
-// remote wrapper discovers at run time and hands over in one runner-owned env.
+// The explicit caller cap is forwarded to the file pool, which also consumes
+// the native policy; classified lane concurrency is never raised.
 test('a lane jobs cap lowers a lane, never raises one, and refuses garbage', () => {
   const batchEnvs = [];
   const jobsOf = (files, cap) => {
     const calls = [];
-    runClassifiedTestFiles(files, {...COOL, root, write: () => {},
+    runClassifiedTestFiles(files, {root, write: () => {},
       env: {LAGRANGE_LANE_JOBS_CAP: cap},
       spawn(command, args, options) {
         calls.push([args.at(-1), args[1]]);
         batchEnvs.push(options.env);
-        return {status: 0};
+        return completedBatch();
       }});
     return Object.fromEntries(calls);
   };
@@ -775,8 +582,8 @@ test('a lane jobs cap lowers a lane, never raises one, and refuses garbage', () 
   assert.deepEqual(jobsOf([ORDINARY, BOOTSTRAP], '1'),
     {[ORDINARY]: '--jobs=1', [BOOTSTRAP]: '--jobs=1'}, 'a two-thread host runs one-up');
   assert.deepEqual(jobsOf([ORDINARY], '19'), {[ORDINARY]: '--jobs=4'}, 'never raised');
-  assert.ok(batchEnvs.every((env) => !Object.hasOwn(env, 'LAGRANGE_LANE_JOBS_CAP')),
-    'the runner consumes its cap: a batch\'s tests never inherit the host\'s ceiling');
+  assert.ok(batchEnvs.every((env) => ['3', '1', '19'].includes(env.LAGRANGE_LANE_JOBS_CAP)),
+    'the batch file pool receives the explicit caller cap');
   for (const garbage of ['0', 'x', '2.5', '-1']) {
     assert.throws(() => jobsOf([ORDINARY], garbage), /LAGRANGE_LANE_JOBS_CAP/u, garbage);
   }

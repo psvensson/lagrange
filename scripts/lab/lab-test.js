@@ -1,3 +1,4 @@
+import {THERMAL_ENDPOINT_ENV} from '../checks/wait-for-thermal-headroom.js';
 // The hand-lab test command's exact planning checkout, assignments and observed results.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -16,7 +17,7 @@ import {abortTogether, forwardedPolicy, placementExitStatus, runClassifiedChild,
   startRemoteShard} from './placement-execution.js';
 import {commitAt, gitAt, safeName} from './placement-source.js';
 import {CONTROLLER_FIT, CONTROLLER_MACHINE, TIER, abortOnSignals, controllerHeadroom,
-  deadlineFor, discoverPlacement, logVerdicts, minutes, placeTestFiles,
+  deadlineFor, discoverPlacement, filePlacementCost, logVerdicts, minutes, placeTestFiles,
   reportHostBusy, reportThermalUnfit} from './test-placement.js';
 
 const EMPTY = '';
@@ -243,7 +244,8 @@ export function planLabSplit(plan, machines, {controller = CONTROLLER_MACHINE, c
   held = [], controllerHeadroom = CONTROLLER_FIT} = {}) {
   if (machines.length + held.length === 0) throw new Error(PLACEMENT_TEXT.NO_MACHINE);
   const split = (tier, heldMachines) =>
-    splitLanes(plan, [{...controller, tier}, ...machines, ...heldMachines], costs);
+    splitLanes(plan, [...(controller.executionPolicy === null ? [] :
+      [{...controller, tier}]), ...machines, ...heldMachines], costs);
   const heldTier = held.map((machine) => ({...machine, tier: TIER.HELD}));
   const role = (assignments, reason, reserve) => ({assignments, controller: {reason, reserve}});
   if (!controllerHeadroom.fit) {
@@ -269,7 +271,7 @@ export function planLabSplit(plan, machines, {controller = CONTROLLER_MACHINE, c
 // lock wait - its estimate, capped as every lab lock wait is - so the share
 // would refuse busy rather than run.
 function lateQueuedShares(assignments, costs) {
-  const costOf = new Map(costs.map((cost) => [cost.file, cost.ms / cost.jobs]));
+  const costOf = new Map(costs.map((cost) => [cost.file, cost]));
   return assignments.filter(({machine, lanes}) => machine.waitMs !== undefined &&
     machine.waitMs > Math.min(LAB_LOCK_WAIT_MAX_MS,
       labShareEstimateMs(machine, lanes.flatMap((lane) => lane.files), costOf)));
@@ -300,7 +302,11 @@ export function formatLabController({assignments, controller}) {
 // for the lock: its setup, then its files' cost scaled by its speed.
 function labShareEstimateMs(machine, files, costOf) {
   return PLACEMENT_REMOTE_SETUP_MS +
-    files.reduce((sum, file) => sum + (costOf.get(file) || 0), 0) * machine.speed;
+    files.reduce((sum, file) => {
+      const cost = costOf.get(file);
+      if (!cost) throw new Error(`missing placement cost: ${file}`);
+      return sum + filePlacementCost(machine, cost);
+    }, 0) + Math.max(0, files.length - 1) * machine.executionPolicy.cadence_ms;
 }
 
 // The plan's files spread by cost, each machine's share as its own lanes.
@@ -360,14 +366,16 @@ export function formatLabDecision(assignments) {
 
 // A split's controller headroom: its tree must be exactly the commit it
 // runs, and it must have thermal and load headroom.
-function splitHeadroom(deps, sha) {
+function splitHeadroom(deps, sha, controller) {
   if (deps.commitAt() !== sha) return {fit: false, reason: `${LAB_TEST_TEXT.CONTROLLER_TREE}${sha}`};
-  return deps.controllerHeadroom ? deps.controllerHeadroom() : CONTROLLER_FIT;
+  return deps.controllerHeadroom(controller.thermalEndpoint);
 }
 
 function controllerMachine(fleet) {
   const capability = fleet.find((entry) => entry.controller)?.capability;
   return {...CONTROLLER_MACHINE, cores: capability?.cores ?? null,
+    thermalEndpoint: capability?.thermalEndpoint,
+    executionPolicy: capability?.thermalDecision?.execution_policy ?? null,
     memKiB: capability?.memKiB ?? null};
 }
 
@@ -384,7 +392,9 @@ function startLabShare({machine, lanes}, {commit, deps, forward, results, costOf
   };
   if (machine.controller) {
     return {machine, files, lines,
-      run: deps.runLocalChild(files, {onLine, checkBase: forward.checkBase})};
+      run: deps.runLocalChild(files, {onLine, checkBase: forward.checkBase,
+        thermalEndpoint: machine.thermalEndpoint,
+        deadlineMs: deadlineFor({loadMs: labShareEstimateMs(machine, files, costOf)})})};
   }
   const loadMs = labShareEstimateMs(machine, files, costOf);
   const run = deps.runRemote({machine, files}, {sha: commit.sha, gitRoot: commit.gitRoot,
@@ -474,7 +484,7 @@ export async function runLabTest({plan, costs = [], commit, checkBase, on = null
   try {
     const {fleet = [], machines, held = []} = await deps.discover(commit.sha);
     const placed = split ? planLabSplit(plan, machines, {held, costs,
-      controller: controllerMachine(fleet), controllerHeadroom: splitHeadroom(deps, commit.sha)}) :
+      controller: controllerMachine(fleet), controllerHeadroom: await splitHeadroom(deps, commit.sha, controllerMachine(fleet))}) :
       {assignments: placeLabLanes(plan, machines, {on, fleet})};
     const {assignments} = placed;
     for (const line of [...formatLabDecision(assignments), ...(split ? [formatLabController(placed),
@@ -482,7 +492,7 @@ export async function runLabTest({plan, costs = [], commit, checkBase, on = null
     if (assignments.some(({machine}) => machine.controller) && deps.commitAt() !== commit.sha) {
       throw new Error(`${LAB_TEST_TEXT.CONTROLLER_TREE}${commit.sha}`);
     }
-    const costOf = new Map(costs.map((cost) => [cost.file, cost.ms / cost.jobs]));
+    const costOf = new Map(costs.map((cost) => [cost.file, cost]));
     const context = {commit, deps, forward: forwardedPolicy(env, checkBase), results, costOf,
       write};
     for (const assignment of assignments) {
@@ -518,7 +528,8 @@ export function labTestDeps({root, env = gitProcessEnvironment()}) {
     runRemote: (shard, options) => startRemoteShard(shard, {...options, root, env}),
     runLocalChild: (files, options) => runClassifiedChild(root, files, env, options),
     commitAt: () => commitAt(root, env),
-    controllerHeadroom: () => controllerHeadroom({env}),
+    controllerHeadroom: (endpoint) => controllerHeadroom({env: {...env,
+      [THERMAL_ENDPOINT_ENV]: JSON.stringify(endpoint)}}),
   };
 }
 

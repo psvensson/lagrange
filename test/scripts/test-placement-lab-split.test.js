@@ -33,7 +33,7 @@ test('a hand lab run takes its machine from measured facts, never a written host
   assert.deepEqual(machines.map((machine) => [machine.name, machine.cores, machine.memKiB]),
     [['alpha', 12, 16 * 1024 * 1024], ['beta', 8, 16 * 1024 * 1024]],
     'each machine carries its measured capacity');
-  const controller = {name: '(controller)', controller: true, speed: 1, cores: 20,
+  const controller = {...CONTROLLER, cores: 20,
     memKiB: 32 * 1024 * 1024};
   const names = (assignments) => assignments.map((one) =>
     [one.machine.name, one.lanes.map((lane) => lane.resourceClass)]);
@@ -70,7 +70,7 @@ const CHANGED_367 = Object.freeze([
   files: Array.from({length: count}, (_, index) => `test/${resourceClass}-${index}.test.js`)})));
 const CHANGED_COSTS = Object.freeze(CHANGED_367.flatMap((lane) => lane.files.map((file) =>
   ({file, ms: 20 * SECOND, jobs: lane.jobs, lane: lane.resourceClass}))));
-const HOT = Object.freeze({fit: false, reason: 'thermally held: CPU package 86C >= 75C'});
+const HOT = Object.freeze({fit: false, reason: 'thermally held: HOLD: COOLING:cpu'});
 
 function shareOf(assignments, name) {
   return assignments.filter((one) => one.machine.name === name)
@@ -149,8 +149,8 @@ test('the controller is a reserve while two lab hosts can carry the split', () =
   // A hot controller is unchanged: only what no host fits, under its reason.
   const hot = split(FIVE_LABS.slice(0, 1), {controllerHeadroom: HOT, costs: LONG_COSTS});
   assert.deepEqual(controllerFiles(hot), [CHANGED_COSTS[0].file]);
-  assert.equal(formatLabController(hot), 'lab test: controller: thermally held: CPU package ' +
-    '86C >= 75C; takes 1 file(s), only what no lab host fits');
+  assert.equal(formatLabController(hot), `lab test: controller: ${HOT.reason}; ` +
+    'takes 1 file(s), only what no lab host fits');
 });
 
 test('a held host carries its holder\'s expected wait, or the longest wait when it cannot say',
@@ -166,20 +166,20 @@ test('a held host carries its holder\'s expected wait, or the longest wait when 
     assert.equal(placementMachines(fleet, state).length, 0, 'and a held host is not free');
   });
 
-test('the controller has headroom only under the thermal and load owners\' thresholds', () => {
-  const ok = () => ({outcome: 'headroom-ok', reading: {reason: 'under the hold thresholds'}});
-  assert.deepEqual(controllerHeadroom({thermal: ok, load: 4, cores: 20}),
+test('the controller has headroom only under the thermal and load owners\' thresholds', async () => {
+  const ok = () => ({outcome: 'READY', reason: null});
+  assert.deepEqual(await controllerHeadroom({thermal: ok, load: 4, cores: 20}),
     {fit: true, reason: null});
-  assert.deepEqual(controllerHeadroom({thermal: ok, load: 18, cores: 20}),
+  assert.deepEqual(await controllerHeadroom({thermal: ok, load: 18, cores: 20}),
     {fit: false, reason: 'loaded: one-minute load 18.0 >= 15.0 (20 cores)'});
-  assert.deepEqual(controllerHeadroom({thermal: () => ({outcome: 'headroom-exhausted',
-    reading: {reason: 'CPU package 86C >= 75C'}}), load: 1, cores: 20}),
-  {fit: false, reason: 'thermally held: CPU package 86C >= 75C'});
+  assert.deepEqual(await controllerHeadroom({
+    thermal: () => ({outcome: 'HOLD', reason: 'COOLING:cpu'}), load: 1, cores: 20}),
+  {fit: false, reason: 'thermally held: HOLD: COOLING:cpu'});
   // The real thermal owner, read once: a hold is not waited out here.
   const started = Date.now();
-  const real = controllerHeadroom({load: 0, cores: 20});
+  const real = await controllerHeadroom({env: {}, load: 0, cores: 20});
   assert.ok(Date.now() - started < 10 * SECOND, 'one reading, no wait');
-  assert.equal(typeof real.fit, 'boolean');
+  assert.equal(real.fit, false, 'a missing endpoint is unavailable, never headroom');
 });
 
 test('concurrent splits spread over the lab rather than all choosing one host', () => {
@@ -217,7 +217,7 @@ test('a split says why it left each machine out', () => {
   ];
   const assignments = [{machine: {name: 'tv-dator'}, lanes: []}];
   assert.deepEqual(formatLabSkipped(fleet, assignments, HOT), [
-    'lab test: skipped (controller): thermally held: CPU package 86C >= 75C',
+    'lab test: skipped (controller): thermally held: HOLD: COOLING:cpu',
     'lab test: skipped main-linux: same machine as (controller)',
     'lab test: skipped lenovo-laptop: busy: held by claude:other (lagrange, test:ordinary) ' +
       'since 2026-10-04T17:52:07Z, expected 38 min',
@@ -248,7 +248,7 @@ test('a split prints its plan and every skipped machine before any share starts'
   const plan = events.slice(0, firstStart);
   assert.equal(plan.filter((line) => /^lab test: [^ ]+: .*\(\d+ files\).* ~[\d.]+ min$/u
     .test(line)).length, 4, `one line per host with its share and estimate: ${plan.join('\n')}`);
-  assert.ok(plan.includes('lab test: skipped (controller): thermally held: CPU package 86C >= 75C'),
+  assert.ok(plan.includes('lab test: skipped (controller): thermally held: HOLD: COOLING:cpu'),
     plan.join('\n'));
   assert.ok(plan.includes('lab test: skipped gamma: not ready: no-repository'), plan.join('\n'));
   // A cool controller says it is the reserve, before any share starts.
@@ -312,7 +312,8 @@ for (const fault of [
         }},
         write: (line) => lines.push(line)}, {
         signals,
-        discover: async () => ({machines: [lab('first', 1), lab('second', 1)]}),
+        discover: async () => ({fleet: fakeInventory().fleet,
+          machines: [lab('first', 1), lab('second', 1)]}),
         commitAt: () => 'a'.repeat(40),
         controllerHeadroom: () => HOT,
         runLocalChild: () => assert.fail('a failed share never moves to the controller'),
@@ -419,10 +420,12 @@ test('a real acquisition error stays primary when the planning checkout cannot b
     let primary;
     let acquisitions = 0;
     const result = runLabTest({root, commit, on: 'finite-peer',
+      costs: [{file: PLANNING_ORIGINAL, ms: SECOND, jobs: 1, lane: LANE.ORDINARY}],
       plan: [{resourceClass: LANE.ORDINARY, files: [PLANNING_ORIGINAL], jobs: 1}],
       write: (line) => lines.push(line)}, {
       signals,
-      discover: async () => ({machines: [lab('finite-peer', 1)]}),
+      discover: async () => ({fleet: fakeInventory().fleet,
+        machines: [lab('finite-peer', 1)]}),
       commitAt: () => commit.sha,
       runLocalChild: () => assert.fail('the unavailable assignment never moves to the controller'),
       runRemote: () => {

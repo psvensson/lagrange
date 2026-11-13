@@ -2,7 +2,7 @@
 import os from 'node:os';
 import {resolvedCheckBaseCommit} from '../checks/changed-paths.js';
 import {defaultLoadThreshold} from '../checks/wait-for-load-headroom.js';
-import {HEADROOM, THERMAL_REFUSAL_LINE, waitForThermalHeadroom}
+import {THERMAL_ENDPOINT_ENV, THERMAL_REFUSAL_LINE, readThermalHeadroom, thermalPermits}
   from '../checks/wait-for-thermal-headroom.js';
 import {TEST_FILE_LINE, relayedLine} from '../run-test-files.js';
 import {DISCOVERY_FAILURE, FLEET_CONTROLLER_NAME, REQUIREMENT_FAILURES, discoverFleet,
@@ -100,7 +100,8 @@ function assignByCost(costs, machines, setupMs) {
     let bestFinish = Infinity;
     for (const shard of shards) {
       if (!fits(shard.machine, cost)) continue;
-      const finish = shard.loadMs + (cost.ms / jobsOn(shard.machine, cost)) * shard.machine.speed;
+      const finish = shard.loadMs + filePlacementCost(shard.machine, cost) +
+        (shard.files.length > 0 ? shard.machine.executionPolicy.cadence_ms : 0);
       const tier = shard.machine.tier || 0;
       const bestTier = best?.machine.tier || 0;
       if (!best || tier < bestTier || (tier === bestTier && finish < bestFinish)) {
@@ -108,17 +109,20 @@ function assignByCost(costs, machines, setupMs) {
         bestFinish = finish;
       }
     }
+    if (!best) throw new Error(`no admitted machine can run ${cost.file}`);
     best.files.push(cost.file);
     best.loadMs = bestFinish;
   }
   return shards;
 }
 
-// The workers a file's lane gets on a machine: the lane's own on the
-// controller, and on a lab machine at most its cores less one.
-function jobsOn(machine, cost) {
-  return machine.controller || !(machine.cores > 1) ? cost.jobs :
-    Math.min(cost.jobs, machine.cores - 1);
+// Planning consumes the same explicit native policy that bounds actual launches.
+export function filePlacementCost(machine, cost) {
+  const policy = machine.executionPolicy;
+  if (!policy || !Number.isSafeInteger(policy.max_concurrency) ||
+      policy.max_concurrency <= 0 || !Number.isSafeInteger(policy.cadence_ms) ||
+      policy.cadence_ms < 0) throw new Error('placement requires explicit execution policy');
+  return cost.ms / Math.min(cost.jobs, policy.max_concurrency) * machine.speed;
 }
 
 // Whether a file may go to a machine: the controller takes anything; a lab
@@ -148,7 +152,8 @@ export function placementMachines(fleet, state, {controllerFactor = 1, held = fa
   for (const entry of fleet) {
     const cap = entry.capability;
     const node = state.nodes?.[entry.name];
-    if (!(reference > 0) || !isPlaceable(entry, node, held)) continue;
+    if (!(reference > 0) || !isPlaceable(entry, node, held) ||
+        !thermalPermits(cap.thermalDecision)) continue;
     const speed = cap.cpuSampleMs / reference;
     machines.push({
       name: entry.name,
@@ -156,6 +161,8 @@ export function placementMachines(fleet, state, {controllerFactor = 1, held = fa
       speed,
       // The measured capacity a hand run's decision is printed with.
       cores: cap.cores,
+      thermalEndpoint: cap.thermalEndpoint,
+      executionPolicy: cap.thermalDecision.execution_policy,
       memKiB: cap.memKiB,
       factor: Math.max(1, Math.ceil(speed * controllerFactor * PLACEMENT_FACTOR_STEPS) /
         PLACEMENT_FACTOR_STEPS),
@@ -198,7 +205,7 @@ const TIER = Object.freeze({HELD: 1, HOT: 2});
 const CONTROLLER_FIT = Object.freeze({fit: true, reason: null});
 
 const CONTROLLER_MACHINE = Object.freeze({
-  name: FLEET_CONTROLLER_NAME, controller: true, speed: 1,
+  name: FLEET_CONTROLLER_NAME, controller: true, speed: 1, executionPolicy: null,
 });
 
 function minutes(ms) {
@@ -330,9 +337,13 @@ export async function runPlacedTestFiles(files, deps) {
   }
   if (fleet.machines.length === 0) return unavailable(PLACEMENT_TEXT.NO_MACHINE);
   // A controller without headroom takes only what no lab machine can.
-  const headroom = deps.controllerHeadroom ? deps.controllerHeadroom() : CONTROLLER_FIT;
-  const shards = placeTestFiles(costs, [{...CONTROLLER_MACHINE, tier: headroom.fit ? 0 : TIER.HOT},
-    ...fleet.machines]);
+  const controller = fleet.fleet.find((entry) => entry.controller)?.capability;
+  const headroom = await deps.controllerHeadroom(controller?.thermalEndpoint);
+  const controllerPolicy = controller?.thermalDecision?.execution_policy;
+  const controllerCandidates = controllerPolicy ? [{...CONTROLLER_MACHINE,
+    thermalEndpoint: controller.thermalEndpoint, executionPolicy: controllerPolicy,
+    tier: headroom.fit ? 0 : TIER.HOT}] : [];
+  const shards = placeTestFiles(costs, [...controllerCandidates, ...fleet.machines]);
   const remote = shards.filter((shard) => !shard.machine.controller);
   if (remote.length === 0) return local(PLACEMENT_TEXT.NO_GAIN);
   const controllerShard = shards.find((shard) => shard.machine.controller);
@@ -381,7 +392,9 @@ export async function runPlacedTestFiles(files, deps) {
     const failedStart = acquired.find((entry) => entry.status === PLACEMENT_REJECTED);
     if (failedStart) throw failedStart.reason;
     if (controllerShard) {
-      here = runLocalChild(controllerShard.files);
+      here = runLocalChild(controllerShard.files, {
+        deadlineMs: deadlineFor(controllerShard),
+        thermalEndpoint: controllerShard.machine.thermalEndpoint});
     }
     const settled = Promise.all(acquired.map(async ({value: entry}) => {
       const outcome = await entry.settled;
@@ -471,6 +484,7 @@ async function discoverPlacement(root, env, sha) {
   const fleet = await discoverFleet({
     nodes: Object.values(state.nodes || {}),
     controllerRepoPath: root,
+    controllerThermalEndpoint: state.controller?.thermalEndpoint,
     ...requirement,
   });
   await saveState(recordFleet(state, fleet));
@@ -493,28 +507,29 @@ export function placementDeps({root, failFast = false, env = process.env,
   planCosts, runLocal}) {
   return {
     failFast, env, planCosts, runLocal,
-    runLocalChild: (files) => runClassifiedChild(root, files, env),
+    runLocalChild: (files, options) => runClassifiedChild(root, files, env, options),
     commitAt: () => commitAt(root, env),
     checkBase: () => resolvedCheckBaseCommit(null, env, root),
     discover: (sha) => discoverPlacement(root, env, sha),
     runRemote: (shard, options) => startRemoteShard(shard, {...options, root}),
-    controllerHeadroom: () => controllerHeadroom({env}),
+    controllerHeadroom: (endpoint) => controllerHeadroom({env: {...env,
+      [THERMAL_ENDPOINT_ENV]: JSON.stringify(endpoint)}}),
   };
 }
 /**
  * Whether the controller may take files this run: one reading of the thermal
- * owner (no wait; its skip variable honoured) under its hold thresholds, and
+ * owner (no wait), consuming its explicit configured policy, and
  * the one-minute load under the load owner's threshold for its cores.
  * @param {{env?: Object, thermal?: Function, load?: number, cores?: number}} [input]
  * @return {{fit: boolean, reason: string|null}}
  */
-export function controllerHeadroom({env = process.env,
-  thermal = () => waitForThermalHeadroom({attempts: 0, env}),
+export async function controllerHeadroom({env = process.env,
+  thermal = () => readThermalHeadroom({env}),
   load = os.loadavg()[0], cores = os.cpus().length} = {}) {
-  const reading = thermal();
+  const reading = await thermal();
   const threshold = defaultLoadThreshold(cores);
-  const reason = reading.outcome === HEADROOM.EXHAUSTED ?
-    `${LAB_TEST_TEXT.HOT}${reading.reading.reason}` :
+  const reason = !thermalPermits(reading) ?
+    `${LAB_TEST_TEXT.HOT}${reading.outcome}: ${reading.reason}` :
     load >= threshold ? `${LAB_TEST_TEXT.LOADED}${load.toFixed(1)} >= ` +
       `${threshold.toFixed(1)} (${cores} cores)` : null;
   return reason === null ? CONTROLLER_FIT : {fit: false, reason};

@@ -16,7 +16,7 @@ import {THERMAL_REFUSAL, THERMAL_REFUSAL_EXIT}
 import {PLACEMENT_EXIT, runPlacedTestFiles} from '../../scripts/lab/probe.js';
 import {reportLocalCorpus, startLocalCorpus} from '../../scripts/publish-head.js';
 import {EXECUTION_SECTIONS_ENV, readExecutionRuns} from '../../scripts/test-execution-report.js';
-import {lab, placementRunFixture} from './test-placement-fixtures.js';
+import {fakeInventory, lab, placementRunFixture} from './test-placement-fixtures.js';
 
 const RUNNER = path.resolve('scripts/run-test-files.js');
 const FILES = Array.from({length: 8}, (_, index) => `test/single-pass-${index}.test.js`);
@@ -157,7 +157,7 @@ for (const [name, outcome] of [
       // below its setup cost and is omitted by the real initial planner.
       planCosts: (files) => files.map((file, index) =>
         ({file, ms: index < 2 ? 260000 : 1000, jobs: 1, lane: 'ordinary'})),
-      discover: async () => ({machines: [lab('lab', 1), lab('spare', 1.1)],
+      discover: async () => ({fleet: fakeInventory().fleet, machines: [lab('lab', 1), lab('spare', 1.1)],
         record: () => assert.fail('refusal does not change routing history')}),
     });
     assert.notEqual(observed.status, 0);
@@ -220,7 +220,7 @@ for (const [name, overrides] of [
   ['fleet unavailable', {discover: async () => {
     throw new Error('inventory unavailable');
   }}],
-  ['empty fleet', {discover: async () => ({machines: []})}],
+  ['empty fleet', {discover: async () => ({fleet: fakeInventory().fleet, machines: []})}],
   ['proof base unavailable', {checkBase: () => {
     throw new Error('base unavailable');
   }}],

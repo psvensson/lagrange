@@ -10,6 +10,7 @@ import {
   readFileSync,
   renameSync,
   statSync,
+  writeFileSync,
 } from 'node:fs';
 import {spawn, spawnSync} from 'node:child_process';
 import {gitProcessEnvironment} from './checks/git-process-environment.js';
@@ -25,11 +26,16 @@ import {
   EXECUTION_SECTIONS_ENV, SECTION_KIND, appendExecutionSection, describeCheckout,
   fileResultRecord,
 } from './test-execution-report.js';
+import {THERMAL_REFUSAL, THERMAL_REFUSAL_EXIT, fileExecutionEnvironment}
+  from './checks/wait-for-thermal-headroom.js';
+import {BATCH_PREVIOUS_CLOSE_ENV, runAdmittedTestFiles} from './test-file-admission.js';
 import {flushCoverageBeforeKill} from './checks/census-pre-kill-flush.js';
 import {PARENT_DIRECTORY_PREFIX, TEXT_ENCODING, readBoundedOutput} from './test-output-reader.js';
 
 export {readBoundedOutput};
 
+export const BATCH_RESULT_ENV = 'LAGRANGE_TEST_BATCH_RESULT_FD';
+export const BATCH_RESULT_FD = 3;
 const DEFAULT_JOBS = 4;
 const DEFAULT_TIMEOUT_MS = 600000;
 const FAILURE_EXIT_CODE = 1;
@@ -271,23 +277,23 @@ function prepareTestRun(file, options) {
     options.resultsDirectory ?? TAP_RESULTS_DIRECTORY,
   );
   const {absoluteFile, relativeFile} = normalizeTestFile(cwd, file);
-  const outputFile = path.join(resultsDirectory, `${relativeFile}${TAP_RESULT_SUFFIX}`);
-  const stderrFile = `${outputFile}${STDERR_RESULT_SUFFIX}`;
-  mkdirSync(path.dirname(outputFile), {recursive: true});
-  const stdoutFd = openSync(outputFile, 'w');
-  const stderrFd = openSync(stderrFile, 'w');
   // No test process inherits a git repository pointer: a push from a linked
   // worktree runs the gate with git's GIT_DIR exported, and a fixture that
   // commits, configures or resets would reach the pusher's repository
   // (2026-09-13) - while a test that reads the repository must read the
   // checkout it runs in. One owner here, for every test file.
-  const env = {
+  const env = fileExecutionEnvironment({
     ...gitProcessEnvironment({...process.env, ...options.env}),
     TAP_ALLOW_INCOMPLETE_COVERAGE: '1',
     TAP_FAIL_SKIP: '1',
     TAP_FAIL_TODO: '1',
     _TAPJS_PROCESSINFO_COVERAGE_: '0',
-  };
+  }, absoluteFile);
+  const outputFile = path.join(resultsDirectory, `${relativeFile}${TAP_RESULT_SUFFIX}`);
+  const stderrFile = `${outputFile}${STDERR_RESULT_SUFFIX}`;
+  mkdirSync(path.dirname(outputFile), {recursive: true});
+  const stdoutFd = openSync(outputFile, 'w');
+  const stderrFd = openSync(stderrFile, 'w');
   // A node:test parent sets NODE_TEST_CONTEXT=child-v8. A separately spawned
   // file inheriting it emits binary test events even with the TAP reporter
   // selected. Each file belongs to this runner's TAP capture, not its caller's
@@ -298,6 +304,8 @@ function prepareTestRun(file, options) {
   // repositories), and its sections would be read as this proof's
   // (proof-receipt-bound-to-validated-execution).
   delete env[EXECUTION_SECTIONS_ENV];
+  delete env[BATCH_RESULT_ENV];
+  delete env[BATCH_PREVIOUS_CLOSE_ENV];
   // Honor per-test {timeout: N} options written in the file: this tap
   // version silently CAPS every test at the 30s default - neither the
   // test option nor t.setTimeout() can extend past it (verified
@@ -608,26 +616,28 @@ async function runTestFiles(files, options = {}) {
     };
   }
   if (options.ledgerFile) rotateLedger(options.ledgerFile);
-  const jobs = Math.min(options.jobs ?? DEFAULT_JOBS, files.length);
-  const results = new Array(files.length);
-  let nextFileIndex = 0;
-  const worker = async () => {
-    while (nextFileIndex < files.length) {
-      const index = nextFileIndex++;
-      results[index] = await runTestFile(files[index], options);
-    }
-  };
-  await Promise.all(Array.from({length: jobs}, worker));
+  const {results, refusal, nextFileIndex, unresolved} = await runAdmittedTestFiles(files,
+    {...options, jobs: options.jobs ?? DEFAULT_JOBS}, runTestFile);
+  const write = options.write ?? ((text) => process.stdout.write(text));
   const failed = results.filter((result) => !result.ok).length;
+  const notRun = files.slice(nextFileIndex);
+  if (unresolved.length > 0) write(`# file outcomes unresolved: ${unresolved.join(' ')}\n`);
+  if (refusal) {
+    write(`thermal: ${THERMAL_REFUSAL} ${refusal.reason}\n`);
+    write(`# ${THERMAL_REFUSAL}: ${notRun.length} file(s) not run: ${notRun.join(' ')}\n`);
+  }
   const assertions = results.reduce((total, result) => total + result.assertions, 0);
   return {
     assertions,
     failed,
-    ok: failed === 0,
+    ok: failed === 0 && refusal === null,
     passed: results.length - failed,
-    reasons: NO_FAILURE_REASONS,
+    reasons: refusal ? [THERMAL_REFUSAL] : NO_FAILURE_REASONS,
     results,
     total: results.length,
+    notRun,
+    admissionRefused: refusal !== null,
+    exitStatus: failed > 0 ? FAILURE_EXIT_CODE : refusal ? THERMAL_REFUSAL_EXIT : SUCCESS_EXIT_CODE,
   };
 }
 
@@ -662,8 +672,16 @@ async function main() {
     process.stderr.write(`${summary.reasons.join(REASON_SEPARATOR)}\n`);
   }
   process.stdout.write(`${formatTestFilesSummary(summary)}\n`);
-  const status = summary.ok ? SUCCESS_EXIT_CODE : FAILURE_EXIT_CODE;
+  const status = summary.exitStatus ?? (summary.ok ? SUCCESS_EXIT_CODE : FAILURE_EXIT_CODE);
   report.end(summary, status);
+  if (process.env[BATCH_RESULT_ENV] !== undefined) {
+    if (process.env[BATCH_RESULT_ENV] !== String(BATCH_RESULT_FD)) {
+      throw new Error('invalid batch terminal channel');
+    }
+    writeFileSync(BATCH_RESULT_FD, JSON.stringify({
+      refused: summary.admissionRefused === true, exitStatus: status,
+    }));
+  }
   return status;
 }
 

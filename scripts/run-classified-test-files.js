@@ -32,18 +32,13 @@ import {
   RESOURCE_CLASS_JOBS,
   RESOURCE_CLASS_ORDINARY,
 } from './checks/test-resource-classification-constants.js';
-import {
-  HEADROOM,
-  THERMAL_REFUSAL,
-  THERMAL_REFUSAL_EXIT,
-  THERMAL_SKIP_ENV,
-  formatThermalOutcome,
-  readThermalHeadroom,
-  waitForThermalHeadroom,
-} from './checks/wait-for-thermal-headroom.js';
+import {THERMAL_REFUSAL, THERMAL_REFUSAL_EXIT}
+  from './checks/wait-for-thermal-headroom.js';
 import {parseLaneArgs, planLane} from './plan-test-lane.js';
 import {placementDeps, runPlacedTestFiles} from './lab/probe.js';
-import {formatBatchSignalLine, formatPlannedLine} from './run-test-files.js';
+import {BATCH_PREVIOUS_CLOSE_ENV} from './test-file-admission.js';
+import {BATCH_RESULT_ENV, BATCH_RESULT_FD,
+  formatBatchSignalLine, formatPlannedLine} from './run-test-files.js';
 import {
   appendArrayValue,
   appendArrayValues,
@@ -134,25 +129,13 @@ const LANE_JOBS_CAP_PATTERN = /^[1-9]\d*$/u;
 const DECIMAL_RADIX = 10;
 // No cap: every lane runs at its own worker count.
 const NO_LANE_JOBS_CAP = Number.POSITIVE_INFINITY;
-// A batch the runner gated carries the one skip, so a runner nested inside
-// one of its tests does not gate a second time inside a gated batch.
-const THERMAL_SKIP_VALUE = '1';
-// Decisions that cannot change between batches are said once per run.
-const THERMAL_ONCE_OUTCOMES = Object.freeze([
-  HEADROOM.UNMEASURABLE,
-  HEADROOM.SKIPPED,
-]);
 const WORD_SEPARATOR = ' ';
-// The gate's word on one batch.
-const GATE_DECISION = Object.freeze({PROCEED: 'proceed', REFUSE: 'refuse'});
+const BATCH_RESULT_BOUND = 4096;
 // What one lane batch came to, and what that does to the run.
 const BATCH_OUTCOME = Object.freeze({
   PASSED: 'passed', FAILED: 'failed', REFUSED: 'refused',
 });
 const RUN_STEP = Object.freeze({CONTINUE: 'continue', STOP: 'stop'});
-const REFUSED_BATCH = Object.freeze({
-  outcome: BATCH_OUTCOME.REFUSED, status: THERMAL_REFUSAL_EXIT,
-});
 const MIXED_INPUT_PROBLEM =
   'classified test plan cannot combine filters and stdin';
 const UNEXPECTED_FILTER_ARGUMENT_PREFIX =
@@ -312,7 +295,7 @@ function medianOf(values) {
 // duration here, else the median of its lane's timed files, else a default.
 // A red or unknown file is priced like its lane, never as free. Each names
 // its lane, which a placed shard tells other agents on the lab it runs.
-export function estimateFileCosts(plan, resultsRoots) {
+export function estimateFileCosts(plan, resultsRoots, requestedCap = NO_LANE_JOBS_CAP) {
   const costs = [];
   for (let laneIndex = 0; laneIndex < plan.length; laneIndex += 1) {
     const lane = plan[laneIndex];
@@ -327,7 +310,7 @@ export function estimateFileCosts(plan, resultsRoots) {
     for (let index = 0; index < lane.files.length; index += 1) {
       appendArrayValue(costs, {
         file: lane.files[index],
-        jobs: lane.jobs,
+        jobs: laneJobs(lane, requestedCap),
         ms: measured[index] === null ? fallback : measured[index],
         lane: lane.resourceClass,
       });
@@ -414,56 +397,26 @@ export function planClassifiedTestFiles(
   return buildLanePlan(lanes, copiedResultsRoots, files.length);
 }
 
-function isValidRunnerOptionShape(root, spawn, failFast, env, write, sources) {
-  const validRoot = typeof root === 'string' && root.length > 0;
-  const validCallbacks = typeof spawn === 'function' && typeof write === 'function';
-  const validEnv = Boolean(env) && typeof env === 'object' && Boolean(sources);
-  return validRoot && validCallbacks && typeof failFast === 'boolean' && validEnv;
-}
-
-// The runner's options, validated: every one an own data value, so an
-// inherited or accessor option can never replace the root, the launcher or
-// the thermal sources.
 function runnerOptions(options) {
-  const ownedOptions = copyOwnDataRecord(options);
-  if (!ownedOptions) throw new Error(INVALID_OPTIONS_PROBLEM);
+  const owned = copyOwnDataRecord(options);
+  if (!owned) throw new Error(INVALID_OPTIONS_PROBLEM);
   const {root = ROOT, spawn = spawnSync, failFast = false, env = process.env,
-    write = (text) => process.stdout.write(text), thermalSources = {},
-    thermalSleep} = ownedOptions;
-  const sources = copyOwnDataRecord(thermalSources);
-  if (!isValidRunnerOptionShape(root, spawn, failFast, env, write, sources)) {
-    throw new Error(INVALID_OPTIONS_PROBLEM);
-  }
-  return {root, spawn, failFast, env, write, sources, sleep: thermalSleep};
+    write = (text) => process.stdout.write(text)} = owned;
+  if (typeof root !== 'string' || root.length === 0 || typeof spawn !== 'function' ||
+      typeof failFast !== 'boolean' || !env || typeof env !== 'object' ||
+      typeof write !== 'function') throw new Error(INVALID_OPTIONS_PROBLEM);
+  return {root, spawn, failFast, env, write};
 }
 
 // A host's ceiling on any lane's workers: none unless the runner's own env
 // names one, and garbage is refused rather than read as no cap.
-function laneJobsCap(env) {
+export function laneJobsCap(env) {
   const value = env[LANE_JOBS_CAP_ENV];
   if (value === undefined) return NO_LANE_JOBS_CAP;
   if (typeof value !== 'string' || !regExpExec(LANE_JOBS_CAP_PATTERN, value)) {
     throw new Error(`${INVALID_LANE_JOBS_CAP_PROBLEM}${value}`);
   }
   return numberParseInt(value, DECIMAL_RADIX);
-}
-
-// The thermal gate before a batch: the one thermal owner is asked, never
-// spawned. A hold waits with the owner's poll (its lines in this stream), an
-// unmeasurable or skipped host is said once and proceeds, and exhausted
-// headroom refuses: the batch must not start hot.
-function createThermalGate({env, write, sources, sleep}) {
-  let announced = false;
-  return () => {
-    const result = waitForThermalHeadroom({env, sleep,
-      read: () => readThermalHeadroom(sources),
-      log: (line) => write(`${line}${NEWLINE}`)});
-    const once = stringCollectionHas(THERMAL_ONCE_OUTCOMES, result.outcome);
-    if (!once || !announced) write(`${formatThermalOutcome(result)}${NEWLINE}`);
-    if (once) announced = true;
-    return result.outcome === HEADROOM.EXHAUSTED ?
-      GATE_DECISION.REFUSE : GATE_DECISION.PROCEED;
-  };
 }
 
 // A lane's workers on this host: its own count, lowered to the host's cap.
@@ -486,24 +439,17 @@ function reportNotRun(plan, laneIndex, firstFile, write) {
     `${arrayJoin(notRun, WORD_SEPARATOR)}${NEWLINE}`);
 }
 
-// Every batch carries the skip: it is gated already. The lane cap is this
-// runner's own input, consumed here: a batch's tests never inherit the host's
-// ceiling. A floor, not a cap: the runner owns the final TAP_TIMEOUT and lifts
+// Transport batches retain the native endpoint and host cap: the child pool
+// owns every actual file admission. A floor, not a cap: the runner owns the final TAP_TIMEOUT and lifts
 // it to the file's declared budget when that is larger. An explicit caller
 // TAP_TIMEOUT flows through process.env and wins.
-function batchEnv(env, resourceClass) {
-  const gated = {...env, [THERMAL_SKIP_ENV]: THERMAL_SKIP_VALUE};
-  delete gated[LANE_JOBS_CAP_ENV];
+function batchEnv(env, resourceClass, previousClose) {
+  const gated = {...env, [BATCH_RESULT_ENV]: String(BATCH_RESULT_FD)};
+  if (previousClose !== null) gated[BATCH_PREVIOUS_CLOSE_ENV] = String(previousClose);
   if (stringCollectionHas(TIMEOUT_FLOOR_LANES, resourceClass)) {
     gated.TAP_TIMEOUT_FLOOR = EXCLUSIVE_TAP_TIMEOUT_FLOOR_SECONDS;
   }
   return gated;
-}
-
-// A refused batch starts nothing: every file from it on is reported not run.
-function refuseBatch(write, plan, laneIndex, batchIndex) {
-  reportNotRun(plan, laneIndex, batchIndex * MAX_FILES_PER_RUN, write);
-  return REFUSED_BATCH;
 }
 
 function batchArgs(jobs, files) {
@@ -517,7 +463,22 @@ function batchArgs(jobs, files) {
 function batchResult(result, files, write) {
   if (result.signal) write(`${formatBatchSignalLine(result.signal, files.length)}${NEWLINE}`);
   const status = result.status ?? 1;
-  return {outcome: status === 0 ? BATCH_OUTCOME.PASSED : BATCH_OUTCOME.FAILED, status};
+  const terminal = result.output?.[BATCH_RESULT_FD];
+  try {
+    if (!terminal || terminal.length > BATCH_RESULT_BOUND) {
+      throw new Error('batch terminal missing or exceeds bound');
+    }
+    const value = JSON.parse(String(terminal));
+    if (typeof value.refused !== 'boolean' || value.exitStatus !== status) {
+      throw new Error('batch terminal status differs');
+    }
+    return {outcome: value.refused ? BATCH_OUTCOME.REFUSED :
+      status === 0 ? BATCH_OUTCOME.PASSED : BATCH_OUTCOME.FAILED, status};
+  } catch (error) {
+    write(`# batch terminal unavailable: ${error.message}${NEWLINE}`);
+    return {outcome: BATCH_OUTCOME.REFUSED, status: status || THERMAL_REFUSAL_EXIT,
+      unresolved: true};
+  }
 }
 
 // What a batch does to the run. Keep-going keeps the first red as the status;
@@ -534,11 +495,11 @@ export function runClassifiedTestFiles(inputFiles, options = {}) {
   const run = runnerOptions(options);
   const plan = planClassifiedTestFiles(run.root, inputFiles);
   const cap = laneJobsCap(run.env);
-  const gate = createThermalGate(run);
   // Every file planned, before any runs: the reader of this stream calls the
   // run complete only when summaries cover it.
   run.write(`${formatPlannedLine(inputFiles.length)}${NEWLINE}`);
   let firstFailure = 0;
+  let previousClose = null;
   for (let laneIndex = 0; laneIndex < plan.length; laneIndex += 1) {
     const lane = plan[laneIndex];
     const jobs = laneJobs(lane, cap);
@@ -550,11 +511,21 @@ export function runClassifiedTestFiles(inputFiles, options = {}) {
     for (let batchIndex = 0;
       batchIndex < laneBatches.length;
       batchIndex += 1) {
-      const batch = gate() === GATE_DECISION.PROCEED ?
-        batchResult(run.spawn(process.execPath, batchArgs(jobs, laneBatches[batchIndex]),
-          {cwd: run.root, env: batchEnv(run.env, lane.resourceClass), stdio: 'inherit'}),
-        laneBatches[batchIndex], run.write) :
-        refuseBatch(run.write, plan, laneIndex, batchIndex);
+      const batch = batchResult(run.spawn(process.execPath,
+        batchArgs(jobs, laneBatches[batchIndex]),
+        {cwd: run.root, env: batchEnv(run.env, lane.resourceClass, previousClose),
+          stdio: ['inherit', 'inherit', 'inherit', 'pipe'], maxBuffer: BATCH_RESULT_BOUND}),
+      laneBatches[batchIndex], run.write);
+      previousClose = Date.now();
+      if (batch.unresolved) {
+        run.write(`# batch outcome unresolved: ${arrayJoin(laneBatches[batchIndex], WORD_SEPARATOR)}` +
+          NEWLINE);
+      }
+      if (batch.outcome === BATCH_OUTCOME.REFUSED) {
+        // The child names its precise unstarted suffix; this parent names only
+        // later transport batches and lanes that it never delegated.
+        reportNotRun(plan, laneIndex, (batchIndex + 1) * MAX_FILES_PER_RUN, run.write);
+      }
       const settled = settleBatch(firstFailure, batch, run.failFast);
       if (settled.step === RUN_STEP.STOP) return settled.status;
       firstFailure = settled.status;
@@ -599,8 +570,10 @@ export function runPlacedClassifiedTestFiles(files, options = {}) {
   return runPlacedTestFiles(files, placementDeps({
     root,
     failFast,
+    env: options.env ?? process.env,
     planCosts: (planned) => estimateFileCosts(
-      planClassifiedTestFiles(root, planned), lastResultsRoots(root)),
+      planClassifiedTestFiles(root, planned), lastResultsRoots(root),
+      laneJobsCap(options.env ?? process.env)),
     runLocal: (planned, localOptions) =>
       runClassifiedTestFiles(planned, {...options, ...localOptions}),
   }));

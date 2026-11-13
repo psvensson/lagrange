@@ -36,17 +36,18 @@ async function settleProbe(probe, input) {
  * @return {Promise<Array<Object>>}
  */
 export async function discoverFleet({nodes, controllerRepoPath, lockGraphSha256,
-  nodeMinimum, probe = probeTestCapability}) {
+  nodeMinimum, controllerThermalEndpoint, probe = probeTestCapability}) {
   // The node major a run activates, taken from the engines floor rather than
   // written down a second time.
   const nodeMajor = String(nodeMinimum || EMPTY).split('.')[0];
   const targets = [{name: FLEET_CONTROLLER_NAME, controller: true,
-    input: {sshTarget: null, repoPath: controllerRepoPath, nodeMajor}}];
+    input: {sshTarget: null, repoPath: controllerRepoPath, nodeMajor,
+      thermalEndpoint: controllerThermalEndpoint}}];
   for (const node of nodes) {
     if (!node || !node.ssh) continue;
     targets.push({name: node.name, controller: false,
       input: {sshTarget: node.ssh, repoPath: node.repoPath || FLEET_DEFAULT_REPO_PATH,
-        nodeMajor}});
+        nodeMajor, thermalEndpoint: node.thermalEndpoint}});
   }
   const outcomes = await Promise.all(
     targets.map((target) => settleProbe(probe, target.input)));

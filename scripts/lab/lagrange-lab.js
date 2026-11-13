@@ -22,7 +22,7 @@ import {
   workerCloneUrl, workerSetupScript,
 } from './probe.js';
 import {
-  CLASSIFIED_LANES, estimateFileCosts, lastResultsRoots, planClassifiedTestFiles,
+  CLASSIFIED_LANES, estimateFileCosts, laneJobsCap, lastResultsRoots, planClassifiedTestFiles,
 } from '../run-classified-test-files.js';
 import {parseLaneArgs, planLane} from '../plan-test-lane.js';
 import {capture} from './process.js';
@@ -330,6 +330,7 @@ async function commandFleet(args) {
   const fleet = await discoverFleet({
     nodes: Object.values(state.nodes || {}),
     controllerRepoPath: FLEET_REPO_ROOT,
+    controllerThermalEndpoint: state.controller?.thermalEndpoint,
     ...requirement,
   });
   await saveState(recordFleet(state, fleet));
@@ -509,7 +510,7 @@ async function commandTest(profile, args) {
     const plan = await labTestPlan(profile, request, commit);
     const status = await runLabTest({
       plan,
-      costs: estimateFileCosts(plan, lastResultsRoots(FLEET_REPO_ROOT)),
+      costs: estimateFileCosts(plan, lastResultsRoots(FLEET_REPO_ROOT), laneJobsCap(process.env)),
       commit,
       // The base the cone was selected from is the one its history walks use.
       checkBase: resolvedCheckBaseCommit(request.baseSha, process.env, commit.gitRoot),

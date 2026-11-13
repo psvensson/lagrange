@@ -1,3 +1,6 @@
+import {THERMAL_ENDPOINT_ENV, THERMAL_DEADLINE_ENV, TEST_EXECUTION_CONTEXT_ENV}
+  from '../checks/wait-for-thermal-headroom.js';
+import {LANE_JOBS_CAP_ENV} from '../checks/test-resource-classification-constants.js';
 // Acquire, observe and close one assigned placement execution and its original inputs.
 import {spawn, spawnSync} from 'node:child_process';
 import fs from 'node:fs';
@@ -94,6 +97,7 @@ function forwardedPolicy(env, checkBase) {
   return {
     tapTimeout: env[PLACEMENT_FORWARDED_ENV.TAP_TIMEOUT] || EMPTY,
     checkBase: checkBase || EMPTY,
+    laneJobsCap: env[LANE_JOBS_CAP_ENV] ?? EMPTY,
   };
 }
 
@@ -372,7 +376,9 @@ export function startRemoteShard(shard, {sha, deadlineMs, root, holder,
         machine.nodeMajor || EMPTY, String(machine.factor || 1), runId, remoteBundle,
         ...forwardedArgs(forward), results,
         ...labLockArgs({waitMs: holder.expectedMs, purpose: holder.purpose,
-          expectedMs: holder.expectedMs, sha, env})], {fromStdin: true})),
+          expectedMs: holder.expectedMs, sha, env}),
+        JSON.stringify(machine.thermalEndpoint), String(deadlineMs),
+        forward.laneJobsCap ?? EMPTY], {fromStdin: true})),
       scriptFile,
     });
     acquisition = spawnShardWrapper(wrapper, {env, logFile, errorFile});
@@ -539,7 +545,16 @@ function abortTogether(runs) {
 // this event loop had written found the non-blocking socket empty and died
 // with EAGAIN - every child, when this process was busy for 300 ms after the
 // spawn (found 2026-09-23). The file is unlinked once the child holds it.
-function runClassifiedChild(root, files, env, {onLine = null, checkBase = EMPTY} = {}) {
+function runClassifiedChild(root, files, env, {onLine = null, checkBase = EMPTY,
+  thermalEndpoint, deadlineMs} = {}) {
+  const childEnv = {...env};
+  delete childEnv[TEST_EXECUTION_CONTEXT_ENV];
+  if (thermalEndpoint) childEnv[THERMAL_ENDPOINT_ENV] = JSON.stringify(thermalEndpoint);
+  if (deadlineMs !== undefined) {
+    const owned = Date.now() + deadlineMs;
+    const outer = Number(env[THERMAL_DEADLINE_ENV]);
+    childEnv[THERMAL_DEADLINE_ENV] = String(Number.isFinite(outer) ? Math.min(outer, owned) : owned);
+  }
   const output = onLine ? PLACEMENT_STDIO_PIPE : PLACEMENT_STDIO_INHERIT;
   const listDir = path.join(root, PLACEMENT_LOG_PARENT);
   fs.mkdirSync(listDir, {recursive: true});
@@ -554,7 +569,7 @@ function runClassifiedChild(root, files, env, {onLine = null, checkBase = EMPTY}
     input = fs.openSync(list, PLACEMENT_READ_FLAG);
     child = spawn(process.execPath, [PLACEMENT_RUNNER, PLACEMENT_RUNNER_STDIN], {
       cwd: root,
-      env: {...env, [PLACEMENT_ENV]: PLACEMENT_LOCAL,
+      env: {...childEnv, [PLACEMENT_ENV]: PLACEMENT_LOCAL,
         ...(checkBase ? {[PLACEMENT_FORWARDED_ENV.CHECK_BASE]: checkBase} : {})},
       stdio: [input, output, output],
       detached: true,

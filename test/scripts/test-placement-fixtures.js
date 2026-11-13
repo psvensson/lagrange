@@ -8,10 +8,20 @@ import path from 'node:path';
 
 import {gitProcessEnvironment} from '../../scripts/checks/git-process-environment.js';
 
-export const CONTROLLER = Object.freeze({name: '(controller)', controller: true, speed: 1});
+export const SENSOR_POLICY = Object.freeze({
+  mode: 'sensor-required', cadence_ms: 0, max_concurrency: 4,
+});
+// Planning-only descriptor. Real execution fixtures provide their own finite endpoint.
+export const PLANNING_ENDPOINT = Object.freeze({schema: 'native-thermal-endpoint/v1',
+  python: '/usr/bin/python3', entry: '/fixture/observer.py', config: '/fixture/config.json',
+  sourceSha256: 'a'.repeat(64), configSha256: 'b'.repeat(64), bootId: 'fixture-boot'});
+export const CONTROLLER = Object.freeze({name: '(controller)', controller: true, speed: 1,
+  executionPolicy: SENSOR_POLICY, thermalEndpoint: PLANNING_ENDPOINT});
 
 export function lab(name, speed, extra = {}) {
-  return {name, controller: false, speed, avoid: [], gapsKey: 'k', ...extra};
+  return {name, controller: false, speed, avoid: [], gapsKey: 'k',
+    thermalEndpoint: PLANNING_ENDPOINT, executionPolicy: {...SENSOR_POLICY,
+      max_concurrency: extra.cores > 1 ? extra.cores - 1 : 4}, ...extra};
 }
 
 // The real placement owner's collaborators, with execution substituted by
@@ -35,6 +45,7 @@ export function placementRunFixture(overrides = {}) {
       done: Promise.resolve(deps.runLocal(files, {})),
       abort: () => {},
     }),
+    controllerHeadroom: async () => ({fit: true, reason: null}),
     lastGreen: () => true,
     checkBase: () => 'b'.repeat(40),
     commitAt: () => {
@@ -43,7 +54,8 @@ export function placementRunFixture(overrides = {}) {
     },
     discover: async () => {
       calls.discover += 1;
-      return {machines: [lab('lab', 1)], record: async (...args) => calls.record.push(args)};
+      return {fleet: fakeInventory().fleet, machines: [lab('lab', 1)],
+        record: async (...args) => calls.record.push(args)};
     },
     runRemote: (shard, options) => {
       calls.order.push('remote');
@@ -64,10 +76,12 @@ export const LANE = Object.freeze({ORDINARY: 'ordinary', EXCLUSIVE: 'exclusive',
 export function fakeInventory() {
   const ready = {ready: true, missing: [], gaps: []};
   const cap = (extra = {}) => ({repoPath: '/srv/lagrange', cpuSampleMs: 260, cores: 12,
+    thermalEndpoint: PLANNING_ENDPOINT,
+    thermalDecision: {outcome: 'READY', execution_policy: SENSOR_POLICY},
     memKiB: 16 * 1024 * 1024, nodeVersion: 'v22.22.3', repo: {head: 'c'.repeat(40)}, ...extra});
   const fleet = [
     {name: '(controller)', controller: true,
-      capability: {cpuSampleMs: 200, cores: 20, memKiB: 32 * 1024 * 1024}, readiness: ready},
+      capability: cap({cpuSampleMs: 200, cores: 20, memKiB: 32 * 1024 * 1024}), readiness: ready},
     {name: 'alpha', capability: cap(), readiness: ready},
     {name: 'beta', capability: cap({cpuSampleMs: 150, cores: 8}), readiness: ready},
     {name: 'gamma', capability: cap(), readiness: {ready: false, missing: ['no-repository'],

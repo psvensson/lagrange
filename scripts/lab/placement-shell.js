@@ -1,3 +1,5 @@
+import {THERMAL_ENDPOINT_ENV, THERMAL_DEADLINE_ENV, TEST_EXECUTION_CONTEXT_ENV}
+  from '../checks/wait-for-thermal-headroom.js';
 import {CHECK_BASE_ENV, WORKSPACE_INJECTION_ENV} from '../checks/change-selection-constants.js';
 import {PROOF_CHECKOUT_GENERATORS} from '../checks/proof-checkout-preparation.js';
 import {LANE_JOBS_CAP_ENV} from '../checks/test-resource-classification-constants.js';
@@ -54,6 +56,8 @@ export function placementShell(files, {exit, locks, parent, resultsPrefix,
     'repo="$1"; sha="$2"; node_major="$3"; factor="$4"; run="$5"; bundle="$6"',
     'tap_timeout="$7"; check_base="$8"; results="$9"; lock_wait="${10}"',
     'holder_head="${11}"; expected_minutes="${12}"',
+    'thermal_endpoint="${13}"; thermal_budget="${14}"; lane_cap="${15}"',
+    'thermal_started="$(date +%s)"',
     'set --',
     'first_status=0; waiter_pid=""; group_pid=""; holding=""',
     'scope_stop_started=""; scope_stop_status=0; scope_uncertain=""',
@@ -253,16 +257,14 @@ export function placementShell(files, {exit, locks, parent, resultsPrefix,
     `if [ -n "$tap_timeout" ]; then export ${tapTimeoutEnv}="$tap_timeout"; fi`,
     `if [ -n "$check_base" ]; then export ${CHECK_BASE_ENV}="$check_base"; ` +
       `else unset ${CHECK_BASE_ENV}; fi`,
-    `unset ${LANE_JOBS_CAP_ENV}`,
-    'cores="$(getconf _NPROCESSORS_ONLN 2>/dev/null)"; cores_status=$?',
-    'if [ "$cores_status" != 0 ]; then',
-    '  echo "placement: processor census unavailable" >&2',
-    `  exit ${exit.SETUP}`,
-    'fi',
-    'case "$cores" in ""|0|*[!0-9]*) echo "placement: processor census unavailable" >&2; ' +
-      `exit ${exit.SETUP};; esac`,
-    `case "$cores" in 1) export ${LANE_JOBS_CAP_ENV}=1;; ` +
-      `*) export ${LANE_JOBS_CAP_ENV}=$((cores - 1));; esac`,
+    `unset ${TEST_EXECUTION_CONTEXT_ENV}`,
+    `export ${THERMAL_ENDPOINT_ENV}="$thermal_endpoint"`,
+    'case "$thermal_budget" in ""|0|*[!0-9]*) exit ' + String(exit.SETUP) + ';; esac',
+    `export ${THERMAL_DEADLINE_ENV}=$((thermal_started * 1000 + thermal_budget))`,
+    'if [ -n "$lane_cap" ]; then',
+    '  case "$lane_cap" in 0|*[!0-9]*) exit ' + String(exit.SETUP) + ';; esac',
+    `  export ${LANE_JOBS_CAP_ENV}="$lane_cap"`,
+    `else unset ${LANE_JOBS_CAP_ENV}; fi`,
     `echo "placement-env=factor:$${machineFactorEnv} mode:$${placementEnv} ` +
       `timeout:\${${tapTimeoutEnv}:-} lanecap:\${${LANE_JOBS_CAP_ENV}:-} ` +
       `base:\${${CHECK_BASE_ENV}:-}"`,
