@@ -20,7 +20,8 @@ import {
   runPlacedTestFiles, startRemoteShard,
 } from '../../scripts/lab/probe.js';
 import {
-  CONTROLLER, IMPORT_GRAPH_PRODUCER, LANE, READY_LINE, fakeInventory, lab, labRunnerLog,
+  CONTROLLER, IMPORT_GRAPH_PRODUCER, LANE, PLANNING_ENDPOINT, READY_LINE, SENSOR_POLICY,
+  fakeInventory, lab, labRunnerLog,
   placementRunFixture as fakeDeps, waitForNonEmptyFile, worktreeTap,
 } from './test-placement-fixtures.js';
 import {spawnGit} from '../../scripts/checks/git-invocation.js';
@@ -106,6 +107,8 @@ test('placement spreads files by measured duration and machine speed', () => {
 test('only a ready, distinct, reachable machine receives files', () => {
   const ready = {ready: true, missing: [], gaps: ['no-helm']};
   const cap = (extra = {}) => ({repoPath: '/srv/lagrange', cpuSampleMs: 260,
+    thermalEndpoint: PLANNING_ENDPOINT,
+    thermalDecision: {outcome: 'READY', execution_policy: SENSOR_POLICY},
     nodeVersion: 'v22.22.3', repo: {head: 'c'.repeat(40)}, ...extra});
   const fleet = [
     {name: '(controller)', controller: true, capability: {cpuSampleMs: 200}, readiness: ready},
@@ -267,7 +270,7 @@ test('a red lab file remains red and every assigned file executes once', async (
   run = fakeDeps({env: {TAP_TIMEOUT: '900'}, checkBase: () => 'c0'});
   await runPlacedTestFiles(MANY, run.deps);
   assert.deepEqual(run.calls.options[0].options.forward,
-    {tapTimeout: '900', checkBase: 'c0'});
+    {tapTimeout: '900', checkBase: 'c0', laneJobsCap: ''});
   assert.equal(run.calls.options[0].options.deadlineMs, 30 * MINUTE,
     'never under half an hour');
   assert.deepEqual(run.calls.order, ['remote', 'local'], 'lab shards first, then this one');
@@ -712,20 +715,19 @@ test('a lab machine proves the exact commit and cleans only its successful attem
     const {node, controller, parent, machine, sha, basis, env, start} = fixture;
     const earlier = leftovers(node);
     const started = start([FAST_TEST], {runId: 'capped',
-      forward: {tapTimeout: '900', checkBase: basis}});
+      forward: {tapTimeout: '900', checkBase: basis, laneJobsCap: '1'}});
     assert.equal(typeof started.then, 'undefined', 'a shard is started, not awaited');
     // The lab-side script as sent, read before its shard removes it and
     // asserted once the shard has settled, so a red leaves nothing running.
     const sent = fs.readFileSync(path.join(controller, 'test-output', 'placement',
       'capped-lab.sh'), 'utf8');
     const green = await started.done;
-    // The lane cap comes from the host's own processor count at run time,
-    // never from a host name.
-    assert.match(sent, /^cores="\$\(getconf _NPROCESSORS_ONLN 2>\/dev\/null\)"; cores_status=\$\?$/mu,
-      'the remote host counts its processors through its declared producer');
-    assert.match(sent, /case "\$cores" in ""\|0\|\*\[!0-9\]\*\)/u,
-      'missing, zero or malformed processor counts refuse admission');
-    assert.doesNotMatch(sent, /\bnproc\b/u, 'no alternate census can promote an unavailable count');
+    assert.match(sent, /export LAGRANGE_LANE_JOBS_CAP="\$lane_cap"/u,
+      'the remote shell forwards the declared lane cap');
+    assert.match(sent, /case "\$lane_cap" in 0\|\*\[!0-9\]\*\)/u,
+      'zero or malformed supplied caps refuse admission');
+    assert.doesNotMatch(sent, /\b(?:getconf|nproc)\b/u,
+      'a processor census cannot replace explicit policy');
     // The lab convention's default lock directory is `$HOME/.lab` on every
     // host; the fixture's machine is also called lab.
     assert.doesNotMatch(sent.replaceAll('$HOME/.lab', ''), /\blab\b/u,
@@ -734,12 +736,10 @@ test('a lab machine proves the exact commit and cleans only its successful attem
     assert.match(green.log, new RegExp(`^placement-head=${sha}$`, 'mu'),
       'the worktree is at the commit the controller holds, sent as a bundle');
     assert.match(green.log, new RegExp(`^ok ${FAST_TEST} `, 'mu'));
-    const cores = Number(spawnSync('getconf', ['_NPROCESSORS_ONLN'], {encoding: 'utf8'})
-      .stdout.trim());
     assert.match(green.log, new RegExp('^placement-env=factor:1\\.5 mode:local ' +
-      `timeout:900 lanecap:${Math.max(1, cores - 1)} base:${basis}$`, 'mu'),
+      `timeout:900 lanecap:1 base:${basis}$`, 'mu'),
     'its own budgets scaled, the controller\'s timeout policy and check base, ' +
-      'never placed again, and its lanes capped at its cores less one');
+      'never placed again, and the explicit one-worker cap preserved');
     assert.match(sent, /else unset LAGRANGE_CHECK_BASE; fi$/mu, 'none forwarded, none kept');
     assert.match(green.log, /^placement-link=node_modules$/mu);
     assert.match(green.log, /^placement-link=data\/examples$/mu, 'an ignored entry is linked');
@@ -964,6 +964,8 @@ test('a lab shard finding the machine held waits its budget, then refuses naming
 test('discovery keeps a machine another agent holds out of placement before it is tried', () => {
   const ready = {ready: true, missing: [], gaps: []};
   const cap = (machineLock) => ({repoPath: '/srv/lagrange', cpuSampleMs: 260,
+    thermalEndpoint: PLANNING_ENDPOINT,
+    thermalDecision: {outcome: 'READY', execution_policy: SENSOR_POLICY},
     nodeVersion: 'v22.22.3', repo: {head: 'c'.repeat(40)}, machineLock});
   const fleet = [
     {name: '(controller)', controller: true, capability: {cpuSampleMs: 200}, readiness: ready},
