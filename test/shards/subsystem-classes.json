@@ -28,7 +28,7 @@
   "censusSize": 2658,
   "digest": "fnv1a32-94c127d8",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-28bd4369",
+  "observationDigest": "fnv1a32-589ac1e5",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -21046,6 +21046,7 @@
     },
     "test/scripts/push-gate-change-proof.test.js": {
       "files": [
+        ".githooks/pre-commit",
         ".githooks/pre-push",
         ".taprc",
         "CHANGELOG.md",
@@ -21099,6 +21100,7 @@
         "scripts/run-project-hardening-acceptance.js",
         "scripts/run-test-files.js",
         "scripts/select-change-tests.js",
+        "scripts/session-worktree.js",
         "scripts/solve.js",
         "scripts/solve/commands.js",
         "scripts/solve/quest-record-commands.js",
