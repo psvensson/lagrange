@@ -1,0 +1,226 @@
+ORIGINAL_DIAGNOSTIC_CONTINUATION=complete the interrupted original #3580 measurement on this host through an independent request; preserve every original outcome
+LAB_HOST=adams-gamla
+v22.23.2
+aabc29b487375b76dc0f3b7519ce2c8502d0020b
+9ae3ed4e00355d4d8acc645dd378e9a08d2e6bc4
+bc9e83a24cee235aa7fd33ff9777dc97d229903c
+ORIGINAL_DIAGNOSTIC_SCOPE=unchanged measured production with five disjoint original-compatible control roots; actual failures retained; no canonical corpus or repair acceptance
+npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+
+> lagrange-server@0.4.0 prepare
+> node -e "import('node:fs').then(({existsSync}) => existsSync('scripts/install-git-hooks.js') && import('./scripts/install-git-hooks.js'))"
+
+[hooks] Installed repo hooks at .githooks
+
+added 964 packages in 27s
+npm notice
+npm notice New major version of npm available! 10.9.8 -> 12.2.2
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.2
+npm notice To update run: npm install -g npm@12.2.2
+npm notice
+SQLITE_NATIVE_PROVENANCE={"version":"3.49.2","source_id":"2025-05-07 10:39:52 17144570b0d96ae63cd6f3edca39e27ebd74925252bbaf6723bcb2f6b4861fb1","addon_sha256":"d7d9272b12d11c1dc2bb787741b1b7c4037d336155f316ace3420410c28fda37"}
+ORIGINAL_DIAGNOSTIC_GROUP=strict proof falsifier path diagnostics
+ORIGINAL_DIAGNOSTIC_ROOT=test/scripts/proof-authority-falsifiers.test.js
+not ok test/scripts/proof-authority-falsifiers.test.js (10 assertions, 30028ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: observed-file: a defect in a fixture a test reads through fs is detected
+ok 1 - observed-file: a defect in a fixture a test reads through fs is detected
+  ---
+  duration_ms: 2128.642987
+  type: 'test'
+  ...
+# Subtest: observed-directory: a defect in a directory a test lists is detected
+ok 2 - observed-directory: a defect in a directory a test lists is detected
+  ---
+  duration_ms: 2137.865086
+  type: 'test'
+  ...
+# Subtest: spawned-script: a defect in a script a test spawns by name is detected
+ok 3 - spawned-script: a defect in a script a test spawns by name is detected
+  ---
+  duration_ms: 3511.163079
+  type: 'test'
+  ...
+# Subtest: behavioural-source: a defect in product source is detected
+ok 4 - behavioural-source: a defect in product source is detected
+  ---
+  duration_ms: 3473.625418
+  type: 'test'
+  ...
+# Subtest: working-tree-not-proof: a defect that exists only in the working tree is invisible to the gate, and a committed one is not
+ok 5 - working-tree-not-proof: a defect that exists only in the working tree is invisible to the gate, and a committed one is not
+  ---
+  duration_ms: 7170.413761
+  type: 'test'
+  ...
+# Subtest: the gate reads its own checkout under a push hook's GIT_DIR
+ok 6 - the gate reads its own checkout under a push hook's GIT_DIR
+  ---
+  duration_ms: 2845.851257
+  type: 'test'
+  ...
+# Subtest: a failed gate run keeps its diagnostics after the checkout is removed
+not ok 7 - a failed gate run keeps its diagnostics after the checkout is removed
+  ---
+  duration_ms: 1382.191819
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/4689dde6-90fc-45cc-af45-f72641b844d7/work/source/test/scripts/proof-authority-falsifiers.test.js:354:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the gate says where it kept them:
+    {
+      "expectedKept": "/tmp/lab-1000-b5238adc4daacae3/proof-authority-Bd7hom/repo/test-output/push-gate/d9ecc1607d7b4533dc4df0838f94f7c13f682df2",
+      "canonicalKept": "/home/peter/.local/state/lagrange-lab-worker/generic/runs/4689dde6-90fc-45cc-af45-f72641b844d7/work/tmp/proof-authority-Bd7hom/repo/test-output/push-gate/d9ecc1607d7b4533dc4df0838f94f7c13f682df2",
+      "declaredTmpdir": "/tmp/lab-1000-b5238adc4daacae3",
+      "fixtureTemporaryRoot": "/tmp/lab-1000-b5238adc4daacae3",
+      "canonicalTemporaryRoot": "/home/peter/.local/state/lagrange-lab-worker/generic/runs/4689dde6-90fc-45cc-af45-f72641b844d7/work/tmp",
+      "fixtureRepository": "/tmp/lab-1000-b5238adc4daacae3/proof-authority-Bd7hom/repo",
+      "gitRepositoryRoot": "/home/peter/.local/state/lagrange-lab-worker/generic/runs/4689dde6-90fc-45cc-af45-f72641b844d7/work/tmp/proof-authority-Bd7hom/repo"
+    }
+    [push-gate] gate diagnostics retained in /home/peter/.local/state/lagrange-lab-worker/generic/runs/4689dde6-90fc-45cc-af45-f72641b844d7/work/tmp/proof-authority-Bd7hom/repo/test-output/push-gate/d9ecc1607d7b4533dc4df0838f94f7c13f682df2
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    gateKeepsDiagnostics (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/4689dde6-90fc-45cc-af45-f72641b844d7/work/source/test/scripts/proof-authority-falsifiers.test.js:338:12)
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/4689dde6-90fc-45cc-af45-f72641b844d7/work/source/test/scripts/proof-authority-falsifiers.test.js:355:3)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: a gate whose injection link was replaced keeps its diagnostics
+not ok 8 - a gate whose injection link was replaced keeps its diagnostics
+  ---
+  duration_ms: 1348.113934
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/4689dde6-90fc-45cc-af45-f72641b844d7/work/source/test/scripts/proof-authority-falsifiers.test.js:358:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the gate says where it kept them:
+    {
+      "expectedKept": "/tmp/lab-1000-b5238adc4daacae3/proof-authority-Bd7hom/repo/test-output/push-gate/d9ecc1607d7b4533dc4df0838f94f7c13f682df2",
+      "canonicalKept": "/home/peter/.local/state/lagrange-lab-worker/generic/runs/4689dde6-90fc-45cc-af45-f72641b844d7/work/tmp/proof-authority-Bd7hom/repo/test-output/push-gate/d9ecc1607d7b4533dc4df0838f94f7c13f682df2",
+      "declaredTmpdir": "/tmp/lab-1000-b5238adc4daacae3",
+      "fixtureTemporaryRoot": "/tmp/lab-1000-b5238adc4daacae3",
+      "canonicalTemporaryRoot": "/home/peter/.local/state/lagrange-lab-worker/generic/runs/4689dde6-90fc-45cc-af45-f72641b844d7/work/tmp",
+      "fixtureRepository": "/tmp/lab-1000-b5238adc4daacae3/proof-authority-Bd7hom/repo",
+      "gitRepositoryRoot": "/home/peter/.local/state/lagrange-lab-worker/generic/runs/4689dde6-90fc-45cc-af45-f72641b844d7/work/tmp/proof-authority-Bd7hom/repo"
+    }
+    [push-gate] a workspace injection link was replaced during the gate
+    [push-gate] gate diagnostics retained in /home/peter/.local/state/lagrange-lab-worker/generic/runs/4689dde6-90fc-45cc-af45-f72641b844d7/work/tmp/proof-authority-Bd7hom/repo/test-output/push-gate/d9ecc1607d7b4533dc4df0838f94f7c13f682df2
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    gateKeepsDiagnostics (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/4689dde6-90fc-45cc-af45-f72641b844d7/work/source/test/scripts/proof-authority-falsifiers.test.js:338:12)
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/4689dde6-90fc-45cc-af45-f72641b844d7/work/source/test/scripts/proof-authority-falsifiers.test.js:359:3)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: a gate that dirtied its checkout keeps its diagnostics
+not ok 9 - a gate that dirtied its checkout keeps its diagnostics
+  ---
+  duration_ms: 1359.088882
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/4689dde6-90fc-45cc-af45-f72641b844d7/work/source/test/scripts/proof-authority-falsifiers.test.js:362:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the gate says where it kept them:
+    {
+      "expectedKept": "/tmp/lab-1000-b5238adc4daacae3/proof-authority-Bd7hom/repo/test-output/push-gate/d9ecc1607d7b4533dc4df0838f94f7c13f682df2",
+      "canonicalKept": "/home/peter/.local/state/lagrange-lab-worker/generic/runs/4689dde6-90fc-45cc-af45-f72641b844d7/work/tmp/proof-authority-Bd7hom/repo/test-output/push-gate/d9ecc1607d7b4533dc4df0838f94f7c13f682df2",
+      "declaredTmpdir": "/tmp/lab-1000-b5238adc4daacae3",
+      "fixtureTemporaryRoot": "/tmp/lab-1000-b5238adc4daacae3",
+      "canonicalTemporaryRoot": "/home/peter/.local/state/lagrange-lab-worker/generic/runs/4689dde6-90fc-45cc-af45-f72641b844d7/work/tmp",
+      "fixtureRepository": "/tmp/lab-1000-b5238adc4daacae3/proof-authority-Bd7hom/repo",
+      "gitRepositoryRoot": "/home/peter/.local/state/lagrange-lab-worker/generic/runs/4689dde6-90fc-45cc-af45-f72641b844d7/work/tmp/proof-authority-Bd7hom/repo"
+    }
+    [push-gate] the gate mutated the exact checkout of the pushed sha:
+    M package.json
+    [push-gate] gate diagnostics retained in /home/peter/.local/state/lagrange-lab-worker/generic/runs/4689dde6-90fc-45cc-af45-f72641b844d7/work/tmp/proof-authority-Bd7hom/repo/test-output/push-gate/d9ecc1607d7b4533dc4df0838f94f7c13f682df2
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    gateKeepsDiagnostics (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/4689dde6-90fc-45cc-af45-f72641b844d7/work/source/test/scripts/proof-authority-falsifiers.test.js:338:12)
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/4689dde6-90fc-45cc-af45-f72641b844d7/work/source/test/scripts/proof-authority-falsifiers.test.js:363:3)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: a gate that throws after its command keeps its diagnostics
+not ok 10 - a gate that throws after its command keeps its diagnostics
+  ---
+  duration_ms: 1366.258306
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/4689dde6-90fc-45cc-af45-f72641b844d7/work/source/test/scripts/proof-authority-falsifiers.test.js:366:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the gate says where it kept them:
+    {
+      "expectedKept": "/tmp/lab-1000-b5238adc4daacae3/proof-authority-Bd7hom/repo/test-output/push-gate/d9ecc1607d7b4533dc4df0838f94f7c13f682df2",
+      "canonicalKept": "/home/peter/.local/state/lagrange-lab-worker/generic/runs/4689dde6-90fc-45cc-af45-f72641b844d7/work/tmp/proof-authority-Bd7hom/repo/test-output/push-gate/d9ecc1607d7b4533dc4df0838f94f7c13f682df2",
+      "declaredTmpdir": "/tmp/lab-1000-b5238adc4daacae3",
+      "fixtureTemporaryRoot": "/tmp/lab-1000-b5238adc4daacae3",
+      "canonicalTemporaryRoot": "/home/peter/.local/state/lagrange-lab-worker/generic/runs/4689dde6-90fc-45cc-af45-f72641b844d7/work/tmp",
+      "fixtureRepository": "/tmp/lab-1000-b5238adc4daacae3/proof-authority-Bd7hom/repo",
+      "gitRepositoryRoot": "/home/peter/.local/state/lagrange-lab-worker/generic/runs/4689dde6-90fc-45cc-af45-f72641b844d7/work/tmp/proof-authority-Bd7hom/repo"
+    }
+    fatal: not a git repository: /nonexistent
+    [push-gate] gate diagnostics retained in /home/peter/.local/state/lagrange-lab-worker/generic/runs/4689dde6-90fc-45cc-af45-f72641b844d7/work/tmp/proof-authority-Bd7hom/repo/test-output/push-gate/d9ecc1607d7b4533dc4df0838f94f7c13f682df2
+    fatal: validation failed, cannot remove working tree: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/4689dde6-90fc-45cc-af45-f72641b844d7/work/tmp/proof-authority-Bd7hom/repo/test-output/push-gate-worktrees/session-worktree-zsYl1C/tree/.git' is not a .git file, error code 7
+    [session-worktree] cleanup warning: Command failed: git -C /home/peter/.local/state/lagrange-lab-worker/generic/runs/4689dde6-90fc-45cc-af45-f72641b844d7/work/tmp/proof-authority-Bd7hom/repo worktree remove --force /home/peter/.local/state/lagrange-lab-worker/generic/runs/4689dde6-90fc-45cc-af45-f72641b844d7/work/tmp/proof-authority-Bd7hom/repo/test-output/push-gate-worktrees/session-worktree-zsYl1C/tree
+    fatal: validation failed, cannot remove working tree: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/4689dde6-90fc-45cc-af45-f72641b844d7/work/tmp/proof-authority-Bd7hom/repo/test-output/push-gate-worktrees/session-worktree-zsYl1C/tree/.git' is not a .git file, error code 7
+    
+    [push-gate-corpus] error: Command failed: git -C /home/peter/.local/state/lagrange-lab-worker/generic/runs/4689dde6-90fc-45cc-af45-f72641b844d7/work/tmp/proof-authority-Bd7hom/repo/test-output/push-gate-worktrees/session-worktree-zsYl1C/tree status --porcelain
+    fatal: not a git repository: /nonexistent
+    
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    gateKeepsDiagnostics (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/4689dde6-90fc-45cc-af45-f72641b844d7/work/source/test/scripts/proof-authority-falsifiers.test.js:338:12)
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/4689dde6-90fc-45cc-af45-f72641b844d7/work/source/test/scripts/proof-authority-falsifiers.test.js:368:3)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..10
+# tests 10
+# suites 0
+# pass 6
+# fail 4
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 26745.68012
+# time=30028ms
+# test-files total=1 pass=0 fail=1 assertions=10
+ORIGINAL_DIAGNOSTIC_TEST_EXIT=1
+ORIGINAL_DIAGNOSTIC_FINAL_GUARD_EXIT=0
