@@ -1,0 +1,34 @@
+{
+  "schema": "solve-quest/2",
+  "id": "reviewed-foundation-integration",
+  "class": "fix",
+  "statement": "The reviewed canonical JSON, durable-store connection, CDC timer and lifecycle-observation cuts form one source-preserving foundation on current main. Canonical generated inputs, the complete required physical-lab execution, independent composition review and the existing publication owner establish acceptance for that exact combined candidate. The remaining formation WIP and public-service readiness retain their separate obligations.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/reviewed-foundation-integration/evidence/receipt.json",
+      "requiredReceipts": [
+        "reviewed-source-composition",
+        "canonical-generated-inputs-and-selection",
+        "complete-required-physical-lab-execution",
+        "static-and-ratchet-gates",
+        "independent-composition-review",
+        "canonical-publication-policy-and-delivery"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "one-foundation",
+      "statement": "Compose the reviewed PR203-206 source and controls without importing the broad WIP. Retain current main-only work and all original failure evidence. Regenerate shared metadata for the actual combined tree; never combine seals from different source revisions."
+    },
+    {
+      "id": "physical-proof",
+      "statement": "All tests, parsers, generators, static checks and proof commands execute only on qualified physical lab machines through the sole coordinator. Each required run conserves the canonical root selection and resource lanes across disjoint host assignments. Preserve first failures; no retry-once, enlarged timeout, raised baseline, skip, synthetic receipt or acceptance inferred from mailbox completion."
+    },
+    {
+      "id": "publication-owner",
+      "statement": "Any demonstrated CI, pre-push or publication policy mismatch is repaired as its named producer-consumer interaction with original negative controls and independent review. Preserve full-corpus triggers and exact-candidate gates. Missing lab-to-publication capability remains explicit; do not invent a hosted fallback, status, credential or proof import."
+    }
+  ]
+}
