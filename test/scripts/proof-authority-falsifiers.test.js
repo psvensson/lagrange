@@ -336,7 +336,15 @@ function gateKeepsDiagnostics(script) {
     assert.equal(fs.readFileSync(path.join(kept, 'change-proof.json'), UTF8),
       GATE_FAILURE_DETAIL, 'the failing command artifact is kept with its detail');
     assert.ok(gated.stderr.includes(`gate diagnostics retained in ${kept}`),
-      `the gate says where it kept them: ${gated.stderr}`);
+      `the gate says where it kept them:\n${JSON.stringify({
+        expectedKept: kept,
+        canonicalKept: fs.realpathSync(kept),
+        declaredTmpdir: process.env.TMPDIR ?? null,
+        fixtureTemporaryRoot: os.tmpdir(),
+        canonicalTemporaryRoot: fs.realpathSync(os.tmpdir()),
+        fixtureRepository: repo,
+        gitRepositoryRoot: git(['rev-parse', '--show-toplevel']),
+      }, null, 2)}\n${gated.stderr}`);
   } finally {
     fs.rmSync(kept, {recursive: true, force: true});
     restore();
