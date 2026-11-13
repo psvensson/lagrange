@@ -81,7 +81,33 @@ function observeFormationCdcHeld(owner, obligation, error) {
     const event = JSON.parse(obligation.eventJson);
     return observeFormationCdc(owner.logger, 'source-held', event.tableName, {
       ...formationCdcEvent(event), obligationLogIndex: obligation.logIndex,
-      obligationOrdinal: obligation.ordinal, errorCode: error?.code ?? null,
+      obligationOrdinal: obligation.ordinal, errorCode: scalar(error?.code),
+      reason: scalar(error?.reason), retryAfterMs: scalar(error?.retryAfterMs),
+      errorOrigin: scalar(typeof error?.stack === 'string' ? error.stack.split('\n')[1] : null),
+      causeError: scalar(error?.cause?.error), causeReason: scalar(error?.cause?.reason),
+      causeState: scalar(error?.cause?.state),
+      nestedCauseError: scalar(error?.cause?.cause?.error),
+      nestedCauseReason: scalar(error?.cause?.cause?.reason),
+    });
+  } catch {
+    return 'sink-unavailable';
+  }
+}
+
+function observeFormationPropagation(owner, stage, tableName, admission = null) {
+  try {
+    const queued = owner.waitingDurableSliceTables;
+    const head = Array.isArray(queued) ? queued[0] : null;
+    return observeFormationCdc(owner.logger, stage, tableName, {
+      admission: scalar(admission), observedAtMs: scalar(owner.now()),
+      active: owner.activeDurablePropagation !== null,
+      activeSourceGroup: scalar(owner.activeDurablePropagation?.source?.groupId),
+      sliceTable: scalar(owner.durableSliceTable), sliceWaves: scalar(owner.durableSliceWaves),
+      contended: scalar(owner.durableSliceContended), queuedHead: scalar(head),
+      queuedCount: Array.isArray(queued) ? queued.length : null,
+      queuedHeadSinceMs: scalar(owner.waitingDurableSliceTableTimestamps?.get(head)),
+      yieldedTable: scalar(owner.yieldedDurableSliceTable),
+      yieldedUntilMs: scalar(owner.yieldedDurableSliceUntilMs),
     });
   } catch {
     return 'sink-unavailable';
@@ -97,5 +123,5 @@ function observeFormationCache(cache, stage, tableName, key, event, details) {
 export {
   formationCdcEvent, formationCdcRead, formationCdcRow, observeFormationCdc,
   observeFormationCdcDrive, observeFormationCdcAnswer, observeFormationCdcHeld,
-  observeFormationCache,
+  observeFormationCache, observeFormationPropagation,
 };

@@ -1,3 +1,4 @@
+import {observeFormationPropagation} from '../cdc/formation-cdc-observation.js';
 import {deliveryAnswerOf} from '../transport/transport-semantic-outcome.js';
 // CDCGroupPropagationService's durable wave, its one propagation path. Source
 // debt and between-attempt progress remain with the source lane; the service
@@ -257,6 +258,7 @@ function computeBusyRetryAfterMs(owner, incomingTable, deliveryContext = null) {
 }
 
 function durablePropagationRefusal(owner, admission, options = null) {
+  observeFormationPropagation(owner, 'propagation-refused', options?.tableName, admission);
   if (admission === DURABLE_PROPAGATION_ADMISSION.BUSY) {
     const incomingTable = options?.tableName ?? null;
     return {
@@ -490,9 +492,11 @@ async function propagateDurableCdcEvent(owner, options) {
   const wave = {context, source: options.sourceMessageGroupService};
   owner.activeDurablePropagation = wave;
   advanceDurablePropagationSlice(owner, options.tableName, context, parent);
+  observeFormationPropagation(owner, 'propagation-admitted', options.tableName, admission);
   context.cleanup.then(() => {
     if (owner.activeDurablePropagation === wave) {
       owner.activeDurablePropagation = null;
+      observeFormationPropagation(owner, 'propagation-released', options.tableName);
       notifyNextWaitingDurableSliceTable(owner);
     }
   });
@@ -502,7 +506,7 @@ async function propagateDurableCdcEvent(owner, options) {
     const plan = captureDurablePropagationPlan(owner, wave.source);
     const sourceAdmission = decideDurablePropagationAdmission(false, plan.sourceMismatch);
     if (sourceAdmission !== DURABLE_PROPAGATION_ADMISSION.ADMIT) {
-      return durablePropagationRefusal(owner, sourceAdmission);
+      return durablePropagationRefusal(owner, sourceAdmission, options);
     }
     owner.setPublicationMode(publicationModeOf(plan), plan.fallbackReason);
     const prepared = prepareDurableForegroundWave(owner, wave, events, plan);
