@@ -31,7 +31,7 @@ test('operator-paced blind policy waits after actual closure and records unavail
     const native = nativeThermalFixture(t, {outcomes: ['UNAVAILABLE'],
       policy: {mode: 'operator-paced', cadence_ms: 5000, max_concurrency: 1}});
     const lines = [];
-    const result = await runTestFiles(files, {cwd: root, env: native.env, jobs: 4,
+    const result = await runTestFiles(files, {print: false, cwd: root, env: native.env, jobs: 4,
       write(line) { lines.push(line); }});
     assert.equal(result.ok, true);
     const events = fs.readFileSync(ledger, 'utf8').trim().split('\n').map(JSON.parse);

@@ -83,14 +83,14 @@ test('the actual child owns file-body context and nested fixtures do not pause',
     `  process.env.${TEST_EXECUTION_CONTEXT_ENV}));`,
   ].join('\n'));
   const originalEnv = JSON.stringify(native.env);
-  const top = await runTestFiles([file], {env: native.env, cwd: native.root, write() {}});
+  const top = await runTestFiles([file], {print: false, env: native.env, cwd: native.root, write() {}});
   assert.equal(top.ok, true);
   assert.deepEqual(JSON.parse(fs.readFileSync(seen, 'utf8')),
     {version: 1, phase: 'file-body', file});
   assert.equal(JSON.stringify(native.env), originalEnv);
   const enclosing = {version: 1, phase: 'file-body', file: '/enclosing/owned.test.js'};
   const nestedEnv = {...native.env, [TEST_EXECUTION_CONTEXT_ENV]: JSON.stringify(enclosing)};
-  const nested = await runTestFiles([file], {env: nestedEnv, cwd: native.root,
+  const nested = await runTestFiles([file], {print: false, env: nestedEnv, cwd: native.root,
     thermalRead: async () => assert.fail('nested fixture cannot acquire a new admission')});
   assert.equal(nested.ok, true);
   assert.deepEqual(JSON.parse(fs.readFileSync(seen, 'utf8')), enclosing);

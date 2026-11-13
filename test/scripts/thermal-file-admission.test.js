@@ -108,7 +108,7 @@ test('each of 101 actual file executions has its own thermal admission',
 test('unavailable native sensor-required observation admits no file', async (t) => {
   const {root, files} = fixture(t, 2);
   const native = nativeThermalFixture(t, {outcomes: ['UNAVAILABLE']});
-  const result = await runTestFiles(files, {cwd: root, env: native.env, write() {}});
+  const result = await runTestFiles(files, {print: false, cwd: root, env: native.env, write() {}});
   assert.equal(result.total, 0);
   assert.deepEqual(result.notRun, files);
   assert.notEqual(result.exitStatus, 0);
@@ -156,7 +156,7 @@ test('HOLD drains the actual admitted file before waiting or admitting another',
   const native = nativeThermalFixture(t);
   const policy = {mode: 'sensor-required', cadence_ms: 0, max_concurrency: 2};
   let reads = 0;
-  const result = await runTestFiles(files, {cwd: root, env: native.env, jobs: 2,
+  const result = await runTestFiles(files, {print: false, cwd: root, env: native.env, jobs: 2,
     write() {}, async thermalRead() {
       reads += 1;
       if (reads === 2) return {outcome: 'HOLD', execution_policy: policy};
