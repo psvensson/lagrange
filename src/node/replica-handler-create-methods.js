@@ -271,6 +271,8 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
                 replicaId,
                 error: error.message,
                 stack: error.stack,
+                authorityOutcome: error.authorityOutcome,
+                authorityError: error.authorityError,
               });
             }));
           });
@@ -663,6 +665,8 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           partitionId,
           error: error.message,
           stack: error.stack,
+          authorityOutcome: error.authorityOutcome,
+          authorityError: error.authorityError,
         });
         const claimCleanup = failedReplicaCreateClaimsCleanup(createPhase, error);
         const failedOutcomeOptions = {

@@ -18,6 +18,8 @@ import {
   buildReplicaCreateAttemptToken,
 } from '../../src/rebalancer/replica-create-admission-token.js';
 
+import {REPLICA_HANDLER_LOG_MSG} from '../../src/node/replica-handler-constants.js';
+
 const TEST_INITIAL_STATUS_RETRY_OPERATION_ID =
   'op-initial-create-status-retry';
 const TEST_INITIAL_STATUS_RETRY_REPLICA_ID =
@@ -895,11 +897,16 @@ export async function registerReplicaHandlerCreateAdmissionTests({
           controlPlaneSystemTableGateway:
             createLifecycleControlPlaneGatewayForCache(cache),
         });
+        const authorityFields = failurePoint === 'before-runtime-open' ? {
+          authorityOutcome: 'owner_not_ready',
+          authorityError: 'all_services_filtered_by_readiness',
+        } : {};
         const deferred = () => Object.assign(
           new Error(`CREATE admission read deferred for ${operationId}`), {
             code: 'REPLICA_CREATE_ADMISSION_DEFERRED',
             errorCode: 'REPLICA_CREATE_ADMISSION_DEFERRED',
             deferRetry: true,
+            ...authorityFields,
           });
         const handler = new ReplicaHandler({
           nodeId: 'test-node',
@@ -918,6 +925,23 @@ export async function registerReplicaHandlerCreateAdmissionTests({
           },
           dataDir: getTempDir(),
         });
+        const failureLogs = [];
+        let acknowledgeAsyncFailure;
+        const asyncFailureLogged = new Promise((resolve) => {
+          acknowledgeAsyncFailure = resolve;
+        });
+        const originalLogger = handler.logger;
+        handler.logger = Object.create(originalLogger);
+        handler.logger.error = (message, fields) => {
+          originalLogger.error(message, fields);
+          if (message === REPLICA_HANDLER_LOG_MSG.CREATE_FAILED ||
+              message === REPLICA_HANDLER_LOG_MSG.ASYNC_CREATE_FAILED) {
+            failureLogs.push({message, fields: JSON.parse(JSON.stringify(fields))});
+          }
+          if (message === REPLICA_HANDLER_LOG_MSG.ASYNC_CREATE_FAILED) {
+            acknowledgeAsyncFailure();
+          }
+        };
         // Fixture seam at the post-open activation step the run failed in.
         handler.shouldGateActivationOnVoterReadiness = () => true;
         handler.waitForVoterReadyActivation = async () => {
@@ -941,6 +965,23 @@ export async function registerReplicaHandlerCreateAdmissionTests({
           replicaId,
         });
         await failed;
+        await asyncFailureLogged;
+        t.same(failureLogs.map(({message}) => message), [
+          REPLICA_HANDLER_LOG_MSG.CREATE_FAILED,
+          REPLICA_HANDLER_LOG_MSG.ASYNC_CREATE_FAILED,
+        ], 'both actual failure paths retain diagnostic custody');
+        for (const {fields} of failureLogs) {
+          t.equal(fields.authorityOutcome, authorityFields.authorityOutcome,
+            'authority outcome is preserved without a default');
+          t.equal(fields.authorityError, authorityFields.authorityError,
+            'authority error is preserved without a default');
+          t.equal(Object.hasOwn(fields, 'authorityOutcome'),
+            Object.hasOwn(authorityFields, 'authorityOutcome'),
+            'missing authority outcome remains absent in serialized log');
+          t.equal(Object.hasOwn(fields, 'authorityError'),
+            Object.hasOwn(authorityFields, 'authorityError'),
+            'missing authority error remains absent in serialized log');
+        }
         const row = cache.get(SYSTEM_TABLE_NAME.SERVICES, replicaId);
         t.equal(row?.status, ReplicaStatus.FAILED, 'the create failed durably');
         t.equal(failedOutcomes.length, 1, 'one failed executor outcome');
