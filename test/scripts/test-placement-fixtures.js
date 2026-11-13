@@ -14,6 +14,43 @@ export function lab(name, speed, extra = {}) {
   return {name, controller: false, speed, avoid: [], gapsKey: 'k', ...extra};
 }
 
+// The real placement owner's collaborators, with execution substituted by
+// recorded calls and complete runner verdicts. No placement decision is faked.
+export function placementRunFixture(overrides = {}) {
+  const calls = {local: [], discover: 0, commit: 0, remote: [], record: [], lines: [],
+    order: [], options: []};
+  const deps = {
+    env: {},
+    write: (line) => calls.lines.push(line),
+    planCosts: (files) => files.map((file) =>
+      ({file, ms: 120000, jobs: 1, lane: 'ordinary'})),
+    runLocal: (files) => {
+      calls.order.push('local');
+      calls.local.push([...files]);
+      return 0;
+    },
+    lastGreen: () => true,
+    checkBase: () => 'b'.repeat(40),
+    commitAt: () => {
+      calls.commit += 1;
+      return 'a'.repeat(40);
+    },
+    discover: async () => {
+      calls.discover += 1;
+      return {machines: [lab('lab', 1)], record: async (...args) => calls.record.push(args)};
+    },
+    runRemote: (shard, options) => {
+      calls.order.push('remote');
+      calls.remote.push(shard.files);
+      calls.options.push({shard, options});
+      return {done: Promise.resolve({status: 0,
+        log: shard.files.map((file) => `ok ${file} (1 assertions, 5ms)`).join('\n')})};
+    },
+    ...overrides,
+  };
+  return {deps, calls};
+}
+
 export const LANE = Object.freeze({ORDINARY: 'ordinary', EXCLUSIVE: 'exclusive',
   BOOTSTRAP: 'bootstrap', EXTERNAL: 'external-toolchain'});
 

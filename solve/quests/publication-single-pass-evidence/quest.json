@@ -1,0 +1,34 @@
+{
+  "schema": "solve-quest/2",
+  "id": "publication-single-pass-evidence",
+  "class": "fix",
+  "statement": "The existing test runner, placement and publication owners preserve one scheduled execution's first outcome. A failed, incomplete, unavailable or zero-assertion execution cannot be promoted by an automatic retry, reassignment, later green verdict or guessed proof base. Publication retains original exact-source failure evidence and does not cancel an older corpus obligation or overwrite a recorded same-head attempt. Native proof contracts continue to refuse failed and retried evidence.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/publication-single-pass-evidence/evidence/receipt.json",
+      "requiredReceipts": [
+        "original-causal-controls",
+        "single-pass-runner-and-placement",
+        "publication-evidence-custody",
+        "strict-native-proof-and-caller-regressions",
+        "independent-review",
+        "lab-canonical-static-and-whole-corpus"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "one-execution-and-evidence-owner",
+      "statement": "Correct existing run-test-files, lab placement, publisher, Solver land and CI producers/consumers together. Remove automatic retry and fallback branches and obsolete active knobs. Preserve native REFUSE contracts, worst-verdict aggregation, source identity, complete-corpus triggers, declared budgets, locks and bounded cleanup. Add no replacement publisher, receipt-import framework, synthetic status or guessed physical runner route."
+    },
+    {
+      "id": "preserved-history-and-explicit-supersession",
+      "statement": "The user's single-pass/no-fallback direction supersedes the active retry-once and newer-head cancellation semantics previously proven by land-retry-parity and local-corpus-canary. Preserve all sealed Quest statements, receipts, findings and prior evidence bytes; record new behavior and proof here without reinterpreting those earlier claims."
+    },
+    {
+      "id": "physical-proof-and-separate-delivery",
+      "statement": "All execution, generators and acceptance checks run on physical lab machines through the sole coordinator after independent review of immutable source and payload. This unsealed proposal contains no synthetic red receipt. Missing trusted GitHub delivery credentials, native evidence custody and check linkage remain a separate explicit capability gap; source review and lab-work completion grant no publication approval."
+    }
+  ]
+}
