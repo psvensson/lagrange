@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 218,
     "storage-raft": 152,
-    "test-infrastructure": 178,
+    "test-infrastructure": 181,
     "transactions": 17,
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2658,
-  "digest": "fnv1a32-94c127d8",
+  "censusSize": 2661,
+  "digest": "fnv1a32-ef73c2ef",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-589ac1e5",
+  "observationDigest": "fnv1a32-15180673",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2367,10 +2367,12 @@
     "test/scripts/model-invariants.test.js": "test-infrastructure",
     "test/scripts/model-tlc-mode-selection.test.js": "test-infrastructure",
     "test/scripts/model-tlc-output-tail.test.js": "test-infrastructure",
+    "test/scripts/native-thermal-client.test.js": "test-infrastructure",
     "test/scripts/no-external-llm-guards.test.js": "test-infrastructure",
     "test/scripts/no-legacy-consensus-reference-audit.test.js": "test-infrastructure",
     "test/scripts/no-legacy-consensus-reference-ratchet.test.js": "test-infrastructure",
     "test/scripts/observation-census.test.js": "test-infrastructure",
+    "test/scripts/operator-paced-file-admission.test.js": "test-infrastructure",
     "test/scripts/participant-release-completion-owner.test.js": "test-infrastructure",
     "test/scripts/placement-failure-custody.test.js": "test-infrastructure",
     "test/scripts/pre-push-hook-control-flow.test.js": "test-infrastructure",
@@ -2428,6 +2430,7 @@
     "test/scripts/test-subsystem-classification.test.js": "test-infrastructure",
     "test/scripts/test-subsystem-repository-index.test.js": "test-infrastructure",
     "test/scripts/test-timeout-declarations.test.js": "test-infrastructure",
+    "test/scripts/thermal-file-admission.test.js": "test-infrastructure",
     "test/scripts/wait-for-load-headroom.test.js": "test-infrastructure",
     "test/scripts/workspace-injection-candidates.test.js": "test-infrastructure",
     "test/sea/runtime-file-resolution.test.js": "release-packaging",
@@ -16692,6 +16695,7 @@
     "test/rebalancer/formation-runtime-service-create-lane-budget-starvation.test.js": {
       "files": [
         "scripts/checks/guard-test-scenario-runner.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/test-machine-factor.js",
         "src/bootstrap/shared/runtime-service-handler-setup.js",
         "src/bootstrap/shared/runtime-service-rebalancer-setup.js",
@@ -17733,6 +17737,7 @@
     "test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js": {
       "files": [
         "scripts/checks/guard-test-scenario-runner.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/test-machine-factor.js",
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
@@ -18121,6 +18126,8 @@
         "scripts/lab/machine-lock-constants.js",
         "scripts/release-notes.js",
         "scripts/run-classified-test-files.js",
+        "scripts/run-test-files.js",
+        "scripts/test-file-admission.js",
         "src/public-api.js",
         "test/manifests/project-hardening-proof-manifest.json",
         "test/manifests/project-hardening-proof-postpush-manifest.json"
@@ -18214,6 +18221,7 @@
     "test/runtime/minimal-deployment-request-cell-runtime-readiness.test.js": {
       "files": [
         "scripts/checks/guard-test-scenario-runner.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/test-machine-factor.js",
         "src/node/runtime-service-handler.js",
         "src/runtime/runtime-driver-registry.js",
@@ -18591,6 +18599,7 @@
     "test/scripts/acceptance-proof-manifest-runner.test.js": {
       "files": [
         "package.json",
+        "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/run-test-files.js",
         "scripts/test-machine-factor.js",
         "test/admin/admin-websocket-external-bind-policy.test.js",
@@ -19672,6 +19681,7 @@
     },
     "test/scripts/effective-placement-serial-priority-planner-scenario.test.js": {
       "files": [
+        "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/test-machine-factor.js",
         "test/convergence/dt-formation-priority-placement-before-active.test.js",
         "test/rebalancer/effective-placement-serial-priority-planner.test.js",
@@ -19845,6 +19855,7 @@
         "scripts/checks/fallback-branch-census-shell.js",
         "scripts/checks/fallback-branch-census.js",
         "scripts/checks/formation-health.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-source-owner-index.js",
         "scripts/run-classified-test-files.js",
         "scripts/test-machine-factor.js",
@@ -20699,6 +20710,13 @@
         "TLA_TOOLS_JAR"
       ]
     },
+    "test/scripts/native-thermal-client.test.js": {
+      "files": [
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/test-file-admission.js",
+        "scripts/test-machine-factor.js"
+      ]
+    },
     "test/scripts/no-external-llm-guards.test.js": {
       "files": [
         ".env.example",
@@ -20769,6 +20787,35 @@
         "LAGRANGE_PROBE",
         "LAGRANGE_TEST_MACHINE_FACTOR",
         "OTHER_THING"
+      ]
+    },
+    "test/scripts/operator-paced-file-admission.test.js": {
+      "files": [
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/lab/fleet-discovery.js",
+        "scripts/lab/machine-lock-constants.js",
+        "scripts/lab/placement-constants.js",
+        "scripts/lab/placement-execution.js",
+        "scripts/lab/process.js",
+        "scripts/lab/remote-command.js",
+        "scripts/lab/test-capability.js",
+        "scripts/lab/test-placement.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/run-test-files.js",
+        "scripts/select-change-tests.js",
+        "scripts/test-machine-factor.js",
+        "test/shards/primary-classes.json"
+      ],
+      "directories": [
+        "test"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "XDG_CONFIG_HOME"
       ]
     },
     "test/scripts/participant-release-completion-owner.test.js": {
@@ -21467,6 +21514,7 @@
     },
     "test/scripts/run-test-files.test.js": {
       "files": [
+        "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/test-machine-factor.js"
       ],
       "directories": [
@@ -21868,6 +21916,7 @@
         "test/query/budget-limit-error.test.js",
         "test/query/distributed-merge-engine.test.js",
         "test/scripts/check-operation-dispatch-completion-owner.test.js",
+        "test/scripts/test-placement-fixtures.js",
         "test/shards/primary-classes.json"
       ],
       "directories": [
@@ -21878,6 +21927,7 @@
         "APPDATA",
         "GIT_DIR",
         "LAGRANGE_LAB_HOME",
+        "LAGRANGE_NATIVE_THERMAL_ENDPOINT",
         "PATH",
         "PRODUCER_FAILS",
         "PRODUCER_REWRITES",
@@ -21957,6 +22007,42 @@
       "env": [
         "TAP_TIMEOUT",
         "TAP_TIMEOUT_FLOOR"
+      ]
+    },
+    "test/scripts/thermal-file-admission.test.js": {
+      "files": [
+        "README.md",
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/test-resource-classification-constants.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/lab/fleet-discovery.js",
+        "scripts/lab/machine-lock-constants.js",
+        "scripts/lab/placement-constants.js",
+        "scripts/lab/placement-execution.js",
+        "scripts/lab/process.js",
+        "scripts/lab/remote-command.js",
+        "scripts/lab/test-capability.js",
+        "scripts/lab/test-placement.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/run-test-files.js",
+        "scripts/select-change-tests.js",
+        "scripts/test-machine-factor.js",
+        "test/query/distributed-merge-engine.test.js",
+        "test/shards/primary-classes.json"
+      ],
+      "directories": [
+        "data/storage-load",
+        "test"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "PATH",
+        "PRODUCER_FAILS",
+        "PRODUCER_REWRITES",
+        "XDG_CONFIG_HOME"
       ]
     },
     "test/scripts/workspace-injection-candidates.test.js": {
