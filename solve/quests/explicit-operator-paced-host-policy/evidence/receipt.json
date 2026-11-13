@@ -1,0 +1,65 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "explicit-operator-paced-host-policy",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "physical-carina-commissioning-and-execution",
+      "measured": true,
+      "passed": false,
+      "detail": "Actual pre-feature commissioning doctor was invoked once and returned REFUSED THERMAL_SENSORS_UNCONFIGURED on observed Carina Linux WSL2 with complete bounded hwmon enumeration containing zero devices. This measures absence of the authorized commissioning capability at its first physical boundary. No worker was staged, no workload admitted or executed, and no test assertion or successful execution/closure is claimed."
+    }
+  ],
+  "unmeasuredObligations": [
+    "explicit-policy-and-missing-policy-refusal",
+    "native-admission-and-monitor-policy",
+    "per-file-cadence-cap-and-closure",
+    "sensor-required-no-mode-switch",
+    "independent-composition-verification"
+  ],
+  "interpretation": "Actual failed capability-boundary baseline for the separate feature. Existing receipt probe counts six outstanding obligations (one observed failed commissioning boundary and five absent), not six workload failures. The prior doctor refusal was expected sensor-required behavior, not a regression of the sealed thermal repair. This new user-authorized capability did not yet exist. No passing capability receipt or native job is fabricated.",
+  "contextEvidence": [
+    {
+      "kind": "owner-authorization-and-observations",
+      "path": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261113/fourth-host-observation-and-operator-policy-20261113.md",
+      "ceiling": "Carina bounded sensor enumeration found no devices and doctor refused; explicit user instruction authorizes operator-paced use. These are context facts, not feature acceptance."
+    },
+    {
+      "kind": "separate-historical-original",
+      "quest": "canonical-native-thermal-pacing",
+      "originalSource": "5f951340cdb0a1c9134f1be940057e4573392520",
+      "sealedAt": "986c2240995157743ee612c55b3066c0fafdce08",
+      "ceiling": "Three actual sensor-policy/cap originals and seal retained; they did not measure this newly authorized mode."
+    }
+  ],
+  "baselineObservation": {
+    "kind": "commissioning-doctor-capability-refusal",
+    "host": "carinas-windows",
+    "bootId": "77e4060f-5dc5-4e77-8d15-c31f83969d8d",
+    "state": "REFUSED",
+    "reason": "THERMAL_SENSORS_UNCONFIGURED",
+    "transportCalls": 1,
+    "workerStaged": false,
+    "workloadAdmitted": false,
+    "workloadExecuted": false,
+    "commissionOwnerSha256": "749fcda6bd278e19c2d8a398af8b1822ddbe3aeccb1eb753d70f71092824739e",
+    "candidateWorkerSha256": "e3cd98ab3ed5c7a2593a3201ac9191ddfc561212d8bb9b8601ef08eb31df4f5c",
+    "evidence": [
+      {
+        "path": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261113/fourth-host-carinas-windows-observation-20261113-01/stdout",
+        "bytes": 63,
+        "sha256": "ac05b92611b29ab012e56dd805b37c72f5f3b48c3c4ad815a562d5b2f083a8d3"
+      },
+      {
+        "path": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261113/fourth-host-carinas-windows-observation-20261113-01/stderr",
+        "bytes": 1647,
+        "sha256": "357b48a98c4841e2e833840ec94193aeb398b7ffa165120fbefec6b75d07aa09"
+      },
+      {
+        "path": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261113/fourth-host-carinas-windows-observation-20261113-01/result.json",
+        "bytes": 119,
+        "sha256": "7b82918f2dc2599361a6553d70381f452d719c7658928d84c2a4c47307d1d99c"
+      }
+    ]
+  }
+}

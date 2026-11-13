@@ -1,0 +1,38 @@
+{
+  "schema": "solve-quest/2",
+  "id": "explicit-operator-paced-host-policy",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "An explicitly commissioned operator-paced Linux host can execute reserved test files without claiming measured thermal readiness. One required native execution policy selects the mode before observation; operator-paced mode enforces one active file and a five-second rest after closure before the next admission. Sensor-required hosts retain actual configured sensor refusal and may add the same cadence. Missing or malformed policy never selects a mode. The authorized Carina WSL2 host is commissioned and exercised through the normal native owner with unavailable temperatures reported truthfully.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/explicit-operator-paced-host-policy/evidence/receipt.json",
+      "requiredReceipts": [
+        "explicit-policy-and-missing-policy-refusal",
+        "native-admission-and-monitor-policy",
+        "per-file-cadence-cap-and-closure",
+        "sensor-required-no-mode-switch",
+        "physical-carina-commissioning-and-execution",
+        "independent-composition-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "separate-feature-history",
+      "statement": "New user-authorized capability, not a repair receipt for the sealed canonical-native-thermal-pacing original. Preserve that Quest, seal, original controls and original failed index unchanged; explicitly record feature scope/applicability alongside the composed candidate."
+    },
+    {
+      "id": "one-required-policy-owner",
+      "statement": "Native execution_policy is required and validated by its canonical owner: mode sensor-required or operator-paced, cadence_ms a nonnegative safe integer, max_concurrency a positive safe integer. Operator-paced requires cadence_ms5000 and max_concurrency1. No absent-mode defaults, observation-error mode changes, alternate sensors or fabricated temperatures."
+    },
+    {
+      "id": "bounded-lifetime",
+      "statement": "Reserve through existing owners; cadence occurs only after a file closes and before the next file starts. No pause inside a test or benchmark sample. Retain original deadlines, cancellation, all first failures, unrun-file accounting and actual process closure. No automatic retry or reassignment."
+    },
+    {
+      "id": "bounded-commissioning",
+      "statement": "Commission only the authorized exact host through existing native owners, retain source/config/boot/policy identities and actual user-systemd/linger outcome. Carina sensor absence remains unmeasured; readiness is admission capacity under explicit policy, not measured thermal safety. Other hosts retain explicit current policy."
+    }
+  ]
+}
