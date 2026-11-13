@@ -1,0 +1,28 @@
+{
+  "schema": "solve-quest/2",
+  "id": "comparative-explicit-load-generator",
+  "class": "fix",
+  "statement": "The lab comparative campaign accepts an explicit registered eligible load-generator name, reserves that physical host before choosing data hosts, and refuses an invalid explicit choice without substitution through both dry-run and actual campaign selection.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/comparative-explicit-load-generator/evidence/receipt.json",
+      "requiredReceipts": [
+        "original-explicit-selection-gap",
+        "candidate-selection-and-refusal",
+        "canonical-cli-role-binding",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "existing-selection-owner",
+      "statement": "Reuse canonical live eligibility, boot de-duplication, measured client storage/Node requirements and data disk policy. Preserve bounded ordered locks, thermal policy and automatic selection when no explicit request exists. No fabricated inventory facts, aliases, artificial lock steering or invalid-request fallback."
+    },
+    {
+      "id": "bounded-feature",
+      "statement": "New flag is lab-only; GCP --client-node remains executable path. No campaign performance/formation/release acceptance from selector proof."
+    }
+  ]
+}

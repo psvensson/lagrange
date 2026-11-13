@@ -353,3 +353,26 @@ test('host facts are read locale-independently; a non-numeric fact is typed', as
   await assert.rejects(collectHostFacts({hosts, sshRun: comma.sshRun, opts: {}}),
     (error) => error.code === 'host_facts_unreadable' && /memGb/u.test(error.message));
 });
+
+// Original feature controls: production is unchanged in this checkpoint.
+test('an explicit registered load generator is reserved before data-host selection', () => {
+  const state = inventory([['adam-laptop', 'free'], ['adams-gamla', 'free'],
+    ['carinas-windows', 'free'], ['tv-dator', 'free']]);
+  const hosts = selectLabBenchmarkHosts({state, dataHostCount: 3,
+    nodeMinimum: '22.12.0', loadGeneratorRequirement: REQUIREMENT,
+    loadGeneratorName: 'adam-laptop'});
+  assert.deepEqual(hosts.map(({name, role}) => [name, role]), [
+    ['adams-gamla', 'data'], ['carinas-windows', 'data'], ['tv-dator', 'data'],
+    ['adam-laptop', 'client'],
+  ]);
+});
+
+test('an unknown explicit load generator refuses rather than selecting another host', () => {
+  const state = inventory([['adam-laptop', 'free'], ['adams-gamla', 'free'],
+    ['carinas-windows', 'free'], ['tv-dator', 'free']]);
+  assert.throws(() => selectLabBenchmarkHosts({state, dataHostCount: 3,
+    nodeMinimum: '22.12.0', loadGeneratorRequirement: REQUIREMENT,
+    loadGeneratorName: 'not-registered'}), (error) =>
+    error.code === 'refused_load_generator_selection' &&
+    error.message.includes('not-registered'));
+});
