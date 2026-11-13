@@ -214,9 +214,6 @@ lane that its own recovery is meant to restore.
 
 These are required contracts. Completion of each consumer's cutover remains
 bound to its source and evidence; this prose does not certify implementation.
-The superseding decision and consumer work are retained in
-[`serve-eligibility-committed-epoch-read`](../solve/quests/serve-eligibility-committed-epoch-read/quest.json)
-and its log under the existing cutover epic.
 
 Forbidden patterns:
 

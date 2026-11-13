@@ -38,10 +38,8 @@ refresh) and never grants `serveEligible`.
 When both the local `NODES` row and `SERVICES` rows remain absent after bounded
 authoritative refresh, self-node readiness fails closed with `node_row_missing`.
 
-The original decisions and source-bound evidence remain in
-[`serve-eligibility-committed-epoch-read`](../solve/quests/serve-eligibility-committed-epoch-read/quest.json)
-and [`readiness-self-grace-service-evidence-contract`](../solve/quests/readiness-self-grace-service-evidence-contract/quest.json).
-This current contract does not itself establish that every consumer conforms.
+Each consumer's implementation and verification establish its conformance to
+this contract; the description alone does not certify that conformance.
 
 ## Cluster Membership Health
 
