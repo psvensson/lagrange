@@ -6,7 +6,7 @@
 // only. Proved against a disposable repository whose producer is a stand-in
 // at the real producer's path, through the real materializer.
 import assert from 'node:assert/strict';
-import {spawnSync} from 'node:child_process';
+import {spawn, spawnSync} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -17,6 +17,7 @@ import {gitProcessEnvironment} from '../../scripts/checks/git-process-environmen
 import {IMPORT_GRAPH_PATH, IMPORT_GRAPH_SEAL_PATH}
   from '../../scripts/checks/impact-proof-cone-constants.js';
 import {PROOF_CHECKOUT_GENERATORS} from '../../scripts/checks/proof-checkout-preparation.js';
+import {managedSleep, managedTimeout} from '../../src/test-helpers/managed-timers.js';
 
 const MATERIALIZER = path.resolve('scripts/checks/push-gate-corpus-worktree.js');
 const PRODUCER = 'scripts/generate-global-owner-debt-inventory.js';
@@ -42,7 +43,7 @@ function fixture(t, producerBody) {
   git(root, 'config', 'user.name', 'Preparation Fixture');
   git(root, 'config', 'user.email', 'preparation@example.invalid');
   git(root, 'add', '.');
-  git(root, 'commit', '--quiet', '-m', 'fixture');
+  git(root, '-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', 'fixture');
   return root;
 }
 
@@ -172,4 +173,266 @@ test('a materialized gate keeps its original failure and checkout when retention
   assert.ok(git(root, 'worktree', 'list', '--porcelain')
     .includes(`worktree ${fs.realpathSync(checkout)}\n`),
   'the retained original remains registered as a worktree');
+});
+
+// The real materializer and real finite children, with only the measured
+// command/producer substituted. Unlike the preserved scheduling observation,
+// these controls never release a signalled child: cancellation must reach it.
+const CANCELLATION_WAIT_MS = 16000;
+const CANCELLATION_POLL_MS = 20;
+const ORIGINAL_CHILD_CEILING_MS = 1400;
+const FORCED_CHILD_CEILING_MS = 9000;
+const DESCENDANT_CEILING_MS = 12000;
+const CANCELLATION_SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'];
+const CANCELLATION_DIAGNOSTIC = 'first finite gate diagnostic\n';
+const CANCELLATION_ARTIFACT = 'test-output/acceptance/original.txt';
+const CANCELLATION_REPORT = 'test-output/acceptance/gate.report.json';
+
+function processAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    if (error.code !== 'ESRCH') throw error;
+    return false;
+  }
+}
+
+function killOwnedPid(pid) {
+  if (!Number.isInteger(pid) || pid === 0) return;
+  try {
+    process.kill(pid, 'SIGKILL');
+  } catch (error) {
+    if (error.code !== 'ESRCH') throw error;
+  }
+}
+
+async function boundedClose(run) {
+  const expired = Symbol('materializer did not close');
+  let timer;
+  const deadline = new Promise((resolve) => {
+    timer = managedTimeout(run.timers, () => resolve(expired), CANCELLATION_WAIT_MS);
+  });
+  try {
+    const outcome = await Promise.race([run.closed, deadline]);
+    assert.notEqual(outcome, expired, `finite materializer did not close: ${run.stderr}`);
+    return outcome;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function finiteCommand(run, {interrupt, ignoreSignal = false, descendant = false,
+  childExit = 0, missingArtifact = false, preparation = false} = {}) {
+  const artifact = missingArtifact ? 'test-output/acceptance/missing.txt' :
+    CANCELLATION_ARTIFACT;
+  run.report = JSON.stringify({commands: [{status: 'FAIL', artifactIdentity: {path: artifact}}]});
+  const signalHandlers = CANCELLATION_SIGNALS.map((signal) =>
+    `process.on(${JSON.stringify(signal)}, () => {` +
+    `fs.writeFileSync(${JSON.stringify(run.ack)}, ${JSON.stringify(signal)});` +
+    `${ignoreSignal ? '' : 'process.exit(0);'}});`);
+  const nested = [
+    'const fs = require("node:fs");',
+    'process.on("SIGTERM", () => ' +
+      `fs.writeFileSync(${JSON.stringify(run.descendantAck)}, "SIGTERM"));`,
+    'process.send("ready");',
+    `setTimeout(() => process.exit(0), ${DESCENDANT_CEILING_MS});`,
+  ].join('\n');
+  const ready = [
+    `fs.writeFileSync(${JSON.stringify(run.marker + '.tmp')}, JSON.stringify({`,
+    'pid: process.pid, parent: process.ppid, checkout: process.cwd(), descendant: nestedPid}));',
+    `fs.renameSync(${JSON.stringify(run.marker + '.tmp')}, ${JSON.stringify(run.marker)});`,
+    interrupt ? '' : `process.exit(${childExit});`,
+  ].join('\n');
+  const acquired = 'fs.writeFileSync(' + JSON.stringify(run.acquired + '.tmp') +
+    ', JSON.stringify({pid: process.pid, parent: process.ppid, descendant: nestedPid}));' +
+    `fs.renameSync(${JSON.stringify(run.acquired + '.tmp')}, ${JSON.stringify(run.acquired)});`;
+  return [
+    'const fs = require("node:fs");',
+    ...(preparation ? [
+      `if (!process.argv.includes(${JSON.stringify(PROOF_CHECKOUT_GENERATORS[0].args[0])})) ` +
+        'process.exit(9);',
+      `fs.mkdirSync(${JSON.stringify(path.dirname(IMPORT_GRAPH_PATH))}, {recursive: true});`,
+      `fs.writeFileSync(${JSON.stringify(IMPORT_GRAPH_PATH)}, '{"graph": true}\\n');`,
+    ] : []),
+    'fs.mkdirSync("test-output/acceptance", {recursive: true});',
+    `fs.writeFileSync(${JSON.stringify(CANCELLATION_REPORT)}, ${JSON.stringify(run.report)});`,
+    `fs.writeFileSync(${JSON.stringify(CANCELLATION_ARTIFACT)}, ` +
+      `${JSON.stringify(CANCELLATION_DIAGNOSTIC)});`,
+    ...signalHandlers,
+    'let nestedPid = null;',
+    `const acquired = () => {${acquired}};`,
+    'acquired();',
+    `setTimeout(() => {fs.writeFileSync(${JSON.stringify(run.normal)}, ` +
+      `"ordinary completion"); process.exit(${childExit});}, ` +
+      `${ignoreSignal ? FORCED_CHILD_CEILING_MS : ORIGINAL_CHILD_CEILING_MS});`,
+    `const ready = () => {${ready}};`,
+    descendant ? [
+      'const {spawn} = require("node:child_process");',
+      `const nested = spawn(process.execPath, ["-e", ${JSON.stringify(nested)}], ` +
+        '{stdio: ["ignore", "ignore", "ignore", "ipc"]});',
+      'nestedPid = nested.pid; acquired();',
+      'nested.once("message", () => ready());',
+    ].join('\n') : 'ready();',
+  ].join('\n');
+}
+
+async function cleanupFiniteGate(run) {
+  const errors = [];
+  const attempt = async (close) => {
+    try {
+      await close();
+    } catch (error) {
+      errors.push(error);
+    }
+  };
+  if (!run.owned && run.acquired && fs.existsSync(run.acquired)) {
+    await attempt(() => {
+      const owned = JSON.parse(fs.readFileSync(run.acquired, 'utf8'));
+      assert.equal(owned.parent, run.child?.pid, 'cleanup addresses this materializer child');
+      run.owned = owned;
+    });
+  }
+  await attempt(() => killOwnedPid(run.child?.pid ? -run.child.pid : null));
+  for (const pid of [run.owned?.pid, run.owned?.descendant]) {
+    await attempt(() => killOwnedPid(pid));
+  }
+  if (run.closed) await attempt(() => boundedClose(run));
+  for (const close of [...run.timerCleanups, ...run.fileCleanups]) await attempt(close);
+  if (errors.length > 0) throw new AggregateError(errors, 'finite gate cleanup unavailable');
+}
+
+function startFiniteGate(t, options = {}) {
+  const run = {child: null, closed: null, terminal: null, owned: null,
+    stdout: '', stderr: '', timerCleanups: [], fileCleanups: []};
+  run.timers = {teardown: (close) => run.timerCleanups.push(close)};
+  t.after(() => cleanupFiniteGate(run));
+  run.root = fixture({after: (close) => run.fileCleanups.push(close)}, null);
+  const control = path.join(run.root, 'test-output', 'cancellation-control');
+  fs.mkdirSync(control, {recursive: true});
+  for (const name of ['marker', 'acquired', 'ack', 'descendantAck', 'normal', 'admitted']) {
+    run[name] = path.join(control, name);
+  }
+  let command = finiteCommand(run, options);
+  if (options.preparation) {
+    fs.mkdirSync(path.join(run.root, 'scripts'), {recursive: true});
+    fs.writeFileSync(path.join(run.root, PRODUCER), command);
+    git(run.root, 'add', PRODUCER);
+    git(run.root, '-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', 'finite producer');
+    command = 'require("node:fs").writeFileSync(' +
+      `${JSON.stringify(run.admitted)}, "gate admitted");`;
+  }
+  const env = gitProcessEnvironment();
+  delete env.NODE_TEST_CONTEXT;
+  run.child = spawn(process.execPath,
+    [MATERIALIZER, '--gate', 'HEAD', '--run', process.execPath, '-e', command],
+    {cwd: run.root, env, detached: true, stdio: ['ignore', 'pipe', 'pipe']});
+  let error = null;
+  run.closed = new Promise((resolve) => {
+    run.child.once('error', (cause) => { error = cause; });
+    run.child.once('close', (code, signal) => {
+      run.terminal = {code, signal, error};
+      resolve(run.terminal);
+    });
+  });
+  run.child.stdout.on('data', (chunk) => { run.stdout += chunk.toString(); });
+  run.child.stderr.on('data', (chunk) => { run.stderr += chunk.toString(); });
+  return run;
+}
+
+async function acquireFiniteChild(run, {live = true} = {}) {
+  const deadline = Date.now() + CANCELLATION_WAIT_MS;
+  while (!fs.existsSync(run.marker) && !run.terminal && Date.now() < deadline) {
+    await managedSleep(run.timers, CANCELLATION_POLL_MS);
+  }
+  assert.ok(fs.existsSync(run.marker), `the finite child reached its real entry: ${run.stderr}`);
+  run.owned = JSON.parse(fs.readFileSync(run.marker, 'utf8'));
+  assert.ok(Number.isInteger(run.owned.pid) && run.owned.pid > 0,
+    'the acquired child has an actual process identity');
+  assert.equal(run.owned.parent, run.child.pid, 'the measured child belongs to the materializer');
+  if (live) {
+    assert.equal(run.terminal, null, 'the materializer is still awaiting its acquired child');
+    assert.ok(processAlive(run.owned.pid), 'cancellation engages a live child');
+  }
+}
+
+function retainedDiagnostic(run) {
+  const archive = path.join(run.root, 'test-output', 'push-gate');
+  const entries = fs.existsSync(archive) ? fs.readdirSync(archive) : [];
+  return entries.filter((entry) => {
+    const file = path.join(archive, entry, path.basename(CANCELLATION_ARTIFACT));
+    return fs.existsSync(file) && fs.readFileSync(file, 'utf8') === CANCELLATION_DIAGNOSTIC;
+  });
+}
+
+async function interruptFiniteGate(run, signal = 'SIGTERM') {
+  await acquireFiniteChild(run);
+  assert.equal(run.child.kill(signal), true, 'the signal was sent to the live materializer');
+  const outcome = await boundedClose(run);
+  assert.equal(outcome.error, null, 'the actual materializer started and closed');
+  assert.equal(outcome.signal, null, 'the owner settles through its finalizer');
+  assert.equal(outcome.code, 128 + os.constants.signals[signal],
+    'interruption remains primary when the finite child would otherwise exit zero');
+  assert.ok(fs.existsSync(run.ack), 'the acquired child acknowledged forwarded cancellation');
+  assert.equal(fs.readFileSync(run.ack, 'utf8'), signal);
+  assert.equal(fs.existsSync(run.normal), false,
+    'the child did not reach its ordinary completion deadline');
+  assert.equal(processAlive(run.owned.pid), false, 'the child closed before finalization completed');
+}
+
+for (const childExit of [0, 42]) {
+  test(`the exact materializer preserves ordinary child exit ${childExit}`, async (t) => {
+    const run = startFiniteGate(t, {childExit});
+    await acquireFiniteChild(run, {live: false});
+    const outcome = await boundedClose(run);
+    assert.deepEqual(outcome, {code: childExit, signal: null, error: null});
+    assert.equal(processAlive(run.owned.pid), false);
+    assert.equal(retainedDiagnostic(run).length, childExit === 0 ? 0 : 1);
+    assert.equal(fs.existsSync(run.owned.checkout), false);
+  });
+}
+
+for (const signal of CANCELLATION_SIGNALS) {
+  test(`the exact materializer owns live gate cancellation by ${signal}`, async (t) => {
+    const run = startFiniteGate(t, {interrupt: true});
+    await interruptFiniteGate(run, signal);
+    assert.equal(retainedDiagnostic(run).length, 1, 'the first diagnostic was retained');
+    assert.equal(fs.existsSync(run.owned.checkout), false,
+      'a closed child and retained evidence permit checkout removal');
+  });
+}
+
+test('materializer cancellation during preparation never admits the later gate', async (t) => {
+  const run = startFiniteGate(t, {interrupt: true, preparation: true});
+  await interruptFiniteGate(run);
+  assert.equal(fs.existsSync(run.admitted), false, 'the cancelled preparation cannot admit a gate');
+  assert.equal(retainedDiagnostic(run).length, 1);
+});
+
+test('the materializer bounds a child scope that acknowledges but ignores SIGTERM', async (t) => {
+  const run = startFiniteGate(t, {interrupt: true, ignoreSignal: true, descendant: true});
+  await interruptFiniteGate(run);
+  assert.ok(fs.existsSync(run.descendantAck), 'cancellation reached the acquired descendant');
+  assert.equal(fs.readFileSync(run.descendantAck, 'utf8'), 'SIGTERM',
+    'cancellation reached the descendant in the acquired scope');
+  const deadline = Date.now() + CANCELLATION_WAIT_MS;
+  while (processAlive(run.owned.descendant) && Date.now() < deadline) {
+    await managedSleep(run.timers, CANCELLATION_POLL_MS);
+  }
+  assert.equal(processAlive(run.owned.descendant), false, 'forced stop closed the descendant');
+  assert.equal(retainedDiagnostic(run).length, 1);
+});
+
+test('interrupted materializer retention failure keeps the original checkout', async (t) => {
+  const run = startFiniteGate(t, {interrupt: true, missingArtifact: true});
+  await interruptFiniteGate(run);
+  assert.match(run.stderr, /diagnostic retention unavailable; original checkout kept at/u);
+  assert.doesNotMatch(run.stderr, /gate diagnostics retained in/u);
+  assert.equal(fs.readFileSync(path.join(run.owned.checkout, CANCELLATION_REPORT), 'utf8'),
+    run.report);
+  assert.equal(fs.readFileSync(path.join(run.owned.checkout, CANCELLATION_ARTIFACT), 'utf8'),
+    CANCELLATION_DIAGNOSTIC);
+  assert.ok(git(run.root, 'worktree', 'list', '--porcelain')
+    .includes(`worktree ${fs.realpathSync(run.owned.checkout)}\n`),
+  'the uncertain original remains registered');
 });
