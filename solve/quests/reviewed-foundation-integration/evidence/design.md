@@ -28,6 +28,23 @@ It remains unsealed: the existing test-receipt probe correctly treats the absent
 execution receipt as non-measuring. Preparation can proceed under the proposal;
 sealing requires actual recorded measurements, never a placeholder red receipt.
 
+## Pre-land acceptance and final publication
+
+The earlier unsealed proposal joined publication policy and delivery in one
+pre-land receipt. That ordering is circular: Solver measures `doneWhen` before
+its landing commit exists, while the publisher subsequently proves and delivers
+that final HEAD. The pre-land predicate therefore measures canonical publication
+policy alongside the other five integration obligations. Final-HEAD publication,
+native proof persistence and required delivery checks remain explicit post-land
+obligations through the existing publisher. The integration is not delivered,
+and is not the accepted main base for residual-WIP reconciliation, until those
+obligations are actually discharged. A pre-land receipt does not transfer native
+whole-corpus proof to the new landing SHA.
+
+The original unsealed definition and receipt remain preserved at
+`7ca38b074759be7b8d886c97b1e8f75e8ea9e334`. This refinement changes no sealed
+predicate or required publication gate; the append-only log records its reason.
+
 ## Integration sequence
 
 1. Independently verify the exact source/test composition against those inputs.
@@ -41,7 +58,9 @@ sealing requires actual recorded measurements, never a placeholder red receipt.
 5. Retain complete per-file results, first failures, actual source/host/native
    identities, and closed execution/container/thermal scopes. Repair any first
    causal divergence at its owner and remeasure the proof it invalidates.
-6. Complete the existing publication gates. Reconcile the remaining WIP only
+6. After the intended Solver lands, publish the final committed HEAD through
+   the existing publication owner and complete its exact-source gates.
+   Reconcile the remaining WIP only
    against the accepted base, preserving stronger current implementations and
    the stricter ratchets from each side of the three-way history.
 
