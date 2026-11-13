@@ -406,8 +406,8 @@ describe('failing-file run summary', () => {
       '# test-files total=1 pass=1 fail=0 assertions=2',
       '',
     ].join('\n'));
-    assert.deepEqual(named, ['test/a/red.test.js', 'test/b/decided-green.test.js',
-      'test/b/relayed-red.test.js'],
+    assert.deepEqual(named, ['test/a/red.test.js', 'test/b/relayed-red.test.js',
+      'test/b/decided-green.test.js'],
       summary);
     assert.match(summary, /^ {2}failing test files: 3$/mu);
   });
@@ -424,7 +424,7 @@ describe('failing-file run summary', () => {
       '# retried-once fail test/a/broken.test.js',
       '',
     ].join('\n'));
-    assert.deepEqual(named, ['test/a/broken.test.js', 'test/a/flaky.test.js'], summary);
+    assert.deepEqual(named, ['test/a/flaky.test.js', 'test/a/broken.test.js'], summary);
     assert.match(summary, /^ {2}failing test files: 2$/mu);
   });
 
