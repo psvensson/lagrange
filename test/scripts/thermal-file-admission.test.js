@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {spawnSync} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -12,10 +13,10 @@ import {LANE_JOBS_CAP_ENV}
   from '../../scripts/checks/test-resource-classification-constants.js';
 import {FAST_TEST, MINUTE, labFixture} from './test-placement-execution-fixture.js';
 
-// Original-compatible owner controls. The classification and thermal owners
-// are real; sensor documents and the subprocess admission sink are controlled.
-// This measures delegated file admission, not execution of 101 test children
-// or physical sensor readiness. The separate placement witness runs its child.
+// Original-compatible controls through the real classification and file runner.
+// Sensor documents are controlled observations, not native readiness proof.
+// Actual finite child files write the event ledger; parent batch shape is not
+// the assertion. Candidate native observer wiring needs explicit adaptation.
 function fixture(t, count) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'thermal-admission-'));
   t.after(() => fs.rmSync(root, {recursive: true, force: true}));
@@ -36,50 +37,83 @@ function coolSensors() {
   };
 }
 
-test('each of 101 delegated files has its own thermal admission', (t) => {
-  const {root, files, sysRoot} = fixture(t, 101);
-  const events = [];
-  const admitted = [];
-  let first = true;
-  const status = runClassifiedTestFiles(files, {
-    root,
-    env: {[LANE_JOBS_CAP_ENV]: '1'},
-    thermalSources: {sysRoot, sensors() {
-      events.push({kind: 'observe'});
-      return coolSensors();
-    }},
-    thermalSleep() { assert.fail('a cool observation needs no sleep'); },
-    write() {},
-    spawn(_command, args) {
-      assert.equal(args[1], '--jobs=1');
-      for (const file of args.slice(2)) {
-        admitted.push(file);
-        events.push({kind: 'admit', file});
-      }
-      const result = {status: first ? 7 : 0};
-      first = false;
-      return result;
-    },
-  });
-  assert.equal(status, 7, 'later green delegation preserves the first failure');
-  assert.deepEqual([...admitted].sort(), [...files].sort(), 'all files admitted once');
-  assert.equal(new Set(admitted).size, files.length);
-  const gaps = [];
-  let pending = 0;
-  for (const event of events) {
-    if (event.kind === 'observe') {
-      gaps.push(pending);
-      pending = 0;
-    } else {
-      pending += 1;
+test('each of 101 actual file executions has its own thermal admission',
+  {timeout: 6 * MINUTE}, (t) => {
+    const {root, files, sysRoot} = fixture(t, 101);
+    const ledger = path.join(root, 'admission.ndjson');
+    const runnerRoot = process.cwd();
+    for (const [index, file] of files.entries()) {
+      const source = [
+        "import assert from 'node:assert/strict';",
+        "import {appendFileSync} from 'node:fs';",
+        "import {test} from 'node:test';",
+        `const ledger = ${JSON.stringify(ledger)};`,
+        `const file = ${JSON.stringify(file)};`,
+        "const record = (kind) => appendFileSync(ledger, JSON.stringify({kind, file}) + '\\n');",
+        "record('start');",
+        "test('finite admitted child', () => {",
+        '  try {',
+        `    assert.notEqual(${index}, 0, 'intentional original child failure');`,
+        "  } finally { record('end'); }",
+        '});',
+        '',
+      ].join('\n');
+      fs.writeFileSync(path.join(root, file), source);
     }
-  }
-  gaps.push(pending);
-  t.diagnostic(JSON.stringify({files: admitted.length,
-    observations: events.filter((event) => event.kind === 'observe').length, gaps}));
-  assert.equal(Math.max(...gaps), 1,
-    'no observation delegates multiple file starts without fresh admission');
-});
+    const env = {...process.env, [LANE_JOBS_CAP_ENV]: '1'};
+    delete env.NODE_TEST_CONTEXT;
+    delete env.LAGRANGE_SKIP_THERMAL_GATE;
+    let output = '';
+    const status = runClassifiedTestFiles(files, {
+      root,
+      env,
+      thermalSources: {sysRoot, sensors() {
+        fs.appendFileSync(ledger, JSON.stringify({kind: 'observe'}) + '\n');
+        return coolSensors();
+      }},
+      thermalSleep() { assert.fail('a cool observation needs no sleep'); },
+      write() {},
+      spawn(command, args, options) {
+        assert.equal(args[1], '--jobs=1');
+        const result = spawnSync(command,
+          [path.join(runnerRoot, args[0]), ...args.slice(1)],
+          {...options, stdio: 'pipe', encoding: 'utf8', timeout: 4 * MINUTE});
+        assert.ifError(result.error);
+        assert.equal(result.signal, null, result.stderr);
+        output += result.stdout;
+        return result;
+      },
+    });
+    const events = fs.readFileSync(ledger, 'utf8').trim().split('\n').map(JSON.parse);
+    const started = events.filter((event) => event.kind === 'start').map((event) => event.file);
+    const ended = events.filter((event) => event.kind === 'end').map((event) => event.file);
+    assert.deepEqual([...started].sort(), [...files].sort(), 'all real files started once');
+    assert.deepEqual([...ended].sort(), [...files].sort(), 'all real file bodies settled once');
+    assert.equal(new Set(started).size, files.length);
+    assert.equal(status, 1, 'the actual first failed child remains the final failure');
+    const lines = output.split('\n');
+    assert.ok(lines.some((line) => line.startsWith(`not ok ${files[0]} `)), output);
+    assert.ok(lines.some((line) => line.startsWith(`ok ${files.at(-1)} `)), output);
+    const summaries = [...output.matchAll(
+      /^# test-files total=(\d+) pass=(\d+) fail=(\d+) assertions=(\d+)$/gmu)];
+    const totals = summaries.reduce((sum, match) =>
+      sum.map((value, index) => value + Number(match[index + 1])), [0, 0, 0, 0]);
+    assert.deepEqual(totals, [101, 100, 1, 101],
+      'actual settled summaries retain exactly one intentional child failure');
+    let observationAvailable = false;
+    const unobserved = [];
+    for (const event of events) {
+      if (event.kind === 'observe') observationAvailable = true;
+      if (event.kind === 'start') {
+        if (!observationAvailable) unobserved.push(event.file);
+        observationAvailable = false;
+      }
+    }
+    t.diagnostic(JSON.stringify({started: started.length, ended: ended.length,
+      observations: events.filter((event) => event.kind === 'observe').length, unobserved}));
+    assert.deepEqual(unobserved, [],
+      'each actual file start needs an observation; parent transport batching is irrelevant');
+  });
 
 test('unavailable thermal observation admits no file', (t) => {
   const {root, files, sysRoot} = fixture(t, 2);
