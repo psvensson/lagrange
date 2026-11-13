@@ -74,6 +74,7 @@ export const SELECTOR_SELF_PATHS = Object.freeze([
   // Publication and Quest commands own execution acceptance and its obligations.
   'scripts/publish-head.js',
   'scripts/publish-local-corpus.js',
+  'scripts/publish-local-corpus-state.js',
   'scripts/publish-command-runner.js',
   'scripts/publish-execution-constants.js',
   'scripts/proof-authority.js',

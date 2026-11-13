@@ -22,6 +22,7 @@ import {
   SECTION_KIND, appendExecutionSection, fileResultRecord,
 } from '../../scripts/test-execution-report.js';
 import {validExecutionReport} from './execution-report-fixture.js';
+import {readLocalCorpusRecords} from '../../scripts/publish-local-corpus-state.js';
 
 function git(cwd, args) {
   return execGit(args, {cwd, encoding: 'utf8', env: gitProcessEnvironment()}).trim();
@@ -591,17 +592,20 @@ tap.test('a GitHub-merged head cannot mint a receipt from silent successful exec
   t.not(silent, 0, 'a refused proof receipt fails the local corpus run');
   t.equal(merged.receiptRef(merged.merged), '',
     'a green exit without an execution report mints no receipt');
-  const silentRecord = JSON.parse(fs.readFileSync(
-    path.join(merged.stateDir, `${merged.merged}.json`), 'utf8'));
+  const silentRecord = readLocalCorpusRecords(merged.stateDir)
+    .find((entry) => entry.sha === merged.merged);
   t.equal(silentRecord.state, 'red',
     'a refused proof receipt is recorded red, never green');
   t.equal(silentRecord.reason, 'proof-receipt-not-recorded');
   t.match(silentRecord.receipt, /execution-report-planned-file-not-executed/u,
     'and the refusal is named in the local corpus record');
   const recorded = fs.readFileSync(path.join(merged.stateDir, `${merged.merged}.json`), 'utf8');
+  const terminalBefore = JSON.stringify(readLocalCorpusRecords(merged.stateDir));
   t.equal(refusalOf(() => merged.prove(merged.merged)), POST_MERGE_REFUSAL.ALREADY_RECORDED,
     'an unrecorded receipt does not authorize a second same-head attempt');
   t.equal(fs.readFileSync(path.join(merged.stateDir, `${merged.merged}.json`), 'utf8'), recorded);
+  t.equal(JSON.stringify(readLocalCorpusRecords(merged.stateDir)), terminalBefore,
+    'the canonical terminal outcome also remains unchanged');
   t.equal(merged.spawned.length, 1, 'the first attempt is the only admitted run');
   t.equal(git(merged.remote, ['rev-parse', 'refs/heads/main']), remoteBefore,
     'nothing was pushed to main');
@@ -637,8 +641,8 @@ tap.test('a fresh GitHub-merged head gets a receipt only from its native executi
     },
   });
   t.equal(status, 0);
-  const record = JSON.parse(fs.readFileSync(
-    path.join(merged.stateDir, `${merged.merged}.json`), 'utf8'));
+  const record = readLocalCorpusRecords(merged.stateDir)
+    .find((entry) => entry.sha === merged.merged);
   t.same({state: record.state, pid: record.pid, receipt: record.receipt},
     {state: 'green', pid: process.pid, receipt: 'corpus-full-v1'},
     'the admitted child records its own successful execution');

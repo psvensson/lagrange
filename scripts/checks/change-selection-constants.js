@@ -272,7 +272,7 @@ export const FULL_CORPUS_TRIGGER_RULES = Object.freeze([
   // Retention can erase original proof artifacts even after execution settled.
   {id: 'proof-evidence-retention', pattern: /^scripts\/(prune-test-output|checks\/test-output-retention-constants)\.js$/u},
   // Publication and receipt interpretation decide which execution can be accepted.
-  {id: 'proof-publication', pattern: /^scripts\/(publish-head|publish-local-corpus|publish-command-runner|publish-execution-constants|proof-authority|proof-receipt-contract)\.js$/u},
+  {id: 'proof-publication', pattern: /^scripts\/(publish-head|publish-local-corpus(?:-state)?|publish-command-runner|publish-execution-constants|proof-authority|proof-receipt-contract)\.js$/u},
   // Quest recording and landing own the measured obligations publication consumes.
   {id: 'quest-proof-commands', pattern: /^scripts\/solve\/(commands|quest-record-commands)\.js$/u},
   // The scheduler that launches the proof and hands it its environment.

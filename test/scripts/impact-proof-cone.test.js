@@ -329,6 +329,7 @@ test('extracted proof execution owners retain the selector full-corpus obligatio
     'scripts/checks/test-output-retention-constants.js',
     'scripts/publish-head.js',
     'scripts/publish-local-corpus.js',
+    'scripts/publish-local-corpus-state.js',
     'scripts/publish-command-runner.js',
     'scripts/publish-execution-constants.js',
     'scripts/proof-authority.js',
