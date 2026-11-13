@@ -1,0 +1,10 @@
+LAB_HOST=adams-gamla
+v22.23.2
+aabc29b487375b76dc0f3b7519ce2c8502d0020b
+9ae3ed4e00355d4d8acc645dd378e9a08d2e6bc4
+bc9e83a24cee235aa7fd33ff9777dc97d229903c
+NATIVE_INVENTORY_SCOPE=metadata-only diagnosis of existing normal inventory fields for this qualified controller; no fleet, SSH, dependency installation, configuration writes, repair or proof claim
+SQLITE_PROVENANCE_NOT_REMEASURED=only the canonical built-in-only state reader runs; no dependencies installed
+NATIVE_INVENTORY_UNAVAILABLE={"stage":"normal-inventory","code":"ENOENT","reason":"strict normal configured inventory and original bytes could not be loaded"}
+NATIVE_INVENTORY_READ_EXIT=95
+NATIVE_INVENTORY_FINAL_GUARD_EXIT=0

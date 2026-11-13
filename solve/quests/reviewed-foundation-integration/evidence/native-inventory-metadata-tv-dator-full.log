@@ -1,0 +1,12 @@
+LAB_HOST=tv-dator
+v22.23.2
+aabc29b487375b76dc0f3b7519ce2c8502d0020b
+9ae3ed4e00355d4d8acc645dd378e9a08d2e6bc4
+bc9e83a24cee235aa7fd33ff9777dc97d229903c
+NATIVE_INVENTORY_SCOPE=metadata-only diagnosis of existing normal inventory fields for this qualified controller; no fleet, SSH, dependency installation, configuration writes, repair or proof claim
+SQLITE_PROVENANCE_NOT_REMEASURED=only the canonical built-in-only state reader runs; no dependencies installed
+NATIVE_INVENTORY_METADATA={"normalInventoryBytes":1014,"normalInventorySha256":"0b58e9811552386f48ee173db6b97947913b649515552c326d157c1369360759","parsedMatchesOriginalBytes":true,"schemaEligible":true,"existingRecordKeys":[],"requiredPeers":[{"requiredPeer":"local-workstation","recordExists":false,"recordEligible":false,"nameMatches":false,"sshNonempty":false,"sshNonOption":false,"repoPathExplicit":false,"eligible":false},{"requiredPeer":"adams-gamla","recordExists":false,"recordEligible":false,"nameMatches":false,"sshNonempty":false,"sshNonOption":false,"repoPathExplicit":false,"eligible":false}]}
+NATIVE_INVENTORY_UNCHANGED={"unchanged":true,"finalSha256":"0b58e9811552386f48ee173db6b97947913b649515552c326d157c1369360759"}
+NATIVE_INVENTORY_LIMIT=field eligibility only; no machine identity, SSH route, readiness, native test, whole-corpus proof or delivery is established
+NATIVE_INVENTORY_READ_EXIT=95
+NATIVE_INVENTORY_FINAL_GUARD_EXIT=0
