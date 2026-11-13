@@ -1272,3 +1272,116 @@ test('a failed capture spawn retains ENOENT and releases its deadline without la
     assert.deepEqual(attempts, [], 'no cancelled deadline may later target an absent identity');
     assert.deepEqual(diagnostics, [], 'no later cleanup callback replaces the failed acquisition');
   });
+
+function observedHoldProcesses() {
+  const observed = spawnSync('ps', ['-eo', 'pid=,ppid=,pgid=,sid=,stat=,comm='],
+    {encoding: 'utf8'});
+  assert.equal(observed.status, 0, observed.stderr);
+  return observed.stdout.trim().split('\n').map((line) => {
+    const [pid, parent, group, session, state, command] = line.trim().split(/\s+/u);
+    return {pid: Number(pid), parent: Number(parent), group: Number(group),
+      session: Number(session), state, command};
+  });
+}
+
+function liveOwnedHoldProcesses(owned) {
+  const observed = observedHoldProcesses();
+  return owned.map((identity) => {
+    const actual = observed.find(({pid}) => pid === identity.pid);
+    if (!actual || actual.state.startsWith('Z')) return null;
+    assert.deepEqual([actual.group, actual.session, actual.command],
+      [identity.group, identity.session, identity.command],
+      'cleanup addresses only the process identity this finite fixture acquired');
+    return actual;
+  }).filter(Boolean);
+}
+
+test('release preserves actual signal loss after an acquired hold shell exits',
+  {timeout: 15000}, async (t) => {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'lost-lab-hold-')));
+    const owned = [];
+    let held = null;
+    let observedRelease = null;
+    t.after(async () => {
+      const errors = [];
+      const attempt = async (action) => {
+        try {
+          await action();
+        } catch (error) {
+          errors.push(error);
+        }
+      };
+      if (held && !observedRelease) {
+        observedRelease = Promise.resolve().then(() => held.release())
+          .then((value) => ({value}), (error) => ({error}));
+      }
+      // The original hold is not detached. Teardown therefore owns only
+      // these observed shell/reader PIDs, never their caller's process group.
+      for (const identity of [...owned].reverse()) {
+        await attempt(() => {
+          if (liveOwnedHoldProcesses([identity]).length === 0) return;
+          try {
+            process.kill(identity.pid, 'SIGKILL');
+          } catch (error) {
+            if (error.code !== 'ESRCH') throw error;
+          }
+        });
+      }
+      if (observedRelease) {
+        await attempt(() => boundedGroupControl(observedRelease, 'owned hold release settlement'));
+      }
+      await attempt(async () => {
+        const deadline = Date.now() + GROUP_CONTROL_BOUND_MS;
+        while (liveOwnedHoldProcesses(owned).length && Date.now() < deadline) {
+          await new Promise((resolve) => setTimeout(resolve, GROUP_CONTROL_POLL_MS));
+        }
+        assert.deepEqual(liveOwnedHoldProcesses(owned), [], 'all acquired fixture processes close');
+      });
+      if (errors.length) {
+        throw new AggregateError(errors, `hold fixture cleanup unavailable: ${root}`);
+      }
+      fs.rmSync(root, {recursive: true, force: true});
+    });
+    held = labProbe.holdLabMachine({name: 'finite-local-hold', sshTarget: null},
+      {waitMs: 1000, purpose: 'finite lost-session control', expectedMs: MINUTE,
+        env: {...gitProcessEnvironment(), LAB_LOCK_DIR: root}});
+    assert.deepEqual(await boundedGroupControl(held.outcome, 'actual hold acquisition'),
+      {state: 'held'});
+    const record = JSON.parse(fs.readFileSync(path.join(root, 'machine.holder.json'), 'utf8'));
+    assert.ok(Number.isInteger(record.pid) && record.pid > 1);
+    const shell = observedHoldProcesses().find(({pid}) => pid === record.pid);
+    assert.ok(shell && !shell.state.startsWith('Z'), 'the actual held shell is live');
+    assert.equal(shell.parent, process.pid, 'this public hold acquired the observed direct shell');
+    owned.push(shell);
+    let reader;
+    const deadline = Date.now() + GROUP_CONTROL_BOUND_MS;
+    while (!reader && Date.now() < deadline) {
+      reader = observedHoldProcesses().find((one) => one.parent === shell.pid &&
+        one.command === 'cat' && !one.state.startsWith('Z'));
+      if (!reader) await new Promise((resolve) => setTimeout(resolve, GROUP_CONTROL_POLL_MS));
+    }
+    assert.ok(reader, 'the actual hold is waiting in its foreground input reader');
+    assert.ok(Number.isInteger(reader.pid) && reader.pid > 1);
+    assert.deepEqual([reader.group, reader.session], [shell.group, shell.session]);
+    owned.push(reader);
+    process.kill(shell.pid, 'SIGKILL');
+    await directChildEnded(shell.pid);
+    // ChildProcess may close stdin when its direct child exits. The control
+    // measures the actual held-session loss, not assumed reader survival.
+    const release = held.release();
+    observedRelease = release.then((value) => ({value}), (error) => ({error}));
+    assert.equal(held.release(), release, 'release has one cached completion');
+    const outcome = await boundedGroupControl(observedRelease,
+      'the actual lost hold release must settle within its original bound');
+    assert.ok(outcome.error instanceof Error, 'loss of an acquired hold cannot resolve as success');
+    assert.match(outcome.error.message, /^lab hold session closed unavailable:/u);
+    assert.equal(outcome.error.exitCode, null, 'the actual signalled shell had no integer exit');
+    assert.equal(outcome.error.signal, 'SIGKILL', 'the actual shell loss remains visible');
+    assert.equal(outcome.error.group, shell.pid);
+    assert.equal(shell.group, shell.pid, 'the acquired hold owns its process group');
+    assert.deepEqual(liveOwnedHoldProcesses(owned), [],
+      'no owned reader is live at release settlement');
+    assert.deepEqual(observedHoldProcesses().filter((one) => one.group === shell.group &&
+      one.session === shell.session && !one.state.startsWith('Z')), [],
+    'the acquired hold group has no live members at release settlement');
+  });
