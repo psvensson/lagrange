@@ -1,0 +1,55 @@
+{
+  "schema": "lagrange-lab-result/v1",
+  "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+  "request_id": "075afa94e07e4a2fb4e727509d074f9b",
+  "request_sha256": "9b9adb6ab0a1f30587e10cb25be1cdccd0046ddddfb7bdc947c1cb6393aa2a32",
+  "status": "COMPLETE",
+  "recorded_at": "2026-11-13T09:29:27.531Z",
+  "result": {
+    "execution_scope_closed": true,
+    "exit_code": 0,
+    "finished_at": "2026-11-13T09:29:27.499Z",
+    "hosts": [
+      "local-workstation"
+    ],
+    "log_bytes": 2621,
+    "log_sha256": "885f3348e1bf9537eddbf40fa3df005b0da7ce8d56192f20b926c0eb0d3ea4f2",
+    "logical_request_id": "075afa94-e07e-4a2f-b4e7-27509d074f9b",
+    "logs_are_worker_tails": true,
+    "operation": "lab-work",
+    "outcome": "PASS",
+    "payload_sha256": "6b326a84ee7fcd369cb58c1cbc657c580d0ef96bc0e7e931c26dd359a7fe9978",
+    "reason": null,
+    "scope_closed": true,
+    "source_execution_started": true,
+    "source_sha": "aabc29b487375b76dc0f3b7519ce2c8502d0020b",
+    "worker_receipt_count": 1,
+    "worker_receipts_sha256": "db048e6606cee635e9454d5580a089d1539a903e8e117aad632218cd1a5a3229",
+    "workers": {
+      "local-workstation": {
+        "containers_closed": true,
+        "driver_result": {
+          "counters": {},
+          "exit_code": 0
+        },
+        "execution_scope_closed": true,
+        "exit_code": 0,
+        "last_thermals": {
+          "cpu": 43,
+          "missing": [],
+          "ssd": 30.85,
+          "ssd_aux": 67.85
+        },
+        "log_bytes": 2600,
+        "log_sha256": "05dfbac73c8b04ea40ca49f2172a56a97b712229f01e3f4ce645e8e430722d2c",
+        "log_truncated": false,
+        "output_bytes": 2600,
+        "output_sha256": "05dfbac73c8b04ea40ca49f2172a56a97b712229f01e3f4ce645e8e430722d2c",
+        "reason": null,
+        "source_execution_started": true,
+        "state": "COMPLETE",
+        "thermal_scope_closed": true
+      }
+    }
+  }
+}
