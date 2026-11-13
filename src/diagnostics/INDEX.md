@@ -13,7 +13,6 @@ documentClass: generated
 - [causal-graph-builder.js](causal-graph-builder.js) - No leading comment; first export: buildCausalGraph. (importers: few)
 - [comparative-efficiency-opportunity-calculator.js](comparative-efficiency-opportunity-calculator.js) - No leading comment; first export: OPPORTUNITY_CALCULATOR_EVIDENCE_CLASS. (importers: few)
 - [comparative-efficiency-opportunity-constants.js](comparative-efficiency-opportunity-constants.js) - No leading comment; first export: OPPORTUNITY_CALCULATOR_SCHEMA_VERSION. (importers: few)
-- [comparative-efficiency-opportunity-input-integrity.js](comparative-efficiency-opportunity-input-integrity.js) - The calculator's input-integrity surface. (importers: few)
 - [comparative-efficiency-opportunity-input-validation.js](comparative-efficiency-opportunity-input-validation.js) - No leading comment; first export: validateOpportunityCalculatorInput. (importers: one)
 - [control-plane-quiescence-snapshot.js](control-plane-quiescence-snapshot.js) - No leading comment; first export: CONTROL_PLANE_QUIESCENCE_CANDIDATE_WINDOW_RESET_REASON. (importers: many)
 - [event-loop-gap-heartbeat-rule.js](event-loop-gap-heartbeat-rule.js) - The pure heartbeat rule, alone in its own module so that the deterministic simulator can hold the live watchdog's... (importers: one)

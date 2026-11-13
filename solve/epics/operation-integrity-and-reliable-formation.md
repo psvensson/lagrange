@@ -157,9 +157,9 @@ invalid evidence before integration.
   source. Native formatter 3795 yielded a verified patch and seven remaining diagnostics;
   their bounded corrections and full composition are independently source-reviewed.
   Request 3796 also relocated the historical observer through verified canonical
-  storage, retaining its exact bytes and original path mapping. Fresh canonical
-  generation and a frozen candidate for parallel static/focused/full
-  physical proof, Solver land
+  storage, retaining its exact bytes and original path mapping. Native generation 3797 then passed with independently reviewed generated
+  metadata imported unchanged. A new frozen candidate is ready for parallel
+  static/focused proof; whole-corpus proof, Solver land
   and final-HEAD publication remain owed by the foundation/publication Quests.
 - **Current owner objective:** Linux executables and a stable, reproducible
   server baseline for comparative systems measurements. Native macOS artifacts

@@ -67,6 +67,7 @@ documentClass: generated
 - [raft-rs-proposal-codec-constants.js](raft-rs-proposal-codec-constants.js) - The names the rs-raft proposal codec owns. (importers: few)
 - [raft-rs-proposal-codec.js](raft-rs-proposal-codec.js) - The rs-raft proposal codec: the one place a proposal becomes the bytes the core replicates, and committed bytes... (importers: hub)
 - [raft-rs-ready-loop-constants.js](raft-rs-ready-loop-constants.js) - Values the Ready loop needs that belong to raft-rs's own wire model. (importers: hub)
+- [raft-rs-record-integer.js](raft-rs-record-integer.js) - Exact integer conversion at the durable Raft record's SQLite boundary. (importers: one)
 - [raft-rs-replica-lifecycle-constants.js](raft-rs-replica-lifecycle-constants.js) - Owned by the replica lifecycle owner (raft-rs-replica-lifecycle-owner.js): the durable table its rows live in and... (importers: many)
 - [raft-rs-replica-lifecycle-owner.js](raft-rs-replica-lifecycle-owner.js) - Read the monotonic opening fact of exactly the admitted incarnation. (importers: hub)
 - [raft-rs-retained-history.js](raft-rs-retained-history.js) - Pure validation and observation within RaftRsDurableStore's read boundary. (importers: one)

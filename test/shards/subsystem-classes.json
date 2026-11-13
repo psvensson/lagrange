@@ -4,10 +4,10 @@
   "counts": {
     "admin-diagnostics": 121,
     "architecture-governance": 21,
-    "bootstrap-membership": 345,
-    "cdc-metadata": 70,
+    "bootstrap-membership": 347,
+    "cdc-metadata": 71,
     "cli-tooling": 99,
-    "control-plane": 237,
+    "control-plane": 238,
     "convergence-topology": 80,
     "distributed-harness": 216,
     "examples-e2e": 8,
@@ -19,16 +19,16 @@
     "services-runtime": 160,
     "solver-tooling": 7,
     "storage-partition": 218,
-    "storage-raft": 151,
-    "test-infrastructure": 172,
+    "storage-raft": 152,
+    "test-infrastructure": 178,
     "transactions": 17,
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2647,
-  "digest": "fnv1a32-a7e1ea76",
+  "censusSize": 2658,
+  "digest": "fnv1a32-94c127d8",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-ed8e85da",
+  "observationDigest": "fnv1a32-03671a2e",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -361,6 +361,7 @@
     "test/cdc/cdc-confirmation-tracker.property.test.js": "cdc-metadata",
     "test/cdc/cdc-confirmation-tracker.test.js": "cdc-metadata",
     "test/cdc/cdc-confirmation-wiring.test.js": "cdc-metadata",
+    "test/cdc/cdc-delay-until-shutdown-resource.test.js": "cdc-metadata",
     "test/cdc/cdc-delete-cache-absence-convergence.test.js": "cdc-metadata",
     "test/cdc/cdc-delivery-complete-vector.test.js": "cdc-metadata",
     "test/cdc/cdc-delivery-outcome.test.js": "cdc-metadata",
@@ -509,6 +510,7 @@
     "test/closure/original-handoff-static.integration.test.js": "architecture-governance",
     "test/compatibility/pgwire-client-compat.test.js": "pgwire-compat",
     "test/config/architecture-ownership-guardrails.test.js": "architecture-governance",
+    "test/config/ci-proof-range.test.js": "control-plane",
     "test/config/code-path-uniqueness.property.test.js": "architecture-governance",
     "test/config/configuration-centralization.property.test.js": "architecture-governance",
     "test/config/configuration-manager.test.js": "control-plane",
@@ -1319,6 +1321,8 @@
     "test/node/replica-handler-voter-ready-wait-bound-spent.test.js": "bootstrap-membership",
     "test/node/replica-handler.test.js": "bootstrap-membership",
     "test/node/replica-lifecycle-durable-generation.test.js": "bootstrap-membership",
+    "test/node/replica-lifecycle-observation-row-carrier.test.js": "bootstrap-membership",
+    "test/node/replica-lifecycle-observation-snapshot.test.js": "bootstrap-membership",
     "test/node/replica-local-only-row-convergence.test.js": "bootstrap-membership",
     "test/node/replica-recovery-service.test.js": "bootstrap-membership",
     "test/node/replica-removal-consensus-exit-decisions.test.js": "bootstrap-membership",
@@ -1747,6 +1751,7 @@
     "test/raft/raft-rs-backend/durable-ready-loop.test.js": "storage-raft",
     "test/raft/raft-rs-backend/durable-rejoin-record-refusal.test.js": "storage-raft",
     "test/raft/raft-rs-backend/durable-store-committed-entries.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/durable-store-connection-custody.test.js": "storage-raft",
     "test/raft/raft-rs-backend/election-safety.test.js": "storage-raft",
     "test/raft/raft-rs-backend/evidence-o1-admission-liveness.test.js": "storage-raft",
     "test/raft/raft-rs-backend/evidence-o1-anchors.test.js": "storage-raft",
@@ -2347,6 +2352,10 @@
     "test/scripts/lab-test-base.test.js": "test-infrastructure",
     "test/scripts/lab-worker-provisioning.test.js": "test-infrastructure",
     "test/scripts/list-commands.test.js": "test-infrastructure",
+    "test/scripts/local-corpus-concurrency.test.js": "test-infrastructure",
+    "test/scripts/local-corpus-receipt-custody.test.js": "test-infrastructure",
+    "test/scripts/local-corpus-state.test.js": "test-infrastructure",
+    "test/scripts/local-corpus-terminal-custody.test.js": "test-infrastructure",
     "test/scripts/local-corpus.test.js": "test-infrastructure",
     "test/scripts/local-leader-row-visibility-model-contract.test.js": "test-infrastructure",
     "test/scripts/metric-cycle-custody.test.js": "test-infrastructure",
@@ -2363,6 +2372,7 @@
     "test/scripts/no-legacy-consensus-reference-ratchet.test.js": "test-infrastructure",
     "test/scripts/observation-census.test.js": "test-infrastructure",
     "test/scripts/participant-release-completion-owner.test.js": "test-infrastructure",
+    "test/scripts/placement-failure-custody.test.js": "test-infrastructure",
     "test/scripts/pre-push-hook-control-flow.test.js": "test-infrastructure",
     "test/scripts/pre-push-stage-manifest.test.js": "test-infrastructure",
     "test/scripts/priority-recovery-current-artifact-fixture.test.js": "test-infrastructure",
@@ -2372,6 +2382,7 @@
     "test/scripts/proof-cone-cli-output-completeness.test.js": "test-infrastructure",
     "test/scripts/proof-receipt-execution-report.test.js": "test-infrastructure",
     "test/scripts/prune-test-output.test.js": "test-infrastructure",
+    "test/scripts/publication-single-pass.test.js": "test-infrastructure",
     "test/scripts/publish-head-workspace-links.test.js": "test-infrastructure",
     "test/scripts/publish-head.test.js": "test-infrastructure",
     "test/scripts/push-gate-change-proof.test.js": "test-infrastructure",
@@ -4361,6 +4372,11 @@
     "test/config/architecture-ownership-guardrails.test.js": {
       "directories": [
         "src"
+      ]
+    },
+    "test/config/ci-proof-range.test.js": {
+      "files": [
+        ".github/workflows/ci.yml"
       ]
     },
     "test/config/code-path-uniqueness.property.test.js": {
@@ -7311,6 +7327,14 @@
         "package.json",
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/lab/fleet-discovery.js",
+        "scripts/lab/machine-lock-constants.js",
+        "scripts/lab/placement-constants.js",
+        "scripts/lab/placement-execution.js",
+        "scripts/lab/process.js",
+        "scripts/lab/remote-command.js",
+        "scripts/lab/test-capability.js",
+        "scripts/lab/test-placement.js",
         "scripts/run-classified-test-files.js",
         "scripts/select-change-tests.js",
         "scripts/test-machine-factor.js",
@@ -11411,6 +11435,11 @@
         "src/raft/raft-rs-replica-lifecycle-owner.js",
         "src/runtime/oci-host-agent-durable-files.js",
         "src/storage/data-directory-process-owner.js"
+      ]
+    },
+    "test/node/replica-lifecycle-observation-row-carrier.test.js": {
+      "files": [
+        "src/node/replica-state-machine-lifecycle-observation.js"
       ]
     },
     "test/node/replica-local-only-row-convergence.test.js": {
@@ -18089,7 +18118,7 @@
         "package.json",
         "scripts/checks/run-golden-capability-guard-scenarios.js",
         "scripts/lab/harness.js",
-        "scripts/lab/probe.js",
+        "scripts/lab/machine-lock-constants.js",
         "scripts/release-notes.js",
         "scripts/run-classified-test-files.js",
         "src/public-api.js",
@@ -18595,6 +18624,7 @@
         "scripts/checks/push-gate-corpus-worktree.js",
         "scripts/proof-authority.js",
         "scripts/prune-test-output.js",
+        "scripts/publish-execution-constants.js",
         "scripts/publish-head.js",
         "scripts/run-classified-test-files.js",
         "scripts/solve/red-main-exemption.js",
@@ -18678,6 +18708,7 @@
         "scripts/inventory-ordinal-segments.js",
         "scripts/proof-authority.js",
         "scripts/prune-test-output.js",
+        "scripts/publish-execution-constants.js",
         "scripts/publish-head.js",
         "scripts/quest-evidence/quest-agent-tooling-lifecycle.py",
         "scripts/quest-evidence/quest-agent-tooling-receipt.js",
@@ -18691,7 +18722,6 @@
         "scripts/solve/schema.js",
         "scripts/solve/script-artifacts.js",
         "scripts/solve/store.js",
-        "scripts/test-machine-factor.js",
         "solve/changes/global-owner-debt-inventory/inventory.json",
         "solve/changes/priority-recovery-owner-inventory/inventory.json",
         "src/INDEX.md",
@@ -18861,6 +18891,14 @@
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/generate-test-subsystem-classes.js",
+        "scripts/lab/fleet-discovery.js",
+        "scripts/lab/machine-lock-constants.js",
+        "scripts/lab/placement-constants.js",
+        "scripts/lab/placement-execution.js",
+        "scripts/lab/process.js",
+        "scripts/lab/remote-command.js",
+        "scripts/lab/test-capability.js",
+        "scripts/lab/test-placement.js",
         "scripts/proof-authority.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
@@ -18890,6 +18928,14 @@
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/generate-test-subsystem-classes.js",
+        "scripts/lab/fleet-discovery.js",
+        "scripts/lab/machine-lock-constants.js",
+        "scripts/lab/placement-constants.js",
+        "scripts/lab/placement-execution.js",
+        "scripts/lab/process.js",
+        "scripts/lab/remote-command.js",
+        "scripts/lab/test-capability.js",
+        "scripts/lab/test-placement.js",
         "scripts/proof-authority.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
@@ -18933,6 +18979,14 @@
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/generate-test-subsystem-classes.js",
+        "scripts/lab/fleet-discovery.js",
+        "scripts/lab/machine-lock-constants.js",
+        "scripts/lab/placement-constants.js",
+        "scripts/lab/placement-execution.js",
+        "scripts/lab/process.js",
+        "scripts/lab/remote-command.js",
+        "scripts/lab/test-capability.js",
+        "scripts/lab/test-placement.js",
         "scripts/proof-authority.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
@@ -19493,7 +19547,6 @@
         "scripts/generate-source-owner-index.js",
         "scripts/inventory-ordinal-segments.js",
         "scripts/select-proof-cone.js",
-        "scripts/test-machine-factor.js",
         "solve/changes/global-owner-debt-inventory/inventory.json",
         "solve/changes/priority-recovery-owner-inventory/inventory.json",
         "src/INDEX.md",
@@ -19603,8 +19656,18 @@
     },
     "test/scripts/dt-prove.test.js": {
       "files": [
+        ".gitignore",
+        "package.json",
+        "scripts/checks/git-invocation.js",
+        "scripts/checks/git-process-environment.js",
+        "scripts/dt-prove.js",
         "scripts/run-test-files.js",
         "scripts/solve.js"
+      ],
+      "directories": [
+        "scripts",
+        "src",
+        "test"
       ]
     },
     "test/scripts/effective-placement-serial-priority-planner-scenario.test.js": {
@@ -19696,7 +19759,6 @@
         "scripts/inventory-ordinal-segments.js",
         "scripts/solve.js",
         "scripts/solve/store.js",
-        "scripts/test-machine-factor.js",
         "solve/changes/global-owner-debt-inventory/inventory.json",
         "solve/changes/priority-recovery-owner-inventory/inventory.json",
         "solve/epics/solve-v2/migration-report.md",
@@ -19916,6 +19978,14 @@
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/lab.js",
+        "scripts/lab/fleet-discovery.js",
+        "scripts/lab/machine-lock-constants.js",
+        "scripts/lab/placement-constants.js",
+        "scripts/lab/placement-execution.js",
+        "scripts/lab/process.js",
+        "scripts/lab/remote-command.js",
+        "scripts/lab/test-capability.js",
+        "scripts/lab/test-placement.js",
         "scripts/participant-release-completion-audit.js",
         "scripts/run-classified-test-files.js",
         "scripts/select-change-tests.js",
@@ -20058,9 +20128,34 @@
         "scripts/check-guideline-navigability.js",
         "scripts/check-guideline-silent-catch.js",
         "scripts/checks/impact-proof-cone-inputs.js",
+        "scripts/checks/test-output-retention-constants.js",
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/inventory-ordinal-segments.js",
+        "scripts/lab/fleet-discovery.js",
+        "scripts/lab/lab-test.js",
+        "scripts/lab/machine-hold.js",
+        "scripts/lab/machine-lock-constants.js",
+        "scripts/lab/placement-constants.js",
+        "scripts/lab/placement-execution.js",
+        "scripts/lab/placement-shell.js",
+        "scripts/lab/placement-source.js",
+        "scripts/lab/remote-command.js",
+        "scripts/lab/test-capability.js",
+        "scripts/lab/test-placement.js",
+        "scripts/lab/worker-provisioning.js",
+        "scripts/proof-authority.js",
+        "scripts/proof-receipt-contract.js",
+        "scripts/prune-test-output.js",
+        "scripts/publish-command-runner.js",
+        "scripts/publish-execution-constants.js",
+        "scripts/publish-head.js",
+        "scripts/publish-local-corpus-state.js",
+        "scripts/publish-local-corpus.js",
+        "scripts/run-test-files.js",
         "scripts/select-proof-cone.js",
+        "scripts/solve/commands.js",
+        "scripts/solve/quest-record-commands.js",
+        "scripts/test-output-reader.js",
         "solve/changes/global-owner-debt-inventory/inventory.json",
         "src/public-api.js",
         "test/shards/impact-contracts.json",
@@ -20150,6 +20245,14 @@
         "scripts/checks/formation-health.js",
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/lab/fleet-discovery.js",
+        "scripts/lab/machine-lock-constants.js",
+        "scripts/lab/placement-constants.js",
+        "scripts/lab/placement-execution.js",
+        "scripts/lab/process.js",
+        "scripts/lab/remote-command.js",
+        "scripts/lab/test-capability.js",
+        "scripts/lab/test-placement.js",
         "scripts/run-classified-test-files.js",
         "scripts/select-change-tests.js",
         "scripts/test-machine-factor.js",
@@ -20185,6 +20288,14 @@
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/generate-test-subsystem-classes.js",
+        "scripts/lab/fleet-discovery.js",
+        "scripts/lab/machine-lock-constants.js",
+        "scripts/lab/placement-constants.js",
+        "scripts/lab/placement-execution.js",
+        "scripts/lab/process.js",
+        "scripts/lab/remote-command.js",
+        "scripts/lab/test-capability.js",
+        "scripts/lab/test-placement.js",
         "scripts/proof-authority.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
@@ -20227,6 +20338,14 @@
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/generate-test-subsystem-classes.js",
+        "scripts/lab/fleet-discovery.js",
+        "scripts/lab/machine-lock-constants.js",
+        "scripts/lab/placement-constants.js",
+        "scripts/lab/placement-execution.js",
+        "scripts/lab/process.js",
+        "scripts/lab/remote-command.js",
+        "scripts/lab/test-capability.js",
+        "scripts/lab/test-placement.js",
         "scripts/proof-authority.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
@@ -20254,6 +20373,14 @@
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/lab.js",
+        "scripts/lab/fleet-discovery.js",
+        "scripts/lab/machine-lock-constants.js",
+        "scripts/lab/placement-constants.js",
+        "scripts/lab/placement-execution.js",
+        "scripts/lab/process.js",
+        "scripts/lab/remote-command.js",
+        "scripts/lab/test-capability.js",
+        "scripts/lab/test-placement.js",
         "scripts/run-classified-test-files.js",
         "scripts/select-change-tests.js",
         "scripts/test-machine-factor.js"
@@ -20270,11 +20397,77 @@
         "package.json"
       ]
     },
+    "test/scripts/local-corpus-concurrency.test.js": {
+      "files": [
+        "package.json",
+        "scripts/checks/push-gate-corpus-worktree.js",
+        "scripts/proof-authority.js",
+        "scripts/publish-execution-constants.js",
+        "scripts/publish-head.js",
+        "scripts/run-classified-test-files.js",
+        "test/scripts/local-corpus-concurrency-child.js",
+        "test/shards/primary-classes.json"
+      ],
+      "directories": [
+        "test"
+      ]
+    },
+    "test/scripts/local-corpus-receipt-custody.test.js": {
+      "files": [
+        "CHANGELOG.md",
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/push-gate-corpus-worktree.js",
+        "scripts/proof-authority.js",
+        "scripts/publish-execution-constants.js",
+        "scripts/publish-head.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/test-execution-report.js",
+        "src/cli/cli-constants.js",
+        "src/constants/entrypoint.js",
+        "test/shards/primary-classes.json"
+      ],
+      "directories": [
+        "data/releases",
+        "solve",
+        "test"
+      ]
+    },
+    "test/scripts/local-corpus-state.test.js": {
+      "files": [
+        "package.json",
+        "scripts/checks/push-gate-corpus-worktree.js",
+        "scripts/proof-authority.js",
+        "scripts/publish-execution-constants.js",
+        "scripts/publish-head.js",
+        "scripts/run-classified-test-files.js",
+        "test/shards/primary-classes.json"
+      ],
+      "directories": [
+        "test"
+      ]
+    },
+    "test/scripts/local-corpus-terminal-custody.test.js": {
+      "files": [
+        "package.json",
+        "scripts/checks/push-gate-corpus-worktree.js",
+        "scripts/proof-authority.js",
+        "scripts/publish-execution-constants.js",
+        "scripts/publish-head.js",
+        "scripts/run-classified-test-files.js",
+        "test/scripts/local-corpus-terminal-custody-child.js",
+        "test/shards/primary-classes.json"
+      ],
+      "directories": [
+        "test"
+      ]
+    },
     "test/scripts/local-corpus.test.js": {
       "files": [
         ".githooks/pre-push",
         ".github/workflows/full-corpus-canary.yml",
         ".gitignore",
+        "CHANGELOG.md",
         "data/formation-health/trend.ndjson",
         "examples/service-data-affinity/download-movielens.js",
         "package-lock.json",
@@ -20283,17 +20476,32 @@
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/generate-test-subsystem-classes.js",
+        "scripts/lab/fleet-discovery.js",
+        "scripts/lab/machine-lock-constants.js",
+        "scripts/lab/placement-constants.js",
+        "scripts/lab/placement-execution.js",
+        "scripts/lab/process.js",
+        "scripts/lab/remote-command.js",
+        "scripts/lab/test-capability.js",
+        "scripts/lab/test-placement.js",
         "scripts/proof-authority.js",
         "scripts/prune-test-output.js",
+        "scripts/publish-execution-constants.js",
+        "scripts/publish-head.js",
+        "scripts/publish-local-corpus-state.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
         "scripts/select-change-tests.js",
         "scripts/test-machine-factor.js",
+        "src/cli/cli-constants.js",
+        "src/constants/entrypoint.js",
         "test/shards/primary-classes.json"
       ],
       "directories": [
         ".githooks",
         "data",
+        "data/releases",
+        "solve",
         "solve/quests",
         "src/test-helpers",
         "test"
@@ -20583,6 +20791,33 @@
         "test"
       ]
     },
+    "test/scripts/placement-failure-custody.test.js": {
+      "files": [
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/lab/fleet-discovery.js",
+        "scripts/lab/machine-lock-constants.js",
+        "scripts/lab/placement-constants.js",
+        "scripts/lab/placement-execution.js",
+        "scripts/lab/probe.js",
+        "scripts/lab/process.js",
+        "scripts/lab/remote-command.js",
+        "scripts/lab/test-capability.js",
+        "scripts/lab/test-placement.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/select-change-tests.js",
+        "scripts/test-machine-factor.js"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "PRODUCER_FAILS",
+        "PRODUCER_REWRITES",
+        "XDG_CONFIG_HOME"
+      ]
+    },
     "test/scripts/pre-push-hook-control-flow.test.js": {
       "files": [
         ".githooks/pre-push",
@@ -20636,6 +20871,9 @@
         "test",
         "test/manifests",
         "test/shards"
+      ],
+      "env": [
+        "TMPDIR"
       ]
     },
     "test/scripts/proof-authority.test.js": {
@@ -20656,11 +20894,15 @@
     "test/scripts/proof-checkout-preparation.test.js": {
       "files": [
         ".gitignore",
+        "package.json",
+        "scripts/check-file-size-thresholds.js",
+        "scripts/checks/git-invocation.js",
         "scripts/checks/impact-proof-cone-constants.js",
         "scripts/checks/push-gate-corpus-worktree.js",
         "scripts/generate-global-owner-debt-inventory.js"
       ],
       "directories": [
+        "scripts",
         "test"
       ]
     },
@@ -20705,6 +20947,10 @@
       ]
     },
     "test/scripts/prune-test-output.test.js": {
+      "files": [
+        ".gitignore",
+        "README.md"
+      ],
       "directories": [
         "data",
         "examples",
@@ -20712,6 +20958,44 @@
       ],
       "env": [
         "TZ"
+      ]
+    },
+    "test/scripts/publication-single-pass.test.js": {
+      "files": [
+        ".githooks/pre-push",
+        "data/formation-health/trend.ndjson",
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/push-gate-corpus-worktree.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/lab/fleet-discovery.js",
+        "scripts/lab/machine-lock-constants.js",
+        "scripts/lab/placement-constants.js",
+        "scripts/lab/placement-execution.js",
+        "scripts/lab/process.js",
+        "scripts/lab/remote-command.js",
+        "scripts/lab/test-capability.js",
+        "scripts/lab/test-placement.js",
+        "scripts/proof-authority.js",
+        "scripts/prune-test-output.js",
+        "scripts/publish-execution-constants.js",
+        "scripts/publish-head.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/run-test-files.js",
+        "scripts/select-change-tests.js",
+        "scripts/test-machine-factor.js",
+        "test/shards/primary-classes.json"
+      ],
+      "directories": [
+        "test"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "PRODUCER_FAILS",
+        "PRODUCER_REWRITES",
+        "XDG_CONFIG_HOME"
       ]
     },
     "test/scripts/publish-head-workspace-links.test.js": {
@@ -20722,6 +21006,8 @@
         "scripts/checks/push-gate-corpus-worktree.js",
         "scripts/proof-authority.js",
         "scripts/prune-test-output.js",
+        "scripts/publish-execution-constants.js",
+        "scripts/publish-head.js",
         "scripts/run-classified-test-files.js",
         "test/shards/primary-classes.json"
       ],
@@ -20742,6 +21028,8 @@
         "scripts/checks/push-gate-corpus-worktree.js",
         "scripts/proof-authority.js",
         "scripts/prune-test-output.js",
+        "scripts/publish-execution-constants.js",
+        "scripts/publish-head.js",
         "scripts/run-classified-test-files.js",
         "src/cli/cli-constants.js",
         "src/constants/entrypoint.js",
@@ -20775,6 +21063,7 @@
         "scripts/checks/impact-proof-cone-constants.js",
         "scripts/checks/push-gate-change-proof.js",
         "scripts/checks/run-static-audits.js",
+        "scripts/checks/test-output-retention-constants.js",
         "scripts/checks/test-primary-classification.js",
         "scripts/checks/test-timeout-declarations.js",
         "scripts/checks/wait-for-thermal-headroom.js",
@@ -20782,17 +21071,39 @@
         "scripts/generate-test-primary-classes.js",
         "scripts/generate-test-resource-classes.js",
         "scripts/generate-test-subsystem-classes.js",
+        "scripts/lab/fleet-discovery.js",
+        "scripts/lab/lab-test.js",
+        "scripts/lab/machine-hold.js",
+        "scripts/lab/machine-lock-constants.js",
+        "scripts/lab/placement-constants.js",
+        "scripts/lab/placement-execution.js",
+        "scripts/lab/placement-shell.js",
+        "scripts/lab/placement-source.js",
         "scripts/lab/probe.js",
         "scripts/lab/process.js",
+        "scripts/lab/remote-command.js",
         "scripts/lab/state.js",
+        "scripts/lab/test-capability.js",
+        "scripts/lab/test-placement.js",
+        "scripts/lab/worker-provisioning.js",
         "scripts/plan-test-lane.js",
         "scripts/proof-authority.js",
+        "scripts/proof-receipt-contract.js",
+        "scripts/prune-test-output.js",
+        "scripts/publish-command-runner.js",
+        "scripts/publish-execution-constants.js",
+        "scripts/publish-head.js",
+        "scripts/publish-local-corpus-state.js",
+        "scripts/publish-local-corpus.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-project-hardening-acceptance.js",
         "scripts/run-test-files.js",
         "scripts/select-change-tests.js",
         "scripts/solve.js",
+        "scripts/solve/commands.js",
+        "scripts/solve/quest-record-commands.js",
         "scripts/test-machine-factor.js",
+        "scripts/test-output-reader.js",
         "src/cli/cli-constants.js",
         "src/constants/entrypoint.js",
         "test/manifests/pre-push-stages.json",
@@ -20998,6 +21309,14 @@
         "package.json",
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/lab/fleet-discovery.js",
+        "scripts/lab/machine-lock-constants.js",
+        "scripts/lab/placement-constants.js",
+        "scripts/lab/placement-execution.js",
+        "scripts/lab/process.js",
+        "scripts/lab/remote-command.js",
+        "scripts/lab/test-capability.js",
+        "scripts/lab/test-placement.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
         "scripts/select-change-tests.js",
@@ -21163,6 +21482,14 @@
         "scripts/checks/run-formation-release-handoff-gcp-streak.js",
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/lab/fleet-discovery.js",
+        "scripts/lab/machine-lock-constants.js",
+        "scripts/lab/placement-constants.js",
+        "scripts/lab/placement-execution.js",
+        "scripts/lab/process.js",
+        "scripts/lab/remote-command.js",
+        "scripts/lab/test-capability.js",
+        "scripts/lab/test-placement.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-distributed-matrix.js",
         "scripts/select-change-tests.js",
@@ -21201,6 +21528,14 @@
         "package.json",
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/lab/fleet-discovery.js",
+        "scripts/lab/machine-lock-constants.js",
+        "scripts/lab/placement-constants.js",
+        "scripts/lab/placement-execution.js",
+        "scripts/lab/process.js",
+        "scripts/lab/remote-command.js",
+        "scripts/lab/test-capability.js",
+        "scripts/lab/test-placement.js",
         "scripts/rerun-failed-distributed-scenarios.sh",
         "scripts/run-classified-test-files.js",
         "scripts/select-change-tests.js",
@@ -21246,6 +21581,14 @@
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/generate-test-subsystem-classes.js",
+        "scripts/lab/fleet-discovery.js",
+        "scripts/lab/machine-lock-constants.js",
+        "scripts/lab/placement-constants.js",
+        "scripts/lab/placement-execution.js",
+        "scripts/lab/process.js",
+        "scripts/lab/remote-command.js",
+        "scripts/lab/test-capability.js",
+        "scripts/lab/test-placement.js",
         "scripts/proof-authority.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
@@ -21279,6 +21622,14 @@
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/generate-test-subsystem-classes.js",
+        "scripts/lab/fleet-discovery.js",
+        "scripts/lab/machine-lock-constants.js",
+        "scripts/lab/placement-constants.js",
+        "scripts/lab/placement-execution.js",
+        "scripts/lab/process.js",
+        "scripts/lab/remote-command.js",
+        "scripts/lab/test-capability.js",
+        "scripts/lab/test-placement.js",
         "scripts/proof-authority.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
@@ -21432,10 +21783,19 @@
     },
     "test/scripts/test-placement-lab-split.test.js": {
       "files": [
+        ".gitignore",
         "package-lock.json",
         "package.json",
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/lab/fleet-discovery.js",
+        "scripts/lab/machine-lock-constants.js",
+        "scripts/lab/placement-constants.js",
+        "scripts/lab/placement-execution.js",
+        "scripts/lab/process.js",
+        "scripts/lab/remote-command.js",
+        "scripts/lab/test-capability.js",
+        "scripts/lab/test-placement.js",
         "scripts/run-classified-test-files.js",
         "scripts/select-change-tests.js",
         "scripts/test-machine-factor.js"
@@ -21458,7 +21818,15 @@
         "package.json",
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/lab/fleet-discovery.js",
+        "scripts/lab/machine-lock-constants.js",
+        "scripts/lab/placement-constants.js",
+        "scripts/lab/placement-execution.js",
         "scripts/lab/probe.js",
+        "scripts/lab/process.js",
+        "scripts/lab/remote-command.js",
+        "scripts/lab/test-capability.js",
+        "scripts/lab/test-placement.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
         "scripts/select-change-tests.js",
@@ -21476,6 +21844,7 @@
         "APPDATA",
         "GIT_DIR",
         "LAGRANGE_LAB_HOME",
+        "PATH",
         "PRODUCER_FAILS",
         "PRODUCER_REWRITES",
         "XDG_CONFIG_HOME"
@@ -22011,6 +22380,14 @@
         "scripts/generate-priority-recovery-owner-inventory.js",
         "scripts/generate-source-owner-index.js",
         "scripts/inventory-ordinal-segments.js",
+        "scripts/lab/fleet-discovery.js",
+        "scripts/lab/machine-lock-constants.js",
+        "scripts/lab/placement-constants.js",
+        "scripts/lab/placement-execution.js",
+        "scripts/lab/process.js",
+        "scripts/lab/remote-command.js",
+        "scripts/lab/test-capability.js",
+        "scripts/lab/test-placement.js",
         "scripts/run-classified-test-files.js",
         "scripts/select-change-tests.js",
         "scripts/solve.js",
@@ -22427,11 +22804,6 @@
     "test/transport/transport-semantic-outcome.test.js": {
       "files": [
         "src/rebalancer/replica-operation-constants.js"
-      ]
-    },
-    "test/utils/canonical-json-data.test.js": {
-      "files": [
-        "src/diagnostics/comparative-efficiency-opportunity-input-integrity.js"
       ]
     },
     "test/wasm-service/bound-creation-handler-embedding.integration.test.js": {
