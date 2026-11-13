@@ -1,0 +1,30 @@
+{
+  "schema": "solve-quest/2",
+  "id": "canonical-json-nested-data",
+  "class": "fix",
+  "statement": "The existing canonical JSON serializer admits only dense own-data arrays and canonical records at every depth, refuses cycles and caller-owned option accessors or proxies without invoking them, and preserves useful deterministic serialization and digests for ordinary acyclic data. Diagnostics consumes this sole owner directly without a forwarding compatibility module.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/canonical-json-nested-data/evidence/receipt.json",
+      "requiredReceipts": [
+        "nested-data-refusal-without-callbacks",
+        "owned-serialization-options",
+        "stable-digest-and-acyclic-data",
+        "direct-diagnostics-owner-imports",
+        "independent-review",
+        "lab-selected-cone-and-static"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "bounded-owner",
+      "statement": "Change the existing canonical JSON serializer and its direct diagnostics imports. No CDC, system-row capture, authority token, lifecycle or storage migration belongs to this PR. Preserve the existing TypeError contract and useful acyclic serialization."
+    },
+    {
+      "id": "proof",
+      "statement": "Preserve the original source and failure evidence, independently review the extracted patch and execute the selected tests, generators and static gates only on physical lab machines. No retry-once, timeout increase, baseline waiver, skip or fabricated acceptance receipt."
+    }
+  ]
+}

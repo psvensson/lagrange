@@ -18,6 +18,7 @@ const isProxy = types.isProxy.bind(types);
 const jsonStringify = JSON.stringify;
 const numberIsFinite = Number.isFinite;
 const objectDefineProperty = Object.defineProperty;
+const objectFreeze = Object.freeze;
 const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
 const objectGetPrototypeOf = Object.getPrototypeOf;
 const objectHasOwn = Object.hasOwn;
@@ -25,6 +26,10 @@ const objectKeys = Object.keys;
 const reflectOwnKeys = Reflect.ownKeys;
 const canonicalArrayPrototype = Array.prototype;
 const canonicalObjectPrototype = Object.prototype;
+const CanonicalWeakSet = WeakSet;
+const weakSetAdd = Function.prototype.call.bind(WeakSet.prototype.add);
+const weakSetDelete = Function.prototype.call.bind(WeakSet.prototype.delete);
+const weakSetHas = Function.prototype.call.bind(WeakSet.prototype.has);
 
 const SHA256 = Object.freeze({
   ALGORITHM: 'sha256',
@@ -46,6 +51,10 @@ const DATA_PROPERTY = Object.freeze({
   LENGTH: 'length',
   VALUE: 'value',
 });
+const SERIALIZATION_OPTION = Object.freeze({
+  SORT_KEYS: 'sortKeys',
+  SPACING: 'spacing',
+});
 const SERIALIZATION_TEXT = Object.freeze({
   ARRAY_CLOSE: ']',
   ARRAY_EMPTY: '[]',
@@ -66,6 +75,13 @@ const SERIALIZATION_TEXT = Object.freeze({
   OBJECT_OPEN: '{',
   OBJECT_OPEN_PRETTY: '{\n',
 });
+const DEFAULT_SERIALIZATION_OPTIONS = objectFreeze({spacing: 0, sortKeys: false});
+
+class CanonicalJsonDataError extends TypeError {
+  constructor() {
+    super(SERIALIZATION_TEXT.INVALID_DATA);
+  }
+}
 
 function isNonEmptyText(value) {
   if (typeof value !== 'string') return false;
@@ -249,7 +265,8 @@ function buildIndentation(spacing, depth) {
   return indentation;
 }
 
-function serializeArrayData(value, options, depth) {
+function serializeArrayData(value, options, depth, ancestors) {
+  if (!isDenseDataArray(value)) throw new CanonicalJsonDataError();
   if (value.length === 0) return SERIALIZATION_TEXT.ARRAY_EMPTY;
   const pretty = options.spacing > 0;
   const separator = pretty ?
@@ -264,7 +281,7 @@ function serializeArrayData(value, options, depth) {
   for (let index = 0; index < value.length; index += 1) {
     if (index > 0) serialized += separator;
     serialized += indentation +
-      serializeDataValue(value[index], options, depth + 1);
+      serializeDataValue(value[index], options, depth + 1, ancestors);
   }
   if (!pretty) return serialized + SERIALIZATION_TEXT.ARRAY_CLOSE;
   return serialized + SERIALIZATION_TEXT.NEWLINE +
@@ -272,8 +289,8 @@ function serializeArrayData(value, options, depth) {
     SERIALIZATION_TEXT.ARRAY_CLOSE;
 }
 
-function serializeRecordData(value, options, depth) {
-  if (!isRecord(value)) throw new TypeError(SERIALIZATION_TEXT.INVALID_DATA);
+function serializeRecordData(value, options, depth, ancestors) {
+  if (!isRecord(value)) throw new CanonicalJsonDataError();
   const keys = options.sortKeys ?
     sortedOwnStringKeys(value) :
     objectKeys(value);
@@ -293,7 +310,7 @@ function serializeRecordData(value, options, depth) {
     const key = keys[index];
     serialized += indentation + jsonStringify(key) +
       (pretty ? SERIALIZATION_TEXT.COLON_PRETTY : SERIALIZATION_TEXT.COLON) +
-      serializeDataValue(value[key], options, depth + 1);
+      serializeDataValue(value[key], options, depth + 1, ancestors);
   }
   if (!pretty) return serialized + SERIALIZATION_TEXT.OBJECT_CLOSE;
   return serialized + SERIALIZATION_TEXT.NEWLINE +
@@ -301,7 +318,7 @@ function serializeRecordData(value, options, depth) {
     SERIALIZATION_TEXT.OBJECT_CLOSE;
 }
 
-function serializeDataValue(value, options, depth) {
+function serializeDataValue(value, options, depth, ancestors) {
   if (value === null) return SERIALIZATION_TEXT.NULL;
   if (typeof value === 'string') return jsonStringify(value);
   if (typeof value === 'boolean') {
@@ -312,20 +329,35 @@ function serializeDataValue(value, options, depth) {
   if (typeof value === 'number' && numberIsFinite(value)) return `${value}`;
   // Reject before Array.isArray or reflection, including revoked proxies and
   // nested arrays reached by a direct serializer/digest caller.
-  if (isProxy(value)) throw new TypeError(SERIALIZATION_TEXT.INVALID_DATA);
-  if (arrayIsArray(value)) return serializeArrayData(value, options, depth);
-  return serializeRecordData(value, options, depth);
+  if (typeof value !== 'object' || isProxy(value) || weakSetHas(ancestors, value)) {
+    throw new CanonicalJsonDataError();
+  }
+  weakSetAdd(ancestors, value);
+  try {
+    if (arrayIsArray(value)) return serializeArrayData(value, options, depth, ancestors);
+    return serializeRecordData(value, options, depth, ancestors);
+  } finally {
+    weakSetDelete(ancestors, value);
+  }
 }
 
-function serializeJsonData(value, options = {}) {
-  const spacing = options.spacing === 2 ? 2 : 0;
+function serializeJsonData(value, options = DEFAULT_SERIALIZATION_OPTIONS) {
+  if (!isRecord(options)) throw new CanonicalJsonDataError();
+  const spacing = objectGetOwnPropertyDescriptor(
+    options,
+    SERIALIZATION_OPTION.SPACING,
+  )?.value === 2 ? 2 : 0;
   return serializeDataValue(
     value,
     {
-      sortKeys: options.sortKeys === true,
+      sortKeys: objectGetOwnPropertyDescriptor(
+        options,
+        SERIALIZATION_OPTION.SORT_KEYS,
+      )?.value === true,
       spacing,
     },
     0,
+    new CanonicalWeakSet(),
   );
 }
 
