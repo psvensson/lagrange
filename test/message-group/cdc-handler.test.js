@@ -662,8 +662,15 @@ test('diagnostic sink failure preserves handler return and original error', (t) 
   t.equal(handler.applyImmediate(event), false);
   fail = true;
   const next = {...event, timestamp: '1001-0-source', eventKey: 'next'};
-  t.throws(() => handler.applyImmediate(next), (error) => error === original);
+  let caught;
+  try {
+    handler.applyImmediate(next);
+  } catch (error) {
+    caught = error;
+  }
+  t.equal(caught, original, 'preserves the exact application error');
   t.equal(handler.processedEventIds.size, 1);
+  t.end();
 });
 
 test('formation diagnostics retain actual receiver occurrence and absent identity', (t) => {
@@ -701,4 +708,5 @@ test('formation diagnostics retain actual receiver occurrence and absent identit
   t.equal(records[2].fields.sourcePartition, null);
   t.equal(records[2].fields.sourceLogIndex, null);
   t.equal(records[2].fields.eventKey, null);
+  t.end();
 });
