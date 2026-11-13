@@ -1,0 +1,33 @@
+{
+  "schema": "solve-quest/2",
+  "id": "proof-receipt-current-execution-envelope",
+  "class": "fix",
+  "statement": "The existing proof receipt reader requires the execution envelope emitted by validatedExecution before a stored receipt can satisfy exact lookup, release-content identity lookup, indexing or same-head recording reuse. Missing or malformed execution evidence stays unavailable without rewriting its historical object or ref. Valid identity-free corpus receipts and valid release receipts citing the exact corpus proof remain applicable, including a cited release with zero direct files, runs and assertions.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/proof-receipt-current-execution-envelope/evidence/receipt.json",
+      "requiredReceipts": [
+        "original-real-tag-ref-controls",
+        "current-envelope-at-every-reader",
+        "valid-corpus-and-cited-release",
+        "historical-objects-and-refs-retained",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "existing-owner",
+      "statement": "Change receipt applicability at scripts/proof-receipt-contract.js, consumed by proof-authority exact lookup, identity lookup and indexing. Extend the existing proof-receipt-execution-report test root with native Git objects and refs. Keep the report schema, producer algorithm, proof contracts, retry policy and identity algorithm unchanged."
+    },
+    {
+      "id": "explicit-supersession",
+      "statement": "The owner's current no-legacy direction supersedes only active applicability of the historical pre-report receipts admitted by 207d4f792 and the sealed proof-receipt-bound-to-validated-execution Quest. Preserve that Quest, its receipts, all historical objects and refs, and original failure evidence. An execution summary is an audit envelope, never a replay or attestation of the native report."
+    },
+    {
+      "id": "physical-proof",
+      "statement": "Measure original-compatible controls before candidate acceptance on qualified physical labs through the sole coordinator. Source review, native Git and byte bookkeeping in the cloud are not execution proof. No synthetic receipt, baseline change, retry-to-green or broader foundation acceptance is authorized by this bounded proposal."
+    }
+  ]
+}

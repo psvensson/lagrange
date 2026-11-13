@@ -6,8 +6,9 @@
 // and its obligation; a later publish reports earlier red or lost evidence.
 
 import assert from 'node:assert/strict';
-import {spawn, spawnSync} from 'node:child_process';
+import childProcess, {spawn, spawnSync} from 'node:child_process';
 import fs from 'node:fs';
+import {syncBuiltinESMExports} from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
@@ -67,6 +68,86 @@ function fakeRunning(t) {
 function deadPid() {
   return Number(spawnSync(process.execPath, ['-e', 'console.log(process.pid)'],
     {encoding: 'utf8'}).stdout.trim());
+}
+
+const OBSERVATION_CHILD_BOUND_MS = 5000;
+const OBSERVATION_CHILD_LIFETIME_MS = 30000;
+
+// Native child/state custody stays real. Only the exact OS observation below
+// is substituted; these controls do not prove native macOS execution on Linux.
+async function acknowledgedCorpus(t) {
+  const child = spawn(process.execPath, ['-e',
+    `process.send('ready'); setTimeout(() => {}, ${OBSERVATION_CHILD_LIFETIME_MS})`,
+    '--', '--local-corpus'], {detached: true, stdio: ['ignore', 'ignore', 'ignore', 'ipc']});
+  const closed = new Promise((resolve) => child.once('close', resolve));
+  t.after(async () => {
+    if (child.exitCode === null && child.signalCode === null) {
+      flushCoverageBeforeKill(child.pid, 'SIGKILL');
+      try {
+        process.kill(-child.pid, 'SIGKILL');
+      } catch (error) {
+        if (error.code !== 'ESRCH') throw error;
+      }
+    }
+    let timer;
+    try {
+      await Promise.race([closed, new Promise((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error('observation child did not close')),
+          OBSERVATION_CHILD_BOUND_MS);
+      })]);
+    } finally {
+      clearTimeout(timer);
+    }
+  });
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('observation child did not acknowledge')),
+      OBSERVATION_CHILD_BOUND_MS);
+    child.once('message', (message) => {
+      clearTimeout(timer);
+      if (message === 'ready') resolve();
+      else reject(new Error(`unexpected observation child message: ${message}`));
+    });
+    child.once('error', (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.once('exit', () => {
+      clearTimeout(timer);
+      reject(new Error('observation child exited before its acknowledgement'));
+    });
+  });
+  return child;
+}
+
+function commandReadFault(t, pid, code) {
+  const root = scratch(t, 'local-corpus-command-fault-');
+  const witness = path.join(root, 'ps');
+  fs.writeFileSync(witness, '#!/bin/sh\nprintf "observed\\n" > "$0.called"\n' +
+    'printf "inspection unavailable\\n" >&2\nexit 1\n');
+  fs.chmodSync(witness, 0o755);
+  const read = fs.readFileSync;
+  const spawnCommand = childProcess.spawnSync;
+  const cmdline = `/proc/${pid}/cmdline`;
+  const reads = [];
+  const readFault = t.mock.method(fs, 'readFileSync', (...args) => {
+    if (args[0] === cmdline) {
+      reads.push(args[0]);
+      throw Object.assign(new Error('command observation unavailable'), {code});
+    }
+    return read(...args);
+  });
+  const psFault = t.mock.method(childProcess, 'spawnSync', (command, args, options) => {
+    if (path.basename(command) === 'ps') return spawnCommand(witness, [], options);
+    return spawnCommand(command, args, options);
+  });
+  syncBuiltinESMExports();
+  const restore = () => {
+    readFault.mock.restore();
+    psFault.mock.restore();
+    syncBuiltinESMExports();
+  };
+  t.after(restore);
+  return {restore, reads, witness: `${witness}.called`};
 }
 
 test('a cone publish starts exactly the rest of the corpus for the pushed commit', (t) => {
@@ -241,6 +322,221 @@ test('reconciliation preserves live obligations and names only missing processes
     'a pid reused by another process is never signalled');
 
   assert.equal(stateOf(stateDir, '4'.repeat(40)).state, 'green', 'a verdict stays');
+});
+
+for (const code of ['EACCES', 'ENOENT']) {
+  test(`reconcileLocalCorpus retains an unavailable ${code} observation and continues`, async (t) => {
+    const stateDir = path.join(scratch(t, 'local-corpus-observation-'), 'state');
+    const child = await acknowledgedCorpus(t);
+    const missing = 'b'.repeat(40);
+    writeState(stateDir, {sha: HEAD, state: 'running', pid: child.pid, startedAt: 2});
+    writeState(stateDir, {sha: missing, state: 'running', pid: deadPid(), startedAt: 1});
+    const file = path.join(stateDir, `${HEAD}.json`);
+    const before = fs.readFileSync(file, 'utf8');
+    const fault = commandReadFault(t, child.pid, code);
+    const unavailable = [];
+    let during;
+    try {
+      reconcileLocalCorpus(stateDir, (line) => unavailable.push(line));
+      during = fs.readFileSync(file, 'utf8');
+    } finally {
+      fault.restore();
+    }
+    const fresh = [];
+    reconcileLocalCorpus(stateDir, (line) => fresh.push(line));
+    assert.doesNotThrow(() => process.kill(child.pid, 0), 'the actual child remains live');
+    const observed = {
+      originalRecordPreserved: during === before,
+      unavailableReported: unavailable.some((line) => /observation UNAVAILABLE/u.test(line)),
+      otherRecord: stateOf(stateDir, missing).state,
+      psInvoked: fs.existsSync(fault.witness),
+      procReads: fault.reads.length,
+      freshRecordPreserved: fs.readFileSync(file, 'utf8') === before,
+      freshUnavailable: fresh.length,
+    };
+    t.diagnostic(JSON.stringify({code, unavailable, observed}));
+    assert.deepEqual(observed, {
+      originalRecordPreserved: true,
+      unavailableReported: true,
+      otherRecord: 'lost',
+      psInvoked: process.platform === 'darwin',
+      procReads: process.platform === 'linux' ? 1 : 0,
+      freshRecordPreserved: true,
+      freshUnavailable: 0,
+    }, 'inspection failure neither fabricates loss nor changes the platform observer');
+  });
+}
+
+test('reconcileLocalCorpus preserves a live PID when signal-zero inspection is denied', async (t) => {
+  const stateDir = path.join(scratch(t, 'local-corpus-signal-observation-'), 'state');
+  const child = await acknowledgedCorpus(t);
+  const missing = 'b'.repeat(40);
+  writeState(stateDir, {sha: HEAD, state: 'running', pid: child.pid, startedAt: 2});
+  writeState(stateDir, {sha: missing, state: 'running', pid: deadPid(), startedAt: 1});
+  const file = path.join(stateDir, `${HEAD}.json`);
+  const before = fs.readFileSync(file, 'utf8');
+  const signal = process.kill.bind(process);
+  const denied = t.mock.method(process, 'kill', (pid, name) => {
+    if (pid === child.pid && name === 0) {
+      throw Object.assign(new Error('signal observation denied'), {code: 'EPERM'});
+    }
+    return signal(pid, name);
+  });
+  const unavailable = [];
+  let during;
+  try {
+    reconcileLocalCorpus(stateDir, (line) => unavailable.push(line));
+    during = fs.readFileSync(file, 'utf8');
+  } finally {
+    denied.mock.restore();
+  }
+  const fresh = [];
+  reconcileLocalCorpus(stateDir, (line) => fresh.push(line));
+  assert.doesNotThrow(() => process.kill(child.pid, 0), 'the acknowledged child remains alive');
+  const observed = {
+    originalRecordPreserved: during === before,
+    unavailableReported: unavailable.some((line) => /observation UNAVAILABLE/u.test(line)),
+    otherRecord: stateOf(stateDir, missing).state,
+    freshRecordPreserved: fs.readFileSync(file, 'utf8') === before,
+    freshUnavailable: fresh.length,
+  };
+  t.diagnostic(JSON.stringify({unavailable, observed}));
+  assert.deepEqual(observed, {
+    originalRecordPreserved: true,
+    unavailableReported: true,
+    otherRecord: 'lost',
+    freshRecordPreserved: true,
+    freshUnavailable: 0,
+  }, 'EPERM is unavailable inspection, and a fresh observation can resolve it');
+});
+
+test('reconcileLocalCorpus selects the Darwin command observer before reading proc', async (t) => {
+  const stateDir = path.join(scratch(t, 'local-corpus-darwin-observation-'), 'state');
+  const child = await acknowledgedCorpus(t);
+  writeState(stateDir, {sha: HEAD, state: 'running', pid: child.pid, startedAt: 1});
+  const file = path.join(stateDir, `${HEAD}.json`);
+  const before = fs.readFileSync(file, 'utf8');
+  const platform = Object.getOwnPropertyDescriptor(process, 'platform');
+  const read = fs.readFileSync;
+  const spawnCommand = childProcess.spawnSync;
+  const procReads = [];
+  const psCalls = [];
+  const readObserver = t.mock.method(fs, 'readFileSync', (...args) => {
+    if (args[0] === `/proc/${child.pid}/cmdline`) procReads.push(args[0]);
+    return read(...args);
+  });
+  const psObserver = t.mock.method(childProcess, 'spawnSync', (command, args, options) => {
+    if (path.basename(command) === 'ps') psCalls.push({command, args, options});
+    return spawnCommand(command, args, options);
+  });
+  syncBuiltinESMExports();
+  const lines = [];
+  try {
+    // On Linux this measures platform selection against its real ps utility;
+    // it is deliberately not represented as native Darwin execution evidence.
+    Object.defineProperty(process, 'platform', {...platform, value: 'darwin'});
+    reconcileLocalCorpus(stateDir, (line) => lines.push(line));
+  } finally {
+    Object.defineProperty(process, 'platform', platform);
+    readObserver.mock.restore();
+    psObserver.mock.restore();
+    syncBuiltinESMExports();
+  }
+  assert.deepEqual({procReads: procReads.length, psCalls: psCalls.length,
+    preserved: fs.readFileSync(file, 'utf8') === before, lines},
+  {procReads: 0, psCalls: 1, preserved: true, lines: []},
+  'the supported platform owns one observer, selected before a failed Linux lookup');
+  const [{args, options}] = psCalls;
+  assert.ok(args.includes('-ww'), 'the invocation requests an untruncated command');
+  assert.ok(Number.isFinite(options.timeout) && options.timeout > 0,
+    'the invocation owns a finite positive deadline');
+  assert.ok(Number.isFinite(options.maxBuffer) && options.maxBuffer > 0,
+    'the invocation owns a finite positive output bound');
+  assert.equal(options.killSignal, 'SIGKILL',
+    'deadline closure does not depend on the observed command accepting TERM');
+});
+
+test('reconcileLocalCorpus refuses invalid recorded PIDs before observing any process', (t) => {
+  const stateDir = path.join(scratch(t, 'local-corpus-invalid-pid-'), 'state');
+  const file = path.join(stateDir, `${HEAD}.json`);
+  const signals = [];
+  const commands = [];
+  const signalObserver = t.mock.method(process, 'kill', (...args) => {
+    signals.push(args);
+    return true;
+  });
+  const spawnCommand = childProcess.spawnSync;
+  const commandObserver = t.mock.method(childProcess, 'spawnSync', (command, args, options) => {
+    if (path.basename(command) === 'ps') {
+      commands.push(args);
+      return {status: 1, stdout: '', stderr: 'invalid process observation'};
+    }
+    return spawnCommand(command, args, options);
+  });
+  syncBuiltinESMExports();
+  const observations = [];
+  try {
+    for (const pid of [0, null, -1, 1.5]) {
+      writeState(stateDir, {sha: HEAD, state: 'running', pid, startedAt: 1});
+      const before = fs.readFileSync(file, 'utf8');
+      const lines = [];
+      reconcileLocalCorpus(stateDir, (line) => lines.push(line));
+      observations.push({pid, preserved: fs.readFileSync(file, 'utf8') === before,
+        unavailable: lines.some((line) => /observation UNAVAILABLE/u.test(line))});
+    }
+  } finally {
+    signalObserver.mock.restore();
+    commandObserver.mock.restore();
+    syncBuiltinESMExports();
+  }
+  t.diagnostic(JSON.stringify({observations, signals, commands}));
+  assert.deepEqual(observations,
+    [0, null, -1, 1.5].map((pid) => ({pid, preserved: true, unavailable: true})));
+  assert.deepEqual(signals, [], 'no invalid PID can become a process or group observation');
+  assert.deepEqual(commands, [], 'an invalid PID cannot select a command observer');
+});
+
+test('reconcileLocalCorpus reports an unsupported observer without fabricating process loss', (t) => {
+  const stateDir = path.join(scratch(t, 'local-corpus-platform-'), 'state');
+  writeState(stateDir, {sha: HEAD, state: 'running', pid: process.pid, startedAt: 1});
+  const file = path.join(stateDir, `${HEAD}.json`);
+  const before = fs.readFileSync(file, 'utf8');
+  const platform = Object.getOwnPropertyDescriptor(process, 'platform');
+  const signals = [];
+  const reads = [];
+  const commands = [];
+  const read = fs.readFileSync;
+  const spawnCommand = childProcess.spawnSync;
+  const signalObserver = t.mock.method(process, 'kill', (...args) => {
+    signals.push(args);
+    return true;
+  });
+  const readObserver = t.mock.method(fs, 'readFileSync', (...args) => {
+    if (args[0] === `/proc/${process.pid}/cmdline`) reads.push(args[0]);
+    return read(...args);
+  });
+  const commandObserver = t.mock.method(childProcess, 'spawnSync', (command, args, options) => {
+    if (path.basename(command) === 'ps') commands.push(args);
+    return spawnCommand(command, args, options);
+  });
+  syncBuiltinESMExports();
+  const lines = [];
+  try {
+    Object.defineProperty(process, 'platform', {...platform, value: 'unavailable-platform'});
+    reconcileLocalCorpus(stateDir, (line) => lines.push(line));
+  } finally {
+    Object.defineProperty(process, 'platform', platform);
+    signalObserver.mock.restore();
+    readObserver.mock.restore();
+    commandObserver.mock.restore();
+    syncBuiltinESMExports();
+  }
+  const observed = {preserved: fs.readFileSync(file, 'utf8') === before,
+    unavailable: lines.some((line) => /observation UNAVAILABLE/u.test(line)),
+    signals, reads, commands};
+  t.diagnostic(JSON.stringify({observed, lines}));
+  assert.deepEqual(observed,
+    {preserved: true, unavailable: true, signals: [], reads: [], commands: []});
 });
 
 test('reporting retains every earlier red or lost result after a later green', (t) => {

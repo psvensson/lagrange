@@ -1,10 +1,10 @@
 // Falsifiers for the proof receipt's evidence binding
 // (proof-receipt-bound-to-validated-execution). A passing durable receipt may
 // only be minted from a validated execution report of the exact candidate:
-// every test below hands recordProof one deliberately broken report and
-// proves the receipt is refused with its typed problem and that no proof ref
-// reached the remote. The positive case mints from a complete report; the
-// reuse case proves a receipt minted before reports existed still resolves.
+// recording controls hand recordProof one deliberately broken report and
+// prove that no proof ref reached the remote. Stored-receipt controls use
+// real tags and refs to require the current execution envelope at every
+// reader. Historical objects stay unchanged but do not lend missing evidence.
 //
 // A file of its own, beside test/scripts/proof-authority-falsifiers.test.js:
 // that file's bytes are bound by
@@ -17,7 +17,8 @@ import path from 'node:path';
 import {test} from 'node:test';
 
 import {
-  OUTCOME, PROOF, buildReceipt, buildTagBody, proofRef, recordProof, resolveProof,
+  OUTCOME, PROOF, RESOLUTION, buildReceipt, buildTagBody, identityRef, indexProof,
+  proofRef, recordProof, resolveProof,
   subjectCorpusFiles,
 } from '../../scripts/proof-authority.js';
 import {computeReleaseProofIdentity} from '../../scripts/release-proof-identity.js';
@@ -217,7 +218,7 @@ test('omitted-required-file: a corpus file omitted from both planned and runs mi
       'execution-report-planned-file-not-executed');
   });
 
-test('subject-corpus-unreadable: plumbing failure reading subject tree or shard fails closed', () => {
+test('subject-corpus-unreadable: unreadable subject tree or shard fails closed', () => {
   const context = fixture();
   const brokenLsTree = () => ({status: 128, stdout: '', stderr: 'fatal: not a tree object'});
   assert.deepEqual(subjectCorpusFiles({sha: context.sha, cwd: context.source, git: brokenLsTree}), {
@@ -329,27 +330,196 @@ test('positive: a complete report of the exact candidate mints a receipt bound t
   assert.notEqual(remoteRef(context.source, PROOF.RELEASE_FULL, context.sha), '');
 });
 
-test('reuse: a receipt minted before reports existed still resolves', () => {
+function receiptFixture(t) {
   const context = fixture();
-  const receipt = buildReceipt({proofId: PROOF.CORPUS_FULL, sha: context.sha,
-    completedAt: RECORDED_AT, producer: {kind: 'test-fixture', id: 'legacy-run'}});
+  t.after(() => fs.rmSync(context.root, {recursive: true, force: true}));
+  return context;
+}
+
+// The actual recording owner supplies this complete envelope. Its original
+// object/ref stays in a separate bare store while the observed store receives
+// a distinct adverse object. The finite fixture proves receipt applicability,
+// not that its illustrative execution report ran a native corpus.
+function currentReceipt(context, proofId) {
+  const producerStore = path.join(context.root, 'producer.git');
+  git(context.root, 'init', '--bare', '--quiet', producerStore);
+  const identity = computeReleaseProofIdentity(context.source);
+  const recorded = recordProof({proofId, sha: context.sha, cwd: context.source,
+    remote: producerStore, completedAt: RECORDED_AT, now: NOW,
+    report: validExecutionReport({...context,
+      identity: {algorithm: identity.algorithm, digest: identity.digest}})});
+  assert.equal(recorded.outcome, OUTCOME.PROVEN, recorded.because);
+  return structuredClone(recorded.receipt);
+}
+
+function receiptBody(context, objectSha) {
+  return execGit(['cat-file', '-p', objectSha], {cwd: context.source,
+    encoding: 'utf8', env: gitProcessEnvironment()});
+}
+
+function storeReceipt(context, receipt, ref = proofRef(receipt.proofId, receipt.subjectSha)) {
   const objectSha = execGit(['mktag'], {cwd: context.source, encoding: 'utf8',
-    input: buildTagBody({proofId: PROOF.CORPUS_FULL, sha: context.sha,
-      receipt: {schema: receipt.schema, proofId: receipt.proofId,
-        subjectSha: receipt.subjectSha, outcome: 'passed', reuse: receipt.reuse,
-        completedAt: receipt.completedAt, producer: receipt.producer}, now: NOW})}).trim();
-  git(context.source, 'update-ref', 'refs/tmp/legacy', objectSha);
-  git(context.source, 'push', '--quiet', 'origin',
-    `refs/tmp/legacy:${proofRef(PROOF.CORPUS_FULL, context.sha)}`);
-  const resolved = resolveProof({proofId: PROOF.CORPUS_FULL, sha: context.sha,
-    cwd: context.source});
-  assert.equal(resolved.outcome, OUTCOME.PROVEN, resolved.because);
-  assert.equal(resolved.objectSha, objectSha);
-  // A reused receipt answers a later record with a valid report unchanged.
-  const again = record(context, validExecutionReport(context));
-  assert.equal(again.reused, true);
-  assert.equal(again.objectSha, objectSha);
+    env: gitProcessEnvironment(), input: buildTagBody({proofId: receipt.proofId,
+      sha: receipt.subjectSha, receipt, now: NOW})}).trim();
+  const stage = 'refs/tmp/execution-envelope';
+  git(context.source, 'update-ref', stage, objectSha);
+  try {
+    git(context.source, 'push', '--quiet', 'origin', `${stage}:${ref}`);
+  } finally {
+    git(context.source, 'update-ref', '-d', stage);
+  }
+  return {objectSha, ref, body: receiptBody(context, objectSha)};
+}
+
+function assertStoredReceiptUnchanged(context, stored) {
+  assert.equal(git(context.source, 'ls-remote', '--refs', 'origin', stored.ref),
+    `${stored.objectSha}\t${stored.ref}`, 'the original receipt ref remains unchanged');
+  assert.equal(receiptBody(context, stored.objectSha), stored.body,
+    'the original receipt object remains byte-identical');
+}
+
+function receiptWithoutExecution(context, proofId) {
+  const receipt = currentReceipt(context, proofId);
+  delete receipt.execution;
+  return receipt;
+}
+
+for (const proofId of [PROOF.CORPUS_FULL, PROOF.RELEASE_FULL]) {
+  test(`resolveProof refuses ${proofId} exact receipt without execution`, (t) => {
+    const context = receiptFixture(t);
+    const stored = storeReceipt(context, receiptWithoutExecution(context, proofId));
+    const resolved = resolveProof({proofId, sha: context.sha, cwd: context.source});
+    assertStoredReceiptUnchanged(context, stored);
+    assert.equal(resolved.outcome, OUTCOME.UNAVAILABLE,
+      'a stored pass without execution evidence has no current applicability');
+    assert.match(resolved.because, /receipt execution/u);
+  });
+}
+
+test('resolveProof identity lookup refuses a receipt without execution', (t) => {
+  const context = receiptFixture(t);
+  const receipt = receiptWithoutExecution(context, PROOF.RELEASE_FULL);
+  const ref = identityRef(PROOF.RELEASE_FULL, receipt.identity.digest);
+  const stored = storeReceipt(context, receipt, ref);
+  git(context.source, 'commit', '--quiet', '--allow-empty', '-m', 'same content');
+  const sha = git(context.source, 'rev-parse', 'HEAD');
+  assert.notEqual(sha, context.sha);
+  assert.equal(computeReleaseProofIdentity(context.source).digest, receipt.identity.digest,
+    'the new subject must reach the exact identity ref planted by this control');
+  const resolved = resolveProof({proofId: PROOF.RELEASE_FULL, sha, cwd: context.source});
+  assertStoredReceiptUnchanged(context, stored);
+  assert.equal(resolved.outcome, OUTCOME.UNAVAILABLE,
+    'matching content identity supplies no missing execution envelope');
+  assert.match(resolved.because, /receipt execution/u);
 });
+
+test('indexProof refuses an exact receipt without execution and publishes no identity ref', (t) => {
+  const context = receiptFixture(t);
+  const receipt = receiptWithoutExecution(context, PROOF.RELEASE_FULL);
+  const stored = storeReceipt(context, receipt);
+  assert.throws(() => indexProof({proofId: PROOF.RELEASE_FULL, sha: context.sha,
+    cwd: context.source}), /receipt execution/u);
+  assert.equal(git(context.source, 'ls-remote', '--refs', 'origin',
+    identityRef(PROOF.RELEASE_FULL, receipt.identity.digest)), '',
+  'indexing must not add current authority to a receipt lacking its envelope');
+  assertStoredReceiptUnchanged(context, stored);
+});
+
+test('recordProof cannot reuse or replace an existing receipt without execution', (t) => {
+  const context = receiptFixture(t);
+  const stored = storeReceipt(context, receiptWithoutExecution(context, PROOF.CORPUS_FULL));
+  assert.throws(() => record(context, validExecutionReport(context)), /receipt execution/u);
+  assertStoredReceiptUnchanged(context, stored);
+});
+
+const ENVELOPE_MUTATIONS = [
+  ['non-object execution', (receipt) => { receipt.execution = []; }],
+  ['absent report digest', (receipt) => { delete receipt.execution.reportDigest; }],
+  ['malformed report digest', (receipt) => { receipt.execution.reportDigest = 'not-a-digest'; }],
+  ['absent producer', (receipt) => { delete receipt.execution.producer; }],
+  ['absent producer kind', (receipt) => { delete receipt.execution.producer.kind; }],
+  ['absent producer id', (receipt) => { delete receipt.execution.producer.id; }],
+  ['absent summary', (receipt) => { delete receipt.execution.summary; }],
+  ['absent command summary', (receipt) => { delete receipt.execution.summary.commands; }],
+  ['empty command summary', (receipt) => { receipt.execution.summary.commands = []; }],
+  ['failed command summary', (receipt) => {
+    receipt.execution.summary.commands[0].exitStatus = 1;
+  }],
+  ['absent reused-proof summary', (receipt) => { delete receipt.execution.summary.reusedProofs; }],
+  ['non-list reused-proof summary', (receipt) => { receipt.execution.summary.reusedProofs = {}; }],
+  ['malformed reused-proof entry', (receipt) => {
+    receipt.execution.summary.reusedProofs = [null];
+  }],
+  ['negative assertion summary', (receipt) => { receipt.execution.summary.assertions = -1; }],
+  ['empty plan without a cited proof', (receipt) => { receipt.execution.summary.planned = 0; }],
+  ['passed-on-retry summary', (receipt) => { receipt.execution.summary.passedOnRetry = 1; }],
+  ...['planned', 'executed', 'assertions', 'runs', 'passedOnRetry'].map((field) =>
+    [`absent ${field} summary`, (receipt) => { delete receipt.execution.summary[field]; }]),
+];
+
+for (const [description, mutate] of ENVELOPE_MUTATIONS) {
+  test(`resolveProof refuses a stored receipt with ${description}`, (t) => {
+    const context = receiptFixture(t);
+    const receipt = currentReceipt(context, PROOF.CORPUS_FULL);
+    mutate(receipt);
+    const stored = storeReceipt(context, receipt);
+    const resolved = resolveProof({proofId: PROOF.CORPUS_FULL, sha: context.sha,
+      cwd: context.source});
+    assertStoredReceiptUnchanged(context, stored);
+    assert.equal(resolved.outcome, OUTCOME.UNAVAILABLE,
+      `${description} cannot establish current receipt applicability`);
+    assert.match(resolved.because, /receipt execution/u);
+  });
+}
+
+for (const [description, cited] of [
+  ['unsupported cited proof', {proofId: PROOF.RELEASE_FULL, objectSha: 'a'.repeat(40)}],
+  ['malformed cited object', {proofId: PROOF.CORPUS_FULL, objectSha: 'not-an-object-sha'}],
+]) {
+  test(`resolveProof refuses a release receipt with ${description}`, (t) => {
+    const context = receiptFixture(t);
+    const receipt = currentReceipt(context, PROOF.RELEASE_FULL);
+    receipt.execution.summary.reusedProofs = [cited];
+    const stored = storeReceipt(context, receipt);
+    const resolved = resolveProof({proofId: PROOF.RELEASE_FULL, sha: context.sha,
+      cwd: context.source});
+    assertStoredReceiptUnchanged(context, stored);
+    assert.equal(resolved.outcome, OUTCOME.UNAVAILABLE,
+      'the carried citations follow the same registered proof contract as the producer');
+    assert.match(resolved.because, /receipt execution/u);
+  });
+}
+
+test('resolveProof accepts a current identity-free corpus receipt and retains its exact object',
+  (t) => {
+    const context = receiptFixture(t);
+    const recorded = record(context, validExecutionReport(context));
+    assert.equal(recorded.receipt.identity, undefined,
+      'the corpus remains exact-only and does not require a release identity');
+    const resolved = resolveProof({proofId: PROOF.CORPUS_FULL, sha: context.sha,
+      cwd: context.source});
+    assert.equal(resolved.outcome, OUTCOME.PROVEN, resolved.because);
+    assert.equal(resolved.resolution, RESOLUTION.EXACT_SHA);
+    assert.equal(resolved.objectSha, recorded.objectSha);
+    const again = record(context, validExecutionReport(context));
+    assert.equal(again.reused, true);
+    assert.equal(again.objectSha, recorded.objectSha);
+  });
+
+test('receipt applicability preserves producer-permitted counts and unnamed successful commands',
+  (t) => {
+    const context = receiptFixture(t);
+    const report = validExecutionReport(context);
+    delete report.commands[0].label;
+    report.runs[0].results[0] = passingResult(REPORT_FILE_A, 0.5);
+    const recorded = record(context, report);
+    assert.equal(recorded.outcome, OUTCOME.PROVEN, recorded.because);
+    assert.equal(recorded.receipt.execution.summary.assertions, 3.5);
+    const resolved = resolveProof({proofId: PROOF.CORPUS_FULL, sha: context.sha,
+      cwd: context.source});
+    assert.equal(resolved.outcome, OUTCOME.PROVEN, resolved.because);
+    assert.equal(resolved.objectSha, recorded.objectSha);
+  });
 
 test('cli: record without --report is refused with its typed problem', () => {
   const context = fixture();
@@ -418,6 +588,13 @@ test('cited: a release report citing this commit\'s own corpus receipt mints', (
   assert.equal(recorded.outcome, OUTCOME.PROVEN, recorded.because);
   assert.deepEqual(recorded.receipt.execution.summary.reusedProofs,
     [{proofId: PROOF.CORPUS_FULL, objectSha: corpus.objectSha}]);
+  const summary = recorded.receipt.execution.summary;
+  assert.deepEqual([summary.planned, summary.executed, summary.runs, summary.assertions],
+    [0, 0, 0, 0], 'a release citing its exact corpus owes no invented direct execution');
+  const resolved = resolveProof({proofId: PROOF.RELEASE_FULL, sha: context.sha,
+    cwd: context.source});
+  assert.equal(resolved.outcome, OUTCOME.PROVEN, resolved.because);
+  assert.equal(resolved.objectSha, recorded.objectSha);
 });
 
 // One file in two complete runs of the same report (the release proof's
