@@ -1,0 +1,416 @@
+LAB_HOST=adams-gamla
+v22.23.2
+a7514bf45f7eabe393707e2b13cfa2b769e0994f
+6c04295b5a17dce4a1e5057d2dd25ed3cb224fea
+bc9e83a24cee235aa7fd33ff9777dc97d229903c
+ORIGINAL_SPLIT_CONTROL_SCOPE=newly reviewed original-compatible split, process and finalizer controls; unchanged production; actual failures retained; not whole-corpus proof or repair acceptance
+ORIGINAL_SPLIT_CONTROL_DISTINCTION=real process/Git/worktree controls plus explicitly injected disposer-failure control in scenario certification; no outcome normalization
+npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+
+> lagrange-server@0.4.0 prepare
+> node -e "import('node:fs').then(({existsSync}) => existsSync('scripts/install-git-hooks.js') && import('./scripts/install-git-hooks.js'))"
+
+[hooks] Installed repo hooks at .githooks
+
+added 964 packages in 22s
+npm notice
+npm notice New major version of npm available! 10.9.8 -> 12.2.2
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.2
+npm notice To update run: npm install -g npm@12.2.2
+npm notice
+SQLITE_NATIVE_PROVENANCE={"version":"3.49.2","source_id":"2025-05-07 10:39:52 17144570b0d96ae63cd6f3edca39e27ebd74925252bbaf6723bcb2f6b4861fb1","addon_sha256":"d7d9272b12d11c1dc2bb787741b1b7c4037d336155f316ace3420410c28fda37"}
+ORIGINAL_SPLIT_CONTROL_ROOT=test/scripts/test-placement-lab-split.test.js
+ORIGINAL_SPLIT_CONTROL_ROOT=test/scripts/scenario-certification-consumers.test.js
+not ok test/scripts/test-placement-lab-split.test.js (14 assertions, 683ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: a hand lab run takes its machine from measured facts, never a written host
+ok 1 - a hand lab run takes its machine from measured facts, never a written host
+  ---
+  duration_ms: 3.429003
+  type: 'test'
+  ...
+# Subtest: a split spreads a changed set over the free lab hosts by capacity, never a hot controller
+ok 2 - a split spreads a changed set over the free lab hosts by capacity, never a hot controller
+  ---
+  duration_ms: 4.612609
+  type: 'test'
+  ...
+# Subtest: the controller is a reserve while two lab hosts can carry the split
+ok 3 - the controller is a reserve while two lab hosts can carry the split
+  ---
+  duration_ms: 12.63871
+  type: 'test'
+  ...
+# Subtest: a held host carries its holder's expected wait, or the longest wait when it cannot say
+ok 4 - a held host carries its holder's expected wait, or the longest wait when it cannot say
+  ---
+  duration_ms: 0.539859
+  type: 'test'
+  ...
+# Subtest: the controller has headroom only under the thermal and load owners' thresholds
+ok 5 - the controller has headroom only under the thermal and load owners' thresholds
+  ---
+  duration_ms: 156.345917
+  type: 'test'
+  ...
+# Subtest: concurrent splits spread over the lab rather than all choosing one host
+ok 6 - concurrent splits spread over the lab rather than all choosing one host
+  ---
+  duration_ms: 4.303669
+  type: 'test'
+  ...
+# Subtest: a split says why it left each machine out
+ok 7 - a split says why it left each machine out
+  ---
+  duration_ms: 0.599415
+  type: 'test'
+  ...
+# Subtest: a split prints its plan and every skipped machine before any share starts
+ok 8 - a split prints its plan and every skipped machine before any share starts
+  ---
+  duration_ms: 8.651307
+  type: 'test'
+  ...
+# Subtest: runLabTest retains custody after second acquisition fails
+ok 9 - runLabTest retains custody after second acquisition fails
+  ---
+  duration_ms: 2.612349
+  type: 'test'
+  ...
+# Subtest: runLabTest retains custody after second acquisition and planning-checkout release fails
+ok 10 - runLabTest retains custody after second acquisition and planning-checkout release fails
+  ---
+  duration_ms: 1.089097
+  type: 'test'
+  ...
+# Subtest: runLabTest retains custody after settlement fails
+ok 11 - runLabTest retains custody after settlement fails
+  ---
+  duration_ms: 0.913209
+  type: 'test'
+  ...
+# Subtest: runLabTest retains custody after settlement and first cleanup fails
+ok 12 - runLabTest retains custody after settlement and first cleanup fails
+  ---
+  duration_ms: 1.283759
+  type: 'test'
+  ...
+# Subtest: planning release retains and remembers a real Git removal refusal
+not ok 13 - planning release retains and remembers a real Git removal refusal
+  ---
+  duration_ms: 40.872505
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/test/scripts/test-placement-lab-split.test.js:398:1'
+  failureType: 'testCodeFailure'
+  error: 'Missing expected exception: canonical Git refusal is reported instead of recursively erasing the checkout'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: [Function (anonymous)]
+  operator: 'throws'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/test/scripts/test-placement-lab-split.test.js:401:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: a real acquisition error stays primary when the planning checkout cannot be removed
+not ok 14 - a real acquisition error stays primary when the planning checkout cannot be removed
+  ---
+  duration_ms: 41.983312
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/test/scripts/test-placement-lab-split.test.js:414:1'
+  failureType: 'testCodeFailure'
+  error: 'original planning checkout retained: /home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/tmp/lab-planning-custody-QmBmYn/test-output/lab-test-worktrees/470d7479b1d1-mwer3gee-404516'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    assertPlanningBytes (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/test/scripts/test-placement-lab-split.test.js:390:10)
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/test/scripts/test-placement-lab-split.test.js:442:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..14
+# tests 14
+# suites 0
+# pass 12
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 306.300448
+# time=683ms
+not ok test/scripts/scenario-certification-consumers.test.js (18 assertions, 2219ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: quest probe, certification: true - only certified runs at ONE sha from durable evidence count; report files never do; another sha does not
+ok 1 - quest probe, certification: true - only certified runs at ONE sha from durable evidence count; report files never do; another sha does not
+  ---
+  duration_ms: 51.056964
+  type: 'test'
+  ...
+# Subtest: lab certification dry-run: five nodes on five observed machines, one per machine, the runner asked for the verdict
+ok 2 - lab certification dry-run: five nodes on five observed machines, one per machine, the runner asked for the verdict
+  ---
+  duration_ms: 177.811676
+  type: 'test'
+  ...
+# Subtest: lab certification pre-flight (--dry-run --certify): each failing item is a FAIL line and refuses the run, nothing held or built
+ok 3 - lab certification pre-flight (--dry-run --certify): each failing item is a FAIL line and refuses the run, nothing held or built
+  ---
+  duration_ms: 16.451199
+  type: 'test'
+  ...
+# Subtest: lab certification (B3): the run directory and its started.json exist BEFORE any hold; a run aborted at the hold leaves it and prints its record line as interrupted; a directory that cannot be created aborts before any hold
+ok 4 - lab certification (B3): the run directory and its started.json exist BEFORE any hold; a run aborted at the hold leaves it and prints its record line as interrupted; a directory that cannot be created aborts before any hold
+  ---
+  duration_ms: 8.954136
+  type: 'test'
+  ...
+# Subtest: certification retains its primary failure when finalization has none
+ok 5 - certification retains its primary failure when finalization has none
+  ---
+  duration_ms: 4.586403
+  type: 'test'
+  ...
+# Subtest: certification retains its primary failure when finalization has record publication
+not ok 6 - certification retains its primary failure when finalization has record publication
+  ---
+  duration_ms: 5.223994
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/test/scripts/scenario-certification-consumers.test.js:322:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    later finalization preserves the exact original Error
+    + actual - expected
+    
+    + Error: EISDIR: illegal operation on a directory, open '/tmp/lab-1000-82eeaf454691d2f3/cert-finalizer-custody-pKkv07'
+    +     at writeFileSync (node:fs:2430:20)
+    +     at file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/test/scripts/scenario-certification-consumers.test.js:370:15
+    +     at printCertificationRecord (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/test/distributed/harness/certification-evidence-archive.js:329:3)
+    +     at runCertificationHarness (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/scripts/lab/harness.js:579:5)
+    - Error: EISDIR: illegal operation on a directory, read
+    -     at Object.readSync (node:fs:736:18)
+    -     at tryReadSync (node:fs:416:20)
+    -     at readFileSync (node:fs:470:19)
+    -     at hold (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/test/scripts/scenario-certification-consumers.test.js:359:15)
+    -     at holdHarnessNodes (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/scripts/lab/harness.js:383:21)
+    -     at runCertificationHarness (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/scripts/lab/harness.js:568:25)
+          at async waitForActual (node:assert:644:5)
+          at async Function.rejects (node:assert:767:25)
+          at async TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/test/scripts/scenario-certification-consumers.test.js:350:9)
+    +     at async Test.run (node:internal/test_runner/test:1054:7)
+    +     at async Test.processPendingSubtests (node:internal/test_runner/test:744:7) {
+    -     at async Test.run (node:internal/test_runner/test:1054:7) {
+        code: 'EISDIR',
+        errno: -21,
+    +   path: '/tmp/lab-1000-82eeaf454691d2f3/cert-finalizer-custody-pKkv07',
+    +   syscall: 'open'
+    -   syscall: 'read'
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    errno: -21
+    syscall: 'read'
+  error: 'EISDIR: illegal operation on a directory, read'
+  code: 'EISDIR'
+  stack: |-
+    Object.readSync (node:fs:736:18)
+    tryReadSync (node:fs:416:20)
+    readFileSync (node:fs:470:19)
+    hold (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/test/scripts/scenario-certification-consumers.test.js:359:15)
+    holdHarnessNodes (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/scripts/lab/harness.js:383:21)
+    runCertificationHarness (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/scripts/lab/harness.js:568:25)
+    async waitForActual (node:assert:644:5)
+    async Function.rejects (node:assert:767:25)
+    async TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/test/scripts/scenario-certification-consumers.test.js:350:9)
+    async Test.run (node:internal/test_runner/test:1054:7)
+  actual:
+    errno: -21
+    syscall: 'open'
+    path: '/tmp/lab-1000-82eeaf454691d2f3/cert-finalizer-custody-pKkv07'
+  error: "EISDIR: illegal operation on a directory, open '/tmp/lab-1000-82eeaf454691d2f3/cert-finalizer-custody-pKkv07'"
+  code: 'EISDIR'
+  stack: |-
+    writeFileSync (node:fs:2430:20)
+    file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/test/scripts/scenario-certification-consumers.test.js:370:15
+    printCertificationRecord (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/test/distributed/harness/certification-evidence-archive.js:329:3)
+    runCertificationHarness (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/scripts/lab/harness.js:579:5)
+    async waitForActual (node:assert:644:5)
+    async Function.rejects (node:assert:767:25)
+    async TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/test/scripts/scenario-certification-consumers.test.js:350:9)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'strictEqual'
+  stack: |-
+    Object.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/test/scripts/scenario-certification-consumers.test.js:380:18)
+    expectedException (node:assert:576:17)
+    expectsError (node:assert:701:21)
+    Function.rejects (node:assert:767:3)
+    async TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/test/scripts/scenario-certification-consumers.test.js:350:9)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: certification retains its primary failure when finalization has signal-handler removal
+not ok 7 - certification retains its primary failure when finalization has signal-handler removal
+  ---
+  duration_ms: 4.244403
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/test/scripts/scenario-certification-consumers.test.js:322:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    later finalization preserves the exact original Error
+    + actual - expected
+    
+    + Error: finite signal-handler removal refused after its first effect
+    +     at process.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/test/scripts/scenario-certification-consumers.test.js:340:23)
+    +     at Object.apply (node:internal/test_runner/mock/mock:765:20)
+    +     at off (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/test/distributed/harness/certification-evidence-archive.js:349:39)
+    +     at file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/test/distributed/harness/certification-evidence-archive.js:360:49
+    +     at runCertificationHarness (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/scripts/lab/harness.js:578:5)
+    - Error: EISDIR: illegal operation on a directory, read
+    -     at Object.readSync (node:fs:736:18)
+    -     at tryReadSync (node:fs:416:20)
+    -     at readFileSync (node:fs:470:19)
+    -     at hold (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/test/scripts/scenario-certification-consumers.test.js:359:15)
+    -     at holdHarnessNodes (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/scripts/lab/harness.js:383:21)
+    -     at runCertificationHarness (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/scripts/lab/harness.js:568:25)
+          at async waitForActual (node:assert:644:5)
+          at async Function.rejects (node:assert:767:25)
+          at async TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/test/scripts/scenario-certification-consumers.test.js:350:9)
+    +     at async Test.run (node:internal/test_runner/test:1054:7)
+    +     at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+    -     at async Test.run (node:internal/test_runner/test:1054:7) {
+    -   code: 'EISDIR',
+    -   errno: -21,
+    -   syscall: 'read'
+    - }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    errno: -21
+    syscall: 'read'
+  error: 'EISDIR: illegal operation on a directory, read'
+  code: 'EISDIR'
+  stack: |-
+    Object.readSync (node:fs:736:18)
+    tryReadSync (node:fs:416:20)
+    readFileSync (node:fs:470:19)
+    hold (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/test/scripts/scenario-certification-consumers.test.js:359:15)
+    holdHarnessNodes (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/scripts/lab/harness.js:383:21)
+    runCertificationHarness (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/scripts/lab/harness.js:568:25)
+    async waitForActual (node:assert:644:5)
+    async Function.rejects (node:assert:767:25)
+    async TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/test/scripts/scenario-certification-consumers.test.js:350:9)
+    async Test.run (node:internal/test_runner/test:1054:7)
+  actual:
+  error: 'finite signal-handler removal refused after its first effect'
+  stack: |-
+    process.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/test/scripts/scenario-certification-consumers.test.js:340:23)
+    Object.apply (node:internal/test_runner/mock/mock:765:20)
+    off (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/test/distributed/harness/certification-evidence-archive.js:349:39)
+    file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/test/distributed/harness/certification-evidence-archive.js:360:49
+    runCertificationHarness (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/scripts/lab/harness.js:578:5)
+    async waitForActual (node:assert:644:5)
+    async Function.rejects (node:assert:767:25)
+    async TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/test/scripts/scenario-certification-consumers.test.js:350:9)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'strictEqual'
+  stack: |-
+    Object.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/test/scripts/scenario-certification-consumers.test.js:380:18)
+    expectedException (node:assert:576:17)
+    expectsError (node:assert:701:21)
+    Function.rejects (node:assert:767:3)
+    async TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/44945cec-1f0e-4d42-8838-3da482894aa6/work/source/test/scripts/scenario-certification-consumers.test.js:350:9)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: lab certification pre-flight parses a host answer, a clock read as seconds with any fraction width (uutils date on carinas-windows)
+ok 8 - lab certification pre-flight parses a host answer, a clock read as seconds with any fraction width (uutils date on carinas-windows)
+  ---
+  duration_ms: 0.647251
+  type: 'test'
+  ...
+# Subtest: lab certification pre-flight compares base images by registry digest (RepoDigests), never by image Id: the classic and the containerd image store report different Ids for the same pulled content
+ok 9 - lab certification pre-flight compares base images by registry digest (RepoDigests), never by image Id: the classic and the containerd image store report different Ids for the same pulled content
+  ---
+  duration_ms: 5.238532
+  type: 'test'
+  ...
+# Subtest: lab harness keep-evidence prints the record line of ANY run directory, an interrupted one (SIGKILL: no line was printed) included, before it keeps the verdict files
+ok 10 - lab harness keep-evidence prints the record line of ANY run directory, an interrupted one (SIGKILL: no line was printed) included, before it keeps the verdict files
+  ---
+  duration_ms: 3.047408
+  type: 'test'
+  ...
+# Subtest: lab certification (S5): a sixth listed machine gets no node, so it is neither observed, held nor tunneled
+ok 11 - lab certification (S5): a sixth listed machine gets no node, so it is neither observed, held nor tunneled
+  ---
+  duration_ms: 3.056964
+  type: 'test'
+  ...
+# Subtest: lab certification refuses before any hold: shared boot id, an unobservable machine, a dirty or other checkout, two per host, a passthrough --certify, an undeclared scenario, too few machines
+ok 12 - lab certification refuses before any hold: shared boot id, an unobservable machine, a dirty or other checkout, two per host, a passthrough --certify, an undeclared scenario, too few machines
+  ---
+  duration_ms: 13.112357
+  type: 'test'
+  ...
+# Subtest: formation health and the seed budget gate say they are not certification evidence
+ok 13 - formation health and the seed budget gate say they are not certification evidence
+  ---
+  duration_ms: 1.245208
+  type: 'test'
+  ...
+# Subtest: a report entry without a certification verdict says it is not certification evidence
+ok 14 - a report entry without a certification verdict says it is not certification evidence
+  ---
+  duration_ms: 1.79397
+  type: 'test'
+  ...
+# Subtest: ship readiness (validation matrix) says it is not certification
+ok 15 - ship readiness (validation matrix) says it is not certification
+  ---
+  duration_ms: 0.701064
+  type: 'test'
+  ...
+# Subtest: the distributed matrix never certifies: it says so and refuses a --certify passthrough
+ok 16 - the distributed matrix never certifies: it says so and refuses a --certify passthrough
+  ---
+  duration_ms: 918.509313
+  type: 'test'
+  ...
+# Subtest: certification:verdict (S6) states what it certifies and that it is not the formation certification; its verdict and metric are unchanged
+ok 17 - certification:verdict (S6) states what it certifies and that it is not the formation certification; its verdict and metric are unchanged
+  ---
+  duration_ms: 73.111933
+  type: 'test'
+  ...
+# Subtest: the GCP handoff streak (S6) names itself a pass streak, not certification, in its header and refusal text
+ok 18 - the GCP handoff streak (S6) names itself a pass streak, not certification, in its header and refusal text
+  ---
+  duration_ms: 0.315109
+  type: 'test'
+  ...
+1..18
+# tests 18
+# suites 0
+# pass 16
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1297.759107
+# time=2219ms
+# test-files total=2 pass=0 fail=2 assertions=32
+ORIGINAL_SPLIT_CONTROL_TEST_EXIT=1
+ORIGINAL_SPLIT_CONTROL_FINAL_GUARD_EXIT=0

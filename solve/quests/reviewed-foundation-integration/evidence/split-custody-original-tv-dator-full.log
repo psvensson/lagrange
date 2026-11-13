@@ -1,0 +1,8 @@
+LAB_HOST=tv-dator
+v22.23.2
+a7514bf45f7eabe393707e2b13cfa2b769e0994f
+6c04295b5a17dce4a1e5057d2dd25ed3cb224fea
+bc9e83a24cee235aa7fd33ff9777dc97d229903c
+ORIGINAL_SPLIT_CONTROL_SCOPE=newly reviewed original-compatible split, process and finalizer controls; unchanged production; actual failures retained; not whole-corpus proof or repair acceptance
+ORIGINAL_SPLIT_CONTROL_DISTINCTION=real process/Git/worktree controls plus explicitly injected disposer-failure control in scenario certification; no outcome normalization
+npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead

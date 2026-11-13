@@ -1,0 +1,625 @@
+LAB_HOST=local-workstation
+v22.23.2
+a7514bf45f7eabe393707e2b13cfa2b769e0994f
+6c04295b5a17dce4a1e5057d2dd25ed3cb224fea
+bc9e83a24cee235aa7fd33ff9777dc97d229903c
+ORIGINAL_SPLIT_CONTROL_SCOPE=newly reviewed original-compatible split, process and finalizer controls; unchanged production; actual failures retained; not whole-corpus proof or repair acceptance
+ORIGINAL_SPLIT_CONTROL_DISTINCTION=real process/Git/worktree controls plus explicitly injected disposer-failure control in scenario certification; no outcome normalization
+npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+
+> lagrange-server@0.4.0 prepare
+> node -e "import('node:fs').then(({existsSync}) => existsSync('scripts/install-git-hooks.js') && import('./scripts/install-git-hooks.js'))"
+
+[hooks] Installed repo hooks at .githooks
+
+added 964 packages in 7s
+npm notice
+npm notice New major version of npm available! 10.9.8 -> 12.2.2
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.2
+npm notice To update run: npm install -g npm@12.2.2
+npm notice
+SQLITE_NATIVE_PROVENANCE={"version":"3.49.2","source_id":"2025-05-07 10:39:52 17144570b0d96ae63cd6f3edca39e27ebd74925252bbaf6723bcb2f6b4861fb1","addon_sha256":"d7d9272b12d11c1dc2bb787741b1b7c4037d336155f316ace3420410c28fda37"}
+ORIGINAL_SPLIT_CONTROL_ROOT=test/scripts/lab-fleet-discovery.test.js
+ORIGINAL_SPLIT_CONTROL_ROOT=test/scripts/prune-test-output.test.js
+not ok test/scripts/prune-test-output.test.js (23 assertions, 214ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: prune-test-output.js
+    # Subtest: reports stale artifacts in dry-run mode while preserving pinned entries
+    ok 1 - reports stale artifacts in dry-run mode while preserving pinned entries
+      ---
+      duration_ms: 10.543923
+      type: 'test'
+      ...
+    # Subtest: applies the retention plan
+    ok 2 - applies the retention plan
+      ---
+      duration_ms: 4.153497
+      type: 'test'
+      ...
+    # Subtest: default policy prunes sibling artifact roots to the latest four runs
+    ok 3 - default policy prunes sibling artifact roots to the latest four runs
+      ---
+      duration_ms: 20.425342
+      type: 'test'
+      ...
+    1..3
+ok 1 - prune-test-output.js
+  ---
+  duration_ms: 35.722181
+  type: 'suite'
+  ...
+# Subtest: routine retention safety
+    # Subtest: keeps a directory whose own mtime is old when its contents are fresh
+    ok 1 - keeps a directory whose own mtime is old when its contents are fresh
+      ---
+      duration_ms: 1.708717
+      type: 'test'
+      ...
+    # Subtest: keeps a tree whose only recent activity is a directory deep inside it
+    ok 2 - keeps a tree whose only recent activity is a directory deep inside it
+      ---
+      duration_ms: 1.188429
+      type: 'test'
+      ...
+    # Subtest: does not let a future-dated file pin a stale tree
+    ok 3 - does not let a future-dated file pin a stale tree
+      ---
+      duration_ms: 1.007798
+      type: 'test'
+      ...
+    # Subtest: keeps a tree written a moment ahead of the clock
+    ok 4 - keeps a tree written a moment ahead of the clock
+      ---
+      duration_ms: 0.876601
+      type: 'test'
+      ...
+    # Subtest: a far-future date is no freshness for any entry
+    ok 5 - a far-future date is no freshness for any entry
+      ---
+      duration_ms: 1.29805
+      type: 'test'
+      ...
+    # Subtest: judges a playback folder by its newest content
+    ok 6 - judges a playback folder by its newest content
+      ---
+      duration_ms: 1.258018
+      type: 'test'
+      ...
+    # Subtest: keeps and names what it cannot read, and prunes the rest
+    ok 7 - keeps and names what it cannot read, and prunes the rest
+      ---
+      duration_ms: 1.707231
+      type: 'test'
+      ...
+    # Subtest: a delete that fails is reported and the others still happen
+    ok 8 - a delete that fails is reported and the others still happen
+      ---
+      duration_ms: 1.164845
+      type: 'test'
+      ...
+    # Subtest: one entry it cannot measure never stops the rest of the prune
+    ok 9 - one entry it cannot measure never stops the rest of the prune
+      ---
+      duration_ms: 2.052917
+      type: 'test'
+      ...
+    # Subtest: never age-prunes the parent of a registered git worktree
+    ok 10 - never age-prunes the parent of a registered git worktree
+      ---
+      duration_ms: 0.964699
+      type: 'test'
+      ...
+    # Subtest: keeps original push-gate evidence and later attempts while pruning an ordinary stale sibling
+    ok 11 - keeps original push-gate evidence and later attempts while pruning an ordinary stale sibling
+      ---
+      duration_ms: 1.633246
+      type: 'test'
+      ...
+    # Subtest: retains registered split checkouts and original relay files during real aged pruning
+    not ok 12 - retains registered split checkouts and original relay files during real aged pruning
+      ---
+      duration_ms: 24.732422
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/45aa4bfc-d5cf-41af-9152-9d046a4e5801/work/source/test/scripts/prune-test-output.test.js:756:3'
+      failureType: 'testCodeFailure'
+      error: |-
+        Got unwanted rejection: original split evidence remains at /tmp/lab-1000-94cc2652f6d23ce5/prune-retention-DPUmwF/test-output/placement-worktrees/retained-first-attempt/.tap/test-results/original.tap
+        Actual message: "ENOENT: no such file or directory, stat '/tmp/lab-1000-94cc2652f6d23ce5/prune-retention-DPUmwF/test-output/placement-worktrees/retained-first-attempt/.tap/test-results/original.tap'"
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      actual:
+        errno: -2
+        syscall: 'stat'
+        path: '/tmp/lab-1000-94cc2652f6d23ce5/prune-retention-DPUmwF/test-output/placement-worktrees/retained-first-attempt/.tap/test-results/original.tap'
+      error: "ENOENT: no such file or directory, stat '/tmp/lab-1000-94cc2652f6d23ce5/prune-retention-DPUmwF/test-output/placement-worktrees/retained-first-attempt/.tap/test-results/original.tap'"
+      code: 'ENOENT'
+      stack: |-
+        async stat (node:internal/fs/promises:1037:18)
+        async waitForActual (node:assert:644:5)
+        async Function.doesNotReject (node:assert:787:33)
+        async TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/45aa4bfc-d5cf-41af-9152-9d046a4e5801/work/source/test/scripts/prune-test-output.test.js:812:9)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      operator: 'doesNotReject'
+      stack: |-
+        async TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/45aa4bfc-d5cf-41af-9152-9d046a4e5801/work/source/test/scripts/prune-test-output.test.js:812:9)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    1..12
+not ok 2 - routine retention safety
+  ---
+  duration_ms: 40.09507
+  type: 'suite'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/45aa4bfc-d5cf-41af-9152-9d046a4e5801/work/source/test/scripts/prune-test-output.test.js:491:1'
+  failureType: 'subtestsFailed'
+  error: '1 subtest failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: the harness history window survives routine retention
+    # Subtest: keeps the newest harness reports even when newer model reports exist
+    ok 1 - keeps the newest harness reports even when newer model reports exist
+      ---
+      duration_ms: 8.629375
+      type: 'test'
+      ...
+    1..1
+ok 3 - the harness history window survives routine retention
+  ---
+  duration_ms: 8.700313
+  type: 'suite'
+  ...
+# Subtest: test results that still inform dispatch are kept
+    # Subtest: keeps an old result for a test that exists and drops one for a test that does not
+    ok 1 - keeps an old result for a test that exists and drops one for a test that does not
+      ---
+      duration_ms: 1.660034
+      type: 'test'
+      ...
+    1..1
+ok 4 - test results that still inform dispatch are kept
+  ---
+  duration_ms: 1.716074
+  type: 'suite'
+  ...
+# Subtest: a test file that cannot be checked is kept, and never stops retention
+    # Subtest: drops a result whose path runs through a file and keeps one it may not check
+    ok 1 - drops a result whose path runs through a file and keeps one it may not check
+      ---
+      duration_ms: 1.499355
+      type: 'test'
+      ...
+    1..1
+ok 5 - a test file that cannot be checked is kept, and never stops retention
+  ---
+  duration_ms: 1.55061
+  type: 'suite'
+  ...
+1..5
+# tests 18
+# suites 5
+# pass 17
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 91.439006
+# time=214ms
+not ok test/scripts/lab-fleet-discovery.test.js (31 assertions, 10258ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: a probe transcript becomes a capability record
+ok 1 - a probe transcript becomes a capability record
+  ---
+  duration_ms: 1.495729
+  type: 'test'
+  ...
+# Subtest: an unreported fact is unknown, never a capability the machine was not shown to have
+ok 2 - an unreported fact is unknown, never a capability the machine was not shown to have
+  ---
+  duration_ms: 0.175902
+  type: 'test'
+  ...
+# Subtest: readiness names every reason a machine cannot run the corpus
+ok 3 - readiness names every reason a machine cannot run the corpus
+  ---
+  duration_ms: 0.857685
+  type: 'test'
+  ...
+# Subtest: a lockfile that differs only in its release version is the same dependency graph
+ok 4 - a lockfile that differs only in its release version is the same dependency graph
+  ---
+  duration_ms: 218.867226
+  type: 'test'
+  ...
+# Subtest: a real dependency change is a different dependency graph, one change at a time
+ok 5 - a real dependency change is a different dependency graph, one change at a time
+  ---
+  duration_ms: 116.587225
+  type: 'test'
+  ...
+# Subtest: the controller and a lab machine compute one dependency-graph digest
+ok 6 - the controller and a lab machine compute one dependency-graph digest
+  ---
+  duration_ms: 491.1969
+  type: 'test'
+  ...
+# Subtest: concurrent inventory saves in one process publish whole snapshots without temporary-file collisions
+ok 7 - concurrent inventory saves in one process publish whole snapshots without temporary-file collisions
+  ---
+  duration_ms: 5.004124
+  type: 'test'
+  ...
+# Subtest: a placed commit is measured against its own lockfile and engines floor
+ok 8 - a placed commit is measured against its own lockfile and engines floor
+  ---
+  duration_ms: 974.106308
+  type: 'test'
+  ...
+# Subtest: the placed-commit witness leaves the lab home as it found it
+ok 9 - the placed-commit witness leaves the lab home as it found it
+  ---
+  duration_ms: 0.181249
+  type: 'test'
+  ...
+# Subtest: a scratch lab home restores the original once, however often a test asks
+    # Subtest: three scratch homes in one test
+    ok 1 - three scratch homes in one test
+      ---
+      duration_ms: 1.134372
+      type: 'test'
+      ...
+    1..1
+ok 10 - a scratch lab home restores the original once, however often a test asks
+  ---
+  duration_ms: 1.479447
+  type: 'test'
+  ...
+# Subtest: a placed commit's lockfile is read whole up to a named bound
+ok 11 - a placed commit's lockfile is read whole up to a named bound
+  ---
+  duration_ms: 576.367133
+  type: 'test'
+  ...
+# Subtest: a version-only release bump of this repository leaves the fleet ready
+ok 12 - a version-only release bump of this repository leaves the fleet ready
+  ---
+  duration_ms: 3322.785495
+  type: 'test'
+  ...
+# Subtest: the pinned dataset is the one the canary checks before its corpus
+ok 13 - the pinned dataset is the one the canary checks before its corpus
+  ---
+  duration_ms: 7.332758
+  type: 'test'
+  ...
+# Subtest: discovery probes every machine and recognises one reached twice
+ok 14 - discovery probes every machine and recognises one reached twice
+  ---
+  duration_ms: 0.509462
+  type: 'test'
+  ...
+# Subtest: the controller is probed by the same script it sends to a lab node
+ok 15 - the controller is probed by the same script it sends to a lab node
+  ---
+  duration_ms: 345.055435
+  type: 'test'
+  ...
+# Subtest: the probe observes a checkout and never acts on it
+ok 16 - the probe observes a checkout and never acts on it
+  ---
+  duration_ms: 1322.083598
+  type: 'test'
+  ...
+# Subtest: a capture deadline kills the whole process group
+ok 17 - a capture deadline kills the whole process group
+  ---
+  duration_ms: 323.381787
+  type: 'test'
+  ...
+# Subtest: the fleet shows who holds each machine, from its lock and its holder record
+ok 18 - the fleet shows who holds each machine, from its lock and its holder record
+  ---
+  duration_ms: 0.538638
+  type: 'test'
+  ...
+# Subtest: the probe reads the machine lock and its holder record and never takes the lock
+ok 19 - the probe reads the machine lock and its holder record and never takes the lock
+  ---
+  duration_ms: 1062.543999
+  type: 'test'
+  ...
+# Subtest: a formation refuses, typed, when a node is held, before any node starts
+ok 20 - a formation refuses, typed, when a node is held, before any node starts
+  ---
+  duration_ms: 4.835732
+  type: 'test'
+  ...
+# Subtest: a formation acquires its own process group, holds a node and releases it
+not ok 21 - a formation acquires its own process group, holds a node and releases it
+  ---
+  duration_ms: 17.53508
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/45aa4bfc-d5cf-41af-9152-9d046a4e5801/work/source/test/scripts/lab-fleet-discovery.test.js:953:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the acquired hold session owns the exact group its bounded release may signal
+    + actual - expected
+    
+    + 3526151
+    - 3529387
+         ^
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 3529387
+  actual: 3526151
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/45aa4bfc-d5cf-41af-9152-9d046a4e5801/work/source/test/scripts/lab-fleet-discovery.test.js:966:10)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: killGroup never substitutes a live direct child for an absent owned group
+not ok 22 - killGroup never substitutes a live direct child for an absent owned group
+  ---
+  duration_ms: 54.536324
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/45aa4bfc-d5cf-41af-9152-9d046a4e5801/work/source/test/scripts/lab-fleet-discovery.test.js:1074:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the owner stopped the child before /home/peter/.local/state/lagrange-lab-worker/generic/runs/45aa4bfc-d5cf-41af-9152-9d046a4e5801/work/tmp/fleet-group-custody-pKyAYR/ack: {"code":null,"signal":"SIGKILL","error":null}
+    + actual - expected
+    
+    + {
+    +   code: null,
+    +   error: null,
+    +   signal: 'SIGKILL'
+    + }
+    - null
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: ~
+  actual:
+    code: ~
+    signal: 'SIGKILL'
+    error: ~
+  operator: 'strictEqual'
+  stack: |-
+    groupControlMarker (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/45aa4bfc-d5cf-41af-9152-9d046a4e5801/work/source/test/scripts/lab-fleet-discovery.test.js:996:12)
+    async Object.acknowledge (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/45aa4bfc-d5cf-41af-9152-9d046a4e5801/work/source/test/scripts/lab-fleet-discovery.test.js:1068:7)
+    async TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/45aa4bfc-d5cf-41af-9152-9d046a4e5801/work/source/test/scripts/lab-fleet-discovery.test.js:1085:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: killGroup preserves a group signalling refusal without killing the direct child
+not ok 23 - killGroup preserves a group signalling refusal without killing the direct child
+  ---
+  duration_ms: 46.563382
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/45aa4bfc-d5cf-41af-9152-9d046a4e5801/work/source/test/scripts/lab-fleet-discovery.test.js:1088:1'
+  failureType: 'testCodeFailure'
+  error: 'Missing expected exception: the first signal refusal remains explicit instead of selecting another target'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: [Function (anonymous)]
+  operator: 'throws'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/45aa4bfc-d5cf-41af-9152-9d046a4e5801/work/source/test/scripts/lab-fleet-discovery.test.js:1103:14)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: killGroup refuses a failed spawn with no acquired positive process identity
+not ok 24 - killGroup refuses a failed spawn with no acquired positive process identity
+  ---
+  duration_ms: 2.344978
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/45aa4bfc-d5cf-41af-9152-9d046a4e5801/work/source/test/scripts/lab-fleet-discovery.test.js:1111:1'
+  failureType: 'testCodeFailure'
+  error: 'Missing expected exception: an unavailable identity cannot be negated or converted into a direct-child attempt'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  operator: 'throws'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/45aa4bfc-d5cf-41af-9152-9d046a4e5801/work/source/test/scripts/lab-fleet-discovery.test.js:1117:12)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: harness preserves busy admission failure and attempts every acquired hold release
+not ok 25 - harness preserves busy admission failure and attempts every acquired hold release
+  ---
+  duration_ms: 1.275161
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/45aa4bfc-d5cf-41af-9152-9d046a4e5801/work/source/test/scripts/lab-fleet-discovery.test.js:1125:3'
+  failureType: 'testCodeFailure'
+  error: 'the secondary release error never replaces the earlier harness failure'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  error: 'finite first hold release unavailable'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/45aa4bfc-d5cf-41af-9152-9d046a4e5801/work/source/test/scripts/lab-fleet-discovery.test.js:1130:30)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  actual:
+  error: 'finite first hold release unavailable'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/45aa4bfc-d5cf-41af-9152-9d046a4e5801/work/source/test/scripts/lab-fleet-discovery.test.js:1130:30)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'notStrictEqual'
+  stack: |-
+    Object.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/45aa4bfc-d5cf-41af-9152-9d046a4e5801/work/source/test/scripts/lab-fleet-discovery.test.js:1163:18)
+    expectedException (node:assert:576:17)
+    expectsError (node:assert:701:21)
+    Function.rejects (node:assert:767:3)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/45aa4bfc-d5cf-41af-9152-9d046a4e5801/work/source/test/scripts/lab-fleet-discovery.test.js:1158:9)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: harness preserves machine observation failure and attempts every acquired hold release
+not ok 26 - harness preserves machine observation failure and attempts every acquired hold release
+  ---
+  duration_ms: 0.787546
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/45aa4bfc-d5cf-41af-9152-9d046a4e5801/work/source/test/scripts/lab-fleet-discovery.test.js:1125:3'
+  failureType: 'testCodeFailure'
+  error: 'the secondary release error never replaces the earlier harness failure'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  error: 'finite first hold release unavailable'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/45aa4bfc-d5cf-41af-9152-9d046a4e5801/work/source/test/scripts/lab-fleet-discovery.test.js:1130:30)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  actual:
+  error: 'finite first hold release unavailable'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/45aa4bfc-d5cf-41af-9152-9d046a4e5801/work/source/test/scripts/lab-fleet-discovery.test.js:1130:30)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'notStrictEqual'
+  stack: |-
+    Object.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/45aa4bfc-d5cf-41af-9152-9d046a4e5801/work/source/test/scripts/lab-fleet-discovery.test.js:1163:18)
+    expectedException (node:assert:576:17)
+    expectsError (node:assert:701:21)
+    Function.rejects (node:assert:767:3)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/45aa4bfc-d5cf-41af-9152-9d046a4e5801/work/source/test/scripts/lab-fleet-discovery.test.js:1158:9)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: capture retains closed stdout/stderr after the direct child exits 0
+not ok 27 - capture retains closed stdout/stderr after the direct child exits 0
+  ---
+  duration_ms: 125.219438
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/45aa4bfc-d5cf-41af-9152-9d046a4e5801/work/source/test/scripts/lab-fleet-discovery.test.js:1201:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    direct exit cannot settle capture while its owned output pipes remain open
+    
+    true !== false
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: false
+  actual: true
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/45aa4bfc-d5cf-41af-9152-9d046a4e5801/work/source/test/scripts/lab-fleet-discovery.test.js:1238:14)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: capture retains closed stdout/stderr after the direct child exits 42
+not ok 28 - capture retains closed stdout/stderr after the direct child exits 42
+  ---
+  duration_ms: 124.458061
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/45aa4bfc-d5cf-41af-9152-9d046a4e5801/work/source/test/scripts/lab-fleet-discovery.test.js:1201:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    direct exit cannot settle capture while its owned output pipes remain open
+    
+    true !== false
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: false
+  actual: true
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/45aa4bfc-d5cf-41af-9152-9d046a4e5801/work/source/test/scripts/lab-fleet-discovery.test.js:1238:14)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: a failed capture spawn retains ENOENT and releases its deadline without later signalling
+not ok 29 - a failed capture spawn retains ENOENT and releases its deadline without later signalling
+  ---
+  duration_ms: 124.523423
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/45aa4bfc-d5cf-41af-9152-9d046a4e5801/work/source/test/scripts/lab-fleet-discovery.test.js:1250:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    no cancelled deadline may later target an absent identity
+    + actual - expected
+    
+    + [
+    +   {
+    +     name: 'SIGKILL',
+    +     pid: NaN
+    +   }
+    + ]
+    - []
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    0:
+      pid: NaN
+      name: 'SIGKILL'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/45aa4bfc-d5cf-41af-9152-9d046a4e5801/work/source/test/scripts/lab-fleet-discovery.test.js:1272:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: release preserves actual signal loss after an acquired hold shell exits
+not ok 30 - release preserves actual signal loss after an acquired hold shell exits
+  ---
+  duration_ms: 88.558679
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/45aa4bfc-d5cf-41af-9152-9d046a4e5801/work/source/test/scripts/lab-fleet-discovery.test.js:1299:1'
+  failureType: 'testCodeFailure'
+  error: 'loss of an acquired hold cannot resolve as success'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/45aa4bfc-d5cf-41af-9152-9d046a4e5801/work/source/test/scripts/lab-fleet-discovery.test.js:1376:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..30
+# tests 31
+# suites 0
+# pass 21
+# fail 10
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 9366.42952
+# time=10258ms
+# test-files total=2 pass=0 fail=2 assertions=54
+ORIGINAL_SPLIT_CONTROL_TEST_EXIT=1
+ORIGINAL_SPLIT_CONTROL_FINAL_GUARD_EXIT=0
