@@ -121,17 +121,19 @@ invalid evidence before integration.
 - **Integration responsibility:** the owner resumed work. Agent `/root` is
   the sole external coordinator; independent agents investigate state custody,
   review composition and plan physical proof. All project execution remains on
-  qualified physical labs. External writes remain at least 45 seconds apart.
+  qualified physical labs. Coordinator GitHub writes remain at least 45 seconds apart; native LAN evidence
+  reads use the installed controller owner without that mailbox delay.
   The original dirty local checkout is untouched; work is isolated in
   `/mnt/data/peter/projects/lagrange-foundation-takeover-20261113`.
 - **Active foundation blockers:** original jobs 3686/3687 remain closed failures.
-  Their eleven previous windows were recovered from immutable mailbox providers
-  and individually hash-verified. Sequential 8,000-byte retrieval has resumed
-  under the same job/host/stream identities, starting with issue 3707. The live
-  continuation owner is `/root`; request/provider files and verified chunks are
-  retained in `/mnt/data/peter/projects/lagrange-foundation-coordination-20261113`.
-  Full-stream hashes and causal interpretation remain pending. No workload replay
-  is authorized. New original controls at `56d12341a67d8680b16f8f06847a2499f73b24f6`
+  Their complete streams are now recovered and independently reviewed: 306,993
+  and 264,616 bytes, respectively, with matching full hashes. Native LAN reads
+  retained the same installed evidence owner, original job/host/stream and
+  8,000-byte bounds. Reviews record receipt-identity, cleanup, acquisition and
+  cancellation failures and distinguish assertions not reached. The live
+  continuation owner is `/root`; original providers and verified bytes remain
+  in `/mnt/data/peter/projects/lagrange-foundation-coordination-20261113`.
+  No original workload was replayed. New original controls at `56d12341a67d8680b16f8f06847a2499f73b24f6`
   were submitted once as 3720/3721; both closed failed with physical scopes
   closed. Source investigation identifies a systematic conditional
   state-transition gap across reconciliation, startup and terminal writers;
@@ -147,7 +149,12 @@ invalid evidence before integration.
   composed. The receipt Quest was natively sealed against the actual original
   failure at `594e9dbc` in request 3751; its acceptance remains red. Canonical
   evidence upload remains pending. Preparation 3748 completed failed and closed;
-  full output recovery and first-cause review are in progress. Canonical generation, static/focused/full physical proof, Solver land
+  its full hash and first-cause review are complete. ESLint is the first failed
+  stage (266 changed-file errors); required generation and final source guards
+  passed. Its generated patch is retained as evidence, not applied to later
+  source. Scoped formatter correction and canonical raw-evidence retention
+  are the next bounded actions. Fresh canonical generation, static/focused/full
+  physical proof, Solver land
   and final-HEAD publication remain owed by the foundation/publication Quests.
 - **Current owner objective:** Linux executables and a stable, reproducible
   server baseline for comparative systems measurements. Native macOS artifacts
