@@ -139,14 +139,18 @@ function exclusionOf(node, facts, seenBootIds) {
   if (facts.error || !facts.capability) return `unreachable: ${facts.error || 'never probed'}`;
   if (facts.capability.dockerReachable !== true) return 'docker not reachable';
   const thermal = thermalOf(facts.capability);
-  if (!thermal || (!thermalPermits(thermal.decision) &&
-      thermal.decision.outcome !== HEADROOM.HOLD)) {
+  if (!thermalEligible(thermal)) {
     return 'host-ineligible: native thermal decision unavailable';
   }
   if (facts.capability.bootId && seenBootIds.has(facts.capability.bootId)) {
     return 'same machine as another inventory node';
   }
   return null;
+}
+
+function thermalEligible(thermal) {
+  return Boolean(thermal) && (thermalPermits(thermal.decision) ||
+    thermal.decision.outcome === HEADROOM.HOLD);
 }
 
 function thermalOf(capability) {
