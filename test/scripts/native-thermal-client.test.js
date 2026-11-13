@@ -133,3 +133,35 @@ test('a launch rejection retains closure of an already active child', async () =
   assert.equal(result.nextFileIndex, 2);
   assert.equal(result.refusal.reason, 'launch rejected');
 });
+
+test('cadence consumes a child closure that occurs during native observation',
+  {timeout: BOUND_MS}, async () => {
+    let closeFirst;
+    const first = new Promise((resolve) => { closeFirst = resolve; });
+    let reads = 0;
+    let firstClosedAt;
+    let secondStartedAt;
+    const policy = {mode: 'sensor-required', cadence_ms: 5000, max_concurrency: 1};
+    const env = {[TEST_EXECUTION_CONTEXT_ENV]: undefined,
+      [THERMAL_DEADLINE_ENV]: String(Date.now() + BOUND_MS)};
+    const result = await runAdmittedTestFiles(['first', 'second'], {env, jobs: 1, write() {},
+      thermalRead: async () => {
+        reads += 1;
+        if (reads === 2) {
+          firstClosedAt = performance.now();
+          closeFirst({file: 'first', ok: true, assertions: 1});
+          await first;
+          // Allow the existing owner's result and final-close handlers to settle.
+          await Promise.resolve();
+        }
+        return {outcome: HEADROOM.READY, execution_policy: policy};
+      }}, (file) => {
+      if (file === 'first') return first;
+      secondStartedAt = performance.now();
+      return Promise.resolve({file, ok: true, assertions: 1});
+    });
+    assert.equal(result.refusal, null);
+    assert.equal(result.results.length, 2);
+    assert.ok(secondStartedAt - firstClosedAt >= policy.cadence_ms,
+      `next start after ${secondStartedAt - firstClosedAt}ms`);
+  });

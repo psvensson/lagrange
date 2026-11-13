@@ -8,6 +8,63 @@ import {
 
 export const BATCH_PREVIOUS_CLOSE_ENV = 'LAGRANGE_TEST_BATCH_PREVIOUS_CLOSE_MS';
 
+const ADMISSION_STEP = Object.freeze({LAUNCH: 'launch', RECHECK: 'recheck', REFUSE: 'refuse'});
+
+function executionExpired(nested, signal, deadline) {
+  return !nested && (signal?.aborted || performance.now() >= deadline);
+}
+
+function previousBatchClose(env) {
+  const previousClose = env[BATCH_PREVIOUS_CLOSE_ENV];
+  if (previousClose !== undefined && !Number.isSafeInteger(Number(previousClose))) {
+    throw new Error('invalid previous batch closure');
+  }
+  return previousClose === undefined ? null :
+    performance.now() + Number(previousClose) - Date.now();
+}
+
+// One current decision before a pool claim. Active files settle normally before
+// any cooling/cadence wait; a wait returns RECHECK so no old observation grants
+// a later file admission. The caller alone owns results and the next file index.
+async function prepareFileAdmission({nested, requestedJobs, active, read, env, deadline,
+  signal, write, getLastClose, alreadyRefused}) {
+  if (nested) return {step: ADMISSION_STEP.LAUNCH, limit: requestedJobs};
+  let decision;
+  try {
+    decision = await read();
+    if (alreadyRefused()) return {step: ADMISSION_STEP.RECHECK};
+    if (decision.outcome === HEADROOM.HOLD) {
+      await Promise.all(active);
+      if (alreadyRefused()) return {step: ADMISSION_STEP.RECHECK};
+      decision = await waitForThermalHeadroom({env, deadline, read, signal,
+        log: (line) => write(`${line}\n`)});
+    }
+  } catch (error) {
+    return {step: ADMISSION_STEP.REFUSE,
+      decision: {outcome: HEADROOM.UNAVAILABLE, reason: error.message}};
+  }
+  write(`${formatThermalOutcome(decision)}\n`);
+  if (!thermalPermits(decision)) return {step: ADMISSION_STEP.REFUSE, decision};
+  const {cadence_ms: cadence, max_concurrency: maximum} = decision.execution_policy;
+  if (cadence > 0 && active.size > 0) {
+    await Promise.all(active);
+    return {step: ADMISSION_STEP.RECHECK};
+  }
+  const lastClose = getLastClose();
+  if (cadence > 0 && lastClose !== null && performance.now() < lastClose + cadence) {
+    try {
+      const remaining = deadline - performance.now();
+      await delay(Math.min(lastClose + cadence - performance.now(), remaining),
+        undefined, {signal});
+    } catch (error) {
+      return {step: ADMISSION_STEP.REFUSE,
+        decision: {outcome: HEADROOM.EXHAUSTED, reason: error.message}};
+    }
+    return {step: ADMISSION_STEP.RECHECK};
+  }
+  return {step: ADMISSION_STEP.LAUNCH, limit: Math.min(requestedJobs, maximum)};
+}
+
 export async function runAdmittedTestFiles(files, options, launch) {
   const env = {...process.env, ...options.env};
   const nested = executionContext(env) !== null;
@@ -21,65 +78,30 @@ export async function runAdmittedTestFiles(files, options, launch) {
     env, deadline, signal: options.signal,
   }));
   let nextFileIndex = 0;
-  const previousClose = env[BATCH_PREVIOUS_CLOSE_ENV];
-  if (previousClose !== undefined && !Number.isSafeInteger(Number(previousClose))) {
-    throw new Error('invalid previous batch closure');
-  }
-  let lastClose = previousClose === undefined ? null :
-    performance.now() + Number(previousClose) - Date.now();
+  let lastClose = previousBatchClose(env);
   let refusal = null;
   // One orchestration loop owns the index. No worker can claim a file while
   // another admission is pending, and waiting never blocks child close/output.
   while (nextFileIndex < files.length) {
     if (refusal) break;
-    if (!nested && (options.signal?.aborted || performance.now() >= deadline)) {
+    if (executionExpired(nested, options.signal, deadline)) {
       refusal = {outcome: HEADROOM.EXHAUSTED, reason: 'cancelled or owned deadline expired'};
       break;
     }
-    let limit = requestedJobs;
-    if (!nested) {
-      let decision;
-      try {
-        decision = await read();
-      } catch (error) {
-        refusal = {outcome: HEADROOM.UNAVAILABLE, reason: error.message};
-        break;
-      }
-      if (refusal) break;
-      if (decision.outcome === HEADROOM.HOLD) {
-        await Promise.all(active);
-        decision = await waitForThermalHeadroom({env, deadline, read,
-          signal: options.signal, log: (line) => write(`${line}\n`)});
-      }
-      if (refusal) break;
-      write(`${formatThermalOutcome(decision)}\n`);
-      if (!thermalPermits(decision)) {
-        refusal = decision;
-        break;
-      }
-      limit = Math.min(limit, decision.execution_policy.max_concurrency);
-      const cadence = decision.execution_policy.cadence_ms;
-      if (cadence > 0 && active.size > 0) {
-        await Promise.all(active);
-        continue;
-      }
-      if (cadence > 0 && lastClose !== null && performance.now() < lastClose + cadence) {
-        try {
-          const remaining = deadline - performance.now();
-          await delay(Math.min(lastClose + cadence - performance.now(), remaining),
-            undefined, {signal: options.signal});
-        } catch (error) {
-          refusal = {outcome: HEADROOM.EXHAUSTED, reason: error.message};
-          break;
-        }
-        continue;
-      }
+    const admission = await prepareFileAdmission({nested, requestedJobs, active, read,
+      env, deadline, signal: options.signal, write, getLastClose: () => lastClose,
+      alreadyRefused: () => refusal !== null});
+    if (refusal) break;
+    if (admission.step === ADMISSION_STEP.REFUSE) {
+      refusal = admission.decision;
+      break;
     }
-    if (!nested && (options.signal?.aborted || performance.now() >= deadline)) {
+    if (admission.step === ADMISSION_STEP.RECHECK) continue;
+    if (executionExpired(nested, options.signal, deadline)) {
       refusal = {outcome: HEADROOM.EXHAUSTED, reason: 'cancelled or owned deadline expired'};
       break;
     }
-    if (active.size >= limit) {
+    if (active.size >= admission.limit) {
       await Promise.race(active);
       continue;
     }
