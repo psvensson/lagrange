@@ -1,0 +1,40 @@
+LAB_HOST=tv-dator
+v22.23.2
+7793a01fcd5a91be6a69a9663a7ed9bb63ec8170
+add9e8dc980515c820579bc42ff90b00681df5bd
+bc9e83a24cee235aa7fd33ff9777dc97d229903c
+CANDIDATE_SCOPE=focused publication repair validation; canonical generated inputs and full-corpus proof remain separate obligations
+npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+
+> lagrange-server@0.4.0 prepare
+> node -e "import('node:fs').then(({existsSync}) => existsSync('scripts/install-git-hooks.js') && import('./scripts/install-git-hooks.js'))"
+
+[hooks] Installed repo hooks at .githooks
+
+added 964 packages in 1m
+npm notice
+npm notice New major version of npm available! 10.9.8 -> 12.2.2
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.2
+npm notice To update run: npm install -g npm@12.2.2
+npm notice
+SQLITE_NATIVE_PROVENANCE={"version":"3.49.2","source_id":"2025-05-07 10:39:52 17144570b0d96ae63cd6f3edca39e27ebd74925252bbaf6723bcb2f6b4861fb1","addon_sha256":"d7d9272b12d11c1dc2bb787741b1b7c4037d336155f316ace3420410c28fda37"}
+CANDIDATE_SIGNAL_OBSERVATION_BEGIN=one finite fixture observation; no proof acceptance interpretation
+{"kind":"materializer-signal-observation","ceiling":"scheduling and evidence observation only","childExit":0,"signalSent":true,"outcome":{"code":0,"signal":null,"error":null},"childAliveAfterClose":false,"originalRetained":false,"archived":[],"stdout":"[proof-checkout] import-graph not generated: this commit has no scripts/generate-global-owner-debt-inventory.js\n[push-gate] proving d6e1618bab74dd20414a72b1f2f5372bcd65b2cc in /home/peter/.local/state/lagrange-lab-worker/generic/runs/648825e9-f5d2-4eba-9e7c-1b12afa18b40/work/tmp/materializer-signal-Ks8tHr/repo/test-output/push-gate-worktrees/session-worktree-7p5JH4/tree: /home/peter/.nvm/versions/node/v22.23.2/bin/node -e const fs = require(\"node:fs\");\nfs.mkdirSync(\"test-output/acceptance\", {recursive: true});\nfs.writeFileSync(\"test-output/acceptance/gate.report.json\", \"{\\\"commands\\\":[{\\\"status\\\":\\\"FAIL\\\",\\\"artifactIdentity\\\":{\\\"path\\\":\\\"test-output/acceptance/original.txt\\\"}}]}\");\nfs.writeFileSync(\"test-output/acceptance/original.txt\", \"finite original diagnostic, child exit 0\\n\");\nfs.writeFileSync(\"/tmp/lab-1000-fe35749a999a70f5/materializer-signal-Ks8tHr/started.json.tmp\", JSON.stringify({pid: process.pid, parent: process.ppid, checkout: process.cwd()}));\nfs.renameSync(\"/tmp/lab-1000-fe35749a999a70f5/materializer-signal-Ks8tHr/started.json.tmp\", \"/tmp/lab-1000-fe35749a999a70f5/materializer-signal-Ks8tHr/started.json\");\nconst timer = setInterval(() => { if (fs.existsSync(\"/tmp/lab-1000-fe35749a999a70f5/materializer-signal-Ks8tHr/release\")) {clearInterval(timer); process.exit(0); } }, 25);\nsetTimeout(() => process.exit(99), 10000);\n","stderr":""}
+{"kind":"materializer-signal-observation","ceiling":"scheduling and evidence observation only","childExit":42,"signalSent":true,"outcome":{"code":42,"signal":null,"error":null},"childAliveAfterClose":false,"originalRetained":false,"archived":["dc70773d2ec09481b3eb11f85f8ab35c8b66b527"],"stdout":"[proof-checkout] import-graph not generated: this commit has no scripts/generate-global-owner-debt-inventory.js\n[push-gate] proving dc70773d2ec09481b3eb11f85f8ab35c8b66b527 in /home/peter/.local/state/lagrange-lab-worker/generic/runs/648825e9-f5d2-4eba-9e7c-1b12afa18b40/work/tmp/materializer-signal-gjf0cD/repo/test-output/push-gate-worktrees/session-worktree-jstJ4i/tree: /home/peter/.nvm/versions/node/v22.23.2/bin/node -e const fs = require(\"node:fs\");\nfs.mkdirSync(\"test-output/acceptance\", {recursive: true});\nfs.writeFileSync(\"test-output/acceptance/gate.report.json\", \"{\\\"commands\\\":[{\\\"status\\\":\\\"FAIL\\\",\\\"artifactIdentity\\\":{\\\"path\\\":\\\"test-output/acceptance/original.txt\\\"}}]}\");\nfs.writeFileSync(\"test-output/acceptance/original.txt\", \"finite original diagnostic, child exit 42\\n\");\nfs.writeFileSync(\"/tmp/lab-1000-fe35749a999a70f5/materializer-signal-gjf0cD/started.json.tmp\", JSON.stringify({pid: process.pid, parent: process.ppid, checkout: process.cwd()}));\nfs.renameSync(\"/tmp/lab-1000-fe35749a999a70f5/materializer-signal-gjf0cD/started.json.tmp\", \"/tmp/lab-1000-fe35749a999a70f5/materializer-signal-gjf0cD/started.json\");\nconst timer = setInterval(() => { if (fs.existsSync(\"/tmp/lab-1000-fe35749a999a70f5/materializer-signal-gjf0cD/release\")) {clearInterval(timer); process.exit(42); } }, 25);\nsetTimeout(() => process.exit(99), 10000);\n","stderr":"[push-gate] gate diagnostics retained in /home/peter/.local/state/lagrange-lab-worker/generic/runs/648825e9-f5d2-4eba-9e7c-1b12afa18b40/work/tmp/materializer-signal-gjf0cD/repo/test-output/push-gate/dc70773d2ec09481b3eb11f85f8ab35c8b66b527\n"}
+CANDIDATE_SIGNAL_OBSERVATION_EXIT=0
+CANDIDATE_FOCUSED_GROUP=publisher and local corpus
+CANDIDATE_FOCUSED_ROOT=test/scripts/local-corpus.test.js
+CANDIDATE_FOCUSED_ROOT=test/scripts/publish-head.test.js
+CANDIDATE_FOCUSED_ROOT=test/scripts/publish-head-workspace-links.test.js
+CANDIDATE_FOCUSED_ROOT=test/scripts/prune-test-output.test.js
+CANDIDATE_FOCUSED_ROOT=test/scripts/proof-checkout-preparation.test.js
+CANDIDATE_FOCUSED_ROOT=test/scripts/pre-push-hook-control-flow.test.js
+ok test/scripts/local-corpus.test.js (18 assertions, 2005ms)
+ok test/scripts/publish-head-workspace-links.test.js (3 assertions, 190ms)
+ok test/scripts/prune-test-output.test.js (22 assertions, 320ms)
+ok test/scripts/proof-checkout-preparation.test.js (8 assertions, 1267ms)
+ok test/scripts/publish-head.test.js (151 assertions, 4360ms)
+ok test/scripts/pre-push-hook-control-flow.test.js (20 assertions, 2096ms)
+# test-files total=6 pass=6 fail=0 assertions=222
+CANDIDATE_FOCUSED_TEST_EXIT=0
+CANDIDATE_FOCUSED_FINAL_GUARD_EXIT=0

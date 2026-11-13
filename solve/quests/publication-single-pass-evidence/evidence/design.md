@@ -152,3 +152,33 @@ establish repository-write credentials, native artifact export/proof custody
 or a GitHub check bridge. Those remain delivery capability findings. This
 repair neither creates a new publisher nor supplies formation/schema-admission
 or release acceptance.
+
+## Measured materializer interruption
+
+The retained `materializer-original-3491.log` records two real SIGTERM sends
+while the exact-SHA materializer's child was live. The child configured to
+exit zero produced materializer zero and lost its diagnostic; the child
+configured to exit 42 produced materializer 42 and retained its diagnostic.
+The observer itself released each child after signalling. Their observed
+closure therefore does not prove cancellation. Root and author independently
+verified the complete 5,803-byte stream and its SHA256
+`8d4afcf1945b41ab6379026acf330d982f59ebff272502e35c79487604c5ce0d`.
+
+The existing `gateExactSha` producer and its sole `prepareProofCheckout`
+collaborator own the correction. Use one asynchronous, owned child wait for
+preparation and gate execution. The first interruption or failure stops later
+admission and remains primary through bounded child cleanup; a later zero
+cannot erase it. The signal handler requests cancellation and does not remove
+the checkout or exit around finalization. Ordinary completion and interruption
+reach one finalizer, which invokes the existing `retainGateDiagnostics` owner
+before removing a failed checkout. Failed retention or uncertain child cleanup
+keeps the original checkout and reports the unresolved obligation.
+
+Original-compatible controls extend `proof-checkout-preparation.test.js`
+through the real CLI and finite children. A live child acknowledges received
+cancellation; the test does not release it after signalling the materializer.
+Controls retain normal zero/42 behavior, preparation refusal before gate
+admission, bounded forced stop, and original checkout custody when copying
+fails. The original observer and earlier 37 control cases stay unchanged.
+The synchronous acceptance-manifest runner, remote section relay and native
+proof contracts retain their existing scope and requirements.
