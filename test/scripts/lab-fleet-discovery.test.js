@@ -757,7 +757,7 @@ test('the controller is probed by the same script it sends to a lab node', async
   assert.equal(calls[0].command, 'ssh');
   assert.equal(calls[0].args.at(-1), `${QUOTED_PATH_REMOTE} '${endpoint.python}' ` +
     `'${endpoint.entry}' '${endpoint.config}'`,
-    'the remote path is quoted for the remote shell, whatever it contains');
+  'the remote path is quoted for the remote shell, whatever it contains');
   assert.ok(calls[0].args.includes('ConnectTimeout=5'),
     'an address that answers nothing cannot hold discovery');
   assert.ok(calls[0].timeoutMs > 0, 'nor can a machine that answers and then hangs');

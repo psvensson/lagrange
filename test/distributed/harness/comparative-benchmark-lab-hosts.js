@@ -105,13 +105,13 @@ const THERMAL_GATE_WAIT_MS = 10 * 60 * 1000;
 const THERMAL_GATE_SOURCE_SHA = createHash('sha256').update(fs.readFileSync(
   new URL('../../../scripts/checks/wait-for-thermal-headroom.js', import.meta.url))).digest('hex');
 const REMOTE_THERMAL_GATE = [
-  "import fs from 'node:fs'; import {createHash} from 'node:crypto';",
-  "import {pathToFileURL} from 'node:url';",
+  'import fs from \'node:fs\'; import {createHash} from \'node:crypto\';',
+  'import {pathToFileURL} from \'node:url\';',
   'const [file, expected, descriptor, budget] = process.argv.slice(1);',
   // The imported owner has a CLI guard; this invocation is a library caller.
   'process.argv = [process.argv[0]];',
-  "if (createHash('sha256').update(fs.readFileSync(file)).digest('hex') !== expected) " +
-    "throw new Error('thermal client source differs');",
+  'if (createHash(\'sha256\').update(fs.readFileSync(file)).digest(\'hex\') !== expected) ' +
+    'throw new Error(\'thermal client source differs\');',
   'const owner = await import(pathToFileURL(file).href);',
   'const env = {...process.env, [owner.THERMAL_ENDPOINT_ENV]: descriptor,',
   '  [owner.THERMAL_DEADLINE_ENV]: String(Date.now() + Number(budget))};',

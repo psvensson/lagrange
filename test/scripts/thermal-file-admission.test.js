@@ -38,17 +38,17 @@ test('each of 101 actual file executions has its own thermal admission',
     const runnerRoot = process.cwd();
     for (const [index, file] of files.entries()) {
       const source = [
-        "import assert from 'node:assert/strict';",
-        "import {appendFileSync} from 'node:fs';",
-        "import {test} from 'node:test';",
+        'import assert from \'node:assert/strict\';',
+        'import {appendFileSync} from \'node:fs\';',
+        'import {test} from \'node:test\';',
         `const ledger = ${JSON.stringify(ledger)};`,
         `const file = ${JSON.stringify(file)};`,
-        "const record = (kind) => appendFileSync(ledger, JSON.stringify({kind, file}) + '\\n');",
-        "record('start');",
-        "test('finite admitted child', () => {",
+        'const record = (kind) => appendFileSync(ledger, JSON.stringify({kind, file}) + \'\\n\');',
+        'record(\'start\');',
+        'test(\'finite admitted child\', () => {',
         '  try {',
         `    assert.notEqual(${index}, 0, 'intentional original child failure');`,
-        "  } finally { record('end'); }",
+        '  } finally { record(\'end\'); }',
         '});',
         '',
       ].join('\n');
@@ -117,40 +117,40 @@ test('unavailable native sensor-required observation admits no file', async (t) 
 
 test('the actual placed shell preserves an explicit one-worker cap',
   {timeout: 12 * MINUTE}, async (t) => {
-  const placed = labFixture(t);
-  const native = nativeThermalFixture(t);
-  placed.machine.thermalEndpoint = native.endpoint;
-  placed.env[LANE_JOBS_CAP_ENV] = '1';
-  // Substitute only the declared processor-count producer, not the shell,
-  // lock, bundle, checkout, runner or output. Eight CPUs discriminate 1 vs7
-  // deterministically on every qualified host without claiming its CPU count.
-  const stubs = placed.env.PATH.split(path.delimiter)[0];
-  fs.writeFileSync(path.join(stubs, 'getconf'),
-    '#!/bin/sh\n[ "$#" = 1 ] && [ "$1" = _NPROCESSORS_ONLN ] || exit 64\n' +
-    'printf "8\\n"\n', {mode: 0o755});
-  const result = await placed.start([FAST_TEST], {
-    runId: 'thermal-explicit-cap',
-    forward: {tapTimeout: '900', checkBase: placed.basis, laneJobsCap: '1'},
-  }).done;
-  assert.equal(result.status, 0, result.log + result.errors);
-  assert.match(result.log, new RegExp(`^placement-head=${placed.sha}$`, 'mu'));
-  assert.ok(result.log.split('\n').some((line) => line.startsWith(`ok ${FAST_TEST} `)),
-    'the real classified child completed before the negative policy assertion');
-  const policy = result.log.split('\n').find((line) => line.startsWith('placement-env='));
-  t.diagnostic(policy);
-  assert.match(policy, / lanecap:1 /u,
-    'peer processor count cannot overwrite the explicit requested cap');
-});
+    const placed = labFixture(t);
+    const native = nativeThermalFixture(t);
+    placed.machine.thermalEndpoint = native.endpoint;
+    placed.env[LANE_JOBS_CAP_ENV] = '1';
+    // Substitute only the declared processor-count producer, not the shell,
+    // lock, bundle, checkout, runner or output. Eight CPUs discriminate 1 vs7
+    // deterministically on every qualified host without claiming its CPU count.
+    const stubs = placed.env.PATH.split(path.delimiter)[0];
+    fs.writeFileSync(path.join(stubs, 'getconf'),
+      '#!/bin/sh\n[ "$#" = 1 ] && [ "$1" = _NPROCESSORS_ONLN ] || exit 64\n' +
+      'printf "8\\n"\n', {mode: 0o755});
+    const result = await placed.start([FAST_TEST], {
+      runId: 'thermal-explicit-cap',
+      forward: {tapTimeout: '900', checkBase: placed.basis, laneJobsCap: '1'},
+    }).done;
+    assert.equal(result.status, 0, result.log + result.errors);
+    assert.match(result.log, new RegExp(`^placement-head=${placed.sha}$`, 'mu'));
+    assert.ok(result.log.split('\n').some((line) => line.startsWith(`ok ${FAST_TEST} `)),
+      'the real classified child completed before the negative policy assertion');
+    const policy = result.log.split('\n').find((line) => line.startsWith('placement-env='));
+    t.diagnostic(policy);
+    assert.match(policy, / lanecap:1 /u,
+      'peer processor count cannot overwrite the explicit requested cap');
+  });
 
 test('HOLD drains the actual admitted file before waiting or admitting another', async (t) => {
   const {root, files} = fixture(t, 2);
   const ledger = path.join(root, 'close-ledger');
   for (const file of files) {
     fs.writeFileSync(path.join(root, file), [
-      "import {test} from 'node:test';",
-      "import {appendFileSync} from 'node:fs';",
+      'import {test} from \'node:test\';',
+      'import {appendFileSync} from \'node:fs\';',
       `test('finite body', () => appendFileSync(${JSON.stringify(ledger)}, ` +
-        "String(process.pid) + '\\n'));",
+        'String(process.pid) + \'\\n\'));',
     ].join('\n'));
   }
   const native = nativeThermalFixture(t);
@@ -175,8 +175,10 @@ test('HOLD drains the actual admitted file before waiting or admitting another',
 
 test('a true first child failure survives refusal and later batches stay undelegated', (t) => {
   const {root, files} = fixture(t, 101);
-  for (const file of files) fs.writeFileSync(path.join(root, file),
-    "import {test} from 'node:test';\ntest('red', () => { throw new Error('first red'); });\n");
+  for (const file of files) {
+    fs.writeFileSync(path.join(root, file),
+      'import {test} from \'node:test\';\ntest(\'red\', () => { throw new Error(\'first red\'); });\n');
+  }
   const native = nativeThermalFixture(t, {outcomes: ['READY', 'UNAVAILABLE'],
     policy: {mode: 'sensor-required', cadence_ms: 0, max_concurrency: 1}});
   const batches = [];

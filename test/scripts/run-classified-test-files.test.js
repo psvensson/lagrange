@@ -255,7 +255,7 @@ test('inherited runner options cannot replace the root or child launcher', () =>
     fs.mkdirSync(path.join(fixtureRoot, 'scripts'), {recursive: true});
     fs.writeFileSync(path.join(fixtureRoot, fixture), '');
     fs.writeFileSync(path.join(fixtureRoot, 'scripts', 'run-test-files.js'),
-      "require('node:fs').writeFileSync(3, JSON.stringify({refused: false, exitStatus: 0}));\n");
+      'require(\'node:fs\').writeFileSync(3, JSON.stringify({refused: false, exitStatus: 0}));\n');
     Reflect.defineProperty(Object.prototype, 'spawn', {
       configurable: true,
       value() {

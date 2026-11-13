@@ -484,7 +484,8 @@ export async function runLabTest({plan, costs = [], commit, checkBase, on = null
   try {
     const {fleet = [], machines, held = []} = await deps.discover(commit.sha);
     const placed = split ? planLabSplit(plan, machines, {held, costs,
-      controller: controllerMachine(fleet), controllerHeadroom: await splitHeadroom(deps, commit.sha, controllerMachine(fleet))}) :
+      controller: controllerMachine(fleet),
+      controllerHeadroom: await splitHeadroom(deps, commit.sha, controllerMachine(fleet))}) :
       {assignments: placeLabLanes(plan, machines, {on, fleet})};
     const {assignments} = placed;
     for (const line of [...formatLabDecision(assignments), ...(split ? [formatLabController(placed),

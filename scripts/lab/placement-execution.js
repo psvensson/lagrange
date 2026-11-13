@@ -553,7 +553,8 @@ function runClassifiedChild(root, files, env, {onLine = null, checkBase = EMPTY,
   if (deadlineMs !== undefined) {
     const owned = Date.now() + deadlineMs;
     const outer = Number(env[THERMAL_DEADLINE_ENV]);
-    childEnv[THERMAL_DEADLINE_ENV] = String(Number.isFinite(outer) ? Math.min(outer, owned) : owned);
+    childEnv[THERMAL_DEADLINE_ENV] = String(
+      Number.isFinite(outer) ? Math.min(outer, owned) : owned);
   }
   const output = onLine ? PLACEMENT_STDIO_PIPE : PLACEMENT_STDIO_INHERIT;
   const listDir = path.join(root, PLACEMENT_LOG_PARENT);

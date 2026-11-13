@@ -1,3 +1,4 @@
+import {performance} from 'node:perf_hooks';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -63,12 +64,19 @@ test('cancelled cooling and original deadline never start another observation', 
   let reads = 0;
   const result = await waitForThermalHeadroom({deadline: performance.now() + BOUND_MS,
     signal: controller.signal,
-    read: async () => { reads += 1; return {outcome: HEADROOM.HOLD}; },
-    log() { controller.abort(); }});
+    read: async () => {
+      reads += 1;
+      return {outcome: HEADROOM.HOLD};
+    },
+    log() {
+      controller.abort();
+    }});
   assert.equal(result.outcome, HEADROOM.EXHAUSTED);
   assert.equal(reads, 1);
   const expired = await waitForThermalHeadroom({deadline: performance.now() - 1,
-    read: async () => { assert.fail('expired budget cannot invoke observer'); }});
+    read: async () => {
+      assert.fail('expired budget cannot invoke observer');
+    }});
   assert.equal(expired.outcome, HEADROOM.EXHAUSTED);
 });
 
@@ -77,13 +85,14 @@ test('the actual child owns file-body context and nested fixtures do not pause',
   const file = path.join(native.root, 'context.test.js');
   const seen = path.join(native.root, 'context.json');
   fs.writeFileSync(file, [
-    "import {test} from 'node:test';",
-    "import {writeFileSync} from 'node:fs';",
+    'import {test} from \'node:test\';',
+    'import {writeFileSync} from \'node:fs\';',
     `test('context', () => writeFileSync(${JSON.stringify(seen)},`,
     `  process.env.${TEST_EXECUTION_CONTEXT_ENV}));`,
   ].join('\n'));
   const originalEnv = JSON.stringify(native.env);
-  const top = await runTestFiles([file], {print: false, env: native.env, cwd: native.root, write() {}});
+  const top = await runTestFiles([file],
+    {print: false, env: native.env, cwd: native.root, write() {}});
   assert.equal(top.ok, true);
   assert.deepEqual(JSON.parse(fs.readFileSync(seen, 'utf8')),
     {version: 1, phase: 'file-body', file});
@@ -125,7 +134,10 @@ test('a launch rejection retains closure of an already active child', async () =
     {env, jobs: 2}, (file) => {
       if (file === 'rejected') return Promise.reject(new Error('launch rejected'));
       assert.equal(file, 'first');
-      return delay(20).then(() => { closed = true; return first; });
+      return delay(20).then(() => {
+        closed = true;
+        return first;
+      });
     });
   assert.equal(closed, true);
   assert.deepEqual(result.results, [first]);
@@ -137,7 +149,9 @@ test('a launch rejection retains closure of an already active child', async () =
 test('cadence consumes a child closure that occurs during native observation',
   {timeout: BOUND_MS}, async () => {
     let closeFirst;
-    const first = new Promise((resolve) => { closeFirst = resolve; });
+    const first = new Promise((resolve) => {
+      closeFirst = resolve;
+    });
     let reads = 0;
     let firstClosedAt;
     let secondStartedAt;

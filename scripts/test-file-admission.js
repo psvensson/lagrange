@@ -1,3 +1,4 @@
+import {performance} from 'node:perf_hooks';
 // The existing file pool's admission boundary. The file runner owns actual
 // launch/capture/closure; this loop owns only which unstarted file may launch.
 import {setTimeout as delay} from 'node:timers/promises';

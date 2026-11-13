@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {performance} from 'node:perf_hooks';
 
 // Thermal decisions belong to the commissioned native worker. This client
 // verifies that owner's identity; it has no sensor discovery or temperature policy.
@@ -145,7 +146,9 @@ function invoke(endpoint, timeout, signal) {
         child.kill('SIGKILL');
       }
     });
-    child.on('error', (error) => { problem = error.message; });
+    child.on('error', (error) => {
+      problem = error.message;
+    });
     child.on('close', (status, killedBy) => {
       clearTimeout(timer);
       if (problem || killedBy) resolve(unavailable(problem ?? `observer signal ${killedBy}`));

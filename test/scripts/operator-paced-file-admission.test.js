@@ -19,20 +19,24 @@ test('operator-paced blind policy waits after actual closure and records unavail
   {timeout: MINUTE}, async (t) => {
     const {root, files} = fixture(t, 2);
     const ledger = path.join(root, 'cadence-ledger');
-    for (const file of files) fs.writeFileSync(path.join(root, file), [
-      "import {test} from 'node:test';",
-      "import {appendFileSync} from 'node:fs';",
-      `const ledger = ${JSON.stringify(ledger)};`,
-      "appendFileSync(ledger, JSON.stringify({kind:'start', at:Date.now()}) + '\\n');",
-      "test('finite', () => {});",
-      "process.on('exit', () => appendFileSync(ledger, " +
-        "JSON.stringify({kind:'exit', at:Date.now()}) + '\\n'));",
-    ].join('\n'));
+    for (const file of files) {
+      fs.writeFileSync(path.join(root, file), [
+        'import {test} from \'node:test\';',
+        'import {appendFileSync} from \'node:fs\';',
+        `const ledger = ${JSON.stringify(ledger)};`,
+        'appendFileSync(ledger, JSON.stringify({kind:\'start\', at:Date.now()}) + \'\\n\');',
+        'test(\'finite\', () => {});',
+        'process.on(\'exit\', () => appendFileSync(ledger, ' +
+          'JSON.stringify({kind:\'exit\', at:Date.now()}) + \'\\n\'));',
+      ].join('\n'));
+    }
     const native = nativeThermalFixture(t, {outcomes: ['UNAVAILABLE'],
       policy: {mode: 'operator-paced', cadence_ms: 5000, max_concurrency: 1}});
     const lines = [];
     const result = await runTestFiles(files, {print: false, cwd: root, env: native.env, jobs: 4,
-      write(line) { lines.push(line); }});
+      write(line) {
+        lines.push(line);
+      }});
     assert.equal(result.ok, true);
     const events = fs.readFileSync(ledger, 'utf8').trim().split('\n').map(JSON.parse);
     assert.deepEqual(events.map((event) => event.kind), ['start', 'exit', 'start', 'exit']);
@@ -51,13 +55,13 @@ test('operator cadence also spans actual classified lane child boundaries',
       const target = path.join(native.root, file);
       fs.mkdirSync(path.dirname(target), {recursive: true});
       fs.writeFileSync(target, [
-        "import {test} from 'node:test';",
-        "import {appendFileSync} from 'node:fs';",
+        'import {test} from \'node:test\';',
+        'import {appendFileSync} from \'node:fs\';',
         `const ledger = ${JSON.stringify(ledger)};`,
-        "appendFileSync(ledger, JSON.stringify({kind:'start', at:Date.now()}) + '\\n');",
-        "test('finite body', () => {});",
-        "process.on('exit', () => appendFileSync(ledger, " +
-          "JSON.stringify({kind:'exit', at:Date.now()}) + '\\n'));",
+        'appendFileSync(ledger, JSON.stringify({kind:\'start\', at:Date.now()}) + \'\\n\');',
+        'test(\'finite body\', () => {});',
+        'process.on(\'exit\', () => appendFileSync(ledger, ' +
+          'JSON.stringify({kind:\'exit\', at:Date.now()}) + \'\\n\'));',
       ].join('\n'));
     }
     let batches = 0;

@@ -93,7 +93,8 @@ test('the thermal gate carries the endpoint and a fixed remote deadline through 
   async (t) => {
     const native = nativeThermalFixture(t);
     const hosts = HOSTS.map((host) => ({...host, repoPath: process.cwd(),
-      nodePath: process.execPath, thermalEndpoint: native.endpoint, executionPolicy: SENSOR_POLICY}));
+      nodePath: process.execPath, thermalEndpoint: native.endpoint,
+      executionPolicy: SENSOR_POLICY}));
     const calls = [];
     const sshRun = async (_ip, _opts, command, timeoutMs) => {
       calls.push({command, timeoutMs});
@@ -290,7 +291,7 @@ test('the load generator needs room for the harness worktree on its checkout fil
       ['carinas-windows', 'free'], ['lenovo-laptop', 'free'], ['tv-dator', 'free']]);
     state.nodes['adam-laptop'].testCapability.dockerRootFreeBytes = 390 * 1024 * 1024;
     Object.assign(state.nodes['carinas-windows'].testCapability,
-    thermalFacts('carinas-windows', 'UNAVAILABLE'));
+      thermalFacts('carinas-windows', 'UNAVAILABLE'));
     state.nodes['adam-laptop'].testCapability.repoFreeBytes = REQUIREMENT.requiredBytes;
     const select = () => selectLabBenchmarkHosts({state, dataHostCount: 3,
       nodeMinimum: '22.12.0', loadGeneratorRequirement: REQUIREMENT});
