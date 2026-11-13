@@ -472,3 +472,28 @@ for (const childExit of [0, 42]) {
     assert.match(result.stderr, /checkout cleanup unavailable/u);
   });
 }
+
+for (const supplied of [false, true]) {
+  test(`the exact gate provides complete synchronous stdin with supplied=${supplied}`, (t) => {
+    const root = fixture(t, WRITES_GRAPH);
+    const control = path.join(root, 'test-output', 'ref-input');
+    fs.mkdirSync(control, {recursive: true});
+    const input = path.join(control, 'refs');
+    const seen = path.join(control, 'seen');
+    const refs = supplied ? `refs/heads/review ${'a'.repeat(40)} refs/heads/main ${'b'.repeat(40)}\n` :
+      '';
+    if (supplied) fs.writeFileSync(input, refs);
+    const command = 'const fs = require("node:fs");' +
+      `fs.writeFileSync(${JSON.stringify(seen)}, fs.readFileSync(0, "utf8"));`;
+    const env = gitProcessEnvironment();
+    delete env.NODE_TEST_CONTEXT;
+    const result = spawnSync(process.execPath, [MATERIALIZER, '--gate', 'HEAD',
+      ...(supplied ? ['--ref-lines', input] : []), '--run', process.execPath, '-e', command],
+    {cwd: root, encoding: 'utf8', env});
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.equal(fs.readFileSync(seen, 'utf8'), refs,
+      'a synchronous fd0 reader received the complete declared input and EOF');
+    assert.deepEqual(fs.readdirSync(path.join(root, 'test-output', 'push-gate-worktrees')), [],
+      'the completed gate left no owned input or checkout behind');
+  });
+}
