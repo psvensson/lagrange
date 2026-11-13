@@ -1,6 +1,6 @@
 ---
 audience: agent
-last_reviewed: 2026-11-12
+last_reviewed: 2026-11-13
 ---
 
 # Quest workflow
@@ -31,6 +31,29 @@ before implementation and apply the
 [feature-journey policy](../../../test/guidelines/release-gate.md#major-feature-user-journeys)
 when sealing and reviewing completion. That policy keeps bounded repair and
 feature acceptance distinct; it adds no second acceptance record or gate stage.
+
+## Causal scope
+
+Treat an unexplained failure as potentially systemic until evidence bounds its
+cause and affected interaction. Read relevant recurrence history and analogous
+owner contracts before settling on a local repair. This is a causal inquiry,
+not a requirement to census the whole repository for every routine edit.
+
+Account for the producer, consumers, production binding, retained obligations
+and necessary witnesses. Change only the parts needed to repair and prove that
+interaction. A coupled-pair selection identifies proof obligations; it does not
+authorize editing every selected owner. Split unrelated outcomes into separate
+units, while keeping a contract change and its invalidated callers together.
+
+Before writing, record the writable paths or owner boundaries, candidate/base,
+dependencies and material exclusions in an existing Quest finding or, for a
+direct change, its review description. An epic's `authorizes` is an outer
+boundary, not the worker's assignment. Record a necessary scope amendment under
+existing authority before editing beyond the assignment, and reassess affected
+review and proof. A changed sealed premise still requires explicit supersession.
+Route unrelated discoveries to their owners. The current executable scope
+limits are described in [Workflow Validators](../../../docs/development/quest-validators.md);
+an unsupported record field does not create a guard.
 
 ## Contract-first owner work
 
@@ -108,9 +131,19 @@ When a recorded decision refines a general instruction, update the canonical
 owner guidance in the same change and preserve the historical decision.
 
 A change under `src/` lands only behind independent approval newer than the
-last attempt, naming the verifier and reviewed content. A standing rejection
-blocks landing until answered. Evidence reuse needs applicability under the
-existing provenance and proof-selection rules, not an assertion of sameness.
+last attempt, naming the verifier and reviewed content. The same review
+requirement applies to changes that select, execute, interpret, admit or publish
+proof, including harnesses, fixtures, thresholds, configuration and operative
+acceptance prose. File extension alone does not make a change inert. Ordinary
+explanatory documentation retains the direct-change route; this does not exempt
+source edits from their existing review requirement.
+
+A standing rejection blocks landing until answered. Review must remain bound
+to the actual candidate and acceptance inputs; retain unaffected approval only
+where the existing provenance and proof-selection owners establish applicability.
+The [validator owner](../../../docs/development/quest-validators.md) distinguishes
+this policy from the narrower automatic review trigger. Use the same independent
+review record, without adding another approval stage.
 
 ## Landing, publication and continuation
 

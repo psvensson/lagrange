@@ -3,7 +3,7 @@ scope: testing
 status: canonical
 always_load: false
 source_of_truth: self
-last_reviewed: 2026-10-30
+last_reviewed: 2026-11-13
 ---
 
 > **Canonical source.** Scenario and release-gate Quest proof policy. Index:
@@ -66,10 +66,11 @@ failing scenario as a passing repair after measurement. Repeated migrations of
 the dominant blocker prompt a causal reassessment by the current author,
 reviewer, and integration owner, not an automatic architecture task.
 
-A shared-contract repair includes its affected status, diagnostics, admin,
-harness, and reporting consumers. The work is bounded by the changed contract
-and reachable consequences, not by an obligation to repair every historical
-defect encountered during review.
+A shared-contract repair accounts for affected status, diagnostics, admin,
+harness, and reporting consumers; edit only those whose contract or proof is
+invalidated. The work is bounded by the changed contract and reachable
+consequences, not by an obligation to repair every historical defect encountered
+during review.
 
 ## Evidence Ceilings
 
@@ -84,6 +85,11 @@ exercise the real runtime and dependencies. A physical distributed run can prove
 the named network, process, host, and storage failure domains actually used.
 Several processes or containers on one host do not establish independent host
 failure evidence. None of these layers silently substitutes for another.
+
+A structural check proves only its checked property: a witness file exists, an
+import resolves, or a classified inventory is complete. It does not prove that
+the witness ran, production reached the owner, or the claimed behavior held.
+Report these observations separately from executed behavioral evidence.
 
 Use an existing supported configuration when it supplies the needed workload.
 If a capability is proposed for exclusion, first compare completing it with
@@ -112,8 +118,8 @@ terminal disposition. It cannot turn an unresolved product failure into a pass.
 
 Use this order for scenario-driven work:
 
-1. Focused regression through the real owner path, including a meaningful
-   red-on-revert control when it can discriminate the defect.
+1. Focused regression through the real owner path, with a meaningful known-bad
+   causal control before broader execution when it can discriminate the defect.
 2. Static guardrails relevant to that boundary and affected consumers.
 3. Shared unit or dependency gates required by the selected change proof.
 4. Native, physical, or representative service evidence when the claim needs
@@ -134,9 +140,20 @@ and N calibration remain single-homed in
 A deterministic repair proof must reach the production owner and the observable
 its contract promises. A test of a new helper's return value is insufficient
 when production cannot reach it. Trace the real entry path and use a
-red-on-revert witness at the actual seam; label source-only reachability arguments
-as such. A deterministic fixture does not establish real in-cluster behavior
-merely by giving its values the same names.
+meaningful causal control at the actual seam; label source-only reachability
+arguments as such. A deterministic fixture does not establish real in-cluster
+behavior merely by giving its values the same names.
+
+When a control can discriminate the defect, the first focused attempt reuses an
+applicable pre-repair or red-on-revert witness, or deliberately breaks the
+claimed mechanism at its real seam. Name the assertion that detects the defect
+and retain its observed failure. An outer
+negative-control test may pass by correctly observing rejection; keep the bad
+execution identifiable and exclude it from positive certification samples.
+Import, setup, missing-method or timeout-before-engagement failures are not
+causal controls. An unavailable historical runtime does not require a new
+simulator or block unrelated work: state the evidence limitation and select a
+discriminating control where possible. Required sealed proof remains binding.
 
 Before measuring an aggregate improvement, show that the repaired mechanism
 engages and changes its intended observable. Retain separate verdicts for
@@ -225,21 +242,22 @@ require a whole-project rewrite.
 
 ## Static Gate Baselines Are A One-Way Ratchet
 
-Committed static-gate baselines — the `BASELINE_COUNT` constants in
+Committed static-gate baselines - the `BASELINE_COUNT` constants in
 `scripts/check-complexity.js` / `scripts/check-cognitive-complexity.js`, the
 file-size baselines in `scripts/check-file-size-thresholds.js`, and
-known-violations files such as `.dependency-cruiser-known-violations.json` —
-MUST NOT increase, with the single re-anchor exception below.
+known-violations files such as `.dependency-cruiser-known-violations.json` -
+must not increase to admit a change. Inherited debt is an inventory, not
+permission for new debt; removing one violation cannot fund another. Preserve
+violation identity across a justified move. Tighten a baseline in the change
+that removes violations whenever the measured count drops below the committed one.
 
-- An upward re-anchor MUST satisfy all of: the gate was silently red (never
-  ran clean before), it happens at most once per gate, it anchors at
-  measured reality, and the same commit records BOTH a dated in-code comment
-  naming the measured value and the refactor target (the existing idiom) AND
-  a decision-log entry in the owning epic.
-- Do not treat a baseline increase lacking both same-commit artifacts as a
-  judgment call; it is a guideline violation.
-- Tighten a baseline in the same change that removes violations whenever the
-  measured count drops below the committed one.
+A defective measurement may be repaired with independent review. Compare the
+old and corrected checker on the same pinned source; explain the changed
+coverage, retain the earlier records and newly exposed debt, and record the
+decision with the existing work. A corrected count is not product improvement
+or permission to reset debt under a new checker version. A previously silent
+red gate does not authorize an upward acceptance re-anchor. Existing sealed
+acceptance changes only by explicit supersession.
 
 When a delegated worker reviews a scenario Quest, compare current evidence with
 the sealed claim and recorded findings. Consolidate scoped findings with their

@@ -3,7 +3,7 @@ scope: governance
 status: canonical
 always_load: false
 source_of_truth: self
-last_reviewed: 2026-10-22
+last_reviewed: 2026-11-13
 ---
 
 > **Canonical source.** Quest validation and honesty policy. Reached from the
@@ -52,12 +52,33 @@ receipt rules establish applicability to the current change, including relevant
 dependencies, callers, configuration and environment. If applicability cannot
 be established, run the necessary proof; a prose assurance is no substitute.
 
-For `src/` changes, landing requires an independent `subagent:<id>` approval
-newer than the last attempt; a current rejection refuses landing. The runtime
-checks identity format and log order. The author and reviewer must also bind
-the review to the actual changed content and evidence, record a new attempt
-after a material repair, and renew review for what that repair invalidates.
-Preserve applicable unaffected findings instead of restarting the whole review.
+The [review policy](../steering/workflow-guidelines/solver-quests.md#recording-and-review)
+covers source and proof/acceptance changes. The current automatic trigger in
+`requiresVerification` is narrower: paths under `src/` require an independent
+`subagent:<id>` approval newer than the last attempt. A current rejection
+refuses landing. `note --verification` records a `candidateDigest`, and landing
+rejects a mismatch when the recorded and current digests are present. This is
+content checking as well as identity and log-order checking; it does not prove
+complete acceptance-input coverage or make an absent digest a required-field
+failure. The author and reviewer must bind the review to the actual content and
+evidence, record a new attempt after a material repair, and renew review for what
+that repair invalidates. Preserve applicable unaffected findings.
+
+## Required Conduct And Executable Coverage
+
+Policy applies even where an automatic check is narrower. `epicScopeProblems`
+checks a non-legacy epic's `authorizes`, also allowing the Quest directory, epic
+record and epic directory; it does not enforce a per-package assignment. Legacy
+epics and standalone fixes do not acquire that scope guard. Record and review the
+causal assignment under the [workflow owner](../steering/workflow-guidelines/solver-quests.md#causal-scope)
+rather than inventing a schema field or claiming a guard exists. Conversely, an
+implemented check establishes only the property it measures: artifact presence
+or a structural inventory is not execution evidence.
+
+Keep executable gaps and their next owners in the existing active work record,
+not a second permanent policy ledger. Update this implementation description
+when the owning guard changes; a documentation revision alone cannot make an
+unimplemented check pass.
 
 The existing landing guard requires an `altitude-check` finding after more
 than three attempts since the previous altitude check. Use it to reconsider
