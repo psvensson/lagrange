@@ -148,8 +148,10 @@ client's lockfile (at that commit) to the load generator's npm cache. It then ve
 the campaign's
 own check. A failure is typed and names the host and what is missing (a `provisioning_*` code,
 or the code of the campaign check that still refuses); fix it and run the step again. This path
-is tested through the real CLI with only `ssh` and `git push` scripted; it has not yet been run
-on GCP.
+is tested through the real CLI with only `ssh` and `git push` scripted, and its generated
+commands (storage preparation, image probe, commit push/checkout/probe, offline install) are
+executed in tests with the real shell, git and npm; it has not yet been run on GCP: registry
+pulls, `npm cache add` from the registry and `npm ci` on a fresh VM are unproven.
 
 ### Step 3 - Preview and run
 ```sh
