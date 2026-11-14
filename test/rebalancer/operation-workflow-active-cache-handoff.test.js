@@ -24,6 +24,15 @@ import {
 import {UNIFIED_SERVICE_TYPE} from
   '../../src/constants/unified-service-lifecycle.js';
 import {createTestCoordinator} from './test-helpers.js';
+import {
+  buildDerivedPriorityPartitionSummary,
+  isPrioritySpreadHolderServiceRow,
+} from
+  '../../src/control-plane/membership-publication-priority-partition-summary.js';
+import {
+  normalizeNodeIdList,
+  normalizePositiveInteger,
+} from '../../src/control-plane/membership-publication-row-helpers.js';
 
 const TEST_NODE_ID = 'active-cache-handoff-owner';
 const TEST_OPERATION_ID = 'active-cache-handoff-operation';
@@ -1274,5 +1283,126 @@ test(
     } finally {
       await coordinator.shutdown();
     }
+  },
+);
+
+// Real-consumer witness for the partial-row lifecycle reconciliation measured
+// on ed708dfd: the terminal handoff refresh runs through the production cache
+// repair path, then the priority-spread projection reads the same cache.
+const PEER_NODE_IDS = Object.freeze([
+  'active-cache-handoff-peer-1',
+  'active-cache-handoff-peer-2',
+]);
+
+function seedPrioritySpreadPeers(cache) {
+  PEER_NODE_IDS.forEach((nodeId, index) => {
+    const replicaId = `${TEST_PARTITION_ID}-r${index + 1}`;
+    cache.applySystemTableChange(
+      SYSTEM_TABLE_NAME.SERVICES,
+      CDC_OPERATION.UPSERT,
+      buildAuthoritativeServiceRow({
+        service_id: replicaId,
+        replica_id: replicaId,
+        node_id: nodeId,
+        address: `${nodeId}/partition/${replicaId}`,
+      }),
+    );
+  });
+}
+
+function projectPrioritySpread(cache) {
+  return buildDerivedPriorityPartitionSummary(
+    {
+      partitionRows: [{partition_id: TEST_PARTITION_ID, replica_count: 3}],
+      serviceRows: cache.getAll(SYSTEM_TABLE_NAME.SERVICES),
+      locallyEligibleNodeIds: [...PEER_NODE_IDS, TEST_NODE_ID],
+    },
+    {normalizeNodeIdList, normalizePositiveInteger},
+  );
+}
+
+async function driveHandoffOverCachedTarget(t, cachedTargetRow, authorityRow) {
+  const cache = new SystemTableCache();
+  seedPrioritySpreadPeers(cache);
+  cache.applySystemTableChange(
+    SYSTEM_TABLE_NAME.SERVICES,
+    CDC_OPERATION.UPSERT,
+    cachedTargetRow,
+  );
+  t.same(
+    projectPrioritySpread(cache).blockedPartitions[0]?.exclusionReasonCounts,
+    {[cachedTargetRow.status === 'active' ?
+      'raft_role_missing' : `status_${cachedTargetRow.status}`]: 1},
+    'before the handoff the projection excludes the cached target',
+  );
+  const coordinator = createTestCoordinator({
+    nodeId: TEST_NODE_ID,
+    cdcIntegrationService: buildProductionCacheRefreshHost({
+      cache,
+      authoritativeRow: authorityRow,
+    }),
+  });
+  const operation = buildSyncingAddOperation();
+  const completedOperationIds = [];
+  coordinator.workflowOwner.completeOperation =
+    async (completedOperation) => {
+      completedOperationIds.push(completedOperation.operationId);
+    };
+  try {
+    await coordinator.workflowOwner
+      .applyReconciledReplicaStatus(operation, ReplicaStatus.ACTIVE);
+  } finally {
+    await coordinator.shutdown();
+  }
+  const targetRow = cache.get(SYSTEM_TABLE_NAME.SERVICES, TEST_REPLICA_ID);
+  const summary = projectPrioritySpread(cache);
+  t.same(
+    completedOperationIds,
+    [TEST_OPERATION_ID],
+    'the handoff completes against the authoritative row',
+  );
+  t.same(targetRow, authorityRow, 'the cached target is the authoritative row');
+  t.equal(
+    isPrioritySpreadHolderServiceRow(targetRow),
+    true,
+    'the completed target is a priority-spread holder',
+  );
+  t.equal(summary?.satisfied, true, 'the projection includes the replica');
+  t.same(summary?.blockedPartitions, [], 'no replica is excluded');
+}
+
+test(
+  'ACTIVE terminal handoff installs the newer authoritative role over an ' +
+    'older null-role cached target before the projection reads it',
+  async (t) => {
+    await driveHandoffOverCachedTarget(
+      t,
+      buildAuthoritativeServiceRow({
+        status: ReplicaStatus.SYNCING,
+        raft_role: null,
+        state_entered_at: 5,
+        previous_state: 'creating',
+        updated_at: 5,
+        updated_at_hlc: '5-0-services-p1-r1',
+      }),
+      buildAuthoritativeServiceRow({previous_state: 'syncing'}),
+    );
+  },
+);
+
+test(
+  'ACTIVE terminal handoff repairs an ACTIVE cached target whose raft_role ' +
+    'is absent instead of skipping it as already aligned',
+  async (t) => {
+    await driveHandoffOverCachedTarget(
+      t,
+      buildAuthoritativeServiceRow({raft_role: null}),
+      buildAuthoritativeServiceRow({updated_at: 12}),
+    );
+    await driveHandoffOverCachedTarget(
+      t,
+      buildAuthoritativeServiceRow({raft_role: null}),
+      buildAuthoritativeServiceRow(),
+    );
   },
 );
