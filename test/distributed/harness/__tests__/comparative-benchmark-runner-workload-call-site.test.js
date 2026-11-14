@@ -26,6 +26,9 @@ const MANIFEST = buildComparativeCampaignManifest({campaignId: 'bench-x',
   profile: COMPARATIVE_SMOKE_PROFILE, targets: ['lagrange', 'tidb-tikv']});
 const RUN = MANIFEST.runs[0];
 const IMAGE = `sha256:${'a'.repeat(64)}`;
+// The load generator's checkout already holds the harness commit (the
+// presence probe answers exit 0); listed last so a combined command never matches it first.
+const COMMIT_PRESENT = [/git cat-file -e/u, '\n__exit_code=0'];
 
 function deployment() {
   return {roles: [{role: 'n', host: '10.0.0.1', containerId: 'c1'}],
@@ -184,22 +187,24 @@ test('an exhausted deployment is run unopened: the request names the setup failu
 // A lab host's shared checkout is at whatever commit it was last provisioned
 // with (and may carry local edits): the load generator never moves it. The
 // campaign runs the CLI from a throwaway detached worktree of that checkout at
-// the harness commit, fetched from origin when absent, and removes it after.
+// the harness commit, which the checkout must already hold (never fetched), and
+// removes it after.
 test('the load generator runs from a worktree at the harness commit, never the shared checkout',
   async () => {
     const host = {ip: '10.0.0.9', repoPath: '/srv/lagrange', nodePath: '/usr/bin/node'};
     const ssh = createScriptedSsh([[/git worktree add/u, 'abc'],
       [/run-benchmark-workload\.js/u, '\n__exit_code=0'],
       [/tail -n 1/u, JSON.stringify(b1Record())],
-      [/git rev-parse HEAD/u, 'abc']]);
+      [/git rev-parse HEAD/u, 'abc'], COMMIT_PRESENT]);
     const checkout = await prepareLoadGeneratorCheckout({sshRun: ssh.sshRun, opts: {}, host,
       harnessCommit: 'abc', campaignId: 'bench-x'});
     const worktree = '/srv/lagrange/test-output/bench-worktrees/bench-x';
     assert.equal(checkout.host.repoPath, worktree);
     assert.equal(host.repoPath, '/srv/lagrange');
-    const add = ssh.calls[0].command;
+    assert.match(ssh.calls[0].command, /^cd '\/srv\/lagrange' && git cat-file -e 'abc\^\{commit\}'/u);
+    assert.equal(arraySome(ssh.calls, (call) => stringIncludes(call.command, 'fetch')), false);
+    const add = ssh.calls[1].command;
     assert.match(add, /^cd '\/srv\/lagrange' && /u);
-    assert.match(add, /git cat-file -e 'abc\^\{commit\}' 2>\/dev\/null \|\| git fetch --quiet origin 'abc'/u);
     assert.match(add, /git worktree add --detach --quiet '\/srv\/lagrange\/test-output\/bench-worktrees\/bench-x' 'abc'/u);
     assert.match(add, /ln -s '\/srv\/lagrange\/node_modules' '\/srv\/lagrange\/test-output\/bench-worktrees\/bench-x\/node_modules'/u);
     await createRemoteWorkloadRunner({sshRun: ssh.sshRun, opts: {}, host: checkout.host,
@@ -213,7 +218,7 @@ test('the load generator runs from a worktree at the harness commit, never the s
 
 test('a worktree that is not at the harness commit refuses the campaign', async () => {
   const host = {ip: '10.0.0.9', repoPath: '/srv/lagrange', nodePath: '/usr/bin/node'};
-  const ssh = createScriptedSsh([[/git worktree add/u, 'deadbeef']]);
+  const ssh = createScriptedSsh([[/git worktree add/u, 'deadbeef'], COMMIT_PRESENT]);
   await assert.rejects(prepareLoadGeneratorCheckout({sshRun: ssh.sshRun, opts: {}, host,
     harnessCommit: 'abc', campaignId: 'bench-x'}),
   (error) => error.code === 'load_generator_commit_mismatch');
@@ -246,7 +251,7 @@ test('the load-generator worktree installs the reference-client drivers; a faile
   const host = {ip: '10.0.0.9', repoPath: '/srv/lagrange',
     nodePath: '/opt/node/v22/bin/node'};
   const installed = createScriptedSsh([[/git worktree add/u, 'abc'],
-    [/npm ci/u, '\n__exit_code=0']]);
+    [/npm ci/u, '\n__exit_code=0'], COMMIT_PRESENT]);
   const ok = await prepareLoadGeneratorCheckout({sshRun: installed.sshRun, opts: {}, host,
     harnessCommit: 'abc', campaignId: 'bench-x'});
   const install = arrayFind(installed.calls, (call) => stringIncludes(call.command, 'npm ci'));
@@ -257,7 +262,7 @@ test('the load-generator worktree installs the reference-client drivers; a faile
     [/npm ci/u, 'npm ERR! network\n__exit_code=1'],
     [/git rev-parse HEAD/u, 'abc'],
     [/run-benchmark-workload\.js/u, '\n__exit_code=0'],
-    [/tail -n 1 /u, JSON.stringify(b1Record())]]);
+    [/tail -n 1 /u, JSON.stringify(b1Record())], COMMIT_PRESENT]);
   const prepared = await prepareLoadGeneratorCheckout({sshRun: failed.sshRun, opts: {}, host,
     harnessCommit: 'abc', campaignId: 'bench-x'});
   assert.equal(prepared.host.driverInstall.status, 'failed');
@@ -271,11 +276,34 @@ test('the load-generator worktree installs the reference-client drivers; a faile
   assert.equal(record.dispatch.status, 'executed');
 });
 
+// The load generator's checkout must already hold the harness commit: an absent
+// commit is a typed refusal naming the host, checkout and commit. Nothing is
+// fetched from any remote and no worktree is created (owner rule: no fallback).
+test('a load-generator checkout without the harness commit refuses, typed, and never fetches',
+  async () => {
+    const host = {ip: '10.0.0.9', repoPath: '/srv/lagrange', nodePath: '/usr/bin/node'};
+    const ssh = createScriptedSsh([
+      [/git cat-file -e/u, 'fatal: Not a valid object name abc^{commit}\n__exit_code=128']]);
+    await assert.rejects(prepareLoadGeneratorCheckout({sshRun: ssh.sshRun, opts: {}, host,
+      harnessCommit: 'abc', campaignId: 'bench-x'}), (error) => {
+      assert.equal(error.code, 'load_generator_commit_absent');
+      assert.match(error.message, /10\.0\.0\.9/u);
+      assert.match(error.message, /\/srv\/lagrange/u);
+      assert.match(error.message, /abc/u);
+      assert.equal(error.diagnostic.harnessCommit, 'abc');
+      assert.equal(error.diagnostic.repoPath, '/srv/lagrange');
+      return true;
+    });
+    assert.equal(arraySome(ssh.calls, (call) => stringIncludes(call.command, 'fetch')), false);
+    assert.equal(arraySome(ssh.calls, (call) => stringIncludes(call.command, 'worktree add')),
+      false);
+  });
+
 test('a worktree removal that fails is recorded as an incomplete closure, never swallowed',
   async () => {
     const host = {ip: '10.0.0.9', repoPath: '/srv/lagrange', nodePath: '/usr/bin/node'};
     const ssh = createScriptedSsh([[/git worktree add/u, 'abc'],
-      [/git worktree remove/u, new Error('worktree locked')]]);
+      [/git worktree remove/u, new Error('worktree locked')], COMMIT_PRESENT]);
     const checkout = await prepareLoadGeneratorCheckout({sshRun: ssh.sshRun, opts: {}, host,
       harnessCommit: 'abc', campaignId: 'bench-x'});
     const closure = await checkout.release();
@@ -286,11 +314,11 @@ test('a worktree removal that fails is recorded as an incomplete closure, never 
 test('a failed checkout preparation keeps its cause and records the cleanup it attempted',
   async () => {
     const host = {ip: '10.0.0.9', repoPath: '/srv/lagrange', nodePath: '/usr/bin/node'};
-    const ssh = createScriptedSsh([[/git worktree add/u, new Error('fetch failed')],
-      [/git worktree remove/u, new Error('no such worktree')]]);
+    const ssh = createScriptedSsh([[/git worktree add/u, new Error('worktree add failed')],
+      [/git worktree remove/u, new Error('no such worktree')], COMMIT_PRESENT]);
     await assert.rejects(prepareLoadGeneratorCheckout({sshRun: ssh.sshRun, opts: {}, host,
       harnessCommit: 'abc', campaignId: 'bench-x'}), (error) => {
-      assert.match(error.message, /fetch failed/u);
+      assert.match(error.message, /worktree add failed/u);
       assert.equal(error.loadGeneratorWorktree.status, 'incomplete');
       assert.match(error.loadGeneratorWorktree.error, /no such worktree/u);
       return true;
