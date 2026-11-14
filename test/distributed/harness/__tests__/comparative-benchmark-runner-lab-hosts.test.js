@@ -245,7 +245,7 @@ test('the pinned image resolves per host by content identity across image stores
 test('an image absent on a host refuses the campaign naming host, role and image; no pull',
   async () => {
     const {sshRun, calls} = createScriptedSsh([
-      [/docker image inspect --format '\{\{\.Id\}\}' 'pingcap\/tikv:v8\.5\.8'/u,
+      [/docker image inspect --format '\{\{\.Id\}\}' '?pingcap\/tikv:v8\.5\.8/u,
         'Error: No such image: pingcap/tikv:v8.5.8\n__exit_code=1'],
       [/docker image inspect/u, `sha256:${'d'.repeat(64)}\n__exit_code=0`]]);
     const present = await ensureProductImages({hosts: [{ip: '10.0.0.1'}], role: 'data',
