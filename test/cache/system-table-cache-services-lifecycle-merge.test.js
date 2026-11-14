@@ -505,6 +505,51 @@ test(
 );
 
 test(
+  'SystemTableCache - pinned Q4 gap outside the grid: an identity column ' +
+    'that differs blocks the fill, then the identity overwrite exposes it',
+  (t) => {
+    // The incarnation check reads the cached row before the base overwrites
+    // identity columns from authority, so the first reconciliation leaves a
+    // Q1 cell and is not aligned; the next one fills it and aligns.
+    const authoritativeRow = buildLifecycleRow();
+    const cache = new SystemTableCache();
+    cache.applySystemTableChange(
+      TABLES.SERVICES,
+      CDC_OPERATIONS.UPSERT,
+      buildLifecycleRow({raft_role: null, node_id: 'node-a'}),
+    );
+    const reconcile = () => {
+      cache.applySystemTableChange(
+        TABLES.SERVICES,
+        CDC_OPERATIONS.UPSERT,
+        authoritativeRow,
+        {
+          mutationMode: SYSTEM_TABLE_CACHE_MUTATION_MODE
+            .AUTHORITATIVE_SERVICE_LIFECYCLE_RECONCILIATION,
+        },
+      );
+      const row = cache.get(TABLES.SERVICES, SERVICE_ID);
+      return {
+        row,
+        aligned: areAuthoritativeSystemTableCacheRowsAligned(
+          TABLES.SERVICES,
+          row,
+          authoritativeRow,
+        ),
+      };
+    };
+    const first = reconcile();
+    t.equal(first.row.node_id, 'node-b', 'identity follows authority');
+    t.equal(first.row.raft_role, null, 'the other incarnation kept its null');
+    t.equal(first.aligned, false, 'the first refresh is not aligned');
+    const second = reconcile();
+    t.equal(second.row.raft_role, 'follower', 'the next refresh fills it');
+    t.equal(second.aligned, true);
+    t.end();
+  },
+);
+
+test(
   'SystemTableCache - unresolved: an equal-version present role that ' +
     'disagrees with authority keeps the cached value and is reported aligned',
   (t) => {
