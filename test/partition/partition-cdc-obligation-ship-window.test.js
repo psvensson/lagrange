@@ -500,6 +500,96 @@ test('a pinned range is rebuilt when the window fell below its row count', async
   assertRecipientLogs(model);
 });
 
+// The window cut is a fact of the range, remembered by its cell: the pinned
+// retry is composed under the cell's cap, where nothing but that cap ends the
+// run, so only the cell knows the window held more rows back.
+test('a window-cut range that is covered on a pinned retry widens the window', async (t) => {
+  const rows = idsOf(12, 'pinned-cut');
+  const f = await fixture(t, {rows, subscribers: 2});
+  const model = installRecipientModel(f);
+  primeShipWindow(f, 4);
+  // Typed backpressure from the second leaf: the first leaf holds a committed
+  // receipt for the four-row range and the window is left alone.
+  faultFor(model, 0, 1, RECIPIENT_FAULT.BACKPRESSURE);
+  assert.equal((await f.drive()).state, DRIVE.HELD_BY_SUBSCRIBER);
+  assert.deepEqual(model.waves.map((wave) => [wave.index, wave.rows]), [[0, 4], [1, 4]]);
+  assert.equal(shipWindowOf(f), 4, 'typed backpressure leaves the window');
+  assert.equal(laneOf(f).currentObligation.windowCut, true,
+    'the cell remembers that the window cut its range');
+  const mark = model.waves.length;
+  await f.drive();
+  assert.deepEqual(model.waves.slice(mark).map((wave) => [wave.index, wave.rows]),
+    [[1, 4], [0, 8], [1, 8]],
+    'the pinned retry goes to the uncovered leaf only, and the next range is twice as long');
+  assert.equal(model.waves[mark].digest, model.waves[0].digest, 'the identical vector');
+  assert.equal(shipWindowOf(f), 8,
+    'the window doubled when the pinned retry covered the window-cut range');
+  await runLaneToQuiescence(f);
+  assertRecipientLogs(model);
+  assert.deepEqual(countCdcObligations(f.leader.db), {owed: 0, delivered: rows.length});
+});
+
+// --- the scan's captured tail (supersession record 2, S-5) ---
+//
+// A scan is opened at the first composition of a pass and captures the ledger
+// tail; a retry after a hold continues that scan. A range is therefore cut by
+// the captured tail as well, and rows committed after the pass began ship in
+// the next scan. The tail is captured again at pass end and at an idle
+// hydration handshake (also at the retained-delivered bound and with a new
+// tenure, whose witnesses are the retained-bound and tenure tests).
+
+test('captured tail: a retry after a hold continues the same scan and ships only the rows ' +
+  'that existed when the scan was opened; rows committed during the hold follow in the ' +
+  'next scan', async (t) => {
+  const f = await fixture(t, {rows: ['A', 'B'], subscribers: 1});
+  const model = installRecipientModel(f);
+  primeShipWindow(f, WARM_WINDOW);
+  // The first presentation is refused with typed backpressure: nothing attempted.
+  faultFor(model, 0, 0, RECIPIENT_FAULT.BACKPRESSURE);
+  assert.equal((await f.drive()).state, DRIVE.HELD_BY_SUBSCRIBER);
+  const scan = laneOf(f).scan;
+  const tail = {logIndex: model.raw[1].logIndex, ordinal: model.raw[1].ordinal};
+  assert.deepEqual(scan?.through, tail, 'the held lane keeps the scan and the tail it captured');
+  await addRowsWhileHeld(f, model, ['C', 'D']);
+  assert.equal(laneOf(f).scan, scan, 'rows committed during the hold leave the scan alone');
+  assert.deepEqual(scan.through, tail, 'the captured tail did not move');
+  const mark = model.waves.length;
+  assert.equal((await f.drive()).state, DRIVE.DRAINED);
+  assert.deepEqual(model.waves.slice(mark).map((wave) => wave.ids), [['A', 'B'], ['C', 'D']],
+    'the retry ships the rows up to the captured tail although the window had room for ' +
+    'four; the rows committed during the hold are the next scan\'s range');
+  assert.equal(shipWindowOf(f), WARM_WINDOW,
+    'a range ended by the captured tail is not window-cut');
+  await runLaneToQuiescence(f);
+  assertRecipientLogs(model);
+  assert.deepEqual(countCdcObligations(f.leader.db), {owed: 0, delivered: 4});
+});
+
+test('captured tail: an idle hydration handshake ends the scan, and the next scan captures ' +
+  'the rows committed during the hold', async (t) => {
+  const f = await fixture(t, {rows: ['done'], subscribers: 1});
+  const model = installRecipientModel(f);
+  await runLaneToQuiescence(f);
+  await addRowsWhileHeld(f, model, ['A', 'B']);
+  restartIdleScan(f, model);
+  primeShipWindow(f, WARM_WINDOW);
+  faultFor(model, 1, 0, RECIPIENT_FAULT.BACKPRESSURE);
+  assert.equal((await f.drive()).state, DRIVE.HELD_BY_SUBSCRIBER);
+  assert.deepEqual(laneOf(f).scan?.through,
+    {logIndex: model.raw[2].logIndex, ordinal: model.raw[2].ordinal});
+  await addRowsWhileHeld(f, model, ['C', 'D']);
+  // A handshake at a position already delivered acknowledges nothing; the lane
+  // is idle, so its scan ends.
+  restartIdleScan(f, model);
+  const mark = model.waves.length;
+  await f.drive();
+  assert.deepEqual(model.waves.slice(mark).map((wave) => wave.ids), [['A', 'B', 'C', 'D']],
+    'the new scan captured the tail again: one range holds all four rows');
+  await runLaneToQuiescence(f);
+  assertRecipientLogs(model);
+  assert.deepEqual(countCdcObligations(f.leader.db), {owed: 0, delivered: 5});
+});
+
 // --- a hydration image against the range in flight ---
 
 for (const [where, imageAt, retired] of [
@@ -541,3 +631,49 @@ for (const [where, imageAt, retired] of [
     assert.deepEqual(countCdcObligations(f.leader.db), {owed: 0, delivered: 5});
   });
 }
+
+// A failed range is passed only when EVERY row of it needs no delivery any
+// more. Here an image comes to cover the first row of the range in flight
+// (inside the range: its invocation is not retired) and the recipient then
+// fails the range: the rows above the image are still owed, so the lane holds
+// at the range and ships them before any later row.
+test('a range that fails after a hydration image came to cover part of it holds the lane: ' +
+  'its rows above the image ship before any later row', async (t) => {
+  const f = await fixture(t, {rows: ['done'], subscribers: 1});
+  const gate = Promise.withResolvers();
+  let invocation = null;
+  const model = installRecipientModel(f);
+  const answer = f.propagate;
+  f.propagate = async (index, events, context, groupId) => {
+    if (events.length === 3 && invocation === null) {
+      invocation = f.leader.cdcDelivery.activeCdcInvocation;
+      await gate.promise;
+    }
+    return answer(index, events, context, groupId);
+  };
+  await runLaneToQuiescence(f);
+  await addRowsWhileHeld(f, model, ['A', 'B', 'C', 'D']);
+  restartIdleScan(f, model);
+  primeShipWindow(f, 3);
+  // The recipient fails the range that starts at A, once.
+  faultFor(model, 1, 0, RECIPIENT_FAULT.UNKNOWN);
+  const mark = model.waves.length;
+  const drive = f.drive();
+  await settleTicks();
+  assert.ok(invocation, 'the three-row range A, B, C is in flight');
+  model.hydratedThrough(model.raw[1].logIndex);
+  assert.equal(invocation.context.signal.aborted, false,
+    'an image inside the range does not retire its invocation');
+  gate.resolve();
+  const outcome = await drive;
+  assert.equal(outcome.state, DRIVE.HELD_BY_SUBSCRIBER,
+    'the failed range holds the lane although one of its rows was acknowledged meanwhile');
+  assert.equal(outcome.eventKey, model.raw[1].eventKey);
+  assert.deepEqual(model.waves.slice(mark).map((wave) => wave.ids), [['A', 'B', 'C']],
+    'nothing was shipped past the failed range');
+  await runLaneToQuiescence(f);
+  assert.deepEqual(model.waves.slice(mark + 1).map((wave) => wave.ids), [['B'], ['C', 'D']],
+    'the rows of the failed range above the image ship before the later row');
+  assertRecipientLogs(model, {wholeEntries: false});
+  assert.deepEqual(countCdcObligations(f.leader.db), {owed: 0, delivered: 5});
+});

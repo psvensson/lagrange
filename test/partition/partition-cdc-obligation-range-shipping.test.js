@@ -31,6 +31,8 @@ import {PARTITION_CDC_OBLIGATION_BOUND as BOUND,
   '../../src/partition/partition-cdc-obligation-constants.js';
 import {countCdcObligations, readOwedCdcObligations} from
   '../../src/partition/partition-cdc-obligation-ledger.js';
+import {registerCdcAcknowledgementProposer} from
+  '../../src/partition/partition-cdc-obligation-delivery.js';
 import {applyCommitted, clearFixtureSingletons, resetFixtureSingletons, settleTicks, track} from
   '../test-helpers/participant-transaction-fixture.js';
 import {acknowledgingCdcSubscriber} from '../test-helpers/acknowledging-cdc-subscriber.js';
@@ -648,4 +650,97 @@ test('composition reads the hydrated index at every drive step: rows it comes to
   assert.equal(model.waves.length, 4);
   assertRecipientLogs(model);
   assert.deepEqual(countCdcObligations(f.leader.db), {owed: 0, delivered: rows.length});
+});
+
+// The pre-pass acknowledges a hydrated row without delivery; when that
+// acknowledgement is refused the pass ends there and the row is not passed.
+// The refusal here is the real one: the acknowledgement proposer is
+// unavailable, so a full batch cannot be proposed and takes no further row.
+test('a hydrated row whose acknowledgement is refused ends the pass and is not passed: ' +
+  'with the acknowledgement proposer unavailable no row above the image ships past it',
+async (t) => {
+  const hydrated = BOUND.ACK_BATCH_MAX_EVENTS + 20;
+  const rows = idsOf(hydrated + 5, 'refused');
+  const f = await fixture(t, {rows, subscribers: 1});
+  const model = installRecipientModel(f);
+  primeShipWindow(f, STEADY_WINDOW);
+  const registered = registerCdcAcknowledgementProposer(null);
+  t.after(() => registerCdcAcknowledgementProposer(registered));
+  // The image covers the first 276 rows and the handshake's own drain has not
+  // run: the lane meets them hydrated and not pending.
+  const through = model.raw[hydrated - 1].logIndex;
+  laneOf(f).hydratedThroughLogIndex = through;
+  model.hydratedThroughLogIndex = through;
+  const outcome = await f.drive();
+  assert.equal(outcome.state, DRIVE.ACKNOWLEDGEMENT_BACKPRESSURE,
+    'the refused acknowledgement ends the pass');
+  assert.equal(model.waves.length, 0,
+    'no row above the image ships past hydrated rows that were not acknowledged');
+  assert.equal(diagnostics(f).pendingAcknowledgements, BOUND.ACK_BATCH_MAX_EVENTS,
+    'one full batch was taken; it could not be proposed');
+  const last = model.raw[BOUND.ACK_BATCH_MAX_EVENTS - 1];
+  assert.deepEqual(laneOf(f).scan.cursor, {logIndex: last.logIndex, ordinal: last.ordinal},
+    'the cursor stops at the last hydrated row that was acknowledged');
+  registerCdcAcknowledgementProposer(registered);
+  await runLaneToQuiescence(f);
+  assert.deepEqual(idsOfWaves(model), [rows.slice(hydrated)],
+    'once acknowledgements can be proposed the rows above the image ship, once');
+  assertRecipientLogs(model);
+  assert.deepEqual(countCdcObligations(f.leader.db), {owed: 0, delivered: rows.length});
+});
+
+// The READY ordinals of one ledger entry travel together at the
+// retained-delivered bound too. An entry that was shipped whole and is partly
+// covered must be presented again whole: an incoming row of equal version is
+// accepted by the cache merge, so a strict prefix of the entry would move a
+// covered recipient back to an earlier ordinal's value. Here the entry is
+// composed with room under the bound, one leaf covers it, and a hydration
+// handshake then acknowledges the rows the scan had passed as provisional,
+// which leaves room for only two of the entry's three ordinals.
+test('an entry that is partly covered is presented again whole when a hydration handshake ' +
+  'brought the lane to the retained-delivered bound: the covered leaf is never sent a ' +
+  'strict prefix of an entry it holds', async (t) => {
+  const passed = ['p1', 'p2', 'p3'];
+  const siblings = ['s0', 's1', 's2'];
+  const f = await fixture(t, {rows: passed, subscribers: 2, populate: (leader) => {
+    addSourceEntry(leader, 'siblings', siblings.map((id) => insertOperation(id)));
+    return siblings.length;
+  }});
+  const model = installRecipientModel(f);
+  // The three single rows are answered provisional by the first leaf (the scan
+  // passes them, they stay owed); the second leaf answers the entry with typed
+  // backpressure once.
+  for (const index of passed.keys()) {
+    model.faults.set(model.raw[index].eventKey, new Map([[0, [RECIPIENT_FAULT.PROVISIONAL]]]));
+  }
+  model.faults.set(model.raw[passed.length].eventKey,
+    new Map([[1, [RECIPIENT_FAULT.BACKPRESSURE]]]));
+  // The lane's outstanding acknowledgements, five short of the bound: the
+  // whole entry fits when it is first composed.
+  const lane = laneOf(f);
+  const outstanding = Array.from({length: BOUND.RETAINED_DELIVERED_MAX - 5},
+    (_unused, index) => `outstanding-${index}`);
+  for (const [index, key] of outstanding.entries()) {
+    lane.pending.set(key, {logIndex: 1, ordinal: index});
+  }
+  assert.equal((await f.drive()).state, DRIVE.HELD_BY_SUBSCRIBER);
+  assert.deepEqual(model.waves.slice(-2).map((wave) => [wave.index, wave.ids]),
+    [[0, siblings], [1, siblings]], 'the entry was shipped whole; the first leaf covers it');
+  const whole = model.waves.at(-1).digest;
+  // The handshake acknowledges the three passed rows: two short of the bound.
+  model.hydratedThrough(model.raw[passed.length - 1].logIndex);
+  assert.equal(lane.pending.size, BOUND.RETAINED_DELIVERED_MAX - 2);
+  assert.ok(lane.currentObligation, 'the image is below the entry: its cell is kept');
+  const mark = model.waves.length;
+  await f.drive();
+  await settleTicks();
+  assert.deepEqual(model.waves.slice(mark).map((wave) => [wave.index, wave.ids]),
+    [[1, siblings]],
+    'the entry is presented again whole, to the uncovered leaf only');
+  assert.equal(model.waves[mark].digest, whole, 'the identical vector, by digest');
+  for (const key of outstanding) lane.pending.delete(key);
+  await runLaneToQuiescence(f);
+  assertRecipientLogs(model, {ordered: false});
+  assert.deepEqual(countCdcObligations(f.leader.db),
+    {owed: 0, delivered: passed.length + siblings.length});
 });
