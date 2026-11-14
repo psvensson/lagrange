@@ -137,70 +137,6 @@ function hasCompleteAuthoritativeSystemTableCacheAlignmentRow(
     isFiniteSystemTableCacheNumber(authoritativeRow.updated_at);
 }
 
-function isAbsentSystemTableCacheValue(value) {
-  return value === null || typeof value === 'undefined';
-}
-
-// The row version (updated_at) labels every column outside the lifecycle
-// group; a cached row without a finite version carries no row-version evidence.
-function isAuthoritativeServiceRowVersionNewer(existing, authoritative) {
-  const authoritativeUpdatedAt = Number(authoritative?.updated_at);
-  const existingUpdatedAt = Number(existing?.updated_at);
-  return Number.isFinite(authoritativeUpdatedAt) && (
-    !Number.isFinite(existingUpdatedAt) ||
-    authoritativeUpdatedAt > existingUpdatedAt
-  );
-}
-
-// The lifecycle group is ordered by its own durable version
-// (resolveServiceDurableVersion); a strictly newer cached lifecycle is kept.
-function isServiceLifecycleVersionAligned(cachedRow, authoritativeRow) {
-  const authoritativeVersion = resolveServiceDurableVersion(authoritativeRow);
-  const cachedVersion = authoritativeVersion ?
-    Number(cachedRow[authoritativeVersion.column]) : NaN;
-  if (
-    !Number.isFinite(cachedVersion) ||
-    cachedVersion < authoritativeVersion.value
-  ) {
-    return false;
-  }
-  if (cachedVersion > authoritativeVersion.value) {
-    return true;
-  }
-  return SYSTEM_TABLE_CACHE_SERVICE_LIFECYCLE_FIELD_NAMES.every(
-    (fieldName) => !Object.prototype.hasOwnProperty.call(
-      authoritativeRow,
-      fieldName,
-    ) ||
-      stableSerialize(cachedRow[fieldName]) ===
-        stableSerialize(authoritativeRow[fieldName]),
-  );
-}
-
-function isEqualServiceRowVersion(existing, authoritative) {
-  const authoritativeUpdatedAt = Number(authoritative?.updated_at);
-  return Number.isFinite(authoritativeUpdatedAt) &&
-    Number(existing?.updated_at) === authoritativeUpdatedAt;
-}
-
-// An older cached row version is never aligned and a strictly newer one is.
-// At an equal row version an absent cached value is never aligned with a
-// present authoritative value; a present cached value that differs is not
-// ordered against authority here (the read carries no origin HLC) and keeps
-// its previous meaning.
-function isServiceRowVersionAligned(cachedRow, authoritativeRow) {
-  if (isAuthoritativeServiceRowVersionNewer(cachedRow, authoritativeRow)) {
-    return false;
-  }
-  if (!isEqualServiceRowVersion(cachedRow, authoritativeRow)) {
-    return true;
-  }
-  return Object.entries(authoritativeRow).every(
-    ([fieldName, fieldValue]) => isAbsentSystemTableCacheValue(fieldValue) ||
-      !isAbsentSystemTableCacheValue(cachedRow[fieldName]),
-  );
-}
-
 function areAuthoritativeSystemTableCacheRowsAligned(
   tableName,
   cachedRow,
@@ -241,8 +177,26 @@ function areAuthoritativeSystemTableCacheRowsAligned(
   if (!identityAligned || cachedRow.status !== authoritativeRow.status) {
     return false;
   }
-  return isServiceLifecycleVersionAligned(cachedRow, authoritativeRow) &&
-    isServiceRowVersionAligned(cachedRow, authoritativeRow);
+  const authoritativeVersion = resolveServiceDurableVersion(authoritativeRow);
+  const cachedVersion = authoritativeVersion ?
+    Number(cachedRow[authoritativeVersion.column]) : NaN;
+  if (
+    !Number.isFinite(cachedVersion) ||
+    cachedVersion < authoritativeVersion.value
+  ) {
+    return false;
+  }
+  if (cachedVersion > authoritativeVersion.value) {
+    return true;
+  }
+  return SYSTEM_TABLE_CACHE_SERVICE_LIFECYCLE_FIELD_NAMES.every(
+    (fieldName) => !Object.prototype.hasOwnProperty.call(
+      authoritativeRow,
+      fieldName,
+    ) ||
+      stableSerialize(cachedRow[fieldName]) ===
+        stableSerialize(authoritativeRow[fieldName]),
+  );
 }
 
 function hasConflictingNonEmptyField(existing, authoritative, fieldName) {
@@ -382,46 +336,6 @@ function buildAuthoritativeSystemTableCacheReplacement(
   );
 }
 
-function isCachedServiceLifecycleNewer(existing, authoritative) {
-  const authoritativeVersion = resolveServiceDurableVersion(authoritative);
-  if (!authoritativeVersion) {
-    return true;
-  }
-  const existingVersion = Number(existing?.[authoritativeVersion.column]);
-  return Number.isFinite(existingVersion) &&
-    existingVersion > authoritativeVersion.value;
-}
-
-function copyServiceLifecycleFields(source, replacement) {
-  for (const fieldName of SYSTEM_TABLE_CACHE_SERVICE_LIFECYCLE_FIELD_NAMES) {
-    if (Object.prototype.hasOwnProperty.call(source, fieldName)) {
-      replacement[fieldName] = fastJsonClone(source[fieldName]);
-    }
-  }
-  return replacement;
-}
-
-// A newer authoritative row version carries every column it labels. Only the
-// lifecycle group, ordered by its own durable version, stays cached when the
-// same incarnation's cached lifecycle is strictly newer.
-function buildNewerAuthoritativeServiceLifecycleReplacement(
-  existing,
-  authoritative,
-) {
-  const replacement = buildAuthoritativeSystemTableCacheReplacement(
-    TABLES.SERVICES,
-    existing,
-    authoritative,
-  );
-  if (
-    !hasDifferentServiceIdentity(existing, authoritative) &&
-    isCachedServiceLifecycleNewer(existing, authoritative)
-  ) {
-    copyServiceLifecycleFields(existing, replacement);
-  }
-  return replacement;
-}
-
 function buildAuthoritativeServiceLifecycleCacheReplacement(
   existing,
   authoritative,
@@ -433,31 +347,57 @@ function buildAuthoritativeServiceLifecycleCacheReplacement(
       authoritative,
     );
   }
-  if (isAuthoritativeServiceRowVersionNewer(existing, authoritative)) {
-    return buildNewerAuthoritativeServiceLifecycleReplacement(
-      existing,
-      authoritative,
-    );
-  }
   const replacement = fastJsonClone(existing);
-  const equalRowVersion = isEqualServiceRowVersion(existing, authoritative);
-  for (const [fieldName, fieldValue] of Object.entries(authoritative)) {
+  for (const fieldName of HLC_LOCAL_FIELD_NAMES) {
     if (
-      !Object.prototype.hasOwnProperty.call(replacement, fieldName) ||
-      (equalRowVersion &&
-        isAbsentSystemTableCacheValue(replacement[fieldName]) &&
-        !isAbsentSystemTableCacheValue(fieldValue))
+      !Object.prototype.hasOwnProperty.call(authoritative || {}, fieldName) &&
+      !shouldPreserveLocalFieldAcrossAuthoritativeReplacement(
+        fieldName,
+        existing,
+        authoritative,
+      )
     ) {
+      delete replacement[fieldName];
+    }
+  }
+  for (const [fieldName, fieldValue] of Object.entries(authoritative)) {
+    if (!Object.prototype.hasOwnProperty.call(replacement, fieldName)) {
       replacement[fieldName] = fastJsonClone(fieldValue);
     }
   }
   for (const fieldName of SYSTEM_TABLE_CACHE_SERVICE_IDENTITY_FIELD_NAMES) {
     replacement[fieldName] = fastJsonClone(authoritative[fieldName]);
   }
-  if (!isCachedServiceLifecycleNewer(existing, authoritative)) {
-    copyServiceLifecycleFields(authoritative, replacement);
+  const authoritativeVersion = resolveServiceDurableVersion(authoritative);
+  const existingVersion = authoritativeVersion ?
+    Number(existing?.[authoritativeVersion.column]) : NaN;
+  if (authoritativeVersion && (
+    !Number.isFinite(existingVersion) ||
+    authoritativeVersion.value >= existingVersion
+  )) {
+    for (const fieldName of SYSTEM_TABLE_CACHE_SERVICE_LIFECYCLE_FIELD_NAMES) {
+      if (Object.prototype.hasOwnProperty.call(authoritative, fieldName)) {
+        replacement[fieldName] = fastJsonClone(authoritative[fieldName]);
+      }
+    }
   }
-  return replacement;
+  const existingUpdatedAt = Number(existing?.updated_at);
+  const authoritativeUpdatedAt = Number(authoritative?.updated_at);
+  if (
+    Number.isFinite(existingUpdatedAt) &&
+    Number.isFinite(authoritativeUpdatedAt)
+  ) {
+    replacement.updated_at = Math.max(
+      existingUpdatedAt,
+      authoritativeUpdatedAt,
+    );
+  }
+  return applyPreservedNonLeaderVoterRaftRole(
+    TABLES.SERVICES,
+    existing,
+    authoritative,
+    replacement,
+  );
 }
 
 export {
