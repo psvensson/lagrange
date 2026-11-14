@@ -295,10 +295,11 @@ async function runCampaign({opts, manifest, hosts, physicalExtras}) {
     opts}) : null;
   const images = campaignImagesByRole({targets: manifest.targets,
     lagrangeImage: opts.lagrangeImage});
-  await ensureProductImages({hosts: hosts.filter((host) => host.role === 'data'), sshRun, opts,
+  await ensureProductImages({hosts: hosts.filter((host) => host.role === 'data'), role: 'data',
+    sshRun, opts,
     images: images.data.filter((image) => !(pinned && image === opts.lagrangeImage))});
-  await ensureProductImages({hosts: hosts.filter((host) => host.role === 'client'), sshRun,
-    opts, images: images.client});
+  await ensureProductImages({hosts: hosts.filter((host) => host.role === 'client'),
+    role: 'client', sshRun, opts, images: images.client});
   const recordOwner = await loadRawObservationRecordOwner();
   const client = hosts.find((host) => host.role === 'client');
   if (!client.repoPath || !client.nodePath) {

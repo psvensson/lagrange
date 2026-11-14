@@ -1,10 +1,10 @@
 /**
  * Host facts and preparation for a comparative-benchmark campaign: the
  * machine identity of every host (hostname, boot incarnation, cores, memory,
- * primary interface), distinct machines enforced; product images present on
- * every host by reference (pulled, never streamed from the controller - the
- * running containers' image ids are the identity, D18); and the machine
- * identity of the load generator's host.
+ * primary interface), distinct machines enforced; the images each host role
+ * runs present on that host (placed beforehand by the operator, never pulled
+ * or streamed by a run - the running containers' image ids are the identity,
+ * D18); and the machine identity of the load generator's host.
  */
 import {SCENARIO_REFUSAL} from './scenario-host-topology.js';
 import {
@@ -27,8 +27,8 @@ import {
   TIDB_IMAGE_DEFAULT,
   TIKV_IMAGE_DEFAULT,
 } from './real-product-cluster-deployers.js';
-import {TIDB_SQL_CLIENT_IMAGE} from './real-product-deployment-contract.js';
-import {errorText, execWithStatus, shellWord} from './real-product-remote-shell.js';
+import {SQL_CLIENT_IMAGE, TIDB_SQL_CLIENT_IMAGE} from './real-product-deployment-contract.js';
+import {execWithStatus, shellWord} from './real-product-remote-shell.js';
 
 const FIELD_SEPARATOR = '|';
 const HOST_FACTS_COMMAND = 'echo "$(hostname)|$(cat /proc/sys/kernel/random/boot_id)|' +
@@ -36,7 +36,6 @@ const HOST_FACTS_COMMAND = 'echo "$(hostname)|$(cat /proc/sys/kernel/random/boot
   // (sv_SE on adam-laptop, adams-gamla) printed `15,5` otherwise.
   '$(nproc)|$(LC_ALL=C awk \'/MemTotal/ {printf "%.1f", $2/1048576}\' /proc/meminfo)|' +
   '$(ip route get 1.1.1.1 | awk \'{for(i=1;i<=NF;i++) if($i=="dev") print $(i+1); exit}\')"';
-const IMAGE_PULL_TIMEOUT_MS = 10 * 60 * 1000;
 
 const HOST_FACTS_UNREADABLE = 'host_facts_unreadable';
 
@@ -75,14 +74,18 @@ async function collectHostFacts({hosts, sshRun, opts}) {
 /**
  * The images each host role must hold. Data hosts run the product containers
  * and the TiDB readiness client (a lifecycle tool started on the TiDB SQL
- * host); the load generator runs no container and holds no image.
+ * host); the load generator runs the psql client the Lagrange deployer reads
+ * through (real-product-sql-clients.js psqlText, from the client host).
  * @param {{targets: Array<string>, lagrangeImage: string}} input
  * @return {{data: Array<string>, client: Array<string>}}
  */
 function campaignImagesByRole({targets, lagrangeImage}) {
   const data = new Set([POSTGRES_IMAGE_DEFAULT]);
   const client = [];
-  if (arrayIncludes(targets, COMPARATIVE_TARGET.LAGRANGE)) data.add(lagrangeImage);
+  if (arrayIncludes(targets, COMPARATIVE_TARGET.LAGRANGE)) {
+    data.add(lagrangeImage);
+    client.push(SQL_CLIENT_IMAGE);
+  }
   if (arrayIncludes(targets, COMPARATIVE_TARGET.TIDB_TIKV)) {
     for (const image of [PD_IMAGE_DEFAULT, TIKV_IMAGE_DEFAULT, TIDB_IMAGE_DEFAULT]) {
       data.add(image);
@@ -92,30 +95,25 @@ function campaignImagesByRole({targets, lagrangeImage}) {
   return {data: [...data], client};
 }
 
-/** Every image present on every host, by reference; a failed pull is typed. */
-async function ensureProductImages({hosts, images, sshRun, opts}) {
+/**
+ * Every image of `role` present on every host of that role, by reference. An
+ * absent image refuses the campaign naming host, role and image: placing an
+ * image is a separate provisioning step (lab: docker save/load; GCP: the
+ * provisioning script pulls by digest), never something a run does.
+ */
+async function ensureProductImages({hosts, role, images, sshRun, opts}) {
   const present = [];
   for (const host of hosts) {
     for (const image of images) {
-      // Absent is decided by docker's own exit status, never by any failure:
-      // an unreachable host is a typed failure, not a reason to pull.
-      const inspect = `docker image inspect --format '{{.Id}}' ${shellWord(image)}`;
-      const local = await execWithStatus(sshRun, host.ip, opts, `${inspect} 2>&1`);
-      let pulled = false;
+      const local = await execWithStatus(sshRun, host.ip, opts,
+        `docker image inspect --format '{{.Id}}' ${shellWord(image)} 2>&1`);
       if (local.exitCode !== 0) {
-        try {
-          await sshRun(host.ip, opts, `docker pull -q ${shellWord(image)}`,
-            IMAGE_PULL_TIMEOUT_MS);
-          pulled = true;
-        } catch (error) {
-          throw deploymentFailure(DEPLOYMENT_FAILURE.IMAGE_UNAVAILABLE,
-            `image ${image} absent on ${host.ip} and not pullable: ${errorText(error)}`,
-            {host: host.ip, image, reason: 'pull_refused', inspect: local.stdout});
-        }
+        throw deploymentFailure(DEPLOYMENT_FAILURE.IMAGE_UNAVAILABLE,
+          `image ${image} is not on ${host.ip} (${role} host); place it before the campaign ` +
+          '(it is never pulled)', {host: host.ip, role, image, reason: 'absent',
+            inspect: local.stdout});
       }
-      const imageId = pulled ? stringTrim(String(await sshRun(host.ip, opts, inspect))) :
-        stringTrim(local.stdout);
-      present.push({host: host.ip, image, imageId, pulled});
+      present.push({host: host.ip, role, image, imageId: stringTrim(local.stdout)});
     }
   }
   return present;

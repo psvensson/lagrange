@@ -95,6 +95,13 @@ read on a containerd-store host on 2026-11-01). Every data host must already hol
 the runner never pulls it and never deletes or prunes images. On a host whose daemon cannot pull
 from the registry, place the image yourself (`docker save` on a host that has it, `docker load`
 on that host); the run then records its provenance as `loaded:<image id>`.
+The runner never places any image: every image a host role runs must be on that host before the
+campaign (data hosts: the product images, `postgres:17-alpine` and, for TiDB, `mysql:8.4.11`; the
+load generator: `postgres:17-alpine`, the psql client the Lagrange arm reads through). An absent
+image refuses the campaign with `image_unavailable` naming host, role and image, and every
+campaign container runs with `--pull=never`. The load generator installs the reference client
+(`test/distributed/reference-client`, mysql2) with `npm ci --offline` from its npm cache; a tarball
+the cache lacks refuses the TiDB arm and is named. Seed the cache beforehand.
 Every selected host is held with the lab's machine-wide `flock` and holder record before any
 deployment (a host another run holds refuses the campaign, naming the holder), the thermal gate
 `scripts/checks/wait-for-thermal-headroom.js` runs on every held host, and the holds are released
@@ -114,7 +121,8 @@ export ZONE="us-central1-a"
 ./docs/benchmarks/cloud/provision-gcp.sh
 ```
 The script creates the VMs (the dedicated client VM last), an intra-cluster firewall rule, and
-installs Docker. It does not open the Docker socket to everyone and does not add users to the
+installs Docker; it does not place images, so pull every image section 2 lists onto each VM (by
+digest, then tag it with the reference the runner uses) before the run. It does not open the Docker socket to everyone and does not add users to the
 `docker` group: grant Docker access to the one SSH user the runner connects as yourself. SSH
 host keys are verified as usual; record each VM's host key in `known_hosts` (for example with
 `gcloud compute ssh` once per VM) before the run.

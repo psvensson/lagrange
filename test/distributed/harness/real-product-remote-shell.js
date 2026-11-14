@@ -25,6 +25,9 @@ const SINGLE_QUOTE = '\'';
 const ESCAPED_SINGLE_QUOTE = '\'\\\'\'';
 const HTTP_STATUS_MARKER = 'http_status=';
 const EXIT_MARKER = '__exit_code=';
+// A campaign container runs only from an image already on the host: a run
+// never pulls (owner decision D1, 2026-11-14); placing images is provisioning.
+const NEVER_PULL = '--pull=never';
 const HTTP_TIMEOUT_SECONDS = 10;
 const DIAGNOSTIC_LOG_TAIL = 80;
 
@@ -130,7 +133,7 @@ async function dockerRunDetached({sshRun, opts, host, campaignId, role, ordinal 
   const name = `bench-${campaignId}-${role}-${ordinal}`;
   const command = ['docker run -d', '--name', name,
     '--label', `${BENCH_LABEL.CAMPAIGN}=${campaignId}`, '--label', `${BENCH_LABEL.ROLE}=${role}`,
-    '--network host', ...arrayMap(dockerArgs, shellWord), shellWord(image),
+    '--network host', NEVER_PULL, ...arrayMap(dockerArgs, shellWord), shellWord(image),
     ...arrayMap(commandArgs, shellWord)].join(' ');
   let out;
   try {
@@ -154,7 +157,7 @@ async function dockerRunDetached({sshRun, opts, host, campaignId, role, ordinal 
 function dockerRunOnceCommand({campaignId, image, dockerArgs = [], commandArgs = []}) {
   requireCampaignId(campaignId);
   return ['docker run --rm', '--label', `${BENCH_LABEL.CAMPAIGN}=${campaignId}`,
-    '--network host', ...arrayMap(dockerArgs, shellWord), shellWord(image),
+    '--network host', NEVER_PULL, ...arrayMap(dockerArgs, shellWord), shellWord(image),
     ...arrayMap(commandArgs, shellWord)].join(' ');
 }
 

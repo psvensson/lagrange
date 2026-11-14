@@ -23,10 +23,14 @@ import {
 import {BENCHMARK_RUN_STATUS} from './benchmark-scenario-a-run.js';
 import {BENCHMARK_DISPATCH_STATUS} from './benchmark-workload-dispatch.js';
 import {
+  arrayFilter,
   arrayIncludes,
+  arrayJoin,
   arrayMap,
+  stringIncludes,
   stringLastIndexOf,
   stringReplace,
+  stringSplit,
   stringTrim,
 } from './real-product-captured-intrinsics.js';
 import {
@@ -48,7 +52,8 @@ const LOAD_GENERATOR_LINKED_DIR = 'node_modules';
 const CHECKOUT_PREPARATION_TIMEOUT_MS = 10 * 60 * 1000;
 const LOAD_GENERATOR_STDERR_TAIL_LINES = 80;
 // The reference-client package (mysql2, the TiDB arm's driver) is installed in
-// the worktree from its own lockfile with the host's npm.
+// the worktree from its own lockfile with the host's npm, offline only, from the
+// host's npm cache (owner decision D2): seeding that cache is provisioning.
 const REFERENCE_CLIENT_PREFIX = 'test/distributed/reference-client';
 const DRIVER_INSTALL_TIMEOUT_MS = 10 * 60 * 1000;
 const DRIVER_INSTALL_OUTPUT_CHARS = 4000;
@@ -69,6 +74,17 @@ const FAILURE = Object.freeze({
   COMMIT_ABSENT: 'load_generator_commit_absent',
   DRIVER_MISSING: 'load_generator_driver_missing',
 });
+const OFFLINE_CACHE_INCOMPLETE = 'offline_cache_incomplete';
+// npm's own words for a tarball the offline cache lacks (npm 10, ENOTCACHED).
+const NOT_CACHED_MARK = 'failed: cache mode is \'only-if-cached\'';
+const NOT_CACHED_TARBALL = /^.*request to (\S+) failed: cache mode is 'only-if-cached'.*$/u;
+
+// The tarballs npm reported missing from the offline cache, in its order.
+function notCachedTarballs(output) {
+  return arrayMap(arrayFilter(stringSplit(output, '\n'),
+    (line) => stringIncludes(line, NOT_CACHED_MARK)),
+  (line) => stringReplace(line, NOT_CACHED_TARBALL, '$1'));
+}
 
 function bareDigest(value) {
   return stringReplace(String(value ?? ''), SHA_PREFIX, '');
@@ -210,11 +226,13 @@ function npmPathPrefix(nodePath) {
 
 async function installReferenceClient({sshRun, opts, host, worktree}) {
   const result = await execWithStatus(sshRun, host.ip, opts, `cd ${shellQuote(worktree)} && ` +
-    `${npmPathPrefix(host.nodePath)}npm ci --prefix ${REFERENCE_CLIENT_PREFIX} ` +
+    `${npmPathPrefix(host.nodePath)}npm ci --offline --prefix ${REFERENCE_CLIENT_PREFIX} ` +
     '--ignore-scripts 2>&1', DRIVER_INSTALL_TIMEOUT_MS);
-  const output = String(result.stdout ?? '').slice(-DRIVER_INSTALL_OUTPUT_CHARS);
+  const full = String(result.stdout ?? '');
+  const output = full.slice(-DRIVER_INSTALL_OUTPUT_CHARS);
   return {status: result.exitCode === 0 ? DRIVER_INSTALL.INSTALLED : DRIVER_INSTALL.FAILED,
-    exitCode: result.exitCode, output};
+    exitCode: result.exitCode, output,
+    missing: notCachedTarballs(full)};
 }
 
 // The TiDB arm needs the reference-client drivers the worktree installed: a
@@ -225,6 +243,11 @@ function refuseWithoutDrivers(host) {
   if (!install) {
     throw deploymentFailure(FAILURE.DRIVER_MISSING, `load generator ${host.ip} has no ` +
       'record of installing the reference-client drivers', {reason: 'install_not_recorded'});
+  }
+  if (install.missing?.length) {
+    throw deploymentFailure(FAILURE.DRIVER_MISSING, `load generator ${host.ip} offline npm ` +
+      `cache lacks ${arrayJoin(install.missing, ', ')}; seed the cache before the campaign`,
+    {reason: OFFLINE_CACHE_INCOMPLETE, missing: install.missing, output: install.output});
   }
   throw deploymentFailure(FAILURE.DRIVER_MISSING, `load generator ${host.ip} could not ` +
     `install the reference-client drivers (npm ci exit ${install.exitCode})`,
