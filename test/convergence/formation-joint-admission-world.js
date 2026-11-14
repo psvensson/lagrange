@@ -44,7 +44,8 @@ import {
 } from '../../src/bootstrap/system-partition-classification.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {
-  CDC_OPERATION, COLUMN, SERVICE_STATUS, STATE, TABLES,
+  CDC_OPERATION, COLUMN, ENDPOINT_STATUS, SERVICE_STATUS, STATE, TABLES,
+  TRANSPORT_TYPE, WORKFLOW_STEP,
 } from '../../src/constants/index.js';
 import {
   CONTROL_PLANE_PUBLICATION_MODE,
@@ -65,17 +66,28 @@ import {
   NodeReadyLeaseAuthority,
 } from '../../src/control-plane/node-ready-lease-authority.js';
 import {
+  REPLICA_HANDLER_LEADER_HANDOFF_BRANCH,
+} from '../../src/node/replica-handler-leader-handoff-methods.js';
+import {
   PartitionServiceRowOwner,
 } from '../../src/partition/partition-service-row-owner.js';
+import {
+  PARTITION_REPLICA_MEMBERSHIP_STATE,
+} from '../../src/partition/partition-replica-membership-constants.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {
+  EXECUTOR_OUTCOME_TYPE,
+} from '../../src/rebalancer/executor-outcome-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {
   ReplicaOperationField,
   ReplicaOperationMessageType,
+  ReplicaOperationReason,
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
 import {
   buildDeliveryEnvelope,
+  deliveryAnswerOf,
 } from '../../src/transport/transport-semantic-outcome.js';
 import {SeededRandomSource} from '../../src/random/random-source.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
@@ -106,8 +118,11 @@ const SETTLE_TURNS = 12;
 const SETTLE_ROUND_LIMIT = 400;
 const QUIET_ROUNDS_TO_SETTLE = 2;
 const STACK_LINE_SEPARATOR = '\n';
-const SOURCE_FRAME_MARKER = '/src/';
+// A stack frame of production source: the repository's own src directory.
+const SOURCE_FRAME_MARKER = new URL('../../src/', import.meta.url).pathname;
+const SOURCE_FRAME_PREFIX = 'src/';
 const UNKNOWN_ARMING_SOURCE = 'unknown';
+const ARMING_FRAME_LIMIT = 6;
 const RANDOM_SEED = 20261114;
 const LEADER_TERM = 1;
 const LEADER_COMMIT_INDEX = 1;
@@ -142,45 +157,75 @@ const ADDRESS_SEPARATOR = '/';
 const REPLICA_HANDLER_SERVICE = 'replica-handler';
 const REPLICA_DISPATCH_SERVICE = 'replica-dispatch';
 const LEARNER_SERVICE = Object.freeze({getRole: () => RAFT_ROLE.LEARNER});
+const HANDOFF_PUBLICATION_KIND = 'formation_release_handoff';
+const PUBLICATION_KIND_COLUMN = 'publication_kind';
+const PUBLICATION_ID_COLUMN = 'publication_id';
 
 function nodeAddressOf(nodeId) {
   return `${NODE_ADDRESS_PREFIX}${nodeId}${NODE_ADDRESS_SUFFIX}`;
 }
 
-// Frozen time: the clock is never advanced. advance(0) runs only what is due
-// at the frozen instant (deferred continuations), and a macrotask turn lets
-// promise chains reach their next deferral. A timer armed with a positive
-// delay can never fire: it is recorded with the source line that armed it,
-// so a stuck world can name the timers that would have had to expire.
-function armingSourceLine() {
-  const frames = String(new Error().stack).split(STACK_LINE_SEPARATOR);
-  const frame = frames.find((line) => line.includes(SOURCE_FRAME_MARKER));
-  return frame ?
-    frame.slice(frame.indexOf(SOURCE_FRAME_MARKER) + 1).replace(/\)$/u, '') :
-    UNKNOWN_ARMING_SOURCE;
+// World time. The clock moves only by the evaluation instants the driver
+// takes (one millisecond each), so it never reaches a delay any owner armed:
+// advance(0) runs only what is due at the current instant (deferred
+// continuations), and a macrotask turn lets promise chains reach their next
+// deferral. A timer armed with a positive delay stays armed, recorded with
+// the source frames that armed it. The driver may STEP a named cadence: the
+// timers one owner's retry or re-evaluation site armed are run once, as if
+// their delay had elapsed, without moving the clock. Every other armed timer
+// (a bound, a timeout, a deadline) never runs, and the report names it.
+//
+// Every owner's timers are the world's: a timer an owner arms on the
+// platform globals is armed on the world clock too, for the lifetime of the
+// world (restore() puts the platform back). The platform Date.now is NOT the
+// world's: owners that stamp a durable write with it order two writes of one
+// evaluation instant by it (the removed handoff publication did), and a
+// clock that stands still inside an instant would refuse the second write.
+// It therefore keeps running; no decision of the claim reads a duration
+// from it against a world-clock stamp.
+function armingSourceFrames() {
+  return String(new Error().stack).split(STACK_LINE_SEPARATOR)
+    .filter((line) => line.includes(SOURCE_FRAME_MARKER))
+    .slice(0, ARMING_FRAME_LIMIT)
+    .map((line) => SOURCE_FRAME_PREFIX + line.slice(
+      line.indexOf(SOURCE_FRAME_MARKER) + SOURCE_FRAME_MARKER.length)
+      .replace(/\)$/u, ''));
 }
 
-function createFrozenClock() {
+function createWorldClock() {
   const clock = new VirtualTimeSource({startMs: WORLD_START_MS});
   const armed = new Map();
   const dueNow = new Set();
+  const stepped = new Map();
   const baseSetTimeout = clock.setTimeout.bind(clock);
   const baseSetInterval = clock.setInterval.bind(clock);
   const baseClear = clock.clearTimeout.bind(clock);
-  const arm = (schedule, repeating) => (callback, delayMs, ...args) => {
-    const delay = Number.isFinite(Number(delayMs)) && Number(delayMs) > 0 ?
-      Number(delayMs) : DUE_NOW_DELAY_MS;
-    if (delay > DUE_NOW_DELAY_MS) {
-      const handle = schedule(callback, delay, ...args);
-      armed.set(handle, {delayMs: delay, repeating, armedBy: armingSourceLine()});
-      return handle;
-    }
-    const handle = schedule((...fired) => {
+  const runDueNow = (callback, args) => {
+    const handle = baseSetTimeout((...fired) => {
       dueNow.delete(handle);
       return callback(...fired);
     }, DUE_NOW_DELAY_MS, ...args);
     dueNow.add(handle);
     return handle;
+  };
+  const arm = (schedule, repeating) => (callback, delayMs, ...args) => {
+    const delay = Number.isFinite(Number(delayMs)) && Number(delayMs) > 0 ?
+      Number(delayMs) : DUE_NOW_DELAY_MS;
+    if (delay > DUE_NOW_DELAY_MS) {
+      const handle = schedule(callback, delay, ...args);
+      const frames = armingSourceFrames();
+      armed.set(handle, {
+        delayMs: delay,
+        repeating,
+        armedBy: frames[0] || UNKNOWN_ARMING_SOURCE,
+        frames,
+        armedAtMs: clock.now(),
+        callback,
+        args,
+      });
+      return handle;
+    }
+    return runDueNow(callback, args);
   };
   const clear = (handle) => {
     armed.delete(handle);
@@ -191,11 +236,77 @@ function createFrozenClock() {
   clock.setInterval = arm(baseSetInterval, true);
   clock.clearTimeout = clear;
   clock.clearInterval = clear;
+
+  // The platform clock and timers, for owners that reach them directly.
+  const platform = {
+    setTimeout: globalThis.setTimeout,
+    setInterval: globalThis.setInterval,
+    clearTimeout: globalThis.clearTimeout,
+    clearInterval: globalThis.clearInterval,
+  };
+  const ownerHandles = new WeakSet();
+  const armedByOwner = () =>
+    String(new Error().stack).includes(SOURCE_FRAME_MARKER);
+  const ownerTimer = (worldArm, platformArm) => (callback, delayMs, ...args) => {
+    if (!armedByOwner()) return platformArm(callback, delayMs, ...args);
+    const handle = {
+      id: worldArm(callback, delayMs, ...args),
+      ref() { return handle; },
+      unref() { return handle; },
+      hasRef: () => false,
+    };
+    ownerHandles.add(handle);
+    return handle;
+  };
+  const ownerClear = (platformClear) => (handle) => {
+    if (handle && typeof handle === 'object' && ownerHandles.has(handle)) {
+      clear(handle.id);
+      return;
+    }
+    platformClear(handle);
+  };
+  globalThis.setTimeout = ownerTimer(clock.setTimeout, platform.setTimeout);
+  globalThis.setInterval = ownerTimer(clock.setInterval, platform.setInterval);
+  globalThis.clearTimeout = ownerClear(platform.clearTimeout);
+  globalThis.clearInterval = ownerClear(platform.clearInterval);
+
   return {
     clock,
     now: () => clock.now(),
-    // The timers that would have to EXPIRE for anything more to happen.
-    armedTimers: () => [...armed.values()],
+    restore() {
+      globalThis.setTimeout = platform.setTimeout;
+      globalThis.setInterval = platform.setInterval;
+      globalThis.clearTimeout = platform.clearTimeout;
+      globalThis.clearInterval = platform.clearInterval;
+    },
+    // The timers that are armed now: none of them has run unless a cadence
+    // step ran it.
+    armedTimers: () => [...armed.values()].map((timer) => ({
+      delayMs: timer.delayMs,
+      repeating: timer.repeating,
+      armedBy: timer.armedBy,
+      frames: timer.frames,
+      armedAtMs: timer.armedAtMs,
+    })),
+    /**
+     * Step one named cadence: run, once, every timer armed at one of the
+     * cadence's sites. A one-shot timer is consumed; an interval stays armed.
+     * @param {string} name the cadence
+     * @param {Function} armedAtSite whether a timer belongs to the cadence
+     * @return {number} the timers run
+     */
+    stepCadence(name, armedAtSite) {
+      let ran = 0;
+      for (const [handle, timer] of [...armed]) {
+        if (!armedAtSite(timer)) continue;
+        if (!timer.repeating) clear(handle);
+        runDueNow(timer.callback, timer.args);
+        ran += 1;
+      }
+      stepped.set(name, (stepped.get(name) || 0) + ran);
+      return ran;
+    },
+    steppedCadences: () => Object.fromEntries(stepped),
     async settle() {
       let quietRounds = 0;
       for (let round = 0; round < SETTLE_ROUND_LIMIT; round += 1) {
@@ -207,7 +318,7 @@ function createFrozenClock() {
         quietRounds = hadDueWork || dueNow.size > 0 ? 0 : quietRounds + 1;
         if (quietRounds >= QUIET_ROUNDS_TO_SETTLE) return;
       }
-      throw new Error('formation world did not quiesce at the frozen instant');
+      throw new Error('formation world did not quiesce at its instant');
     },
   };
 }
@@ -226,12 +337,16 @@ function createRowPartitionAuthority(cache, hostsById, now) {
         appliedIndex: LEADER_COMMIT_INDEX,
       }) : null;
     },
-    // A read is answered by the partition's leader, with the leader's read
-    // authority: a node holding only a follower or a joining replica is not
-    // a read authority for the partition.
+    // A node serves a partition locally where it holds a caught-up voter
+    // replica of it; only the leader's answer carries the leader's read
+    // authority (the node seam attaches the witness for the leader alone),
+    // and a read that requires the leader is routed to the leader's node.
     hasLocalReplica(nodeId, partitionId) {
-      return cache.get(TABLES.PARTITIONS, partitionId)
-        ?.[COLUMN.LEADER_NODE_ID] === nodeId;
+      return cache.filter(TABLES.SERVICES, (row) =>
+        row[COLUMN.PARTITION_ID] === partitionId &&
+        row[COLUMN.NODE_ID] === nodeId &&
+        row[COLUMN.STATUS] === ReplicaStatus.ACTIVE &&
+        row[COLUMN.RAFT_ROLE] !== RAFT_ROLE.LEARNER).length > 0;
     },
     resolveNodeSqlEngine: (nodeId) =>
       hostsById.get(nodeId)?.sqlQueryEngine || null,
@@ -288,31 +403,95 @@ function insertStoredRow(cache, tableName, row) {
     tableName, CDC_OPERATION.INSERT, asStoredRow(tableName, row));
 }
 
-// The replica runtime of every node, at its message boundary: the handler a
-// node's `<node>/service/replica-handler` address reaches. It does to the
-// durable replica rows what an admitted operation's handler does, and
-// nothing else: a CREATE registers the replica as a SYNCING learner on the
-// addressed node, a REMOVE marks its row REMOVING. One step of the runtime
-// lets every learner catch up (its row turns ACTIVE voter, as the promoted
-// replica's own lifecycle publishes it) and retires every REMOVING row.
+// The replica runtime of every node, at its two boundaries: the handler a
+// node's `<node>/service/replica-handler` address reaches, and the executor
+// outcomes that handler reports to the SAME node's coordinator
+// (ExecutorOutcomeEmitter: replica-handler-create-methods.js reports
+// REPLICA_CREATE_SYNCING when the replica's runtime is registered and
+// REPLICA_CREATE_ACTIVE when it is voter-ready, before the SERVICES write;
+// replica-handler-remove-execution-methods.js reports
+// REPLICA_REMOVE_COMPLETED after the row is gone). It does to the durable
+// replica rows what an admitted operation's handler does, and nothing else:
+// a CREATE registers the replica as a SYNCING learner on the addressed node,
+// a REMOVE marks its row REMOVING. One step of the runtime lets every
+// learner catch up (voter-ready is reported, then its row turns ACTIVE
+// voter, as the promoted replica's own lifecycle publishes it) and retires
+// every REMOVING row (the row is deleted, then the removal is reported).
 // The runtime never reads an operation row, a node row or a lease, and never
 // completes, refuses, orders or retries anything: whether an operation is
 // admitted, dispatched, complete, or safe to remove is decided by the
-// coordinators and planners from the rows it leaves behind.
-function createReplicaRuntime(cache, now) {
-  const learnerReplicaIds = new Set();
-  const removingReplicaIds = new Set();
+// coordinators and planners from the rows and reports it leaves behind. The
+// operation id it reports under is the one the request carried.
+function createReplicaRuntime(cache, now, reportExecutorOutcome) {
+  const learners = new Map();
+  const removals = new Map();
+  const transfers = new Map();
+  const retiredReplicaIds = new Set();
   const handled = [];
+  // The replacement-target election (STEP_DOWN_REPLICA with
+  // replace_target_leader_election, replica-handler-leader-handoff-methods.js):
+  // a tracked follower's transfer is accepted (acceptance, never completion);
+  // any other tracked role is the handler's named role no-op; an untracked
+  // replica is NOT_FOUND. The accepted transfer completes at the next step.
+  const answerStepDown = (nodeId, payload) => {
+    const replicaId = payload[ReplicaOperationField.REPLICA_ID];
+    const row = cache.get(TABLES.SERVICES, replicaId);
+    if (!row || row[COLUMN.NODE_ID] !== nodeId) {
+      return {status: ReplicaOperationResponseStatus.NOT_FOUND};
+    }
+    const electable = payload[ReplicaOperationField.REASON] ===
+        ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION &&
+      row[COLUMN.RAFT_ROLE] === RAFT_ROLE.FOLLOWER &&
+      row[COLUMN.STATUS] === ReplicaStatus.ACTIVE;
+    if (!electable) {
+      return {
+        status: ReplicaOperationResponseStatus.COMPLETED,
+        handoffBranch:
+          REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.TARGET_ELECTION_ROLE_NO_OP,
+        handoffTrackedRole: row[COLUMN.RAFT_ROLE],
+      };
+    }
+    transfers.set(row[COLUMN.PARTITION_ID], replicaId);
+    return {
+      status: ReplicaOperationResponseStatus.COMPLETED,
+      handoffBranch: REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.TRANSFER_REQUESTED,
+      handoffTrackedRole: row[COLUMN.RAFT_ROLE],
+    };
+  };
+  // Leadership as the elected leader publishes it: the partition row names
+  // the leader's node, the leader's replica row its role.
+  const completeTransfer = (partitionId, replicaId) => {
+    const next = cache.get(TABLES.SERVICES, replicaId);
+    const partition = cache.get(TABLES.PARTITIONS, partitionId);
+    if (!next || !partition || next[COLUMN.STATUS] !== ReplicaStatus.ACTIVE) {
+      return;
+    }
+    for (const row of cache.filter(TABLES.SERVICES, (candidate) =>
+      candidate[COLUMN.PARTITION_ID] === partitionId &&
+      candidate[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER)) {
+      cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPDATE,
+        {...row, [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER});
+    }
+    cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPDATE,
+      {...next, [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER});
+    cache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.UPDATE,
+      {...partition, [COLUMN.LEADER_NODE_ID]: next[COLUMN.NODE_ID]});
+  };
   const answerCreate = (nodeId, payload) => {
     const replicaId = payload[ReplicaOperationField.REPLICA_ID];
+    const partitionId = payload[ReplicaOperationField.PARTITION_ID];
+    const operationId = payload[ReplicaOperationField.OPERATION_ID] || null;
     if (cache.get(TABLES.SERVICES, replicaId)) {
-      return {status: learnerReplicaIds.has(replicaId) ?
+      return {status: learners.has(replicaId) ?
         ReplicaOperationResponseStatus.IN_PROGRESS :
         ReplicaOperationResponseStatus.ALREADY_EXISTS};
     }
+    learners.set(replicaId, {nodeId, partitionId, operationId});
+    reportExecutorOutcome(nodeId, EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_SYNCING,
+      operationId, WORKFLOW_STEP.SYNCING, {replicaId, partitionId});
     insertStoredRow(cache, TABLES.SERVICES, {
       ...PartitionServiceRowOwner.buildServiceRow({
-        partitionId: payload[ReplicaOperationField.PARTITION_ID],
+        partitionId,
         replicaId,
         nodeId,
         service: LEARNER_SERVICE,
@@ -321,10 +500,9 @@ function createReplicaRuntime(cache, now) {
       }),
       [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEARNER,
     });
-    learnerReplicaIds.add(replicaId);
     return {status: ReplicaOperationResponseStatus.INITIATED};
   };
-  const answerRemove = (payload) => {
+  const answerRemove = (nodeId, payload) => {
     const replicaId = payload[ReplicaOperationField.REPLICA_ID];
     const row = cache.get(TABLES.SERVICES, replicaId);
     if (!row) {
@@ -334,11 +512,16 @@ function createReplicaRuntime(cache, now) {
       ...row,
       [COLUMN.STATUS]: ReplicaStatus.REMOVING,
     });
-    removingReplicaIds.add(replicaId);
+    removals.set(replicaId, {
+      nodeId,
+      operationId: payload[ReplicaOperationField.OPERATION_ID] || null,
+    });
     return {status: ReplicaOperationResponseStatus.INITIATED};
   };
   return {
     handled,
+    // The replicas whose removal committed: they left their group.
+    retiredReplicaIds,
     answer(nodeId, payload) {
       const type = payload?.[ReplicaOperationField.TYPE];
       if (type === ReplicaOperationMessageType.CREATE_REPLICA) {
@@ -349,15 +532,28 @@ function createReplicaRuntime(cache, now) {
       if (type === ReplicaOperationMessageType.REMOVE_REPLICA) {
         handled.push({nodeId, type,
           replicaId: payload[ReplicaOperationField.REPLICA_ID]});
-        return answerRemove(payload);
+        return answerRemove(nodeId, payload);
+      }
+      if (type === ReplicaOperationMessageType.STEP_DOWN_REPLICA) {
+        handled.push({nodeId, type,
+          replicaId: payload[ReplicaOperationField.REPLICA_ID]});
+        return answerStepDown(nodeId, payload);
       }
       return undefined;
     },
     step() {
-      for (const replicaId of [...learnerReplicaIds]) {
-        learnerReplicaIds.delete(replicaId);
+      for (const [partitionId, replicaId] of [...transfers]) {
+        transfers.delete(partitionId);
+        completeTransfer(partitionId, replicaId);
+      }
+      for (const [replicaId, learner] of [...learners]) {
+        learners.delete(replicaId);
         const row = cache.get(TABLES.SERVICES, replicaId);
         if (row && row[COLUMN.STATUS] === ReplicaStatus.SYNCING) {
+          reportExecutorOutcome(learner.nodeId,
+            EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE, learner.operationId,
+            WORKFLOW_STEP.ACTIVE,
+            {replicaId, partitionId: learner.partitionId});
           cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPDATE, {
             ...row,
             [COLUMN.STATUS]: ReplicaStatus.ACTIVE,
@@ -365,12 +561,16 @@ function createReplicaRuntime(cache, now) {
           });
         }
       }
-      for (const replicaId of [...removingReplicaIds]) {
-        removingReplicaIds.delete(replicaId);
+      for (const [replicaId, removal] of [...removals]) {
+        removals.delete(replicaId);
         const row = cache.get(TABLES.SERVICES, replicaId);
         if (row) {
           cache.applySystemTableChange(
             TABLES.SERVICES, CDC_OPERATION.DELETE, row);
+          retiredReplicaIds.add(replicaId);
+          reportExecutorOutcome(removal.nodeId,
+            EXECUTOR_OUTCOME_TYPE.REPLICA_REMOVE_COMPLETED,
+            removal.operationId, WORKFLOW_STEP.REMOVED, {replicaId});
         }
       }
     },
@@ -406,7 +606,46 @@ function installDelivery(hosts, cache, replicaRuntime, deliveries,
       {status: ReplicaOperationResponseStatus.COMPLETED});
   };
   withFixtureReplaceWitness(router, cache);
+  // The witness's committed configuration: the repository's fixture world
+  // answers it from the replica rows, and a source whose removal the replica
+  // runtime retired has left the committed voters.
+  const answerWitness = router.deliver.bind(router);
+  router.deliver = async (target, payload, options) => {
+    const envelope = await answerWitness(target, payload, options);
+    if (payload?.[ReplicaOperationField.TYPE] !==
+          ReplicaOperationMessageType.READ_REPLICA_MEMBERSHIP ||
+        !replicaRuntime.retiredReplicaIds.has(
+          payload[ReplicaOperationField.SOURCE_REPLICA_ID])) {
+      return envelope;
+    }
+    const answer = deliveryAnswerOf(envelope);
+    return buildDeliveryEnvelope({acknowledged: true}, {
+      ...answer,
+      [ReplicaOperationField.MEMBERSHIP]: {
+        ...answer[ReplicaOperationField.MEMBERSHIP],
+        state: PARTITION_REPLICA_MEMBERSHIP_STATE.ABSENT,
+      },
+    });
+  };
   withFixtureCommittedMembership(router, cache);
+}
+
+// A node's bootstrap transport endpoint, as its registration publishes it
+// (node-registration-owner-publication-methods.js registerNodeEndpoint),
+// stamped with the incarnation that published it.
+function insertNodeEndpointRow(cache, nodeId, nowMs) {
+  insertStoredRow(cache, TABLES.NODE_ENDPOINTS, {
+    [COLUMN.ENDPOINT_ID]: `ep-${nodeId}-ws`,
+    [COLUMN.NODE_ID]: nodeId,
+    [COLUMN.TRANSPORT_TYPE]: TRANSPORT_TYPE.WEBSOCKET,
+    [COLUMN.ADDRESS]: nodeAddressOf(nodeId),
+    [COLUMN.PRIORITY]: 0,
+    [COLUMN.METADATA]: JSON.stringify({}),
+    [COLUMN.STATUS]: ENDPOINT_STATUS.ACTIVE,
+    [COLUMN.CREATED_AT]: nowMs,
+    [COLUMN.UPDATED_AT]: nowMs,
+    [COLUMN.BOOT_INCARNATION]: TEST_BOOT_INCARNATION,
+  });
 }
 
 function seedSystemRows(cache, nowMs) {
@@ -421,6 +660,7 @@ function seedSystemRows(cache, nowMs) {
     [COLUMN.STORAGE_BUDGET_SOURCE]: STORAGE_BUDGET_SOURCE,
     [COLUMN.STORAGE_BUDGET_UPDATED_AT]: nowMs,
   }, nowMs));
+  insertNodeEndpointRow(cache, SEED_NODE_ID, nowMs);
   insert(TABLES.MESSAGE_GROUPS, seedMessageGroupRow(SEED_NODE_ID, nowMs));
   INITIAL_MESSAGE_GROUP_REPLICA_IDS.forEach((replicaId) => {
     insert(TABLES.SERVICES, MessageGroupServiceRowOwner.buildServiceRow({
@@ -463,8 +703,8 @@ function seedSystemRows(cache, nowMs) {
  */
 function createFormationWorld() {
   initializeTestEnvironment();
-  const frozen = createFrozenClock();
-  const {clock} = frozen;
+  const time = createWorldClock();
+  const {clock} = time;
   const cache = new SystemTableCache({
     timeSource: clock,
     cacheId: WORLD_CACHE_ID,
@@ -477,14 +717,41 @@ function createFormationWorld() {
   const publicationModeByNodeId = new Map();
   const lifecyclePublicationByNodeId = new Map();
   const dispatchServiceByNodeId = new Map();
+  // The SQL store's answer for a formation-release publication, on a tree
+  // that writes one (the tree this harness measures main with; a tree
+  // without the handoff never writes the kind). The engine seam answers
+  // reads from the cache, whose publication merge keeps a row's first
+  // created_at; the store replaces the row (INSERT OR REPLACE), and the
+  // handoff reader requires the row exactly as its authority last wrote it.
+  const storedHandoffRows = new Map();
+  function installStoredHandoffRows(hosts) {
+    const owner = hosts.membershipPublicationService.controlPlanePublicationsOwner;
+    const upsertPublication = owner.upsertPublication.bind(owner);
+    const getPublication = owner.getPublication.bind(owner);
+    owner.upsertPublication = async (row, options) => {
+      const result = await upsertPublication(row, options);
+      if (row?.[PUBLICATION_KIND_COLUMN] === HANDOFF_PUBLICATION_KIND) {
+        storedHandoffRows.set(row[PUBLICATION_ID_COLUMN], row);
+      }
+      return result;
+    };
+    owner.getPublication = async (publicationId, options) =>
+      storedHandoffRows.get(publicationId) ??
+        getPublication(publicationId, options);
+  }
   const network = Object.freeze({
     networkTimeSource: () => clock,
     setTimer: (nodeId, callback, delayMs) =>
       clock.setTimeout(callback, delayMs),
   });
   const partitionAuthority =
-    createRowPartitionAuthority(cache, hostsById, frozen.now);
-  const replicaRuntime = createReplicaRuntime(cache, frozen.now);
+    createRowPartitionAuthority(cache, hostsById, time.now);
+  // A replica handler reports to the coordinator of its own node.
+  const reportExecutorOutcome = (nodeId, outcomeType, operationId, step,
+    details) => hostsById.get(nodeId)?.rebalanceCoordinator
+    .executorOutcomeEmitter.emitOutcome(outcomeType, operationId, step, details);
+  const replicaRuntime =
+    createReplicaRuntime(cache, time.now, reportExecutorOutcome);
   const deliveries = [];
 
   function startNode(nodeId, clusterIncarnationFence) {
@@ -512,7 +779,7 @@ function createFormationWorld() {
     const nodeLifecyclePublication = new NodeLifecyclePublication({
       gateway: hosts.controlPlaneSystemTableGateway,
       leaseAuthority: NodeReadyLeaseAuthority.fromConfiguration(),
-      now: frozen.now,
+      now: time.now,
     });
     hosts.heartbeatService.nodeLifecyclePublication = nodeLifecyclePublication;
     // The node's replica dispatch owner, built as control-plane setup builds
@@ -540,6 +807,7 @@ function createFormationWorld() {
     });
     dispatchService.initialize();
     dispatchServiceByNodeId.set(nodeId, dispatchService);
+    installStoredHandoffRows(hosts);
     hostsById.set(nodeId, hosts);
     lifecyclePublicationByNodeId.set(nodeId, nodeLifecyclePublication);
     upNodeIds.add(nodeId);
@@ -549,7 +817,7 @@ function createFormationWorld() {
     return hosts;
   }
 
-  seedSystemRows(cache, frozen.now());
+  seedSystemRows(cache, time.now());
   const seed = startNode(SEED_NODE_ID, SEED_FENCE);
   const seedRebalancers = new Map(PRIORITY_TABLE_IDS.map((tableId) =>
     [INITIAL_PARTITION_IDS[tableId],
@@ -558,7 +826,7 @@ function createFormationWorld() {
   return {
     cache,
     clock,
-    frozen,
+    time,
     hostsById,
     upNodeIds,
     replicaRuntime,
@@ -567,7 +835,7 @@ function createFormationWorld() {
     seed,
     seedRebalancers,
     startNode,
-    settle: () => frozen.settle(),
+    settle: () => time.settle(),
     lifecyclePublicationOf: (nodeId) => lifecyclePublicationByNodeId.get(nodeId),
     // One link of the mesh drops or returns (a connection re-identification
     // is a drop followed by a return).
@@ -606,12 +874,13 @@ function createFormationWorld() {
           nodeAddress: nodeAddressOf(nodeId),
           nodeCapabilities: [],
           bootIncarnation: TEST_BOOT_INCARNATION,
-          now: frozen.now(),
+          now: time.now(),
         }),
         [COLUMN.STORAGE_BUDGET_BYTES]: STORAGE_BUDGET_BYTES,
         [COLUMN.STORAGE_BUDGET_SOURCE]: STORAGE_BUDGET_SOURCE,
-        [COLUMN.STORAGE_BUDGET_UPDATED_AT]: frozen.now(),
+        [COLUMN.STORAGE_BUDGET_UPDATED_AT]: time.now(),
       });
+      insertNodeEndpointRow(cache, nodeId, time.now());
       return hosts;
     },
   };

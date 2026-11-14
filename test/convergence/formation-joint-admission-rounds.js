@@ -39,6 +39,11 @@ const PLANNER_REFUSAL_MESSAGES = new Set([
   'Rebalancing move skipped',
   'Skipping move blocked by safety policy',
 ]);
+// The one line every owner writes when a bound it waited under is spent
+// (src/logging/wait-bound-spent.js).
+const WAIT_BOUND_SPENT_MESSAGE = 'Wait bound spent';
+// The ready-signal gate of the join formation barrier, on a tree that has it.
+const BARRIER_GATE = 'operation_ledger_formation';
 const READY_SIGNAL_STATE = Object.freeze({
   NOT_STARTED: 'not_started',
   RUNNING: 'running',
@@ -75,6 +80,43 @@ function lapsePlannerCadence(rebalancer) {
   rebalancer.rebalanceStartAtMs = 0;
 }
 
+// The cadences this driver steps, by name. A cadence re-evaluates a level
+// condition or retries a step whose preconditions may now hold; production
+// formation legitimately advances on it. Each is stepped once per round, as
+// if its spacing had elapsed, and the report counts every step. Nothing else
+// that is armed ever runs: a bound or a timeout that would have to expire is
+// no progress here.
+//   TIMER cadences are retry timers an owner armed at the named site.
+//   STAMP cadences are spacing stamps the driver ages before an owner's own
+//   periodic body runs (the body is called directly, its interval never
+//   fires).
+const TIMER_CADENCES = Object.freeze([
+  // ReplicaDispatchService: the retry of a deferred operation dispatch,
+  // which also carries the verification of a remote owner wake
+  // (operationDispatchRetryAfterMs).
+  {name: 'dispatch-retry',
+    site: 'src/control-plane/replica-dispatch-retry-scheduling.js'},
+  // Operation workflow owner: the retry of an observed-progress reconcile,
+  // of retained executor evidence, of a deferred transition, of a dispatch,
+  // of an ACTIVE REPLACE whose source removal was deferred, and of a remote
+  // owner handoff.
+  {name: 'observed-progress-retry',
+    site: 'src/rebalancer/operation-workflow-observed-progress-retention.js'},
+  {name: 'executor-outcome-retry',
+    site: 'src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js'},
+  // The authoritative replica_operations read retry.
+  {name: 'operation-read-retry',
+    site: 'src/rebalancer/replica-operation-repository-visibility-methods.js'},
+]);
+const STAMP_CADENCES = Object.freeze({
+  PLANNER_CHECK: 'planner-check-spacing',
+  MEMBERSHIP_TICK: 'membership-tick',
+  COORDINATOR_TICK: 'coordinator-tick',
+  ORPHAN_RECONCILE: 'orphan-reconcile-backoff',
+  // The join formation barrier's poll, on a tree that has the barrier.
+  BARRIER_POLL: 'join-barrier-poll',
+});
+
 /**
  * Mount the real join ready-signal owner on a registered joiner.
  * @param {object} world the formation world
@@ -91,12 +133,30 @@ function mountJoinReadySignal(world, nodeId) {
     nodeAddress: nodeAddressOf(nodeId),
     seedNodeAddress: nodeAddressOf(SEED_NODE_ID),
     now: () => world.clock.now(),
-    // A sleep is a timer. It is never completed: a joiner that sleeps is
-    // waiting on a timer, and the report names it.
+    // A sleep is a timer. It is never left to expire: a joiner that sleeps
+    // is waiting on a timer, and the report names it. The one exception is
+    // a poll of the join formation barrier (the tree this harness measures
+    // main with has one; a tree without it never sleeps there): the driver
+    // steps that poll as a named cadence.
     sleep: (delayMs) => new Promise((resolve) => {
-      sleeps.push({delayMs, resolve});
+      sleeps.push({delayMs, resolve, done: false});
     }),
   });
+  // Transport: a pre-READY joiner's CONNECTED liveness publication (the
+  // barrier's, on a tree that has it) is routed to the seed's durable node
+  // lifecycle owner, which decides what it writes.
+  service.sendControlPlaneNodeStateUpdate = async (publication) =>
+    world.lifecyclePublicationOf(SEED_NODE_ID).publish({
+      nodeId,
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      state: publication.state,
+      heartbeatOnly: publication.heartbeatOnly,
+      heartbeatAt: publication.heartbeatAt,
+      capabilities: publication.capabilities,
+      publicationMode: publication.nodeStatePublicationMode,
+    });
+  const atBarrier = () =>
+    service.infrastructureJoinProgress?.readySignalGate === BARRIER_GATE;
   service.seedNodeId = SEED_NODE_ID;
   // Node-local gates, as the measured joiners had passed them.
   service.cdcSubscriptionsActive = true;
@@ -136,11 +196,24 @@ function mountJoinReadySignal(world, nodeId) {
         joiner.failure = error;
       });
     },
+    // One step of the barrier's poll cadence: its pending poll completes.
+    stepBarrierPoll() {
+      let stepped = 0;
+      for (const sleep of sleeps) {
+        if (!sleep.done && atBarrier()) {
+          sleep.done = true;
+          sleep.resolve();
+          stepped += 1;
+        }
+      }
+      return stepped;
+    },
     // Sleeps the driver never completes: timers that would have to expire.
-    armedSleeps: () => sleeps.map((sleep) => ({
-      delayMs: sleep.delayMs,
-      gate: service.infrastructureJoinProgress?.readySignalGate || null,
-    })),
+    armedSleeps: () => sleeps.filter((sleep) => !sleep.done && !atBarrier())
+      .map((sleep) => ({
+        delayMs: sleep.delayMs,
+        gate: service.infrastructureJoinProgress?.readySignalGate || null,
+      })),
     barrier: () => barrierLog[barrierLog.length - 1] || null,
     isReady: () => isNodeRecordReady(
       world.cache.get(TABLES.NODES, nodeId), {now: world.clock.now()}),
@@ -182,7 +255,10 @@ function createRoundDriver(world) {
     const statement = {gate: null, refusals: new Map()};
     plannerStatements.set(partitionId, statement);
     const record = (message, details) => {
-      if (message === PLANNING_GATE_MESSAGE) {
+      if (message === WAIT_BOUND_SPENT_MESSAGE) {
+        spentBounds.push({nodeId: SEED_NODE_ID, wait: details?.wait || null,
+          subject: details?.subject || partitionId});
+      } else if (message === PLANNING_GATE_MESSAGE) {
         statement.gate = {
           winningGate: details.winningGate,
           bypassState: details.bypassState,
@@ -204,13 +280,53 @@ function createRoundDriver(world) {
     rebalancer.logger = {debug: record, info: record, warn: record, error: record};
   }
 
+  // Every bound an operation owner of a node reported spent.
+  const spentBounds = [];
+  const boundWatch = (nodeId) => {
+    const quiet = () => {};
+    const watch = {
+      debug: quiet,
+      info: quiet,
+      warn: quiet,
+      error(message, details) {
+        if (message === WAIT_BOUND_SPENT_MESSAGE) {
+          spentBounds.push({nodeId, wait: details?.wait || null,
+            subject: details?.subject || null});
+        }
+      },
+      child: () => watch,
+    };
+    return watch;
+  };
+  const watchBounds = (hosts) => {
+    const watch = boundWatch(hosts.nodeId);
+    hosts.rebalanceCoordinator.logger = watch;
+    hosts.rebalanceCoordinator.workflowOwner.logger = watch;
+    hosts.rebalanceCoordinator.repository.logger = watch;
+    world.dispatchServiceByNodeId.get(hosts.nodeId).logger = watch;
+  };
+  watchBounds(seed);
+  const stampSteps = new Map();
+  const countStamp = (name, steps = 1) =>
+    stampSteps.set(name, (stampSteps.get(name) || 0) + steps);
   const driver = {
     world,
     joiners,
     handoffTransitions,
     plannerStatements,
     roundCounter,
+    spentBounds,
+    // Every cadence stepped so far, by name, with the number of steps.
+    steppedCadences: () => ({
+      ...Object.fromEntries(stampSteps),
+      ...world.time.steppedCadences(),
+    }),
+    // The armed timers no cadence of this driver owns: bounds, timeouts and
+    // the intervals whose bodies the driver calls directly.
+    armedBounds: () => world.time.armedTimers().filter((timer) =>
+      !TIMER_CADENCES.some((cadence) => timer.armedBy.startsWith(cadence.site))),
     close() {
+      world.time.restore();
       for (const rebalancer of world.seedRebalancers.values()) {
         rebalancer.shutdown();
       }
@@ -240,7 +356,7 @@ function createRoundDriver(world) {
     },
     async joinerArrives(nodeId) {
       nextEvaluationInstant(world);
-      world.registerJoiner(nodeId);
+      watchBounds(world.registerJoiner(nodeId));
       joiners.set(nodeId, mountJoinReadySignal(world, nodeId));
       await settleWorld(world);
       // The seed's readiness owner evaluates the new member.
@@ -279,6 +395,10 @@ function createRoundDriver(world) {
       nextEvaluationInstant(world);
       const authority = seedReadiness.getStartupAuthoritySnapshotSync(
         SEED_NODE_ID, world.clock.now());
+      // On a tree with the formation-release handoff, the durable
+      // publication of what the read captured.
+      await seedReadiness.formationReleaseHandoffPublicationCoordinator
+        ?.whenIdle();
       await settleWorld(world);
       return authority;
     },
@@ -291,6 +411,7 @@ function createRoundDriver(world) {
     // reconcile tick and the owner-membership driver's tick, each once.
     async membershipDerivation() {
       nextEvaluationInstant(world);
+      countStamp(STAMP_CADENCES.MEMBERSHIP_TICK);
       await seed.heartbeatService.runScheduledMembershipPublicationReconcileTick();
       await settleWorld(world);
       await seed.membershipPublicationService.driveOwnerMembershipReconcile();
@@ -299,6 +420,7 @@ function createRoundDriver(world) {
     // One planning check of every priority partition's planner on the seed.
     async planPriorityPartitions() {
       nextEvaluationInstant(world);
+      countStamp(STAMP_CADENCES.PLANNER_CHECK);
       for (const rebalancer of world.seedRebalancers.values()) {
         lapsePlannerCadence(rebalancer);
         rebalancer.enqueueRebalanceCheck(RECONCILE_REASON.PERIODIC_CHECK);
@@ -310,11 +432,15 @@ function createRoundDriver(world) {
     },
     // One periodic evaluation of every node's rebalance coordinator: the
     // body of its own interval tick (timeouts, orphaned operations,
-    // membership debt), which re-reads the operations it owns.
+    // membership debt), which re-reads the operations it owns. The orphan
+    // reconciler spaces its own scans (five seconds); that spacing is aged.
     async evaluateCoordinators() {
       nextEvaluationInstant(world);
+      countStamp(STAMP_CADENCES.COORDINATOR_TICK);
+      countStamp(STAMP_CADENCES.ORPHAN_RECONCILE);
       for (const hosts of world.hostsById.values()) {
         const coordinator = hosts.rebalanceCoordinator;
+        coordinator.workflowOwner.lastOrphanedOperationReconcileAtMs = 0;
         await coordinator.checkTimeouts();
         await coordinator.reconcileOrphanedOperations();
         await coordinator.reconcileMessageGroupMembershipDebt();
@@ -325,6 +451,20 @@ function createRoundDriver(world) {
     async stepReplicaRuntime() {
       nextEvaluationInstant(world);
       world.replicaRuntime.step();
+      await settleWorld(world);
+    },
+    // One step of every retry cadence an owner armed.
+    async stepRetryCadences() {
+      nextEvaluationInstant(world);
+      countStamp(STAMP_CADENCES.BARRIER_POLL, 0);
+      for (const joiner of joiners.values()) {
+        countStamp(STAMP_CADENCES.BARRIER_POLL, joiner.stepBarrierPoll());
+        await settleWorld(world);
+      }
+      for (const cadence of TIMER_CADENCES) {
+        world.time.stepCadence(cadence.name,
+          (timer) => timer.armedBy.startsWith(cadence.site));
+      }
       await settleWorld(world);
     },
     startReadySignal(nodeId) {
@@ -338,6 +478,7 @@ function createRoundDriver(world) {
       await driver.planPriorityPartitions();
       await driver.evaluateCoordinators();
       await driver.stepReplicaRuntime();
+      await driver.stepRetryCadences();
       await driver.readSeedAuthority();
     },
   };
@@ -345,8 +486,15 @@ function createRoundDriver(world) {
 }
 
 
+// Every cadence the driver steps, by name.
+const STEPPED_CADENCE_NAMES = Object.freeze([
+  ...Object.values(STAMP_CADENCES),
+  ...TIMER_CADENCES.map((cadence) => cadence.name),
+]);
+
 export {
   READY_SIGNAL_STATE,
+  STEPPED_CADENCE_NAMES,
   createRoundDriver,
   nextEvaluationInstant,
   settleWorld,

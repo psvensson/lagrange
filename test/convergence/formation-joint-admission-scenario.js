@@ -10,6 +10,7 @@ import {isNodeRecordReady} from '../../src/node/node-readiness-policy.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {
   READY_SIGNAL_STATE,
+  STEPPED_CADENCE_NAMES,
   createRoundDriver,
 } from './formation-joint-admission-rounds.js';
 import {
@@ -25,7 +26,7 @@ const EVENT = Object.freeze({
   REVOKE: 'revoke',
   DERIVE: 'derive',
 });
-const ROUND_CAP = 10;
+const ROUND_CAP = 60;
 const MEMBERSHIP_KIND = 'cluster_membership';
 const OUTCOME = Object.freeze({
   RELEASED: 'released',
@@ -33,6 +34,10 @@ const OUTCOME = Object.freeze({
   ROUND_CAP: 'round_cap',
 });
 const VOTER_READY_FLOOR = 3;
+const SPREAD_NODE_COUNT = 3;
+// The admission reason of the ledger quorum hold
+// (operation-ledger-hold-policy.js).
+const LEDGER_QUORUM_HOLD_REASON = 'operation_ledger_quorum_concentrated';
 const LIST_SEPARATOR = ',';
 const SYNCING_STATUS = 'syncing';
 
@@ -78,6 +83,8 @@ function nodeStates(world) {
 
 function operationRows(world) {
   return world.cache.getAll(TABLES.REPLICA_OPERATIONS).map((row) => ({
+    operationId: row.operation_id,
+    terminal: row.completed_at !== null && row.completed_at !== undefined,
     type: row.type,
     partitionId: row.partition_id,
     sourceNodeId: row.source_node_id || null,
@@ -249,29 +256,100 @@ async function applyEvent(driver, event) {
  * @param {object[]} order the events, in order
  * @return {Promise<object>} the report
  */
-async function runArrivalOrder(order) {
-  const world = createFormationWorld();
-  const driver = createRoundDriver(world);
+// The spread half of the claim, read from the durable rows: every priority
+// partition is held by voters on SPREAD_NODE_COUNT distinct READY nodes (or
+// on every READY node when there are fewer), no surplus replica is left, and
+// no operation is unfinished.
+function spreadState(world) {
+  const readyNodeIds = new Set(nodeStates(world)
+    .filter((node) => node.readyLease).map((node) => node.nodeId));
+  const required = Math.min(SPREAD_NODE_COUNT, readyNodeIds.size);
+  const partitions = {};
+  for (const partitionId of PRIORITY_PARTITION_IDS) {
+    const rows = world.cache.filter(TABLES.SERVICES, (row) =>
+      row[COLUMN.PARTITION_ID] === partitionId);
+    const voterNodeIds = new Set(rows.filter((row) =>
+      readyNodeIds.has(row[COLUMN.NODE_ID]) &&
+      row[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE &&
+      (row[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER ||
+        row[COLUMN.RAFT_ROLE] === RAFT_ROLE.FOLLOWER))
+      .map((row) => row[COLUMN.NODE_ID]));
+    partitions[partitionId] = {
+      distinctReadyVoterNodes: voterNodeIds.size,
+      replicas: rows.length,
+    };
+  }
+  const unfinished = operationRows(world).filter((row) => !row.terminal);
+  return {
+    required,
+    partitions,
+    spreadOnDistinctNodes: Object.values(partitions).every((partition) =>
+      partition.distinctReadyVoterNodes >= required),
+    surplusRemoved: Object.values(partitions).every((partition) =>
+      partition.replicas === SPREAD_NODE_COUNT),
+    unfinishedOperations: unfinished.map((row) =>
+      `${row.type} ${row.partitionId} ${row.sourceNodeId || ''}>` +
+      `${row.targetNodeId} ${row.step}`),
+  };
+}
+
+function latestMembership(world) {
+  const membership = membershipRows(world);
+  return membership[membership.length - 1] || null;
+}
+
+function isSpreadPublished(world) {
+  const latest = latestMembership(world);
+  return latest?.status === 'PUBLISHED' && latest.spread?.satisfied === true;
+}
+
+// What the run observes at every observation point. Observation only.
+function createObserver(world, driver) {
   const safety = {
     openClusterGates: [],
     floorViolations: [],
+    // The published summary states the spread while the replica rows do not
+    // hold it for the published members.
+    summaryAheadOfRows: [],
+    // Every replica removal that was admitted, dispatched and committed, and
+    // the lowest voter-ready count each partition was ever observed at.
+    admittedRemovals: 0,
+    lowestVoterReady: {},
   };
   const baselineFloor = {};
-  const observeSafety = (label) => {
-    const membership = membershipRows(world);
-    const latest = membership[membership.length - 1] || null;
-    const spreadPublished = latest?.status === 'PUBLISHED' &&
-      latest.spread?.satisfied === true;
-    const gates = clusterGates(driver);
+  const timeline = [];
+  const seenOperations = new Map();
+  const ledgerHold = {engagedRounds: [], refusedMoves: 0};
+  const refusalReasons = {};
+  // Every change of (spread published, a client-facing gate open), in order.
+  const gates = [];
+  const observe = (label) => {
+    const spreadPublished = isSpreadPublished(world);
+    const answers = clusterGates(driver);
+    const open = [
+      ...Object.entries(answers.serve).filter(([, answer]) =>
+        answer.decision === 'eligible').map(([nodeId]) => `serve:${nodeId}`),
+      ...Object.entries(answers.readyz).filter(([, answer]) =>
+        answer.priorityControlPlaneRecoveryHealthy)
+        .map(([nodeId]) => `readyz:${nodeId}`),
+    ];
+    const last = gates[gates.length - 1];
+    if (!last || last.spreadPublished !== spreadPublished ||
+        last.openGates !== open.length) {
+      gates.push({label, spreadPublished, openGates: open.length});
+    }
     if (!spreadPublished) {
-      for (const [nodeId, answer] of Object.entries(gates.serve)) {
-        if (answer.decision === 'eligible') {
-          safety.openClusterGates.push({label, gate: 'serve', nodeId});
-        }
+      for (const gate of open) {
+        safety.openClusterGates.push({label, gate});
       }
-      for (const [nodeId, answer] of Object.entries(gates.readyz)) {
-        if (answer.priorityControlPlaneRecoveryHealthy) {
-          safety.openClusterGates.push({label, gate: 'readyz', nodeId});
+    } else {
+      const members = latestMembership(world).members.length;
+      const required = Math.min(SPREAD_NODE_COUNT, members);
+      for (const [partitionId, partition] of
+        Object.entries(spreadState(world).partitions)) {
+        if (partition.distinctReadyVoterNodes < required) {
+          safety.summaryAheadOfRows.push({label, partitionId,
+            distinctReadyVoterNodes: partition.distinctReadyVoterNodes});
         }
       }
     }
@@ -280,11 +358,61 @@ async function runArrivalOrder(order) {
       if (baselineFloor[partitionId] === undefined) {
         baselineFloor[partitionId] = count;
       }
+      safety.lowestVoterReady[partitionId] = Math.min(
+        safety.lowestVoterReady[partitionId] ?? count, count);
       if (count < Math.min(VOTER_READY_FLOOR, baselineFloor[partitionId])) {
         safety.floorViolations.push({label, partitionId, count});
       }
     }
+    safety.admittedRemovals = world.replicaRuntime.retiredReplicaIds.size;
+    for (const row of operationRows(world)) {
+      const name = `${row.type} ${row.partitionId} ` +
+        `${row.sourceNodeId || ''}>${row.targetNodeId}`;
+      const seen = seenOperations.get(row.operationId);
+      if (!seen) {
+        seenOperations.set(row.operationId, {terminal: row.terminal});
+        timeline.push(`${label}: + ${name}`);
+      }
+      if (row.terminal && !(seen && seen.terminal)) {
+        seenOperations.get(row.operationId).terminal = true;
+        timeline.push(`${label}: = ${name} ${row.step}`);
+      }
+    }
+    const round = driver.roundCounter.number;
+    let heldThisRound = false;
+    for (const [partitionId, statement] of driver.plannerStatements) {
+      for (const refusal of statement.refusals.values()) {
+        if (refusal.round !== round || refusal.counted === true) continue;
+        refusal.counted = true;
+        const reason = refusal.reason || refusal.error || 'unstated';
+        refusalReasons[reason] = (refusalReasons[reason] || 0) + 1;
+        if (reason === LEDGER_QUORUM_HOLD_REASON) {
+          heldThisRound = true;
+          ledgerHold.refusedMoves += 1;
+          timeline.push(`${label}: hold ${refusal.moveType} ${partitionId}` +
+            ` >${refusal.targetNodeId}`);
+        }
+      }
+    }
+    if (heldThisRound) ledgerHold.engagedRounds.push(round);
   };
+  return {safety, timeline, ledgerHold, refusalReasons, gates, observe};
+}
+
+/**
+ * Run one arrival order to its fixpoint.
+ * @param {object[]} order the events, in order
+ * @param {object} [options]
+ * @param {Function} [options.afterReadySignals] events applied once every
+ *   joiner's ready signal has been started (a witness's own disturbance)
+ * @return {Promise<object>} the report
+ */
+async function runArrivalOrder(order, options = {}) {
+  const world = createFormationWorld();
+  const driver = createRoundDriver(world);
+  const observer = createObserver(world, driver);
+  const {safety} = observer;
+  const observeSafety = observer.observe;
   try {
     await driver.formSeed();
     observeSafety('seed formed');
@@ -297,15 +425,21 @@ async function runArrivalOrder(order) {
     }
     await driver.settle();
     observeSafety('ready signals started');
+    const scripted = options.rounds || {};
     let digest = worldDigest(driver);
     let rounds = 0;
     let fixpoint = false;
     while (rounds < ROUND_CAP && !fixpoint) {
+      if (scripted[rounds + 1]) {
+        await scripted[rounds + 1](driver, world);
+        observeSafety(`before round ${rounds + 1}`);
+      }
       await driver.round();
       rounds += 1;
       observeSafety(`round ${rounds}`);
       const next = worldDigest(driver);
-      fixpoint = next === digest;
+      fixpoint = next === digest &&
+        !Object.keys(scripted).some((round) => Number(round) > rounds);
       digest = next;
     }
     const joiners = joinerStates(driver);
@@ -314,20 +448,23 @@ async function runArrivalOrder(order) {
         .filter((nodeId) => nodeId !== SEED_NODE_ID));
     const stuckJoiners = joiners.filter((joiner) =>
       admitted.has(joiner.nodeId) && !joiner.readyLease);
-    const armedTimers = world.frozen.armedTimers();
+    const armedBounds = driver.armedBounds();
     const elapsedMs = world.clock.now() - WORLD_START_MS;
     const shortestArmedDelayMs = Math.min(
-      ...armedTimers.map((timer) => timer.delayMs),
+      ...armedBounds.map((timer) => timer.delayMs),
       ...joiners.flatMap((joiner) =>
         joiner.armedSleeps.map((sleep) => sleep.delayMs)),
     );
-    // No timer was due inside the run: the run is shorter than the shortest
-    // delay any owner armed.
+    // No bound was due inside the run: the run is shorter than the shortest
+    // delay of any armed timer that is not a stepped cadence, and no owner
+    // reported a bound spent.
     assert.ok(elapsedMs < shortestArmedDelayMs,
-      `the run (${elapsedMs} ms) must stay below the shortest armed delay ` +
+      `the run (${elapsedMs} ms) must stay below the shortest armed bound ` +
       `(${shortestArmedDelayMs} ms)`);
+    assert.deepEqual(driver.spentBounds, [],
+      'no owner reported a wait bound spent');
     const armedBy = {};
-    for (const timer of armedTimers) {
+    for (const timer of armedBounds) {
       const key = `${Math.round(timer.delayMs)} ms ${timer.armedBy}`;
       armedBy[key] = (armedBy[key] || 0) + 1;
     }
@@ -364,6 +501,16 @@ async function runArrivalOrder(order) {
       voterReadyFloor: voterReadyFloorCounts(world),
       clusterGates: clusterGates(driver),
       safety,
+      spread: {
+        ...spreadState(world),
+        summarySatisfied: isSpreadPublished(world),
+      },
+      timeline: observer.timeline,
+      ledgerHold: observer.ledgerHold,
+      refusalReasons: observer.refusalReasons,
+      gates: observer.gates,
+      steppedCadences: driver.steppedCadences(),
+      spentBounds: driver.spentBounds,
       timersThatWouldHaveToExpire: armedBy,
     };
   } finally {
@@ -406,6 +553,9 @@ function formatStuckReport(report) {
   lines.push('voter-ready floor (replicas on READY nodes): ' +
     JSON.stringify(report.voterReadyFloor));
   lines.push(`cluster gates: ${JSON.stringify(report.clusterGates)}`);
+  lines.push(`spread: ${JSON.stringify(report.spread)}`);
+  lines.push(`safety: ${JSON.stringify(report.safety)}`);
+  lines.push(`cadences stepped: ${JSON.stringify(report.steppedCadences)}`);
   lines.push('timers that would have to expire: ' +
     JSON.stringify(report.timersThatWouldHaveToExpire));
   return lines.join('\n');
@@ -414,6 +564,8 @@ function formatStuckReport(report) {
 export {
   OUTCOME,
   READY_SIGNAL_STATE,
+  STEPPED_CADENCE_NAMES,
+  VOTER_READY_FLOOR,
   arrive,
   derive,
   describeOrder,
