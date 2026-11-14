@@ -7,7 +7,7 @@ documentClass: generated
 
 ## Files
 
-- [cdc-group-propagation-constants.js](cdc-group-propagation-constants.js) - Constants for CDCGroupPropagationService. (importers: many)
+- [cdc-group-propagation-constants.js](cdc-group-propagation-constants.js) - Constants for CDCGroupPropagationService. (importers: hub)
 - [cdc-group-propagation-delivery-methods.js](cdc-group-propagation-delivery-methods.js) - The foreground retry loop and its pressure gate for CDCGroupPropagationService's durable wave. (importers: one)
 - [cdc-group-propagation-durable-delivery.js](cdc-group-propagation-durable-delivery.js) - No leading comment; first export: propagateDurableCdcEvent. (importers: one)
 - [cdc-group-propagation-durable-plan.js](cdc-group-propagation-durable-plan.js) - The topology owner's synchronous observation of the existing routing plan. (importers: few)

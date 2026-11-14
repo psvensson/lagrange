@@ -204,6 +204,10 @@ function createMessageGroupForwardingOwnerNativeDeliveryMethods() {
       let lastAnswer = null;
       let lastError = null;
       let addressedConvergence = false;
+      // Whether this forward tried exactly one target and it was the native
+      // leader answering typed backpressure: nothing of this forward had an
+      // effect anywhere.
+      let leaderBackpressure = false;
       for (let index = 0; index < targets.length; index += 1) {
         const target = targets[index];
         const result = await this.tryDurableCdcForwardTarget(target, payload, events, options);
@@ -212,9 +216,11 @@ function createMessageGroupForwardingOwnerNativeDeliveryMethods() {
         lastAnswer = result.answer ?? lastAnswer;
         lastError = result.error ?? lastError;
         addressedConvergence ||= result.addressedConvergence;
+        leaderBackpressure = index === 0 && result.leaderBackpressure === true;
         if (step === CDC_FORWARD_TARGET_STEP.STOP) break;
       }
-      return {accepted: false, answer: lastAnswer, error: lastError, addressedConvergence};
+      return {accepted: false, answer: lastAnswer, error: lastError, addressedConvergence,
+        leaderBackpressure};
     },
 
     async tryDurableCdcForwardTarget(target, payload, events, options) {
@@ -229,8 +235,13 @@ function createMessageGroupForwardingOwnerNativeDeliveryMethods() {
         const failure = deliveryReadingOf(delivery);
         const addressedConvergence = await this.observeDurableCdcForwardFailure(
           target, failure, failure?.error, options);
+        // The native leader's own typed refusal: a terminal forward has no
+        // onward hop, and the leader's commit queue answers BACKPRESSURE
+        // before it proposes the vector (at capacity, or the same vector
+        // already in flight there).
         return {accepted: false, answer: forwardedDeliveryAnswer(delivery),
-          addressedConvergence};
+          addressedConvergence, leaderBackpressure: terminal &&
+            deliveryAnswerOf(delivery)?.error === CDC_COMPLETION.BACKPRESSURE};
       } catch (error) {
         options.assertCurrent();
         const addressedConvergence = await this.observeDurableCdcForwardFailure(
@@ -284,7 +295,10 @@ function createMessageGroupForwardingOwnerNativeDeliveryMethods() {
       }
       const result = await this.tryDurableCdcForwardTargets(
         decision.targets, payload, events, options);
-      if (result.accepted) return result.answer;
+      // Like an accepted answer, the leader's typed backpressure refusal is
+      // the forward's answer as the leader gave it; every other failure is
+      // unknown and carries the last answer as its cause.
+      if (result.accepted || result.leaderBackpressure) return result.answer;
       if (result.addressedConvergence) {
         const provisional = await this.tryAddressedDurableCdcIngress(events, options);
         if (provisional !== null) return provisional;

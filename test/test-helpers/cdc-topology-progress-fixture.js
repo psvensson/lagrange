@@ -1,4 +1,6 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE, ROUTER_CONNECTION_CLOSED_ERROR_CODE} from
+  '../../src/transport/transport-error-codes.js';
 // Component fixture: real source apply/ledger/subscription and topology owners,
 // with controlled route projections and recipient answers. These answers are
 // deliberately not evidence of a native recipient commit or a system-row write.
@@ -10,14 +12,15 @@ import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
 import {isIssuedBootIncarnation} from '../../src/bootstrap/boot-incarnation-contract.js';
 import {buildPartitionCdcPropagationSubscriber} from
   '../../src/bootstrap/shared/partition-cdc-propagation-subscriber.js';
-import {buildCommittedCdcOutcome, buildProvisionalCdcOutcome, unknownCdcAcceptance} from
-  '../../src/cdc/cdc-delivery-outcome.js';
+import {CDC_COMPLETION, buildCommittedCdcOutcome, buildProvisionalCdcOutcome,
+  unknownCdcAcceptance} from '../../src/cdc/cdc-delivery-outcome.js';
 import {CDCGroupPropagationService} from '../../src/topology/cdc-group-propagation-service.js';
 import {PARTITION_CDC_COMMAND, PARTITION_CDC_OBLIGATION_REASON} from
   '../../src/partition/partition-cdc-obligation-constants.js';
 import {countCdcObligations} from '../../src/partition/partition-cdc-obligation-ledger.js';
-import {createDurableSourceMessageGroupService, createMessageGroupServiceRow,
-  deliveredEventsOf} from '../topology/cdc-group-propagation-service-harness.js';
+import {FAST_FOREGROUND_RETRY, createDurableSourceMessageGroupService, createHeldMessageRouter,
+  createMessageGroupServiceRow, deliveredEventsOf} from
+  '../topology/cdc-group-propagation-service-harness.js';
 import {CDC_TABLE as TABLE, applyCommitted, committedQueryOf, settleTicks, shutdownAll,
   startLeader} from
   './participant-transaction-fixture.js';
@@ -80,7 +83,7 @@ function buildTopology(f) {
   const topology = new CDCGroupPropagationService({nodeId: SOURCE_NODE,
     systemTableCache: f.projection.cache, messageRouter: router,
     latencyTreeService: {getRoutingOrder: () => f.projection.groups.map((row) => row.group_id)},
-    nowFn: () => f.clock.now(), deliveryRetryMaxAttempts: 1});
+    nowFn: () => f.clock.now(), ...FAST_FOREGROUND_RETRY});
   topology.initialize();
   topology.start();
   return {source, topology};
@@ -158,5 +161,124 @@ function omitTarget(f) {
   f.projection.services[0][COLUMN.STATUS] = SERVICE_STATUS.STOPPED;
 }
 
-export {RESPONSE, SOURCE_GROUP, SOURCE_NODE, TARGET_GROUP, TARGET_NODE,
-  addRequiredGroup, assertDebtWithoutAck, omitTarget, topologyProgressFixture};
+// One source lane over the shared topology owner: a partition leader of
+// `tableName` with its one propagation subscriber, and `rows` committed and
+// owed before it leads (so no recipient callback runs during setup). Its
+// CDC_DELIVERED proposals commit at once through the real application owner.
+// Each lane is a leader of its own partition (`partitionId`), so two lanes
+// may lead partitions of one table.
+async function startSourceLane(f, {tableName, partitionId, rows}) {
+  const {leader, proposed} = await startLeader({tableName, timeSource: f.clock}, partitionId);
+  f.leaders.push(leader);
+  leader.controllablePort.setProposeHandler(async (entry) => {
+    proposed.push({...entry});
+    applyCommitted(leader, entry);
+  });
+  leader.controllablePort.setRole(RAFT_ROLE.FOLLOWER);
+  const selection = () => ({ready: true, service: f.source});
+  await leader.subscribeToCDCWithHandshake(buildPartitionCdcPropagationSubscriber({tableName,
+    resolveOperationalMessageGroupSelection: selection,
+    resolveOperationalMessageGroupSelectionAsync: async () => selection(),
+    buildMessageGroupOwnerNotReadyError: () => Object.assign(new Error('controlled readiness'),
+      {retryAfterMs: RETRY_AFTER_MS}),
+    propagatePartitionCDCEvent: (_selected, events, context) => f.topology.propagateCDCEvent({
+      events, sourceMessageGroupService: f.source, deliveryContext: context}),
+  }), {subscriberId: `lane-${partitionId}`});
+  const lane = {tableName, partitionId, leader, proposed,
+    drive: () => leader.cdcDelivery.driveCdcObligations(
+      PARTITION_CDC_OBLIGATION_REASON.DELIVERY_RETRY),
+    diagnostics: () => leader.cdcDelivery.getCdcObligationDiagnostics(),
+    addRow: (id) => {
+      const command = committedQueryOf(`${partitionId}-${id}`,
+        `INSERT INTO ${tableName} (id, value) VALUES (?, ?)`);
+      command.params = [id, `value-${id}`];
+      command.timestamp = new HLCTimestamp(1000, 0, `lane-${partitionId}`).toString();
+      assert.equal(applyCommitted(leader, command), null);
+    }};
+  for (const id of rows) lane.addRow(id);
+  leader.controllablePort.setRole(RAFT_ROLE.LEADER);
+  await settleTicks();
+  assert.deepEqual(countCdcObligations(leader.db), {owed: rows.length, delivered: 0});
+  return lane;
+}
+
+// What a multi-lane recipient (or the source group) answers. Besides the
+// RESPONSE modes: the CDC outcome owner's BACKPRESSURE (a commit queue at
+// capacity, answered before any proposal, with its hint), and two transport
+// outcomes built by the transport owner for a delivery that was never sent:
+// the router's outbound-queue rejection (typed backpressure, with its hint)
+// and a closed connection (a failure that is not backpressure).
+const LEAF = Object.freeze({...RESPONSE, BACKPRESSURE: 'backpressure',
+  OUTBOUND_BACKPRESSURE: 'outbound_backpressure', CONNECTION_CLOSED: 'connection_closed'});
+
+function leafAnswer(events, groupId, leaf, hintMs = RETRY_AFTER_MS) {
+  return leaf === LEAF.BACKPRESSURE ?
+    {...unknownCdcAcceptance(CDC_COMPLETION.BACKPRESSURE), retryAfterMs: hintMs} :
+    controlledAnswer(events, groupId, leaf);
+}
+
+function leafEnvelope(events, groupId, leaf, hintMs = RETRY_AFTER_MS) {
+  if (leaf === LEAF.OUTBOUND_BACKPRESSURE) {
+    return buildDeliveryEnvelope({errorCode: OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE,
+      retryAfterMs: hintMs});
+  }
+  if (leaf === LEAF.CONNECTION_CLOSED) {
+    return buildDeliveryEnvelope({errorCode: ROUTER_CONNECTION_CLOSED_ERROR_CODE});
+  }
+  return buildDeliveryEnvelope({acknowledged: true}, leafAnswer(events, groupId, leaf, hintMs));
+}
+
+// Several source lanes of one node over one real topology owner (safe mode,
+// one target group unless the test adds more) and the node's one source
+// message group: one lane per partition the node leads, each with its own
+// partition identity. The router holds every target delivery the test does
+// not answer at once: `f.answer(call)` returns a LEAF for the recipient's
+// answer now (optionally {leaf, hintMs}), or null to hold it
+// (`f.release(call, leaf)`). `f.sourceAnswer(events)` is the source group's
+// LEAF for each apply (default NATIVE). Every target call records its lane
+// (by source partition), its row ids and whether it is still held.
+// `laneSpecs`: [{tableName, partitionId?, rows}].
+async function multiLaneTopologyFixture(t, laneSpecs) {
+  const clock = new VirtualTimeSource({startMs: 100});
+  const f = {clock, leaders: [], sourceBatches: [], answer: () => LEAF.NATIVE,
+    sourceAnswer: () => LEAF.NATIVE};
+  f.source = createDurableSourceMessageGroupService(SOURCE_GROUP, {
+    applyCDCBatch: (events) => {
+      f.sourceBatches.push(events.map((event) => event.data.id));
+      return leafAnswer(events, SOURCE_GROUP, f.sourceAnswer(events));
+    }});
+  const envelope = (call, response) => {
+    const {leaf, hintMs} = typeof response === 'string' ? {leaf: response} : response;
+    return leafEnvelope(deliveredEventsOf(call.payload), call.targetGroupId, leaf, hintMs);
+  };
+  f.router = createHeldMessageRouter((call) => {
+    call.ids = deliveredEventsOf(call.payload).map((event) => event.data.id);
+    const response = f.answer(call);
+    return response === null ? null : envelope(call, response);
+  });
+  f.release = (call, response = LEAF.NATIVE) => call.answer(envelope(call, response));
+  f.projection = controlledProjection();
+  f.topology = new CDCGroupPropagationService({nodeId: SOURCE_NODE,
+    systemTableCache: f.projection.cache, messageRouter: f.router,
+    latencyTreeService: {getRoutingOrder: () => []},
+    nowFn: () => clock.now(), ...FAST_FOREGROUND_RETRY});
+  f.topology.initialize();
+  f.topology.start();
+  t.after(async () => {
+    f.topology.stop();
+    for (const call of f.router.calls.filter((entry) => entry.held)) f.release(call);
+    await shutdownAll(...f.leaders);
+  });
+  f.lanes = [];
+  for (const spec of laneSpecs) {
+    f.lanes.push(await startSourceLane(f,
+      {partitionId: `${spec.tableName}-p1`, ...spec}));
+  }
+  f.callsOf = (lane) => f.router.calls.filter((call) =>
+    call.sourcePartition === lane.partitionId);
+  return f;
+}
+
+export {LEAF, RESPONSE, SOURCE_GROUP, SOURCE_NODE, TARGET_GROUP, TARGET_NODE,
+  addRequiredGroup, assertDebtWithoutAck, multiLaneTopologyFixture, omitTarget,
+  topologyProgressFixture};

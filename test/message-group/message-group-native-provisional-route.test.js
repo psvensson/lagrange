@@ -236,7 +236,7 @@ function pendingRouteSnapshot(f) {
       retryArmed: lane.retryTimer.handle !== null, flushArmed: lane.flushTimer !== null,
       lastDrive: lane.lastDrive, lastFlush: lane.lastFlush},
     topology: {state: topology.state, retrySleeps: topology.retrySleepReleases.size,
-      activeWave: topology.activeDurablePropagation !== null},
+      wavesInFlight: topology.inFlightDurableWaves.size},
   };
 }
 

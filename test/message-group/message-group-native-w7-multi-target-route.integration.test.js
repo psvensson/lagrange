@@ -31,6 +31,8 @@ import {
 import {buildDeliveryEnvelope} from
   '../../src/transport/transport-semantic-outcome.js';
 import {buildSafeTargets} from '../../src/topology/cdc-group-propagation-routing.js';
+import {CDC_GROUP_PROPAGATION_RETRY} from
+  '../../src/topology/cdc-group-propagation-constants.js';
 import {PRESSURE_GOVERNOR_ACTION} from '../../src/control-plane/pressure-governor.js';
 import {
   NODE_A,
@@ -314,7 +316,7 @@ async function runTenureResetWhileHeld(f, subJoin, target3FirstHopAddr) {
   await driveWithPump(f, () => activeInv.context.cleanup);
   await pumpMulti(f, 2);
   assert.equal(f.producerLeader.cdcDelivery.activeCdcInvocation === null, true);
-  assert.equal(f.topology.activeDurablePropagation === null, true);
+  assert.equal(f.topology.inFlightDurableWaves.size, 0);
 }
 
 test(
@@ -572,7 +574,7 @@ test(
 
     // --- Step 4: Temporary pressure episode + fresh native redrive + source ACK ---
     f.interceptSend = null;
-    f.topology.deliveryRetryMaxAttempts = 3;
+    f.topology.deliveryRetryMaxAttempts = CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS;
     let deferPressureOnce = true;
     const origPressure = f.topology.resolvePropagationPressure.bind(f.topology);
     f.topology.resolvePropagationPressure = (events) => {

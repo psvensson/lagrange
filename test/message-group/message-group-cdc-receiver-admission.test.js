@@ -23,6 +23,13 @@ import {MESSAGE_GROUP_CDC_FORWARD_MODE, MESSAGE_GROUP_CDC_INGRESS_ACTION} from
 import {CDC_FORWARD_MAX_RELAY_DEPTH} from
   '../../src/message-group/message-group-service-runtime-support.js';
 import {GROUP_ID, NODE_ID, pump, recipientFixture} from './message-group-native-custody-fixture.js';
+import {PROPOSAL_QUEUE_DEFAULT} from '../../src/partition/proposal-queue-constants.js';
+import {PARTITION_CDC_OBLIGATION_DRIVE_STATE as DRIVE} from
+  '../../src/partition/partition-cdc-obligation-constants.js';
+import {OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE, ROUTER_MESSAGE_TIMEOUT_ERROR_CODE} from
+  '../../src/transport/transport-error-codes.js';
+import {multiLaneTopologyFixture} from '../test-helpers/cdc-topology-progress-fixture.js';
+import {settleTicks} from '../test-helpers/participant-transaction-fixture.js';
 
 const KEY = 'receiver-admission-row';
 const RECEIVED_BUDGET_MS = 100;
@@ -599,8 +606,13 @@ function controlledForwardAnswers(f, answers) {
       return Reflect.apply(deliver, this, [address, payload, ...options]);
     }
     const next = answers[calls.length];
-    calls.push({address, payload: structuredClone(payload)});
-    return next ? next() : Reflect.apply(deliver, this, [address, payload, ...options]);
+    const call = {address, payload: structuredClone(payload), answer: null};
+    calls.push(call);
+    return next ? next() : Reflect.apply(deliver, this, [address, payload, ...options])
+      .then((delivery) => {
+        call.answer = delivery.answer;
+        return delivery;
+      });
   };
   return {calls, restore: () => {
     f.router.deliver = deliver;
@@ -841,3 +853,78 @@ test('C4 relay depth belongs to the hop: retries keep depth 1, a third hop is re
       await pump(f);
     }
   });
+
+// Quest cdc-propagation-node-slot-removal, CR-4: the source replica follows
+// and forwards. The leader's commit queue is full of a real native append (so
+// it refuses the forwarded vector before any proposal); `forwards` are
+// controlled transport answers to this follower's forwards, in order, and a
+// forward without one reaches the real leader.
+const LEADER_REFUSAL = Object.freeze({success: false, error: CDC_COMPLETION.BACKPRESSURE,
+  deferRetry: true, retryAfterMs: PROPOSAL_QUEUE_DEFAULT.BACKPRESSURE_RETRY_AFTER_MS});
+const transportFailure = (errorCode) => () =>
+  Promise.resolve(buildDeliveryEnvelope({errorCode, retryAfterMs: 30}));
+const FORWARDED_ROWS = Object.freeze([
+  {name: 'the leader\'s typed backpressure refusal is answered typed, with the leader\'s hint',
+    forwards: [], expect: LEADER_REFUSAL, sent: 1},
+  {name: 'this replica\'s own outbound-queue rejection of the forward stays unknown',
+    forwards: [transportFailure(OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE)], sent: 1},
+  {name: 'a forward that timed out stays unknown',
+    forwards: [transportFailure(ROUTER_MESSAGE_TIMEOUT_ERROR_CODE)], sent: 1},
+  {name: 'the leader\'s refusal of a retried forward stays unknown: the first forward was sent',
+    forwards: [() => Promise.reject(new Error('socket closed after the send'))], sent: 2},
+]);
+
+async function followerOfRefusingLeader(t, forwards) {
+  const f = await recipientFixture(t, KEY);
+  const [leader, follower] = f.services;
+  assert.equal(follower.raft.readStatus().role, RAFT_ROLE.FOLLOWER);
+  configureOneSlot(leader);
+  const occupied = await occupyNativeSlot(f, leader, sourceEvent(1));
+  const forward = controlledForwardAnswers(f, forwards);
+  t.after(async () => {
+    forward.restore();
+    releaseNativePackets(f);
+    await settle(f, occupied, 'the occupying native append commits');
+  });
+  return {f, leader, follower, forward};
+}
+
+for (const row of FORWARDED_ROWS) {
+  test(`CR-4 forwarded source leaf: ${row.name}`, async (t) => {
+    const {f, leader, follower, forward} = await followerOfRefusingLeader(t, row.forwards);
+    const event = sourceEvent(2);
+    const pending = observe(follower.applyCDCBatch([event]));
+    for (let step = 0; step < 100 && !pending.settled; step += 1) {
+      follower.timeSource.advance(10);
+      await pump(f);
+    }
+    assert.equal(pending.error, undefined, pending.error?.stack);
+    assert.equal(forward.calls.length, row.sent, 'precondition: the forwards this entry made');
+    assert.equal(forward.calls.at(-1).payload.cdcForwardMode,
+      MESSAGE_GROUP_CDC_FORWARD_MODE.NATIVE_COMMIT, 'precondition: a terminal forward');
+    assert.equal(nativeEntry(leader, event).entries.length, 0, 'nothing entered the leader\'s log');
+    if (row.expect) assert.deepEqual(pending.answer, row.expect);
+    else {
+      assert.equal(pending.answer.error, CDC_COMPLETION.UNKNOWN);
+      assert.equal(pending.answer.retryAfterMs, undefined);
+    }
+  });
+}
+
+test('CR-4: the leader\'s typed backpressure refusal of a forwarding source replica reaches ' +
+  'the lane as backpressure with the leader\'s hint: the window is unchanged', async (t) => {
+  const {follower, forward} = await followerOfRefusingLeader(t, []);
+  const lanes = await multiLaneTopologyFixture(t, [{tableName: TABLES.CONFIG, rows: []}]);
+  lanes.source = follower;
+  const [lane] = lanes.lanes;
+  lane.addRow('cr4-row');
+  // The wave's foreground retries take real time; the forwards need no pump.
+  for (let step = 0; step < 200 && !(lane.diagnostics().lastDrive &&
+      !lane.leader.cdcDelivery.obligationLane.inFlight); step += 1) await settleTicks();
+  const {lastDrive, shipWindow} = lane.diagnostics();
+  assert.ok(forward.calls.length > 0 && forward.calls.every((call) =>
+    call.answer?.error === CDC_COMPLETION.BACKPRESSURE),
+  'precondition: every source attempt was forwarded and refused by the real leader');
+  assert.deepEqual({state: lastDrive.state, retryDelayMs: lastDrive.retryDelayMs, shipWindow},
+    {state: DRIVE.HELD_BY_SUBSCRIBER, retryDelayMs: LEADER_REFUSAL.retryAfterMs, shipWindow: 1});
+});

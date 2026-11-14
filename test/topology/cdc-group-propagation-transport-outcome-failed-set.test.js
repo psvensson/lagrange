@@ -23,6 +23,8 @@ import {TRANSPORT_DELIVERY_OUTCOME_STATE} from
   '../../src/transport/transport-semantic-outcome.js';
 import {CDCGroupPropagationService} from
   '../../src/topology/cdc-group-propagation-service.js';
+import {CDC_GROUP_PROPAGATION_RETRY} from
+  '../../src/topology/cdc-group-propagation-constants.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {buildCommittedCdcOutcome} from '../../src/cdc/cdc-delivery-outcome.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
@@ -31,7 +33,7 @@ import {createDurableCdcEvent, createDurablePropagationRequest,
   createTopologyCache} from './cdc-group-propagation-service-harness.js';
 
 const NODE_ID = 'cdc-failed-set-node';
-const MAX_ATTEMPTS = 2;
+const MAX_ATTEMPTS = CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS;
 const RETRY_HINT_MS = 250;
 const DELIVERED_GROUP = 'cdc-failed-set-delivered';
 const SOURCE_GROUP = 'cdc-failed-set-source';

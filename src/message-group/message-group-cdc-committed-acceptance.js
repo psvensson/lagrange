@@ -219,6 +219,20 @@ function capturedCdcIngress(service, wait, options) {
   });
 }
 
+// The answer of an admitted entry whose routing ended without a receipt. When
+// its only raw route was one forward and that forward answered the leader's
+// typed backpressure refusal (the forwarding owner returns it only for its
+// one native leader target, whose commit queue refused the vector before any
+// proposal), nothing had an effect and the answer is that refusal with the
+// leader's hint. Anything else is unknown: a local proposal, an earlier raw
+// route of this entry, or any other forwarded outcome may have had an effect.
+function uncommittedCdcAnswer(answer, routes) {
+  return routes.proposed === 0 && routes.forwarded === 1 &&
+      answer?.error === CDC_COMPLETION.BACKPRESSURE ?
+    {...unknownCdcAcceptance(CDC_COMPLETION.BACKPRESSURE), retryAfterMs: answer.retryAfterMs} :
+    {...unknownCdcAcceptance(), cause: answer};
+}
+
 async function deliverCapturedCdc(service, wait, options, context) {
   const assertCurrent = () => assertCdcRequestCurrent(service, wait, context);
   assertCurrent();
@@ -230,6 +244,8 @@ async function deliverCapturedCdc(service, wait, options, context) {
       (!service.isCurrentRaftLeader() && ingress?.localIngress === true))) {
     return provisionalCdcIngress(service, wait, options);
   }
+  // The raw routes this entry took: every routing attempt is one of them.
+  const routes = {proposed: 0, forwarded: 0};
   const answer = await service.proposeCDCCommand(wait.command, {
     ...options, assertCurrent,
     applyProvisionalIngress: () => {
@@ -240,13 +256,19 @@ async function deliverCapturedCdc(service, wait, options, context) {
       assertCurrent();
       return getRemainingBudgetMs(wait.entry.originalBudget, {now: wait.entry.now});
     },
-    proposeCommand: () => proposeCdcAndAwaitCommitted(service, wait),
-    forwardCommand: (forward) => forwardCdcWithinWait(service, wait, forward),
+    proposeCommand: () => {
+      routes.proposed += 1;
+      return proposeCdcAndAwaitCommitted(service, wait);
+    },
+    forwardCommand: (forward) => {
+      routes.forwarded += 1;
+      return forwardCdcWithinWait(service, wait, forward);
+    },
   });
   assertCurrent();
   return isCommittedCdcOutcome(answer, wait.entry.events, service.groupId) ||
     isProvisionalCdcOutcome(answer, wait.entry.events, service.groupId) ?
-    answer : {...unknownCdcAcceptance(), cause: answer};
+    answer : uncommittedCdcAnswer(answer, routes);
 }
 
 function captureCdcParentGrant(service, options) {

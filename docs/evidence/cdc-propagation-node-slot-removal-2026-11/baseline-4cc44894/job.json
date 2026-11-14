@@ -1,0 +1,27 @@
+{
+ "kind": "tests",
+ "host": "tv-dator",
+ "commit": "4cc44894974b785fcc0bb286679ce190b082039b",
+ "base": "9c576f3a06be3bf117623f038f43e6b36b5b33a5",
+ "files": [
+  "test/topology/cdc-group-propagation-service.test.js",
+  "test/topology/cdc-group-propagation-foreground-boundary.test.js",
+  "test/topology/cdc-group-propagation-stop-arms-nothing.test.js",
+  "test/topology/cdc-group-propagation-proposal-cost.test.js",
+  "test/topology/cdc-group-propagation-transport-outcome-failed-set.test.js",
+  "test/partition/partition-cdc-delivery-progress.test.js",
+  "test/partition/partition-cdc-obligation.test.js",
+  "test/partition/partition-cdc-obligation-range-differential.test.js",
+  "test/partition/partition-cdc-obligation-range-shipping.test.js",
+  "test/partition/partition-cdc-obligation-reclamation.test.js",
+  "test/partition/partition-cdc-obligation-ship-window.test.js",
+  "test/partition/partition-cdc-topology-progress-currentness.test.js",
+  "test/partition/partition-cdc-invocation-custody.test.js",
+  "test/partition/partition-cdc-subscriber-vector-contract.test.js",
+  "test/partition/partition-cdc-drain-admission.test.js",
+  "test/bootstrap/seed-teardown-pending-cdc-delivery.test.js",
+  "test/message-group/message-group-native-provisional-route.test.js",
+  "test/message-group/message-group-native-w7-multi-target-route.integration.test.js"
+ ],
+ "requestId": "a614cedb-e0a3-498e-b8e9-2a67d14aef9a"
+}

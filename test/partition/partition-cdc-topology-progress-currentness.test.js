@@ -43,6 +43,18 @@ import {primeShipWindow} from '../test-helpers/partition-cdc-lane-fixture.js';
 beforeEach(() => setupConfig(LATENCY_PROPAGATION_MODE.SAFE));
 afterEach(teardownConfig);
 
+// One foreground attempt per wave, here only: these witnesses count the leaf
+// calls of each lane drive and script the recipients' answers per call, so
+// each drive is one wave attempt. The wave's own retries are witnessed in
+// cdc-group-propagation-foreground-boundary and -wave-lifecycle.
+const ONE_ATTEMPT_PER_DRIVE = 1;
+
+async function oneAttemptFixture(t) {
+  const f = await topologyProgressFixture(t);
+  f.topology.deliveryRetryMaxAttempts = ONE_ATTEMPT_PER_DRIVE;
+  return f;
+}
+
 async function coverFirstBranchAndExpireOther(f) {
   f.expireOther = true;
   assert.equal((await f.drive()).state, DRIVE.HELD_BY_SUBSCRIBER);
@@ -78,7 +90,7 @@ const replacements = [
 
 for (const [name, replace] of replacements) {
   test(`source topology owner reobserves covered branch after ${name} replacement`, async (t) => {
-    const f = await topologyProgressFixture(t);
+    const f = await oneAttemptFixture(t);
     await coverFirstBranchAndExpireOther(f);
     replace(f);
     f.targetMode = RESPONSE.UNKNOWN;
@@ -94,7 +106,7 @@ for (const [name, replace] of replacements) {
 }
 
 test('source topology owner reuses an unchanged covered prefix across response budgets', async (t) => {
-  const f = await topologyProgressFixture(t);
+  const f = await oneAttemptFixture(t);
   await coverFirstBranchAndExpireOther(f);
   assert.equal((await f.drive()).state, DRIVE.PROVISIONAL);
   assert.deepEqual(f.subscriberCalls, [0, 1, 1]);
@@ -110,7 +122,7 @@ test('source topology owner reuses an unchanged covered prefix across response b
 // subscriber branch itself is still uncovered).
 test('source topology owner presents a range whose source leaf is covered again unchanged ' +
   'after more rows were committed and the scan restarted', async (t) => {
-  const f = await topologyProgressFixture(t);
+  const f = await oneAttemptFixture(t);
   primeShipWindow(f, 8);
   f.targetMode = RESPONSE.UNKNOWN;
   assert.equal((await f.drive()).state, DRIVE.HELD_BY_SUBSCRIBER);
@@ -145,7 +157,7 @@ test('source topology owner presents a range whose source leaf is covered again 
 
 test('source topology owner observes a new group before consuming a previously covered branch',
   async (t) => {
-    const f = await topologyProgressFixture(t);
+    const f = await oneAttemptFixture(t);
     await coverFirstBranchAndExpireOther(f);
     const added = addRequiredGroup(f);
     f.targetMode = RESPONSE.UNKNOWN;
@@ -160,7 +172,7 @@ test('source topology owner observes a new group before consuming a previously c
 
 test('source final aggregation reobserves requirements after the last subscriber returns',
   async (t) => {
-    const f = await topologyProgressFixture(t);
+    const f = await oneAttemptFixture(t);
     f.targetMode = RESPONSE.NATIVE;
     f.duringOther = () => {
       addRequiredGroup(f);
@@ -178,7 +190,7 @@ test('source final aggregation reobserves requirements after the last subscriber
 
 test('topology owner cannot install a weak result from the route replaced during its await',
   async (t) => {
-    const f = await topologyProgressFixture(t);
+    const f = await oneAttemptFixture(t);
     f.duringTarget = () => {
       f.projection.services[0][COLUMN.ADDRESS] = 'new-route/message-group/target';
       f.duringTarget = null;
@@ -193,7 +205,7 @@ test('topology owner cannot install a weak result from the route replaced during
 
 test('topology projection omission preserves a captured owed group until it actually answers',
   async (t) => {
-    const f = await topologyProgressFixture(t);
+    const f = await oneAttemptFixture(t);
     f.targetMode = RESPONSE.UNKNOWN;
     assert.equal((await f.drive()).state, DRIVE.HELD_BY_SUBSCRIBER);
     omitTarget(f);
@@ -210,7 +222,7 @@ test('topology projection omission preserves a captured owed group until it actu
 test('grouped source contradiction refuses before effects even with another fallback reason',
   async (t) => {
     setupConfig(LATENCY_PROPAGATION_MODE.GROUPED);
-    const f = await topologyProgressFixture(t);
+    const f = await oneAttemptFixture(t);
     f.targetMode = RESPONSE.NATIVE;
     f.projection.nodes.get(SOURCE_NODE)[COLUMN.LATENCY_GROUP_ID] = 'contradictory-source';
     f.projection.groups.push(createGroupRow('contradictory-source', SOURCE_NODE),
@@ -233,7 +245,7 @@ test('grouped source contradiction refuses before effects even with another fall
     assert.equal(f.targetCalls.length, 1);
   });
 
-test('full CDC continuation path across competing tables, held recipient, tenure replacement, recipient native commit, and source acknowledgement',
+test('full CDC continuation path across overlapping tables, held recipient, tenure replacement, recipient native commit, and source acknowledgement',
   async (t) => {
     const clock = new VirtualTimeSource({startMs: 1000});
     const services = await startLeader({
@@ -306,7 +318,7 @@ test('full CDC continuation path across competing tables, held recipient, tenure
       messageRouter: router,
       latencyTreeService: {getRoutingOrder: () => [SOURCE_GROUP, TARGET_GROUP]},
       nowFn: () => clock.now(),
-      deliveryRetryMaxAttempts: 1,
+      deliveryRetryMaxAttempts: ONE_ATTEMPT_PER_DRIVE,
     });
     topology.initialize();
     topology.start();
@@ -353,94 +365,50 @@ test('full CDC continuation path across competing tables, held recipient, tenure
     await installPartitionPipeline(partitions, TABLES.PARTITIONS, 'part-1');
     await installPartitionPipeline(nodes, TABLES.NODES, 'node-1');
 
-    // 1. Hold SERVICES wave 1 at the recipient while PARTITIONS and NODES contend.
+    // 1. Hold the SERVICES wave at the recipient. NODES is admitted and
+    // delivered while it is in flight; PARTITIONS steps down before it drives.
     heldDeliverRelease = () => {};
     const servicesDrivePromise = services.leader.cdcDelivery.driveCdcObligations(
       PARTITION_CDC_OBLIGATION_REASON.DELIVERY_RETRY,
     );
     await settleTicks();
-    assert.notEqual(topology.activeDurablePropagation, null, 'SERVICES holds the shared slot');
+    assert.equal(topology.inFlightDurableWaves.size, 1, 'the SERVICES wave is in flight');
 
-    const partitionsHeld = await partitions.leader.cdcDelivery.driveCdcObligations(
-      PARTITION_CDC_OBLIGATION_REASON.DELIVERY_RETRY,
-    );
-    assert.equal(partitionsHeld.state, DRIVE.HELD_BY_SUBSCRIBER);
-
-    const nodesHeld = await nodes.leader.cdcDelivery.driveCdcObligations(
-      PARTITION_CDC_OBLIGATION_REASON.DELIVERY_RETRY,
-    );
-    assert.equal(nodesHeld.state, DRIVE.HELD_BY_SUBSCRIBER);
-    assert.deepEqual(topology.waitingDurableSliceTables, [TABLES.PARTITIONS, TABLES.NODES]);
-    assert.equal(
-      nodes.leader.cdcDelivery.obligationLane.retryTimer.delayMs,
-      10,
-      'contending NODES lane initially arms 10ms busy retry delay',
-    );
-
-    // 2. Replace PARTITIONS leadership tenure while queued at head of FIFO contender queue:
-    // PARTITIONS must be evicted from waitingDurableSliceTables, leaving NODES at the head.
     partitions.leader.controllablePort.setRole(RAFT_ROLE.FOLLOWER);
     const partitionsSteppedDown = await partitions.leader.cdcDelivery.driveCdcObligations(
       PARTITION_CDC_OBLIGATION_REASON.DELIVERY_RETRY,
     );
     assert.equal(partitionsSteppedDown.state, DRIVE.NOT_LEADER);
-    assert.deepEqual(
-      topology.waitingDurableSliceTables,
-      [TABLES.NODES],
-      'tenure replacement on PARTITIONS evicts it and promotes NODES to FIFO head',
-    );
+    assert.deepEqual(countCdcObligations(partitions.leader.db), {owed: 1, delivered: 0},
+      'the stepped-down PARTITIONS lane keeps its debt');
 
-    // 3. Release the held recipient for SERVICES wave 1:
-    // SERVICES completes recipient commit + cleanup, waking NODES to a 1ms retry timer,
-    // and flushes its own source CDC_DELIVERED acknowledgement.
-    const releaseRecipient = heldDeliverRelease;
+    const releaseServices = heldDeliverRelease;
     heldDeliverRelease = null;
-    releaseRecipient();
+    const nodesDrive = await nodes.leader.cdcDelivery.driveCdcObligations(
+      PARTITION_CDC_OBLIGATION_REASON.DELIVERY_RETRY,
+    );
+    assert.equal(nodesDrive.state, DRIVE.DRAINED,
+      'NODES is delivered while the SERVICES wave is held');
+    assert.deepEqual(recipientDeliveries.map((entry) => entry.tableName), [TABLES.NODES]);
+
+    // 2. Release the held recipient: SERVICES commits, then both lanes
+    // acknowledge their rows at the source.
+    releaseServices();
     const servicesDriveOutcome = await servicesDrivePromise;
     assert.equal(servicesDriveOutcome.state, DRIVE.DRAINED);
+    assert.deepEqual(recipientDeliveries.map((entry) => entry.tableName),
+      [TABLES.NODES, TABLES.SERVICES]);
+    for (const lane of [services, nodes]) {
+      await lane.leader.cdcDelivery.flushCdcAcknowledgements(
+        PARTITION_CDC_OBLIGATION_REASON.DELIVERY_RETRY,
+      );
+    }
     await settleTicks();
-    assert.equal(
-      nodes.leader.cdcDelivery.obligationLane.retryTimer.delayMs,
-      1,
-      'SERVICES cleanup wake shortens head contender NODES retry timer to 1ms',
-    );
-
-    await services.leader.cdcDelivery.flushCdcAcknowledgements(
-      PARTITION_CDC_OBLIGATION_REASON.DELIVERY_RETRY,
-    );
-    await settleTicks();
-    assert.equal(
-      services.proposed.some((cmd) => cmd.type === PARTITION_CDC_COMMAND.DELIVERED),
-      true,
-      'SERVICES proposes source CDC_DELIVERED acknowledgement',
-    );
-    assert.deepEqual(
-      countCdcObligations(services.leader.db),
-      {owed: 0, delivered: 1},
-      'SERVICES source obligation is acknowledged in the ledger',
-    );
-
-    // 4. Advance clock by 1ms: NODES wakes up automatically from its 1ms timer,
-    // delivers to the recipient, receives native commit receipt, and acknowledges at source.
-    clock.advance(1);
-    await settleTicks();
-    assert.deepEqual(
-      recipientDeliveries.map((entry) => entry.tableName),
-      [TABLES.SERVICES, TABLES.NODES],
-      'NODES delivers to recipient immediately on its 1ms slice-turn wake',
-    );
-    await nodes.leader.cdcDelivery.flushCdcAcknowledgements(
-      PARTITION_CDC_OBLIGATION_REASON.DELIVERY_RETRY,
-    );
-    await settleTicks();
-    assert.equal(
-      nodes.proposed.some((cmd) => cmd.type === PARTITION_CDC_COMMAND.DELIVERED),
-      true,
-      'NODES proposes source CDC_DELIVERED acknowledgement after wake-up delivery',
-    );
-    assert.deepEqual(
-      countCdcObligations(nodes.leader.db),
-      {owed: 0, delivered: 1},
-      'NODES source obligation is acknowledged in the ledger',
-    );
+    for (const lane of [services, nodes]) {
+      assert.equal(lane.proposed.some((cmd) => cmd.type === PARTITION_CDC_COMMAND.DELIVERED),
+        true, 'the source proposes its CDC_DELIVERED acknowledgement');
+      assert.deepEqual(countCdcObligations(lane.leader.db), {owed: 0, delivered: 1},
+        'the source obligation is acknowledged in the ledger');
+    }
+    assert.equal(topology.inFlightDurableWaves.size, 0, 'no wave is left in flight');
   });
