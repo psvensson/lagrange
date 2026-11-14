@@ -1,0 +1,179 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "comparative-explicit-load-generator",
+  "status": "pass",
+  "receipts": [
+    {
+      "id": "original-explicit-selection-gap",
+      "measured": true,
+      "passed": true,
+      "detail": "Actual unchanged owner ignores explicit Adam selection (case14 role array differs) and does not refuse unknown registered name (case15 missing expected exception). Existing13cases pass. passed=true means the red-on-original control obligation is satisfied (observed FAILED exit 1 for the predicted reason on the unchanged owner at 91fb4e9b).",
+      "source": {
+        "sha": "91fb4e9bca760b5f1733099344e46c9c39d54aa6",
+        "tree": "ba67fd9ddc85bc1fc9fe4e55dbd06a8ed239869d"
+      },
+      "measurement": {
+        "docker_create_attempted": false,
+        "elapsed_s": 4.376,
+        "execution_scope_closed": true,
+        "exit_code": 1,
+        "generation": "dc36de51-8de3-4d99-8717-2321d65173fd",
+        "host": "local-workstation",
+        "intentDigest": "a4b9518b44c475865e2f3273c8355e585941281246f1b74ff50d5680618b0ac1",
+        "job_id": "7f7d6c7c-0c59-42f6-b2ac-ad95c5e6d05e",
+        "reason": null,
+        "source_execution_started": false,
+        "state": "FAILED",
+        "unit": "lagrange-lab3-dc36de518de34d9987172321d65173fd-7f7d6c7c0c5942f6b2acad95c5e6d05e.service",
+        "workload_started": true
+      },
+      "testFileDigests": {
+        "test/distributed/harness/__tests__/comparative-benchmark-runner-lab-hosts.test.js": "a4eab83890e8f44ce1447d26e876b30d6ae63bd8e419c7a02b1e12e9fd4214a1"
+      },
+      "evidence": {
+        "fullLogBytes": 12314,
+        "fullLogSha256": "1702b2e30f6edacd055c8dc9883a16cde63c64a546a3c0b526a6c2f48365af2d",
+        "provider": "load-generator-original-91fb4e9b/logs-0.json",
+        "eofProvider": "load-generator-original-91fb4e9b/logs-12314.json"
+      },
+      "record": "docs/evidence/comparative-explicit-load-generator-2026-11/original-7f7d6c7c.json"
+    },
+    {
+      "id": "candidate-selection-and-refusal",
+      "measured": true,
+      "passed": true,
+      "detail": "Candidate 35fc8fc3 on carinas-windows: lab-hosts 19/19 (13 existing + original controls 14/15 + 4 new selection controls), lab-default 8/8 (4 existing D25 + 4 new CLI controls: dry-run binding and refusals, empty name, real-campaign forwarding, GCP rejection), campaign 21/21 and native-thermal-client 8/8 green. Control job 4809bcf0 on adam-laptop ran the same two candidate test files against the unchanged selection owner and CLI (unbranched commit 39d76c1b = 35fc8fc3 with run-comparative-benchmarks.mjs and comparative-benchmark-lab-hosts.js from 5a387e9b): every existing case passed and all 10 explicit-load-generator cases (lab-hosts 14-19, lab-default 5-8) failed. Superseded attempt 8e5e48fc on 4fee8426 FAILED 1: lab-default case 7 stderr pattern was wrong (behavior correct), fixed in 35fc8fc3. Corrective round after the independent rejection: candidate 43194b0f4 adds the option-like-value and repeated-flag CLI cases (lab-default 10/10); writer job 8fdfaeef and verifier job c25c44a0 on carinas-windows both green at that exact commit (4 files, 58 tests). The digests and source of this record are those of 43194b0f4.",
+      "source": {
+        "sha": "35fc8fc32d67a262574ffe2f07bedd13fe5cc55e",
+        "tree": "63011f3439ddb9cd27843f7899060836f31f9cf9"
+      },
+      "measurement": {
+        "docker_create_attempted": false,
+        "elapsed_s": 37.664,
+        "execution_scope_closed": true,
+        "exit_code": 0,
+        "generation": "011d7336-5865-47be-aa0e-41a53482c6f3",
+        "host": "carinas-windows",
+        "intentDigest": "d3f9485f88cfaddacc7f37408718436d700316fff735952fa106092a35723302",
+        "job_id": "792fec3e-a322-4956-8822-f91cf665ad45",
+        "reason": null,
+        "source_execution_started": false,
+        "state": "COMPLETE",
+        "unit": "lagrange-lab3-011d7336586547beaa0e41a53482c6f3-792fec3ea32249568822f91cf665ad45.service",
+        "workload_started": true
+      },
+      "evidence": {
+        "outDir": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/load-generator/candidate-35fc8fc3-a2",
+        "fullLogBytes": 9677,
+        "fullLogSha256": "e3946739c39f3b80ded4a2ea15c8e764a0dcd2cf6cfb19c84141cbc9ebbc9535"
+      },
+      "controls": [
+        {
+          "role": "unchanged-owner control",
+          "commit": "39d76c1b249c90df92c6d29f3fd0ca29c64004a5",
+          "measurement": {
+            "docker_create_attempted": false,
+            "elapsed_s": 171.28,
+            "execution_scope_closed": true,
+            "exit_code": 1,
+            "generation": "798cad22-2ed2-43dd-8c48-b12571410eaa",
+            "host": "adam-laptop",
+            "intentDigest": "963ad9c776d290ce6d980282010bdd4a9bd32e82b65be57f82e03c7f48894d4b",
+            "job_id": "4809bcf0-cb85-4f5d-a895-55c6f18ab408",
+            "reason": null,
+            "source_execution_started": false,
+            "state": "FAILED",
+            "unit": "lagrange-lab3-798cad222ed243dd8c48b12571410eaa-4809bcf0cb854f5da89555c6f18ab408.service",
+            "workload_started": true
+          },
+          "evidence": {
+            "outDir": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/load-generator/control-unchanged-owner-a1",
+            "fullLogBytes": 45696,
+            "fullLogSha256": "f42bbe11f4338db111f8816755798cb3c2e6d472c610d5c2c761dbda0cb44959"
+          }
+        },
+        {
+          "role": "superseded failed attempt",
+          "commit": "4fee8426a729dd5d6f2bca46463194f27f9111e7",
+          "measurement": {
+            "docker_create_attempted": false,
+            "elapsed_s": 36.908,
+            "execution_scope_closed": true,
+            "exit_code": 1,
+            "generation": "011d7336-5865-47be-aa0e-41a53482c6f3",
+            "host": "carinas-windows",
+            "intentDigest": "e7c61dd5b5c8c184caf008c5a7a1ae43aa2770d5c566aeda8125cba5f3582001",
+            "job_id": "8e5e48fc-c803-4a32-8872-c17a340e0ae9",
+            "reason": null,
+            "source_execution_started": false,
+            "state": "FAILED",
+            "unit": "lagrange-lab3-011d7336586547beaa0e41a53482c6f3-8e5e48fcc8034a328872c17a340e0ae9.service",
+            "workload_started": true
+          },
+          "evidence": {
+            "outDir": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/load-generator/candidate-4fee8426-a1",
+            "fullLogBytes": 13144,
+            "fullLogSha256": "bff1cc08da6009af7f5f071be459df32f24b50508920d76a8189cdfb9c792640"
+          }
+        }
+      ]
+    },
+    {
+      "id": "canonical-cli-role-binding",
+      "measured": true,
+      "passed": true,
+      "detail": "Real-lab canonical dry-run job c6fa8a7f-59f8-4b30-9a19-3ad9a1784736 on local-workstation at 39792cfe569560389d7fdb082cd8ef383c463eee (`node docs/benchmarks/cloud/run-comparative-benchmarks.mjs --execution-target lab --profile capacity --dry-run --campaign-id readiness-39792cfe --load-generator adam-laptop` against the live execution inventory built from the round's thermal endpoints and campaign checkouts): exit 0, binds `adam-laptop` (`192.168.86.34`) as `role: client` and selects `adams-gamla`, `carinas-windows`, and `tv-dator` as `role: data` with manifestDigest `sha256:e6e5e7c27bb28e55dc05c77b337e8258430347757eff9f7ac27da4e5229abb0e`.",
+      "source": {
+        "sha": "39792cfe569560389d7fdb082cd8ef383c463eee"
+      },
+      "measurement": {
+        "docker_create_attempted": false,
+        "elapsed_s": 5.696,
+        "execution_scope_closed": true,
+        "exit_code": 0,
+        "generation": "dc36de51-8de3-4d99-8717-2321d65173fd",
+        "host": "local-workstation",
+        "intentDigest": "26b06249255c337540014ec1ca2a04c1e6d27c481c3bbb6af8ed324fd8d9c89b",
+        "job_id": "c6fa8a7f-59f8-4b30-9a19-3ad9a1784736",
+        "reason": null,
+        "source_execution_started": false,
+        "state": "COMPLETE",
+        "unit": "lagrange-lab3-dc36de518de34d9987172321d65173fd-c6fa8a7f59f84b309a193ad9a1784736.service",
+        "workload_started": true
+      },
+      "evidence": {
+        "outDir": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/measurement-prep/dryrun/job",
+        "fullLogBytes": 2793,
+        "fullLogSha256": "d270b067822ca0739369d2034d2e3796a4b6ec4606a17fcaa800bd7d8b6ffcdd",
+        "planBytes": 18856,
+        "planSha256": "8bc3b01bde169942b33533dcf1f6a8002aaf8f6089200ef9ed533f1fd32a8795"
+      }
+    },
+    {
+      "id": "independent-verification",
+      "measured": true,
+      "passed": true,
+      "detail": "Independent verifier subagent:verify-load-generator-1: REJECT of 545b6245d (unwitnessed option-like guard, mutant m4 survived), then APPROVE of 43194b0f4 after the corrective round; seven planted defects m1-m7 each killed by a named test on lab hosts; independent green run c25c44a0 (4 files, 58 tests). Reports retained at docs/evidence/comparative-explicit-load-generator-2026-11/independent-verification-545b6245d.md and docs/evidence/comparative-explicit-load-generator-2026-11/independent-verification-43194b0f4.md."
+    }
+  ],
+  "source": {
+    "sha": "e9cb79dd449f11a8dd6524ed571992110a91585e",
+    "measuredAt": "43194b0f4bdd2c3e854fdb465d8b68a8572faa52",
+    "tree": "8f56fff942c054916c742b9d45ddea30b41d57e3"
+  },
+  "testFileDigests": {
+    "test/distributed/harness/__tests__/comparative-benchmark-runner-lab-hosts.test.js": "4370cbebc91c03ca45c22fd3f3ce3990f3cfe8d4bf26e6a1465de151ffb110d7",
+    "test/distributed/harness/__tests__/comparative-benchmark-runner-lab-default.test.js": "e6063e83e158cbb5ebd5b91e97d6bb5d510b18694c1f9653cc823a99883b29c2"
+  },
+  "applicability": {
+    "status": "approved",
+    "reason": "test/distributed/harness/__tests__/comparative-benchmark-runner-lab-hosts.test.js matches 43194b0f4 byte-for-byte in this unit, and only adds thermal-exclusion reason and image/--pull=never cases in the downstream comparative-campaign-explicit-provisioning unit (all 19 explicit-load-generator cases unchanged; both test files re-verified green at d406588e45c42a492e759773e87e2277f5077c32 in lab job e6483e56-0a1f-49f7-9fee-4e8b214b21af on carinas-windows)."
+  },
+  "evidence": {
+    "directory": "docs/evidence/comparative-explicit-load-generator-2026-11",
+    "originalRedRecord": "docs/evidence/comparative-explicit-load-generator-2026-11/original-7f7d6c7c.json",
+    "verificationPass1": "docs/evidence/comparative-explicit-load-generator-2026-11/independent-verification-545b6245d.md",
+    "verificationPass2": "docs/evidence/comparative-explicit-load-generator-2026-11/independent-verification-43194b0f4.md"
+  },
+  "evidenceCeiling": "Component selector and CLI proof on fixture inventories plus real-lab canonical dry-run role binding (job c6fa8a7f). No campaign execution, deployment, performance, formation or release acceptance. The original receipt keeps its own source, measurement and digests (record docs/evidence/comparative-explicit-load-generator-2026-11/original-7f7d6c7c.json)."
+}
