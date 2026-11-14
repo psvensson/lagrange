@@ -9,9 +9,10 @@
 //    is acknowledged without delivery, acknowledgement backpressure ends the
 //    pass, any other row is READY.
 // 2. Cut: the maximal run of consecutive READY rows from the first one, ended
-//    only by the captured tail, a row that is not READY (a hole, or the
-//    retained-delivered bound counted over the rows already taken), the byte
-//    bound or the lane's shipping window. The byte bound and the window cut at
+//    only by the scan's captured tail, a row that is not READY (a hole, or an
+//    entry that begins at the retained-delivered bound counted over the rows
+//    already taken), the byte bound or the lane's shipping window. The
+//    retained-delivered bound, the byte bound and the window all cut at
 //    ledger-entry boundaries: the READY ordinals of one log index travel
 //    together, and the first entry is always taken whole, so an entry above a
 //    bound ships alone and nothing is refused, split or dropped.
@@ -162,16 +163,22 @@ function* owedPositionsAfter(db, first, through, pageRows) {
   }
 }
 
-// Whether a row after the first READY one continues the run: it is not
-// pending, and the retained-delivered bound is not reached counting the rows
-// already taken into this range as the pending acknowledgements they become
-// (the pre-pass of one row at a time counted them the same way). Such a row is
-// above the hydrated index and never the lowest owed row, because the first
-// READY row precedes it; the acknowledgement batch bounds were judged at the
-// first row and nothing in this synchronous span moves them.
-function continuesRun(lane, row, taken, retainedDelivered) {
-  return !lane.pending.has(row.eventKey) &&
-    lane.pending.size + taken + retainedDelivered() < BOUND.RETAINED_DELIVERED_MAX;
+// Whether a row after the first READY one continues the run. A row pending
+// acknowledgement never does (a hole). Where an entry begins, the
+// retained-delivered bound must not be reached counting the rows already
+// taken into this range as the pending acknowledgements they become (the
+// pre-pass of one row at a time counted them the same way); the further
+// ordinals of an entry travel with its first one, so the bound never cuts an
+// entry apart and is passed by at most one entry's further ordinals. A
+// partly covered entry is therefore composed whole again, never as a strict
+// prefix that would move a covered recipient back to an earlier ordinal.
+// Such a row is above the hydrated index and never the lowest owed row,
+// because the first READY row precedes it; the acknowledgement batch bounds
+// were judged at the first row and nothing in this synchronous span moves them.
+function continuesRun(lane, row, entry, retainedDeliveredWith) {
+  if (lane.pending.has(row.eventKey)) return false;
+  return row.logIndex === entry.rows[0].logIndex ||
+    retainedDeliveredWith(entry) < BOUND.RETAINED_DELIVERED_MAX;
 }
 
 // Whether the next whole entry joins the range, or which bound cuts before
@@ -192,15 +199,18 @@ function takeEntry(range, entry, windowRows) {
 }
 
 // The maximal run of consecutive READY rows from `first`, cut at whole-entry
-// boundaries by the byte bound and the window: {rows, cut}.
+// boundaries by the retained-delivered bound, the byte bound and the window:
+// {rows, cut}.
 function cutReadyRun(owner, lane, first, through) {
   const windowRows = lane.shipWindow;
   const range = {rows: [], bytes: 0};
   let entry = {rows: [first], bytes: first.eventBytes};
   let retained = null;
-  const retainedDelivered = () => {
+  // The retained delivered rows and pending acknowledgements there would be
+  // with the range and the entry in hand acknowledged.
+  const retainedDeliveredWith = (inHand) => {
     retained ??= countRetainedDeliveredCdcObligations(owner.db, BOUND.RETAINED_DELIVERED_MAX);
-    return retained;
+    return lane.pending.size + range.rows.length + inHand.rows.length + retained;
   };
   // The run ended for `reason` after the entry in hand; that entry still
   // joins unless a bound cuts before it.
@@ -209,7 +219,7 @@ function cutReadyRun(owner, lane, first, through) {
     return {rows: range.rows, cut};
   };
   for (const row of owedPositionsAfter(owner.db, first, through, windowRows + 1)) {
-    if (!continuesRun(lane, row, range.rows.length + entry.rows.length, retainedDelivered)) {
+    if (!continuesRun(lane, row, entry, retainedDeliveredWith)) {
       return endedBy(SHIP_RANGE_CUT.NOT_READY);
     }
     if (row.logIndex === entry.rows[0].logIndex) {
