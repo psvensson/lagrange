@@ -9,6 +9,7 @@ doneWhen:
   args:
     command: node scripts/checks/code-navigability-budget.js --metric
 quests:
+  - file-size-change-ratchet-integrity
   - code-navigability-budget-check
   - navigability-guideline-audit
   - state-read-named-defaults
@@ -43,6 +44,7 @@ authorizes:
   - src
   - data/fallback-census
   - examples/service-data-affinity/run-affinity-demo.js
+  - solve/changes/global-owner-debt-inventory/inventory.json
 ---
 
 # Code navigability and mistake resistance
@@ -70,6 +72,30 @@ closure belongs to [Q11](../quests/repository-legacy-fallback-closure/quest.json
 in [canonical authority and reliable formation](operation-integrity-and-reliable-formation.md).
 The ratchets outlive this epic as ordinary static gates; a green budget alone
 does not establish global removal.
+
+## Current ratchet adoption (14 November 2026)
+
+The integration owner is preparing
+[file-size change ratchet integrity](../quests/file-size-change-ratchet-integrity/quest.json)
+under the existing instruction to push and merge the preserved steering work.
+The isolated preparation starts from `348796bca4b896b123def681b18941490de4d393`;
+its original file-size witness comes from genuine red baseline
+`a84827ebd09e156c8fbc7649b196ab2723d26b66`. The intended repair retains the exact
+relevant bytes from `0021c1ba13a76ee12bd25876a1b812025966157f`.
+
+This ratchet phase precedes Solver package/review adoption. Its matching
+code-style, proof-ladders and harness policy travels with the repair, so later
+Solver work does not depend silently on a future inherited-oversize rule.
+The existing global-owner inventory producer is authorized to refresh only
+`solve/changes/global-owner-debt-inventory/inventory.json` as a required derived
+output of this bounded phase. Other generated outputs retain their current
+boundaries; an additional outside path needs an explicit necessary amendment.
+
+The next action is independent review of the prospective record and whole-file
+harness, then an admitted Lab run producing actual red evidence and a supported
+seal. No fresh execution, seal, green receipt, landing or publication is claimed
+by this preparation. Preserve the original broader evidence-and-candidate-binding
+proposal and existing terminal records unchanged.
 
 ## Budget
 

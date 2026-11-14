@@ -1,0 +1,49 @@
+{
+  "schema": "solve-quest/2",
+  "id": "file-size-change-ratchet-integrity",
+  "epic": "code-navigability-and-mistake-resistance",
+  "statement": "The existing file-size owner enforces a per-file no-growth contract against the actual declared comparison base in addition to its unchanged aggregate budget. New identities and newly over-threshold files are refused; inherited oversize may remain only without growth. One byte-identical move may preserve one compatible inherited identity, while copies, edited moves and moves outside the measured scope cannot transfer that allowance. The existing changed-path owner preserves exact filenames and both rename sides, and pre-commit, fast-static and pre-push use the comparison base owned by their actual proof range. The preserved repair and its matching policy are adopted together; its focused whole-file witnesses prove rejection and preservation of valid paths.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/file-size-change-ratchet-integrity/evidence/receipt.json",
+      "requiredReceipts": [
+        "per-file-size-identity-and-range",
+        "changed-path-identity-preserved",
+        "fast-static-uses-comparison-base",
+        "pre-push-uses-pushed-base",
+        "file-size-policy-matches-enforcement"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "prospective-inherited-work-adoption",
+      "statement": "This is an unsealed proposal until the supported start command records a genuine measuring red on an isolated baseline. Implementation base 348796bca4b896b123def681b18941490de4d393, original test-only baseline a84827ebd09e156c8fbc7649b196ab2723d26b66 and preserved repair 0021c1ba13a76ee12bd25876a1b812025966157f remain distinct identities. The fresh execution and seal retain their own actual source identities; historical Lab issue 3809 is provenance and does not become a fresh receipt or backdated seal."
+    },
+    {
+      "id": "existing-owners-and-policy",
+      "statement": "Keep thresholds, aggregate caps and line measurement with scripts/check-file-size-thresholds.js, per-file comparison with its file-size-change-ratchet helper, and comparison-range/path identity with scripts/checks/changed-paths.js. Carry the matching code-style, proof-ladders and harness policy in this ratchet phase. Do not raise a threshold or aggregate baseline, add a second debt ledger, or claim the later Solver package/review guards are implemented here."
+    },
+    {
+      "id": "executed-whole-file-proof",
+      "statement": "The unchanged scripts/quest-evidence/harness-runtime.js executes every declared whole test file and owns test-receipt/1 production. Its receipt and matching runner TAP must be retained. Red sealing requires a real counterexample assertion failure in the original file-size witness, not a missing artifact, infrastructure refusal, marker file or manually supplied passed flag. Other interaction receipts may already pass on the baseline."
+    },
+    {
+      "id": "phase-local-generated-state",
+      "statement": "Regenerate required inventories, test metadata and source indexes on the actual phase tree on Lab. Do not copy generated outputs from the complete 0021 candidate into this partial phase. The declared package and epic boundary include the exact necessary global-owner inventory output; any additional generated path outside current authority requires a prospective scope amendment before modification."
+    },
+    {
+      "id": "bounded-claim-and-history",
+      "statement": "This Quest claims only this per-file ratchet interaction. It does not close quest-evidence-and-candidate-binding, global code navigability, a general measurement-correction program, whole-corpus publication, or a distributed service milestone. Preserve original commits and evidence; retain the red receipt in Git history and durable Lab evidence, and keep only the sealed probe's required current artifact at closure."
+    },
+    {
+      "id": "lab-only-execution-and-independent-review",
+      "statement": "All repository commands, tests, audits and generators execute on the authorized Lab. Independent review covers the actual acceptance, harness, policy, generated outputs and preserved repair before normal land. A new WIP preservation branch is not accepted integration; publishing it must not open or update a pull request that triggers hosted execution."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ]
+}
