@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-10T05:02:58.233Z",
-  "rawViolationCount": 687,
+  "generatedAt": "2026-11-14T17:29:56.503Z",
+  "rawViolationCount": 684,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
@@ -1094,7 +1094,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 538,
+      "line": 540,
       "column": 10,
       "functionName": "applySystemTableChange",
       "kind": "row_field_alias_reads",
@@ -1103,7 +1103,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 540,
+      "line": 542,
       "column": 10,
       "functionName": "applySystemTableChange",
       "kind": "row_field_alias_reads",
@@ -2078,24 +2078,6 @@
       "line": 83,
       "column": 23,
       "functionName": "readBootIncarnation",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/startup-authority-placement-eligibility.js",
-      "line": 81,
-      "column": 17,
-      "functionName": "readStartupAuthorityPlacementNodeId",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/startup-authority-placement-eligibility.js",
-      "line": 93,
-      "column": 4,
-      "functionName": "isStartupAuthorityPlacementConnected",
       "kind": "row_field_alias_reads",
       "reason": "one field read in two spellings; decode the row once in one row decoder",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -3614,7 +3596,7 @@
     },
     {
       "filePath": "src/policy/table-policy-resolution.js",
-      "line": 375,
+      "line": 378,
       "column": 23,
       "functionName": "parseAndCacheMessageGroupPolicyDecision",
       "kind": "row_field_alias_reads",
@@ -3623,7 +3605,7 @@
     },
     {
       "filePath": "src/policy/table-policy-resolution.js",
-      "line": 507,
+      "line": 512,
       "column": 26,
       "functionName": "isFreshCachedMessageGroupPolicy",
       "kind": "row_field_alias_reads",
@@ -4577,7 +4559,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-routing-metadata-methods.js",
-      "line": 312,
+      "line": 350,
       "column": 21,
       "functionName": "getRoutablePartitionServiceNodeIds",
       "kind": "row_field_alias_reads",
@@ -4586,7 +4568,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-statement-execution.js",
-      "line": 183,
+      "line": 213,
       "column": 8,
       "functionName": "resolveLocalManagedSplitEvaluationPartitionIds",
       "kind": "row_field_alias_reads",
@@ -4667,7 +4649,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-write-execution.js",
-      "line": 592,
+      "line": 628,
       "column": 10,
       "functionName": "runOwnedWriteAttempt",
       "kind": "row_field_alias_reads",
@@ -5396,16 +5378,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-available-nodes.js",
-      "line": 338,
-      "column": 8,
-      "functionName": "isStartupAuthorityControlPlanePlacementEligibleNode",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/unified-rebalancer-available-nodes.js",
-      "line": 449,
+      "line": 367,
       "column": 6,
       "functionName": "readAvailablePriorityRecoveryPlanningSnapshot",
       "kind": "row_field_alias_reads",
@@ -5414,7 +5387,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-available-nodes.js",
-      "line": 504,
+      "line": 422,
       "column": 6,
       "functionName": "getPriorityRecoveryPlanningSnapshotSync",
       "kind": "row_field_alias_reads",
@@ -5468,7 +5441,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 742,
+      "line": 692,
       "column": 8,
       "functionName": "getNormalizedOperationType",
       "kind": "row_field_alias_reads",

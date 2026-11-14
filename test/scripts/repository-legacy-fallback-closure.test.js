@@ -12,9 +12,9 @@ import {
 test('repository-wide candidate inventory is complete and reconciled with census', () => {
   const inventory = auditCandidateInventory();
   assert.equal(inventory.isInventoryComplete, true,
-    'candidate inventory must account for 2,685 census sites across all classes');
-  assert.equal(inventory.totalCensusSites, 2685, 'census must contain 2,685 candidate sites');
-  assert.equal(inventory.activeDetectedSites, 2682, 'detected fallback sites in src must be 2,682');
+    'candidate inventory must account for 2,674 census sites across all classes');
+  assert.equal(inventory.totalCensusSites, 2674, 'census must contain 2,674 candidate sites');
+  assert.equal(inventory.activeDetectedSites, 2671, 'detected fallback sites in src must be 2,671');
   assert.equal(inventory.retiredSites, 9, 'retired sites from census must be 9');
 });
 

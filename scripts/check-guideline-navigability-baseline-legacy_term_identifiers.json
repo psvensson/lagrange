@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-11T06:28:37.073Z",
-  "rawViolationCount": 2848,
+  "generatedAt": "2026-11-14T17:29:56.656Z",
+  "rawViolationCount": 2838,
   "violations": [
     {
       "filePath": "src/admin/admin-cli-compat.js",
@@ -1651,24 +1651,6 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/bootstrap/node-joining-operation-ledger-formation-readiness.js",
-      "line": 45,
-      "column": 48,
-      "functionName": "resolveFormationBarrierDuration",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/node-joining-operation-ledger-formation-readiness.js",
-      "line": 46,
-      "column": 61,
-      "functionName": "resolveFormationBarrierDuration",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/bootstrap/node-joining-owner-construction.js",
       "line": 303,
       "column": 8,
@@ -1679,7 +1661,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-ready-signal-readiness.js",
-      "line": 117,
+      "line": 109,
       "column": 46,
       "functionName": "resolveInfrastructureJoinFailureCode",
       "kind": "legacy_term_identifiers",
@@ -1688,7 +1670,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-ready-signal-readiness.js",
-      "line": 125,
+      "line": 117,
       "column": 15,
       "functionName": "resolveInfrastructureJoinFailureCode",
       "kind": "legacy_term_identifiers",
@@ -1697,7 +1679,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-ready-signal-readiness.js",
-      "line": 125,
+      "line": 117,
       "column": 40,
       "functionName": "resolveInfrastructureJoinFailureCode",
       "kind": "legacy_term_identifiers",
@@ -1706,7 +1688,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-ready-signal-readiness.js",
-      "line": 126,
+      "line": 118,
       "column": 13,
       "functionName": "resolveInfrastructureJoinFailureCode",
       "kind": "legacy_term_identifiers",
@@ -7252,78 +7234,6 @@
       "filePath": "src/control-plane/failure-class-constants.js",
       "line": 17,
       "column": 2,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/formation-release-handoff-closure-owner.js",
-      "line": 136,
-      "column": 9,
-      "functionName": "constructor",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/formation-release-handoff-closure-owner.js",
-      "line": 184,
-      "column": 9,
-      "functionName": "restore",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/formation-release-handoff-closure-owner.js",
-      "line": 270,
-      "column": 9,
-      "functionName": "revoke",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/formation-release-handoff-closure-owner.js",
-      "line": 319,
-      "column": 11,
-      "functionName": "evaluateCapturedCohort",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/formation-release-handoff-closure-owner.js",
-      "line": 414,
-      "column": 9,
-      "functionName": "observe",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/formation-release-handoff-closure-owner.js",
-      "line": 448,
-      "column": 12,
-      "functionName": "project",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/formation-release-handoff-closure-owner.js",
-      "line": 455,
-      "column": 11,
-      "functionName": "project",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/formation-release-handoff-contract.js",
-      "line": 37,
-      "column": 29,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
       "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
@@ -20246,7 +20156,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-replica-identity-methods.js",
-      "line": 331,
+      "line": 329,
       "column": 4,
       "functionName": "resolveReplaceSourceRetirementSafetyState",
       "kind": "legacy_term_identifiers",
@@ -20255,7 +20165,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-replica-identity-methods.js",
-      "line": 348,
+      "line": 346,
       "column": 8,
       "functionName": "resolveReplaceSourceRetirementSafetyState",
       "kind": "legacy_term_identifiers",
@@ -20264,7 +20174,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-replica-identity-methods.js",
-      "line": 381,
+      "line": 379,
       "column": 8,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -20273,7 +20183,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-replica-identity-methods.js",
-      "line": 389,
+      "line": 387,
       "column": 10,
       "functionName": "getRetiredReplaceSourceMoveSafetyError",
       "kind": "legacy_term_identifiers",
@@ -20282,7 +20192,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-replica-identity-methods.js",
-      "line": 390,
+      "line": 388,
       "column": 17,
       "functionName": "getRetiredReplaceSourceMoveSafetyError",
       "kind": "legacy_term_identifiers",
@@ -20291,7 +20201,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-replica-identity-methods.js",
-      "line": 419,
+      "line": 417,
       "column": 6,
       "functionName": "getRetiredReplaceSourceMoveSafetyError",
       "kind": "legacy_term_identifiers",
@@ -21245,7 +21155,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js",
-      "line": 17,
+      "line": 14,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -21254,7 +21164,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js",
-      "line": 240,
+      "line": 205,
       "column": 8,
       "functionName": "resolvePriorityControlPlaneQuorumDistinctNodeCount",
       "kind": "legacy_term_identifiers",
@@ -21263,7 +21173,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js",
-      "line": 255,
+      "line": 220,
       "column": 13,
       "functionName": "getPriorityControlPlaneTargetReplicaCount",
       "kind": "legacy_term_identifiers",
@@ -21272,7 +21182,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js",
-      "line": 270,
+      "line": 235,
       "column": 11,
       "functionName": "getPriorityControlPlaneTargetReplicaCount",
       "kind": "legacy_term_identifiers",
@@ -21281,7 +21191,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js",
-      "line": 437,
+      "line": 402,
       "column": 11,
       "functionName": "getLatestPublishedMembershipRow",
       "kind": "legacy_term_identifiers",
@@ -21290,7 +21200,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js",
-      "line": 450,
+      "line": 415,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -21308,7 +21218,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-critical-topology-methods.js",
-      "line": 110,
+      "line": 109,
       "column": 4,
       "functionName": "collectCriticalNodeEvidence",
       "kind": "legacy_term_identifiers",
@@ -21317,7 +21227,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-critical-topology-methods.js",
-      "line": 143,
+      "line": 142,
       "column": 9,
       "functionName": "buildTransitionalNodeBlocker",
       "kind": "legacy_term_identifiers",
@@ -21326,7 +21236,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-critical-topology-methods.js",
-      "line": 269,
+      "line": 268,
       "column": 50,
       "functionName": "readFirstTruthyField",
       "kind": "legacy_term_identifiers",
@@ -21335,7 +21245,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-critical-topology-methods.js",
-      "line": 271,
+      "line": 270,
       "column": 41,
       "functionName": "readFirstTruthyField",
       "kind": "legacy_term_identifiers",
@@ -21344,7 +21254,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-critical-topology-methods.js",
-      "line": 448,
+      "line": 447,
       "column": 11,
       "functionName": "getCriticalSystemTopologySettlingBlocker",
       "kind": "legacy_term_identifiers",
@@ -21587,7 +21497,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 304,
+      "line": 254,
       "column": 18,
       "functionName": "getCurrentReplicas",
       "kind": "legacy_term_identifiers",
@@ -21596,7 +21506,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 321,
+      "line": 271,
       "column": 18,
       "functionName": "getCurrentReplicas",
       "kind": "legacy_term_identifiers",
@@ -21605,7 +21515,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 340,
+      "line": 290,
       "column": 11,
       "functionName": "getCurrentReplicas",
       "kind": "legacy_term_identifiers",
@@ -21614,7 +21524,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 400,
+      "line": 350,
       "column": 10,
       "functionName": "projectPriorityTerminalCreateTargets",
       "kind": "legacy_term_identifiers",
@@ -21623,7 +21533,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 400,
+      "line": 350,
       "column": 35,
       "functionName": "projectPriorityTerminalCreateTargets",
       "kind": "legacy_term_identifiers",
@@ -21632,7 +21542,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 413,
+      "line": 363,
       "column": 8,
       "functionName": "projectPriorityTerminalCreateTargets",
       "kind": "legacy_term_identifiers",
@@ -21641,7 +21551,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 613,
+      "line": 563,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -21650,7 +21560,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 614,
+      "line": 564,
       "column": 10,
       "functionName": "getTerminalRetiredReplicaIds",
       "kind": "legacy_term_identifiers",
@@ -21659,7 +21569,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 636,
+      "line": 586,
       "column": 12,
       "functionName": "getTerminalRetiredReplicaIds",
       "kind": "legacy_term_identifiers",
@@ -21668,7 +21578,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 640,
+      "line": 590,
       "column": 10,
       "functionName": "getTerminalRetiredReplicaIds",
       "kind": "legacy_term_identifiers",
@@ -21677,7 +21587,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 641,
+      "line": 591,
       "column": 8,
       "functionName": "getTerminalRetiredReplicaIds",
       "kind": "legacy_term_identifiers",
@@ -21686,7 +21596,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 641,
+      "line": 591,
       "column": 30,
       "functionName": "getTerminalRetiredReplicaIds",
       "kind": "legacy_term_identifiers",
@@ -21695,7 +21605,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 644,
+      "line": 594,
       "column": 11,
       "functionName": "getTerminalRetiredReplicaIds",
       "kind": "legacy_term_identifiers",
@@ -21704,7 +21614,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 652,
+      "line": 602,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -21713,7 +21623,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 654,
+      "line": 604,
       "column": 10,
       "functionName": "filterReplicasRetiredByTerminalOperations",
       "kind": "legacy_term_identifiers",
@@ -21722,7 +21632,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 654,
+      "line": 604,
       "column": 35,
       "functionName": "filterReplicasRetiredByTerminalOperations",
       "kind": "legacy_term_identifiers",
@@ -21731,7 +21641,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 655,
+      "line": 605,
       "column": 8,
       "functionName": "filterReplicasRetiredByTerminalOperations",
       "kind": "legacy_term_identifiers",
@@ -21740,7 +21650,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 662,
+      "line": 612,
       "column": 9,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",

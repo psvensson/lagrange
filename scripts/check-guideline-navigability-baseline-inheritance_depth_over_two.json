@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-09T17:56:57.106Z",
-  "rawViolationCount": 58,
+  "generatedAt": "2026-11-14T17:29:56.502Z",
+  "rawViolationCount": 57,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
@@ -87,15 +87,6 @@
     {
       "filePath": "src/bootstrap/node-joining-publication-activation.js",
       "line": 60,
-      "column": 6,
-      "functionName": "<anonymous>",
-      "kind": "inheritance_depth_over_two",
-      "reason": "extends chain deeper than two; compose named collaborators instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/node-joining-ready-signal-readiness.js",
-      "line": 85,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -212,7 +203,7 @@
     },
     {
       "filePath": "src/partition/partition-service-split-accessor-base.js",
-      "line": 111,
+      "line": 163,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -266,7 +257,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
-      "line": 49,
+      "line": 46,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -293,7 +284,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-statement-execution.js",
-      "line": 98,
+      "line": 130,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -356,7 +347,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-drain.js",
-      "line": 110,
+      "line": 108,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",

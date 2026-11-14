@@ -15,7 +15,7 @@ documentClass: generated
 - [endpoint-incarnation-authority.js](endpoint-incarnation-authority.js) - The endpoint incarnation authority (invariant I9): every node_endpoints / service_endpoints row belongs to one exact... (importers: many)
 - [endpoint-incarnation-currentness.js](endpoint-incarnation-currentness.js) - The endpoint currentness view of the endpoint incarnation authority (invariant I9): which endpoint rows are current... (importers: many)
 - [endpoint-metadata-owner-base.js](endpoint-metadata-owner-base.js) - No leading comment; first export: EndpointMetadataOwnerBase. (importers: few)
-- [index.js](index.js) - No leading comment; first export: SystemMetadataOwnerBase. (importers: many)
+- [index.js](index.js) - No leading comment; first export: SystemMetadataOwnerBase. (importers: hub)
 - [log-diagnostic-marker-contract.js](log-diagnostic-marker-contract.js) - No leading comment; first export: LOG_MARKER_ERROR_CODE. (importers: many)
 - [logs-owner.js](logs-owner.js) - No leading comment; first export: LogsOwner. (importers: few)
 - [membership-publication-runtime-owner.js](membership-publication-runtime-owner.js) - The joiner's NODES registration at this boot's exact incarnation: birth or one CAS over an older incarnation, never... (importers: many)

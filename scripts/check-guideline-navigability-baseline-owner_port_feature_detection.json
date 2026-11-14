@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-11T06:26:21.790Z",
-  "rawViolationCount": 2035,
+  "generatedAt": "2026-11-14T17:29:56.457Z",
+  "rawViolationCount": 2016,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
@@ -1148,7 +1148,7 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-service-control-plane-runtime-methods.js",
-      "line": 377,
+      "line": 376,
       "column": 10,
       "functionName": "publishSeedReadyWithControlPlane",
       "kind": "owner_port_feature_detection",
@@ -1304,24 +1304,6 @@
       "line": 88,
       "column": 6,
       "functionName": "getRouterStats",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/critical-placement-formation-observer.js",
-      "line": 59,
-      "column": 8,
-      "functionName": "readTableRows",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/critical-placement-formation-observer.js",
-      "line": 61,
-      "column": 15,
-      "functionName": "readTableRows",
       "kind": "owner_port_feature_detection",
       "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -1723,42 +1705,6 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/bootstrap/node-joining-operation-ledger-formation-readiness.js",
-      "line": 323,
-      "column": 8,
-      "functionName": "publishOperationLedgerFormationLiveness",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/node-joining-operation-ledger-formation-readiness.js",
-      "line": 406,
-      "column": 8,
-      "functionName": "awaitOperationLedgerFormationBarrier",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/node-joining-operation-ledger-formation-readiness.js",
-      "line": 408,
-      "column": 8,
-      "functionName": "awaitOperationLedgerFormationBarrier",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/node-joining-operation-ledger-formation-readiness.js",
-      "line": 410,
-      "column": 8,
-      "functionName": "awaitOperationLedgerFormationBarrier",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/bootstrap/node-joining-owner-construction.js",
       "line": 145,
       "column": 6,
@@ -1859,7 +1805,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-publication-activation.js",
-      "line": 451,
+      "line": 450,
       "column": 6,
       "functionName": "initializeControlPlaneService",
       "kind": "owner_port_feature_detection",
@@ -1868,7 +1814,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-ready-signal-readiness.js",
-      "line": 229,
+      "line": 221,
       "column": 6,
       "functionName": "getReadySignalMetadataPublicationReadinessSnapshot",
       "kind": "owner_port_feature_detection",
@@ -1877,7 +1823,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-ready-signal-readiness.js",
-      "line": 231,
+      "line": 223,
       "column": 8,
       "functionName": "getReadySignalMetadataPublicationReadinessSnapshot",
       "kind": "owner_port_feature_detection",
@@ -1886,43 +1832,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-ready-signal-readiness.js",
-      "line": 263,
-      "column": 6,
-      "functionName": "getPriorityPlacementFormationStartupAuthority",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/node-joining-ready-signal-readiness.js",
-      "line": 269,
-      "column": 8,
-      "functionName": "getPriorityPlacementFormationStartupAuthority",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/node-joining-ready-signal-readiness.js",
-      "line": 278,
-      "column": 8,
-      "functionName": "getPriorityPlacementFormationStartupAuthority",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/node-joining-ready-signal-readiness.js",
-      "line": 313,
-      "column": 6,
-      "functionName": "getPriorityPlacementFormationPreReadyNodeIds",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/node-joining-ready-signal-readiness.js",
-      "line": 589,
+      "line": 491,
       "column": 6,
       "functionName": "hydrateCdcPropagatedTablesAfterSubscription",
       "kind": "owner_port_feature_detection",
@@ -1931,7 +1841,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-ready-signal-readiness.js",
-      "line": 641,
+      "line": 543,
       "column": 6,
       "functionName": "disableSteadyStateControlPlaneReporter",
       "kind": "owner_port_feature_detection",
@@ -3101,7 +3011,7 @@
     },
     {
       "filePath": "src/bootstrap/shared/control-plane-setup.js",
-      "line": 260,
+      "line": 259,
       "column": 8,
       "functionName": "create",
       "kind": "owner_port_feature_detection",
@@ -3110,7 +3020,7 @@
     },
     {
       "filePath": "src/bootstrap/shared/control-plane-setup.js",
-      "line": 402,
+      "line": 397,
       "column": 15,
       "functionName": "create",
       "kind": "owner_port_feature_detection",
@@ -3119,7 +3029,7 @@
     },
     {
       "filePath": "src/bootstrap/shared/control-plane-setup.js",
-      "line": 488,
+      "line": 483,
       "column": 8,
       "functionName": "create",
       "kind": "owner_port_feature_detection",
@@ -5980,69 +5890,6 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/control-plane/formation-release-handoff-publication-coordinator.js",
-      "line": 20,
-      "column": 6,
-      "functionName": "requireStorageOwner",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/formation-release-handoff-publication-coordinator.js",
-      "line": 23,
-      "column": 6,
-      "functionName": "requireStorageOwner",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/formation-release-handoff-publication-coordinator.js",
-      "line": 43,
-      "column": 6,
-      "functionName": "constructor",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/formation-release-handoff-publication-coordinator.js",
-      "line": 47,
-      "column": 6,
-      "functionName": "constructor",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/formation-release-handoff-publication-coordinator.js",
-      "line": 51,
-      "column": 6,
-      "functionName": "constructor",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/formation-release-handoff-publication.js",
-      "line": 335,
-      "column": 6,
-      "functionName": "readPublicationRowWithOptions",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/formation-release-handoff-publication.js",
-      "line": 422,
-      "column": 4,
-      "functionName": "readFormationReleaseHandoffPublicationFromCache",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/control-plane/heartbeat-service-lifecycle-methods.js",
       "line": 268,
       "column": 10,
@@ -8018,15 +7865,6 @@
       "line": 132,
       "column": 6,
       "functionName": "bindWaiterCancellation",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/startup-authority-placement-eligibility.js",
-      "line": 166,
-      "column": 4,
-      "functionName": "getStartupAuthorityControlPlanePlacementEligibleNodeIds",
       "kind": "owner_port_feature_detection",
       "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -15431,7 +15269,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-topology-guard-methods.js",
-      "line": 66,
+      "line": 62,
       "column": 6,
       "functionName": "captureInventoryCacheTableState",
       "kind": "owner_port_feature_detection",
@@ -15440,7 +15278,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-topology-guard-methods.js",
-      "line": 69,
+      "line": 65,
       "column": 6,
       "functionName": "captureInventoryCacheTableState",
       "kind": "owner_port_feature_detection",
@@ -15449,18 +15287,9 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-topology-guard-methods.js",
-      "line": 72,
+      "line": 68,
       "column": 6,
       "functionName": "captureInventoryCacheTableState",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/rebalance-coordinator-topology-guard-methods.js",
-      "line": 96,
-      "column": 6,
-      "functionName": "getTopologyGuardStartupAuthorityPlacementEligibleNodeIds",
       "kind": "owner_port_feature_detection",
       "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -15566,7 +15395,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
-      "line": 382,
+      "line": 371,
       "column": 6,
       "functionName": "isPriorityRecoveryOperationCreationRequiredForPlanningGate",
       "kind": "owner_port_feature_detection",
@@ -15575,7 +15404,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
-      "line": 614,
+      "line": 603,
       "column": 6,
       "functionName": "resolvePriorityRecoveryOperationCreationPlanningGateForEvaluation",
       "kind": "owner_port_feature_detection",
@@ -16025,7 +15854,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js",
-      "line": 319,
+      "line": 284,
       "column": 6,
       "functionName": "hasControlPlanePublicationTrimOverflow",
       "kind": "owner_port_feature_detection",
@@ -16034,7 +15863,16 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js",
-      "line": 412,
+      "line": 377,
+      "column": 6,
+      "functionName": "getLatestMembershipPublicationRow",
+      "kind": "owner_port_feature_detection",
+      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js",
+      "line": 383,
       "column": 6,
       "functionName": "getLatestMembershipPublicationRow",
       "kind": "owner_port_feature_detection",
@@ -16045,15 +15883,6 @@
       "filePath": "src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js",
       "line": 418,
       "column": 6,
-      "functionName": "getLatestMembershipPublicationRow",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js",
-      "line": 453,
-      "column": 6,
       "functionName": "getPublishedMembershipRowFallback",
       "kind": "owner_port_feature_detection",
       "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
@@ -16061,7 +15890,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js",
-      "line": 460,
+      "line": 425,
       "column": 6,
       "functionName": "getPublishedMembershipRowFallback",
       "kind": "owner_port_feature_detection",
@@ -16070,7 +15899,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-critical-topology-methods.js",
-      "line": 329,
+      "line": 328,
       "column": 4,
       "functionName": "mergeEndpointRows",
       "kind": "owner_port_feature_detection",
@@ -16079,7 +15908,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-critical-topology-methods.js",
-      "line": 484,
+      "line": 483,
       "column": 6,
       "functionName": "readCriticalSystemEndpointVisibilityAuthoritativeRows",
       "kind": "owner_port_feature_detection",
@@ -16322,7 +16151,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 185,
+      "line": 135,
       "column": 19,
       "functionName": "isTransportReady",
       "kind": "owner_port_feature_detection",
@@ -16331,7 +16160,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 194,
+      "line": 144,
       "column": 6,
       "functionName": "isTransportReady",
       "kind": "owner_port_feature_detection",
@@ -16340,7 +16169,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 214,
+      "line": 164,
       "column": 19,
       "functionName": "checkReadinessPing",
       "kind": "owner_port_feature_detection",
@@ -16349,7 +16178,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 267,
+      "line": 217,
       "column": 19,
       "functionName": "getNodeReadinessSkipReason",
       "kind": "owner_port_feature_detection",
@@ -16358,7 +16187,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 275,
+      "line": 225,
       "column": 6,
       "functionName": "getNodeReadinessSkipReason",
       "kind": "owner_port_feature_detection",
@@ -16367,7 +16196,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 283,
+      "line": 233,
       "column": 6,
       "functionName": "getNodeReadinessSkipReason",
       "kind": "owner_port_feature_detection",

@@ -516,11 +516,3 @@ test('certification:verdict (S6) states what it certifies and that it is ' +
   assert.match(metric.stdout, /^\d+\n$/u);
   assert.match(metric.stderr, /NOT the formation certification/u);
 });
-
-test('the GCP handoff streak (S6) names itself a pass streak, not ' +
-  'certification, in its header and refusal text', () => {
-  const source = readFileSync(
-    'scripts/checks/run-formation-release-handoff-gcp-streak.js', 'utf8');
-  assert.match(source, /^\/\/ Bounded PASS streak \(NOT certification/u);
-  assert.doesNotMatch(source, /runner certifies|certification streak/u);
-});

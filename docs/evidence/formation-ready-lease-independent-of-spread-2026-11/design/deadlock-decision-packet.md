@@ -1,3 +1,7 @@
+---
+audience: evidence
+---
+
 # Formation release deadlock: decision packet
 
 **What this is.** A read-only owner reading of the three-node formation deadlock seen in `repeat-551bf264/run-1`. Nothing in the repository was changed, no tests were run and no lab jobs were started.
@@ -8,7 +12,7 @@
 
 **Evidence markers.** Every statement carries one of these:
 - **[V-code]** verified in the code at the cited file and line.
-- **[V-log]** verified in a node log. The failed-run logs are in `journey/analysis/repeat-fail/logs/fail/`. The passing-run logs are in `journey/analysis/slot-run/logs/` (f3aa2f08), `journey/analysis/logs/` (9991b450) and `…20261113/tv-diagnostic-retained-ed708dfd/`.
+- **[V-log]** verified in a node log. The failed-run logs are in `journey/analysis/repeat-fail/logs/fail/`. The passing-run logs are in `journey/analysis/slot-run/logs/` (f3aa2f08), `journey/analysis/logs/` (9991b450) and `...20261113/tv-diagnostic-retained-ed708dfd/`.
 - **[I]** inferred.
 
 **Node names.** The failed run's seed is `621932d0` and its joiners are `a6577360` (j1) and `10f1932b` (j2). The passing run's seed is `70808e06` and its joiners are `84ee7b06` and `96203c04`.
@@ -23,7 +27,7 @@
 2. The seed can finish that spread only by REPLACE operations that remove a replica from the seed. The remove-safety floor counts only voters on nodes with a valid READY lease (`priority-publication-safety-topology.js:136-140`). So no seed replica can be removed until a joiner is READY. While that REPLACE is parked, the ledger interlock holds back every other priority ADD.
 3. The one designed breaker is the formation-release handoff. It lets a joiner publish READY before the spread completes. It can only be *captured* at an instant when the authority is READY and spread-satisfied, which means an instant when the cohort is not yet being counted. Once a generation is revoked, or was never captured, and the cohort is counted, no such instant ever comes again. Release is edge-triggered on a window the cohort's own arrival closes.
 
-### Recommended rule (repair B in §9)
+### Recommended rule (repair B in section 9)
 
 **A node's READY lease states only that this node can serve. The cluster-level formation fact ("the operation ledger and the priority partitions are spread") is a separate fact owned by the readiness owner. It is consumed by the observables it actually protects: cluster ACTIVE, schema admission and ordinary placement.**
 
@@ -35,11 +39,11 @@ With that rule, READY depends on node-local facts and spread depends on READY. T
 - The pre-READY placement carve-outs that exist only because joiners are held: `startup-authority-placement-eligibility.js` cure classification, the cure-target exemption at `unified-rebalancer-critical-topology-methods.js:88`, and the pre-READY branch in `unified-rebalancer-available-nodes.js:321-384`.
 
 **What must be proven.**
-1. Every safety property the barrier claims to protect (§5) is either delivered by the relocated cluster-level gate or is already not delivered today. The passing-run log shows the joiners READY at 12:12:51.3 and 12:12:57.0, while the ledger replica was first placed on a joiner at 12:13:02.8 and the seed's surplus ledger replica was only removed at 12:14:04 [V-log]. So "ACTIVE before ledger spread" already happens in every passing run.
+1. Every safety property the barrier claims to protect (section 5) is either delivered by the relocated cluster-level gate or is already not delivered today. The passing-run log shows the joiners READY at 12:12:51.3 and 12:12:57.0, while the ledger replica was first placed on a joiner at 12:13:02.8 and the seed's surplus ledger replica was only removed at 12:14:04 [V-log]. So "ACTIVE before ledger spread" already happens in every passing run.
 2. Ordinary placement and schema admission are gated on the formation fact by exactly one owner.
-3. A deterministic test (§10) shows every admitted joiner released with no timer expiring, for every arrival order including two joiners in one derivation.
+3. A deterministic test (section 10) shows every admitted joiner released with no timer expiring, for every arrival order including two joiners in one derivation.
 
-### The smaller bounded repair (C1 in §9) is a credible alternative
+### The smaller bounded repair (C1 in section 9) is a credible alternative
 
 Make the remove-safety floor and the placement predicate use **one** definition of a legitimate holder. The current floor (after `ab55403b6`, 2026-11-06) does not count a placement-eligible pre-READY joiner. The pre-`ab55403b6` floor carried a comment naming this exact deadlock. With one definition, the raw spread can complete before READY and the barrier releases at the level of its own condition. The handoff then becomes deletable.
 
@@ -57,11 +61,11 @@ Notation: **X ⇐ Y** means "X requires Y". The guard's code location is given f
 
 - **a1. READY lease publication ⇐ the formation barrier returns.** `signalReadyForReplicas` awaits `awaitOperationLedgerFormationBarrier()` at `src/bootstrap/node-joining-ready-signal-readiness.js:447`. Only after that does it send the heartbeat with `requireDurableVisibility: true` (:487-489). [V-code]
 - **a2. The barrier returns ⇐ state ∈ {`ledger_spread_satisfied`, `bypassed_insufficient_formation_cohort`}.** See `node-joining-operation-ledger-formation-readiness.js:34-37, 450-452`. [V-code]
-  - **a2.1. Not engaged.** `bypassed` is reached only while the barrier is **not engaged** and `now ≥ discoveryDeadline` (:238-241). The discovery window defaults to 5 s (`node-joining-constants.js:35`). [V-code]
-  - **a2.2. Engagement is latched.** `barrierEngaged = barrierEngaged || hasSufficient…(snapshot)` (:437-438). "Sufficient" means `candidateNodeIds ≥ replicaTarget (3)` **and** `preReadyCandidateNodeIds ≥ replicaTarget-1 (2)` (:352-362). So two concurrent pre-READY joiners in a three-node formation always engage, and engagement never un-latches. [V-code]
+  - **a2.1. Not engaged.** `bypassed` is reached only while the barrier is **not engaged** and `now >= discoveryDeadline` (:238-241). The discovery window defaults to 5 s (`node-joining-constants.js:35`). [V-code]
+  - **a2.2. Engagement is latched.** `barrierEngaged = barrierEngaged || hasSufficient...(snapshot)` (:437-438). "Sufficient" means `candidateNodeIds >= replicaTarget (3)` **and** `preReadyCandidateNodeIds >= replicaTarget-1 (2)` (:352-362). So two concurrent pre-READY joiners in a three-node formation always engage, and engagement never un-latches. [V-code]
   - **a2.3. Engaged release ⇐ `snapshot.startupAuthorityReady === true`** (:243-245). [V-code]
 - **a3. `startupAuthorityReady` on a joiner ⇐ one of two things.**
-  - **(i)** The joiner's **own local derivation** of the authority, from its own planning answer over its CDC-fed cache, is READY. See `node-joining-ready-signal-readiness.js:258-293` → `control-plane-readiness-startup-authority-health.js:193-246`, using `getPriorityRecoveryPlanningAnswerForOwnerRead` on the joiner. [V-code]
+  - **(i)** The joiner's **own local derivation** of the authority, from its own planning answer over its CDC-fed cache, is READY. See `node-joining-ready-signal-readiness.js:258-293` -> `control-plane-readiness-startup-authority-health.js:193-246`, using `getPriorityRecoveryPlanningAnswerForOwnerRead` on the joiner. [V-code]
   - **(ii)** A seed-published handoff contract validates as a consumer contract with `releaseAuthorized === true`. The function `attachFormationReleaseHandoffToStartupAuthority` then overwrites `ready = true` and `state = READY` (`formation-release-handoff-contract.js:561-574`; consumer validation :579-597, `control-plane-readiness-formation-release-methods.js:224-251`). [V-code]
 - **a4. Other gates before the barrier.** These are the CDC subscription, local query transport and metadata publication readiness (`node-joining-ready-signal-readiness.js:379-444`). In the failed run all of them passed [V-log, analysis table]. None is in the cycle.
 - **a5. Barrier timeout.** `priorityPlacementFormationTimeoutMs` is 120 s (`node-joining-constants.js:37`). On timeout the barrier throws a retryable error (:453-459, 363-382). The join phase retries and re-enters the same barrier [V-log, joiner lines at 12:33:06.9 and 12:33:41]. It is not a breaker.
@@ -92,8 +96,8 @@ The function is `buildStartupAuthoritySnapshotFromPlanningAnswerUncached` (`src/
     - `control_plane_publications` at 12:31:12.25, completed 12:31:23.47;
     - `schema_operations` at 12:31:12.26, completed 12:31:29.78;
     - `sql_transactions` at 12:31:18.36, completed 12:31:33.34.
-- **c2. Spread at or above the replica target ⇐ a count-neutral REPLACE (remove from the seed).** The seed logged "Deferring spread-driven count-increasing ADD while already at/over target replica count (no count-neutral REPLACE pairing)" 57 times [V-log]. The REPLACE for `replica_operations-p1` (seed → a6577360) was created at 12:31:46.68 [V-log].
-- **c3. The REPLACE's source removal ⇐ remove-safety floor: projected voter-ready rows ≥ the minimum replica count (3).**
+- **c2. Spread at or above the replica target ⇐ a count-neutral REPLACE (remove from the seed).** The seed logged "Deferring spread-driven count-increasing ADD while already at/over target replica count (no count-neutral REPLACE pairing)" 57 times [V-log]. The REPLACE for `replica_operations-p1` (seed -> a6577360) was created at 12:31:46.68 [V-log].
+- **c3. The REPLACE's source removal ⇐ remove-safety floor: projected voter-ready rows >= the minimum replica count (3).**
   - Rows are counted by `isVoterReadyFloorCountableReplica` (`operation-workflow-remove-safety-evaluator.js:550-552, 649-669`).
   - That function requires `committedNodeFloor.nodeSemanticsById[node].readyNow === true` (`priority-publication-safety-topology.js:136-140`).
   - `readyNow` means ACTIVE plus a valid READY lease (`node-liveness-semantic-projection.js:489-490`, cited from a sub-reading). [V-code]
@@ -101,11 +105,11 @@ The function is `buildStartupAuthoritySnapshotFromPlanningAnswerUncached` (`src/
   - **This edge is c3 ⇐ a1: joiner READY.**
 - **c4. Every other priority ADD ⇐ no operation-ledger self-move in flight** (`rebalance-coordinator-ledger-interlock-admission.js:77-78`). [V-code]
   - **[V-log]** From 12:31:46.7 onward, "Rebalancing move skipped" with `admissionReason = operation_ledger_self_move_in_flight` appears for:
-    - `schema_operations` ×7
-    - `sql_transaction_participants` ×6
-    - `sql_transactions` ×5
-    - `sql_write_operations` ×5
-    - `control_plane_publications` ×14
+    - `schema_operations` x7
+    - `sql_transaction_participants` x6
+    - `sql_transactions` x5
+    - `sql_write_operations` x5
+    - `control_plane_publications` x14
 - **c5. System partitions ⇐ the critical-topology settling gate** (`unified-rebalancer-critical-topology-methods.js:83-104, 142-171`). JOINING nodes are TRANSITIONAL unless they are formation-cohort cure targets (:88). Recovery-lane partitions pass on quorum (:153-160). [V-code]
   - **[V-log]** On the priority partitions the blocker logged was `topology_operations_in_flight`: on `replica_operations` 12:31:48-52, and on `schema_operations`, `sql_transactions` and `control_plane_publications` 12:31:17-44.
   - `node_ready_lease_incomplete` naming both joiners was the blocker on the non-priority system partitions (`config`, `indices`, `service_*` and others).
@@ -122,16 +126,16 @@ All in `formation-release-handoff-closure-owner.js` unless stated. [V-code]
     - `successorCapture.state === COMPLETED_GENERATION`.
   - **A connection to the authority itself** (:229-233).
   - **A non-empty cohort.** Every canonical member present, JOINING with CONNECTED or READY, with a connection whose boot incarnation matches; a member that is already READY is skipped (:46-89, 234-240).
-  - **Not the same cohort at an epoch ≤ the terminal one.** The cohort signature must not equal `terminalGeneration.cohortSignature` at `publicationEpoch ≤ terminalGeneration.publicationEpoch` (:243-249).
+  - **Not the same cohort at an epoch <= the terminal one.** The cohort signature must not equal `terminalGeneration.cohortSignature` at `publicationEpoch <= terminalGeneration.publicationEpoch` (:243-249).
   - **A valid observation:** authority evidence present, rows and connections parse, finite `observedAt` (:114-130; evidence :199-265).
 - **d2. Retained ⇐ all of the following.**
   - The authority connection's boot incarnation equals the captured one (:393-406).
   - `isRetainableAuthority(authority, generation)` (:408-413; contract :391-427). That requires:
-    - **Identity:** epoch ≥ the captured epoch, and the fence identity equals the captured one (:382-390).
+    - **Identity:** epoch >= the captured epoch, and the fence identity equals the captured one (:382-390).
     - **Cohort:** every captured cohort member is still canonical (:428-440).
     - **Readiness:** one of READY with spread satisfied, BLOCKED with spread false and no reasons, or RECOVERY_PENDING with spread false and reasons ⊆ {`priority_partitions_not_spread`} (:408-426, 441-460; allow-list :43-44).
   - Every cohort member is present, has the same incarnation, is JOINING or ACTIVE, and is CONNECTED or READY (:91-112, 301-305).
-- **d3. Release-authorised ⇐ the generation is durably published and read back.** The flow is: publication coordinator `offer` (`formation-release-handoff-publication-coordinator.js:65`) → `persistAndAcknowledge` (:119) → `onDurable` (:138) → `acknowledgePublication` (closure :462-485; wiring `control-plane-readiness-participation-base.js:239-251`).
+- **d3. Release-authorised ⇐ the generation is durably published and read back.** The flow is: publication coordinator `offer` (`formation-release-handoff-publication-coordinator.js:65`) -> `persistAndAcknowledge` (:119) -> `onDurable` (:138) -> `acknowledgePublication` (closure :462-485; wiring `control-plane-readiness-participation-base.js:239-251`).
 - **d4. Completed ⇐ every captured cohort member is a current READY member at the captured incarnation** (:306-335). Completion records `terminalGeneration = generation` and `successorCapture = COMPLETED_GENERATION` (:320-324).
 - **d5. Revoked ⇐ any of these.**
   - The observation is invalid (:365-370).
@@ -152,7 +156,7 @@ All in `formation-release-handoff-closure-owner.js` unless stated. [V-code]
   - **(β)** the predecessor generation completed and the authority is still retainable (d6).
 - **β needs a predecessor that completed**, which needs its cohort READY, which needs its own handoff. So β is self-sustaining once started but cannot start itself.
 - **α needs authority READY with spread satisfied while the cohort exists.** By b6 that holds only while the cohort is **not** counted in the eligible set, or while the eligible set is still below 3. Exactly the event that makes the cohort count (its publication) destroys α.
-- **So the breaker is available only in a window bounded by the cohort's own publication.** In passing runs that window is the 0.5-1.4 s between "j1 published at epoch 3" and "j2 published at epoch 4" [V-log; see §3].
+- **So the breaker is available only in a window bounded by the cohort's own publication.** In passing runs that window is the 0.5-1.4 s between "j1 published at epoch 3" and "j2 published at epoch 4" [V-log; see section 3].
 
 **Cycle C2 (interlock amplification)**
 
@@ -200,7 +204,7 @@ These fields are set in the constructor at closure-owner :133-143 [V-code]:
 | From | To | Guard | Code |
 |---|---|---|---|
 | IDLE / COMPLETE / REVOKED (no generation) | ACTIVE (unauthorised) | d1 | :376-391 |
-| ACTIVE unauthorised | ACTIVE authorised | durable write and read-back of the same contract | coordinator :119-138 → closure :462-485 |
+| ACTIVE unauthorised | ACTIVE authorised | durable write and read-back of the same contract | coordinator :119-138 -> closure :462-485 |
 | ACTIVE | ACTIVE | d2 holds, some member pending | :337-348 |
 | ACTIVE | COMPLETE | every member READY | :316-335; sets terminal and COMPLETED_GENERATION |
 | ACTIVE | REVOKED | d5 | :266-281; sets terminal and CLOSED |
@@ -307,13 +311,13 @@ It is **a defect in its own right, though not the cause of the deadlock.**
 - **Why the successor admission exists.** In the GCP run 2026-08-30T10-05-10, gen-1 completed in the same evaluation that saw the priority reopen, so no gen-2 was captured. The late joiners waited 54-55 s at `waiting_for_startup_authority` (closure-v4 L25; commit message).
 - **Constraint `typed-bounded-admission`:** the admission is "closed by the successor capture, by any revocation, and by the first incompatible or absent authority observation; it never reopens without a new completion."
 - **Decision table** (`docs/specs/decision-tables/formation-release-handoff-closure.json`), rule `completion-under-compatible-reopen-captures-successor`: "a substantive block, an incompatible identity, or a revocation closes the admission and capture returns to the READY gate."
-- **Safety property** (stated as minting evidence; the property label is [I]): "The completed generation's authority evidence … is the minting evidence for its successor."
+- **Safety property** (stated as minting evidence; the property label is [I]): "The completed generation's authority evidence ... is the minting evidence for its successor."
   - A revocation means that evidence chain is broken: a member was lost, an incarnation changed, or there was a substantive block.
   - So minting must return to fresh READY-with-spread evidence.
   - It protects against releasing joiners on authority evidence that has been invalidated.
 - **What nobody recorded.** No quest records what happens if READY with spread can never recur. The quest's verification (L5) states only that the admission "never reopens".
 
-### (ii) The `terminalGeneration` same-cohort, epoch ≤ terminal refusal
+### (ii) The `terminalGeneration` same-cohort, epoch <= terminal refusal
 
 - **Where it came from.** It was introduced in checkpoint `3a065e5f2` (2026-08-28, `formation-release-handoff-closure-v3`). **No log entry states its reason.**
 - **Indirect evidence:**
@@ -342,11 +346,11 @@ It is **a defect in its own right, though not the cause of the deadlock.**
 - **Quest:** `formation-priority-spread-without-exclusive-self-move-cost`, L40 (2026-07-17).
 - **Theory:** `theory-20260717-join-finalization-currently-conflates-priority-placement`.
 - **Code:** first landed in bulk checkpoint `6929b3dfb` (2026-07-18).
-- **The intervention as stated:** "publish an owner-authored priority-placement-ready lease …; allow only startup-authority priority control-plane placement to target that live-transport cohort; keep ordinary placement ACTIVE-only; delay final ACTIVE until the replica_operations quorum is no longer concentrated."
+- **The intervention as stated:** "publish an owner-authored priority-placement-ready lease ...; allow only startup-authority priority control-plane placement to target that live-transport cohort; keep ordinary placement ACTIVE-only; delay final ACTIVE until the replica_operations quorum is no longer concentrated."
 
 ### The stated hazard
 
-The hazard was: "signalReadyForReplicas publishes ACTIVE and the live harness can open schema admission immediately, while serialized ledger REPLACE number two cannot even be minted until number one terminalizes … leaving no formation barrier in which the ledger concentration can close." Its ancestry is `formation-ledger-quorum-spread-first` (2026-07-05): "never leaves the operation ledger's quorum concentrated on the seed".
+The hazard was: "signalReadyForReplicas publishes ACTIVE and the live harness can open schema admission immediately, while serialized ledger REPLACE number two cannot even be minted until number one terminalizes ... leaving no formation barrier in which the ledger concentration can close." Its ancestry is `formation-ledger-quorum-spread-first` (2026-07-05): "never leaves the operation ledger's quorum concentrated on the seed".
 
 ### Whose property is it?
 
@@ -364,8 +368,8 @@ Per the design:
 
 In pass f3aa2f08:
 - The joiners signalled READY at 12:12:51.318 and 12:12:57.004.
-- The *first* priority placement on any joiner after that was `control_plane_publications` → 96203c04 at 12:12:55.0.
-- `replica_operations` → 96203c04 was created at 12:13:02.8.
+- The *first* priority placement on any joiner after that was `control_plane_publications` -> 96203c04 at 12:12:55.0.
+- `replica_operations` -> 96203c04 was created at 12:13:02.8.
 - The seed's surplus ledger replica was removed at 12:14:04.1.
 - The harness counted the cluster ACTIVE at +21.7 s, which is about 12:12:58.
 - So **ACTIVE opened about 66 s before the ledger left the seed**.
@@ -407,13 +411,13 @@ The deadlock state is: no ACTIVE, release-authorised generation; the authority n
 
 | Event order | Reachable? | Why |
 |---|---|---|
-| **Two joiners eligible within one driver tick (5 s)** | **Yes** [V-code + I] | Nothing caps a derivation (`membership-publication-candidate-derivation.js:528-557`). If both joiners are published at the same epoch, no observation exists with exactly one joiner counted, so α never holds after the first revoke. In the failed run the *projection* jumped 1 → 3 at 06.158 (SWIM divergence) [V-log]. The *publication* still added one joiner per drive (epoch 2 at 11.8 s, epoch 3 by 15.1 s) [V-log]. The authority's not-spread came from the projection or eligible set before epoch 2 [I]. |
-| **The membership derivation delayed by load** (the observed case) | **Yes** [V-log] | The race loss was about 1 s (analysis §3). |
-| **No authority reader samples the READY window** | **Yes** [I] | `observe()` is driven by readers (§2). A window of about 0.3-1.4 s can fall between reads. |
+| **Two joiners eligible within one driver tick (5 s)** | **Yes** [V-code + I] | Nothing caps a derivation (`membership-publication-candidate-derivation.js:528-557`). If both joiners are published at the same epoch, no observation exists with exactly one joiner counted, so α never holds after the first revoke. In the failed run the *projection* jumped 1 -> 3 at 06.158 (SWIM divergence) [V-log]. The *publication* still added one joiner per drive (epoch 2 at 11.8 s, epoch 3 by 15.1 s) [V-log]. The authority's not-spread came from the projection or eligible set before epoch 2 [I]. |
+| **The membership derivation delayed by load** (the observed case) | **Yes** [V-log] | The race loss was about 1 s (analysis section 3). |
+| **No authority reader samples the READY window** | **Yes** [I] | `observe()` is driven by readers (section 2). A window of about 0.3-1.4 s can fall between reads. |
 | **A revoke at a later epoch** | **Yes** [V-code] | Any non-allow-listed reason during an ACTIVE generation revokes it and closes the admission (d2, d5). Examples: a transient `publication_epoch_pending` when the next joiner is published with acknowledgements pending, an evidence-unavailable instant, or `control_plane_not_writable`. If the remaining cohort is still pre-READY and the spread is unsatisfied, that is the deadlock. Passing runs got through epochs 4-5 with only `not_spread` [V-log], but nothing guarantees that. |
 | **A joiner restart during formation** | **Yes** [V-code + I] | The captured member's incarnation changes, so the generation is revoked as `captured_cohort_incarnation_changed` (:100, 305) and the admission closes. A *fresh* (stateless) restarted joiner re-enters the barrier and the deadlock holds. A *durable-rejoin* restart bypasses the barrier (:398-400) and publishes READY, which **breaks** the cycle: the remove floor counts it once it holds a voter replica. |
-| **A seed restart during formation** | **Yes** [V-code + I] | All closure state is lost and the old contract is unconsumable (§2). Recapture needs α. If the joiners are already published (spread required = 3), α is unreachable. |
-| **Five-node formation** | **Yes, with more exposure** [I] | Engagement needs only 2 pre-READY joiners (a2.2). Any successor-chain break (a revoke) while ≥ 2 joiners are pre-READY and counted reproduces the state. The history records five-node runs reading `node_ready_lease_incomplete` 521 times (`release-0-2-five-node-convergence` L19). The successor chain also releases one cohort at a time, which lengthens exposure. |
+| **A seed restart during formation** | **Yes** [V-code + I] | All closure state is lost and the old contract is unconsumable (section 2). Recapture needs α. If the joiners are already published (spread required = 3), α is unreachable. |
+| **Five-node formation** | **Yes, with more exposure** [I] | Engagement needs only 2 pre-READY joiners (a2.2). Any successor-chain break (a revoke) while >= 2 joiners are pre-READY and counted reproduces the state. The history records five-node runs reading `node_ready_lease_incomplete` 521 times (`release-0-2-five-node-convergence` L19). The successor chain also releases one cohort at a time, which lengthens exposure. |
 | **A single joiner** (sequential growth) | **No** | The barrier never engages (pre-READY < 2) and bypasses after the 5 s discovery window (a2.1) [V-code; pass joiner 2 released `bypassed_insufficient_formation_cohort` V-log]. |
 | **The handoff captured but never acknowledged** (durable write failing repeatedly) | **Yes, as a stall rather than a lock** [I] | The joiners keep waiting until the write succeeds or the generation is revoked. |
 
@@ -448,7 +452,7 @@ Each repair is stated as a rule.
 ### A. Level-triggered, cohort-discounted capture
 
 **Rule.** The seed admits the capture of a generation for cohort K whenever the authority, evaluated with K's absence discounted, is READY. Concretely:
-- every not-READY cause is in class (i) of §6 for K;
+- every not-READY cause is in class (i) of section 6 for K;
 - every non-K fact meets READY;
 - the fence and incarnation are current.
 
@@ -466,7 +470,7 @@ Admission is a pure function of current evidence. The admission does not close o
   - The attribution adds a new derivation. It must have one owner, or it duplicates spread logic.
   - It keeps the whole handoff apparatus (about 2,250 lines).
   - It keeps the joiner's *local* re-derivation of the authority (a3.i). That is a second derivation of one decision; the decision table's `durable-consumer-parity` only partly fences it.
-  - It still leaves "ACTIVE before ledger spread" in place (§5).
+  - It still leaves "ACTIVE before ledger spread" in place (section 5).
 
 ### B. A joiner's READY is independent of spread; the cluster gate moves to its consumers
 
@@ -480,10 +484,10 @@ Evaluation of B:
 - **Invariant.** READY ⇐ node-local facts only, and spread ⇐ READY nodes. The graph is acyclic by construction, so liveness does not depend on any window.
 - **Cycles removed.** C1, C2 and C3. The c3 floor is then satisfied by READY joiners. That is exactly what passing runs do today after the handoff.
 - **Safety preserved.**
-  - The §5 property ("the cluster does not open while the ledger is concentrated") becomes enforced at the observable it names, instead of indirectly through withheld leases.
-  - In passing runs it is currently *not* enforced (§5, V-log), so B strengthens it.
+  - The section 5 property ("the cluster does not open while the ledger is concentrated") becomes enforced at the observable it names, instead of indirectly through withheld leases.
+  - In passing runs it is currently *not* enforced (section 5, V-log), so B strengthens it.
   - Remove safety, fencing and readiness semantics are untouched.
-  - It is consistent with the binding ruling "one semantic READY owner at the durable NODES lifecycle boundary … no compatibility branches" (memory `ready-owner-at-durable-nodes-boundary.md`).
+  - It is consistent with the binding ruling "one semantic READY owner at the durable NODES lifecycle boundary ... no compatibility branches" (memory `ready-owner-at-durable-nodes-boundary.md`).
 - **Owners touched.**
   - Bootstrap join (`node-joining-ready-signal-readiness.js`).
   - The readiness owner (the formation fact).
@@ -508,7 +512,7 @@ Evaluation of B:
 
 - **Invariant.** The planner never places a replica it will then refuse to count.
 - **Cycle removed.** C1's edge c3 ⇐ a1, and with it C2.
-  - The raw cure then completes before READY. The census already counts pre-READY holders (§6, V-log).
+  - The raw cure then completes before READY. The census already counts pre-READY holders (section 6, V-log).
   - The authority becomes READY on its own evidence.
   - The barrier releases on a3.i at the level of its condition.
   - It is independent of timing because the cure no longer needs any joiner's READY.
@@ -527,11 +531,11 @@ Evaluation of B:
 
 **Rule.** The admission predicate must evaluate the authority with the cohort counted.
 
-On its own this makes the handoff never capture in three-node formation. It is useful only as a diagnostic that **every** current release is vacuous (§3). **Not a repair.**
+On its own this makes the handoff never capture in three-node formation. It is useful only as a diagnostic that **every** current release is vacuous (section 3). **Not a repair.**
 
 ### C3. A barrier cohort generation owned by the joiners' engagement
 
-**Rule.** The seed captures a generation at the moment the barrier would engage, defined as ≥ 2 pre-READY candidates. It releases the generation whenever the authority's non-cohort facts are READY.
+**Rule.** The seed captures a generation at the moment the barrier would engage, defined as >= 2 pre-READY candidates. It releases the generation whenever the authority's non-cohort facts are READY.
 
 This is A with a different trigger. It is listed so it can be rejected: it adds a second engagement owner.
 
@@ -544,7 +548,7 @@ This is A with a different trigger. It is listed so it can be rejected: it adds 
 **What would falsify B.**
 1. A census showing that some consumer other than the cluster-ACTIVE / schema-admission observable and ordinary placement depends on "pre-spread joiners have no READY lease" for *safety*, not liveness. For example, a routing, leadership, or SQL-transaction coordinator choice that would be unsafe on a READY node without ledger spread.
 2. A run under B where the relocated cluster gate is green while the ledger quorum is concentrated. That would mean the gate is mis-owned.
-3. The §10 test failing under B for any arrival order.
+3. The section 10 test failing under B for any arrival order.
 
 **What would falsify C1.** Evidence that the CONNECTED heartbeat plus live transport is not a sufficient liveness fence for a quorum floor. For example, a run where a joiner counted by the floor dies before READY and the ledger loses quorum.
 
@@ -573,8 +577,8 @@ This is A with a different trigger. It is listed so it can be rejected: it adds 
 
 ### Script for the losing order
 
-1. **Epoch 1.** The seed alone is published. The authority is READY with spread satisfied. j1 registers as JOINING and CONNECTED. Read the authority on the seed → expect capture (ACTIVE) and acknowledgement.
-2. **Make j1 recovery-active and unpublished** (`missingPublishedCount = 1`). Read the authority → expect REVOKED `startup_authority_incompatible`. *This step also pins down §3's open question: assert which path revoked.*
+1. **Epoch 1.** The seed alone is published. The authority is READY with spread satisfied. j1 registers as JOINING and CONNECTED. Read the authority on the seed -> expect capture (ACTIVE) and acknowledgement.
+2. **Make j1 recovery-active and unpublished** (`missingPublishedCount = 1`). Read the authority -> expect REVOKED `startup_authority_incompatible`. *This step also pins down section 3's open question: assert which path revoked.*
 3. **j2 registers.** Run **one** derivation with both joiners eligible. Publish epoch 2 containing both; acknowledgements pending, then acknowledged.
 4. **Expect the authority to read** `recovery_pending ['priority_partitions_not_spread']`.
 5. **Start both joiner barriers.** Expect both to reach `waiting_for_startup_authority` (engaged).
@@ -609,7 +613,7 @@ Enumerate the interleavings of {revoke, derivation(j1), derivation(j2), derivati
   - which d1 conjunct refused.
 - The authority's `canonicalStartupNodeIds`, eligible node ids and blocked partitions with their missing holders.
 - For each priority partition: the planner gate decision, the admission reason, and any remove-safety deferral with projected/minimum counts and the node ids excluded from the floor.
-- The cycle witness: the list of edges (a1…c4) whose guard is currently false, each with the code location.
+- The cycle witness: the list of edges (a1...c4) whose guard is currently false, each with the code location.
 
 ### Where to build it
 
@@ -634,12 +638,12 @@ These points come from a sub-reading [V-code there; not re-opened by me]. Extend
 
 ## What I could not determine
 
-1. **Which `startup_authority_incompatible` path revoked gen-1, and which reason codes the authority carried at that instant**, in any run. The publication-pending mechanism in §3 is inferred. The closure owner logs neither refused captures nor revoke inputs.
+1. **Which `startup_authority_incompatible` path revoked gen-1, and which reason codes the authority carried at that instant**, in any run. The publication-pending mechanism in section 3 is inferred. The closure owner logs neither refused captures nor revoke inputs.
 2. **The exact eligible node set behind `requiredDistinctNodeCount`** at epoch 1 and epoch 3 in the passing runs. That is why epoch-3 READY is "vacuous" only as an inference.
 3. **Whether the pre-`ab55403b6` floor carve-out actually counted a JOINING joiner with no lease.** Its own test was `isNodeActiveWithCurrentLease`. So I cannot say whether `ab55403b6` *introduced* the permanent c3 edge or only removed a carve-out that never fired.
-4. **Why the failed seed's derivation added the joiners to the projection at once but published them one per drive** (epoch 2 at 11.8 s, epoch 3 by 15.1 s), while the passing seed went 1 → 3 → 4 → 5 within one drive. The reconcile step durations are not logged.
+4. **Why the failed seed's derivation added the joiners to the projection at once but published them one per drive** (epoch 2 at 11.8 s, epoch 3 by 15.1 s), while the passing seed went 1 -> 3 -> 4 -> 5 within one drive. The reconcile step durations are not logged.
 5. **What the 1.7 s pre-derivation latency and the 7.4 s reconcile on the failed seed waited on.**
 6. **Who owns the client-facing "cluster ACTIVE / schema admission open" decision**, beyond the harness probe (`cluster-class-publication-evidence.js:308`), and which runtime consumers besides ordinary placement read joiner READY as "safe to use". Repair B needs this census.
-7. **The original reason for the `terminalGeneration` refusal.** No log entry states it; §4(ii) gives the inferred purpose.
+7. **The original reason for the `terminalGeneration` refusal.** No log entry states it; section 4(ii) gives the inferred purpose.
 8. **Whether the REPLACE path has a `priorityRecoveryCompletionSafe` exemption that could have applied here.** The evaluator (:663-669) consults it, but I did not trace its inputs.
 9. **The passing runs' exact `Signaled readiness` to `replica_operations` spread chronology for 9991 and ed708.** Only f3aa2f08 was checked.

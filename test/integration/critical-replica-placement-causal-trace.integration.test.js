@@ -34,10 +34,8 @@ import {SERVICE_TYPE} from '../../src/constants/index.js';
 import {
   CRITICAL_PLACEMENT_EVIDENCE_STATE,
   resolveCriticalPartitionPlacement,
+  resolveCriticalPlacementConvergence,
 } from '../../src/bootstrap/critical-placement-convergence.js';
-import {
-  observeCriticalPlacement,
-} from '../../src/bootstrap/critical-placement-formation-observer.js';
 import {
   evaluateOperationLedgerQuorumConcentration,
 } from '../../src/rebalancer/operation-ledger-quorum-concentration.js';
@@ -65,7 +63,6 @@ const READY_TIMEOUT_MS = 12000;
 // Join budget measured for this three-full-nodes-one-event-loop harness by
 // three-node-seed-rebalance (node3 join observed 12441-14748ms).
 const JOIN_READY_TIMEOUT_MS = 25000;
-const FORMATION_DISCOVERY_MS = 250;
 const POLL_INTERVAL_MS = 100;
 const SAMPLE_INTERVAL_MS = 500;
 const TRACE_BUDGET_MS = 90000;
@@ -360,7 +357,6 @@ test('critical placement causal trace',
         ...TEST_CONFIG.bootstrap,
         httpTimeoutMs: 5000,
         leadershipWaitTimeoutMs: 12000,
-        priorityPlacementFormationDiscoveryMs: FORMATION_DISCOVERY_MS,
       };
       node2JoinService = new NodeJoiningService({
         bootIncarnation: 1,
@@ -400,21 +396,24 @@ test('critical placement causal trace',
 
       await t.test('fresh-formation-critical-baseline-measured',
         async (st) => {
-          const baseline = observeCriticalPlacement({systemTableCache});
+          const baseline = resolveCriticalPlacementConvergence({
+            serviceRows: readRows(systemTableCache, SYSTEM_TABLE_NAME.SERVICES),
+            partitionRows: readRows(
+              systemTableCache,
+              SYSTEM_TABLE_NAME.PARTITIONS,
+            ),
+          });
           artifact.baselineObservation = {
             evidenceState: baseline.evidenceState,
-            reasonCodes: [...baseline.reasonCodes],
-            observedPartitionCount: baseline.observedPartitionCount,
+            observedPartitionCount: baseline.partitions.length,
             pendingPartitionIds: [...baseline.pendingPartitionIds],
             unknownPartitionIds: [...baseline.unknownPartitionIds],
-            membershipEpoch: {...baseline.membershipEpoch},
           };
-          st.ok(baseline.observedPartitionCount > 0,
+          st.ok(baseline.partitions.length > 0,
             'the whole declared critical set is inspected');
           st.ok(baseline.evidenceState !==
             CRITICAL_PLACEMENT_EVIDENCE_STATE.UNKNOWN ||
-            baseline.unknownPartitionIds.length > 0 ||
-            baseline.reasonCodes.length > 0,
+            baseline.unknownPartitionIds.length > 0,
           'the baseline is a typed measurement, never a shrug');
           st.equal(baseline.unknownPartitionIds.length, 0,
             'every critical partition has authoritative persisted policy ' +
@@ -424,7 +423,10 @@ test('critical placement causal trace',
       // The traced critical partition comes from the MEASUREMENT: the first
       // pending critical partition at baseline; a fully converged baseline
       // traces the first critical partition and records completion.
-      const baselineObservation = observeCriticalPlacement({systemTableCache});
+      const baselineObservation = resolveCriticalPlacementConvergence({
+        serviceRows: readRows(systemTableCache, SYSTEM_TABLE_NAME.SERVICES),
+        partitionRows: readRows(systemTableCache, SYSTEM_TABLE_NAME.PARTITIONS),
+      });
       const tracedCriticalPartitionId =
         baselineObservation.pendingPartitionIds[0] ||
         [...(readRows(systemTableCache, SYSTEM_TABLE_NAME.PARTITIONS)

@@ -28,11 +28,14 @@ are described in [../architecture/bootstrap.md](../architecture/bootstrap.md).
 
 ### `GET /readyz`
 
-- Meaning: node is safe to serve join/admin traffic.
+- Meaning: cluster has formed voter quorums (published priority control-plane
+  partition spread across distinct READY nodes) and this node is safe to serve
+  client, join, and admin traffic.
 - Success: `200` when the node's readiness dimensions are healthy enough to
-  serve traffic. Operationally this means the control plane is
-  `repairEligible`, self/ingress serving requirements are satisfied, and no
-  blocking readiness reason remains active.
+  serve traffic. Operationally this means the node's own membership READY lease
+  is published from local readiness, cluster formation has published priority
+  control-plane partition spread so the control plane is `repairEligible` and
+  `serveEligible`, and no blocking readiness reason remains active.
 - Failure: `503` with `reasons` and optional `retryAfterMs`.
 
 Readiness is a projection over canonical owner rows, cache state, and bounded

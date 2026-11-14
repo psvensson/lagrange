@@ -1,3 +1,7 @@
+---
+audience: evidence
+---
+
 # Bootstrap and join in mature systems: how circular readiness is avoided
 
 Method: official docs, design posts and source fetched 2026-11-14. Claims carry a URL. "UNCONFIRMED" means I could not verify it from a primary source in this pass. Several doc pages I tried returned 404 or omitted the topic, and that is noted where it matters.

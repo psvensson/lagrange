@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-11T06:28:14.467Z",
-  "rawViolationCount": 1693,
+  "generatedAt": "2026-11-14T17:29:56.542Z",
+  "rawViolationCount": 1691,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
@@ -833,7 +833,7 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-service-control-plane-runtime-methods.js",
-      "line": 308,
+      "line": 307,
       "column": 16,
       "functionName": "onRetry",
       "kind": "two_source_fallback_reads",
@@ -1093,15 +1093,6 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/bootstrap/node-joining-operation-ledger-formation-readiness.js",
-      "line": 354,
-      "column": 6,
-      "functionName": "hasSufficientOperationLedgerFormationCohort",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/bootstrap/node-joining-owner-construction.js",
       "line": 390,
       "column": 12,
@@ -1139,7 +1130,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-ready-signal-readiness.js",
-      "line": 179,
+      "line": 171,
       "column": 12,
       "functionName": "onRetry",
       "kind": "two_source_fallback_reads",
@@ -1148,7 +1139,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-ready-signal-readiness.js",
-      "line": 413,
+      "line": 316,
       "column": 10,
       "functionName": "signalReadyForReplicas",
       "kind": "two_source_fallback_reads",
@@ -1157,7 +1148,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-ready-signal-readiness.js",
-      "line": 437,
+      "line": 340,
       "column": 10,
       "functionName": "signalReadyForReplicas",
       "kind": "two_source_fallback_reads",
@@ -1166,7 +1157,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-ready-signal-readiness.js",
-      "line": 523,
+      "line": 425,
       "column": 19,
       "functionName": "lastObserved",
       "kind": "two_source_fallback_reads",
@@ -1661,7 +1652,7 @@
     },
     {
       "filePath": "src/bootstrap/shared/control-plane-setup.js",
-      "line": 256,
+      "line": 255,
       "column": 6,
       "functionName": "create",
       "kind": "two_source_fallback_reads",
@@ -2786,7 +2777,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-startup-authority-health.js",
-      "line": 421,
+      "line": 346,
       "column": 4,
       "functionName": "buildPriorityControlPlaneRecoveryProjection",
       "kind": "two_source_fallback_reads",
@@ -2795,7 +2786,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-startup-authority-health.js",
-      "line": 508,
+      "line": 433,
       "column": 4,
       "functionName": "buildPriorityControlPlaneRecoveryProjection",
       "kind": "two_source_fallback_reads",
@@ -2804,7 +2795,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-startup-authority-health.js",
-      "line": 571,
+      "line": 496,
       "column": 6,
       "functionName": "buildPriorityControlPlaneRecoveryProjection",
       "kind": "two_source_fallback_reads",
@@ -2813,7 +2804,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-startup-authority-health.js",
-      "line": 576,
+      "line": 501,
       "column": 6,
       "functionName": "buildPriorityControlPlaneRecoveryProjection",
       "kind": "two_source_fallback_reads",
@@ -11840,7 +11831,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-topology-guard-methods.js",
-      "line": 381,
+      "line": 348,
       "column": 23,
       "functionName": "ensurePrioritySurplusRemovePlacementFenceAllowed",
       "kind": "two_source_fallback_reads",
@@ -11849,7 +11840,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-topology-guard-methods.js",
-      "line": 435,
+      "line": 402,
       "column": 23,
       "functionName": "buildTopologyGuardSnapshot",
       "kind": "two_source_fallback_reads",
@@ -11939,7 +11930,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
-      "line": 109,
+      "line": 108,
       "column": 6,
       "functionName": "hasTopologySettlingBlockerForOperationCreationTarget",
       "kind": "two_source_fallback_reads",
@@ -11948,7 +11939,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
-      "line": 122,
+      "line": 121,
       "column": 8,
       "functionName": "<anonymous>",
       "kind": "two_source_fallback_reads",
@@ -11957,16 +11948,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
-      "line": 132,
-      "column": 8,
-      "functionName": "<anonymous>",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
-      "line": 408,
+      "line": 397,
       "column": 10,
       "functionName": "<anonymous>",
       "kind": "two_source_fallback_reads",
@@ -11975,7 +11957,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
-      "line": 462,
+      "line": 451,
       "column": 6,
       "functionName": "buildPriorityRecoveryPublicationEventSchedulingSnapshot",
       "kind": "two_source_fallback_reads",
@@ -11984,7 +11966,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
-      "line": 468,
+      "line": 457,
       "column": 6,
       "functionName": "buildPriorityRecoveryPublicationEventSchedulingSnapshot",
       "kind": "two_source_fallback_reads",
@@ -11993,7 +11975,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
-      "line": 639,
+      "line": 628,
       "column": 6,
       "functionName": "buildPriorityRecoveryPlanningGateBypassSnapshot",
       "kind": "two_source_fallback_reads",
@@ -12002,7 +11984,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
-      "line": 645,
+      "line": 634,
       "column": 6,
       "functionName": "buildPriorityRecoveryPlanningGateBypassSnapshot",
       "kind": "two_source_fallback_reads",
@@ -12299,7 +12281,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-available-nodes.js",
-      "line": 164,
+      "line": 159,
       "column": 6,
       "functionName": "resolveAvailableNodeMembershipConstraintState",
       "kind": "two_source_fallback_reads",
@@ -12326,7 +12308,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-critical-topology-methods.js",
-      "line": 553,
+      "line": 552,
       "column": 8,
       "functionName": "summarizeCriticalSystemEndpointVisibility",
       "kind": "two_source_fallback_reads",
@@ -12641,7 +12623,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 418,
+      "line": 368,
       "column": 8,
       "functionName": "projectPriorityTerminalCreateTargets",
       "kind": "two_source_fallback_reads",
@@ -12650,7 +12632,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 555,
+      "line": 505,
       "column": 6,
       "functionName": "getReplaceSourceReplicaIdFromOperationRow",
       "kind": "two_source_fallback_reads",
@@ -12659,7 +12641,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 565,
+      "line": 515,
       "column": 8,
       "functionName": "getReplaceSourceReplicaIdFromOperationRow",
       "kind": "two_source_fallback_reads",
@@ -12668,7 +12650,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 583,
+      "line": 533,
       "column": 6,
       "functionName": "getReplicaIdFromOperationRow",
       "kind": "two_source_fallback_reads",
@@ -12677,7 +12659,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 596,
+      "line": 546,
       "column": 6,
       "functionName": "getReplicaIdFromServiceRow",
       "kind": "two_source_fallback_reads",
@@ -12686,7 +12668,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 741,
+      "line": 691,
       "column": 6,
       "functionName": "getNormalizedOperationType",
       "kind": "two_source_fallback_reads",
