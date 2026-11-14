@@ -2,7 +2,7 @@
   "schema": "test-receipt/1",
   "quest": "comparative-campaign-explicit-provisioning",
   "status": "fail",
-  "interpretation": "Corrective round after the rejection of 39792cfe5: GCP provisioning is now code (provision-gcp.sh --place -> run-comparative-benchmarks.mjs --provision -> comparative-benchmark-provisioning.js), derived from the campaign's own requirement and verified with the campaign's own checks; measured at candidate 8a1e541ab with scripted hosts only. Lab placement is still not repository code (see provisioning-exists-for-every-target).",
+  "interpretation": "Corrective round after the second rejection (B2, 8a1e541ab). Measured at candidate a959ddb19: GCP provisioning is witnessed through the production entrypoint (the real run-comparative-benchmarks.mjs --provision, then the real campaign entry) with only ssh and the controller's git push scripted; twelve mutants run on the lab, all killed. Independent verification pending.",
   "receipts": [
     {
       "id": "refusals-red-on-original",
@@ -14,24 +14,24 @@
       "id": "refusals-green-on-candidate",
       "measured": true,
       "passed": true,
-      "detail": "Job fbdb9def on adams-gamla at 8a1e541ab: the 23 comparative and real-product files of job 20f2cd3c plus comparative-benchmark-provisioning.test.js, 24 files, 239 assertions, all passing."
+      "detail": "Job 9694e5bf on tv-dator at a959ddb19: the 24 files of job fbdb9def plus comparative-benchmark-provisioning-entrypoint.test.js, 25 files, 243 assertions, all passing."
     },
     {
       "id": "provisioning-exists-for-every-target",
       "measured": true,
-      "passed": false,
-      "detail": "GCP: red job 26f54e43 on adams-gamla at 99bb2b4b7 (provisioning test fails at file level: no provisioning module; storage-root ownership test fails), green job fbdb9def at 8a1e541ab: a scripted fresh host fails the campaign's checks (image_unavailable, load_generator_commit_absent, offline cache misses every lockfile tarball) and, after provisioning, passes ensureProductImages over campaignImagesByRole and prepareLoadGeneratorCheckout with the drivers installed, for every target subset; provisioning failures are typed; provision-gcp.sh passes bash -n and --place runs --provision. Nothing executed on GCP. Lab: placement (docker save/load, checkout bundle, npm cache) exists only as operator tooling outside the repository (labrun.py, transfer scripts), so the 'in code for every target' clause is not met for the lab; owner decision pending."
+      "passed": true,
+      "detail": "Per the supersession record in the quest log: GCP in repository code, lab by the documented operator step (proven by the recorded lab placements and dry run c6fa8a7f). GCP measured through the production entrypoint: red job 260256ff on tv-dator at the tests-only commit 60b73c80b (provisioning_commit_not_placed: 'src refspec undefined', the B2 defect; foreign-storage refusal missing); green job 9694e5bf at a959ddb19: the real CLI pushes the real 40-hex HEAD and checks it out, pulls every campaignImagesByRole image per role by its exact reference, installs and seeds every lockfile tarball, checks docker first and places nothing after a failure; the real campaign entry then passes host preparation, and without provisioning refuses image_unavailable and load_generator_commit_absent (offline_cache_incomplete through the campaign's preparation and workload runner in process). Mutants m1-m12 on throwaway branches mutant/no-fallback-a959ddb1-m*, all killed: m1 28a23968, m2 53afe25d, m3 9f5b2487, m4 1729cd60, m5 d0aa691c, m6 727bee92, m7 3800e809, m8 38b5b0fe, m9 0c59d95d, m10 ea470e48, m11 c44355b7, m12 f43a8320. Ceiling: the remote executor (ssh) and git push are scripted; nothing ran on GCP."
     }
   ],
   "unmeasuredObligations": [
     "independent-verification"
   ],
   "source": {
-    "sha": "8a1e541ab40a0536a6dab3599d09fc41bb19f3b8",
+    "sha": "a959ddb19c86d305ec7fec039f5005be248e4e5f",
     "base": "965a86bb8"
   },
   "evidence": {
     "directory": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/measurement-prep"
   },
-  "evidenceCeiling": "Fixture-level proof (scripted ssh hosts) of the refusals, of GCP provisioning's coverage of the campaign requirement, and of the storage-root ownership step; lab shell jobs 822e78f2 and 16dce80a (tv-dator) observed the EACCES the ownership step repairs and that a pre-chowned directory is writable. Nothing has been executed on GCP: a real run would additionally prove the pulls, the git push over ssh into a fresh checkout, npm ci of the root and the npm cache add/offline install against the real registry and npm, and a campaign starting on the provisioned VMs without any refusal."
+  "evidenceCeiling": "Real: the CLI wiring (argument parsing, manifest, harness identity from the real git HEAD, provisioning owner, host preparation and the campaign's own checks). Scripted: the remote executor (ssh answering docker/git/npm from a per-host state) and the controller's git push. Lab shell jobs 822e78f2 and 16dce80a observed the storage EACCES the ownership step repairs. Nothing has been executed on GCP: a real run would additionally prove registry pulls, the git push over ssh into a fresh VM checkout, root npm ci, that npm cache add serves npm ci --offline, and a campaign starting on the provisioned VMs."
 }
