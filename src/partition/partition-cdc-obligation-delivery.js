@@ -24,11 +24,12 @@ import {isWriteOutcomeUnknown} from './partition-write-kernel.js';
 import {CDC_COVERAGE_STATE} from '../cdc/cdc-delivery-outcome.js';
 import {beginCdcDeliveryInvocation} from '../cdc/cdc-delivery-invocation.js';
 import {SHIP_RANGE_STATE, advanceScanCursor, composeCdcShipRange, eventsOfShipRange,
-  hasOwedWorkBeyondScan, isShipRangeAlreadyAcknowledged, scanReachedTail} from
+  hasOwedWorkBeyondScan, isShipRangeAlreadyAcknowledged, releaseUncoveredScanTail,
+  scanReachedTail} from
   './partition-cdc-obligation-range.js';
 import {cdcObligationCoverage, cdcProgressCurrent, cdcSubscriberInvocation, nextCdcSubscriber,
   observeCdcSubscriber, prepareCdcObligationProgress, recordUncoveredSubscriberHint,
-  releaseContendedPropagationOwners, throwUncoveredObligationError} from
+  throwUncoveredObligationError} from
   './partition-cdc-obligation-progress.js';
 import {PARTITION_CDC_OBLIGATION_BOUND as BOUND, PARTITION_CDC_OBLIGATION_DRIVE_STATE as DRIVE,
   PARTITION_CDC_OBLIGATION_FAILURE_CODE as CODE,
@@ -312,7 +313,6 @@ function scheduleDeliveryRetry(delivery, error = null, explicitDisposition = nul
   if (disposition === OBLIGATION_RETRY_DISPOSITION.STALE_LIFETIME ||
       disposition === OBLIGATION_RETRY_DISPOSITION.NO_PENDING_WORK) {
     if (disposition === OBLIGATION_RETRY_DISPOSITION.STALE_LIFETIME) lane.currentObligation = null;
-    releaseContendedPropagationOwners(lane);
     disarmDeliveryRetry(owner, lane, disposition === OBLIGATION_RETRY_DISPOSITION.NO_PENDING_WORK);
     return 0;
   }
@@ -340,17 +340,6 @@ function scheduleDeliveryRetry(delivery, error = null, explicitDisposition = nul
   return delayMs;
 }
 
-function wakeContendedLaneForSliceTurn(delivery, lane) {
-  if (!laneIsCurrent(delivery, lane) || delivery.owner.isShutdown) return;
-  lane.consecutiveBackpressure = 0;
-  lane.retryDelayMs = PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
-  const retryArmed = lane.retryTimer.state === OBLIGATION_RETRY_STATE.ARMED;
-  lane.sliceTurnReady = !retryArmed;
-  if (retryArmed) {
-    scheduleDeliveryRetry(delivery, {retryAfterMs: 1}, OBLIGATION_RETRY_DISPOSITION.PAGE_YIELDED);
-  }
-}
-
 // Ship one composed range to every current subscriber as one ordered vector.
 // It is covered when every branch answered for exactly this vector; a refusal
 // (a subscriber not ready, a handler that threw, a member that cannot be
@@ -363,8 +352,7 @@ async function deliverShipRange(delivery, lane, range, subscribers, context) {
   const hintState = {retryAfterMs: null, backpressured: false};
   for (let visited = 0; visited < subscribers.length; visited += 1) {
     const branch = nextCdcSubscriber(cell);
-    const scoped = cdcSubscriberInvocation(delivery, lane, cell, branch, context, events,
-      () => wakeContendedLaneForSliceTurn(delivery, lane));
+    const scoped = cdcSubscriberInvocation(delivery, lane, cell, branch, context, events);
     scoped.assertCurrent();
     if (branch.coverage.state !== CDC_COVERAGE_STATE.UNCOVERED) continue;
     const answer = await delivery.deliverCDCEventToSubscriber(branch.wrapper, events, scoped);
@@ -395,7 +383,9 @@ function drivePrecondition(delivery, lane, reason) {
 
 // The lane is held at the head of `obligations` (the range it could not
 // cover). A failure that is not typed backpressure was an attempt, so the
-// shipping window halves; backpressure attempted nothing and leaves it.
+// shipping window halves; backpressure attempted nothing and leaves it, and
+// when no leaf of the range is covered the next composition takes the owed
+// tail as it stands then (a covered leaf pins the identical range instead).
 function handleDeliveryFailure(delivery, lane, obligations, reason, delivered, error) {
   if (!laneIsCurrent(delivery, lane)) {
     return driveOutcome(lane, DRIVE.NOT_LEADER, {reason, delivered});
@@ -406,6 +396,8 @@ function handleDeliveryFailure(delivery, lane, obligations, reason, delivered, e
   const retryDelayMs = scheduleDeliveryRetry(delivery, error);
   if (lane.lastRetryDisposition === OBLIGATION_RETRY_DISPOSITION.TRANSIENT_FAILURE) {
     narrowShipWindow(lane);
+  } else if (lane.lastRetryDisposition === OBLIGATION_RETRY_DISPOSITION.BACKPRESSURE) {
+    releaseUncoveredScanTail(lane);
   }
   const logDetails = {
     partitionId: owner.partitionId,
@@ -429,7 +421,6 @@ function handleDeliveryFailure(delivery, lane, obligations, reason, delivered, e
 // (the pre-pass found it at the first row) or inside a covered one, whose
 // rows from the refused one on stay owed (`fields.unacknowledged` counts them).
 function acknowledgementBackpressureOutcome(delivery, lane, reason, delivered, fields = {}) {
-  releaseContendedPropagationOwners(lane);
   scheduleDeliveryRetry(delivery, null, OBLIGATION_RETRY_DISPOSITION.BACKPRESSURE);
   return driveOutcome(lane, DRIVE.ACKNOWLEDGEMENT_BACKPRESSURE, {reason, delivered, ...fields});
 }
@@ -493,13 +484,10 @@ async function driveShipRange(delivery, lane, range, subscribers, reason, delive
   }
 }
 
-function yieldPageOutcome(delivery, lane, scan, reason, delivered, yieldedOnContention) {
-  if (yieldedOnContention && !scan.provisional) scan.through = null;
+function yieldPageOutcome(delivery, lane, scan, reason, delivered) {
   const disposition = delivered > 0 || !scan.provisional ?
     OBLIGATION_RETRY_DISPOSITION.PAGE_YIELDED : OBLIGATION_RETRY_DISPOSITION.TRANSIENT_FAILURE;
-  const hint = yieldedOnContention && disposition === OBLIGATION_RETRY_DISPOSITION.PAGE_YIELDED ?
-    {retryAfterMs: 10} : null;
-  const retryDelayMs = scheduleDeliveryRetry(delivery, hint, disposition);
+  const retryDelayMs = scheduleDeliveryRetry(delivery, null, disposition);
   return driveOutcome(lane, DRIVE.PAGE_YIELDED, {reason, delivered, retryDelayMs});
 }
 
@@ -518,21 +506,15 @@ function finalizeDrainedScan(delivery, lane, scan) {
     return;
   }
   if (lane.rerun) return;
-  releaseContendedPropagationOwners(lane);
   if (!hasUnproposedCommand(lane)) {
     scheduleDeliveryRetry(delivery, null, OBLIGATION_RETRY_DISPOSITION.NO_PENDING_WORK);
   }
 }
 
-function drivePageFinished(
-  delivery, lane, visited, reason, delivered, yieldedOnContention = false) {
+function drivePageFinished(delivery, lane, visited, reason, delivered) {
   const scan = lane.scan;
-  const moreWorkAfterContention = yieldedOnContention &&
-    (hasOwedWorkBeyondScan(delivery.owner, scan) || lane.rerun);
-  if (((visited >= BOUND.DRIVE_PAGE_ROWS || yieldedOnContention) && !scanReachedTail(scan)) ||
-      moreWorkAfterContention) {
-    if (moreWorkAfterContention) lane.rerun = false;
-    return yieldPageOutcome(delivery, lane, scan, reason, delivered, yieldedOnContention);
+  if (visited >= BOUND.DRIVE_PAGE_ROWS && !scanReachedTail(scan)) {
+    return yieldPageOutcome(delivery, lane, scan, reason, delivered);
   }
   lane.scan = null;
   if (scan.provisional) {
@@ -552,12 +534,10 @@ async function driveOnce(delivery, lane, reason) {
   const subscribersCurrent = captureSubscriberCurrentness(delivery, precondition.subscribers);
   let delivered = 0;
   let visited = 0;
-  let yieldedOnContention = false;
   while (visited < BOUND.DRIVE_PAGE_ROWS) {
     const context = beginCdcDeliveryInvocation(delivery,
       () => laneIsCurrent(delivery, lane) && subscribersCurrent(),
       () => resumeAfterCdcCleanup(delivery));
-    let stepContended = false;
     try {
       const range = composeCdcShipRange(delivery, lane, acknowledgeDelivered);
       if (range.state === SHIP_RANGE_STATE.DRAINED) break;
@@ -569,8 +549,6 @@ async function driveOnce(delivery, lane, reason) {
       if (result.outcome) return result.outcome;
       visited += result.visited;
       delivered += result.delivered;
-      stepContended = context.isContended?.() === true &&
-        (delivered > 0 || lane.scan?.provisional === true);
     } finally {
       context.finish();
     }
@@ -578,12 +556,8 @@ async function driveOnce(delivery, lane, reason) {
       lane.rerun = true;
       return driveOutcome(lane, DRIVE.JOINED_IN_FLIGHT, {reason, delivered});
     }
-    if (stepContended) {
-      yieldedOnContention = true;
-      break;
-    }
   }
-  return drivePageFinished(delivery, lane, visited, reason, delivered, yieldedOnContention);
+  return drivePageFinished(delivery, lane, visited, reason, delivered);
 }
 
 function captureSubscriberCurrentness(delivery, subscribers) {
@@ -733,10 +707,6 @@ function acknowledgeHydratedObligationsThrough(delivery, appliedIndex) {
   lane.hydratedThroughLogIndex = Math.max(lane.hydratedThroughLogIndex || 0, throughLogIndex);
   retireHydratedInvocationAndResetIdleScan(delivery, lane, throughLogIndex);
   const acknowledged = drainPendingHydratedObligations(delivery, lane);
-  const remainingAfterHydration = readOwedCdcObligations(owner.db, {
-    after: {logIndex: throughLogIndex, ordinal: Number.MAX_SAFE_INTEGER}, limit: 1,
-  });
-  if (remainingAfterHydration.length === 0) releaseContendedPropagationOwners(lane);
   return Object.freeze({acknowledged});
 }
 

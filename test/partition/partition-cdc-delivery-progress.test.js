@@ -19,7 +19,6 @@ import {
   scheduleDeliveryRetry,
 } from '../../src/partition/partition-cdc-obligation-delivery.js';
 import {PARTITION_SERVICE_DEFAULT} from '../../src/partition/partition-service-constants.js';
-import {TablePolicyService} from '../../src/policy/table-policy-service.js';
 import {countCdcObligations} from '../../src/partition/partition-cdc-obligation-ledger.js';
 import {applyCommitted, awaitProposal, clearFixtureSingletons, resetFixtureSingletons,
   settleTicks, track} from '../test-helpers/participant-transaction-fixture.js';
@@ -174,7 +173,7 @@ test('source reads only the payload it ships per await while keeping its 256-vis
 });
 
 test('435 owed obligations make bounded progress across explicit retry dispositions ' +
-  'without starving a concurrent TablePolicyService update', async (t) => {
+  'and drain in log order within the drive quantum', async (t) => {
   const rows = Array.from({length: 435}, (_unused, index) => `ob-${index}`);
   const f = await fixture(t, {rows, subscribers: 1});
   const delivery = f.leader.cdcDelivery;
@@ -257,73 +256,14 @@ test('435 owed obligations make bounded progress across explicit retry dispositi
   assert.equal(lane.lastRetryDisposition, OBLIGATION_RETRY_DISPOSITION.STALE_LIFETIME);
   assert.equal(lane.retryTimer.state, 'idle');
 
-  // 5. Drive 435 obligations with committed receipts and contend on the range that
-  // carries the 10th obligation while committing a TablePolicyService update. From a
-  // cold window the lane ships 1, 2, 4, 8 rows: the fourth range carries ob-9.
-  const cachedTables = new Map([
-    ['user_events', {table_id: 'user_events', table_policies: '{}', updated_at: 100}],
-  ]);
-  const policyService = new TablePolicyService({
-    systemTableCache: {
-      filter: (_tableName, predicate) => [...cachedTables.values()].filter(predicate),
-    },
-    cdcIntegrationService: {},
-    controlPlaneSystemTableGateway: {
-      executeRead: async ({readFromCache}) => ({rows: readFromCache()}),
-      // The policy write's base is the committed row (census site 6).
-      readAuthoritativeRows: async (_tableName, _sql, params) => ({
-        success: true,
-        rows: cachedTables.has(params[0]) ?
-          [{...cachedTables.get(params[0])}] : [],
-      }),
-      submitMutation: async (_mutation, options) => {
-        // The policy write answers at its commit: no projection-field wait.
-        assert.equal(options.expectedCacheFields, undefined);
-        assert.equal(options.minimumCacheFields, undefined);
-        return {
-          success: true,
-          outcome: 'applied',
-          partitionResult: {affectedRows: 1},
-        };
-      },
-    },
-  });
-
-  f.behavior = (_index, events, context, groupId) => {
-    if (events.some((event) => event.data.id === 'ob-9')) {
-      context.markContended();
-    }
-    return recipientAnswer(events, groupId, true);
-  };
-  const rangeRows = () => f.calls.map((call) => call.ids.length);
-
-  const firstDrive = await f.drive();
-  assert.equal(firstDrive.state, DRIVE.PAGE_YIELDED,
-    'contended obligation drive yields fairly after progress');
-  assert.deepEqual(rangeRows(), [1, 2, 4, 8],
-    'the drive yields right after the range that was contended');
-  assert.equal(firstDrive.delivered, 15);
-  assert.equal(lane.lastRetryDisposition, OBLIGATION_RETRY_DISPOSITION.PAGE_YIELDED);
-  assert.equal(lane.retryDelayMs, initialDelay,
-    'page yield after progress keeps initial continuation delay without backoff');
-
-  // Commit policy update while the 435-obligation lane is yielded between slices;
-  // verify immediate read-your-writes visibility without starvation.
-  await policyService.updateTablePolicy('user_events', {
-    mergeStorageThreshold: 1,
-    mergeTrafficThreshold: 0,
-  });
-  const visiblePolicy = await policyService.getTablePolicy('user_events');
-  assert.equal(visiblePolicy.mergeStorageThreshold, 1);
-  assert.equal(visiblePolicy.mergeTrafficThreshold, 0);
-
-  // Continue draining the remaining 420 obligations: the window keeps doubling
-  // (16, 32, 64, 128 rows: 240 visited, under the 256-row quantum), and the
-  // last range takes the 180 rows that are left and reaches the captured tail.
-  const secondDrive = await f.drive();
-  assert.equal(secondDrive.state, DRIVE.DRAINED);
-  assert.equal(secondDrive.delivered, 435 - 15);
-  assert.deepEqual(rangeRows(), [1, 2, 4, 8, 16, 32, 64, 128, 180]);
+  // 5. Drive 435 obligations with committed receipts. From a cold window the
+  // lane ships 1, 2, 4 ... 128 rows (255 visited, under the 256-row quantum);
+  // the last range takes the 180 rows that are left and reaches the tail.
+  f.behavior = (_index, events, _context, groupId) => recipientAnswer(events, groupId, true);
+  const drive = await f.drive();
+  assert.equal(drive.state, DRIVE.DRAINED);
+  assert.equal(drive.delivered, 435);
+  assert.deepEqual(f.calls.map((call) => call.ids.length), [1, 2, 4, 8, 16, 32, 64, 128, 180]);
   assert.equal(lane.retryDelayMs, initialDelay);
   assert.equal(lane.lastRetryDisposition, OBLIGATION_RETRY_DISPOSITION.NO_PENDING_WORK);
   assert.deepEqual(f.calls.flatMap((call) => call.ids), rows,
@@ -393,40 +333,44 @@ test('handleDeliveryFailure logs at debug level on backpressure and warn on othe
   assert.equal(mockLane.shipWindow, 4);
 });
 
-test('contended page yield preserves open ACK batch until flush deadline while ' +
-  'unproposed batches without a timer are retried on retryTimer', async (t) => {
+test('a lane held by typed backpressure preserves its open ACK batch until the flush ' +
+  'deadline, and its retry continuation joins the same batch', async (t) => {
   const rows = Array.from({length: 12}, (_unused, index) => `ack-batch-${index}`);
   const f = await fixture(t, {rows, subscribers: 1});
   const delivery = f.leader.cdcDelivery;
-  const initialDelay = PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
-
-  f.behavior = (_index, events, context, groupId) => {
-    if (events.some((event) => event.data.id === 'ack-batch-4')) {
-      context.markContended();
+  const hintMs = 20;
+  let refused = false;
+  f.behavior = (_index, events, _context, groupId) => {
+    if (!refused && events.some((event) => event.data.id === 'ack-batch-4')) {
+      refused = true;
+      return {...unknownCdcAcceptance(CDC_COMPLETION.BACKPRESSURE), retryAfterMs: hintMs};
     }
     return recipientAnswer(events, groupId, true);
   };
 
   // From a cold window the lane ships 1, 2, 4 rows; the third range carries
-  // the contended row, so the drive yields with 7 rows acknowledged.
+  // ack-batch-4 and is refused by typed backpressure, so the drive is held with
+  // 3 rows acknowledged.
   const firstDrive = await f.drive();
   const lane = delivery.obligationLane;
-  assert.equal(firstDrive.state, DRIVE.PAGE_YIELDED);
+  assert.equal(firstDrive.state, DRIVE.HELD_BY_SUBSCRIBER);
+  assert.equal(firstDrive.retryDelayMs, hintMs, 'the backpressure hint paces the retry');
   assert.deepEqual(f.calls.map((call) => call.ids.length), [1, 2, 4]);
-  assert.equal(firstDrive.delivered, 7);
-  assert.equal(lane.batch.events, 7, '7 acknowledged events accumulate in the open batch');
+  assert.equal(firstDrive.delivered, 3);
+  assert.equal(lane.shipWindow, 4, 'backpressure leaves the shipping window');
+  assert.equal(lane.batch.events, 3, '3 acknowledged events accumulate in the open batch');
   assert.notEqual(lane.flushTimer, null, 'flush deadline timer is armed for the open batch');
   assert.equal(
     f.proposed.some((command) => command.type === PARTITION_CDC_COMMAND.DELIVERED),
     false,
-    'no premature 7-event CDC_DELIVERED is proposed before bound or deadline',
+    'no premature CDC_DELIVERED is proposed before bound or deadline',
   );
 
-  // Advancing retryTimer (50ms) drives the remaining 5 rows into the same batch
-  // without flushing the first 7 events as a separate 7-event Raft commit.
-  f.clock.advance(initialDelay);
+  // The retry timer drives the remaining 9 rows into the same batch without
+  // flushing the first 3 events as a separate Raft commit.
+  f.clock.advance(hintMs);
   await settleTicks();
-  assert.equal(lane.batch.events, 12, 'remaining 5 events join the open batch on retryTimer');
+  assert.equal(lane.batch.events, 12, 'remaining 9 events join the open batch on retryTimer');
   assert.equal(
     f.proposed.filter((command) => command.type === PARTITION_CDC_COMMAND.DELIVERED).length,
     0,

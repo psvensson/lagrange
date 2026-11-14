@@ -314,7 +314,7 @@ async function runTenureResetWhileHeld(f, subJoin, target3FirstHopAddr) {
   await driveWithPump(f, () => activeInv.context.cleanup);
   await pumpMulti(f, 2);
   assert.equal(f.producerLeader.cdcDelivery.activeCdcInvocation === null, true);
-  assert.equal(f.topology.activeDurablePropagation === null, true);
+  assert.equal(f.topology.inFlightDurableWaves.size, 0);
 }
 
 test(

@@ -166,7 +166,7 @@ test('the seed teardown completes when the latency topology stops inside a ' +
   }
   assert.equal(propagation.retrySleepReleases.size, 1,
     'the partition\'s CDC delivery waits in the propagation wave\'s retry delay');
-  assert.notEqual(propagation.activeDurablePropagation, null,
+  assert.equal(propagation.inFlightDurableWaves.size, 1,
     'the durable propagation wave is in flight');
   assert.equal(sourceMessageGroup.batches.length, 1,
     'the wave applied the event on the source group once');
@@ -185,7 +185,7 @@ test('the seed teardown completes when the latency topology stops inside a ' +
     'settled when the propagation service stopped');
   assert.equal(partition.pendingCDCEventDeliveries.size, 0,
     'no CDC delivery is left pending on the partition');
-  assert.equal(propagation.activeDurablePropagation, null,
+  assert.equal(propagation.inFlightDurableWaves.size, 0,
     'no propagation wave is left in flight');
   assert.equal(propagation.retrySleepReleases.size, 0,
     'no retry delay is left held');

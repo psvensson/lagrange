@@ -230,6 +230,13 @@ function pinnedCellOf(lane) {
   return cell !== null && cdcProgressHoldsCoverage(cell) ? cell : null;
 }
 
+// After a refusal that attempted nothing (typed backpressure) the lane's next
+// composition takes the owed tail as it stands then, unless a leaf of the
+// range is covered: then the identical range is presented again (pinning).
+function releaseUncoveredScanTail(lane) {
+  if (lane.scan !== null && pinnedCellOf(lane) === null) lane.scan.through = null;
+}
+
 function composeThrough(delivery, lane, acknowledge, pinned) {
   const scan = openScan(delivery.owner, lane);
   if (scan.through === null) return DRAINED_RANGE;
@@ -321,4 +328,5 @@ function isShipRangeAlreadyAcknowledged(delivery, lane, obligations) {
 }
 
 export {SHIP_RANGE_STATE, advanceScanCursor, composeCdcShipRange, eventsOfShipRange,
-  hasOwedWorkBeyondScan, isShipRangeAlreadyAcknowledged, scanReachedTail};
+  hasOwedWorkBeyondScan, isShipRangeAlreadyAcknowledged, releaseUncoveredScanTail,
+  scanReachedTail};

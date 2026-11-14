@@ -1,4 +1,6 @@
-import {deliveryAnswerOf} from '../transport/transport-semantic-outcome.js';
+import {TRANSPORT_DELIVERY_OUTCOME_REASON_CODE, classifyThrownDeliveryError,
+  deliveryAnswerOf, deliveryTransportOf, isDeliveredTransportDeliveryOutcome} from
+  '../transport/transport-semantic-outcome.js';
 // CDCGroupPropagationService's durable wave, its one propagation path. Source
 // debt and between-attempt progress remain with the source lane; the service
 // keeps no payload of its own between attempts or after the wave.
@@ -21,311 +23,15 @@ import {CDC_GROUP_FOREGROUND_RETRY_STATE, CDC_GROUP_PROPAGATION_EVENT,
   CDC_GROUP_PUBLICATION_MODE} from
   './cdc-group-propagation-constants.js';
 
-const DURABLE_PROPAGATION_ADMISSION = Object.freeze({
-  ADMIT: 'admit',
-  BUSY: 'busy',
-  SOURCE_MISMATCH: 'source_mismatch',
-});
 const DURABLE_PROPAGATION_CAUSE = Object.freeze({
   NONE: 'none',
   RESPONSE: 'response',
   ERROR: 'error',
 });
-const CONTENDED_TABLE_SLICE_WAVES = 4;
-const CONTENDED_SLICE_YIELD_HOLD_MS = 300;
-const BUSY_CONTENDED_RETRY_AFTER_MS = 10;
-const MIN_YIELD_HOLD_RETRY_AFTER_MS = 5;
 
-function isWaitingSliceTableExpired(owner, table) {
-  const isLive = owner.waitingDurableSliceTableLifecycles?.get?.(table);
-  return typeof isLive === 'function' && isLive() === false;
-}
-
-function clearWaitingSliceTableMetadata(owner, table) {
-  owner.waitingDurableSliceTableTimestamps?.delete?.(table);
-  owner.waitingDurableSliceTableLifecycles?.delete?.(table);
-  owner.creditedWaitingDurableSliceTables?.delete?.(table);
-}
-
-function pruneStaleWaitingDurableSliceTables(owner) {
-  if (!Array.isArray(owner.waitingDurableSliceTables) ||
-      owner.waitingDurableSliceTables.length === 0) {
-    return;
-  }
-  owner.waitingDurableSliceTables = owner.waitingDurableSliceTables.filter(
-    (table) => {
-      if (isWaitingSliceTableExpired(owner, table)) {
-        clearWaitingSliceTableMetadata(owner, table);
-        return false;
-      }
-      return true;
-    },
-  );
-  if (owner.waitingDurableSliceTables.length === 0) {
-    owner.durableSliceContended = false;
-  }
-}
-
-function enqueueWaitingDurableSliceTable(owner, tableName, deliveryContext = null) {
-  if (
-    typeof tableName !== 'string' ||
-    tableName.length === 0 ||
-    tableName === owner.durableSliceTable
-  ) {
-    return;
-  }
-  pruneStaleWaitingDurableSliceTables(owner);
-  if (!Array.isArray(owner.waitingDurableSliceTables)) {
-    owner.waitingDurableSliceTables = [];
-  }
-  if (!(owner.waitingDurableSliceTableTimestamps instanceof Map)) {
-    owner.waitingDurableSliceTableTimestamps = new Map();
-  }
-  if (!(owner.waitingDurableSliceTableLifecycles instanceof Map)) {
-    owner.waitingDurableSliceTableLifecycles = new Map();
-  }
-  owner.waitingDurableSliceTableTimestamps.set(tableName, owner.now());
-  const lifecycle =
-    typeof deliveryContext?.registerContentionOwner === 'function' ?
-      deliveryContext.registerContentionOwner(owner, tableName) :
-      null;
-  if (typeof lifecycle === 'function') {
-    owner.waitingDurableSliceTableLifecycles.set(tableName, lifecycle);
-  }
-  if (!owner.waitingDurableSliceTables.includes(tableName)) {
-    owner.waitingDurableSliceTables.push(tableName);
-  }
-}
-
-function dequeueWaitingDurableSliceTable(owner, tableName) {
-  if (!Array.isArray(owner.waitingDurableSliceTables) || !tableName) {
-    return;
-  }
-  const index = owner.waitingDurableSliceTables.indexOf(tableName);
-  if (index !== -1) {
-    owner.waitingDurableSliceTables.splice(index, 1);
-  }
-  if (owner.waitingDurableSliceTableTimestamps instanceof Map) {
-    owner.waitingDurableSliceTableTimestamps.delete(tableName);
-  }
-  if (owner.waitingDurableSliceTableLifecycles instanceof Map) {
-    owner.waitingDurableSliceTableLifecycles.delete(tableName);
-  }
-  if (owner.creditedWaitingDurableSliceTables instanceof Set) {
-    owner.creditedWaitingDurableSliceTables.delete(tableName);
-  }
-}
-
-function notifyNextWaitingDurableSliceTable(owner) {
-  if (
-    owner?.activeDurablePropagation !== null ||
-    !Array.isArray(owner?.waitingDurableSliceTables) ||
-    owner.waitingDurableSliceTables.length === 0
-  ) {
-    return;
-  }
-  pruneStaleWaitingDurableSliceTables(owner);
-  const headTable = owner.waitingDurableSliceTables[0];
-  if (!headTable) return;
-  const lifecycle = owner.waitingDurableSliceTableLifecycles?.get?.(headTable);
-  if (typeof lifecycle?.onSliceTurnReady === 'function') {
-    lifecycle.onSliceTurnReady();
-  }
-}
-
-function clearActiveDurableSliceIfMatching(owner, tableName) {
-  if (owner.durableSliceTable !== tableName) return false;
-  owner.durableSliceTable = null;
-  owner.durableSliceWaves = 0;
-  if (
-    Array.isArray(owner.waitingDurableSliceTables) &&
-    owner.waitingDurableSliceTables.length > 0
-  ) {
-    owner.yieldedDurableSliceTable = tableName;
-    owner.yieldedDurableSliceUntilMs =
-      owner.now() + CONTENDED_SLICE_YIELD_HOLD_MS;
-  } else if (owner.yieldedDurableSliceTable === null) {
-    owner.yieldedDurableSliceUntilMs = 0;
-  }
-  return true;
-}
-
-function releaseWaitingDurableSliceContender(owner, tableName) {
-  if (!owner || typeof tableName !== 'string' || tableName.length === 0) {
-    return false;
-  }
-  const wasActiveSlice = clearActiveDurableSliceIfMatching(owner, tableName);
-  const waiting = owner.waitingDurableSliceTables;
-  const wasHead = Array.isArray(waiting) && waiting[0] === tableName;
-  const wasQueued = Array.isArray(waiting) && waiting.includes(tableName);
-  dequeueWaitingDurableSliceTable(owner, tableName);
-  if (!Array.isArray(waiting) || waiting.length === 0) {
-    owner.durableSliceContended = false;
-    owner.yieldedDurableSliceUntilMs = 0;
-    owner.yieldedDurableSliceTable = null;
-  } else if (wasHead || wasActiveSlice) {
-    notifyNextWaitingDurableSliceTable(owner);
-  }
-  return wasQueued || wasActiveSlice;
-}
-
-function expireYieldedSliceHoldIfElapsed(owner) {
-  pruneStaleWaitingDurableSliceTables(owner);
-  if (
-    Number.isFinite(owner.yieldedDurableSliceUntilMs) &&
-    owner.yieldedDurableSliceUntilMs > 0 &&
-    owner.now() >= owner.yieldedDurableSliceUntilMs
-  ) {
-    owner.yieldedDurableSliceUntilMs = 0;
-    owner.yieldedDurableSliceTable = null;
-    if (Array.isArray(owner.waitingDurableSliceTables) &&
-        owner.waitingDurableSliceTables.length > 0) {
-      const headTable = owner.waitingDurableSliceTables[0];
-      if (!(owner.creditedWaitingDurableSliceTables instanceof Set)) {
-        owner.creditedWaitingDurableSliceTables = new Set();
-      }
-      owner.creditedWaitingDurableSliceTables.add(headTable);
-      if (owner.waitingDurableSliceTableTimestamps instanceof Map) {
-        owner.waitingDurableSliceTableTimestamps.set(headTable, owner.now());
-      }
-    }
-  }
-}
-
-function isYieldHoldWindowActive(owner) {
-  return (
-    Number.isFinite(owner.yieldedDurableSliceUntilMs) &&
-    owner.yieldedDurableSliceUntilMs > 0 &&
-    owner.now() < owner.yieldedDurableSliceUntilMs
-  );
-}
-
-function isYieldedSliceTableDeferred(owner, tableName) {
-  expireYieldedSliceHoldIfElapsed(owner);
-  if (!isYieldHoldWindowActive(owner)) return false;
-  const candidateTable = tableName ?? null;
-  if (owner.durableSliceTable !== null && candidateTable === owner.durableSliceTable) {
-    return false;
-  }
-  const nextWaitingTable = owner.waitingDurableSliceTables?.[0] ?? null;
-  if (nextWaitingTable !== null) {
-    return candidateTable !== nextWaitingTable;
-  }
-  return owner.yieldedDurableSliceTable !== null &&
-    candidateTable === owner.yieldedDurableSliceTable;
-}
-
-function decideDurablePropagationAdmission(occupied, sourceMismatch = false) {
-  if (occupied) return DURABLE_PROPAGATION_ADMISSION.BUSY;
-  return sourceMismatch ? DURABLE_PROPAGATION_ADMISSION.SOURCE_MISMATCH :
-    DURABLE_PROPAGATION_ADMISSION.ADMIT;
-}
-
-function shouldPreemptActiveDurableSlice(owner, incomingTable) {
-  if ((owner.durableSliceWaves ?? 0) >= CONTENDED_TABLE_SLICE_WAVES) {
-    return true;
-  }
-  return Boolean(owner.creditedWaitingDurableSliceTables?.has?.(incomingTable));
-}
-
-function computeBusyRetryAfterMs(owner, incomingTable, deliveryContext = null) {
-  if (owner.activeDurablePropagation !== null) {
-    if (incomingTable !== owner.durableSliceTable) {
-      enqueueWaitingDurableSliceTable(owner, incomingTable, deliveryContext);
-      owner.durableSliceContended = true;
-      if (shouldPreemptActiveDurableSlice(owner, incomingTable)) {
-        owner.activeDurablePropagation?.context?.markContended?.();
-      }
-    }
-    return Math.min(owner.deliveryRetryDelayMs, BUSY_CONTENDED_RETRY_AFTER_MS);
-  }
-  if (
-    incomingTable !== owner.yieldedDurableSliceTable ||
-    (Array.isArray(owner.waitingDurableSliceTables) &&
-      owner.waitingDurableSliceTables.length > 0)
-  ) {
-    enqueueWaitingDurableSliceTable(owner, incomingTable, deliveryContext);
-  }
-  notifyNextWaitingDurableSliceTable(owner);
-  return Math.max(
-    MIN_YIELD_HOLD_RETRY_AFTER_MS,
-    Math.min(
-      owner.deliveryRetryDelayMs,
-      (owner.yieldedDurableSliceUntilMs ?? 0) - owner.now(),
-    ),
-  );
-}
-
-function durablePropagationRefusal(owner, admission, options = null) {
-  if (admission === DURABLE_PROPAGATION_ADMISSION.BUSY) {
-    const incomingTable = options?.tableName ?? null;
-    return {
-      ...unknownCdcAcceptance(CDC_COMPLETION.BACKPRESSURE),
-      retryAfterMs: computeBusyRetryAfterMs(
-        owner,
-        incomingTable,
-        options?.deliveryContext ?? null,
-      ),
-    };
-  }
+function durablePropagationRefusal() {
   return {...unknownCdcAcceptance(),
     fallbackReason: CDC_GROUP_PROPAGATION_REASON.SOURCE_GROUP_MISMATCH};
-}
-
-function shouldMarkSliceContended(owner, wasCredited) {
-  const hasOtherCreditedContender =
-    !wasCredited &&
-    owner.creditedWaitingDurableSliceTables instanceof Set &&
-    owner.creditedWaitingDurableSliceTables.size > 0;
-  return (
-    hasOtherCreditedContender ||
-    (owner.durableSliceContended &&
-      owner.durableSliceWaves >= CONTENDED_TABLE_SLICE_WAVES)
-  );
-}
-
-function advanceDurablePropagationSlice(
-  owner, tableName, context, deliveryContext = null,
-) {
-  expireYieldedSliceHoldIfElapsed(owner);
-  const wasCredited = Boolean(
-    owner.creditedWaitingDurableSliceTables?.has?.(tableName),
-  );
-  dequeueWaitingDurableSliceTable(owner, tableName);
-  deliveryContext?.registerContentionOwner?.(owner, tableName);
-  owner.yieldedDurableSliceTable = null;
-  owner.yieldedDurableSliceUntilMs = 0;
-  if (owner.durableSliceTable === tableName) {
-    owner.durableSliceWaves = (owner.durableSliceWaves ?? 0) + 1;
-  } else {
-    owner.durableSliceTable = tableName ?? null;
-    owner.durableSliceWaves = 1;
-    owner.durableSliceContended =
-      Array.isArray(owner.waitingDurableSliceTables) &&
-      owner.waitingDurableSliceTables.length > 0;
-  }
-  if (shouldMarkSliceContended(owner, wasCredited)) {
-    context.markContended?.();
-  }
-}
-
-function finishDurablePropagationSliceWave(owner, context) {
-  if (context.isContended?.() === true) {
-    owner.yieldedDurableSliceTable = owner.durableSliceTable;
-    owner.durableSliceTable = null;
-    owner.yieldedDurableSliceUntilMs =
-      owner.now() + CONTENDED_SLICE_YIELD_HOLD_MS;
-    owner.durableSliceWaves = 0;
-    owner.durableSliceContended = false;
-    return;
-  }
-  if (
-    Array.isArray(owner.waitingDurableSliceTables) &&
-    owner.waitingDurableSliceTables.length > 0
-  ) {
-    owner.yieldedDurableSliceUntilMs =
-      owner.now() + CONTENDED_SLICE_YIELD_HOLD_MS;
-  }
 }
 
 function bindWaveProgress(owner, source, events, context, plan) {
@@ -348,14 +54,75 @@ function targetDeliveryPayload(owner, source, events, target) {
 // A target leaf is either delivered (the router's envelope) or not sent at
 // all (no envelope, with the unknown-acceptance answer naming why); a
 // not-sent leaf stays uncovered and the wave retries it.
-function notSentTarget(error = undefined) {
-  return {delivery: null, answer: unknownCdcAcceptance(error)};
+function notSentTarget(error = undefined, retryAfterMs = 0) {
+  return {delivery: null, answer: {...unknownCdcAcceptance(error),
+    ...(Number.isFinite(retryAfterMs) && retryAfterMs > 0 ? {retryAfterMs} : {})}};
+}
+
+// How a leaf left uncovered was refused. Typed backpressure is a refusal
+// before any effect at that leaf, typed by its owner: the CDC outcome owner's
+// BACKPRESSURE answer (the source group's or a recipient's commit queue at
+// capacity, answered before any proposal), the pressure governor's defer (the
+// leaf was not sent), or the transport owner's outbound-queue rejection or
+// preemption (outbound_queue_backpressured, never sent). Any other outcome (a
+// timeout, a closed or missing connection, a handler failure, an unknown or
+// invalid answer, any other throw) is not, and is never relabelled.
+const NOT_BACKPRESSURE = Object.freeze({backpressure: false, retryAfterMs: null});
+
+function typedBackpressure(retryAfterMs) {
+  return Object.freeze({backpressure: true,
+    retryAfterMs: Number.isFinite(retryAfterMs) && retryAfterMs > 0 ? retryAfterMs : null});
+}
+
+function refusalOfAnswer(answer) {
+  return answer?.error === CDC_COMPLETION.BACKPRESSURE ?
+    typedBackpressure(answer.retryAfterMs) : NOT_BACKPRESSURE;
+}
+
+function refusalOfTransport(transport) {
+  return transport.reasonCode ===
+    TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.OUTBOUND_QUEUE_BACKPRESSURED ?
+    typedBackpressure(transport.retryAfterMs) : NOT_BACKPRESSURE;
+}
+
+function refusalOfLeaf(delivery, answer) {
+  if (delivery === null) return refusalOfAnswer(answer);
+  const transport = deliveryTransportOf(delivery);
+  return isDeliveredTransportDeliveryOutcome(transport) ?
+    refusalOfAnswer(answer) : refusalOfTransport(transport);
+}
+
+// The leaves the wave leaves uncovered now: one full rotation of the bound
+// progress, which visits every leaf once and so returns the rotation to
+// where it stood.
+function uncoveredLeavesOf(progress) {
+  const leaves = [];
+  progress.leafCount();
+  for (let dispatch = progress.next(); dispatch !== null; dispatch = progress.next()) {
+    leaves.push(dispatch.target);
+  }
+  return leaves;
+}
+
+// The answer of a wave that is not complete: typed backpressure carrying the
+// smallest hint its leaves gave when every leaf it leaves uncovered was
+// refused by typed backpressure in this wave, otherwise unknown.
+function uncoveredWaveAnswer(progress, refusals) {
+  const refused = uncoveredLeavesOf(progress).map((leaf) =>
+    refusals.get(leaf) ?? NOT_BACKPRESSURE);
+  if (refused.length === 0 || !refused.every((refusal) => refusal.backpressure)) {
+    return unknownCdcAcceptance();
+  }
+  const hints = refused.map((refusal) => refusal.retryAfterMs).filter((hint) => hint !== null);
+  return {...unknownCdcAcceptance(CDC_COMPLETION.BACKPRESSURE),
+    ...(hints.length > 0 ? {retryAfterMs: Math.min(...hints)} : {})};
 }
 
 async function deliverTarget(owner, source, events, leaf, context) {
   context.assertCurrent();
-  if (owner.resolvePropagationPressure(events).action === PRESSURE_GOVERNOR_ACTION.DEFER) {
-    return notSentTarget(CDC_COMPLETION.BACKPRESSURE);
+  const pressure = owner.resolvePropagationPressure(events);
+  if (pressure.action === PRESSURE_GOVERNOR_ACTION.DEFER) {
+    return notSentTarget(CDC_COMPLETION.BACKPRESSURE, pressure.retryAfterMs);
   }
   if (
     !owner.messageRouter ||
@@ -383,11 +150,12 @@ async function deliverTarget(owner, source, events, leaf, context) {
 }
 
 async function deliverUncoveredLeaves(owner, wave, progress, events) {
-  const {context, source} = wave;
+  const {context, source, refusals} = wave;
   const count = progress.leafCount();
   let lastFailure = {state: DURABLE_PROPAGATION_CAUSE.NONE};
-  // A serial dispatch window is bounded by every positive router concurrency.
-  // The total captured population is not capped by that window.
+  // A serial dispatch window: one leaf of this wave at a time. Overlapping
+  // waves of other lanes share the router's per-destination bounds, which
+  // answer with typed backpressure.
   for (let visited = 0; visited < count; visited += 1) {
     context.assertCurrent();
     const leaf = progress.next();
@@ -400,11 +168,13 @@ async function deliverUncoveredLeaves(owner, wave, progress, events) {
         }))} : await deliverTarget(owner, source, events, leaf, context);
       context.assertCurrent();
       progress.observe(leaf, progress.isSource(leaf) ? answer : delivery);
+      refusals.set(leaf.target, refusalOfLeaf(delivery, answer));
       if (answer?.success !== true) {
         lastFailure = {state: DURABLE_PROPAGATION_CAUSE.RESPONSE, cause: delivery ?? answer};
       }
     } catch (error) {
       context.assertCurrent();
+      refusals.set(leaf.target, refusalOfTransport(classifyThrownDeliveryError(error)));
       lastFailure = {state: DURABLE_PROPAGATION_CAUSE.ERROR, cause: error};
     }
   }
@@ -412,7 +182,7 @@ async function deliverUncoveredLeaves(owner, wave, progress, events) {
 }
 
 function prepareDurableForegroundWave(owner, wave, events, plan) {
-  const {context, source} = wave;
+  const {context, source, refusals} = wave;
   const progress = bindWaveProgress(owner, source, events, context, plan);
   let lastFailure = {state: DURABLE_PROPAGATION_CAUSE.NONE};
   const complete = (answer) => isCommittedCdcOutcome(answer, events, source.groupId) ||
@@ -420,9 +190,10 @@ function prepareDurableForegroundWave(owner, wave, events, plan) {
   const result = () => {
     const answer = progress.result();
     return complete(answer) ? propagationResult(owner, source, plan, progress, answer) :
-      {...propagationResult(owner, source, plan, progress, unknownCdcAcceptance()),
-        failedTargetGroupIds: progress.failedTargetGroupIds(),
-        cause: lastFailure};
+      {...propagationResult(owner, source, plan, progress,
+        uncoveredWaveAnswer(progress, refusals)),
+      failedTargetGroupIds: progress.failedTargetGroupIds(),
+      cause: lastFailure};
   };
   return {
     deliveryLabel: owner.describeDeliveryEvents(events),
@@ -447,6 +218,8 @@ function prepareDurableForegroundWave(owner, wave, events, plan) {
   };
 }
 
+// The result fields are the last completed wave's: with overlapping waves
+// `stats.last*` and the PROPAGATED event describe whichever finished last.
 function propagationResult(owner, source, plan, progress, answer) {
   const strategy = plan.useGrouped ? CDC_GROUP_PROPAGATION_STRATEGY.GROUP_COORDINATOR :
     CDC_GROUP_PROPAGATION_STRATEGY.DIRECT_FANOUT;
@@ -475,38 +248,26 @@ function publicationModeOf(plan) {
 }
 
 // One durable wave for one vector (`options.events`: one table, in source
-// order). Slot admission and slice bookkeeping read the vector's table.
+// order), admitted whenever its source lane presents it: no wave waits for,
+// or is refused because of, another lane's wave. The lane's own single flight
+// bounds it to one wave per lane. The wave is a member of the service's
+// in-flight set from admission until its actual local cleanup (not its
+// response, not stop), so stop, initialize and a lifetime change retire every
+// wave in flight.
 async function propagateDurableCdcEvent(owner, options) {
   const parent = options.deliveryContext;
   assertCdcDeliveryInvocation(parent);
-  const {tableName} = options.events[0];
-  const admission = decideDurablePropagationAdmission(
-    owner.activeDurablePropagation !== null ||
-      isYieldedSliceTableDeferred(owner, tableName),
-  );
-  if (admission !== DURABLE_PROPAGATION_ADMISSION.ADMIT) {
-    return durablePropagationRefusal(owner, admission, {tableName, deliveryContext: parent});
-  }
-  // Admission precedes immutable capture, target capture, source effects and
-  // every await. The slot is released by actual local cleanup, not response.
+  // The child scope opens before immutable capture, target capture, source
+  // effects and every await.
   const context = openCdcDeliveryChildScope(parent);
-  const wave = {context, source: options.sourceMessageGroupService};
-  owner.activeDurablePropagation = wave;
-  advanceDurablePropagationSlice(owner, tableName, context, parent);
-  context.cleanup.then(() => {
-    if (owner.activeDurablePropagation === wave) {
-      owner.activeDurablePropagation = null;
-      notifyNextWaitingDurableSliceTable(owner);
-    }
-  });
+  const wave = {context, source: options.sourceMessageGroupService, refusals: new Map()};
+  owner.inFlightDurableWaves.add(wave);
+  context.cleanup.then(() => owner.inFlightDurableWaves.delete(wave));
   try {
     context.assertCurrent();
     const events = captureCdcEvents(options.events);
     const plan = captureDurablePropagationPlan(owner, wave.source);
-    const sourceAdmission = decideDurablePropagationAdmission(false, plan.sourceMismatch);
-    if (sourceAdmission !== DURABLE_PROPAGATION_ADMISSION.ADMIT) {
-      return durablePropagationRefusal(owner, sourceAdmission);
-    }
+    if (plan.sourceMismatch) return durablePropagationRefusal();
     owner.setPublicationMode(publicationModeOf(plan), plan.fallbackReason);
     const prepared = prepareDurableForegroundWave(owner, wave, events, plan);
     const result = await owner.deliverToTargetsWithRetry(prepared);
@@ -519,9 +280,8 @@ async function propagateDurableCdcEvent(owner, options) {
     }
     return result;
   } finally {
-    finishDurablePropagationSliceWave(owner, context);
     context.finish();
   }
 }
 
-export {propagateDurableCdcEvent, releaseWaitingDurableSliceContender};
+export {propagateDurableCdcEvent};

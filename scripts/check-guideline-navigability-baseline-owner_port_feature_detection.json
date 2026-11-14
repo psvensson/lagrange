@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-11T06:26:21.790Z",
-  "rawViolationCount": 2035,
+  "generatedAt": "2026-11-14T10:56:29.787Z",
+  "rawViolationCount": 2033,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
@@ -3533,7 +3533,7 @@
     },
     {
       "filePath": "src/bootstrap/shared/partition-cdc-propagation-subscriber.js",
-      "line": 168,
+      "line": 173,
       "column": 16,
       "functionName": "logPropagationEvent",
       "kind": "owner_port_feature_detection",
@@ -4685,7 +4685,7 @@
     },
     {
       "filePath": "src/cdc/cdc-integration-service-lifecycle.js",
-      "line": 287,
+      "line": 310,
       "column": 6,
       "functionName": "executeSQL",
       "kind": "owner_port_feature_detection",
@@ -8816,7 +8816,7 @@
     },
     {
       "filePath": "src/live-query/live-query-startup-wiring.js",
-      "line": 437,
+      "line": 444,
       "column": 8,
       "functionName": "unsubscribeFromPartition",
       "kind": "owner_port_feature_detection",
@@ -8825,7 +8825,7 @@
     },
     {
       "filePath": "src/live-query/live-query-startup-wiring.js",
-      "line": 440,
+      "line": 447,
       "column": 8,
       "functionName": "unsubscribeFromPartition",
       "kind": "owner_port_feature_detection",
@@ -8834,7 +8834,7 @@
     },
     {
       "filePath": "src/live-query/live-query-startup-wiring.js",
-      "line": 448,
+      "line": 455,
       "column": 21,
       "functionName": "unsubscribeFromPartition",
       "kind": "owner_port_feature_detection",
@@ -9842,7 +9842,7 @@
     },
     {
       "filePath": "src/node/replica-handler-create-methods.js",
-      "line": 436,
+      "line": 438,
       "column": 10,
       "functionName": "createReplicaAsync",
       "kind": "owner_port_feature_detection",
@@ -10157,7 +10157,7 @@
     },
     {
       "filePath": "src/node/replica-state-machine-lifecycle-observation.js",
-      "line": 268,
+      "line": 277,
       "column": 20,
       "functionName": "resolveReplicaCreateGroupId",
       "kind": "owner_port_feature_detection",
@@ -10166,7 +10166,7 @@
     },
     {
       "filePath": "src/node/replica-state-machine-lifecycle-observation.js",
-      "line": 382,
+      "line": 391,
       "column": 6,
       "functionName": "resolveLiveReplicaRaftRole",
       "kind": "owner_port_feature_detection",
@@ -10175,7 +10175,7 @@
     },
     {
       "filePath": "src/node/replica-state-machine-lifecycle-observation.js",
-      "line": 406,
+      "line": 415,
       "column": 20,
       "functionName": "readCachedReplicaServiceRow",
       "kind": "owner_port_feature_detection",
@@ -10652,7 +10652,7 @@
     },
     {
       "filePath": "src/partition/partition-cdc-delivery.js",
-      "line": 126,
+      "line": 143,
       "column": 18,
       "functionName": "isCDCSubscriber",
       "kind": "owner_port_feature_detection",
@@ -10661,7 +10661,7 @@
     },
     {
       "filePath": "src/partition/partition-cdc-delivery.js",
-      "line": 147,
+      "line": 164,
       "column": 8,
       "functionName": "constructor",
       "kind": "owner_port_feature_detection",
@@ -10670,7 +10670,7 @@
     },
     {
       "filePath": "src/partition/partition-cdc-delivery.js",
-      "line": 166,
+      "line": 183,
       "column": 8,
       "functionName": "driveCdcObligations",
       "kind": "owner_port_feature_detection",
@@ -10679,7 +10679,7 @@
     },
     {
       "filePath": "src/partition/partition-cdc-delivery.js",
-      "line": 247,
+      "line": 265,
       "column": 6,
       "functionName": "resolveCDCSubscriberReadiness",
       "kind": "owner_port_feature_detection",
@@ -10688,7 +10688,7 @@
     },
     {
       "filePath": "src/partition/partition-cdc-obligation-delivery.js",
-      "line": 58,
+      "line": 61,
       "column": 6,
       "functionName": "trackOnOwner",
       "kind": "owner_port_feature_detection",
@@ -10697,7 +10697,7 @@
     },
     {
       "filePath": "src/partition/partition-cdc-obligation-progress.js",
-      "line": 37,
+      "line": 39,
       "column": 9,
       "functionName": "topologyBindingCurrent",
       "kind": "owner_port_feature_detection",
@@ -10742,7 +10742,7 @@
     },
     {
       "filePath": "src/partition/partition-service-cdc-stream-base.js",
-      "line": 228,
+      "line": 230,
       "column": 20,
       "functionName": "trackPendingCDCEvent",
       "kind": "owner_port_feature_detection",
@@ -10751,7 +10751,7 @@
     },
     {
       "filePath": "src/partition/partition-service-cdc-stream-base.js",
-      "line": 285,
+      "line": 287,
       "column": 6,
       "functionName": "requestManagedSplitEvaluationAfterWrite",
       "kind": "owner_port_feature_detection",
@@ -17465,25 +17465,7 @@
     },
     {
       "filePath": "src/topology/cdc-group-propagation-durable-delivery.js",
-      "line": 89,
-      "column": 4,
-      "functionName": "enqueueWaitingDurableSliceTable",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/topology/cdc-group-propagation-durable-delivery.js",
-      "line": 131,
-      "column": 6,
-      "functionName": "notifyNextWaitingDurableSliceTable",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/topology/cdc-group-propagation-durable-delivery.js",
-      "line": 332,
+      "line": 38,
       "column": 9,
       "functionName": "bindWaveProgress",
       "kind": "owner_port_feature_detection",
@@ -17492,7 +17474,7 @@
     },
     {
       "filePath": "src/topology/cdc-group-propagation-durable-delivery.js",
-      "line": 362,
+      "line": 129,
       "column": 4,
       "functionName": "deliverTarget",
       "kind": "owner_port_feature_detection",
@@ -17501,7 +17483,7 @@
     },
     {
       "filePath": "src/topology/cdc-group-propagation-retry-wait-report.js",
-      "line": 24,
+      "line": 31,
       "column": 17,
       "functionName": "reportCdcPropagationRetryScheduled",
       "kind": "owner_port_feature_detection",
@@ -17546,7 +17528,7 @@
     },
     {
       "filePath": "src/topology/cdc-group-propagation-service.js",
-      "line": 233,
+      "line": 201,
       "column": 8,
       "functionName": "assertPropagationRequest",
       "kind": "owner_port_feature_detection",
@@ -17555,7 +17537,7 @@
     },
     {
       "filePath": "src/topology/cdc-group-propagation-service.js",
-      "line": 234,
+      "line": 202,
       "column": 8,
       "functionName": "assertPropagationRequest",
       "kind": "owner_port_feature_detection",

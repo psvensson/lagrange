@@ -4,7 +4,6 @@
 
 import {PARTITION_SERVICE_DEFAULT} from './partition-service-constants.js';
 import {CDC_COMPLETION} from '../cdc/cdc-delivery-outcome.js';
-import {releaseContendedPropagationOwners} from './partition-cdc-obligation-progress.js';
 import {PARTITION_CDC_OBLIGATION_BOUND as BOUND} from './partition-cdc-obligation-constants.js';
 import {acknowledgedEventBytesOf, cdcObligationEventKeyDigest,
   emptyAcknowledgedBytes} from './partition-cdc-obligation-ledger.js';
@@ -47,10 +46,9 @@ function createCdcObligationLane(tenure = null) {
     tenure, inFlight: false, rerun: false, scan: null, currentObligation: null,
     hydratedThroughLogIndex: 0, shipWindow: 1,
     pending: new Map(), commands: new Map(), batch: emptyBatch(),
-    contendedPropagationOwners: new Map(),
     flushTimer: null, retryTimer: IDLE_OBLIGATION_RETRY,
     retryDelayMs: PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS,
-    consecutiveBackpressure: 0, sliceTurnReady: false,
+    consecutiveBackpressure: 0,
     held: null, lastDrive: null, lastFlush: null,
   };
 }
@@ -80,7 +78,6 @@ function resetCdcObligationLane(delivery) {
   if (lane.tenure === tenure && !delivery.owner.isShutdown) return;
   clearTimer(delivery.owner, lane.flushTimer);
   clearTimer(delivery.owner, lane.retryTimer.handle);
-  releaseContendedPropagationOwners(lane);
   delivery.activeCdcInvocation?.retire();
   delivery.obligationLane = createCdcObligationLane(tenure);
 }
@@ -163,7 +160,6 @@ function disarmDeliveryRetry(owner, lane, resetDelay = true) {
   clearTimer(owner, lane.retryTimer.handle);
   lane.retryTimer = IDLE_OBLIGATION_RETRY;
   lane.consecutiveBackpressure = 0;
-  lane.sliceTurnReady = false;
   if (resetDelay) lane.retryDelayMs = PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
 }
 
@@ -174,23 +170,11 @@ function resetYieldedRetryDelay(lane, disposition) {
   }
 }
 
-function consumeRetryHintMs(lane, error) {
-  if (lane.sliceTurnReady === true) {
-    lane.sliceTurnReady = false;
-    lane.consecutiveBackpressure = 0;
-    lane.retryDelayMs = PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
-    return 1;
-  }
-  return error?.retryAfterMs;
-}
-
 function computeRetryDelayMs(lane, error, disposition) {
   resetYieldedRetryDelay(lane, disposition);
-  const sliceTurnWoken = lane.sliceTurnReady === true;
-  const rawHint = consumeRetryHintMs(lane, error);
+  const rawHint = error?.retryAfterMs;
   const hasHint = Number.isFinite(rawHint) && rawHint > 0;
-  const isBackpressure =
-    disposition === OBLIGATION_RETRY_DISPOSITION.BACKPRESSURE && !sliceTurnWoken;
+  const isBackpressure = disposition === OBLIGATION_RETRY_DISPOSITION.BACKPRESSURE;
   const isTransient = disposition === OBLIGATION_RETRY_DISPOSITION.TRANSIENT_FAILURE;
   const initDelay = PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
   const maxDelay = PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_MAX_DELAY_MS;

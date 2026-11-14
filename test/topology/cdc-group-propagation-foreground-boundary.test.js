@@ -76,7 +76,7 @@ async function durableFixture(t, maxAttempts) {
 
 function assertNoHeldWork(topology) {
   assert.equal(topology.retrySleepReleases.size, 0, 'no retry delay is held');
-  assert.equal(topology.activeDurablePropagation, null, 'no durable wave is in flight');
+  assert.equal(topology.inFlightDurableWaves.size, 0, 'no durable wave is in flight');
 }
 
 function assertDurableDebt(f) {

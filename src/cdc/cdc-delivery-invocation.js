@@ -201,7 +201,6 @@ function beginCdcDeliveryInvocation(delivery, isCurrent, onClosed = () => {}) {
   let closed = false;
   let refusal = null;
   let timeoutId = null;
-  let contended = false;
 
   const closeIfSettled = () => {
     if (closed || !dispatchClosed || childCount !== 0) return;
@@ -283,16 +282,6 @@ function beginCdcDeliveryInvocation(delivery, isCurrent, onClosed = () => {}) {
     ownChild,
     run,
     retire,
-    markContended: () => {
-      contended = true;
-    },
-    isContended: () => contended,
-    registerContentionOwner: (propagationOwner, tableName) => {
-      if (!propagationOwner || typeof tableName !== 'string' || tableName.length === 0) {
-        return null;
-      }
-      return () => !owner.isShutdown && isCurrent();
-    },
     signal: controller.signal,
     cleanup: cleanup.promise,
     remainingMs: () => {

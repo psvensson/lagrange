@@ -10,10 +10,7 @@ import {unknownCdcAcceptance} from '../cdc/cdc-delivery-outcome.js';
 import {CDC_EVENT_METADATA_FIELD} from '../cdc/cdc-event-envelope.js';
 import {isDenseDataArray} from '../utils/canonical-json-data.js';
 import {isCdcDeliveryInvocation} from '../cdc/cdc-delivery-invocation.js';
-import {
-  propagateDurableCdcEvent,
-  releaseWaitingDurableSliceContender,
-} from './cdc-group-propagation-durable-delivery.js';
+import {propagateDurableCdcEvent} from './cdc-group-propagation-durable-delivery.js';
 import {
   LATENCY_PROPAGATION_MODE,
   LATENCY_TOPOLOGY_CONFIG_KEY,
@@ -61,16 +58,9 @@ class CDCGroupPropagationService extends EventEmitter {
       loggingService.forSubsystem(CDC_GROUP_PROPAGATION_SUBSYSTEM) :
       console;
     this.state = CDC_GROUP_PROPAGATION_STATE.CREATED;
-    this.activeDurablePropagation = null;
-    this.durableSliceTable = null;
-    this.durableSliceWaves = 0;
-    this.durableSliceContended = false;
-    this.yieldedDurableSliceTable = null;
-    this.yieldedDurableSliceUntilMs = 0;
-    this.waitingDurableSliceTables = [];
-    this.waitingDurableSliceTableTimestamps = new Map();
-    this.waitingDurableSliceTableLifecycles = new Map();
-    this.creditedWaitingDurableSliceTables = new Set();
+    // Every durable wave from admission until its actual local cleanup; held
+    // only so stop, initialize and a lifetime change can retire each one.
+    this.inFlightDurableWaves = new Set();
     this.durablePropagationLifetime = Object.freeze({});
     this.stats = {
       groupedCount: 0,
@@ -115,16 +105,7 @@ class CDCGroupPropagationService extends EventEmitter {
    * Initialize dependencies.
    * @param {Object} options
    */ initialize(options = {}) {
-    this.activeDurablePropagation?.context.retire();
-    this.durableSliceTable = null;
-    this.durableSliceWaves = 0;
-    this.durableSliceContended = false;
-    this.yieldedDurableSliceTable = null;
-    this.yieldedDurableSliceUntilMs = 0;
-    this.waitingDurableSliceTables = [];
-    this.waitingDurableSliceTableTimestamps = new Map();
-    this.waitingDurableSliceTableLifecycles = new Map();
-    this.creditedWaitingDurableSliceTables = new Set();
+    this.retireInFlightDurableWaves();
     this.durablePropagationLifetime = Object.freeze({});
     if (options.nodeId) {
       this.nodeId = options.nodeId;
@@ -163,6 +144,7 @@ class CDCGroupPropagationService extends EventEmitter {
     this.ensureInitialized();
     this.refreshConfig();
     if (this.state !== CDC_GROUP_PROPAGATION_STATE.RUNNING) {
+      this.retireInFlightDurableWaves();
       this.durablePropagationLifetime = Object.freeze({});
     }
     this.state = CDC_GROUP_PROPAGATION_STATE.RUNNING;
@@ -175,16 +157,7 @@ class CDCGroupPropagationService extends EventEmitter {
    * Stop propagation lifecycle.
    */ stop() {
     this.state = CDC_GROUP_PROPAGATION_STATE.STOPPED;
-    this.activeDurablePropagation?.context.retire();
-    this.durableSliceTable = null;
-    this.durableSliceWaves = 0;
-    this.durableSliceContended = false;
-    this.yieldedDurableSliceTable = null;
-    this.yieldedDurableSliceUntilMs = 0;
-    this.waitingDurableSliceTables = [];
-    this.waitingDurableSliceTableTimestamps = new Map();
-    this.waitingDurableSliceTableLifecycles = new Map();
-    this.creditedWaitingDurableSliceTables = new Set();
+    this.retireInFlightDurableWaves();
     for (const releaseSleep of [...this.retrySleepReleases]) {
       releaseSleep();
     }
@@ -211,16 +184,6 @@ class CDCGroupPropagationService extends EventEmitter {
   }
 
   /**
-   * Release a waiting table contender when its source retires, steps down,
-   * hydrates through its owed tail, or drains all owed obligations.
-   * @param {string} tableName
-   * @return {boolean}
-   */
-  releaseDurableSliceContender(tableName) {
-    return releaseWaitingDurableSliceContender(this, tableName);
-  }
-
-  /**
    * The caller's contract: a vector of durable partition events of one table
    * with its delivery invocation, and a source message group with the surface
    * the durable wave reads (its group, consensus port and commit lifetime,
@@ -241,7 +204,7 @@ class CDCGroupPropagationService extends EventEmitter {
     );
     const {events} = options;
     // The vector: dense, at least one member, every member a CDC payload of
-    // the one table the wave is admitted and sliced under.
+    // one table.
     assertCritical(
       isDenseDataArray(events) && events.length > 0 && events.every((event) =>
         event && event.tableName && event.operation && event.data &&
@@ -333,37 +296,30 @@ class CDCGroupPropagationService extends EventEmitter {
       return;
     }
 
-    if (!current || current.currentMode !== nextMode) {
-      const changedAt = this.toIsoTimestamp(this.now());
-      const recentTransitions = Array.isArray(current?.recentTransitions) ?
-        [...current.recentTransitions] :
-        [];
-
-      if (current?.currentMode) {
-        recentTransitions.push(
-          Object.freeze({
-            from: current.currentMode,
-            to: nextMode,
-            reasonCode: reasonCode || null,
-            changedAt,
-          }),
-        );
-      }
-      this.publicationModeDiagnostics = this.freezePublicationModeDiagnostics({
-        currentMode: nextMode,
-        reasonCode: reasonCode || null,
-        enteredAt: changedAt,
-        recentTransitions: recentTransitions.slice(-PUBLICATION_TRANSITION_HISTORY_LIMIT),
-      });
+    // A write of the mode already current is a no-op: overlapping waves whose
+    // plans imply the same mode record no transition and leave the reason
+    // and entry time as the first writer set them.
+    if (current?.currentMode === nextMode) {
       return;
     }
-
-    if (reasonCode && current.reasonCode !== reasonCode) {
-      this.publicationModeDiagnostics = this.freezePublicationModeDiagnostics({
-        ...current,
-        reasonCode,
-      });
+    const changedAt = this.toIsoTimestamp(this.now());
+    const recentTransitions = Array.isArray(current?.recentTransitions) ?
+      [...current.recentTransitions] :
+      [];
+    if (current?.currentMode) {
+      recentTransitions.push(Object.freeze({
+        from: current.currentMode,
+        to: nextMode,
+        reasonCode: reasonCode || null,
+        changedAt,
+      }));
     }
+    this.publicationModeDiagnostics = this.freezePublicationModeDiagnostics({
+      currentMode: nextMode,
+      reasonCode: reasonCode || null,
+      enteredAt: changedAt,
+      recentTransitions: recentTransitions.slice(-PUBLICATION_TRANSITION_HISTORY_LIMIT),
+    });
   }
 
   /**
