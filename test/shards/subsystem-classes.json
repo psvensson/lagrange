@@ -18,17 +18,17 @@
     "runtime-primitives": 23,
     "services-runtime": 160,
     "solver-tooling": 7,
-    "storage-partition": 222,
+    "storage-partition": 223,
     "storage-raft": 152,
     "test-infrastructure": 181,
     "transactions": 17,
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2665,
-  "digest": "fnv1a32-3fc49f29",
+  "censusSize": 2666,
+  "digest": "fnv1a32-e47efd78",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-bb4083dc",
+  "observationDigest": "fnv1a32-e0ef17f7",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -347,6 +347,7 @@
     "test/cache/system-table-cache-cdc-provenance.test.js": "storage-partition",
     "test/cache/system-table-cache-consistency.property.test.js": "storage-partition",
     "test/cache/system-table-cache-lifecycle-delete-ordering.test.js": "storage-partition",
+    "test/cache/system-table-cache-lifecycle-reconciliation-differential.test.js": "storage-partition",
     "test/cache/system-table-cache-observation.test.js": "storage-partition",
     "test/cache/system-table-cache-services-lifecycle-merge.test.js": "storage-partition",
     "test/cache/system-table-cache-time-authority.test.js": "storage-partition",
@@ -4003,6 +4004,18 @@
       "files": [
         "src/cache/cache-constants.js",
         "src/cache/system-table-cache.js"
+      ]
+    },
+    "test/cache/system-table-cache-lifecycle-reconciliation-differential.test.js": {
+      "files": [
+        "src/bootstrap/system-table-core-schema-definitions.js",
+        "test/cache/fixtures/system-table-cache-lifecycle-reconciliation-golden.json"
+      ]
+    },
+    "test/cache/system-table-cache-services-lifecycle-merge.test.js": {
+      "files": [
+        "src/cache/cache-constants.js",
+        "src/cache/system-table-cache-authoritative-reconciliation.js"
       ]
     },
     "test/cache/system-table-cache-tombstone-time-authority.test.js": {
@@ -16978,8 +16991,10 @@
     "test/rebalancer/operation-workflow-active-cache-handoff.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/cache/system-table-cache-authoritative-reconciliation.js",
         "src/constants/unified-service-lifecycle.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/membership-publication-priority-partition-summary.js",
         "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
