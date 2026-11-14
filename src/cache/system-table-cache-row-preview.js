@@ -38,17 +38,16 @@ function copyKeyState(cache, copy, tableName, key) {
     copy.tables.get(tableName).set(key, cache.deepClone(row));
   }
   cache.tombstoneStore.copyKeyTo(copy.tombstoneStore, tableName, key);
-  for (const tableState of [
-    'lastAuthoritativeObservedAtMsByTableName',
-    'lastAuthoritativeObservedCauseIdByTableName',
-    'mutationVersionByTableName',
-    'tableRevisionWatermarks',
-  ]) {
-    copyMapEntry(cache[tableState], copy[tableState], tableName);
-  }
-  for (const keyState of ['mutationVersionByTableKey', 'lastCdcObservationByTableName']) {
-    copyMapEntry(cache[keyState].get(tableName), copy[keyState].get(tableName), key);
-  }
+  copyMapEntry(cache.lastAuthoritativeObservedAtMsByTableName,
+    copy.lastAuthoritativeObservedAtMsByTableName, tableName);
+  copyMapEntry(cache.lastAuthoritativeObservedCauseIdByTableName,
+    copy.lastAuthoritativeObservedCauseIdByTableName, tableName);
+  copyMapEntry(cache.mutationVersionByTableName, copy.mutationVersionByTableName, tableName);
+  copyMapEntry(cache.tableRevisionWatermarks, copy.tableRevisionWatermarks, tableName);
+  copyMapEntry(cache.mutationVersionByTableKey.get(tableName),
+    copy.mutationVersionByTableKey.get(tableName), key);
+  copyMapEntry(cache.lastCdcObservationByTableName.get(tableName),
+    copy.lastCdcObservationByTableName.get(tableName), key);
 }
 
 /**
