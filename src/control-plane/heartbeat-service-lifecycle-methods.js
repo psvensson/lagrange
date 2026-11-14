@@ -12,6 +12,7 @@ import {
   HEARTBEAT_LOG_MSG,
   HEARTBEAT_STATE,
 } from './heartbeat-service-constants.js';
+import {resolveRenewalIntervalMs} from './node-ready-lease-authority.js';
 import {
   recordHeartbeatPublicationAttempt,
   recordHeartbeatPublicationSuccess,
@@ -139,7 +140,7 @@ class HeartbeatServiceLifecycleMethods {
       Number.isFinite(configuredTransportTimeoutMs) && configuredTransportTimeoutMs > ZERO ?
         Math.floor(configuredTransportTimeoutMs) :
         TRANSPORT_DEFAULT.MESSAGE_TIMEOUT_MS;
-    const leaseSafetyWindowMs = Math.max(ONE, Math.floor(this.readyLeaseMs / 3));
+    const leaseSafetyWindowMs = resolveRenewalIntervalMs(this.readyLeaseMs);
     const transportSafetyWindowMs =
       transportMessageTimeoutMs + HEARTBEAT_DEFAULT.ATTEMPT_TIMEOUT_SAFETY_MARGIN_MS;
     const defaultTimeoutMs = Math.max(

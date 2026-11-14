@@ -7,7 +7,7 @@
     "bootstrap-membership": 345,
     "cdc-metadata": 70,
     "cli-tooling": 99,
-    "control-plane": 237,
+    "control-plane": 238,
     "convergence-topology": 80,
     "distributed-harness": 216,
     "examples-e2e": 8,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2648,
-  "digest": "fnv1a32-73d6f441",
+  "censusSize": 2649,
+  "digest": "fnv1a32-62e90a96",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-ccb15d53",
+  "observationDigest": "fnv1a32-b5a68f09",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -637,6 +637,7 @@
     "test/control-plane/node-incarnation-fence.test.js": "control-plane",
     "test/control-plane/node-lifecycle-publication.test.js": "control-plane",
     "test/control-plane/node-liveness-semantic-projection-owner.test.js": "control-plane",
+    "test/control-plane/node-ready-lease-renewal-cadence.test.js": "control-plane",
     "test/control-plane/node-terminal-removal.test.js": "control-plane",
     "test/control-plane/node-terminal-transition-fence.test.js": "control-plane",
     "test/control-plane/node-trust-serve-lane-observability.test.js": "control-plane",
@@ -5070,6 +5071,18 @@
         "src/rebalancer/unified-rebalancer-available-nodes.js",
         "src/rebalancer/unified-rebalancer-follow-up-move.js",
         "src/rebalancer/unified-rebalancer-replica-state.js"
+      ]
+    },
+    "test/control-plane/node-ready-lease-renewal-cadence.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/heartbeat-service-constants.js",
+        "src/control-plane/node-lifecycle-publication.js",
+        "src/control-plane/node-ready-lease-authority.js",
+        "src/message-group/message-group-target-resolver.js",
+        "test/test-helpers/boot-incarnation-fixture.js",
+        "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/control-plane/node-terminal-removal.test.js": {

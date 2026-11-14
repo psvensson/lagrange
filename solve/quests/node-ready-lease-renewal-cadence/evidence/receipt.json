@@ -1,0 +1,70 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "node-ready-lease-renewal-cadence",
+  "status": "pass",
+  "test-Command": "node --test test/control-plane/node-ready-lease-renewal-cadence.test.js",
+  "files": [
+    "src/control-plane/node-ready-lease-authority.js",
+    "src/control-plane/heartbeat-service-constants.js",
+    "src/control-plane/heartbeat-service-lifecycle-methods.js",
+    "src/control-plane/node-lifecycle-publication.js",
+    "src/control-plane/lease-service.js",
+    "src/node/node-readiness-policy.js",
+    "src/message-group/message-group-target-resolver.js",
+    "test/control-plane/node-ready-lease-renewal-cadence.test.js"
+  ],
+  "checks": [
+    "node --test test/control-plane/node-ready-lease-renewal-cadence.test.js",
+    "node scripts/generate-source-owner-index.js --check",
+    "npm run audit:impact-contracts",
+    "npm run audit:shards",
+    "npm run lint",
+    "npm run audit:doc-audience",
+    "npm run audit:doc-ascii",
+    "npm run audit:documentation-current",
+    "npm run audit:file-size",
+    "npm run test:complexity",
+    "npm run audit:guideline:navigability",
+    "npm run audit:guidelines",
+    "npm run test:unused:ratchet",
+    "node --test test/scripts/closed-quest-shape.test.js"
+  ],
+  "summary": "docs/evidence/node-ready-lease-renewal-cadence-2026-11/summary.md",
+  "receipts": [
+    {
+      "id": "renewal-cadence-and-heartbeat-coalescing",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^R1 .*$\" test/control-plane/node-ready-lease-renewal-cadence.test.js",
+      "detail": "NodeReadyLeaseAuthority exports DEFAULT_TTL_MS === 15000, DEFAULT_RENEWAL_CADENCE_DIVISOR === 3, DEFAULT_RENEWAL_INTERVAL_MS === 5000, and resolveRenewalIntervalMs(15000) === 5000; HeartbeatService coalesces within 5000 ms and renews at +9998 ms after a -2 ms jitter at +4998 ms well before the 15000 ms lease expires.",
+      "testFile": "test/control-plane/node-ready-lease-renewal-cadence.test.js"
+    },
+    {
+      "id": "ready-lease-authority-null-expiry-semantics",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^R2 .*$\" test/control-plane/node-ready-lease-renewal-cadence.test.js",
+      "detail": "NodeReadyLeaseAuthority.parseLeaseExpiresAt returns null for null/undefined/empty/boolean/non-positive values, and both isExpired({ ready_lease_expires_at: null }, now) and holdsLiveLease({ ready_lease_expires_at: null }, now) return false.",
+      "testFile": "test/control-plane/node-ready-lease-renewal-cadence.test.js"
+    },
+    {
+      "id": "lease-sweep-joining-null-expiry-and-skip-observation",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^R3 .*$\" test/control-plane/node-ready-lease-renewal-cadence.test.js",
+      "detail": "LeaseService.sweepExpiredLeases ignores JOINING nodes with ready_lease_expires_at: null and noteLeaseSkipObservation returns leaseExpiredForMs: null instead of now - 0 (~1.79e12 ms).",
+      "testFile": "test/control-plane/node-ready-lease-renewal-cadence.test.js"
+    },
+    {
+      "id": "node-readiness-policy-explicit-clear-and-null-coercion",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^R4 .*$\" test/control-plane/node-ready-lease-renewal-cadence.test.js",
+      "detail": "getNodeReadyLeaseExpiresAt({ ready_lease_expires_at: null }) and getNodeLastHeartbeat({ last_heartbeat: null }) return null, and isNodeReadyLeaseExplicitlyCleared({ status: 'STOPPING', ready_lease_expires_at: null }) returns true.",
+      "testFile": "test/control-plane/node-ready-lease-renewal-cadence.test.js"
+    },
+    {
+      "id": "message-group-target-resolver-null-lease-rejection",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^R5 .*$\" test/control-plane/node-ready-lease-renewal-cadence.test.js",
+      "detail": "isReadyNodeRow in message-group-target-resolver.js rejects ready_lease_expires_at: null across positive and negative clocks while accepting live positive leases.",
+      "testFile": "test/control-plane/node-ready-lease-renewal-cadence.test.js"
+    }
+  ]
+}

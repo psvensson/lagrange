@@ -16,7 +16,10 @@ import {
 import {emitInvariant} from '../invariants/invariant-emitter.js';
 import {INVARIANT_ID} from '../invariants/invariant-catalog.js';
 import {assertCritical} from '../utils/assert.js';
-import {NodeReadyLeaseAuthority} from './node-ready-lease-authority.js';
+import {
+  NodeReadyLeaseAuthority,
+  parseLeaseExpiresAt,
+} from './node-ready-lease-authority.js';
 import {classifyControlPlaneMutationResult} from
   './control-plane-mutation-outcome-classifier.js';
 import {endpointIncarnationPredicate} from
@@ -81,8 +84,8 @@ const createDefaultMessageGroupServices = () => new Set();
  *   skippedForMs: number}}
  */
 function noteLeaseSkipObservation(observations, node, now) {
-  const leaseExpiry = Number(node.ready_lease_expires_at);
-  const leaseExpiredForMs = Number.isFinite(leaseExpiry) ?
+  const leaseExpiry = parseLeaseExpiresAt(node);
+  const leaseExpiredForMs = leaseExpiry !== null ?
     now - leaseExpiry :
     null;
   const observation = observations.get(node.node_id);
@@ -568,4 +571,4 @@ class LeaseService extends EventEmitter {
   }
 }
 
-export {LeaseService};
+export {LeaseService, noteLeaseSkipObservation};
