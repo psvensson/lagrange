@@ -354,6 +354,6 @@ function assertRecipientLogs(model, {label = 'recipient', ordered = true,
 export {
   DRIVE_STATE_IN_A_LEADING_LANE, FLUSH_STATE_IN_A_LEADING_LANE, RECIPIENT_FAULT, WINDOW_EFFECT,
   WINDOW_EFFECT_BY_COMPLETION, WINDOW_EFFECT_BY_COVERAGE, WINDOW_EFFECT_BY_FAULT,
-  WINDOW_EFFECT_BY_RETRY_DISPOSITION, assertRecipientLogs, diagnosticsOf, expectedMemberOf,
-  firstOccurrences, flattenLog, installRecipientModel, readRawLedger, runLaneToQuiescence,
+  WINDOW_EFFECT_BY_RETRY_DISPOSITION, assertRecipientLogs, diagnosticsOf, firstOccurrences,
+  flattenLog, installRecipientModel, runLaneToQuiescence,
 };
