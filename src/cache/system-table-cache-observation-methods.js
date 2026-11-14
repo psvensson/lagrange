@@ -3,6 +3,8 @@ import {assertCritical} from '../utils/assert.js';
 import {normalizeCauseId} from '../utils/cause-id.js';
 import {deepFreeze} from '../utils/deep-freeze.js';
 import {CACHE_ERROR_MSG, CACHE_LOG_MSG} from './cache-constants.js';
+import {previewSystemTableCacheRowAfterEachChange} from
+  './system-table-cache-row-preview.js';
 import {
   getAllTableRevisionWatermarkSnapshots,
   getTableRevisionWatermarkSnapshot,
@@ -476,6 +478,21 @@ class SystemTableCacheObservationMethods {
   count(tableName) {
     this.validateTableName(tableName);
     return this.tables.get(tableName).size;
+  }
+
+  /**
+   * The rows this cache would hold for one key after each of `changes`,
+   * applied in order, without applying them: element i is the row after
+   * changes 0..i, null when the cache would hold no row. Read-only: the
+   * changes run through applySystemTableChange on a private copy of the
+   * state that method reads for the key, on this cache's clock.
+   * @param {string} tableName
+   * @param {string} key
+   * @param {Array<{operation: string, data: Object}>} changes
+   * @return {Array<Object|null>}
+   */
+  previewRowAfterEachChange(tableName, key, changes) {
+    return previewSystemTableCacheRowAfterEachChange(this, tableName, key, changes);
   }
 }
 

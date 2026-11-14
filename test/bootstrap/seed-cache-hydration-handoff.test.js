@@ -30,6 +30,7 @@ import {BootstrapNodeReadyRebalanceOwner} from
 import {BOOTSTRAP_ERROR} from '../../src/bootstrap/bootstrap-constants.js';
 import {SERVICE_STATUS, TABLES} from '../../src/constants/index.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {SYSTEM_TABLE_CACHE_MUTATION_MODE} from '../../src/cache/cache-constants.js';
 
 const SEED_NODE_ID = 'seed-handoff-node';
 const LEADER_WAIT_REACHED = 'leader wait reached';
@@ -305,7 +306,7 @@ async function nodeReadyHookSeed() {
   const cacheRow = (row) => cache.applySystemTableChange(TABLES.NODES, 'INSERT', {...row});
   const cachedRows = () => cache.getAll(TABLES.NODES)
     .map((row) => ({...row})).sort((left, right) => left.node_id.localeCompare(right.node_id));
-  return {subscriber: subscribers[0], cacheRow, cachedRows, triggers, rebalanceOwner};
+  return {subscriber: subscribers[0], cache, cacheRow, cachedRows, triggers, rebalanceOwner};
 }
 
 const LEASE = 4102444800000; // far in the future: the lease never lapses in the witness
@@ -498,15 +499,15 @@ for (const [name, anchor] of Object.entries(NODE_READY_MERGE_ANCHORS)) {
 // A seeded generator (no wall clock; the seed is the whole state) writes a
 // history and a vector of NODES members for two nodes: INSERT, UPDATE and
 // DELETE, full and partial rows, ready and not ready, and members older than
-// what came before (a lower version and heartbeat). The history reaches both
-// sides one event at a time. The vector then reaches one side one event at a
-// time and the other as one vector, and both are presented a second time, as
-// a lane does when it retries. Compared: the node-ready decision for every
-// member, in order, the rebalances pending afterwards, the rows the real
-// cache holds, and the previous row every member is handed. The previous row
-// is compared for the members of nodes the cache holds no delete tombstone
-// for: the hook's replay starts from the cached row and cannot read a
-// tombstone (the residual pins below state that difference).
+// what came before (a lower version and heartbeat). The history also leaves
+// what the cache holds beyond rows: delete tombstones (its DELETE events),
+// authoritative-absence marks and authoritative observations of the table.
+// The history reaches both sides the same way. The vector then reaches one
+// side one event at a time and the other as one vector, and both are
+// presented a second time, as a lane does when it retries. Compared, for
+// every member in order: the previous row it is handed and its node-ready
+// decision; and afterwards the rebalances pending and the rows the real
+// cache holds.
 function nodeEventGenerator(seed) {
   let state = seed >>> 0;
   const random = () => {
@@ -534,8 +535,31 @@ function nodeEventGenerator(seed) {
     return nodesEvent(operation, data);
   };
   const sequence = (length) => Array.from({length}, member);
-  return {history: sequence(Math.floor(random() * 4)),
+  // A history step is a CDC event, an authoritative-absence mark for a node
+  // or an authoritative observation of the table, at an instant on the scale
+  // of the rows' versions.
+  const historyStep = () => {
+    const kind = pick(['event', 'event', 'event', 'absence', 'observation']);
+    if (kind === 'event') return {kind, event: member()};
+    if (kind === 'observation') return {kind, observedAtMs: tick * 10 + 5};
+    return {kind, nodeId: pick(['g1', 'g2']), observedAtMs: tick * 10 + 5};
+  };
+  return {history: Array.from({length: Math.floor(random() * 5)}, historyStep),
     vector: sequence(2 + Math.floor(random() * 5))};
+}
+
+// One history step reaches a seed: an event through its subscriber (hook and
+// cache), a mark or an observation through the cache's own surface.
+async function applyHistoryStep(seed, step) {
+  if (step.kind === 'event') {
+    await seed.subscriber(Object.freeze([step.event]));
+  } else if (step.kind === 'observation') {
+    seed.cache.recordAuthoritativeObservation(TABLES.NODES, {observedAtMs: step.observedAtMs});
+  } else {
+    seed.cache.applySystemTableChange(TABLES.NODES, 'DELETE', {node_id: step.nodeId}, {
+      mutationMode: SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_ABSENCE_RECONCILIATION,
+      authoritativeObservedAtMs: step.observedAtMs});
+  }
 }
 
 const NODE_READY_DIFFERENTIAL_SEEDS = Object.freeze(
@@ -550,16 +574,11 @@ for (const seed of NODE_READY_DIFFERENTIAL_SEEDS) {
     const vector = await nodeReadyHookSeed();
     const context = (stage) => `seed ${seed}, ${stage}: ${JSON.stringify(scenario)}`;
     try {
-      for (const event of scenario.history) {
-        await perEvent.subscriber(Object.freeze([event]));
-        await vector.subscriber(Object.freeze([event]));
+      for (const step of scenario.history) {
+        await applyHistoryStep(perEvent, step);
+        await applyHistoryStep(vector, step);
       }
       assert.deepEqual(triggersOf(vector), triggersOf(perEvent), context('history'));
-      const isDelete = (event) => event.operation === 'DELETE';
-      const deleted = new Set(scenario.history.filter(isDelete)
-        .map((event) => event.data.node_id));
-      const notDeleted = (seed, from) => triggersOf(seed, from)
-        .filter((trigger) => !deleted.has(trigger.nodeId));
       for (const presentation of ['first presentation', 'retry']) {
         const from = perEvent.triggers.length;
         assert.equal(vector.triggers.length, from, context(presentation));
@@ -570,14 +589,12 @@ for (const seed of NODE_READY_DIFFERENTIAL_SEEDS) {
         assert.deepEqual(triggersOf(vector, from).map((trigger) => trigger.scheduled),
           triggersOf(perEvent, from).map((trigger) => trigger.scheduled),
           context(`${presentation}: the same node-ready triggers, in order`));
-        assert.deepEqual(notDeleted(vector, from), notDeleted(perEvent, from),
+        assert.deepEqual(triggersOf(vector, from), triggersOf(perEvent, from),
           context(`${presentation}: every member is handed the same previous row`));
         assert.deepEqual(pendingOf(vector), pendingOf(perEvent),
           context(`${presentation}: the same rebalances pending`));
         assert.deepEqual(vector.cachedRows(), perEvent.cachedRows(),
           context(`${presentation}: the same rows in the real cache`));
-        // A node this vector deleted is under a tombstone when it is presented again.
-        for (const event of scenario.vector.filter(isDelete)) deleted.add(event.data.node_id);
       }
     } finally {
       perEvent.rebalanceOwner.clearNodeReadyRebalanceState();
@@ -614,17 +631,12 @@ test('seed node-ready hook: a vector presented again runs the hook for every mem
   }
 });
 
-// RESIDUAL PINS (supersession record 3, S-9), reported with a proposed
-// owner-side export, not repaired here. The hook's replay starts from the row
-// the node cache holds; a delete tombstone the node cache also holds is not
-// readable through the cache's public surface. Under a tombstone the real
-// cache refuses a write older than the delete, so one-event delivery reads no
-// row for the next member, while the replay, which has no tombstone, takes the
-// write. Two states reach it: a vector that deleted the node is presented
-// again, and an older write is delivered again after an earlier delete. The
-// pins state both sides' previous rows literally and that the decisions agree
-// in these cases; an export that lets the cache preview its own row removes
-// the difference (the vector side then equals the one-event side).
+// Under a delete tombstone (supersession record 4, S-11). The real cache
+// refuses a write older than the delete, so the next member of that node has
+// no previous row. The hook asks the cache owner, whose preview starts from
+// the tombstone as well as the row. Two states reach it: a vector that
+// deleted its node is presented again, and older writes are delivered again
+// after an earlier delete of the node.
 const tombstoneRows = Object.freeze({
   first: nodeRow('n1', 'joining', {last_heartbeat: 1, updated_at: 10}),
   second: {node_id: 'n1', address: 'n1:2', last_heartbeat: 2, updated_at: 15},
@@ -632,40 +644,39 @@ const tombstoneRows = Object.freeze({
     {ready_lease_expires_at: LEASE, last_heartbeat: 3, updated_at: 20}),
 });
 
-test('seed node-ready hook, residual pin: a vector that deleted its node, presented again',
-  async () => {
-    const perEvent = await nodeReadyHookSeed();
-    const vector = await nodeReadyHookSeed();
-    try {
-      const events = [nodesEvent('INSERT', tombstoneRows.first),
-        nodesEvent('UPDATE', tombstoneRows.second), nodesEvent('UPDATE', tombstoneRows.third),
-        nodesEvent('DELETE', {node_id: 'n1'})];
-      for (const event of events) await perEvent.subscriber(Object.freeze([event]));
-      await vector.subscriber(Object.freeze([...events]));
-      assert.deepEqual(triggersOf(vector), triggersOf(perEvent),
-        'the first presentation is the same either way');
-      const from = events.length;
-      for (const event of events) await perEvent.subscriber(Object.freeze([event]));
-      await vector.subscriber(Object.freeze([...events]));
-      const previous = (seed) => seed.triggers.slice(from, from + 3)
-        .map((trigger) => trigger.previousRow);
-      assert.deepEqual(previous(perEvent), [null, null, null],
-        'one-event delivery: the tombstone refuses the writes older than the delete');
-      assert.deepEqual(previous(vector),
-        [null, tombstoneRows.first, {...tombstoneRows.first, ...tombstoneRows.second}],
-        'one vector: the replay has no tombstone and takes them');
-      assert.deepEqual(vector.triggers.map((trigger) => trigger.scheduled),
-        perEvent.triggers.map((trigger) => trigger.scheduled),
-        'the node-ready decisions agree');
-      assert.deepEqual(pendingOf(vector), pendingOf(perEvent));
-    } finally {
-      perEvent.rebalanceOwner.clearNodeReadyRebalanceState();
-      vector.rebalanceOwner.clearNodeReadyRebalanceState();
-    }
-  });
+test('seed node-ready hook under a delete tombstone: a vector that deleted its node, ' +
+  'presented again, is handed the previous rows of one-event delivery',
+async () => {
+  const perEvent = await nodeReadyHookSeed();
+  const vector = await nodeReadyHookSeed();
+  try {
+    const events = [nodesEvent('INSERT', tombstoneRows.first),
+      nodesEvent('UPDATE', tombstoneRows.second), nodesEvent('UPDATE', tombstoneRows.third),
+      nodesEvent('DELETE', {node_id: 'n1'})];
+    for (const event of events) await perEvent.subscriber(Object.freeze([event]));
+    await vector.subscriber(Object.freeze([...events]));
+    assert.deepEqual(triggersOf(vector), triggersOf(perEvent),
+      'the first presentation is the same either way');
+    const from = events.length;
+    for (const event of events) await perEvent.subscriber(Object.freeze([event]));
+    await vector.subscriber(Object.freeze([...events]));
+    const previous = (seed) => seed.triggers.slice(from, from + 3)
+      .map((trigger) => trigger.previousRow);
+    assert.deepEqual(previous(perEvent), [null, null, null],
+      'one-event delivery: the tombstone refuses the writes older than the delete');
+    assert.deepEqual(previous(vector), [null, null, null],
+      'one vector: the owner\'s preview refuses them too');
+    assert.deepEqual(triggersOf(vector), triggersOf(perEvent),
+      'every member is handed the same previous row and takes the same decision');
+    assert.deepEqual(pendingOf(vector), pendingOf(perEvent));
+  } finally {
+    perEvent.rebalanceOwner.clearNodeReadyRebalanceState();
+    vector.rebalanceOwner.clearNodeReadyRebalanceState();
+  }
+});
 
-test('seed node-ready hook, residual pin: older writes delivered again after an earlier ' +
-  'delete of the node', async () => {
+test('seed node-ready hook under a delete tombstone: older writes delivered again after an ' +
+  'earlier delete of the node are handed the previous rows of one-event delivery', async () => {
   const perEvent = await nodeReadyHookSeed();
   const vector = await nodeReadyHookSeed();
   try {
@@ -683,11 +694,10 @@ test('seed node-ready hook, residual pin: older writes delivered again after an 
     const previous = (seed) => seed.triggers.slice(from).map((trigger) => trigger.previousRow);
     assert.deepEqual(previous(perEvent), [null, null],
       'one-event delivery: the tombstone refuses the older INSERT');
-    assert.deepEqual(previous(vector), [null, tombstoneRows.first],
-      'one vector: the replay has no tombstone and takes it');
-    assert.deepEqual(vector.triggers.map((trigger) => trigger.scheduled),
-      perEvent.triggers.map((trigger) => trigger.scheduled),
-      'the node-ready decisions agree');
+    assert.deepEqual(previous(vector), [null, null],
+      'one vector: the owner\'s preview refuses it too');
+    assert.deepEqual(triggersOf(vector), triggersOf(perEvent),
+      'every member is handed the same previous row and takes the same decision');
     assert.deepEqual(vector.cachedRows(), perEvent.cachedRows());
   } finally {
     perEvent.rebalanceOwner.clearNodeReadyRebalanceState();

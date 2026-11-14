@@ -287,7 +287,8 @@
         "src/rebalancer/unified-rebalancer-critical-topology-methods.js",
         "src/workflow/owner-key-reconcile-queue.js",
         "src/control-plane/serve-eligibility-owner.js",
-        "src/control-plane/control-plane-readiness-serve-eligibility-methods.js"
+        "src/control-plane/control-plane-readiness-serve-eligibility-methods.js",
+        "src/cache/system-table-cache-row-preview.js"
       ],
       "tests": [
         "test/control-plane/single-readiness-owner.receipt.test.js",
@@ -316,7 +317,9 @@
         "test/control-plane/readiness-planning-liveness-veto.test.js",
         "test/control-plane/readiness-planning-publication-atomicity.test.js",
         "test/control-plane/readiness-planning-publication-version-key.test.js",
-        "test/control-plane/readiness-planning-read-amplification.test.js"
+        "test/control-plane/readiness-planning-read-amplification.test.js",
+        "test/cache/system-table-cache-row-preview.test.js",
+        "test/bootstrap/seed-cache-hydration-handoff.test.js"
       ]
     },
     "active-gate-convergence": {
@@ -1497,7 +1500,8 @@
         "test/partition/partition-cdc-obligation-range-shipping.test.js",
         "test/partition/partition-cdc-obligation-ship-window.test.js",
         "test/partition/partition-cdc-obligation-range-differential.test.js",
-        "test/partition/partition-cdc-subscriber-vector-contract.test.js"
+        "test/partition/partition-cdc-subscriber-vector-contract.test.js",
+        "test/bootstrap/seed-cache-hydration-handoff.test.js"
       ]
     },
     "router-delivery-envelope": {
@@ -3772,7 +3776,8 @@
         "test/partition/partition-cdc-obligation-range-shipping.test.js",
         "test/partition/partition-cdc-obligation-ship-window.test.js",
         "test/partition/partition-cdc-obligation-range-differential.test.js",
-        "test/partition/partition-cdc-subscriber-vector-contract.test.js"
+        "test/partition/partition-cdc-subscriber-vector-contract.test.js",
+        "test/bootstrap/seed-cache-hydration-handoff.test.js"
       ]
     },
     "router-envelope-query": {

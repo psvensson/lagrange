@@ -18,17 +18,17 @@
     "runtime-primitives": 23,
     "services-runtime": 160,
     "solver-tooling": 7,
-    "storage-partition": 222,
+    "storage-partition": 223,
     "storage-raft": 152,
     "test-infrastructure": 181,
     "transactions": 17,
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2665,
-  "digest": "fnv1a32-3fc49f29",
+  "censusSize": 2666,
+  "digest": "fnv1a32-8fa989ad",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-bb4083dc",
+  "observationDigest": "fnv1a32-cd5a3b19",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -348,6 +348,7 @@
     "test/cache/system-table-cache-consistency.property.test.js": "storage-partition",
     "test/cache/system-table-cache-lifecycle-delete-ordering.test.js": "storage-partition",
     "test/cache/system-table-cache-observation.test.js": "storage-partition",
+    "test/cache/system-table-cache-row-preview.test.js": "storage-partition",
     "test/cache/system-table-cache-services-lifecycle-merge.test.js": "storage-partition",
     "test/cache/system-table-cache-time-authority.test.js": "storage-partition",
     "test/cache/system-table-cache-tombstone-time-authority.test.js": "storage-partition",
@@ -4003,6 +4004,11 @@
       "files": [
         "src/cache/cache-constants.js",
         "src/cache/system-table-cache.js"
+      ]
+    },
+    "test/cache/system-table-cache-row-preview.test.js": {
+      "files": [
+        "src/cache/system-table-cache-observation-methods.js"
       ]
     },
     "test/cache/system-table-cache-tombstone-time-authority.test.js": {

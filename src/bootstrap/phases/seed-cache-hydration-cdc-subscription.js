@@ -5,11 +5,9 @@ import {
   BOOTSTRAP_LOG_MSG,
 } from '../bootstrap-constants.js';
 import {
-  CDC_OPERATION,
   COLUMN,
   TABLES,
 } from '../../constants/index.js';
-import {SystemTableCache} from '../../cache/system-table-cache.js';
 
 function nodeOfEvent(cdcEvent) {
   const cdcData = cdcEvent?.data &&
@@ -19,63 +17,42 @@ function nodeOfEvent(cdcEvent) {
     cdcData.id || null};
 }
 
-// The row the node cache would hold for one node after the earlier members of
-// a vector, worked out by the cache owner's own apply path: the members are
-// replayed, in order, into a private system table cache that starts from the
-// row the node cache holds now. The hook writes no merge of its own. The
-// private cache starts from the cached row only; what the node cache holds
-// beyond the row (a delete tombstone, an authoritative-absence mark) is not
-// readable from here.
-function createNodeRowReplay(nodeCache) {
-  let replay = null;
-  const earlierMembers = new Map();
-  const started = new Set();
-  const cachedRowOf = (nodeId) => {
-    const cachedNodeRow = nodeCache.get(TABLES.NODES, nodeId);
-    return cachedNodeRow ? {...cachedNodeRow} : null;
-  };
-  const startFromCachedRow = (nodeId) => {
-    started.add(nodeId);
-    const cachedNodeRow = cachedRowOf(nodeId);
-    if (cachedNodeRow) {
-      replay.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, cachedNodeRow);
-    }
-  };
-  const replayedRowOf = (nodeId, members) => {
-    if (replay === null) replay = new SystemTableCache();
-    if (!started.has(nodeId)) startFromCachedRow(nodeId);
-    for (const cdcEvent of members.splice(0)) {
-      replay.applySystemTableChange(TABLES.NODES, cdcEvent.operation, cdcEvent.data);
-    }
-    const replayedNodeRow = replay.get(TABLES.NODES, nodeId);
-    return replayedNodeRow ? {...replayedNodeRow} : null;
-  };
-  return {
-    // The row a member of `nodeId` is compared against: the cached row for the
-    // node's first member, the replayed row for a later one.
-    previousRowOf(nodeId) {
-      const members = earlierMembers.get(nodeId);
-      return members ? replayedRowOf(nodeId, members) : cachedRowOf(nodeId);
-    },
-    remember(nodeId, cdcEvent) {
-      if (!earlierMembers.has(nodeId)) earlierMembers.set(nodeId, []);
-      earlierMembers.get(nodeId).push(cdcEvent);
-    },
-  };
-}
-
-// The NODES node-ready trigger over one vector, member by member in order.
-// Each member's previous row is what the node cache holds when that member is
-// reached under one-event delivery: the whole vector is applied to the node
-// cache only after this hook, so a later member of a node reads the row the
-// cache's own apply path leaves after the node's earlier members.
-function triggerNodeReadyRebalanceForVector(delegates, events) {
-  const replay = createNodeRowReplay(delegates.getSystemTableCache());
+// The previous row of every member of a NODES vector: what the node cache
+// holds when that member is reached under one-event delivery. The whole
+// vector is applied to the node cache only after this hook, so the first
+// member of a node reads the cached row and a later member reads the row the
+// cache itself would hold after the node's earlier members. The cache owner
+// answers that from its own state (previewRowAfterEachChange), once per node
+// that appears more than once in the vector; the hook holds no cache and
+// writes no merge. Returns nodeId -> the previous rows of its members, in
+// member order.
+function previousNodeRowsOf(nodeCache, events) {
+  const membersOf = new Map();
   for (const cdcEvent of events) {
     const {nodeId} = nodeOfEvent(cdcEvent);
-    const previousNodeRow = nodeId ? replay.previousRowOf(nodeId) : null;
-    if (nodeId) replay.remember(nodeId, cdcEvent);
-    delegates.handleNodeReadyRebalanceTrigger(cdcEvent, previousNodeRow);
+    if (!nodeId) continue;
+    if (!membersOf.has(nodeId)) membersOf.set(nodeId, []);
+    membersOf.get(nodeId).push(cdcEvent);
+  }
+  const previousRowsOf = new Map();
+  for (const [nodeId, members] of membersOf) {
+    const afterEarlierMembers = members.length > 1 ?
+      nodeCache.previewRowAfterEachChange(TABLES.NODES, nodeId, members.slice(0, -1)) : [];
+    previousRowsOf.set(nodeId,
+      [nodeCache.get(TABLES.NODES, nodeId), ...afterEarlierMembers]);
+  }
+  return previousRowsOf;
+}
+
+// The NODES node-ready trigger over one vector, member by member in order,
+// each member against its previous row.
+function triggerNodeReadyRebalanceForVector(delegates, events) {
+  const previousRowsOf = previousNodeRowsOf(delegates.getSystemTableCache(), events);
+  for (const cdcEvent of events) {
+    const {nodeId} = nodeOfEvent(cdcEvent);
+    const previousNodeRow = nodeId ? previousRowsOf.get(nodeId).shift() : null;
+    delegates.handleNodeReadyRebalanceTrigger(cdcEvent,
+      previousNodeRow ? {...previousNodeRow} : null);
   }
 }
 
