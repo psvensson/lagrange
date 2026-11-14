@@ -8,7 +8,7 @@
     "cdc-metadata": 70,
     "cli-tooling": 99,
     "control-plane": 237,
-    "convergence-topology": 80,
+    "convergence-topology": 81,
     "distributed-harness": 216,
     "examples-e2e": 8,
     "pgwire-compat": 23,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2647,
-  "digest": "fnv1a32-a7e1ea76",
+  "censusSize": 2648,
+  "digest": "fnv1a32-7cb2a824",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-ed8e85da",
+  "observationDigest": "fnv1a32-6f7807fe",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -757,6 +757,7 @@
     "test/convergence/deterministic-convergence-harness.test.js": "convergence-topology",
     "test/convergence/dt-admin-event-loop-isolation-discriminator.test.js": "convergence-topology",
     "test/convergence/dt-formation-barrier-spread-release-oscillation.test.js": "convergence-topology",
+    "test/convergence/dt-formation-joint-admission-release-liveness.test.js": "convergence-topology",
     "test/convergence/dt-formation-priority-placement-before-active.test.js": "convergence-topology",
     "test/convergence/dt-ledger-completion-continuity-discriminator.test.js": "convergence-topology",
     "test/convergence/dt-local-leader-seed-safety-merge.test.js": "convergence-topology",
@@ -5683,6 +5684,23 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "test/rebalancer/committed-membership-fixture.js"
+      ]
+    },
+    "test/convergence/dt-formation-joint-admission-release-liveness.test.js": {
+      "files": [
+        "src/bootstrap/rejoin-hints.js",
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/active-node-publication-snapshots.js",
+        "src/control-plane/control-plane-gateway-registry.js",
+        "src/control-plane/control-plane-publications-leadership.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/membership-publication-coordinator.js",
+        "src/control-plane/owners/membership-publication-runtime-owner.js",
+        "src/diagnostics/formation-turn-attribution.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/storage/data-directory-process-owner.js",
+        "test/simulation/formation-sim-infrastructure-composition.js"
       ]
     },
     "test/convergence/dt-formation-priority-placement-before-active.test.js": {

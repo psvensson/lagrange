@@ -61,6 +61,7 @@ quests:
   - repository-legacy-fallback-closure
   - canonical-authority-formation-acceptance
   - fresh-formation-user-table-routability
+  - formation-ready-lease-independent-of-spread
   - serve-eligibility-committed-epoch-read
   - fresh-create-release-authority-from-committed-operation
   - replica-admission-from-committed-operation

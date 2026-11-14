@@ -1,0 +1,51 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "formation-ready-lease-independent-of-spread",
+  "status": "fail",
+  "interpretation": "Seal-time state. The deterministic reproducer is measured red on main for the liveness half of the claim (joiners stuck in the join formation barrier in four of nine arrival orders, with the negative control green). Nothing else is measured yet.",
+  "receipts": [
+    {
+      "id": "reproducer-red-on-main",
+      "measured": true,
+      "passed": true,
+      "detail": "Lab job b9946a68-c082-4fba-9e17-59e97a3f90c0 on tv-dator, FAILED exit 1 as intended, tree 966d1e66b4f8 = main 232082669eddebe4c9fd98d3e07c11fc91ffb781 plus the reproducer only (test/convergence/dt-formation-joint-admission-release-liveness.test.js and its three helpers; four lines added to test/simulation/formation-sim-node-hosts.js; no product change). Negative control green (one joiner per derivation releases every joiner); the losing order reproduces the measured barrier state (both joiners waiting_for_startup_authority, candidates 3, preReady 2, recovery_pending [priority_partitions_not_spread], handoff null; seed at epoch 2 with six priority partitions at 1 of 3 holders, handoff revoked); the liveness assertion is red for the losing order and the sweep is red: stuck in 4 of 9 orders (two joiners in one derivation after a revoke; two in one derivation with no generation ever captured; two in successive derivations with no authority read between; four in one derivation after a revoke). Real owners: the join ready-signal path with its barrier and the READY heartbeat through the NODES lifecycle publication, per-node control-plane readiness (startup authority, handoff closure owner, publication coordinator, consumer read), the membership publication coordinator, the unified rebalancer's planning for the six priority partitions, the serve-eligibility answer and the priority-recovery health /readyz reads. Doubles: clock, transport (mesh connection evidence, one shared row store over the SQL seam), leadership read from partition rows, CDC publication mode, the node-local gates. No timer fires (elapsed 39 ms against a shortest armed delay of 100 ms). LIMITS, stated so that nothing is claimed beyond them: the operation workflow is not mounted, so no operation is created and the parked REPLACE, the remove-safety floor and the ledger interlock of the measured run are NOT reproduced; the floor probe is vacuous at this stage. The revoke of the first generation is forced by a connection re-identification (captured_cohort_member_ineligible), not by the startup_authority_incompatible reason seen in every lab run, whose cause the logs do not show.",
+      "evidence": "solve/quests/formation-ready-lease-independent-of-spread/evidence/b9946a68-c082-4fba-9e17-59e97a3f90c0"
+    },
+    {
+      "id": "reproducer-and-owned-roots-green-on-candidate",
+      "measured": false,
+      "passed": false,
+      "detail": "Not measured: no candidate exists yet."
+    },
+    {
+      "id": "removed-mechanism-census-zero",
+      "measured": false,
+      "passed": false,
+      "detail": "Not measured: no candidate exists yet."
+    },
+    {
+      "id": "formation-stage-completes-on-lab",
+      "measured": false,
+      "passed": false,
+      "detail": "Not measured: no candidate exists yet. Origin of the defect: the registered scenario on tv-dator on 2026-11-14 (evidence/design/repeat-fail-analysis.md): seed active, both joiners inactive at the unchanged 135 s bound."
+    },
+    {
+      "id": "independent-verification",
+      "measured": false,
+      "passed": false,
+      "detail": "Not measured: no candidate exists yet."
+    }
+  ],
+  "unmeasuredObligations": [
+    "The spread half of the claim (priority partitions reach min(3, eligible) holders with READY joiners; no removal below the voter-ready floor) needs the operation workflow in the deterministic harness or a lab run; it is owed by the candidate's evidence, not by the seal."
+  ],
+  "source": {
+    "sha": "232082669eddebe4c9fd98d3e07c11fc91ffb781",
+    "reproducerTree": "966d1e66b4f8c4989ec67ccaf314f86d12475efc"
+  },
+  "evidence": {
+    "directory": "solve/quests/formation-ready-lease-independent-of-spread/evidence",
+    "design": "solve/quests/formation-ready-lease-independent-of-spread/evidence/design"
+  },
+  "evidenceCeiling": "One lab run of a deterministic test; the measured field failure it models is one run of four on the registered scenario."
+}
