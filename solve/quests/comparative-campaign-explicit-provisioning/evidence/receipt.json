@@ -2,7 +2,7 @@
   "schema": "test-receipt/1",
   "quest": "comparative-campaign-explicit-provisioning",
   "status": "fail",
-  "interpretation": "Measured so far: the reproducers red on the code before each fix and green on candidate 39792cfe5. The candidate was independently rejected because GCP provisioning exists only as prose; see the quest log.",
+  "interpretation": "Corrective round after the rejection of 39792cfe5: GCP provisioning is now code (provision-gcp.sh --place -> run-comparative-benchmarks.mjs --provision -> comparative-benchmark-provisioning.js), derived from the campaign's own requirement and verified with the campaign's own checks; measured at candidate 8a1e541ab with scripted hosts only. Lab placement is still not repository code (see provisioning-exists-for-every-target).",
   "receipts": [
     {
       "id": "refusals-red-on-original",
@@ -13,20 +13,25 @@
     {
       "id": "refusals-green-on-candidate",
       "measured": true,
+      "passed": true,
+      "detail": "Job fbdb9def on adams-gamla at 8a1e541ab: the 23 comparative and real-product files of job 20f2cd3c plus comparative-benchmark-provisioning.test.js, 24 files, 239 assertions, all passing."
+    },
+    {
+      "id": "provisioning-exists-for-every-target",
+      "measured": true,
       "passed": false,
-      "detail": "Job 20f2cd3c on adams-gamla at 39792cfe5: 23 comparative and real-product test files, 231 assertions, all passing; an earlier run 8566c6d4 failed on a defect in one new test, corrected by 39792cfe5. Not credited as passed: the candidate was rejected and will change."
+      "detail": "GCP: red job 26f54e43 on adams-gamla at 99bb2b4b7 (provisioning test fails at file level: no provisioning module; storage-root ownership test fails), green job fbdb9def at 8a1e541ab: a scripted fresh host fails the campaign's checks (image_unavailable, load_generator_commit_absent, offline cache misses every lockfile tarball) and, after provisioning, passes ensureProductImages over campaignImagesByRole and prepareLoadGeneratorCheckout with the drivers installed, for every target subset; provisioning failures are typed; provision-gcp.sh passes bash -n and --place runs --provision. Nothing executed on GCP. Lab: placement (docker save/load, checkout bundle, npm cache) exists only as operator tooling outside the repository (labrun.py, transfer scripts), so the 'in code for every target' clause is not met for the lab; owner decision pending."
     }
   ],
   "unmeasuredObligations": [
-    "provisioning-exists-for-every-target",
     "independent-verification"
   ],
   "source": {
-    "sha": "39792cfe569560389d7fdb082cd8ef383c463eee",
+    "sha": "8a1e541ab40a0536a6dab3599d09fc41bb19f3b8",
     "base": "965a86bb8"
   },
   "evidence": {
     "directory": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/measurement-prep"
   },
-  "evidenceCeiling": "Fixture-level proof of the refusals; the real-lab dry run c6fa8a7f proves host selection and eligibility only and reaches none of the refusal sites. Nothing has been executed on GCP."
+  "evidenceCeiling": "Fixture-level proof (scripted ssh hosts) of the refusals, of GCP provisioning's coverage of the campaign requirement, and of the storage-root ownership step; lab shell jobs 822e78f2 and 16dce80a (tv-dator) observed the EACCES the ownership step repairs and that a pre-chowned directory is writable. Nothing has been executed on GCP: a real run would additionally prove the pulls, the git push over ssh into a fresh checkout, npm ci of the root and the npm cache add/offline install against the real registry and npm, and a campaign starting on the provisioned VMs without any refusal."
 }
