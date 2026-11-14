@@ -23,7 +23,7 @@ documentClass: generated
 - [node-host-statistics-sampler.js](node-host-statistics-sampler.js) - Sample process-host statistics once per source, clock, and collection interval. (importers: one)
 - [node-lifecycle-state-machine-constants.js](node-lifecycle-state-machine-constants.js) - No leading comment; first export: NODE_LIFECYCLE_DEFAULT_OPTIONS. (importers: few)
 - [node-lifecycle-state-machine.js](node-lifecycle-state-machine.js) - Node Lifecycle State Machine - Manages explicit node lifecycle states. (importers: hub)
-- [node-readiness-policy.js](node-readiness-policy.js) - Check if a node record is ready based on lease and state fields. (importers: many)
+- [node-readiness-policy.js](node-readiness-policy.js) - Check if a node record is ready based on lease and state fields. (importers: hub)
 - [node-reintegration-reconciliation.js](node-reintegration-reconciliation.js) - No leading comment; first export: buildPostRejoinReconciliationDecisionForNode. (importers: one)
 - [node-reintegration-service.js](node-reintegration-service.js) - Node Reintegration Service - Reintegrates recovered nodes into the cluster. (importers: few)
 - [node-runtime-local-authorities.js](node-runtime-local-authorities.js) - The authorities a node runtime owns rather than shares: its thread manager, its clock, and its node-local... (importers: few)

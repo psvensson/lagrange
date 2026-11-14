@@ -705,8 +705,6 @@ const NOT_READERS = Object.freeze({
   'src/control-plane/membership-publication-readiness-repair.js': 'producer',
   'src/control-plane/membership-publication-row-helpers.js': 'producer',
   'src/control-plane/membership-publication-target-selection.js': 'producer',
-  'src/control-plane/formation-release-handoff-publication.js':
-    'another publication kind',
   // Evidence built from the owner's snapshot or planning projection: it
   // carries the list on, it does not decide what a row means.
   'src/admin/admin-control-snapshot.js': 'projection of the owner',

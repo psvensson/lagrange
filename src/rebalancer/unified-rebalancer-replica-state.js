@@ -103,26 +103,6 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
       }
       return true;
     }
-    // Cold-formation priority placement has a narrower readiness authority
-    // than public ready-lease publication: an owner-authored startup-cohort
-    // peer may receive the ledger spread cure while its lease is deliberately
-    // withheld by that cure's join barrier. Evaluate that authority
-    // independently of the recovery-dimension bit. After a ledger leadership
-    // handoff the new owner can report recoveryEligible=true for the same
-    // pre-ready peer; treating that true bit as a reason to fall through to
-    // strict lease readiness creates a circular repair_ineligible veto.
-    if (
-      this.isStartupAuthorityControlPlanePlacementEligibleNode(
-        nodeId,
-        readinessDecisionDimension,
-      )
-    ) {
-      return this.isStartupAuthorityPlacementNodeReady(
-        nodeId,
-        readiness,
-        readinessDecisionDimension,
-      );
-    }
     if (
       !this.isReadinessDimensionSatisfied(readiness, readinessDecisionDimension)
     ) {
@@ -139,36 +119,6 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
       enableReadinessPing: this.enableReadinessPing,
       readinessPingTimeoutMs: this.readinessPingTimeoutMs,
     });
-  }
-
-  /**
-   * Evaluate node readiness under startup-authority control-plane placement.
-   *
-   * @param {string} nodeId
-   * @param {Object|null} readiness
-   * @param {string} readinessDecisionDimension
-   * @return {boolean}
-   * @private
-   */
-  isStartupAuthorityPlacementNodeReady(
-    nodeId,
-    readiness,
-    readinessDecisionDimension,
-  ) {
-    if (
-      !this.isStartupAuthorityPlacementDispatchReady(
-        nodeId,
-        readiness,
-        readinessDecisionDimension,
-      ) ||
-      !this.isTransportReady(nodeId)
-    ) {
-      return false;
-    }
-    if (this.enableReadinessPing) {
-      return this.checkReadinessPing(nodeId);
-    }
-    return true;
   }
 
   /**

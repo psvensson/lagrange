@@ -76,11 +76,8 @@ function createSeedReadyNodeRow() {
   };
 }
 
-// A formation-barrier-held joiner: process-alive and CONNECTED
-// (heartbeat-only publication), but with NO ready lease — the operation
-// ledger formation barrier withholds it by design
-// (node-joining-operation-ledger-formation-readiness.js
-// publishOperationLedgerFormationLiveness).
+// A pre-lease joiner: process-alive and CONNECTED (heartbeat-only
+// publication), before its READY lease is published.
 function createBarrierHeldJoinerNodeRow(nodeId) {
   return {
     node_id: nodeId,

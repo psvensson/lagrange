@@ -83,7 +83,7 @@ function readTargetReplicaCount(systemTableCache, partitionId) {
     desiredTarget.replicationFactor;
 }
 
-function readPlacementEligibleNodeIds(systemTableCache, options = {}) {
+function readPlacementEligibleNodeIds(systemTableCache) {
   const placementEligibleNodeIds = new Set();
   for (const nodeRow of readCacheRows(
     systemTableCache,
@@ -94,18 +94,6 @@ function readPlacementEligibleNodeIds(systemTableCache, options = {}) {
   )) {
     const nodeId = normalizedField(nodeRow, 'node_id');
     if (nodeId.length > 0) {
-      placementEligibleNodeIds.add(nodeId);
-    }
-  }
-  const additionalNodeIds = Array.isArray(options.placementEligibleNodeIds) ?
-    options.placementEligibleNodeIds :
-    [];
-  for (const nodeId of additionalNodeIds) {
-    if (
-      typeof nodeId === 'string' &&
-      nodeId.length > 0 &&
-      !placementEligibleNodeIds.has(nodeId)
-    ) {
       placementEligibleNodeIds.add(nodeId);
     }
   }
@@ -228,10 +216,7 @@ function evaluateLedgerPartitionConcentration({
  * @param {Object|null} systemTableCache
  * @return {{holdEngaged: boolean, concentratedPartitions: Array<Object>}}
  */
-function evaluateOperationLedgerQuorumConcentration(
-  systemTableCache,
-  options = {},
-) {
+function evaluateOperationLedgerQuorumConcentration(systemTableCache) {
   const ledgerReplicaRows = readCacheRows(
     systemTableCache,
     TABLES.SERVICES,
@@ -245,10 +230,7 @@ function evaluateOperationLedgerQuorumConcentration(
     return EMPTY_EVALUATION;
   }
 
-  const readyNodeIds = readPlacementEligibleNodeIds(
-    systemTableCache,
-    options,
-  );
+  const readyNodeIds = readPlacementEligibleNodeIds(systemTableCache);
   const concentratedPartitions = [];
   for (const [partitionId, partitionRows] of groupRowsByPartitionId(
     ledgerReplicaRows,
