@@ -62,7 +62,6 @@ const controlPlaneReadinessPlanningOwnerDelegateMethods = {
   },
 
   shutdownReadinessPlanningOwner() {
-    this.formationReleaseHandoffPublicationCoordinator?.shutdown();
     this.readinessPlanningSnapshotOwner?.shutdown();
     this.shutdownNodeLivenessSemanticProjectionOwner();
   },

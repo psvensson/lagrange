@@ -2,33 +2,25 @@
 // (quest formation-ready-lease-independent-of-spread): with no timer
 // expiring, every admitted joiner holds a READY lease at the fixpoint.
 //
-// REAL: the join ready-signal path with its operation-ledger formation
-// barrier and the durable READY heartbeat (NodeJoiningService, the node
-// lifecycle publication owner); each node's readiness service with the
-// startup-authority evaluation and the formation-release closure owner,
-// publication coordinator and consumer read; the membership publication
-// coordinator (derivation, publication, acknowledgement); the planner of
-// every priority partition and the rebalance coordinator; the committed
-// serve-eligibility answer and the priority-recovery health /readyz consumes.
-// DOUBLES (formation-joint-admission-world.js states why none hides the
-// defect): the clock, the transport (mesh connectivity, zero-latency shared
-// row store, the SQL store's answer for a formation-release row), consensus
-// leadership as the rows state it, and the node-local publication mode.
+// REAL: the join ready-signal path and the durable READY heartbeat
+// (NodeJoiningService, the node lifecycle publication owner); each node's
+// readiness service with the startup-authority evaluation; the membership
+// publication coordinator (derivation, publication, acknowledgement); the
+// planner of every priority partition, the rebalance coordinators and the
+// replica dispatch service; the committed serve-eligibility answer and the
+// priority-recovery health /readyz consumes.
+// DOUBLES (formation-joint-admission-world.js states why none hides a
+// defect): the clock, the transport (mesh connectivity, a zero-latency shared
+// row store), consensus leadership as the rows state it, the node-local
+// publication mode, and the replica runtime at its message boundary.
 //
-// The operation workflow is the production one: every planner's move becomes
-// an operation through the rebalance coordinators (admission, ledger
-// interlock, dispatch, remove safety, completion, re-plan). The double is the
-// replica runtime at its message boundary (formation-joint-admission-world.js
-// createReplicaRuntime): what a delivered CREATE or REMOVE does to the
-// durable replica rows, stepped once per round.
+// On main (232082669) four of the nine orders below left every admitted
+// joiner waiting at the operation-ledger formation barrier (lab jobs
+// b9946a68, be96bee0 and 618296c9 in the quest's evidence).
 //
-// Coordinator-to-coordinator wakes reach the real ReplicaDispatchService of
-// the addressed node.
-//
-// KNOWN LIMIT: no REPLACE completes in this world. Its owner's dispatch is
-// deferred by ReplicaDispatchService ("Cache update not observed for replica
-// operation", a 250 ms retry) and the retry is a timer, which never fires
-// here; so no order reaches the spread, and no removal is ever admitted.
+// KNOWN LIMIT: no REPLACE completes in this world yet (its owner's dispatch
+// retry is a cadence this world does not step), so the spread half of the
+// claim is not asserted here.
 // NOT MOUNTED: BootstrapReadinessOwner (/readyz is read through the HARD
 // priority-recovery health it consumes).
 
@@ -50,22 +42,11 @@ const J1 = 'j1';
 const J2 = 'j2';
 const J3 = 'j3';
 const J4 = 'j4';
-const BARRIER_WAITING_AUTHORITY = 'waiting_for_startup_authority';
-const AUTHORITY_RECOVERY_PENDING = 'recovery_pending';
-const REASON_NOT_SPREAD = 'priority_partitions_not_spread';
-const HANDOFF_REVOKED = 'revoked';
-const OPERATION_ADD = 'ADD';
-const OPERATION_REPLACE = 'REPLACE';
-const STEP_ACTIVE = 'ACTIVE';
-const LEDGER_PARTITION_ID = 'replica_operations-p1';
-const FLOOR_REFUSAL = 'would drop voter-ready replicas below minimum (2/3)';
-const INTERLOCK_REFUSAL = 'operation_ledger_self_move_in_flight';
-const TERMINAL_STEPS = new Set(['ACTIVE', 'REMOVED', 'FAILED']);
 const TABLE_PAD = 9;
 
 // The measured losing order (lab job 0bc41a40, run repeat-551bf264/run-1):
-// the first generation is captured for one joiner, revoked, and one
-// membership derivation then admits both joiners before any further capture.
+// one joiner arrives, the seed's authority is read, that joiner's connection
+// is re-identified, and one membership derivation then admits both joiners.
 const LOSING_ORDER = Object.freeze([
   arrive(J1), readAuthority(), revoke(J1), arrive(J2), derive(),
 ]);
@@ -124,57 +105,26 @@ test('negative control: one joiner per derivation releases every joiner',
     assertSafety(report, 'winning order');
   });
 
-test('the losing order reproduces the measured stuck state', async () => {
-  const report = await runArrivalOrder(LOSING_ORDER);
-  process.stdout.write(`LOSING ORDER ${describeOrder(LOSING_ORDER)}\n` +
-    `${formatStuckReport(report)}\n`);
-  assert.equal(report.fixpoint, true);
-  assert.deepEqual(report.admittedJoiners, [J1, J2]);
-  assert.equal(report.authority.handoff.state, HANDOFF_REVOKED);
-  for (const joiner of report.joiners) {
-    assert.equal(joiner.barrier.state, BARRIER_WAITING_AUTHORITY);
-    assert.equal(joiner.barrier.candidateNodeCount, 3);
-    assert.equal(joiner.barrier.preReadyCandidateNodeCount, 2);
-    assert.equal(joiner.barrier.startupAuthorityAvailable, true);
-    assert.equal(joiner.barrier.startupAuthorityState,
-      AUTHORITY_RECOVERY_PENDING);
-    assert.deepEqual(joiner.barrier.startupAuthorityRecoveryReasonCodes,
-      [REASON_NOT_SPREAD]);
-    assert.equal(joiner.barrier.formationReleaseHandoffState, null);
-  }
-  // The operation picture the composed owners state on main: the priority
-  // ADDs onto the first joiner that were admitted completed; the ledger's
-  // count-neutral REPLACE is in flight and not terminal; every other priority
-  // planner either refuses its own surplus removal of a seed replica at the
-  // voter-ready floor (2 of 3) or has its ADD refused by the ledger
-  // interlock while that self-move is in flight.
-  const adds = report.operations.filter((operation) =>
-    operation.type === OPERATION_ADD);
-  assert.ok(adds.length > 0);
-  assert.ok(adds.every((operation) => operation.step === STEP_ACTIVE));
-  const replaces = report.operations.filter((operation) =>
-    operation.type === OPERATION_REPLACE);
-  assert.equal(replaces.length, 1);
-  assert.equal(replaces[0].partitionId, LEDGER_PARTITION_ID);
-  assert.equal(TERMINAL_STEPS.has(replaces[0].step), false);
-  const refusalKinds = {floor: 0, interlock: 0};
-  for (const [partitionId, planner] of Object.entries(report.planners)) {
-    if (partitionId !== LEDGER_PARTITION_ID) {
-      const atFloor = planner.refusals.some((refusal) =>
-        String(refusal.error).includes(FLOOR_REFUSAL));
-      const interlocked = planner.refusals.some((refusal) =>
-        refusal.reason === INTERLOCK_REFUSAL);
-      assert.ok(atFloor || interlocked,
-        `${partitionId}: refused at the floor or by the ledger interlock`);
-      refusalKinds.floor += atFloor ? 1 : 0;
-      refusalKinds.interlock += interlocked ? 1 : 0;
+test('no joiner consults a formation barrier or a release handoff',
+  async () => {
+    const report = await runArrivalOrder(LOSING_ORDER);
+    process.stdout.write(`MEASURED LOSING ORDER ${describeOrder(LOSING_ORDER)}\n` +
+      `${formatStuckReport(report)}\n`);
+    assert.equal(report.fixpoint, true);
+    assert.deepEqual(report.admittedJoiners, [J1, J2]);
+    for (const joiner of report.joiners) {
+      assert.equal(joiner.readyLease, true);
+      assert.equal(joiner.barrier, null, 'no barrier state is ever stated');
+      assert.deepEqual(joiner.armedSleeps, [], 'no joiner waits on a timer');
     }
-  }
-  assert.equal(refusalKinds.floor, adds.length);
-  assert.equal(refusalKinds.floor + refusalKinds.interlock, 5);
-  assert.ok(refusalKinds.interlock > 0);
-  assertSafety(report, 'losing order');
-});
+    assert.deepEqual(report.handoffTransitions, [],
+      'no formation-release handoff transition is logged');
+    assert.equal(report.authority.handoff, null,
+      'the startup authority carries no release handoff');
+    assert.deepEqual(report.otherPublicationKinds, [],
+      'no formation-release publication row is written');
+    assertSafety(report, 'measured losing order');
+  });
 
 test('liveness: the losing order releases every admitted joiner', async () => {
   const report = await runArrivalOrder(LOSING_ORDER);

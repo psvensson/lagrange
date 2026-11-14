@@ -1,7 +1,7 @@
 // The evaluation-round driver of the joint-admission release-liveness
 // reproducer: it mounts the REAL join ready-signal path (NodeJoiningService:
-// node-local gates, the operation-ledger formation barrier, the durable READY
-// heartbeat) on each joiner of a formation world, and advances the world only
+// node-local gates and the durable READY heartbeat) on each joiner of a
+// formation world, and advances the world only
 // by asking owners to evaluate. Nothing here decides anything.
 //
 // Time model. No timer fires and no deadline is reached. Production orders a
@@ -12,11 +12,10 @@
 // the shortest delay any owner armed. The planning read memo's 250 ms
 // staleness floor (membership-planning-version-key.js) is lapsed at each
 // evaluation, as it is between any two evaluations of a running node (the
-// barrier polls every 500 ms, the planner and the membership driver every
-// 5 s); it is a read bound, not a liveness timer.
+// planner and the membership driver evaluate every 5 s); it is a read bound,
+// not a liveness timer.
 
 import {
-  JOINING_DEFAULT,
   JOINING_LOG_MSG,
 } from '../../src/bootstrap/node-joining-constants.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
@@ -32,8 +31,6 @@ import {SEED_NODE_ID, nodeAddressOf} from './formation-joint-admission-world.js'
 
 const EVALUATION_STEP_MS = 1;
 const FAR_FUTURE_MS = Number.MAX_SAFE_INTEGER;
-const BARRIER_POLL_MS = JOINING_DEFAULT.priorityPlacementFormationPollMs;
-const BARRIER_GATE = 'operation_ledger_formation';
 const HANDOFF_TRANSITION_MESSAGE =
   'Formation release handoff authority transition';
 const PLANNING_GATE_MESSAGE =
@@ -94,8 +91,8 @@ function mountJoinReadySignal(world, nodeId) {
     nodeAddress: nodeAddressOf(nodeId),
     seedNodeAddress: nodeAddressOf(SEED_NODE_ID),
     now: () => world.clock.now(),
-    // A sleep is a timer. It is never left to expire: the driver completes
-    // only the barrier's own poll, as one explicit barrier evaluation.
+    // A sleep is a timer. It is never completed: a joiner that sleeps is
+    // waiting on a timer, and the report names it.
     sleep: (delayMs) => new Promise((resolve) => {
       sleeps.push({delayMs, resolve});
     }),
@@ -107,21 +104,6 @@ function mountJoinReadySignal(world, nodeId) {
   service.messageRouter = hosts.messageRouter;
   service.heartbeatService = hosts.heartbeatService;
   service.rebalanceCoordinator = hosts.rebalanceCoordinator;
-  // Transport: the barrier's CONNECTED liveness publication is routed to
-  // the seed's durable node lifecycle owner, which decides what it writes.
-  const livenessPublications = [];
-  service.sendControlPlaneNodeStateUpdate = async (publication) => {
-    livenessPublications.push(publication);
-    return world.lifecyclePublicationOf(SEED_NODE_ID).publish({
-      nodeId,
-      bootIncarnation: TEST_BOOT_INCARNATION,
-      state: publication.state,
-      heartbeatOnly: publication.heartbeatOnly,
-      heartbeatAt: publication.heartbeatAt,
-      capabilities: publication.capabilities,
-      publicationMode: publication.nodeStatePublicationMode,
-    });
-  };
   const baseLogger = service.logger;
   service.logger = {
     debug: () => {},
@@ -142,7 +124,6 @@ function mountJoinReadySignal(world, nodeId) {
     service,
     sleeps,
     barrierLog,
-    livenessPublications,
     state: READY_SIGNAL_STATE.NOT_STARTED,
     failure: null,
     start() {
@@ -155,26 +136,11 @@ function mountJoinReadySignal(world, nodeId) {
         joiner.failure = error;
       });
     },
-    // One barrier evaluation: complete the barrier's pending poll sleep.
-    evaluateBarrier() {
-      const pending = sleeps.filter((sleep) => !sleep.done);
-      for (const sleep of pending) {
-        if (sleep.delayMs === BARRIER_POLL_MS &&
-            service.infrastructureJoinProgress?.readySignalGate ===
-              BARRIER_GATE) {
-          sleep.done = true;
-          sleep.resolve();
-        }
-      }
-    },
     // Sleeps the driver never completes: timers that would have to expire.
-    armedSleeps: () => sleeps.filter((sleep) => !sleep.done &&
-      !(sleep.delayMs === BARRIER_POLL_MS &&
-        service.infrastructureJoinProgress?.readySignalGate === BARRIER_GATE))
-      .map((sleep) => ({
-        delayMs: sleep.delayMs,
-        gate: service.infrastructureJoinProgress?.readySignalGate || null,
-      })),
+    armedSleeps: () => sleeps.map((sleep) => ({
+      delayMs: sleep.delayMs,
+      gate: service.infrastructureJoinProgress?.readySignalGate || null,
+    })),
     barrier: () => barrierLog[barrierLog.length - 1] || null,
     isReady: () => isNodeRecordReady(
       world.cache.get(TABLES.NODES, nodeId), {now: world.clock.now()}),
@@ -308,14 +274,11 @@ function createRoundDriver(world) {
       await seedReadiness.getNodeReadiness(SEED_NODE_ID);
       await settleWorld(world);
     },
-    // One read of the seed's own startup authority: the closure owner's
-    // observation, and the durable publication of what it captured.
+    // One read of the seed's own startup authority.
     async readSeedAuthority() {
       nextEvaluationInstant(world);
       const authority = seedReadiness.getStartupAuthoritySnapshotSync(
         SEED_NODE_ID, world.clock.now());
-      await seedReadiness.formationReleaseHandoffPublicationCoordinator
-        .whenIdle();
       await settleWorld(world);
       return authority;
     },
@@ -367,13 +330,6 @@ function createRoundDriver(world) {
     startReadySignal(nodeId) {
       joiners.get(nodeId).start();
     },
-    async evaluateJoiners() {
-      nextEvaluationInstant(world);
-      for (const joiner of joiners.values()) {
-        joiner.evaluateBarrier();
-        await settleWorld(world);
-      }
-    },
     // One evaluation round of every owner.
     async round() {
       roundCounter.number += 1;
@@ -382,7 +338,6 @@ function createRoundDriver(world) {
       await driver.planPriorityPartitions();
       await driver.evaluateCoordinators();
       await driver.stepReplicaRuntime();
-      await driver.evaluateJoiners();
       await driver.readSeedAuthority();
     },
   };

@@ -351,6 +351,12 @@ async function runArrivalOrder(order) {
           .map((member) => member.nodeId),
       })),
       membership: membershipRows(world),
+      // Every publication row that is not a membership publication, by kind:
+      // the removed formation-release handoff wrote such rows.
+      otherPublicationKinds: world.cache
+        .getAll(TABLES.CONTROL_PLANE_PUBLICATIONS)
+        .filter((row) => row.publication_kind !== MEMBERSHIP_KIND)
+        .map((row) => row.publication_kind),
       nodes: nodeStates(world),
       planners: plannerStates(driver),
       operations: operationRows(world),

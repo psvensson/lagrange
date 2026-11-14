@@ -1,7 +1,5 @@
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
-import {
-  NodeJoiningOperationLedgerFormationReadiness,
-} from './node-joining-operation-ledger-formation-readiness.js';
+import {NodeJoiningOwnerConstruction} from './node-joining-owner-construction.js';
 import {
   BOOTSTRAP_API_PROBE_REASON,
 } from './bootstrap-api-constants.js';
@@ -16,11 +14,6 @@ import {
   isMetadataPublicationReadySnapshot,
 } from './traffic-readiness-utils.js';
 import {PressureGovernor} from '../control-plane/pressure-governor.js';
-import {
-  getStartupAuthorityControlPlanePlacementEligibleNodeIds,
-} from '../control-plane/startup-authority-placement-eligibility.js';
-import {TABLES} from '../constants/index.js';
-import {isNodeRecordReady} from '../node/node-readiness-policy.js';
 import {
   readWaitClock,
   reportWaitBoundSpent,
@@ -54,7 +47,6 @@ const INFRASTRUCTURE_JOIN_READY_SIGNAL_GATE = Object.freeze({
   CDC_SUBSCRIPTION: 'cdc_subscription',
   LOCAL_QUERY_TRANSPORT: 'local_query_transport',
   METADATA_PUBLICATION: 'metadata_publication',
-  OPERATION_LEDGER_FORMATION: 'operation_ledger_formation',
   HEARTBEAT_PUBLICATION: 'heartbeat_publication',
 });
 const LOCAL_STR_BOOTSTRAP_METADATA_PUBLICATION_NOT_READY =
@@ -83,7 +75,7 @@ function readOwnInfrastructureJoinFailureCode(error, field) {
 }
 
 class NodeJoiningReadySignalReadiness
-  extends NodeJoiningOperationLedgerFormationReadiness {
+  extends NodeJoiningOwnerConstruction {
   recordInfrastructureJoinCheckpointTarget(checkpointTarget) {
     const current = this.infrastructureJoinProgress || {};
     this.infrastructureJoinProgress = {
@@ -235,95 +227,6 @@ class NodeJoiningReadySignalReadiness
       snapshot,
     );
   }
-  /**
-   * Return startup-authority nodes that are already safe targets for the
-   * priority placement lane, even though their public ready lease is still
-   * withheld. This mirrors the existing rebalancer eligibility conjuncts:
-   * owner-authored membership, ACTIVE registration row, connected/ready state,
-   * and live transport. It does not make ordinary placement eligible.
-   *
-   * @param {Object} systemTableCache
-   * @param {number} now
-   * @return {Array<string>}
-   * @private
-   */
-  async getPriorityPlacementFormationCandidateNodeIds(systemTableCache, now) {
-    const startupAuthority =
-      await this.getPriorityPlacementFormationStartupAuthority(now);
-    return this.getPriorityPlacementFormationCandidateNodeIdsFromAuthority(
-      systemTableCache,
-      startupAuthority,
-    );
-  }
-  async getPriorityPlacementFormationStartupAuthority(now) {
-    const readinessService =
-      this.rebalanceCoordinator?.controlPlaneReadinessService || null;
-    if (
-      !readinessService ||
-      typeof readinessService.getStartupAuthoritySnapshotSync !== 'function'
-    ) {
-      return null;
-    }
-    try {
-      if (
-        typeof readinessService
-          .getFormationReleaseStartupAuthoritySnapshot === 'function'
-      ) {
-        return await readinessService.getFormationReleaseStartupAuthoritySnapshot(
-          this.seedNodeId || this.nodeId,
-          now,
-        );
-      }
-      if (
-        typeof readinessService
-          .getFormationReleaseStartupAuthoritySnapshotSync === 'function'
-      ) {
-        return readinessService.getFormationReleaseStartupAuthoritySnapshotSync(
-          this.seedNodeId || this.nodeId,
-          now,
-        );
-      }
-      return readinessService.getStartupAuthoritySnapshotSync(
-        this.seedNodeId || this.nodeId,
-        now,
-      );
-    } catch {
-      return null;
-    }
-  }
-  getPriorityPlacementFormationCandidateNodeIdsFromAuthority(
-    systemTableCache,
-    startupAuthority,
-  ) {
-    return getStartupAuthorityControlPlanePlacementEligibleNodeIds({
-      systemTableCache,
-      startupAuthority,
-      messageRouter: this.messageRouter,
-      localNodeId: this.nodeId,
-      includeSelf: true,
-    });
-  }
-  getPriorityPlacementFormationPreReadyNodeIds(
-    systemTableCache,
-    candidateNodeIds,
-    now,
-  ) {
-    if (
-      !systemTableCache ||
-      typeof systemTableCache.filter !== 'function'
-    ) {
-      return [];
-    }
-    const candidateNodeIdSet = new Set(candidateNodeIds);
-    return systemTableCache
-      .filter(
-        TABLES.NODES,
-        (node) =>
-          candidateNodeIdSet.has(node?.node_id) &&
-          !isNodeRecordReady(node, {now}),
-      )
-      .map((node) => node.node_id);
-  }
   resolveReadySignalMetadataPublicationReadinessSnapshot(snapshot) {
     if (snapshot && typeof snapshot === 'object') {
       snapshot = {
@@ -441,10 +344,9 @@ class NodeJoiningReadySignalReadiness
       });
       throw error;
     }
-    this.recordInfrastructureJoinReadySignalProgress({
-      gate: INFRASTRUCTURE_JOIN_READY_SIGNAL_GATE.OPERATION_LEDGER_FORMATION,
-    });
-    await this.awaitOperationLedgerFormationBarrier();
+    // The READY lease states that this node can serve: it awaits the
+    // node-local gates above and the durable NODES write below, and no
+    // cluster-level fact.
     const heartbeat = assertCritical(
       this.heartbeatService,
       JOINING_ERROR_MSG.CONTROL_PLANE_SERVICE_REQUIRED,

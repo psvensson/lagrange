@@ -1,8 +1,7 @@
 // The formation world of the joint-admission release-liveness reproducer
 // (quest formation-ready-lease-independent-of-spread): one seed and its
 // joiners, each node the REAL control-plane owners of a production node
-// (createSimulatedNodeHosts: readiness service with its formation-release
-// closure owner and publication coordinator, membership publication
+// (createSimulatedNodeHosts: readiness service, membership publication
 // coordinator, gateway, CDC owner, heartbeat service, rebalance coordinator)
 // over ONE durable row store, on ONE clock that never moves.
 //
@@ -18,9 +17,9 @@
 //     a node holds a replica where a services row says so;
 //   - the node-local publication mode (CDC group propagation), which the
 //     measured joiners had already passed.
-// Every decision the claim is about (barrier, startup authority, handoff
-// capture and revoke, membership derivation, planning, admission, remove
-// safety) is the production owner's, over the rows below.
+// Every decision the claim is about (READY publication, startup authority,
+// membership derivation, planning, admission, remove safety) is the
+// production owner's, over the rows below.
 
 import {
   INITIAL_MESSAGE_GROUP_ID,
@@ -143,9 +142,6 @@ const ADDRESS_SEPARATOR = '/';
 const REPLICA_HANDLER_SERVICE = 'replica-handler';
 const REPLICA_DISPATCH_SERVICE = 'replica-dispatch';
 const LEARNER_SERVICE = Object.freeze({getRole: () => RAFT_ROLE.LEARNER});
-const HANDOFF_PUBLICATION_KIND = 'formation_release_handoff';
-const PUBLICATION_KIND_COLUMN = 'publication_kind';
-const PUBLICATION_ID_COLUMN = 'publication_id';
 
 function nodeAddressOf(nodeId) {
   return `${NODE_ADDRESS_PREFIX}${nodeId}${NODE_ADDRESS_SUFFIX}`;
@@ -481,26 +477,6 @@ function createFormationWorld() {
   const publicationModeByNodeId = new Map();
   const lifecyclePublicationByNodeId = new Map();
   const dispatchServiceByNodeId = new Map();
-  // The SQL store's answer for a formation-release publication. The engine
-  // seam answers reads from the cache, whose publication merge keeps a row's
-  // first created_at; the store replaces the row (INSERT OR REPLACE), and the
-  // handoff reader requires the row exactly as its authority last wrote it.
-  const storedHandoffRows = new Map();
-  function installStoredHandoffRows(hosts) {
-    const owner = hosts.membershipPublicationService.controlPlanePublicationsOwner;
-    const upsertPublication = owner.upsertPublication.bind(owner);
-    const getPublication = owner.getPublication.bind(owner);
-    owner.upsertPublication = async (row, options) => {
-      const result = await upsertPublication(row, options);
-      if (row?.[PUBLICATION_KIND_COLUMN] === HANDOFF_PUBLICATION_KIND) {
-        storedHandoffRows.set(row[PUBLICATION_ID_COLUMN], row);
-      }
-      return result;
-    };
-    owner.getPublication = async (publicationId, options) =>
-      storedHandoffRows.get(publicationId) ??
-        getPublication(publicationId, options);
-  }
   const network = Object.freeze({
     networkTimeSource: () => clock,
     setTimer: (nodeId, callback, delayMs) =>
@@ -520,7 +496,6 @@ function createFormationWorld() {
       randomSource: new SeededRandomSource({seed: RANDOM_SEED}),
     });
     const readiness = hosts.controlPlaneReadinessService;
-    readiness.setFormationReleaseAuthorityNodeId(SEED_NODE_ID);
     const publicationModeOwner = Object.freeze({
       getPublicationModeDiagnostics: () =>
         publicationModeByNodeId.get(nodeId) || PUBLICATION_MODE_GROUPED,
@@ -571,7 +546,6 @@ function createFormationWorld() {
     installMeshTransport(hosts, upNodeIds, downLinks);
     installDelivery(hosts, cache, replicaRuntime, deliveries,
       dispatchServiceByNodeId);
-    installStoredHandoffRows(hosts);
     return hosts;
   }
 
