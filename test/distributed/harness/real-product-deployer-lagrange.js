@@ -70,6 +70,7 @@ import {
   dockerRunDetached,
   dockerRunOnceCommand,
   errorText,
+  execWithStatus,
   httpFromHost,
   shellWord,
 } from './real-product-remote-shell.js';
@@ -149,20 +150,39 @@ function storageArgs(opts, campaignId, index) {
 // 16dce80a, tv-dator 2026-11-14: EACCES at uid 10001). The directory is made
 // beforehand, owned by that user, through a throwaway container of the
 // PostgreSQL image every data host holds (campaignImagesByRole); the product
-// never runs as root and nothing is made world-writable.
+// never runs as root and nothing is made world-writable. Re-owning is limited
+// to what carries no one else's data: an absent directory, an empty one (as
+// dockerd leaves behind) or one the runtime user owns (an earlier run of the
+// same campaign). A non-empty directory of another owner is foreign data: the
+// node is refused, typed, and the directory is left as it is.
+const FOREIGN_STORAGE_EXIT = 3;
+
+function storagePreparationScript(dir) {
+  return `if [ -d ${dir} ] && [ -n "$(ls -A ${dir})" ] && ` +
+    `[ "$(stat -c %u:%g ${dir})" != "${RUNTIME_USER}" ]; then ` +
+    `echo "foreign $(stat -c %u:%g ${dir})"; exit ${FOREIGN_STORAGE_EXIT}; fi; ` +
+    `mkdir -p ${dir} && chown ${RUNTIME_USER} ${dir}`;
+}
+
 async function prepareNodeStorage({sshRun, opts, host, campaignId, index}) {
   if (!opts.storageRoot) return;
-  const dir = `${STORAGE_MOUNT}/${storageLabel(index)}`;
-  try {
-    await sshRun(host, opts, dockerRunOnceCommand({campaignId, image: POSTGRES_IMAGE_DEFAULT,
-      dockerArgs: ['-v', `${opts.storageRoot}/${campaignId}:${STORAGE_MOUNT}`],
-      commandArgs: ['sh', '-c', `mkdir -p ${dir} && chown ${RUNTIME_USER} ${dir}`]}));
-  } catch (error) {
-    throw deploymentFailure(DEPLOYMENT_FAILURE.DEPLOYMENT_COMMAND_FAILED, 'could not prepare ' +
-      `${opts.storageRoot}/${campaignId}/${storageLabel(index)} on ${host} for the runtime ` +
-      `user ${RUNTIME_USER}: ${errorText(error)}`, {host, reason: 'storage_owner_unprepared',
-      storageRoot: opts.storageRoot});
+  const storagePath = `${opts.storageRoot}/${campaignId}/${storageLabel(index)}`;
+  const result = await execWithStatus(sshRun, host, opts, `${dockerRunOnceCommand({campaignId,
+    image: POSTGRES_IMAGE_DEFAULT,
+    dockerArgs: ['-v', `${opts.storageRoot}/${campaignId}:${STORAGE_MOUNT}`],
+    commandArgs: ['sh', '-c',
+      storagePreparationScript(`${STORAGE_MOUNT}/${storageLabel(index)}`)]})} 2>&1`);
+  if (result.exitCode === 0) return;
+  const output = stringTrim(result.stdout);
+  if (result.exitCode === FOREIGN_STORAGE_EXIT && stringStartsWith(output, 'foreign ')) {
+    throw deploymentFailure(DEPLOYMENT_FAILURE.DEPLOYMENT_COMMAND_FAILED, `${storagePath} on ${host} ` +
+      `already holds data owned by ${output.slice('foreign '.length)}, not the runtime user ` +
+      `${RUNTIME_USER}; it is never re-owned`, {host, reason: 'storage_foreign_owner', path: storagePath,
+      owner: output.slice('foreign '.length)});
   }
+  throw deploymentFailure(DEPLOYMENT_FAILURE.DEPLOYMENT_COMMAND_FAILED, 'could not prepare ' +
+    `${storagePath} on ${host} for the runtime user ${RUNTIME_USER} (exit ${result.exitCode}): ` +
+    output, {host, reason: 'storage_owner_unprepared', path: storagePath, output});
 }
 
 function normalizeImageDigest(digest, image) {
