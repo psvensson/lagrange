@@ -412,9 +412,15 @@ test('seed node-ready hook: the second member of a node reads the first member m
 // an INSERT replaces the cached row (the overlay keeps its other fields), and
 // a member older than the cached row is rejected (the overlay applies it).
 // The hook follows record S-4b (the previous member of the same node inside
-// the vector is the previous row); these probes measure whether a later
-// member of the same node then takes another decision than under one-event
-// delivery through the real cache.
+// the vector is the previous row). Measured through the real cache (lab job
+// 12776852 tv-dator):
+// - a member older than the cached row: the hook's previous row differs, the
+//   decisions do not;
+// - DEFECT PIN, reported and not repaired here: an INSERT over a cached row
+//   followed by a member of the same node. One-event delivery reads the row
+//   the cache replaced (the old ready lease is gone) and does not trigger; the
+//   vector's overlay still carries the old lease and triggers the node-ready
+//   rebalance. The pin states both behaviours; a repair changes `vector`.
 const NODE_READY_MERGE_PROBES = Object.freeze({
   'an INSERT over a cached row': {
     cached: [nodeRow('n1', 'joining',
@@ -423,6 +429,11 @@ const NODE_READY_MERGE_PROBES = Object.freeze({
       nodesEvent('INSERT', nodeRow('n1', 'joining', {last_heartbeat: 2})),
       nodesEvent('UPDATE', {node_id: 'n1', status: SERVICE_STATUS.ACTIVE, last_heartbeat: 3}),
     ],
+    perEvent: {decisions: [false, false],
+      previous: {node_id: 'n1', status: 'joining', last_heartbeat: 2}},
+    vector: {decisions: [false, true],
+      previous: {node_id: 'n1', status: 'joining', address: 'n1:1',
+        ready_lease_expires_at: LEASE, last_heartbeat: 2}},
   },
   'a member older than the cached row': {
     cached: [nodeRow('n1', SERVICE_STATUS.ACTIVE,
@@ -432,30 +443,36 @@ const NODE_READY_MERGE_PROBES = Object.freeze({
       nodesEvent('UPDATE', nodeRow('n1', SERVICE_STATUS.ACTIVE,
         {ready_lease_expires_at: LEASE + 1, last_heartbeat: 3, updated_at: 20})),
     ],
+    perEvent: {decisions: [false, true],
+      previous: {node_id: 'n1', status: SERVICE_STATUS.ACTIVE, ready_lease_expires_at: LEASE,
+        last_heartbeat: 1, updated_at: 30}},
+    vector: {decisions: [false, true],
+      previous: {node_id: 'n1', status: 'joining', ready_lease_expires_at: LEASE,
+        last_heartbeat: 2, updated_at: 10}},
   },
 });
 
-for (const [name, {cached, events}] of Object.entries(NODE_READY_MERGE_PROBES)) {
-  test(`seed node-ready hook against the real cache merge: ${name}`, async (t) => {
+for (const [name, probe] of Object.entries(NODE_READY_MERGE_PROBES)) {
+  test(`seed node-ready hook against the real cache merge: ${name}`, async () => {
     const perEvent = await nodeReadyHookSeed();
     const vector = await nodeReadyHookSeed();
     try {
       for (const seed of [perEvent, vector]) {
-        for (const row of cached) seed.cacheRow(row);
+        for (const row of probe.cached) seed.cacheRow(row);
       }
-      for (const event of events) await perEvent.subscriber(Object.freeze([event]));
-      await vector.subscriber(Object.freeze([...events]));
-      const decisionsOf = (seed) => seed.triggers.map((trigger) => trigger.scheduled);
-      const previousOf = (seed) => seed.triggers.map((trigger) => trigger.previousRow);
-      t.diagnostic(`NODE_READY_PROBE ${JSON.stringify({name,
-        perEvent: {decisions: decisionsOf(perEvent), previous: previousOf(perEvent),
-          cached: perEvent.cachedRows()},
-        vector: {decisions: decisionsOf(vector), previous: previousOf(vector),
-          cached: vector.cachedRows()}})}`);
+      for (const event of probe.events) await perEvent.subscriber(Object.freeze([event]));
+      await vector.subscriber(Object.freeze([...probe.events]));
+      const measured = (seed) => ({
+        decisions: seed.triggers.map((trigger) => trigger.scheduled),
+        previous: seed.triggers[1].previousRow});
       assert.deepEqual(vector.cachedRows(), perEvent.cachedRows(),
         'the real cache holds the same rows either way');
-      assert.deepEqual(previousOf(vector)[0], previousOf(perEvent)[0],
+      assert.deepEqual(vector.triggers[0].previousRow, perEvent.triggers[0].previousRow,
         'the first member reads the cached row either way');
+      assert.deepEqual(measured(perEvent), probe.perEvent,
+        'one-event delivery: the second member reads what the real cache merge left');
+      assert.deepEqual(measured(vector), probe.vector,
+        'one vector: the second member reads the first member overlaid on the cached row');
     } finally {
       perEvent.rebalanceOwner.clearNodeReadyRebalanceState();
       vector.rebalanceOwner.clearNodeReadyRebalanceState();
