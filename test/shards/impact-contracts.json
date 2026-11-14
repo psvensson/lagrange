@@ -1445,7 +1445,8 @@
         "src/topology/cdc-group-propagation-retry-wait-report.js",
         "src/transport/transport-query-semantic-outcome.js",
         "src/partition/partition-cdc-owed-admission.js",
-        "src/partition/partition-cdc-obligation-lane.js"
+        "src/partition/partition-cdc-obligation-lane.js",
+        "src/partition/partition-cdc-obligation-range.js"
       ],
       "tests": [
         "test/cdc/cdc-delivery-outcome.test.js",
@@ -1492,7 +1493,11 @@
         "test/partition/partition-cdc-drain-admission.test.js",
         "test/partition/partition-cdc-owed-admission-native.test.js",
         "test/message-group/message-group-peer-address-committed-configuration.test.js",
-        "test/partition/cdc-hydration-live-handoff.test.js"
+        "test/partition/cdc-hydration-live-handoff.test.js",
+        "test/partition/partition-cdc-obligation-range-shipping.test.js",
+        "test/partition/partition-cdc-obligation-ship-window.test.js",
+        "test/partition/partition-cdc-obligation-range-differential.test.js",
+        "test/partition/partition-cdc-subscriber-vector-contract.test.js"
       ]
     },
     "router-delivery-envelope": {
@@ -3685,7 +3690,8 @@
             "src/utils/canonical-json-data.js",
             "src/topology/cdc-group-propagation-retry-wait-report.js",
             "src/partition/partition-cdc-owed-admission.js",
-            "src/partition/partition-cdc-obligation-lane.js"
+            "src/partition/partition-cdc-obligation-lane.js",
+            "src/partition/partition-cdc-obligation-range.js"
           ]
         },
         {
@@ -3762,7 +3768,11 @@
         "test/partition/partition-cdc-drain-admission.test.js",
         "test/partition/partition-cdc-owed-admission-native.test.js",
         "test/message-group/message-group-peer-address-committed-configuration.test.js",
-        "test/partition/cdc-hydration-live-handoff.test.js"
+        "test/partition/cdc-hydration-live-handoff.test.js",
+        "test/partition/partition-cdc-obligation-range-shipping.test.js",
+        "test/partition/partition-cdc-obligation-ship-window.test.js",
+        "test/partition/partition-cdc-obligation-range-differential.test.js",
+        "test/partition/partition-cdc-subscriber-vector-contract.test.js"
       ]
     },
     "router-envelope-query": {
