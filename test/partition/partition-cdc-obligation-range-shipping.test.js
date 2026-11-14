@@ -657,3 +657,33 @@ test('composition is fresh at every drive step: rows a hydration image covers wh
   assertRecipientLogs(model);
   assert.deepEqual(countCdcObligations(f.leader.db), {owed: 0, delivered: rows.length});
 });
+
+// The hydrated index is read at every step, not once per scan: here it moves
+// while a range is in flight and the handshake's own drain has not run for
+// the rows it comes to cover, so the lane meets them hydrated and not pending
+// in the same scan.
+test('composition reads the hydrated index at every drive step: rows it comes to cover ' +
+  'while a range is in flight are acknowledged without delivery by the next step of the ' +
+  'same scan', async (t) => {
+  const rows = idsOf(12, 'moving');
+  const f = await fixture(t, {rows, subscribers: 1});
+  let moved = false;
+  const model = installRecipientModel(f, {onWave: (wave) => {
+    if (wave.rows !== 2 || moved) return;
+    moved = true;
+    const through = model.raw[6].logIndex;
+    laneOf(f).hydratedThroughLogIndex = through;
+    model.hydratedThroughLogIndex = through;
+  }});
+  const outcome = await f.drive();
+  assert.equal(outcome.state, DRIVE.DRAINED, 'one drive shipped every range');
+  assert.equal(moved, true);
+  assert.deepEqual(idsOfWaves(model), [[rows[0]], rows.slice(1, 3), rows.slice(7, 11),
+    [rows[11]]], 'the four rows the index came to cover were not shipped');
+  assert.equal(diagnostics(f).pendingAcknowledgements, rows.length,
+    'they were acknowledged by the pre-pass');
+  await runLaneToQuiescence(f);
+  assert.equal(model.waves.length, 4);
+  assertRecipientLogs(model);
+  assert.deepEqual(countCdcObligations(f.leader.db), {owed: 0, delivered: rows.length});
+});
