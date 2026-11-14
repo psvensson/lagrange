@@ -41,6 +41,6 @@ documentClass: generated
 - [message-group-service-runtime-support.js](message-group-service-runtime-support.js) - The relay depth one CDC forward send carries: the sending hop's depth plus one. (importers: many)
 - [message-group-service-state.js](message-group-service-state.js) - Message Group Service - construction and persisted-state accessors. (importers: one)
 - [message-group-service.js](message-group-service.js) - Message Group Service - Reliable inter-service communication. (importers: hub)
-- [message-group-target-resolver.js](message-group-target-resolver.js) - No leading comment; first export: resolveMessageGroupForwardServiceCandidatesFromCache. (importers: few)
+- [message-group-target-resolver.js](message-group-target-resolver.js) - No leading comment; first export: isReadyNodeRow. (importers: few)
 - [message-retry-handler.js](message-retry-handler.js) - Message Retry Handler - Implements exponential backoff retry logic. (importers: many)
 - [system-cache-query-service.js](system-cache-query-service.js) - System Cache Query Service - API for local services to query system information. (importers: few)

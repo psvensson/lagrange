@@ -82,6 +82,7 @@ quests:
   - failed-create-cleanup-claim-normalization
   - strict-hydration-fixture-owner-ports
   - tap-default-machine-factor-portability
+  - node-ready-lease-renewal-cadence
 authorizes:
   - src
   - test
@@ -900,3 +901,9 @@ Quest evidence above govern continuation.
   existing comparison epic. No original service/comparison seal, receipt or
   earlier log entry changed. Source confirmation and external reported
   reproduction remain distinct; no new runtime tests or campaign ran here.
+- 2026-11-14: Registered `node-ready-lease-renewal-cadence` under
+  `operation-integrity-and-reliable-formation` to unify READY-lease renewal
+  cadence ownership in `NodeReadyLeaseAuthority` (`DEFAULT_RENEWAL_INTERVAL_MS`
+  = `5000 ms` for a `15000 ms` lease) and eliminate `Number(null) -> 0`
+  timestamp coercion across `NodeReadyLeaseAuthority`, `LeaseService`,
+  `node-readiness-policy.js`, and `message-group-target-resolver.js`.

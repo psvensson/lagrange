@@ -24,6 +24,10 @@ import {
   readAuthoritativeControlPlaneRows,
 } from './control-plane-system-table-gateway.js';
 import {DISPATCH_DEFAULT} from './replica-dispatch-service-constants.js';
+import {
+  DEFAULT_RENEWAL_CADENCE_DIVISOR,
+  resolveRenewalIntervalMs,
+} from './node-ready-lease-authority.js';
 
 /**
  * The one semantic owner of durable node lifecycle publication (CONNECTED
@@ -124,7 +128,7 @@ const NODE_LIFECYCLE_PUBLICATION_LITERAL = Object.freeze({
     'NodeLifecyclePublication requires a control-plane system-table gateway',
   LEASE_AUTHORITY_REQUIRED:
     'NodeLifecyclePublication requires the node READY lease authority',
-  QUERY_TIMEOUT_LEASE_DIVISOR: 3,
+  QUERY_TIMEOUT_LEASE_DIVISOR: DEFAULT_RENEWAL_CADENCE_DIVISOR,
 });
 
 // Lifecycle writes are routed to the NODES partition owner; the caller's
@@ -592,10 +596,9 @@ class NodeLifecyclePublication {
         `${plan.nodeId}`,
       deliveryPriority: profile.deliveryPriority,
       pressureRetryAfterMs: this.retryAfterMs,
-      queryTimeoutMs: mathMax(1, mathFloor(
-        this.leaseAuthority.readyLeaseMs /
-          NODE_LIFECYCLE_PUBLICATION_LITERAL.QUERY_TIMEOUT_LEASE_DIVISOR,
-      )),
+      queryTimeoutMs:
+        this.leaseAuthority.renewalIntervalMs ??
+        resolveRenewalIntervalMs(this.leaseAuthority.readyLeaseMs),
       workloadClass: profile.workloadClass,
       workClass: profile.workClass,
     };

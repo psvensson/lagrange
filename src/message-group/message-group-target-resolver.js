@@ -7,6 +7,10 @@ import {
 } from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 
+const EMPTY_STRING = '';
+const BOOLEAN_TYPE = 'boolean';
+const MIN_LEASE_TIMESTAMP_MS = 0;
+
 function filterRows(cache, tableName, predicate) {
   if (!cache) {
     return [];
@@ -37,6 +41,28 @@ function hasNodeReadinessRows(cache) {
   return false;
 }
 
+function isReadyNodeRow(nodeRow, nowMs = Date.now()) {
+  if (!nodeRow || nodeRow[COLUMN.CONNECTION_STATE] !== STATE.READY) {
+    return false;
+  }
+  const rawLeaseExpiry = nodeRow[COLUMN.READY_LEASE_EXPIRES_AT];
+  if (
+    rawLeaseExpiry === null ||
+    rawLeaseExpiry === undefined ||
+    rawLeaseExpiry === EMPTY_STRING ||
+    typeof rawLeaseExpiry === BOOLEAN_TYPE
+  ) {
+    return false;
+  }
+  const readyLeaseExpiresAt = Number(rawLeaseExpiry);
+  const now = Number.isFinite(nowMs) ? nowMs : Date.now();
+  return (
+    Number.isFinite(readyLeaseExpiresAt) &&
+    readyLeaseExpiresAt > MIN_LEASE_TIMESTAMP_MS &&
+    readyLeaseExpiresAt > now
+  );
+}
+
 function isReadyNode(cache, nodeId) {
   if (typeof nodeId !== 'string' || nodeId.length === 0) {
     return false;
@@ -54,14 +80,7 @@ function isReadyNode(cache, nodeId) {
   const nodeRow = findRow(cache, TABLES.NODES, (row) => {
     return row?.[COLUMN.NODE_ID] === nodeId;
   });
-  if (!nodeRow) {
-    return false;
-  }
-
-  const readyLeaseExpiresAt = Number(nodeRow?.[COLUMN.READY_LEASE_EXPIRES_AT]);
-  return nodeRow?.[COLUMN.CONNECTION_STATE] === STATE.READY &&
-    Number.isFinite(readyLeaseExpiresAt) &&
-    readyLeaseExpiresAt > Date.now();
+  return isReadyNodeRow(nodeRow, Date.now());
 }
 
 function getMessageGroupServiceCandidates(cache, groupId, options = {}) {
@@ -316,6 +335,7 @@ function resolveMessageGroupTargetAddressFromCache(cache, groupId, options = {})
 }
 
 export {
+  isReadyNodeRow,
   resolveMessageGroupForwardServiceCandidatesFromCache,
   resolveMessageGroupForwardServiceFromCache,
   resolveMessageGroupLeaderServiceFromCache,
