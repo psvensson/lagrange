@@ -188,6 +188,9 @@ function evaluateCombo(axes, report) {
 test(
   'lifecycle reconciliation equals the sealed base golden everywhere ' +
     'except the Q1 fill and the Q3 refusal',
+  // 134,400 cells: about 3 s on adams-gamla, about 42 s on adam-laptop,
+  // where the default per-test timeout fired (lab job for mutant m11).
+  {timeout: 120000},
   (t) => {
     const report = {
       cellCount: 0,
