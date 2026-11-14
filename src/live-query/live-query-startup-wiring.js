@@ -417,9 +417,16 @@ function createLiveQueryStartupWiring(options = {}) {
       );
     }
     const subKey = `${queryId}:${partitionId}`;
-    const wrappedHandler = (rawEvent) => {
-      const normalized = normalizePartitionCDCEvent(rawEvent, partitionId);
-      return handler(normalized);
+    // The partition's one subscriber contract hands (events, deliveryContext),
+    // events an ordered vector: every member reaches the query's handler in
+    // order, and the answer is the handler's for the last member (a vector of
+    // one, as the non-durable producer hands it, keeps its answer).
+    const wrappedHandler = async (events) => {
+      let answer;
+      for (const rawEvent of events) {
+        answer = await handler(normalizePartitionCDCEvent(rawEvent, partitionId));
+      }
+      return answer;
     };
     partitionSubscribers.set(subKey, wrappedHandler);
 

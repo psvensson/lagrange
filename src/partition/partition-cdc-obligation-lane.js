@@ -24,10 +24,28 @@ function emptyBatch() {
     firstAcknowledgedAt: null};
 }
 
+// The shipping window (quest cdc-obligation-range-shipping, record S-1): how
+// many rows the next shipped range may hold, one integer owned by the tenure
+// in [1, ACK_BATCH_MAX_EVENTS]. It starts at one whole ledger entry per wave
+// (the lane's behaviour before ranges), doubles after a range reached
+// committed coverage while the window was what cut it, and halves after a
+// range that was attempted and left uncovered, so one member that can never
+// be applied, or a range too slow for a recipient's attempt budget, cannot
+// hold the rows ahead of it. A refusal that attempted nothing (typed
+// backpressure) and provisional coverage leave it unchanged. It arms no timer
+// and adds no delay.
+function widenShipWindow(lane) {
+  lane.shipWindow = Math.min(BOUND.ACK_BATCH_MAX_EVENTS, lane.shipWindow * 2);
+}
+
+function narrowShipWindow(lane) {
+  lane.shipWindow = Math.max(1, Math.floor(lane.shipWindow / 2));
+}
+
 function createCdcObligationLane(tenure = null) {
   return {
     tenure, inFlight: false, rerun: false, scan: null, currentObligation: null,
-    hydratedThroughLogIndex: 0,
+    hydratedThroughLogIndex: 0, shipWindow: 1,
     pending: new Map(), commands: new Map(), batch: emptyBatch(),
     contendedPropagationOwners: new Map(),
     flushTimer: null, retryTimer: IDLE_OBLIGATION_RETRY,
@@ -235,4 +253,6 @@ export {
   OBLIGATION_RETRY_STATE,
   IDLE_OBLIGATION_RETRY,
   OBLIGATION_RETRY_DISPOSITION,
+  narrowShipWindow,
+  widenShipWindow,
 };

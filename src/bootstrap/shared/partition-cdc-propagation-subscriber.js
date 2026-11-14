@@ -156,9 +156,14 @@ function buildPropagationOwnerNotReadyMessage(tableName) {
     `for ${tableName} ${CDC_PROPAGATION_SUBSCRIBER_MESSAGE.PROPAGATION}`;
 }
 
-function acceptsPropagationTable(cdcEvent, tableName) {
-  if (cdcEvent?.tableName === tableName) return true;
-  if (hasDurableCdcEvents([cdcEvent])) {
+// The table guard, for every member of the vector: a vector of this
+// subscriber's table is propagated; an ordinary vector of another table is not
+// this subscriber's; a durable event of another table, or a vector that mixes
+// tables, breaks the one-table contract and is refused.
+function acceptsPropagationTable(events, tableName) {
+  const foreign = events.filter((cdcEvent) => cdcEvent?.tableName !== tableName).length;
+  if (foreign === 0) return true;
+  if (foreign !== events.length || hasDurableCdcEvents(events)) {
     throw Object.assign(new Error(CDC_COMPLETION.INVALID), {code: CDC_COMPLETION.INVALID});
   }
   return false;
@@ -193,10 +198,10 @@ function resolveUnknownAnswerDeferredFields(answer) {
   };
 }
 
-function propagationIsProvisional(answer, cdcEvent, groupId) {
-  if (!hasDurableCdcEvents([cdcEvent]) ||
-      isCommittedCdcOutcome(answer, [cdcEvent], groupId)) return false;
-  if (isProvisionalCdcOutcome(answer, [cdcEvent], groupId)) return true;
+function propagationIsProvisional(answer, events, groupId) {
+  if (!hasDurableCdcEvents(events) ||
+      isCommittedCdcOutcome(answer, events, groupId)) return false;
+  if (isProvisionalCdcOutcome(answer, events, groupId)) return true;
   throw Object.assign(new Error(CDC_COMPLETION.UNKNOWN), {
     code: CDC_COMPLETION.UNKNOWN, cause: answer, deferRetry: true,
     ...resolveUnknownAnswerDeferredFields(answer),
@@ -231,36 +236,43 @@ function buildPartitionCdcPropagationSubscriber(options = {}) {
     return resolvePropagationServiceReadiness(service, cdcEvent, requiredTables);
   };
 
-  const subscriber = async (cdcEvent = {}, deliveryContext = null) => {
+  // The one subscriber contract: (events, deliveryContext), events a dense,
+  // ordered vector of one table and one partition, propagated as one wave.
+  // The hooks take the vector: beforePropagation walks its members, and
+  // afterPropagation runs once for the committed vector. Readiness is asked
+  // with the first member.
+  const subscriber = async (events, deliveryContext = null) => {
     if (deliveryContext !== null) assertCdcDeliveryInvocation(deliveryContext);
     const wait = (operation) => deliveryContext === null ? operation() :
       deliveryContext.run(operation);
-    if (!acceptsPropagationTable(cdcEvent, tableName)) return;
-    logPropagationEvent(logger, eventLogMessage, cdcEvent, partitionId, replicaId);
+    if (!acceptsPropagationTable(events, tableName)) return;
+    for (const cdcEvent of events) {
+      logPropagationEvent(logger, eventLogMessage, cdcEvent, partitionId, replicaId);
+    }
 
     if (typeof beforePropagation === 'function') {
-      await wait(() => beforePropagation(cdcEvent));
+      await wait(() => beforePropagation(events));
     }
 
     const selection = await wait(() => resolveOperationalMessageGroupSelectionAsync(
       buildPropagationSelectionOptions(requiredTables, preferredService)));
     const propagationMessageGroupService = requirePropagationService(
-      selection, cdcEvent, requiredTables, resolveDeferredSelectionError);
+      selection, events[0], requiredTables, resolveDeferredSelectionError);
 
     const answer = await wait(() => propagatePartitionCDCEvent(
       propagationMessageGroupService,
-      cdcEvent,
+      events,
       deliveryContext,
     ));
 
     // The source delivery owner consumes this exact answer. In particular,
     // provisional ingress cannot run completion hooks or become an ACK merely
     // because this callback returned without throwing.
-    if (propagationIsProvisional(answer, cdcEvent, propagationMessageGroupService.groupId)) {
+    if (propagationIsProvisional(answer, events, propagationMessageGroupService.groupId)) {
       return answer;
     }
     if (typeof afterPropagation === 'function') {
-      await wait(() => afterPropagation(cdcEvent));
+      await wait(() => afterPropagation(events));
     }
     return answer;
   };

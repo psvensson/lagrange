@@ -55,8 +55,25 @@ const PARTITION_CDC_OBLIGATION_BYTES = Object.freeze({
 //   most one acknowledgement entry per second per partition, and the events a
 //   crash can make the consumer see twice are those acknowledged within the
 //   last second (at most ACK_BATCH_MAX_EVENTS of them).
-// - DRIVE_PAGE_ROWS: how many owed rows one drive visits before yielding; each
-//   ledger read hydrates only the current row, in log order.
+// - DRIVE_PAGE_ROWS: how many owed rows one drive visits before it yields; the
+//   quantum is read between shipped ranges, so a pass ends with the range that
+//   reaches it.
+// - SHIP_MAX_BYTES (quest cdc-obligation-range-shipping, record S-2): one
+//   shipped range carries at most this many bytes of summed event_json. A
+//   scheduling bound, never a payload cap: the unit of shipping is a ledger
+//   entry, a range always holds at least one, and an entry above the bound
+//   ships alone and whole. No owner states a hard limit on this path (the
+//   router sets no maxPayload, so the ws default of 100 MiB applies and
+//   exceeding it closes the peer connection; the message-group proposal codec
+//   and CDC_BATCH check no size; raft-rs max_size_per_msg of 1 MiB is a soft
+//   batching limit and entries travel base64, x4/3). The bound is therefore
+//   chosen from time: one range must commit and apply at a recipient inside
+//   the 1500 ms per-attempt CDC propose timeout and must not hold a
+//   recipient's event loop long. 256 KiB keeps the base64 entry under the
+//   raft batching limit and equals 256 typical system-table rows of 1 KiB,
+//   so for ordinary rows it coincides with the count bound.
+//   The count bound of a shipped range is ACK_BATCH_MAX_EVENTS itself: one
+//   range is acknowledged by at most one full CDC_DELIVERED batch.
 // - RETAINED_DELIVERED_MAX (decision D1): delivered rows are reclaimed only
 //   below the lowest owed row, so a row the lane leaves owed (a provisional
 //   coverage, a batch that commits after a later one) keeps every delivered
@@ -78,6 +95,7 @@ const PARTITION_CDC_OBLIGATION_BOUND = Object.freeze({
   // committed command
   ACK_FLUSH_DEADLINE_MS: TIME_MS.SECOND,
   DRIVE_PAGE_ROWS: NUM.TWO_HUNDRED_FIFTY_SIX,
+  SHIP_MAX_BYTES: NUM.TWO_HUNDRED_FIFTY_SIX * NUM.BYTES_PER_KIB,
   RETAINED_DELIVERED_MAX: NUM.FOUR * NUM.TWO_HUNDRED_FIFTY_SIX,
   RECLAIM_ROWS_PER_APPLY: NUM.FOUR * NUM.FOUR * NUM.TWO_HUNDRED_FIFTY_SIX,
 });
@@ -139,6 +157,16 @@ const PARTITION_CDC_OBLIGATION_SQL = Object.freeze({
   // The owed rows after a position, in log order (the redelivery order).
   SELECT_OWED_AFTER:
     'SELECT event_key, log_index, term, ordinal, entry_id, event_json ' +
+    `FROM ${PARTITION_CDC_OBLIGATION_TABLE} WHERE delivered = 0 ` +
+    'AND (log_index > @logIndex OR (log_index = @logIndex AND ordinal > @ordinal)) ' +
+    'AND (log_index < @throughIndex OR ' +
+    '(log_index = @throughIndex AND ordinal <= @throughOrdinal)) ' +
+    'ORDER BY log_index, ordinal LIMIT @limit',
+  // The same owed rows without their payloads: position, identity and the
+  // payload's byte length (the lane cuts a shipped range before it reads one).
+  SELECT_OWED_POSITIONS_AFTER:
+    'SELECT event_key, log_index, ordinal, entry_id, ' +
+    'octet_length(event_json) AS event_bytes ' +
     `FROM ${PARTITION_CDC_OBLIGATION_TABLE} WHERE delivered = 0 ` +
     'AND (log_index > @logIndex OR (log_index = @logIndex AND ordinal > @ordinal)) ' +
     'AND (log_index < @throughIndex OR ' +

@@ -5,9 +5,40 @@ import {
   BOOTSTRAP_LOG_MSG,
 } from '../bootstrap-constants.js';
 import {
+  CDC_OPERATION,
   COLUMN,
   TABLES,
 } from '../../constants/index.js';
+
+// The NODES node-ready trigger over one vector, member by member in order.
+// Each member's previous row is what the node cache holds when that member is
+// reached under one-event delivery: the cached row, overlaid by the earlier
+// members of the same node in this vector (a deleted node has no row), because
+// the whole vector is applied to the cache only after this hook.
+function triggerNodeReadyRebalanceForVector(delegates, events) {
+  const rowsAfterEarlierMembers = new Map();
+  for (const cdcEvent of events) {
+    const cdcData = cdcEvent?.data &&
+      typeof cdcEvent.data === 'object' ?
+      cdcEvent.data : {};
+    const nodeId = cdcData[COLUMN.NODE_ID] ||
+      cdcData.id || null;
+    let previousNodeRow = null;
+    if (nodeId && rowsAfterEarlierMembers.has(nodeId)) {
+      previousNodeRow = rowsAfterEarlierMembers.get(nodeId);
+    } else if (nodeId) {
+      const cachedNodeRow =
+        delegates.getSystemTableCache().get(TABLES.NODES, nodeId);
+      previousNodeRow = cachedNodeRow ?
+        {...cachedNodeRow} : null;
+    }
+    if (nodeId) {
+      rowsAfterEarlierMembers.set(nodeId, cdcEvent.operation === CDC_OPERATION.DELETE ?
+        null : {...previousNodeRow, ...cdcData});
+    }
+    delegates.handleNodeReadyRebalanceTrigger(cdcEvent, previousNodeRow);
+  }
+}
 
 /**
  * Subscribe message groups to CDC events from a partition.
@@ -76,27 +107,11 @@ async function subscribeToHydrationCDC({
           ),
         buildMessageGroupOwnerNotReadyError: (selection, errorOptions) =>
           d.buildMessageGroupOwnerNotReadyError(selection, errorOptions),
-        propagatePartitionCDCEvent: (messageGroupService, cdcEvent, deliveryContext) =>
-          d.propagatePartitionCDCEvent(messageGroupService, cdcEvent, deliveryContext),
-        beforePropagation: async (cdcEvent) => {
-          const cdcData = cdcEvent?.data &&
-            typeof cdcEvent.data === 'object' ?
-            cdcEvent.data : {};
-          const nodeId = cdcData[COLUMN.NODE_ID] ||
-            cdcData.id || null;
-          let previousNodeRow = null;
-          if (tableName === TABLES.NODES && nodeId) {
-            const stc = d.getSystemTableCache();
-            const cachedNodeRow =
-              stc.get(TABLES.NODES, nodeId);
-            previousNodeRow = cachedNodeRow ?
-              {...cachedNodeRow} : null;
-          }
-
+        propagatePartitionCDCEvent: (messageGroupService, events, deliveryContext) =>
+          d.propagatePartitionCDCEvent(messageGroupService, events, deliveryContext),
+        beforePropagation: async (events) => {
           if (tableName === TABLES.NODES) {
-            d.handleNodeReadyRebalanceTrigger(
-              cdcEvent, previousNodeRow,
-            );
+            triggerNodeReadyRebalanceForVector(d, events);
           }
         },
         afterPropagation: async () => {

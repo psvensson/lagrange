@@ -6,7 +6,9 @@ import {EventEmitter} from 'events';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {assertCritical} from '../utils/assert.js';
-import {hasDurableCdcEvents, unknownCdcAcceptance} from '../cdc/cdc-delivery-outcome.js';
+import {unknownCdcAcceptance} from '../cdc/cdc-delivery-outcome.js';
+import {CDC_EVENT_METADATA_FIELD} from '../cdc/cdc-event-envelope.js';
+import {isDenseDataArray} from '../utils/canonical-json-data.js';
 import {isCdcDeliveryInvocation} from '../cdc/cdc-delivery-invocation.js';
 import {
   propagateDurableCdcEvent,
@@ -189,10 +191,12 @@ class CDCGroupPropagationService extends EventEmitter {
     this.logger.info(CDC_GROUP_PROPAGATION_LOG_MSG.STOPPED, {nodeId: this.nodeId});
   }
   /**
-   * Propagate one durable partition CDC event through the durable wave
-   * (cdc-group-propagation-durable-delivery.js), grouped or safe by config.
-   * @param {Object} options - The durable event, its delivery invocation
-   *   (`deliveryContext`) and the source message group.
+   * Propagate one vector of durable partition CDC events through the durable
+   * wave (cdc-group-propagation-durable-delivery.js), grouped or safe by
+   * config: one source batch and one delivery per target for the whole vector.
+   * @param {Object} options - The vector (`events`: dense, ordered, durable,
+   *   one table), its delivery invocation (`deliveryContext`) and the source
+   *   message group.
    * @return {Promise<Object>}
    */ async propagateCDCEvent(options = {}) {
     this.ensureInitialized();
@@ -217,10 +221,11 @@ class CDCGroupPropagationService extends EventEmitter {
   }
 
   /**
-   * The caller's contract: a durable partition event with its delivery
-   * invocation, and a source message group with the surface the durable wave
-   * reads (its group, consensus port and commit lifetime, the strict forward
-   * retry hint, and the batch apply answered with the committed receipt).
+   * The caller's contract: a vector of durable partition events of one table
+   * with its delivery invocation, and a source message group with the surface
+   * the durable wave reads (its group, consensus port and commit lifetime,
+   * the strict forward retry hint, and the batch apply answered with the
+   * committed receipt).
    * @param {Object} options
    * @private
    */
@@ -234,12 +239,16 @@ class CDCGroupPropagationService extends EventEmitter {
         typeof source.applyCDCBatch === 'function',
       CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_MESSAGE_GROUP_SERVICE,
     );
+    const {events} = options;
     assertCritical(
-      options.tableName && options.operation && options.data,
+      isDenseDataArray(events) && events.length > 0 && events.every((event) =>
+        event && event.tableName && event.operation && event.data),
       CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_CDC_PAYLOAD,
     );
     assertCritical(
-      hasDurableCdcEvents([options]) && isCdcDeliveryInvocation(options.deliveryContext),
+      events.every((event) => Object.hasOwn(event, CDC_EVENT_METADATA_FIELD.EVENT_KEY) &&
+        event.tableName === events[0].tableName) &&
+        isCdcDeliveryInvocation(options.deliveryContext),
       CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_DURABLE_EVENT,
     );
   }

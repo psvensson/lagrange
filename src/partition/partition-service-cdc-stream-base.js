@@ -185,11 +185,13 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
       subscriberCount: this.cdcSubscribers.size,
     });
     const subscriberSnapshot = [...this.cdcSubscribers];
+    // The one subscriber contract: this producer hands a vector of one.
+    const events = Object.freeze([cdcEvent]);
     let deliveredCount = 0;
     let deliveryFailureCount = 0;
     for (const subscriber of subscriberSnapshot) {
       try {
-        await this.deliverCDCEventToSubscriber(subscriber, cdcEvent);
+        await this.deliverCDCEventToSubscriber(subscriber, events);
         deliveredCount++;
       } catch (error) {
         deliveryFailureCount++;
@@ -561,15 +563,16 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
     return this.cdcDelivery.resolveCDCSubscriberId(subscriber, options);
   }
   /**
-   * Deliver one CDC event to a subscriber callback/object.
+   * Deliver one vector of CDC events to a subscriber callback/object.
    * Delegates to partition-cdc-delivery.js.
    * @param {Function|Object} subscriber - Subscriber callback/object.
-   * @param {Object} cdcEvent - Event payload.
-   * @return {Promise<void>}
+   * @param {Array<Object>} events - A dense, ordered, frozen vector of one
+   *   table and one partition.
+   * @return {Promise<*>} The subscriber's answer.
    * @private
    */
-  async deliverCDCEventToSubscriber(subscriber, cdcEvent) {
-    return this.cdcDelivery.deliverCDCEventToSubscriber(subscriber, cdcEvent);
+  async deliverCDCEventToSubscriber(subscriber, events) {
+    return this.cdcDelivery.deliverCDCEventToSubscriber(subscriber, events);
   }
   /**
    * Create a wrapper that enriches stream metadata for one subscriber.
