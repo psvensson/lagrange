@@ -106,7 +106,7 @@ documentClass: generated
 - [system-partition-classification.js](system-partition-classification.js) - No leading comment; first export: CRITICAL_SYSTEM_PARTITION_IDS. (importers: hub)
 - [system-readiness-snapshot.js](system-readiness-snapshot.js) - No leading comment; first export: createSystemLeaderReadinessSnapshot. (importers: few)
 - [system-table-artifact-schema-definitions.js](system-table-artifact-schema-definitions.js) - Internal artifact payload store schemas (brief: docs/development/cluster-owned-artifacts-parallel-dispatch-brief.md S1). (importers: many)
-- [system-table-core-schema-definitions.js](system-table-core-schema-definitions.js) - Core system table schema definitions. (importers: few)
+- [system-table-core-schema-definitions.js](system-table-core-schema-definitions.js) - Core system table schema definitions. (importers: many)
 - [system-table-runtime-schema-definitions.js](system-table-runtime-schema-definitions.js) - Runtime and service system table schema definitions. (importers: many)
 - [system-table-schema-shared-constants.js](system-table-schema-shared-constants.js) - Shared system table schema constants. (importers: hub)
 - [system-table-schema-sql.js](system-table-schema-sql.js) - Generate SQL CREATE TABLE statement from schema. (importers: many)
