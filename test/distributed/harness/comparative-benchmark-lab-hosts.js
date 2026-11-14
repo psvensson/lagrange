@@ -150,13 +150,17 @@ function exclusionOf(node, facts, seenBootIds) {
 
 // Why a host's native thermal facts exclude it, or null: each cause keeps its
 // own typed reason (an endpoint never recorded or invalid, or the native
-// decision's outcome and reason), never one generic "unavailable".
+// decision's outcome and reason), never one generic "unavailable". The only
+// decision that excludes is UNAVAILABLE (checkedThermalObservation yields
+// READY, HOLD, OPERATOR_PACED or UNAVAILABLE), and its producer always sets a
+// non-empty `reason` (wait-for-thermal-headroom.js `unavailable` and the
+// observation contract), so that one field is read.
 function thermalExclusion(thermal) {
   if (thermal.refusal) return `host-ineligible: ${thermal.refusal}`;
   const {decision} = thermal;
   if (thermalPermits(decision) || decision.outcome === HEADROOM.HOLD) return null;
   return `host-ineligible: native thermal decision unavailable (${decision.outcome}: ` +
-    `${decision.reason ?? decision.cooling_reason ?? decision.abort_reason ?? 'no reason given'})`;
+    `${decision.reason})`;
 }
 
 const THERMAL_ENDPOINT_NOT_RECORDED = 'native thermal endpoint not recorded';

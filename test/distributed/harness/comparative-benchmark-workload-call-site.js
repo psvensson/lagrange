@@ -245,7 +245,7 @@ function refuseWithoutDrivers(host) {
     throw deploymentFailure(FAILURE.DRIVER_MISSING, `load generator ${host.ip} has no ` +
       'record of installing the reference-client drivers', {reason: 'install_not_recorded'});
   }
-  if (install.missing?.length) {
+  if (install.missing.length > 0) {
     throw deploymentFailure(FAILURE.DRIVER_MISSING, `load generator ${host.ip} offline npm ` +
       `cache lacks ${arrayJoin(install.missing, ', ')}; seed the cache before the campaign`,
     {reason: OFFLINE_CACHE_INCOMPLETE, missing: install.missing, output: install.output});
