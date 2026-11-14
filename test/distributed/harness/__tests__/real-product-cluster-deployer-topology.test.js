@@ -168,6 +168,38 @@ test('Lagrange: DATA_DIR is the data directory the image gives its runtime user'
   }
 });
 
+// Lab experiment 16dce80a (tv-dator, 2026-11-14): dockerd creates a missing
+// bind-mount source as 0:0 755, so the image's runtime user (10001) could not
+// write <storage-root>/<campaign>/lagrange-N (EACCES); the same directory
+// created beforehand and chowned to that user through a throwaway container
+// was writable. With --storage-root each node's directory is created with the
+// runtime user's ownership on its host before its container starts; without
+// it no directory is made.
+test('Lagrange: with --storage-root each node directory is owned by the runtime user ' +
+  'before its container starts', async () => {
+  const dockerfile = fs.readFileSync(new URL('../../../../Dockerfile', import.meta.url), 'utf8');
+  const user = /^USER (\S+)$/mu.exec(dockerfile)[1];
+  const content = contentIdentityOf([`sha256:${LAGRANGE_IMAGE_ID.slice(-64)}`]);
+  const volume = createScriptedSsh(lagrangeHealthyRules(createContainerLedger(),
+    {hosts: HOSTS}));
+  await deployers.deployComparativeTarget('lagrange', {...input(volume.sshRun),
+    opts: {...OPTS, storageRoot: '/srv/bench', lagrangeImageContent: content}});
+  for (let index = 0; index < HOSTS.length; index += 1) {
+    const label = `lagrange-${index + 1}`;
+    const step = `mkdir -p /campaign/${label} && chown ${user} /campaign/${label}`;
+    const throwaway = /^docker run --rm .* --pull=never .*-v '?\/srv\/bench\/camp-topo:\/campaign'? /u;
+    const prepare = arrayFindIndex(volume.calls, (call) => call.host === HOSTS[index] &&
+      throwaway.test(call.command) && stringIncludes(call.command, step));
+    const start = arrayFindIndex(volume.calls, (call) => call.host === HOSTS[index] &&
+      /^docker run -d .*lagrange-node/u.test(call.command));
+    assert.ok(prepare >= 0, `${label}: its directory is prepared on ${HOSTS[index]}`);
+    assert.ok(prepare < start, `${label}: before its container starts`);
+  }
+  const plain = createScriptedSsh(lagrangeHealthyRules(createContainerLedger(), {hosts: HOSTS}));
+  await deployers.deployComparativeTarget('lagrange', input(plain.sshRun));
+  assert.equal(arraySome(plain.calls, (call) => stringIncludes(call.command, 'chown')), false);
+});
+
 // Coordinator decision 2 (2026-11-02): an exhausted Lagrange arm's version is
 // null only with the reason the product did not answer it (live campaign
 // bench-live-20261101-b-r6: node 2 never ready, its facts endpoint silent).
