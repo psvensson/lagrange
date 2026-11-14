@@ -11,14 +11,19 @@
 #       # its dependencies, and the reference client's npm cache; docker, git and Node are checked
 #       # first, each placement is verified with the campaign's own check, and a failure is typed
 #       # (a provisioning_* code, or that check's code). Needs HOSTS, SSH_HOSTS, SSH_USER,
-#       # IMAGE_FAMILY and IMAGE_PROJECT as printed by the create step, Docker access for
-#       # SSH_USER on every VM, and Node at the engines floor on the load generator
-#       # (--client-node). Pass the same --targets/--lagrange-image* options the campaign will use.
+#       # IMAGE_FAMILY, IMAGE_PROJECT, BOOT_DISK_SIZE, BOOT_DISK_TYPE and FIREWALL_ALLOW as
+#       # printed by the create step (recorded for every host), Docker access for SSH_USER on
+#       # every VM, and Node at the engines floor on the load generator (--client-node). Pass
+#       # the same --targets/--lagrange-image* options the campaign will use.
 #
 # Every value is named by the operator or is one of the documented defaults below, printed
 # before anything is created. The script never probes for a value and adapts, and never
 # tolerates a failed step: a missing value is refused with usage (exit 2) before any gcloud
-# call, and a failed step exits non-zero naming what failed.
+# call, and a failed step exits non-zero naming what failed. The run never reuses a firewall
+# rule it did not create: an existing rule of its name is refused (run --teardown first).
+#
+# Credentials: gcloud runs as the account of the operator's gcloud configuration; the script
+# prints that account and the project before creating or deleting anything.
 #
 # Required:
 #   PROJECT_ID           GCP project ID (create, teardown)
@@ -30,6 +35,12 @@
 #   MACHINE_TYPE    Compute Engine machine type (default: e2-standard-4)
 #   CLUSTER_PREFIX  Instance name prefix (default: lagrange-bench)
 #   NETWORK         VPC network for the VMs and the firewall rule (default: default)
+#   BOOT_DISK_SIZE  boot disk size of every VM (default: 50GB)
+#   BOOT_DISK_TYPE  boot disk type of every VM (default: pd-ssd; it bears on results)
+#   FIREWALL_ALLOW  protocols and ports the intra-cluster rule allows between the VMs
+#                   (default: tcp:1-65535,udp:1-65535,icmp)
+# Fixed by design: 6 VMs named ${CLUSTER_PREFIX}-1..6 (5 cluster VMs + 1 dedicated client),
+# tagged ${CLUSTER_PREFIX}-node; the firewall rule is ${CLUSTER_PREFIX}-internal.
 #   IMAGE_FAMILY    VM image family, named together with IMAGE_PROJECT (default, when
 #   IMAGE_PROJECT   neither is set: ubuntu-2404-lts-amd64 in ubuntu-os-cloud). The VMs are
 #                   created from exactly the named image; the script never looks for
@@ -63,15 +74,16 @@ fi
 
 if [ "${1:-}" = "--place" ]; then
   shift
-  : "${HOSTS:?HOSTS is not set (export it as the create step printed)}"
-  : "${SSH_HOSTS:?SSH_HOSTS is not set (export it as the create step printed)}"
-  : "${SSH_USER:?SSH_USER is not set (export it as the create step printed)}"
-  : "${IMAGE_FAMILY:?IMAGE_FAMILY is not set (export it and IMAGE_PROJECT as the create step printed)}"
+  for name in HOSTS SSH_HOSTS SSH_USER IMAGE_FAMILY BOOT_DISK_SIZE BOOT_DISK_TYPE FIREWALL_ALLOW; do
+    [ -n "${!name:-}" ] || usage "${name} is not set: export it as the create step printed"
+  done
   REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
   echo "[gcp] Placing images, the harness commit and the reference-client cache..."
   exec node "${REPO_ROOT}/docs/benchmarks/cloud/run-comparative-benchmarks.mjs" --execution-target gcp --provision \
     --hosts "${HOSTS}" --ssh-hosts "${SSH_HOSTS}" --ssh-user "${SSH_USER}" \
-    --vm-image-family "${IMAGE_FAMILY}" --vm-image-project "${IMAGE_PROJECT}" "$@"
+    --vm-image-family "${IMAGE_FAMILY}" --vm-image-project "${IMAGE_PROJECT}" \
+    --vm-boot-disk-size "${BOOT_DISK_SIZE}" --vm-boot-disk-type "${BOOT_DISK_TYPE}" \
+    --vm-firewall-allow "${FIREWALL_ALLOW}" "$@"
 fi
 
 [ -n "${PROJECT_ID:-}" ] || usage "PROJECT_ID is not set: export PROJECT_ID=<your-gcp-project-id>"
@@ -81,9 +93,11 @@ ZONE="${ZONE:-us-central1-a}"
 MACHINE_TYPE="${MACHINE_TYPE:-e2-standard-4}"
 CLUSTER_PREFIX="${CLUSTER_PREFIX:-lagrange-bench}"
 NETWORK="${NETWORK:-default}"
+BOOT_DISK_SIZE="${BOOT_DISK_SIZE:-50GB}"
+BOOT_DISK_TYPE="${BOOT_DISK_TYPE:-pd-ssd}"
+FIREWALL_ALLOW="${FIREWALL_ALLOW:-tcp:1-65535,udp:1-65535,icmp}"
 NETWORK_TAG="${CLUSTER_PREFIX}-node"
 FIREWALL_RULE="${CLUSTER_PREFIX}-internal"
-FIREWALL_ALLOW="tcp:1-65535,udp:1-65535,icmp"
 
 NODES=(
   "${CLUSTER_PREFIX}-1"
@@ -104,7 +118,16 @@ firewall_rule_names() {
     --filter="name=${FIREWALL_RULE}" --format='value(name)'
 }
 
+# The account gcloud acts as (the operator's gcloud configuration), printed with the project.
+print_account() {
+  local account
+  account="$(gcloud config get-value account)" || fail "could not read the active gcloud account"
+  [ -n "${account}" ] || fail "no active gcloud account: run gcloud auth login"
+  echo "[gcp] gcloud account ${account}, project ${PROJECT_ID}"
+}
+
 if [ "${1:-}" = "--teardown" ]; then
+  print_account
   echo "[gcp] Teardown: VMs ${NODES[*]} and firewall rule ${FIREWALL_RULE} in ${PROJECT_ID}/${ZONE}"
   present="$(campaign_instances)" ||
     fail "could not ask which VMs of ${CLUSTER_PREFIX} exist in ${PROJECT_ID}/${ZONE}; nothing was deleted; ${NODES[*]} may still be billed"
@@ -155,31 +178,25 @@ fi
   usage "SSH_PUBLIC_KEY_FILE ${SSH_PUBLIC_KEY_FILE} does not exist, is not readable or is empty"
 SSH_PUB_KEY="$(cat "${SSH_PUBLIC_KEY_FILE}")"
 
+print_account
 echo "[gcp] project ${PROJECT_ID}, zone ${ZONE}, machine type ${MACHINE_TYPE}, prefix ${CLUSTER_PREFIX}, network ${NETWORK}"
 echo "[gcp] VM image: family ${IMAGE_FAMILY} in project ${IMAGE_PROJECT}"
+echo "[gcp] boot disk ${BOOT_DISK_SIZE} ${BOOT_DISK_TYPE}, firewall allows ${FIREWALL_ALLOW}"
 echo "[gcp] ssh user ${SSH_USER}, key ${SSH_PUBLIC_KEY_FILE}"
 
-# The firewall rule is created, or an existing one is used only when its rules are what this
-# script would create (asked and compared); anything else is refused.
-WANTED_RULE="${NETWORK};${NETWORK_TAG};${NETWORK_TAG};${FIREWALL_ALLOW}"
+# The run creates its firewall rule; a rule of that name that already exists was not created
+# by this run and is never reused.
 rules="$(firewall_rule_names)" || fail "could not ask whether firewall rule ${FIREWALL_RULE} exists in ${PROJECT_ID}"
-if [ -n "${rules}" ]; then
-  actual="$(gcloud compute firewall-rules describe "${FIREWALL_RULE}" --project="${PROJECT_ID}" \
-    --format='value[separator=";"](network.basename(),sourceTags.list(),targetTags.list(),allowed[].map().firewall_rule().list())')" ||
-    fail "could not read firewall rule ${FIREWALL_RULE} in ${PROJECT_ID}"
-  [ "${actual}" = "${WANTED_RULE}" ] ||
-    fail "firewall rule ${FIREWALL_RULE} exists with network;source tags;target tags;allowed = '${actual}', not '${WANTED_RULE}'; delete it or choose another CLUSTER_PREFIX"
-  echo "[gcp] Using existing firewall rule ${FIREWALL_RULE} (its rules are the ones this script creates)"
-else
-  echo "[gcp] Creating internal benchmark firewall rule ${FIREWALL_RULE} in ${PROJECT_ID}..."
-  gcloud compute firewall-rules create "${FIREWALL_RULE}" \
-    --project="${PROJECT_ID}" \
-    --network="${NETWORK}" \
-    --allow="${FIREWALL_ALLOW}" \
-    --source-tags="${NETWORK_TAG}" \
-    --target-tags="${NETWORK_TAG}" \
-    --description="Intra-cluster traffic for Lagrange 5-node + 1-client comparative benchmarks"
-fi
+[ -z "${rules}" ] ||
+  fail "firewall rule ${FIREWALL_RULE} already exists in ${PROJECT_ID}; it is not reused: run ./docs/benchmarks/cloud/provision-gcp.sh --teardown (it deletes it), then create again"
+echo "[gcp] Creating internal benchmark firewall rule ${FIREWALL_RULE} in ${PROJECT_ID}..."
+gcloud compute firewall-rules create "${FIREWALL_RULE}" \
+  --project="${PROJECT_ID}" \
+  --network="${NETWORK}" \
+  --allow="${FIREWALL_ALLOW}" \
+  --source-tags="${NETWORK_TAG}" \
+  --target-tags="${NETWORK_TAG}" \
+  --description="Intra-cluster traffic for Lagrange 5-node + 1-client comparative benchmarks"
 
 IMAGE_ARGS=(--image-family="${IMAGE_FAMILY}" --image-project="${IMAGE_PROJECT}")
 
@@ -209,8 +226,8 @@ gcloud compute instances create "${NODES[@]}" \
   --machine-type="${MACHINE_TYPE}" \
   --network="${NETWORK}" \
   "${IMAGE_ARGS[@]}" \
-  --boot-disk-size="50GB" \
-  --boot-disk-type="pd-ssd" \
+  --boot-disk-size="${BOOT_DISK_SIZE}" \
+  --boot-disk-type="${BOOT_DISK_TYPE}" \
   --tags="${NETWORK_TAG}" \
   "${META_ARGS[@]}"
 
@@ -241,6 +258,9 @@ echo "export SSH_HOSTS=\"${SSH_HOSTS_CSV}\""
 echo "export SSH_USER=\"${SSH_USER}\""
 echo "export IMAGE_FAMILY=\"${IMAGE_FAMILY}\""
 echo "export IMAGE_PROJECT=\"${IMAGE_PROJECT}\""
+echo "export BOOT_DISK_SIZE=\"${BOOT_DISK_SIZE}\""
+echo "export BOOT_DISK_TYPE=\"${BOOT_DISK_TYPE}\""
+echo "export FIREWALL_ALLOW=\"${FIREWALL_ALLOW}\""
 echo ""
 echo "Grant Docker access to \${SSH_USER} on each VM yourself (the script does not), put Node >= 22"
 echo "on the client VM, then place what the campaign needs (the campaign itself never pulls or fetches):"

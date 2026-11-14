@@ -105,9 +105,9 @@ function harnessCommitPusher({controllerRoot, sshCommand}) {
 
 /** What provisioning places, from the campaign's own requirement definitions. */
 function comparativeProvisioningPlan({targets, lagrangeImage, harnessCommit,
-  referenceClientLock, vmImage, nodeMinimum}) {
+  referenceClientLock, vm, nodeMinimum}) {
   return {images: campaignImagesByRole({targets, lagrangeImage}), harnessCommit,
-    tarballs: referenceClientTarballs(referenceClientLock), vmImage, nodeMinimum};
+    tarballs: referenceClientTarballs(referenceClientLock), vm, nodeMinimum};
 }
 
 // Docker reachable for the ssh user (a fresh login each time, so a group grant
@@ -224,7 +224,9 @@ async function seedReferenceClientCache({sshRun, opts, host, tarballs}) {
 /**
  * Provision the campaign's hosts. Docker (every host) and the load generator's
  * git and Node are checked before anything is placed. The record states, per
- * host, the VM image the operator named and the versions and image ids observed. `pushHarnessCommit({host, repoPath, harnessCommit})`
+ * host, how the VMs were created as the operator named it (image family and
+ * project, boot disk size and type, firewall rules) and the versions and image
+ * ids observed. `pushHarnessCommit({host, repoPath, harnessCommit})`
  * sends the commit from the controller. With opts.lagrangeImageContent the
  * data hosts are verified by content as the campaign resolves them.
  * @return {Promise<{data: Array, client: Object}>} what was placed and verified
@@ -238,7 +240,7 @@ async function provisionComparativeHosts({hosts, plan, sshRun, opts, pushHarness
   const dataHosts = arrayFilter(hosts, (host) => host.role === ROLE.DATA);
   const data = [];
   for (const host of dataHosts) {
-    data.push({host: host.ip, vmImage: plan.vmImage, dockerServer: dockerServer[host.ip],
+    data.push({host: host.ip, vm: plan.vm, dockerServer: dockerServer[host.ip],
       images: await placeImages({sshRun, opts, host, images: plan.images.data})});
   }
   const pinned = opts.lagrangeImageContent ? await resolvePinnedImage({hosts: dataHosts,
@@ -250,7 +252,7 @@ async function provisionComparativeHosts({hosts, plan, sshRun, opts, pushHarness
   await installDependencies({sshRun, opts, host: client});
   const driverInstall = await seedReferenceClientCache({sshRun, opts, host: client,
     tarballs: plan.tarballs});
-  return {data, pinned, client: {host: client.ip, vmImage: plan.vmImage,
+  return {data, pinned, client: {host: client.ip, vm: plan.vm,
     dockerServer: dockerServer[client.ip], git: tools.git, node: tools.node, images,
     repoPath: client.repoPath, head,
     tarballs: arrayMap(plan.tarballs, (tarball) => tarball.resolved),

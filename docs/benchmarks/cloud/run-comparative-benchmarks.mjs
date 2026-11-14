@@ -130,9 +130,10 @@ Options:
   --ssh-key <path>              gcp only: SSH private key
   --client-checkout <path>      gcp only: checkout on the load generator, at this commit
   --client-node <path>          gcp only: Node >= 22 on the load generator (default: node)
-  --vm-image-family <f>, --vm-image-project <p>
-                                with --provision: the VM image the hosts were created
-                                from (provision-gcp.sh prints both); recorded per host
+  --vm-image-family <f>, --vm-image-project <p>, --vm-boot-disk-size <s>,
+  --vm-boot-disk-type <t>, --vm-firewall-allow <rules>
+                                with --provision, all required: how the hosts were
+                                created (provision-gcp.sh prints each); recorded per host
   --provision                   gcp only: place every image each role runs, the harness
                                 commit in --client-checkout (absolute) and the reference
                                 client's npm cache, verify them, and exit (no campaign)
@@ -166,6 +167,10 @@ Options:
 class UsageError extends Error {}
 
 const LOAD_GENERATOR_FLAG = '--load-generator';
+// How the GCP hosts were created; --provision records them for every host.
+const VM_FLAGS = Object.freeze([['--vm-image-family', 'vmImageFamily'],
+  ['--vm-image-project', 'vmImageProject'], ['--vm-boot-disk-size', 'vmBootDiskSize'],
+  ['--vm-boot-disk-type', 'vmBootDiskType'], ['--vm-firewall-allow', 'vmFirewallAllow']]);
 
 const VALUE_FLAGS = Object.freeze({
   '--execution-target': 'executionTarget', '--hosts': 'hostsRaw',
@@ -180,6 +185,8 @@ const VALUE_FLAGS = Object.freeze({
   '--lagrange-image-content': 'lagrangeImageContent',
   '--lagrange-revision': 'lagrangeRevision',
   '--vm-image-family': 'vmImageFamily', '--vm-image-project': 'vmImageProject',
+  '--vm-boot-disk-size': 'vmBootDiskSize', '--vm-boot-disk-type': 'vmBootDiskType',
+  '--vm-firewall-allow': 'vmFirewallAllow',
   '--lagrange-src-fingerprint': 'lagrangeSrcFingerprint',
 });
 
@@ -222,9 +229,10 @@ function validateProvisionOptions(opts) {
       'provisioned through the lab controller)');
   }
   if (opts.dryRun) throw new UsageError('--provision and --dry-run are separate invocations');
-  if (!opts.vmImageFamily || !opts.vmImageProject) {
-    throw new UsageError('--provision needs --vm-image-family and --vm-image-project (the VM ' +
-      'image the create step printed), recorded for every host');
+  const missing = VM_FLAGS.filter(([, key]) => !opts[key]).map(([flag]) => flag);
+  if (missing.length > 0) {
+    throw new UsageError(`--provision needs ${missing.join(', ')} (how the hosts were created, ` +
+      'as the create step printed), recorded for every host');
   }
   if (!path.isAbsolute(opts.clientCheckout)) {
     throw new UsageError('--provision needs --client-checkout <absolute path> on the load ' +
@@ -447,7 +455,9 @@ async function provisionGcpHosts({opts, manifest, dataHostCount}) {
   const plan = comparativeProvisioningPlan({targets: manifest.targets,
     lagrangeImage: opts.lagrangeImage, harnessCommit: gitCommit,
     referenceClientLock: readReferenceClientLock(REPO_ROOT, gitCommit),
-    vmImage: {family: opts.vmImageFamily, project: opts.vmImageProject},
+    vm: {imageFamily: opts.vmImageFamily, imageProject: opts.vmImageProject,
+      bootDiskSize: opts.vmBootDiskSize, bootDiskType: opts.vmBootDiskType,
+      firewallAllow: opts.vmFirewallAllow},
     nodeMinimum: fleetRequirement(REPO_ROOT, gitCommit).nodeMinimum});
   return provisionComparativeHosts({hosts, plan, sshRun: createSshRun(hosts, opts), opts,
     pushHarnessCommit: harnessCommitPusher({controllerRoot: REPO_ROOT,

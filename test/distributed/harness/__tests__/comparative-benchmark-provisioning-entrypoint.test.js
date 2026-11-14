@@ -55,8 +55,11 @@ const TARGETS = ['lagrange', 'tidb-tikv', 'pg-single-primary'];
 const COMMON = ['--execution-target', 'gcp', '--hosts', [...DATA, CLIENT].join(','),
   '--ssh-user', 'bench', '--ssh-key', SSH_KEY, '--client-checkout', CHECKOUT, '--client-node', '/opt/node/bin/node',
   '--lagrange-image', LAGRANGE, '--targets', TARGETS.join(','),
-  '--vm-image-family', 'ubuntu-2404-lts-amd64', '--vm-image-project', 'ubuntu-os-cloud'];
-const VM_IMAGE = {family: 'ubuntu-2404-lts-amd64', project: 'ubuntu-os-cloud'};
+  '--vm-image-family', 'ubuntu-2404-lts-amd64', '--vm-image-project', 'ubuntu-os-cloud',
+  '--vm-boot-disk-size', '50GB', '--vm-boot-disk-type', 'pd-ssd',
+  '--vm-firewall-allow', 'tcp:1-65535,udp:1-65535,icmp'];
+const VM = {imageFamily: 'ubuntu-2404-lts-amd64', imageProject: 'ubuntu-os-cloud',
+  bootDiskSize: '50GB', bootDiskType: 'pd-ssd', firewallAllow: 'tcp:1-65535,udp:1-65535,icmp'};
 const REFUSALS = ['image_unavailable', 'load_generator_commit_absent', 'offline_cache_incomplete'];
 const HEAD = stringTrim(execFileSync('git', ['rev-parse', 'HEAD'], {cwd: ROOT,
   encoding: 'utf8'}));
@@ -126,7 +129,7 @@ test('--provision places, through the real CLI, exactly what the campaign checks
   const record = JSON.parse(placed.stdout).provisioned;
   assert.equal(record.client.head, HEAD);
   for (const entry of [...record.data, record.client]) {
-    assert.deepEqual(entry.vmImage, VM_IMAGE);
+    assert.deepEqual(entry.vm, VM);
     assert.equal(entry.dockerServer, '27.5.1');
     assert.ok(arrayEvery(entry.images, (image) => /^sha256:[0-9a-f]{64}$/u.test(image.imageId)));
   }

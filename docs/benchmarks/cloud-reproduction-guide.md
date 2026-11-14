@@ -131,19 +131,23 @@ Every value is named by you or is a documented default, and the script prints th
 before it creates anything. `PROJECT_ID`, `SSH_USER` and `SSH_PUBLIC_KEY_FILE` are required (the
 key is installed for `SSH_USER` on every VM; a missing or unreadable key file is refused before any
 `gcloud` call, and the script never searches for a key). Defaults: `ZONE=us-central1-a`,
-`MACHINE_TYPE=e2-standard-4`, `CLUSTER_PREFIX=lagrange-bench`, `NETWORK=default`, and the image
+`MACHINE_TYPE=e2-standard-4`, `CLUSTER_PREFIX=lagrange-bench`, `NETWORK=default`,
+`BOOT_DISK_SIZE=50GB`, `BOOT_DISK_TYPE=pd-ssd` (the disk type bears on results),
+`FIREWALL_ALLOW=tcp:1-65535,udp:1-65535,icmp` (between the VMs only), and the image
 `ubuntu-2404-lts-amd64` in `ubuntu-os-cloud` unless you name another with both `IMAGE_FAMILY` and
 `IMAGE_PROJECT` (for example a project's pre-baked `lagrange-distributed-harness` family); naming
 only one is refused, and the script never switches to an image you did not name. It creates the
-VMs (the dedicated client VM last) and an intra-cluster firewall rule; an existing rule of that
-name is used only when its rules are the ones the script creates, otherwise it refuses and says
-what differs. The startup script installs Docker and git from the image's archive (not pinned;
+VMs (the dedicated client VM last) and an intra-cluster firewall rule; a rule of that name that
+already exists was not created by this run and is refused (run `--teardown`, which deletes it).
+gcloud acts as the account of your gcloud configuration; the script prints that account and the
+project before it creates or deletes anything. The startup script installs Docker and git from the image's archive (not pinned;
 step 2 records the versions). The script does not open the Docker socket to everyone and does not
 add users to the `docker` group: grant Docker access to the one SSH user the runner connects as
 yourself. SSH host keys are verified as usual; record each VM's host key in `known_hosts` (for
 example with `gcloud compute ssh` once per VM) before the run. Put Node at the repository's
-engines floor on the client VM. Export the `HOSTS`, `SSH_HOSTS`, `SSH_USER`, `IMAGE_FAMILY` and
-`IMAGE_PROJECT` lines the script prints.
+engines floor on the client VM. Export the `HOSTS`, `SSH_HOSTS`, `SSH_USER`, `IMAGE_FAMILY`,
+`IMAGE_PROJECT`, `BOOT_DISK_SIZE`, `BOOT_DISK_TYPE` and `FIREWALL_ALLOW` lines the script prints;
+step 2 refuses without any of them and records them for every host.
 
 ### Step 2 - Place what the campaign needs
 ```sh
@@ -162,8 +166,8 @@ client's lockfile (at that commit) to the load generator's npm cache. It then ve
 the campaign's
 own check. A failure is typed and names the host and what is missing (a `provisioning_*` code,
 or the code of the campaign check that still refuses); fix it and run the step again. Its
-output records, for every host, the VM image family and project you named (`IMAGE_FAMILY`,
-`IMAGE_PROJECT`), the Docker server version and the id of every image it verified, and for the
+output records, for every host, how the VMs were created (image family and project, boot disk
+size and type, firewall rules), the Docker server version and the id of every image it verified, and for the
 load generator the git and Node versions. This path
 is tested through the real CLI with only `ssh` and `git push` scripted, and its generated
 commands (storage preparation, image probe, commit push/checkout/probe, offline install) are

@@ -127,7 +127,8 @@ function createFakeHosts(ips) {
 
 function planFor(targets) {
   return comparativeProvisioningPlan({targets, lagrangeImage: LAGRANGE, harnessCommit: COMMIT,
-    referenceClientLock: LOCK, vmImage: {family: 'f', project: 'p'}, nodeMinimum: '22.12.0'});
+    referenceClientLock: LOCK, vm: {imageFamily: 'f', imageProject: 'p', bootDiskSize: '50GB', bootDiskType: 'pd-ssd', firewallAllow: 'icmp'},
+    nodeMinimum: '22.12.0'});
 }
 
 // The campaign's own preparation checks, exactly as runCampaign calls them.
@@ -261,11 +262,13 @@ test('the runner\'s provisioning mode is GCP only, separate from --dry-run, and 
     {encoding: 'utf8', cwd: ROOT, env: {...process.env, EXECUTION_TARGET: ''}});
   const hostsOnly = ['--execution-target', 'gcp', '--provision',
     '--hosts', '10.0.0.1,10.0.0.2,10.0.0.3,10.0.0.9'];
-  const gcp = [...hostsOnly, '--vm-image-family', 'f', '--vm-image-project', 'p'];
+  const vm = ['--vm-image-family', 'f', '--vm-image-project', 'p', '--vm-boot-disk-size', '50GB',
+    '--vm-boot-disk-type', 'pd-ssd', '--vm-firewall-allow', 'icmp'];
+  const gcp = [...hostsOnly, ...vm];
   for (const [args, message] of [
     [['--provision'], /^--provision is only for --execution-target gcp/mu],
-    [[...hostsOnly, '--client-checkout', '/srv/c', '--vm-image-family', 'f'],
-      /^--provision needs --vm-image-family and --vm-image-project/mu],
+    [[...hostsOnly, '--client-checkout', '/srv/c', ...vm.slice(0, 2)],
+      /^--provision needs --vm-image-project, --vm-boot-disk-size, --vm-boot-disk-type, --vm-firewall-allow /mu],
     [[...gcp, '--client-checkout', 'lagrange'],
       /^--provision needs --client-checkout <absolute path>/mu],
     [[...gcp, '--client-checkout', '/srv/c', '--dry-run'],

@@ -196,7 +196,8 @@ test('harness commit, executed with real git: pushed over ssh with the campaign\
   const host = {ip: '127.0.0.1', role: 'client', sshTarget: 'bench@127.0.0.1',
     repoPath: path.join(shell.dir, 'client'), nodePath: process.execPath};
   const plan = {images: {data: [], client: []}, harnessCommit: commit, tarballs: [],
-    vmImage: {family: 'f', project: 'p'}, nodeMinimum: '22.12.0'};
+    vm: {imageFamily: 'f', imageProject: 'p', bootDiskSize: '50GB', bootDiskType: 'pd-ssd', firewallAllow: 'icmp'},
+    nodeMinimum: '22.12.0'};
   const provision = (target, sshCommand) => shell.asController(() =>
     provisionComparativeHosts({hosts: [target], plan, sshRun: shell.sshRun, opts: {},
       pushHarnessCommit: harnessCommitPusher({controllerRoot: controller, sshCommand})}));
