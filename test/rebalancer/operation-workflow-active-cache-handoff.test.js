@@ -1310,8 +1310,10 @@ function seedPrioritySpreadPeers(cache) {
   });
 }
 
-function projectPrioritySpread(cache) {
-  return buildDerivedPriorityPartitionSummary(
+// The projection reports every initial priority partition; the witness reads
+// only the target partition's spread block.
+function projectTargetPartitionSpread(cache) {
+  const summary = buildDerivedPriorityPartitionSummary(
     {
       partitionRows: [{partition_id: TEST_PARTITION_ID, replica_count: 3}],
       serviceRows: cache.getAll(SYSTEM_TABLE_NAME.SERVICES),
@@ -1319,6 +1321,12 @@ function projectPrioritySpread(cache) {
     },
     {normalizeNodeIdList, normalizePositiveInteger},
   );
+  return {
+    missing: summary.missingPartitionIds.includes(TEST_PARTITION_ID),
+    block: summary.blockedPartitions.find(
+      (entry) => entry.partitionId === TEST_PARTITION_ID,
+    ) || null,
+  };
 }
 
 async function driveHandoffOverCachedTarget(t, cachedTargetRow, authorityRow) {
@@ -1330,7 +1338,7 @@ async function driveHandoffOverCachedTarget(t, cachedTargetRow, authorityRow) {
     cachedTargetRow,
   );
   t.same(
-    projectPrioritySpread(cache).blockedPartitions[0]?.exclusionReasonCounts,
+    projectTargetPartitionSpread(cache).block?.exclusionReasonCounts,
     {[cachedTargetRow.status === 'active' ?
       'raft_role_missing' : `status_${cachedTargetRow.status}`]: 1},
     'before the handoff the projection excludes the cached target',
@@ -1355,7 +1363,7 @@ async function driveHandoffOverCachedTarget(t, cachedTargetRow, authorityRow) {
     await coordinator.shutdown();
   }
   const targetRow = cache.get(SYSTEM_TABLE_NAME.SERVICES, TEST_REPLICA_ID);
-  const summary = projectPrioritySpread(cache);
+  const spread = projectTargetPartitionSpread(cache);
   t.same(
     completedOperationIds,
     [TEST_OPERATION_ID],
@@ -1367,8 +1375,8 @@ async function driveHandoffOverCachedTarget(t, cachedTargetRow, authorityRow) {
     true,
     'the completed target is a priority-spread holder',
   );
-  t.equal(summary?.satisfied, true, 'the projection includes the replica');
-  t.same(summary?.blockedPartitions, [], 'no replica is excluded');
+  t.equal(spread.block, null, 'the projection includes the replica');
+  t.equal(spread.missing, false, 'the target partition reaches its spread');
 }
 
 test(
