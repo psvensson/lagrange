@@ -1,8 +1,8 @@
 {
   "schema": "test-receipt/1",
   "quest": "service-lifecycle-reconciliation-row-integrity",
-  "status": "fail",
-  "interpretation": "Original measurement that motivates the repair; not candidate proof. Measured on the registered three-node journey at source ed708dfd01e5ffb446f49ba0447a5bf9915f511a (sealed base 9a22bf79b plus observation-only diagnostics).",
+  "status": "pass",
+  "interpretation": "All required receipts are measured and passed for candidate 5778ba12e under supersession records v2 and v3: reproducers red on the original, golden-table differential and owned roots green on the candidate, the real-consumer witnesses, and independent verification. The bounded claim is the absent-cached-value fill and its aligned check; the routed list in the quest log names what this quest does not claim. The journey itself is not claimed green.",
   "receipts": [
     {
       "id": "original-journey-partial-row-episode",
