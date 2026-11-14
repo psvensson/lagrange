@@ -5,6 +5,14 @@
 # Usage:
 #   ./docs/benchmarks/cloud/provision-gcp.sh              # provisions 6 VMs and prints HOSTS / SSH_HOSTS
 #   ./docs/benchmarks/cloud/provision-gcp.sh --teardown   # deletes the 6 VMs and firewall rule
+#   ./docs/benchmarks/cloud/provision-gcp.sh --place --client-checkout <abs path> [campaign options]
+#       # places what the campaign checks for and never obtains itself: every image each role
+#       # runs, the harness commit (this checkout's HEAD) in the load generator's checkout with
+#       # its dependencies, and the reference client's npm cache; each is verified, and a
+#       # failure is a typed provisioning failure. Needs HOSTS, SSH_HOSTS and SSH_USER as
+#       # printed by the create step, Docker access for SSH_USER on every VM, and Node >= 22
+#       # on the load generator (--client-node). Pass the same --targets/--lagrange-image*
+#       # options the campaign will use.
 #
 # Environment overrides:
 #   PROJECT_ID      GCP project ID (defaults to `gcloud config get-value project`)
@@ -22,6 +30,16 @@ CLUSTER_PREFIX="${CLUSTER_PREFIX:-lagrange-bench}"
 NETWORK_TAG="${CLUSTER_PREFIX}-node"
 FIREWALL_RULE="${CLUSTER_PREFIX}-internal"
 SSH_USER="${SSH_USER:-${USER:-ubuntu}}"
+
+if [ "${1:-}" = "--place" ]; then
+  shift
+  : "${HOSTS:?HOSTS is not set (export it as the create step printed)}"
+  : "${SSH_HOSTS:?SSH_HOSTS is not set (export it as the create step printed)}"
+  REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+  echo "[gcp] Placing images, the harness commit and the reference-client cache..."
+  exec node "${REPO_ROOT}/docs/benchmarks/cloud/run-comparative-benchmarks.mjs" --execution-target gcp --provision \
+    --hosts "${HOSTS}" --ssh-hosts "${SSH_HOSTS}" --ssh-user "${SSH_USER}" "$@"
+fi
 
 if [ -z "${PROJECT_ID}" ]; then
   echo "Error: PROJECT_ID is not set and could not be read from gcloud config." >&2
@@ -78,9 +96,9 @@ done
 
 STARTUP_SCRIPT='#!/usr/bin/env bash
 set -euxo pipefail
-if ! command -v docker >/dev/null 2>&1; then
+if ! command -v docker >/dev/null 2>&1 || ! command -v git >/dev/null 2>&1; then
   apt-get update -y
-  apt-get install -y docker.io
+  apt-get install -y docker.io git
   systemctl enable --now docker
 fi
 # Docker socket access is NOT granted here: no world-writable socket and no
@@ -132,7 +150,10 @@ echo "export HOSTS=\"${HOSTS_CSV}\""
 echo "export SSH_HOSTS=\"${SSH_HOSTS_CSV}\""
 echo "export SSH_USER=\"${SSH_USER}\""
 echo ""
-echo "Grant Docker access to \${SSH_USER} on each VM yourself (the script does not), then preview and run:"
+echo "Grant Docker access to \${SSH_USER} on each VM yourself (the script does not), put Node >= 22"
+echo "on the client VM, then place what the campaign needs (the campaign itself never pulls or fetches):"
+echo "  ./docs/benchmarks/cloud/provision-gcp.sh --place --client-checkout <abs path on the client VM> --client-node <node path> [--targets ...] [--lagrange-image <repo@sha256:...>]"
+echo "Then preview and run with the same options:"
 echo "  node docs/benchmarks/cloud/run-comparative-benchmarks.mjs --execution-target gcp --hosts \"\${HOSTS}\" --ssh-hosts \"\${SSH_HOSTS}\" --ssh-user \"\${SSH_USER}\" --dry-run"
 echo "  node docs/benchmarks/cloud/run-comparative-benchmarks.mjs --execution-target gcp --hosts \"\${HOSTS}\" --ssh-hosts \"\${SSH_HOSTS}\" --ssh-user \"\${SSH_USER}\""
 echo ""

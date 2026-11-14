@@ -2,9 +2,9 @@
  * Host facts and preparation for a comparative-benchmark campaign: the
  * machine identity of every host (hostname, boot incarnation, cores, memory,
  * primary interface), distinct machines enforced; the images each host role
- * runs present on that host (placed beforehand by the operator, never pulled
- * or streamed by a run - the running containers' image ids are the identity,
- * D18); and the machine identity of the load generator's host.
+ * runs present on that host (placed beforehand by a provisioning step, never
+ * pulled or streamed by a run - the running containers' image ids are the
+ * identity, D18); and the machine identity of the load generator's host.
  */
 import {SCENARIO_REFUSAL} from './scenario-host-topology.js';
 import {
@@ -72,10 +72,14 @@ async function collectHostFacts({hosts, sshRun, opts}) {
 }
 
 /**
- * The images each host role must hold. Data hosts run the product containers
- * and the TiDB readiness client (a lifecycle tool started on the TiDB SQL
- * host); the load generator runs the psql client the Lagrange deployer reads
- * through (real-product-sql-clients.js psqlText, from the client host).
+ * The images each host role must hold: the one requirement both the campaign's
+ * check (ensureProductImages) and GCP provisioning
+ * (comparative-benchmark-provisioning.js) read. Data hosts run the product
+ * containers, the TiDB readiness client (a lifecycle tool started on the TiDB
+ * SQL host) and PostgreSQL (also the throwaway container that prepares a
+ * Lagrange node's --storage-root directory); the load generator runs the psql
+ * client the Lagrange deployer reads through (real-product-sql-clients.js
+ * psqlText, from the client host).
  * @param {{targets: Array<string>, lagrangeImage: string}} input
  * @return {{data: Array<string>, client: Array<string>}}
  */
@@ -97,9 +101,13 @@ function campaignImagesByRole({targets, lagrangeImage}) {
 
 /**
  * Every image of `role` present on every host of that role, by reference. An
- * absent image refuses the campaign naming host, role and image: placing an
- * image is a separate provisioning step (lab: docker save/load; GCP: the
- * provisioning script pulls by digest), never something a run does.
+ * absent image refuses the campaign naming host, role and image. Placing an
+ * image is a separate provisioning step, never something a run does: on GCP
+ * `provision-gcp.sh --place` runs the runner's `--provision`
+ * (comparative-benchmark-provisioning.js), which pulls each image by the very
+ * reference checked here (the Lagrange image by its @sha256 digest) and then
+ * runs this check; on the lab the operator loads them (docker save/load), as
+ * no repository code places images on lab hosts.
  */
 async function ensureProductImages({hosts, role, images, sshRun, opts}) {
   const present = [];

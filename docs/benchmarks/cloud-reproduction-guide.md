@@ -101,7 +101,10 @@ load generator: `postgres:17-alpine`, the psql client the Lagrange arm reads thr
 image refuses the campaign with `image_unavailable` naming host, role and image, and every
 campaign container runs with `--pull=never`. The load generator installs the reference client
 (`test/distributed/reference-client`, mysql2) with `npm ci --offline` from its npm cache; a tarball
-the cache lacks refuses the TiDB arm and is named. Seed the cache beforehand.
+the cache lacks refuses the TiDB arm and is named. The load generator's checkout must already hold
+the harness commit (`load_generator_commit_absent` otherwise; it is never fetched). On the lab,
+placing the images, the commit and the cache is the operator's step (no repository code places
+them on lab hosts); on GCP it is `provision-gcp.sh --place` (section 3).
 Every selected host is held with the lab's machine-wide `flock` and holder record before any
 deployment (a host another run holds refuses the campaign, naming the holder), the thermal gate
 `scripts/checks/wait-for-thermal-headroom.js` runs on every held host, and the holds are released
@@ -121,13 +124,27 @@ export ZONE="us-central1-a"
 ./docs/benchmarks/cloud/provision-gcp.sh
 ```
 The script creates the VMs (the dedicated client VM last), an intra-cluster firewall rule, and
-installs Docker; it does not place images, so pull every image section 2 lists onto each VM (by
-digest, then tag it with the reference the runner uses) before the run. It does not open the Docker socket to everyone and does not add users to the
-`docker` group: grant Docker access to the one SSH user the runner connects as yourself. SSH
+installs Docker and git. It does not open the Docker socket to everyone and does not add users to
+the `docker` group: grant Docker access to the one SSH user the runner connects as yourself. SSH
 host keys are verified as usual; record each VM's host key in `known_hosts` (for example with
-`gcloud compute ssh` once per VM) before the run.
+`gcloud compute ssh` once per VM) before the run. Put Node 22 or later on the client VM.
 
-### Step 2 - Preview and run
+### Step 2 - Place what the campaign needs
+```sh
+./docs/benchmarks/cloud/provision-gcp.sh --place --client-checkout /home/$SSH_USER/lagrange \
+  --client-node /path/to/node --lagrange-image psvensson/lagrange@sha256:<digest>
+```
+This is the only step that uses the network on purpose; the campaign never pulls or fetches. It
+runs the runner's `--provision` mode with your campaign options (`--targets`, `--lagrange-image`,
+`--lagrange-image-content`): on every VM it pulls each image its role runs, by the reference the
+campaign checks (the Lagrange image by its `@sha256` digest; the comparator images by their
+pinned tags), pushes this checkout's HEAD (the harness commit) into `--client-checkout` on the
+load generator, checks it out and runs `npm ci` there, and adds every tarball of the reference
+client's lockfile to the load generator's npm cache. It then verifies each with the campaign's
+own check. A failure is typed and names the host and what is missing (a `provisioning_*` code,
+or the code of the campaign check that still refuses); fix it and run the step again.
+
+### Step 3 - Preview and run
 ```sh
 node docs/benchmarks/cloud/run-comparative-benchmarks.mjs --execution-target gcp \
   --hosts "$HOSTS" --ssh-hosts "$SSH_HOSTS" --ssh-user "$SSH_USER" --dry-run
@@ -136,11 +153,9 @@ node docs/benchmarks/cloud/run-comparative-benchmarks.mjs --execution-target gcp
   --hosts "$HOSTS" --ssh-hosts "$SSH_HOSTS" --ssh-user "$SSH_USER"
 ```
 The first three `--hosts` addresses are the data hosts and the last is the load generator.
-A live GCP run also needs `--client-checkout <path>` (a checkout of this commit with
-`npm ci` done on the load-generator VM) and, if `node` there is not Node 22 or later,
-`--client-node <path>`.
+A live GCP run also needs the `--client-checkout` and `--client-node` you placed with.
 
-### Step 3 - Tear down
+### Step 4 - Tear down
 ```sh
 ./docs/benchmarks/cloud/provision-gcp.sh --teardown
 ```

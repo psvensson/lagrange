@@ -53,7 +53,8 @@ const CHECKOUT_PREPARATION_TIMEOUT_MS = 10 * 60 * 1000;
 const LOAD_GENERATOR_STDERR_TAIL_LINES = 80;
 // The reference-client package (mysql2, the TiDB arm's driver) is installed in
 // the worktree from its own lockfile with the host's npm, offline only, from the
-// host's npm cache (owner decision D2): seeding that cache is provisioning.
+// host's npm cache (owner decision D2): seeding that cache is provisioning
+// (GCP: comparative-benchmark-provisioning.js; lab: the operator).
 const REFERENCE_CLIENT_PREFIX = 'test/distributed/reference-client';
 const DRIVER_INSTALL_TIMEOUT_MS = 10 * 60 * 1000;
 const DRIVER_INSTALL_OUTPUT_CHARS = 4000;
@@ -396,7 +397,12 @@ function createWorkloadRunExecutor({runWorkload, describeLoadGenerator, clientHo
 }
 
 export {
+  DRIVER_INSTALL,
+  REFERENCE_CLIENT_PREFIX,
   createRemoteWorkloadRunner,
   createWorkloadRunExecutor,
+  installReferenceClient,
+  npmPathPrefix,
   prepareLoadGeneratorCheckout,
+  requireHarnessCommit,
 };

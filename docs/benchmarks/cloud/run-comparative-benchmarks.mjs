@@ -11,6 +11,11 @@
  * thermal gate runs on every held host before deployment. GCP is explicit
  * (`--execution-target gcp --hosts ...`) and creates no infrastructure.
  *
+ * A campaign never obtains an image, the harness commit or a reference-client
+ * package itself. On GCP, `--provision` is the separate, explicit step that
+ * places them (comparative-benchmark-provisioning.js) and exits; the campaign
+ * is the next invocation with the same options.
+ *
  * The campaign runs a frozen manifest (written and digested before any run)
  * and APPENDS a v2 campaign header and one record per attempted run to the
  * raw observation store. Publication is not this runner's business: stream
@@ -59,6 +64,11 @@ import {
   prepareLoadGeneratorCheckout,
 } from '../../../test/distributed/harness/comparative-benchmark-workload-call-site.js';
 import {
+  comparativeProvisioningPlan,
+  provisionComparativeHosts,
+  readReferenceClientLock,
+} from '../../../test/distributed/harness/comparative-benchmark-provisioning.js';
+import {
   loadRawObservationRecordOwner,
 } from '../../../test/distributed/harness/comparative-benchmark-record-owner.js';
 import {
@@ -84,7 +94,11 @@ import {
 import {
   observeProductsAfterWindow,
 } from '../../../test/distributed/harness/real-product-identity.js';
-import {GIT_OUTPUT_BOUND, execGit} from '../../../scripts/checks/git-invocation.js';
+import {
+  GIT_OUTPUT_BOUND,
+  execGit,
+  execGitAsync,
+} from '../../../scripts/checks/git-invocation.js';
 import {discoverFleet, fleetRequirement} from '../../../scripts/lab/probe.js';
 import {loadState, selectNodesByRole} from '../../../scripts/lab/state.js';
 
@@ -119,6 +133,9 @@ Options:
   --ssh-key <path>              gcp only: SSH private key
   --client-checkout <path>      gcp only: checkout on the load generator, at this commit
   --client-node <path>          gcp only: Node >= 22 on the load generator (default: node)
+  --provision                   gcp only: place every image each role runs, the harness
+                                commit in --client-checkout (absolute) and the reference
+                                client's npm cache, verify them, and exit (no campaign)
   --targets <a,b,...>           ${Object.values(COMPARATIVE_TARGET).join(', ')}
                                 (default: ${DEFAULT_TARGETS.join(',')})
   --profile <smoke|capacity>    smoke (default): one run per arm, not a comparison;
@@ -176,7 +193,7 @@ function generatedCampaignId() {
 
 const BOOLEAN_FLAGS = Object.freeze({
   '--help': 'help', '-h': 'help', '--dry-run': 'dryRun',
-  '--from-recorded-facts': 'fromRecordedFacts',
+  '--from-recorded-facts': 'fromRecordedFacts', '--provision': 'provision',
 });
 
 function validateCliOptions(opts) {
@@ -195,6 +212,19 @@ function validateCliOptions(opts) {
       JSON.stringify(opts.loadGeneratorName));
   }
   if (!PROFILES[opts.profile]) throw new UsageError(`unknown profile ${opts.profile}`);
+  if (opts.provision) validateProvisionOptions(opts);
+}
+
+function validateProvisionOptions(opts) {
+  if (opts.executionTarget !== TARGET.GCP) {
+    throw new UsageError('--provision is only for --execution-target gcp (lab hosts are ' +
+      'provisioned through the lab controller)');
+  }
+  if (opts.dryRun) throw new UsageError('--provision and --dry-run are separate invocations');
+  if (!path.isAbsolute(opts.clientCheckout)) {
+    throw new UsageError('--provision needs --client-checkout <absolute path> on the load ' +
+      'generator');
+  }
 }
 
 // Two explicit load generators are ambiguous operator intent, never "the last one".
@@ -212,7 +242,7 @@ function parseCliArgs(argv, env) {
     storageRoot: '', lagrangeImage: LAGRANGE_IMAGE_DEFAULT,
     rawObservationsPath: DEFAULT_RAW_OBSERVATIONS_NDJSON_PATH, outputPath: '',
     lockWaitMinutes: String(DEFAULT_LOCK_WAIT_MINUTES), clientCheckout: '', clientNode: 'node',
-    loadGeneratorName: null, dryRun: false, help: false};
+    loadGeneratorName: null, dryRun: false, provision: false, help: false};
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (BOOLEAN_FLAGS[arg]) opts[BOOLEAN_FLAGS[arg]] = true;
@@ -252,14 +282,17 @@ function gcpHosts(opts, dataHostCount) {
     host(ips.length - 1, 'client')];
 }
 
+function sshOptions(opts) {
+  return ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=15',
+    ...(opts.sshKey ? ['-i', opts.sshKey] : [])];
+}
+
 function createSshRun(hosts, opts) {
   const targetOf = new Map(hosts.map((host) => [host.ip, host.sshTarget]));
   return async (ip, _opts, command, timeoutMs = SSH_TIMEOUT_MS) => {
     const target = targetOf.get(ip);
     if (!target) throw new Error(`host ${ip} is not part of this campaign`);
-    const args = ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=15'];
-    if (opts.sshKey) args.push('-i', opts.sshKey);
-    const {stdout} = await execFileAsync('ssh', [...args, target, command],
+    const {stdout} = await execFileAsync('ssh', [...sshOptions(opts), target, command],
       {timeout: timeoutMs, maxBuffer: SSH_MAX_BUFFER});
     return String(stdout || '').trim();
   };
@@ -396,6 +429,25 @@ function campaignExitCode(runExitCode, outcome) {
   return outcome === SCENARIO_OUTCOME.REFUSED ? EXIT_CODES.REFUSED : EXIT_CODES.FAILURE;
 }
 
+// The explicit GCP provisioning step: what the campaign with these options will
+// check for, placed and verified on its hosts. The harness commit is the
+// controller's HEAD (the commit the campaign records), pushed over the same ssh.
+async function provisionGcpHosts({opts, manifest, dataHostCount}) {
+  const hosts = gcpHosts(opts, dataHostCount);
+  if (manifest.targets.includes(COMPARATIVE_TARGET.LAGRANGE)) {
+    opts.lagrangeImage = resolveLagrangeContainerImage(opts);
+  }
+  const plan = comparativeProvisioningPlan({targets: manifest.targets,
+    lagrangeImage: opts.lagrangeImage, harnessCommit: harnessIdentity(manifest).gitCommit,
+    referenceClientLock: readReferenceClientLock(REPO_ROOT)});
+  const pushHarnessCommit = ({host, repoPath, harnessCommit}) => execGitAsync(['push',
+    '--quiet', `ssh://${host.sshTarget}${repoPath}`, `+${harnessCommit}:refs/bench/harness`],
+  {cwd: REPO_ROOT, env: {...process.env, GIT_SSH_COMMAND: ['ssh', ...sshOptions(opts)]
+    .join(' ')}, bound: GIT_OUTPUT_BOUND.COMMAND});
+  return provisionComparativeHosts({hosts, plan, sshRun: createSshRun(hosts, opts), opts,
+    pushHarnessCommit});
+}
+
 async function runLabCampaign({opts, manifest, dataHostCount}) {
   const state = await loadState({allowMissing: false});
   const {requirement, fleet} = await discoverLabFleet(state);
@@ -472,6 +524,11 @@ async function main() {
   if (opts.dryRun) {
     const plan = await dryRunPlan({opts, manifest, dataHostCount});
     process.stdout.write(`${JSON.stringify(plan, null, 2)}\n`);
+    return;
+  }
+  if (opts.provision) {
+    const placed = await provisionGcpHosts({opts, manifest, dataHostCount});
+    process.stdout.write(`${JSON.stringify({provisioned: placed}, null, 2)}\n`);
     return;
   }
   const summary = opts.executionTarget === TARGET.LAB ?

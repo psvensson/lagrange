@@ -35,6 +35,8 @@ import {
   arraySome,
   objectKeys,
   stringIncludes,
+  stringReplace,
+  stringTrim,
 } from '../real-product-captured-intrinsics.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
@@ -53,7 +55,8 @@ function exited(code, text = '') {
 }
 
 function quotedWord(command, pattern) {
-  return pattern.exec(command)?.[1]?.replace(/^'|'$/gu, '') ?? null;
+  const match = pattern.exec(command);
+  return match ? stringReplace(match[1], /^'|'$/gu, '') : null;
 }
 
 // One fresh host: no image, no checkout, an empty npm cache.
@@ -169,7 +172,7 @@ test('a fresh host fails the campaign\'s checks; after provisioning every target
       plan: planFor(targets), sshRun: fake.sshRun, opts: {},
       pushHarnessCommit: fake.pushHarnessCommit});
     const prepared = await campaignChecks(fake, targets);
-    assert.equal(prepared.host.driverInstall.status, 'installed', targets.join(','));
+    assert.equal(prepared.host.driverInstall.status, 'installed', arrayJoin(targets, ','));
     assert.equal(receipt.client.head, COMMIT);
     assert.equal(receipt.client.tarballs.length, referenceClientTarballs(LOCK).length);
     // Provisioning used the network on purpose; the campaign's checks did not.
@@ -253,8 +256,9 @@ test('a cache that does not serve the offline install fails provisioning, naming
 test('provision-gcp.sh is valid bash and its placement step runs the runner\'s provisioning',
   () => {
     const script = path.join(ROOT, 'docs/benchmarks/cloud/provision-gcp.sh');
-    const bash = spawnSync('sh', ['-c', 'command -v bash'], {encoding: 'utf8'}).stdout.trim();
-    const checked = spawnSync(bash, ['-n', script], {encoding: 'utf8'});
+    const bash = spawnSync('sh', ['-c', 'command -v bash'], {encoding: 'utf8'}).stdout;
+    const bashPath = stringTrim(bash);
+    const checked = spawnSync(bashPath, ['-n', script], {encoding: 'utf8'});
     assert.equal(checked.status, 0, checked.stderr);
     const text = fs.readFileSync(script, 'utf8');
     assert.match(text, /"\$\{1:-\}" = "--place"/u);
