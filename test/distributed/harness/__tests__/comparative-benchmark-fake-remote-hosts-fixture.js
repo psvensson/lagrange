@@ -186,6 +186,11 @@ function runFakeGit(argv) {
   return 0;
 }
 
+/** The stand-in for `ssh` or `git` (by name), as the PATH shims run it. */
+function runFakeProcess(name, argv) {
+  return name === 'ssh' ? runFakeSsh(argv) : runFakeGit(argv);
+}
+
 /**
  * A directory holding the `ssh` and `git` stand-ins and the hosts' state.
  * @param {Array<string>} ips
@@ -199,10 +204,10 @@ function createFakeRemoteHosts(ips) {
   writeState(file, {hosts: Object.fromEntries(arrayMap(ips, (ip) => [ip, freshHost()])), log: [],
     pushes: [], unscripted: [], pastPreparation: false});
   const self = fileURLToPath(import.meta.url);
-  for (const [name, entry] of [['ssh', 'runFakeSsh'], ['git', 'runFakeGit']]) {
+  for (const name of ['ssh', 'git']) {
     fs.writeFileSync(path.join(bin, name), `#!${process.execPath}\n` +
-      `import(${JSON.stringify(self)}).then((m) => { process.exitCode = ` +
-      `m.${entry}(process.argv.slice(2)); });\n`, {mode: 0o755});
+      `import(${jsonStringify(self)}).then((m) => { process.exitCode = ` +
+      `m.runFakeProcess(${jsonStringify(name)}, process.argv.slice(2)); });\n`, {mode: 0o755});
   }
   const realGit = stringTrim(execFileSync('sh', ['-c', 'command -v git'], {encoding: 'utf8'}));
   const clean = {...process.env};
@@ -222,6 +227,5 @@ function createFakeRemoteHosts(ips) {
 export {
   createFakeRemoteHosts,
   lockfileTarballs,
-  runFakeGit,
-  runFakeSsh,
+  runFakeProcess,
 };

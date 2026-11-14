@@ -9,12 +9,14 @@
  *   @sha256 digest, which a GCP campaign requires);
  * - the harness commit in the load generator's checkout (pushed from the
  *   controller, then checked out), with that checkout's dependencies installed;
- * - every tarball of the reference-client lockfile in the load generator's npm
- *   cache.
+ * - every tarball of the reference-client lockfile (at the harness commit) in
+ *   the load generator's npm cache.
  * Each placement is verified with the campaign's own check (ensureProductImages,
  * resolvePinnedImage, the harness-commit probe, the offline reference-client
- * install). A failure is a typed provisioning failure naming host, role and
- * the missing item; the campaign never papers over it.
+ * install). Docker is checked on every host before anything is placed. A
+ * failure is typed (a provisioning_* code, or the code of the campaign check
+ * that still refuses) and names host and the missing item; nothing is placed
+ * after it, and the campaign never papers over it.
  */
 import {GIT_OUTPUT_BOUND, execGit} from '../../../scripts/checks/git-invocation.js';
 import {

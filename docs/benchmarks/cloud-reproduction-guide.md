@@ -45,7 +45,10 @@ sweeps, live movement, RTT sweeps, recovery and backfill are recorded in the cam
 
 Without `--storage-root`, product data lives in the containers' writable layer and every run is
 recorded as `smoke`. With `--storage-root <dir>`, each data directory is an explicit host volume
-under `<dir>/<campaignId>/` and the deployment records it as `host-volume`.
+under `<dir>/<campaignId>/` and the deployment records it as `host-volume`. Before a Lagrange
+node starts, its directory is created owned by the image's runtime user (10001:10001) through a
+throwaway `postgres:17-alpine` container; a directory that already holds data of another owner
+is refused (`deployment_command_failed`, reason `storage_foreign_owner`) and never re-owned.
 
 Publishing is not part of the runner: published pages are regenerated from admitted cells only.
 
@@ -136,13 +139,17 @@ host keys are verified as usual; record each VM's host key in `known_hosts` (for
 ```
 This is the only step that uses the network on purpose; the campaign never pulls or fetches. It
 runs the runner's `--provision` mode with your campaign options (`--targets`, `--lagrange-image`,
-`--lagrange-image-content`): on every VM it pulls each image its role runs, by the reference the
+`--lagrange-image-content`): it checks Docker on every VM first, then on every VM pulls each
+image its role runs, by the reference the
 campaign checks (the Lagrange image by its `@sha256` digest; the comparator images by their
 pinned tags), pushes this checkout's HEAD (the harness commit) into `--client-checkout` on the
 load generator, checks it out and runs `npm ci` there, and adds every tarball of the reference
-client's lockfile to the load generator's npm cache. It then verifies each with the campaign's
+client's lockfile (at that commit) to the load generator's npm cache. It then verifies each with
+the campaign's
 own check. A failure is typed and names the host and what is missing (a `provisioning_*` code,
-or the code of the campaign check that still refuses); fix it and run the step again.
+or the code of the campaign check that still refuses); fix it and run the step again. This path
+is tested through the real CLI with only `ssh` and `git push` scripted; it has not yet been run
+on GCP.
 
 ### Step 3 - Preview and run
 ```sh

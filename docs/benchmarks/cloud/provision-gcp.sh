@@ -8,8 +8,9 @@
 #   ./docs/benchmarks/cloud/provision-gcp.sh --place --client-checkout <abs path> [campaign options]
 #       # places what the campaign checks for and never obtains itself: every image each role
 #       # runs, the harness commit (this checkout's HEAD) in the load generator's checkout with
-#       # its dependencies, and the reference client's npm cache; each is verified, and a
-#       # failure is a typed provisioning failure. Needs HOSTS, SSH_HOSTS and SSH_USER as
+#       # its dependencies, and the reference client's npm cache; docker is checked on every
+#       # VM first, each placement is verified with the campaign's own check, and a failure
+#       # is typed (a provisioning_* code, or that check's code). Needs HOSTS, SSH_HOSTS and SSH_USER as
 #       # printed by the create step, Docker access for SSH_USER on every VM, and Node >= 22
 #       # on the load generator (--client-node). Pass the same --targets/--lagrange-image*
 #       # options the campaign will use.

@@ -28,7 +28,7 @@ import {
 import {
   createFakeRemoteHosts,
   lockfileTarballs,
-  runFakeSsh,
+  runFakeProcess,
 } from './comparative-benchmark-fake-remote-hosts-fixture.js';
 import {
   arrayFilter,
@@ -169,7 +169,7 @@ function runInProcess(fake, ip, command) {
   process.stdout.write = (chunk) => writes.push(String(chunk)) > 0;
   let code;
   try {
-    code = runFakeSsh(['-o', 'BatchMode=yes', `bench@${ip}`, command]);
+    code = runFakeProcess('ssh', ['-o', 'BatchMode=yes', `bench@${ip}`, command]);
   } finally {
     process.stdout.write = write;
   }
