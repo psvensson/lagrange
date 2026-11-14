@@ -3,7 +3,8 @@
 // - `docker`: `info` answers; `image inspect --format {{.Id}} IMAGE` answers
 //   from the images it was given; `run --rm ... --pull=never -v SRC:DST IMAGE
 //   sh -c SCRIPT` runs SCRIPT with the real sh against SRC, as the bind mount
-//   would (a run without --pull=never is refused);
+//   would (a run without --pull=never, or of an image it was not given, is
+//   refused as docker refuses it);
 // - `chown`: records the intent (ownership cannot change without root);
 // - `ssh` (git's transport, via GIT_SSH_COMMAND): requires BatchMode=yes and
 //   the expected key, then runs the remote command (git-receive-pack) locally.
@@ -31,16 +32,23 @@ case "$1" in
       *) echo "Error: No such image: $image"; exit 1 ;;
     esac ;;
   run)
-    shift; mount=""; never=0; script=""
+    shift; mount=""; never=0; script=""; image=""
     while [ $# -gt 0 ]; do
       case "$1" in
         --pull=never) never=1 ;;
+        --label|--network|-e) shift ;;
         -v) mount="$2"; shift ;;
-        sh) if [ "$2" = "-c" ]; then script="$3"; break; fi ;;
+        -*) ;;
+        sh) if [ -n "$image" ] && [ "$2" = "-c" ]; then script="$3"; break; fi ;;
+        *) [ -n "$image" ] || image="$1" ;;
       esac
       shift
     done
     [ "$never" = 1 ] || { echo "docker shim: a run without --pull=never" >&2; exit 125; }
+    case ",$DOCKER_SHIM_IMAGES," in
+      *",$image,"*) ;;
+      *) echo "docker: Error response from daemon: No such image: $image" >&2; exit 125 ;;
+    esac
     src="\${mount%%:*}"; dst="\${mount#*:}"
     mkdir -p "$src"
     script=$(printf '%s' "$script" | sed "s#$dst/#$src/#g")

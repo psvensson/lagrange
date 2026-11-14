@@ -28,7 +28,7 @@
   "censusSize": 2664,
   "digest": "fnv1a32-bbf9c947",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-4ec790c5",
+  "observationDigest": "fnv1a32-b3414ace",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -7265,10 +7265,10 @@
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
-        "test/distributed/harness/run-benchmark-workload.js"
+        "test/distributed/harness/run-benchmark-workload.js",
+        "test/distributed/reference-client/package-lock.json"
       ],
       "directories": [
-        "data",
         "src",
         "test/distributed/reference-client"
       ],
@@ -7320,6 +7320,9 @@
       "directories": [
         "src",
         "test/distributed/reference-client"
+      ],
+      "env": [
+        "PATH"
       ]
     },
     "test/distributed/harness/__tests__/comparative-benchmark-runner-campaign.test.js": {

@@ -12,7 +12,8 @@
  * - every tarball of the reference-client lockfile (at the harness commit) in
  *   the load generator's npm cache.
  * Each placement is verified with the campaign's own check (ensureProductImages,
- * resolvePinnedImage, the harness-commit probe, the offline reference-client
+ * resolvePinnedImage, the checkout's HEAD equal to the harness commit, the
+ * offline reference-client
  * install). Docker is checked on every host before anything is placed. A
  * failure is typed (a provisioning_* code, or the code of the campaign check
  * that still refuses) and names host and the missing item; nothing is placed
@@ -33,7 +34,6 @@ import {
   REFERENCE_CLIENT_PREFIX,
   installReferenceClient,
   npmPathPrefix,
-  requireHarnessCommit,
 } from './comparative-benchmark-workload-call-site.js';
 import {
   arrayFilter,
@@ -140,7 +140,8 @@ async function remoteStep({sshRun, opts, host, step, command, harnessCommit}) {
 
 // The harness commit into the load generator's checkout: the checkout is made
 // a repository when it is not one, the commit is pushed from the controller and
-// checked out, then verified with the campaign's own probe and HEAD.
+// checked out, then verified: HEAD must be the harness commit (a HEAD at the
+// commit implies the object is present, which the campaign later probes).
 async function placeHarnessCommit({sshRun, opts, host, harnessCommit, pushHarnessCommit}) {
   const repo = shellQuote(host.repoPath);
   await remoteStep({sshRun, opts, host, harnessCommit, step: 'init',
@@ -154,7 +155,6 @@ async function placeHarnessCommit({sshRun, opts, host, harnessCommit, pushHarnes
   }
   await remoteStep({sshRun, opts, host, harnessCommit, step: 'check out',
     command: `cd ${repo} && git checkout --detach --quiet ${shellQuote(harnessCommit)}`});
-  await requireHarnessCommit({sshRun, opts, host, harnessCommit});
   const head = stringTrim(await remoteStep({sshRun, opts, host, harnessCommit, step: 'verify',
     command: `cd ${repo} && git rev-parse HEAD`}));
   if (head !== harnessCommit) {

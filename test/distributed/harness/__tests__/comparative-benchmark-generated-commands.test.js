@@ -8,7 +8,7 @@
 // Real ownership by another uid (root) is exercised by lab shell job
 // (see the quest log), not here: a unit test cannot own files as root.
 import assert from 'node:assert/strict';
-import {execFileSync, spawnSync} from 'node:child_process';
+import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
@@ -32,7 +32,6 @@ import {
   prepareLoadGeneratorCheckout,
 } from '../comparative-benchmark-workload-call-site.js';
 import * as deployers from '../real-product-cluster-deployers.js';
-import {storagePreparationScript} from '../real-product-deployer-lagrange.js';
 import {contentIdentityOf} from '../real-product-identity.js';
 import {
   arrayIncludes,
@@ -57,83 +56,72 @@ const OWN = `${process.getuid()}:${process.getgid()}`;
 const RUNTIME = '10001:10001';
 const KEY = '/keys/bench key';
 
-function runScript(shell, script) {
-  return spawnSync('sh', ['-c', script], {env: shell.env, encoding: 'utf8'});
+// The deployer with --storage-root through its own command line: the
+// preparation container is executed (real sh, stat, ls, mkdir against real
+// directories; docker and chown-to-10001 are stand-ins). The runtime user's
+// own non-empty directory needs real uid 10001 ownership: lab shell job
+// (comparative storage-owner job in the quest log) covers it with real root.
+async function deployWithStorage({images = ['postgres:17-alpine'], prepare = () => {}} = {}) {
+  const shell = createLocalShell({images});
+  const root = path.join(shell.dir, 'root');
+  prepare(path.join(root, 'camp-exec'));
+  const content = contentIdentityOf([`sha256:${LAGRANGE_IMAGE_ID.slice(-64)}`]);
+  const scripted = createScriptedSsh([
+    [/^docker run --rm .*\/campaign/u, (command) => shell.sshRun('', {}, command)],
+    ...lagrangeHealthyRules(createContainerLedger())]);
+  const outcome = await deployers.deployComparativeTarget('lagrange', {
+    hosts: ['10.0.0.1', '10.0.0.2', '10.0.0.3'], clientIp: '10.0.0.9',
+    sshRun: scripted.sshRun, campaignId: 'camp-exec', sleep: async () => {},
+    opts: {lagrangeImage: LAGRANGE_IMAGE, storageRoot: root, lagrangeImageContent: content,
+      readiness: {stablePolls: 1, attempts: 2, intervalMs: 0, timeoutMs: 50,
+        pollIntervalMs: 1}}}).then((deployment) => ({deployment}), (error) => ({error}));
+  const started = (host) => arraySome(scripted.calls, (call) => call.host === host &&
+    /^docker run -d .*lagrange-node/u.test(call.command));
+  return {...outcome, shell, campaign: path.join(root, 'camp-exec'), started};
 }
 
-test('storage preparation script, executed: absent, empty and runtime-owned directories ' +
-  'are prepared; a non-empty directory of another owner is refused and left untouched', () => {
+test('storage preparation through the deployer\'s own command line, executed: absent and ' +
+  'empty node directories are prepared before each node starts; a non-empty directory of ' +
+  'another owner refuses that node, typed, and is left untouched', async () => {
   assert.notEqual(OWN, RUNTIME, 'the test must not run as the runtime user');
-  const shell = createLocalShell();
-  const base = path.join(shell.dir, 'storage');
-  const absent = path.join(base, 'absent');
-  const prepared = runScript(shell, storagePreparationScript({dir: absent, owner: RUNTIME}));
-  assert.equal(prepared.status, 0, prepared.stderr);
-  assert.ok(fs.statSync(absent).isDirectory(), 'an absent directory is created');
-  assert.deepEqual(shell.chowns(), [`${RUNTIME} ${absent}`]);
-
-  const empty = path.join(base, 'empty');
-  fs.mkdirSync(empty);
-  assert.equal(runScript(shell, storagePreparationScript({dir: empty, owner: RUNTIME})).status,
-    0, 'an empty directory of another owner is taken over');
-  assert.deepEqual(shell.chowns(), [`${RUNTIME} ${absent}`, `${RUNTIME} ${empty}`]);
-
-  const foreign = path.join(base, 'foreign');
-  fs.mkdirSync(foreign);
-  fs.writeFileSync(path.join(foreign, 'data'), 'someone else\'s');
-  const refused = runScript(shell, storagePreparationScript({dir: foreign, owner: RUNTIME}));
-  assert.equal(refused.status, 3);
-  assert.equal(stringTrim(refused.stdout), `foreign ${OWN}`);
-  assert.equal(arraySome(shell.chowns(), (line) => stringIncludes(line, foreign)), false,
-    'foreign data is never re-owned');
-  assert.equal(fs.readFileSync(path.join(foreign, 'data'), 'utf8'), 'someone else\'s');
-
-  const own = path.join(base, 'own');
-  fs.mkdirSync(own);
-  fs.writeFileSync(path.join(own, 'data'), 'an earlier run');
-  const reused = runScript(shell, storagePreparationScript({dir: own, owner: OWN}));
-  assert.equal(reused.status, 0, 'the runtime user\'s own directory is kept: ' + reused.stdout);
-  assert.equal(fs.readFileSync(path.join(own, 'data'), 'utf8'), 'an earlier run');
-});
-
-test('storage preparation through the deployer\'s own command line, executed: fresh node ' +
-  'directories are prepared; foreign data refuses the node, typed', async () => {
-  const content = contentIdentityOf([`sha256:${LAGRANGE_IMAGE_ID.slice(-64)}`]);
-  const run = async (prepare) => {
-    const shell = createLocalShell();
-    const root = path.join(shell.dir, 'root');
-    prepare(root);
-    const scripted = createScriptedSsh([
-      [/^docker run --rm .*\/campaign/u, (command) => shell.sshRun('', {}, command)],
-      ...lagrangeHealthyRules(createContainerLedger())]);
-    const outcome = await deployers.deployComparativeTarget('lagrange', {
-      hosts: ['10.0.0.1', '10.0.0.2', '10.0.0.3'], clientIp: '10.0.0.9',
-      sshRun: scripted.sshRun, campaignId: 'camp-exec', sleep: async () => {},
-      opts: {lagrangeImage: LAGRANGE_IMAGE, storageRoot: root, lagrangeImageContent: content,
-        readiness: {stablePolls: 1, attempts: 2, intervalMs: 0, timeoutMs: 50,
-          pollIntervalMs: 1}}}).then((deployment) => ({deployment}), (error) => ({error}));
-    return {...outcome, shell, root, calls: scripted.calls};
-  };
-  const fresh = await run(() => {});
+  const fresh = await deployWithStorage({prepare: (campaign) =>
+    fs.mkdirSync(path.join(campaign, 'lagrange-3'), {recursive: true})});
   assert.equal(fresh.error, undefined, fresh.error?.message);
   for (const n of [1, 2, 3]) {
-    const dir = path.join(fresh.root, 'camp-exec', `lagrange-${n}`);
+    const dir = path.join(fresh.campaign, `lagrange-${n}`);
     assert.ok(fs.statSync(dir).isDirectory(), dir);
-    assert.ok(arrayIncludes(fresh.shell.chowns(), `${RUNTIME} ${dir}`), dir);
+    assert.ok(arrayIncludes(fresh.shell.chowns(), `${RUNTIME} /campaign/lagrange-${n}`) ||
+      arrayIncludes(fresh.shell.chowns(), `${RUNTIME} ${dir}`), dir);
   }
-  const taken = await run((root) => {
-    fs.mkdirSync(path.join(root, 'camp-exec', 'lagrange-2'), {recursive: true});
-    fs.writeFileSync(path.join(root, 'camp-exec', 'lagrange-2', 'data'), 'foreign');
-  });
+  const taken = await deployWithStorage({prepare: (campaign) => {
+    fs.mkdirSync(path.join(campaign, 'lagrange-2'), {recursive: true});
+    fs.writeFileSync(path.join(campaign, 'lagrange-2', 'data'), 'foreign');
+  }});
   assert.equal(taken.error?.code, 'deployment_command_failed');
   assert.equal(taken.error.diagnostic.reason, 'storage_foreign_owner');
   assert.equal(taken.error.diagnostic.owner, OWN);
-  assert.equal(fs.readFileSync(path.join(taken.root, 'camp-exec', 'lagrange-2', 'data'),
-    'utf8'), 'foreign');
+  assert.equal(taken.error.diagnostic.host, '10.0.0.2');
+  assert.equal(fs.readFileSync(path.join(taken.campaign, 'lagrange-2', 'data'), 'utf8'),
+    'foreign');
   assert.equal(arraySome(taken.shell.chowns(), (line) => stringIncludes(line, 'lagrange-2')),
-    false);
-  assert.equal(arraySome(taken.calls, (call) => call.host === '10.0.0.2' &&
-    /^docker run -d .*lagrange-node/u.test(call.command)), false);
+    false, 'foreign data is never re-owned');
+  assert.equal(taken.started('10.0.0.1'), true);
+  assert.equal(taken.started('10.0.0.2'), false, 'the refused node never starts');
+});
+
+// B4: a preparation container that fails for any other reason (here the
+// helper image is absent under --pull=never) refuses the node with
+// storage_owner_unprepared; the node never starts on an unprepared directory.
+test('storage preparation that fails for a non-foreign reason refuses the node, typed; it ' +
+  'never starts', async () => {
+  const failed = await deployWithStorage({images: []});
+  assert.equal(failed.error?.code, 'deployment_command_failed');
+  assert.equal(failed.error.diagnostic.reason, 'storage_owner_unprepared');
+  assert.equal(failed.error.diagnostic.host, '10.0.0.1');
+  assert.equal(failed.error.diagnostic.path, `${path.dirname(failed.campaign)}/camp-exec/lagrange-1`);
+  assert.match(failed.error.diagnostic.output, /No such image: postgres:17-alpine/u);
+  assert.equal(failed.started('10.0.0.1'), false);
+  assert.equal(fs.existsSync(path.join(failed.campaign, 'lagrange-1')), false);
 });
 
 test('image presence probe, executed: a present image answers its id; an absent one refuses',
@@ -177,6 +165,13 @@ test('harness commit, executed with real git: pushed over ssh with the campaign\
   const controller = path.join(shell.dir, 'controller');
   fs.mkdirSync(controller);
   const commit = controllerRepository(controller);
+  // The lockfile provisioning seeds from is the harness commit's, not the
+  // controller's working tree.
+  const lockPath = path.join(controller, 'test/distributed/reference-client/package-lock.json');
+  const committedLock = JSON.parse(fs.readFileSync(lockPath, 'utf8'));
+  fs.writeFileSync(lockPath, JSON.stringify({...committedLock, packages: {...committedLock.packages,
+    'node_modules/uncommitted': {version: '1.0.0', resolved: 'https://example.invalid/u.tgz'}}}));
+  assert.deepEqual(readReferenceClientLock(controller, commit), committedLock);
   const host = {ip: '127.0.0.1', role: 'client', sshTarget: 'bench@127.0.0.1',
     repoPath: path.join(shell.dir, 'client'), nodePath: process.execPath};
   const plan = {images: {data: [], client: []}, harnessCommit: commit, tarballs: []};

@@ -271,6 +271,7 @@ test('the load-generator worktree installs the reference-client drivers; a faile
     host: prepared.host, harnessCommit: 'abc', campaignId: 'bench-x'});
   await assert.rejects(runner({system: 'tidb-tikv'}, RUN),
     (error) => error.code === 'load_generator_driver_missing' &&
+      error.diagnostic.reason === 'install_failed' &&
       /npm ERR! network/u.test(error.diagnostic.output));
   const record = await runner({system: 'postgresql'}, RUN);
   assert.equal(record.dispatch.status, 'executed');

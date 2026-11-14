@@ -404,5 +404,4 @@ export {
   installReferenceClient,
   npmPathPrefix,
   prepareLoadGeneratorCheckout,
-  requireHarnessCommit,
 };

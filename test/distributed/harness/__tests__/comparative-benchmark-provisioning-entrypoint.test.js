@@ -37,6 +37,7 @@ import {
   arrayMap,
   arraySome,
   stringIncludes,
+  stringReplace,
   stringTrim,
 } from '../real-product-captured-intrinsics.js';
 
@@ -226,4 +227,72 @@ test('provisioning failures through the CLI: docker is checked everywhere first;
   const unseeded = cli(partialCache, ['--provision']);
   assert.match(unseeded.stderr, /^provisioning_cache_not_seeded: /mu);
   assert.ok(stringIncludes(unseeded.stderr, first));
+});
+
+// Every provisioning failure branch, through the real CLI: the typed code and
+// its named fields, the failed step is the last thing that ran on its host, and
+// provisioning never reports success.
+function provisionFailing(change, args = []) {
+  const fake = hosts();
+  fake.update(change);
+  const result = cli(fake, ['--provision', ...args]);
+  assert.notEqual(result.status, 0);
+  assert.ok(!stringIncludes(result.stdout, 'provisioned'), result.stdout);
+  return {stderr: result.stderr, state: fake.state()};
+}
+
+function ranOn(state, ip, pattern) {
+  return arraySome(state.log, (entry) => entry.ip === ip && pattern.test(entry.command));
+}
+
+test('a failed root npm ci is provisioning_dependencies_not_installed; nothing after it runs',
+  () => {
+    const {stderr, state} = provisionFailing((s) => {
+      s.hosts[CLIENT].npmCiFails = true;
+    });
+    assert.match(stderr, new RegExp('^provisioning_dependencies_not_installed: npm ci failed in ' +
+      `${CHECKOUT} on 10\\.20\\.0\\.9$`, 'mu'));
+    assert.match(stderr, /^diagnostic: .*"host":"10\.20\.0\.9".*Unable to authenticate/mu);
+    assert.equal(ranOn(state, CLIENT, /npm cache add|npm ci --offline/u), false);
+    assert.equal(state.hosts[CLIENT].modules, false);
+  });
+
+test('a refused cache add is provisioning_cache_not_seeded naming it; no further add and no ' +
+  'offline install', () => {
+  const [, second] = lockfileTarballs();
+  const {stderr, state} = provisionFailing((s) => {
+    s.hosts[CLIENT].refuseCacheAdd = second;
+  });
+  assert.match(stderr, new RegExp(`^provisioning_cache_not_seeded: could not add ${
+    stringReplace(second, /[.*+?^${}()|[\]\\/]/gu, '\\$&')} `, 'mu'));
+  assert.equal(commandsOn(state, CLIENT, /npm cache add /u).length, 2);
+  assert.equal(ranOn(state, CLIENT, /npm ci --offline/u), false);
+});
+
+test('a refused checkout and a checkout that lands elsewhere are provisioning_commit_not_placed ' +
+  'at their step; the install never runs', () => {
+  const refused = provisionFailing((s) => {
+    s.hosts[CLIENT].refuseCheckout = true;
+  });
+  assert.match(refused.stderr, new RegExp('^provisioning_commit_not_placed: could not check out ' +
+    `the harness commit ${HEAD} in ${CHECKOUT} on 10\\.20\\.0\\.9: error: Your local changes`, 'mu'));
+  assert.match(refused.stderr, /^diagnostic: .*"step":"check out"/mu);
+  assert.equal(ranOn(refused.state, CLIENT, / npm ci 2>&1/u), false);
+  const elsewhere = 'f'.repeat(40);
+  const moved = provisionFailing((s) => {
+    s.hosts[CLIENT].checkoutLandsOn = elsewhere;
+  });
+  assert.match(moved.stderr, new RegExp(`^provisioning_commit_not_placed: checkout ${CHECKOUT} ` +
+    `on 10\\.20\\.0\\.9 is at ${elsewhere}, not the harness commit ${HEAD}$`, 'mu'));
+  assert.equal(ranOn(moved.state, CLIENT, / npm ci 2>&1/u), false);
+});
+
+test('with --lagrange-image-content the data hosts are re-checked by content: content they do ' +
+  'not hold is image_unavailable before anything is placed on the load generator', () => {
+  const content = `sha256:${'0'.repeat(64)}`;
+  const {stderr, state} = provisionFailing(() => {}, ['--lagrange-image-content', content]);
+  assert.match(stderr, new RegExp(`^image_unavailable: pinned image content ${content} is not ` +
+    'on 10\\.20\\.0\\.1$', 'mu'));
+  assert.deepEqual(state.pushes, []);
+  assert.equal(ranOn(state, CLIENT, /^docker pull|git |npm /u), false);
 });

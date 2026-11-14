@@ -75,6 +75,11 @@ function offlineInstall(host) {
 const RULES = [
   [/^echo "\$\(hostname\)\|/u, (_host, _command, ip) =>
     ok(`vm-${ip}|boot-${ip}|4|15.6|ens4`)],
+  // resolvePinnedImage: the store, then every local image's id, digests and
+  // layers (a layer per image named after it, so no pinned content matches).
+  [/^docker info --format '\{\{\.Driver\}\}/u, () => ok('overlay2|[]')],
+  [/^docker image inspect --format '\{\{\.Id\}\}\|/u, (host) => ok(arrayJoin(arrayMap(
+    host.images, (image) => `sha256:${'d'.repeat(64)}|[]|["sha256:${image}"]`), '\n'))],
   [/^docker info /u, (host) => (host.docker ? ok('27.5.1') :
     fail(1, 'permission denied while trying to connect to the Docker daemon socket'))],
   [/^docker pull --quiet /u, (host, command) => {
@@ -98,7 +103,10 @@ const RULES = [
   [/git checkout --detach --quiet /u, (host, command) => {
     const commit = word(command, /git checkout --detach --quiet (\S+)/u);
     if (!arrayIncludes(host.commits, commit)) return fail(1, `error: pathspec '${commit}' did not match`);
-    host.head = commit;
+    if (host.refuseCheckout) {
+      return fail(1, 'error: Your local changes to the following files would be overwritten');
+    }
+    host.head = host.checkoutLandsOn ?? commit;
     return ok();
   }],
   [/git cat-file -e /u, (host, command) => (arrayIncludes(host.commits,
@@ -107,12 +115,14 @@ const RULES = [
   [/git rev-parse HEAD/u, (host) => ok(host.head ?? '')],
   [/npm cache add /u, (host, command) => {
     const url = word(command, /npm cache add (\S+) /u);
+    if (host.refuseCacheAdd === url) return fail(1, `npm error 404 Not Found - GET ${url}`);
     if (!arrayIncludes(host.lossyCacheAdds, url)) arrayPush(host.cache, url);
     return ok();
   }],
   [/npm ci --offline --prefix test\/distributed\/reference-client /u,
     (host) => offlineInstall(host)],
   [/ npm ci 2>&1$/u, (host) => {
+    if (host.npmCiFails) return fail(1, 'npm error code E401\nnpm error Unable to authenticate');
     host.modules = true;
     return ok('added 900 packages');
   }],

@@ -188,6 +188,8 @@ test('selection requires native identity and policy; fresh missing members never
   const state = inventory([['a', 'free'], ['b', 'free'], ['c', 'free'], ['d', 'free']]);
   Object.assign(state.nodes.b.testCapability, recordedThermalFacts('boot-b', 'UNAVAILABLE'));
   delete state.nodes.c.testCapability.thermalEndpoint;
+  const recordedEndpoint = state.nodes.d.testCapability.thermalEndpoint;
+  state.nodes.d.testCapability.thermalEndpoint = {schema: 'not-an-endpoint'};
   const select = (fleet = null) => selectLabBenchmarkHosts({state, fleet, dataHostCount: 3,
     nodeMinimum: '22.12.0', loadGeneratorRequirement: REQUIREMENT});
   assert.throws(() => select(), (error) => {
@@ -197,8 +199,11 @@ test('selection requires native identity and policy; fresh missing members never
     // carries the native reason, a missing endpoint says it was never recorded.
     assert.match(reasons.b, /^host-ineligible: native thermal decision unavailable \(UNAVAILABLE: .+\)$/u);
     assert.equal(reasons.c, 'host-ineligible: native thermal endpoint not recorded');
+    assert.equal(reasons.d, 'host-ineligible: native thermal endpoint invalid: ' +
+      'invalid native thermal endpoint');
     return error.code === 'refused_insufficient_host_topology';
   });
+  state.nodes.d.testCapability.thermalEndpoint = recordedEndpoint;
   Object.assign(state.nodes.b.testCapability,
     recordedThermalFacts('boot-b', 'UNAVAILABLE', PACED_POLICY));
   Object.assign(state.nodes.c.testCapability, recordedThermalFacts('boot-c', 'HOLD'));

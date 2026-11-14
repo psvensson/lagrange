@@ -10,6 +10,7 @@
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 import {fileURLToPath} from 'node:url';
@@ -254,28 +255,52 @@ test('a cache that does not serve the offline install fails provisioning, naming
 
 // The provisioning script places, it does not describe: its placement step
 // runs the runner's provisioning mode with the operator's campaign options.
-test('provision-gcp.sh is valid bash and its placement step runs the runner\'s provisioning',
-  () => {
-    const script = path.join(ROOT, 'docs/benchmarks/cloud/provision-gcp.sh');
-    const bash = spawnSync('sh', ['-c', 'command -v bash'], {encoding: 'utf8'}).stdout;
-    const bashPath = stringTrim(bash);
-    const checked = spawnSync(bashPath, ['-n', script], {encoding: 'utf8'});
-    assert.equal(checked.status, 0, checked.stderr);
-    const text = fs.readFileSync(script, 'utf8');
-    assert.match(text, /"\$\{1:-\}" = "--place"/u);
-    assert.match(text, /run-comparative-benchmarks\.mjs" --execution-target gcp --provision /u);
-  });
+// Executed: `provision-gcp.sh --place` with a `node` stand-in on PATH that
+// records its arguments. Without HOSTS it refuses before running anything;
+// with them it runs the runner's provisioning with the operator's options.
+test('provision-gcp.sh --place, executed: refuses without HOSTS; runs the runner\'s ' +
+  '--provision with the hosts, ssh user and the operator\'s options', () => {
+  const script = path.join(ROOT, 'docs/benchmarks/cloud/provision-gcp.sh');
+  const bash = stringTrim(spawnSync('sh', ['-c', 'command -v bash'], {encoding: 'utf8'}).stdout);
+  assert.equal(spawnSync(bash, ['-n', script]).status, 0);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'place-'));
+  const record = path.join(dir, 'node-argv.json');
+  fs.mkdirSync(path.join(dir, 'bin'));
+  fs.writeFileSync(path.join(dir, 'bin', 'node'), `#!${process.execPath}\n` +
+    `require('fs').writeFileSync(${JSON.stringify(record)}, ` +
+    'JSON.stringify(process.argv.slice(2)));\n', {mode: 0o755});
+  const env = {PATH: `${path.join(dir, 'bin')}:${process.env.PATH}`, HOME: dir,
+    PROJECT_ID: 'p', SSH_USER: 'bench'};
+  const place = (extra) => spawnSync(bash, [script, '--place', '--client-checkout', '/srv/c'],
+    {encoding: 'utf8', env: {...env, ...extra}});
+  const refused = place({});
+  assert.notEqual(refused.status, 0);
+  assert.match(refused.stderr, /HOSTS is not set/u);
+  assert.equal(fs.existsSync(record), false, 'nothing ran');
+  const placed = place({HOSTS: '10.0.0.1,10.0.0.2,10.0.0.3,10.0.0.9', SSH_HOSTS: '1.2.3.4'});
+  assert.equal(placed.status, 0, placed.stderr);
+  assert.deepEqual(JSON.parse(fs.readFileSync(record, 'utf8')), [
+    path.join(ROOT, 'docs/benchmarks/cloud/run-comparative-benchmarks.mjs'),
+    '--execution-target', 'gcp', '--provision', '--hosts', '10.0.0.1,10.0.0.2,10.0.0.3,10.0.0.9',
+    '--ssh-hosts', '1.2.3.4', '--ssh-user', 'bench', '--client-checkout', '/srv/c']);
+});
 
-test('the runner\'s provisioning mode is GCP only and needs an absolute client checkout',
-  () => {
-    const runner = path.join(ROOT, 'docs/benchmarks/cloud/run-comparative-benchmarks.mjs');
-    const run = (args) => spawnSync(process.execPath, [runner, ...args],
-      {encoding: 'utf8', cwd: ROOT, env: {...process.env, EXECUTION_TARGET: ''}});
-    const lab = run(['--provision']);
-    assert.notEqual(lab.status, 0);
-    assert.match(lab.stderr, /--provision is only for --execution-target gcp/u);
-    const relative = run(['--execution-target', 'gcp', '--provision',
-      '--hosts', '10.0.0.1,10.0.0.2,10.0.0.3,10.0.0.9', '--client-checkout', 'lagrange']);
-    assert.notEqual(relative.status, 0);
-    assert.match(relative.stderr, /--provision needs --client-checkout <absolute path>/u);
-  });
+test('the runner\'s provisioning mode is GCP only, separate from --dry-run, and needs an ' +
+  'absolute client checkout', () => {
+  const runner = path.join(ROOT, 'docs/benchmarks/cloud/run-comparative-benchmarks.mjs');
+  const run = (args) => spawnSync(process.execPath, [runner, ...args],
+    {encoding: 'utf8', cwd: ROOT, env: {...process.env, EXECUTION_TARGET: ''}});
+  const gcp = ['--execution-target', 'gcp', '--provision',
+    '--hosts', '10.0.0.1,10.0.0.2,10.0.0.3,10.0.0.9'];
+  for (const [args, message] of [
+    [['--provision'], /^--provision is only for --execution-target gcp/mu],
+    [[...gcp, '--client-checkout', 'lagrange'],
+      /^--provision needs --client-checkout <absolute path>/mu],
+    [[...gcp, '--client-checkout', '/srv/c', '--dry-run'],
+      /^--provision and --dry-run are separate invocations/mu]]) {
+    const result = run(args);
+    assert.notEqual(result.status, 0, args.join(' '));
+    assert.match(result.stderr, message);
+    assert.equal(stringIncludes(result.stdout, 'provisioned'), false);
+  }
+});
