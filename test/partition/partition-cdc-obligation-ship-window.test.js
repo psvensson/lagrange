@@ -30,7 +30,8 @@ import {countCdcObligations} from '../../src/partition/partition-cdc-obligation-
 import {clearFixtureSingletons, resetFixtureSingletons, settleTicks} from
   '../test-helpers/participant-transaction-fixture.js';
 import {RETRY_AFTER_MS, TABLE, addSourceRow, currentLaneOf as laneOf, fixture,
-  primeShipWindow, shipWindowOf} from '../test-helpers/partition-cdc-lane-fixture.js';
+  holdShipWindow, primeShipWindow, shipWindowOf} from
+  '../test-helpers/partition-cdc-lane-fixture.js';
 import {DRIVE_STATE_IN_A_LEADING_LANE, FLUSH_STATE_IN_A_LEADING_LANE, RECIPIENT_FAULT,
   WINDOW_EFFECT, WINDOW_EFFECT_BY_COMPLETION, WINDOW_EFFECT_BY_COVERAGE,
   WINDOW_EFFECT_BY_FAULT, WINDOW_EFFECT_BY_RETRY_DISPOSITION, assertRecipientLogs,
@@ -146,6 +147,32 @@ for (const fault of Object.values(RECIPIENT_FAULT)) {
     assert.deepEqual(countCdcObligations(f.leader.db), {owed: 0, delivered: 3});
   });
 }
+
+// CONFLICT PIN (reported to the lead, not resolved here). Record S-1 states
+// both that provisional coverage leaves the window unchanged and that under
+// any fault the lane delivers at least what one entry per wave delivers. A
+// provisional answer keyed to one row makes the second false for as long as
+// it lasts: the range shipped with that row is provisional as a whole, so the
+// rows around it stay owed, where the lane held at one entry passes that row
+// and delivers the others. Both lanes deliver every row once the answer clears.
+test('conflict pin: while one row of a range is answered provisional the rows shipped ' +
+  'with it stay owed, where the lane held at one entry delivers them', async (t) => {
+  const acknowledged = {};
+  for (const lane of ['windowed', 'held at one entry']) {
+    const rows = idsOf(3, lane === 'windowed' ? 'pin-window' : 'pin-one');
+    const f = await fixture(t, {rows, subscribers: 1});
+    const model = installRecipientModel(f);
+    faultFor(model, 1, 0, RECIPIENT_FAULT.PROVISIONAL);
+    if (lane === 'windowed') primeShipWindow(f, WARM_WINDOW);
+    else holdShipWindow(f, 1);
+    assert.equal((await f.drive()).state, DRIVE.PROVISIONAL, lane);
+    acknowledged[lane] = diagnosticsOf(f).pendingAcknowledgements;
+    await runLaneToQuiescence(f);
+    assertRecipientLogs(model, {ordered: false});
+    assert.deepEqual(countCdcObligations(f.leader.db), {owed: 0, delivered: 3}, lane);
+  }
+  assert.deepEqual(acknowledged, {'windowed': 0, 'held at one entry': 2});
+});
 
 // How each CDC completion code reaches the lane as a recipient's answer for a
 // whole range.
