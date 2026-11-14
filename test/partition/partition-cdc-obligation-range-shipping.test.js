@@ -541,7 +541,14 @@ test('acknowledgement refused inside a covered range leaves the rows from the re
   const wideKeys = wideRows.map((row) => row.eventKey);
   assert.equal(wideKeys.length, 320);
   pendingLater = wideRows[315];
-  const outcome = await f.drive();
+  // The new scan first passes the rows still pending acknowledgement, at most
+  // one visit quantum per pass (the quantum witness below owns that), then
+  // ships the entry.
+  let outcome = await f.drive();
+  for (let pass = 0; pass < MAX_DRIVES && outcome.state === DRIVE.PAGE_YIELDED; pass += 1) {
+    assert.equal(outcome.delivered, 0);
+    outcome = await f.drive();
+  }
   assert.equal(laneOf(f).pending.delete(pendingLater.eventKey), true);
   assert.deepEqual(model.waves.at(-1).keys, wideKeys, 'the entry shipped whole, as one range');
   // 56 rows fill the open batch (it is proposed: two outstanding), 256 fill the
@@ -565,6 +572,37 @@ test('acknowledgement refused inside a covered range leaves the rows from the re
   assertRecipientLogs(model, {wholeEntries: false});
   assert.deepEqual(countCdcObligations(f.leader.db),
     {owed: 0, delivered: singles.length + 321});
+});
+
+// The drive's visit quantum (DRIVE_PAGE_ROWS) counts the rows the pre-pass
+// passes, as it did when the lane visited one row at a time: a pass over rows
+// that need no delivery yields after one quantum instead of walking the
+// whole ledger in one synchronous span.
+test('rows the pre-pass passes count toward the drive\'s visit quantum: a pass over rows ' +
+  'pending acknowledgement yields after DRIVE_PAGE_ROWS of them', async (t) => {
+  const rows = idsOf(BOUND.DRIVE_PAGE_ROWS + 44, 'quantum');
+  const f = await fixture(t, {rows, subscribers: 1});
+  const model = installRecipientModel(f);
+  primeShipWindow(f, STEADY_WINDOW);
+  // Every row is delivered and waits for its CDC_DELIVERED; none commits yet.
+  assert.equal((await f.drive()).state, DRIVE.PAGE_YIELDED);
+  assert.equal((await f.drive()).state, DRIVE.DRAINED);
+  assert.deepEqual(rowsOfWaves(model), [BOUND.DRIVE_PAGE_ROWS, 44]);
+  assert.equal(diagnostics(f).pendingAcknowledgements, rows.length);
+  assert.equal(laneOf(f).scan, null, 'the drained scan ended');
+  // A new scan meets only rows pending acknowledgement.
+  const first = await f.drive();
+  assert.equal(first.state, DRIVE.PAGE_YIELDED, 'one quantum of passed rows ends the pass');
+  assert.equal(first.delivered, 0);
+  const last = model.raw[BOUND.DRIVE_PAGE_ROWS - 1];
+  assert.deepEqual(laneOf(f).scan.cursor, {logIndex: last.logIndex, ordinal: last.ordinal},
+    'the pass stopped after DRIVE_PAGE_ROWS rows');
+  const second = await f.drive();
+  assert.equal(second.state, DRIVE.DRAINED, 'the next pass passes the rest and reaches the tail');
+  assert.equal(model.waves.length, 2, 'no pending row was shipped again');
+  await runLaneToQuiescence(f);
+  assertRecipientLogs(model);
+  assert.deepEqual(countCdcObligations(f.leader.db), {owed: 0, delivered: rows.length});
 });
 
 test('the lane reads positions first and only the payloads of the range it ships; nothing ' +

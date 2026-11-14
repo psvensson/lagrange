@@ -7,7 +7,9 @@
 // 1. Pre-pass, row by row from the scan cursor, over positions only: a row
 //    pending acknowledgement is skipped, a row at or below the hydrated index
 //    is acknowledged without delivery, acknowledgement backpressure ends the
-//    pass, any other row is READY.
+//    pass, any other row is READY. Every row it passes is a visited row of
+//    the drive's quantum (DRIVE_PAGE_ROWS), as it was when the lane visited
+//    one row at a time: a pass never passes more rows than its quantum has left.
 // 2. Cut: the maximal run of consecutive READY rows from the first one, ended
 //    only by the captured tail, a row that is not READY (a hole, or the
 //    retained-delivered bound counted over the rows already taken), the byte
@@ -32,10 +34,12 @@ import {countRetainedDeliveredCdcObligations, isCdcPositionReclaimed, readCdcObl
 import {cdcProgressHoldsCoverage} from './partition-cdc-obligation-progress.js';
 
 // What one composition ended as (R07): a range to ship, nothing READY up to
-// the captured tail, or the lane's acknowledgement backpressure.
+// the captured tail, the drive's visit quantum spent on rows that needed no
+// delivery, or the lane's acknowledgement backpressure.
 const SHIP_RANGE_STATE = Object.freeze({
   READY: 'ready',
   DRAINED: 'drained',
+  QUANTUM_SPENT: 'visit_quantum_spent',
   ACKNOWLEDGEMENT_BACKPRESSURE: DRIVE.ACKNOWLEDGEMENT_BACKPRESSURE,
 });
 
@@ -54,6 +58,7 @@ const PRE_PASS_STEP = Object.freeze({
   BACKPRESSURE: 'acknowledgement_backpressure',
 });
 const DRAINED_RANGE = Object.freeze({state: SHIP_RANGE_STATE.DRAINED});
+const QUANTUM_SPENT_RANGE = Object.freeze({state: SHIP_RANGE_STATE.QUANTUM_SPENT});
 const BACKPRESSURED_RANGE = Object.freeze({state: SHIP_RANGE_STATE.ACKNOWLEDGEMENT_BACKPRESSURE});
 
 function positionOf(row) {
@@ -136,10 +141,13 @@ function resolvePrePassStep(delivery, lane, obligation, acknowledge) {
 // The first READY row after the scan cursor, one position read per row so
 // each row is judged as the ledger and the lane stand after the previous
 // row's acknowledgement: {state: READY, row}, the drained range when nothing
-// up to `through` is READY, or the backpressured range when the pass ends here.
-function firstReadyRow(delivery, lane, through, acknowledge) {
+// up to `through` is READY, the backpressured range when the pass ends here,
+// or the quantum-spent range once `visit.passed` rows were passed over
+// (`visit` = {passed, quantum}, counted across the compositions of one step).
+function firstReadyRow(delivery, lane, through, acknowledge, visit) {
   const {owner} = delivery;
   for (;;) {
+    if (visit.passed >= visit.quantum) return QUANTUM_SPENT_RANGE;
     const [row] = readOwedCdcObligationPositions(owner.db,
       {after: openScan(owner, lane).cursor, through, limit: 1});
     if (!row) return DRAINED_RANGE;
@@ -147,6 +155,7 @@ function firstReadyRow(delivery, lane, through, acknowledge) {
     if (step === PRE_PASS_STEP.BACKPRESSURE) return BACKPRESSURED_RANGE;
     if (step === PRE_PASS_STEP.READY) return {state: SHIP_RANGE_STATE.READY, row};
     advanceScanCursor(lane, row);
+    visit.passed += 1;
   }
 }
 
@@ -230,12 +239,12 @@ function pinnedCellOf(lane) {
   return cell !== null && cdcProgressHoldsCoverage(cell) ? cell : null;
 }
 
-function composeThrough(delivery, lane, acknowledge, pinned) {
+function composeThrough(delivery, lane, acknowledge, pinned, visit) {
   const scan = openScan(delivery.owner, lane);
   if (scan.through === null) return DRAINED_RANGE;
   const through = pinned !== null && isBefore(pinned.last, scan.through) ?
     pinned.last : scan.through;
-  const first = firstReadyRow(delivery, lane, through, acknowledge);
+  const first = firstReadyRow(delivery, lane, through, acknowledge, visit);
   if (first.state !== SHIP_RANGE_STATE.READY) return first;
   return {state: SHIP_RANGE_STATE.READY,
     ...cutReadyRun(delivery.owner, lane, first.row, through)};
@@ -253,26 +262,40 @@ function readRangePayloads(db, rows) {
     through: positionOf(rows.at(-1)), limit: rows.length});
 }
 
+// A composition that ships nothing ends the step (and never discards a pinned
+// cell) on backpressure or a spent quantum; a drained one does when it was
+// not capped by a pinned cell.
+function endsStepWithoutRange(range, pinned) {
+  return range.state === SHIP_RANGE_STATE.ACKNOWLEDGEMENT_BACKPRESSURE ||
+    range.state === SHIP_RANGE_STATE.QUANTUM_SPENT ||
+    (range.state === SHIP_RANGE_STATE.DRAINED && pinned === null);
+}
+
 /**
  * Compose the range this drive step ships (see the header). Leading rows that
  * need no delivery are passed (the scan cursor moves over them) and hydrated
- * ones acknowledged through `acknowledge`.
+ * ones acknowledged through `acknowledge`; at most `quantum` rows are passed.
  * @param {Object} delivery - The CDC delivery owner.
  * @param {Object} lane - Its current obligation lane.
  * @param {Function} acknowledge - (delivery, obligation) -> boolean, the
  *   lane's acknowledgement of a row that needs no delivery.
- * @return {Object} {state: a SHIP_RANGE_STATE}; when READY also
- *   {obligations, windowCut}: the owed rows with their payloads, in log
- *   order, and whether the shipping window was what cut the run.
+ * @param {number} quantum - The visited rows the drive pass has left.
+ * @return {Object} {state: a SHIP_RANGE_STATE, passed}: how the composition
+ *   ended and how many rows it passed over; when READY also {obligations,
+ *   windowCut}: the owed rows with their payloads, in log order, and whether
+ *   the shipping window was what cut the run.
  */
-function composeCdcShipRange(delivery, lane, acknowledge) {
+function composeCdcShipRange(delivery, lane, acknowledge, quantum) {
+  const visit = {passed: 0, quantum};
   for (;;) {
     const pinned = pinnedCellOf(lane);
-    const range = composeThrough(delivery, lane, acknowledge, pinned);
-    if (range.state === SHIP_RANGE_STATE.ACKNOWLEDGEMENT_BACKPRESSURE) return range;
+    const range = composeThrough(delivery, lane, acknowledge, pinned, visit);
+    if (endsStepWithoutRange(range, pinned)) {
+      return Object.freeze({state: range.state, passed: visit.passed});
+    }
     if (pinned === null || isRangeOfCell(range, pinned)) {
-      return range.state === SHIP_RANGE_STATE.DRAINED ? range : Object.freeze({
-        state: SHIP_RANGE_STATE.READY,
+      return Object.freeze({
+        state: SHIP_RANGE_STATE.READY, passed: visit.passed,
         obligations: readRangePayloads(delivery.owner.db, range.rows),
         windowCut: range.cut === SHIP_RANGE_CUT.WINDOW});
     }
