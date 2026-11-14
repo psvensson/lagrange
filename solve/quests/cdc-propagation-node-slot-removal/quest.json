@@ -1,0 +1,54 @@
+{
+  "schema": "solve-quest/2",
+  "id": "cdc-propagation-node-slot-removal",
+  "class": "fix",
+  "statement": "The CDC group propagation service admits every durable wave its source lane presents: no wave is refused, delayed or ordered because another lane's wave is in flight. The node-wide propagation slot and every mechanism that existed to share it (per-table slice counts, the yield hold, the waiting-table queue with its lifecycles and timestamps, credits, the slice-turn wake, contention marks on the invocation, and the lane-side contention registration, release and hint handling) are removed from source, tests and documentation, not disabled. In-flight waves are bounded structurally by one per source lane; stopping the service retires every in-flight wave and arms nothing; after a refusal that attempted nothing the lane composes its next vector from the current owed tail. Coverage, receipts, acknowledgement, order within a lane and every timeout, retry count and bound value are unchanged.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/cdc-propagation-node-slot-removal/evidence/receipt.json",
+      "requiredReceipts": [
+        "reproducers-red-on-original",
+        "reproducers-and-owned-roots-green-on-candidate",
+        "removed-mechanism-census-zero",
+        "journey-no-slot-wait",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "bounded-repair-not-service-acceptance",
+      "statement": "Bounded repair of the second measured cause of the open service quest fresh-formation-user-table-routability. Measured on the composed range-shipping and lifecycle candidates (journey job 4216bd0b on tv-dator, measurement head 9991b450d): predicate g still fails with two persistent episodes, both a single wait on the slot (one event refused 15 times over 3.05 s, one 19 times over 4.73 s with the next row of its lane waiting behind it); 1215 refusals, all busy; the slot was 82.5 percent occupied; the services lane spent 61.6 s waiting for the slot against 26.8 s in waves; no lane-backlog and no partial-row cause appears. Closing this quest does not claim the journey green."
+    },
+    {
+      "id": "removal-not-disablement",
+      "statement": "No flag, mode, compatibility branch, alias or fallback keeps the slot or any slicing behaviour reachable; no symbol, constant, test or document of the removed mechanism survives (owner rule: no legacy, one version of any logic). History: introduced 2026-10-23 (681da1dc1, contract F2) as a memory and custody bound, not an ordering rule; fifteen behavioural patches from 2026-10-27 to 2026-11-08 tuned fairness around it without measuring sender latency; its removal was approved by the owner on 2026-11-11."
+    },
+    {
+      "id": "structural-bound-replaces-the-slot",
+      "statement": "What the slot bounded stays bounded without a shared resource: at most one in-flight wave per source lane (the lane's own single flight), each carrying one vector bounded by the lane's window and SHIP_MAX_BYTES; the service owns the set of in-flight waves only to retire them on stop. No new node-wide limiter, queue, timer or fairness mechanism is introduced; a recipient that cannot keep up answers with its existing typed backpressure. If measurement shows a node-wide bound is needed, that is reported as a finding with the numbers, not built here."
+    },
+    {
+      "id": "nothing-relied-on-serialization-silently",
+      "statement": "Every piece of state the single slot implicitly serialized is found and either shown safe under overlapping waves or given an owner: service statistics and publication-mode diagnostics, plan capture and config refresh, retry sleep bookkeeping, the progress rotation, emitted events, and any reader of the removed fields (diagnostics, readiness, admin, tests)."
+    },
+    {
+      "id": "unchanged-semantics",
+      "statement": "No timeout, hold, retry count, cooldown, backoff or bound value changes except those deleted with the mechanism; coverage, receipts, acknowledgement and per-lane order are untouched; message-group files, the cache and the ledger are untouched; journey predicates and bounds are untouched."
+    },
+    {
+      "id": "depends-on-range-shipping",
+      "statement": "Built on the composed head 589c1e2f (range-shipping candidate 596ca79c0, still in independent verification, plus the verified lifecycle candidate 5778ba12e). If the range-shipping candidate changes, this branch takes the change by merge and re-proves what it invalidates."
+    },
+    {
+      "id": "verification-and-custody",
+      "statement": "Reproducers are observed red on the base before the candidate is credited; independent verification on the exact candidate before landing; tests and the journey run on lab hosts through the local controller with complete evidence brought back; a failed run stays recorded as failed."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ],
+  "sealedAt": "589c1e2f70c1910026367d4ab4461e67e81b5d52"
+}

@@ -1,0 +1,30 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "cdc-propagation-node-slot-removal",
+  "status": "fail",
+  "interpretation": "Original measurement that motivates the repair; not candidate proof. One journey run on the composed candidates with observation-only diagnostics.",
+  "receipts": [
+    {
+      "id": "original-journey-slot-wait",
+      "measured": true,
+      "passed": false,
+      "detail": "Journey job 4216bd0b-3da9-4bcb-b796-f52953fd2dba on tv-dator at measurement head 9991b450d (= composed head 589c1e2f + one observation-only commit): scenario FAILED, predicates a-f met, g-projection-agrees-with-authority fails with two persistent episodes (ledger_in_flight 2416 ms on observer 7704; priority_spread 1218 ms on observer cffe, bound 1000 ms). Both are a wait on the node-wide slot: the first event was refused 15 times over 3.05 s while services, nodes and control_plane_publications took turns; the second 19 times over 4.73 s, and the active row behind it in the same lane arrived 2.5 s after it committed. Slot: 1215 refusals, all busy; 82.5 percent occupied overall and 81-96 percent per 10 s for about 130 s. Services lane: 26.8 s in waves, 61.6 s waiting for the slot. Wave cost about 328 ms plus 42 ms per row; per-leaf legs p50 72, 98 and 154 ms with no in-wave retry. In 742 drives the vector was cut at the scan tail captured when the pass began with 1-10 READY rows already owed behind it, so after a run of refusals the admitted vector was usually one row. Compared with source ed708dfd: episodes 5 -> 2, services commit to first drive p50 10.6 s -> 0.60 s, no raft_role_missing exclusion."
+    }
+  ],
+  "unmeasuredObligations": [
+    "reproducers-red-on-original",
+    "reproducers-and-owned-roots-green-on-candidate",
+    "removed-mechanism-census-zero",
+    "journey-no-slot-wait",
+    "independent-verification"
+  ],
+  "source": {
+    "sha": "9991b450db37529ba1a25e993c99d6d441e8c89e",
+    "sealedBase": "589c1e2f70c1910026367d4ab4461e67e81b5d52"
+  },
+  "evidence": {
+    "directory": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/journey/measure-9991b450",
+    "analysis": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/journey/measure-analysis.md"
+  },
+  "evidenceCeiling": "One run; both episodes exceed the 1000 ms bound only narrowly; diagnostic overhead bounds absolute timings; the range-shipping candidate in the composed head is not yet independently approved."
+}
