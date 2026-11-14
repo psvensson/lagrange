@@ -1,0 +1,21 @@
+{
+ "kind": "tests",
+ "host": "adams-gamla",
+ "commit": "232082669eddebe4c9fd98d3e07c11fc91ffb781",
+ "tree": "1352b00ee946ba431454da8cd3dd43f5f41a0f1d",
+ "worktreePaths": [
+  "test/cache/fixtures/system-table-cache-lifecycle-reconciliation-golden.json",
+  "test/cache/system-table-cache-lifecycle-reconciliation-differential.test.js",
+  "test/cache/system-table-cache-lifecycle-reconciliation-grid.js",
+  "test/cache/system-table-cache-services-lifecycle-merge.test.js",
+  "test/rebalancer/operation-workflow-active-cache-handoff.test.js"
+ ],
+ "transportCommit": "47f5baa4f62c6b7996fd45eea5b44abb06a39a7b",
+ "base": "9c576f3a06be3bf117623f038f43e6b36b5b33a5",
+ "files": [
+  "test/cache/system-table-cache-lifecycle-reconciliation-differential.test.js",
+  "test/cache/system-table-cache-services-lifecycle-merge.test.js",
+  "test/rebalancer/operation-workflow-active-cache-handoff.test.js"
+ ],
+ "requestId": "1960973f-8ce7-47fa-9dc6-bc2f3218657e"
+}

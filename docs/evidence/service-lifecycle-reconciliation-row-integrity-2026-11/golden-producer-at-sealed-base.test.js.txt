@@ -1,0 +1,45 @@
+// Golden producer, run once at the sealed base 9a22bf79b (throwaway commit e302ed204, lab job 96804049), whose touched files are byte-identical to main 232082669.
+// Recorded verbatim; it may not run against the landed grid helper, which no longer exports summarizeCombo.
+// Golden producer for the lifecycle reconciliation differential. Runs only on
+// a throwaway branch at the sealed base 9a22bf79b; prints the base builder's
+// and predicate's outputs over the shared model grid.
+import {test} from '../../src/test-helpers/tap.js';
+import {TABLES} from '../../src/constants/index.js';
+import {
+  areAuthoritativeSystemTableCacheRowsAligned,
+  buildAuthoritativeServiceLifecycleCacheReplacement,
+} from '../../src/cache/system-table-cache-authoritative-reconciliation.js';
+import {
+  comboKey,
+  enumerateComboCells,
+  enumerateGridCombos,
+  summarizeCombo,
+} from './system-table-cache-lifecycle-reconciliation-grid.js';
+
+test('golden: base lifecycle reconciliation over the model grid', (t) => {
+  const golden = {};
+  let cellCount = 0;
+  for (const axes of enumerateGridCombos()) {
+    const cells = [...enumerateComboCells(axes)];
+    const outputs = [];
+    const alignedBefore = [];
+    const alignedAfter = [];
+    for (const cell of cells) {
+      const output = buildAuthoritativeServiceLifecycleCacheReplacement(
+        cell.cached,
+        cell.authority,
+      );
+      outputs.push(output);
+      alignedBefore.push(areAuthoritativeSystemTableCacheRowsAligned(
+        TABLES.SERVICES, cell.cached, cell.authority));
+      alignedAfter.push(areAuthoritativeSystemTableCacheRowsAligned(
+        TABLES.SERVICES, output, cell.authority));
+      cellCount += 1;
+    }
+    golden[comboKey(axes)] = summarizeCombo(
+      cells, outputs, alignedBefore, alignedAfter);
+  }
+  console.log(`GOLDEN_JSON ${JSON.stringify({cellCount, golden})}`);
+  t.ok(cellCount > 0, `golden covers ${cellCount} cells`);
+  t.end();
+});

@@ -1,0 +1,99 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "service-lifecycle-reconciliation-row-integrity",
+  "status": "pass",
+  "interpretation": "Landing form. The candidate is the uncommitted delta on main 232082669eddebe4c9fd98d3e07c11fc91ffb781, candidate tree 6d02559e6e6306c22b15261d882d0ce7f3d9ff05: the approved candidate 5778ba12e moved onto main, one helper renamed to clear two name-based decision-boundary hits, unused test-helper functions removed, and the evidence kept under docs/evidence/service-lifecycle-reconciliation-row-integrity-2026-11. Reproducers are measured red on main and the owned roots green on the candidate; an independent verifier approved this exact state.",
+  "receipts": [
+    {
+      "id": "original-journey-partial-row-episode",
+      "measured": true,
+      "passed": true,
+      "detail": "Native job 81b81f30-d9b1-4132-854c-6f1c3dffe647 on tv-dator. Episode 1 of predicate g-projection-agrees-with-authority: observer de5a0bc4, partition replica_operations-p1, row replica_operations-p1-r4, longest span 1389 ms against a 1000 ms bound. Observer log lines 2182-2183 (2026-11-13T22:28:06.898Z): cache UPSERT by authoritative_service_lifecycle_reconciliation, before {status syncing, updated_at 1794608883548, originHlc 1794608883960-0-services-p1-r1}, after {status active, updated_at 1794608885950, originHlc null}, incomingVersionAccepted true; the journey report records exclusion raft_role_missing for that replica while authorityRows hold raft_role follower (seed applied index 336 at :06.209). The row was rewritten by authoritative_observation_reconciliation at about :08.05, before the live CDC event arrived. Deterministic reproduction on a scratch copy of the same source: {raft_role: null, status: active, aligned: true}. Census of the run: 12 lifecycle-reconciliation writes (7 merged over an existing row; this is the one that crossed a role change). passed=true records that the failure was observed on the original; it is the red baseline, not a claim about the candidate. Measured on the diagnostic line (ed708dfd), where the episode was observed; it is the origin of the defect, not proof of the candidate."
+    },
+    {
+      "id": "reproducer-red-on-original",
+      "measured": true,
+      "passed": true,
+      "detail": "RE-MEASURED ON MAIN: lab job 1960973f-8ce7-47fa-9dc6-bc2f3218657e on adams-gamla, FAILED exit 1, tree 1352b00ee946 = main 232082669eddebe4c9fd98d3e07c11fc91ffb781 plus the unit test files and golden fixture only (no source change): all three reproducer files red for the stated reasons (differential Q1, Q3 and Q4 assertions with Q2 passing; absent cached columns not filled; the handoff witness reads raft_role_missing). Earlier measurement on the line: Record v2 tests at ddd5f4668 (product source = sealed base 9a22bf79b, restored by 7facd0f5a). Lab job db1ece60-ce33-4717-8585-34487704e99f on adams-gamla FAILED exit 1, all three files red: differential (Q2/Q3/Q4 assertions), lifecycle-merge anchors (measured interleaving, absent/undefined/non-finite fills), handoff witnesses (measured interleaving and role-only/equal-version cases: target not filled, projection raft_role_missing). The seed witness and the cleared-null anchors pass on the base, as they must.",
+      "evidence": "docs/evidence/service-lifecycle-reconciliation-row-integrity-2026-11/lab-1960973f-8ce7-47fa-9dc6-bc2f3218657e",
+      "earlierEvidence": "lagrange-foundation-coordination-20261114/lifecycle-row/mut-red-ddd5f466-adams-gamla-r1 (coordination records, not in git)"
+    },
+    {
+      "id": "reproducer-and-owned-roots-green-on-candidate",
+      "measured": true,
+      "passed": true,
+      "detail": "RE-MEASURED ON THE LANDING CANDIDATE: lab job 6c86f09d-8b06-4b35-a516-6b94dc06607a on tv-dator, COMPLETE exit 0, tree a4c29e3128f1 = main 232082669eddebe4c9fd98d3e07c11fc91ffb781 plus the unit: 58 files listed (56 distinct owned roots, two listed twice), 2985 assertions, 0 failed. That measured tree (a4c29e3128f1) predates the test-only repair: the landing tree differs from it under solve/quests and in two test files (the grid helper and the differential test header), whose current bytes were measured by job 952fadbb (tree 04b6e854) and again by the verifier control cc60f473. Earlier measurement on the line: Candidate 5778ba12ec6972a91fd3895db24d2df9ad0373a3 (source 1e43d70bf; later commits test-only). Lab job e04f0324-5e78-4ede-8c85-b07844685736 on adams-gamla COMPLETE exit 0: 56/56 files, 2752 assertions (differential, all test/cache, handoff file, every file referencing the builders, the lifecycle mode, the refresh/repair functions and the projection consumers). Earlier on the same source: 4bd4ac6d7 job b1ea5485-3347-4145-880b-4fab3f0c9f19 56/56 2746; core three files on adam-laptop job d20222c5-1618-4f79-91e1-1fe5f38bdb78 3/3; 1e43d70bf job 8528c17e-4580-47a2-ad88-f04e0098ca38 56/56 and carinas-windows job 1801aa15-6b81-4453-a561-817e2109648f 3/3. AFTER THE TEST-ONLY REPAIR of the landing round (two unused functions removed from the grid helper, two constants made module-private, provenance added to the differential test header; source and golden fixture bytes unchanged): lab job 952fadbb-fa29-4b3b-a98d-e8a90e8969e6 on adams-gamla, COMPLETE exit 0, the three core files, 241 assertions (evidence docs/evidence/service-lifecycle-reconciliation-row-integrity-2026-11/lab-952fadbb-fa29-4b3b-a98d-e8a90e8969e6). The other owned roots were measured on tree a4c29e3128f1 and import neither changed file. FINAL LANDING STATE (candidate tree 6d02559e6e6306c22b15261d882d0ce7f3d9ff05): differs from the tree measured by job 952fadbb only by one provenance comment line in the differential test, the evidence files under docs/evidence/service-lifecycle-reconciliation-row-integrity-2026-11 and this quest directory; the differential test ran green on the final bytes (7 of 7, local single-file run by the lead and by the verifier).",
+      "evidence": "docs/evidence/service-lifecycle-reconciliation-row-integrity-2026-11/lab-6c86f09d-8b06-4b35-a516-6b94dc06607a",
+      "earlierEvidence": "lagrange-foundation-coordination-20261114/lifecycle-row/v2-final-wide-5778ba12-adams-gamla-r1 (coordination records, not in git)"
+    },
+    {
+      "id": "golden-differential-q2",
+      "measured": true,
+      "passed": true,
+      "detail": "Golden produced at the sealed base: throwaway commit e302ed2048a4e720a2ed235b520b355074e20326 (9a22bf79b + generator blob fc92516ae6605543a561c5fc9169431e9366d134 + producer), lab job 96804049-a14d-49c1-b45e-11f5752956e0 on carinas-windows COMPLETE; 134400 cells over 400 combos; committed as test/cache/fixtures/system-table-cache-lifecycle-reconciliation-golden.json with provenance. Differential test green on the candidate (job e04f0324). APPLICABILITY TO THE LANDING CANDIDATE: the landing candidate is the uncommitted delta on main 232082669eddebe4c9fd98d3e07c11fc91ffb781; main and the unit base 9a22bf79b hold byte-identical contents for every touched file that exists on main, and the candidate source differs from 5778ba12e only by the rename of one helper (isAbsentCachedServiceFieldFilledByAuthority to authorityFillsAbsentCachedServiceField, three lines, no test references it). The test that carries this receipt ran green on the landing candidate in job 6c86f09d (evidence docs/evidence/service-lifecycle-reconciliation-row-integrity-2026-11/lab-6c86f09d-8b06-4b35-a516-6b94dc06607a). The current bytes of the differential test and its grid helper (after the test-only repair) ran green in job 952fadbb (tree 04b6e854; evidence docs/evidence/service-lifecycle-reconciliation-row-integrity-2026-11/lab-952fadbb-fa29-4b3b-a98d-e8a90e8969e6); the verifier found the old and new grid to enumerate the same 400 combos and 134,400 cells with an identical digest.",
+      "earlierEvidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/lifecycle-row/golden-base-e302ed20-carinas (coordination records, not in git)",
+      "evidence": "docs/evidence/service-lifecycle-reconciliation-row-integrity-2026-11/lab-6c86f09d-8b06-4b35-a516-6b94dc06607a"
+    },
+    {
+      "id": "guard-mutation-table",
+      "measured": true,
+      "passed": true,
+      "detail": "Mutants of 1e43d70bf, one throwaway commit each, three core test files. Killed: m01 null-as-present 5965ffb9 (adams-gamla); m02 undefined-not-filled c767ebaf (adams-gamla); m03 version guard removed cdfcacfd (adams-gamla); m04 lifecycle restriction removed fa7d03d7 (carinas-windows); m05 incarnation restriction removed 741af2fc (carinas-windows); m07 fill identity/HLC e8bde22b (carinas-windows); m08 authoritative null fills e1211cf7 (adam-laptop); m09 predicate condition removed a638e482 (adam-laptop); m10 condition moved into the strictly-newer-cached branch 6d44742c (adam-laptop). Survived as equivalent mutants: m06 fill applied to lifecycle columns 24723758 (carinas-windows) - the base lifecycle overlay rewrites every lifecycle column whenever Q1's lifecycle guard passes, and the predicate's lifecycle branch already compares them; m11 condition moved before the identity check 84a9db3f (carinas-windows) - Q1's lifecycle guard confines Q1 cells to the lifecycle-compare branch or branches already false. The first m11 run (53d9fc5c, adam-laptop) failed on the per-test timeout (infrastructure), recorded as failed. APPLICABILITY TO THE LANDING CANDIDATE: the landing candidate is the uncommitted delta on main 232082669eddebe4c9fd98d3e07c11fc91ffb781; main and the unit base 9a22bf79b hold byte-identical contents for every touched file that exists on main, and the candidate source differs from 5778ba12e only by the rename of one helper (isAbsentCachedServiceFieldFilledByAuthority to authorityFillsAbsentCachedServiceField, three lines, no test references it). The mutants were executed on the line-based candidate; a spot check by mechanism on the landing candidate is part of the fresh independent verification and is recorded under independent-verification. Spot check on the landing candidate by the fresh verifier: twelve behavioural mutants killed by named assertions on the first pass and three decisive ones again after the test-only repair (reports docs/evidence/service-lifecycle-reconciliation-row-integrity-2026-11/independent-verification-landing-candidate.md and docs/evidence/service-lifecycle-reconciliation-row-integrity-2026-11/independent-verification-landing-candidate-recheck.md).",
+      "evidence": "docs/evidence/service-lifecycle-reconciliation-row-integrity-2026-11/independent-verification-5778ba12e.md",
+      "earlierEvidence": "lagrange-foundation-coordination-20261114/lifecycle-row (coordination records, not in git)"
+    },
+    {
+      "id": "real-consumer-witness",
+      "measured": true,
+      "passed": true,
+      "detail": "Handoff witnesses through applyReconciledReplicaStatus -> refreshAuthoritativeCacheRow -> applySystemTableChange, read through buildDerivedPriorityPartitionSummary and isPrioritySpreadHolderServiceRow: measured interleaving (not aligned beforehand; replica included afterwards), role-only and equal-version absent role, and the CL-035 owner-local seed (follower and holder kept, as on the base). Red on the base source (job db1ece60, seed case green there), green on the candidate (job e04f0324). APPLICABILITY TO THE LANDING CANDIDATE: the landing candidate is the uncommitted delta on main 232082669eddebe4c9fd98d3e07c11fc91ffb781; main and the unit base 9a22bf79b hold byte-identical contents for every touched file that exists on main, and the candidate source differs from 5778ba12e only by the rename of one helper (isAbsentCachedServiceFieldFilledByAuthority to authorityFillsAbsentCachedServiceField, three lines, no test references it). The test that carries this receipt ran green on the landing candidate in job 6c86f09d (evidence docs/evidence/service-lifecycle-reconciliation-row-integrity-2026-11/lab-6c86f09d-8b06-4b35-a516-6b94dc06607a). The current bytes of the differential test and its grid helper (after the test-only repair) ran green in job 952fadbb (tree 04b6e854; evidence docs/evidence/service-lifecycle-reconciliation-row-integrity-2026-11/lab-952fadbb-fa29-4b3b-a98d-e8a90e8969e6); the verifier found the old and new grid to enumerate the same 400 combos and 134,400 cells with an identical digest.",
+      "earlierEvidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/lifecycle-row/v2-final-wide-5778ba12-adams-gamla-r1 (coordination records, not in git)",
+      "evidence": "docs/evidence/service-lifecycle-reconciliation-row-integrity-2026-11/lab-6c86f09d-8b06-4b35-a516-6b94dc06607a"
+    },
+    {
+      "id": "superseded-3bd5053b5-reproducer-red-on-original",
+      "measured": true,
+      "passed": false,
+      "detail": "SUPERSEDED, not proof of any later candidate: measured on rejected candidate 3bd5053b5 (reproducer commit 2a60ee973) under the withdrawn frozen claim. Reproducer-only commit 2a60ee97307d47c90db19f1ef63a7d2e081a028c (sealed base 9a22bf79b + quest record + tests; src unchanged). Lab job 8e2873c6-1025-4a3a-a397-f343782ad07f on adams-gamla, state FAILED, exit 1, as expected: test/cache/system-table-cache-services-lifecycle-merge.test.js 9 fail/38 (newer authority row keeps cached raft_role null; partial row labelled with the authoritative version reported aligned; role-only newer version reported aligned and not installed; equal-version null/missing cached raft_role reported aligned and null kept; newer row version with newer cached lifecycle keeps the older cached role); test/rebalancer/operation-workflow-active-cache-handoff.test.js 12 fail/127, all in the three new witness cases: the handoff completes while the cached target keeps raft_role null, is no priority-spread holder and the projection reports raft_role_missing for the target partition. Pre-existing tests in both files pass. Earlier job 63cfb628-4a8c-410a-8687-a222ed8d18d2 (commit 7ee430928) also FAILED but its witness precondition read the wrong projection block (fixture error, fixed in 2a60ee973); retained as recorded, not credited.",
+      "earlierEvidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/lifecycle-row/red-repro-2a60ee97 (coordination records, not in git)",
+      "evidence": "docs/evidence/service-lifecycle-reconciliation-row-integrity-2026-11/independent-verification-3bd5053b5.md"
+    },
+    {
+      "id": "superseded-3bd5053b5-reproducer-and-owned-roots-green-on-candidate",
+      "measured": true,
+      "passed": false,
+      "detail": "SUPERSEDED, not proof of any later candidate: measured on rejected candidate 3bd5053b5 (reproducer commit 2a60ee973) under the withdrawn frozen claim. Candidate 3bd5053b5c3a3109c96416c9b0c9ae315d3887fa. Lab job 104e18d8-30de-480e-a934-574f5e8ee0e5 on adams-gamla, state COMPLETE, exit 0: 55/55 test files, 2706 assertions \u2014 all 26 test/cache files, the handoff witness file, and every test file referencing the builders, the lifecycle mutation mode, refreshAuthoritativeCacheRow/refreshAuthoritativeReplicaCacheRow or applyAuthoritativeCacheRepair, plus the priority-spread projection/census consumers.",
+      "earlierEvidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/lifecycle-row/green-candidate-3bd5053b (coordination records, not in git)",
+      "evidence": "docs/evidence/service-lifecycle-reconciliation-row-integrity-2026-11/independent-verification-3bd5053b5.md"
+    },
+    {
+      "id": "superseded-3bd5053b5-real-consumer-witness",
+      "measured": true,
+      "passed": false,
+      "detail": "SUPERSEDED, not proof of any later candidate: measured on rejected candidate 3bd5053b5 (reproducer commit 2a60ee973) under the withdrawn frozen claim. test/rebalancer/operation-workflow-active-cache-handoff.test.js witness cases drive workflowOwner.applyReconciledReplicaStatus(ACTIVE) -> confirmActiveReplicaTerminalHandoff -> refreshAuthoritativeCacheRow -> applyAuthoritativeCacheRepair -> SystemTableCache.applySystemTableChange (lifecycle mode) and read the outcome through buildDerivedPriorityPartitionSummary and isPrioritySpreadHolderServiceRow over cache.getAll('services'): red on 2a60ee973 (job 8e2873c6, raft_role_missing after completion), green on 3bd5053b5 (job 104e18d8).",
+      "earlierEvidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/lifecycle-row/green-candidate-3bd5053b (coordination records, not in git)",
+      "evidence": "docs/evidence/service-lifecycle-reconciliation-row-integrity-2026-11/independent-verification-3bd5053b5.md"
+    },
+    {
+      "id": "independent-verification",
+      "measured": true,
+      "passed": true,
+      "detail": "APPROVE of the final landing state (uncommitted delta on main 232082669eddebe4c9fd98d3e07c11fc91ffb781, candidate tree 6d02559e6e6306c22b15261d882d0ce7f3d9ff05) by independent verifier subagent:aec8e65e9bb02856d, in three passes on the landing form: (1) reject on the unused-export ratchet with the behavioural claim holding and twelve behavioural mutants killed on the lab; (2) approve after the test-only repair (tree b7fd5429432f), three decisive mutants re-run; (3) approve after the evidence was moved out of the quest directory, following a first landing commit that CI refused on the closed-quest shape rule: outside the quest directory only one comment line and the evidence files differ from the tree approved in pass 2, the landing was simulated in a throwaway commit and the closed-quest, append-only, documentation, shard and impact-contract audits pass. Reports of passes 1 and 2 and of the two earlier candidates are in docs/evidence/service-lifecycle-reconciliation-row-integrity-2026-11; pass 3 is recorded in the quest log. Not checked by the verifier and owed by the landing itself: the npm test change proof."
+    }
+  ],
+  "unmeasuredObligations": [],
+  "source": {
+    "sha": "232082669eddebe4c9fd98d3e07c11fc91ffb781",
+    "landingCandidate": "uncommitted delta on main 232082669eddebe4c9fd98d3e07c11fc91ffb781; candidate tree 6d02559e6e6306c22b15261d882d0ce7f3d9ff05; lab-measured trees a4c29e3128f1 (56 owned roots, before the test-only repair) and 04b6e854 (three core files after it)",
+    "earlierCandidate": "5778ba12ec6972a91fd3895db24d2df9ad0373a3",
+    "earlierSealedBase": "9a22bf79b61610bd782cf82ca45844f325f6a8e6",
+    "earlierCandidateSource": "1e43d70bf019602a45980d7e6e687f6da73272cd",
+    "supersededCandidate": "3bd5053b5c3a3109c96416c9b0c9ae315d3887fa",
+    "diagnosticLine": "ed708dfd01e5ffb446f49ba0447a5bf9915f511a"
+  },
+  "evidence": {
+    "directory": "docs/evidence/service-lifecycle-reconciliation-row-integrity-2026-11",
+    "analysis": "partial-row cache write trace of 2026-11-14 on the diagnostic line, retained with the coordination records outside git"
+  },
+  "evidenceCeiling": "The cache observation logs status, updated_at and updated_at_hlc only; the null raft_role is read from the journey report's projection exclusion and reproduced deterministically, not read from the cache log line. One run."
+}

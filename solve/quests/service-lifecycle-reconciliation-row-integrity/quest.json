@@ -1,0 +1,52 @@
+{
+  "schema": "solve-quest/2",
+  "id": "service-lifecycle-reconciliation-row-integrity",
+  "class": "fix",
+  "statement": "An authoritative service-lifecycle reconciliation of the system-table cache never installs a services row that claims a version newer than the columns it carries: when the authoritative row read from the services partition is newer than the cached row, the cached row afterwards holds the authoritative value of every column the authoritative row carries, including raft_role; an absent (null or missing) cached value never overrides an authoritative value; and the refresh reports the cache aligned only when the cached row agrees with the authoritative row on every authoritative column, or the cached row is strictly newer.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/service-lifecycle-reconciliation-row-integrity/evidence/receipt.json",
+      "requiredReceipts": [
+        "reproducer-red-on-original",
+        "reproducer-and-owned-roots-green-on-candidate",
+        "real-consumer-witness",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "bounded-repair-not-service-acceptance",
+      "statement": "This is the bounded repair of the second measured cause of the open service quest fresh-formation-user-table-routability: on source ed708dfd observer de5a0bc4 installed services row replica_operations-p1-r4 by mutation mode authoritative_service_lifecycle_reconciliation as active with the authority's updated_at but with raft_role null, although authority held raft_role follower; the priority-spread projection excluded the replica (raft_role_missing) for 1389 ms and the refresh reported the row aligned, so the terminal handoff completed against the wrong row. Closing this quest does not claim the journey green."
+    },
+    {
+      "id": "repair-the-builder-not-the-consumers",
+      "statement": "The repair belongs to the cache reconciliation owner (the lifecycle replacement builder and its aligned predicate). Forbidden: tolerating a missing raft_role in any consumer, re-stamping or inventing updated_at_hlc, widening the projection persistence bound or any timeout, adding a second write or a retry to paper over the row, a fallback path, or a change to the journey predicates."
+    },
+    {
+      "id": "preserve-proven-newer-local-evidence",
+      "statement": "The existing contract that a cached row strictly newer than the authoritative read is not regressed (quest executor-active-services-cache-handoff, CL-021, CL-035/CL-016) stays in force and stays witnessed; what changes is that older or absent cached content can no longer be labelled with the authority's newer version. If the two cannot both hold for a concrete interleaving, that interleaving is reported as a finding, not resolved by guessing."
+    },
+    {
+      "id": "systemic-not-local",
+      "statement": "The class is 'a cache row whose version label disagrees with its content'. Census every authoritative replacement builder and every mutation mode that skips the stale-version fence; each either provably installs the authoritative row or a strictly newer cached row, or is named in a finding for its owner. About 25 readers decide on raft_role; none is changed here."
+    },
+    {
+      "id": "real-consumer-witness",
+      "statement": "Beyond the builder-level reproducer, one witness drives the production entrypoint (the rebalancer terminal handoff refresh through refreshAuthoritativeCacheRow and applySystemTableChange) and observes the outcome through a real reader of the row (the priority-spread projection or the handoff's own completion decision), proving the changed meaning reaches the consumer."
+    },
+    {
+      "id": "source-change-independent-verification",
+      "statement": "Every source and proof change is verified on the exact candidate by a fresh independent verifier before landing; the reproducer is observed red on the sealed base before the candidate is credited."
+    },
+    {
+      "id": "lab-execution-and-custody",
+      "statement": "Tests run on lab hosts through the local controller, never on the workstation; every run's complete evidence is brought back; a failed run stays recorded as failed and is never replayed to obtain a green."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction"
+  ],
+  "sealedAt": "9a22bf79b61610bd782cf82ca45844f325f6a8e6"
+}

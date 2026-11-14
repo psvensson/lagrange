@@ -1,0 +1,33 @@
+{
+ "kind": "tests",
+ "host": "adams-gamla",
+ "commit": "232082669eddebe4c9fd98d3e07c11fc91ffb781",
+ "tree": "04b6e854c686847b050bb6e161fdef4e710a44c1",
+ "worktreePaths": [
+  "solve/quests/service-lifecycle-reconciliation-row-integrity/evidence/1960973f-8ce7-47fa-9dc6-bc2f3218657e/job.json",
+  "solve/quests/service-lifecycle-reconciliation-row-integrity/evidence/1960973f-8ce7-47fa-9dc6-bc2f3218657e/summary.json",
+  "solve/quests/service-lifecycle-reconciliation-row-integrity/evidence/6c86f09d-8b06-4b35-a516-6b94dc06607a/job.json",
+  "solve/quests/service-lifecycle-reconciliation-row-integrity/evidence/6c86f09d-8b06-4b35-a516-6b94dc06607a/summary.json",
+  "solve/quests/service-lifecycle-reconciliation-row-integrity/evidence/golden-producer-at-sealed-base.test.js.txt",
+  "solve/quests/service-lifecycle-reconciliation-row-integrity/evidence/independent-verification-3bd5053b5.md",
+  "solve/quests/service-lifecycle-reconciliation-row-integrity/evidence/independent-verification-5778ba12e.md",
+  "solve/quests/service-lifecycle-reconciliation-row-integrity/evidence/independent-verification-landing-candidate.md",
+  "solve/quests/service-lifecycle-reconciliation-row-integrity/evidence/receipt.json",
+  "solve/quests/service-lifecycle-reconciliation-row-integrity/log.ndjson",
+  "solve/quests/service-lifecycle-reconciliation-row-integrity/quest.json",
+  "src/cache/system-table-cache-authoritative-reconciliation.js",
+  "test/cache/fixtures/system-table-cache-lifecycle-reconciliation-golden.json",
+  "test/cache/system-table-cache-lifecycle-reconciliation-differential.test.js",
+  "test/cache/system-table-cache-lifecycle-reconciliation-grid.js",
+  "test/cache/system-table-cache-services-lifecycle-merge.test.js",
+  "test/rebalancer/operation-workflow-active-cache-handoff.test.js"
+ ],
+ "transportCommit": "677bd1aa18122ea998805cd5f8794ee573322600",
+ "base": "9c576f3a06be3bf117623f038f43e6b36b5b33a5",
+ "files": [
+  "test/cache/system-table-cache-lifecycle-reconciliation-differential.test.js",
+  "test/cache/system-table-cache-services-lifecycle-merge.test.js",
+  "test/rebalancer/operation-workflow-active-cache-handoff.test.js"
+ ],
+ "requestId": "952fadbb-fa29-4b3b-a98d-e8a90e8969e6"
+}

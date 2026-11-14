@@ -6,6 +6,8 @@ import {
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {areAuthoritativeSystemTableCacheRowsAligned} from
+  '../../src/cache/system-table-cache-authoritative-reconciliation.js';
 import {
   applyCDCIntegrationServiceCacheVisibilityWait,
 } from '../../src/cdc/cdc-integration-service-cache-visibility-wait.js';
@@ -24,6 +26,15 @@ import {
 import {UNIFIED_SERVICE_TYPE} from
   '../../src/constants/unified-service-lifecycle.js';
 import {createTestCoordinator} from './test-helpers.js';
+import {
+  buildDerivedPriorityPartitionSummary,
+  isPrioritySpreadHolderServiceRow,
+} from
+  '../../src/control-plane/membership-publication-priority-partition-summary.js';
+import {
+  normalizeNodeIdList,
+  normalizePositiveInteger,
+} from '../../src/control-plane/membership-publication-row-helpers.js';
 
 const TEST_NODE_ID = 'active-cache-handoff-owner';
 const TEST_OPERATION_ID = 'active-cache-handoff-operation';
@@ -1274,5 +1285,169 @@ test(
     } finally {
       await coordinator.shutdown();
     }
+  },
+);
+
+// Real-consumer witness for the partial-row lifecycle reconciliation measured
+// on ed708dfd: the terminal handoff refresh runs through the production cache
+// repair path, then the priority-spread projection reads the same cache.
+const PEER_NODE_IDS = Object.freeze([
+  'active-cache-handoff-peer-1',
+  'active-cache-handoff-peer-2',
+]);
+
+function seedPrioritySpreadPeers(cache) {
+  PEER_NODE_IDS.forEach((nodeId, index) => {
+    const replicaId = `${TEST_PARTITION_ID}-r${index + 1}`;
+    cache.applySystemTableChange(
+      SYSTEM_TABLE_NAME.SERVICES,
+      CDC_OPERATION.UPSERT,
+      buildAuthoritativeServiceRow({
+        service_id: replicaId,
+        replica_id: replicaId,
+        node_id: nodeId,
+        address: `${nodeId}/partition/${replicaId}`,
+      }),
+    );
+  });
+}
+
+// The projection reports every initial priority partition; the witness reads
+// only the target partition's spread block.
+function projectTargetPartitionSpread(cache) {
+  const summary = buildDerivedPriorityPartitionSummary(
+    {
+      partitionRows: [{partition_id: TEST_PARTITION_ID, replica_count: 3}],
+      serviceRows: cache.getAll(SYSTEM_TABLE_NAME.SERVICES),
+      locallyEligibleNodeIds: [...PEER_NODE_IDS, TEST_NODE_ID],
+    },
+    {normalizeNodeIdList, normalizePositiveInteger},
+  );
+  return {
+    missing: summary.missingPartitionIds.includes(TEST_PARTITION_ID),
+    block: summary.blockedPartitions.find(
+      (entry) => entry.partitionId === TEST_PARTITION_ID,
+    ) || null,
+  };
+}
+
+function expectedExclusionBefore(cachedTargetRow) {
+  if (cachedTargetRow.status !== 'active') {
+    return {[`status_${cachedTargetRow.status}`]: 1};
+  }
+  return cachedTargetRow.raft_role ? null : {raft_role_missing: 1};
+}
+
+async function driveHandoffOverCachedTarget(
+  t,
+  cachedTargetRow,
+  authorityRow,
+  expectedRow = authorityRow,
+) {
+  const cache = new SystemTableCache();
+  seedPrioritySpreadPeers(cache);
+  cache.applySystemTableChange(
+    SYSTEM_TABLE_NAME.SERVICES,
+    CDC_OPERATION.UPSERT,
+    cachedTargetRow,
+  );
+  t.same(
+    projectTargetPartitionSpread(cache).block?.exclusionReasonCounts ?? null,
+    expectedExclusionBefore(cachedTargetRow),
+    'before the handoff the projection reads the cached target as cached',
+  );
+  t.equal(
+    areAuthoritativeSystemTableCacheRowsAligned(
+      SYSTEM_TABLE_NAME.SERVICES,
+      cache.get(SYSTEM_TABLE_NAME.SERVICES, TEST_REPLICA_ID),
+      authorityRow,
+    ),
+    false,
+    'the cached target is not reported aligned before the refresh',
+  );
+  const coordinator = createTestCoordinator({
+    nodeId: TEST_NODE_ID,
+    cdcIntegrationService: buildProductionCacheRefreshHost({
+      cache,
+      authoritativeRow: authorityRow,
+    }),
+  });
+  const operation = buildSyncingAddOperation();
+  const completedOperationIds = [];
+  coordinator.workflowOwner.completeOperation =
+    async (completedOperation) => {
+      completedOperationIds.push(completedOperation.operationId);
+    };
+  try {
+    await coordinator.workflowOwner
+      .applyReconciledReplicaStatus(operation, ReplicaStatus.ACTIVE);
+  } finally {
+    await coordinator.shutdown();
+  }
+  const targetRow = cache.get(SYSTEM_TABLE_NAME.SERVICES, TEST_REPLICA_ID);
+  const spread = projectTargetPartitionSpread(cache);
+  t.same(
+    completedOperationIds,
+    [TEST_OPERATION_ID],
+    'the handoff completes',
+  );
+  t.same(targetRow, expectedRow, 'the cached target holds the expected row');
+  t.equal(
+    isPrioritySpreadHolderServiceRow(targetRow),
+    true,
+    'the completed target is a priority-spread holder',
+  );
+  t.equal(spread.block, null, 'the projection includes the replica');
+  t.equal(spread.missing, false, 'the target partition reaches its spread');
+}
+
+test(
+  'ACTIVE terminal handoff installs the newer authoritative role over an ' +
+    'older null-role cached target before the projection reads it',
+  async (t) => {
+    await driveHandoffOverCachedTarget(
+      t,
+      buildAuthoritativeServiceRow({
+        status: ReplicaStatus.SYNCING,
+        raft_role: null,
+        state_entered_at: 5,
+        previous_state: 'creating',
+        updated_at: 5,
+        updated_at_hlc: '5-0-services-p1-r1',
+      }),
+      buildAuthoritativeServiceRow({previous_state: 'syncing'}),
+    );
+  },
+);
+
+test(
+  'ACTIVE terminal handoff repairs an ACTIVE cached target whose raft_role ' +
+    'is absent instead of skipping it as already aligned',
+  async (t) => {
+    await driveHandoffOverCachedTarget(
+      t,
+      buildAuthoritativeServiceRow({raft_role: null}),
+      buildAuthoritativeServiceRow({updated_at: 12}),
+    );
+    await driveHandoffOverCachedTarget(
+      t,
+      buildAuthoritativeServiceRow({raft_role: null}),
+      buildAuthoritativeServiceRow(),
+    );
+  },
+);
+
+test(
+  'ACTIVE terminal handoff keeps an owner-local voter seed held under an ' +
+    'older label when authority still has no role at a newer version',
+  async (t) => {
+    // CL-035 seed: the cached voter role is ahead of the durable row.
+    const authorityRow = buildAuthoritativeServiceRow({raft_role: null});
+    await driveHandoffOverCachedTarget(
+      t,
+      buildAuthoritativeServiceRow({state_entered_at: 5, updated_at: 5}),
+      authorityRow,
+      {...authorityRow, raft_role: 'follower'},
+    );
   },
 );
