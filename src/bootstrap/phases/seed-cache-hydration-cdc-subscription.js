@@ -9,6 +9,7 @@ import {
   COLUMN,
   TABLES,
 } from '../../constants/index.js';
+import {SystemTableCache} from '../../cache/system-table-cache.js';
 
 function nodeOfEvent(cdcEvent) {
   const cdcData = cdcEvent?.data &&
@@ -18,28 +19,62 @@ function nodeOfEvent(cdcEvent) {
     cdcData.id || null};
 }
 
+// The row the node cache would hold for one node after the earlier members of
+// a vector, worked out by the cache owner's own apply path: the members are
+// replayed, in order, into a private system table cache that starts from the
+// row the node cache holds now. The hook writes no merge of its own. The
+// private cache starts from the cached row only; what the node cache holds
+// beyond the row (a delete tombstone, an authoritative-absence mark) is not
+// readable from here.
+function createNodeRowReplay(nodeCache) {
+  let replay = null;
+  const earlierMembers = new Map();
+  const started = new Set();
+  const cachedRowOf = (nodeId) => {
+    const cachedNodeRow = nodeCache.get(TABLES.NODES, nodeId);
+    return cachedNodeRow ? {...cachedNodeRow} : null;
+  };
+  const startFromCachedRow = (nodeId) => {
+    started.add(nodeId);
+    const cachedNodeRow = cachedRowOf(nodeId);
+    if (cachedNodeRow) {
+      replay.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, cachedNodeRow);
+    }
+  };
+  const replayedRowOf = (nodeId, members) => {
+    if (replay === null) replay = new SystemTableCache();
+    if (!started.has(nodeId)) startFromCachedRow(nodeId);
+    for (const cdcEvent of members.splice(0)) {
+      replay.applySystemTableChange(TABLES.NODES, cdcEvent.operation, cdcEvent.data);
+    }
+    const replayedNodeRow = replay.get(TABLES.NODES, nodeId);
+    return replayedNodeRow ? {...replayedNodeRow} : null;
+  };
+  return {
+    // The row a member of `nodeId` is compared against: the cached row for the
+    // node's first member, the replayed row for a later one.
+    previousRowOf(nodeId) {
+      const members = earlierMembers.get(nodeId);
+      return members ? replayedRowOf(nodeId, members) : cachedRowOf(nodeId);
+    },
+    remember(nodeId, cdcEvent) {
+      if (!earlierMembers.has(nodeId)) earlierMembers.set(nodeId, []);
+      earlierMembers.get(nodeId).push(cdcEvent);
+    },
+  };
+}
+
 // The NODES node-ready trigger over one vector, member by member in order.
 // Each member's previous row is what the node cache holds when that member is
-// reached under one-event delivery: the cached row, overlaid by the earlier
-// members of the same node in this vector (a deleted node has no row), because
-// the whole vector is applied to the cache only after this hook.
+// reached under one-event delivery: the whole vector is applied to the node
+// cache only after this hook, so a later member of a node reads the row the
+// cache's own apply path leaves after the node's earlier members.
 function triggerNodeReadyRebalanceForVector(delegates, events) {
-  const rowsAfterEarlierMembers = new Map();
-  const cachedRowOf = (nodeId) => {
-    const cachedNodeRow =
-      delegates.getSystemTableCache().get(TABLES.NODES, nodeId);
-    return cachedNodeRow ?
-      {...cachedNodeRow} : null;
-  };
+  const replay = createNodeRowReplay(delegates.getSystemTableCache());
   for (const cdcEvent of events) {
-    const {cdcData, nodeId} = nodeOfEvent(cdcEvent);
-    let previousNodeRow = null;
-    if (nodeId) {
-      previousNodeRow = rowsAfterEarlierMembers.has(nodeId) ?
-        rowsAfterEarlierMembers.get(nodeId) : cachedRowOf(nodeId);
-      rowsAfterEarlierMembers.set(nodeId, cdcEvent.operation === CDC_OPERATION.DELETE ?
-        null : {...previousNodeRow, ...cdcData});
-    }
+    const {nodeId} = nodeOfEvent(cdcEvent);
+    const previousNodeRow = nodeId ? replay.previousRowOf(nodeId) : null;
+    if (nodeId) replay.remember(nodeId, cdcEvent);
     delegates.handleNodeReadyRebalanceTrigger(cdcEvent, previousNodeRow);
   }
 }
