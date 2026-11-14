@@ -59,6 +59,7 @@ import {
   cdcEvents,
 } from '../message-group/message-group-native-w7-composition.js';
 import {
+  assertEnvelope,
   commandOf,
   writeReleasedSql,
   buildDualBridgeSubscribers,
@@ -707,5 +708,208 @@ test(
       ),
       true,
     );
+  },
+);
+
+// Range shipping (quest cdc-obligation-range-shipping, records S-1 and S-3):
+// the literal anchor of a shipped range over the real path. Five owed CONFIG
+// rows of a released source partition leave the real obligation lane as one
+// vector; the real seed bridge, topology owner and remote router carry that
+// vector, and the source group and every remote native recipient commit it as
+// one command whose members are the raw ledger events, in ledger order.
+const RANGE_ANCHOR_ROWS = 5;
+const RANGE_ANCHOR_WINDOW = 8;
+
+test(
+  'range anchor: five owed CONFIG rows ship as one vector over the seed bridge, the ' +
+    'topology owner and the remote router, and every native recipient commits one ' +
+    'command holding the raw ledger event of each row in ledger order',
+  async (t) => {
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+    ConfigurationManager.getInstance().initialize({
+      node: {id: NODE_A},
+      logging: {level: 'fatal'},
+      raft: {
+        heartbeatIntervalMs: 20,
+        electionTimeoutMinMs: 150,
+        electionTimeoutMaxMs: 300,
+      },
+    });
+    LoggingService.getInstance().initialize({level: 'fatal'});
+
+    const {routerA, routerB, portA, portB} = await connectTwoRouters(24385, 24386);
+    const f = {
+      phase: 'setup',
+      routerA,
+      routerB,
+      deliverA: routerA.deliver,
+      deliverB: routerB.deliver,
+      nodeRows: [
+        activeNodeRow(NODE_A, portA, 'mg-range-source'),
+        activeNodeRow(NODE_B, portB, 'mg-range-target-1'),
+      ],
+      services: new Map(),
+      serviceRouters: new Map(),
+      cutPeers: new Map(),
+      events: [],
+      native: [],
+      heldNative: [],
+      heldApplications: [],
+      applicationSettlements: new Set(),
+      subscribers: [],
+      interceptSend: null,
+      maxObservedInFlight: 0,
+      directory: fs.mkdtempSync(path.join(os.tmpdir(), 'mg-range-anchor-')),
+    };
+    wrapRouterDelivery(f, routerA, f.deliverA, 'routerA');
+    wrapRouterDelivery(f, routerB, f.deliverB, 'routerB');
+
+    const configPartId = 'config-range-anchor';
+    await setupReleasedConfigProducer(t, f, {
+      configPartId,
+      tempPrefix: 'mg-range-anchor-part-',
+    });
+
+    const insertSql =
+      'INSERT INTO config (config_key, config_value, value_type, ' +
+      'default_value, created_at) VALUES (?, ?, ?, ?, ?)';
+    const debts = [];
+    for (let row = 0; row < RANGE_ANCHOR_ROWS; row += 1) {
+      debts.push(await writeReleasedSql(
+        f.producer,
+        f.producerLeader,
+        insertSql,
+        [`range-anchor-key-${row}`, `range-anchor-value-${row}`, 'string', '', 1],
+        `range-anchor-${row}`,
+        TABLES.CONFIG,
+      ));
+    }
+    const keys = debts.map((debt) => debt.eventKey);
+    assert.equal(new Set(keys).size, RANGE_ANCHOR_ROWS);
+    for (let row = 1; row < debts.length; row += 1) {
+      assert.ok(debts[row - 1].logIndex < debts[row].logIndex, 'the rows are in ledger order');
+    }
+
+    const targetGroupIds = ['mg-range-target-1', 'mg-range-target-2'];
+    const serviceRows = [];
+    for (const groupId of targetGroupIds) {
+      const replicaId = `${groupId}-r1`;
+      await openMultiReplica(f, {
+        groupId,
+        replicaId,
+        replicas: [replicaId],
+        nodeId: NODE_B,
+        router: routerB,
+        rows: [],
+        hints: [nodeAddressOf(NODE_B, replicaId)],
+        table: TABLES.CONFIG,
+      });
+      serviceRows.push(activeServiceRow(groupId, replicaId, NODE_B, RAFT_ROLE.LEADER));
+    }
+    f.source = await openMultiReplica(f, {
+      groupId: 'mg-range-source',
+      replicaId: 'mg-range-source-r1',
+      replicas: ['mg-range-source-r1'],
+      nodeId: NODE_A,
+      router: routerA,
+      rows: [
+        activeServiceRow('mg-range-source', 'mg-range-source-r1', NODE_A, RAFT_ROLE.LEADER),
+        ...serviceRows,
+      ],
+      hints: [nodeAddressOf(NODE_A, 'mg-range-source-r1')],
+      table: TABLES.CONFIG,
+    });
+
+    const {subSeed} = buildDualBridgeSubscribers(f, TABLES.CONFIG, configPartId);
+    f.subscribers.push(subSeed);
+    await subscribeWithoutEagerDrive(f, subSeed, 'range-anchor-seed-sub');
+    f.subscribersReady = true;
+
+    // Precondition: earlier committed ranges have widened the lane's shipping
+    // window past the five owed rows (it starts at one; the ship-window
+    // witnesses own its dynamics).
+    f.producerLeader.getCdcObligationDiagnostics();
+    f.producerLeader.cdcDelivery.obligationLane.shipWindow = RANGE_ANCHOR_WINDOW;
+    const mark = f.events.length;
+
+    const drive = await driveWithPump(f, () =>
+      f.producerLeader.cdcDelivery.driveCdcObligations('range-anchor'),
+    );
+    assert.equal(drive.state, DRIVE.DRAINED);
+    const measured = f.events.slice(mark);
+
+    // The lane handed its subscriber one vector: every row once, in order.
+    assert.deepEqual(
+      measured.filter((event) => event.kind === 'subscriber-before')
+        .map((event) => event.eventKey),
+      keys,
+      'the lane presented the five rows once, in ledger order',
+    );
+
+    // The wire: every remote request that carries one of the rows carries the
+    // whole range, in ledger order, and both remote target groups are sent it.
+    const sends = measured.filter((event) => event.kind === 'application-send' &&
+      event.router === 'routerA' &&
+      event.envelope.payload.events.some((item) => keys.includes(item.eventKey)));
+    assert.deepEqual(
+      [...new Set(sends.map((send) => send.address))].sort(),
+      targetGroupIds.map((groupId) => nodeAddressOf(NODE_B, `${groupId}-r1`)).sort(),
+      'each remote target group is sent the range',
+    );
+    for (const send of sends) {
+      assert.deepEqual(send.envelope.payload.events.map((item) => item.eventKey), keys,
+        'one remote request carries the whole range in ledger order');
+    }
+
+    // The recipients' committed command logs: the source group and each remote
+    // target committed the range as ONE command, and each member is the raw
+    // ledger event_json of its row with that row's obligation identity.
+    const recipients = [
+      f.source,
+      ...targetGroupIds.map((groupId) => f.services.get(`${groupId}-r1`)),
+    ];
+    for (const recipient of recipients) {
+      const commands = recordOf(recipient).entries.map((entry) => commandOf(entry))
+        .filter((command) => {
+          const members = command?.events ?? (command ? [command] : []);
+          return members.some((member) => keys.includes(member.eventKey));
+        });
+      assert.equal(commands.length, 1,
+        `${recipient.replicaId} committed the range as one command`);
+      const members = commands[0].events;
+      assert.ok(Array.isArray(members),
+        `${recipient.replicaId} committed a vector command, not a single-event one`);
+      assert.deepEqual(members.map((member) => member.eventKey), keys,
+        `${recipient.replicaId} committed the rows in ledger order`);
+      members.forEach((member, row) => assertEnvelope(member, debts[row]));
+      for (let row = 0; row < RANGE_ANCHOR_ROWS; row += 1) {
+        assert.equal(
+          recipient.systemTableCache.get(TABLES.CONFIG, `range-anchor-key-${row}`)
+            ?.config_value,
+          `range-anchor-value-${row}`,
+          `${recipient.replicaId} applied row ${row}`,
+        );
+      }
+    }
+
+    // Source custody: the flush acknowledges all five rows and every source
+    // voter's ledger reclaims them.
+    await driveWithPump(f, () =>
+      f.producerLeader.cdcDelivery.flushCdcAcknowledgements('range-anchor-ack'),
+    );
+    for (const debt of debts) {
+      assert.equal(
+        await f.producer.waitFor(() =>
+          f.producer.services.every(
+            (s) =>
+              readCdcObligationStanding(s.db, debt).standing ===
+              PARTITION_CDC_OBLIGATION_STANDING.RECLAIMED,
+          ),
+        ),
+        true,
+        `source ACK reclaimed ${debt.entryId}`,
+      );
+    }
   },
 );
