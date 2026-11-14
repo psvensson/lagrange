@@ -31,18 +31,14 @@ import {installControlPlaneReadinessSnapshotStoreMethods} from
   './control-plane-readiness-snapshot-store.js';
 import {installControlPlaneReadinessRuntimeAuthorityMethods} from
   './control-plane-readiness-runtime-authority-methods.js';
-import {installControlPlaneReadinessFormationReleaseMethods} from
-  './control-plane-readiness-formation-release-methods.js';
 import {CONTROL_PLANE_READINESS_PLANNING_SHARED as SHARED} from
   './control-plane-readiness-planning-shared.js';
 const {MEMBERSHIP_PUBLICATION_PLANNING_SOURCE} = SHARED;
 
 class ControlPlaneReadinessService {
   constructor(options = {}) {
-    // The owner's own empty slots: no publication diagnostics memoized and
-    // no formation-release handoff authority logged yet.
+    // The owner's own empty slot: no publication diagnostics memoized yet.
     this.membershipPublicationDiagnosticsMemo = null;
-    this.lastFormationReleaseHandoffAuthorityLogSignature = null;
     // The committed serve-eligibility record's owner, created on first read.
     this.serveEligibilityOwner = null;
     participation.initializeControlPlaneReadinessState(this, options);
@@ -69,9 +65,6 @@ class ControlPlaneReadinessService {
       ),
       error,
     );
-  }
-  setFormationReleaseAuthorityNodeId(nodeId) {
-    return participation.setFormationReleaseAuthorityNodeId(this, nodeId);
   }
   logMissingOwner(message, owner) {
     return participation.logMissingOwner(this, message, owner);
@@ -615,9 +608,6 @@ class ControlPlaneReadinessService {
   getStartupAuthoritySnapshotSync(nodeId, observedAt) {
     return startup.getStartupAuthoritySnapshotSync(this, nodeId, observedAt);
   }
-  getFormationReleaseStartupAuthoritySnapshotSync(nodeId, observedAt) {
-    return startup.getFormationReleaseStartupAuthoritySnapshotSync(this, nodeId, observedAt);
-  }
   resolveStartupAuthoritySnapshotFromPlanningRead(readPlanningAnswer, nodeId, observedAt) {
     return startup.resolveStartupAuthoritySnapshotFromPlanningRead(
       this,
@@ -625,9 +615,6 @@ class ControlPlaneReadinessService {
       nodeId,
       observedAt,
     );
-  }
-  getFormationReleaseStartupAuthoritySnapshot(nodeId, observedAt) {
-    return startup.getFormationReleaseStartupAuthoritySnapshot(this, nodeId, observedAt);
   }
   getStartupAuthoritySnapshot(nodeId, observedAt) {
     return startup.getStartupAuthoritySnapshot(this, nodeId, observedAt);
@@ -782,9 +769,6 @@ installControlPlaneReadinessSnapshotStoreMethods(
   ControlPlaneReadinessService.prototype,
 );
 installControlPlaneReadinessRuntimeAuthorityMethods(
-  ControlPlaneReadinessService.prototype,
-);
-installControlPlaneReadinessFormationReleaseMethods(
   ControlPlaneReadinessService.prototype,
 );
 

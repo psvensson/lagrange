@@ -34,8 +34,7 @@ import {
   resetEnvironment,
 } from './formation-barrier-test-fixture.js';
 
-// Deterministic witness for the formation-release-handoff-closure run
-// 2026-08-29T19-08-22.423Z (five-node GCP formation, seed 44050525): after the
+// Deterministic witness for five-node GCP formation (seed 44050525): after the
 // replica_operations ledger self-move (replace-op b0b98821, source removal
 // 19:11:57.58) the seed's priority-recovery ADDs went out ONE AT A TIME
 // (SENDING 19:12:05.1, :23.6, :34.4, :43.1, :48.5) while three joiners sat in

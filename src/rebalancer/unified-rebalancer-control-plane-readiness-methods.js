@@ -6,9 +6,6 @@ import {
   REPLICATION_TARGET_SOURCE,
   resolveDesiredReplicationFactor,
 } from '../bootstrap/replication-target-authority.js';
-import {
-  shouldAllowPriorityRecoveryDispatchBootstrap,
-} from '../control-plane/replica-dispatch-priority-recovery-bootstrap.js';
 
 const {
   CONTROL_PLANE_PUBLICATION_STATUS,
@@ -55,38 +52,6 @@ class UnifiedRebalancerControlPlaneReadinessMethods {
       return CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
     }
     return CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE;
-  }
-
-  /**
-   * Whether a node admitted by startup-authority priority placement is also
-   * ready for dispatch execution.
-   *
-   * @param {string} nodeId
-   * @param {Object|null} readiness
-   * @param {string|null} [readinessDecisionDimension=null]
-   * @return {boolean}
-   * @private
-   */
-  isStartupAuthorityPlacementDispatchReady(
-    nodeId,
-    readiness,
-    readinessDecisionDimension = null,
-  ) {
-    const dimension =
-      readinessDecisionDimension ||
-      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
-    return (
-      this.isReadinessDimensionSatisfied(readiness, dimension) ||
-      shouldAllowPriorityRecoveryDispatchBootstrap({
-        operation: {
-          partitionId: this.entityId,
-          targetNodeId: nodeId,
-        },
-        readiness,
-        decisionDimension: dimension,
-        selfNodeId: this.nodeId,
-      })
-    );
   }
 
   /**

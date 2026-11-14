@@ -36,63 +36,18 @@ import {scaleByMachineFactor} from '../../scripts/test-machine-factor.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const TEST_TIMEOUT_MS = 120000;
-// Reference budgets, calibrated on the reference machine and pinned by
-// test/bootstrap/join-formation-discovery-window-budget.test.js; every wait
-// below scales them by LAGRANGE_TEST_MACHINE_FACTOR at the point of use: the
-// seed bootstrap took 5.6 s here and 13.4 s on the 2.4x slower GCP proof
-// host (2026-09-13), past a fixed 12 s.
-const READY_TIMEOUT_MS = 12000;
-// The join waits get their own measured budget. READY_TIMEOUT_MS fits the
-// operations it actually bounds (seed bootstrap, seed API initialize, the
-// nodes-ready convergence poll); it does not fit a node JOIN in this harness,
-// and it never did. This file runs three full nodes in ONE process on ONE
-// event loop, so a joiner's convergence is interleaved with the seed's and the
-// earlier joiner's control-plane work. Measured standalone on an idle 20-core
-// host, both BEFORE and AFTER the formation-barrier compression below:
-//
-//   node2 join  3796-4855ms
-//   node3 join 12441-14748ms   (12441, 12474, 12971, 13238, 13448, 14212,
-//                               14748 - every observation over 12000ms)
-//
-// A bound below the observed floor can never pass, so 12000ms was mis-set for
-// this wait rather than masking a regression - the joins are not slower than
-// they were, and no production default is involved. 25000ms is ~1.7x the
-// observed maximum, and stays far inside the UNCHANGED 120000ms TEST_TIMEOUT_MS
-// parent cap. Owner decision, recorded 2026-08-31.
+// Reference budgets for single-process three-node bootstrap and convergence;
+// every wait below scales them by LAGRANGE_TEST_MACHINE_FACTOR at the point of
+// use. Seed bootstrap spans infrastructure, message-group, 46-table partition
+// creation, and the 15s seed participant release registration budget.
+const READY_TIMEOUT_MS = 20000;
+// The join waits get their own measured budget. This file runs three full nodes
+// in ONE process on ONE event loop, so a joiner's convergence is interleaved
+// with the seed's and the earlier joiner's control-plane work.
 const JOIN_READY_TIMEOUT_MS = 25000;
 const REBALANCE_TIMEOUT_MS = 20000;
 const POLL_INTERVAL_MS = 100;
 const CLEANUP_TIMEOUT_MS = 10000;
-// Harness time compression for the join-time priority-placement formation
-// barrier, in the same class as TEST_CONFIG's compressed election and
-// leadership waits. In every observed run of this three-node shape the
-// barrier's cohort check does not engage, so each join sleeps out the FULL
-// production 5s discovery window before reaching the same
-// `bypassed_insufficient_formation_cohort` answer. That bypass is EMPIRICAL,
-// not structural: INITIAL_REPLICA_IDS[replica_operations] has exactly three
-// entries, so engagement is reachable at three nodes and a cohort that turned
-// sufficient inside the compressed window would bypass here where production
-// would engage. The compression therefore changes no barrier decision in the
-// observed shape, and an ENGAGED barrier is never released by it. Compressing the window changes no barrier decision - only how long
-// the joins sleep before reaching the same bypass.
-//
-// Measured, paired, standalone runs on an idle 20-core host (the file is
-// already the serial lane's work: primary class `integration` maps to the
-// exclusive resource class, jobs=1, in scripts/run-classified-test-files.js,
-// so lane starvation is excluded by construction):
-//
-//   before (5000ms window)   node2 barrier 5062-5210ms  join  9118-9779ms
-//                            node3 barrier 5515-6727ms  join 12441-14212ms
-//   after  (500ms window)    node2 barrier  811- 935ms  join  3796-4855ms
-//                            node3 barrier 2394-3489ms  join 12971-14748ms
-//
-// So the compression is real for node2 (-4.4s per join, ~-10s of file wall
-// clock) and does NOT move node3: node3's barrier was sleeping through cluster
-// convergence its join has to wait for anyway, so its join stays convergence-
-// bound at 12.4-14.7s against the UNCHANGED 12000ms READY_TIMEOUT_MS. That
-// residual is an owner budget/convergence decision, deliberately NOT hidden by
-// a widened cap.
-const FORMATION_DISCOVERY_MS = 500;
 const EXPECTED_NODE_COUNT = 3;
 const REQUIRED_REBALANCED_PARTITIONS = 1;
 const SEED_NODE_ID = '550e8400-e29b-41d4-a716-446655440401';
@@ -321,7 +276,6 @@ test('Three-node seed rebalance', {timeout: TEST_TIMEOUT_MS}, async (t) => {
             ...TEST_CONFIG.bootstrap,
             httpTimeoutMs: 5000,
             leadershipWaitTimeoutMs: 12000,
-            priorityPlacementFormationDiscoveryMs: FORMATION_DISCOVERY_MS,
           },
           httpPost,
         });
@@ -337,7 +291,6 @@ test('Three-node seed rebalance', {timeout: TEST_TIMEOUT_MS}, async (t) => {
             ...TEST_CONFIG.bootstrap,
             httpTimeoutMs: 5000,
             leadershipWaitTimeoutMs: 12000,
-            priorityPlacementFormationDiscoveryMs: FORMATION_DISCOVERY_MS,
           },
           httpPost,
         });

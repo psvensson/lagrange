@@ -304,6 +304,9 @@ function createNodePartitionAuthoritySeam(nodeId, cache, now, partitionAuthority
 function createSimulatedNodeHosts({network, nodeId, randomSource,
   compositionRegistry = null,
   partitionAuthority = null,
+  // A scenario whose nodes read one durable row store hands that store in;
+  // otherwise each node owns the cache built below, exactly as before.
+  systemTableCache = null,
   chargeDispatch = (id, callback) => callback()}) {
   // This composer builds the node's cache, CDC service and router host, so it
   // declares itself where a scenario tracks composition. Scenarios that do
@@ -316,7 +319,7 @@ function createSimulatedNodeHosts({network, nodeId, randomSource,
   // is still deferred to a later turn, but that turn is an event on this
   // node's deterministic queue instead of a real setImmediate the virtual
   // clock never reaches. Delivery, ordering and batching are untouched.
-  const cache = new SystemTableCache({
+  const cache = systemTableCache || new SystemTableCache({
     // The node's own clock owns the cache's mutation watermark, and the
     // instance id is named rather than drawn, because a debug string must not
     // become a reason to read host time inside a simulated process.

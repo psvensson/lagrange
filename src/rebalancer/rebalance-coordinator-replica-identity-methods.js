@@ -317,8 +317,6 @@ class RebalanceCoordinatorReplicaIdentityMethods {
       systemTableCache: cache,
       moveType: OperationType.REPLACE,
       partitionId: evidence.entityId,
-      placementEligibleNodeIds:
-        this.getTopologyGuardStartupAuthorityPlacementEligibleNodeIds(),
       sourceReplicaNodeId: sourceRow ?
         String(sourceRow.node_id || '').trim() :
         null,

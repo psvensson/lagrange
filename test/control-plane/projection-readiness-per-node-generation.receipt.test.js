@@ -88,7 +88,7 @@ const SEGMENT_INDEX = Object.freeze(Object.fromEntries(
 const NODE_LOCAL_CAUSES = Object.freeze(
   PROJECTION_READINESS_GENERATION_SEGMENT.filter((name) =>
     name !== 'membershipPublication'));
-const FORMATION_RELEASE_HANDOFF_PUBLICATION_KIND = 'formation_release_handoff';
+const NON_MEMBERSHIP_PUBLICATION_KIND = 'non_membership_publication';
 
 function publicationRow(epoch, nowMs, overrides = {}) {
   return buildMembershipPublicationRow({
@@ -620,8 +620,8 @@ test('A3b: a CONTROL_PLANE_PUBLICATIONS write that leaves the membership ' +
   // lands in the same table: the membership winner is unchanged.
   cluster.cache.applySystemTableChange(TABLES.CONTROL_PLANE_PUBLICATIONS,
     'INSERT', {
-      publication_id: 'handoff-1',
-      publication_kind: FORMATION_RELEASE_HANDOFF_PUBLICATION_KIND,
+      publication_id: 'other-kind-1',
+      publication_kind: NON_MEMBERSHIP_PUBLICATION_KIND,
       publication_epoch: 99,
       status: MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED,
       created_at: cluster.startMs + 21,

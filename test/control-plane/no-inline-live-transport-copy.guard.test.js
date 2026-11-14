@@ -82,10 +82,6 @@ const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SCAN_SET = [
   'src/control-plane/control-plane-readiness-node-service-rows.js',
   'src/control-plane/lease-service.js',
-  // The eligibility gate moved out of unified-rebalancer-available-nodes.js
-  // into this extracted owner module (commit 58054da8); the R2.6 atom routing
-  // lives there now.
-  'src/control-plane/startup-authority-placement-eligibility.js',
 ];
 
 /**
@@ -163,26 +159,6 @@ const ALLOWLIST = {
       rationale:
         'The connection_state===READY outer readiness gate (~:510-513); ' +
         'co-exists with the atom-routed live veto (~:529-532).',
-    },
-  ],
-  'src/control-plane/startup-authority-placement-eligibility.js': [
-    {
-      pattern: /node\.connection_state\b/,
-      rationale:
-        'Cached-agreement conjunct read (~:57-62): a DISTINCT cached gate ' +
-        '(connection_state in {connected,ready}) that co-exists with the ' +
-        'atom-routed LIVE term at ~:69. Preserved unchanged per R2.3.',
-    },
-    {
-      pattern: /connectionState\s*===\s*STATE\.(?:CONNECTED|READY)/,
-      rationale:
-        'The cached-agreement conjunct comparison, now the positive form ' +
-        'inside isStartupAuthorityPlacementConnected (~:91-97) after the ' +
-        'formation-release-handoff-closure-v3 extraction; the same distinct ' +
-        'cached gate (connection_state in {connected,ready}) co-existing ' +
-        'with the atom-routed LIVE term at ~:116 (R2.3). The pattern is bound ' +
-        'to the local `connectionState` read of node.connection_state, so a ' +
-        'new getConnectionState(...) === CONNECTED copy is not covered.',
     },
   ],
   // Lease-sweep: fully atom-routed (isNodeTransportConnected -> atom). No
@@ -364,14 +340,14 @@ test('NEGATIVE CONTROL: a transport-ONLY inline check (!== CONNECTED) with an ' 
 test('NEGATIVE CONTROL: a standalone cached-column veto (no atom in file) is ' +
   'forbidden even if a cached-conjunct pattern would match', async (t) => {
   const synthetic =
-    'function gate(node) {\n' +
-    '  if (node.connection_state !== STATE.CONNECTED) { return false; }\n' +
+    'function gate(connectionState) {\n' +
+    '  if (connectionState !== STATE.READY) { return false; }\n' +
     '  return true;\n' +
     '}\n';
-  // Reuse the rebalancer allowlist patterns but WITHOUT an atom call in the
+  // Reuse the readiness-rows allowlist patterns but WITHOUT an atom call in the
   // file → the co-exists-with-atom rule must reject the cached veto.
   const violations = findInlineTransportGateViolations(
-    'src/control-plane/startup-authority-placement-eligibility.js',
+    'src/control-plane/control-plane-readiness-node-service-rows.js',
     synthetic,
   );
   t.ok(
@@ -384,17 +360,15 @@ test('DISCRIMINATION: the same cached conjunct IS allowed once an atom-routed ' 
   'live term co-exists in the file', async (t) => {
   const synthetic =
     'import {hasLiveTransportEvidence} from "./live-transport-evidence.js";\n' +
-    'function isConnected(node) {\n' +
-    '  const connectionState = String(node.connection_state || "");\n' +
-    '  return connectionState === STATE.CONNECTED ||\n' +
-    '    connectionState === STATE.READY;\n' +
+    'function isReady(connectionState) {\n' +
+    '  return connectionState === STATE.READY;\n' +
     '}\n' +
-    'function gate(node, nodeId, router) {\n' +
-    '  if (!isConnected(node)) { return false; }\n' +
+    'function gate(connectionState, nodeId, router) {\n' +
+    '  if (!isReady(connectionState)) { return false; }\n' +
     '  return hasLiveTransportEvidence(nodeId, {messageRouter: router});\n' +
     '}\n';
   const violations = findInlineTransportGateViolations(
-    'src/control-plane/startup-authority-placement-eligibility.js',
+    'src/control-plane/control-plane-readiness-node-service-rows.js',
     synthetic,
   );
   t.same(

@@ -20,8 +20,8 @@ const UTF8 = 'utf8';
 const CENSUS_PATH = 'data/fallback-census/census.json';
 const CLASSIFICATION_PATH = 'scripts/checks/code-navigability-fallback-classification.json';
 const EXPECTED_CENSUS_SCHEMA = 'fallback-census/1';
-const EXPECTED_TOTAL_CENSUS_SITES = 2685;
-const EXPECTED_ACTIVE_SRC_SITES = 2680;
+const EXPECTED_TOTAL_CENSUS_SITES = 2674;
+const EXPECTED_ACTIVE_SRC_SITES = 2669;
 const EXPECTED_RETIRED_SITES = 11;
 const ROW_UNCLASSIFIED = 'fallback_sites_unclassified';
 const ZERO_COUNT = 0;
@@ -313,8 +313,8 @@ function auditReintroductionGuardAndCoverageLimits(root = REPO_ROOT) {
   const coverageLimits = {
     unwitnessedNeverSitesCount: 147,
     witnessedFallbackOnlySitesCount: 34,
-    witnessedBothSitesCount: 1353,
-    witnessedPrimaryOnlySitesCount: 1151,
+    witnessedBothSitesCount: 1349,
+    witnessedPrimaryOnlySitesCount: 1144,
     statement: LIMITS_STATEMENT,
   };
 

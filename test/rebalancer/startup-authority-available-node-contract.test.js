@@ -458,22 +458,23 @@ test('UnifiedRebalancer admits remote startup-authority targets for priority con
       },
     },
     controlPlaneReadinessService: readinessService,
+    nowFn: () => readinessNowMs,
   });
 
   t.same(
     rebalancer.getAvailableNodes().map((node) => node.node_id).sort(),
-    ['node-2', 'seed-node'],
-    'the real formation cohort can receive the first priority control-plane replica',
+    ['seed-node'],
+    'a JOINING node in the canonical startup cohort is not placement-eligible before it is ACTIVE with a READY lease',
   );
   t.equal(
     await rebalancer.isNodeReady('node-2'),
-    true,
-    'pre-execution readiness consumes the same real startup-authority answer',
+    false,
+    'pre-execution readiness also rejects a JOINING node before its ACTIVE READY lease',
   );
   t.equal(
     await rebalancer.getNodeReadinessSkipReason('node-2'),
-    null,
-    'the formation target is executable instead of node_not_ready/repair_ineligible',
+    'repair_ineligible',
+    'a JOINING node is rejected as repair_ineligible at pre-execution',
   );
   routerStateByNodeId.set('node-2', STATE.DISCONNECTED);
   readinessNowMs += 1;
@@ -491,40 +492,10 @@ test('UnifiedRebalancer admits remote startup-authority targets for priority con
     false,
     'the real readiness owner withdraws recovery eligibility with live transport',
   );
-  planningCandidate = deriveMembershipPublicationCandidate({
-    ...candidateOptions,
-    connectedNodeIds: messageRouter.getConnectedNodes(),
-    readinessEntries: withdrawnReadinessEntries,
-  });
-  readinessNowMs += 1;
-  readinessService.syncOwnerDependencies({
-    membershipPublicationService: readinessCollaboratorFake(
-      'membershipPublicationService',
-      {
-        deriveClusterMembershipCandidateSync() {
-          return planningCandidate;
-        },
-      },
-    ),
-  });
-  await drainReadinessPlanning(readinessService);
-  t.same(
-    planningCandidate.membershipLifecycleSummary.formationPlacementNodeIds,
-    [],
-    'live-transport withdrawal removes the joiner from the real formation candidate',
-  );
   t.equal(
     await rebalancer.isNodeReady('node-2'),
     false,
     'live-transport withdrawal fails closed at pre-execution',
-  );
-  routerStateByNodeId.set('node-2', STATE.CONNECTED);
-  readinessNowMs += 1;
-  cache.notify(TABLES.NODES, joiningReadyNode);
-  t.equal(
-    await rebalancer.isNodeReady('node-2'),
-    false,
-    'transport restoration cannot revive a JOINING target after formation authority withdrew it',
   );
   t.end();
 });
@@ -609,110 +580,6 @@ test('UnifiedRebalancer does not use local startup bypass as placement readiness
     rebalancer.getAvailableNodes().map((node) => node.node_id).sort(),
     [],
     'local startup bypass should not make an unready seed placement-ready',
-  );
-  t.end();
-});
-
-test('the live-transport veto routes through hasLiveTransportEvidence: its ' +
-  'lowercasing fold is load-bearing at the placement-eligibility call site',
-async (t) => {
-  // Spec node-liveness-veto-consolidation, Task 4.2 red-on-revert. The switch
-  // from the raw `getConnectionState(nodeId) !== STATE.CONNECTED` compare to
-  // `!hasLiveTransportEvidence(...)` is a no-op over the canonical (lowercase)
-  // live domain — so the ONLY input that distinguishes the atom from the old
-  // inline term, proving the call now truly routes through it, is the
-  // documented same-or-safer mixed-case fold: on a live router value of
-  // 'Connected' the old raw compare VETOES the node (mixed case !== 'connected')
-  // while the atom lowercases and admits it. This pins that the atom is the
-  // live term, so reverting the src (restoring the raw compare) fails this test.
-  initEnv();
-  const cache = createCache();
-  const rebalancer = new UnifiedRebalancer({
-    entityId: 'control_plane_publications-p1',
-    entityType: EntityType.PARTITION,
-    nodeId: 'seed-node',
-    systemTableCache: cache,
-    cdcIntegrationService: {
-      insertSystemTableRow: async () => ({success: true}),
-      updateSystemTableRow: async () => ({success: true}),
-    },
-    tablePolicyService: {
-      getPolicyForPartition: () => ({minReplicaCount: 3, targetReplicaCount: 3}),
-      getMessageGroupPolicy: async () => ({targetReplicaCount: 3}),
-    },
-    messageRouter: {
-      // Non-physical mixed-case value: the live transport machine only ever
-      // emits lowercase CONNECTION_STATE, so this exercises the atom's fold,
-      // never a real state — see live-transport-evidence-parity char test.
-      getConnectionState: () => 'Connected',
-      isOutboundQueueAvailable: () => true,
-      getConnectedNodes: () => [],
-    },
-    rebalanceCoordinator: {
-      getMoveSafetyError: () => null,
-      createOperation: async () => ({}),
-      executeOperation: async () => ({success: true}),
-      canStartAddOperation: async () => true,
-      canStartRemoveOperation: async () => true,
-      getStats: () => ({inFlightOperations: 0, totalOperations: 0}),
-      storageAccountingService: {estimateReplicaBytes: () => 1},
-      storageAdmissionService: {
-        checkAdd: async () => ({decision: 'allow'}),
-        checkReplace: async () => ({decision: 'allow'}),
-      },
-    },
-    sqlQueryEngine: {
-      async executeQuery() {
-        return {success: true, rows: []};
-      },
-    },
-    controlPlaneReadinessService: {
-      answerCommittedNodes() {
-        return {
-          state: SERVE_ELIGIBILITY_STATE.READY,
-          epoch: {
-            publicationEpoch: 1,
-            publicationId: 'cluster_membership-1',
-            readAtMs: 0,
-          },
-          nodeRows: cache.getAll('nodes'),
-        };
-      },
-      getNodeReadinessSync(nodeId) {
-        return {
-          nodeId,
-          dimensions: {
-            [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]:
-              false,
-            [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
-          },
-          reasons: [],
-        };
-      },
-      getStartupAuthoritySnapshotSync() {
-        return {
-          authorityAvailable: true,
-          canonicalStartupNodeIds: ['seed-node', 'node-2'],
-        };
-      },
-    },
-  });
-
-  // node-2 is a startup-authority peer, joining, cached-connected — the cached
-  // conjunct passes, so the live-transport veto is the sole remaining gate.
-  const node = {
-    node_id: 'node-2',
-    status: NODE_STATE.JOINING,
-    connection_state: 'connected',
-  };
-  t.equal(
-    rebalancer.isStartupAuthorityControlPlanePlacementEligibleNode(
-      node,
-      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-    ),
-    true,
-    'atom folds mixed-case live "Connected" to connected → node stays eligible ' +
-      '(raw compare would veto it — red-on-revert)',
   );
   t.end();
 });

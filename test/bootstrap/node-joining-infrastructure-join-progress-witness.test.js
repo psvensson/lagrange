@@ -59,7 +59,6 @@ test('NodeJoiningService projects the ordered ready-signal gate witness',
       async () => capture();
     service.awaitMetadataPublicationReadinessForReadySignal =
       async () => capture();
-    service.awaitOperationLedgerFormationBarrier = async () => capture();
     service.heartbeatService = {
       sendHeartbeat: async () => capture(),
     };
@@ -78,7 +77,6 @@ test('NodeJoiningService projects the ordered ready-signal gate witness',
         'cdc_subscription',
         'local_query_transport',
         'metadata_publication',
-        'operation_ledger_formation',
         'heartbeat_publication',
       ],
       'the witness follows the existing ready-signal execution order',
@@ -311,7 +309,6 @@ test('NodeJoiningService retains the current ready-signal retry failure',
     service.awaitCdcSubscriptionsForReadiness = async () => {};
     service.awaitLocalQueryTransportReadinessForReadySignal = async () => {};
     service.awaitMetadataPublicationReadinessForReadySignal = async () => {};
-    service.awaitOperationLedgerFormationBarrier = async () => {};
 
     let attempt = 0;
     let retrySnapshot = null;

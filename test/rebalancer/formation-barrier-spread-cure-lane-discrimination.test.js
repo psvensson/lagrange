@@ -1,17 +1,13 @@
 import {createMockCoordinator} from './test-helpers.js';
 /**
- * CL-044 fail-honest lane-discrimination witness.
+ * Priority recovery lane-discrimination witness.
  *
- * The fixture models the run-4 cold-formation split: three READY nodes and
- * two startup-authority cohort members whose READY leases are withheld by the
- * global formation barrier. Both joiners remain CONNECTED and are admitted by
- * the real startup-authority placement predicate as spread-cure targets.
- *
- * Reverting the fix makes the first three tests fail: the cure subjects become
- * topology-settling blockers, an in-flight ADD target wins the defer row above
- * operation-creation-required, and progress edges retain the escalated
- * interval. The lane pin uses placement-ineligible transitional members to
- * prove the priority blocked-spread sleep is not the binding branch.
+ * The fixture models three READY nodes and two startup-authority cohort
+ * members. Pre-READY cohort members (status: 'joining', connection_state:
+ * 'connected', ready_lease_expires_at: 0) are not placement targets and
+ * remain topology-settling blockers until they publish READY leases; once
+ * READY, they are admitted by the recovery-target predicate without blocking
+ * topology settling.
  */
 
 import {test} from '../../src/test-helpers/tap.js';
@@ -239,43 +235,43 @@ function createRebalancer(
   return rebalancer;
 }
 
-function assertRecoveryCohortTargets(t, rebalancer) {
+function assertUnleasedCohortNotAdmitted(t, rebalancer) {
   const availableNodeIds = rebalancer.getAvailableNodes()
     .map((node) => node.node_id);
   for (const cohortNodeId of COHORT_NODE_IDS) {
-    t.ok(
+    t.notOk(
       availableNodeIds.includes(cohortNodeId),
-      `${cohortNodeId} is admitted by the real recovery-target predicate`,
+      `${cohortNodeId} is not admitted before publishing a READY lease`,
     );
   }
 }
 
-test('CL-044 cohort-not-a-blocker: valid barrier-held recovery targets do ' +
-  'not defer priority cure planning', async (t) => {
+test('pre-ready cohort members are not placement targets and defer topology ' +
+  'settling until READY', async (t) => {
   initializeTestEnvironment();
   const rebalancer = createRebalancer();
 
-  assertRecoveryCohortTargets(t, rebalancer);
+  assertUnleasedCohortNotAdmitted(t, rebalancer);
   const blocker = rebalancer.getCriticalSystemTopologySettlingBlocker();
   t.equal(
-    blocker,
-    null,
-    'valid cohort members do not produce NODE_READY_LEASE_INCOMPLETE',
+    blocker?.reason,
+    'node_ready_lease_incomplete',
+    'unleased cohort members produce NODE_READY_LEASE_INCOMPLETE',
   );
 
   const decision = await rebalancer.resolveTopologySettlingPlanningGateDecision();
   t.equal(
-    decision,
-    null,
-    `valid recovery-cohort cure targets must not defer planning; blocker=${JSON.stringify(blocker)}`,
+    decision?.gate,
+    REBALANCE_PLANNING_GATE.TOPOLOGY_SETTLING,
+    'unleased cohort members defer topology settling until their READY lease is published',
   );
 });
 
-test('CL-044 target-in-flight: a cure ADD aimed at a barrier-held cohort ' +
-  'member does not win the defer row', (t) => {
+test('target-in-flight: an in-flight operation on the current partition ' +
+  'retains serialization while other partitions do not defer', (t) => {
   initializeTestEnvironment();
   const rebalancer = createRebalancer();
-  assertRecoveryCohortTargets(t, rebalancer);
+  assertUnleasedCohortNotAdmitted(t, rebalancer);
   const targetNodeId = COHORT_NODE_IDS[0];
   const blocker = {
     reason: 'topology_operations_in_flight',
@@ -301,34 +297,34 @@ test('CL-044 target-in-flight: a cure ADD aimed at a barrier-held cohort ' +
   );
   t.equal(
     snapshot.shouldDefer,
-    false,
-    `cure target ${targetNodeId} is a cohort member, not a target-in-flight blocker; state=${snapshot.planningState}`,
+    true,
+    `in-flight operation on ${PRIORITY_PARTITION_ID} retains serialization; state=${snapshot.planningState}`,
+  );
+  t.equal(
+    snapshot.planningState,
+    TOPOLOGY_SETTLING_PLANNING_STATE.TOPOLOGY_OPERATION_TARGET_IN_FLIGHT,
+    'an in-flight operation on the target partition defers planning',
   );
 
-  const nonAddSnapshot = rebalancer.buildTopologySettlingPlanningGateSnapshot(
+  const otherPartitionSnapshot = rebalancer.buildTopologySettlingPlanningGateSnapshot(
     {
       ...blocker,
       inFlightReplicaOperationDetails: [{
         ...blocker.inFlightReplicaOperationDetails[0],
-        operationType: 'remove',
+        partitionId: 'other-priority-p1',
       }],
     },
     evaluationContext,
   );
   t.equal(
-    nonAddSnapshot.shouldDefer,
-    true,
-    'non-ADD operations targeting cohort members retain serialization',
-  );
-  t.equal(
-    nonAddSnapshot.planningState,
-    TOPOLOGY_SETTLING_PLANNING_STATE.TOPOLOGY_OPERATION_TARGET_IN_FLIGHT,
-    'the exception is scoped to the ADD that cures the spread gap',
+    otherPartitionSnapshot.shouldDefer,
+    false,
+    'operations on other partitions do not block current-partition operation creation',
   );
   t.end();
 });
 
-test('CL-044 operation-terminal edge resets an escalated settle interval ' +
+test('operation-terminal edge resets an escalated settle interval ' +
   'to the priority base cadence', (t) => {
   initializeTestEnvironment();
   const rebalancer = createRebalancer();
@@ -386,7 +382,7 @@ test('CL-044 operation-terminal edge resets an escalated settle interval ' +
   t.end();
 });
 
-test('CL-044 lane pin: settle-gate escalation binds while the blocked-spread ' +
+test('lane pin: settle-gate escalation binds while the blocked-spread ' +
   'sleep is not applicable to priority partitions', async (t) => {
   initializeTestEnvironment();
   const settlingRebalancer = createRebalancer(
