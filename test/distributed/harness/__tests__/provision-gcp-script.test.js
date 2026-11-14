@@ -241,12 +241,22 @@ test('teardown: reports deleted, already absent and failed; any failure exits no
     assert.ok(stringIncludes(run.stderr, named), run.stderr);
     assert.equal(arraySome(run.lines, (l) => /Teardown complete/u.test(l)), false);
   };
-  notComplete(runScript({args: ['--teardown'], instances: NODES, firewall: rule,
-    flags: ['fail-delete-lagrange-bench-3']}), 'VM lagrange-bench-3');
+  const deleteFailed = runScript({args: ['--teardown'], instances: NODES, firewall: rule,
+    flags: ['fail-delete-lagrange-bench-3']});
+  notComplete(deleteFailed, 'VM lagrange-bench-3');
+  assert.ok(stringIncludes(deleteFailed.stderr, '[gcp] FAILED to delete VM lagrange-bench-3'));
+  assert.equal(arraySome(deleteFailed.lines, (l) => l === '[gcp] deleted VM lagrange-bench-3'),
+    false);
   notComplete(runScript({args: ['--teardown'], instances: NODES, firewall: rule,
     flags: ['sticky-lagrange-bench-5']}), 'VM lagrange-bench-5 (still present)');
+  const ruleFailed = runScript({args: ['--teardown'], instances: NODES, firewall: rule,
+    flags: ['fail-firewall-delete']});
+  notComplete(ruleFailed, 'firewall rule lagrange-bench-internal');
+  assert.ok(stringIncludes(ruleFailed.stderr,
+    '[gcp] FAILED to delete firewall rule lagrange-bench-internal'));
   notComplete(runScript({args: ['--teardown'], instances: NODES, firewall: rule,
-    flags: ['fail-firewall-delete']}), 'firewall rule lagrange-bench-internal');
+    flags: ['fail-firewall-list']}),
+  'firewall rule lagrange-bench-internal (could not ask whether it exists)');
   const blind = runScript({args: ['--teardown'], instances: NODES, flags: ['fail-list']});
   assert.equal(blind.status, 1);
   assert.ok(stringIncludes(blind.stderr, 'nothing was deleted'), blind.stderr);
