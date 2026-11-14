@@ -16,8 +16,8 @@ import {CDCGroupPropagationService} from '../../src/topology/cdc-group-propagati
 import {PARTITION_CDC_COMMAND, PARTITION_CDC_OBLIGATION_REASON} from
   '../../src/partition/partition-cdc-obligation-constants.js';
 import {countCdcObligations} from '../../src/partition/partition-cdc-obligation-ledger.js';
-import {createDurableSourceMessageGroupService, createMessageGroupServiceRow,
-  deliveredEventsOf} from '../topology/cdc-group-propagation-service-harness.js';
+import {createDurableSourceMessageGroupService, createHeldMessageRouter,
+  createMessageGroupServiceRow, deliveredEventsOf} from '../topology/cdc-group-propagation-service-harness.js';
 import {CDC_TABLE as TABLE, applyCommitted, committedQueryOf, settleTicks, shutdownAll,
   startLeader} from
   './participant-transaction-fixture.js';
@@ -158,5 +158,88 @@ function omitTarget(f) {
   f.projection.services[0][COLUMN.STATUS] = SERVICE_STATUS.STOPPED;
 }
 
+// One source lane over the shared topology owner: a partition leader of
+// `tableName` with its one propagation subscriber, and `rows` committed and
+// owed before it leads (so no recipient callback runs during setup). Its
+// CDC_DELIVERED proposals commit at once through the real application owner.
+// The participant fixture gives every leader the same partition identity, so
+// a lane is named by its table: one lane per table.
+async function startSourceLane(f, {tableName, rows}) {
+  const {leader, proposed} = await startLeader({tableName, timeSource: f.clock});
+  f.leaders.push(leader);
+  leader.controllablePort.setProposeHandler(async (entry) => {
+    proposed.push({...entry});
+    applyCommitted(leader, entry);
+  });
+  leader.controllablePort.setRole(RAFT_ROLE.FOLLOWER);
+  const selection = () => ({ready: true, service: f.source});
+  await leader.subscribeToCDCWithHandshake(buildPartitionCdcPropagationSubscriber({tableName,
+    resolveOperationalMessageGroupSelection: selection,
+    resolveOperationalMessageGroupSelectionAsync: async () => selection(),
+    buildMessageGroupOwnerNotReadyError: () => Object.assign(new Error('controlled readiness'),
+      {retryAfterMs: RETRY_AFTER_MS}),
+    propagatePartitionCDCEvent: (_selected, events, context) => f.topology.propagateCDCEvent({
+      events, sourceMessageGroupService: f.source, deliveryContext: context}),
+  }), {subscriberId: `lane-${tableName}`});
+  const lane = {tableName, leader, proposed,
+    drive: () => leader.cdcDelivery.driveCdcObligations(
+      PARTITION_CDC_OBLIGATION_REASON.DELIVERY_RETRY),
+    diagnostics: () => leader.cdcDelivery.getCdcObligationDiagnostics(),
+    addRow: (id) => {
+      const command = committedQueryOf(`${tableName}-${id}`,
+        `INSERT INTO ${tableName} (id, value) VALUES (?, ?)`);
+      command.params = [id, `value-${id}`];
+      command.timestamp = new HLCTimestamp(1000, 0, `lane-${tableName}`).toString();
+      assert.equal(applyCommitted(leader, command), null);
+    }};
+  for (const id of rows) lane.addRow(id);
+  leader.controllablePort.setRole(RAFT_ROLE.LEADER);
+  await settleTicks();
+  assert.deepEqual(countCdcObligations(leader.db), {owed: rows.length, delivered: 0});
+  return lane;
+}
+
+// Several source lanes of one node over one real topology owner (safe mode,
+// one target group) and the node's one source message group: one lane per
+// partition the node leads. The router holds every target delivery the test
+// does not answer at once: `f.answer(call)` returns a RESPONSE for the
+// recipient's answer now, or null to hold it (`f.release(call, response)`).
+// Every target call records its lane (by table), its row ids and whether it is
+// still held. `laneSpecs`: [{tableName, rows}], one table per lane.
+async function multiLaneTopologyFixture(t, laneSpecs) {
+  const clock = new VirtualTimeSource({startMs: 100});
+  const f = {clock, leaders: [], sourceBatches: [], answer: () => RESPONSE.NATIVE};
+  f.source = createDurableSourceMessageGroupService(SOURCE_GROUP, {
+    applyCDCBatch: (events) => {
+      f.sourceBatches.push(events.map((event) => event.data.id));
+      return controlledAnswer(events, SOURCE_GROUP, RESPONSE.NATIVE);
+    }});
+  const envelope = (call, response) => buildDeliveryEnvelope({acknowledged: true},
+    controlledAnswer(deliveredEventsOf(call.payload), call.targetGroupId, response));
+  f.router = createHeldMessageRouter((call) => {
+    call.ids = deliveredEventsOf(call.payload).map((event) => event.data.id);
+    const response = f.answer(call);
+    return response === null ? null : envelope(call, response);
+  });
+  f.release = (call, response = RESPONSE.NATIVE) => call.answer(envelope(call, response));
+  f.projection = controlledProjection();
+  f.topology = new CDCGroupPropagationService({nodeId: SOURCE_NODE,
+    systemTableCache: f.projection.cache, messageRouter: f.router,
+    latencyTreeService: {getRoutingOrder: () => []},
+    nowFn: () => clock.now(), deliveryRetryMaxAttempts: 1});
+  f.topology.initialize();
+  f.topology.start();
+  t.after(async () => {
+    f.topology.stop();
+    for (const call of f.router.calls.filter((entry) => entry.held)) f.release(call);
+    await shutdownAll(...f.leaders);
+  });
+  f.lanes = [];
+  for (const spec of laneSpecs) f.lanes.push(await startSourceLane(f, spec));
+  f.callsOf = (lane) => f.router.calls.filter((call) => call.tableName === lane.tableName);
+  return f;
+}
+
 export {RESPONSE, SOURCE_GROUP, SOURCE_NODE, TARGET_GROUP, TARGET_NODE,
-  addRequiredGroup, assertDebtWithoutAck, omitTarget, topologyProgressFixture};
+  addRequiredGroup, assertDebtWithoutAck, multiLaneTopologyFixture, omitTarget,
+  topologyProgressFixture};

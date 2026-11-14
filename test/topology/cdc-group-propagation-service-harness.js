@@ -114,19 +114,22 @@ export function createDurableCdcEvent({
   data = {[COLUMN.NODE_ID]: 'node-z'},
   eventKey = 'durable-event-1',
   sourceLogIndex = 1,
+  sourcePartition = DURABLE_SOURCE_PARTITION,
 } = {}) {
   return {
     tableName, operation, data,
     timestamp: new HLCTimestamp(1000, 0, 'durable-source').toString(),
-    sourcePartition: DURABLE_SOURCE_PARTITION,
-    sourceReplica: `${DURABLE_SOURCE_PARTITION}-r1`,
+    sourcePartition,
+    sourceReplica: `${sourcePartition}-r1`,
     eventKey, entryId: eventKey, sourceLogIndex, sourceOrdinal: 0,
   };
 }
 
 // The source delivery owner's invocation for one durable event, on a virtual
 // clock (no real timer): the deliveryContext a partition subscriber passes.
-function beginDurableCdcInvocation(timeSource = new VirtualTimeSource({startMs: 1000})) {
+// Each call is its own source delivery owner, so each invocation stands for
+// one source lane; lanes of one node share `timeSource`.
+export function beginDurableCdcInvocation(timeSource = new VirtualTimeSource({startMs: 1000})) {
   const delivery = {owner: {timeSource, isShutdown: false}};
   return beginCdcDeliveryInvocation(delivery, () => true);
 }
@@ -174,6 +177,35 @@ export function createMessageRouter(results = []) {
       calls.push({address, payload, options});
       const index = calls.length - 1;
       return results[Math.min(index, results.length - 1)];
+    },
+  };
+}
+
+// A router whose every target delivery waits until the test answers it: the
+// transport seam of recipients that answer when told to. `answer(call)` is
+// asked once per delivery and returns the delivery envelope to answer at once,
+// or null to hold it (the test answers it later with `call.answer(envelope)`).
+// Each call records the target, the vector's table, source partition and event
+// keys, and whether it is still unanswered.
+export function createHeldMessageRouter(answer = () => null) {
+  const calls = [];
+  return {
+    calls,
+    deliver(address, payload, options) {
+      return new Promise((resolve) => {
+        const events = deliveredEventsOf(payload);
+        const call = {address, payload, options, held: true,
+          targetGroupId: payload.targetGroupId, tableName: events[0].tableName,
+          sourcePartition: events[0].sourcePartition,
+          eventKeys: events.map((event) => event.eventKey),
+          answer: (envelope) => {
+            call.held = false;
+            resolve(envelope);
+          }};
+        calls.push(call);
+        const immediate = answer(call);
+        if (immediate !== null) call.answer(immediate);
+      });
     },
   };
 }
