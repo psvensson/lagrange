@@ -145,8 +145,9 @@ test('the real lab campaign selects with the named load generator before any hol
   const env = {LAGRANGE_LAB_HOME: inventoryDir(unreachable)};
   const named = runCli(['--campaign-id', 'bench-test-2', '--load-generator', 'alpha'], env);
   assert.equal(named.status, EXIT_CODES.REFUSED, named.stderr);
-  assert.match(named.stderr,
-    /^refused_load_generator_selection: alpha: no ssh target or ip in the inventory$/mu);
+  assert.match(named.stderr, /^refused_load_generator_selection: /mu);
+  assert.deepEqual(JSON.parse(/^diagnostic: (.*)$/mu.exec(named.stderr)[1]),
+    {loadGeneratorName: 'alpha', reason: 'no ssh target or ip in the inventory'});
   const automatic = runCli(['--campaign-id', 'bench-test-3'], env);
   assert.equal(automatic.status, EXIT_CODES.REFUSED, automatic.stderr);
   assert.match(automatic.stderr, /^refused_insufficient_host_topology: /mu);
