@@ -138,6 +138,30 @@ test('an empty --load-generator is a usage error, not automatic selection', () =
   assert.match(result.stderr, /--load-generator needs a registered lab host name, got ""/u);
 });
 
+test('an option-like --load-generator value is a usage error before discovery', () => {
+  // Inventory hosts without ssh: if the value were taken as a name, selection
+  // would run and print a typed refusal with its diagnostic instead.
+  const unreachable = arrayMap(FLEET.slice(0, 4), ({ssh: _ssh, ...node}) => node);
+  const env = {LAGRANGE_LAB_HOME: inventoryDir(unreachable)};
+  for (const args of [['--load-generator', '--dry-run'],
+    ['--dry-run', '--from-recorded-facts', '--load-generator', '-x']]) {
+    const result = runCli(args, env);
+    assert.equal(result.status, EXIT_CODES.FAILURE, result.stderr);
+    assert.equal(result.stdout, '', 'no plan is printed');
+    assert.match(result.stderr, /^--load-generator needs a registered lab host name, got "-/mu);
+    assert.doesNotMatch(result.stderr, /refused_|^diagnostic: /mu, 'selection never ran');
+  }
+});
+
+test('a repeated --load-generator is a usage error, not the last name', () => {
+  const result = runCli(['--dry-run', '--from-recorded-facts', '--load-generator', 'alpha',
+    '--load-generator', 'bravo'], {LAGRANGE_LAB_HOME: inventoryDir(FLEET)});
+  assert.equal(result.status, EXIT_CODES.FAILURE, result.stderr);
+  assert.equal(result.stdout, '', 'no plan is printed');
+  assert.match(result.stderr, /^--load-generator may be given once$/mu);
+  assert.doesNotMatch(result.stderr, /refused_|^diagnostic: /mu);
+});
+
 test('the real lab campaign selects with the named load generator before any hold', () => {
   // No ssh target: discovery probes nothing and selection refuses before any
   // hold, so the forwarded name decides which typed refusal the CLI reports.

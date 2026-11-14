@@ -148,6 +148,8 @@ Options:
 
 class UsageError extends Error {}
 
+const LOAD_GENERATOR_FLAG = '--load-generator';
+
 const VALUE_FLAGS = Object.freeze({
   '--execution-target': 'executionTarget', '--hosts': 'hostsRaw',
   '--ssh-hosts': 'sshHostsRaw', '--ssh-user': 'sshUser', '--ssh-key': 'sshKey',
@@ -155,7 +157,7 @@ const VALUE_FLAGS = Object.freeze({
   '--storage-root': 'storageRoot', '--lagrange-image': 'lagrangeImage',
   '--raw-observations': 'rawObservationsPath', '--output': 'outputPath',
   '--lock-wait-minutes': 'lockWaitMinutes', '--client-checkout': 'clientCheckout',
-  '--load-generator': 'loadGeneratorName', '--client-node': 'clientNode',
+  [LOAD_GENERATOR_FLAG]: 'loadGeneratorName', '--client-node': 'clientNode',
   '--lagrange-version': 'lagrangeVersion',
   '--lagrange-image-digest': 'lagrangeImageDigest',
   '--lagrange-image-content': 'lagrangeImageContent',
@@ -195,7 +197,15 @@ function validateCliOptions(opts) {
   if (!PROFILES[opts.profile]) throw new UsageError(`unknown profile ${opts.profile}`);
 }
 
+// Two explicit load generators are ambiguous operator intent, never "the last one".
+function rejectRepeatedLoadGenerator(argv) {
+  if (argv.filter((arg) => arg === LOAD_GENERATOR_FLAG).length > 1) {
+    throw new UsageError(`${LOAD_GENERATOR_FLAG} may be given once`);
+  }
+}
+
 function parseCliArgs(argv, env) {
+  rejectRepeatedLoadGenerator(argv);
   const opts = {executionTarget: env.EXECUTION_TARGET || TARGET.LAB, hostsRaw: '',
     sshHostsRaw: '', sshUser: env.SSH_USER || env.USER || '', sshKey: env.SSH_KEY || '',
     targetsRaw: DEFAULT_TARGETS.join(','), profile: 'smoke', campaignId: '',
