@@ -1,0 +1,42 @@
+{
+ "kind": "tests",
+ "host": "adams-gamla",
+ "commit": "232082669eddebe4c9fd98d3e07c11fc91ffb781",
+ "tree": "9c3ccb5724b35c29761dbce52008b8a94b0bd5f4",
+ "worktreePaths": [
+  "solve/epics/operation-integrity-and-reliable-formation.md",
+  "src/bootstrap/bootstrap-service-control-plane-runtime-methods.js",
+  "src/bootstrap/node-joining-publication-activation.js",
+  "src/bootstrap/node-joining-ready-signal-readiness.js",
+  "src/bootstrap/shared/control-plane-setup.js",
+  "src/control-plane/control-plane-readiness-participation-base.js",
+  "src/control-plane/control-plane-readiness-planning-owner-delegate-methods.js",
+  "src/control-plane/control-plane-readiness-service.js",
+  "src/control-plane/control-plane-readiness-startup-authority-health.js",
+  "src/control-plane/startup-authority-snapshot-owner.js",
+  "src/rebalancer/operation-ledger-hold-policy.js",
+  "src/rebalancer/operation-ledger-quorum-concentration.js",
+  "src/rebalancer/rebalance-coordinator-replica-identity-methods.js",
+  "src/rebalancer/rebalance-coordinator-topology-guard-methods.js",
+  "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
+  "src/rebalancer/unified-rebalancer-available-nodes.js",
+  "src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js",
+  "src/rebalancer/unified-rebalancer-critical-topology-methods.js",
+  "src/rebalancer/unified-rebalancer-replica-state.js",
+  "test/convergence/dt-formation-joint-admission-release-liveness.test.js",
+  "test/convergence/formation-joint-admission-rounds.js",
+  "test/convergence/formation-joint-admission-scenario.js",
+  "test/convergence/formation-joint-admission-world.js",
+  "test/shards/impact-graph-seal.json",
+  "test/shards/primary-classes.json",
+  "test/shards/resource-classes.json",
+  "test/shards/subsystem-classes.json",
+  "test/simulation/formation-sim-node-hosts.js"
+ ],
+ "transportCommit": "c5e574c408b7a969828a83751bc9f382538f09e7",
+ "base": "9c576f3a06be3bf117623f038f43e6b36b5b33a5",
+ "files": [
+  "test/convergence/dt-formation-joint-admission-release-liveness.test.js"
+ ],
+ "requestId": "45ce2e94-9ee1-45f8-a18e-9b2acbf78a62"
+}
