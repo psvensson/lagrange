@@ -137,8 +137,8 @@ test('the seed teardown completes when the latency topology stops inside a ' +
   await resumeFixtureParticipantAdmission(partition);
   const sourceMessageGroup = createDurableSourceMessageGroupService(SOURCE_GROUP_ID);
   await partition.subscribeToCDCWithHandshake(
-    (cdcEvent, deliveryContext) => bridge.propagatePartitionCDCEvent(
-      sourceMessageGroup, cdcEvent, deliveryContext),
+    (events, deliveryContext) => bridge.propagatePartitionCDCEvent(
+      sourceMessageGroup, events, deliveryContext),
     {subscriberId: 'seed-hydration'});
   const handler = new ReplicaHandler({
     nodeId: NODE_ID,

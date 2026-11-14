@@ -171,6 +171,36 @@ function readOwedCdcObligations(db, options = {}) {
   }).map(obligationOf);
 }
 
+/**
+ * The owed obligations after a position without their payloads, in log
+ * order: what the lane needs to cut a shipped range (position, identity and
+ * the stored payload's byte length). An absent ledger owes nothing.
+ * @param {Object} db - The partition's connection.
+ * @param {Object} bounds - {after: {logIndex, ordinal}|null, through:
+ *   {logIndex, ordinal}, limit}; after is exclusive, through inclusive.
+ * @return {Array<Object>} Frozen {eventKey, logIndex, ordinal, entryId,
+ *   eventBytes}, at most `limit`.
+ */
+function readOwedCdcObligationPositions(db, {after, through, limit}) {
+  if (!cdcObligationLedgerExists(db)) {
+    return [];
+  }
+  const start = after === null ? FIRST_POSITION : after;
+  return db.prepare(SQL.SELECT_OWED_POSITIONS_AFTER).all({
+    logIndex: start.logIndex,
+    ordinal: start.ordinal,
+    throughIndex: through.logIndex,
+    throughOrdinal: through.ordinal,
+    limit,
+  }).map((row) => Object.freeze({
+    eventKey: row.event_key,
+    logIndex: Number(row.log_index),
+    ordinal: Number(row.ordinal),
+    entryId: row.entry_id,
+    eventBytes: Number(row.event_bytes),
+  }));
+}
+
 // A finite scan pass ends at this position even while new obligations arrive.
 // It is a scheduling bound, never evidence that any prefix was delivered.
 function readOwedCdcTail(db) {
@@ -534,6 +564,7 @@ export {
   readCdcObligationProgress,
   readCdcObligationStanding,
   readOwedCdcHead,
+  readOwedCdcObligationPositions,
   readOwedCdcObligations,
   readOwedCdcTail,
   reclaimDeliveredCdcObligations,

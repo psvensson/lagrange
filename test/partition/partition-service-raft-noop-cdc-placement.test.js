@@ -179,12 +179,14 @@ test('zero-change Raft apply cannot overwrite completed priority placement',
     await partition.initialize();
     partition.controllablePort.setRole(RAFT_ROLE.LEADER);
     await resumeFixtureParticipantAdmission(partition);
-    await partition.subscribeToCDCWithHandshake((event) => {
-      cache.applySystemTableChange(
-        event.tableName,
-        event.operation,
-        event.data,
-      );
+    await partition.subscribeToCDCWithHandshake((events) => {
+      for (const event of events) {
+        cache.applySystemTableChange(
+          event.tableName,
+          event.operation,
+          event.data,
+        );
+      }
     });
     partition.controllablePort.setProposeHandler(async (entry) => {
       partition.controllablePort.commit(entry);

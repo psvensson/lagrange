@@ -349,9 +349,11 @@ test('W-D1f: pending work under budget - an owed row the lane cannot complete (p
   try {
     const gate = {holding: true, hole: null, drives: new Set()};
     const acknowledging = acknowledgingCdcSubscriber();
-    await leader.subscribeToCDCWithHandshake(async (event) =>
-      gate.holding && event.eventKey === gate.hole ?
-        buildProvisionalCdcOutcome([event], W_D1F_RETRY_MS) : acknowledging(event),
+    // A vector that carries the held row is answered provisional as a whole
+    // (a recipient answers for the vector it was handed), any other committed.
+    await leader.subscribeToCDCWithHandshake(async (events) =>
+      gate.holding && events.some((event) => event.eventKey === gate.hole) ?
+        buildProvisionalCdcOutcome(events, W_D1F_RETRY_MS) : acknowledging(events),
     {subscriberId: 'f'});
     for (let index = 0; index < W_D1F_WRITES; index += 1) {
       const command = upsertOf(leader, 'f', index);

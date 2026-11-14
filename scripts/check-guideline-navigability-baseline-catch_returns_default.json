@@ -1,7 +1,7 @@
 {
   "version": 1,
   "generatedAt": "2026-11-09T17:56:57.238Z",
-  "rawViolationCount": 386,
+  "rawViolationCount": 385,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-diagnostic-loss-accounting.js",
@@ -1583,15 +1583,6 @@
       "line": 173,
       "column": 6,
       "functionName": "parseSchemaIfJson",
-      "kind": "catch_returns_default",
-      "reason": "catch that returns a default; surface a typed refusal instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-cdc-obligation-delivery.js",
-      "line": 523,
-      "column": 4,
-      "functionName": "driveOneObligation",
       "kind": "catch_returns_default",
       "reason": "catch that returns a default; surface a typed refusal instead",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"

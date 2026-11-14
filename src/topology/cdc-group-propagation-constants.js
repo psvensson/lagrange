@@ -78,9 +78,12 @@ const CDC_GROUP_PROPAGATION_ERROR_MSG = Object.freeze({
   MISSING_MESSAGE_GROUP_SERVICE:
     'CDC propagation requires a durable sourceMessageGroupService ' +
     '(groupId, raft, cdcCommitLifetime, resolveStrictCdcForwardRetryAfterMs, applyCDCBatch)',
-  MISSING_CDC_PAYLOAD: 'CDC propagation requires tableName/operation/data',
+  MISSING_CDC_PAYLOAD:
+    'CDC propagation requires events: a dense, non-empty vector of one table whose members ' +
+    'each carry tableName/operation/data',
   MISSING_DURABLE_EVENT:
-    'CDC propagation requires a durable partition event (eventKey) and its delivery invocation',
+    'CDC propagation requires every event of the vector to be a durable partition event ' +
+    '(eventKey) and the delivery invocation of the vector',
 });
 
 export {

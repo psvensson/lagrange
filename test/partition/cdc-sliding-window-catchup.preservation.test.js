@@ -330,8 +330,8 @@ test(
                 }
 
                 const deliveredEvents = [];
-                const subscriber = async (cdcEvent) => {
-                  deliveredEvents.push(cdcEvent);
+                const subscriber = async (delivered) => {
+                  deliveredEvents.push(...delivered);
                 };
 
                 // First subscription — 'ok', registered, nothing replayed

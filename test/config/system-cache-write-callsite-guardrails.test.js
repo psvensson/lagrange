@@ -13,6 +13,10 @@ const SANCTIONED_APPLY_CALL_COUNTS = Object.freeze({
   'bootstrap/node-joining-cdc-subscription-and-backfill.js': 1,
   'bootstrap/phases/create-message-group-phase.js': 1,
   'bootstrap/phases/query-system-state-phase.js': 2,
+  // The cache owner's own row-preview helper (quest cdc-obligation-range-shipping,
+  // S-11): runs candidate changes through applySystemTableChange on a private,
+  // listener-free copy of the key's state so no merge or fence rule is restated.
+  'cache/system-table-cache-row-preview.js': 1,
   // The CDC authoritative cache-repair owner. 55a42ef57 (one CDC terminal
   // gate at the owner) extracted the repair body out of
   // cdc-integration-service-cache-visibility-wait.js into the module-private

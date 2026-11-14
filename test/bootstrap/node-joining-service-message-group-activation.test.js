@@ -1044,9 +1044,9 @@ test('NodeJoiningService - CDC propagation reuses captured ingress when operatio
         },
         upsertSystemTableRow: async () => true,
       });
-      service.propagatePartitionCDCEvent = async (messageGroupService, cdcEvent) => {
+      service.propagatePartitionCDCEvent = async (messageGroupService, events) => {
         propagatedMessageGroupService = messageGroupService;
-        propagatedEvent = cdcEvent;
+        propagatedEvent = events;
       };
 
       NodeService.getInstance = () => ({
@@ -1098,7 +1098,7 @@ test('NodeJoiningService - CDC propagation reuses captured ingress when operatio
         operation: 'UPSERT',
         data: {transaction_id: 'tx-1'},
       };
-      await capturedSubscriber(cdcEvent);
+      await capturedSubscriber(Object.freeze([cdcEvent]));
 
       t.equal(
         propagatedMessageGroupService,
@@ -1107,8 +1107,8 @@ test('NodeJoiningService - CDC propagation reuses captured ingress when operatio
       );
       t.same(
         propagatedEvent,
-        cdcEvent,
-        'join CDC propagation should forward the original CDC event through the captured ingress',
+        [cdcEvent],
+        'join CDC propagation should forward the original vector through the captured ingress',
       );
     } finally {
       ReplicaHandlerSetup.create = originalReplicaHandlerCreate;

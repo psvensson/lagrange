@@ -133,48 +133,56 @@ function buildDualBridgeSubscribers(f, tableName, partitionId) {
       resolveOperationalMessageGroupSelection: select,
       resolveOperationalMessageGroupSelectionAsync: selectAsync,
       buildMessageGroupOwnerNotReadyError,
-      beforePropagation: (event) => {
-        f.events.push({
-          ordinal: f.events.length,
-          phase: f.phase,
-          kind: 'subscriber-before',
-          subscriber: label,
-          eventKey: event.eventKey,
-          entryId: event.entryId,
-        });
+      // The subscriber contract hands a vector; the witness log keeps one
+      // record per member, in order, for each hook and each return.
+      beforePropagation: (events) => {
+        for (const event of events) {
+          f.events.push({
+            ordinal: f.events.length,
+            phase: f.phase,
+            kind: 'subscriber-before',
+            subscriber: label,
+            eventKey: event.eventKey,
+            entryId: event.entryId,
+          });
+        }
       },
-      propagatePartitionCDCEvent: async (service, event, deliveryContext) => {
+      propagatePartitionCDCEvent: async (service, events, deliveryContext) => {
         assert.equal(service, f.source);
-        const result = await propagateFn(service, event, deliveryContext);
-        f.events.push({
-          ordinal: f.events.length,
-          phase: f.phase,
-          kind: 'subscriber-return',
-          subscriber: label,
-          eventKey: event.eventKey,
-          result: structuredClone(result),
-        });
+        const result = await propagateFn(service, events, deliveryContext);
+        for (const event of events) {
+          f.events.push({
+            ordinal: f.events.length,
+            phase: f.phase,
+            kind: 'subscriber-return',
+            subscriber: label,
+            eventKey: event.eventKey,
+            result: structuredClone(result),
+          });
+        }
         return result;
       },
-      afterPropagation: (event) => {
-        f.events.push({
-          ordinal: f.events.length,
-          phase: f.phase,
-          kind: 'subscriber-after',
-          subscriber: label,
-          eventKey: event.eventKey,
-        });
+      afterPropagation: (events) => {
+        for (const event of events) {
+          f.events.push({
+            ordinal: f.events.length,
+            phase: f.phase,
+            kind: 'subscriber-after',
+            subscriber: label,
+            eventKey: event.eventKey,
+          });
+        }
       },
     });
 
-  const subSeed = makeSubscriber('seed-bridge', (service, event, ctx) =>
-    seedBridge.propagatePartitionCDCEvent(service, event, ctx),
+  const subSeed = makeSubscriber('seed-bridge', (service, events, ctx) =>
+    seedBridge.propagatePartitionCDCEvent(service, events, ctx),
   );
-  const subJoin = makeSubscriber('joining-bridge', (service, event, ctx) =>
+  const subJoin = makeSubscriber('joining-bridge', (service, events, ctx) =>
     NodeJoiningPublicationActivation.prototype.propagatePartitionCDCEvent.call(
       joiningContext,
       service,
-      event,
+      events,
       ctx,
     ),
   );

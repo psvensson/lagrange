@@ -1,5 +1,7 @@
 // The obligation lane's one metadata-only continuation. The source ledger
-// remains the owner of debt; this cell retains neither event bodies nor calls.
+// remains the owner of debt; this cell retains neither event bodies nor calls:
+// of the range it covers it keeps the vector digest, the first and last
+// position, the row count and whether the shipping window cut it.
 import {CDC_COMPLETION, CDC_COVERAGE_STATE, cdcCommitWaitIdentity, cdcCoverageState,
   emptyCdcCoverage, observeCdcCoverage} from
   '../cdc/cdc-delivery-outcome.js';
@@ -52,18 +54,38 @@ function resolveObligationNumber(primary, fallback, defaultValue) {
   return Number.isSafeInteger(fallback) ? fallback : defaultValue;
 }
 
-function prepareCdcObligationProgress(delivery, lane, event, subscribers) {
-  const binding = cdcCommitWaitIdentity([event]);
+function eventPosition(event) {
+  return {logIndex: resolveObligationNumber(event?.logIndex, event?.sourceLogIndex, null),
+    ordinal: resolveObligationNumber(event?.ordinal, event?.sourceOrdinal, 0)};
+}
+
+// The cell of the range `events` is: the current one while it is bound to the
+// same vector and every subscriber and topology binding is current (its leaf
+// coverage is kept and covered leaves are not sent again), a new one otherwise.
+function prepareCdcObligationProgress(delivery, lane, events, subscribers, windowCut) {
+  const binding = cdcCommitWaitIdentity(events);
   const previous = lane.currentObligation;
   if (previous?.binding === binding && cdcProgressCurrent(delivery, lane, previous)) {
     return previous;
   }
-  const logIndex = resolveObligationNumber(event?.logIndex, event?.sourceLogIndex, null);
-  const ordinal = resolveObligationNumber(event?.ordinal, event?.sourceOrdinal, 0);
-  const cell = {binding, logIndex, ordinal, branches: subscribers.map((subscriber) =>
-    subscriberBinding(delivery, subscriber)), nextSubscriber: 0};
+  const cell = {binding, first: eventPosition(events[0]), last: eventPosition(events.at(-1)),
+    rows: events.length, windowCut, branches: subscribers.map((subscriber) =>
+      subscriberBinding(delivery, subscriber)), nextSubscriber: 0};
   lane.currentObligation = cell;
   return cell;
+}
+
+function coverageHeld(coverage) {
+  return coverage.state !== CDC_COVERAGE_STATE.UNCOVERED;
+}
+
+// Whether any leaf of the cell is covered: a subscriber branch, or the source
+// or a target leaf of a branch's topology progress. While one is, the lane
+// presents the cell's range again unchanged instead of composing a longer one.
+function cdcProgressHoldsCoverage(cell) {
+  return cell.branches.some((branch) => coverageHeld(branch.coverage) ||
+    (branch.topology !== null && (coverageHeld(branch.topology.sourceCoverage) ||
+      branch.topology.targets.some((leaf) => coverageHeld(leaf.coverage)))));
 }
 
 function nextCdcSubscriber(cell) {
@@ -112,16 +134,16 @@ function registerLaneContentionOwner(
 }
 
 function cdcSubscriberInvocation(
-  delivery, lane, cell, branch, context, event, onSliceTurnReady = null,
+  delivery, lane, cell, branch, context, events, onSliceTurnReady = null,
 ) {
   const operations = (scoped) => ({
     bindTopology: (owner, source, targets) => {
       scoped.assertCurrent();
       const progress = topologyProgressOf(lane, branch, owner, source, targets);
       scoped.assertCurrent();
-      return bindCdcPropagationProgress(scoped, progress, [event]);
+      return bindCdcPropagationProgress(scoped, progress, events);
     },
-    registerContentionOwner: (propagationOwner, tableName = event?.tableName) =>
+    registerContentionOwner: (propagationOwner, tableName = events[0].tableName) =>
       registerLaneContentionOwner(
         delivery, lane, tableName, propagationOwner, onSliceTurnReady,
       ),
@@ -130,8 +152,8 @@ function cdcSubscriberInvocation(
     () => cdcProgressCurrent(delivery, lane, cell), operations);
 }
 
-function observeCdcSubscriber(branch, answer, event) {
-  branch.coverage = observeCdcCoverage(answer, [event], branch.topology?.sourceGroupId ?? null);
+function observeCdcSubscriber(branch, answer, events) {
+  branch.coverage = observeCdcCoverage(answer, events, branch.topology?.sourceGroupId ?? null);
 }
 
 function cdcObligationCoverage(cell) {
@@ -177,6 +199,7 @@ function releaseContendedPropagationOwners(lane, tableName = null) {
   map.clear();
 }
 
-export {cdcObligationCoverage, cdcProgressCurrent, cdcSubscriberInvocation, nextCdcSubscriber,
+export {cdcObligationCoverage, cdcProgressCurrent, cdcProgressHoldsCoverage,
+  cdcSubscriberInvocation, nextCdcSubscriber,
   observeCdcSubscriber, prepareCdcObligationProgress, recordUncoveredSubscriberHint,
   releaseContendedPropagationOwners, throwUncoveredObligationError};

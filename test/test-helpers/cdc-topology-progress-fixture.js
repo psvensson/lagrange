@@ -16,8 +16,8 @@ import {CDCGroupPropagationService} from '../../src/topology/cdc-group-propagati
 import {PARTITION_CDC_COMMAND, PARTITION_CDC_OBLIGATION_REASON} from
   '../../src/partition/partition-cdc-obligation-constants.js';
 import {countCdcObligations} from '../../src/partition/partition-cdc-obligation-ledger.js';
-import {createDurableSourceMessageGroupService, createMessageGroupServiceRow} from
-  '../topology/cdc-group-propagation-service-harness.js';
+import {createDurableSourceMessageGroupService, createMessageGroupServiceRow,
+  deliveredEventsOf} from '../topology/cdc-group-propagation-service-harness.js';
 import {CDC_TABLE as TABLE, applyCommitted, committedQueryOf, settleTicks, shutdownAll,
   startLeader} from
   './participant-transaction-fixture.js';
@@ -69,11 +69,13 @@ function buildTopology(f) {
     }});
   const router = {deliver: async (address, payload, options) => {
     assert.equal(f.leader.db.inTransaction, false);
+    const delivered = deliveredEventsOf(payload);
     f.targetCalls.push({address, groupId: payload.targetGroupId,
-      nodeId: options.targetNodeId, eventKey: payload.eventKey});
+      nodeId: options.targetNodeId, eventKey: delivered[0].eventKey,
+      eventKeys: delivered.map((event) => event.eventKey)});
     if (f.duringTarget) f.duringTarget();
     return buildDeliveryEnvelope({acknowledged: true},
-      controlledAnswer([payload], payload.targetGroupId, f.targetMode));
+      controlledAnswer(delivered, payload.targetGroupId, f.targetMode));
   }};
   const topology = new CDCGroupPropagationService({nodeId: SOURCE_NODE,
     systemTableCache: f.projection.cache, messageRouter: router,
@@ -93,15 +95,15 @@ function buildSubscriber(f, index) {
     resolveOperationalMessageGroupSelectionAsync: async () => selection(),
     buildMessageGroupOwnerNotReadyError: () => Object.assign(new Error('controlled readiness'),
       {retryAfterMs: RETRY_AFTER_MS}),
-    propagatePartitionCDCEvent: (_selected, event, context) => {
+    propagatePartitionCDCEvent: (_selected, events, context) => {
       f.subscriberCalls.push(index);
       if (index === 0) {
-        return f.topology.propagateCDCEvent({...event,
+        return f.topology.propagateCDCEvent({events,
           sourceMessageGroupService: f.source, deliveryContext: context});
       }
       if (f.expireOther) f.clock.advance(context.remainingMs());
       if (f.duringOther) f.duringOther();
-      return controlledAnswer([event], source.groupId, f.otherMode);
+      return controlledAnswer(events, source.groupId, f.otherMode);
     },
     afterPropagation: () => f.hooks.push(index),
   });

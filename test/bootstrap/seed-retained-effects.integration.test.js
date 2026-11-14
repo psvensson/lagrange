@@ -212,12 +212,14 @@ for (const tableName of FOUNDATION_TABLES) {
     const received = [];
     const subscriber = {
       canAcceptCDCEvent: () => true,
-      async handleCDCEvent(event) {
-        received.push(event);
-        cache.applySystemTableChange(event.tableName, event.operation, event.data);
+      async handleCDCEvent(events) {
+        for (const event of events) {
+          received.push(event);
+          cache.applySystemTableChange(event.tableName, event.operation, event.data);
+        }
         // Cache visibility is provisional recipient work, never a forged MG
         // committed receipt and never permission to clear the source debt.
-        return buildProvisionalCdcOutcome([event], PROVISIONAL_RETRY_MS);
+        return buildProvisionalCdcOutcome(events, PROVISIONAL_RETRY_MS);
       },
     };
     reopened.subscribeToCDC(subscriber);

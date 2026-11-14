@@ -474,22 +474,25 @@ function publicationModeOf(plan) {
     CDC_GROUP_PUBLICATION_MODE.REPAIR_ONLY : CDC_GROUP_PUBLICATION_MODE.CONSERVATIVE_FANOUT;
 }
 
+// One durable wave for one vector (`options.events`: one table, in source
+// order). Slot admission and slice bookkeeping read the vector's table.
 async function propagateDurableCdcEvent(owner, options) {
   const parent = options.deliveryContext;
   assertCdcDeliveryInvocation(parent);
+  const {tableName} = options.events[0];
   const admission = decideDurablePropagationAdmission(
     owner.activeDurablePropagation !== null ||
-      isYieldedSliceTableDeferred(owner, options.tableName),
+      isYieldedSliceTableDeferred(owner, tableName),
   );
   if (admission !== DURABLE_PROPAGATION_ADMISSION.ADMIT) {
-    return durablePropagationRefusal(owner, admission, options);
+    return durablePropagationRefusal(owner, admission, {tableName, deliveryContext: parent});
   }
   // Admission precedes immutable capture, target capture, source effects and
   // every await. The slot is released by actual local cleanup, not response.
   const context = openCdcDeliveryChildScope(parent);
   const wave = {context, source: options.sourceMessageGroupService};
   owner.activeDurablePropagation = wave;
-  advanceDurablePropagationSlice(owner, options.tableName, context, parent);
+  advanceDurablePropagationSlice(owner, tableName, context, parent);
   context.cleanup.then(() => {
     if (owner.activeDurablePropagation === wave) {
       owner.activeDurablePropagation = null;
@@ -498,7 +501,7 @@ async function propagateDurableCdcEvent(owner, options) {
   });
   try {
     context.assertCurrent();
-    const events = captureCdcEvents([options]);
+    const events = captureCdcEvents(options.events);
     const plan = captureDurablePropagationPlan(owner, wave.source);
     const sourceAdmission = decideDurablePropagationAdmission(false, plan.sourceMismatch);
     if (sourceAdmission !== DURABLE_PROPAGATION_ADMISSION.ADMIT) {

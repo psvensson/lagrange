@@ -32,11 +32,11 @@ test('BootstrapService partition CDC propagation requires topology owner',
       service.seedCacheHydrationPhase
         .propagatePartitionCDCEvent(
           {},
-          {
+          [{
             tableName: TABLES.NODES,
             operation: 'INSERT',
             data: {node_id: 'node-z'},
-          },
+          }],
         ),
       /Latency topology services are not initialized/,
     );
@@ -60,24 +60,24 @@ test('BootstrapService delegates partition CDC propagation to topology owner',
     };
 
     const messageGroupService = {id: 'mg-1'};
-    const cdcEvent = {
-      tableName: TABLES.NODES,
-      operation: 'UPDATE',
-      data: {node_id: 'node-z'},
-    };
+    // The request carries the lane's vector as `events`, in order.
+    const events = [
+      {tableName: TABLES.NODES, operation: 'UPDATE', data: {node_id: 'node-z'}},
+      {tableName: TABLES.NODES, operation: 'UPDATE', data: {node_id: 'node-y'}},
+    ];
 
     const result = await service.seedCacheHydrationPhase
       .propagatePartitionCDCEvent(
         messageGroupService,
-        cdcEvent,
+        events,
       );
 
     assert.equal(result.success, true);
     assert.equal(result.delegated, true);
-    assert.equal(calls.length, 1);
-    assert.equal(calls[0].tableName, cdcEvent.tableName);
-    assert.equal(calls[0].operation, cdcEvent.operation);
-    assert.deepEqual(calls[0].data, cdcEvent.data);
+    assert.equal(calls.length, 1, 'one request for the whole vector');
+    assert.deepEqual(calls[0].events, events);
+    assert.equal(Object.hasOwn(calls[0], 'tableName'), false,
+      'the request carries no single-event payload beside its vector');
     assert.equal(calls[0].sourceMessageGroupService, messageGroupService);
 
     teardownEnvironment();
@@ -96,11 +96,11 @@ test('NodeJoiningService partition CDC propagation requires topology owner',
     await assert.rejects(
       service.propagatePartitionCDCEvent(
         {},
-        {
+        [{
           tableName: TABLES.NODES,
           operation: 'INSERT',
           data: {node_id: 'node-z'},
-        },
+        }],
       ),
       /Latency topology services are not initialized/,
     );
@@ -128,23 +128,22 @@ test('NodeJoiningService delegates partition CDC propagation to topology owner',
     };
 
     const messageGroupService = {id: 'mg-1'};
-    const cdcEvent = {
-      tableName: TABLES.NODES,
-      operation: 'DELETE',
-      data: {node_id: 'node-z'},
-    };
+    const events = [
+      {tableName: TABLES.NODES, operation: 'DELETE', data: {node_id: 'node-z'}},
+      {tableName: TABLES.NODES, operation: 'INSERT', data: {node_id: 'node-y'}},
+    ];
 
     const result = await service.propagatePartitionCDCEvent(
       messageGroupService,
-      cdcEvent,
+      events,
     );
 
     assert.equal(result.success, true);
     assert.equal(result.delegated, true);
-    assert.equal(calls.length, 1);
-    assert.equal(calls[0].tableName, cdcEvent.tableName);
-    assert.equal(calls[0].operation, cdcEvent.operation);
-    assert.deepEqual(calls[0].data, cdcEvent.data);
+    assert.equal(calls.length, 1, 'one request for the whole vector');
+    assert.deepEqual(calls[0].events, events);
+    assert.equal(Object.hasOwn(calls[0], 'tableName'), false,
+      'the request carries no single-event payload beside its vector');
     assert.equal(calls[0].sourceMessageGroupService, messageGroupService);
 
     teardownEnvironment();

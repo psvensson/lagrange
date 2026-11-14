@@ -197,10 +197,11 @@ class SeedRuntimeBridgeOwner {
     });
   }
 
-  async propagatePartitionCDCEvent(messageGroupService, cdcEvent, deliveryContext = null) {
+  // One propagation request carries the partition lane's vector as `events`.
+  async propagatePartitionCDCEvent(messageGroupService, events, deliveryContext = null) {
     const override = this.getCompatibilityOverride('propagatePartitionCDCEvent');
     if (override) {
-      return override(messageGroupService, cdcEvent, deliveryContext);
+      return override(messageGroupService, events, deliveryContext);
     }
 
     const d = this.delegates;
@@ -209,7 +210,7 @@ class SeedRuntimeBridgeOwner {
       BOOTSTRAP_ERROR.LATENCY_TOPOLOGY_MISSING,
     );
     return topologyOwners.cdcGroupPropagationService.propagateCDCEvent({
-      ...copyCdcEvent(cdcEvent),
+      events: events.map((cdcEvent) => copyCdcEvent(cdcEvent)),
       sourceMessageGroupService: messageGroupService,
       deliveryContext,
     });
