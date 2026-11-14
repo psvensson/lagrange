@@ -66,6 +66,7 @@ const FAILURE = Object.freeze({
   NOT_EXECUTED: 'workload_not_executed',
   PLAN_MISMATCH: 'plan_mismatch',
   COMMIT_MISMATCH: 'load_generator_commit_mismatch',
+  COMMIT_ABSENT: 'load_generator_commit_absent',
   DRIVER_MISSING: 'load_generator_driver_missing',
 });
 
@@ -143,8 +144,10 @@ function createRemoteWorkloadRunner({sshRun, opts, host, harnessCommit, campaign
  * The load generator's checkout at the harness commit. A lab host's shared
  * checkout stays at whatever commit it was provisioned with (and may carry
  * local edits); it is never moved. The CLI runs from a throwaway detached
- * worktree of it at the harness commit (fetched from origin when absent),
- * with the host's installed dependencies linked in; `release` removes it and
+ * worktree of it at the harness commit, which the checkout must already hold:
+ * an absent commit refuses the campaign (load_generator_commit_absent) before
+ * any worktree exists, and nothing is fetched from any remote. The host's
+ * installed dependencies are linked in; `release` removes it and
  * answers the closure: {status: 'complete'} or {status: 'incomplete', error}
  * (a removal failure is recorded, never swallowed). A failed preparation
  * leaves with its cause and the closure of the removal it attempted
@@ -165,12 +168,11 @@ async function prepareLoadGeneratorCheckout({sshRun, opts, host, harnessCommit, 
       return {status: WORKTREE_CLOSURE.INCOMPLETE, error: errorText(error)};
     }
   };
+  await requireHarnessCommit({sshRun, opts, host, harnessCommit});
   let head;
   try {
     head = stringTrim(String(await sshRun(host.ip, opts, [
       `cd ${shellQuote(repo)}`,
-      `{ git cat-file -e ${shellQuote(`${harnessCommit}^{commit}`)} 2>/dev/null || ` +
-        `git fetch --quiet origin ${shellQuote(harnessCommit)}; }`,
       `git worktree add --detach --quiet ${shellQuote(worktree)} ${shellQuote(harnessCommit)}`,
       `ln -s ${shellQuote(`${repo}/${LOAD_GENERATOR_LINKED_DIR}`)} ` +
         shellQuote(`${worktree}/${LOAD_GENERATOR_LINKED_DIR}`),
@@ -186,6 +188,18 @@ async function prepareLoadGeneratorCheckout({sshRun, opts, host, harnessCommit, 
   }
   const driverInstall = await installReferenceClient({sshRun, opts, host, worktree});
   return {host: {...host, repoPath: worktree, driverInstall}, release};
+}
+
+// The harness commit must already be in the load generator's checkout; its
+// absence is a typed refusal naming what is missing, never a fetch.
+async function requireHarnessCommit({sshRun, opts, host, harnessCommit}) {
+  const probe = await execWithStatus(sshRun, host.ip, opts, `cd ${shellQuote(host.repoPath)} && ` +
+    `git cat-file -e ${shellQuote(`${harnessCommit}^{commit}`)} 2>&1`);
+  if (probe.exitCode === 0) return;
+  throw deploymentFailure(FAILURE.COMMIT_ABSENT, `load generator ${host.ip} checkout ` +
+    `${host.repoPath} does not hold the harness commit ${harnessCommit}; place it there ` +
+    'before the campaign (it is never fetched)', {repoPath: host.repoPath, harnessCommit,
+    exitCode: probe.exitCode, output: probe.stdout});
 }
 
 // The host's npm sits beside the node the lab recorded for it.
