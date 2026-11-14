@@ -1,0 +1,1910 @@
+{
+ "candidate": "741b3cd08a74d51c929e671ac66e91c07a958b62",
+ "note": "round 1 mutants are commits on mutants/cdc-range-shipping-20261114 made from candidate 37bcec59a (source identical to the final candidate); round 2 (M38, M43, M46, M47) from candidate 023a70d47",
+ "baselines": [
+  {
+   "id": "BASE-tv-dator",
+   "job": "73541f14-d5e6-4054-8f54-a19845688c81",
+   "host": "tv-dator",
+   "state": "COMPLETE",
+   "jobExit": "0",
+   "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mutbase-37bcec59a-tv-dator"
+  },
+  {
+   "id": "BASE-carinas-windows",
+   "job": "077889b0-743f-47b2-9718-813be8d0eb7d",
+   "host": "carinas-windows",
+   "state": "COMPLETE",
+   "jobExit": "0",
+   "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mutbase-37bcec59a-carinas-windows"
+  },
+  {
+   "id": "BASE-adams-gamla",
+   "job": "a83d601c-186a-4fe2-8171-5f8c517c4d60",
+   "host": "adams-gamla",
+   "state": "COMPLETE",
+   "jobExit": "0",
+   "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mutbase-37bcec59a-adams-gamla"
+  }
+ ],
+ "mutants": [
+  {
+   "id": "M01",
+   "mutation": "vector reordered",
+   "killed": true,
+   "killingJob": "0180620d-4b1a-45bc-a857-e8dbc6650f9e",
+   "host": "tv-dator",
+   "mutantCommit": "6498494e589798765ce8cf491cc80927bd2b4e3d",
+   "killingWitnesses": {
+    "partition-cdc-obligation-range-shipping": 10,
+    "partition-cdc-obligation-ship-window": 20,
+    "partition-cdc-obligation-range-differential": 23,
+    "partition-cdc-delivery-progress": 1
+   },
+   "firstFailingAssertion": "R1-1 driveCdcObligations ships 600 owed rows in at most ceil(600 / ACK_BATCH_MAX_EVENTS) subscriber calls, every row once in log order",
+   "runs": [
+    {
+     "job": "0180620d-4b1a-45bc-a857-e8dbc6650f9e",
+     "host": "tv-dator",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M01-6498494e5-tv-dator"
+    }
+   ]
+  },
+  {
+   "id": "M02",
+   "mutation": "row dropped at a cut (cursor skips the next entry)",
+   "killed": true,
+   "killingJob": "770757c0-4e80-46e4-8a71-bbf4363a80e6",
+   "host": "carinas-windows",
+   "mutantCommit": "d6c8e9445bd5fbf03109c4c66199b81b4ae59dfb",
+   "killingWitnesses": {
+    "partition-cdc-obligation-range-shipping": 14,
+    "partition-cdc-obligation-ship-window": 16,
+    "partition-cdc-obligation-range-differential": 18,
+    "partition-cdc-delivery-progress": 4
+   },
+   "firstFailingAssertion": "R1-1 driveCdcObligations ships 600 owed rows in at most ceil(600 / ACK_BATCH_MAX_EVENTS) subscriber calls, every row once in log order",
+   "runs": [
+    {
+     "job": "770757c0-4e80-46e4-8a71-bbf4363a80e6",
+     "host": "carinas-windows",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M02-d6c8e9445-carinas-windows"
+    }
+   ]
+  },
+  {
+   "id": "M03",
+   "mutation": "entry split (ordinals of one log index not kept together)",
+   "killed": true,
+   "killingJob": "b0db5d8b-6903-451f-9d94-fbcec85105d6",
+   "host": "adams-gamla",
+   "mutantCommit": "ec8edee9fe44db3f765893ef48c3d780308155cc",
+   "killingWitnesses": {
+    "partition-cdc-obligation-range-shipping": 3,
+    "partition-cdc-obligation-range-differential": 15
+   },
+   "firstFailingAssertion": "the READY ordinals of one ledger entry are never cut apart: an entry ships whole at a window of one row, and a wider window cuts only at entry boundaries",
+   "runs": [
+    {
+     "job": "b0db5d8b-6903-451f-9d94-fbcec85105d6",
+     "host": "adams-gamla",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M03-ec8edee9f-adams-gamla"
+    }
+   ]
+  },
+  {
+   "id": "M04",
+   "mutation": "pin removed (covered leaf re-sent with a changed vector)",
+   "killed": true,
+   "killingJob": "c44bbb71-e895-4b12-a452-0d8d975a2d83",
+   "host": "tv-dator",
+   "mutantCommit": "417bbc7fc43b620d40347b3afbb31b17925c33fd",
+   "killingWitnesses": {
+    "partition-cdc-obligation-ship-window": 1
+   },
+   "firstFailingAssertion": "a partially covered range is presented again unchanged although more rows were committed and the scan restarted: the covered leaf is not sent it again",
+   "runs": [
+    {
+     "job": "c44bbb71-e895-4b12-a452-0d8d975a2d83",
+     "host": "tv-dator",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M04-417bbc7fc-tv-dator"
+    }
+   ]
+  },
+  {
+   "id": "M05",
+   "mutation": "row acknowledged before the last receipt (provisional acknowledged)",
+   "killed": true,
+   "killingJob": "a2a1605c-ba3e-41f8-b531-972e1908f969",
+   "host": "carinas-windows",
+   "mutantCommit": "202fb238d5c79731e097cd3a091b1a55fd72df38",
+   "killingWitnesses": {
+    "partition-cdc-obligation-range-shipping": 1,
+    "partition-cdc-obligation-ship-window": 1,
+    "partition-cdc-obligation-range-differential": 5,
+    "partition-cdc-delivery-progress": 3
+   },
+   "firstFailingAssertion": "a row pending acknowledgement splits the run: the rows before it ship without the rows after it, and a hole never widens the window",
+   "runs": [
+    {
+     "job": "a2a1605c-ba3e-41f8-b531-972e1908f969",
+     "host": "carinas-windows",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M05-202fb238d-carinas-windows"
+    }
+   ]
+  },
+  {
+   "id": "M06",
+   "mutation": "hydrated row delivered",
+   "killed": true,
+   "killingJob": "4eaff857-41f1-458e-915d-2c9cf79cf497",
+   "host": "adams-gamla",
+   "mutantCommit": "910defa524d75c5537593eef821ef99b9428ca8c",
+   "killingWitnesses": {
+    "partition-cdc-obligation-range-shipping": 1
+   },
+   "firstFailingAssertion": "rows at or below the hydrated index that are not yet pending are acknowledged without delivery by the pre-pass, and the rows above it ship",
+   "runs": [
+    {
+     "job": "4eaff857-41f1-458e-915d-2c9cf79cf497",
+     "host": "adams-gamla",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M06-910defa52-adams-gamla"
+    }
+   ]
+  },
+  {
+   "id": "M07a",
+   "mutation": "pending row re-delivered (pre-pass does not skip it)",
+   "killed": true,
+   "killingJob": "e3e522b7-c5cc-4b47-8250-ef602e04f499",
+   "host": "tv-dator",
+   "mutantCommit": "e95d1f5b5ea41961cdfd8a13aa15ba3f96a95ecc",
+   "killingWitnesses": {
+    "partition-cdc-obligation-range-shipping": 12,
+    "partition-cdc-obligation-ship-window": 3,
+    "partition-cdc-obligation-range-differential": 13
+   },
+   "firstFailingAssertion": "R1-1 driveCdcObligations ships 600 owed rows in at most ceil(600 / ACK_BATCH_MAX_EVENTS) subscriber calls, every row once in log order",
+   "runs": [
+    {
+     "job": "e3e522b7-c5cc-4b47-8250-ef602e04f499",
+     "host": "tv-dator",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M07a-e95d1f5b5-tv-dator"
+    }
+   ]
+  },
+  {
+   "id": "M07b",
+   "mutation": "pending row re-delivered (run continues over a hole)",
+   "killed": true,
+   "killingJob": "2172f030-ba44-4b84-8829-af23900b859e",
+   "host": "carinas-windows",
+   "mutantCommit": "e1c82ad7aa1d8a65bdc4dcb805cfd99ef6fdb250",
+   "killingWitnesses": {
+    "partition-cdc-obligation-range-shipping": 1
+   },
+   "firstFailingAssertion": "a row pending acknowledgement splits the run: the rows before it ship without the rows after it, and a hole never widens the window",
+   "runs": [
+    {
+     "job": "2172f030-ba44-4b84-8829-af23900b859e",
+     "host": "carinas-windows",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M07b-e1c82ad7a-carinas-windows"
+    }
+   ]
+  },
+  {
+   "id": "M08",
+   "mutation": "cursor advanced past an unacknowledged row",
+   "killed": true,
+   "killingJob": "e4228ea8-c641-4d55-ad95-fc10c3014457",
+   "host": "tv-dator",
+   "mutantCommit": "40e42e30acbee1c7d81905710289eb75025ba261",
+   "killingWitnesses": {
+    "partition-cdc-obligation-range-shipping": 1
+   },
+   "firstFailingAssertion": "acknowledgement refused inside a covered range leaves the rows from the refused one owed, stops the cursor before it, says so in the drive outcome, and ships them again b",
+   "runs": [
+    {
+     "job": "e4228ea8-c641-4d55-ad95-fc10c3014457",
+     "host": "tv-dator",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M08-40e42e30a-tv-dator"
+    }
+   ]
+  },
+  {
+   "id": "M09",
+   "mutation": "window not halved after an attempted failure",
+   "killed": true,
+   "killingJob": "124a7abb-405d-46e2-b91b-8e8f9ad34651",
+   "host": "carinas-windows",
+   "mutantCommit": "7a0d1b0dfb6d001960d9a19132c2b4fc10dbf527",
+   "killingWitnesses": {
+    "partition-cdc-obligation-range-shipping": 1,
+    "partition-cdc-obligation-ship-window": 14,
+    "partition-cdc-delivery-progress": 1
+   },
+   "firstFailingAssertion": "the lane reads positions first and only the payloads of the range it ships; nothing of a range stays in the lane between attempts",
+   "runs": [
+    {
+     "job": "124a7abb-405d-46e2-b91b-8e8f9ad34651",
+     "host": "carinas-windows",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M09-7a0d1b0df-carinas-windows"
+    }
+   ]
+  },
+  {
+   "id": "M10",
+   "mutation": "window halved on backpressure",
+   "killed": true,
+   "killingJob": "292d59f8-5f19-4bc0-8797-a518514b9c35",
+   "host": "adams-gamla",
+   "mutantCommit": "4f8d229b1bfa60293fcd6c8e55fe329f4b0b83dc",
+   "killingWitnesses": {
+    "partition-cdc-obligation-ship-window": 6,
+    "partition-cdc-delivery-progress": 1
+   },
+   "firstFailingAssertion": "a recipient answering backpressure for a three-row range leaves the window unchanged, and every row is delivered once the fault clears",
+   "runs": [
+    {
+     "job": "292d59f8-5f19-4bc0-8797-a518514b9c35",
+     "host": "adams-gamla",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M10-4f8d229b1-adams-gamla"
+    }
+   ]
+  },
+  {
+   "id": "M11",
+   "mutation": "window not restored by success",
+   "killed": true,
+   "killingJob": "bb30b1cb-caab-4aba-86cf-310b8d214d68",
+   "host": "tv-dator",
+   "mutantCommit": "8f005946639273fb6016b77e2ac4c0ffcee86bcf",
+   "killingWitnesses": {
+    "partition-cdc-obligation-range-shipping": 5,
+    "partition-cdc-obligation-ship-window": 4,
+    "partition-cdc-obligation-range-differential": 1,
+    "partition-cdc-delivery-progress": 2
+   },
+   "firstFailingAssertion": "R1-1 from a cold shipping window 600 owed rows drain in at most ceil(600 / ACK_BATCH_MAX_EVENTS) + log2(ACK_BATCH_MAX_EVENTS) subscriber calls, every row once in log orde",
+   "runs": [
+    {
+     "job": "bb30b1cb-caab-4aba-86cf-310b8d214d68",
+     "host": "tv-dator",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M11-8f0059466-tv-dator"
+    }
+   ]
+  },
+  {
+   "id": "M12",
+   "mutation": "payload retained between attempts",
+   "killed": true,
+   "killingJob": "ddc76aac-2088-43af-9a79-0cb2f6b4d67b",
+   "host": "carinas-windows",
+   "mutantCommit": "86eeefdd5cf45cce03154c3ee9835430e47cf5e9",
+   "killingWitnesses": {
+    "partition-cdc-obligation-range-shipping": 1,
+    "partition-cdc-delivery-progress": 1
+   },
+   "firstFailingAssertion": "the lane reads positions first and only the payloads of the range it ships; nothing of a range stays in the lane between attempts",
+   "runs": [
+    {
+     "job": "ddc76aac-2088-43af-9a79-0cb2f6b4d67b",
+     "host": "carinas-windows",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M12-86eeefdd5-carinas-windows"
+    }
+   ]
+  },
+  {
+   "id": "M13",
+   "mutation": "read held across an await (transaction left open)",
+   "killed": true,
+   "killingJob": "6e5f4fc0-9bf6-4d02-89d0-d6039d43ed61",
+   "host": "adams-gamla",
+   "mutantCommit": "7b14776c7a7b066113ffeb90aa7d6e0b58dd987b",
+   "killingWitnesses": {
+    "partition-cdc-obligation-range-shipping": 18,
+    "partition-cdc-obligation-ship-window": 26,
+    "partition-cdc-obligation-range-differential": 24,
+    "partition-cdc-delivery-progress": 5
+   },
+   "firstFailingAssertion": "R1-1 driveCdcObligations ships 600 owed rows in at most ceil(600 / ACK_BATCH_MAX_EVENTS) subscriber calls, every row once in log order",
+   "runs": [
+    {
+     "job": "6e5f4fc0-9bf6-4d02-89d0-d6039d43ed61",
+     "host": "adams-gamla",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M13-7b14776c7-adams-gamla"
+    }
+   ]
+  },
+  {
+   "id": "M14",
+   "mutation": "retained-delivered bound not cumulative",
+   "killed": true,
+   "killingJob": "4f25457e-9430-464d-953a-b8db2c2fb3c0",
+   "host": "tv-dator",
+   "mutantCommit": "0382e10f42166cc6918730a0659be026c71e285a",
+   "killingWitnesses": {
+    "partition-cdc-obligation-range-shipping": 1
+   },
+   "firstFailingAssertion": "the retained-delivered bound counts the rows already taken into the range: a range stops where the per-row lane stopped",
+   "runs": [
+    {
+     "job": "4f25457e-9430-464d-953a-b8db2c2fb3c0",
+     "host": "tv-dator",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M14-0382e10f4-tv-dator"
+    }
+   ]
+  },
+  {
+   "id": "M15",
+   "mutation": "oversized entry refused (first entry not always taken)",
+   "killed": true,
+   "killingJob": "157a7b61-df79-4f78-a4b1-572f2d237886",
+   "host": "carinas-windows",
+   "mutantCommit": "4e3be2b2368d7919a44d17cfce17fc204c2862bf",
+   "killingWitnesses": {
+    "partition-cdc-obligation-range-shipping": 5,
+    "partition-cdc-obligation-range-differential": 21
+   },
+   "firstFailingAssertion": "R1-5 guard: a 2 MiB row among small rows is handed whole and acknowledged; nothing is refused, split or dropped",
+   "runs": [
+    {
+     "job": "157a7b61-df79-4f78-a4b1-572f2d237886",
+     "host": "carinas-windows",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M15-4e3be2b23-carinas-windows"
+    }
+   ]
+  },
+  {
+   "id": "M16",
+   "mutation": "a bound value changed (SHIP_MAX_BYTES)",
+   "killed": true,
+   "killingJob": "ced4ca0a-b3c1-45ac-879b-65a847e2099f",
+   "host": "tv-dator",
+   "mutantCommit": "5d38a5b200d241a8809456f87c3aef2d97f5914f",
+   "killingWitnesses": {
+    "partition-cdc-obligation-range-shipping": 3,
+    "partition-cdc-obligation-ship-window": 3
+   },
+   "firstFailingAssertion": "R1-1 from a cold shipping window 600 owed rows drain in at most ceil(600 / ACK_BATCH_MAX_EVENTS) + log2(ACK_BATCH_MAX_EVENTS) subscriber calls, every row once in log orde",
+   "runs": [
+    {
+     "job": "ced4ca0a-b3c1-45ac-879b-65a847e2099f",
+     "host": "tv-dator",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M16-5d38a5b20-tv-dator"
+    }
+   ]
+  },
+  {
+   "id": "M17",
+   "mutation": "window not capped at ACK_BATCH_MAX_EVENTS",
+   "killed": true,
+   "killingJob": "7d073624-97f5-4b34-9984-1de1331efc20",
+   "host": "carinas-windows",
+   "mutantCommit": "65d34bd0adbec8384f357381aa75a6aa03bb6556",
+   "killingWitnesses": {
+    "partition-cdc-obligation-range-shipping": 1,
+    "partition-cdc-obligation-ship-window": 2
+   },
+   "firstFailingAssertion": "counterexample: acknowledgement backpressure on the first row ends the pass without handing it to a subscriber",
+   "runs": [
+    {
+     "job": "7d073624-97f5-4b34-9984-1de1331efc20",
+     "host": "carinas-windows",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M17-65d34bd0a-carinas-windows"
+    }
+   ]
+  },
+  {
+   "id": "M18",
+   "mutation": "window does not start at one entry",
+   "killed": true,
+   "killingJob": "bd2cc9dc-4325-4322-9b67-2e61d17eb592",
+   "host": "tv-dator",
+   "mutantCommit": "ebd908d3a2a532950a0e498c61523bda195f66b7",
+   "killingWitnesses": {
+    "partition-cdc-obligation-range-shipping": 4,
+    "partition-cdc-obligation-ship-window": 3,
+    "partition-cdc-obligation-range-differential": 1,
+    "partition-cdc-delivery-progress": 4
+   },
+   "firstFailingAssertion": "R1-1 from a cold shipping window 600 owed rows drain in at most ceil(600 / ACK_BATCH_MAX_EVENTS) + log2(ACK_BATCH_MAX_EVENTS) subscriber calls, every row once in log orde",
+   "runs": [
+    {
+     "job": "bd2cc9dc-4325-4322-9b67-2e61d17eb592",
+     "host": "tv-dator",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M18-ebd908d3a-tv-dator"
+    }
+   ]
+  },
+  {
+   "id": "M19",
+   "mutation": "hydration retires a range on its first position",
+   "killed": true,
+   "killingJob": "bd8886d9-5304-4dc4-ad7d-c11e9bf1a21b",
+   "host": "carinas-windows",
+   "mutantCommit": "0a8519e348444064bb87061c05e8d77ef3b85b87",
+   "killingWitnesses": {
+    "partition-cdc-obligation-ship-window": 2
+   },
+   "firstFailingAssertion": "a hydration image inside the range in flight does not retire its invocation, and every row above the image is delivered",
+   "runs": [
+    {
+     "job": "bd8886d9-5304-4dc4-ad7d-c11e9bf1a21b",
+     "host": "carinas-windows",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M19-0a8519e34-carinas-windows"
+    }
+   ]
+  },
+  {
+   "id": "M20",
+   "mutation": "acknowledgement continues after a refused row",
+   "killed": true,
+   "killingJob": "4cea2caa-b6f0-46e5-bf49-8baf48ca70bf",
+   "host": "tv-dator",
+   "mutantCommit": "de6f7413f720554808539726f6e16a2903d350f5",
+   "killingWitnesses": {
+    "partition-cdc-obligation-range-shipping": 1
+   },
+   "firstFailingAssertion": "acknowledgement refused inside a covered range leaves the rows from the refused one owed, stops the cursor before it, says so in the drive outcome, and ships them again b",
+   "runs": [
+    {
+     "job": "4cea2caa-b6f0-46e5-bf49-8baf48ca70bf",
+     "host": "tv-dator",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M20-de6f7413f-tv-dator"
+    }
+   ]
+  },
+  {
+   "id": "M21",
+   "mutation": "members emitted and counted once per vector",
+   "killed": true,
+   "killingJob": "88e73e53-f3ad-45f7-92fc-d020fb42d700",
+   "host": "carinas-windows",
+   "mutantCommit": "9e68d8fe1ca87f674d83eeab5b1f05b3b3712020",
+   "killingWitnesses": {
+    "partition-cdc-obligation-range-shipping": 1
+   },
+   "firstFailingAssertion": "acknowledgement refused inside a covered range leaves the rows from the refused one owed, stops the cursor before it, says so in the drive outcome, and ships them again b",
+   "runs": [
+    {
+     "job": "88e73e53-f3ad-45f7-92fc-d020fb42d700",
+     "host": "carinas-windows",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M21-9e68d8fe1-carinas-windows"
+    }
+   ]
+  },
+  {
+   "id": "M22",
+   "mutation": "table guard asks only the first member",
+   "killed": true,
+   "killingJob": "c2c7dc11-63e5-415a-877c-f582db10009e",
+   "host": "tv-dator",
+   "mutantCommit": "c1dc1fa6c47f9a50a0a2fb42954b94880c417167",
+   "killingWitnesses": {
+    "partition-cdc-propagation-subscriber": 2
+   },
+   "firstFailingAssertion": "Expected values to be strictly deep-equal: + actual - expected    Comparison { +   code: 'cdc_committed_acceptance_unknown' -   code: 'cdc_committed_acceptance_invalid'  ",
+   "runs": [
+    {
+     "job": "c2c7dc11-63e5-415a-877c-f582db10009e",
+     "host": "tv-dator",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M22-c1dc1fa6c-tv-dator"
+    }
+   ]
+  },
+  {
+   "id": "M23a",
+   "mutation": "subscriber contract accepts a vector that is not frozen",
+   "killed": true,
+   "killingJob": "3a571151-d421-4457-8627-37e68f5690bb",
+   "host": "carinas-windows",
+   "mutantCommit": "9e1eb70f1bc68f3f6571b2e6bd8dddc3611f2649",
+   "killingWitnesses": {
+    "partition-cdc-subscriber-vector-contract": 1
+   },
+   "firstFailingAssertion": "deliverCDCEventToSubscriber refuses anything but a dense frozen vector of one table and one partition before the subscriber is invoked",
+   "runs": [
+    {
+     "job": "3a571151-d421-4457-8627-37e68f5690bb",
+     "host": "carinas-windows",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M23a-9e1eb70f1-carinas-windows"
+    }
+   ]
+  },
+  {
+   "id": "M23b",
+   "mutation": "subscriber contract accepts a vector of two tables",
+   "killed": true,
+   "killingJob": "9b00548f-bb2f-4c0d-a673-c0df2aba731e",
+   "host": "tv-dator",
+   "mutantCommit": "7df29e3f9139f6a008d386d3dfe56739846881a3",
+   "killingWitnesses": {
+    "partition-cdc-subscriber-vector-contract": 1
+   },
+   "firstFailingAssertion": "deliverCDCEventToSubscriber refuses anything but a dense frozen vector of one table and one partition before the subscriber is invoked",
+   "runs": [
+    {
+     "job": "9b00548f-bb2f-4c0d-a673-c0df2aba731e",
+     "host": "tv-dator",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M23b-7df29e3f9-tv-dator"
+    }
+   ]
+  },
+  {
+   "id": "M23c",
+   "mutation": "subscriber contract accepts a vector of two partitions",
+   "killed": true,
+   "killingJob": "ab863de0-648e-461b-b1b9-c67f4361c112",
+   "host": "adams-gamla",
+   "mutantCommit": "ed81d9581c573e137c3441ac9f391922f3df0b0e",
+   "killingWitnesses": {
+    "partition-cdc-subscriber-vector-contract": 1
+   },
+   "firstFailingAssertion": "deliverCDCEventToSubscriber refuses anything but a dense frozen vector of one table and one partition before the subscriber is invoked",
+   "runs": [
+    {
+     "job": "ab863de0-648e-461b-b1b9-c67f4361c112",
+     "host": "adams-gamla",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M23c-ed81d9581-adams-gamla"
+    }
+   ]
+  },
+  {
+   "id": "M24",
+   "mutation": "propagation request accepts a vector of two tables",
+   "killed": true,
+   "killingJob": "e0479109-0d29-422b-830e-f216ad3338e7",
+   "host": "carinas-windows",
+   "mutantCommit": "b318b9bf65b02e107135c9f69f1b916873a2f69e",
+   "killingWitnesses": {
+    "cdc-group-propagation-service": 1
+   },
+   "firstFailingAssertion": "a request lacking the durable surface or a one-table durable vector is refused typed before any effect",
+   "runs": [
+    {
+     "job": "e0479109-0d29-422b-830e-f216ad3338e7",
+     "host": "carinas-windows",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M24-b318b9bf6-carinas-windows"
+    }
+   ]
+  },
+  {
+   "id": "M24b",
+   "mutation": "propagation request checks the durable identity of the first member only",
+   "killed": true,
+   "killingJob": "e7baf71a-5212-47c6-9a40-66d71889ab95",
+   "host": "carinas-windows",
+   "mutantCommit": "184a830e05820f28fa030170bdd4fda5ca5c99c8",
+   "killingWitnesses": {
+    "cdc-group-propagation-service": 1
+   },
+   "firstFailingAssertion": "a request lacking the durable surface or a one-table durable vector is refused typed before any effect",
+   "runs": [
+    {
+     "job": "e7baf71a-5212-47c6-9a40-66d71889ab95",
+     "host": "carinas-windows",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M24b-184a830e0-carinas-windows"
+    }
+   ]
+  },
+  {
+   "id": "M25a",
+   "mutation": "node-ready hook ignores the earlier member of the same node",
+   "killed": true,
+   "killingJob": "7a381340-856c-418b-88e2-ca84fb0c2379",
+   "host": "tv-dator",
+   "mutantCommit": "84634179222bca397a017a730df144a3bf9a1abb",
+   "killingWitnesses": {
+    "seed-cache-hydration-handoff": 5
+   },
+   "firstFailingAssertion": "seed node-ready hook: a node made ready and then renewed - one vector triggers exactly as the same events delivered one at a time",
+   "runs": [
+    {
+     "job": "7a381340-856c-418b-88e2-ca84fb0c2379",
+     "host": "tv-dator",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M25a-846341792-tv-dator"
+    }
+   ]
+  },
+  {
+   "id": "M25b",
+   "mutation": "node-ready hook does not merge the earlier member over the cached row",
+   "killed": true,
+   "killingJob": "e8856613-0407-4454-af58-f676ba150b8e",
+   "host": "carinas-windows",
+   "mutantCommit": "7002aeb2271c9cbb492d30004d4373a3b190894b",
+   "killingWitnesses": {
+    "seed-cache-hydration-handoff": 3
+   },
+   "firstFailingAssertion": "seed node-ready hook: a node made ready and then renewed - one vector triggers exactly as the same events delivered one at a time",
+   "runs": [
+    {
+     "job": "e8856613-0407-4454-af58-f676ba150b8e",
+     "host": "carinas-windows",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M25b-7002aeb22-carinas-windows"
+    }
+   ]
+  },
+  {
+   "id": "M25c",
+   "mutation": "node-ready hook keeps a row after a DELETE member",
+   "killed": true,
+   "killingJob": "7591137a-f742-4f3a-a4f8-1e7f597e7527",
+   "host": "tv-dator",
+   "mutantCommit": "129eb3bdf0d96d5e9efc8a66b5141336091c6837",
+   "killingWitnesses": {
+    "seed-cache-hydration-handoff": 2
+   },
+   "firstFailingAssertion": "seed node-ready hook: a node deleted and inserted ready again - one vector triggers exactly as the same events delivered one at a time",
+   "runs": [
+    {
+     "job": "7591137a-f742-4f3a-a4f8-1e7f597e7527",
+     "host": "tv-dator",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M25c-129eb3bdf-tv-dator"
+    }
+   ]
+  },
+  {
+   "id": "M26",
+   "mutation": "afterPropagation runs once per member",
+   "killed": true,
+   "killingJob": "5c6e66b0-4388-4015-b937-e1dbaea830e7",
+   "host": "adams-gamla",
+   "mutantCommit": "1b87c549a8fa4a16aa646bd34123b7571204ba31",
+   "killingWitnesses": {
+    "partition-cdc-propagation-subscriber": 3
+   },
+   "firstFailingAssertion": "afterPropagation runs once per vector",
+   "runs": [
+    {
+     "job": "5c6e66b0-4388-4015-b937-e1dbaea830e7",
+     "host": "adams-gamla",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M26-1b87c549a-adams-gamla"
+    }
+   ]
+  },
+  {
+   "id": "M27",
+   "mutation": "live-query subscriber hands members out of order",
+   "killed": true,
+   "killingJob": "baf47e37-38be-44d7-96b0-ddad9aa0bc2f",
+   "host": "carinas-windows",
+   "mutantCommit": "4b06c6a151d4d60a4cf23e24c8b6c55ffc02ba01",
+   "killingWitnesses": {
+    "live-query-startup-wiring": 3
+   },
+   "firstFailingAssertion": "hands every member of a vector to the query handler in order, normalized, and waits for each before the next",
+   "runs": [
+    {
+     "job": "baf47e37-38be-44d7-96b0-ddad9aa0bc2f",
+     "host": "carinas-windows",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M27-4b06c6a15-carinas-windows"
+    }
+   ]
+  },
+  {
+   "id": "M28",
+   "mutation": "wrapper gives every member the same sequence number",
+   "killed": true,
+   "killingJob": "e83a2702-1836-4c06-86fd-0189f7ecf83d",
+   "host": "tv-dator",
+   "mutantCommit": "60030825fe7f41d136df93a5caff1aecebdfec94",
+   "killingWitnesses": {
+    "partition-cdc-subscriber-vector-contract": 1
+   },
+   "firstFailingAssertion": "the subscriber wrapper gives every member of a vector the subscription identity and its own sequence number, in order, and records the last one as delivered",
+   "runs": [
+    {
+     "job": "e83a2702-1836-4c06-86fd-0189f7ecf83d",
+     "host": "tv-dator",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M28-60030825f-tv-dator"
+    }
+   ]
+  },
+  {
+   "id": "M29",
+   "mutation": "a run cut by bytes and window counts as window-cut",
+   "killed": true,
+   "killingJob": "fc8c2b5f-d7dd-4f98-9820-47e7e750ae5f",
+   "host": "carinas-windows",
+   "mutantCommit": "5e1d623b5440359266816c192c151bbeab9b5192",
+   "killingWitnesses": {
+    "partition-cdc-obligation-ship-window": 1
+   },
+   "firstFailingAssertion": "a lone owed row, and a run the byte bound cut, do not widen the window",
+   "runs": [
+    {
+     "job": "fc8c2b5f-d7dd-4f98-9820-47e7e750ae5f",
+     "host": "carinas-windows",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M29-5e1d623b5-carinas-windows"
+    }
+   ]
+  },
+  {
+   "id": "M30",
+   "mutation": "a range retired by hydration is treated as a failure",
+   "killed": true,
+   "killingJob": "9c03e38d-83a2-402f-a639-b206da98b529",
+   "host": "tv-dator",
+   "mutantCommit": "6ec0d477f8f9fbba7a490a99d6330351ca72de10",
+   "killingWitnesses": {
+    "partition-cdc-obligation-range-shipping": 1
+   },
+   "firstFailingAssertion": "composition is fresh at every drive step: rows a hydration image covers while a range is in flight are not in the next range",
+   "runs": [
+    {
+     "job": "9c03e38d-83a2-402f-a639-b206da98b529",
+     "host": "tv-dator",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M30-6ec0d477f-tv-dator"
+    }
+   ]
+  },
+  {
+   "id": "M31",
+   "mutation": "a rebuilt range stays capped at the discarded cell",
+   "killed": true,
+   "killingJob": "01c83082-c060-4c84-beac-9e75bcd165a0",
+   "host": "adams-gamla",
+   "mutantCommit": "22c404dc3d51ff4286f1466e8a215081b65334dc",
+   "killingWitnesses": {
+    "partition-cdc-obligation-ship-window": 1
+   },
+   "firstFailingAssertion": "a pinned range is rebuilt when a hydration image acknowledged one of its rows: the cell is discarded and the new range is composed without its cap",
+   "runs": [
+    {
+     "job": "01c83082-c060-4c84-beac-9e75bcd165a0",
+     "host": "adams-gamla",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M31-22c404dc3-adams-gamla"
+    }
+   ]
+  },
+  {
+   "id": "M32",
+   "mutation": "pin ignores leaf coverage held in a topology progress",
+   "killed": true,
+   "killingJob": "88d6d75b-1f0b-45eb-b696-bb5ceabb4be7",
+   "host": "carinas-windows",
+   "mutantCommit": "47ff8605164026b0486d79b0ce09e225d828d10e",
+   "killingWitnesses": {
+    "partition-cdc-topology-progress-currentness": 1
+   },
+   "firstFailingAssertion": "source topology owner presents a range whose source leaf is covered again unchanged after more rows were committed and the scan restarted",
+   "runs": [
+    {
+     "job": "88d6d75b-1f0b-45eb-b696-bb5ceabb4be7",
+     "host": "carinas-windows",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M32-47ff86051-carinas-windows"
+    }
+   ]
+  },
+  {
+   "id": "M33",
+   "mutation": "payload read takes a full page and truncates",
+   "killed": true,
+   "killingJob": "c4f7af17-3403-4312-8a42-102c16ca6708",
+   "host": "tv-dator",
+   "mutantCommit": "a4a572134a7ab908fb799a5c131ae6a1f7311030",
+   "killingWitnesses": {
+    "partition-cdc-obligation-range-shipping": 2,
+    "partition-cdc-delivery-progress": 1
+   },
+   "firstFailingAssertion": "acknowledgement refused inside a covered range leaves the rows from the refused one owed, stops the cursor before it, says so in the drive outcome, and ships them again b",
+   "runs": [
+    {
+     "job": "c4f7af17-3403-4312-8a42-102c16ca6708",
+     "host": "tv-dator",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M33-a4a572134-tv-dator"
+    }
+   ]
+  },
+  {
+   "id": "M34",
+   "mutation": "the cut stops at the first positions page",
+   "killed": true,
+   "killingJob": "a767f964-6160-473a-ab76-fb5d90d08008",
+   "host": "tv-dator",
+   "mutantCommit": "1c2436fd7bd9d3c968d7a1f836cf95ecea8c7f58",
+   "killingWitnesses": {
+    "partition-cdc-obligation-range-shipping": 2,
+    "partition-cdc-obligation-range-differential": 15
+   },
+   "firstFailingAssertion": "the READY ordinals of one ledger entry are never cut apart: an entry ships whole at a window of one row, and a wider window cuts only at entry boundaries",
+   "runs": [
+    {
+     "job": "91e46c38-c896-4695-ac81-69a7b5c382c1",
+     "host": "adams-gamla",
+     "state": null,
+     "exit": null,
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M34-1c2436fd7-adams-gamla"
+    },
+    {
+     "job": "a767f964-6160-473a-ab76-fb5d90d08008",
+     "host": "tv-dator",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M34-1c2436fd7-tv-dator-try2"
+    }
+   ]
+  },
+  {
+   "id": "M35",
+   "mutation": "non-durable producer hands a vector that is not frozen",
+   "killed": true,
+   "killingJob": "edc0af5a-1cfa-4f11-b3fd-a9cb440dc59e",
+   "host": "tv-dator",
+   "mutantCommit": "159c3905633332bd40be33dfaf5f6483b3e2a531",
+   "killingWitnesses": {
+    "partition-cdc-subscriber-vector-contract": 2
+   },
+   "firstFailingAssertion": "the non-durable producer hands each subscriber a frozen vector of exactly one event per write, in write order, and counts and emits each event once",
+   "runs": [
+    {
+     "job": "edc0af5a-1cfa-4f11-b3fd-a9cb440dc59e",
+     "host": "tv-dator",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M35-159c39056-tv-dator"
+    }
+   ]
+  },
+  {
+   "id": "M36",
+   "mutation": "propagation request carries only the first event",
+   "killed": true,
+   "killingJob": "1db28d12-44ea-40ba-95fc-689556f46d04",
+   "host": "carinas-windows",
+   "mutantCommit": "3e5dc267c8afe70ade9ed957529f138b39fcd737",
+   "killingWitnesses": {
+    "latency-topology-owner-delegation": 2
+   },
+   "firstFailingAssertion": "Expected values to be strictly deep-equal: + actual - expected ... Skipped lines    [     {       data: {         node_id: 'node-z'       }, ...     }, -   { -     data: ",
+   "runs": [
+    {
+     "job": "1db28d12-44ea-40ba-95fc-689556f46d04",
+     "host": "carinas-windows",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M36-3e5dc267c-carinas-windows"
+    }
+   ]
+  },
+  {
+   "id": "M36b",
+   "mutation": "joiner propagation request carries only the first event",
+   "killed": true,
+   "killingJob": "fd632078-b46d-4b28-bd59-0865727230e4",
+   "host": "carinas-windows",
+   "mutantCommit": "d88252197335c2a4437f6881646a131094354bba",
+   "killingWitnesses": {
+    "latency-topology-owner-delegation": 2
+   },
+   "firstFailingAssertion": "Expected values to be strictly deep-equal: + actual - expected ... Skipped lines    [     {       data: {         node_id: 'node-z'       }, ...     }, -   { -     data: ",
+   "runs": [
+    {
+     "job": "fd632078-b46d-4b28-bd59-0865727230e4",
+     "host": "carinas-windows",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M36b-d88252197-carinas-windows"
+    }
+   ]
+  },
+  {
+   "id": "M37",
+   "mutation": "cell records the first position as its last",
+   "killed": true,
+   "killingJob": "13c6bbe0-3c46-4dab-aca4-af6bad630f96",
+   "host": "tv-dator",
+   "mutantCommit": "a2071597d7a2dec347dea8e6f9984d41ab60cacc",
+   "killingWitnesses": {
+    "partition-cdc-obligation-range-shipping": 1,
+    "partition-cdc-obligation-ship-window": 5
+   },
+   "firstFailingAssertion": "R1-3 a partially covered vector is presented again unchanged, the covered leaf is not handed it again, and no CDC_DELIVERED precedes the last receipt",
+   "runs": [
+    {
+     "job": "13c6bbe0-3c46-4dab-aca4-af6bad630f96",
+     "host": "tv-dator",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M37-a2071597d-tv-dator"
+    }
+   ]
+  },
+  {
+   "id": "M38",
+   "mutation": "stale composition (hydrated index read when the scan opened)",
+   "killed": true,
+   "killingJob": "3b3d67f8-82d0-45d8-92b9-00a5c56d2cad",
+   "host": "tv-dator",
+   "mutantCommit": "b2fb42b1a9fd54142b630d112d9d8297aaacb2cb",
+   "killingWitnesses": {
+    "partition-cdc-obligation-range-shipping": 1
+   },
+   "firstFailingAssertion": "composition reads the hydrated index at every drive step: rows it comes to cover while a range is in flight are acknowledged without delivery by the next step of the same",
+   "runs": [
+    {
+     "job": "fae4dcfd-81ca-4f16-bffa-0b8073c2ed8e",
+     "host": "adams-gamla",
+     "state": null,
+     "exit": null,
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M38-0c4249507-adams-gamla"
+    },
+    {
+     "job": "809b2bca-3e42-48a6-9fad-438698acf389",
+     "host": "adams-gamla",
+     "state": null,
+     "exit": null,
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M38-0c4249507-adams-gamla-try2"
+    },
+    {
+     "job": "8130dd9d-c7de-4cc7-b44e-8ebb617977be",
+     "host": "carinas-windows",
+     "state": "COMPLETE",
+     "exit": "0",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M38-0c4249507-carinas-windows-try3"
+    },
+    {
+     "job": "3b3d67f8-82d0-45d8-92b9-00a5c56d2cad",
+     "host": "tv-dator",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 2,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M38-b2fb42b1a-tv-dator"
+    }
+   ]
+  },
+  {
+   "id": "M39",
+   "mutation": "window widened by a committed range the window did not cut",
+   "killed": true,
+   "killingJob": "a1aac8ea-310a-41d9-9200-8b8f76bd57c5",
+   "host": "carinas-windows",
+   "mutantCommit": "8031c5dcc6e3a8d1f52f99996f1f152f833b6433",
+   "killingWitnesses": {
+    "partition-cdc-obligation-range-shipping": 1,
+    "partition-cdc-obligation-ship-window": 6
+   },
+   "firstFailingAssertion": "a row pending acknowledgement splits the run: the rows before it ship without the rows after it, and a hole never widens the window",
+   "runs": [
+    {
+     "job": "4b2b1106-8a2d-43c4-b59c-8cb1536871ce",
+     "host": "adams-gamla",
+     "state": null,
+     "exit": null,
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M39-8031c5dcc-adams-gamla"
+    },
+    {
+     "job": "a1aac8ea-310a-41d9-9200-8b8f76bd57c5",
+     "host": "carinas-windows",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M39-8031c5dcc-carinas-windows-try2"
+    }
+   ]
+  },
+  {
+   "id": "M40",
+   "mutation": "window widened by provisional coverage",
+   "killed": true,
+   "killingJob": "07f0a751-51a6-4d77-9fee-80095756c5c6",
+   "host": "carinas-windows",
+   "mutantCommit": "ca7292565b6134213155d830144bd00f8af8b656",
+   "killingWitnesses": {
+    "partition-cdc-obligation-range-shipping": 1,
+    "partition-cdc-delivery-progress": 1
+   },
+   "firstFailingAssertion": "a row pending acknowledgement splits the run: the rows before it ship without the rows after it, and a hole never widens the window",
+   "runs": [
+    {
+     "job": "07f0a751-51a6-4d77-9fee-80095756c5c6",
+     "host": "carinas-windows",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M40-ca7292565-carinas-windows"
+    }
+   ]
+  },
+  {
+   "id": "M41",
+   "mutation": "a range counts as one visited row of the drive quantum",
+   "killed": true,
+   "killingJob": "f34f346e-38ca-4533-96b6-b97ca28f7bd8",
+   "host": "tv-dator",
+   "mutantCommit": "a4338e56ffb0ea46cb2402dd0a84e63c51c9da5f",
+   "killingWitnesses": {
+    "partition-cdc-obligation-range-shipping": 2
+   },
+   "firstFailingAssertion": "counterexample: acknowledgement backpressure on the first row ends the pass without handing it to a subscriber",
+   "runs": [
+    {
+     "job": "f34f346e-38ca-4533-96b6-b97ca28f7bd8",
+     "host": "tv-dator",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M41-a4338e56f-tv-dator"
+    }
+   ]
+  },
+  {
+   "id": "M42",
+   "mutation": "positions read does not filter acknowledged (delivered) rows",
+   "killed": true,
+   "killingJob": "efbff862-2b23-43d3-b9c9-a0074c23b10b",
+   "host": "tv-dator",
+   "mutantCommit": "aa96ea8a69b5746a4e95d54787453536995be4c0",
+   "killingWitnesses": {
+    "partition-cdc-obligation-range-differential": 5
+   },
+   "firstFailingAssertion": "differential, faults including provisional coverage, seed 31: the windowed lane and the lane held at one entry agree at entry granularity",
+   "runs": [
+    {
+     "job": "c21acd6b-72c3-45f6-8321-672d11ca3dad",
+     "host": "adams-gamla",
+     "state": null,
+     "exit": null,
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M42-aa96ea8a6-adams-gamla"
+    },
+    {
+     "job": "45868e18-2452-433c-af94-4f770498fd8b",
+     "host": "adams-gamla",
+     "state": null,
+     "exit": null,
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M42-aa96ea8a6-adams-gamla-try2"
+    },
+    {
+     "job": "efbff862-2b23-43d3-b9c9-a0074c23b10b",
+     "host": "tv-dator",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M42-aa96ea8a6-tv-dator-try3"
+    }
+   ]
+  },
+  {
+   "id": "M43",
+   "mutation": "byte bound not applied to a range",
+   "killed": true,
+   "killingJob": "9178b821-9478-4e30-a4b2-35ee89e21178",
+   "host": "carinas-windows",
+   "mutantCommit": "769c778991a473d3e2b4422165a7e0da3473e72e",
+   "killingWitnesses": {
+    "partition-cdc-obligation-range-shipping": 2,
+    "partition-cdc-obligation-ship-window": 1
+   },
+   "firstFailingAssertion": "R1-5 a row above the shipping byte bound ships alone between vectors and is acknowledged",
+   "runs": [
+    {
+     "job": "a3eefcdb-4744-41f6-8bf4-519c54c5394d",
+     "host": "adams-gamla",
+     "state": null,
+     "exit": null,
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M43-2cf647f26-adams-gamla"
+    },
+    {
+     "job": "db212edf-6cde-41cd-bab8-045810b049d2",
+     "host": "adams-gamla",
+     "state": null,
+     "exit": null,
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M43-2cf647f26-adams-gamla-try2"
+    },
+    {
+     "job": "a1e2615a-d5c3-4c2e-abd4-b48d3d72be87",
+     "host": "adams-gamla",
+     "state": null,
+     "exit": null,
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M43-2cf647f26-adams-gamla-try3"
+    },
+    {
+     "job": "bdff68b4-5f32-4d80-9c34-4eb3ffa98abe",
+     "host": "adams-gamla",
+     "state": null,
+     "exit": null,
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M43-2cf647f26-adams-gamla-try4"
+    },
+    {
+     "job": "8057b834-76b2-4ff8-8034-ce3a6175c8ad",
+     "host": "adams-gamla",
+     "state": null,
+     "exit": null,
+     "round": 1,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M43-2cf647f26-adams-gamla-try5"
+    },
+    {
+     "job": "9178b821-9478-4e30-a4b2-35ee89e21178",
+     "host": "carinas-windows",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 2,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M43-769c77899-carinas-windows"
+    }
+   ]
+  },
+  {
+   "id": "M46",
+   "mutation": "a range no subscriber covered is acknowledged",
+   "killed": true,
+   "killingJob": "6e6a1f53-83d3-41d2-b87c-c76748be535a",
+   "host": "tv-dator",
+   "mutantCommit": "2443b584566a17376a829a11a30f3de744e2a4d0",
+   "killingWitnesses": {
+    "partition-cdc-topology-progress-currentness": 1
+   },
+   "firstFailingAssertion": "source final aggregation reobserves requirements after the last subscriber returns",
+   "runs": [
+    {
+     "job": "cf818e63-5562-4376-8f0a-324a7973e290",
+     "host": "tv-dator",
+     "state": "COMPLETE",
+     "exit": "0",
+     "round": 2,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M46-2443b5845-tv-dator"
+    },
+    {
+     "job": "6e6a1f53-83d3-41d2-b87c-c76748be535a",
+     "host": "tv-dator",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 2,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M46-broad-2443b5845-tv-dator"
+    }
+   ]
+  },
+  {
+   "id": "M47",
+   "mutation": "a delay value changed (ACK_FLUSH_DEADLINE_MS)",
+   "killed": true,
+   "killingJob": "d92a9483-a753-4685-9fd0-75f2e98573d9",
+   "host": "carinas-windows",
+   "mutantCommit": "ebe529ef7f7c48593b59461bd0ab310ce1f8e90a",
+   "killingWitnesses": {
+    "partition-cdc-obligation-ship-window": 1
+   },
+   "firstFailingAssertion": "the lane's bounds and delays keep their literal values",
+   "runs": [
+    {
+     "job": "d92a9483-a753-4685-9fd0-75f2e98573d9",
+     "host": "carinas-windows",
+     "state": "FAILED",
+     "exit": "1",
+     "round": 2,
+     "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M47-ebe529ef7-carinas-windows"
+    }
+   ]
+  }
+ ],
+ "correctiveRound": {
+  "candidate": "b606455dce33ea0052c7dcfeb4ae64af2d4fae7f",
+  "note": "mutants made after merging candidate 11562392d (source and tests identical to b606455dc) into mutants/cdc-range-shipping-20261114; V7, V8, V10 are the independent verifier's surviving mutants re-applied; M03, M07b, M14, M15 re-run against the repaired cut; M25a-c re-run against the real-cache node-ready witness",
+  "mutants": [
+   {
+    "id": "M03",
+    "mutation": "entry split (ordinals of one log index not kept together)",
+    "killed": true,
+    "killingJob": "38b035d5-461f-4a55-8ddc-2fffc2e9acb7",
+    "host": "tv-dator",
+    "mutantCommit": "6573df5d927b91cf6222c99e4cd338b60a64f762",
+    "killingWitnesses": {
+     "partition-cdc-obligation-range-shipping": [
+      "the READY ordinals of one ledger entry are never cut apart: an entry ships whole at a window of one row, and a wider window cuts only at entry boundaries",
+      "an entry above the shipping byte bound ships alone and whole between ranges; nothing is refused, split or dropped",
+      "acknowledgement refused inside a covered range leaves the rows from the refused one owed, stops the cursor before it, says so in the drive outcome, and ships them again b",
+      "an entry that is partly covered is presented again whole when a hydration handshake brought the lane to the retained-delivered bound: the covered leaf is never sent a str"
+     ]
+    },
+    "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M03-6573df5d9-tv-dator"
+   },
+   {
+    "id": "M07b",
+    "mutation": "pending row re-delivered (run continues over a hole)",
+    "killed": true,
+    "killingJob": "a0c2d105-5b50-46ba-a4aa-e366b075876d",
+    "host": "tv-dator",
+    "mutantCommit": "6e2e8cb9d7e193e9bf997f0afd1f1bfee8ff488e",
+    "killingWitnesses": {
+     "partition-cdc-obligation-range-shipping": [
+      "a row pending acknowledgement splits the run: the rows before it ship without the rows after it, and a hole never widens the window"
+     ]
+    },
+    "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M07b-6e2e8cb9d-tv-dator"
+   },
+   {
+    "id": "M14",
+    "mutation": "retained-delivered bound not cumulative",
+    "killed": true,
+    "killingJob": "35320407-5d89-4404-8850-c26a1b41a4dc",
+    "host": "tv-dator",
+    "mutantCommit": "5b9e9db04cbf6a62f12f4666b4d74b2839d4c470",
+    "killingWitnesses": {
+     "partition-cdc-obligation-range-shipping": [
+      "the retained-delivered bound counts the rows already taken into the range: a range stops where the per-row lane stopped"
+     ]
+    },
+    "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M14-5b9e9db04-tv-dator"
+   },
+   {
+    "id": "M15",
+    "mutation": "oversized entry refused (first entry not always taken)",
+    "killed": true,
+    "killingJob": "20e9519d-7c97-4ba0-95b6-07d57e04bc01",
+    "host": "tv-dator",
+    "mutantCommit": "e9e5a881a44146bdf2b842bd87a5946bd63a398a",
+    "killingWitnesses": {
+     "partition-cdc-obligation-range-shipping": [
+      "R1-5 guard: a 2 MiB row among small rows is handed whole and acknowledged; nothing is refused, split or dropped",
+      "R1-5 a row above the shipping byte bound ships alone between vectors and is acknowledged",
+      "the READY ordinals of one ledger entry are never cut apart: an entry ships whole at a window of one row, and a wider window cuts only at entry boundaries",
+      "an entry above the shipping byte bound ships alone and whole between ranges; nothing is refused, split or dropped",
+      "acknowledgement refused inside a covered range leaves the rows from the refused one owed, stops the cursor before it, says so in the drive outcome, and ships them again b",
+      "an entry that is partly covered is presented again whole when a hydration handshake brought the lane to the retained-delivered bound: the covered leaf is never sent a str"
+     ]
+    },
+    "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M15-e9e5a881a-tv-dator"
+   },
+   {
+    "id": "M25a",
+    "mutation": "node-ready hook ignores the earlier member of the same node",
+    "killed": true,
+    "killingJob": "7294fb80-7b23-4ff2-9e61-548972ad1f7c",
+    "host": "tv-dator",
+    "mutantCommit": "3a6fbe94e03391181f0e723f9c57869d177e6c38",
+    "killingWitnesses": {
+     "seed-cache-hydration-handoff": [
+      "seed node-ready hook: a node made ready and then renewed - one vector triggers exactly as the same events delivered one at a time",
+      "seed node-ready hook: a partial row first, ready second - one vector triggers exactly as the same events delivered one at a time",
+      "seed node-ready hook: a node deleted and inserted ready again - one vector triggers exactly as the same events delivered one at a time",
+      "seed node-ready hook: two nodes interleaved - one vector triggers exactly as the same events delivered one at a time",
+      "seed node-ready hook: the second member of a node reads the first member merged over the cached row, and a member after a DELETE reads no row",
+      "seed node-ready hook against the real cache merge: an INSERT over a cached row",
+      "seed node-ready hook against the real cache merge: a member older than the cached row"
+     ]
+    },
+    "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M25a-3a6fbe94e-tv-dator"
+   },
+   {
+    "id": "M25b",
+    "mutation": "node-ready hook does not merge the earlier member over the cached row",
+    "killed": true,
+    "killingJob": "8153d677-1e5e-499a-8c26-7fcaf3b21641",
+    "host": "tv-dator",
+    "mutantCommit": "a2403068ad77003f4667be87d6700774e80dd26d",
+    "killingWitnesses": {
+     "seed-cache-hydration-handoff": [
+      "seed node-ready hook: a node made ready and then renewed - one vector triggers exactly as the same events delivered one at a time",
+      "seed node-ready hook: a partial row first, ready second - one vector triggers exactly as the same events delivered one at a time",
+      "seed node-ready hook: the second member of a node reads the first member merged over the cached row, and a member after a DELETE reads no row",
+      "seed node-ready hook against the real cache merge: an INSERT over a cached row",
+      "seed node-ready hook against the real cache merge: a member older than the cached row"
+     ]
+    },
+    "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M25b-a2403068a-tv-dator"
+   },
+   {
+    "id": "M25c",
+    "mutation": "node-ready hook keeps a row after a DELETE member",
+    "killed": true,
+    "killingJob": "a6fa1e62-28f8-4e44-9cdc-ee1fb1a03afe",
+    "host": "tv-dator",
+    "mutantCommit": "c915eef4b3bf394f47daddd64d0c1d8f46e01384",
+    "killingWitnesses": {
+     "seed-cache-hydration-handoff": [
+      "seed node-ready hook: a node deleted and inserted ready again - one vector triggers exactly as the same events delivered one at a time",
+      "seed node-ready hook: the second member of a node reads the first member merged over the cached row, and a member after a DELETE reads no row"
+     ]
+    },
+    "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-M25c-c915eef4b-tv-dator"
+   },
+   {
+    "id": "V7",
+    "mutation": "verifier V7: a failed range is passed when any of its rows was acknowledged meanwhile",
+    "killed": true,
+    "killingJob": "121bfd73-0c3f-45a6-9b47-5e2e74ab4616",
+    "host": "tv-dator",
+    "mutantCommit": "63dd597d028951802fde432db8aff5c29ae09252",
+    "killingWitnesses": {
+     "partition-cdc-obligation-ship-window": [
+      "a range that fails after a hydration image came to cover part of it holds the lane: its rows above the image ship before any later row"
+     ]
+    },
+    "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-V7-63dd597d0-tv-dator"
+   },
+   {
+    "id": "V8",
+    "mutation": "verifier V8: window-cut read from the retried composition, not the cell",
+    "killed": true,
+    "killingJob": "6aed46ec-2bbe-481d-a217-0787e440688f",
+    "host": "tv-dator",
+    "mutantCommit": "32db34f406a068ed045b64a7d941d734bc637683",
+    "killingWitnesses": {
+     "partition-cdc-obligation-ship-window": [
+      "a window-cut range that is covered on a pinned retry widens the window"
+     ]
+    },
+    "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-V8-32db34f40-tv-dator"
+   },
+   {
+    "id": "V10",
+    "mutation": "verifier V10: pre-pass passes a hydrated row whose acknowledgement was refused",
+    "killed": true,
+    "killingJob": "ba8ee668-0fa3-4f47-be6e-f6e8dd02011a",
+    "host": "tv-dator",
+    "mutantCommit": "ab2d89acd472cf3a0d4bf54d49c871d6379439f3",
+    "killingWitnesses": {
+     "partition-cdc-obligation-range-shipping": [
+      "a hydrated row whose acknowledgement is refused ends the pass and is not passed: with the acknowledgement proposer unavailable no row above the image ships past it"
+     ]
+    },
+    "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-V10-ab2d89acd-tv-dator"
+   },
+   {
+    "id": "S1",
+    "mutation": "retained-delivered bound judged per row again (an entry is cut apart)",
+    "killed": true,
+    "killingJob": "aa930db1-2187-48e6-904f-f8ae7f665a2d",
+    "host": "tv-dator",
+    "mutantCommit": "ce21a8811ac19c65adea395bc692bcd3b6ead85e",
+    "killingWitnesses": {
+     "partition-cdc-obligation-range-shipping": [
+      "an entry that is partly covered is presented again whole when a hydration handshake brought the lane to the retained-delivered bound: the covered leaf is never sent a str"
+     ]
+    },
+    "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-S1-ce21a8811-tv-dator"
+   },
+   {
+    "id": "T1",
+    "mutation": "scan tail captured again after a hold that attempted nothing",
+    "killed": true,
+    "killingJob": "dca45ad3-4c20-4b26-aed8-f376ab576724",
+    "host": "tv-dator",
+    "mutantCommit": "063ca5a1d413a4e762fd284b6abe4a180a54ad0d",
+    "killingWitnesses": {
+     "partition-cdc-obligation-range-shipping": [
+      "acknowledgement refused inside a covered range leaves the rows from the refused one owed, stops the cursor before it, says so in the drive outcome, and ships them again b"
+     ],
+     "partition-cdc-obligation-ship-window": [
+      "captured tail: a retry after a hold continues the same scan and ships only the rows that existed when the scan was opened; rows committed during the hold follow in the ne",
+      "captured tail: an idle hydration handshake ends the scan, and the next scan captures the rows committed during the hold"
+     ]
+    },
+    "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-T1-063ca5a1d-tv-dator"
+   },
+   {
+    "id": "T2",
+    "mutation": "an idle hydration handshake does not end the scan",
+    "killed": true,
+    "killingJob": "e31573d0-fc8a-423a-b384-b23dc3fb032b",
+    "host": "tv-dator",
+    "mutantCommit": "a795bb236770c5236a18bae87f06f3a94e33a1ff",
+    "killingWitnesses": {
+     "partition-cdc-obligation-ship-window": [
+      "a partially covered range is presented again unchanged although more rows were committed and the scan restarted: the covered leaf is not sent it again",
+      "a pinned range is rebuilt when a hydration image acknowledged one of its rows: the cell is discarded and the new range is composed without its cap",
+      "captured tail: an idle hydration handshake ends the scan, and the next scan captures the rows committed during the hold",
+      "a hydration image below the range in flight does not retire its invocation, and every row above the image is delivered",
+      "a hydration image inside the range in flight does not retire its invocation, and every row above the image is delivered",
+      "a hydration image at the end of the range in flight retires its invocation, and every row above the image is delivered",
+      "a range that fails after a hydration image came to cover part of it holds the lane: its rows above the image ship before any later row"
+     ]
+    },
+    "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-T2-a795bb236-tv-dator"
+   },
+   {
+    "id": "C7",
+    "mutation": "cache merge ignores the HLC order of an older row",
+    "killed": true,
+    "killingJob": "fe972706-f36b-42d7-9090-631faf8ee0d0",
+    "host": "tv-dator",
+    "mutantCommit": "d6b11b66704b0f87ebafed078ed60feaca70e029",
+    "killingWitnesses": {
+     "cdc-source-occurrence-delivery.integration": [
+      "overlap order (M-7): a wide vector that commits at a native recipient after the narrower rebuilt vector and the newer one leaves the newest row in its cache"
+     ]
+    },
+    "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-C7-d6b11b667-tv-dator"
+   }
+  ]
+ },
+ "nodeReadyHookRound": {
+  "candidate": "41a1b1616d4c6d69f4bc95081104deb8f582a654",
+  "note": "mutants made after merging candidate b7e72d6d3 into mutants/cdc-range-shipping-20261114 (source identical to 41a1b1616, which adds one literal test scenario and the seal)",
+  "mutants": [
+   {
+    "id": "H1",
+    "mutation": "node-ready hook overlays the earlier members again",
+    "killed": true,
+    "killingJob": "eb40d560-146a-4526-a996-5be93dbcf7fc",
+    "host": "adams-gamla",
+    "mutantCommit": "42747c164104bbc3b0879157b492f7a02e41e489",
+    "killingWitnesses": {
+     "seed-cache-hydration-handoff": [
+      "seed node-ready hook, cache apply path: an INSERT over a cached row, then another member - one vector triggers exactly as one-event delivery through the real cache",
+      "seed node-ready hook, cache apply path: a member the cache rejects as older than the cached row - one vector triggers exactly as one-event delivery through the real cache",
+      "seed node-ready hook differential, seed 7002: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7003: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7006: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7007: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7008: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7009: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7010: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7011: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7012: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7014: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7015: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7016: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7017: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7022: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7023: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7025: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7027: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7028: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7029: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7030: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7031: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7032: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7035: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7040: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7041: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7043: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7048: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook: a vector presented again runs the hook for every member again, against the rows the cache then holds"
+     ]
+    },
+    "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-H1-42747c164-adams-gamla"
+   },
+   {
+    "id": "H2",
+    "mutation": "node-ready hook compares every member against the cached row",
+    "killed": true,
+    "killingJob": "406d4053-7a6e-4465-85c9-f1feac56c970",
+    "host": "adams-gamla",
+    "mutantCommit": "304db524d4dbead775faa6cb9ab8c1d1fbb8a734",
+    "killingWitnesses": {
+     "seed-cache-hydration-handoff": [
+      "seed node-ready hook: a node made ready and then renewed - one vector triggers exactly as the same events delivered one at a time",
+      "seed node-ready hook: a partial row first, ready second - one vector triggers exactly as the same events delivered one at a time",
+      "seed node-ready hook: a node deleted and inserted ready again - one vector triggers exactly as the same events delivered one at a time",
+      "seed node-ready hook: two nodes interleaved - one vector triggers exactly as the same events delivered one at a time",
+      "seed node-ready hook: the second member of a node reads the first member merged over the cached row, and a member after a DELETE reads no row",
+      "seed node-ready hook, cache apply path: an INSERT over a cached row, then another member - one vector triggers exactly as one-event delivery through the real cache",
+      "seed node-ready hook, cache apply path: a first-ever row with no cached predecessor - one vector triggers exactly as one-event delivery through the real cache",
+      "seed node-ready hook differential, seed 7001: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7002: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7003: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7004: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7006: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7007: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7008: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7009: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7010: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7011: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7012: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7014: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7015: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7031: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7032: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7033: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7034: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7035: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7036: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7037: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7038: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7039: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7040: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7041: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7043: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7044: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7045: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7046: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7048: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook: a vector presented again runs the hook for every member again, against the rows the cache then holds",
+      "seed node-ready hook, residual pin: a vector that deleted its node, presented again",
+      "seed node-ready hook, residual pin: older writes delivered again after an earlier delete of the node"
+     ]
+    },
+    "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-H2-304db524d-adams-gamla"
+   },
+   {
+    "id": "H3",
+    "mutation": "node-ready replay does not start from the cached row (a member the cache rejects as stale is taken)",
+    "killed": true,
+    "killingJob": "bc5ba662-978a-4ffa-a100-6900d1595f73",
+    "host": "adams-gamla",
+    "mutantCommit": "4e9d484751bb9d51b89f7008ab1af5e1f3749ac0",
+    "killingWitnesses": {
+     "seed-cache-hydration-handoff": [
+      "seed node-ready hook: a node made ready and then renewed - one vector triggers exactly as the same events delivered one at a time",
+      "seed node-ready hook: a partial row first, ready second - one vector triggers exactly as the same events delivered one at a time",
+      "seed node-ready hook: the second member of a node reads the first member merged over the cached row, and a member after a DELETE reads no row",
+      "seed node-ready hook, cache apply path: a member the cache rejects as older than the cached row - one vector triggers exactly as one-event delivery through the real cache",
+      "seed node-ready hook differential, seed 7001: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7002: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7003: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7006: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7007: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7008: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7009: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7010: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7011: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7012: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7014: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7015: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7016: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7026: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7027: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7028: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7029: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7030: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7031: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7035: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7037: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7039: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7040: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7041: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7043: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7046: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7048: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook: a vector presented again runs the hook for every member again, against the rows the cache then holds"
+     ]
+    },
+    "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-H3-4e9d48475-adams-gamla"
+   },
+   {
+    "id": "H4",
+    "mutation": "node-ready hook does not run on a re-presented vector",
+    "killed": true,
+    "killingJob": "2e5f55f8-b42b-45ee-b425-d16260d89f36",
+    "host": "adams-gamla",
+    "mutantCommit": "c8f1a8c17619084af242c664de405c5f93c6d495",
+    "killingWitnesses": {
+     "seed-cache-hydration-handoff": [
+      "seed node-ready hook differential, seed 7001: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7002: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7003: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7004: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7005: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7006: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7007: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7008: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7009: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7010: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7011: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7012: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7013: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7014: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7015: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7016: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7017: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7018: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7019: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7020: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7021: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7022: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7023: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7024: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7025: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7026: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7027: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7028: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7029: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7030: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7031: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7032: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7033: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7034: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7035: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7036: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7037: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7038: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7039: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7040: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7041: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7042: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7043: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7044: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7045: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7046: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7047: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7048: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook: a vector presented again runs the hook for every member again, against the rows the cache then holds",
+      "seed node-ready hook, residual pin: a vector that deleted its node, presented again"
+     ]
+    },
+    "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-H4-c8f1a8c17-adams-gamla"
+   }
+  ]
+ },
+ "ownerPreviewRound": {
+  "candidate": "122365b5b7ec6e58463a7f3c145fc8f11cf5cb03",
+  "note": "mutants made after merging candidate 122365b5b into mutants/cdc-range-shipping-20261114",
+  "mutants": [
+   {
+    "id": "P1",
+    "mutation": "preview ignores the key's delete tombstone",
+    "killed": true,
+    "killingJob": "7a71f989-fd73-49e5-957f-e66adb29fabc",
+    "host": "adams-gamla",
+    "mutantCommit": "d4bbc7ee91a3ecebd92243ac5c4d7ff9fdcbb915",
+    "killingWitnesses": {
+     "system-table-cache-row-preview": [
+      "previewRowAfterEachChange, a delete tombstone refuses a write older than the delete and admits a newer one",
+      "previewRowAfterEachChange, an authoritative-absence mark refuses a write that does not follow the observation",
+      "previewRowAfterEachChange, a tombstone still alive on the cache clock refuses",
+      "seeded differential: over generated histories with rows, delete tombstones, authoritative-absence marks, authoritative observations and a moving clock, the preview equals"
+     ],
+     "seed-cache-hydration-handoff": [
+      "seed node-ready hook differential, seed 7008: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7032: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7034: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook under a delete tombstone: a vector that deleted its node, presented again, is handed the previous rows of one-event delivery",
+      "seed node-ready hook under a delete tombstone: older writes delivered again after an earlier delete of the node are handed the previous rows of one-event delivery",
+      "seed node-ready hook, missed-trigger anchor: a newer ready row still triggers when the member before it is an older ready write the cache refuses under a delete tombstone"
+     ]
+    },
+    "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-P1-d4bbc7ee9-adams-gamla"
+   },
+   {
+    "id": "P2",
+    "mutation": "preview ignores the table's authoritative observation",
+    "killed": true,
+    "killingJob": "c05a7393-d674-4cb5-bd21-9bf583bc2f7b",
+    "host": "adams-gamla",
+    "mutantCommit": "edbfa415be715178c060a7b0b700e1db8049bd05",
+    "killingWitnesses": {
+     "system-table-cache-row-preview": [
+      "previewRowAfterEachChange, the table's authoritative observation refuses an older write for an absent key",
+      "seeded differential: over generated histories with rows, delete tombstones, authoritative-absence marks, authoritative observations and a moving clock, the preview equals"
+     ],
+     "seed-cache-hydration-handoff": [
+      "seed node-ready hook differential, seed 7007: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7022: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7028: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7029: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7038: one vector triggers as one-event delivery through the real cache, when first presented and when presented again"
+     ]
+    },
+    "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-P2-edbfa415b-adams-gamla"
+   },
+   {
+    "id": "P3",
+    "mutation": "preview writes through to the owner",
+    "killed": true,
+    "killingJob": "7ed64bc8-4487-4fc1-8a30-feed22815109",
+    "host": "adams-gamla",
+    "mutantCommit": "eff6f907a7b18a156123fe6445658d49fe075f9f",
+    "killingWitnesses": {
+     "system-table-cache-row-preview": [
+      "previewRowAfterEachChange, the row: an UPDATE merges, an INSERT replaces, a DELETE removes",
+      "previewRowAfterEachChange, a delete tombstone refuses a write older than the delete and admits a newer one",
+      "previewRowAfterEachChange, an authoritative-absence mark refuses a write that does not follow the observation",
+      "previewRowAfterEachChange, the table's authoritative observation refuses an older write for an absent key",
+      "previewRowAfterEachChange, a tombstone that expired on the cache clock no longer refuses",
+      "previewRowAfterEachChange answers for a key the cache never saw, and for no changes",
+      "a preview changes nothing observable in the owner: state, tombstones, marks, observation and version records, listeners, notifications, read statistics",
+      "seeded differential: over generated histories with rows, delete tombstones, authoritative-absence marks, authoritative observations and a moving clock, the preview equals"
+     ],
+     "seed-cache-hydration-handoff": [
+      "seed node-ready hook: a node made ready and then renewed - one vector triggers exactly as the same events delivered one at a time",
+      "seed node-ready hook: a partial row first, ready second - one vector triggers exactly as the same events delivered one at a time",
+      "seed node-ready hook: a node deleted and inserted ready again - one vector triggers exactly as the same events delivered one at a time",
+      "seed node-ready hook: a first-ever node inserted, deleted and inserted again - one vector triggers exactly as the same events delivered one at a time",
+      "seed node-ready hook: two nodes interleaved - one vector triggers exactly as the same events delivered one at a time",
+      "seed node-ready hook: the second member of a node reads the first member merged over the cached row, and a member after a DELETE reads no row",
+      "seed node-ready hook, cache apply path: an INSERT over a cached row, then another member - one vector triggers exactly as one-event delivery through the real cache",
+      "seed node-ready hook, cache apply path: a first-ever row with no cached predecessor - one vector triggers exactly as one-event delivery through the real cache",
+      "seed node-ready hook differential, seed 7001: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7002: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7003: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7004: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7006: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7007: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7008: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7009: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7010: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7012: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7013: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed ",
+      "seed node-ready hook differential, seed 7031: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7032: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7034: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7035: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7036: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7037: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7039: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7040: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7041: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7042: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7043: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7044: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7045: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7046: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7048: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook: a vector presented again runs the hook for every member again, against the rows the cache then holds",
+      "seed node-ready hook under a delete tombstone: a vector that deleted its node, presented again, is handed the previous rows of one-event delivery"
+     ]
+    },
+    "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-P3-eff6f907a-adams-gamla"
+   },
+   {
+    "id": "P4",
+    "mutation": "preview reads a different time source than the owner",
+    "killed": true,
+    "killingJob": "ae73c139-2de8-480c-b185-ed76a6b7f501",
+    "host": "adams-gamla",
+    "mutantCommit": "85072b23765ef1c300436f36f8ae5252ee25fc87",
+    "killingWitnesses": {
+     "system-table-cache-row-preview": [
+      "previewRowAfterEachChange, a delete tombstone refuses a write older than the delete and admits a newer one",
+      "previewRowAfterEachChange, an authoritative-absence mark refuses a write that does not follow the observation",
+      "previewRowAfterEachChange, a tombstone still alive on the cache clock refuses",
+      "seeded differential: over generated histories with rows, delete tombstones, authoritative-absence marks, authoritative observations and a moving clock, the preview equals"
+     ]
+    },
+    "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-P4-85072b237-adams-gamla"
+   },
+   {
+    "id": "P5",
+    "mutation": "node-ready hook uses its own private cache again (hook of 41a1b1616)",
+    "killed": true,
+    "killingJob": "62c88ab5-2b99-466b-8115-48f8bd35c723",
+    "host": "adams-gamla",
+    "mutantCommit": "f1991d9c12040ba615321cbb9fdb0c3412cc4dc3",
+    "killingWitnesses": {
+     "seed-cache-hydration-handoff": [
+      "seed node-ready hook differential, seed 7002: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7007: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7008: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7022: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7028: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7029: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7032: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7034: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7038: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook differential, seed 7039: one vector triggers as one-event delivery through the real cache, when first presented and when presented again",
+      "seed node-ready hook under a delete tombstone: a vector that deleted its node, presented again, is handed the previous rows of one-event delivery",
+      "seed node-ready hook under a delete tombstone: older writes delivered again after an earlier delete of the node are handed the previous rows of one-event delivery",
+      "seed node-ready hook, missed-trigger anchor: a newer ready row still triggers when the member before it is an older ready write the cache refuses under a delete tombstone"
+     ]
+    },
+    "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping/mut-P5-f1991d9c1-adams-gamla"
+   }
+  ]
+ }
+}

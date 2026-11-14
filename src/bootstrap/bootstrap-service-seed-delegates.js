@@ -318,9 +318,9 @@ function buildPhaseExecutionDelegates(service) {
       self.nodeReadyRebalanceOwner.handleNodeReadyRebalanceTrigger(
         cdcEvent, prevRow,
       ),
-    propagatePartitionCDCEvent: (mgs, cdcEvent, deliveryContext) =>
+    propagatePartitionCDCEvent: (mgs, events, deliveryContext) =>
       self.seedRuntimeBridgeOwner
-        .propagatePartitionCDCEvent(mgs, cdcEvent, deliveryContext),
+        .propagatePartitionCDCEvent(mgs, events, deliveryContext),
     resolveCdcPropagationMessageGroup: (preferred) =>
       self.seedCacheHydrationPhase
         .resolveCdcPropagationMessageGroup(preferred),

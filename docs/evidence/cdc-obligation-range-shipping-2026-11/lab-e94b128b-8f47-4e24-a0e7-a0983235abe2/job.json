@@ -1,0 +1,18 @@
+{
+ "kind": "tests",
+ "host": "tv-dator",
+ "commit": "6f446edf99a8c864dfca748673bd08fcffdb7c04",
+ "base": "9c576f3a06be3bf117623f038f43e6b36b5b33a5",
+ "files": [
+  "test/partition/partition-cdc-delivery-progress.test.js",
+  "test/partition/partition-cdc-obligation.test.js",
+  "test/partition/cdc-hydration-live-handoff.test.js",
+  "test/partition/partition-cdc-topology-progress-currentness.test.js",
+  "test/partition/partition-cdc-invocation-custody.test.js",
+  "test/partition/partition-cdc-obligation-reclamation.test.js",
+  "test/topology/cdc-group-propagation-service.test.js",
+  "test/topology/cdc-recipient-domain-and-retained-debt.test.js",
+  "test/cdc/cdc-delivery-complete-vector.test.js"
+ ],
+ "requestId": "e94b128b-8f47-4e24-a0e7-a0983235abe2"
+}

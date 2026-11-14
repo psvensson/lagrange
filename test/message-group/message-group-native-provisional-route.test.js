@@ -181,11 +181,17 @@ function connectSubscriber(f) {
       return selection;
     },
     buildMessageGroupOwnerNotReadyError,
-    beforePropagation: (event) => note(f, 'actual-subscriber-input', {event: structuredClone(event), source: sourceView(f)}),
-    propagatePartitionCDCEvent: async (service, event, deliveryContext) => {
+    // The subscriber contract hands a vector. Provisional coverage never
+    // widens the lane's shipping window and the committed redrive starts at
+    // one entry, so every wave of this witness carries one occurrence.
+    beforePropagation: (events) => {
+      assert.equal(events.length, 1, 'each wave of this witness ships one occurrence');
+      note(f, 'actual-subscriber-input', {event: structuredClone(events[0]), source: sourceView(f)});
+    },
+    propagatePartitionCDCEvent: async (service, events, deliveryContext) => {
       assert.equal(service, f.source);
-      const result = await bridge.propagatePartitionCDCEvent(service, event, deliveryContext);
-      note(f, 'actual-topology-return', {event: structuredClone(event), result: structuredClone(result),
+      const result = await bridge.propagatePartitionCDCEvent(service, events, deliveryContext);
+      note(f, 'actual-topology-return', {event: structuredClone(events[0]), result: structuredClone(result),
         source: sourceView(f), target: targetView(f)});
       return result;
     },

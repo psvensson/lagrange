@@ -1,0 +1,71 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "cdc-obligation-range-shipping",
+  "status": "pass",
+  "interpretation": "Landing form. The candidate is the uncommitted delta on HEAD e9cb79dd4 (main 232082669eddebe4c9fd98d3e07c11fc91ffb781 plus the landed service-lifecycle-reconciliation-row-integrity commit), with every one of the 66 unit source and test paths byte-identical to the class-repair candidate measured on tv-dator (job cb689ec2-9f24-42ee-84ee-8937215a80aa, 149/149 files, 5613 assertions) and the in-git evidence retained under docs/evidence/cdc-obligation-range-shipping-2026-11.",
+  "receipts": [
+    {
+      "id": "original-journey-lane-backlog",
+      "measured": true,
+      "passed": true,
+      "detail": "Native job 81b81f30-d9b1-4132-854c-6f1c3dffe647 on tv-dator, journey fresh-formation-user-table-routability FAILED at g-projection-agrees-with-authority (5 persistent priority_spread episodes, bound 1000 ms) at diagnostic source ed708dfd01e5ffb446f49ba0447a5bf9915f511a. Seed services lane: 516 drive attempts for 141 distinct events, 136 waves of one event each, median wave 450.5 ms (max 1295 ms); 120 of 134 events were committed before the previous event was answered, up to 23 owed rows waiting; commit to first drive p50 10.6 s, p90 22.2 s, max 32.8 s. Control case: node de5a0bc4 sent replica_operations with 197 waves, zero refusals and zero in-wave retries and was up to 99.5 % busy with commit to drive up to 18 s. Four of the five episodes are explained by this in-lane backlog (CDC arrival 16.6 to 23.1 s after commit); authoritative reconciliation repaired each before the live event arrived. passed=true records that the motivating baseline was measured on the original; it is the origin of the defect, not candidate proof."
+    },
+    {
+      "id": "reproducers-red-on-original",
+      "measured": true,
+      "passed": true,
+      "detail": "RE-MEASURED ON MAIN WITHOUT THE UNIT: lab job c2065548-981f-4449-9db8-7dd6c0f28703 on adams-gamla, FAILED exit 1 as predicted, main 232082669eddebe4c9fd98d3e07c11fc91ffb781 with the five Phase A test files of 6f446edf9 only (production source untouched): 8 of 9 range-shipping reproducers red (the 2 MiB guard green), R1-4 red in cdc-group-propagation-service.test.js, and partition-cdc-delivery-progress.test.js green on the base lane. EARLIER MEASUREMENT ON THE SEALED BASE: reproducer commit 6f446edf9 (production source identical to the sealed base 9a22bf79b). Lab job 456812e5-36b0-4d5f-aeca-c2de1fe2ec77 on adams-gamla FAILED exit 1: new reproducer files 9 tests, 8 fail as predicted, 1 guard passes (R1-1 'subscriber calls to drain 600 owed rows: 600 (bound 3)'; R1-2 owed depth 'max 61 over 121 waves (bound 5)'; R1-3 'deliveries to the covered leaf A: 3'; R1-4 refused 'CDC propagation requires tableName/operation/data'; R1-5 'SHIP_MAX_BYTES = undefined'; same-key versions 4 calls; hydrated prefix 5 calls; acknowledgement backpressure 512 calls; second durable subscriber 3 single-event calls; the 2 MiB row guard is green). Lab job e94b128b-8f47-4e24-a0e7-a0983235abe2 on tv-dator: the nine existing roots 8 files green, 108 assertions, the only red being R1-4 added to cdc-group-propagation-service.test.js. CORRECTIVE ROUND RED-FIRST REPRODUCERS: sibling-regression reproducer job ac612a2a-84e9-4ca7-9c86-f9af7ffeac28 on tv-dator at bc99d76ac FAILED as predicted before e035ac0ff; S-11 node-ready missed-trigger anchor job 7f21ea4f-1b19-4c82-a1b5-809020d699ed on adams-gamla at e55071559 FAILED as predicted before c160f41bf; S-12/S-13 shipping-unit red-first jobs af89ce4e-ac4d-4b51-838f-dcded59e9e1e on tv-dator and 75e9cb63-7168-44e1-bc71-0864a360cd51 on adams-gamla (with verifier mutant W6b) FAILED as predicted before the shipping-unit class repair.",
+      "evidence": "docs/evidence/cdc-obligation-range-shipping-2026-11/lab-c2065548-981f-4449-9db8-7dd6c0f28703",
+      "earlierEvidence": "docs/evidence/cdc-obligation-range-shipping-2026-11/lab-456812e5-36b0-4d5f-aeca-c2de1fe2ec77"
+    },
+    {
+      "id": "reproducers-and-owned-roots-green-on-candidate",
+      "measured": true,
+      "passed": true,
+      "detail": "MEASURED ON THE FINAL CLASS-REPAIR CANDIDATE: lab job cb689ec2-9f24-42ee-84ee-8937215a80aa on tv-dator, COMPLETE exit 0, transport tree 0653e4ca95193f0e42d46bfa1ce8a7cde1a9b11f (main 232082669eddebe4c9fd98d3e07c11fc91ffb781 plus the 66 unit source/test paths): 149/149 files, 5613 assertions, 0 failed (every test/partition and test/topology file with cdc in its name plus the changed partition files, test/cdc, test/live-query, test/message-group cdc|native files, test/bootstrap CDC-subscription and cdc-source-occurrence files including the real multi-row range anchor and the real oversized participant-transaction anchor, three integration files, the eleven test/cache/system-table-cache*.test.js and read-only-system-table-cache.test.js files including system-table-cache-row-preview.test.js, and test/partition/partition-cdc-obligation-ship-unit.test.js with 54 tests and 1160 property compositions across five fault/state families). Earlier full sweeps on the candidate line: fca4410d-b1d7-46a3-b496-2aadbab16b1f on tv-dator (149/149 files, 5615 assertions); 09ebb1b0-48df-47f9-bf10-aee8c32b7650 on tv-dator at 122365b5b (149/149 files, 5580 assertions); d71ddfc9-d541-456b-8d36-46fbe266db9f on tv-dator at 41a1b1616 (138/138 files, 5063 assertions); d2998760-6fb2-4327-be4b-c248154056d3 on tv-dator at b606455dc (138/138 files, 5017 assertions); 2610fb8a-88e6-4fb4-a8c5-d0ec7ace8613 on tv-dator (77/77 files, 2134 assertions) and 3340591b-b133-4280-8b34-6c394a8fb563 on carinas-windows (61/61 files, 2861 assertions) at 596ca79c0. MUTATION TABLES: 52/52 Phase B mutants killed on lab hosts (docs/evidence/cdc-obligation-range-shipping-2026-11/mutation-results.json), 14 round-2 mutants (including verifier V7, V8, V10, S1, T1, T2, C7) killed, 4 round-3 hook mutants H1-H4 killed, 5 round-4 cache-preview mutants P1-P5 killed, and 11/11 round-5 class-repair shipping-unit mutants (U1-retained-inside-unit = verifier W6b, U2-window-inside-unit, U3-bytes-inside-unit, U4-cap-inside-unit, O1-oversized-whole, O2-ordinals-reversed, O3a-class-reads-window, O3b-class-reads-ready-rows, A1-ordinal-has-company, B1-bytes-ignore-unit-in-hand, R1-retained-not-asked) killed on tv-dator and adams-gamla at the final state (docs/evidence/cdc-obligation-range-shipping-2026-11/land-mutation-results.json). DIAGNOSTIC TIMING RECEIPTS: M-3 recipient synchronous apply span of a 256-member vector at SHIP_MAX_BYTES measured on tv-dator (job d0ff9530: median 4.1 ms, max 12.5 ms at RF1; 3.4/2.3/2.2 ms at RF3; 0 microtasks between members); S-11 previewRowAfterEachChange cost measured on tv-dator (job 4b530779: median 10 us base + <2 us per change). APPLICABILITY TO STACKED HEAD e9cb79dd4: e9cb79dd4 is main 232082669eddebe4c9fd98d3e07c11fc91ffb781 plus the landed service-lifecycle-reconciliation-row-integrity commit (whose touched cache test files are already part of the 149-file set), and all 66 unit source and test files are byte-identical to the state measured by job cb689ec2.",
+      "evidence": "docs/evidence/cdc-obligation-range-shipping-2026-11/lab-cb689ec2-9f24-42ee-84ee-8937215a80aa",
+      "earlierEvidence": "docs/evidence/cdc-obligation-range-shipping-2026-11/lab-09ebb1b0-48df-47f9-bf10-aee8c32b7650"
+    },
+    {
+      "id": "journey-drives-ship-owed-ranges",
+      "measured": true,
+      "passed": true,
+      "detail": "Measured on the registered three-node journey fresh-formation-user-table-routability on tv-dator in two runs: (1) Job 4216bd0b-3da9-4bcb-b796-f52953fd2dba at measurement head 9991b450db37529ba1a25e993c99d6d441e8c89e (range shipping + service-lifecycle-reconciliation-row-integrity, with the node-wide propagation slot still present, compared against ed708dfd): seed services lane shipped 129 rows in 67 vectors (sizes 1x39, 2x14, 3x3, 4x5, 5x3, 6x3; window opened 1 -> 2 -> 4 -> 8, 0 halvings) instead of 136 one-event waves; commit to first drive fell from p50 10,614 ms / p90 22,182 ms / max 32,750 ms on ed708dfd to p50 602 ms / p90 2,838 ms / max 11,341 ms, and commit to remote receiver-entry fell from p50 11,267 ms / max 33,377 ms to p50 1,669-1,775 ms / p90 3.8-3.9 s / max 7,868-7,947 ms. Seed replica_operations lane shipped 200 rows in 92 vectors (max 11 rows; window opened 1 -> 16, 0 halvings) instead of 197 one-event waves; commit to first drive fell from p50 1,932 ms / max 18,123 ms to p50 611 ms / max 6,561 ms. Across all tables, 292 waves carried 503 rows (least-squares wave cost 328 ms + 42 ms/row, so a 6-row wave costs ~1.4x a 1-row wave); after the first 10 s the maximum READY rows past the cut per 10 s bucket was 1-6 for services and 3-10 for replica_operations (no in-lane backlog); 0 order inversions and 0 drops on any recipient; multi-member vector apply spans on receivers were p50 0-1 ms, max 2 ms. As stated in constraint bounded-repair-not-service-acceptance, the journey on 9991b450 still had 2 persistent g episodes (down from 5 on ed708dfd), both caused by waits for the node-wide slot (3.05 s and 4.73 s refused behind a 3-4 table rotation while commit -> first drive was 139 ms and 54 ms). (2) Job 80f31146-504f-412b-95e5-45d32551ad8d at measurement head f3aa2f082ed98460f436295c6c416ae3b521af1c (with the next stacked unit cdc-propagation-node-slot-removal added): scenario PASSED (passed=True, verdict PASS, 0 persistent g episodes, services 140 rows in 126 vectors with commit -> first drive p50 172 ms / p90 597 ms and commit -> remote receipt p50 346-586 ms; replica_operations 203 rows in 148 vectors up to 4 rows; 0 lane holds, 0 order inversions, 0 drops).",
+      "evidence": "docs/evidence/cdc-obligation-range-shipping-2026-11/journey-measure-9991b450-analysis.md",
+      "earlierEvidence": "docs/evidence/cdc-obligation-range-shipping-2026-11/journey-measure-slot-f3aa2f08-analysis.md"
+    },
+    {
+      "id": "independent-verification",
+      "measured": true,
+      "passed": true,
+      "detail": "Two earlier independent verification rounds rejected prior candidates on the cut-placement root and drove the supersession records and class repair: (1) subagent:verify-range-shipping-1 on candidate 596ca79c0 (report docs/evidence/cdc-obligation-range-shipping-2026-11/independent-verification-596ca79c0.md) confirmed claims (i)-(v) and no safety defect by reading, killed 8 of 11 planted defects on tv-dator, and rejected on surviving mutants V7, V8, V10, scan-lifetime wording in S-1, coupled-pair registration, and unlogged deviations (repaired in Supersession Records 2-4, commits b606455dc, 41a1b1616, 122365b5b). (2) subagent:ade8e14fcca361ea7 on candidate 41a1b1616 pass 1 (report docs/evidence/cdc-obligation-range-shipping-2026-11/independent-verification-41a1b1616-pass1.md) confirmed earlier blocking items 1-6 closed and killed mutants W1-W8, and rejected on surviving mutant W6b (retained-delivered bound judged per row inside a non-first entry), unbounded entry bytes vs base per-ordinal liveness, and S-5 contended page-yield tail recapture wording (repaired by the Altitude Check and Supersession Records 5 and 6: one shipping-unit and cut authority shipUnitsFrom/unitsOfEntry/cutBefore in src/partition/partition-cdc-obligation-range.js, oversized entries shipping per ordinal by durable owed bytes, seeded property witness in test/partition/partition-cdc-obligation-ship-unit.test.js killing all 11 class-repair mutants U1..U4, O1, O2, O3a, O3b, A1, B1, R1, and real participant-transaction oversized anchor in test/bootstrap/cdc-source-occurrence-delivery.integration.test.js). Final landing state (uncommitted delta on e9cb79dd4) is verified by the fresh independent verifier recorded in the terminal verification entry of solve/quests/cdc-obligation-range-shipping/log.ndjson (receipt finalized prior to recording the approval entry so that receipt.json is bound by the verifier's candidate digest and remains immutable after closure). Owed by solve.js land itself: the npm test change proof.",
+      "evidence": "docs/evidence/cdc-obligation-range-shipping-2026-11/independent-verification-41a1b1616-pass1.md",
+      "earlierEvidence": "docs/evidence/cdc-obligation-range-shipping-2026-11/independent-verification-596ca79c0.md"
+    }
+  ],
+  "unmeasuredObligations": [],
+  "source": {
+    "sha": "e9cb79dd449f11a8dd6524ed571992110a91585e",
+    "mainBase": "232082669eddebe4c9fd98d3e07c11fc91ffb781",
+    "sealedBase": "9a22bf79b61610bd782cf82ca45844f325f6a8e6",
+    "labMeasuredTransportTree": "0653e4ca95193f0e42d46bfa1ce8a7cde1a9b11f",
+    "earlierCandidates": [
+      "596ca79c026bcf52ada8e81e8e800abbcf5c31da",
+      "b606455dce33ea0052c7dcfeb4ae64af2d4fae7f",
+      "41a1b1616d4c6d69f4bc95081104deb8f582a654",
+      "122365b5b7ec6e58463a7f3c145fc8f11cf5cb03",
+      "c00aea4ef"
+    ],
+    "journeyMeasurementHeads": [
+      "9991b450db37529ba1a25e993c99d6d441e8c89e",
+      "f3aa2f082ed98460f436295c6c416ae3b521af1c"
+    ],
+    "diagnosticLine": "ed708dfd01e5ffb446f49ba0447a5bf9915f511a"
+  },
+  "evidence": {
+    "directory": "docs/evidence/cdc-obligation-range-shipping-2026-11",
+    "coordinationDirectory": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/range-shipping",
+    "journeyCoordinationDirectory": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/journey"
+  },
+  "evidenceCeiling": "Claim (iv) (with the window forced to 1 the lane's externally relevant result equals the sealed base's at unit granularity) rests on source reading and the listed S-7/S-12 differences because the differential's reference is the candidate at window 1; after a new tenure or provisional coverage a per-ordinal oversized entry is re-presented from an earlier ordinal as on the base. Journey observation covers the registered three-node scenario on tv-dator."
+}

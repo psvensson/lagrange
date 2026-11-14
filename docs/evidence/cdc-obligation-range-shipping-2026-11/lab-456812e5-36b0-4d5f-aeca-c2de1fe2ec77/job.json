@@ -1,0 +1,11 @@
+{
+ "kind": "tests",
+ "host": "adams-gamla",
+ "commit": "6f446edf99a8c864dfca748673bd08fcffdb7c04",
+ "base": "9c576f3a06be3bf117623f038f43e6b36b5b33a5",
+ "files": [
+  "test/partition/partition-cdc-obligation-range-shipping.test.js",
+  "test/topology/cdc-group-propagation-service.test.js"
+ ],
+ "requestId": "456812e5-36b0-4d5f-aeca-c2de1fe2ec77"
+}

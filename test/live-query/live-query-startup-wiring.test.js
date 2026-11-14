@@ -154,4 +154,71 @@ describe('live query startup wiring', () => {
     assert.ok(adminCompositionCalls.length >= 2);
     assert.ok(managerOptions.length >= 1);
   });
+
+  // The partition's one subscriber contract (quest cdc-obligation-range-shipping,
+  // record S-3): the subscriber live query registers on a partition is handed
+  // (events, deliveryContext), events an ordered vector.
+  describe('partition CDC subscriber', () => {
+    async function subscribedHandler(handler) {
+      let partitionSubscriber = null;
+      const partition = {
+        async subscribeToCDCWithHandshake(subscriber, options) {
+          partitionSubscriber = subscriber;
+          return {subscriberId: options.subscriberId, versionContext: {streamVersion: 0}};
+        },
+        unsubscribeFromCDC() {},
+      };
+      const wiring = createLiveQueryStartupWiring({
+        nodeId: 'node-vector',
+        systemTableCache: createMockSystemCache([]),
+        sqlQueryEngine: null,
+        partitions: new Map([['orders-p1', partition]]),
+      });
+      await wiring.liveQueryManager.subscribeToPartition('orders-p1', 'query-1', handler, {});
+      return {partitionSubscriber, wiring};
+    }
+
+    it('hands every member of a vector to the query handler in order, normalized, and ' +
+      'waits for each before the next', async () => {
+      const seen = [];
+      let running = 0;
+      const {partitionSubscriber, wiring} = await subscribedHandler(async (change) => {
+        running += 1;
+        assert.equal(running, 1, 'members are handled one at a time, in order');
+        await Promise.resolve();
+        seen.push(change);
+        running -= 1;
+        return {handled: change.data?.id ?? change.old_data?.id};
+      });
+      const events = Object.freeze([
+        {tableName: 'orders', operation: 'insert', data: {id: 'o-1'}, sequenceNumber: 7},
+        {tableName: 'orders', operation: 'UPDATE', data: {id: 'o-1', total: 2},
+          sourcePartition: 'orders-p1', timestamp: '1000:0:n'},
+        {tableName: 'orders', operation: 'DELETE', data: {id: 'o-1'}},
+      ]);
+      const answer = await partitionSubscriber(events, null);
+      assert.deepEqual(seen.map((change) => [change.operation, change.partitionId,
+        change.data, change.old_data, change.sequenceNumber, change.hlc_timestamp]), [
+        ['INSERT', 'orders-p1', {id: 'o-1'}, null, 7, null],
+        ['UPDATE', 'orders-p1', {id: 'o-1', total: 2}, null, null, '1000:0:n'],
+        ['DELETE', 'orders-p1', null, {id: 'o-1'}, null, null],
+      ]);
+      assert.deepEqual(answer, {handled: 'o-1'}, 'the answer is the handler\'s for the last member');
+      wiring.shutdown();
+    });
+
+    it('a vector of one, as the non-durable producer hands it, reaches the handler ' +
+      'synchronously and keeps the handler\'s answer', async () => {
+      const seen = [];
+      const {partitionSubscriber, wiring} = await subscribedHandler((change) => {
+        seen.push(change.data.id);
+        return {success: false, reason: 'handler-refusal'};
+      });
+      const pending = partitionSubscriber(Object.freeze([
+        {tableName: 'orders', operation: 'INSERT', data: {id: 'o-9'}}]));
+      assert.deepEqual(seen, ['o-9'], 'the handler ran before the subscriber yielded');
+      assert.deepEqual(await pending, {success: false, reason: 'handler-refusal'});
+      wiring.shutdown();
+    });
+  });
 });

@@ -738,15 +738,15 @@ class SeedCacheHydrationPhase {
   /**
    * Propagate partition CDC via topology-owned propagation path.
    * @param {Object} messageGroupService
-   * @param {Object} cdcEvent
+   * @param {Array<Object>} events
    * @return {Promise<Object>}
    */
   async propagatePartitionCDCEvent(
-    messageGroupService, cdcEvent, deliveryContext = null,
+    messageGroupService, events, deliveryContext = null,
   ) {
     return this.runtimeBridgeOwner.propagatePartitionCDCEvent(
       messageGroupService,
-      cdcEvent,
+      events,
       deliveryContext,
     );
   }

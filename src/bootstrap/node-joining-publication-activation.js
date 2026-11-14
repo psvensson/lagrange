@@ -319,8 +319,8 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
               ),
           buildMessageGroupOwnerNotReadyError: (selection, errorOptions) =>
             this.buildMessageGroupOwnerNotReadyError(selection, errorOptions),
-          propagatePartitionCDCEvent: (messageGroupService, cdcEvent, deliveryContext) =>
-            this.propagatePartitionCDCEvent(messageGroupService, cdcEvent, deliveryContext),
+          propagatePartitionCDCEvent: (messageGroupService, events, deliveryContext) =>
+            this.propagatePartitionCDCEvent(messageGroupService, events, deliveryContext),
         });
         const handshake = await partition.subscribeToCDCWithHandshake(
           cdcSubscriber,
@@ -705,19 +705,20 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
     return this.runtimeHandoffOwner.startLatencyTopologyLifecycle();
   }
   /**
-   * Propagate partition CDC via topology-owned propagation path.
+   * Propagate partition CDC via topology-owned propagation path: one request
+   * carries the partition lane's vector as `events`.
    * @param {Object} messageGroupService
-   * @param {Object} cdcEvent
+   * @param {Array<Object>} events
    * @return {Promise<Object>}
    * @private
    */
-  async propagatePartitionCDCEvent(messageGroupService, cdcEvent, deliveryContext = null) {
+  async propagatePartitionCDCEvent(messageGroupService, events, deliveryContext = null) {
     const topologyOwners = assertCritical(
       this.latencyTopology,
       JOINING_ERROR_MSG.LATENCY_TOPOLOGY_MISSING,
     );
     return topologyOwners.cdcGroupPropagationService.propagateCDCEvent({
-      ...copyCdcEvent(cdcEvent),
+      events: events.map((cdcEvent) => copyCdcEvent(cdcEvent)),
       sourceMessageGroupService: messageGroupService,
       deliveryContext,
     });

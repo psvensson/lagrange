@@ -301,6 +301,22 @@ class SystemTableCacheTombstoneStore {
     return false;
   }
 
+  /**
+   * Hand one key's tombstone, exactly as it stands, to another store: the
+   * private copy a cache previews a row on. Read-only here: nothing in this
+   * store is evicted, pruned or touched, and an expired entry is handed over
+   * as it is, for the receiving store to judge against the same clock.
+   * @param {SystemTableCacheTombstoneStore} target
+   * @param {string} tableName
+   * @param {string} key
+   */
+  copyKeyTo(target, tableName, key) {
+    const tombstone = this.tables.get(tableName)?.get(key);
+    if (tombstone) {
+      target.tables.get(tableName).set(key, {...tombstone});
+    }
+  }
+
   clear() {
     for (const tombstoneTable of this.tables.values()) {
       tombstoneTable.clear();

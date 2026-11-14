@@ -376,7 +376,11 @@ function subscribe(t, f, producer) {
       observeOwnerCall(f, 'async-selection', () =>
         resolveOperationalMessageGroupSelectionAsync(f.services, options)),
     buildMessageGroupOwnerNotReadyError,
-    beforePropagation: (event) => {
+    // The subscriber contract hands a vector; this witness owes one source
+    // occurrence, so each vector carries exactly that one event.
+    beforePropagation: (events) => {
+      assert.equal(events.length, 1, 'one owed occurrence ships as a vector of one');
+      const [event] = events;
       f.event = structuredClone(event);
       emit(f, 'producer-durable-event-entered-subscriber', {event: f.event,
         obligation: readCdcObligation(producer.leader.db, event.eventKey)});
@@ -385,14 +389,14 @@ function subscribe(t, f, producer) {
       const result = await Reflect.apply(bridge.propagatePartitionCDCEvent, bridge, args);
       // Capture the frontier at the same real bridge-return continuation as
       // before tracing; the observer's later settlement must not move this cut.
-      emit(f, 'actual-propagation-return', {result, event: structuredClone(args[1]),
+      emit(f, 'actual-propagation-return', {result, event: structuredClone(args[1][0]),
         recipient: view(f)});
       return result;
     }),
     afterPropagation: () => emit(f, 'subscriber-after-propagation'),
   });
-  const subscriber = (event, deliveryContext) => observeOwnerCall(f, 'subscriber', () =>
-    actualSubscriber(event, deliveryContext));
+  const subscriber = (events, deliveryContext) => observeOwnerCall(f, 'subscriber', () =>
+    actualSubscriber(events, deliveryContext));
   subscriber.getCDCPropagationService = () => actualSubscriber.getCDCPropagationService();
   subscriber.canAcceptCDCEvent = (event) => {
     try {
