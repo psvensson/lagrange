@@ -1,0 +1,29 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "service-lifecycle-reconciliation-row-integrity",
+  "status": "fail",
+  "interpretation": "Original measurement that motivates the repair; not candidate proof. Measured on the registered three-node journey at source ed708dfd01e5ffb446f49ba0447a5bf9915f511a (sealed base 9a22bf79b plus observation-only diagnostics).",
+  "receipts": [
+    {
+      "id": "original-journey-partial-row-episode",
+      "measured": true,
+      "passed": false,
+      "detail": "Native job 81b81f30-d9b1-4132-854c-6f1c3dffe647 on tv-dator. Episode 1 of predicate g-projection-agrees-with-authority: observer de5a0bc4, partition replica_operations-p1, row replica_operations-p1-r4, longest span 1389 ms against a 1000 ms bound. Observer log lines 2182-2183 (2026-11-13T22:28:06.898Z): cache UPSERT by authoritative_service_lifecycle_reconciliation, before {status syncing, updated_at 1794608883548, originHlc 1794608883960-0-services-p1-r1}, after {status active, updated_at 1794608885950, originHlc null}, incomingVersionAccepted true; the journey report records exclusion raft_role_missing for that replica while authorityRows hold raft_role follower (seed applied index 336 at :06.209). The row was rewritten by authoritative_observation_reconciliation at about :08.05, before the live CDC event arrived. Deterministic reproduction on a scratch copy of the same source: {raft_role: null, status: active, aligned: true}. Census of the run: 12 lifecycle-reconciliation writes (7 merged over an existing row; this is the one that crossed a role change)."
+    }
+  ],
+  "unmeasuredObligations": [
+    "reproducer-red-on-original",
+    "reproducer-and-owned-roots-green-on-candidate",
+    "real-consumer-witness",
+    "independent-verification"
+  ],
+  "source": {
+    "sha": "ed708dfd01e5ffb446f49ba0447a5bf9915f511a",
+    "sealedBase": "9a22bf79b61610bd782cf82ca45844f325f6a8e6"
+  },
+  "evidence": {
+    "directory": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261113/tv-diagnostic-retained-ed708dfd",
+    "analysis": "partial-row cache write trace of 2026-11-14, retained with the coordination records"
+  },
+  "evidenceCeiling": "The cache observation logs status, updated_at and updated_at_hlc only; the null raft_role is read from the journey report's projection exclusion and reproduced deterministically, not read from the cache log line. One run."
+}
