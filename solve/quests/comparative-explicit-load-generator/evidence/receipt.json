@@ -117,6 +117,12 @@
           }
         }
       ]
+    },
+    {
+      "id": "independent-verification",
+      "measured": true,
+      "passed": true,
+      "detail": "Independent verifier subagent:verify-load-generator-1: REJECT of 545b6245d (unwitnessed option-like guard, mutant m4 survived), then APPROVE of 43194b0f4 after the corrective round; seven planted defects m1-m7 each killed by a named test on lab hosts; independent green run c25c44a0 (4 files, 58 tests). Reports independent-verification-545b6245d.md and independent-verification-43194b0f4.md retained with the coordination records."
     }
   ],
   "source": {
