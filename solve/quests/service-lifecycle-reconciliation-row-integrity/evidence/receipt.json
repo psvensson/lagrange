@@ -1,0 +1,49 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "service-lifecycle-reconciliation-row-integrity",
+  "status": "fail",
+  "interpretation": "Original measurement that motivates the repair; not candidate proof. Measured on the registered three-node journey at source ed708dfd01e5ffb446f49ba0447a5bf9915f511a (sealed base 9a22bf79b plus observation-only diagnostics).",
+  "receipts": [
+    {
+      "id": "original-journey-partial-row-episode",
+      "measured": true,
+      "passed": false,
+      "detail": "Native job 81b81f30-d9b1-4132-854c-6f1c3dffe647 on tv-dator. Episode 1 of predicate g-projection-agrees-with-authority: observer de5a0bc4, partition replica_operations-p1, row replica_operations-p1-r4, longest span 1389 ms against a 1000 ms bound. Observer log lines 2182-2183 (2026-11-13T22:28:06.898Z): cache UPSERT by authoritative_service_lifecycle_reconciliation, before {status syncing, updated_at 1794608883548, originHlc 1794608883960-0-services-p1-r1}, after {status active, updated_at 1794608885950, originHlc null}, incomingVersionAccepted true; the journey report records exclusion raft_role_missing for that replica while authorityRows hold raft_role follower (seed applied index 336 at :06.209). The row was rewritten by authoritative_observation_reconciliation at about :08.05, before the live CDC event arrived. Deterministic reproduction on a scratch copy of the same source: {raft_role: null, status: active, aligned: true}. Census of the run: 12 lifecycle-reconciliation writes (7 merged over an existing row; this is the one that crossed a role change)."
+    },
+    {
+      "id": "reproducer-red-on-original",
+      "measured": true,
+      "passed": true,
+      "detail": "Reproducer-only commit 2a60ee97307d47c90db19f1ef63a7d2e081a028c (sealed base 9a22bf79b + quest record + tests; src unchanged). Lab job 8e2873c6-1025-4a3a-a397-f343782ad07f on adams-gamla, state FAILED, exit 1, as expected: test/cache/system-table-cache-services-lifecycle-merge.test.js 9 fail/38 (newer authority row keeps cached raft_role null; partial row labelled with the authoritative version reported aligned; role-only newer version reported aligned and not installed; equal-version null/missing cached raft_role reported aligned and null kept; newer row version with newer cached lifecycle keeps the older cached role); test/rebalancer/operation-workflow-active-cache-handoff.test.js 12 fail/127, all in the three new witness cases: the handoff completes while the cached target keeps raft_role null, is no priority-spread holder and the projection reports raft_role_missing for the target partition. Pre-existing tests in both files pass. Earlier job 63cfb628-4a8c-410a-8687-a222ed8d18d2 (commit 7ee430928) also FAILED but its witness precondition read the wrong projection block (fixture error, fixed in 2a60ee973); retained as recorded, not credited.",
+      "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/lifecycle-row/red-repro-2a60ee97"
+    },
+    {
+      "id": "reproducer-and-owned-roots-green-on-candidate",
+      "measured": true,
+      "passed": true,
+      "detail": "Candidate 3bd5053b5c3a3109c96416c9b0c9ae315d3887fa. Lab job 104e18d8-30de-480e-a934-574f5e8ee0e5 on adams-gamla, state COMPLETE, exit 0: 55/55 test files, 2706 assertions \u2014 all 26 test/cache files, the handoff witness file, and every test file referencing the builders, the lifecycle mutation mode, refreshAuthoritativeCacheRow/refreshAuthoritativeReplicaCacheRow or applyAuthoritativeCacheRepair, plus the priority-spread projection/census consumers.",
+      "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/lifecycle-row/green-candidate-3bd5053b"
+    },
+    {
+      "id": "real-consumer-witness",
+      "measured": true,
+      "passed": true,
+      "detail": "test/rebalancer/operation-workflow-active-cache-handoff.test.js witness cases drive workflowOwner.applyReconciledReplicaStatus(ACTIVE) -> confirmActiveReplicaTerminalHandoff -> refreshAuthoritativeCacheRow -> applyAuthoritativeCacheRepair -> SystemTableCache.applySystemTableChange (lifecycle mode) and read the outcome through buildDerivedPriorityPartitionSummary and isPrioritySpreadHolderServiceRow over cache.getAll('services'): red on 2a60ee973 (job 8e2873c6, raft_role_missing after completion), green on 3bd5053b5 (job 104e18d8).",
+      "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/lifecycle-row/green-candidate-3bd5053b"
+    }
+  ],
+  "unmeasuredObligations": [
+    "independent-verification"
+  ],
+  "source": {
+    "sha": "ed708dfd01e5ffb446f49ba0447a5bf9915f511a",
+    "sealedBase": "9a22bf79b61610bd782cf82ca45844f325f6a8e6",
+    "candidate": "3bd5053b5c3a3109c96416c9b0c9ae315d3887fa",
+    "reproducerCommit": "2a60ee97307d47c90db19f1ef63a7d2e081a028c"
+  },
+  "evidence": {
+    "directory": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261113/tv-diagnostic-retained-ed708dfd",
+    "analysis": "partial-row cache write trace of 2026-11-14, retained with the coordination records"
+  },
+  "evidenceCeiling": "The cache observation logs status, updated_at and updated_at_hlc only; the null raft_role is read from the journey report's projection exclusion and reproduced deterministically, not read from the cache log line. One run."
+}
