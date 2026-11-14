@@ -694,3 +694,52 @@ test('seed node-ready hook, residual pin: older writes delivered again after an 
     vector.rebalanceOwner.clearNodeReadyRebalanceState();
   }
 });
+
+// Supersession record 4, S-11: the missed trigger. The node cache holds a
+// delete tombstone for the node. The first member of the vector is a ready
+// write older than the delete (the real cache refuses it) that carries no
+// heartbeat watermark; the second is the newer ready row. Under one-event
+// delivery the newer row has no previous row and triggers the node-ready
+// rebalance. A hook that takes the refused write as the previous row sees a
+// node that was already ready and does not trigger.
+test('seed node-ready hook, missed-trigger anchor: a newer ready row still triggers when the ' +
+  'member before it is an older ready write the cache refuses under a delete tombstone',
+async () => {
+  const perEvent = await nodeReadyHookSeed();
+  const vector = await nodeReadyHookSeed();
+  try {
+    const history = [
+      nodesEvent('INSERT', nodeRow('n1', 'joining', {last_heartbeat: 5, updated_at: 20})),
+      nodesEvent('DELETE', {node_id: 'n1'}),
+    ];
+    for (const event of history) {
+      await perEvent.subscriber(Object.freeze([event]));
+      await vector.subscriber(Object.freeze([event]));
+    }
+    const events = [
+      nodesEvent('INSERT', nodeRow('n1', SERVICE_STATUS.ACTIVE,
+        {ready_lease_expires_at: LEASE, updated_at: 10})),
+      nodesEvent('UPDATE', nodeRow('n1', SERVICE_STATUS.ACTIVE,
+        {ready_lease_expires_at: LEASE + 1, last_heartbeat: 6, updated_at: 30})),
+    ];
+    const from = history.length;
+    for (const event of events) await perEvent.subscriber(Object.freeze([event]));
+    await vector.subscriber(Object.freeze([...events]));
+    const decisions = (seed) => seed.triggers.slice(from).map((trigger) => trigger.scheduled);
+    const previous = (seed) => seed.triggers.slice(from).map((trigger) => trigger.previousRow);
+    assert.deepEqual(decisions(perEvent), [false, true],
+      'one-event delivery: the newer ready row triggers the node-ready rebalance');
+    assert.deepEqual(previous(perEvent), [null, null],
+      'one-event delivery: the tombstone refused the older write, the newer row has no ' +
+      'previous row');
+    assert.deepEqual(decisions(vector), [false, true],
+      'one vector: the node-ready trigger of the newer row is not missed');
+    assert.deepEqual(previous(vector), [null, null],
+      'one vector: the newer row is handed no previous row either');
+    assert.deepEqual(pendingOf(vector), ['n1']);
+    assert.deepEqual(vector.cachedRows(), perEvent.cachedRows());
+  } finally {
+    perEvent.rebalanceOwner.clearNodeReadyRebalanceState();
+    vector.rebalanceOwner.clearNodeReadyRebalanceState();
+  }
+});
