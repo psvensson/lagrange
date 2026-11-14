@@ -45,7 +45,7 @@ const PARTITION_CDC_DELIVERY_LITERAL = Object.freeze({
   CDCREPLAYRETRYDEPTH: 'cdcReplayRetryDepth',
 });
 const CDC_SUBSCRIBER_NOT_READY_MSG = 'CDC subscriber not ready for delivery';
-const CDC_SUBSCRIBER_REFUSED_MSG = 'CDC subscriber refused the event';
+const CDC_SUBSCRIBER_REFUSED_MSG = 'CDC subscriber refused the event vector';
 const CDC_SUBSCRIBER_REFUSED_CODE = 'cdc_subscriber_refused';
 
 // The one subscriber contract (quest cdc-obligation-range-shipping, record
