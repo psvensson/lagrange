@@ -15,8 +15,10 @@ import {test} from 'node:test';
 import {
   campaignImagesByRole,
   collectHostFacts,
+  ensureProductImages,
   resolvePinnedImage,
 } from '../comparative-benchmark-host-preparation.js';
+import {dockerRunDetached, dockerRunOnceCommand} from '../real-product-remote-shell.js';
 import {contentIdentityOf} from '../real-product-identity.js';
 import {
   measureLoadGeneratorRequirement,
@@ -191,8 +193,10 @@ test('selection requires native identity and policy; fresh missing members never
   assert.throws(() => select(), (error) => {
     const reasons = Object.fromEntries(arrayMap(error.diagnostic.excluded,
       (entry) => [entry.name, entry.reason]));
-    assert.equal(reasons.b, 'host-ineligible: native thermal decision unavailable');
-    assert.equal(reasons.c, reasons.b);
+    // Each exclusion keeps its own typed cause: an unavailable native decision
+    // carries the native reason, a missing endpoint says it was never recorded.
+    assert.match(reasons.b, /^host-ineligible: native thermal decision unavailable \(UNAVAILABLE: .+\)$/u);
+    assert.equal(reasons.c, 'host-ineligible: native thermal endpoint not recorded');
     return error.code === 'refused_insufficient_host_topology';
   });
   Object.assign(state.nodes.b.testCapability,
@@ -236,6 +240,40 @@ test('the pinned image resolves per host by content identity across image stores
   assert.equal(arraySome(calls, (call) => /docker pull/u.test(call.command)), false);
 });
 
+// Decision D1 (2026-11-14): a run never places an image. An image absent on a
+// host is a typed refusal naming host, role and image; nothing is pulled.
+test('an image absent on a host refuses the campaign naming host, role and image; no pull',
+  async () => {
+    const {sshRun, calls} = createScriptedSsh([
+      [/docker image inspect --format '\{\{\.Id\}\}' 'pingcap\/tikv:v8\.5\.8'/u,
+        'Error: No such image: pingcap/tikv:v8.5.8\n__exit_code=1'],
+      [/docker image inspect/u, `sha256:${'d'.repeat(64)}\n__exit_code=0`]]);
+    const present = await ensureProductImages({hosts: [{ip: '10.0.0.1'}], role: 'data',
+      images: ['postgres:17-alpine'], sshRun, opts: {}});
+    assert.deepEqual(present, [{host: '10.0.0.1', role: 'data', image: 'postgres:17-alpine',
+      imageId: `sha256:${'d'.repeat(64)}`}]);
+    await assert.rejects(ensureProductImages({hosts: [{ip: '10.0.0.2'}], role: 'data',
+      images: ['postgres:17-alpine', 'pingcap/tikv:v8.5.8'], sshRun, opts: {}}), (error) => {
+      assert.equal(error.code, 'image_unavailable');
+      assert.deepEqual({host: error.diagnostic.host, role: error.diagnostic.role,
+        image: error.diagnostic.image, reason: error.diagnostic.reason},
+      {host: '10.0.0.2', role: 'data', image: 'pingcap/tikv:v8.5.8', reason: 'absent'});
+      assert.match(error.message, /pingcap\/tikv:v8\.5\.8.*10\.0\.0\.2.*data/u);
+      return true;
+    });
+    assert.equal(arraySome(calls, (call) => /docker pull/u.test(call.command)), false);
+  });
+
+// Decision D1: no container the campaign starts may pull implicitly.
+test('every campaign docker run refuses to pull (--pull=never)', async () => {
+  const {sshRun, calls} = createScriptedSsh([[/docker run -d/u, 'a'.repeat(64)]]);
+  await dockerRunDetached({sshRun, opts: {}, host: '10.0.0.1', campaignId: 'bench-x',
+    role: 'pd', image: 'pingcap/pd:v8.5.8'});
+  assert.match(calls[0].command, / --pull=never .*'?pingcap\/pd:v8\.5\.8'?$/u);
+  assert.match(dockerRunOnceCommand({campaignId: 'bench-x', image: 'postgres:17-alpine',
+    commandArgs: ['psql']}), /^docker run --rm .* --pull=never .*postgres:17-alpine'? '?psql'?$/u);
+});
+
 test('docker disk is a fleet fact: a host below the data-host requirement is not a data ' +
   'host but may be the load generator (2026-11-01: adam-laptop had 433 MB free)', () => {
   const state = inventory([['adam-laptop', 'free'], ['adams-gamla', 'free'],
@@ -257,23 +295,27 @@ test('docker disk is a fleet fact: a host below the data-host requirement is not
 // every host, the load generator included, so a load generator with little
 // docker disk (adam-laptop, 408 MB free) failed staging on images it never
 // runs. Data hosts hold the product images and the TiDB readiness client
-// (it runs on the TiDB SQL host); the load generator holds no image.
-test('product and readiness-client images go to the data hosts; the load generator gets none',
-  () => {
-    const all = campaignImagesByRole({targets: ['lagrange', 'tidb-tikv', 'pg-single-primary'],
-      lagrangeImage: 'psvensson/lagrange@sha256:abc'});
-    assert.deepEqual(all.client, []);
-    assert.deepEqual([...all.data].sort(), ['mysql:8.4.11', 'pingcap/pd:v8.5.8',
-      'pingcap/tidb:v8.5.8', 'pingcap/tikv:v8.5.8', 'postgres:17-alpine',
-      'psvensson/lagrange@sha256:abc']);
-    const noTidb = campaignImagesByRole({targets: ['lagrange', 'pg-single-primary'],
-      lagrangeImage: 'psvensson/lagrange@sha256:abc'});
-    assert.deepEqual(noTidb.client, []);
-    assert.deepEqual([...noTidb.data].sort(), ['postgres:17-alpine',
-      'psvensson/lagrange@sha256:abc']);
-  });
+// (it runs on the TiDB SQL host). The load generator holds exactly the psql
+// client image the Lagrange deployer runs from it (real-product-sql-clients.js
+// psqlText, `from: clientIp`), and only when Lagrange is a target.
+test('product and readiness-client images go to the data hosts; the load generator holds ' +
+  'only the psql client image', () => {
+  const all = campaignImagesByRole({targets: ['lagrange', 'tidb-tikv', 'pg-single-primary'],
+    lagrangeImage: 'psvensson/lagrange@sha256:abc'});
+  assert.deepEqual(all.client, ['postgres:17-alpine']);
+  assert.deepEqual([...all.data].sort(), ['mysql:8.4.11', 'pingcap/pd:v8.5.8',
+    'pingcap/tidb:v8.5.8', 'pingcap/tikv:v8.5.8', 'postgres:17-alpine',
+    'psvensson/lagrange@sha256:abc']);
+  const noTidb = campaignImagesByRole({targets: ['lagrange', 'pg-single-primary'],
+    lagrangeImage: 'psvensson/lagrange@sha256:abc'});
+  assert.deepEqual(noTidb.client, ['postgres:17-alpine']);
+  assert.deepEqual(campaignImagesByRole({targets: ['tidb-tikv', 'pg-single-primary'],
+    lagrangeImage: 'psvensson/lagrange@sha256:abc'}).client, []);
+  assert.deepEqual([...noTidb.data].sort(), ['postgres:17-alpine',
+    'psvensson/lagrange@sha256:abc']);
+});
 
-// The load generator holds no image; it needs only the checkout worktree at
+// Besides the psql client image, the load generator needs the checkout worktree at
 // the harness commit (prepareLoadGeneratorCheckout), Node at the engines
 // floor, and room on its checkout's filesystem for that worktree. A host
 // short of the measured requirement is refused as `host-ineligible:

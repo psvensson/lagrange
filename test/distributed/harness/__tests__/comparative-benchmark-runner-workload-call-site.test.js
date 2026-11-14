@@ -256,7 +256,7 @@ test('the load-generator worktree installs the reference-client drivers; a faile
     harnessCommit: 'abc', campaignId: 'bench-x'});
   const install = arrayFind(installed.calls, (call) => stringIncludes(call.command, 'npm ci'));
   assert.match(install.command, /cd '\/srv\/lagrange\/test-output\/bench-worktrees\/bench-x'/u);
-  assert.match(install.command, /PATH='\/opt\/node\/v22\/bin':"\$PATH" npm ci --prefix test\/distributed\/reference-client --ignore-scripts/u);
+  assert.match(install.command, /PATH='\/opt\/node\/v22\/bin':"\$PATH" npm ci --offline --prefix test\/distributed\/reference-client --ignore-scripts/u);
   assert.equal(ok.host.driverInstall.status, 'installed');
   const failed = createScriptedSsh([[/git worktree add/u, 'abc'],
     [/npm ci/u, 'npm ERR! network\n__exit_code=1'],
@@ -297,6 +297,29 @@ test('a load-generator checkout without the harness commit refuses, typed, and n
     assert.equal(arraySome(ssh.calls, (call) => stringIncludes(call.command, 'fetch')), false);
     assert.equal(arraySome(ssh.calls, (call) => stringIncludes(call.command, 'worktree add')),
       false);
+  });
+
+// Decision D2 (2026-11-14): the reference client installs offline only, from
+// the host's npm cache; a tarball missing from that cache refuses the TiDB arm
+// and names the tarball. No online install is attempted.
+test('the reference-client install is offline only; a tarball missing from the cache is named',
+  async () => {
+    const host = {ip: '10.0.0.9', repoPath: '/srv/lagrange', nodePath: '/usr/bin/node'};
+    const url = 'https://registry.npmjs.org/@types/node/-/node-22.20.2.tgz';
+    const ssh = createScriptedSsh([[/git worktree add/u, 'abc'],
+      [/npm ci/u, 'npm error code ENOTCACHED\nnpm error request to ' + url +
+        ' failed: cache mode is \'only-if-cached\' but no cached response is available.\n' +
+        '__exit_code=1'], COMMIT_PRESENT]);
+    const prepared = await prepareLoadGeneratorCheckout({sshRun: ssh.sshRun, opts: {}, host,
+      harnessCommit: 'abc', campaignId: 'bench-x'});
+    const install = arrayFind(ssh.calls, (call) => stringIncludes(call.command, 'npm ci'));
+    assert.match(install.command, / npm ci --offline /u);
+    assert.deepEqual(prepared.host.driverInstall.missing, [url]);
+    await assert.rejects(createRemoteWorkloadRunner({sshRun: ssh.sshRun, opts: {},
+      host: prepared.host, harnessCommit: 'abc', campaignId: 'bench-x'})({system: 'tidb-tikv'}, RUN),
+    (error) => error.code === 'load_generator_driver_missing' &&
+      error.diagnostic.reason === 'offline_cache_incomplete' &&
+      stringIncludes(error.message, url));
   });
 
 test('a worktree removal that fails is recorded as an incomplete closure, never swallowed',
