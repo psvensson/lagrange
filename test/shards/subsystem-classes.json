@@ -9,7 +9,7 @@
     "cli-tooling": 99,
     "control-plane": 238,
     "convergence-topology": 80,
-    "distributed-harness": 217,
+    "distributed-harness": 218,
     "examples-e2e": 8,
     "pgwire-compat": 23,
     "placement-rebalance": 281,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2662,
-  "digest": "fnv1a32-972ca0d7",
+  "censusSize": 2663,
+  "digest": "fnv1a32-7e00793e",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-145c337c",
+  "observationDigest": "fnv1a32-041c78cb",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -909,6 +909,7 @@
     "test/distributed/harness/__tests__/cluster.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/comparative-benchmark-chain-acceptance.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/comparative-benchmark-defect-regressions.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/comparative-benchmark-provisioning-entrypoint.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/comparative-benchmark-provisioning.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/comparative-benchmark-runner-campaign.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/comparative-benchmark-runner-harness-identity.test.js": "distributed-harness",
@@ -7248,6 +7249,30 @@
         "docs/benchmarks",
         "src",
         "test/distributed/harness"
+      ]
+    },
+    "test/distributed/harness/__tests__/comparative-benchmark-provisioning-entrypoint.test.js": {
+      "files": [
+        "Dockerfile",
+        "docs/benchmarks/cloud/run-comparative-benchmarks.mjs",
+        "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
+        "src/admin/static/playback-viewer.html",
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
+        "test/distributed/harness/container-memory-working-set.js",
+        "test/distributed/harness/run-benchmark-workload.js",
+        "test/distributed/reference-client/package-lock.json"
+      ],
+      "directories": [
+        "src",
+        "test/distributed/reference-client"
+      ],
+      "env": [
+        "FAKE_REMOTE_HOSTS_STATE",
+        "PATH"
       ]
     },
     "test/distributed/harness/__tests__/comparative-benchmark-provisioning.test.js": {

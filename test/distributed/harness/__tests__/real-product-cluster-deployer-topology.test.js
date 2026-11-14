@@ -200,6 +200,33 @@ test('Lagrange: with --storage-root each node directory is owned by the runtime 
   assert.equal(arraySome(plain.calls, (call) => stringIncludes(call.command, 'chown')), false);
 });
 
+// A node directory that already holds data owned by someone other than the
+// runtime user is foreign data: the deployer refuses, typed, and never
+// re-owns it or starts that node. An absent directory, an empty one (dockerd
+// leaves 0:0 empty directories behind) or one the runtime user already owns
+// (an earlier run of the same campaign) is prepared as before.
+test('Lagrange: a --storage-root node directory with foreign-owned data is refused, never ' +
+  're-owned', async () => {
+  const content = contentIdentityOf([`sha256:${LAGRANGE_IMAGE_ID.slice(-64)}`]);
+  const foreign = createScriptedSsh([
+    [(command, host) => host === HOSTS[1] && /^docker run --rm .*lagrange-2/u.test(command),
+      'foreign 0:0\n__exit_code=3'],
+    ...lagrangeHealthyRules(createContainerLedger(), {hosts: HOSTS})]);
+  await assert.rejects(deployers.deployComparativeTarget('lagrange', {...input(foreign.sshRun),
+    opts: {...OPTS, storageRoot: '/srv/bench', lagrangeImageContent: content}}), (error) => {
+    assert.equal(error.code, 'deployment_command_failed');
+    assert.equal(error.diagnostic.reason, 'storage_foreign_owner');
+    assert.equal(error.diagnostic.host, HOSTS[1]);
+    assert.equal(error.diagnostic.owner, '0:0');
+    return true;
+  });
+  const prepare = arrayFind(foreign.calls, (call) => call.host === HOSTS[1] &&
+    /^docker run --rm /u.test(call.command));
+  assert.match(prepare.command, /-n "\$\(ls -A \/campaign\/lagrange-2\)"/u);
+  assert.equal(arraySome(foreign.calls, (call) => call.host === HOSTS[1] &&
+    /^docker run -d .*lagrange-node/u.test(call.command)), false);
+});
+
 // Coordinator decision 2 (2026-11-02): an exhausted Lagrange arm's version is
 // null only with the reason the product did not answer it (live campaign
 // bench-live-20261101-b-r6: node 2 never ready, its facts endpoint silent).
