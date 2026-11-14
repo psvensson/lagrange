@@ -6,6 +6,8 @@ import {
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {areAuthoritativeSystemTableCacheRowsAligned} from
+  '../../src/cache/system-table-cache-authoritative-reconciliation.js';
 import {
   applyCDCIntegrationServiceCacheVisibilityWait,
 } from '../../src/cdc/cdc-integration-service-cache-visibility-wait.js';
@@ -1329,7 +1331,19 @@ function projectTargetPartitionSpread(cache) {
   };
 }
 
-async function driveHandoffOverCachedTarget(t, cachedTargetRow, authorityRow) {
+function expectedExclusionBefore(cachedTargetRow) {
+  if (cachedTargetRow.status !== 'active') {
+    return {[`status_${cachedTargetRow.status}`]: 1};
+  }
+  return cachedTargetRow.raft_role ? null : {raft_role_missing: 1};
+}
+
+async function driveHandoffOverCachedTarget(
+  t,
+  cachedTargetRow,
+  authorityRow,
+  expectedRow = authorityRow,
+) {
   const cache = new SystemTableCache();
   seedPrioritySpreadPeers(cache);
   cache.applySystemTableChange(
@@ -1338,10 +1352,18 @@ async function driveHandoffOverCachedTarget(t, cachedTargetRow, authorityRow) {
     cachedTargetRow,
   );
   t.same(
-    projectTargetPartitionSpread(cache).block?.exclusionReasonCounts,
-    {[cachedTargetRow.status === 'active' ?
-      'raft_role_missing' : `status_${cachedTargetRow.status}`]: 1},
-    'before the handoff the projection excludes the cached target',
+    projectTargetPartitionSpread(cache).block?.exclusionReasonCounts ?? null,
+    expectedExclusionBefore(cachedTargetRow),
+    'before the handoff the projection reads the cached target as cached',
+  );
+  t.equal(
+    areAuthoritativeSystemTableCacheRowsAligned(
+      SYSTEM_TABLE_NAME.SERVICES,
+      cache.get(SYSTEM_TABLE_NAME.SERVICES, TEST_REPLICA_ID),
+      authorityRow,
+    ),
+    false,
+    'the cached target is not reported aligned before the refresh',
   );
   const coordinator = createTestCoordinator({
     nodeId: TEST_NODE_ID,
@@ -1367,9 +1389,9 @@ async function driveHandoffOverCachedTarget(t, cachedTargetRow, authorityRow) {
   t.same(
     completedOperationIds,
     [TEST_OPERATION_ID],
-    'the handoff completes against the authoritative row',
+    'the handoff completes',
   );
-  t.same(targetRow, authorityRow, 'the cached target is the authoritative row');
+  t.same(targetRow, expectedRow, 'the cached target holds the expected row');
   t.equal(
     isPrioritySpreadHolderServiceRow(targetRow),
     true,
@@ -1411,6 +1433,21 @@ test(
       t,
       buildAuthoritativeServiceRow({raft_role: null}),
       buildAuthoritativeServiceRow(),
+    );
+  },
+);
+
+test(
+  'ACTIVE terminal handoff keeps an owner-local voter seed held under an ' +
+    'older label when authority still has no role at a newer version',
+  async (t) => {
+    // CL-035 seed: the cached voter role is ahead of the durable row.
+    const authorityRow = buildAuthoritativeServiceRow({raft_role: null});
+    await driveHandoffOverCachedTarget(
+      t,
+      buildAuthoritativeServiceRow({state_entered_at: 5, updated_at: 5}),
+      authorityRow,
+      {...authorityRow, raft_role: 'follower'},
     );
   },
 );

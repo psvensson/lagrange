@@ -201,8 +201,8 @@ function reconcileLifecycle(cachedRow, authoritativeRow) {
 }
 
 test(
-  'SystemTableCache - lifecycle reconciliation installs every column of a ' +
-    'newer authoritative SERVICES row over an older null-role cached row',
+  'SystemTableCache - lifecycle reconciliation fills the absent cached role ' +
+    'of the measured interleaving from the newer authoritative row',
   (t) => {
     const authoritativeRow = buildLifecycleRow();
     const {row, alignedAfter} = reconcileLifecycle(
@@ -220,8 +220,7 @@ test(
     t.same(
       row,
       authoritativeRow,
-      'the newer authoritative version carries its own columns, raft_role ' +
-        'included, and no superseded HLC',
+      'the absent cached role is filled and the superseded HLC dropped',
     );
     t.equal(row.raft_role, 'follower', 'the older null role is not kept');
     t.equal(alignedAfter, true, 'the installed authoritative row is aligned');
@@ -352,24 +351,155 @@ test(
 );
 
 test(
-  'SystemTableCache - a newer authoritative row version carries its role ' +
-    'while a newer cached lifecycle timestamp keeps the lifecycle fields',
+  'SystemTableCache - lifecycle reconciliation keeps an owner-local voter ' +
+    'seed held under an older label against a newer null authoritative role',
   (t) => {
-    const {row} = reconcileLifecycle(
-      buildLifecycleRow({state_entered_at: 5000, updated_at: 5000}),
+    // CL-035: the owner seeds its voter role ahead of the durable row.
+    const {row, alignedAfter} = reconcileLifecycle(
+      buildLifecycleRow({state_entered_at: 2000, updated_at: 2000}),
+      buildLifecycleRow({raft_role: null}),
+    );
+    t.equal(row.raft_role, 'follower', 'the seeded voter role is kept');
+    t.equal(row.updated_at, 3000);
+    t.equal(alignedAfter, true);
+    t.end();
+  },
+);
+
+test(
+  'SystemTableCache - lifecycle reconciliation keeps a deliberately cleared ' +
+    'null under newer cached evidence or another incarnation',
+  (t) => {
+    const newerLifecycleRow = buildLifecycleRow({
+      raft_role: null,
+      state_entered_at: 4000,
+      updated_at: 4000,
+    });
+    const newerLifecycle = reconcileLifecycle(
+      newerLifecycleRow,
+      buildLifecycleRow({updated_at: 4000}),
+    );
+    t.equal(
+      newerLifecycle.row.raft_role,
+      null,
+      'a strictly newer cached lifecycle keeps its cleared role',
+    );
+    t.equal(newerLifecycle.alignedBefore, true);
+
+    const newerLifecycleError = reconcileLifecycle(
       buildLifecycleRow({
-        status: 'syncing',
-        raft_role: 'learner',
-        state_entered_at: 3000,
-        previous_state: 'creating',
-        updated_at: 6000,
+        status: 'creating',
+        error_message: null,
+        state_entered_at: 4000,
+        updated_at: 4000,
       }),
+      buildLifecycleRow({error_message: 'boom', updated_at: 4000}),
+    );
+    t.equal(
+      newerLifecycleError.row.error_message,
+      null,
+      'an older lifecycle value is never written into a newer lifecycle',
     );
 
-    t.equal(row.raft_role, 'learner', 'the row-versioned role follows authority');
-    t.equal(row.updated_at, 6000, 'the row version follows authority');
-    t.equal(row.status, 'active', 'lifecycle ordering follows state_entered_at');
-    t.equal(row.state_entered_at, 5000);
+    for (const incarnation of [
+      {create_attempt_token: 'attempt-0'},
+      {created_at: 400},
+    ]) {
+      const otherIncarnation = reconcileLifecycle(
+        buildLifecycleRow({raft_role: null, ...incarnation}),
+        buildLifecycleRow(),
+      );
+      t.equal(
+        otherIncarnation.row.raft_role,
+        null,
+        `another incarnation (${Object.keys(incarnation)[0]}) keeps its null`,
+      );
+    }
+    t.end();
+  },
+);
+
+test(
+  'SystemTableCache - documented: a seed-cleared null at an equal lifecycle ' +
+    'version is refilled from the authoritative row',
+  (t) => {
+    // Record v2 routes this case to the cache position-contract unit; this
+    // quest pins the behaviour, it does not claim it.
+    const {alignedBefore, row} = reconcileLifecycle(
+      buildLifecycleRow({raft_role: null}),
+      buildLifecycleRow(),
+    );
+    t.equal(alignedBefore, false);
+    t.equal(row.raft_role, 'follower');
+    t.end();
+  },
+);
+
+test(
+  'SystemTableCache - lifecycle reconciliation fills undefined and other ' +
+    'non-lifecycle absent cached columns',
+  (t) => {
+    const undefinedRole = reconcileLifecycle(
+      buildLifecycleRow({raft_role: undefined}),
+      buildLifecycleRow(),
+    );
+    t.equal(undefinedRole.alignedBefore, false);
+    t.equal(undefinedRole.row.raft_role, 'follower');
+
+    const nullGroup = reconcileLifecycle(
+      buildLifecycleRow({group_id: null}),
+      buildLifecycleRow({group_id: 'group-1'}),
+    );
+    t.equal(nullGroup.alignedBefore, false);
+    t.equal(nullGroup.row.group_id, 'group-1');
+    t.equal(nullGroup.alignedAfter, true);
+    t.end();
+  },
+);
+
+test(
+  'SystemTableCache - lifecycle reconciliation version guards with ' +
+    'non-finite versions on either side',
+  (t) => {
+    for (const updatedAt of [null, 'not-a-number']) {
+      const cachedNonFinite = reconcileLifecycle(
+        buildLifecycleRow({raft_role: null, updated_at: updatedAt}),
+        buildLifecycleRow(),
+      );
+      t.equal(
+        cachedNonFinite.row.raft_role,
+        'follower',
+        `a non-finite cached updated_at (${updatedAt}) is not newer`,
+      );
+    }
+    const cachedLifecycleNonFinite = reconcileLifecycle(
+      buildLifecycleRow({raft_role: null, state_entered_at: null}),
+      buildLifecycleRow(),
+    );
+    t.equal(
+      cachedLifecycleNonFinite.row.raft_role,
+      'follower',
+      'a non-finite cached lifecycle version is not newer',
+    );
+
+    const authorityRowNonFinite = reconcileLifecycle(
+      buildLifecycleRow({raft_role: null}),
+      buildLifecycleRow({updated_at: null}),
+    );
+    t.equal(
+      authorityRowNonFinite.row.raft_role,
+      null,
+      'a non-finite authoritative updated_at fills nothing',
+    );
+    const authorityLifecycleNonFinite = reconcileLifecycle(
+      buildLifecycleRow({raft_role: null}),
+      buildLifecycleRow({state_entered_at: null}),
+    );
+    t.equal(
+      authorityLifecycleNonFinite.row.raft_role,
+      null,
+      'an unresolvable authoritative lifecycle version fills nothing',
+    );
     t.end();
   },
 );
