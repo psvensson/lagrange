@@ -130,45 +130,8 @@ function getStartupAuthoritySnapshotSync(
   observedAt = service.now(),
 ) {
   try {
-    return service.applyFormationReleaseHandoff(
-      service.buildStartupAuthoritySnapshotFromPlanningAnswer(
-        service.getPriorityRecoveryPlanningAnswerSync(nodeId, observedAt),
-      ),
-      observedAt,
-      service.formationReleaseAuthorityNodeId,
-      {
-        projectionNodeId: nodeId,
-        observeAuthority:
-          nodeId === service.formationReleaseAuthorityNodeId &&
-          service.nodeId === service.formationReleaseAuthorityNodeId,
-      },
-    );
-  } catch (error) {
-    return service.buildStartupAuthorityUnavailableSnapshot(
-      PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.PLANNING_READ_FAILED,
-      error,
-    );
-  }
-}
-
-function getFormationReleaseStartupAuthoritySnapshotSync(
-  service,
-  nodeId = service.nodeId,
-  observedAt = service.now(),
-) {
-  try {
-    return service.applyFormationReleaseHandoff(
-      service.buildStartupAuthoritySnapshotFromPlanningAnswer(
-        service.getPriorityRecoveryPlanningAnswerSync(nodeId, observedAt),
-      ),
-      observedAt,
-      service.formationReleaseAuthorityNodeId,
-      {
-        projectionNodeId: nodeId,
-        observeAuthority:
-          nodeId === service.formationReleaseAuthorityNodeId &&
-          service.nodeId === service.formationReleaseAuthorityNodeId,
-      },
+    return service.buildStartupAuthoritySnapshotFromPlanningAnswer(
+      service.getPriorityRecoveryPlanningAnswerSync(nodeId, observedAt),
     );
   } catch (error) {
     return service.buildStartupAuthorityUnavailableSnapshot(
@@ -180,9 +143,8 @@ function getFormationReleaseStartupAuthoritySnapshotSync(
 
 /**
  * Shared async startup-authority projection: read one planning answer via
- * the supplied reader, then apply the formation-release handoff (reading the
- * published handoff from the authority when this node is not observing it).
- * Any read failure collapses to the PLANNING_READ_FAILED unavailable snapshot.
+ * the supplied reader and answer from that evidence alone. Any read failure
+ * collapses to the PLANNING_READ_FAILED unavailable snapshot.
  *
  * @param {function(string, number): Promise<Object>} readPlanningAnswer
  * @param {string} nodeId
@@ -197,29 +159,8 @@ async function resolveStartupAuthoritySnapshotFromPlanningRead(
   observedAt,
 ) {
   try {
-    const startupAuthority =
-      service.buildStartupAuthoritySnapshotFromPlanningAnswer(
-        await readPlanningAnswer(nodeId, observedAt),
-      );
-    const observeAuthority =
-      nodeId === service.formationReleaseAuthorityNodeId &&
-      service.nodeId === service.formationReleaseAuthorityNodeId;
-    const publishedHandoff = observeAuthority ? null :
-      await service.readFormationReleaseHandoffFromAuthority(
-        service.formationReleaseAuthorityNodeId,
-        service.getFormationReleaseAuthorityBootIncarnation(
-          service.formationReleaseAuthorityNodeId,
-        ),
-      );
-    return service.applyFormationReleaseHandoff(
-      startupAuthority,
-      observedAt,
-      service.formationReleaseAuthorityNodeId,
-      {
-        observeAuthority,
-        publishedHandoff,
-        projectionNodeId: nodeId,
-      },
+    return service.buildStartupAuthoritySnapshotFromPlanningAnswer(
+      await readPlanningAnswer(nodeId, observedAt),
     );
   } catch (error) {
     return service.buildStartupAuthorityUnavailableSnapshot(
@@ -227,22 +168,6 @@ async function resolveStartupAuthoritySnapshotFromPlanningRead(
       error,
     );
   }
-}
-
-async function getFormationReleaseStartupAuthoritySnapshot(
-  service,
-  nodeId = service.nodeId,
-  observedAt = service.now(),
-) {
-  return service.resolveStartupAuthoritySnapshotFromPlanningRead(
-    (readNodeId, readObservedAt) =>
-      service.getPriorityRecoveryPlanningAnswerForOwnerRead(
-        readNodeId,
-        readObservedAt,
-      ),
-    nodeId,
-    observedAt,
-  );
 }
 
 async function getStartupAuthoritySnapshot(
@@ -646,9 +571,7 @@ export {
   buildStartupAuthorityUnavailableSnapshot,
   buildStartupAuthoritySnapshotFromPlanningAnswer,
   getStartupAuthoritySnapshotSync,
-  getFormationReleaseStartupAuthoritySnapshotSync,
   resolveStartupAuthoritySnapshotFromPlanningRead,
-  getFormationReleaseStartupAuthoritySnapshot,
   getStartupAuthoritySnapshot,
   buildPriorityControlPlaneRecoveryHealthFromPlanningAnswer,
   getPriorityControlPlaneRecoveryHealthSync,

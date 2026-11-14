@@ -8,8 +8,6 @@ import {
 import {resolveTimeSource} from '../time/time-source.js';
 import {assertReadinessServiceCollaborators} from './control-plane-readiness-collaborators.js';
 import {ReadinessPlanningSnapshotOwner} from './readiness-planning-snapshot-owner.js';
-import {FormationReleaseHandoffClosureOwner} from './formation-release-handoff-closure-owner.js';
-import {FormationReleaseHandoffPublicationCoordinator} from './formation-release-handoff-publication-coordinator.js';
 const LOCAL_STR_CONTROL_PLANE_READINESS_EVALUATION = 'control-plane-readiness-evaluation';
 const numberIsFinite = Number.isFinite;
 const objectFreeze = Object.freeze;
@@ -83,11 +81,6 @@ function initializeReadinessTimingOptions(service, options) {
 function initializeControlPlaneReadinessState(service, options = {}) {
   assertReadinessServiceCollaborators(options);
   service.nodeId = options.nodeId;
-  const configuredFormationAuthority = options.formationReleaseAuthorityNodeId;
-  service.formationReleaseAuthorityNodeId =
-    typeof configuredFormationAuthority === 'string' &&
-    configuredFormationAuthority.length > 0 ? configuredFormationAuthority :
-      service.nodeId;
   service.systemTableCache = options.systemTableCache || null;
   service.nodesOwner = options.nodesOwner || null;
   service.servicesOwner = options.servicesOwner || null;
@@ -229,26 +222,11 @@ function initializeControlPlaneReadinessState(service, options = {}) {
       name: LOCAL_STR_CONTROL_PLANE_READINESS_EVALUATION,
       workflowCoordinator: service.readinessOperationWorkflowCoordinator,
     });
-  service.formationReleaseHandoffClosureOwner = options.formationReleaseHandoffClosureOwner ||
-    new FormationReleaseHandoffClosureOwner();
   service.cacheChangeListener = null;
   const loggingService = LoggingService.getInstance();
   service.logger = loggingService.isInitialized() ?
     loggingService.forSubsystem(CONTROL_PLANE_READINESS_SUBSYSTEM) :
     console;
-  service.formationReleaseHandoffPublicationCoordinator =
-    options.formationReleaseHandoffPublicationCoordinator ||
-    new FormationReleaseHandoffPublicationCoordinator({
-      getStorageOwner: () =>
-        service.getFormationReleasePublicationStorageOwner(),
-      onDurable: (contract) =>
-        service.formationReleaseHandoffClosureOwner.acknowledgePublication(
-          contract.generation,
-        ),
-      onRearm: () =>
-        service.recordReadinessPlanningRecoveryEpochChange(),
-      logger: service.logger,
-    });
   service.nodeLivenessSemanticProjectionOwner =
     createNodeLivenessSemanticProjectionOwner(service, options);
   service.refreshNodeLivenessSourceSubscriptions();
@@ -311,11 +289,6 @@ function initializeControlPlaneReadinessState(service, options = {}) {
       scheduleDrainFn: options.readinessPlanningScheduleDrainFn,
     });
   service.subscribeToCacheChanges();
-}
-function setFormationReleaseAuthorityNodeId(service, nodeId) {
-  if (typeof nodeId === 'string' && nodeId.length > 0) {
-    service.formationReleaseAuthorityNodeId = nodeId;
-  }
 }
 /**
  * Log one-time diagnostics for missing readiness owners.
@@ -582,7 +555,6 @@ function buildControlPlaneParticipation(service, context) {
 
 export {
   initializeControlPlaneReadinessState,
-  setFormationReleaseAuthorityNodeId,
   logMissingOwner,
   getControlPlaneParticipation,
   getControlPlaneParticipationSync,

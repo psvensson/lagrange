@@ -1,0 +1,53 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "formation-ready-lease-independent-of-spread",
+  "status": "pass",
+  "interpretation": "All five required receipts are measured and green on the candidate. The deterministic tree-agnostic reproducer is red on main (2/6 subtests pass, 4/6 fail with joiners stuck at operation_ledger_formation in 4 of 9 arrival orders) and 6/6 green on the candidate across all 9 arrival orders (spread=true, surplusRemoved=true, lowestVoterReady=3, no timer/bound expiring). All 10 unwired src/ files, 5 scripts, 2 decision tables, 2 TLA+ models (including CL-044), and 17 mechanism-only test files are removed and pinned by the removed-mechanism census test. On the lab (tv-dator and adams-gamla), all 20 affected unit/convergence/integration suites pass, three consecutive unpaused runs of fresh-formation-user-table-routability on the composed stack pass 100% of predicates (a-g + observation-integrity, exit 0), and the forced seed-pause comparison (c7038c2a6 vs c3ec15e6b) confirms immediate post-resume READY lease publication with zero barrier/handoff state and zero pre-READY placements.",
+  "receipts": [
+    {
+      "id": "reproducer-red-on-main",
+      "measured": true,
+      "passed": true,
+      "detail": "Seal-time lab job b9946a68-c082-4fba-9e17-59e97a3f90c0 on tv-dator (tree 966d1e66b4f8 = main 232082669eddebe4c9fd98d3e07c11fc91ffb781 plus reproducer) and Stage 1b tree-agnostic harness re-verification on main 232082669eddebe4c9fd98d3e07c11fc91ffb781: FAILED exit 1 as intended (2/6 subtests pass, 4/6 fail). On main, the negative control (one joiner per derivation) completes the spread in 14 rounds (removals=12, lowestVoterReady=3), while the losing order (two joiners in one derivation after a revoked first generation) fails with stuck=[j1, j2] at operation_ledger_formation after 6 rounds, and the arrival-order sweep fails in 4 of 9 orders (stuck at operation_ledger_formation).",
+      "evidence": "docs/evidence/formation-ready-lease-independent-of-spread-2026-11/b9946a68-c082-4fba-9e17-59e97a3f90c0"
+    },
+    {
+      "id": "reproducer-and-owned-roots-green-on-candidate",
+      "measured": true,
+      "passed": true,
+      "detail": "Stage 1b lab job 45ce2e94-9ee1-45f8-a18e-9b2acbf78a62 on adams-gamla (6/6 subtests pass in test/convergence/dt-formation-joint-admission-release-liveness.test.js; all 9 arrival orders release every admitted joiner and complete the spread with spread=true, surplusRemoved=true, unfinished=0, summary=true, removals=12, lowestVoterReady=3, holdRounds=4, no bound expiring), Stage 2 lab job ee356f14-97c3-4303-a45c-66ca86761f44 on adams-gamla (19/19 test suites pass across reproducer, removed-mechanism census, bootstrap, control-plane, rebalancer, and governance checks), and Stage 2 lab job 91da51b8-eae3-4eef-8cea-5a3c65cdd6a9 on tv-dator (1/1 pass, 11/11 assertions in test/integration/three-node-seed-rebalance.integration.test.js).",
+      "evidence": "docs/evidence/formation-ready-lease-independent-of-spread-2026-11/ee356f14-97c3-4303-a45c-66ca86761f44"
+    },
+    {
+      "id": "removed-mechanism-census-zero",
+      "measured": true,
+      "passed": true,
+      "detail": "Pinned by test/bootstrap/removed-formation-barrier-and-handoff-census.test.js (10/10 subtests pass, verified in lab job ee356f14-97c3-4303-a45c-66ca86761f44 on adams-gamla) and test/scripts/repository-legacy-fallback-closure.test.js (exact-count fallback census 2674, active 2669, retired 11). Verified zero occurrences of the deleted files (10 src/ files, 5 scripts, 2 decision tables, 2 TLA+ models including CL-044, 17 mechanism-only tests), deleted exports, constants, decision tables, impact contracts, and log message IDs across src/, scripts/, models/, docs/specs/decision-tables/, package.json, and test/.",
+      "evidence": "docs/evidence/formation-ready-lease-independent-of-spread-2026-11/ee356f14-97c3-4303-a45c-66ca86761f44"
+    },
+    {
+      "id": "formation-stage-completes-on-lab",
+      "measured": true,
+      "passed": true,
+      "detail": "Measured on tv-dator across three consecutive unpaused runs of fresh-formation-user-table-routability on the composed stack (527527c80): run 1 (deb67c75-8a32-4204-a83d-b5c85e036828, PASS, exit 0, 240.5 s, cluster ACTIVE at 19.2 s, margin 115.8 s), run 2 (7a7a7e03-81e8-4820-8149-b736aee5724e, PASS, exit 0, 185.2 s, cluster ACTIVE at 14.8 s, margin 120.2 s), and run 3 (cd888ca3-4839-4fa7-8fd4-365cc920e409, PASS, exit 0, 171.2 s, cluster ACTIVE at 15.8 s, margin 119.2 s), with all predicates (a-g and observation-integrity) met, 0 barrier/handoff log lines, and 0 pre-READY placements. Additionally measured with a 5 s forced seed pause at +6.8 s comparing control c7038c2a6 (3df23b1d-93d7-4249-8b51-938ad6ede392: handoff revoked at 6.7 s and 16.2 s, second joiner delayed in barrier until 24.2 s via bypassed_insufficient_formation_cohort, 1 pre-READY placement at 21.1 s, cluster ACTIVE at 28.7 s) against candidate c3ec15e6b (9e8a8950-b1eb-4775-84a4-f439fe6e0df3: joiners READY at 13.8 s and 17.2 s, 0 barrier/handoff lines, 0 pre-READY placements, cluster ACTIVE at 20.1 s, lowest voter-ready floor 3 across all 6 priority partitions, predicates a-f and observation-integrity all met).",
+      "evidence": "docs/evidence/formation-ready-lease-independent-of-spread-2026-11/formation-b-analysis.md"
+    },
+    {
+      "id": "independent-verification",
+      "measured": true,
+      "passed": true,
+      "detail": "Independently verified across templates admission-gating, formation-circularity, owner-interaction, and harness-fidelity: READY lease publication depends only on node-local gates and durable NODES write; no node without a valid READY lease is a placement target; remove-safety floor on READY nodes is unchanged and never drops below 3 across all 12 removals in the 9-order deterministic sweep; and all static gates, ratchets, and census checks pass.",
+      "evidence": "docs/evidence/formation-ready-lease-independent-of-spread-2026-11/transition.md"
+    }
+  ],
+  "unmeasuredObligations": [],
+  "source": {
+    "sha": "498c9e0de19560324c8f630c53feff8b522dfa7d",
+    "reproducerTree": "966d1e66b4f8c4989ec67ccaf314f86d12475efc"
+  },
+  "evidence": {
+    "directory": "docs/evidence/formation-ready-lease-independent-of-spread-2026-11",
+    "design": "docs/evidence/formation-ready-lease-independent-of-spread-2026-11/design"
+  },
+  "evidenceCeiling": "Deterministic 9-order arrival sweep over real owners + 20 lab test suites on adams-gamla and tv-dator + 3 consecutive green journey runs and forced seed-pause comparison on tv-dator."
+}

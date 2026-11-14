@@ -1,0 +1,25 @@
+{
+ "kind": "tests",
+ "host": "tv-dator",
+ "commit": "232082669eddebe4c9fd98d3e07c11fc91ffb781",
+ "tree": "966d1e66b4f8c4989ec67ccaf314f86d12475efc",
+ "worktreePaths": [
+  "solve/epics/operation-integrity-and-reliable-formation.md",
+  "solve/quests/formation-ready-lease-independent-of-spread/evidence/design/deadlock-decision-packet.md",
+  "solve/quests/formation-ready-lease-independent-of-spread/evidence/design/repair-b-design.md",
+  "solve/quests/formation-ready-lease-independent-of-spread/evidence/design/repeat-fail-analysis.md",
+  "solve/quests/formation-ready-lease-independent-of-spread/evidence/design/similar-systems-bootstrap-join.md",
+  "solve/quests/formation-ready-lease-independent-of-spread/quest.json",
+  "test/convergence/dt-formation-joint-admission-release-liveness.test.js",
+  "test/convergence/formation-joint-admission-rounds.js",
+  "test/convergence/formation-joint-admission-scenario.js",
+  "test/convergence/formation-joint-admission-world.js",
+  "test/simulation/formation-sim-node-hosts.js"
+ ],
+ "transportCommit": "7cc7e4f1fee8d9cc313c32bcdf3f9cbb552154fd",
+ "base": "9c576f3a06be3bf117623f038f43e6b36b5b33a5",
+ "files": [
+  "test/convergence/dt-formation-joint-admission-release-liveness.test.js"
+ ],
+ "requestId": "b9946a68-c082-4fba-9e17-59e97a3f90c0"
+}

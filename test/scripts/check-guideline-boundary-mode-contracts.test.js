@@ -8,8 +8,6 @@ const REBALANCE_COORDINATOR_FILE_PATH =
   'src/rebalancer/rebalance-coordinator.js';
 const HEARTBEAT_LIFECYCLE_FILE_PATH =
   'src/control-plane/heartbeat-service-lifecycle-methods.js';
-const FORMATION_BARRIER_FILE_PATH =
-  'src/bootstrap/node-joining-operation-ledger-formation-readiness.js';
 const QUERY_ROUTER_FILE_PATH = 'src/query/query-router.js';
 const DISTRIBUTED_WRITE_COORDINATOR_FILE_PATH =
   'src/query/distributed/distributed-write-coordinator.js';
@@ -67,25 +65,6 @@ test('rejects coupling membership reconcile back into heartbeat ownership',
     t.equal(
       violations[0].target,
       'await this.runScheduledMembershipPublicationReconcileTick',
-    );
-  });
-
-test('rejects a second placement or operation authority in the formation barrier',
-  async (t) => {
-    const violations = collectBoundaryModeContractViolationsFromSource(
-      [
-        'await view.readReadinessOwnerRows();',
-        'await coordinator.getEntityAuthoritativeOperationObservation();',
-      ].join('\n'),
-      FORMATION_BARRIER_FILE_PATH,
-    );
-
-    t.same(
-      violations.map((violation) => violation.target).sort(),
-      [
-        'getEntityAuthoritativeOperationObservation',
-        'readReadinessOwnerRows',
-      ],
     );
   });
 
@@ -207,7 +186,6 @@ test('tracks the bounded boundary-mode hotspot set explicitly', async (t) => {
       'src/admin/admin-control-snapshot-local-build-base.js',
       'src/bootstrap/bootstrap-service-runtime-methods.js',
       'src/bootstrap/node-joining-message-group-runtime-delegation.js',
-      'src/bootstrap/node-joining-operation-ledger-formation-readiness.js',
       'src/cdc/cdc-integration-service-authoritative-read-flow.js',
       'src/cdc/cdc-integration-service-owner-rpc-read-execution.js',
       'src/config/config-key-constants.js',

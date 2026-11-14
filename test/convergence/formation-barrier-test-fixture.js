@@ -1,16 +1,9 @@
-// Shared deterministic fixture for the operation-ledger formation barrier DTs
-// (dt-formation-priority-placement-before-active.test.js and
-// dt-formation-barrier-spread-release-oscillation.test.js): a SystemTableCache
-// formation shape (all ledger voters concentrated on the seed), the
-// owner-derived startup-authority snapshot for the join cohort, a real
-// MovePlanner over the live cache rows, and a reduced
-// NodeJoiningReadySignalReadiness owner driving the REAL barrier loop on a
-// virtual clock. Extracted so sibling cases can vary the joiner cohort
-// without duplicating the fixture.
+// Shared deterministic fixture for formation placement and startup-authority DTs:
+// a SystemTableCache formation shape (all ledger voters concentrated on the
+// seed while joiners have published their local READY leases), the
+// owner-derived startup-authority snapshot for the join cohort, and a real
+// MovePlanner over the live cache rows.
 
-import {
-  NodeJoiningReadySignalReadiness,
-} from '../../src/bootstrap/node-joining-ready-signal-readiness.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -29,9 +22,6 @@ import {
 import {
   buildStartupAuthoritySnapshotFromPlanningAnswer,
 } from '../../src/control-plane/startup-authority-snapshot-owner.js';
-import {
-  STARTUP_JOIN_MODE,
-} from '../../src/bootstrap/rejoin-hints-constants.js';
 
 const LEDGER_PARTITION_ID = 'replica_operations-p1';
 const SEED_NODE_ID = 'seed-node';
@@ -68,17 +58,13 @@ function buildFormationCache(options = {}) {
   const joinerNodeIds = options.joinerNodeIds || JOINER_NODE_IDS;
   const cache = new SystemTableCache();
   const now = Date.now();
-  for (const [nodeId, connectionState] of [
-    [SEED_NODE_ID, 'ready'],
-    ...joinerNodeIds.map((joinerNodeId) => [joinerNodeId, 'connected']),
-  ]) {
+  for (const nodeId of [SEED_NODE_ID, ...joinerNodeIds]) {
     applyRow(cache, 'nodes', {
       node_id: nodeId,
       status: ReplicaStatus.ACTIVE,
-      connection_state: connectionState,
+      connection_state: 'ready',
       last_heartbeat: now,
-      ready_lease_expires_at:
-        nodeId === SEED_NODE_ID ? now + 60000 : null,
+      ready_lease_expires_at: now + 60000,
     });
   }
   applyRow(cache, 'partitions', {
@@ -149,63 +135,6 @@ function buildOwnerDerivedStartupAuthoritySnapshot(options = {}) {
   };
 }
 
-function buildFormationBarrierOwner({
-  cache,
-  coordinator = null,
-  sleep,
-  now,
-  startupMode = STARTUP_JOIN_MODE.FRESH_JOIN,
-  startupAuthority: providedStartupAuthority = null,
-  isStartupAuthorityReady = null,
-  joinerNodeIds = JOINER_NODE_IDS,
-}) {
-  NodeService.getInstance().setSystemCacheProxy(cache);
-  const owner = Object.create(NodeJoiningReadySignalReadiness.prototype);
-  owner.nodeId = JOINER_1_NODE_ID;
-  owner.startupMode = startupMode;
-  owner.config = {
-    priorityPlacementFormationDiscoveryMs: 0,
-    priorityPlacementFormationPollMs: 1,
-    priorityPlacementFormationTimeoutMs: 100,
-    heartbeatIntervalMs: 10,
-  };
-  owner.now = now;
-  owner.sleep = sleep;
-  owner.logger = {
-    debug: () => {},
-    info: () => {},
-    warn: () => {},
-    error: () => {},
-  };
-  owner.messageRouter = {
-    getConnectionState: () => 'connected',
-  };
-  const {startupAuthority: defaultStartupAuthority} =
-    buildOwnerDerivedStartupAuthoritySnapshot({joinerNodeIds});
-  const startupAuthority =
-    providedStartupAuthority || defaultStartupAuthority;
-  const readinessService =
-    coordinator?.controlPlaneReadinessService || {};
-  readinessService.getStartupAuthoritySnapshotSync = () => {
-    if (typeof isStartupAuthorityReady !== 'function') {
-      return startupAuthority;
-    }
-    const ready = isStartupAuthorityReady() === true;
-    return Object.freeze({
-      ...startupAuthority,
-      state: ready ? 'ready' : 'recovery_pending',
-      ready,
-      authorityAvailable: true,
-    });
-  };
-  owner.rebalanceCoordinator = coordinator || {
-    controlPlaneReadinessService: readinessService,
-  };
-  owner.getNodeCapabilities = () => ['partition_replica'];
-  owner.sendControlPlaneNodeStateUpdate = async () => {};
-  return owner;
-}
-
 function currentLedgerReplicas(cache) {
   return cache.filter(
     'services',
@@ -243,12 +172,8 @@ export {
   LEDGER_PARTITION_ID,
   SEED_NODE_ID,
   JOINER_1_NODE_ID,
-  JOINER_2_NODE_ID,
-  JOINER_3_NODE_ID,
-  JOINER_4_NODE_ID,
   JOINER_NODE_IDS,
   applyRow,
-  buildFormationBarrierOwner,
   buildFormationCache,
   buildOwnerDerivedStartupAuthoritySnapshot,
   buildRealLedgerPlanner,
