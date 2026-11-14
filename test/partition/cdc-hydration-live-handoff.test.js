@@ -205,18 +205,23 @@ test('W-D4c: acknowledgeHydratedObligationsThrough drains > 256 pre-hydration ob
   }
 });
 
-test('W-D4d: prepareCdcObligationProgress attaches logIndex and ' +
+// The cell keeps the first and last position of the range in flight; a
+// hydration image at or above the range's last position retires its invocation
+// (a range reaching above the image is the range-shipping witness
+// "hydration index inside the range in flight").
+test('W-D4d: prepareCdcObligationProgress attaches the range\'s first and last position and ' +
   'acknowledgeHydratedObligationsThrough retires an in-flight pre-hydration invocation', async () => {
   const timeSource = new VirtualTimeSource();
   const {leader, proposed} = await startLeader({timeSource, tableName: CDC_TABLE});
   try {
     let unblockDelivery = null;
-    let observedCellLogIndex = null;
+    let observedCell = null;
     let observedInvocationDuringHydration = null;
     const blockingSubscriber = {
       handleCDCEvent: async () => {
         const currentCell = leader.cdcDelivery.obligationLane.currentObligation;
-        observedCellLogIndex = currentCell?.logIndex ?? null;
+        observedCell = currentCell === null ? null :
+          {first: currentCell.first, last: currentCell.last, rows: currentCell.rows};
         observedInvocationDuringHydration = leader.cdcDelivery.activeCdcInvocation;
         await new Promise((resolve) => {
           unblockDelivery = resolve;
@@ -227,7 +232,11 @@ test('W-D4d: prepareCdcObligationProgress attaches logIndex and ' +
     await leader.subscribeToCDCWithHandshake(blockingSubscriber, {subscriberId: 'blocking-sub'});
     applyCommitted(leader, upsertOf(leader, 'inflight-seed', 0));
     await settleTicks();
-    assert.equal(Number.isSafeInteger(observedCellLogIndex) && observedCellLogIndex > 0, true);
+    assert.equal(observedCell.rows, 1);
+    assert.equal(Number.isSafeInteger(observedCell.first.logIndex) &&
+      observedCell.first.logIndex > 0, true);
+    assert.deepEqual(observedCell.last, observedCell.first,
+      'a range of one row starts and ends at that row\'s position');
     assert.notEqual(observedInvocationDuringHydration, null);
 
     const image = leader.readHydrationImage(IMAGE_SQL);

@@ -180,6 +180,52 @@ test('R1-4 propagateCDCEvent({events}) of a five-event vector applies one source
   assert.equal(result.cdcVectorDigest, cdcCommitWaitIdentity(events));
 });
 
+// The two wire shapes of one range (challenge A4): a vector of one travels as
+// CDC_PROPAGATION carrying the event itself, a longer vector as
+// CDC_PROPAGATION_BATCH carrying `events`. The same occurrences reach the
+// source group and every target unchanged and in order through either shape.
+test('wire shape: the same three events as three vectors of one and as one vector reach the ' +
+  'source batch and the target with the same members in the same order', async (t) => {
+  const events = createDurableCdcVector(3);
+  const keys = events.map((event) => event.eventKey);
+  const single = compose(t, LATENCY_PROPAGATION_MODE.SAFE);
+  for (const event of events) {
+    const result = await single.service.propagateCDCEvent(
+      createDurableVectorPropagationRequest(single.source, [event]));
+    assert.equal(result.success, true);
+    assert.equal(result.cdcVectorDigest, cdcCommitWaitIdentity([event]));
+  }
+  const singleSourceMembers = single.source.batches.flat();
+  const singleTargetMembers = single.calls.map((call) => call.payload);
+  assert.deepEqual(single.source.batches.map((batch) => batch.length), [1, 1, 1]);
+  assert.deepEqual(single.calls.map((call) => call.payload.type),
+    keys.map(() => LATENCY_TOPOLOGY_MESSAGE_TYPE.CDC_PROPAGATION));
+  assert.equal(single.calls.some((call) => Object.hasOwn(call.payload, 'events')), false,
+    'a vector of one carries its event in the payload itself');
+
+  const batch = compose(t, LATENCY_PROPAGATION_MODE.SAFE);
+  const result = await batch.service.propagateCDCEvent(
+    createDurableVectorPropagationRequest(batch.source, events));
+  assert.equal(result.success, true);
+  assert.equal(result.cdcVectorDigest, cdcCommitWaitIdentity(events));
+  assert.deepEqual(batch.source.batches.map((members) => members.length), [3]);
+  assert.deepEqual(batch.calls.map((call) => call.payload.type),
+    [LATENCY_TOPOLOGY_MESSAGE_TYPE.CDC_PROPAGATION_BATCH]);
+  assert.equal(Object.hasOwn(batch.calls[0].payload, 'eventKey'), false,
+    'a longer vector carries its events only as `events`');
+
+  assert.deepEqual(batch.source.batches[0].map((event) => event.eventKey), keys);
+  assert.deepEqual(batch.source.batches[0], singleSourceMembers,
+    'the source group applies the same members through either shape');
+  const fieldsOf = (member) => Object.fromEntries(Object.keys(events[0])
+    .map((field) => [field, member[field]]));
+  assert.deepEqual(batch.calls[0].payload.events.map(fieldsOf),
+    singleTargetMembers.map(fieldsOf),
+    'a target is delivered the same members through either shape');
+  assert.deepEqual(batch.calls[0].payload.events.map(fieldsOf), events,
+    'and they are the request\'s events, unchanged and in order');
+});
+
 test('grouped mode: a missing coordinator address retains target-group debt ' +
   'without silent completion, and recovery returns to grouped with both transitions recorded', async (t) => {
   const f = compose(t, LATENCY_PROPAGATION_MODE.GROUPED,
@@ -295,38 +341,50 @@ test('under local router pressure a background-class wave defers without ' +
     buildCriticalVisibilityCdcPropagationDeliverySource(TABLES.PARTITIONS, 'tbl-critical-p1'));
 });
 
-// The request contract (assertPropagationRequest): the durable surface or a
-// typed refusal before any source or target effect. On base the volatile
-// source double (applyCDCEvent only) and a non-durable event were accepted.
-test('a request lacking the durable surface is refused typed before any effect',
-  async (t) => {
-    const f = compose(t, LATENCY_PROPAGATION_MODE.SAFE);
-    const event = createDurableCdcEvent();
-    const volatileCalls = [];
-    const volatileSource = {groupId: SOURCE_GROUP,
-      applyCDCEvent: async (...args) => volatileCalls.push(args)};
-    const {eventKey: _eventKey, ...nonDurableEvent} = event;
-    const {applyCDCBatch: _applyCDCBatch, ...batchless} = f.source;
-    const refusals = [
-      [createDurablePropagationRequest(volatileSource, event),
-        CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_MESSAGE_GROUP_SERVICE],
-      [createDurablePropagationRequest(batchless, event),
-        CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_MESSAGE_GROUP_SERVICE],
-      [{...createDurablePropagationRequest(f.source, event), data: null},
-        CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_CDC_PAYLOAD],
-      [{...nonDurableEvent, sourceMessageGroupService: f.source},
-        CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_DURABLE_EVENT],
-      [{...event, sourceMessageGroupService: f.source, deliveryContext: null},
-        CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_DURABLE_EVENT],
-    ];
-    for (const [request, message] of refusals) {
-      await assert.rejects(f.service.propagateCDCEvent(request),
-        (error) => error.message === message && error.isCritical === true);
-    }
-    assert.deepEqual(volatileCalls, [], 'the volatile apply is never read');
-    assert.equal(f.source.batches.length, 0);
-    assert.equal(f.calls.length, 0);
-  });
+// The request contract (assertPropagationRequest): the durable surface and a
+// vector of durable events of one table, or a typed refusal before any source
+// or target effect. On base the volatile source double (applyCDCEvent only)
+// and a non-durable event were accepted. A request shaped as one event (the
+// payload beside the source, no `events`) is not a request any more.
+test('a request lacking the durable surface or a one-table durable vector is refused typed ' +
+  'before any effect', async (t) => {
+  const f = compose(t, LATENCY_PROPAGATION_MODE.SAFE);
+  const event = createDurableCdcEvent();
+  const second = createDurableCdcEvent({eventKey: 'durable-event-2', sourceLogIndex: 2});
+  const volatileCalls = [];
+  const volatileSource = {groupId: SOURCE_GROUP,
+    applyCDCEvent: async (...args) => volatileCalls.push(args)};
+  const {eventKey: _eventKey, ...nonDurableEvent} = second;
+  const {applyCDCBatch: _applyCDCBatch, ...batchless} = f.source;
+  const request = (events, extra = {}) =>
+    ({...createDurableVectorPropagationRequest(f.source, events), ...extra});
+  const refusals = [
+    [createDurablePropagationRequest(volatileSource, event),
+      CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_MESSAGE_GROUP_SERVICE],
+    [createDurablePropagationRequest(batchless, event),
+      CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_MESSAGE_GROUP_SERVICE],
+    [request([event, {...second, data: null}]),
+      CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_CDC_PAYLOAD],
+    [request([]), CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_CDC_PAYLOAD],
+    [request(event), CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_CDC_PAYLOAD],
+    [{...event, sourceMessageGroupService: f.source,
+      deliveryContext: request([event]).deliveryContext},
+    CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_CDC_PAYLOAD],
+    [request([event, {...second, tableName: TABLES.CONFIG}]),
+      CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_CDC_PAYLOAD],
+    [request([event, nonDurableEvent]),
+      CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_DURABLE_EVENT],
+    [request([event, second], {deliveryContext: null}),
+      CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_DURABLE_EVENT],
+  ];
+  for (const [request, message] of refusals) {
+    await assert.rejects(f.service.propagateCDCEvent(request),
+      (error) => error.message === message && error.isCritical === true);
+  }
+  assert.deepEqual(volatileCalls, [], 'the volatile apply is never read');
+  assert.equal(f.source.batches.length, 0);
+  assert.equal(f.calls.length, 0);
+});
 
 test('a stopped service answers the typed stopped unknown and applies or ' +
   'delivers nothing', async (t) => {

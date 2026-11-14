@@ -221,8 +221,8 @@ test('seed handoff: before the latency owners exist the lane retries a nodes eve
       rebalanceOwner.handleNodeReadyRebalanceTrigger(event, previousRow),
   };
   const bridge = new SeedRuntimeBridgeOwner({delegates});
-  delegates.propagatePartitionCDCEvent = (service, event, context) =>
-    bridge.propagatePartitionCDCEvent(service, event, context);
+  delegates.propagatePartitionCDCEvent = (service, events, context) =>
+    bridge.propagatePartitionCDCEvent(service, events, context);
   const phase = new SeedCacheHydrationPhase({delegates, runtimeBridgeOwner: bridge});
   await phase.subscribeToInitialSystemTableCDC(TABLES.NODES);
   const event = {tableName: TABLES.NODES, operation: 'UPDATE',
@@ -231,7 +231,8 @@ test('seed handoff: before the latency owners exist the lane retries a nodes eve
   const refusals = [];
   try {
     for (let retry = 0; retry < LANE_RETRIES; retry += 1) {
-      await subscribers[0](event).catch((error) => refusals.push(error.message));
+      await subscribers[0](Object.freeze([event]))
+        .catch((error) => refusals.push(error.message));
     }
     assert.deepEqual({
       refusals,
@@ -244,5 +245,154 @@ test('seed handoff: before the latency owners exist the lane retries a nodes eve
     });
   } finally {
     rebalanceOwner.clearNodeReadyRebalanceState();
+  }
+});
+
+// --- the node-ready hook over a vector (quest cdc-obligation-range-shipping,
+// record S-4b) ---
+//
+// The seed's NODES subscriber, registered through the real phase, with the
+// real node-ready rebalance owner behind its trigger. The node cache is a
+// recording double that merges an applied row as the system table cache does
+// for NODES ({...existing, ...incoming}; a DELETE removes the row), and the
+// propagation double applies a vector's members to it in order, as the source
+// leaf of a wave does. One-event delivery is the same subscriber handed
+// vectors of one, the cache applied between them.
+async function nodeReadyHookSeed() {
+  const subscribers = [];
+  const partition = {
+    partitionId: INITIAL_PARTITION_IDS[TABLES.NODES],
+    isLeader: true,
+    async subscribeToCDCWithHandshake(subscriber, options = {}) {
+      subscribers.push(subscriber);
+      return buildCdcSubscriptionHandshake({status: PARTITION_SERVICE_CDC.HANDSHAKE_STATUS_OK,
+        subscriberId: options.subscriberId, subscriptionEpoch: 1, streamVersion: 0});
+    },
+  };
+  const rebalanceOwner = new BootstrapNodeReadyRebalanceOwner({delegates: {
+    getLogger: () => silentLogger,
+    getLocalNodeId: () => SEED_NODE_ID,
+    getNodeReadyRebalanceDelayMs: () => NODE_READY_DELAY_MS,
+    executeNodeReadyRebalance: () => {},
+  }});
+  const nodeRows = new Map();
+  const triggers = [];
+  const messageGroup = {groupId: 'mg-1', initialized: true, async subscribeToCDC() {}};
+  const delegates = {
+    getLogger: () => silentLogger,
+    getNodeId: () => SEED_NODE_ID,
+    getMessageGroupServices: () => new Map([['mg-1-r1', messageGroup]]),
+    getPartitionServices: () => new Map([[getInitialReplicaIds(TABLES.NODES)[0], partition]]),
+    getSystemTableCache: () => ({get: (_table, nodeId) => nodeRows.get(nodeId) ?? null}),
+    resolveOperationalMessageGroupSelectionAsync: async () => ({service: messageGroup}),
+    handleNodeReadyRebalanceTrigger: (event, previousRow) => {
+      const scheduled = rebalanceOwner.handleNodeReadyRebalanceTrigger(event, previousRow);
+      triggers.push({nodeId: event.data.node_id, operation: event.operation,
+        status: event.data.status ?? null, previousRow: previousRow && {...previousRow},
+        scheduled});
+    },
+    propagatePartitionCDCEvent: async (_service, events) => {
+      for (const event of events) {
+        if (event.operation === 'DELETE') nodeRows.delete(event.data.node_id);
+        else {
+          nodeRows.set(event.data.node_id,
+            {...nodeRows.get(event.data.node_id), ...event.data});
+        }
+      }
+    },
+  };
+  const phase = new SeedCacheHydrationPhase({delegates, runtimeBridgeOwner: {}});
+  await phase.subscribeToInitialSystemTableCDC(TABLES.NODES);
+  return {subscriber: subscribers[0], nodeRows, triggers, rebalanceOwner};
+}
+
+const LEASE = 4102444800000; // far in the future: the lease never lapses in the witness
+const nodeRow = (nodeId, status, extra = {}) => ({node_id: nodeId, status, ...extra});
+const nodesEvent = (operation, data) => ({tableName: TABLES.NODES, operation, data});
+const NODE_READY_VECTORS = Object.freeze({
+  'a node made ready and then renewed': {
+    cached: [nodeRow('n1', 'joining', {address: 'n1:1'})],
+    events: [
+      nodesEvent('UPDATE', nodeRow('n1', SERVICE_STATUS.ACTIVE, {ready_lease_expires_at: LEASE})),
+      nodesEvent('UPDATE', nodeRow('n1', SERVICE_STATUS.ACTIVE,
+        {ready_lease_expires_at: LEASE + 1, last_heartbeat: 5})),
+    ],
+    scheduled: [true, false],
+  },
+  'a partial row first, ready second': {
+    cached: [nodeRow('n1', 'joining', {address: 'n1:1', ready_lease_expires_at: LEASE})],
+    events: [
+      nodesEvent('UPDATE', {node_id: 'n1', address: 'n1:2'}),
+      nodesEvent('UPDATE', {node_id: 'n1', status: SERVICE_STATUS.ACTIVE}),
+    ],
+    scheduled: [false, true],
+  },
+  'a node deleted and inserted ready again': {
+    cached: [nodeRow('n1', SERVICE_STATUS.ACTIVE, {ready_lease_expires_at: LEASE})],
+    events: [
+      nodesEvent('DELETE', {node_id: 'n1'}),
+      nodesEvent('INSERT', nodeRow('n1', SERVICE_STATUS.ACTIVE,
+        {ready_lease_expires_at: LEASE + 2})),
+    ],
+    scheduled: null,
+  },
+  'two nodes interleaved': {
+    cached: [nodeRow('n1', 'joining'), nodeRow('n2', 'joining')],
+    events: [
+      nodesEvent('UPDATE', nodeRow('n1', SERVICE_STATUS.ACTIVE, {ready_lease_expires_at: LEASE})),
+      nodesEvent('UPDATE', nodeRow('n2', SERVICE_STATUS.ACTIVE, {ready_lease_expires_at: LEASE})),
+      nodesEvent('UPDATE', nodeRow('n1', SERVICE_STATUS.ACTIVE,
+        {ready_lease_expires_at: LEASE + 3})),
+    ],
+    scheduled: [true, true, false],
+  },
+});
+
+for (const [name, {cached, events, scheduled}] of Object.entries(NODE_READY_VECTORS)) {
+  test(`seed node-ready hook: ${name} - one vector triggers exactly as the same events ` +
+    'delivered one at a time', async () => {
+    const perEvent = await nodeReadyHookSeed();
+    const vector = await nodeReadyHookSeed();
+    try {
+      for (const seed of [perEvent, vector]) {
+        for (const row of cached) seed.nodeRows.set(row.node_id, {...row});
+      }
+      for (const event of events) await perEvent.subscriber(Object.freeze([event]));
+      await vector.subscriber(Object.freeze([...events]));
+      assert.equal(perEvent.triggers.length, events.length);
+      assert.deepEqual(vector.triggers, perEvent.triggers,
+        'each member saw the previous row and took the decision of one-event delivery');
+      assert.deepEqual([...vector.nodeRows], [...perEvent.nodeRows]);
+      // Literal anchors, independent of the one-event run.
+      assert.deepEqual(vector.triggers[0].previousRow,
+        cached.find((row) => row.node_id === events[0].data.node_id),
+        'the first member of a node reads the cached row');
+      if (scheduled !== null) {
+        assert.deepEqual(vector.triggers.map((trigger) => trigger.scheduled), scheduled);
+      }
+    } finally {
+      perEvent.rebalanceOwner.clearNodeReadyRebalanceState();
+      vector.rebalanceOwner.clearNodeReadyRebalanceState();
+    }
+  });
+}
+
+test('seed node-ready hook: the second member of a node reads the first member merged over ' +
+  'the cached row, and a member after a DELETE reads no row', async () => {
+  const merged = await nodeReadyHookSeed();
+  const deleted = await nodeReadyHookSeed();
+  try {
+    const partial = NODE_READY_VECTORS['a partial row first, ready second'];
+    merged.nodeRows.set('n1', {...partial.cached[0]});
+    await merged.subscriber(Object.freeze([...partial.events]));
+    assert.deepEqual(merged.triggers[1].previousRow,
+      {node_id: 'n1', status: 'joining', address: 'n1:2', ready_lease_expires_at: LEASE});
+    const removed = NODE_READY_VECTORS['a node deleted and inserted ready again'];
+    deleted.nodeRows.set('n1', {...removed.cached[0]});
+    await deleted.subscriber(Object.freeze([...removed.events]));
+    assert.equal(deleted.triggers[1].previousRow, null);
+  } finally {
+    merged.rebalanceOwner.clearNodeReadyRebalanceState();
+    deleted.rebalanceOwner.clearNodeReadyRebalanceState();
   }
 });

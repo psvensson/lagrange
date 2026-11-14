@@ -434,7 +434,8 @@ test(
     let switchToSafeOn2MiB = true;
     const origPropagate = f.topology.propagateCDCEvent.bind(f.topology);
     f.topology.propagateCDCEvent = async (opts) => {
-      if (switchToSafeOn2MiB && opts.entryId === 'w9-2mib-row') {
+      if (switchToSafeOn2MiB &&
+          opts.events.some((event) => event.entryId === 'w9-2mib-row')) {
         ConfigurationManager.getInstance().setByPath(
           LATENCY_TOPOLOGY_CONFIG_KEY.PROPAGATION_MODE,
           LATENCY_PROPAGATION_MODE.SAFE,

@@ -905,9 +905,10 @@ test('TX1 CDC O17: provisional metadata advances formation without acknowledging
       // Provisional first; then the owner's committed receipt through the one
       // acknowledging fixture (was: undefined, which the receipt gate refuses).
       const acknowledging = acknowledgingCdcSubscriber();
-      await leader.subscribeToCDCWithHandshake(async (event) => {
-        seen.push(event.data.id);
-        return provisional ? buildProvisionalCdcOutcome([event], 50) : acknowledging(event);
+      // One subscriber call is handed the entry's two events as one vector.
+      await leader.subscribeToCDCWithHandshake(async (events) => {
+        seen.push(...events.map((event) => event.data.id));
+        return provisional ? buildProvisionalCdcOutcome(events, 50) : acknowledging(events);
       });
       commitHandBuilt(leader, identityOf('c17'), [cdcOperationOf(ROW), cdcOperationOf(ROW_2)]);
       await settleTicks();
@@ -935,12 +936,17 @@ test('TX1 CDC O18: provisional scanning yields after one page and revisits old d
     commitHandBuilt(leader, identityOf('c18-b'), rowsOf('b', 4).map(cdcOperationOf));
     await settleTicks();
     const seen = [];
-    leader.cdcSubscribers.add(async (event) => {
-      seen.push(event.data.id);
-      return buildProvisionalCdcOutcome([event], 50);
+    // Each wave is handed one whole committed entry (its ordinals travel
+    // together): the 256-event entry fills the first turn's visit quantum.
+    const waves = [];
+    leader.cdcSubscribers.add(async (events) => {
+      waves.push(events.length);
+      seen.push(...events.map((event) => event.data.id));
+      return buildProvisionalCdcOutcome(events, 50);
     });
     await leader.cdcDelivery.driveCdcObligations('provisional-page-witness');
     assert.equal(seen.length, 256, 'one bounded page in the first turn');
+    assert.deepEqual(waves, [256], 'the entry is one vector, never cut between its ordinals');
     timeSource.advance(50);
     await settleTicks();
     assert.equal(new Set(seen).size, 260, 'second page is not starved by provisional page one');

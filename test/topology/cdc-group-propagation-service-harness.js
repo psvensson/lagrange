@@ -131,10 +131,11 @@ function beginDurableCdcInvocation(timeSource = new VirtualTimeSource({startMs: 
   return beginCdcDeliveryInvocation(delivery, () => true);
 }
 
-// One durable propagation request: the event, its invocation and the source.
+// One durable propagation request for a vector of one: the event as the
+// request's `events`, its invocation and the source.
 export function createDurablePropagationRequest(source, event = createDurableCdcEvent(),
   deliveryContext = beginDurableCdcInvocation()) {
-  return {...event, sourceMessageGroupService: source, deliveryContext};
+  return createDurableVectorPropagationRequest(source, [event], deliveryContext);
 }
 
 // A dense vector of durable events of one source partition and one table, in
@@ -153,7 +154,7 @@ export function createDurableVectorPropagationRequest(source, events,
 }
 
 // The events a target delivery carries, by its wire type.
-function deliveredEventsOf(payload) {
+export function deliveredEventsOf(payload) {
   return payload.type === LATENCY_TOPOLOGY_MESSAGE_TYPE.CDC_PROPAGATION_BATCH ?
     payload.events : [payload];
 }

@@ -1151,8 +1151,8 @@ test('PartitionService - suppresses CDC for no-op updates', async (t) => {
   await Promise.resolve();
 
   const cdcEvents = [];
-  await partition.subscribeToCDCWithHandshake((event) => {
-    cdcEvents.push(event);
+  await partition.subscribeToCDCWithHandshake((events) => {
+    cdcEvents.push(...events);
   });
 
   const updateResult = await partition.updateData(
@@ -1417,8 +1417,8 @@ test('PartitionService - follower applyCommittedEntry must not emit CDC', async 
   partition.isLeader = false;
 
   const cdcEvents = [];
-  partition.subscribeToCDC((event) => {
-    cdcEvents.push(event);
+  partition.subscribeToCDC((events) => {
+    cdcEvents.push(...events);
   });
 
   // The committed entry reaches the application through the port; the

@@ -48,15 +48,18 @@ test('CDC subscription - only leader replicates events', async (_t) => {
   for (const messageGroup of [leaderMessageGroup, followerMessageGroup]) {
     await messageGroup.subscribeToCDC('nodes');
 
-    partition.subscribeToCDC(async (cdcEvent) => {
-      if (cdcEvent.tableName === 'nodes') {
-        // Only apply CDC event if this message group is the leader
-        if (messageGroup.isLeaderReplica()) {
-          await messageGroup.applyCDCEvent(
-            cdcEvent.tableName,
-            cdcEvent.operation,
-            cdcEvent.data,
-          );
+    // A partition subscriber is handed a vector of events (here of one).
+    partition.subscribeToCDC(async (events) => {
+      for (const cdcEvent of events) {
+        if (cdcEvent.tableName === 'nodes') {
+          // Only apply CDC event if this message group is the leader
+          if (messageGroup.isLeaderReplica()) {
+            await messageGroup.applyCDCEvent(
+              cdcEvent.tableName,
+              cdcEvent.operation,
+              cdcEvent.data,
+            );
+          }
         }
       }
     });
@@ -71,7 +74,7 @@ test('CDC subscription - only leader replicates events', async (_t) => {
 
   // Deliver to all subscribers
   for (const subscriber of cdcSubscribers) {
-    await subscriber(cdcEvent);
+    await subscriber(Object.freeze([cdcEvent]));
   }
 
   // Verify only leader applied the event
@@ -101,15 +104,17 @@ test('CDC subscription - follower does not replicate', async (_t) => {
   // Setup CDC subscription
   await followerMessageGroup.subscribeToCDC('nodes');
 
-  partition.subscribeToCDC(async (cdcEvent) => {
-    if (cdcEvent.tableName === 'nodes') {
-      // Only apply if leader
-      if (followerMessageGroup.isLeaderReplica()) {
-        await followerMessageGroup.applyCDCEvent(
-          cdcEvent.tableName,
-          cdcEvent.operation,
-          cdcEvent.data,
-        );
+  partition.subscribeToCDC(async (events) => {
+    for (const cdcEvent of events) {
+      if (cdcEvent.tableName === 'nodes') {
+        // Only apply if leader
+        if (followerMessageGroup.isLeaderReplica()) {
+          await followerMessageGroup.applyCDCEvent(
+            cdcEvent.tableName,
+            cdcEvent.operation,
+            cdcEvent.data,
+          );
+        }
       }
     }
   });
@@ -122,7 +127,7 @@ test('CDC subscription - follower does not replicate', async (_t) => {
   };
 
   for (const subscriber of cdcSubscribers) {
-    await subscriber(cdcEvent);
+    await subscriber(Object.freeze([cdcEvent]));
   }
 
   // Verify follower did not apply

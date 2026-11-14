@@ -41,8 +41,8 @@ test(
 
     // Mock propagatePartitionCDCEvent to capture calls
     service.seedCacheHydrationPhase.propagatePartitionCDCEvent =
-      async (_messageGroup, cdcEvent) => {
-        propagatedEvents.push(cdcEvent);
+      async (_messageGroup, events) => {
+        propagatedEvents.push(...events);
       };
 
     // Mock latencyTopology so propagatePartitionCDCEvent can resolve
@@ -111,7 +111,7 @@ test(
       sourceReplica: 'partitions-p1-r1',
     };
 
-    await capturedCdcSubscriber(cdcEvent);
+    await capturedCdcSubscriber(Object.freeze([cdcEvent]));
 
     // The event SHOULD be propagated even though the local MG
     // is not the leader. Currently it is silently dropped.
@@ -186,11 +186,11 @@ test(
     );
 
     await assert.rejects(
-      () => capturedCdcSubscriber({
+      () => capturedCdcSubscriber(Object.freeze([{
         tableName: 'partitions',
         operation: 'INSERT',
         data: {partition_id: 'tbl-abc-p1', table_name: 'benchmark'},
-      }),
+      }])),
       (error) => {
         assert.equal(error.ownerNotReady, true);
         assert.equal(error.deferRetry, true);
@@ -216,8 +216,8 @@ test(
     let repairSelectionCalls = 0;
 
     service.seedCacheHydrationPhase.propagatePartitionCDCEvent =
-      async (_messageGroup, cdcEvent) => {
-        propagatedEvents.push(cdcEvent);
+      async (_messageGroup, events) => {
+        propagatedEvents.push(...events);
       };
     service.latencyTopology = {
       cdcGroupPropagationService: {
@@ -273,11 +273,11 @@ test(
       ['nodes-p1-r1'],
     );
 
-    await capturedCdcSubscriber({
+    await capturedCdcSubscriber(Object.freeze([{
       tableName: 'nodes',
       operation: 'UPSERT',
       data: {node_id: 'node-b'},
-    });
+    }]));
 
     assert.equal(
       propagatedEvents.length,
@@ -307,8 +307,8 @@ test(
     let repairSelectionCalls = 0;
 
     service.seedCacheHydrationPhase.propagatePartitionCDCEvent =
-      async (messageGroup, cdcEvent) => {
-        propagatedEvents.push({messageGroup, cdcEvent});
+      async (messageGroup, events) => {
+        for (const cdcEvent of events) propagatedEvents.push({messageGroup, cdcEvent});
       };
     service.latencyTopology = {
       cdcGroupPropagationService: {
@@ -365,11 +365,11 @@ test(
       ['nodes-p1-r1'],
     );
 
-    await capturedCdcSubscriber({
+    await capturedCdcSubscriber(Object.freeze([{
       tableName: 'nodes',
       operation: 'UPSERT',
       data: {node_id: 'node-b'},
-    });
+    }]));
 
     assert.equal(
       propagatedEvents.length,

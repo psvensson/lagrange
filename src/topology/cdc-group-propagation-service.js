@@ -240,14 +240,16 @@ class CDCGroupPropagationService extends EventEmitter {
       CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_MESSAGE_GROUP_SERVICE,
     );
     const {events} = options;
+    // The vector: dense, at least one member, every member a CDC payload of
+    // the one table the wave is admitted and sliced under.
     assertCritical(
       isDenseDataArray(events) && events.length > 0 && events.every((event) =>
-        event && event.tableName && event.operation && event.data),
+        event && event.tableName && event.operation && event.data &&
+        event.tableName === events[0].tableName),
       CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_CDC_PAYLOAD,
     );
     assertCritical(
-      events.every((event) => Object.hasOwn(event, CDC_EVENT_METADATA_FIELD.EVENT_KEY) &&
-        event.tableName === events[0].tableName) &&
+      events.every((event) => Object.hasOwn(event, CDC_EVENT_METADATA_FIELD.EVENT_KEY)) &&
         isCdcDeliveryInvocation(options.deliveryContext),
       CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_DURABLE_EVENT,
     );

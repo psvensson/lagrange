@@ -23,6 +23,7 @@ import {
   createDurableSourceMessageGroupService,
   createGroupRow,
   createMessageGroupServiceRow,
+  deliveredEventsOf,
   setupConfig,
   teardownConfig,
 } from '../topology/cdc-group-propagation-service-harness.js';
@@ -245,15 +246,16 @@ test('full CDC continuation path across competing tables, held recipient, tenure
             heldDeliverRelease = resolve;
           });
         }
+        const delivered = deliveredEventsOf(payload);
         recipientDeliveries.push({
           address,
-          tableName: payload.tableName,
-          eventKey: payload.eventKey,
+          tableName: delivered[0].tableName,
+          eventKey: delivered[0].eventKey,
           targetNodeId: options.targetNodeId,
         });
         return buildDeliveryEnvelope(
           {acknowledged: true},
-          buildCommittedCdcOutcome([payload], payload.targetGroupId, {index: 21, term: 3}),
+          buildCommittedCdcOutcome(delivered, payload.targetGroupId, {index: 21, term: 3}),
         );
       },
     };
@@ -284,9 +286,9 @@ test('full CDC continuation path across competing tables, held recipient, tenure
         resolveOperationalMessageGroupSelection: selection,
         resolveOperationalMessageGroupSelectionAsync: async () => selection(),
         buildMessageGroupOwnerNotReadyError: () => new Error('not ready'),
-        propagatePartitionCDCEvent: (_selected, event, context) =>
+        propagatePartitionCDCEvent: (_selected, events, context) =>
           topology.propagateCDCEvent({
-            ...event,
+            events,
             sourceMessageGroupService: sourceGroup,
             deliveryContext: context,
           }),

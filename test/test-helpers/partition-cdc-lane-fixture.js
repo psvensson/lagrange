@@ -1,7 +1,8 @@
 // The one source-owner component fixture of the partition CDC obligation lane:
 // the existing controllable consensus fixture with explicitly controlled
 // recipient answers. It exercises the real application/ledger/subscription/ACK
-// owners; it does not prove native MG commit.
+// owners; it does not prove native MG commit. Its subscribers follow the one
+// subscriber contract: each call is handed an ordered vector of events.
 import assert from 'node:assert/strict';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
@@ -13,8 +14,9 @@ import {buildCommittedCdcOutcome, buildProvisionalCdcOutcome} from
 import {PARTITION_CDC_COMMAND, PARTITION_CDC_OBLIGATION_REASON} from
   '../../src/partition/partition-cdc-obligation-constants.js';
 import {countCdcObligations} from '../../src/partition/partition-cdc-obligation-ledger.js';
-import {CDC_TABLE as TABLE, applyCommitted, committedQueryOf, settleTicks, shutdownAll,
-  startLeader} from './participant-transaction-fixture.js';
+import {CDC_TABLE as TABLE, applyCommitted, commitDecision, committedQueryOf, generationOf,
+  identityOf, operationOf, prepareCommandOf, settleTicks, shutdownAll, startLeader} from
+  './participant-transaction-fixture.js';
 
 const REASON = PARTITION_CDC_OBLIGATION_REASON;
 const RETRY_AFTER_MS = 20;
@@ -39,10 +41,10 @@ function delayedClock() {
   };
 }
 
-function recipientAnswer(event, groupId, committed) {
+function recipientAnswer(events, groupId, committed) {
   // Controlled semantic input to the source, never native acceptance evidence.
-  return committed ? buildCommittedCdcOutcome([event], groupId, {index: 17, term: 2}) :
-    buildProvisionalCdcOutcome([event], RETRY_AFTER_MS, groupId);
+  return committed ? buildCommittedCdcOutcome(events, groupId, {index: 17, term: 2}) :
+    buildProvisionalCdcOutcome(events, RETRY_AFTER_MS, groupId);
 }
 
 // One committed source statement through the real application owner.
@@ -58,6 +60,25 @@ function addSourceRow(leader, id, value = PAYLOAD_SENTINEL) {
   commitSourceStatement(leader, {entryId: `progress-${id}`,
     sql: `INSERT INTO ${TABLE} (id, value) VALUES (?, ?)`, params: [id, value]});
 }
+
+// One committed transaction decision of several operations through the real
+// application owner: one ledger entry (one log index) owing one event per
+// operation, ordinals 0..n-1. `operations` are {sql, params} statements on the
+// fixture table; `tag` names the transaction.
+function addSourceEntry(leader, tag, operations, wallMs = 1000) {
+  const tx = identityOf(tag);
+  const prepare = prepareCommandOf(tx, operations.map((operation, ordinal) =>
+    operationOf({}, {entryId: `${tag}-op-${ordinal}`, ...operation})), generationOf(leader));
+  assert.equal(applyCommitted(leader, prepare), null,
+    'the real application owner accepted the controlled PREPARE');
+  const decision = {...commitDecision(tx, prepare),
+    timestamp: new HLCTimestamp(wallMs, 0, 'source-progress-component').toString()};
+  assert.equal(applyCommitted(leader, decision), null,
+    'the real application owner accepted the controlled COMMIT decision');
+}
+
+const insertOperation = (id, value = PAYLOAD_SENTINEL) =>
+  ({sql: `INSERT INTO ${TABLE} (id, value) VALUES (?, ?)`, params: [id, value]});
 
 function addSubscriber(f, index) {
   const service = {groupId: `component-recipient-${index}`,
@@ -82,9 +103,12 @@ function addSubscriber(f, index) {
 }
 
 // rows: source row ids inserted first; statements: further committed source
-// statements ({entryId, sql, params, wallMs}) applied after them, all before
-// the partition leads, so no recipient callback runs during setup.
-async function fixture(t, {rows = ['A', 'B'], subscribers = 3, statements = []} = {}) {
+// statements ({entryId, sql, params, wallMs}) applied after them; populate: any
+// further committed source work ((leader) => owed events it added). All of it
+// is applied before the partition leads, so no recipient callback runs during
+// setup.
+async function fixture(t, {rows = ['A', 'B'], subscribers = 3, statements = [],
+  populate = () => 0} = {}) {
   const clock = delayedClock();
   // The source partition holds a CDC-carrying table (decision D2: only a
   // propagated table records an obligation).
@@ -92,25 +116,29 @@ async function fixture(t, {rows = ['A', 'B'], subscribers = 3, statements = []} 
   t.after(() => shutdownAll(leader));
   leader.controllablePort.setRole(RAFT_ROLE.FOLLOWER);
   const f = {clock, leader, proposed, ready: false, calls: [], hooks: [], subscribers: [],
-    behavior: (_index, event, _context, groupId) => recipientAnswer(event, groupId, false),
+    behavior: (_index, events, _context, groupId) => recipientAnswer(events, groupId, false),
     // The recipient seam: what the propagation subscriber hands its
-    // propagatePartitionCDCEvent, and its completion hook.
-    propagate: (index, event, context, groupId) => {
-      f.calls.push({index, id: event.data.id, eventKey: event.eventKey,
-        timestamp: event.timestamp, remainingMs: context.remainingMs()});
-      return f.behavior(index, event, context, groupId);
+    // propagatePartitionCDCEvent (one vector per call), and its completion
+    // hook. A call records the row ids its vector carried, in order.
+    propagate: (index, events, context, groupId) => {
+      f.calls.push({index, ids: events.map((event) => event.data.id),
+        eventKeys: events.map((event) => event.eventKey),
+        remainingMs: context.remainingMs()});
+      return f.behavior(index, events, context, groupId);
     },
-    afterPropagation: (index, event) => f.hooks.push({index, id: event.data.id}),
+    afterPropagation: (index, events) =>
+      f.hooks.push({index, ids: events.map((event) => event.data.id)}),
     acks: () => proposed.filter((command) => command.type === PARTITION_CDC_COMMAND.DELIVERED),
     drive: () => leader.cdcDelivery.driveCdcObligations(REASON.DELIVERY_RETRY),
   };
   for (let index = 0; index < subscribers; index += 1) await addSubscriber(f, index);
   for (const id of rows) addSourceRow(leader, id);
   for (const statement of statements) commitSourceStatement(leader, statement);
+  const populated = populate(leader);
   leader.controllablePort.setRole(RAFT_ROLE.LEADER);
   await settleTicks();
   assert.deepEqual(countCdcObligations(leader.db),
-    {owed: rows.length + statements.length, delivered: 0});
+    {owed: rows.length + statements.length + populated, delivered: 0});
   assert.equal(f.calls.length, 0, 'readiness held all recipient callbacks during setup');
   f.ready = true;
   return f;
@@ -122,5 +150,24 @@ function assertOwedWithoutAck(f, owed) {
   assert.equal(f.leader.cdcDelivery.getCdcObligationDiagnostics().pendingAcknowledgements, 0);
 }
 
-export {PAYLOAD_SENTINEL, RETRY_AFTER_MS, TABLE, addSourceRow, assertOwedWithoutAck,
-  commitSourceStatement, fixture, recipientAnswer};
+// The lane's shipping window as a precondition of a test whose property is
+// stated for a given window (a warmed lane ships up to `rows` per wave). The
+// window's own dynamics from a cold start are proved where they are the
+// property; from here on the lane moves the window by its own rules.
+function primeShipWindow(f, rows) {
+  f.leader.cdcDelivery.obligationLane.shipWindow = rows;
+}
+
+// Hold the lane's shipping window at `rows`: the same lane with its one
+// parameter pinned (the reference of the differential property, window 1).
+// Re-applied by the caller after a tenure change, which makes a new lane.
+function holdShipWindow(f, rows) {
+  Object.defineProperty(f.leader.cdcDelivery.obligationLane, 'shipWindow',
+    {get: () => rows, set: () => {}, enumerable: true, configurable: true});
+}
+
+const shipWindowOf = (f) => f.leader.cdcDelivery.getCdcObligationDiagnostics().shipWindow;
+
+export {PAYLOAD_SENTINEL, RETRY_AFTER_MS, TABLE, addSourceEntry, addSourceRow,
+  assertOwedWithoutAck, commitSourceStatement, fixture, holdShipWindow, insertOperation,
+  primeShipWindow, recipientAnswer, shipWindowOf};
