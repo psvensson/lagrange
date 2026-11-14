@@ -150,24 +150,32 @@ function assertOwedWithoutAck(f, owed) {
   assert.equal(f.leader.cdcDelivery.getCdcObligationDiagnostics().pendingAcknowledgements, 0);
 }
 
+// The lane of the current leadership tenure. The delivery owner replaces its
+// lane lazily, the next time it is asked after the tenure changed, so the lane
+// is read through the owner (its diagnostics) first.
+function currentLaneOf(f) {
+  f.leader.cdcDelivery.getCdcObligationDiagnostics();
+  return f.leader.cdcDelivery.obligationLane;
+}
+
 // The lane's shipping window as a precondition of a test whose property is
 // stated for a given window (a warmed lane ships up to `rows` per wave). The
 // window's own dynamics from a cold start are proved where they are the
 // property; from here on the lane moves the window by its own rules.
 function primeShipWindow(f, rows) {
-  f.leader.cdcDelivery.obligationLane.shipWindow = rows;
+  currentLaneOf(f).shipWindow = rows;
 }
 
 // Hold the lane's shipping window at `rows`: the same lane with its one
 // parameter pinned (the reference of the differential property, window 1).
 // Re-applied by the caller after a tenure change, which makes a new lane.
 function holdShipWindow(f, rows) {
-  Object.defineProperty(f.leader.cdcDelivery.obligationLane, 'shipWindow',
+  Object.defineProperty(currentLaneOf(f), 'shipWindow',
     {get: () => rows, set: () => {}, enumerable: true, configurable: true});
 }
 
 const shipWindowOf = (f) => f.leader.cdcDelivery.getCdcObligationDiagnostics().shipWindow;
 
 export {PAYLOAD_SENTINEL, RETRY_AFTER_MS, TABLE, addSourceEntry, addSourceRow,
-  assertOwedWithoutAck, commitSourceStatement, fixture, holdShipWindow, insertOperation,
-  primeShipWindow, recipientAnswer, shipWindowOf};
+  assertOwedWithoutAck, commitSourceStatement, currentLaneOf, fixture, holdShipWindow,
+  insertOperation, primeShipWindow, recipientAnswer, shipWindowOf};

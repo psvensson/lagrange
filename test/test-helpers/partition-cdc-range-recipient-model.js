@@ -251,9 +251,10 @@ function assertLeadingLane(f, label) {
 }
 
 /**
- * Run the lane to quiescence: commit every CDC_DELIVERED it proposes through
- * the real application owner and advance the virtual clock (retry timers,
- * flush deadline) until nothing is owed, pending or in flight.
+ * Run the lane to quiescence: each round requests a drive, commits every
+ * CDC_DELIVERED the lane proposed through the real application owner and
+ * advances the virtual clock (retry timers, flush deadline), until nothing is
+ * owed, pending or in flight.
  * @param {Object} f - The lane fixture.
  * @param {Object} [options] - {maxRounds, label, until: () => boolean}.
  * @return {Promise<number>} The rounds it took.
@@ -270,6 +271,7 @@ async function runLaneToQuiescence(f, {maxRounds = 400, label = 'lane',
         diagnostics.batchEvents === 0) {
       return round;
     }
+    await f.drive();
     f.clock.advance(BOUND.ACK_FLUSH_DEADLINE_MS);
     await settleTicks();
   }

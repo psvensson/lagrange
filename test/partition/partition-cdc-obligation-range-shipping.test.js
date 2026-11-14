@@ -34,8 +34,9 @@ import {countCdcObligations, readOwedCdcObligations} from
 import {applyCommitted, clearFixtureSingletons, resetFixtureSingletons, settleTicks, track} from
   '../test-helpers/participant-transaction-fixture.js';
 import {acknowledgingCdcSubscriber} from '../test-helpers/acknowledging-cdc-subscriber.js';
-import {PAYLOAD_SENTINEL, TABLE, addSourceEntry, addSourceRow, fixture, insertOperation,
-  primeShipWindow, shipWindowOf} from '../test-helpers/partition-cdc-lane-fixture.js';
+import {PAYLOAD_SENTINEL, TABLE, addSourceEntry, addSourceRow, currentLaneOf as laneOf,
+  fixture, insertOperation, primeShipWindow, shipWindowOf} from
+  '../test-helpers/partition-cdc-lane-fixture.js';
 import {RECIPIENT_FAULT, assertRecipientLogs, installRecipientModel, runLaneToQuiescence} from
   '../test-helpers/partition-cdc-range-recipient-model.js';
 import {PARTITION_CDC_OBLIGATION_SQL as SQL} from
@@ -368,7 +369,6 @@ test('counterexample: a second, non-propagation durable subscriber is handed the
 
 const idsOfWaves = (model) => model.waves.map((wave) => wave.ids);
 const rowsOfWaves = (model) => model.waves.map((wave) => wave.rows);
-const laneOf = (f) => f.leader.cdcDelivery.obligationLane;
 
 // The payload reads of the lane (the owed rows with event_json), by limit and
 // row count; the positions-only pre-pass uses its own statement.

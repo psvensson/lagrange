@@ -309,40 +309,48 @@ async function nodeReadyHookSeed() {
 const LEASE = 4102444800000; // far in the future: the lease never lapses in the witness
 const nodeRow = (nodeId, status, extra = {}) => ({node_id: nodeId, status, ...extra});
 const nodesEvent = (operation, data) => ({tableName: TABLES.NODES, operation, data});
+// Rows carry an increasing last_heartbeat, the node owner's liveness
+// watermark: without one it keeps its previous observation of the node.
 const NODE_READY_VECTORS = Object.freeze({
   'a node made ready and then renewed': {
-    cached: [nodeRow('n1', 'joining', {address: 'n1:1'})],
+    cached: [nodeRow('n1', 'joining', {address: 'n1:1', last_heartbeat: 1})],
     events: [
-      nodesEvent('UPDATE', nodeRow('n1', SERVICE_STATUS.ACTIVE, {ready_lease_expires_at: LEASE})),
       nodesEvent('UPDATE', nodeRow('n1', SERVICE_STATUS.ACTIVE,
-        {ready_lease_expires_at: LEASE + 1, last_heartbeat: 5})),
+        {ready_lease_expires_at: LEASE, last_heartbeat: 2})),
+      nodesEvent('UPDATE', nodeRow('n1', SERVICE_STATUS.ACTIVE,
+        {ready_lease_expires_at: LEASE + 1, last_heartbeat: 3})),
     ],
     scheduled: [true, false],
   },
   'a partial row first, ready second': {
-    cached: [nodeRow('n1', 'joining', {address: 'n1:1', ready_lease_expires_at: LEASE})],
+    cached: [nodeRow('n1', 'joining',
+      {address: 'n1:1', ready_lease_expires_at: LEASE, last_heartbeat: 1})],
     events: [
-      nodesEvent('UPDATE', {node_id: 'n1', address: 'n1:2'}),
-      nodesEvent('UPDATE', {node_id: 'n1', status: SERVICE_STATUS.ACTIVE}),
+      nodesEvent('UPDATE', {node_id: 'n1', address: 'n1:2', last_heartbeat: 2}),
+      nodesEvent('UPDATE', {node_id: 'n1', status: SERVICE_STATUS.ACTIVE, last_heartbeat: 3}),
     ],
     scheduled: [false, true],
   },
   'a node deleted and inserted ready again': {
-    cached: [nodeRow('n1', SERVICE_STATUS.ACTIVE, {ready_lease_expires_at: LEASE})],
+    cached: [nodeRow('n1', SERVICE_STATUS.ACTIVE,
+      {ready_lease_expires_at: LEASE, last_heartbeat: 1})],
     events: [
       nodesEvent('DELETE', {node_id: 'n1'}),
       nodesEvent('INSERT', nodeRow('n1', SERVICE_STATUS.ACTIVE,
-        {ready_lease_expires_at: LEASE + 2})),
+        {ready_lease_expires_at: LEASE + 2, last_heartbeat: 3})),
     ],
     scheduled: null,
   },
   'two nodes interleaved': {
-    cached: [nodeRow('n1', 'joining'), nodeRow('n2', 'joining')],
+    cached: [nodeRow('n1', 'joining', {last_heartbeat: 1}),
+      nodeRow('n2', 'joining', {last_heartbeat: 1})],
     events: [
-      nodesEvent('UPDATE', nodeRow('n1', SERVICE_STATUS.ACTIVE, {ready_lease_expires_at: LEASE})),
-      nodesEvent('UPDATE', nodeRow('n2', SERVICE_STATUS.ACTIVE, {ready_lease_expires_at: LEASE})),
       nodesEvent('UPDATE', nodeRow('n1', SERVICE_STATUS.ACTIVE,
-        {ready_lease_expires_at: LEASE + 3})),
+        {ready_lease_expires_at: LEASE, last_heartbeat: 2})),
+      nodesEvent('UPDATE', nodeRow('n2', SERVICE_STATUS.ACTIVE,
+        {ready_lease_expires_at: LEASE, last_heartbeat: 2})),
+      nodesEvent('UPDATE', nodeRow('n1', SERVICE_STATUS.ACTIVE,
+        {ready_lease_expires_at: LEASE + 3, last_heartbeat: 3})),
     ],
     scheduled: [true, true, false],
   },
@@ -385,8 +393,8 @@ test('seed node-ready hook: the second member of a node reads the first member m
     const partial = NODE_READY_VECTORS['a partial row first, ready second'];
     merged.nodeRows.set('n1', {...partial.cached[0]});
     await merged.subscriber(Object.freeze([...partial.events]));
-    assert.deepEqual(merged.triggers[1].previousRow,
-      {node_id: 'n1', status: 'joining', address: 'n1:2', ready_lease_expires_at: LEASE});
+    assert.deepEqual(merged.triggers[1].previousRow, {node_id: 'n1', status: 'joining',
+      address: 'n1:2', ready_lease_expires_at: LEASE, last_heartbeat: 2});
     const removed = NODE_READY_VECTORS['a node deleted and inserted ready again'];
     deleted.nodeRows.set('n1', {...removed.cached[0]});
     await deleted.subscriber(Object.freeze([...removed.events]));

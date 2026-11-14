@@ -28,8 +28,8 @@ import {OBLIGATION_RETRY_DISPOSITION, handleDeliveryFailure, scheduleDeliveryRet
 import {countCdcObligations} from '../../src/partition/partition-cdc-obligation-ledger.js';
 import {clearFixtureSingletons, resetFixtureSingletons, settleTicks} from
   '../test-helpers/participant-transaction-fixture.js';
-import {RETRY_AFTER_MS, TABLE, addSourceRow, fixture, primeShipWindow, shipWindowOf} from
-  '../test-helpers/partition-cdc-lane-fixture.js';
+import {RETRY_AFTER_MS, TABLE, addSourceRow, currentLaneOf as laneOf, fixture,
+  primeShipWindow, shipWindowOf} from '../test-helpers/partition-cdc-lane-fixture.js';
 import {DRIVE_STATE_IN_A_LEADING_LANE, FLUSH_STATE_IN_A_LEADING_LANE, RECIPIENT_FAULT,
   WINDOW_EFFECT, WINDOW_EFFECT_BY_COMPLETION, WINDOW_EFFECT_BY_COVERAGE,
   WINDOW_EFFECT_BY_FAULT, WINDOW_EFFECT_BY_RETRY_DISPOSITION, assertRecipientLogs,
@@ -46,7 +46,6 @@ const idsOf = (count, prefix) => Array.from({length: count}, (_unused, index) =>
   `${prefix}-${String(index).padStart(4, '0')}`);
 const idsOfWaves = (model) => model.waves.map((wave) => wave.ids);
 const rowsOfWaves = (model) => model.waves.map((wave) => wave.rows);
-const laneOf = (f) => f.leader.cdcDelivery.obligationLane;
 const faultFor = (model, rowIndex, leaf, ...kinds) =>
   model.faults.set(model.raw[rowIndex].eventKey, new Map([[leaf, kinds]]));
 const sorted = (values) => [...values].sort();

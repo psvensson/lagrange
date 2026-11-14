@@ -10,6 +10,14 @@ import {
   TABLES,
 } from '../../constants/index.js';
 
+function nodeOfEvent(cdcEvent) {
+  const cdcData = cdcEvent?.data &&
+    typeof cdcEvent.data === 'object' ?
+    cdcEvent.data : {};
+  return {cdcData, nodeId: cdcData[COLUMN.NODE_ID] ||
+    cdcData.id || null};
+}
+
 // The NODES node-ready trigger over one vector, member by member in order.
 // Each member's previous row is what the node cache holds when that member is
 // reached under one-event delivery: the cached row, overlaid by the earlier
@@ -17,22 +25,18 @@ import {
 // the whole vector is applied to the cache only after this hook.
 function triggerNodeReadyRebalanceForVector(delegates, events) {
   const rowsAfterEarlierMembers = new Map();
+  const cachedRowOf = (nodeId) => {
+    const cachedNodeRow =
+      delegates.getSystemTableCache().get(TABLES.NODES, nodeId);
+    return cachedNodeRow ?
+      {...cachedNodeRow} : null;
+  };
   for (const cdcEvent of events) {
-    const cdcData = cdcEvent?.data &&
-      typeof cdcEvent.data === 'object' ?
-      cdcEvent.data : {};
-    const nodeId = cdcData[COLUMN.NODE_ID] ||
-      cdcData.id || null;
+    const {cdcData, nodeId} = nodeOfEvent(cdcEvent);
     let previousNodeRow = null;
-    if (nodeId && rowsAfterEarlierMembers.has(nodeId)) {
-      previousNodeRow = rowsAfterEarlierMembers.get(nodeId);
-    } else if (nodeId) {
-      const cachedNodeRow =
-        delegates.getSystemTableCache().get(TABLES.NODES, nodeId);
-      previousNodeRow = cachedNodeRow ?
-        {...cachedNodeRow} : null;
-    }
     if (nodeId) {
+      previousNodeRow = rowsAfterEarlierMembers.has(nodeId) ?
+        rowsAfterEarlierMembers.get(nodeId) : cachedRowOf(nodeId);
       rowsAfterEarlierMembers.set(nodeId, cdcEvent.operation === CDC_OPERATION.DELETE ?
         null : {...previousNodeRow, ...cdcData});
     }
