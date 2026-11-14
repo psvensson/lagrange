@@ -7,8 +7,8 @@
     {
       "id": "original-journey-partial-row-episode",
       "measured": true,
-      "passed": false,
-      "detail": "Native job 81b81f30-d9b1-4132-854c-6f1c3dffe647 on tv-dator. Episode 1 of predicate g-projection-agrees-with-authority: observer de5a0bc4, partition replica_operations-p1, row replica_operations-p1-r4, longest span 1389 ms against a 1000 ms bound. Observer log lines 2182-2183 (2026-11-13T22:28:06.898Z): cache UPSERT by authoritative_service_lifecycle_reconciliation, before {status syncing, updated_at 1794608883548, originHlc 1794608883960-0-services-p1-r1}, after {status active, updated_at 1794608885950, originHlc null}, incomingVersionAccepted true; the journey report records exclusion raft_role_missing for that replica while authorityRows hold raft_role follower (seed applied index 336 at :06.209). The row was rewritten by authoritative_observation_reconciliation at about :08.05, before the live CDC event arrived. Deterministic reproduction on a scratch copy of the same source: {raft_role: null, status: active, aligned: true}. Census of the run: 12 lifecycle-reconciliation writes (7 merged over an existing row; this is the one that crossed a role change)."
+      "passed": true,
+      "detail": "Native job 81b81f30-d9b1-4132-854c-6f1c3dffe647 on tv-dator. Episode 1 of predicate g-projection-agrees-with-authority: observer de5a0bc4, partition replica_operations-p1, row replica_operations-p1-r4, longest span 1389 ms against a 1000 ms bound. Observer log lines 2182-2183 (2026-11-13T22:28:06.898Z): cache UPSERT by authoritative_service_lifecycle_reconciliation, before {status syncing, updated_at 1794608883548, originHlc 1794608883960-0-services-p1-r1}, after {status active, updated_at 1794608885950, originHlc null}, incomingVersionAccepted true; the journey report records exclusion raft_role_missing for that replica while authorityRows hold raft_role follower (seed applied index 336 at :06.209). The row was rewritten by authoritative_observation_reconciliation at about :08.05, before the live CDC event arrived. Deterministic reproduction on a scratch copy of the same source: {raft_role: null, status: active, aligned: true}. Census of the run: 12 lifecycle-reconciliation writes (7 merged over an existing row; this is the one that crossed a role change). passed=true records that the failure was observed on the original; it is the red baseline, not a claim about the candidate."
     },
     {
       "id": "reproducer-red-on-original",
@@ -65,11 +65,15 @@
       "passed": false,
       "detail": "SUPERSEDED, not proof of any later candidate: measured on rejected candidate 3bd5053b5 (reproducer commit 2a60ee973) under the withdrawn frozen claim. test/rebalancer/operation-workflow-active-cache-handoff.test.js witness cases drive workflowOwner.applyReconciledReplicaStatus(ACTIVE) -> confirmActiveReplicaTerminalHandoff -> refreshAuthoritativeCacheRow -> applyAuthoritativeCacheRepair -> SystemTableCache.applySystemTableChange (lifecycle mode) and read the outcome through buildDerivedPriorityPartitionSummary and isPrioritySpreadHolderServiceRow over cache.getAll('services'): red on 2a60ee973 (job 8e2873c6, raft_role_missing after completion), green on 3bd5053b5 (job 104e18d8).",
       "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/lifecycle-row/green-candidate-3bd5053b"
+    },
+    {
+      "id": "independent-verification",
+      "measured": true,
+      "passed": true,
+      "detail": "Independent verifier subagent:verify-lifecycle-row-1: REJECT of 3bd5053b5 (the over-broad first candidate wiped owner-local seeds and filled nulls inside a newer cached lifecycle group), claim re-derived as supersession record v2 and reviewed by the verifier before any corrective code, then APPROVE of 5778ba12e. Verifier's own probes (65 cells), six planted defects and one independent green run (b68ff63c, 56/56 files, 2752 assertions) on lab hosts. Reports independent-verification-3bd5053b5.md and independent-verification-5778ba12e.md retained with the coordination records; rulings in supersession record v3."
     }
   ],
-  "unmeasuredObligations": [
-    "independent-verification"
-  ],
+  "unmeasuredObligations": [],
   "source": {
     "sha": "ed708dfd01e5ffb446f49ba0447a5bf9915f511a",
     "sealedBase": "9a22bf79b61610bd782cf82ca45844f325f6a8e6",
