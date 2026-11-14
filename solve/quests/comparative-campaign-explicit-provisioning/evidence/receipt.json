@@ -1,0 +1,32 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "comparative-campaign-explicit-provisioning",
+  "status": "fail",
+  "interpretation": "Measured so far: the reproducers red on the code before each fix and green on candidate 39792cfe5. The candidate was independently rejected because GCP provisioning exists only as prose; see the quest log.",
+  "receipts": [
+    {
+      "id": "refusals-red-on-original",
+      "measured": true,
+      "passed": true,
+      "detail": "Tests committed before each fix and run on the lab against the unchanged code: job 527c983f on tv-dator at 44dabbfa5 (the two harness-commit cases fail: the code fetches from origin) and job ae0b1bae on adams-gamla at baab5f6a0 (exactly the six new or changed cases fail: image pulled at run time, online npm ci, no --pull=never, thermal exclusion without a reason). passed=true means observed red for the predicted reason."
+    },
+    {
+      "id": "refusals-green-on-candidate",
+      "measured": true,
+      "passed": false,
+      "detail": "Job 20f2cd3c on adams-gamla at 39792cfe5: 23 comparative and real-product test files, 231 assertions, all passing; an earlier run 8566c6d4 failed on a defect in one new test, corrected by 39792cfe5. Not credited as passed: the candidate was rejected and will change."
+    }
+  ],
+  "unmeasuredObligations": [
+    "provisioning-exists-for-every-target",
+    "independent-verification"
+  ],
+  "source": {
+    "sha": "39792cfe569560389d7fdb082cd8ef383c463eee",
+    "base": "965a86bb8"
+  },
+  "evidence": {
+    "directory": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/measurement-prep"
+  },
+  "evidenceCeiling": "Fixture-level proof of the refusals; the real-lab dry run c6fa8a7f proves host selection and eligibility only and reaches none of the refusal sites. Nothing has been executed on GCP."
+}

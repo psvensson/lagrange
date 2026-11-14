@@ -1,0 +1,40 @@
+{
+  "schema": "solve-quest/2",
+  "id": "comparative-campaign-explicit-provisioning",
+  "class": "fix",
+  "statement": "During preparation and execution the comparative campaign never obtains an image, a harness commit or a reference-client package from the network on its own initiative and never substitutes another source or outcome when one is missing: an absent image is a typed image_unavailable refusal naming host, role and image, with --pull=never on every campaign docker run; an absent harness commit is a typed load_generator_commit_absent refusal before any worktree exists; the reference client installs offline only and a missing tarball is a typed offline_cache_incomplete refusal naming it; a host whose thermal decision cannot be read stays excluded and the exclusion carries a typed reason. Placement of images, the harness commit and the reference-client cache is an explicit provisioning step that exists in code for every supported target (the home lab and GCP), so no target that worked before is left with only a refusal.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/comparative-campaign-explicit-provisioning/evidence/receipt.json",
+      "requiredReceipts": [
+        "refusals-red-on-original",
+        "refusals-green-on-candidate",
+        "provisioning-exists-for-every-target",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "owner-rule-no-fallback",
+      "statement": "Owner rule: no legacy or fallback logic anywhere; unavailability is an explicit typed outcome (R11). Decisions recorded 2026-11-14: missing image refused, --pull=never everywhere, provisioning explicit and separate; reference client offline only; lab image provenance is the loaded image's content digest."
+    },
+    {
+      "id": "no-working-path-broken",
+      "statement": "A refusal replaces a fallback only together with the explicit provisioning that makes the supported path work: the GCP provisioning script places images by digest, seeds the reference-client package cache and places the harness commit; a statement in code or prose that provisioning does something must be true at the same commit."
+    },
+    {
+      "id": "bounded",
+      "statement": "Selection, deployment, workload, deadlines, admission and evidence behaviour are otherwise unchanged; journey and benchmark predicates and bounds are untouched. This quest does not claim a campaign ran."
+    },
+    {
+      "id": "verification-and-custody",
+      "statement": "Independent verification on the exact candidate before landing; tests run on lab hosts through the local controller; a failed run stays recorded as failed."
+    }
+  ],
+  "verificationTemplates": [
+    "harness-fidelity"
+  ],
+  "sealedAt": "39792cfe569560389d7fdb082cd8ef383c463eee"
+}
