@@ -196,7 +196,12 @@ function areAuthoritativeSystemTableCacheRowsAligned(
     ) ||
       stableSerialize(cachedRow[fieldName]) ===
         stableSerialize(authoritativeRow[fieldName]),
-  );
+  ) && !Object.keys(authoritativeRow).some((fieldName) =>
+    isAbsentCachedServiceFieldFilledByAuthority(
+      cachedRow,
+      authoritativeRow,
+      fieldName,
+    ));
 }
 
 function hasConflictingNonEmptyField(existing, authoritative, fieldName) {
@@ -336,6 +341,63 @@ function buildAuthoritativeSystemTableCacheReplacement(
   );
 }
 
+const AUTHORITATIVE_ABSENT_FILL_EXCLUDED_FIELD_NAMES = new Set([
+  ...SYSTEM_TABLE_CACHE_SERVICE_IDENTITY_FIELD_NAMES,
+  ...SYSTEM_TABLE_CACHE_SERVICE_LIFECYCLE_FIELD_NAMES,
+  SERVICE_LIFECYCLE_COLUMN.UPDATED_AT,
+]);
+
+function isAbsentSystemTableCacheValue(value) {
+  return value === null || typeof value === 'undefined';
+}
+
+function isCachedServiceLifecycleVersionNewer(existing, authoritative) {
+  const authoritativeVersion = resolveServiceDurableVersion(authoritative);
+  if (!authoritativeVersion) {
+    return true;
+  }
+  const existingVersion = existing?.[authoritativeVersion.column];
+  return isFiniteSystemTableCacheNumber(existingVersion) &&
+    Number(existingVersion) > authoritativeVersion.value;
+}
+
+function isAbsentCachedServiceFillColumn(existing, authoritative, fieldName) {
+  return !AUTHORITATIVE_ABSENT_FILL_EXCLUDED_FIELD_NAMES.has(fieldName) &&
+    !HLC_LOCAL_FIELD_NAMES.has(fieldName) &&
+    isAbsentSystemTableCacheValue(existing?.[fieldName]) &&
+    !isAbsentSystemTableCacheValue(authoritative?.[fieldName]);
+}
+
+function isCachedServiceRowVersionNewerOrAuthorityUnversioned(
+  existing,
+  authoritative,
+) {
+  const existingUpdatedAt = existing?.updated_at;
+  const authoritativeUpdatedAt = authoritative?.updated_at;
+  return !isFiniteSystemTableCacheNumber(authoritativeUpdatedAt) ||
+    (isFiniteSystemTableCacheNumber(existingUpdatedAt) &&
+      Number(existingUpdatedAt) > Number(authoritativeUpdatedAt));
+}
+
+// A cached key holding null or undefined is absent evidence, not a newer
+// value: it takes the authoritative value of a non-identity, non-lifecycle
+// column when the cached row version is not newer, the cached lifecycle is
+// not newer and both rows are the same incarnation. The builder fills these
+// cells and the aligned predicate refuses while one stands.
+function isAbsentCachedServiceFieldFilledByAuthority(
+  existing,
+  authoritative,
+  fieldName,
+) {
+  return isAbsentCachedServiceFillColumn(existing, authoritative, fieldName) &&
+    !isCachedServiceRowVersionNewerOrAuthorityUnversioned(
+      existing,
+      authoritative,
+    ) &&
+    !isCachedServiceLifecycleVersionNewer(existing, authoritative) &&
+    !hasDifferentServiceIdentity(existing, authoritative);
+}
+
 function buildAuthoritativeServiceLifecycleCacheReplacement(
   existing,
   authoritative,
@@ -361,7 +423,14 @@ function buildAuthoritativeServiceLifecycleCacheReplacement(
     }
   }
   for (const [fieldName, fieldValue] of Object.entries(authoritative)) {
-    if (!Object.prototype.hasOwnProperty.call(replacement, fieldName)) {
+    if (
+      !Object.prototype.hasOwnProperty.call(replacement, fieldName) ||
+      isAbsentCachedServiceFieldFilledByAuthority(
+        existing,
+        authoritative,
+        fieldName,
+      )
+    ) {
       replacement[fieldName] = fastJsonClone(fieldValue);
     }
   }
