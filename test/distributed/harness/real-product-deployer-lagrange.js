@@ -43,6 +43,7 @@ import {
 import {
   DEPLOYMENT_FAILURE,
   LAGRANGE_IMAGE_DEFAULT,
+  POSTGRES_IMAGE_DEFAULT,
   READINESS_STATE,
   deploymentFailure,
   requireCampaignId,
@@ -67,6 +68,7 @@ import {
 import {pollReadiness} from './real-product-readiness.js';
 import {
   dockerRunDetached,
+  dockerRunOnceCommand,
   errorText,
   httpFromHost,
   shellWord,
@@ -82,6 +84,12 @@ const PORT = Object.freeze({REST: 8080, ADMIN: 8081, TRANSPORT: 8082});
 // runtime USER (`chown 10001:10001 /data`); a path outside it fails with
 // EACCES at startup.
 const DATA_DIR = '/data';
+// The Dockerfile's runtime USER, the owner of DATA_DIR in the image; a test
+// holds the two equal.
+const RUNTIME_USER = '10001:10001';
+// Where the throwaway container that prepares a node's storage directory
+// mounts <storage-root>/<campaign>.
+const STORAGE_MOUNT = '/campaign';
 const NODE_ROLE = 'lagrange-node';
 const LISTENER_ROLE = 'sys-postgres-wire';
 const PG_WIRE_SERVICE_ID = 'sys-postgres-wire';
@@ -127,9 +135,34 @@ function nodeEnv({nodeId, host, seedHost, connection}) {
   return arrayFlatMap(Object.entries(env), ([key, value]) => ['-e', `${key}=${value}`]);
 }
 
+function storageLabel(index) {
+  return `lagrange-${index + 1}`;
+}
+
 function storageArgs(opts, campaignId, index) {
   return opts.storageRoot ?
-    ['-v', `${opts.storageRoot}/${campaignId}/lagrange-${index + 1}:${DATA_DIR}`] : [];
+    ['-v', `${opts.storageRoot}/${campaignId}/${storageLabel(index)}:${DATA_DIR}`] : [];
+}
+
+// With --storage-root, dockerd would create a node's missing bind-mount source
+// as 0:0 755, which the image's runtime user cannot write (lab experiment
+// 16dce80a, tv-dator 2026-11-14: EACCES at uid 10001). The directory is made
+// beforehand, owned by that user, through a throwaway container of the
+// PostgreSQL image every data host holds (campaignImagesByRole); the product
+// never runs as root and nothing is made world-writable.
+async function prepareNodeStorage({sshRun, opts, host, campaignId, index}) {
+  if (!opts.storageRoot) return;
+  const dir = `${STORAGE_MOUNT}/${storageLabel(index)}`;
+  try {
+    await sshRun(host, opts, dockerRunOnceCommand({campaignId, image: POSTGRES_IMAGE_DEFAULT,
+      dockerArgs: ['-v', `${opts.storageRoot}/${campaignId}:${STORAGE_MOUNT}`],
+      commandArgs: ['sh', '-c', `mkdir -p ${dir} && chown ${RUNTIME_USER} ${dir}`]}));
+  } catch (error) {
+    throw deploymentFailure(DEPLOYMENT_FAILURE.DEPLOYMENT_COMMAND_FAILED, 'could not prepare ' +
+      `${opts.storageRoot}/${campaignId}/${storageLabel(index)} on ${host} for the runtime ` +
+      `user ${RUNTIME_USER}: ${errorText(error)}`, {host, reason: 'storage_owner_unprepared',
+      storageRoot: opts.storageRoot});
+  }
 }
 
 function normalizeImageDigest(digest, image) {
@@ -530,6 +563,7 @@ async function formLagrangeCluster({ctx, hosts, image, connection, roles, nodeRe
   for (let index = 0; index < hosts.length; index += 1) {
     const host = hosts[index];
     const nodeId = nodeIdOf(index);
+    await prepareNodeStorage({sshRun, opts, host, campaignId, index});
     const started = await dockerRunDetached({sshRun, opts, host, campaignId, role: NODE_ROLE,
       ordinal: index + 1, image: imageForHost(opts, host, image),
       dockerArgs: [...storageArgs(opts, campaignId, index),
