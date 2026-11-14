@@ -129,7 +129,8 @@ test('lanes beyond a router destination bound receive typed backpressure while t
   const tables = [TABLES.SERVICES, TABLES.PARTITIONS, TABLES.NODES, TABLES.REPLICA_OPERATIONS];
   const f = await multiLaneTopologyFixture(t,
     tables.map((tableName) => ({tableName, rows: [`${tableName}-1`]})));
-  f.answer = () => f.router.calls.filter((call) => call.held).length < DESTINATION_BOUND ?
+  // The double's destination bound: the delivery being asked counts itself.
+  f.answer = () => f.router.calls.filter((call) => call.held).length <= DESTINATION_BOUND ?
     HOLD : {leaf: LEAF.OUTBOUND_BACKPRESSURE, hintMs: SMALL_HINT_MS};
   const inside = f.lanes.slice(0, DESTINATION_BOUND).map((lane) => track(lane.drive()));
   await settleTicks();

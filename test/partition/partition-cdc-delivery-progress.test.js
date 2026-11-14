@@ -15,6 +15,7 @@ import {PARTITION_CDC_COMMAND, PARTITION_CDC_OBLIGATION_BOUND,
   '../../src/partition/partition-cdc-obligation-constants.js';
 import {
   OBLIGATION_RETRY_DISPOSITION,
+  createCdcObligationLane,
   handleDeliveryFailure,
   scheduleDeliveryRetry,
 } from '../../src/partition/partition-cdc-obligation-delivery.js';
@@ -274,13 +275,8 @@ test('handleDeliveryFailure logs at debug level on backpressure and warn on othe
   const debugCalls = [];
   const warnCalls = [];
   const tenure = {term: 1, generation: 1};
-  const mockLane = {
-    tenure,
-    retryTimer: {state: 'idle', handle: null},
-    retryDelayMs: 50,
-    consecutiveBackpressure: 0,
-    shipWindow: 8,
-  };
+  // The lane owner's own shape (a hand copy would miss its fields).
+  const mockLane = {...createCdcObligationLane(tenure), shipWindow: 8};
   const mockDelivery = {
     term: 1,
     generation: 1,

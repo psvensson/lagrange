@@ -559,9 +559,15 @@ test('acknowledgement refused inside a covered range leaves the rows from the re
     BOUND.ACK_MAX_OUTSTANDING_BATCHES);
   const wavesBefore = model.waves.length;
   await runLaneToQuiescence(f);
-  assert.deepEqual(model.waves.slice(wavesBefore).map((wave) => wave.keys),
-    [wideKeys.slice(312), [model.raw.at(-1).eventKey]],
-    'the eight rows left owed ship again together, in order, ahead of the later row');
+  // The later row was committed while the lane was refused before any attempt
+  // (owner not ready), so the lane's owed tail includes it (quest
+  // cdc-propagation-node-slot-removal, R-4): the eight rows left owed ship
+  // again first, in order, and the later row follows them, once.
+  const shippedAgain = model.waves.slice(wavesBefore).map((wave) => wave.keys);
+  assert.deepEqual(shippedAgain[0].slice(0, 8), wideKeys.slice(312),
+    'the eight rows left owed ship again together, in order, at the head of the next range');
+  assert.deepEqual(shippedAgain.flat(), [...wideKeys.slice(312), model.raw.at(-1).eventKey],
+    'each owed row ships once, the later row after the eight');
   assertRecipientLogs(model, {wholeEntries: false});
   assert.deepEqual(countCdcObligations(f.leader.db),
     {owed: 0, delivered: singles.length + 321});
