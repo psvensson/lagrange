@@ -422,6 +422,7 @@ async function checkLabThermalHeadroom({hosts, sshRun, opts}) {
 }
 
 export {
+  versionAtLeast,
   THERMAL_GATE,
   checkLabThermalHeadroom,
   holdLabBenchmarkHosts,

@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2638,
+    "ordinary": 2639,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2664,
-  "digest": "fnv1a32-cc4fd17f",
+  "censusSize": 2665,
+  "digest": "fnv1a32-e6062726",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -975,6 +975,7 @@
     "test/distributed/harness/__tests__/postgres-baseline-partition-table-name-readback.test.js": "ordinary",
     "test/distributed/harness/__tests__/priority-recovery-summary-normalization.test.js": "ordinary",
     "test/distributed/harness/__tests__/progress-wait.test.js": "ordinary",
+    "test/distributed/harness/__tests__/provision-gcp-script.test.js": "ordinary",
     "test/distributed/harness/__tests__/public-path-multinode-baseline-scenario.test.js": "ordinary",
     "test/distributed/harness/__tests__/public-path-scale-and-failure-certification.test.js": "ordinary",
     "test/distributed/harness/__tests__/public-seam-durability-scenario.test.js": "ordinary",

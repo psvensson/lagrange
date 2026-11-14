@@ -36,6 +36,7 @@ import {
   arrayIncludes,
   arrayMap,
   arraySome,
+  arrayEvery,
   stringIncludes,
   stringReplace,
   stringTrim,
@@ -53,7 +54,9 @@ const LAGRANGE = `psvensson/lagrange@sha256:${'e'.repeat(64)}`;
 const TARGETS = ['lagrange', 'tidb-tikv', 'pg-single-primary'];
 const COMMON = ['--execution-target', 'gcp', '--hosts', [...DATA, CLIENT].join(','),
   '--ssh-user', 'bench', '--ssh-key', SSH_KEY, '--client-checkout', CHECKOUT, '--client-node', '/opt/node/bin/node',
-  '--lagrange-image', LAGRANGE, '--targets', TARGETS.join(',')];
+  '--lagrange-image', LAGRANGE, '--targets', TARGETS.join(','),
+  '--vm-image-family', 'ubuntu-2404-lts-amd64', '--vm-image-project', 'ubuntu-os-cloud'];
+const VM_IMAGE = {family: 'ubuntu-2404-lts-amd64', project: 'ubuntu-os-cloud'};
 const REFUSALS = ['image_unavailable', 'load_generator_commit_absent', 'offline_cache_incomplete'];
 const HEAD = stringTrim(execFileSync('git', ['rev-parse', 'HEAD'], {cwd: ROOT,
   encoding: 'utf8'}));
@@ -119,7 +122,17 @@ test('--provision places, through the real CLI, exactly what the campaign checks
     /npm cache add '?([^' ]+)'? /u.exec(entry.command)[1]);
   assert.deepEqual(added, lockfileTarballs());
   assert.equal(state.hosts[CLIENT].modules, true);
-  assert.equal(JSON.parse(placed.stdout).provisioned.client.head, HEAD);
+  // The record states, per host, the VM image named and what was observed.
+  const record = JSON.parse(placed.stdout).provisioned;
+  assert.equal(record.client.head, HEAD);
+  for (const entry of [...record.data, record.client]) {
+    assert.deepEqual(entry.vmImage, VM_IMAGE);
+    assert.equal(entry.dockerServer, '27.5.1');
+    assert.ok(arrayEvery(entry.images, (image) => /^sha256:[0-9a-f]{64}$/u.test(image.imageId)));
+  }
+  assert.deepEqual(arrayMap(record.data, (entry) => entry.host), DATA);
+  assert.equal(record.client.git, 'git version 2.43.0');
+  assert.equal(record.client.node, 'v22.23.2');
 
   const after = campaign(fake);
   assert.equal(after.result.status !== 0 && after.state.pastPreparation, true, after.stderr);
@@ -294,5 +307,19 @@ test('with --lagrange-image-content the data hosts are re-checked by content: co
   assert.match(stderr, new RegExp(`^image_unavailable: pinned image content ${content} is not ` +
     'on 10\\.20\\.0\\.1$', 'mu'));
   assert.deepEqual(state.pushes, []);
-  assert.equal(ranOn(state, CLIENT, /^docker pull|git |npm /u), false);
+  assert.equal(ranOn(state, CLIENT, /^docker pull|git (init|checkout)|npm /u), false);
+});
+
+test('the load generator\'s git and Node are checked before anything is placed: absent is ' +
+  'provisioning_tool_unavailable, below the engines floor provisioning_node_below_floor', () => {
+  const noGit = provisionFailing((s) => {
+    s.hosts[CLIENT].gitMissing = true;
+  });
+  assert.match(noGit.stderr, /^provisioning_tool_unavailable: git is not usable on the load generator 10\.20\.0\.9 /mu);
+  assert.equal(arraySome(noGit.state.log, (entry) => /^docker pull/u.test(entry.command)), false);
+  const oldNode = provisionFailing((s) => {
+    s.hosts[CLIENT].nodeVersion = 'v20.11.0';
+  });
+  assert.match(oldNode.stderr, /^provisioning_node_below_floor: Node v20\.11\.0 at \/opt\/node\/bin\/node on the load generator 10\.20\.0\.9 is below the engines floor \d+\.\d+\.\d+$/mu);
+  assert.equal(arraySome(oldNode.state.log, (entry) => /^docker pull/u.test(entry.command)), false);
 });

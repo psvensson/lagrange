@@ -9,8 +9,6 @@
 // machine answering the same ssh commands); nothing runs on GCP.
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
-import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 import {fileURLToPath} from 'node:url';
@@ -30,7 +28,6 @@ import {COMPARATIVE_TARGET} from '../real-product-cluster-deployers.js';
 import {
   arrayEvery,
   arrayFilter,
-  arrayFindIndex,
   arrayIncludes,
   arrayJoin,
   arrayMap,
@@ -38,8 +35,6 @@ import {
   objectKeys,
   stringIncludes,
   stringReplace,
-  stringSplit,
-  stringTrim,
 } from '../real-product-captured-intrinsics.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
@@ -88,6 +83,8 @@ function createFakeHosts(ips) {
       return state.images.has(image) ? exited(0, `sha256:${'d'.repeat(64)}`) :
         exited(1, `Error: No such image: ${image}`);
     }],
+    [/^git --version 2>&1/u, () => exited(0, 'git version 2.43.0')],
+    [/^'[^']*' --version 2>&1/u, () => exited(0, 'v22.23.2')],
     [/git init --quiet/u, () => exited(0)],
     [/git checkout --detach --quiet/u, (state, command) => {
       const commit = quotedWord(command, /git checkout --detach --quiet (\S+)/u);
@@ -130,7 +127,7 @@ function createFakeHosts(ips) {
 
 function planFor(targets) {
   return comparativeProvisioningPlan({targets, lagrangeImage: LAGRANGE, harnessCommit: COMMIT,
-    referenceClientLock: LOCK});
+    referenceClientLock: LOCK, vmImage: {family: 'f', project: 'p'}, nodeMinimum: '22.12.0'});
 }
 
 // The campaign's own preparation checks, exactly as runCampaign calls them.
@@ -257,49 +254,18 @@ test('a cache that does not serve the offline install fails provisioning, naming
 
 // The provisioning script places, it does not describe: its placement step
 // runs the runner's provisioning mode with the operator's campaign options.
-// Executed: `provision-gcp.sh --place` with a `node` stand-in on PATH that
-// records its arguments. Without HOSTS it refuses before running anything;
-// with them it runs the runner's provisioning with the operator's options.
-test('provision-gcp.sh --place, executed: refuses without HOSTS; runs the runner\'s ' +
-  '--provision with the hosts, ssh user and the operator\'s options', () => {
-  const script = path.join(ROOT, 'docs/benchmarks/cloud/provision-gcp.sh');
-  const bash = stringTrim(spawnSync('sh', ['-c', 'command -v bash'], {encoding: 'utf8'}).stdout);
-  assert.equal(spawnSync(bash, ['-n', script]).status, 0);
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'place-'));
-  const record = path.join(dir, 'node-argv.json');
-  fs.mkdirSync(path.join(dir, 'bin'));
-  fs.writeFileSync(path.join(dir, 'bin', 'node'), `#!${process.execPath}\n` +
-    `require('fs').writeFileSync(${JSON.stringify(record)}, ` +
-    'JSON.stringify(process.argv.slice(2)));\n', {mode: 0o755});
-  const env = {PATH: `${path.join(dir, 'bin')}:${process.env.PATH}`, HOME: dir,
-    PROJECT_ID: 'p', SSH_USER: 'bench'};
-  const place = (extra) => spawnSync(bash, [script, '--place', '--client-checkout', '/srv/c'],
-    {encoding: 'utf8', env: {...env, ...extra}});
-  // bash's own words for an unset required variable: `NAME: message`.
-  const refused = place({SSH_HOSTS: '1.2.3.4'});
-  assert.notEqual(refused.status, 0);
-  assert.match(refused.stderr, /(^|[^_])HOSTS: HOSTS is not set/mu);
-  const noSsh = place({HOSTS: '10.0.0.1,10.0.0.2,10.0.0.3,10.0.0.9'});
-  assert.notEqual(noSsh.status, 0);
-  assert.match(noSsh.stderr, /SSH_HOSTS: SSH_HOSTS is not set/u);
-  assert.equal(fs.existsSync(record), false, 'nothing ran');
-  const placed = place({HOSTS: '10.0.0.1,10.0.0.2,10.0.0.3,10.0.0.9', SSH_HOSTS: '1.2.3.4'});
-  assert.equal(placed.status, 0, placed.stderr);
-  assert.deepEqual(JSON.parse(fs.readFileSync(record, 'utf8')), [
-    path.join(ROOT, 'docs/benchmarks/cloud/run-comparative-benchmarks.mjs'),
-    '--execution-target', 'gcp', '--provision', '--hosts', '10.0.0.1,10.0.0.2,10.0.0.3,10.0.0.9',
-    '--ssh-hosts', '1.2.3.4', '--ssh-user', 'bench', '--client-checkout', '/srv/c']);
-});
-
 test('the runner\'s provisioning mode is GCP only, separate from --dry-run, and needs an ' +
   'absolute client checkout', () => {
   const runner = path.join(ROOT, 'docs/benchmarks/cloud/run-comparative-benchmarks.mjs');
   const run = (args) => spawnSync(process.execPath, [runner, ...args],
     {encoding: 'utf8', cwd: ROOT, env: {...process.env, EXECUTION_TARGET: ''}});
-  const gcp = ['--execution-target', 'gcp', '--provision',
+  const hostsOnly = ['--execution-target', 'gcp', '--provision',
     '--hosts', '10.0.0.1,10.0.0.2,10.0.0.3,10.0.0.9'];
+  const gcp = [...hostsOnly, '--vm-image-family', 'f', '--vm-image-project', 'p'];
   for (const [args, message] of [
     [['--provision'], /^--provision is only for --execution-target gcp/mu],
+    [[...hostsOnly, '--client-checkout', '/srv/c', '--vm-image-family', 'f'],
+      /^--provision needs --vm-image-family and --vm-image-project/mu],
     [[...gcp, '--client-checkout', 'lagrange'],
       /^--provision needs --client-checkout <absolute path>/mu],
     [[...gcp, '--client-checkout', '/srv/c', '--dry-run'],
@@ -308,64 +274,5 @@ test('the runner\'s provisioning mode is GCP only, separate from --dry-run, and 
     assert.notEqual(result.status, 0, args.join(' '));
     assert.match(result.stderr, message);
     assert.equal(stringIncludes(result.stdout, 'provisioned'), false);
-  }
-});
-
-// Executed: the create step with a `gcloud` stand-in on PATH that records each
-// call (and answers a pre-baked family as present). The VMs come from exactly
-// the image named, the documented one when none is; the script never probes
-// for a family; naming half an image is refused before any gcloud call.
-test('provision-gcp.sh create, executed: exactly the named VM image, the documented one by ' +
-  'default, printed before anything is created; never a probed family; half a name refused',
-() => {
-  const script = path.join(ROOT, 'docs/benchmarks/cloud/provision-gcp.sh');
-  const bash = stringTrim(spawnSync('sh', ['-c', 'command -v bash'], {encoding: 'utf8'}).stdout);
-  const create = (extra) => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gcp-create-'));
-    const log = path.join(dir, 'log');
-    fs.mkdirSync(path.join(dir, 'bin'));
-    fs.writeFileSync(path.join(dir, 'bin', 'gcloud'), '#!/bin/sh\n' +
-      `echo "gcloud $*" >> ${JSON.stringify(log)}\n` +
-      'case "$*" in *"instances describe"*) echo 10.0.0.1 ;; esac\nexit 0\n', {mode: 0o755});
-    const result = spawnSync(bash, ['-c', `"$0" >> ${JSON.stringify(log)} 2>&1`, script],
-      {encoding: 'utf8', env: {PATH: `${path.join(dir, 'bin')}:${process.env.PATH}`, HOME: dir,
-        SSH_USER: 'bench', ...extra}});
-    const lines = fs.existsSync(log) ? arrayFilter(stringSplit(fs.readFileSync(log, 'utf8'), '\n'),
-      Boolean) : [];
-    return {status: result.status, lines,
-      calls: arrayFilter(lines, (line) => /^gcloud /u.test(line))};
-  };
-  const imageOf = (run) => {
-    const created = arrayFilter(run.calls, (line) => stringIncludes(line, 'instances create'));
-    assert.equal(created.length, 1);
-    const [, family, project] = /--image-family=(\S+) --image-project=(\S+)/u.exec(created[0]);
-    return [family, project];
-  };
-  const printedBeforeCreating = (run, family, project) => {
-    const printed = arrayFindIndex(run.lines, (line) =>
-      line === `[gcp] VM image: family ${family} in project ${project}`);
-    const firstCreate = arrayFindIndex(run.lines, (line) => / create /u.test(line));
-    assert.ok(printed >= 0 && printed < firstCreate, arrayJoin(run.lines, '\n'));
-  };
-  // A project holding the pre-baked family (the stand-in answers every
-  // describe-from-family as present): nothing named is still the documented image.
-  const defaulted = create({PROJECT_ID: 'bench-project'});
-  assert.equal(defaulted.status, 0, arrayJoin(defaulted.lines, '\n'));
-  assert.deepEqual(imageOf(defaulted), ['ubuntu-2404-lts-amd64', 'ubuntu-os-cloud']);
-  assert.equal(arraySome(defaulted.calls, (line) => stringIncludes(line, 'describe-from-family')),
-    false, 'no family is probed');
-  printedBeforeCreating(defaulted, 'ubuntu-2404-lts-amd64', 'ubuntu-os-cloud');
-  const named = create({PROJECT_ID: 'bench-project',
-    IMAGE_FAMILY: 'lagrange-distributed-harness', IMAGE_PROJECT: 'bench-project'});
-  assert.equal(named.status, 0);
-  assert.deepEqual(imageOf(named), ['lagrange-distributed-harness', 'bench-project']);
-  printedBeforeCreating(named, 'lagrange-distributed-harness', 'bench-project');
-  for (const half of [{IMAGE_FAMILY: 'lagrange-distributed-harness'},
-    {IMAGE_PROJECT: 'bench-project'}]) {
-    const refused = create(half);
-    assert.equal(refused.status, 2, JSON.stringify(half));
-    assert.ok(arraySome(refused.lines, (line) => stringIncludes(line,
-      'IMAGE_FAMILY and IMAGE_PROJECT name one image together; set both or neither.')));
-    assert.deepEqual(refused.calls, [], 'refused before any gcloud call');
   }
 });

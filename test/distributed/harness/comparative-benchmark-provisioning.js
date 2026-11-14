@@ -29,6 +29,7 @@ import {
   ensureProductImages,
   resolvePinnedImage,
 } from './comparative-benchmark-host-preparation.js';
+import {versionAtLeast} from './comparative-benchmark-lab-hosts.js';
 import {
   DRIVER_INSTALL,
   REFERENCE_CLIENT_PREFIX,
@@ -52,6 +53,8 @@ const PROVISIONING_FAILURE = Object.freeze({
   COMMIT_NOT_PLACED: 'provisioning_commit_not_placed',
   DEPENDENCIES_NOT_INSTALLED: 'provisioning_dependencies_not_installed',
   CACHE_NOT_SEEDED: 'provisioning_cache_not_seeded',
+  TOOL_UNAVAILABLE: 'provisioning_tool_unavailable',
+  NODE_BELOW_FLOOR: 'provisioning_node_below_floor',
 });
 const ROLE = Object.freeze({DATA: 'data', CLIENT: 'client'});
 const IMAGE_PULL_TIMEOUT_MS = 20 * 60 * 1000;
@@ -102,18 +105,44 @@ function harnessCommitPusher({controllerRoot, sshCommand}) {
 
 /** What provisioning places, from the campaign's own requirement definitions. */
 function comparativeProvisioningPlan({targets, lagrangeImage, harnessCommit,
-  referenceClientLock}) {
+  referenceClientLock, vmImage, nodeMinimum}) {
   return {images: campaignImagesByRole({targets, lagrangeImage}), harnessCommit,
-    tarballs: referenceClientTarballs(referenceClientLock)};
+    tarballs: referenceClientTarballs(referenceClientLock), vmImage, nodeMinimum};
 }
 
+// Docker reachable for the ssh user (a fresh login each time, so a group grant
+// is in effect); answers the server version it observed.
 async function requireDocker({sshRun, opts, host}) {
   const probe = await execWithStatus(sshRun, host.ip, opts,
     'docker info --format \'{{.ServerVersion}}\' 2>&1');
-  if (probe.exitCode === 0) return;
+  if (probe.exitCode === 0) return stringTrim(probe.stdout);
   throw deploymentFailure(PROVISIONING_FAILURE.DOCKER_UNREACHABLE, 'docker is not reachable for the ' +
     `ssh user on ${host.ip} (${host.role} host): ${stringTrim(probe.stdout)}`,
   {host: host.ip, role: host.role, output: tail(probe.stdout)});
+}
+
+// The load generator's git and Node, before anything is placed: absent is a
+// typed failure, a Node below the harness commit's engines floor too. Answers
+// the versions it observed.
+async function requireClientTools({sshRun, opts, host, nodeMinimum}) {
+  const observed = {};
+  for (const [tool, command] of [['git', 'git --version'],
+    ['node', `${shellQuote(host.nodePath)} --version`]]) {
+    const probe = await execWithStatus(sshRun, host.ip, opts, `${command} 2>&1`);
+    if (probe.exitCode !== 0) {
+      throw deploymentFailure(PROVISIONING_FAILURE.TOOL_UNAVAILABLE, `${tool} is not usable on ` +
+        `the load generator ${host.ip} (${command}): ${stringTrim(probe.stdout)}`,
+      {host: host.ip, tool, command, output: tail(probe.stdout)});
+    }
+    observed[tool] = stringTrim(probe.stdout);
+  }
+  if (!versionAtLeast(observed.node, nodeMinimum)) {
+    throw deploymentFailure(PROVISIONING_FAILURE.NODE_BELOW_FLOOR, `Node ${observed.node} at ` +
+      `${host.nodePath} on the load generator ${host.ip} is below the engines floor ` +
+      `${nodeMinimum}`, {host: host.ip, nodePath: host.nodePath, version: observed.node,
+      minimum: nodeMinimum});
+  }
+  return observed;
 }
 
 // Pull every image of the host's role, then verify with the campaign's check.
@@ -193,31 +222,37 @@ async function seedReferenceClientCache({sshRun, opts, host, tarballs}) {
 }
 
 /**
- * Provision the campaign's hosts. Docker is checked on every host before
- * anything is placed. `pushHarnessCommit({host, repoPath, harnessCommit})`
+ * Provision the campaign's hosts. Docker (every host) and the load generator's
+ * git and Node are checked before anything is placed. The record states, per
+ * host, the VM image the operator named and the versions and image ids observed. `pushHarnessCommit({host, repoPath, harnessCommit})`
  * sends the commit from the controller. With opts.lagrangeImageContent the
  * data hosts are verified by content as the campaign resolves them.
  * @return {Promise<{data: Array, client: Object}>} what was placed and verified
  */
 async function provisionComparativeHosts({hosts, plan, sshRun, opts, pushHarnessCommit}) {
-  for (const host of hosts) await requireDocker({sshRun, opts, host});
+  const dockerServer = {};
+  for (const host of hosts) dockerServer[host.ip] = await requireDocker({sshRun, opts, host});
+  const [client] = arrayFilter(hosts, (host) => host.role === ROLE.CLIENT);
+  const tools = await requireClientTools({sshRun, opts, host: client,
+    nodeMinimum: plan.nodeMinimum});
   const dataHosts = arrayFilter(hosts, (host) => host.role === ROLE.DATA);
   const data = [];
   for (const host of dataHosts) {
-    data.push({host: host.ip,
+    data.push({host: host.ip, vmImage: plan.vmImage, dockerServer: dockerServer[host.ip],
       images: await placeImages({sshRun, opts, host, images: plan.images.data})});
   }
   const pinned = opts.lagrangeImageContent ? await resolvePinnedImage({hosts: dataHosts,
     contentIdentity: opts.lagrangeImageContent, registryRef: opts.lagrangeImage, sshRun,
     opts}) : null;
-  const [client] = arrayFilter(hosts, (host) => host.role === ROLE.CLIENT);
   const images = await placeImages({sshRun, opts, host: client, images: plan.images.client});
   const head = await placeHarnessCommit({sshRun, opts, host: client,
     harnessCommit: plan.harnessCommit, pushHarnessCommit});
   await installDependencies({sshRun, opts, host: client});
   const driverInstall = await seedReferenceClientCache({sshRun, opts, host: client,
     tarballs: plan.tarballs});
-  return {data, pinned, client: {host: client.ip, images, repoPath: client.repoPath, head,
+  return {data, pinned, client: {host: client.ip, vmImage: plan.vmImage,
+    dockerServer: dockerServer[client.ip], git: tools.git, node: tools.node, images,
+    repoPath: client.repoPath, head,
     tarballs: arrayMap(plan.tarballs, (tarball) => tarball.resolved),
     driverInstall: driverInstall.status}};
 }

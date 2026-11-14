@@ -93,6 +93,9 @@ const RULES = [
     return arrayIncludes(host.images, image) ? ok(`sha256:${'d'.repeat(64)}`) :
       fail(1, `Error: No such image: ${image}`);
   }],
+  [/^git --version 2>&1$/u, (host) => (host.gitMissing ? fail(127, 'sh: 1: git: not found') :
+    ok('git version 2.43.0'))],
+  [/^'[^']*' --version 2>&1$/u, (host) => ok(host.nodeVersion ?? 'v22.23.2')],
   [/git init --quiet/u, () => ok()],
   [/git worktree add /u, (host, command) => {
     const commit = word(command, /git worktree add --detach --quiet \S+ (\S+) &&/u);

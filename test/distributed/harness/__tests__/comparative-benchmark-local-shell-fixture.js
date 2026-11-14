@@ -9,7 +9,7 @@
 // - `ssh` (git's transport, via GIT_SSH_COMMAND): requires BatchMode=yes and
 //   the expected key, then runs the remote command (git-receive-pack) locally.
 // Everything else - sh, stat, ls, mkdir, git, npm - is the real tool.
-import {spawnSync} from 'node:child_process';
+import {execFileSync, spawnSync} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -20,6 +20,7 @@ import {
   arrayJoin,
   objectKeys,
   stringSplit,
+  stringTrim,
 } from '../real-product-captured-intrinsics.js';
 
 const DOCKER = `#!/bin/sh
@@ -52,10 +53,19 @@ case "$1" in
     src="\${mount%%:*}"; dst="\${mount#*:}"
     mkdir -p "$src"
     script=$(printf '%s' "$script" | sed "s#$dst/#$src/#g")
+    [ -z "$SHIM_CONTAINER_STAT_DIR" ] || PATH="$SHIM_CONTAINER_STAT_DIR:$PATH"
     exec sh -c "$script" ;;
 esac
 echo "docker shim: unscripted docker $*" >&2
 exit 125
+`;
+
+// The container's view of ownership when the test user plays the image's
+// runtime user (as a user-namespace remap would show it): the real stat, with
+// the test user's uid:gid reported as the runtime user's.
+const CONTAINER_STAT = `#!/bin/sh
+out=$("$SHIM_REAL_STAT" "$@") || exit $?
+printf '%s\n' "$out" | sed "s#^$SHIM_TEST_OWNER\\$#$SHIM_RUNTIME_OWNER#"
 `;
 
 const CHOWN = `#!/bin/sh
@@ -86,17 +96,22 @@ function lines(file) {
 }
 
 /**
- * @param {{images?: Array<string>, sshKey?: string}} [options]
+ * @param {{images?: Array<string>, sshKey?: string, runtimeOwner?: string}} [options]
+ *   runtimeOwner: inside the docker stand-in's containers, files the test user
+ *   owns are reported as owned by this uid:gid (the image's runtime user)
  * @return {{dir: string, env: Object, sshRun: Function, asController: Function,
  *   chowns: Function, sshConnections: Function}}
  */
-function createLocalShell({images = [], sshKey = ''} = {}) {
+function createLocalShell({images = [], sshKey = '', runtimeOwner = ''} = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'local-shell-'));
   const bin = path.join(dir, 'bin');
   fs.mkdirSync(bin);
   for (const [name, text] of [['docker', DOCKER], ['chown', CHOWN], ['ssh', SSH]]) {
     fs.writeFileSync(path.join(bin, name), text, {mode: 0o755});
   }
+  const containerStat = path.join(dir, 'container-stat');
+  fs.mkdirSync(containerStat);
+  fs.writeFileSync(path.join(containerStat, 'stat'), CONTAINER_STAT, {mode: 0o755});
   const chownLog = path.join(dir, 'chown.log');
   const sshLog = path.join(dir, 'ssh.log');
   const cache = path.join(dir, 'npm-cache');
@@ -105,7 +120,11 @@ function createLocalShell({images = [], sshKey = ''} = {}) {
     DOCKER_SHIM_IMAGES: arrayJoin(images, ','), CHOWN_SHIM_LOG: chownLog,
     SSH_SHIM_LOG: sshLog, SSH_SHIM_KEY: sshKey, npm_config_cache: cache,
     npm_config_audit: 'false', npm_config_fund: 'false',
-    npm_config_update_notifier: 'false'};
+    npm_config_update_notifier: 'false',
+    ...(runtimeOwner ? {SHIM_CONTAINER_STAT_DIR: containerStat, SHIM_RUNTIME_OWNER: runtimeOwner,
+      SHIM_TEST_OWNER: `${process.getuid()}:${process.getgid()}`,
+      SHIM_REAL_STAT: stringTrim(execFileSync('sh', ['-c', 'command -v stat'],
+        {encoding: 'utf8'}))} : {SHIM_CONTAINER_STAT_DIR: ''})};
   const sshRun = async (_ip, _opts, command) => {
     const result = spawnSync('sh', ['-c', command], {env, encoding: 'utf8',
       timeout: 120000});
