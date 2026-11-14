@@ -1,0 +1,30 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "cdc-obligation-range-shipping",
+  "status": "fail",
+  "interpretation": "Original measurement that motivates the repair; not candidate proof. Measured on the registered three-node journey at source ed708dfd01e5ffb446f49ba0447a5bf9915f511a (the sealed base 9a22bf79b plus observation-only diagnostics that change no decision).",
+  "receipts": [
+    {
+      "id": "original-journey-lane-backlog",
+      "measured": true,
+      "passed": false,
+      "detail": "Native job 81b81f30-d9b1-4132-854c-6f1c3dffe647 on tv-dator, journey fresh-formation-user-table-routability FAILED at g-projection-agrees-with-authority (5 persistent priority_spread episodes, bound 1000 ms). Seed services lane: 516 drive attempts for 141 distinct events, 136 waves of one event each, median wave 450.5 ms (max 1295 ms); 120 of 134 events were committed before the previous event was answered, up to 23 owed rows waiting; commit to first drive p50 10.6 s, p90 22.2 s, max 32.8 s. Control case: node de5a0bc4 sent replica_operations with 197 waves, zero refusals and zero in-wave retries and was up to 99.5 % busy with commit to drive up to 18 s. Four of the five episodes are explained by this in-lane backlog (CDC arrival 16.6 to 23.1 s after commit); authoritative reconciliation repaired each before the live event arrived."
+    }
+  ],
+  "unmeasuredObligations": [
+    "reproducers-red-on-original",
+    "reproducers-and-owned-roots-green-on-candidate",
+    "journey-drives-ship-owed-ranges",
+    "independent-verification"
+  ],
+  "source": {
+    "sha": "ed708dfd01e5ffb446f49ba0447a5bf9915f511a",
+    "sealedBase": "9a22bf79b61610bd782cf82ca45844f325f6a8e6"
+  },
+  "evidence": {
+    "directory": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261113/tv-diagnostic-retained-ed708dfd",
+    "analysis": "trace-quantification of 2026-11-14 (sections 1, 2, 5), scripts retained with the coordination records",
+    "seedLogSha256": "see local-custody-verification.json in topology-cdc-diagnostic-evidence-archive"
+  },
+  "evidenceCeiling": "Diagnostic observation covers the services and replica_operations tables only; instrumentation overhead bounds the absolute timings; one run. The count of waves per event and the owed depth at each drive are structural facts of the lane and do not depend on those ceilings."
+}

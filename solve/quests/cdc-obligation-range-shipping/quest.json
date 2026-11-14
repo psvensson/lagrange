@@ -1,0 +1,57 @@
+{
+  "schema": "solve-quest/2",
+  "id": "cdc-obligation-range-shipping",
+  "class": "fix",
+  "statement": "The partition CDC obligation lane ships every owed obligation after its scan cursor, up to the existing count bound and a byte bound, as one ordered vector in one durable wave: draining a backlog of B owed rows takes at most ceil(B / bound) waves plus one per byte-bound split instead of B waves, while order within the partition, exact occurrence identity, the acknowledgement rule (a row is delivered only by a committed CDC_DELIVERED proposed after every current leaf returned a committed receipt for a vector containing it) and the idempotent recipient effect are unchanged.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/cdc-obligation-range-shipping/evidence/receipt.json",
+      "requiredReceipts": [
+        "reproducers-red-on-original",
+        "reproducers-and-owned-roots-green-on-candidate",
+        "journey-drives-ship-owed-ranges",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "bounded-repair-not-service-acceptance",
+      "statement": "This is the bounded repair of the first measured cause of the open service quest fresh-formation-user-table-routability (owner (a), system-table-cache CDC delivery): on source ed708dfd the services lane delivered one event per wave, 120 of 134 events were committed before the previous one was answered, commit to first drive was 10.6 s at the median and 32.8 s at worst, and an uncontended lane on another node was saturated by wave time alone. Closing this quest does not claim the journey green: the node-wide propagation slot with its slicing, the partial-row cache write found in the same run, recipient isolation and a defined start position remain separate units."
+    },
+    {
+      "id": "scheduling-bound-not-payload-cap",
+      "statement": "The shipping bound decides how much one wave carries, never what may be delivered: a vector always holds at least one row, so a row larger than the byte bound ships alone and nothing is refused, split or dropped (cdc-owed-work-admission: no new payload, event or target-vector cap; W9 2 MiB and 65-target obligations stay deliverable). The count bound is the existing ACK_BATCH_MAX_EVENTS. The byte bound is derived from limits their owners already state for a message-group proposal and a router message and is imported from those owners; no new free-standing scalar is invented."
+    },
+    {
+      "id": "one-contract-no-adapter",
+      "statement": "The durable subscriber contract becomes (events, deliveryContext) for every durable subscriber of the lane (propagation and live-query); there is no per-event adapter, alias, feature detection or compatibility branch, and no second delivery path. The non-durable user-table path is untouched."
+    },
+    {
+      "id": "never-coalesce-occurrences",
+      "statement": "A vector preserves every source occurrence in (log_index, ordinal) order with its own eventKey; distinct occurrences of one row are never merged, reordered or deduplicated by the sender."
+    },
+    {
+      "id": "memory-and-custody-unchanged",
+      "statement": "No SQLite read is held across an await; the lane retains between attempts only positions and digests of its one pinned vector, never payloads; a retry after partial coverage presents the same vector; the 256-row visit quantum, captured tail, hydrated-prefix acknowledgement, acknowledgement batching and backpressure, OWED_MAX_EVENTS and every timeout, retry count and cooldown keep their current values."
+    },
+    {
+      "id": "no-symptom-patches",
+      "statement": "Forbidden: widened or shortened timeouts, bounds, budgets, holds, retry counts or catch-up cadence; harness repair of product state; changes to the journey predicates or their bounds; tuning of the slot slicing machinery (it is carried unchanged by this unit and removed by its own unit)."
+    },
+    {
+      "id": "source-change-independent-verification",
+      "statement": "Every source and proof change is verified on the exact candidate by a fresh independent verifier (note --verification ... --verifier subagent:<id> --verdict approve) before landing; reproducers are observed red on the sealed base before the candidate is credited."
+    },
+    {
+      "id": "lab-execution-and-custody",
+      "statement": "Tests and the journey run on lab hosts through the local controller, never on the workstation; every run's complete evidence is brought back before the host environment is reused; a failed run stays recorded as failed and is never replayed to obtain a green."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ],
+  "sealedAt": "9a22bf79b61610bd782cf82ca45844f325f6a8e6"
+}
