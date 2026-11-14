@@ -28,7 +28,7 @@
   "censusSize": 2648,
   "digest": "fnv1a32-0863499d",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-aebecbf7",
+  "observationDigest": "fnv1a32-23862a33",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -7328,7 +7328,10 @@
     },
     "test/distributed/harness/__tests__/comparative-benchmark-runner-lab-default.test.js": {
       "files": [
-        "docs/benchmarks/cloud/run-comparative-benchmarks.mjs"
+        "Dockerfile",
+        "docs/benchmarks/cloud/run-comparative-benchmarks.mjs",
+        "src/admin/static/playback-viewer.html",
+        "test/distributed/config/local.json"
       ],
       "directories": [
         "data"
@@ -7351,7 +7354,8 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/cluster-node-owner-operations.js",
-        "test/distributed/harness/container-memory-working-set.js"
+        "test/distributed/harness/container-memory-working-set.js",
+        "test/scripts/native-thermal-fixture.js"
       ],
       "directories": [
         "src"
