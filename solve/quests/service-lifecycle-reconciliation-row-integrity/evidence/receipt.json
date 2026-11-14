@@ -14,21 +14,56 @@
       "id": "reproducer-red-on-original",
       "measured": true,
       "passed": true,
-      "detail": "Reproducer-only commit 2a60ee97307d47c90db19f1ef63a7d2e081a028c (sealed base 9a22bf79b + quest record + tests; src unchanged). Lab job 8e2873c6-1025-4a3a-a397-f343782ad07f on adams-gamla, state FAILED, exit 1, as expected: test/cache/system-table-cache-services-lifecycle-merge.test.js 9 fail/38 (newer authority row keeps cached raft_role null; partial row labelled with the authoritative version reported aligned; role-only newer version reported aligned and not installed; equal-version null/missing cached raft_role reported aligned and null kept; newer row version with newer cached lifecycle keeps the older cached role); test/rebalancer/operation-workflow-active-cache-handoff.test.js 12 fail/127, all in the three new witness cases: the handoff completes while the cached target keeps raft_role null, is no priority-spread holder and the projection reports raft_role_missing for the target partition. Pre-existing tests in both files pass. Earlier job 63cfb628-4a8c-410a-8687-a222ed8d18d2 (commit 7ee430928) also FAILED but its witness precondition read the wrong projection block (fixture error, fixed in 2a60ee973); retained as recorded, not credited.",
-      "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/lifecycle-row/red-repro-2a60ee97"
+      "detail": "Record v2 tests at ddd5f4668 (product source = sealed base 9a22bf79b, restored by 7facd0f5a). Lab job db1ece60-ce33-4717-8585-34487704e99f on adams-gamla FAILED exit 1, all three files red: differential (Q2/Q3/Q4 assertions), lifecycle-merge anchors (measured interleaving, absent/undefined/non-finite fills), handoff witnesses (measured interleaving and role-only/equal-version cases: target not filled, projection raft_role_missing). The seed witness and the cleared-null anchors pass on the base, as they must.",
+      "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/lifecycle-row/mut-red-ddd5f466-adams-gamla-r1"
     },
     {
       "id": "reproducer-and-owned-roots-green-on-candidate",
       "measured": true,
       "passed": true,
-      "detail": "Candidate 3bd5053b5c3a3109c96416c9b0c9ae315d3887fa. Lab job 104e18d8-30de-480e-a934-574f5e8ee0e5 on adams-gamla, state COMPLETE, exit 0: 55/55 test files, 2706 assertions \u2014 all 26 test/cache files, the handoff witness file, and every test file referencing the builders, the lifecycle mutation mode, refreshAuthoritativeCacheRow/refreshAuthoritativeReplicaCacheRow or applyAuthoritativeCacheRepair, plus the priority-spread projection/census consumers.",
-      "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/lifecycle-row/green-candidate-3bd5053b"
+      "detail": "Candidate 5778ba12ec6972a91fd3895db24d2df9ad0373a3 (source 1e43d70bf; later commits test-only). Lab job e04f0324-5e78-4ede-8c85-b07844685736 on adams-gamla COMPLETE exit 0: 56/56 files, 2752 assertions (differential, all test/cache, handoff file, every file referencing the builders, the lifecycle mode, the refresh/repair functions and the projection consumers). Earlier on the same source: 4bd4ac6d7 job b1ea5485-3347-4145-880b-4fab3f0c9f19 56/56 2746; core three files on adam-laptop job d20222c5-1618-4f79-91e1-1fe5f38bdb78 3/3; 1e43d70bf job 8528c17e-4580-47a2-ad88-f04e0098ca38 56/56 and carinas-windows job 1801aa15-6b81-4453-a561-817e2109648f 3/3.",
+      "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/lifecycle-row/v2-final-wide-5778ba12-adams-gamla-r1"
+    },
+    {
+      "id": "golden-differential-q2",
+      "measured": true,
+      "passed": true,
+      "detail": "Golden produced at the sealed base: throwaway commit e302ed2048a4e720a2ed235b520b355074e20326 (9a22bf79b + generator blob fc92516ae6605543a561c5fc9169431e9366d134 + producer), lab job 96804049-a14d-49c1-b45e-11f5752956e0 on carinas-windows COMPLETE; 134400 cells over 400 combos; committed as test/cache/fixtures/system-table-cache-lifecycle-reconciliation-golden.json with provenance. Differential test green on the candidate (job e04f0324).",
+      "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/lifecycle-row/golden-base-e302ed20-carinas"
+    },
+    {
+      "id": "guard-mutation-table",
+      "measured": true,
+      "passed": true,
+      "detail": "Mutants of 1e43d70bf, one throwaway commit each, three core test files. Killed: m01 null-as-present 5965ffb9 (adams-gamla); m02 undefined-not-filled c767ebaf (adams-gamla); m03 version guard removed cdfcacfd (adams-gamla); m04 lifecycle restriction removed fa7d03d7 (carinas-windows); m05 incarnation restriction removed 741af2fc (carinas-windows); m07 fill identity/HLC e8bde22b (carinas-windows); m08 authoritative null fills e1211cf7 (adam-laptop); m09 predicate condition removed a638e482 (adam-laptop); m10 condition moved into the strictly-newer-cached branch 6d44742c (adam-laptop). Survived as equivalent mutants: m06 fill applied to lifecycle columns 24723758 (carinas-windows) - the base lifecycle overlay rewrites every lifecycle column whenever Q1's lifecycle guard passes, and the predicate's lifecycle branch already compares them; m11 condition moved before the identity check 84a9db3f (carinas-windows) - Q1's lifecycle guard confines Q1 cells to the lifecycle-compare branch or branches already false. The first m11 run (53d9fc5c, adam-laptop) failed on the per-test timeout (infrastructure), recorded as failed.",
+      "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/lifecycle-row"
     },
     {
       "id": "real-consumer-witness",
       "measured": true,
       "passed": true,
-      "detail": "test/rebalancer/operation-workflow-active-cache-handoff.test.js witness cases drive workflowOwner.applyReconciledReplicaStatus(ACTIVE) -> confirmActiveReplicaTerminalHandoff -> refreshAuthoritativeCacheRow -> applyAuthoritativeCacheRepair -> SystemTableCache.applySystemTableChange (lifecycle mode) and read the outcome through buildDerivedPriorityPartitionSummary and isPrioritySpreadHolderServiceRow over cache.getAll('services'): red on 2a60ee973 (job 8e2873c6, raft_role_missing after completion), green on 3bd5053b5 (job 104e18d8).",
+      "detail": "Handoff witnesses through applyReconciledReplicaStatus -> refreshAuthoritativeCacheRow -> applySystemTableChange, read through buildDerivedPriorityPartitionSummary and isPrioritySpreadHolderServiceRow: measured interleaving (not aligned beforehand; replica included afterwards), role-only and equal-version absent role, and the CL-035 owner-local seed (follower and holder kept, as on the base). Red on the base source (job db1ece60, seed case green there), green on the candidate (job e04f0324).",
+      "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/lifecycle-row/v2-final-wide-5778ba12-adams-gamla-r1"
+    },
+    {
+      "id": "superseded-3bd5053b5-reproducer-red-on-original",
+      "measured": true,
+      "passed": false,
+      "detail": "SUPERSEDED, not proof of any later candidate: measured on rejected candidate 3bd5053b5 (reproducer commit 2a60ee973) under the withdrawn frozen claim. Reproducer-only commit 2a60ee97307d47c90db19f1ef63a7d2e081a028c (sealed base 9a22bf79b + quest record + tests; src unchanged). Lab job 8e2873c6-1025-4a3a-a397-f343782ad07f on adams-gamla, state FAILED, exit 1, as expected: test/cache/system-table-cache-services-lifecycle-merge.test.js 9 fail/38 (newer authority row keeps cached raft_role null; partial row labelled with the authoritative version reported aligned; role-only newer version reported aligned and not installed; equal-version null/missing cached raft_role reported aligned and null kept; newer row version with newer cached lifecycle keeps the older cached role); test/rebalancer/operation-workflow-active-cache-handoff.test.js 12 fail/127, all in the three new witness cases: the handoff completes while the cached target keeps raft_role null, is no priority-spread holder and the projection reports raft_role_missing for the target partition. Pre-existing tests in both files pass. Earlier job 63cfb628-4a8c-410a-8687-a222ed8d18d2 (commit 7ee430928) also FAILED but its witness precondition read the wrong projection block (fixture error, fixed in 2a60ee973); retained as recorded, not credited.",
+      "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/lifecycle-row/red-repro-2a60ee97"
+    },
+    {
+      "id": "superseded-3bd5053b5-reproducer-and-owned-roots-green-on-candidate",
+      "measured": true,
+      "passed": false,
+      "detail": "SUPERSEDED, not proof of any later candidate: measured on rejected candidate 3bd5053b5 (reproducer commit 2a60ee973) under the withdrawn frozen claim. Candidate 3bd5053b5c3a3109c96416c9b0c9ae315d3887fa. Lab job 104e18d8-30de-480e-a934-574f5e8ee0e5 on adams-gamla, state COMPLETE, exit 0: 55/55 test files, 2706 assertions \u2014 all 26 test/cache files, the handoff witness file, and every test file referencing the builders, the lifecycle mutation mode, refreshAuthoritativeCacheRow/refreshAuthoritativeReplicaCacheRow or applyAuthoritativeCacheRepair, plus the priority-spread projection/census consumers.",
+      "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/lifecycle-row/green-candidate-3bd5053b"
+    },
+    {
+      "id": "superseded-3bd5053b5-real-consumer-witness",
+      "measured": true,
+      "passed": false,
+      "detail": "SUPERSEDED, not proof of any later candidate: measured on rejected candidate 3bd5053b5 (reproducer commit 2a60ee973) under the withdrawn frozen claim. test/rebalancer/operation-workflow-active-cache-handoff.test.js witness cases drive workflowOwner.applyReconciledReplicaStatus(ACTIVE) -> confirmActiveReplicaTerminalHandoff -> refreshAuthoritativeCacheRow -> applyAuthoritativeCacheRepair -> SystemTableCache.applySystemTableChange (lifecycle mode) and read the outcome through buildDerivedPriorityPartitionSummary and isPrioritySpreadHolderServiceRow over cache.getAll('services'): red on 2a60ee973 (job 8e2873c6, raft_role_missing after completion), green on 3bd5053b5 (job 104e18d8).",
       "evidence": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/lifecycle-row/green-candidate-3bd5053b"
     }
   ],
@@ -38,8 +73,10 @@
   "source": {
     "sha": "ed708dfd01e5ffb446f49ba0447a5bf9915f511a",
     "sealedBase": "9a22bf79b61610bd782cf82ca45844f325f6a8e6",
-    "candidate": "3bd5053b5c3a3109c96416c9b0c9ae315d3887fa",
-    "reproducerCommit": "2a60ee97307d47c90db19f1ef63a7d2e081a028c"
+    "candidate": "5778ba12ec6972a91fd3895db24d2df9ad0373a3",
+    "reproducerCommit": "ddd5f4668784d438edc0b21737d48518f7ce4fa6",
+    "candidateSource": "1e43d70bf019602a45980d7e6e687f6da73272cd",
+    "supersededCandidate": "3bd5053b5c3a3109c96416c9b0c9ae315d3887fa"
   },
   "evidence": {
     "directory": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261113/tv-diagnostic-retained-ed708dfd",
