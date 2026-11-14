@@ -1,0 +1,19 @@
+{
+ "job": "01cc0d0d-06f5-4ee5-af47-42dd972369d1",
+ "terminal": {
+  "docker_create_attempted": false,
+  "elapsed_s": 16.811,
+  "execution_scope_closed": true,
+  "exit_code": 0,
+  "generation": "d9f3761f-b090-489b-a9be-4175111367fc",
+  "host": "carinas-windows",
+  "intentDigest": "724422a3ab50a10150207f64b4c6b7a653783a43b5a38c68e5fdbdc9fee7d7e9",
+  "job_id": "01cc0d0d-06f5-4ee5-af47-42dd972369d1",
+  "reason": null,
+  "source_execution_started": false,
+  "state": "COMPLETE",
+  "unit": "lagrange-lab3-d9f3761fb090489ba9be4175111367fc-01cc0d0d06f54ee5af4742dd972369d1.service",
+  "workload_started": true
+ },
+ "evidence_problems": []
+}

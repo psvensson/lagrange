@@ -145,7 +145,7 @@ documentClass: generated
 - [node-lifecycle-publication.js](node-lifecycle-publication.js) - The one semantic owner of durable node lifecycle publication (CONNECTED liveness and READY promotion) at the NODES... (importers: many)
 - [node-liveness-semantic-projection-owner.js](node-liveness-semantic-projection-owner.js) - No leading comment; first export: NODE_LIVENESS_SEMANTIC_STATE. (importers: many)
 - [node-liveness-semantic-projection.js](node-liveness-semantic-projection.js) - No leading comment; first export: NODE_LIVENESS_SEMANTIC_STATE. (importers: many)
-- [node-ready-lease-authority.js](node-ready-lease-authority.js) - The single owner of the node READY lease term. (importers: many)
+- [node-ready-lease-authority.js](node-ready-lease-authority.js) - Resolve the canonical READY-lease renewal interval (1/3 of the lease TTL). (importers: many)
 - [node-terminal-transition-fence.js](node-terminal-transition-fence.js) - The exact-incarnation fence of a node's own terminal NODES transitions (graceful shutdown, failed-join withdrawal). (importers: few)
 - [node-trust-state.js](node-trust-state.js) - No leading comment; first export: NODE_TRUST_STATE. (importers: few)
 - [owner-contract-outcome.js](owner-contract-outcome.js) - No leading comment; first export: OWNER_CONTRACT_NEXT_ACTION. (importers: hub)

@@ -12,6 +12,9 @@ const LOCAL_STR_READYLEASEEXPIRESATMS = 'readyLeaseExpiresAtMs';
 const LOCAL_STR_READYLEASEEXPIRES = 'readyLeaseExpires';
 
 const REQUIRE_ACTIVE_STATUS_DEFAULT = true;
+const EMPTY_STRING = '';
+const BOOLEAN_TYPE = 'boolean';
+const MIN_LEASE_TIMESTAMP_MS = 0;
 
 function normalizeConnectionState(nodeRow) {
   const rawState = nodeRow?.connection_state ??
@@ -26,6 +29,14 @@ function normalizeConnectionState(nodeRow) {
 }
 
 function getFiniteNumber(value) {
+  if (
+    value === null ||
+    value === undefined ||
+    value === EMPTY_STRING ||
+    typeof value === BOOLEAN_TYPE
+  ) {
+    return null;
+  }
   const normalized = numberCoerce(value);
   return numberIsFinite(normalized) ? normalized : null;
 }
@@ -43,6 +54,14 @@ function hasExplicitReadyLeaseField(nodeRow) {
     hasOwnField(nodeRow, LOCAL_STR_READYLEASEEXPIRESAT) ||
     hasOwnField(nodeRow, LOCAL_STR_READYLEASEEXPIRESATMS) ||
     hasOwnField(nodeRow, LOCAL_STR_READYLEASEEXPIRES);
+}
+
+function getNodeLastHeartbeat(nodeRow) {
+  return getFiniteNumber(nodeRow?.last_heartbeat);
+}
+
+function getNodeReadyLeaseExpiresAt(nodeRow) {
+  return getFiniteNumber(nodeRow?.ready_lease_expires_at);
 }
 
 function getNodeHeartbeatWatermark(nodeRow) {
@@ -166,8 +185,12 @@ function isNodeRecordReady(nodeRow, options = {}) {
     return false;
   }
 
-  const leaseExpiry = Number(nodeRow.ready_lease_expires_at);
-  if (!Number.isFinite(leaseExpiry) || leaseExpiry <= now) {
+  const leaseExpiry = getNodeReadyLeaseExpiresAt(nodeRow);
+  if (
+    leaseExpiry === null ||
+    leaseExpiry <= MIN_LEASE_TIMESTAMP_MS ||
+    leaseExpiry <= now
+  ) {
     return false;
   }
 
@@ -196,13 +219,13 @@ function wasNodeRecordReadyWhenWritten(nodeRow, options = {}) {
     return false;
   }
 
-  const leaseExpiry = Number(nodeRow.ready_lease_expires_at);
-  if (!Number.isFinite(leaseExpiry)) {
+  const leaseExpiry = getNodeReadyLeaseExpiresAt(nodeRow);
+  if (leaseExpiry === null || leaseExpiry <= MIN_LEASE_TIMESTAMP_MS) {
     return false;
   }
 
-  const heartbeatAt = Number(nodeRow.last_heartbeat);
-  if (Number.isFinite(heartbeatAt)) {
+  const heartbeatAt = getNodeLastHeartbeat(nodeRow);
+  if (heartbeatAt !== null) {
     return leaseExpiry > heartbeatAt;
   }
 
@@ -229,18 +252,19 @@ function isNodeReadyLeaseExplicitlyCleared(nodeRow, options = {}) {
     return false;
   }
 
-  const requireActiveStatus =
-    options.requireActiveStatus ?? REQUIRE_ACTIVE_STATUS_DEFAULT;
-  if (requireActiveStatus && nodeRow.status !== SERVICE_STATUS.ACTIVE) {
+  if (
+    options.requireActiveStatus === true &&
+    nodeRow.status !== SERVICE_STATUS.ACTIVE
+  ) {
     return false;
   }
 
-  return !Number.isFinite(Number(
+  return getFiniteNumber(
     nodeRow.ready_lease_expires_at ??
     nodeRow.readyLeaseExpiresAt ??
     nodeRow.readyLeaseExpiresAtMs ??
     nodeRow.readyLeaseExpires,
-  ));
+  ) === null;
 }
 
 /**
@@ -314,6 +338,8 @@ async function isNodeReadyWithTransport(options = {}) {
 export {
   compareNodeHeartbeatWatermarks,
   getNodeHeartbeatWatermark,
+  getNodeLastHeartbeat,
+  getNodeReadyLeaseExpiresAt,
   isNodeHeartbeatWatermarkRegression,
   isNodeRecordReady,
   isNodeReadyLeaseExplicitlyCleared,

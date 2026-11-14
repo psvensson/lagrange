@@ -1,0 +1,36 @@
+{
+ "kind": "tests",
+ "host": "carinas-windows",
+ "commit": "e9cb79dd449f11a8dd6524ed571992110a91585e",
+ "tree": "c5c4c2d5ab0e666ca4e7645e4d1d963ba4db55d5",
+ "worktreePaths": [
+  "docs/evidence/node-ready-lease-renewal-cadence-2026-11/summary.md",
+  "solve/epics/operation-integrity-and-reliable-formation.md",
+  "src/control-plane/INDEX.md",
+  "src/control-plane/heartbeat-service-constants.js",
+  "src/control-plane/heartbeat-service-lifecycle-methods.js",
+  "src/control-plane/lease-service.js",
+  "src/control-plane/node-lifecycle-publication.js",
+  "src/control-plane/node-ready-lease-authority.js",
+  "src/message-group/INDEX.md",
+  "src/message-group/message-group-target-resolver.js",
+  "src/node/node-readiness-policy.js",
+  "test/control-plane/node-ready-lease-renewal-cadence.test.js",
+  "test/shards/impact-graph-seal.json",
+  "test/shards/primary-classes.json",
+  "test/shards/resource-classes.json",
+  "test/shards/subsystem-classes.json"
+ ],
+ "transportCommit": "dbd092d8f461d3cc22c67207020aeee21c3d6afa",
+ "base": "1efa85aa4e9409df6b1625ae1d932cd01c8a6d10",
+ "files": [
+  "test/control-plane/node-ready-lease-renewal-cadence.test.js",
+  "test/control-plane/node-lifecycle-publication.test.js",
+  "test/control-plane/heartbeat-memory-trend.test.js",
+  "test/control-plane/lease-sweep-skip-observability.test.js",
+  "test/control-plane/lease-sweep-stale-row-reaper.test.js",
+  "test/control-plane/shared-node-readiness-policy.test.js",
+  "test/message-group/message-group-target-resolver.test.js"
+ ],
+ "requestId": "01cc0d0d-06f5-4ee5-af47-42dd972369d1"
+}
