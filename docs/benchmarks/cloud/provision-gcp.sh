@@ -21,8 +21,26 @@
 #   MACHINE_TYPE    Compute Engine machine type (default: e2-standard-4)
 #   CLUSTER_PREFIX  Instance name prefix (default: lagrange-bench)
 #   SSH_USER        SSH username for benchmark runner (default: $USER)
+#   IMAGE_FAMILY    VM image family, named together with IMAGE_PROJECT (default, when
+#   IMAGE_PROJECT   neither is set: ubuntu-2404-lts-amd64 in ubuntu-os-cloud). The VMs are
+#                   created from exactly the named image; the script never looks for
+#                   another image (such as a project's pre-baked family) and switches to
+#                   it. Naming one without the other is refused before any gcloud call.
 
 set -euo pipefail
+
+DEFAULT_IMAGE_FAMILY="ubuntu-2404-lts-amd64"
+DEFAULT_IMAGE_PROJECT="ubuntu-os-cloud"
+if [ -n "${IMAGE_FAMILY:-}" ] && [ -n "${IMAGE_PROJECT:-}" ]; then
+  :
+elif [ -n "${IMAGE_FAMILY:-}" ] || [ -n "${IMAGE_PROJECT:-}" ]; then
+  echo "Error: IMAGE_FAMILY and IMAGE_PROJECT name one image together; set both or neither." >&2
+  echo "Default (neither set): IMAGE_FAMILY=${DEFAULT_IMAGE_FAMILY} IMAGE_PROJECT=${DEFAULT_IMAGE_PROJECT}" >&2
+  exit 2
+else
+  IMAGE_FAMILY="${DEFAULT_IMAGE_FAMILY}"
+  IMAGE_PROJECT="${DEFAULT_IMAGE_PROJECT}"
+fi
 
 PROJECT_ID="${PROJECT_ID:-$(gcloud config get-value project 2>/dev/null || true)}"
 ZONE="${ZONE:-us-central1-a}"
@@ -71,6 +89,7 @@ if [ "${1:-}" = "--teardown" ]; then
   exit 0
 fi
 
+echo "[gcp] VM image: family ${IMAGE_FAMILY} in project ${IMAGE_PROJECT}"
 echo "[gcp] Creating internal benchmark firewall rule ${FIREWALL_RULE} in ${PROJECT_ID}..."
 if ! gcloud compute firewall-rules describe "${FIREWALL_RULE}" --project="${PROJECT_ID}" >/dev/null 2>&1; then
   gcloud compute firewall-rules create "${FIREWALL_RULE}" \
@@ -81,11 +100,7 @@ if ! gcloud compute firewall-rules describe "${FIREWALL_RULE}" --project="${PROJ
     --description="Intra-cluster traffic for Lagrange 5-node + 1-client comparative benchmarks"
 fi
 
-IMAGE_ARGS=(--image-family="ubuntu-2404-lts-amd64" --image-project="ubuntu-os-cloud")
-if gcloud compute images describe-from-family lagrange-distributed-harness --project="${PROJECT_ID}" >/dev/null 2>&1; then
-  echo "[gcp] Using pre-baked image family lagrange-distributed-harness in ${PROJECT_ID}..."
-  IMAGE_ARGS=(--image-family="lagrange-distributed-harness" --image-project="${PROJECT_ID}")
-fi
+IMAGE_ARGS=(--image-family="${IMAGE_FAMILY}" --image-project="${IMAGE_PROJECT}")
 
 SSH_PUB_KEY=""
 for candidate in "${HOME}/.ssh/id_ecdsa.pub" "${HOME}/.ssh/id_rsa.pub" "${HOME}/.ssh/google_compute_engine.pub"; do

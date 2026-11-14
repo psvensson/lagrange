@@ -127,7 +127,11 @@ export ZONE="us-central1-a"
 ./docs/benchmarks/cloud/provision-gcp.sh
 ```
 The script creates the VMs (the dedicated client VM last), an intra-cluster firewall rule, and
-installs Docker and git. It does not open the Docker socket to everyone and does not add users to
+installs Docker and git. The VMs are created from exactly one image, printed before anything is
+created: `ubuntu-2404-lts-amd64` in `ubuntu-os-cloud` unless you name another with both
+`IMAGE_FAMILY` and `IMAGE_PROJECT` (for example a project's pre-baked
+`lagrange-distributed-harness` family); naming only one is refused, and the script never
+switches to an image you did not name. It does not open the Docker socket to everyone and does not add users to
 the `docker` group: grant Docker access to the one SSH user the runner connects as yourself. SSH
 host keys are verified as usual; record each VM's host key in `known_hosts` (for example with
 `gcloud compute ssh` once per VM) before the run. Put Node 22 or later on the client VM.
