@@ -343,6 +343,16 @@ const NODE_READY_VECTORS = Object.freeze({
     ],
     scheduled: null,
   },
+  'a first-ever node inserted, deleted and inserted again': {
+    cached: [],
+    events: [
+      nodesEvent('INSERT', nodeRow('n1', 'joining', {last_heartbeat: 1, updated_at: 10})),
+      nodesEvent('DELETE', {node_id: 'n1'}),
+      nodesEvent('INSERT', nodeRow('n1', SERVICE_STATUS.ACTIVE,
+        {ready_lease_expires_at: LEASE, last_heartbeat: 3, updated_at: 30})),
+    ],
+    scheduled: null,
+  },
   'two nodes interleaved': {
     cached: [nodeRow('n1', 'joining', {last_heartbeat: 1}),
       nodeRow('n2', 'joining', {last_heartbeat: 1})],
@@ -376,7 +386,7 @@ for (const [name, {cached, events, scheduled}] of Object.entries(NODE_READY_VECT
         'the real cache holds the same rows after the vector as after one-event delivery');
       // Literal anchors, independent of the one-event run.
       assert.deepEqual(vector.triggers[0].previousRow,
-        cached.find((row) => row.node_id === events[0].data.node_id),
+        cached.find((row) => row.node_id === events[0].data.node_id) ?? null,
         'the first member of a node reads the cached row');
       if (scheduled !== null) {
         assert.deepEqual(vector.triggers.map((trigger) => trigger.scheduled), scheduled);
