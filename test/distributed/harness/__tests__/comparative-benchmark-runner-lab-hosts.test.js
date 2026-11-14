@@ -8,7 +8,8 @@ import {execFile} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import {promisify} from 'node:util';
-import {nativeThermalFixture} from '../../../scripts/native-thermal-fixture.js';
+import {nativeThermalFixture, recordedThermalFacts}
+  from '../../../scripts/native-thermal-fixture.js';
 import {test} from 'node:test';
 
 import {
@@ -23,7 +24,13 @@ import {
   holdLabBenchmarkHosts,
   selectLabBenchmarkHosts,
 } from '../comparative-benchmark-lab-hosts.js';
-import {arrayMap, arraySome} from '../real-product-captured-intrinsics.js';
+import {
+  arrayEvery,
+  arrayFind,
+  arrayMap,
+  arraySome,
+  stringIncludes,
+} from '../real-product-captured-intrinsics.js';
 import {createScriptedSsh} from './real-product-deployer-scripted-ssh-fixture.js';
 
 // A load-generator requirement as the runner measures it (see the measurement
@@ -33,21 +40,6 @@ const REQUIREMENT = Object.freeze({checkoutBytes: 150 * 2 ** 20,
 
 const SENSOR_POLICY = Object.freeze({mode: 'sensor-required', cadence_ms: 0, max_concurrency: 4});
 const PACED_POLICY = Object.freeze({mode: 'operator-paced', cadence_ms: 5000, max_concurrency: 1});
-
-function thermalFacts(name, outcome = 'READY', policy = SENSOR_POLICY) {
-  const thermalEndpoint = {schema: 'native-thermal-endpoint/v1', python: '/usr/bin/python3',
-    entry: '/fixture/observer.py', config: '/fixture/config.json',
-    sourceSha256: 'a'.repeat(64), configSha256: 'b'.repeat(64), bootId: `boot-${name}`};
-  return {thermalEndpoint, thermalStatus: outcome === 'UNAVAILABLE' ? 2 : 0,
-    thermalObservation: {schema: 'lab3-thermal-observation/v1', outcome,
-      source_sha256: thermalEndpoint.sourceSha256, config_sha256: thermalEndpoint.configSha256,
-      boot_id: thermalEndpoint.bootId, observed_at: 1, execution_policy: policy,
-      observations: outcome === 'UNAVAILABLE' ? null : {
-        cpu: {path: '/fixture/cpu', millidegrees: 40000},
-        ssd: {path: '/fixture/ssd', millidegrees: 40000}},
-      cooling_reason: outcome === 'HOLD' ? 'COOLING:cpu' : null,
-      abort_reason: null, reason: outcome === 'UNAVAILABLE' ? 'no configured sensors' : null}};
-}
 
 const HOSTS = arrayMap(['delta', 'alpha', 'charlie'], (name, index) => ({name,
   ip: `10.0.0.${index + 1}`, sshTarget: `bench@${name}`, repoPath: '/srv/lagrange',
@@ -92,7 +84,7 @@ test('a busy host releases the holds taken and names its holder', async () => {
 test('the thermal gate carries the endpoint and a fixed remote deadline through a real shell',
   async (t) => {
     const native = nativeThermalFixture(t);
-    const hosts = HOSTS.map((host) => ({...host, repoPath: process.cwd(),
+    const hosts = arrayMap(HOSTS, (host) => ({...host, repoPath: process.cwd(),
       nodePath: process.execPath, thermalEndpoint: native.endpoint,
       executionPolicy: SENSOR_POLICY}));
     const calls = [];
@@ -104,9 +96,9 @@ test('the thermal gate carries the endpoint and a fixed remote deadline through 
     };
     const results = await checkLabThermalHeadroom({hosts, sshRun, opts: {}});
     assert.equal(calls.length, 3);
-    assert.ok(calls.every((call) => call.timeoutMs === 11 * 60 * 1000));
+    assert.ok(arrayEvery(calls, (call) => call.timeoutMs === 11 * 60 * 1000));
     assert.match(calls[0].command, /600000/u, 'one remote-clock ten-minute budget plus transport slack');
-    assert.ok(calls[0].command.includes(native.endpoint.sourceSha256));
+    assert.ok(stringIncludes(calls[0].command, native.endpoint.sourceSha256));
     assert.equal(results.alpha.outcome, 'READY');
     assert.equal(results.alpha.config_sha256, native.endpoint.configSha256);
     assert.equal(fs.readFileSync(native.counter, 'utf8'), '3');
@@ -128,8 +120,9 @@ function inventory(entries) {
     [name, {name, ip: `192.168.9.${name.length}${name.charCodeAt(0)}`, ssh: `b@${name}`,
       os: 'linux', roles: ['harness'], testCapability: {bootId: `boot-${name}`,
         dockerReachable: true, repoPath: '/srv/lagrange', nodePath: '/usr/bin/node',
-        nodeVersion: 'v22.23.2', ...thermalFacts(name), dockerRootFreeBytes: 100 * 2 ** 30,
-        repoFreeBytes: 100 * 2 ** 30, machineLock: {state: lock, holder: null}}, ...extra}]))};
+        nodeVersion: 'v22.23.2', ...recordedThermalFacts(`boot-${name}`),
+        dockerRootFreeBytes: 100 * 2 ** 30, repoFreeBytes: 100 * 2 ** 30,
+        machineLock: {state: lock, holder: null}}, ...extra}]))};
 }
 
 test('selection prefers free hosts, then held ones the hold will wait for; unreachable, ' +
@@ -137,7 +130,7 @@ test('selection prefers free hosts, then held ones the hold will wait for; unrea
   const state = inventory([['a', 'busy'], ['b', 'free'], ['c', 'free'],
     ['d', 'free', {lastProbeFailure: {error: 'ssh timeout'}, testCapability: null}],
     ['e', 'stale-record'], ['f', 'busy'], ['g', 'free',
-      {testCapability: {bootId: 'boot-b', dockerReachable: true, ...thermalFacts('b'),
+      {testCapability: {bootId: 'boot-b', dockerReachable: true, ...recordedThermalFacts('boot-b'),
         machineLock: {state: 'free'}}}]]);
   const hosts = selectLabBenchmarkHosts({state, dataHostCount: 3, nodeMinimum: '22.12.0', loadGeneratorRequirement: REQUIREMENT});
   assert.deepEqual(arrayMap(hosts, (host) => [host.name, host.role, host.lock.state]),
@@ -148,7 +141,7 @@ test('selection prefers free hosts, then held ones the hold will wait for; unrea
 test('a host whose checkout runs an old Node is never the load generator', () => {
   const old = {testCapability: {bootId: 'boot-old', dockerReachable: true,
     repoPath: '/srv/lagrange', nodePath: '/usr/bin/node', nodeVersion: 'v14.21.3',
-    ...thermalFacts('old'), dockerRootFreeBytes: 100 * 2 ** 30,
+    ...recordedThermalFacts('boot-old'), dockerRootFreeBytes: 100 * 2 ** 30,
     machineLock: {state: 'free'}}};
   const state = inventory([['a', 'free', old], ['b', 'free', {testCapability: {...old.testCapability,
     bootId: 'boot-b'}}], ['c', 'free', {testCapability: {...old.testCapability,
@@ -183,7 +176,7 @@ test('sensor unavailability refuses while explicit operator pacing preserves unm
       }
     }
     const old = createScriptedSsh([[/wait-for-thermal-headroom/u, 'thermal: ok cpu 51C']]);
-    const facts = thermalFacts('delta');
+    const facts = recordedThermalFacts('boot-delta');
     await assert.rejects(checkLabThermalHeadroom({hosts: [{...HOSTS[0],
       thermalEndpoint: facts.thermalEndpoint, executionPolicy: SENSOR_POLICY}], sshRun: old.sshRun,
     opts: {}}), (error) => error.code === 'thermal_exhausted');
@@ -191,7 +184,7 @@ test('sensor unavailability refuses while explicit operator pacing preserves unm
 
 test('selection requires native identity and policy; fresh missing members never use cached facts', () => {
   const state = inventory([['a', 'free'], ['b', 'free'], ['c', 'free'], ['d', 'free']]);
-  Object.assign(state.nodes.b.testCapability, thermalFacts('b', 'UNAVAILABLE'));
+  Object.assign(state.nodes.b.testCapability, recordedThermalFacts('boot-b', 'UNAVAILABLE'));
   delete state.nodes.c.testCapability.thermalEndpoint;
   const select = (fleet = null) => selectLabBenchmarkHosts({state, fleet, dataHostCount: 3,
     nodeMinimum: '22.12.0', loadGeneratorRequirement: REQUIREMENT});
@@ -202,11 +195,12 @@ test('selection requires native identity and policy; fresh missing members never
     assert.equal(reasons.c, reasons.b);
     return error.code === 'refused_insufficient_host_topology';
   });
-  Object.assign(state.nodes.b.testCapability, thermalFacts('b', 'UNAVAILABLE', PACED_POLICY));
-  Object.assign(state.nodes.c.testCapability, thermalFacts('c', 'HOLD'));
+  Object.assign(state.nodes.b.testCapability,
+    recordedThermalFacts('boot-b', 'UNAVAILABLE', PACED_POLICY));
+  Object.assign(state.nodes.c.testCapability, recordedThermalFacts('boot-c', 'HOLD'));
   const hosts = select();
-  assert.deepEqual(hosts.find((host) => host.name === 'b').executionPolicy, PACED_POLICY);
-  assert.deepEqual(hosts.find((host) => host.name === 'b').thermalEndpoint,
+  assert.deepEqual(arrayFind(hosts, (host) => host.name === 'b').executionPolicy, PACED_POLICY);
+  assert.deepEqual(arrayFind(hosts, (host) => host.name === 'b').thermalEndpoint,
     state.nodes.b.testCapability.thermalEndpoint);
   assert.throws(() => select([]), (error) => /not present in fresh discovery/u.test(error.message));
   state.nodes.b.testCapability.thermalObservation.config_sha256 = '0'.repeat(64);
@@ -248,7 +242,7 @@ test('docker disk is a fleet fact: a host below the data-host requirement is not
     ['carinas-windows', 'free'], ['lenovo-laptop', 'free'], ['tv-dator', 'free']]);
   state.nodes['adam-laptop'].testCapability.dockerRootFreeBytes = 433 * 1024 * 1024;
   Object.assign(state.nodes['carinas-windows'].testCapability,
-    thermalFacts('carinas-windows', 'UNAVAILABLE'));
+    recordedThermalFacts('boot-carinas-windows', 'UNAVAILABLE'));
   const hosts = selectLabBenchmarkHosts({state, dataHostCount: 3, nodeMinimum: '22.12.0', loadGeneratorRequirement: REQUIREMENT});
   assert.deepEqual(arrayMap(hosts, (host) => [host.name, host.role]), [
     ['adams-gamla', 'data'], ['lenovo-laptop', 'data'], ['tv-dator', 'data'],
@@ -291,7 +285,7 @@ test('the load generator needs room for the harness worktree on its checkout fil
       ['carinas-windows', 'free'], ['lenovo-laptop', 'free'], ['tv-dator', 'free']]);
     state.nodes['adam-laptop'].testCapability.dockerRootFreeBytes = 390 * 1024 * 1024;
     Object.assign(state.nodes['carinas-windows'].testCapability,
-      thermalFacts('carinas-windows', 'UNAVAILABLE'));
+      recordedThermalFacts('boot-carinas-windows', 'UNAVAILABLE'));
     state.nodes['adam-laptop'].testCapability.repoFreeBytes = REQUIREMENT.requiredBytes;
     const select = () => selectLabBenchmarkHosts({state, dataHostCount: 3,
       nodeMinimum: '22.12.0', loadGeneratorRequirement: REQUIREMENT});
@@ -354,14 +348,14 @@ test('host facts are read locale-independently; a non-numeric fact is typed', as
     (error) => error.code === 'host_facts_unreadable' && /memGb/u.test(error.message));
 });
 
-// Original feature controls: production is unchanged in this checkpoint.
+// Original feature controls retained from the measured and sealed red checkpoint.
 test('an explicit registered load generator is reserved before data-host selection', () => {
   const state = inventory([['adam-laptop', 'free'], ['adams-gamla', 'free'],
     ['carinas-windows', 'free'], ['tv-dator', 'free']]);
   const hosts = selectLabBenchmarkHosts({state, dataHostCount: 3,
     nodeMinimum: '22.12.0', loadGeneratorRequirement: REQUIREMENT,
     loadGeneratorName: 'adam-laptop'});
-  assert.deepEqual(hosts.map(({name, role}) => [name, role]), [
+  assert.deepEqual(arrayMap(hosts, ({name, role}) => [name, role]), [
     ['adams-gamla', 'data'], ['carinas-windows', 'data'], ['tv-dator', 'data'],
     ['adam-laptop', 'client'],
   ]);
@@ -374,5 +368,71 @@ test('an unknown explicit load generator refuses rather than selecting another h
     nodeMinimum: '22.12.0', loadGeneratorRequirement: REQUIREMENT,
     loadGeneratorName: 'not-registered'}), (error) =>
     error.code === 'refused_load_generator_selection' &&
-    error.message.includes('not-registered'));
+    stringIncludes(error.message, 'not-registered'));
+});
+
+// Selection with an explicit load generator over a five-host inventory.
+function selectExplicit(state, name, fleet = null) {
+  return selectLabBenchmarkHosts({state, fleet, dataHostCount: 3, nodeMinimum: '22.12.0',
+    loadGeneratorRequirement: REQUIREMENT, loadGeneratorName: name});
+}
+
+function refusedFor(name, reason) {
+  return (error) => error.code === 'refused_load_generator_selection' &&
+    error.diagnostic.loadGeneratorName === name && reason.test(error.diagnostic.reason) &&
+    stringIncludes(error.message, name);
+}
+
+test('a held explicit load generator is kept for the hold to wait for, not replaced', () => {
+  const state = inventory([['a', 'busy'], ['b', 'free'], ['c', 'free'],
+    ['d', 'free'], ['e', 'free']]);
+  const hosts = selectExplicit(state, 'a');
+  assert.deepEqual(arrayMap(hosts, ({name, role}) => [name, role]),
+    [['b', 'data'], ['c', 'data'], ['d', 'data'], ['a', 'client']]);
+  assert.equal(hosts[3].lock.state, 'busy');
+});
+
+test('an ineligible explicit load generator is refused with its reason and no substitute', () => {
+  const cases = [
+    [{roles: ['runner']}, {}, /no harness role/u],
+    [{}, {dockerReachable: false}, /docker not reachable/u],
+    [{}, {thermalObservation: null}, /native thermal/u],
+    [{}, {repoPath: ''}, /no checkout/u],
+    [{}, {nodeVersion: 'v18.0.0'}, /below the engines floor/u],
+    [{}, {repoFreeBytes: 0}, /disk_low/u],
+  ];
+  for (const [node, capability, reason] of cases) {
+    const state = inventory([['a', 'free'], ['b', 'free'], ['c', 'free'],
+      ['d', 'free'], ['e', 'free']]);
+    Object.assign(state.nodes.a, node);
+    Object.assign(state.nodes.a.testCapability, capability);
+    assert.throws(() => selectExplicit(state, 'a'), refusedFor('a', reason));
+  }
+});
+
+test('an explicit physical alias or a host absent from fresh discovery is refused', () => {
+  const state = inventory([['a', 'free'], ['b', 'free'], ['c', 'free'],
+    ['d', 'free'], ['z', 'free']]);
+  state.nodes.z.testCapability = {...state.nodes.a.testCapability};
+  assert.throws(() => selectExplicit(state, 'z'), refusedFor('z', /same machine/u));
+  const fleet = arrayMap(['b', 'c', 'd', 'z'],
+    (name) => ({name, capability: state.nodes[name].testCapability}));
+  assert.throws(() => selectExplicit(state, 'a', fleet),
+    refusedFor('a', /not present in fresh discovery/u));
+});
+
+test('the explicit load generator leaves the data hosts their disk policy and topology', () => {
+  const state = inventory([['a', 'free'], ['b', 'free'], ['c', 'free'], ['d', 'free']]);
+  state.nodes.d.testCapability.dockerRootFreeBytes = 2 ** 30;
+  const roles = (hosts) => arrayMap(hosts, ({name, role}) => [name, role]);
+  assert.deepEqual(roles(selectLabBenchmarkHosts({state, dataHostCount: 3,
+    loadGeneratorRequirement: REQUIREMENT})),
+  [['a', 'data'], ['b', 'data'], ['c', 'data'], ['d', 'client']], 'automatic is unchanged');
+  assert.deepEqual(roles(selectExplicit(state, 'd')),
+    [['a', 'data'], ['b', 'data'], ['c', 'data'], ['d', 'client']],
+    'a client holds no product image, so its docker root is not a data-host gap');
+  assert.throws(() => selectExplicit(state, 'a'), (error) =>
+    error.code === 'refused_insufficient_host_topology' && error.diagnostic.available === 0 &&
+    arraySome(error.diagnostic.excluded, (entry) => entry.name === 'd' &&
+      /docker_disk_low/u.test(entry.reason)));
 });

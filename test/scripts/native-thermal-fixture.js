@@ -61,3 +61,21 @@ export function nativeThermalFixture(t, {policy = SENSOR_POLICY,
   delete env.NODE_TEST_CONTEXT;
   return {root, entry, config, endpoint, env, counter};
 }
+
+// The thermal facts a lab probe records on an inventory node (testCapability
+// thermalEndpoint, thermalStatus, thermalObservation) for controls that select
+// from recorded facts; no endpoint runs, so this is not sensor evidence either.
+export function recordedThermalFacts(bootId, outcome = 'READY', policy = SENSOR_POLICY) {
+  const thermalEndpoint = {schema: 'native-thermal-endpoint/v1', python: PYTHON,
+    entry: '/fixture/observer.py', config: '/fixture/config.json',
+    sourceSha256: 'a'.repeat(64), configSha256: 'b'.repeat(64), bootId};
+  return {thermalEndpoint, thermalStatus: outcome === 'UNAVAILABLE' ? 2 : 0,
+    thermalObservation: {schema: 'lab3-thermal-observation/v1', outcome,
+      source_sha256: thermalEndpoint.sourceSha256, config_sha256: thermalEndpoint.configSha256,
+      boot_id: bootId, observed_at: 1, execution_policy: policy,
+      observations: outcome === 'UNAVAILABLE' ? null : {
+        cpu: {path: '/fixture/cpu', millidegrees: 40000},
+        ssd: {path: '/fixture/ssd', millidegrees: 40000}},
+      cooling_reason: outcome === 'HOLD' ? 'COOLING:cpu' : null,
+      abort_reason: null, reason: outcome === 'UNAVAILABLE' ? 'no configured sensors' : null}};
+}

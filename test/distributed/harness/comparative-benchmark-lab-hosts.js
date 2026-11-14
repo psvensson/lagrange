@@ -24,6 +24,7 @@ import {
   arrayFind,
   arrayIncludes,
   arrayMap,
+  objectHasOwn,
   stringReplace,
   stringSplit,
   stringTrim,
@@ -56,6 +57,7 @@ const DATA_HOST_MIN_DOCKER_FREE_BYTES = Math.ceil(6.5 * 2 ** 30);
 // that will be checked out, plus the run's evidence under the worktree's
 // test-output (reserved, unmeasured). The load generator holds no image.
 const LOAD_GENERATOR_RUN_EVIDENCE_BYTES = 64 * 2 ** 20;
+const LOAD_GENERATOR_SELECTION_REFUSED = 'refused_load_generator_selection';
 // A selection asked for without the measured requirement is refused (the
 // campaign is blocked), never run with an assumed one.
 const LOAD_GENERATOR_REQUIREMENT_UNMEASURED = 'refused_load_generator_requirement_unmeasured';
@@ -201,13 +203,14 @@ function loadGeneratorGap(facts, nodeMinimum, requirement) {
  * hosts another run holds (the hold waits for them, bounded, and refuses
  * naming the holder), each group in name order. Too few eligible hosts is a
  * typed topology refusal (blocked, never failed) naming every excluded host
- * and why.
+ * and why. An explicit registered client is reserved before choosing data hosts;
+ * an ineligible explicit choice is refused without substitution.
  * @param {{state: Object, fleet?: Array<Object>|null, dataHostCount: number,
- *   nodeMinimum?: string|null}} input
+ *   nodeMinimum?: string|null, loadGeneratorName?: string|null}} input
  * @return {Array<Object>}
  */
 function selectLabBenchmarkHosts({state, fleet = null, dataHostCount, nodeMinimum = null,
-  loadGeneratorRequirement = null}) {
+  loadGeneratorRequirement = null, loadGeneratorName = null}) {
   if (!Number.isSafeInteger(loadGeneratorRequirement?.requiredBytes)) {
     throw deploymentFailure(LOAD_GENERATOR_REQUIREMENT_UNMEASURED,
       `${LOAD_GENERATOR_REQUIREMENT_UNMEASURED}: lab host selection needs the measured ` +
@@ -218,8 +221,11 @@ function selectLabBenchmarkHosts({state, fleet = null, dataHostCount, nodeMinimu
   const free = (entry) => arrayIncludes(USABLE_LOCK_STATES, entry.lock.state);
   const preferred = [...arrayFilter(eligible, free),
     ...arrayFilter(eligible, (entry) => !free(entry))];
-  const data = chooseDataHosts(preferred, dataHostCount, excluded);
-  const client = chooseLoadGenerator(preferred, data, free, {nodeMinimum,
+  const requested = explicitLoadGenerator({state, eligible, excluded, name: loadGeneratorName,
+    nodeMinimum, requirement: loadGeneratorRequirement});
+  const data = chooseDataHosts(arrayFilter(preferred, (entry) => entry !== requested),
+    dataHostCount, excluded);
+  const client = requested ?? chooseLoadGenerator(preferred, data, free, {nodeMinimum,
     requirement: loadGeneratorRequirement}, excluded);
   const ordered = client && data.length === dataHostCount ? [...data, client] : [];
   if (ordered.length < required) {
@@ -236,6 +242,30 @@ function selectLabBenchmarkHosts({state, fleet = null, dataHostCount, nodeMinimu
     thermalEndpoint: thermalOf(facts.capability).endpoint,
     executionPolicy: thermalOf(facts.capability).decision.execution_policy,
     lock, role: index < dataHostCount ? HOST_ROLE.DATA : HOST_ROLE.CLIENT}));
+}
+
+// The operator's named load generator (--load-generator), or null when none
+// was named (automatic selection). It must be an eligible harness host that
+// can be a load generator; otherwise the campaign is refused with the reason,
+// never given another host. Its recorded lock is kept: a held host is waited
+// for by the hold, not replaced.
+function explicitLoadGenerator({state, eligible, excluded, name, nodeMinimum, requirement}) {
+  if (name === null) return null;
+  const entry = arrayFind(eligible, (candidate) => candidate.node.name === name);
+  const reason = entry ? loadGeneratorGap(entry.facts, nodeMinimum, requirement) :
+    arrayFind(excluded, (candidate) => candidate.name === name)?.reason ??
+      unselectableReason(state, name);
+  if (reason) {
+    throw deploymentFailure(LOAD_GENERATOR_SELECTION_REFUSED,
+      `${LOAD_GENERATOR_SELECTION_REFUSED}: ${name}: ${reason}`,
+      {loadGeneratorName: name, reason});
+  }
+  return entry;
+}
+
+function unselectableReason(state, name) {
+  return objectHasOwn(state.nodes ?? {}, name) ?
+    `no ${HARNESS_ROLE} role in the lab inventory` : 'not registered in the lab inventory';
 }
 
 // The inventory's harness nodes in name order, split into eligible hosts (with
