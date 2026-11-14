@@ -829,7 +829,7 @@ test(
     // Precondition: earlier committed ranges have widened the lane's shipping
     // window past the five owed rows (it starts at one; the ship-window
     // witnesses own its dynamics).
-    f.producerLeader.getCdcObligationDiagnostics();
+    f.producerLeader.cdcDelivery.getCdcObligationDiagnostics();
     f.producerLeader.cdcDelivery.obligationLane.shipWindow = RANGE_ANCHOR_WINDOW;
     const mark = f.events.length;
 
