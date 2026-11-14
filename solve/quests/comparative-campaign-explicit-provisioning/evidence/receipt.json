@@ -2,7 +2,7 @@
   "schema": "test-receipt/1",
   "quest": "comparative-campaign-explicit-provisioning",
   "status": "fail",
-  "interpretation": "Corrective round after the second rejection (B2, 8a1e541ab). Measured at candidate a959ddb19: GCP provisioning is witnessed through the production entrypoint (the real run-comparative-benchmarks.mjs --provision, then the real campaign entry) with only ssh and the controller's git push scripted; twelve mutants run on the lab, all killed. Independent verification pending.",
+  "interpretation": "Corrective round after the third rejection (B3, a959ddb19). Measured at candidate 41945cd0: every generated script whose behaviour the change claims is executed by a test (real sh/stat/git/npm; docker, chown-to-other-uid and the ssh hop are stand-ins), real root ownership by lab shell job 2109704c; mutants x1, x2, x2b, s1-s5 all killed. Independent verification pending.",
   "receipts": [
     {
       "id": "refusals-red-on-original",
@@ -14,24 +14,26 @@
       "id": "refusals-green-on-candidate",
       "measured": true,
       "passed": true,
-      "detail": "Job 9694e5bf on tv-dator at a959ddb19: the 24 files of job fbdb9def plus comparative-benchmark-provisioning-entrypoint.test.js, 25 files, 243 assertions, all passing."
+      "detail": "Job 3ee535b2 on tv-dator at 41945cd0: the 25 files of job 9694e5bf plus comparative-benchmark-generated-commands.test.js, 26 files, 248 assertions, all passing. The earlier run 146f5ebc at 5f1ea624c FAILED (the executed push reached the host's real ssh); corrected by 41945cd0."
     },
     {
       "id": "provisioning-exists-for-every-target",
       "measured": true,
       "passed": true,
-      "detail": "Per the supersession record in the quest log: GCP in repository code, lab by the documented operator step (proven by the recorded lab placements and dry run c6fa8a7f). GCP measured through the production entrypoint: red job 260256ff on tv-dator at the tests-only commit 60b73c80b (provisioning_commit_not_placed: 'src refspec undefined', the B2 defect; foreign-storage refusal missing); green job 9694e5bf at a959ddb19: the real CLI pushes the real 40-hex HEAD and checks it out, pulls every campaignImagesByRole image per role by its exact reference, installs and seeds every lockfile tarball, checks docker first and places nothing after a failure; the real campaign entry then passes host preparation, and without provisioning refuses image_unavailable and load_generator_commit_absent (offline_cache_incomplete through the campaign's preparation and workload runner in process). Mutants m1-m12 on throwaway branches mutant/no-fallback-a959ddb1-m*, all killed: m1 28a23968, m2 53afe25d, m3 9f5b2487, m4 1729cd60, m5 d0aa691c, m6 727bee92, m7 3800e809, m8 38b5b0fe, m9 0c59d95d, m10 ea470e48, m11 c44355b7, m12 f43a8320. Ceiling: the remote executor (ssh) and git push are scripted; nothing ran on GCP."
+      "detail": "Per the supersession record: GCP in repository code, lab by the documented operator step. GCP through the production entrypoint (real CLI, only ssh and git push scripted; the fake requires BatchMode and the operator key on every connection, the push connects through GIT_SSH_COMMAND): green 3ee535b2 at 41945cd0. Generated commands executed for real (comparative-benchmark-generated-commands.test.js): storage script with real sh/stat against absent/empty/foreign/runtime-owned dirs, also through the deployer's own command line; image probe; harness commit pushed with real git over an ssh stand-in into a real client checkout, checked out, probed, then the campaign's real worktree and offline install; a checkout lacking the commit refuses; a push without key or BatchMode fails; real npm with an empty cache names one lockfile tarball (npm 10 reports the first only) and the TiDB arm refuses offline_cache_incomplete. Real root ownership: lab shell job 2109704c (tv-dator, postgres:17-alpine): absent, root-owned empty and 10001-owned non-empty prepared to 10001:10001; root-owned non-empty refused (foreign 0:0) and left untouched. Mutants: x1 30f69e96, x2 738967e1, s1 2b8baffb, s4 3c17117f, s5 99a066d4 (base 5f1ea624c); x2b 30174ce0, s2 28a1e514, s3 01529259 (base 41945cd0); all killed. Previous round m1-m12 all killed at a959ddb19. Unproven without GCP: registry pulls, npm cache add from the registry serving npm ci --offline, root npm ci on a fresh VM, the push over a real ssh."
     }
   ],
   "unmeasuredObligations": [
     "independent-verification"
   ],
   "source": {
-    "sha": "a959ddb19c86d305ec7fec039f5005be248e4e5f",
+    "sha": "55ff1820149d494156a3ac9cbcad66f2804feca2",
+    "measuredAt": "41945cd0364e8190657b1f7497752952ec5ec064",
+    "note": "55ff18201 differs from 41945cd0 only in docs/benchmarks/cloud-reproduction-guide.md",
     "base": "965a86bb8"
   },
   "evidence": {
     "directory": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/measurement-prep"
   },
-  "evidenceCeiling": "Real: the CLI wiring (argument parsing, manifest, harness identity from the real git HEAD, provisioning owner, host preparation and the campaign's own checks). Scripted: the remote executor (ssh answering docker/git/npm from a per-host state) and the controller's git push. Lab shell jobs 822e78f2 and 16dce80a observed the storage EACCES the ownership step repairs. Nothing has been executed on GCP: a real run would additionally prove registry pulls, the git push over ssh into a fresh VM checkout, root npm ci, that npm cache add serves npm ci --offline, and a campaign starting on the provisioned VMs."
+  "evidenceCeiling": "Real: the CLI wiring, the provisioning owner, the campaign's checks, and the generated scripts and command lines executed with the real sh, stat, git and npm; real root-owned storage on tv-dator (job 2109704c). Stand-ins: the docker binary in unit tests, chown to another uid, the ssh hop, and the remote executor in the CLI tests. Nothing executed on GCP: registry pulls, npm cache add from the registry serving npm ci --offline, root npm ci on a fresh VM and the push over a real ssh remain unproven."
 }
