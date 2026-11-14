@@ -3,23 +3,30 @@
  * source invocation duration. Their actual stop is reported here.
  */
 
-import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+import {WAIT_BOUND_SPENT_SINK, reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {LogThrottle} from '../logging/log-throttle.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {CDC_GROUP_FOREGROUND_RETRY_STATE, CDC_GROUP_PROPAGATION_LOG_MSG} from
   './cdc-group-propagation-constants.js';
 
 const RETRY_SCHEDULE_LEVEL = 'warn';
-// One bucket per service. Neither changing targets nor repeated retries grow this state.
-const scheduledRetryThrottles = new WeakMap();
+const FOREGROUND_RETRY_SPENT_THROTTLE_KEY = 'cdc_propagation_foreground_retry_spent';
+// One throttle per service, one bucket per report. Neither changing targets,
+// repeated retries nor overlapping waves grow this state.
+const retryReportThrottles = new WeakMap();
 
-function reportCdcPropagationRetryScheduled(service, scheduled) {
-  let throttle = scheduledRetryThrottles.get(service);
+function admitRetryReport(service, key) {
+  let throttle = retryReportThrottles.get(service);
   if (!throttle) {
     throttle = new LogThrottle({now: () => service.now()});
-    scheduledRetryThrottles.set(service, throttle);
+    retryReportThrottles.set(service, throttle);
   }
-  const suppressed = throttle.admit(CDC_GROUP_PROPAGATION_LOG_MSG.RETRYING_DELIVERY_FAILURES);
+  return throttle.admit(key);
+}
+
+function reportCdcPropagationRetryScheduled(service, scheduled) {
+  const suppressed = admitRetryReport(service,
+    CDC_GROUP_PROPAGATION_LOG_MSG.RETRYING_DELIVERY_FAILURES);
   if (suppressed === null) return;
   const logger = typeof service.logger?.logConsoleOnly === 'function' ?
     service.logger : LoggingService.getInstance();
@@ -40,13 +47,19 @@ const CDC_PROPAGATION_RETRY_WAIT = Object.freeze({
 /**
  * A durable wave's foreground retry budget ran out: one wait_bound_spent
  * ERROR with the wave's table, operation, attempts, its aggregate failure
- * count, event count and why it stopped. The source owner keeps the debt.
+ * count, event count, why it stopped and how many reports the throttle
+ * suppressed before it. The source owner keeps the debt. Like the scheduling
+ * notice it is console-only and throttled per service: many waves fail
+ * together, and a wave may itself be carrying a logs-table write, so this
+ * report is never fed back through the CDC pipeline it observes.
  * @param {Object} service - The CDC group propagation service.
  * @param {Object} spent - {tableName, operation, attempt, maxAttempts,
  *   failureCount, eventCount, stopReason, remainingMs?, retryDelayMs?}.
  * @return {void}
  */
 function reportCdcPropagationForegroundRetrySpent(service, spent) {
+  const suppressed = admitRetryReport(service, FOREGROUND_RETRY_SPENT_THROTTLE_KEY);
+  if (suppressed === null) return;
   reportWaitBoundSpent(service.logger, {
     ...CDC_PROPAGATION_RETRY_WAIT,
     ...(spent.stopReason === CDC_GROUP_FOREGROUND_RETRY_STATE.INSUFFICIENT_DURATION ?
@@ -63,8 +76,10 @@ function reportCdcPropagationForegroundRetrySpent(service, spent) {
       stopReason: spent.stopReason,
       ...(spent.remainingMs === undefined ? {} : {remainingMs: spent.remainingMs}),
       ...(spent.retryDelayMs === undefined ? {} : {retryDelayMs: spent.retryDelayMs}),
+      suppressed,
     },
     scope: {nodeId: service.nodeId ?? null},
+    sink: WAIT_BOUND_SPENT_SINK.CONSOLE_ONLY,
   });
 }
 

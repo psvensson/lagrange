@@ -1,0 +1,12 @@
+{
+ "kind": "tests",
+ "host": "tv-dator",
+ "commit": "4cc44894974b785fcc0bb286679ce190b082039b",
+ "base": "9c576f3a06be3bf117623f038f43e6b36b5b33a5",
+ "files": [
+  "test/topology/cdc-group-propagation-wave-isolation.test.js",
+  "test/partition/partition-cdc-lane-wave-isolation.test.js",
+  "test/partition/partition-cdc-obligation-scan-recapture.test.js"
+ ],
+ "requestId": "f56ec976-f22f-429d-a5d8-65f7aeac6641"
+}

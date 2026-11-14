@@ -20,7 +20,7 @@
 // - A propagate call after stop still proposed on the source message group
 //   (round 5, N1).
 // The service has one propagation path, the durable wave: its only held work
-// is the retry delay (sleep) and the in-flight wave (activeDurablePropagation).
+// is the retry delay (sleep) and the waves in flight (inFlightDurableWaves).
 // Deleted with the volatile branch: the batch-window and background-retry
 // lanes (their maps and timers no longer exist).
 //
@@ -284,8 +284,8 @@ function assertStoppedAnswer(lane) {
 function assertOwnerBookkeepingEmpty(service) {
   assert.deepEqual({
     heldSleeps: service.retrySleepReleases.size,
-    waveInFlight: service.activeDurablePropagation !== null,
-  }, {heldSleeps: 0, waveInFlight: false},
+    wavesInFlight: service.inFlightDurableWaves.size,
+  }, {heldSleeps: 0, wavesInFlight: 0},
   'the owner holds no wave and no sleep after stop');
 }
 

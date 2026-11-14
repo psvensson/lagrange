@@ -1,0 +1,60 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "cdc-propagation-node-slot-removal",
+  "status": "pass",
+  "interpretation": "All five required receipts for cdc-propagation-node-slot-removal are measured and pass: reproducers observed red on the original base (f56ec976 on tv-dator at 4cc448949 and d3f0c692 on adams-gamla on rebuilt base 5b954ef93), all 55 reproducers, witnesses and owned-root test files green on the candidate after corrective rules CR-1..CR-6 and supersession R09 withdrawing tail re-capture (d7bc0b01 on tv-dator, 55/55 files, 862 assertions, plus 6b296bd2 13/13 forwarding-owner files and 45 mutation runs with zero surviving mutants), the removed-mechanism census target zero across src, test, scripts, docs and architecture, the three-node formation journey measured with zero slot waits and zero lane holds (80f31146 on tv-dator at f3aa2f08), and independent verification recorded.",
+  "receipts": [
+    {
+      "id": "original-journey-slot-wait",
+      "measured": true,
+      "passed": false,
+      "detail": "Journey job 4216bd0b-3da9-4bcb-b796-f52953fd2dba on tv-dator at measurement head 9991b450d (= composed head 589c1e2f + one observation-only commit): scenario FAILED, predicates a-f met, g-projection-agrees-with-authority fails with two persistent episodes (ledger_in_flight 2416 ms on observer 7704; priority_spread 1218 ms on observer cffe, bound 1000 ms). Both are a wait on the node-wide slot: the first event was refused 15 times over 3.05 s while services, nodes and control_plane_publications took turns; the second 19 times over 4.73 s, and the active row behind it in the same lane arrived 2.5 s after it committed. Slot: 1215 refusals, all busy; 82.5 percent occupied overall and 81-96 percent per 10 s for about 130 s. Services lane: 26.8 s in waves, 61.6 s waiting for the slot. Wave cost about 328 ms plus 42 ms per row; per-leaf legs p50 72, 98 and 154 ms with no in-wave retry. In 742 drives the vector was cut at the scan tail captured when the pass began with 1-10 READY rows already owed behind it, so after a run of refusals the admitted vector was usually one row. Compared with source ed708dfd: episodes 5 -> 2, services commit to first drive p50 10.6 s -> 0.60 s, no raft_role_missing exclusion. Retained in docs/evidence/cdc-propagation-node-slot-removal-2026-11/measure-9991b450/ and measure-9991b450-analysis.md."
+    },
+    {
+      "id": "reproducers-red-on-original",
+      "measured": true,
+      "passed": true,
+      "detail": "Reproducer commit 4cc448949 (production source identical to the base 589c1e2f). Job f56ec976-f22f-429d-a5d8-65f7aeac6641 on tv-dator: the behaviours the removal changes fail for the slot reason (R1 cross-table wave refused while another table's wave waits on a never-settling leaf; R2 second partition of one table refused; R3 7 of 8 lanes presenting in one turn refused; R4 lane presenting during another lane's wave held with a 10 ms retry armed by the service's hint; R5 stop with several waves finds one in flight instead of three; R6b service retains five waiting tables, timestamps and lifecycles after every wave is done), and the two that pin unchanged behaviour (R8 single-lane differential and R6a lane single flight) pass. Baseline job a614cedb-e0a3-498e-b8e9-2a67d14aef9a on tv-dator: the 18 existing topology, partition CDC, seed-teardown and message-group route files green, 215 assertions. Re-verified on rebuilt base 5b954ef93 in job d3f0c692-2326-46e1-8a0a-371d97db8b43 on adams-gamla (FAILED exit 1 as intended: R1, R2, R3, R4, R5, R6b red by their named assertions; R6a, R8a, R8b and C2 green on base) and verifier counterexamples C1, C1b, C2, C3 observed red before CR-1..CR-6 repair in job 7ddd525a-0d09-417c-9936-3e582316fa55 on tv-dator. Note: R7 (scan tail re-capture after refusal) was withdrawn by Supersession Record R09 because it contradicted range-shipping S-5. Evidence retained in docs/evidence/cdc-propagation-node-slot-removal-2026-11/repro-4cc44894/, baseline-4cc44894/, land-repro-red-on-base-adams/, and land-cx-red-rebuilt-tv/. passed=true means observed red on the original for the predicted reason."
+    },
+    {
+      "id": "reproducers-and-owned-roots-green-on-candidate",
+      "measured": true,
+      "passed": true,
+      "detail": "Candidate tree 2845319bce6de32c37e65ab083418ad399d716c3 on base 5b954ef935691b7359f0e52b5171ef3f403f872c after corrective rules CR-1..CR-6 and Supersession Record R09 (withdrawing tail re-capture so src/partition/partition-cdc-obligation-range.js and test/partition/partition-cdc-obligation-range-shipping.test.js remain byte-identical to the range-shipping candidate, and retaining only contention-machinery deletions plus truthful typed backpressure CR-1 and CR-4). Lab job d7bc0b01-7b56-4509-8cc4-f56a0ea2640b on tv-dator (transportCommit ef5dab8ea070fedbd61824dce808d6eb419fcaf4): COMPLETE, exit 0, 55/55 test files, 862 assertions green across all reproducers (cdc-group-propagation-wave-isolation.test.js, partition-cdc-lane-wave-isolation.test.js), CR-1..CR-6 witnesses (cdc-group-propagation-wave-lifecycle.test.js, partition-cdc-lane-typed-backpressure.test.js, partition-cdc-obligation-provisional-tail-order.test.js, message-group-cdc-receiver-admission.test.js), removed-mechanism census (cdc-propagation-slot-removed-census.test.js), range-shipping witnesses (including both S-5 captured-tail tests in partition-cdc-obligation-ship-window.test.js), and owned topology/partition/bootstrap/message-group roots. Forwarding-owner suite outside the 55-file set green in job 6b296bd2-ac8f-4e99-8c0f-0163c65b5b18 on tv-dator (13/13 files). Mutation matrix across m01..m13, v01..v10, n1..n7, and t1..t3 (e215a5a5, 73c29870, d41fd956, 14502ef7, 2aff5930, a0fe3686, adfd5025, f9d11b5c, 7b6ca562, 7c160b9e, b7d5a570, 2cf8bca2, 9630fdcd, 1425c08a, 37315fb3, 25b42626, 2285fefd) killed every non-equivalent mutant (0 survivors). Retained in docs/evidence/cdc-propagation-node-slot-removal-2026-11/land-final2-55files-tv/, land-state1-forwarding13-tv/, and mutation-summary.json."
+    },
+    {
+      "id": "removed-mechanism-census-zero",
+      "measured": true,
+      "passed": true,
+      "detail": "test/topology/cdc-propagation-slot-removed-census.test.js scans all .js, .mjs, .cjs, .json, .md and .txt files across the fixed scope (src, test, scripts, docs, architecture) by path and line content case-insensitively against all 16 families of retired slot and slicing identifiers (activeDurablePropagation, durableSlice, sliceTurn, contendedPropagation, registerContentionOwner, markContended/isContended, CONTENDED_TABLE_SLICE/CONTENDED_SLICE_YIELD, YIELD_HOLD, BUSY_CONTENDED, DURABLE_PROPAGATION_ADMISSION, yieldedOnContention, stepContended, consumeRetryHint, computeBusyRetry, decideDurablePropagationAdmission, wakeContendedLane), proves the matcher red on all 24 retired symbol names, and asserts zero surviving occurrences (target 0, observed 0 both in lab job d7bc0b01-7b56-4509-8cc4-f56a0ea2640b on tv-dator and locally)."
+    },
+    {
+      "id": "journey-no-slot-wait",
+      "measured": true,
+      "passed": true,
+      "detail": "Three-node Docker formation journey job 80f31146-504f-412b-95e5-45d32551ad8d on tv-dator at measurement head f3aa2f082ed98460f436295c6c416ae3b521af1c (transportCommit 784c3b2bf64e71de43e674d404f2d36d5e3fd218, tree 6430b6de42edf31e7cede84fc4aef9d6e0960e71): COMPLETE, exit 0, scenario passed=True, verdict PASS in 195.4 s. All predicates a-g and observation-integrity met with 0 persistent g episodes (versus 5 on ed708dfd and 2 on 9991b450d). Zero slot waits and zero lane holds (down from 1186 busy holds in 9991b450d); 0 window halvings; 0 outbound-queue rejections or preemptions across all nodes; commit-waiter peak 6 of 1000; services commit-to-first-drive p50/p90/max 172/597/1936 ms (down from 602/2838/11341 ms in 9991b450d) and commit-to-remote-receipt p50/p90/max 346-586 / 853-1172 / 2255 ms (down from 1669-1775 / 3771-3935 / 7947 ms). Concurrent waves peaked at 7 at startup and stayed <= 3 for 96.4% of the run; seed RSS ended at 499 MB (max heap 213 MB). Separate pre-existing findings (formation ready-lease barrier race on simultaneous joiner derivation and seed CPU costs) are analysed and routed to their own quests in repeat-fail-analysis.md and seed-cpu-profile-analysis.md. Retained in docs/evidence/cdc-propagation-node-slot-removal-2026-11/measure-slot-f3aa2f08/ and measure-slot-analysis.md."
+    },
+    {
+      "id": "independent-verification",
+      "measured": true,
+      "passed": true,
+      "detail": "Pass 1 independent verification by subagent:ac56664e53eb33b4e rejected candidate 551bf2643964491b9c1c6364de82ab8504f731e6 with blocking findings B1 (in-wave leaf refusal standing not monotone across foreground retries when deliveryRetryMaxAttempts > 1), B2 (scan tail released while scan.provisional, breaking ledger order), B3 (equal-mode publication write dropped reason update), B4 (forwarded source leaf dropped leader BACKPRESSURE to unknown-with-cause), and B5 (six surviving mutants v01, v02, v04, v06, v07, v10); report retained in docs/evidence/cdc-propagation-node-slot-removal-2026-11/independent-verification-551bf2643.md. All blocking findings were repaired under corrective rules CR-1..CR-6 and Supersession Record R09 (monotone per-wave leaf refusal standing in recordLeafRefusal, withdrawal of tail re-capture, restoration of setPublicationMode equal-mode reason update, follower-forwarded leader BACKPRESSURE propagation in uncommittedCdcAnswer and forwarding-owner native delivery, production foreground attempt count across fixtures, and 100% mutant kill coverage across v01..v10, n1..n7, t1..t3), and verified by fresh final independent verification on the exact uncommitted candidate tree."
+    }
+  ],
+  "unmeasuredObligations": [],
+  "source": {
+    "sha": "9c3a10fdb902ab6db34df19fe8bc669c827a4ab5",
+    "sealedBase": "589c1e2f70c1910026367d4ab4461e67e81b5d52"
+  },
+  "evidence": {
+    "directory": "docs/evidence/cdc-propagation-node-slot-removal-2026-11",
+    "analysis": "docs/evidence/cdc-propagation-node-slot-removal-2026-11/measure-slot-analysis.md",
+    "journeyJob": "docs/evidence/cdc-propagation-node-slot-removal-2026-11/measure-slot-f3aa2f08/summary.json",
+    "candidateTestsJob": "docs/evidence/cdc-propagation-node-slot-removal-2026-11/land-final2-55files-tv/summary.json",
+    "reproducerRedJob": "docs/evidence/cdc-propagation-node-slot-removal-2026-11/repro-4cc44894/summary.json",
+    "rebuiltReproducerRedJob": "docs/evidence/cdc-propagation-node-slot-removal-2026-11/land-repro-red-on-base-adams/summary.json",
+    "mutations": "docs/evidence/cdc-propagation-node-slot-removal-2026-11/mutation-summary.json",
+    "verificationPass1": "docs/evidence/cdc-propagation-node-slot-removal-2026-11/independent-verification-551bf2643.md"
+  },
+  "evidenceCeiling": "Bounded repair of cause 2 (the node-wide CDC propagation slot) of fresh-formation-user-table-routability; closing this quest does not claim the service-level formation journey green (cause 4, the formation ready-lease barrier race, is owned by quest formation-ready-lease-independent-of-spread)."
+}

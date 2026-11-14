@@ -1,0 +1,742 @@
+{
+  "quest": "cdc-propagation-node-slot-removal",
+  "recorded": "2026-11-14",
+  "runs": [
+    {
+      "dir": "land-mut-control-adams",
+      "job": "050a8ee2-2967-495f-acc2-b58ce3379dc9",
+      "host": "adams-gamla",
+      "commit": "5b954ef935691b7359f0e52b5171ef3f403f872c",
+      "tree": "e3ecbf7175a1b65594f5ccee4adf824af7fe8b1a",
+      "transportCommit": "7662573fe5fada532fece054984387762f6a8e51",
+      "state": "COMPLETE",
+      "exitCode": 0,
+      "elapsedSeconds": 58.486,
+      "files": [
+        "test/topology/cdc-group-propagation-wave-lifecycle.test.js",
+        "test/partition/partition-cdc-lane-typed-backpressure.test.js",
+        "test/partition/partition-cdc-obligation-scan-recapture.test.js",
+        "test/message-group/message-group-cdc-receiver-admission.test.js"
+      ]
+    },
+    {
+      "dir": "land-mut-n1-adams-gamla",
+      "job": "9630fdcd-3831-4cd9-a7ce-1697089ebecc",
+      "host": "adams-gamla",
+      "commit": "5b954ef935691b7359f0e52b5171ef3f403f872c",
+      "tree": "96be9f61f19e926428db610c314a388d6b2d4a5b",
+      "transportCommit": "c08e49b51330f897a093b4b8430815e36aba1aad",
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 58.009,
+      "files": [
+        "test/topology/cdc-group-propagation-wave-lifecycle.test.js",
+        "test/partition/partition-cdc-lane-typed-backpressure.test.js",
+        "test/partition/partition-cdc-obligation-scan-recapture.test.js",
+        "test/message-group/message-group-cdc-receiver-admission.test.js"
+      ]
+    },
+    {
+      "dir": "land-mut-n2-adams-gamla",
+      "job": "cb27a986-5e53-4152-a837-dc6694f4c179",
+      "host": "adams-gamla",
+      "commit": "5b954ef935691b7359f0e52b5171ef3f403f872c",
+      "tree": "1a32006dda54deafca1146df1bcd740ef42b560b",
+      "transportCommit": "6d1845b9a05fce331782f843887f14f8892e95e3",
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 59.637,
+      "files": [
+        "test/topology/cdc-group-propagation-wave-lifecycle.test.js",
+        "test/partition/partition-cdc-lane-typed-backpressure.test.js",
+        "test/partition/partition-cdc-obligation-scan-recapture.test.js",
+        "test/message-group/message-group-cdc-receiver-admission.test.js"
+      ]
+    },
+    {
+      "dir": "land-mut-n4-adams-gamla",
+      "job": "098d713f-cd57-476b-a5ec-d05f4bc424cf",
+      "host": "adams-gamla",
+      "commit": "5b954ef935691b7359f0e52b5171ef3f403f872c",
+      "tree": "d66c1a20a256be5f56bc2823d5dfb8b4f02ab160",
+      "transportCommit": "bb54e20fc132b9aa5f6e563a24a710ad8c966089",
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 58.562,
+      "files": [
+        "test/topology/cdc-group-propagation-wave-lifecycle.test.js",
+        "test/partition/partition-cdc-lane-typed-backpressure.test.js",
+        "test/partition/partition-cdc-obligation-scan-recapture.test.js",
+        "test/message-group/message-group-cdc-receiver-admission.test.js"
+      ]
+    },
+    {
+      "dir": "land-mut-n5-adams-gamla",
+      "job": "067fb63e-3ca8-41a5-9069-cf4111d2bc4a",
+      "host": "adams-gamla",
+      "commit": "5b954ef935691b7359f0e52b5171ef3f403f872c",
+      "tree": "9e30f5f8cf2b11440f4176bbd3815d7d37316efc",
+      "transportCommit": "309d69cb48c2b30c70f5f767bdfd3954ac5ee546",
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 58.048,
+      "files": [
+        "test/topology/cdc-group-propagation-wave-lifecycle.test.js",
+        "test/partition/partition-cdc-lane-typed-backpressure.test.js",
+        "test/partition/partition-cdc-obligation-scan-recapture.test.js",
+        "test/message-group/message-group-cdc-receiver-admission.test.js"
+      ]
+    },
+    {
+      "dir": "land-mut-n6-adams-gamla",
+      "job": "da98524e-a816-492c-b786-fd233b78c6dd",
+      "host": "adams-gamla",
+      "commit": "5b954ef935691b7359f0e52b5171ef3f403f872c",
+      "tree": "c6748e9a88f1b78fa538e3f455fba750f456b29c",
+      "transportCommit": "92b5f6bac405f53af52f8efa25757a0698d2f2aa",
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 57.981,
+      "files": [
+        "test/topology/cdc-group-propagation-wave-lifecycle.test.js",
+        "test/partition/partition-cdc-lane-typed-backpressure.test.js",
+        "test/partition/partition-cdc-obligation-scan-recapture.test.js",
+        "test/message-group/message-group-cdc-receiver-admission.test.js"
+      ]
+    },
+    {
+      "dir": "land-mut-v01-adams-gamla",
+      "job": "96c263e0-5fda-420b-9848-ab4bae13e365",
+      "host": "adams-gamla",
+      "commit": "5b954ef935691b7359f0e52b5171ef3f403f872c",
+      "tree": "6d5a6142e6ea86a633db6aee9e8cebe100dc43e9",
+      "transportCommit": "d5c732d5a22d7abd45b8dd6ef60f95fe0141f74c",
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 58.462,
+      "files": [
+        "test/topology/cdc-group-propagation-wave-lifecycle.test.js",
+        "test/partition/partition-cdc-lane-typed-backpressure.test.js",
+        "test/partition/partition-cdc-obligation-scan-recapture.test.js",
+        "test/message-group/message-group-cdc-receiver-admission.test.js"
+      ]
+    },
+    {
+      "dir": "land-mut-v02-adams-gamla",
+      "job": "4eb06977-74d0-4aea-a3a9-98df340f8999",
+      "host": "adams-gamla",
+      "commit": "5b954ef935691b7359f0e52b5171ef3f403f872c",
+      "tree": "b4b543790743a26c669d3f76c1886a8523ad7646",
+      "transportCommit": "3a7b2aaeefce450b397b0607689df849694c5eb0",
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 59.254,
+      "files": [
+        "test/topology/cdc-group-propagation-wave-lifecycle.test.js",
+        "test/partition/partition-cdc-lane-typed-backpressure.test.js",
+        "test/partition/partition-cdc-obligation-scan-recapture.test.js",
+        "test/message-group/message-group-cdc-receiver-admission.test.js"
+      ]
+    },
+    {
+      "dir": "land-mut-v03-adams-gamla",
+      "job": "f9d11b5c-149e-42ea-8ad3-f23627916c6c",
+      "host": "adams-gamla",
+      "commit": "5b954ef935691b7359f0e52b5171ef3f403f872c",
+      "tree": "2ecd450a8690a65b7c2293551316b187f7f48156",
+      "transportCommit": "83d63d3cde07f45f5fd03c955cc6f4882d80027e",
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 58.009,
+      "files": [
+        "test/topology/cdc-group-propagation-wave-lifecycle.test.js",
+        "test/partition/partition-cdc-lane-typed-backpressure.test.js",
+        "test/partition/partition-cdc-obligation-scan-recapture.test.js",
+        "test/message-group/message-group-cdc-receiver-admission.test.js"
+      ]
+    },
+    {
+      "dir": "land-mut-v04-adams-gamla",
+      "job": "7b6ca562-f680-4baf-b7c0-5b297283af98",
+      "host": "adams-gamla",
+      "commit": "5b954ef935691b7359f0e52b5171ef3f403f872c",
+      "tree": "20e39fb60214ccd16806c3129fe1596f6811fe1e",
+      "transportCommit": "e5a13931f8f25d20527080044bf04c573dfc6843",
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 58.194,
+      "files": [
+        "test/topology/cdc-group-propagation-wave-lifecycle.test.js",
+        "test/partition/partition-cdc-lane-typed-backpressure.test.js",
+        "test/partition/partition-cdc-obligation-scan-recapture.test.js",
+        "test/message-group/message-group-cdc-receiver-admission.test.js"
+      ]
+    },
+    {
+      "dir": "land-mut-v05-adams-gamla",
+      "job": "7c160b9e-04c2-43a7-a89e-b87da84103fc",
+      "host": "adams-gamla",
+      "commit": "5b954ef935691b7359f0e52b5171ef3f403f872c",
+      "tree": "388b5b9202b68d6dd79ca4f373eb821ed93f623d",
+      "transportCommit": "bccfde51d793e02c2048253a2d9c99b4d8e030cd",
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 59.038,
+      "files": [
+        "test/topology/cdc-group-propagation-wave-lifecycle.test.js",
+        "test/partition/partition-cdc-lane-typed-backpressure.test.js",
+        "test/partition/partition-cdc-obligation-scan-recapture.test.js",
+        "test/message-group/message-group-cdc-receiver-admission.test.js"
+      ]
+    },
+    {
+      "dir": "land-mut-v06-adams-gamla",
+      "job": "1425c08a-fde0-4eb6-b1bd-5d530ab33c23",
+      "host": "adams-gamla",
+      "commit": "5b954ef935691b7359f0e52b5171ef3f403f872c",
+      "tree": "9c852dd46f0add376a1322403b73b78e9d146c7e",
+      "transportCommit": "d7c27a0571c52f88be51d915180814c9f08db163",
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 58.358,
+      "files": [
+        "test/topology/cdc-group-propagation-wave-lifecycle.test.js",
+        "test/partition/partition-cdc-lane-typed-backpressure.test.js",
+        "test/partition/partition-cdc-obligation-scan-recapture.test.js",
+        "test/message-group/message-group-cdc-receiver-admission.test.js"
+      ]
+    },
+    {
+      "dir": "land-mut-v07-adams-gamla",
+      "job": "ff98900a-75d8-4ae1-b572-97666ddb0397",
+      "host": "adams-gamla",
+      "commit": "5b954ef935691b7359f0e52b5171ef3f403f872c",
+      "tree": "f1b59eaf92cb1d03b67f762b938a071f34b23acb",
+      "transportCommit": "1cadb369206f64cbff950f9e8e07ceba0a1f03ca",
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 58.791,
+      "files": [
+        "test/topology/cdc-group-propagation-wave-lifecycle.test.js",
+        "test/partition/partition-cdc-lane-typed-backpressure.test.js",
+        "test/partition/partition-cdc-obligation-scan-recapture.test.js",
+        "test/message-group/message-group-cdc-receiver-admission.test.js"
+      ]
+    },
+    {
+      "dir": "land-mut-v08-adams-gamla",
+      "job": "b7d5a570-d24c-4c33-8bc0-b62af84eba58",
+      "host": "adams-gamla",
+      "commit": "5b954ef935691b7359f0e52b5171ef3f403f872c",
+      "tree": "5c1f0230a0bd7be6820d3989250a712e3c4be000",
+      "transportCommit": "2e1e7fa858ffc82362dda232bd04c86b5c3e85ca",
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 58.681,
+      "files": [
+        "test/topology/cdc-group-propagation-wave-lifecycle.test.js",
+        "test/partition/partition-cdc-lane-typed-backpressure.test.js",
+        "test/partition/partition-cdc-obligation-scan-recapture.test.js",
+        "test/message-group/message-group-cdc-receiver-admission.test.js"
+      ]
+    },
+    {
+      "dir": "land-mut-v09-adams-gamla",
+      "job": "25b42626-3419-4bad-bbf7-81a99ec2d44a",
+      "host": "adams-gamla",
+      "commit": "5b954ef935691b7359f0e52b5171ef3f403f872c",
+      "tree": "9fab588b3f984e9de28d3820b8c0cc71ea9c7dfc",
+      "transportCommit": "1ea84cb6c70100a9d6315be5d2a8bfb10b3f5abe",
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 58.028,
+      "files": [
+        "test/topology/cdc-group-propagation-wave-lifecycle.test.js",
+        "test/partition/partition-cdc-lane-typed-backpressure.test.js",
+        "test/partition/partition-cdc-obligation-scan-recapture.test.js",
+        "test/message-group/message-group-cdc-receiver-admission.test.js"
+      ]
+    },
+    {
+      "dir": "land-mut-v10-adams-gamla",
+      "job": "a5cfc57a-c5a2-4831-aca7-43ba8609a02d",
+      "host": "adams-gamla",
+      "commit": "5b954ef935691b7359f0e52b5171ef3f403f872c",
+      "tree": "6df486478bb23bfc9bae50f2ee1a18c3a899c322",
+      "transportCommit": "e69c443cd949daf06a159e7887906b48b0b5cdc3",
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 58.428,
+      "files": [
+        "test/topology/cdc-group-propagation-wave-lifecycle.test.js",
+        "test/partition/partition-cdc-lane-typed-backpressure.test.js",
+        "test/partition/partition-cdc-obligation-scan-recapture.test.js",
+        "test/message-group/message-group-cdc-receiver-admission.test.js"
+      ]
+    },
+    {
+      "dir": "land-mut2-n2-adams-gamla",
+      "job": "34f7bf68-bad0-40bc-94cf-a6957d89af02",
+      "host": "adams-gamla",
+      "commit": "5b954ef935691b7359f0e52b5171ef3f403f872c",
+      "tree": "b53c6472821aaa1907ca29a629a128ffab736ac2",
+      "transportCommit": "4996a178bf748266ea37564a9acdef7c90c7a714",
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 58.287,
+      "files": [
+        "test/topology/cdc-group-propagation-wave-lifecycle.test.js",
+        "test/partition/partition-cdc-lane-typed-backpressure.test.js",
+        "test/partition/partition-cdc-obligation-scan-recapture.test.js",
+        "test/message-group/message-group-cdc-receiver-admission.test.js"
+      ]
+    },
+    {
+      "dir": "land-mut2-n4-adams-gamla",
+      "job": "37315fb3-f5b7-4600-b2e9-19297a1b0bb2",
+      "host": "adams-gamla",
+      "commit": "5b954ef935691b7359f0e52b5171ef3f403f872c",
+      "tree": "d0cce734585373911e736d71957df925caa236bc",
+      "transportCommit": "eb31049f28696bc4e50e75f05474c7632e4351f0",
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 58.185,
+      "files": [
+        "test/topology/cdc-group-propagation-wave-lifecycle.test.js",
+        "test/partition/partition-cdc-lane-typed-backpressure.test.js",
+        "test/partition/partition-cdc-obligation-scan-recapture.test.js",
+        "test/message-group/message-group-cdc-receiver-admission.test.js"
+      ]
+    },
+    {
+      "dir": "land-mut2-n5-adams-gamla",
+      "job": "981bbcad-08a0-4a1d-8f4a-226504afc6ad",
+      "host": "adams-gamla",
+      "commit": "5b954ef935691b7359f0e52b5171ef3f403f872c",
+      "tree": "5c8059bb90cc2e2c39e60620d428ad8814b027cc",
+      "transportCommit": "056a5e4c137a47972cde5a04436398f734096f36",
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 58.028,
+      "files": [
+        "test/topology/cdc-group-propagation-wave-lifecycle.test.js",
+        "test/partition/partition-cdc-lane-typed-backpressure.test.js",
+        "test/partition/partition-cdc-obligation-scan-recapture.test.js",
+        "test/message-group/message-group-cdc-receiver-admission.test.js"
+      ]
+    },
+    {
+      "dir": "land-mut2-n6-adams-gamla",
+      "job": "4f147299-a6a1-4ea6-a071-9d574dcb6cf6",
+      "host": "adams-gamla",
+      "commit": "5b954ef935691b7359f0e52b5171ef3f403f872c",
+      "tree": "ce8bd5a17f93c1ee7bf857a9bbe9e24c28740e33",
+      "transportCommit": "b8e679db7b7465625a46a0e4ccee11ec52283b7d",
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 59.795,
+      "files": [
+        "test/topology/cdc-group-propagation-wave-lifecycle.test.js",
+        "test/partition/partition-cdc-lane-typed-backpressure.test.js",
+        "test/partition/partition-cdc-obligation-scan-recapture.test.js",
+        "test/message-group/message-group-cdc-receiver-admission.test.js"
+      ]
+    },
+    {
+      "dir": "land-mut2-n7-tv-dator",
+      "job": "2285fefd-4b45-4f22-8599-deafa3c54dd6",
+      "host": "tv-dator",
+      "commit": "5b954ef935691b7359f0e52b5171ef3f403f872c",
+      "tree": "a60b4c2820b742c23ee6fe24bfc2b223d848fa7e",
+      "transportCommit": "d0f03a57b9bc0a8b0cbb691e7f74c07a855987c1",
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 32.171,
+      "files": [
+        "test/topology/cdc-group-propagation-wave-lifecycle.test.js",
+        "test/partition/partition-cdc-lane-typed-backpressure.test.js",
+        "test/partition/partition-cdc-obligation-scan-recapture.test.js",
+        "test/message-group/message-group-cdc-receiver-admission.test.js"
+      ]
+    },
+    {
+      "dir": "land-mut2-n8-tv-dator",
+      "job": "82f09583-4eb9-441d-a4c0-1831f1a44f4d",
+      "host": "tv-dator",
+      "commit": "5b954ef935691b7359f0e52b5171ef3f403f872c",
+      "tree": "6905ad88e4a3600c3e79c37d0a12b9b081505e7d",
+      "transportCommit": "b300e5709b0560585cbc9f7b116330fb3fbfc5f4",
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 38.554,
+      "files": [
+        "test/partition/partition-cdc-obligation-ship-window.test.js",
+        "test/partition/partition-cdc-obligation-range-shipping.test.js",
+        "test/partition/partition-cdc-obligation-scan-recapture.test.js",
+        "test/partition/partition-cdc-lane-typed-backpressure.test.js"
+      ]
+    },
+    {
+      "dir": "land-mut2-v10-adams-gamla",
+      "job": "2cf8bca2-76f9-496b-aad8-07b1744809ca",
+      "host": "adams-gamla",
+      "commit": "5b954ef935691b7359f0e52b5171ef3f403f872c",
+      "tree": "6cf0bd799761ccf060abd52c08fce8f7e61a593e",
+      "transportCommit": "5b43622151d4a67156b6d3c939a36446a065dea4",
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 58.525,
+      "files": [
+        "test/topology/cdc-group-propagation-wave-lifecycle.test.js",
+        "test/partition/partition-cdc-lane-typed-backpressure.test.js",
+        "test/partition/partition-cdc-obligation-scan-recapture.test.js",
+        "test/message-group/message-group-cdc-receiver-admission.test.js"
+      ]
+    },
+    {
+      "dir": "land-mut3-control-adams-gamla",
+      "job": "c210e6f4-c0fe-4ceb-b8a1-7e16b80a503d",
+      "host": "adams-gamla",
+      "commit": "5b954ef935691b7359f0e52b5171ef3f403f872c",
+      "tree": "2845319bce6de32c37e65ab083418ad399d716c3",
+      "transportCommit": "ef5dab8ea070fedbd61824dce808d6eb419fcaf4",
+      "state": "COMPLETE",
+      "exitCode": 0,
+      "elapsedSeconds": 82.249,
+      "files": [
+        "test/partition/partition-cdc-obligation-ship-window.test.js",
+        "test/partition/partition-cdc-obligation-provisional-tail-order.test.js",
+        "test/partition/partition-cdc-lane-typed-backpressure.test.js",
+        "test/partition/partition-cdc-obligation-range-shipping.test.js",
+        "test/topology/cdc-group-propagation-wave-lifecycle.test.js",
+        "test/message-group/message-group-cdc-receiver-admission.test.js"
+      ]
+    },
+    {
+      "dir": "land-mut3-n5-adams-gamla",
+      "job": "a0fe3686-f858-4621-8649-0f25845b31fe",
+      "host": "adams-gamla",
+      "commit": "5b954ef935691b7359f0e52b5171ef3f403f872c",
+      "tree": "e2e25d2fa3083a95e74b4a38f355c1fe495262fe",
+      "transportCommit": "f13f9ae96e909255fee7777182a8813afff0e214",
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 58.241,
+      "files": [
+        "test/topology/cdc-group-propagation-wave-lifecycle.test.js",
+        "test/partition/partition-cdc-lane-typed-backpressure.test.js",
+        "test/partition/partition-cdc-obligation-provisional-tail-order.test.js",
+        "test/message-group/message-group-cdc-receiver-admission.test.js"
+      ]
+    },
+    {
+      "dir": "land-mut3-n6-adams-gamla",
+      "job": "8b160e2a-a57f-4a11-852a-b71f6a45528c",
+      "host": "adams-gamla",
+      "commit": "5b954ef935691b7359f0e52b5171ef3f403f872c",
+      "tree": "0735e86bd255debaa24302a67914e52101e02f91",
+      "transportCommit": "bda5ef4b72d061a43390eae44c4af58bf722a10e",
+      "state": null,
+      "exitCode": null,
+      "elapsedSeconds": null,
+      "files": [
+        "test/topology/cdc-group-propagation-wave-lifecycle.test.js",
+        "test/partition/partition-cdc-lane-typed-backpressure.test.js",
+        "test/partition/partition-cdc-obligation-provisional-tail-order.test.js",
+        "test/message-group/message-group-cdc-receiver-admission.test.js"
+      ]
+    },
+    {
+      "dir": "land-mut3-n6-tv-dator",
+      "job": "adfd5025-7dee-40d1-adcc-cad048e0677e",
+      "host": "tv-dator",
+      "commit": "5b954ef935691b7359f0e52b5171ef3f403f872c",
+      "tree": "0735e86bd255debaa24302a67914e52101e02f91",
+      "transportCommit": "bda5ef4b72d061a43390eae44c4af58bf722a10e",
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 37.369,
+      "files": [
+        "test/topology/cdc-group-propagation-wave-lifecycle.test.js",
+        "test/partition/partition-cdc-lane-typed-backpressure.test.js",
+        "test/partition/partition-cdc-obligation-provisional-tail-order.test.js",
+        "test/message-group/message-group-cdc-receiver-admission.test.js"
+      ]
+    },
+    {
+      "dir": "land-mut3-t1-adams-gamla",
+      "job": "e215a5a5-021f-4986-b1dd-475dea902e6f",
+      "host": "adams-gamla",
+      "commit": "5b954ef935691b7359f0e52b5171ef3f403f872c",
+      "tree": "c7f77fdda335cd09961e6998bc7b4f7ffe5f2df7",
+      "transportCommit": "de4b30531b67b7bd32a95cd9988c03f13571b748",
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 70.413,
+      "files": [
+        "test/partition/partition-cdc-obligation-ship-window.test.js",
+        "test/partition/partition-cdc-obligation-provisional-tail-order.test.js",
+        "test/partition/partition-cdc-lane-typed-backpressure.test.js",
+        "test/partition/partition-cdc-obligation-range-shipping.test.js"
+      ]
+    },
+    {
+      "dir": "land-mut3-t2-adams-gamla",
+      "job": "73c29870-f6c2-4a32-85ed-9875309f2148",
+      "host": "adams-gamla",
+      "commit": "5b954ef935691b7359f0e52b5171ef3f403f872c",
+      "tree": "c7d39d0cca633805855abd6cc2c7269348afe529",
+      "transportCommit": "f3be525520ba37c2fd2fab5bc385b4561769745a",
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 69.894,
+      "files": [
+        "test/partition/partition-cdc-obligation-ship-window.test.js",
+        "test/partition/partition-cdc-obligation-provisional-tail-order.test.js",
+        "test/partition/partition-cdc-lane-typed-backpressure.test.js",
+        "test/partition/partition-cdc-obligation-range-shipping.test.js"
+      ]
+    },
+    {
+      "dir": "land-mut3-t3-adams-gamla",
+      "job": "d41fd956-183a-4a6b-90e4-9b2c8c0d329e",
+      "host": "adams-gamla",
+      "commit": "5b954ef935691b7359f0e52b5171ef3f403f872c",
+      "tree": "747fe6be0196ba8bf850fe06dc3cae9aa23d5351",
+      "transportCommit": "8de1198824d6e6fc98e90195ceb37628f03cd0a3",
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 69.86,
+      "files": [
+        "test/partition/partition-cdc-obligation-ship-window.test.js",
+        "test/partition/partition-cdc-obligation-provisional-tail-order.test.js",
+        "test/partition/partition-cdc-lane-typed-backpressure.test.js",
+        "test/partition/partition-cdc-obligation-range-shipping.test.js"
+      ]
+    },
+    {
+      "dir": "land-mut3-v01-adams-gamla",
+      "job": "14502ef7-1055-4d3c-8b5a-55fd95c008d7",
+      "host": "adams-gamla",
+      "commit": "5b954ef935691b7359f0e52b5171ef3f403f872c",
+      "tree": "e30ec79ebe5d475d9a8dbd0747580e04ac379fb2",
+      "transportCommit": "0a2a0e8063690f98e67ec3113bb045be62ebd208",
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 57.724,
+      "files": [
+        "test/topology/cdc-group-propagation-wave-lifecycle.test.js",
+        "test/partition/partition-cdc-lane-typed-backpressure.test.js",
+        "test/partition/partition-cdc-obligation-provisional-tail-order.test.js",
+        "test/message-group/message-group-cdc-receiver-admission.test.js"
+      ]
+    },
+    {
+      "dir": "land-mut3-v02-adams-gamla",
+      "job": "2aff5930-0963-4ac9-b32f-2d79e632e5d5",
+      "host": "adams-gamla",
+      "commit": "5b954ef935691b7359f0e52b5171ef3f403f872c",
+      "tree": "dbf4d5c3ab0982ccf5ce6f4f37707b2123b0df8c",
+      "transportCommit": "3c1721ee43c0f4191e46a0b08b9744ed2e598e4f",
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 58.168,
+      "files": [
+        "test/topology/cdc-group-propagation-wave-lifecycle.test.js",
+        "test/partition/partition-cdc-lane-typed-backpressure.test.js",
+        "test/partition/partition-cdc-obligation-provisional-tail-order.test.js",
+        "test/message-group/message-group-cdc-receiver-admission.test.js"
+      ]
+    },
+    {
+      "dir": "mutant-m01-admission-reserialised",
+      "job": "1f192e7c-e28a-44ae-ba98-d680a3f0089f",
+      "host": "tv-dator",
+      "commit": "15f216b934be878445cacc934ee05be9349990d7",
+      "tree": null,
+      "transportCommit": null,
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 21.283,
+      "files": [
+        "test/topology/cdc-group-propagation-wave-isolation.test.js",
+        "test/partition/partition-cdc-lane-wave-isolation.test.js"
+      ]
+    },
+    {
+      "dir": "mutant-m02-not-added-to-set",
+      "job": "f18f8f9b-2898-46f4-98b1-fb1fa5aa7284",
+      "host": "tv-dator",
+      "commit": "60d5ef3745a7e659b6e261e7a36cc04421c8c16c",
+      "tree": null,
+      "transportCommit": null,
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 19.365,
+      "files": [
+        "test/topology/cdc-group-propagation-wave-lifecycle.test.js",
+        "test/topology/cdc-group-propagation-wave-isolation.test.js"
+      ]
+    },
+    {
+      "dir": "mutant-m03-not-removed-on-cleanup",
+      "job": "24a7d173-781d-4c1c-ad5d-d30ef94089ff",
+      "host": "tv-dator",
+      "commit": "afa567abd3f7508d61349a89d9d34bcedf7a5a45",
+      "tree": null,
+      "transportCommit": null,
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 18.416,
+      "files": [
+        "test/topology/cdc-group-propagation-wave-lifecycle.test.js"
+      ]
+    },
+    {
+      "dir": "mutant-m04-stop-retires-one",
+      "job": "4f7e986f-1e70-4765-bde1-58ea5b0c0458",
+      "host": "tv-dator",
+      "commit": "122b4c8a2af3cb5c561bf7ea4ce5043ef7d83996",
+      "tree": null,
+      "transportCommit": null,
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 19.076,
+      "files": [
+        "test/topology/cdc-group-propagation-wave-lifecycle.test.js",
+        "test/topology/cdc-group-propagation-wave-isolation.test.js"
+      ]
+    },
+    {
+      "dir": "mutant-m05-initialize-not-retiring",
+      "job": "a51f2ad1-74e5-4837-b216-d92d3d90ca0c",
+      "host": "tv-dator",
+      "commit": "19d74769191481e798a29b45bb7bf08fdc97e401",
+      "tree": null,
+      "transportCommit": null,
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 18.035,
+      "files": [
+        "test/topology/cdc-group-propagation-wave-lifecycle.test.js"
+      ]
+    },
+    {
+      "dir": "mutant-m06-backpressure-dropped",
+      "job": "c089b292-0a09-45e0-8528-df44c53faf94",
+      "host": "tv-dator",
+      "commit": "0cbe67294d34cf9392b2e6bf731f33a51c973335",
+      "tree": null,
+      "transportCommit": null,
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 21.842,
+      "files": [
+        "test/topology/cdc-group-propagation-wave-lifecycle.test.js",
+        "test/partition/partition-cdc-lane-typed-backpressure.test.js"
+      ]
+    },
+    {
+      "dir": "mutant-m07-failure-relabelled",
+      "job": "3016e1e3-ae16-43b9-b9c1-0535bea519ca",
+      "host": "tv-dator",
+      "commit": "321f58f24822617a8466e40d2a18c625aa254b7a",
+      "tree": null,
+      "transportCommit": null,
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 22.002,
+      "files": [
+        "test/topology/cdc-group-propagation-wave-lifecycle.test.js",
+        "test/partition/partition-cdc-lane-typed-backpressure.test.js"
+      ]
+    },
+    {
+      "dir": "mutant-m08-hint-not-smallest",
+      "job": "900b51fe-2af7-4a0b-bdae-7508659c2763",
+      "host": "tv-dator",
+      "commit": "80e8807b795dc6be89d97cf4acae58ae92ba3b1e",
+      "tree": null,
+      "transportCommit": null,
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 21.669,
+      "files": [
+        "test/topology/cdc-group-propagation-wave-lifecycle.test.js",
+        "test/partition/partition-cdc-lane-typed-backpressure.test.js"
+      ]
+    },
+    {
+      "dir": "mutant-m09-tail-not-recaptured",
+      "job": "10b1873c-1716-4668-9131-a83dc22fb417",
+      "host": "tv-dator",
+      "commit": "d52ed744702ee9b267a229d3a7372522dc5df1da",
+      "tree": null,
+      "transportCommit": null,
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 24.083,
+      "files": [
+        "test/partition/partition-cdc-obligation-scan-recapture.test.js",
+        "test/partition/partition-cdc-lane-typed-backpressure.test.js"
+      ]
+    },
+    {
+      "dir": "mutant-m10-recaptured-despite-coverage",
+      "job": "f2d10668-8083-4a3b-8564-2b9edb0613c4",
+      "host": "tv-dator",
+      "commit": "fd0866407bc794872eb21b88dc8a5ccd605e998b",
+      "tree": null,
+      "transportCommit": null,
+      "state": "COMPLETE",
+      "exitCode": 0,
+      "elapsedSeconds": 24.22,
+      "files": [
+        "test/partition/partition-cdc-lane-typed-backpressure.test.js",
+        "test/partition/partition-cdc-obligation-scan-recapture.test.js"
+      ]
+    },
+    {
+      "dir": "mutant-m11-equal-mode-transition",
+      "job": "9036ddfc-7f85-4c56-9f4b-e38e1f28de31",
+      "host": "tv-dator",
+      "commit": "54d0f9e0bf0705d9f4b5983b0d08f0c842f65375",
+      "tree": null,
+      "transportCommit": null,
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 18.305,
+      "files": [
+        "test/topology/cdc-group-propagation-wave-lifecycle.test.js"
+      ]
+    },
+    {
+      "dir": "mutant-m12-spent-report-persisted",
+      "job": "c536d21f-ffdb-40bd-8528-fdf340418cb3",
+      "host": "tv-dator",
+      "commit": "cafa5015bec8736e039154430eccde8273819ff0",
+      "tree": null,
+      "transportCommit": null,
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 18.132,
+      "files": [
+        "test/topology/cdc-group-propagation-wave-lifecycle.test.js"
+      ]
+    },
+    {
+      "dir": "mutant-m13-removed-symbol-reachable",
+      "job": "adbf2858-b62f-4a48-9538-dbead88ee475",
+      "host": "tv-dator",
+      "commit": "8364b0e9fdb198489c8e31b843e3062e7b981bbd",
+      "tree": null,
+      "transportCommit": null,
+      "state": "FAILED",
+      "exitCode": 1,
+      "elapsedSeconds": 17.441,
+      "files": [
+        "test/topology/cdc-propagation-slot-removed-census.test.js"
+      ]
+    }
+  ]
+}

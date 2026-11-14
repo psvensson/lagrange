@@ -1,0 +1,19 @@
+{
+ "job": "d7bc0b01-7b56-4509-8cc4-f56a0ea2640b",
+ "terminal": {
+  "docker_create_attempted": false,
+  "elapsed_s": 267.37,
+  "execution_scope_closed": true,
+  "exit_code": 0,
+  "generation": "f47f6573-7ed5-4393-99fb-e940c3114bcc",
+  "host": "tv-dator",
+  "intentDigest": "4b2eaab3a377473c98a7bb58bfe8fab0f6b4cd21ea52523a6abf166b5465ac81",
+  "job_id": "d7bc0b01-7b56-4509-8cc4-f56a0ea2640b",
+  "reason": null,
+  "source_execution_started": false,
+  "state": "COMPLETE",
+  "unit": "lagrange-lab3-f47f65737ed5439399fbe940c3114bcc-d7bc0b017b5645098cc4f56a0ea2640b.service",
+  "workload_started": true
+ },
+ "evidence_problems": []
+}

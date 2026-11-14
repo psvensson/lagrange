@@ -1,7 +1,8 @@
 /**
  * Stop-lifecycle methods for CDCGroupPropagationService: the one guard every
  * arm site and post-attempt path checks, the one timer primitive that refuses
- * once stopped, and the held retry delay that stop() ends.
+ * once stopped, the held retry delay that stop() ends, and the retirement of
+ * every durable wave in flight.
  */
 
 import {CDC_GROUP_PROPAGATION_STATE} from './cdc-group-propagation-constants.js';
@@ -13,6 +14,22 @@ class CDCGroupPropagationLifecycleMethods {
    */
   isPropagationStopped() {
     return this.state === CDC_GROUP_PROPAGATION_STATE.STOPPED;
+  }
+  /**
+   * Retire every durable wave in flight (stop, initialize, a new lifetime):
+   * each wave's invocation is retired at once, so it starts no further leaf
+   * and its answer defers to the source owner, and every held retry delay
+   * ends and clears its timer. A wave leaves the set only at its actual local
+   * cleanup, when every child it started has settled.
+   * @private
+   */
+  retireInFlightDurableWaves() {
+    for (const wave of [...this.inFlightDurableWaves]) {
+      wave.context.retire();
+    }
+    for (const releaseSleep of [...this.retrySleepReleases]) {
+      releaseSleep();
+    }
   }
   /**
    * The owner's one timer primitive: every retry delay arms through it, and

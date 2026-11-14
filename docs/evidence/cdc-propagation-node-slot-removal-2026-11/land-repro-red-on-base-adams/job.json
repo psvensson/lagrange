@@ -1,0 +1,22 @@
+{
+ "kind": "tests",
+ "host": "adams-gamla",
+ "commit": "5b954ef935691b7359f0e52b5171ef3f403f872c",
+ "tree": "6e5eb3bad376d9f60d7279940aadfc466339cdf7",
+ "worktreePaths": [
+  "test/partition/partition-cdc-lane-wave-isolation.test.js",
+  "test/partition/partition-cdc-obligation-scan-recapture.test.js",
+  "test/test-helpers/cdc-topology-progress-fixture.js",
+  "test/test-helpers/participant-transaction-fixture.js",
+  "test/topology/cdc-group-propagation-service-harness.js",
+  "test/topology/cdc-group-propagation-wave-isolation.test.js"
+ ],
+ "transportCommit": "8af2439df62277fa7786fcd43a9ac4ed2a0ec836",
+ "base": "9c576f3a06be3bf117623f038f43e6b36b5b33a5",
+ "files": [
+  "test/topology/cdc-group-propagation-wave-isolation.test.js",
+  "test/partition/partition-cdc-lane-wave-isolation.test.js",
+  "test/partition/partition-cdc-obligation-scan-recapture.test.js"
+ ],
+ "requestId": "d3f0c692-2326-46e1-8a0a-371d97db8b43"
+}
