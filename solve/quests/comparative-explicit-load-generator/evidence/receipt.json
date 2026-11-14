@@ -42,7 +42,7 @@
       "id": "candidate-selection-and-refusal",
       "measured": true,
       "passed": true,
-      "detail": "Candidate 35fc8fc3 on carinas-windows: lab-hosts 19/19 (13 existing + original controls 14/15 + 4 new selection controls), lab-default 8/8 (4 existing D25 + 4 new CLI controls: dry-run binding and refusals, empty name, real-campaign forwarding, GCP rejection), campaign 21/21 and native-thermal-client 8/8 green. Control job 4809bcf0 on adam-laptop ran the same two candidate test files against the unchanged selection owner and CLI (unbranched commit 39d76c1b = 35fc8fc3 with run-comparative-benchmarks.mjs and comparative-benchmark-lab-hosts.js from 5a387e9b): every existing case passed and all 10 explicit-load-generator cases (lab-hosts 14-19, lab-default 5-8) failed. Superseded attempt 8e5e48fc on 4fee8426 FAILED 1: lab-default case 7 stderr pattern was wrong (behavior correct), fixed in 35fc8fc3.",
+      "detail": "Candidate 35fc8fc3 on carinas-windows: lab-hosts 19/19 (13 existing + original controls 14/15 + 4 new selection controls), lab-default 8/8 (4 existing D25 + 4 new CLI controls: dry-run binding and refusals, empty name, real-campaign forwarding, GCP rejection), campaign 21/21 and native-thermal-client 8/8 green. Control job 4809bcf0 on adam-laptop ran the same two candidate test files against the unchanged selection owner and CLI (unbranched commit 39d76c1b = 35fc8fc3 with run-comparative-benchmarks.mjs and comparative-benchmark-lab-hosts.js from 5a387e9b): every existing case passed and all 10 explicit-load-generator cases (lab-hosts 14-19, lab-default 5-8) failed. Superseded attempt 8e5e48fc on 4fee8426 FAILED 1: lab-default case 7 stderr pattern was wrong (behavior correct), fixed in 35fc8fc3. Corrective round after the independent rejection: candidate 43194b0f4 adds the option-like-value and repeated-flag CLI cases (lab-default 10/10); writer job 8fdfaeef and verifier job c25c44a0 on carinas-windows both green at that exact commit (4 files, 58 tests). The digests and source of this record are those of 43194b0f4.",
       "source": {
         "sha": "35fc8fc32d67a262574ffe2f07bedd13fe5cc55e",
         "tree": "63011f3439ddb9cd27843f7899060836f31f9cf9"
@@ -126,12 +126,12 @@
     }
   ],
   "source": {
-    "sha": "35fc8fc32d67a262574ffe2f07bedd13fe5cc55e",
-    "tree": "63011f3439ddb9cd27843f7899060836f31f9cf9"
+    "sha": "43194b0f4bdd2c3e854fdb465d8b68a8572faa52",
+    "tree": "8f56fff942c054916c742b9d45ddea30b41d57e3"
   },
   "testFileDigests": {
     "test/distributed/harness/__tests__/comparative-benchmark-runner-lab-hosts.test.js": "4370cbebc91c03ca45c22fd3f3ce3990f3cfe8d4bf26e6a1465de151ffb110d7",
-    "test/distributed/harness/__tests__/comparative-benchmark-runner-lab-default.test.js": "d337ff392103570c3154ef988859648fc3066a0fc003d83581a7eb01796e55ff"
+    "test/distributed/harness/__tests__/comparative-benchmark-runner-lab-default.test.js": "e6063e83e158cbb5ebd5b91e97d6bb5d510b18694c1f9653cc823a99883b29c2"
   },
-  "evidenceCeiling": "Component selector and CLI proof on fixture inventories only. canonical-cli-role-binding (a fresh canonical dry-run with --load-generator adam-laptop against the real lab) and independent-verification are not measured; status stays fail. No campaign, deployment, performance, formation or release acceptance. The original receipt keeps its own source, measurement and digests (record original-7f7d6c7c.json)."
+  "evidenceCeiling": "Component selector and CLI proof on fixture inventories only. canonical-cli-role-binding (a fresh canonical dry-run with --load-generator adam-laptop against the real lab) is not measured; status stays fail. No campaign, deployment, performance, formation or release acceptance. The original receipt keeps its own source, measurement and digests (record original-7f7d6c7c.json)."
 }
