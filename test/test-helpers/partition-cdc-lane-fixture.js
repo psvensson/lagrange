@@ -45,13 +45,18 @@ function recipientAnswer(event, groupId, committed) {
     buildProvisionalCdcOutcome([event], RETRY_AFTER_MS, groupId);
 }
 
-function addSourceRow(leader, id) {
-  const command = committedQueryOf(`progress-${id}`,
-    `INSERT INTO ${TABLE} (id, value) VALUES (?, ?)`);
-  command.params = [id, PAYLOAD_SENTINEL];
-  command.timestamp = new HLCTimestamp(1000, 0, 'source-progress-component').toString();
+// One committed source statement through the real application owner.
+function commitSourceStatement(leader, {entryId, sql, params, wallMs = 1000}) {
+  const command = committedQueryOf(entryId, sql);
+  command.params = params;
+  command.timestamp = new HLCTimestamp(wallMs, 0, 'source-progress-component').toString();
   assert.equal(applyCommitted(leader, command), null,
     'the real application owner accepted the controlled committed QUERY');
+}
+
+function addSourceRow(leader, id, value = PAYLOAD_SENTINEL) {
+  commitSourceStatement(leader, {entryId: `progress-${id}`,
+    sql: `INSERT INTO ${TABLE} (id, value) VALUES (?, ?)`, params: [id, value]});
 }
 
 function addSubscriber(f, index) {
@@ -64,21 +69,22 @@ function addSubscriber(f, index) {
     resolveOperationalMessageGroupSelectionAsync: async () => selection(),
     buildMessageGroupOwnerNotReadyError: () => Object.assign(new Error('controlled readiness'),
       {retryAfterMs: RETRY_AFTER_MS}),
-    propagatePartitionCDCEvent: async (_selected, event, context) => {
+    propagatePartitionCDCEvent: async (_selected, delivered, context) => {
       assert.equal(f.leader.db.inTransaction, false,
         'no SQLite transaction spans the recipient await');
-      f.calls.push({index, id: event.data.id, eventKey: event.eventKey,
-        timestamp: event.timestamp, remainingMs: context.remainingMs()});
-      return f.behavior(index, event, context, service.groupId);
+      return f.propagate(index, delivered, context, service.groupId);
     },
-    afterPropagation: (event) => f.hooks.push({index, id: event.data.id}),
+    afterPropagation: (delivered) => f.afterPropagation(index, delivered),
   });
   f.subscribers.push(subscriber);
   return f.leader.subscribeToCDCWithHandshake(subscriber,
     {subscriberId: `progress-subscriber-${index}`});
 }
 
-async function fixture(t, {rows = ['A', 'B'], subscribers = 3} = {}) {
+// rows: source row ids inserted first; statements: further committed source
+// statements ({entryId, sql, params, wallMs}) applied after them, all before
+// the partition leads, so no recipient callback runs during setup.
+async function fixture(t, {rows = ['A', 'B'], subscribers = 3, statements = []} = {}) {
   const clock = delayedClock();
   // The source partition holds a CDC-carrying table (decision D2: only a
   // propagated table records an obligation).
@@ -87,14 +93,24 @@ async function fixture(t, {rows = ['A', 'B'], subscribers = 3} = {}) {
   leader.controllablePort.setRole(RAFT_ROLE.FOLLOWER);
   const f = {clock, leader, proposed, ready: false, calls: [], hooks: [], subscribers: [],
     behavior: (_index, event, _context, groupId) => recipientAnswer(event, groupId, false),
+    // The recipient seam: what the propagation subscriber hands its
+    // propagatePartitionCDCEvent, and its completion hook.
+    propagate: (index, event, context, groupId) => {
+      f.calls.push({index, id: event.data.id, eventKey: event.eventKey,
+        timestamp: event.timestamp, remainingMs: context.remainingMs()});
+      return f.behavior(index, event, context, groupId);
+    },
+    afterPropagation: (index, event) => f.hooks.push({index, id: event.data.id}),
     acks: () => proposed.filter((command) => command.type === PARTITION_CDC_COMMAND.DELIVERED),
     drive: () => leader.cdcDelivery.driveCdcObligations(REASON.DELIVERY_RETRY),
   };
   for (let index = 0; index < subscribers; index += 1) await addSubscriber(f, index);
   for (const id of rows) addSourceRow(leader, id);
+  for (const statement of statements) commitSourceStatement(leader, statement);
   leader.controllablePort.setRole(RAFT_ROLE.LEADER);
   await settleTicks();
-  assert.deepEqual(countCdcObligations(leader.db), {owed: rows.length, delivered: 0});
+  assert.deepEqual(countCdcObligations(leader.db),
+    {owed: rows.length + statements.length, delivered: 0});
   assert.equal(f.calls.length, 0, 'readiness held all recipient callbacks during setup');
   f.ready = true;
   return f;
@@ -106,5 +122,5 @@ function assertOwedWithoutAck(f, owed) {
   assert.equal(f.leader.cdcDelivery.getCdcObligationDiagnostics().pendingAcknowledgements, 0);
 }
 
-export {PAYLOAD_SENTINEL, RETRY_AFTER_MS, addSourceRow, assertOwedWithoutAck, fixture,
-  recipientAnswer};
+export {PAYLOAD_SENTINEL, RETRY_AFTER_MS, TABLE, addSourceRow, assertOwedWithoutAck,
+  commitSourceStatement, fixture, recipientAnswer};

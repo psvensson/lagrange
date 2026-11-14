@@ -14,7 +14,8 @@ import {afterEach, test} from 'node:test';
 
 import {CDC_OPERATION, COLUMN, TABLES} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
-import {CDC_COMPLETION, unknownCdcAcceptance} from '../../src/cdc/cdc-delivery-outcome.js';
+import {CDC_COMPLETION, cdcCommitWaitIdentity, unknownCdcAcceptance} from
+  '../../src/cdc/cdc-delivery-outcome.js';
 import {
   beginCdcDeliveryInvocation,
   scopeCdcDeliveryInvocation,
@@ -38,7 +39,9 @@ import {CDCGroupPropagationService} from '../../src/topology/cdc-group-propagati
 import {
   committedTargetAnswer,
   createDurableCdcEvent,
+  createDurableCdcVector,
   createDurablePropagationRequest,
+  createDurableVectorPropagationRequest,
   createDurableSourceMessageGroupService,
   createGroupRow,
   createMessageGroupServiceRow,
@@ -151,6 +154,30 @@ test('grouped mode: the durable wave fans out to every group coordinator on the 
   assert.equal(f.service.getStats().groupedCount, 1);
   assert.equal(f.service.getPublicationModeDiagnostics().currentMode,
     CDC_GROUP_PUBLICATION_MODE.GROUPED);
+});
+
+// Reproducer R1-4 (quest cdc-obligation-range-shipping, design note 4.8): the
+// request carries the lane's range as one ordered vector; the wave applies it as
+// one source batch and one CDC_PROPAGATION_BATCH per target, never one wave per
+// event, and its committed answer binds the whole vector.
+test('R1-4 propagateCDCEvent({events}) of a five-event vector applies one source batch and ' +
+  'sends one CDC_PROPAGATION_BATCH per target, committed over the whole vector', async (t) => {
+  const f = compose(t, LATENCY_PROPAGATION_MODE.SAFE, {groups: ['g-1', 'g-2', 'g-3']});
+  const events = createDurableCdcVector(5);
+  const keys = events.map((event) => event.eventKey);
+  const result = await f.service.propagateCDCEvent(
+    createDurableVectorPropagationRequest(f.source, events));
+  assert.equal(result.success, true);
+  assert.equal(f.source.batches.length, 1, 'the source group applies the vector once');
+  assert.deepEqual(f.source.batches[0].map((event) => event.eventKey), keys);
+  assert.deepEqual(f.calls.map((call) => call.payload.targetGroupId).sort(), ['g-2', 'g-3'],
+    'one delivery per target group');
+  for (const call of f.calls) {
+    assert.equal(call.payload.type, LATENCY_TOPOLOGY_MESSAGE_TYPE.CDC_PROPAGATION_BATCH);
+    assert.deepEqual(call.payload.events.map((event) => event.eventKey), keys,
+      'the vector keeps its order and every occurrence');
+  }
+  assert.equal(result.cdcVectorDigest, cdcCommitWaitIdentity(events));
 });
 
 test('grouped mode: a missing coordinator address retains target-group debt ' +

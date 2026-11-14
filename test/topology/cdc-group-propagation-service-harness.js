@@ -8,6 +8,7 @@ import {
   TABLES,
 } from '../../src/constants/index.js';
 import {buildCommittedCdcOutcome} from '../../src/cdc/cdc-delivery-outcome.js';
+import {LATENCY_TOPOLOGY_MESSAGE_TYPE} from '../../src/topology/latency-topology-constants.js';
 import {beginCdcDeliveryInvocation} from '../../src/cdc/cdc-delivery-invocation.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
@@ -136,11 +137,32 @@ export function createDurablePropagationRequest(source, event = createDurableCdc
   return {...event, sourceMessageGroupService: source, deliveryContext};
 }
 
+// A dense vector of durable events of one source partition and one table, in
+// ascending source position, each its own occurrence: what a partition lane
+// ships as one range.
+export function createDurableCdcVector(count) {
+  return Array.from({length: count}, (_unused, index) => createDurableCdcEvent({
+    data: {[COLUMN.NODE_ID]: `node-v${index}`},
+    eventKey: `durable-event-v${index}`, sourceLogIndex: index + 1}));
+}
+
+// One durable range propagation request: the vector, its invocation, the source.
+export function createDurableVectorPropagationRequest(source, events,
+  deliveryContext = beginDurableCdcInvocation()) {
+  return {events, sourceMessageGroupService: source, deliveryContext};
+}
+
+// The events a target delivery carries, by its wire type.
+function deliveredEventsOf(payload) {
+  return payload.type === LATENCY_TOPOLOGY_MESSAGE_TYPE.CDC_PROPAGATION_BATCH ?
+    payload.events : [payload];
+}
+
 // A target's answer through the owners: the transport delivered it and the
 // target group answered the CDC outcome owner's committed receipt.
 export function committedTargetAnswer(payload, receipt = {index: 1, term: DURABLE_SOURCE_TERM}) {
   return buildDeliveryEnvelope({acknowledged: true},
-    buildCommittedCdcOutcome([payload], payload.targetGroupId, receipt));
+    buildCommittedCdcOutcome(deliveredEventsOf(payload), payload.targetGroupId, receipt));
 }
 
 export function createMessageRouter(results = []) {
