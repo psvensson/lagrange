@@ -14,41 +14,23 @@
 // ceiling: the source owner's view with controlled recipient answers, never a
 // native recipient commit.
 import assert from 'node:assert/strict';
-import {afterEach, test} from 'node:test';
+import {test} from 'node:test';
 import {fileURLToPath} from 'node:url';
 
 import {COLUMN, TABLES} from '../../src/constants/index.js';
-import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {CDC_COMPLETION} from '../../src/cdc/cdc-delivery-outcome.js';
-import {VirtualTimeSource} from '../../src/time/time-source.js';
-import {LATENCY_PROPAGATION_MODE} from '../../src/topology/latency-topology-constants.js';
-import {CDCGroupPropagationService} from '../../src/topology/cdc-group-propagation-service.js';
 import {createOwnerWorkLedger} from '../helpers/owner-work-ledger.js';
 import {
-  beginDurableCdcInvocation,
   committedTargetAnswer,
+  composeWaveTopology,
   createDurableCdcEvent,
-  createDurableSourceMessageGroupService,
-  createDurableVectorPropagationRequest,
-  createGroupRow,
-  createHeldMessageRouter,
-  createMessageGroupServiceRow,
-  createTopologyCache,
-  setupConfig,
-  teardownConfig,
 } from './cdc-group-propagation-service-harness.js';
 
-const SOURCE_GROUP = 'g-1';
 const TARGET_GROUP = 'g-2';
-const GROUPS = Object.freeze([SOURCE_GROUP, TARGET_GROUP]);
 const TURNS = 60;
-const QUIET_LOGGER = Object.freeze({info() {}, warn() {}, debug() {}, error() {},
-  logConsoleOnly() {}});
 const OWNER_FILE = /[\\/]src[\\/]topology[\\/]cdc-group-propagation[\w-]*\.js$/u;
 const TEST_FILE = fileURLToPath(import.meta.url);
 const HOLD = null;
-
-afterEach(teardownConfig);
 
 async function turns(count = TURNS) {
   for (let turn = count; turn > 0; turn -= 1) {
@@ -56,63 +38,10 @@ async function turns(count = TURNS) {
   }
 }
 
-function settledBox(promise) {
-  const box = {settled: false, value: undefined, error: undefined};
-  box.promise = promise.then((value) => Object.assign(box, {settled: true, value}),
-    (error) => Object.assign(box, {settled: true, error}));
-  return box;
-}
-
-// One running topology owner in safe mode (one source group, one target group)
-// over a held router. `answer(call)` is the router's policy per delivery: a
-// committed receipt now, or HOLD. Every lane shares `clock`.
-function compose(t, {answer = () => HOLD, ledger = null} = {}) {
-  setupConfig(LATENCY_PROPAGATION_MODE.SAFE);
-  const clock = new VirtualTimeSource({startMs: 1000});
-  const router = createHeldMessageRouter((call) => {
-    const policy = answer(call);
-    return policy === HOLD ? null : committedTargetAnswer(call.payload);
-  });
-  const service = new CDCGroupPropagationService({
-    nodeId: 'node-a',
-    systemTableCache: createTopologyCache({
-      nodes: [{[COLUMN.NODE_ID]: 'node-a', [COLUMN.LATENCY_GROUP_ID]: SOURCE_GROUP}],
-      groups: GROUPS.map((groupId, index) =>
-        createGroupRow(groupId, index === 0 ? 'node-a' : `node-${groupId}`)),
-      services: [createMessageGroupServiceRow(`${TARGET_GROUP}-r1`, `node-${TARGET_GROUP}`,
-        `node-${TARGET_GROUP}/message-group/${TARGET_GROUP}-r1`, RAFT_ROLE.LEADER,
-        TARGET_GROUP)],
-    }),
-    messageRouter: router,
-    latencyTreeService: {getRoutingOrder: () => GROUPS},
-    nowFn: () => clock.now(),
-    deliveryRetryMaxAttempts: 1,
-  });
-  service.logger = QUIET_LOGGER;
-  service.initialize();
-  service.start();
-  const source = createDurableSourceMessageGroupService(SOURCE_GROUP);
-  const f = {clock, router, service, source, lanes: []};
-  // One lane presents one vector: its own invocation, the node's source group.
-  f.present = (events) => {
-    const request = createDurableVectorPropagationRequest(source, events,
-      beginDurableCdcInvocation(clock));
-    const lane = {events, request, keys: events.map((event) => event.eventKey),
-      box: settledBox(service.propagateCDCEvent(request))};
-    f.lanes.push(lane);
-    return lane;
-  };
-  f.callsOf = (lane) => router.calls.filter((call) =>
-    call.eventKeys.join() === lane.keys.join());
-  t.after(async () => {
-    ledger?.close();
-    service.stop();
-    for (const call of router.calls.filter((entry) => entry.held)) {
-      call.answer(committedTargetAnswer(call.payload));
-    }
-    await turns();
-  });
-  return f;
+// The router answers a committed receipt now, or holds the delivery.
+function compose(t, {answer = () => HOLD} = {}) {
+  return composeWaveTopology(t, {answer: (call) =>
+    answer(call) === HOLD ? null : committedTargetAnswer(call.payload)});
 }
 
 function laneEvent(tableName, sourcePartition, key, sourceLogIndex = 1) {
@@ -208,7 +137,8 @@ test('stop with several waves in flight retires every one: each caller settles w
   'stop', async (t) => {
   const ledger = createOwnerWorkLedger({ownerFile: OWNER_FILE, testFile: TEST_FILE});
   ledger.open();
-  const f = compose(t, {ledger});
+  t.after(() => ledger.close());
+  const f = compose(t);
   const lanes = [TABLES.SERVICES, TABLES.PARTITIONS, TABLES.NODES].map((tableName) =>
     f.present([laneEvent(tableName, `${tableName}-p1`, `${tableName}-1`)]));
   assert.equal(await untilHeldCalls(f, lanes.length), lanes.length,

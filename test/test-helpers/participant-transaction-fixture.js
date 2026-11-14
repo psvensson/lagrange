@@ -385,11 +385,12 @@ function committedQueryOf(entryId, sql) {
 }
 
 // A fixture replica: the fixture table unless `extra.tableName` names
-// another (a production system table, with `extra.schema`).
-function createReplica(replicaId, extra = {}) {
+// another (a production system table, with `extra.schema`), of the fixture
+// partition unless `partitionId` names another.
+function createReplica(replicaId, extra = {}, partitionId = PARTITION_ID) {
   const replicaIds = extra.replicaIds ?? [...REPLICAS];
   return createControllablePartitionService({
-    partitionId: PARTITION_ID,
+    partitionId,
     tableId: extra.tableName ?? TABLE,
     tableName: extra.tableName ?? TABLE,
     replicaId,
@@ -426,13 +427,13 @@ async function retireFixtureParticipants(replicas, failure, message) {
 // Start a replica; unless `extra.generationOrigin` is false, a fresh one
 // applies the partition's generation origin first, at GENERATION_ORIGIN_INDEX
 // (transaction admission enabled on the partition, design 0.0.13).
-async function startReplica(replicaId, extra) {
-  const replica = createReplica(replicaId, extra);
+async function startReplica(replicaId, extra, partitionId = PARTITION_ID) {
+  const replica = createReplica(replicaId, extra, partitionId);
   try {
     await replica.initialize();
     if (extra?.generationOrigin !== false && originOf(replica) === null) {
       replica.controllablePort.committedIndex = GENERATION_ORIGIN_INDEX - 1;
-      applyCommitted(replica, originCommandOf());
+      applyCommitted(replica, originCommandOf(partitionId));
     }
     return replica;
   } catch (error) {
@@ -440,8 +441,10 @@ async function startReplica(replicaId, extra) {
       'fixture participant startup and service cleanup failed');
   }
 }
-async function startLeader(extra) {
-  const leader = await startReplica(REPLICAS[0], extra);
+// The leader of the fixture partition, or of the partition `partitionId`
+// names (several leaders of one table on one node, each its own partition).
+async function startLeader(extra, partitionId = PARTITION_ID) {
+  const leader = await startReplica(REPLICAS[0], extra, partitionId);
   try {
     leader.role = 'leader';
     leader.isLeader = true;

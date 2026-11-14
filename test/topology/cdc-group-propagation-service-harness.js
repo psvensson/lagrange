@@ -13,6 +13,9 @@ import {beginCdcDeliveryInvocation} from '../../src/cdc/cdc-delivery-invocation.
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
+import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {LATENCY_PROPAGATION_MODE} from '../../src/topology/latency-topology-constants.js';
+import {CDCGroupPropagationService} from '../../src/topology/cdc-group-propagation-service.js';
 
 const DURABLE_SOURCE_FORWARD_RETRY_MS = 20;
 const DURABLE_SOURCE_TERM = 1;
@@ -234,4 +237,71 @@ export function createMessageGroupServiceRow(
     [COLUMN.ADDRESS]: address,
     [COLUMN.RAFT_ROLE]: raftRole,
   };
+}
+
+const WAVE_SOURCE_GROUP = 'g-1';
+const QUIET_LOGGER = Object.freeze({info() {}, warn() {}, debug() {}, error() {},
+  logConsoleOnly() {}});
+
+function settledBox(promise) {
+  const box = {settled: false, value: undefined, error: undefined};
+  box.promise = promise.then((value) => Object.assign(box, {settled: true, value}),
+    (error) => Object.assign(box, {settled: true, error}));
+  return box;
+}
+
+// One running topology owner over a held router, for witnesses of
+// overlapping waves: source group g-1 on node-a, one leader per target group
+// (`targets`, default g-2), `mode` (default safe). `answer(call)` is the
+// router's policy per delivery: a delivery envelope now, or null to hold it.
+// `applyCDCBatch` overrides the source group's apply. Every lane shares
+// `clock`; `present(events)` presents one vector as one lane (its own
+// invocation) and records it in `lanes` with its settled box.
+export function composeWaveTopology(t, {answer = () => null, targets = ['g-2'],
+  mode = LATENCY_PROPAGATION_MODE.SAFE, applyCDCBatch = null, logger = QUIET_LOGGER,
+  options = {}} = {}) {
+  setupConfig(mode);
+  const clock = new VirtualTimeSource({startMs: 1000});
+  const groups = [WAVE_SOURCE_GROUP, ...targets];
+  const router = createHeldMessageRouter(answer);
+  const service = new CDCGroupPropagationService({
+    nodeId: 'node-a',
+    systemTableCache: createTopologyCache({
+      nodes: [{[COLUMN.NODE_ID]: 'node-a', [COLUMN.LATENCY_GROUP_ID]: WAVE_SOURCE_GROUP}],
+      groups: groups.map((groupId, index) =>
+        createGroupRow(groupId, index === 0 ? 'node-a' : `node-${groupId}`)),
+      services: targets.map((groupId) => createMessageGroupServiceRow(`${groupId}-r1`,
+        `node-${groupId}`, `node-${groupId}/message-group/${groupId}-r1`, RAFT_ROLE.LEADER,
+        groupId)),
+    }),
+    messageRouter: router,
+    latencyTreeService: {getRoutingOrder: () => groups},
+    nowFn: () => clock.now(),
+    deliveryRetryMaxAttempts: 1,
+    ...options,
+  });
+  service.logger = logger;
+  service.initialize();
+  service.start();
+  const source = createDurableSourceMessageGroupService(WAVE_SOURCE_GROUP, {applyCDCBatch});
+  const f = {clock, router, service, source, lanes: []};
+  f.present = (events) => {
+    const request = createDurableVectorPropagationRequest(source, events,
+      beginDurableCdcInvocation(clock));
+    const lane = {events, request, keys: events.map((event) => event.eventKey),
+      box: settledBox(service.propagateCDCEvent(request))};
+    f.lanes.push(lane);
+    return lane;
+  };
+  f.callsOf = (lane) => router.calls.filter((call) =>
+    call.eventKeys.join() === lane.keys.join());
+  t.after(async () => {
+    service.stop();
+    for (const call of router.calls.filter((entry) => entry.held)) {
+      call.answer(committedTargetAnswer(call.payload));
+    }
+    await Promise.all(f.lanes.map((lane) => lane.box.promise));
+    teardownConfig();
+  });
+  return f;
 }

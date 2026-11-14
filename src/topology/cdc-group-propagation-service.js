@@ -158,9 +158,6 @@ class CDCGroupPropagationService extends EventEmitter {
    */ stop() {
     this.state = CDC_GROUP_PROPAGATION_STATE.STOPPED;
     this.retireInFlightDurableWaves();
-    for (const releaseSleep of [...this.retrySleepReleases]) {
-      releaseSleep();
-    }
     this.logger.info(CDC_GROUP_PROPAGATION_LOG_MSG.STOPPED, {nodeId: this.nodeId});
   }
   /**

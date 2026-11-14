@@ -18,13 +18,17 @@ class CDCGroupPropagationLifecycleMethods {
   /**
    * Retire every durable wave in flight (stop, initialize, a new lifetime):
    * each wave's invocation is retired at once, so it starts no further leaf
-   * and its answer defers to the source owner. A wave leaves the set only at
-   * its actual local cleanup, when every child it started has settled.
+   * and its answer defers to the source owner, and every held retry delay
+   * ends and clears its timer. A wave leaves the set only at its actual local
+   * cleanup, when every child it started has settled.
    * @private
    */
   retireInFlightDurableWaves() {
     for (const wave of [...this.inFlightDurableWaves]) {
       wave.context.retire();
+    }
+    for (const releaseSleep of [...this.retrySleepReleases]) {
+      releaseSleep();
     }
   }
   /**
