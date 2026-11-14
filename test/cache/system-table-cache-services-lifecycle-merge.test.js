@@ -309,6 +309,18 @@ test(
     t.same(row, cachedRow, 'newer cached role and version evidence stays');
     t.equal(alignedBefore, true, 'a strictly newer cached row is aligned');
     t.equal(alignedAfter, true);
+
+    const newerAbsentRoleRow = {...cachedRow, raft_role: null};
+    const newerAbsentRole = reconcileLifecycle(
+      newerAbsentRoleRow,
+      buildLifecycleRow(),
+    );
+    t.same(
+      newerAbsentRole.row,
+      newerAbsentRoleRow,
+      'an older authoritative role is not written under a newer cached version',
+    );
+    t.equal(newerAbsentRole.alignedBefore, true);
     t.end();
   },
 );
