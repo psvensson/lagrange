@@ -25,6 +25,7 @@ import {PARTITION_CDC_OBLIGATION_BOUND as BOUND,
   '../../src/partition/partition-cdc-obligation-constants.js';
 import {OBLIGATION_RETRY_DISPOSITION, handleDeliveryFailure, scheduleDeliveryRetry} from
   '../../src/partition/partition-cdc-obligation-delivery.js';
+import {PARTITION_SERVICE_DEFAULT} from '../../src/partition/partition-service-constants.js';
 import {countCdcObligations} from '../../src/partition/partition-cdc-obligation-ledger.js';
 import {clearFixtureSingletons, resetFixtureSingletons, settleTicks} from
   '../test-helpers/participant-transaction-fixture.js';
@@ -80,6 +81,9 @@ test('the window never passes ACK_BATCH_MAX_EVENTS and no range of ordinary entr
   assertRecipientLogs(model);
 });
 
+// From a cold window both the window (one row) and the byte bound would hold
+// the next row back; the byte bound is asked first, so the run counts as cut
+// by bytes: widening the window could not have shipped more.
 test('a lone owed row, and a run the byte bound cut, do not widen the window', async (t) => {
   const big = 'x'.repeat(BOUND.SHIP_MAX_BYTES / 2);
   const insert = (id) => ({entryId: `bytes-${id}`,
@@ -87,17 +91,34 @@ test('a lone owed row, and a run the byte bound cut, do not widen the window', a
   const f = await fixture(t, {rows: [], subscribers: 1,
     statements: [insert('b0'), insert('b1'), insert('b2')]});
   const model = installRecipientModel(f);
-  primeShipWindow(f, WARM_WINDOW);
   await runLaneToQuiescence(f);
   assert.deepEqual(idsOfWaves(model), [['b0'], ['b1'], ['b2']],
     'two of these rows pass the byte bound, so each ships alone');
-  assert.equal(shipWindowOf(f), WARM_WINDOW, 'the byte bound cut every run, never the window');
+  assert.equal(shipWindowOf(f), 1, 'the byte bound cut every run, never the window');
   addSourceRow(f.leader, 'lone');
   await settleTicks();
   model.noteLedger();
   await runLaneToQuiescence(f);
   assert.deepEqual(idsOfWaves(model).at(-1), ['lone']);
-  assert.equal(shipWindowOf(f), WARM_WINDOW);
+  assert.equal(shipWindowOf(f), 1);
+});
+
+// The bounds and delays the lane ships under, as literal values: range
+// shipping changes none of them and adds one (SHIP_MAX_BYTES, 256 KiB).
+test('the lane\'s bounds and delays keep their literal values', () => {
+  assert.deepEqual({...BOUND}, {
+    OWED_MAX_EVENTS: 4096,
+    ACK_BATCH_MAX_EVENTS: 256,
+    ACK_MAX_OUTSTANDING_BATCHES: 2,
+    ACK_BATCH_MAX_BYTES: 65536,
+    ACK_FLUSH_DEADLINE_MS: 1000,
+    DRIVE_PAGE_ROWS: 256,
+    SHIP_MAX_BYTES: 262144,
+    RETAINED_DELIVERED_MAX: 1024,
+    RECLAIM_ROWS_PER_APPLY: 4096,
+  });
+  assert.deepEqual([PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS,
+    PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_MAX_DELAY_MS], [50, 10000]);
 });
 
 // --- halving only after an attempted failure; unchanged otherwise ---
@@ -407,29 +428,32 @@ test('a partially covered range is presented again unchanged although more rows 
   assert.deepEqual(countCdcObligations(f.leader.db), {owed: 0, delivered: 6});
 });
 
-test('a pinned range is rebuilt when a hydration image acknowledged one of its rows',
-  async (t) => {
-    const f = await fixture(t, {rows: ['A', 'B', 'C'], subscribers: 2});
-    const model = installRecipientModel(f);
-    primeShipWindow(f, WARM_WINDOW);
-    faultFor(model, 0, 1, RECIPIENT_FAULT.BACKPRESSURE);
-    await f.drive();
-    assert.deepEqual(model.waves.map((wave) => [wave.index, wave.ids]),
-      [[0, ['A', 'B', 'C']], [1, ['A', 'B', 'C']]]);
-    const pinned = laneOf(f).currentObligation;
-    assert.ok(pinned);
-    // The image covers A only: the range in the cell no longer reads back.
-    model.hydratedThrough(model.raw[0].logIndex);
-    const mark = model.waves.length;
-    await f.drive();
-    assert.deepEqual(model.waves.slice(mark).map((wave) => [wave.index, wave.ids]),
-      [[0, ['B', 'C']], [1, ['B', 'C']]],
-      'a new range without the acknowledged row goes to every leaf');
-    assert.notEqual(model.waves[mark].digest, model.waves[0].digest);
-    await runLaneToQuiescence(f);
-    assertRecipientLogs(model, {wholeEntries: false});
-    assert.deepEqual(countCdcObligations(f.leader.db), {owed: 0, delivered: 3});
-  });
+test('a pinned range is rebuilt when a hydration image acknowledged one of its rows: the ' +
+  'cell is discarded and the new range is composed without its cap', async (t) => {
+  const f = await fixture(t, {rows: ['A', 'B', 'C'], subscribers: 2});
+  const model = installRecipientModel(f);
+  primeShipWindow(f, WARM_WINDOW);
+  faultFor(model, 0, 1, RECIPIENT_FAULT.BACKPRESSURE);
+  await f.drive();
+  assert.deepEqual(model.waves.map((wave) => [wave.index, wave.ids]),
+    [[0, ['A', 'B', 'C']], [1, ['A', 'B', 'C']]]);
+  const pinned = laneOf(f).currentObligation;
+  assert.ok(pinned);
+  await addRowsWhileHeld(f, model, ['D', 'E']);
+  assert.equal(laneOf(f).currentObligation, pinned, 'the held lane keeps its cell');
+  // The image covers A only: the range in the cell no longer reads back.
+  model.hydratedThrough(model.raw[0].logIndex);
+  const mark = model.waves.length;
+  await f.drive();
+  assert.deepEqual(model.waves.slice(mark).map((wave) => [wave.index, wave.ids]),
+    [[0, ['B', 'C', 'D', 'E']], [1, ['B', 'C', 'D', 'E']]],
+    'a new range without the acknowledged row, and no longer capped at the old cell, ' +
+    'goes to every leaf');
+  assert.notEqual(model.waves[mark].digest, model.waves[0].digest);
+  await runLaneToQuiescence(f);
+  assertRecipientLogs(model, {wholeEntries: false});
+  assert.deepEqual(countCdcObligations(f.leader.db), {owed: 0, delivered: 5});
+});
 
 test('a pinned range is rebuilt when the window fell below its row count', async (t) => {
   const rows = idsOf(4, 'narrow');

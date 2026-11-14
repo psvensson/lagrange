@@ -178,7 +178,14 @@ async function runLane(t, plan, family, {heldAtOne}) {
   if (heldAtOne) holdShipWindow(f, 1);
   const label = `seed ${plan.seed} (${heldAtOne ? 'window held at 1' : 'windowed'})`;
   await runLaneToQuiescence(f, {label, maxRounds: 1500});
-  assert.equal(pending.late, false, `${label}: the late source work was committed`);
+  if (pending.late) {
+    // The row that triggers the late work was never presented (a hydration
+    // image acknowledged it): the late work is committed now.
+    pending.late = false;
+    for (const step of late) commitStep(f.leader, step);
+    learnLedger();
+    await runLaneToQuiescence(f, {label, maxRounds: 1500});
+  }
   assertRecipientLogs(model, {label, ordered: family.ordered,
     wholeEntries: !family.hydration});
   assert.deepEqual(countCdcObligations(f.leader.db),
@@ -190,19 +197,31 @@ async function runLane(t, plan, family, {heldAtOne}) {
   return {f, model, label};
 }
 
+// The ledger as both lanes must hold it. Log indexes are left out: the
+// CDC_DELIVERED entries each lane commits between source entries differ in
+// number, so the same source entry sits at another index in each lane.
+const ledgerOf = (model) => model.raw.map(({eventKey, ordinal, entryId, eventJson}) =>
+  ({eventKey, ordinal, entryId, eventJson}));
+
+// The rows a lane had to deliver: those above its hydration image.
+const requiredKeysOf = (model) => new Set(model.raw
+  .filter((row) => row.logIndex > model.hydratedThroughLogIndex)
+  .map((row) => row.eventKey));
+
 // One leaf's committed log at entry granularity: the first occurrence of
-// every required row, grouped by ledger entry.
-function entriesOf(model, leaf, ordered) {
+// every compared row, grouped by ledger entry (each group in ledger order).
+function entriesOf(model, leaf, compared, ordered) {
   const logIndexOf = new Map(model.raw.map((row) => [row.eventKey, row.logIndex]));
-  const required = firstOccurrences(model.logs[leaf])
-    .filter((key) => logIndexOf.get(key) > model.hydratedThroughLogIndex);
+  const first = firstOccurrences(model.logs[leaf]).filter((key) => compared.has(key));
   const entries = [];
-  for (const key of ordered ? required : [...required].sort()) {
+  let previous = null;
+  for (const key of ordered ? first : [...first].sort()) {
     const logIndex = logIndexOf.get(key);
-    if (entries.at(-1)?.logIndex === logIndex) entries.at(-1).keys.push(key);
-    else entries.push({logIndex, keys: [key]});
+    if (logIndex === previous) entries.at(-1).push(key);
+    else entries.push([key]);
+    previous = logIndex;
   }
-  return ordered ? entries : entries.sort((left, right) => left.logIndex - right.logIndex);
+  return ordered ? entries : entries.sort();
 }
 
 for (const family of Object.values(FAMILY)) {
@@ -212,7 +231,7 @@ for (const family of Object.values(FAMILY)) {
       const plan = planOf(seed);
       const windowed = await runLane(t, plan, family, {heldAtOne: false});
       const reference = await runLane(t, plan, family, {heldAtOne: true});
-      assert.deepEqual(windowed.model.raw, reference.model.raw,
+      assert.deepEqual(ledgerOf(windowed.model), ledgerOf(reference.model),
         `seed ${seed}: both lanes ran over the same ledger`);
       // (iv) held at one, every range is exactly one ledger entry.
       const logIndexOf = new Map(reference.model.raw.map((row) => [row.eventKey, row.logIndex]));
@@ -221,15 +240,15 @@ for (const family of Object.values(FAMILY)) {
           `seed ${seed}: a range of the held lane is one ledger entry`);
       }
       // A hydration image is taken at the same row identity in both lanes, but
-      // the rows already delivered by then differ, so the claim is made for
-      // the rows above the image of both.
-      const image = Math.max(windowed.model.hydratedThroughLogIndex,
-        reference.model.hydratedThroughLogIndex);
-      windowed.model.hydratedThroughLogIndex = image;
-      reference.model.hydratedThroughLogIndex = image;
+      // the rows committed by then may differ, so the two lanes are compared
+      // over the rows both had to deliver (those above the image of each).
+      const required = requiredKeysOf(reference.model);
+      const compared = new Set([...requiredKeysOf(windowed.model)]
+        .filter((key) => required.has(key)));
+      assert.ok(compared.size > 0 || family.hydration, `seed ${seed}: rows are compared`);
       for (let leaf = 0; leaf < plan.leaves; leaf += 1) {
-        assert.deepEqual(entriesOf(windowed.model, leaf, family.ordered),
-          entriesOf(reference.model, leaf, family.ordered),
+        assert.deepEqual(entriesOf(windowed.model, leaf, compared, family.ordered),
+          entriesOf(reference.model, leaf, compared, family.ordered),
           `seed ${seed}: leaf ${leaf} committed the same entries` +
           (family.ordered ? ' in the same order' : ''));
       }

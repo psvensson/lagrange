@@ -508,7 +508,15 @@ test('acknowledgement refused inside a covered range leaves the rows from the re
   const singles = idsOf(BOUND.ACK_BATCH_MAX_EVENTS + 200, 'single');
   const entry = idsOf(320, 'wide');
   const f = await fixture(t, {rows: singles, subscribers: 1});
-  const model = installRecipientModel(f);
+  // While the wide range is in flight, a row after the one that will be
+  // refused is marked pending by hand (the lane never produces this): the
+  // cursor must still stop before the refused row.
+  let pendingLater = null;
+  const model = installRecipientModel(f, {onWave: (wave) => {
+    if (wave.rows !== entry.length) return;
+    laneOf(f).pending.set(pendingLater.eventKey,
+      {logIndex: pendingLater.logIndex, ordinal: pendingLater.ordinal});
+  }});
   primeShipWindow(f, STEADY_WINDOW);
   const emitted = [];
   f.leader.on(PARTITION_SERVICE_EVENT.CDC_EVENT, (event) => emitted.push(event.eventKey));
@@ -529,10 +537,12 @@ test('acknowledgement refused inside a covered range leaves the rows from the re
   f.ready = true;
   const metricBefore = deliveredMetric();
   emitted.length = 0;
-  const outcome = await f.drive();
-  const wideKeys = model.raw.filter((row) => row.eventKey.startsWith('txop:'))
-    .map((row) => row.eventKey);
+  const wideRows = model.raw.filter((row) => row.eventKey.startsWith('txop:'));
+  const wideKeys = wideRows.map((row) => row.eventKey);
   assert.equal(wideKeys.length, 320);
+  pendingLater = wideRows[315];
+  const outcome = await f.drive();
+  assert.equal(laneOf(f).pending.delete(pendingLater.eventKey), true);
   assert.deepEqual(model.waves.at(-1).keys, wideKeys, 'the entry shipped whole, as one range');
   // 56 rows fill the open batch (it is proposed: two outstanding), 256 fill the
   // next one, which cannot be proposed; the 313th row is refused.

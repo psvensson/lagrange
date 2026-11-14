@@ -31,12 +31,14 @@ import {RESPONSE, SOURCE_GROUP, SOURCE_NODE, TARGET_GROUP, TARGET_NODE,
   addRequiredGroup, assertDebtWithoutAck, omitTarget, topologyProgressFixture} from
   '../test-helpers/cdc-topology-progress-fixture.js';
 import {
+  CDC_TABLE,
   applyCommitted,
   committedQueryOf,
   settleTicks,
   shutdownAll,
   startLeader,
 } from '../test-helpers/participant-transaction-fixture.js';
+import {primeShipWindow} from '../test-helpers/partition-cdc-lane-fixture.js';
 
 beforeEach(() => setupConfig(LATENCY_PROPAGATION_MODE.SAFE));
 afterEach(teardownConfig);
@@ -100,6 +102,45 @@ test('source topology owner reuses an unchanged covered prefix across response b
   assert.equal(f.targetCalls.length, 1);
   assert.equal(f.leader.cdcDelivery.obligationLane.currentObligation, null);
   assertDebtWithoutAck(f);
+});
+
+// Range shipping (quest cdc-obligation-range-shipping, design decision 2): the
+// leaf coverage that pins a range may live in a branch's topology progress
+// only (the source leaf holds a native receipt, the target does not, so the
+// subscriber branch itself is still uncovered).
+test('source topology owner presents a range whose source leaf is covered again unchanged ' +
+  'after more rows were committed and the scan restarted', async (t) => {
+  const f = await topologyProgressFixture(t);
+  primeShipWindow(f, 8);
+  f.targetMode = RESPONSE.UNKNOWN;
+  assert.equal((await f.drive()).state, DRIVE.HELD_BY_SUBSCRIBER);
+  assert.equal(f.sourceCalls.length, 1);
+  assert.equal(f.targetCalls.length, 1);
+  const [firstRange] = f.sourceCalls;
+  assert.equal(firstRange.length, 1);
+  // A second source row is committed while the subscribers hold, and a
+  // handshake below the range restarts the idle scan: an unpinned composition
+  // would now take both rows.
+  f.ready = false;
+  const command = committedQueryOf('topology-progress-source-row-later',
+    `INSERT INTO ${CDC_TABLE} (id, value) VALUES (?, ?)`);
+  command.params = ['B', 'later-source-body'];
+  command.timestamp = new HLCTimestamp(1001, 0, 'topology-progress-component').toString();
+  assert.equal(applyCommitted(f.leader, command), null);
+  await settleTicks();
+  f.leader.cdcDelivery.acknowledgeHydratedObligationsThrough(1);
+  assert.equal(f.leader.cdcDelivery.obligationLane.scan, null, 'the idle scan restarted');
+  f.ready = true;
+  f.targetMode = RESPONSE.NATIVE;
+  await f.drive();
+  assert.deepEqual(f.sourceCalls.map((keys) => keys.length), [1, 1],
+    'the covered source leaf is not applied the first range again; the later row is its ' +
+    'own range');
+  assert.deepEqual(f.sourceCalls[0], firstRange);
+  assert.notDeepEqual(f.sourceCalls[1], firstRange);
+  assert.deepEqual(f.targetCalls.map((call) => call.eventKeys),
+    [firstRange, firstRange, f.sourceCalls[1]],
+    'the uncovered target is presented the identical range, then the later row');
 });
 
 test('source topology owner observes a new group before consuming a previously covered branch',
