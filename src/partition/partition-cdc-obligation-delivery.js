@@ -559,13 +559,11 @@ async function driveOnce(delivery, lane, reason) {
       () => resumeAfterCdcCleanup(delivery));
     let stepContended = false;
     try {
-      const range = composeCdcShipRange(delivery, lane, acknowledgeDelivered,
-        BOUND.DRIVE_PAGE_ROWS - visited);
-      visited += range.passed;
+      const range = composeCdcShipRange(delivery, lane, acknowledgeDelivered);
+      if (range.state === SHIP_RANGE_STATE.DRAINED) break;
       if (range.state === SHIP_RANGE_STATE.ACKNOWLEDGEMENT_BACKPRESSURE) {
         return acknowledgementBackpressureOutcome(delivery, lane, reason, delivered);
       }
-      if (range.state !== SHIP_RANGE_STATE.READY) break;
       const result = await driveShipRange(delivery, lane, range,
         precondition.subscribers, reason, delivered, context);
       if (result.outcome) return result.outcome;
