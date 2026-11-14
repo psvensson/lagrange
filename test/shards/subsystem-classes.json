@@ -28,7 +28,7 @@
   "censusSize": 2648,
   "digest": "fnv1a32-7cb2a824",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-6f7807fe",
+  "observationDigest": "fnv1a32-9b04678a",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -5697,10 +5697,17 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/control-plane/membership-publication-coordinator.js",
         "src/control-plane/owners/membership-publication-runtime-owner.js",
+        "src/control-plane/replica-dispatch-retry-scheduling.js",
         "src/diagnostics/formation-turn-attribution.js",
         "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js",
+        "src/rebalancer/operation-workflow-observed-progress-retention.js",
+        "src/rebalancer/replica-operation-repository-visibility-methods.js",
         "src/storage/data-directory-process-owner.js",
         "test/simulation/formation-sim-infrastructure-composition.js"
+      ],
+      "directories": [
+        "src"
       ]
     },
     "test/convergence/dt-formation-priority-placement-before-active.test.js": {

@@ -251,6 +251,8 @@ function createRoundDriver(world) {
   // thing it said about why it is not acting.
   const plannerStatements = new Map();
   const roundCounter = {number: 0};
+  // Every bound an operation owner of a node reported spent.
+  const spentBounds = [];
   for (const [partitionId, rebalancer] of world.seedRebalancers) {
     const statement = {gate: null, refusals: new Map()};
     plannerStatements.set(partitionId, statement);
@@ -280,8 +282,6 @@ function createRoundDriver(world) {
     rebalancer.logger = {debug: record, info: record, warn: record, error: record};
   }
 
-  // Every bound an operation owner of a node reported spent.
-  const spentBounds = [];
   const boundWatch = (nodeId) => {
     const quiet = () => {};
     const watch = {
@@ -493,9 +493,6 @@ const STEPPED_CADENCE_NAMES = Object.freeze([
 ]);
 
 export {
-  READY_SIGNAL_STATE,
   STEPPED_CADENCE_NAMES,
   createRoundDriver,
-  nextEvaluationInstant,
-  settleWorld,
 };

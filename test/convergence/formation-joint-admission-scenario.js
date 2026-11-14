@@ -9,7 +9,6 @@ import {COLUMN, SERVICE_STATUS, TABLES} from '../../src/constants/index.js';
 import {isNodeRecordReady} from '../../src/node/node-readiness-policy.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {
-  READY_SIGNAL_STATE,
   STEPPED_CADENCE_NAMES,
   createRoundDriver,
 } from './formation-joint-admission-rounds.js';
@@ -303,6 +302,86 @@ function isSpreadPublished(world) {
   return latest?.status === 'PUBLISHED' && latest.spread?.satisfied === true;
 }
 
+function openClientGateLabels(answers) {
+  return [
+    ...Object.entries(answers.serve).filter(([, answer]) =>
+      answer.decision === 'eligible').map(([nodeId]) => `serve:${nodeId}`),
+    ...Object.entries(answers.readyz).filter(([, answer]) =>
+      answer.priorityControlPlaneRecoveryHealthy)
+      .map(([nodeId]) => `readyz:${nodeId}`),
+  ];
+}
+
+function recordSpreadSafety(world, safety, spreadPublished, open, label) {
+  if (!spreadPublished) {
+    for (const gate of open) {
+      safety.openClusterGates.push({label, gate});
+    }
+    return;
+  }
+  const members = latestMembership(world).members.length;
+  const required = Math.min(SPREAD_NODE_COUNT, members);
+  for (const [partitionId, partition] of
+    Object.entries(spreadState(world).partitions)) {
+    if (partition.distinctReadyVoterNodes < required) {
+      safety.summaryAheadOfRows.push({label, partitionId,
+        distinctReadyVoterNodes: partition.distinctReadyVoterNodes});
+    }
+  }
+}
+
+function recordFloorSafety(world, baselineFloor, safety, label) {
+  for (const [partitionId, count] of
+    Object.entries(voterReadyFloorCounts(world))) {
+    if (baselineFloor[partitionId] === undefined) {
+      baselineFloor[partitionId] = count;
+    }
+    safety.lowestVoterReady[partitionId] = Math.min(
+      safety.lowestVoterReady[partitionId] ?? count, count);
+    if (count < Math.min(VOTER_READY_FLOOR, baselineFloor[partitionId])) {
+      safety.floorViolations.push({label, partitionId, count});
+    }
+  }
+  safety.admittedRemovals = world.replicaRuntime.retiredReplicaIds.size;
+}
+
+function recordOperationTimeline(world, seenOperations, timeline, label) {
+  for (const row of operationRows(world)) {
+    const name = `${row.type} ${row.partitionId} ` +
+      `${row.sourceNodeId || ''}>${row.targetNodeId}`;
+    const seen = seenOperations.get(row.operationId);
+    if (!seen) {
+      seenOperations.set(row.operationId, {terminal: row.terminal});
+      timeline.push(`${label}: + ${name}`);
+    }
+    if (row.terminal && !(seen && seen.terminal)) {
+      seenOperations.get(row.operationId).terminal = true;
+      timeline.push(`${label}: = ${name} ${row.step}`);
+    }
+  }
+}
+
+function recordPlannerRefusals(driver, refusalReasons, ledgerHold, timeline,
+  label) {
+  const round = driver.roundCounter.number;
+  let heldThisRound = false;
+  for (const [partitionId, statement] of driver.plannerStatements) {
+    for (const refusal of statement.refusals.values()) {
+      if (refusal.round !== round || refusal.counted === true) continue;
+      refusal.counted = true;
+      const reason = refusal.reason || refusal.error || 'unstated';
+      refusalReasons[reason] = (refusalReasons[reason] || 0) + 1;
+      if (reason === LEDGER_QUORUM_HOLD_REASON) {
+        heldThisRound = true;
+        ledgerHold.refusedMoves += 1;
+        timeline.push(`${label}: hold ${refusal.moveType} ${partitionId}` +
+          ` >${refusal.targetNodeId}`);
+      }
+    }
+  }
+  if (heldThisRound) ledgerHold.engagedRounds.push(round);
+}
+
 // What the run observes at every observation point. Observation only.
 function createObserver(world, driver) {
   const safety = {
@@ -325,78 +404,120 @@ function createObserver(world, driver) {
   const gates = [];
   const observe = (label) => {
     const spreadPublished = isSpreadPublished(world);
-    const answers = clusterGates(driver);
-    const open = [
-      ...Object.entries(answers.serve).filter(([, answer]) =>
-        answer.decision === 'eligible').map(([nodeId]) => `serve:${nodeId}`),
-      ...Object.entries(answers.readyz).filter(([, answer]) =>
-        answer.priorityControlPlaneRecoveryHealthy)
-        .map(([nodeId]) => `readyz:${nodeId}`),
-    ];
+    const open = openClientGateLabels(clusterGates(driver));
     const last = gates[gates.length - 1];
     if (!last || last.spreadPublished !== spreadPublished ||
         last.openGates !== open.length) {
       gates.push({label, spreadPublished, openGates: open.length});
     }
-    if (!spreadPublished) {
-      for (const gate of open) {
-        safety.openClusterGates.push({label, gate});
-      }
-    } else {
-      const members = latestMembership(world).members.length;
-      const required = Math.min(SPREAD_NODE_COUNT, members);
-      for (const [partitionId, partition] of
-        Object.entries(spreadState(world).partitions)) {
-        if (partition.distinctReadyVoterNodes < required) {
-          safety.summaryAheadOfRows.push({label, partitionId,
-            distinctReadyVoterNodes: partition.distinctReadyVoterNodes});
-        }
-      }
-    }
-    for (const [partitionId, count] of
-      Object.entries(voterReadyFloorCounts(world))) {
-      if (baselineFloor[partitionId] === undefined) {
-        baselineFloor[partitionId] = count;
-      }
-      safety.lowestVoterReady[partitionId] = Math.min(
-        safety.lowestVoterReady[partitionId] ?? count, count);
-      if (count < Math.min(VOTER_READY_FLOOR, baselineFloor[partitionId])) {
-        safety.floorViolations.push({label, partitionId, count});
-      }
-    }
-    safety.admittedRemovals = world.replicaRuntime.retiredReplicaIds.size;
-    for (const row of operationRows(world)) {
-      const name = `${row.type} ${row.partitionId} ` +
-        `${row.sourceNodeId || ''}>${row.targetNodeId}`;
-      const seen = seenOperations.get(row.operationId);
-      if (!seen) {
-        seenOperations.set(row.operationId, {terminal: row.terminal});
-        timeline.push(`${label}: + ${name}`);
-      }
-      if (row.terminal && !(seen && seen.terminal)) {
-        seenOperations.get(row.operationId).terminal = true;
-        timeline.push(`${label}: = ${name} ${row.step}`);
-      }
-    }
-    const round = driver.roundCounter.number;
-    let heldThisRound = false;
-    for (const [partitionId, statement] of driver.plannerStatements) {
-      for (const refusal of statement.refusals.values()) {
-        if (refusal.round !== round || refusal.counted === true) continue;
-        refusal.counted = true;
-        const reason = refusal.reason || refusal.error || 'unstated';
-        refusalReasons[reason] = (refusalReasons[reason] || 0) + 1;
-        if (reason === LEDGER_QUORUM_HOLD_REASON) {
-          heldThisRound = true;
-          ledgerHold.refusedMoves += 1;
-          timeline.push(`${label}: hold ${refusal.moveType} ${partitionId}` +
-            ` >${refusal.targetNodeId}`);
-        }
-      }
-    }
-    if (heldThisRound) ledgerHold.engagedRounds.push(round);
+    recordSpreadSafety(world, safety, spreadPublished, open, label);
+    recordFloorSafety(world, baselineFloor, safety, label);
+    recordOperationTimeline(world, seenOperations, timeline, label);
+    recordPlannerRefusals(driver, refusalReasons, ledgerHold, timeline, label);
   };
   return {safety, timeline, ledgerHold, refusalReasons, gates, observe};
+}
+
+async function runRoundsToFixpoint(driver, world, observeSafety, scripted) {
+  let digest = worldDigest(driver);
+  let rounds = 0;
+  let fixpoint = false;
+  while (rounds < ROUND_CAP && !fixpoint) {
+    if (scripted[rounds + 1]) {
+      await scripted[rounds + 1](driver, world);
+      observeSafety(`before round ${rounds + 1}`);
+    }
+    await driver.round();
+    rounds += 1;
+    observeSafety(`round ${rounds}`);
+    const next = worldDigest(driver);
+    fixpoint = next === digest &&
+      !Object.keys(scripted).some((round) => Number(round) > rounds);
+    digest = next;
+  }
+  return {rounds, fixpoint};
+}
+
+function summarizeArmedBounds(armedBounds) {
+  const armedBy = {};
+  for (const timer of armedBounds) {
+    const key = `${Math.round(timer.delayMs)} ms ${timer.armedBy}`;
+    armedBy[key] = (armedBy[key] || 0) + 1;
+  }
+  return armedBy;
+}
+
+function resolveArrivalOutcome(fixpoint, stuckJoiners) {
+  if (!fixpoint) return OUTCOME.ROUND_CAP;
+  return stuckJoiners.length > 0 ? OUTCOME.STUCK : OUTCOME.RELEASED;
+}
+
+function buildArrivalOrderReport({world, driver, observer, rounds, fixpoint}) {
+  const joiners = joinerStates(driver);
+  const admitted = new Set(
+    (membershipRows(world).at(-1)?.members || [])
+      .filter((nodeId) => nodeId !== SEED_NODE_ID));
+  const stuckJoiners = joiners.filter((joiner) =>
+    admitted.has(joiner.nodeId) && !joiner.readyLease);
+  const armedBounds = driver.armedBounds();
+  const elapsedMs = world.clock.now() - WORLD_START_MS;
+  const shortestArmedDelayMs = Math.min(
+    ...armedBounds.map((timer) => timer.delayMs),
+    ...joiners.flatMap((joiner) =>
+      joiner.armedSleeps.map((sleep) => sleep.delayMs)),
+  );
+  // No bound was due inside the run: the run is shorter than the shortest
+  // delay of any armed timer that is not a stepped cadence, and no owner
+  // reported a bound spent.
+  assert.ok(elapsedMs < shortestArmedDelayMs,
+    `the run (${elapsedMs} ms) must stay below the shortest armed bound ` +
+    `(${shortestArmedDelayMs} ms)`);
+  assert.deepEqual(driver.spentBounds, [],
+    'no owner reported a wait bound spent');
+  return {
+    outcome: resolveArrivalOutcome(fixpoint, stuckJoiners),
+    fixpoint,
+    rounds,
+    elapsedMs,
+    shortestArmedDelayMs,
+    admittedJoiners: [...admitted].sort(),
+    stuckJoiners: stuckJoiners.map((joiner) => joiner.nodeId),
+    joiners,
+    authority: seedAuthorityState(driver),
+    handoffTransitions: driver.handoffTransitions.map((transition) => ({
+      state: transition.state,
+      reason: transition.reason,
+      releaseAuthorized: transition.releaseAuthorized,
+      observedPublicationEpoch: transition.observedPublicationEpoch,
+      requiredCohort: (transition.requiredCohort || [])
+        .map((member) => member.nodeId),
+    })),
+    membership: membershipRows(world),
+    // Every publication row that is not a membership publication, by kind:
+    // the removed formation-release handoff wrote such rows.
+    otherPublicationKinds: world.cache
+      .getAll(TABLES.CONTROL_PLANE_PUBLICATIONS)
+      .filter((row) => row.publication_kind !== MEMBERSHIP_KIND)
+      .map((row) => row.publication_kind),
+    nodes: nodeStates(world),
+    planners: plannerStates(driver),
+    operations: operationRows(world),
+    placement: placement(world),
+    voterReadyFloor: voterReadyFloorCounts(world),
+    clusterGates: clusterGates(driver),
+    safety: observer.safety,
+    spread: {
+      ...spreadState(world),
+      summarySatisfied: isSpreadPublished(world),
+    },
+    timeline: observer.timeline,
+    ledgerHold: observer.ledgerHold,
+    refusalReasons: observer.refusalReasons,
+    gates: observer.gates,
+    steppedCadences: driver.steppedCadences(),
+    spentBounds: driver.spentBounds,
+    timersThatWouldHaveToExpire: summarizeArmedBounds(armedBounds),
+  };
 }
 
 /**
@@ -411,7 +532,6 @@ async function runArrivalOrder(order, options = {}) {
   const world = createFormationWorld();
   const driver = createRoundDriver(world);
   const observer = createObserver(world, driver);
-  const {safety} = observer;
   const observeSafety = observer.observe;
   try {
     await driver.formSeed();
@@ -425,94 +545,9 @@ async function runArrivalOrder(order, options = {}) {
     }
     await driver.settle();
     observeSafety('ready signals started');
-    const scripted = options.rounds || {};
-    let digest = worldDigest(driver);
-    let rounds = 0;
-    let fixpoint = false;
-    while (rounds < ROUND_CAP && !fixpoint) {
-      if (scripted[rounds + 1]) {
-        await scripted[rounds + 1](driver, world);
-        observeSafety(`before round ${rounds + 1}`);
-      }
-      await driver.round();
-      rounds += 1;
-      observeSafety(`round ${rounds}`);
-      const next = worldDigest(driver);
-      fixpoint = next === digest &&
-        !Object.keys(scripted).some((round) => Number(round) > rounds);
-      digest = next;
-    }
-    const joiners = joinerStates(driver);
-    const admitted = new Set(
-      (membershipRows(world).at(-1)?.members || [])
-        .filter((nodeId) => nodeId !== SEED_NODE_ID));
-    const stuckJoiners = joiners.filter((joiner) =>
-      admitted.has(joiner.nodeId) && !joiner.readyLease);
-    const armedBounds = driver.armedBounds();
-    const elapsedMs = world.clock.now() - WORLD_START_MS;
-    const shortestArmedDelayMs = Math.min(
-      ...armedBounds.map((timer) => timer.delayMs),
-      ...joiners.flatMap((joiner) =>
-        joiner.armedSleeps.map((sleep) => sleep.delayMs)),
-    );
-    // No bound was due inside the run: the run is shorter than the shortest
-    // delay of any armed timer that is not a stepped cadence, and no owner
-    // reported a bound spent.
-    assert.ok(elapsedMs < shortestArmedDelayMs,
-      `the run (${elapsedMs} ms) must stay below the shortest armed bound ` +
-      `(${shortestArmedDelayMs} ms)`);
-    assert.deepEqual(driver.spentBounds, [],
-      'no owner reported a wait bound spent');
-    const armedBy = {};
-    for (const timer of armedBounds) {
-      const key = `${Math.round(timer.delayMs)} ms ${timer.armedBy}`;
-      armedBy[key] = (armedBy[key] || 0) + 1;
-    }
-    return {
-      outcome: !fixpoint ? OUTCOME.ROUND_CAP :
-        stuckJoiners.length > 0 ? OUTCOME.STUCK : OUTCOME.RELEASED,
-      fixpoint,
-      rounds,
-      elapsedMs,
-      shortestArmedDelayMs,
-      admittedJoiners: [...admitted].sort(),
-      stuckJoiners: stuckJoiners.map((joiner) => joiner.nodeId),
-      joiners,
-      authority: seedAuthorityState(driver),
-      handoffTransitions: driver.handoffTransitions.map((transition) => ({
-        state: transition.state,
-        reason: transition.reason,
-        releaseAuthorized: transition.releaseAuthorized,
-        observedPublicationEpoch: transition.observedPublicationEpoch,
-        requiredCohort: (transition.requiredCohort || [])
-          .map((member) => member.nodeId),
-      })),
-      membership: membershipRows(world),
-      // Every publication row that is not a membership publication, by kind:
-      // the removed formation-release handoff wrote such rows.
-      otherPublicationKinds: world.cache
-        .getAll(TABLES.CONTROL_PLANE_PUBLICATIONS)
-        .filter((row) => row.publication_kind !== MEMBERSHIP_KIND)
-        .map((row) => row.publication_kind),
-      nodes: nodeStates(world),
-      planners: plannerStates(driver),
-      operations: operationRows(world),
-      placement: placement(world),
-      voterReadyFloor: voterReadyFloorCounts(world),
-      clusterGates: clusterGates(driver),
-      safety,
-      spread: {
-        ...spreadState(world),
-        summarySatisfied: isSpreadPublished(world),
-      },
-      timeline: observer.timeline,
-      ledgerHold: observer.ledgerHold,
-      refusalReasons: observer.refusalReasons,
-      gates: observer.gates,
-      steppedCadences: driver.steppedCadences(),
-      spentBounds: driver.spentBounds,
-      timersThatWouldHaveToExpire: armedBy,
-    };
+    const {rounds, fixpoint} = await runRoundsToFixpoint(
+      driver, world, observeSafety, options.rounds || {});
+    return buildArrivalOrderReport({world, driver, observer, rounds, fixpoint});
   } finally {
     driver.close();
   }
@@ -563,7 +598,6 @@ function formatStuckReport(report) {
 
 export {
   OUTCOME,
-  READY_SIGNAL_STATE,
   STEPPED_CADENCE_NAMES,
   VOTER_READY_FLOOR,
   arrive,

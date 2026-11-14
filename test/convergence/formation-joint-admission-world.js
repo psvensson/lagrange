@@ -251,8 +251,8 @@ function createWorldClock() {
     if (!armedByOwner()) return platformArm(callback, delayMs, ...args);
     const handle = {
       id: worldArm(callback, delayMs, ...args),
-      ref() { return handle; },
-      unref() { return handle; },
+      ref: () => handle,
+      unref: () => handle,
       hasRef: () => false,
     };
     ownerHandles.add(handle);
@@ -763,6 +763,7 @@ function createFormationWorld() {
       randomSource: new SeededRandomSource({seed: RANDOM_SEED}),
     });
     const readiness = hosts.controlPlaneReadinessService;
+    readiness.setFormationReleaseAuthorityNodeId?.(SEED_NODE_ID);
     const publicationModeOwner = Object.freeze({
       getPublicationModeDiagnostics: () =>
         publicationModeByNodeId.get(nodeId) || PUBLICATION_MODE_GROUPED,
@@ -888,8 +889,6 @@ function createFormationWorld() {
 
 export {
   PRIORITY_PARTITION_IDS,
-  PRIORITY_TABLE_IDS,
-  SCHEMA_BY_TABLE_ID,
   SEED_NODE_ID,
   WORLD_START_MS,
   createFormationWorld,
