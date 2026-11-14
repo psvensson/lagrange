@@ -16,9 +16,7 @@
  * install). A failure is a typed provisioning failure naming host, role and
  * the missing item; the campaign never papers over it.
  */
-import fs from 'node:fs';
-import path from 'node:path';
-
+import {GIT_OUTPUT_BOUND, execGit} from '../../../scripts/checks/git-invocation.js';
 import {
   campaignImagesByRole,
   ensureProductImages,
@@ -58,9 +56,14 @@ function tail(text) {
   return String(text).slice(-OUTPUT_TAIL_CHARS);
 }
 
-/** The reference client's lockfile, read from a checkout root. */
-function readReferenceClientLock(root) {
-  return JSON.parse(fs.readFileSync(path.join(root, REFERENCE_CLIENT_PREFIX, LOCKFILE), 'utf8'));
+/**
+ * The reference client's lockfile at a commit of the checkout at `root`: the
+ * harness commit, whose lockfile the campaign's worktree installs from (the
+ * working tree may differ from it).
+ */
+function readReferenceClientLock(root, commit) {
+  return JSON.parse(String(execGit(['show', `${commit}:${REFERENCE_CLIENT_PREFIX}/${LOCKFILE}`],
+    {cwd: root, encoding: 'utf8', bound: GIT_OUTPUT_BOUND.COMMAND})));
 }
 
 /**

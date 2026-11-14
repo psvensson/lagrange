@@ -91,6 +91,7 @@ import {
 import {
   resolveLagrangeContainerImage,
 } from '../../../test/distributed/harness/real-product-deployer-lagrange.js';
+import {shellQuote} from '../../../test/distributed/harness/real-product-remote-shell.js';
 import {
   observeProductsAfterWindow,
 } from '../../../test/distributed/harness/real-product-identity.js';
@@ -437,13 +438,16 @@ async function provisionGcpHosts({opts, manifest, dataHostCount}) {
   if (manifest.targets.includes(COMPARATIVE_TARGET.LAGRANGE)) {
     opts.lagrangeImage = resolveLagrangeContainerImage(opts);
   }
+  // The same harness identity the campaign records (awaited, as runCampaign does).
+  const {gitCommit} = await harnessIdentity(manifest);
   const plan = comparativeProvisioningPlan({targets: manifest.targets,
-    lagrangeImage: opts.lagrangeImage, harnessCommit: harnessIdentity(manifest).gitCommit,
-    referenceClientLock: readReferenceClientLock(REPO_ROOT)});
+    lagrangeImage: opts.lagrangeImage, harnessCommit: gitCommit,
+    referenceClientLock: readReferenceClientLock(REPO_ROOT, gitCommit)});
+  // GIT_SSH_COMMAND is read by a shell: every ssh word is quoted.
   const pushHarnessCommit = ({host, repoPath, harnessCommit}) => execGitAsync(['push',
     '--quiet', `ssh://${host.sshTarget}${repoPath}`, `+${harnessCommit}:refs/bench/harness`],
   {cwd: REPO_ROOT, env: {...process.env, GIT_SSH_COMMAND: ['ssh', ...sshOptions(opts)]
-    .join(' ')}, bound: GIT_OUTPUT_BOUND.COMMAND});
+    .map(shellQuote).join(' ')}, bound: GIT_OUTPUT_BOUND.COMMAND});
   return provisionComparativeHosts({hosts, plan, sshRun: createSshRun(hosts, opts), opts,
     pushHarnessCommit});
 }

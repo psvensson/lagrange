@@ -40,7 +40,7 @@ import {
 } from '../real-product-captured-intrinsics.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
-const LOCK = readReferenceClientLock(ROOT);
+const LOCK = readReferenceClientLock(ROOT, 'HEAD');
 const COMMIT = 'c'.repeat(40);
 const REPO = '/srv/lagrange-campaign';
 const LAGRANGE = `psvensson/lagrange@sha256:${'e'.repeat(64)}`;
