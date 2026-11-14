@@ -9,10 +9,15 @@
       "measured": true,
       "passed": false,
       "detail": "Journey job 4216bd0b-3da9-4bcb-b796-f52953fd2dba on tv-dator at measurement head 9991b450d (= composed head 589c1e2f + one observation-only commit): scenario FAILED, predicates a-f met, g-projection-agrees-with-authority fails with two persistent episodes (ledger_in_flight 2416 ms on observer 7704; priority_spread 1218 ms on observer cffe, bound 1000 ms). Both are a wait on the node-wide slot: the first event was refused 15 times over 3.05 s while services, nodes and control_plane_publications took turns; the second 19 times over 4.73 s, and the active row behind it in the same lane arrived 2.5 s after it committed. Slot: 1215 refusals, all busy; 82.5 percent occupied overall and 81-96 percent per 10 s for about 130 s. Services lane: 26.8 s in waves, 61.6 s waiting for the slot. Wave cost about 328 ms plus 42 ms per row; per-leaf legs p50 72, 98 and 154 ms with no in-wave retry. In 742 drives the vector was cut at the scan tail captured when the pass began with 1-10 READY rows already owed behind it, so after a run of refusals the admitted vector was usually one row. Compared with source ed708dfd: episodes 5 -> 2, services commit to first drive p50 10.6 s -> 0.60 s, no raft_role_missing exclusion."
+    },
+    {
+      "id": "reproducers-red-on-original",
+      "measured": true,
+      "passed": true,
+      "detail": "Reproducer commit 4cc448949 (production source identical to the base 589c1e2f). Job f56ec976 on tv-dator: the seven behaviours the removal changes fail for the slot or stale-tail reason (a second table's vector refused while another table's wave waits on a never-settling leaf; a second partition of one table refused; 7 of 8 lanes presenting in one turn refused; a lane presenting during another lane's wave held with a 10 ms retry armed by the service's hint; stop with several waves finds one in flight instead of three; the service retains five waiting tables, timestamps and lifecycles after every wave is done; after an owner-not-ready refusal the vectors are [[A,B],[C,D,E,F]] instead of [[A..F]]), and the two that pin unchanged behaviour (the single-lane differential and the lane's single flight) pass. Baseline job a614cedb on tv-dator: the 18 existing topology, partition CDC, seed-teardown and message-group route files green, 215 assertions. Evidence retained under lagrange-foundation-coordination-20261114/slot-removal/repro-4cc44894 and baseline-4cc44894. passed=true means observed red on the original for the predicted reason."
     }
   ],
   "unmeasuredObligations": [
-    "reproducers-red-on-original",
     "reproducers-and-owned-roots-green-on-candidate",
     "removed-mechanism-census-zero",
     "journey-no-slot-wait",
